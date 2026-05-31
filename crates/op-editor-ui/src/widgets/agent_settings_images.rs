@@ -1,18 +1,17 @@
 //! Images tab of the settings modal.
 
 use crate::theme::Theme;
-use crate::widgets::agent_settings_caret::{
-    caret_x_for_text, paint_caret, settings_caret_for_focus,
-};
 use crate::widgets::agent_settings_i18n::t as t_settings;
 use crate::widgets::agent_settings_images_parts::{
-    ellipsize, paint_search_input_row, rect_contains,
+    ellipsize, paint_profile_field, paint_profile_test_button, paint_provider_field,
+    paint_provider_menu, paint_search_input_row, rect_contains,
 };
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
 use op_editor_core::agent_settings::{
-    AgentSettings, ImageGenField, ImageGenProfile, ImageSearchField, SettingsFocus,
+    AgentSettings, ImageGenField, ImageGenProfile, ImageGenProvider, ImageSearchField,
+    SettingsFocus,
 };
 use op_editor_core::editor_ui_state::EditorUiState;
 
@@ -38,6 +37,7 @@ const PROFILE_FORM_TOP: f32 = 40.0;
 const PROFILE_FIELD_H: f32 = 24.0;
 const PROFILE_TEST_BTN_W: f32 = 56.0;
 const PROFILE_TEST_GAP: f32 = 8.0;
+const PROVIDER_OPTION_H: f32 = 24.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ImagesHit {
@@ -49,8 +49,15 @@ pub enum ImagesHit {
     SetActiveGenConfig(usize),
     RemoveGenConfig(usize),
     TestGenConfig(usize),
-    CycleGenProvider(usize),
-    FocusGenConfig { index: usize, field: ImageGenField },
+    ToggleGenProviderMenu(usize),
+    SelectGenProvider {
+        index: usize,
+        provider: ImageGenProvider,
+    },
+    FocusGenConfig {
+        index: usize,
+        field: ImageGenField,
+    },
     None,
 }
 
@@ -235,6 +242,17 @@ fn profile_provider_rect(row: Rect) -> Rect {
     profile_field_rect(row, 1)
 }
 
+fn profile_provider_option_rect(row: Rect, option_index: usize) -> Rect {
+    let provider = profile_provider_rect(row);
+    Rect {
+        origin: Point2D::new(
+            provider.origin.x,
+            provider.origin.y + provider.size.y + option_index as f32 * PROVIDER_OPTION_H,
+        ),
+        size: Point2D::new(provider.size.x, PROVIDER_OPTION_H),
+    }
+}
+
 fn profile_field_index(field: ImageGenField) -> usize {
     match field {
         ImageGenField::Name => 0,
@@ -266,6 +284,16 @@ pub fn hit_test(content: Rect, settings: &AgentSettings, scrolled: Point2D) -> I
     }
     for (index, profile) in settings.image_gen_profiles.iter().enumerate() {
         let row = profile_row_rect(content, settings, index);
+        if settings.image_gen_provider_menu_open == Some(index) {
+            for (option_index, provider) in ImageGenProvider::ALL.iter().enumerate() {
+                if rect_contains(profile_provider_option_rect(row, option_index), scrolled) {
+                    return ImagesHit::SelectGenProvider {
+                        index,
+                        provider: *provider,
+                    };
+                }
+            }
+        }
         if rect_contains(profile_active_rect(row), scrolled) {
             return ImagesHit::SetActiveGenConfig(index);
         }
@@ -283,7 +311,7 @@ pub fn hit_test(content: Rect, settings: &AgentSettings, scrolled: Point2D) -> I
                 return ImagesHit::None;
             }
             if rect_contains(profile_provider_rect(row), scrolled) {
-                return ImagesHit::CycleGenProvider(index);
+                return ImagesHit::ToggleGenProviderMenu(index);
             }
             for field in image_gen_fields() {
                 if rect_contains(profile_input_rect(row, field), scrolled) {
@@ -628,166 +656,26 @@ fn paint_profile_row(
 
     if editing {
         for field in image_gen_fields() {
-            paint_profile_field(cx, theme, settings, ui, profile, index, field, row, now_ms);
+            paint_profile_field(
+                cx,
+                theme,
+                settings,
+                ui,
+                profile,
+                index,
+                field,
+                profile_input_rect(row, field),
+                row.origin.x + 12.0,
+                now_ms,
+            );
         }
-        paint_profile_test_button(cx, theme, ui, profile, row);
-        paint_provider_field(cx, theme, profile, row);
-    }
-}
-
-#[allow(clippy::too_many_arguments)]
-fn paint_profile_field(
-    cx: &mut PaintCx<'_>,
-    theme: &Theme,
-    settings: &AgentSettings,
-    ui: &EditorUiState,
-    profile: &ImageGenProfile,
-    index: usize,
-    field: ImageGenField,
-    row: Rect,
-    now_ms: u64,
-) {
-    let focus = SettingsFocus::ImageGenProfile { index, field };
-    let focused = settings.focus == Some(focus);
-    let value = if focused {
-        ui.settings_input_draft.as_str()
-    } else {
-        match field {
-            ImageGenField::Name => profile.name.as_str(),
-            ImageGenField::ApiKey if !profile.api_key.is_empty() => "********",
-            ImageGenField::ApiKey => "",
-            ImageGenField::Model => profile.model.as_str(),
-            ImageGenField::BaseUrl => profile.base_url.as_deref().unwrap_or(""),
+        paint_profile_test_button(cx, theme, ui, profile, profile_test_btn_rect(row));
+        let provider_rect = profile_provider_rect(row);
+        paint_provider_field(cx, theme, profile, provider_rect, row.origin.x + 12.0);
+        if settings.image_gen_provider_menu_open == Some(index) {
+            paint_provider_menu(cx, theme, provider_rect, profile.provider);
         }
-    };
-    let label = match field {
-        ImageGenField::Name => "Name",
-        ImageGenField::ApiKey => "API Key",
-        ImageGenField::Model => "Model",
-        ImageGenField::BaseUrl => "Base URL",
-    };
-    let input = profile_input_rect(row, field);
-    let label_lay = TextLayout::single_run(
-        label,
-        "system-ui",
-        11.0,
-        to_jian(theme.muted_foreground),
-        Point2D::new(0.0, 0.0),
-    );
-    cx.backend.draw_text(
-        &label_lay,
-        Point2D::new(row.origin.x + 12.0, input.origin.y + 16.0),
-    );
-    cx.backend.fill_round_rect(
-        input,
-        6.0,
-        if focused {
-            theme.background
-        } else {
-            theme.card
-        },
-    );
-    cx.backend.stroke_round_rect(
-        input,
-        6.0,
-        if focused { theme.primary } else { theme.border },
-        1.0,
-    );
-    let clipped = ellipsize(cx, value, input.size.x - 12.0, 11.0);
-    let text_x = input.origin.x + 6.0;
-    let value_lay = TextLayout::single_run(
-        &clipped,
-        "system-ui",
-        11.0,
-        to_jian(theme.foreground),
-        Point2D::new(0.0, 0.0),
-    );
-    cx.backend
-        .draw_text(&value_lay, Point2D::new(text_x, input.origin.y + 16.0));
-    if focused {
-        let caret = settings_caret_for_focus(ui, focus);
-        let caret_x = caret_x_for_text(
-            cx,
-            value,
-            caret,
-            text_x,
-            input.origin.x + input.size.x - 8.0,
-            11.0,
-        );
-        let caret_y = input.origin.y + 4.5;
-        let anchor = ui.settings_input_caret_anchor_ms;
-        paint_caret(cx, theme, now_ms, anchor, caret_x, caret_y);
     }
-}
-
-fn paint_profile_test_button(
-    cx: &mut PaintCx<'_>,
-    theme: &Theme,
-    ui: &EditorUiState,
-    profile: &ImageGenProfile,
-    row: Rect,
-) {
-    let btn = profile_test_btn_rect(row);
-    let enabled = !profile.api_key.trim().is_empty();
-    cx.backend.fill_round_rect(btn, 6.0, theme.muted);
-    cx.backend.stroke_round_rect(btn, 6.0, theme.border, 1.0);
-    let label = t_settings(ui, "settings.images.test");
-    let label_w = cx.backend.measure_text(label, 11.0);
-    let layout = TextLayout::single_run(
-        label,
-        "system-ui",
-        11.0,
-        to_jian(if enabled {
-            theme.foreground
-        } else {
-            theme.muted_foreground
-        }),
-        Point2D::new(0.0, 0.0),
-    );
-    cx.backend.draw_text(
-        &layout,
-        Point2D::new(
-            btn.origin.x + (btn.size.x - label_w) / 2.0,
-            btn.origin.y + btn.size.y / 2.0 + 4.0,
-        ),
-    );
-}
-
-fn paint_provider_field(cx: &mut PaintCx<'_>, theme: &Theme, profile: &ImageGenProfile, row: Rect) {
-    let input = profile_provider_rect(row);
-    let label_lay = TextLayout::single_run(
-        "Provider",
-        "system-ui",
-        11.0,
-        to_jian(theme.muted_foreground),
-        Point2D::new(0.0, 0.0),
-    );
-    cx.backend.draw_text(
-        &label_lay,
-        Point2D::new(row.origin.x + 12.0, input.origin.y + 16.0),
-    );
-    cx.backend.fill_round_rect(input, 6.0, theme.card);
-    cx.backend.stroke_round_rect(input, 6.0, theme.border, 1.0);
-    let value = ellipsize(cx, profile.provider.label(), input.size.x - 28.0, 11.0);
-    let value_lay = TextLayout::single_run(
-        &value,
-        "system-ui",
-        11.0,
-        to_jian(theme.foreground),
-        Point2D::new(0.0, 0.0),
-    );
-    cx.backend.draw_text(
-        &value_lay,
-        Point2D::new(input.origin.x + 6.0, input.origin.y + 16.0),
-    );
-    draw_icon(
-        cx.backend,
-        Icon::ChevronDown,
-        Point2D::new(input.origin.x + input.size.x - 18.0, input.origin.y + 5.0),
-        14.0,
-        theme.muted_foreground,
-        1.5,
-    );
 }
 
 fn image_gen_fields() -> [ImageGenField; 4] {

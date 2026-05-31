@@ -612,7 +612,7 @@ fn image_generation_profile_focus_accepts_text_and_commits() {
 }
 
 #[test]
-fn image_generation_provider_click_cycles_provider_and_clears_model() {
+fn image_generation_provider_click_opens_menu_without_changing_profile() {
     let mut host = WidgetHostNative::new();
     host.editor_state_mut().editor_ui.agent_settings.tab = AgentSettingsTab::Images;
     host.editor_state_mut()
@@ -649,9 +649,28 @@ fn image_generation_provider_click_cycles_provider_and_clears_model() {
         .editor_ui
         .agent_settings
         .image_gen_profiles[0];
+    assert_eq!(profile.provider, ImageGenProvider::OpenAi);
+    assert_eq!(profile.model, "dall-e-3");
+    assert!(host.editor_state().editor_ui.agent_settings.focus.is_none());
+    assert_eq!(
+        host.editor_state()
+            .editor_ui
+            .agent_settings
+            .image_gen_provider_menu_open,
+        Some(0)
+    );
+
+    assert!(host.dispatch_agent_settings_press(
+        content_x + 110.0 + 20.0,
+        provider_y + 60.0,
+        1200.0,
+        800.0
+    ));
+    let settings = &host.editor_state().editor_ui.agent_settings;
+    let profile = &settings.image_gen_profiles[0];
     assert_eq!(profile.provider, ImageGenProvider::Gemini);
     assert!(profile.model.is_empty());
-    assert!(host.editor_state().editor_ui.agent_settings.focus.is_none());
+    assert!(settings.image_gen_provider_menu_open.is_none());
 }
 
 #[test]

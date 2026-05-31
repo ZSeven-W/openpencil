@@ -891,6 +891,6 @@ fn images_tab_expanded_profile_provider_row_is_clickable() {
             rect,
             crate::Point2D::new(content_x + 110.0 + 20.0, provider_y + 12.0)
         ),
-        AgentSettingsHit::CycleGenProvider(0)
+        AgentSettingsHit::ToggleGenProviderMenu(0)
     );
 }

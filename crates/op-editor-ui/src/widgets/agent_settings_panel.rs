@@ -88,7 +88,11 @@ pub enum AgentSettingsHit {
     SetActiveGenConfig(usize),
     RemoveGenConfig(usize),
     TestGenConfig(usize),
-    CycleGenProvider(usize),
+    ToggleGenProviderMenu(usize),
+    SelectGenProvider {
+        index: usize,
+        provider: op_editor_core::agent_settings::ImageGenProvider,
+    },
     FocusGenConfig {
         index: usize,
         field: ImageGenField,
@@ -257,8 +261,11 @@ impl<'a> AgentSettingsPanel<'a> {
                     ImagesHit::TestGenConfig(index) => {
                         return AgentSettingsHit::TestGenConfig(index);
                     }
-                    ImagesHit::CycleGenProvider(index) => {
-                        return AgentSettingsHit::CycleGenProvider(index);
+                    ImagesHit::ToggleGenProviderMenu(index) => {
+                        return AgentSettingsHit::ToggleGenProviderMenu(index);
+                    }
+                    ImagesHit::SelectGenProvider { index, provider } => {
+                        return AgentSettingsHit::SelectGenProvider { index, provider };
                     }
                     ImagesHit::FocusGenConfig { index, field } => {
                         return AgentSettingsHit::FocusGenConfig { index, field };
