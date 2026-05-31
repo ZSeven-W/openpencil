@@ -120,6 +120,13 @@ impl ApplicationHandler for DesktopApp {
 
         self.window = Some(window);
 
+        if let Some(window) = self.window.as_ref() {
+            let size = window.inner_size();
+            self.viewport_width = size.width as f32 / self.dpi;
+            self.viewport_height = size.height as f32 / self.dpi;
+        }
+        self.fit_initial_blank_frame_to_actual_viewport();
+
         // Build + attach the native menu bar now that the NSApp /
         // window exists. macOS attaches to the shared NSApp;
         // Windows to this window; Linux is a no-op.
