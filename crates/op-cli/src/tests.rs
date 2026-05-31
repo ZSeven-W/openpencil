@@ -50,6 +50,46 @@ fn parse_args_maps_ts_status_to_local_status_probe() {
 }
 
 #[test]
+fn parse_args_maps_start_to_rust_mcp_server() {
+    let p = parse_args(&[
+        "--port".to_string(),
+        "3200".to_string(),
+        "start".to_string(),
+        "--file".to_string(),
+        "/tmp/session.op".to_string(),
+    ])
+    .expect("parse start");
+    assert_eq!(p.port, 3200);
+    assert_eq!(
+        p.command,
+        Command::StartMcp {
+            document_path: Some("/tmp/session.op".to_string()),
+        }
+    );
+}
+
+#[test]
+fn parse_args_maps_stop_to_rust_mcp_stop() {
+    let p = parse_args(&["stop".to_string()]).expect("parse stop");
+    assert_eq!(p.command, Command::StopMcp);
+}
+
+#[test]
+fn start_document_file_is_minimal_op_when_missing() {
+    let dir = std::env::temp_dir().join(format!("op-cli-start-doc-{}", std::process::id()));
+    let path = dir.join("nested").join("session.op");
+    let _ = std::fs::remove_dir_all(&dir);
+
+    app_control_cli::ensure_document_file(&path).expect("ensure document file");
+
+    assert_eq!(
+        std::fs::read_to_string(&path).expect("read document"),
+        "{\n  \"version\": \"0.8.0\",\n  \"name\": \"OpenPencil CLI Session\",\n  \"children\": []\n}\n"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn status_json_matches_ts_running_shape_without_requiring_server() {
     assert_eq!(
         status_json_from_running(DEFAULT_PORT, false),
