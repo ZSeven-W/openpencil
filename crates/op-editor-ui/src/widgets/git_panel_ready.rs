@@ -172,8 +172,8 @@ impl GitPanel<'_> {
         draw_icon(
             cx.backend,
             Icon::GitBranch,
-            Point2D::new(branch_r.origin.x, cy - 7.0),
-            14.0,
+            Point2D::new(branch_r.origin.x, cy - 6.0),
+            12.0,
             t.foreground,
             1.5,
         );
@@ -186,14 +186,14 @@ impl GitPanel<'_> {
             &label,
             branch_r.origin.x + 18.0,
             cy + 4.0,
-            13.0,
+            12.0,
             t.foreground,
         );
         draw_icon(
             cx.backend,
             Icon::ChevronDown,
-            Point2D::new(branch_r.origin.x + branch_r.size.x - 12.0, cy - 5.0),
-            10.0,
+            Point2D::new(branch_r.origin.x + branch_r.size.x - 14.0, cy - 6.0),
+            12.0,
             t.muted_foreground,
             1.5,
         );
@@ -344,12 +344,14 @@ impl GitPanel<'_> {
     /// One ghost icon button — a faint rounded slot + a centred glyph,
     /// dimmed when disabled.
     fn paint_ready_icon(&self, cx: &mut PaintCx<'_>, rect: Rect, icon: Icon, enabled: bool) {
+        // TS: enabled = currentColor (foreground), disabled = full
+        // text-muted-foreground — no half-alpha (git-panel-remote-controls.tsx).
         let color = if enabled {
-            alpha(self.theme.foreground, 0.80)
+            self.theme.foreground
         } else {
-            alpha(self.theme.muted_foreground, 0.50)
+            self.theme.muted_foreground
         };
-        let s = 14.0;
+        let s = 12.0;
         let c = Point2D::new(
             rect.origin.x + (rect.size.x - s) / 2.0,
             rect.origin.y + (rect.size.y - s) / 2.0,
@@ -371,8 +373,8 @@ impl GitPanel<'_> {
 
         let label = self.t("git.commit.submitButton");
         let icon_s = 11.0;
-        let gap = 5.0;
-        let label_w = cx.backend.measure_text(label, 12.0);
+        let gap = 4.0;
+        let label_w = cx.backend.measure_text(label, 11.0);
         let content_w = icon_s + gap + label_w;
         let start_x = rect.origin.x + (rect.size.x - content_w).max(6.0) / 2.0;
         let color = alpha(t.primary_foreground, factor);
@@ -385,14 +387,14 @@ impl GitPanel<'_> {
             Point2D::new(start_x, rect.origin.y + (rect.size.y - icon_s) / 2.0),
             icon_s,
             color,
-            1.8,
+            2.0,
         );
         self.text(
             cx,
             label,
             start_x + icon_s + gap,
             rect.origin.y + rect.size.y / 2.0 + 4.0,
-            12.0,
+            11.0,
             color,
         );
         cx.backend.restore();
