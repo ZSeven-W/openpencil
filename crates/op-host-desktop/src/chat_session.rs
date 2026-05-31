@@ -74,10 +74,43 @@ pub fn apply_poll_to_message(message: &mut ChatMessage, poll: &ChatPoll) {
         message.content.push_str(&poll.text);
     }
     message.thinking.push_str(&poll.thinking);
+    if poll.tool_calls.iter().any(tool_call_defaults_open) {
+        message.tools_collapsed = false;
+    }
     message.tool_calls.extend(poll.tool_calls.iter().cloned());
     if poll.finished {
         message.streaming = false;
     }
+}
+
+fn tool_call_defaults_open(call: &ChatToolCall) -> bool {
+    if let Some(level) = tool_level_from_args(&call.args) {
+        return matches!(level.as_str(), "modify" | "delete" | "orchestrate");
+    }
+    matches!(
+        call.name.as_str(),
+        "update_node"
+            | "replace_node"
+            | "move_node"
+            | "set_variables"
+            | "set_themes"
+            | "load_theme_preset"
+            | "rename_page"
+            | "reorder_page"
+            | "batch_design"
+            | "set_design_md"
+            | "export_design_md"
+            | "delete_node"
+            | "remove_page"
+    )
+}
+
+fn tool_level_from_args(args: &str) -> Option<String> {
+    serde_json::from_str::<serde_json::Value>(args)
+        .ok()?
+        .get("level")?
+        .as_str()
+        .map(str::to_string)
 }
 
 impl ChatSession {
@@ -551,6 +584,55 @@ mod tests {
         );
         assert_eq!(msg.content, "hi!", "text accumulates across polls");
         assert!(!msg.streaming, "finished clears the streaming flag");
+    }
+
+    #[test]
+    fn apply_poll_expands_modify_tool_process_like_ts_cards() {
+        let mut msg = ChatMessage::assistant_streaming();
+        assert!(msg.tools_collapsed, "assistant messages start collapsed");
+
+        apply_poll_to_message(
+            &mut msg,
+            &ChatPoll {
+                text: String::new(),
+                thinking: String::new(),
+                tool_calls: vec![ChatToolCall {
+                    name: "batch_design".into(),
+                    args: "{}".into(),
+                }],
+                error: None,
+                finished: false,
+            },
+        );
+
+        assert!(
+            !msg.tools_collapsed,
+            "TS opens modify/delete/orchestrate tool cards by default"
+        );
+    }
+
+    #[test]
+    fn apply_poll_keeps_read_tool_process_collapsed_like_ts_cards() {
+        let mut msg = ChatMessage::assistant_streaming();
+
+        apply_poll_to_message(
+            &mut msg,
+            &ChatPoll {
+                text: String::new(),
+                thinking: String::new(),
+                tool_calls: vec![ChatToolCall {
+                    name: "snapshot_layout".into(),
+                    args: "{}".into(),
+                }],
+                error: None,
+                finished: false,
+            },
+        );
+
+        assert!(
+            msg.tools_collapsed,
+            "TS keeps read/create tool cards collapsed by default"
+        );
     }
 
     #[test]
