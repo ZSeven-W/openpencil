@@ -26,6 +26,7 @@ impl WidgetHostNative {
             || self.git_commit_focus_active()
             || self.git_remote_focus_active()
             || self.git_https_focus_active()
+            || self.git_branch_create_focus_active()
             || self.git_clone_input_active()
     }
 
