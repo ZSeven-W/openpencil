@@ -298,7 +298,7 @@ fn save_acp_agent_draft_persists_agent() {
     }
     let card_y = acp_card_y(content_y);
     let save_x = content_x + content_w - 12.0 - 34.0;
-    let save_y = card_y + 116.0 + 18.0;
+    let save_y = card_y + 332.0 + 18.0;
     assert!(host.dispatch_agent_settings_press(save_x, save_y, 1200.0, 800.0));
 
     let settings = &host.editor_state().editor_ui.agent_settings;
@@ -325,7 +325,7 @@ fn cancel_acp_agent_draft_discards_unsaved_agent() {
     }
     let card_y = acp_card_y(content_y);
     let cancel_x = content_x + content_w - 12.0 - 68.0 - 8.0 - 34.0;
-    let cancel_y = card_y + 116.0 + 18.0;
+    let cancel_y = card_y + 332.0 + 18.0;
     assert!(host.dispatch_agent_settings_press(cancel_x, cancel_y, 1200.0, 800.0));
 
     let settings = &host.editor_state().editor_ui.agent_settings;
@@ -383,7 +383,7 @@ fn acp_agent_command_field_accepts_text_and_commits() {
 
     assert!(host.dispatch_agent_settings_press(
         content_x + 92.0,
-        card_y + 48.0 + 28.0 + 12.0,
+        card_y + 154.0 + 14.0,
         1200.0,
         800.0
     ));

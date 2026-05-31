@@ -9,6 +9,31 @@ use op_editor_ui::widgets::GitPanel;
 use op_editor_ui::Point2D;
 
 impl WidgetHostNative {
+    fn try_scroll_agent_preset_menu(
+        &mut self,
+        x: f32,
+        y: f32,
+        delta: f32,
+        viewport_width: f32,
+        viewport_height: f32,
+    ) -> bool {
+        use op_editor_ui::widgets::agent_settings_panel::AgentSettingsPanel;
+        self.refresh_layout_scene();
+        let panel = AgentSettingsPanel::for_editor(&self.editor_state);
+        let panel_rect = panel.rect(viewport_width, viewport_height);
+        let point = Point2D::new(x, y);
+        let Some(max) = panel.builtin_preset_scroll_max_at(panel_rect, point) else {
+            return false;
+        };
+        let settings = &mut self.editor_state.editor_ui.agent_settings;
+        let next = (settings.builtin_preset_menu_scroll - delta).clamp(0.0, max);
+        if next != settings.builtin_preset_menu_scroll {
+            settings.builtin_preset_menu_scroll = next;
+            self.mark_dirty();
+        }
+        true
+    }
+
     /// Scroll the right-rail PropertyPanel when a wheel / trackpad
     /// pan lands over it. `delta` is the vertical scroll delta
     /// (wheel `delta_y` or pan `dy`). Returns `true` when the cursor
@@ -124,13 +149,18 @@ impl WidgetHostNative {
         if self.editor_state.editor_ui.agent_settings_open {
             use op_editor_ui::widgets::agent_settings_panel::AgentSettingsPanel;
             self.refresh_layout_scene();
-            let panel = AgentSettingsPanel::for_editor(&self.editor_state);
-            let panel_rect = panel.rect(viewport_width, viewport_height);
+            let panel_rect = AgentSettingsPanel::for_editor(&self.editor_state)
+                .rect(viewport_width, viewport_height);
             if panel_rect.origin.x <= x
                 && x <= panel_rect.origin.x + panel_rect.size.x
                 && panel_rect.origin.y <= y
                 && y <= panel_rect.origin.y + panel_rect.size.y
             {
+                if self.try_scroll_agent_preset_menu(x, y, delta_y, viewport_width, viewport_height)
+                {
+                    return true;
+                }
+                let panel = AgentSettingsPanel::for_editor(&self.editor_state);
                 let total = panel.content_total_height();
                 let viewport_h_inner = panel_rect.size.y - 48.0;
                 let max_scroll = (total - viewport_h_inner).max(0.0);
@@ -245,13 +275,17 @@ impl WidgetHostNative {
         if self.editor_state.editor_ui.agent_settings_open {
             use op_editor_ui::widgets::agent_settings_panel::AgentSettingsPanel;
             self.refresh_layout_scene();
-            let panel = AgentSettingsPanel::for_editor(&self.editor_state);
-            let panel_rect = panel.rect(viewport_width, viewport_height);
+            let panel_rect = AgentSettingsPanel::for_editor(&self.editor_state)
+                .rect(viewport_width, viewport_height);
             if panel_rect.origin.x <= x
                 && x <= panel_rect.origin.x + panel_rect.size.x
                 && panel_rect.origin.y <= y
                 && y <= panel_rect.origin.y + panel_rect.size.y
             {
+                if self.try_scroll_agent_preset_menu(x, y, dy, viewport_width, viewport_height) {
+                    return true;
+                }
+                let panel = AgentSettingsPanel::for_editor(&self.editor_state);
                 let total = panel.content_total_height();
                 let viewport_h_inner = panel_rect.size.y - 48.0;
                 let max_scroll = (total - viewport_h_inner).max(0.0);

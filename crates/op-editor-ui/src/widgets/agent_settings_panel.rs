@@ -295,6 +295,26 @@ impl<'a> AgentSettingsPanel<'a> {
         agent_settings_builtin::card_at(content_rect(panel), &self.settings, scrolled)
     }
 
+    pub fn builtin_preset_hover_at(
+        &self,
+        panel: Rect,
+        point: Point2D,
+    ) -> Option<BuiltinAgentPresetKey> {
+        if !rect_contains(panel, point) {
+            return None;
+        }
+        let scrolled = Point2D::new(point.x, point.y + self.settings.scroll_y);
+        agent_settings_builtin::preset_hover_at(content_rect(panel), &self.settings, scrolled)
+    }
+
+    pub fn builtin_preset_scroll_max_at(&self, panel: Rect, point: Point2D) -> Option<f32> {
+        if !rect_contains(panel, point) {
+            return None;
+        }
+        let scrolled = Point2D::new(point.x, point.y + self.settings.scroll_y);
+        agent_settings_builtin::preset_scroll_max_at(content_rect(panel), &self.settings, scrolled)
+    }
+
     /// Total content height for the active tab. Host uses this to
     /// clamp `scroll_y` so the bottom of the list never floats
     /// above the panel bottom.
@@ -353,7 +373,6 @@ fn paint_panel(
     cx.backend.fill_round_rect(panel, 14.0, theme.card);
     cx.backend.stroke_round_rect(panel, 14.0, theme.border, 1.0);
     paint_sidebar(cx, theme, settings, _ui, panel);
-    paint_close(cx, theme, panel);
     let content_rect = content_rect(panel);
     cx.backend.save();
     cx.backend.clip_rect(content_rect);
@@ -373,6 +392,7 @@ fn paint_panel(
         }
     }
     cx.backend.restore();
+    paint_close(cx, theme, panel);
 }
 
 fn paint_sidebar(

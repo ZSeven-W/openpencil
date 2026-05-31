@@ -288,6 +288,8 @@ impl WidgetHostNative {
                 let settings = &mut self.editor_state.editor_ui.agent_settings;
                 settings.builtin_preset_menu_open =
                     (settings.builtin_preset_menu_open != Some(target)).then_some(target);
+                settings.builtin_preset_menu_scroll = 0.0;
+                settings.builtin_preset_menu_hover = None;
             }
             AgentSettingsHit::SelectBuiltinAgentPreset { index, preset } => {
                 self.commit_settings_focus_if_any();
@@ -309,6 +311,14 @@ impl WidgetHostNative {
                     .editor_ui
                     .agent_settings
                     .builtin_preset_menu_open = None;
+                self.editor_state
+                    .editor_ui
+                    .agent_settings
+                    .builtin_preset_menu_scroll = 0.0;
+                self.editor_state
+                    .editor_ui
+                    .agent_settings
+                    .builtin_preset_menu_hover = None;
             }
             AgentSettingsHit::ToggleBuiltinAgentEnabled(index) => {
                 self.commit_settings_focus_if_any();
@@ -378,6 +388,8 @@ impl WidgetHostNative {
                         op_editor_core::agent_settings::AcpAgentField::Command => {
                             agent.command.clone()
                         }
+                        op_editor_core::agent_settings::AcpAgentField::Args => agent.args_text(),
+                        op_editor_core::agent_settings::AcpAgentField::Env => agent.env_text(),
                         op_editor_core::agent_settings::AcpAgentField::Url => {
                             agent.url.clone().unwrap_or_default()
                         }
@@ -414,6 +426,8 @@ impl WidgetHostNative {
                     };
                     self.editor_state.editor_ui.settings_input_draft = match field {
                         AcpAgentField::Command => agent.command.clone(),
+                        AcpAgentField::Args => agent.args_text(),
+                        AcpAgentField::Env => agent.env_text(),
                         AcpAgentField::Url => agent.url.clone().unwrap_or_default(),
                         AcpAgentField::DisplayName => agent.display_name.clone(),
                     };
@@ -477,6 +491,8 @@ impl WidgetHostNative {
                         };
                         self.editor_state.editor_ui.settings_input_draft = match field {
                             AcpAgentField::Command => agent.command.clone(),
+                            AcpAgentField::Args => agent.args_text(),
+                            AcpAgentField::Env => agent.env_text(),
                             AcpAgentField::Url => agent.url.clone().unwrap_or_default(),
                             AcpAgentField::DisplayName => agent.display_name.clone(),
                         };

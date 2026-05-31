@@ -89,6 +89,8 @@ impl WidgetHostNative {
             self.editor_state.editor_ui.settings_input_draft = match field {
                 AcpAgentField::DisplayName => agent.display_name.clone(),
                 AcpAgentField::Command => agent.command.clone(),
+                AcpAgentField::Args => agent.args_text(),
+                AcpAgentField::Env => agent.env_text(),
                 AcpAgentField::Url => agent.url.clone().unwrap_or_default(),
             };
             self.editor_state.editor_ui.agent_settings.focus =
@@ -117,6 +119,8 @@ impl WidgetHostNative {
             };
             self.editor_state.editor_ui.settings_input_draft = match field {
                 AcpAgentField::Command => agent.command.clone(),
+                AcpAgentField::Args => agent.args_text(),
+                AcpAgentField::Env => agent.env_text(),
                 AcpAgentField::Url => agent.url.clone().unwrap_or_default(),
                 AcpAgentField::DisplayName => agent.display_name.clone(),
             };

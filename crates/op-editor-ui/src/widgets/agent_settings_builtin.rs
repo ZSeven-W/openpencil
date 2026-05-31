@@ -102,7 +102,11 @@ pub fn hit_test(content: Rect, settings: &AgentSettings, point: Point2D) -> Buil
             }
             if settings.builtin_preset_menu_open == Some(BuiltinAgentPresetMenuTarget::Agent(index))
             {
-                if let Some(preset) = agent_settings_builtin_parts::preset_at(card, point) {
+                if let Some(preset) = agent_settings_builtin_parts::preset_at(
+                    card,
+                    point,
+                    settings.builtin_preset_menu_scroll,
+                ) {
                     return BuiltinHit::SelectPreset {
                         index: Some(index),
                         preset,
@@ -148,7 +152,11 @@ pub fn hit_test(content: Rect, settings: &AgentSettings, point: Point2D) -> Buil
             return BuiltinHit::TogglePresetMenu(None);
         }
         if settings.builtin_preset_menu_open == Some(BuiltinAgentPresetMenuTarget::Draft) {
-            if let Some(preset) = agent_settings_builtin_parts::preset_at(card, point) {
+            if let Some(preset) = agent_settings_builtin_parts::preset_at(
+                card,
+                point,
+                settings.builtin_preset_menu_scroll,
+            ) {
                 return BuiltinHit::SelectPreset {
                     index: None,
                     preset,
@@ -195,6 +203,56 @@ pub fn card_at(content: Rect, settings: &AgentSettings, point: Point2D) -> Optio
             return Some(index);
         }
         card_y += card.size.y + CARD_GAP;
+    }
+    None
+}
+
+pub fn preset_hover_at(
+    content: Rect,
+    settings: &AgentSettings,
+    point: Point2D,
+) -> Option<BuiltinAgentPresetKey> {
+    let card = open_preset_menu_card(content, settings, point)?;
+    agent_settings_builtin_parts::preset_hover_at(card, point, settings.builtin_preset_menu_scroll)
+}
+
+pub fn preset_scroll_max_at(
+    content: Rect,
+    settings: &AgentSettings,
+    point: Point2D,
+) -> Option<f32> {
+    let _ = open_preset_menu_card(content, settings, point)?;
+    Some(agent_settings_builtin_parts::preset_scroll_max())
+}
+
+fn open_preset_menu_card(content: Rect, settings: &AgentSettings, point: Point2D) -> Option<Rect> {
+    let mut card_y = content.origin.y + 12.0 + HEADER_HEIGHT + SUBTITLE_HEIGHT;
+    for (index, _) in settings.builtin_agents.iter().enumerate() {
+        let card = card_rect(
+            content.origin.x,
+            card_y,
+            content.size.x,
+            card_height(settings, index),
+        );
+        if settings.builtin_preset_menu_open == Some(BuiltinAgentPresetMenuTarget::Agent(index))
+            && agent_settings_builtin_parts::preset_menu_contains(card, point)
+        {
+            return Some(card);
+        }
+        card_y += card.size.y + CARD_GAP;
+    }
+    if settings.builtin_preset_menu_open == Some(BuiltinAgentPresetMenuTarget::Draft)
+        && settings.builtin_agent_draft.is_some()
+    {
+        let card = card_rect(
+            content.origin.x,
+            card_y,
+            content.size.x,
+            draft_card_height(settings),
+        );
+        if agent_settings_builtin_parts::preset_menu_contains(card, point) {
+            return Some(card);
+        }
     }
     None
 }
