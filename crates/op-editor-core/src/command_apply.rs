@@ -21,6 +21,7 @@
 use crate::align::AlignAction;
 use crate::command::{EditorCommand, VariableScalarPayload};
 use crate::node_id::NodeId;
+use crate::pen_node_ext::PenNodeExt;
 use crate::state::EditorState;
 use crate::tool::Tool;
 use crate::viewport::Viewport;
@@ -391,13 +392,39 @@ impl EditorState {
                 self.history_push_past(snap);
                 true
             }
-            EditorCommand::ImportSvg { svg, x, y } => {
+            EditorCommand::ImportSvg {
+                svg,
+                x,
+                y,
+                target_parent,
+            } => {
                 let Some(mut next_id) = self.next_node_id_seed() else {
                     return false;
                 };
+                if target_parent.is_real() {
+                    match find_node(self.active_children(), &target_parent) {
+                        Some(parent) if parent.is_container() => {}
+                        _ => return false,
+                    }
+                }
                 // `import_svg` pushes its own history snapshot when it
                 // inserts ≥ 1 node.
-                self.import_svg(&mut next_id, &svg, (x as f64, y as f64)) > 0
+                let count = self.import_svg(&mut next_id, &svg, (x as f64, y as f64));
+                if count == 0 {
+                    return false;
+                }
+                if target_parent.is_real() {
+                    let Some(imported_root) = self
+                        .active_children()
+                        .last()
+                        .map(|node| NodeId::new(node.id_str()))
+                    else {
+                        return false;
+                    };
+                    imported_root.is_real() && self.cmd_move_node(&imported_root, &target_parent)
+                } else {
+                    true
+                }
             }
 
             // --- Tool + viewport + history -------------------------

@@ -8,7 +8,9 @@
 
 #![cfg(test)]
 
-use crate::test_support::state_with;
+use crate::command::EditorCommand;
+use crate::pen_node_ext::PenNodeExt;
+use crate::test_support::{frame, state_with};
 use jian_ops_schema::node::PenNode;
 
 /// Return the imported top-level nodes regardless of whether they
@@ -66,6 +68,24 @@ fn imports_offset_translates_nodes() {
         }
         other => panic!("expected rect, got {other:?}"),
     }
+}
+
+#[test]
+fn import_svg_command_can_insert_under_parent() {
+    let mut s = state_with(vec![frame("n1", "Frame", 0.0, 0.0, 400.0, 400.0, vec![])]);
+
+    assert!(s.apply(EditorCommand::ImportSvg {
+        svg: r#"<svg><rect width="10" height="10"/></svg>"#.into(),
+        x: 0,
+        y: 0,
+        target_parent: crate::NodeId::new("n1"),
+    }));
+
+    assert_eq!(s.active_children().len(), 1);
+    let frame = &s.active_children()[0];
+    let children = frame.children().expect("parent children");
+    assert_eq!(children.len(), 1);
+    assert_eq!(children[0].base().name.as_deref(), Some("Imported SVG"));
 }
 
 #[test]

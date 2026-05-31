@@ -494,6 +494,9 @@ fn map_import_svg(positionals: &[String], flags: &Flags) -> Result<Command, Stri
     if let Some(y) = flag_value(flags, "y") {
         pairs.push(pair("y", y));
     }
+    if let Some(parent) = flag_value(flags, "parent") {
+        pairs.push(pair("parent", parent));
+    }
     tool_call("import_svg", pairs)
 }
 
@@ -714,5 +717,7 @@ fn version_json() -> String {
     format!(r#"{{"version":"{}"}}"#, env!("CARGO_PKG_VERSION"))
 }
 
+#[cfg(test)]
+mod cli_import_tests;
 #[cfg(test)]
 mod tests;
