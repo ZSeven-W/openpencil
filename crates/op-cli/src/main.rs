@@ -208,7 +208,13 @@ fn command_from_positionals(positionals: &[String], flags: &Flags) -> Result<Com
         "version" => Ok(Command::Version),
         "tools" => Ok(Command::ToolsList),
         "status" => tool_call("get_document_info", vec![]),
-        "open" if positionals.len() == 1 => tool_call("get_document_info", vec![]),
+        "open" => {
+            let args = flag_value(flags, "file")
+                .or_else(|| positionals.get(1).cloned())
+                .map(|path| vec![pair("filePath", path)])
+                .unwrap_or_default();
+            tool_call("open_document", args)
+        }
         "get" => map_get(flags),
         "selection" => tool_call("get_selection", vec![]),
         "insert" => map_insert(positionals),

@@ -35,8 +35,8 @@ use op_mcp::{
     insert_node_snapshot, instantiate_component_snapshot, list_components_snapshot,
     list_node_kinds_snapshot, list_pages_snapshot, list_theme_presets_snapshot,
     list_variables_snapshot, load_theme_preset_snapshot, move_node_snapshot,
-    nudge_selected_snapshot, paste_clipboard_snapshot, read_nodes_snapshot, redo_snapshot,
-    remove_node_effect_snapshot, remove_page_snapshot, rename_component_snapshot,
+    nudge_selected_snapshot, open_document_snapshot, paste_clipboard_snapshot, read_nodes_snapshot,
+    redo_snapshot, remove_node_effect_snapshot, remove_page_snapshot, rename_component_snapshot,
     rename_page_snapshot, rename_variable_snapshot, reorder_page_snapshot,
     reorder_selected_snapshot, replace_node_snapshot, run_stdio_with_applier,
     save_theme_preset_snapshot, selection_snapshot, set_active_axis_value_snapshot,
@@ -112,9 +112,7 @@ where
     if trimmed.is_empty() {
         return Ok(None);
     }
-    // MCP handshake / discovery methods short-circuit the tool
-    // dispatcher — detected via a cheap method-field sniff so JSON
-    // parsing stays confined to the wire parser.
+    // MCP handshake / discovery methods short-circuit the tool dispatcher.
     match sniff_method(trimmed).as_deref() {
         Some("initialize") => {
             return Ok(sniff_id_raw(trimmed).map(|id| initialize_response(&id)));
@@ -377,6 +375,7 @@ fn rebuild_registry(doc: &EditorState) -> ToolRegistry {
     for tool in op_mcp::element_tools::insert_kit_component_tools(doc) {
         r.register(Box::new(tool));
     }
+    r.register(Box::new(open_document_snapshot(doc)));
     r.register(Box::new(document_info_snapshot(doc)));
     r.register(Box::new(selection_snapshot(doc)));
     r.register(Box::new(get_node_snapshot(doc)));
@@ -664,14 +663,8 @@ fn ping_response(id_raw: &str) -> String {
 }
 
 fn tools_list_response(id_raw: &str, state: &EditorState) -> String {
-    // The tool catalog must match what `rebuild_registry`
-    // installs. Schemas are minimal but sufficient for an MCP
-    // client to render a tool picker + validate calls. Dynamic
-    // UIKit element tools (one per kit component) are appended
-    // alongside the static schemas — the kit set lives on
-    // `EditorState`, so they're computed per call. Debug-tool
-    // schemas are appended only when the isolation flag is set,
-    // so they stay invisible to a production client.
+    // The tool catalog must match `rebuild_registry`; dynamic element schemas and
+    // debug schemas are appended here under the same gates as registration.
     let mut entries: Vec<String> = TOOL_SCHEMAS.iter().map(|s| (*s).to_string()).collect();
     entries.extend(op_mcp::element_tools::element_tool_schemas(state));
     if debug_tools_enabled() {
@@ -686,6 +679,7 @@ fn tools_list_response(id_raw: &str, state: &EditorState) -> String {
 /// Per-tool JSON schemas, kept as string literals to avoid serde on this path.
 const TOOL_SCHEMAS: &[&str] = &[
     // --- read tools ---
+    r#"{"name":"open_document","description":"Connect to the current Rust MCP document and return metadata, context summary, and design prompt. filePath is accepted for TS CLI compatibility; the Rust server remains bound to the document it was started with.","inputSchema":{"type":"object","properties":{"filePath":{"type":"string","description":"Accepted for TS compatibility; use live://canvas/current server document"}}}}"#,
     r#"{"name":"get_document_info","description":"Summarize the open document (page count, active page, etc).","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
     r#"{"name":"get_selection","description":"Return the current selection state (ids, count).","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
     r#"{"name":"get_node","description":"Read a node by id with depth-limited descendants.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string","description":"u64 node id"}},"required":["node_id"]}}"#,
