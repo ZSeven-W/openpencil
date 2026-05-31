@@ -1,6 +1,8 @@
 use super::*;
 use jian_ops_schema::node::base::PenNodeBase;
-use jian_ops_schema::node::{ContainerProps, FrameNode, ImageNode, PenNode, TextContent, TextNode};
+use jian_ops_schema::node::{
+    ContainerProps, FrameNode, ImageNode, PenNode, RectangleNode, TextContent, TextNode,
+};
 use jian_ops_schema::sizing::SizingBehavior;
 use jian_ops_schema::style::{ImageFillMode, PenFill, SolidFillBody};
 
@@ -94,6 +96,30 @@ fn frame_node(
         image_search_query: None,
         reusable: None,
         slot: None,
+        state: None,
+        bindings: None,
+        events: None,
+        lifecycle: None,
+        semantics: None,
+        gestures: None,
+        route: None,
+    })
+}
+
+fn rectangle_node(id: &str, name: &str, fill: Option<Vec<PenFill>>) -> PenNode {
+    PenNode::Rectangle(RectangleNode {
+        base: PenNodeBase {
+            id: id.to_string(),
+            name: Some(name.into()),
+            ..Default::default()
+        },
+        container: ContainerProps {
+            width: Some(SizingBehavior::Number(240.0)),
+            height: Some(SizingBehavior::Number(160.0)),
+            fill,
+            ..Default::default()
+        },
+        children: None,
         state: None,
         bindings: None,
         events: None,
@@ -211,6 +237,23 @@ fn collect_targets_uses_parent_semantic_name_for_generic_heuristic_frame() {
 }
 
 #[test]
+fn collect_targets_includes_solid_rectangle_image_areas() {
+    let mut state = EditorState::default();
+    state.active_children_mut().clear();
+    state.active_children_mut().push(rectangle_node(
+        "photo",
+        "Latte Image",
+        Some(vec![solid_fill()]),
+    ));
+
+    let targets = collect_targets(&state, &HashSet::new());
+
+    assert_eq!(targets.len(), 1);
+    assert_eq!(targets[0].node_id.as_str(), "photo");
+    assert_eq!(targets[0].query, "Latte Image");
+}
+
+#[test]
 fn apply_result_repaints_placeholder_frame_with_image_fill_and_clears_children() {
     let mut state = EditorState::default();
     state.active_children_mut().clear();
@@ -240,6 +283,31 @@ fn apply_result_repaints_placeholder_frame_with_image_fill_and_clears_children()
     assert_eq!(image_fill.url, "https://example.com/photo.jpg");
     assert_eq!(image_fill.mode, Some(ImageFillMode::Crop));
     assert_eq!(frame.children.as_deref(), Some(&[][..]));
+}
+
+#[test]
+fn apply_result_repaints_placeholder_rectangle_with_image_fill() {
+    let mut state = EditorState::default();
+    state.active_children_mut().clear();
+    state.active_children_mut().push(rectangle_node(
+        "photo",
+        "Latte Image",
+        Some(vec![solid_fill()]),
+    ));
+
+    assert!(apply_result(
+        &mut state,
+        &NodeId::new("photo"),
+        "https://example.com/photo.jpg"
+    ));
+    let PenNode::Rectangle(rect) = &state.active_children()[0] else {
+        panic!("expected rectangle");
+    };
+    let Some([PenFill::Image(image_fill)]) = rect.container.fill.as_deref() else {
+        panic!("expected single image fill");
+    };
+    assert_eq!(image_fill.url, "https://example.com/photo.jpg");
+    assert_eq!(image_fill.mode, Some(ImageFillMode::Crop));
 }
 
 #[test]
