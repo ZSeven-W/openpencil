@@ -97,3 +97,28 @@ fn acp_agent_draft_can_cancel_or_save() {
     assert!(s.acp_agent_draft.is_none());
     assert_eq!(s.acp_agents[0].command, "op-agent");
 }
+
+#[test]
+fn acp_agent_args_text_uses_comma_separated_values_like_ts() {
+    let mut s = AgentSettings::default();
+    let id = s.add_acp_agent_config(
+        "Local ACP",
+        crate::AcpConnectionType::Local,
+        "op-agent",
+        vec!["--stdio".into(), "--workspace /tmp".into()],
+        Default::default(),
+        None,
+        true,
+    );
+    let agent = s
+        .acp_agents
+        .iter_mut()
+        .find(|agent| agent.id == id)
+        .expect("agent exists");
+
+    assert_eq!(agent.args_text(), "--stdio, --workspace /tmp");
+
+    agent.set_args_text(" --stdio, --workspace /tmp, , --verbose ");
+
+    assert_eq!(agent.args, vec!["--stdio", "--workspace /tmp", "--verbose"]);
+}
