@@ -592,6 +592,19 @@ fn system_auto_update_switch_has_click_target() {
 }
 
 #[test]
+fn system_tab_uses_ts_compact_auto_update_card_height() {
+    let mut state = EditorState::default();
+    state.editor_ui.agent_settings.tab = AgentSettingsTab::System;
+    let panel = AgentSettingsPanel::for_editor(&state);
+
+    assert_eq!(
+        panel.content_total_height(),
+        130.0,
+        "System tab should match the TS desktop branch: title plus one compact auto-update row"
+    );
+}
+
+#[test]
 fn images_tab_profile_rows_expose_active_and_remove_targets() {
     let mut state = EditorState::default();
     state.editor_ui.agent_settings.tab = AgentSettingsTab::Images;
