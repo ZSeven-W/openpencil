@@ -39,10 +39,11 @@ const HISTORY_FIRST: f32 = COMMIT_TOP + COMMIT_H + 24.0;
 const ROW_H: f32 = 26.0;
 const MAX_COMMITS: usize = 8;
 const SUMMARY_MAX: usize = 34;
-/// Height of the inline commit-detail card (里程碑详情 title + a
-/// restore/copy-hash button row) inserted under an expanded commit row
-/// (TS `HistoryMilestoneRow` detail block). Pushes later rows down.
-const CARD_H: f32 = 60.0;
+/// Height of the inline commit-detail card (里程碑详情 title + a diff
+/// status line + a restore/copy-hash button row) inserted under an
+/// expanded commit row (TS `HistoryMilestoneRow` detail block). Pushes
+/// later rows down.
+const CARD_H: f32 = 84.0;
 /// Per-char advance heuristic for the branch label (keeps paint +
 /// hit-test aligned without measuring text).
 const BRANCH_CHAR_W: f32 = 7.5;
@@ -96,7 +97,8 @@ impl GitPanel<'_> {
     /// `(恢复, 复制哈希)` button rects for the inline card whose top edge
     /// is `card_top`. Backend-free fixed widths keep paint + hit aligned.
     fn commit_card_button_rects(&self, rect: Rect, card_top: f32) -> (Rect, Rect) {
-        let btn_y = card_top + 30.0;
+        // Title at +18, diff line at +40, button row at +52 (h24) → 84.
+        let btn_y = card_top + 52.0;
         let h = 24.0;
         let x = rect.origin.x + 40.0; // align with the message column (`pl-10`)
         let restore = Rect {
@@ -416,7 +418,7 @@ impl GitPanel<'_> {
                 // `ready_commit_card_buttons` lands on the same geometry.
                 if self.state.expanded_commit == Some(i) {
                     let card_top = y - 6.0;
-                    self.paint_commit_card(cx, rect, card_top);
+                    self.paint_commit_card(cx, rect, card_top, commit.is_initial);
                     y += CARD_H;
                 }
             }
@@ -424,10 +426,11 @@ impl GitPanel<'_> {
     }
 
     /// Paint the inline commit-detail card (里程碑详情) — a muted band
-    /// with the detail title and a `恢复` / `复制哈希` button row. TS
-    /// `HistoryMilestoneRow` detail block; the inline diff summary is
-    /// deferred (the semantic node-diff is a separate subsystem).
-    fn paint_commit_card(&self, cx: &mut PaintCx<'_>, rect: Rect, card_top: f32) {
+    /// with the detail title, a diff status line, and a `恢复` / `复制哈希`
+    /// button row. TS `HistoryMilestoneRow` detail block. The root commit
+    /// shows the "no parent to diff against" line; the semantic node-diff
+    /// summary for later commits is deferred (a separate subsystem).
+    fn paint_commit_card(&self, cx: &mut PaintCx<'_>, rect: Rect, card_top: f32, is_initial: bool) {
         let t = self.theme;
         cx.backend.fill_rect(
             Rect {
@@ -445,6 +448,19 @@ impl GitPanel<'_> {
             11.0,
             t.foreground,
         );
+        // Diff status line. The root commit has no parent to diff against
+        // (TS `git.history.diff.initialCommit`); non-root commits leave it
+        // blank until the semantic node-diff summary lands.
+        if is_initial {
+            self.text(
+                cx,
+                self.t("git.history.diff.initialCommit"),
+                rect.origin.x + 40.0,
+                card_top + 40.0,
+                11.0,
+                alpha(t.muted_foreground, 0.85),
+            );
+        }
         let (restore, copy) = self.commit_card_button_rects(rect, card_top);
         // 恢复 — outline button.
         cx.backend.stroke_round_rect(restore, 6.0, t.border, 1.0);

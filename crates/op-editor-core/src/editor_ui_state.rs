@@ -130,6 +130,10 @@ pub struct GitCommitSummary {
     /// taken (TS `formatCompactTime`). The widget layer is platform-free
     /// and has no wall clock, so it cannot derive this itself.
     pub time_label: String,
+    /// `true` for the root commit (no parent). The expanded detail card
+    /// shows the "initial commit — nothing to diff" line for it (TS
+    /// `git.history.diff.initialCommit`).
+    pub is_initial: bool,
 }
 
 /// One changed file in the Git panel's staging list — plain data

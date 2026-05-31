@@ -21,6 +21,9 @@ pub struct Commit {
     pub timestamp: i64,
     /// First line of the commit message.
     pub summary: String,
+    /// `true` for the root commit (no parent) — drives the panel's
+    /// "initial commit, nothing to diff" detail line.
+    pub is_initial: bool,
 }
 
 impl GitRepo {
@@ -139,6 +142,7 @@ fn commit_to_record(commit: &git2::Commit<'_>) -> Commit {
         email: author.email().unwrap_or("").to_string(),
         timestamp: commit.time().seconds(),
         summary: commit.summary().unwrap_or("").to_string(),
+        is_initial: commit.parent_count() == 0,
     }
 }
 
@@ -200,6 +204,7 @@ mod tests {
             email: "ada@x.dev".to_string(),
             timestamp: 1_700_000_000,
             summary: "first commit".to_string(),
+            is_initial: true,
         };
         assert_eq!(c.hash, "abc123");
         assert_eq!(c.short_hash, "abc");

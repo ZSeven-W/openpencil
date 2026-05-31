@@ -52,6 +52,7 @@ fn open_panel_height_grows_with_commits() {
                 summary: "first".into(),
                 author: "Ada".into(),
                 time_label: "now".into(),
+                is_initial: false,
             };
             3
         ],
@@ -70,6 +71,7 @@ fn empty_history_reserves_a_placeholder_row() {
             summary: "only".into(),
             author: "Ada".into(),
             time_label: "now".into(),
+            is_initial: false,
         }],
         ..open_repo()
     });
@@ -162,12 +164,14 @@ fn commit_rows_open_a_commit_diff() {
                 summary: "first".into(),
                 author: "Ada".into(),
                 time_label: "now".into(),
+                is_initial: false,
             },
             GitCommitSummary {
                 short_hash: "bbb2222".into(),
                 summary: "second".into(),
                 author: "Bo".into(),
                 time_label: "now".into(),
+                is_initial: false,
             },
         ],
         ..open_repo()
@@ -199,12 +203,14 @@ fn expanded_commit_card_maps_restore_and_copy_and_shifts_later_rows() {
             summary: "first".into(),
             author: "Ada".into(),
             time_label: "now".into(),
+            is_initial: false,
         },
         GitCommitSummary {
             short_hash: "bbb2222".into(),
             summary: "second".into(),
             author: "Bo".into(),
             time_label: "now".into(),
+            is_initial: false,
         },
     ];
     let collapsed = state_with(GitPanelState {
@@ -236,7 +242,7 @@ fn expanded_commit_card_maps_restore_and_copy_and_shifts_later_rows() {
     );
     // Row 1 shifted down by exactly the card height; the panel grew too.
     let row1_expanded = panel.ready_commit_row_rects(rect)[1].origin.y;
-    assert!((row1_expanded - row1_collapsed - 60.0).abs() < 0.5);
+    assert!((row1_expanded - row1_collapsed - 84.0).abs() < 0.5);
     assert!(panel.height() > cp.height());
     // The expanded card sits below row 0's click target.
     let row0 = panel.ready_commit_row_rects(rect)[0];
