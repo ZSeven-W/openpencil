@@ -9,8 +9,8 @@
 
 use super::helpers::{rect_contains, TOOLBAR_INSET_X, TOOLBAR_INSET_Y};
 use super::{
-    ChatDragState, CreateDragState, DragState, HandleDragState, NodeDragState, PanelResize,
-    PanelResizeKind, RotateDragState, WidgetHostNative,
+    ChatDragState, ChatResizeState, CreateDragState, DragState, HandleDragState, NodeDragState,
+    PanelResize, PanelResizeKind, RotateDragState, WidgetHostNative,
 };
 use op_editor_ui::widgets::{
     rotation_corner_at_point, selection_handle_at_point, AIChatHit, AIChatPlaceholder, LayoutCx,
@@ -530,6 +530,17 @@ impl WidgetHostNative {
         if let Some(chat_rect) = self.ai_chat_rect(viewport_width, viewport_height) {
             let panel = AIChatPlaceholder::from_editor(&self.editor_state);
             if let Some(hit) = panel.hit_test(chat_rect, Point2D::new(x, y)) {
+                if let AIChatHit::Resize(edge) = hit {
+                    self.chat_resize = Some(ChatResizeState {
+                        edge,
+                        start_x: x,
+                        start_y: y,
+                        start_rect: chat_rect,
+                    });
+                    self.editor_state.chat.focused = false;
+                    self.mark_dirty();
+                    return true;
+                }
                 if matches!(hit, AIChatHit::DragHandle) {
                     self.chat_drag = Some(ChatDragState {
                         grab_dx: x - chat_rect.origin.x,

@@ -405,6 +405,9 @@ impl WidgetHost {
         if let Some(chat_rect) = self.ai_chat_rect(viewport_width, viewport_height) {
             let panel = AIChatPlaceholder::from_editor_at(&self.editor_state, self.now_ms);
             if let Some(hit) = panel.hit_test(chat_rect, Point2D::new(x, y)) {
+                if matches!(hit, AIChatHit::Resize(_)) {
+                    return true;
+                }
                 if matches!(hit, AIChatHit::DragHandle) {
                     self.chat_drag = Some(ChatDragState {
                         grab_dx: x - chat_rect.origin.x,
@@ -625,6 +628,9 @@ impl WidgetHost {
                         return true;
                     }
                     AIChatHit::DragHandle => {
+                        return false;
+                    }
+                    AIChatHit::Resize(_) => {
                         return false;
                     }
                     AIChatHit::ToggleCollapse => {

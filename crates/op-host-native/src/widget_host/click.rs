@@ -162,6 +162,10 @@ impl WidgetHostNative {
                         // this; reaching here is a path bypass.
                         return false;
                     }
+                    AIChatHit::Resize(_) => {
+                        // Resize handles are press-drag only.
+                        return false;
+                    }
                     AIChatHit::ToggleCollapse => {
                         self.editor_state.chat.collapsed = !self.editor_state.chat.collapsed;
                         self.mark_dirty();

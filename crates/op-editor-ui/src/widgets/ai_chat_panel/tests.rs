@@ -250,6 +250,42 @@ fn hit_test_header_returns_drag_handle() {
 }
 
 #[test]
+fn resize_edge_at_resolves_all_ts_handles_when_not_maximized() {
+    let s = EditorState::new();
+    let panel = AIChatPlaceholder::from_editor(&s);
+    let rect = Rect::xywh(100.0, 80.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
+    let mid_x = rect.origin.x + rect.size.x / 2.0;
+    let mid_y = rect.origin.y + rect.size.y / 2.0;
+    let right = rect.origin.x + rect.size.x;
+    let bottom = rect.origin.y + rect.size.y;
+
+    let cases = [
+        (Point2D::new(mid_x, rect.origin.y + 2.0), ChatResizeEdge::N),
+        (Point2D::new(mid_x, bottom - 2.0), ChatResizeEdge::S),
+        (Point2D::new(right - 2.0, mid_y), ChatResizeEdge::E),
+        (Point2D::new(rect.origin.x + 2.0, mid_y), ChatResizeEdge::W),
+        (
+            Point2D::new(right - 2.0, rect.origin.y + 2.0),
+            ChatResizeEdge::Ne,
+        ),
+        (
+            Point2D::new(rect.origin.x + 2.0, rect.origin.y + 2.0),
+            ChatResizeEdge::Nw,
+        ),
+        (Point2D::new(right - 2.0, bottom - 2.0), ChatResizeEdge::Se),
+        (
+            Point2D::new(rect.origin.x + 2.0, bottom - 2.0),
+            ChatResizeEdge::Sw,
+        ),
+    ];
+
+    for (point, edge) in cases {
+        assert_eq!(panel.resize_edge_at(rect, point), Some(edge));
+        assert_eq!(panel.hit_test(rect, point), Some(AIChatHit::Resize(edge)));
+    }
+}
+
+#[test]
 fn hit_test_resolves_header_maximize_button() {
     let s = EditorState::new();
     let panel = AIChatPlaceholder::from_editor(&s);

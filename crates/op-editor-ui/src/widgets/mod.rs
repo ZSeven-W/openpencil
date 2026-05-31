@@ -177,10 +177,10 @@ pub use canvas_viewport::{
 
 pub use icons::{draw_icon, draw_icon_catalog_entry, draw_icon_data, Icon, IconPathData};
 
-pub use ai_chat_hit::AIChatHit;
+pub use ai_chat_hit::{AIChatHit, ChatResizeEdge};
 pub use ai_chat_panel::{
     AIChatPlaceholder, AI_CHAT_COLLAPSED_HEIGHT, AI_CHAT_COLLAPSED_WIDTH, AI_CHAT_HEIGHT,
-    AI_CHAT_WIDTH,
+    AI_CHAT_MAX_RATIO, AI_CHAT_MIN_HEIGHT, AI_CHAT_MIN_WIDTH, AI_CHAT_WIDTH,
 };
 pub use align_toolbar::{AlignToolbar, AlignToolbarHit, ALIGN_TOOLBAR_HEIGHT, ALIGN_TOOLBAR_WIDTH};
 pub use component_browser_panel::{
