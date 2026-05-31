@@ -55,6 +55,21 @@ const PLANNING_GUIDE: &str = r#"DESIGN PLANNING:
 - Keep forms together with their primary action. Split only when one section would be too large.
 - Default to light neutral styling unless the request explicitly asks for dark, cyber, neon, terminal, noir, night, or similar themes."#;
 
+const RUST_ELEMENT_TOOL_GUIDE: &str = r##"RUST MCP ELEMENT TOOL COMPATIBILITY:
+- This Rust MCP server does not expose the TS `add_*_v1` element-tool family unless those exact tools appear in tools/list. Do not call `add_*` tools just because older prompt text or examples mention them.
+- For custom UI trees, use `batch_design` with the TS operations DSL in the `operations` argument. Supported write op: `binding=I(parent, nodeJson)`.
+- Parent can be `null` for the active page root, a previous binding name, or one real existing parent id. The node JSON is canonical PenNode JSON; omit `id` if you do not care, because Rust remaps inserted ids.
+
+Example:
+root=I(null, {"type":"frame","name":"Page","width":1200,"height":800,"layout":"vertical","gap":24,"fill":"#ffffff"})
+hero=I(root, {"type":"frame","name":"Hero","width":"fill_container","height":360,"layout":"vertical","gap":16})
+title=I(hero, {"type":"text","name":"Headline","content":"Welcome Back","width":"fill_container","height":64,"fontSize":48,"fontWeight":700})
+
+Light/dark handling:
+- Inspect `get_variables` / `get_active_theme` first when the document already defines theme axes.
+- Use variable refs such as `$color-bg`, `$color-text`, and `$color-surface` when the document provides them.
+- If the user explicitly asks for a one-off dark or light design and no variables exist, use concrete high-contrast fills and text colors directly."##;
+
 const DEFAULT_DESIGN_MD: &str = "No design.md loaded in the current document.";
 
 pub struct GetDesignPrompt {
@@ -132,8 +147,8 @@ fn section_content(section: &str) -> Option<String> {
             skill_content("product-principles")
         )),
         "planning" => Some(PLANNING_GUIDE.into()),
-        "elements" => Some(skill_content("elements")),
-        "elements-cookbook" => Some(skill_content("elements-cookbook")),
+        "elements" => Some(RUST_ELEMENT_TOOL_GUIDE.into()),
+        "elements-cookbook" => Some(RUST_ELEMENT_TOOL_GUIDE.into()),
         "design-md" => Some(DEFAULT_DESIGN_MD.into()),
         "copywriting" => Some(skill_content("copywriting")),
         "overflow" => Some(skill_content("overflow")),
@@ -166,8 +181,7 @@ fn build_full_prompt() -> String {
         &skill_content("text-rules"),
         &skill_content("design-principles"),
         &skill_content("variables"),
-        &skill_content("elements"),
-        &skill_content("elements-cookbook"),
+        RUST_ELEMENT_TOOL_GUIDE,
     ]
     .join("\n\n")
 }

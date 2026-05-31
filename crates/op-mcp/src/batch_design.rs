@@ -4,6 +4,9 @@
 
 use std::collections::BTreeMap;
 
+use jian_ops_schema::node::PenNode;
+use op_editor_core::{NodeId, PenNodeExt};
+
 use super::write_tools::{validate_hex, ALLOWED_KINDS};
 use super::{BatchInsertItem, EditorCommand, McpTool, ToolErrorCode, ToolOutcome};
 
@@ -31,25 +34,7 @@ impl McpTool for BatchDesign {
         "batch_design"
     }
     fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
-        let Some(raw) = args.get("nodes_json") else {
-            return ToolOutcome::Err(
-                ToolErrorCode::MissingArgument,
-                "nodes_json is required (JSON array of node descriptors)".into(),
-            );
-        };
-        match parse_batch_items(raw) {
-            Ok(items) if items.is_empty() => ToolOutcome::Err(
-                ToolErrorCode::InvalidArgument,
-                "nodes_json must contain at least one descriptor".into(),
-            ),
-            Ok(items) => {
-                let mut out = BTreeMap::new();
-                out.insert("wrote".into(), "true".into());
-                out.insert("count".into(), items.len().to_string());
-                ToolOutcome::OkWithCommand(out, EditorCommand::BatchInsert { items })
-            }
-            Err(e) => ToolOutcome::Err(ToolErrorCode::InvalidArgument, e),
-        }
+        dispatch_batch_design(args, None)
     }
 }
 
@@ -66,10 +51,31 @@ pub fn batch_design_snapshot() -> BatchDesign {
 /// (e.g. `design_refine` patching existing nodes via UpdateNode
 /// batches) once a richer command exists.
 fn dispatch_phase(args: &BTreeMap<String, String>, phase: &'static str) -> ToolOutcome {
+    dispatch_batch_design(args, Some(phase))
+}
+
+fn dispatch_batch_design(
+    args: &BTreeMap<String, String>,
+    phase: Option<&'static str>,
+) -> ToolOutcome {
+    if let Some(operations) = args.get("operations") {
+        return match parse_insert_operations(operations) {
+            Ok((parent_id, nodes, count)) => {
+                let mut out = BTreeMap::new();
+                out.insert("wrote".into(), "true".into());
+                out.insert("count".into(), count.to_string());
+                if let Some(phase) = phase {
+                    out.insert("phase".into(), phase.into());
+                }
+                ToolOutcome::OkWithCommand(out, EditorCommand::InsertSubtree { nodes, parent_id })
+            }
+            Err(e) => ToolOutcome::Err(ToolErrorCode::InvalidArgument, e),
+        };
+    }
     let Some(raw) = args.get("nodes_json") else {
         return ToolOutcome::Err(
             ToolErrorCode::MissingArgument,
-            "nodes_json is required (JSON array of node descriptors)".into(),
+            "nodes_json or operations is required".into(),
         );
     };
     match parse_batch_items(raw) {
@@ -81,10 +87,339 @@ fn dispatch_phase(args: &BTreeMap<String, String>, phase: &'static str) -> ToolO
             let mut out = BTreeMap::new();
             out.insert("wrote".into(), "true".into());
             out.insert("count".into(), items.len().to_string());
-            out.insert("phase".into(), phase.into());
+            if let Some(phase) = phase {
+                out.insert("phase".into(), phase.into());
+            }
             ToolOutcome::OkWithCommand(out, EditorCommand::BatchInsert { items })
         }
         Err(e) => ToolOutcome::Err(ToolErrorCode::InvalidArgument, e),
+    }
+}
+
+struct ParsedInsert {
+    binding: String,
+    parent: ParentRef,
+    node: PenNode,
+}
+
+enum ParentRef {
+    Root,
+    Ref(String),
+}
+
+fn parse_insert_operations(input: &str) -> Result<(NodeId, Vec<PenNode>, usize), String> {
+    let lines = split_operations(input);
+    if lines.is_empty() {
+        return Err("operations must contain at least one I(parent, node) operation".into());
+    }
+    let mut inserts = Vec::new();
+    let mut binding_to_idx = BTreeMap::new();
+    let mut tmp_id = 1usize;
+    for (line_idx, line) in lines.iter().enumerate() {
+        let (binding, parent, data) = parse_insert_operation(line, line_idx)?;
+        if binding_to_idx.contains_key(&binding) {
+            return Err(format!("duplicate binding {binding:?}"));
+        }
+        let mut value: serde_json::Value =
+            serde_json::from_str(data).map_err(|e| format!("{binding}: invalid node JSON: {e}"))?;
+        normalize_node_shape(&mut value);
+        ensure_node_ids(&mut value, &mut tmp_id);
+        let node: PenNode = serde_json::from_value(value)
+            .map_err(|e| format!("{binding}: invalid PenNode payload: {e}"))?;
+        binding_to_idx.insert(binding.clone(), inserts.len());
+        inserts.push(ParsedInsert {
+            binding,
+            parent,
+            node,
+        });
+    }
+    assemble_insert_forest(inserts, &binding_to_idx)
+}
+
+fn assemble_insert_forest(
+    inserts: Vec<ParsedInsert>,
+    binding_to_idx: &BTreeMap<String, usize>,
+) -> Result<(NodeId, Vec<PenNode>, usize), String> {
+    let mut children_by_parent = vec![Vec::<usize>::new(); inserts.len()];
+    let mut roots = Vec::<usize>::new();
+    let mut real_parent: Option<NodeId> = None;
+    for (idx, item) in inserts.iter().enumerate() {
+        match &item.parent {
+            ParentRef::Root => roots.push(idx),
+            ParentRef::Ref(raw) => {
+                if let Some(parent_idx) = binding_to_idx.get(raw).copied() {
+                    if parent_idx == idx {
+                        return Err(format!("{} cannot be inserted under itself", item.binding));
+                    }
+                    children_by_parent[parent_idx].push(idx);
+                } else {
+                    let parent_id = root_or_node_id(raw);
+                    if parent_id.is_real() {
+                        match &real_parent {
+                            Some(existing) if existing != &parent_id => {
+                                return Err(
+                                    "operations can target only one existing parent per call"
+                                        .into(),
+                                );
+                            }
+                            None => real_parent = Some(parent_id),
+                            _ => {}
+                        }
+                    }
+                    roots.push(idx);
+                }
+            }
+        }
+    }
+    if roots.is_empty() {
+        return Err("operations must include at least one root insert".into());
+    }
+    let mut visit = vec![0u8; inserts.len()];
+    let mut nodes = Vec::with_capacity(roots.len());
+    for root in roots {
+        nodes.push(build_tree(root, &inserts, &children_by_parent, &mut visit)?);
+    }
+    Ok((real_parent.unwrap_or(NodeId::NONE), nodes, inserts.len()))
+}
+
+fn build_tree(
+    idx: usize,
+    inserts: &[ParsedInsert],
+    children_by_parent: &[Vec<usize>],
+    visit: &mut [u8],
+) -> Result<PenNode, String> {
+    match visit[idx] {
+        1 => return Err("operations contain a parent cycle".into()),
+        2 => return Ok(inserts[idx].node.clone()),
+        _ => {}
+    }
+    visit[idx] = 1;
+    let mut node = inserts[idx].node.clone();
+    for child_idx in &children_by_parent[idx] {
+        let child = build_tree(*child_idx, inserts, children_by_parent, visit)?;
+        let Some(children) = node.children_mut() else {
+            return Err(format!(
+                "binding {:?} cannot receive children because it is not a container",
+                inserts[idx].binding
+            ));
+        };
+        children.push(child);
+    }
+    visit[idx] = 2;
+    Ok(node)
+}
+
+fn parse_insert_operation(line: &str, index: usize) -> Result<(String, ParentRef, &str), String> {
+    let trimmed = line.trim().trim_end_matches(';').trim();
+    let (binding, call) = match find_top_level_char(trimmed, '=') {
+        Some(eq) => {
+            let binding = trimmed[..eq].trim();
+            if !is_binding(binding) {
+                return Err(format!("invalid binding {binding:?}"));
+            }
+            (binding.to_string(), trimmed[eq + 1..].trim())
+        }
+        None => (format!("_auto_{index}_I"), trimmed),
+    };
+    if !call.starts_with("I(") || !call.ends_with(')') {
+        return Err(format!(
+            "{binding}: only I(parent, node) operations are supported"
+        ));
+    }
+    let body = &call[2..call.len() - 1];
+    let Some(comma) = find_top_level_char(body, ',') else {
+        return Err(format!("{binding}: I() requires parent and node JSON"));
+    };
+    let parent = parse_parent_ref(body[..comma].trim())?;
+    let data = body[comma + 1..].trim();
+    if data.is_empty() {
+        return Err(format!("{binding}: node JSON is empty"));
+    }
+    Ok((binding, parent, data))
+}
+
+fn split_operations(raw: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut buf = String::new();
+    let mut depth = 0i32;
+    let mut in_string: Option<char> = None;
+    let mut escape = false;
+    for ch in raw.chars() {
+        if escape {
+            buf.push(ch);
+            escape = false;
+            continue;
+        }
+        if in_string.is_some() && ch == '\\' {
+            buf.push(ch);
+            escape = true;
+            continue;
+        }
+        if let Some(quote) = in_string {
+            if ch == quote {
+                in_string = None;
+            }
+            buf.push(ch);
+            continue;
+        }
+        match ch {
+            '"' | '\'' => {
+                in_string = Some(ch);
+                buf.push(ch);
+            }
+            '(' | '[' | '{' => {
+                depth += 1;
+                buf.push(ch);
+            }
+            ')' | ']' | '}' => {
+                depth -= 1;
+                buf.push(ch);
+            }
+            '\n' if depth == 0 => {
+                let line = buf.trim();
+                if !line.is_empty() && !line.starts_with("//") {
+                    out.push(line.to_string());
+                }
+                buf.clear();
+            }
+            _ => buf.push(ch),
+        }
+    }
+    let tail = buf.trim();
+    if !tail.is_empty() && !tail.starts_with("//") {
+        out.push(tail.to_string());
+    }
+    out
+}
+
+fn find_top_level_char(s: &str, target: char) -> Option<usize> {
+    let mut depth = 0i32;
+    let mut in_string: Option<char> = None;
+    let mut escape = false;
+    for (idx, ch) in s.char_indices() {
+        if escape {
+            escape = false;
+            continue;
+        }
+        if in_string.is_some() && ch == '\\' {
+            escape = true;
+            continue;
+        }
+        if let Some(quote) = in_string {
+            if ch == quote {
+                in_string = None;
+            }
+            continue;
+        }
+        match ch {
+            '"' | '\'' => in_string = Some(ch),
+            '(' | '[' | '{' => depth += 1,
+            ')' | ']' | '}' => depth -= 1,
+            _ if ch == target && depth == 0 => return Some(idx),
+            _ => {}
+        }
+    }
+    None
+}
+
+fn parse_parent_ref(raw: &str) -> Result<ParentRef, String> {
+    let raw = raw.trim();
+    if matches!(raw, "null" | "undefined" | "\"\"" | "''" | "0" | "\"0\"") {
+        return Ok(ParentRef::Root);
+    }
+    if raw.starts_with('"') {
+        return serde_json::from_str::<String>(raw)
+            .map(ParentRef::Ref)
+            .map_err(|e| format!("invalid quoted parent ref: {e}"));
+    }
+    if raw.starts_with('\'') && raw.ends_with('\'') && raw.len() >= 2 {
+        return Ok(ParentRef::Ref(raw[1..raw.len() - 1].to_string()));
+    }
+    if raw.is_empty() {
+        return Ok(ParentRef::Root);
+    }
+    Ok(ParentRef::Ref(raw.to_string()))
+}
+
+fn root_or_node_id(raw: &str) -> NodeId {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() || trimmed == "0" {
+        NodeId::NONE
+    } else {
+        NodeId::new(trimmed)
+    }
+}
+
+fn is_binding(s: &str) -> bool {
+    !s.is_empty() && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+}
+
+fn normalize_node_shape(value: &mut serde_json::Value) {
+    let serde_json::Value::Object(obj) = value else {
+        return;
+    };
+    if let Some(fill) = obj.get_mut("fill") {
+        normalize_fill(fill);
+    }
+    if let Some(stroke) = obj.get_mut("stroke") {
+        normalize_stroke(stroke);
+    }
+    if let Some(serde_json::Value::Array(children)) = obj.get_mut("children") {
+        for child in children {
+            normalize_node_shape(child);
+        }
+    }
+}
+
+fn normalize_fill(value: &mut serde_json::Value) {
+    match value {
+        serde_json::Value::String(color) => {
+            *value = serde_json::json!([{ "type": "solid", "color": color }]);
+        }
+        serde_json::Value::Object(_) => {
+            let single = std::mem::take(value);
+            *value = serde_json::Value::Array(vec![single]);
+        }
+        _ => {}
+    }
+}
+
+fn normalize_stroke(value: &mut serde_json::Value) {
+    match value {
+        serde_json::Value::String(color) => {
+            *value = serde_json::json!({
+                "thickness": 1,
+                "fill": [{ "type": "solid", "color": color }]
+            });
+        }
+        serde_json::Value::Object(obj) => {
+            if let Some(color) = obj.remove("color") {
+                obj.entry("fill")
+                    .or_insert_with(|| serde_json::json!([{ "type": "solid", "color": color }]));
+            }
+            if let Some(fill) = obj.get_mut("fill") {
+                normalize_fill(fill);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn ensure_node_ids(value: &mut serde_json::Value, next: &mut usize) {
+    let serde_json::Value::Object(obj) = value else {
+        return;
+    };
+    if obj.contains_key("type") && !obj.contains_key("id") {
+        obj.insert(
+            "id".into(),
+            serde_json::Value::String(format!("__op_tmp_{next}")),
+        );
+        *next += 1;
+    }
+    if let Some(serde_json::Value::Array(children)) = obj.get_mut("children") {
+        for child in children {
+            ensure_node_ids(child, next);
+        }
     }
 }
 
