@@ -96,6 +96,8 @@ pub enum Icon {
     Copy,
     /// Pencil — rename / edit affordance.
     Pencil,
+    /// Pen — settings Agents tab glyph.
+    Pen,
     /// ArrowUp — move up.
     ArrowUp,
     /// ArrowDown — move down.
@@ -286,6 +288,7 @@ impl Icon {
             Icon::Trash => TRASH,
             Icon::Copy => COPY,
             Icon::Pencil => PENCIL,
+            Icon::Pen => PEN,
             Icon::ArrowUp => ARROW_UP,
             Icon::ArrowDown => ARROW_DOWN,
             Icon::ChevronUp => CHEVRON_UP,
@@ -426,6 +429,7 @@ impl Icon {
             "arrow-up-right" => Icon::ArrowUpRight,
             "rotate-cw" => Icon::RotateCw,
             "pencil" | "edit" => Icon::Pencil,
+            "pen" => Icon::Pen,
             "copy" => Icon::Copy,
             "save" => Icon::Save,
             "download" => Icon::Download,

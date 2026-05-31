@@ -458,7 +458,7 @@ fn paint_sidebar(
             cx.backend.fill_round_rect(r, 8.0, theme.accent);
         }
         let icon = match tab {
-            AgentSettingsTab::Agents => Icon::Pencil,
+            AgentSettingsTab::Agents => Icon::Pen,
             AgentSettingsTab::Mcp => Icon::Terminal,
             AgentSettingsTab::Images => Icon::Image,
             AgentSettingsTab::System => Icon::Settings,
