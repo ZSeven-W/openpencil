@@ -8,6 +8,9 @@ use jian_ops_schema::node::{PenNode, TextContent};
 use jian_ops_schema::sizing::{SizingBehavior, SizingKeyword};
 use jian_ops_schema::style::{ImageFillBody, ImageFillMode, PenFill};
 use op_editor_core::{walkers, EditorState, NodeId, PenNodeExt as _};
+use reqwest::header::CONTENT_TYPE;
+
+const MAX_EMBEDDED_IMAGE_BYTES: usize = 4 * 1024 * 1024;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ImageSearchTarget {
@@ -558,12 +561,16 @@ async fn fetch_openverse(
     }
     let json: serde_json::Value = resp.json().await.ok()?;
     let result = json.get("results")?.as_array()?.first()?;
-    result
-        .get("thumbnail")
-        .and_then(serde_json::Value::as_str)
-        .or_else(|| result.get("url").and_then(serde_json::Value::as_str))
-        .filter(|s| !s.trim().is_empty())
-        .map(str::to_string)
+    let mut candidates = Vec::new();
+    push_candidate_url(
+        &mut candidates,
+        result.get("thumbnail").and_then(serde_json::Value::as_str),
+    );
+    push_candidate_url(
+        &mut candidates,
+        result.get("url").and_then(serde_json::Value::as_str),
+    );
+    first_renderable_image_src(client, candidates).await
 }
 
 async fn fetch_openverse_token(
@@ -620,15 +627,102 @@ async fn fetch_wikimedia(client: &reqwest::Client, query: &str) -> Option<String
             .and_then(serde_json::Value::as_array)
             .and_then(|items| items.first())
         {
-            if let Some(url) = info
-                .get("thumburl")
-                .and_then(serde_json::Value::as_str)
-                .or_else(|| info.get("url").and_then(serde_json::Value::as_str))
-                .filter(|s| !s.trim().is_empty())
-            {
-                return Some(url.to_string());
+            let mut candidates = Vec::new();
+            push_candidate_url(
+                &mut candidates,
+                info.get("thumburl").and_then(serde_json::Value::as_str),
+            );
+            push_candidate_url(
+                &mut candidates,
+                info.get("url").and_then(serde_json::Value::as_str),
+            );
+            if let Some(src) = first_renderable_image_src(client, candidates).await {
+                return Some(src);
             }
         }
+    }
+    None
+}
+
+fn push_candidate_url(candidates: &mut Vec<String>, url: Option<&str>) {
+    let Some(url) = url.map(str::trim).filter(|url| !url.is_empty()) else {
+        return;
+    };
+    if !candidates.iter().any(|candidate| candidate == url) {
+        candidates.push(url.to_string());
+    }
+}
+
+async fn first_renderable_image_src(
+    client: &reqwest::Client,
+    candidates: Vec<String>,
+) -> Option<String> {
+    for candidate in candidates {
+        if let Some(src) = fetch_image_data_url(client, &candidate).await {
+            return Some(src);
+        }
+    }
+    None
+}
+
+async fn fetch_image_data_url(client: &reqwest::Client, url: &str) -> Option<String> {
+    let resp = client.get(url).send().await.ok()?;
+    if !resp.status().is_success() {
+        return None;
+    }
+    if resp
+        .content_length()
+        .is_some_and(|len| len > MAX_EMBEDDED_IMAGE_BYTES as u64)
+    {
+        return None;
+    }
+    let header_mime = resp
+        .headers()
+        .get(CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .and_then(normalize_image_mime_header);
+    let bytes = resp.bytes().await.ok()?;
+    if bytes.is_empty() || bytes.len() > MAX_EMBEDDED_IMAGE_BYTES {
+        return None;
+    }
+    let mime = header_mime.or_else(|| sniff_image_mime(&bytes).map(str::to_string))?;
+    image_bytes_to_data_url(&mime, &bytes)
+}
+
+fn image_bytes_to_data_url(mime: &str, bytes: &[u8]) -> Option<String> {
+    if bytes.is_empty() {
+        return None;
+    }
+    let mime = normalize_image_mime_header(mime)?;
+    use base64::engine::general_purpose::STANDARD as B64;
+    use base64::Engine as _;
+    Some(format!("data:{mime};base64,{}", B64.encode(bytes)))
+}
+
+fn normalize_image_mime_header(value: &str) -> Option<String> {
+    let mime = value.split(';').next()?.trim().to_ascii_lowercase();
+    if mime == "image/jpg" {
+        return Some("image/jpeg".to_string());
+    }
+    if mime.starts_with("image/") && mime != "image/svg+xml" {
+        Some(mime)
+    } else {
+        None
+    }
+}
+
+fn sniff_image_mime(bytes: &[u8]) -> Option<&'static str> {
+    if bytes.starts_with(b"\x89PNG\r\n\x1A\n") {
+        return Some("image/png");
+    }
+    if bytes.starts_with(b"\xFF\xD8\xFF") {
+        return Some("image/jpeg");
+    }
+    if bytes.starts_with(b"GIF87a") || bytes.starts_with(b"GIF89a") {
+        return Some("image/gif");
+    }
+    if bytes.len() >= 12 && bytes.starts_with(b"RIFF") && &bytes[8..12] == b"WEBP" {
+        return Some("image/webp");
     }
     None
 }

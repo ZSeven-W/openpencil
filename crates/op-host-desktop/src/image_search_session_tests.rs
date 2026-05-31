@@ -439,11 +439,44 @@ fn openverse_credentials_require_both_fields() {
     assert_eq!(credentials.client_secret, "secret");
 }
 
+#[test]
+fn image_bytes_to_data_url_encodes_canvas_renderable_src() {
+    let src = image_bytes_to_data_url("image/png; charset=binary", b"ABC")
+        .expect("png bytes should encode");
+
+    assert_eq!(src, "data:image/png;base64,QUJD");
+}
+
+#[test]
+fn image_bytes_to_data_url_normalizes_jpg_mime_alias() {
+    let src = image_bytes_to_data_url("image/jpg", b"ABC").expect("jpg alias should encode");
+
+    assert_eq!(src, "data:image/jpeg;base64,QUJD");
+}
+
+#[test]
+fn image_bytes_to_data_url_rejects_svg_payloads() {
+    assert!(image_bytes_to_data_url("image/svg+xml", b"<svg></svg>").is_none());
+}
+
+#[test]
+fn sniff_image_mime_detects_common_raster_formats() {
+    assert_eq!(
+        sniff_image_mime(b"\x89PNG\r\n\x1A\nrest"),
+        Some("image/png")
+    );
+    assert_eq!(sniff_image_mime(b"\xFF\xD8\xFFrest"), Some("image/jpeg"));
+    assert_eq!(sniff_image_mime(b"GIF89arest"), Some("image/gif"));
+    assert_eq!(sniff_image_mime(b"RIFFxxxxWEBPrest"), Some("image/webp"));
+    assert_eq!(sniff_image_mime(b"<svg></svg>"), None);
+}
+
 #[tokio::test]
 #[ignore = "network smoke test for Openverse/Wikimedia"]
 async fn fetch_first_image_url_smoke() {
     let url = fetch_first_image_url("burger fries", None)
         .await
-        .expect("common query should return an image URL");
-    assert!(url.starts_with("http"), "got {url}");
+        .expect("common query should return a renderable image data URL");
+    assert!(url.starts_with("data:image/"), "got {url}");
+    assert!(url.contains(";base64,"), "got {url}");
 }
