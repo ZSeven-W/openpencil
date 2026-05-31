@@ -13,8 +13,8 @@ use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
 use op_editor_core::chat::{ChatMessage, ChatRole};
 
-const PROGRESS_H: f32 = 2.0;
-const HEADER_H: f32 = 32.0;
+pub(crate) const PROGRESS_H: f32 = 2.0;
+pub(crate) const HEADER_H: f32 = 32.0;
 const ITEM_H: f32 = 22.0;
 const ITEM_GAP: f32 = 1.0;
 const BOTTOM_PAD: f32 = 8.0;
@@ -77,10 +77,13 @@ pub(crate) fn fixed_checklist_items(messages: &[ChatMessage]) -> Vec<ChecklistIt
     }
 }
 
-pub(crate) fn fixed_checklist_height(messages: &[ChatMessage]) -> f32 {
+pub(crate) fn fixed_checklist_height(messages: &[ChatMessage], collapsed: bool) -> f32 {
     let count = fixed_checklist_items(messages).len();
     if count == 0 {
         return 0.0;
+    }
+    if collapsed {
+        return PROGRESS_H + HEADER_H;
     }
     let list_h = (count as f32 * (ITEM_H + ITEM_GAP) - ITEM_GAP).min(MAX_LIST_H);
     PROGRESS_H + HEADER_H + list_h + BOTTOM_PAD
@@ -101,6 +104,7 @@ pub(crate) fn paint_fixed_checklist(
     theme: &Theme,
     rect: Rect,
     messages: &[ChatMessage],
+    collapsed: bool,
 ) {
     let items = fixed_checklist_items(messages);
     if items.is_empty() {
@@ -155,9 +159,26 @@ pub(crate) fn paint_fixed_checklist(
         &counter,
         10.0,
         theme.muted_foreground,
-        rect.origin.x + rect.size.x - PAD - counter_w,
+        rect.origin.x + rect.size.x - PAD - counter_w - 20.0,
         header_y + 19.0,
     );
+    draw_icon(
+        cx.backend,
+        if collapsed {
+            Icon::ChevronDown
+        } else {
+            Icon::ChevronUp
+        },
+        Point2D::new(rect.origin.x + rect.size.x - PAD - 13.0, header_y + 10.0),
+        12.0,
+        theme.muted_foreground,
+        1.4,
+    );
+
+    if collapsed {
+        cx.backend.restore();
+        return;
+    }
 
     let mut y = header_y + HEADER_H;
     for item in &items {
@@ -297,5 +318,20 @@ mod tests {
         assert!(items[0].done);
         assert!(items[1].active);
         assert_eq!(items[1].label, "Subtask `hero` — Hero section");
+    }
+
+    #[test]
+    fn fixed_checklist_height_omits_step_rows_when_collapsed() {
+        let mut message = ChatMessage::assistant_streaming();
+        message.content = r#"<step title="Plan" status="done"></step>
+<step title="Draw" status="streaming"></step>"#
+            .into();
+
+        let messages = [message];
+        let expanded = fixed_checklist_height(&messages, false);
+        let collapsed = fixed_checklist_height(&messages, true);
+
+        assert!(expanded > collapsed);
+        assert_eq!(collapsed, PROGRESS_H + HEADER_H);
     }
 }

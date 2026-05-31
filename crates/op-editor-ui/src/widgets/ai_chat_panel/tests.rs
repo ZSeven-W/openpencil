@@ -221,6 +221,47 @@ fn body_rect_reserves_space_for_fixed_step_checklist() {
     );
 }
 
+#[test]
+fn body_rect_reserves_less_space_when_fixed_step_checklist_collapsed() {
+    let mut expanded_state = EditorState::new();
+    let mut message = op_editor_core::ChatMessage::assistant_streaming();
+    message.content = r#"<step title="Plan" status="done"></step>
+<step title="Draw" status="streaming"></step>"#
+        .into();
+    expanded_state.chat.messages.push(message.clone());
+
+    let mut collapsed_state = EditorState::new();
+    collapsed_state.chat.messages.push(message);
+    collapsed_state.chat.checklist_collapsed = true;
+
+    let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
+    let expanded = AIChatPlaceholder::from_editor(&expanded_state).body_rect(rect);
+    let collapsed = AIChatPlaceholder::from_editor(&collapsed_state).body_rect(rect);
+
+    assert!(collapsed.size.y > expanded.size.y);
+}
+
+#[test]
+fn hit_test_resolves_fixed_checklist_header_toggle() {
+    let mut s = EditorState::new();
+    let mut message = op_editor_core::ChatMessage::assistant_streaming();
+    message.content = r#"<step title="Plan" status="done"></step>
+<step title="Draw" status="streaming"></step>"#
+        .into();
+    s.chat.messages.push(message);
+
+    let panel = AIChatPlaceholder::from_editor(&s);
+    let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
+    let checklist_h = fixed_checklist_height(&s.chat.messages, s.chat.checklist_collapsed);
+    let checklist = fixed_checklist_rect(rect, INPUT_BASE_HEIGHT, checklist_h);
+    let p = Point2D::new(
+        checklist.origin.x + checklist.size.x / 2.0,
+        checklist.origin.y + 2.0 + 32.0 / 2.0,
+    );
+
+    assert_eq!(panel.hit_test(rect, p), Some(AIChatHit::ToggleChecklist));
+}
+
 #[derive(Default)]
 struct PanelPaintBackend {
     fills: Vec<(Rect, crate::Color)>,

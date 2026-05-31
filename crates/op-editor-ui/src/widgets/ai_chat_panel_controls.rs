@@ -11,7 +11,7 @@
 //! Paint + hit-test share the layout helpers so a click always lands
 //! on the chip the user sees — no text measurement in the hot path.
 
-use super::ai_chat_panel::AIChatHit;
+use super::ai_chat_hit::AIChatHit;
 use crate::theme::Theme;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::PaintCx;

@@ -275,6 +275,9 @@ pub struct ChatState {
     /// the canvas region with a small inset, mirroring the TS app's
     /// expanded panel.
     pub maximized: bool,
+    /// Collapsed state for the fixed "Pencil it out" design checklist
+    /// pinned above the input, mirroring the TS checklist header.
+    pub checklist_collapsed: bool,
     /// Last user-action timestamp (focus / keystroke) in ms — drives
     /// the caret blink phase. Reset on focus and on every key event.
     pub caret_anchor_ms: u64,
@@ -337,6 +340,7 @@ impl Default for ChatState {
             anchor: ChatAnchor::BottomLeft,
             collapsed: false,
             maximized: false,
+            checklist_collapsed: false,
             caret_anchor_ms: 0,
             pending_send: None,
             pending_new_chat: false,
@@ -476,6 +480,11 @@ impl ChatState {
         if let Some(msg) = self.messages.get_mut(idx) {
             msg.tools_collapsed = !msg.tools_collapsed;
         }
+    }
+
+    /// Flip the fixed design-checklist panel state.
+    pub fn toggle_checklist_collapsed(&mut self) {
+        self.checklist_collapsed = !self.checklist_collapsed;
     }
 
     /// Advance the thinking-mode selector one step:
@@ -819,6 +828,18 @@ mod tests {
         chat.toggle_message_tool_calls(0);
         assert_eq!(chat.messages[0].tools_collapsed, !before);
         chat.toggle_message_tool_calls(99);
+    }
+
+    #[test]
+    fn toggle_checklist_collapsed_flips_panel_checklist_flag() {
+        let mut chat = ChatState::default();
+        assert!(!chat.checklist_collapsed);
+
+        chat.toggle_checklist_collapsed();
+        assert!(chat.checklist_collapsed);
+
+        chat.toggle_checklist_collapsed();
+        assert!(!chat.checklist_collapsed);
     }
 
     #[test]
