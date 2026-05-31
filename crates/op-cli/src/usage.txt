@@ -7,6 +7,7 @@ USAGE:
   op help                                 show this message
 
 COMMON COMMANDS:
+  op status                               check whether MCP HTTP is reachable
   op get [--type T] [--name N] [--id ID] [--depth N] [--parent P]
   op selection                            get current selection
   op insert <json|@file|->                insert a leaf node

@@ -44,6 +44,24 @@ fn default_port_matches_ts_mcp_http_port() {
 }
 
 #[test]
+fn parse_args_maps_ts_status_to_local_status_probe() {
+    let p = parse_args(&["status".to_string()]).expect("parse status");
+    assert_eq!(p.command, Command::Status);
+}
+
+#[test]
+fn status_json_matches_ts_running_shape_without_requiring_server() {
+    assert_eq!(
+        status_json_from_running(DEFAULT_PORT, false),
+        r#"{"running":false}"#
+    );
+    assert_eq!(
+        status_json_from_running(3101, true),
+        r#"{"running":true,"port":3101,"url":"http://127.0.0.1:3101"}"#
+    );
+}
+
+#[test]
 fn http_request_targets_mcp_endpoint() {
     let request = http_request("{}");
     assert!(request.starts_with("POST /mcp HTTP/1.1\r\n"));

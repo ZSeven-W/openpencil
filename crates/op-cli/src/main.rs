@@ -42,6 +42,7 @@ fn run(args: &[String]) -> Result<String, String> {
     let out = match command {
         Command::Help => USAGE.to_string(),
         Command::Version => version_json(),
+        Command::Status => status_json(port),
         Command::ToolsList => post(port, &tools_list_body())?,
         Command::ToolCall { tool, args } => {
             post(port, &tool_call_body(&tool, &args_to_json(&args)))?
@@ -64,6 +65,7 @@ struct Parsed {
 enum Command {
     Help,
     Version,
+    Status,
     ToolsList,
     ToolCall {
         tool: String,
@@ -170,7 +172,7 @@ fn command_from_positionals(positionals: &[String], flags: &Flags) -> Result<Com
         "help" | "-h" | "--help" => Ok(Command::Help),
         "version" => Ok(Command::Version),
         "tools" => Ok(Command::ToolsList),
-        "status" => tool_call("get_document_info", vec![]),
+        "status" => Ok(Command::Status),
         "open" => {
             let args = flag_value(flags, "file")
                 .or_else(|| positionals.get(1).cloned())
@@ -672,6 +674,21 @@ fn pretty_json(raw: &str) -> String {
         .ok()
         .and_then(|value| serde_json::to_string_pretty(&value).ok())
         .unwrap_or_else(|| raw.to_string())
+}
+
+fn status_json(port: u16) -> String {
+    status_json_from_running(
+        port,
+        std::net::TcpStream::connect(("127.0.0.1", port)).is_ok(),
+    )
+}
+
+fn status_json_from_running(port: u16, running: bool) -> String {
+    if running {
+        format!(r#"{{"running":true,"port":{port},"url":"http://127.0.0.1:{port}"}}"#)
+    } else {
+        r#"{"running":false}"#.to_string()
+    }
 }
 
 /// JSON-RPC body for `tools/list`.
