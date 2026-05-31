@@ -51,6 +51,25 @@ fn status_tracks_untracked_then_clean_after_commit() {
     assert!(tr.repo.status().expect("status").is_clean());
 }
 
+#[cfg(unix)]
+#[test]
+fn stage_accepts_paths_through_symlinked_parent() {
+    let Some(tr) = TempRepo::new("stage-symlink") else {
+        return;
+    };
+    let link = unique_temp_dir("stage-symlink-link");
+    std::os::unix::fs::symlink(&tr.dir, &link).expect("symlink workdir");
+
+    let doc = link.join("design.op");
+    std::fs::write(&doc, "{\"v\":1}").expect("write through symlink");
+    tr.repo.stage(&[doc.as_path()]).expect("stage via symlink");
+    let hash = tr.repo.commit("add design").expect("commit");
+
+    assert_eq!(hash.len(), 40, "commit returns a full hash");
+    assert!(tr.repo.status().expect("status").is_clean());
+    let _ = std::fs::remove_file(&link);
+}
+
 #[test]
 fn commit_shows_up_in_the_log() {
     let Some(tr) = TempRepo::new("log") else {
