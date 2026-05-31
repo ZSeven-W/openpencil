@@ -77,6 +77,34 @@ fn ai_chat_new_chat_click_clears_transcript_and_queues_abort() {
 }
 
 #[test]
+fn ai_chat_stop_click_keeps_transcript_and_queues_abort() {
+    let mut host = WidgetHostNative::new();
+    host.editor_state_mut()
+        .chat
+        .messages
+        .push(op_editor_core::ChatMessage::user("make a dashboard"));
+    host.editor_state_mut()
+        .chat
+        .messages
+        .push(op_editor_core::ChatMessage::assistant_streaming());
+    let rect = host
+        .ai_chat_rect(1200.0, 800.0)
+        .expect("chat panel visible");
+    let x = rect.origin.x + rect.size.x - 16.0 - 20.0;
+    let y = rect.origin.y + toolbar_center_y_for_test();
+
+    assert!(host.apply_click(x, y, 1200.0, 800.0));
+
+    assert_eq!(host.editor_state().chat.messages.len(), 2);
+    assert!(!host.editor_state().chat.messages[1].streaming);
+    assert!(host.editor_state().chat.pending_stop_chat);
+}
+
+fn toolbar_center_y_for_test() -> f32 {
+    op_editor_ui::widgets::AI_CHAT_HEIGHT - 19.0
+}
+
+#[test]
 fn escape_closes_one_overlay_per_press_in_priority_order() {
     // Codex CONCERN-2 regression: Escape used to clear all
     // three pickers in a single press. TS parity is one-at-a-

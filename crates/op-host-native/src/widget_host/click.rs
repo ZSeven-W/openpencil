@@ -145,6 +145,11 @@ impl WidgetHostNative {
                         self.mark_dirty();
                         return true;
                     }
+                    AIChatHit::Stop => {
+                        self.editor_state.chat.stop_streaming();
+                        self.mark_dirty();
+                        return true;
+                    }
                     AIChatHit::Example(text) => {
                         self.editor_state.chat.input = text;
                         self.editor_state.chat.focused = true;
