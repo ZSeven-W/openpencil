@@ -23,8 +23,9 @@ use op_mcp::{
     codegen_clean_snapshot, codegen_plan_snapshot, codegen_submit_chunk_snapshot,
     copy_node_snapshot, copy_selected_snapshot, count_nodes_snapshot, create_component_snapshot,
     create_variable_snapshot, cut_selected_snapshot, cycle_active_axis_value_snapshot,
-    debug_tools_enabled, debug_validation_report_snapshot, delete_component_snapshot,
-    delete_node_snapshot, delete_page_snapshot, delete_selected_snapshot, delete_variable_snapshot,
+    debug_logs_tail_snapshot, debug_screenshot_snapshot, debug_tools_enabled,
+    debug_validation_report_snapshot, delete_component_snapshot, delete_node_snapshot,
+    delete_page_snapshot, delete_selected_snapshot, delete_variable_snapshot,
     design_content_snapshot, design_refine_snapshot, design_skeleton_snapshot,
     document_info_snapshot, duplicate_page_snapshot, duplicate_selected_snapshot,
     export_design_md_snapshot, find_empty_space_snapshot, find_node_by_name_snapshot,
@@ -410,6 +411,8 @@ fn rebuild_registry(doc: &EditorState) -> ToolRegistry {
     r.register(Box::new(get_selection_set_snapshot(doc)));
     if debug_tools_enabled() {
         r.register(Box::new(debug_validation_report_snapshot(doc)));
+        r.register(Box::new(debug_logs_tail_snapshot()));
+        r.register(Box::new(debug_screenshot_snapshot()));
     }
     r.register(Box::new(clear_selection_snapshot()));
     r.register(Box::new(set_selection_snapshot()));
@@ -673,7 +676,6 @@ fn tools_list_response(id_raw: &str, state: &EditorState) -> String {
     )
 }
 
-/// Per-tool JSON schemas, kept as string literals to avoid serde on this path.
 const TOOL_SCHEMAS: &[&str] = &[
     // --- read tools ---
     r#"{"name":"open_document","description":"Connect to the current Rust MCP document and return metadata, context summary, and design prompt. filePath is accepted for TS CLI compatibility; the Rust server remains bound to the document it was started with.","inputSchema":{"type":"object","properties":{"filePath":{"type":"string","description":"Accepted for TS compatibility; use live://canvas/current server document"}}}}"#,
@@ -784,11 +786,10 @@ const TOOL_SCHEMAS: &[&str] = &[
     r#"{"name":"replace_node","description":"Swap an existing node at the same parent slot with a freshly-built leaf. Set drop_children=true to discard a container's subtree.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string"},"kind":{"type":"string","enum":["frame","group","rect","ellipse","polygon","line","text","path"]},"name":{"type":"string"},"x":{"type":"string"},"y":{"type":"string"},"width":{"type":"string"},"height":{"type":"string"},"fill_hex":{"type":"string"},"drop_children":{"type":"string","enum":["true","false"]}},"required":["node_id","kind","name","x","y","width","height"]}}"#,
 ];
 
-/// Debug-only tool schemas — appended to `tools/list` only when
-/// `OPENPENCIL_DEBUG_TOOLS=1`. Kept separate from `TOOL_SCHEMAS` so the
-/// production catalog never advertises them.
 const DEBUG_TOOL_SCHEMAS: &[&str] = &[
     r#"{"name":"debug_validation_report","description":"Run the op-design-lint detectors over the active page and return the design-issue list. Read-only, no parameters. Result: count + categories (`;`-separated `category|count`) + issues (JSON-serialized Issue array). Gated behind the OPENPENCIL_DEBUG_TOOLS=1 env flag.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
+    r#"{"name":"debug_logs_tail","description":"Read the tail of ~/.openpencil/logs/server-YYYY-MM-DD.log with API keys and Authorization headers redacted. Gated behind OPENPENCIL_DEBUG_TOOLS=1.","inputSchema":{"type":"object","properties":{"tailLines":{"type":"number","description":"Maximum lines to return (default 100, max 500)."},"sinceMs":{"type":"number","description":"Unix ms timestamp; only return lines newer than this."},"grep":{"type":"string","description":"Regex to filter lines by content after redaction."}}}}"#,
+    r#"{"name":"debug_screenshot","description":"Capture a PNG screenshot of the live canvas via the renderer. File-backed Rust MCP reports the same no-live-canvas error as TS standalone mode. Gated behind OPENPENCIL_DEBUG_TOOLS=1.","inputSchema":{"type":"object","properties":{"target":{"type":"string","enum":["node","root"]},"nodeId":{"type":"string","description":"Required when target=node."},"padding":{"type":"number"},"dpr":{"type":"number"},"timeoutMs":{"type":"number","description":"Default 15000, max 60000."}},"required":["target"]}}"#,
 ];
 
 #[cfg(test)]

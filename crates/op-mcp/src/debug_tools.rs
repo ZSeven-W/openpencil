@@ -22,10 +22,12 @@
 //! unset the tool surfaces a clean `ToolFailed` error at call time.
 
 use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
 
 use jian_ops_schema::node::PenNode;
 use op_design_lint::{detect_all, Issue};
 use op_editor_core::EditorState;
+use regex::{Regex, RegexBuilder};
 
 use super::{McpTool, ToolErrorCode, ToolOutcome};
 
@@ -51,6 +53,12 @@ pub struct DebugValidationReport {
     /// The detected issues, snapshotted at registration time.
     pub issues: Vec<Issue>,
 }
+
+pub struct DebugLogsTail {
+    log_dir: PathBuf,
+}
+
+pub struct DebugScreenshot;
 
 impl McpTool for DebugValidationReport {
     fn name(&self) -> &str {
@@ -96,6 +104,77 @@ impl McpTool for DebugValidationReport {
     }
 }
 
+impl McpTool for DebugLogsTail {
+    fn name(&self) -> &str {
+        "debug_logs_tail"
+    }
+
+    fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
+        if !debug_tools_enabled() {
+            return ToolOutcome::Err(
+                ToolErrorCode::ToolFailed,
+                format!("debug tools are disabled — set {DEBUG_TOOLS_ENV}=1 to enable"),
+            );
+        }
+        let tail_lines = match parse_tail_lines(args) {
+            Ok(v) => v,
+            Err(msg) => return ToolOutcome::Err(ToolErrorCode::InvalidArgument, msg),
+        };
+        let since_ms = match parse_since_ms(args) {
+            Ok(v) => v,
+            Err(msg) => return ToolOutcome::Err(ToolErrorCode::InvalidArgument, msg),
+        };
+        let grep = match args.get("grep").map(|raw| Regex::new(raw)) {
+            Some(Ok(re)) => Some(re),
+            Some(Err(e)) => {
+                return ToolOutcome::Err(
+                    ToolErrorCode::InvalidArgument,
+                    format!("grep must be a valid regex: {e}"),
+                )
+            }
+            None => None,
+        };
+        let Some(path) = find_latest_log(&self.log_dir) else {
+            return logs_tail_out(None, Vec::new());
+        };
+        let lines = read_log_tail(&path, tail_lines, since_ms, grep.as_ref()).unwrap_or_default();
+        logs_tail_out(Some(&path), lines)
+    }
+}
+
+impl McpTool for DebugScreenshot {
+    fn name(&self) -> &str {
+        "debug_screenshot"
+    }
+
+    fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
+        if !debug_tools_enabled() {
+            return ToolOutcome::Err(
+                ToolErrorCode::ToolFailed,
+                format!("debug tools are disabled — set {DEBUG_TOOLS_ENV}=1 to enable"),
+            );
+        }
+        let Some(target) = args.get("target") else {
+            return ToolOutcome::Err(ToolErrorCode::MissingArgument, "target is required".into());
+        };
+        match target.as_str() {
+            "node" if !args.contains_key("nodeId") => ToolOutcome::Err(
+                ToolErrorCode::InvalidArgument,
+                "target=\"node\" requires nodeId".into(),
+            ),
+            "node" | "root" => ToolOutcome::Err(
+                ToolErrorCode::ToolFailed,
+                "No live canvas available. Ensure an Electron window or /editor tab is running."
+                    .into(),
+            ),
+            other => ToolOutcome::Err(
+                ToolErrorCode::InvalidArgument,
+                format!("target must be node or root, got {other:?}"),
+            ),
+        }
+    }
+}
+
 /// Snapshot the active page + run `op_design_lint::detect_all` over
 /// every top-level node of the active page.
 ///
@@ -111,11 +190,163 @@ pub fn debug_validation_report_snapshot(state: &EditorState) -> DebugValidationR
     DebugValidationReport { issues }
 }
 
+pub fn debug_logs_tail_snapshot() -> DebugLogsTail {
+    debug_logs_tail_snapshot_for_log_dir(default_log_dir())
+}
+
+pub fn debug_logs_tail_snapshot_for_log_dir(log_dir: PathBuf) -> DebugLogsTail {
+    DebugLogsTail { log_dir }
+}
+
+pub fn debug_screenshot_snapshot() -> DebugScreenshot {
+    DebugScreenshot
+}
+
+fn default_log_dir() -> PathBuf {
+    std::env::var_os("HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join(".openpencil")
+        .join("logs")
+}
+
+fn find_latest_log(dir: &Path) -> Option<PathBuf> {
+    let mut candidates = Vec::new();
+    for entry in std::fs::read_dir(dir).ok()? {
+        let entry = entry.ok()?;
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        if is_server_log_name(&name) {
+            candidates.push(name.to_string());
+        }
+    }
+    candidates.sort();
+    candidates.pop().map(|name| dir.join(name))
+}
+
+fn is_server_log_name(name: &str) -> bool {
+    let bytes = name.as_bytes();
+    bytes.len() == "server-YYYY-MM-DD.log".len()
+        && name.starts_with("server-")
+        && name.ends_with(".log")
+        && bytes[7..11].iter().all(u8::is_ascii_digit)
+        && bytes[11] == b'-'
+        && bytes[12..14].iter().all(u8::is_ascii_digit)
+        && bytes[14] == b'-'
+        && bytes[15..17].iter().all(u8::is_ascii_digit)
+}
+
+fn read_log_tail(
+    path: &Path,
+    tail_lines: usize,
+    since_ms: Option<i64>,
+    grep: Option<&Regex>,
+) -> std::io::Result<Vec<String>> {
+    let sensitive =
+        RegexBuilder::new(r"ANTHROPIC_API_KEY=|Authorization:\s*Bearer|api[_-]?key\s*[:=]")
+            .case_insensitive(true)
+            .build()
+            .expect("sensitive log regex");
+    let raw = std::fs::read_to_string(path)?;
+    let mut filtered = Vec::new();
+    for line in raw.lines().filter(|line| !line.trim().is_empty()) {
+        if sensitive.is_match(line) {
+            continue;
+        }
+        if since_ms.is_some_and(|since| {
+            parse_iso_timestamp_ms(line).is_some_and(|line_ms| line_ms < since)
+        }) {
+            continue;
+        }
+        if grep.is_some_and(|re| !re.is_match(line)) {
+            continue;
+        }
+        filtered.push(line.to_string());
+    }
+    let start = filtered.len().saturating_sub(tail_lines);
+    Ok(filtered[start..].to_vec())
+}
+
+fn logs_tail_out(path: Option<&Path>, lines: Vec<String>) -> ToolOutcome {
+    let lines_json = match serde_json::to_string(&lines) {
+        Ok(json) => json,
+        Err(e) => {
+            return ToolOutcome::Err(
+                ToolErrorCode::Internal,
+                format!("failed to serialize log lines: {e}"),
+            )
+        }
+    };
+    let mut out = BTreeMap::new();
+    out.insert("source".into(), "server".into());
+    out.insert(
+        "path".into(),
+        path.map(|p| p.display().to_string()).unwrap_or_default(),
+    );
+    out.insert("totalLines".into(), lines.len().to_string());
+    out.insert("lines".into(), lines_json);
+    ToolOutcome::Ok(out)
+}
+
+fn parse_tail_lines(args: &BTreeMap<String, String>) -> Result<usize, String> {
+    let Some(raw) = args.get("tailLines").or_else(|| args.get("tail_lines")) else {
+        return Ok(100);
+    };
+    let parsed = raw
+        .parse::<usize>()
+        .map_err(|_| format!("tailLines must be a non-negative integer, got {raw:?}"))?;
+    Ok(parsed.min(500))
+}
+
+fn parse_since_ms(args: &BTreeMap<String, String>) -> Result<Option<i64>, String> {
+    let Some(raw) = args.get("sinceMs").or_else(|| args.get("since_ms")) else {
+        return Ok(None);
+    };
+    raw.parse::<i64>()
+        .map(Some)
+        .map_err(|_| format!("sinceMs must be an integer unix-ms timestamp, got {raw:?}"))
+}
+
+fn parse_iso_timestamp_ms(line: &str) -> Option<i64> {
+    if line.len() < 20 || line.as_bytes().get(19) != Some(&b'Z') && !line[19..].contains('Z') {
+        return None;
+    }
+    let year = line.get(0..4)?.parse::<i32>().ok()?;
+    let month = line.get(5..7)?.parse::<u32>().ok()?;
+    let day = line.get(8..10)?.parse::<u32>().ok()?;
+    let hour = line.get(11..13)?.parse::<i64>().ok()?;
+    let minute = line.get(14..16)?.parse::<i64>().ok()?;
+    let second = line.get(17..19)?.parse::<i64>().ok()?;
+    let millis = if line.as_bytes().get(19) == Some(&b'.') {
+        let z = line[20..].find('Z')? + 20;
+        let mut frac = line.get(20..z)?.chars().take(3).collect::<String>();
+        while frac.len() < 3 {
+            frac.push('0');
+        }
+        frac.parse::<i64>().ok()?
+    } else {
+        0
+    };
+    let days = days_from_civil(year, month, day);
+    Some((((days * 24 + hour) * 60 + minute) * 60 + second) * 1000 + millis)
+}
+
+fn days_from_civil(year: i32, month: u32, day: u32) -> i64 {
+    let year = year - i32::from(month <= 2);
+    let era = if year >= 0 { year } else { year - 399 } / 400;
+    let yoe = year - era * 400;
+    let mp = month as i32 + if month > 2 { -3 } else { 9 };
+    let doy = (153 * mp + 2) / 5 + day as i32 - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    (era * 146_097 + doe - 719_468) as i64
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::test_fixtures::{frame, state_with};
     use jian_ops_schema::node::PenNodeBase;
+    use serde_json::Value;
 
     /// Build a frame whose `base.rotation` is set — triggers the
     /// `unexpected-rotation` detector (UI nodes rarely tilt on purpose).
@@ -136,11 +367,25 @@ mod tests {
     /// runner. The snapshot (`detect_all`) is env-independent; only the
     /// `call()` gate reads `OPENPENCIL_DEBUG_TOOLS`.
     #[test]
-    fn report_respects_the_env_gate_and_serializes_issues() {
+    fn debug_tools_respect_the_env_gate_and_match_ts_debug_behaviour() {
         let bad = debug_validation_report_snapshot(&state_with(vec![rotated_frame()]));
         let clean_frame = frame("f1", "clean", 0.0, 0.0, 100.0, 100.0, vec![]);
         let clean = debug_validation_report_snapshot(&state_with(vec![clean_frame]));
         let empty = BTreeMap::new();
+        let log_dir = temp_dir("logs");
+        std::fs::create_dir_all(&log_dir).expect("log dir");
+        let log_path = log_dir.join("server-2024-01-02.log");
+        std::fs::write(
+            &log_path,
+            "2024-01-02T00:00:00.000Z skip old\n\
+             2024-01-02T00:00:02.000Z keep alpha\n\
+             Authorization: Bearer secret\n\
+             no timestamp keep beta\n\
+             2024-01-02T00:00:03.000Z error gamma\n",
+        )
+        .expect("log file");
+        let logs = debug_logs_tail_snapshot_for_log_dir(log_dir.clone());
+        let screenshot = debug_screenshot_snapshot();
 
         // Gate closed — the tool rejects regardless of document state.
         std::env::remove_var(DEBUG_TOOLS_ENV);
@@ -150,6 +395,13 @@ mod tests {
                 assert!(msg.contains(DEBUG_TOOLS_ENV));
             }
             other => panic!("expected ToolFailed when gate is closed, got {other:?}"),
+        }
+        match logs.call(&empty) {
+            ToolOutcome::Err(code, msg) => {
+                assert_eq!(code, ToolErrorCode::ToolFailed);
+                assert!(msg.contains(DEBUG_TOOLS_ENV));
+            }
+            other => panic!("expected ToolFailed for logs when gate is closed, got {other:?}"),
         }
 
         // Gate open — a known-bad document reports its issue.
@@ -180,6 +432,74 @@ mod tests {
             }
             other => panic!("expected Ok for the clean document, got {other:?}"),
         }
+
+        let mut log_args = BTreeMap::new();
+        log_args.insert("tailLines".into(), "2".into());
+        log_args.insert("sinceMs".into(), "1704153601000".into());
+        log_args.insert("grep".into(), "keep|error".into());
+        match logs.call(&log_args) {
+            ToolOutcome::Ok(out) => {
+                assert_eq!(out.get("source"), Some(&"server".to_string()));
+                assert_eq!(out.get("path"), Some(&log_path.display().to_string()));
+                assert_eq!(out.get("totalLines"), Some(&"2".to_string()));
+                let lines: Value =
+                    serde_json::from_str(out.get("lines").expect("lines json")).unwrap();
+                assert_eq!(
+                    lines,
+                    serde_json::json!([
+                        "no timestamp keep beta",
+                        "2024-01-02T00:00:03.000Z error gamma"
+                    ])
+                );
+            }
+            other => panic!("expected filtered log tail, got {other:?}"),
+        }
+
+        let missing_logs = debug_logs_tail_snapshot_for_log_dir(log_dir.join("missing"));
+        match missing_logs.call(&empty) {
+            ToolOutcome::Ok(out) => {
+                assert_eq!(out.get("source"), Some(&"server".to_string()));
+                assert_eq!(out.get("path"), Some(&String::new()));
+                assert_eq!(out.get("totalLines"), Some(&"0".to_string()));
+                assert_eq!(out.get("lines"), Some(&"[]".to_string()));
+            }
+            other => panic!("expected empty log tail, got {other:?}"),
+        }
+
+        let mut bad_screenshot_args = BTreeMap::new();
+        bad_screenshot_args.insert("target".into(), "node".into());
+        match screenshot.call(&bad_screenshot_args) {
+            ToolOutcome::Err(code, msg) => {
+                assert_eq!(code, ToolErrorCode::InvalidArgument);
+                assert_eq!(msg, "target=\"node\" requires nodeId");
+            }
+            other => panic!("expected nodeId validation error, got {other:?}"),
+        }
+        let mut root_screenshot_args = BTreeMap::new();
+        root_screenshot_args.insert("target".into(), "root".into());
+        match screenshot.call(&root_screenshot_args) {
+            ToolOutcome::Err(code, msg) => {
+                assert_eq!(code, ToolErrorCode::ToolFailed);
+                assert_eq!(
+                    msg,
+                    "No live canvas available. Ensure an Electron window or /editor tab is running."
+                );
+            }
+            other => panic!("expected live-canvas screenshot error, got {other:?}"),
+        }
+
         std::env::remove_var(DEBUG_TOOLS_ENV);
+        let _ = std::fs::remove_dir_all(&log_dir);
+    }
+
+    fn temp_dir(label: &str) -> std::path::PathBuf {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        std::env::temp_dir().join(format!(
+            "openpencil-debug-tools-{label}-{}-{nanos}",
+            std::process::id()
+        ))
     }
 }
