@@ -176,7 +176,17 @@ impl GitPanel<'_> {
                 self.theme.muted_foreground,
             );
         } else {
-            let line = if focused {
+            // Blink the caret on the same 530 ms cadence as the commit
+            // box (shared `commit_caret_anchor_ms`), rather than a static
+            // `|`. The host wakes the loop while these inputs are focused
+            // so the toggle actually animates.
+            let caret = focused
+                && jian_core::anim::blink_visible(
+                    self.now_ms,
+                    self.state.commit_caret_anchor_ms,
+                    530,
+                );
+            let line = if caret {
                 format!("{shown}|")
             } else {
                 shown.to_string()
