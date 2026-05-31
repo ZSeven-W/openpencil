@@ -18,9 +18,14 @@ use crate::widgets::PaintCx;
 use crate::{Point2D, Rect, TextLayout};
 use op_editor_core::chat::{ChatMessage, ChatRole};
 
+use super::ai_chat_transcript_design::{
+    extract_design_json_blocks, paint_design_block, place_design_blocks, DesignBlock,
+};
 use super::ai_chat_transcript_steps::{
     extract_step_blocks, split_design_progress, strip_tool_call_xml, ParsedStep, ParsedStepStatus,
 };
+use super::ai_chat_transcript_text::char_display_units;
+pub(crate) use super::ai_chat_transcript_text::wrap_units;
 use super::ai_chat_transcript_tools::tool_lines;
 
 /// Body text size used throughout the transcript.
@@ -116,6 +121,7 @@ pub(crate) struct TranscriptItem {
     pub steps: Vec<ActionStep>,
     pub thinking: Option<Collapsible>,
     pub tools: Option<Collapsible>,
+    pub design_blocks: Vec<DesignBlock>,
     pub bubble: Option<TextBubble>,
     /// Absolute thumbnail rects, parallel to `messages[i].images`
     /// (truncated to whatever fits — see [`build_item`]).
@@ -203,13 +209,19 @@ fn build_item(
     let budget = unit_budget(bubble_w - 2.0 * BUBBLE_PAD);
     let mut y = top;
     let (mut progress_steps, thinking_text) = split_design_progress(&msg.thinking);
-    let visible_content = if is_user {
+    let raw_visible_content = if is_user {
         msg.content.clone()
     } else {
         let display_content = strip_tool_call_xml(&msg.content);
         let extracted = extract_step_blocks(&display_content, msg.streaming);
         progress_steps.extend(extracted.steps);
         extracted.visible_text
+    };
+    let (visible_content, pending_design_blocks) = if is_user {
+        (raw_visible_content, Vec::new())
+    } else {
+        let extracted = extract_design_json_blocks(&raw_visible_content, msg.streaming);
+        (extracted.visible_text, extracted.blocks)
     };
     let has_progress_steps = !progress_steps.is_empty();
 
@@ -289,6 +301,9 @@ fn build_item(
         },
         &mut y,
     );
+    let (design_blocks, next_y) =
+        place_design_blocks(pending_design_blocks, x, y, bubble_w, SUB_GAP);
+    y = next_y;
 
     let typing = msg.streaming
         && msg.content.is_empty()
@@ -371,6 +386,7 @@ fn build_item(
             steps,
             thinking,
             tools,
+            design_blocks,
             bubble,
             images,
             streaming: msg.streaming,
@@ -455,80 +471,6 @@ pub(crate) fn transcript_hit(
         }
     }
     None
-}
-
-/// Display width of one character, in wrap *units*. Wide scripts
-/// (CJK, kana, Hangul, full-width punctuation, emoji) occupy two
-/// units; everything else one. A deliberate estimate — the
-/// transcript body is clipped, so a mild over/under-shoot is safe.
-fn char_display_units(c: char) -> u32 {
-    let cp = c as u32;
-    let wide = matches!(cp,
-        0x1100..=0x115F   // Hangul Jamo
-        | 0x2E80..=0x303E // CJK radicals + symbols
-        | 0x3041..=0x33FF // Hiragana / Katakana / CJK marks
-        | 0x3400..=0x4DBF // CJK Ext-A
-        | 0x4E00..=0x9FFF // CJK Unified
-        | 0xA000..=0xA4CF // Yi
-        | 0xAC00..=0xD7A3 // Hangul syllables
-        | 0xF900..=0xFAFF // CJK compat ideographs
-        | 0xFE30..=0xFE4F // CJK compat forms
-        | 0xFF00..=0xFF60 // full-width forms
-        | 0xFFE0..=0xFFE6
-        | 0x1F000..=0x1FAFF // emoji + symbols
-    );
-    if wide {
-        2
-    } else {
-        1
-    }
-}
-
-/// Greedy word-wrap `text` to lines no wider than `max_units`.
-/// Existing `\n` always breaks; a run that overflows breaks at the
-/// last space when there is one, otherwise mid-glyph (so a single
-/// long token can't escape the bubble). Empty input yields one
-/// empty line so a blank message still occupies a row.
-pub(crate) fn wrap_units(text: &str, max_units: u32) -> Vec<String> {
-    let budget = max_units.max(1);
-    let mut out = Vec::new();
-    for raw in text.split('\n') {
-        let mut line = String::new();
-        let mut line_units = 0u32;
-        // Byte offset of the last space seen in `line`, so an
-        // overflow can rewind to a word boundary instead of
-        // breaking mid-word.
-        let mut last_space: Option<usize> = None;
-        for c in raw.chars() {
-            let u = char_display_units(c);
-            if line_units + u > budget && !line.is_empty() {
-                match last_space {
-                    Some(idx) if idx > 0 => {
-                        let rest: String = line[idx..].trim_start().to_string();
-                        line.truncate(idx);
-                        out.push(std::mem::take(&mut line));
-                        line = rest;
-                        line_units = line.chars().map(char_display_units).sum();
-                    }
-                    _ => {
-                        out.push(std::mem::take(&mut line));
-                        line_units = 0;
-                    }
-                }
-                last_space = None;
-            }
-            if c == ' ' {
-                last_space = Some(line.len());
-            }
-            line.push(c);
-            line_units += u;
-        }
-        out.push(line);
-    }
-    if out.is_empty() {
-        out.push(String::new());
-    }
-    out
 }
 
 /// Draw one wrapped text line. Small shared helper so the bubble,
@@ -725,6 +667,9 @@ pub(crate) fn paint_transcript(
         }
         if let Some(block) = &item.tools {
             paint_collapsible(cx, theme, block);
+        }
+        for block in &item.design_blocks {
+            paint_design_block(cx, theme, block);
         }
         if let Some(bubble) = &item.bubble {
             let (bg, fg) = match item.role {

@@ -342,6 +342,49 @@ render: captured frame
 }
 
 #[test]
+fn assistant_design_json_code_fence_renders_compact_design_block() {
+    let message = ChatMessage::assistant(
+        r#"Here is the design:
+```json
+[{"id":"frame-1","type":"Frame"},{"id":"text-1","type":"Text"}]
+```
+Applied to canvas."#,
+    );
+
+    let items = build_transcript(
+        std::slice::from_ref(&message),
+        body(),
+        op_editor_core::Locale::EnUs,
+    );
+
+    assert_eq!(items[0].design_blocks.len(), 1);
+    assert_eq!(items[0].design_blocks[0].element_count, 2);
+    assert_eq!(items[0].design_blocks[0].label, "2 design elements");
+    let visible_text = items[0].bubble.as_ref().unwrap().lines.join("\n");
+    assert!(visible_text.contains("Here is the design:"));
+    assert!(visible_text.contains("Applied to canvas."));
+    assert!(!visible_text.contains(r#""type":"Frame""#));
+}
+
+#[test]
+fn streaming_unclosed_design_json_code_fence_renders_generating_block() {
+    let mut message = ChatMessage::assistant_streaming();
+    message.content = r#"```json
+[{"id":"frame-1","type":"Frame"}]"#
+        .into();
+
+    let items = build_transcript(
+        std::slice::from_ref(&message),
+        body(),
+        op_editor_core::Locale::EnUs,
+    );
+
+    assert_eq!(items[0].design_blocks.len(), 1);
+    assert_eq!(items[0].design_blocks[0].label, "Generating design...");
+    assert!(items[0].bubble.is_none());
+}
+
+#[test]
 fn assistant_tool_call_xml_is_hidden_from_answer_bubble() {
     let message = ChatMessage::assistant(
         r#"before
