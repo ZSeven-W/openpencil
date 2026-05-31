@@ -15,6 +15,7 @@ mod app_control_cli;
 mod codegen_cli;
 mod figma_cli;
 mod mcp_http_cli;
+mod skill_install_cli;
 
 use mcp_http_cli::{
     args_to_json, json_escape, post, pretty_json, status_json, tool_call_body, tools_list_body,
@@ -59,6 +60,8 @@ fn run(args: &[String]) -> Result<String, String> {
             app_control_cli::run_start(port, document_path.as_deref())?
         }
         Command::StopMcp => app_control_cli::run_stop()?,
+        Command::InstallSkill { target } => skill_install_cli::run_install(target.as_deref())?,
+        Command::UninstallSkill { target } => skill_install_cli::run_uninstall(target.as_deref())?,
         Command::ToolsList => post(port, &tools_list_body())?,
         Command::ImportFigma { fig_path, out_path } => {
             figma_cli::run_import_figma(&fig_path, &out_path)?
@@ -89,6 +92,12 @@ enum Command {
         document_path: Option<String>,
     },
     StopMcp,
+    InstallSkill {
+        target: Option<String>,
+    },
+    UninstallSkill {
+        target: Option<String>,
+    },
     ToolsList,
     ImportFigma {
         fig_path: String,
@@ -204,6 +213,12 @@ fn command_from_positionals(positionals: &[String], flags: &Flags) -> Result<Com
             document_path: flag_value(flags, "file"),
         }),
         "stop" => Ok(Command::StopMcp),
+        "install" => Ok(Command::InstallSkill {
+            target: flag_value(flags, "target"),
+        }),
+        "uninstall" => Ok(Command::UninstallSkill {
+            target: flag_value(flags, "target"),
+        }),
         "open" => {
             let args = flag_value(flags, "file")
                 .or_else(|| positionals.get(1).cloned())
@@ -246,10 +261,6 @@ fn command_from_positionals(positionals: &[String], flags: &Flags) -> Result<Com
         "codegen:plan" | "codegen:submit" | "codegen:assemble" | "codegen:clean" => {
             codegen_cli::map_codegen(positionals, flags)
         }
-        "install" | "uninstall" => Err(format!(
-            "TS command {:?} is not implemented by the Rust HTTP MCP CLI yet",
-            positionals[0]
-        )),
         tool => generic_tool_call(tool, &positionals[1..], flags),
     }
 }

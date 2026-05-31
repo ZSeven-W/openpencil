@@ -9,6 +9,8 @@ USAGE:
 COMMON COMMANDS:
   op start [--file path.op] [--port N]     start Rust MCP HTTP server
   op stop                                  stop Rust MCP HTTP server
+  op install [--target T]                  install openpencil-skill for AI agents
+  op uninstall [--target T]                uninstall openpencil-skill
   op status                               check whether MCP HTTP is reachable
   op get [--type T] [--name N] [--id ID] [--depth N] [--parent P]
   op selection                            get current selection
