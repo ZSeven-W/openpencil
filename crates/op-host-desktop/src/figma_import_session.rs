@@ -42,6 +42,7 @@ pub struct FigmaImportSession {
 }
 
 impl FigmaImportSession {
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     pub fn path(&self) -> &Path {
         &self.path
     }
