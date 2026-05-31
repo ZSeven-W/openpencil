@@ -140,8 +140,21 @@ impl WidgetHost {
                         .remove_image_gen_profile(&id);
                 }
             }
-            AgentSettingsHit::TestGenConfig(_) => {
+            AgentSettingsHit::TestGenConfig(index) => {
                 self.commit_settings_focus();
+                if let Some(profile) = self
+                    .editor_state
+                    .editor_ui
+                    .agent_settings
+                    .image_gen_profiles
+                    .get_mut(index)
+                {
+                    profile.test_status = if profile.api_key.trim().is_empty() {
+                        ImageTestStatus::Invalid
+                    } else {
+                        ImageTestStatus::Testing
+                    };
+                }
             }
             AgentSettingsHit::ToggleGenConfigEditor(index) => {
                 let was_editing = matches!(

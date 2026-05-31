@@ -419,6 +419,7 @@ pub struct ImageGenProfile {
     pub api_key: String,
     pub model: String,
     pub base_url: Option<String>,
+    pub test_status: ImageTestStatus,
 }
 
 /// State for the floating agent-settings modal.
@@ -727,6 +728,7 @@ impl AgentSettings {
             api_key: String::new(),
             model: String::new(),
             base_url: None,
+            test_status: ImageTestStatus::Idle,
         });
         if self.active_image_gen_profile_id.is_none() {
             self.active_image_gen_profile_id = Some(id.clone());

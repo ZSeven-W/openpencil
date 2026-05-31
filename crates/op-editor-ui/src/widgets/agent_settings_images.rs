@@ -136,6 +136,10 @@ fn search_test_enabled(settings: &AgentSettings) -> bool {
         && settings.images_search_test_status != ImageTestStatus::Testing
 }
 
+fn profile_test_enabled(profile: &ImageGenProfile) -> bool {
+    !profile.api_key.trim().is_empty() && profile.test_status != ImageTestStatus::Testing
+}
+
 fn test_btn_rect(content: Rect, settings: &AgentSettings) -> Rect {
     if !settings.images_advanced_open {
         return Rect {
@@ -310,7 +314,7 @@ pub fn hit_test(content: Rect, settings: &AgentSettings, scrolled: Point2D) -> I
         }
         if is_editing_profile(settings, index) {
             if rect_contains(profile_test_btn_rect(row), scrolled) {
-                if !profile.api_key.trim().is_empty() {
+                if profile_test_enabled(profile) {
                     return ImagesHit::TestGenConfig(index);
                 }
                 return ImagesHit::None;

@@ -55,6 +55,7 @@ fn image_generation_profiles_follow_ts_lifecycle() {
     );
     assert_eq!(s.image_gen_profiles[0].name, "Config 1");
     assert_eq!(s.image_gen_profiles[0].provider, ImageGenProvider::OpenAi);
+    assert_eq!(s.image_gen_profiles[0].test_status, ImageTestStatus::Idle);
 
     let second = s.add_image_gen_profile();
     assert_eq!(s.image_gen_profiles.len(), 2);

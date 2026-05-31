@@ -9,7 +9,7 @@ use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
 use op_editor_core::agent_settings::{
     AgentSettings, ImageGenField, ImageGenProfile, ImageGenProvider, ImageSearchField,
-    SettingsFocus,
+    ImageTestStatus, SettingsFocus,
 };
 use op_editor_core::editor_ui_state::EditorUiState;
 
@@ -193,7 +193,9 @@ pub(super) fn paint_profile_test_button(
     profile: &ImageGenProfile,
     btn: Rect,
 ) {
-    let enabled = !profile.api_key.trim().is_empty();
+    let enabled =
+        !profile.api_key.trim().is_empty() && profile.test_status != ImageTestStatus::Testing;
+    paint_profile_test_status(cx, theme, profile, btn);
     cx.backend.fill_round_rect(btn, 6.0, theme.muted);
     cx.backend.stroke_round_rect(btn, 6.0, theme.border, 1.0);
     let label = crate::widgets::agent_settings_i18n::t(ui, "settings.images.test");
@@ -216,6 +218,47 @@ pub(super) fn paint_profile_test_button(
             btn.origin.y + btn.size.y / 2.0 + 4.0,
         ),
     );
+}
+
+fn paint_profile_test_status(
+    cx: &mut PaintCx<'_>,
+    theme: &Theme,
+    profile: &ImageGenProfile,
+    btn: Rect,
+) {
+    match profile.test_status {
+        ImageTestStatus::Idle => {}
+        ImageTestStatus::Testing => draw_icon(
+            cx.backend,
+            Icon::Loader,
+            Point2D::new(btn.origin.x - 20.0, btn.origin.y + 7.0),
+            11.0,
+            theme.muted_foreground,
+            1.5,
+        ),
+        ImageTestStatus::Valid => draw_icon(
+            cx.backend,
+            Icon::Check,
+            Point2D::new(btn.origin.x - 20.0, btn.origin.y + 7.0),
+            11.0,
+            theme.primary,
+            1.8,
+        ),
+        ImageTestStatus::Invalid => {
+            let label = "Invalid";
+            let layout = TextLayout::single_run(
+                label,
+                "system-ui",
+                10.0,
+                to_jian(theme.destructive),
+                Point2D::new(0.0, 0.0),
+            );
+            cx.backend.draw_text(
+                &layout,
+                Point2D::new(btn.origin.x - 44.0, btn.origin.y + 17.0),
+            );
+        }
+    }
 }
 
 pub(super) fn paint_provider_field(

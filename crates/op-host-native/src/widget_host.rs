@@ -38,6 +38,8 @@ use op_editor_ui::{Rect, Theme};
 mod agent_settings_acp_tests;
 mod agent_settings_draft_dispatch;
 #[cfg(test)]
+mod agent_settings_image_gen_tests;
+#[cfg(test)]
 mod agent_settings_tests;
 mod ai_chat_geometry;
 mod chat_design_hover;

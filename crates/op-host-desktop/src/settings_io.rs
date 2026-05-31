@@ -442,6 +442,7 @@ fn image_gen_profile_from_payload(payload: ImageGenProfilePayload) -> Option<Ima
         api_key: payload.api_key,
         model: payload.model,
         base_url: payload.base_url,
+        test_status: op_editor_core::agent_settings::ImageTestStatus::Idle,
     })
 }
 
