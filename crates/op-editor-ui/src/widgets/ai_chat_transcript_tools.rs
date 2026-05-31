@@ -455,6 +455,12 @@ fn paint_tool_card(cx: &mut PaintCx<'_>, theme: &Theme, card: &ToolCallCard) {
     }
     paint_status_icon(cx, theme, card);
     if card.body.size.y > 0.0 {
+        cx.backend.stroke_line(
+            Point2D::new(card.body.origin.x, card.body.origin.y),
+            Point2D::new(card.body.origin.x + card.body.size.x, card.body.origin.y),
+            theme.border,
+            1.0,
+        );
         cx.backend.save();
         cx.backend.clip_rect(card.body);
         let mut baseline = card.body.origin.y + CARD_PAD_Y + 9.0;
@@ -580,6 +586,28 @@ mod tests {
         assert_eq!(backend.status_colors, vec![Theme::dark().destructive]);
     }
 
+    #[test]
+    fn expanded_tool_card_paints_ts_body_separator() {
+        let mut backend = StatusIconBackend::default();
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+        let card = expanded_test_card();
+        let theme = Theme::dark();
+
+        paint_tool_card(&mut cx, &theme, &card);
+
+        assert_eq!(
+            backend.separator_lines,
+            vec![(
+                Point2D::new(card.body.origin.x, card.body.origin.y),
+                Point2D::new(card.body.origin.x + card.body.size.x, card.body.origin.y),
+                theme.border,
+                1.0,
+            )]
+        );
+    }
+
     fn test_card(status: &str, result_failed: bool) -> ToolCallCard {
         ToolCallCard {
             rect: Rect::xywh(10.0, 10.0, 100.0, 24.0),
@@ -596,10 +624,27 @@ mod tests {
         }
     }
 
+    fn expanded_test_card() -> ToolCallCard {
+        ToolCallCard {
+            rect: Rect::xywh(10.0, 10.0, 100.0, 50.0),
+            header: Rect::xywh(10.0, 10.0, 100.0, 24.0),
+            body: Rect::xywh(10.0, 34.0, 100.0, 26.0),
+            expanded: true,
+            name: "update_node".into(),
+            source: None,
+            status: "done".into(),
+            level: ToolLevel::Modify,
+            result_failed: false,
+            arg_lines: vec!["Args: {}".into()],
+            result_lines: Vec::new(),
+        }
+    }
+
     #[derive(Default)]
     struct StatusIconBackend {
         status_paths: Vec<&'static str>,
         status_colors: Vec<Color>,
+        separator_lines: Vec<(Point2D, Point2D, Color, f32)>,
     }
 
     impl RenderBackend for StatusIconBackend {
@@ -609,7 +654,9 @@ mod tests {
         fn stroke_rect(&mut self, _: Rect, _: Color, _: f32) {}
         fn draw_text(&mut self, _: &TextLayout, _: Point2D) {}
         fn clip_rect(&mut self, _: Rect) {}
-        fn stroke_line(&mut self, _: Point2D, _: Point2D, _: Color, _: f32) {}
+        fn stroke_line(&mut self, from: Point2D, to: Point2D, color: Color, width: f32) {
+            self.separator_lines.push((from, to, color, width));
+        }
         fn fill_round_rect(&mut self, _: Rect, _: f32, _: Color) {}
         fn stroke_round_rect(&mut self, _: Rect, _: f32, _: Color, _: f32) {}
         fn stroke_svg_path(&mut self, d: &str, at: Point2D, _: f32, color: Color, _: f32) {
