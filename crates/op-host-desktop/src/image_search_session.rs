@@ -143,7 +143,10 @@ fn collect_from_children(
             targets.push(target);
         }
 
-        if is_image_placeholder_frame(node) || is_image_area_frame_by_heuristic(node) {
+        if is_image_placeholder_frame(node)
+            || is_image_area_frame_by_heuristic(node)
+            || is_image_area_rectangle_by_heuristic(node)
+        {
             continue;
         }
         if let Some(grand) = node.children() {
@@ -168,6 +171,7 @@ fn image_search_target_for(
     let needs_image = match node {
         PenNode::Image(image) => is_placeholder_src(&image.src),
         PenNode::Frame(_) => is_frame_placeholder_still_unfilled(node),
+        PenNode::Rectangle(_) => is_image_area_rectangle_by_heuristic(node),
         _ => false,
     };
     if !needs_image {
@@ -234,6 +238,31 @@ fn is_image_area_frame_by_heuristic(node: &PenNode) -> bool {
         return false;
     }
     let Some(children) = frame.children.as_ref() else {
+        return true;
+    };
+    matches!(children.as_slice(), [] | [PenNode::IconFont(_)])
+}
+
+fn is_image_area_rectangle_by_heuristic(node: &PenNode) -> bool {
+    let PenNode::Rectangle(rect) = node else {
+        return false;
+    };
+    let Some(name) = rect.base.name.as_deref() else {
+        return false;
+    };
+    if !has_image_area_keyword(name) {
+        return false;
+    }
+    if !matches!(node.width_px(), Some(w) if w >= 80.0) {
+        return false;
+    }
+    if !matches!(node.height_px(), Some(h) if h >= 60.0) {
+        return false;
+    }
+    if !matches!(rect.container.fill.as_deref(), Some([PenFill::Solid(_)])) {
+        return false;
+    }
+    let Some(children) = rect.children.as_ref() else {
         return true;
     };
     matches!(children.as_slice(), [] | [PenNode::IconFont(_)])
@@ -402,6 +431,7 @@ pub(crate) fn apply_result(state: &mut EditorState, node_id: &NodeId, url: &str)
         return false;
     };
     let is_unfilled_placeholder_frame = is_frame_placeholder_still_unfilled(node);
+    let is_unfilled_placeholder_rectangle = is_image_area_rectangle_by_heuristic(node);
     match node {
         PenNode::Image(image) => {
             if image.src == url {
@@ -427,6 +457,25 @@ pub(crate) fn apply_result(state: &mut EditorState, node_id: &NodeId, url: &str)
                 shadows: None,
             })]);
             frame.children = Some(Vec::new());
+            true
+        }
+        PenNode::Rectangle(rect) if is_unfilled_placeholder_rectangle => {
+            rect.container.fill = Some(vec![PenFill::Image(ImageFillBody {
+                url: url.to_string(),
+                mode: Some(ImageFillMode::Crop),
+                original_size: None,
+                transform: None,
+                explain: None,
+                opacity: None,
+                exposure: None,
+                contrast: None,
+                saturation: None,
+                temperature: None,
+                tint: None,
+                highlights: None,
+                shadows: None,
+            })]);
+            rect.children = Some(Vec::new());
             true
         }
         _ => false,
