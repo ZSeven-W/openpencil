@@ -632,6 +632,17 @@ impl WidgetHostNative {
         // 4. Canvas click — branch on the active tool.
         if self.over_canvas(x, y, viewport_width, viewport_height) {
             use op_editor_core::Tool;
+            // A press on the canvas while the Git panel is open dismisses
+            // it — the panel is a popover (TS parity: clicking off a
+            // popover closes it), and a click inside it was already
+            // consumed at §0.9, so anything reaching here is genuinely
+            // outside. Swallow the press so the dismiss doesn't also
+            // select / pan / start drawing.
+            if self.editor_state.editor_ui.git_panel.open {
+                self.close_git_panel();
+                self.mark_dirty();
+                return true;
+            }
             self.refresh_layout_scene();
             if matches!(self.editor_state.tool, Tool::Hand) {
                 self.drag = Some(DragState {

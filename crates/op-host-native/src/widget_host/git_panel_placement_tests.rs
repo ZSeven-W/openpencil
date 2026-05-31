@@ -309,6 +309,29 @@ fn hidden_clone_form_does_not_capture_keyboard() {
 }
 
 #[test]
+fn canvas_press_dismisses_the_open_git_panel() {
+    // The Git panel is a popover — a press on the canvas (outside the
+    // panel body + caret bridge) closes it, the way clicking off a popover
+    // does, and is consumed so it doesn't also clear selection / pan.
+    let mut host = host_with_git_panel_open();
+    let (vw, vh) = (1400.0, 900.0);
+    let body = host.git_panel_rect(vw, vh).expect("panel open => Some");
+    // A point centred under the panel but well below its body — on the
+    // empty canvas, clear of the panel, caret bridge, toolbar, and chat.
+    let px = body.origin.x + body.size.x / 2.0;
+    let py = body.origin.y + body.size.y + 120.0;
+    assert!(py < vh - 80.0, "probe sits on-screen below the panel");
+    assert!(
+        host.apply_press(px, py, vw, vh),
+        "a canvas press while the panel is open is consumed by the dismiss",
+    );
+    assert!(
+        !host.editor_state().editor_ui.git_panel.open,
+        "a canvas press dismisses the open Git-panel popover",
+    );
+}
+
+#[test]
 fn clone_wizard_accepts_pasted_url() {
     use op_editor_core::{CloneField, CloneFormState};
     let mut host = host_with_git_panel_open();

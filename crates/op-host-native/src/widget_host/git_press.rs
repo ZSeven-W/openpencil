@@ -304,4 +304,23 @@ impl WidgetHostNative {
         self.mark_dirty();
         true
     }
+
+    /// Close the floating Git panel and reset its transient sub-state —
+    /// input focus, header popovers, and the diff / merge-resolve / clone
+    /// views. The desktop host's poll loops abandon any in-flight `git_*`
+    /// job once `open` is false (they gate on `panel.open`). Shared by the
+    /// click-outside (canvas) dismiss and any other programmatic close.
+    pub(in crate::widget_host) fn close_git_panel(&mut self) {
+        let panel = &mut self.editor_state.editor_ui.git_panel;
+        panel.open = false;
+        panel.commit_focused = false;
+        panel.remote_focused = false;
+        panel.https_focused = false;
+        panel.branch_picker_open = false;
+        panel.overflow_open = false;
+        panel.overflow_view = op_editor_core::GitOverflowView::Menu;
+        panel.diff = None;
+        panel.merge_resolve = None;
+        panel.clone_form = None;
+    }
 }
