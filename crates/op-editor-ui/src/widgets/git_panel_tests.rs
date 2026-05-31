@@ -4,8 +4,9 @@
 use crate::widgets::git_panel::*;
 use crate::{Point2D, Rect};
 use op_editor_core::{
-    CloneField, CloneFormState, EditorState, GitCommitSummary, GitDiffView, GitFileEntry,
-    GitOverflowView, GitPanelState, MergeConflictRow, MergeResolveFile, MergeResolveState,
+    CloneField, CloneFormState, EditorState, GitBranchPickerMode, GitCommitSummary, GitDiffView,
+    GitFileEntry, GitOverflowView, GitPanelState, MergeConflictRow, MergeResolveFile,
+    MergeResolveState,
 };
 
 fn state_with(panel: GitPanelState) -> EditorState {
@@ -273,6 +274,44 @@ fn branch_picker_dropdown_switches_and_dismisses() {
     // would leave the popover stuck open).
     let far = Point2D::new(rect.origin.x - 200.0, rect.origin.y + 400.0);
     assert_eq!(panel.hit_test(rect, far), Some(GitPanelHit::DismissPopover));
+}
+
+#[test]
+fn branch_picker_submodes_map_create_input_and_cancel() {
+    let s = state_with(GitPanelState {
+        branch: Some("main".to_string()),
+        branches: vec!["feature".to_string(), "main".to_string()],
+        branch_picker_open: true,
+        branch_picker_mode: GitBranchPickerMode::Create,
+        ..open_repo()
+    });
+    let panel = GitPanel::for_editor(&s).unwrap();
+    let rect = panel_rect(&panel);
+    let picker = panel.branch_picker_panel(rect);
+    let input_point = Point2D::new(picker.origin.x + 16.0, picker.origin.y + 34.0);
+    assert_eq!(
+        panel.hit_test(rect, input_point),
+        Some(GitPanelHit::BranchCreateInput)
+    );
+
+    let s = state_with(GitPanelState {
+        branch: Some("main".to_string()),
+        branches: vec!["feature".to_string(), "main".to_string()],
+        branch_picker_open: true,
+        branch_picker_mode: GitBranchPickerMode::Merge,
+        ..open_repo()
+    });
+    let panel = GitPanel::for_editor(&s).unwrap();
+    let rect = panel_rect(&panel);
+    let picker = panel.branch_picker_panel(rect);
+    let cancel_point = Point2D::new(
+        picker.origin.x + picker.size.x / 2.0,
+        picker.origin.y + picker.size.y - 12.0,
+    );
+    assert_eq!(
+        panel.hit_test(rect, cancel_point),
+        Some(GitPanelHit::BranchPickerCancel)
+    );
 }
 
 #[test]
