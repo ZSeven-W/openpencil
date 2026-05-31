@@ -47,3 +47,22 @@ fn fresh_app_fits_blank_frame_like_ts_canvas_init() {
     assert!((v.pan_x - 64.0).abs() < 1e-2, "pan_x {}", v.pan_x);
     assert!((v.pan_y - 158.0).abs() < 1e-2, "pan_y {}", v.pan_y);
 }
+
+#[test]
+fn fresh_app_refits_blank_frame_to_actual_window_size_once() {
+    let mut app = DesktopApp::new(None);
+    app.viewport_width = 1000.0;
+    app.viewport_height = 700.0;
+
+    assert!(app.fit_initial_blank_frame_to_actual_viewport());
+    let v = app.host.editor_state().viewport;
+    assert!((v.zoom - 0.31333333).abs() < 1e-3, "zoom {}", v.zoom);
+    assert!((v.pan_x - 64.0).abs() < 1e-2, "pan_x {}", v.pan_x);
+    assert!((v.pan_y - 204.66666).abs() < 1e-2, "pan_y {}", v.pan_y);
+
+    app.viewport_width = 1200.0;
+    app.viewport_height = 800.0;
+    assert!(!app.fit_initial_blank_frame_to_actual_viewport());
+    let unchanged = app.host.editor_state().viewport;
+    assert_eq!(v, unchanged);
+}

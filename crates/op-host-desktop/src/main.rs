@@ -56,6 +56,9 @@ struct DesktopApp {
     /// Cached LOGICAL viewport size (refreshed on Resumed + Resized).
     viewport_width: f32,
     viewport_height: f32,
+    /// Fresh empty documents are first fit to the default attrs in
+    /// `new()`, then once more after winit reports the real window size.
+    pending_initial_blank_frame_fit: bool,
     /// Last cursor position (logical, top-left origin).
     cursor_x: f32,
     cursor_y: f32,
@@ -192,6 +195,7 @@ impl DesktopApp {
             host,
             viewport_width: INITIAL_VIEWPORT_W,
             viewport_height: INITIAL_VIEWPORT_H,
+            pending_initial_blank_frame_fit: fit_blank_frame,
             cursor_x: 0.0,
             cursor_y: 0.0,
             dpi: 1.0,
@@ -229,6 +233,23 @@ impl DesktopApp {
             git_clone_origin: None,
             last_git_refresh: Instant::now(),
         }
+    }
+
+    fn fit_initial_blank_frame_to_actual_viewport(&mut self) -> bool {
+        if !self.pending_initial_blank_frame_fit {
+            return false;
+        }
+        if self.viewport_width <= 0.0 || self.viewport_height <= 0.0 {
+            return false;
+        }
+        self.pending_initial_blank_frame_fit = false;
+        if self.host.editor_state().doc != op_editor_core::EditorState::starter().doc {
+            return false;
+        }
+        self.host
+            .fit_content_to_viewport(self.viewport_width, self.viewport_height);
+        self.host.mark_editor_state_dirty();
+        true
     }
 
     /// Snapshot the current document as the saved baseline — called
