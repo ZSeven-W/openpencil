@@ -267,6 +267,13 @@ impl WidgetHostNative {
                         self.mark_dirty();
                         return true;
                     }
+                    AIChatHit::SetDesignBlockExpanded(msg_idx, block_idx, expanded) => {
+                        self.editor_state
+                            .chat
+                            .set_message_design_block_expanded(msg_idx, block_idx, expanded);
+                        self.mark_dirty();
+                        return true;
+                    }
                     AIChatHit::ToggleChecklist => {
                         self.editor_state.chat.toggle_checklist_collapsed();
                         self.mark_dirty();

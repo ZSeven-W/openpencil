@@ -370,6 +370,31 @@ Applied to canvas."#,
 }
 
 #[test]
+fn expanded_design_json_block_reserves_body_and_surfaces_code_like_ts() {
+    let mut message = ChatMessage::assistant(
+        r#"```json
+[{"id":"frame-1","type":"Frame"}]
+```"#,
+    );
+    message.design_block_expanded_overrides = vec![Some(true)];
+
+    let items = build_transcript(
+        std::slice::from_ref(&message),
+        body(),
+        op_editor_core::Locale::EnUs,
+    );
+    let block = &items[0].design_blocks[0];
+
+    assert!(block.expanded);
+    assert!(block.rect.size.y > 32.0);
+    assert!(block.body.size.y > 0.0);
+    assert!(block
+        .code_lines
+        .iter()
+        .any(|line| line.contains(r#""type":"Frame""#)));
+}
+
+#[test]
 fn paint_design_json_block_shows_expand_affordance_like_ts() {
     let message = ChatMessage::assistant(
         r#"```json
@@ -397,6 +422,37 @@ fn paint_design_json_block_shows_expand_affordance_like_ts() {
             .iter()
             .any(|(point, size)| *size == 12.0 && point.x >= body.origin.x + body.size.x - 26.0),
         "TS design JSON blocks carry a right-side chevron affordance"
+    );
+}
+
+#[test]
+fn paint_expanded_design_json_block_draws_code_preview_like_ts() {
+    let mut message = ChatMessage::assistant(
+        r#"```json
+[{"id":"frame-1","type":"Frame"}]
+```"#,
+    );
+    message.design_block_expanded_overrides = vec![Some(true)];
+    let mut backend = TranscriptPaintBackend::default();
+    let mut cx = PaintCx {
+        backend: &mut backend,
+    };
+
+    paint_transcript(
+        &mut cx,
+        &crate::Theme::dark(),
+        body(),
+        &[message],
+        0,
+        op_editor_core::Locale::EnUs,
+    );
+
+    assert!(
+        backend
+            .texts
+            .iter()
+            .any(|line| line.contains(r#""type":"Frame""#)),
+        "expanded TS design cards show a JSON preview"
     );
 }
 
@@ -716,6 +772,24 @@ fn transcript_hit_resolves_a_click_on_an_individual_tool_card_header() {
     assert_eq!(
         transcript_hit(msgs, body(), cx, cy, op_editor_core::Locale::EnUs),
         Some(TranscriptHit::SetToolCallCardExpanded(0, 0, true))
+    );
+}
+
+#[test]
+fn transcript_hit_resolves_a_click_on_a_design_block_header() {
+    let m = ChatMessage::assistant(
+        r#"```json
+[{"id":"frame-1","type":"Frame"}]
+```"#,
+    );
+    let msgs = std::slice::from_ref(&m);
+    let header =
+        build_transcript(msgs, body(), op_editor_core::Locale::EnUs)[0].design_blocks[0].header;
+    let cx = header.origin.x + header.size.x / 2.0;
+    let cy = header.origin.y + header.size.y / 2.0;
+    assert_eq!(
+        transcript_hit(msgs, body(), cx, cy, op_editor_core::Locale::EnUs),
+        Some(TranscriptHit::SetDesignBlockExpanded(0, 0, true))
     );
 }
 

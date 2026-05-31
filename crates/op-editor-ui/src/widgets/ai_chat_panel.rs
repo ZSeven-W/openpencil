@@ -346,19 +346,7 @@ impl<'a> AIChatPlaceholder<'a> {
                 point.y,
                 self.locale,
             ) {
-                return Some(match hit {
-                    crate::widgets::ai_chat_transcript::TranscriptHit::ToggleThinking(i) => {
-                        AIChatHit::ToggleThinking(i)
-                    }
-                    crate::widgets::ai_chat_transcript::TranscriptHit::ToggleToolCalls(i) => {
-                        AIChatHit::ToggleToolCalls(i)
-                    }
-                    crate::widgets::ai_chat_transcript::TranscriptHit::SetToolCallCardExpanded(
-                        message_index,
-                        tool_index,
-                        expanded,
-                    ) => AIChatHit::SetToolCallCardExpanded(message_index, tool_index, expanded),
-                });
+                return Some(hit.into());
             }
         }
         if self.state.messages.is_empty() && can_use_model && !self.is_streaming() {
