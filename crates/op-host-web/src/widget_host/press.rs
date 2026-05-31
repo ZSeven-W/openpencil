@@ -493,9 +493,14 @@ impl WidgetHost {
             if let Some(hit) = AlignToolbar::for_canvas_region(canvas_region, &self.editor_state)
                 .and_then(|tb| tb.hit_test_action(Point2D::new(x, y)))
             {
-                if let AlignToolbarHit::Align(action) = hit {
-                    self.editor_state.align_selected(action);
-                    self.mark_dirty();
+                match hit {
+                    AlignToolbarHit::Align(action) => {
+                        self.editor_state.align_selected(action);
+                        self.mark_dirty();
+                    }
+                    AlignToolbarHit::Boolean(op) => {
+                        let _ = self.apply_boolean_op(op);
+                    }
                 }
                 return true;
             }

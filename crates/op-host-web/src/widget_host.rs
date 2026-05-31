@@ -44,6 +44,9 @@ use op_editor_ui::widgets::{
 use op_editor_ui::{Point2D, Rect, Theme};
 
 mod agent_settings_press;
+mod boolean_ops;
+#[cfg(test)]
+mod boolean_toolbar_tests;
 mod chat_model_picker_caret;
 #[cfg(test)]
 mod chat_model_picker_caret_tests;
@@ -337,19 +340,6 @@ impl WidgetHost {
         true
     }
 
-    /// Mouse-press handler. Hit-test order mirrors paint order in
-    /// REVERSE so the topmost overlay always wins (Step 5 codex
-    /// stop-hook fix — toolbar paints AFTER the chat panel, so it
-    /// sits on top in any overlap region and must be checked
-    /// first, otherwise the taller chat panel intercepts toolbar
-    /// clicks):
-    ///   1. Toolbar (top z-order among overlays)
-    ///   2. AI chat panel — DragHandle starts a chat drag,
-    ///      everything else defers to apply_click
-    ///   3. apply_click handles AI chat focus/send/example +
-    ///      LayerPanel hit + chat-defocus side effect
-    ///   4. Otherwise: start canvas pan-drag.
-
     /// Update `editor_ui.hovered_layer_id` from the cursor.
     /// Returns true if hover state changed (caller should
     /// repaint). Mirrors the native host.
@@ -380,7 +370,7 @@ impl WidgetHost {
             };
         // shell-core hit-test returns shell-core `NodeId`s; translate
         // to op-editor-core ids for storage on `editor_ui`.
-        let new_layer_ec = new_layer.as_ref().map(|id| id.clone());
+        let new_layer_ec = new_layer.clone();
         let changed = new_layer_ec != self.editor_state.editor_ui.hovered_layer_id
             || new_page != self.editor_state.editor_ui.hovered_page_index;
         if changed {
@@ -794,12 +784,6 @@ impl WidgetHost {
             size: Point2D::new(panel_w, panel_h),
         })
     }
-
-    /// Apply a primary-button mouse click at `(x, y)` (canvas-local
-    /// coordinates). Routes to AI chat / Toolbar / LayerPanel
-    /// hit-tests, in floating-z-order. Returns `true` if the click
-    /// was consumed by a widget so the caller knows whether to
-    /// repaint.
 
     pub(in crate::widget_host) fn layer_panel_rect(&self, viewport_h: f32) -> Rect {
         Rect {
