@@ -503,6 +503,8 @@ fn structured_arg_allowed(tool: &str, key: &str) -> bool {
         ("set_variables", "variables")
             | ("set_themes", "themes")
             | ("read_nodes", "nodeIds")
+            | ("batch_get", "patterns")
+            | ("batch_get", "nodeIds")
             | ("get_style_guide", "tags")
     )
 }

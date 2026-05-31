@@ -20,6 +20,9 @@ use std::collections::BTreeMap;
 pub mod batch_design;
 #[cfg(test)]
 mod batch_design_tests;
+pub mod batch_get;
+#[cfg(test)]
+mod batch_get_tests;
 pub mod bulk_vars;
 #[cfg(test)]
 mod bulk_vars_tests;
@@ -91,6 +94,7 @@ pub use batch_design::{
     batch_design_snapshot, design_content_snapshot, design_refine_snapshot,
     design_skeleton_snapshot, BatchDesign, DesignContent, DesignRefine, DesignSkeleton,
 };
+pub use batch_get::{batch_get_snapshot, BatchGet};
 pub use bulk_vars::{
     get_variables_snapshot, set_themes_snapshot, set_variables_snapshot, GetVariables, SetThemes,
     SetVariables,

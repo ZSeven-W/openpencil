@@ -19,9 +19,9 @@ pub struct ReadNodes {
 }
 
 #[derive(Clone)]
-struct PageNodes {
-    id: String,
-    roots: Vec<PenNode>,
+pub(crate) struct PageNodes {
+    pub(crate) id: String,
+    pub(crate) roots: Vec<PenNode>,
 }
 
 impl McpTool for ReadNodes {
@@ -106,7 +106,7 @@ impl ReadNodes {
     }
 }
 
-fn page_nodes_snapshots(state: &EditorState) -> (Vec<PageNodes>, String) {
+pub(crate) fn page_nodes_snapshots(state: &EditorState) -> (Vec<PageNodes>, String) {
     match state.doc.pages.as_ref() {
         Some(pages) if !pages.is_empty() => {
             let active_idx = state
@@ -185,7 +185,7 @@ fn parse_node_ids(args: &BTreeMap<String, String>) -> Result<Option<Vec<String>>
     ))
 }
 
-fn node_snapshot_value(node: &PenNode, depth: i32) -> Value {
+pub(crate) fn node_snapshot_value(node: &PenNode, depth: i32) -> Value {
     let mut value = serde_json::to_value(node).unwrap_or(Value::Null);
     if depth != -1 {
         truncate_children(&mut value, depth);

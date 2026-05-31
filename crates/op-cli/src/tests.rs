@@ -56,8 +56,61 @@ fn parse_args_maps_ts_get_id_alias_to_rust_tool() {
     assert_eq!(
         p.command,
         Command::ToolCall {
-            tool: "get_node".to_string(),
-            args: vec![("node_id".to_string(), "n42".to_string())],
+            tool: "batch_get".to_string(),
+            args: vec![("nodeIds".to_string(), r#"["n42"]"#.to_string())],
+        }
+    );
+}
+
+#[test]
+fn parse_args_maps_ts_get_parent_name_to_batch_get() {
+    let args = vec![
+        "get".to_string(),
+        "--parent".to_string(),
+        "n10".to_string(),
+        "--name".to_string(),
+        "Button".to_string(),
+        "--depth".to_string(),
+        "0".to_string(),
+    ];
+    let p = parse_args(&args).expect("parse");
+    assert_eq!(
+        p.command,
+        Command::ToolCall {
+            tool: "batch_get".to_string(),
+            args: vec![
+                ("patterns".to_string(), r#"[{"name":"Button"}]"#.to_string(),),
+                ("parentId".to_string(), "n10".to_string()),
+                ("readDepth".to_string(), "0".to_string()),
+            ],
+        }
+    );
+}
+
+#[test]
+fn parse_args_maps_ts_get_type_id_depth_page_to_batch_get() {
+    let args = vec![
+        "get".to_string(),
+        "--id".to_string(),
+        "n11".to_string(),
+        "--type".to_string(),
+        "text".to_string(),
+        "--depth".to_string(),
+        "2".to_string(),
+        "--page".to_string(),
+        "p1".to_string(),
+    ];
+    let p = parse_args(&args).expect("parse");
+    assert_eq!(
+        p.command,
+        Command::ToolCall {
+            tool: "batch_get".to_string(),
+            args: vec![
+                ("nodeIds".to_string(), r#"["n11"]"#.to_string()),
+                ("patterns".to_string(), r#"[{"type":"text"}]"#.to_string(),),
+                ("readDepth".to_string(), "2".to_string()),
+                ("pageId".to_string(), "p1".to_string()),
+            ],
         }
     );
 }
