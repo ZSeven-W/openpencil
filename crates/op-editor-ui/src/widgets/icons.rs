@@ -154,6 +154,8 @@ pub enum Icon {
     Image,
     /// Lucide `settings.svg` — used for the System settings tab.
     Settings,
+    /// Lucide `wrench.svg` — used for delegated/orchestrated tool cards.
+    Wrench,
     /// Lucide `save.svg` — file save / save-as menu rows.
     Save,
     /// Lucide `download.svg` — export image menu row.
@@ -307,6 +309,7 @@ impl Icon {
             Icon::Terminal => TERMINAL,
             Icon::Image => IMAGE,
             Icon::Settings => SETTINGS,
+            Icon::Wrench => WRENCH,
             Icon::Save => SAVE,
             Icon::Download => DOWNLOAD,
             Icon::FileText => FILE_TEXT,
@@ -402,6 +405,7 @@ impl Icon {
             "user" | "person" => Icon::User,
             "search" => Icon::Search,
             "settings" => Icon::Settings,
+            "wrench" | "tool" => Icon::Wrench,
             "image" | "image-icon" => Icon::Image,
             "github" => Icon::Github,
             "globe" => Icon::Globe,
