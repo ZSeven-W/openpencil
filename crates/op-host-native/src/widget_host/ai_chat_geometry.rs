@@ -4,7 +4,7 @@ use super::helpers::{AICHAT_INSET_BOTTOM, AICHAT_INSET_LEFT};
 use super::WidgetHostNative;
 use op_editor_core::ChatAnchor;
 use op_editor_ui::widgets::{
-    AI_CHAT_COLLAPSED_HEIGHT, AI_CHAT_COLLAPSED_WIDTH, AI_CHAT_HEIGHT, AI_CHAT_WIDTH,
+    AI_CHAT_COLLAPSED_HEIGHT, AI_CHAT_COLLAPSED_WIDTH, AI_CHAT_MIN_HEIGHT, AI_CHAT_MIN_WIDTH,
 };
 use op_editor_ui::{Point2D, Rect};
 
@@ -13,7 +13,10 @@ impl WidgetHostNative {
         if self.editor_state.chat.collapsed {
             (AI_CHAT_COLLAPSED_WIDTH, AI_CHAT_COLLAPSED_HEIGHT)
         } else {
-            (AI_CHAT_WIDTH, AI_CHAT_HEIGHT)
+            (
+                self.editor_state.chat.panel_width.max(AI_CHAT_MIN_WIDTH),
+                self.editor_state.chat.panel_height.max(AI_CHAT_MIN_HEIGHT),
+            )
         }
     }
 
@@ -40,6 +43,12 @@ impl WidgetHostNative {
         if let Some(d) = self.chat_drag {
             return Some(Rect {
                 origin: Point2D::new(d.pos_x, d.pos_y),
+                size: Point2D::new(panel_w, panel_h),
+            });
+        }
+        if let Some((x, y)) = self.editor_state.chat.panel_position {
+            return Some(Rect {
+                origin: Point2D::new(x, y),
                 size: Point2D::new(panel_w, panel_h),
             });
         }

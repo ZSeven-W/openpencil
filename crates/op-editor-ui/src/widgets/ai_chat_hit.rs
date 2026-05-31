@@ -14,6 +14,8 @@ pub enum AIChatHit {
     /// Click landed on the header / margin — host should start a
     /// drag so the user can move the panel between canvas corners.
     DragHandle,
+    /// Press landed on one of the invisible TS-style resize handles.
+    Resize(ChatResizeEdge),
     /// Click on the chevron at the top-left of the header — host
     /// flips the `ChatState::collapsed` flag.
     ToggleCollapse,
@@ -64,6 +66,18 @@ pub enum AIChatHit {
     /// Click on the fixed "Pencil it out" checklist header — host
     /// toggles the checklist body between expanded and collapsed.
     ToggleChecklist,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ChatResizeEdge {
+    N,
+    S,
+    E,
+    W,
+    Ne,
+    Nw,
+    Se,
+    Sw,
 }
 
 impl From<super::ai_chat_transcript::TranscriptHit> for AIChatHit {

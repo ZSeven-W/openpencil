@@ -2,7 +2,7 @@ use crate::theme::Theme;
 use crate::widgets::ai_chat_checklist::{
     fixed_checklist_height, fixed_checklist_rect, paint_fixed_checklist, HEADER_H, PROGRESS_H,
 };
-use crate::widgets::ai_chat_hit::AIChatHit;
+use crate::widgets::ai_chat_hit::{AIChatHit, ChatResizeEdge};
 use crate::widgets::ai_chat_panel_controls::{
     attachment_row_hit, paint_attachment_row, ATTACHMENT_ROW_HEIGHT,
 };
@@ -16,12 +16,17 @@ use crate::{Color, Point2D, Rect, TextLayout};
 use op_editor_core::chat::ChatState;
 use op_editor_core::EditorState;
 
-pub const AI_CHAT_WIDTH: f32 = 360.0;
-pub const AI_CHAT_HEIGHT: f32 = 400.0;
+pub const AI_CHAT_WIDTH: f32 = op_editor_core::chat::DEFAULT_CHAT_PANEL_WIDTH;
+pub const AI_CHAT_HEIGHT: f32 = op_editor_core::chat::DEFAULT_CHAT_PANEL_HEIGHT;
+pub const AI_CHAT_MIN_WIDTH: f32 = 280.0;
+pub const AI_CHAT_MIN_HEIGHT: f32 = 250.0;
+pub const AI_CHAT_MAX_RATIO: f32 = 0.8;
 pub const AI_CHAT_COLLAPSED_WIDTH: f32 = 150.0;
 pub const AI_CHAT_COLLAPSED_HEIGHT: f32 = 36.0;
 pub(crate) const PAD: f32 = 16.0;
 pub(crate) const HEADER_HEIGHT: f32 = 36.0;
+const RESIZE_GUTTER: f32 = 4.0;
+const RESIZE_CORNER: f32 = 12.0;
 const INPUT_AREA_HEIGHT: f32 = 56.0;
 const INPUT_TOOLBAR_HEIGHT: f32 = 40.0;
 const MODEL_CHIP_W: f32 = 150.0;
@@ -194,6 +199,9 @@ impl<'a> AIChatPlaceholder<'a> {
     }
 
     pub fn hit_test(&self, rect: Rect, point: Point2D) -> Option<AIChatHit> {
+        if let Some(edge) = self.resize_edge_at(rect, point) {
+            return Some(AIChatHit::Resize(edge));
+        }
         if !rect_contains(rect, point) {
             return None;
         }
@@ -362,6 +370,58 @@ impl<'a> AIChatPlaceholder<'a> {
         Some(AIChatHit::DragHandle)
     }
 
+    pub fn resize_edge_at(&self, rect: Rect, point: Point2D) -> Option<ChatResizeEdge> {
+        if self.state.collapsed || self.state.maximized {
+            return None;
+        }
+        let left = rect.origin.x;
+        let right = rect.origin.x + rect.size.x;
+        let top = rect.origin.y;
+        let bottom = rect.origin.y + rect.size.y;
+        let outer = Rect::xywh(
+            left - RESIZE_GUTTER,
+            top - RESIZE_GUTTER,
+            rect.size.x + RESIZE_GUTTER * 2.0,
+            rect.size.y + RESIZE_GUTTER * 2.0,
+        );
+        if !rect_contains(outer, point) {
+            return None;
+        }
+
+        let near_top = (point.y - top).abs() <= RESIZE_GUTTER;
+        let near_bottom = (point.y - bottom).abs() <= RESIZE_GUTTER;
+        let near_left = (point.x - left).abs() <= RESIZE_GUTTER;
+        let near_right = (point.x - right).abs() <= RESIZE_GUTTER;
+        let in_left_corner = point.x <= left + RESIZE_CORNER;
+        let in_right_corner = point.x >= right - RESIZE_CORNER;
+        let in_top_corner = point.y <= top + RESIZE_CORNER;
+        let in_bottom_corner = point.y >= bottom - RESIZE_CORNER;
+
+        match (
+            near_top && in_left_corner,
+            near_top && in_right_corner,
+            near_bottom && in_left_corner,
+            near_bottom && in_right_corner,
+        ) {
+            (true, _, _, _) => return Some(ChatResizeEdge::Nw),
+            (_, true, _, _) => return Some(ChatResizeEdge::Ne),
+            (_, _, true, _) => return Some(ChatResizeEdge::Sw),
+            (_, _, _, true) => return Some(ChatResizeEdge::Se),
+            _ => {}
+        }
+        if near_top {
+            Some(ChatResizeEdge::N)
+        } else if near_bottom {
+            Some(ChatResizeEdge::S)
+        } else if near_left && !in_top_corner && !in_bottom_corner {
+            Some(ChatResizeEdge::W)
+        } else if near_right && !in_top_corner && !in_bottom_corner {
+            Some(ChatResizeEdge::E)
+        } else {
+            None
+        }
+    }
+
     pub fn design_block_hover_at(&self, rect: Rect, point: Point2D) -> Option<(usize, usize)> {
         if self.state.messages.is_empty() {
             return None;
@@ -392,7 +452,7 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
         LayoutBox {
             rect: Rect {
                 origin: Point2D::new(0.0, 0.0),
-                size: Point2D::new(AI_CHAT_WIDTH, AI_CHAT_HEIGHT),
+                size: Point2D::new(self.state.panel_width, self.state.panel_height),
             },
         }
     }

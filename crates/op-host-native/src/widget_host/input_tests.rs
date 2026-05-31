@@ -5,7 +5,7 @@
 //! `host.editor_state` from canonical-schema JSON and assert against
 //! `editor_state` + the derived `LayoutScene` render scene.
 
-use super::WidgetHostNative;
+use super::{CursorHint, WidgetHostNative};
 use op_editor_core::ui_draft::PropertyFocus;
 use op_editor_core::NodeId;
 use op_editor_core::PenNodeExt;
@@ -74,6 +74,40 @@ fn ai_chat_new_chat_click_clears_transcript_and_queues_abort() {
     assert!(host.editor_state().chat.messages.is_empty());
     assert!(host.editor_state().chat.input.is_empty());
     assert!(host.editor_state().chat.pending_new_chat);
+}
+
+#[test]
+fn ai_chat_east_edge_shows_resize_cursor() {
+    let host = WidgetHostNative::new();
+    let rect = host
+        .ai_chat_rect(1200.0, 800.0)
+        .expect("chat panel visible");
+    let x = rect.origin.x + rect.size.x - 2.0;
+    let y = rect.origin.y + rect.size.y / 2.0;
+
+    assert_eq!(host.cursor_hint(x, y, 1200.0, 800.0), CursorHint::ResizeEw);
+}
+
+#[test]
+fn ai_chat_east_edge_drag_resizes_panel_width() {
+    let mut host = WidgetHostNative::new();
+    let before = host
+        .ai_chat_rect(1200.0, 800.0)
+        .expect("chat panel visible");
+    let x = before.origin.x + before.size.x - 2.0;
+    let y = before.origin.y + before.size.y / 2.0;
+
+    assert!(host.apply_press(x, y, 1200.0, 800.0));
+    assert!(host.apply_cursor_move(x + 72.0, y));
+
+    let after = host
+        .ai_chat_rect(1200.0, 800.0)
+        .expect("chat panel visible after resize");
+    assert!(
+        after.size.x > before.size.x + 60.0,
+        "dragging the east edge should grow chat width; before={before:?}, after={after:?}"
+    );
+    assert_eq!(after.origin.x, before.origin.x);
 }
 
 #[test]

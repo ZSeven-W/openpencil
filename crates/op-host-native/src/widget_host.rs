@@ -153,6 +153,9 @@ pub struct WidgetHostNative {
     /// host computes the nearest corner via `ChatAnchor::nearest`
     /// and snaps.
     pub(in crate::widget_host) chat_drag: Option<ChatDragState>,
+    /// Active chat-panel resize — mirrors the TS panel's invisible
+    /// edge/corner handles.
+    pub(in crate::widget_host) chat_resize: Option<ChatResizeState>,
     /// Active Design-MD panel drag — present while the user drags the
     /// floating panel by its header bar. The live top-left is written
     /// straight back into `editor_ui.design_md_panel_pos`.
@@ -405,6 +408,14 @@ pub(in crate::widget_host) struct ChatDragState {
 }
 
 #[derive(Debug, Clone, Copy)]
+pub(in crate::widget_host) struct ChatResizeState {
+    pub(in crate::widget_host) edge: op_editor_ui::widgets::ChatResizeEdge,
+    pub(in crate::widget_host) start_x: f32,
+    pub(in crate::widget_host) start_y: f32,
+    pub(in crate::widget_host) start_rect: Rect,
+}
+
+#[derive(Debug, Clone, Copy)]
 pub(in crate::widget_host) struct DesignMdDragState {
     /// Pointer offset within the panel rect when the drag began —
     /// subtracting from the live cursor gives the panel top-left.
@@ -439,6 +450,7 @@ impl WidgetHostNative {
             theme: Theme::dark(),
             drag: None,
             chat_drag: None,
+            chat_resize: None,
             design_md_drag: None,
             component_browser_drag: None,
             icon_picker_drag: None,

@@ -10,8 +10,8 @@
 use super::helpers::{rect_contains, PANEL_RESIZE_GUTTER, STATUS_INSET};
 use super::{CursorHint, PanelResizeKind, WidgetHostNative};
 use op_editor_ui::widgets::{
-    rotation_corner_at_point, selection_handle_at_point, STATUS_BAR_HEIGHT, STATUS_BAR_WIDTH,
-    TOP_BAR_HEIGHT,
+    rotation_corner_at_point, selection_handle_at_point, AIChatPlaceholder, ChatResizeEdge,
+    STATUS_BAR_HEIGHT, STATUS_BAR_WIDTH, TOP_BAR_HEIGHT,
 };
 use op_editor_ui::{Point2D, Rect};
 
@@ -56,6 +56,27 @@ impl WidgetHostNative {
     /// leaves the gutter mid-drag.
     pub fn is_resizing_panel(&self) -> bool {
         self.panel_resize.is_some()
+    }
+
+    pub fn chat_resize_hover(
+        &self,
+        x: f32,
+        y: f32,
+        viewport_w: f32,
+        viewport_h: f32,
+    ) -> Option<ChatResizeEdge> {
+        let rect = self.ai_chat_rect(viewport_w, viewport_h)?;
+        let panel = AIChatPlaceholder::from_editor(&self.editor_state);
+        panel.resize_edge_at(rect, Point2D::new(x, y))
+    }
+
+    fn chat_resize_cursor(edge: ChatResizeEdge) -> CursorHint {
+        match edge {
+            ChatResizeEdge::E | ChatResizeEdge::W => CursorHint::ResizeEw,
+            ChatResizeEdge::N | ChatResizeEdge::S => CursorHint::ResizeNs,
+            ChatResizeEdge::Nw | ChatResizeEdge::Se => CursorHint::ResizeNwse,
+            ChatResizeEdge::Ne | ChatResizeEdge::Sw => CursorHint::ResizeNesw,
+        }
     }
 
     /// Clear every lower-overlay hover highlight — file menu, locale
@@ -355,6 +376,12 @@ impl WidgetHostNative {
         // so it wins over the Git popover's neutral Default.
         if self.over_disabled_init_card(x, y, viewport_w, viewport_h) {
             return CursorHint::NotAllowed;
+        }
+        if let Some(resize) = self.chat_resize {
+            return Self::chat_resize_cursor(resize.edge);
+        }
+        if let Some(edge) = self.chat_resize_hover(x, y, viewport_w, viewport_h) {
+            return Self::chat_resize_cursor(edge);
         }
         // Any floating overlay (panels, Git popover, Toolbar /
         // StatusBar / chat, open dropdowns) — a neutral cursor over

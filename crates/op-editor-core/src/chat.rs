@@ -285,6 +285,9 @@ impl ChatAnchor {
     }
 }
 
+pub const DEFAULT_CHAT_PANEL_WIDTH: f32 = 360.0;
+pub const DEFAULT_CHAT_PANEL_HEIGHT: f32 = 400.0;
+
 /// Floating AI chat panel state — mirrors shell-core's `ChatState`
 /// (messages, input draft, focused flag, panel anchor, model catalog).
 #[derive(Debug, Clone)]
@@ -294,6 +297,16 @@ pub struct ChatState {
     pub focused: bool,
     /// Which canvas corner the floating chat panel snaps to.
     pub anchor: ChatAnchor,
+    /// Non-maximized panel width. TS persists this as
+    /// `panelWidth` in the AI UI store.
+    pub panel_width: f32,
+    /// Non-maximized panel height. TS persists this as
+    /// `panelHeight` in the AI UI store.
+    pub panel_height: f32,
+    /// Absolute top-left while the user has resized from an edge
+    /// that moves the panel origin. `None` falls back to the snapped
+    /// corner anchor.
+    pub panel_position: Option<(f32, f32)>,
     /// Collapsed state — when true the panel paints only its header.
     pub collapsed: bool,
     /// Maximized state — when true the host lays the panel out across
@@ -370,6 +383,9 @@ impl Default for ChatState {
             input: String::new(),
             focused: false,
             anchor: ChatAnchor::BottomLeft,
+            panel_width: DEFAULT_CHAT_PANEL_WIDTH,
+            panel_height: DEFAULT_CHAT_PANEL_HEIGHT,
+            panel_position: None,
             collapsed: false,
             maximized: false,
             checklist_collapsed: false,

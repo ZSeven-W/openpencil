@@ -2,6 +2,9 @@
 
 use super::helpers::{resize_bounds, PANEL_MAX_WIDTH, PANEL_MIN_WIDTH};
 use super::{PanelResizeKind, WidgetHostNative};
+use op_editor_ui::widgets::{
+    ChatResizeEdge, AI_CHAT_MAX_RATIO, AI_CHAT_MIN_HEIGHT, AI_CHAT_MIN_WIDTH,
+};
 use op_editor_ui::{Point2D, Rect};
 
 /// Minimum cursor travel (logical px) from the node-drag press point
@@ -536,6 +539,95 @@ impl WidgetHostNative {
             self.mark_dirty();
             return true;
         }
+        if let Some(resize) = self.chat_resize {
+            let (cx0, cy0, cw, ch) = self.canvas_region(self.last_viewport_w, self.last_viewport_h);
+            let max_w = (cw * AI_CHAT_MAX_RATIO).max(AI_CHAT_MIN_WIDTH);
+            let max_h = (ch * AI_CHAT_MAX_RATIO).max(AI_CHAT_MIN_HEIGHT);
+            let dx = x - resize.start_x;
+            let dy = y - resize.start_y;
+            let mut new_w = resize.start_rect.size.x;
+            let mut new_h = resize.start_rect.size.y;
+            let mut new_left = resize.start_rect.origin.x;
+            let mut new_top = resize.start_rect.origin.y;
+
+            if matches!(
+                resize.edge,
+                ChatResizeEdge::E | ChatResizeEdge::Ne | ChatResizeEdge::Se
+            ) {
+                new_w = resize.start_rect.size.x + dx;
+            }
+            if matches!(
+                resize.edge,
+                ChatResizeEdge::W | ChatResizeEdge::Nw | ChatResizeEdge::Sw
+            ) {
+                new_w = resize.start_rect.size.x - dx;
+                new_left = resize.start_rect.origin.x + dx;
+            }
+            if matches!(
+                resize.edge,
+                ChatResizeEdge::S | ChatResizeEdge::Se | ChatResizeEdge::Sw
+            ) {
+                new_h = resize.start_rect.size.y + dy;
+            }
+            if matches!(
+                resize.edge,
+                ChatResizeEdge::N | ChatResizeEdge::Ne | ChatResizeEdge::Nw
+            ) {
+                new_h = resize.start_rect.size.y - dy;
+                new_top = resize.start_rect.origin.y + dy;
+            }
+
+            if new_w < AI_CHAT_MIN_WIDTH {
+                let diff = AI_CHAT_MIN_WIDTH - new_w;
+                new_w = AI_CHAT_MIN_WIDTH;
+                if matches!(
+                    resize.edge,
+                    ChatResizeEdge::W | ChatResizeEdge::Nw | ChatResizeEdge::Sw
+                ) {
+                    new_left -= diff;
+                }
+            }
+            if new_w > max_w {
+                let diff = new_w - max_w;
+                new_w = max_w;
+                if matches!(
+                    resize.edge,
+                    ChatResizeEdge::W | ChatResizeEdge::Nw | ChatResizeEdge::Sw
+                ) {
+                    new_left += diff;
+                }
+            }
+            if new_h < AI_CHAT_MIN_HEIGHT {
+                let diff = AI_CHAT_MIN_HEIGHT - new_h;
+                new_h = AI_CHAT_MIN_HEIGHT;
+                if matches!(
+                    resize.edge,
+                    ChatResizeEdge::N | ChatResizeEdge::Ne | ChatResizeEdge::Nw
+                ) {
+                    new_top -= diff;
+                }
+            }
+            if new_h > max_h {
+                let diff = new_h - max_h;
+                new_h = max_h;
+                if matches!(
+                    resize.edge,
+                    ChatResizeEdge::N | ChatResizeEdge::Ne | ChatResizeEdge::Nw
+                ) {
+                    new_top += diff;
+                }
+            }
+
+            let max_left = cx0 + cw - new_w;
+            let max_top = cy0 + ch - new_h;
+            new_left = new_left.clamp(cx0, max_left.max(cx0));
+            new_top = new_top.clamp(cy0, max_top.max(cy0));
+            self.editor_state.chat.panel_width = new_w.round();
+            self.editor_state.chat.panel_height = new_h.round();
+            self.editor_state.chat.panel_position = Some((new_left.round(), new_top.round()));
+            self.mark_dirty();
+            return true;
+        }
         if let Some(d) = self.chat_drag.as_mut() {
             d.pos_x = x - d.grab_dx;
             d.pos_y = y - d.grab_dy;
@@ -582,6 +674,9 @@ impl WidgetHostNative {
             self.mark_dirty();
         }
         if self.panel_resize.take().is_some() {
+            return true;
+        }
+        if self.chat_resize.take().is_some() {
             return true;
         }
         if self.rotate_drag.take().is_some() {
@@ -644,6 +739,7 @@ impl WidgetHostNative {
             let (cx0, cy0, cw, ch) = self.canvas_region(viewport_w, viewport_h);
             self.editor_state.chat.anchor =
                 op_editor_core::ChatAnchor::nearest(center, cx0, cy0, cw, ch);
+            self.editor_state.chat.panel_position = None;
             self.mark_dirty();
             return true;
         }
@@ -655,6 +751,9 @@ impl WidgetHostNative {
     /// Viewport-less release variant — drops viewport-bound drags.
     pub fn apply_release(&mut self) -> bool {
         if self.panel_resize.take().is_some() {
+            return true;
+        }
+        if self.chat_resize.take().is_some() {
             return true;
         }
         if self.rotate_drag.take().is_some() {
