@@ -11,6 +11,7 @@ use op_editor_core::EditorState;
 struct CaptureBackend {
     fills: Vec<(Rect, Color)>,
     icon_strokes: Vec<(Point2D, f32, usize)>,
+    svg_strokes: Vec<(String, Point2D, f32)>,
     ops: Vec<&'static str>,
 }
 
@@ -26,8 +27,9 @@ impl RenderBackend for CaptureBackend {
     fn stroke_line(&mut self, _: Point2D, _: Point2D, _: Color, _: f32) {}
     fn fill_round_rect(&mut self, _: Rect, _: f32, _: Color) {}
     fn stroke_round_rect(&mut self, _: Rect, _: f32, _: Color, _: f32) {}
-    fn stroke_svg_path(&mut self, _: &str, at: Point2D, size: f32, _: Color, _: f32) {
+    fn stroke_svg_path(&mut self, d: &str, at: Point2D, size: f32, _: Color, _: f32) {
         self.icon_strokes.push((at, size, self.ops.len()));
+        self.svg_strokes.push((d.to_owned(), at, size));
         self.ops.push("icon");
     }
     fn save(&mut self) {
@@ -95,6 +97,35 @@ fn close_button_paints_after_scrollable_content() {
         close_idx > restore_idx,
         "close button must paint above clipped, scrollable content"
     );
+}
+
+#[test]
+fn agents_nav_icon_uses_ts_pen_glyph_not_pencil() {
+    const PEN_PATH: &str =
+        "M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z";
+    let state = EditorState::default();
+    let panel = AgentSettingsPanel::for_editor(&state);
+    let rect = panel.rect(1200.0, 800.0);
+    let mut backend = CaptureBackend::default();
+    let mut cx = PaintCx {
+        backend: &mut backend,
+    };
+
+    panel.paint(&mut cx, rect);
+
+    let agents_nav_icon = Point2D::new(rect.origin.x + 20.0, rect.origin.y + 63.0);
+    let strokes: Vec<_> = backend
+        .svg_strokes
+        .iter()
+        .filter(|(_, at, size)| {
+            (at.x - agents_nav_icon.x).abs() < 0.01
+                && (at.y - agents_nav_icon.y).abs() < 0.01
+                && (*size - 14.0).abs() < 0.01
+        })
+        .collect();
+
+    assert_eq!(strokes.len(), 1, "TS settings sidebar uses lucide Pen");
+    assert_eq!(strokes[0].0, PEN_PATH);
 }
 
 #[test]

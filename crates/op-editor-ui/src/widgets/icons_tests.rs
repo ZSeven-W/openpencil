@@ -92,6 +92,7 @@ fn every_variant_paints_at_least_one_primitive() {
         Icon::Sparkles,
         Icon::Wand2,
         Icon::Close,
+        Icon::Pen,
         Icon::ChevronUp,
         Icon::MessageSquare,
         Icon::LayoutGrid,
