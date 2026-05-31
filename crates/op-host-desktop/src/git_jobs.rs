@@ -121,6 +121,13 @@ fn snapshot(repo: &GitRepo) -> GitSnapshot {
                 .count()
         })
         .unwrap_or(0);
+    // Snapshot the wall clock once so every row's relative-time label is
+    // computed against the same "now" (the platform-free widget layer has
+    // no wall clock of its own — it just displays the label).
+    let now_secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0);
     let recent_commits = repo
         .log(8)
         .unwrap_or_default()
@@ -129,6 +136,7 @@ fn snapshot(repo: &GitRepo) -> GitSnapshot {
             short_hash: c.short_hash,
             summary: c.summary,
             author: c.author,
+            time_label: format_compact_time(c.timestamp, now_secs),
         })
         .collect();
     let merging = repo.is_merging();
@@ -365,4 +373,48 @@ fn compute_diff(repo: &GitRepo, target: &GitDiffTarget, locale: Locale) -> GitDi
         lines,
         stage_path,
     }
+}
+
+/// Compact relative time for a commit's author timestamp — a port of
+/// the TS `formatCompactTime`: `now` (<1 min), `{n}m` (<1 h), `{n}h`
+/// (<1 day), `yesterday` (1 day), `{n}d` (<1 week), else `YYYY-MM-DD`.
+/// `now_secs` is the wall-clock Unix time captured at snapshot.
+fn format_compact_time(ts_secs: i64, now_secs: i64) -> String {
+    let diff = (now_secs - ts_secs).max(0);
+    let min = diff / 60;
+    if min < 1 {
+        return "now".to_string();
+    }
+    if min < 60 {
+        return format!("{min}m");
+    }
+    let hr = min / 60;
+    if hr < 24 {
+        return format!("{hr}h");
+    }
+    let day = hr / 24;
+    if day == 1 {
+        return "yesterday".to_string();
+    }
+    if day < 7 {
+        return format!("{day}d");
+    }
+    let (y, m, d) = civil_from_days(ts_secs.div_euclid(86_400));
+    format!("{y:04}-{m:02}-{d:02}")
+}
+
+/// Gregorian `(year, month, day)` from a day count relative to the Unix
+/// epoch — Howard Hinnant's `civil_from_days`. Used only for commits
+/// older than a week, where the relative label falls back to a date.
+fn civil_from_days(days: i64) -> (i64, u32, u32) {
+    let z = days + 719_468;
+    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let year = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let day = (doy - (153 * mp + 2) / 5 + 1) as u32;
+    let month = (if mp < 10 { mp + 3 } else { mp - 9 }) as u32;
+    (if month <= 2 { year + 1 } else { year }, month, day)
 }

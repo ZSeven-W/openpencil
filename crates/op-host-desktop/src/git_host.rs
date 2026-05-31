@@ -283,6 +283,9 @@ impl DesktopApp {
             GitPanelAction::SwitchBranch(name) => {
                 self.run_reloading_git_op("switch", |repo| repo.switch_branch(&name));
             }
+            GitPanelAction::CreateBranch(name) => {
+                self.run_reloading_git_op("branch", |repo| repo.create_and_switch_branch(&name));
+            }
             GitPanelAction::MergeBranch(name) => {
                 self.run_branch_merge(&name);
             }

@@ -24,6 +24,17 @@ const MENU_PAD: f32 = 4.0;
 const MENU_MAX_BRANCHES: usize = 8;
 /// Branch-name truncation inside the dropdown.
 const BRANCH_NAME_MAX: usize = 26;
+/// Fixed branch-picker popover width (TS `w-[280px]`), clamped to the
+/// available panel column.
+const PICKER_W: f32 = 280.0;
+/// "分支" section-header band height (TS `px-2 py-1` ≈ 22 px).
+const PICKER_HEADER_H: f32 = 22.0;
+/// Two-line branch row (name + last-commit subtitle) ≈ 40 px.
+const PICKER_ROW_H: f32 = 40.0;
+/// Divider band between the branch list and the footer actions.
+const PICKER_DIVIDER_H: f32 = 9.0;
+/// Footer band holding the "新建分支" / "合并分支" actions (TS justify-end).
+const PICKER_FOOTER_H: f32 = 30.0;
 /// Overflow-menu width (TS `w-56` ≈ 224 px, clamped to the panel).
 const OVERFLOW_W: f32 = 208.0;
 /// Remote-settings subview width (TS `w-[300px]`, clamped).
@@ -77,24 +88,27 @@ impl GitPanel<'_> {
     pub(super) fn branch_picker_panel(&self, panel_rect: Rect) -> Rect {
         let btn = self.ready_branch_rect(panel_rect);
         let rows = self.state.branches.len().clamp(1, MENU_MAX_BRANCHES);
-        let w = (panel_rect.size.x - PAD * 2.0).clamp(180.0, 260.0);
-        let h = MENU_PAD * 2.0 + rows as f32 * MENU_ROW_H;
+        let w = PICKER_W.min(panel_rect.size.x - PAD * 2.0);
+        let h = MENU_PAD * 2.0
+            + PICKER_HEADER_H
+            + rows as f32 * PICKER_ROW_H
+            + PICKER_DIVIDER_H
+            + PICKER_FOOTER_H;
         Rect {
             origin: Point2D::new(btn.origin.x, btn.origin.y + btn.size.y + 4.0),
             size: Point2D::new(w, h),
         }
     }
 
-    /// One clickable rect per listed branch.
+    /// One clickable rect per listed branch — offset below the "分支"
+    /// header band and one taller (two-line) row each.
     pub(super) fn branch_picker_row_rects(&self, panel_rect: Rect) -> Vec<Rect> {
         let panel = self.branch_picker_panel(panel_rect);
+        let top = panel.origin.y + MENU_PAD + PICKER_HEADER_H;
         (0..self.state.branches.len().min(MENU_MAX_BRANCHES))
             .map(|i| Rect {
-                origin: Point2D::new(
-                    panel.origin.x + MENU_PAD,
-                    panel.origin.y + MENU_PAD + i as f32 * MENU_ROW_H,
-                ),
-                size: Point2D::new(panel.size.x - MENU_PAD * 2.0, MENU_ROW_H),
+                origin: Point2D::new(panel.origin.x + MENU_PAD, top + i as f32 * PICKER_ROW_H),
+                size: Point2D::new(panel.size.x - MENU_PAD * 2.0, PICKER_ROW_H),
             })
             .collect()
     }
@@ -105,17 +119,18 @@ impl GitPanel<'_> {
         let panel = self.branch_picker_panel(panel_rect);
         cx.backend.fill_round_rect(panel, 8.0, t.popover);
         cx.backend.stroke_round_rect(panel, 8.0, t.border, 1.0);
-        if self.state.branches.is_empty() {
-            self.text(
-                cx,
-                self.t("git.branch.listHeading"),
-                panel.origin.x + 12.0,
-                panel.origin.y + MENU_PAD + 18.0,
-                12.0,
-                t.muted_foreground,
-            );
-            return;
-        }
+
+        // "分支" section header (TS git.branch.listHeading) — always shown
+        // above the branch rows.
+        self.text(
+            cx,
+            self.t("git.branch.listHeading"),
+            panel.origin.x + 10.0,
+            panel.origin.y + MENU_PAD + 14.0,
+            11.0,
+            t.muted_foreground,
+        );
+
         let rows = self.branch_picker_row_rects(panel_rect);
         for (i, row) in rows.iter().enumerate() {
             let is_current = self.state.branches.get(i) == self.state.branch.as_ref();
@@ -123,13 +138,37 @@ impl GitPanel<'_> {
                 self.state.branches.get(i).map(String::as_str).unwrap_or(""),
                 BRANCH_NAME_MAX,
             );
+            // Line 1 — branch name (TS `text-xs font-medium`, always
+            // foreground; the current branch is signalled by the check,
+            // not by colour).
             self.text(
                 cx,
                 &name,
                 row.origin.x + 10.0,
-                row.origin.y + row.size.y / 2.0 + 4.0,
+                row.origin.y + 16.0,
                 12.0,
-                if is_current { t.primary } else { t.foreground },
+                t.foreground,
+            );
+            // Line 2 — last-commit subtitle (TS `branch.lastCommit?.message
+            // ?? noCommits`). Only the current branch's HEAD commit is known
+            // to this layer (recent_commits[0]); other branches fall back to
+            // the no-commits label until per-branch commit data is plumbed.
+            let subtitle = if is_current {
+                self.state
+                    .recent_commits
+                    .first()
+                    .map(|c| c.summary.as_str())
+                    .unwrap_or_else(|| self.t("git.branch.noCommits"))
+            } else {
+                self.t("git.branch.noCommits")
+            };
+            self.text(
+                cx,
+                &truncate(subtitle, BRANCH_NAME_MAX + 6),
+                row.origin.x + 10.0,
+                row.origin.y + 31.0,
+                11.0,
+                t.muted_foreground,
             );
             if is_current {
                 draw_icon(
@@ -137,11 +176,11 @@ impl GitPanel<'_> {
                     Icon::Check,
                     Point2D::new(
                         row.origin.x + row.size.x - 22.0,
-                        row.origin.y + (row.size.y - 14.0) / 2.0,
+                        row.origin.y + (row.size.y - 12.0) / 2.0,
                     ),
-                    14.0,
-                    t.primary,
-                    1.6,
+                    12.0,
+                    t.foreground,
+                    1.5,
                 );
             } else {
                 // A non-current branch shows a merge affordance on the
@@ -157,6 +196,28 @@ impl GitPanel<'_> {
                 );
             }
         }
+
+        // Footer — divider + "新建分支" / "合并分支" ghost actions (TS
+        // GitPanelBranchPicker list-mode footer). Both labels resolve
+        // through op-i18n so they localize like the rest of the chrome.
+        let row_count = self.state.branches.len().clamp(1, MENU_MAX_BRANCHES) as f32;
+        let footer_top = panel.origin.y + MENU_PAD + PICKER_HEADER_H + row_count * PICKER_ROW_H;
+        cx.backend.fill_rect(
+            Rect {
+                origin: Point2D::new(panel.origin.x + MENU_PAD, footer_top + 4.0),
+                size: Point2D::new(panel.size.x - MENU_PAD * 2.0, 1.0),
+            },
+            alpha(t.border, 0.60),
+        );
+        let label_y = footer_top + PICKER_DIVIDER_H + PICKER_FOOTER_H / 2.0 + 4.0;
+        let merge_label = self.t("git.branch.mergeAction");
+        let create_label = self.t("git.branch.createAction");
+        let merge_w = cx.backend.measure_text(merge_label, 12.0);
+        let create_w = cx.backend.measure_text(create_label, 12.0);
+        let merge_x = panel.origin.x + panel.size.x - 12.0 - merge_w;
+        let create_x = merge_x - 16.0 - create_w;
+        self.text(cx, create_label, create_x, label_y, 12.0, t.foreground);
+        self.text(cx, merge_label, merge_x, label_y, 12.0, t.foreground);
     }
 
     /// Hit-test the branch-picker dropdown. `None` when the point is

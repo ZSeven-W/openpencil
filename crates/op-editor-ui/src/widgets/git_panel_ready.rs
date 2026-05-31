@@ -119,7 +119,8 @@ impl GitPanel<'_> {
     /// The `保存为里程碑` button anchored bottom-right inside the box.
     pub(super) fn ready_commit_btn(&self, rect: Rect) -> Rect {
         let b = self.ready_commit_box(rect);
-        let w = 96.0;
+        // Wider than the label alone so the leading milestone icon fits.
+        let w = 108.0;
         let h = 24.0;
         Rect {
             origin: Point2D::new(
@@ -201,7 +202,20 @@ impl GitPanel<'_> {
         let (pull_r, push_r, overflow_r) = self.ready_header_buttons(rect);
         self.paint_ready_icon(cx, pull_r, Icon::ArrowDown, !self.state.pulling);
         self.paint_ready_icon(cx, push_r, Icon::ArrowUp, !self.state.pushing);
-        self.paint_ready_icon(cx, overflow_r, Icon::MoreVertical, true);
+        // Overflow `…` — TS colors this `text-muted-foreground` at size 13,
+        // dimmer than the pull / push glyphs (git-panel-header.tsx:127-129).
+        let overflow_s = 13.0;
+        draw_icon(
+            cx.backend,
+            Icon::MoreHorizontal,
+            Point2D::new(
+                overflow_r.origin.x + (overflow_r.size.x - overflow_s) / 2.0,
+                overflow_r.origin.y + (overflow_r.size.y - overflow_s) / 2.0,
+            ),
+            overflow_s,
+            t.muted_foreground,
+            1.5,
+        );
 
         // ── Commit box (TS textarea + milestone button) ──
         let box_r = self.ready_commit_box(rect);
@@ -242,13 +256,7 @@ impl GitPanel<'_> {
                 );
             }
         }
-        self.paint_button(
-            cx,
-            self.ready_commit_btn(rect),
-            self.t("git.commit.submitButton"),
-            self.ready_can_commit(),
-            true,
-        );
+        self.paint_milestone_button(cx, self.ready_commit_btn(rect), self.ready_can_commit());
         cx.backend.fill_rect(
             Rect {
                 origin: Point2D::new(rect.origin.x, box_r.origin.y + box_r.size.y + 6.0),
@@ -300,9 +308,16 @@ impl GitPanel<'_> {
                     3.5,
                     t.foreground,
                 );
-                let author_w = cx.backend.measure_text(&commit.author, 10.0);
+                // Right meta — `<author-first-token> · <relative-time>`
+                // (TS `{authorShort} · {timeAgo}`).
+                let meta = format!(
+                    "{} · {}",
+                    author_first_token(&commit.author),
+                    commit.time_label,
+                );
+                let author_w = cx.backend.measure_text(&meta, 10.0);
                 let author_x = rect.origin.x + width - READY_PAD - author_w;
-                // Truncate the message to the space left of the author.
+                // Truncate the message to the space left of the meta.
                 let msg_w = (author_x - msg_x - 8.0).max(0.0);
                 let chars = (msg_w / 7.0) as usize;
                 self.text(
@@ -315,7 +330,7 @@ impl GitPanel<'_> {
                 );
                 self.text(
                     cx,
-                    &commit.author,
+                    &meta,
                     author_x,
                     y,
                     10.0,
@@ -340,6 +355,47 @@ impl GitPanel<'_> {
             rect.origin.y + (rect.size.y - s) / 2.0,
         );
         draw_icon(cx.backend, icon, c, s, color, 1.5);
+    }
+
+    /// Paint the `保存为里程碑` milestone button — a port of the TS
+    /// commit-input button (`variant="default"`, a primary-blue fill with
+    /// a leading `Milestone` icon). Unlike the generic
+    /// [`GitPanel::paint_button`], the disabled state stays primary-blue
+    /// at half opacity (TS `disabled:opacity-50`) instead of going grey,
+    /// and the signpost icon sits to the left of the centred label.
+    fn paint_milestone_button(&self, cx: &mut PaintCx<'_>, rect: Rect, enabled: bool) {
+        let t = self.theme;
+        let factor = if enabled { 1.0 } else { 0.5 };
+        cx.backend
+            .fill_round_rect(rect, 6.0, alpha(t.primary, factor));
+
+        let label = self.t("git.commit.submitButton");
+        let icon_s = 11.0;
+        let gap = 5.0;
+        let label_w = cx.backend.measure_text(label, 12.0);
+        let content_w = icon_s + gap + label_w;
+        let start_x = rect.origin.x + (rect.size.x - content_w).max(6.0) / 2.0;
+        let color = alpha(t.primary_foreground, factor);
+
+        cx.backend.save();
+        cx.backend.clip_rect(rect);
+        draw_icon(
+            cx.backend,
+            Icon::Milestone,
+            Point2D::new(start_x, rect.origin.y + (rect.size.y - icon_s) / 2.0),
+            icon_s,
+            color,
+            1.8,
+        );
+        self.text(
+            cx,
+            label,
+            start_x + icon_s + gap,
+            rect.origin.y + rect.size.y / 2.0 + 4.0,
+            12.0,
+            color,
+        );
+        cx.backend.restore();
     }
 
     /// One clickable rect per displayed recent-commit row. Shared by
@@ -397,4 +453,11 @@ fn alpha(c: Color, factor: f32) -> Color {
         a: c.a * factor,
         ..c
     }
+}
+
+/// The first whitespace-delimited token of an author name — TS
+/// `commit.author.name.split(/\s+/)[0]` ("Ada Lovelace" → "Ada",
+/// "Kayshen-X" stays whole).
+fn author_first_token(author: &str) -> &str {
+    author.split_whitespace().next().unwrap_or(author)
 }

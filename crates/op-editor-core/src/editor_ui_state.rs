@@ -125,6 +125,11 @@ pub struct GitCommitSummary {
     pub summary: String,
     /// Author display name.
     pub author: String,
+    /// Pre-formatted relative-time label (`now` / `5m` / `2h` / …),
+    /// computed host-side against the wall clock when the snapshot is
+    /// taken (TS `formatCompactTime`). The widget layer is platform-free
+    /// and has no wall clock, so it cannot derive this itself.
+    pub time_label: String,
 }
 
 /// One changed file in the Git panel's staging list — plain data
@@ -251,6 +256,20 @@ pub enum GitOverflowView {
     RemoteSettings,
 }
 
+/// Which sub-mode the branch-picker dropdown is showing (mirrors the
+/// TS `GitPanelBranchPicker` `mode` state machine). Resets to `List`
+/// when the dropdown closes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum GitBranchPickerMode {
+    /// Branch list + the `新建分支` / `合并分支` footer actions.
+    #[default]
+    List,
+    /// Inline `新建分支` form — a branch-name text input.
+    Create,
+    /// `合并分支` mode — pick a non-current branch to merge into HEAD.
+    Merge,
+}
+
 /// An interactive action requested from the Git panel. The desktop
 /// host drains it from [`GitPanelState::pending_action`] and runs it
 /// against its `GitSession` (the widget layer never calls git).
@@ -279,6 +298,9 @@ pub enum GitPanelAction {
     CommitMilestone,
     /// Switch the working tree to the named branch.
     SwitchBranch(String),
+    /// Create a new branch with the given name (from the inline
+    /// `新建分支` form) and switch to it.
+    CreateBranch(String),
     /// Add / re-point the `origin` remote to the given URL.
     SetRemote(String),
     /// Generate (or reuse) an SSH key for the `origin` host and bind
@@ -383,6 +405,12 @@ pub struct GitPanelState {
     /// All local branch names, sorted — the panel lists them for
     /// one-click switching.
     pub branches: Vec<String>,
+    /// Which branch-picker sub-mode is showing (list / create / merge).
+    pub branch_picker_mode: GitBranchPickerMode,
+    /// Draft branch name typed into the inline `新建分支` form.
+    pub branch_create_draft: String,
+    /// Whether the `新建分支` name input holds keyboard focus.
+    pub branch_create_focused: bool,
     /// Number of changed (dirty) files in the working tree.
     pub dirty_count: usize,
     /// Number of files with unresolved merge conflicts.

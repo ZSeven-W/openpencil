@@ -50,6 +50,7 @@ fn open_panel_height_grows_with_commits() {
                 short_hash: "abc1234".into(),
                 summary: "first".into(),
                 author: "Ada".into(),
+                time_label: "now".into(),
             };
             3
         ],
@@ -67,6 +68,7 @@ fn empty_history_reserves_a_placeholder_row() {
             short_hash: "abc1234".into(),
             summary: "only".into(),
             author: "Ada".into(),
+            time_label: "now".into(),
         }],
         ..open_repo()
     });
@@ -158,11 +160,13 @@ fn commit_rows_open_a_commit_diff() {
                 short_hash: "aaa1111".into(),
                 summary: "first".into(),
                 author: "Ada".into(),
+                time_label: "now".into(),
             },
             GitCommitSummary {
                 short_hash: "bbb2222".into(),
                 summary: "second".into(),
                 author: "Bo".into(),
+                time_label: "now".into(),
             },
         ],
         ..open_repo()
