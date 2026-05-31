@@ -79,6 +79,7 @@ pub enum AgentSettingsHit {
     ToggleAcpConnected(usize),
     ToggleMcpServer,
     ToggleMcpCli(McpCli),
+    CopyMcpClientConfig,
     ToggleImagesAdvanced,
     FocusSearchField(ImageSearchField),
     TestImageSearch,
@@ -230,6 +231,7 @@ impl<'a> AgentSettingsPanel<'a> {
                 match agent_settings_mcp::hit_test(content_rect(panel), &self.settings, scrolled) {
                     McpHit::ToggleServer => return AgentSettingsHit::ToggleMcpServer,
                     McpHit::ToggleCli(cli) => return AgentSettingsHit::ToggleMcpCli(cli),
+                    McpHit::CopyClientConfig => return AgentSettingsHit::CopyMcpClientConfig,
                     McpHit::FocusPort => return AgentSettingsHit::FocusMcpPort,
                     McpHit::None => {}
                 }

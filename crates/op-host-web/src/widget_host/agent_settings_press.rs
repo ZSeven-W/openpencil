@@ -60,6 +60,16 @@ impl WidgetHost {
                         .running = true;
                 }
             }
+            AgentSettingsHit::CopyMcpClientConfig => {
+                self.commit_settings_focus();
+                let config = self
+                    .editor_state
+                    .editor_ui
+                    .agent_settings
+                    .mcp_server
+                    .client_config_text();
+                self.editor_state.chat.queue_copy_text(config);
+            }
             AgentSettingsHit::ToggleImagesAdvanced => {
                 self.editor_state
                     .editor_ui

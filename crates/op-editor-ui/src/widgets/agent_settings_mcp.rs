@@ -5,6 +5,7 @@ use crate::widgets::agent_settings_caret::{
     caret_x_for_text, paint_caret, settings_caret_for_focus,
 };
 use crate::widgets::agent_settings_i18n::t as t_settings;
+use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
 use op_editor_core::agent_settings::{AgentSettings, McpCli, SettingsFocus};
@@ -28,6 +29,8 @@ const BTN_W: f32 = 72.0;
 const BTN_H: f32 = 28.0;
 const PORT_FIELD_W: f32 = 64.0;
 const PORT_FIELD_H: f32 = 28.0;
+const CLIENT_COPY_BTN: f32 = 20.0;
+const CLIENT_COPY_ICON: f32 = 10.0;
 
 fn server_card_top(content: Rect) -> f32 {
     content.origin.y + TITLE_H
@@ -68,6 +71,7 @@ pub(super) fn content_height(settings: &AgentSettings) -> f32 {
 pub enum McpHit {
     ToggleServer,
     ToggleCli(McpCli),
+    CopyClientConfig,
     FocusPort,
     None,
 }
@@ -114,9 +118,35 @@ fn cli_cell_rect(content: Rect, settings: &AgentSettings, idx: usize) -> Rect {
     }
 }
 
+fn client_config_rect(content: Rect) -> Rect {
+    Rect {
+        origin: Point2D::new(
+            content.origin.x,
+            server_card_top(content) + SERVER_CARD_H + CLIENT_CONFIG_GAP,
+        ),
+        size: Point2D::new(content.size.x, CLIENT_CONFIG_H),
+    }
+}
+
+fn client_config_copy_button_rect(content: Rect) -> Rect {
+    let rect = client_config_rect(content);
+    Rect {
+        origin: Point2D::new(
+            rect.origin.x + rect.size.x - 12.0 - CLIENT_COPY_BTN,
+            rect.origin.y + 8.0,
+        ),
+        size: Point2D::new(CLIENT_COPY_BTN, CLIENT_COPY_BTN),
+    }
+}
+
 pub fn hit_test(content: Rect, settings: &AgentSettings, scrolled: Point2D) -> McpHit {
     if rect_contains(server_button_rect(content), scrolled) {
         return McpHit::ToggleServer;
+    }
+    if settings.mcp_server.running
+        && rect_contains(client_config_copy_button_rect(content), scrolled)
+    {
+        return McpHit::CopyClientConfig;
     }
     if !settings.mcp_server.running && rect_contains(port_field_rect(content), scrolled) {
         return McpHit::FocusPort;
@@ -340,13 +370,7 @@ fn paint_client_config(
     if !settings.mcp_server.running {
         return;
     }
-    let rect = Rect {
-        origin: Point2D::new(
-            content.origin.x,
-            server_card_top(content) + SERVER_CARD_H + 8.0,
-        ),
-        size: Point2D::new(content.size.x, CLIENT_CONFIG_H),
-    };
+    let rect = client_config_rect(content);
     cx.backend.fill_round_rect(rect, 8.0, theme.card);
     cx.backend.stroke_round_rect(rect, 8.0, theme.border, 1.0);
     let title = TextLayout::single_run(
@@ -360,11 +384,25 @@ fn paint_client_config(
         &title,
         Point2D::new(rect.origin.x + 12.0, rect.origin.y + 18.0),
     );
-    let config = format!(
-        r#"{{ "type": "http", "url": "http://127.0.0.1:{}/mcp" }}"#,
-        settings.mcp_server.port
+    let copy = client_config_copy_button_rect(content);
+    draw_icon(
+        cx.backend,
+        Icon::Copy,
+        Point2D::new(
+            copy.origin.x + (CLIENT_COPY_BTN - CLIENT_COPY_ICON) / 2.0,
+            copy.origin.y + (CLIENT_COPY_BTN - CLIENT_COPY_ICON) / 2.0,
+        ),
+        CLIENT_COPY_ICON,
+        theme.muted_foreground,
+        1.5,
     );
-    let config = ellipsize(cx, &config, rect.size.x - 24.0, 10.0);
+    let config = settings.mcp_server.client_config_text();
+    let config = ellipsize(
+        cx,
+        &config,
+        rect.size.x - 24.0 - CLIENT_COPY_BTN - 8.0,
+        10.0,
+    );
     let config_lay = TextLayout::single_run(
         &config,
         "monospace",
