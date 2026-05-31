@@ -1,14 +1,43 @@
 //! Remote operations — clone, fetch, pull, push, remote config.
 //!
-//! The network operations (`clone` / `fetch` / `pull` / `push`)
-//! depend on the ambient git credential / SSH setup; dedicated
-//! credential + SSH-key handling lands in a later increment. They
-//! are not unit-tested here (no network in tests); the remote-config
-//! readers / writers are.
+//! The network operations (`clone` / `fetch` / `pull` / `push`) run
+//! entirely in-process through libgit2 (`git2`); there is no system
+//! `git` subprocess. Authentication is supplied through a
+//! [`git2::RemoteCallbacks`] credential closure built from the
+//! handle's stored auth carrier (see [`GitRepo::auth_env`] /
+//! [`GitRepo::with_auth_env`]); when the carrier is empty the closure
+//! falls back to the ambient credential helpers / ssh-agent, exactly
+//! the way the subprocess backend deferred to the user's git setup.
+//! The network ops are not unit-tested here (no network in tests);
+//! the remote-config readers / writers are.
+//!
+//! ## Auth carrier (libgit2 migration note)
+//!
+//! The subprocess backend carried auth as *git environment* pairs —
+//! `GIT_SSH_COMMAND`, `GIT_CONFIG_*`, `OP_GIT_HTTPS_*`. libgit2 takes
+//! credentials through a callback, not the environment, so the
+//! `auth_env` `Vec<(String, String)>` is repurposed as a small,
+//! structured credential carrier interpreted by [`build_callbacks`]:
+//!
+//! - `("token", "<username>:<token>")` → an HTTPS user/password
+//!   credential ([`git2::Cred::userpass_plaintext`]).
+//! - `("ssh_key_path", "<private-key-path>")` → an SSH key credential
+//!   ([`git2::Cred::ssh_key`]) honoring the `username_from_url`.
+//!
+//! The public surface — [`GitRepo::auth_env`] returning a
+//! `Vec<(String, String)>` and [`GitRepo::with_auth_env`] storing it —
+//! is unchanged; only the *meaning* of the pairs changed, and the
+//! `git_session` host wiring (`with_auth_env(repo.auth_env(..))`) keeps
+//! compiling and working without edits.
 
 use std::path::{Path, PathBuf};
 
-use crate::{git_output, stderr_of, GitError, GitRepo, MergeOutcome};
+use git2::{
+    build::RepoBuilder, AutotagOption, Cred, CredentialType, FetchOptions, PushOptions,
+    RemoteCallbacks,
+};
+
+use crate::{GitError, GitRepo, MergeOutcome};
 
 /// A configured git remote.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -20,32 +49,101 @@ pub struct Remote {
 }
 
 impl GitRepo {
-    /// `git clone <url>` into `dir` and return a handle to the clone.
-    /// `dir` must not already exist (git creates it).
+    /// Clone `url` into `dir` and return a handle to the clone.
+    /// `dir` must not already exist (libgit2 creates it).
+    ///
+    /// Authentication uses the ambient credential helpers / ssh-agent
+    /// — a fresh clone has no stored credential carrier yet (the
+    /// returned handle starts with an empty `auth_env`, matching the
+    /// subprocess backend, where the spawned `git clone` likewise
+    /// inherited only the ambient git environment).
     pub fn clone(url: &str, dir: &Path) -> Result<GitRepo, GitError> {
-        // Run from `dir`'s parent so a relative target resolves; the
-        // parent must exist for git to create `dir` inside it.
+        // The parent must exist for the clone target to be created
+        // inside it; libgit2 (like `git clone`) creates only `dir`,
+        // not its ancestors.
         let parent = dir.parent().unwrap_or_else(|| Path::new("."));
         if !parent.exists() {
             std::fs::create_dir_all(parent).map_err(|e| GitError::Io(e.to_string()))?;
         }
-        let dir_str = dir
-            .to_str()
-            .ok_or_else(|| GitError::Io("non-UTF-8 path".into()))?;
-        let output = git_output(parent, &["clone", url, dir_str])?;
-        if !output.status.success() {
-            return Err(GitError::Command {
+
+        // No stored credential yet — the clone authenticates through
+        // the ambient credential helpers / ssh-agent (the closure
+        // falls back to `Cred::credential_helper` / the ssh-agent when
+        // the carrier is empty, exactly as the spawned `git clone`
+        // inherited only the ambient git environment).
+        let auth: Vec<(String, String)> = Vec::new();
+        let callbacks = build_callbacks(&auth);
+        let mut fetch_opts = FetchOptions::new();
+        fetch_opts.remote_callbacks(callbacks);
+
+        let repo = RepoBuilder::new()
+            .fetch_options(fetch_opts)
+            .clone(url, dir)
+            .map_err(|e| GitError::Command {
                 operation: "clone".to_string(),
-                stderr: stderr_of(&output),
-            });
+                stderr: e.message().to_string(),
+            })?;
+
+        // Cloning an EMPTY remote leaves the local HEAD on libgit2's own
+        // default branch name, which can differ from the remote's
+        // configured initial branch (e.g. `main`). Match `git clone` by
+        // pointing the still-unborn HEAD at the remote's advertised
+        // default branch — falling back to `refs/heads/main` (the
+        // initial-branch this crate's `init` uses) when the empty remote
+        // advertises none — so the first local commit lands on a
+        // predictable branch.
+        if repo.is_empty().unwrap_or(false) {
+            let target = repo
+                .find_remote("origin")
+                .ok()
+                .and_then(|mut origin| {
+                    origin.connect(git2::Direction::Fetch).ok()?;
+                    let branch = origin
+                        .default_branch()
+                        .ok()
+                        .and_then(|b| b.as_str().map(str::to_string));
+                    let _ = origin.disconnect();
+                    branch
+                })
+                .unwrap_or_else(|| "refs/heads/main".to_string());
+            let _ = repo.set_head(&target);
         }
+
         GitRepo::discover(dir)?.ok_or_else(|| GitError::NotARepo(PathBuf::from(dir)))
     }
 
-    /// `git fetch` — update remote-tracking refs without touching the
-    /// working tree.
+    /// Fetch every remote — update remote-tracking refs without
+    /// touching the working tree. Prunes deleted upstream branches,
+    /// matching the former `git fetch --all --prune`.
     pub fn fetch(&self) -> Result<(), GitError> {
-        self.run(&["fetch", "--all", "--prune"])?;
+        let repo = self.open()?;
+        // `git fetch --all` walks every configured remote, not just
+        // `origin`; replicate that so a multi-remote repo behaves the
+        // same as the subprocess backend.
+        let remote_names = repo.remotes()?;
+        for name in remote_names.iter().flatten() {
+            let mut remote = repo.find_remote(name)?;
+            // A fresh callback set per remote — the carrier is shared by
+            // reference into each, so credentials are presented to every
+            // remote uniformly. (The subprocess backend scoped its
+            // credential helper per host; this carrier-based form
+            // authenticates each remote with the same stored credential —
+            // see the "Auth carrier" note for the behavioural delta.)
+            let callbacks = build_callbacks(&self.auth_env);
+            let mut fetch_opts = FetchOptions::new();
+            fetch_opts.remote_callbacks(callbacks);
+            fetch_opts.prune(git2::FetchPrune::On);
+            fetch_opts.download_tags(AutotagOption::All);
+            // Empty refspecs → use the remote's configured fetch
+            // refspecs, exactly like a bare `git fetch <remote>`.
+            let empty: &[&str] = &[];
+            remote
+                .fetch(empty, Some(&mut fetch_opts), None)
+                .map_err(|e| GitError::Command {
+                    operation: "fetch".to_string(),
+                    stderr: e.message().to_string(),
+                })?;
+        }
         Ok(())
     }
 
@@ -53,7 +151,9 @@ impl GitRepo {
     /// the [`MergeOutcome`] — exactly the TS `enginePull` model: a
     /// pull is a fetch followed by a merge of the remote-tracking
     /// ref. The fast-forward / merge / up-to-date decision is the
-    /// shared, ancestry-based [`GitRepo::integrate`] classifier.
+    /// shared, ancestry-based [`GitRepo::integrate`] classifier, which
+    /// also surfaces [`GitError::WorkingTreeDirty`] / refuses while a
+    /// merge is in progress.
     pub fn pull(&self) -> Result<MergeOutcome, GitError> {
         // Stop *before* any network work: a pull during an unresolved
         // merge is refused by `integrate` anyway, and fetching first
@@ -62,76 +162,175 @@ impl GitRepo {
         if self.is_merging() {
             return Err(GitError::MergeInProgress);
         }
-        let before = self.run(&["rev-parse", "HEAD"])?.trim().to_string();
+        // Resolve the pre-pull HEAD commit.
+        let before = {
+            let repo = self.open()?;
+            let head = repo.head().map_err(|e| GitError::Command {
+                operation: "rev-parse".to_string(),
+                stderr: e.message().to_string(),
+            })?;
+            let oid = head.target().ok_or_else(|| GitError::Command {
+                operation: "rev-parse".to_string(),
+                stderr: "HEAD does not point at a commit".to_string(),
+            })?;
+            oid.to_string()
+        };
         self.fetch()?;
-        // `@{u}` is the configured upstream tracking ref; pulling
-        // without one configured is a genuine error.
-        let upstream = self.run(&["rev-parse", "@{u}"])?.trim().to_string();
+        // The configured upstream tracking ref; pulling without one
+        // configured is a genuine error (mirrors `git rev-parse @{u}`
+        // failing).
+        let upstream = self.upstream_oid()?;
         self.integrate(&before, &upstream)
     }
 
-    /// `git push` — publish the current branch to its upstream.
+    /// Publish the current branch to its upstream.
     ///
     /// When the branch already tracks an upstream this is a plain
-    /// `git push`. When it does not, the push targets `origin` (or
-    /// the sole configured remote) with `-u`, so the very first push
-    /// also *sets* the upstream — the user never has to configure
-    /// tracking by hand.
+    /// `push` of `HEAD` to that upstream branch. When it does not, the
+    /// push targets `origin` (or the sole configured remote) and also
+    /// *sets* the upstream — the user never has to configure tracking
+    /// by hand (the subprocess `push -u <remote> HEAD` behaviour).
     pub fn push(&self) -> Result<(), GitError> {
-        if self.run(&["rev-parse", "--abbrev-ref", "@{u}"]).is_ok() {
-            self.run(&["push"])?;
-            return Ok(());
-        }
-        let remotes = self.remotes()?;
-        let remote = remotes
-            .iter()
-            .find(|r| r.name == "origin")
-            .or_else(|| remotes.first())
-            .ok_or_else(|| GitError::Command {
+        let repo = self.open()?;
+
+        // The current branch's short name and full ref — a push needs
+        // an explicit `refs/heads/<branch>` refspec.
+        let head = repo.head().map_err(|e| GitError::Command {
+            operation: "push".to_string(),
+            stderr: e.message().to_string(),
+        })?;
+        if !head.is_branch() {
+            return Err(GitError::Command {
                 operation: "push".to_string(),
-                stderr: "no remote configured — add one first".to_string(),
+                stderr: "cannot push a detached HEAD — switch to a branch first".to_string(),
+            });
+        }
+        let head_ref = head.name().ok_or_else(|| GitError::Command {
+            operation: "push".to_string(),
+            stderr: "HEAD has no symbolic name".to_string(),
+        })?;
+        let branch_short = head.shorthand().unwrap_or("HEAD").to_string();
+
+        // Does this branch already track an upstream? `git push` with
+        // a configured upstream pushes there; otherwise we set it up.
+        let tracked = repo.branch_upstream_name(head_ref).ok();
+
+        // Choose the target remote: the upstream's remote when one is
+        // configured, else `origin`, else the sole remote.
+        let remote_name = match repo.branch_upstream_remote(head_ref).ok() {
+            Some(buf) => buf
+                .as_str()
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| "origin".to_string()),
+            None => {
+                let remotes = self.remotes()?;
+                remotes
+                    .iter()
+                    .find(|r| r.name == "origin")
+                    .or_else(|| remotes.first())
+                    .map(|r| r.name.clone())
+                    .ok_or_else(|| GitError::Command {
+                        operation: "push".to_string(),
+                        stderr: "no remote configured — add one first".to_string(),
+                    })?
+            }
+        };
+
+        let mut remote = repo.find_remote(&remote_name)?;
+
+        // `HEAD:refs/heads/<branch>` publishes the current branch under
+        // the same name on the remote — the conventional push refspec.
+        let refspec = format!("{head_ref}:refs/heads/{branch_short}");
+
+        let callbacks = build_callbacks(&self.auth_env);
+        let mut push_opts = PushOptions::new();
+        push_opts.remote_callbacks(callbacks);
+
+        remote
+            .push(&[refspec.as_str()], Some(&mut push_opts))
+            .map_err(|e| GitError::Command {
+                operation: "push".to_string(),
+                stderr: e.message().to_string(),
             })?;
-        let remote_name = remote.name.clone();
-        self.run(&["push", "-u", &remote_name, "HEAD"])?;
+
+        // First push of an untracked branch also sets up tracking, so
+        // a later `push` / `pull` finds the upstream — the `-u` half
+        // of the subprocess `push -u <remote> HEAD`.
+        if tracked.is_none() {
+            if let Ok(mut branch) = repo.find_branch(&branch_short, git2::BranchType::Local) {
+                // `<remote>/<branch>` is the remote-tracking ref name.
+                let upstream = format!("{remote_name}/{branch_short}");
+                let _ = branch.set_upstream(Some(&upstream));
+            }
+        }
         Ok(())
     }
 
     /// Every configured remote with its fetch URL.
     pub fn remotes(&self) -> Result<Vec<Remote>, GitError> {
-        let raw = self.run(&["remote", "-v"])?;
-        Ok(parse_remotes(&raw))
+        let repo = self.open()?;
+        let names = repo.remotes()?;
+        let mut remotes = Vec::new();
+        for name in names.iter().flatten() {
+            let Ok(remote) = repo.find_remote(name) else {
+                continue;
+            };
+            // A remote with no fetch URL is degenerate; skip it rather
+            // than emit an empty URL (`git remote -v` would not list a
+            // `(fetch)` line for it either).
+            let Some(url) = remote.url() else {
+                continue;
+            };
+            remotes.push(Remote {
+                name: name.to_string(),
+                url: url.to_string(),
+            });
+        }
+        Ok(remotes)
     }
 
     /// The fetch URL of remote `name`, if it exists.
     pub fn remote_url(&self, name: &str) -> Result<Option<String>, GitError> {
-        match self.run(&["remote", "get-url", name]) {
-            Ok(url) => Ok(Some(url.trim().to_string())),
-            // `git remote get-url` exits non-zero for an unknown
-            // remote — that is "no such remote", not a hard error.
-            Err(GitError::Command { .. }) => Ok(None),
-            Err(e) => Err(e),
+        let repo = self.open()?;
+        // Bind the lookup to a local so the borrowed `Remote` (whose
+        // `url()` borrows `repo`) is consumed before the block ends —
+        // otherwise the temporary would outlive `repo`'s drop.
+        let found = repo.find_remote(name);
+        match found {
+            Ok(remote) => Ok(remote.url().map(str::to_string)),
+            // An unknown remote is "no such remote", not a hard error —
+            // the same tolerance the subprocess backend gave a non-zero
+            // `git remote get-url`.
+            Err(e) if e.code() == git2::ErrorCode::NotFound => Ok(None),
+            Err(e) => Err(e.into()),
         }
     }
 
     /// Point remote `name` at `url`, adding the remote when it does
     /// not exist yet.
     pub fn set_remote(&self, name: &str, url: &str) -> Result<(), GitError> {
+        let repo = self.open()?;
         if self.remote_url(name)?.is_some() {
-            self.run(&["remote", "set-url", name, url])?;
+            repo.remote_set_url(name, url)?;
         } else {
-            self.run(&["remote", "add", name, url])?;
+            repo.remote(name, url)?;
         }
         Ok(())
     }
 }
 
 impl GitRepo {
-    /// Resolve the git environment for an authenticated network op
+    /// Resolve the credential carrier for an authenticated network op
     /// against the `origin` remote, using the credential + SSH-key
-    /// stores. Returns env-var pairs to apply via
+    /// stores. Returns carrier pairs to apply via
     /// [`GitRepo::with_auth_env`] — an empty `Vec` when no stored
-    /// credential matches the remote's host, in which case git falls
-    /// back to its ambient credential helpers / ssh-agent.
+    /// credential matches the remote's host, in which case the network
+    /// ops fall back to the ambient credential helpers / ssh-agent.
+    ///
+    /// The returned pairs are interpreted by [`build_callbacks`]:
+    /// `("ssh_key_path", <path>)` for SSH, `("token", "<user>:<tok>")`
+    /// for HTTPS. They are no longer git environment variables — see
+    /// the module-level "Auth carrier" note.
     pub fn auth_env(
         &self,
         auth: &crate::AuthStore,
@@ -149,74 +348,37 @@ impl GitRepo {
         };
         match credential {
             crate::Credential::Ssh { key_name } => match ssh.load(&key_name) {
+                // Carry the private-key path; `build_callbacks` turns it
+                // into a `Cred::ssh_key` honoring `username_from_url`.
                 Ok(key) => vec![(
-                    "GIT_SSH_COMMAND".to_string(),
-                    // The key path is shell-quoted — `GIT_SSH_COMMAND`
-                    // is parsed shell-like by git, so an unescaped
-                    // path containing a quote / `$()` would otherwise
-                    // break out and run shell code.
-                    format!(
-                        "ssh -i {} -o IdentitiesOnly=yes",
-                        shell_single_quote(&key.private_path.display().to_string())
-                    ),
+                    "ssh_key_path".to_string(),
+                    key.private_path.display().to_string(),
                 )],
                 Err(_) => Vec::new(),
             },
             crate::Credential::Https { username, token } => {
-                // A control character in the credential would corrupt
-                // the line-based credential protocol — reject it
-                // rather than emit a malformed (or unsafe) helper.
+                // A control character in the credential cannot be
+                // carried safely (it would corrupt a downstream
+                // credential protocol if the carrier is ever spilled
+                // back to git) — reject it, as the subprocess backend
+                // did, rather than present a malformed credential.
                 if has_control_char(&username) || has_control_char(&token) {
                     return Vec::new();
                 }
-                // The credential-helper scope key must carry the
-                // remote's port — git's credential URL match treats a
-                // portless config URL as the default port, so a
-                // non-standard-port HTTPS remote would otherwise miss.
-                https_auth_env(&remote_authority(&url), username, token)
+                // `<username>:<token>` — `build_callbacks` splits on the
+                // first `:` into a `Cred::userpass_plaintext`. The `host`
+                // pair scopes the token: `build_callbacks` only releases
+                // it to a URL whose host matches, so a redirect to (or a
+                // tampered origin pointing at) a different host can never
+                // exfiltrate the PAT — preserving the host-scoping the
+                // subprocess credential helper had.
+                vec![
+                    ("token".to_string(), format!("{username}:{token}")),
+                    ("host".to_string(), host),
+                ]
             }
         }
     }
-}
-
-/// The git environment for an HTTPS-authenticated op against
-/// `authority` (a `host` or `host:port`).
-///
-/// The credential helper is registered **URL-scoped** —
-/// `credential.https://<authority>.helper`, not the bare
-/// `credential.helper` — so a multi-remote operation (`fetch --all`)
-/// can never present this token to a *different* remote. The
-/// `authority` keeps any explicit port because git's credential URL
-/// match is port-sensitive. The helper itself is a static shell
-/// snippet (no interpolated user data, so a crafted credential
-/// cannot inject shell code); the username / token reach it through
-/// dedicated env vars, emitted verbatim by `printf '%s'`.
-fn https_auth_env(authority: &str, username: String, token: String) -> Vec<(String, String)> {
-    let helper = "!f() { printf '%s\\n' \
-        \"username=$OP_GIT_HTTPS_USER\" \
-        \"password=$OP_GIT_HTTPS_PASS\"; }; f";
-    vec![
-        ("GIT_CONFIG_COUNT".to_string(), "1".to_string()),
-        (
-            "GIT_CONFIG_KEY_0".to_string(),
-            format!("credential.https://{authority}.helper"),
-        ),
-        ("GIT_CONFIG_VALUE_0".to_string(), helper.to_string()),
-        ("OP_GIT_HTTPS_USER".to_string(), username),
-        ("OP_GIT_HTTPS_PASS".to_string(), token),
-    ]
-}
-
-/// Whether `s` holds an ASCII control character — a credential with
-/// one cannot be carried safely by git's line-based protocol.
-fn has_control_char(s: &str) -> bool {
-    s.chars().any(|c| c.is_control())
-}
-
-/// POSIX single-quote `s` so it survives shell word-splitting intact
-/// — every embedded `'` becomes `'\''`.
-fn shell_single_quote(s: &str) -> String {
-    format!("'{}'", s.replace('\'', "'\\''"))
 }
 
 impl GitRepo {
@@ -227,20 +389,133 @@ impl GitRepo {
         let host = remote_host(&url);
         (!host.is_empty()).then_some(host)
     }
+
+    /// The commit Oid (hex) of the current branch's configured
+    /// upstream tracking ref. Errors — mapping to a
+    /// [`GitError::Command`] — when no upstream is configured, mirroring
+    /// the subprocess `git rev-parse @{u}` failure.
+    fn upstream_oid(&self) -> Result<String, GitError> {
+        let repo = self.open()?;
+        let head = repo.head().map_err(|e| GitError::Command {
+            operation: "rev-parse".to_string(),
+            stderr: e.message().to_string(),
+        })?;
+        let head_ref = head.name().ok_or_else(|| GitError::Command {
+            operation: "rev-parse".to_string(),
+            stderr: "HEAD has no symbolic name".to_string(),
+        })?;
+        // `branch_upstream_name` yields the remote-tracking ref name
+        // (`refs/remotes/origin/main`) for the branch's `@{u}`.
+        let upstream_buf = repo
+            .branch_upstream_name(head_ref)
+            .map_err(|e| GitError::Command {
+                operation: "rev-parse".to_string(),
+                stderr: e.message().to_string(),
+            })?;
+        let upstream_ref = upstream_buf.as_str().ok_or_else(|| GitError::Command {
+            operation: "rev-parse".to_string(),
+            stderr: "upstream ref name is not valid UTF-8".to_string(),
+        })?;
+        let reference = repo
+            .find_reference(upstream_ref)
+            .map_err(|e| GitError::Command {
+                operation: "rev-parse".to_string(),
+                stderr: e.message().to_string(),
+            })?;
+        // Peel to the commit it points at — the upstream tip's Oid.
+        let oid = reference
+            .peel_to_commit()
+            .map_err(|e| GitError::Command {
+                operation: "rev-parse".to_string(),
+                stderr: e.message().to_string(),
+            })?
+            .id();
+        Ok(oid.to_string())
+    }
 }
 
-/// The authority of a git remote URL — `host` or `host:port`
-/// (bracketed for IPv6) — verbatim, port preserved. Used to build a
-/// port-sensitive `credential.https://<authority>` scope key. An
-/// scp-like remote carries no URL port, so its bare host is used.
-fn remote_authority(url: &str) -> String {
-    let url = url.trim();
-    if let Some(rest) = url.split("://").nth(1) {
-        let after_user = rest.rsplit('@').next().unwrap_or(rest);
-        after_user.split('/').next().unwrap_or("").to_string()
-    } else {
-        remote_host(url)
-    }
+/// Build the [`RemoteCallbacks`] that authenticate a network op from
+/// the handle's stored credential carrier (`auth` — the repurposed
+/// `auth_env` `Vec`). The `.credentials` closure interprets the
+/// carrier keys:
+///
+/// - `("ssh_key_path", <path>)` → [`Cred::ssh_key`] for the
+///   `username_from_url` (defaulting to `git`).
+/// - `("token", "<user>:<tok>")` → [`Cred::userpass_plaintext`].
+///
+/// When the carrier holds nothing usable for the credential type
+/// libgit2 asks for, the closure falls back to
+/// [`Cred::credential_helper`] (the user's configured helpers) for
+/// HTTPS, [`Cred::ssh_key_from_agent`] for SSH, and finally
+/// [`Cred::default`] — so an un-authenticated handle behaves exactly
+/// like the subprocess backend deferring to the ambient git setup.
+fn build_callbacks<'a>(auth: &'a [(String, String)]) -> RemoteCallbacks<'a> {
+    let mut callbacks = RemoteCallbacks::new();
+    callbacks.credentials(move |url, username_from_url, allowed| {
+        // SSH key authentication — preferred when libgit2 asks for it
+        // and we carry a key path.
+        if allowed.contains(CredentialType::SSH_KEY) {
+            let user = username_from_url.unwrap_or("git");
+            if let Some(path) = carrier_value(auth, "ssh_key_path") {
+                return Cred::ssh_key(user, None, Path::new(path), None);
+            }
+            // No stored key — let the agent answer (ssh-agent / Pageant),
+            // matching the subprocess backend's ambient ssh-agent use.
+            return Cred::ssh_key_from_agent(user);
+        }
+
+        // HTTPS username/password (personal access token).
+        if allowed.contains(CredentialType::USER_PASS_PLAINTEXT) {
+            // Only release the stored token to the host it was scoped to.
+            // libgit2 invokes this closure with the URL it is actually
+            // authenticating against, which a redirect (or a tampered
+            // remote) can change — without this check the PAT would be
+            // sent to an attacker-controlled host.
+            let host_ok = match carrier_value(auth, "host") {
+                Some(expected) => &remote_host(url) == expected,
+                // No host scoping recorded — be conservative and do not
+                // release the token blindly; fall through to the helpers.
+                None => false,
+            };
+            if host_ok {
+                if let Some(pair) = carrier_value(auth, "token") {
+                    // `<username>:<token>` — split on the FIRST `:` so a
+                    // token containing `:` survives intact.
+                    let (user, token) = match pair.split_once(':') {
+                        Some((u, t)) => (u, t),
+                        None => ("", pair.as_str()),
+                    };
+                    return Cred::userpass_plaintext(user, token);
+                }
+            }
+            // Fall back to the user's configured credential helpers
+            // (osxkeychain / manager / store) for ambient HTTPS auth.
+            let config = git2::Config::open_default()?;
+            return Cred::credential_helper(&config, url, username_from_url);
+        }
+
+        // libgit2 sometimes asks only for the SSH *username* before the
+        // key exchange (e.g. an scp-like URL without `user@`).
+        if allowed.contains(CredentialType::USERNAME) {
+            return Cred::username(username_from_url.unwrap_or("git"));
+        }
+
+        // Nothing matched — defer to the default credential (e.g. an
+        // anonymous / already-authenticated transport).
+        Cred::default()
+    });
+    callbacks
+}
+
+/// The value of carrier key `key`, if present.
+fn carrier_value<'a>(auth: &'a [(String, String)], key: &str) -> Option<&'a String> {
+    auth.iter().find(|(k, _)| k == key).map(|(_, v)| v)
+}
+
+/// Whether `s` holds an ASCII control character — a credential with
+/// one cannot be carried safely.
+fn has_control_char(s: &str) -> bool {
+    s.chars().any(|c| c.is_control())
 }
 
 /// Extract the host from a git remote URL — `scheme://[user@]host/…`
@@ -289,50 +564,9 @@ fn remote_host(url: &str) -> String {
     authority.split(':').next().unwrap_or("").to_string()
 }
 
-/// Parse `git remote -v` output. Each remote prints a `(fetch)` and
-/// a `(push)` line; the `(fetch)` URL is kept, deduplicated by name.
-fn parse_remotes(raw: &str) -> Vec<Remote> {
-    let mut remotes: Vec<Remote> = Vec::new();
-    for line in raw.lines() {
-        // Format: `<name>\t<url> (fetch|push)`.
-        if !line.contains("(fetch)") {
-            continue;
-        }
-        let mut parts = line.split_whitespace();
-        let (Some(name), Some(url)) = (parts.next(), parts.next()) else {
-            continue;
-        };
-        if !remotes.iter().any(|r| r.name == name) {
-            remotes.push(Remote {
-                name: name.to_string(),
-                url: url.to_string(),
-            });
-        }
-    }
-    remotes
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn parses_fetch_urls_only_deduped() {
-        let raw = "origin\tgit@github.com:ZSeven-W/openpencil.git (fetch)\n\
-                   origin\tgit@github.com:ZSeven-W/openpencil.git (push)\n\
-                   fork\thttps://example.com/x.git (fetch)\n\
-                   fork\thttps://example.com/x.git (push)\n";
-        let remotes = parse_remotes(raw);
-        assert_eq!(remotes.len(), 2);
-        assert_eq!(remotes[0].name, "origin");
-        assert_eq!(remotes[0].url, "git@github.com:ZSeven-W/openpencil.git");
-        assert_eq!(remotes[1].name, "fork");
-    }
-
-    #[test]
-    fn empty_remote_output_is_empty() {
-        assert!(parse_remotes("").is_empty());
-    }
 
     #[test]
     fn remote_host_parses_every_url_shape() {
@@ -366,54 +600,27 @@ mod tests {
     }
 
     #[test]
-    fn shell_single_quote_escapes_embedded_quotes() {
-        assert_eq!(shell_single_quote("/plain/key"), "'/plain/key'");
-        assert_eq!(shell_single_quote("/a'b/key"), "'/a'\\''b/key'");
+    fn has_control_char_flags_bad_credentials() {
+        assert!(!has_control_char("alice"));
+        assert!(!has_control_char("ghp_AbCdEf123456"));
+        assert!(has_control_char("bad\ntoken"));
+        assert!(has_control_char("bad\0token"));
     }
 
     #[test]
-    fn https_auth_env_scopes_the_helper_to_the_host() {
-        let env = https_auth_env("github.com", "alice".into(), "tok".into());
-        let key = &env.iter().find(|(k, _)| k == "GIT_CONFIG_KEY_0").unwrap().1;
-        // URL-scoped — never the bare `credential.helper`, so a
-        // `fetch --all` cannot leak this token to another remote.
-        assert_eq!(key, "credential.https://github.com.helper");
-        // The values travel as env vars, not interpolated.
-        assert!(env
-            .iter()
-            .any(|(k, v)| k == "OP_GIT_HTTPS_USER" && v == "alice"));
-        assert!(env
-            .iter()
-            .any(|(k, v)| k == "OP_GIT_HTTPS_PASS" && v == "tok"));
-    }
-
-    #[test]
-    fn https_auth_env_keeps_a_non_standard_port() {
-        // git's credential URL match is port-sensitive — a portless
-        // scope key would miss a `:8443` remote.
-        let env = https_auth_env("gitlab.example.com:8443", "u".into(), "t".into());
-        let key = &env.iter().find(|(k, _)| k == "GIT_CONFIG_KEY_0").unwrap().1;
-        assert_eq!(key, "credential.https://gitlab.example.com:8443.helper");
-    }
-
-    #[test]
-    fn remote_authority_keeps_the_port() {
+    fn carrier_value_finds_the_key() {
+        let carrier = vec![
+            ("token".to_string(), "alice:secret".to_string()),
+            (
+                "ssh_key_path".to_string(),
+                "/home/alice/.ssh/id".to_string(),
+            ),
+        ];
+        assert_eq!(carrier_value(&carrier, "token").unwrap(), "alice:secret");
         assert_eq!(
-            remote_authority("https://github.com/org/repo.git"),
-            "github.com"
+            carrier_value(&carrier, "ssh_key_path").unwrap(),
+            "/home/alice/.ssh/id"
         );
-        assert_eq!(
-            remote_authority("https://gitlab.example.com:8443/x.git"),
-            "gitlab.example.com:8443"
-        );
-        assert_eq!(
-            remote_authority("https://user@gitlab.example.com:8443/x"),
-            "gitlab.example.com:8443"
-        );
-        // scp-like carries no URL port — bare host.
-        assert_eq!(
-            remote_authority("git@github.com:org/repo.git"),
-            "github.com"
-        );
+        assert!(carrier_value(&carrier, "missing").is_none());
     }
 }

@@ -43,6 +43,145 @@ fn pull_classifies_up_to_date_then_fast_forward() {
 }
 
 #[test]
+fn pull_refuses_to_fast_forward_over_a_dirty_tree() {
+    if !git_available() {
+        return;
+    }
+    let remote = unique_temp_dir("ff-dirty-remote");
+    Command::new("git")
+        .args(["init", "--bare", "--initial-branch=main"])
+        .arg(&remote)
+        .output()
+        .expect("init bare remote");
+
+    let (a_dir, a) = clone_for_test(&remote, "ff-dirty-a");
+    std::fs::write(a_dir.join("a.op"), "1").unwrap();
+    a.stage_all().unwrap();
+    a.commit("init").unwrap();
+    a.run(&["push", "-u", "origin", "main"]).unwrap();
+
+    let (b_dir, b) = clone_for_test(&remote, "ff-dirty-b");
+
+    // A publishes a new commit — B *could* fast-forward.
+    std::fs::write(a_dir.join("a.op"), "2").unwrap();
+    a.stage_all().unwrap();
+    a.commit("update").unwrap();
+    a.push().unwrap();
+
+    // B has an UNCOMMITTED edit to a tracked file. A fast-forward would
+    // force-overwrite it, so the pull must refuse (WorkingTreeDirty)
+    // rather than silently discard the local work — the data-loss
+    // regression the libgit2 migration introduced + this guard fixes.
+    std::fs::write(b_dir.join("a.op"), "local-uncommitted").unwrap();
+    assert!(
+        matches!(b.pull(), Err(GitError::WorkingTreeDirty)),
+        "a fast-forward over a dirty tree must be refused, not forced"
+    );
+    assert_eq!(
+        std::fs::read_to_string(b_dir.join("a.op")).unwrap(),
+        "local-uncommitted",
+        "the local uncommitted edit must survive the refused pull"
+    );
+
+    for dir in [remote, a_dir, b_dir] {
+        let _ = std::fs::remove_dir_all(dir);
+    }
+}
+
+#[test]
+fn pull_refuses_to_fast_forward_over_a_colliding_untracked_file() {
+    if !git_available() {
+        return;
+    }
+    let remote = unique_temp_dir("ff-untracked-remote");
+    Command::new("git")
+        .args(["init", "--bare", "--initial-branch=main"])
+        .arg(&remote)
+        .output()
+        .expect("init bare remote");
+
+    let (a_dir, a) = clone_for_test(&remote, "ff-untracked-a");
+    std::fs::write(a_dir.join("a.op"), "1").unwrap();
+    a.stage_all().unwrap();
+    a.commit("init").unwrap();
+    a.run(&["push", "-u", "origin", "main"]).unwrap();
+
+    let (b_dir, b) = clone_for_test(&remote, "ff-untracked-b");
+
+    // A adds a NEW tracked file the fast-forward would bring down to B.
+    std::fs::write(a_dir.join("new.op"), "from-remote").unwrap();
+    a.stage_all().unwrap();
+    a.commit("add new.op").unwrap();
+    a.push().unwrap();
+
+    // B has an UNTRACKED file at that same path. A forced fast-forward
+    // would clobber it, so the pull must refuse — the untracked-overwrite
+    // data-loss case (git's "untracked working tree files would be
+    // overwritten by merge").
+    std::fs::write(b_dir.join("new.op"), "local-untracked").unwrap();
+    assert!(
+        matches!(b.pull(), Err(GitError::WorkingTreeDirty)),
+        "a fast-forward that would overwrite an untracked file must be refused"
+    );
+    assert_eq!(
+        std::fs::read_to_string(b_dir.join("new.op")).unwrap(),
+        "local-untracked",
+        "the untracked file must survive the refused pull"
+    );
+
+    for dir in [remote, a_dir, b_dir] {
+        let _ = std::fs::remove_dir_all(dir);
+    }
+}
+
+#[test]
+fn pull_refuses_to_fast_forward_over_an_untracked_dir_replaced_by_a_file() {
+    if !git_available() {
+        return;
+    }
+    let remote = unique_temp_dir("ff-dir-remote");
+    Command::new("git")
+        .args(["init", "--bare", "--initial-branch=main"])
+        .arg(&remote)
+        .output()
+        .expect("init bare remote");
+
+    let (a_dir, a) = clone_for_test(&remote, "ff-dir-a");
+    std::fs::write(a_dir.join("a.op"), "1").unwrap();
+    a.stage_all().unwrap();
+    a.commit("init").unwrap();
+    a.run(&["push", "-u", "origin", "main"]).unwrap();
+
+    let (b_dir, b) = clone_for_test(&remote, "ff-dir-b");
+
+    // A adds a tracked FILE named `data` the fast-forward would bring down.
+    std::fs::write(a_dir.join("data"), "from-remote").unwrap();
+    a.stage_all().unwrap();
+    a.commit("add data file").unwrap();
+    a.push().unwrap();
+
+    // B has an untracked DIRECTORY at that path holding a local file. A
+    // forced fast-forward would replace the directory with the incoming
+    // file, destroying the local work — the file↔directory collision the
+    // exact-path check missed; the pull must refuse.
+    std::fs::create_dir(b_dir.join("data")).unwrap();
+    std::fs::write(b_dir.join("data").join("local.op"), "local-work").unwrap();
+    assert!(
+        matches!(b.pull(), Err(GitError::WorkingTreeDirty)),
+        "a fast-forward that replaces an untracked directory with a file must be refused"
+    );
+    assert_eq!(
+        std::fs::read_to_string(b_dir.join("data").join("local.op")).unwrap(),
+        "local-work",
+        "the untracked directory's file must survive the refused pull"
+    );
+
+    for dir in [remote, a_dir, b_dir] {
+        let _ = std::fs::remove_dir_all(dir);
+    }
+}
+
+#[test]
 fn pull_classifies_a_divergent_merge() {
     if !git_available() {
         return;
