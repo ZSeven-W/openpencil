@@ -54,11 +54,13 @@ impl WidgetHostNative {
                             agent.model = draft.trim().to_string();
                         }
                         BuiltinAgentField::BaseUrl => {
-                            agent.base_url = if draft.trim().is_empty() {
-                                agent.kind.default_base_url().to_string()
-                            } else {
-                                draft.trim().to_string()
-                            };
+                            if agent.base_url_editable() {
+                                agent.base_url = if draft.trim().is_empty() {
+                                    agent.kind.default_base_url().to_string()
+                                } else {
+                                    draft.trim().to_string()
+                                };
+                            }
                         }
                     }
                     self.editor_state.rebuild_chat_models();
@@ -85,11 +87,13 @@ impl WidgetHostNative {
                             agent.model = draft.trim().to_string();
                         }
                         BuiltinAgentField::BaseUrl => {
-                            agent.base_url = if draft.trim().is_empty() {
-                                agent.kind.default_base_url().to_string()
-                            } else {
-                                draft.trim().to_string()
-                            };
+                            if agent.base_url_editable() {
+                                agent.base_url = if draft.trim().is_empty() {
+                                    agent.kind.default_base_url().to_string()
+                                } else {
+                                    draft.trim().to_string()
+                                };
+                            }
                         }
                     }
                 }

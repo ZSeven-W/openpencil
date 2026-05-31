@@ -2,6 +2,11 @@
 
 use crate::theme::Theme;
 use crate::widgets::agent_settings_builtin_draft;
+use crate::widgets::agent_settings_builtin_layout::{
+    add_provider_rect, card_height, card_rect, compact_edit_rect, compact_remove_rect,
+    compact_switch_rect, draft_card_height, expanded_card_height, field_input_rect, is_editing,
+    rect_contains, CARD_GAP, EMPTY_HEIGHT, HEADER_HEIGHT, SUBTITLE_HEIGHT, TOP_HEADER_RIGHT_INSET,
+};
 use crate::widgets::agent_settings_builtin_parts;
 use crate::widgets::agent_settings_caret::{
     caret_x_for_text, paint_caret, settings_caret_for_focus,
@@ -20,21 +25,6 @@ use op_editor_core::agent_settings::{
 };
 use op_editor_core::editor_ui_state::EditorUiState;
 use op_editor_core::BuiltinAgentPresetKey;
-
-const HEADER_HEIGHT: f32 = 28.0;
-const SUBTITLE_HEIGHT: f32 = 28.0;
-const EMPTY_HEIGHT: f32 = 64.0;
-const COMPACT_CARD_HEIGHT: f32 = 60.0;
-const EXPANDED_CARD_HEIGHT: f32 = 196.0;
-const DRAFT_ACTION_HEIGHT: f32 = 36.0;
-const CARD_GAP: f32 = 8.0;
-const ADD_W: f32 = 96.0;
-const TOP_HEADER_RIGHT_INSET: f32 = 12.0;
-const FIELD_LABEL_W: f32 = 68.0;
-const FIELD_H: f32 = 24.0;
-const SWITCH_W: f32 = 34.0;
-const SWITCH_H: f32 = 20.0;
-const ACTION_W: f32 = 24.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BuiltinHit {
@@ -125,6 +115,9 @@ pub fn hit_test(content: Rect, settings: &AgentSettings, point: Point2D) -> Buil
             .into_iter()
             .enumerate()
             {
+                if field == BuiltinAgentField::BaseUrl && !agent.base_url_editable() {
+                    continue;
+                }
                 if rect_contains(field_input_rect(settings, card, Some(index), row), point) {
                     return BuiltinHit::Focus { index, field };
                 }
@@ -179,6 +172,9 @@ pub fn hit_test(content: Rect, settings: &AgentSettings, point: Point2D) -> Buil
         .into_iter()
         .enumerate()
         {
+            if field == BuiltinAgentField::BaseUrl && !agent.base_url_editable() {
+                continue;
+            }
             if rect_contains(field_input_rect(settings, card, None, row), point) {
                 return BuiltinHit::FocusDraft(field);
             }
@@ -632,6 +628,7 @@ fn paint_field(
         BuiltinAgentField::BaseUrl => "Base URL",
     };
     let input = field_input_rect(settings, card, index, row);
+    let editable = field != BuiltinAgentField::BaseUrl || agent.base_url_editable();
     let label_y = input.origin.y + 16.0;
     draw_text(
         cx,
@@ -662,7 +659,11 @@ fn paint_field(
         cx,
         &clipped,
         11.0,
-        theme.foreground,
+        if editable {
+            theme.foreground
+        } else {
+            theme.muted_foreground
+        },
         text_x,
         input.origin.y + 16.0,
     );
@@ -747,99 +748,6 @@ fn mask_key(api_key: &str) -> String {
     } else {
         "***".to_string()
     }
-}
-
-fn is_editing(settings: &AgentSettings, index: usize) -> bool {
-    matches!(
-        settings.focus,
-        Some(SettingsFocus::BuiltinAgent { index: i, .. }) if i == index
-    )
-}
-
-fn card_height(settings: &AgentSettings, index: usize) -> f32 {
-    if is_editing(settings, index) {
-        expanded_card_height(settings, Some(index))
-    } else {
-        COMPACT_CARD_HEIGHT
-    }
-}
-
-fn expanded_card_height(settings: &AgentSettings, index: Option<usize>) -> f32 {
-    EXPANDED_CARD_HEIGHT + agent_settings_builtin_parts::preset_menu_height(settings, index)
-}
-
-fn draft_card_height(settings: &AgentSettings) -> f32 {
-    expanded_card_height(settings, None) + DRAFT_ACTION_HEIGHT
-}
-
-fn add_provider_rect(content: Rect, y: f32) -> Rect {
-    Rect {
-        origin: Point2D::new(
-            content.origin.x + content.size.x - TOP_HEADER_RIGHT_INSET - ADD_W,
-            y,
-        ),
-        size: Point2D::new(ADD_W, 24.0),
-    }
-}
-
-fn card_rect(x: f32, y: f32, w: f32, h: f32) -> Rect {
-    Rect {
-        origin: Point2D::new(x, y),
-        size: Point2D::new(w, h),
-    }
-}
-
-fn compact_switch_rect(card: Rect) -> Rect {
-    Rect {
-        origin: Point2D::new(
-            card.origin.x + card.size.x - 12.0 - SWITCH_W - 8.0 - ACTION_W * 2.0 - 4.0,
-            card.origin.y + (card.size.y - SWITCH_H) / 2.0,
-        ),
-        size: Point2D::new(SWITCH_W, SWITCH_H),
-    }
-}
-
-fn compact_edit_rect(card: Rect) -> Rect {
-    Rect {
-        origin: Point2D::new(
-            compact_switch_rect(card).origin.x + SWITCH_W + 8.0,
-            card.origin.y + (card.size.y - ACTION_W) / 2.0,
-        ),
-        size: Point2D::new(ACTION_W, ACTION_W),
-    }
-}
-
-fn compact_remove_rect(card: Rect) -> Rect {
-    Rect {
-        origin: Point2D::new(
-            compact_edit_rect(card).origin.x + ACTION_W + 4.0,
-            card.origin.y + (card.size.y - ACTION_W) / 2.0,
-        ),
-        size: Point2D::new(ACTION_W, ACTION_W),
-    }
-}
-
-fn field_input_rect(
-    settings: &AgentSettings,
-    card: Rect,
-    index: Option<usize>,
-    row: usize,
-) -> Rect {
-    let menu_h = agent_settings_builtin_parts::preset_menu_height(settings, index);
-    Rect {
-        origin: Point2D::new(
-            card.origin.x + 12.0 + FIELD_LABEL_W,
-            card.origin.y + 76.0 + menu_h + row as f32 * 28.0,
-        ),
-        size: Point2D::new(card.size.x - 24.0 - FIELD_LABEL_W, FIELD_H),
-    }
-}
-
-fn rect_contains(r: Rect, p: Point2D) -> bool {
-    p.x >= r.origin.x
-        && p.y >= r.origin.y
-        && p.x <= r.origin.x + r.size.x
-        && p.y <= r.origin.y + r.size.y
 }
 
 fn to_jian(c: Color) -> jian_core::scene::Color {
