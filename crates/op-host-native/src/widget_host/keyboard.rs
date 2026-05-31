@@ -646,6 +646,14 @@ impl WidgetHostNative {
             self.mark_dirty();
             return true;
         }
+        // While a ready-state popover (branch picker / overflow menu) is open
+        // with no focused input, swallow Enter so it can't fall through to the
+        // global chat send below. (Focused inputs already submitted above.)
+        if self.editor_state.editor_ui.git_panel.branch_picker_open
+            || self.editor_state.editor_ui.git_panel.overflow_open
+        {
+            return true;
+        }
         if self.editor_state.ui.layer_rename.is_some() {
             let ok = self.editor_state.rename_commit();
             if ok {
