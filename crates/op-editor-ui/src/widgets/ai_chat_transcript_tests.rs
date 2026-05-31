@@ -366,6 +366,24 @@ after"#,
 }
 
 #[test]
+fn hidden_completed_assistant_action_shows_completion_placeholder() {
+    let message = ChatMessage::assistant(
+        r#"<function_calls><invoke name="batch_design">secret</invoke></function_calls>
+<result>{"ok":true}</result>
+<!-- APPLIED -->"#,
+    );
+
+    let items = build_transcript(
+        std::slice::from_ref(&message),
+        body(),
+        op_editor_core::Locale::EnUs,
+    );
+    let text = items[0].bubble.as_ref().unwrap().lines.join("\n");
+
+    assert_eq!(text, "(Automated action completed)");
+}
+
+#[test]
 fn streaming_unclosed_invoke_is_hidden_from_answer_bubble() {
     let mut message = ChatMessage::assistant_streaming();
     message.content = r#"visible
