@@ -75,9 +75,45 @@ fn paint_design_json_copy_icon_is_visible_for_hovered_card_like_ts() {
     assert!(backend.copy_icon_strokes > 0);
 }
 
+#[test]
+fn paint_design_json_block_uses_ts_wand_icon() {
+    const WAND_SPARKLES_MAIN_PATH: &str =
+        "m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.2 1.2 0 0 0 1.72 0L21.64 5.36a1.2 1.2 0 0 0 0-1.72";
+    let message = ChatMessage::assistant(
+        r#"```json
+[{"id":"frame-1","type":"Frame"}]
+```"#,
+    );
+    let messages = [message];
+    let mut backend = CopyPaintBackend::default();
+    let mut cx = PaintCx {
+        backend: &mut backend,
+    };
+
+    paint_transcript(
+        &mut cx,
+        &crate::Theme::dark(),
+        body(),
+        &messages,
+        0,
+        op_editor_core::Locale::EnUs,
+    );
+
+    assert!(
+        backend.svg_strokes.iter().any(|(path, point, size)| {
+            *path == WAND_SPARKLES_MAIN_PATH
+                && (*size - 10.0).abs() < 1e-4
+                && (point.x - 15.0).abs() < 1e-4
+                && (point.y - 11.0).abs() < 1e-4
+        }),
+        "TS DesignJsonBlock uses Wand2 size=10 centered inside a 16px icon circle"
+    );
+}
+
 #[derive(Default)]
 struct CopyPaintBackend {
     copy_icon_strokes: usize,
+    svg_strokes: Vec<(String, Point2D, f32)>,
 }
 
 impl crate::RenderBackend for CopyPaintBackend {
@@ -93,7 +129,8 @@ impl crate::RenderBackend for CopyPaintBackend {
     fn stroke_line(&mut self, _: Point2D, _: Point2D, _: crate::Color, _: f32) {}
     fn fill_round_rect(&mut self, _: Rect, _: f32, _: crate::Color) {}
     fn stroke_round_rect(&mut self, _: Rect, _: f32, _: crate::Color, _: f32) {}
-    fn stroke_svg_path(&mut self, _: &str, point: Point2D, _: f32, _: crate::Color, _: f32) {
+    fn stroke_svg_path(&mut self, d: &str, point: Point2D, size: f32, _: crate::Color, _: f32) {
+        self.svg_strokes.push((d.to_owned(), point, size));
         if (290.0..=305.0).contains(&point.x) {
             self.copy_icon_strokes += 1;
         }

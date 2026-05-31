@@ -5,6 +5,10 @@ use crate::widgets::PaintCx;
 use crate::{Point2D, Rect, TextLayout};
 
 pub(crate) const DESIGN_BLOCK_H: f32 = 32.0;
+const DESIGN_ICON_LEFT: f32 = 12.0;
+const DESIGN_ICON_BG: f32 = 16.0;
+const DESIGN_ICON_SIZE: f32 = 10.0;
+const DESIGN_ICON_GAP: f32 = 10.0;
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct PendingDesignBlock {
@@ -209,21 +213,21 @@ pub(crate) fn paint_design_block(cx: &mut PaintCx<'_>, theme: &Theme, block: &De
 
     let mut icon_bg = theme.primary;
     icon_bg.a *= 0.12;
-    cx.backend.fill_round_rect(
-        Rect::xywh(
-            block.rect.origin.x + 8.0,
-            block.rect.origin.y + 8.0,
-            16.0,
-            16.0,
-        ),
-        8.0,
-        icon_bg,
+    let icon_bg_rect = Rect::xywh(
+        block.rect.origin.x + DESIGN_ICON_LEFT,
+        block.rect.origin.y + (DESIGN_BLOCK_H - DESIGN_ICON_BG) / 2.0,
+        DESIGN_ICON_BG,
+        DESIGN_ICON_BG,
     );
+    cx.backend.fill_round_rect(icon_bg_rect, 8.0, icon_bg);
     draw_icon(
         cx.backend,
-        Icon::Sparkles,
-        Point2D::new(block.rect.origin.x + 10.0, block.rect.origin.y + 10.0),
-        12.0,
+        Icon::Wand2,
+        Point2D::new(
+            icon_bg_rect.origin.x + (DESIGN_ICON_BG - DESIGN_ICON_SIZE) / 2.0,
+            icon_bg_rect.origin.y + (DESIGN_ICON_BG - DESIGN_ICON_SIZE) / 2.0,
+        ),
+        DESIGN_ICON_SIZE,
         theme.primary,
         1.5,
     );
@@ -235,11 +239,12 @@ pub(crate) fn paint_design_block(cx: &mut PaintCx<'_>, theme: &Theme, block: &De
     if block.streaming {
         color.a *= 0.85;
     }
+    let label_x = icon_bg_rect.origin.x + DESIGN_ICON_BG + DESIGN_ICON_GAP;
     cx.backend.save();
     cx.backend.clip_rect(Rect::xywh(
-        block.header.origin.x + 30.0,
+        label_x,
         block.header.origin.y,
-        (block.header.size.x - 86.0).max(1.0),
+        (block.header.origin.x + block.header.size.x - label_x - 56.0).max(1.0),
         block.header.size.y,
     ));
     let layout = TextLayout::single_run(
@@ -249,10 +254,8 @@ pub(crate) fn paint_design_block(cx: &mut PaintCx<'_>, theme: &Theme, block: &De
         to_jian_color(color),
         Point2D::new(0.0, 0.0),
     );
-    cx.backend.draw_text(
-        &layout,
-        Point2D::new(block.header.origin.x + 30.0, block.header.origin.y + 20.0),
-    );
+    cx.backend
+        .draw_text(&layout, Point2D::new(label_x, block.header.origin.y + 20.0));
     cx.backend.restore();
 
     if block.copy_visible {
