@@ -96,9 +96,16 @@ impl Default for McpServer {
 }
 
 impl McpServer {
-    pub fn client_config_text(self) -> String {
+    pub fn client_config_display_text(self) -> String {
         format!(
             r#"{{ "type": "http", "url": "http://127.0.0.1:{}/mcp" }}"#,
+            self.port
+        )
+    }
+
+    pub fn client_config_clipboard_text(self) -> String {
+        format!(
+            "{{\n  \"type\": \"http\",\n  \"url\": \"http://127.0.0.1:{}/mcp\"\n}}",
             self.port
         )
     }
