@@ -211,6 +211,7 @@ fn build_item(
         progress_steps.extend(extracted.steps);
         extracted.visible_text
     };
+    let has_progress_steps = !progress_steps.is_empty();
 
     let build_collapsible = |present: bool,
                              collapsed: bool,
@@ -243,8 +244,12 @@ fn build_item(
     };
 
     let mut steps = Vec::new();
-    let total_steps = progress_steps.len();
-    for (i, step) in progress_steps.iter().enumerate() {
+    let inline_steps: Vec<&ParsedStep> = progress_steps
+        .iter()
+        .filter(|step| !step.details.is_empty())
+        .collect();
+    let total_steps = inline_steps.len();
+    for (i, step) in inline_steps.iter().copied().enumerate() {
         let (done, active, failed) = step_state(step, msg.streaming, i, total_steps);
         let details: Vec<String> = step
             .details
@@ -288,6 +293,7 @@ fn build_item(
     let typing = msg.streaming
         && msg.content.is_empty()
         && steps.is_empty()
+        && !has_progress_steps
         && thinking.is_none()
         && tools.is_none();
     let automated_placeholder = !is_user
@@ -295,6 +301,7 @@ fn build_item(
         && !msg.content.trim().is_empty()
         && visible_content.is_empty()
         && steps.is_empty()
+        && !has_progress_steps
         && thinking.is_none()
         && tools.is_none();
     let bubble = if typing {
