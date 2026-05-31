@@ -17,8 +17,8 @@ use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect};
 use op_editor_core::{EditorState, GitPanelState};
 
-/// Panel width in logical px.
-pub const GIT_PANEL_WIDTH: f32 = 320.0;
+/// Panel width in logical px (TS ready/history popover is `w-[420px]`).
+pub const GIT_PANEL_WIDTH: f32 = 420.0;
 /// Panel width while a diff is open — wide enough for ~95-column diffs.
 pub const GIT_DIFF_PANEL_WIDTH: f32 = 620.0;
 /// Inset from the canvas corner the panel floats at.
@@ -415,9 +415,35 @@ impl<'a> GitPanel<'a> {
 
     /// Paint the panel into `rect`.
     pub fn paint(&self, cx: &mut PaintCx<'_>, rect: Rect) {
-        cx.backend.fill_round_rect(rect, 10.0, self.theme.popover);
+        // Drop shadow (TS PopoverContent `shadow-md`) — two soft black rects
+        // offset down so the floating panel lifts off the canvas instead of
+        // reading flat / stuck-on against it.
+        cx.backend.fill_round_rect(
+            Rect {
+                origin: Point2D::new(rect.origin.x, rect.origin.y + 10.0),
+                size: rect.size,
+            },
+            6.0,
+            Color {
+                a: 0.10,
+                ..Color::BLACK
+            },
+        );
+        cx.backend.fill_round_rect(
+            Rect {
+                origin: Point2D::new(rect.origin.x, rect.origin.y + 4.0),
+                size: rect.size,
+            },
+            6.0,
+            Color {
+                a: 0.14,
+                ..Color::BLACK
+            },
+        );
+        // TS popover radius is `rounded-md` = 6px (Rust was 10px, too round).
+        cx.backend.fill_round_rect(rect, 6.0, self.theme.popover);
         cx.backend
-            .stroke_round_rect(rect, 10.0, self.theme.border, 1.0);
+            .stroke_round_rect(rect, 6.0, self.theme.border, 1.0);
 
         // The inline clone wizard replaces the whole body.
         if self.state.clone_form.is_some() {
