@@ -1,7 +1,8 @@
 use crate::theme::Theme;
 use crate::widgets::ai_chat_checklist::{
-    fixed_checklist_height, fixed_checklist_rect, paint_fixed_checklist,
+    fixed_checklist_height, fixed_checklist_rect, paint_fixed_checklist, HEADER_H, PROGRESS_H,
 };
+use crate::widgets::ai_chat_hit::AIChatHit;
 use crate::widgets::ai_chat_panel_controls::{
     attachment_row_hit, paint_attachment_row, ATTACHMENT_ROW_HEIGHT,
 };
@@ -65,58 +66,6 @@ pub(crate) fn example_cards(locale: op_editor_core::Locale) -> [ExampleCard; 4] 
             emoji: "🎨",
         },
     ]
-}
-
-/// What a click inside the panel resolved to.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum AIChatHit {
-    /// Click landed on the input area — host should focus chat.
-    FocusInput,
-    /// Click landed on the send affordance.
-    Send,
-    /// Click landed on an example card; payload is the example's
-    /// title (host fills the input with this).
-    Example(String),
-    /// Click landed on the header / margin — host should start a
-    /// drag so the user can move the panel between canvas corners.
-    DragHandle,
-    /// Click on the chevron at the top-left of the header — host
-    /// flips the `ChatState::collapsed` flag.
-    ToggleCollapse,
-    /// Click on the maximize / restore affordance in the header.
-    ToggleMaximize,
-    /// Click on the plus affordance in the header.
-    NewChat,
-    /// Click on the model chip (bottom-left of the input toolbar) —
-    /// host toggles `ui.chat_model_picker_open` to open / close the
-    /// model dropdown.
-    ToggleModelPicker,
-    /// Click on a model row in the open picker dropdown — payload
-    /// is the index into `chat.available_models`
-    /// (`Document::select_chat_model`).
-    SelectModel(usize),
-    /// Click landed inside the model-picker search/header area.
-    /// The picker owns keyboard input while open, so this consumes
-    /// the click without closing the dropdown.
-    FocusModelSearch,
-    /// Click on the thinking-mode chip — host cycles
-    /// `ChatState::thinking_mode`.
-    CycleThinking,
-    /// Click on the effort chip — host cycles
-    /// `ChatState::effort_level`.
-    CycleEffort,
-    /// Click on the attach button — host opens a file picker and
-    /// stages the chosen file via `ChatState::add_attachment`.
-    AddAttachment,
-    /// Click on a staged-attachment chip — payload is the index
-    /// into `chat.pending_attachments` to drop.
-    RemoveAttachment(usize),
-    /// Click on a message's thinking-block header — host toggles
-    /// `ChatMessage::thinking_collapsed` for that message index.
-    ToggleThinking(usize),
-    /// Click on a message's tool-calls panel header — host toggles
-    /// `ChatMessage::tools_collapsed` for that message index.
-    ToggleToolCalls(usize),
 }
 
 pub struct AIChatPlaceholder<'a> {
@@ -221,7 +170,7 @@ impl<'a> AIChatPlaceholder<'a> {
             - self.input_height()
             - PAD
             - 8.0
-            - fixed_checklist_height(&self.state.messages);
+            - fixed_checklist_height(&self.state.messages, self.state.checklist_collapsed);
         Rect {
             origin: Point2D::new(rect.origin.x + PAD, body_top),
             size: Point2D::new(rect.size.x - PAD * 2.0, (body_bottom - body_top).max(0.0)),
@@ -360,6 +309,23 @@ impl<'a> AIChatPlaceholder<'a> {
                 }
             }
             return Some(AIChatHit::FocusInput);
+        }
+        let checklist_h =
+            fixed_checklist_height(&self.state.messages, self.state.checklist_collapsed);
+        if checklist_h > 0.0 {
+            let checklist = fixed_checklist_rect(rect, input_h, checklist_h);
+            if rect_contains(checklist, point) {
+                let header = Rect::xywh(
+                    checklist.origin.x,
+                    checklist.origin.y + PROGRESS_H,
+                    checklist.size.x,
+                    HEADER_H,
+                );
+                if rect_contains(header, point) {
+                    return Some(AIChatHit::ToggleChecklist);
+                }
+                return Some(AIChatHit::FocusInput);
+            }
         }
         // Transcript hit-test — a click on a message's thinking /
         // tool-call collapsible header toggles it. Checked before the
@@ -508,7 +474,8 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
         );
 
         // Body — either messages or examples.
-        let checklist_h = fixed_checklist_height(&self.state.messages);
+        let checklist_h =
+            fixed_checklist_height(&self.state.messages, self.state.checklist_collapsed);
         if self.state.messages.is_empty() {
             paint_examples(
                 cx,
@@ -534,6 +501,7 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
                 &self.theme,
                 fixed_checklist_rect(rect, input_h, checklist_h),
                 &self.state.messages,
+                self.state.checklist_collapsed,
             );
         }
 

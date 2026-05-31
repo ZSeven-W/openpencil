@@ -696,6 +696,11 @@ impl WidgetHost {
                         self.mark_dirty();
                         return true;
                     }
+                    AIChatHit::ToggleChecklist => {
+                        self.editor_state.chat.toggle_checklist_collapsed();
+                        self.mark_dirty();
+                        return true;
+                    }
                 }
             }
         }

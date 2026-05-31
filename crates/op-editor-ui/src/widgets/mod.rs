@@ -111,6 +111,7 @@ pub mod agent_settings_panel;
 mod agent_settings_panel_tests;
 pub mod agent_settings_system;
 mod ai_chat_checklist;
+mod ai_chat_hit;
 pub mod ai_chat_model_picker;
 pub mod ai_chat_panel;
 pub mod ai_chat_panel_controls;
@@ -165,9 +166,10 @@ pub use canvas_viewport::{
 
 pub use icons::{draw_icon, draw_icon_catalog_entry, draw_icon_data, Icon, IconPathData};
 
+pub use ai_chat_hit::AIChatHit;
 pub use ai_chat_panel::{
-    AIChatHit, AIChatPlaceholder, AI_CHAT_COLLAPSED_HEIGHT, AI_CHAT_COLLAPSED_WIDTH,
-    AI_CHAT_HEIGHT, AI_CHAT_WIDTH,
+    AIChatPlaceholder, AI_CHAT_COLLAPSED_HEIGHT, AI_CHAT_COLLAPSED_WIDTH, AI_CHAT_HEIGHT,
+    AI_CHAT_WIDTH,
 };
 pub use align_toolbar::{AlignToolbar, ALIGN_TOOLBAR_HEIGHT, ALIGN_TOOLBAR_WIDTH};
 pub use component_browser_panel::{
