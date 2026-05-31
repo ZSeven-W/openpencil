@@ -162,6 +162,22 @@ impl WidgetHostNative {
                         .remove_image_gen_profile(&id);
                 }
             }
+            AgentSettingsHit::ToggleGenConfigEditor(index) => {
+                let was_editing = matches!(
+                    self.editor_state.editor_ui.agent_settings.focus,
+                    Some(op_editor_core::agent_settings::SettingsFocus::ImageGenProfile {
+                        index: focused,
+                        ..
+                    }) if focused == index
+                );
+                self.commit_settings_focus_if_any();
+                if !was_editing {
+                    self.focus_image_gen_profile(
+                        index,
+                        op_editor_core::agent_settings::ImageGenField::Name,
+                    );
+                }
+            }
             AgentSettingsHit::CycleGenProvider(index) => {
                 self.commit_settings_focus_if_any();
                 if let Some(profile) = self
@@ -177,33 +193,7 @@ impl WidgetHostNative {
             }
             AgentSettingsHit::FocusGenConfig { index, field } => {
                 self.commit_settings_focus_if_any();
-                if let Some(profile) = self
-                    .editor_state
-                    .editor_ui
-                    .agent_settings
-                    .image_gen_profiles
-                    .get(index)
-                {
-                    self.editor_state.editor_ui.settings_input_draft = match field {
-                        op_editor_core::agent_settings::ImageGenField::Name => profile.name.clone(),
-                        op_editor_core::agent_settings::ImageGenField::ApiKey => {
-                            profile.api_key.clone()
-                        }
-                        op_editor_core::agent_settings::ImageGenField::Model => {
-                            profile.model.clone()
-                        }
-                        op_editor_core::agent_settings::ImageGenField::BaseUrl => {
-                            profile.base_url.clone().unwrap_or_default()
-                        }
-                    };
-                    self.editor_state.editor_ui.agent_settings.focus = Some(
-                        op_editor_core::agent_settings::SettingsFocus::ImageGenProfile {
-                            index,
-                            field,
-                        },
-                    );
-                    self.editor_state.editor_ui.settings_input_caret_anchor_ms = self.now_ms;
-                }
+                self.focus_image_gen_profile(index, field);
             }
             AgentSettingsHit::ToggleAutoUpdate => {
                 let v = &mut self
@@ -550,6 +540,35 @@ impl WidgetHostNative {
         }
         self.mark_dirty();
         true
+    }
+}
+
+impl WidgetHostNative {
+    fn focus_image_gen_profile(
+        &mut self,
+        index: usize,
+        field: op_editor_core::agent_settings::ImageGenField,
+    ) {
+        if let Some(profile) = self
+            .editor_state
+            .editor_ui
+            .agent_settings
+            .image_gen_profiles
+            .get(index)
+        {
+            self.editor_state.editor_ui.settings_input_draft = match field {
+                op_editor_core::agent_settings::ImageGenField::Name => profile.name.clone(),
+                op_editor_core::agent_settings::ImageGenField::ApiKey => profile.api_key.clone(),
+                op_editor_core::agent_settings::ImageGenField::Model => profile.model.clone(),
+                op_editor_core::agent_settings::ImageGenField::BaseUrl => {
+                    profile.base_url.clone().unwrap_or_default()
+                }
+            };
+            self.editor_state.editor_ui.agent_settings.focus = Some(
+                op_editor_core::agent_settings::SettingsFocus::ImageGenProfile { index, field },
+            );
+            self.editor_state.editor_ui.settings_input_caret_anchor_ms = self.now_ms;
+        }
     }
 }
 

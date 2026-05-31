@@ -117,6 +117,19 @@ impl WidgetHost {
                         .remove_image_gen_profile(&id);
                 }
             }
+            AgentSettingsHit::ToggleGenConfigEditor(index) => {
+                let was_editing = matches!(
+                    self.editor_state.editor_ui.agent_settings.focus,
+                    Some(SettingsFocus::ImageGenProfile {
+                        index: focused,
+                        ..
+                    }) if focused == index
+                );
+                self.commit_settings_focus();
+                if !was_editing {
+                    self.focus_image_gen_profile(index, ImageGenField::Name);
+                }
+            }
             AgentSettingsHit::AddGenConfig => {
                 self.commit_settings_focus();
                 let id = self
@@ -163,23 +176,7 @@ impl WidgetHost {
             }
             AgentSettingsHit::FocusGenConfig { index, field } => {
                 self.commit_settings_focus();
-                if let Some(profile) = self
-                    .editor_state
-                    .editor_ui
-                    .agent_settings
-                    .image_gen_profiles
-                    .get(index)
-                {
-                    self.editor_state.editor_ui.settings_input_draft = match field {
-                        ImageGenField::Name => profile.name.clone(),
-                        ImageGenField::ApiKey => profile.api_key.clone(),
-                        ImageGenField::Model => profile.model.clone(),
-                        ImageGenField::BaseUrl => profile.base_url.clone().unwrap_or_default(),
-                    };
-                    self.editor_state.editor_ui.agent_settings.focus =
-                        Some(SettingsFocus::ImageGenProfile { index, field });
-                    self.editor_state.editor_ui.settings_input_caret_anchor_ms = self.now_ms;
-                }
+                self.focus_image_gen_profile(index, field);
             }
             AgentSettingsHit::ToggleAutoUpdate => {
                 self.editor_state
@@ -621,9 +618,32 @@ impl WidgetHost {
     }
 }
 
+impl WidgetHost {
+    fn focus_image_gen_profile(&mut self, index: usize, field: ImageGenField) {
+        if let Some(profile) = self
+            .editor_state
+            .editor_ui
+            .agent_settings
+            .image_gen_profiles
+            .get(index)
+        {
+            self.editor_state.editor_ui.settings_input_draft = match field {
+                ImageGenField::Name => profile.name.clone(),
+                ImageGenField::ApiKey => profile.api_key.clone(),
+                ImageGenField::Model => profile.model.clone(),
+                ImageGenField::BaseUrl => profile.base_url.clone().unwrap_or_default(),
+            };
+            self.editor_state.editor_ui.agent_settings.focus =
+                Some(SettingsFocus::ImageGenProfile { index, field });
+            self.editor_state.editor_ui.settings_input_caret_anchor_ms = self.now_ms;
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use op_editor_core::agent_settings::AgentSettingsTab;
 
     #[test]
     fn toggling_builtin_kind_commits_focused_api_key_draft() {
@@ -744,5 +764,32 @@ mod tests {
         assert!(settings.builtin_agent_draft.is_none());
         assert_eq!(settings.builtin_agents[0].api_key, "sk-web");
         assert!(settings.focus.is_none());
+    }
+
+    #[test]
+    fn image_generation_profile_header_click_toggles_editor_closed() {
+        let mut host = WidgetHost::new();
+        host.editor_state.editor_ui.agent_settings.tab = AgentSettingsTab::Images;
+        host.editor_state
+            .editor_ui
+            .agent_settings
+            .add_image_gen_profile();
+        host.editor_state.editor_ui.agent_settings.focus = Some(SettingsFocus::ImageGenProfile {
+            index: 0,
+            field: ImageGenField::Name,
+        });
+        host.editor_state.editor_ui.settings_input_draft = "Config 1".into();
+
+        let panel = AgentSettingsPanel::for_editor(&host.editor_state);
+        let rect = panel.rect(1200.0, 800.0);
+        let content_x = rect.origin.x + 200.0 + 24.0;
+        let content_y = rect.origin.y + 24.0;
+        let gen_top = content_y + 36.0 + 24.0 + 28.0;
+        let row_y = gen_top + 36.0;
+
+        assert!(host.dispatch_agent_settings_press(content_x + 72.0, row_y + 16.0, 1200.0, 800.0));
+
+        assert_eq!(host.editor_state.editor_ui.agent_settings.focus, None);
+        assert!(host.editor_state.editor_ui.settings_input_draft.is_empty());
     }
 }

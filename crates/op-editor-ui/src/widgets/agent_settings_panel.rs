@@ -79,6 +79,7 @@ pub enum AgentSettingsHit {
     FocusSearchField(ImageSearchField),
     TestImageSearch,
     AddGenConfig,
+    ToggleGenConfigEditor(usize),
     SetActiveGenConfig(usize),
     RemoveGenConfig(usize),
     CycleGenProvider(usize),
@@ -237,6 +238,9 @@ impl<'a> AgentSettingsPanel<'a> {
                     }
                     ImagesHit::TestSearch => return AgentSettingsHit::TestImageSearch,
                     ImagesHit::AddGenConfig => return AgentSettingsHit::AddGenConfig,
+                    ImagesHit::ToggleGenConfigEditor(index) => {
+                        return AgentSettingsHit::ToggleGenConfigEditor(index);
+                    }
                     ImagesHit::SetActiveGenConfig(index) => {
                         return AgentSettingsHit::SetActiveGenConfig(index);
                     }
