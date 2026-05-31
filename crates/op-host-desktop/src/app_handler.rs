@@ -230,6 +230,10 @@ impl ApplicationHandler for DesktopApp {
         // first paint so the launch document shows immediately.
         self.drain_opened_files();
 
+        if self.bootstrap_mcp_runtime_from_settings() {
+            settings_io::save(self.host.editor_state());
+        }
+
         if self.try_init_render_context(event_loop) {
             if let (Some(ctx), Some(backend)) = (self.ctx.as_mut(), self.backend.as_mut()) {
                 frame::paint(

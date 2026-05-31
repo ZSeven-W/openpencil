@@ -3,6 +3,35 @@
 use super::{mcp_integrations, mcp_live, DesktopApp};
 
 impl DesktopApp {
+    pub(crate) fn bootstrap_mcp_runtime_from_settings(&mut self) -> bool {
+        let detected_flags = mcp_integrations::detect_enabled_clis();
+        let settings = &mut self.host.editor_state_mut().editor_ui.agent_settings;
+        let mut changed = false;
+        for (idx, detected) in detected_flags.iter().copied().enumerate() {
+            if detected && !settings.mcp_cli_enabled[idx] {
+                settings.mcp_cli_enabled[idx] = true;
+                changed = true;
+            }
+        }
+        let any_cli_enabled = settings.mcp_cli_enabled.iter().any(|enabled| *enabled);
+        let port = settings.mcp_server.port;
+        if any_cli_enabled && !settings.mcp_server.running {
+            settings.mcp_server.running = true;
+            changed = true;
+        }
+        if changed {
+            self.host.mark_editor_state_dirty();
+        }
+        if any_cli_enabled && port != 0 {
+            changed |= self.reconcile_mcp_cli_integrations(Some(([false; 6], port)));
+        }
+        changed |= self.reconcile_mcp_server_from_settings();
+        if self.mcp_server_active() {
+            changed |= self.request_redraw(false);
+        }
+        changed
+    }
+
     pub(crate) fn reconcile_mcp_server_from_settings(&mut self) -> bool {
         let desired = self
             .host
