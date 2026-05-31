@@ -448,7 +448,7 @@ fn dedupe_builtin_agents(agents: Vec<BuiltinAgentConfig>) -> Vec<BuiltinAgentCon
     let mut deduped: Vec<BuiltinAgentConfig> = Vec::new();
     for agent in agents {
         let is_duplicate = deduped.iter().any(|existing| {
-            existing.matches_config(
+            existing.matches_add_candidate(
                 &agent.display_name,
                 &agent.api_key,
                 &agent.model,
@@ -733,6 +733,44 @@ mod tests {
             "builtin-1"
         );
         assert_eq!(dst.editor_ui.agent_settings.next_builtin_agent_id, 2);
+    }
+
+    #[test]
+    fn duplicate_auto_named_builtin_agents_are_deduped_on_load() {
+        let settings = r#"{
+            "version": 1,
+            "builtin_agents": [
+                {
+                    "id": "builtin-5",
+                    "display_name": "Built-in Agent 5",
+                    "kind": "anthropic",
+                    "api_key": "sk-test",
+                    "model": "claude-sonnet-4-5",
+                    "base_url": "https://api.anthropic.com",
+                    "enabled": true
+                },
+                {
+                    "id": "builtin-6",
+                    "display_name": "Built-in Agent 6",
+                    "kind": "anthropic",
+                    "api_key": "sk-test",
+                    "model": "claude-sonnet-4-5",
+                    "base_url": "https://api.anthropic.com",
+                    "enabled": true
+                }
+            ]
+        }"#;
+        let payload: SettingsPayload = serde_json::from_str(settings).unwrap();
+        let mut dst = EditorState::new();
+
+        apply_payload(&mut dst, payload);
+
+        assert_eq!(dst.editor_ui.agent_settings.builtin_agents.len(), 1);
+        assert_eq!(
+            dst.editor_ui.agent_settings.builtin_agents[0].display_name,
+            "Built-in Agent 5"
+        );
+        assert_eq!(dst.editor_ui.agent_settings.next_builtin_agent_id, 6);
     }
 
     #[test]

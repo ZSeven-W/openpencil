@@ -217,6 +217,35 @@ impl BuiltinAgentConfig {
             && self.base_url.trim().trim_end_matches('/') == base_url.trim().trim_end_matches('/')
     }
 
+    pub fn matches_add_candidate(
+        &self,
+        display_name: &str,
+        api_key: &str,
+        model: &str,
+        kind: BuiltinAgentKind,
+        base_url: &str,
+    ) -> bool {
+        if !self.matches_backend(api_key, model, kind, base_url) {
+            return false;
+        }
+        self.display_name.trim() == display_name.trim()
+            || is_auto_builtin_agent_name(&self.display_name)
+            || is_auto_builtin_agent_name(display_name)
+    }
+
+    fn matches_backend(
+        &self,
+        api_key: &str,
+        model: &str,
+        kind: BuiltinAgentKind,
+        base_url: &str,
+    ) -> bool {
+        self.kind == kind
+            && self.api_key.trim() == api_key.trim()
+            && self.model.trim() == model.trim()
+            && self.base_url.trim().trim_end_matches('/') == base_url.trim().trim_end_matches('/')
+    }
+
     pub fn apply_preset(&mut self, key: BuiltinAgentPresetKey) {
         let preset = builtin_agent_preset(key);
         self.preset = preset.key;
@@ -250,6 +279,12 @@ impl BuiltinAgentConfig {
         };
         self.set_kind_for_preset(next);
     }
+}
+
+fn is_auto_builtin_agent_name(name: &str) -> bool {
+    name.trim()
+        .strip_prefix("Built-in Agent ")
+        .is_some_and(|suffix| suffix.parse::<u64>().is_ok())
 }
 
 /// ACP-compatible agent connection style mirrored from the TS
@@ -556,11 +591,9 @@ impl AgentSettings {
         let api_key = api_key.into();
         let model = model.into();
         let base_url = base_url.into();
-        if let Some(existing) = self
-            .builtin_agents
-            .iter()
-            .find(|agent| agent.matches_config(&display_name, &api_key, &model, kind, &base_url))
-        {
+        if let Some(existing) = self.builtin_agents.iter().find(|agent| {
+            agent.matches_add_candidate(&display_name, &api_key, &model, kind, &base_url)
+        }) {
             return existing.id.clone();
         }
         let id = format!("builtin-{}", self.next_builtin_agent_id.max(1));
