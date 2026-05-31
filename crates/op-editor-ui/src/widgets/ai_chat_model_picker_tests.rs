@@ -157,6 +157,44 @@ fn builtin_search_does_not_match_api_key_badge_text() {
 }
 
 #[test]
+fn builtin_search_uses_display_group_label_not_backing_provider_like_ts() {
+    let entry = ModelEntry::builtin_with_display_name(
+        AgentProvider::CodexCli,
+        "builtin-minimax",
+        "MiniMax",
+        "builtin:builtin-minimax:MiniMax-M2.7",
+        "MiniMax-M2.7",
+    );
+
+    assert_eq!(
+        visible_model_indices(std::slice::from_ref(&entry), "minimax"),
+        vec![0]
+    );
+    assert_eq!(
+        visible_model_indices(std::slice::from_ref(&entry), "openai"),
+        Vec::<usize>::new()
+    );
+}
+
+#[test]
+fn acp_search_uses_acp_group_label_not_backing_provider_like_ts() {
+    let entry = ModelEntry::acp("local-agent", "Local Agent");
+
+    assert_eq!(
+        visible_model_indices(std::slice::from_ref(&entry), "local"),
+        vec![0]
+    );
+    assert_eq!(
+        visible_model_indices(std::slice::from_ref(&entry), "acp"),
+        vec![0]
+    );
+    assert_eq!(
+        visible_model_indices(std::slice::from_ref(&entry), "openai"),
+        Vec::<usize>::new()
+    );
+}
+
+#[test]
 fn builtin_group_header_falls_back_to_generic_label_without_retained_name() {
     let entry = ModelEntry::builtin(
         AgentProvider::CodexCli,

@@ -75,13 +75,26 @@ fn model_matches(entry: &ModelEntry, q: &str) -> bool {
     q.is_empty()
         || entry.display_name.to_lowercase().contains(q)
         || entry.value.to_lowercase().contains(q)
-        || provider_label(entry.provider).to_lowercase().contains(q)
-        || entry
+        || searchable_group_label(entry).is_some_and(|label| label.to_lowercase().contains(q))
+}
+
+fn searchable_group_label(entry: &ModelEntry) -> Option<String> {
+    if is_acp(entry) {
+        return Some(group_label_for_entry(entry));
+    }
+    if is_builtin(entry) {
+        return entry
             .builtin_provider_display_name
             .as_deref()
             .map(str::trim)
             .filter(|label| !label.is_empty())
-            .is_some_and(|label| label.to_lowercase().contains(q))
+            .map(str::to_string)
+            .or_else(|| {
+                (entry.provider == AgentProvider::ClaudeCode)
+                    .then(|| "Anthropic (API Key)".to_string())
+            });
+    }
+    Some(provider_label(entry.provider).to_string())
 }
 
 pub fn visible_model_indices(models: &[ModelEntry], search: &str) -> Vec<usize> {
