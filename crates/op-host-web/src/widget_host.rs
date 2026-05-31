@@ -35,10 +35,8 @@
 //! Functions that pull in `op_editor_ui::widgets::*` MUST live
 //! in this file (per spec §1.4). Phase B4 boundary check enforces.
 
-use op_editor_core::ChatAnchor;
 use op_editor_ui::widgets::{
-    LayoutCx, LocalePicker, Toolbar, TopBar, Widget, AI_CHAT_COLLAPSED_HEIGHT,
-    AI_CHAT_COLLAPSED_WIDTH, AI_CHAT_HEIGHT, AI_CHAT_WIDTH, LOCALE_PICKER_WIDTH, TOOLBAR_WIDTH,
+    LayoutCx, LocalePicker, Toolbar, TopBar, Widget, LOCALE_PICKER_WIDTH, TOOLBAR_WIDTH,
     TOP_BAR_HEIGHT,
 };
 use op_editor_ui::{Point2D, Rect, Theme};
@@ -46,6 +44,9 @@ use op_editor_ui::{Point2D, Rect, Theme};
 mod agent_settings_press;
 #[cfg(test)]
 mod agent_settings_press_tests;
+mod ai_chat_geometry;
+#[cfg(test)]
+mod ai_chat_geometry_tests;
 mod boolean_ops;
 #[cfg(test)]
 mod boolean_toolbar_tests;
@@ -719,14 +720,6 @@ impl WidgetHost {
     // `widget_host/keyboard.rs` — split out to keep this spine
     // file under the 800-line ceiling.
 
-    fn ai_chat_size(&self) -> (f32, f32) {
-        if self.editor_state.chat.collapsed {
-            (AI_CHAT_COLLAPSED_WIDTH, AI_CHAT_COLLAPSED_HEIGHT)
-        } else {
-            (AI_CHAT_WIDTH, AI_CHAT_HEIGHT)
-        }
-    }
-
     pub(in crate::widget_host) fn locale_picker_rect(&self, viewport_w: f32) -> Rect {
         let top_bar_rect = Rect {
             origin: Point2D::new(0.0, 0.0),
@@ -742,49 +735,6 @@ impl WidgetHost {
             origin: Point2D::new(x, y),
             size: Point2D::new(LOCALE_PICKER_WIDTH, panel_h),
         }
-    }
-
-    pub(in crate::widget_host) fn ai_chat_rect(
-        &self,
-        viewport_w: f32,
-        viewport_h: f32,
-    ) -> Option<Rect> {
-        let (cx0, cy0, cw, ch) = self.canvas_region(viewport_w, viewport_h);
-        let (panel_w, panel_h) = self.ai_chat_size();
-        if cw <= panel_w + AICHAT_INSET_LEFT + 16.0 || ch <= panel_h + 16.0 {
-            return None;
-        }
-        if let Some(d) = self.chat_drag {
-            return Some(Rect {
-                origin: Point2D::new(d.pos_x, d.pos_y),
-                size: Point2D::new(panel_w, panel_h),
-            });
-        }
-        // `editor_state.chat.anchor` is op-editor-core's `ChatAnchor`;
-        // shell-core's is a structurally identical four-variant enum.
-        let (x, y) = match self.editor_state.chat.anchor {
-            op_editor_core::ChatAnchor::TopLeft => {
-                (cx0 + AICHAT_INSET_LEFT, cy0 + AICHAT_INSET_BOTTOM)
-            }
-            op_editor_core::ChatAnchor::TopRight => (
-                cx0 + cw - panel_w - AICHAT_INSET_BOTTOM,
-                cy0 + AICHAT_INSET_BOTTOM,
-            ),
-            op_editor_core::ChatAnchor::BottomLeft => (
-                cx0 + AICHAT_INSET_LEFT,
-                cy0 + ch - panel_h - AICHAT_INSET_BOTTOM,
-            ),
-            op_editor_core::ChatAnchor::BottomRight => (
-                cx0 + cw - panel_w - AICHAT_INSET_BOTTOM,
-                cy0 + ch - panel_h - AICHAT_INSET_BOTTOM,
-            ),
-        };
-        // `ChatAnchor` import kept for the `nearest` call in release.
-        let _ = ChatAnchor::TopLeft;
-        Some(Rect {
-            origin: Point2D::new(x, y),
-            size: Point2D::new(panel_w, panel_h),
-        })
     }
 
     pub(in crate::widget_host) fn layer_panel_rect(&self, viewport_h: f32) -> Rect {
