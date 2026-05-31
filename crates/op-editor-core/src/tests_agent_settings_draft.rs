@@ -14,6 +14,30 @@ fn duplicate_builtin_agent_config_reuses_existing_provider() {
 }
 
 #[test]
+fn duplicate_builtin_agent_backend_reuses_existing_provider_across_display_aliases() {
+    let mut s = AgentSettings::default();
+
+    let first = s.add_builtin_agent_config(
+        "MINIMAX",
+        "sk-test",
+        "MiniMax-M2.7",
+        BuiltinAgentKind::OpenAiCompat,
+        "https://api.minimaxi.com/v1",
+    );
+    let second = s.add_builtin_agent_config(
+        "MiniMax",
+        "sk-test",
+        "MiniMax-M2.7",
+        BuiltinAgentKind::OpenAiCompat,
+        "https://api.minimaxi.com/v1",
+    );
+
+    assert_eq!(second, first);
+    assert_eq!(s.builtin_agents.len(), 1);
+    assert_eq!(s.builtin_agents[0].display_name, "MINIMAX");
+}
+
+#[test]
 fn duplicate_auto_named_builtin_agent_config_reuses_existing_provider() {
     let mut s = AgentSettings::default();
 
