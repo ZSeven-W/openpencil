@@ -10,6 +10,8 @@ use op_editor_core::EditorState;
 #[derive(Default)]
 struct CaptureBackend {
     fills: Vec<(Rect, Color)>,
+    icon_strokes: Vec<(Point2D, f32, usize)>,
+    ops: Vec<&'static str>,
 }
 
 impl RenderBackend for CaptureBackend {
@@ -24,9 +26,16 @@ impl RenderBackend for CaptureBackend {
     fn stroke_line(&mut self, _: Point2D, _: Point2D, _: Color, _: f32) {}
     fn fill_round_rect(&mut self, _: Rect, _: f32, _: Color) {}
     fn stroke_round_rect(&mut self, _: Rect, _: f32, _: Color, _: f32) {}
-    fn stroke_svg_path(&mut self, _: &str, _: Point2D, _: f32, _: Color, _: f32) {}
-    fn save(&mut self) {}
-    fn restore(&mut self) {}
+    fn stroke_svg_path(&mut self, _: &str, at: Point2D, size: f32, _: Color, _: f32) {
+        self.icon_strokes.push((at, size, self.ops.len()));
+        self.ops.push("icon");
+    }
+    fn save(&mut self) {
+        self.ops.push("save");
+    }
+    fn restore(&mut self) {
+        self.ops.push("restore");
+    }
     fn translate(&mut self, _: Point2D) {}
     fn resize(&mut self, _: u32, _: u32) {}
     fn dpi_scale(&self) -> f32 {
@@ -51,6 +60,41 @@ fn caret_fills(fills: &[(Rect, Color)], color: Color) -> Vec<Rect> {
                 .then_some(*rect)
         })
         .collect()
+}
+
+#[test]
+fn close_button_paints_after_scrollable_content() {
+    let state = EditorState::default();
+    let panel = AgentSettingsPanel::for_editor(&state);
+    let rect = panel.rect(1200.0, 800.0);
+    let mut backend = CaptureBackend::default();
+    let mut cx = PaintCx {
+        backend: &mut backend,
+    };
+
+    panel.paint(&mut cx, rect);
+
+    let close_origin = Point2D::new(rect.origin.x + rect.size.x - 32.0, rect.origin.y + 16.0);
+    let close_idx = backend
+        .icon_strokes
+        .iter()
+        .find_map(|(at, size, idx)| {
+            ((at.x - close_origin.x).abs() < 0.01
+                && (at.y - close_origin.y).abs() < 0.01
+                && (*size - 16.0).abs() < 0.01)
+                .then_some(*idx)
+        })
+        .expect("close icon should paint");
+    let restore_idx = backend
+        .ops
+        .iter()
+        .rposition(|op| *op == "restore")
+        .expect("content clip should restore");
+
+    assert!(
+        close_idx > restore_idx,
+        "close button must paint above clipped, scrollable content"
+    );
 }
 
 #[test]
@@ -202,6 +246,20 @@ fn agents_tab_acp_cards_replace_empty_hint_height() {
     assert!(
         with_acp > empty,
         "configured ACP agents should contribute list-card height instead of a fixed empty hint"
+    );
+}
+
+#[test]
+fn acp_draft_form_reserves_room_for_args_and_env_fields() {
+    let mut state = EditorState::default();
+    state.editor_ui.agent_settings.begin_acp_agent_draft();
+
+    let height =
+        crate::widgets::agent_settings_acp::content_height(&state.editor_ui.agent_settings);
+
+    assert!(
+        height >= 320.0,
+        "ACP draft form should include display name, connection type, command, args, env, and actions"
     );
 }
 

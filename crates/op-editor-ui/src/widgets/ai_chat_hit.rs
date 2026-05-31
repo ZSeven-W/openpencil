@@ -30,6 +30,8 @@ pub enum AIChatHit {
     /// The picker owns keyboard input while open, so this consumes
     /// the click without closing the dropdown.
     FocusModelSearch,
+    /// Click on the clear affordance inside the model-picker search.
+    ClearModelSearch,
     /// Click on the thinking-mode chip — host cycles
     /// `ChatState::thinking_mode`.
     CycleThinking,

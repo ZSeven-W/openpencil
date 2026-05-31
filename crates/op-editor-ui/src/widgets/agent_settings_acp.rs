@@ -21,14 +21,13 @@ const HEADER_H: f32 = 28.0;
 const SUBTITLE_H: f32 = 28.0;
 const EMPTY_H: f32 = 64.0;
 const COMPACT_CARD_H: f32 = 60.0;
-const EXPANDED_CARD_H: f32 = 116.0;
-const DRAFT_CARD_H: f32 = 152.0;
+const EXPANDED_CARD_H: f32 = 332.0;
+const DRAFT_CARD_H: f32 = 370.0;
 const CARD_GAP: f32 = 8.0;
 const TOP_HEADER_RIGHT_INSET: f32 = 12.0;
 const ADD_W: f32 = 96.0;
-const FIELD_LABEL_W: f32 = 72.0;
-const FIELD_H: f32 = 24.0;
-const TYPE_TOGGLE_W: f32 = 156.0;
+const FIELD_H: f32 = 28.0;
+const ENV_FIELD_H: f32 = 64.0;
 const ACTION_W: f32 = 24.0;
 const CONNECT_BTN_W: f32 = 96.0;
 const CONNECT_BTN_H: f32 = 28.0;
@@ -85,15 +84,12 @@ pub fn hit_test(content: Rect, settings: &AgentSettings, point: Point2D, y: f32)
             if rect_contains(type_toggle_rect(card), point) {
                 return AcpHit::ToggleConnectionType(index);
             }
-            for (row, field) in [
-                AcpAgentField::DisplayName,
-                connection_field(agent.connection_type),
-            ]
-            .into_iter()
-            .enumerate()
-            {
-                if rect_contains(field_input_rect(card, row), point) {
-                    return AcpHit::Focus { index, field };
+            for field in form_fields(agent.connection_type) {
+                if rect_contains(field_input_rect(card, *field), point) {
+                    return AcpHit::Focus {
+                        index,
+                        field: *field,
+                    };
                 }
             }
         } else if rect_contains(compact_edit_rect(card), point) {
@@ -110,15 +106,9 @@ pub fn hit_test(content: Rect, settings: &AgentSettings, point: Point2D, y: f32)
         if rect_contains(type_toggle_rect(card), point) {
             return AcpHit::ToggleDraftConnectionType;
         }
-        for (row, field) in [
-            AcpAgentField::DisplayName,
-            connection_field(agent.connection_type),
-        ]
-        .into_iter()
-        .enumerate()
-        {
-            if rect_contains(field_input_rect(card, row), point) {
-                return AcpHit::FocusDraft(field);
+        for field in form_fields(agent.connection_type) {
+            if rect_contains(field_input_rect(card, *field), point) {
+                return AcpHit::FocusDraft(*field);
             }
         }
         if rect_contains(save_button_rect(card, EXPANDED_CARD_H), point) {
@@ -339,42 +329,18 @@ fn paint_acp_form(
 ) {
     cx.backend.fill_round_rect(card, 10.0, theme.muted);
     cx.backend.stroke_round_rect(card, 10.0, theme.border, 1.0);
-    paint_avatar(cx, theme, ui, agent, card);
-
-    let (status, status_color) = acp_status(theme, agent);
     draw_text(
         cx,
-        status,
+        t_settings(ui, "acp.connectionType"),
         11.0,
-        status_color,
-        card.origin.x + 60.0,
-        card.origin.y + 29.0,
+        theme.muted_foreground,
+        card.origin.x + 12.0,
+        type_toggle_rect(card).origin.y - 8.0,
     );
     paint_type_toggle(cx, theme, ui, agent, card);
-    paint_field(
-        cx,
-        theme,
-        settings,
-        ui,
-        agent,
-        index,
-        AcpAgentField::DisplayName,
-        0,
-        card,
-        now_ms,
-    );
-    paint_field(
-        cx,
-        theme,
-        settings,
-        ui,
-        agent,
-        index,
-        connection_field(agent.connection_type),
-        1,
-        card,
-        now_ms,
-    );
+    for field in form_fields(agent.connection_type) {
+        paint_field(cx, theme, settings, ui, agent, index, *field, card, now_ms);
+    }
 }
 
 fn paint_avatar(
@@ -461,7 +427,6 @@ fn paint_field(
     agent: &AcpAgentConfig,
     index: Option<usize>,
     field: AcpAgentField,
-    row: usize,
     card: Rect,
     now_ms: u64,
 ) {
@@ -471,20 +436,25 @@ fn paint_field(
     };
     let focused = settings.focus == Some(focus);
     let value = if focused {
-        ui.settings_input_draft.as_str()
+        ui.settings_input_draft.clone()
     } else {
         match field {
-            AcpAgentField::DisplayName => agent.display_name.as_str(),
-            AcpAgentField::Command => agent.command.as_str(),
-            AcpAgentField::Url => agent.url.as_deref().unwrap_or(""),
+            AcpAgentField::DisplayName => agent.display_name.clone(),
+            AcpAgentField::Command => agent.command.clone(),
+            AcpAgentField::Args => agent.args_text(),
+            AcpAgentField::Env => agent.env_text(),
+            AcpAgentField::Url => agent.url.clone().unwrap_or_default(),
         }
     };
     let label = match field {
-        AcpAgentField::DisplayName => "Name",
-        AcpAgentField::Command => "Command",
+        AcpAgentField::DisplayName => t_settings(ui, "acp.displayName"),
+        AcpAgentField::Command => t_settings(ui, "acp.command"),
+        AcpAgentField::Args => t_settings(ui, "acp.args"),
+        AcpAgentField::Env => t_settings(ui, "acp.env"),
         AcpAgentField::Url => "URL",
     };
-    let label_y = field_input_rect(card, row).origin.y + 16.0;
+    let input = field_input_rect(card, field);
+    let label_y = input.origin.y - 8.0;
     draw_text(
         cx,
         label,
@@ -493,7 +463,6 @@ fn paint_field(
         card.origin.x + 12.0,
         label_y,
     );
-    let input = field_input_rect(card, row);
     cx.backend.fill_round_rect(
         input,
         6.0,
@@ -509,13 +478,30 @@ fn paint_field(
         if focused { theme.primary } else { theme.border },
         1.0,
     );
-    let clipped = ellipsize(cx, value, input.size.x - 12.0, 11.0);
+    let placeholder = match field {
+        AcpAgentField::DisplayName => t_settings(ui, "acp.displayNamePlaceholder"),
+        AcpAgentField::Command => t_settings(ui, "acp.commandPlaceholder"),
+        AcpAgentField::Args => t_settings(ui, "acp.argsPlaceholder"),
+        AcpAgentField::Env => t_settings(ui, "acp.envPlaceholder"),
+        AcpAgentField::Url => "https://agent.example.com",
+    };
+    let shown = if value.is_empty() {
+        placeholder
+    } else {
+        &value
+    };
+    let text_color = if value.is_empty() {
+        theme.muted_foreground
+    } else {
+        theme.foreground
+    };
+    let clipped = ellipsize(cx, shown, input.size.x - 12.0, 11.0);
     let text_x = input.origin.x + 6.0;
     draw_text(
         cx,
         &clipped,
         11.0,
-        theme.foreground,
+        text_color,
         text_x,
         input.origin.y + 16.0,
     );
@@ -523,7 +509,7 @@ fn paint_field(
         let caret = settings_caret_for_focus(ui, focus);
         let caret_x = caret_x_for_text(
             cx,
-            value,
+            &value,
             caret,
             text_x,
             input.origin.x + input.size.x - 8.0,
@@ -563,15 +549,22 @@ fn paint_type_toggle(
             theme.muted_foreground
         };
         let label = connection_type_label(ui, *kind);
-        let tw = cx.backend.measure_text(label, 10.0);
-        draw_text(
-            cx,
-            label,
-            10.0,
+        let icon = match kind {
+            AcpConnectionType::Local => Icon::Terminal,
+            AcpConnectionType::Remote => Icon::Globe,
+        };
+        let tw = cx.backend.measure_text(label, 11.0);
+        let group_w = 16.0 + 6.0 + tw;
+        let group_x = item.origin.x + (item.size.x - group_w) / 2.0;
+        draw_icon(
+            cx.backend,
+            icon,
+            Point2D::new(group_x, item.origin.y + 6.0),
+            14.0,
             color,
-            item.origin.x + (item.size.x - tw) / 2.0,
-            item.origin.y + 16.0,
+            1.5,
         );
+        draw_text(cx, label, 11.0, color, group_x + 22.0, item.origin.y + 18.0);
     }
 }
 
@@ -596,24 +589,6 @@ fn acp_detail(agent: &AcpAgentConfig) -> String {
     }
 }
 
-fn acp_status(theme: &Theme, agent: &AcpAgentConfig) -> (&'static str, Color) {
-    if agent.connected {
-        (
-            "connected",
-            Color {
-                r: 0.34,
-                g: 0.78,
-                b: 0.45,
-                a: 1.0,
-            },
-        )
-    } else if agent.ready() {
-        ("ready", theme.muted_foreground)
-    } else {
-        ("not configured", theme.muted_foreground)
-    }
-}
-
 fn connection_type_label(ui: &EditorUiState, kind: AcpConnectionType) -> &'static str {
     match kind {
         AcpConnectionType::Local => t_settings(ui, "acp.local"),
@@ -621,10 +596,17 @@ fn connection_type_label(ui: &EditorUiState, kind: AcpConnectionType) -> &'stati
     }
 }
 
-fn connection_field(kind: AcpConnectionType) -> AcpAgentField {
+fn form_fields(kind: AcpConnectionType) -> &'static [AcpAgentField] {
+    const LOCAL: &[AcpAgentField] = &[
+        AcpAgentField::DisplayName,
+        AcpAgentField::Command,
+        AcpAgentField::Args,
+        AcpAgentField::Env,
+    ];
+    const REMOTE: &[AcpAgentField] = &[AcpAgentField::DisplayName, AcpAgentField::Url];
     match kind {
-        AcpConnectionType::Local => AcpAgentField::Command,
-        AcpConnectionType::Remote => AcpAgentField::Url,
+        AcpConnectionType::Local => LOCAL,
+        AcpConnectionType::Remote => REMOTE,
     }
 }
 
@@ -692,21 +674,26 @@ fn connection_button_rect(card: Rect) -> Rect {
 
 fn type_toggle_rect(card: Rect) -> Rect {
     Rect {
-        origin: Point2D::new(
-            card.origin.x + card.size.x - 16.0 - TYPE_TOGGLE_W,
-            card.origin.y + 10.0,
-        ),
-        size: Point2D::new(TYPE_TOGGLE_W, 24.0),
+        origin: Point2D::new(card.origin.x + 12.0, card.origin.y + 100.0),
+        size: Point2D::new(card.size.x - 24.0, 28.0),
     }
 }
 
-fn field_input_rect(card: Rect, row: usize) -> Rect {
+fn field_input_rect(card: Rect, field: AcpAgentField) -> Rect {
+    let y = match field {
+        AcpAgentField::DisplayName => card.origin.y + 34.0,
+        AcpAgentField::Command | AcpAgentField::Url => card.origin.y + 154.0,
+        AcpAgentField::Args => card.origin.y + 208.0,
+        AcpAgentField::Env => card.origin.y + 262.0,
+    };
+    let h = if field == AcpAgentField::Env {
+        ENV_FIELD_H
+    } else {
+        FIELD_H
+    };
     Rect {
-        origin: Point2D::new(
-            card.origin.x + 12.0 + FIELD_LABEL_W,
-            card.origin.y + 48.0 + row as f32 * 28.0,
-        ),
-        size: Point2D::new(card.size.x - 24.0 - FIELD_LABEL_W, FIELD_H),
+        origin: Point2D::new(card.origin.x + 12.0, y),
+        size: Point2D::new(card.size.x - 24.0, h),
     }
 }
 

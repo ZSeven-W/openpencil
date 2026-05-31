@@ -532,6 +532,14 @@ impl WidgetHost {
                             agent.command = draft.trim().to_string();
                             agent.connected = false;
                         }
+                        AcpAgentField::Args => {
+                            agent.set_args_text(&draft);
+                            agent.connected = false;
+                        }
+                        AcpAgentField::Env => {
+                            agent.set_env_text(&draft);
+                            agent.connected = false;
+                        }
                         AcpAgentField::Url => {
                             agent.url = if draft.trim().is_empty() {
                                 None
@@ -559,6 +567,14 @@ impl WidgetHost {
                         }
                         AcpAgentField::Command => {
                             agent.command = draft.trim().to_string();
+                            agent.connected = false;
+                        }
+                        AcpAgentField::Args => {
+                            agent.set_args_text(&draft);
+                            agent.connected = false;
+                        }
+                        AcpAgentField::Env => {
+                            agent.set_env_text(&draft);
                             agent.connected = false;
                         }
                         AcpAgentField::Url => {

@@ -256,6 +256,32 @@ impl WidgetHost {
     ) -> bool {
         self.last_viewport_w = viewport_width;
         self.last_viewport_h = viewport_height;
+        if self.editor_state.editor_ui.agent_settings_open {
+            use op_editor_ui::widgets::agent_settings_panel::AgentSettingsPanel;
+            let panel_rect = AgentSettingsPanel::for_editor(&self.editor_state)
+                .rect(viewport_width, viewport_height);
+            let point = Point2D::new(x, y);
+            if rect_contains(panel_rect, point) {
+                if let Some(max) = AgentSettingsPanel::for_editor(&self.editor_state)
+                    .builtin_preset_scroll_max_at(panel_rect, point)
+                {
+                    let settings = &mut self.editor_state.editor_ui.agent_settings;
+                    settings.builtin_preset_menu_scroll =
+                        (settings.builtin_preset_menu_scroll - delta_y).clamp(0.0, max);
+                    self.mark_dirty();
+                    return true;
+                }
+                let panel = AgentSettingsPanel::for_editor(&self.editor_state);
+                let total = panel.content_total_height();
+                let viewport_h_inner = panel_rect.size.y - 48.0;
+                let max_scroll = (total - viewport_h_inner).max(0.0);
+                self.editor_state.editor_ui.agent_settings.scroll_y =
+                    (self.editor_state.editor_ui.agent_settings.scroll_y - delta_y)
+                        .clamp(0.0, max_scroll);
+                self.mark_dirty();
+                return true;
+            }
+        }
         // Side rails scroll their panels instead of zooming the
         // canvas (`widget_host/scroll.rs`).
         if self.try_scroll_property_panel(x, y, delta_y, viewport_width, viewport_height) {
@@ -362,6 +388,27 @@ impl WidgetHost {
         // below (layer context menu, layer drag, align toolbar) reads
         // current geometry, never a stale snapshot.
         self.refresh_layout_scene();
+        if self.editor_state.editor_ui.agent_settings_open {
+            use op_editor_ui::widgets::agent_settings_panel::AgentSettingsPanel;
+            let point = Point2D::new(x, y);
+            let panel = AgentSettingsPanel::for_editor(&self.editor_state);
+            let panel_rect = panel.rect(self.last_viewport_w, self.last_viewport_h);
+            let new_hover = panel.builtin_preset_hover_at(panel_rect, point);
+            if new_hover
+                != self
+                    .editor_state
+                    .editor_ui
+                    .agent_settings
+                    .builtin_preset_menu_hover
+            {
+                self.editor_state
+                    .editor_ui
+                    .agent_settings
+                    .builtin_preset_menu_hover = new_hover;
+                self.mark_dirty();
+                return true;
+            }
+        }
         if let Some(state) = self.editor_state.editor_ui.layer_context_menu.clone() {
             use op_editor_ui::widgets::layer_context_menu::LayerContextMenu;
             let menu = LayerContextMenu::for_state(&self.editor_state, state.clone());

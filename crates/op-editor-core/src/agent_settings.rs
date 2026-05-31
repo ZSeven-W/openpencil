@@ -123,6 +123,8 @@ pub enum ImageSearchField {
 pub enum AcpAgentField {
     DisplayName,
     Command,
+    Args,
+    Env,
     Url,
 }
 
@@ -274,6 +276,38 @@ impl AcpAgentConfig {
                     .unwrap_or(false),
             }
     }
+
+    pub fn args_text(&self) -> String {
+        self.args.join(" ")
+    }
+
+    pub fn env_text(&self) -> String {
+        self.env
+            .iter()
+            .map(|(key, value)| format!("{key}={value}"))
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    pub fn set_args_text(&mut self, text: &str) {
+        self.args = text
+            .split_whitespace()
+            .map(str::trim)
+            .filter(|part| !part.is_empty())
+            .map(str::to_string)
+            .collect();
+    }
+
+    pub fn set_env_text(&mut self, text: &str) {
+        self.env = text
+            .lines()
+            .filter_map(|line| {
+                let (key, value) = line.split_once('=')?;
+                let key = key.trim();
+                (!key.is_empty()).then(|| (key.to_string(), value.trim().to_string()))
+            })
+            .collect();
+    }
 }
 
 /// Image-generation service providers mirrored from the TS
@@ -337,6 +371,8 @@ pub struct AgentSettings {
     pub builtin_agents: Vec<BuiltinAgentConfig>,
     pub builtin_agent_draft: Option<BuiltinAgentConfig>,
     pub builtin_preset_menu_open: Option<BuiltinAgentPresetMenuTarget>,
+    pub builtin_preset_menu_scroll: f32,
+    pub builtin_preset_menu_hover: Option<BuiltinAgentPresetKey>,
     pub next_builtin_agent_id: u64,
     pub acp_agents: Vec<AcpAgentConfig>,
     pub acp_agent_draft: Option<AcpAgentConfig>,
@@ -374,6 +410,8 @@ impl Default for AgentSettings {
             builtin_agents: Vec::new(),
             builtin_agent_draft: None,
             builtin_preset_menu_open: None,
+            builtin_preset_menu_scroll: 0.0,
+            builtin_preset_menu_hover: None,
             next_builtin_agent_id: 1,
             acp_agents: Vec::new(),
             acp_agent_draft: None,
@@ -474,6 +512,8 @@ impl AgentSettings {
     pub fn cancel_builtin_agent_draft(&mut self) {
         self.builtin_agent_draft = None;
         self.builtin_preset_menu_open = None;
+        self.builtin_preset_menu_scroll = 0.0;
+        self.builtin_preset_menu_hover = None;
     }
 
     pub fn add_builtin_agent_with_defaults(
@@ -727,7 +767,7 @@ mod tests {
     }
 
     #[test]
-    fn add_builtin_agent_prefills_coding_provider_presets_first() {
+    fn add_builtin_agent_prefills_ts_provider_presets_first() {
         let mut s = AgentSettings::default();
 
         for _ in 0..4 {
@@ -752,28 +792,28 @@ mod tests {
             summary,
             vec![
                 (
-                    "MINIMAX",
-                    BuiltinAgentKind::OpenAiCompat,
-                    "MiniMax-M2.7",
-                    "https://api.minimaxi.com/v1",
-                    "",
-                ),
-                (
-                    "百炼CP",
-                    BuiltinAgentKind::OpenAiCompat,
-                    "qwen3-coder-plus",
-                    "https://coding.dashscope.aliyuncs.com/v1",
-                    "",
-                ),
-                (
-                    "方舟CP",
+                    "Anthropic",
                     BuiltinAgentKind::Anthropic,
-                    "ark-code-latest",
-                    "https://ark.cn-beijing.volces.com/api/coding",
+                    "claude-sonnet-4-6-20250916",
+                    "https://api.anthropic.com",
                     "",
                 ),
                 (
-                    "DS",
+                    "OpenAI",
+                    BuiltinAgentKind::OpenAiCompat,
+                    "gpt-5.4",
+                    "https://api.openai.com/v1",
+                    "",
+                ),
+                (
+                    "OpenRouter",
+                    BuiltinAgentKind::OpenAiCompat,
+                    "anthropic/claude-sonnet-4.6",
+                    "https://openrouter.ai/api/v1",
+                    "",
+                ),
+                (
+                    "DeepSeek",
                     BuiltinAgentKind::OpenAiCompat,
                     "deepseek-v4-pro",
                     "https://api.deepseek.com/v1",
