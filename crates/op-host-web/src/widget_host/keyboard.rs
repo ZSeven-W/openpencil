@@ -549,6 +549,7 @@ impl WidgetHost {
                             agent.connected = false;
                         }
                     }
+                    self.editor_state.rebuild_chat_models();
                 }
             }
             SettingsFocus::AcpAgentDraft(field) => {

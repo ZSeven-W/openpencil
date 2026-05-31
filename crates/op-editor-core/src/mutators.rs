@@ -583,7 +583,7 @@ impl EditorState {
         if let Some(entry) = self.chat.available_models.get(idx) {
             let provider = entry.provider;
             self.chat.selected_model = idx;
-            if entry.builtin_provider_id.is_none() {
+            if entry.builtin_provider_id.is_none() && entry.acp_agent_id().is_none() {
                 if let Some(pidx) = crate::AgentProvider::ALL
                     .iter()
                     .position(|p| *p == provider)
@@ -606,6 +606,11 @@ impl EditorState {
     /// connected mask off `editor_ui.agent_settings`. Hosts call this
     /// after discovery finishes and after every connect toggle.
     pub fn rebuild_chat_models(&mut self) {
+        let prev = self
+            .chat
+            .available_models
+            .get(self.chat.selected_model)
+            .cloned();
         let connected = self.editor_ui.agent_settings.connected;
         self.chat.rebuild_available_models(&connected);
         self.chat.available_models.extend(
@@ -624,8 +629,25 @@ impl EditorState {
                     )
                 }),
         );
+        self.chat.available_models.extend(
+            self.editor_ui
+                .agent_settings
+                .acp_agents
+                .iter()
+                .filter(|agent| agent.ready() && agent.connected)
+                .map(|agent| crate::ModelEntry::acp(agent.id.clone(), agent.display_name.clone())),
+        );
+        if let Some(prev) = prev {
+            if let Some(idx) = self.chat.available_models.iter().position(|entry| {
+                entry.provider == prev.provider
+                    && entry.value == prev.value
+                    && entry.builtin_provider_id == prev.builtin_provider_id
+            }) {
+                self.chat.selected_model = idx;
+            }
+        }
         if let Some(entry) = self.chat.selected_model_entry() {
-            if entry.builtin_provider_id.is_none() {
+            if entry.builtin_provider_id.is_none() && entry.acp_agent_id().is_none() {
                 if let Some(pidx) = crate::AgentProvider::ALL
                     .iter()
                     .position(|p| *p == entry.provider)

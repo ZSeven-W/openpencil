@@ -16,6 +16,7 @@ use op_editor_core::{ChatMessage, ChatToolCall, EditorState};
 use op_host_native::WidgetHostNative;
 use op_orchestrator::{classify_intent, DesignRequest, Intent};
 
+use crate::chat_acp::AcpProvider;
 use crate::chat_builtin_http::ConfiguredBuiltinProvider;
 use crate::chat_claude::ClaudeCodeProvider;
 use crate::chat_copilot::CopilotProvider;
@@ -312,6 +313,9 @@ fn provider_for_selected_model(host: &WidgetHostNative) -> Option<Box<dyn ChatPr
         if let Some(id) = entry.builtin_provider_id.as_deref() {
             return provider_for_builtin(host.editor_state(), id);
         }
+        if let Some(id) = entry.acp_agent_id() {
+            return provider_for_acp(host.editor_state(), id);
+        }
     }
     provider_for_agent(host.editor_state().editor_ui.chat_selected_agent)
 }
@@ -327,6 +331,35 @@ fn provider_for_builtin(state: &EditorState, id: &str) -> Option<Box<dyn ChatPro
     Some(Box::new(provider))
 }
 
+fn provider_for_acp(state: &EditorState, id: &str) -> Option<Box<dyn ChatProvider>> {
+    let config = state
+        .editor_ui
+        .agent_settings
+        .acp_agents
+        .iter()
+        .find(|agent| agent.id == id && agent.ready() && agent.connected)?;
+    Some(Box::new(AcpProvider::new(acp_config_for_provider(config))))
+}
+
+fn acp_config_for_provider(agent: &op_editor_core::AcpAgentConfig) -> op_acp::AcpAgentConfig {
+    op_acp::AcpAgentConfig {
+        id: agent.id.clone(),
+        display_name: agent.display_name.clone(),
+        connection_type: match agent.connection_type {
+            op_editor_core::AcpConnectionType::Local => op_acp::ConnectionType::Local,
+            op_editor_core::AcpConnectionType::Remote => op_acp::ConnectionType::Remote,
+        },
+        command: match agent.connection_type {
+            op_editor_core::AcpConnectionType::Local => Some(agent.command.clone()),
+            op_editor_core::AcpConnectionType::Remote => None,
+        },
+        args: agent.args.clone(),
+        env: agent.env.clone(),
+        url: agent.url.clone(),
+        enabled: agent.enabled,
+    }
+}
+
 fn selected_provider_label(host: &WidgetHostNative) -> String {
     if let Some(entry) = host.editor_state().chat.selected_model_entry() {
         if let Some(id) = entry.builtin_provider_id.as_deref() {
@@ -335,6 +368,18 @@ fn selected_provider_label(host: &WidgetHostNative) -> String {
                 .editor_ui
                 .agent_settings
                 .builtin_agents
+                .iter()
+                .find(|agent| agent.id == id)
+            {
+                return agent.display_name.clone();
+            }
+        }
+        if let Some(id) = entry.acp_agent_id() {
+            if let Some(agent) = host
+                .editor_state()
+                .editor_ui
+                .agent_settings
+                .acp_agents
                 .iter()
                 .find(|agent| agent.id == id)
             {
@@ -529,6 +574,37 @@ mod tests {
 
         let provider = provider_for_selected_model(&host).expect("built-in provider should build");
         assert_eq!(provider.provider_label(), "Built-in Claude");
+    }
+
+    #[test]
+    fn selected_acp_model_routes_to_acp_provider() {
+        let mut host = WidgetHostNative::new();
+        let id = host
+            .editor_state_mut()
+            .editor_ui
+            .agent_settings
+            .add_acp_agent_config(
+                "Local ACP",
+                op_editor_core::AcpConnectionType::Local,
+                "test-acp-agent",
+                Vec::new(),
+                std::collections::BTreeMap::new(),
+                None,
+                true,
+            );
+        host.editor_state_mut().editor_ui.agent_settings.acp_agents[0].connected = true;
+        host.editor_state_mut().rebuild_chat_models();
+        let idx = host
+            .editor_state()
+            .chat
+            .available_models
+            .iter()
+            .position(|m| m.value == format!("acp:{id}"))
+            .expect("ACP model should be selectable");
+        host.editor_state_mut().select_chat_model(idx);
+
+        let provider = provider_for_selected_model(&host).expect("ACP provider should build");
+        assert_eq!(provider.provider_label(), "ACP: Local ACP");
     }
 
     #[test]
