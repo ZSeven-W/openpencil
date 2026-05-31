@@ -65,8 +65,20 @@ impl DesktopApp {
         }
         match mcp_live::McpLiveServer::start(port) {
             Ok(server) => {
+                let bound_port = server.port();
                 self.mcp_server = Some(server);
-                false
+                if bound_port != port {
+                    self.host
+                        .editor_state_mut()
+                        .editor_ui
+                        .agent_settings
+                        .mcp_server
+                        .port = bound_port;
+                    self.host.mark_editor_state_dirty();
+                    true
+                } else {
+                    false
+                }
             }
             Err(err) => {
                 eprintln!("openpencil-desktop mcp: failed to start: {err}");

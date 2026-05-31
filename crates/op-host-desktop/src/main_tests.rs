@@ -155,4 +155,14 @@ fn startup_mcp_bootstrap_starts_live_server_for_enabled_cli() {
         0,
         "ephemeral port should be reported after binding"
     );
+    assert_eq!(
+        app.host
+            .editor_state()
+            .editor_ui
+            .agent_settings
+            .mcp_server
+            .port,
+        app.mcp_server.as_ref().expect("server").port(),
+        "settings should reflect the bound port so the server is not restarted on every reconcile"
+    );
 }
