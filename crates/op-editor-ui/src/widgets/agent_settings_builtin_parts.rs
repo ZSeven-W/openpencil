@@ -7,13 +7,21 @@ use crate::{Color, Point2D, Rect, TextLayout};
 use op_editor_core::agent_settings::{
     AgentSettings, BuiltinAgentConfig, BuiltinAgentKind, BuiltinAgentPresetMenuTarget,
 };
-use op_editor_core::{BuiltinAgentPresetKey, BUILTIN_AGENT_PRESETS};
+use op_editor_core::{builtin_agent_preset, BuiltinAgentPresetKey, BUILTIN_AGENT_PRESETS};
 
 const FIELD_LABEL_W: f32 = 68.0;
 const FIELD_H: f32 = 24.0;
 const PRESET_MENU_ITEM_H: f32 = 24.0;
 const PRESET_MENU_PAD: f32 = 4.0;
 const PRESET_MENU_MAX_VISIBLE_ITEMS: usize = 8;
+const ANTHROPIC_KIND_OPTION: [(&str, BuiltinAgentKind); 1] =
+    [("Anthropic", BuiltinAgentKind::Anthropic)];
+const OPENAI_KIND_OPTION: [(&str, BuiltinAgentKind); 1] =
+    [("OpenAI", BuiltinAgentKind::OpenAiCompat)];
+const BOTH_KIND_OPTIONS: [(&str, BuiltinAgentKind); 2] = [
+    ("Anthropic", BuiltinAgentKind::Anthropic),
+    ("OpenAI", BuiltinAgentKind::OpenAiCompat),
+];
 
 pub fn paint_kind_toggle(
     cx: &mut PaintCx<'_>,
@@ -23,18 +31,9 @@ pub fn paint_kind_toggle(
 ) {
     let r = kind_rect(card);
     cx.backend.stroke_round_rect(r, 6.0, theme.border, 1.0);
-    let half = r.size.x / 2.0;
-    for (i, (label, kind)) in [
-        ("Anthropic", BuiltinAgentKind::Anthropic),
-        ("OpenAI", BuiltinAgentKind::OpenAiCompat),
-    ]
-    .iter()
-    .enumerate()
-    {
-        let item = Rect {
-            origin: Point2D::new(r.origin.x + i as f32 * half, r.origin.y),
-            size: Point2D::new(half, r.size.y),
-        };
+    let options = kind_options(agent);
+    for (i, (label, kind)) in options.iter().enumerate() {
+        let item = kind_option_rect(card, i, options.len());
         let active = agent.kind == *kind;
         if active {
             cx.backend.fill_round_rect(item, 5.0, theme.primary);
@@ -53,6 +52,34 @@ pub fn paint_kind_toggle(
             item.origin.x + (item.size.x - tw) / 2.0,
             item.origin.y + 16.0,
         );
+    }
+}
+
+pub fn kind_toggle_target(
+    agent: &BuiltinAgentConfig,
+    card: Rect,
+    point: Point2D,
+) -> Option<BuiltinAgentKind> {
+    if !rect_contains(kind_rect(card), point) {
+        return None;
+    }
+    let options = kind_options(agent);
+    options
+        .iter()
+        .enumerate()
+        .find(|(index, _)| rect_contains(kind_option_rect(card, *index, options.len()), point))
+        .map(|(_, (_, kind))| *kind)
+        .filter(|kind| *kind != agent.kind)
+}
+
+fn kind_options(agent: &BuiltinAgentConfig) -> &'static [(&'static str, BuiltinAgentKind)] {
+    let preset = builtin_agent_preset(agent.preset);
+    if preset.alt_kind.is_some() {
+        return &BOTH_KIND_OPTIONS;
+    }
+    match preset.kind {
+        BuiltinAgentKind::Anthropic => &ANTHROPIC_KIND_OPTION,
+        BuiltinAgentKind::OpenAiCompat => &OPENAI_KIND_OPTION,
     }
 }
 
@@ -189,6 +216,16 @@ pub fn kind_rect(card: Rect) -> Rect {
     Rect {
         origin: Point2D::new(card.origin.x + card.size.x - 172.0, card.origin.y + 10.0),
         size: Point2D::new(156.0, 24.0),
+    }
+}
+
+fn kind_option_rect(card: Rect, index: usize, count: usize) -> Rect {
+    let r = kind_rect(card);
+    let count = count.max(1) as f32;
+    let w = r.size.x / count;
+    Rect {
+        origin: Point2D::new(r.origin.x + index as f32 * w, r.origin.y),
+        size: Point2D::new(w, r.size.y),
     }
 }
 
@@ -364,5 +401,34 @@ mod tests {
         assert!(capped_h <= PRESET_MENU_PAD * 2.0 + PRESET_MENU_ITEM_H * 8.0 + 6.0);
         settings.builtin_preset_menu_open = Some(BuiltinAgentPresetMenuTarget::Agent(0));
         assert_eq!(preset_menu_height(&settings, None), 0.0);
+    }
+
+    #[test]
+    fn pure_provider_kind_toggle_hides_unsupported_format() {
+        let card = Rect {
+            origin: Point2D::new(20.0, 30.0),
+            size: Point2D::new(500.0, 196.0),
+        };
+        let anthropic = BuiltinAgentConfig {
+            id: "anthropic".into(),
+            preset: BuiltinAgentPresetKey::Anthropic,
+            display_name: "Anthropic".into(),
+            kind: BuiltinAgentKind::Anthropic,
+            api_key: String::new(),
+            model: "claude-sonnet-4-6-20250916".into(),
+            base_url: "https://api.anthropic.com".into(),
+            enabled: true,
+        };
+        let openai_half = Point2D::new(
+            kind_rect(card).origin.x + 120.0,
+            kind_rect(card).origin.y + 12.0,
+        );
+        assert_eq!(kind_toggle_target(&anthropic, card, openai_half), None);
+
+        let mut minimax = anthropic.clone();
+        minimax.preset = BuiltinAgentPresetKey::MiniMax;
+        minimax.display_name = "MiniMax".into();
+        let target = kind_toggle_target(&minimax, card, openai_half);
+        assert_eq!(target, Some(BuiltinAgentKind::OpenAiCompat));
     }
 }

@@ -143,7 +143,13 @@ fn builtin_agent_kind_toggle_commits_focused_api_key_draft() {
     host.editor_state_mut()
         .editor_ui
         .agent_settings
-        .add_builtin_agent_with_defaults("MINIMAX", "", "MiniMax-M2.7");
+        .add_builtin_agent_config(
+            "MiniMax",
+            "",
+            "MiniMax-M2.7",
+            op_editor_core::agent_settings::BuiltinAgentKind::Anthropic,
+            "https://api.minimaxi.com/anthropic",
+        );
     host.editor_state_mut().editor_ui.agent_settings.focus = Some(SettingsFocus::BuiltinAgent {
         index: 0,
         field: BuiltinAgentField::ApiKey,

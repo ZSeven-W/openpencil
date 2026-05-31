@@ -86,7 +86,7 @@ pub fn hit_test(content: Rect, settings: &AgentSettings, point: Point2D) -> Buil
         return BuiltinHit::AddProvider;
     }
     let mut card_y = y + HEADER_HEIGHT + SUBTITLE_HEIGHT;
-    for (index, _) in settings.builtin_agents.iter().enumerate() {
+    for (index, agent) in settings.builtin_agents.iter().enumerate() {
         let card = card_rect(
             content.origin.x,
             card_y,
@@ -113,7 +113,7 @@ pub fn hit_test(content: Rect, settings: &AgentSettings, point: Point2D) -> Buil
                     };
                 }
             }
-            if rect_contains(agent_settings_builtin_parts::kind_rect(card), point) {
+            if agent_settings_builtin_parts::kind_toggle_target(agent, card, point).is_some() {
                 return BuiltinHit::ToggleKind(index);
             }
             for (row, field) in [
@@ -138,7 +138,7 @@ pub fn hit_test(content: Rect, settings: &AgentSettings, point: Point2D) -> Buil
         }
         card_y += card.size.y + CARD_GAP;
     }
-    if settings.builtin_agent_draft.is_some() {
+    if let Some(agent) = settings.builtin_agent_draft.as_ref() {
         let card = card_rect(
             content.origin.x,
             card_y,
@@ -163,7 +163,7 @@ pub fn hit_test(content: Rect, settings: &AgentSettings, point: Point2D) -> Buil
                 };
             }
         }
-        if rect_contains(agent_settings_builtin_parts::kind_rect(card), point) {
+        if agent_settings_builtin_parts::kind_toggle_target(agent, card, point).is_some() {
             return BuiltinHit::ToggleDraftKind;
         }
         for (row, field) in [
