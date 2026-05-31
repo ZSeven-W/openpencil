@@ -435,6 +435,40 @@ fn starting_mcp_server_commits_port_draft_and_clears_focus() {
 }
 
 #[test]
+fn copy_mcp_client_config_queues_clipboard_text() {
+    let mut host = WidgetHostNative::new();
+    host.editor_state_mut().editor_ui.agent_settings.tab = AgentSettingsTab::Mcp;
+    host.editor_state_mut()
+        .editor_ui
+        .agent_settings
+        .mcp_server
+        .running = true;
+    host.editor_state_mut()
+        .editor_ui
+        .agent_settings
+        .mcp_server
+        .port = 4123;
+
+    let panel = AgentSettingsPanel::for_editor(host.editor_state());
+    let rect = panel.rect(1200.0, 800.0);
+    let content_x = rect.origin.x + 200.0 + 24.0;
+    let content_y = rect.origin.y + 24.0;
+    let content_w = rect.size.x - 200.0 - 48.0;
+    let client_config_y = content_y + 36.0 + 52.0 + 8.0;
+    assert!(host.dispatch_agent_settings_press(
+        content_x + content_w - 22.0,
+        client_config_y + 18.0,
+        1200.0,
+        800.0
+    ));
+
+    assert_eq!(
+        host.editor_state().chat.pending_copy_text.as_deref(),
+        Some(r#"{ "type": "http", "url": "http://127.0.0.1:4123/mcp" }"#)
+    );
+}
+
+#[test]
 fn system_auto_update_switch_toggles_preference() {
     let mut host = WidgetHostNative::new();
     host.editor_state_mut().editor_ui.agent_settings.tab = AgentSettingsTab::System;

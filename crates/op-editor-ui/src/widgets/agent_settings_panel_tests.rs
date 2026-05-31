@@ -210,6 +210,56 @@ fn sidebar_nav_uses_ts_compact_rows() {
 }
 
 #[test]
+fn mcp_running_client_config_paints_copy_icon_like_ts() {
+    let mut state = EditorState::default();
+    state.editor_ui.agent_settings.tab = AgentSettingsTab::Mcp;
+    state.editor_ui.agent_settings.mcp_server.running = true;
+    let panel = AgentSettingsPanel::for_editor(&state);
+    let rect = panel.rect(1200.0, 800.0);
+    let content_x = rect.origin.x + 200.0 + 24.0;
+    let content_y = rect.origin.y + 24.0;
+    let content_w = rect.size.x - 200.0 - 48.0;
+    let client_config_y = content_y + 36.0 + 52.0 + 8.0;
+    let icon_origin = Point2D::new(content_x + content_w - 27.0, client_config_y + 13.0);
+    let mut backend = CaptureBackend::default();
+    let mut cx = PaintCx {
+        backend: &mut backend,
+    };
+
+    panel.paint(&mut cx, rect);
+
+    assert!(
+        backend.icon_strokes.iter().any(|(at, size, _)| {
+            (*size - 10.0).abs() < 0.01
+                && (at.x - icon_origin.x).abs() < 0.01
+                && (at.y - icon_origin.y).abs() < 0.01
+        }),
+        "running MCP client config should expose a TS-like copy icon button"
+    );
+}
+
+#[test]
+fn mcp_running_client_config_copy_icon_is_clickable() {
+    let mut state = EditorState::default();
+    state.editor_ui.agent_settings.tab = AgentSettingsTab::Mcp;
+    state.editor_ui.agent_settings.mcp_server.running = true;
+    let panel = AgentSettingsPanel::for_editor(&state);
+    let rect = panel.rect(1200.0, 800.0);
+    let content_x = rect.origin.x + 200.0 + 24.0;
+    let content_y = rect.origin.y + 24.0;
+    let content_w = rect.size.x - 200.0 - 48.0;
+    let client_config_y = content_y + 36.0 + 52.0 + 8.0;
+
+    assert_eq!(
+        panel.hit_test(
+            rect,
+            Point2D::new(content_x + content_w - 22.0, client_config_y + 18.0)
+        ),
+        AgentSettingsHit::CopyMcpClientConfig
+    );
+}
+
+#[test]
 fn builtin_agent_cards_use_ts_compact_height_when_not_editing() {
     let mut state = EditorState::default();
     state

@@ -95,6 +95,15 @@ impl Default for McpServer {
     }
 }
 
+impl McpServer {
+    pub fn client_config_text(self) -> String {
+        format!(
+            r#"{{ "type": "http", "url": "http://127.0.0.1:{}/mcp" }}"#,
+            self.port
+        )
+    }
+}
+
 /// Editable inputs on the settings modal that aren't tied to a `Node`
 /// (so they don't fit the property-panel's `PropertyFocus`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
