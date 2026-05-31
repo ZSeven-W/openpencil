@@ -509,6 +509,8 @@ fn structured_arg_allowed(tool: &str, key: &str) -> bool {
             | ("search_all_unique_properties", "properties")
             | ("replace_all_matching_properties", "parents")
             | ("replace_all_matching_properties", "properties")
+            | ("codegen_plan", "plan")
+            | ("codegen_submit_chunk", "result")
             | ("get_style_guide", "tags")
     )
 }

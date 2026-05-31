@@ -594,6 +594,34 @@ fn parse_tool_call_allows_structured_style_guide_tags_for_ts_parity() {
 }
 
 #[test]
+fn parse_tool_call_allows_structured_codegen_args_for_ts_parity() {
+    let plan_line = r#"{"id":5,"method":"tools/call","params":{"name":"codegen_plan","arguments":{"plan":{"chunks":[{"chunkId":"hero","nodeIds":["n1"],"dependsOn":[]}],"sharedStyles":[],"rootLayout":{"nodeId":"n1"}},"pageId":"page-1"}}}"#;
+    let plan = parse_tool_call(plan_line).expect("codegen_plan must accept TS-style plan object");
+    assert_eq!(plan.tool, "codegen_plan");
+    assert_eq!(
+        plan.arguments.get("plan"),
+        Some(
+            &r#"{"chunks":[{"chunkId":"hero","nodeIds":["n1"],"dependsOn":[]}],"sharedStyles":[],"rootLayout":{"nodeId":"n1"}}"#
+                .to_string()
+        )
+    );
+    assert_eq!(plan.arguments.get("pageId"), Some(&"page-1".to_string()));
+
+    let submit_line = r#"{"id":6,"method":"tools/call","params":{"name":"codegen_submit_chunk","arguments":{"planId":"plan-1","result":{"chunkId":"hero","code":"export const Hero = () => null;","contract":{"provides":[],"requires":[]}},"status":"failed"}}}"#;
+    let submit =
+        parse_tool_call(submit_line).expect("codegen_submit_chunk must accept result object");
+    assert_eq!(submit.tool, "codegen_submit_chunk");
+    assert_eq!(
+        submit.arguments.get("result"),
+        Some(
+            &r#"{"chunkId":"hero","code":"export const Hero = () => null;","contract":{"provides":[],"requires":[]}}"#
+                .to_string()
+        )
+    );
+    assert_eq!(submit.arguments.get("status"), Some(&"failed".to_string()));
+}
+
+#[test]
 fn parse_tool_call_rejects_non_object_arguments_field() {
     let str_args =
         r#"{"id":1,"method":"tools/call","params":{"name":"get_node","arguments":"oops"}}"#;
