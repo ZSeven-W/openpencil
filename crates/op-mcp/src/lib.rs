@@ -53,6 +53,9 @@ pub mod selected_ops_tools;
 mod selected_ops_tools_tests;
 #[cfg(test)]
 pub mod test_fixtures;
+pub mod theme_presets;
+#[cfg(test)]
+mod theme_presets_tests;
 pub mod tools;
 #[cfg(test)]
 mod tools_tests;
@@ -128,6 +131,10 @@ pub use selected_ops_tools::{
     ungroup_selected_snapshot, AlignSelected, CopySelected, CutSelected, DeleteSelected,
     DuplicateSelected, GroupSelected, NudgeSelected, PasteClipboard, ReorderSelected,
     UngroupSelected,
+};
+pub use theme_presets::{
+    list_theme_presets_snapshot, load_theme_preset_snapshot, save_theme_preset_snapshot,
+    ListThemePresets, LoadThemePreset, SaveThemePreset,
 };
 pub use tools::{
     count_nodes_snapshot, document_info_snapshot, find_empty_space_snapshot,
