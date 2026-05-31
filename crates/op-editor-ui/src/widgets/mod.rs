@@ -110,6 +110,8 @@ mod agent_settings_form_actions;
 pub mod agent_settings_i18n;
 pub mod agent_settings_images;
 mod agent_settings_images_parts;
+#[cfg(test)]
+mod agent_settings_images_profile_tests;
 pub mod agent_settings_mcp;
 pub mod agent_settings_panel;
 mod agent_settings_panel_geometry;
