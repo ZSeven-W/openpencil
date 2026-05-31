@@ -303,12 +303,7 @@ impl WidgetHost {
             return false;
         }
         self.editor_state.commit_history();
-        // shell-core `ReorderDirection` → op-editor-core's.
-        let dir = match direction {
-            op_editor_core::ReorderDirection::Up => op_editor_core::ReorderDirection::Up,
-            op_editor_core::ReorderDirection::Down => op_editor_core::ReorderDirection::Down,
-        };
-        if self.editor_state.reorder_selected(dir) {
+        if self.editor_state.reorder_selected(direction) {
             self.mark_dirty();
             return true;
         }

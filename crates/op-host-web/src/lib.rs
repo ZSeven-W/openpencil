@@ -16,6 +16,8 @@
 
 #[cfg(feature = "skia")]
 mod backend;
+#[cfg(feature = "skia")]
+mod boolean_ops;
 pub mod event;
 #[cfg(feature = "skia")]
 mod widget_host;
