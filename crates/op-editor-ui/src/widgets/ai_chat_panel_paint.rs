@@ -9,8 +9,11 @@ use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
 
 pub(crate) const EXAMPLE_CARD_GAP: f32 = 8.0;
-pub(crate) const EXAMPLE_CARD_HEIGHT: f32 = 58.0;
+pub(crate) const EXAMPLE_CARD_HEIGHT: f32 = 72.0;
 const EXAMPLE_CARD_PAD: f32 = 12.0;
+const EXAMPLE_TITLE_FONT: f32 = 12.0;
+const EXAMPLE_SUBTITLE_FONT: f32 = 10.0;
+const EXAMPLE_SUBTITLE_LINE_H: f32 = 12.0;
 
 pub(crate) fn example_card_rects(rect: Rect) -> [Rect; 4] {
     let grid_y = rect.origin.y + HEADER_HEIGHT + 32.0;
@@ -30,6 +33,51 @@ pub(crate) fn example_card_rects(rect: Rect) -> [Rect; 4] {
 
 fn with_alpha(color: Color, a: f32) -> Color {
     Color { a, ..color }
+}
+
+fn wrapped_lines(
+    cx: &mut PaintCx<'_>,
+    value: &str,
+    max_w: f32,
+    size: f32,
+    max_lines: usize,
+) -> Vec<String> {
+    if max_lines == 0 || value.is_empty() {
+        return Vec::new();
+    }
+    let chars: Vec<char> = value.chars().collect();
+    let mut lines = Vec::new();
+    let mut idx = 0;
+    while idx < chars.len() && lines.len() < max_lines {
+        while idx < chars.len() && chars[idx].is_whitespace() {
+            idx += 1;
+        }
+        let mut line = String::new();
+        while idx < chars.len() {
+            let candidate = format!("{}{}", line, chars[idx]);
+            if !line.is_empty() && cx.backend.measure_text(&candidate, size) > max_w {
+                break;
+            }
+            line.push(chars[idx]);
+            idx += 1;
+        }
+        if line.is_empty() && idx < chars.len() {
+            line.push(chars[idx]);
+            idx += 1;
+        }
+        if !line.is_empty() {
+            lines.push(line.trim_end().to_string());
+        }
+    }
+    if idx < chars.len() {
+        if let Some(last) = lines.last_mut() {
+            while !last.is_empty() && cx.backend.measure_text(&format!("{last}..."), size) > max_w {
+                last.pop();
+            }
+            last.push_str("...");
+        }
+    }
+    lines
 }
 
 /// Paint the floating chat panel shell. TS uses
@@ -123,34 +171,60 @@ pub(crate) fn paint_examples(
                 card.origin.y + EXAMPLE_CARD_PAD + 10.0,
             ),
         );
-        let title_layout = TextLayout::single_run(
+        let title_lines = wrapped_lines(
+            cx,
             &ex.title,
-            "system-ui",
-            12.0,
-            to_jian_color(title_color),
-            Point2D::new(0.0, 0.0),
+            card.size.x - EXAMPLE_CARD_PAD * 2.0 - 20.0,
+            EXAMPLE_TITLE_FONT,
+            2,
         );
-        cx.backend.draw_text(
-            &title_layout,
-            Point2D::new(
-                card.origin.x + EXAMPLE_CARD_PAD + 20.0,
-                card.origin.y + EXAMPLE_CARD_PAD + 10.0,
-            ),
-        );
-        let subtitle_layout = TextLayout::single_run(
+        for (line_index, line) in title_lines.iter().enumerate() {
+            let title_layout = TextLayout::single_run(
+                line,
+                "system-ui",
+                EXAMPLE_TITLE_FONT,
+                to_jian_color(title_color),
+                Point2D::new(0.0, 0.0),
+            );
+            cx.backend.draw_text(
+                &title_layout,
+                Point2D::new(
+                    card.origin.x + EXAMPLE_CARD_PAD + 20.0,
+                    card.origin.y
+                        + EXAMPLE_CARD_PAD
+                        + 10.0
+                        + line_index as f32 * EXAMPLE_SUBTITLE_LINE_H,
+                ),
+            );
+        }
+        let title_extra = title_lines.len().saturating_sub(1) as f32 * EXAMPLE_SUBTITLE_LINE_H;
+        let subtitle_lines = wrapped_lines(
+            cx,
             &ex.subtitle,
-            "system-ui",
-            11.0,
-            to_jian_color(subtitle_color),
-            Point2D::new(0.0, 0.0),
+            card.size.x - EXAMPLE_CARD_PAD * 2.0,
+            EXAMPLE_SUBTITLE_FONT,
+            2,
         );
-        cx.backend.draw_text(
-            &subtitle_layout,
-            Point2D::new(
-                card.origin.x + EXAMPLE_CARD_PAD,
-                card.origin.y + EXAMPLE_CARD_PAD + 28.0,
-            ),
-        );
+        for (line_index, line) in subtitle_lines.iter().enumerate() {
+            let subtitle_layout = TextLayout::single_run(
+                line,
+                "system-ui",
+                EXAMPLE_SUBTITLE_FONT,
+                to_jian_color(subtitle_color),
+                Point2D::new(0.0, 0.0),
+            );
+            cx.backend.draw_text(
+                &subtitle_layout,
+                Point2D::new(
+                    card.origin.x + EXAMPLE_CARD_PAD,
+                    card.origin.y
+                        + EXAMPLE_CARD_PAD
+                        + 29.0
+                        + title_extra
+                        + line_index as f32 * EXAMPLE_SUBTITLE_LINE_H,
+                ),
+            );
+        }
         cx.backend.restore();
     }
     let tip = TextLayout::single_run(
@@ -169,7 +243,7 @@ pub(crate) fn paint_examples(
                 + HEADER_HEIGHT
                 + 32.0
                 + EXAMPLE_CARD_HEIGHT * 2.0
-                + EXAMPLE_CARD_GAP * 2.0
+                + EXAMPLE_CARD_GAP
                 + 22.0,
         ),
     );
