@@ -144,7 +144,14 @@ impl WidgetHostNative {
             AgentSettingsHit::TestImageSearch => {
                 self.commit_settings_focus_if_any();
                 let settings = &mut self.editor_state.editor_ui.agent_settings;
+                let has_client_id = !settings.openverse_client_id.trim().is_empty();
+                let has_client_secret = !settings.openverse_client_secret.trim().is_empty();
                 settings.images_search_ready = true;
+                settings.images_search_test_status = if has_client_id && has_client_secret {
+                    op_editor_core::agent_settings::ImageTestStatus::Testing
+                } else {
+                    op_editor_core::agent_settings::ImageTestStatus::Invalid
+                };
             }
             AgentSettingsHit::SetActiveGenConfig(index) => {
                 self.commit_settings_focus_if_any();
