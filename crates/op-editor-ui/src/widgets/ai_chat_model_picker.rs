@@ -93,41 +93,52 @@ pub fn visible_model_indices(models: &[ModelEntry], search: &str) -> Vec<usize> 
         .collect()
 }
 
+fn grouped_visible_model_indices(models: &[ModelEntry], search: &str) -> Vec<Vec<usize>> {
+    let visible = visible_model_indices(models, search);
+    let mut groups: Vec<Vec<usize>> = Vec::new();
+    for idx in visible {
+        if let Some(group) = groups
+            .iter_mut()
+            .find(|group| same_group(&models[group[0]], &models[idx]))
+        {
+            group.push(idx);
+        } else {
+            groups.push(vec![idx]);
+        }
+    }
+    groups
+}
+
 /// Walk the dropdown row layout, invoking `f(row, y, height)` for
 /// each row top-to-bottom starting at `top`. Paint and hit-test
 /// both drive off this so they never drift apart.
 fn walk_rows(models: &[ModelEntry], search: &str, top: f32, mut f: impl FnMut(&Row, f32, f32)) {
     let mut y = top + MODEL_PICKER_PAD_Y;
-    let visible = visible_model_indices(models, search);
-    let mut last_idx: Option<usize> = None;
-    for idx in visible {
-        let entry = &models[idx];
-        let first_in_group = last_idx
-            .map(|prev| !same_group(&models[prev], entry))
-            .unwrap_or(true);
-        if first_in_group {
-            f(
-                &Row::Header {
-                    provider: entry.provider,
-                    builtin: is_builtin(entry),
-                    acp: is_acp(entry),
-                    label: group_label_for_entry(entry),
-                },
-                y,
-                MODEL_GROUP_H,
-            );
-            y += MODEL_GROUP_H;
-        }
+    for group in grouped_visible_model_indices(models, search) {
+        let first_idx = group[0];
+        let entry = &models[first_idx];
         f(
-            &Row::Model {
-                idx,
-                first_in_group,
+            &Row::Header {
+                provider: entry.provider,
+                builtin: is_builtin(entry),
+                acp: is_acp(entry),
+                label: group_label_for_entry(entry),
             },
             y,
-            MODEL_ROW_H,
+            MODEL_GROUP_H,
         );
-        y += MODEL_ROW_H;
-        last_idx = Some(idx);
+        y += MODEL_GROUP_H;
+        for (group_row, idx) in group.into_iter().enumerate() {
+            f(
+                &Row::Model {
+                    idx,
+                    first_in_group: group_row == 0,
+                },
+                y,
+                MODEL_ROW_H,
+            );
+            y += MODEL_ROW_H;
+        }
     }
 }
 
@@ -138,23 +149,14 @@ pub fn picker_content_height(models: &[ModelEntry], search: &str) -> f32 {
 }
 
 fn picker_list_height(models: &[ModelEntry], search: &str) -> f32 {
-    let visible = visible_model_indices(models, search);
-    if visible.is_empty() {
+    let groups = grouped_visible_model_indices(models, search);
+    if groups.is_empty() {
         return MODEL_EMPTY_H;
     }
-    let mut groups = 0usize;
-    let mut last_idx: Option<usize> = None;
-    for idx in visible.iter().copied() {
-        let entry = &models[idx];
-        if last_idx
-            .map(|prev| !same_group(&models[prev], entry))
-            .unwrap_or(true)
-        {
-            groups += 1;
-        }
-        last_idx = Some(idx);
-    }
-    groups as f32 * MODEL_GROUP_H + visible.len() as f32 * MODEL_ROW_H + MODEL_PICKER_PAD_Y * 2.0
+    let model_count: usize = groups.iter().map(Vec::len).sum();
+    groups.len() as f32 * MODEL_GROUP_H
+        + model_count as f32 * MODEL_ROW_H
+        + MODEL_PICKER_PAD_Y * 2.0
 }
 
 /// Map a click inside the dropdown `rect` to the index of the
@@ -617,7 +619,7 @@ pub fn paint_provider_logo(
 
 /// Uppercase provider name for the group header (matches the TS
 /// dropdown's `providerName` styling).
-fn provider_label(provider: AgentProvider) -> &'static str {
+pub(super) fn provider_label(provider: AgentProvider) -> &'static str {
     match provider {
         AgentProvider::ClaudeCode => "ANTHROPIC",
         AgentProvider::CodexCli => "OPENAI",
@@ -641,7 +643,7 @@ fn group_label(provider: AgentProvider, builtin: bool) -> &'static str {
     }
 }
 
-fn group_label_for_entry(entry: &ModelEntry) -> String {
+pub(super) fn group_label_for_entry(entry: &ModelEntry) -> String {
     if is_acp(entry) {
         let name = entry.display_name.trim();
         if name.is_empty() {
@@ -660,208 +662,4 @@ fn group_label_for_entry(entry: &ModelEntry) -> String {
         }
     }
     group_label(entry.provider, is_builtin(entry)).to_string()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn entry(p: AgentProvider, v: &str) -> ModelEntry {
-        ModelEntry::new(p, v, v)
-    }
-
-    #[test]
-    fn content_height_counts_groups_and_rows() {
-        let models = vec![
-            entry(AgentProvider::ClaudeCode, "a"),
-            entry(AgentProvider::ClaudeCode, "b"),
-            entry(AgentProvider::CodexCli, "c"),
-        ];
-        // 2 groups + 3 rows + padding.
-        let expected =
-            MODEL_SEARCH_H + 2.0 * MODEL_GROUP_H + 3.0 * MODEL_ROW_H + MODEL_PICKER_PAD_Y * 2.0;
-        assert!((picker_content_height(&models, "") - expected).abs() < 0.01);
-    }
-
-    #[test]
-    fn model_at_resolves_row_and_skips_headers() {
-        let models = vec![
-            entry(AgentProvider::ClaudeCode, "a"),
-            entry(AgentProvider::CodexCli, "b"),
-        ];
-        let rect = Rect {
-            origin: Point2D::new(0.0, 0.0),
-            size: Point2D::new(200.0, picker_content_height(&models, "")),
-        };
-        // First model row sits below the first group header.
-        let first_row_y = MODEL_SEARCH_H + MODEL_PICKER_PAD_Y + MODEL_GROUP_H + MODEL_ROW_H / 2.0;
-        assert_eq!(
-            model_at(rect, Point2D::new(100.0, first_row_y), &models, 0.0, ""),
-            Some(0)
-        );
-        // A click on the header band resolves to nothing.
-        let header_y = MODEL_SEARCH_H + MODEL_PICKER_PAD_Y + MODEL_GROUP_H / 2.0;
-        assert_eq!(
-            model_at(rect, Point2D::new(100.0, header_y), &models, 0.0, ""),
-            None
-        );
-    }
-
-    #[test]
-    fn model_at_honors_scroll_offset() {
-        // A tall catalog (one group, many rows) clamped to the cap;
-        // with the content scrolled down, the row under a fixed
-        // cursor point shifts to a later index.
-        let models: Vec<ModelEntry> = (0..40)
-            .map(|i| entry(AgentProvider::OpenCode, &format!("m{i}")))
-            .collect();
-        let rect = Rect {
-            origin: Point2D::new(0.0, 0.0),
-            size: Point2D::new(200.0, picker_view_height(&models, "")),
-        };
-        let probe = Point2D::new(
-            100.0,
-            MODEL_SEARCH_H + MODEL_PICKER_PAD_Y + MODEL_GROUP_H + MODEL_ROW_H / 2.0,
-        );
-        let unscrolled = model_at(rect, probe, &models, 0.0, "");
-        let scrolled = model_at(rect, probe, &models, MODEL_ROW_H * 3.0, "");
-        assert_eq!(unscrolled, Some(0));
-        assert_eq!(scrolled, Some(3));
-        // The catalog overflows the cap, so scrolling is possible.
-        assert!(max_picker_scroll(&models, "") > 0.0);
-    }
-
-    #[test]
-    fn long_catalog_height_is_capped_to_ts_dropdown_height_and_still_scrolls() {
-        let models: Vec<ModelEntry> = (0..40)
-            .map(|i| entry(AgentProvider::OpenCode, &format!("m{i}")))
-            .collect();
-
-        assert!((picker_view_height(&models, "") - 288.0).abs() < 0.01);
-        assert!(max_picker_scroll(&models, "") > 0.0);
-    }
-
-    #[test]
-    fn model_at_filters_by_search_and_returns_original_index() {
-        let models = vec![
-            entry(AgentProvider::ClaudeCode, "opus"),
-            entry(AgentProvider::CodexCli, "gpt-5.5"),
-            entry(AgentProvider::CodexCli, "gpt-4.1"),
-        ];
-        let rect = Rect {
-            origin: Point2D::new(0.0, 0.0),
-            size: Point2D::new(220.0, picker_view_height(&models, "5.5")),
-        };
-        let first_filtered_row_y =
-            MODEL_SEARCH_H + MODEL_PICKER_PAD_Y + MODEL_GROUP_H + MODEL_ROW_H / 2.0;
-
-        assert_eq!(
-            model_at(
-                rect,
-                Point2D::new(100.0, first_filtered_row_y),
-                &models,
-                0.0,
-                "5.5"
-            ),
-            Some(1)
-        );
-    }
-
-    #[test]
-    fn builtin_group_header_prefers_retained_provider_display_name() {
-        let mut entry = ModelEntry::builtin(
-            AgentProvider::CodexCli,
-            "builtin-1",
-            "builtin:builtin-1:MiniMax-M2.7",
-            "MiniMax-M2.7",
-        );
-        entry.builtin_provider_display_name = Some("MiniMax".into());
-
-        assert_eq!(group_label_for_entry(&entry), "MINIMAX");
-    }
-
-    #[test]
-    fn search_matches_retained_builtin_provider_display_name() {
-        let entry = ModelEntry::builtin_with_display_name(
-            AgentProvider::CodexCli,
-            "builtin-bailian",
-            "百炼CP",
-            "builtin:builtin-bailian:qwen3-coder-plus",
-            "qwen3-coder-plus",
-        );
-
-        assert_eq!(visible_model_indices(&[entry], "百炼"), vec![0]);
-    }
-
-    #[test]
-    fn builtin_search_does_not_match_api_key_badge_text() {
-        let builtin = ModelEntry::builtin(
-            AgentProvider::CodexCli,
-            "builtin-1",
-            "builtin:builtin-1:deepseek-v4-pro",
-            "deepseek-v4-pro",
-        );
-        let provider_model = entry(AgentProvider::CodexCli, "gpt-5.5");
-
-        assert_eq!(
-            visible_model_indices(std::slice::from_ref(&builtin), "api key"),
-            Vec::<usize>::new()
-        );
-        assert_eq!(
-            visible_model_indices(std::slice::from_ref(&builtin), "deepseek"),
-            vec![0]
-        );
-        assert_eq!(visible_model_indices(&[provider_model], "openai"), vec![0]);
-    }
-
-    #[test]
-    fn builtin_group_header_falls_back_to_generic_label_without_retained_name() {
-        let entry = ModelEntry::builtin(
-            AgentProvider::CodexCli,
-            "builtin-1",
-            "builtin:builtin-1:deepseek-v4-pro",
-            "deepseek-v4-pro",
-        );
-
-        assert_eq!(group_label_for_entry(&entry), "OPENAI API KEY");
-    }
-
-    #[test]
-    fn gemini_provider_group_label_matches_ts_provider_name() {
-        assert_eq!(provider_label(AgentProvider::GeminiCli), "GOOGLE GEMINI");
-    }
-
-    #[test]
-    fn builtin_groups_stay_separate_when_ids_differ_but_provider_matches() {
-        let models = vec![
-            ModelEntry::builtin(
-                AgentProvider::CodexCli,
-                "builtin-1",
-                "builtin:builtin-1:MiniMax-M2.7",
-                "MiniMax-M2.7",
-            ),
-            ModelEntry::builtin(
-                AgentProvider::CodexCli,
-                "builtin-2",
-                "builtin:builtin-2:deepseek-v4-pro",
-                "deepseek-v4-pro",
-            ),
-        ];
-
-        let expected =
-            MODEL_SEARCH_H + 2.0 * MODEL_GROUP_H + 2.0 * MODEL_ROW_H + MODEL_PICKER_PAD_Y * 2.0;
-        assert!((picker_content_height(&models, "") - expected).abs() < 0.01);
-    }
-
-    #[test]
-    fn acp_models_with_same_placeholder_provider_stay_in_separate_groups() {
-        let models = vec![
-            ModelEntry::new(AgentProvider::CodexCli, "acp:acp-1", "Local ACP"),
-            ModelEntry::new(AgentProvider::CodexCli, "acp:acp-2", "Remote ACP"),
-        ];
-
-        let expected =
-            MODEL_SEARCH_H + 2.0 * MODEL_GROUP_H + 2.0 * MODEL_ROW_H + MODEL_PICKER_PAD_Y * 2.0;
-        assert!((picker_content_height(&models, "") - expected).abs() < 0.01);
-    }
 }

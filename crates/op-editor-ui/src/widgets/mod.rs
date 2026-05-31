@@ -116,6 +116,8 @@ pub mod agent_settings_system;
 mod ai_chat_checklist;
 mod ai_chat_hit;
 pub mod ai_chat_model_picker;
+#[cfg(test)]
+mod ai_chat_model_picker_tests;
 pub mod ai_chat_panel;
 pub mod ai_chat_panel_controls;
 pub mod ai_chat_panel_paint;
