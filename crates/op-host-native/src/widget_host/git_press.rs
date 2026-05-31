@@ -253,13 +253,33 @@ impl WidgetHostNative {
                 panel.pending_action = Some(GitPanelAction::ShowDiff(GitDiffTarget::WorkingTree));
             }
             Some(GitPanelHit::ShowCommitDiff(index)) => {
+                // Toggle the inline detail card under that row (TS
+                // `HistoryMilestoneRow` expand) — clicking the open row
+                // collapses it, a different row moves the card.
+                panel.expanded_commit = if panel.expanded_commit == Some(index) {
+                    None
+                } else if index < panel.recent_commits.len() {
+                    Some(index)
+                } else {
+                    panel.expanded_commit
+                };
+            }
+            Some(GitPanelHit::RestoreCommit(index)) => {
                 if let Some(rev) = panel
                     .recent_commits
                     .get(index)
                     .map(|c| c.short_hash.clone())
                 {
-                    panel.pending_action =
-                        Some(GitPanelAction::ShowDiff(GitDiffTarget::Commit(rev)));
+                    panel.pending_action = Some(GitPanelAction::RestoreCommit(rev));
+                }
+            }
+            Some(GitPanelHit::CopyCommitHash(index)) => {
+                if let Some(rev) = panel
+                    .recent_commits
+                    .get(index)
+                    .map(|c| c.short_hash.clone())
+                {
+                    panel.pending_action = Some(GitPanelAction::CopyHash(rev));
                 }
             }
             Some(GitPanelHit::ShowFileDiff(index)) => {

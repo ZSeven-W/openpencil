@@ -189,6 +189,61 @@ fn commit_rows_open_a_commit_diff() {
 }
 
 #[test]
+fn expanded_commit_card_maps_restore_and_copy_and_shifts_later_rows() {
+    // Row 0 expanded → its inline detail card (里程碑详情) sits between
+    // rows 0 and 1, exposing 恢复 / 复制哈希 buttons and pushing row 1
+    // down by the card height.
+    let commits = vec![
+        GitCommitSummary {
+            short_hash: "aaa1111".into(),
+            summary: "first".into(),
+            author: "Ada".into(),
+            time_label: "now".into(),
+        },
+        GitCommitSummary {
+            short_hash: "bbb2222".into(),
+            summary: "second".into(),
+            author: "Bo".into(),
+            time_label: "now".into(),
+        },
+    ];
+    let collapsed = state_with(GitPanelState {
+        branch: Some("main".to_string()),
+        recent_commits: commits.clone(),
+        ..open_repo()
+    });
+    let cp = GitPanel::for_editor(&collapsed).unwrap();
+    let crect = panel_rect(&cp);
+    let row1_collapsed = cp.ready_commit_row_rects(crect)[1].origin.y;
+    // Same state, but row 0 expanded.
+    let expanded = state_with(GitPanelState {
+        branch: Some("main".to_string()),
+        recent_commits: commits,
+        expanded_commit: Some(0),
+        ..open_repo()
+    });
+    let panel = GitPanel::for_editor(&expanded).unwrap();
+    let rect = panel_rect(&panel);
+    // Card buttons exist and map to the expanded row's index.
+    let (restore, copy) = panel.ready_commit_card_buttons(rect).unwrap();
+    assert_eq!(
+        panel.hit_test(rect, centre(restore)),
+        Some(GitPanelHit::RestoreCommit(0))
+    );
+    assert_eq!(
+        panel.hit_test(rect, centre(copy)),
+        Some(GitPanelHit::CopyCommitHash(0))
+    );
+    // Row 1 shifted down by exactly the card height; the panel grew too.
+    let row1_expanded = panel.ready_commit_row_rects(rect)[1].origin.y;
+    assert!((row1_expanded - row1_collapsed - 60.0).abs() < 0.5);
+    assert!(panel.height() > cp.height());
+    // The expanded card sits below row 0's click target.
+    let row0 = panel.ready_commit_row_rects(rect)[0];
+    assert!(restore.origin.y > row0.origin.y);
+}
+
+#[test]
 fn ready_view_maps_each_header_and_commit_region() {
     // A clean bound repo → the TS ready layout. Its header exposes
     // the branch picker + pull/push + overflow; the commit box is a

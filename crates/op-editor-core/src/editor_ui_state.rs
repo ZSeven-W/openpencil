@@ -331,6 +331,12 @@ pub enum GitPanelAction {
     /// Clone-form submit — `git clone <url> <dest>` on a worker thread,
     /// then bind the cloned repo. Reads url / dest from `clone_form`.
     SubmitClone,
+    /// Roll the tracked document back to the given commit (hash) and
+    /// reload the editor — the TS `restoreCommit`. The payload is the
+    /// commit's (short) hash from the expanded detail card.
+    RestoreCommit(String),
+    /// Copy the given commit hash to the OS clipboard (TS copy-hash).
+    CopyHash(String),
 }
 
 /// Which clone-form text field has keyboard focus.
@@ -437,6 +443,12 @@ pub struct GitPanelState {
     pub https_focused: bool,
     /// Most-recent commits, newest first.
     pub recent_commits: Vec<GitCommitSummary>,
+    /// Index into `recent_commits` of the row whose inline detail card
+    /// (里程碑详情 — restore + copy-hash) is expanded, if any. Pure UI
+    /// state, toggled by clicking a commit row. Cleared host-side when
+    /// the commit list changes so it can't point at a stale commit
+    /// (TS keys the card by hash; the widget layer keys by index).
+    pub expanded_commit: Option<usize>,
     /// Commit-message draft typed into the panel's input box.
     pub commit_message: String,
     /// Whether the commit-message input holds keyboard focus.

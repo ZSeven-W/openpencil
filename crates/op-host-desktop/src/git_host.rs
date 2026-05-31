@@ -77,6 +77,12 @@ impl DesktopApp {
             || panel.changed_files != snap.changed_files
             || panel.remotes != snap.remotes
             || panel.recent_commits != snap.recent_commits;
+        // Collapse the inline detail card when the log changes — its
+        // index would otherwise point at a since-shifted commit.
+        let commits_changed = panel.recent_commits != snap.recent_commits;
+        if commits_changed {
+            panel.expanded_commit = None;
+        }
         panel.in_repo = snap.in_repo;
         panel.branch = snap.branch;
         panel.branches = snap.branches;
@@ -367,6 +373,17 @@ impl DesktopApp {
                         });
                     self.git_diff_job = Some(git_jobs::GitDiffJob::spawn(repo, target, locale));
                 }
+            }
+            GitPanelAction::RestoreCommit(rev) => {
+                // Roll the tracked document back to that commit, then
+                // reload so the editor reflects it (TS `restoreCommit`).
+                if let Some(path) = self.git_session.tracked_file().map(|p| p.to_path_buf()) {
+                    self.run_reloading_git_op("restore", move |repo| repo.restore(&path, &rev));
+                }
+            }
+            GitPanelAction::CopyHash(rev) => {
+                // Pure clipboard write — no git op, no reload.
+                crate::clipboard::set_text(&rev);
             }
         }
         // Every action ends with a fresh snapshot + a repaint.
