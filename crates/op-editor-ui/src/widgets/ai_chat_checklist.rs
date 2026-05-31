@@ -17,6 +17,8 @@ pub(crate) const PROGRESS_H: f32 = 2.0;
 pub(crate) const HEADER_H: f32 = 32.0;
 const ITEM_H: f32 = 22.0;
 const ITEM_GAP: f32 = 1.0;
+const DETAIL_GAP: f32 = 2.0;
+const DETAIL_LINE_H: f32 = 14.0;
 const BOTTOM_PAD: f32 = 8.0;
 const MAX_LIST_H: f32 = 144.0;
 
@@ -26,6 +28,14 @@ pub(crate) struct ChecklistItem {
     pub done: bool,
     pub active: bool,
     pub failed: bool,
+    pub details: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DetailStatus {
+    Done,
+    Pending,
+    Error,
 }
 
 pub(crate) fn fixed_checklist_items(messages: &[ChatMessage]) -> Vec<ChecklistItem> {
@@ -64,6 +74,7 @@ pub(crate) fn fixed_checklist_items(messages: &[ChatMessage]) -> Vec<ChecklistIt
                 done,
                 active,
                 failed,
+                details: step.details.clone(),
             }
         })
         .collect();
@@ -78,14 +89,17 @@ pub(crate) fn fixed_checklist_items(messages: &[ChatMessage]) -> Vec<ChecklistIt
 }
 
 pub(crate) fn fixed_checklist_height(messages: &[ChatMessage], collapsed: bool) -> f32 {
-    let count = fixed_checklist_items(messages).len();
+    let items = fixed_checklist_items(messages);
+    let count = items.len();
     if count == 0 {
         return 0.0;
     }
     if collapsed {
         return PROGRESS_H + HEADER_H;
     }
-    let list_h = (count as f32 * (ITEM_H + ITEM_GAP) - ITEM_GAP).min(MAX_LIST_H);
+    let list_h =
+        items.iter().map(item_height).sum::<f32>() + (count.saturating_sub(1) as f32 * ITEM_GAP);
+    let list_h = list_h.min(MAX_LIST_H);
     PROGRESS_H + HEADER_H + list_h + BOTTOM_PAD
 }
 
@@ -182,7 +196,8 @@ pub(crate) fn paint_fixed_checklist(
 
     let mut y = header_y + HEADER_H;
     for item in &items {
-        if y + ITEM_H > rect.origin.y + rect.size.y - BOTTOM_PAD {
+        let height = item_height(item);
+        if y + height > rect.origin.y + rect.size.y - BOTTOM_PAD {
             break;
         }
         paint_item(
@@ -193,9 +208,17 @@ pub(crate) fn paint_fixed_checklist(
             y,
             rect.size.x - PAD * 2.0,
         );
-        y += ITEM_H + ITEM_GAP;
+        y += height + ITEM_GAP;
     }
     cx.backend.restore();
+}
+
+fn item_height(item: &ChecklistItem) -> f32 {
+    if item.details.is_empty() {
+        ITEM_H
+    } else {
+        ITEM_H + DETAIL_GAP + item.details.len() as f32 * DETAIL_LINE_H
+    }
 }
 
 fn item_state(
@@ -220,7 +243,7 @@ fn item_state(
 fn paint_item(cx: &mut PaintCx<'_>, theme: &Theme, item: &ChecklistItem, x: f32, y: f32, w: f32) {
     if item.active {
         cx.backend.fill_round_rect(
-            Rect::xywh(x, y, w, ITEM_H),
+            Rect::xywh(x, y, w, item_height(item)),
             5.0,
             with_alpha(theme.primary, 0.08),
         );
@@ -272,6 +295,75 @@ fn paint_item(cx: &mut PaintCx<'_>, theme: &Theme, item: &ChecklistItem, x: f32,
         with_alpha(theme.muted_foreground, 0.65)
     };
     draw_label(cx, &item.label, 12.0, color, x + 24.0, y + 15.0);
+    if !item.details.is_empty() {
+        let mut baseline = y + ITEM_H + DETAIL_GAP + 10.0;
+        for detail in &item.details {
+            let (status, text) = parse_detail_status(detail);
+            let text_x = if let Some(status) = status {
+                paint_detail_status(cx, theme, status, x + 25.0, baseline - 8.5);
+                x + 39.0
+            } else {
+                x + 24.0
+            };
+            draw_label(
+                cx,
+                text,
+                10.0,
+                with_alpha(theme.muted_foreground, 0.65),
+                text_x,
+                baseline,
+            );
+            baseline += DETAIL_LINE_H;
+        }
+    }
+}
+
+fn parse_detail_status(line: &str) -> (Option<DetailStatus>, &str) {
+    for (prefix, status) in [
+        ("[done]", DetailStatus::Done),
+        ("[pending]", DetailStatus::Pending),
+        ("[error]", DetailStatus::Error),
+    ] {
+        if let Some(rest) = line.strip_prefix(prefix) {
+            return (Some(status), rest.trim_start());
+        }
+    }
+    (None, line)
+}
+
+fn paint_detail_status(cx: &mut PaintCx<'_>, theme: &Theme, status: DetailStatus, x: f32, y: f32) {
+    match status {
+        DetailStatus::Done => {
+            cx.backend.fill_oval(
+                Rect::xywh(x, y, 10.0, 10.0),
+                with_alpha(theme.primary, 0.16),
+            );
+            draw_icon(
+                cx.backend,
+                Icon::Check,
+                Point2D::new(x + 2.0, y + 2.0),
+                6.0,
+                theme.primary,
+                2.0,
+            );
+        }
+        DetailStatus::Pending => {
+            cx.backend.fill_oval(
+                Rect::xywh(x + 3.0, y + 3.0, 4.0, 4.0),
+                with_alpha(theme.primary, 0.7),
+            );
+        }
+        DetailStatus::Error => {
+            draw_icon(
+                cx.backend,
+                Icon::AlertTriangle,
+                Point2D::new(x, y - 1.0),
+                11.0,
+                theme.destructive,
+                1.5,
+            );
+        }
+    }
 }
 
 fn draw_label(cx: &mut PaintCx<'_>, text: &str, size: f32, color: Color, x: f32, y: f32) {
@@ -333,5 +425,55 @@ mod tests {
 
         assert!(expanded > collapsed);
         assert_eq!(collapsed, PROGRESS_H + HEADER_H);
+    }
+
+    #[test]
+    fn fixed_checklist_keeps_step_detail_lines() {
+        let mut message = ChatMessage::assistant_streaming();
+        message.content = r#"<step title="Plan" status="done">
+[done] Checked constraints
+[pending] Choose layout
+</step>"#
+            .into();
+
+        let items = fixed_checklist_items(std::slice::from_ref(&message));
+
+        assert_eq!(
+            items[0].details,
+            vec![
+                "[done] Checked constraints".to_string(),
+                "[pending] Choose layout".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn fixed_checklist_height_grows_for_step_detail_lines() {
+        let mut plain = ChatMessage::assistant_streaming();
+        plain.content = r#"<step title="Plan" status="done"></step>"#.into();
+        let mut detailed = ChatMessage::assistant_streaming();
+        detailed.content = r#"<step title="Plan" status="done">
+Checked constraints
+Choose layout
+</step>"#
+            .into();
+
+        let plain_h = fixed_checklist_height(&[plain], false);
+        let detailed_h = fixed_checklist_height(&[detailed], false);
+
+        assert!(detailed_h > plain_h);
+    }
+
+    #[test]
+    fn parse_detail_status_strips_ts_prefixes() {
+        assert_eq!(
+            parse_detail_status("[done] Checked constraints"),
+            (Some(DetailStatus::Done), "Checked constraints")
+        );
+        assert_eq!(
+            parse_detail_status("[pending] Choose layout"),
+            (Some(DetailStatus::Pending), "Choose layout")
+        );
+        assert_eq!(parse_detail_status("Plain detail"), (None, "Plain detail"));
     }
 }
