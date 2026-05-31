@@ -1,10 +1,8 @@
 //! Stdio MCP server mode for the desktop binary.
 //!
-//! When `openpencil-desktop --mcp <path>` is invoked, we skip the
-//! winit event loop and run a JSON-RPC stdio server against the
-//! `.op` file at `<path>`. External CLIs (Claude Code / Codex /
-//! Gemini / Copilot) can spawn the binary in this mode to drive
-//! the Rust editor exactly the way they drive TS pen-mcp today.
+//! `openpencil-desktop --mcp <path>` runs JSON-RPC stdio against a
+//! `.op` file. External CLIs can spawn this mode to drive the Rust
+//! editor the way they drive TS pen-mcp today.
 //! The server backs the `.op` file with an `op_editor_core::
 //! EditorState` (the canonical `jian_ops_schema::PenDocument`), not
 //! the old shell-core `Document`. Loading a `.op` into a `PenDocument`
@@ -41,18 +39,19 @@ use op_mcp::{
     redo_snapshot, remove_node_effect_snapshot, remove_page_snapshot, rename_component_snapshot,
     rename_page_snapshot, rename_variable_snapshot, reorder_page_snapshot,
     reorder_selected_snapshot, replace_all_matching_properties_snapshot, replace_node_snapshot,
-    run_stdio_with_applier, save_theme_preset_snapshot, search_all_unique_properties_snapshot,
-    selection_snapshot, set_active_axis_value_snapshot, set_active_page_snapshot,
-    set_active_tool_snapshot, set_design_md_snapshot, set_ellipse_arc_snapshot,
-    set_node_collapsed_snapshot, set_node_corner_radius_snapshot, set_node_fill_hex_snapshot,
-    set_node_flip_snapshot, set_node_font_size_snapshot, set_node_font_weight_snapshot,
-    set_node_hidden_snapshot, set_node_locked_snapshot, set_node_name_snapshot,
-    set_node_rotation_snapshot, set_node_stroke_hex_snapshot, set_node_stroke_width_snapshot,
-    set_node_text_snapshot, set_selection_set_snapshot, set_selection_snapshot,
-    set_themes_snapshot, set_variable_boolean_snapshot, set_variable_color_snapshot,
-    set_variable_number_snapshot, set_variable_string_snapshot, set_variables_snapshot,
-    set_viewport_snapshot, snapshot_layout_snapshot, toggle_node_selection_snapshot, undo_snapshot,
-    ungroup_selected_snapshot, update_node_snapshot, ToolRegistry,
+    run_stdio_with_applier, save_document_snapshot, save_theme_preset_snapshot,
+    search_all_unique_properties_snapshot, selection_snapshot, set_active_axis_value_snapshot,
+    set_active_page_snapshot, set_active_tool_snapshot, set_design_md_snapshot,
+    set_ellipse_arc_snapshot, set_node_collapsed_snapshot, set_node_corner_radius_snapshot,
+    set_node_fill_hex_snapshot, set_node_flip_snapshot, set_node_font_size_snapshot,
+    set_node_font_weight_snapshot, set_node_hidden_snapshot, set_node_locked_snapshot,
+    set_node_name_snapshot, set_node_rotation_snapshot, set_node_stroke_hex_snapshot,
+    set_node_stroke_width_snapshot, set_node_text_snapshot, set_selection_set_snapshot,
+    set_selection_snapshot, set_themes_snapshot, set_variable_boolean_snapshot,
+    set_variable_color_snapshot, set_variable_number_snapshot, set_variable_string_snapshot,
+    set_variables_snapshot, set_viewport_snapshot, snapshot_layout_snapshot,
+    toggle_node_selection_snapshot, undo_snapshot, ungroup_selected_snapshot, update_node_snapshot,
+    ToolRegistry,
 };
 
 /// Load a `.op` file into an `EditorState`. The `.op` format is plain
@@ -373,6 +372,7 @@ fn rebuild_registry(doc: &EditorState) -> ToolRegistry {
         r.register(Box::new(tool));
     }
     r.register(Box::new(open_document_snapshot(doc)));
+    r.register(Box::new(save_document_snapshot(doc)));
     r.register(Box::new(document_info_snapshot(doc)));
     r.register(Box::new(selection_snapshot(doc)));
     r.register(Box::new(get_node_snapshot(doc)));
@@ -679,6 +679,7 @@ fn tools_list_response(id_raw: &str, state: &EditorState) -> String {
 const TOOL_SCHEMAS: &[&str] = &[
     // --- read tools ---
     r#"{"name":"open_document","description":"Connect to the current Rust MCP document and return metadata, context summary, and design prompt. filePath is accepted for TS CLI compatibility; the Rust server remains bound to the document it was started with.","inputSchema":{"type":"object","properties":{"filePath":{"type":"string","description":"Accepted for TS compatibility; use live://canvas/current server document"}}}}"#,
+    r#"{"name":"save_document","description":"Save the current Rust MCP document snapshot to a .op file. Used by the Rust HTTP CLI to match TS `op save`.","inputSchema":{"type":"object","properties":{"filePath":{"type":"string","description":"Target .op file path"}},"required":["filePath"]}}"#,
     r#"{"name":"get_document_info","description":"Summarize the open document (page count, active page, etc).","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
     r#"{"name":"get_selection","description":"Return the current selection state (ids, count).","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
     r#"{"name":"get_node","description":"Read a node by id with depth-limited descendants.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string","description":"u64 node id"}},"required":["node_id"]}}"#,

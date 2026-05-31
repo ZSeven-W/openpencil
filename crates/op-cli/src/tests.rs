@@ -156,6 +156,18 @@ fn parse_args_maps_ts_open_to_open_document() {
 }
 
 #[test]
+fn parse_args_maps_ts_save_to_save_document_tool() {
+    let p = parse_args(&["save".to_string(), "/tmp/copy.op".to_string()]).expect("parse save");
+    assert_eq!(
+        p.command,
+        Command::ToolCall {
+            tool: "save_document".to_string(),
+            args: vec![("filePath".to_string(), "/tmp/copy.op".to_string())],
+        }
+    );
+}
+
+#[test]
 fn parse_args_maps_ts_page_list_alias_to_rust_tool() {
     let args = vec!["page".to_string(), "list".to_string()];
     let p = parse_args(&args).expect("parse");
