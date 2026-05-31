@@ -5,6 +5,7 @@ use std::sync::mpsc::{self, Receiver, TryRecvError};
 use std::time::Duration;
 
 use jian_ops_schema::node::{PenNode, TextContent};
+use jian_ops_schema::sizing::{SizingBehavior, SizingKeyword};
 use jian_ops_schema::style::{ImageFillBody, ImageFillMode, PenFill};
 use op_editor_core::{walkers, EditorState, NodeId, PenNodeExt as _};
 
@@ -88,9 +89,14 @@ impl ImageSearchSession {
                     let job = self.jobs.swap_remove(i);
                     let id = job.node_id.as_str().to_string();
                     self.in_flight.remove(&id);
-                    self.completed.insert(id);
                     if let Some(url) = url {
-                        changed |= apply_result(state, &job.node_id, &url);
+                        if apply_result(state, &job.node_id, &url) {
+                            changed = true;
+                        } else {
+                            self.completed.insert(id);
+                        }
+                    } else {
+                        self.completed.insert(id);
                     }
                 }
                 Err(TryRecvError::Empty) => {
@@ -228,10 +234,7 @@ fn is_image_area_frame_by_heuristic(node: &PenNode) -> bool {
     if !has_image_area_keyword(name) {
         return false;
     }
-    if !matches!(node.width_px(), Some(w) if w >= 80.0) {
-        return false;
-    }
-    if !matches!(node.height_px(), Some(h) if h >= 60.0) {
+    if !is_image_area_size(&frame.container.width, &frame.container.height) {
         return false;
     }
     if !matches!(frame.container.fill.as_deref(), Some([PenFill::Solid(_)])) {
@@ -253,10 +256,7 @@ fn is_image_area_rectangle_by_heuristic(node: &PenNode) -> bool {
     if !has_image_area_keyword(name) {
         return false;
     }
-    if !matches!(node.width_px(), Some(w) if w >= 80.0) {
-        return false;
-    }
-    if !matches!(node.height_px(), Some(h) if h >= 60.0) {
+    if !is_image_area_size(&rect.container.width, &rect.container.height) {
         return false;
     }
     if !matches!(rect.container.fill.as_deref(), Some([PenFill::Solid(_)])) {
@@ -266,6 +266,20 @@ fn is_image_area_rectangle_by_heuristic(node: &PenNode) -> bool {
         return true;
     };
     matches!(children.as_slice(), [] | [PenNode::IconFont(_)])
+}
+
+fn is_image_area_size(width: &Option<SizingBehavior>, height: &Option<SizingBehavior>) -> bool {
+    let (width_ok, width_concrete) = image_area_dimension_ok(width, 80.0);
+    let (height_ok, height_concrete) = image_area_dimension_ok(height, 60.0);
+    width_ok && height_ok && (width_concrete || height_concrete)
+}
+
+fn image_area_dimension_ok(size: &Option<SizingBehavior>, min_px: f64) -> (bool, bool) {
+    match size {
+        Some(SizingBehavior::Number(px)) if *px >= min_px => (true, true),
+        Some(SizingBehavior::Keyword(SizingKeyword::FillContainer)) => (true, false),
+        _ => (false, false),
+    }
 }
 
 fn has_image_area_keyword(name: &str) -> bool {
