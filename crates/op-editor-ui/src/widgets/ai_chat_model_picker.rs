@@ -45,6 +45,7 @@ enum Row {
     Header {
         provider: AgentProvider,
         builtin: bool,
+        acp: bool,
         label: String,
     },
     /// Selectable model — carries its index into the flat list.
@@ -59,7 +60,14 @@ fn is_builtin(entry: &ModelEntry) -> bool {
     entry.builtin_provider_id.is_some() || entry.value.starts_with("builtin:")
 }
 
+fn is_acp(entry: &ModelEntry) -> bool {
+    entry.acp_agent_id().is_some()
+}
+
 fn same_group(a: &ModelEntry, b: &ModelEntry) -> bool {
+    if is_acp(a) || is_acp(b) {
+        return is_acp(a) && is_acp(b) && a.value == b.value;
+    }
     a.provider == b.provider && a.builtin_provider_id == b.builtin_provider_id
 }
 
@@ -102,6 +110,7 @@ fn walk_rows(models: &[ModelEntry], search: &str, top: f32, mut f: impl FnMut(&R
                 &Row::Header {
                     provider: entry.provider,
                     builtin: is_builtin(entry),
+                    acp: is_acp(entry),
                     label: group_label_for_entry(entry),
                 },
                 y,
@@ -277,11 +286,19 @@ pub fn paint_model_picker(
         Row::Header {
             provider,
             builtin,
+            acp,
             label,
         } => {
             let logo_y = y + (h - 12.0) / 2.0;
             if *builtin {
                 paint_key_glyph(
+                    cx,
+                    Point2D::new(row_left, logo_y),
+                    12.0,
+                    theme.muted_foreground,
+                );
+            } else if *acp {
+                paint_plug_glyph(
                     cx,
                     Point2D::new(row_left, logo_y),
                     12.0,
@@ -543,6 +560,34 @@ pub(crate) fn paint_key_glyph(cx: &mut PaintCx<'_>, top_left: Point2D, size: f32
     );
 }
 
+fn paint_plug_glyph(cx: &mut PaintCx<'_>, top_left: Point2D, size: f32, color: Color) {
+    let x = top_left.x;
+    let y = top_left.y;
+    let body = Rect {
+        origin: Point2D::new(x + size * 0.28, y + size * 0.36),
+        size: Point2D::new(size * 0.44, size * 0.34),
+    };
+    cx.backend.stroke_round_rect(body, size * 0.08, color, 1.3);
+    cx.backend.stroke_line(
+        Point2D::new(x + size * 0.38, y + size * 0.16),
+        Point2D::new(x + size * 0.38, y + size * 0.36),
+        color,
+        1.3,
+    );
+    cx.backend.stroke_line(
+        Point2D::new(x + size * 0.62, y + size * 0.16),
+        Point2D::new(x + size * 0.62, y + size * 0.36),
+        color,
+        1.3,
+    );
+    cx.backend.stroke_line(
+        Point2D::new(x + size * 0.50, y + size * 0.70),
+        Point2D::new(x + size * 0.50, y + size * 0.94),
+        color,
+        1.3,
+    );
+}
+
 /// Paint a provider's brand logo into a `size × size` square.
 /// OpenCode has no single-path logo, so it routes through the
 /// multi-primitive `paint_opencode_logo`.
@@ -597,6 +642,13 @@ fn group_label(provider: AgentProvider, builtin: bool) -> &'static str {
 }
 
 fn group_label_for_entry(entry: &ModelEntry) -> String {
+    if is_acp(entry) {
+        let name = entry.display_name.trim();
+        if name.is_empty() {
+            return "ACP".to_string();
+        }
+        return format!("{name} (ACP)");
+    }
     if is_builtin(entry) {
         if let Some(label) = entry
             .builtin_provider_display_name
@@ -794,6 +846,18 @@ mod tests {
                 "builtin:builtin-2:deepseek-v4-pro",
                 "deepseek-v4-pro",
             ),
+        ];
+
+        let expected =
+            MODEL_SEARCH_H + 2.0 * MODEL_GROUP_H + 2.0 * MODEL_ROW_H + MODEL_PICKER_PAD_Y * 2.0;
+        assert!((picker_content_height(&models, "") - expected).abs() < 0.01);
+    }
+
+    #[test]
+    fn acp_models_with_same_placeholder_provider_stay_in_separate_groups() {
+        let models = vec![
+            ModelEntry::new(AgentProvider::CodexCli, "acp:acp-1", "Local ACP"),
+            ModelEntry::new(AgentProvider::CodexCli, "acp:acp-2", "Remote ACP"),
         ];
 
         let expected =

@@ -128,6 +128,21 @@ impl ModelEntry {
             builtin_provider_display_name: Some(builtin_provider_display_name.into()),
         }
     }
+
+    pub fn acp(acp_agent_id: impl Into<String>, display_name: impl Into<String>) -> Self {
+        let id = acp_agent_id.into();
+        Self {
+            provider: AgentProvider::CodexCli,
+            value: format!("acp:{id}"),
+            display_name: display_name.into(),
+            builtin_provider_id: None,
+            builtin_provider_display_name: None,
+        }
+    }
+
+    pub fn acp_agent_id(&self) -> Option<&str> {
+        self.value.strip_prefix("acp:")
+    }
 }
 
 /// Author of a chat message.

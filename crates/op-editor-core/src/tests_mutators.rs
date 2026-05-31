@@ -570,6 +570,48 @@ fn rebuild_chat_models_retains_builtin_agent_display_name_as_group_label() {
     );
 }
 
+#[test]
+fn rebuild_chat_models_includes_connected_acp_agents() {
+    let mut s = sample();
+    let id = s.editor_ui.agent_settings.add_acp_agent_config(
+        "Local ACP",
+        crate::AcpConnectionType::Local,
+        "op-agent",
+        Vec::new(),
+        std::collections::BTreeMap::new(),
+        None,
+        true,
+    );
+    s.editor_ui.agent_settings.acp_agents[0].connected = true;
+
+    s.rebuild_chat_models();
+
+    let entry = s
+        .chat
+        .available_models
+        .iter()
+        .find(|m| m.value == format!("acp:{id}"))
+        .expect("connected ACP agent should appear in model picker");
+    assert_eq!(entry.display_name, "Local ACP");
+}
+
+#[test]
+fn select_chat_model_keeps_agent_sync_unchanged_for_acp_models() {
+    let mut s = sample();
+    s.chat.available_models = vec![
+        crate::ModelEntry::new(crate::AgentProvider::ClaudeCode, "claude", "Claude"),
+        crate::ModelEntry::new(crate::AgentProvider::CodexCli, "acp:acp-1", "Local ACP"),
+    ];
+    s.editor_ui.chat_selected_agent = 0;
+    s.editor_ui.chat_model_picker_open = true;
+
+    s.select_chat_model(1);
+
+    assert_eq!(s.chat.selected_model, 1);
+    assert_eq!(s.editor_ui.chat_selected_agent, 0);
+    assert!(!s.editor_ui.chat_model_picker_open);
+}
+
 // --- Layer collapse (Gap 3) -----------------------------------------
 
 #[test]

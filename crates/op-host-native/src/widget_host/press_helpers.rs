@@ -458,6 +458,7 @@ impl WidgetHostNative {
                     self.editor_state.editor_ui.agent_settings.focus = None;
                     self.editor_state.editor_ui.settings_input_draft.clear();
                     self.clear_settings_caret();
+                    self.editor_state.rebuild_chat_models();
                 }
             }
             AgentSettingsHit::ToggleAcpConnected(index) => {
@@ -493,6 +494,7 @@ impl WidgetHostNative {
                             });
                         self.editor_state.editor_ui.settings_input_caret_anchor_ms = self.now_ms;
                     }
+                    self.editor_state.rebuild_chat_models();
                 }
             }
             AgentSettingsHit::AddAcpAgent => {
