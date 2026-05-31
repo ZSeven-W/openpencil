@@ -55,6 +55,8 @@ mod scroll;
 mod settings_caret;
 #[cfg(test)]
 mod settings_caret_tests;
+#[cfg(test)]
+mod theme_tests;
 
 pub(in crate::widget_host) const TOOLBAR_INSET_X: f32 = 12.0;
 pub(in crate::widget_host) const TOOLBAR_INSET_Y: f32 = 12.0;
@@ -199,6 +201,14 @@ impl WidgetHost {
     /// and calls this just before dispatch.
     pub fn set_modifier_shift(&mut self, held: bool) {
         self.shift_held = held;
+    }
+
+    /// Refresh host-level theme tokens from the canonical editor UI
+    /// state. Most widgets derive their theme directly, but a few
+    /// paint-layer affordances still read this host cache.
+    pub(in crate::widget_host) fn sync_theme_from_editor(&mut self) {
+        self.theme =
+            op_editor_ui::widgets::editor_state_ext::theme_for(&self.editor_state.editor_ui);
     }
 
     /// Rebuild the layout-resolved `LayoutScene` from `editor_state`

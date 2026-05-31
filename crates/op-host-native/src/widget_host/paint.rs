@@ -24,6 +24,7 @@ impl WidgetHostNative {
         viewport_width: f32,
         viewport_height: f32,
     ) {
+        self.sync_theme_from_editor();
         // 1. Background fill so previous-frame pixels never bleed.
         frame.fill_rect(
             Rect {
