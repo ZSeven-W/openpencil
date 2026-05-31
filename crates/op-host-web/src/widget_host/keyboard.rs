@@ -13,28 +13,8 @@ impl WidgetHost {
     /// Push a typed character into the focused chat / settings input.
     /// Returns true if anything changed.
     pub fn apply_text(&mut self, c: char) -> bool {
-        if let Some(focus) = self.editor_state.editor_ui.agent_settings.focus {
-            let draft = &mut self.editor_state.editor_ui.settings_input_draft;
-            let accepts = match focus {
-                op_editor_core::agent_settings::SettingsFocus::McpPort => {
-                    c.is_ascii_digit() && draft.len() < 5
-                }
-                op_editor_core::agent_settings::SettingsFocus::ImageSearch(_)
-                | op_editor_core::agent_settings::SettingsFocus::BuiltinAgent { .. }
-                | op_editor_core::agent_settings::SettingsFocus::BuiltinAgentDraft(_)
-                | op_editor_core::agent_settings::SettingsFocus::ImageGenProfile { .. }
-                | op_editor_core::agent_settings::SettingsFocus::AcpAgent { .. }
-                | op_editor_core::agent_settings::SettingsFocus::AcpAgentDraft(_) => {
-                    !c.is_control() && draft.len() < 512
-                }
-            };
-            if accepts {
-                draft.push(c);
-                self.editor_state.editor_ui.settings_input_caret_anchor_ms = self.now_ms;
-                self.mark_dirty();
-                return true;
-            }
-            return false;
+        if self.editor_state.editor_ui.agent_settings.focus.is_some() {
+            return self.apply_settings_text(c);
         }
         if self.editor_state.ui.layer_rename.is_some() && !c.is_control() {
             let mut s = [0u8; 4];
@@ -55,15 +35,8 @@ impl WidgetHost {
             }
             return false;
         }
-        if self.editor_state.editor_ui.chat_model_picker_open && !c.is_control() {
-            self.editor_state.editor_ui.chat_model_picker_search.push(c);
-            self.editor_state
-                .editor_ui
-                .chat_model_picker_caret_anchor_ms = self.now_ms;
-            self.editor_state.editor_ui.chat_model_picker_scroll = 0.0;
-            self.editor_state.editor_ui.chat_model_picker_hover = None;
-            self.mark_dirty();
-            return true;
+        if self.editor_state.editor_ui.chat_model_picker_open {
+            return self.apply_chat_model_picker_text(c);
         }
         if !self.editor_state.chat.focused {
             return false;
@@ -75,10 +48,7 @@ impl WidgetHost {
 
     pub fn apply_backspace(&mut self) -> bool {
         if self.editor_state.editor_ui.agent_settings.focus.is_some() {
-            self.editor_state.editor_ui.settings_input_draft.pop();
-            self.editor_state.editor_ui.settings_input_caret_anchor_ms = self.now_ms;
-            self.mark_dirty();
-            return true;
+            return self.apply_settings_backspace();
         }
         if self.editor_state.ui.layer_rename.is_some() {
             let ok = self.editor_state.rename_backspace();
@@ -95,22 +65,7 @@ impl WidgetHost {
             return ok;
         }
         if self.editor_state.editor_ui.chat_model_picker_open {
-            if self
-                .editor_state
-                .editor_ui
-                .chat_model_picker_search
-                .pop()
-                .is_some()
-            {
-                self.editor_state
-                    .editor_ui
-                    .chat_model_picker_caret_anchor_ms = self.now_ms;
-                self.editor_state.editor_ui.chat_model_picker_scroll = 0.0;
-                self.editor_state.editor_ui.chat_model_picker_hover = None;
-                self.mark_dirty();
-                return true;
-            }
-            return false;
+            return self.apply_chat_model_picker_backspace();
         }
         if self.editor_state.chat.focused {
             if self.editor_state.chat.input.pop().is_some() {
@@ -178,7 +133,15 @@ impl WidgetHost {
             }
             return ok;
         }
-        if self.editor_state.chat.focused {
+        // Don't delete the selected node when a text input owns the
+        // keyboard — the model-picker search, property focus, or chat
+        // input. Their own backspace handlers run earlier; falling
+        // through to `delete_selected` would drop the node behind the
+        // focused field.
+        if self.editor_state.ui.property_focus.is_some()
+            || self.editor_state.editor_ui.chat_model_picker_open
+            || self.editor_state.chat.focused
+        {
             return false;
         }
         if self.editor_state.selection.is_empty() {
@@ -364,6 +327,7 @@ impl WidgetHost {
             .is_some()
         {
             self.editor_state.editor_ui.settings_input_draft.clear();
+            self.clear_settings_caret();
             self.mark_dirty();
             return true;
         }
@@ -400,6 +364,15 @@ impl WidgetHost {
             self.mark_dirty();
             return true;
         }
+        if self.editor_state.editor_ui.chat_model_picker_open {
+            self.editor_state.editor_ui.chat_model_picker_open = false;
+            self.editor_state.editor_ui.chat_model_picker_scroll = 0.0;
+            self.editor_state.editor_ui.chat_model_picker_search.clear();
+            self.editor_state.editor_ui.chat_model_picker_caret = None;
+            self.editor_state.editor_ui.chat_model_picker_hover = None;
+            self.mark_dirty();
+            return true;
+        }
         if self.editor_state.chat.focused {
             self.editor_state.chat.focused = false;
             self.mark_dirty();
@@ -422,6 +395,7 @@ impl WidgetHost {
             || ui.text_editing.is_some()
             || ui.property_focus.is_some()
             || self.editor_state.editor_ui.agent_settings.focus.is_some()
+            || self.editor_state.editor_ui.chat_model_picker_open
             || self.editor_state.chat.focused
     }
 
@@ -444,6 +418,7 @@ impl WidgetHost {
             return;
         };
         let draft = std::mem::take(&mut self.editor_state.editor_ui.settings_input_draft);
+        self.clear_settings_caret();
         match focus {
             SettingsFocus::McpPort => {
                 if let Ok(port) = draft.trim().parse::<u16>() {

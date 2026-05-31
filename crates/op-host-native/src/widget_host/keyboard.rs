@@ -14,38 +14,8 @@ impl WidgetHostNative {
     /// row → property → chat.
     pub fn apply_text(&mut self, c: char) -> bool {
         // Settings input owns the keyboard while focused.
-        if let Some(focus) = self.editor_state.editor_ui.agent_settings.focus {
-            let draft = &mut self.editor_state.editor_ui.settings_input_draft;
-            let accepts = match focus {
-                op_editor_core::agent_settings::SettingsFocus::McpPort => {
-                    c.is_ascii_digit() && draft.len() < 5
-                }
-                op_editor_core::agent_settings::SettingsFocus::ImageSearch(_) => {
-                    !c.is_control() && draft.len() < 512
-                }
-                op_editor_core::agent_settings::SettingsFocus::BuiltinAgent { .. } => {
-                    !c.is_control() && draft.len() < 512
-                }
-                op_editor_core::agent_settings::SettingsFocus::BuiltinAgentDraft(_) => {
-                    !c.is_control() && draft.len() < 512
-                }
-                op_editor_core::agent_settings::SettingsFocus::AcpAgent { .. } => {
-                    !c.is_control() && draft.len() < 512
-                }
-                op_editor_core::agent_settings::SettingsFocus::AcpAgentDraft(_) => {
-                    !c.is_control() && draft.len() < 512
-                }
-                op_editor_core::agent_settings::SettingsFocus::ImageGenProfile { .. } => {
-                    !c.is_control() && draft.len() < 512
-                }
-            };
-            if accepts {
-                draft.push(c);
-                self.editor_state.editor_ui.settings_input_caret_anchor_ms = self.now_ms;
-                self.mark_dirty();
-                return true;
-            }
-            return false;
+        if self.editor_state.editor_ui.agent_settings.focus.is_some() {
+            return self.apply_settings_text(c);
         }
         // The inline clone wizard owns the keyboard while it is open: a
         // focused URL / destination field takes the character (unless a
@@ -193,15 +163,8 @@ impl WidgetHostNative {
             self.mark_dirty();
             return true;
         }
-        if self.editor_state.editor_ui.chat_model_picker_open && !c.is_control() {
-            self.editor_state.editor_ui.chat_model_picker_search.push(c);
-            self.editor_state
-                .editor_ui
-                .chat_model_picker_caret_anchor_ms = self.now_ms;
-            self.editor_state.editor_ui.chat_model_picker_scroll = 0.0;
-            self.editor_state.editor_ui.chat_model_picker_hover = None;
-            self.mark_dirty();
-            return true;
+        if self.editor_state.editor_ui.chat_model_picker_open {
+            return self.apply_chat_model_picker_text(c);
         }
         if self.editor_state.editor_ui.component_browser_open && !c.is_control() {
             self.editor_state.editor_ui.component_browser_search.push(c);
@@ -270,10 +233,7 @@ impl WidgetHostNative {
 
     pub fn apply_backspace(&mut self) -> bool {
         if self.editor_state.editor_ui.agent_settings.focus.is_some() {
-            self.editor_state.editor_ui.settings_input_draft.pop();
-            self.editor_state.editor_ui.settings_input_caret_anchor_ms = self.now_ms;
-            self.mark_dirty();
-            return true;
+            return self.apply_settings_backspace();
         }
         if self.git_clone_input_active() {
             // Swallow Backspace whenever the wizard is open so it can
@@ -362,22 +322,7 @@ impl WidgetHostNative {
             return false;
         }
         if self.editor_state.editor_ui.chat_model_picker_open {
-            if self
-                .editor_state
-                .editor_ui
-                .chat_model_picker_search
-                .pop()
-                .is_some()
-            {
-                self.editor_state
-                    .editor_ui
-                    .chat_model_picker_caret_anchor_ms = self.now_ms;
-                self.editor_state.editor_ui.chat_model_picker_scroll = 0.0;
-                self.editor_state.editor_ui.chat_model_picker_hover = None;
-                self.mark_dirty();
-                return true;
-            }
-            return false;
+            return self.apply_chat_model_picker_backspace();
         }
         if self.editor_state.editor_ui.component_browser_open {
             if self
@@ -448,6 +393,7 @@ impl WidgetHostNative {
         if self.editor_state.ui.property_focus.is_some()
             || self.editor_state.editor_ui.effect_param_focus.is_some()
             || self.editor_state.editor_ui.icon_picker_open
+            || self.editor_state.editor_ui.chat_model_picker_open
             || self.editor_state.editor_ui.component_browser_open
             || self.editor_state.chat.focused
         {
@@ -722,6 +668,7 @@ impl WidgetHostNative {
             .is_some()
         {
             self.editor_state.editor_ui.settings_input_draft.clear();
+            self.clear_settings_caret();
             self.mark_dirty();
             return true;
         }
@@ -850,6 +797,7 @@ impl WidgetHostNative {
             self.editor_state.editor_ui.chat_model_picker_open = false;
             self.editor_state.editor_ui.chat_model_picker_scroll = 0.0;
             self.editor_state.editor_ui.chat_model_picker_search.clear();
+            self.editor_state.editor_ui.chat_model_picker_caret = None;
             self.editor_state.editor_ui.chat_model_picker_hover = None;
             self.mark_dirty();
             return true;

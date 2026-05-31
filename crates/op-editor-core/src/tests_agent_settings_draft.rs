@@ -1,4 +1,5 @@
-use crate::agent_settings::AgentSettings;
+use crate::agent_settings::{AgentSettings, BuiltinAgentKind};
+use crate::agent_settings_builtin_presets::BuiltinAgentPresetKey;
 
 #[test]
 fn duplicate_builtin_agent_config_reuses_existing_provider() {
@@ -29,6 +30,50 @@ fn builtin_agent_draft_does_not_persist_until_save() {
     assert_eq!(s.builtin_agents.len(), 1);
     assert!(s.builtin_agent_draft.is_none());
     assert_eq!(s.builtin_agents[0].api_key, "sk-test");
+}
+
+#[test]
+fn builtin_agent_draft_starts_from_anthropic_preset() {
+    let mut s = AgentSettings::default();
+
+    s.begin_builtin_agent_draft();
+
+    let draft = s.builtin_agent_draft.as_ref().expect("draft exists");
+    assert_eq!(draft.display_name, "Anthropic");
+    assert_eq!(draft.base_url, "https://api.anthropic.com");
+}
+
+#[test]
+fn builtin_agent_draft_can_select_ts_builtin_provider_preset() {
+    let mut s = AgentSettings::default();
+
+    s.begin_builtin_agent_draft();
+    s.builtin_agent_draft.as_mut().unwrap().api_key = "sk-test".into();
+    s.set_builtin_agent_draft_preset(BuiltinAgentPresetKey::MiniMax);
+
+    let draft = s.builtin_agent_draft.as_ref().expect("draft exists");
+    assert_eq!(draft.preset, BuiltinAgentPresetKey::MiniMax);
+    assert_eq!(draft.display_name, "MiniMax");
+    assert_eq!(draft.kind, BuiltinAgentKind::Anthropic);
+    assert_eq!(draft.base_url, "https://api.minimaxi.com/anthropic");
+    assert_eq!(draft.model, "MiniMax-M2.7");
+    assert_eq!(draft.api_key, "sk-test");
+}
+
+#[test]
+fn builtin_agent_format_toggle_uses_selected_provider_alt_base_url() {
+    let mut s = AgentSettings::default();
+
+    s.begin_builtin_agent_draft();
+    s.set_builtin_agent_draft_preset(BuiltinAgentPresetKey::MiniMax);
+    s.builtin_agent_draft
+        .as_mut()
+        .unwrap()
+        .toggle_kind_for_preset();
+
+    let draft = s.builtin_agent_draft.as_ref().expect("draft exists");
+    assert_eq!(draft.kind, BuiltinAgentKind::OpenAiCompat);
+    assert_eq!(draft.base_url, "https://api.minimaxi.com/v1");
 }
 
 #[test]

@@ -2,6 +2,10 @@
 
 use crate::theme::Theme;
 use crate::widgets::agent_settings_builtin_draft;
+use crate::widgets::agent_settings_builtin_parts;
+use crate::widgets::agent_settings_caret::{
+    caret_x_for_text, paint_caret, settings_caret_for_focus,
+};
 use crate::widgets::agent_settings_form_actions::{
     cancel_button_rect, paint_form_actions, save_button_rect,
 };
@@ -11,16 +15,18 @@ use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
 use op_editor_core::agent_settings::{
-    AgentSettings, BuiltinAgentConfig, BuiltinAgentField, BuiltinAgentKind, SettingsFocus,
+    AgentSettings, BuiltinAgentConfig, BuiltinAgentField, BuiltinAgentKind,
+    BuiltinAgentPresetMenuTarget, SettingsFocus,
 };
 use op_editor_core::editor_ui_state::EditorUiState;
+use op_editor_core::BuiltinAgentPresetKey;
 
 const HEADER_HEIGHT: f32 = 28.0;
 const SUBTITLE_HEIGHT: f32 = 28.0;
 const EMPTY_HEIGHT: f32 = 64.0;
 const COMPACT_CARD_HEIGHT: f32 = 60.0;
-const EXPANDED_CARD_HEIGHT: f32 = 168.0;
-const DRAFT_CARD_HEIGHT: f32 = 204.0;
+const EXPANDED_CARD_HEIGHT: f32 = 196.0;
+const DRAFT_ACTION_HEIGHT: f32 = 36.0;
 const CARD_GAP: f32 = 8.0;
 const ADD_W: f32 = 96.0;
 const TOP_HEADER_RIGHT_INSET: f32 = 12.0;
@@ -40,6 +46,11 @@ pub enum BuiltinHit {
     FocusDraft(BuiltinAgentField),
     ToggleKind(usize),
     ToggleDraftKind,
+    TogglePresetMenu(Option<usize>),
+    SelectPreset {
+        index: Option<usize>,
+        preset: BuiltinAgentPresetKey,
+    },
     SaveDraft,
     CancelDraft,
     ToggleEnabled(usize),
@@ -61,7 +72,7 @@ pub fn content_height(settings: &AgentSettings) -> f32 {
             .sum();
         saved_h
             + if has_draft {
-                DRAFT_CARD_HEIGHT + CARD_GAP
+                draft_card_height(settings) + CARD_GAP
             } else {
                 0.0
             }
@@ -83,7 +94,22 @@ pub fn hit_test(content: Rect, settings: &AgentSettings, point: Point2D) -> Buil
             card_height(settings, index),
         );
         if is_editing(settings, index) {
-            if rect_contains(kind_rect(card), point) {
+            if rect_contains(
+                agent_settings_builtin_parts::provider_select_rect(card),
+                point,
+            ) {
+                return BuiltinHit::TogglePresetMenu(Some(index));
+            }
+            if settings.builtin_preset_menu_open == Some(BuiltinAgentPresetMenuTarget::Agent(index))
+            {
+                if let Some(preset) = agent_settings_builtin_parts::preset_at(card, point) {
+                    return BuiltinHit::SelectPreset {
+                        index: Some(index),
+                        preset,
+                    };
+                }
+            }
+            if rect_contains(agent_settings_builtin_parts::kind_rect(card), point) {
                 return BuiltinHit::ToggleKind(index);
             }
             for (row, field) in [
@@ -95,7 +121,7 @@ pub fn hit_test(content: Rect, settings: &AgentSettings, point: Point2D) -> Buil
             .into_iter()
             .enumerate()
             {
-                if rect_contains(field_input_rect(card, row), point) {
+                if rect_contains(field_input_rect(settings, card, Some(index), row), point) {
                     return BuiltinHit::Focus { index, field };
                 }
             }
@@ -109,8 +135,27 @@ pub fn hit_test(content: Rect, settings: &AgentSettings, point: Point2D) -> Buil
         card_y += card.size.y + CARD_GAP;
     }
     if settings.builtin_agent_draft.is_some() {
-        let card = card_rect(content.origin.x, card_y, content.size.x, DRAFT_CARD_HEIGHT);
-        if rect_contains(kind_rect(card), point) {
+        let card = card_rect(
+            content.origin.x,
+            card_y,
+            content.size.x,
+            draft_card_height(settings),
+        );
+        if rect_contains(
+            agent_settings_builtin_parts::provider_select_rect(card),
+            point,
+        ) {
+            return BuiltinHit::TogglePresetMenu(None);
+        }
+        if settings.builtin_preset_menu_open == Some(BuiltinAgentPresetMenuTarget::Draft) {
+            if let Some(preset) = agent_settings_builtin_parts::preset_at(card, point) {
+                return BuiltinHit::SelectPreset {
+                    index: None,
+                    preset,
+                };
+            }
+        }
+        if rect_contains(agent_settings_builtin_parts::kind_rect(card), point) {
             return BuiltinHit::ToggleDraftKind;
         }
         for (row, field) in [
@@ -122,14 +167,15 @@ pub fn hit_test(content: Rect, settings: &AgentSettings, point: Point2D) -> Buil
         .into_iter()
         .enumerate()
         {
-            if rect_contains(field_input_rect(card, row), point) {
+            if rect_contains(field_input_rect(settings, card, None, row), point) {
                 return BuiltinHit::FocusDraft(field);
             }
         }
-        if rect_contains(save_button_rect(card, EXPANDED_CARD_HEIGHT), point) {
+        let form_h = expanded_card_height(settings, None);
+        if rect_contains(save_button_rect(card, form_h), point) {
             return BuiltinHit::SaveDraft;
         }
-        if rect_contains(cancel_button_rect(card, EXPANDED_CARD_HEIGHT), point) {
+        if rect_contains(cancel_button_rect(card, form_h), point) {
             return BuiltinHit::CancelDraft;
         }
     }
@@ -199,14 +245,20 @@ pub fn paint_builtin_section(
         y += card.size.y + CARD_GAP;
     }
     if let Some(draft) = settings.builtin_agent_draft.as_ref() {
-        let card = card_rect(content.origin.x, y, content.size.x, DRAFT_CARD_HEIGHT);
+        let card = card_rect(
+            content.origin.x,
+            y,
+            content.size.x,
+            draft_card_height(settings),
+        );
         paint_builtin_agent_form(cx, theme, settings, ui, draft, None, card, now_ms);
+        let form_h = expanded_card_height(settings, None);
         paint_form_actions(
             cx,
             theme,
             ui,
             card,
-            EXPANDED_CARD_HEIGHT,
+            form_h,
             agent_settings_builtin_draft::ready(settings, ui),
         );
         y += card.size.y + CARD_GAP;
@@ -340,7 +392,8 @@ fn paint_builtin_agent_form(
         card.origin.y + 28.0,
     );
 
-    paint_kind_toggle(cx, theme, agent, card);
+    agent_settings_builtin_parts::paint_kind_toggle(cx, theme, agent, card);
+    agent_settings_builtin_parts::paint_provider_select(cx, theme, agent, card);
     paint_field(
         cx,
         theme,
@@ -389,6 +442,7 @@ fn paint_builtin_agent_form(
         card,
         now_ms,
     );
+    agent_settings_builtin_parts::paint_preset_menu(cx, theme, settings, agent, index, card);
 }
 
 fn paint_compact_builtin_agent_card(
@@ -409,7 +463,7 @@ fn paint_compact_builtin_agent_card(
         size: Point2D::new(36.0, 36.0),
     };
     cx.backend.fill_round_rect(avatar, 8.0, theme.card);
-    paint_key_glyph(cx, theme, avatar);
+    agent_settings_builtin_parts::paint_key_glyph(cx, theme, avatar);
 
     let text_x = card.origin.x + 60.0;
     let name = ellipsize(cx, &agent.display_name, 250.0, 13.0);
@@ -493,10 +547,11 @@ fn paint_field(
     card: Rect,
     now_ms: u64,
 ) {
-    let focused = match index {
-        Some(index) => settings.focus == Some(SettingsFocus::BuiltinAgent { index, field }),
-        None => settings.focus == Some(SettingsFocus::BuiltinAgentDraft(field)),
+    let focus = match index {
+        Some(index) => SettingsFocus::BuiltinAgent { index, field },
+        None => SettingsFocus::BuiltinAgentDraft(field),
     };
+    let focused = settings.focus == Some(focus);
     let value = if focused {
         ui.settings_input_draft.as_str()
     } else {
@@ -514,7 +569,8 @@ fn paint_field(
         BuiltinAgentField::Model => "Model",
         BuiltinAgentField::BaseUrl => "Base URL",
     };
-    let label_y = field_input_rect(card, row).origin.y + 16.0;
+    let input = field_input_rect(settings, card, index, row);
+    let label_y = input.origin.y + 16.0;
     draw_text(
         cx,
         label,
@@ -523,7 +579,6 @@ fn paint_field(
         card.origin.x + 12.0,
         label_y,
     );
-    let input = field_input_rect(card, row);
     cx.backend.fill_round_rect(
         input,
         6.0,
@@ -549,51 +604,23 @@ fn paint_field(
         text_x,
         input.origin.y + 16.0,
     );
-    if focused && jian_core::anim::blink_visible(now_ms, ui.settings_input_caret_anchor_ms, 500) {
-        let caret_x = (text_x + cx.backend.measure_text(&clipped, 11.0) + 1.0)
-            .min(input.origin.x + input.size.x - 8.0);
-        cx.backend.fill_rect(
-            Rect {
-                origin: Point2D::new(caret_x, input.origin.y + 4.5),
-                size: Point2D::new(1.5, 15.0),
-            },
-            theme.foreground,
-        );
-    }
-}
-
-fn paint_kind_toggle(cx: &mut PaintCx<'_>, theme: &Theme, agent: &BuiltinAgentConfig, card: Rect) {
-    let r = kind_rect(card);
-    cx.backend.stroke_round_rect(r, 6.0, theme.border, 1.0);
-    let half = r.size.x / 2.0;
-    for (i, (label, kind)) in [
-        ("Anthropic", BuiltinAgentKind::Anthropic),
-        ("OpenAI", BuiltinAgentKind::OpenAiCompat),
-    ]
-    .iter()
-    .enumerate()
-    {
-        let item = Rect {
-            origin: Point2D::new(r.origin.x + i as f32 * half, r.origin.y),
-            size: Point2D::new(half, r.size.y),
-        };
-        let active = agent.kind == *kind;
-        if active {
-            cx.backend.fill_round_rect(item, 5.0, theme.primary);
-        }
-        let color = if active {
-            theme.primary_foreground
-        } else {
-            theme.muted_foreground
-        };
-        let tw = cx.backend.measure_text(label, 10.0);
-        draw_text(
+    if focused {
+        let caret = settings_caret_for_focus(ui, focus);
+        let caret_x = caret_x_for_text(
             cx,
-            label,
-            10.0,
-            color,
-            item.origin.x + (item.size.x - tw) / 2.0,
-            item.origin.y + 16.0,
+            value,
+            caret,
+            text_x,
+            input.origin.x + input.size.x - 8.0,
+            11.0,
+        );
+        paint_caret(
+            cx,
+            theme,
+            now_ms,
+            ui.settings_input_caret_anchor_ms,
+            caret_x,
+            input.origin.y + 4.5,
         );
     }
 }
@@ -607,39 +634,6 @@ fn draw_text(cx: &mut PaintCx<'_>, text: &str, size: f32, color: Color, x: f32, 
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(&layout, Point2D::new(x, y));
-}
-
-fn paint_key_glyph(cx: &mut PaintCx<'_>, theme: &Theme, avatar: Rect) {
-    let color = theme.foreground;
-    let cx0 = avatar.origin.x + 13.0;
-    let cy0 = avatar.origin.y + 17.0;
-    cx.backend.stroke_round_rect(
-        Rect {
-            origin: Point2D::new(cx0 - 4.0, cy0 - 4.0),
-            size: Point2D::new(8.0, 8.0),
-        },
-        4.0,
-        color,
-        1.6,
-    );
-    cx.backend.stroke_line(
-        Point2D::new(cx0 + 4.0, cy0),
-        Point2D::new(avatar.origin.x + 27.0, cy0),
-        color,
-        1.6,
-    );
-    cx.backend.stroke_line(
-        Point2D::new(avatar.origin.x + 23.0, cy0),
-        Point2D::new(avatar.origin.x + 23.0, cy0 + 4.0),
-        color,
-        1.6,
-    );
-    cx.backend.stroke_line(
-        Point2D::new(avatar.origin.x + 27.0, cy0),
-        Point2D::new(avatar.origin.x + 27.0, cy0 + 4.0),
-        color,
-        1.6,
-    );
 }
 
 fn paint_switch(cx: &mut PaintCx<'_>, theme: &Theme, rect: Rect, enabled: bool) {
@@ -702,10 +696,18 @@ fn is_editing(settings: &AgentSettings, index: usize) -> bool {
 
 fn card_height(settings: &AgentSettings, index: usize) -> f32 {
     if is_editing(settings, index) {
-        EXPANDED_CARD_HEIGHT
+        expanded_card_height(settings, Some(index))
     } else {
         COMPACT_CARD_HEIGHT
     }
+}
+
+fn expanded_card_height(settings: &AgentSettings, index: Option<usize>) -> f32 {
+    EXPANDED_CARD_HEIGHT + agent_settings_builtin_parts::preset_menu_height(settings, index)
+}
+
+fn draft_card_height(settings: &AgentSettings) -> f32 {
+    expanded_card_height(settings, None) + DRAFT_ACTION_HEIGHT
 }
 
 fn add_provider_rect(content: Rect, y: f32) -> Rect {
@@ -755,18 +757,17 @@ fn compact_remove_rect(card: Rect) -> Rect {
     }
 }
 
-fn kind_rect(card: Rect) -> Rect {
-    Rect {
-        origin: Point2D::new(card.origin.x + card.size.x - 172.0, card.origin.y + 10.0),
-        size: Point2D::new(156.0, 24.0),
-    }
-}
-
-fn field_input_rect(card: Rect, row: usize) -> Rect {
+fn field_input_rect(
+    settings: &AgentSettings,
+    card: Rect,
+    index: Option<usize>,
+    row: usize,
+) -> Rect {
+    let menu_h = agent_settings_builtin_parts::preset_menu_height(settings, index);
     Rect {
         origin: Point2D::new(
             card.origin.x + 12.0 + FIELD_LABEL_W,
-            card.origin.y + 48.0 + row as f32 * 28.0,
+            card.origin.y + 76.0 + menu_h + row as f32 * 28.0,
         ),
         size: Point2D::new(card.size.x - 24.0 - FIELD_LABEL_W, FIELD_H),
     }

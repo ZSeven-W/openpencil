@@ -2,7 +2,7 @@
 
 use super::WidgetHostNative;
 use op_editor_core::agent_settings::{
-    AcpAgentField, AcpConnectionType, BuiltinAgentField, BuiltinAgentKind, SettingsFocus,
+    AcpAgentField, AcpConnectionType, BuiltinAgentField, SettingsFocus,
 };
 
 impl WidgetHostNative {
@@ -36,16 +36,7 @@ impl WidgetHostNative {
             .builtin_agent_draft
             .as_mut()
         {
-            agent.kind = match agent.kind {
-                BuiltinAgentKind::Anthropic => BuiltinAgentKind::OpenAiCompat,
-                BuiltinAgentKind::OpenAiCompat => BuiltinAgentKind::Anthropic,
-            };
-            agent.base_url = agent.kind.default_base_url().to_string();
-            if agent.kind == BuiltinAgentKind::OpenAiCompat && agent.model.starts_with("claude-") {
-                agent.model = "gpt-5.4".into();
-            } else if agent.kind == BuiltinAgentKind::Anthropic && agent.model.starts_with("gpt-") {
-                agent.model = "claude-sonnet-4-5".into();
-            }
+            agent.toggle_kind_for_preset();
         }
     }
 
@@ -69,6 +60,7 @@ impl WidgetHostNative {
         {
             self.editor_state.editor_ui.agent_settings.focus = None;
             self.editor_state.editor_ui.settings_input_draft.clear();
+            self.clear_settings_caret();
             self.editor_state.rebuild_chat_models();
         } else {
             self.focus_builtin_agent_draft(BuiltinAgentField::ApiKey);
@@ -82,6 +74,7 @@ impl WidgetHostNative {
             .cancel_builtin_agent_draft();
         self.editor_state.editor_ui.agent_settings.focus = None;
         self.editor_state.editor_ui.settings_input_draft.clear();
+        self.clear_settings_caret();
     }
 
     pub(in crate::widget_host) fn focus_acp_agent_draft(&mut self, field: AcpAgentField) {
@@ -153,6 +146,7 @@ impl WidgetHostNative {
         {
             self.editor_state.editor_ui.agent_settings.focus = None;
             self.editor_state.editor_ui.settings_input_draft.clear();
+            self.clear_settings_caret();
         } else {
             let field = self
                 .editor_state
@@ -176,5 +170,6 @@ impl WidgetHostNative {
             .cancel_acp_agent_draft();
         self.editor_state.editor_ui.agent_settings.focus = None;
         self.editor_state.editor_ui.settings_input_draft.clear();
+        self.clear_settings_caret();
     }
 }

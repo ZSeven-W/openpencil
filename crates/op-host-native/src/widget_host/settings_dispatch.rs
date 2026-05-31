@@ -12,6 +12,7 @@ impl WidgetHostNative {
             return;
         };
         let draft = std::mem::take(&mut self.editor_state.editor_ui.settings_input_draft);
+        self.clear_settings_caret();
         match focus {
             SettingsFocus::McpPort => {
                 if let Ok(port) = draft.trim().parse::<u16>() {

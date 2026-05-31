@@ -1,13 +1,6 @@
 //! Auto-saved user settings (TS parity with `agent-settings-store`
 //! localStorage).
 //!
-//! Distinct from `persistence.rs`:
-//!  - `persistence.rs` saves the *document* (.pen / .op) to a path
-//!    the user chose via the rfd Save dialog.
-//!  - `settings_io.rs` saves the *preferences* (theme / locale /
-//!    MCP port / MCP CLI toggles / Images advanced / auto-update flags) to a
-//!    fixed config dir so they survive app restarts.
-//!
 //! All preferences live on `EditorState.editor_ui` — the host's
 //! single source of truth.
 
@@ -15,8 +8,8 @@ use std::path::PathBuf;
 
 use op_editor_core::editor_ui_state::RecentFile;
 use op_editor_core::{
-    AcpAgentConfig, AcpConnectionType, BuiltinAgentConfig, BuiltinAgentKind, EditorState,
-    ImageGenProfile, ImageGenProvider, Locale, ThemeMode,
+    AcpAgentConfig, AcpConnectionType, BuiltinAgentConfig, BuiltinAgentKind, BuiltinAgentPresetKey,
+    EditorState, ImageGenProfile, ImageGenProvider, Locale, ThemeMode,
 };
 use op_host_native::WidgetHostNative;
 use serde::{Deserialize, Serialize};
@@ -32,6 +25,8 @@ struct RecentFilePayload {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 struct BuiltinAgentPayload {
     id: String,
+    #[serde(default)]
+    preset: Option<String>,
     display_name: String,
     kind: String,
     api_key: String,
@@ -318,6 +313,7 @@ fn apply_payload(state: &mut EditorState, payload: SettingsPayload) {
 fn builtin_agent_to_payload(agent: &BuiltinAgentConfig) -> BuiltinAgentPayload {
     BuiltinAgentPayload {
         id: agent.id.clone(),
+        preset: Some(agent.preset.as_str().into()),
         display_name: agent.display_name.clone(),
         kind: match agent.kind {
             BuiltinAgentKind::Anthropic => "anthropic",
@@ -339,6 +335,11 @@ fn builtin_agent_from_payload(payload: BuiltinAgentPayload) -> Option<BuiltinAge
     };
     Some(BuiltinAgentConfig {
         id: payload.id,
+        preset: payload
+            .preset
+            .as_deref()
+            .and_then(BuiltinAgentPresetKey::from_str)
+            .unwrap_or_else(|| op_editor_core::infer_builtin_agent_preset(kind, &payload.base_url)),
         display_name: payload.display_name,
         kind,
         api_key: payload.api_key,
@@ -668,9 +669,13 @@ mod tests {
     #[test]
     fn builtin_agents_round_trip_through_payload() {
         let mut src = EditorState::new();
-        src.editor_ui
-            .agent_settings
-            .add_builtin_agent_with_defaults("Built-in Claude", "sk-test", "claude-sonnet-4-5");
+        src.editor_ui.agent_settings.add_builtin_agent_config(
+            "MiniMax",
+            "sk-test",
+            "MiniMax-M2.7",
+            BuiltinAgentKind::Anthropic,
+            "https://api.minimaxi.com/anthropic",
+        );
 
         let json = serde_json::to_string(&to_payload(&src)).unwrap();
         let payload: SettingsPayload = serde_json::from_str(&json).unwrap();
@@ -680,11 +685,15 @@ mod tests {
         assert_eq!(dst.editor_ui.agent_settings.builtin_agents.len(), 1);
         assert_eq!(
             dst.editor_ui.agent_settings.builtin_agents[0].display_name,
-            "Built-in Claude"
+            "MiniMax"
         );
         assert_eq!(
             dst.editor_ui.agent_settings.builtin_agents[0].api_key,
             "sk-test"
+        );
+        assert_eq!(
+            dst.editor_ui.agent_settings.builtin_agents[0].preset,
+            BuiltinAgentPresetKey::MiniMax
         );
     }
 

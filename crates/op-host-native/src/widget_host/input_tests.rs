@@ -458,6 +458,50 @@ fn backspace_without_focus_deletes_selected() {
 }
 
 #[test]
+fn delete_with_model_picker_open_does_not_delete_selected() {
+    // The chat model-picker search owns the keyboard while open, so
+    // Delete must be swallowed instead of dropping the canvas node
+    // behind the dropdown.
+    let mut host = WidgetHostNative::new();
+    host.editor_state_mut()
+        .set_single_selection(NodeId::new("n10"));
+    host.editor_state_mut().editor_ui.chat_model_picker_open = true;
+
+    assert!(!host.apply_delete());
+    assert_eq!(host.editor_state().selection.anchor, NodeId::new("n10"));
+}
+
+#[test]
+fn backspace_with_model_picker_open_edits_search_not_selection() {
+    // Backspace pops from the model-picker search query, never the
+    // selected node.
+    let mut host = WidgetHostNative::new();
+    host.editor_state_mut()
+        .set_single_selection(NodeId::new("n10"));
+    host.editor_state_mut().editor_ui.chat_model_picker_open = true;
+    host.editor_state_mut().editor_ui.chat_model_picker_search = "gp".to_string();
+
+    assert!(host.apply_backspace());
+    assert_eq!(host.editor_state().editor_ui.chat_model_picker_search, "g");
+    assert_eq!(host.editor_state().selection.anchor, NodeId::new("n10"));
+}
+
+#[test]
+fn shortcuts_gated_while_model_picker_open() {
+    // Nudge / duplicate / reorder all route through `input_active`,
+    // which must report the model picker as owning the keyboard.
+    let mut host = WidgetHostNative::new();
+    host.editor_state_mut()
+        .set_single_selection(NodeId::new("n10"));
+    host.editor_state_mut().editor_ui.chat_model_picker_open = true;
+
+    assert!(!host.apply_nudge(1.0, 0.0));
+    assert!(!host.apply_duplicate());
+    assert!(!host.apply_reorder(op_editor_core::ReorderDirection::Up));
+    assert_eq!(host.editor_state().selection.anchor, NodeId::new("n10"));
+}
+
+#[test]
 fn marquee_drag_replaces_selection_with_intersecting_nodes() {
     let mut host = WidgetHostNative::new();
     // 3 rects: two close together near origin, one far away.

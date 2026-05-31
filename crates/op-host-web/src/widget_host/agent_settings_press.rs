@@ -2,8 +2,8 @@
 
 use super::WidgetHost;
 use op_editor_core::agent_settings::{
-    AcpAgentField, AcpConnectionType, AgentProvider, BuiltinAgentField, BuiltinAgentKind,
-    ImageGenField, ImageSearchField, McpCli, SettingsFocus,
+    AcpAgentField, AcpConnectionType, AgentProvider, BuiltinAgentField, ImageGenField,
+    ImageSearchField, McpCli, SettingsFocus,
 };
 use op_editor_ui::widgets::agent_settings_panel::{AgentSettingsHit, AgentSettingsPanel};
 use op_editor_ui::Point2D;
@@ -248,20 +248,7 @@ impl WidgetHost {
                     .builtin_agents
                     .get_mut(index)
                 {
-                    agent.kind = match agent.kind {
-                        BuiltinAgentKind::Anthropic => BuiltinAgentKind::OpenAiCompat,
-                        BuiltinAgentKind::OpenAiCompat => BuiltinAgentKind::Anthropic,
-                    };
-                    agent.base_url = agent.kind.default_base_url().to_string();
-                    if agent.kind == BuiltinAgentKind::OpenAiCompat
-                        && agent.model.starts_with("claude-")
-                    {
-                        agent.model = "gpt-5.4".into();
-                    } else if agent.kind == BuiltinAgentKind::Anthropic
-                        && agent.model.starts_with("gpt-")
-                    {
-                        agent.model = "claude-sonnet-4-5".into();
-                    }
+                    agent.toggle_kind_for_preset();
                     self.editor_state.rebuild_chat_models();
                 }
             }
@@ -274,21 +261,41 @@ impl WidgetHost {
                     .builtin_agent_draft
                     .as_mut()
                 {
-                    agent.kind = match agent.kind {
-                        BuiltinAgentKind::Anthropic => BuiltinAgentKind::OpenAiCompat,
-                        BuiltinAgentKind::OpenAiCompat => BuiltinAgentKind::Anthropic,
-                    };
-                    agent.base_url = agent.kind.default_base_url().to_string();
-                    if agent.kind == BuiltinAgentKind::OpenAiCompat
-                        && agent.model.starts_with("claude-")
-                    {
-                        agent.model = "gpt-5.4".into();
-                    } else if agent.kind == BuiltinAgentKind::Anthropic
-                        && agent.model.starts_with("gpt-")
-                    {
-                        agent.model = "claude-sonnet-4-5".into();
-                    }
+                    agent.toggle_kind_for_preset();
                 }
+            }
+            AgentSettingsHit::ToggleBuiltinAgentPresetMenu(index) => {
+                self.commit_settings_focus();
+                let target = match index {
+                    Some(index) => {
+                        op_editor_core::agent_settings::BuiltinAgentPresetMenuTarget::Agent(index)
+                    }
+                    None => op_editor_core::agent_settings::BuiltinAgentPresetMenuTarget::Draft,
+                };
+                let settings = &mut self.editor_state.editor_ui.agent_settings;
+                settings.builtin_preset_menu_open =
+                    (settings.builtin_preset_menu_open != Some(target)).then_some(target);
+            }
+            AgentSettingsHit::SelectBuiltinAgentPreset { index, preset } => {
+                self.commit_settings_focus();
+                match index {
+                    Some(index) => {
+                        self.editor_state
+                            .editor_ui
+                            .agent_settings
+                            .set_builtin_agent_preset(index, preset);
+                        self.editor_state.rebuild_chat_models();
+                    }
+                    None => self
+                        .editor_state
+                        .editor_ui
+                        .agent_settings
+                        .set_builtin_agent_draft_preset(preset),
+                }
+                self.editor_state
+                    .editor_ui
+                    .agent_settings
+                    .builtin_preset_menu_open = None;
             }
             AgentSettingsHit::ToggleBuiltinAgentEnabled(index) => {
                 self.commit_settings_focus();
@@ -328,6 +335,7 @@ impl WidgetHost {
                     agents.remove(index);
                     self.editor_state.editor_ui.agent_settings.focus = None;
                     self.editor_state.editor_ui.settings_input_draft.clear();
+                    self.clear_settings_caret();
                     self.editor_state.rebuild_chat_models();
                 }
             }
@@ -360,6 +368,7 @@ impl WidgetHost {
                 {
                     self.editor_state.editor_ui.agent_settings.focus = None;
                     self.editor_state.editor_ui.settings_input_draft.clear();
+                    self.clear_settings_caret();
                     self.editor_state.rebuild_chat_models();
                 } else {
                     self.editor_state.editor_ui.agent_settings.focus =
@@ -375,6 +384,7 @@ impl WidgetHost {
                     .cancel_builtin_agent_draft();
                 self.editor_state.editor_ui.agent_settings.focus = None;
                 self.editor_state.editor_ui.settings_input_draft.clear();
+                self.clear_settings_caret();
             }
             AgentSettingsHit::FocusAcpAgent { index, field } => {
                 self.commit_settings_focus();
@@ -495,6 +505,7 @@ impl WidgetHost {
                     agents.remove(index);
                     self.editor_state.editor_ui.agent_settings.focus = None;
                     self.editor_state.editor_ui.settings_input_draft.clear();
+                    self.clear_settings_caret();
                 }
             }
             AgentSettingsHit::ToggleAcpConnected(index) => {
@@ -555,6 +566,7 @@ impl WidgetHost {
                 {
                     self.editor_state.editor_ui.agent_settings.focus = None;
                     self.editor_state.editor_ui.settings_input_draft.clear();
+                    self.clear_settings_caret();
                 } else {
                     let field = self
                         .editor_state
@@ -580,6 +592,7 @@ impl WidgetHost {
                     .cancel_acp_agent_draft();
                 self.editor_state.editor_ui.agent_settings.focus = None;
                 self.editor_state.editor_ui.settings_input_draft.clear();
+                self.clear_settings_caret();
             }
             AgentSettingsHit::Inside => {}
         }
@@ -618,7 +631,10 @@ mod tests {
 
         let agent = &host.editor_state.editor_ui.agent_settings.builtin_agents[0];
         assert_eq!(agent.api_key, "sk-web");
-        assert_eq!(agent.kind, BuiltinAgentKind::OpenAiCompat);
+        assert_eq!(
+            agent.kind,
+            op_editor_core::agent_settings::BuiltinAgentKind::OpenAiCompat
+        );
         assert!(host.editor_state.editor_ui.agent_settings.focus.is_none());
     }
 
@@ -652,6 +668,38 @@ mod tests {
     }
 
     #[test]
+    fn builtin_provider_menu_selects_ts_preset_for_draft() {
+        let mut host = WidgetHost::new();
+        let panel = AgentSettingsPanel::for_editor(&host.editor_state);
+        let rect = panel.rect(1200.0, 800.0);
+        let content_x = rect.origin.x + 200.0 + 24.0;
+        let content_y = rect.origin.y + 24.0;
+        let content_w = rect.size.x - 200.0 - 48.0;
+        let add_x = content_x + content_w - 48.0;
+        let add_y = content_y + 24.0;
+
+        assert!(host.dispatch_agent_settings_press(add_x, add_y, 1200.0, 800.0));
+        let card_y = content_y + 12.0 + 28.0 + 28.0;
+        let provider_x = content_x + 68.0 + 24.0;
+        let provider_y = card_y + 60.0;
+        assert!(host.dispatch_agent_settings_press(provider_x, provider_y, 1200.0, 800.0));
+        let minimax_y = card_y + 76.0 + 4.0 + 5.0 * 24.0 + 12.0;
+        assert!(host.dispatch_agent_settings_press(provider_x, minimax_y, 1200.0, 800.0));
+
+        let draft = host
+            .editor_state
+            .editor_ui
+            .agent_settings
+            .builtin_agent_draft
+            .as_ref()
+            .expect("draft remains open");
+        assert_eq!(draft.preset, op_editor_core::BuiltinAgentPresetKey::MiniMax);
+        assert_eq!(draft.display_name, "MiniMax");
+        assert_eq!(draft.model, "MiniMax-M2.7");
+        assert_eq!(draft.base_url, "https://api.minimaxi.com/anthropic");
+    }
+
+    #[test]
     fn save_builtin_agent_draft_persists_provider() {
         let mut host = WidgetHost::new();
         let panel = AgentSettingsPanel::for_editor(&host.editor_state);
@@ -668,7 +716,7 @@ mod tests {
         }
         let card_y = content_y + 12.0 + 28.0 + 28.0;
         let save_x = content_x + content_w - 12.0 - 34.0;
-        let save_y = card_y + 168.0 + 18.0;
+        let save_y = card_y + 196.0 + 18.0;
         assert!(host.dispatch_agent_settings_press(save_x, save_y, 1200.0, 800.0));
 
         let settings = &host.editor_state.editor_ui.agent_settings;

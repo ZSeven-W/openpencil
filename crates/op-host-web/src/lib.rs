@@ -598,11 +598,15 @@ pub fn mount(canvas_id: &str) -> Result<WebShell, JsValue> {
                             consumed = inner.host.apply_nudge(0.0, nudge);
                         }
                         "ArrowLeft" if !is_mod => {
-                            consumed = inner.host.apply_rename_caret(false)
+                            consumed = inner.host.apply_settings_caret(false)
+                                || inner.host.apply_chat_model_picker_caret(false)
+                                || inner.host.apply_rename_caret(false)
                                 || inner.host.apply_nudge(-nudge, 0.0);
                         }
                         "ArrowRight" if !is_mod => {
-                            consumed = inner.host.apply_rename_caret(true)
+                            consumed = inner.host.apply_settings_caret(true)
+                                || inner.host.apply_chat_model_picker_caret(true)
+                                || inner.host.apply_rename_caret(true)
                                 || inner.host.apply_nudge(nudge, 0.0);
                         }
                         "[" if !is_mod => {

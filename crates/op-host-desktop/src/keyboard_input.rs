@@ -54,16 +54,28 @@ impl DesktopApp {
                 consumed =
                     self.host.apply_property_step(-nudge) || self.host.apply_nudge(0.0, nudge);
             }
+            Key::Named(NamedKey::ArrowLeft)
+                if !self.zoom_modifier && self.host.settings_focus_active() =>
+            {
+                consumed = self.host.apply_settings_caret(false);
+            }
+            Key::Named(NamedKey::ArrowRight)
+                if !self.zoom_modifier && self.host.settings_focus_active() =>
+            {
+                consumed = self.host.apply_settings_caret(true);
+            }
             Key::Named(NamedKey::ArrowLeft) if !self.zoom_modifier && !settings_focused => {
                 // An active inline rename moves its caret first, then a
                 // focused property input moves its text caret;
                 // otherwise the arrow nudges the selection.
-                consumed = self.host.apply_rename_caret(false)
+                consumed = self.host.apply_chat_model_picker_caret(false)
+                    || self.host.apply_rename_caret(false)
                     || self.host.apply_property_caret(false)
                     || self.host.apply_nudge(-nudge, 0.0);
             }
             Key::Named(NamedKey::ArrowRight) if !self.zoom_modifier && !settings_focused => {
-                consumed = self.host.apply_rename_caret(true)
+                consumed = self.host.apply_chat_model_picker_caret(true)
+                    || self.host.apply_rename_caret(true)
                     || self.host.apply_property_caret(true)
                     || self.host.apply_nudge(nudge, 0.0);
             }

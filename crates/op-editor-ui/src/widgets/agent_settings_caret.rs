@@ -1,6 +1,28 @@
 use crate::theme::Theme;
 use crate::widgets::PaintCx;
 use crate::{Point2D, Rect};
+use op_editor_core::agent_settings::SettingsFocus;
+use op_editor_core::editor_ui_state::EditorUiState;
+
+pub(super) fn settings_caret_for_focus(ui: &EditorUiState, focus: SettingsFocus) -> Option<usize> {
+    if ui.settings_input_caret_focus == Some(focus) {
+        ui.settings_input_caret
+    } else {
+        None
+    }
+}
+
+pub(super) fn caret_x_for_text(
+    cx: &mut PaintCx<'_>,
+    value: &str,
+    caret: Option<usize>,
+    text_x: f32,
+    max_x: f32,
+    size: f32,
+) -> f32 {
+    let pos = clamp_boundary(value, caret.unwrap_or(value.len()));
+    (text_x + cx.backend.measure_text(&value[..pos], size) + 1.0).min(max_x)
+}
 
 pub(super) fn paint_caret(
     cx: &mut PaintCx<'_>,
@@ -20,4 +42,12 @@ pub(super) fn paint_caret(
         },
         theme.foreground,
     );
+}
+
+fn clamp_boundary(value: &str, pos: usize) -> usize {
+    let mut pos = pos.min(value.len());
+    while pos > 0 && !value.is_char_boundary(pos) {
+        pos -= 1;
+    }
+    pos
 }

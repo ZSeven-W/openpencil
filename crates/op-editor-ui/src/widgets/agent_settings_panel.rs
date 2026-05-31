@@ -17,6 +17,7 @@ use op_editor_core::agent_settings::{
     ImageGenField, ImageSearchField, McpCli,
 };
 use op_editor_core::editor_ui_state::EditorUiState;
+use op_editor_core::BuiltinAgentPresetKey;
 use op_editor_core::EditorState;
 
 pub const PANEL_WIDTH: f32 = 720.0;
@@ -49,6 +50,11 @@ pub enum AgentSettingsHit {
     FocusBuiltinAgentDraft(BuiltinAgentField),
     ToggleBuiltinAgentKind(usize),
     ToggleBuiltinAgentDraftKind,
+    ToggleBuiltinAgentPresetMenu(Option<usize>),
+    SelectBuiltinAgentPreset {
+        index: Option<usize>,
+        preset: BuiltinAgentPresetKey,
+    },
     SaveBuiltinAgentDraft,
     CancelBuiltinAgentDraft,
     ToggleBuiltinAgentEnabled(usize),
@@ -152,6 +158,12 @@ impl<'a> AgentSettingsPanel<'a> {
                     }
                     BuiltinHit::ToggleDraftKind => {
                         return AgentSettingsHit::ToggleBuiltinAgentDraftKind;
+                    }
+                    BuiltinHit::TogglePresetMenu(index) => {
+                        return AgentSettingsHit::ToggleBuiltinAgentPresetMenu(index);
+                    }
+                    BuiltinHit::SelectPreset { index, preset } => {
+                        return AgentSettingsHit::SelectBuiltinAgentPreset { index, preset };
                     }
                     BuiltinHit::SaveDraft => return AgentSettingsHit::SaveBuiltinAgentDraft,
                     BuiltinHit::CancelDraft => return AgentSettingsHit::CancelBuiltinAgentDraft,

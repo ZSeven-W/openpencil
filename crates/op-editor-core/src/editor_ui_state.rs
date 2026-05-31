@@ -604,6 +604,10 @@ pub struct EditorUiState {
     pub agent_settings_drag: Option<crate::agent_settings::AgentSettingsDrag>,
     /// Draft for the focused settings-modal input (e.g. MCP port).
     pub settings_input_draft: String,
+    /// Byte caret for the focused settings-modal input.
+    pub settings_input_caret: Option<usize>,
+    /// Focus identity that owns [`Self::settings_input_caret`].
+    pub settings_input_caret_focus: Option<crate::agent_settings::SettingsFocus>,
     /// Last focus / edit timestamp for focused settings-modal inputs.
     pub settings_input_caret_anchor_ms: u64,
 
@@ -643,6 +647,8 @@ pub struct EditorUiState {
     /// Live text filter for the chat model picker. While the picker
     /// is open it owns typed characters, matching the TS search box.
     pub chat_model_picker_search: String,
+    /// Byte caret for the chat model-picker search box.
+    pub chat_model_picker_caret: Option<usize>,
     /// Last focus / edit timestamp for the chat model-picker search
     /// caret blink cycle.
     pub chat_model_picker_caret_anchor_ms: u64,
@@ -826,6 +832,8 @@ impl Default for EditorUiState {
             agent_settings: crate::agent_settings::AgentSettings::default(),
             agent_settings_drag: None,
             settings_input_draft: String::new(),
+            settings_input_caret: None,
+            settings_input_caret_focus: None,
             settings_input_caret_anchor_ms: 0,
             shape_picker_open: false,
             shape_picker_hover: None,
@@ -840,6 +848,7 @@ impl Default for EditorUiState {
             chat_model_picker_open: false,
             chat_model_picker_scroll: 0.0,
             chat_model_picker_search: String::new(),
+            chat_model_picker_caret: None,
             chat_model_picker_caret_anchor_ms: 0,
             chat_model_picker_hover: None,
             chat_selected_agent: 0,
