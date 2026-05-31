@@ -697,6 +697,29 @@ fn transcript_hit_resolves_a_click_on_the_tool_header() {
 }
 
 #[test]
+fn transcript_hit_resolves_a_click_on_an_individual_tool_card_header() {
+    let mut m = ChatMessage::assistant("answer");
+    m.tools_collapsed = false;
+    m.tool_calls = vec![ChatToolCall {
+        name: "snapshot_layout".into(),
+        args: r#"{"args":{"pageId":"page-1"}}"#.into(),
+    }];
+    let msgs = std::slice::from_ref(&m);
+    let card_header = build_transcript(msgs, body(), op_editor_core::Locale::EnUs)[0]
+        .tools
+        .as_ref()
+        .unwrap()
+        .cards[0]
+        .header;
+    let cx = card_header.origin.x + card_header.size.x / 2.0;
+    let cy = card_header.origin.y + card_header.size.y / 2.0;
+    assert_eq!(
+        transcript_hit(msgs, body(), cx, cy, op_editor_core::Locale::EnUs),
+        Some(TranscriptHit::SetToolCallCardExpanded(0, 0, true))
+    );
+}
+
+#[test]
 fn transcript_hit_misses_when_the_click_is_not_on_a_header() {
     let m = ChatMessage::assistant("plain answer, no thinking, no tools");
     let msgs = std::slice::from_ref(&m);

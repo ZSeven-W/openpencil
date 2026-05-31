@@ -197,6 +197,9 @@ pub struct ChatMessage {
     pub thinking_collapsed: bool,
     /// Collapsed state of the tool-calls panel (default collapsed).
     pub tools_collapsed: bool,
+    /// Per-tool-card expanded-state overrides. Missing / `None`
+    /// entries fall back to the UI's auth-level default.
+    pub tool_call_expanded_overrides: Vec<Option<bool>>,
     /// True while this (assistant) message's turn streams in.
     pub streaming: bool,
 }
@@ -212,6 +215,7 @@ impl ChatMessage {
             images: Vec::new(),
             thinking_collapsed: true,
             tools_collapsed: true,
+            tool_call_expanded_overrides: Vec::new(),
             streaming: false,
         }
     }
@@ -227,6 +231,7 @@ impl ChatMessage {
             images: Vec::new(),
             thinking_collapsed: true,
             tools_collapsed: true,
+            tool_call_expanded_overrides: Vec::new(),
             streaming: false,
         }
     }
@@ -521,6 +526,26 @@ impl ChatState {
         if let Some(msg) = self.messages.get_mut(idx) {
             msg.tools_collapsed = !msg.tools_collapsed;
         }
+    }
+
+    /// Set one tool card's expanded override. Out-of-range message /
+    /// tool indexes are no-ops.
+    pub fn set_message_tool_call_expanded(
+        &mut self,
+        msg_idx: usize,
+        tool_idx: usize,
+        expanded: bool,
+    ) {
+        let Some(msg) = self.messages.get_mut(msg_idx) else {
+            return;
+        };
+        if tool_idx >= msg.tool_calls.len() {
+            return;
+        }
+        if msg.tool_call_expanded_overrides.len() <= tool_idx {
+            msg.tool_call_expanded_overrides.resize(tool_idx + 1, None);
+        }
+        msg.tool_call_expanded_overrides[tool_idx] = Some(expanded);
     }
 
     /// Flip the fixed design-checklist panel state.
@@ -869,6 +894,30 @@ mod tests {
         chat.toggle_message_tool_calls(0);
         assert_eq!(chat.messages[0].tools_collapsed, !before);
         chat.toggle_message_tool_calls(99);
+    }
+
+    #[test]
+    fn set_message_tool_call_expanded_records_per_card_override() {
+        let mut chat = ChatState::default();
+        let mut msg = ChatMessage::assistant("hi");
+        msg.tool_calls.push(ChatToolCall {
+            name: "snapshot_layout".into(),
+            args: "{}".into(),
+        });
+        chat.messages.push(msg);
+
+        chat.set_message_tool_call_expanded(0, 0, true);
+        assert_eq!(
+            chat.messages[0].tool_call_expanded_overrides,
+            vec![Some(true)]
+        );
+
+        chat.set_message_tool_call_expanded(0, 99, false);
+        chat.set_message_tool_call_expanded(99, 0, false);
+        assert_eq!(
+            chat.messages[0].tool_call_expanded_overrides,
+            vec![Some(true)]
+        );
     }
 
     #[test]

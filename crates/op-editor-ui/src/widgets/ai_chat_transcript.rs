@@ -83,6 +83,9 @@ pub enum TranscriptHit {
     ToggleThinking(usize),
     /// The tool-calls panel header — toggle its collapsed state.
     ToggleToolCalls(usize),
+    /// One tool-call card header — set just that card's expanded
+    /// state. Carries `(message_index, tool_call_index, expanded)`.
+    SetToolCallCardExpanded(usize, usize, bool),
 }
 
 /// A collapsible block (thinking text or tool-call list) — a
@@ -300,6 +303,7 @@ fn build_item(
             width: bubble_w,
             budget,
             default_status: if msg.streaming { "running" } else { "done" },
+            expanded_overrides: &msg.tool_call_expanded_overrides,
         },
     );
     y = next_y;
@@ -469,6 +473,15 @@ pub(crate) fn transcript_hit(
         if let Some(t) = &item.tools {
             if rect_contains(t.header, x, y) {
                 return Some(TranscriptHit::ToggleToolCalls(item.msg_index));
+            }
+            for (tool_index, card) in t.cards.iter().enumerate() {
+                if rect_contains(card.header, x, y) {
+                    return Some(TranscriptHit::SetToolCallCardExpanded(
+                        item.msg_index,
+                        tool_index,
+                        !card.expanded,
+                    ));
+                }
             }
         }
     }
