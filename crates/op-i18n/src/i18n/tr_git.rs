@@ -329,6 +329,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.gitError.mergeInProgress" => "Zaten bir birleştirme sürüyor — önce onu çözün veya iptal edin.",
         "git.gitError.workingTreeDirty" => "Çalışma ağacında işlenmemiş değişiklikler var — birleştirmeden önce işleyin veya zulalayın.",
         "git.gitError.io" => "Git işlem hatası: {{detail}}",
+        "git.empty.openNotARepo" => "Bu klasör bir Git deposu değil.",
+        "git.empty.cloneComingSoon" => "Klonlama için uzak bir URL gerekir — panel içi klonlama formu yakında geliyor.",
         _ => return None,
     })
 }

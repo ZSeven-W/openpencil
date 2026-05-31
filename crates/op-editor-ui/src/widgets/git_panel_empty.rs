@@ -44,12 +44,14 @@ const EMPTY_CARDS: [(Icon, &str, &str); 3] = [
 impl GitPanel<'_> {
     /// `true` when the panel shows the no-repo onboarding empty state
     /// (clock + Init/Open/Clone cards) — i.e. not loading, not in a
-    /// repo, and not in the diff / merge views.
+    /// repo, and not in the diff / merge / clone-wizard views. (The
+    /// clone wizard opens *from* this state, so it must take over.)
     pub(super) fn is_empty_state(&self) -> bool {
         !self.state.loading
             && !self.state.in_repo
             && self.state.diff.is_none()
             && self.state.merge_resolve.is_none()
+            && self.state.clone_form.is_none()
     }
 
     /// The empty-state "Init" card rect (index 0) — the host uses it
@@ -248,7 +250,8 @@ impl GitPanel<'_> {
         } else {
             alpha(t.muted, 0.50)
         };
-        cx.backend.fill_round_rect(ib_rect, 10.0, alpha(ib_fill, o));
+        // TS icon box is `rounded-lg` (8px), inside the `rounded-xl` card.
+        cx.backend.fill_round_rect(ib_rect, 8.0, alpha(ib_fill, o));
         // Icon — hover `text-primary`, else `text-foreground/80`
         // (enabled) / `text-muted-foreground` (disabled).
         let icon_color = if active {

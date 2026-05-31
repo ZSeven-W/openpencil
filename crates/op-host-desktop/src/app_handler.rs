@@ -464,6 +464,10 @@ impl ApplicationHandler for DesktopApp {
                 if self.poll_git_diff_job() {
                     self.redraw_dirty = true;
                 }
+                // Drain a finished background `git clone`.
+                if self.poll_git_clone_job() {
+                    self.redraw_dirty = true;
+                }
                 // Keep an open Git panel fresh against external repo
                 // changes — re-request a snapshot at most every 2 s.
                 // The query runs on a worker thread, so this never

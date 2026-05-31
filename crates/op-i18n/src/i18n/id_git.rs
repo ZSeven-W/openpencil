@@ -329,6 +329,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "git.gitError.mergeInProgress" => "Sudah ada penggabungan yang berlangsung — selesaikan atau batalkan dulu.",
         "git.gitError.workingTreeDirty" => "Pohon kerja memiliki perubahan yang belum di-commit — commit atau stash sebelum menggabungkan.",
         "git.gitError.io" => "Galat proses git: {{detail}}",
+        "git.empty.openNotARepo" => "Folder tersebut bukan repositori Git.",
+        "git.empty.cloneComingSoon" => "Kloning memerlukan URL jarak jauh — formulir kloning di panel akan segera hadir.",
         _ => return None,
     })
 }

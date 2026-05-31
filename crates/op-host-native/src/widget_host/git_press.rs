@@ -6,7 +6,7 @@
 //! after the rail blocks (which already skip a click that lands
 //! inside the Git-panel rect) and before the canvas overlays.
 
-use op_editor_core::{GitDiffTarget, GitOverflowView, GitPanelAction};
+use op_editor_core::{CloneField, GitDiffTarget, GitOverflowView, GitPanelAction};
 use op_editor_ui::widgets::{GitPanel, GitPanelHit};
 use op_editor_ui::Point2D;
 
@@ -107,7 +107,35 @@ impl WidgetHostNative {
                 panel.pending_action = Some(GitPanelAction::OpenRepo);
             }
             Some(GitPanelHit::EmptyClone) => {
+                // Opens the inline clone wizard (host-side, so it can seed
+                // the URL focus + caret from the live clock).
                 panel.pending_action = Some(GitPanelAction::CloneRepo);
+            }
+            Some(GitPanelHit::CloneUrlInput) => {
+                if let Some(form) = panel.clone_form.as_mut() {
+                    form.focus = Some(CloneField::Url);
+                    form.caret_anchor_ms = now;
+                    form.error = None;
+                }
+            }
+            Some(GitPanelHit::CloneDestInput) => {
+                if let Some(form) = panel.clone_form.as_mut() {
+                    form.focus = Some(CloneField::Dest);
+                    form.caret_anchor_ms = now;
+                    form.error = None;
+                }
+            }
+            Some(GitPanelHit::CloneDestPick) => {
+                panel.pending_action = Some(GitPanelAction::PickCloneDest);
+            }
+            Some(GitPanelHit::CloneSubmit) => {
+                // The host validates (URL + dest non-empty) + runs the
+                // clone; a no-op when the form is already cloning.
+                panel.pending_action = Some(GitPanelAction::SubmitClone);
+            }
+            Some(GitPanelHit::CloneCancel) => {
+                // Pure UI — drop the wizard back to the empty state.
+                panel.clone_form = None;
             }
             Some(GitPanelHit::Refresh) => {
                 panel.pending_action = Some(GitPanelAction::Refresh);

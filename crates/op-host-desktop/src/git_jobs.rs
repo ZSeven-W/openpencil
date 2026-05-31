@@ -198,6 +198,48 @@ impl GitPullJob {
     }
 }
 
+/// A `git clone <url> <dest>` running on a worker thread — the
+/// network-bound clone must not block the winit UI thread. On success
+/// the worker returns the destination path so the host can discover +
+/// bind the freshly-cloned repository.
+pub struct GitCloneJob {
+    rx: Option<Receiver<Result<std::path::PathBuf, GitError>>>,
+}
+
+impl GitCloneJob {
+    /// Spawn `GitRepo::clone(url, dest)` on a worker thread.
+    pub fn spawn(url: String, dest: std::path::PathBuf) -> Self {
+        let (tx, rx) = mpsc::channel();
+        std::thread::spawn(move || {
+            let result = GitRepo::clone(&url, &dest).map(|_repo| dest);
+            let _ = tx.send(result);
+        });
+        Self { rx: Some(rx) }
+    }
+
+    /// Drain the clone result once it lands — `Some` exactly once.
+    pub fn poll(&mut self) -> Option<Result<std::path::PathBuf, GitError>> {
+        let rx = self.rx.as_ref()?;
+        match rx.try_recv() {
+            Ok(result) => {
+                self.rx = None;
+                Some(result)
+            }
+            Err(TryRecvError::Empty) => None,
+            Err(TryRecvError::Disconnected) => {
+                self.rx = None;
+                // The worker dropped its sender without sending a result
+                // (a panic in `git clone`). Surface it as a failure so the
+                // host clears the job + shows an error, rather than leaving
+                // the wizard stuck at `cloning = true` forever.
+                Some(Err(GitError::Io(
+                    "clone worker terminated without a result".into(),
+                )))
+            }
+        }
+    }
+}
+
 /// A `git push` running on a worker thread — the network-bound
 /// push must not block the winit UI thread.
 pub struct GitPushJob {

@@ -132,6 +132,7 @@ pub(super) fn paint_mcp_tab(
     settings: &AgentSettings,
     ui: &EditorUiState,
     content: Rect,
+    now_ms: u64,
 ) {
     let title = TextLayout::single_run(
         t_settings(ui, "settings.mcp.server"),
@@ -144,7 +145,7 @@ pub(super) fn paint_mcp_tab(
         &title,
         Point2D::new(content.origin.x, content.origin.y + 20.0),
     );
-    paint_server_card(cx, theme, settings, ui, content);
+    paint_server_card(cx, theme, settings, ui, content, now_ms);
     paint_client_config(cx, theme, settings, ui, content);
 
     let mut y =
@@ -191,6 +192,7 @@ fn paint_server_card(
     settings: &AgentSettings,
     ui: &EditorUiState,
     content: Rect,
+    now_ms: u64,
 ) {
     let card = server_card_rect(content);
     cx.backend.fill_round_rect(card, 10.0, theme.muted);
@@ -273,13 +275,13 @@ fn paint_server_card(
     let port_y = port_field.origin.y + PORT_FIELD_H / 2.0 + 5.0;
     cx.backend
         .draw_text(&port_layout, Point2D::new(port_x, port_y));
-    if focused {
-        // Static caret at the end of the draft — chrome caret blink
-        // would require threading `now_ms`; the static bar is enough
-        // to signal "this field is accepting keystrokes".
+    if focused && jian_core::anim::blink_visible(now_ms, ui.settings_input_caret_anchor_ms, 500) {
         let caret = Rect {
-            origin: Point2D::new(port_x + port_w + 1.0, port_field.origin.y + 6.0),
-            size: Point2D::new(1.5, PORT_FIELD_H - 12.0),
+            origin: Point2D::new(
+                (port_x + port_w + 1.0).min(port_field.origin.x + port_field.size.x - 8.0),
+                port_field.origin.y + (PORT_FIELD_H - 15.0) / 2.0,
+            ),
+            size: Point2D::new(1.5, 15.0),
         };
         cx.backend.fill_rect(caret, theme.foreground);
     }

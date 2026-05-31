@@ -210,6 +210,8 @@ pub fn paint_model_picker(
     scroll: f32,
     hover: Option<usize>,
     search: &str,
+    now_ms: u64,
+    caret_anchor_ms: u64,
     locale: op_editor_core::Locale,
 ) {
     // Card background + border — painted unscrolled so the frame
@@ -217,7 +219,7 @@ pub fn paint_model_picker(
     cx.backend.fill_round_rect(rect, 10.0, theme.card);
     cx.backend.stroke_round_rect(rect, 10.0, theme.border, 1.0);
     let row_left = rect.origin.x + 12.0;
-    paint_search_row(cx, theme, rect, search, locale);
+    paint_search_row(cx, theme, rect, search, now_ms, caret_anchor_ms, locale);
     let list_rect = model_list_rect(rect);
     if visible_model_indices(models, search).is_empty() {
         let empty = op_i18n::translate(locale, "ai.noModelsFound");
@@ -381,6 +383,8 @@ fn paint_search_row(
     theme: &Theme,
     rect: Rect,
     search: &str,
+    now_ms: u64,
+    caret_anchor_ms: u64,
     locale: op_editor_core::Locale,
 ) {
     let divider_y = rect.origin.y + MODEL_SEARCH_H - 0.5;
@@ -421,10 +425,24 @@ fn paint_search_row(
         to_jian_color(color),
         Point2D::new(0.0, 0.0),
     );
-    cx.backend.draw_text(
-        &layout,
-        Point2D::new(search_rect.origin.x + 28.0, search_rect.origin.y + 17.0),
-    );
+    let text_x = search_rect.origin.x + 28.0;
+    cx.backend
+        .draw_text(&layout, Point2D::new(text_x, search_rect.origin.y + 17.0));
+    if jian_core::anim::blink_visible(now_ms, caret_anchor_ms, 500) {
+        let caret_x = if raw.is_empty() {
+            text_x - 4.0
+        } else {
+            text_x + cx.backend.measure_text(raw, 12.0) + 1.0
+        };
+        let caret_x = caret_x.min(search_rect.origin.x + search_rect.size.x - 24.0);
+        cx.backend.fill_rect(
+            Rect {
+                origin: Point2D::new(caret_x, search_rect.origin.y + 4.5),
+                size: Point2D::new(1.5, 15.0),
+            },
+            theme.foreground,
+        );
+    }
     if !raw.is_empty() {
         draw_icon(
             cx.backend,
@@ -695,11 +713,11 @@ mod tests {
         let provider_model = entry(AgentProvider::CodexCli, "gpt-5.5");
 
         assert_eq!(
-            visible_model_indices(&[builtin.clone()], "api key"),
+            visible_model_indices(std::slice::from_ref(&builtin), "api key"),
             Vec::<usize>::new()
         );
         assert_eq!(
-            visible_model_indices(&[builtin.clone()], "deepseek"),
+            visible_model_indices(std::slice::from_ref(&builtin), "deepseek"),
             vec![0]
         );
         assert_eq!(visible_model_indices(&[provider_model], "openai"), vec![0]);

@@ -372,6 +372,11 @@ impl WidgetHostNative {
                         panel.https_focused = false;
                         panel.diff = None;
                         panel.merge_resolve = None;
+                        // Close the clone wizard synchronously so a rapid
+                        // close→reopen can't resurface a stale form before
+                        // the host's `poll_git_clone_job` runs (it then
+                        // abandons any in-flight job — `cloning` form gone).
+                        panel.clone_form = None;
                     }
                     self.mark_dirty();
                     return true;

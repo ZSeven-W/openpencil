@@ -26,7 +26,13 @@ impl WidgetHostNative {
                 op_editor_core::agent_settings::SettingsFocus::BuiltinAgent { .. } => {
                     !c.is_control() && draft.len() < 512
                 }
+                op_editor_core::agent_settings::SettingsFocus::BuiltinAgentDraft(_) => {
+                    !c.is_control() && draft.len() < 512
+                }
                 op_editor_core::agent_settings::SettingsFocus::AcpAgent { .. } => {
+                    !c.is_control() && draft.len() < 512
+                }
+                op_editor_core::agent_settings::SettingsFocus::AcpAgentDraft(_) => {
                     !c.is_control() && draft.len() < 512
                 }
                 op_editor_core::agent_settings::SettingsFocus::ImageGenProfile { .. } => {
@@ -35,10 +41,34 @@ impl WidgetHostNative {
             };
             if accepts {
                 draft.push(c);
+                self.editor_state.editor_ui.settings_input_caret_anchor_ms = self.now_ms;
                 self.mark_dirty();
                 return true;
             }
             return false;
+        }
+        // The inline clone wizard owns the keyboard while it is open: a
+        // focused URL / destination field takes the character (unless a
+        // clone is already running), and every other key is swallowed so
+        // nothing reaches the canvas.
+        if self.git_clone_input_active() {
+            if c.is_control() {
+                return false;
+            }
+            let now = self.now_ms;
+            if let Some(form) = self.editor_state.editor_ui.git_panel.clone_form.as_mut() {
+                if !form.cloning {
+                    match form.focus {
+                        Some(op_editor_core::CloneField::Url) => form.url.push(c),
+                        Some(op_editor_core::CloneField::Dest) => form.dest.push(c),
+                        None => {}
+                    }
+                    form.caret_anchor_ms = now;
+                    form.error = None;
+                }
+            }
+            self.mark_dirty();
+            return true;
         }
         // Git panel's commit-message input owns the keyboard next.
         if self.git_commit_focus_active() {
@@ -165,6 +195,9 @@ impl WidgetHostNative {
         }
         if self.editor_state.editor_ui.chat_model_picker_open && !c.is_control() {
             self.editor_state.editor_ui.chat_model_picker_search.push(c);
+            self.editor_state
+                .editor_ui
+                .chat_model_picker_caret_anchor_ms = self.now_ms;
             self.editor_state.editor_ui.chat_model_picker_scroll = 0.0;
             self.editor_state.editor_ui.chat_model_picker_hover = None;
             self.mark_dirty();
@@ -200,6 +233,27 @@ impl WidgetHostNative {
         true
     }
 
+    /// Paste clipboard `text` into whichever text input currently owns
+    /// the keyboard — the clone-wizard URL / destination, the git commit
+    /// message, the remote / HTTPS draft, or a settings field. Each
+    /// character is routed through [`Self::apply_text`], so per-input
+    /// filtering (e.g. digits-only for the MCP port, the clone field's
+    /// `!cloning` lock) still applies; control characters / newlines are
+    /// dropped since these inputs are single-line. Returns `true` if
+    /// anything was inserted.
+    pub fn apply_input_paste(&mut self, text: &str) -> bool {
+        let mut inserted = false;
+        for c in text.chars() {
+            if c.is_control() {
+                continue;
+            }
+            if self.apply_text(c) {
+                inserted = true;
+            }
+        }
+        inserted
+    }
+
     /// Cut the focused chat input — returns its text and empties the
     /// buffer. `None` when the chat input is not focused or already
     /// empty. The desktop host writes the returned text to the OS
@@ -217,6 +271,24 @@ impl WidgetHostNative {
     pub fn apply_backspace(&mut self) -> bool {
         if self.editor_state.editor_ui.agent_settings.focus.is_some() {
             self.editor_state.editor_ui.settings_input_draft.pop();
+            self.editor_state.editor_ui.settings_input_caret_anchor_ms = self.now_ms;
+            self.mark_dirty();
+            return true;
+        }
+        if self.git_clone_input_active() {
+            // Swallow Backspace whenever the wizard is open so it can
+            // never delete a selected node; pop a char only from a
+            // focused field that isn't mid-clone.
+            if let Some(form) = self.editor_state.editor_ui.git_panel.clone_form.as_mut() {
+                if !form.cloning {
+                    match form.focus {
+                        Some(op_editor_core::CloneField::Url) => form.url.pop(),
+                        Some(op_editor_core::CloneField::Dest) => form.dest.pop(),
+                        None => None,
+                    };
+                    form.error = None;
+                }
+            }
             self.mark_dirty();
             return true;
         }
@@ -297,6 +369,9 @@ impl WidgetHostNative {
                 .pop()
                 .is_some()
             {
+                self.editor_state
+                    .editor_ui
+                    .chat_model_picker_caret_anchor_ms = self.now_ms;
                 self.editor_state.editor_ui.chat_model_picker_scroll = 0.0;
                 self.editor_state.editor_ui.chat_model_picker_hover = None;
                 self.mark_dirty();
@@ -538,6 +613,25 @@ impl WidgetHostNative {
             self.commit_settings_focus_if_any();
             return true;
         }
+        // Enter is owned by the clone wizard whenever it is open: a
+        // focused field (not mid-clone) requests the clone; otherwise the
+        // key is simply swallowed so it can't fall through to chat send
+        // or any other action.
+        if self.git_clone_input_active() {
+            let submit = self
+                .editor_state
+                .editor_ui
+                .git_panel
+                .clone_form
+                .as_ref()
+                .is_some_and(|f| f.focus.is_some() && !f.cloning);
+            if submit {
+                self.editor_state.editor_ui.git_panel.pending_action =
+                    Some(op_editor_core::GitPanelAction::SubmitClone);
+            }
+            self.mark_dirty();
+            return true;
+        }
         // Enter in the Git commit input requests a commit — needs a
         // message and a staged file (the commit is the staged set).
         if self.git_commit_focus_active() {
@@ -628,6 +722,26 @@ impl WidgetHostNative {
             .is_some()
         {
             self.editor_state.editor_ui.settings_input_draft.clear();
+            self.mark_dirty();
+            return true;
+        }
+        // Escape steps out of the clone wizard: first defocus the active
+        // field, then (on a second press) close the wizard back to the
+        // empty state.
+        if self.git_clone_input_active() {
+            let defocused = {
+                let form = self
+                    .editor_state
+                    .editor_ui
+                    .git_panel
+                    .clone_form
+                    .as_mut()
+                    .unwrap();
+                form.focus.take().is_some()
+            };
+            if !defocused {
+                self.editor_state.editor_ui.git_panel.clone_form = None;
+            }
             self.mark_dirty();
             return true;
         }

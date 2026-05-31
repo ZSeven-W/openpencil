@@ -153,6 +153,8 @@ pub struct AIChatPlaceholder<'a> {
     /// Live model-picker search query
     /// (`Document.ui.chat_model_picker_search`).
     pub model_picker_search: String,
+    /// Last focus / edit timestamp for the model-picker search caret.
+    pub model_picker_caret_anchor_ms: u64,
     /// Localised empty-state example cards — resolved at construction
     /// time so the grid reflows when the user flips the Globe icon.
     pub(crate) examples: [ExampleCard; 4],
@@ -187,6 +189,7 @@ impl<'a> AIChatPlaceholder<'a> {
             model_picker_scroll: ui.chat_model_picker_scroll,
             model_picker_hover: ui.chat_model_picker_hover,
             model_picker_search: ui.chat_model_picker_search.clone(),
+            model_picker_caret_anchor_ms: ui.chat_model_picker_caret_anchor_ms,
             examples: example_cards(ui.locale),
             locale: ui.locale,
         }
@@ -764,6 +767,8 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
                 self.model_picker_scroll,
                 self.model_picker_hover,
                 &self.model_picker_search,
+                self.now_ms,
+                self.model_picker_caret_anchor_ms,
                 self.locale,
             );
         }

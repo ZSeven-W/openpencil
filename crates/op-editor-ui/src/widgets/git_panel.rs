@@ -157,6 +157,16 @@ pub enum GitPanelHit {
     EmptyOpen,
     /// Empty-state "Clone" card — clone from a remote.
     EmptyClone,
+    /// Clone view — focus the URL field.
+    CloneUrlInput,
+    /// Clone view — focus the destination field.
+    CloneDestInput,
+    /// Clone view — open a native folder picker for the destination.
+    CloneDestPick,
+    /// Clone view — submit `git clone`.
+    CloneSubmit,
+    /// Clone view — cancel back to the empty state.
+    CloneCancel,
     /// Inside the panel but not on an interactive target — the
     /// click is swallowed (and the commit input defocused).
     Inside,
@@ -261,6 +271,10 @@ impl<'a> GitPanel<'a> {
 
     /// The panel's total height for the current content.
     pub fn height(&self) -> f32 {
+        // The inline clone wizard takes over the whole panel.
+        if self.state.clone_form.is_some() {
+            return self.clone_view_height();
+        }
         // The merge-resolution view sizes to its conflict count.
         if self.state.merge_resolve.is_some() {
             return self.resolve_view_height();
@@ -395,6 +409,11 @@ impl<'a> GitPanel<'a> {
         cx.backend
             .stroke_round_rect(rect, 10.0, self.theme.border, 1.0);
 
+        // The inline clone wizard replaces the whole body.
+        if self.state.clone_form.is_some() {
+            self.paint_clone(cx, rect);
+            return;
+        }
         // The merge-resolution view replaces the whole body.
         if self.state.merge_resolve.is_some() {
             self.paint_resolve(cx, rect);

@@ -106,6 +106,7 @@ fn builtin_agent_compact_switch_toggles_enabled_and_models() {
 #[test]
 fn builtin_agent_compact_edit_focuses_display_name_form() {
     let mut host = WidgetHostNative::new();
+    host.set_now_ms(1234);
     host.editor_state_mut()
         .editor_ui
         .agent_settings
@@ -129,44 +130,101 @@ fn builtin_agent_compact_edit_focuses_display_name_form() {
         host.editor_state().editor_ui.settings_input_draft,
         "MiniMax"
     );
+    assert_eq!(
+        host.editor_state().editor_ui.settings_input_caret_anchor_ms,
+        1234
+    );
 }
 
 #[test]
-fn repeated_add_provider_press_reuses_empty_builtin_draft() {
+fn builtin_agent_kind_toggle_commits_focused_api_key_draft() {
     let mut host = WidgetHostNative::new();
-    for _ in 0..4 {
-        host.editor_state_mut()
-            .editor_ui
-            .agent_settings
-            .add_builtin_agent();
-    }
+    host.editor_state_mut()
+        .editor_ui
+        .agent_settings
+        .add_builtin_agent_with_defaults("MINIMAX", "", "MiniMax-M2.7");
+    host.editor_state_mut().editor_ui.agent_settings.focus = Some(SettingsFocus::BuiltinAgent {
+        index: 0,
+        field: BuiltinAgentField::ApiKey,
+    });
+    host.editor_state_mut().editor_ui.settings_input_draft = "sk-kind-toggle".into();
 
-    let (content_x, content_y, content_w) = agent_settings_content_metrics(&host);
-    let add_x = content_x + content_w - 12.0 - 48.0;
-    let add_y = content_y + 12.0 + 12.0;
+    let panel = AgentSettingsPanel::for_editor(host.editor_state());
+    let rect = panel.rect(1200.0, 800.0);
+    let content_x = rect.origin.x + 200.0 + 24.0;
+    let content_y = rect.origin.y + 24.0;
+    let content_w = rect.size.x - 200.0 - 48.0;
+    let first_card_y = content_y + 12.0 + 28.0 + 28.0;
+    let kind_x = content_x + content_w - 172.0 + 120.0;
+    let kind_y = first_card_y + 22.0;
 
-    assert!(host.dispatch_agent_settings_press(add_x, add_y, 1200.0, 800.0));
+    assert!(host.dispatch_agent_settings_press(kind_x, kind_y, 1200.0, 800.0));
+
+    let agent = &host.editor_state().editor_ui.agent_settings.builtin_agents[0];
+    assert_eq!(agent.api_key, "sk-kind-toggle");
+    assert!(host.editor_state().editor_ui.agent_settings.focus.is_none());
+}
+
+#[test]
+fn add_provider_opens_unsaved_builtin_agent_draft() {
+    let mut host = WidgetHostNative::new();
+    host.set_now_ms(1234);
+
+    let panel = AgentSettingsPanel::for_editor(host.editor_state());
+    let rect = panel.rect(1200.0, 800.0);
+    let content_x = rect.origin.x + 200.0 + 24.0;
+    let content_y = rect.origin.y + 24.0;
+    let content_w = rect.size.x - 200.0 - 48.0;
+    let add_x = content_x + content_w - 48.0;
+    let add_y = content_y + 24.0;
+
     assert!(host.dispatch_agent_settings_press(add_x, add_y, 1200.0, 800.0));
 
     let settings = &host.editor_state().editor_ui.agent_settings;
-    assert_eq!(
-        settings.builtin_agents.len(),
-        5,
-        "replayed add-provider presses should not append Built-in Agent 6+"
-    );
-    assert_eq!(settings.builtin_agents[4].display_name, "Built-in Agent 5");
+    assert!(settings.builtin_agents.is_empty());
+    assert!(settings.builtin_agent_draft.is_some());
     assert_eq!(
         settings.focus,
-        Some(SettingsFocus::BuiltinAgent {
-            index: 4,
-            field: BuiltinAgentField::ApiKey,
-        })
+        Some(SettingsFocus::BuiltinAgentDraft(BuiltinAgentField::ApiKey))
+    );
+    assert_eq!(host.editor_state().editor_ui.settings_input_draft, "");
+    assert_eq!(
+        host.editor_state().editor_ui.settings_input_caret_anchor_ms,
+        1234
     );
 }
 
 #[test]
-fn add_acp_agent_press_creates_local_agent() {
+fn save_builtin_agent_draft_persists_provider() {
     let mut host = WidgetHostNative::new();
+    let panel = AgentSettingsPanel::for_editor(host.editor_state());
+    let rect = panel.rect(1200.0, 800.0);
+    let content_x = rect.origin.x + 200.0 + 24.0;
+    let content_y = rect.origin.y + 24.0;
+    let content_w = rect.size.x - 200.0 - 48.0;
+    let add_x = content_x + content_w - 48.0;
+    let add_y = content_y + 24.0;
+
+    assert!(host.dispatch_agent_settings_press(add_x, add_y, 1200.0, 800.0));
+    for c in "sk-test".chars() {
+        assert!(host.apply_text(c));
+    }
+    let card_y = content_y + 12.0 + 28.0 + 28.0;
+    let save_x = content_x + content_w - 12.0 - 34.0;
+    let save_y = card_y + 168.0 + 18.0;
+    assert!(host.dispatch_agent_settings_press(save_x, save_y, 1200.0, 800.0));
+
+    let settings = &host.editor_state().editor_ui.agent_settings;
+    assert_eq!(settings.builtin_agents.len(), 1);
+    assert!(settings.builtin_agent_draft.is_none());
+    assert_eq!(settings.builtin_agents[0].api_key, "sk-test");
+    assert!(settings.focus.is_none());
+}
+
+#[test]
+fn add_acp_agent_press_opens_unsaved_draft() {
+    let mut host = WidgetHostNative::new();
+    host.set_now_ms(1234);
     let panel = AgentSettingsPanel::for_editor(host.editor_state());
     let rect = panel.rect(1200.0, 800.0);
     let content_x = rect.origin.x + 200.0 + 24.0;
@@ -178,8 +236,69 @@ fn add_acp_agent_press_creates_local_agent() {
     assert!(host.dispatch_agent_settings_press(add_x, add_y, 1200.0, 800.0));
 
     let settings = &host.editor_state().editor_ui.agent_settings;
+    assert!(settings.acp_agents.is_empty());
+    assert!(settings.acp_agent_draft.is_some());
+    assert_eq!(
+        settings.focus,
+        Some(SettingsFocus::AcpAgentDraft(AcpAgentField::Command))
+    );
+    assert_eq!(
+        host.editor_state().editor_ui.settings_input_caret_anchor_ms,
+        1234
+    );
+}
+
+#[test]
+fn save_acp_agent_draft_persists_agent() {
+    let mut host = WidgetHostNative::new();
+    let panel = AgentSettingsPanel::for_editor(host.editor_state());
+    let rect = panel.rect(1200.0, 800.0);
+    let content_x = rect.origin.x + 200.0 + 24.0;
+    let content_y = rect.origin.y + 24.0;
+    let content_w = rect.size.x - 200.0 - 48.0;
+    let add_x = content_x + content_w - 12.0 - 48.0;
+    let add_y = content_y + 12.0 + 120.0 + 28.0 + 12.0;
+
+    assert!(host.dispatch_agent_settings_press(add_x, add_y, 1200.0, 800.0));
+    for c in "op-agent".chars() {
+        assert!(host.apply_text(c));
+    }
+    let card_y = acp_card_y(content_y);
+    let save_x = content_x + content_w - 12.0 - 34.0;
+    let save_y = card_y + 116.0 + 18.0;
+    assert!(host.dispatch_agent_settings_press(save_x, save_y, 1200.0, 800.0));
+
+    let settings = &host.editor_state().editor_ui.agent_settings;
     assert_eq!(settings.acp_agents.len(), 1);
-    assert_eq!(settings.acp_agents[0].display_name, "ACP Agent 1");
+    assert!(settings.acp_agent_draft.is_none());
+    assert_eq!(settings.acp_agents[0].command, "op-agent");
+    assert!(settings.focus.is_none());
+}
+
+#[test]
+fn cancel_acp_agent_draft_discards_unsaved_agent() {
+    let mut host = WidgetHostNative::new();
+    let panel = AgentSettingsPanel::for_editor(host.editor_state());
+    let rect = panel.rect(1200.0, 800.0);
+    let content_x = rect.origin.x + 200.0 + 24.0;
+    let content_y = rect.origin.y + 24.0;
+    let content_w = rect.size.x - 200.0 - 48.0;
+    let add_x = content_x + content_w - 12.0 - 48.0;
+    let add_y = content_y + 12.0 + 120.0 + 28.0 + 12.0;
+
+    assert!(host.dispatch_agent_settings_press(add_x, add_y, 1200.0, 800.0));
+    for c in "op-agent".chars() {
+        assert!(host.apply_text(c));
+    }
+    let card_y = acp_card_y(content_y);
+    let cancel_x = content_x + content_w - 12.0 - 68.0 - 8.0 - 34.0;
+    let cancel_y = card_y + 116.0 + 18.0;
+    assert!(host.dispatch_agent_settings_press(cancel_x, cancel_y, 1200.0, 800.0));
+
+    let settings = &host.editor_state().editor_ui.agent_settings;
+    assert!(settings.acp_agents.is_empty());
+    assert!(settings.acp_agent_draft.is_none());
+    assert!(settings.focus.is_none());
 }
 
 #[test]

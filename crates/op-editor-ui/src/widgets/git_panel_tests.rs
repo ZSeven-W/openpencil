@@ -4,8 +4,8 @@
 use crate::widgets::git_panel::*;
 use crate::{Point2D, Rect};
 use op_editor_core::{
-    EditorState, GitCommitSummary, GitDiffView, GitFileEntry, GitOverflowView, GitPanelState,
-    MergeConflictRow, MergeResolveFile, MergeResolveState,
+    CloneField, CloneFormState, EditorState, GitCommitSummary, GitDiffView, GitFileEntry,
+    GitOverflowView, GitPanelState, MergeConflictRow, MergeResolveFile, MergeResolveState,
 };
 
 fn state_with(panel: GitPanelState) -> EditorState {
@@ -19,22 +19,6 @@ fn open_repo() -> GitPanelState {
         open: true,
         in_repo: true,
         ..GitPanelState::default()
-    }
-}
-
-/// A bound repo with a dirty working tree — leaves the TS ready view
-/// (which only shows for a clean tree) and exercises the classic
-/// status body: branch rows, the Commit/Refresh/Pull/Push row, the
-/// working-tree status line, and the Remotes section.
-fn dirty_repo() -> GitPanelState {
-    GitPanelState {
-        changed_files: vec![GitFileEntry {
-            path: "dirty.op".into(),
-            staged: false,
-            status: 'M',
-        }],
-        dirty_count: 1,
-        ..open_repo()
     }
 }
 
@@ -89,158 +73,6 @@ fn empty_history_reserves_a_placeholder_row() {
     assert_eq!(
         GitPanel::for_editor(&empty).unwrap().height(),
         GitPanel::for_editor(&one).unwrap().height(),
-    );
-}
-
-#[test]
-fn hit_test_maps_each_action_region() {
-    // A dirty tree keeps the classic status body (the TS ready view
-    // only paints for a clean tree); that is where the 4-button row
-    // + commit input live.
-    let s = state_with(dirty_repo());
-    let panel = GitPanel::for_editor(&s).unwrap();
-    let rect = panel_rect(&panel);
-    let rects = GitPanel::action_rects(rect, false);
-    // Normal mode: Commit / Refresh / Pull / Push + the commit input.
-    assert_eq!(rects.buttons.len(), 4);
-    assert_eq!(
-        panel.hit_test(rect, centre(rects.input)),
-        Some(GitPanelHit::CommitInput)
-    );
-    assert_eq!(
-        panel.hit_test(rect, centre(rects.buttons[0])),
-        Some(GitPanelHit::Commit)
-    );
-    assert_eq!(
-        panel.hit_test(rect, centre(rects.buttons[1])),
-        Some(GitPanelHit::Refresh)
-    );
-    assert_eq!(
-        panel.hit_test(rect, centre(rects.buttons[2])),
-        Some(GitPanelHit::Pull)
-    );
-    assert_eq!(
-        panel.hit_test(rect, centre(rects.buttons[3])),
-        Some(GitPanelHit::Push)
-    );
-    // Header area → swallowed, not an action.
-    assert_eq!(
-        panel.hit_test(rect, Point2D::new(20.0, 8.0)),
-        Some(GitPanelHit::Inside)
-    );
-    // Outside the panel entirely → None.
-    assert_eq!(
-        panel.hit_test(rect, Point2D::new(GIT_PANEL_WIDTH + 50.0, 8.0)),
-        None
-    );
-}
-
-#[test]
-fn branch_rows_switch_to_non_current_branch() {
-    let s = state_with(GitPanelState {
-        branch: Some("main".to_string()),
-        branches: vec!["feature".to_string(), "main".to_string()],
-        ..dirty_repo()
-    });
-    let panel = GitPanel::for_editor(&s).unwrap();
-    let rect = panel_rect(&panel);
-    let (_, rows) = panel.branch_layout(rect);
-    assert_eq!(rows.len(), 2);
-    // Row 0 is `feature` (not current) → a switch.
-    assert_eq!(
-        panel.hit_test(rect, centre(rows[0])),
-        Some(GitPanelHit::SwitchBranch(0))
-    );
-    // Row 1 is `main` (the current branch) → a no-op click.
-    assert_eq!(
-        panel.hit_test(rect, centre(rows[1])),
-        Some(GitPanelHit::Inside)
-    );
-}
-
-#[test]
-fn branch_row_merge_button_dispatches_a_merge() {
-    let s = state_with(GitPanelState {
-        branch: Some("main".to_string()),
-        branches: vec!["feature".to_string(), "main".to_string()],
-        ..dirty_repo()
-    });
-    let panel = GitPanel::for_editor(&s).unwrap();
-    let rect = panel_rect(&panel);
-    let (_, rows) = panel.branch_layout(rect);
-    // Row 0 = `feature` (not current). Its right-edge button merges;
-    // the row body switches.
-    let merge_btn = GitPanel::branch_merge_button(rows[0]);
-    assert_eq!(
-        panel.hit_test(rect, centre(merge_btn)),
-        Some(GitPanelHit::MergeBranch(0))
-    );
-    // A point on the row's far left (clear of the button) → switch.
-    let left_of_row = Point2D::new(rows[0].origin.x + 8.0, centre(rows[0]).y);
-    assert_eq!(
-        panel.hit_test(rect, left_of_row),
-        Some(GitPanelHit::SwitchBranch(0))
-    );
-    // The current branch's row has no merge button — its whole row
-    // (button area included) is a no-op.
-    let current_btn = GitPanel::branch_merge_button(rows[1]);
-    assert_eq!(
-        panel.hit_test(rect, centre(current_btn)),
-        Some(GitPanelHit::Inside)
-    );
-}
-
-#[test]
-fn changed_file_rows_toggle_staging() {
-    let s = state_with(GitPanelState {
-        changed_files: vec![
-            GitFileEntry {
-                path: "a.op".into(),
-                staged: false,
-                status: 'M',
-            },
-            GitFileEntry {
-                path: "b.op".into(),
-                staged: true,
-                status: 'A',
-            },
-        ],
-        ..open_repo()
-    });
-    let panel = GitPanel::for_editor(&s).unwrap();
-    let rect = panel_rect(&panel);
-    let rows = panel.list_row_rects(rect);
-    // A dirty tree → the list slot shows the staging list. The
-    // left-edge checkbox toggles staging; the row body opens the
-    // file's diff (where hunks can be staged).
-    assert_eq!(rows.len(), 2);
-    let checkbox = |r: Rect| Point2D::new(r.origin.x + 10.0, centre(r).y);
-    assert_eq!(
-        panel.hit_test(rect, checkbox(rows[0])),
-        Some(GitPanelHit::ToggleStageFile(0))
-    );
-    assert_eq!(
-        panel.hit_test(rect, centre(rows[1])),
-        Some(GitPanelHit::ShowChangedFileDiff(1))
-    );
-}
-
-#[test]
-fn remotes_section_maps_the_input_and_set_button() {
-    let s = state_with(GitPanelState {
-        remotes: vec!["origin → git@host:org/repo.git".into()],
-        ..dirty_repo()
-    });
-    let panel = GitPanel::for_editor(&s).unwrap();
-    let rect = panel_rect(&panel);
-    let layout = panel.remotes_layout(rect);
-    assert_eq!(
-        panel.hit_test(rect, centre(layout.input)),
-        Some(GitPanelHit::RemoteInput)
-    );
-    assert_eq!(
-        panel.hit_test(rect, centre(layout.set_button)),
-        Some(GitPanelHit::SetRemote)
     );
 }
 
@@ -317,29 +149,6 @@ fn truncate_caps_long_summaries() {
 }
 
 // --- Diff view ----------------------------------------------------
-
-#[test]
-fn dirty_status_line_opens_the_working_diff() {
-    // A clean tree → the TS ready view, which has no working-tree
-    // status line at all, so no click anywhere yields a working diff.
-    let clean = state_with(open_repo());
-    let panel = GitPanel::for_editor(&clean).unwrap();
-    let rect = panel_rect(&panel);
-    let clean_hit = panel.hit_test(rect, centre(panel.status_rect(rect)));
-    assert_ne!(clean_hit, Some(GitPanelHit::ShowWorkingDiff));
-
-    // A dirty tree → the classic body's status line opens the diff.
-    let dirty = state_with(GitPanelState {
-        dirty_count: 3,
-        ..dirty_repo()
-    });
-    let panel = GitPanel::for_editor(&dirty).unwrap();
-    let rect = panel_rect(&panel);
-    assert_eq!(
-        panel.hit_test(rect, centre(panel.status_rect(rect))),
-        Some(GitPanelHit::ShowWorkingDiff)
-    );
-}
 
 #[test]
 fn commit_rows_open_a_commit_diff() {
@@ -778,5 +587,110 @@ fn empty_state_cards_map_to_actions() {
     assert_eq!(
         panel.hit_test(rect, centre(cards[1])),
         Some(GitPanelHit::EmptyOpen)
+    );
+}
+
+#[test]
+fn clone_form_takes_over_and_maps_each_target() {
+    // With `clone_form` set the panel switches to the clone view; each
+    // field / button hit-tests to its own action regardless of repo
+    // state (the wizard opens from the no-repo empty state).
+    let st = state_with(GitPanelState {
+        open: true,
+        in_repo: false,
+        clone_form: Some(CloneFormState {
+            url: "https://github.com/owner/repo.git".into(),
+            dest: "/tmp/repo".into(),
+            focus: Some(CloneField::Url),
+            ..Default::default()
+        }),
+        ..GitPanelState::default()
+    });
+    let panel = GitPanel::for_editor(&st).unwrap();
+    let rect = panel_rect(&panel);
+    // The view sizes to the clone layout (positive, finite height).
+    assert!(panel.height() > 0.0);
+    let layout = panel.clone_layout(rect);
+    assert_eq!(
+        panel.hit_test(rect, centre(layout.url_input)),
+        Some(GitPanelHit::CloneUrlInput)
+    );
+    assert_eq!(
+        panel.hit_test(rect, centre(layout.dest_input)),
+        Some(GitPanelHit::CloneDestInput)
+    );
+    assert_eq!(
+        panel.hit_test(rect, centre(layout.dest_pick)),
+        Some(GitPanelHit::CloneDestPick)
+    );
+    assert_eq!(
+        panel.hit_test(rect, centre(layout.submit)),
+        Some(GitPanelHit::CloneSubmit)
+    );
+    assert_eq!(
+        panel.hit_test(rect, centre(layout.cancel)),
+        Some(GitPanelHit::CloneCancel)
+    );
+    // The dest input + pick button must not overlap.
+    assert!(
+        layout.dest_input.origin.x + layout.dest_input.size.x <= layout.dest_pick.origin.x + 0.01,
+        "dest input + pick button overlap"
+    );
+}
+
+#[test]
+fn clone_view_locks_to_cancel_only_while_cloning() {
+    // Mid-clone the form is locked: only Cancel acts (it abandons the
+    // job); the URL / destination / pick / submit controls are greyed
+    // and must swallow clicks instead of mutating a running clone.
+    let st = state_with(GitPanelState {
+        open: true,
+        in_repo: false,
+        clone_form: Some(CloneFormState {
+            url: "https://github.com/owner/repo.git".into(),
+            dest: "/tmp/repo".into(),
+            cloning: true,
+            ..Default::default()
+        }),
+        ..GitPanelState::default()
+    });
+    let panel = GitPanel::for_editor(&st).unwrap();
+    let rect = panel_rect(&panel);
+    let layout = panel.clone_layout(rect);
+    assert_eq!(
+        panel.hit_test(rect, centre(layout.cancel)),
+        Some(GitPanelHit::CloneCancel)
+    );
+    assert_eq!(
+        panel.hit_test(rect, centre(layout.submit)),
+        Some(GitPanelHit::Inside)
+    );
+    assert_eq!(
+        panel.hit_test(rect, centre(layout.url_input)),
+        Some(GitPanelHit::Inside)
+    );
+    assert_eq!(
+        panel.hit_test(rect, centre(layout.dest_pick)),
+        Some(GitPanelHit::Inside)
+    );
+}
+
+#[test]
+fn dirty_bound_repo_still_shows_the_ready_view() {
+    // TS parity: a bound, non-merging repo shows the ready view whether
+    // the working tree is clean OR dirty (there is no per-file staging
+    // view in TS; the commit-milestone flow handles dirty changes).
+    let mut state = open_repo();
+    state.changed_files = vec![GitFileEntry {
+        path: "x.op".into(),
+        staged: false,
+        status: 'M',
+    }];
+    state.dirty_count = 1;
+    let editor = state_with(state);
+    let panel = GitPanel::for_editor(&editor).expect("open repo => panel");
+    assert!(
+        panel.is_ready_state(),
+        "a dirty bound repo must still show the ready view",
     );
 }

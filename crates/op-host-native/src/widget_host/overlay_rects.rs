@@ -11,8 +11,8 @@
 use super::helpers::{rect_contains, GIT_PANEL_CARET_GAP, TOOLBAR_INSET_X, TOOLBAR_INSET_Y};
 use super::WidgetHostNative;
 use op_editor_ui::widgets::{
-    AlignToolbar, GitPanel, LayoutCx, LocalePicker, ShapePicker, Toolbar, TopBar, Widget,
-    GIT_PANEL_INSET, ICON_PICKER_PANEL_H, ICON_PICKER_PANEL_W, LOCALE_PICKER_WIDTH,
+    AlignToolbar, GitPanel, GitPanelHit, LayoutCx, LocalePicker, ShapePicker, Toolbar, TopBar,
+    Widget, GIT_PANEL_INSET, ICON_PICKER_PANEL_H, ICON_PICKER_PANEL_W, LOCALE_PICKER_WIDTH,
     SHAPE_PICKER_WIDTH, TOOLBAR_WIDTH, TOP_BAR_HEIGHT,
 };
 use op_editor_ui::{Point2D, Rect};
@@ -85,6 +85,32 @@ impl WidgetHostNative {
             });
         if hovered != self.editor_state.editor_ui.git_panel.empty_hovered_card {
             self.editor_state.editor_ui.git_panel.empty_hovered_card = hovered;
+            self.mark_dirty();
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Update `git_panel.branch_button_hovered` from the cursor — drives
+    /// the ready-view `⎇ <branch> ▾` button's `hover:bg-accent` wash.
+    /// Reuses the panel's own hit-test (`BranchPicker` is returned only
+    /// over that button in the ready view). Returns `true` when the hover
+    /// state flipped (a repaint is due).
+    pub(in crate::widget_host) fn update_git_panel_ready_hover(&mut self, x: f32, y: f32) -> bool {
+        let hovered = self
+            .git_panel_rect(self.last_viewport_w, self.last_viewport_h)
+            .and_then(|body| {
+                GitPanel::for_editor(&self.editor_state).map(|p| {
+                    matches!(
+                        p.hit_test(body, Point2D::new(x, y)),
+                        Some(GitPanelHit::BranchPicker)
+                    )
+                })
+            })
+            .unwrap_or(false);
+        if hovered != self.editor_state.editor_ui.git_panel.branch_button_hovered {
+            self.editor_state.editor_ui.git_panel.branch_button_hovered = hovered;
             self.mark_dirty();
             true
         } else {

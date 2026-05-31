@@ -13,15 +13,15 @@ impl DesktopApp {
         use op_editor_core::ReorderDirection;
         let mut consumed = false;
         let nudge = if self.shift_modifier { 10.0 } else { 1.0 };
-        // While a settings-modal input OR the Git panel's
-        // commit-message input owns the keyboard, the ONLY
-        // allowed paths are text / backspace / send / escape.
-        // Editor shortcuts (Cmd+D, Cmd+G, Cmd+Z, arrow nudges,
-        // Delete, [ / ], single-letter tool switches, …) would
-        // otherwise silently mutate the document while the
-        // user thinks they are typing into the input.
-        let settings_focused =
-            self.host.settings_focus_active() || self.host.git_commit_focus_active();
+        // While a settings-modal input, the Git commit-message input, OR
+        // the inline clone wizard owns the keyboard, the ONLY allowed
+        // paths are text / backspace / send / escape. Editor shortcuts
+        // (Cmd+D, Cmd+G, Cmd+Z, arrow nudges, Delete, [ / ], single-letter
+        // tool switches, …) would otherwise silently mutate the document
+        // while the user thinks they are typing into the input.
+        let settings_focused = self.host.settings_focus_active()
+            || self.host.git_commit_focus_active()
+            || self.host.git_clone_input_active();
         match logical_key {
             // Named-key shortcuts fire only when no Cmd/Ctrl is held.
             Key::Named(NamedKey::Backspace) if !self.zoom_modifier => {
@@ -122,6 +122,17 @@ impl DesktopApp {
                         if consumed {
                             self.mark_document_saved();
                         }
+                    }
+                    // Cmd+V pastes OS clipboard text into a focused text
+                    // input (clone-wizard URL / destination, commit
+                    // message, settings field) — placed before the
+                    // `settings_focused` swallow below, which would
+                    // otherwise eat the paste and route nothing.
+                    "v" if settings_focused => {
+                        if let Some(text) = crate::clipboard::get_text() {
+                            self.host.apply_input_paste(&text);
+                        }
+                        consumed = true;
                     }
                     _ if settings_focused => {}
                     "d" => consumed = self.host.apply_duplicate(),

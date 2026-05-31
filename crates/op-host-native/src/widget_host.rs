@@ -34,6 +34,7 @@
 use op_editor_ui::widgets::SelectionHandle;
 use op_editor_ui::{Rect, Theme};
 
+mod agent_settings_draft_dispatch;
 #[cfg(test)]
 mod agent_settings_tests;
 mod ai_chat_geometry;
@@ -570,6 +571,14 @@ impl WidgetHostNative {
         preserved.figma_import_in_progress = false;
         preserved.file_name_display = state.editor_ui.file_name_display.take();
         preserved.preserve_authored_geometry = state.editor_ui.preserve_authored_geometry;
+        // The imported document replaces the previous one, so an in-flight
+        // clone wizard belongs to a document that no longer exists — drop
+        // it. The host's `poll_git_clone_job` then abandons the job (it
+        // only binds while a `cloning` form is live). Without this the
+        // clone could bind a repo onto the freshly-imported untitled
+        // document, which the path-based origin check can't catch (both
+        // documents are untitled → the same `None` path).
+        preserved.git_panel.clone_form = None;
         state.editor_ui = preserved;
 
         let old_state = std::mem::replace(&mut self.editor_state, state);
@@ -667,6 +676,24 @@ impl WidgetHostNative {
                 500,
             ));
         }
+        if self.editor_state.editor_ui.agent_settings_open
+            && self.editor_state.editor_ui.agent_settings.focus.is_some()
+        {
+            return Some(jian_core::anim::next_blink_flip_ms(
+                self.now_ms,
+                self.editor_state.editor_ui.settings_input_caret_anchor_ms,
+                500,
+            ));
+        }
+        if self.editor_state.editor_ui.chat_model_picker_open {
+            return Some(jian_core::anim::next_blink_flip_ms(
+                self.now_ms,
+                self.editor_state
+                    .editor_ui
+                    .chat_model_picker_caret_anchor_ms,
+                500,
+            ));
+        }
         if self.editor_state.chat.focused {
             return Some(jian_core::anim::next_blink_flip_ms(
                 self.now_ms,
@@ -684,6 +711,18 @@ impl WidgetHostNative {
                 self.editor_state.editor_ui.git_panel.commit_caret_anchor_ms,
                 530,
             ));
+        }
+        // Clone-wizard field caret, and while a `git clone` runs — keep
+        // the loop ticking so the caret blinks and `poll_git_clone_job`
+        // drains the worker's result on a later frame.
+        if let Some(form) = &self.editor_state.editor_ui.git_panel.clone_form {
+            if form.focus.is_some() || form.cloning {
+                return Some(jian_core::anim::next_blink_flip_ms(
+                    self.now_ms,
+                    form.caret_anchor_ms,
+                    530,
+                ));
+            }
         }
         None
     }

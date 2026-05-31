@@ -180,18 +180,26 @@ impl WidgetHostNative {
                         return true;
                     }
                     AIChatHit::ToggleModelPicker => {
-                        self.editor_state.editor_ui.chat_model_picker_open =
-                            !self.editor_state.editor_ui.chat_model_picker_open;
+                        let opening = !self.editor_state.editor_ui.chat_model_picker_open;
+                        self.editor_state.editor_ui.chat_model_picker_open = opening;
                         // Reopen the picker un-scrolled / un-hovered so
                         // a stale offset from a prior open never hides
                         // the top of the catalog.
                         self.editor_state.editor_ui.chat_model_picker_scroll = 0.0;
                         self.editor_state.editor_ui.chat_model_picker_search.clear();
+                        if opening {
+                            self.editor_state
+                                .editor_ui
+                                .chat_model_picker_caret_anchor_ms = self.now_ms;
+                        }
                         self.editor_state.editor_ui.chat_model_picker_hover = None;
                         self.mark_dirty();
                         return true;
                     }
                     AIChatHit::FocusModelSearch => {
+                        self.editor_state
+                            .editor_ui
+                            .chat_model_picker_caret_anchor_ms = self.now_ms;
                         self.mark_dirty();
                         return true;
                     }

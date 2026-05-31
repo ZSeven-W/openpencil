@@ -26,14 +26,16 @@ const ICON_BTN: f32 = 28.0;
 /// by the header, commit box, and history so the column lines up.
 const READY_PAD: f32 = 10.0;
 /// Commit-box geometry — the TS `p-3` outer wrapper (12 px) around a
-/// `rounded-lg` card (~74 px: 2-row textarea + `h-6` button row).
+/// `rounded-lg` card. The card = a 2-row `text-xs` `leading-relaxed`
+/// textarea (`pt-2.5`+`pb-1` ≈ 53 px) over the `justify-end` button row
+/// (`h-6` 24 px + `pb-1.5` 6 px = 30 px) ≈ 83 px.
 const COMMIT_TOP: f32 = HEADER_H + 12.0;
-const COMMIT_H: f32 = 74.0;
-/// History section. The commit box owns the only divider below it; the
-/// label sits ~16 px under the box bottom and the first row ~20 px
-/// under the label so the rhythm matches the TS list `py-1.5`.
-const HISTORY_LABEL: f32 = COMMIT_TOP + COMMIT_H + 16.0;
-const HISTORY_FIRST: f32 = HISTORY_LABEL + 20.0;
+const COMMIT_H: f32 = 83.0;
+/// History section. The commit box owns the only divider below it. The
+/// TS `git-panel-history-list` has NO section header — the timeline (or
+/// the empty `git.history.empty` line) sits directly under that divider
+/// with the list's `py-1.5` rhythm.
+const HISTORY_FIRST: f32 = COMMIT_TOP + COMMIT_H + 24.0;
 const ROW_H: f32 = 26.0;
 const MAX_COMMITS: usize = 8;
 const SUMMARY_MAX: usize = 34;
@@ -47,12 +49,15 @@ impl GitPanel<'_> {
     /// resolve takeover. Dirty working trees keep the classic status
     /// + staging body so per-file staging stays reachable.
     pub(super) fn is_ready_state(&self) -> bool {
+        // TS parity: a bound, non-merging repo always shows the ready view
+        // — whether the working tree is clean OR dirty. TS has no per-file
+        // staging view; the commit-milestone flow saves + commits dirty
+        // changes. (`changed_files` no longer gates this.)
         self.state.in_repo
             && !self.state.loading
             && !self.state.merging
             && self.state.diff.is_none()
             && self.state.merge_resolve.is_none()
-            && self.state.changed_files.is_empty()
     }
 
     /// The panel height for the ready view — header + commit box + the
@@ -137,7 +142,6 @@ impl GitPanel<'_> {
     /// Paint the ready view.
     pub(super) fn paint_ready(&self, cx: &mut PaintCx<'_>, rect: Rect) {
         let t = self.theme;
-        let left = rect.origin.x + READY_PAD + 2.0;
         let top = rect.origin.y;
         let width = rect.size.x;
 
@@ -157,8 +161,12 @@ impl GitPanel<'_> {
             alpha(t.border, 0.60),
         );
 
-        // Branch button — `⎇ <branch> ▾`.
+        // Branch button — `⎇ <branch> ▾`, with a `hover:bg-accent` wash
+        // (TS the branch trigger is a ghost button).
         let branch_r = self.ready_branch_rect(rect);
+        if self.state.branch_button_hovered {
+            cx.backend.fill_round_rect(branch_r, 6.0, t.accent);
+        }
         let cy = top + HEADER_H / 2.0;
         draw_icon(
             cx.backend,
@@ -249,37 +257,71 @@ impl GitPanel<'_> {
             alpha(t.border, 0.60),
         );
 
-        // ── Recent-commit history ──
-        self.text(
-            cx,
-            self.t("git.panel.recentCommits"),
-            left,
-            top + HISTORY_LABEL,
-            12.0,
-            t.muted_foreground,
-        );
+        // ── Recent-commit history (TS `git-panel-history-list`) ──
+        // No section header — the timeline / empty line sits directly
+        // under the commit-box divider.
         let mut y = top + HISTORY_FIRST;
         if self.state.recent_commits.is_empty() {
+            // Empty log → a single centered `git.history.empty` line
+            // (TS `flex items-center justify-center p-6 text-xs
+            // text-muted-foreground`).
+            let label = self.t("git.history.empty");
+            let tw = cx.backend.measure_text(label, 12.0);
             self.text(
                 cx,
-                self.t("git.panel.noCommits"),
-                left,
+                label,
+                rect.origin.x + (rect.size.x - tw) / 2.0,
                 y,
                 12.0,
                 t.muted_foreground,
             );
-        }
-        for commit in self.state.recent_commits.iter().take(MAX_COMMITS) {
-            let summary = truncate(&commit.summary, SUMMARY_MAX);
-            self.text(
-                cx,
-                &format!("{}  {}", commit.short_hash, summary),
-                left,
-                y,
-                12.0,
-                t.foreground,
+        } else {
+            // TS `git-panel-history-list`: a timeline with a 1px rail down
+            // the dot column (`left-5`), a 7px milestone dot per row, the
+            // message (`text-[12px] text-foreground`) left, and the author
+            // (`font-mono text-[10px] text-muted-foreground/80`) right.
+            let rail_x = rect.origin.x + 20.0;
+            let msg_x = rect.origin.x + 40.0;
+            let n = self.state.recent_commits.len().min(MAX_COMMITS);
+            cx.backend.fill_rect(
+                Rect {
+                    origin: Point2D::new(rail_x, y - 8.0),
+                    size: Point2D::new(1.0, n as f32 * ROW_H),
+                },
+                alpha(t.border, 0.60),
             );
-            y += ROW_H;
+            for commit in self.state.recent_commits.iter().take(MAX_COMMITS) {
+                cx.backend.fill_round_rect(
+                    Rect {
+                        origin: Point2D::new(rail_x - 3.5, y - 7.5),
+                        size: Point2D::new(7.0, 7.0),
+                    },
+                    3.5,
+                    t.foreground,
+                );
+                let author_w = cx.backend.measure_text(&commit.author, 10.0);
+                let author_x = rect.origin.x + width - READY_PAD - author_w;
+                // Truncate the message to the space left of the author.
+                let msg_w = (author_x - msg_x - 8.0).max(0.0);
+                let chars = (msg_w / 7.0) as usize;
+                self.text(
+                    cx,
+                    &truncate(&commit.summary, chars.min(SUMMARY_MAX)),
+                    msg_x,
+                    y,
+                    12.0,
+                    t.foreground,
+                );
+                self.text(
+                    cx,
+                    &commit.author,
+                    author_x,
+                    y,
+                    10.0,
+                    alpha(t.muted_foreground, 0.80),
+                );
+                y += ROW_H;
+            }
         }
     }
 

@@ -86,11 +86,14 @@ impl DesktopApp {
         panel.changed_files = snap.changed_files;
         panel.remotes = snap.remotes;
         panel.recent_commits = snap.recent_commits;
-        // The header popovers only exist in the clean ready view; if the
-        // refresh left that state (no repo / merging / a dirty tree),
-        // clear the popover flags so they can't go stale and dead-end
-        // input (the press-time modal guard keys off these flags).
-        if !panel.in_repo || panel.merging || !panel.changed_files.is_empty() {
+        // The header popovers only exist in the ready view; if the
+        // refresh left that state (no repo / merging), clear the popover
+        // flags so they can't go stale and dead-end input (the press-time
+        // modal guard keys off these flags). A dirty working tree still
+        // shows the ready view (TS parity), so it must NOT close them —
+        // otherwise a periodic status poll snaps an open branch-picker /
+        // overflow menu shut.
+        if !panel.header_popovers_allowed() {
             panel.branch_picker_open = false;
             panel.overflow_open = false;
             panel.overflow_view = op_editor_core::GitOverflowView::Menu;
@@ -152,7 +155,13 @@ impl DesktopApp {
                 self.open_existing_repo();
             }
             GitPanelAction::CloneRepo => {
-                self.clone_repo_prompt();
+                self.open_clone_form();
+            }
+            GitPanelAction::PickCloneDest => {
+                self.pick_clone_dest();
+            }
+            GitPanelAction::SubmitClone => {
+                self.submit_clone();
             }
             // Refresh is handled by the shared snapshot below.
             GitPanelAction::Refresh => {}
@@ -653,17 +662,203 @@ impl DesktopApp {
         }
     }
 
-    /// Empty-state "Clone" card — cloning needs a remote URL, which
-    /// requires the in-panel clone form (a follow-up); for now point
-    /// the user at it.
-    fn clone_repo_prompt(&mut self) {
+    /// Empty-state "Clone" card — open the inline clone wizard, focused
+    /// on the URL field (a port of the TS `GitPanelCloneForm`).
+    fn open_clone_form(&mut self) {
+        // Abandon any clone still running from a previously-cancelled
+        // wizard so the fresh form's submit isn't blocked by the dead
+        // job (its worker finishes on its own; the result is discarded).
+        self.git_clone_job = None;
+        let panel = &mut self.host.editor_state_mut().editor_ui.git_panel;
+        panel.clone_form = Some(op_editor_core::CloneFormState {
+            focus: Some(op_editor_core::CloneField::Url),
+            ..Default::default()
+        });
+    }
+
+    /// Clone wizard "浏览…" — a native folder picker for the clone
+    /// destination, written back into the form's `dest` field.
+    fn pick_clone_dest(&mut self) {
+        let Some(folder) = rfd::FileDialog::new().pick_folder() else {
+            return;
+        };
+        let path = folder.to_string_lossy().to_string();
+        if let Some(form) = self
+            .host
+            .editor_state_mut()
+            .editor_ui
+            .git_panel
+            .clone_form
+            .as_mut()
+        {
+            form.dest = path;
+            form.focus = Some(op_editor_core::CloneField::Dest);
+            form.error = None;
+        }
+    }
+
+    /// Clone wizard submit — validate the URL + destination, then run
+    /// `git clone` on a worker thread. [`Self::poll_git_clone_job`] binds
+    /// the cloned repository when the job lands.
+    fn submit_clone(&mut self) {
+        if self.git_clone_job.is_some() {
+            return;
+        }
         let locale = self.host.editor_state().editor_ui.locale;
-        rfd::MessageDialog::new()
-            .set_title(op_i18n::translate(locale, "git.empty.cloneCard"))
-            .set_description(op_i18n::translate(locale, "git.empty.cloneComingSoon"))
-            .set_level(rfd::MessageLevel::Info)
-            .set_buttons(rfd::MessageButtons::Ok)
-            .show();
+        let (url, dest) = {
+            let Some(form) = self
+                .host
+                .editor_state()
+                .editor_ui
+                .git_panel
+                .clone_form
+                .as_ref()
+            else {
+                return;
+            };
+            (form.url.trim().to_string(), form.dest.trim().to_string())
+        };
+        let validation = if url.is_empty() {
+            Some("git.wizard.clone.validationUrl")
+        } else if dest.is_empty() {
+            Some("git.wizard.clone.validationDest")
+        } else {
+            None
+        };
+        if let Some(key) = validation {
+            if let Some(form) = self
+                .host
+                .editor_state_mut()
+                .editor_ui
+                .git_panel
+                .clone_form
+                .as_mut()
+            {
+                form.error = Some(op_i18n::translate(locale, key).to_string());
+            }
+            return;
+        }
+        // Remember the document context so completion only binds when
+        // the user is still on the same document (see `poll_git_clone_job`).
+        self.git_clone_origin = self.current_path.clone();
+        self.git_clone_job = Some(git_jobs::GitCloneJob::spawn(
+            url,
+            std::path::PathBuf::from(&dest),
+        ));
+        if let Some(form) = self
+            .host
+            .editor_state_mut()
+            .editor_ui
+            .git_panel
+            .clone_form
+            .as_mut()
+        {
+            form.cloning = true;
+            form.error = None;
+            // No field is editable while the clone runs — drop focus so
+            // the caret vanishes and a single Escape cancels (rather than
+            // a first, invisible, focus-clearing press).
+            form.focus = None;
+        }
+    }
+
+    /// Drain a finished `git clone`. On success, discover + bind the
+    /// cloned repository and close the wizard; on failure, surface the
+    /// error inside the form so the user can retry. Returns `true` when
+    /// the job resolved (a repaint is due).
+    pub(crate) fn poll_git_clone_job(&mut self) -> bool {
+        // A clone wizard left over after the Git panel was closed is
+        // hidden state — clear it (and abandon any in-flight job) so it
+        // can neither capture the keyboard nor bind a repo while
+        // invisible. Runs even when no job exists, to also catch an idle
+        // form left open when the panel was closed.
+        if !self.host.editor_state().editor_ui.git_panel.open {
+            self.git_clone_job = None;
+            return self
+                .host
+                .editor_state_mut()
+                .editor_ui
+                .git_panel
+                .clone_form
+                .take()
+                .is_some();
+        }
+        if self.git_clone_job.is_none() {
+            return false;
+        }
+        // Panel is open. Abandon the job when the user cancelled the
+        // wizard (form gone or no longer `cloning`): drop the handle so
+        // the result is discarded (no repo bound behind the user's back)
+        // and a fresh clone isn't blocked. The worker finishes on its
+        // own; its channel send no-ops. Mirrors `poll_git_diff_job`
+        // dropping a stale diff for a closed view.
+        let active = self
+            .host
+            .editor_state()
+            .editor_ui
+            .git_panel
+            .clone_form
+            .as_ref()
+            .is_some_and(|f| f.cloning);
+        if !active {
+            self.git_clone_job = None;
+            return false;
+        }
+        let Some(result) = self
+            .git_clone_job
+            .as_mut()
+            .expect("clone job present (checked above)")
+            .poll()
+        else {
+            return false;
+        };
+        self.git_clone_job = None;
+        // The clone binds its repo onto the live document. If the user
+        // switched / saved-as to a different document while it ran, the
+        // bind target changed — discard the result rather than binding the
+        // cloned repo onto the wrong document, and close the now-stale
+        // wizard. (Opening a document already replaces the editor state +
+        // closes the panel, which the `!open` branch above catches; this
+        // covers an in-place path change, e.g. Save As.)
+        if self.current_path != self.git_clone_origin {
+            self.host.editor_state_mut().editor_ui.git_panel.clone_form = None;
+            self.host.mark_editor_state_dirty();
+            return true;
+        }
+        let locale = self.host.editor_state().editor_ui.locale;
+        let bound = match result {
+            Ok(dir) => match op_git::GitRepo::discover(&dir) {
+                Ok(Some(repo)) => {
+                    self.git_session
+                        .bind_repo(repo, self.current_path.as_deref());
+                    true
+                }
+                _ => false,
+            },
+            Err(err) => {
+                eprintln!("openpencil-desktop: git clone failed: {err}");
+                false
+            }
+        };
+        if bound {
+            let panel = &mut self.host.editor_state_mut().editor_ui.git_panel;
+            panel.clone_form = None;
+            panel.loading = true;
+            self.refresh_git_panel();
+        } else if let Some(form) = self
+            .host
+            .editor_state_mut()
+            .editor_ui
+            .git_panel
+            .clone_form
+            .as_mut()
+        {
+            form.cloning = false;
+            form.error =
+                Some(op_i18n::translate(locale, "git.wizard.clone.error.clone-failed").to_string());
+        }
+        self.host.mark_editor_state_dirty();
+        true
     }
 
     /// Info/error dialog for the empty-state cards.

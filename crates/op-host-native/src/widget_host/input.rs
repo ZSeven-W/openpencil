@@ -26,6 +26,7 @@ impl WidgetHostNative {
             || self.git_commit_focus_active()
             || self.git_remote_focus_active()
             || self.git_https_focus_active()
+            || self.git_clone_input_active()
     }
 
     pub fn settings_focus_active(&self) -> bool {
@@ -48,6 +49,17 @@ impl WidgetHostNative {
     pub fn git_https_focus_active(&self) -> bool {
         let panel = &self.editor_state.editor_ui.git_panel;
         panel.open && panel.https_focused && !panel.loading
+    }
+
+    /// Whether the inline Git clone wizard is up. While it is, the
+    /// wizard owns the keyboard: a focused URL / destination field takes
+    /// text, and every other key is swallowed so no canvas shortcut
+    /// (tool letters, Delete, arrow nudges, …) leaks to the document
+    /// while the user types a URL. View-level (not field-level) because
+    /// the wizard covers the panel even between field focuses.
+    pub fn git_clone_input_active(&self) -> bool {
+        let panel = &self.editor_state.editor_ui.git_panel;
+        panel.open && panel.clone_form.is_some()
     }
 
     /// Snap node drags to nearby top-level edge/centre guides.
@@ -180,6 +192,11 @@ impl WidgetHostNative {
         // pill (a no-op repaint=false when the panel is closed / the
         // cursor isn't over that card).
         if self.update_git_panel_empty_hover(x, y) {
+            return true;
+        }
+        // Git ready-view branch-button hover — `hover:bg-accent` wash on
+        // the `⎇ <branch> ▾` trigger.
+        if self.update_git_panel_ready_hover(x, y) {
             return true;
         }
         // Suppress lower-overlay hover while a floating panel is on top.

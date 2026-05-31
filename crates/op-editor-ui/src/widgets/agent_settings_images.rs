@@ -1,6 +1,7 @@
 //! Images tab of the settings modal.
 
 use crate::theme::Theme;
+use crate::widgets::agent_settings_caret::paint_caret;
 use crate::widgets::agent_settings_i18n::t as t_settings;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::PaintCx;
@@ -254,6 +255,7 @@ pub(super) fn paint_images_tab(
     settings: &AgentSettings,
     ui: &EditorUiState,
     content: Rect,
+    now_ms: u64,
 ) {
     let title_str = t_settings(ui, "settings.images.search");
     let title = TextLayout::single_run(
@@ -357,6 +359,7 @@ pub(super) fn paint_images_tab(
             content.origin.x,
             y,
             content.size.x,
+            now_ms,
         );
         y += ROW_H + ROW_VGAP;
         paint_search_input_row(
@@ -370,6 +373,7 @@ pub(super) fn paint_images_tab(
             content.origin.x,
             y,
             content.size.x,
+            now_ms,
         );
         y += ROW_H + BODY_GAP;
         let link_text = t_settings(ui, "settings.images.registerLink");
@@ -465,11 +469,12 @@ pub(super) fn paint_images_tab(
     } else {
         for (index, profile) in settings.image_gen_profiles.iter().enumerate() {
             let row = profile_row_rect(content, settings, index);
-            paint_profile_row(cx, theme, settings, ui, profile, index, row);
+            paint_profile_row(cx, theme, settings, ui, profile, index, row, now_ms);
         }
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn paint_profile_row(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
@@ -478,6 +483,7 @@ fn paint_profile_row(
     profile: &ImageGenProfile,
     index: usize,
     row: Rect,
+    now_ms: u64,
 ) {
     let active = settings.active_image_gen_profile_id.as_deref() == Some(profile.id.as_str());
     let editing = is_editing_profile(settings, index);
@@ -556,7 +562,7 @@ fn paint_profile_row(
 
     if editing {
         for field in image_gen_fields() {
-            paint_profile_field(cx, theme, settings, ui, profile, index, field, row);
+            paint_profile_field(cx, theme, settings, ui, profile, index, field, row, now_ms);
         }
         paint_provider_field(cx, theme, profile, row);
     }
@@ -572,6 +578,7 @@ fn paint_profile_field(
     index: usize,
     field: ImageGenField,
     row: Rect,
+    now_ms: u64,
 ) {
     let focused = settings.focus == Some(SettingsFocus::ImageGenProfile { index, field });
     let value = if focused {
@@ -619,6 +626,7 @@ fn paint_profile_field(
         1.0,
     );
     let value = ellipsize(cx, value, input.size.x - 12.0, 11.0);
+    let text_x = input.origin.x + 6.0;
     let value_lay = TextLayout::single_run(
         &value,
         "system-ui",
@@ -626,10 +634,15 @@ fn paint_profile_field(
         to_jian(theme.foreground),
         Point2D::new(0.0, 0.0),
     );
-    cx.backend.draw_text(
-        &value_lay,
-        Point2D::new(input.origin.x + 6.0, input.origin.y + 16.0),
-    );
+    cx.backend
+        .draw_text(&value_lay, Point2D::new(text_x, input.origin.y + 16.0));
+    if focused {
+        let caret_x = (text_x + cx.backend.measure_text(&value, 11.0) + 1.0)
+            .min(input.origin.x + input.size.x - 8.0);
+        let caret_y = input.origin.y + 4.5;
+        let anchor = ui.settings_input_caret_anchor_ms;
+        paint_caret(cx, theme, now_ms, anchor, caret_x, caret_y);
+    }
 }
 
 fn paint_provider_field(cx: &mut PaintCx<'_>, theme: &Theme, profile: &ImageGenProfile, row: Rect) {
@@ -681,6 +694,7 @@ fn paint_search_input_row(
     x: f32,
     y: f32,
     w: f32,
+    now_ms: u64,
 ) {
     let label_lay = TextLayout::single_run(
         label,
@@ -721,6 +735,7 @@ fn paint_search_input_row(
         text
     };
     let value = ellipsize(cx, value, field.size.x - 24.0, 13.0);
+    let text_x = field.origin.x + 12.0;
     let lay = TextLayout::single_run(
         &value,
         "system-ui",
@@ -734,8 +749,16 @@ fn paint_search_input_row(
     );
     cx.backend.draw_text(
         &lay,
-        Point2D::new(field.origin.x + 12.0, field.origin.y + ROW_H / 2.0 + 5.0),
+        Point2D::new(text_x, field.origin.y + ROW_H / 2.0 + 5.0),
     );
+    if focused {
+        let caret_text = ellipsize(cx, text, field.size.x - 24.0, 13.0);
+        let caret_x = (text_x + cx.backend.measure_text(&caret_text, 13.0) + 1.0)
+            .min(field.origin.x + field.size.x - 12.0);
+        let caret_y = field.origin.y + (ROW_H - 15.0) / 2.0;
+        let anchor = ui.settings_input_caret_anchor_ms;
+        paint_caret(cx, theme, now_ms, anchor, caret_x, caret_y);
+    }
 }
 
 fn ellipsize(cx: &mut PaintCx<'_>, value: &str, max_w: f32, size: f32) -> String {
@@ -750,12 +773,8 @@ fn ellipsize(cx: &mut PaintCx<'_>, value: &str, max_w: f32, size: f32) -> String
 }
 
 fn image_gen_fields() -> [ImageGenField; 4] {
-    [
-        ImageGenField::Name,
-        ImageGenField::ApiKey,
-        ImageGenField::Model,
-        ImageGenField::BaseUrl,
-    ]
+    use ImageGenField::*;
+    [Name, ApiKey, Model, BaseUrl]
 }
 
 fn is_editing_profile(settings: &AgentSettings, index: usize) -> bool {

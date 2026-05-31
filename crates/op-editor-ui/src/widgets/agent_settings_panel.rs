@@ -46,7 +46,11 @@ pub enum AgentSettingsHit {
         index: usize,
         field: BuiltinAgentField,
     },
+    FocusBuiltinAgentDraft(BuiltinAgentField),
     ToggleBuiltinAgentKind(usize),
+    ToggleBuiltinAgentDraftKind,
+    SaveBuiltinAgentDraft,
+    CancelBuiltinAgentDraft,
     ToggleBuiltinAgentEnabled(usize),
     EditBuiltinAgent(usize),
     RemoveBuiltinAgent(usize),
@@ -55,7 +59,11 @@ pub enum AgentSettingsHit {
         index: usize,
         field: AcpAgentField,
     },
+    FocusAcpAgentDraft(AcpAgentField),
     ToggleAcpConnectionType(usize),
+    ToggleAcpDraftConnectionType,
+    SaveAcpAgentDraft,
+    CancelAcpAgentDraft,
     EditAcpAgent(usize),
     RemoveAcpAgent(usize),
     ToggleAcpConnected(usize),
@@ -82,15 +90,21 @@ pub struct AgentSettingsPanel<'a> {
     pub id: WidgetId,
     pub theme: Theme,
     pub settings: AgentSettings,
+    pub now_ms: u64,
     ui: &'a EditorUiState,
 }
 
 impl<'a> AgentSettingsPanel<'a> {
     pub fn for_editor(state: &'a EditorState) -> Self {
+        Self::for_editor_at(state, 0)
+    }
+
+    pub fn for_editor_at(state: &'a EditorState, now_ms: u64) -> Self {
         Self {
             id: WidgetId::new(5200),
             theme: theme_for(&state.editor_ui),
             settings: state.editor_ui.agent_settings.clone(),
+            now_ms,
             ui: &state.editor_ui,
         }
     }
@@ -130,9 +144,17 @@ impl<'a> AgentSettingsPanel<'a> {
                     BuiltinHit::Focus { index, field } => {
                         return AgentSettingsHit::FocusBuiltinAgent { index, field };
                     }
+                    BuiltinHit::FocusDraft(field) => {
+                        return AgentSettingsHit::FocusBuiltinAgentDraft(field);
+                    }
                     BuiltinHit::ToggleKind(index) => {
                         return AgentSettingsHit::ToggleBuiltinAgentKind(index);
                     }
+                    BuiltinHit::ToggleDraftKind => {
+                        return AgentSettingsHit::ToggleBuiltinAgentDraftKind;
+                    }
+                    BuiltinHit::SaveDraft => return AgentSettingsHit::SaveBuiltinAgentDraft,
+                    BuiltinHit::CancelDraft => return AgentSettingsHit::CancelBuiltinAgentDraft,
                     BuiltinHit::ToggleEnabled(index) => {
                         return AgentSettingsHit::ToggleBuiltinAgentEnabled(index);
                     }
@@ -151,9 +173,17 @@ impl<'a> AgentSettingsPanel<'a> {
                     AcpHit::Focus { index, field } => {
                         return AgentSettingsHit::FocusAcpAgent { index, field };
                     }
+                    AcpHit::FocusDraft(field) => {
+                        return AgentSettingsHit::FocusAcpAgentDraft(field)
+                    }
                     AcpHit::ToggleConnectionType(index) => {
                         return AgentSettingsHit::ToggleAcpConnectionType(index);
                     }
+                    AcpHit::ToggleDraftConnectionType => {
+                        return AgentSettingsHit::ToggleAcpDraftConnectionType;
+                    }
+                    AcpHit::SaveDraft => return AgentSettingsHit::SaveAcpAgentDraft,
+                    AcpHit::CancelDraft => return AgentSettingsHit::CancelAcpAgentDraft,
                     AcpHit::Edit(index) => return AgentSettingsHit::EditAcpAgent(index),
                     AcpHit::Remove(index) => return AgentSettingsHit::RemoveAcpAgent(index),
                     AcpHit::ToggleConnected(index) => {
@@ -290,7 +320,7 @@ impl<'a> Widget for AgentSettingsPanel<'a> {
     }
 
     fn paint(&self, cx: &mut PaintCx<'_>, rect: Rect) {
-        paint_panel(cx, &self.theme, &self.settings, rect, self.ui);
+        paint_panel(cx, &self.theme, &self.settings, rect, self.ui, self.now_ms);
     }
 
     fn access_node(&self) -> accesskit::Node {
@@ -306,6 +336,7 @@ fn paint_panel(
     settings: &AgentSettings,
     panel: Rect,
     _ui: &EditorUiState,
+    now_ms: u64,
 ) {
     cx.backend.fill_round_rect(panel, 14.0, theme.card);
     cx.backend.stroke_round_rect(panel, 14.0, theme.border, 1.0);
@@ -316,12 +347,14 @@ fn paint_panel(
     cx.backend.clip_rect(content_rect);
     cx.backend.translate(Point2D::new(0.0, -settings.scroll_y));
     match settings.tab {
-        AgentSettingsTab::Agents => paint_agents_tab(cx, theme, settings, _ui, content_rect),
+        AgentSettingsTab::Agents => {
+            paint_agents_tab(cx, theme, settings, _ui, content_rect, now_ms)
+        }
         AgentSettingsTab::Mcp => {
-            agent_settings_mcp::paint_mcp_tab(cx, theme, settings, _ui, content_rect)
+            agent_settings_mcp::paint_mcp_tab(cx, theme, settings, _ui, content_rect, now_ms)
         }
         AgentSettingsTab::Images => {
-            agent_settings_images::paint_images_tab(cx, theme, settings, _ui, content_rect)
+            agent_settings_images::paint_images_tab(cx, theme, settings, _ui, content_rect, now_ms)
         }
         AgentSettingsTab::System => {
             agent_settings_system::paint_system_tab(cx, theme, settings, _ui, content_rect)
@@ -417,11 +450,12 @@ fn paint_agents_tab(
     settings: &AgentSettings,
     ui: &EditorUiState,
     content: Rect,
+    now_ms: u64,
 ) {
     let mut y = content.origin.y + 12.0;
-    y = agent_settings_builtin::paint_builtin_section(cx, theme, settings, ui, content, y);
+    y = agent_settings_builtin::paint_builtin_section(cx, theme, settings, ui, content, y, now_ms);
     y += SECTION_GAP;
-    y = agent_settings_acp::paint_acp_section(cx, theme, settings, ui, content, y);
+    y = agent_settings_acp::paint_acp_section(cx, theme, settings, ui, content, y, now_ms);
     y += SECTION_GAP;
 
     y = paint_section_header(

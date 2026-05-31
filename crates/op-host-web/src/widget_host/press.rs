@@ -403,7 +403,7 @@ impl WidgetHost {
         //    click inside its rect is consumed here, even when
         //    that point lies inside the toolbar rect underneath.
         if let Some(chat_rect) = self.ai_chat_rect(viewport_width, viewport_height) {
-            let panel = AIChatPlaceholder::from_editor(&self.editor_state);
+            let panel = AIChatPlaceholder::from_editor_at(&self.editor_state, self.now_ms);
             if let Some(hit) = panel.hit_test(chat_rect, Point2D::new(x, y)) {
                 if matches!(hit, AIChatHit::DragHandle) {
                     self.chat_drag = Some(ChatDragState {
@@ -622,9 +622,41 @@ impl WidgetHost {
                         self.mark_dirty();
                         return true;
                     }
+                    AIChatHit::ToggleMaximize => {
+                        self.editor_state.chat.maximized = !self.editor_state.chat.maximized;
+                        self.editor_state.chat.collapsed = false;
+                        self.editor_state.editor_ui.chat_model_picker_open = false;
+                        self.editor_state.editor_ui.chat_model_picker_search.clear();
+                        self.mark_dirty();
+                        return true;
+                    }
+                    AIChatHit::NewChat => {
+                        self.editor_state.chat.new_chat();
+                        self.editor_state.editor_ui.chat_model_picker_open = false;
+                        self.editor_state.editor_ui.chat_model_picker_scroll = 0.0;
+                        self.editor_state.editor_ui.chat_model_picker_search.clear();
+                        self.editor_state.editor_ui.chat_model_picker_hover = None;
+                        self.mark_dirty();
+                        return true;
+                    }
                     AIChatHit::ToggleModelPicker => {
-                        let v = &mut self.editor_state.editor_ui.chat_model_picker_open;
-                        *v = !*v;
+                        let opening = !self.editor_state.editor_ui.chat_model_picker_open;
+                        self.editor_state.editor_ui.chat_model_picker_open = opening;
+                        self.editor_state.editor_ui.chat_model_picker_scroll = 0.0;
+                        self.editor_state.editor_ui.chat_model_picker_search.clear();
+                        self.editor_state.editor_ui.chat_model_picker_hover = None;
+                        if opening {
+                            self.editor_state
+                                .editor_ui
+                                .chat_model_picker_caret_anchor_ms = self.now_ms;
+                        }
+                        self.mark_dirty();
+                        return true;
+                    }
+                    AIChatHit::FocusModelSearch => {
+                        self.editor_state
+                            .editor_ui
+                            .chat_model_picker_caret_anchor_ms = self.now_ms;
                         self.mark_dirty();
                         return true;
                     }
@@ -756,85 +788,5 @@ impl WidgetHost {
         // Defocusing the chat input itself is a visible change —
         // the caller should still repaint to drop the caret.
         was_focused
-    }
-
-    /// Returns true once the modal swallowed the press.
-    fn dispatch_agent_settings_press(&mut self, x: f32, y: f32, vw: f32, vh: f32) -> bool {
-        use op_editor_ui::widgets::agent_settings_panel::{AgentSettingsHit, AgentSettingsPanel};
-        self.refresh_layout_scene();
-        let panel = AgentSettingsPanel::for_editor(&self.editor_state);
-        let panel_rect = panel.rect(vw, vh);
-        match panel.hit_test(panel_rect, Point2D::new(x, y)) {
-            AgentSettingsHit::Close | AgentSettingsHit::Outside => {
-                self.commit_settings_focus();
-                self.editor_state.editor_ui.agent_settings_open = false;
-            }
-            AgentSettingsHit::SelectTab(t) => {
-                self.commit_settings_focus();
-                self.editor_state.editor_ui.agent_settings.tab = t;
-                self.editor_state.editor_ui.agent_settings.scroll_y = 0.0;
-            }
-            AgentSettingsHit::Connect(p) => {
-                // `connected` is indexed by `AgentProvider::ALL` order.
-                let idx = op_editor_core::agent_settings::AgentProvider::ALL
-                    .iter()
-                    .position(|x| *x == p)
-                    .unwrap_or(0);
-                self.editor_state.editor_ui.agent_settings.connected[idx] ^= true;
-                // Re-derive the chat model picker for the new mask.
-                self.editor_state.rebuild_chat_models();
-            }
-            AgentSettingsHit::ToggleMcpServer => {
-                self.commit_settings_focus();
-                self.editor_state
-                    .editor_ui
-                    .agent_settings
-                    .mcp_server
-                    .running ^= true;
-            }
-            AgentSettingsHit::ToggleMcpCli(cli) => {
-                // `mcp_cli_enabled` is indexed by `McpCli::ALL` order.
-                let idx = op_editor_core::agent_settings::McpCli::ALL
-                    .iter()
-                    .position(|x| *x == cli)
-                    .unwrap_or(0);
-                self.editor_state.editor_ui.agent_settings.mcp_cli_enabled[idx] ^= true;
-            }
-            AgentSettingsHit::ToggleImagesAdvanced => {
-                self.editor_state
-                    .editor_ui
-                    .agent_settings
-                    .images_advanced_open ^= true;
-            }
-            AgentSettingsHit::ToggleAutoUpdate => {
-                self.editor_state
-                    .editor_ui
-                    .agent_settings
-                    .auto_update_enabled ^= true;
-            }
-            AgentSettingsHit::FocusMcpPort => {
-                self.commit_settings_focus();
-                self.editor_state.editor_ui.agent_settings.focus =
-                    Some(op_editor_core::agent_settings::SettingsFocus::McpPort);
-                self.editor_state.editor_ui.settings_input_draft = self
-                    .editor_state
-                    .editor_ui
-                    .agent_settings
-                    .mcp_server
-                    .port
-                    .to_string();
-            }
-            AgentSettingsHit::AddProvider
-            | AgentSettingsHit::AddAcpAgent
-            | AgentSettingsHit::TestImageSearch
-            | AgentSettingsHit::AddGenConfig
-            | AgentSettingsHit::SetActiveGenConfig(_)
-            | AgentSettingsHit::RemoveGenConfig(_)
-            | AgentSettingsHit::FocusSearchField(_)
-            | AgentSettingsHit::FocusGenConfig { .. }
-            | AgentSettingsHit::Inside => {}
-        }
-        self.mark_dirty();
-        true
     }
 }

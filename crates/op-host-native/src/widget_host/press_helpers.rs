@@ -5,14 +5,6 @@
 use super::WidgetHostNative;
 use op_editor_ui::Point2D;
 
-fn empty_builtin_agent_draft_index(
-    settings: &op_editor_core::agent_settings::AgentSettings,
-) -> Option<usize> {
-    settings.builtin_agents.iter().position(|agent| {
-        agent.api_key.trim().is_empty() && agent.display_name.starts_with("Built-in Agent ")
-    })
-}
-
 impl WidgetHostNative {
     /// Spawn a fresh node for the active shape / frame / text tool at
     /// `doc_point`. Returns the new node's id when the tool maps to a
@@ -130,6 +122,7 @@ impl WidgetHostNative {
                 self.editor_state.editor_ui.agent_settings.focus = Some(
                     op_editor_core::agent_settings::SettingsFocus::ImageSearch(field),
                 );
+                self.editor_state.editor_ui.settings_input_caret_anchor_ms = self.now_ms;
             }
             AgentSettingsHit::TestImageSearch => {
                 self.commit_settings_focus_if_any();
@@ -209,6 +202,7 @@ impl WidgetHostNative {
                             field,
                         },
                     );
+                    self.editor_state.editor_ui.settings_input_caret_anchor_ms = self.now_ms;
                 }
             }
             AgentSettingsHit::ToggleAutoUpdate => {
@@ -230,6 +224,7 @@ impl WidgetHostNative {
                     .mcp_server
                     .port
                     .to_string();
+                self.editor_state.editor_ui.settings_input_caret_anchor_ms = self.now_ms;
             }
             AgentSettingsHit::FocusBuiltinAgent { index, field } => {
                 self.commit_settings_focus_if_any();
@@ -260,7 +255,11 @@ impl WidgetHostNative {
                             field,
                         },
                     );
+                    self.editor_state.editor_ui.settings_input_caret_anchor_ms = self.now_ms;
                 }
+            }
+            AgentSettingsHit::FocusBuiltinAgentDraft(field) => {
+                self.focus_builtin_agent_draft(field);
             }
             AgentSettingsHit::ToggleBuiltinAgentKind(index) => {
                 self.commit_settings_focus_if_any();
@@ -288,6 +287,9 @@ impl WidgetHostNative {
                     }
                     self.editor_state.rebuild_chat_models();
                 }
+            }
+            AgentSettingsHit::ToggleBuiltinAgentDraftKind => {
+                self.toggle_builtin_agent_draft_kind();
             }
             AgentSettingsHit::ToggleBuiltinAgentEnabled(index) => {
                 self.commit_settings_focus_if_any();
@@ -318,6 +320,7 @@ impl WidgetHostNative {
                             field: op_editor_core::agent_settings::BuiltinAgentField::DisplayName,
                         },
                     );
+                    self.editor_state.editor_ui.settings_input_caret_anchor_ms = self.now_ms;
                 }
             }
             AgentSettingsHit::RemoveBuiltinAgent(index) => {
@@ -331,32 +334,13 @@ impl WidgetHostNative {
                 }
             }
             AgentSettingsHit::AddProvider => {
-                let index = if let Some(index) =
-                    empty_builtin_agent_draft_index(&self.editor_state.editor_ui.agent_settings)
-                {
-                    index
-                } else {
-                    let id = self
-                        .editor_state
-                        .editor_ui
-                        .agent_settings
-                        .add_builtin_agent();
-                    self.editor_state
-                        .editor_ui
-                        .agent_settings
-                        .builtin_agents
-                        .iter()
-                        .position(|agent| agent.id == id)
-                        .unwrap_or(0)
-                };
-                self.editor_state.editor_ui.agent_settings.focus = Some(
-                    op_editor_core::agent_settings::SettingsFocus::BuiltinAgent {
-                        index,
-                        field: op_editor_core::agent_settings::BuiltinAgentField::ApiKey,
-                    },
-                );
-                self.editor_state.editor_ui.settings_input_draft.clear();
-                self.editor_state.rebuild_chat_models();
+                self.begin_builtin_agent_draft();
+            }
+            AgentSettingsHit::SaveBuiltinAgentDraft => {
+                self.save_builtin_agent_draft();
+            }
+            AgentSettingsHit::CancelBuiltinAgentDraft => {
+                self.cancel_builtin_agent_draft();
             }
             AgentSettingsHit::FocusAcpAgent { index, field } => {
                 self.commit_settings_focus_if_any();
@@ -383,7 +367,11 @@ impl WidgetHostNative {
                             index,
                             field,
                         });
+                    self.editor_state.editor_ui.settings_input_caret_anchor_ms = self.now_ms;
                 }
+            }
+            AgentSettingsHit::FocusAcpAgentDraft(field) => {
+                self.focus_acp_agent_draft(field);
             }
             AgentSettingsHit::ToggleAcpConnectionType(index) => {
                 self.commit_settings_focus_if_any();
@@ -414,7 +402,11 @@ impl WidgetHostNative {
                             index,
                             field,
                         });
+                    self.editor_state.editor_ui.settings_input_caret_anchor_ms = self.now_ms;
                 }
+            }
+            AgentSettingsHit::ToggleAcpDraftConnectionType => {
+                self.toggle_acp_agent_draft_connection_type();
             }
             AgentSettingsHit::EditAcpAgent(index) => {
                 self.commit_settings_focus_if_any();
@@ -431,6 +423,7 @@ impl WidgetHostNative {
                             index,
                             field: op_editor_core::agent_settings::AcpAgentField::DisplayName,
                         });
+                    self.editor_state.editor_ui.settings_input_caret_anchor_ms = self.now_ms;
                 }
             }
             AgentSettingsHit::RemoveAcpAgent(index) => {
@@ -471,26 +464,18 @@ impl WidgetHostNative {
                                 index,
                                 field,
                             });
+                        self.editor_state.editor_ui.settings_input_caret_anchor_ms = self.now_ms;
                     }
                 }
             }
             AgentSettingsHit::AddAcpAgent => {
-                self.commit_settings_focus_if_any();
-                let id = self.editor_state.editor_ui.agent_settings.add_acp_agent();
-                let index = self
-                    .editor_state
-                    .editor_ui
-                    .agent_settings
-                    .acp_agents
-                    .iter()
-                    .position(|agent| agent.id == id)
-                    .unwrap_or(0);
-                self.editor_state.editor_ui.agent_settings.focus =
-                    Some(op_editor_core::agent_settings::SettingsFocus::AcpAgent {
-                        index,
-                        field: op_editor_core::agent_settings::AcpAgentField::Command,
-                    });
-                self.editor_state.editor_ui.settings_input_draft.clear();
+                self.begin_acp_agent_draft();
+            }
+            AgentSettingsHit::SaveAcpAgentDraft => {
+                self.save_acp_agent_draft();
+            }
+            AgentSettingsHit::CancelAcpAgentDraft => {
+                self.cancel_acp_agent_draft();
             }
             AgentSettingsHit::Inside => {}
             AgentSettingsHit::AddGenConfig => {
@@ -522,6 +507,7 @@ impl WidgetHostNative {
                             field: op_editor_core::agent_settings::ImageGenField::Name,
                         },
                     );
+                    self.editor_state.editor_ui.settings_input_caret_anchor_ms = self.now_ms;
                 }
             }
         }

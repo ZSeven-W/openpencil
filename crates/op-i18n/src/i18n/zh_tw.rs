@@ -273,7 +273,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
             "設計一個現代的行動裝置登入頁面，包含電子郵件輸入框、密碼輸入框、登入按鈕和社群登入選項"
         }
         "ai.quickAction.foodApp" => "美食App首頁",
-        "ai.quickAction.foodAppPrompt" => "Generate a well-designed food mobile app homepage",
+        "ai.quickAction.foodAppPrompt" => "產生一個設計精良的美食行動應用程式首頁",
         "ai.quickAction.bottomNav" => "設計底部導覽列",
         "ai.quickAction.bottomNavPrompt" => {
             "設計一個包含 5 個標籤的行動應用程式底部導覽列：首頁、搜尋、新增、訊息、個人"
@@ -364,7 +364,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "settings.title" => "設定",
         "settings.agents" => "Agents",
         "settings.mcp" => "MCP",
-        "settings.images" => "Images",
+        "settings.images" => "圖片",
         "settings.system" => "系統",
         "settings.autoUpdateDesc" => "啟動時自動檢查新版本",
         "settings.systemDesktopOnly" => "系統設定僅在桌面應用程式中可用。",
@@ -476,7 +476,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "variablePicker.noVariables" => "未定義 {{type}} 類型的變數",
         "settings.tab.agents" => "Agents",
         "settings.tab.mcp" => "MCP",
-        "settings.tab.images" => "Images",
+        "settings.tab.images" => "圖片",
         "settings.tab.system" => "系統",
         "settings.agents.builtin" => "內建服務商",
         "settings.agents.builtinSubtitle" => "直接設定 API 金鑰 — 無需 CLI 工具。",

@@ -1,0 +1,180 @@
+//! Draft Add/Save/Cancel helpers for the agent-settings modal.
+
+use super::WidgetHostNative;
+use op_editor_core::agent_settings::{
+    AcpAgentField, AcpConnectionType, BuiltinAgentField, BuiltinAgentKind, SettingsFocus,
+};
+
+impl WidgetHostNative {
+    pub(in crate::widget_host) fn focus_builtin_agent_draft(&mut self, field: BuiltinAgentField) {
+        self.commit_settings_focus_if_any();
+        if let Some(agent) = self
+            .editor_state
+            .editor_ui
+            .agent_settings
+            .builtin_agent_draft
+            .as_ref()
+        {
+            self.editor_state.editor_ui.settings_input_draft = match field {
+                BuiltinAgentField::DisplayName => agent.display_name.clone(),
+                BuiltinAgentField::ApiKey => agent.api_key.clone(),
+                BuiltinAgentField::Model => agent.model.clone(),
+                BuiltinAgentField::BaseUrl => agent.base_url.clone(),
+            };
+            self.editor_state.editor_ui.agent_settings.focus =
+                Some(SettingsFocus::BuiltinAgentDraft(field));
+            self.editor_state.editor_ui.settings_input_caret_anchor_ms = self.now_ms;
+        }
+    }
+
+    pub(in crate::widget_host) fn toggle_builtin_agent_draft_kind(&mut self) {
+        self.commit_settings_focus_if_any();
+        if let Some(agent) = self
+            .editor_state
+            .editor_ui
+            .agent_settings
+            .builtin_agent_draft
+            .as_mut()
+        {
+            agent.kind = match agent.kind {
+                BuiltinAgentKind::Anthropic => BuiltinAgentKind::OpenAiCompat,
+                BuiltinAgentKind::OpenAiCompat => BuiltinAgentKind::Anthropic,
+            };
+            agent.base_url = agent.kind.default_base_url().to_string();
+            if agent.kind == BuiltinAgentKind::OpenAiCompat && agent.model.starts_with("claude-") {
+                agent.model = "gpt-5.4".into();
+            } else if agent.kind == BuiltinAgentKind::Anthropic && agent.model.starts_with("gpt-") {
+                agent.model = "claude-sonnet-4-5".into();
+            }
+        }
+    }
+
+    pub(in crate::widget_host) fn begin_builtin_agent_draft(&mut self) {
+        self.commit_settings_focus_if_any();
+        self.editor_state
+            .editor_ui
+            .agent_settings
+            .begin_builtin_agent_draft();
+        self.focus_builtin_agent_draft(BuiltinAgentField::ApiKey);
+    }
+
+    pub(in crate::widget_host) fn save_builtin_agent_draft(&mut self) {
+        self.commit_settings_focus_if_any();
+        if self
+            .editor_state
+            .editor_ui
+            .agent_settings
+            .save_builtin_agent_draft()
+            .is_some()
+        {
+            self.editor_state.editor_ui.agent_settings.focus = None;
+            self.editor_state.editor_ui.settings_input_draft.clear();
+            self.editor_state.rebuild_chat_models();
+        } else {
+            self.focus_builtin_agent_draft(BuiltinAgentField::ApiKey);
+        }
+    }
+
+    pub(in crate::widget_host) fn cancel_builtin_agent_draft(&mut self) {
+        self.editor_state
+            .editor_ui
+            .agent_settings
+            .cancel_builtin_agent_draft();
+        self.editor_state.editor_ui.agent_settings.focus = None;
+        self.editor_state.editor_ui.settings_input_draft.clear();
+    }
+
+    pub(in crate::widget_host) fn focus_acp_agent_draft(&mut self, field: AcpAgentField) {
+        self.commit_settings_focus_if_any();
+        if let Some(agent) = self
+            .editor_state
+            .editor_ui
+            .agent_settings
+            .acp_agent_draft
+            .as_ref()
+        {
+            self.editor_state.editor_ui.settings_input_draft = match field {
+                AcpAgentField::DisplayName => agent.display_name.clone(),
+                AcpAgentField::Command => agent.command.clone(),
+                AcpAgentField::Url => agent.url.clone().unwrap_or_default(),
+            };
+            self.editor_state.editor_ui.agent_settings.focus =
+                Some(SettingsFocus::AcpAgentDraft(field));
+            self.editor_state.editor_ui.settings_input_caret_anchor_ms = self.now_ms;
+        }
+    }
+
+    pub(in crate::widget_host) fn toggle_acp_agent_draft_connection_type(&mut self) {
+        self.commit_settings_focus_if_any();
+        if let Some(agent) = self
+            .editor_state
+            .editor_ui
+            .agent_settings
+            .acp_agent_draft
+            .as_mut()
+        {
+            agent.connection_type = match agent.connection_type {
+                AcpConnectionType::Local => AcpConnectionType::Remote,
+                AcpConnectionType::Remote => AcpConnectionType::Local,
+            };
+            agent.connected = false;
+            let field = match agent.connection_type {
+                AcpConnectionType::Local => AcpAgentField::Command,
+                AcpConnectionType::Remote => AcpAgentField::Url,
+            };
+            self.editor_state.editor_ui.settings_input_draft = match field {
+                AcpAgentField::Command => agent.command.clone(),
+                AcpAgentField::Url => agent.url.clone().unwrap_or_default(),
+                AcpAgentField::DisplayName => agent.display_name.clone(),
+            };
+            self.editor_state.editor_ui.agent_settings.focus =
+                Some(SettingsFocus::AcpAgentDraft(field));
+            self.editor_state.editor_ui.settings_input_caret_anchor_ms = self.now_ms;
+        }
+    }
+
+    pub(in crate::widget_host) fn begin_acp_agent_draft(&mut self) {
+        self.commit_settings_focus_if_any();
+        self.editor_state
+            .editor_ui
+            .agent_settings
+            .begin_acp_agent_draft();
+        self.focus_acp_agent_draft(AcpAgentField::Command);
+    }
+
+    pub(in crate::widget_host) fn save_acp_agent_draft(&mut self) {
+        self.commit_settings_focus_if_any();
+        if self
+            .editor_state
+            .editor_ui
+            .agent_settings
+            .save_acp_agent_draft()
+            .is_some()
+        {
+            self.editor_state.editor_ui.agent_settings.focus = None;
+            self.editor_state.editor_ui.settings_input_draft.clear();
+        } else {
+            let field = self
+                .editor_state
+                .editor_ui
+                .agent_settings
+                .acp_agent_draft
+                .as_ref()
+                .map(|agent| match agent.connection_type {
+                    AcpConnectionType::Local => AcpAgentField::Command,
+                    AcpConnectionType::Remote => AcpAgentField::Url,
+                })
+                .unwrap_or(AcpAgentField::Command);
+            self.focus_acp_agent_draft(field);
+        }
+    }
+
+    pub(in crate::widget_host) fn cancel_acp_agent_draft(&mut self) {
+        self.editor_state
+            .editor_ui
+            .agent_settings
+            .cancel_acp_agent_draft();
+        self.editor_state.editor_ui.agent_settings.focus = None;
+        self.editor_state.editor_ui.settings_input_draft.clear();
+    }
+}
