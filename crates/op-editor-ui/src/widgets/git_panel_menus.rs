@@ -91,7 +91,7 @@ impl GitPanel<'_> {
         let btn = self.ready_branch_rect(panel_rect);
         let w = PICKER_W.min(panel_rect.size.x - PAD * 2.0);
         let body = match self.state.branch_picker_mode {
-            GitBranchPickerMode::Create => PICKER_HEADER_H + PICKER_CREATE_H,
+            GitBranchPickerMode::Create => PICKER_CREATE_H + 6.0,
             GitBranchPickerMode::Merge => {
                 let n = self.merge_candidate_indices().len().max(1) as f32;
                 PICKER_HEADER_H + n * PICKER_ROW_H + PICKER_FOOTER_H
@@ -160,21 +160,28 @@ impl GitPanel<'_> {
         )
     }
 
-    /// (input, submit) rects for the inline 新建分支 form (Create mode).
-    fn branch_create_rects(&self, panel: Rect) -> (Rect, Rect) {
+    /// (input, submit, cancel) rects for the inline 新建分支 form. TS renders
+    /// no header here, so the input starts near the popover top.
+    fn branch_create_rects(&self, panel: Rect) -> (Rect, Rect, Rect) {
         let left = panel.origin.x + MENU_PAD + 6.0;
         let inner_w = panel.size.x - (MENU_PAD + 6.0) * 2.0;
-        let input_top = panel.origin.y + MENU_PAD + PICKER_HEADER_H;
+        let input_top = panel.origin.y + MENU_PAD + 6.0;
         let input = Rect {
             origin: Point2D::new(left, input_top),
             size: Point2D::new(inner_w, 30.0),
         };
+        let btn_y = input_top + 30.0 + 8.0;
         let submit_w = 64.0;
         let submit = Rect {
-            origin: Point2D::new(left + inner_w - submit_w, input_top + 30.0 + 8.0),
+            origin: Point2D::new(left + inner_w - submit_w, btn_y),
             size: Point2D::new(submit_w, 24.0),
         };
-        (input, submit)
+        let cancel_w = 56.0;
+        let cancel = Rect {
+            origin: Point2D::new(submit.origin.x - 8.0 - cancel_w, btn_y),
+            size: Point2D::new(cancel_w, 24.0),
+        };
+        (input, submit, cancel)
     }
 
     /// Paint the branch-picker dropdown.
@@ -199,18 +206,22 @@ impl GitPanel<'_> {
             }
             GitBranchPickerMode::List => self.t("git.branch.listHeading"),
         };
-        self.text(
-            cx,
-            heading,
-            panel.origin.x + 10.0,
-            panel.origin.y + MENU_PAD + 14.0,
-            11.0,
-            t.muted_foreground,
-        );
+        // Create mode has no header band in TS — paint the heading only for
+        // list / merge.
+        if mode != GitBranchPickerMode::Create {
+            self.text(
+                cx,
+                heading,
+                panel.origin.x + 10.0,
+                panel.origin.y + MENU_PAD + 14.0,
+                11.0,
+                t.muted_foreground,
+            );
+        }
 
-        // Create mode — inline name input + submit button.
+        // Create mode — inline name input + Cancel / Create buttons.
         if mode == GitBranchPickerMode::Create {
-            let (input, submit) = self.branch_create_rects(panel);
+            let (input, submit, cancel) = self.branch_create_rects(panel);
             self.paint_menu_input(
                 cx,
                 input,
@@ -218,6 +229,8 @@ impl GitPanel<'_> {
                 self.t("git.branch.createPlaceholder"),
                 self.state.branch_create_focused,
             );
+            // Ghost Cancel + primary Create, right-aligned (TS picker:271-285).
+            self.paint_button(cx, cancel, self.t("git.branch.cancel"), true, false);
             self.paint_button(
                 cx,
                 submit,
@@ -365,12 +378,15 @@ impl GitPanel<'_> {
         }
         match self.state.branch_picker_mode {
             GitBranchPickerMode::Create => {
-                let (input, submit) = self.branch_create_rects(panel);
+                let (input, submit, cancel) = self.branch_create_rects(panel);
                 if contains(input, point) {
                     return Some(GitPanelHit::BranchCreateInput);
                 }
                 if contains(submit, point) {
                     return Some(GitPanelHit::BranchCreateSubmit);
+                }
+                if contains(cancel, point) {
+                    return Some(GitPanelHit::BranchPickerCancel);
                 }
                 Some(GitPanelHit::Inside)
             }
