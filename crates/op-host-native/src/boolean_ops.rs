@@ -15,9 +15,9 @@
 use op_editor_core::BooleanOp;
 use op_editor_ui::layout_scene::{regular_polygon_points, LayoutScene, NodeKind, SceneNode};
 use op_editor_ui::{Point2D, Rect};
-use skia_safe::{Path as SkPath, PathBuilder, PathOp, Rect as SkRect};
+use skia_safe::{Matrix, Path as SkPath, PathBuilder, PathOp, Rect as SkRect};
 
-/// Result of a boolean-op computation — the source path ids to
+/// Result of a boolean-op computation — the source shape ids to
 /// remove + the new polyline (doc-space `(x, y)` pairs) to commit.
 pub struct BooleanResult {
     pub source_ids: Vec<String>,
@@ -72,7 +72,7 @@ pub fn compute_boolean_op(
 }
 
 fn build_node_path(node: &SceneNode) -> Option<SkPath> {
-    match node.kind {
+    let path = match node.kind {
         NodeKind::Frame | NodeKind::Rect => build_rect_path(node.bounds),
         NodeKind::Ellipse => build_oval_path(node.bounds),
         NodeKind::Polygon => {
@@ -93,7 +93,8 @@ fn build_node_path(node: &SceneNode) -> Option<SkPath> {
             }
         }
         NodeKind::Group | NodeKind::Text | NodeKind::Other(_) => None,
-    }
+    }?;
+    Some(apply_node_rotation(path, node))
 }
 
 fn build_rect_path(bounds: Rect) -> Option<SkPath> {
@@ -145,6 +146,17 @@ fn build_polyline_path(points: &[Point2D]) -> Option<SkPath> {
         b.close();
     }
     Some(b.detach())
+}
+
+fn apply_node_rotation(path: SkPath, node: &SceneNode) -> SkPath {
+    if node.rotation.abs() <= f32::EPSILON {
+        return path;
+    }
+    let b = node.aggregate_bounds();
+    let pivot = skia_safe::Point::new(b.origin.x + b.size.x / 2.0, b.origin.y + b.size.y / 2.0);
+    let mut matrix = Matrix::new_identity();
+    matrix.set_rotate(node.rotation.to_degrees(), Some(pivot));
+    path.with_transform(&matrix)
 }
 
 /// Walk the result Path and yield a flat polyline. Curves (Quad /
