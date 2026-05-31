@@ -6,6 +6,10 @@ use crate::widgets::agent_settings_builtin::{self, BuiltinHit};
 use crate::widgets::agent_settings_i18n::t as t_settings;
 use crate::widgets::agent_settings_images::{self, ImagesHit};
 use crate::widgets::agent_settings_mcp::{self, McpHit};
+use crate::widgets::agent_settings_panel_geometry::{
+    acp_section_y, agent_card_rect_at, agent_card_rect_in, close_rect, connect_btn_rect_at,
+    content_rect, disconnect_btn_rect_at, nav_item_rect, rect_contains, tab_i18n_label, to_jian,
+};
 use crate::widgets::agent_settings_system::{self, SystemHit};
 use crate::widgets::brand_icons::{paint_brand_logo, paint_opencode_logo, BrandLogo};
 use crate::widgets::editor_state_ext::theme_for;
@@ -22,16 +26,16 @@ use op_editor_core::EditorState;
 
 pub const PANEL_WIDTH: f32 = 720.0;
 pub const PANEL_HEIGHT: f32 = 720.0;
-const SIDEBAR_WIDTH: f32 = 200.0;
-const PAD: f32 = 24.0;
-const NAV_ITEM_STEP: f32 = 30.0;
-const NAV_ITEM_HEIGHT: f32 = 28.0;
-const NAV_TOP: f32 = 56.0;
-const SECTION_GAP: f32 = 28.0;
-const CARD_HEIGHT: f32 = 56.0;
-const CARD_GAP: f32 = 8.0;
-const CONNECT_BTN_W: f32 = 56.0;
-const CONNECT_BTN_H: f32 = 28.0;
+pub(super) const SIDEBAR_WIDTH: f32 = 200.0;
+pub(super) const PAD: f32 = 24.0;
+pub(super) const NAV_ITEM_STEP: f32 = 30.0;
+pub(super) const NAV_ITEM_HEIGHT: f32 = 28.0;
+pub(super) const NAV_TOP: f32 = 56.0;
+pub(super) const SECTION_GAP: f32 = 28.0;
+pub(super) const CARD_HEIGHT: f32 = 56.0;
+pub(super) const CARD_GAP: f32 = 8.0;
+pub(super) const CONNECT_BTN_W: f32 = 56.0;
+pub(super) const CONNECT_BTN_H: f32 = 28.0;
 const AVATAR_SIZE: f32 = 28.0;
 const AVATAR_ICON: f32 = 16.0;
 const NAME_FONT: f32 = 13.0;
@@ -82,6 +86,7 @@ pub enum AgentSettingsHit {
     ToggleGenConfigEditor(usize),
     SetActiveGenConfig(usize),
     RemoveGenConfig(usize),
+    TestGenConfig(usize),
     CycleGenProvider(usize),
     FocusGenConfig {
         index: usize,
@@ -246,6 +251,9 @@ impl<'a> AgentSettingsPanel<'a> {
                     }
                     ImagesHit::RemoveGenConfig(index) => {
                         return AgentSettingsHit::RemoveGenConfig(index);
+                    }
+                    ImagesHit::TestGenConfig(index) => {
+                        return AgentSettingsHit::TestGenConfig(index);
                     }
                     ImagesHit::CycleGenProvider(index) => {
                         return AgentSettingsHit::CycleGenProvider(index);
@@ -724,105 +732,6 @@ fn paint_agent_card(
             Point2D::new(btn.origin.x + (btn.size.x - lw) / 2.0, btn.origin.y + 18.0),
         );
     }
-}
-
-const DISCONNECT_BTN_W: f32 = 96.0;
-
-fn tab_i18n_label(ui: &EditorUiState, tab: AgentSettingsTab) -> &'static str {
-    match tab {
-        AgentSettingsTab::Agents => t_settings(ui, "settings.tab.agents"),
-        AgentSettingsTab::Mcp => t_settings(ui, "settings.tab.mcp"),
-        AgentSettingsTab::Images => t_settings(ui, "settings.tab.images"),
-        AgentSettingsTab::System => t_settings(ui, "settings.tab.system"),
-    }
-}
-
-fn disconnect_btn_rect_at(card: Rect) -> Rect {
-    Rect {
-        origin: Point2D::new(
-            card.origin.x + card.size.x - 16.0 - DISCONNECT_BTN_W,
-            card.origin.y + (CARD_HEIGHT - CONNECT_BTN_H) / 2.0,
-        ),
-        size: Point2D::new(DISCONNECT_BTN_W, CONNECT_BTN_H),
-    }
-}
-
-fn content_rect(panel: Rect) -> Rect {
-    Rect {
-        origin: Point2D::new(panel.origin.x + SIDEBAR_WIDTH + PAD, panel.origin.y + PAD),
-        size: Point2D::new(
-            panel.size.x - SIDEBAR_WIDTH - PAD * 2.0,
-            panel.size.y - PAD * 2.0,
-        ),
-    }
-}
-
-fn nav_item_rect(panel: Rect, i: usize) -> Rect {
-    let y = panel.origin.y + NAV_TOP + i as f32 * NAV_ITEM_STEP;
-    Rect {
-        origin: Point2D::new(panel.origin.x + 8.0, y),
-        size: Point2D::new(SIDEBAR_WIDTH - 16.0, NAV_ITEM_HEIGHT),
-    }
-}
-
-fn close_rect(panel: Rect) -> Rect {
-    let s = 16.0;
-    Rect {
-        origin: Point2D::new(
-            panel.origin.x + panel.size.x - 16.0 - s,
-            panel.origin.y + 16.0,
-        ),
-        size: Point2D::new(s, s),
-    }
-}
-
-fn acp_section_y(content: Rect, settings: &AgentSettings) -> f32 {
-    content.origin.y + 12.0 + agent_settings_builtin::content_height(settings) + SECTION_GAP
-}
-
-fn agent_card_rect_at(x: f32, y: f32, w: f32) -> Rect {
-    Rect {
-        origin: Point2D::new(x, y),
-        size: Point2D::new(w, CARD_HEIGHT),
-    }
-}
-
-fn connect_btn_rect_at(card: Rect) -> Rect {
-    Rect {
-        origin: Point2D::new(
-            card.origin.x + card.size.x - 16.0 - CONNECT_BTN_W,
-            card.origin.y + (CARD_HEIGHT - CONNECT_BTN_H) / 2.0,
-        ),
-        size: Point2D::new(CONNECT_BTN_W, CONNECT_BTN_H),
-    }
-}
-
-fn agent_card_rect_in(panel: Rect, index: usize, settings: &AgentSettings) -> Rect {
-    let content = content_rect(panel);
-    let builtin_block = agent_settings_builtin::content_height(settings) + SECTION_GAP;
-    let acp_block = agent_settings_acp::content_height(settings) + SECTION_GAP;
-    let mut y = content.origin.y + 12.0 + builtin_block + acp_block + 32.0;
-    for i in 0..index {
-        y += CARD_HEIGHT + CARD_GAP;
-        if i == 0 && settings.connected[0] {
-            y += 28.0;
-        }
-    }
-    agent_card_rect_at(content.origin.x, y, content.size.x)
-}
-
-fn rect_contains(r: Rect, p: Point2D) -> bool {
-    p.x >= r.origin.x
-        && p.y >= r.origin.y
-        && p.x <= r.origin.x + r.size.x
-        && p.y <= r.origin.y + r.size.y
-}
-
-fn to_jian(c: Color) -> jian_core::scene::Color {
-    fn ch(v: f32) -> u8 {
-        (v.clamp(0.0, 1.0) * 255.0).round() as u8
-    }
-    jian_core::scene::Color::rgba(ch(c.r), ch(c.g), ch(c.b), ch(c.a))
 }
 
 pub fn drag_for_hit(
