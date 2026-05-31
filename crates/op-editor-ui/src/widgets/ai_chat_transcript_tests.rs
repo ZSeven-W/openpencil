@@ -568,6 +568,74 @@ fn streaming_tool_card_falls_back_to_running_status() {
 }
 
 #[test]
+fn paint_expanded_tool_calls_as_individual_cards_like_ts() {
+    let mut m = ChatMessage::assistant("done");
+    m.tools_collapsed = false;
+    m.tool_calls = vec![
+        ChatToolCall {
+            name: "batch_design".into(),
+            args: r#"{"args":{"dsl":"I(\"root\",{})"},"status":"running"}"#.into(),
+        },
+        ChatToolCall {
+            name: "delete_node".into(),
+            args: r#"{"args":{"id":"old-node"},"result":{"success":false,"error":"missing"}}"#
+                .into(),
+        },
+    ];
+    let mut backend = TranscriptPaintBackend::default();
+    let mut cx = PaintCx {
+        backend: &mut backend,
+    };
+
+    paint_transcript(
+        &mut cx,
+        &crate::Theme::dark(),
+        body(),
+        &[m],
+        0,
+        op_editor_core::Locale::EnUs,
+    );
+
+    assert!(
+        backend.round_rects.len() >= 3,
+        "TS renders each tool call as its own bordered card, not one text body"
+    );
+}
+
+#[test]
+fn mixed_tool_calls_expand_only_write_level_card_bodies_like_ts() {
+    let mut m = ChatMessage::assistant("done");
+    m.tools_collapsed = false;
+    m.tool_calls = vec![
+        ChatToolCall {
+            name: "snapshot_layout".into(),
+            args: r#"{"args":{"pageId":"page-1"}}"#.into(),
+        },
+        ChatToolCall {
+            name: "batch_design".into(),
+            args: r#"{"args":{"dsl":"I(\"root\",{})"}}"#.into(),
+        },
+    ];
+
+    let items = build_transcript(
+        std::slice::from_ref(&m),
+        body(),
+        op_editor_core::Locale::EnUs,
+    );
+    let tools = items[0].tools.as_ref().expect("tools block present");
+
+    assert_eq!(tools.cards.len(), 2);
+    assert!(
+        tools.cards[0].body.size.y == 0.0,
+        "TS keeps read tool cards collapsed by default"
+    );
+    assert!(
+        tools.cards[1].body.size.y > 0.0,
+        "TS opens modify tool cards by default"
+    );
+}
+
+#[test]
 fn user_message_images_get_one_thumbnail_rect_each() {
     let mut m = ChatMessage::user("look");
     for i in 0..3 {
