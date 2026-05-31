@@ -171,6 +171,33 @@ fn collect_targets_prefers_query_on_empty_image_nodes() {
 }
 
 #[test]
+fn collect_targets_infers_image_aspect_ratio() {
+    let mut state = EditorState::default();
+    state.active_children_mut().clear();
+    state
+        .active_children_mut()
+        .push(image_node("img1", "", Some("burger fries")));
+
+    let targets = collect_targets(&state, &HashSet::new());
+
+    assert_eq!(targets.len(), 1);
+    assert_eq!(targets[0].aspect_ratio, Some(ImageAspectRatio::Wide));
+}
+
+#[test]
+fn openverse_search_url_includes_aspect_ratio() {
+    let url = openverse_search_url("burger fries", Some(ImageAspectRatio::Square))
+        .expect("valid openverse url");
+
+    assert_eq!(
+        url.query_pairs()
+            .find(|(key, _)| key == "aspect_ratio")
+            .map(|(_, value)| value.into_owned()),
+        Some("square".to_string())
+    );
+}
+
+#[test]
 fn apply_result_sets_empty_image_src() {
     let mut state = EditorState::default();
     state.active_children_mut().clear();
@@ -474,7 +501,7 @@ fn sniff_image_mime_detects_common_raster_formats() {
 #[tokio::test]
 #[ignore = "network smoke test for Openverse/Wikimedia"]
 async fn fetch_first_image_url_smoke() {
-    let url = fetch_first_image_url("burger fries", None)
+    let url = fetch_first_image_url("burger fries", None, None)
         .await
         .expect("common query should return a renderable image data URL");
     assert!(url.starts_with("data:image/"), "got {url}");
