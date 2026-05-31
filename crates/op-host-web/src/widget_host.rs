@@ -44,11 +44,17 @@ use op_editor_ui::widgets::{
 use op_editor_ui::{Point2D, Rect, Theme};
 
 mod agent_settings_press;
+mod chat_model_picker_caret;
+#[cfg(test)]
+mod chat_model_picker_caret_tests;
 mod keyboard;
 mod paint;
 mod press;
 mod property_dispatch;
 mod scroll;
+mod settings_caret;
+#[cfg(test)]
+mod settings_caret_tests;
 
 pub(in crate::widget_host) const TOOLBAR_INSET_X: f32 = 12.0;
 pub(in crate::widget_host) const TOOLBAR_INSET_Y: f32 = 12.0;

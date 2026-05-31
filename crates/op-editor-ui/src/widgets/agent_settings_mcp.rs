@@ -1,6 +1,9 @@
 //! MCP tab of the settings modal.
 
 use crate::theme::Theme;
+use crate::widgets::agent_settings_caret::{
+    caret_x_for_text, paint_caret, settings_caret_for_focus,
+};
 use crate::widgets::agent_settings_i18n::t as t_settings;
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
@@ -275,15 +278,24 @@ fn paint_server_card(
     let port_y = port_field.origin.y + PORT_FIELD_H / 2.0 + 5.0;
     cx.backend
         .draw_text(&port_layout, Point2D::new(port_x, port_y));
-    if focused && jian_core::anim::blink_visible(now_ms, ui.settings_input_caret_anchor_ms, 500) {
-        let caret = Rect {
-            origin: Point2D::new(
-                (port_x + port_w + 1.0).min(port_field.origin.x + port_field.size.x - 8.0),
-                port_field.origin.y + (PORT_FIELD_H - 15.0) / 2.0,
-            ),
-            size: Point2D::new(1.5, 15.0),
-        };
-        cx.backend.fill_rect(caret, theme.foreground);
+    if focused {
+        let caret = settings_caret_for_focus(ui, SettingsFocus::McpPort);
+        let caret_x = caret_x_for_text(
+            cx,
+            &port_str,
+            caret,
+            port_x,
+            port_field.origin.x + port_field.size.x - 8.0,
+            12.0,
+        );
+        paint_caret(
+            cx,
+            theme,
+            now_ms,
+            ui.settings_input_caret_anchor_ms,
+            caret_x,
+            port_field.origin.y + (PORT_FIELD_H - 15.0) / 2.0,
+        );
     }
 
     let btn_bg = if running { theme.muted } else { theme.primary };

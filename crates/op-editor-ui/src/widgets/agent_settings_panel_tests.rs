@@ -66,7 +66,7 @@ fn hit_test_resolves_builtin_agent_api_key_field() {
     let content_x = rect.origin.x + 200.0 + 24.0;
     let content_y = rect.origin.y + 24.0;
     let first_card_y = content_y + 12.0 + 28.0 + 28.0;
-    let point = crate::Point2D::new(content_x + 92.0, first_card_y + 88.0);
+    let point = crate::Point2D::new(content_x + 92.0, first_card_y + 116.0);
 
     assert_eq!(
         panel.hit_test(rect, point),

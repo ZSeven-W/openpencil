@@ -3,6 +3,7 @@ use op_editor_core::agent_settings::{
     AcpAgentField, AgentSettingsTab, BuiltinAgentField, ImageGenField, ImageGenProvider,
     ImageSearchField, SettingsFocus,
 };
+use op_editor_core::BuiltinAgentPresetKey;
 use op_editor_ui::widgets::agent_settings_panel::AgentSettingsPanel;
 
 fn agent_settings_content_metrics(host: &WidgetHostNative) -> (f32, f32, f32) {
@@ -195,6 +196,38 @@ fn add_provider_opens_unsaved_builtin_agent_draft() {
 }
 
 #[test]
+fn builtin_provider_menu_selects_ts_preset_for_draft() {
+    let mut host = WidgetHostNative::new();
+    let panel = AgentSettingsPanel::for_editor(host.editor_state());
+    let rect = panel.rect(1200.0, 800.0);
+    let content_x = rect.origin.x + 200.0 + 24.0;
+    let content_y = rect.origin.y + 24.0;
+    let content_w = rect.size.x - 200.0 - 48.0;
+    let add_x = content_x + content_w - 48.0;
+    let add_y = content_y + 24.0;
+
+    assert!(host.dispatch_agent_settings_press(add_x, add_y, 1200.0, 800.0));
+    let card_y = content_y + 12.0 + 28.0 + 28.0;
+    let provider_x = content_x + 68.0 + 24.0;
+    let provider_y = card_y + 60.0;
+    assert!(host.dispatch_agent_settings_press(provider_x, provider_y, 1200.0, 800.0));
+    let minimax_y = card_y + 76.0 + 4.0 + 5.0 * 24.0 + 12.0;
+    assert!(host.dispatch_agent_settings_press(provider_x, minimax_y, 1200.0, 800.0));
+
+    let draft = host
+        .editor_state()
+        .editor_ui
+        .agent_settings
+        .builtin_agent_draft
+        .as_ref()
+        .expect("draft remains open");
+    assert_eq!(draft.preset, BuiltinAgentPresetKey::MiniMax);
+    assert_eq!(draft.display_name, "MiniMax");
+    assert_eq!(draft.model, "MiniMax-M2.7");
+    assert_eq!(draft.base_url, "https://api.minimaxi.com/anthropic");
+}
+
+#[test]
 fn save_builtin_agent_draft_persists_provider() {
     let mut host = WidgetHostNative::new();
     let panel = AgentSettingsPanel::for_editor(host.editor_state());
@@ -211,7 +244,7 @@ fn save_builtin_agent_draft_persists_provider() {
     }
     let card_y = content_y + 12.0 + 28.0 + 28.0;
     let save_x = content_x + content_w - 12.0 - 34.0;
-    let save_y = card_y + 168.0 + 18.0;
+    let save_y = card_y + 196.0 + 18.0;
     assert!(host.dispatch_agent_settings_press(save_x, save_y, 1200.0, 800.0));
 
     let settings = &host.editor_state().editor_ui.agent_settings;

@@ -1,7 +1,9 @@
 //! Images tab of the settings modal.
 
 use crate::theme::Theme;
-use crate::widgets::agent_settings_caret::paint_caret;
+use crate::widgets::agent_settings_caret::{
+    caret_x_for_text, paint_caret, settings_caret_for_focus,
+};
 use crate::widgets::agent_settings_i18n::t as t_settings;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::PaintCx;
@@ -580,7 +582,8 @@ fn paint_profile_field(
     row: Rect,
     now_ms: u64,
 ) {
-    let focused = settings.focus == Some(SettingsFocus::ImageGenProfile { index, field });
+    let focus = SettingsFocus::ImageGenProfile { index, field };
+    let focused = settings.focus == Some(focus);
     let value = if focused {
         ui.settings_input_draft.as_str()
     } else {
@@ -625,10 +628,10 @@ fn paint_profile_field(
         if focused { theme.primary } else { theme.border },
         1.0,
     );
-    let value = ellipsize(cx, value, input.size.x - 12.0, 11.0);
+    let clipped = ellipsize(cx, value, input.size.x - 12.0, 11.0);
     let text_x = input.origin.x + 6.0;
     let value_lay = TextLayout::single_run(
-        &value,
+        &clipped,
         "system-ui",
         11.0,
         to_jian(theme.foreground),
@@ -637,8 +640,15 @@ fn paint_profile_field(
     cx.backend
         .draw_text(&value_lay, Point2D::new(text_x, input.origin.y + 16.0));
     if focused {
-        let caret_x = (text_x + cx.backend.measure_text(&value, 11.0) + 1.0)
-            .min(input.origin.x + input.size.x - 8.0);
+        let caret = settings_caret_for_focus(ui, focus);
+        let caret_x = caret_x_for_text(
+            cx,
+            value,
+            caret,
+            text_x,
+            input.origin.x + input.size.x - 8.0,
+            11.0,
+        );
         let caret_y = input.origin.y + 4.5;
         let anchor = ui.settings_input_caret_anchor_ms;
         paint_caret(cx, theme, now_ms, anchor, caret_x, caret_y);
@@ -710,7 +720,8 @@ fn paint_search_input_row(
         size: Point2D::new(w - LABEL_W, ROW_H),
     };
     cx.backend.fill_round_rect(field, 6.0, theme.background);
-    let focused = settings.focus == Some(SettingsFocus::ImageSearch(field_kind));
+    let focus = SettingsFocus::ImageSearch(field_kind);
+    let focused = settings.focus == Some(focus);
     cx.backend.stroke_round_rect(
         field,
         6.0,
@@ -752,9 +763,15 @@ fn paint_search_input_row(
         Point2D::new(text_x, field.origin.y + ROW_H / 2.0 + 5.0),
     );
     if focused {
-        let caret_text = ellipsize(cx, text, field.size.x - 24.0, 13.0);
-        let caret_x = (text_x + cx.backend.measure_text(&caret_text, 13.0) + 1.0)
-            .min(field.origin.x + field.size.x - 12.0);
+        let caret = settings_caret_for_focus(ui, focus);
+        let caret_x = caret_x_for_text(
+            cx,
+            text,
+            caret,
+            text_x,
+            field.origin.x + field.size.x - 12.0,
+            13.0,
+        );
         let caret_y = field.origin.y + (ROW_H - 15.0) / 2.0;
         let anchor = ui.settings_input_caret_anchor_ms;
         paint_caret(cx, theme, now_ms, anchor, caret_x, caret_y);

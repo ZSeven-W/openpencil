@@ -12,6 +12,9 @@
 
 use std::collections::BTreeMap;
 
+use crate::agent_settings_builtin_presets::{
+    builtin_agent_preset, infer_builtin_agent_preset, BuiltinAgentPresetKey, BUILTIN_AGENT_PRESETS,
+};
 pub use crate::chat::AgentProvider;
 
 /// Which section of the settings modal is active.
@@ -143,6 +146,12 @@ pub enum SettingsFocus {
     AcpAgentDraft(AcpAgentField),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BuiltinAgentPresetMenuTarget {
+    Agent(usize),
+    Draft,
+}
+
 /// Built-in provider backend configured directly in OpenPencil.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BuiltinAgentKind {
@@ -170,6 +179,7 @@ impl BuiltinAgentKind {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BuiltinAgentConfig {
     pub id: String,
+    pub preset: BuiltinAgentPresetKey,
     pub display_name: String,
     pub kind: BuiltinAgentKind,
     pub api_key: String,
@@ -197,42 +207,38 @@ impl BuiltinAgentConfig {
             && self.model.trim() == model.trim()
             && self.base_url.trim().trim_end_matches('/') == base_url.trim().trim_end_matches('/')
     }
-}
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct BuiltinAgentPreset {
-    pub display_name: &'static str,
-    pub kind: BuiltinAgentKind,
-    pub model: &'static str,
-    pub base_url: &'static str,
-}
+    pub fn apply_preset(&mut self, key: BuiltinAgentPresetKey) {
+        let preset = builtin_agent_preset(key);
+        self.preset = preset.key;
+        self.display_name = preset.display_name.into();
+        self.kind = preset.kind;
+        self.model = preset.model.into();
+        self.base_url = preset.base_url.into();
+    }
 
-pub const BUILTIN_AGENT_PRESETS: [BuiltinAgentPreset; 4] = [
-    BuiltinAgentPreset {
-        display_name: "MINIMAX",
-        kind: BuiltinAgentKind::OpenAiCompat,
-        model: "MiniMax-M2.7",
-        base_url: "https://api.minimaxi.com/v1",
-    },
-    BuiltinAgentPreset {
-        display_name: "百炼CP",
-        kind: BuiltinAgentKind::OpenAiCompat,
-        model: "qwen3-coder-plus",
-        base_url: "https://coding.dashscope.aliyuncs.com/v1",
-    },
-    BuiltinAgentPreset {
-        display_name: "方舟CP",
-        kind: BuiltinAgentKind::Anthropic,
-        model: "ark-code-latest",
-        base_url: "https://ark.cn-beijing.volces.com/api/coding",
-    },
-    BuiltinAgentPreset {
-        display_name: "DS",
-        kind: BuiltinAgentKind::OpenAiCompat,
-        model: "deepseek-v4-pro",
-        base_url: "https://api.deepseek.com/v1",
-    },
-];
+    pub fn set_kind_for_preset(&mut self, kind: BuiltinAgentKind) {
+        self.kind = kind;
+        if let Some(base_url) = builtin_agent_preset(self.preset).base_url_for_kind(kind) {
+            self.base_url = base_url.into();
+        } else if self.preset != BuiltinAgentPresetKey::Custom {
+            self.base_url = kind.default_base_url().into();
+        }
+        if kind == BuiltinAgentKind::OpenAiCompat && self.model.starts_with("claude-") {
+            self.model = "gpt-5.4".into();
+        } else if kind == BuiltinAgentKind::Anthropic && self.model.starts_with("gpt-") {
+            self.model = "claude-sonnet-4-6-20250916".into();
+        }
+    }
+
+    pub fn toggle_kind_for_preset(&mut self) {
+        let next = match self.kind {
+            BuiltinAgentKind::Anthropic => BuiltinAgentKind::OpenAiCompat,
+            BuiltinAgentKind::OpenAiCompat => BuiltinAgentKind::Anthropic,
+        };
+        self.set_kind_for_preset(next);
+    }
+}
 
 /// ACP-compatible agent connection style mirrored from the TS
 /// `AcpAgentConfig.connectionType` union.
@@ -330,6 +336,7 @@ pub struct AgentSettings {
     pub connected: [bool; 5],
     pub builtin_agents: Vec<BuiltinAgentConfig>,
     pub builtin_agent_draft: Option<BuiltinAgentConfig>,
+    pub builtin_preset_menu_open: Option<BuiltinAgentPresetMenuTarget>,
     pub next_builtin_agent_id: u64,
     pub acp_agents: Vec<AcpAgentConfig>,
     pub acp_agent_draft: Option<AcpAgentConfig>,
@@ -366,6 +373,7 @@ impl Default for AgentSettings {
             connected: [false; 5],
             builtin_agents: Vec::new(),
             builtin_agent_draft: None,
+            builtin_preset_menu_open: None,
             next_builtin_agent_id: 1,
             acp_agents: Vec::new(),
             acp_agent_draft: None,
@@ -414,34 +422,35 @@ impl AgentSettings {
         if self.builtin_agent_draft.is_some() {
             return;
         }
-        let draft = if let Some(preset) = BUILTIN_AGENT_PRESETS.iter().find(|preset| {
-            !self
-                .builtin_agents
-                .iter()
-                .any(|agent| agent.display_name == preset.display_name)
-        }) {
-            BuiltinAgentConfig {
-                id: String::new(),
-                display_name: preset.display_name.into(),
-                kind: preset.kind,
-                api_key: String::new(),
-                model: preset.model.into(),
-                base_url: preset.base_url.into(),
-                enabled: true,
-            }
-        } else {
-            let n = self.next_builtin_agent_id.max(1);
-            BuiltinAgentConfig {
-                id: String::new(),
-                display_name: format!("Built-in Agent {n}"),
-                kind: BuiltinAgentKind::Anthropic,
-                api_key: String::new(),
-                model: "claude-sonnet-4-5".into(),
-                base_url: BuiltinAgentKind::Anthropic.default_base_url().into(),
-                enabled: true,
-            }
-        };
-        self.builtin_agent_draft = Some(draft);
+        let preset = builtin_agent_preset(BuiltinAgentPresetKey::Anthropic);
+        self.builtin_agent_draft = Some(BuiltinAgentConfig {
+            id: String::new(),
+            preset: preset.key,
+            display_name: preset.display_name.into(),
+            kind: preset.kind,
+            api_key: String::new(),
+            model: preset.model.into(),
+            base_url: preset.base_url.into(),
+            enabled: true,
+        });
+    }
+
+    pub fn set_builtin_agent_preset(&mut self, index: usize, preset: BuiltinAgentPresetKey) {
+        if let Some(agent) = self.builtin_agents.get_mut(index) {
+            let api_key = agent.api_key.clone();
+            let enabled = agent.enabled;
+            agent.apply_preset(preset);
+            agent.api_key = api_key;
+            agent.enabled = enabled;
+        }
+    }
+
+    pub fn set_builtin_agent_draft_preset(&mut self, preset: BuiltinAgentPresetKey) {
+        if let Some(agent) = self.builtin_agent_draft.as_mut() {
+            let api_key = agent.api_key.clone();
+            agent.apply_preset(preset);
+            agent.api_key = api_key;
+        }
     }
 
     pub fn save_builtin_agent_draft(&mut self) -> Option<String> {
@@ -464,6 +473,7 @@ impl AgentSettings {
 
     pub fn cancel_builtin_agent_draft(&mut self) {
         self.builtin_agent_draft = None;
+        self.builtin_preset_menu_open = None;
     }
 
     pub fn add_builtin_agent_with_defaults(
@@ -504,6 +514,7 @@ impl AgentSettings {
         self.next_builtin_agent_id = self.next_builtin_agent_id.max(1).saturating_add(1);
         self.builtin_agents.push(BuiltinAgentConfig {
             id: id.clone(),
+            preset: infer_builtin_agent_preset(kind, &base_url),
             display_name,
             kind,
             api_key,

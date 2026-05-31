@@ -38,6 +38,9 @@ mod agent_settings_draft_dispatch;
 #[cfg(test)]
 mod agent_settings_tests;
 mod ai_chat_geometry;
+mod chat_model_picker_caret;
+#[cfg(test)]
+mod chat_model_picker_caret_tests;
 mod click;
 mod color_picker_press;
 mod component_browser_press;
@@ -65,6 +68,9 @@ mod property_dispatch;
 mod property_layout_dispatch;
 mod property_popovers;
 mod scroll;
+mod settings_caret;
+#[cfg(test)]
+mod settings_caret_tests;
 mod settings_dispatch;
 mod shape_picker_press;
 mod shortcuts;

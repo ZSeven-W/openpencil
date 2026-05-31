@@ -2,7 +2,9 @@
 
 use crate::theme::Theme;
 use crate::widgets::agent_settings_acp_draft;
-use crate::widgets::agent_settings_caret::paint_caret;
+use crate::widgets::agent_settings_caret::{
+    caret_x_for_text, paint_caret, settings_caret_for_focus,
+};
 use crate::widgets::agent_settings_form_actions::{
     cancel_button_rect, paint_form_actions, save_button_rect,
 };
@@ -463,10 +465,11 @@ fn paint_field(
     card: Rect,
     now_ms: u64,
 ) {
-    let focused = match index {
-        Some(index) => settings.focus == Some(SettingsFocus::AcpAgent { index, field }),
-        None => settings.focus == Some(SettingsFocus::AcpAgentDraft(field)),
+    let focus = match index {
+        Some(index) => SettingsFocus::AcpAgent { index, field },
+        None => SettingsFocus::AcpAgentDraft(field),
     };
+    let focused = settings.focus == Some(focus);
     let value = if focused {
         ui.settings_input_draft.as_str()
     } else {
@@ -517,8 +520,15 @@ fn paint_field(
         input.origin.y + 16.0,
     );
     if focused {
-        let caret_x = (text_x + cx.backend.measure_text(&clipped, 11.0) + 1.0)
-            .min(input.origin.x + input.size.x - 8.0);
+        let caret = settings_caret_for_focus(ui, focus);
+        let caret_x = caret_x_for_text(
+            cx,
+            value,
+            caret,
+            text_x,
+            input.origin.x + input.size.x - 8.0,
+            11.0,
+        );
         let caret_y = input.origin.y + 4.5;
         let anchor = ui.settings_input_caret_anchor_ms;
         paint_caret(cx, theme, now_ms, anchor, caret_x, caret_y);

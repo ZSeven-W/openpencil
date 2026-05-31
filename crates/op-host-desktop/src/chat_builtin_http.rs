@@ -462,6 +462,7 @@ mod tests {
         });
         let provider = ConfiguredBuiltinProvider::from_builtin_agent(&BuiltinAgentConfig {
             id: "builtin-1".into(),
+            preset: op_editor_core::BuiltinAgentPresetKey::Custom,
             display_name: "Mock OpenAI".into(),
             kind: BuiltinAgentKind::OpenAiCompat,
             api_key: "sk-test".into(),

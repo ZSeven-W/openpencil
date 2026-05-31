@@ -188,11 +188,29 @@ pub fn model_at(
     hit
 }
 
+pub fn search_clear_hit(rect: Rect, point: Point2D, search: &str) -> bool {
+    !search.is_empty() && rect_contains(search_clear_rect(rect), point)
+}
+
 fn model_list_rect(rect: Rect) -> Rect {
     Rect {
         origin: Point2D::new(rect.origin.x, rect.origin.y + MODEL_SEARCH_H),
         size: Point2D::new(rect.size.x, (rect.size.y - MODEL_SEARCH_H).max(0.0)),
     }
+}
+
+fn search_clear_rect(rect: Rect) -> Rect {
+    Rect {
+        origin: Point2D::new(rect.origin.x + rect.size.x - 40.0, rect.origin.y + 7.0),
+        size: Point2D::new(32.0, 24.0),
+    }
+}
+
+fn rect_contains(rect: Rect, point: Point2D) -> bool {
+    point.x >= rect.origin.x
+        && point.x <= rect.origin.x + rect.size.x
+        && point.y >= rect.origin.y
+        && point.y <= rect.origin.y + rect.size.y
 }
 
 /// Paint the dropdown card + grouped rows. `selected` is the index
@@ -210,6 +228,7 @@ pub fn paint_model_picker(
     scroll: f32,
     hover: Option<usize>,
     search: &str,
+    caret: Option<usize>,
     now_ms: u64,
     caret_anchor_ms: u64,
     locale: op_editor_core::Locale,
@@ -219,7 +238,16 @@ pub fn paint_model_picker(
     cx.backend.fill_round_rect(rect, 10.0, theme.card);
     cx.backend.stroke_round_rect(rect, 10.0, theme.border, 1.0);
     let row_left = rect.origin.x + 12.0;
-    paint_search_row(cx, theme, rect, search, now_ms, caret_anchor_ms, locale);
+    paint_search_row(
+        cx,
+        theme,
+        rect,
+        search,
+        caret,
+        now_ms,
+        caret_anchor_ms,
+        locale,
+    );
     let list_rect = model_list_rect(rect);
     if visible_model_indices(models, search).is_empty() {
         let empty = op_i18n::translate(locale, "ai.noModelsFound");
@@ -378,11 +406,13 @@ pub fn paint_model_picker(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn paint_search_row(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
     rect: Rect,
     search: &str,
+    caret: Option<usize>,
     now_ms: u64,
     caret_anchor_ms: u64,
     locale: op_editor_core::Locale,
@@ -409,7 +439,7 @@ fn paint_search_row(
         theme.muted_foreground,
         1.4,
     );
-    let raw = search.trim();
+    let raw = search;
     let (label, color) = if raw.is_empty() {
         (
             op_i18n::translate(locale, "ai.searchModels"),
@@ -432,7 +462,8 @@ fn paint_search_row(
         let caret_x = if raw.is_empty() {
             text_x - 4.0
         } else {
-            text_x + cx.backend.measure_text(raw, 12.0) + 1.0
+            let caret = clamp_caret(raw, caret.unwrap_or(raw.len()));
+            text_x + cx.backend.measure_text(&raw[..caret], 12.0) + 1.0
         };
         let caret_x = caret_x.min(search_rect.origin.x + search_rect.size.x - 24.0);
         cx.backend.fill_rect(
@@ -456,6 +487,14 @@ fn paint_search_row(
             1.4,
         );
     }
+}
+
+fn clamp_caret(value: &str, pos: usize) -> usize {
+    let mut pos = pos.min(value.len());
+    while pos > 0 && !value.is_char_boundary(pos) {
+        pos -= 1;
+    }
+    pos
 }
 
 fn paint_badge(cx: &mut PaintCx<'_>, theme: &Theme, text: &str, right_x: f32, y: f32) {

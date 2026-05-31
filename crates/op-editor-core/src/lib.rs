@@ -8,6 +8,7 @@
 //! UI drafts).
 
 pub mod agent_settings;
+pub mod agent_settings_builtin_presets;
 pub mod align;
 pub mod align_guides;
 pub mod chat;
@@ -74,6 +75,10 @@ pub use agent_settings::{
     AcpAgentConfig, AcpAgentField, AcpConnectionType, AgentSettings, AgentSettingsDrag,
     AgentSettingsTab, BuiltinAgentConfig, BuiltinAgentField, BuiltinAgentKind, ImageGenField,
     ImageGenProfile, ImageGenProvider, ImageSearchField, McpCli, McpServer, SettingsFocus,
+};
+pub use agent_settings_builtin_presets::{
+    builtin_agent_preset, infer_builtin_agent_preset, BuiltinAgentPreset, BuiltinAgentPresetKey,
+    BUILTIN_AGENT_PRESETS,
 };
 pub use align::AlignAction;
 pub use chat::{

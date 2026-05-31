@@ -270,26 +270,45 @@ impl WidgetHostNative {
                     .builtin_agents
                     .get_mut(index)
                 {
-                    use op_editor_core::agent_settings::BuiltinAgentKind;
-                    agent.kind = match agent.kind {
-                        BuiltinAgentKind::Anthropic => BuiltinAgentKind::OpenAiCompat,
-                        BuiltinAgentKind::OpenAiCompat => BuiltinAgentKind::Anthropic,
-                    };
-                    agent.base_url = agent.kind.default_base_url().to_string();
-                    if agent.kind == BuiltinAgentKind::OpenAiCompat
-                        && agent.model.starts_with("claude-")
-                    {
-                        agent.model = "gpt-5.4".into();
-                    } else if agent.kind == BuiltinAgentKind::Anthropic
-                        && agent.model.starts_with("gpt-")
-                    {
-                        agent.model = "claude-sonnet-4-5".into();
-                    }
+                    agent.toggle_kind_for_preset();
                     self.editor_state.rebuild_chat_models();
                 }
             }
             AgentSettingsHit::ToggleBuiltinAgentDraftKind => {
                 self.toggle_builtin_agent_draft_kind();
+            }
+            AgentSettingsHit::ToggleBuiltinAgentPresetMenu(index) => {
+                self.commit_settings_focus_if_any();
+                let target = match index {
+                    Some(index) => {
+                        op_editor_core::agent_settings::BuiltinAgentPresetMenuTarget::Agent(index)
+                    }
+                    None => op_editor_core::agent_settings::BuiltinAgentPresetMenuTarget::Draft,
+                };
+                let settings = &mut self.editor_state.editor_ui.agent_settings;
+                settings.builtin_preset_menu_open =
+                    (settings.builtin_preset_menu_open != Some(target)).then_some(target);
+            }
+            AgentSettingsHit::SelectBuiltinAgentPreset { index, preset } => {
+                self.commit_settings_focus_if_any();
+                match index {
+                    Some(index) => {
+                        self.editor_state
+                            .editor_ui
+                            .agent_settings
+                            .set_builtin_agent_preset(index, preset);
+                        self.editor_state.rebuild_chat_models();
+                    }
+                    None => self
+                        .editor_state
+                        .editor_ui
+                        .agent_settings
+                        .set_builtin_agent_draft_preset(preset),
+                }
+                self.editor_state
+                    .editor_ui
+                    .agent_settings
+                    .builtin_preset_menu_open = None;
             }
             AgentSettingsHit::ToggleBuiltinAgentEnabled(index) => {
                 self.commit_settings_focus_if_any();
@@ -330,6 +349,7 @@ impl WidgetHostNative {
                     agents.remove(index);
                     self.editor_state.editor_ui.agent_settings.focus = None;
                     self.editor_state.editor_ui.settings_input_draft.clear();
+                    self.clear_settings_caret();
                     self.editor_state.rebuild_chat_models();
                 }
             }
@@ -433,6 +453,7 @@ impl WidgetHostNative {
                     agents.remove(index);
                     self.editor_state.editor_ui.agent_settings.focus = None;
                     self.editor_state.editor_ui.settings_input_draft.clear();
+                    self.clear_settings_caret();
                 }
             }
             AgentSettingsHit::ToggleAcpConnected(index) => {
