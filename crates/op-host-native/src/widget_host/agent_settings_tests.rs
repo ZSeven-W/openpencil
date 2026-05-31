@@ -760,7 +760,7 @@ fn image_search_oauth_focus_accepts_text_and_commits() {
 }
 
 #[test]
-fn image_search_test_updates_ready_status_from_oauth_completeness() {
+fn image_search_test_keeps_search_ready_when_oauth_is_incomplete() {
     let mut host = WidgetHostNative::new();
     host.editor_state_mut().editor_ui.agent_settings.tab = AgentSettingsTab::Images;
     host.editor_state_mut()
@@ -781,8 +781,7 @@ fn image_search_test_updates_ready_status_from_oauth_completeness() {
 
     assert!(host.dispatch_agent_settings_press(x, y, 1200.0, 800.0));
     assert!(
-        !host
-            .editor_state()
+        host.editor_state()
             .editor_ui
             .agent_settings
             .images_search_ready
