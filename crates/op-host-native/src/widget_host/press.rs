@@ -595,9 +595,16 @@ impl WidgetHostNative {
             return rename_committed || text_edit_committed;
         }
 
-        if let Some(a) = self.align_toolbar_hit(x, y, viewport_width, viewport_height) {
-            self.editor_state.align_selected(a);
-            self.mark_dirty();
+        if let Some(hit) = self.selection_toolbar_hit(x, y, viewport_width, viewport_height) {
+            match hit {
+                op_editor_ui::widgets::AlignToolbarHit::Align(action) => {
+                    self.editor_state.align_selected(action);
+                    self.mark_dirty();
+                }
+                op_editor_ui::widgets::AlignToolbarHit::Boolean(op) => {
+                    let _ = self.apply_boolean_op(op);
+                }
+            }
             return true;
         }
         // 3. apply_click — LayerPanel + chat-defocus. Peek the

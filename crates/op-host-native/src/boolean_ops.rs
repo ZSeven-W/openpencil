@@ -1,22 +1,21 @@
 //! Path boolean ops (Union / Subtract / Intersect / Exclude) for
 //! the selection. Backed by skia's built-in `Path::op` so the
-//! implementation is short + correct for the polyline path-points
+//! implementation is short + correct for the layout-resolved shape
 //! model the editor uses today. Mirrors the four shortcuts TS
 //! exposes via Paper.js (`use-edit-shortcuts.ts` Ctrl+Alt+U/S/I).
 //!
 //! Lives in `shell-native` (not shell-core) so shell-core stays
 //! skia-free. This module is a pure *computation*: given the
 //! layout-resolved `LayoutScene` + the editor's selection set it
-//! returns the source path ids + the result polyline. The host
+//! returns the source shape ids + the result polyline. The host
 //! commits that result back through an `EditorState` mutator
 //! (`replace_paths_with_polyline`) so the canonical tree is never
 //! edited directly.
 
 use op_editor_core::BooleanOp;
-use op_editor_ui::layout_scene::LayoutScene;
-use op_editor_ui::layout_scene::NodeKind;
-use op_editor_ui::Point2D;
-use skia_safe::{Path as SkPath, PathBuilder, PathOp};
+use op_editor_ui::layout_scene::{regular_polygon_points, LayoutScene, NodeKind, SceneNode};
+use op_editor_ui::{Point2D, Rect};
+use skia_safe::{Path as SkPath, PathBuilder, PathOp, Rect as SkRect};
 
 /// Result of a boolean-op computation — the source path ids to
 /// remove + the new polyline (doc-space `(x, y)` pairs) to commit.
@@ -25,10 +24,11 @@ pub struct BooleanResult {
     pub points: Vec<(f64, f64)>,
 }
 
-/// Compute `op` over the selected Path nodes. `selected` is the
-/// editor's selection set (scene-space string ids). Requires 2+
-/// Path nodes among the selection; returns `None` when fewer than
-/// two paths are selected or the result polyline is empty. The
+/// Compute `op` over the selected boolean-compatible shape nodes.
+/// `selected` is the editor's selection set (scene-space string ids).
+/// Requires every selected node to be a supported shape, and at least
+/// two operands; returns `None` when the selection is unsupported or
+/// the result polyline is empty. The
 /// returned `BooleanResult` is the input the host feeds to
 /// `EditorState::replace_paths_with_polyline`.
 pub fn compute_boolean_op(
@@ -37,22 +37,14 @@ pub fn compute_boolean_op(
     op: BooleanOp,
 ) -> Option<BooleanResult> {
     let page = scene.active_page()?;
-    let path_ids: Vec<String> = selected
-        .iter()
-        .filter(|id| {
-            page.find(id)
-                .map(|n| matches!(n.kind, NodeKind::Path))
-                .unwrap_or(false)
-        })
-        .cloned()
-        .collect();
-    if path_ids.len() < 2 {
-        return None;
+    let mut source_ids = Vec::with_capacity(selected.len());
+    let mut sk_paths = Vec::with_capacity(selected.len());
+    for id in selected {
+        let node = page.find(id)?;
+        let path = build_node_path(node)?;
+        source_ids.push(id.clone());
+        sk_paths.push(path);
     }
-    let sk_paths: Vec<SkPath> = path_ids
-        .iter()
-        .filter_map(|id| page.find(id).map(|n| build_skia_path(&n.points)))
-        .collect();
     if sk_paths.len() < 2 {
         return None;
     }
@@ -71,7 +63,7 @@ pub fn compute_boolean_op(
         return None;
     }
     Some(BooleanResult {
-        source_ids: path_ids,
+        source_ids,
         points: result_points
             .iter()
             .map(|p| (p.x as f64, p.y as f64))
@@ -79,7 +71,71 @@ pub fn compute_boolean_op(
     })
 }
 
-fn build_skia_path(points: &[Point2D]) -> SkPath {
+fn build_node_path(node: &SceneNode) -> Option<SkPath> {
+    match node.kind {
+        NodeKind::Frame | NodeKind::Rect => build_rect_path(node.bounds),
+        NodeKind::Ellipse => build_oval_path(node.bounds),
+        NodeKind::Polygon => {
+            build_polyline_path(&regular_polygon_points(node.bounds, node.polygon_sides))
+        }
+        NodeKind::Path => build_polyline_path(&node.points),
+        NodeKind::Line => {
+            if node.points.len() >= 2 {
+                build_polyline_path(&node.points)
+            } else {
+                build_polyline_path(&[
+                    node.bounds.origin,
+                    Point2D::new(
+                        node.bounds.origin.x + node.bounds.size.x,
+                        node.bounds.origin.y + node.bounds.size.y,
+                    ),
+                ])
+            }
+        }
+        NodeKind::Group | NodeKind::Text | NodeKind::Other(_) => None,
+    }
+}
+
+fn build_rect_path(bounds: Rect) -> Option<SkPath> {
+    if bounds.size.x <= 0.0 || bounds.size.y <= 0.0 {
+        return None;
+    }
+    let mut b = PathBuilder::new();
+    b.add_rect(
+        SkRect::from_xywh(
+            bounds.origin.x,
+            bounds.origin.y,
+            bounds.size.x,
+            bounds.size.y,
+        ),
+        None,
+        None,
+    );
+    Some(b.detach())
+}
+
+fn build_oval_path(bounds: Rect) -> Option<SkPath> {
+    if bounds.size.x <= 0.0 || bounds.size.y <= 0.0 {
+        return None;
+    }
+    let mut b = PathBuilder::new();
+    b.add_oval(
+        SkRect::from_xywh(
+            bounds.origin.x,
+            bounds.origin.y,
+            bounds.size.x,
+            bounds.size.y,
+        ),
+        None,
+        None,
+    );
+    Some(b.detach())
+}
+
+fn build_polyline_path(points: &[Point2D]) -> Option<SkPath> {
+    if points.len() < 2 {
+        return None;
+    }
     let mut b = PathBuilder::new();
     if let Some(first) = points.first() {
         b.move_to((first.x, first.y));
@@ -88,7 +144,7 @@ fn build_skia_path(points: &[Point2D]) -> SkPath {
         }
         b.close();
     }
-    b.detach()
+    Some(b.detach())
 }
 
 /// Walk the result Path and yield a flat polyline. Curves (Quad /
@@ -150,6 +206,21 @@ mod tests {
         }
     }
 
+    fn scene_with_two_rectangles() -> LayoutScene {
+        let mut a = SceneNode::leaf("n10", NodeKind::Rect);
+        a.bounds = Rect::xywh(0.0, 0.0, 20.0, 20.0);
+        let mut b = SceneNode::leaf("n11", NodeKind::Rect);
+        b.bounds = Rect::xywh(10.0, 0.0, 20.0, 20.0);
+        LayoutScene {
+            pages: vec![ScenePage {
+                id: "p".into(),
+                name: "P".into(),
+                children: vec![a, b],
+            }],
+            active_page_index: 0,
+        }
+    }
+
     #[test]
     fn union_of_two_overlapping_squares_yields_a_polyline() {
         let scene = scene_with_two_squares();
@@ -175,6 +246,23 @@ mod tests {
     }
 
     #[test]
+    fn subtract_accepts_two_rectangles() {
+        let scene = scene_with_two_rectangles();
+        let sel = vec!["n10".to_string(), "n11".to_string()];
+        let r = compute_boolean_op(&scene, &sel, BooleanOp::Subtract).expect("subtract computes");
+        assert_eq!(r.source_ids, sel);
+        assert!(!r.points.is_empty(), "subtract must yield points");
+        let min_x = r.points.iter().map(|p| p.0).fold(f64::INFINITY, f64::min);
+        let max_x = r
+            .points
+            .iter()
+            .map(|p| p.0)
+            .fold(f64::NEG_INFINITY, f64::max);
+        assert!((min_x - 0.0).abs() < 0.5);
+        assert!((max_x - 10.0).abs() < 0.5);
+    }
+
+    #[test]
     fn boolean_op_requires_two_path_nodes() {
         let scene = scene_with_two_squares();
         let sel = vec!["n10".to_string()];
@@ -182,14 +270,12 @@ mod tests {
     }
 
     #[test]
-    fn boolean_op_skips_non_path_nodes_in_selection() {
+    fn boolean_op_rejects_unsupported_nodes_in_selection() {
         let mut scene = scene_with_two_squares();
-        let mut r = SceneNode::leaf("n12", NodeKind::Rect);
-        r.bounds = Rect::xywh(0.0, 0.0, 10.0, 10.0);
-        scene.pages[0].children.push(r);
+        let mut text = SceneNode::leaf("n12", NodeKind::Text);
+        text.bounds = Rect::xywh(0.0, 0.0, 10.0, 10.0);
+        scene.pages[0].children.push(text);
         let sel = vec!["n10".to_string(), "n11".to_string(), "n12".to_string()];
-        // Still has 2 Path nodes — should succeed; Rect is ignored.
-        let res = compute_boolean_op(&scene, &sel, BooleanOp::Union).expect("union computes");
-        assert_eq!(res.source_ids.len(), 2);
+        assert!(compute_boolean_op(&scene, &sel, BooleanOp::Union).is_none());
     }
 }

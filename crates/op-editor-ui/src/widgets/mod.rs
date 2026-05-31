@@ -172,7 +172,7 @@ pub use ai_chat_panel::{
     AIChatPlaceholder, AI_CHAT_COLLAPSED_HEIGHT, AI_CHAT_COLLAPSED_WIDTH, AI_CHAT_HEIGHT,
     AI_CHAT_WIDTH,
 };
-pub use align_toolbar::{AlignToolbar, ALIGN_TOOLBAR_HEIGHT, ALIGN_TOOLBAR_WIDTH};
+pub use align_toolbar::{AlignToolbar, AlignToolbarHit, ALIGN_TOOLBAR_HEIGHT, ALIGN_TOOLBAR_WIDTH};
 pub use component_browser_panel::{
     ComponentBrowserHit, ComponentBrowserPanel, COMPONENT_BROWSER_PANEL_H,
     COMPONENT_BROWSER_PANEL_W,

@@ -14,8 +14,9 @@
 use crate::theme::Theme;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::{Point2D, Rect, RenderBackend};
-use op_editor_core::AlignAction;
-use op_editor_core::EditorState;
+use jian_ops_schema::node::PenNode;
+use op_editor_core::walkers::find_node;
+use op_editor_core::{AlignAction, BooleanOp, EditorState};
 
 pub const ALIGN_TOOLBAR_HEIGHT: f32 = 36.0;
 const BUTTON_SIZE: f32 = 28.0;
@@ -49,13 +50,49 @@ const ITEMS: &[(AlignAction, Icon)] = &[
     (AlignAction::DistributeV, Icon::DistributeV),
 ];
 
+const SQUARES_UNITE: &[&str] = &["M4 16a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v3a1 1 0 0 0 1 1h3a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H10a2 2 0 0 1-2-2v-3a1 1 0 0 0-1-1z"];
+const SQUARES_SUBTRACT: &[&str] = &[
+    "M10 22a2 2 0 0 1-2-2",
+    "M16 22h-2",
+    "M16 4a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h3a1 1 0 0 0 1-1v-5a2 2 0 0 1 2-2h5a1 1 0 0 0 1-1z",
+    "M20 8a2 2 0 0 1 2 2",
+    "M22 14v2",
+    "M22 20a2 2 0 0 1-2 2",
+];
+const SQUARES_INTERSECT: &[&str] = &[
+    "M10 22a2 2 0 0 1-2-2",
+    "M14 2a2 2 0 0 1 2 2",
+    "M16 22h-2",
+    "M2 10V8",
+    "M2 4a2 2 0 0 1 2-2",
+    "M20 8a2 2 0 0 1 2 2",
+    "M22 14v2",
+    "M22 20a2 2 0 0 1-2 2",
+    "M4 16a2 2 0 0 1-2-2",
+    "M8 10a2 2 0 0 1 2-2h5a1 1 0 0 1 1 1v5a2 2 0 0 1-2 2H9a1 1 0 0 1-1-1z",
+    "M8 2h2",
+];
+
+const BOOLEAN_ITEMS: &[(BooleanOp, &[&str])] = &[
+    (BooleanOp::Union, SQUARES_UNITE),
+    (BooleanOp::Subtract, SQUARES_SUBTRACT),
+    (BooleanOp::Intersect, SQUARES_INTERSECT),
+];
+
 /// Group divider indices (after these positions, insert a `GROUP_GAP`
 /// instead of the default `INNER_GAP`). Two dividers split the 8
 /// buttons into [3, 3, 2].
 const GROUP_BREAKS: &[usize] = &[3, 6];
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AlignToolbarHit {
+    Align(AlignAction),
+    Boolean(BooleanOp),
+}
+
 pub struct AlignToolbar {
     rect: Rect,
+    boolean_ops: bool,
 }
 
 impl AlignToolbar {
@@ -73,13 +110,15 @@ impl AlignToolbar {
         // max_x clamp keeps it inside the right rail. When the canvas
         // can't fit both, hide entirely — never render a clipped or
         // out-of-region pill with stale hit-test geometry.
+        let boolean_ops = can_boolean_op(state);
+        let toolbar_width = toolbar_width(boolean_ops);
         let min_x = canvas_region.origin.x + VERTICAL_TOOLBAR_RESERVE;
-        let max_x = canvas_region.origin.x + canvas_region.size.x - ALIGN_TOOLBAR_WIDTH;
+        let max_x = canvas_region.origin.x + canvas_region.size.x - toolbar_width;
         if max_x < min_x {
             return None;
         }
         let cx = canvas_region.origin.x + canvas_region.size.x / 2.0;
-        let mut x = cx - ALIGN_TOOLBAR_WIDTH / 2.0;
+        let mut x = cx - toolbar_width / 2.0;
         if x < min_x {
             x = min_x;
         }
@@ -88,7 +127,8 @@ impl AlignToolbar {
         }
         let y = canvas_region.origin.y + 16.0;
         Some(Self {
-            rect: Rect::xywh(x, y, ALIGN_TOOLBAR_WIDTH, ALIGN_TOOLBAR_HEIGHT),
+            rect: Rect::xywh(x, y, toolbar_width, ALIGN_TOOLBAR_HEIGHT),
+            boolean_ops,
         })
     }
 
@@ -122,17 +162,50 @@ impl AlignToolbar {
                 1.5,
             );
         }
+        if self.boolean_ops {
+            for (i, (_, paths)) in BOOLEAN_ITEMS.iter().enumerate() {
+                let r = self.button_rect(ITEMS.len() + i);
+                let icon_x = r.origin.x + (r.size.x - ICON_SIZE) / 2.0;
+                let icon_y = r.origin.y + (r.size.y - ICON_SIZE) / 2.0;
+                for path in *paths {
+                    backend.stroke_svg_path(
+                        path,
+                        Point2D::new(icon_x, icon_y),
+                        ICON_SIZE,
+                        theme.foreground,
+                        1.5,
+                    );
+                }
+            }
+        }
     }
 
     /// Map a screen point to an `AlignAction`. None when the point
     /// lands outside the toolbar or in a gutter.
     pub fn hit_test(&self, point: Point2D) -> Option<AlignAction> {
+        match self.hit_test_action(point) {
+            Some(AlignToolbarHit::Align(action)) => Some(action),
+            _ => None,
+        }
+    }
+
+    /// Map a screen point to either an align/distribute action or a
+    /// boolean operation. None when the point lands outside the
+    /// toolbar or in a gutter.
+    pub fn hit_test_action(&self, point: Point2D) -> Option<AlignToolbarHit> {
         if !rect_contains(self.rect, point) {
             return None;
         }
         for (i, (action, _)) in ITEMS.iter().enumerate() {
             if rect_contains(self.button_rect(i), point) {
-                return Some(*action);
+                return Some(AlignToolbarHit::Align(*action));
+            }
+        }
+        if self.boolean_ops {
+            for (i, (op, _)) in BOOLEAN_ITEMS.iter().enumerate() {
+                if rect_contains(self.button_rect(ITEMS.len() + i), point) {
+                    return Some(AlignToolbarHit::Boolean(*op));
+                }
             }
         }
         None
@@ -142,7 +215,7 @@ impl AlignToolbar {
         let mut x = self.rect.origin.x + SIDE_PAD;
         for i in 0..index {
             x += BUTTON_SIZE;
-            x += if GROUP_BREAKS.contains(&(i + 1)) {
+            x += if is_group_break_after(i, self.boolean_ops) {
                 GROUP_GAP
             } else {
                 INNER_GAP
@@ -151,6 +224,45 @@ impl AlignToolbar {
         let y = self.rect.origin.y + (self.rect.size.y - BUTTON_SIZE) / 2.0;
         Rect::xywh(x, y, BUTTON_SIZE, BUTTON_SIZE)
     }
+}
+
+fn toolbar_width(boolean_ops: bool) -> f32 {
+    if !boolean_ops {
+        return ALIGN_TOOLBAR_WIDTH;
+    }
+    ALIGN_TOOLBAR_WIDTH
+        + GROUP_GAP
+        + BUTTON_SIZE * BOOLEAN_ITEMS.len() as f32
+        + INNER_GAP * BOOLEAN_ITEMS.len().saturating_sub(1) as f32
+}
+
+fn is_group_break_after(index: usize, boolean_ops: bool) -> bool {
+    let after = index + 1;
+    GROUP_BREAKS.contains(&after) || (boolean_ops && after == ITEMS.len())
+}
+
+fn can_boolean_op(state: &EditorState) -> bool {
+    if state.selection.len() < 2 {
+        return false;
+    }
+    let children = state.active_children();
+    state.selection.set.iter().all(|id| {
+        find_node(children, id)
+            .map(boolean_supported_node)
+            .unwrap_or(false)
+    })
+}
+
+fn boolean_supported_node(node: &PenNode) -> bool {
+    matches!(
+        node,
+        PenNode::Frame(_)
+            | PenNode::Rectangle(_)
+            | PenNode::Ellipse(_)
+            | PenNode::Polygon(_)
+            | PenNode::Path(_)
+            | PenNode::Line(_)
+    )
 }
 
 fn rect_contains(r: Rect, p: Point2D) -> bool {
@@ -163,15 +275,55 @@ fn rect_contains(r: Rect, p: Point2D) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use jian_ops_schema::node::{ContainerProps, PenNode, PenNodeBase, RectangleNode};
+    use jian_ops_schema::sizing::SizingBehavior;
     use op_editor_core::node_id::NodeId as OpNodeId;
 
     fn doc_with_n_selected(n: usize) -> EditorState {
         let mut state = EditorState::new();
         let ids: Vec<OpNodeId> = (0..n)
-            .map(|i| OpNodeId::new(format!("n{}", 100 + i)))
+            .map(|i| OpNodeId::new(format!("missing-align-test-{i}")))
             .collect();
         state.selection.anchor = ids.last().cloned().unwrap_or_default();
         state.selection.set = ids;
+        state
+    }
+
+    fn rect_node(id: &str, x: f64, y: f64, w: f64, h: f64) -> PenNode {
+        PenNode::Rectangle(RectangleNode {
+            base: PenNodeBase {
+                id: id.to_string(),
+                name: Some(id.to_string()),
+                x: Some(x),
+                y: Some(y),
+                ..Default::default()
+            },
+            container: ContainerProps {
+                width: Some(SizingBehavior::Number(w)),
+                height: Some(SizingBehavior::Number(h)),
+                ..Default::default()
+            },
+            children: None,
+            state: None,
+            bindings: None,
+            events: None,
+            lifecycle: None,
+            semantics: None,
+            gestures: None,
+            route: None,
+        })
+    }
+
+    fn doc_with_two_rects_selected() -> EditorState {
+        let mut state = EditorState::new();
+        state
+            .active_children_mut()
+            .push(rect_node("n10", 0.0, 0.0, 100.0, 80.0));
+        state
+            .active_children_mut()
+            .push(rect_node("n11", 40.0, 0.0, 100.0, 80.0));
+        state.selection.set = vec![OpNodeId::new("n10"), OpNodeId::new("n11")];
+        state.selection.anchor = OpNodeId::new("n11");
         state
     }
 
@@ -204,6 +356,23 @@ mod tests {
         assert_eq!(tb.rect.origin.y, 16.0);
         assert_eq!(tb.rect.size.x, ALIGN_TOOLBAR_WIDTH);
         assert_eq!(tb.rect.size.y, ALIGN_TOOLBAR_HEIGHT);
+    }
+
+    #[test]
+    fn boolean_compatible_selection_appends_boolean_buttons() {
+        let doc = doc_with_two_rects_selected();
+        let tb = AlignToolbar::for_canvas_region(canvas(), &doc).unwrap();
+        assert!(tb.rect.size.x > ALIGN_TOOLBAR_WIDTH);
+        let first_boolean = tb.button_rect(ITEMS.len());
+        let center = Point2D::new(
+            first_boolean.origin.x + first_boolean.size.x / 2.0,
+            first_boolean.origin.y + first_boolean.size.y / 2.0,
+        );
+        assert_eq!(
+            tb.hit_test_action(center),
+            Some(AlignToolbarHit::Boolean(BooleanOp::Union))
+        );
+        assert_eq!(tb.hit_test(center), None);
     }
 
     #[test]

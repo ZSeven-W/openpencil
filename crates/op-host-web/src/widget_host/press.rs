@@ -484,18 +484,19 @@ impl WidgetHost {
         //      so the visible button always wins over a layer row
         //      that happens to share screen y (matches native order).
         {
-            use op_editor_ui::widgets::AlignToolbar;
+            use op_editor_ui::widgets::{AlignToolbar, AlignToolbarHit};
             let (acx, _, acw, ach) = self.canvas_region(viewport_width, viewport_height);
             let canvas_region = op_editor_ui::Rect {
                 origin: Point2D::new(acx, TOP_BAR_HEIGHT),
                 size: Point2D::new(acw, ach),
             };
-            if let Some(action) = AlignToolbar::for_canvas_region(canvas_region, &self.editor_state)
-                .and_then(|tb| tb.hit_test(Point2D::new(x, y)))
+            if let Some(hit) = AlignToolbar::for_canvas_region(canvas_region, &self.editor_state)
+                .and_then(|tb| tb.hit_test_action(Point2D::new(x, y)))
             {
-                let ec_action = action;
-                self.editor_state.align_selected(ec_action);
-                self.mark_dirty();
+                if let AlignToolbarHit::Align(action) = hit {
+                    self.editor_state.align_selected(action);
+                    self.mark_dirty();
+                }
                 return true;
             }
         }
