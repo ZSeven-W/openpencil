@@ -14,13 +14,33 @@ const FIELD_H: f32 = 24.0;
 const PRESET_MENU_ITEM_H: f32 = 24.0;
 const PRESET_MENU_PAD: f32 = 4.0;
 const PRESET_MENU_MAX_VISIBLE_ITEMS: usize = 8;
-const ANTHROPIC_KIND_OPTION: [(&str, BuiltinAgentKind); 1] =
-    [("Anthropic", BuiltinAgentKind::Anthropic)];
-const OPENAI_KIND_OPTION: [(&str, BuiltinAgentKind); 1] =
-    [("OpenAI", BuiltinAgentKind::OpenAiCompat)];
-const BOTH_KIND_OPTIONS: [(&str, BuiltinAgentKind); 2] = [
-    ("Anthropic", BuiltinAgentKind::Anthropic),
-    ("OpenAI", BuiltinAgentKind::OpenAiCompat),
+struct KindOption {
+    label: &'static str,
+    kind: BuiltinAgentKind,
+    slot: usize,
+}
+
+const ANTHROPIC_KIND_OPTION: [KindOption; 1] = [KindOption {
+    label: "Anthropic",
+    kind: BuiltinAgentKind::Anthropic,
+    slot: 0,
+}];
+const OPENAI_KIND_OPTION: [KindOption; 1] = [KindOption {
+    label: "OpenAI",
+    kind: BuiltinAgentKind::OpenAiCompat,
+    slot: 1,
+}];
+const BOTH_KIND_OPTIONS: [KindOption; 2] = [
+    KindOption {
+        label: "Anthropic",
+        kind: BuiltinAgentKind::Anthropic,
+        slot: 0,
+    },
+    KindOption {
+        label: "OpenAI",
+        kind: BuiltinAgentKind::OpenAiCompat,
+        slot: 1,
+    },
 ];
 
 pub fn paint_kind_toggle(
@@ -32,9 +52,9 @@ pub fn paint_kind_toggle(
     let r = kind_rect(card);
     cx.backend.stroke_round_rect(r, 6.0, theme.border, 1.0);
     let options = kind_options(agent);
-    for (i, (label, kind)) in options.iter().enumerate() {
-        let item = kind_option_rect(card, i, options.len());
-        let active = agent.kind == *kind;
+    for option in options {
+        let item = kind_option_rect(card, option.slot);
+        let active = agent.kind == option.kind;
         if active {
             cx.backend.fill_round_rect(item, 5.0, theme.primary);
         }
@@ -43,10 +63,10 @@ pub fn paint_kind_toggle(
         } else {
             theme.muted_foreground
         };
-        let tw = cx.backend.measure_text(label, 10.0);
+        let tw = cx.backend.measure_text(option.label, 10.0);
         draw_text(
             cx,
-            label,
+            option.label,
             10.0,
             color,
             item.origin.x + (item.size.x - tw) / 2.0,
@@ -66,13 +86,12 @@ pub fn kind_toggle_target(
     let options = kind_options(agent);
     options
         .iter()
-        .enumerate()
-        .find(|(index, _)| rect_contains(kind_option_rect(card, *index, options.len()), point))
-        .map(|(_, (_, kind))| *kind)
+        .find(|option| rect_contains(kind_option_rect(card, option.slot), point))
+        .map(|option| option.kind)
         .filter(|kind| *kind != agent.kind)
 }
 
-fn kind_options(agent: &BuiltinAgentConfig) -> &'static [(&'static str, BuiltinAgentKind)] {
+fn kind_options(agent: &BuiltinAgentConfig) -> &'static [KindOption] {
     let preset = builtin_agent_preset(agent.preset);
     if preset.alt_kind.is_some() {
         return &BOTH_KIND_OPTIONS;
@@ -219,12 +238,11 @@ pub fn kind_rect(card: Rect) -> Rect {
     }
 }
 
-fn kind_option_rect(card: Rect, index: usize, count: usize) -> Rect {
+fn kind_option_rect(card: Rect, slot: usize) -> Rect {
     let r = kind_rect(card);
-    let count = count.max(1) as f32;
-    let w = r.size.x / count;
+    let w = r.size.x / 2.0;
     Rect {
-        origin: Point2D::new(r.origin.x + index as f32 * w, r.origin.y),
+        origin: Point2D::new(r.origin.x + slot.min(1) as f32 * w, r.origin.y),
         size: Point2D::new(w, r.size.y),
     }
 }
@@ -424,6 +442,22 @@ mod tests {
             kind_rect(card).origin.y + 12.0,
         );
         assert_eq!(kind_toggle_target(&anthropic, card, openai_half), None);
+
+        let openai = BuiltinAgentConfig {
+            id: "openai".into(),
+            preset: BuiltinAgentPresetKey::OpenAi,
+            display_name: "OpenAI".into(),
+            kind: BuiltinAgentKind::OpenAiCompat,
+            api_key: String::new(),
+            model: "gpt-5.1".into(),
+            base_url: "https://api.openai.com/v1".into(),
+            enabled: true,
+        };
+        let anthropic_half = Point2D::new(
+            kind_rect(card).origin.x + 30.0,
+            kind_rect(card).origin.y + 12.0,
+        );
+        assert_eq!(kind_toggle_target(&openai, card, anthropic_half), None);
 
         let mut minimax = anthropic.clone();
         minimax.preset = BuiltinAgentPresetKey::MiniMax;
