@@ -38,8 +38,10 @@ COMMON COMMANDS:
   op design:content [section] <json-array|@file|->
   op design:refine <json-array|@file|->
   op page list|add [--name N]|remove|rename|reorder|duplicate ...
-  op vars                                 list variables
+  op vars                                 get variables + theme axes
+  op vars:set <json|@file|-> [--replace] set variables
   op themes                               get active theme pins
+  op themes:set <json|@file|-> [--replace]
   op layout [--parent P] [--depth N]      snapshot layout tree
   op find-space [--direction D] [--width W] [--height H]
   op import:svg <file.svg> [--x N] [--y N]
@@ -222,14 +224,16 @@ fn command_from_positionals(positionals: &[String], flags: &Flags) -> Result<Com
         }
         "design:refine" => map_design_like("design_refine", positionals.get(1)),
         "page" => map_page(positionals, flags),
-        "vars" => tool_call("list_variables", vec![]),
+        "vars" => tool_call("get_variables", vec![]),
+        "vars:set" => map_vars_set(positionals, flags),
         "themes" => tool_call("get_active_theme", vec![]),
+        "themes:set" => map_themes_set(positionals, flags),
         "layout" => map_layout(flags),
         "find-space" => map_find_space(flags),
         "import:svg" => map_import_svg(positionals, flags),
-        "start" | "stop" | "save" | "read-nodes" | "vars:set" | "themes:set" | "theme:save"
-        | "theme:load" | "theme:list" | "import:figma" | "install" | "uninstall"
-        | "codegen:plan" | "codegen:submit" | "codegen:assemble" | "codegen:clean" => Err(format!(
+        "start" | "stop" | "save" | "read-nodes" | "theme:save" | "theme:load" | "theme:list"
+        | "import:figma" | "install" | "uninstall" | "codegen:plan" | "codegen:submit"
+        | "codegen:assemble" | "codegen:clean" => Err(format!(
             "TS command {:?} is not implemented by the Rust HTTP MCP CLI yet",
             positionals[0]
         )),
@@ -348,6 +352,24 @@ fn map_page(positionals: &[String], flags: &Flags) -> Result<Command, String> {
         }
         _ => Err(format!("unknown page subcommand {sub:?}")),
     }
+}
+
+fn map_vars_set(positionals: &[String], flags: &Flags) -> Result<Command, String> {
+    let raw = resolve_arg(positionals.get(1).map(String::as_str))?;
+    let mut pairs = vec![pair("variables", raw)];
+    if flags.contains_key("replace") {
+        pairs.push(pair("replace", "true"));
+    }
+    tool_call("set_variables", pairs)
+}
+
+fn map_themes_set(positionals: &[String], flags: &Flags) -> Result<Command, String> {
+    let raw = resolve_arg(positionals.get(1).map(String::as_str))?;
+    let mut pairs = vec![pair("themes", raw)];
+    if flags.contains_key("replace") {
+        pairs.push(pair("replace", "true"));
+    }
+    tool_call("set_themes", pairs)
 }
 
 fn map_layout(flags: &Flags) -> Result<Command, String> {

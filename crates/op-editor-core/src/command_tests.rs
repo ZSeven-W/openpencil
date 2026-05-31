@@ -16,7 +16,7 @@ use crate::test_support::{frame, rect, sample, state_with};
 use crate::walkers::find_node;
 use jian_ops_schema::node::PenNode;
 use jian_ops_schema::page::PenPage;
-use jian_ops_schema::variable::VariableScalar;
+use jian_ops_schema::variable::{VariableDefinition, VariableKind, VariableScalar, VariableValue};
 
 fn id(s: &str) -> NodeId {
     NodeId::new(s)
@@ -735,6 +735,77 @@ fn set_variable_scalar_number() {
         Some(VariableScalar::Num(n)) => assert_eq!(*n, 16.0),
         other => panic!("unexpected {other:?}"),
     }
+}
+
+#[test]
+fn set_variables_command_merges_and_replaces_definitions() {
+    let mut s = state_with(vec![]);
+    assert!(s.apply(EditorCommand::CreateVariable {
+        name: "brand".into(),
+        kind: "color".into(),
+        default_value: "#ff0000".into(),
+    }));
+
+    let mut incoming = std::collections::BTreeMap::new();
+    incoming.insert(
+        "gap".into(),
+        VariableDefinition {
+            kind: VariableKind::Number,
+            value: VariableValue::Scalar(VariableScalar::Num(8.0)),
+        },
+    );
+    assert!(s.apply(EditorCommand::SetVariables {
+        variables: incoming,
+        replace: false,
+    }));
+    let vars = s.doc.variables.as_ref().expect("variables");
+    assert!(vars.contains_key("brand"));
+    assert!(vars.contains_key("gap"));
+
+    let mut replacement = std::collections::BTreeMap::new();
+    replacement.insert(
+        "enabled".into(),
+        VariableDefinition {
+            kind: VariableKind::Boolean,
+            value: VariableValue::Scalar(VariableScalar::Bool(true)),
+        },
+    );
+    assert!(s.apply(EditorCommand::SetVariables {
+        variables: replacement,
+        replace: true,
+    }));
+    let vars = s.doc.variables.as_ref().expect("variables");
+    assert!(!vars.contains_key("brand"));
+    assert!(!vars.contains_key("gap"));
+    assert!(vars.contains_key("enabled"));
+}
+
+#[test]
+fn set_themes_command_merges_and_replaces_axes() {
+    let mut s = state_with(vec![]);
+    let mut themes = std::collections::BTreeMap::new();
+    themes.insert("Mode".into(), vec!["Light".into(), "Dark".into()]);
+    assert!(s.apply(EditorCommand::SetThemes {
+        themes,
+        replace: false,
+    }));
+    assert_eq!(
+        s.doc.themes.as_ref().and_then(|t| t.get("Mode")).cloned(),
+        Some(vec!["Light".into(), "Dark".into()])
+    );
+
+    let mut replacement = std::collections::BTreeMap::new();
+    replacement.insert(
+        "Density".into(),
+        vec!["Compact".into(), "Comfortable".into()],
+    );
+    assert!(s.apply(EditorCommand::SetThemes {
+        themes: replacement,
+        replace: true,
+    }));
+    let themes = s.doc.themes.as_ref().expect("themes");
+    assert!(!themes.contains_key("Mode"));
+    assert!(themes.contains_key("Density"));
 }
 
 // --- Component commands -----------------------------------------------

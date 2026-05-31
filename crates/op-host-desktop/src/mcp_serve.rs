@@ -40,22 +40,23 @@ use op_mcp::{
     duplicate_page_snapshot, duplicate_selected_snapshot, find_empty_space_snapshot,
     find_node_by_name_snapshot, get_active_theme_snapshot, get_canvas_bounds_snapshot,
     get_component_snapshot, get_history_depth_snapshot, get_node_children_snapshot,
-    get_node_parent_snapshot, get_node_snapshot, get_selection_set_snapshot, get_viewport_snapshot,
-    group_selected_snapshot, import_svg_snapshot, insert_node_snapshot,
-    instantiate_component_snapshot, list_components_snapshot, list_node_kinds_snapshot,
-    list_pages_snapshot, list_variables_snapshot, move_node_snapshot, nudge_selected_snapshot,
-    paste_clipboard_snapshot, redo_snapshot, remove_node_effect_snapshot, remove_page_snapshot,
-    rename_component_snapshot, rename_page_snapshot, rename_variable_snapshot,
-    reorder_page_snapshot, reorder_selected_snapshot, replace_node_snapshot,
-    run_stdio_with_applier, selection_snapshot, set_active_axis_value_snapshot,
-    set_active_page_snapshot, set_active_tool_snapshot, set_ellipse_arc_snapshot,
-    set_node_collapsed_snapshot, set_node_corner_radius_snapshot, set_node_fill_hex_snapshot,
-    set_node_flip_snapshot, set_node_font_size_snapshot, set_node_font_weight_snapshot,
-    set_node_hidden_snapshot, set_node_locked_snapshot, set_node_name_snapshot,
-    set_node_rotation_snapshot, set_node_stroke_hex_snapshot, set_node_stroke_width_snapshot,
-    set_node_text_snapshot, set_selection_set_snapshot, set_selection_snapshot,
-    set_variable_boolean_snapshot, set_variable_color_snapshot, set_variable_number_snapshot,
-    set_variable_string_snapshot, set_viewport_snapshot, snapshot_layout_snapshot,
+    get_node_parent_snapshot, get_node_snapshot, get_selection_set_snapshot,
+    get_variables_snapshot, get_viewport_snapshot, group_selected_snapshot, import_svg_snapshot,
+    insert_node_snapshot, instantiate_component_snapshot, list_components_snapshot,
+    list_node_kinds_snapshot, list_pages_snapshot, list_variables_snapshot, move_node_snapshot,
+    nudge_selected_snapshot, paste_clipboard_snapshot, redo_snapshot, remove_node_effect_snapshot,
+    remove_page_snapshot, rename_component_snapshot, rename_page_snapshot,
+    rename_variable_snapshot, reorder_page_snapshot, reorder_selected_snapshot,
+    replace_node_snapshot, run_stdio_with_applier, selection_snapshot,
+    set_active_axis_value_snapshot, set_active_page_snapshot, set_active_tool_snapshot,
+    set_ellipse_arc_snapshot, set_node_collapsed_snapshot, set_node_corner_radius_snapshot,
+    set_node_fill_hex_snapshot, set_node_flip_snapshot, set_node_font_size_snapshot,
+    set_node_font_weight_snapshot, set_node_hidden_snapshot, set_node_locked_snapshot,
+    set_node_name_snapshot, set_node_rotation_snapshot, set_node_stroke_hex_snapshot,
+    set_node_stroke_width_snapshot, set_node_text_snapshot, set_selection_set_snapshot,
+    set_selection_snapshot, set_themes_snapshot, set_variable_boolean_snapshot,
+    set_variable_color_snapshot, set_variable_number_snapshot, set_variable_string_snapshot,
+    set_variables_snapshot, set_viewport_snapshot, snapshot_layout_snapshot,
     toggle_node_selection_snapshot, undo_snapshot, ungroup_selected_snapshot, update_node_snapshot,
     ToolRegistry,
 };
@@ -389,6 +390,7 @@ fn rebuild_registry(doc: &EditorState) -> ToolRegistry {
     r.register(Box::new(get_node_snapshot(doc)));
     r.register(Box::new(list_pages_snapshot(doc)));
     r.register(Box::new(list_variables_snapshot(doc)));
+    r.register(Box::new(get_variables_snapshot(doc)));
     r.register(Box::new(get_active_theme_snapshot(doc)));
     r.register(Box::new(list_components_snapshot(doc)));
     r.register(Box::new(get_component_snapshot(doc)));
@@ -460,6 +462,8 @@ fn rebuild_registry(doc: &EditorState) -> ToolRegistry {
     r.register(Box::new(set_variable_number_snapshot(doc)));
     r.register(Box::new(set_variable_string_snapshot(doc)));
     r.register(Box::new(set_variable_boolean_snapshot(doc)));
+    r.register(Box::new(set_variables_snapshot()));
+    r.register(Box::new(set_themes_snapshot()));
     r.register(Box::new(create_variable_snapshot(doc)));
     r.register(Box::new(delete_variable_snapshot(doc)));
     r.register(Box::new(rename_variable_snapshot(doc)));
@@ -686,6 +690,7 @@ const TOOL_SCHEMAS: &[&str] = &[
     r#"{"name":"get_node","description":"Read a node by id with depth-limited descendants.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string","description":"u64 node id"}},"required":["node_id"]}}"#,
     r#"{"name":"list_pages","description":"List page ids + names. Result includes page_count, active_page_index, ids, and names as comma-separated strings.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
     r#"{"name":"list_variables","description":"List design variables with kinds.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
+    r#"{"name":"get_variables","description":"Return all design variables and theme axes as JSON strings. TS-compatible read alias for variables/theme metadata.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
     r#"{"name":"get_active_theme","description":"Return the active theme axis pinning per axis.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
     r#"{"name":"list_components","description":"List registered components (saved Frames / Groups promoted via Save as Component). Returns count + a `;`-separated record of `name|id` pairs.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
     r#"{"name":"get_component","description":"Fetch one component by id with detail: name, root node kind, and the subtree's leaf count.","inputSchema":{"type":"object","properties":{"component_id":{"type":"string","description":"positive u64 component id"}},"required":["component_id"]}}"#,
@@ -744,6 +749,8 @@ const TOOL_SCHEMAS: &[&str] = &[
     r#"{"name":"set_variable_number","description":"Set a Number-kind variable's value (decimal, may be negative or fractional).","inputSchema":{"type":"object","properties":{"name":{"type":"string"},"value":{"type":"string"}},"required":["name","value"]}}"#,
     r#"{"name":"set_variable_string","description":"Set a String-kind variable's value (free-form text).","inputSchema":{"type":"object","properties":{"name":{"type":"string"},"value":{"type":"string"}},"required":["name","value"]}}"#,
     r#"{"name":"set_variable_boolean","description":"Set a Boolean-kind variable's value (\"true\" or \"false\").","inputSchema":{"type":"object","properties":{"name":{"type":"string"},"value":{"type":"string","enum":["true","false"]}},"required":["name","value"]}}"#,
+    r#"{"name":"set_variables","description":"Add/update or replace the document variables map. Accepts TS-style variables object and optional replace boolean.","inputSchema":{"type":"object","properties":{"variables":{"type":"object","description":"name -> { type, value } variable definitions"},"replace":{"type":"boolean","description":"Replace all variables instead of merging"}},"required":["variables"]}}"#,
+    r#"{"name":"set_themes","description":"Add/update or replace theme axes. Accepts TS-style themes object and optional replace boolean.","inputSchema":{"type":"object","properties":{"themes":{"type":"object","description":"axis name -> variant names array"},"replace":{"type":"boolean","description":"Replace all theme axes instead of merging"}},"required":["themes"]}}"#,
     r##"{"name":"create_variable","description":"Create a new design-token variable. kind is color/number/boolean/string; default_value is parsed per kind (hex for color, decimal for number, true/false for boolean, free text for string). Rejects empty/duplicate names and bad defaults.","inputSchema":{"type":"object","properties":{"name":{"type":"string"},"kind":{"type":"string","enum":["color","number","boolean","string"]},"default_value":{"type":"string","description":"hex / decimal / true|false / text per kind"}},"required":["name","kind","default_value"]}}"##,
     r#"{"name":"delete_variable","description":"Delete a design-token variable by name. Also drops any node $ref pointing at it. Rejects unknown names.","inputSchema":{"type":"object","properties":{"name":{"type":"string"}},"required":["name"]}}"#,
     r#"{"name":"rename_variable","description":"Rename a design-token variable and rewrite every node $ref pointing at it. Rejects unknown old_name, empty new_name, or a new_name colliding with a different variable.","inputSchema":{"type":"object","properties":{"old_name":{"type":"string"},"new_name":{"type":"string"}},"required":["old_name","new_name"]}}"#,

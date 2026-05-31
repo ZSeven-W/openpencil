@@ -41,7 +41,7 @@ pub fn parse_tool_call(line: &str) -> Option<ToolCall> {
         //     empty args, hiding wire-shape errors).
         let arguments = match arguments_field(&params_body) {
             ParamsResult::Missing => BTreeMap::new(),
-            ParamsResult::Body(body) => parse_flat_object_body(&body)?,
+            ParamsResult::Body(body) => parse_flat_object_body(&body, &name)?,
             ParamsResult::Malformed => return None,
         };
         (name, arguments)
@@ -50,7 +50,7 @@ pub fn parse_tool_call(line: &str) -> Option<ToolCall> {
         // Same three-way as above.
         let arguments = match params_body_if_present(line) {
             ParamsResult::Missing => BTreeMap::new(),
-            ParamsResult::Body(body) => parse_flat_object_body(&body)?,
+            ParamsResult::Body(body) => parse_flat_object_body(&body, &method)?,
             ParamsResult::Malformed => return None,
         };
         (method, arguments)
@@ -382,13 +382,11 @@ fn params_body_if_present(line: &str) -> ParamsResult {
 }
 
 /// Parse the body of a JSON object (the content between `{` and `}`)
-/// into a flat key→stringified-value map. Returns `None` the moment
-/// any value is structured (`{` / `[`) — wire input that pretends a
-/// scalar arg is an object/array would otherwise need either a
-/// sentinel (which can collide with a legitimate user-supplied
-/// string) or per-tool defensive code. Reject at the wire layer
-/// instead, so every tool downstream is guaranteed to see scalars.
-fn parse_flat_object_body(body: &str) -> Option<BTreeMap<String, String>> {
+/// into a key→stringified-value map. Most tools accept only scalars;
+/// the TypeScript parity bulk variable tools legitimately pass object
+/// arguments (`variables`, `themes`), so those specific fields are
+/// preserved as compact JSON strings for their tool layer to validate.
+fn parse_flat_object_body(body: &str, tool: &str) -> Option<BTreeMap<String, String>> {
     let mut out: BTreeMap<String, String> = BTreeMap::new();
     let bytes = body.as_bytes();
     let mut i = 0usize;
@@ -440,24 +438,48 @@ fn parse_flat_object_body(body: &str) -> Option<BTreeMap<String, String>> {
                 if i >= bytes.len() {
                     return None;
                 }
-                out.insert(key, body[val_start..i].to_string());
+                let raw = &body[val_start..i];
+                out.insert(key, decode_json_string_fragment(raw)?);
                 i += 1; // closing quote
             }
             b'{' | b'[' => {
-                // Reject the entire parse when a structured value
-                // shows up for any key. Tool args are scalars by
-                // contract; surfacing a sentinel here would either
-                // collide with a legitimate scalar (Codex flagged
-                // `{...}` could match a real variable name) or
-                // leave string-accepting tools unable to tell wire
-                // malformed input from a real value. The wire
-                // dispatch loop continues to the next line on
-                // None, so the client sees no response for the
-                // malformed call — same as any other unparseable
-                // JSON-RPC frame. Any future tool that legitimately
-                // needs structured args must add its own typed
-                // path here.
-                return None;
+                if !structured_arg_allowed(tool, &key) {
+                    return None;
+                }
+                let open = bytes[i];
+                let close = if open == b'{' { b'}' } else { b']' };
+                let mut depth = 1i32;
+                let start = i;
+                i += 1;
+                let mut in_str = false;
+                let mut escape = false;
+                while i < bytes.len() && depth > 0 {
+                    let c = bytes[i];
+                    if in_str {
+                        if escape {
+                            escape = false;
+                        } else if c == b'\\' {
+                            escape = true;
+                        } else if c == b'"' {
+                            in_str = false;
+                        }
+                    } else if c == b'"' {
+                        in_str = true;
+                    } else if c == open {
+                        depth += 1;
+                    } else if c == close {
+                        depth -= 1;
+                        if depth == 0 {
+                            break;
+                        }
+                    }
+                    i += 1;
+                }
+                if depth != 0 || i >= bytes.len() {
+                    return None;
+                }
+                out.insert(key, body[start..=i].to_string());
+                i += 1;
             }
             _ => {
                 // Number / true / false / null — read until comma /
@@ -473,6 +495,18 @@ fn parse_flat_object_body(body: &str) -> Option<BTreeMap<String, String>> {
         }
     }
     Some(out)
+}
+
+fn structured_arg_allowed(tool: &str, key: &str) -> bool {
+    matches!(
+        (tool, key),
+        ("set_variables", "variables") | ("set_themes", "themes")
+    )
+}
+
+fn decode_json_string_fragment(raw: &str) -> Option<String> {
+    let token = format!("\"{raw}\"");
+    serde_json::from_str::<String>(&token).ok()
 }
 
 fn extract_field<'a>(line: &'a str, key: &str) -> Option<&'a str> {
