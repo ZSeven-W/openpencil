@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { SquaresUnite, SquaresSubtract, SquaresIntersect } from 'lucide-react';
+import { SquaresUnite, SquaresSubtract, SquaresIntersect, SquaresExclude } from 'lucide-react';
 import { useDesignEngine } from '../hooks/use-design-engine.js';
 import { useSelection } from '../hooks/use-selection.js';
 import { canBooleanOp, executeBooleanOp, type BooleanOpType } from '@zseven-w/pen-core';
@@ -14,6 +14,7 @@ const OPS: Array<{
   { type: 'union', icon: SquaresUnite, label: 'Boolean Union', shortcut: '⌘⌥U' },
   { type: 'subtract', icon: SquaresSubtract, label: 'Boolean Subtract', shortcut: '⌘⌥S' },
   { type: 'intersect', icon: SquaresIntersect, label: 'Boolean Intersect', shortcut: '⌘⌥I' },
+  { type: 'exclude', icon: SquaresExclude, label: 'Boolean Exclude', shortcut: '⌘⌥X' },
 ];
 
 export function BooleanToolbar() {

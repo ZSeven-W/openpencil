@@ -416,6 +416,7 @@ const hi: TranslationKeys = {
   'layerMenu.booleanUnion': 'संयोजन',
   'layerMenu.booleanSubtract': 'घटाना',
   'layerMenu.booleanIntersect': 'प्रतिच्छेदन',
+  'layerMenu.booleanExclude': 'बहिष्करण',
   'layerMenu.toggleLock': 'लॉक टॉगल करें',
   'layerMenu.toggleVisibility': 'दृश्यता टॉगल करें',
 

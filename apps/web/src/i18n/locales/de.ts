@@ -430,6 +430,7 @@ const de: TranslationKeys = {
   'layerMenu.booleanUnion': 'Vereinigung',
   'layerMenu.booleanSubtract': 'Subtraktion',
   'layerMenu.booleanIntersect': 'Schnittmenge',
+  'layerMenu.booleanExclude': 'Ausschluss',
   'layerMenu.toggleLock': 'Sperren umschalten',
   'layerMenu.toggleVisibility': 'Sichtbarkeit umschalten',
 

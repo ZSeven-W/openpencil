@@ -107,6 +107,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "layerMenu.booleanUnion" => "Gabungan",
         "layerMenu.booleanSubtract" => "Kurangi",
         "layerMenu.booleanIntersect" => "Irisan",
+        "layerMenu.booleanExclude" => "Kecualikan",
         "layerMenu.toggleLock" => "Alihkan Kunci",
         "layerMenu.toggleVisibility" => "Alihkan Visibilitas",
         "property.createComponent" => "Buat Komponen",

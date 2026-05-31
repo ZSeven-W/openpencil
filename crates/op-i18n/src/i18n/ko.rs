@@ -107,6 +107,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "layerMenu.booleanUnion" => "합치기",
         "layerMenu.booleanSubtract" => "빼기",
         "layerMenu.booleanIntersect" => "교차",
+        "layerMenu.booleanExclude" => "제외",
         "layerMenu.toggleLock" => "잠금 전환",
         "layerMenu.toggleVisibility" => "표시 전환",
         "property.createComponent" => "컴포넌트 만들기",

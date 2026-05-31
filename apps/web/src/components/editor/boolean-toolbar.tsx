@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { SquaresUnite, SquaresSubtract, SquaresIntersect } from 'lucide-react';
+import { SquaresUnite, SquaresSubtract, SquaresIntersect, SquaresExclude } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useCanvasStore } from '@/stores/canvas-store';
 import { useDocumentStore } from '@/stores/document-store';
@@ -26,6 +26,12 @@ const OPS = [
     icon: SquaresIntersect,
     labelKey: 'layerMenu.booleanIntersect',
     shortcut: '\u2318\u2325I',
+  },
+  {
+    type: 'exclude' as BooleanOpType,
+    icon: SquaresExclude,
+    labelKey: 'layerMenu.booleanExclude',
+    shortcut: '\u2318\u2325X',
   },
 ] as const;
 

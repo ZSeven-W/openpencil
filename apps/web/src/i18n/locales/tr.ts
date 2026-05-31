@@ -426,6 +426,7 @@ const tr: TranslationKeys = {
   'layerMenu.booleanUnion': 'Birleştir',
   'layerMenu.booleanSubtract': 'Çıkar',
   'layerMenu.booleanIntersect': 'Kesiştir',
+  'layerMenu.booleanExclude': 'Hariç tut',
   'layerMenu.toggleLock': 'Kilidi Aç/Kapat',
   'layerMenu.toggleVisibility': 'Görünürlüğü Aç/Kapat',
 

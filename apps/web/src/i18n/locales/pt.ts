@@ -426,6 +426,7 @@ const pt: TranslationKeys = {
   'layerMenu.booleanUnion': 'União',
   'layerMenu.booleanSubtract': 'Subtrair',
   'layerMenu.booleanIntersect': 'Interseção',
+  'layerMenu.booleanExclude': 'Excluir',
   'layerMenu.toggleLock': 'Alternar bloqueio',
   'layerMenu.toggleVisibility': 'Alternar visibilidade',
 

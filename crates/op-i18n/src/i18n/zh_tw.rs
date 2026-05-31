@@ -107,6 +107,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "layerMenu.booleanUnion" => "聯合",
         "layerMenu.booleanSubtract" => "減去",
         "layerMenu.booleanIntersect" => "交集",
+        "layerMenu.booleanExclude" => "排除",
         "layerMenu.toggleLock" => "切換鎖定",
         "layerMenu.toggleVisibility" => "切換可見性",
         "property.createComponent" => "建立元件",

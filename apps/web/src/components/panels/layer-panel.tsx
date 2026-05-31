@@ -388,7 +388,8 @@ function LayerPanelInner() {
           break;
         case 'boolean-union':
         case 'boolean-subtract':
-        case 'boolean-intersect': {
+        case 'boolean-intersect':
+        case 'boolean-exclude': {
           const opType = action.replace('boolean-', '') as BooleanOpType;
           const nodes = selectedIds
             .map((id) => getNodeById(id))

@@ -11,6 +11,7 @@ import {
   SquaresUnite,
   SquaresSubtract,
   SquaresIntersect,
+  SquaresExclude,
 } from 'lucide-react';
 
 interface LayerContextMenuProps {
@@ -46,6 +47,12 @@ const MENU_ITEMS = [
     action: 'boolean-intersect',
     labelKey: 'layerMenu.booleanIntersect',
     icon: SquaresIntersect,
+    requireBoolean: true,
+  },
+  {
+    action: 'boolean-exclude',
+    labelKey: 'layerMenu.booleanExclude',
+    icon: SquaresExclude,
     requireBoolean: true,
   },
   {

@@ -411,6 +411,7 @@ const zhTW: TranslationKeys = {
   'layerMenu.booleanUnion': '聯合',
   'layerMenu.booleanSubtract': '減去',
   'layerMenu.booleanIntersect': '交集',
+  'layerMenu.booleanExclude': '排除',
   'layerMenu.toggleLock': '切換鎖定',
   'layerMenu.toggleVisibility': '切換可見性',
 
