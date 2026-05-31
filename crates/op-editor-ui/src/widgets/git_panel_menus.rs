@@ -185,10 +185,18 @@ impl GitPanel<'_> {
         cx.backend.stroke_round_rect(panel, 8.0, t.border, 1.0);
 
         let mode = self.state.branch_picker_mode;
-        // Header label per mode (TS list / create / merge headings).
-        let heading = match mode {
+        // Header label per mode (TS list / create / merge headings). Merge
+        // uses "合并到 {name}" (git.branch.mergeHeading) with the current
+        // branch substituted, not the generic "合并分支…" action label.
+        let merge_heading;
+        let heading: &str = match mode {
             GitBranchPickerMode::Create => self.t("git.branch.createAction"),
-            GitBranchPickerMode::Merge => self.t("git.branch.mergeAction"),
+            GitBranchPickerMode::Merge => {
+                merge_heading = self
+                    .t("git.branch.mergeHeading")
+                    .replace("{{name}}", self.state.branch.as_deref().unwrap_or(""));
+                &merge_heading
+            }
             GitBranchPickerMode::List => self.t("git.branch.listHeading"),
         };
         self.text(
@@ -265,14 +273,15 @@ impl GitPanel<'_> {
                 t.muted_foreground,
             );
             if merging {
+                // TS merge-candidate row trailing glyph is a ChevronRight.
                 draw_icon(
                     cx.backend,
-                    Icon::GitBranch,
+                    Icon::ChevronRight,
                     Point2D::new(
-                        row.origin.x + row.size.x - 24.0,
-                        row.origin.y + (row.size.y - 14.0) / 2.0,
+                        row.origin.x + row.size.x - 22.0,
+                        row.origin.y + (row.size.y - 12.0) / 2.0,
                     ),
-                    14.0,
+                    12.0,
                     t.muted_foreground,
                     1.5,
                 );
