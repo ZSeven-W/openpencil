@@ -37,19 +37,22 @@ impl WidgetHostNative {
     /// Whether the visible Git commit-message input owns the keyboard.
     pub fn git_commit_focus_active(&self) -> bool {
         let panel = &self.editor_state.editor_ui.git_panel;
-        panel.open && panel.commit_focused && !panel.loading
+        // The branch-picker dropdown has no commit input; while it is open a
+        // stale `commit_focused` must not route keys (text / Enter) to the
+        // hidden commit box.
+        panel.open && panel.commit_focused && !panel.loading && !panel.branch_picker_open
     }
 
     /// Whether the visible Git remote-URL input owns the keyboard.
     pub fn git_remote_focus_active(&self) -> bool {
         let panel = &self.editor_state.editor_ui.git_panel;
-        panel.open && panel.remote_focused && !panel.loading
+        panel.open && panel.remote_focused && !panel.loading && !panel.branch_picker_open
     }
 
     /// Whether the visible Git HTTPS-credential input owns the keyboard.
     pub fn git_https_focus_active(&self) -> bool {
         let panel = &self.editor_state.editor_ui.git_panel;
-        panel.open && panel.https_focused && !panel.loading
+        panel.open && panel.https_focused && !panel.loading && !panel.branch_picker_open
     }
 
     /// Whether the inline create-branch name input owns the keyboard.
