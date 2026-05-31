@@ -1,6 +1,18 @@
 use crate::agent_settings::AgentSettings;
 
 #[test]
+fn duplicate_builtin_agent_config_reuses_existing_provider() {
+    let mut s = AgentSettings::default();
+
+    let first = s.add_builtin_agent_with_defaults("MINIMAX", "sk-test", "MiniMax-M2.7");
+    let second = s.add_builtin_agent_with_defaults("MINIMAX", "sk-test", "MiniMax-M2.7");
+
+    assert_eq!(second, first);
+    assert_eq!(s.builtin_agents.len(), 1);
+    assert_eq!(s.next_builtin_agent_id, 2);
+}
+
+#[test]
 fn builtin_agent_draft_does_not_persist_until_save() {
     let mut s = AgentSettings::default();
 

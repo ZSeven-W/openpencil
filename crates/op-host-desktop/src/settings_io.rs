@@ -252,10 +252,11 @@ fn apply_payload(state: &mut EditorState, payload: SettingsPayload) {
         eui.agent_settings.connected = c;
     }
     if let Some(agents) = payload.builtin_agents {
-        eui.agent_settings.builtin_agents = agents
+        let agents = agents
             .into_iter()
             .filter_map(builtin_agent_from_payload)
             .collect();
+        eui.agent_settings.builtin_agents = dedupe_builtin_agents(agents);
         eui.agent_settings.next_builtin_agent_id =
             next_builtin_agent_id(&eui.agent_settings.builtin_agents);
     }
@@ -440,6 +441,25 @@ fn next_builtin_agent_id(agents: &[BuiltinAgentConfig]) -> u64 {
         .max()
         .unwrap_or(0)
         .saturating_add(1)
+}
+
+fn dedupe_builtin_agents(agents: Vec<BuiltinAgentConfig>) -> Vec<BuiltinAgentConfig> {
+    let mut deduped: Vec<BuiltinAgentConfig> = Vec::new();
+    for agent in agents {
+        let is_duplicate = deduped.iter().any(|existing| {
+            existing.matches_config(
+                &agent.display_name,
+                &agent.api_key,
+                &agent.model,
+                agent.kind,
+                &agent.base_url,
+            )
+        });
+        if !is_duplicate {
+            deduped.push(agent);
+        }
+    }
+    deduped
 }
 
 fn next_acp_agent_id(agents: &[AcpAgentConfig]) -> u64 {
@@ -666,6 +686,44 @@ mod tests {
             dst.editor_ui.agent_settings.builtin_agents[0].api_key,
             "sk-test"
         );
+    }
+
+    #[test]
+    fn duplicate_builtin_agents_are_deduped_on_load() {
+        let settings = r#"{
+            "version": 1,
+            "builtin_agents": [
+                {
+                    "id": "builtin-1",
+                    "display_name": "MINIMAX",
+                    "kind": "openai-compat",
+                    "api_key": "sk-test",
+                    "model": "MiniMax-M2.7",
+                    "base_url": "https://api.minimaxi.com/v1",
+                    "enabled": true
+                },
+                {
+                    "id": "builtin-2",
+                    "display_name": "MINIMAX",
+                    "kind": "openai-compat",
+                    "api_key": "sk-test",
+                    "model": "MiniMax-M2.7",
+                    "base_url": "https://api.minimaxi.com/v1",
+                    "enabled": true
+                }
+            ]
+        }"#;
+        let payload: SettingsPayload = serde_json::from_str(settings).unwrap();
+        let mut dst = EditorState::new();
+
+        apply_payload(&mut dst, payload);
+
+        assert_eq!(dst.editor_ui.agent_settings.builtin_agents.len(), 1);
+        assert_eq!(
+            dst.editor_ui.agent_settings.builtin_agents[0].id,
+            "builtin-1"
+        );
+        assert_eq!(dst.editor_ui.agent_settings.next_builtin_agent_id, 2);
     }
 
     #[test]

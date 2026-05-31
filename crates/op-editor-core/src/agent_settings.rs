@@ -182,6 +182,21 @@ impl BuiltinAgentConfig {
     pub fn ready(&self) -> bool {
         self.enabled && !self.api_key.trim().is_empty() && !self.model.trim().is_empty()
     }
+
+    pub fn matches_config(
+        &self,
+        display_name: &str,
+        api_key: &str,
+        model: &str,
+        kind: BuiltinAgentKind,
+        base_url: &str,
+    ) -> bool {
+        self.kind == kind
+            && self.display_name.trim() == display_name.trim()
+            && self.api_key.trim() == api_key.trim()
+            && self.model.trim() == model.trim()
+            && self.base_url.trim().trim_end_matches('/') == base_url.trim().trim_end_matches('/')
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -474,15 +489,26 @@ impl AgentSettings {
         kind: BuiltinAgentKind,
         base_url: impl Into<String>,
     ) -> String {
+        let display_name = display_name.into();
+        let api_key = api_key.into();
+        let model = model.into();
+        let base_url = base_url.into();
+        if let Some(existing) = self
+            .builtin_agents
+            .iter()
+            .find(|agent| agent.matches_config(&display_name, &api_key, &model, kind, &base_url))
+        {
+            return existing.id.clone();
+        }
         let id = format!("builtin-{}", self.next_builtin_agent_id.max(1));
         self.next_builtin_agent_id = self.next_builtin_agent_id.max(1).saturating_add(1);
         self.builtin_agents.push(BuiltinAgentConfig {
             id: id.clone(),
-            display_name: display_name.into(),
+            display_name,
             kind,
-            api_key: api_key.into(),
-            model: model.into(),
-            base_url: base_url.into(),
+            api_key,
+            model,
+            base_url,
             enabled: true,
         });
         id
