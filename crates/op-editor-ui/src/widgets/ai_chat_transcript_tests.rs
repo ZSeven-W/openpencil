@@ -345,6 +345,67 @@ render: captured frame
 }
 
 #[test]
+fn completed_step_with_content_defaults_collapsed_like_ts_accordion() {
+    let mut message = ChatMessage::assistant(
+        r#"<step title="Validate design" status="done">
+lint: fixed spacing
+render: captured frame
+</step>"#,
+    );
+    message.streaming = false;
+
+    let items = build_transcript(
+        std::slice::from_ref(&message),
+        body(),
+        op_editor_core::Locale::EnUs,
+    );
+
+    assert_eq!(items[0].steps.len(), 1);
+    assert!(items[0].steps[0].done);
+    assert!(!items[0].steps[0].active);
+    assert!(
+        (items[0].steps[0].rect.size.y - ACTION_STEP_H).abs() < 1e-4,
+        "TS ActionStepItem defaults completed accordions closed"
+    );
+}
+
+#[test]
+fn paint_completed_step_hides_details_like_collapsed_ts_accordion() {
+    let message = ChatMessage::assistant(
+        r#"<step title="Validate design" status="done">
+lint: fixed spacing
+render: captured frame
+</step>"#,
+    );
+    let mut backend = TranscriptPaintBackend::default();
+    let mut cx = PaintCx {
+        backend: &mut backend,
+    };
+
+    paint_transcript(
+        &mut cx,
+        &crate::Theme::dark(),
+        body(),
+        &[message],
+        0,
+        op_editor_core::Locale::EnUs,
+    );
+
+    assert!(
+        backend.texts.iter().any(|text| text == "Validate design"),
+        "collapsed accordion still paints its title"
+    );
+    assert!(
+        !backend
+            .texts
+            .iter()
+            .any(|text| text.contains("lint: fixed spacing")
+                || text.contains("render: captured frame")),
+        "collapsed TS accordions hide details until opened"
+    );
+}
+
+#[test]
 fn assistant_design_json_code_fence_renders_compact_design_block() {
     let message = ChatMessage::assistant(
         r#"Here is the design:
