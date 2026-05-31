@@ -75,6 +75,17 @@ impl EditorState {
     /// Append a fresh empty page named `"Page N"` and switch to it.
     /// Returns the new index, or `None` on id overflow.
     pub fn add_page(&mut self) -> Option<usize> {
+        self.add_page_with_name(None)
+    }
+
+    /// Append a fresh empty page with an optional display name and
+    /// switch to it. Empty / whitespace-only custom names are rejected.
+    pub fn add_page_with_name(&mut self, name: Option<String>) -> Option<usize> {
+        let custom_name = match name {
+            Some(name) if name.trim().is_empty() => return None,
+            Some(name) => Some(name),
+            None => None,
+        };
         // Migrate to multi-page form FIRST so the migrated "Page 1"
         // id is part of the id space before the new page id is
         // minted — otherwise both could land on `n{max+1}`.
@@ -86,7 +97,8 @@ impl EditorState {
         let frame = make_blank_page_frame(&frame_id)?;
         let pages = self.doc.pages.as_mut().unwrap();
         let n = pages.len() + 1;
-        pages.push(make_page(page_id.into(), format!("Page {n}"), vec![frame]));
+        let page_name = custom_name.unwrap_or_else(|| format!("Page {n}"));
+        pages.push(make_page(page_id.into(), page_name, vec![frame]));
         let new_index = pages.len() - 1;
         self.ui.active_page_index = new_index;
         self.clear_selection();

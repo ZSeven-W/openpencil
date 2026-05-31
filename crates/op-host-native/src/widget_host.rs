@@ -737,6 +737,7 @@ impl WidgetHostNative {
         // static while focused.
         if self.editor_state.editor_ui.git_panel.remote_focused
             || self.editor_state.editor_ui.git_panel.https_focused
+            || self.editor_state.editor_ui.git_panel.branch_create_focused
         {
             return Some(jian_core::anim::next_blink_flip_ms(
                 self.now_ms,

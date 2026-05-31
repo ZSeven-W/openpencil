@@ -658,11 +658,21 @@ fn set_viewport_partial_axes() {
 #[test]
 fn add_then_set_active_page() {
     let mut s = state_with(vec![rect("n1", "r", 0.0, 0.0, 10.0, 10.0)]);
-    assert!(s.apply(EditorCommand::AddPage));
+    assert!(s.apply(EditorCommand::AddPage { name: None }));
     assert_eq!(s.page_count(), 2);
     assert!(s.apply(EditorCommand::SetActivePage { index: 0 }));
     assert_eq!(s.ui.active_page_index, 0);
     assert!(!s.apply(EditorCommand::SetActivePage { index: 9 }));
+}
+
+#[test]
+fn add_page_command_accepts_custom_name() {
+    let mut s = state_with(vec![rect("n1", "r", 0.0, 0.0, 10.0, 10.0)]);
+    assert!(s.apply(EditorCommand::AddPage {
+        name: Some("Checkout".into()),
+    }));
+    let pages = s.doc.pages.as_ref().expect("multi-page doc");
+    assert_eq!(pages[1].name, "Checkout");
 }
 
 // --- Variables -------------------------------------------------------

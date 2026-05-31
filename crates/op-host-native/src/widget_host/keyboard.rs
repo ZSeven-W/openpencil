@@ -73,11 +73,11 @@ impl WidgetHostNative {
         }
         if self.git_branch_create_focus_active() {
             if !c.is_control() {
-                self.editor_state
-                    .editor_ui
-                    .git_panel
-                    .branch_create_draft
-                    .push(c);
+                let now = self.now_ms;
+                let panel = &mut self.editor_state.editor_ui.git_panel;
+                panel.branch_create_draft.push(c);
+                // Keep the caret solid while typing (reset the blink).
+                panel.commit_caret_anchor_ms = now;
                 self.mark_dirty();
                 return true;
             }
