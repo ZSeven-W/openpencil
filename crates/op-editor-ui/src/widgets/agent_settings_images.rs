@@ -39,6 +39,7 @@ pub enum ImagesHit {
     FocusSearchField(ImageSearchField),
     TestSearch,
     AddGenConfig,
+    ToggleGenConfigEditor(usize),
     SetActiveGenConfig(usize),
     RemoveGenConfig(usize),
     CycleGenProvider(usize),
@@ -177,6 +178,13 @@ fn profile_remove_rect(row: Rect) -> Rect {
     }
 }
 
+fn profile_header_rect(row: Rect) -> Rect {
+    Rect {
+        origin: row.origin,
+        size: Point2D::new(row.size.x, PROFILE_ROW_H),
+    }
+}
+
 fn profile_field_rect(row: Rect, field_index: usize) -> Rect {
     Rect {
         origin: Point2D::new(
@@ -227,6 +235,9 @@ pub fn hit_test(content: Rect, settings: &AgentSettings, scrolled: Point2D) -> I
         }
         if rect_contains(profile_remove_rect(row), scrolled) {
             return ImagesHit::RemoveGenConfig(index);
+        }
+        if rect_contains(profile_header_rect(row), scrolled) {
+            return ImagesHit::ToggleGenConfigEditor(index);
         }
         if is_editing_profile(settings, index) {
             if rect_contains(profile_provider_rect(row), scrolled) {
