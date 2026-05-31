@@ -14,6 +14,12 @@ const CARD_GAP: f32 = 4.0;
 const CARD_PAD_X: f32 = 8.0;
 const CARD_PAD_Y: f32 = 6.0;
 const CARD_LINE_H: f32 = 14.0;
+const STATUS_SUCCESS_GREEN: crate::Color = crate::Color {
+    r: 0x22 as f32 / 255.0,
+    g: 0xc5 as f32 / 255.0,
+    b: 0x5e as f32 / 255.0,
+    a: 1.0,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ToolLevel {
@@ -499,9 +505,9 @@ fn paint_source_badge(cx: &mut PaintCx<'_>, theme: &Theme, card: &ToolCallCard, 
 fn paint_status_icon(cx: &mut PaintCx<'_>, theme: &Theme, card: &ToolCallCard) {
     let (icon, color) = match card.status.as_str() {
         "running" | "pending" => (Icon::Loader, theme.muted_foreground),
-        "error" => (Icon::XCircle, theme.destructive),
-        _ if card.result_failed => (Icon::XCircle, theme.destructive),
-        _ => (Icon::CheckCircle, theme.primary),
+        "error" => (Icon::Close, theme.destructive),
+        _ if card.result_failed => (Icon::Close, theme.destructive),
+        _ => (Icon::Check, STATUS_SUCCESS_GREEN),
     };
     draw_icon(
         cx.backend,
@@ -537,11 +543,108 @@ fn draw_line(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{Color, RenderBackend};
 
     #[test]
     fn orchestrate_tool_level_uses_ts_wrench_icon() {
         let wrench = Icon::from_name("wrench").expect("wrench icon should be available");
 
         assert_eq!(ToolLevel::Orchestrate.icon(), wrench);
+    }
+
+    #[test]
+    fn done_tool_status_uses_ts_plain_check_icon() {
+        let mut backend = StatusIconBackend::default();
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+        let card = test_card("done", false);
+
+        paint_tool_card(&mut cx, &Theme::dark(), &card);
+
+        assert_eq!(backend.status_paths, Icon::Check.paths());
+        assert_eq!(backend.status_colors, vec![tailwind_green_500()]);
+    }
+
+    #[test]
+    fn failed_tool_status_uses_ts_plain_x_icon() {
+        let mut backend = StatusIconBackend::default();
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+        let card = test_card("error", true);
+
+        paint_tool_card(&mut cx, &Theme::dark(), &card);
+
+        assert_eq!(backend.status_paths, Icon::Close.paths());
+        assert_eq!(backend.status_colors, vec![Theme::dark().destructive]);
+    }
+
+    fn test_card(status: &str, result_failed: bool) -> ToolCallCard {
+        ToolCallCard {
+            rect: Rect::xywh(10.0, 10.0, 100.0, 24.0),
+            header: Rect::xywh(10.0, 10.0, 100.0, 24.0),
+            body: Rect::xywh(10.0, 34.0, 100.0, 0.0),
+            expanded: false,
+            name: "update_node".into(),
+            source: None,
+            status: status.into(),
+            level: ToolLevel::Modify,
+            result_failed,
+            arg_lines: Vec::new(),
+            result_lines: Vec::new(),
+        }
+    }
+
+    #[derive(Default)]
+    struct StatusIconBackend {
+        status_paths: Vec<&'static str>,
+        status_colors: Vec<Color>,
+    }
+
+    impl RenderBackend for StatusIconBackend {
+        fn begin_frame(&mut self) {}
+        fn end_frame(&mut self) {}
+        fn fill_rect(&mut self, _: Rect, _: Color) {}
+        fn stroke_rect(&mut self, _: Rect, _: Color, _: f32) {}
+        fn draw_text(&mut self, _: &TextLayout, _: Point2D) {}
+        fn clip_rect(&mut self, _: Rect) {}
+        fn stroke_line(&mut self, _: Point2D, _: Point2D, _: Color, _: f32) {}
+        fn fill_round_rect(&mut self, _: Rect, _: f32, _: Color) {}
+        fn stroke_round_rect(&mut self, _: Rect, _: f32, _: Color, _: f32) {}
+        fn stroke_svg_path(&mut self, d: &str, at: Point2D, _: f32, color: Color, _: f32) {
+            if (at.x - 90.0).abs() < 0.01 && (at.y - 15.0).abs() < 0.01 {
+                let path = Icon::Check
+                    .paths()
+                    .iter()
+                    .chain(Icon::Close.paths().iter())
+                    .chain(Icon::CheckCircle.paths().iter())
+                    .chain(Icon::XCircle.paths().iter())
+                    .copied()
+                    .find(|path| *path == d)
+                    .expect("status icon path should be static icon data");
+                self.status_paths.push(path);
+                if self.status_colors.last().copied() != Some(color) {
+                    self.status_colors.push(color);
+                }
+            }
+        }
+        fn fill_oval(&mut self, _: Rect, _: Color) {}
+        fn save(&mut self) {}
+        fn restore(&mut self) {}
+        fn translate(&mut self, _: Point2D) {}
+        fn resize(&mut self, _: u32, _: u32) {}
+        fn dpi_scale(&self) -> f32 {
+            1.0
+        }
+    }
+
+    fn tailwind_green_500() -> Color {
+        Color {
+            r: 0x22 as f32 / 255.0,
+            g: 0xc5 as f32 / 255.0,
+            b: 0x5e as f32 / 255.0,
+            a: 1.0,
+        }
     }
 }
