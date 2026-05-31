@@ -76,6 +76,8 @@ mod settings_caret_tests;
 mod settings_dispatch;
 mod shape_picker_press;
 mod shortcuts;
+#[cfg(test)]
+mod theme_tests;
 mod toolbar_hover;
 mod viewport_fit;
 
@@ -465,6 +467,14 @@ impl WidgetHostNative {
     /// animations via `jian_core::anim`.
     pub fn set_now_ms(&mut self, now_ms: u64) {
         self.now_ms = now_ms;
+    }
+
+    /// Refresh host-level theme tokens from the canonical editor UI
+    /// state. Most widgets derive their theme directly, but a few
+    /// paint-layer affordances still read this host cache.
+    pub(in crate::widget_host) fn sync_theme_from_editor(&mut self) {
+        self.theme =
+            op_editor_ui::widgets::editor_state_ext::theme_for(&self.editor_state.editor_ui);
     }
 
     /// Run a path boolean op on the active selection (Union /

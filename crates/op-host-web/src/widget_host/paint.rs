@@ -34,6 +34,7 @@ impl WidgetHost {
     ///   9. LocalePicker (top-most overlay)
     // glue:
     pub fn paint(&mut self, backend: &mut WebBackend, viewport_width: f32, viewport_height: f32) {
+        self.sync_theme_from_editor();
         backend.fill_rect(
             Rect {
                 origin: Point2D::new(0.0, 0.0),
