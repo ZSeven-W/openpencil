@@ -14,6 +14,20 @@ fn duplicate_builtin_agent_config_reuses_existing_provider() {
 }
 
 #[test]
+fn duplicate_auto_named_builtin_agent_config_reuses_existing_provider() {
+    let mut s = AgentSettings::default();
+
+    let first =
+        s.add_builtin_agent_with_defaults("Built-in Agent 5", "sk-test", "claude-sonnet-4-5");
+    let second =
+        s.add_builtin_agent_with_defaults("Built-in Agent 6", "sk-test", "claude-sonnet-4-5");
+
+    assert_eq!(second, first);
+    assert_eq!(s.builtin_agents.len(), 1);
+    assert_eq!(s.builtin_agents[0].display_name, "Built-in Agent 5");
+}
+
+#[test]
 fn builtin_agent_draft_does_not_persist_until_save() {
     let mut s = AgentSettings::default();
 
