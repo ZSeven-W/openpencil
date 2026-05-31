@@ -39,6 +39,10 @@ const HISTORY_FIRST: f32 = COMMIT_TOP + COMMIT_H + 24.0;
 const ROW_H: f32 = 26.0;
 const MAX_COMMITS: usize = 8;
 const SUMMARY_MAX: usize = 34;
+/// Height of the inline commit-detail card (里程碑详情 title + a
+/// restore/copy-hash button row) inserted under an expanded commit row
+/// (TS `HistoryMilestoneRow` detail block). Pushes later rows down.
+const CARD_H: f32 = 60.0;
 /// Per-char advance heuristic for the branch label (keeps paint +
 /// hit-test aligned without measuring text).
 const BRANCH_CHAR_W: f32 = 7.5;
@@ -64,7 +68,58 @@ impl GitPanel<'_> {
     /// recent-commit rows (at least one placeholder row).
     pub(super) fn ready_height(&self) -> f32 {
         let rows = self.state.recent_commits.len().clamp(1, MAX_COMMITS);
-        HISTORY_FIRST + rows as f32 * ROW_H + PAD
+        HISTORY_FIRST + rows as f32 * ROW_H + PAD + self.expanded_card_extra()
+    }
+
+    /// Extra height contributed by an open inline commit-detail card —
+    /// `CARD_H` when a valid row is expanded, else 0. Shared by
+    /// [`GitPanel::ready_height`] + the history paint / hit-test walk so
+    /// they stay in lockstep.
+    fn expanded_card_extra(&self) -> f32 {
+        let n = self.state.recent_commits.len().min(MAX_COMMITS);
+        match self.state.expanded_commit {
+            Some(e) if e < n => CARD_H,
+            _ => 0.0,
+        }
+    }
+
+    /// Vertical offset inserted before commit row `i` by a detail card
+    /// open under an earlier row.
+    fn expand_offset_before(&self, i: usize) -> f32 {
+        let n = self.state.recent_commits.len().min(MAX_COMMITS);
+        match self.state.expanded_commit {
+            Some(e) if e < i && e < n => CARD_H,
+            _ => 0.0,
+        }
+    }
+
+    /// `(恢复, 复制哈希)` button rects for the inline card whose top edge
+    /// is `card_top`. Backend-free fixed widths keep paint + hit aligned.
+    fn commit_card_button_rects(&self, rect: Rect, card_top: f32) -> (Rect, Rect) {
+        let btn_y = card_top + 30.0;
+        let h = 24.0;
+        let x = rect.origin.x + 40.0; // align with the message column (`pl-10`)
+        let restore = Rect {
+            origin: Point2D::new(x, btn_y),
+            size: Point2D::new(64.0, h),
+        };
+        let copy = Rect {
+            origin: Point2D::new(x + 64.0 + 8.0, btn_y),
+            size: Point2D::new(84.0, h),
+        };
+        (restore, copy)
+    }
+
+    /// `(恢复, 复制哈希)` rects for the currently-expanded card, or `None`
+    /// when nothing is expanded. Mirrors the history paint y-walk so the
+    /// hit-test lands exactly where paint drew the buttons.
+    pub(super) fn ready_commit_card_buttons(&self, rect: Rect) -> Option<(Rect, Rect)> {
+        let n = self.state.recent_commits.len().min(MAX_COMMITS);
+        let e = self.state.expanded_commit.filter(|&e| e < n)?;
+        // Row `e`'s text baseline (no prior card offsets — only one card
+        // can be open) then `+ ROW_H` to the card top, matching paint.
+        let card_top = rect.origin.y + HISTORY_FIRST + (e as f32 + 1.0) * ROW_H - 6.0;
+        Some(self.commit_card_button_rects(rect, card_top))
     }
 
     /// Resolved branch label (`detached HEAD` fallback).
@@ -307,11 +362,17 @@ impl GitPanel<'_> {
             cx.backend.fill_rect(
                 Rect {
                     origin: Point2D::new(rail_x, y - 8.0),
-                    size: Point2D::new(1.0, n as f32 * ROW_H),
+                    size: Point2D::new(1.0, n as f32 * ROW_H + self.expanded_card_extra()),
                 },
                 alpha(t.border, 0.60),
             );
-            for commit in self.state.recent_commits.iter().take(MAX_COMMITS) {
+            for (i, commit) in self
+                .state
+                .recent_commits
+                .iter()
+                .take(MAX_COMMITS)
+                .enumerate()
+            {
                 cx.backend.fill_round_rect(
                     Rect {
                         origin: Point2D::new(rail_x - 3.5, y - 7.5),
@@ -349,8 +410,70 @@ impl GitPanel<'_> {
                     alpha(t.muted_foreground, 0.80),
                 );
                 y += ROW_H;
+                // Inline detail card under the expanded row (TS
+                // `HistoryMilestoneRow` detail block). Captures the card
+                // top right after the row advance so the hit-test helper
+                // `ready_commit_card_buttons` lands on the same geometry.
+                if self.state.expanded_commit == Some(i) {
+                    let card_top = y - 6.0;
+                    self.paint_commit_card(cx, rect, card_top);
+                    y += CARD_H;
+                }
             }
         }
+    }
+
+    /// Paint the inline commit-detail card (里程碑详情) — a muted band
+    /// with the detail title and a `恢复` / `复制哈希` button row. TS
+    /// `HistoryMilestoneRow` detail block; the inline diff summary is
+    /// deferred (the semantic node-diff is a separate subsystem).
+    fn paint_commit_card(&self, cx: &mut PaintCx<'_>, rect: Rect, card_top: f32) {
+        let t = self.theme;
+        cx.backend.fill_rect(
+            Rect {
+                origin: Point2D::new(rect.origin.x, card_top),
+                size: Point2D::new(rect.size.x, CARD_H),
+            },
+            alpha(t.muted, 0.30),
+        );
+        // Title — `text-[11px] font-medium`.
+        self.text(
+            cx,
+            self.t("git.history.milestoneDetailTitle"),
+            rect.origin.x + 40.0,
+            card_top + 18.0,
+            11.0,
+            t.foreground,
+        );
+        let (restore, copy) = self.commit_card_button_rects(rect, card_top);
+        // 恢复 — outline button.
+        cx.backend.stroke_round_rect(restore, 6.0, t.border, 1.0);
+        self.center_label(
+            cx,
+            self.t("git.history.restoreButton"),
+            restore,
+            t.foreground,
+        );
+        // 复制哈希 — ghost button (no border).
+        self.center_label(
+            cx,
+            self.t("git.history.copyHashButton"),
+            copy,
+            alpha(t.foreground, 0.80),
+        );
+    }
+
+    /// Draw an 11px label horizontally + vertically centred in `r`.
+    fn center_label(&self, cx: &mut PaintCx<'_>, label: &str, r: Rect, color: Color) {
+        let tw = cx.backend.measure_text(label, 11.0);
+        self.text(
+            cx,
+            label,
+            r.origin.x + (r.size.x - tw) / 2.0,
+            r.origin.y + r.size.y / 2.0 + 4.0,
+            11.0,
+            color,
+        );
     }
 
     /// One ghost icon button — a faint rounded slot + a centred glyph,
@@ -421,7 +544,10 @@ impl GitPanel<'_> {
         let first = rect.origin.y + HISTORY_FIRST - ROW_H + 9.0;
         (0..self.state.recent_commits.len().min(MAX_COMMITS))
             .map(|i| Rect {
-                origin: Point2D::new(rect.origin.x, first + i as f32 * ROW_H),
+                origin: Point2D::new(
+                    rect.origin.x,
+                    first + i as f32 * ROW_H + self.expand_offset_before(i),
+                ),
                 size: Point2D::new(rect.size.x, ROW_H),
             })
             .collect()
@@ -451,6 +577,18 @@ impl GitPanel<'_> {
         }
         if contains(self.ready_commit_box(rect), point) {
             return Some(GitPanelHit::CommitInput);
+        }
+        // Expanded detail-card buttons win over the rows they sit between.
+        if let (Some((restore, copy)), Some(e)) = (
+            self.ready_commit_card_buttons(rect),
+            self.state.expanded_commit,
+        ) {
+            if contains(restore, point) {
+                return Some(GitPanelHit::RestoreCommit(e));
+            }
+            if contains(copy, point) {
+                return Some(GitPanelHit::CopyCommitHash(e));
+            }
         }
         for (i, row) in self.ready_commit_row_rects(rect).iter().enumerate() {
             if contains(*row, point) {

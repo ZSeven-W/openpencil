@@ -132,8 +132,15 @@ pub enum GitPanelHit {
     SetHttpsAuth,
     /// The working-tree status line — open the whole-repo diff.
     ShowWorkingDiff,
-    /// A recent-commit row — open that commit's patch.
+    /// A recent-commit row — toggle its inline detail card
+    /// (里程碑详情 — restore + copy-hash). TS `HistoryMilestoneRow`.
     ShowCommitDiff(usize),
+    /// The expanded commit card's "恢复" button — roll the tracked
+    /// document back to `recent_commits[index]` (TS `restoreCommit`).
+    RestoreCommit(usize),
+    /// The expanded commit card's "复制哈希" button — copy
+    /// `recent_commits[index]`'s hash to the OS clipboard.
+    CopyCommitHash(usize),
     /// A conflicted-file row (merge mode) — open that file's diff.
     ShowFileDiff(usize),
     /// A changed-file row's checkbox — toggle whether it is staged.
