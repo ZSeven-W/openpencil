@@ -647,7 +647,7 @@ fn group_label_for_entry(entry: &ModelEntry) -> String {
         if name.is_empty() {
             return "ACP".to_string();
         }
-        return format!("{name} (ACP)");
+        return format!("{name} (ACP)").to_uppercase();
     }
     if is_builtin(entry) {
         if let Some(label) = entry
@@ -656,7 +656,7 @@ fn group_label_for_entry(entry: &ModelEntry) -> String {
             .map(str::trim)
             .filter(|label| !label.is_empty())
         {
-            return label.to_string();
+            return label.to_uppercase();
         }
     }
     group_label(entry.provider, is_builtin(entry)).to_string()
@@ -777,7 +777,7 @@ mod tests {
         );
         entry.builtin_provider_display_name = Some("MiniMax".into());
 
-        assert_eq!(group_label_for_entry(&entry), "MiniMax");
+        assert_eq!(group_label_for_entry(&entry), "MINIMAX");
     }
 
     #[test]
