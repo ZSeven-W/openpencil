@@ -55,6 +55,16 @@ fn toolbar_center_y() -> f32 {
     AI_CHAT_HEIGHT - INPUT_BASE_HEIGHT + 1.0 + INPUT_AREA_HEIGHT + INPUT_TOOLBAR_HEIGHT / 2.0
 }
 
+fn seed_available_model(s: &mut EditorState) {
+    s.chat
+        .available_models
+        .push(op_editor_core::chat::ModelEntry::new(
+            op_editor_core::chat::AgentProvider::CodexCli,
+            "gpt-5",
+            "GPT-5",
+        ));
+}
+
 #[test]
 fn hit_test_resolves_input_focus() {
     let s = EditorState::new();
@@ -66,8 +76,43 @@ fn hit_test_resolves_input_focus() {
 }
 
 #[test]
-fn hit_test_resolves_send_at_right() {
+fn no_model_disables_send_hit() {
+    let mut s = EditorState::new();
+    s.chat.input = "design a login page".into();
+    let panel = AIChatPlaceholder::from_editor(&s);
+    let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
+    let send_x = AI_CHAT_WIDTH - PAD - 20.0;
+    let p = Point2D::new(send_x, toolbar_center_y());
+
+    assert_eq!(panel.hit_test(rect, p), Some(AIChatHit::FocusInput));
+}
+
+#[test]
+fn no_model_disables_quick_action_cards() {
     let s = EditorState::new();
+    let panel = AIChatPlaceholder::from_editor(&s);
+    let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
+    let card_w = (AI_CHAT_WIDTH - PAD * 2.0 - 8.0) / 2.0;
+    let p = Point2D::new(PAD + card_w / 2.0, HEADER_HEIGHT + 32.0 + 35.0);
+
+    assert_eq!(panel.hit_test(rect, p), Some(AIChatHit::DragHandle));
+}
+
+#[test]
+fn no_model_disables_model_picker_toggle() {
+    let s = EditorState::new();
+    let panel = AIChatPlaceholder::from_editor(&s);
+    let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
+    let p = Point2D::new(PAD + 8.0, toolbar_center_y());
+
+    assert_eq!(panel.hit_test(rect, p), Some(AIChatHit::FocusInput));
+}
+
+#[test]
+fn hit_test_resolves_send_at_right() {
+    let mut s = EditorState::new();
+    seed_available_model(&mut s);
+    s.chat.input = "design a login page".into();
     let panel = AIChatPlaceholder::from_editor(&s);
     let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
     let send_x = AI_CHAT_WIDTH - PAD - 20.0;
@@ -91,7 +136,9 @@ fn hit_test_resolves_stop_at_right_while_streaming() {
 
 #[test]
 fn hit_test_resolves_bottom_toolbar_actions() {
-    let s = EditorState::new();
+    let mut s = EditorState::new();
+    seed_available_model(&mut s);
+    s.chat.input = "design a login page".into();
     let panel = AIChatPlaceholder::from_editor(&s);
     let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
     let y = toolbar_center_y();
@@ -112,6 +159,7 @@ fn hit_test_resolves_bottom_toolbar_actions() {
 #[test]
 fn hit_test_resolves_model_search_clear_button() {
     let mut s = EditorState::new();
+    seed_available_model(&mut s);
     s.editor_ui.chat_model_picker_open = true;
     s.editor_ui.chat_model_picker_search = "231".into();
     let panel = AIChatPlaceholder::from_editor(&s);
@@ -159,7 +207,8 @@ fn hit_test_resolves_attachment_chip_at_painted_position() {
 
 #[test]
 fn hit_test_resolves_first_example_when_empty() {
-    let s = EditorState::new(); // chat empty by default
+    let mut s = EditorState::new(); // chat empty by default
+    seed_available_model(&mut s);
     let panel = AIChatPlaceholder::from_editor(&s);
     let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
     // First example card: top-left of grid.

@@ -35,9 +35,6 @@ pub(crate) struct ExampleCard {
     pub(crate) emoji: &'static str,
 }
 
-/// Build the 4 empty-state example cards localised against `locale`.
-/// Titles / subtitles / prompts come from the `ai.quickAction.*`
-/// table; emojis stay literal.
 pub(crate) fn example_cards(locale: op_editor_core::Locale) -> [ExampleCard; 4] {
     let t = |key: &'static str| op_i18n::translate(locale, key).to_string();
     [
@@ -72,45 +69,30 @@ pub struct AIChatPlaceholder<'a> {
     pub id: WidgetId,
     pub theme: Theme,
     pub state: &'a ChatState,
-    /// Host frame timestamp in ms; drives caret blink.
     pub now_ms: u64,
-    /// Localised chrome strings — resolved at construction time
-    /// from `Document::t` so the panel reflows when the user
-    /// flips the TopBar Globe icon.
     pub label_new_chat: String,
     pub label_start_with_ai: String,
     pub label_input_placeholder: String,
-    /// Empty-state tip line below the example cards.
     pub label_tip_select_elements: String,
-    /// Chip label shown when no model is selected / discovered yet
-    /// (`ai.noModelsConnected`).
     pub label_no_models: String,
     /// Number of currently selected canvas nodes, shown in the
     /// bottom toolbar like the TS panel.
     pub(crate) selected_count: usize,
-    /// Whether the model-picker dropdown is open
-    /// (`Document.ui.chat_model_picker_open`). The picker lists
-    /// `state.available_models`; the active row is
-    /// `state.selected_model`.
+    /// Whether the model-picker dropdown is open.
     pub model_picker_open: bool,
-    /// Vertical scroll offset of the open model-picker dropdown, in
-    /// px (`Document.ui.chat_model_picker_scroll`).
+    /// Vertical scroll offset of the open model-picker dropdown.
     pub model_picker_scroll: f32,
-    /// Index into `state.available_models` of the picker row under
-    /// the cursor (`Document.ui.chat_model_picker_hover`).
+    /// Index into `state.available_models` of the picker row under the cursor.
     pub model_picker_hover: Option<usize>,
-    /// Live model-picker search query
-    /// (`Document.ui.chat_model_picker_search`).
+    /// Live model-picker search query.
     pub model_picker_search: String,
     /// Byte caret for the model-picker search query.
     pub model_picker_caret: Option<usize>,
     /// Last focus / edit timestamp for the model-picker search caret.
     pub model_picker_caret_anchor_ms: u64,
-    /// Localised empty-state example cards — resolved at construction
-    /// time so the grid reflows when the user flips the Globe icon.
+    /// Localised empty-state example cards.
     pub(crate) examples: [ExampleCard; 4],
-    /// Active UI locale — threaded into the transcript layout /
-    /// hit-test so the thinking / tool-call headers translate.
+    /// Active UI locale.
     pub(crate) locale: op_editor_core::Locale,
 }
 
@@ -119,8 +101,6 @@ impl<'a> AIChatPlaceholder<'a> {
         Self::from_editor_at(state, 0)
     }
 
-    /// Same as `from_editor` but threads through the host's
-    /// current millisecond timestamp so the caret can blink.
     pub fn from_editor_at(state: &'a EditorState, now_ms: u64) -> Self {
         let ui = &state.editor_ui;
         Self {
@@ -226,6 +206,7 @@ impl<'a> AIChatPlaceholder<'a> {
         if self.state.collapsed {
             return Some(AIChatHit::ToggleCollapse);
         }
+        let can_use_model = !self.state.available_models.is_empty();
         // Expanded: chevron-down at top-left toggles collapse.
         let chevron_rect = Rect {
             origin: rect.origin,
@@ -265,7 +246,7 @@ impl<'a> AIChatPlaceholder<'a> {
         // open it behaves modally: a row click selects, any other
         // click dismisses it. Hit-tested before the input so a row
         // click isn't eaten by the message list beneath.
-        if self.model_picker_open {
+        if self.model_picker_open && can_use_model {
             let picker = self.model_picker_rect(rect, input_rect);
             if crate::widgets::ai_chat_model_picker::search_clear_hit(
                 picker,
@@ -311,7 +292,11 @@ impl<'a> AIChatPlaceholder<'a> {
             // send icon buttons on the right.
             if point.y >= toolbar_top {
                 if point.x <= input_rect.origin.x + MODEL_CHIP_W {
-                    return Some(AIChatHit::ToggleModelPicker);
+                    return Some(if can_use_model {
+                        AIChatHit::ToggleModelPicker
+                    } else {
+                        AIChatHit::FocusInput
+                    });
                 }
                 let send_x = input_rect.origin.x + input_rect.size.x - 32.0;
                 let attach_x = send_x - 32.0;
@@ -321,8 +306,13 @@ impl<'a> AIChatPlaceholder<'a> {
                 if point.x >= send_x {
                     return Some(if self.is_streaming() {
                         AIChatHit::Stop
-                    } else {
+                    } else if can_use_model
+                        && (!self.state.input.trim().is_empty()
+                            || !self.state.pending_attachments.is_empty())
+                    {
                         AIChatHit::Send
+                    } else {
+                        AIChatHit::FocusInput
                     });
                 }
             }
@@ -366,7 +356,7 @@ impl<'a> AIChatPlaceholder<'a> {
                 });
             }
         }
-        if self.state.messages.is_empty() {
+        if self.state.messages.is_empty() && can_use_model && !self.is_streaming() {
             // Examples grid hit-test (only rendered when no messages).
             for (card, ex) in example_card_rects(rect).iter().zip(self.examples.iter()) {
                 if rect_contains(*card, point) {
@@ -449,6 +439,7 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
         }
 
         paint_panel_surface(cx, &self.theme, rect);
+        let can_use_model = !self.state.available_models.is_empty();
         let input_h = self.input_height();
         let sep_y = rect.origin.y + rect.size.y - input_h;
         paint_panel_body_chrome(cx, &self.theme, rect, sep_y);
@@ -502,6 +493,7 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
                 &self.label_start_with_ai,
                 &self.label_tip_select_elements,
                 &self.examples,
+                !can_use_model || self.is_streaming(),
             );
         } else {
             crate::widgets::ai_chat_transcript::paint_transcript(
@@ -723,8 +715,8 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
         };
         // A turn is sendable with text, with staged attachments, or
         // both (TS parity: an attachment-only message is valid).
-        let send_active =
-            !self.state.input.trim().is_empty() || !self.state.pending_attachments.is_empty();
+        let send_active = can_use_model
+            && (!self.state.input.trim().is_empty() || !self.state.pending_attachments.is_empty());
         let streaming = self.is_streaming();
         let (send_bg, icon_color, send_icon) = if streaming {
             (
