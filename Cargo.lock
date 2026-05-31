@@ -2846,6 +2846,9 @@ dependencies = [
 [[package]]
 name = "op-cli"
 version = "0.1.0"
+dependencies = [
+ "serde_json",
+]
 
 [[package]]
 name = "op-codegen"
