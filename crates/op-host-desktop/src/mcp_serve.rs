@@ -28,7 +28,7 @@
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::path::PathBuf;
 
-use op_editor_core::EditorState;
+use op_editor_core::{EditorCommand, EditorState};
 use op_mcp::{
     add_node_effect_snapshot, add_page_snapshot, align_selected_snapshot, batch_design_snapshot,
     clear_selection_snapshot, copy_node_snapshot, copy_selected_snapshot, count_nodes_snapshot,
@@ -86,6 +86,34 @@ fn process_message(
     path: &std::path::Path,
     line: &str,
 ) -> Result<Option<String>, String> {
+    let mut applier_failed: Option<String> = None;
+    let response = process_message_with_applier(state, line, |state, cmd| {
+        // `EditorState::apply` runs the pre-validate-then-mutate
+        // discipline; `false` means the command rejected and the
+        // document was NOT changed.
+        if !state.apply(cmd.clone()) {
+            return false;
+        }
+        if let Err(e) = save_editor_state(state, path) {
+            applier_failed = Some(format!("save failed: {e}"));
+            return false;
+        }
+        true
+    })?;
+    if let Some(msg) = applier_failed {
+        eprintln!("openpencil-desktop mcp: {msg}");
+    }
+    Ok(response)
+}
+
+pub(crate) fn process_message_with_applier<F>(
+    state: &mut EditorState,
+    line: &str,
+    mut apply: F,
+) -> Result<Option<String>, String>
+where
+    F: FnMut(&mut EditorState, &EditorCommand) -> bool,
+{
     let trimmed = line.trim();
     if trimmed.is_empty() {
         return Ok(None);
@@ -112,27 +140,11 @@ fn process_message(
     // registry snapshots `state` at build time, so it no longer
     // borrows it once the applier closure mutates it.
     let registry = rebuild_registry(state);
-    let mut applier_failed: Option<String> = None;
     let mut out: Vec<u8> = Vec::new();
     {
         let mut input = std::io::Cursor::new(line.as_bytes());
-        run_stdio_with_applier(&registry, &mut input, &mut out, |cmd| {
-            // `EditorState::apply` runs the pre-validate-then-mutate
-            // discipline; `false` means the command rejected and the
-            // document was NOT changed.
-            if !state.apply(cmd.clone()) {
-                return false;
-            }
-            if let Err(e) = save_editor_state(state, path) {
-                applier_failed = Some(format!("save failed: {e}"));
-                return false;
-            }
-            true
-        })
-        .map_err(|e| format!("dispatch: {e}"))?;
-    }
-    if let Some(msg) = applier_failed {
-        eprintln!("openpencil-desktop mcp: {msg}");
+        run_stdio_with_applier(&registry, &mut input, &mut out, |cmd| apply(state, cmd))
+            .map_err(|e| format!("dispatch: {e}"))?;
     }
     let resp = String::from_utf8_lossy(&out).trim().to_string();
     Ok((!resp.is_empty()).then_some(resp))
@@ -262,7 +274,7 @@ fn serve_http_connection<S: std::io::Read + std::io::Write>(
 /// the `\r\n\r\n` header terminator, parses `Content-Length`, then
 /// reads exactly that many body bytes. The header block is capped so
 /// a malformed peer can't exhaust memory.
-fn read_http_request_body<S: std::io::Read>(stream: &mut S) -> Result<String, String> {
+pub(crate) fn read_http_request_body<S: std::io::Read>(stream: &mut S) -> Result<String, String> {
     const MAX_HEADER: usize = 64 * 1024;
     const MAX_BODY: usize = 8 * 1024 * 1024;
     let mut head: Vec<u8> = Vec::new();

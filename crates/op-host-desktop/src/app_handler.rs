@@ -272,6 +272,13 @@ impl ApplicationHandler for DesktopApp {
             WindowEvent::CursorMoved { .. } => None,
             _ => Some(settings_io::fingerprint(self.host.editor_state())),
         };
+        let mcp_cli_before = match &event {
+            WindowEvent::CursorMoved { .. } => None,
+            _ => {
+                let settings = &self.host.editor_state().editor_ui.agent_settings;
+                Some((settings.mcp_cli_enabled, settings.mcp_server.port))
+            }
+        };
         match event {
             WindowEvent::CloseRequested => {
                 // The unsaved-changes prompt can abort the close.
@@ -482,6 +489,12 @@ impl ApplicationHandler for DesktopApp {
                 if self.poll_git_clone_job() {
                     self.redraw_dirty = true;
                 }
+                // Drain live MCP requests. Write tools must apply on the
+                // UI-owned EditorState so canvas state, history and
+                // selection stay canonical.
+                if self.poll_mcp_server() {
+                    self.redraw_dirty = true;
+                }
                 // Keep an open Git panel fresh against external repo
                 // changes — re-request a snapshot at most every 2 s.
                 // The query runs on a worker thread, so this never
@@ -529,7 +542,7 @@ impl ApplicationHandler for DesktopApp {
                     event_loop.set_control_flow(ControlFlow::WaitUntil(
                         Instant::now() + Duration::from_millis(33),
                     ));
-                } else if self.current_figma_import.is_some() {
+                } else if self.current_figma_import.is_some() || self.mcp_server_active() {
                     event_loop.set_control_flow(ControlFlow::WaitUntil(
                         Instant::now() + Duration::from_millis(100),
                     ));
@@ -887,6 +900,12 @@ impl ApplicationHandler for DesktopApp {
             }
             _ => {}
         }
+        if self.reconcile_mcp_server_from_settings() {
+            self.request_redraw(true);
+        }
+        if self.reconcile_mcp_cli_integrations(mcp_cli_before) {
+            self.request_redraw(true);
+        }
         if let Some(before) = settings_before {
             settings_io::save_if_changed(self.host.editor_state(), before);
         }
@@ -912,6 +931,9 @@ impl ApplicationHandler for DesktopApp {
         // a focused-but-uncommitted edit isn't silently dropped.
         self.host.flush_settings_input();
         settings_io::save(self.host.editor_state());
+        if let Some(mut server) = self.mcp_server.take() {
+            server.stop();
+        }
         // Save window geometry for next launch. Guarded on a window
         // having existed — a failed startup reaches `exiting` with
         // unseeded geometry and would clobber the previous good save.
