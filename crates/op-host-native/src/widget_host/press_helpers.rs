@@ -161,6 +161,9 @@ impl WidgetHostNative {
                         .remove_image_gen_profile(&id);
                 }
             }
+            AgentSettingsHit::TestGenConfig(_) => {
+                self.commit_settings_focus_if_any();
+            }
             AgentSettingsHit::ToggleGenConfigEditor(index) => {
                 let was_editing = matches!(
                     self.editor_state.editor_ui.agent_settings.focus,

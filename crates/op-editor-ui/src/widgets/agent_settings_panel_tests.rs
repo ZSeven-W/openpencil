@@ -708,6 +708,7 @@ fn images_tab_expanded_profile_fields_are_focusable() {
     let mut state = EditorState::default();
     state.editor_ui.agent_settings.tab = AgentSettingsTab::Images;
     state.editor_ui.agent_settings.add_image_gen_profile();
+    state.editor_ui.agent_settings.image_gen_profiles[0].api_key = "sk-test".into();
     state.editor_ui.agent_settings.focus = Some(SettingsFocus::ImageGenProfile {
         index: 0,
         field: ImageGenField::Name,
@@ -730,6 +731,13 @@ fn images_tab_expanded_profile_fields_are_focusable() {
             index: 0,
             field: ImageGenField::ApiKey,
         }
+    );
+    assert_eq!(
+        panel.hit_test(
+            rect,
+            crate::Point2D::new(content_x + 430.0, api_field_y + 12.0)
+        ),
+        AgentSettingsHit::TestGenConfig(0)
     );
     assert!(
         panel.content_total_height() > 180.0,
