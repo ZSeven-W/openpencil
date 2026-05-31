@@ -90,7 +90,7 @@ jobs:
             libxkbcommon-dev libxkbcommon-x11-dev \
             libwayland-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
             libegl1-mesa-dev libgles2-mesa-dev libgbm-dev mesa-utils \
-            libfreetype-dev libfontconfig1-dev \
+            libfreetype-dev libfontconfig1-dev fonts-noto-cjk \
             xvfb
       - name: Build (host)
         if: matrix.cross == false && matrix.check_only != true

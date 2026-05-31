@@ -413,9 +413,38 @@ fn map_openai_stop_reason(reason: &str) -> StopReason {
 mod tests {
     use super::*;
     use std::io::{Read, Write};
-    use std::net::TcpListener;
+    use std::net::{TcpListener, TcpStream};
     use std::sync::mpsc as std_mpsc;
     use std::time::Duration;
+
+    fn read_http_request(stream: &mut TcpStream) -> String {
+        let mut buf = Vec::new();
+        let mut chunk = [0_u8; 4096];
+        loop {
+            let n = stream.read(&mut chunk).expect("read request");
+            if n == 0 {
+                break;
+            }
+            buf.extend_from_slice(&chunk[..n]);
+            let Some(header_end) = buf.windows(4).position(|w| w == b"\r\n\r\n") else {
+                continue;
+            };
+            let headers = String::from_utf8_lossy(&buf[..header_end]);
+            let content_len = headers
+                .lines()
+                .find_map(|line| {
+                    let (key, value) = line.split_once(':')?;
+                    key.eq_ignore_ascii_case("content-length")
+                        .then(|| value.trim().parse::<usize>().ok())
+                        .flatten()
+                })
+                .unwrap_or(0);
+            if buf.len() >= header_end + 4 + content_len {
+                break;
+            }
+        }
+        String::from_utf8_lossy(&buf).to_string()
+    }
 
     #[test]
     fn parse_openai_sse_data_extracts_text_delta() {
@@ -445,9 +474,7 @@ mod tests {
             stream
                 .set_read_timeout(Some(Duration::from_secs(2)))
                 .expect("set read timeout");
-            let mut buf = [0_u8; 8192];
-            let n = stream.read(&mut buf).expect("read request");
-            let request = String::from_utf8_lossy(&buf[..n]).to_string();
+            let request = read_http_request(&mut stream);
             req_tx.send(request).expect("send request capture");
 
             let body = "data: {\"error\":{\"message\":\"bad key\"}}\n\n";
