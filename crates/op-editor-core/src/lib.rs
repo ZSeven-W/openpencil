@@ -63,6 +63,8 @@ mod svg_import_tests;
 #[cfg(test)]
 mod test_support;
 #[cfg(test)]
+mod tests_agent_settings;
+#[cfg(test)]
 mod tests_agent_settings_draft;
 #[cfg(test)]
 mod tests_geometry;
