@@ -54,6 +54,41 @@ fn parse_u32_arg(args: &BTreeMap<String, String>, key: &str) -> Result<u32, Tool
     })
 }
 
+fn page_id_index(state: &EditorState) -> BTreeMap<String, u32> {
+    state
+        .doc
+        .pages
+        .as_ref()
+        .map(|pages| {
+            pages
+                .iter()
+                .enumerate()
+                .map(|(idx, page)| (page.id.clone(), idx as u32))
+                .collect()
+        })
+        .unwrap_or_else(|| BTreeMap::from([("0".to_string(), 0)]))
+}
+
+#[allow(clippy::result_large_err)]
+fn parse_page_index(
+    args: &BTreeMap<String, String>,
+    page_ids: &BTreeMap<String, u32>,
+    legacy_key: &str,
+) -> Result<u32, ToolOutcome> {
+    if let Some(page_id) = args.get("pageId").or_else(|| args.get("page_id")) {
+        if let Some(index) = page_ids.get(page_id) {
+            return Ok(*index);
+        }
+        return page_id.parse::<u32>().map_err(|_| {
+            ToolOutcome::Err(
+                ToolErrorCode::InvalidArgument,
+                format!("pageId must be a known page id or u32 index, got {page_id:?}"),
+            )
+        });
+    }
+    parse_u32_arg(args, legacy_key)
+}
+
 /// First-party `add_page` tool — append a fresh empty page.
 pub struct AddPage;
 
@@ -83,14 +118,16 @@ pub fn add_page_snapshot() -> AddPage {
 }
 
 /// First-party `rename_page` tool — set a page's display name.
-pub struct RenamePage;
+pub struct RenamePage {
+    pub page_ids: BTreeMap<String, u32>,
+}
 
 impl McpTool for RenamePage {
     fn name(&self) -> &str {
         "rename_page"
     }
     fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
-        let index = match parse_u32_arg(args, "index") {
+        let index = match parse_page_index(args, &self.page_ids, "index") {
             Ok(v) => v,
             Err(e) => return e,
         };
@@ -115,19 +152,24 @@ impl McpTool for RenamePage {
     }
 }
 
-pub fn rename_page_snapshot() -> RenamePage {
-    RenamePage
+pub fn rename_page_snapshot(state: &EditorState) -> RenamePage {
+    RenamePage {
+        page_ids: page_id_index(state),
+    }
 }
 
 /// First-party `delete_page` tool — remove a page by index.
-pub struct DeletePage;
+pub struct DeletePage {
+    pub tool_name: &'static str,
+    pub page_ids: BTreeMap<String, u32>,
+}
 
 impl McpTool for DeletePage {
     fn name(&self) -> &str {
-        "delete_page"
+        self.tool_name
     }
     fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
-        let index = match parse_u32_arg(args, "index") {
+        let index = match parse_page_index(args, &self.page_ids, "index") {
             Ok(v) => v,
             Err(e) => return e,
         };
@@ -137,48 +179,87 @@ impl McpTool for DeletePage {
     }
 }
 
-pub fn delete_page_snapshot() -> DeletePage {
-    DeletePage
+pub fn delete_page_snapshot(state: &EditorState) -> DeletePage {
+    DeletePage {
+        tool_name: "delete_page",
+        page_ids: page_id_index(state),
+    }
+}
+
+pub fn remove_page_snapshot(state: &EditorState) -> DeletePage {
+    DeletePage {
+        tool_name: "remove_page",
+        page_ids: page_id_index(state),
+    }
 }
 
 /// First-party `duplicate_page` tool — clone the page at `index`.
-pub struct DuplicatePage;
+pub struct DuplicatePage {
+    pub page_ids: BTreeMap<String, u32>,
+}
 
 impl McpTool for DuplicatePage {
     fn name(&self) -> &str {
         "duplicate_page"
     }
     fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
-        let index = match parse_u32_arg(args, "index") {
+        let index = match parse_page_index(args, &self.page_ids, "index") {
             Ok(v) => v,
             Err(e) => return e,
         };
+        let name = match args.get("name") {
+            Some(name) if name.trim().is_empty() => {
+                return ToolOutcome::Err(
+                    ToolErrorCode::InvalidArgument,
+                    "name must not be empty / whitespace-only".into(),
+                );
+            }
+            Some(name) => Some(name.clone()),
+            None => None,
+        };
         let mut out = BTreeMap::new();
         out.insert("wrote".into(), "true".into());
-        ToolOutcome::OkWithCommand(out, EditorCommand::DuplicatePage { index })
+        ToolOutcome::OkWithCommand(out, EditorCommand::DuplicatePage { index, name })
     }
 }
 
-pub fn duplicate_page_snapshot() -> DuplicatePage {
-    DuplicatePage
+pub fn duplicate_page_snapshot(state: &EditorState) -> DuplicatePage {
+    DuplicatePage {
+        page_ids: page_id_index(state),
+    }
 }
 
 /// First-party `reorder_page` tool — move a page from one index to
 /// another.
-pub struct ReorderPage;
+pub struct ReorderPage {
+    pub page_ids: BTreeMap<String, u32>,
+}
 
 impl McpTool for ReorderPage {
     fn name(&self) -> &str {
         "reorder_page"
     }
     fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
-        let from = match parse_u32_arg(args, "from") {
-            Ok(v) => v,
-            Err(e) => return e,
-        };
-        let to = match parse_u32_arg(args, "to") {
-            Ok(v) => v,
-            Err(e) => return e,
+        let (from, to) = if args.contains_key("pageId") || args.contains_key("page_id") {
+            let from = match parse_page_index(args, &self.page_ids, "from") {
+                Ok(v) => v,
+                Err(e) => return e,
+            };
+            let to = match parse_u32_arg(args, "index") {
+                Ok(v) => v,
+                Err(e) => return e,
+            };
+            (from, to)
+        } else {
+            let from = match parse_u32_arg(args, "from") {
+                Ok(v) => v,
+                Err(e) => return e,
+            };
+            let to = match parse_u32_arg(args, "to") {
+                Ok(v) => v,
+                Err(e) => return e,
+            };
+            (from, to)
         };
         let mut out = BTreeMap::new();
         out.insert("wrote".into(), "true".into());
@@ -186,8 +267,10 @@ impl McpTool for ReorderPage {
     }
 }
 
-pub fn reorder_page_snapshot() -> ReorderPage {
-    ReorderPage
+pub fn reorder_page_snapshot(state: &EditorState) -> ReorderPage {
+    ReorderPage {
+        page_ids: page_id_index(state),
+    }
 }
 
 /// First-party `clear_selection` tool — drop the current multi-select.
