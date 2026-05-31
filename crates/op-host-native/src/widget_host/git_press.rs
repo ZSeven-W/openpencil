@@ -6,7 +6,9 @@
 //! after the rail blocks (which already skip a click that lands
 //! inside the Git-panel rect) and before the canvas overlays.
 
-use op_editor_core::{CloneField, GitDiffTarget, GitOverflowView, GitPanelAction};
+use op_editor_core::{
+    CloneField, GitBranchPickerMode, GitDiffTarget, GitOverflowView, GitPanelAction,
+};
 use op_editor_ui::widgets::{GitPanel, GitPanelHit};
 use op_editor_ui::Point2D;
 
@@ -155,6 +157,11 @@ impl WidgetHostNative {
                 panel.branch_picker_open = !panel.branch_picker_open;
                 panel.overflow_open = false;
                 panel.overflow_view = GitOverflowView::Menu;
+                // Always (re)open on the branch list — a prior session's
+                // create / merge sub-mode should never leak back in.
+                panel.branch_picker_mode = GitBranchPickerMode::List;
+                panel.branch_create_draft.clear();
+                panel.branch_create_focused = false;
             }
             Some(GitPanelHit::Overflow) => {
                 // Always (re)open on the top-level menu so a prior
@@ -177,6 +184,9 @@ impl WidgetHostNative {
             Some(GitPanelHit::DismissPopover) => {
                 // Click outside an open popover — close it + swallow.
                 panel.branch_picker_open = false;
+                panel.branch_picker_mode = GitBranchPickerMode::List;
+                panel.branch_create_draft.clear();
+                panel.branch_create_focused = false;
                 panel.overflow_open = false;
                 panel.overflow_view = GitOverflowView::Menu;
                 panel.commit_focused = false;
@@ -201,6 +211,34 @@ impl WidgetHostNative {
                     panel.pending_action = Some(GitPanelAction::MergeBranch(name));
                 }
                 panel.branch_picker_open = false;
+            }
+            Some(GitPanelHit::BranchCreateMode) => {
+                panel.branch_picker_mode = GitBranchPickerMode::Create;
+                panel.branch_create_draft.clear();
+                panel.branch_create_focused = true;
+                panel.commit_focused = false;
+                panel.remote_focused = false;
+                panel.https_focused = false;
+            }
+            Some(GitPanelHit::BranchMergeMode) => {
+                panel.branch_picker_mode = GitBranchPickerMode::Merge;
+                panel.branch_create_focused = false;
+            }
+            Some(GitPanelHit::BranchCreateInput) => {
+                panel.branch_create_focused = true;
+                panel.commit_focused = false;
+                panel.remote_focused = false;
+                panel.https_focused = false;
+            }
+            Some(GitPanelHit::BranchCreateSubmit) => {
+                let name = panel.branch_create_draft.trim().to_string();
+                if !name.is_empty() {
+                    panel.pending_action = Some(GitPanelAction::CreateBranch(name));
+                    panel.branch_picker_mode = GitBranchPickerMode::List;
+                    panel.branch_create_draft.clear();
+                    panel.branch_create_focused = false;
+                    panel.branch_picker_open = false;
+                }
             }
             Some(GitPanelHit::ShowWorkingDiff) => {
                 panel.pending_action = Some(GitPanelAction::ShowDiff(GitDiffTarget::WorkingTree));

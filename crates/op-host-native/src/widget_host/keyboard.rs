@@ -71,6 +71,18 @@ impl WidgetHostNative {
             }
             return false;
         }
+        if self.git_branch_create_focus_active() {
+            if !c.is_control() {
+                self.editor_state
+                    .editor_ui
+                    .git_panel
+                    .branch_create_draft
+                    .push(c);
+                self.mark_dirty();
+                return true;
+            }
+            return false;
+        }
         if self.editor_state.ui.layer_rename.is_some() && !c.is_control() {
             let mut s = [0u8; 4];
             let _ = self.editor_state.rename_append(c.encode_utf8(&mut s));
@@ -264,6 +276,15 @@ impl WidgetHostNative {
         }
         if self.git_https_focus_active() {
             self.editor_state.editor_ui.git_panel.https_draft.pop();
+            self.mark_dirty();
+            return true;
+        }
+        if self.git_branch_create_focus_active() {
+            self.editor_state
+                .editor_ui
+                .git_panel
+                .branch_create_draft
+                .pop();
             self.mark_dirty();
             return true;
         }
@@ -612,6 +633,19 @@ impl WidgetHostNative {
             self.mark_dirty();
             return true;
         }
+        if self.git_branch_create_focus_active() {
+            let panel = &mut self.editor_state.editor_ui.git_panel;
+            let name = panel.branch_create_draft.trim().to_string();
+            if !name.is_empty() {
+                panel.pending_action = Some(op_editor_core::GitPanelAction::CreateBranch(name));
+                panel.branch_picker_mode = op_editor_core::GitBranchPickerMode::List;
+                panel.branch_create_draft.clear();
+                panel.branch_create_focused = false;
+                panel.branch_picker_open = false;
+            }
+            self.mark_dirty();
+            return true;
+        }
         if self.editor_state.ui.layer_rename.is_some() {
             let ok = self.editor_state.rename_commit();
             if ok {
@@ -710,6 +744,14 @@ impl WidgetHostNative {
         // …and the Git HTTPS-credential input.
         if self.git_https_focus_active() {
             self.editor_state.editor_ui.git_panel.https_focused = false;
+            self.mark_dirty();
+            return true;
+        }
+        if self.git_branch_create_focus_active() {
+            let panel = &mut self.editor_state.editor_ui.git_panel;
+            panel.branch_picker_mode = op_editor_core::GitBranchPickerMode::List;
+            panel.branch_create_draft.clear();
+            panel.branch_create_focused = false;
             self.mark_dirty();
             return true;
         }

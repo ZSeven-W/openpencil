@@ -109,6 +109,14 @@ pub enum GitPanelHit {
     /// A branch row's merge button — merge `branches[index]` into
     /// the current branch.
     MergeBranch(usize),
+    /// Footer "新建分支" — enter the inline create-branch form.
+    BranchCreateMode,
+    /// Footer "合并分支" — enter merge mode (pick a branch to merge into HEAD).
+    BranchMergeMode,
+    /// The inline create-branch name input — focus it.
+    BranchCreateInput,
+    /// The inline create-branch submit button — create + switch.
+    BranchCreateSubmit,
     /// The Remotes-section URL input box — focus it.
     RemoteInput,
     /// The Remotes-section "Set origin" button.
