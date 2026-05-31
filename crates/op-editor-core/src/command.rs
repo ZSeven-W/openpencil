@@ -204,7 +204,7 @@ pub enum EditorCommand {
     /// Remove a page by index.
     DeletePage { index: u32 },
     /// Duplicate the page at `index` (clone + insert after).
-    DuplicatePage { index: u32 },
+    DuplicatePage { index: u32, name: Option<String> },
     /// Move the page at `from` to `to`.
     ReorderPage { from: u32, to: u32 },
     /// Clear the multi-selection.

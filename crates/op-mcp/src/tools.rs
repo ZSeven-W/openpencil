@@ -170,6 +170,7 @@ pub fn selection_snapshot(state: &EditorState) -> GetSelection {
 pub struct ListPages {
     pub page_count: usize,
     pub active_page_index: usize,
+    pub ids: String,
     pub names: String,
 }
 
@@ -184,24 +185,33 @@ impl McpTool for ListPages {
             "active_page_index".into(),
             self.active_page_index.to_string(),
         );
+        out.insert("ids".into(), self.ids.clone());
         out.insert("names".into(), self.names.clone());
         ToolOutcome::Ok(out)
     }
 }
 
 pub fn list_pages_snapshot(state: &EditorState) -> ListPages {
-    let names = match state.doc.pages.as_ref() {
-        Some(pages) => pages
-            .iter()
-            .map(|p| p.name.clone())
-            .collect::<Vec<_>>()
-            .join(","),
+    let (ids, names) = match state.doc.pages.as_ref() {
+        Some(pages) => (
+            pages
+                .iter()
+                .map(|p| p.id.clone())
+                .collect::<Vec<_>>()
+                .join(","),
+            pages
+                .iter()
+                .map(|p| p.name.clone())
+                .collect::<Vec<_>>()
+                .join(","),
+        ),
         // Single-page fallback: one implicit "Page 1".
-        None => "Page 1".to_string(),
+        None => ("0".to_string(), "Page 1".to_string()),
     };
     ListPages {
         page_count: state.page_count(),
         active_page_index: state.ui.active_page_index,
+        ids,
         names,
     }
 }

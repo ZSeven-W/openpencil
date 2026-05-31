@@ -317,33 +317,32 @@ fn map_page(positionals: &[String], flags: &Flags) -> Result<Command, String> {
             tool_call("add_page", pairs)
         }
         "remove" | "delete" => {
-            let index = required_pos(positionals, 2, "Usage: op page remove <index>")?;
-            tool_call("delete_page", vec![pair("index", index)])
+            let page_id = required_pos(positionals, 2, "Usage: op page remove <page-id>")?;
+            tool_call("remove_page", vec![pair("pageId", page_id)])
         }
         "rename" => {
-            let index = required_pos(positionals, 2, "Usage: op page rename <index> <name>")?;
-            let name = required_pos(positionals, 3, "Usage: op page rename <index> <name>")?;
+            let page_id = required_pos(positionals, 2, "Usage: op page rename <page-id> <name>")?;
+            let name = required_pos(positionals, 3, "Usage: op page rename <page-id> <name>")?;
             tool_call(
                 "rename_page",
-                vec![pair("index", index), pair("name", name)],
+                vec![pair("pageId", page_id), pair("name", name)],
             )
         }
         "reorder" => {
-            let from = required_pos(
-                positionals,
-                2,
-                "Usage: op page reorder <from-index> <to-index>",
-            )?;
-            let to = required_pos(
-                positionals,
-                3,
-                "Usage: op page reorder <from-index> <to-index>",
-            )?;
-            tool_call("reorder_page", vec![pair("from", from), pair("to", to)])
+            let page_id = required_pos(positionals, 2, "Usage: op page reorder <page-id> <index>")?;
+            let index = required_pos(positionals, 3, "Usage: op page reorder <page-id> <index>")?;
+            tool_call(
+                "reorder_page",
+                vec![pair("pageId", page_id), pair("index", index)],
+            )
         }
         "duplicate" => {
-            let index = required_pos(positionals, 2, "Usage: op page duplicate <index>")?;
-            tool_call("duplicate_page", vec![pair("index", index)])
+            let page_id = required_pos(positionals, 2, "Usage: op page duplicate <page-id>")?;
+            let mut pairs = vec![pair("pageId", page_id)];
+            if let Some(name) = flag_value(flags, "name") {
+                pairs.push(pair("name", name));
+            }
+            tool_call("duplicate_page", pairs)
         }
         _ => Err(format!("unknown page subcommand {sub:?}")),
     }

@@ -109,6 +109,17 @@ impl EditorState {
     /// New node ids are minted past `max_node_id`. Switches the
     /// active page to the clone.
     pub fn duplicate_page(&mut self, idx: usize) -> Option<usize> {
+        self.duplicate_page_with_name(idx, None)
+    }
+
+    /// Duplicate the page at `idx`, optionally overriding the clone's
+    /// display name. Empty / whitespace-only custom names are rejected.
+    pub fn duplicate_page_with_name(&mut self, idx: usize, name: Option<String>) -> Option<usize> {
+        let custom_name = match name {
+            Some(name) if name.trim().is_empty() => return None,
+            Some(name) => Some(name),
+            None => None,
+        };
         // `ensure_pages` first so a single-page document is migrated
         // before the id space is snapshotted — otherwise the cloned
         // page id could collide with the migrated "Page 1" id.
@@ -123,11 +134,8 @@ impl EditorState {
             .iter()
             .map(|c| walkers::deep_clone_with_new_ids(c, &mut next_id, &mut taken))
             .collect();
-        let clone = make_page(
-            new_page_id.into(),
-            format!("{} copy", source.name),
-            new_children,
-        );
+        let clone_name = custom_name.unwrap_or_else(|| format!("{} copy", source.name));
+        let clone = make_page(new_page_id.into(), clone_name, new_children);
         let new_index = idx + 1;
         self.doc.pages.as_mut().unwrap().insert(new_index, clone);
         self.ui.active_page_index = new_index;

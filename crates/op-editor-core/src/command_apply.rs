@@ -241,7 +241,9 @@ impl EditorState {
             EditorCommand::AddPage { name } => self.add_page_with_name(name).is_some(),
             EditorCommand::RenamePage { index, name } => self.rename_page(index as usize, name),
             EditorCommand::DeletePage { index } => self.remove_page(index as usize),
-            EditorCommand::DuplicatePage { index } => self.duplicate_page(index as usize).is_some(),
+            EditorCommand::DuplicatePage { index, name } => self
+                .duplicate_page_with_name(index as usize, name)
+                .is_some(),
             EditorCommand::ReorderPage { from, to } => {
                 self.reorder_page(from as usize, to as usize)
             }

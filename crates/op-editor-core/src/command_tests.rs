@@ -675,6 +675,20 @@ fn add_page_command_accepts_custom_name() {
     assert_eq!(pages[1].name, "Checkout");
 }
 
+#[test]
+fn duplicate_page_command_accepts_custom_name() {
+    let mut s = state_with(vec![rect("n1", "r", 0.0, 0.0, 10.0, 10.0)]);
+    assert!(s.apply(EditorCommand::AddPage {
+        name: Some("Checkout".into()),
+    }));
+    assert!(s.apply(EditorCommand::DuplicatePage {
+        index: 1,
+        name: Some("Checkout copy 2".into()),
+    }));
+    let pages = s.doc.pages.as_ref().expect("multi-page doc");
+    assert_eq!(pages[2].name, "Checkout copy 2");
+}
+
 // --- Variables -------------------------------------------------------
 
 #[test]

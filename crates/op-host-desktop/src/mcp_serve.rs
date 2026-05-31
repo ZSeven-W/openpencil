@@ -44,9 +44,9 @@ use op_mcp::{
     import_svg_snapshot, insert_node_snapshot, instantiate_component_snapshot,
     list_components_snapshot, list_node_kinds_snapshot, list_pages_snapshot,
     list_variables_snapshot, move_node_snapshot, nudge_selected_snapshot, paste_clipboard_snapshot,
-    redo_snapshot, remove_node_effect_snapshot, rename_component_snapshot, rename_page_snapshot,
-    rename_variable_snapshot, reorder_page_snapshot, reorder_selected_snapshot,
-    replace_node_snapshot, run_stdio_with_applier, selection_snapshot,
+    redo_snapshot, remove_node_effect_snapshot, remove_page_snapshot, rename_component_snapshot,
+    rename_page_snapshot, rename_variable_snapshot, reorder_page_snapshot,
+    reorder_selected_snapshot, replace_node_snapshot, run_stdio_with_applier, selection_snapshot,
     set_active_axis_value_snapshot, set_active_page_snapshot, set_active_tool_snapshot,
     set_ellipse_arc_snapshot, set_node_collapsed_snapshot, set_node_corner_radius_snapshot,
     set_node_fill_hex_snapshot, set_node_flip_snapshot, set_node_font_size_snapshot,
@@ -467,10 +467,11 @@ fn rebuild_registry(doc: &EditorState) -> ToolRegistry {
     r.register(Box::new(rename_component_snapshot()));
     r.register(Box::new(set_active_page_snapshot()));
     r.register(Box::new(add_page_snapshot()));
-    r.register(Box::new(rename_page_snapshot()));
-    r.register(Box::new(delete_page_snapshot()));
-    r.register(Box::new(duplicate_page_snapshot()));
-    r.register(Box::new(reorder_page_snapshot()));
+    r.register(Box::new(rename_page_snapshot(doc)));
+    r.register(Box::new(delete_page_snapshot(doc)));
+    r.register(Box::new(remove_page_snapshot(doc)));
+    r.register(Box::new(duplicate_page_snapshot(doc)));
+    r.register(Box::new(reorder_page_snapshot(doc)));
     r
 }
 
@@ -681,7 +682,7 @@ const TOOL_SCHEMAS: &[&str] = &[
     r#"{"name":"get_document_info","description":"Summarize the open document (page count, active page, etc).","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
     r#"{"name":"get_selection","description":"Return the current selection state (ids, count).","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
     r#"{"name":"get_node","description":"Read a node by id with depth-limited descendants.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string","description":"u64 node id"}},"required":["node_id"]}}"#,
-    r#"{"name":"list_pages","description":"List page ids + names.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
+    r#"{"name":"list_pages","description":"List page ids + names. Result includes page_count, active_page_index, ids, and names as comma-separated strings.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
     r#"{"name":"list_variables","description":"List design variables with kinds.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
     r#"{"name":"get_active_theme","description":"Return the active theme axis pinning per axis.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
     r#"{"name":"list_components","description":"List registered components (saved Frames / Groups promoted via Save as Component). Returns count + a `;`-separated record of `name|id` pairs.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
@@ -749,10 +750,11 @@ const TOOL_SCHEMAS: &[&str] = &[
     r#"{"name":"rename_component","description":"Rename a registered component. Name must be non-empty / non-whitespace.","inputSchema":{"type":"object","properties":{"component_id":{"type":"string","description":"positive u64 component id"},"name":{"type":"string"}},"required":["component_id","name"]}}"#,
     r#"{"name":"set_active_page","description":"Switch which page is the active target for subsequent inserts / batch_design / design_* commands. index is 0-based.","inputSchema":{"type":"object","properties":{"index":{"type":"string","description":"0-based page index"}},"required":["index"]}}"#,
     r#"{"name":"add_page","description":"Append a fresh empty page and switch the active page to it. Optional name mirrors the TS MCP page tool. Returns false on id-space exhaustion or an empty name.","inputSchema":{"type":"object","properties":{"name":{"type":"string","description":"Page name (default: Page N)"}}}}"#,
-    r#"{"name":"rename_page","description":"Set a page's display name. Name must be non-empty / non-whitespace.","inputSchema":{"type":"object","properties":{"index":{"type":"string","description":"0-based page index"},"name":{"type":"string"}},"required":["index","name"]}}"#,
-    r#"{"name":"delete_page","description":"Remove a page by index. The applier keeps the active page valid (clamps if needed).","inputSchema":{"type":"object","properties":{"index":{"type":"string","description":"0-based page index"}},"required":["index"]}}"#,
-    r#"{"name":"duplicate_page","description":"Clone the page at index and switch the active page to the clone.","inputSchema":{"type":"object","properties":{"index":{"type":"string","description":"0-based page index"}},"required":["index"]}}"#,
-    r#"{"name":"reorder_page","description":"Move a page from one index to another. `to` is clamped to [0, page_count). The active page tracking follows the move.","inputSchema":{"type":"object","properties":{"from":{"type":"string","description":"0-based source page index"},"to":{"type":"string","description":"0-based target page index"}},"required":["from","to"]}}"#,
+    r#"{"name":"rename_page","description":"Set a page's display name. Accepts TS-style pageId or legacy index. Name must be non-empty / non-whitespace.","inputSchema":{"type":"object","properties":{"pageId":{"type":"string","description":"Page id returned by list_pages"},"index":{"type":"string","description":"0-based page index (legacy)"},"name":{"type":"string"}},"required":["name"]}}"#,
+    r#"{"name":"delete_page","description":"Remove a page by index or pageId. The applier keeps the active page valid (clamps if needed).","inputSchema":{"type":"object","properties":{"pageId":{"type":"string","description":"Page id returned by list_pages"},"index":{"type":"string","description":"0-based page index (legacy)"}}}}"#,
+    r#"{"name":"remove_page","description":"TS-compatible alias for delete_page. Removes a page by pageId or index.","inputSchema":{"type":"object","properties":{"pageId":{"type":"string","description":"Page id returned by list_pages"},"index":{"type":"string","description":"0-based page index"}}}}"#,
+    r#"{"name":"duplicate_page","description":"Clone a page and switch the active page to the clone. Accepts TS-style pageId or legacy index; optional name overrides the clone name.","inputSchema":{"type":"object","properties":{"pageId":{"type":"string","description":"Page id returned by list_pages"},"index":{"type":"string","description":"0-based page index (legacy)"},"name":{"type":"string","description":"Optional clone name"}}}}"#,
+    r#"{"name":"reorder_page","description":"Move a page. Accepts TS-style pageId + index or legacy from + to. Target is clamped to [0, page_count).","inputSchema":{"type":"object","properties":{"pageId":{"type":"string","description":"Page id returned by list_pages"},"index":{"type":"string","description":"0-based target page index"},"from":{"type":"string","description":"0-based source page index (legacy)"},"to":{"type":"string","description":"0-based target page index (legacy)"}}}}"#,
     r#"{"name":"set_active_axis_value","description":"Pin a theme axis to one of its allowed values.","inputSchema":{"type":"object","properties":{"axis":{"type":"string"},"value":{"type":"string"}},"required":["axis","value"]}}"#,
     r#"{"name":"insert_node","description":"Create a new leaf node on the active page.","inputSchema":{"type":"object","properties":{"kind":{"type":"string","enum":["frame","group","rect","ellipse","polygon","line","text","path"]},"name":{"type":"string"},"x":{"type":"string"},"y":{"type":"string"},"width":{"type":"string"},"height":{"type":"string"},"fill_hex":{"type":"string"}},"required":["kind","name","x","y","width","height"]}}"#,
     r#"{"name":"update_node","description":"Patch fields on an existing node. Pass any subset of x/y/width/height/name/fill_hex.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string"},"x":{"type":"string"},"y":{"type":"string"},"width":{"type":"string"},"height":{"type":"string"},"name":{"type":"string"},"fill_hex":{"type":"string"}},"required":["node_id"]}}"#,

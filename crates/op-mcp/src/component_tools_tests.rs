@@ -18,6 +18,12 @@ fn state_with_two_nodes() -> EditorState {
     ])
 }
 
+fn state_with_two_pages() -> EditorState {
+    let mut s = state_with_two_nodes();
+    assert!(s.add_page_with_name(Some("Second".into())).is_some());
+    s
+}
+
 // --- Component commands ----------------------------------------------
 
 #[test]
@@ -109,6 +115,72 @@ fn add_page_tool_accepts_optional_name() {
             assert_eq!(name.as_deref(), Some("Checkout"));
         }
         other => panic!("expected AddPage command with name, got {other:?}"),
+    }
+}
+
+#[test]
+fn rename_page_tool_accepts_ts_page_id() {
+    let s = state_with_two_pages();
+    let page_id = s.doc.pages.as_ref().unwrap()[1].id.clone();
+    let tool = rename_page_snapshot(&s);
+    let mut args = BTreeMap::new();
+    args.insert("pageId".into(), page_id);
+    args.insert("name".into(), "Renamed".into());
+    match tool.call(&args) {
+        ToolOutcome::OkWithCommand(_, EditorCommand::RenamePage { index, name }) => {
+            assert_eq!(index, 1);
+            assert_eq!(name, "Renamed");
+        }
+        other => panic!("expected RenamePage command from pageId, got {other:?}"),
+    }
+}
+
+#[test]
+fn remove_page_alias_accepts_ts_page_id() {
+    let s = state_with_two_pages();
+    let page_id = s.doc.pages.as_ref().unwrap()[1].id.clone();
+    let tool = remove_page_snapshot(&s);
+    let mut args = BTreeMap::new();
+    args.insert("pageId".into(), page_id);
+    match tool.call(&args) {
+        ToolOutcome::OkWithCommand(_, EditorCommand::DeletePage { index }) => {
+            assert_eq!(index, 1);
+        }
+        other => panic!("expected DeletePage command from remove_page alias, got {other:?}"),
+    }
+}
+
+#[test]
+fn reorder_page_tool_accepts_ts_page_id_and_index() {
+    let s = state_with_two_pages();
+    let page_id = s.doc.pages.as_ref().unwrap()[1].id.clone();
+    let tool = reorder_page_snapshot(&s);
+    let mut args = BTreeMap::new();
+    args.insert("pageId".into(), page_id);
+    args.insert("index".into(), "0".into());
+    match tool.call(&args) {
+        ToolOutcome::OkWithCommand(_, EditorCommand::ReorderPage { from, to }) => {
+            assert_eq!(from, 1);
+            assert_eq!(to, 0);
+        }
+        other => panic!("expected ReorderPage command from pageId/index, got {other:?}"),
+    }
+}
+
+#[test]
+fn duplicate_page_tool_accepts_ts_page_id_and_optional_name() {
+    let s = state_with_two_pages();
+    let page_id = s.doc.pages.as_ref().unwrap()[1].id.clone();
+    let tool = duplicate_page_snapshot(&s);
+    let mut args = BTreeMap::new();
+    args.insert("pageId".into(), page_id);
+    args.insert("name".into(), "Second copy 2".into());
+    match tool.call(&args) {
+        ToolOutcome::OkWithCommand(_, EditorCommand::DuplicatePage { index, name }) => {
+            assert_eq!(index, 1);
+            assert_eq!(name.as_deref(), Some("Second copy 2"));
+        }
+        other => panic!("expected DuplicatePage command from pageId/name, got {other:?}"),
     }
 }
 

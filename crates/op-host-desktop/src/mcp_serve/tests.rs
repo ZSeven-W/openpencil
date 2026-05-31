@@ -56,7 +56,7 @@ fn tools_list_response_includes_all_registered_tools() {
     // TOOL_SCHEMAS without being added to the list below.
     assert_eq!(
         TOOL_SCHEMAS.len(),
-        82,
+        83,
         "tools/list catalog count must match the registered tools — add the new tool to this test"
     );
     // Production catalog excludes debug tools (we removed the
@@ -148,6 +148,7 @@ fn tools_list_response_includes_all_registered_tools() {
         "add_page",
         "rename_page",
         "delete_page",
+        "remove_page",
         "duplicate_page",
         "reorder_page",
         "set_variable_color",

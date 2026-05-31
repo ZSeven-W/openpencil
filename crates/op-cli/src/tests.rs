@@ -94,6 +94,83 @@ fn parse_args_maps_page_add_name_alias_to_rust_tool() {
 }
 
 #[test]
+fn parse_args_maps_page_remove_to_ts_remove_page_alias() {
+    let args = vec!["page".to_string(), "remove".to_string(), "n2".to_string()];
+    let p = parse_args(&args).expect("parse");
+    assert_eq!(
+        p.command,
+        Command::ToolCall {
+            tool: "remove_page".to_string(),
+            args: vec![("pageId".to_string(), "n2".to_string())],
+        }
+    );
+}
+
+#[test]
+fn parse_args_maps_page_rename_to_ts_page_id_shape() {
+    let args = vec![
+        "page".to_string(),
+        "rename".to_string(),
+        "n2".to_string(),
+        "Checkout".to_string(),
+    ];
+    let p = parse_args(&args).expect("parse");
+    assert_eq!(
+        p.command,
+        Command::ToolCall {
+            tool: "rename_page".to_string(),
+            args: vec![
+                ("pageId".to_string(), "n2".to_string()),
+                ("name".to_string(), "Checkout".to_string()),
+            ],
+        }
+    );
+}
+
+#[test]
+fn parse_args_maps_page_reorder_to_ts_page_id_shape() {
+    let args = vec![
+        "page".to_string(),
+        "reorder".to_string(),
+        "n2".to_string(),
+        "0".to_string(),
+    ];
+    let p = parse_args(&args).expect("parse");
+    assert_eq!(
+        p.command,
+        Command::ToolCall {
+            tool: "reorder_page".to_string(),
+            args: vec![
+                ("pageId".to_string(), "n2".to_string()),
+                ("index".to_string(), "0".to_string()),
+            ],
+        }
+    );
+}
+
+#[test]
+fn parse_args_maps_page_duplicate_name_to_ts_page_id_shape() {
+    let args = vec![
+        "page".to_string(),
+        "duplicate".to_string(),
+        "n2".to_string(),
+        "--name".to_string(),
+        "Checkout copy".to_string(),
+    ];
+    let p = parse_args(&args).expect("parse");
+    assert_eq!(
+        p.command,
+        Command::ToolCall {
+            tool: "duplicate_page".to_string(),
+            args: vec![
+                ("pageId".to_string(), "n2".to_string()),
+                ("name".to_string(), "Checkout copy".to_string()),
+            ],
+        }
+    );
+}
+
+#[test]
 fn parse_args_maps_ts_insert_json_alias_to_rust_tool() {
     let args = vec![
         "insert".to_string(),

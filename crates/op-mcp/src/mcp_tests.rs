@@ -374,6 +374,16 @@ fn list_pages_reports_count_and_names() {
 }
 
 #[test]
+fn list_pages_reports_page_ids_for_multi_page_docs() {
+    let mut s = state_with(vec![]);
+    assert!(s.add_page_with_name(Some("Second".into())).is_some());
+    let snap = list_pages_snapshot(&s);
+    let pages = s.doc.pages.as_ref().expect("multi-page doc");
+    let ids: Vec<&str> = snap.ids.split(',').collect();
+    assert_eq!(ids, vec![pages[0].id.as_str(), pages[1].id.as_str()]);
+}
+
+#[test]
 fn get_node_returns_record_for_known_id() {
     let s = sample();
     let tool = get_node_snapshot(&s);

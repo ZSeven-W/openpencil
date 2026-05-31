@@ -94,13 +94,14 @@ pub use node_attr_tools::{
 };
 pub use page_tools::{
     add_page_snapshot, clear_selection_snapshot, cycle_active_axis_value_snapshot,
-    delete_page_snapshot, duplicate_page_snapshot, redo_snapshot, rename_page_snapshot,
-    reorder_page_snapshot, set_active_page_snapshot, set_active_tool_snapshot,
-    set_node_hidden_snapshot, set_node_locked_snapshot, set_selection_set_snapshot,
-    set_selection_snapshot, set_viewport_snapshot, toggle_node_selection_snapshot, undo_snapshot,
-    AddPage, ClearSelection, CycleActiveAxisValue, DeletePage, DuplicatePage, Redo, RenamePage,
-    ReorderPage, SetActivePage, SetActiveTool, SetNodeHidden, SetNodeLocked, SetSelection,
-    SetSelectionSet, SetViewport, ToggleNodeSelection, Undo,
+    delete_page_snapshot, duplicate_page_snapshot, redo_snapshot, remove_page_snapshot,
+    rename_page_snapshot, reorder_page_snapshot, set_active_page_snapshot,
+    set_active_tool_snapshot, set_node_hidden_snapshot, set_node_locked_snapshot,
+    set_selection_set_snapshot, set_selection_snapshot, set_viewport_snapshot,
+    toggle_node_selection_snapshot, undo_snapshot, AddPage, ClearSelection, CycleActiveAxisValue,
+    DeletePage, DuplicatePage, Redo, RenamePage, ReorderPage, SetActivePage, SetActiveTool,
+    SetNodeHidden, SetNodeLocked, SetSelection, SetSelectionSet, SetViewport, ToggleNodeSelection,
+    Undo,
 };
 pub use parser::parse_tool_call;
 pub use scalar_vars::{
