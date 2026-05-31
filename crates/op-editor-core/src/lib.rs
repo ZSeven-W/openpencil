@@ -79,8 +79,8 @@ pub use agent_settings::{
     ImageGenProfile, ImageGenProvider, ImageSearchField, McpCli, McpServer, SettingsFocus,
 };
 pub use agent_settings_builtin_presets::{
-    builtin_agent_preset, infer_builtin_agent_preset, BuiltinAgentPreset, BuiltinAgentPresetKey,
-    BUILTIN_AGENT_PRESETS,
+    builtin_agent_preset, infer_builtin_agent_preset, normalize_builtin_agent_preset,
+    BuiltinAgentPreset, BuiltinAgentPresetKey, BUILTIN_AGENT_PRESETS,
 };
 pub use align::AlignAction;
 pub use chat::{

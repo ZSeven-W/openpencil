@@ -609,7 +609,7 @@ impl AgentSettings {
         self.next_builtin_agent_id = self.next_builtin_agent_id.max(1).saturating_add(1);
         self.builtin_agents.push(BuiltinAgentConfig {
             id: id.clone(),
-            preset: infer_builtin_agent_preset(kind, &base_url),
+            preset: infer_builtin_agent_preset(kind, &base_url, &model),
             display_name,
             kind,
             api_key,
