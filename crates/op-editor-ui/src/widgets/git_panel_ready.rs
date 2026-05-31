@@ -264,14 +264,15 @@ impl GitPanel<'_> {
         if self.state.recent_commits.is_empty() {
             // Empty log → a single centered `git.history.empty` line
             // (TS `flex items-center justify-center p-6 text-xs
-            // text-muted-foreground`).
+            // text-muted-foreground`). +14 gives the `p-6`-style top
+            // breathing room so it doesn't crowd the commit-box divider.
             let label = self.t("git.history.empty");
             let tw = cx.backend.measure_text(label, 12.0);
             self.text(
                 cx,
                 label,
                 rect.origin.x + (rect.size.x - tw) / 2.0,
-                y,
+                y + 14.0,
                 12.0,
                 t.muted_foreground,
             );
