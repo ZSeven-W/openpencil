@@ -26,7 +26,9 @@ use super::ai_chat_transcript_steps::{
 };
 use super::ai_chat_transcript_text::char_display_units;
 pub(crate) use super::ai_chat_transcript_text::wrap_units;
-use super::ai_chat_transcript_tools::tool_lines;
+use super::ai_chat_transcript_tools::{
+    build_tool_panel, paint_tool_panel, ToolPanel, ToolPanelLayout,
+};
 
 /// Body text size used throughout the transcript.
 const BODY_FONT: f32 = 12.0;
@@ -120,7 +122,7 @@ pub(crate) struct TranscriptItem {
     pub role: ChatRole,
     pub steps: Vec<ActionStep>,
     pub thinking: Option<Collapsible>,
-    pub tools: Option<Collapsible>,
+    pub tools: Option<ToolPanel>,
     pub design_blocks: Vec<DesignBlock>,
     pub bubble: Option<TextBubble>,
     /// Absolute thumbnail rects, parallel to `messages[i].images`
@@ -287,20 +289,20 @@ fn build_item(
         &|| wrap_units(&thinking_text, budget),
         &mut y,
     );
-    let tools = build_collapsible(
-        !msg.tool_calls.is_empty(),
-        msg.tools_collapsed,
-        op_i18n::translate(locale, "ai.toolCalls")
-            .replace("{{count}}", &msg.tool_calls.len().to_string()),
-        &|| {
-            tool_lines(
-                &msg.tool_calls,
-                budget,
-                if msg.streaming { "running" } else { "done" },
-            )
+    let (tools, next_y) = build_tool_panel(
+        &msg.tool_calls,
+        ToolPanelLayout {
+            collapsed: msg.tools_collapsed,
+            label: op_i18n::translate(locale, "ai.toolCalls")
+                .replace("{{count}}", &msg.tool_calls.len().to_string()),
+            x,
+            y,
+            width: bubble_w,
+            budget,
+            default_status: if msg.streaming { "running" } else { "done" },
         },
-        &mut y,
     );
+    y = next_y;
     let (design_blocks, next_y) =
         place_design_blocks(pending_design_blocks, x, y, bubble_w, SUB_GAP);
     y = next_y;
@@ -666,7 +668,7 @@ pub(crate) fn paint_transcript(
             paint_collapsible(cx, theme, block);
         }
         if let Some(block) = &item.tools {
-            paint_collapsible(cx, theme, block);
+            paint_tool_panel(cx, theme, block);
         }
         for block in &item.design_blocks {
             paint_design_block(cx, theme, block);
