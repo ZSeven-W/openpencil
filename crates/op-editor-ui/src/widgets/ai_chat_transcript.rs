@@ -93,6 +93,7 @@ pub(crate) struct ActionStep {
     pub rect: Rect,
     pub label: String,
     pub details: Vec<String>,
+    pub expanded: bool,
     pub done: bool,
     pub active: bool,
     pub failed: bool,
@@ -258,11 +259,13 @@ fn build_item(
             .iter()
             .flat_map(|line| wrap_units(line, budget.saturating_sub(4)))
             .collect();
-        let step_h = action_step_height(details.len());
+        let expanded = active;
+        let step_h = action_step_height(expanded, details.len());
         steps.push(ActionStep {
             rect: Rect::xywh(x, y, bubble_w, step_h),
             label: step.title.clone(),
             details,
+            expanded,
             done,
             active,
             failed,
@@ -395,8 +398,8 @@ fn build_item(
     )
 }
 
-fn action_step_height(detail_count: usize) -> f32 {
-    if detail_count == 0 {
+fn action_step_height(expanded: bool, detail_count: usize) -> f32 {
+    if !expanded || detail_count == 0 {
         ACTION_STEP_H
     } else {
         ACTION_STEP_H + ACTION_DETAIL_GAP + detail_count as f32 * ACTION_DETAIL_LINE_H
@@ -528,7 +531,22 @@ fn paint_action_step(cx: &mut PaintCx<'_>, theme: &Theme, step: &ActionStep) {
         11.0,
         label_color,
     );
-    if !step.details.is_empty() {
+    draw_icon(
+        cx.backend,
+        if step.expanded {
+            Icon::ChevronDown
+        } else {
+            Icon::ChevronRight
+        },
+        Point2D::new(
+            step.rect.origin.x + step.rect.size.x - 20.0,
+            step.rect.origin.y + 7.0,
+        ),
+        14.0,
+        theme.muted_foreground,
+        1.5,
+    );
+    if step.expanded && !step.details.is_empty() {
         cx.backend.save();
         cx.backend.clip_rect(step.rect);
         let mut baseline = step.rect.origin.y + ACTION_STEP_H + ACTION_DETAIL_GAP + 9.0;
