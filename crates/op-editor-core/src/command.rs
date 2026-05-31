@@ -141,6 +141,9 @@ pub enum EditorCommand {
         height: Option<i32>,
         name: Option<String>,
         fill_hex: Option<String>,
+        /// `None` updates on the active page; `Some` targets a page id
+        /// or legacy page index.
+        page_id: Option<String>,
     },
     /// Remove a node + all its descendants.
     DeleteNode { node_id: NodeId },

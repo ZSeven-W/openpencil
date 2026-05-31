@@ -191,6 +191,7 @@ fn repair_mobile_content_sections(sink: &mut dyn DocSink, root_id: &str) {
             height: None,
             name: None,
             fill_hex: None,
+            page_id: None,
         });
     }
     for node_id in repairs.placeholder_tiles {
@@ -208,6 +209,7 @@ fn repair_mobile_content_sections(sink: &mut dyn DocSink, root_id: &str) {
             height: Some(side),
             name: None,
             fill_hex: None,
+            page_id: None,
         });
     }
 }
@@ -256,6 +258,7 @@ fn adjust_root_height_to_content(sink: &mut dyn DocSink, root_id: &str) {
             height: Some(height),
             name: None,
             fill_hex: None,
+            page_id: None,
         });
     }
 }

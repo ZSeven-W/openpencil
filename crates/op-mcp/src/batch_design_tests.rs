@@ -132,6 +132,7 @@ fn batch_design_accepts_single_update_operation() {
                 height,
                 name,
                 fill_hex,
+                page_id,
             },
         ) => {
             assert_eq!(result.get("count"), Some(&"1".to_string()));
@@ -142,6 +143,7 @@ fn batch_design_accepts_single_update_operation() {
             assert_eq!(height, Some(32));
             assert_eq!(name.as_deref(), Some("Updated title"));
             assert_eq!(fill_hex.as_deref(), Some("#112233"));
+            assert_eq!(page_id, None);
         }
         other => panic!("expected UpdateNode command, got {other:?}"),
     }

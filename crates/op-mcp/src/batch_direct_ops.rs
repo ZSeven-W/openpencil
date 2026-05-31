@@ -68,6 +68,7 @@ fn parse_update_operation(body: &str) -> Result<EditorCommand, String> {
         height,
         name,
         fill_hex,
+        page_id: None,
     })
 }
 

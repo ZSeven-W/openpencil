@@ -31,3 +31,29 @@ fn parse_args_maps_insert_parent_and_page_flags_to_ts_args() {
         }
     );
 }
+
+#[test]
+fn parse_args_maps_update_page_flag_to_ts_page_arg() {
+    let p = parse_args(&[
+        "update".to_string(),
+        "n10".to_string(),
+        r##"{"name":"Updated","x":5,"fill":[{"type":"solid","color":"#123456"}]}"##.to_string(),
+        "--page".to_string(),
+        "page-2".to_string(),
+    ])
+    .expect("parse update");
+
+    assert_eq!(
+        p.command,
+        Command::ToolCall {
+            tool: "update_node".to_string(),
+            args: vec![
+                ("node_id".to_string(), "n10".to_string()),
+                ("name".to_string(), "Updated".to_string()),
+                ("x".to_string(), "5".to_string()),
+                ("fill_hex".to_string(), "#123456".to_string()),
+                ("pageId".to_string(), "page-2".to_string()),
+            ],
+        }
+    );
+}

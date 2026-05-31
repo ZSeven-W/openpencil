@@ -12,6 +12,7 @@ use std::collections::BTreeMap;
 use jian_ops_schema::variable::VariableKind;
 use op_editor_core::EditorState;
 use op_editor_core::NodeId;
+use serde_json::Value;
 
 use super::{EditorCommand, McpTool, ToolErrorCode, ToolOutcome};
 use crate::insert_node_args::{insert_node_params, InsertNodeParams};
@@ -237,21 +238,25 @@ impl McpTool for UpdateNode {
         "update_node"
     }
     fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
-        let node_id = match parse_node_id(args, "node_id") {
+        let node_id = match parse_node_id_alias(args, "node_id", "nodeId") {
             Ok(v) => v,
             Err(e) => return e,
         };
-        let x = parse_opt_i32(args, "x");
-        let y = parse_opt_i32(args, "y");
-        let width = parse_opt_i32(args, "width");
-        let height = parse_opt_i32(args, "height");
+        let patch_args = match update_patch_args(args) {
+            Ok(v) => v,
+            Err(e) => return e,
+        };
+        let x = parse_opt_i32(&patch_args, "x");
+        let y = parse_opt_i32(&patch_args, "y");
+        let width = parse_opt_i32(&patch_args, "width");
+        let height = parse_opt_i32(&patch_args, "height");
         for (lab, v) in [("x", &x), ("y", &y), ("width", &width), ("height", &height)] {
             if let Err(e) = v {
                 return ToolOutcome::Err(ToolErrorCode::InvalidArgument, format!("{lab}: {e}"));
             }
         }
-        let name = args.get("name").cloned();
-        let fill_hex = match args.get("fill_hex") {
+        let name = patch_args.get("name").cloned();
+        let fill_hex = match patch_args.get("fill_hex") {
             None => None,
             Some(s) if !validate_hex(s) => {
                 return ToolOutcome::Err(
@@ -265,6 +270,13 @@ impl McpTool for UpdateNode {
         let y = y.unwrap();
         let width = width.unwrap();
         let height = height.unwrap();
+        let page_id = args
+            .get("pageId")
+            .or_else(|| args.get("page_id"))
+            .or_else(|| args.get("page"))
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .map(str::to_string);
         if x.is_none()
             && y.is_none()
             && width.is_none()
@@ -289,6 +301,7 @@ impl McpTool for UpdateNode {
                 height,
                 name,
                 fill_hex,
+                page_id,
             },
         )
     }
@@ -296,6 +309,113 @@ impl McpTool for UpdateNode {
 
 pub fn update_node_snapshot() -> UpdateNode {
     UpdateNode
+}
+
+#[allow(clippy::result_large_err)]
+fn parse_node_id_alias(
+    args: &BTreeMap<String, String>,
+    snake_key: &str,
+    camel_key: &str,
+) -> Result<NodeId, ToolOutcome> {
+    if args.contains_key(snake_key) {
+        return parse_node_id(args, snake_key);
+    }
+    let Some(raw) = args.get(camel_key) else {
+        return Err(ToolOutcome::Err(
+            ToolErrorCode::MissingArgument,
+            format!("{snake_key} is required"),
+        ));
+    };
+    NodeId::new_opt(raw.as_str()).ok_or_else(|| {
+        ToolOutcome::Err(
+            ToolErrorCode::InvalidArgument,
+            format!("{camel_key} must be a non-empty node id"),
+        )
+    })
+}
+
+#[allow(clippy::result_large_err)]
+fn update_patch_args(
+    args: &BTreeMap<String, String>,
+) -> Result<BTreeMap<String, String>, ToolOutcome> {
+    let Some(raw) = args.get("data") else {
+        return Ok(args.clone());
+    };
+    let value: Value = serde_json::from_str(raw).map_err(|e| {
+        ToolOutcome::Err(
+            ToolErrorCode::InvalidArgument,
+            format!("data must be a JSON object: {e}"),
+        )
+    })?;
+    let Some(obj) = value.as_object() else {
+        return Err(ToolOutcome::Err(
+            ToolErrorCode::InvalidArgument,
+            "data must be a JSON object".into(),
+        ));
+    };
+    let mut out = BTreeMap::new();
+    if let Some(name) = json_scalar_to_string(obj.get("name").or_else(|| obj.get("content"))) {
+        out.insert("name".into(), name);
+    }
+    for key in ["x", "y", "width", "height"] {
+        if let Some(value) = obj.get(key) {
+            let Some(raw) = json_scalar_to_string(Some(value)) else {
+                return Err(ToolOutcome::Err(
+                    ToolErrorCode::InvalidArgument,
+                    format!("data.{key} must be a string or number"),
+                ));
+            };
+            out.insert(key.into(), raw);
+        }
+    }
+    if let Some(fill_hex) = json_fill_hex_field(obj)? {
+        out.insert("fill_hex".into(), fill_hex);
+    }
+    Ok(out)
+}
+
+#[allow(clippy::result_large_err)]
+fn json_fill_hex_field(
+    obj: &serde_json::Map<String, Value>,
+) -> Result<Option<String>, ToolOutcome> {
+    if let Some(v) = obj.get("fill_hex").or_else(|| obj.get("fillHex")) {
+        return json_scalar_to_string(Some(v)).map(Some).ok_or_else(|| {
+            ToolOutcome::Err(
+                ToolErrorCode::InvalidArgument,
+                "data.fill_hex must be a string".into(),
+            )
+        });
+    }
+    let Some(fill) = obj.get("fill") else {
+        return Ok(None);
+    };
+    match fill {
+        Value::String(s) => Ok(Some(s.clone())),
+        Value::Object(fill_obj) => Ok(json_scalar_to_string(fill_obj.get("color"))),
+        Value::Array(items) => {
+            for item in items {
+                if let Value::Object(fill_obj) = item {
+                    if let Some(color) = json_scalar_to_string(fill_obj.get("color")) {
+                        return Ok(Some(color));
+                    }
+                }
+            }
+            Ok(None)
+        }
+        _ => Err(ToolOutcome::Err(
+            ToolErrorCode::InvalidArgument,
+            "data.fill must be a hex string, fill object, or fill array".into(),
+        )),
+    }
+}
+
+fn json_scalar_to_string(value: Option<&Value>) -> Option<String> {
+    match value? {
+        Value::String(s) => Some(s.clone()),
+        Value::Number(n) => Some(n.to_string()),
+        Value::Bool(v) => Some(v.to_string()),
+        _ => None,
+    }
 }
 
 /// Parse an optional i32 arg. `Ok(None)` when absent, `Ok(Some)` on a

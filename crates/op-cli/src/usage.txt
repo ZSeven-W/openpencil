@@ -16,7 +16,8 @@ COMMON COMMANDS:
   op selection                            get current selection
   op insert <json|@file|-> [--parent P] [--page PAGE]
                                           insert a leaf node
-  op update <id> <json|@file|->           patch x/y/width/height/name/fill
+  op update <id> <json|@file|-> [--page PAGE]
+                                          patch x/y/width/height/name/fill
   op delete <id>                          delete a node
   op read-nodes [ids] [--depth N] [--vars] [--page P] [--file F]
   op move <id> [--parent P]               reparent a node (empty parent = page root)
