@@ -314,6 +314,9 @@ impl WidgetHostNative {
                 }
             }
         }
+        if self.update_chat_design_hover(x, y, over_topmost) {
+            return true;
+        }
         if let Some(drag) = self.rotate_drag {
             let cursor_angle = (y - drag.center_screen_y).atan2(x - drag.center_screen_x);
             let new_rotation = drag.start_rotation + (cursor_angle - drag.start_cursor_angle);

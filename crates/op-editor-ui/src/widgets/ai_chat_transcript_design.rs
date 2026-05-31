@@ -25,6 +25,7 @@ pub(crate) struct DesignBlock {
     pub label: String,
     pub streaming: bool,
     pub code: String,
+    pub copy_visible: bool,
     pub code_lines: Vec<String>,
 }
 
@@ -146,6 +147,7 @@ pub(crate) fn place_design_blocks(
     width: f32,
     gap: f32,
     expanded_overrides: &[Option<bool>],
+    hovered_index: Option<usize>,
 ) -> (Vec<DesignBlock>, f32) {
     const BODY_PAD_Y: f32 = 8.0;
     const BODY_LINE_H: f32 = 13.0;
@@ -189,6 +191,7 @@ pub(crate) fn place_design_blocks(
             label: pending.label,
             streaming: pending.streaming,
             code: pending.code,
+            copy_visible: hovered_index == Some(index),
             code_lines,
         });
         y += DESIGN_BLOCK_H + body_h + gap;
@@ -252,16 +255,18 @@ pub(crate) fn paint_design_block(cx: &mut PaintCx<'_>, theme: &Theme, block: &De
     );
     cx.backend.restore();
 
-    let mut copy_color = theme.muted_foreground;
-    copy_color.a *= 0.5;
-    draw_icon(
-        cx.backend,
-        Icon::Copy,
-        Point2D::new(block.copy.origin.x + 4.0, block.copy.origin.y + 4.0),
-        12.0,
-        copy_color,
-        1.5,
-    );
+    if block.copy_visible {
+        let mut copy_color = theme.muted_foreground;
+        copy_color.a *= 0.5;
+        draw_icon(
+            cx.backend,
+            Icon::Copy,
+            Point2D::new(block.copy.origin.x + 4.0, block.copy.origin.y + 4.0),
+            12.0,
+            copy_color,
+            1.5,
+        );
+    }
 
     let mut chevron_color = theme.muted_foreground;
     chevron_color.a *= 0.45;
