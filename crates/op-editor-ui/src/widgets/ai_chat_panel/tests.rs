@@ -22,6 +22,46 @@ fn examples_grid_has_four_cards() {
     assert_eq!(example_cards(op_editor_core::Locale::EnUs).len(), 4);
 }
 
+fn assert_close(actual: f32, expected: f32) {
+    assert!(
+        (actual - expected).abs() < 1e-4,
+        "expected {actual} to be close to {expected}"
+    );
+}
+
+#[test]
+fn paint_collapsed_bar_matches_ts_minimized_bar_style() {
+    let mut s = EditorState::new();
+    s.chat.collapsed = true;
+    let panel = AIChatPlaceholder::from_editor(&s);
+    let rect = Rect::xywh(0.0, 0.0, AI_CHAT_COLLAPSED_WIDTH, AI_CHAT_COLLAPSED_HEIGHT);
+    let mut backend = PanelPaintBackend::default();
+    let mut cx = PaintCx {
+        backend: &mut backend,
+    };
+
+    panel.paint(&mut cx, rect);
+
+    // TS: `h-8 bg-card rounded-lg gap-1.5 px-3`, with 13px
+    // MessageSquare, 12px chevron, and muted 12px title text.
+    assert_close(AI_CHAT_COLLAPSED_HEIGHT, 32.0);
+    assert_eq!(backend.round_rects[0].0, rect);
+    assert_close(backend.round_rects[0].1, 8.0);
+    assert_eq!(backend.round_rects[0].2, panel.theme.card);
+    assert_eq!(backend.texts[0].0, "New Chat");
+    assert_close(backend.texts[0].1, 12.0);
+    assert_eq!(
+        backend.texts[0].2,
+        to_jian_color(panel.theme.muted_foreground)
+    );
+    assert_close(backend.texts[0].3.x, 12.0 + 13.0 + 6.0);
+    assert_eq!(backend.svg_strokes.len(), 2);
+    assert_close(backend.svg_strokes[0].0.x, 12.0);
+    assert_close(backend.svg_strokes[0].1, 13.0);
+    assert_close(backend.svg_strokes[1].0.x, rect.size.x - 12.0 - 12.0);
+    assert_close(backend.svg_strokes[1].1, 12.0);
+}
+
 #[test]
 fn from_editor_tracks_selection_count_for_toolbar() {
     let mut s = EditorState::new();
@@ -481,6 +521,9 @@ fn hit_test_resolves_design_block_copy_button() {
 #[derive(Default)]
 struct PanelPaintBackend {
     fills: Vec<(Rect, crate::Color)>,
+    round_rects: Vec<(Rect, f32, crate::Color)>,
+    texts: Vec<(String, f32, jian_core::scene::Color, Point2D)>,
+    svg_strokes: Vec<(Point2D, f32, crate::Color, f32)>,
     stroke_lines: usize,
 }
 
@@ -491,7 +534,12 @@ impl crate::RenderBackend for PanelPaintBackend {
         self.fills.push((rect, color));
     }
     fn stroke_rect(&mut self, _: Rect, _: crate::Color, _: f32) {}
-    fn draw_text(&mut self, _: &crate::TextLayout, _: Point2D) {}
+    fn draw_text(&mut self, layout: &crate::TextLayout, origin: Point2D) {
+        if let Some(run) = layout.runs().first() {
+            self.texts
+                .push((run.content.clone(), run.font_size, run.color, origin));
+        }
+    }
     fn clip_rect(&mut self, _: Rect) {}
     fn save(&mut self) {}
     fn restore(&mut self) {}
@@ -499,9 +547,20 @@ impl crate::RenderBackend for PanelPaintBackend {
     fn stroke_line(&mut self, _: Point2D, _: Point2D, _: crate::Color, _: f32) {
         self.stroke_lines += 1;
     }
-    fn fill_round_rect(&mut self, _: Rect, _: f32, _: crate::Color) {}
+    fn fill_round_rect(&mut self, rect: Rect, radius: f32, color: crate::Color) {
+        self.round_rects.push((rect, radius, color));
+    }
     fn stroke_round_rect(&mut self, _: Rect, _: f32, _: crate::Color, _: f32) {}
-    fn stroke_svg_path(&mut self, _: &str, _: Point2D, _: f32, _: crate::Color, _: f32) {}
+    fn stroke_svg_path(
+        &mut self,
+        _: &str,
+        top_left: Point2D,
+        size: f32,
+        color: crate::Color,
+        width: f32,
+    ) {
+        self.svg_strokes.push((top_left, size, color, width));
+    }
     fn resize(&mut self, _: u32, _: u32) {}
     fn dpi_scale(&self) -> f32 {
         1.0
