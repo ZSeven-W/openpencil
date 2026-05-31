@@ -11,57 +11,13 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::io::{self, Read, Write};
 
+mod codegen_cli;
+
 /// Default HTTP MCP port, matching TS `@zseven-w/pen-mcp`.
 const DEFAULT_PORT: u16 = 3100;
 const MCP_PATH: &str = "/mcp";
 
-const USAGE: &str = "\
-op - OpenPencil CLI (drives the editor over the HTTP MCP transport)
-
-USAGE:
-  op [--port N] tools                     list every MCP tool + input schema
-  op [--port N] <tool> [key=value ...]    call one MCP tool with string args
-  op [--port N] <command> [options]       TS-style command aliases
-  op help                                 show this message
-
-COMMON COMMANDS:
-  op get [--type T] [--name N] [--id ID] [--depth N] [--parent P]
-  op selection                            get current selection
-  op insert <json|@file|->                insert a leaf node
-  op update <id> <json|@file|->           patch x/y/width/height/name/fill
-  op delete <id>                          delete a node
-  op read-nodes [ids] [--depth N] [--vars] [--page P] [--file F]
-  op move <id> [--parent P]               reparent a node (empty parent = page root)
-  op copy <id> [--parent P]               deep-copy a node
-  op replace <id> <json|@file|->          replace with a leaf node
-  op design <json-array|@file|->          call batch_design(nodes_json)
-  op design:skeleton <json-array|@file|->
-  op design:content [section] <json-array|@file|->
-  op design:refine <json-array|@file|->
-  op page list|add [--name N]|remove|rename|reorder|duplicate ...
-  op vars                                 get variables + theme axes
-  op vars:set <json|@file|-> [--replace] set variables
-  op themes                               get active theme pins
-  op themes:set <json|@file|-> [--replace]
-  op layout [--parent P] [--depth N]      snapshot layout tree
-  op find-space [--direction D] [--width W] [--height H]
-  op import:svg <file.svg> [--x N] [--y N]
-
-GLOBAL FLAGS:
-  --port <n>      MCP HTTP port (default: 3100)
-  --pretty        pretty-print JSON replies
-  --file <path>   accepted for TS CLI compatibility; Rust MCP targets the
-                  document already opened by the MCP server
-  --page <id>     accepted for TS CLI compatibility; use set_active_page for
-                  Rust MCP page selection by index
-
-The server must be running at:
-  http://127.0.0.1:3100/mcp
-
-Low-level examples:
-  op tools
-  op insert_node kind=rect name=Box x=10 y=20 width=100 height=60
-  op set_node_fill_hex node_id=n3 hex=#ff0000";
+const USAGE: &str = include_str!("usage.txt");
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -90,6 +46,9 @@ fn run(args: &[String]) -> Result<String, String> {
         Command::ToolCall { tool, args } => {
             post(port, &tool_call_body(&tool, &args_to_json(&args)))?
         }
+        Command::ToolCallJson { tool, args_json } => {
+            post(port, &tool_call_body(&tool, &args_json))?
+        }
     };
     Ok(if pretty { pretty_json(&out) } else { out })
 }
@@ -109,6 +68,10 @@ enum Command {
     ToolCall {
         tool: String,
         args: Vec<(String, String)>,
+    },
+    ToolCallJson {
+        tool: String,
+        args_json: String,
     },
 }
 
@@ -242,8 +205,10 @@ fn command_from_positionals(positionals: &[String], flags: &Flags) -> Result<Com
         "layout" => map_layout(flags),
         "find-space" => map_find_space(flags),
         "import:svg" => map_import_svg(positionals, flags),
-        "start" | "stop" | "save" | "import:figma" | "install" | "uninstall" | "codegen:plan"
-        | "codegen:submit" | "codegen:assemble" | "codegen:clean" => Err(format!(
+        "codegen:plan" | "codegen:submit" | "codegen:assemble" | "codegen:clean" => {
+            codegen_cli::map_codegen(positionals, flags)
+        }
+        "start" | "stop" | "save" | "import:figma" | "install" | "uninstall" => Err(format!(
             "TS command {:?} is not implemented by the Rust HTTP MCP CLI yet",
             positionals[0]
         )),
