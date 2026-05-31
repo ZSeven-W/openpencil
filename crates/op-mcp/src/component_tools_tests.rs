@@ -99,6 +99,19 @@ fn set_node_collapsed_surfaces_clean_gap_error() {
     }
 }
 
+#[test]
+fn add_page_tool_accepts_optional_name() {
+    let tool = add_page_snapshot();
+    let mut args = BTreeMap::new();
+    args.insert("name".into(), "Checkout".into());
+    match tool.call(&args) {
+        ToolOutcome::OkWithCommand(_, EditorCommand::AddPage { name }) => {
+            assert_eq!(name.as_deref(), Some("Checkout"));
+        }
+        other => panic!("expected AddPage command with name, got {other:?}"),
+    }
+}
+
 // --- set_selection_set -----------------------------------------------
 
 #[test]

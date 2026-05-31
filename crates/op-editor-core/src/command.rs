@@ -198,7 +198,7 @@ pub enum EditorCommand {
     /// Switch the active page.
     SetActivePage { index: u32 },
     /// Append a fresh empty page + switch to it.
-    AddPage,
+    AddPage { name: Option<String> },
     /// Set a page's display name.
     RenamePage { index: u32, name: String },
     /// Remove a page by index.

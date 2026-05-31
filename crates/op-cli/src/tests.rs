@@ -76,6 +76,24 @@ fn parse_args_maps_ts_page_list_alias_to_rust_tool() {
 }
 
 #[test]
+fn parse_args_maps_page_add_name_alias_to_rust_tool() {
+    let args = vec![
+        "page".to_string(),
+        "add".to_string(),
+        "--name".to_string(),
+        "Checkout".to_string(),
+    ];
+    let p = parse_args(&args).expect("parse");
+    assert_eq!(
+        p.command,
+        Command::ToolCall {
+            tool: "add_page".to_string(),
+            args: vec![("name".to_string(), "Checkout".to_string())],
+        }
+    );
+}
+
+#[test]
 fn parse_args_maps_ts_insert_json_alias_to_rust_tool() {
     let args = vec![
         "insert".to_string(),

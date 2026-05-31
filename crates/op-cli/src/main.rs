@@ -37,7 +37,7 @@ COMMON COMMANDS:
   op design:skeleton <json-array|@file|->
   op design:content [section] <json-array|@file|->
   op design:refine <json-array|@file|->
-  op page list|add|remove|rename|reorder|duplicate ...
+  op page list|add [--name N]|remove|rename|reorder|duplicate ...
   op vars                                 list variables
   op themes                               get active theme pins
   op layout                               snapshot top-level layout
@@ -309,10 +309,12 @@ fn map_page(positionals: &[String], flags: &Flags) -> Result<Command, String> {
     match sub {
         "list" => tool_call("list_pages", vec![]),
         "add" => {
-            if flag_value(flags, "name").is_some() || positionals.get(2).is_some() {
-                return Err("Rust MCP page add does not accept a page name yet; call page rename <index> <name> after adding".into());
+            let name = flag_value(flags, "name").or_else(|| positionals.get(2).cloned());
+            let mut pairs = Vec::new();
+            if let Some(name) = name {
+                pairs.push(pair("name", name));
             }
-            tool_call("add_page", vec![])
+            tool_call("add_page", pairs)
         }
         "remove" | "delete" => {
             let index = required_pos(positionals, 2, "Usage: op page remove <index>")?;

@@ -672,7 +672,15 @@ impl GitPanel<'_> {
             );
         } else {
             let shown = truncate(value, 30);
-            let shown = if focused { format!("{shown}|") } else { shown };
+            // Blink the caret on the shared commit-caret cadence (the host
+            // wakes the loop for this input's focus), instead of a static `|`.
+            let blink =
+                jian_core::anim::blink_visible(self.now_ms, self.state.commit_caret_anchor_ms, 530);
+            let shown = if focused && blink {
+                format!("{shown}|")
+            } else {
+                shown
+            };
             self.text(
                 cx,
                 &shown,

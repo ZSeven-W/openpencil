@@ -61,10 +61,20 @@ impl McpTool for AddPage {
     fn name(&self) -> &str {
         "add_page"
     }
-    fn call(&self, _args: &BTreeMap<String, String>) -> ToolOutcome {
+    fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
+        let name = match args.get("name") {
+            Some(name) if name.trim().is_empty() => {
+                return ToolOutcome::Err(
+                    ToolErrorCode::InvalidArgument,
+                    "name must not be empty / whitespace-only".into(),
+                );
+            }
+            Some(name) => Some(name.clone()),
+            None => None,
+        };
         let mut out = BTreeMap::new();
         out.insert("wrote".into(), "true".into());
-        ToolOutcome::OkWithCommand(out, EditorCommand::AddPage)
+        ToolOutcome::OkWithCommand(out, EditorCommand::AddPage { name })
     }
 }
 

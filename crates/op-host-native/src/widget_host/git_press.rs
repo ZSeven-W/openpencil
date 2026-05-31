@@ -219,6 +219,8 @@ impl WidgetHostNative {
                 panel.commit_focused = false;
                 panel.remote_focused = false;
                 panel.https_focused = false;
+                // Seed the shared caret anchor so it starts solid, then blinks.
+                panel.commit_caret_anchor_ms = now;
             }
             Some(GitPanelHit::BranchMergeMode) => {
                 panel.branch_picker_mode = GitBranchPickerMode::Merge;
@@ -229,6 +231,7 @@ impl WidgetHostNative {
                 panel.commit_focused = false;
                 panel.remote_focused = false;
                 panel.https_focused = false;
+                panel.commit_caret_anchor_ms = now;
             }
             Some(GitPanelHit::BranchCreateSubmit) => {
                 let name = panel.branch_create_draft.trim().to_string();

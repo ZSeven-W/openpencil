@@ -238,7 +238,7 @@ impl EditorState {
 
             // --- Pages ---------------------------------------------
             EditorCommand::SetActivePage { index } => self.set_active_page(index as usize),
-            EditorCommand::AddPage => self.add_page().is_some(),
+            EditorCommand::AddPage { name } => self.add_page_with_name(name).is_some(),
             EditorCommand::RenamePage { index, name } => self.rename_page(index as usize, name),
             EditorCommand::DeletePage { index } => self.remove_page(index as usize),
             EditorCommand::DuplicatePage { index } => self.duplicate_page(index as usize).is_some(),
