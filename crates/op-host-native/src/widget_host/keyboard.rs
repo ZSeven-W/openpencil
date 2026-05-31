@@ -646,12 +646,12 @@ impl WidgetHostNative {
             self.mark_dirty();
             return true;
         }
-        // While a ready-state popover (branch picker / overflow menu) is open
-        // with no focused input, swallow Enter so it can't fall through to the
-        // global chat send below. (Focused inputs already submitted above.)
-        if self.editor_state.editor_ui.git_panel.branch_picker_open
-            || self.editor_state.editor_ui.git_panel.overflow_open
-        {
+        // While a ready-state popover (branch picker / overflow menu) is
+        // actually visible with no focused input, swallow Enter so it can't
+        // fall through to the global chat send below. (Focused inputs already
+        // submitted above; the helper requires the ready view so a stale flag
+        // on a closed / merging / diff panel can't eat global Enter.)
+        if self.git_ready_popover_open() {
             return true;
         }
         if self.editor_state.ui.layer_rename.is_some() {

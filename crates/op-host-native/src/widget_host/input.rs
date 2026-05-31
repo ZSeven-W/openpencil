@@ -61,6 +61,21 @@ impl WidgetHostNative {
         panel.open && panel.branch_create_focused && !panel.loading
     }
 
+    /// Whether a ready-state Git popover (branch picker / overflow menu) is
+    /// actually visible — the panel is open, in the ready view, and a popover
+    /// flag is set. Scopes the Enter swallow so a stale flag while the panel
+    /// is closed / loading / merging / showing a diff can't eat global Enter.
+    pub fn git_ready_popover_open(&self) -> bool {
+        let p = &self.editor_state.editor_ui.git_panel;
+        p.open
+            && p.in_repo
+            && !p.loading
+            && !p.merging
+            && p.diff.is_none()
+            && p.merge_resolve.is_none()
+            && (p.branch_picker_open || p.overflow_open)
+    }
+
     /// Whether the inline Git clone wizard is up. While it is, the
     /// wizard owns the keyboard: a focused URL / destination field takes
     /// text, and every other key is swallowed so no canvas shortcut
