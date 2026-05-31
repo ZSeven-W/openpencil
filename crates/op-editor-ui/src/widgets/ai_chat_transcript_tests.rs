@@ -251,7 +251,7 @@ fn assistant_thinking_expanded_has_wrapped_body_lines() {
 }
 
 #[test]
-fn design_progress_lines_do_not_render_as_reasoning_or_typing_placeholder() {
+fn empty_design_progress_lines_do_not_render_inline_or_as_typing_placeholder() {
     let mut m = ChatMessage::assistant_streaming();
     m.thinking = "\n• Planning…\n• Scaffold ready".into();
     let items = build_transcript(
@@ -260,24 +260,24 @@ fn design_progress_lines_do_not_render_as_reasoning_or_typing_placeholder() {
         op_editor_core::Locale::EnUs,
     );
 
-    assert_eq!(items[0].steps.len(), 2);
-    assert_eq!(items[0].steps[0].label, "Planning…");
-    assert!(items[0].steps[0].done);
-    assert!(items[0].steps[1].done);
+    assert!(
+        items[0].steps.is_empty(),
+        "empty plan/progress rows belong to the fixed checklist, matching TS ActionSteps"
+    );
     assert!(
         items[0].thinking.is_none(),
-        "design progress should render as action steps, not a thinking block"
+        "design progress should not render as a reasoning block"
     );
     assert!(
         items[0].bubble.is_none(),
-        "design progress should replace the empty streaming typing placeholder"
+        "fixed checklist progress should suppress the empty streaming typing placeholder"
     );
 }
 
 #[test]
-fn current_design_progress_step_is_active_until_terminal() {
+fn current_step_with_content_is_active_until_terminal() {
     let mut m = ChatMessage::assistant_streaming();
-    m.thinking = "• Planning…".into();
+    m.content = r#"<step title="Planning…">Drafting layout constraints</step>"#.into();
     let items = build_transcript(
         std::slice::from_ref(&m),
         body(),
@@ -285,6 +285,7 @@ fn current_design_progress_step_is_active_until_terminal() {
     );
 
     assert_eq!(items[0].steps.len(), 1);
+    assert_eq!(items[0].steps[0].label, "Planning…");
     assert!(items[0].steps[0].active);
     assert!(!items[0].steps[0].done);
 }
