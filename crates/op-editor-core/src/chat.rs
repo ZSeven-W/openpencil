@@ -318,6 +318,9 @@ pub struct ChatState {
     /// affordance. Unlike New Chat, the transcript stays visible; the
     /// desktop event loop only drops the in-flight worker.
     pub pending_stop_chat: bool,
+    /// Raised when the user clicks a transcript copy affordance; hosts
+    /// drain this into the platform clipboard.
+    pub pending_copy_text: Option<String>,
     /// Full model catalog discovered from every *installed* CLI,
     /// before the connected-providers filter. The desktop host fills
     /// this from `model_discovery`; [`rebuild_available_models`] then
@@ -374,6 +377,7 @@ impl Default for ChatState {
             pending_send: None,
             pending_new_chat: false,
             pending_stop_chat: false,
+            pending_copy_text: None,
             discovered_models: Vec::new(),
             available_models: Vec::new(),
             selected_model: 0,
@@ -512,9 +516,14 @@ impl ChatState {
         self.input.clear();
         self.pending_send = None;
         self.pending_stop_chat = false;
+        self.pending_copy_text = None;
         self.pending_attachments.clear();
         self.pending_attachment_pick = false;
         self.pending_new_chat = true;
+    }
+
+    pub fn queue_copy_text(&mut self, text: impl Into<String>) {
+        self.pending_copy_text = Some(text.into());
     }
 
     /// Flip the collapsed state of message `idx`'s thinking block.
@@ -959,6 +968,15 @@ mod tests {
             chat.messages[0].design_block_expanded_overrides,
             vec![None, Some(true)]
         );
+    }
+
+    #[test]
+    fn queue_copy_text_records_pending_clipboard_payload() {
+        let mut chat = ChatState::default();
+
+        chat.queue_copy_text("json");
+
+        assert_eq!(chat.pending_copy_text.as_deref(), Some("json"));
     }
 
     #[test]
