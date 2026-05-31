@@ -134,6 +134,10 @@ impl WidgetHostNative {
             let panel = AIChatPlaceholder::from_editor(&self.editor_state);
             if let Some(hit) = panel.hit_test(chat_rect, Point2D::new(x, y)) {
                 match hit {
+                    AIChatHit::Inside => {
+                        self.mark_dirty();
+                        return true;
+                    }
                     AIChatHit::FocusInput => {
                         self.editor_state.chat.focused = true;
                         self.editor_state.chat.caret_anchor_ms = self.now_ms;

@@ -313,7 +313,11 @@ impl<'a> AIChatPlaceholder<'a> {
                 let send_x = input_rect.origin.x + input_rect.size.x - 32.0;
                 let attach_x = send_x - 32.0;
                 if point.x >= attach_x && point.x < send_x {
-                    return Some(AIChatHit::AddAttachment);
+                    return Some(if self.is_streaming() {
+                        AIChatHit::Inside
+                    } else {
+                        AIChatHit::AddAttachment
+                    });
                 }
                 if point.x >= send_x {
                     return Some(if self.is_streaming() {
@@ -328,7 +332,11 @@ impl<'a> AIChatPlaceholder<'a> {
                     });
                 }
             }
-            return Some(AIChatHit::FocusInput);
+            return Some(if self.is_streaming() {
+                AIChatHit::Inside
+            } else {
+                AIChatHit::FocusInput
+            });
         }
         let checklist_h =
             fixed_checklist_height(&self.state.messages, self.state.checklist_collapsed);
