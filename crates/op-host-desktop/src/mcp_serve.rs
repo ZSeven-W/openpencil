@@ -44,10 +44,10 @@ use op_mcp::{
     get_variables_snapshot, get_viewport_snapshot, group_selected_snapshot, import_svg_snapshot,
     insert_node_snapshot, instantiate_component_snapshot, list_components_snapshot,
     list_node_kinds_snapshot, list_pages_snapshot, list_variables_snapshot, move_node_snapshot,
-    nudge_selected_snapshot, paste_clipboard_snapshot, redo_snapshot, remove_node_effect_snapshot,
-    remove_page_snapshot, rename_component_snapshot, rename_page_snapshot,
-    rename_variable_snapshot, reorder_page_snapshot, reorder_selected_snapshot,
-    replace_node_snapshot, run_stdio_with_applier, selection_snapshot,
+    nudge_selected_snapshot, paste_clipboard_snapshot, read_nodes_snapshot, redo_snapshot,
+    remove_node_effect_snapshot, remove_page_snapshot, rename_component_snapshot,
+    rename_page_snapshot, rename_variable_snapshot, reorder_page_snapshot,
+    reorder_selected_snapshot, replace_node_snapshot, run_stdio_with_applier, selection_snapshot,
     set_active_axis_value_snapshot, set_active_page_snapshot, set_active_tool_snapshot,
     set_ellipse_arc_snapshot, set_node_collapsed_snapshot, set_node_corner_radius_snapshot,
     set_node_fill_hex_snapshot, set_node_flip_snapshot, set_node_font_size_snapshot,
@@ -394,6 +394,7 @@ fn rebuild_registry(doc: &EditorState) -> ToolRegistry {
     r.register(Box::new(get_active_theme_snapshot(doc)));
     r.register(Box::new(list_components_snapshot(doc)));
     r.register(Box::new(get_component_snapshot(doc)));
+    r.register(Box::new(read_nodes_snapshot(doc)));
     r.register(Box::new(snapshot_layout_snapshot(doc)));
     r.register(Box::new(find_empty_space_snapshot(doc)));
     r.register(Box::new(get_canvas_bounds_snapshot(doc)));
@@ -694,6 +695,7 @@ const TOOL_SCHEMAS: &[&str] = &[
     r#"{"name":"get_active_theme","description":"Return the active theme axis pinning per axis.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
     r#"{"name":"list_components","description":"List registered components (saved Frames / Groups promoted via Save as Component). Returns count + a `;`-separated record of `name|id` pairs.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
     r#"{"name":"get_component","description":"Fetch one component by id with detail: name, root node kind, and the subtree's leaf count.","inputSchema":{"type":"object","properties":{"component_id":{"type":"string","description":"positive u64 component id"}},"required":["component_id"]}}"#,
+    r#"{"name":"read_nodes","description":"Read nodes with depth control. Omit nodeIds to return top-level page children; depth=0 truncates children to \"...\", depth=-1 returns full subtrees. includeVariables=true attaches variables/themes JSON strings.","inputSchema":{"type":"object","properties":{"nodeIds":{"type":"array","items":{"type":"string"},"description":"Node ids to read; omit for top-level children"},"depth":{"type":"number","description":"0=node only, 1=direct children, -1=full subtree"},"pageId":{"type":"string"},"includeVariables":{"type":"boolean"}}}}"#,
     r#"{"name":"snapshot_layout","description":"Return a depth-limited layout snapshot. Result `layout` is a `;`-separated record of `id|x|y|w|h` (ints, doc-px).","inputSchema":{"type":"object","properties":{"parentId":{"type":"string"},"maxDepth":{"type":"string","description":"u32 depth, default 1 when arguments are present"},"pageId":{"type":"string"}}}}"#,
     r#"{"name":"find_empty_space","description":"Find padded empty canvas space in one direction for placing new content.","inputSchema":{"type":"object","properties":{"width":{"type":"string","description":"i32 doc-px"},"height":{"type":"string","description":"i32 doc-px"},"padding":{"type":"string","description":"i32 doc-px, default 50"},"direction":{"type":"string","enum":["top","right","bottom","left"]},"nodeId":{"type":"string"},"pageId":{"type":"string"}},"required":["width","height","direction"]}}"#,
     r#"{"name":"get_canvas_bounds","description":"Return the union bounding box of every top-level node on the active page (x/y/w/h ints + has_content true/false).","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,

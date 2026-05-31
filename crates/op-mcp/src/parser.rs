@@ -500,7 +500,7 @@ fn parse_flat_object_body(body: &str, tool: &str) -> Option<BTreeMap<String, Str
 fn structured_arg_allowed(tool: &str, key: &str) -> bool {
     matches!(
         (tool, key),
-        ("set_variables", "variables") | ("set_themes", "themes")
+        ("set_variables", "variables") | ("set_themes", "themes") | ("read_nodes", "nodeIds")
     )
 }
 

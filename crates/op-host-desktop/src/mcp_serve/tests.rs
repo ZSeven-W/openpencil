@@ -4,6 +4,7 @@
 #![cfg(test)]
 
 use super::*;
+use op_editor_core::pen_node_ext::PenNodeExt;
 
 #[test]
 fn sniff_method_walks_top_level() {
@@ -56,7 +57,7 @@ fn tools_list_response_includes_all_registered_tools() {
     // TOOL_SCHEMAS without being added to the list below.
     assert_eq!(
         TOOL_SCHEMAS.len(),
-        87,
+        88,
         "tools/list catalog count must match the registered tools — add the new tool to this test"
     );
     // Production catalog excludes debug tools (we removed the
@@ -96,6 +97,7 @@ fn tools_list_response_includes_all_registered_tools() {
         "get_active_theme",
         "list_components",
         "get_component",
+        "read_nodes",
         "snapshot_layout",
         "find_empty_space",
         "get_canvas_bounds",
@@ -216,6 +218,30 @@ fn find_empty_space_returns_padded_position_from_active_page_bounds() {
     assert!(response.contains(r#""id":9"#), "{response}");
     assert!(response.contains(r#""x":"240""#), "{response}");
     assert!(response.contains(r#""y":"20""#), "{response}");
+}
+
+#[test]
+fn read_nodes_accepts_structured_ids_over_mcp() {
+    let mut state = op_editor_core::EditorState::new();
+    assert!(state.apply(EditorCommand::InsertNode {
+        kind: "rect".into(),
+        name: "Card".into(),
+        x: 10,
+        y: 20,
+        width: 100,
+        height: 50,
+        fill_hex: None,
+    }));
+    let node_id = state.active_children()[0].base().id.clone();
+    let line = format!(
+        r#"{{"jsonrpc":"2.0","id":11,"method":"tools/call","params":{{"name":"read_nodes","arguments":{{"nodeIds":["{node_id}"],"depth":0}}}}}}"#
+    );
+    let response = process_message_with_applier(&mut state, &line, |_, _| false)
+        .expect("dispatch")
+        .expect("response");
+    assert!(response.contains(r#""id":11"#), "{response}");
+    assert!(response.contains(r#""count":"1""#), "{response}");
+    assert!(response.contains(&node_id), "{response}");
 }
 
 #[test]

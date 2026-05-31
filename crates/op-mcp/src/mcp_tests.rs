@@ -523,6 +523,18 @@ fn parse_tool_call_allows_structured_variable_payloads_for_ts_parity() {
 }
 
 #[test]
+fn parse_tool_call_allows_structured_read_nodes_ids_for_ts_parity() {
+    let line = r#"{"id":3,"method":"tools/call","params":{"name":"read_nodes","arguments":{"nodeIds":["n10","n11"],"depth":0}}}"#;
+    let call = parse_tool_call(line).expect("read_nodes must accept TS-style nodeIds array");
+    assert_eq!(call.tool, "read_nodes");
+    assert_eq!(
+        call.arguments.get("nodeIds"),
+        Some(&r#"["n10","n11"]"#.to_string())
+    );
+    assert_eq!(call.arguments.get("depth"), Some(&"0".to_string()));
+}
+
+#[test]
 fn parse_tool_call_rejects_non_object_arguments_field() {
     let str_args =
         r#"{"id":1,"method":"tools/call","params":{"name":"get_node","arguments":"oops"}}"#;

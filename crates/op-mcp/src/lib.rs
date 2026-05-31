@@ -39,6 +39,9 @@ pub mod node_attr_tools;
 mod node_attr_tools_tests;
 pub mod page_tools;
 pub mod parser;
+pub mod read_nodes;
+#[cfg(test)]
+mod read_nodes_tests;
 pub mod read_tools;
 #[cfg(test)]
 mod replace_node_tests;
@@ -111,6 +114,7 @@ pub use page_tools::{
     Undo,
 };
 pub use parser::parse_tool_call;
+pub use read_nodes::{read_nodes_snapshot, ReadNodes};
 pub use scalar_vars::{
     create_variable_snapshot, delete_variable_snapshot, rename_variable_snapshot,
     set_variable_boolean_snapshot, set_variable_number_snapshot, set_variable_string_snapshot,
