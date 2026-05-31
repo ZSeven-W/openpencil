@@ -941,9 +941,10 @@ impl ApplicationHandler for DesktopApp {
         // having existed — a failed startup reaches `exiting` with
         // unseeded geometry and would clobber the previous good save.
         if self.window.is_some() {
-            window_state::save(&window_state::WindowState::from_window(
+            window_state::save(&window_state::WindowState::from_window_physical(
                 self.win_pos,
                 self.win_size,
+                self.dpi,
                 self.win_maximized,
             ));
         }

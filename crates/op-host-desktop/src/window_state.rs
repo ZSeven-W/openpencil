@@ -6,13 +6,11 @@
 //! maximized flag — so a restart reopens the window the way the
 //! user left it.
 //!
-//! Geometry is stored in PHYSICAL pixels next to the settings file
-//! (`<config>/openpencil/window.json`). Physical units avoid a
-//! chicken-and-egg DPI problem: the scale factor is not known until
-//! a window exists, and winit's `with_inner_size` / `with_position`
-//! both accept `Physical*` directly. The OS clamps a position that
-//! no longer lands on any monitor, so a stale entry can't strand the
-//! window off-screen.
+//! Window size is stored in logical pixels next to the settings file
+//! (`<config>/openpencil/window.json`) to match Electron's
+//! `BrowserWindow` contract. Position remains physical because winit's
+//! outer-position APIs are physical and the OS clamps stale monitor
+//! coordinates.
 
 use std::path::PathBuf;
 
@@ -22,13 +20,13 @@ const APP_DIR: &str = "openpencil";
 const FILE_NAME: &str = "window.json";
 const STATE_VERSION: u32 = 1;
 
-/// Minimum restored size — guards against a corrupt file shrinking
-/// the window to an unusable sliver. Mirrors the TS app's
-/// `WINDOW_MIN_WIDTH` / `WINDOW_MIN_HEIGHT` (physical px at 1×).
-const MIN_W: u32 = 640;
-const MIN_H: u32 = 400;
+/// Minimum restored logical size — guards against a corrupt file
+/// shrinking the window to an unusable sliver. Mirrors the TS app's
+/// `WINDOW_MIN_WIDTH` / `WINDOW_MIN_HEIGHT`.
+const MIN_W: u32 = 1024;
+const MIN_H: u32 = 600;
 
-/// Persisted window geometry. Position + size are PHYSICAL pixels.
+/// Persisted window geometry. Position is physical; size is logical.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WindowState {
     version: u32,
@@ -38,7 +36,7 @@ pub struct WindowState {
     x: Option<i32>,
     #[serde(default)]
     y: Option<i32>,
-    /// Inner-size width / height (physical px).
+    /// Inner-size width / height (logical px, matching Electron).
     #[serde(default)]
     width: Option<u32>,
     #[serde(default)]
@@ -85,10 +83,11 @@ pub fn save(state: &WindowState) {
 }
 
 impl WindowState {
-    /// Build the to-persist snapshot from the live window geometry.
-    /// `pos` / `size` are the last *windowed* (non-maximized) values
-    /// the runner tracked, so un-maximizing after a restart restores
-    /// a sensible size rather than the maximized rectangle.
+    /// Build the to-persist snapshot from already-logical window
+    /// geometry. `pos` / `size` are the last *windowed*
+    /// (non-maximized) values the runner tracked, so un-maximizing
+    /// after a restart restores a sensible size rather than the
+    /// maximized rectangle.
     pub fn from_window(pos: Option<(i32, i32)>, size: Option<(u32, u32)>, maximized: bool) -> Self {
         Self {
             version: STATE_VERSION,
@@ -98,6 +97,17 @@ impl WindowState {
             height: size.map(|s| s.1),
             maximized,
         }
+    }
+
+    /// Build the to-persist snapshot from winit's physical inner size.
+    pub fn from_window_physical(
+        pos: Option<(i32, i32)>,
+        physical_size: Option<(u32, u32)>,
+        scale_factor: f32,
+        maximized: bool,
+    ) -> Self {
+        let logical_size = physical_size.map(|size| physical_size_to_logical(size, scale_factor));
+        Self::from_window(pos, logical_size, maximized)
     }
 
     /// Last windowed outer-position, if recorded.
@@ -125,13 +135,21 @@ impl WindowState {
         if let (Some(w), Some(h)) = (self.width, self.height) {
             let w = w.max(MIN_W);
             let h = h.max(MIN_H);
-            attrs = attrs.with_inner_size(winit::dpi::PhysicalSize::new(w, h));
+            attrs = attrs.with_inner_size(winit::dpi::LogicalSize::new(w as f64, h as f64));
         }
         if let (Some(x), Some(y)) = (self.x, self.y) {
             attrs = attrs.with_position(winit::dpi::PhysicalPosition::new(x, y));
         }
         attrs.with_maximized(self.maximized)
     }
+}
+
+fn physical_size_to_logical(size: (u32, u32), scale_factor: f32) -> (u32, u32) {
+    let scale = f64::from(scale_factor).max(1.0);
+    (
+        ((size.0 as f64) / scale).round().max(1.0) as u32,
+        ((size.1 as f64) / scale).round().max(1.0) as u32,
+    )
 }
 
 /// A monitor's physical rectangle: `((x, y), (width, height))`.
@@ -187,6 +205,15 @@ mod tests {
     }
 
     #[test]
+    fn from_window_physical_stores_logical_size_like_electron() {
+        let s = WindowState::from_window_physical(Some((12, 34)), Some((2880, 1800)), 2.0, false);
+        assert_eq!(s.x, Some(12));
+        assert_eq!(s.y, Some(34));
+        assert_eq!(s.width, Some(1440));
+        assert_eq!(s.height, Some(900));
+    }
+
+    #[test]
     fn json_round_trips() {
         let s = WindowState::from_window(Some((1, 2)), Some((800, 600)), false);
         let json = serde_json::to_string(&s).expect("serialize");
@@ -207,6 +234,11 @@ mod tests {
         );
         let parsed: WindowState = serde_json::from_str(&raw).expect("still parses");
         assert_ne!(parsed.version, STATE_VERSION);
+    }
+
+    #[test]
+    fn minimum_size_matches_ts_desktop_window_contract() {
+        assert_eq!((MIN_W, MIN_H), (1024, 600));
     }
 
     #[test]
