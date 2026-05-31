@@ -7,6 +7,8 @@
 //! multi-page: the root `children` migrate into "Page 1" so no
 //! nodes are lost.
 
+use crate::command_node::build_leaf_node;
+use crate::fills::set_primary_fill_hex;
 use crate::node_id::NodeId;
 use crate::state::EditorState;
 use crate::walkers;
@@ -23,6 +25,12 @@ fn make_page(id: String, name: String, children: Vec<PenNode>) -> PenPage {
         state: None,
         lifecycle: None,
     }
+}
+
+fn make_blank_page_frame(id: &NodeId) -> Option<PenNode> {
+    let mut frame = build_leaf_node("frame", id.as_str(), "Frame", 0, 0, 1200, 800)?;
+    set_primary_fill_hex(&mut frame, "#FFFFFF");
+    Some(frame)
 }
 
 impl EditorState {
@@ -71,14 +79,14 @@ impl EditorState {
         // id is part of the id space before the new page id is
         // minted — otherwise both could land on `n{max+1}`.
         self.ensure_pages();
-        let next_id = self.max_node_id().checked_add(1)?;
+        let mut next_id = self.max_node_id().checked_add(1)?;
+        let mut taken = self.collect_node_ids();
+        let page_id = walkers::alloc_n_id(&mut next_id, &mut taken)?;
+        let frame_id = walkers::alloc_n_id(&mut next_id, &mut taken)?;
+        let frame = make_blank_page_frame(&frame_id)?;
         let pages = self.doc.pages.as_mut().unwrap();
         let n = pages.len() + 1;
-        pages.push(make_page(
-            format!("n{next_id}"),
-            format!("Page {n}"),
-            Vec::new(),
-        ));
+        pages.push(make_page(page_id.into(), format!("Page {n}"), vec![frame]));
         let new_index = pages.len() - 1;
         self.ui.active_page_index = new_index;
         self.clear_selection();
