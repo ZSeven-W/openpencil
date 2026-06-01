@@ -198,6 +198,35 @@ fn openverse_search_url_includes_aspect_ratio() {
 }
 
 #[test]
+fn openverse_search_url_simplifies_verbose_ai_prompt_like_ts() {
+    let url = openverse_search_url("a beautiful photo of the sunset on the beach", None)
+        .expect("valid openverse url");
+
+    assert_eq!(
+        url.query_pairs()
+            .find(|(key, _)| key == "q")
+            .map(|(_, value)| value.into_owned()),
+        Some("beautiful photo sunset beach".to_string())
+    );
+}
+
+#[test]
+fn openverse_search_url_limits_simplified_query_to_four_keywords_like_ts() {
+    let url = openverse_search_url(
+        "modern office workspace natural lighting wooden desk plants",
+        None,
+    )
+    .expect("valid openverse url");
+
+    assert_eq!(
+        url.query_pairs()
+            .find(|(key, _)| key == "q")
+            .map(|(_, value)| value.into_owned()),
+        Some("modern office workspace natural".to_string())
+    );
+}
+
+#[test]
 fn apply_result_sets_empty_image_src() {
     let mut state = EditorState::default();
     state.active_children_mut().clear();
