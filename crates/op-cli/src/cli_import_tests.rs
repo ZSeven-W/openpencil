@@ -2,15 +2,11 @@ use super::*;
 
 #[test]
 fn parse_args_maps_import_svg_parent_flag_to_ts_parent_arg() {
-    let dir = std::env::temp_dir().join(format!("op-cli-import-svg-{}", std::process::id()));
-    let path = dir.join("icon.svg");
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("temp dir");
-    std::fs::write(&path, r#"<svg><rect width="10" height="10"/></svg>"#).expect("write svg");
+    let path = "/tmp/icon.svg";
 
     let p = parse_args(&[
         "import:svg".to_string(),
-        path.to_string_lossy().to_string(),
+        path.to_string(),
         "--parent".to_string(),
         "n10".to_string(),
     ])
@@ -21,28 +17,20 @@ fn parse_args_maps_import_svg_parent_flag_to_ts_parent_arg() {
         Command::ToolCall {
             tool: "import_svg".to_string(),
             args: vec![
-                (
-                    "svg".to_string(),
-                    r#"<svg><rect width="10" height="10"/></svg>"#.to_string(),
-                ),
+                ("svgPath".to_string(), path.to_string()),
                 ("parent".to_string(), "n10".to_string()),
             ],
         }
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
 fn parse_args_maps_import_svg_page_flag_to_ts_page_arg() {
-    let dir = std::env::temp_dir().join(format!("op-cli-import-svg-page-{}", std::process::id()));
-    let path = dir.join("icon.svg");
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("temp dir");
-    std::fs::write(&path, r#"<svg><rect width="10" height="10"/></svg>"#).expect("write svg");
+    let path = "/tmp/icon.svg";
 
     let p = parse_args(&[
         "import:svg".to_string(),
-        path.to_string_lossy().to_string(),
+        path.to_string(),
         "--page".to_string(),
         "page-2".to_string(),
     ])
@@ -53,13 +41,9 @@ fn parse_args_maps_import_svg_page_flag_to_ts_page_arg() {
         Command::ToolCall {
             tool: "import_svg".to_string(),
             args: vec![
-                (
-                    "svg".to_string(),
-                    r#"<svg><rect width="10" height="10"/></svg>"#.to_string(),
-                ),
+                ("svgPath".to_string(), path.to_string()),
                 ("pageId".to_string(), "page-2".to_string()),
             ],
         }
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }

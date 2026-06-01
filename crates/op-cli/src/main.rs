@@ -1,10 +1,5 @@
-//! `op` - the OpenPencil command-line tool.
-//!
-//! The Rust CLI talks to the live Rust MCP HTTP server and keeps the
-//! common command surface aligned with the TypeScript `op` CLI where
-//! the Rust MCP tool set already supports the behavior. Unknown
-//! commands still fall back to the low-level `op <tool> key=value`
-//! form so new MCP tools remain immediately scriptable.
+//! `op` - the OpenPencil CLI.
+//! Keeps common TS `op` aliases while preserving low-level `op <tool> key=value`.
 
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -15,11 +10,13 @@ mod app_control_cli;
 mod codegen_cli;
 mod figma_cli;
 mod mcp_http_cli;
+mod path_args;
 mod skill_install_cli;
 
 use mcp_http_cli::{
     args_to_json, json_escape, post, pretty_json, status_json, tool_call_body, tools_list_body,
 };
+use path_args::{resolve_file_path_arg, resolve_file_path_value};
 
 #[cfg(test)]
 use mcp_http_cli::{http_request, status_json_from_running};
@@ -222,37 +219,35 @@ fn command_from_positionals(positionals: &[String], flags: &Flags) -> Result<Com
         "open" => {
             let args = flag_value(flags, "file")
                 .or_else(|| positionals.get(1).cloned())
-                .map(|path| vec![pair("filePath", path)])
+                .map(|path| vec![pair("filePath", resolve_file_path_arg(&path))])
                 .unwrap_or_default();
             tool_call("open_document", args)
         }
         "save" => {
-            let file_path = required_pos(positionals, 1, "Usage: op save <file.op>")?;
+            let file_path =
+                resolve_file_path_arg(&required_pos(positionals, 1, "Usage: op save <file.op>")?);
             tool_call("save_document", vec![pair("filePath", file_path)])
         }
         "get" => map_get(flags),
-        "selection" => tool_call("get_selection", vec![]),
+        "selection" => map_selection(flags),
         "insert" => map_insert(positionals, flags),
         "update" => map_update(positionals, flags),
         "delete" => map_delete(positionals, flags),
         "read-nodes" => map_read_nodes(positionals, flags),
         "move" => map_reparent("move_node", positionals, flags),
         "copy" => map_reparent("copy_node", positionals, flags),
-        "replace" => map_replace(positionals),
-        "design" => map_design_like("batch_design", positionals.get(1)),
-        "design:skeleton" => map_design_like("design_skeleton", positionals.get(1)),
-        "design:content" => {
-            let payload = positionals.get(2).or_else(|| positionals.get(1));
-            map_design_like("design_content", payload)
-        }
-        "design:refine" => map_design_like("design_refine", positionals.get(1)),
+        "replace" => map_replace(positionals, flags),
+        "design" => map_design_like("batch_design", positionals.get(1), flags, true),
+        "design:skeleton" => map_design_skeleton(positionals, flags),
+        "design:content" => map_design_content(positionals, flags),
+        "design:refine" => map_design_refine(flags),
         "page" => map_page(positionals, flags),
-        "vars" => tool_call("get_variables", vec![]),
+        "vars" => tool_call_with_file("get_variables", flags),
         "vars:set" => map_vars_set(positionals, flags),
-        "themes" => tool_call("get_active_theme", vec![]),
+        "themes" => tool_call_with_file("get_variables", flags),
         "themes:set" => map_themes_set(positionals, flags),
         "theme:save" => map_theme_save(positionals, flags),
-        "theme:load" => map_theme_load(positionals),
+        "theme:load" => map_theme_load(positionals, flags),
         "theme:list" => map_theme_list(positionals),
         "layout" => map_layout(flags),
         "find-space" => map_find_space(flags),
@@ -289,46 +284,72 @@ fn map_get(flags: &Flags) -> Result<Command, String> {
     if let Some(page) = flag_value(flags, "page") {
         pairs.push(pair("pageId", page));
     }
+    push_file_path(&mut pairs, flags);
     tool_call("batch_get", pairs)
+}
+
+fn map_selection(flags: &Flags) -> Result<Command, String> {
+    let mut pairs = Vec::new();
+    if let Some(depth) = flag_value(flags, "depth") {
+        pairs.push(pair("readDepth", depth));
+    }
+    push_file_path(&mut pairs, flags);
+    tool_call("get_selection", pairs)
 }
 
 fn map_insert(positionals: &[String], flags: &Flags) -> Result<Command, String> {
     let raw = resolve_arg(positionals.get(1).map(String::as_str))?;
-    let mut pairs = insert_pairs(&raw)?;
+    let mut pairs = data_pairs(&raw)?;
     if let Some(parent) = flag_value(flags, "parent") {
         pairs.push(pair("parent", parent));
     }
     if let Some(page) = flag_value(flags, "page") {
         pairs.push(pair("pageId", page));
     }
+    if flags.contains_key("post-process") {
+        pairs.push(pair("postProcess", "true"));
+    }
+    push_file_path(&mut pairs, flags);
     tool_call("insert_node", pairs)
 }
 
 fn map_update(positionals: &[String], flags: &Flags) -> Result<Command, String> {
     let node_id = required_pos(positionals, 1, "Usage: op update <node-id> <json>")?;
     let raw = resolve_arg(positionals.get(2).map(String::as_str))?;
-    let mut pairs = vec![pair("node_id", node_id)];
-    pairs.extend(update_pairs(&raw)?);
+    let mut pairs = vec![pair("nodeId", node_id)];
+    pairs.extend(data_pairs(&raw)?);
     if let Some(page) = flag_value(flags, "page") {
         pairs.push(pair("pageId", page));
     }
+    if flags.contains_key("post-process") {
+        pairs.push(pair("postProcess", "true"));
+    }
+    push_file_path(&mut pairs, flags);
     tool_call("update_node", pairs)
 }
 
-fn map_replace(positionals: &[String]) -> Result<Command, String> {
+fn map_replace(positionals: &[String], flags: &Flags) -> Result<Command, String> {
     let node_id = required_pos(positionals, 1, "Usage: op replace <node-id> <json>")?;
     let raw = resolve_arg(positionals.get(2).map(String::as_str))?;
-    let mut pairs = vec![pair("node_id", node_id)];
-    pairs.extend(replace_pairs(&raw)?);
+    let mut pairs = vec![pair("nodeId", node_id)];
+    pairs.extend(data_pairs(&raw)?);
+    if let Some(page) = flag_value(flags, "page") {
+        pairs.push(pair("pageId", page));
+    }
+    if flags.contains_key("post-process") {
+        pairs.push(pair("postProcess", "true"));
+    }
+    push_file_path(&mut pairs, flags);
     tool_call("replace_node", pairs)
 }
 
 fn map_delete(positionals: &[String], flags: &Flags) -> Result<Command, String> {
     let id = required_pos(positionals, 1, "Usage: op delete <node-id>")?;
-    let mut pairs = vec![pair("node_id", id)];
+    let mut pairs = vec![pair("nodeId", id)];
     if let Some(page) = flag_value(flags, "page") {
         pairs.push(pair("pageId", page));
     }
+    push_file_path(&mut pairs, flags);
     tool_call("delete_node", pairs)
 }
 
@@ -346,6 +367,7 @@ fn map_read_nodes(positionals: &[String], flags: &Flags) -> Result<Command, Stri
     if flags.contains_key("vars") {
         pairs.push(pair("includeVariables", "true"));
     }
+    push_file_path(&mut pairs, flags);
     tool_call("read_nodes", pairs)
 }
 
@@ -355,8 +377,13 @@ fn map_reparent(tool: &str, positionals: &[String], flags: &Flags) -> Result<Com
         1,
         "Usage: op move/copy <node-id> [--parent <parent-id>] [--page PAGE]",
     )?;
-    let parent = flag_value(flags, "parent").unwrap_or_default();
-    let mut pairs = vec![pair("node_id", id), pair("target_parent_id", parent)];
+    let id_key = if tool == "copy_node" {
+        "sourceId"
+    } else {
+        "nodeId"
+    };
+    let parent = flag_value(flags, "parent").unwrap_or_else(|| "null".into());
+    let mut pairs = vec![pair(id_key, id), pair("parent", parent)];
     if tool == "move_node" {
         if let Some(index) = flag_value(flags, "index") {
             pairs.push(pair("index", index));
@@ -365,16 +392,133 @@ fn map_reparent(tool: &str, positionals: &[String], flags: &Flags) -> Result<Com
     if let Some(page) = flag_value(flags, "page") {
         pairs.push(pair("pageId", page));
     }
+    push_file_path(&mut pairs, flags);
     tool_call(tool, pairs)
 }
 
-fn map_design_like(tool: &str, payload: Option<&String>) -> Result<Command, String> {
+fn map_design_like(
+    tool: &str,
+    payload: Option<&String>,
+    flags: &Flags,
+    default_post_process: bool,
+) -> Result<Command, String> {
     let raw = resolve_arg(payload.map(String::as_str))?;
     let trimmed = raw.trim();
+    let mut pairs = Vec::new();
     if trimmed.starts_with('[') {
-        return tool_call(tool, vec![pair("nodes_json", trimmed)]);
+        pairs.push(pair("nodes_json", trimmed));
+    } else {
+        pairs.push(pair("operations", trimmed));
     }
-    tool_call(tool, vec![pair("operations", trimmed)])
+    if default_post_process {
+        pairs.push(pair("postProcess", "true"));
+    }
+    if let Some(canvas_width) = flag_value(flags, "canvas-width") {
+        pairs.push(pair("canvasWidth", canvas_width));
+    }
+    if let Some(page) = flag_value(flags, "page") {
+        pairs.push(pair("pageId", page));
+    }
+    push_file_path(&mut pairs, flags);
+    tool_call(tool, pairs)
+}
+
+fn map_design_content(positionals: &[String], flags: &Flags) -> Result<Command, String> {
+    let section_id = required_pos(
+        positionals,
+        1,
+        "Usage: op design:content <section-id> <json|@file|->",
+    )?;
+    let raw = resolve_arg(positionals.get(2).map(String::as_str))?;
+    let payload: Value = serde_json::from_str(raw.trim())
+        .map_err(|e| format!("invalid design:content JSON payload: {e}"))?;
+    let children = payload
+        .get("children")
+        .ok_or("design:content JSON payload must contain a children array")?;
+    if !children.is_array() {
+        return Err("design:content children must be an array".into());
+    }
+
+    let mut args = serde_json::Map::new();
+    args.insert("sectionId".into(), Value::String(section_id));
+    args.insert("children".into(), children.clone());
+    if let Some(canvas_width) = flag_value(flags, "canvas-width") {
+        let width = canvas_width
+            .parse::<i64>()
+            .map_err(|_| format!("--canvas-width must be an integer, got {canvas_width:?}"))?;
+        args.insert("canvasWidth".into(), Value::Number(width.into()));
+    }
+    if let Some(page) = flag_value(flags, "page") {
+        args.insert("pageId".into(), Value::String(page));
+    }
+    if let Some(file) = flag_value(flags, "file") {
+        args.insert("filePath".into(), resolve_file_path_value(&file));
+    }
+    let args_json = serde_json::to_string(&Value::Object(args))
+        .map_err(|e| format!("cannot serialize design:content args: {e}"))?;
+    Ok(Command::ToolCallJson {
+        tool: "design_content".into(),
+        args_json,
+    })
+}
+
+fn map_design_skeleton(positionals: &[String], flags: &Flags) -> Result<Command, String> {
+    let raw = resolve_arg(positionals.get(1).map(String::as_str))?;
+    let payload: Value = serde_json::from_str(raw.trim())
+        .map_err(|e| format!("invalid design:skeleton JSON payload: {e}"))?;
+    let root_frame = payload
+        .get("rootFrame")
+        .ok_or("design:skeleton JSON payload must contain rootFrame")?;
+    if !root_frame.is_object() {
+        return Err("design:skeleton rootFrame must be an object".into());
+    }
+    let sections = payload
+        .get("sections")
+        .ok_or("design:skeleton JSON payload must contain sections")?;
+    if !sections.is_array() {
+        return Err("design:skeleton sections must be an array".into());
+    }
+
+    let mut args = serde_json::Map::new();
+    args.insert("rootFrame".into(), root_frame.clone());
+    args.insert("sections".into(), sections.clone());
+    if let Some(style_guide) = payload.get("styleGuide") {
+        if !style_guide.is_object() {
+            return Err("design:skeleton styleGuide must be an object".into());
+        }
+        args.insert("styleGuide".into(), style_guide.clone());
+    }
+    if let Some(canvas_width) = flag_value(flags, "canvas-width") {
+        let width = canvas_width
+            .parse::<i64>()
+            .map_err(|_| format!("--canvas-width must be an integer, got {canvas_width:?}"))?;
+        args.insert("canvasWidth".into(), Value::Number(width.into()));
+    }
+    if let Some(page) = flag_value(flags, "page") {
+        args.insert("pageId".into(), Value::String(page));
+    }
+    if let Some(file) = flag_value(flags, "file") {
+        args.insert("filePath".into(), resolve_file_path_value(&file));
+    }
+    let args_json = serde_json::to_string(&Value::Object(args))
+        .map_err(|e| format!("cannot serialize design:skeleton args: {e}"))?;
+    Ok(Command::ToolCallJson {
+        tool: "design_skeleton".into(),
+        args_json,
+    })
+}
+
+fn map_design_refine(flags: &Flags) -> Result<Command, String> {
+    let root_id = flag_value(flags, "root-id").ok_or("Usage: op design:refine --root-id <id>")?;
+    let mut pairs = vec![pair("rootId", root_id)];
+    if let Some(canvas_width) = flag_value(flags, "canvas-width") {
+        pairs.push(pair("canvasWidth", canvas_width));
+    }
+    if let Some(page) = flag_value(flags, "page") {
+        pairs.push(pair("pageId", page));
+    }
+    push_file_path(&mut pairs, flags);
+    tool_call("design_refine", pairs)
 }
 
 fn map_page(positionals: &[String], flags: &Flags) -> Result<Command, String> {
@@ -383,34 +527,39 @@ fn map_page(positionals: &[String], flags: &Flags) -> Result<Command, String> {
         .map(String::as_str)
         .ok_or("Usage: op page list|add|remove|rename|reorder|duplicate ...")?;
     match sub {
-        "list" => tool_call("list_pages", vec![]),
+        "list" => {
+            let mut pairs = Vec::new();
+            push_file_path(&mut pairs, flags);
+            tool_call("list_pages", pairs)
+        }
         "add" => {
             let name = flag_value(flags, "name").or_else(|| positionals.get(2).cloned());
             let mut pairs = Vec::new();
             if let Some(name) = name {
                 pairs.push(pair("name", name));
             }
+            push_file_path(&mut pairs, flags);
             tool_call("add_page", pairs)
         }
         "remove" | "delete" => {
             let page_id = required_pos(positionals, 2, "Usage: op page remove <page-id>")?;
-            tool_call("remove_page", vec![pair("pageId", page_id)])
+            let mut pairs = vec![pair("pageId", page_id)];
+            push_file_path(&mut pairs, flags);
+            tool_call("remove_page", pairs)
         }
         "rename" => {
             let page_id = required_pos(positionals, 2, "Usage: op page rename <page-id> <name>")?;
             let name = required_pos(positionals, 3, "Usage: op page rename <page-id> <name>")?;
-            tool_call(
-                "rename_page",
-                vec![pair("pageId", page_id), pair("name", name)],
-            )
+            let mut pairs = vec![pair("pageId", page_id), pair("name", name)];
+            push_file_path(&mut pairs, flags);
+            tool_call("rename_page", pairs)
         }
         "reorder" => {
             let page_id = required_pos(positionals, 2, "Usage: op page reorder <page-id> <index>")?;
             let index = required_pos(positionals, 3, "Usage: op page reorder <page-id> <index>")?;
-            tool_call(
-                "reorder_page",
-                vec![pair("pageId", page_id), pair("index", index)],
-            )
+            let mut pairs = vec![pair("pageId", page_id), pair("index", index)];
+            push_file_path(&mut pairs, flags);
+            tool_call("reorder_page", pairs)
         }
         "duplicate" => {
             let page_id = required_pos(positionals, 2, "Usage: op page duplicate <page-id>")?;
@@ -418,6 +567,7 @@ fn map_page(positionals: &[String], flags: &Flags) -> Result<Command, String> {
             if let Some(name) = flag_value(flags, "name") {
                 pairs.push(pair("name", name));
             }
+            push_file_path(&mut pairs, flags);
             tool_call("duplicate_page", pairs)
         }
         _ => Err(format!("unknown page subcommand {sub:?}")),
@@ -430,6 +580,7 @@ fn map_vars_set(positionals: &[String], flags: &Flags) -> Result<Command, String
     if flags.contains_key("replace") {
         pairs.push(pair("replace", "true"));
     }
+    push_file_path(&mut pairs, flags);
     tool_call("set_variables", pairs)
 }
 
@@ -439,6 +590,7 @@ fn map_themes_set(positionals: &[String], flags: &Flags) -> Result<Command, Stri
     if flags.contains_key("replace") {
         pairs.push(pair("replace", "true"));
     }
+    push_file_path(&mut pairs, flags);
     tool_call("set_themes", pairs)
 }
 
@@ -448,12 +600,15 @@ fn map_theme_save(positionals: &[String], flags: &Flags) -> Result<Command, Stri
     if let Some(name) = flag_value(flags, "name") {
         pairs.push(pair("name", name));
     }
+    push_file_path(&mut pairs, flags);
     tool_call("save_theme_preset", pairs)
 }
 
-fn map_theme_load(positionals: &[String]) -> Result<Command, String> {
+fn map_theme_load(positionals: &[String], flags: &Flags) -> Result<Command, String> {
     let preset_path = required_pos(positionals, 1, "Usage: op theme:load <file.optheme>")?;
-    tool_call("load_theme_preset", vec![pair("presetPath", preset_path)])
+    let mut pairs = vec![pair("presetPath", preset_path)];
+    push_file_path(&mut pairs, flags);
+    tool_call("load_theme_preset", pairs)
 }
 
 fn map_theme_list(positionals: &[String]) -> Result<Command, String> {
@@ -472,6 +627,7 @@ fn map_layout(flags: &Flags) -> Result<Command, String> {
     if let Some(page) = flag_value(flags, "page") {
         pairs.push(pair("pageId", page));
     }
+    push_file_path(&mut pairs, flags);
     tool_call("snapshot_layout", pairs)
 }
 
@@ -496,6 +652,7 @@ fn map_find_space(flags: &Flags) -> Result<Command, String> {
     if let Some(page) = flag_value(flags, "page") {
         pairs.push(pair("pageId", page));
     }
+    push_file_path(&mut pairs, flags);
     tool_call("find_empty_space", pairs)
 }
 
@@ -505,9 +662,7 @@ fn map_import_svg(positionals: &[String], flags: &Flags) -> Result<Command, Stri
         1,
         "Usage: op import:svg <file.svg> [--x N] [--y N] [--parent P] [--page PAGE]",
     )?;
-    let svg =
-        fs::read_to_string(&path).map_err(|e| format!("cannot read SVG file {path:?}: {e}"))?;
-    let mut pairs = vec![pair("svg", svg)];
+    let mut pairs = vec![pair("svgPath", path)];
     if let Some(x) = flag_value(flags, "x") {
         pairs.push(pair("x", x));
     }
@@ -520,6 +675,7 @@ fn map_import_svg(positionals: &[String], flags: &Flags) -> Result<Command, Stri
     if let Some(page) = flag_value(flags, "page") {
         pairs.push(pair("pageId", page));
     }
+    push_file_path(&mut pairs, flags);
     tool_call("import_svg", pairs)
 }
 
@@ -534,6 +690,7 @@ fn generic_tool_call(tool: &str, rest: &[String], flags: &Flags) -> Result<Comma
         }
         pairs.push(pair(k, v));
     }
+    push_file_path(&mut pairs, flags);
     for (k, v) in flags {
         if is_global_compat_flag(k) {
             continue;
@@ -544,74 +701,7 @@ fn generic_tool_call(tool: &str, rest: &[String], flags: &Flags) -> Result<Comma
 }
 
 fn is_global_compat_flag(key: &str) -> bool {
-    matches!(
-        key,
-        "file" | "page" | "post-process" | "canvas-width" | "depth"
-    )
-}
-
-fn insert_pairs(raw: &str) -> Result<Vec<(String, String)>, String> {
-    let value = parse_json_object(raw)?;
-    let obj = value.as_object().expect("validated JSON object");
-    let kind =
-        normalize_kind(string_field(obj, &["kind", "type"]).ok_or("insert JSON needs kind/type")?);
-    let name = string_field(obj, &["name", "content"]).unwrap_or_else(|| kind.clone());
-    let mut pairs = vec![
-        pair("kind", kind),
-        pair("name", name),
-        pair("x", dimension_field(obj, "x", Some("0"))?),
-        pair("y", dimension_field(obj, "y", Some("0"))?),
-        pair("width", dimension_field(obj, "width", Some("100"))?),
-        pair("height", dimension_field(obj, "height", Some("100"))?),
-    ];
-    if let Some(fill_hex) = fill_hex_field(obj)? {
-        pairs.push(pair("fill_hex", fill_hex));
-    }
-    Ok(pairs)
-}
-
-fn update_pairs(raw: &str) -> Result<Vec<(String, String)>, String> {
-    let value = parse_json_object(raw)?;
-    let obj = value.as_object().expect("validated JSON object");
-    let mut pairs = Vec::new();
-    if let Some(name) = string_field(obj, &["name"]) {
-        pairs.push(pair("name", name));
-    }
-    for key in ["x", "y", "width", "height"] {
-        if obj.contains_key(key) {
-            pairs.push(pair(key, dimension_field(obj, key, None)?));
-        }
-    }
-    if let Some(fill_hex) = fill_hex_field(obj)? {
-        pairs.push(pair("fill_hex", fill_hex));
-    }
-    if pairs.is_empty() {
-        return Err("update JSON must include at least one of x/y/width/height/name/fill".into());
-    }
-    Ok(pairs)
-}
-
-fn replace_pairs(raw: &str) -> Result<Vec<(String, String)>, String> {
-    let value = parse_json_object(raw)?;
-    let obj = value.as_object().expect("validated JSON object");
-    let kind =
-        normalize_kind(string_field(obj, &["kind", "type"]).ok_or("replace JSON needs kind/type")?);
-    let name = string_field(obj, &["name", "content"]).unwrap_or_else(|| kind.clone());
-    let mut pairs = vec![
-        pair("kind", kind),
-        pair("name", name),
-        pair("x", dimension_field(obj, "x", None)?),
-        pair("y", dimension_field(obj, "y", None)?),
-        pair("width", dimension_field(obj, "width", None)?),
-        pair("height", dimension_field(obj, "height", None)?),
-    ];
-    if let Some(fill_hex) = fill_hex_field(obj)? {
-        pairs.push(pair("fill_hex", fill_hex));
-    }
-    if let Some(v) = string_field(obj, &["drop_children", "dropChildren"]) {
-        pairs.push(pair("drop_children", v));
-    }
-    Ok(pairs)
+    ["file", "page", "post-process", "canvas-width", "depth"].contains(&key)
 }
 
 fn parse_json_object(raw: &str) -> Result<Value, String> {
@@ -623,71 +713,9 @@ fn parse_json_object(raw: &str) -> Result<Value, String> {
     Ok(value)
 }
 
-fn string_field(obj: &serde_json::Map<String, Value>, keys: &[&str]) -> Option<String> {
-    keys.iter().find_map(|key| scalar_to_string(obj.get(*key)?))
-}
-
-fn dimension_field(
-    obj: &serde_json::Map<String, Value>,
-    key: &str,
-    default: Option<&str>,
-) -> Result<String, String> {
-    let Some(value) = obj.get(key) else {
-        return default
-            .map(str::to_string)
-            .ok_or_else(|| format!("{key} is required and must be a numeric doc-px value"));
-    };
-    let Some(s) = scalar_to_string(value) else {
-        return Err(format!("{key} must be a string or number"));
-    };
-    match s.parse::<i32>() {
-        Ok(_) => Ok(s),
-        Err(_) => Err(format!(
-            "{key} must be a decimal i32 for Rust MCP, got {s:?}"
-        )),
-    }
-}
-
-fn fill_hex_field(obj: &serde_json::Map<String, Value>) -> Result<Option<String>, String> {
-    if let Some(v) = obj.get("fill_hex").or_else(|| obj.get("fillHex")) {
-        return scalar_to_string(v)
-            .map(Some)
-            .ok_or_else(|| "fill_hex must be a string".into());
-    }
-    let Some(fill) = obj.get("fill") else {
-        return Ok(None);
-    };
-    match fill {
-        Value::String(s) => Ok(Some(s.clone())),
-        Value::Array(items) => {
-            for item in items {
-                if let Value::Object(fill_obj) = item {
-                    if let Some(color) = string_field(fill_obj, &["color"]) {
-                        return Ok(Some(color));
-                    }
-                }
-            }
-            Ok(None)
-        }
-        Value::Object(fill_obj) => Ok(string_field(fill_obj, &["color"])),
-        _ => Err("fill must be a hex string, fill object, or fill array".into()),
-    }
-}
-
-fn scalar_to_string(value: &Value) -> Option<String> {
-    match value {
-        Value::String(s) => Some(s.clone()),
-        Value::Number(n) => Some(n.to_string()),
-        Value::Bool(v) => Some(v.to_string()),
-        _ => None,
-    }
-}
-
-fn normalize_kind(kind: String) -> String {
-    match kind.as_str() {
-        "rectangle" => "rect".into(),
-        other => other.into(),
-    }
+fn data_pairs(raw: &str) -> Result<Vec<(String, String)>, String> {
+    parse_json_object(raw)?;
+    Ok(vec![pair("data", raw.trim())])
 }
 
 fn resolve_arg(arg: Option<&str>) -> Result<String, String> {
@@ -725,8 +753,20 @@ fn flag_value(flags: &Flags, key: &str) -> Option<String> {
     flags.get(key).and_then(Clone::clone)
 }
 
+fn push_file_path(pairs: &mut Vec<(String, String)>, flags: &Flags) {
+    if let Some(file) = flag_value(flags, "file") {
+        pairs.push(pair("filePath", resolve_file_path_arg(&file)));
+    }
+}
+
 fn pair(k: impl Into<String>, v: impl Into<String>) -> (String, String) {
     (k.into(), v.into())
+}
+
+fn tool_call_with_file(tool: &str, flags: &Flags) -> Result<Command, String> {
+    let mut pairs = Vec::new();
+    push_file_path(&mut pairs, flags);
+    tool_call(tool, pairs)
 }
 
 fn tool_call(tool: &str, args: Vec<(String, String)>) -> Result<Command, String> {
@@ -741,8 +781,14 @@ fn version_json() -> String {
 }
 
 #[cfg(test)]
+mod cli_design_tests;
+#[cfg(test)]
+mod cli_file_flag_tests;
+#[cfg(test)]
 mod cli_import_tests;
 #[cfg(test)]
 mod cli_node_tests;
+#[cfg(test)]
+mod cli_selection_tests;
 #[cfg(test)]
 mod tests;

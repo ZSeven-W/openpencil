@@ -14,24 +14,25 @@ COMMON COMMANDS:
   op status                               check whether MCP HTTP is reachable
   op get [--type T] [--name N] [--id ID] [--depth N] [--parent P]
   op selection                            get current selection
-  op insert <json|@file|-> [--parent P] [--page PAGE]
-                                          insert a leaf node
-  op update <id> <json|@file|-> [--page PAGE]
-                                          patch x/y/width/height/name/fill
+  op insert <json|@file|-> [--parent P] [--page PAGE] [--post-process]
+                                          insert a PenNode JSON tree
+  op update <id> <json|@file|-> [--page PAGE] [--post-process]
+                                          patch node data
   op delete <id> [--page PAGE]            delete a node
   op read-nodes [ids] [--depth N] [--vars] [--page P] [--file F]
   op move <id> [--parent P] [--index N] [--page PAGE]
                                           reparent a node (empty parent = page root)
   op copy <id> [--parent P] [--page PAGE] deep-copy a node
-  op replace <id> <json|@file|->          replace with a leaf node
-  op design <json-array|@file|->          call batch_design(nodes_json)
+  op replace <id> <json|@file|-> [--page PAGE] [--post-process]
+                                          replace with PenNode JSON
+  op design <dsl|json-array|@file|->      call batch_design(operations/nodes_json)
   op design:skeleton <json-array|@file|->
   op design:content [section] <json-array|@file|->
-  op design:refine <json-array|@file|->
+  op design:refine --root-id <id>
   op page list|add [--name N]|remove|rename|reorder|duplicate ...
   op vars                                 get variables + theme axes
   op vars:set <json|@file|-> [--replace] set variables
-  op themes                               get active theme pins
+  op themes                               get theme axes
   op themes:set <json|@file|-> [--replace]
   op layout [--parent P] [--depth N]      snapshot layout tree
   op find-space [--direction D] [--width W] [--height H]
@@ -45,10 +46,9 @@ COMMON COMMANDS:
 GLOBAL FLAGS:
   --port <n>      MCP HTTP port (default: 3100)
   --pretty        pretty-print JSON replies
-  --file <path>   `op start` document path; otherwise accepted for TS CLI
-                  compatibility while Rust MCP targets the open document
-  --page <id>     accepted for TS CLI compatibility; use set_active_page for
-                  Rust MCP page selection by index
+  --file <path>   `op start` document path; otherwise target .op file for
+                  tools that accept filePath (omit for the server document)
+  --page <id>     target page ID for tools that support pageId
 
 The server must be running at:
   http://127.0.0.1:3100/mcp
