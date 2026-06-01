@@ -2877,6 +2877,7 @@ dependencies = [
  "jian-ops-schema",
  "op-ai",
  "op-i18n",
+ "serde_json",
 ]
 
 [[package]]

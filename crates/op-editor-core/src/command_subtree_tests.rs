@@ -54,6 +54,7 @@ fn insert_subtree_nests_children_under_root() {
     assert!(s.apply(EditorCommand::InsertSubtree {
         nodes: vec![subtree],
         parent_id: NodeId::NONE,
+        page_id: None,
     }));
 
     // The root gained one group; the group keeps its one child.
@@ -72,6 +73,7 @@ fn insert_subtree_rejects_empty() {
     assert!(!s.apply(EditorCommand::InsertSubtree {
         nodes: vec![],
         parent_id: NodeId::NONE,
+        page_id: None,
     }));
     assert_eq!(s.active_children().len(), 0);
 }
@@ -82,6 +84,7 @@ fn insert_subtree_is_undoable() {
     assert!(s.apply(EditorCommand::InsertSubtree {
         nodes: vec![make_group("ext-1".into(), "card", vec![])],
         parent_id: NodeId::NONE,
+        page_id: None,
     }));
     assert_eq!(s.active_children().len(), 1);
 
@@ -99,6 +102,7 @@ fn insert_subtree_under_parent_container() {
     assert!(s.apply(EditorCommand::InsertSubtree {
         nodes: vec![make_group("ext-1".into(), "card", vec![])],
         parent_id: NodeId::new("parent"),
+        page_id: None,
     }));
     // The subtree nested into `parent`, not the page root.
     assert_eq!(s.active_children().len(), 1);
@@ -112,6 +116,7 @@ fn insert_subtree_rejects_missing_parent() {
     assert!(!s.apply(EditorCommand::InsertSubtree {
         nodes: vec![make_group("ext-1".into(), "card", vec![])],
         parent_id: NodeId::new("nope"),
+        page_id: None,
     }));
     assert_eq!(s.active_children().len(), 0);
 }
@@ -123,6 +128,7 @@ fn insert_subtree_rejects_non_container_parent() {
     assert!(!s.apply(EditorCommand::InsertSubtree {
         nodes: vec![make_group("ext-1".into(), "card", vec![])],
         parent_id: NodeId::new("leaf"),
+        page_id: None,
     }));
     // Document unchanged: still just that path.
     assert_eq!(s.active_children().len(), 1);
@@ -138,6 +144,7 @@ fn insert_subtree_remaps_ids_colliding_with_live_doc() {
     assert!(s.apply(EditorCommand::InsertSubtree {
         nodes: vec![make_group("n1".into(), "card", vec![])],
         parent_id: NodeId::NONE,
+        page_id: None,
     }));
     // Insert succeeded and the whole document has no duplicate ids.
     assert_eq!(s.active_children().len(), 2);

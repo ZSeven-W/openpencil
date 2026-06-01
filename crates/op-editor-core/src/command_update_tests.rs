@@ -5,8 +5,9 @@
 use crate::command::EditorCommand;
 use crate::node_id::NodeId;
 use crate::pen_node_ext::PenNodeExt;
-use crate::test_support::{rect, state_with};
+use crate::test_support::{rect, state_with, text};
 use crate::walkers::find_node;
+use jian_ops_schema::node::{PenNode, TextContent};
 use jian_ops_schema::page::PenPage;
 
 fn id(s: &str) -> NodeId {
@@ -105,4 +106,21 @@ fn update_node_can_patch_requested_page_without_switching_active_page() {
     );
     assert_eq!(pages[1].children[0].base().x, Some(42.0));
     assert_eq!(s.ui.active_page_index, 0);
+}
+
+#[test]
+fn patch_node_data_shallow_merges_ts_text_fields() {
+    let mut s = state_with(vec![text("n1", "Title", 0.0, 0.0, 100.0, 24.0, "Old")]);
+
+    assert!(s.apply(EditorCommand::PatchNodeData {
+        node_id: id("n1"),
+        patch_json: r#"{"content":"New","fontSize":24}"#.into(),
+        page_id: None,
+    }));
+
+    let PenNode::Text(text) = find_node(s.active_children(), &id("n1")).unwrap() else {
+        panic!("expected text node");
+    };
+    assert_eq!(text.content, TextContent::Plain("New".into()));
+    assert_eq!(text.font_size, Some(24.0));
 }

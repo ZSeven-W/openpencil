@@ -76,6 +76,7 @@ fn copy_node_clones_subtree_with_fresh_ids() {
     assert!(s.apply(EditorCommand::CopyNode {
         node_id: id("n12"),
         target_parent: NodeId::NONE,
+        overrides_json: None,
         page_id: None,
     }));
     // A clone landed at the page root; its id is fresh.
@@ -90,6 +91,7 @@ fn copy_node_rejects_unknown_source() {
     assert!(!s.apply(EditorCommand::CopyNode {
         node_id: id("ghost"),
         target_parent: NodeId::NONE,
+        overrides_json: None,
         page_id: None,
     }));
 }
@@ -110,6 +112,7 @@ fn replace_node_swaps_at_same_slot() {
         height: 50,
         fill_hex: Some("#ff0000".into()),
         drop_children: false,
+        page_id: None,
     }));
     let frame = find_node(s.active_children(), &id("n10")).unwrap();
     let kids = frame.children().unwrap();
@@ -135,6 +138,7 @@ fn replace_node_refuses_to_drop_container_children() {
         height: 50,
         fill_hex: None,
         drop_children: false,
+        page_id: None,
     }));
     let frame = find_node(s.active_children(), &id("n10")).unwrap();
     assert_eq!(frame.children().unwrap().len(), 2);
@@ -154,6 +158,7 @@ fn replace_node_drops_container_children_when_opted_in() {
         height: 50,
         fill_hex: None,
         drop_children: true,
+        page_id: None,
     }));
     let root = s.active_children();
     assert!(root.iter().all(|n| n.id_str() != "n10"));
@@ -175,6 +180,7 @@ fn replace_node_atomic_on_bad_fill_hex() {
         height: 10,
         fill_hex: Some("not-hex".into()),
         drop_children: false,
+        page_id: None,
     }));
     // n11 still present, no id minted.
     let frame = find_node(s.active_children(), &id("n10")).unwrap();
@@ -212,6 +218,7 @@ fn batch_insert_appends_all_items() {
                 fill_hex: Some("#00ff00".into()),
             },
         ],
+        page_id: None,
     }));
     assert_eq!(s.active_children().len(), 2);
     assert!(s.find_duplicate_id().is_none());
@@ -241,6 +248,7 @@ fn batch_insert_rejects_whole_batch_on_one_bad_item() {
                 fill_hex: None,
             },
         ],
+        page_id: None,
     }));
     // Nothing inserted — atomic.
     assert!(s.active_children().is_empty());
@@ -249,7 +257,10 @@ fn batch_insert_rejects_whole_batch_on_one_bad_item() {
 #[test]
 fn batch_insert_rejects_empty() {
     let mut s = state_with(vec![]);
-    assert!(!s.apply(EditorCommand::BatchInsert { items: vec![] }));
+    assert!(!s.apply(EditorCommand::BatchInsert {
+        items: vec![],
+        page_id: None,
+    }));
 }
 
 // --- Per-node attribute writers --------------------------------------
@@ -538,7 +549,10 @@ fn set_viewport_partial_axes() {
 #[test]
 fn add_then_set_active_page() {
     let mut s = state_with(vec![rect("n1", "r", 0.0, 0.0, 10.0, 10.0)]);
-    assert!(s.apply(EditorCommand::AddPage { name: None }));
+    assert!(s.apply(EditorCommand::AddPage {
+        name: None,
+        children: None,
+    }));
     assert_eq!(s.page_count(), 2);
     assert!(s.apply(EditorCommand::SetActivePage { index: 0 }));
     assert_eq!(s.ui.active_page_index, 0);
@@ -550,6 +564,7 @@ fn add_page_command_accepts_custom_name() {
     let mut s = state_with(vec![rect("n1", "r", 0.0, 0.0, 10.0, 10.0)]);
     assert!(s.apply(EditorCommand::AddPage {
         name: Some("Checkout".into()),
+        children: None,
     }));
     let pages = s.doc.pages.as_ref().expect("multi-page doc");
     assert_eq!(pages[1].name, "Checkout");
@@ -560,6 +575,7 @@ fn duplicate_page_command_accepts_custom_name() {
     let mut s = state_with(vec![rect("n1", "r", 0.0, 0.0, 10.0, 10.0)]);
     assert!(s.apply(EditorCommand::AddPage {
         name: Some("Checkout".into()),
+        children: None,
     }));
     assert!(s.apply(EditorCommand::DuplicatePage {
         index: 1,

@@ -96,6 +96,7 @@ fn copy_node_can_target_requested_page_without_switching_active_page() {
     assert!(s.apply(EditorCommand::CopyNode {
         node_id: id("n3"),
         target_parent: id("n2"),
+        overrides_json: None,
         page_id: Some("page-2".into()),
     }));
 
@@ -105,4 +106,26 @@ fn copy_node_can_target_requested_page_without_switching_active_page() {
     assert_ne!(target_children[0].id_str(), "n3");
     assert_eq!(target_children[0].base().name.as_deref(), Some("Source"));
     assert_eq!(s.ui.active_page_index, 0);
+}
+
+#[test]
+fn copy_node_applies_root_overrides_without_overriding_fresh_id() {
+    let mut s = state_with(vec![rect("n1", "Source", 0.0, 0.0, 10.0, 10.0)]);
+
+    assert!(s.apply(EditorCommand::CopyNode {
+        node_id: id("n1"),
+        target_parent: NodeId::NONE,
+        page_id: None,
+        overrides_json: Some(r#"{"id":"override-id","name":"Copy","x":42,"width":88}"#.into()),
+    }));
+
+    let clone = s
+        .active_children()
+        .iter()
+        .find(|node| node.id_str() != "n1")
+        .expect("cloned node");
+    assert_ne!(clone.id_str(), "override-id");
+    assert_eq!(clone.base().name.as_deref(), Some("Copy"));
+    assert_eq!(clone.base().x, Some(42.0));
+    assert_eq!(clone.width_px(), Some(88.0));
 }
