@@ -11,6 +11,99 @@ use op_editor_core::{walkers, EditorState, NodeId, PenNodeExt as _};
 use reqwest::header::CONTENT_TYPE;
 
 const MAX_EMBEDDED_IMAGE_BYTES: usize = 4 * 1024 * 1024;
+const IMAGE_SEARCH_STOP_WORDS: &[&str] = &[
+    "a",
+    "an",
+    "the",
+    "and",
+    "or",
+    "but",
+    "in",
+    "on",
+    "at",
+    "to",
+    "for",
+    "of",
+    "with",
+    "by",
+    "from",
+    "is",
+    "are",
+    "was",
+    "were",
+    "be",
+    "been",
+    "being",
+    "have",
+    "has",
+    "had",
+    "do",
+    "does",
+    "did",
+    "will",
+    "would",
+    "could",
+    "should",
+    "may",
+    "might",
+    "shall",
+    "can",
+    "that",
+    "this",
+    "these",
+    "those",
+    "it",
+    "its",
+    "very",
+    "really",
+    "just",
+    "also",
+    "about",
+    "above",
+    "after",
+    "before",
+    "between",
+    "into",
+    "through",
+    "during",
+    "each",
+    "some",
+    "such",
+    "no",
+    "not",
+    "only",
+    "same",
+    "so",
+    "than",
+    "too",
+    "up",
+    "out",
+    "if",
+    "then",
+    "once",
+    "here",
+    "there",
+    "when",
+    "where",
+    "how",
+    "all",
+    "both",
+    "few",
+    "more",
+    "most",
+    "other",
+    "any",
+    "as",
+    "while",
+    "using",
+    "showing",
+    "featuring",
+    "looking",
+    "style",
+    "styled",
+    "inspired",
+    "based",
+];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ImageSearchTarget {
@@ -576,7 +669,8 @@ async fn fetch_first_image_url(
         .user_agent(concat!("openpencil-desktop/", env!("CARGO_PKG_VERSION")))
         .build()
         .ok()?;
-    if let Some(url) = fetch_openverse(&client, query, aspect_ratio, credentials).await {
+    let query = simplify_search_query(query);
+    if let Some(url) = fetch_openverse(&client, &query, aspect_ratio, credentials).await {
         return Some(url);
     }
     let words: Vec<&str> = query.split_whitespace().filter(|w| !w.is_empty()).collect();
@@ -589,7 +683,28 @@ async fn fetch_first_image_url(
             return Some(url);
         }
     }
-    fetch_wikimedia(&client, query).await
+    fetch_wikimedia(&client, &query).await
+}
+
+fn simplify_search_query(prompt: &str) -> String {
+    let mut normalized = String::with_capacity(prompt.len());
+    for ch in prompt.to_lowercase().chars() {
+        if ch.is_ascii_alphanumeric() || ch.is_ascii_whitespace() || ch == '-' {
+            normalized.push(ch);
+        } else {
+            normalized.push(' ');
+        }
+    }
+    let keywords: Vec<&str> = normalized
+        .split_whitespace()
+        .filter(|word| word.len() > 2 && !IMAGE_SEARCH_STOP_WORDS.contains(word))
+        .take(4)
+        .collect();
+    if keywords.is_empty() {
+        prompt.chars().take(30).collect()
+    } else {
+        keywords.join(" ")
+    }
 }
 
 async fn fetch_openverse(
@@ -627,9 +742,10 @@ fn openverse_search_url(
     query: &str,
     aspect_ratio: Option<ImageAspectRatio>,
 ) -> Option<reqwest::Url> {
+    let query = simplify_search_query(query);
     let mut url = reqwest::Url::parse_with_params(
         "https://api.openverse.org/v1/images/",
-        &[("q", query), ("page_size", "1")],
+        &[("q", query.as_str()), ("page_size", "1")],
     )
     .ok()?;
     if let Some(aspect_ratio) = aspect_ratio {
