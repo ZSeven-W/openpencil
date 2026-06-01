@@ -65,6 +65,20 @@ impl DesktopApp {
         if !self.git_session.is_bound() {
             return false;
         }
+        // Resolve the stored-credential kind for the remote host before the
+        // `panel` borrow (it reads `git_session`'s auth store).
+        let stored_auth = match snap.remote_host.as_deref() {
+            None => String::new(),
+            Some(host) => match self
+                .git_session
+                .auth_stores()
+                .and_then(|(auth, _)| auth.get(host).ok().flatten())
+            {
+                Some(op_git::Credential::Ssh { .. }) => "ssh".to_string(),
+                Some(op_git::Credential::Https { .. }) => "token".to_string(),
+                None => "none".to_string(),
+            },
+        };
         let panel = &mut self.host.editor_state_mut().editor_ui.git_panel;
         let changed = panel.in_repo != snap.in_repo
             || panel.branch != snap.branch
@@ -82,12 +96,16 @@ impl DesktopApp {
         let commits_changed = panel.recent_commits != snap.recent_commits;
         if commits_changed {
             panel.expanded_commit = None;
+            panel.expanded_commit_diff = None;
         }
         panel.in_repo = snap.in_repo;
         panel.branch = snap.branch;
         panel.branches = snap.branches;
         panel.dirty_count = snap.dirty_count;
         panel.ahead = snap.ahead;
+        panel.behind = snap.behind;
+        panel.remote_host = snap.remote_host;
+        panel.stored_auth = stored_auth;
         panel.conflicted_count = snap.conflicted_count;
         panel.merging = snap.merging;
         panel.conflicted_files = snap.conflicted_files;
@@ -247,18 +265,43 @@ impl DesktopApp {
                 // (the TS `commitMilestone` flow). stage_tracked is
                 // explicitly designed to refresh the index blob after a
                 // save, so a milestone captures exactly what's on screen.
-                if !message.is_empty() {
+                // No committer identity yet → show the signature form and
+                // defer the commit (the message stays put; `save_author_identity`
+                // re-fires this action). TS `authorIdentity === null` path.
+                let needs_author = !message.is_empty()
+                    && !self
+                        .git_session
+                        .repo()
+                        .map(|r| r.has_committer_identity())
+                        .unwrap_or(true);
+                if needs_author {
+                    let panel = &mut self.host.editor_state_mut().editor_ui.git_panel;
+                    panel.author_prompt = true;
+                    panel.author_name_focused = true;
+                    panel.author_email_focused = false;
+                    // Hand keyboard focus to the form, off the (now hidden)
+                    // commit box, so typing lands in the name/email fields.
+                    panel.commit_focused = false;
+                    panel.commit_no_changes = false;
+                } else if !message.is_empty() {
                     match self.git_session.tracked_file().map(|p| p.to_path_buf()) {
                         Some(path) => {
                             match persistence::save_to_path(self.host.editor_state(), &path) {
                                 Ok(()) => {
                                     self.mark_document_saved();
-                                    let committed = self
-                                        .git_session
-                                        .stage_tracked()
-                                        .and_then(|()| self.git_session.commit_staged(&message));
+                                    // Stage, then guard against an empty
+                                    // milestone: if the saved file matches the
+                                    // last commit there is nothing to commit,
+                                    // so skip rather than create an empty one.
+                                    let committed = match self.git_session.stage_tracked() {
+                                        Ok(()) if self.git_session.tracked_has_staged_changes() => {
+                                            self.git_session.commit_staged(&message).map(|()| true)
+                                        }
+                                        Ok(()) => Ok(false),
+                                        Err(e) => Err(e),
+                                    };
                                     match committed {
-                                        Ok(()) => {
+                                        Ok(true) => {
                                             let panel = &mut self
                                                 .host
                                                 .editor_state_mut()
@@ -266,6 +309,16 @@ impl DesktopApp {
                                                 .git_panel;
                                             panel.commit_message.clear();
                                             panel.commit_focused = false;
+                                            panel.commit_no_changes = false;
+                                        }
+                                        // Nothing changed — keep the message and
+                                        // flag a "no changes" hint under the box.
+                                        Ok(false) => {
+                                            self.host
+                                                .editor_state_mut()
+                                                .editor_ui
+                                                .git_panel
+                                                .commit_no_changes = true;
                                         }
                                         Err(err) => self.show_git_op_error_dialog("commit", &err),
                                     }
@@ -384,6 +437,23 @@ impl DesktopApp {
             GitPanelAction::CopyHash(rev) => {
                 // Pure clipboard write — no git op, no reload.
                 crate::clipboard::set_text(&rev);
+            }
+            GitPanelAction::LoadCommitDiff(index) => self.load_expanded_commit_diff(index),
+            GitPanelAction::EnterTrackedPicker => self.enter_tracked_picker(),
+            GitPanelAction::BindTrackedFile(path, open) => self.bind_tracked_file(path, open),
+            GitPanelAction::ClearAuthor => self.clear_commit_author(),
+            GitPanelAction::CloseRepo => self.close_repo(),
+            GitPanelAction::EnterSshKeys => self.enter_ssh_keys(),
+            GitPanelAction::ImportSshKey => self.import_ssh_key(),
+            GitPanelAction::SaveAuthor => self.save_author_identity(),
+            GitPanelAction::FetchRemote => {
+                // `git fetch` on origin (with stored credentials) — the tail
+                // refresh re-reads ahead/behind afterward.
+                if let Some(repo) = self.git_session.authed_repo() {
+                    if let Err(e) = repo.fetch() {
+                        eprintln!("openpencil-desktop: git fetch failed: {e}");
+                    }
+                }
             }
         }
         // Every action ends with a fresh snapshot + a repaint.

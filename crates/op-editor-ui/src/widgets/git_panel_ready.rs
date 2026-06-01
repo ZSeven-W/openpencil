@@ -15,6 +15,7 @@ use crate::widgets::git_panel::{contains, truncate, GitPanel, GitPanelHit, PAD};
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect};
+use op_editor_core::{CommitDiffSummary, CommitDiffView};
 
 /// Header bar height (TS `px-2.5 py-1.5` around a 28 px `icon-sm`
 /// button = 6 + 28 + 6 = 40 px row).
@@ -31,19 +32,28 @@ const READY_PAD: f32 = 10.0;
 /// (`h-6` 24 px + `pb-1.5` 6 px = 30 px) ≈ 83 px.
 const COMMIT_TOP: f32 = HEADER_H + 12.0;
 const COMMIT_H: f32 = 83.0;
-/// History section. The commit box owns the only divider below it. The
-/// TS `git-panel-history-list` has NO section header — the timeline (or
-/// the empty `git.history.empty` line) sits directly under that divider
-/// with the list's `py-1.5` rhythm.
-const HISTORY_FIRST: f32 = COMMIT_TOP + COMMIT_H + 24.0;
+/// Height of the commit-signature form (`提交署名`) when it replaces the
+/// commit box — heading + subheading + name + email inputs + button row.
+const AUTHOR_FORM_H: f32 = 168.0;
 const ROW_H: f32 = 26.0;
 const MAX_COMMITS: usize = 8;
+/// Extra empty body height appended below the recent-commit history so the
+/// ready panel reads roomy (TS fixed-height feel) instead of hugging a short
+/// history. Constant, so the panel still grows with more commits.
+const READY_FILL: f32 = 200.0;
 const SUMMARY_MAX: usize = 34;
-/// Height of the inline commit-detail card (里程碑详情 title + a diff
-/// status line + a restore/copy-hash button row) inserted under an
-/// expanded commit row (TS `HistoryMilestoneRow` detail block). Pushes
-/// later rows down.
-const CARD_H: f32 = 84.0;
+/// Base height of the inline commit-detail card (里程碑详情 title + one
+/// status/summary line + a restore/copy-hash button row) under an expanded
+/// commit row (TS `HistoryMilestoneRow` detail block). Grows by one
+/// [`PATCH_ROW_H`] per rendered patch line. The extra height over the button
+/// row (anchored at `height - 52`) is bottom padding so the next commit row
+/// stays well clear of the buttons.
+const CARD_BASE_H: f32 = 104.0;
+/// Per-patch-line height in the expanded diff list.
+const PATCH_ROW_H: f32 = 14.0;
+/// Cap on patch lines drawn in the card (TS scrolls a `max-h-24` list;
+/// the summary counts still report the full totals above the list).
+const MAX_PATCH_ROWS: usize = 6;
 /// Per-char advance heuristic for the branch label (keeps paint +
 /// hit-test aligned without measuring text).
 const BRANCH_CHAR_W: f32 = 7.5;
@@ -65,21 +75,47 @@ impl GitPanel<'_> {
             && self.state.merge_resolve.is_none()
     }
 
-    /// The panel height for the ready view — header + commit box + the
-    /// recent-commit rows (at least one placeholder row).
+    /// Y of the first history row — below the commit box, or below the taller
+    /// commit-signature form when it has replaced the box.
+    fn history_first(&self) -> f32 {
+        let box_h = if self.state.author_prompt {
+            AUTHOR_FORM_H
+        } else {
+            COMMIT_H
+        };
+        COMMIT_TOP + box_h + 24.0
+    }
+
+    /// The panel height for the ready view — header + commit box (or signature
+    /// form) + the recent-commit rows, plus [`READY_FILL`] body space.
     pub(super) fn ready_height(&self) -> f32 {
         let rows = self.state.recent_commits.len().clamp(1, MAX_COMMITS);
-        HISTORY_FIRST + rows as f32 * ROW_H + PAD + self.expanded_card_extra()
+        self.history_first() + rows as f32 * ROW_H + PAD + self.expanded_card_extra() + READY_FILL
+    }
+
+    /// Number of patch lines the expanded card will draw (0 unless the diff
+    /// is `Ready`, capped at [`MAX_PATCH_ROWS`]).
+    fn card_patch_rows(&self) -> usize {
+        match &self.state.expanded_commit_diff {
+            Some(CommitDiffView::Ready(s)) => s.patches.len().min(MAX_PATCH_ROWS),
+            _ => 0,
+        }
+    }
+
+    /// Total height of the open card — base chrome plus one row per drawn
+    /// patch line. Shared by paint + the hit-test walk so they agree.
+    fn expanded_card_height(&self) -> f32 {
+        CARD_BASE_H + self.card_patch_rows() as f32 * PATCH_ROW_H
     }
 
     /// Extra height contributed by an open inline commit-detail card —
-    /// `CARD_H` when a valid row is expanded, else 0. Shared by
-    /// [`GitPanel::ready_height`] + the history paint / hit-test walk so
-    /// they stay in lockstep.
+    /// [`Self::expanded_card_height`] when a valid row is expanded, else 0.
+    /// Shared by [`GitPanel::ready_height`] + the history paint / hit-test
+    /// walk so they stay in lockstep.
     fn expanded_card_extra(&self) -> f32 {
         let n = self.state.recent_commits.len().min(MAX_COMMITS);
         match self.state.expanded_commit {
-            Some(e) if e < n => CARD_H,
+            Some(e) if e < n => self.expanded_card_height(),
             _ => 0.0,
         }
     }
@@ -89,16 +125,20 @@ impl GitPanel<'_> {
     fn expand_offset_before(&self, i: usize) -> f32 {
         let n = self.state.recent_commits.len().min(MAX_COMMITS);
         match self.state.expanded_commit {
-            Some(e) if e < i && e < n => CARD_H,
+            Some(e) if e < i && e < n => self.expanded_card_height(),
             _ => 0.0,
         }
     }
 
     /// `(恢复, 复制哈希)` button rects for the inline card whose top edge
     /// is `card_top`. Backend-free fixed widths keep paint + hit aligned.
+    /// The button row is bottom-anchored so a growing patch list pushes it
+    /// down in lockstep with paint.
     fn commit_card_button_rects(&self, rect: Rect, card_top: f32) -> (Rect, Rect) {
-        // Title at +18, diff line at +40, button row at +52 (h24) → 84.
-        let btn_y = card_top + 52.0;
+        // Button row sits at content position `52 + patches`; the rest of the
+        // card height (CARD_BASE_H - 52 = 52px) is bottom padding so the next
+        // commit row keeps well clear of the buttons.
+        let btn_y = card_top + self.expanded_card_height() - 52.0;
         let h = 24.0;
         let x = rect.origin.x + 40.0; // align with the message column (`pl-10`)
         let restore = Rect {
@@ -120,7 +160,7 @@ impl GitPanel<'_> {
         let e = self.state.expanded_commit.filter(|&e| e < n)?;
         // Row `e`'s text baseline (no prior card offsets — only one card
         // can be open) then `+ ROW_H` to the card top, matching paint.
-        let card_top = rect.origin.y + HISTORY_FIRST + (e as f32 + 1.0) * ROW_H - 6.0;
+        let card_top = rect.origin.y + self.history_first() + (e as f32 + 1.0) * ROW_H - 6.0;
         Some(self.commit_card_button_rects(rect, card_top))
     }
 
@@ -210,6 +250,70 @@ impl GitPanel<'_> {
     }
 
     /// Paint the ready view.
+    /// `(name_input, email_input, save, cancel)` rects of the commit-signature
+    /// form, shared by paint + hit-test.
+    pub(super) fn author_form_rects(&self, rect: Rect) -> (Rect, Rect, Rect, Rect) {
+        let left = rect.origin.x + READY_PAD;
+        let inner_w = rect.size.x - READY_PAD * 2.0;
+        let top = rect.origin.y + COMMIT_TOP;
+        let name_input = Rect {
+            origin: Point2D::new(left, top + 58.0),
+            size: Point2D::new(inner_w, 28.0),
+        };
+        let email_input = Rect {
+            origin: Point2D::new(left, top + 102.0),
+            size: Point2D::new(inner_w, 28.0),
+        };
+        let btn_y = top + 138.0;
+        let w = 56.0;
+        let save = Rect {
+            origin: Point2D::new(rect.origin.x + rect.size.x - READY_PAD - w, btn_y),
+            size: Point2D::new(w, 26.0),
+        };
+        let cancel = Rect {
+            origin: Point2D::new(save.origin.x - 8.0 - w, btn_y),
+            size: Point2D::new(w, 26.0),
+        };
+        (name_input, email_input, save, cancel)
+    }
+
+    /// Paint the commit-signature form (`提交署名`) in the commit-box area.
+    fn paint_author_form(&self, cx: &mut PaintCx<'_>, rect: Rect) {
+        let t = self.theme;
+        let left = rect.origin.x + READY_PAD;
+        let top = rect.origin.y + COMMIT_TOP;
+        self.text(cx, self.t("git.author.heading"), left, top + 16.0, 13.0, t.foreground);
+        self.text(
+            cx,
+            self.t("git.author.subheading"),
+            left,
+            top + 36.0,
+            11.0,
+            t.muted_foreground,
+        );
+        let (name_input, email_input, save, cancel) = self.author_form_rects(rect);
+        self.text(cx, self.t("git.author.nameLabel"), left, top + 54.0, 11.0, t.muted_foreground);
+        self.paint_menu_input(
+            cx,
+            name_input,
+            &self.state.author_name_draft,
+            self.t("git.author.namePlaceholder"),
+            self.state.author_name_focused,
+        );
+        self.text(cx, self.t("git.author.emailLabel"), left, top + 98.0, 11.0, t.muted_foreground);
+        self.paint_menu_input(
+            cx,
+            email_input,
+            &self.state.author_email_draft,
+            self.t("git.author.emailPlaceholder"),
+            self.state.author_email_focused,
+        );
+        let can_save = !self.state.author_name_draft.trim().is_empty()
+            && self.state.author_email_draft.contains('@');
+        self.paint_button(cx, cancel, self.t("git.author.cancel"), true, false);
+        self.paint_button(cx, save, self.t("git.author.submit"), can_save, true);
+    }
+
     pub(super) fn paint_ready(&self, cx: &mut PaintCx<'_>, rect: Rect) {
         let t = self.theme;
         let top = rect.origin.y;
@@ -286,7 +390,10 @@ impl GitPanel<'_> {
             1.5,
         );
 
-        // ── Commit box (TS textarea + milestone button) ──
+        // ── Commit box / signature form ──
+        if self.state.author_prompt {
+            self.paint_author_form(cx, rect);
+        } else {
         let box_r = self.ready_commit_box(rect);
         cx.backend.fill_round_rect(box_r, 8.0, t.card);
         let border = if self.state.commit_focused {
@@ -313,7 +420,7 @@ impl GitPanel<'_> {
             let baseline = box_r.origin.y + 22.0;
             self.text(cx, msg, text_x, baseline, 12.0, t.foreground);
             let blink =
-                jian_core::anim::blink_visible(self.now_ms, self.state.commit_caret_anchor_ms, 530);
+                jian_core::anim::blink_visible(self.now_ms, self.state.commit_caret_anchor_ms, 500);
             if self.state.commit_focused && blink {
                 let caret_x = text_x + cx.backend.measure_text(msg, 12.0) + 1.0;
                 cx.backend.fill_rect(
@@ -325,10 +432,25 @@ impl GitPanel<'_> {
                 );
             }
         }
-        self.paint_milestone_button(cx, self.ready_commit_btn(rect), self.ready_can_commit());
+        let btn = self.ready_commit_btn(rect);
+        self.paint_milestone_button(cx, btn, self.ready_can_commit());
+        // "未检测到变更" hint — shown to the left of the button after a
+        // milestone save was skipped for having no changes (TS-style guard).
+        if self.state.commit_no_changes {
+            self.text(
+                cx,
+                self.t("git.history.diff.noChanges"),
+                box_r.origin.x + 4.0,
+                btn.origin.y + btn.size.y / 2.0 + 4.0,
+                11.0,
+                alpha(t.destructive, 0.90),
+            );
+        }
+        }
+        // Divider below the commit box / form, just above the history.
         cx.backend.fill_rect(
             Rect {
-                origin: Point2D::new(rect.origin.x, box_r.origin.y + box_r.size.y + 6.0),
+                origin: Point2D::new(rect.origin.x, rect.origin.y + self.history_first() - 18.0),
                 size: Point2D::new(width, 1.0),
             },
             alpha(t.border, 0.60),
@@ -337,7 +459,7 @@ impl GitPanel<'_> {
         // ── Recent-commit history (TS `git-panel-history-list`) ──
         // No section header — the timeline / empty line sits directly
         // under the commit-box divider.
-        let mut y = top + HISTORY_FIRST;
+        let mut y = top + self.history_first();
         if self.state.recent_commits.is_empty() {
             // Empty log → a single centered `git.history.empty` line
             // (TS `flex items-center justify-center p-6 text-xs
@@ -418,48 +540,91 @@ impl GitPanel<'_> {
                 // `ready_commit_card_buttons` lands on the same geometry.
                 if self.state.expanded_commit == Some(i) {
                     let card_top = y - 6.0;
-                    self.paint_commit_card(cx, rect, card_top, commit.is_initial);
-                    y += CARD_H;
+                    self.paint_commit_card(cx, rect, card_top);
+                    y += self.expanded_card_height();
                 }
             }
         }
     }
 
-    /// Paint the inline commit-detail card (里程碑详情) — a muted band
-    /// with the detail title, a diff status line, and a `恢复` / `复制哈希`
-    /// button row. TS `HistoryMilestoneRow` detail block. The root commit
-    /// shows the "no parent to diff against" line; the semantic node-diff
-    /// summary for later commits is deferred (a separate subsystem).
-    fn paint_commit_card(&self, cx: &mut PaintCx<'_>, rect: Rect, card_top: f32, is_initial: bool) {
+    /// Paint the inline commit-detail card (里程碑详情) — a muted band with
+    /// the detail title, the semantic diff (TS `GitPanelHistoryDiff`: a
+    /// summary row + an `op nodeId` patch list, or a loading / initial /
+    /// no-changes / error line), and a `恢复` / `复制哈希` button row.
+    fn paint_commit_card(&self, cx: &mut PaintCx<'_>, rect: Rect, card_top: f32) {
         let t = self.theme;
+        let h = self.expanded_card_height();
         cx.backend.fill_rect(
             Rect {
                 origin: Point2D::new(rect.origin.x, card_top),
-                size: Point2D::new(rect.size.x, CARD_H),
+                size: Point2D::new(rect.size.x, h),
             },
             alpha(t.muted, 0.30),
         );
+        let body_x = rect.origin.x + 40.0;
         // Title — `text-[11px] font-medium`.
         self.text(
             cx,
             self.t("git.history.milestoneDetailTitle"),
-            rect.origin.x + 40.0,
+            body_x,
             card_top + 18.0,
             11.0,
             t.foreground,
         );
-        // Diff status line. The root commit has no parent to diff against
-        // (TS `git.history.diff.initialCommit`); non-root commits leave it
-        // blank until the semantic node-diff summary lands.
-        if is_initial {
-            self.text(
-                cx,
-                self.t("git.history.diff.initialCommit"),
-                rect.origin.x + 40.0,
-                card_top + 40.0,
-                11.0,
-                alpha(t.muted_foreground, 0.85),
-            );
+        // Diff body (TS `GitPanelHistoryDiff` states).
+        let status_y = card_top + 38.0;
+        match &self.state.expanded_commit_diff {
+            None | Some(CommitDiffView::Loading) => {
+                self.text(
+                    cx,
+                    self.t("git.history.diff.loading"),
+                    body_x,
+                    status_y,
+                    10.0,
+                    alpha(t.muted_foreground, 0.85),
+                );
+            }
+            Some(CommitDiffView::Initial) => {
+                self.text(
+                    cx,
+                    self.t("git.history.diff.initialCommit"),
+                    body_x,
+                    status_y,
+                    10.0,
+                    alpha(t.muted_foreground, 0.85),
+                );
+            }
+            Some(CommitDiffView::NoChanges) => {
+                self.text(
+                    cx,
+                    self.t("git.history.diff.noChanges"),
+                    body_x,
+                    status_y,
+                    10.0,
+                    alpha(t.muted_foreground, 0.85),
+                );
+            }
+            Some(CommitDiffView::Error(msg)) => {
+                let label = self.t("git.history.diff.error").replace("{{message}}", msg);
+                self.text(cx, &label, body_x, status_y, 10.0, t.destructive);
+            }
+            Some(CommitDiffView::Ready(summary)) => {
+                self.paint_diff_summary(cx, summary, body_x, status_y);
+                // Patch list — one `op nodeId` line each (TS font-mono).
+                for (k, p) in summary.patches.iter().take(MAX_PATCH_ROWS).enumerate() {
+                    let py = card_top + 54.0 + k as f32 * PATCH_ROW_H;
+                    self.text(cx, &p.op, body_x, py, 10.0, t.foreground);
+                    let opw = cx.backend.measure_text(&p.op, 10.0);
+                    self.text(
+                        cx,
+                        &p.node_id,
+                        body_x + opw + 6.0,
+                        py,
+                        10.0,
+                        alpha(t.muted_foreground, 0.70),
+                    );
+                }
+            }
         }
         let (restore, copy) = self.commit_card_button_rects(rect, card_top);
         // 恢复 — outline button.
@@ -490,6 +655,78 @@ impl GitPanel<'_> {
             11.0,
             color,
         );
+    }
+
+    /// Paint the diff summary row — coloured `framesChanged` / `+added` /
+    /// `-removed` / `~modified` segments left-to-right (TS `GitPanelHistoryDiff`
+    /// summary spans). Only non-zero counts render.
+    fn paint_diff_summary(&self, cx: &mut PaintCx<'_>, s: &CommitDiffSummary, x: f32, y: f32) {
+        let t = self.theme;
+        // Build the (label, colour) segments first so the draw loop borrows
+        // `self` only through `self.text` / the backend measure.
+        let mut segments: Vec<(String, Color)> = Vec::new();
+        if s.frames_changed > 0 {
+            segments.push((
+                self.plural(
+                    "git.history.diff.framesChanged_one",
+                    "git.history.diff.framesChanged_other",
+                    s.frames_changed,
+                ),
+                t.muted_foreground,
+            ));
+        }
+        if s.nodes_added > 0 {
+            segments.push((
+                format!(
+                    "+{}",
+                    self.plural(
+                        "git.history.diff.nodesAdded_one",
+                        "git.history.diff.nodesAdded_other",
+                        s.nodes_added,
+                    )
+                ),
+                t.primary,
+            ));
+        }
+        if s.nodes_removed > 0 {
+            segments.push((
+                format!(
+                    "-{}",
+                    self.plural(
+                        "git.history.diff.nodesRemoved_one",
+                        "git.history.diff.nodesRemoved_other",
+                        s.nodes_removed,
+                    )
+                ),
+                t.destructive,
+            ));
+        }
+        if s.nodes_modified > 0 {
+            segments.push((
+                format!(
+                    "~{}",
+                    self.plural(
+                        "git.history.diff.nodesModified_one",
+                        "git.history.diff.nodesModified_other",
+                        s.nodes_modified,
+                    )
+                ),
+                t.muted_foreground,
+            ));
+        }
+        let mut cur = x;
+        for (label, color) in &segments {
+            self.text(cx, label, cur, y, 10.0, *color);
+            cur += cx.backend.measure_text(label, 10.0) + 10.0;
+        }
+    }
+
+    /// Pick the `_one` / `_other` plural form (TS i18next English rule: 1 →
+    /// one) and substitute `{{count}}`. Both keys are `&'static` so they
+    /// satisfy [`GitPanel::t`]'s static-key contract.
+    fn plural(&self, one_key: &'static str, other_key: &'static str, count: u32) -> String {
+        let key = if count == 1 { one_key } else { other_key };
+        self.t(key).replace("{{count}}", &count.to_string())
     }
 
     /// One ghost icon button — a faint rounded slot + a centred glyph,
@@ -556,8 +793,8 @@ impl GitPanel<'_> {
     /// hit-test stay aligned.
     pub(super) fn ready_commit_row_rects(&self, rect: Rect) -> Vec<Rect> {
         // +9 centres the 26px click target on the 12px row text whose
-        // baseline is `HISTORY_FIRST + i*ROW_H` (was +4, bottom-biased).
-        let first = rect.origin.y + HISTORY_FIRST - ROW_H + 9.0;
+        // baseline is `history_first() + i*ROW_H` (was +4, bottom-biased).
+        let first = rect.origin.y + self.history_first() - ROW_H + 9.0;
         (0..self.state.recent_commits.len().min(MAX_COMMITS))
             .map(|i| Rect {
                 origin: Point2D::new(
@@ -572,8 +809,24 @@ impl GitPanel<'_> {
     /// Map a press inside the ready view onto a [`GitPanelHit`].
     pub(super) fn ready_hit(&self, rect: Rect, point: Point2D) -> Option<GitPanelHit> {
         let (pull, push, overflow) = self.ready_header_buttons(rect);
-        // Save-milestone button first (it sits inside the commit box).
-        if self.ready_can_commit() && contains(self.ready_commit_btn(rect), point) {
+        // While the signature form is up, the commit box is replaced by it —
+        // its fields/buttons own the clicks in that region (header still works).
+        if self.state.author_prompt {
+            let (name, email, save, cancel) = self.author_form_rects(rect);
+            if contains(name, point) {
+                return Some(GitPanelHit::AuthorNameInput);
+            }
+            if contains(email, point) {
+                return Some(GitPanelHit::AuthorEmailInput);
+            }
+            if contains(save, point) {
+                return Some(GitPanelHit::AuthorSave);
+            }
+            if contains(cancel, point) {
+                return Some(GitPanelHit::AuthorCancel);
+            }
+        } else if self.ready_can_commit() && contains(self.ready_commit_btn(rect), point) {
+            // Save-milestone button (it sits inside the commit box).
             return Some(GitPanelHit::CommitMilestone);
         }
         // Overflow is the right-anchored fixed element — test it before
@@ -591,7 +844,7 @@ impl GitPanel<'_> {
         if self.push_enabled() && contains(push, point) {
             return Some(GitPanelHit::Push);
         }
-        if contains(self.ready_commit_box(rect), point) {
+        if !self.state.author_prompt && contains(self.ready_commit_box(rect), point) {
             return Some(GitPanelHit::CommitInput);
         }
         // Expanded detail-card buttons win over the rows they sit between.

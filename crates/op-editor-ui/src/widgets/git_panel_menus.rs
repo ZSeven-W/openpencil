@@ -38,7 +38,7 @@ const PICKER_FOOTER_H: f32 = 30.0;
 /// Create-mode body height — name input (30) + gap (8) + submit (24) + pad.
 const PICKER_CREATE_H: f32 = 70.0;
 /// Overflow-menu width (TS `w-56` ≈ 224 px, clamped to the panel).
-const OVERFLOW_W: f32 = 208.0;
+const OVERFLOW_W: f32 = 224.0;
 /// Remote-settings subview width (TS `w-[300px]`, clamped).
 const RS_W: f32 = 280.0;
 /// Inner padding inside the remote-settings subview.
@@ -51,6 +51,10 @@ const RS_BACK_H: f32 = 24.0;
 const RS_BTN_W: f32 = 52.0;
 /// Gap between an input and its trailing button.
 const RS_GAP: f32 = 8.0;
+/// Height of the ahead/behind + credentials section appended below the
+/// remote-URL input (divider + ahead/behind row + divider + credentials row,
+/// plus bottom padding).
+const RS_SECTION: f32 = 70.0;
 
 /// One overflow-menu entry — an icon, a label key, and the
 /// [`GitPanelHit`] it dispatches.
@@ -60,27 +64,65 @@ struct OverflowItem {
     hit: GitPanelHit,
     /// A `›` submenu affordance (the entry opens a subview).
     submenu: bool,
+    /// A divider band painted below this row (TS `<Separator>`).
+    divider_after: bool,
 }
+
+/// Height of a divider band between overflow-menu groups (TS
+/// `<Separator className="my-1">` ≈ 1px line + 8px margins).
+const OVERFLOW_DIVIDER_H: f32 = 9.0;
 
 impl GitPanel<'_> {
     /// The overflow menu's entries, top to bottom — a port of the TS
-    /// header popover. Only the remote-settings / SSH-keys subviews are
-    /// wired today; the entries map to existing git actions.
-    fn overflow_items(&self) -> [OverflowItem; 2] {
-        [
+    /// header popover (`git-panel-header.tsx`): switch-tracked-file /
+    /// clear-author / —— / remote-settings › / ssh-keys › / —— / close-repo.
+    fn overflow_items(&self) -> Vec<OverflowItem> {
+        vec![
+            OverflowItem {
+                icon: Icon::FileSearch,
+                label_key: "git.header.overflowSwitchTracked",
+                hit: GitPanelHit::OverflowSwitchTracked,
+                submenu: false,
+                divider_after: false,
+            },
+            OverflowItem {
+                icon: Icon::UserX,
+                label_key: "git.header.overflowClearAuthor",
+                hit: GitPanelHit::OverflowClearAuthor,
+                submenu: false,
+                divider_after: true,
+            },
             OverflowItem {
                 icon: Icon::Settings2,
                 label_key: "git.header.overflowRemoteSettings",
                 hit: GitPanelHit::OverflowRemoteSettings,
                 submenu: true,
+                divider_after: false,
             },
             OverflowItem {
-                icon: Icon::Lock,
+                icon: Icon::Key,
                 label_key: "git.header.overflowSshKeys",
                 hit: GitPanelHit::OverflowSshKeys,
+                submenu: true,
+                divider_after: true,
+            },
+            OverflowItem {
+                icon: Icon::LogOut,
+                label_key: "git.header.overflowCloseRepo",
+                hit: GitPanelHit::OverflowCloseRepo,
                 submenu: false,
+                divider_after: false,
             },
         ]
+    }
+
+    /// Total extra height contributed by divider bands in the menu.
+    fn overflow_dividers_height(&self) -> f32 {
+        self.overflow_items()
+            .iter()
+            .filter(|it| it.divider_after)
+            .count() as f32
+            * OVERFLOW_DIVIDER_H
     }
 
     // ── Branch picker ────────────────────────────────────────────────
@@ -435,7 +477,7 @@ impl GitPanel<'_> {
         let (_, _, overflow_btn) = self.ready_header_buttons(panel_rect);
         let items = self.overflow_items().len();
         let w = OVERFLOW_W.min(panel_rect.size.x - PAD * 2.0);
-        let h = MENU_PAD * 2.0 + items as f32 * MENU_ROW_H;
+        let h = MENU_PAD * 2.0 + items as f32 * MENU_ROW_H + self.overflow_dividers_height();
         let right = overflow_btn.origin.x + overflow_btn.size.x;
         Rect {
             origin: Point2D::new(right - w, overflow_btn.origin.y + overflow_btn.size.y + 4.0),
@@ -443,21 +485,27 @@ impl GitPanel<'_> {
         }
     }
 
-    /// One clickable rect per overflow-menu entry.
+    /// One clickable rect per overflow-menu entry. The y-walk inserts a
+    /// [`OVERFLOW_DIVIDER_H`] gap after any `divider_after` row so paint +
+    /// hit-test agree on where each row lands.
     pub(super) fn overflow_row_rects(&self, panel_rect: Rect) -> Vec<Rect> {
         let panel = self.overflow_panel(panel_rect);
-        (0..self.overflow_items().len())
-            .map(|i| Rect {
-                origin: Point2D::new(
-                    panel.origin.x + MENU_PAD,
-                    panel.origin.y + MENU_PAD + i as f32 * MENU_ROW_H,
-                ),
+        let mut y = panel.origin.y + MENU_PAD;
+        let mut rects = Vec::new();
+        for item in self.overflow_items() {
+            rects.push(Rect {
+                origin: Point2D::new(panel.origin.x + MENU_PAD, y),
                 size: Point2D::new(panel.size.x - MENU_PAD * 2.0, MENU_ROW_H),
-            })
-            .collect()
+            });
+            y += MENU_ROW_H;
+            if item.divider_after {
+                y += OVERFLOW_DIVIDER_H;
+            }
+        }
+        rects
     }
 
-    /// Paint the overflow `…` menu.
+    /// Paint the overflow `…` menu (TS `git-panel-header.tsx` popover).
     pub(super) fn paint_overflow_menu(&self, cx: &mut PaintCx<'_>, panel_rect: Rect) {
         let t = self.theme;
         let panel = self.overflow_panel(panel_rect);
@@ -465,13 +513,14 @@ impl GitPanel<'_> {
         cx.backend.stroke_round_rect(panel, 8.0, t.border, 1.0);
         let rows = self.overflow_row_rects(panel_rect);
         for (item, row) in self.overflow_items().iter().zip(rows.iter()) {
+            // Leaf icon (TS size=13 strokeWidth=1.75, muted).
             draw_icon(
                 cx.backend,
                 item.icon,
-                Point2D::new(row.origin.x + 8.0, row.origin.y + (row.size.y - 14.0) / 2.0),
-                14.0,
+                Point2D::new(row.origin.x + 8.0, row.origin.y + (row.size.y - 13.0) / 2.0),
+                13.0,
                 t.muted_foreground,
-                1.5,
+                1.75,
             );
             self.text(
                 cx,
@@ -492,6 +541,17 @@ impl GitPanel<'_> {
                     12.0,
                     alpha(t.muted_foreground, 0.70),
                     1.5,
+                );
+            }
+            // Divider band below the row (TS `<Separator className="my-1">`).
+            if item.divider_after {
+                let dy = row.origin.y + row.size.y + OVERFLOW_DIVIDER_H / 2.0;
+                cx.backend.fill_rect(
+                    Rect {
+                        origin: Point2D::new(panel.origin.x + MENU_PAD, dy),
+                        size: Point2D::new(panel.size.x - MENU_PAD * 2.0, 1.0),
+                    },
+                    alpha(t.border, 0.50),
                 );
             }
         }
@@ -521,6 +581,8 @@ impl GitPanel<'_> {
         match self.state.overflow_view {
             GitOverflowView::Menu => self.paint_overflow_menu(cx, panel_rect),
             GitOverflowView::RemoteSettings => self.paint_remote_settings(cx, panel_rect),
+            GitOverflowView::TrackedPicker => self.paint_tracked_picker(cx, panel_rect),
+            GitOverflowView::SshKeys => self.paint_ssh_keys(cx, panel_rect),
         }
     }
 
@@ -533,6 +595,8 @@ impl GitPanel<'_> {
         match self.state.overflow_view {
             GitOverflowView::Menu => self.overflow_hit(panel_rect, point),
             GitOverflowView::RemoteSettings => self.remote_settings_hit(panel_rect, point),
+            GitOverflowView::TrackedPicker => self.tracked_picker_hit(panel_rect, point),
+            GitOverflowView::SshKeys => self.ssh_keys_hit(panel_rect, point),
         }
     }
 
@@ -542,17 +606,48 @@ impl GitPanel<'_> {
     pub(super) fn remote_settings_panel(&self, panel_rect: Rect) -> Rect {
         let (_, _, overflow_btn) = self.ready_header_buttons(panel_rect);
         let w = RS_W.min(panel_rect.size.x - PAD * 2.0);
-        let h = RS_PAD * 2.0 + RS_BACK_H + 8.0 + RS_ROW_H + 8.0 + RS_ROW_H;
+        let top = overflow_btn.origin.y + overflow_btn.size.y + 4.0;
+        // back + 远端 heading + optional empty hint + Origin-地址 label + URL
+        // input row + the ahead/behind & credentials section.
+        let h = (self.remote_url_top(top) - top) + RS_ROW_H + 8.0 + RS_SECTION;
         let right = overflow_btn.origin.x + overflow_btn.size.x;
         Rect {
-            origin: Point2D::new(right - w, overflow_btn.origin.y + overflow_btn.size.y + 4.0),
+            origin: Point2D::new(right - w, top),
             size: Point2D::new(w, h),
         }
     }
 
-    /// The subview's interactive sub-rects: `(back, url_input, set,
-    /// https_input, login)`. Shared by paint + hit-test (+ tests).
-    pub(super) fn remote_settings_rects(&self, panel_rect: Rect) -> (Rect, Rect, Rect, Rect, Rect) {
+    /// Absolute y of the Origin-URL input — below the back row, the 远端
+    /// heading, the optional "尚未配置远端仓库" hint, and the Origin-地址 label.
+    fn remote_url_top(&self, panel_top: f32) -> f32 {
+        let mut y = panel_top + RS_PAD + RS_BACK_H + 6.0; // 远端 heading row
+        y += 18.0;
+        if self.state.remotes.is_empty() {
+            y += 18.0; // empty hint
+        }
+        y += 18.0; // Origin 地址 label
+        y
+    }
+
+    /// Y of the first divider below the URL input.
+    fn remote_settings_section_top(&self, p: Rect) -> f32 {
+        self.remote_url_top(p.origin.y) + RS_ROW_H + 8.0
+    }
+
+    /// The "获取" (Fetch) button rect on the ahead/behind row.
+    pub(super) fn remote_settings_fetch_rect(&self, panel_rect: Rect) -> Rect {
+        let p = self.remote_settings_panel(panel_rect);
+        let top = self.remote_settings_section_top(p);
+        Rect {
+            origin: Point2D::new(p.origin.x + p.size.x - RS_PAD - 44.0, top + 6.0),
+            size: Point2D::new(44.0, 22.0),
+        }
+    }
+
+    /// The subview's interactive sub-rects: `(back, url_input, set)` — the
+    /// TS layout has no HTTPS-credential input here. Shared by paint +
+    /// hit-test (+ tests).
+    pub(super) fn remote_settings_rects(&self, panel_rect: Rect) -> (Rect, Rect, Rect) {
         let p = self.remote_settings_panel(panel_rect);
         let left = p.origin.x + RS_PAD;
         let inner_w = p.size.x - RS_PAD * 2.0;
@@ -560,7 +655,7 @@ impl GitPanel<'_> {
             origin: Point2D::new(left, p.origin.y + RS_PAD),
             size: Point2D::new(inner_w, RS_BACK_H),
         };
-        let url_top = back.origin.y + RS_BACK_H + 8.0;
+        let url_top = self.remote_url_top(p.origin.y);
         let field_w = inner_w - RS_BTN_W - RS_GAP;
         let url_input = Rect {
             origin: Point2D::new(left, url_top),
@@ -570,16 +665,7 @@ impl GitPanel<'_> {
             origin: Point2D::new(left + field_w + RS_GAP, url_top),
             size: Point2D::new(RS_BTN_W, RS_ROW_H),
         };
-        let cred_top = url_top + RS_ROW_H + 8.0;
-        let https_input = Rect {
-            origin: Point2D::new(left, cred_top),
-            size: Point2D::new(field_w, RS_ROW_H),
-        };
-        let login = Rect {
-            origin: Point2D::new(left + field_w + RS_GAP, cred_top),
-            size: Point2D::new(RS_BTN_W, RS_ROW_H),
-        };
-        (back, url_input, set, https_input, login)
+        (back, url_input, set)
     }
 
     /// Paint the remote-settings subview.
@@ -588,25 +674,57 @@ impl GitPanel<'_> {
         let p = self.remote_settings_panel(panel_rect);
         cx.backend.fill_round_rect(p, 8.0, t.popover);
         cx.backend.stroke_round_rect(p, 8.0, t.border, 1.0);
-        let (back, url_input, set, https_input, login) = self.remote_settings_rects(panel_rect);
-        // ‹ Back header row.
+        let (back, url_input, set) = self.remote_settings_rects(panel_rect);
+        let left = back.origin.x;
+        // ← Back row.
         draw_icon(
             cx.backend,
             Icon::ChevronLeft,
-            Point2D::new(back.origin.x, back.origin.y + (back.size.y - 14.0) / 2.0),
+            Point2D::new(left, back.origin.y + (back.size.y - 14.0) / 2.0),
             14.0,
             t.muted_foreground,
             1.5,
         );
         self.text(
             cx,
-            self.t("git.remote.settingsHeading"),
-            back.origin.x + 20.0,
+            self.t("git.remote.back"),
+            left + 20.0,
             back.origin.y + back.size.y / 2.0 + 4.0,
             12.0,
             t.foreground,
         );
-        // Remote-URL field + "Save".
+        // 远端 section heading (uppercase muted).
+        let heading_y = back.origin.y + RS_BACK_H + 6.0;
+        self.text(
+            cx,
+            self.t("git.remote.settingsHeading"),
+            left,
+            heading_y + 12.0,
+            10.0,
+            t.muted_foreground,
+        );
+        // Empty hint + Origin-地址 label above the URL input.
+        let mut label_y = heading_y + 18.0;
+        if self.state.remotes.is_empty() {
+            self.text(
+                cx,
+                self.t("git.remote.emptyNoOrigin"),
+                left,
+                label_y + 12.0,
+                11.0,
+                t.muted_foreground,
+            );
+            label_y += 18.0;
+        }
+        self.text(
+            cx,
+            self.t("git.remote.urlLabel"),
+            left,
+            label_y + 12.0,
+            11.0,
+            t.muted_foreground,
+        );
+        // Origin-URL field + "Save".
         self.paint_menu_input(
             cx,
             url_input,
@@ -621,20 +739,63 @@ impl GitPanel<'_> {
             !self.state.remote_draft.trim().is_empty(),
             true,
         );
-        // HTTPS-credential field + "Login".
-        self.paint_menu_input(
-            cx,
-            https_input,
-            &self.state.https_draft,
-            self.t("git.panel.httpsPlaceholder"),
-            self.state.https_focused,
-        );
+
+        // ── Ahead/behind + Fetch + stored-credentials section (TS rows) ──
+        let p = self.remote_settings_panel(panel_rect);
+        let inner_w = p.size.x - RS_PAD * 2.0;
+        let top = self.remote_settings_section_top(p);
+        let divider = |cx: &mut PaintCx<'_>, y: f32| {
+            cx.backend.fill_rect(
+                Rect {
+                    origin: Point2D::new(left, y),
+                    size: Point2D::new(inner_w, 1.0),
+                },
+                alpha(t.border, 0.50),
+            );
+        };
+        divider(cx, top);
+        // 领先 N · 落后 N
+        let ab = self
+            .t("git.remote.aheadBehind")
+            .replace("{{ahead}}", &self.state.ahead.to_string())
+            .replace("{{behind}}", &self.state.behind.to_string());
+        self.text(cx, &ab, left, top + 21.0, 11.0, t.muted_foreground);
+        // 获取 button (enabled when a remote exists).
         self.paint_button(
             cx,
-            login,
-            self.t("git.panel.login"),
-            !self.state.https_draft.trim().is_empty(),
+            self.remote_settings_fetch_rect(panel_rect),
+            self.t("git.remote.fetchButton"),
+            !self.state.remotes.is_empty(),
             false,
+        );
+        // Credentials row.
+        let d2 = top + 8.0 + 30.0;
+        divider(cx, d2);
+        self.text(
+            cx,
+            self.t("git.remote.storedAuthLabel"),
+            left,
+            d2 + 21.0,
+            11.0,
+            t.muted_foreground,
+        );
+        let status = if self.state.remote_host.is_none() {
+            self.t("git.remote.storedAuth.noHost")
+        } else {
+            match self.state.stored_auth.as_str() {
+                "ssh" => self.t("git.remote.storedAuth.ssh"),
+                "token" => self.t("git.remote.storedAuth.token"),
+                _ => self.t("git.remote.storedAuth.none"),
+            }
+        };
+        let sw = cx.backend.measure_text(status, 11.0);
+        self.text(
+            cx,
+            status,
+            p.origin.x + p.size.x - RS_PAD - sw,
+            d2 + 21.0,
+            11.0,
+            t.foreground,
         );
     }
 
@@ -648,7 +809,7 @@ impl GitPanel<'_> {
         if !contains(p, point) {
             return None;
         }
-        let (back, url_input, set, https_input, login) = self.remote_settings_rects(panel_rect);
+        let (back, url_input, set) = self.remote_settings_rects(panel_rect);
         if contains(back, point) {
             return Some(GitPanelHit::OverflowBack);
         }
@@ -658,18 +819,17 @@ impl GitPanel<'_> {
         if contains(set, point) {
             return Some(GitPanelHit::SetRemote);
         }
-        if contains(https_input, point) {
-            return Some(GitPanelHit::HttpsInput);
-        }
-        if contains(login, point) {
-            return Some(GitPanelHit::SetHttpsAuth);
+        if !self.state.remotes.is_empty()
+            && contains(self.remote_settings_fetch_rect(panel_rect), point)
+        {
+            return Some(GitPanelHit::FetchRemote);
         }
         Some(GitPanelHit::Inside)
     }
 
     /// A simple popover input box — rounded field + draft / placeholder
     /// text + a blink-free caret bar when focused.
-    fn paint_menu_input(
+    pub(super) fn paint_menu_input(
         &self,
         cx: &mut PaintCx<'_>,
         rect: Rect,
@@ -700,7 +860,7 @@ impl GitPanel<'_> {
             // Blink the caret on the shared commit-caret cadence (the host
             // wakes the loop for this input's focus), instead of a static `|`.
             let blink =
-                jian_core::anim::blink_visible(self.now_ms, self.state.commit_caret_anchor_ms, 530);
+                jian_core::anim::blink_visible(self.now_ms, self.state.commit_caret_anchor_ms, 500);
             let shown = if focused && blink {
                 format!("{shown}|")
             } else {

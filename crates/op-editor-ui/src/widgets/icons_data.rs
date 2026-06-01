@@ -636,6 +636,38 @@ pub(super) const SETTINGS2: &[&str] = &[
     "M4 7a3 3 0 1 0 6 0 3 3 0 0 0-6 0z",
 ];
 
+// === Git overflow-menu icons (lucide@0.545.0) ===
+
+// Lucide `file-search.svg` — circle cx=5 cy=14 r=3 → two-arc path.
+pub(super) const FILE_SEARCH: &[&str] = &[
+    "M14 2v4a2 2 0 0 0 2 2h4",
+    "M4.268 21a2 2 0 0 0 1.727 1H18a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v3",
+    "m9 18-1.5-1.5",
+    "M2 14A3 3 0 1 0 8 14A3 3 0 1 0 2 14Z",
+];
+
+// Lucide `user-x.svg` — circle cx=9 cy=7 r=4 + two <line> → "M…L…".
+pub(super) const USER_X: &[&str] = &[
+    "M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2",
+    "M5 7A4 4 0 1 0 13 7A4 4 0 1 0 5 7Z",
+    "M17 8L22 13",
+    "M22 8L17 13",
+];
+
+// Lucide `key.svg` — circle cx=7.5 cy=15.5 r=5.5 → two-arc path.
+pub(super) const KEY: &[&str] = &[
+    "m15.5 7.5 2.3 2.3a1 1 0 0 0 1.4 0l2.1-2.1a1 1 0 0 0 0-1.4L19 4",
+    "m21 2-9.6 9.6",
+    "M2 15.5A5.5 5.5 0 1 0 13 15.5A5.5 5.5 0 1 0 2 15.5Z",
+];
+
+// Lucide `log-out.svg`.
+pub(super) const LOG_OUT: &[&str] = &[
+    "m16 17 5-5-5-5",
+    "M21 12H9",
+    "M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4",
+];
+
 // === Align toolbar icons (lucide@0.545.0) ===
 // Rounded rects expanded to "M…H…A…V…A…H…A…V…A…Z" paths.
 

@@ -232,6 +232,23 @@ impl GitRepo {
         Ok(())
     }
 
+    /// Read `relpath`'s file content at `rev` (a hash, tag, branch, or a
+    /// revspec like `<hash>^`). Returns `None` when the path does not exist
+    /// at that revision (e.g. the file was added in that commit, or `rev`
+    /// has no parent). Used by the commit-detail card's semantic diff.
+    pub fn blob_at_commit(&self, rev: &str, relpath: &str) -> Result<Option<String>, GitError> {
+        let repo = self.open()?;
+        let result = match repo.revparse_single(&format!("{rev}:{relpath}")) {
+            Ok(object) => {
+                let blob = object.peel_to_blob()?;
+                Ok(Some(String::from_utf8_lossy(blob.content()).into_owned()))
+            }
+            Err(e) if e.code() == git2::ErrorCode::NotFound => Ok(None),
+            Err(e) => Err(e.into()),
+        };
+        result
+    }
+
     /// A path made relative to the work-tree root — libgit2 index /
     /// pathspec APIs expect repo-relative paths, but callers pass
     /// absolute document paths.

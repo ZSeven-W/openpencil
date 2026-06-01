@@ -46,6 +46,7 @@ impl WidgetHostNative {
                 let now = self.now_ms;
                 let panel = &mut self.editor_state.editor_ui.git_panel;
                 panel.commit_message.push(c);
+                panel.commit_no_changes = false;
                 // Keep the caret solid while typing (reset the blink).
                 panel.commit_caret_anchor_ms = now;
                 self.mark_dirty();
@@ -66,6 +67,22 @@ impl WidgetHostNative {
         if self.git_https_focus_active() {
             if !c.is_control() {
                 self.editor_state.editor_ui.git_panel.https_draft.push(c);
+                self.mark_dirty();
+                return true;
+            }
+            return false;
+        }
+        // …then the commit-signature form's name / email inputs.
+        if self.git_author_focus_active() {
+            if !c.is_control() {
+                let now = self.now_ms;
+                let panel = &mut self.editor_state.editor_ui.git_panel;
+                if panel.author_email_focused {
+                    panel.author_email_draft.push(c);
+                } else {
+                    panel.author_name_draft.push(c);
+                }
+                panel.commit_caret_anchor_ms = now;
                 self.mark_dirty();
                 return true;
             }
@@ -276,6 +293,16 @@ impl WidgetHostNative {
         }
         if self.git_https_focus_active() {
             self.editor_state.editor_ui.git_panel.https_draft.pop();
+            self.mark_dirty();
+            return true;
+        }
+        if self.git_author_focus_active() {
+            let panel = &mut self.editor_state.editor_ui.git_panel;
+            if panel.author_email_focused {
+                panel.author_email_draft.pop();
+            } else {
+                panel.author_name_draft.pop();
+            }
             self.mark_dirty();
             return true;
         }
@@ -646,6 +673,18 @@ impl WidgetHostNative {
             self.mark_dirty();
             return true;
         }
+        // Enter in the commit-signature form submits it when valid; swallowed
+        // either way so it never falls through to the global chat send.
+        if self.git_author_focus_active() {
+            let panel = &mut self.editor_state.editor_ui.git_panel;
+            if !panel.author_name_draft.trim().is_empty()
+                && panel.author_email_draft.contains('@')
+            {
+                panel.pending_action = Some(op_editor_core::GitPanelAction::SaveAuthor);
+            }
+            self.mark_dirty();
+            return true;
+        }
         // While a ready-state popover (branch picker / overflow menu) is
         // actually visible with no focused input, swallow Enter so it can't
         // fall through to the global chat send below. (Focused inputs already
@@ -750,6 +789,17 @@ impl WidgetHostNative {
             panel.branch_picker_mode = op_editor_core::GitBranchPickerMode::List;
             panel.branch_create_draft.clear();
             panel.branch_create_focused = false;
+            self.mark_dirty();
+            return true;
+        }
+        // Escape dismisses the commit-signature form (TS form cancel) without
+        // committing — checked before the input-focus handlers so a focused
+        // name/email field doesn't swallow it.
+        if self.editor_state.editor_ui.git_panel.author_prompt {
+            let panel = &mut self.editor_state.editor_ui.git_panel;
+            panel.author_prompt = false;
+            panel.author_name_focused = false;
+            panel.author_email_focused = false;
             self.mark_dirty();
             return true;
         }
