@@ -473,6 +473,7 @@ impl ChatState {
         if trimmed.is_empty() && self.pending_attachments.is_empty() {
             return false;
         }
+        self.collapsed = false;
         // A turn still in flight is interrupted by this new send — its
         // assistant bubble will never reach `Done`. Clear every
         // `streaming` flag so a stale bubble doesn't animate forever;
@@ -503,6 +504,18 @@ impl ChatState {
         self.input.clear();
         self.pending_send = Some(trimmed);
         true
+    }
+
+    pub fn has_streaming_turn(&self) -> bool {
+        self.pending_send.is_some() || self.messages.iter().any(|msg| msg.streaming)
+    }
+
+    pub fn toggle_collapsed(&mut self) {
+        if self.has_streaming_turn() {
+            self.collapsed = false;
+        } else {
+            self.collapsed = !self.collapsed;
+        }
     }
 
     /// Stop the currently streaming turn while keeping the visible
@@ -662,6 +675,22 @@ mod tests {
         assert!(chat.messages[1].content.is_empty());
         assert!(chat.input.is_empty());
         assert_eq!(chat.pending_send.as_deref(), Some("design a login page"));
+    }
+
+    #[test]
+    fn begin_send_expands_collapsed_panel_for_streaming_turn() {
+        let mut chat = ChatState {
+            input: "design a pricing page".into(),
+            collapsed: true,
+            ..Default::default()
+        };
+
+        assert!(chat.begin_send());
+
+        assert!(
+            !chat.collapsed,
+            "streaming output should reopen the chat panel like the TS isStreaming effect"
+        );
     }
 
     #[test]

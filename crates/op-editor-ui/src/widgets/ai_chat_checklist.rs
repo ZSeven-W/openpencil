@@ -4,6 +4,7 @@
 //! of letting step rows scroll away with assistant messages.
 
 use super::ai_chat_panel::{to_jian_color, PAD};
+use super::ai_chat_transcript_design::extract_design_json_blocks;
 use super::ai_chat_transcript_steps::{
     extract_step_blocks, split_design_progress, ParsedStep, ParsedStepStatus,
 };
@@ -38,6 +39,16 @@ enum DetailStatus {
     Error,
 }
 
+#[derive(Debug, Clone, Copy)]
+struct ChecklistProgress {
+    streaming: bool,
+    total: usize,
+    has_explicit_status: bool,
+    has_terminal_result: bool,
+    json_block_count: usize,
+    use_progress_position_fallback: bool,
+}
+
 pub(crate) fn fixed_checklist_items(messages: &[ChatMessage]) -> Vec<ChecklistItem> {
     let Some(message) = messages
         .iter()
@@ -52,23 +63,42 @@ pub(crate) fn fixed_checklist_items(messages: &[ChatMessage]) -> Vec<ChecklistIt
         .into_iter()
         .filter(|step| !step.title.eq_ignore_ascii_case("Thinking"))
         .collect();
+    let mut use_progress_position_fallback = false;
     if steps.is_empty() {
         steps = split_design_progress(&message.thinking)
             .0
             .into_iter()
             .filter(|step| !step.title.eq_ignore_ascii_case("Thinking"))
             .collect();
+        use_progress_position_fallback = !steps.is_empty();
     }
     if steps.is_empty() {
         return Vec::new();
     }
 
-    let total = steps.len();
+    let json_block_count = extract_design_json_blocks(&message.content, message.streaming)
+        .blocks
+        .len();
+    let is_applied = message.content.contains('✅')
+        || message.content.contains("<!-- APPLIED -->")
+        || message.content.contains("[done] Applied");
+    let has_error = message.content.to_ascii_lowercase().contains("**error:**");
+    let has_explicit_status = steps.iter().any(|step| step.status.is_some());
+    let has_terminal_result =
+        !message.streaming && !has_error && (is_applied || json_block_count > 0);
+    let progress = ChecklistProgress {
+        streaming: message.streaming,
+        total: steps.len(),
+        has_explicit_status,
+        has_terminal_result,
+        json_block_count,
+        use_progress_position_fallback,
+    };
     let items: Vec<ChecklistItem> = steps
         .iter()
         .enumerate()
         .map(|(index, step)| {
-            let (done, active, failed) = item_state(step, message.streaming, index, total);
+            let (done, active, failed) = item_state(step, index, progress);
             ChecklistItem {
                 label: step.title.clone(),
                 done,
@@ -221,23 +251,30 @@ fn item_height(item: &ChecklistItem) -> f32 {
     }
 }
 
-fn item_state(
-    step: &ParsedStep,
-    streaming: bool,
-    index: usize,
-    total: usize,
-) -> (bool, bool, bool) {
-    match step.status {
-        Some(ParsedStepStatus::Done) => (true, false, false),
-        Some(ParsedStepStatus::Error) => (false, false, true),
-        Some(ParsedStepStatus::Streaming) => (false, streaming, false),
-        Some(ParsedStepStatus::Pending) => (false, false, false),
-        None => {
-            let done = !streaming || index + 1 < total;
-            let active = streaming && index + 1 == total && !done;
-            (done, active, false)
-        }
+fn item_state(step: &ParsedStep, index: usize, progress: ChecklistProgress) -> (bool, bool, bool) {
+    if progress.has_explicit_status {
+        return match step.status {
+            Some(ParsedStepStatus::Done) => (true, false, false),
+            Some(ParsedStepStatus::Error) => (false, false, true),
+            Some(ParsedStepStatus::Streaming) => (false, progress.streaming, false),
+            Some(ParsedStepStatus::Pending) | None => (false, false, false),
+        };
     }
+
+    if progress.has_terminal_result {
+        return (true, false, false);
+    }
+
+    if progress.use_progress_position_fallback {
+        let done = !progress.streaming || index + 1 < progress.total;
+        let active = progress.streaming && index + 1 == progress.total && !done;
+        return (done, active, false);
+    }
+
+    let done = index < progress.json_block_count;
+    let active =
+        progress.streaming && !done && index == progress.json_block_count && index < progress.total;
+    (done, active, false)
 }
 
 fn paint_item(cx: &mut PaintCx<'_>, theme: &Theme, item: &ChecklistItem, x: f32, y: f32, w: f32) {
@@ -397,6 +434,40 @@ mod tests {
         assert_eq!(items.len(), 2);
         assert!(items[0].done);
         assert!(items[1].active);
+    }
+
+    #[test]
+    fn fixed_checklist_fallback_starts_at_first_step_until_design_json_streams() {
+        let mut message = ChatMessage::assistant_streaming();
+        message.content = r#"<step title="Plan"></step>
+<step title="Draw"></step>"#
+            .into();
+
+        let items = fixed_checklist_items(std::slice::from_ref(&message));
+
+        assert_eq!(items.len(), 2);
+        assert!(
+            items[0].active,
+            "TS keeps step[0] active before any JSON block"
+        );
+        assert!(!items[0].done);
+        assert!(!items[1].active);
+        assert!(!items[1].done);
+    }
+
+    #[test]
+    fn fixed_checklist_hides_terminal_plan_without_design_result_like_ts() {
+        let message = ChatMessage::assistant(
+            r#"<step title="Plan"></step>
+<step title="Draw"></step>"#,
+        );
+
+        let items = fixed_checklist_items(std::slice::from_ref(&message));
+
+        assert!(
+            items.is_empty(),
+            "TS hides the checklist after a non-streaming turn with no applied or JSON result"
+        );
     }
 
     #[test]

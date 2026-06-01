@@ -9,6 +9,7 @@ pub enum TranscriptHit {
     SetToolCallCardExpanded(usize, usize, bool),
     SetDesignBlockExpanded(usize, usize, bool),
     CopyDesignBlock(String),
+    ApplyDesignBlock(usize, String),
 }
 
 fn rect_contains(r: Rect, x: f32, y: f32) -> bool {
@@ -46,6 +47,14 @@ pub(crate) fn transcript_hit(
             }
         }
         for (block_index, block) in item.design_blocks.iter().enumerate() {
+            if let Some(apply) = block.apply {
+                if rect_contains(apply, x, y) {
+                    return Some(TranscriptHit::ApplyDesignBlock(
+                        item.msg_index,
+                        block.code.clone(),
+                    ));
+                }
+            }
             if rect_contains(block.copy, x, y) {
                 return Some(TranscriptHit::CopyDesignBlock(block.code.clone()));
             }
