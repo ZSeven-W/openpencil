@@ -358,6 +358,7 @@ impl Orchestrator {
             if zero_node_failure {
                 sink.apply(EditorCommand::DeleteNode {
                     node_id: NodeId::new(root_id.clone()),
+                    page_id: None,
                 });
             }
             rollback(sink, &var_snapshot);

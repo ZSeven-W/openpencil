@@ -12,7 +12,7 @@
 //!
 //! | `PlannedAction`         | `EditorCommand`(s)                                      |
 //! |------------------------|----------------------------------------------------------|
-//! | `Remove`               | `DeleteNode { node_id }`                                |
+//! | `Remove`               | `DeleteNode { node_id, page_id: None }`                 |
 //! | `SetHeightFitContent`  | `SetNodeLayoutProp { property:"height", Keyword("fit_content") }` |
 //! | `SetRotation(deg)`     | `SetNodeRotation { degrees }`                           |
 //! | `SetCornerRadius(r)`   | `SetNodeCornerRadius { radius }`                        |
@@ -100,6 +100,7 @@ fn planned_fix_to_commands(fix: &PlannedFix, state: &EditorState) -> Vec<EditorC
         PlannedAction::Remove => {
             cmds.push(EditorCommand::DeleteNode {
                 node_id: node_id.clone(),
+                page_id: None,
             });
         }
 

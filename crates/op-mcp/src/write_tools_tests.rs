@@ -550,13 +550,30 @@ fn delete_node_validates_arg() {
 }
 
 #[test]
+fn delete_node_accepts_ts_node_id_and_page_args() {
+    let tool = delete_node_snapshot();
+    let mut args = BTreeMap::new();
+    args.insert("nodeId".into(), "n11".into());
+    args.insert("pageId".into(), "page-2".into());
+    match tool.call(&args) {
+        ToolOutcome::OkWithCommand(_, EditorCommand::DeleteNode { node_id, page_id }) => {
+            assert_eq!(node_id.as_str(), "n11");
+            assert_eq!(page_id.as_deref(), Some("page-2"));
+        }
+        other => panic!("expected DeleteNode command with pageId, got {other:?}"),
+    }
+}
+
+#[test]
 fn delete_node_command_applies_through_editor_state() {
     let mut s = sample();
     assert!(s.apply(EditorCommand::DeleteNode {
         node_id: op_editor_core::NodeId::new("n11"),
+        page_id: None,
     }));
     assert!(!s.apply(EditorCommand::DeleteNode {
         node_id: op_editor_core::NodeId::new("n99999"),
+        page_id: None,
     }));
 }
 

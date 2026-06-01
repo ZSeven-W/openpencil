@@ -14,6 +14,7 @@ pub(crate) fn parse_single_direct_operation(line: &str) -> Result<Option<EditorC
                 "U" => parse_update_operation(body).map(Some),
                 "D" => Ok(Some(EditorCommand::DeleteNode {
                     node_id: NodeId::new(&parse_ref_token(body)?),
+                    page_id: None,
                 })),
                 "M" => parse_move_operation(body).map(Some),
                 _ => unreachable!(),

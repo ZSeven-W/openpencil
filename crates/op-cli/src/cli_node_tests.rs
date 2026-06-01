@@ -57,3 +57,25 @@ fn parse_args_maps_update_page_flag_to_ts_page_arg() {
         }
     );
 }
+
+#[test]
+fn parse_args_maps_delete_page_flag_to_ts_page_arg() {
+    let p = parse_args(&[
+        "delete".to_string(),
+        "n10".to_string(),
+        "--page".to_string(),
+        "page-2".to_string(),
+    ])
+    .expect("parse delete");
+
+    assert_eq!(
+        p.command,
+        Command::ToolCall {
+            tool: "delete_node".to_string(),
+            args: vec![
+                ("node_id".to_string(), "n10".to_string()),
+                ("pageId".to_string(), "page-2".to_string()),
+            ],
+        }
+    );
+}
