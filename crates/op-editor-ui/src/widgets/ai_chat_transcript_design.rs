@@ -3,6 +3,9 @@ use crate::theme::Theme;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::PaintCx;
 use crate::{Point2D, Rect, TextLayout};
+use jian_ops_schema::node::PenNode;
+use op_editor_core::PenNodeExt;
+use std::collections::BTreeMap;
 
 pub(crate) const DESIGN_BLOCK_H: f32 = 32.0;
 const DESIGN_ICON_LEFT: f32 = 12.0;
@@ -15,6 +18,7 @@ pub(crate) struct PendingDesignBlock {
     pub element_count: usize,
     pub label: String,
     pub streaming: bool,
+    pub applied: bool,
     pub code: String,
 }
 
@@ -24,6 +28,7 @@ pub(crate) struct DesignBlock {
     pub header: Rect,
     pub copy: Rect,
     pub body: Rect,
+    pub apply: Option<Rect>,
     pub expanded: bool,
     pub element_count: usize,
     pub label: String,
@@ -99,6 +104,7 @@ fn finish_code_block(
             element_count,
             label,
             streaming,
+            applied: false,
             code: code.trim_end().to_string(),
         });
     } else {
@@ -125,6 +131,175 @@ fn design_element_count(code: &str) -> usize {
             .count(),
         _ => 0,
     }
+}
+
+pub fn parse_design_json_nodes(code: &str) -> Result<Vec<PenNode>, String> {
+    let trimmed = code.trim();
+    if trimmed.is_empty() {
+        return Err("empty design JSON".into());
+    }
+    if let Ok(value) = serde_json::from_str::<serde_json::Value>(trimmed) {
+        return parse_design_value(value);
+    }
+    parse_jsonl_nodes(trimmed)
+}
+
+fn parse_design_value(mut value: serde_json::Value) -> Result<Vec<PenNode>, String> {
+    normalize_design_json(&mut value);
+    let nodes =
+        match value {
+            serde_json::Value::Array(_) => serde_json::from_value::<Vec<PenNode>>(value)
+                .map_err(|e| format!("deserialize: {e}"))?,
+            serde_json::Value::Object(_) => vec![serde_json::from_value::<PenNode>(value)
+                .map_err(|e| format!("deserialize: {e}"))?],
+            _ => return Err("design JSON must be an object or array".into()),
+        };
+    if nodes.is_empty() {
+        Err("empty design node array".into())
+    } else {
+        Ok(nodes)
+    }
+}
+
+fn normalize_design_json(value: &mut serde_json::Value) {
+    match value {
+        serde_json::Value::Array(items) => {
+            for item in items {
+                normalize_design_json(item);
+            }
+        }
+        serde_json::Value::Object(object) => {
+            object.remove("_parent");
+            if object
+                .get("type")
+                .and_then(serde_json::Value::as_str)
+                .is_some_and(|ty| ty == "image")
+                && matches!(object.get("src"), None | Some(serde_json::Value::Null))
+            {
+                object.insert("src".into(), serde_json::Value::String(String::new()));
+            }
+            for child in object.values_mut() {
+                normalize_design_json(child);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn parse_jsonl_nodes(text: &str) -> Result<Vec<PenNode>, String> {
+    let objects = extract_json_objects(text)?;
+    if objects.is_empty() {
+        return Err("no JSON objects found".into());
+    }
+
+    let mut nodes_by_id = BTreeMap::<String, PenNode>::new();
+    let mut children_by_parent = BTreeMap::<String, Vec<String>>::new();
+    let mut parents = Vec::<(String, Option<String>)>::new();
+
+    for mut value in objects {
+        let parent = value
+            .as_object_mut()
+            .and_then(|object| object.remove("_parent"))
+            .and_then(|value| value.as_str().map(str::to_string));
+        normalize_design_json(&mut value);
+        let node =
+            serde_json::from_value::<PenNode>(value).map_err(|e| format!("deserialize: {e}"))?;
+        let id = node.id_str().to_string();
+        parents.push((id.clone(), parent));
+        nodes_by_id.insert(id, node);
+    }
+
+    let mut root_ids = Vec::new();
+    for (id, parent) in parents {
+        if let Some(parent_id) = parent.filter(|parent_id| nodes_by_id.contains_key(parent_id)) {
+            children_by_parent.entry(parent_id).or_default().push(id);
+        } else {
+            root_ids.push(id);
+        }
+    }
+
+    let mut roots = Vec::new();
+    for id in root_ids {
+        if let Some(node) = build_jsonl_tree(&id, &mut nodes_by_id, &mut children_by_parent) {
+            roots.push(node);
+        }
+    }
+    if roots.is_empty() {
+        Err("empty design node tree".into())
+    } else {
+        Ok(roots)
+    }
+}
+
+fn extract_json_objects(text: &str) -> Result<Vec<serde_json::Value>, String> {
+    let bytes = text.as_bytes();
+    let mut values = Vec::new();
+    let mut i = 0usize;
+    while i < bytes.len() {
+        while i < bytes.len() && bytes[i] != b'{' {
+            i += 1;
+        }
+        if i >= bytes.len() {
+            break;
+        }
+        let start = i;
+        let mut depth = 0i32;
+        let mut in_str = false;
+        let mut esc = false;
+        while i < bytes.len() {
+            let c = bytes[i];
+            if in_str {
+                if esc {
+                    esc = false;
+                } else if c == b'\\' {
+                    esc = true;
+                } else if c == b'"' {
+                    in_str = false;
+                }
+                i += 1;
+                continue;
+            }
+            match c {
+                b'"' => in_str = true,
+                b'{' => depth += 1,
+                b'}' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        let slice = &text[start..=i];
+                        let value = serde_json::from_str::<serde_json::Value>(slice)
+                            .map_err(|e| format!("json: {e}"))?;
+                        values.push(value);
+                        i += 1;
+                        break;
+                    }
+                }
+                _ => {}
+            }
+            i += 1;
+        }
+        if depth > 0 {
+            return Err("incomplete JSON object".into());
+        }
+    }
+    Ok(values)
+}
+
+fn build_jsonl_tree(
+    id: &str,
+    nodes_by_id: &mut BTreeMap<String, PenNode>,
+    children_by_parent: &mut BTreeMap<String, Vec<String>>,
+) -> Option<PenNode> {
+    let mut node = nodes_by_id.remove(id)?;
+    if let Some(child_ids) = children_by_parent.remove(id) {
+        if let Some(children) = node.children_mut() {
+            for child_id in child_ids {
+                if let Some(child) = build_jsonl_tree(&child_id, nodes_by_id, children_by_parent) {
+                    children.push(child);
+                }
+            }
+        }
+    }
+    Some(node)
 }
 
 fn collapse_blank_lines(input: &str) -> String {
@@ -156,6 +331,7 @@ pub(crate) fn place_design_blocks(
     const BODY_TOP_GAP: f32 = 4.0;
     const BODY_PAD_Y: f32 = 8.0;
     const BODY_LINE_H: f32 = 13.0;
+    const APPLY_H: f32 = 32.0;
     const MAX_BODY_LINES: usize = 12;
     let mut blocks = Vec::new();
     for (index, pending) in pending.into_iter().enumerate() {
@@ -187,7 +363,18 @@ pub(crate) fn place_design_blocks(
         } else {
             0.0
         };
-        let rect = Rect::xywh(x, y, width, DESIGN_BLOCK_H + body_h);
+        let apply = if expanded && !pending.streaming && !pending.applied && body_content_h > 0.0 {
+            Some(Rect::xywh(
+                x,
+                y + DESIGN_BLOCK_H + BODY_TOP_GAP + body_content_h,
+                width,
+                APPLY_H,
+            ))
+        } else {
+            None
+        };
+        let apply_h = apply.map(|rect| rect.size.y).unwrap_or(0.0);
+        let rect = Rect::xywh(x, y, width, DESIGN_BLOCK_H + body_h + apply_h);
         let header = Rect::xywh(x, y, width, DESIGN_BLOCK_H);
         let copy = Rect::xywh(x + width - 48.0, y + 6.0, 20.0, 20.0);
         let body = Rect::xywh(x, y + DESIGN_BLOCK_H + BODY_TOP_GAP, width, body_content_h);
@@ -196,6 +383,7 @@ pub(crate) fn place_design_blocks(
             header,
             copy,
             body,
+            apply,
             expanded,
             element_count: pending.element_count,
             label: pending.label,
@@ -204,7 +392,7 @@ pub(crate) fn place_design_blocks(
             copy_visible: hovered_index == Some(index),
             code_lines,
         });
-        y += DESIGN_BLOCK_H + body_h + gap;
+        y += DESIGN_BLOCK_H + body_h + apply_h + gap;
     }
     (blocks, y)
 }
@@ -319,5 +507,24 @@ pub(crate) fn paint_design_block(cx: &mut PaintCx<'_>, theme: &Theme, block: &De
             baseline += 13.0;
         }
         cx.backend.restore();
+    }
+
+    if let Some(apply) = block.apply {
+        let mut apply_fill = theme.muted;
+        apply_fill.a *= 0.35;
+        let mut apply_border = theme.border;
+        apply_border.a *= 0.3;
+        cx.backend.fill_round_rect(apply, 6.0, apply_fill);
+        cx.backend.stroke_round_rect(apply, 6.0, apply_border, 1.0);
+        let layout = TextLayout::single_run(
+            "Apply to Canvas",
+            "system-ui",
+            10.0,
+            to_jian_color(theme.muted_foreground),
+            Point2D::new(0.0, 0.0),
+        );
+        let text_x = apply.origin.x + (apply.size.x - 84.0).max(0.0) / 2.0;
+        cx.backend
+            .draw_text(&layout, Point2D::new(text_x, apply.origin.y + 20.0));
     }
 }

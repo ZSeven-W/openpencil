@@ -12,6 +12,7 @@ pub mod agent_settings_builtin_presets;
 pub mod align;
 pub mod align_guides;
 pub mod chat;
+mod chat_design_apply;
 pub mod clipboard;
 pub mod color_picker;
 pub mod command;

@@ -638,8 +638,7 @@ impl WidgetHost {
                         return false;
                     }
                     AIChatHit::ToggleCollapse => {
-                        let v = &mut self.editor_state.chat.collapsed;
-                        *v = !*v;
+                        self.editor_state.chat.toggle_collapsed();
                         self.mark_dirty();
                         return true;
                     }
@@ -749,6 +748,9 @@ impl WidgetHost {
                         self.editor_state.chat.queue_copy_text(text);
                         self.mark_dirty();
                         return true;
+                    }
+                    AIChatHit::ApplyDesignBlock(msg_idx, text) => {
+                        return self.apply_chat_design_block(msg_idx, &text);
                     }
                     AIChatHit::ToggleChecklist => {
                         self.editor_state.chat.toggle_checklist_collapsed();

@@ -50,6 +50,9 @@ mod ai_chat_geometry_tests;
 mod boolean_ops;
 #[cfg(test)]
 mod boolean_toolbar_tests;
+mod chat_design_apply;
+#[cfg(test)]
+mod chat_design_apply_tests;
 mod chat_model_picker_caret;
 #[cfg(test)]
 mod chat_model_picker_caret_tests;

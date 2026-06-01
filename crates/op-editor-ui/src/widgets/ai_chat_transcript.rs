@@ -208,12 +208,19 @@ fn build_item(
         progress_steps.extend(extracted.steps);
         extracted.visible_text
     };
-    let (visible_content, pending_design_blocks) = if is_user {
+    let design_applied =
+        !is_user && (msg.content.contains("<!-- APPLIED -->") || msg.content.contains('\u{2705}'));
+    let (visible_content, mut pending_design_blocks) = if is_user {
         (raw_visible_content, Vec::new())
     } else {
         let extracted = extract_design_json_blocks(&raw_visible_content, msg.streaming);
         (extracted.visible_text, extracted.blocks)
     };
+    if design_applied {
+        for block in &mut pending_design_blocks {
+            block.applied = true;
+        }
+    }
     let has_progress_steps = !progress_steps.is_empty();
 
     let build_collapsible = |present: bool,

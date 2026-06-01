@@ -258,7 +258,7 @@ impl<'a> AIChatPlaceholder<'a> {
         // open it behaves modally: a row click selects, any other
         // click dismisses it. Hit-tested before the input so a row
         // click isn't eaten by the message list beneath.
-        if self.model_picker_open && can_use_model {
+        if self.model_picker_open {
             let picker = self.model_picker_rect(rect, input_rect);
             if crate::widgets::ai_chat_model_picker::search_clear_hit(
                 picker,
