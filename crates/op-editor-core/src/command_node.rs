@@ -236,6 +236,50 @@ pub fn replace_node_in_children(
     false
 }
 
+#[allow(clippy::result_large_err)]
+fn insert_into_parent_or_root(
+    children: &mut Vec<PenNode>,
+    parent: &NodeId,
+    node: PenNode,
+    index: Option<usize>,
+) -> Result<(), PenNode> {
+    if !parent.is_real() {
+        let idx = index.unwrap_or(children.len()).min(children.len());
+        children.insert(idx, node);
+        return Ok(());
+    }
+    insert_into_parent(children, parent, node, index)
+}
+
+#[allow(clippy::result_large_err)]
+fn insert_into_parent(
+    children: &mut [PenNode],
+    parent: &NodeId,
+    node: PenNode,
+    index: Option<usize>,
+) -> Result<(), PenNode> {
+    if let Some(idx) = children.iter().position(|n| n.id_str() == parent.as_str()) {
+        match children[idx].children_mut() {
+            Some(grand) => {
+                let insert_idx = index.unwrap_or(grand.len()).min(grand.len());
+                grand.insert(insert_idx, node);
+                return Ok(());
+            }
+            None => return Err(node),
+        }
+    }
+    let mut carry = node;
+    for child in children.iter_mut() {
+        if let Some(grand) = child.children_mut() {
+            match insert_into_parent(grand, parent, carry, index) {
+                Ok(()) => return Ok(()),
+                Err(returned) => carry = returned,
+            }
+        }
+    }
+    Err(carry)
+}
+
 impl EditorState {
     /// Compute the numeric seed for the next editor-minted `n{N}` id —
     /// `max_node_id() + 1`. `None` on `u64` exhaustion.
@@ -374,7 +418,12 @@ impl EditorState {
     /// `MoveNode` — reparent a node. A `NONE` target reparents to the
     /// active page root; a real target must resolve + must not create
     /// a cycle (target is a descendant of the moved node).
-    pub(crate) fn cmd_move_node(&mut self, node_id: &NodeId, target_parent: &NodeId) -> bool {
+    pub(crate) fn cmd_move_node(
+        &mut self,
+        node_id: &NodeId,
+        target_parent: &NodeId,
+        index: Option<usize>,
+    ) -> bool {
         if !node_id.is_real() || target_parent == node_id {
             return false;
         }
@@ -389,7 +438,10 @@ impl EditorState {
                 if walkers::descendant_contains(src, target_parent) {
                     return false;
                 }
-                if walkers::find_node(children, target_parent).is_none() {
+                let Some(target) = walkers::find_node(children, target_parent) else {
+                    return false;
+                };
+                if target.children().is_none() {
                     return false;
                 }
             }
@@ -398,12 +450,7 @@ impl EditorState {
         let Some(detached) = walkers::extract_node(children, node_id) else {
             return false;
         };
-        if target_parent.is_real() {
-            walkers::append_into(children, target_parent, detached).is_ok()
-        } else {
-            children.push(detached);
-            true
-        }
+        insert_into_parent_or_root(children, target_parent, detached, index).is_ok()
     }
 
     /// `CopyNode` — deep-clone a node + subtree under a new parent
@@ -418,8 +465,13 @@ impl EditorState {
             if walkers::find_node(children, node_id).is_none() {
                 return false;
             }
-            if target_parent.is_real() && walkers::find_node(children, target_parent).is_none() {
-                return false;
+            if target_parent.is_real() {
+                let Some(target) = walkers::find_node(children, target_parent) else {
+                    return false;
+                };
+                if target.children().is_none() {
+                    return false;
+                }
             }
         }
         let Some(mut next_id) = self.next_node_id_seed() else {
@@ -433,12 +485,7 @@ impl EditorState {
             walkers::deep_clone_with_new_ids(src, &mut next_id, &mut taken)
         };
         let children = self.active_children_mut();
-        if target_parent.is_real() {
-            walkers::append_into(children, target_parent, clone).is_ok()
-        } else {
-            children.push(clone);
-            true
-        }
+        insert_into_parent_or_root(children, target_parent, clone, None).is_ok()
     }
 
     /// `ReplaceNode` — swap an existing node for a freshly-built leaf at

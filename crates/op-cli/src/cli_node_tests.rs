@@ -79,3 +79,56 @@ fn parse_args_maps_delete_page_flag_to_ts_page_arg() {
         }
     );
 }
+
+#[test]
+fn parse_args_maps_move_page_and_index_flags_to_ts_args() {
+    let p = parse_args(&[
+        "move".to_string(),
+        "n10".to_string(),
+        "--parent".to_string(),
+        "n20".to_string(),
+        "--index".to_string(),
+        "2".to_string(),
+        "--page".to_string(),
+        "page-2".to_string(),
+    ])
+    .expect("parse move");
+
+    assert_eq!(
+        p.command,
+        Command::ToolCall {
+            tool: "move_node".to_string(),
+            args: vec![
+                ("node_id".to_string(), "n10".to_string()),
+                ("target_parent_id".to_string(), "n20".to_string()),
+                ("index".to_string(), "2".to_string()),
+                ("pageId".to_string(), "page-2".to_string()),
+            ],
+        }
+    );
+}
+
+#[test]
+fn parse_args_maps_copy_page_flag_to_ts_args() {
+    let p = parse_args(&[
+        "copy".to_string(),
+        "n10".to_string(),
+        "--parent".to_string(),
+        "n20".to_string(),
+        "--page".to_string(),
+        "page-2".to_string(),
+    ])
+    .expect("parse copy");
+
+    assert_eq!(
+        p.command,
+        Command::ToolCall {
+            tool: "copy_node".to_string(),
+            args: vec![
+                ("node_id".to_string(), "n10".to_string()),
+                ("target_parent_id".to_string(), "n20".to_string()),
+                ("pageId".to_string(), "page-2".to_string()),
+            ],
+        }
+    );
+}

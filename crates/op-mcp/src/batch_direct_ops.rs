@@ -78,12 +78,22 @@ fn parse_move_operation(body: &str) -> Result<EditorCommand, String> {
         return Err("M() requires node id and parent id".into());
     };
     let rest = body[comma + 1..].trim();
-    if find_top_level_char(rest, ',').is_some() {
-        return Err("M() index argument is not supported by the Rust MoveNode command".into());
-    }
+    let (parent_raw, index) = if let Some(index_comma) = find_top_level_char(rest, ',') {
+        let raw_index = rest[index_comma + 1..]
+            .trim()
+            .trim_matches(|c| c == '"' || c == '\'');
+        let index = raw_index
+            .parse::<usize>()
+            .map_err(|_| format!("M() index must be a non-negative integer, got {raw_index:?}"))?;
+        (rest[..index_comma].trim(), Some(index))
+    } else {
+        (rest, None)
+    };
     Ok(EditorCommand::MoveNode {
         node_id: NodeId::new(&parse_ref_token(body[..comma].trim())?),
-        target_parent: parse_parent_node_id(rest)?,
+        target_parent: parse_parent_node_id(parent_raw)?,
+        page_id: None,
+        index,
     })
 }
 

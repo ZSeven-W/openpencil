@@ -63,6 +63,7 @@ pub mod read_nodes;
 #[cfg(test)]
 mod read_nodes_tests;
 pub mod read_tools;
+pub mod reparent_tools;
 #[cfg(test)]
 mod replace_node_tests;
 pub mod scalar_vars;
@@ -157,6 +158,7 @@ pub use page_tools::{
 };
 pub use parser::parse_tool_call;
 pub use read_nodes::{read_nodes_snapshot, ReadNodes};
+pub use reparent_tools::{copy_node_snapshot, move_node_snapshot, CopyNode, MoveNode};
 pub use scalar_vars::{
     create_variable_snapshot, delete_variable_snapshot, rename_variable_snapshot,
     set_variable_boolean_snapshot, set_variable_number_snapshot, set_variable_string_snapshot,
@@ -194,10 +196,9 @@ pub use tools::{
     ListVariables, NodeRecord, SnapshotLayout, VariableRecord,
 };
 pub use write_tools::{
-    copy_node_snapshot, delete_node_snapshot, import_svg_snapshot, insert_node_snapshot,
-    move_node_snapshot, replace_node_snapshot, set_active_axis_value_snapshot,
-    set_variable_color_snapshot, update_node_snapshot, CopyNode, DeleteNode, ImportSvg, InsertNode,
-    MoveNode, ReplaceNode, SetActiveAxisValue, SetVariableColor, UpdateNode,
+    delete_node_snapshot, import_svg_snapshot, insert_node_snapshot, replace_node_snapshot,
+    set_active_axis_value_snapshot, set_variable_color_snapshot, update_node_snapshot, DeleteNode,
+    ImportSvg, InsertNode, ReplaceNode, SetActiveAxisValue, SetVariableColor, UpdateNode,
 };
 
 /// JSON-RPC-style request id. Strings + integers both supported by

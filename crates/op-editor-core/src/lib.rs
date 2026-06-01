@@ -63,6 +63,8 @@ mod command_delete_tests;
 #[cfg(test)]
 mod command_insert_tests;
 #[cfg(test)]
+mod command_reparent_tests;
+#[cfg(test)]
 mod command_style_replace_tests;
 #[cfg(test)]
 mod command_subtree_tests;

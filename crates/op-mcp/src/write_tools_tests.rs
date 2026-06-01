@@ -7,6 +7,7 @@
 //! apply-path correctness itself is exhaustively covered by
 //! `op-editor-core`'s own `command_tests.rs`.
 
+use super::reparent_tools::move_node_snapshot;
 use super::test_fixtures::{add_theme_axis, add_variable, sample, state_with};
 use super::write_tools::*;
 use super::{EditorCommand, McpTool, ToolErrorCode, ToolOutcome};
@@ -615,12 +616,43 @@ fn move_node_returns_command_with_empty_target_for_page_root() {
             EditorCommand::MoveNode {
                 node_id,
                 target_parent,
+                page_id,
+                index,
             },
         ) => {
             assert_eq!(node_id.as_str(), "n11");
             assert!(!target_parent.is_real(), "0 maps to the page-root NONE");
+            assert!(page_id.is_none());
+            assert!(index.is_none());
         }
         other => panic!("expected MoveNode, got {other:?}"),
+    }
+}
+
+#[test]
+fn move_node_accepts_ts_node_parent_page_and_index_args() {
+    let tool = move_node_snapshot();
+    let mut args = BTreeMap::new();
+    args.insert("nodeId".into(), "n11".into());
+    args.insert("parent".into(), "n10".into());
+    args.insert("pageId".into(), "page-2".into());
+    args.insert("index".into(), "2".into());
+    match tool.call(&args) {
+        ToolOutcome::OkWithCommand(
+            _,
+            EditorCommand::MoveNode {
+                node_id,
+                target_parent,
+                page_id,
+                index,
+            },
+        ) => {
+            assert_eq!(node_id.as_str(), "n11");
+            assert_eq!(target_parent.as_str(), "n10");
+            assert_eq!(page_id.as_deref(), Some("page-2"));
+            assert_eq!(index, Some(2));
+        }
+        other => panic!("expected MoveNode command with TS args, got {other:?}"),
     }
 }
 
@@ -631,6 +663,8 @@ fn move_node_command_applies_through_editor_state() {
     assert!(s.apply(EditorCommand::MoveNode {
         node_id: op_editor_core::NodeId::new("n11"),
         target_parent: op_editor_core::NodeId::NONE,
+        page_id: None,
+        index: None,
     }));
     assert!(s
         .active_children()

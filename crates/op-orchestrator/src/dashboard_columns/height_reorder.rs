@@ -167,6 +167,8 @@ pub(crate) fn reorder_dashboard_main_children(
         .map(|id| EditorCommand::MoveNode {
             node_id: NodeId::new(id),
             target_parent: main_node_id.clone(),
+            page_id: None,
+            index: None,
         })
         .collect()
 }
