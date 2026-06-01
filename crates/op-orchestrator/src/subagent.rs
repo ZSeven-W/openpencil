@@ -84,7 +84,11 @@ pub async fn run_subtask(
         Some(id) => NodeId::new(id.clone()),
         None => NodeId::NONE,
     };
-    let applied = sink.apply(EditorCommand::InsertSubtree { nodes, parent_id });
+    let applied = sink.apply(EditorCommand::InsertSubtree {
+        nodes,
+        parent_id,
+        page_id: None,
+    });
     if !applied {
         return fail("InsertSubtree rejected by document".into());
     }

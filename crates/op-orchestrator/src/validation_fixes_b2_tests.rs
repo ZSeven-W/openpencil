@@ -22,6 +22,7 @@ fn sink_with_json_nodes(nodes: Vec<serde_json::Value>) -> VecDocSink {
     sink.apply(EditorCommand::InsertSubtree {
         nodes: pen_nodes,
         parent_id: NodeId::NONE,
+        page_id: None,
     });
     // Clear the applied log so tests only see fix commands.
     sink.applied.clear();

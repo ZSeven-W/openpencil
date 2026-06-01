@@ -24,6 +24,7 @@ fn sink_with_json_nodes(nodes: Vec<serde_json::Value>) -> VecDocSink {
     sink.apply(EditorCommand::InsertSubtree {
         nodes: pen_nodes,
         parent_id: NodeId::NONE,
+        page_id: None,
     });
     sink.applied.clear();
     sink
@@ -173,7 +174,9 @@ fn add_child_frame_spec_emits_insert_subtree() {
     assert!(
         sink.applied.iter().any(|c| matches!(
             c,
-            EditorCommand::InsertSubtree { parent_id, nodes }
+            EditorCommand::InsertSubtree {
+                parent_id, nodes, ..
+            }
             if parent_id.as_str() == "n1" && !nodes.is_empty()
         )),
         "expected InsertSubtree under n1, got: {:?}",
@@ -203,7 +206,9 @@ fn add_child_text_spec_emits_insert_subtree_text() {
     assert!(
         sink.applied.iter().any(|c| matches!(
             c,
-            EditorCommand::InsertSubtree { parent_id, nodes }
+            EditorCommand::InsertSubtree {
+                parent_id, nodes, ..
+            }
             if parent_id.as_str() == "n1" && !nodes.is_empty()
         )),
         "expected InsertSubtree under n1"

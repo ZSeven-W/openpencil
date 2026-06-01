@@ -147,6 +147,7 @@ pub(crate) fn build_scaffold_dashboard(
     let cmds: Vec<EditorCommand> = vec![EditorCommand::InsertSubtree {
         nodes: vec![root_node],
         parent_id: NodeId::NONE,
+        page_id: None,
     }];
 
     Ok((cmds, sidebar_id, main_id, scaffold_baseline))

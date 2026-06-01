@@ -388,6 +388,7 @@ pub(crate) fn apply_validation_fixes(
                 sink.apply(EditorCommand::InsertSubtree {
                     nodes: vec![new_node],
                     parent_id: pid.clone(),
+                    page_id: None,
                 });
                 result.applied += 1;
 

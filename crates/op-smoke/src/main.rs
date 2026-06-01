@@ -174,7 +174,9 @@ impl DocSink for InlineDocSink {
 /// identifying field so the trace stays readable.
 fn describe_cmd(cmd: &EditorCommand) -> String {
     match cmd {
-        EditorCommand::InsertSubtree { nodes, parent_id } => {
+        EditorCommand::InsertSubtree {
+            nodes, parent_id, ..
+        } => {
             format!("InsertSubtree(parent={parent_id:?}, nodes={})", nodes.len())
         }
         EditorCommand::UpdateNode { node_id, .. } => format!("UpdateNode({node_id:?})"),

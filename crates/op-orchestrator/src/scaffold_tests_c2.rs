@@ -431,7 +431,9 @@ fn existing_build_scaffold_unchanged_by_dashboard_variant() {
     let cmds = build_scaffold(&plan, false).expect("sequential scaffold");
     assert_eq!(cmds.len(), 1, "non-dashboard scaffold must have 1 command");
     match &cmds[0] {
-        EditorCommand::InsertSubtree { nodes, parent_id } => {
+        EditorCommand::InsertSubtree {
+            nodes, parent_id, ..
+        } => {
             assert_eq!(nodes[0].id_str(), "root");
             assert!(!parent_id.is_real());
         }
