@@ -8,9 +8,12 @@
 
 use std::collections::BTreeMap;
 
+use jian_ops_schema::node::PenNode;
 use op_editor_core::EditorState;
 use op_editor_core::NodeId;
+use serde_json::Value;
 
+use super::batch_design::normalize_node_shape;
 use super::write_tools::parse_node_id;
 use super::{EditorCommand, McpTool, NodeFlag, ToolErrorCode, ToolOutcome};
 
@@ -34,6 +37,38 @@ impl McpTool for SetActivePage {
 
 pub fn set_active_page_snapshot() -> SetActivePage {
     SetActivePage
+}
+
+#[allow(clippy::result_large_err)]
+fn parse_children_arg(
+    args: &BTreeMap<String, String>,
+) -> Result<Option<Vec<PenNode>>, ToolOutcome> {
+    let Some(raw) = args.get("children") else {
+        return Ok(None);
+    };
+    let mut value: Value = serde_json::from_str(raw).map_err(|e| {
+        ToolOutcome::Err(
+            ToolErrorCode::InvalidArgument,
+            format!("children must be a JSON array: {e}"),
+        )
+    })?;
+    let Value::Array(items) = &mut value else {
+        return Err(ToolOutcome::Err(
+            ToolErrorCode::InvalidArgument,
+            "children must be a JSON array".into(),
+        ));
+    };
+    for item in items {
+        normalize_node_shape(item);
+    }
+    serde_json::from_value::<Vec<PenNode>>(value)
+        .map(Some)
+        .map_err(|e| {
+            ToolOutcome::Err(
+                ToolErrorCode::InvalidArgument,
+                format!("children must contain valid PenNode objects: {e}"),
+            )
+        })
 }
 
 // `ToolOutcome` is the shared MCP outcome type — boxing it broadly to
@@ -107,9 +142,13 @@ impl McpTool for AddPage {
             Some(name) => Some(name.clone()),
             None => None,
         };
+        let children = match parse_children_arg(args) {
+            Ok(children) => children,
+            Err(e) => return e,
+        };
         let mut out = BTreeMap::new();
         out.insert("wrote".into(), "true".into());
-        ToolOutcome::OkWithCommand(out, EditorCommand::AddPage { name })
+        ToolOutcome::OkWithCommand(out, EditorCommand::AddPage { name, children })
     }
 }
 

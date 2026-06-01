@@ -36,11 +36,13 @@ fn copy_node_validates_args() {
             EditorCommand::CopyNode {
                 node_id,
                 target_parent,
+                overrides_json,
                 page_id,
             },
         ) => {
             assert_eq!(node_id.as_str(), "n10");
             assert_eq!(target_parent.as_str(), "n10");
+            assert!(overrides_json.is_none());
             assert!(page_id.is_none());
         }
         other => panic!("expected CopyNode, got {other:?}"),
@@ -74,14 +76,47 @@ fn copy_node_accepts_ts_source_parent_and_page_args() {
             EditorCommand::CopyNode {
                 node_id,
                 target_parent,
+                overrides_json,
                 page_id,
             },
         ) => {
             assert_eq!(node_id.as_str(), "n12");
             assert_eq!(target_parent.as_str(), "n10");
+            assert!(overrides_json.is_none());
             assert_eq!(page_id.as_deref(), Some("page-2"));
         }
         other => panic!("expected CopyNode command with TS args, got {other:?}"),
+    }
+}
+
+#[test]
+fn copy_node_accepts_ts_overrides_arg() {
+    let tool = copy_node_snapshot();
+    let mut args = BTreeMap::new();
+    args.insert("sourceId".into(), "n12".into());
+    args.insert("parent".into(), "n10".into());
+    args.insert(
+        "overrides".into(),
+        r#"{"name":"Copy","x":24,"id":"ignored"}"#.into(),
+    );
+    match tool.call(&args) {
+        ToolOutcome::OkWithCommand(
+            _,
+            EditorCommand::CopyNode {
+                node_id,
+                target_parent,
+                overrides_json,
+                ..
+            },
+        ) => {
+            assert_eq!(node_id.as_str(), "n12");
+            assert_eq!(target_parent.as_str(), "n10");
+            assert_eq!(
+                overrides_json.as_deref(),
+                Some(r#"{"name":"Copy","x":24,"id":"ignored"}"#)
+            );
+        }
+        other => panic!("expected CopyNode command with overrides, got {other:?}"),
     }
 }
 
@@ -92,6 +127,7 @@ fn copy_node_command_clones_to_page_root() {
     assert!(s.apply(EditorCommand::CopyNode {
         node_id: NodeId::new("n12"),
         target_parent: NodeId::NONE,
+        overrides_json: None,
         page_id: None,
     }));
     assert_eq!(s.active_children().len(), pre_root_len + 1);
@@ -103,11 +139,13 @@ fn copy_node_command_rejects_unknown_source_or_target() {
     assert!(!s.apply(EditorCommand::CopyNode {
         node_id: NodeId::new("n99999"),
         target_parent: NodeId::NONE,
+        overrides_json: None,
         page_id: None,
     }));
     assert!(!s.apply(EditorCommand::CopyNode {
         node_id: NodeId::new("n11"),
         target_parent: NodeId::new("n99999"),
+        overrides_json: None,
         page_id: None,
     }));
 }

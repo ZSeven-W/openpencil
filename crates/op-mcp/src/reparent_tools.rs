@@ -73,6 +73,11 @@ impl McpTool for CopyNode {
             Err(e) => return e,
         };
         let page_id = optional_page_id(args);
+        let overrides_json = args
+            .get("overrides")
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .map(str::to_string);
         let mut out = BTreeMap::new();
         out.insert("wrote".into(), "true".into());
         ToolOutcome::OkWithCommand(
@@ -80,6 +85,7 @@ impl McpTool for CopyNode {
             EditorCommand::CopyNode {
                 node_id,
                 target_parent,
+                overrides_json,
                 page_id,
             },
         )

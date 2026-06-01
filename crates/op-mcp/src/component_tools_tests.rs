@@ -8,7 +8,7 @@ use super::component_tools::*;
 use super::page_tools::*;
 use super::test_fixtures::{add_theme_axis, rect, state_with};
 use super::{EditorCommand, McpTool, ToolErrorCode, ToolOutcome};
-use op_editor_core::{EditorState, NodeId};
+use op_editor_core::{EditorState, NodeId, PenNodeExt};
 use std::collections::BTreeMap;
 
 fn state_with_two_nodes() -> EditorState {
@@ -111,10 +111,35 @@ fn add_page_tool_accepts_optional_name() {
     let mut args = BTreeMap::new();
     args.insert("name".into(), "Checkout".into());
     match tool.call(&args) {
-        ToolOutcome::OkWithCommand(_, EditorCommand::AddPage { name }) => {
+        ToolOutcome::OkWithCommand(_, EditorCommand::AddPage { name, children }) => {
             assert_eq!(name.as_deref(), Some("Checkout"));
+            assert!(children.is_none());
         }
         other => panic!("expected AddPage command with name, got {other:?}"),
+    }
+}
+
+#[test]
+fn add_page_tool_accepts_ts_children_payload() {
+    let tool = add_page_snapshot();
+    let mut args = BTreeMap::new();
+    args.insert(
+        "children".into(),
+        r##"[{"id":"hero","type":"frame","name":"Hero","x":0,"y":0,"width":1200,"height":640,"fill":[{"type":"solid","color":"#FFFFFF"}],"children":[]}]"##
+            .into(),
+    );
+    match tool.call(&args) {
+        ToolOutcome::OkWithCommand(
+            _,
+            EditorCommand::AddPage {
+                children: Some(children),
+                ..
+            },
+        ) => {
+            assert_eq!(children.len(), 1);
+            assert_eq!(children[0].base().name.as_deref(), Some("Hero"));
+        }
+        other => panic!("expected AddPage command with children, got {other:?}"),
     }
 }
 

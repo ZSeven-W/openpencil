@@ -57,7 +57,7 @@ const PLANNING_GUIDE: &str = r#"DESIGN PLANNING:
 
 const RUST_ELEMENT_TOOL_GUIDE: &str = r##"RUST MCP ELEMENT TOOL COMPATIBILITY:
 - This Rust MCP server does not expose the TS `add_*_v1` element-tool family unless those exact tools appear in tools/list. Do not call `add_*` tools just because older prompt text or examples mention them.
-- For custom UI trees, use `batch_design` with the TS operations DSL in the `operations` argument. Supported writes: `binding=I(parent, nodeJson)` for inserts, plus one-at-a-time `U(nodeId, patchJson)`, `D(nodeId)`, and `M(nodeId, parent)` refine operations.
+- For custom UI trees, use `batch_design` with the TS operations DSL in the `operations` argument. Supported writes: `binding=I(parent, nodeJson)` for inserts, plus one-at-a-time `U(nodeId, patchJson)`, `D(nodeId)`, `M(nodeId, parent, index?)`, `binding=C(sourceId, parent, overrides?)`, `binding=R(nodeId, nodeJson)`, and `binding=G(parent, "search"|"generate", prompt)` refine operations.
 - Parent can be `null` for the active page root, a previous binding name, or one real existing parent id. The node JSON is canonical PenNode JSON; omit `id` if you do not care, because Rust remaps inserted ids.
 - `U` currently patches geometry/name/fill fields; use dedicated `set_node_*` tools for text, rotation, stroke, font, effects, and other specialized fields.
 

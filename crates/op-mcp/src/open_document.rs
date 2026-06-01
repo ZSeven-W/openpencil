@@ -24,19 +24,15 @@ impl McpTool for OpenDocument {
 
     fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
         let mut out = BTreeMap::new();
-        out.insert("filePath".into(), LIVE_CANVAS_PATH.into());
+        let file_path = args
+            .get("filePath")
+            .filter(|path| !path.trim().is_empty())
+            .cloned()
+            .unwrap_or_else(|| LIVE_CANVAS_PATH.into());
+        out.insert("filePath".into(), file_path);
         out.insert("document".into(), self.document_json.clone());
         out.insert("context".into(), self.context.clone());
         out.insert("designPrompt".into(), self.design_prompt.clone());
-        if args
-            .get("filePath")
-            .is_some_and(|path| path != LIVE_CANVAS_PATH)
-        {
-            out.insert(
-                "warning".into(),
-                "Rust MCP is bound to the document it was started with; filePath is accepted for TS CLI compatibility but does not reopen files".into(),
-            );
-        }
         ToolOutcome::Ok(out)
     }
 }

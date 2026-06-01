@@ -71,8 +71,8 @@ fn tools_list_response_includes_all_registered_tools() {
     // the static schemas in the tools/list response.
     assert_eq!(
         op_mcp::element_tools::element_tool_schemas(&state).len(),
-        6,
-        "starter kit ships 6 element tools — update this if the kit grows"
+        194,
+        "starter kit ships 6 canonical + 188 TS-compatible element tools — update this if the TS catalog changes"
     );
     for name in [
         "insert_btn_primary",
@@ -81,6 +81,18 @@ fn tools_list_response_includes_all_registered_tools() {
         "insert_nav_bar",
         "insert_divider",
         "insert_badge",
+        "add_text_button_v0",
+        "add_text_button_v1",
+        "add_form_field_v0",
+        "add_form_field_v1",
+        "add_stat_card_v0",
+        "add_stat_card_v1",
+        "add_top_nav_bar_v0",
+        "add_top_nav_bar_v1",
+        "add_divider_v0",
+        "add_divider_v1",
+        "add_badge_v0",
+        "add_badge_v1",
     ] {
         assert!(
             r.contains(name),
@@ -212,6 +224,108 @@ fn tools_list_response_includes_all_registered_tools() {
         );
     }
     std::env::remove_var("OPENPENCIL_DEBUG_TOOLS");
+}
+
+#[test]
+fn tools_list_design_content_schema_advertises_ts_layered_args() {
+    std::env::remove_var("OPENPENCIL_DEBUG_TOOLS");
+    let state = op_editor_core::EditorState::new();
+    let response: serde_json::Value = serde_json::from_str(&tools_list_response("3", &state))
+        .expect("tools/list response should be JSON");
+    let tools = response["result"]["tools"]
+        .as_array()
+        .expect("tools/list result should contain tools");
+    let design_content = tools
+        .iter()
+        .find(|tool| tool.get("name").and_then(|name| name.as_str()) == Some("design_content"))
+        .expect("design_content schema");
+    let properties = design_content["inputSchema"]["properties"]
+        .as_object()
+        .expect("design_content properties");
+
+    for key in [
+        "sectionId",
+        "children",
+        "postProcess",
+        "canvasWidth",
+        "pageId",
+    ] {
+        assert!(
+            properties.contains_key(key),
+            "design_content schema should advertise {key}: {design_content}"
+        );
+    }
+    assert_eq!(
+        design_content["inputSchema"]["required"]
+            .as_array()
+            .map(|items| items
+                .iter()
+                .filter_map(|item| item.as_str())
+                .collect::<Vec<_>>()),
+        Some(vec!["sectionId", "children"])
+    );
+}
+
+#[test]
+fn tools_list_schemas_advertise_ts_file_path_args() {
+    std::env::remove_var("OPENPENCIL_DEBUG_TOOLS");
+    let state = op_editor_core::EditorState::new();
+    let response: serde_json::Value = serde_json::from_str(&tools_list_response("3", &state))
+        .expect("tools/list response should be JSON");
+    let tools = response["result"]["tools"]
+        .as_array()
+        .expect("tools/list result should contain tools");
+
+    for (tool_name, expected) in [
+        ("get_selection", vec!["filePath", "readDepth"]),
+        ("batch_get", vec!["filePath", "readDepth", "searchDepth"]),
+        ("read_nodes", vec!["filePath", "nodeIds", "depth"]),
+        ("snapshot_layout", vec!["filePath", "parentId", "maxDepth"]),
+        ("find_empty_space", vec!["filePath", "width", "height"]),
+        ("add_page", vec!["filePath", "name", "children"]),
+        (
+            "insert_node",
+            vec!["filePath", "data", "postProcess", "canvasWidth", "pageId"],
+        ),
+        (
+            "update_node",
+            vec!["filePath", "data", "postProcess", "canvasWidth", "pageId"],
+        ),
+        (
+            "replace_node",
+            vec!["filePath", "data", "postProcess", "canvasWidth", "pageId"],
+        ),
+        (
+            "import_svg",
+            vec![
+                "filePath",
+                "svgPath",
+                "maxDim",
+                "postProcess",
+                "canvasWidth",
+            ],
+        ),
+        ("set_variables", vec!["filePath", "variables", "replace"]),
+        ("get_design_prompt", vec!["section", "filePath"]),
+        ("get_design_md", vec!["filePath"]),
+        ("set_design_md", vec!["filePath", "markdown", "autoExtract"]),
+        ("export_design_md", vec!["filePath"]),
+        ("design_content", vec!["filePath", "sectionId", "children"]),
+    ] {
+        let tool = tools
+            .iter()
+            .find(|tool| tool.get("name").and_then(|name| name.as_str()) == Some(tool_name))
+            .unwrap_or_else(|| panic!("missing {tool_name} schema"));
+        let properties = tool["inputSchema"]["properties"]
+            .as_object()
+            .unwrap_or_else(|| panic!("{tool_name} properties should be an object"));
+        for key in expected {
+            assert!(
+                properties.contains_key(key),
+                "{tool_name} schema should advertise {key}: {tool}"
+            );
+        }
+    }
 }
 
 #[test]
@@ -368,6 +482,134 @@ fn set_themes_accepts_structured_mcp_arguments_and_mutates_state() {
             .cloned(),
         Some(vec!["Light".to_string(), "Dark".to_string()])
     );
+}
+
+fn temp_doc_paths(test_name: &str) -> (std::path::PathBuf, std::path::PathBuf, std::path::PathBuf) {
+    let dir = std::env::temp_dir().join(format!(
+        "openpencil-mcp-filepath-{test_name}-{}",
+        std::process::id()
+    ));
+    std::fs::create_dir_all(&dir).expect("temp dir");
+    let primary = dir.join("primary.op");
+    let alternate = dir.join("alternate.op");
+    (dir, primary, alternate)
+}
+
+fn write_named_doc(path: &std::path::Path, node_id: &str, name: &str) {
+    std::fs::write(
+        path,
+        format!(
+            r##"{{
+  "version": "1.0.0",
+  "children": [
+    {{
+      "id": "{node_id}",
+      "type": "rectangle",
+      "name": "{name}",
+      "x": 0,
+      "y": 0,
+      "width": 100,
+      "height": 60,
+      "fill": [{{ "type": "solid", "color": "#FFFFFF" }}]
+    }}
+  ]
+}}"##
+        ),
+    )
+    .expect("write doc");
+}
+
+#[test]
+fn process_message_reads_document_from_ts_file_path_arg() {
+    let (dir, primary_path, alternate_path) = temp_doc_paths("read");
+    write_named_doc(&primary_path, "n1", "Primary");
+    write_named_doc(&alternate_path, "n2", "Alternate");
+    let mut state = load_editor_state(&primary_path).expect("primary state");
+    let file_path_json =
+        serde_json::to_string(&alternate_path.to_string_lossy()).expect("path json");
+    let line = format!(
+        r#"{{"jsonrpc":"2.0","id":21,"method":"tools/call","params":{{"name":"batch_get","arguments":{{"filePath":{file_path_json},"readDepth":1}}}}}}"#
+    );
+
+    let response = process_message(&mut state, &primary_path, &line)
+        .expect("dispatch")
+        .expect("response");
+
+    assert!(response.contains("Alternate"), "{response}");
+    assert!(!response.contains("Primary"), "{response}");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn process_message_open_document_reports_ts_file_path_target() {
+    let (dir, primary_path, alternate_path) = temp_doc_paths("open");
+    write_named_doc(&primary_path, "n1", "Primary");
+    write_named_doc(&alternate_path, "n2", "Alternate");
+    let mut state = load_editor_state(&primary_path).expect("primary state");
+    let alternate = alternate_path.to_string_lossy().to_string();
+    let file_path_json = serde_json::to_string(&alternate).expect("path json");
+    let line = format!(
+        r#"{{"jsonrpc":"2.0","id":23,"method":"tools/call","params":{{"name":"open_document","arguments":{{"filePath":{file_path_json}}}}}}}"#
+    );
+
+    let response = process_message(&mut state, &primary_path, &line)
+        .expect("dispatch")
+        .expect("response");
+
+    assert!(response.contains(&alternate), "{response}");
+    assert!(!response.contains("warning"), "{response}");
+    assert!(!response.contains("does not reopen files"), "{response}");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn process_message_open_document_creates_missing_ts_file_path_target() {
+    let (dir, primary_path, alternate_path) = temp_doc_paths("open-create");
+    write_named_doc(&primary_path, "n1", "Primary");
+    assert!(!alternate_path.exists());
+    let mut state = load_editor_state(&primary_path).expect("primary state");
+    let alternate = alternate_path.to_string_lossy().to_string();
+    let file_path_json = serde_json::to_string(&alternate).expect("path json");
+    let line = format!(
+        r#"{{"jsonrpc":"2.0","id":24,"method":"tools/call","params":{{"name":"open_document","arguments":{{"filePath":{file_path_json}}}}}}}"#
+    );
+
+    let response = process_message(&mut state, &primary_path, &line)
+        .expect("dispatch")
+        .expect("response");
+
+    assert!(response.contains(&alternate), "{response}");
+    assert!(
+        alternate_path.exists(),
+        "open_document should create the target .op file"
+    );
+    let created = std::fs::read_to_string(&alternate_path).expect("created document");
+    assert!(created.contains(r#""version""#), "{created}");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn process_message_writes_document_to_ts_file_path_arg() {
+    let (dir, primary_path, alternate_path) = temp_doc_paths("write");
+    write_named_doc(&primary_path, "n1", "Primary");
+    write_named_doc(&alternate_path, "n2", "Alternate");
+    let mut state = load_editor_state(&primary_path).expect("primary state");
+    let file_path_json =
+        serde_json::to_string(&alternate_path.to_string_lossy()).expect("path json");
+    let line = format!(
+        r#"{{"jsonrpc":"2.0","id":22,"method":"tools/call","params":{{"name":"add_page","arguments":{{"filePath":{file_path_json},"name":"FromFilePath"}}}}}}"#
+    );
+
+    let response = process_message(&mut state, &primary_path, &line)
+        .expect("dispatch")
+        .expect("response");
+
+    assert!(response.contains(r#""wrote":"true""#), "{response}");
+    let primary_text = std::fs::read_to_string(&primary_path).expect("primary doc");
+    let alternate_text = std::fs::read_to_string(&alternate_path).expect("alternate doc");
+    assert!(!primary_text.contains("FromFilePath"), "{primary_text}");
+    assert!(alternate_text.contains("FromFilePath"), "{alternate_text}");
+    let _ = std::fs::remove_dir_all(dir);
 }
 
 /// In-memory `Read + Write` stand-in for a `TcpStream` so the HTTP

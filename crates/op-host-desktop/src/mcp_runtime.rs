@@ -22,10 +22,10 @@ impl DesktopApp {
         if changed {
             self.host.mark_editor_state_dirty();
         }
-        if any_cli_enabled && port != 0 {
+        changed |= self.reconcile_mcp_server_from_settings();
+        if any_cli_enabled {
             changed |= self.reconcile_mcp_cli_integrations(Some(([false; 6], port)));
         }
-        changed |= self.reconcile_mcp_server_from_settings();
         if self.mcp_server_active() {
             changed |= self.request_redraw(false);
         }
@@ -81,7 +81,33 @@ impl DesktopApp {
                 }
             }
             Err(err) => {
-                eprintln!("openpencil-desktop mcp: failed to start: {err}");
+                eprintln!("openpencil-desktop mcp: failed to start on {port}: {err}");
+                if port != 0 {
+                    match mcp_live::McpLiveServer::start(0) {
+                        Ok(server) => {
+                            let bound_port = server.port();
+                            eprintln!(
+                                "openpencil-desktop mcp: fell back to 127.0.0.1:{bound_port}/mcp"
+                            );
+                            self.mcp_server = Some(server);
+                            let settings = &mut self
+                                .host
+                                .editor_state_mut()
+                                .editor_ui
+                                .agent_settings
+                                .mcp_server;
+                            settings.running = true;
+                            settings.port = bound_port;
+                            self.host.mark_editor_state_dirty();
+                            return true;
+                        }
+                        Err(fallback_err) => {
+                            eprintln!(
+                                "openpencil-desktop mcp: fallback start failed: {fallback_err}"
+                            );
+                        }
+                    }
+                }
                 self.host
                     .editor_state_mut()
                     .editor_ui

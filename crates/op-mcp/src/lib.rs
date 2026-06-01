@@ -24,6 +24,10 @@ mod batch_direct_ops;
 pub mod batch_get;
 #[cfg(test)]
 mod batch_get_tests;
+mod batch_layered;
+#[cfg(test)]
+mod batch_layered_tests;
+mod batch_page;
 pub mod bulk_vars;
 #[cfg(test)]
 mod bulk_vars_tests;
@@ -45,11 +49,15 @@ mod design_prompt_tests;
 pub mod document_save;
 #[cfg(test)]
 mod document_save_tests;
+mod element_alias_builders;
+#[cfg(test)]
+mod element_parser_tests;
 pub mod element_tools;
 pub mod extra_read_tools;
 #[cfg(test)]
 mod extra_read_tools_tests;
 mod insert_node_args;
+mod insert_node_data;
 pub mod json_serializer;
 pub mod node_attr_tools;
 #[cfg(test)]
@@ -72,6 +80,8 @@ mod scalar_vars_tests;
 pub mod selected_ops_tools;
 #[cfg(test)]
 mod selected_ops_tools_tests;
+#[cfg(test)]
+mod selection_tools_tests;
 pub mod style_guide_tools;
 #[cfg(test)]
 mod style_guide_tools_tests;
@@ -86,6 +96,9 @@ mod theme_presets_tests;
 pub mod tools;
 #[cfg(test)]
 mod tools_tests;
+mod update_node_data;
+#[cfg(test)]
+mod update_node_data_tests;
 pub mod write_tools;
 #[cfg(test)]
 mod write_tools_tests;

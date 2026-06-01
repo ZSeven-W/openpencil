@@ -30,3 +30,22 @@ fn open_document_reports_live_document_metadata_context_and_prompt() {
         other => panic!("expected Ok, got {other:?}"),
     }
 }
+
+#[test]
+fn open_document_echoes_ts_file_path_without_legacy_warning() {
+    let state = sample();
+    let tool = open_document_snapshot(&state);
+    let mut args = BTreeMap::new();
+    args.insert("filePath".into(), "/tmp/design.op".into());
+
+    match tool.call(&args) {
+        ToolOutcome::Ok(out) => {
+            assert_eq!(out.get("filePath"), Some(&"/tmp/design.op".to_string()));
+            assert!(
+                !out.contains_key("warning"),
+                "desktop transports route filePath before dispatch, so open_document should not emit the legacy ignored-filePath warning"
+            );
+        }
+        other => panic!("expected Ok, got {other:?}"),
+    }
+}
