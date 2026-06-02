@@ -1,0 +1,50 @@
+op - OpenPencil CLI (drives the editor over the HTTP MCP transport)
+
+USAGE:
+  op [--port N] tools                     list every MCP tool + input schema
+  op [--port N] <tool> [key=value ...]    call one MCP tool with string args
+  op [--port N] <command> [options]       TS-style command aliases
+  op help                                 show this message
+
+COMMON COMMANDS:
+  op get [--type T] [--name N] [--id ID] [--depth N] [--parent P]
+  op selection                            get current selection
+  op insert <json|@file|->                insert a leaf node
+  op update <id> <json|@file|->           patch x/y/width/height/name/fill
+  op delete <id>                          delete a node
+  op read-nodes [ids] [--depth N] [--vars] [--page P] [--file F]
+  op move <id> [--parent P]               reparent a node (empty parent = page root)
+  op copy <id> [--parent P]               deep-copy a node
+  op replace <id> <json|@file|->          replace with a leaf node
+  op design <json-array|@file|->          call batch_design(nodes_json)
+  op design:skeleton <json-array|@file|->
+  op design:content [section] <json-array|@file|->
+  op design:refine <json-array|@file|->
+  op page list|add [--name N]|remove|rename|reorder|duplicate ...
+  op vars                                 get variables + theme axes
+  op vars:set <json|@file|-> [--replace] set variables
+  op themes                               get active theme pins
+  op themes:set <json|@file|-> [--replace]
+  op layout [--parent P] [--depth N]      snapshot layout tree
+  op find-space [--direction D] [--width W] [--height H]
+  op import:svg <file.svg> [--x N] [--y N]
+  op codegen:plan <plan-json|@file|->
+  op codegen:submit <planId> <chunk-result|@file|->
+  op codegen:assemble <planId> [--framework react]
+  op codegen:clean <planId>
+
+GLOBAL FLAGS:
+  --port <n>      MCP HTTP port (default: 3100)
+  --pretty        pretty-print JSON replies
+  --file <path>   accepted for TS CLI compatibility; Rust MCP targets the
+                  document already opened by the MCP server
+  --page <id>     accepted for TS CLI compatibility; use set_active_page for
+                  Rust MCP page selection by index
+
+The server must be running at:
+  http://127.0.0.1:3100/mcp
+
+Low-level examples:
+  op tools
+  op insert_node kind=rect name=Box x=10 y=20 width=100 height=60
+  op set_node_fill_hex node_id=n3 hex=#ff0000

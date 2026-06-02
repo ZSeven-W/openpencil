@@ -407,6 +407,68 @@ fn parse_args_maps_theme_preset_commands_to_ts_tool_shape() {
 }
 
 #[test]
+fn parse_args_maps_codegen_plan_to_structured_mcp_args() {
+    let args = vec![
+        "codegen:plan".to_string(),
+        r#"{"chunks":[],"sharedStyles":[],"rootLayout":{"nodeId":"n1"}}"#.to_string(),
+        "--file".to_string(),
+        "/tmp/design.op".to_string(),
+        "--page".to_string(),
+        "page-1".to_string(),
+    ];
+    let p = parse_args(&args).expect("parse codegen plan");
+    assert_eq!(
+        p.command,
+        Command::ToolCallJson {
+            tool: "codegen_plan".to_string(),
+            args_json: r#"{"filePath":"/tmp/design.op","pageId":"page-1","plan":{"chunks":[],"rootLayout":{"nodeId":"n1"},"sharedStyles":[]}}"#.to_string(),
+        }
+    );
+}
+
+#[test]
+fn parse_args_maps_codegen_submit_to_structured_mcp_args() {
+    let args = vec![
+        "codegen:submit".to_string(),
+        "plan-1".to_string(),
+        r#"{"chunkId":"hero","code":"export const Hero = () => null;","contract":{"provides":[],"requires":[]}}"#.to_string(),
+    ];
+    let p = parse_args(&args).expect("parse codegen submit");
+    assert_eq!(
+        p.command,
+        Command::ToolCallJson {
+            tool: "codegen_submit_chunk".to_string(),
+            args_json: r#"{"planId":"plan-1","result":{"chunkId":"hero","code":"export const Hero = () => null;","contract":{"provides":[],"requires":[]}}}"#.to_string(),
+        }
+    );
+}
+
+#[test]
+fn parse_args_maps_codegen_assemble_and_clean_to_mcp_tools() {
+    let assemble =
+        parse_args(&["codegen:assemble".to_string(), "plan-1".to_string()]).expect("assemble");
+    assert_eq!(
+        assemble.command,
+        Command::ToolCall {
+            tool: "codegen_assemble".to_string(),
+            args: vec![
+                ("planId".to_string(), "plan-1".to_string()),
+                ("framework".to_string(), "react".to_string()),
+            ],
+        }
+    );
+
+    let clean = parse_args(&["codegen:clean".to_string(), "plan-1".to_string()]).expect("clean");
+    assert_eq!(
+        clean.command,
+        Command::ToolCall {
+            tool: "codegen_clean".to_string(),
+            args: vec![("planId".to_string(), "plan-1".to_string())],
+        }
+    );
+}
+
+#[test]
 fn parse_args_maps_ts_insert_json_alias_to_rust_tool() {
     let args = vec![
         "insert".to_string(),
