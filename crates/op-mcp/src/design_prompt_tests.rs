@@ -23,6 +23,38 @@ fn get_design_prompt_defaults_to_all_and_lists_sections() {
 }
 
 #[test]
+fn get_design_prompt_full_uses_rust_mcp_element_compatibility_note() {
+    let state = op_editor_core::EditorState::new();
+
+    match get_design_prompt_snapshot(&state).call(&BTreeMap::new()) {
+        ToolOutcome::Ok(out) => {
+            let prompt = out.get("designPrompt").expect("prompt");
+            assert!(prompt.contains("RUST MCP ELEMENT TOOL COMPATIBILITY"));
+            assert!(prompt.contains("operations"));
+            assert!(!prompt.contains("add_section_header_v1"));
+        }
+        other => panic!("expected prompt ok, got {other:?}"),
+    }
+}
+
+#[test]
+fn get_design_prompt_elements_section_points_to_batch_design_operations() {
+    let state = op_editor_core::EditorState::new();
+    let mut args = BTreeMap::new();
+    args.insert("section".into(), "elements".into());
+
+    match get_design_prompt_snapshot(&state).call(&args) {
+        ToolOutcome::Ok(out) => {
+            let prompt = out.get("designPrompt").expect("prompt");
+            assert!(prompt.contains("batch_design"));
+            assert!(prompt.contains("root=I(null"));
+            assert!(!prompt.contains("add_card_row_v1"));
+        }
+        other => panic!("expected prompt ok, got {other:?}"),
+    }
+}
+
+#[test]
 fn get_design_prompt_uses_document_design_md_for_style_section() {
     let mut state = op_editor_core::EditorState::new();
     state.doc.design_md = Some(op_editor_core::parse_design_md(

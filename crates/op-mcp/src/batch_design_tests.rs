@@ -8,6 +8,7 @@
 use super::batch_design::*;
 use super::test_fixtures::sample;
 use super::{BatchInsertItem, EditorCommand, McpTool, ToolErrorCode, ToolOutcome};
+use op_editor_core::PenNodeExt;
 use std::collections::BTreeMap;
 
 #[test]
@@ -56,6 +57,58 @@ fn batch_design_parses_minimal_two_node_array() {
         }
         other => panic!("expected BatchInsert, got {other:?}"),
     }
+}
+
+#[test]
+fn batch_design_accepts_ts_insert_operations_tree() {
+    let tool = batch_design_snapshot();
+    let mut args = BTreeMap::new();
+    args.insert(
+        "operations".into(),
+        r##"root=I(null, {"type":"frame","name":"Page","width":320,"height":240})
+label=I(root, {"type":"text","name":"Greeting","content":"Hello","width":120,"height":24})"##
+            .into(),
+    );
+
+    match tool.call(&args) {
+        ToolOutcome::OkWithCommand(result, EditorCommand::InsertSubtree { nodes, parent_id }) => {
+            assert_eq!(result.get("count"), Some(&"2".to_string()));
+            assert!(!parent_id.is_real());
+            assert_eq!(nodes.len(), 1);
+            let root = &nodes[0];
+            assert!(root.is_container());
+            assert_eq!(root.children().expect("children").len(), 1);
+            assert_eq!(
+                root.children().unwrap()[0].base().name.as_deref(),
+                Some("Greeting")
+            );
+        }
+        other => panic!("expected InsertSubtree command, got {other:?}"),
+    }
+}
+
+#[test]
+fn batch_design_insert_operations_apply_as_one_nested_subtree() {
+    let tool = batch_design_snapshot();
+    let mut args = BTreeMap::new();
+    args.insert(
+        "operations".into(),
+        r##"card=I(null, {"type":"frame","name":"Card","width":200,"height":120})
+title=I(card, {"type":"text","name":"Title","content":"Ready","width":100,"height":24})"##
+            .into(),
+    );
+    let cmd = match tool.call(&args) {
+        ToolOutcome::OkWithCommand(_, cmd) => cmd,
+        other => panic!("expected command, got {other:?}"),
+    };
+
+    let mut s = sample();
+    let before = s.active_children().len();
+    assert!(s.apply(cmd));
+    assert_eq!(s.active_children().len(), before + 1);
+    let inserted = s.active_children().last().expect("inserted root");
+    assert_eq!(inserted.base().name.as_deref(), Some("Card"));
+    assert_eq!(inserted.children().expect("nested children").len(), 1);
 }
 
 #[test]

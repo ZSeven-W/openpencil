@@ -351,12 +351,10 @@ fn map_reparent(tool: &str, positionals: &[String], flags: &Flags) -> Result<Com
 fn map_design_like(tool: &str, payload: Option<&String>) -> Result<Command, String> {
     let raw = resolve_arg(payload.map(String::as_str))?;
     let trimmed = raw.trim();
-    if !trimmed.starts_with('[') {
-        return Err(format!(
-            "{tool} in Rust MCP currently accepts a JSON array payload (nodes_json), not the TS batch DSL"
-        ));
+    if trimmed.starts_with('[') {
+        return tool_call(tool, vec![pair("nodes_json", trimmed)]);
     }
-    tool_call(tool, vec![pair("nodes_json", trimmed)])
+    tool_call(tool, vec![pair("operations", trimmed)])
 }
 
 fn map_page(positionals: &[String], flags: &Flags) -> Result<Command, String> {

@@ -275,6 +275,32 @@ fn parse_args_maps_ts_open_to_open_document() {
 }
 
 #[test]
+fn parse_args_maps_ts_design_dsl_to_operations_arg() {
+    let dsl = r#"root=I(null, {"type":"frame","name":"Page","width":320,"height":240})"#;
+    let p = parse_args(&["design".to_string(), dsl.to_string()]).expect("parse design dsl");
+    assert_eq!(
+        p.command,
+        Command::ToolCall {
+            tool: "batch_design".to_string(),
+            args: vec![("operations".to_string(), dsl.to_string())],
+        }
+    );
+}
+
+#[test]
+fn parse_args_keeps_json_array_design_as_nodes_json() {
+    let nodes = r#"[{"kind":"rect","name":"A","x":0,"y":0,"width":10,"height":10}]"#;
+    let p = parse_args(&["design".to_string(), nodes.to_string()]).expect("parse design array");
+    assert_eq!(
+        p.command,
+        Command::ToolCall {
+            tool: "batch_design".to_string(),
+            args: vec![("nodes_json".to_string(), nodes.to_string())],
+        }
+    );
+}
+
+#[test]
 fn parse_args_maps_ts_save_to_save_document_tool() {
     let p = parse_args(&["save".to_string(), "/tmp/copy.op".to_string()]).expect("parse save");
     assert_eq!(
