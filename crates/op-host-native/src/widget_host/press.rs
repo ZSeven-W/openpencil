@@ -28,14 +28,22 @@ impl WidgetHostNative {
         use op_editor_ui::widgets::layer_context_menu::LayerContextAction as A;
         match (action, target) {
             (A::Duplicate, T::Layer(id)) => {
-                self.editor_state.set_single_selection(id);
+                // Act on the whole multi-selection when the right-clicked
+                // row is part of it; otherwise retarget to just this row.
+                if !self.editor_state.is_selected(&id) {
+                    self.editor_state.set_single_selection(id);
+                }
                 self.editor_state.commit_history();
                 let _ = self
                     .editor_state
                     .duplicate_selected(&mut self.next_node_id, 10.0);
             }
             (A::Delete, T::Layer(id)) => {
-                self.editor_state.set_single_selection(id);
+                // Keep the multi-selection so Delete removes every selected
+                // layer, not just the right-clicked one.
+                if !self.editor_state.is_selected(&id) {
+                    self.editor_state.set_single_selection(id);
+                }
                 self.editor_state.commit_history();
                 let _ = self.editor_state.delete_selected();
             }
