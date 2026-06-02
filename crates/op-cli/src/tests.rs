@@ -75,6 +75,35 @@ fn parse_args_maps_stop_to_rust_mcp_stop() {
 }
 
 #[test]
+fn parse_args_maps_install_and_uninstall_targets() {
+    let install = parse_args(&[
+        "install".to_string(),
+        "--target".to_string(),
+        "codex".to_string(),
+    ])
+    .expect("parse install");
+    assert_eq!(
+        install.command,
+        Command::InstallSkill {
+            target: Some("codex".to_string()),
+        }
+    );
+
+    let uninstall = parse_args(&[
+        "uninstall".to_string(),
+        "--target".to_string(),
+        "opencode".to_string(),
+    ])
+    .expect("parse uninstall");
+    assert_eq!(
+        uninstall.command,
+        Command::UninstallSkill {
+            target: Some("opencode".to_string()),
+        }
+    );
+}
+
+#[test]
 fn start_document_file_is_minimal_op_when_missing() {
     let dir = std::env::temp_dir().join(format!("op-cli-start-doc-{}", std::process::id()));
     let path = dir.join("nested").join("session.op");
@@ -87,6 +116,56 @@ fn start_document_file_is_minimal_op_when_missing() {
         "{\n  \"version\": \"0.8.0\",\n  \"name\": \"OpenPencil CLI Session\",\n  \"children\": []\n}\n"
     );
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn install_codex_writes_bundle_and_uninstall_removes_it() {
+    let home = std::env::temp_dir().join(format!("op-cli-skill-codex-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&home);
+    std::fs::create_dir_all(&home).expect("temp home");
+
+    skill_install_cli::install_target_at_home("codex", &home).expect("install codex");
+
+    assert!(home
+        .join(".codex/openpencil-skill/skills/openpencil-design/SKILL.md")
+        .is_file());
+    assert!(home.join(".agents/skills/openpencil-skill").exists());
+
+    skill_install_cli::uninstall_target_at_home("codex", &home).expect("uninstall codex");
+
+    assert!(!home.join(".codex/openpencil-skill").exists());
+    assert!(!home.join(".agents/skills/openpencil-skill").exists());
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn install_opencode_updates_plugin_array_and_preserves_other_plugins() {
+    let home = std::env::temp_dir().join(format!("op-cli-skill-opencode-{}", std::process::id()));
+    let config = home.join(".config/opencode/opencode.json");
+    let _ = std::fs::remove_dir_all(&home);
+    std::fs::create_dir_all(config.parent().unwrap()).expect("config dir");
+    std::fs::write(&config, r#"{"plugin":["other@file"]}"#).expect("seed config");
+
+    skill_install_cli::install_target_at_home("opencode", &home).expect("install opencode");
+    skill_install_cli::install_target_at_home("opencode", &home).expect("install is idempotent");
+
+    let installed: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&config).expect("read config"))
+            .expect("json config");
+    let plugins = installed["plugin"].as_array().expect("plugin array");
+    assert_eq!(plugins.len(), 2);
+    assert!(plugins.iter().any(|p| p == "other@file"));
+    assert!(plugins
+        .iter()
+        .any(|p| p.as_str().is_some_and(|s| s.contains("openpencil-skill"))));
+
+    skill_install_cli::uninstall_target_at_home("opencode", &home).expect("uninstall opencode");
+
+    let uninstalled: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&config).expect("read config"))
+            .expect("json config");
+    assert_eq!(uninstalled["plugin"], serde_json::json!(["other@file"]));
+    let _ = std::fs::remove_dir_all(&home);
 }
 
 #[test]
