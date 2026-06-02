@@ -80,7 +80,10 @@ fn remove_duplicate_status_bars(sink: &mut dyn DocSink, root_id: &str) {
             .collect()
     };
     for id in dupes {
-        sink.apply(EditorCommand::DeleteNode { node_id: id });
+        sink.apply(EditorCommand::DeleteNode {
+            node_id: id,
+            page_id: None,
+        });
     }
 }
 
@@ -752,6 +755,7 @@ pub fn cleanup_concurrent_roots(
             // Scaffold-only root — remove it (mirrors TS `store.removeNode`).
             sink.apply(EditorCommand::DeleteNode {
                 node_id: NodeId::new(root_id.to_string()),
+                page_id: None,
             });
         } else {
             any_content_survived = true;

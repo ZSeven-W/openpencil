@@ -146,7 +146,12 @@ pub enum EditorCommand {
         page_id: Option<String>,
     },
     /// Remove a node + all its descendants.
-    DeleteNode { node_id: NodeId },
+    DeleteNode {
+        node_id: NodeId,
+        /// `None` deletes on the active page; `Some` targets a page id
+        /// or legacy page index.
+        page_id: Option<String>,
+    },
     /// Reparent a node. A `NONE` target reparents to the active page
     /// root; a real id must resolve + must not create a cycle.
     MoveNode {

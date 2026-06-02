@@ -178,7 +178,7 @@ fn describe_cmd(cmd: &EditorCommand) -> String {
             format!("InsertSubtree(parent={parent_id:?}, nodes={})", nodes.len())
         }
         EditorCommand::UpdateNode { node_id, .. } => format!("UpdateNode({node_id:?})"),
-        EditorCommand::DeleteNode { node_id } => format!("DeleteNode({node_id:?})"),
+        EditorCommand::DeleteNode { node_id, .. } => format!("DeleteNode({node_id:?})"),
         EditorCommand::MoveNode { node_id, .. } => format!("MoveNode({node_id:?})"),
         EditorCommand::SetNodeLayoutProp {
             node_id, property, ..

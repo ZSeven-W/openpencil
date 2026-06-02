@@ -156,9 +156,10 @@ fn batch_design_accepts_single_delete_operation() {
     args.insert("operations".into(), r##"D("n14")"##.into());
 
     match tool.call(&args) {
-        ToolOutcome::OkWithCommand(result, EditorCommand::DeleteNode { node_id }) => {
+        ToolOutcome::OkWithCommand(result, EditorCommand::DeleteNode { node_id, page_id }) => {
             assert_eq!(result.get("count"), Some(&"1".to_string()));
             assert_eq!(node_id.as_str(), "n14");
+            assert_eq!(page_id, None);
         }
         other => panic!("expected DeleteNode command, got {other:?}"),
     }

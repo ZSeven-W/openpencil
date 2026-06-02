@@ -234,7 +234,7 @@ fn command_from_positionals(positionals: &[String], flags: &Flags) -> Result<Com
         "selection" => tool_call("get_selection", vec![]),
         "insert" => map_insert(positionals, flags),
         "update" => map_update(positionals, flags),
-        "delete" => map_one_id("delete_node", positionals),
+        "delete" => map_delete(positionals, flags),
         "read-nodes" => map_read_nodes(positionals, flags),
         "move" => map_reparent("move_node", positionals, flags),
         "copy" => map_reparent("copy_node", positionals, flags),
@@ -323,9 +323,13 @@ fn map_replace(positionals: &[String]) -> Result<Command, String> {
     tool_call("replace_node", pairs)
 }
 
-fn map_one_id(tool: &str, positionals: &[String]) -> Result<Command, String> {
+fn map_delete(positionals: &[String], flags: &Flags) -> Result<Command, String> {
     let id = required_pos(positionals, 1, "Usage: op delete <node-id>")?;
-    tool_call(tool, vec![pair("node_id", id)])
+    let mut pairs = vec![pair("node_id", id)];
+    if let Some(page) = flag_value(flags, "page") {
+        pairs.push(pair("pageId", page));
+    }
+    tool_call("delete_node", pairs)
 }
 
 fn map_read_nodes(positionals: &[String], flags: &Flags) -> Result<Command, String> {

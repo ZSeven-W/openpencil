@@ -305,7 +305,7 @@ fn remove_node_normal_emits_delete_node() {
     assert_eq!(result.applied, 1);
     has_cmd(
         &sink,
-        |c| matches!(c, EditorCommand::DeleteNode { node_id } if node_id.as_str() == "n1"),
+        |c| matches!(c, EditorCommand::DeleteNode { node_id, .. } if node_id.as_str() == "n1"),
         "DeleteNode{n1}",
     );
 }

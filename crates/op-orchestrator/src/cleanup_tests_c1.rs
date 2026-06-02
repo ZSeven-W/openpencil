@@ -212,7 +212,7 @@ fn cleanup_concurrent_n_roots_partial_content_keeps_variables() {
         .applied
         .iter()
         .filter_map(|c| {
-            if let EditorCommand::DeleteNode { node_id } = c {
+            if let EditorCommand::DeleteNode { node_id, .. } = c {
                 Some(node_id.as_str().to_string())
             } else {
                 None
@@ -272,7 +272,7 @@ fn cleanup_concurrent_all_scaffold_only_deletes_all_and_rolls_back_vars() {
         .applied
         .iter()
         .map(|c| match c {
-            EditorCommand::DeleteNode { node_id } => {
+            EditorCommand::DeleteNode { node_id, .. } => {
                 format!("del:{}", node_id.as_str())
             }
             EditorCommand::DeleteVariable { name } => format!("delvar:{name}"),

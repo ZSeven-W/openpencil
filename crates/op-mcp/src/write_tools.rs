@@ -438,13 +438,20 @@ impl McpTool for DeleteNode {
         "delete_node"
     }
     fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
-        let node_id = match parse_node_id(args, "node_id") {
+        let node_id = match parse_node_id_alias(args, "node_id", "nodeId") {
             Ok(v) => v,
             Err(e) => return e,
         };
+        let page_id = args
+            .get("pageId")
+            .or_else(|| args.get("page_id"))
+            .or_else(|| args.get("page"))
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .map(str::to_string);
         let mut out = BTreeMap::new();
         out.insert("wrote".into(), "true".into());
-        ToolOutcome::OkWithCommand(out, EditorCommand::DeleteNode { node_id })
+        ToolOutcome::OkWithCommand(out, EditorCommand::DeleteNode { node_id, page_id })
     }
 }
 

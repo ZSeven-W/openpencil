@@ -333,7 +333,10 @@ pub(crate) fn apply_validation_fixes(
                     continue;
                 }
 
-                sink.apply(EditorCommand::DeleteNode { node_id: id });
+                sink.apply(EditorCommand::DeleteNode {
+                    node_id: id,
+                    page_id: None,
+                });
                 result.applied += 1;
             }
             StructuralFix::AddChild {
