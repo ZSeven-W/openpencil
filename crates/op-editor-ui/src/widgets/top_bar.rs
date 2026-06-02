@@ -86,6 +86,9 @@ pub enum TopBarHit {
     OpenAgentSettings,
     /// Git-branch button next to the file name — toggle the git panel.
     ToggleGitPanel,
+    /// Maximize icon (rightmost of the right cluster) — toggle window
+    /// fullscreen.
+    ToggleFullscreen,
 }
 
 pub struct TopBar {
@@ -398,6 +401,15 @@ impl TopBar {
         let right = rect.origin.x + rect.size.x;
         let sun_x = right - PAD - ICON_BUTTON * 2.0;
         let icon_y = rect.origin.y + 8.0;
+        // Maximize (rightmost icon, painted at `right - PAD - ICON_BUTTON`)
+        // → toggle fullscreen.
+        let maximize_rect = Rect {
+            origin: Point2D::new(right - PAD - ICON_BUTTON, icon_y),
+            size: Point2D::new(ICON_BUTTON, ICON_BUTTON),
+        };
+        if rect_contains(maximize_rect, point) {
+            return Some(TopBarHit::ToggleFullscreen);
+        }
         let sun_rect = Rect {
             origin: Point2D::new(sun_x, icon_y),
             size: Point2D::new(ICON_BUTTON, ICON_BUTTON),
@@ -595,5 +607,28 @@ mod tests {
     fn access_node_advertises_header_role() {
         let node = TopBar::untitled().access_node();
         assert_eq!(node.role(), accesskit::Role::Header);
+    }
+
+    #[test]
+    fn maximize_button_hit_tests_to_toggle_fullscreen() {
+        let bar = TopBar::untitled();
+        let rect = Rect {
+            origin: Point2D::new(0.0, 0.0),
+            size: Point2D::new(1000.0, TOP_BAR_HEIGHT),
+        };
+        let cy = 8.0 + ICON_BUTTON / 2.0;
+        // Rightmost icon (Maximize) → ToggleFullscreen.
+        let fs_cx = 1000.0 - PAD - ICON_BUTTON / 2.0;
+        assert_eq!(
+            bar.hit_test(rect, Point2D::new(fs_cx, cy)),
+            Some(TopBarHit::ToggleFullscreen),
+        );
+        // The neighbour to its left (Sun) still maps to ToggleTheme —
+        // adjacency unbroken.
+        let sun_cx = 1000.0 - PAD - ICON_BUTTON - ICON_BUTTON / 2.0;
+        assert_eq!(
+            bar.hit_test(rect, Point2D::new(sun_cx, cy)),
+            Some(TopBarHit::ToggleTheme),
+        );
     }
 }

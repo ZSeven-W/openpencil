@@ -830,6 +830,10 @@ pub struct EditorUiState {
     /// Window is in fullscreen. macOS hides the native traffic
     /// lights then, so the TopBar drops its left-edge reservation.
     pub window_fullscreen: bool,
+    /// Raised when the TopBar fullscreen button is clicked. The host
+    /// runner (which owns the window) consumes it next frame to toggle
+    /// the actual window fullscreen, then clears it.
+    pub pending_fullscreen_toggle: bool,
 
     // --- Alignment toolbar -----------------------------------------
     /// Align-toolbar button currently hovered.
@@ -1020,6 +1024,7 @@ impl Default for EditorUiState {
             chat_selected_agent: 0,
             topbar_traffic_hover: false,
             window_fullscreen: false,
+            pending_fullscreen_toggle: false,
             align_toolbar_hover: None,
             property_tab: PropertyTab::Design,
             flex_layout: FlexLayout::Free,

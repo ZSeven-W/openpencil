@@ -266,6 +266,19 @@ impl WidgetHost {
                 TopBarHit::ToggleGitPanel => {
                     self.editor_state.editor_ui.git_panel.open ^= true;
                 }
+                TopBarHit::ToggleFullscreen => {
+                    // The web host runs in WASM, so it toggles the browser
+                    // Fullscreen API directly — no runner round-trip and no
+                    // unconsumed intent flag (unlike native, where the host
+                    // can't reach the winit window).
+                    if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+                        if doc.fullscreen_element().is_some() {
+                            doc.exit_fullscreen();
+                        } else if let Some(el) = doc.document_element() {
+                            let _ = el.request_fullscreen();
+                        }
+                    }
+                }
             }
             self.mark_dirty();
             return true;
