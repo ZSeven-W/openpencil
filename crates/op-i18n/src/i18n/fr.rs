@@ -107,6 +107,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "layerMenu.booleanUnion" => "Union",
         "layerMenu.booleanSubtract" => "Soustraire",
         "layerMenu.booleanIntersect" => "Intersection",
+        "layerMenu.booleanExclude" => "Exclusion",
         "layerMenu.toggleLock" => "Verrouiller / Déverrouiller",
         "layerMenu.toggleVisibility" => "Afficher / Masquer",
         "property.createComponent" => "Créer un composant",

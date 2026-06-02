@@ -425,6 +425,7 @@ const ja: TranslationKeys = {
   'layerMenu.booleanUnion': '合体',
   'layerMenu.booleanSubtract': '前面で型抜き',
   'layerMenu.booleanIntersect': '交差',
+  'layerMenu.booleanExclude': '除外',
   'layerMenu.toggleLock': 'ロックの切り替え',
   'layerMenu.toggleVisibility': '表示の切り替え',
 

@@ -422,6 +422,7 @@ const en = {
   'layerMenu.booleanUnion': 'Union',
   'layerMenu.booleanSubtract': 'Subtract',
   'layerMenu.booleanIntersect': 'Intersect',
+  'layerMenu.booleanExclude': 'Exclude',
   'layerMenu.toggleLock': 'Toggle Lock',
   'layerMenu.toggleVisibility': 'Toggle Visibility',
 

@@ -107,6 +107,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "layerMenu.booleanUnion" => "Hợp nhất",
         "layerMenu.booleanSubtract" => "Trừ",
         "layerMenu.booleanIntersect" => "Giao nhau",
+        "layerMenu.booleanExclude" => "Loại trừ",
         "layerMenu.toggleLock" => "Bật/Tắt khoá",
         "layerMenu.toggleVisibility" => "Bật/Tắt hiển thị",
         "property.createComponent" => "Tạo thành phần",

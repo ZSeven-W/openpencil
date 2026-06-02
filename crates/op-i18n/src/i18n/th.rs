@@ -107,6 +107,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "layerMenu.booleanUnion" => "รวม",
         "layerMenu.booleanSubtract" => "ลบ",
         "layerMenu.booleanIntersect" => "ตัดกัน",
+        "layerMenu.booleanExclude" => "ยกเว้น",
         "layerMenu.toggleLock" => "สลับล็อก",
         "layerMenu.toggleVisibility" => "สลับการมองเห็น",
         "property.createComponent" => "สร้างคอมโพเนนต์",

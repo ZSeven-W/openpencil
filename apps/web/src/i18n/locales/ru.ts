@@ -427,6 +427,7 @@ const ru: TranslationKeys = {
   'layerMenu.booleanUnion': 'Объединение',
   'layerMenu.booleanSubtract': 'Вычитание',
   'layerMenu.booleanIntersect': 'Пересечение',
+  'layerMenu.booleanExclude': 'Исключение',
   'layerMenu.toggleLock': 'Переключить блокировку',
   'layerMenu.toggleVisibility': 'Переключить видимость',
 

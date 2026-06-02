@@ -107,6 +107,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "layerMenu.booleanUnion" => "संयोजन",
         "layerMenu.booleanSubtract" => "घटाना",
         "layerMenu.booleanIntersect" => "प्रतिच्छेदन",
+        "layerMenu.booleanExclude" => "बहिष्करण",
         "layerMenu.toggleLock" => "लॉक टॉगल करें",
         "layerMenu.toggleVisibility" => "दृश्यता टॉगल करें",
         "property.createComponent" => "कंपोनेंट बनाएँ",

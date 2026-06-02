@@ -102,6 +102,17 @@ describe('executeBooleanOp', () => {
     expect(result!.height).toBeCloseTo(50, 0);
   });
 
+  it('performs exclude of two overlapping rectangles', () => {
+    const r1 = makeRect('a', 0, 0, 100, 100);
+    const r2 = makeRect('b', 50, 50, 100, 100);
+    const result = executeBooleanOp([r1, r2], 'exclude');
+    expect(result).not.toBeNull();
+    expect(result!.type).toBe('path');
+    expect(result!.name).toBe('Exclude');
+    expect(result!.width).toBeGreaterThanOrEqual(149);
+    expect(result!.height).toBeGreaterThanOrEqual(149);
+  });
+
   it('preserves fill from first operand', () => {
     const r1 = makeRect('a', 0, 0, 100, 100);
     const r2 = makeRect('b', 50, 50, 100, 100);

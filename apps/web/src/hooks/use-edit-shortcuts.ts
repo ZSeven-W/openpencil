@@ -95,12 +95,13 @@ export function useEditShortcuts() {
         return;
       }
 
-      // Boolean operations: Cmd/Ctrl+Alt+U (union), Cmd/Ctrl+Alt+S (subtract), Cmd/Ctrl+Alt+I (intersect)
+      // Boolean operations: Cmd/Ctrl+Alt+U/S/I/X for union/subtract/intersect/exclude.
       if (isMod && e.altKey && !e.shiftKey) {
         const booleanOps: Record<string, BooleanOpType> = {
           u: 'union',
           s: 'subtract',
           i: 'intersect',
+          x: 'exclude',
         };
         const opType = booleanOps[e.key.toLowerCase()];
         if (opType) {

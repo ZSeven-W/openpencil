@@ -419,6 +419,7 @@ const ko: TranslationKeys = {
   'layerMenu.booleanUnion': '합치기',
   'layerMenu.booleanSubtract': '빼기',
   'layerMenu.booleanIntersect': '교차',
+  'layerMenu.booleanExclude': '제외',
   'layerMenu.toggleLock': '잠금 전환',
   'layerMenu.toggleVisibility': '표시 전환',
 

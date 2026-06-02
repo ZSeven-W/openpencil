@@ -412,6 +412,7 @@ const th: TranslationKeys = {
   'layerMenu.booleanUnion': 'รวม',
   'layerMenu.booleanSubtract': 'ลบ',
   'layerMenu.booleanIntersect': 'ตัดกัน',
+  'layerMenu.booleanExclude': 'ยกเว้น',
   'layerMenu.toggleLock': 'สลับล็อก',
   'layerMenu.toggleVisibility': 'สลับการมองเห็น',
 

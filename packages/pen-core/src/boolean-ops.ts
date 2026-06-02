@@ -1,7 +1,7 @@
 import { nanoid } from 'nanoid';
 import type { PenNode, PathNode } from '@zseven-w/pen-types';
 
-export type BooleanOpType = 'union' | 'subtract' | 'intersect';
+export type BooleanOpType = 'union' | 'subtract' | 'intersect' | 'exclude';
 
 // ---------------------------------------------------------------------------
 // Paper.js scope — headless (no canvas needed)
@@ -23,6 +23,7 @@ interface PaperPathItem {
   unite: (path: PaperPathItem) => PaperPathItem;
   subtract: (path: PaperPathItem) => PaperPathItem;
   intersect: (path: PaperPathItem) => PaperPathItem;
+  exclude: (path: PaperPathItem) => PaperPathItem;
   remove: () => void;
 }
 
@@ -252,6 +253,9 @@ export function executeBooleanOp(nodes: PenNode[], operation: BooleanOpType): Pa
       case 'intersect':
         result = result.intersect(paths[i]);
         break;
+      case 'exclude':
+        result = result.exclude(paths[i]);
+        break;
     }
   }
 
@@ -277,6 +281,7 @@ export function executeBooleanOp(nodes: PenNode[], operation: BooleanOpType): Pa
     union: 'Union',
     subtract: 'Subtract',
     intersect: 'Intersect',
+    exclude: 'Exclude',
   };
 
   // Inherit style from first operand

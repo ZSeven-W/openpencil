@@ -404,6 +404,7 @@ const zh: TranslationKeys = {
   'layerMenu.booleanUnion': '联合',
   'layerMenu.booleanSubtract': '减去',
   'layerMenu.booleanIntersect': '交集',
+  'layerMenu.booleanExclude': '排除',
   'layerMenu.toggleLock': '切换锁定',
   'layerMenu.toggleVisibility': '切换可见性',
 

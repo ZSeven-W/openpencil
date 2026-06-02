@@ -432,6 +432,7 @@ const fr: TranslationKeys = {
   'layerMenu.booleanUnion': 'Union',
   'layerMenu.booleanSubtract': 'Soustraire',
   'layerMenu.booleanIntersect': 'Intersection',
+  'layerMenu.booleanExclude': 'Exclusion',
   'layerMenu.toggleLock': 'Verrouiller / Déverrouiller',
   'layerMenu.toggleVisibility': 'Afficher / Masquer',
 

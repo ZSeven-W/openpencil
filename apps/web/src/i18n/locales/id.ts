@@ -423,6 +423,7 @@ const id: TranslationKeys = {
   'layerMenu.booleanUnion': 'Gabungan',
   'layerMenu.booleanSubtract': 'Kurangi',
   'layerMenu.booleanIntersect': 'Irisan',
+  'layerMenu.booleanExclude': 'Kecualikan',
   'layerMenu.toggleLock': 'Alihkan Kunci',
   'layerMenu.toggleVisibility': 'Alihkan Visibilitas',
 
