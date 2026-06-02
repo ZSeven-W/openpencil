@@ -12,4 +12,5 @@ name = "op"
 path = "src/main.rs"
 
 [dependencies]
+op-figma = { path = "../op-figma" }
 serde_json = { workspace = true }

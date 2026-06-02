@@ -435,13 +435,24 @@ fn parse_args_maps_codegen_plan_to_structured_mcp_args() {
         "page-1".to_string(),
     ];
     let p = parse_args(&args).expect("parse codegen plan");
-    assert_eq!(
-        p.command,
-        Command::ToolCallJson {
-            tool: "codegen_plan".to_string(),
-            args_json: r#"{"filePath":"/tmp/design.op","pageId":"page-1","plan":{"chunks":[],"rootLayout":{"nodeId":"n1"},"sharedStyles":[]}}"#.to_string(),
+    match p.command {
+        Command::ToolCallJson { tool, args_json } => {
+            assert_eq!(tool, "codegen_plan");
+            assert_eq!(
+                serde_json::from_str::<serde_json::Value>(&args_json).expect("args json"),
+                serde_json::json!({
+                    "filePath": "/tmp/design.op",
+                    "pageId": "page-1",
+                    "plan": {
+                        "chunks": [],
+                        "sharedStyles": [],
+                        "rootLayout": { "nodeId": "n1" },
+                    },
+                })
+            );
         }
-    );
+        other => panic!("expected structured codegen plan call, got {other:?}"),
+    }
 }
 
 #[test]
@@ -452,13 +463,23 @@ fn parse_args_maps_codegen_submit_to_structured_mcp_args() {
         r#"{"chunkId":"hero","code":"export const Hero = () => null;","contract":{"provides":[],"requires":[]}}"#.to_string(),
     ];
     let p = parse_args(&args).expect("parse codegen submit");
-    assert_eq!(
-        p.command,
-        Command::ToolCallJson {
-            tool: "codegen_submit_chunk".to_string(),
-            args_json: r#"{"planId":"plan-1","result":{"chunkId":"hero","code":"export const Hero = () => null;","contract":{"provides":[],"requires":[]}}}"#.to_string(),
+    match p.command {
+        Command::ToolCallJson { tool, args_json } => {
+            assert_eq!(tool, "codegen_submit_chunk");
+            assert_eq!(
+                serde_json::from_str::<serde_json::Value>(&args_json).expect("args json"),
+                serde_json::json!({
+                    "planId": "plan-1",
+                    "result": {
+                        "chunkId": "hero",
+                        "code": "export const Hero = () => null;",
+                        "contract": { "provides": [], "requires": [] },
+                    },
+                })
+            );
         }
-    );
+        other => panic!("expected structured codegen submit call, got {other:?}"),
+    }
 }
 
 #[test]
@@ -483,6 +504,37 @@ fn parse_args_maps_codegen_assemble_and_clean_to_mcp_tools() {
             tool: "codegen_clean".to_string(),
             args: vec![("planId".to_string(), "plan-1".to_string())],
         }
+    );
+}
+
+#[test]
+fn parse_args_maps_import_figma_to_direct_converter() {
+    let p = parse_args(&[
+        "import:figma".to_string(),
+        "/tmp/source.fig".to_string(),
+        "--out".to_string(),
+        "/tmp/converted.op".to_string(),
+    ])
+    .expect("parse import:figma");
+    assert_eq!(
+        p.command,
+        Command::ImportFigma {
+            fig_path: "/tmp/source.fig".to_string(),
+            out_path: "/tmp/converted.op".to_string(),
+        }
+    );
+}
+
+#[test]
+fn figma_default_out_path_matches_ts_suffix_replacement() {
+    assert_eq!(figma_default_out_path("checkout.fig"), "checkout.op");
+    assert_eq!(
+        figma_default_out_path("/tmp/checkout.fig"),
+        "/tmp/checkout.op"
+    );
+    assert_eq!(
+        figma_default_out_path("/tmp/checkout.FIG"),
+        "/tmp/checkout.FIG"
     );
 }
 
