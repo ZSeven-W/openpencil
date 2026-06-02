@@ -12,6 +12,7 @@ path = "src/lib.rs"
 
 [dependencies]
 jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema" }
+op-ai-skills = { path = "../op-ai-skills" }
 op-design-lint = { path = "../op-design-lint" }
 op-editor-core = { path = "../op-editor-core" }
 serde_json = { workspace = true }

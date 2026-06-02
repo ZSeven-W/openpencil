@@ -5,9 +5,6 @@
 //! `.op` file at `<path>`. External CLIs (Claude Code / Codex /
 //! Gemini / Copilot) can spawn the binary in this mode to drive
 //! the Rust editor exactly the way they drive TS pen-mcp today.
-//!
-//! ## op-editor-core port (Phase 5 Task 5.1)
-//!
 //! The server backs the `.op` file with an `op_editor_core::
 //! EditorState` (the canonical `jian_ops_schema::PenDocument`), not
 //! the old shell-core `Document`. Loading a `.op` into a `PenDocument`
@@ -40,27 +37,28 @@ use op_mcp::{
     duplicate_page_snapshot, duplicate_selected_snapshot, export_design_md_snapshot,
     find_empty_space_snapshot, find_node_by_name_snapshot, get_active_theme_snapshot,
     get_canvas_bounds_snapshot, get_component_snapshot, get_design_md_snapshot,
-    get_history_depth_snapshot, get_node_children_snapshot, get_node_parent_snapshot,
-    get_node_snapshot, get_selection_set_snapshot, get_variables_snapshot, get_viewport_snapshot,
-    group_selected_snapshot, import_svg_snapshot, insert_node_snapshot,
-    instantiate_component_snapshot, list_components_snapshot, list_node_kinds_snapshot,
-    list_pages_snapshot, list_theme_presets_snapshot, list_variables_snapshot,
-    load_theme_preset_snapshot, move_node_snapshot, nudge_selected_snapshot,
-    paste_clipboard_snapshot, read_nodes_snapshot, redo_snapshot, remove_node_effect_snapshot,
-    remove_page_snapshot, rename_component_snapshot, rename_page_snapshot,
-    rename_variable_snapshot, reorder_page_snapshot, reorder_selected_snapshot,
-    replace_node_snapshot, run_stdio_with_applier, save_theme_preset_snapshot, selection_snapshot,
-    set_active_axis_value_snapshot, set_active_page_snapshot, set_active_tool_snapshot,
-    set_design_md_snapshot, set_ellipse_arc_snapshot, set_node_collapsed_snapshot,
-    set_node_corner_radius_snapshot, set_node_fill_hex_snapshot, set_node_flip_snapshot,
-    set_node_font_size_snapshot, set_node_font_weight_snapshot, set_node_hidden_snapshot,
-    set_node_locked_snapshot, set_node_name_snapshot, set_node_rotation_snapshot,
-    set_node_stroke_hex_snapshot, set_node_stroke_width_snapshot, set_node_text_snapshot,
-    set_selection_set_snapshot, set_selection_snapshot, set_themes_snapshot,
-    set_variable_boolean_snapshot, set_variable_color_snapshot, set_variable_number_snapshot,
-    set_variable_string_snapshot, set_variables_snapshot, set_viewport_snapshot,
-    snapshot_layout_snapshot, toggle_node_selection_snapshot, undo_snapshot,
-    ungroup_selected_snapshot, update_node_snapshot, ToolRegistry,
+    get_design_prompt_snapshot, get_history_depth_snapshot, get_node_children_snapshot,
+    get_node_parent_snapshot, get_node_snapshot, get_selection_set_snapshot,
+    get_variables_snapshot, get_viewport_snapshot, group_selected_snapshot, import_svg_snapshot,
+    insert_node_snapshot, instantiate_component_snapshot, list_components_snapshot,
+    list_node_kinds_snapshot, list_pages_snapshot, list_theme_presets_snapshot,
+    list_variables_snapshot, load_theme_preset_snapshot, move_node_snapshot,
+    nudge_selected_snapshot, paste_clipboard_snapshot, read_nodes_snapshot, redo_snapshot,
+    remove_node_effect_snapshot, remove_page_snapshot, rename_component_snapshot,
+    rename_page_snapshot, rename_variable_snapshot, reorder_page_snapshot,
+    reorder_selected_snapshot, replace_node_snapshot, run_stdio_with_applier,
+    save_theme_preset_snapshot, selection_snapshot, set_active_axis_value_snapshot,
+    set_active_page_snapshot, set_active_tool_snapshot, set_design_md_snapshot,
+    set_ellipse_arc_snapshot, set_node_collapsed_snapshot, set_node_corner_radius_snapshot,
+    set_node_fill_hex_snapshot, set_node_flip_snapshot, set_node_font_size_snapshot,
+    set_node_font_weight_snapshot, set_node_hidden_snapshot, set_node_locked_snapshot,
+    set_node_name_snapshot, set_node_rotation_snapshot, set_node_stroke_hex_snapshot,
+    set_node_stroke_width_snapshot, set_node_text_snapshot, set_selection_set_snapshot,
+    set_selection_snapshot, set_themes_snapshot, set_variable_boolean_snapshot,
+    set_variable_color_snapshot, set_variable_number_snapshot, set_variable_string_snapshot,
+    set_variables_snapshot, set_viewport_snapshot, snapshot_layout_snapshot,
+    toggle_node_selection_snapshot, undo_snapshot, ungroup_selected_snapshot, update_node_snapshot,
+    ToolRegistry,
 };
 
 /// Load a `.op` file into an `EditorState`. The `.op` format is plain
@@ -465,6 +463,7 @@ fn rebuild_registry(doc: &EditorState) -> ToolRegistry {
     r.register(Box::new(copy_node_snapshot()));
     r.register(Box::new(replace_node_snapshot()));
     r.register(Box::new(batch_design_snapshot()));
+    r.register(Box::new(get_design_prompt_snapshot(doc)));
     r.register(Box::new(design_skeleton_snapshot()));
     r.register(Box::new(design_content_snapshot()));
     r.register(Box::new(design_refine_snapshot()));
@@ -757,6 +756,7 @@ const TOOL_SCHEMAS: &[&str] = &[
     // --- write tools ---
     r##"{"name":"set_variable_color","description":"Set a Color-kind variable's value.","inputSchema":{"type":"object","properties":{"name":{"type":"string"},"hex":{"type":"string","description":"#rgb / #rrggbb / #rrggbbaa"}},"required":["name","hex"]}}"##,
     r#"{"name":"batch_design","description":"Insert N leaf nodes on the active page in one atomic shot. nodes_json must be a JSON array string of {kind,name,x,y,width,height,fill_hex?} descriptors.","inputSchema":{"type":"object","properties":{"nodes_json":{"type":"string","description":"JSON array of node descriptors"}},"required":["nodes_json"]}}"#,
+    r#"{"name":"get_design_prompt","description":"Get OpenPencil design-generation prompt knowledge. Pass section for a focused subset; omit it for all sections. style and design-md are derived from the live document's design.md when present.","inputSchema":{"type":"object","properties":{"section":{"type":"string","description":"Prompt section name, e.g. all, layout, style, design-md, elements, codegen-react"}},"required":[]}}"#,
     r#"{"name":"design_skeleton","description":"Layered design workflow phase 1: insert structural scaffolding. Apply behavior is identical to batch_design today (phase is metadata only); the response carries phase=skeleton so the client can phase its prompting. A future patch may add per-phase apply semantics.","inputSchema":{"type":"object","properties":{"nodes_json":{"type":"string","description":"JSON array of node descriptors"}},"required":["nodes_json"]}}"#,
     r#"{"name":"design_content","description":"Layered design workflow phase 2: fill content into the scaffold. Apply behavior is identical to batch_design today (phase is metadata only); the response carries phase=content. A future patch may add per-phase apply semantics.","inputSchema":{"type":"object","properties":{"nodes_json":{"type":"string","description":"JSON array of node descriptors"}},"required":["nodes_json"]}}"#,
     r#"{"name":"design_refine","description":"Layered design workflow phase 3: polish details. Apply behavior is identical to batch_design today (phase is metadata only); the response carries phase=refine. A future patch may add per-phase apply semantics.","inputSchema":{"type":"object","properties":{"nodes_json":{"type":"string","description":"JSON array of node descriptors"}},"required":["nodes_json"]}}"#,
