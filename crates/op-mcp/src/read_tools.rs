@@ -14,26 +14,88 @@ use op_editor_core::EditorState;
 use super::tools::{active_children, kind_label};
 use super::{McpTool, ToolErrorCode, ToolOutcome};
 
+type ToolCallError = (ToolErrorCode, String);
+
 // --- snapshot_layout -------------------------------------------------
 
 /// First-party `snapshot_layout` tool — bounding box of every
-/// top-level node on the active page.
+/// node on the active page, optionally filtered by page / parent /
+/// depth for TS CLI compatibility.
 pub struct SnapshotLayout {
     pub items: Vec<(String, i32, i32, i32, i32)>,
+    pages: Vec<PageLayout>,
+    active_page_id: String,
+}
+
+#[derive(Clone)]
+struct PageLayout {
+    id: String,
+    records: Vec<LayoutRecord>,
+}
+
+#[derive(Clone)]
+struct LayoutRecord {
+    id: String,
+    ancestors: Vec<String>,
+    depth: u32,
+    x: i32,
+    y: i32,
+    w: i32,
+    h: i32,
 }
 
 impl McpTool for SnapshotLayout {
     fn name(&self) -> &str {
         "snapshot_layout"
     }
-    fn call(&self, _args: &BTreeMap<String, String>) -> ToolOutcome {
-        let encoded: Vec<String> = self
-            .items
+    fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
+        let page = match self.page_layout(args) {
+            Ok(page) => page,
+            Err((code, msg)) => return ToolOutcome::Err(code, msg),
+        };
+        let max_depth = match arg_alias(args, &["maxDepth", "depth"]) {
+            Some(raw) => match raw.parse::<u32>() {
+                Ok(v) => v,
+                Err(_) => {
+                    return ToolOutcome::Err(
+                        ToolErrorCode::InvalidArgument,
+                        format!("maxDepth must be a u32, got {raw:?}"),
+                    );
+                }
+            },
+            None => 1,
+        };
+        let parent_id = arg_alias(args, &["parentId", "parent_id", "parent"]);
+        let parent_depth = match parent_id {
+            Some(id) => match page.records.iter().find(|r| r.id == id) {
+                Some(parent) => Some(parent.depth),
+                None => {
+                    return ToolOutcome::Err(
+                        ToolErrorCode::ToolFailed,
+                        format!("node not found: {id}"),
+                    );
+                }
+            },
+            None => None,
+        };
+        let selected: Vec<&LayoutRecord> = page
+            .records
+            .iter()
+            .filter(|record| match (parent_id, parent_depth) {
+                (Some(parent), Some(depth)) => {
+                    record.ancestors.iter().any(|id| id == parent)
+                        && record.depth <= depth + max_depth + 1
+                }
+                _ => record.depth <= max_depth,
+            })
+            .collect();
+        let layout_items = self.layout_items(args, &selected);
+        let encoded: Vec<String> = layout_items
             .iter()
             .map(|(id, x, y, w, h)| format!("{id}|{x}|{y}|{w}|{h}"))
             .collect();
         let mut out = BTreeMap::new();
-        out.insert("count".into(), self.items.len().to_string());
+        out.insert("count".into(), layout_items.len().to_string());
         out.insert("layout".into(), encoded.join(";"));
         ToolOutcome::Ok(out)
     }
@@ -53,7 +115,309 @@ pub fn snapshot_layout_snapshot(state: &EditorState) -> SnapshotLayout {
             )
         })
         .collect();
-    SnapshotLayout { items }
+    let (pages, active_page_id) = page_layout_snapshots(state);
+    SnapshotLayout {
+        items,
+        pages,
+        active_page_id,
+    }
+}
+
+impl SnapshotLayout {
+    fn page_layout(&self, args: &BTreeMap<String, String>) -> Result<&PageLayout, ToolCallError> {
+        let id = arg_alias(args, &["pageId", "page_id", "page"]);
+        let target = id.unwrap_or(self.active_page_id.as_str());
+        self.pages
+            .iter()
+            .find(|page| page.id == target)
+            .ok_or_else(|| {
+                (
+                    ToolErrorCode::ToolFailed,
+                    format!("page not found: {target}"),
+                )
+            })
+    }
+
+    fn layout_items(
+        &self,
+        args: &BTreeMap<String, String>,
+        selected: &[&LayoutRecord],
+    ) -> Vec<(String, i32, i32, i32, i32)> {
+        if args.is_empty() {
+            return self.items.clone();
+        }
+        selected
+            .iter()
+            .map(|r| (r.id.clone(), r.x, r.y, r.w, r.h))
+            .collect()
+    }
+}
+
+// --- find_empty_space -----------------------------------------------
+
+/// First-party `find_empty_space` tool — find a padded position for a
+/// new rectangle relative to either the page content or one node.
+pub struct FindEmptySpace {
+    pages: Vec<PageSpace>,
+    active_page_id: String,
+}
+
+#[derive(Clone)]
+struct PageSpace {
+    id: String,
+    roots: Vec<BoundsRecord>,
+    all: Vec<BoundsRecord>,
+}
+
+#[derive(Clone)]
+struct BoundsRecord {
+    id: String,
+    x: i32,
+    y: i32,
+    w: i32,
+    h: i32,
+}
+
+impl McpTool for FindEmptySpace {
+    fn name(&self) -> &str {
+        "find_empty_space"
+    }
+    fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
+        let width = match required_i32_arg(args, "width") {
+            Ok(v) => v,
+            Err((code, msg)) => return ToolOutcome::Err(code, msg),
+        };
+        let height = match required_i32_arg(args, "height") {
+            Ok(v) => v,
+            Err((code, msg)) => return ToolOutcome::Err(code, msg),
+        };
+        let padding = match optional_i32_arg(args, "padding", 50) {
+            Ok(v) => v,
+            Err((code, msg)) => return ToolOutcome::Err(code, msg),
+        };
+        let Some(direction) = args.get("direction") else {
+            return ToolOutcome::Err(
+                ToolErrorCode::MissingArgument,
+                "direction is required".into(),
+            );
+        };
+        let page = match self.page_space(args) {
+            Ok(page) => page,
+            Err((code, msg)) => return ToolOutcome::Err(code, msg),
+        };
+        let node_id = arg_alias(args, &["nodeId", "node_id", "node"]);
+        let nodes: Vec<&BoundsRecord> = match node_id {
+            Some(id) => match page.all.iter().find(|record| record.id == id) {
+                Some(record) => vec![record],
+                None => {
+                    return ToolOutcome::Err(
+                        ToolErrorCode::ToolFailed,
+                        format!("node not found: {id}"),
+                    );
+                }
+            },
+            None => page.roots.iter().collect(),
+        };
+        let (x, y) = match find_padded_position(&nodes, direction, width, height, padding) {
+            Ok(pos) => pos,
+            Err((code, msg)) => return ToolOutcome::Err(code, msg),
+        };
+        let mut out = BTreeMap::new();
+        out.insert("x".into(), x.to_string());
+        out.insert("y".into(), y.to_string());
+        ToolOutcome::Ok(out)
+    }
+}
+
+pub fn find_empty_space_snapshot(state: &EditorState) -> FindEmptySpace {
+    let (pages, active_page_id) = page_space_snapshots(state);
+    FindEmptySpace {
+        pages,
+        active_page_id,
+    }
+}
+
+impl FindEmptySpace {
+    fn page_space(&self, args: &BTreeMap<String, String>) -> Result<&PageSpace, ToolCallError> {
+        let id = arg_alias(args, &["pageId", "page_id", "page"]);
+        let target = id.unwrap_or(self.active_page_id.as_str());
+        self.pages
+            .iter()
+            .find(|page| page.id == target)
+            .ok_or_else(|| {
+                (
+                    ToolErrorCode::ToolFailed,
+                    format!("page not found: {target}"),
+                )
+            })
+    }
+}
+
+fn page_layout_snapshots(state: &EditorState) -> (Vec<PageLayout>, String) {
+    match state.doc.pages.as_ref() {
+        Some(pages) if !pages.is_empty() => {
+            let active = state.ui.active_page_index.min(pages.len() - 1);
+            let out = pages
+                .iter()
+                .map(|page| PageLayout {
+                    id: page.id.clone(),
+                    records: layout_records(&page.children),
+                })
+                .collect();
+            (out, pages[active].id.clone())
+        }
+        _ => (
+            vec![PageLayout {
+                id: "0".into(),
+                records: layout_records(&state.doc.children),
+            }],
+            "0".into(),
+        ),
+    }
+}
+
+fn page_space_snapshots(state: &EditorState) -> (Vec<PageSpace>, String) {
+    match state.doc.pages.as_ref() {
+        Some(pages) if !pages.is_empty() => {
+            let active = state.ui.active_page_index.min(pages.len() - 1);
+            let out = pages
+                .iter()
+                .map(|page| page_space(&page.id, &page.children))
+                .collect();
+            (out, pages[active].id.clone())
+        }
+        _ => (vec![page_space("0", &state.doc.children)], "0".into()),
+    }
+}
+
+fn layout_records(nodes: &[PenNode]) -> Vec<LayoutRecord> {
+    fn walk(
+        nodes: &[PenNode],
+        ancestors: &[String],
+        depth: u32,
+        parent_x: i32,
+        parent_y: i32,
+        out: &mut Vec<LayoutRecord>,
+    ) {
+        for n in nodes {
+            let b = aggregate_bounds(n);
+            let x = parent_x + b.x as i32;
+            let y = parent_y + b.y as i32;
+            let id = n.id_str().to_string();
+            out.push(LayoutRecord {
+                id: id.clone(),
+                ancestors: ancestors.to_vec(),
+                depth,
+                x,
+                y,
+                w: b.w as i32,
+                h: b.h as i32,
+            });
+            if let Some(children) = n.children() {
+                let mut child_ancestors = ancestors.to_vec();
+                child_ancestors.push(id.clone());
+                walk(children, &child_ancestors, depth + 1, x, y, out);
+            }
+        }
+    }
+    let mut out = Vec::new();
+    walk(nodes, &[], 0, 0, 0, &mut out);
+    out
+}
+
+fn page_space(id: &str, roots: &[PenNode]) -> PageSpace {
+    fn walk(nodes: &[PenNode], out: &mut Vec<BoundsRecord>) {
+        for n in nodes {
+            out.push(bounds_record(n));
+            if let Some(children) = n.children() {
+                walk(children, out);
+            }
+        }
+    }
+    let root_bounds = roots.iter().map(bounds_record).collect();
+    let mut all = Vec::new();
+    walk(roots, &mut all);
+    PageSpace {
+        id: id.to_string(),
+        roots: root_bounds,
+        all,
+    }
+}
+
+fn bounds_record(node: &PenNode) -> BoundsRecord {
+    let b = aggregate_bounds(node);
+    BoundsRecord {
+        id: node.id_str().to_string(),
+        x: b.x as i32,
+        y: b.y as i32,
+        w: b.w as i32,
+        h: b.h as i32,
+    }
+}
+
+fn find_padded_position(
+    nodes: &[&BoundsRecord],
+    direction: &str,
+    width: i32,
+    height: i32,
+    padding: i32,
+) -> Result<(i32, i32), ToolCallError> {
+    if nodes.is_empty() {
+        return Ok((0, 0));
+    }
+    let mut min_x = i32::MAX;
+    let mut min_y = i32::MAX;
+    let mut max_x = i32::MIN;
+    let mut max_y = i32::MIN;
+    for n in nodes {
+        min_x = min_x.min(n.x);
+        min_y = min_y.min(n.y);
+        max_x = max_x.max(n.x + n.w);
+        max_y = max_y.max(n.y + n.h);
+    }
+    match direction {
+        "right" => Ok((max_x + padding, min_y)),
+        "left" => Ok((min_x - padding - width, min_y)),
+        "bottom" => Ok((min_x, max_y + padding)),
+        "top" => Ok((min_x, min_y - padding - height)),
+        other => Err((
+            ToolErrorCode::InvalidArgument,
+            format!("direction must be top/right/bottom/left, got {other:?}"),
+        )),
+    }
+}
+
+fn arg_alias<'a>(args: &'a BTreeMap<String, String>, keys: &[&str]) -> Option<&'a str> {
+    keys.iter()
+        .find_map(|key| args.get(*key).map(String::as_str))
+}
+
+fn required_i32_arg(args: &BTreeMap<String, String>, key: &str) -> Result<i32, ToolCallError> {
+    let Some(raw) = args.get(key) else {
+        return Err((ToolErrorCode::MissingArgument, format!("{key} is required")));
+    };
+    raw.parse::<i32>().map_err(|_| {
+        (
+            ToolErrorCode::InvalidArgument,
+            format!("{key} must be an i32, got {raw:?}"),
+        )
+    })
+}
+
+fn optional_i32_arg(
+    args: &BTreeMap<String, String>,
+    key: &str,
+    default: i32,
+) -> Result<i32, ToolCallError> {
+    match args.get(key) {
+        Some(raw) => raw.parse::<i32>().map_err(|_| {
+            (
+                ToolErrorCode::InvalidArgument,
+                format!("{key} must be an i32, got {raw:?}"),
+            )
+        }),
+        None => Ok(default),
+    }
 }
 
 // --- get_canvas_bounds -----------------------------------------------

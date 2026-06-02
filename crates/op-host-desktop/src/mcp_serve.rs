@@ -37,26 +37,27 @@ use op_mcp::{
     delete_component_snapshot, delete_node_snapshot, delete_page_snapshot,
     delete_selected_snapshot, delete_variable_snapshot, design_content_snapshot,
     design_refine_snapshot, design_skeleton_snapshot, document_info_snapshot,
-    duplicate_page_snapshot, duplicate_selected_snapshot, find_node_by_name_snapshot,
-    get_active_theme_snapshot, get_canvas_bounds_snapshot, get_component_snapshot,
-    get_history_depth_snapshot, get_node_children_snapshot, get_node_parent_snapshot,
-    get_node_snapshot, get_selection_set_snapshot, get_viewport_snapshot, group_selected_snapshot,
-    import_svg_snapshot, insert_node_snapshot, instantiate_component_snapshot,
-    list_components_snapshot, list_node_kinds_snapshot, list_pages_snapshot,
-    list_variables_snapshot, move_node_snapshot, nudge_selected_snapshot, paste_clipboard_snapshot,
-    redo_snapshot, remove_node_effect_snapshot, remove_page_snapshot, rename_component_snapshot,
-    rename_page_snapshot, rename_variable_snapshot, reorder_page_snapshot,
-    reorder_selected_snapshot, replace_node_snapshot, run_stdio_with_applier, selection_snapshot,
-    set_active_axis_value_snapshot, set_active_page_snapshot, set_active_tool_snapshot,
-    set_ellipse_arc_snapshot, set_node_collapsed_snapshot, set_node_corner_radius_snapshot,
-    set_node_fill_hex_snapshot, set_node_flip_snapshot, set_node_font_size_snapshot,
-    set_node_font_weight_snapshot, set_node_hidden_snapshot, set_node_locked_snapshot,
-    set_node_name_snapshot, set_node_rotation_snapshot, set_node_stroke_hex_snapshot,
-    set_node_stroke_width_snapshot, set_node_text_snapshot, set_selection_set_snapshot,
-    set_selection_snapshot, set_variable_boolean_snapshot, set_variable_color_snapshot,
-    set_variable_number_snapshot, set_variable_string_snapshot, set_viewport_snapshot,
-    snapshot_layout_snapshot, toggle_node_selection_snapshot, undo_snapshot,
-    ungroup_selected_snapshot, update_node_snapshot, ToolRegistry,
+    duplicate_page_snapshot, duplicate_selected_snapshot, find_empty_space_snapshot,
+    find_node_by_name_snapshot, get_active_theme_snapshot, get_canvas_bounds_snapshot,
+    get_component_snapshot, get_history_depth_snapshot, get_node_children_snapshot,
+    get_node_parent_snapshot, get_node_snapshot, get_selection_set_snapshot, get_viewport_snapshot,
+    group_selected_snapshot, import_svg_snapshot, insert_node_snapshot,
+    instantiate_component_snapshot, list_components_snapshot, list_node_kinds_snapshot,
+    list_pages_snapshot, list_variables_snapshot, move_node_snapshot, nudge_selected_snapshot,
+    paste_clipboard_snapshot, redo_snapshot, remove_node_effect_snapshot, remove_page_snapshot,
+    rename_component_snapshot, rename_page_snapshot, rename_variable_snapshot,
+    reorder_page_snapshot, reorder_selected_snapshot, replace_node_snapshot,
+    run_stdio_with_applier, selection_snapshot, set_active_axis_value_snapshot,
+    set_active_page_snapshot, set_active_tool_snapshot, set_ellipse_arc_snapshot,
+    set_node_collapsed_snapshot, set_node_corner_radius_snapshot, set_node_fill_hex_snapshot,
+    set_node_flip_snapshot, set_node_font_size_snapshot, set_node_font_weight_snapshot,
+    set_node_hidden_snapshot, set_node_locked_snapshot, set_node_name_snapshot,
+    set_node_rotation_snapshot, set_node_stroke_hex_snapshot, set_node_stroke_width_snapshot,
+    set_node_text_snapshot, set_selection_set_snapshot, set_selection_snapshot,
+    set_variable_boolean_snapshot, set_variable_color_snapshot, set_variable_number_snapshot,
+    set_variable_string_snapshot, set_viewport_snapshot, snapshot_layout_snapshot,
+    toggle_node_selection_snapshot, undo_snapshot, ungroup_selected_snapshot, update_node_snapshot,
+    ToolRegistry,
 };
 
 /// Load a `.op` file into an `EditorState`. The `.op` format is plain
@@ -392,6 +393,7 @@ fn rebuild_registry(doc: &EditorState) -> ToolRegistry {
     r.register(Box::new(list_components_snapshot(doc)));
     r.register(Box::new(get_component_snapshot(doc)));
     r.register(Box::new(snapshot_layout_snapshot(doc)));
+    r.register(Box::new(find_empty_space_snapshot(doc)));
     r.register(Box::new(get_canvas_bounds_snapshot(doc)));
     r.register(Box::new(find_node_by_name_snapshot(doc)));
     r.register(Box::new(get_node_parent_snapshot(doc)));
@@ -687,7 +689,8 @@ const TOOL_SCHEMAS: &[&str] = &[
     r#"{"name":"get_active_theme","description":"Return the active theme axis pinning per axis.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
     r#"{"name":"list_components","description":"List registered components (saved Frames / Groups promoted via Save as Component). Returns count + a `;`-separated record of `name|id` pairs.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
     r#"{"name":"get_component","description":"Fetch one component by id with detail: name, root node kind, and the subtree's leaf count.","inputSchema":{"type":"object","properties":{"component_id":{"type":"string","description":"positive u64 component id"}},"required":["component_id"]}}"#,
-    r#"{"name":"snapshot_layout","description":"Return the bounding box of every top-level node on the active page. Result `layout` is a `;`-separated record of `id|x|y|w|h` (ints, doc-px).","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
+    r#"{"name":"snapshot_layout","description":"Return a depth-limited layout snapshot. Result `layout` is a `;`-separated record of `id|x|y|w|h` (ints, doc-px).","inputSchema":{"type":"object","properties":{"parentId":{"type":"string"},"maxDepth":{"type":"string","description":"u32 depth, default 1 when arguments are present"},"pageId":{"type":"string"}}}}"#,
+    r#"{"name":"find_empty_space","description":"Find padded empty canvas space in one direction for placing new content.","inputSchema":{"type":"object","properties":{"width":{"type":"string","description":"i32 doc-px"},"height":{"type":"string","description":"i32 doc-px"},"padding":{"type":"string","description":"i32 doc-px, default 50"},"direction":{"type":"string","enum":["top","right","bottom","left"]},"nodeId":{"type":"string"},"pageId":{"type":"string"}},"required":["width","height","direction"]}}"#,
     r#"{"name":"get_canvas_bounds","description":"Return the union bounding box of every top-level node on the active page (x/y/w/h ints + has_content true/false).","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
     r#"{"name":"find_node_by_name","description":"Locate the first node whose name matches (case-sensitive, exact) anywhere on the active page. Returns id + kind. ToolFailed when no match.","inputSchema":{"type":"object","properties":{"name":{"type":"string"}},"required":["name"]}}"#,
     r#"{"name":"get_node_parent","description":"Return the parent id of node_id on the active page. parent_id=0 means the node is at the page root. depth is distance from root.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string","description":"positive u64 node id"}},"required":["node_id"]}}"#,
