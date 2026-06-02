@@ -465,6 +465,11 @@ impl EditorState {
                 property,
                 value,
             } => self.cmd_set_node_layout_prop(&node_id, &property, &value),
+            EditorCommand::ReplaceAllMatchingProperties {
+                page_id,
+                parent_ids,
+                replacements,
+            } => self.cmd_replace_all_matching_properties(&page_id, &parent_ids, &replacements),
         }
     }
 }

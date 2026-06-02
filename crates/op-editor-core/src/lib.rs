@@ -20,6 +20,7 @@ pub mod command_apply;
 pub mod command_layout_prop;
 pub mod command_node;
 pub mod command_node_attrs;
+pub mod command_style_replace;
 pub mod components;
 pub mod design_md;
 pub mod editor_ui_state;
@@ -56,6 +57,8 @@ pub mod walkers;
 #[cfg(test)]
 mod command_attr_tests;
 #[cfg(test)]
+mod command_style_replace_tests;
+#[cfg(test)]
 mod command_subtree_tests;
 #[cfg(test)]
 mod command_tests;
@@ -91,7 +94,8 @@ pub use chat::{
 };
 pub use color_picker::{hsv_to_rgb, parse_hex_alpha, parse_hex_rgb, rgb_to_hex, rgb_to_hsv};
 pub use command::{
-    BatchInsertItem, EditorCommand, EffectField, LayoutPropValue, NodeFlag, VariableScalarPayload,
+    BatchInsertItem, EditorCommand, EffectField, LayoutPropValue, NodeFlag, StylePropValue,
+    StylePropertyReplacement, VariableScalarPayload,
 };
 pub use components::{Component, ComponentLibrary};
 pub use design_md::{extract_design_md_from_document, generate_design_md, parse_design_md};

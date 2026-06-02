@@ -535,6 +535,37 @@ fn parse_tool_call_allows_structured_read_nodes_ids_for_ts_parity() {
 }
 
 #[test]
+fn parse_tool_call_allows_structured_style_ops_args_for_ts_parity() {
+    let line = r#"{"id":5,"method":"tools/call","params":{"name":"search_all_unique_properties","arguments":{"parents":["n1"],"properties":["fillColor","textColor"]}}}"#;
+    let call = parse_tool_call(line).expect("style ops must accept TS-style array arguments");
+    assert_eq!(call.tool, "search_all_unique_properties");
+    assert_eq!(
+        call.arguments.get("parents").map(String::as_str),
+        Some(r#"["n1"]"#)
+    );
+    assert_eq!(
+        call.arguments.get("properties").map(String::as_str),
+        Some(r#"["fillColor","textColor"]"#)
+    );
+}
+
+#[test]
+fn parse_tool_call_allows_structured_replace_style_ops_args_for_ts_parity() {
+    let line = r##"{"id":6,"method":"tools/call","params":{"name":"replace_all_matching_properties","arguments":{"parents":["n1"],"properties":{"fillColor":[{"from":"#fff","to":"#000"}]}}}}"##;
+    let call = parse_tool_call(line)
+        .expect("replace style ops must accept TS-style array/object arguments");
+    assert_eq!(call.tool, "replace_all_matching_properties");
+    assert_eq!(
+        call.arguments.get("parents").map(String::as_str),
+        Some(r#"["n1"]"#)
+    );
+    assert_eq!(
+        call.arguments.get("properties").map(String::as_str),
+        Some(r##"{"fillColor":[{"from":"#fff","to":"#000"}]}"##)
+    );
+}
+
+#[test]
 fn parse_tool_call_allows_structured_batch_get_args_for_ts_parity() {
     let line = r#"{"id":4,"method":"tools/call","params":{"name":"batch_get","arguments":{"patterns":[{"name":"Button"}],"nodeIds":["n11"],"readDepth":0}}}"#;
     let call = parse_tool_call(line).expect("batch_get must accept TS-style structured args");

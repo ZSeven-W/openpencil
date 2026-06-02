@@ -76,6 +76,22 @@ pub enum LayoutPropValue {
     Bool(bool),
 }
 
+/// Value payload used by batch style-property replacement commands.
+#[derive(Debug, Clone, PartialEq)]
+pub enum StylePropValue {
+    String(String),
+    Number(f64),
+    NumberArray(Vec<f64>),
+}
+
+/// One `replace_all_matching_properties` rule after MCP parsing.
+#[derive(Debug, Clone, PartialEq)]
+pub struct StylePropertyReplacement {
+    pub property: String,
+    pub from: StylePropValue,
+    pub to: StylePropValue,
+}
+
 /// Per-item descriptor for [`EditorCommand::BatchInsert`]. Same shape as
 /// `InsertNode`'s args; carried in a Vec so the applier can
 /// validate-then-mutate the whole set atomically.
@@ -349,5 +365,13 @@ pub enum EditorCommand {
         node_id: NodeId,
         property: String,
         value: LayoutPropValue,
+    },
+    /// Replace all matching style property values under one or more
+    /// parent ids. Mirrors the TS MCP `replace_all_matching_properties`
+    /// operation.
+    ReplaceAllMatchingProperties {
+        page_id: Option<String>,
+        parent_ids: Vec<NodeId>,
+        replacements: Vec<StylePropertyReplacement>,
     },
 }
