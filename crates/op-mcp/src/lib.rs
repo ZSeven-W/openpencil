@@ -118,7 +118,8 @@ pub use component_tools::{
     InstantiateComponent, RenameComponent, SetNodeCollapsed,
 };
 pub use debug_tools::{
-    debug_tools_enabled, debug_validation_report_snapshot, DebugValidationReport,
+    debug_logs_tail_snapshot, debug_screenshot_snapshot, debug_tools_enabled,
+    debug_validation_report_snapshot, DebugLogsTail, DebugScreenshot, DebugValidationReport,
 };
 pub use design_md_tools::{
     export_design_md_snapshot, get_design_md_snapshot, set_design_md_snapshot, ExportDesignMd,

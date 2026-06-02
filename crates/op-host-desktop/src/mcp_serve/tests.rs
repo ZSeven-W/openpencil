@@ -200,10 +200,16 @@ fn tools_list_response_includes_all_registered_tools() {
     // Gate open — the debug tool joins the catalog.
     std::env::set_var("OPENPENCIL_DEBUG_TOOLS", "1");
     let r_debug = tools_list_response("3", &state);
-    assert!(
-        r_debug.contains("debug_validation_report"),
-        "debug tools/list must advertise debug_validation_report: {r_debug}"
-    );
+    for name in [
+        "debug_validation_report",
+        "debug_logs_tail",
+        "debug_screenshot",
+    ] {
+        assert!(
+            r_debug.contains(name),
+            "debug tools/list must advertise {name}: {r_debug}"
+        );
+    }
     std::env::remove_var("OPENPENCIL_DEBUG_TOOLS");
 }
 
