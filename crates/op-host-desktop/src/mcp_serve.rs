@@ -43,22 +43,23 @@ use op_mcp::{
     get_node_parent_snapshot, get_node_snapshot, get_selection_set_snapshot,
     get_variables_snapshot, get_viewport_snapshot, group_selected_snapshot, import_svg_snapshot,
     insert_node_snapshot, instantiate_component_snapshot, list_components_snapshot,
-    list_node_kinds_snapshot, list_pages_snapshot, list_variables_snapshot, move_node_snapshot,
+    list_node_kinds_snapshot, list_pages_snapshot, list_theme_presets_snapshot,
+    list_variables_snapshot, load_theme_preset_snapshot, move_node_snapshot,
     nudge_selected_snapshot, paste_clipboard_snapshot, read_nodes_snapshot, redo_snapshot,
     remove_node_effect_snapshot, remove_page_snapshot, rename_component_snapshot,
     rename_page_snapshot, rename_variable_snapshot, reorder_page_snapshot,
-    reorder_selected_snapshot, replace_node_snapshot, run_stdio_with_applier, selection_snapshot,
-    set_active_axis_value_snapshot, set_active_page_snapshot, set_active_tool_snapshot,
-    set_ellipse_arc_snapshot, set_node_collapsed_snapshot, set_node_corner_radius_snapshot,
-    set_node_fill_hex_snapshot, set_node_flip_snapshot, set_node_font_size_snapshot,
-    set_node_font_weight_snapshot, set_node_hidden_snapshot, set_node_locked_snapshot,
-    set_node_name_snapshot, set_node_rotation_snapshot, set_node_stroke_hex_snapshot,
-    set_node_stroke_width_snapshot, set_node_text_snapshot, set_selection_set_snapshot,
-    set_selection_snapshot, set_themes_snapshot, set_variable_boolean_snapshot,
-    set_variable_color_snapshot, set_variable_number_snapshot, set_variable_string_snapshot,
-    set_variables_snapshot, set_viewport_snapshot, snapshot_layout_snapshot,
-    toggle_node_selection_snapshot, undo_snapshot, ungroup_selected_snapshot, update_node_snapshot,
-    ToolRegistry,
+    reorder_selected_snapshot, replace_node_snapshot, run_stdio_with_applier,
+    save_theme_preset_snapshot, selection_snapshot, set_active_axis_value_snapshot,
+    set_active_page_snapshot, set_active_tool_snapshot, set_ellipse_arc_snapshot,
+    set_node_collapsed_snapshot, set_node_corner_radius_snapshot, set_node_fill_hex_snapshot,
+    set_node_flip_snapshot, set_node_font_size_snapshot, set_node_font_weight_snapshot,
+    set_node_hidden_snapshot, set_node_locked_snapshot, set_node_name_snapshot,
+    set_node_rotation_snapshot, set_node_stroke_hex_snapshot, set_node_stroke_width_snapshot,
+    set_node_text_snapshot, set_selection_set_snapshot, set_selection_snapshot,
+    set_themes_snapshot, set_variable_boolean_snapshot, set_variable_color_snapshot,
+    set_variable_number_snapshot, set_variable_string_snapshot, set_variables_snapshot,
+    set_viewport_snapshot, snapshot_layout_snapshot, toggle_node_selection_snapshot, undo_snapshot,
+    ungroup_selected_snapshot, update_node_snapshot, ToolRegistry,
 };
 
 /// Load a `.op` file into an `EditorState`. The `.op` format is plain
@@ -391,6 +392,9 @@ fn rebuild_registry(doc: &EditorState) -> ToolRegistry {
     r.register(Box::new(list_pages_snapshot(doc)));
     r.register(Box::new(list_variables_snapshot(doc)));
     r.register(Box::new(get_variables_snapshot(doc)));
+    r.register(Box::new(save_theme_preset_snapshot(doc)));
+    r.register(Box::new(load_theme_preset_snapshot()));
+    r.register(Box::new(list_theme_presets_snapshot()));
     r.register(Box::new(get_active_theme_snapshot(doc)));
     r.register(Box::new(list_components_snapshot(doc)));
     r.register(Box::new(get_component_snapshot(doc)));
@@ -692,6 +696,9 @@ const TOOL_SCHEMAS: &[&str] = &[
     r#"{"name":"list_pages","description":"List page ids + names. Result includes page_count, active_page_index, ids, and names as comma-separated strings.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
     r#"{"name":"list_variables","description":"List design variables with kinds.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
     r#"{"name":"get_variables","description":"Return all design variables and theme axes as JSON strings. TS-compatible read alias for variables/theme metadata.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
+    r#"{"name":"save_theme_preset","description":"Save the current document themes and variables as a reusable .optheme preset file.","inputSchema":{"type":"object","properties":{"presetPath":{"type":"string","description":"Path for the output .optheme file"},"name":{"type":"string","description":"Display name for the preset; defaults to file name"}},"required":["presetPath"]}}"#,
+    r#"{"name":"load_theme_preset","description":"Load a .optheme preset file and merge its themes and variables into the live document.","inputSchema":{"type":"object","properties":{"presetPath":{"type":"string","description":"Path to the .optheme file to load"}},"required":["presetPath"]}}"#,
+    r#"{"name":"list_theme_presets","description":"List valid .optheme preset files in a directory.","inputSchema":{"type":"object","properties":{"directory":{"type":"string","description":"Directory to scan for .optheme files"}},"required":["directory"]}}"#,
     r#"{"name":"get_active_theme","description":"Return the active theme axis pinning per axis.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
     r#"{"name":"list_components","description":"List registered components (saved Frames / Groups promoted via Save as Component). Returns count + a `;`-separated record of `name|id` pairs.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
     r#"{"name":"get_component","description":"Fetch one component by id with detail: name, root node kind, and the subtree's leaf count.","inputSchema":{"type":"object","properties":{"component_id":{"type":"string","description":"positive u64 component id"}},"required":["component_id"]}}"#,

@@ -230,12 +230,14 @@ fn command_from_positionals(positionals: &[String], flags: &Flags) -> Result<Com
         "vars:set" => map_vars_set(positionals, flags),
         "themes" => tool_call("get_active_theme", vec![]),
         "themes:set" => map_themes_set(positionals, flags),
+        "theme:save" => map_theme_save(positionals, flags),
+        "theme:load" => map_theme_load(positionals),
+        "theme:list" => map_theme_list(positionals),
         "layout" => map_layout(flags),
         "find-space" => map_find_space(flags),
         "import:svg" => map_import_svg(positionals, flags),
-        "start" | "stop" | "save" | "theme:save" | "theme:load" | "theme:list" | "import:figma"
-        | "install" | "uninstall" | "codegen:plan" | "codegen:submit" | "codegen:assemble"
-        | "codegen:clean" => Err(format!(
+        "start" | "stop" | "save" | "import:figma" | "install" | "uninstall" | "codegen:plan"
+        | "codegen:submit" | "codegen:assemble" | "codegen:clean" => Err(format!(
             "TS command {:?} is not implemented by the Rust HTTP MCP CLI yet",
             positionals[0]
         )),
@@ -389,6 +391,25 @@ fn map_themes_set(positionals: &[String], flags: &Flags) -> Result<Command, Stri
         pairs.push(pair("replace", "true"));
     }
     tool_call("set_themes", pairs)
+}
+
+fn map_theme_save(positionals: &[String], flags: &Flags) -> Result<Command, String> {
+    let preset_path = required_pos(positionals, 1, "Usage: op theme:save <file.optheme>")?;
+    let mut pairs = vec![pair("presetPath", preset_path)];
+    if let Some(name) = flag_value(flags, "name") {
+        pairs.push(pair("name", name));
+    }
+    tool_call("save_theme_preset", pairs)
+}
+
+fn map_theme_load(positionals: &[String]) -> Result<Command, String> {
+    let preset_path = required_pos(positionals, 1, "Usage: op theme:load <file.optheme>")?;
+    tool_call("load_theme_preset", vec![pair("presetPath", preset_path)])
+}
+
+fn map_theme_list(positionals: &[String]) -> Result<Command, String> {
+    let directory = required_pos(positionals, 1, "Usage: op theme:list <directory>")?;
+    tool_call("list_theme_presets", vec![pair("directory", directory)])
 }
 
 fn map_layout(flags: &Flags) -> Result<Command, String> {

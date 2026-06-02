@@ -189,6 +189,11 @@ pub enum EditorCommand {
         themes: BTreeMap<String, Vec<String>>,
         replace: bool,
     },
+    /// Merge a theme preset payload into document variables + theme axes.
+    MergeThemePreset {
+        variables: BTreeMap<String, VariableDefinition>,
+        themes: BTreeMap<String, Vec<String>>,
+    },
     /// Instantiate a registered component onto the active page.
     InstantiateComponent { component_id: NodeId },
     /// Promote an active-page Frame / Group / Rectangle to a component.

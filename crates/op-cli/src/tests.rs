@@ -292,6 +292,46 @@ fn parse_args_maps_read_nodes_to_ts_tool_shape() {
 }
 
 #[test]
+fn parse_args_maps_theme_preset_commands_to_ts_tool_shape() {
+    let save = parse_args(&[
+        "theme:save".to_string(),
+        "/tmp/acme.optheme".to_string(),
+        "--name".to_string(),
+        "Acme".to_string(),
+    ])
+    .expect("parse save");
+    assert_eq!(
+        save.command,
+        Command::ToolCall {
+            tool: "save_theme_preset".to_string(),
+            args: vec![
+                ("presetPath".to_string(), "/tmp/acme.optheme".to_string()),
+                ("name".to_string(), "Acme".to_string()),
+            ],
+        }
+    );
+
+    let load = parse_args(&["theme:load".to_string(), "/tmp/acme.optheme".to_string()])
+        .expect("parse load");
+    assert_eq!(
+        load.command,
+        Command::ToolCall {
+            tool: "load_theme_preset".to_string(),
+            args: vec![("presetPath".to_string(), "/tmp/acme.optheme".to_string())],
+        }
+    );
+
+    let list = parse_args(&["theme:list".to_string(), "/tmp".to_string()]).expect("parse list");
+    assert_eq!(
+        list.command,
+        Command::ToolCall {
+            tool: "list_theme_presets".to_string(),
+            args: vec![("directory".to_string(), "/tmp".to_string())],
+        }
+    );
+}
+
+#[test]
 fn parse_args_maps_ts_insert_json_alias_to_rust_tool() {
     let args = vec![
         "insert".to_string(),

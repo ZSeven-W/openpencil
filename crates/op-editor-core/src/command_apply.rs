@@ -235,6 +235,9 @@ impl EditorState {
                 self.set_variables_bulk(variables, replace)
             }
             EditorCommand::SetThemes { themes, replace } => self.set_themes_bulk(themes, replace),
+            EditorCommand::MergeThemePreset { variables, themes } => {
+                self.set_variables_bulk(variables, false) && self.set_themes_bulk(themes, false)
+            }
             EditorCommand::SetActiveAxisValue { axis, value } => {
                 self.set_active_axis_value(&axis, &value)
             }

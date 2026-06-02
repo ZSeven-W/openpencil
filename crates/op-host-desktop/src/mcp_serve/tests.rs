@@ -57,7 +57,7 @@ fn tools_list_response_includes_all_registered_tools() {
     // TOOL_SCHEMAS without being added to the list below.
     assert_eq!(
         TOOL_SCHEMAS.len(),
-        88,
+        91,
         "tools/list catalog count must match the registered tools — add the new tool to this test"
     );
     // Production catalog excludes debug tools (we removed the
@@ -94,6 +94,9 @@ fn tools_list_response_includes_all_registered_tools() {
         "list_pages",
         "list_variables",
         "get_variables",
+        "save_theme_preset",
+        "load_theme_preset",
+        "list_theme_presets",
         "get_active_theme",
         "list_components",
         "get_component",
@@ -242,6 +245,57 @@ fn read_nodes_accepts_structured_ids_over_mcp() {
     assert!(response.contains(r#""id":11"#), "{response}");
     assert!(response.contains(r#""count":"1""#), "{response}");
     assert!(response.contains(&node_id), "{response}");
+}
+
+#[test]
+fn load_theme_preset_merges_live_doc_over_mcp() {
+    let mut state = op_editor_core::EditorState::new();
+    let dir = std::env::temp_dir().join(format!(
+        "openpencil-theme-preset-test-{}",
+        std::process::id()
+    ));
+    std::fs::create_dir_all(&dir).expect("temp dir");
+    let preset_path = dir.join("dark.optheme");
+    std::fs::write(
+        &preset_path,
+        r##"{
+  "type": "openpencil-theme-preset",
+  "version": "1.0.0",
+  "name": "Dark",
+  "themes": { "Mode": ["Light", "Dark"] },
+  "variables": { "brand": { "type": "color", "value": "#101010" } }
+}"##,
+    )
+    .expect("preset file");
+
+    let preset_path_json =
+        serde_json::to_string(&preset_path.to_string_lossy()).expect("path json");
+    let line = format!(
+        r#"{{"jsonrpc":"2.0","id":12,"method":"tools/call","params":{{"name":"load_theme_preset","arguments":{{"presetPath":{preset_path_json}}}}}}}"#
+    );
+    let response =
+        process_message_with_applier(&mut state, &line, |state, cmd| state.apply(cmd.clone()))
+            .expect("dispatch")
+            .expect("response");
+    assert!(response.contains(r#""id":12"#), "{response}");
+    assert!(response.contains(r#""wrote":"true""#), "{response}");
+    assert_eq!(
+        state
+            .doc
+            .themes
+            .as_ref()
+            .and_then(|themes| themes.get("Mode"))
+            .cloned(),
+        Some(vec!["Light".to_string(), "Dark".to_string()])
+    );
+    assert!(state
+        .doc
+        .variables
+        .as_ref()
+        .is_some_and(|variables| variables.contains_key("brand")));
+
+    let _ = std::fs::remove_file(&preset_path);
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
