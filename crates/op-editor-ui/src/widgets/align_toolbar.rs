@@ -13,7 +13,7 @@
 
 use crate::theme::Theme;
 use crate::widgets::icons::{draw_icon, Icon};
-use crate::{Point2D, Rect, RenderBackend};
+use crate::{Color, Point2D, Rect, RenderBackend};
 use jian_ops_schema::node::PenNode;
 use op_editor_core::walkers::find_node;
 use op_editor_core::{AlignAction, BooleanOp, EditorState};
@@ -50,37 +50,11 @@ const ITEMS: &[(AlignAction, Icon)] = &[
     (AlignAction::DistributeV, Icon::DistributeV),
 ];
 
-const SQUARES_UNITE: &[&str] = &["M4 16a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v3a1 1 0 0 0 1 1h3a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H10a2 2 0 0 1-2-2v-3a1 1 0 0 0-1-1z"];
-const SQUARES_SUBTRACT: &[&str] = &[
-    "M10 22a2 2 0 0 1-2-2",
-    "M16 22h-2",
-    "M16 4a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h3a1 1 0 0 0 1-1v-5a2 2 0 0 1 2-2h5a1 1 0 0 0 1-1z",
-    "M20 8a2 2 0 0 1 2 2",
-    "M22 14v2",
-    "M22 20a2 2 0 0 1-2 2",
-];
-const SQUARES_INTERSECT: &[&str] = &[
-    "M10 22a2 2 0 0 1-2-2",
-    "M14 2a2 2 0 0 1 2 2",
-    "M16 22h-2",
-    "M2 10V8",
-    "M2 4a2 2 0 0 1 2-2",
-    "M20 8a2 2 0 0 1 2 2",
-    "M22 14v2",
-    "M22 20a2 2 0 0 1-2 2",
-    "M4 16a2 2 0 0 1-2-2",
-    "M8 10a2 2 0 0 1 2-2h5a1 1 0 0 1 1 1v5a2 2 0 0 1-2 2H9a1 1 0 0 1-1-1z",
-    "M8 2h2",
-];
-const SQUARES_EXCLUDE: &[&str] = &[
-    "M16 12v2a2 2 0 0 1-2 2H9a1 1 0 0 0-1 1v3a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2h0",
-    "M4 16a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v3a1 1 0 0 1-1 1h-5a2 2 0 0 0-2 2v2",
-];
-const BOOLEAN_ITEMS: &[(BooleanOp, &[&str])] = &[
-    (BooleanOp::Union, SQUARES_UNITE),
-    (BooleanOp::Subtract, SQUARES_SUBTRACT),
-    (BooleanOp::Intersect, SQUARES_INTERSECT),
-    (BooleanOp::Exclude, SQUARES_EXCLUDE),
+const BOOLEAN_ITEMS: &[BooleanOp] = &[
+    BooleanOp::Union,
+    BooleanOp::Subtract,
+    BooleanOp::Intersect,
+    BooleanOp::Exclude,
 ];
 
 /// Group divider indices (after these positions, insert a `GROUP_GAP`
@@ -167,19 +141,17 @@ impl AlignToolbar {
             );
         }
         if self.boolean_ops {
-            for (i, (_, paths)) in BOOLEAN_ITEMS.iter().enumerate() {
+            for (i, op) in BOOLEAN_ITEMS.iter().enumerate() {
                 let r = self.button_rect(ITEMS.len() + i);
                 let icon_x = r.origin.x + (r.size.x - ICON_SIZE) / 2.0;
                 let icon_y = r.origin.y + (r.size.y - ICON_SIZE) / 2.0;
-                for path in *paths {
-                    backend.stroke_svg_path(
-                        path,
-                        Point2D::new(icon_x, icon_y),
-                        ICON_SIZE,
-                        theme.foreground,
-                        1.5,
-                    );
-                }
+                paint_boolean_icon(
+                    backend,
+                    *op,
+                    Point2D::new(icon_x, icon_y),
+                    ICON_SIZE,
+                    theme.foreground,
+                );
             }
         }
     }
@@ -206,7 +178,7 @@ impl AlignToolbar {
             }
         }
         if self.boolean_ops {
-            for (i, (op, _)) in BOOLEAN_ITEMS.iter().enumerate() {
+            for (i, op) in BOOLEAN_ITEMS.iter().enumerate() {
                 if rect_contains(self.button_rect(ITEMS.len() + i), point) {
                     return Some(AlignToolbarHit::Boolean(*op));
                 }
@@ -238,6 +210,113 @@ fn toolbar_width(boolean_ops: bool) -> f32 {
         + GROUP_GAP
         + BUTTON_SIZE * BOOLEAN_ITEMS.len() as f32
         + INNER_GAP * BOOLEAN_ITEMS.len().saturating_sub(1) as f32
+}
+
+fn paint_boolean_icon(
+    backend: &mut dyn RenderBackend,
+    op: BooleanOp,
+    top_left: Point2D,
+    size: f32,
+    color: Color,
+) {
+    let a = Rect::xywh(
+        top_left.x + size * 0.08,
+        top_left.y + size * 0.08,
+        size * 0.56,
+        size * 0.56,
+    );
+    let b = Rect::xywh(
+        top_left.x + size * 0.36,
+        top_left.y + size * 0.36,
+        size * 0.56,
+        size * 0.56,
+    );
+    let overlap = Rect::xywh(
+        top_left.x + size * 0.36,
+        top_left.y + size * 0.36,
+        size * 0.28,
+        size * 0.28,
+    );
+    let faint = alpha(color, 0.14);
+    let muted = alpha(color, 0.42);
+    let strong = alpha(color, 0.28);
+    match op {
+        BooleanOp::Union => {
+            backend.fill_round_rect(a, 2.0, faint);
+            backend.fill_round_rect(b, 2.0, faint);
+            backend.fill_round_rect(overlap, 1.0, strong);
+            backend.stroke_round_rect(a, 2.0, color, 1.4);
+            backend.stroke_round_rect(b, 2.0, color, 1.4);
+        }
+        BooleanOp::Subtract => {
+            backend.fill_round_rect(a, 2.0, faint);
+            backend.stroke_round_rect(a, 2.0, color, 1.4);
+            paint_dashed_rect(backend, b, muted, 1.4);
+            backend.stroke_line(
+                Point2D::new(
+                    overlap.origin.x - 1.0,
+                    overlap.origin.y + overlap.size.y + 1.0,
+                ),
+                Point2D::new(
+                    overlap.origin.x + overlap.size.x + 1.0,
+                    overlap.origin.y - 1.0,
+                ),
+                color,
+                1.4,
+            );
+        }
+        BooleanOp::Intersect => {
+            backend.stroke_round_rect(a, 2.0, muted, 1.2);
+            backend.stroke_round_rect(b, 2.0, muted, 1.2);
+            backend.fill_round_rect(overlap, 1.0, strong);
+            backend.stroke_round_rect(overlap, 1.0, color, 1.4);
+        }
+        BooleanOp::Exclude => {
+            backend.stroke_round_rect(a, 2.0, color, 1.4);
+            backend.stroke_round_rect(b, 2.0, color, 1.4);
+            backend.stroke_line(
+                Point2D::new(overlap.origin.x - 0.5, overlap.origin.y - 0.5),
+                Point2D::new(
+                    overlap.origin.x + overlap.size.x + 0.5,
+                    overlap.origin.y + overlap.size.y + 0.5,
+                ),
+                color,
+                1.4,
+            );
+            backend.stroke_line(
+                Point2D::new(
+                    overlap.origin.x + overlap.size.x + 0.5,
+                    overlap.origin.y - 0.5,
+                ),
+                Point2D::new(
+                    overlap.origin.x - 0.5,
+                    overlap.origin.y + overlap.size.y + 0.5,
+                ),
+                color,
+                1.4,
+            );
+        }
+    }
+}
+
+fn paint_dashed_rect(backend: &mut dyn RenderBackend, rect: Rect, color: Color, width: f32) {
+    let x0 = rect.origin.x;
+    let y0 = rect.origin.y;
+    let x1 = rect.origin.x + rect.size.x;
+    let y1 = rect.origin.y + rect.size.y;
+    let d = rect.size.x * 0.32;
+    backend.stroke_line(Point2D::new(x0, y0), Point2D::new(x0 + d, y0), color, width);
+    backend.stroke_line(Point2D::new(x1 - d, y0), Point2D::new(x1, y0), color, width);
+    backend.stroke_line(Point2D::new(x1, y0), Point2D::new(x1, y0 + d), color, width);
+    backend.stroke_line(Point2D::new(x1, y1 - d), Point2D::new(x1, y1), color, width);
+    backend.stroke_line(Point2D::new(x1, y1), Point2D::new(x1 - d, y1), color, width);
+    backend.stroke_line(Point2D::new(x0 + d, y1), Point2D::new(x0, y1), color, width);
+    backend.stroke_line(Point2D::new(x0, y1), Point2D::new(x0, y1 - d), color, width);
+    backend.stroke_line(Point2D::new(x0, y0 + d), Point2D::new(x0, y0), color, width);
+}
+
+fn alpha(color: Color, a: f32) -> Color {
+    Color { a, ..color }
 }
 
 fn is_group_break_after(index: usize, boolean_ops: bool) -> bool {
