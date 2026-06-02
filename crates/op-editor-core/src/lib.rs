@@ -17,9 +17,11 @@ pub mod clipboard;
 pub mod color_picker;
 pub mod command;
 pub mod command_apply;
+pub mod command_authored_subtree;
 pub mod command_layout_prop;
 pub mod command_node;
 pub mod command_node_attrs;
+pub mod command_refine;
 pub mod command_style_replace;
 pub mod components;
 pub mod design_md;
@@ -57,13 +59,21 @@ pub mod walkers;
 #[cfg(test)]
 mod command_attr_tests;
 #[cfg(test)]
+mod command_authored_subtree_tests;
+#[cfg(test)]
+mod command_batch_page_tests;
+#[cfg(test)]
 mod command_component_tests;
 #[cfg(test)]
 mod command_delete_tests;
 #[cfg(test)]
 mod command_insert_tests;
 #[cfg(test)]
+mod command_refine_tests;
+#[cfg(test)]
 mod command_reparent_tests;
+#[cfg(test)]
+mod command_replace_tests;
 #[cfg(test)]
 mod command_style_replace_tests;
 #[cfg(test)]

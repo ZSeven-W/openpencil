@@ -145,6 +145,14 @@ pub enum EditorCommand {
         /// or legacy page index.
         page_id: Option<String>,
     },
+    /// Shallow-merge TS-style JSON fields onto an existing node.
+    PatchNodeData {
+        node_id: NodeId,
+        patch_json: String,
+        /// `None` updates on the active page; `Some` targets a page id
+        /// or legacy page index.
+        page_id: Option<String>,
+    },
     /// Remove a node + all its descendants.
     DeleteNode {
         node_id: NodeId,
@@ -168,6 +176,9 @@ pub enum EditorCommand {
     CopyNode {
         node_id: NodeId,
         target_parent: NodeId,
+        /// Optional TS-style shallow overrides JSON applied to the cloned
+        /// root. The clone's freshly-generated id is preserved.
+        overrides_json: Option<String>,
         /// `None` copies on the active page; `Some` targets a page id
         /// or legacy page index.
         page_id: Option<String>,
@@ -186,10 +197,28 @@ pub enum EditorCommand {
         height: i32,
         fill_hex: Option<String>,
         drop_children: bool,
+        /// `None` replaces on the active page; `Some` targets a page id
+        /// or legacy page index.
+        page_id: Option<String>,
+    },
+    /// Replace an existing node with a pre-built canonical subtree at
+    /// the same parent slot. Incoming ids are remapped before insertion.
+    ReplaceSubtree {
+        node_id: NodeId,
+        node: Box<PenNode>,
+        drop_children: bool,
+        /// `None` replaces on the active page; `Some` targets a page id
+        /// or legacy page index.
+        page_id: Option<String>,
     },
     /// Insert N leaf nodes on the active page atomically — one bad
     /// descriptor rejects the whole batch.
-    BatchInsert { items: Vec<BatchInsertItem> },
+    BatchInsert {
+        items: Vec<BatchInsertItem>,
+        /// `None` inserts on the active page; `Some` targets a page id
+        /// or legacy page index.
+        page_id: Option<String>,
+    },
 
     /// Insert one or more pre-built canonical `PenNode` subtrees under a
     /// parent. Unlike `InsertNode` / `BatchInsert` (flat leaves), this
@@ -200,6 +229,30 @@ pub enum EditorCommand {
         nodes: Vec<PenNode>,
         /// `NodeId::NONE` → active page root.
         parent_id: NodeId,
+        /// `None` inserts on the active page; `Some` targets a page id
+        /// or legacy page index.
+        page_id: Option<String>,
+    },
+    /// Insert one or more already-id-authored subtrees. Used by the
+    /// layered design skeleton workflow, which must return root/section
+    /// ids that remain valid for later `design_content` calls.
+    InsertAuthoredSubtree {
+        nodes: Vec<PenNode>,
+        /// `NodeId::NONE` → active page root.
+        parent_id: NodeId,
+        /// `None` inserts on the active page; `Some` targets a page id
+        /// or legacy page index.
+        page_id: Option<String>,
+    },
+    /// Run deterministic post-generation cleanup for a layered design
+    /// root. Unlike most write commands, a valid root with no needed
+    /// edits is still accepted so `design_refine` can be idempotent.
+    RefineDesign {
+        root_id: NodeId,
+        canvas_width: Option<i32>,
+        /// `None` refines on the active page; `Some` targets a page id
+        /// or legacy page index.
+        page_id: Option<String>,
     },
     /// Set a non-color scalar variable's value.
     SetVariableScalar {
@@ -254,8 +307,13 @@ pub enum EditorCommand {
     },
     /// Switch the active page.
     SetActivePage { index: u32 },
-    /// Append a fresh empty page + switch to it.
-    AddPage { name: Option<String> },
+    /// Append a fresh page + switch to it. When `children` is omitted,
+    /// the page gets the default blank frame; when supplied, external
+    /// child ids are remapped before insertion.
+    AddPage {
+        name: Option<String>,
+        children: Option<Vec<PenNode>>,
+    },
     /// Set a page's display name.
     RenamePage { index: u32, name: String },
     /// Remove a page by index.

@@ -407,6 +407,38 @@ impl EditorState {
         true
     }
 
+    /// `PatchNodeData` — TS-style shallow merge on a canonical PenNode.
+    pub(crate) fn cmd_patch_node_data(&mut self, node_id: &NodeId, patch_json: &str) -> bool {
+        if !node_id.is_real() {
+            return false;
+        }
+        let Ok(serde_json::Value::Object(patch)) =
+            serde_json::from_str::<serde_json::Value>(patch_json)
+        else {
+            return false;
+        };
+        let Some(current) = walkers::find_node(self.active_children(), node_id) else {
+            return false;
+        };
+        let Ok(mut value) = serde_json::to_value(current) else {
+            return false;
+        };
+        let Some(obj) = value.as_object_mut() else {
+            return false;
+        };
+        for (key, value) in patch {
+            obj.insert(key, value);
+        }
+        let Ok(replacement) = serde_json::from_value::<PenNode>(value) else {
+            return false;
+        };
+        if replacement.id_str().is_empty() {
+            return false;
+        }
+        let mut slot = Some(replacement);
+        replace_node_in_children(self.active_children_mut(), node_id, &mut slot)
+    }
+
     /// `DeleteNode` — remove a node + descendants from the active page.
     pub(crate) fn cmd_delete_node(&mut self, node_id: &NodeId) -> bool {
         if !node_id.is_real() {
@@ -455,7 +487,12 @@ impl EditorState {
 
     /// `CopyNode` — deep-clone a node + subtree under a new parent
     /// (`NONE` = active page root). Fresh ids minted past the id space.
-    pub(crate) fn cmd_copy_node(&mut self, node_id: &NodeId, target_parent: &NodeId) -> bool {
+    pub(crate) fn cmd_copy_node(
+        &mut self,
+        node_id: &NodeId,
+        target_parent: &NodeId,
+        overrides_json: Option<&str>,
+    ) -> bool {
         if !node_id.is_real() {
             return false;
         }
@@ -479,11 +516,14 @@ impl EditorState {
         };
         let mut taken = self.collect_node_ids();
         // Clone the owned subtree before re-borrowing the tree mutably.
-        let clone = {
+        let mut clone = {
             let children = self.active_children();
             let src = walkers::find_node(children, node_id).expect("validated");
             walkers::deep_clone_with_new_ids(src, &mut next_id, &mut taken)
         };
+        if !apply_copy_overrides(&mut clone, overrides_json) {
+            return false;
+        }
         let children = self.active_children_mut();
         insert_into_parent_or_root(children, target_parent, clone, None).is_ok()
     }
@@ -537,6 +577,41 @@ impl EditorState {
             set_primary_fill_hex(&mut replacement, hex);
         }
         let mut slot = Some(replacement);
+        replace_node_in_children(self.active_children_mut(), node_id, &mut slot)
+    }
+
+    /// `ReplaceSubtree` — swap an existing node for a fully-authored
+    /// canonical subtree. The destructive-swap guard matches
+    /// `ReplaceNode`: replacing a node WITH children requires explicit
+    /// opt-in.
+    pub(crate) fn cmd_replace_subtree(
+        &mut self,
+        node_id: &NodeId,
+        node: PenNode,
+        drop_children: bool,
+    ) -> bool {
+        if !node_id.is_real() {
+            return false;
+        }
+        {
+            let children = self.active_children();
+            let Some(target) = walkers::find_node(children, node_id) else {
+                return false;
+            };
+            let has_children = target.children().map(|c| !c.is_empty()).unwrap_or(false);
+            if has_children && !drop_children {
+                return false;
+            }
+        }
+        let Some(mut next_id) = self.next_node_id_seed() else {
+            return false;
+        };
+        let mut taken = self.collect_node_ids();
+        let mut nodes = vec![node];
+        if !remap_subtree_ids(&mut nodes, &mut next_id, &mut taken) {
+            return false;
+        }
+        let mut slot = nodes.pop();
         replace_node_in_children(self.active_children_mut(), node_id, &mut slot)
     }
 
@@ -632,6 +707,33 @@ impl EditorState {
         }
         true
     }
+}
+
+fn apply_copy_overrides(node: &mut PenNode, overrides_json: Option<&str>) -> bool {
+    let Some(raw) = overrides_json else {
+        return true;
+    };
+    let Ok(serde_json::Value::Object(mut overrides)) =
+        serde_json::from_str::<serde_json::Value>(raw)
+    else {
+        return false;
+    };
+    overrides.remove("id");
+
+    let Ok(mut node_value) = serde_json::to_value(&*node) else {
+        return false;
+    };
+    let Some(node_object) = node_value.as_object_mut() else {
+        return false;
+    };
+    for (key, value) in overrides {
+        node_object.insert(key, value);
+    }
+    let Ok(overridden) = serde_json::from_value::<PenNode>(node_value) else {
+        return false;
+    };
+    *node = overridden;
+    true
 }
 
 /// Reassign every node id in `nodes` (recursively, including

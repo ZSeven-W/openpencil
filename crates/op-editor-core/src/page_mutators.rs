@@ -7,7 +7,7 @@
 //! multi-page: the root `children` migrate into "Page 1" so no
 //! nodes are lost.
 
-use crate::command_node::build_leaf_node;
+use crate::command_node::{build_leaf_node, remap_subtree_ids};
 use crate::fills::set_primary_fill_hex;
 use crate::node_id::NodeId;
 use crate::state::EditorState;
@@ -81,6 +81,17 @@ impl EditorState {
     /// Append a fresh empty page with an optional display name and
     /// switch to it. Empty / whitespace-only custom names are rejected.
     pub fn add_page_with_name(&mut self, name: Option<String>) -> Option<usize> {
+        self.add_page_with_name_and_children(name, None)
+    }
+
+    /// Append a fresh page with optional caller-provided children and
+    /// switch to it. External child ids are always remapped into this
+    /// document's id space, matching `InsertSubtree`.
+    pub fn add_page_with_name_and_children(
+        &mut self,
+        name: Option<String>,
+        children: Option<Vec<PenNode>>,
+    ) -> Option<usize> {
         let custom_name = match name {
             Some(name) if name.trim().is_empty() => return None,
             Some(name) => Some(name),
@@ -93,12 +104,22 @@ impl EditorState {
         let mut next_id = self.max_node_id().checked_add(1)?;
         let mut taken = self.collect_node_ids();
         let page_id = walkers::alloc_n_id(&mut next_id, &mut taken)?;
-        let frame_id = walkers::alloc_n_id(&mut next_id, &mut taken)?;
-        let frame = make_blank_page_frame(&frame_id)?;
+        let page_children = match children {
+            Some(mut children) => {
+                if !remap_subtree_ids(&mut children, &mut next_id, &mut taken) {
+                    return None;
+                }
+                children
+            }
+            None => {
+                let frame_id = walkers::alloc_n_id(&mut next_id, &mut taken)?;
+                vec![make_blank_page_frame(&frame_id)?]
+            }
+        };
         let pages = self.doc.pages.as_mut().unwrap();
         let n = pages.len() + 1;
         let page_name = custom_name.unwrap_or_else(|| format!("Page {n}"));
-        pages.push(make_page(page_id.into(), page_name, vec![frame]));
+        pages.push(make_page(page_id.into(), page_name, page_children));
         let new_index = pages.len() - 1;
         self.ui.active_page_index = new_index;
         self.clear_selection();
