@@ -181,6 +181,7 @@ fn reorder_produces_move_node_commands_in_plan_order() {
     sink.state.apply(EditorCommand::InsertSubtree {
         nodes: vec![main_node],
         parent_id: NodeId::NONE,
+        page_id: None,
     });
 
     let main_id = find_by_name(&sink.state, "Main").expect("Main not found");
@@ -253,6 +254,7 @@ fn reorder_resolves_slot_to_row_ancestor() {
     sink.state.apply(EditorCommand::InsertSubtree {
         nodes: vec![main_node],
         parent_id: NodeId::NONE,
+        page_id: None,
     });
 
     let main_id = find_by_name(&sink.state, "Main").expect("Main not found");
@@ -313,6 +315,7 @@ fn reorder_uses_generated_root_id_as_fallback() {
     sink.state.apply(EditorCommand::InsertSubtree {
         nodes: vec![main_node],
         parent_id: NodeId::NONE,
+        page_id: None,
     });
 
     let main_id = find_by_name(&sink.state, "Main").expect("Main not found");

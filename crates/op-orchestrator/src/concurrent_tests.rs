@@ -229,6 +229,7 @@ fn buffer_doc_sink_collects_commands() {
     let applied = sink.apply(EditorCommand::InsertSubtree {
         nodes: vec![],
         parent_id: op_editor_core::NodeId::NONE,
+        page_id: None,
     });
     assert!(applied, "BufferDocSink.apply must always return true");
     assert_eq!(sink.commands.len(), 1);

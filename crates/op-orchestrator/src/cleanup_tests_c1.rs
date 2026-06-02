@@ -133,6 +133,7 @@ fn cleanup_concurrent_roots_removes_scaffold_only_root() {
     sink.state.apply(EditorCommand::InsertSubtree {
         nodes: vec![tree],
         parent_id: NodeId::NONE,
+        page_id: None,
     });
     // Get actual remapped ID (InsertSubtree remaps IDs).
     let root_id = sink.state.active_children()[0].id_str().to_string();
@@ -159,6 +160,7 @@ fn cleanup_concurrent_roots_keeps_root_with_content() {
     sink.state.apply(EditorCommand::InsertSubtree {
         nodes: vec![tree],
         parent_id: NodeId::NONE,
+        page_id: None,
     });
     // Get actual remapped ID.
     let root_id = sink.state.active_children()[0].id_str().to_string();
@@ -190,6 +192,7 @@ fn cleanup_concurrent_n_roots_partial_content_keeps_variables() {
     sink.state.apply(EditorCommand::InsertSubtree {
         nodes: vec![tree_a],
         parent_id: NodeId::NONE,
+        page_id: None,
     });
     // capture actual remapped ID for root-a (InsertSubtree remaps IDs).
     let root_a = sink.state.active_children()[0].id_str().to_string();
@@ -199,6 +202,7 @@ fn cleanup_concurrent_n_roots_partial_content_keeps_variables() {
     sink.state.apply(EditorCommand::InsertSubtree {
         nodes: vec![tree_b],
         parent_id: NodeId::NONE,
+        page_id: None,
     });
     // root-b is the second child at index 1.
     let root_b = sink.state.active_children()[1].id_str().to_string();
@@ -254,6 +258,7 @@ fn cleanup_concurrent_all_scaffold_only_deletes_all_and_rolls_back_vars() {
         sink.state.apply(EditorCommand::InsertSubtree {
             nodes: vec![tree],
             parent_id: NodeId::NONE,
+            page_id: None,
         });
     }
     // Capture actual remapped IDs.
@@ -302,6 +307,7 @@ fn cleanup_concurrent_mobile_baseline_one_removes_status_bar_only_root() {
     sink.state.apply(EditorCommand::InsertSubtree {
         nodes: vec![tree],
         parent_id: NodeId::NONE,
+        page_id: None,
     });
     // Get actual remapped ID.
     let root_id = sink.state.active_children()[0].id_str().to_string();

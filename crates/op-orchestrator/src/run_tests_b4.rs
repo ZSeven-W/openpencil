@@ -47,6 +47,7 @@ fn insert_target_frame(sink: &mut VecDocSink, hint_id: &str) -> String {
     sink.apply(EditorCommand::InsertSubtree {
         nodes: vec![node],
         parent_id: op_editor_core::NodeId::NONE,
+        page_id: None,
     });
     // The newly inserted node is appended at the end.
     sink.state()
@@ -67,6 +68,7 @@ fn insert_target_frame_mobile(sink: &mut VecDocSink, hint_id: &str) -> String {
     sink.apply(EditorCommand::InsertSubtree {
         nodes: vec![node],
         parent_id: op_editor_core::NodeId::NONE,
+        page_id: None,
     });
     sink.state()
         .active_children()
@@ -428,6 +430,7 @@ fn append_mode_wins_over_dashboard_branch() {
         sink.apply(EditorCommand::InsertSubtree {
             nodes: vec![node],
             parent_id: op_editor_core::NodeId::NONE,
+            page_id: None,
         });
         sink.state()
             .active_children()

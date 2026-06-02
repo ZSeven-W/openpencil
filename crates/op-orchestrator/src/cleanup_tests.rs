@@ -47,6 +47,7 @@ fn descendant_count_counts_nested() {
     sink.state.apply(EditorCommand::InsertSubtree {
         nodes: vec![tree],
         parent_id: NodeId::NONE,
+        page_id: None,
     });
     let root_id = sink.state.active_children()[0].id_str().to_string();
     assert_eq!(descendant_count(&sink.state, &root_id), 2);
@@ -68,6 +69,7 @@ fn remove_duplicate_status_bars_keeps_one() {
     sink.state.apply(EditorCommand::InsertSubtree {
         nodes: vec![tree],
         parent_id: NodeId::NONE,
+        page_id: None,
     });
     let root_id = sink.state.active_children()[0].id_str().to_string();
     sink.applied.clear();
@@ -86,6 +88,7 @@ fn run_cleanup_passes_callable_on_empty_root() {
     sink.state.apply(EditorCommand::InsertSubtree {
         nodes: vec![tree],
         parent_id: NodeId::NONE,
+        page_id: None,
     });
     let root_id = sink.state.active_children()[0].id_str().to_string();
     sink.applied.clear();
@@ -117,6 +120,7 @@ fn cleanup_does_not_shrink_fixed_mobile_root_to_partial_child_sum() {
     sink.state.apply(EditorCommand::InsertSubtree {
         nodes: vec![tree],
         parent_id: NodeId::NONE,
+        page_id: None,
     });
     let root_id = sink.state.active_children()[0].id_str().to_string();
     sink.applied.clear();
@@ -176,6 +180,7 @@ fn cleanup_recolors_safe_dark_bottom_nav_on_light_mobile_root() {
     sink.state.apply(EditorCommand::InsertSubtree {
         nodes: vec![tree],
         parent_id: NodeId::NONE,
+        page_id: None,
     });
     let root_id = sink.state.active_children()[0].id_str().to_string();
     sink.applied.clear();
@@ -227,6 +232,7 @@ fn cleanup_injects_missing_bottom_nav_surface_on_light_mobile_root() {
     sink.state.apply(EditorCommand::InsertSubtree {
         nodes: vec![tree],
         parent_id: NodeId::NONE,
+        page_id: None,
     });
     let root_id = sink.state.active_children()[0].id_str().to_string();
     sink.applied.clear();
@@ -303,6 +309,7 @@ fn cleanup_recolors_white_bottom_nav_to_tinted_mobile_root_surface() {
     sink.state.apply(EditorCommand::InsertSubtree {
         nodes: vec![tree],
         parent_id: NodeId::NONE,
+        page_id: None,
     });
     let root_id = sink.state.active_children()[0].id_str().to_string();
     sink.applied.clear();
@@ -355,6 +362,7 @@ fn cleanup_repairs_mobile_section_padding_and_overwide_children() {
     sink.state.apply(EditorCommand::InsertSubtree {
         nodes: vec![tree],
         parent_id: NodeId::NONE,
+        page_id: None,
     });
     let root_id = sink.state.active_children()[0].id_str().to_string();
     sink.applied.clear();
@@ -427,6 +435,7 @@ fn cleanup_clamps_mobile_absolute_overflow_inside_sections() {
     sink.state.apply(EditorCommand::InsertSubtree {
         nodes: vec![tree],
         parent_id: NodeId::NONE,
+        page_id: None,
     });
     let root_id = sink.state.active_children()[0].id_str().to_string();
     sink.applied.clear();
@@ -483,6 +492,7 @@ fn cleanup_recolors_blank_gray_mobile_placeholders() {
     sink.state.apply(EditorCommand::InsertSubtree {
         nodes: vec![tree],
         parent_id: NodeId::NONE,
+        page_id: None,
     });
     let root_id = sink.state.active_children()[0].id_str().to_string();
     sink.applied.clear();
@@ -554,6 +564,7 @@ fn cleanup_squares_mobile_icon_and_placeholder_tiles() {
     sink.state.apply(EditorCommand::InsertSubtree {
         nodes: vec![tree],
         parent_id: NodeId::NONE,
+        page_id: None,
     });
     let root_id = sink.state.active_children()[0].id_str().to_string();
     sink.applied.clear();
@@ -622,6 +633,7 @@ fn cleanup_preserves_dark_bottom_nav_on_dark_mobile_root() {
     sink.state.apply(EditorCommand::InsertSubtree {
         nodes: vec![tree],
         parent_id: NodeId::NONE,
+        page_id: None,
     });
     let root_id = sink.state.active_children()[0].id_str().to_string();
     sink.applied.clear();
@@ -684,6 +696,7 @@ fn run_cleanup_passes_repairs_overbold_text_hierarchy() {
     sink.state.apply(EditorCommand::InsertSubtree {
         nodes: vec![tree],
         parent_id: NodeId::NONE,
+        page_id: None,
     });
     let root_id = sink.state.active_children()[0].id_str().to_string();
     sink.applied.clear();

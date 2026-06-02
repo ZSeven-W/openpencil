@@ -51,7 +51,9 @@ fn build_scaffold_desktop_one_root_no_children() {
     let cmds = build_scaffold(&plan(), false).expect("scaffold");
     assert_eq!(cmds.len(), 1);
     match &cmds[0] {
-        EditorCommand::InsertSubtree { nodes, parent_id } => {
+        EditorCommand::InsertSubtree {
+            nodes, parent_id, ..
+        } => {
             assert_eq!(nodes.len(), 1);
             assert!(!parent_id.is_real()); // NONE → page root
             assert_eq!(nodes[0].id_str(), "root");

@@ -301,6 +301,7 @@ pub fn build_scaffold(
     Ok(vec![EditorCommand::InsertSubtree {
         nodes: vec![node],
         parent_id: NodeId::NONE,
+        page_id: None,
     }])
 }
 
@@ -413,6 +414,7 @@ fn build_scaffold_concurrent_inner(
         cmds.push(EditorCommand::InsertSubtree {
             nodes: vec![node],
             parent_id: NodeId::NONE,
+            page_id: None,
         });
 
         root_ids.push(original_id);
