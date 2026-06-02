@@ -37,28 +37,29 @@ use op_mcp::{
     delete_component_snapshot, delete_node_snapshot, delete_page_snapshot,
     delete_selected_snapshot, delete_variable_snapshot, design_content_snapshot,
     design_refine_snapshot, design_skeleton_snapshot, document_info_snapshot,
-    duplicate_page_snapshot, duplicate_selected_snapshot, find_empty_space_snapshot,
-    find_node_by_name_snapshot, get_active_theme_snapshot, get_canvas_bounds_snapshot,
-    get_component_snapshot, get_history_depth_snapshot, get_node_children_snapshot,
-    get_node_parent_snapshot, get_node_snapshot, get_selection_set_snapshot,
-    get_variables_snapshot, get_viewport_snapshot, group_selected_snapshot, import_svg_snapshot,
-    insert_node_snapshot, instantiate_component_snapshot, list_components_snapshot,
-    list_node_kinds_snapshot, list_pages_snapshot, list_theme_presets_snapshot,
-    list_variables_snapshot, load_theme_preset_snapshot, move_node_snapshot,
-    nudge_selected_snapshot, paste_clipboard_snapshot, read_nodes_snapshot, redo_snapshot,
-    remove_node_effect_snapshot, remove_page_snapshot, rename_component_snapshot,
-    rename_page_snapshot, rename_variable_snapshot, reorder_page_snapshot,
-    reorder_selected_snapshot, replace_node_snapshot, run_stdio_with_applier,
-    save_theme_preset_snapshot, selection_snapshot, set_active_axis_value_snapshot,
-    set_active_page_snapshot, set_active_tool_snapshot, set_ellipse_arc_snapshot,
-    set_node_collapsed_snapshot, set_node_corner_radius_snapshot, set_node_fill_hex_snapshot,
-    set_node_flip_snapshot, set_node_font_size_snapshot, set_node_font_weight_snapshot,
-    set_node_hidden_snapshot, set_node_locked_snapshot, set_node_name_snapshot,
-    set_node_rotation_snapshot, set_node_stroke_hex_snapshot, set_node_stroke_width_snapshot,
-    set_node_text_snapshot, set_selection_set_snapshot, set_selection_snapshot,
-    set_themes_snapshot, set_variable_boolean_snapshot, set_variable_color_snapshot,
-    set_variable_number_snapshot, set_variable_string_snapshot, set_variables_snapshot,
-    set_viewport_snapshot, snapshot_layout_snapshot, toggle_node_selection_snapshot, undo_snapshot,
+    duplicate_page_snapshot, duplicate_selected_snapshot, export_design_md_snapshot,
+    find_empty_space_snapshot, find_node_by_name_snapshot, get_active_theme_snapshot,
+    get_canvas_bounds_snapshot, get_component_snapshot, get_design_md_snapshot,
+    get_history_depth_snapshot, get_node_children_snapshot, get_node_parent_snapshot,
+    get_node_snapshot, get_selection_set_snapshot, get_variables_snapshot, get_viewport_snapshot,
+    group_selected_snapshot, import_svg_snapshot, insert_node_snapshot,
+    instantiate_component_snapshot, list_components_snapshot, list_node_kinds_snapshot,
+    list_pages_snapshot, list_theme_presets_snapshot, list_variables_snapshot,
+    load_theme_preset_snapshot, move_node_snapshot, nudge_selected_snapshot,
+    paste_clipboard_snapshot, read_nodes_snapshot, redo_snapshot, remove_node_effect_snapshot,
+    remove_page_snapshot, rename_component_snapshot, rename_page_snapshot,
+    rename_variable_snapshot, reorder_page_snapshot, reorder_selected_snapshot,
+    replace_node_snapshot, run_stdio_with_applier, save_theme_preset_snapshot, selection_snapshot,
+    set_active_axis_value_snapshot, set_active_page_snapshot, set_active_tool_snapshot,
+    set_design_md_snapshot, set_ellipse_arc_snapshot, set_node_collapsed_snapshot,
+    set_node_corner_radius_snapshot, set_node_fill_hex_snapshot, set_node_flip_snapshot,
+    set_node_font_size_snapshot, set_node_font_weight_snapshot, set_node_hidden_snapshot,
+    set_node_locked_snapshot, set_node_name_snapshot, set_node_rotation_snapshot,
+    set_node_stroke_hex_snapshot, set_node_stroke_width_snapshot, set_node_text_snapshot,
+    set_selection_set_snapshot, set_selection_snapshot, set_themes_snapshot,
+    set_variable_boolean_snapshot, set_variable_color_snapshot, set_variable_number_snapshot,
+    set_variable_string_snapshot, set_variables_snapshot, set_viewport_snapshot,
+    snapshot_layout_snapshot, toggle_node_selection_snapshot, undo_snapshot,
     ungroup_selected_snapshot, update_node_snapshot, ToolRegistry,
 };
 
@@ -395,6 +396,9 @@ fn rebuild_registry(doc: &EditorState) -> ToolRegistry {
     r.register(Box::new(save_theme_preset_snapshot(doc)));
     r.register(Box::new(load_theme_preset_snapshot()));
     r.register(Box::new(list_theme_presets_snapshot()));
+    r.register(Box::new(get_design_md_snapshot(doc)));
+    r.register(Box::new(set_design_md_snapshot(doc)));
+    r.register(Box::new(export_design_md_snapshot(doc)));
     r.register(Box::new(get_active_theme_snapshot(doc)));
     r.register(Box::new(list_components_snapshot(doc)));
     r.register(Box::new(get_component_snapshot(doc)));
@@ -685,9 +689,7 @@ fn tools_list_response(id_raw: &str, state: &EditorState) -> String {
     )
 }
 
-/// Per-tool JSON schemas — kept as string literals to avoid
-/// pulling serde into this binary's MCP path. Each entry is a
-/// complete JSON object: name + description + inputSchema.
+/// Per-tool JSON schemas, kept as string literals to avoid serde on this path.
 const TOOL_SCHEMAS: &[&str] = &[
     // --- read tools ---
     r#"{"name":"get_document_info","description":"Summarize the open document (page count, active page, etc).","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
@@ -699,6 +701,9 @@ const TOOL_SCHEMAS: &[&str] = &[
     r#"{"name":"save_theme_preset","description":"Save the current document themes and variables as a reusable .optheme preset file.","inputSchema":{"type":"object","properties":{"presetPath":{"type":"string","description":"Path for the output .optheme file"},"name":{"type":"string","description":"Display name for the preset; defaults to file name"}},"required":["presetPath"]}}"#,
     r#"{"name":"load_theme_preset","description":"Load a .optheme preset file and merge its themes and variables into the live document.","inputSchema":{"type":"object","properties":{"presetPath":{"type":"string","description":"Path to the .optheme file to load"}},"required":["presetPath"]}}"#,
     r#"{"name":"list_theme_presets","description":"List valid .optheme preset files in a directory.","inputSchema":{"type":"object","properties":{"directory":{"type":"string","description":"Directory to scan for .optheme files"}},"required":["directory"]}}"#,
+    r#"{"name":"get_design_md","description":"Get the document design.md spec and markdown, falling back to best-effort extraction from variables and typography.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
+    r#"{"name":"set_design_md","description":"Import design.md markdown into the live document, or pass autoExtract=true to derive it from current variables and typography.","inputSchema":{"type":"object","properties":{"markdown":{"type":"string","description":"Raw design.md markdown"},"autoExtract":{"type":"boolean","description":"Derive design.md from the current document"}}}}"#,
+    r#"{"name":"export_design_md","description":"Export design.md markdown, falling back to best-effort extraction when none is persisted.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
     r#"{"name":"get_active_theme","description":"Return the active theme axis pinning per axis.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
     r#"{"name":"list_components","description":"List registered components (saved Frames / Groups promoted via Save as Component). Returns count + a `;`-separated record of `name|id` pairs.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
     r#"{"name":"get_component","description":"Fetch one component by id with detail: name, root node kind, and the subtree's leaf count.","inputSchema":{"type":"object","properties":{"component_id":{"type":"string","description":"positive u64 component id"}},"required":["component_id"]}}"#,

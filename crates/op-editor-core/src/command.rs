@@ -22,6 +22,7 @@ use crate::node_id::NodeId;
 use crate::walkers::ReorderDirection;
 use jian_ops_schema::node::PenNode;
 use jian_ops_schema::variable::VariableDefinition;
+use jian_ops_schema::DesignMdSpec;
 use std::collections::BTreeMap;
 
 /// Which boolean property [`EditorCommand::SetNodeFlag`] writes. The
@@ -194,6 +195,8 @@ pub enum EditorCommand {
         variables: BTreeMap<String, VariableDefinition>,
         themes: BTreeMap<String, Vec<String>>,
     },
+    /// Replace the document's persisted design.md spec.
+    SetDesignMd { spec: Box<DesignMdSpec> },
     /// Instantiate a registered component onto the active page.
     InstantiateComponent { component_id: NodeId },
     /// Promote an active-page Frame / Group / Rectangle to a component.

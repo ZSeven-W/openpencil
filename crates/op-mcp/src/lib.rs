@@ -29,6 +29,9 @@ mod component_tools_tests;
 #[cfg(test)]
 mod copy_node_tests;
 pub mod debug_tools;
+pub mod design_md_tools;
+#[cfg(test)]
+mod design_md_tools_tests;
 pub mod element_tools;
 pub mod extra_read_tools;
 #[cfg(test)]
@@ -93,6 +96,10 @@ pub use component_tools::{
 };
 pub use debug_tools::{
     debug_tools_enabled, debug_validation_report_snapshot, DebugValidationReport,
+};
+pub use design_md_tools::{
+    export_design_md_snapshot, get_design_md_snapshot, set_design_md_snapshot, ExportDesignMd,
+    GetDesignMd, SetDesignMd,
 };
 pub use extra_read_tools::{get_node_children_snapshot, ChildRecord, GetNodeChildren};
 pub use json_serializer::response_to_json;

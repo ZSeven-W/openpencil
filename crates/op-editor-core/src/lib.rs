@@ -94,7 +94,7 @@ pub use command::{
     BatchInsertItem, EditorCommand, EffectField, LayoutPropValue, NodeFlag, VariableScalarPayload,
 };
 pub use components::{Component, ComponentLibrary};
-pub use design_md::parse_design_md;
+pub use design_md::{extract_design_md_from_document, generate_design_md, parse_design_md};
 pub use editor_ui_state::{
     BooleanOp, CloneField, CloneFormState, DesignMdRequest, EditorUiState, ExportFormat,
     FileAction, FileMenuChoice, FillType, FlexLayout, GitBranchPickerMode, GitCommitSummary,
