@@ -14,7 +14,7 @@ use crate::node_id::NodeId;
 use crate::state::EditorState;
 use crate::tool::Tool;
 use crate::walkers::{find_node, find_node_mut};
-use jian_ops_schema::node::{IconFontNode, PathNode, PenNode, PenNodeBase, PenPathAnchor};
+use jian_ops_schema::node::{IconFontNode, PathNode, PenNode, PenNodeBase};
 use jian_ops_schema::sizing::SizingBehavior;
 use jian_ops_schema::style::{PenEffect, PenFill, PenStroke};
 
@@ -351,22 +351,31 @@ impl EditorState {
     }
 
     /// Replace the path nodes `source_ids` on the active page with a
-    /// single new `Path` node whose anchors trace `points`. Used by
-    /// the host's path-boolean op: the skia `Path::op` math lives in
-    /// `openpencil-shell-native`, but the resulting polyline is
-    /// committed back through this `EditorState` mutator so the host
-    /// never edits the canonical tree directly.
+    /// single new `Path` node whose geometry is the boolean `contours`
+    /// (one closed polyline per subpath). Used by the host's path-boolean
+    /// op: the skia `Path::op` math lives in the host layer, but the
+    /// result is committed back through this `EditorState` mutator so the
+    /// host never edits the canonical tree directly.
     ///
-    /// Returns the new node's id on success; `None` when `points` is
-    /// empty or the id allocator is exhausted. Caller is responsible
+    /// The contours are emitted as a compound SVG `d` string (one
+    /// `M … L … Z` per contour) rather than the single-contour `anchors`
+    /// form, so holes / disjoint regions (Subtract / Exclude) survive:
+    /// a `d` with ≥2 `Z` commands makes the renderer apply even-odd
+    /// winding. Mirrors TS `boolean-ops.ts`, which also stores the result
+    /// as `d` only.
+    ///
+    /// Returns the new node's id on success; `None` when no contour has
+    /// ≥2 points or the id allocator is exhausted. Caller is responsible
     /// for the surrounding history snapshot + selection update.
     pub fn replace_paths_with_polyline(
         &mut self,
         source_ids: &[NodeId],
-        points: &[(f64, f64)],
+        contours: &[Vec<(f64, f64)>],
         next_id: &mut u64,
     ) -> Option<NodeId> {
-        if points.is_empty() {
+        // Keep only contours with real extent (≥2 points).
+        let usable: Vec<&Vec<(f64, f64)>> = contours.iter().filter(|c| c.len() >= 2).collect();
+        if usable.is_empty() {
             return None;
         }
         let safe = self.max_node_id().checked_add(1)?;
@@ -377,7 +386,7 @@ impl EditorState {
             .iter()
             .find_map(|src| find_node(self.active_children(), src).map(boolean_path_style))
             .unwrap_or_default();
-        let (min_x, min_y, max_x, max_y) = points.iter().fold(
+        let (min_x, min_y, max_x, max_y) = usable.iter().flat_map(|c| c.iter()).fold(
             (
                 f64::INFINITY,
                 f64::INFINITY,
@@ -394,16 +403,21 @@ impl EditorState {
         for src in source_ids {
             crate::walkers::remove_from_children(self.active_children_mut(), src);
         }
-        let anchors: Vec<PenPathAnchor> = points
-            .iter()
-            .map(|(x, y)| PenPathAnchor {
-                x: *x - min_x,
-                y: *y - min_y,
-                handle_in: None,
-                handle_out: None,
-                point_type: None,
-            })
-            .collect();
+        // Compound `d` in node-local coordinates (origin at the bbox min):
+        // one `M … L … Z` subpath per contour.
+        let mut d = String::new();
+        for contour in &usable {
+            for (i, (x, y)) in contour.iter().enumerate() {
+                let lx = *x - min_x;
+                let ly = *y - min_y;
+                if i == 0 {
+                    d.push_str(&format!("M {:.2} {:.2}", lx, ly));
+                } else {
+                    d.push_str(&format!(" L {:.2} {:.2}", lx, ly));
+                }
+            }
+            d.push_str(" Z");
+        }
         let node = PenNode::Path(PathNode {
             base: PenNodeBase {
                 id: id.as_str().to_string(),
@@ -413,8 +427,8 @@ impl EditorState {
                 ..Default::default()
             },
             icon_id: None,
-            d: None,
-            anchors: Some(anchors),
+            d: Some(d),
+            anchors: None,
             closed: Some(true),
             width: Some(SizingBehavior::Number(width)),
             height: Some(SizingBehavior::Number(height)),
@@ -548,10 +562,10 @@ mod tests {
         let result = s
             .replace_paths_with_polyline(
                 &[a, b],
-                &[(10.0, 10.0), (0.0, 0.0), (10.0, 0.0)],
+                &[vec![(10.0, 10.0), (0.0, 0.0), (10.0, 0.0)]],
                 &mut next,
             )
-            .expect("polyline committed");
+            .expect("path committed");
         assert!(result.is_real());
         // Both sources gone, one result node remains.
         assert_eq!(s.active_children().len(), 1);
@@ -562,9 +576,12 @@ mod tests {
         assert_eq!(path.base.y, Some(0.0));
         assert_eq!(path.width, Some(SizingBehavior::Number(10.0)));
         assert_eq!(path.height, Some(SizingBehavior::Number(10.0)));
-        let anchors = path.anchors.as_ref().expect("anchors");
-        assert_eq!(anchors[0].x, 10.0);
-        assert_eq!(anchors[0].y, 10.0);
+        // Committed as a compound `d` (node-local coords), not anchors.
+        assert!(path.anchors.is_none(), "result uses a compound d, not anchors");
+        assert_eq!(
+            path.d.as_deref(),
+            Some("M 10.00 10.00 L 0.00 0.00 L 10.00 0.00 Z")
+        );
     }
 
     #[test]
@@ -572,6 +589,10 @@ mod tests {
         let mut s = EditorState::new();
         let mut next = 100u64;
         assert!(s.replace_paths_with_polyline(&[], &[], &mut next).is_none());
+        // A contour with <2 points is degenerate and also rejected.
+        assert!(s
+            .replace_paths_with_polyline(&[], &[vec![(1.0, 1.0)]], &mut next)
+            .is_none());
     }
 
     #[test]
@@ -591,10 +612,10 @@ mod tests {
         let mut next = 100u64;
         s.replace_paths_with_polyline(
             &[NodeId::new("n10"), NodeId::new("n11")],
-            &[(0.0, 0.0), (20.0, 0.0), (20.0, 20.0)],
+            &[vec![(0.0, 0.0), (20.0, 0.0), (20.0, 20.0)]],
             &mut next,
         )
-        .expect("polyline committed");
+        .expect("path committed");
         let PenNode::Path(path) = &s.active_children()[0] else {
             panic!("boolean result should be a Path");
         };

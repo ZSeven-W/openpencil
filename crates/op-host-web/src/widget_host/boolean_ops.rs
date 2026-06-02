@@ -26,7 +26,7 @@ impl WidgetHost {
         let pre = self.editor_state.snapshot_for_history();
         let new_id = self.editor_state.replace_paths_with_polyline(
             &source_ids,
-            &result.points,
+            &result.contours,
             &mut self.next_node_id,
         );
         match new_id {

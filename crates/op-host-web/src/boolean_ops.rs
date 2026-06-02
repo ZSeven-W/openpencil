@@ -5,11 +5,14 @@
 use op_editor_core::BooleanOp;
 use op_editor_ui::layout_scene::{regular_polygon_points, LayoutScene, NodeKind, SceneNode};
 use op_editor_ui::{Point2D, Rect};
-use skia_safe::{Matrix, Path as SkPath, PathBuilder, PathOp, Rect as SkRect};
+use skia_safe::{ContourMeasureIter, Matrix, Path as SkPath, PathBuilder, PathOp, Rect as SkRect};
 
 pub struct BooleanResult {
     pub source_ids: Vec<String>,
-    pub points: Vec<(f64, f64)>,
+    /// One closed polyline per result contour (doc-space `(x, y)`).
+    /// Multiple contours encode holes / disjoint regions; the committer
+    /// emits them as a compound even-odd path.
+    pub contours: Vec<Vec<(f64, f64)>>,
 }
 
 pub fn compute_boolean_op(
@@ -39,13 +42,16 @@ pub fn compute_boolean_op(
     for p in &sk_paths[1..] {
         acc = acc.op(p, pop)?;
     }
-    let points = extract_points(&acc);
-    if points.is_empty() {
+    let result_contours = flatten_path(&acc);
+    if result_contours.is_empty() {
         return None;
     }
     Some(BooleanResult {
         source_ids,
-        points: points.iter().map(|p| (p.x as f64, p.y as f64)).collect(),
+        contours: result_contours
+            .iter()
+            .map(|c| c.iter().map(|p| (p.x as f64, p.y as f64)).collect())
+            .collect(),
     })
 }
 
@@ -56,7 +62,13 @@ fn build_node_path(node: &SceneNode) -> Option<SkPath> {
         NodeKind::Polygon => {
             build_polyline_path(&regular_polygon_points(node.bounds, node.polygon_sides))
         }
-        NodeKind::Path => build_polyline_path(&node.points),
+        // Prefer the compound `d` so a boolean op chained onto a previous
+        // boolean result (which is `d`-only) round-trips correctly.
+        NodeKind::Path => node
+            .svg_path
+            .as_deref()
+            .and_then(|d| build_svg_path(d, node.bounds))
+            .or_else(|| build_polyline_path(&node.points)),
         NodeKind::Line => {
             if node.points.len() >= 2 {
                 build_polyline_path(&node.points)
@@ -111,6 +123,52 @@ fn build_oval_path(bounds: Rect) -> Option<SkPath> {
     Some(b.detach())
 }
 
+/// Parse a node's compound SVG `d` (node-local coords) into a doc-space
+/// skia path fitted to `bounds`; ≥2 subpaths → even-odd so chained ops
+/// see holes. Mirrors the native host's `build_svg_path`.
+fn build_svg_path(d: &str, bounds: Rect) -> Option<SkPath> {
+    let parsed = skia_safe::utils::parse_path::from_svg(d)?;
+    if parsed.is_empty() {
+        return None;
+    }
+    let mut path = fit_path_to_rect(&parsed, bounds);
+    if d.bytes().filter(|c| *c == b'Z' || *c == b'z').count() >= 2 {
+        path.set_fill_type(skia_safe::PathFillType::EvenOdd);
+    }
+    Some(path)
+}
+
+/// Scale + translate `path` so its tight bounds map onto `rect` — a copy
+/// of the backend's `fit_path_to_rect`.
+fn fit_path_to_rect(path: &SkPath, rect: Rect) -> SkPath {
+    let bounds = path.compute_tight_bounds();
+    if !bounds.is_finite()
+        || !rect.size.x.is_finite()
+        || !rect.size.y.is_finite()
+        || rect.size.x <= 0.0
+        || rect.size.y <= 0.0
+    {
+        let mut matrix = Matrix::new_identity();
+        matrix.set_translate((rect.origin.x, rect.origin.y));
+        return path.with_transform(&matrix);
+    }
+    let sx = if bounds.width().abs() > 0.01 {
+        rect.size.x / bounds.width()
+    } else {
+        1.0
+    };
+    let sy = if bounds.height().abs() > 0.01 {
+        rect.size.y / bounds.height()
+    } else {
+        1.0
+    };
+    let tx = rect.origin.x - bounds.left() * sx;
+    let ty = rect.origin.y - bounds.top() * sy;
+    let mut matrix = Matrix::new_identity();
+    matrix.set_scale_translate((sx, sy), (tx, ty));
+    path.with_transform(&matrix)
+}
+
 fn build_polyline_path(points: &[Point2D]) -> Option<SkPath> {
     if points.len() < 2 {
         return None;
@@ -137,20 +195,54 @@ fn apply_node_rotation(path: SkPath, node: &SceneNode) -> SkPath {
     path.with_transform(&matrix)
 }
 
-fn extract_points(path: &SkPath) -> Vec<Point2D> {
-    use skia_safe::PathVerb;
-    let mut out = Vec::new();
-    for rec in path.iter() {
-        let pts = rec.points();
-        let pt = match rec.verb() {
-            PathVerb::Move | PathVerb::Line => pts.first().copied(),
-            PathVerb::Quad | PathVerb::Conic => pts.get(1).copied(),
-            PathVerb::Cubic => pts.get(2).copied(),
-            PathVerb::Close => None,
-        };
-        if let Some(p) = pt {
-            out.push(Point2D::new(p.x, p.y));
+/// Flatten the boolean result into one closed polyline per contour.
+/// `ContourMeasureIter` splits subpaths (so separate contours don't fuse
+/// into a self-crossing loop) and `pos_tan` arc-length sampling turns
+/// conic arcs into smooth segments instead of collapsing each curve to a
+/// single endpoint. Mirrors the native host's `flatten_path`.
+fn flatten_path(path: &SkPath) -> Vec<Vec<Point2D>> {
+    const STEP: f32 = 1.0; // doc-px arc length between samples
+    const MAX_PER_CONTOUR: usize = 8192; // runaway-path guard
+    let mut contours = Vec::new();
+    for cm in ContourMeasureIter::new(path, false, None) {
+        let len = cm.length();
+        if len <= 0.0 {
+            continue;
+        }
+        let n = ((len / STEP).ceil() as usize).clamp(1, MAX_PER_CONTOUR);
+        let count = if cm.is_closed() { n } else { n + 1 };
+        let mut poly: Vec<Point2D> = Vec::with_capacity(count);
+        for i in 0..count {
+            let d = len * (i as f32) / (n as f32);
+            if let Some((p, _tan)) = cm.pos_tan(d) {
+                push_simplified(&mut poly, Point2D::new(p.x, p.y));
+            }
+        }
+        if poly.len() >= 2 {
+            contours.push(poly);
         }
     }
-    out
+    contours
+}
+
+/// Drop a sample that is within `EPS_DIST` of the segment spanned by the
+/// previous two points (collapses collinear runs on straight edges).
+fn push_simplified(poly: &mut Vec<Point2D>, p: Point2D) {
+    const EPS_DIST: f32 = 0.08; // px: max perpendicular deviation
+    let n = poly.len();
+    if n >= 2 {
+        let a = poly[n - 2];
+        let b = poly[n - 1];
+        let dx = p.x - a.x;
+        let dy = p.y - a.y;
+        let seg = (dx * dx + dy * dy).sqrt();
+        if seg > 1e-6 {
+            let dist = ((b.x - a.x) * dy - (b.y - a.y) * dx).abs() / seg;
+            if dist < EPS_DIST {
+                poly[n - 1] = p;
+                return;
+            }
+        }
+    }
+    poly.push(p);
 }
