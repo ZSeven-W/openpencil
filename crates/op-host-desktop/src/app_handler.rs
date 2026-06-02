@@ -702,6 +702,15 @@ impl ApplicationHandler for DesktopApp {
                     self.viewport_width,
                     self.viewport_height,
                 );
+                // TopBar fullscreen button raised an intent — toggle the
+                // real window through the shared menu-action path.
+                if self.host.editor_state().editor_ui.pending_fullscreen_toggle {
+                    self.host
+                        .editor_state_mut()
+                        .editor_ui
+                        .pending_fullscreen_toggle = false;
+                    self.handle_menu_action(crate::menu::MenuAction::ToggleFullscreen, event_loop);
+                }
                 if let Some(text) = self.host.editor_state_mut().chat.pending_copy_text.take() {
                     crate::clipboard::set_text(&text);
                 }

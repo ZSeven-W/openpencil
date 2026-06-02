@@ -360,6 +360,13 @@ impl WidgetHostNative {
                     self.mark_dirty();
                     return true;
                 }
+                TopBarHit::ToggleFullscreen => {
+                    // The widget host doesn't own the winit window — raise
+                    // an intent the desktop runner consumes next frame.
+                    self.editor_state.editor_ui.pending_fullscreen_toggle = true;
+                    self.mark_dirty();
+                    return true;
+                }
                 TopBarHit::OpenFigmaImport => {
                     self.editor_state.editor_ui.figma_import_open = true;
                     self.mark_dirty();
