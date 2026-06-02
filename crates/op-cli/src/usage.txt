@@ -32,7 +32,7 @@ COMMON COMMANDS:
   op themes:set <json|@file|-> [--replace]
   op layout [--parent P] [--depth N]      snapshot layout tree
   op find-space [--direction D] [--width W] [--height H]
-  op import:svg <file.svg> [--x N] [--y N]
+  op import:svg <file.svg> [--x N] [--y N] [--parent P]
   op import:figma <file.fig> [--out output.op]
   op codegen:plan <plan-json|@file|->
   op codegen:submit <planId> <chunk-result|@file|->

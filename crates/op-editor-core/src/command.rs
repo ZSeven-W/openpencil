@@ -348,7 +348,13 @@ pub enum EditorCommand {
     PasteClipboard { offset_px: i32 },
     /// Parse an SVG document + insert the resulting nodes on the
     /// active page, offset by `(x, y)` doc-px.
-    ImportSvg { svg: String, x: i32, y: i32 },
+    ImportSvg {
+        svg: String,
+        x: i32,
+        y: i32,
+        /// `NodeId::NONE` inserts at the active page root.
+        target_parent: NodeId,
+    },
     /// Set a layout / text property on a node by name + value.
     ///
     /// Covers the remaining 17-property whitelist entries that do not

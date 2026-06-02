@@ -380,10 +380,11 @@ pub fn move_node_snapshot() -> MoveNode {
 /// Resolve a `target_parent_id`-style arg. The legacy wire used `"0"`
 /// for "page root"; the canonical model uses the empty `NodeId::NONE`
 /// sentinel. Both `""` and `"0"` map to `NONE` so older clients keep
-/// working.
+/// working. `"root"` is also accepted because the generated tool
+/// schema uses that wording for page-root inserts.
 fn root_or_node_id(raw: &str) -> NodeId {
     let trimmed = raw.trim();
-    if trimmed.is_empty() || trimmed == "0" {
+    if trimmed.is_empty() || trimmed == "0" || trimmed.eq_ignore_ascii_case("root") {
         NodeId::NONE
     } else {
         NodeId::new(trimmed)
@@ -588,6 +589,12 @@ impl McpTool for ImportSvg {
             Ok(v) => v.unwrap_or(0),
             Err(e) => return ToolOutcome::Err(ToolErrorCode::InvalidArgument, format!("y: {e}")),
         };
+        let target_parent = args
+            .get("parent")
+            .or_else(|| args.get("parent_id"))
+            .or_else(|| args.get("target_parent_id"))
+            .map(|s| root_or_node_id(s))
+            .unwrap_or(NodeId::NONE);
         let mut out = BTreeMap::new();
         out.insert("wrote".into(), "true".into());
         ToolOutcome::OkWithCommand(
@@ -596,6 +603,7 @@ impl McpTool for ImportSvg {
                 svg: svg.clone(),
                 x,
                 y,
+                target_parent,
             },
         )
     }

@@ -502,3 +502,45 @@ fn move_node_command_applies_through_editor_state() {
         .iter()
         .any(|n| op_editor_core::pen_node_ext::PenNodeExt::id_str(n) == "n11"));
 }
+
+#[test]
+fn import_svg_accepts_ts_parent_arg() {
+    let tool = import_svg_snapshot();
+    let mut args = BTreeMap::new();
+    args.insert(
+        "svg".into(),
+        r#"<svg><rect width="10" height="10"/></svg>"#.into(),
+    );
+    args.insert("parent".into(), "n10".into());
+
+    match tool.call(&args) {
+        ToolOutcome::OkWithCommand(
+            _,
+            EditorCommand::ImportSvg {
+                svg, target_parent, ..
+            },
+        ) => {
+            assert!(svg.contains("<svg>"));
+            assert_eq!(target_parent.as_str(), "n10");
+        }
+        other => panic!("expected ImportSvg with parent, got {other:?}"),
+    }
+}
+
+#[test]
+fn import_svg_maps_root_parent_alias_to_page_root() {
+    let tool = import_svg_snapshot();
+    let mut args = BTreeMap::new();
+    args.insert(
+        "svg".into(),
+        r#"<svg><rect width="10" height="10"/></svg>"#.into(),
+    );
+    args.insert("parent".into(), "root".into());
+
+    match tool.call(&args) {
+        ToolOutcome::OkWithCommand(_, EditorCommand::ImportSvg { target_parent, .. }) => {
+            assert!(!target_parent.is_real(), "root maps to page root")
+        }
+        other => panic!("expected ImportSvg with page-root parent, got {other:?}"),
+    }
+}
