@@ -116,6 +116,28 @@ fn parse_args_maps_ts_get_type_id_depth_page_to_batch_get() {
 }
 
 #[test]
+fn parse_args_maps_ts_open_to_open_document() {
+    let p = parse_args(&["open".to_string()]).expect("parse open");
+    assert_eq!(
+        p.command,
+        Command::ToolCall {
+            tool: "open_document".to_string(),
+            args: vec![],
+        }
+    );
+
+    let with_path =
+        parse_args(&["open".to_string(), "/tmp/design.op".to_string()]).expect("parse open path");
+    assert_eq!(
+        with_path.command,
+        Command::ToolCall {
+            tool: "open_document".to_string(),
+            args: vec![("filePath".to_string(), "/tmp/design.op".to_string())],
+        }
+    );
+}
+
+#[test]
 fn parse_args_maps_ts_page_list_alias_to_rust_tool() {
     let args = vec!["page".to_string(), "list".to_string()];
     let p = parse_args(&args).expect("parse");

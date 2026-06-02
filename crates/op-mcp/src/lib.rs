@@ -46,6 +46,9 @@ pub mod json_serializer;
 pub mod node_attr_tools;
 #[cfg(test)]
 mod node_attr_tools_tests;
+pub mod open_document;
+#[cfg(test)]
+mod open_document_tests;
 pub mod page_tools;
 pub mod parser;
 pub mod read_nodes;
@@ -123,6 +126,7 @@ pub use node_attr_tools::{
     SetNodeFillHex, SetNodeFlip, SetNodeFontSize, SetNodeFontWeight, SetNodeName, SetNodeRotation,
     SetNodeStrokeHex, SetNodeStrokeWidth, SetNodeText,
 };
+pub use open_document::{open_document_snapshot, OpenDocument};
 pub use page_tools::{
     add_page_snapshot, clear_selection_snapshot, cycle_active_axis_value_snapshot,
     delete_page_snapshot, duplicate_page_snapshot, redo_snapshot, remove_page_snapshot,
