@@ -1,5 +1,6 @@
 //! Agent settings modal press dispatcher for the web host.
 
+use super::agent_settings_mcp_server::{mcp_server_request, request_mcp_server_update};
 use super::WidgetHost;
 use op_editor_core::agent_settings::{
     AcpAgentField, AcpConnectionType, AgentProvider, BuiltinAgentField, ImageGenField,
@@ -18,6 +19,10 @@ impl WidgetHost {
         vh: f32,
     ) -> bool {
         self.refresh_layout_scene();
+        let before_mcp = {
+            let mcp = self.editor_state.editor_ui.agent_settings.mcp_server;
+            (mcp.running, mcp.port)
+        };
         let panel = AgentSettingsPanel::for_editor(&self.editor_state);
         let panel_rect = panel.rect(vw, vh);
         match panel.hit_test(panel_rect, Point2D::new(x, y)) {
@@ -661,6 +666,15 @@ impl WidgetHost {
                 self.clear_settings_caret();
             }
             AgentSettingsHit::Inside => {}
+        }
+        let after_mcp = {
+            let mcp = self.editor_state.editor_ui.agent_settings.mcp_server;
+            (mcp.running, mcp.port)
+        };
+        if let Some(request) =
+            mcp_server_request(before_mcp.0, before_mcp.1, after_mcp.0, after_mcp.1)
+        {
+            request_mcp_server_update(request);
         }
         self.mark_dirty();
         true
