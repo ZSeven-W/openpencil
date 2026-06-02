@@ -18,6 +18,13 @@ pub(crate) fn set_cli_enabled(cli: McpCli, enabled: bool, port: u16) -> Result<P
     set_cli_enabled_at_path(cli, enabled, port, path)
 }
 
+pub(crate) fn detect_enabled_clis() -> [bool; 6] {
+    let Some(home) = dirs::home_dir() else {
+        return [false; 6];
+    };
+    detect_enabled_clis_for_home(&home, true)
+}
+
 #[cfg(test)]
 fn set_cli_enabled_at_home(
     cli: McpCli,
@@ -27,6 +34,20 @@ fn set_cli_enabled_at_home(
 ) -> Result<PathBuf, String> {
     let path = config_path(cli, home, false);
     set_cli_enabled_at_path(cli, enabled, port, path)
+}
+
+#[cfg(test)]
+fn detect_enabled_clis_at_home(home: &Path) -> [bool; 6] {
+    detect_enabled_clis_for_home(home, false)
+}
+
+fn detect_enabled_clis_for_home(home: &Path, use_env: bool) -> [bool; 6] {
+    let mut flags = [false; 6];
+    for (idx, cli) in McpCli::ALL.iter().copied().enumerate() {
+        let path = config_path(cli, home, use_env);
+        flags[idx] = cli_config_has_openpencil(cli, &path);
+    }
+    flags
 }
 
 fn set_cli_enabled_at_path(
@@ -44,6 +65,19 @@ fn set_cli_enabled_at_path(
         | McpCli::GithubCopilot => update_json_config(&path, enabled, port)?,
     }
     Ok(path)
+}
+
+fn cli_config_has_openpencil(cli: McpCli, path: &Path) -> bool {
+    match cli {
+        McpCli::Codex => fs::read_to_string(path)
+            .map(|text| codex_config_has_openpencil(&text))
+            .unwrap_or(false),
+        McpCli::ClaudeCode
+        | McpCli::Gemini
+        | McpCli::OpenCode
+        | McpCli::Kiro
+        | McpCli::GithubCopilot => json_config_has_openpencil(path),
+    }
 }
 
 fn config_path(cli: McpCli, home: &Path, use_env: bool) -> PathBuf {
@@ -64,6 +98,17 @@ fn config_path(cli: McpCli, home: &Path, use_env: bool) -> PathBuf {
         McpCli::Kiro => home.join(".kiro").join("settings.json"),
         McpCli::GithubCopilot => home.join(".config").join("github-copilot").join("mcp.json"),
     }
+}
+
+fn json_config_has_openpencil(path: &Path) -> bool {
+    read_json_object(path)
+        .ok()
+        .and_then(|root| {
+            root.get("mcpServers")
+                .and_then(Value::as_object)
+                .map(|servers| servers.contains_key(SERVER_NAME))
+        })
+        .unwrap_or(false)
 }
 
 fn update_json_config(path: &Path, enabled: bool, port: u16) -> Result<(), String> {
@@ -143,6 +188,10 @@ fn update_codex_config(path: &Path, enabled: bool, port: u16) -> Result<(), Stri
         fs::create_dir_all(parent).map_err(|e| format!("create {}: {e}", parent.display()))?;
     }
     fs::write(path, text).map_err(|e| format!("write {}: {e}", path.display()))
+}
+
+fn codex_config_has_openpencil(input: &str) -> bool {
+    input.lines().map(str::trim).any(is_codex_openpencil_table)
 }
 
 fn remove_codex_server_block(input: &str) -> String {
@@ -252,6 +301,32 @@ mod tests {
         assert!(!text.contains("[mcp_servers.openpencil]"), "{text}");
         assert!(text.contains("model = \"gpt-5\""), "{text}");
         assert!(text.contains("[profiles.dev]"), "{text}");
+
+        let _ = fs::remove_dir_all(home);
+    }
+
+    #[test]
+    fn detects_legacy_codex_openpencil_server_config() {
+        let home = temp_home("codex-detect");
+        let path = home.join(".codex").join("config.toml");
+        fs::create_dir_all(path.parent().expect("parent")).expect("create codex dir");
+        fs::write(
+            &path,
+            "model = \"gpt-5\"\n\n[mcp_servers.openpencil]\ncommand = \"/usr/local/bin/node\"\nargs = [\"/Applications/OpenPencil.app/Contents/Resources/mcp-server.cjs\"]\n",
+        )
+        .expect("seed legacy config");
+
+        let flags = detect_enabled_clis_at_home(&home);
+
+        let codex_idx = McpCli::ALL
+            .iter()
+            .position(|cli| *cli == McpCli::Codex)
+            .expect("Codex CLI index");
+        assert!(flags[codex_idx]);
+        assert!(
+            flags.iter().filter(|enabled| **enabled).count() == 1,
+            "{flags:?}"
+        );
 
         let _ = fs::remove_dir_all(home);
     }

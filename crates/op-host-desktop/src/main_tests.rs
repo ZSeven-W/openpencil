@@ -126,3 +126,33 @@ fn live_mcp_http_server_applies_write_requests_to_editor_state() {
         "MCP write should mutate the live editor state"
     );
 }
+
+#[test]
+fn startup_mcp_bootstrap_starts_live_server_for_enabled_cli() {
+    let mut app = DesktopApp::new(None);
+    let settings = &mut app.host.editor_state_mut().editor_ui.agent_settings;
+    settings.mcp_server.port = 0;
+    settings.mcp_server.running = false;
+    let codex_idx = op_editor_core::agent_settings::McpCli::ALL
+        .iter()
+        .position(|cli| *cli == op_editor_core::agent_settings::McpCli::Codex)
+        .expect("Codex CLI index");
+    settings.mcp_cli_enabled[codex_idx] = true;
+
+    assert!(app.bootstrap_mcp_runtime_from_settings());
+
+    assert!(app.mcp_server_active());
+    assert!(
+        app.host
+            .editor_state()
+            .editor_ui
+            .agent_settings
+            .mcp_server
+            .running
+    );
+    assert_ne!(
+        app.mcp_server.as_ref().expect("server").port(),
+        0,
+        "ephemeral port should be reported after binding"
+    );
+}

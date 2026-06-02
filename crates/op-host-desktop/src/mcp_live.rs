@@ -40,6 +40,10 @@ impl McpLiveServer {
     pub(crate) fn start(port: u16) -> Result<Self, String> {
         let listener = TcpListener::bind(("127.0.0.1", port))
             .map_err(|e| format!("bind 127.0.0.1:{port}: {e}"))?;
+        let bound_port = listener
+            .local_addr()
+            .map_err(|e| format!("read bound MCP port: {e}"))?
+            .port();
         listener
             .set_nonblocking(true)
             .map_err(|e| format!("set nonblocking: {e}"))?;
@@ -49,9 +53,9 @@ impl McpLiveServer {
             .name("op-mcp-live-http".into())
             .spawn(move || server_loop(listener, req_tx, stop_rx))
             .map_err(|e| format!("spawn MCP live server: {e}"))?;
-        eprintln!("openpencil-desktop mcp: listening on 127.0.0.1:{port}/mcp");
+        eprintln!("openpencil-desktop mcp: listening on 127.0.0.1:{bound_port}/mcp");
         Ok(Self {
-            port,
+            port: bound_port,
             req_rx,
             stop_tx,
         })
