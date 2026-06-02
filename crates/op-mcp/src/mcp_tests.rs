@@ -444,6 +444,13 @@ fn parse_tool_call_extracts_string_params() {
 }
 
 #[test]
+fn parse_tool_call_unescapes_string_params() {
+    let line = r#"{"id":1,"method":"set_node_text","params":{"node_id":"n1","text":"a\"b\\c"}}"#;
+    let call = parse_tool_call(line).expect("must parse");
+    assert_eq!(call.arguments.get("text"), Some(&r#"a"b\c"#.to_string()));
+}
+
+#[test]
 fn parse_tool_call_extracts_numeric_and_bool_params() {
     let line = r#"{"id":7,"method":"x","params":{"page":1,"active":true}}"#;
     let call = parse_tool_call(line).expect("must parse");
@@ -493,6 +500,26 @@ fn parse_tool_call_rejects_structured_values_in_mcp_tools_call_shape() {
     let call = parse_tool_call(ok).expect("scalar-only must parse");
     assert_eq!(call.tool, "get_node");
     assert_eq!(call.arguments.get("node_id"), Some(&"42".to_string()));
+}
+
+#[test]
+fn parse_tool_call_allows_structured_variable_payloads_for_ts_parity() {
+    let vars = r##"{"id":1,"method":"tools/call","params":{"name":"set_variables","arguments":{"variables":{"brand":{"type":"color","value":"#ff0000"}},"replace":true}}}"##;
+    let call = parse_tool_call(vars).expect("set_variables must accept TS-style object args");
+    assert_eq!(call.tool, "set_variables");
+    assert_eq!(
+        call.arguments.get("variables"),
+        Some(&r##"{"brand":{"type":"color","value":"#ff0000"}}"##.to_string())
+    );
+    assert_eq!(call.arguments.get("replace"), Some(&"true".to_string()));
+
+    let themes = r#"{"id":2,"method":"tools/call","params":{"name":"set_themes","arguments":{"themes":{"Mode":["Light","Dark"]}}}}"#;
+    let call = parse_tool_call(themes).expect("set_themes must accept TS-style object args");
+    assert_eq!(call.tool, "set_themes");
+    assert_eq!(
+        call.arguments.get("themes"),
+        Some(&r#"{"Mode":["Light","Dark"]}"#.to_string())
+    );
 }
 
 #[test]

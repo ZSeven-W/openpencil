@@ -56,7 +56,7 @@ fn tools_list_response_includes_all_registered_tools() {
     // TOOL_SCHEMAS without being added to the list below.
     assert_eq!(
         TOOL_SCHEMAS.len(),
-        84,
+        87,
         "tools/list catalog count must match the registered tools — add the new tool to this test"
     );
     // Production catalog excludes debug tools (we removed the
@@ -92,6 +92,7 @@ fn tools_list_response_includes_all_registered_tools() {
         "get_node",
         "list_pages",
         "list_variables",
+        "get_variables",
         "get_active_theme",
         "list_components",
         "get_component",
@@ -165,6 +166,8 @@ fn tools_list_response_includes_all_registered_tools() {
         "set_variable_number",
         "set_variable_string",
         "set_variable_boolean",
+        "set_variables",
+        "set_themes",
         "create_variable",
         "delete_variable",
         "rename_variable",
@@ -213,6 +216,27 @@ fn find_empty_space_returns_padded_position_from_active_page_bounds() {
     assert!(response.contains(r#""id":9"#), "{response}");
     assert!(response.contains(r#""x":"240""#), "{response}");
     assert!(response.contains(r#""y":"20""#), "{response}");
+}
+
+#[test]
+fn set_themes_accepts_structured_mcp_arguments_and_mutates_state() {
+    let mut state = op_editor_core::EditorState::new();
+    let line = r#"{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"set_themes","arguments":{"themes":{"Mode":["Light","Dark"]},"replace":true}}}"#;
+    let response =
+        process_message_with_applier(&mut state, line, |state, cmd| state.apply(cmd.clone()))
+            .expect("dispatch")
+            .expect("response");
+    assert!(response.contains(r#""id":10"#), "{response}");
+    assert!(response.contains(r#""wrote":"true""#), "{response}");
+    assert_eq!(
+        state
+            .doc
+            .themes
+            .as_ref()
+            .and_then(|themes| themes.get("Mode"))
+            .cloned(),
+        Some(vec!["Light".to_string(), "Dark".to_string()])
+    );
 }
 
 /// In-memory `Read + Write` stand-in for a `TcpStream` so the HTTP

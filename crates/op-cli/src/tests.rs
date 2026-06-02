@@ -224,6 +224,48 @@ fn parse_args_maps_find_space_to_ts_tool_shape() {
 }
 
 #[test]
+fn parse_args_maps_vars_set_to_ts_bulk_tool_shape() {
+    let args = vec![
+        "vars:set".to_string(),
+        r##"{"brand":{"type":"color","value":"#ff0000"}}"##.to_string(),
+        "--replace".to_string(),
+    ];
+    let p = parse_args(&args).expect("parse");
+    assert_eq!(
+        p.command,
+        Command::ToolCall {
+            tool: "set_variables".to_string(),
+            args: vec![
+                (
+                    "variables".to_string(),
+                    r##"{"brand":{"type":"color","value":"#ff0000"}}"##.to_string(),
+                ),
+                ("replace".to_string(), "true".to_string()),
+            ],
+        }
+    );
+}
+
+#[test]
+fn parse_args_maps_themes_set_to_ts_bulk_tool_shape() {
+    let args = vec![
+        "themes:set".to_string(),
+        r#"{"Mode":["Light","Dark"]}"#.to_string(),
+    ];
+    let p = parse_args(&args).expect("parse");
+    assert_eq!(
+        p.command,
+        Command::ToolCall {
+            tool: "set_themes".to_string(),
+            args: vec![(
+                "themes".to_string(),
+                r#"{"Mode":["Light","Dark"]}"#.to_string(),
+            )],
+        }
+    );
+}
+
+#[test]
 fn parse_args_maps_ts_insert_json_alias_to_rust_tool() {
     let args = vec![
         "insert".to_string(),

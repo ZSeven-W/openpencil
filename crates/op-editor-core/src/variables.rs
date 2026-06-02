@@ -204,6 +204,48 @@ impl EditorState {
         true
     }
 
+    /// Merge or replace the persisted document variables map. This
+    /// matches the TS `set_variables` bulk operation used by the CLI
+    /// and MCP route.
+    pub fn set_variables_bulk(
+        &mut self,
+        variables: BTreeMap<String, VariableDefinition>,
+        replace: bool,
+    ) -> bool {
+        if replace {
+            self.doc.variables = Some(variables);
+        } else {
+            self.variables_mut().extend(variables);
+        }
+        true
+    }
+
+    /// Merge or replace the persisted document theme axes. Any
+    /// transient active-theme pin that no longer points at a declared
+    /// axis/value is dropped so later variable resolution cannot keep
+    /// using a stale selection.
+    pub fn set_themes_bulk(
+        &mut self,
+        themes: BTreeMap<String, Vec<String>>,
+        replace: bool,
+    ) -> bool {
+        if replace {
+            self.doc.themes = Some(themes);
+        } else {
+            self.doc
+                .themes
+                .get_or_insert_with(BTreeMap::new)
+                .extend(themes);
+        }
+        let declared = self.doc.themes.clone().unwrap_or_default();
+        self.ui.variables.active_theme.retain(|axis, value| {
+            declared
+                .get(axis)
+                .is_some_and(|values| values.iter().any(|v| v == value))
+        });
+        true
+    }
+
     // --- Theme axis -------------------------------------------------
 
     /// Set the active value of a theme axis (e.g. `("mode", "dark")`).

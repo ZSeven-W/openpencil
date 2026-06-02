@@ -231,6 +231,10 @@ impl EditorState {
             EditorCommand::RenameVariable { old_name, new_name } => {
                 self.rename_variable(&old_name, &new_name)
             }
+            EditorCommand::SetVariables { variables, replace } => {
+                self.set_variables_bulk(variables, replace)
+            }
+            EditorCommand::SetThemes { themes, replace } => self.set_themes_bulk(themes, replace),
             EditorCommand::SetActiveAxisValue { axis, value } => {
                 self.set_active_axis_value(&axis, &value)
             }

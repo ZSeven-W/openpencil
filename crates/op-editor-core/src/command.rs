@@ -21,6 +21,8 @@
 use crate::node_id::NodeId;
 use crate::walkers::ReorderDirection;
 use jian_ops_schema::node::PenNode;
+use jian_ops_schema::variable::VariableDefinition;
+use std::collections::BTreeMap;
 
 /// Which boolean property [`EditorCommand::SetNodeFlag`] writes. The
 /// canonical `PenNodeBase` carries `visible` + `locked`; `Collapsed` is
@@ -177,6 +179,16 @@ pub enum EditorCommand {
     DeleteVariable { name: String },
     /// Rename a variable.
     RenameVariable { old_name: String, new_name: String },
+    /// Merge or replace the full document variables map.
+    SetVariables {
+        variables: BTreeMap<String, VariableDefinition>,
+        replace: bool,
+    },
+    /// Merge or replace the full document theme axes map.
+    SetThemes {
+        themes: BTreeMap<String, Vec<String>>,
+        replace: bool,
+    },
     /// Instantiate a registered component onto the active page.
     InstantiateComponent { component_id: NodeId },
     /// Promote an active-page Frame / Group / Rectangle to a component.
