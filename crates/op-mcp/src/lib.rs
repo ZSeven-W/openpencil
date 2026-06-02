@@ -20,6 +20,7 @@ use std::collections::BTreeMap;
 pub mod batch_design;
 #[cfg(test)]
 mod batch_design_tests;
+mod batch_direct_ops;
 pub mod batch_get;
 #[cfg(test)]
 mod batch_get_tests;

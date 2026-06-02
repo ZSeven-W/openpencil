@@ -7,6 +7,7 @@ use std::collections::BTreeMap;
 use jian_ops_schema::node::PenNode;
 use op_editor_core::{NodeId, PenNodeExt};
 
+use super::batch_direct_ops::parse_single_direct_operation;
 use super::write_tools::{validate_hex, ALLOWED_KINDS};
 use super::{BatchInsertItem, EditorCommand, McpTool, ToolErrorCode, ToolOutcome};
 
@@ -59,8 +60,12 @@ fn dispatch_batch_design(
     phase: Option<&'static str>,
 ) -> ToolOutcome {
     if let Some(operations) = args.get("operations") {
-        return match parse_insert_operations(operations) {
-            Ok((parent_id, nodes, count)) => {
+        return match parse_operations(operations) {
+            Ok(ParsedOperations::Insert {
+                parent_id,
+                nodes,
+                count,
+            }) => {
                 let mut out = BTreeMap::new();
                 out.insert("wrote".into(), "true".into());
                 out.insert("count".into(), count.to_string());
@@ -68,6 +73,15 @@ fn dispatch_batch_design(
                     out.insert("phase".into(), phase.into());
                 }
                 ToolOutcome::OkWithCommand(out, EditorCommand::InsertSubtree { nodes, parent_id })
+            }
+            Ok(ParsedOperations::Direct(command)) => {
+                let mut out = BTreeMap::new();
+                out.insert("wrote".into(), "true".into());
+                out.insert("count".into(), "1".into());
+                if let Some(phase) = phase {
+                    out.insert("phase".into(), phase.into());
+                }
+                ToolOutcome::OkWithCommand(out, command)
             }
             Err(e) => ToolOutcome::Err(ToolErrorCode::InvalidArgument, e),
         };
@@ -105,6 +119,30 @@ struct ParsedInsert {
 enum ParentRef {
     Root,
     Ref(String),
+}
+
+enum ParsedOperations {
+    Insert {
+        parent_id: NodeId,
+        nodes: Vec<PenNode>,
+        count: usize,
+    },
+    Direct(EditorCommand),
+}
+
+fn parse_operations(input: &str) -> Result<ParsedOperations, String> {
+    let lines = split_operations(input);
+    if lines.len() == 1 {
+        if let Some(command) = parse_single_direct_operation(&lines[0])? {
+            return Ok(ParsedOperations::Direct(command));
+        }
+    }
+    let (parent_id, nodes, count) = parse_insert_operations(input)?;
+    Ok(ParsedOperations::Insert {
+        parent_id,
+        nodes,
+        count,
+    })
 }
 
 fn parse_insert_operations(input: &str) -> Result<(NodeId, Vec<PenNode>, usize), String> {
@@ -292,7 +330,7 @@ fn split_operations(raw: &str) -> Vec<String> {
     out
 }
 
-fn find_top_level_char(s: &str, target: char) -> Option<usize> {
+pub(crate) fn find_top_level_char(s: &str, target: char) -> Option<usize> {
     let mut depth = 0i32;
     let mut in_string: Option<char> = None;
     let mut escape = false;
@@ -354,7 +392,7 @@ fn is_binding(s: &str) -> bool {
     !s.is_empty() && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
 }
 
-fn normalize_node_shape(value: &mut serde_json::Value) {
+pub(crate) fn normalize_node_shape(value: &mut serde_json::Value) {
     let serde_json::Value::Object(obj) = value else {
         return;
     };

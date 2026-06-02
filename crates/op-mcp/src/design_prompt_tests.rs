@@ -48,6 +48,7 @@ fn get_design_prompt_elements_section_points_to_batch_design_operations() {
             let prompt = out.get("designPrompt").expect("prompt");
             assert!(prompt.contains("batch_design"));
             assert!(prompt.contains("root=I(null"));
+            assert!(prompt.contains("U(nodeId, patchJson)"));
             assert!(!prompt.contains("add_card_row_v1"));
         }
         other => panic!("expected prompt ok, got {other:?}"),
