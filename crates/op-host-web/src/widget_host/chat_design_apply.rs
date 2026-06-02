@@ -13,6 +13,7 @@ impl WidgetHost {
         if self.editor_state.apply(EditorCommand::InsertSubtree {
             nodes,
             parent_id: NodeId::NONE,
+            page_id: None,
         }) {
             self.editor_state
                 .chat
