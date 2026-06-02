@@ -26,6 +26,9 @@ mod batch_get_tests;
 pub mod bulk_vars;
 #[cfg(test)]
 mod bulk_vars_tests;
+pub mod codegen_tools;
+#[cfg(test)]
+mod codegen_tools_tests;
 pub mod component_tools;
 #[cfg(test)]
 mod component_tools_tests;
@@ -104,6 +107,10 @@ pub use batch_get::{batch_get_snapshot, BatchGet};
 pub use bulk_vars::{
     get_variables_snapshot, set_themes_snapshot, set_variables_snapshot, GetVariables, SetThemes,
     SetVariables,
+};
+pub use codegen_tools::{
+    codegen_assemble_snapshot, codegen_clean_snapshot, codegen_plan_snapshot,
+    codegen_submit_chunk_snapshot, CodegenAssemble, CodegenClean, CodegenPlan, CodegenSubmitChunk,
 };
 pub use component_tools::{
     create_component_snapshot, delete_component_snapshot, instantiate_component_snapshot,

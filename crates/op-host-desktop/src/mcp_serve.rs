@@ -19,11 +19,12 @@ use std::path::PathBuf;
 use op_editor_core::{EditorCommand, EditorState};
 use op_mcp::{
     add_node_effect_snapshot, add_page_snapshot, align_selected_snapshot, batch_design_snapshot,
-    batch_get_snapshot, clear_selection_snapshot, copy_node_snapshot, copy_selected_snapshot,
-    count_nodes_snapshot, create_component_snapshot, create_variable_snapshot,
-    cut_selected_snapshot, cycle_active_axis_value_snapshot, debug_tools_enabled,
-    debug_validation_report_snapshot, delete_component_snapshot, delete_node_snapshot,
-    delete_page_snapshot, delete_selected_snapshot, delete_variable_snapshot,
+    batch_get_snapshot, clear_selection_snapshot, codegen_assemble_snapshot,
+    codegen_clean_snapshot, codegen_plan_snapshot, codegen_submit_chunk_snapshot,
+    copy_node_snapshot, copy_selected_snapshot, count_nodes_snapshot, create_component_snapshot,
+    create_variable_snapshot, cut_selected_snapshot, cycle_active_axis_value_snapshot,
+    debug_tools_enabled, debug_validation_report_snapshot, delete_component_snapshot,
+    delete_node_snapshot, delete_page_snapshot, delete_selected_snapshot, delete_variable_snapshot,
     design_content_snapshot, design_refine_snapshot, design_skeleton_snapshot,
     document_info_snapshot, duplicate_page_snapshot, duplicate_selected_snapshot,
     export_design_md_snapshot, find_empty_space_snapshot, find_node_by_name_snapshot,
@@ -365,13 +366,8 @@ pub(crate) fn write_mcp_http_response<S: std::io::Write>(
     stream.flush().map_err(|e| format!("http flush: {e}"))
 }
 
-/// Re-build the registry against the latest editor state so read-tool
-/// snapshots reflect every prior write command's mutations.
 fn rebuild_registry(doc: &EditorState) -> ToolRegistry {
     let mut r = ToolRegistry::default();
-    // UIKit element tools — one `insert_<comp>` per kit component.
-    // Registered first so a future static-tool name collision fails
-    // loudly at tools/list (the registry de-duplicates by name).
     for tool in op_mcp::element_tools::insert_kit_component_tools(doc) {
         r.register(Box::new(tool));
     }
@@ -395,6 +391,10 @@ fn rebuild_registry(doc: &EditorState) -> ToolRegistry {
     r.register(Box::new(get_component_snapshot(doc)));
     r.register(Box::new(batch_get_snapshot(doc)));
     r.register(Box::new(read_nodes_snapshot(doc)));
+    r.register(Box::new(codegen_plan_snapshot()));
+    r.register(Box::new(codegen_submit_chunk_snapshot()));
+    r.register(Box::new(codegen_assemble_snapshot()));
+    r.register(Box::new(codegen_clean_snapshot()));
     r.register(Box::new(search_all_unique_properties_snapshot(doc)));
     r.register(Box::new(replace_all_matching_properties_snapshot(doc)));
     r.register(Box::new(snapshot_layout_snapshot(doc)));
@@ -408,9 +408,6 @@ fn rebuild_registry(doc: &EditorState) -> ToolRegistry {
     r.register(Box::new(get_history_depth_snapshot(doc)));
     r.register(Box::new(get_viewport_snapshot(doc)));
     r.register(Box::new(get_selection_set_snapshot(doc)));
-    // Debug tools stay out of the production registry unless the
-    // isolation flag is set — matches the TS design where debug tools
-    // ship only in a debug build, never in the production catalog.
     if debug_tools_enabled() {
         r.register(Box::new(debug_validation_report_snapshot(doc)));
     }
@@ -665,8 +662,6 @@ fn ping_response(id_raw: &str) -> String {
 }
 
 fn tools_list_response(id_raw: &str, state: &EditorState) -> String {
-    // The tool catalog must match `rebuild_registry`; dynamic element schemas and
-    // debug schemas are appended here under the same gates as registration.
     let mut entries: Vec<String> = TOOL_SCHEMAS.iter().map(|s| (*s).to_string()).collect();
     entries.extend(op_mcp::element_tools::element_tool_schemas(state));
     if debug_tools_enabled() {
@@ -701,6 +696,10 @@ const TOOL_SCHEMAS: &[&str] = &[
     r#"{"name":"get_component","description":"Fetch one component by id with detail: name, root node kind, and the subtree's leaf count.","inputSchema":{"type":"object","properties":{"component_id":{"type":"string","description":"positive u64 component id"}},"required":["component_id"]}}"#,
     r#"{"name":"batch_get","description":"Search and read nodes from the document. With no patterns/nodeIds, returns top-level children. Supports type/name regex patterns, nodeIds, parentId, readDepth, searchDepth, and pageId.","inputSchema":{"type":"object","properties":{"patterns":{"type":"array","items":{"type":"object","properties":{"type":{"type":"string"},"name":{"type":"string"},"reusable":{"type":"boolean"}}}},"nodeIds":{"type":"array","items":{"type":"string"}},"parentId":{"type":"string"},"readDepth":{"type":"number"},"searchDepth":{"type":"number"},"pageId":{"type":"string"},"resolve_refs":{"type":"boolean"}}}}"#,
     r#"{"name":"read_nodes","description":"Read nodes with depth control. Omit nodeIds to return top-level page children; depth=0 truncates children to \"...\", depth=-1 returns full subtrees. includeVariables=true attaches variables/themes JSON strings.","inputSchema":{"type":"object","properties":{"nodeIds":{"type":"array","items":{"type":"string"},"description":"Node ids to read; omit for top-level children"},"depth":{"type":"number","description":"0=node only, 1=direct children, -1=full subtree"},"pageId":{"type":"string"},"includeVariables":{"type":"boolean"}}}}"#,
+    r#"{"name":"codegen_plan","description":"Submit a code generation plan. In file-backed Rust MCP this reports the same live-canvas requirement as TS standalone mode because pipeline state is stored in App memory.","inputSchema":{"type":"object","properties":{"plan":{"type":"object","description":"CodePlanFromAI: { chunks, sharedStyles, rootLayout }"},"filePath":{"type":"string"},"pageId":{"type":"string"}},"required":["plan"]}}"#,
+    r#"{"name":"codegen_submit_chunk","description":"Submit generated code for one chunk. In file-backed Rust MCP this reports the same live-canvas requirement as TS standalone mode.","inputSchema":{"type":"object","properties":{"planId":{"type":"string"},"result":{"type":"object","description":"ChunkResult: { chunkId, code, contract }"},"status":{"type":"string","enum":["failed","skipped"]}},"required":["planId","result"]}}"#,
+    r#"{"name":"codegen_assemble","description":"Retrieve all chunk results for final assembly. In file-backed Rust MCP this reports the same live-canvas requirement as TS standalone mode.","inputSchema":{"type":"object","properties":{"planId":{"type":"string"},"framework":{"type":"string","enum":["react","vue","svelte","html","flutter","swiftui","compose","react-native"]}},"required":["planId","framework"]}}"#,
+    r#"{"name":"codegen_clean","description":"Manually clean up an abandoned codegen plan. Idempotent; without live canvas state returns ok=true and deleted=false.","inputSchema":{"type":"object","properties":{"planId":{"type":"string"}},"required":["planId"]}}"#,
     r#"{"name":"search_all_unique_properties","description":"Recursively search unique style property values under the provided parent node ids. Result `properties` is a JSON object keyed by requested property names.","inputSchema":{"type":"object","properties":{"parents":{"type":"array","items":{"type":"string"},"description":"Parent node ids to search; descendants and the parent itself are included"},"properties":{"type":"array","items":{"type":"string","enum":["fillColor","textColor","strokeColor","strokeThickness","cornerRadius","padding","gap","fontSize","fontFamily","fontWeight"]}},"pageId":{"type":"string"},"filePath":{"type":"string","description":"Accepted for TS compatibility; live Rust MCP uses the server document"}},"required":["parents","properties"]}}"#,
     r#"{"name":"replace_all_matching_properties","description":"Recursively replace matching style property values under parent node ids. Returns replacedCount and applies one bulk edit when matches exist.","inputSchema":{"type":"object","properties":{"parents":{"type":"array","items":{"type":"string"}},"properties":{"type":"object","description":"property -> array of {from,to} replacement rules"},"pageId":{"type":"string"},"filePath":{"type":"string","description":"Accepted for TS compatibility; live Rust MCP uses the server document"}},"required":["parents","properties"]}}"#,
     r#"{"name":"snapshot_layout","description":"Return a depth-limited layout snapshot. Result `layout` is a `;`-separated record of `id|x|y|w|h` (ints, doc-px).","inputSchema":{"type":"object","properties":{"parentId":{"type":"string"},"maxDepth":{"type":"string","description":"u32 depth, default 1 when arguments are present"},"pageId":{"type":"string"}}}}"#,
