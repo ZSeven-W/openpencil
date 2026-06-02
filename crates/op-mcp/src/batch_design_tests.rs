@@ -177,11 +177,15 @@ fn batch_design_accepts_single_move_operation_without_index() {
             EditorCommand::MoveNode {
                 node_id,
                 target_parent,
+                page_id,
+                index,
             },
         ) => {
             assert_eq!(result.get("count"), Some(&"1".to_string()));
             assert_eq!(node_id.as_str(), "n14");
             assert!(!target_parent.is_real());
+            assert!(page_id.is_none());
+            assert!(index.is_none());
         }
         other => panic!("expected MoveNode command, got {other:?}"),
     }
@@ -235,6 +239,28 @@ fn batch_design_rejects_malformed_json() {
             }
             _ => panic!("expected reject on {bad}"),
         }
+    }
+}
+
+#[test]
+fn batch_design_accepts_single_move_operation_with_index() {
+    let tool = batch_design_snapshot();
+    let mut args = BTreeMap::new();
+    args.insert("operations".into(), r##"M("n14", "n10", 2)"##.into());
+
+    match tool.call(&args) {
+        ToolOutcome::OkWithCommand(
+            _,
+            EditorCommand::MoveNode {
+                target_parent,
+                index,
+                ..
+            },
+        ) => {
+            assert_eq!(target_parent.as_str(), "n10");
+            assert_eq!(index, Some(2));
+        }
+        other => panic!("expected indexed MoveNode command, got {other:?}"),
     }
 }
 

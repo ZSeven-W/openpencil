@@ -157,12 +157,20 @@ pub enum EditorCommand {
     MoveNode {
         node_id: NodeId,
         target_parent: NodeId,
+        /// `None` moves on the active page; `Some` targets a page id
+        /// or legacy page index.
+        page_id: Option<String>,
+        /// Optional insertion index within the target parent/root.
+        index: Option<usize>,
     },
     /// Deep-clone a node + subtree under a new parent (`NONE` = active
     /// page root). Fresh ids minted past the id space.
     CopyNode {
         node_id: NodeId,
         target_parent: NodeId,
+        /// `None` copies on the active page; `Some` targets a page id
+        /// or legacy page index.
+        page_id: Option<String>,
     },
     /// Replace an existing node with a freshly-built leaf at the same
     /// slot. `drop_children` is the destructive-swap guard: replacing a

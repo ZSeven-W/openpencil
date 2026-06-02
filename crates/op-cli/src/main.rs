@@ -353,13 +353,19 @@ fn map_reparent(tool: &str, positionals: &[String], flags: &Flags) -> Result<Com
     let id = required_pos(
         positionals,
         1,
-        "Usage: op move/copy <node-id> [--parent <parent-id>]",
+        "Usage: op move/copy <node-id> [--parent <parent-id>] [--page PAGE]",
     )?;
     let parent = flag_value(flags, "parent").unwrap_or_default();
-    tool_call(
-        tool,
-        vec![pair("node_id", id), pair("target_parent_id", parent)],
-    )
+    let mut pairs = vec![pair("node_id", id), pair("target_parent_id", parent)];
+    if tool == "move_node" {
+        if let Some(index) = flag_value(flags, "index") {
+            pairs.push(pair("index", index));
+        }
+    }
+    if let Some(page) = flag_value(flags, "page") {
+        pairs.push(pair("pageId", page));
+    }
+    tool_call(tool, pairs)
 }
 
 fn map_design_like(tool: &str, payload: Option<&String>) -> Result<Command, String> {

@@ -133,7 +133,7 @@ fn apply_import_svg_on_active_page(
         else {
             return false;
         };
-        imported_root.is_real() && state.cmd_move_node(&imported_root, target_parent)
+        imported_root.is_real() && state.cmd_move_node(&imported_root, target_parent, None)
     } else {
         true
     }
@@ -220,11 +220,40 @@ impl EditorState {
             EditorCommand::MoveNode {
                 node_id,
                 target_parent,
-            } => self.cmd_move_node(&node_id, &target_parent),
+                page_id,
+                index,
+            } => {
+                let Some(target_page_index) = command_page_index(self, page_id.as_deref()) else {
+                    return false;
+                };
+                let original_page_index = self.ui.active_page_index;
+                if page_id.is_some() {
+                    self.ui.active_page_index = target_page_index;
+                }
+                let changed = self.cmd_move_node(&node_id, &target_parent, index);
+                if page_id.is_some() && target_page_index != original_page_index {
+                    self.ui.active_page_index = original_page_index;
+                }
+                changed
+            }
             EditorCommand::CopyNode {
                 node_id,
                 target_parent,
-            } => self.cmd_copy_node(&node_id, &target_parent),
+                page_id,
+            } => {
+                let Some(target_page_index) = command_page_index(self, page_id.as_deref()) else {
+                    return false;
+                };
+                let original_page_index = self.ui.active_page_index;
+                if page_id.is_some() {
+                    self.ui.active_page_index = target_page_index;
+                }
+                let changed = self.cmd_copy_node(&node_id, &target_parent);
+                if page_id.is_some() && target_page_index != original_page_index {
+                    self.ui.active_page_index = original_page_index;
+                }
+                changed
+            }
             EditorCommand::ReplaceNode {
                 node_id,
                 kind,

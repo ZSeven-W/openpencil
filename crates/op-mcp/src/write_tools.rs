@@ -459,56 +459,12 @@ pub fn delete_node_snapshot() -> DeleteNode {
     DeleteNode
 }
 
-/// First-party `move_node` tool — reparent a node. An empty
-/// `target_parent_id` reparents to the active page root.
-pub struct MoveNode;
-
-impl McpTool for MoveNode {
-    fn name(&self) -> &str {
-        "move_node"
-    }
-    fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
-        let node_id = match parse_node_id(args, "node_id") {
-            Ok(v) => v,
-            Err(e) => return e,
-        };
-        // `target_parent_id` is required; an empty string ("" or "0")
-        // means "the active page root" (the NONE sentinel).
-        let Some(raw_target) = args.get("target_parent_id") else {
-            return ToolOutcome::Err(
-                ToolErrorCode::MissingArgument,
-                "target_parent_id is required (\"\" or \"0\" = page root)".into(),
-            );
-        };
-        let target_parent = root_or_node_id(raw_target);
-        if target_parent.is_real() && target_parent == node_id {
-            return ToolOutcome::Err(
-                ToolErrorCode::InvalidArgument,
-                "node_id and target_parent_id must differ".into(),
-            );
-        }
-        let mut out = BTreeMap::new();
-        out.insert("wrote".into(), "true".into());
-        ToolOutcome::OkWithCommand(
-            out,
-            EditorCommand::MoveNode {
-                node_id,
-                target_parent,
-            },
-        )
-    }
-}
-
-pub fn move_node_snapshot() -> MoveNode {
-    MoveNode
-}
-
 /// Resolve a `target_parent_id`-style arg. The legacy wire used `"0"`
 /// for "page root"; the canonical model uses the empty `NodeId::NONE`
 /// sentinel. Both `""` and `"0"` map to `NONE` so older clients keep
 /// working. `"root"` is also accepted because the generated tool
 /// schema uses that wording for page-root inserts.
-fn root_or_node_id(raw: &str) -> NodeId {
+pub(super) fn root_or_node_id(raw: &str) -> NodeId {
     let trimmed = raw.trim();
     if trimmed.is_empty()
         || trimmed == "0"
@@ -519,42 +475,6 @@ fn root_or_node_id(raw: &str) -> NodeId {
     } else {
         NodeId::new(trimmed)
     }
-}
-
-/// First-party `copy_node` tool — deep-clone a node + subtree under a
-/// new parent.
-pub struct CopyNode;
-
-impl McpTool for CopyNode {
-    fn name(&self) -> &str {
-        "copy_node"
-    }
-    fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
-        let node_id = match parse_node_id(args, "node_id") {
-            Ok(v) => v,
-            Err(e) => return e,
-        };
-        let Some(raw_target) = args.get("target_parent_id") else {
-            return ToolOutcome::Err(
-                ToolErrorCode::MissingArgument,
-                "target_parent_id is required (\"\" or \"0\" = page root)".into(),
-            );
-        };
-        let target_parent = root_or_node_id(raw_target);
-        let mut out = BTreeMap::new();
-        out.insert("wrote".into(), "true".into());
-        ToolOutcome::OkWithCommand(
-            out,
-            EditorCommand::CopyNode {
-                node_id,
-                target_parent,
-            },
-        )
-    }
-}
-
-pub fn copy_node_snapshot() -> CopyNode {
-    CopyNode
 }
 
 /// First-party `replace_node` tool — swap an existing node for a

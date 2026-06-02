@@ -20,8 +20,9 @@ COMMON COMMANDS:
                                           patch x/y/width/height/name/fill
   op delete <id> [--page PAGE]            delete a node
   op read-nodes [ids] [--depth N] [--vars] [--page P] [--file F]
-  op move <id> [--parent P]               reparent a node (empty parent = page root)
-  op copy <id> [--parent P]               deep-copy a node
+  op move <id> [--parent P] [--index N] [--page PAGE]
+                                          reparent a node (empty parent = page root)
+  op copy <id> [--parent P] [--page PAGE] deep-copy a node
   op replace <id> <json|@file|->          replace with a leaf node
   op design <json-array|@file|->          call batch_design(nodes_json)
   op design:skeleton <json-array|@file|->

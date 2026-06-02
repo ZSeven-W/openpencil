@@ -29,6 +29,8 @@ fn move_node_reparents_into_container() {
     assert!(s.apply(EditorCommand::MoveNode {
         node_id: id("n11"),
         target_parent: id("n12"),
+        page_id: None,
+        index: None,
     }));
     let group = find_node(s.active_children(), &id("n12")).unwrap();
     assert!(group
@@ -45,6 +47,8 @@ fn move_node_rejects_cycle() {
     assert!(!s.apply(EditorCommand::MoveNode {
         node_id: id("n10"),
         target_parent: id("n12"),
+        page_id: None,
+        index: None,
     }));
     // n10 still at root.
     assert!(s.active_children().iter().any(|c| c.id_str() == "n10"));
@@ -56,6 +60,8 @@ fn move_node_to_page_root_with_none_target() {
     assert!(s.apply(EditorCommand::MoveNode {
         node_id: id("n11"),
         target_parent: NodeId::NONE,
+        page_id: None,
+        index: None,
     }));
     // n11 now at the page root, alongside n10.
     assert!(s.active_children().iter().any(|c| c.id_str() == "n11"));
@@ -70,6 +76,7 @@ fn copy_node_clones_subtree_with_fresh_ids() {
     assert!(s.apply(EditorCommand::CopyNode {
         node_id: id("n12"),
         target_parent: NodeId::NONE,
+        page_id: None,
     }));
     // A clone landed at the page root; its id is fresh.
     assert!(s.max_node_id() > pre_max);
@@ -83,6 +90,7 @@ fn copy_node_rejects_unknown_source() {
     assert!(!s.apply(EditorCommand::CopyNode {
         node_id: id("ghost"),
         target_parent: NodeId::NONE,
+        page_id: None,
     }));
 }
 
