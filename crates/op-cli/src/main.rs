@@ -30,6 +30,7 @@ COMMON COMMANDS:
   op insert <json|@file|->                insert a leaf node
   op update <id> <json|@file|->           patch x/y/width/height/name/fill
   op delete <id>                          delete a node
+  op read-nodes [ids] [--depth N] [--vars] [--page P] [--file F]
   op move <id> [--parent P]               reparent a node (empty parent = page root)
   op copy <id> [--parent P]               deep-copy a node
   op replace <id> <json|@file|->          replace with a leaf node
@@ -213,6 +214,7 @@ fn command_from_positionals(positionals: &[String], flags: &Flags) -> Result<Com
         "insert" => map_insert(positionals),
         "update" => map_update(positionals),
         "delete" => map_one_id("delete_node", positionals),
+        "read-nodes" => map_read_nodes(positionals, flags),
         "move" => map_reparent("move_node", positionals, flags),
         "copy" => map_reparent("copy_node", positionals, flags),
         "replace" => map_replace(positionals),
@@ -231,9 +233,9 @@ fn command_from_positionals(positionals: &[String], flags: &Flags) -> Result<Com
         "layout" => map_layout(flags),
         "find-space" => map_find_space(flags),
         "import:svg" => map_import_svg(positionals, flags),
-        "start" | "stop" | "save" | "read-nodes" | "theme:save" | "theme:load" | "theme:list"
-        | "import:figma" | "install" | "uninstall" | "codegen:plan" | "codegen:submit"
-        | "codegen:assemble" | "codegen:clean" => Err(format!(
+        "start" | "stop" | "save" | "theme:save" | "theme:load" | "theme:list" | "import:figma"
+        | "install" | "uninstall" | "codegen:plan" | "codegen:submit" | "codegen:assemble"
+        | "codegen:clean" => Err(format!(
             "TS command {:?} is not implemented by the Rust HTTP MCP CLI yet",
             positionals[0]
         )),
@@ -281,6 +283,23 @@ fn map_replace(positionals: &[String]) -> Result<Command, String> {
 fn map_one_id(tool: &str, positionals: &[String]) -> Result<Command, String> {
     let id = required_pos(positionals, 1, "Usage: op delete <node-id>")?;
     tool_call(tool, vec![pair("node_id", id)])
+}
+
+fn map_read_nodes(positionals: &[String], flags: &Flags) -> Result<Command, String> {
+    let mut pairs = Vec::new();
+    if let Some(ids) = positionals.get(1) {
+        pairs.push(pair("nodeIds", ids.clone()));
+    }
+    if let Some(depth) = flag_value(flags, "depth") {
+        pairs.push(pair("depth", depth));
+    }
+    if let Some(page) = flag_value(flags, "page") {
+        pairs.push(pair("pageId", page));
+    }
+    if flags.contains_key("vars") {
+        pairs.push(pair("includeVariables", "true"));
+    }
+    tool_call("read_nodes", pairs)
 }
 
 fn map_reparent(tool: &str, positionals: &[String], flags: &Flags) -> Result<Command, String> {

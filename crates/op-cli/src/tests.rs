@@ -266,6 +266,32 @@ fn parse_args_maps_themes_set_to_ts_bulk_tool_shape() {
 }
 
 #[test]
+fn parse_args_maps_read_nodes_to_ts_tool_shape() {
+    let args = vec![
+        "read-nodes".to_string(),
+        "n10,n11".to_string(),
+        "--depth".to_string(),
+        "0".to_string(),
+        "--vars".to_string(),
+        "--page".to_string(),
+        "p1".to_string(),
+    ];
+    let p = parse_args(&args).expect("parse");
+    assert_eq!(
+        p.command,
+        Command::ToolCall {
+            tool: "read_nodes".to_string(),
+            args: vec![
+                ("nodeIds".to_string(), "n10,n11".to_string()),
+                ("depth".to_string(), "0".to_string()),
+                ("pageId".to_string(), "p1".to_string()),
+                ("includeVariables".to_string(), "true".to_string()),
+            ],
+        }
+    );
+}
+
+#[test]
 fn parse_args_maps_ts_insert_json_alias_to_rust_tool() {
     let args = vec![
         "insert".to_string(),
