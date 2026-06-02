@@ -544,3 +544,21 @@ fn import_svg_maps_root_parent_alias_to_page_root() {
         other => panic!("expected ImportSvg with page-root parent, got {other:?}"),
     }
 }
+
+#[test]
+fn import_svg_accepts_ts_page_arg() {
+    let tool = import_svg_snapshot();
+    let mut args = BTreeMap::new();
+    args.insert(
+        "svg".into(),
+        r#"<svg><rect width="10" height="10"/></svg>"#.into(),
+    );
+    args.insert("pageId".into(), "page-2".into());
+
+    match tool.call(&args) {
+        ToolOutcome::OkWithCommand(_, EditorCommand::ImportSvg { page_id, .. }) => {
+            assert_eq!(page_id.as_deref(), Some("page-2"));
+        }
+        other => panic!("expected ImportSvg with page_id, got {other:?}"),
+    }
+}

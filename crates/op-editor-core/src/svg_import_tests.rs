@@ -12,6 +12,7 @@ use crate::command::EditorCommand;
 use crate::pen_node_ext::PenNodeExt;
 use crate::test_support::{frame, state_with};
 use jian_ops_schema::node::PenNode;
+use jian_ops_schema::page::PenPage;
 
 /// Return the imported top-level nodes regardless of whether they
 /// were wrapped in a Group (multi-node SVG) or left flat (single
@@ -79,6 +80,7 @@ fn import_svg_command_can_insert_under_parent() {
         x: 0,
         y: 0,
         target_parent: crate::NodeId::new("n1"),
+        page_id: None,
     }));
 
     assert_eq!(s.active_children().len(), 1);
@@ -86,6 +88,47 @@ fn import_svg_command_can_insert_under_parent() {
     let children = frame.children().expect("parent children");
     assert_eq!(children.len(), 1);
     assert_eq!(children[0].base().name.as_deref(), Some("Imported SVG"));
+}
+
+#[test]
+fn import_svg_command_can_insert_on_requested_page_without_switching_active_page() {
+    let mut s = state_with(vec![]);
+    s.doc.pages = Some(vec![
+        PenPage {
+            id: "page-1".into(),
+            name: "Page 1".into(),
+            children: vec![frame("n1", "Current", 0.0, 0.0, 400.0, 400.0, vec![])],
+            state: None,
+            lifecycle: None,
+        },
+        PenPage {
+            id: "page-2".into(),
+            name: "Page 2".into(),
+            children: Vec::new(),
+            state: None,
+            lifecycle: None,
+        },
+    ]);
+    s.ui.active_page_index = 0;
+    s.set_single_selection(crate::NodeId::new("n1"));
+
+    assert!(s.apply(EditorCommand::ImportSvg {
+        svg: r#"<svg><rect width="10" height="10"/></svg>"#.into(),
+        x: 0,
+        y: 0,
+        target_parent: crate::NodeId::NONE,
+        page_id: Some("page-2".into()),
+    }));
+
+    let pages = s.doc.pages.as_ref().expect("pages");
+    assert_eq!(pages[0].children.len(), 1);
+    assert_eq!(pages[1].children.len(), 1);
+    assert_eq!(
+        pages[1].children[0].base().name.as_deref(),
+        Some("Imported SVG")
+    );
+    assert_eq!(s.ui.active_page_index, 0);
+    assert_eq!(s.selection.anchor.as_str(), "n1");
 }
 
 #[test]
