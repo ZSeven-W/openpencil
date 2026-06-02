@@ -41,6 +41,9 @@ mod design_md_tools_tests;
 pub mod design_prompt;
 #[cfg(test)]
 mod design_prompt_tests;
+pub mod document_save;
+#[cfg(test)]
+mod document_save_tests;
 pub mod element_tools;
 pub mod extra_read_tools;
 #[cfg(test)]
@@ -126,6 +129,7 @@ pub use design_md_tools::{
     GetDesignMd, SetDesignMd,
 };
 pub use design_prompt::{get_design_prompt_snapshot, GetDesignPrompt};
+pub use document_save::{save_document_snapshot, SaveDocument};
 pub use extra_read_tools::{get_node_children_snapshot, ChildRecord, GetNodeChildren};
 pub use json_serializer::response_to_json;
 pub use node_attr_tools::{

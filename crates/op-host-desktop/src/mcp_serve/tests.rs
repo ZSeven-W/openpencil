@@ -57,7 +57,7 @@ fn tools_list_response_includes_all_registered_tools() {
     // TOOL_SCHEMAS without being added to the list below.
     assert_eq!(
         TOOL_SCHEMAS.len(),
-        105,
+        106,
         "tools/list catalog count must match the registered tools — add the new tool to this test"
     );
     // Production catalog excludes debug tools (we removed the
@@ -90,6 +90,7 @@ fn tools_list_response_includes_all_registered_tools() {
     for name in [
         "get_document_info",
         "open_document",
+        "save_document",
         "get_selection",
         "get_node",
         "list_pages",

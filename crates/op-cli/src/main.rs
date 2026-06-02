@@ -191,6 +191,10 @@ fn command_from_positionals(positionals: &[String], flags: &Flags) -> Result<Com
                 .unwrap_or_default();
             tool_call("open_document", args)
         }
+        "save" => {
+            let file_path = required_pos(positionals, 1, "Usage: op save <file.op>")?;
+            tool_call("save_document", vec![pair("filePath", file_path)])
+        }
         "get" => map_get(flags),
         "selection" => tool_call("get_selection", vec![]),
         "insert" => map_insert(positionals),
@@ -222,7 +226,7 @@ fn command_from_positionals(positionals: &[String], flags: &Flags) -> Result<Com
         "codegen:plan" | "codegen:submit" | "codegen:assemble" | "codegen:clean" => {
             codegen_cli::map_codegen(positionals, flags)
         }
-        "start" | "stop" | "save" | "install" | "uninstall" => Err(format!(
+        "start" | "stop" | "install" | "uninstall" => Err(format!(
             "TS command {:?} is not implemented by the Rust HTTP MCP CLI yet",
             positionals[0]
         )),
