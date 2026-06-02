@@ -15,13 +15,15 @@
 use op_editor_core::BooleanOp;
 use op_editor_ui::layout_scene::{regular_polygon_points, LayoutScene, NodeKind, SceneNode};
 use op_editor_ui::{Point2D, Rect};
-use skia_safe::{Matrix, Path as SkPath, PathBuilder, PathOp, Rect as SkRect};
+use skia_safe::{ContourMeasureIter, Matrix, Path as SkPath, PathBuilder, PathOp, Rect as SkRect};
 
-/// Result of a boolean-op computation — the source shape ids to
-/// remove + the new polyline (doc-space `(x, y)` pairs) to commit.
+/// Result of a boolean-op computation — the source shape ids to remove +
+/// the result contours. One closed polyline per contour (doc-space
+/// `(x, y)` pairs); multiple contours encode holes / disjoint regions,
+/// which the committer turns into a compound even-odd path.
 pub struct BooleanResult {
     pub source_ids: Vec<String>,
-    pub points: Vec<(f64, f64)>,
+    pub contours: Vec<Vec<(f64, f64)>>,
 }
 
 /// Compute `op` over the selected boolean-compatible shape nodes.
@@ -58,15 +60,15 @@ pub fn compute_boolean_op(
     for p in &sk_paths[1..] {
         acc = acc.op(p, pop)?;
     }
-    let result_points = extract_points(&acc);
-    if result_points.is_empty() {
+    let result_contours = flatten_path(&acc);
+    if result_contours.is_empty() {
         return None;
     }
     Some(BooleanResult {
         source_ids,
-        points: result_points
+        contours: result_contours
             .iter()
-            .map(|p| (p.x as f64, p.y as f64))
+            .map(|c| c.iter().map(|p| (p.x as f64, p.y as f64)).collect())
             .collect(),
     })
 }
@@ -78,7 +80,15 @@ fn build_node_path(node: &SceneNode) -> Option<SkPath> {
         NodeKind::Polygon => {
             build_polyline_path(&regular_polygon_points(node.bounds, node.polygon_sides))
         }
-        NodeKind::Path => build_polyline_path(&node.points),
+        // A Path may carry geometry either as a compound SVG `d`
+        // (boolean results, SVG imports) or as flat anchor points (pen
+        // tool). Prefer the `d` so a boolean op chained onto a previous
+        // boolean result — which is `d`-only — round-trips correctly.
+        NodeKind::Path => node
+            .svg_path
+            .as_deref()
+            .and_then(|d| build_svg_path(d, node.bounds))
+            .or_else(|| build_polyline_path(&node.points)),
         NodeKind::Line => {
             if node.points.len() >= 2 {
                 build_polyline_path(&node.points)
@@ -148,6 +158,54 @@ fn build_polyline_path(points: &[Point2D]) -> Option<SkPath> {
     Some(b.detach())
 }
 
+/// Parse a node's compound SVG `d` (node-local coords) into a doc-space
+/// skia path, fitted to `bounds` exactly as the renderer paints it.
+/// Compound `d`s with ≥2 subpaths (Subtract / Exclude holes) are tagged
+/// even-odd so a chained `Path::op` sees the hole.
+fn build_svg_path(d: &str, bounds: Rect) -> Option<SkPath> {
+    let parsed = skia_safe::utils::parse_path::from_svg(d)?;
+    if parsed.is_empty() {
+        return None;
+    }
+    let mut path = fit_path_to_rect(&parsed, bounds);
+    if d.bytes().filter(|c| *c == b'Z' || *c == b'z').count() >= 2 {
+        path.set_fill_type(skia_safe::PathFillType::EvenOdd);
+    }
+    Some(path)
+}
+
+/// Scale + translate `path` so its tight bounds map onto `rect` — a copy
+/// of the backend's `fit_path_to_rect` (the boolean layer can't reach the
+/// private backend fn), so boolean input geometry matches what is painted.
+fn fit_path_to_rect(path: &SkPath, rect: Rect) -> SkPath {
+    let bounds = path.compute_tight_bounds();
+    if !bounds.is_finite()
+        || !rect.size.x.is_finite()
+        || !rect.size.y.is_finite()
+        || rect.size.x <= 0.0
+        || rect.size.y <= 0.0
+    {
+        let mut matrix = Matrix::new_identity();
+        matrix.set_translate((rect.origin.x, rect.origin.y));
+        return path.with_transform(&matrix);
+    }
+    let sx = if bounds.width().abs() > 0.01 {
+        rect.size.x / bounds.width()
+    } else {
+        1.0
+    };
+    let sy = if bounds.height().abs() > 0.01 {
+        rect.size.y / bounds.height()
+    } else {
+        1.0
+    };
+    let tx = rect.origin.x - bounds.left() * sx;
+    let ty = rect.origin.y - bounds.top() * sy;
+    let mut matrix = Matrix::new_identity();
+    matrix.set_scale_translate((sx, sy), (tx, ty));
+    path.with_transform(&matrix)
+}
+
 fn apply_node_rotation(path: SkPath, node: &SceneNode) -> SkPath {
     if node.rotation.abs() <= f32::EPSILON {
         return path;
@@ -159,28 +217,65 @@ fn apply_node_rotation(path: SkPath, node: &SceneNode) -> SkPath {
     path.with_transform(&matrix)
 }
 
-/// Walk the result Path and yield a flat polyline. Curves (Quad /
-/// Conic / Cubic) degrade to their endpoint (TS Paper.js also emits
-/// curve segments here; full handle support arrives with the
-/// anchor-with-handles model).
-fn extract_points(path: &SkPath) -> Vec<Point2D> {
-    use skia_safe::PathVerb;
-    let mut out = Vec::new();
-    for rec in path.iter() {
-        let pts = rec.points();
-        let pt = match rec.verb() {
-            // Move + Line use a single point in pts[0] (legacy
-            // skia-bindings PathIter behavior — see path_iter.rs).
-            PathVerb::Move | PathVerb::Line => pts.first().copied(),
-            PathVerb::Quad | PathVerb::Conic => pts.get(1).copied(),
-            PathVerb::Cubic => pts.get(2).copied(),
-            PathVerb::Close => None,
-        };
-        if let Some(p) = pt {
-            out.push(Point2D::new(p.x, p.y));
+/// Flatten the boolean result into one closed polyline per contour.
+///
+/// `ContourMeasureIter` walks the result path one subpath at a time, so
+/// separate contours never fuse into a single self-crossing loop (the
+/// old `extract_points` concatenated them — hence the XOR "bowtie").
+/// Arc-length sampling via `pos_tan` turns the oval's conic arcs into
+/// smooth line segments rather than collapsing each curve to a single
+/// endpoint (the old "ellipse becomes a triangle" bug). Nearly-collinear
+/// samples are dropped so straight edges stay crisp.
+fn flatten_path(path: &SkPath) -> Vec<Vec<Point2D>> {
+    const STEP: f32 = 1.0; // doc-px arc length between samples
+    const MAX_PER_CONTOUR: usize = 8192; // runaway-path guard
+    let mut contours = Vec::new();
+    // force_closed=false: respect the contour's own open/closed flag.
+    for cm in ContourMeasureIter::new(path, false, None) {
+        let len = cm.length();
+        if len <= 0.0 {
+            continue;
+        }
+        let n = ((len / STEP).ceil() as usize).clamp(1, MAX_PER_CONTOUR);
+        // A closed contour stops one sample short of `len` — that sample
+        // duplicates the start, and the emitted path closes the seam.
+        let count = if cm.is_closed() { n } else { n + 1 };
+        let mut poly: Vec<Point2D> = Vec::with_capacity(count);
+        for i in 0..count {
+            let d = len * (i as f32) / (n as f32);
+            if let Some((p, _tan)) = cm.pos_tan(d) {
+                push_simplified(&mut poly, Point2D::new(p.x, p.y));
+            }
+        }
+        if poly.len() >= 2 {
+            contours.push(poly);
         }
     }
-    out
+    contours
+}
+
+/// Append `p`, but when it is within `EPS_DIST` of the segment spanned by
+/// the last two points, replace the middle point instead — collapsing
+/// collinear runs (the straight edges of rects/polygons) without touching
+/// curved spans, where consecutive samples deviate measurably.
+fn push_simplified(poly: &mut Vec<Point2D>, p: Point2D) {
+    const EPS_DIST: f32 = 0.08; // px: max perpendicular deviation
+    let n = poly.len();
+    if n >= 2 {
+        let a = poly[n - 2];
+        let b = poly[n - 1];
+        let dx = p.x - a.x;
+        let dy = p.y - a.y;
+        let seg = (dx * dx + dy * dy).sqrt();
+        if seg > 1e-6 {
+            let dist = ((b.x - a.x) * dy - (b.y - a.y) * dx).abs() / seg;
+            if dist < EPS_DIST {
+                poly[n - 1] = p;
+                return;
+            }
+        }
+    }
+    poly.push(p);
 }
 
 #[cfg(test)]
@@ -239,7 +334,8 @@ mod tests {
         let sel = vec!["n10".to_string(), "n11".to_string()];
         let r = compute_boolean_op(&scene, &sel, BooleanOp::Union).expect("union computes");
         assert_eq!(r.source_ids.len(), 2);
-        assert!(!r.points.is_empty(), "union must yield points");
+        assert!(!r.contours.is_empty(), "union must yield a contour");
+        assert!(r.contours[0].len() >= 4, "union outline needs ≥4 points");
     }
 
     #[test]
@@ -248,12 +344,9 @@ mod tests {
         let sel = vec!["n10".to_string(), "n11".to_string()];
         let r = compute_boolean_op(&scene, &sel, BooleanOp::Intersect).expect("intersect computes");
         // Intersection covers the 10..20 × 10..20 square.
-        let min_x = r.points.iter().map(|p| p.0).fold(f64::INFINITY, f64::min);
-        let max_x = r
-            .points
-            .iter()
-            .map(|p| p.0)
-            .fold(f64::NEG_INFINITY, f64::max);
+        let xs = || r.contours.iter().flatten().map(|p| p.0);
+        let min_x = xs().fold(f64::INFINITY, f64::min);
+        let max_x = xs().fold(f64::NEG_INFINITY, f64::max);
         assert!((max_x - min_x - 10.0).abs() < 0.5);
     }
 
@@ -263,13 +356,10 @@ mod tests {
         let sel = vec!["n10".to_string(), "n11".to_string()];
         let r = compute_boolean_op(&scene, &sel, BooleanOp::Subtract).expect("subtract computes");
         assert_eq!(r.source_ids, sel);
-        assert!(!r.points.is_empty(), "subtract must yield points");
-        let min_x = r.points.iter().map(|p| p.0).fold(f64::INFINITY, f64::min);
-        let max_x = r
-            .points
-            .iter()
-            .map(|p| p.0)
-            .fold(f64::NEG_INFINITY, f64::max);
+        assert!(!r.contours.is_empty(), "subtract must yield a contour");
+        let xs = || r.contours.iter().flatten().map(|p| p.0);
+        let min_x = xs().fold(f64::INFINITY, f64::min);
+        let max_x = xs().fold(f64::NEG_INFINITY, f64::max);
         assert!((min_x - 0.0).abs() < 0.5);
         assert!((max_x - 10.0).abs() < 0.5);
     }
@@ -289,5 +379,32 @@ mod tests {
         scene.pages[0].children.push(text);
         let sel = vec!["n10".to_string(), "n11".to_string(), "n12".to_string()];
         assert!(compute_boolean_op(&scene, &sel, BooleanOp::Union).is_none());
+    }
+
+    /// A boolean result is committed as a `d`-only Path (no anchors → the
+    /// SceneNode has empty `points`). Chaining another op onto it must
+    /// still work by parsing `svg_path` — this would return `None` before
+    /// the svg_path branch in `build_node_path`.
+    #[test]
+    fn boolean_op_accepts_svg_path_only_nodes() {
+        let mut a = SceneNode::leaf("n10", NodeKind::Path);
+        a.svg_path = Some("M 0 0 L 20 0 L 20 20 L 0 20 Z".into());
+        a.bounds = Rect::xywh(0.0, 0.0, 20.0, 20.0);
+        assert!(a.points.is_empty(), "svg-path node has no flat points");
+        let mut b = SceneNode::leaf("n11", NodeKind::Path);
+        b.svg_path = Some("M 0 0 L 20 0 L 20 20 L 0 20 Z".into());
+        b.bounds = Rect::xywh(10.0, 10.0, 20.0, 20.0);
+        let scene = LayoutScene {
+            pages: vec![ScenePage {
+                id: "p".into(),
+                name: "P".into(),
+                children: vec![a, b],
+            }],
+            active_page_index: 0,
+        };
+        let sel = vec!["n10".to_string(), "n11".to_string()];
+        let r = compute_boolean_op(&scene, &sel, BooleanOp::Union)
+            .expect("union of two svg-path-only nodes computes");
+        assert!(!r.contours.is_empty(), "chained boolean op must yield a contour");
     }
 }
