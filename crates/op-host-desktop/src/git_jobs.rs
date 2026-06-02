@@ -140,6 +140,7 @@ fn snapshot(repo: &GitRepo) -> GitSnapshot {
             summary: c.summary,
             author: c.author,
             time_label: format_compact_time(c.timestamp, now_secs),
+            is_initial: c.is_initial,
         })
         .collect();
     let merging = repo.is_merging();
