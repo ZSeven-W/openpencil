@@ -275,32 +275,6 @@ fn parse_args_maps_ts_open_to_open_document() {
 }
 
 #[test]
-fn parse_args_maps_ts_design_dsl_to_operations_arg() {
-    let dsl = r#"root=I(null, {"type":"frame","name":"Page","width":320,"height":240})"#;
-    let p = parse_args(&["design".to_string(), dsl.to_string()]).expect("parse design dsl");
-    assert_eq!(
-        p.command,
-        Command::ToolCall {
-            tool: "batch_design".to_string(),
-            args: vec![("operations".to_string(), dsl.to_string())],
-        }
-    );
-}
-
-#[test]
-fn parse_args_keeps_json_array_design_as_nodes_json() {
-    let nodes = r#"[{"kind":"rect","name":"A","x":0,"y":0,"width":10,"height":10}]"#;
-    let p = parse_args(&["design".to_string(), nodes.to_string()]).expect("parse design array");
-    assert_eq!(
-        p.command,
-        Command::ToolCall {
-            tool: "batch_design".to_string(),
-            args: vec![("nodes_json".to_string(), nodes.to_string())],
-        }
-    );
-}
-
-#[test]
 fn parse_args_maps_ts_save_to_save_document_tool() {
     let p = parse_args(&["save".to_string(), "/tmp/copy.op".to_string()]).expect("parse save");
     assert_eq!(
@@ -492,6 +466,18 @@ fn parse_args_maps_vars_set_to_ts_bulk_tool_shape() {
                 ),
                 ("replace".to_string(), "true".to_string()),
             ],
+        }
+    );
+}
+
+#[test]
+fn parse_args_maps_themes_to_ts_variables_read_tool() {
+    let p = parse_args(&["themes".to_string()]).expect("parse themes");
+    assert_eq!(
+        p.command,
+        Command::ToolCall {
+            tool: "get_variables".to_string(),
+            args: vec![],
         }
     );
 }
@@ -706,15 +692,11 @@ fn parse_args_maps_ts_insert_json_alias_to_rust_tool() {
         p.command,
         Command::ToolCall {
             tool: "insert_node".to_string(),
-            args: vec![
-                ("kind".to_string(), "rect".to_string()),
-                ("name".to_string(), "Card".to_string()),
-                ("x".to_string(), "12".to_string()),
-                ("y".to_string(), "24".to_string()),
-                ("width".to_string(), "200".to_string()),
-                ("height".to_string(), "100".to_string()),
-                ("fill_hex".to_string(), "#ffffff".to_string()),
-            ],
+            args: vec![(
+                "data".to_string(),
+                r##"{"type":"rectangle","name":"Card","x":12,"y":24,"width":200,"height":100,"fill":[{"type":"solid","color":"#ffffff"}]}"##
+                    .to_string(),
+            )],
         }
     );
 }

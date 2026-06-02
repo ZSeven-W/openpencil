@@ -1,6 +1,9 @@
 use serde_json::Value;
 
-use super::{flag_value, json_escape, pair, required_pos, resolve_arg, tool_call, Command, Flags};
+use super::{
+    flag_value, json_escape, pair, required_pos, resolve_arg, resolve_file_path_arg, tool_call,
+    Command, Flags,
+};
 
 pub(super) fn map_codegen(positionals: &[String], flags: &Flags) -> Result<Command, String> {
     match positionals[0].as_str() {
@@ -18,7 +21,8 @@ fn map_codegen_plan(positionals: &[String], flags: &Flags) -> Result<Command, St
     let plan = compact_json_object(&raw, "plan-json")?;
     let mut fields = Vec::new();
     if let Some(file_path) = flag_value(flags, "file") {
-        fields.push(json_string_field("filePath", &file_path));
+        let resolved_file_path = resolve_file_path_arg(&file_path);
+        fields.push(json_string_field("filePath", &resolved_file_path));
     }
     if let Some(page_id) = flag_value(flags, "page") {
         fields.push(json_string_field("pageId", &page_id));
