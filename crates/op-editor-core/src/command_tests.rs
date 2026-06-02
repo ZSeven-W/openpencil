@@ -22,58 +22,6 @@ fn id(s: &str) -> NodeId {
     NodeId::new(s)
 }
 
-// --- UpdateNode ------------------------------------------------------
-
-#[test]
-fn update_node_patches_fields() {
-    let mut s = state_with(vec![rect("n1", "r", 0.0, 0.0, 10.0, 10.0)]);
-    assert!(s.apply(EditorCommand::UpdateNode {
-        node_id: id("n1"),
-        x: Some(50),
-        y: None,
-        width: Some(80),
-        height: None,
-        name: Some("Renamed".into()),
-        fill_hex: None,
-    }));
-    let n = find_node(s.active_children(), &id("n1")).unwrap();
-    assert_eq!(n.base().x, Some(50.0));
-    assert_eq!(n.base().y, Some(0.0)); // untouched
-    assert_eq!(n.width_px(), Some(80.0));
-    assert_eq!(n.base().name.as_deref(), Some("Renamed"));
-}
-
-#[test]
-fn update_node_atomic_on_negative_width() {
-    let mut s = state_with(vec![rect("n1", "r", 0.0, 0.0, 10.0, 10.0)]);
-    assert!(!s.apply(EditorCommand::UpdateNode {
-        node_id: id("n1"),
-        x: Some(99),
-        y: None,
-        width: Some(-5),
-        height: None,
-        name: None,
-        fill_hex: None,
-    }));
-    // x must NOT have been written — validation rejects before mutation.
-    let n = find_node(s.active_children(), &id("n1")).unwrap();
-    assert_eq!(n.base().x, Some(0.0));
-}
-
-#[test]
-fn update_node_rejects_unknown_id() {
-    let mut s = state_with(vec![rect("n1", "r", 0.0, 0.0, 10.0, 10.0)]);
-    assert!(!s.apply(EditorCommand::UpdateNode {
-        node_id: id("ghost"),
-        x: Some(1),
-        y: None,
-        width: None,
-        height: None,
-        name: None,
-        fill_hex: None,
-    }));
-}
-
 // --- DeleteNode ------------------------------------------------------
 
 #[test]

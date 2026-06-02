@@ -598,6 +598,22 @@ fn parse_tool_call_allows_structured_insert_node_data_for_ts_parity() {
 }
 
 #[test]
+fn parse_tool_call_allows_structured_update_node_data_for_ts_parity() {
+    let line = r##"{"id":5,"method":"tools/call","params":{"name":"update_node","arguments":{"nodeId":"n10","data":{"name":"Updated","x":5,"fill":[{"type":"solid","color":"#123456"}]},"pageId":"page-2"}}}"##;
+    let call = parse_tool_call(line).expect("update_node must accept TS-style data object");
+    assert_eq!(call.tool, "update_node");
+    assert_eq!(call.arguments.get("nodeId"), Some(&"n10".to_string()));
+    assert_eq!(
+        call.arguments.get("data"),
+        Some(
+            &r##"{"name":"Updated","x":5,"fill":[{"type":"solid","color":"#123456"}]}"##
+                .to_string()
+        )
+    );
+    assert_eq!(call.arguments.get("pageId"), Some(&"page-2".to_string()));
+}
+
+#[test]
 fn parse_tool_call_allows_structured_style_guide_tags_for_ts_parity() {
     let line = r#"{"id":4,"method":"tools/call","params":{"name":"get_style_guide","arguments":{"tags":["light-mode","clean"],"platform":"webapp"}}}"#;
     let call = parse_tool_call(line).expect("get_style_guide must accept TS-style tags array");

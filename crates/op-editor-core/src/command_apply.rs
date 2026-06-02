@@ -188,7 +188,21 @@ impl EditorState {
                 height,
                 name,
                 fill_hex,
-            } => self.cmd_update_node(&node_id, x, y, width, height, &name, &fill_hex),
+                page_id,
+            } => {
+                let Some(target_page_index) = command_page_index(self, page_id.as_deref()) else {
+                    return false;
+                };
+                let original_page_index = self.ui.active_page_index;
+                if page_id.is_some() {
+                    self.ui.active_page_index = target_page_index;
+                }
+                let changed = self.cmd_update_node(&node_id, x, y, width, height, &name, &fill_hex);
+                if page_id.is_some() && target_page_index != original_page_index {
+                    self.ui.active_page_index = original_page_index;
+                }
+                changed
+            }
             EditorCommand::DeleteNode { node_id } => self.cmd_delete_node(&node_id),
             EditorCommand::MoveNode {
                 node_id,

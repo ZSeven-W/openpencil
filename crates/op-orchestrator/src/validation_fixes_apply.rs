@@ -222,6 +222,7 @@ pub(crate) fn apply_validation_fixes(
                     },
                     name: None,
                     fill_hex: None,
+                    page_id: None,
                 });
                 result.applied += 1;
                 continue;

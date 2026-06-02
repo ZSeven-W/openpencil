@@ -454,6 +454,7 @@ fn update_node_returns_command_with_partial_patch() {
                 height,
                 name,
                 fill_hex,
+                page_id,
             },
         ) => {
             assert_eq!(node_id.as_str(), "n10");
@@ -463,8 +464,47 @@ fn update_node_returns_command_with_partial_patch() {
             assert_eq!(height, None);
             assert!(name.is_none());
             assert!(fill_hex.is_none());
+            assert_eq!(page_id, None);
         }
         other => panic!("expected UpdateNode command, got {other:?}"),
+    }
+}
+
+#[test]
+fn update_node_accepts_ts_node_id_data_and_page_args() {
+    let tool = update_node_snapshot();
+    let mut args = BTreeMap::new();
+    args.insert("nodeId".into(), "n10".into());
+    args.insert(
+        "data".into(),
+        r##"{"name":"Updated","x":5,"fill":[{"type":"solid","color":"#123456"}]}"##.into(),
+    );
+    args.insert("pageId".into(), "page-2".into());
+
+    match tool.call(&args) {
+        ToolOutcome::OkWithCommand(
+            _,
+            EditorCommand::UpdateNode {
+                node_id,
+                x,
+                y,
+                width,
+                height,
+                name,
+                fill_hex,
+                page_id,
+            },
+        ) => {
+            assert_eq!(node_id.as_str(), "n10");
+            assert_eq!(x, Some(5));
+            assert_eq!(y, None);
+            assert_eq!(width, None);
+            assert_eq!(height, None);
+            assert_eq!(name.as_deref(), Some("Updated"));
+            assert_eq!(fill_hex.as_deref(), Some("#123456"));
+            assert_eq!(page_id.as_deref(), Some("page-2"));
+        }
+        other => panic!("expected UpdateNode command from TS data, got {other:?}"),
     }
 }
 
@@ -479,6 +519,7 @@ fn update_node_command_applies_through_editor_state() {
         height: Some(50),
         name: Some("Renamed".into()),
         fill_hex: None,
+        page_id: None,
     }));
     // Unknown id rejects.
     assert!(!s.apply(EditorCommand::UpdateNode {
@@ -489,6 +530,7 @@ fn update_node_command_applies_through_editor_state() {
         height: None,
         name: None,
         fill_hex: None,
+        page_id: None,
     }));
 }
 

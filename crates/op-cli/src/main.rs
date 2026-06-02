@@ -233,7 +233,7 @@ fn command_from_positionals(positionals: &[String], flags: &Flags) -> Result<Com
         "get" => map_get(flags),
         "selection" => tool_call("get_selection", vec![]),
         "insert" => map_insert(positionals, flags),
-        "update" => map_update(positionals),
+        "update" => map_update(positionals, flags),
         "delete" => map_one_id("delete_node", positionals),
         "read-nodes" => map_read_nodes(positionals, flags),
         "move" => map_reparent("move_node", positionals, flags),
@@ -304,11 +304,14 @@ fn map_insert(positionals: &[String], flags: &Flags) -> Result<Command, String> 
     tool_call("insert_node", pairs)
 }
 
-fn map_update(positionals: &[String]) -> Result<Command, String> {
+fn map_update(positionals: &[String], flags: &Flags) -> Result<Command, String> {
     let node_id = required_pos(positionals, 1, "Usage: op update <node-id> <json>")?;
     let raw = resolve_arg(positionals.get(2).map(String::as_str))?;
     let mut pairs = vec![pair("node_id", node_id)];
     pairs.extend(update_pairs(&raw)?);
+    if let Some(page) = flag_value(flags, "page") {
+        pairs.push(pair("pageId", page));
+    }
     tool_call("update_node", pairs)
 }
 
