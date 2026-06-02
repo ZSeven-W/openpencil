@@ -224,7 +224,7 @@ impl GitPanel<'_> {
         cx.backend.save();
         cx.backend.clip_rect(rect);
         self.text(cx, value, text_x, baseline, 12.0, t.foreground);
-        if focused && jian_core::anim::blink_visible(self.now_ms, anchor_ms, 530) {
+        if focused && jian_core::anim::blink_visible(self.now_ms, anchor_ms, 500) {
             let caret_x = text_x + cx.backend.measure_text(value, 12.0) + 1.0;
             cx.backend.fill_rect(
                 Rect {

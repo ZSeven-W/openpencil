@@ -159,6 +159,20 @@ impl GitSession {
         repo.stage(&[file.as_path()])
     }
 
+    /// Whether the tracked document has staged changes (its index blob
+    /// differs from `HEAD`). After `stage_tracked`, `false` means the saved
+    /// file matches the last commit — committing would create an empty
+    /// milestone, so the caller skips it.
+    pub fn tracked_has_staged_changes(&self) -> bool {
+        let Some(repo) = self.repo.as_ref() else {
+            return false;
+        };
+        match self.tracked_relpath() {
+            Some(rel) => repo.is_path_staged(&rel).unwrap_or(false),
+            None => false,
+        }
+    }
+
     /// The tracked document's path relative to the repository root,
     /// `/`-separated — the key form the Git panel's `changed_files`
     /// uses. `None` when unbound or the path is outside the repo.

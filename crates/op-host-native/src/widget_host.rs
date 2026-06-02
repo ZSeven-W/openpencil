@@ -741,7 +741,7 @@ impl WidgetHostNative {
                 500,
             ));
         }
-        // Git commit textarea caret — same 530 ms cadence the ready
+        // Git commit textarea caret — same 500 ms cadence the ready
         // panel paints at (`git_panel_ready.rs`). Without this wake the
         // window never repaints while the commit box is focused, so the
         // caret sits static instead of blinking.
@@ -749,7 +749,7 @@ impl WidgetHostNative {
             return Some(jian_core::anim::next_blink_flip_ms(
                 self.now_ms,
                 self.editor_state.editor_ui.git_panel.commit_caret_anchor_ms,
-                530,
+                500,
             ));
         }
         // Remote-settings inputs (remote URL + HTTPS username:token) share
@@ -762,7 +762,7 @@ impl WidgetHostNative {
             return Some(jian_core::anim::next_blink_flip_ms(
                 self.now_ms,
                 self.editor_state.editor_ui.git_panel.commit_caret_anchor_ms,
-                530,
+                500,
             ));
         }
         // Clone-wizard field caret, and while a `git clone` runs — keep
@@ -773,7 +773,7 @@ impl WidgetHostNative {
                 return Some(jian_core::anim::next_blink_flip_ms(
                     self.now_ms,
                     form.caret_anchor_ms,
-                    530,
+                    500,
                 ));
             }
         }

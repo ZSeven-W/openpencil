@@ -25,6 +25,7 @@ use std::path::{Path, PathBuf};
 
 mod auth;
 mod branch;
+mod candidates;
 mod history;
 mod merge;
 mod remote;
@@ -34,6 +35,7 @@ mod worktree;
 
 pub use auth::{AuthStore, Credential};
 pub use branch::Branch;
+pub use candidates::CandidateOpFile;
 pub use history::Commit;
 pub use merge::{
     ConflictBag, ConflictKind, ConflictStages, ConflictedFile, MergeOutcome, WorktreeMergeReport,
@@ -249,6 +251,28 @@ impl GitRepo {
             name: self.config_get("user.name"),
             email: self.config_get("user.email"),
         }
+    }
+
+    /// Whether a committer identity is resolvable — both `user.name` and
+    /// `user.email` are set (repo → global → system). A commit refuses
+    /// without one, so the panel prompts for a signature when this is false.
+    pub fn has_committer_identity(&self) -> bool {
+        let a = self.author();
+        a.name.is_some() && a.email.is_some()
+    }
+
+    /// Write `user.name` / `user.email` into the repo-LOCAL config (the
+    /// signature for commits in this repo). The inverse of
+    /// [`Self::unset_local_author`]; used by the commit-signature form.
+    pub fn set_local_author(&self, name: &str, email: &str) -> Result<(), GitError> {
+        let repo = self.open()?;
+        let mut local = repo
+            .config()?
+            .open_level(git2::ConfigLevel::Local)
+            .or_else(|_| repo.config())?;
+        local.set_str("user.name", name)?;
+        local.set_str("user.email", email)?;
+        Ok(())
     }
 
     /// Read a single git config value (repo config, falling back to the

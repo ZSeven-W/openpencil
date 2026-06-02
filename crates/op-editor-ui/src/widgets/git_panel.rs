@@ -94,6 +94,35 @@ pub enum GitPanelHit {
     OverflowRemoteSettings,
     /// The overflow menu's "SSH keys" entry — set up SSH auth.
     OverflowSshKeys,
+    /// The overflow menu's "Switch tracked file" entry — open the
+    /// tracked-file picker subview.
+    OverflowSwitchTracked,
+    /// The overflow menu's "Clear commit author" entry.
+    OverflowClearAuthor,
+    /// The overflow menu's "Close repository" entry — unbind the repo.
+    OverflowCloseRepo,
+    /// A tracked-file-picker candidate row — select `candidate_files[index]`.
+    TrackedPickerRow(usize),
+    /// The tracked-file picker's "Track this file" button.
+    TrackedPickerBind,
+    /// The tracked-file picker's "Track and open" button.
+    TrackedPickerBindOpen,
+    /// The tracked-file picker's Back / Cancel button.
+    TrackedPickerBack,
+    /// Remote-settings "获取" — run `git fetch` on origin.
+    FetchRemote,
+    /// Commit-signature form — focus the 姓名 (name) input.
+    AuthorNameInput,
+    /// Commit-signature form — focus the 邮箱 (email) input.
+    AuthorEmailInput,
+    /// Commit-signature form "保存" — save identity + re-fire the commit.
+    AuthorSave,
+    /// Commit-signature form "取消" — dismiss without committing.
+    AuthorCancel,
+    /// SSH subview "生成新密钥" — generate a key for the origin host.
+    SshGenerateKey,
+    /// SSH subview "导入现有密钥" — import an existing private key.
+    SshImportKey,
     /// A subview's `‹ Back` row — return to the overflow menu.
     OverflowBack,
     /// A click outside an open header popover (but inside the panel) —
@@ -422,31 +451,6 @@ impl<'a> GitPanel<'a> {
 
     /// Paint the panel into `rect`.
     pub fn paint(&self, cx: &mut PaintCx<'_>, rect: Rect) {
-        // Drop shadow (TS PopoverContent `shadow-md`) — two soft black rects
-        // offset down so the floating panel lifts off the canvas instead of
-        // reading flat / stuck-on against it.
-        cx.backend.fill_round_rect(
-            Rect {
-                origin: Point2D::new(rect.origin.x, rect.origin.y + 10.0),
-                size: rect.size,
-            },
-            6.0,
-            Color {
-                a: 0.10,
-                ..Color::BLACK
-            },
-        );
-        cx.backend.fill_round_rect(
-            Rect {
-                origin: Point2D::new(rect.origin.x, rect.origin.y + 4.0),
-                size: rect.size,
-            },
-            6.0,
-            Color {
-                a: 0.14,
-                ..Color::BLACK
-            },
-        );
         // TS popover radius is `rounded-md` = 6px (Rust was 10px, too round).
         cx.backend.fill_round_rect(rect, 6.0, self.theme.popover);
         cx.backend

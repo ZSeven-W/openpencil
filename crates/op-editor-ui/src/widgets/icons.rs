@@ -229,6 +229,14 @@ pub enum Icon {
     XCircle,
     /// Lucide `file-text.svg` — recent file rows.
     FileText,
+    /// Lucide `file-search.svg` — git overflow "switch tracked file".
+    FileSearch,
+    /// Lucide `user-x.svg` — git overflow "clear commit author".
+    UserX,
+    /// Lucide `key.svg` — git overflow "SSH keys".
+    Key,
+    /// Lucide `log-out.svg` — git overflow "close repository".
+    LogOut,
     /// Lucide `align-start-vertical` — align selection's left edges.
     AlignLeft,
     /// Lucide `align-center-vertical` — align selection horizontal centers.
@@ -319,6 +327,10 @@ impl Icon {
             Icon::Save => SAVE,
             Icon::Download => DOWNLOAD,
             Icon::FileText => FILE_TEXT,
+            Icon::FileSearch => FILE_SEARCH,
+            Icon::UserX => USER_X,
+            Icon::Key => KEY,
+            Icon::LogOut => LOG_OUT,
             Icon::Mail => MAIL,
             Icon::Smartphone => SMARTPHONE,
             Icon::Chrome => CHROME,
@@ -434,6 +446,10 @@ impl Icon {
             "save" => Icon::Save,
             "download" => Icon::Download,
             "file-text" => Icon::FileText,
+            "file-search" => Icon::FileSearch,
+            "user-x" => Icon::UserX,
+            "key" => Icon::Key,
+            "log-out" | "logout" => Icon::LogOut,
             "folder-open" | "folder" => Icon::FolderOpen,
             "git-branch" | "git" => Icon::GitBranch,
             "history" | "clock-history" => Icon::History,

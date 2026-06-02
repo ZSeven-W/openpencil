@@ -7,7 +7,8 @@
 //! inside the Git-panel rect) and before the canvas overlays.
 
 use op_editor_core::{
-    CloneField, GitBranchPickerMode, GitDiffTarget, GitOverflowView, GitPanelAction,
+    CloneField, CommitDiffView, GitBranchPickerMode, GitDiffTarget, GitOverflowView,
+    GitPanelAction, GitPanelState,
 };
 use op_editor_ui::widgets::{GitPanel, GitPanelHit};
 use op_editor_ui::Point2D;
@@ -59,6 +60,8 @@ impl WidgetHostNative {
                 panel.commit_caret_anchor_ms = now;
                 panel.remote_focused = false;
                 panel.https_focused = false;
+                // Re-engaging the input dismisses the stale "no changes" hint.
+                panel.commit_no_changes = false;
             }
             Some(GitPanelHit::RemoteInput) => {
                 panel.remote_focused = true;
@@ -104,6 +107,30 @@ impl WidgetHostNative {
                 if !panel.commit_message.trim().is_empty() {
                     panel.pending_action = Some(GitPanelAction::CommitMilestone);
                 }
+            }
+            Some(GitPanelHit::AuthorNameInput) => {
+                panel.author_name_focused = true;
+                panel.author_email_focused = false;
+                panel.commit_focused = false;
+                panel.remote_focused = false;
+                panel.https_focused = false;
+                panel.commit_caret_anchor_ms = now;
+            }
+            Some(GitPanelHit::AuthorEmailInput) => {
+                panel.author_email_focused = true;
+                panel.author_name_focused = false;
+                panel.commit_focused = false;
+                panel.remote_focused = false;
+                panel.https_focused = false;
+                panel.commit_caret_anchor_ms = now;
+            }
+            Some(GitPanelHit::AuthorSave) => {
+                panel.pending_action = Some(GitPanelAction::SaveAuthor);
+            }
+            Some(GitPanelHit::AuthorCancel) => {
+                panel.author_prompt = false;
+                panel.author_name_focused = false;
+                panel.author_email_focused = false;
             }
             Some(GitPanelHit::EmptyInit) => {
                 panel.pending_action = Some(GitPanelAction::InitRepo);
@@ -174,12 +201,58 @@ impl WidgetHostNative {
                 panel.overflow_view = GitOverflowView::RemoteSettings;
             }
             Some(GitPanelHit::OverflowSshKeys) => {
+                // Open the SSH-keys subview (host enumerates the stored keys).
+                panel.pending_action = Some(GitPanelAction::EnterSshKeys);
+            }
+            Some(GitPanelHit::SshGenerateKey) => {
                 panel.pending_action = Some(GitPanelAction::SetupSshAuth);
                 panel.overflow_open = false;
                 panel.overflow_view = GitOverflowView::Menu;
             }
+            Some(GitPanelHit::SshImportKey) => {
+                panel.pending_action = Some(GitPanelAction::ImportSshKey);
+            }
+            Some(GitPanelHit::FetchRemote) => {
+                panel.pending_action = Some(GitPanelAction::FetchRemote);
+            }
             Some(GitPanelHit::OverflowBack) => {
                 panel.overflow_view = GitOverflowView::Menu;
+            }
+            Some(GitPanelHit::OverflowSwitchTracked) => {
+                // Host enumerates the repo's `.op` candidates, then flips the
+                // subview to the tracked-file picker.
+                panel.pending_action = Some(GitPanelAction::EnterTrackedPicker);
+            }
+            Some(GitPanelHit::OverflowClearAuthor) => {
+                panel.pending_action = Some(GitPanelAction::ClearAuthor);
+                panel.overflow_open = false;
+                panel.overflow_view = GitOverflowView::Menu;
+            }
+            Some(GitPanelHit::OverflowCloseRepo) => {
+                panel.pending_action = Some(GitPanelAction::CloseRepo);
+                panel.overflow_open = false;
+                panel.overflow_view = GitOverflowView::Menu;
+            }
+            Some(GitPanelHit::TrackedPickerRow(index)) => {
+                // Pure UI — single-select a candidate.
+                if index < panel.candidate_files.len() {
+                    panel.tracked_picker_selected = Some(index);
+                }
+            }
+            Some(GitPanelHit::TrackedPickerBind) => {
+                if let Some(path) = picker_selected_path(panel) {
+                    panel.pending_action = Some(GitPanelAction::BindTrackedFile(path, false));
+                }
+            }
+            Some(GitPanelHit::TrackedPickerBindOpen) => {
+                if let Some(path) = picker_selected_path(panel) {
+                    panel.pending_action = Some(GitPanelAction::BindTrackedFile(path, true));
+                }
+            }
+            Some(GitPanelHit::TrackedPickerBack) => {
+                // Close the picker subview back to the overflow menu.
+                panel.overflow_view = GitOverflowView::Menu;
+                panel.tracked_picker_selected = None;
             }
             Some(GitPanelHit::DismissPopover) => {
                 // Click outside an open popover — close it + swallow.
@@ -256,13 +329,24 @@ impl WidgetHostNative {
                 // Toggle the inline detail card under that row (TS
                 // `HistoryMilestoneRow` expand) — clicking the open row
                 // collapses it, a different row moves the card.
-                panel.expanded_commit = if panel.expanded_commit == Some(index) {
+                let next = if panel.expanded_commit == Some(index) {
                     None
                 } else if index < panel.recent_commits.len() {
                     Some(index)
                 } else {
                     panel.expanded_commit
                 };
+                panel.expanded_commit = next;
+                match next {
+                    // Newly expanded → show the loading state and ask the
+                    // host to compute the semantic diff (TS `computeDiff`).
+                    Some(i) => {
+                        panel.expanded_commit_diff = Some(CommitDiffView::Loading);
+                        panel.pending_action = Some(GitPanelAction::LoadCommitDiff(i));
+                    }
+                    // Collapsed → drop any loaded diff.
+                    None => panel.expanded_commit_diff = None,
+                }
             }
             Some(GitPanelHit::RestoreCommit(index)) => {
                 if let Some(rev) = panel
@@ -393,4 +477,12 @@ impl WidgetHostNative {
         panel.merge_resolve = None;
         panel.clone_form = None;
     }
+}
+
+/// The absolute path of the tracked-file picker's selected candidate, if any.
+fn picker_selected_path(panel: &GitPanelState) -> Option<String> {
+    panel
+        .tracked_picker_selected
+        .and_then(|i| panel.candidate_files.get(i))
+        .map(|c| c.path.clone())
 }

@@ -30,6 +30,7 @@ impl WidgetHostNative {
             || self.git_remote_focus_active()
             || self.git_https_focus_active()
             || self.git_branch_create_focus_active()
+            || self.git_author_focus_active()
             || self.git_clone_input_active()
     }
 
@@ -40,10 +41,14 @@ impl WidgetHostNative {
     /// Whether the visible Git commit-message input owns the keyboard.
     pub fn git_commit_focus_active(&self) -> bool {
         let panel = &self.editor_state.editor_ui.git_panel;
-        // The branch-picker dropdown has no commit input; while it is open a
-        // stale `commit_focused` must not route keys (text / Enter) to the
-        // hidden commit box.
-        panel.open && panel.commit_focused && !panel.loading && !panel.branch_picker_open
+        // A stale `commit_focused` must not route keys to a HIDDEN commit box —
+        // the box is gone while the branch-picker dropdown OR the signature
+        // form (`author_prompt`) has replaced it.
+        panel.open
+            && panel.commit_focused
+            && !panel.loading
+            && !panel.branch_picker_open
+            && !panel.author_prompt
     }
 
     /// Whether the visible Git remote-URL input owns the keyboard.
@@ -62,6 +67,15 @@ impl WidgetHostNative {
     pub fn git_branch_create_focus_active(&self) -> bool {
         let panel = &self.editor_state.editor_ui.git_panel;
         panel.open && panel.branch_create_focused && !panel.loading
+    }
+
+    /// Whether a commit-signature form input (name / email) owns the keyboard.
+    pub fn git_author_focus_active(&self) -> bool {
+        let panel = &self.editor_state.editor_ui.git_panel;
+        panel.open
+            && panel.author_prompt
+            && (panel.author_name_focused || panel.author_email_focused)
+            && !panel.loading
     }
 
     /// Whether a ready-state Git popover (branch picker / overflow menu) is

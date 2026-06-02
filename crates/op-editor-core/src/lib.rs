@@ -110,12 +110,13 @@ pub use command::{
 pub use components::{Component, ComponentLibrary};
 pub use design_md::{extract_design_md_from_document, generate_design_md, parse_design_md};
 pub use editor_ui_state::{
-    BooleanOp, CloneField, CloneFormState, DesignMdRequest, EditorUiState, ExportFormat,
-    FileAction, FileMenuChoice, FillType, FlexLayout, GitBranchPickerMode, GitCommitSummary,
-    GitDiffTarget, GitDiffView, GitFileEntry, GitOverflowView, GitPanelAction, GitPanelState,
-    ImageAdjustmentField, ImageFillMode, LayerContextMenuState, Locale, MergeConflictRow,
-    MergeResolveFile, MergeResolveState, PaddingEditMode, PageRenameState, PropertyTab, RecentFile,
-    ShapeChoice, ThemeMode, UpdateStatus, VariableRowFocus,
+    BooleanOp, CloneField, CloneFormState, CommitDiffPatch, CommitDiffSummary, CommitDiffView,
+    DesignMdRequest, EditorUiState, ExportFormat, FileAction, FileMenuChoice, FillType, FlexLayout,
+    GitBranchPickerMode, GitCandidateFile, GitCommitSummary, GitDiffTarget, GitDiffView,
+    GitFileEntry, GitOverflowView, GitPanelAction, GitPanelState, ImageAdjustmentField,
+    ImageFillMode, LayerContextMenuState, Locale, MergeConflictRow, MergeResolveFile,
+    MergeResolveState, PaddingEditMode, PageRenameState, PropertyTab, RecentFile, ShapeChoice,
+    ThemeMode, UpdateStatus, VariableRowFocus,
 };
 pub use fills::{
     first_fill_type, first_image_fill_summary, first_solid_fill_hex, first_solid_fill_opacity,

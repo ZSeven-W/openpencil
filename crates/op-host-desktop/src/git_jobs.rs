@@ -24,6 +24,10 @@ pub struct GitSnapshot {
     pub dirty_count: usize,
     /// Commits ahead of the upstream — gates the Push button.
     pub ahead: u32,
+    /// Commits behind the upstream — remote-settings row.
+    pub behind: u32,
+    /// `origin` remote host (e.g. `github.com`), `None` when absent.
+    pub remote_host: Option<String>,
     /// Conflicted-file count.
     pub conflicted_count: usize,
     /// Whether a merge is in progress.
@@ -115,6 +119,8 @@ fn snapshot(repo: &GitRepo) -> GitSnapshot {
     let status = repo.status().ok();
     let dirty_count = status.as_ref().map(|s| s.files.len()).unwrap_or(0);
     let ahead = status.as_ref().map(|s| s.ahead).unwrap_or(0);
+    let behind = status.as_ref().map(|s| s.behind).unwrap_or(0);
+    let remote_host = repo.origin_host();
     let conflicted_count = status
         .as_ref()
         .map(|s| {
@@ -161,6 +167,8 @@ fn snapshot(repo: &GitRepo) -> GitSnapshot {
         branches,
         dirty_count,
         ahead,
+        behind,
+        remote_host,
         conflicted_count,
         merging,
         conflicted_files,
@@ -384,7 +392,7 @@ fn compute_diff(repo: &GitRepo, target: &GitDiffTarget, locale: Locale) -> GitDi
 /// the TS `formatCompactTime`: `now` (<1 min), `{n}m` (<1 h), `{n}h`
 /// (<1 day), `yesterday` (1 day), `{n}d` (<1 week), else `YYYY-MM-DD`.
 /// `now_secs` is the wall-clock Unix time captured at snapshot.
-fn format_compact_time(ts_secs: i64, now_secs: i64) -> String {
+pub(crate) fn format_compact_time(ts_secs: i64, now_secs: i64) -> String {
     let diff = (now_secs - ts_secs).max(0);
     let min = diff / 60;
     if min < 1 {

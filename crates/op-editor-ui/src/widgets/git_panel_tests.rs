@@ -4,9 +4,9 @@
 use crate::widgets::git_panel::*;
 use crate::{Point2D, Rect};
 use op_editor_core::{
-    CloneField, CloneFormState, EditorState, GitBranchPickerMode, GitCommitSummary, GitDiffView,
-    GitFileEntry, GitOverflowView, GitPanelState, MergeConflictRow, MergeResolveFile,
-    MergeResolveState,
+    CloneField, CloneFormState, EditorState, GitBranchPickerMode, GitCandidateFile,
+    GitCommitSummary, GitDiffView, GitFileEntry, GitOverflowView, GitPanelState, MergeConflictRow,
+    MergeResolveFile, MergeResolveState,
 };
 
 fn state_with(panel: GitPanelState) -> EditorState {
@@ -241,8 +241,9 @@ fn expanded_commit_card_maps_restore_and_copy_and_shifts_later_rows() {
         Some(GitPanelHit::CopyCommitHash(0))
     );
     // Row 1 shifted down by exactly the card height; the panel grew too.
+    // (No diff loaded in this state → base card height, no patch rows.)
     let row1_expanded = panel.ready_commit_row_rects(rect)[1].origin.y;
-    assert!((row1_expanded - row1_collapsed - 84.0).abs() < 0.5);
+    assert!((row1_expanded - row1_collapsed - 104.0).abs() < 0.5);
     assert!(panel.height() > cp.height());
     // The expanded card sits below row 0's click target.
     let row0 = panel.ready_commit_row_rects(rect)[0];
@@ -413,14 +414,77 @@ fn overflow_menu_maps_its_entries() {
     let panel = GitPanel::for_editor(&s).unwrap();
     let rect = panel_rect(&panel);
     let rows = panel.overflow_row_rects(rect);
-    assert_eq!(rows.len(), 2);
+    // TS 5-item menu: switch-tracked / clear-author / remote-settings /
+    // ssh-keys / close-repo (with two dividers between groups).
+    assert_eq!(rows.len(), 5);
     assert_eq!(
         panel.hit_test(rect, centre(rows[0])),
-        Some(GitPanelHit::OverflowRemoteSettings)
+        Some(GitPanelHit::OverflowSwitchTracked)
     );
     assert_eq!(
         panel.hit_test(rect, centre(rows[1])),
+        Some(GitPanelHit::OverflowClearAuthor)
+    );
+    assert_eq!(
+        panel.hit_test(rect, centre(rows[2])),
+        Some(GitPanelHit::OverflowRemoteSettings)
+    );
+    assert_eq!(
+        panel.hit_test(rect, centre(rows[3])),
         Some(GitPanelHit::OverflowSshKeys)
+    );
+    assert_eq!(
+        panel.hit_test(rect, centre(rows[4])),
+        Some(GitPanelHit::OverflowCloseRepo)
+    );
+}
+
+#[test]
+fn tracked_picker_maps_rows_and_actions() {
+    let s = state_with(GitPanelState {
+        branch: Some("main".to_string()),
+        overflow_open: true,
+        overflow_view: GitOverflowView::TrackedPicker,
+        candidate_files: vec![
+            GitCandidateFile {
+                path: "/r/a.op".into(),
+                relative_path: "a.op".into(),
+                milestone_count: 2,
+                last_commit_time: "1h".into(),
+                last_commit_message: Some("hi".into()),
+            },
+            GitCandidateFile {
+                path: "/r/b.op".into(),
+                relative_path: "b.op".into(),
+                milestone_count: 0,
+                last_commit_time: String::new(),
+                last_commit_message: None,
+            },
+        ],
+        tracked_picker_selected: Some(0),
+        ..open_repo()
+    });
+    let panel = GitPanel::for_editor(&s).unwrap();
+    let rect = panel_rect(&panel);
+    let rows = panel.tracked_picker_row_rects(rect);
+    assert_eq!(rows.len(), 2);
+    assert_eq!(
+        panel.hit_test(rect, centre(rows[1])),
+        Some(GitPanelHit::TrackedPickerRow(1))
+    );
+    // With a selection, both bind buttons are live; Back always is.
+    let (back, bind, open) = panel.tracked_picker_footer_rects(rect);
+    assert_eq!(
+        panel.hit_test(rect, centre(back)),
+        Some(GitPanelHit::TrackedPickerBack)
+    );
+    assert_eq!(
+        panel.hit_test(rect, centre(bind)),
+        Some(GitPanelHit::TrackedPickerBind)
+    );
+    assert_eq!(
+        panel.hit_test(rect, centre(open)),
+        Some(GitPanelHit::TrackedPickerBindOpen)
     );
 }
 
@@ -430,11 +494,12 @@ fn overflow_remote_settings_subview_maps_inputs_and_back() {
         branch: Some("main".to_string()),
         overflow_open: true,
         overflow_view: GitOverflowView::RemoteSettings,
+        remotes: vec!["origin → https://example.com/r.git".to_string()],
         ..open_repo()
     });
     let panel = GitPanel::for_editor(&s).unwrap();
     let rect = panel_rect(&panel);
-    let (back, url, set, https, login) = panel.remote_settings_rects(rect);
+    let (back, url, set) = panel.remote_settings_rects(rect);
     assert_eq!(
         panel.hit_test(rect, centre(back)),
         Some(GitPanelHit::OverflowBack)
@@ -447,13 +512,12 @@ fn overflow_remote_settings_subview_maps_inputs_and_back() {
         panel.hit_test(rect, centre(set)),
         Some(GitPanelHit::SetRemote)
     );
+    // The TS remote-settings has no HTTPS-credential input — fetch is the
+    // next interactive element (a remote is configured in this state).
+    let fetch = panel.remote_settings_fetch_rect(rect);
     assert_eq!(
-        panel.hit_test(rect, centre(https)),
-        Some(GitPanelHit::HttpsInput)
-    );
-    assert_eq!(
-        panel.hit_test(rect, centre(login)),
-        Some(GitPanelHit::SetHttpsAuth)
+        panel.hit_test(rect, centre(fetch)),
+        Some(GitPanelHit::FetchRemote)
     );
 }
 

@@ -136,6 +136,60 @@ pub struct GitCommitSummary {
     pub is_initial: bool,
 }
 
+/// One `.op` candidate in the tracked-file picker (TS `GitCandidateFileInfo`).
+/// Plain data the host enumerates from the repo; the widget only paints it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GitCandidateFile {
+    /// Absolute path — the bind argument.
+    pub path: String,
+    /// Repo-relative path — the row title.
+    pub relative_path: String,
+    /// Number of commits that touched this file (the "N milestones" label).
+    pub milestone_count: u32,
+    /// Pre-formatted relative time of the last commit touching it, or empty.
+    pub last_commit_time: String,
+    /// First line of the last commit's message, if any.
+    pub last_commit_message: Option<String>,
+}
+
+/// One node-level change in a commit's semantic diff (TS `NodePatch`,
+/// rendered as `<op> <nodeId>` in the inline detail card).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CommitDiffPatch {
+    /// `add` / `remove` / `modify` / `move`.
+    pub op: String,
+    /// The affected node's id.
+    pub node_id: String,
+}
+
+/// Aggregated semantic diff of one commit against its parent — the TS
+/// `engineDiff` result that drives `GitPanelHistoryDiff`.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct CommitDiffSummary {
+    /// Distinct parent ids touched by any patch.
+    pub frames_changed: u32,
+    pub nodes_added: u32,
+    pub nodes_removed: u32,
+    pub nodes_modified: u32,
+    /// Per-node patch list (newest-first walk order).
+    pub patches: Vec<CommitDiffPatch>,
+}
+
+/// Lazy state of the expanded commit's inline diff (TS `DiffState`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CommitDiffView {
+    /// The host is computing the diff on a worker / this frame.
+    Loading,
+    /// The root commit — no parent to diff against.
+    Initial,
+    /// Diff computed, but no node changed (rare; e.g. metadata-only).
+    NoChanges,
+    /// The diff could not be computed (parse / git error). Carries the message.
+    Error(String),
+    /// Computed diff ready to render.
+    Ready(CommitDiffSummary),
+}
+
 /// One changed file in the Git panel's staging list — plain data
 /// snapshotted by the desktop host from `git status`.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -258,6 +312,10 @@ pub enum GitOverflowView {
     Menu,
     /// The remote-settings subview — origin URL + HTTPS credential.
     RemoteSettings,
+    /// The tracked-file picker subview — pick which `.op` the panel tracks.
+    TrackedPicker,
+    /// The SSH-keys subview — list keys + import / generate.
+    SshKeys,
 }
 
 /// Which sub-mode the branch-picker dropdown is showing (mirrors the
@@ -341,6 +399,29 @@ pub enum GitPanelAction {
     RestoreCommit(String),
     /// Copy the given commit hash to the OS clipboard (TS copy-hash).
     CopyHash(String),
+    /// Compute the semantic diff of `recent_commits[index]` against its
+    /// parent and store it in `expanded_commit_diff` (TS `computeDiff`,
+    /// triggered when a commit row's detail card is expanded).
+    LoadCommitDiff(usize),
+    /// Overflow "切换跟踪文件" — enumerate the repo's `.op` candidates into
+    /// `candidate_files` and open the tracked-file picker subview.
+    EnterTrackedPicker,
+    /// Bind the panel to the given `.op` path (TS `bindTrackedFile`). The
+    /// `bool` is "also load it into the editor" (TS "track and open").
+    BindTrackedFile(String, bool),
+    /// Overflow "清除提交作者" — clear the stored commit-author identity.
+    ClearAuthor,
+    /// Overflow "关闭仓库" — unbind the repository and reset to empty state.
+    CloseRepo,
+    /// Overflow "SSH 密钥" — enumerate stored SSH keys + open the subview.
+    EnterSshKeys,
+    /// SSH subview "导入现有密钥" — pick a private key file and import it.
+    ImportSshKey,
+    /// Remote-settings "获取" — run `git fetch` on the origin remote.
+    FetchRemote,
+    /// Commit-signature form "保存" — write the name/email drafts into the
+    /// repo identity, then re-fire the pending milestone commit.
+    SaveAuthor,
 }
 
 /// Which clone-form text field has keyboard focus.
@@ -426,6 +507,14 @@ pub struct GitPanelState {
     /// Commits the current branch is ahead of its upstream — gates the
     /// Push button (TS disables Push when `ahead === 0`).
     pub ahead: u32,
+    /// Commits the local branch is behind its upstream (remote-settings row).
+    pub behind: u32,
+    /// The `origin` remote's host (e.g. `github.com`), parsed host-side.
+    /// Drives the remote-settings credentials row; `None` = no host detected.
+    pub remote_host: Option<String>,
+    /// Stored-credential kind for `remote_host`: `"token"` / `"ssh"` /
+    /// `"none"` (empty when there's no host). Host-filled.
+    pub stored_auth: String,
     /// Number of files with unresolved merge conflicts.
     pub conflicted_count: usize,
     /// Whether a merge is in progress — drives the panel's conflict
@@ -453,10 +542,36 @@ pub struct GitPanelState {
     /// the commit list changes so it can't point at a stale commit
     /// (TS keys the card by hash; the widget layer keys by index).
     pub expanded_commit: Option<usize>,
+    /// Lazy semantic diff for the expanded commit (TS `GitPanelHistoryDiff`).
+    /// `None` when no card is open; otherwise loading / initial / ready /
+    /// error. The host fills it after a `LoadCommitDiff` action.
+    pub expanded_commit_diff: Option<CommitDiffView>,
+    /// Candidate `.op` files for the tracked-file picker subview, host-filled
+    /// when the picker opens (TS `RepoMeta.candidateFiles`).
+    pub candidate_files: Vec<GitCandidateFile>,
+    /// The picker's currently-selected candidate index, if any.
+    pub tracked_picker_selected: Option<usize>,
+    /// SSH key names for the SSH-keys subview (host-filled on open).
+    pub ssh_keys: Vec<String>,
     /// Commit-message draft typed into the panel's input box.
     pub commit_message: String,
     /// Whether the commit-message input holds keyboard focus.
     pub commit_focused: bool,
+    /// Set when a milestone "save" was skipped because the saved design
+    /// matched the last commit — the ready view shows a "未检测到变更" hint
+    /// under the commit box. Cleared when the user re-engages the input.
+    pub commit_no_changes: bool,
+    /// Whether the commit-signature form (`提交署名`) is showing in place of
+    /// the commit box — raised when a commit is attempted with no committer
+    /// identity (TS `authorPromptVisible`). The pending message stays in
+    /// `commit_message` and the commit re-fires after a successful save.
+    pub author_prompt: bool,
+    /// Name / email drafts typed into the commit-signature form.
+    pub author_name_draft: String,
+    pub author_email_draft: String,
+    /// Which signature-form field holds keyboard focus.
+    pub author_name_focused: bool,
+    pub author_email_focused: bool,
     /// Caret-blink anchor (ms) for the commit input — reset on focus +
     /// each keystroke so the caret stays solid while typing, then
     /// blinks (same cadence as the chat / property inputs).
