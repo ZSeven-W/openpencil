@@ -150,6 +150,11 @@ fn serve_connection<S: std::io::Read + std::io::Write>(
             r#"{"jsonrpc":"2.0","error":{"code":-32000,"message":"Invalid or missing session ID"},"id":null}"#,
         );
     }
+    if let Some(response) =
+        crate::mcp_serve::file_path::process_message_for_file_path_arg(None, &req.body)?
+    {
+        return write_json_rpc_response(stream, &response);
+    }
     let mut state = request_snapshot(req_tx)?;
     let response = crate::mcp_serve::process_message_with_applier(
         &mut state,
@@ -166,6 +171,13 @@ fn serve_connection<S: std::io::Read + std::io::Write>(
         },
     )?
     .unwrap_or_default();
+    write_json_rpc_response(stream, &response)
+}
+
+fn write_json_rpc_response<S: std::io::Write>(
+    stream: &mut S,
+    response: &str,
+) -> Result<(), String> {
     if response.is_empty() {
         crate::mcp_serve::write_mcp_http_response(stream, "202 Accepted", "")
     } else {

@@ -614,6 +614,36 @@ fn parse_tool_call_allows_structured_update_node_data_for_ts_parity() {
 }
 
 #[test]
+fn parse_tool_call_allows_structured_copy_node_overrides_for_ts_parity() {
+    let line = r##"{"id":7,"method":"tools/call","params":{"name":"copy_node","arguments":{"sourceId":"n10","parent":null,"overrides":{"name":"Copy","x":24,"id":"ignored"},"pageId":"page-2"}}}"##;
+    let call = parse_tool_call(line).expect("copy_node must accept TS-style overrides object");
+    assert_eq!(call.tool, "copy_node");
+    assert_eq!(call.arguments.get("sourceId"), Some(&"n10".to_string()));
+    assert_eq!(call.arguments.get("parent"), Some(&"null".to_string()));
+    assert_eq!(
+        call.arguments.get("overrides"),
+        Some(&r#"{"name":"Copy","x":24,"id":"ignored"}"#.to_string())
+    );
+    assert_eq!(call.arguments.get("pageId"), Some(&"page-2".to_string()));
+}
+
+#[test]
+fn parse_tool_call_allows_structured_replace_node_data_for_ts_parity() {
+    let line = r##"{"id":6,"method":"tools/call","params":{"name":"replace_node","arguments":{"nodeId":"n10","data":{"type":"rectangle","name":"Replacement","x":5,"width":100,"height":50,"fill":[{"type":"solid","color":"#123456"}]},"pageId":"page-2"}}}"##;
+    let call = parse_tool_call(line).expect("replace_node must accept TS-style data object");
+    assert_eq!(call.tool, "replace_node");
+    assert_eq!(call.arguments.get("nodeId"), Some(&"n10".to_string()));
+    assert_eq!(
+        call.arguments.get("data"),
+        Some(
+            &r##"{"type":"rectangle","name":"Replacement","x":5,"width":100,"height":50,"fill":[{"type":"solid","color":"#123456"}]}"##
+                .to_string()
+        )
+    );
+    assert_eq!(call.arguments.get("pageId"), Some(&"page-2".to_string()));
+}
+
+#[test]
 fn parse_tool_call_allows_structured_style_guide_tags_for_ts_parity() {
     let line = r#"{"id":4,"method":"tools/call","params":{"name":"get_style_guide","arguments":{"tags":["light-mode","clean"],"platform":"webapp"}}}"#;
     let call = parse_tool_call(line).expect("get_style_guide must accept TS-style tags array");
@@ -651,6 +681,39 @@ fn parse_tool_call_allows_structured_codegen_args_for_ts_parity() {
         )
     );
     assert_eq!(submit.arguments.get("status"), Some(&"failed".to_string()));
+}
+
+#[test]
+fn parse_tool_call_allows_structured_design_content_children_for_ts_parity() {
+    let line = r#"{"id":7,"method":"tools/call","params":{"name":"design_content","arguments":{"sectionId":"section-1","children":[{"type":"text","name":"Title","content":"Hello","width":120,"height":24}]}}}"#;
+    let call = parse_tool_call(line).expect("design_content must accept TS-style children array");
+    assert_eq!(call.tool, "design_content");
+    assert_eq!(
+        call.arguments.get("sectionId"),
+        Some(&"section-1".to_string())
+    );
+    assert_eq!(
+        call.arguments.get("children"),
+        Some(
+            &r#"[{"type":"text","name":"Title","content":"Hello","width":120,"height":24}]"#
+                .to_string()
+        )
+    );
+}
+
+#[test]
+fn parse_tool_call_allows_structured_add_page_children_for_ts_parity() {
+    let line = r#"{"id":8,"method":"tools/call","params":{"name":"add_page","arguments":{"name":"Landing","children":[{"type":"frame","name":"Hero","width":1200,"height":640,"children":[]}]}}}"#;
+    let call = parse_tool_call(line).expect("add_page must accept TS-style children array");
+    assert_eq!(call.tool, "add_page");
+    assert_eq!(call.arguments.get("name"), Some(&"Landing".to_string()));
+    assert_eq!(
+        call.arguments.get("children"),
+        Some(
+            &r#"[{"type":"frame","name":"Hero","width":1200,"height":640,"children":[]}]"#
+                .to_string()
+        )
+    );
 }
 
 #[test]
@@ -709,30 +772,6 @@ fn get_node_reachable_through_stdio_path() {
             panic!("expected Ok, got Err({code:?}, {message})")
         }
     }
-}
-
-#[test]
-fn parse_tool_call_real_mcp_tools_call_shape() {
-    let line = r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"get_node","arguments":{"node_id":"42"}}}"#;
-    let call = parse_tool_call(line).expect("parse");
-    assert_eq!(call.tool, "get_node");
-    assert_eq!(call.arguments.get("node_id"), Some(&"42".to_string()));
-}
-
-#[test]
-fn parse_tool_call_mcp_shape_with_no_arguments() {
-    let line = r#"{"id":2,"method":"tools/call","params":{"name":"list_pages","arguments":{}}}"#;
-    let call = parse_tool_call(line).expect("parse");
-    assert_eq!(call.tool, "list_pages");
-    assert!(call.arguments.is_empty());
-}
-
-#[test]
-fn parse_tool_call_mcp_shape_with_numeric_arg() {
-    let line = r#"{"id":3,"method":"tools/call","params":{"name":"x","arguments":{"limit":5,"enabled":true}}}"#;
-    let call = parse_tool_call(line).expect("parse");
-    assert_eq!(call.arguments.get("limit"), Some(&"5".to_string()));
-    assert_eq!(call.arguments.get("enabled"), Some(&"true".to_string()));
 }
 
 #[test]

@@ -9,7 +9,7 @@
 use super::test_fixtures::sample;
 use super::write_tools::*;
 use super::{EditorCommand, McpTool, ToolErrorCode, ToolOutcome};
-use op_editor_core::NodeId;
+use op_editor_core::{NodeId, PenNodeExt};
 use std::collections::BTreeMap;
 
 #[test]
@@ -47,6 +47,7 @@ fn replace_node_validates_required_args() {
                 height,
                 fill_hex,
                 drop_children,
+                page_id,
             },
         ) => {
             assert_eq!(node_id.as_str(), "n11");
@@ -61,9 +62,91 @@ fn replace_node_validates_required_args() {
                 !drop_children,
                 "default opt-out keeps container subtrees safe"
             );
+            assert!(page_id.is_none());
         }
         other => panic!("expected ReplaceNode, got {other:?}"),
     }
+}
+
+#[test]
+fn replace_node_accepts_ts_node_id_data_and_page_args() {
+    let tool = replace_node_snapshot();
+    let mut args = BTreeMap::new();
+    args.insert("nodeId".into(), "n11".into());
+    args.insert(
+        "data".into(),
+        r##"{"type":"rectangle","name":"Replacement","x":10,"y":20,"width":100,"height":30,"fill":[{"type":"solid","color":"#112233"}]}"##.into(),
+    );
+    args.insert("pageId".into(), "page-2".into());
+    match tool.call(&args) {
+        ToolOutcome::OkWithCommand(
+            _,
+            EditorCommand::ReplaceNode {
+                node_id,
+                kind,
+                name,
+                fill_hex,
+                page_id,
+                ..
+            },
+        ) => {
+            assert_eq!(node_id.as_str(), "n11");
+            assert_eq!(kind, "rect");
+            assert_eq!(name, "Replacement");
+            assert_eq!(fill_hex.as_deref(), Some("#112233"));
+            assert_eq!(page_id.as_deref(), Some("page-2"));
+        }
+        other => panic!("expected ReplaceNode command with TS args, got {other:?}"),
+    }
+}
+
+#[test]
+fn replace_node_accepts_ts_data_tree_as_subtree() {
+    let tool = replace_node_snapshot();
+    let mut args = BTreeMap::new();
+    args.insert("nodeId".into(), "n11".into());
+    args.insert(
+        "data".into(),
+        r##"{"type":"frame","name":"Card","width":200,"height":120,"children":[{"type":"text","name":"Title","content":"Hello","width":100,"height":24}]}"##
+            .into(),
+    );
+
+    match tool.call(&args) {
+        ToolOutcome::OkWithCommand(
+            _,
+            EditorCommand::ReplaceSubtree {
+                node_id,
+                node,
+                drop_children,
+                page_id,
+            },
+        ) => {
+            assert_eq!(node_id.as_str(), "n11");
+            assert_eq!(node.base().name.as_deref(), Some("Card"));
+            assert_eq!(node.children().expect("children").len(), 1);
+            assert!(!drop_children);
+            assert!(page_id.is_none());
+        }
+        other => panic!("expected ReplaceSubtree command from TS data tree, got {other:?}"),
+    }
+}
+
+#[test]
+fn replace_node_preserves_ts_leaf_data_with_extra_fields_as_subtree() {
+    let mut args = BTreeMap::new();
+    args.insert("nodeId".into(), "n11".into());
+    args.insert("data".into(), r##"{"type":"text","name":"Hero","content":"Welcome","width":240,"height":48,"fontSize":24}"##.into());
+
+    let ToolOutcome::OkWithCommand(_, EditorCommand::ReplaceSubtree { node, .. }) =
+        replace_node_snapshot().call(&args)
+    else {
+        panic!("expected ReplaceSubtree preserving TS leaf data");
+    };
+    let jian_ops_schema::node::PenNode::Text(text) = node.as_ref() else {
+        panic!("expected text node, got {node:?}");
+    };
+    assert_eq!(text.base.name.as_deref(), Some("Hero"));
+    assert_eq!(text.font_size, Some(24.0));
 }
 
 #[test]
@@ -109,6 +192,7 @@ fn replace_node_command_swaps_leaf_at_same_slot() {
         height: 50,
         fill_hex: Some("#ff0000".into()),
         drop_children: false,
+        page_id: None,
     }));
 }
 
@@ -125,6 +209,7 @@ fn replace_node_command_rejects_unknown_id() {
         height: 10,
         fill_hex: None,
         drop_children: false,
+        page_id: None,
     }));
 }
 
@@ -142,6 +227,7 @@ fn replace_node_command_refuses_to_drop_container_children() {
         height: 50,
         fill_hex: None,
         drop_children: false,
+        page_id: None,
     }));
     // With explicit consent the swap succeeds.
     assert!(s.apply(EditorCommand::ReplaceNode {
@@ -154,6 +240,7 @@ fn replace_node_command_refuses_to_drop_container_children() {
         height: 50,
         fill_hex: None,
         drop_children: true,
+        page_id: None,
     }));
 }
 

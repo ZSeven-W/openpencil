@@ -498,6 +498,9 @@ fn parse_flat_object_body(body: &str, tool: &str) -> Option<BTreeMap<String, Str
 }
 
 fn structured_arg_allowed(tool: &str, key: &str) -> bool {
+    if tool.starts_with("add_") {
+        return !key.is_empty();
+    }
     matches!(
         (tool, key),
         ("set_variables", "variables")
@@ -511,8 +514,14 @@ fn structured_arg_allowed(tool: &str, key: &str) -> bool {
             | ("replace_all_matching_properties", "properties")
             | ("codegen_plan", "plan")
             | ("codegen_submit_chunk", "result")
+            | ("copy_node", "overrides")
             | ("insert_node", "data")
             | ("update_node", "data")
+            | ("replace_node", "data")
+            | ("design_skeleton", "rootFrame")
+            | ("design_skeleton", "sections")
+            | ("design_skeleton", "styleGuide")
+            | ("design_content", "children")
             | ("get_style_guide", "tags")
     )
 }

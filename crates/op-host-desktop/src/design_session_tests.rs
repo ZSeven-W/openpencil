@@ -216,6 +216,7 @@ fn pump_commands_refits_viewport_after_design_insert() {
             op: DesignCmdOp::Apply(EditorCommand::InsertSubtree {
                 nodes: vec![mobile_root()],
                 parent_id: op_editor_core::NodeId::NONE,
+                page_id: None,
             }),
             ack: ack_tx,
         })

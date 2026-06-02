@@ -15,9 +15,11 @@ use jian_ops_schema::node::PenNode;
 use jian_ops_schema::variable::{VariableKind, VariableScalar};
 use op_editor_core::geometry::{aggregate_bounds, DocRect};
 use op_editor_core::pen_node_ext::PenNodeExt;
+use op_editor_core::walkers::find_node;
 use op_editor_core::{EditorState, NodeId};
 
 use super::{McpTool, ToolErrorCode, ToolOutcome};
+use crate::read_nodes::node_snapshot_value;
 
 // --- Shared helpers --------------------------------------------------
 
@@ -109,13 +111,35 @@ pub struct GetSelection {
     pub y: i32,
     pub width: i32,
     pub height: i32,
+    pub selected_ids_json: String,
+    pub active_page_id: String,
+    pub selected_nodes: Vec<PenNode>,
 }
 
 impl McpTool for GetSelection {
     fn name(&self) -> &str {
         "get_selection"
     }
-    fn call(&self, _args: &BTreeMap<String, String>) -> ToolOutcome {
+    fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
+        let depth = match parse_selection_depth(args) {
+            Ok(depth) => depth,
+            Err((code, msg)) => return ToolOutcome::Err(code, msg),
+        };
+        let nodes: Vec<_> = self
+            .selected_nodes
+            .iter()
+            .map(|node| node_snapshot_value(node, depth))
+            .collect();
+        let nodes_json = match serde_json::to_string(&nodes) {
+            Ok(json) => json,
+            Err(e) => {
+                return ToolOutcome::Err(
+                    ToolErrorCode::Internal,
+                    format!("serialize selection nodes failed: {e}"),
+                );
+            }
+        };
+
         let mut out = BTreeMap::new();
         out.insert("selected_id".into(), self.selected_id.clone());
         out.insert("kind".into(), self.kind.clone());
@@ -123,12 +147,31 @@ impl McpTool for GetSelection {
         out.insert("y".into(), self.y.to_string());
         out.insert("width".into(), self.width.to_string());
         out.insert("height".into(), self.height.to_string());
+        out.insert("selectedIds".into(), self.selected_ids_json.clone());
+        out.insert("activePageId".into(), self.active_page_id.clone());
+        out.insert("nodes".into(), nodes_json);
         ToolOutcome::Ok(out)
     }
 }
 
 /// Snapshot the editor selection into a `GetSelection` tool.
 pub fn selection_snapshot(state: &EditorState) -> GetSelection {
+    let selected_ids: Vec<String> = state
+        .selection
+        .set
+        .iter()
+        .filter(|id| id.is_real())
+        .map(|id| id.as_str().to_string())
+        .collect();
+    let selected_ids_json = serde_json::to_string(&selected_ids).unwrap_or_else(|_| "[]".into());
+    let selected_nodes: Vec<PenNode> = state
+        .selection
+        .set
+        .iter()
+        .filter(|id| id.is_real())
+        .filter_map(|id| find_node(state.active_children(), id).cloned())
+        .collect();
+    let active_page_id = active_page_id(state);
     let selected_id = state.selection.anchor.as_str().to_string();
     if !state.selection.anchor.is_real() {
         return GetSelection {
@@ -138,6 +181,9 @@ pub fn selection_snapshot(state: &EditorState) -> GetSelection {
             y: 0,
             width: 0,
             height: 0,
+            selected_ids_json,
+            active_page_id,
+            selected_nodes,
         };
     }
     match state.selected_node() {
@@ -150,6 +196,9 @@ pub fn selection_snapshot(state: &EditorState) -> GetSelection {
                 y,
                 width: w,
                 height: h,
+                selected_ids_json,
+                active_page_id,
+                selected_nodes,
             }
         }
         None => GetSelection {
@@ -159,7 +208,35 @@ pub fn selection_snapshot(state: &EditorState) -> GetSelection {
             y: 0,
             width: 0,
             height: 0,
+            selected_ids_json,
+            active_page_id,
+            selected_nodes,
         },
+    }
+}
+
+fn parse_selection_depth(args: &BTreeMap<String, String>) -> Result<i32, (ToolErrorCode, String)> {
+    match args.get("readDepth").or_else(|| args.get("depth")) {
+        None => Ok(2),
+        Some(raw) => raw.parse::<i32>().map_err(|_| {
+            (
+                ToolErrorCode::InvalidArgument,
+                format!("readDepth must be an i32, got {raw:?}"),
+            )
+        }),
+    }
+}
+
+fn active_page_id(state: &EditorState) -> String {
+    match state.doc.pages.as_ref() {
+        Some(pages) if !pages.is_empty() => {
+            let active_idx = state
+                .ui
+                .active_page_index
+                .min(pages.len().saturating_sub(1));
+            pages[active_idx].id.clone()
+        }
+        _ => "0".into(),
     }
 }
 

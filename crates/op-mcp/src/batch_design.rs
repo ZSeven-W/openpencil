@@ -8,6 +8,10 @@ use jian_ops_schema::node::PenNode;
 use op_editor_core::{NodeId, PenNodeExt};
 
 use super::batch_direct_ops::parse_single_direct_operation;
+use super::batch_layered::{
+    dispatch_design_content, dispatch_design_refine, dispatch_design_skeleton,
+};
+use super::batch_page::{command_with_outer_page_id, optional_page_id};
 use super::write_tools::{validate_hex, ALLOWED_KINDS};
 use super::{BatchInsertItem, EditorCommand, McpTool, ToolErrorCode, ToolOutcome};
 
@@ -59,6 +63,7 @@ fn dispatch_batch_design(
     args: &BTreeMap<String, String>,
     phase: Option<&'static str>,
 ) -> ToolOutcome {
+    let page_id = optional_page_id(args);
     if let Some(operations) = args.get("operations") {
         return match parse_operations(operations) {
             Ok(ParsedOperations::Insert {
@@ -72,7 +77,14 @@ fn dispatch_batch_design(
                 if let Some(phase) = phase {
                     out.insert("phase".into(), phase.into());
                 }
-                ToolOutcome::OkWithCommand(out, EditorCommand::InsertSubtree { nodes, parent_id })
+                ToolOutcome::OkWithCommand(
+                    out,
+                    EditorCommand::InsertSubtree {
+                        nodes,
+                        parent_id,
+                        page_id,
+                    },
+                )
             }
             Ok(ParsedOperations::Direct(command)) => {
                 let mut out = BTreeMap::new();
@@ -81,7 +93,7 @@ fn dispatch_batch_design(
                 if let Some(phase) = phase {
                     out.insert("phase".into(), phase.into());
                 }
-                ToolOutcome::OkWithCommand(out, command)
+                ToolOutcome::OkWithCommand(out, command_with_outer_page_id(command, page_id))
             }
             Err(e) => ToolOutcome::Err(ToolErrorCode::InvalidArgument, e),
         };
@@ -104,7 +116,7 @@ fn dispatch_batch_design(
             if let Some(phase) = phase {
                 out.insert("phase".into(), phase.into());
             }
-            ToolOutcome::OkWithCommand(out, EditorCommand::BatchInsert { items })
+            ToolOutcome::OkWithCommand(out, EditorCommand::BatchInsert { items, page_id })
         }
         Err(e) => ToolOutcome::Err(ToolErrorCode::InvalidArgument, e),
     }
@@ -470,6 +482,9 @@ impl McpTool for DesignSkeleton {
         "design_skeleton"
     }
     fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
+        if args.contains_key("rootFrame") || args.contains_key("sections") {
+            return dispatch_design_skeleton(args);
+        }
         dispatch_phase(args, "skeleton")
     }
 }
@@ -485,6 +500,9 @@ impl McpTool for DesignContent {
         "design_content"
     }
     fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
+        if args.contains_key("children") || args.contains_key("sectionId") {
+            return dispatch_design_content(args);
+        }
         dispatch_phase(args, "content")
     }
 }
@@ -493,13 +511,18 @@ pub fn design_content_snapshot() -> DesignContent {
 }
 
 /// `design_refine` — phase 3 of the layered design workflow.
-/// Mirrors `batch_design` apply semantics; tagged `phase=refine`.
+/// Accepts the TS layered-workflow `rootId` shape and emits a
+/// targeted refine command. Legacy batch-like payloads still route
+/// through `dispatch_phase` for compatibility.
 pub struct DesignRefine;
 impl McpTool for DesignRefine {
     fn name(&self) -> &str {
         "design_refine"
     }
     fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
+        if args.contains_key("rootId") || args.contains_key("root_id") {
+            return dispatch_design_refine(args);
+        }
         dispatch_phase(args, "refine")
     }
 }

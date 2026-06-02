@@ -128,6 +128,93 @@ fn live_mcp_http_server_applies_write_requests_to_editor_state() {
 }
 
 #[test]
+fn live_mcp_http_server_routes_file_path_requests_to_target_file() {
+    use std::io::{Read, Write};
+    use std::net::{TcpListener, TcpStream};
+    use std::sync::mpsc;
+    use std::time::{Duration, Instant};
+
+    fn unused_port() -> u16 {
+        let listener = TcpListener::bind(("127.0.0.1", 0)).expect("bind ephemeral port");
+        listener.local_addr().expect("local addr").port()
+    }
+
+    fn post_json(port: u16, body: &str) -> String {
+        let mut stream = TcpStream::connect(("127.0.0.1", port)).expect("connect MCP server");
+        let req = format!(
+            "POST /mcp HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: {}\r\n\r\n{}",
+            body.len(),
+            body
+        );
+        stream.write_all(req.as_bytes()).expect("write request");
+        let mut out = String::new();
+        stream.read_to_string(&mut out).expect("read response");
+        out
+    }
+
+    fn write_named_doc(path: &std::path::Path, node_id: &str, name: &str) {
+        std::fs::write(
+            path,
+            format!(
+                r##"{{
+  "version": "1.0.0",
+  "children": [
+    {{
+      "id": "{node_id}",
+      "type": "rectangle",
+      "name": "{name}",
+      "x": 0,
+      "y": 0,
+      "width": 100,
+      "height": 60,
+      "fill": [{{ "type": "solid", "color": "#FFFFFF" }}]
+    }}
+  ]
+}}"##
+            ),
+        )
+        .expect("write doc");
+    }
+
+    let port = unused_port();
+    let mut server = mcp_live::McpLiveServer::start(port).expect("start MCP server");
+    let mut state = op_editor_core::EditorState::new();
+    let dir = std::env::temp_dir().join(format!(
+        "openpencil-live-mcp-filepath-{}",
+        std::process::id()
+    ));
+    std::fs::create_dir_all(&dir).expect("temp dir");
+    let alternate_path = dir.join("alternate.op");
+    write_named_doc(&alternate_path, "n2", "Alternate");
+    let file_path_json =
+        serde_json::to_string(&alternate_path.to_string_lossy()).expect("path json");
+    let body = format!(
+        r#"{{"jsonrpc":"2.0","id":31,"method":"tools/call","params":{{"name":"batch_get","arguments":{{"filePath":{file_path_json},"readDepth":1}}}}}}"#
+    );
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        let _ = tx.send(post_json(port, &body));
+    });
+
+    let started = Instant::now();
+    let response = loop {
+        server.pump(&mut state);
+        if let Ok(response) = rx.try_recv() {
+            break response;
+        }
+        assert!(
+            started.elapsed() < Duration::from_secs(2),
+            "MCP request timed out"
+        );
+        std::thread::sleep(Duration::from_millis(10));
+    };
+
+    assert!(response.starts_with("HTTP/1.1 200 OK"), "{response}");
+    assert!(response.contains("Alternate"), "{response}");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
 fn startup_mcp_bootstrap_starts_live_server_for_enabled_cli() {
     let mut app = DesktopApp::new(None);
     let settings = &mut app.host.editor_state_mut().editor_ui.agent_settings;
@@ -165,4 +252,75 @@ fn startup_mcp_bootstrap_starts_live_server_for_enabled_cli() {
         app.mcp_server.as_ref().expect("server").port(),
         "settings should reflect the bound port so the server is not restarted on every reconcile"
     );
+}
+
+#[test]
+fn startup_mcp_bootstrap_updates_cli_config_after_port_fallback() {
+    use std::net::TcpListener;
+
+    let busy = TcpListener::bind(("127.0.0.1", 0)).expect("bind busy port");
+    let busy_port = busy.local_addr().expect("busy port addr").port();
+    let codex_home = std::env::temp_dir().join(format!(
+        "openpencil-mcp-bootstrap-codex-{}",
+        std::process::id()
+    ));
+    struct CodexHomeGuard(Option<std::ffi::OsString>);
+    impl Drop for CodexHomeGuard {
+        fn drop(&mut self) {
+            if let Some(value) = self.0.take() {
+                std::env::set_var("CODEX_HOME", value);
+            } else {
+                std::env::remove_var("CODEX_HOME");
+            }
+        }
+    }
+    let _guard = CodexHomeGuard(std::env::var_os("CODEX_HOME"));
+    std::env::set_var("CODEX_HOME", &codex_home);
+
+    let mut app = DesktopApp::new(None);
+    let settings = &mut app.host.editor_state_mut().editor_ui.agent_settings;
+    settings.mcp_server.port = busy_port;
+    settings.mcp_server.running = false;
+    let codex_idx = op_editor_core::agent_settings::McpCli::ALL
+        .iter()
+        .position(|cli| *cli == op_editor_core::agent_settings::McpCli::Codex)
+        .expect("Codex CLI index");
+    settings.mcp_cli_enabled[codex_idx] = true;
+
+    assert!(app.bootstrap_mcp_runtime_from_settings());
+
+    let bound_port = app.mcp_server.as_ref().expect("server").port();
+    assert_ne!(bound_port, busy_port);
+    let codex_config = std::fs::read_to_string(codex_home.join("config.toml"))
+        .expect("Codex config should be written");
+    assert!(
+        codex_config.contains(&format!("http://127.0.0.1:{bound_port}/mcp")),
+        "{codex_config}"
+    );
+    assert!(
+        !codex_config.contains(&format!("http://127.0.0.1:{busy_port}/mcp")),
+        "{codex_config}"
+    );
+
+    let _ = std::fs::remove_dir_all(codex_home);
+}
+
+#[test]
+fn manual_mcp_start_falls_back_to_available_port_when_requested_port_is_busy() {
+    use std::net::TcpListener;
+
+    let busy = TcpListener::bind(("127.0.0.1", 0)).expect("bind busy port");
+    let busy_port = busy.local_addr().expect("busy port addr").port();
+    let mut app = DesktopApp::new(None);
+    let settings = &mut app.host.editor_state_mut().editor_ui.agent_settings;
+    settings.mcp_server.port = busy_port;
+    settings.mcp_server.running = true;
+
+    assert!(app.reconcile_mcp_server_from_settings());
+
+    let settings = &app.host.editor_state().editor_ui.agent_settings;
+    let server = app.mcp_server.as_ref().expect("server should start");
+    assert!(settings.mcp_server.running);
+    assert_ne!(server.port(), busy_port);
+    assert_eq!(settings.mcp_server.port, server.port());
 }

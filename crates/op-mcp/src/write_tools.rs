@@ -7,8 +7,9 @@
 //! canonical `.op` schema's string ids (`NodeId`), not the old `u64`.
 //! `parse_node_id` accepts any non-empty string.
 
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, fs};
 
+use jian_ops_schema::node::PenNode;
 use jian_ops_schema::variable::VariableKind;
 use op_editor_core::EditorState;
 use op_editor_core::NodeId;
@@ -16,6 +17,8 @@ use serde_json::Value;
 
 use super::{EditorCommand, McpTool, ToolErrorCode, ToolOutcome};
 use crate::insert_node_args::{insert_node_params, InsertNodeParams};
+use crate::insert_node_data::ts_data_node;
+use crate::update_node_data::ts_update_patch_json;
 
 /// Parse a `node_id`-style argument into a `NodeId`. Node ids are
 /// canonical `.op` schema strings — any non-empty string is valid; an
@@ -137,6 +140,16 @@ impl McpTool for InsertNode {
         "insert_node"
     }
     fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
+        match ts_data_tree_command(args) {
+            Ok(Some(command)) => {
+                let mut out = BTreeMap::new();
+                out.insert("wrote".into(), "true".into());
+                out.insert("count".into(), "1".into());
+                return ToolOutcome::OkWithCommand(out, command);
+            }
+            Ok(None) => {}
+            Err(e) => return e,
+        }
         let params = match insert_node_params(args) {
             Ok(params) => params,
             Err(e) => return e,
@@ -209,25 +222,40 @@ pub(super) const ALLOWED_KINDS: &[&str] = &[
     "frame", "group", "rect", "ellipse", "polygon", "line", "text", "path",
 ];
 
-// `ToolOutcome` is the shared MCP outcome type — see `parse_node_id`.
-#[allow(clippy::result_large_err)]
-fn parse_i32_arg(args: &BTreeMap<String, String>, key: &str) -> Result<i32, ToolOutcome> {
-    let Some(raw) = args.get(key) else {
-        return Err(ToolOutcome::Err(
-            ToolErrorCode::MissingArgument,
-            format!("{key} is required"),
-        ));
-    };
-    raw.parse::<i32>().map_err(|_| {
-        ToolOutcome::Err(
-            ToolErrorCode::InvalidArgument,
-            format!("{key} must be a decimal i32, got {raw:?}"),
-        )
-    })
-}
-
 pub fn insert_node_snapshot() -> InsertNode {
     InsertNode
+}
+
+#[allow(clippy::result_large_err)]
+fn ts_data_tree_command(
+    args: &BTreeMap<String, String>,
+) -> Result<Option<EditorCommand>, ToolOutcome> {
+    let Some(node) = ts_data_tree_node(args)? else {
+        return Ok(None);
+    };
+    let parent_id = args
+        .get("parent")
+        .or_else(|| args.get("parent_id"))
+        .or_else(|| args.get("target_parent_id"))
+        .map(|s| root_or_node_id(s))
+        .unwrap_or(NodeId::NONE);
+    let page_id = args
+        .get("pageId")
+        .or_else(|| args.get("page_id"))
+        .or_else(|| args.get("page"))
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .map(str::to_string);
+    Ok(Some(EditorCommand::InsertSubtree {
+        nodes: vec![node],
+        parent_id,
+        page_id,
+    }))
+}
+
+#[allow(clippy::result_large_err)]
+fn ts_data_tree_node(args: &BTreeMap<String, String>) -> Result<Option<PenNode>, ToolOutcome> {
+    ts_data_node(args)
 }
 
 /// First-party `update_node` tool — patch fields on an existing node.
@@ -242,6 +270,29 @@ impl McpTool for UpdateNode {
             Ok(v) => v,
             Err(e) => return e,
         };
+        match ts_update_patch_json(args) {
+            Ok(Some(patch_json)) => {
+                let page_id = args
+                    .get("pageId")
+                    .or_else(|| args.get("page_id"))
+                    .or_else(|| args.get("page"))
+                    .map(|s| s.trim())
+                    .filter(|s| !s.is_empty())
+                    .map(str::to_string);
+                let mut out = BTreeMap::new();
+                out.insert("wrote".into(), "true".into());
+                return ToolOutcome::OkWithCommand(
+                    out,
+                    EditorCommand::PatchNodeData {
+                        node_id,
+                        patch_json,
+                        page_id,
+                    },
+                );
+            }
+            Ok(None) => {}
+            Err(e) => return e,
+        }
         let patch_args = match update_patch_args(args) {
             Ok(v) => v,
             Err(e) => return e,
@@ -486,16 +537,51 @@ impl McpTool for ReplaceNode {
         "replace_node"
     }
     fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
-        let node_id = match parse_node_id(args, "node_id") {
+        let node_id = match parse_node_id_alias(args, "node_id", "nodeId") {
             Ok(v) => v,
             Err(e) => return e,
         };
-        let kind = match args.get("kind") {
-            Some(s) => s.clone(),
-            None => {
-                return ToolOutcome::Err(ToolErrorCode::MissingArgument, "kind is required".into());
+        match ts_data_tree_node(args) {
+            Ok(Some(node)) => {
+                let drop_children = match parse_drop_children_arg(args) {
+                    Ok(v) => v,
+                    Err(e) => return e,
+                };
+                let page_id = args
+                    .get("pageId")
+                    .or_else(|| args.get("page_id"))
+                    .or_else(|| args.get("page"))
+                    .map(|s| s.trim())
+                    .filter(|s| !s.is_empty())
+                    .map(str::to_string);
+                let mut out = BTreeMap::new();
+                out.insert("wrote".into(), "true".into());
+                return ToolOutcome::OkWithCommand(
+                    out,
+                    EditorCommand::ReplaceSubtree {
+                        node_id,
+                        node: Box::new(node),
+                        drop_children,
+                        page_id,
+                    },
+                );
             }
+            Ok(None) => {}
+            Err(e) => return e,
+        }
+        let params = match insert_node_params(args) {
+            Ok(params) => params,
+            Err(e) => return e,
         };
+        let InsertNodeParams {
+            kind,
+            name,
+            x,
+            y,
+            width,
+            height,
+            fill_hex,
+        } = params;
         if !ALLOWED_KINDS.iter().any(|k| *k == kind) {
             return ToolOutcome::Err(
                 ToolErrorCode::InvalidArgument,
@@ -505,55 +591,31 @@ impl McpTool for ReplaceNode {
                 ),
             );
         }
-        let name = match args.get("name") {
-            Some(s) => s.clone(),
-            None => {
-                return ToolOutcome::Err(ToolErrorCode::MissingArgument, "name is required".into());
-            }
-        };
-        let x = match parse_i32_arg(args, "x") {
-            Ok(v) => v,
-            Err(e) => return e,
-        };
-        let y = match parse_i32_arg(args, "y") {
-            Ok(v) => v,
-            Err(e) => return e,
-        };
-        let width = match parse_i32_arg(args, "width") {
-            Ok(v) => v,
-            Err(e) => return e,
-        };
-        let height = match parse_i32_arg(args, "height") {
-            Ok(v) => v,
-            Err(e) => return e,
-        };
         if width < 0 || height < 0 {
             return ToolOutcome::Err(
                 ToolErrorCode::InvalidArgument,
                 "width / height must be non-negative".into(),
             );
         }
-        let fill_hex = match args.get("fill_hex") {
-            None => None,
-            Some(s) if !validate_hex(s) => {
+        if let Some(hex) = fill_hex.as_deref() {
+            if !validate_hex(hex) {
                 return ToolOutcome::Err(
                     ToolErrorCode::InvalidArgument,
-                    format!("fill_hex must be #rgb/#rrggbb/#rrggbbaa, got {s:?}"),
+                    format!("fill_hex must be #rgb/#rrggbb/#rrggbbaa, got {hex:?}"),
                 );
             }
-            Some(s) => Some(s.clone()),
+        }
+        let drop_children = match parse_drop_children_arg(args) {
+            Ok(v) => v,
+            Err(e) => return e,
         };
-        let drop_children = match args.get("drop_children") {
-            None => false,
-            Some(s) if s == "true" => true,
-            Some(s) if s == "false" => false,
-            Some(s) => {
-                return ToolOutcome::Err(
-                    ToolErrorCode::InvalidArgument,
-                    format!("drop_children must be \"true\" or \"false\", got {s:?}"),
-                );
-            }
-        };
+        let page_id = args
+            .get("pageId")
+            .or_else(|| args.get("page_id"))
+            .or_else(|| args.get("page"))
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .map(str::to_string);
         let mut out = BTreeMap::new();
         out.insert("wrote".into(), "true".into());
         ToolOutcome::OkWithCommand(
@@ -568,6 +630,7 @@ impl McpTool for ReplaceNode {
                 height,
                 fill_hex,
                 drop_children,
+                page_id,
             },
         )
     }
@@ -575,6 +638,22 @@ impl McpTool for ReplaceNode {
 
 pub fn replace_node_snapshot() -> ReplaceNode {
     ReplaceNode
+}
+
+#[allow(clippy::result_large_err)]
+fn parse_drop_children_arg(args: &BTreeMap<String, String>) -> Result<bool, ToolOutcome> {
+    match args
+        .get("drop_children")
+        .or_else(|| args.get("dropChildren"))
+    {
+        None => Ok(false),
+        Some(s) if s == "true" => Ok(true),
+        Some(s) if s == "false" => Ok(false),
+        Some(s) => Err(ToolOutcome::Err(
+            ToolErrorCode::InvalidArgument,
+            format!("drop_children must be \"true\" or \"false\", got {s:?}"),
+        )),
+    }
 }
 
 pub fn set_active_axis_value_snapshot(state: &EditorState) -> SetActiveAxisValue {
@@ -617,11 +696,25 @@ impl McpTool for ImportSvg {
         "import_svg"
     }
     fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
-        let Some(svg) = args.get("svg") else {
-            return ToolOutcome::Err(
-                ToolErrorCode::MissingArgument,
-                "svg is required (an SVG document string)".into(),
-            );
+        let svg = match args.get("svg") {
+            Some(svg) => svg.clone(),
+            None => {
+                let Some(path) = args.get("svgPath").or_else(|| args.get("svg_path")) else {
+                    return ToolOutcome::Err(
+                        ToolErrorCode::MissingArgument,
+                        "svg or svgPath is required".into(),
+                    );
+                };
+                match fs::read_to_string(path) {
+                    Ok(svg) => svg,
+                    Err(e) => {
+                        return ToolOutcome::Err(
+                            ToolErrorCode::ToolFailed,
+                            format!("failed to read svgPath {path:?}: {e}"),
+                        );
+                    }
+                }
+            }
         };
         if svg.trim().is_empty() {
             return ToolOutcome::Err(
@@ -657,7 +750,7 @@ impl McpTool for ImportSvg {
         ToolOutcome::OkWithCommand(
             out,
             EditorCommand::ImportSvg {
-                svg: svg.clone(),
+                svg,
                 x,
                 y,
                 target_parent,

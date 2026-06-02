@@ -12,8 +12,9 @@ use super::test_fixtures::{add_theme_axis, add_variable, sample, state_with};
 use super::write_tools::*;
 use super::{EditorCommand, McpTool, ToolErrorCode, ToolOutcome};
 use jian_ops_schema::variable::{VariableKind, VariableScalar};
-use op_editor_core::{EditorState, NodeId};
+use op_editor_core::{EditorState, NodeId, PenNodeExt};
 use std::collections::BTreeMap;
+use std::fs;
 
 fn state_with_color_var(name: &str, hex: &str) -> EditorState {
     let mut s = state_with(vec![]);
@@ -387,6 +388,54 @@ fn insert_node_accepts_ts_data_arg() {
 }
 
 #[test]
+fn insert_node_preserves_ts_leaf_data_with_extra_fields_as_subtree() {
+    let mut args = BTreeMap::new();
+    args.insert("data".into(), r##"{"type":"text","name":"Hero","content":"Welcome","x":0,"y":0,"width":240,"height":48,"fontSize":24}"##.into());
+    let outcome = insert_node_snapshot().call(&args);
+    let ToolOutcome::OkWithCommand(_, EditorCommand::InsertSubtree { nodes, .. }) = outcome else {
+        panic!("expected InsertSubtree preserving TS leaf data");
+    };
+    let [jian_ops_schema::node::PenNode::Text(text)] = nodes.as_slice() else {
+        panic!("expected one text node, got {nodes:?}");
+    };
+    assert_eq!(text.base.name.as_deref(), Some("Hero"));
+    assert_eq!(text.font_size, Some(24.0));
+}
+
+#[test]
+fn insert_node_accepts_ts_data_tree_as_subtree() {
+    let tool = insert_node_snapshot();
+    let mut args = BTreeMap::new();
+    args.insert("parent".into(), "n10".into());
+    args.insert(
+        "data".into(),
+        r##"{"type":"frame","name":"Card","width":200,"height":120,"layout":"vertical","children":[{"type":"text","name":"Title","content":"Hello","width":100,"height":24}]}"##
+            .into(),
+    );
+
+    match tool.call(&args) {
+        ToolOutcome::OkWithCommand(
+            _,
+            EditorCommand::InsertSubtree {
+                nodes,
+                parent_id,
+                page_id,
+            },
+        ) => {
+            assert_eq!(parent_id.as_str(), "n10");
+            assert!(page_id.is_none());
+            assert_eq!(nodes.len(), 1);
+            let root = &nodes[0];
+            assert_eq!(root.base().name.as_deref(), Some("Card"));
+            let children = root.children().expect("children");
+            assert_eq!(children.len(), 1);
+            assert_eq!(children[0].base().name.as_deref(), Some("Title"));
+        }
+        other => panic!("expected InsertSubtree command from TS data tree, got {other:?}"),
+    }
+}
+
+#[test]
 fn insert_node_command_applies_through_editor_state() {
     let mut s = state_with(vec![]);
     let before = s.active_children().len();
@@ -694,6 +743,24 @@ fn import_svg_accepts_ts_parent_arg() {
         }
         other => panic!("expected ImportSvg with parent, got {other:?}"),
     }
+}
+
+#[test]
+fn import_svg_accepts_ts_svg_path_arg() {
+    let tool = import_svg_snapshot();
+    let path = std::env::temp_dir().join(format!("op-mcp-import-svg-{}.svg", std::process::id()));
+    fs::write(&path, r#"<svg><rect width="10" height="10"/></svg>"#).expect("write svg");
+    let mut args = BTreeMap::new();
+    args.insert("svgPath".into(), path.to_string_lossy().into_owned());
+
+    match tool.call(&args) {
+        ToolOutcome::OkWithCommand(_, EditorCommand::ImportSvg { svg, .. }) => {
+            assert!(svg.contains("<rect"));
+        }
+        other => panic!("expected ImportSvg from svgPath, got {other:?}"),
+    }
+
+    let _ = fs::remove_file(path);
 }
 
 #[test]
