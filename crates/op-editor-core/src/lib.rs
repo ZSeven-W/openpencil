@@ -57,6 +57,8 @@ pub mod walkers;
 #[cfg(test)]
 mod command_attr_tests;
 #[cfg(test)]
+mod command_insert_tests;
+#[cfg(test)]
 mod command_style_replace_tests;
 #[cfg(test)]
 mod command_subtree_tests;

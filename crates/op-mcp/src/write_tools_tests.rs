@@ -11,7 +11,7 @@ use super::test_fixtures::{add_theme_axis, add_variable, sample, state_with};
 use super::write_tools::*;
 use super::{EditorCommand, McpTool, ToolErrorCode, ToolOutcome};
 use jian_ops_schema::variable::{VariableKind, VariableScalar};
-use op_editor_core::EditorState;
+use op_editor_core::{EditorState, NodeId};
 use std::collections::BTreeMap;
 
 fn state_with_color_var(name: &str, hex: &str) -> EditorState {
@@ -297,6 +297,8 @@ fn insert_node_returns_command_with_parsed_args() {
                 width,
                 height,
                 fill_hex,
+                target_parent,
+                page_id,
             },
         ) => {
             assert_eq!(kind, "rect");
@@ -306,8 +308,39 @@ fn insert_node_returns_command_with_parsed_args() {
             assert_eq!(width, 100);
             assert_eq!(height, 50);
             assert_eq!(fill_hex.as_deref(), Some("#ff0000"));
+            assert!(!target_parent.is_real());
+            assert_eq!(page_id, None);
         }
         other => panic!("expected InsertNode command, got {other:?}"),
+    }
+}
+
+#[test]
+fn insert_node_accepts_ts_parent_and_page_args() {
+    let tool = insert_node_snapshot();
+    let mut args = BTreeMap::new();
+    args.insert("kind".into(), "rect".into());
+    args.insert("name".into(), "Nested".into());
+    args.insert("x".into(), "1".into());
+    args.insert("y".into(), "2".into());
+    args.insert("width".into(), "3".into());
+    args.insert("height".into(), "4".into());
+    args.insert("parent".into(), "n10".into());
+    args.insert("pageId".into(), "page-2".into());
+
+    match tool.call(&args) {
+        ToolOutcome::OkWithCommand(
+            _,
+            EditorCommand::InsertNode {
+                target_parent,
+                page_id,
+                ..
+            },
+        ) => {
+            assert_eq!(target_parent.as_str(), "n10");
+            assert_eq!(page_id.as_deref(), Some("page-2"));
+        }
+        other => panic!("expected InsertNode command with parent/page, got {other:?}"),
     }
 }
 
@@ -323,6 +356,8 @@ fn insert_node_command_applies_through_editor_state() {
         width: 200,
         height: 150,
         fill_hex: Some("#00ff00".into()),
+        target_parent: NodeId::NONE,
+        page_id: None,
     }));
     assert_eq!(s.active_children().len(), before + 1);
 }

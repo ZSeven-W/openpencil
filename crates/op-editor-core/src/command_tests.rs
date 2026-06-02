@@ -22,58 +22,6 @@ fn id(s: &str) -> NodeId {
     NodeId::new(s)
 }
 
-// --- InsertNode ------------------------------------------------------
-
-#[test]
-fn insert_node_appends_a_fresh_leaf() {
-    let mut s = state_with(vec![]);
-    assert!(s.apply(EditorCommand::InsertNode {
-        kind: "rect".into(),
-        name: "Box".into(),
-        x: 10,
-        y: 20,
-        width: 100,
-        height: 60,
-        fill_hex: Some("#ff0000".into()),
-    }));
-    assert_eq!(s.active_children().len(), 1);
-    let node = &s.active_children()[0];
-    assert_eq!(node.base().name.as_deref(), Some("Box"));
-    assert_eq!(node.base().x, Some(10.0));
-}
-
-#[test]
-fn insert_node_rejects_unknown_kind() {
-    let mut s = state_with(vec![]);
-    assert!(!s.apply(EditorCommand::InsertNode {
-        kind: "bogus".into(),
-        name: "X".into(),
-        x: 0,
-        y: 0,
-        width: 10,
-        height: 10,
-        fill_hex: None,
-    }));
-    assert!(s.active_children().is_empty());
-}
-
-#[test]
-fn insert_node_atomic_on_bad_fill_hex() {
-    let mut s = state_with(vec![]);
-    assert!(!s.apply(EditorCommand::InsertNode {
-        kind: "rect".into(),
-        name: "X".into(),
-        x: 0,
-        y: 0,
-        width: 10,
-        height: 10,
-        fill_hex: Some("not-hex".into()),
-    }));
-    // No id minted, no node appended.
-    assert!(s.active_children().is_empty());
-    assert_eq!(s.max_node_id(), 0);
-}
-
 // --- UpdateNode ------------------------------------------------------
 
 #[test]

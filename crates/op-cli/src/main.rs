@@ -232,7 +232,7 @@ fn command_from_positionals(positionals: &[String], flags: &Flags) -> Result<Com
         }
         "get" => map_get(flags),
         "selection" => tool_call("get_selection", vec![]),
-        "insert" => map_insert(positionals),
+        "insert" => map_insert(positionals, flags),
         "update" => map_update(positionals),
         "delete" => map_one_id("delete_node", positionals),
         "read-nodes" => map_read_nodes(positionals, flags),
@@ -292,9 +292,16 @@ fn map_get(flags: &Flags) -> Result<Command, String> {
     tool_call("batch_get", pairs)
 }
 
-fn map_insert(positionals: &[String]) -> Result<Command, String> {
+fn map_insert(positionals: &[String], flags: &Flags) -> Result<Command, String> {
     let raw = resolve_arg(positionals.get(1).map(String::as_str))?;
-    tool_call("insert_node", insert_pairs(&raw)?)
+    let mut pairs = insert_pairs(&raw)?;
+    if let Some(parent) = flag_value(flags, "parent") {
+        pairs.push(pair("parent", parent));
+    }
+    if let Some(page) = flag_value(flags, "page") {
+        pairs.push(pair("pageId", page));
+    }
+    tool_call("insert_node", pairs)
 }
 
 fn map_update(positionals: &[String]) -> Result<Command, String> {
@@ -722,5 +729,7 @@ fn version_json() -> String {
 
 #[cfg(test)]
 mod cli_import_tests;
+#[cfg(test)]
+mod cli_node_tests;
 #[cfg(test)]
 mod tests;

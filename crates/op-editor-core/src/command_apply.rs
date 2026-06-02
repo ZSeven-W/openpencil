@@ -70,7 +70,7 @@ fn parse_variable_kind(s: &str) -> Option<VariableKind> {
     }
 }
 
-fn import_svg_page_index(state: &EditorState, page_id: Option<&str>) -> Option<usize> {
+fn command_page_index(state: &EditorState, page_id: Option<&str>) -> Option<usize> {
     let Some(raw) = page_id.map(str::trim).filter(|s| !s.is_empty()) else {
         return Some(
             state
@@ -86,6 +86,21 @@ fn import_svg_page_index(state: &EditorState, page_id: Option<&str>) -> Option<u
             .or_else(|| raw.parse::<usize>().ok().filter(|idx| *idx < pages.len())),
         _ => raw.parse::<usize>().ok().filter(|idx| *idx == 0),
     }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn apply_insert_node_on_active_page(
+    state: &mut EditorState,
+    kind: &str,
+    name: &str,
+    x: i32,
+    y: i32,
+    width: i32,
+    height: i32,
+    fill_hex: &Option<String>,
+    target_parent: &NodeId,
+) -> bool {
+    state.cmd_insert_node(kind, name, x, y, width, height, fill_hex, target_parent)
 }
 
 fn apply_import_svg_on_active_page(
@@ -139,7 +154,32 @@ impl EditorState {
                 width,
                 height,
                 fill_hex,
-            } => self.cmd_insert_node(&kind, &name, x, y, width, height, &fill_hex),
+                target_parent,
+                page_id,
+            } => {
+                let Some(target_page_index) = command_page_index(self, page_id.as_deref()) else {
+                    return false;
+                };
+                let original_page_index = self.ui.active_page_index;
+                if page_id.is_some() {
+                    self.ui.active_page_index = target_page_index;
+                }
+                let changed = apply_insert_node_on_active_page(
+                    self,
+                    &kind,
+                    &name,
+                    x,
+                    y,
+                    width,
+                    height,
+                    &fill_hex,
+                    &target_parent,
+                );
+                if page_id.is_some() && target_page_index != original_page_index {
+                    self.ui.active_page_index = original_page_index;
+                }
+                changed
+            }
             EditorCommand::UpdateNode {
                 node_id,
                 x,
@@ -453,8 +493,7 @@ impl EditorState {
                 target_parent,
                 page_id,
             } => {
-                let Some(target_page_index) = import_svg_page_index(self, page_id.as_deref())
-                else {
+                let Some(target_page_index) = command_page_index(self, page_id.as_deref()) else {
                     return false;
                 };
                 let original_page_index = self.ui.active_page_index;

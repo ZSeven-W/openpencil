@@ -14,7 +14,8 @@ COMMON COMMANDS:
   op status                               check whether MCP HTTP is reachable
   op get [--type T] [--name N] [--id ID] [--depth N] [--parent P]
   op selection                            get current selection
-  op insert <json|@file|->                insert a leaf node
+  op insert <json|@file|-> [--parent P] [--page PAGE]
+                                          insert a leaf node
   op update <id> <json|@file|->           patch x/y/width/height/name/fill
   op delete <id>                          delete a node
   op read-nodes [ids] [--depth N] [--vars] [--page P] [--file F]
