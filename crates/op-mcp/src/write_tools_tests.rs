@@ -345,6 +345,47 @@ fn insert_node_accepts_ts_parent_and_page_args() {
 }
 
 #[test]
+fn insert_node_accepts_ts_data_arg() {
+    let tool = insert_node_snapshot();
+    let mut args = BTreeMap::new();
+    args.insert("parent".into(), "null".into());
+    args.insert("pageId".into(), "page-2".into());
+    args.insert(
+        "data".into(),
+        r##"{"type":"rectangle","name":"Card","x":1,"y":2,"width":100,"height":50,"fill":[{"type":"solid","color":"#112233"}]}"##
+            .into(),
+    );
+
+    match tool.call(&args) {
+        ToolOutcome::OkWithCommand(
+            _,
+            EditorCommand::InsertNode {
+                kind,
+                name,
+                x,
+                y,
+                width,
+                height,
+                fill_hex,
+                target_parent,
+                page_id,
+            },
+        ) => {
+            assert_eq!(kind, "rect");
+            assert_eq!(name, "Card");
+            assert_eq!(x, 1);
+            assert_eq!(y, 2);
+            assert_eq!(width, 100);
+            assert_eq!(height, 50);
+            assert_eq!(fill_hex.as_deref(), Some("#112233"));
+            assert!(!target_parent.is_real());
+            assert_eq!(page_id.as_deref(), Some("page-2"));
+        }
+        other => panic!("expected InsertNode command from TS data, got {other:?}"),
+    }
+}
+
+#[test]
 fn insert_node_command_applies_through_editor_state() {
     let mut s = state_with(vec![]);
     let before = s.active_children().len();

@@ -511,6 +511,7 @@ fn structured_arg_allowed(tool: &str, key: &str) -> bool {
             | ("replace_all_matching_properties", "properties")
             | ("codegen_plan", "plan")
             | ("codegen_submit_chunk", "result")
+            | ("insert_node", "data")
             | ("get_style_guide", "tags")
     )
 }

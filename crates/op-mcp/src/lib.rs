@@ -49,6 +49,7 @@ pub mod element_tools;
 pub mod extra_read_tools;
 #[cfg(test)]
 mod extra_read_tools_tests;
+mod insert_node_args;
 pub mod json_serializer;
 pub mod node_attr_tools;
 #[cfg(test)]
