@@ -535,6 +535,22 @@ fn parse_tool_call_allows_structured_read_nodes_ids_for_ts_parity() {
 }
 
 #[test]
+fn parse_tool_call_allows_structured_batch_get_args_for_ts_parity() {
+    let line = r#"{"id":4,"method":"tools/call","params":{"name":"batch_get","arguments":{"patterns":[{"name":"Button"}],"nodeIds":["n11"],"readDepth":0}}}"#;
+    let call = parse_tool_call(line).expect("batch_get must accept TS-style structured args");
+    assert_eq!(call.tool, "batch_get");
+    assert_eq!(
+        call.arguments.get("patterns"),
+        Some(&r#"[{"name":"Button"}]"#.to_string())
+    );
+    assert_eq!(
+        call.arguments.get("nodeIds"),
+        Some(&r#"["n11"]"#.to_string())
+    );
+    assert_eq!(call.arguments.get("readDepth"), Some(&"0".to_string()));
+}
+
+#[test]
 fn parse_tool_call_allows_structured_style_guide_tags_for_ts_parity() {
     let line = r#"{"id":4,"method":"tools/call","params":{"name":"get_style_guide","arguments":{"tags":["light-mode","clean"],"platform":"webapp"}}}"#;
     let call = parse_tool_call(line).expect("get_style_guide must accept TS-style tags array");

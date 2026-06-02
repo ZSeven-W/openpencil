@@ -25,7 +25,7 @@ USAGE:
   op help                                 show this message
 
 COMMON COMMANDS:
-  op get [--id ID] [--name NAME]          read document, node, or named node
+  op get [--type T] [--name N] [--id ID] [--depth N] [--parent P]
   op selection                            get current selection
   op insert <json|@file|->                insert a leaf node
   op update <id> <json|@file|->           patch x/y/width/height/name/fill
@@ -246,19 +246,30 @@ fn command_from_positionals(positionals: &[String], flags: &Flags) -> Result<Com
 }
 
 fn map_get(flags: &Flags) -> Result<Command, String> {
+    let mut pairs = Vec::new();
     if let Some(id) = flag_value(flags, "id") {
-        return tool_call("get_node", vec![pair("node_id", id)]);
+        pairs.push(pair("nodeIds", format!(r#"["{}"]"#, json_escape(&id))));
     }
-    if let Some(name) = flag_value(flags, "name") {
-        return tool_call("find_node_by_name", vec![pair("name", name)]);
+    if flag_value(flags, "type").is_some() || flag_value(flags, "name").is_some() {
+        let mut fields = Vec::new();
+        if let Some(kind) = flag_value(flags, "type") {
+            fields.push(format!(r#""type":"{}""#, json_escape(&kind)));
+        }
+        if let Some(name) = flag_value(flags, "name") {
+            fields.push(format!(r#""name":"{}""#, json_escape(&name)));
+        }
+        pairs.push(pair("patterns", format!("[{{{}}}]", fields.join(","))));
     }
-    if flag_value(flags, "parent").is_some() {
-        return Err("Rust MCP get currently supports --id and --name; use get_node_children directly for parent reads".into());
+    if let Some(parent) = flag_value(flags, "parent") {
+        pairs.push(pair("parentId", parent));
     }
-    if flag_value(flags, "type").is_some() {
-        return tool_call("list_node_kinds", vec![]);
+    if let Some(depth) = flag_value(flags, "depth") {
+        pairs.push(pair("readDepth", depth));
     }
-    tool_call("get_document_info", vec![])
+    if let Some(page) = flag_value(flags, "page") {
+        pairs.push(pair("pageId", page));
+    }
+    tool_call("batch_get", pairs)
 }
 
 fn map_insert(positionals: &[String]) -> Result<Command, String> {

@@ -57,7 +57,7 @@ fn tools_list_response_includes_all_registered_tools() {
     // TOOL_SCHEMAS without being added to the list below.
     assert_eq!(
         TOOL_SCHEMAS.len(),
-        97,
+        98,
         "tools/list catalog count must match the registered tools — add the new tool to this test"
     );
     // Production catalog excludes debug tools (we removed the
@@ -105,6 +105,7 @@ fn tools_list_response_includes_all_registered_tools() {
         "get_active_theme",
         "list_components",
         "get_component",
+        "batch_get",
         "read_nodes",
         "snapshot_layout",
         "find_empty_space",
