@@ -266,6 +266,17 @@ impl TopBar {
                 1.4,
             );
         } else {
+            // Light rounded backdrop behind the brand icon(s) — the TS active
+            // chip shows the provider glyph in a `bg-muted` rounded box.
+            let pad = 4.0;
+            cx.backend.fill_round_rect(
+                Rect {
+                    origin: Point2D::new(chip_rect.origin.x + 8.0 - pad, icons_y - pad),
+                    size: Point2D::new(icons_w + pad * 2.0, ICON_SIZE + pad * 2.0),
+                },
+                5.0,
+                self.theme.muted,
+            );
             let mut ix = chip_rect.origin.x + 8.0;
             for (i, provider) in op_editor_core::AgentProvider::ALL.iter().enumerate() {
                 if !self.connected[i] {
