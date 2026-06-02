@@ -7,6 +7,8 @@ USAGE:
   op help                                 show this message
 
 COMMON COMMANDS:
+  op start [--file path.op] [--port N]     start Rust MCP HTTP server
+  op stop                                  stop Rust MCP HTTP server
   op status                               check whether MCP HTTP is reachable
   op get [--type T] [--name N] [--id ID] [--depth N] [--parent P]
   op selection                            get current selection
@@ -38,8 +40,8 @@ COMMON COMMANDS:
 GLOBAL FLAGS:
   --port <n>      MCP HTTP port (default: 3100)
   --pretty        pretty-print JSON replies
-  --file <path>   accepted for TS CLI compatibility; Rust MCP targets the
-                  document already opened by the MCP server
+  --file <path>   `op start` document path; otherwise accepted for TS CLI
+                  compatibility while Rust MCP targets the open document
   --page <id>     accepted for TS CLI compatibility; use set_active_page for
                   Rust MCP page selection by index
 
