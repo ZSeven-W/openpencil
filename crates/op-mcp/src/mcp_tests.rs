@@ -535,6 +535,18 @@ fn parse_tool_call_allows_structured_read_nodes_ids_for_ts_parity() {
 }
 
 #[test]
+fn parse_tool_call_allows_structured_style_guide_tags_for_ts_parity() {
+    let line = r#"{"id":4,"method":"tools/call","params":{"name":"get_style_guide","arguments":{"tags":["light-mode","clean"],"platform":"webapp"}}}"#;
+    let call = parse_tool_call(line).expect("get_style_guide must accept TS-style tags array");
+    assert_eq!(call.tool, "get_style_guide");
+    assert_eq!(
+        call.arguments.get("tags"),
+        Some(&r#"["light-mode","clean"]"#.to_string())
+    );
+    assert_eq!(call.arguments.get("platform"), Some(&"webapp".to_string()));
+}
+
+#[test]
 fn parse_tool_call_rejects_non_object_arguments_field() {
     let str_args =
         r#"{"id":1,"method":"tools/call","params":{"name":"get_node","arguments":"oops"}}"#;
