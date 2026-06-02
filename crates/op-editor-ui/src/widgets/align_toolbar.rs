@@ -72,10 +72,15 @@ const SQUARES_INTERSECT: &[&str] = &[
     "M8 10a2 2 0 0 1 2-2h5a1 1 0 0 1 1 1v5a2 2 0 0 1-2 2H9a1 1 0 0 1-1-1z",
     "M8 2h2",
 ];
+const SQUARES_EXCLUDE: &[&str] = &[
+    "M16 12v2a2 2 0 0 1-2 2H9a1 1 0 0 0-1 1v3a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2h0",
+    "M4 16a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v3a1 1 0 0 1-1 1h-5a2 2 0 0 0-2 2v2",
+];
 const BOOLEAN_ITEMS: &[(BooleanOp, &[&str])] = &[
     (BooleanOp::Union, SQUARES_UNITE),
     (BooleanOp::Subtract, SQUARES_SUBTRACT),
     (BooleanOp::Intersect, SQUARES_INTERSECT),
+    (BooleanOp::Exclude, SQUARES_EXCLUDE),
 ];
 
 /// Group divider indices (after these positions, insert a `GROUP_GAP`
@@ -362,7 +367,7 @@ mod tests {
         let doc = doc_with_two_rects_selected();
         let tb = AlignToolbar::for_canvas_region(canvas(), &doc).unwrap();
         assert!(tb.rect.size.x > ALIGN_TOOLBAR_WIDTH);
-        let expected_width = ALIGN_TOOLBAR_WIDTH + GROUP_GAP + BUTTON_SIZE * 3.0 + INNER_GAP * 2.0;
+        let expected_width = ALIGN_TOOLBAR_WIDTH + GROUP_GAP + BUTTON_SIZE * 4.0 + INNER_GAP * 3.0;
         assert_eq!(tb.rect.size.x, expected_width);
         let first_boolean = tb.button_rect(ITEMS.len());
         let center = Point2D::new(
@@ -382,6 +387,15 @@ mod tests {
         assert_eq!(
             tb.hit_test_action(center),
             Some(AlignToolbarHit::Boolean(BooleanOp::Intersect))
+        );
+        let exclude = tb.button_rect(ITEMS.len() + 3);
+        let center = Point2D::new(
+            exclude.origin.x + exclude.size.x / 2.0,
+            exclude.origin.y + exclude.size.y / 2.0,
+        );
+        assert_eq!(
+            tb.hit_test_action(center),
+            Some(AlignToolbarHit::Boolean(BooleanOp::Exclude))
         );
     }
 
