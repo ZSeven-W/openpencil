@@ -63,7 +63,15 @@ impl WidgetHost {
         match panel.hit_test(layer_rect, Point2D::new(x, y)) {
             Some(LayerPanelHit::Layer(id)) => {
                 let ec_id = id.clone();
-                self.editor_state.set_single_selection(ec_id.clone());
+                // Right-clicking a row that's part of a multi-selection
+                // keeps the whole selection (so context-menu Delete /
+                // Duplicate act on every selected layer); right-clicking
+                // outside the selection retargets to just that row.
+                if !(self.editor_state.is_selected(&ec_id)
+                    && self.editor_state.selection_count() > 1)
+                {
+                    self.editor_state.set_single_selection(ec_id.clone());
+                }
                 self.editor_state.editor_ui.layer_context_menu = Some(LayerContextMenuState {
                     target: LayerContextTarget::Layer(ec_id),
                     anchor_x: x,
@@ -107,14 +115,22 @@ impl WidgetHost {
         use op_editor_ui::widgets::layer_context_menu::LayerContextAction as A;
         match (action, target) {
             (A::Duplicate, T::Layer(id)) => {
-                self.editor_state.set_single_selection(id);
+                // Act on the whole multi-selection when the right-clicked
+                // row is part of it; otherwise retarget to just this row.
+                if !self.editor_state.is_selected(&id) {
+                    self.editor_state.set_single_selection(id);
+                }
                 self.editor_state.commit_history();
                 let _ = self
                     .editor_state
                     .duplicate_selected(&mut self.next_node_id, 10.0);
             }
             (A::Delete, T::Layer(id)) => {
-                self.editor_state.set_single_selection(id);
+                // Keep the multi-selection so Delete removes every selected
+                // layer, not just the right-clicked one.
+                if !self.editor_state.is_selected(&id) {
+                    self.editor_state.set_single_selection(id);
+                }
                 self.editor_state.commit_history();
                 let _ = self.editor_state.delete_selected();
             }

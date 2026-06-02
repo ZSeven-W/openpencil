@@ -173,6 +173,25 @@ fn delete_selected_returns_false_when_unselected() {
 }
 
 #[test]
+fn delete_selected_removes_every_node_in_the_set() {
+    let mut s = state_with(vec![
+        rect("n1", "A", 0.0, 0.0, 10.0, 10.0),
+        rect("n2", "B", 20.0, 0.0, 10.0, 10.0),
+        rect("n3", "C", 40.0, 0.0, 10.0, 10.0),
+    ]);
+    s.clear_selection();
+    s.toggle_selection(NodeId::new("n1"));
+    s.toggle_selection(NodeId::new("n2"));
+    assert_eq!(s.selection_count(), 2);
+    assert!(s.delete_selected());
+    assert!(find_node(s.active_children(), &NodeId::new("n1")).is_none());
+    assert!(find_node(s.active_children(), &NodeId::new("n2")).is_none());
+    assert!(find_node(s.active_children(), &NodeId::new("n3")).is_some());
+    assert_eq!(s.active_children().len(), 1);
+    assert!(s.selection.is_empty());
+}
+
+#[test]
 fn delete_selected_protects_ancestor_of_locked_descendant() {
     let mut child = rect("n61", "child", 0.0, 0.0, 10.0, 10.0);
     child.base_mut().locked = Some(true);
