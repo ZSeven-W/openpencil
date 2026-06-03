@@ -12,9 +12,11 @@ use std::path::PathBuf;
 
 use crate::export::{export_node_raster, RasterFormat};
 
-/// When `--render-shots` is present on argv, render node PNGs and
-/// return `true` so `main` exits; otherwise return `false` and let the
-/// normal GUI path continue.
+/// When `--render-shots` is present on argv, render node PNGs and return
+/// `true` so `main` exits 0; otherwise return `false` and let the normal
+/// GUI path continue. Any failure (bad args, unreadable / unparsable
+/// `.op`, no nodes, or a node that fails to render) exits non-zero — a
+/// benchmark driver must not read success when no PNG was produced.
 pub fn run_cli_if_requested() -> bool {
     let args: Vec<String> = std::env::args().collect();
     let Some(pos) = args.iter().position(|a| a == "--render-shots") else {
@@ -22,7 +24,7 @@ pub fn run_cli_if_requested() -> bool {
     };
     let (Some(file), Some(out_dir)) = (args.get(pos + 1), args.get(pos + 2)) else {
         eprintln!("usage: openpencil-desktop --render-shots <file.op> <out_dir> [scale]");
-        return true;
+        std::process::exit(2);
     };
     let scale: f32 = args
         .get(pos + 3)
@@ -31,21 +33,21 @@ pub fn run_cli_if_requested() -> bool {
     let out_dir = PathBuf::from(out_dir);
     if let Err(e) = std::fs::create_dir_all(&out_dir) {
         eprintln!("render-shots: mkdir {}: {e}", out_dir.display());
-        return true;
+        std::process::exit(1);
     }
 
     let src = match std::fs::read_to_string(file) {
         Ok(s) => s,
         Err(e) => {
             eprintln!("render-shots: read {file}: {e}");
-            return true;
+            std::process::exit(1);
         }
     };
     let loaded = match jian_ops_schema::load_str(&src) {
         Ok(l) => l,
         Err(e) => {
             eprintln!("render-shots: parse {file}: {e}");
-            return true;
+            std::process::exit(1);
         }
     };
     let state = op_editor_core::EditorState::from_document(loaded.value);
@@ -53,11 +55,11 @@ pub fn run_cli_if_requested() -> bool {
 
     let Some(page) = scene.active_page() else {
         eprintln!("render-shots: no active page");
-        return true;
+        std::process::exit(1);
     };
     if page.children.is_empty() {
         eprintln!("render-shots: active page has no nodes");
-        return true;
+        std::process::exit(1);
     }
 
     let total = page.children.len();
@@ -73,6 +75,11 @@ pub fn run_cli_if_requested() -> bool {
         }
     }
     eprintln!("render-shots: {ok}/{total} node(s) → {}", out_dir.display());
+    if ok < total {
+        // A benchmark driver must see a non-zero exit when any node failed
+        // to render, not a silent success.
+        std::process::exit(1);
+    }
     true
 }
 
