@@ -343,17 +343,28 @@ async fn main() -> std::process::ExitCode {
     // so the render / screenshot step can pick it up. Canonical
     // serde_json mirrors `persistence::save_to_path`. Saved regardless of
     // Ok/Err so a partial doc stays inspectable on failure.
-    if let Ok(out_path) = std::env::var("OPENPENCIL_SMOKE_OUT") {
-        if !out_path.is_empty() {
-            match serde_json::to_string_pretty(&sink.state.doc) {
-                Ok(json) => match std::fs::write(&out_path, json) {
-                    Ok(()) => eprintln!("[SMOKE] saved doc → {out_path}"),
-                    Err(e) => eprintln!("[SMOKE] save failed ({out_path}): {e}"),
-                },
-                Err(e) => eprintln!("[SMOKE] serialize failed: {e}"),
+    // A requested save that FAILS forces a non-zero exit below — a
+    // benchmark driver must not read "success" when no `.op` was written.
+    let save_failed = match std::env::var("OPENPENCIL_SMOKE_OUT") {
+        Ok(out_path) if !out_path.is_empty() => match serde_json::to_string_pretty(&sink.state.doc)
+        {
+            Ok(json) => match std::fs::write(&out_path, json) {
+                Ok(()) => {
+                    eprintln!("[SMOKE] saved doc → {out_path}");
+                    false
+                }
+                Err(e) => {
+                    eprintln!("[SMOKE] save failed ({out_path}): {e}");
+                    true
+                }
+            },
+            Err(e) => {
+                eprintln!("[SMOKE] serialize failed: {e}");
+                true
             }
-        }
-    }
+        },
+        _ => false,
+    };
 
     match result {
         Ok(summary) => {
@@ -372,7 +383,12 @@ async fn main() -> std::process::ExitCode {
                         .unwrap_or_default()
                 );
             }
-            std::process::ExitCode::SUCCESS
+            if save_failed {
+                eprintln!("[FINAL] generation OK but OPENPENCIL_SMOKE_OUT write failed");
+                std::process::ExitCode::from(4)
+            } else {
+                std::process::ExitCode::SUCCESS
+            }
         }
         Err(e) => {
             eprintln!("[FINAL] Err in {elapsed:?}: {e}");
