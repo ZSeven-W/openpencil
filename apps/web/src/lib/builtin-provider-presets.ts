@@ -67,7 +67,7 @@ export const BUILTIN_PROVIDER_PRESETS: Record<BuiltinProviderPreset, BuiltinPres
     altRegions: { cn: 'https://api.minimaxi.com/v1', global: 'https://api.minimax.io/v1' },
     altType: 'openai-compat',
     placeholder: 'eyJ...',
-    modelPlaceholder: 'MiniMax-M2.7',
+    modelPlaceholder: 'MiniMax-M3',
     regions: {
       cn: { baseURL: 'https://api.minimaxi.com/anthropic' },
       global: { baseURL: 'https://api.minimax.io/anthropic' },

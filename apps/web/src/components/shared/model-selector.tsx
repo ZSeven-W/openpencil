@@ -22,12 +22,9 @@ export const BUILTIN_MODEL_LISTS: Partial<
     { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash' },
   ],
   minimax: [
+    { id: 'MiniMax-M3', name: 'MiniMax M3' },
     { id: 'MiniMax-M2.7', name: 'MiniMax M2.7' },
     { id: 'MiniMax-M2.7-highspeed', name: 'MiniMax M2.7 Highspeed' },
-    { id: 'MiniMax-M2.5', name: 'MiniMax M2.5' },
-    { id: 'MiniMax-M2.5-highspeed', name: 'MiniMax M2.5 Highspeed' },
-    { id: 'MiniMax-M2.1', name: 'MiniMax M2.1' },
-    { id: 'MiniMax-M1', name: 'MiniMax M1' },
   ],
   'glm-coding': [
     { id: 'glm-5', name: 'GLM-5' },
