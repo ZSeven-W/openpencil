@@ -42,6 +42,7 @@ mod model_discovery;
 mod persistence;
 mod persistence_image;
 mod pre_validator;
+mod render_cli;
 mod settings_io;
 mod tcc_selftest;
 mod update_check;
@@ -887,6 +888,11 @@ fn main() {
     // (macOS TCC) and exits — used to verify a signed bundle inherits
     // a granted app's Desktop/Documents access without opening the GUI.
     if tcc_selftest::run_cli_if_requested() {
+        return;
+    }
+    // `--render-shots <file.op> <out_dir> [scale]` renders node-only
+    // PNGs headless (model-design benchmark) and exits without a window.
+    if render_cli::run_cli_if_requested() {
         return;
     }
     let initial_file = initial_file_from_argv();

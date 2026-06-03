@@ -108,9 +108,18 @@ impl LlmClient for SmokeLlmClient {
                 }
             };
             let mut stream = stream;
+            // Optional raw-response capture for diagnosing weak-model
+            // JSON malformations (set OPENPENCIL_SMOKE_DUMP=1).
+            let dump = std::env::var("OPENPENCIL_SMOKE_DUMP").is_ok();
+            let mut full = String::new();
             while let Some(item) = stream.next().await {
                 let sent = match item {
-                    Ok(Event::TextDelta { delta }) => tx.unbounded_send(Ok(LlmChunk::Text(delta))),
+                    Ok(Event::TextDelta { delta }) => {
+                        if dump {
+                            full.push_str(&delta);
+                        }
+                        tx.unbounded_send(Ok(LlmChunk::Text(delta)))
+                    }
                     Ok(Event::Thinking { delta }) => {
                         tx.unbounded_send(Ok(LlmChunk::Thinking(delta)))
                     }
@@ -134,6 +143,12 @@ impl LlmClient for SmokeLlmClient {
                 if sent.is_err() {
                     break;
                 }
+            }
+            if dump && !full.is_empty() {
+                eprintln!(
+                    "[DUMP] ===== LLM response ({} chars) =====\n{full}\n[DUMP] ===== end =====",
+                    full.len()
+                );
             }
         });
 
@@ -323,6 +338,22 @@ async fn main() -> std::process::ExitCode {
         )
         .await;
     let elapsed = started.elapsed();
+
+    // Persist the produced PenDocument when OPENPENCIL_SMOKE_OUT is set,
+    // so the render / screenshot step can pick it up. Canonical
+    // serde_json mirrors `persistence::save_to_path`. Saved regardless of
+    // Ok/Err so a partial doc stays inspectable on failure.
+    if let Ok(out_path) = std::env::var("OPENPENCIL_SMOKE_OUT") {
+        if !out_path.is_empty() {
+            match serde_json::to_string_pretty(&sink.state.doc) {
+                Ok(json) => match std::fs::write(&out_path, json) {
+                    Ok(()) => eprintln!("[SMOKE] saved doc → {out_path}"),
+                    Err(e) => eprintln!("[SMOKE] save failed ({out_path}): {e}"),
+                },
+                Err(e) => eprintln!("[SMOKE] serialize failed: {e}"),
+            }
+        }
+    }
 
     match result {
         Ok(summary) => {
