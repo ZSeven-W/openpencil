@@ -107,18 +107,25 @@ fn normalize_generated_node_json(value: &mut serde_json::Value) {
     }
 }
 
-/// 收集文本里所有平衡的 `[...]` 子串(忽略字符串字面量内的方括号),
-/// 按出现顺序返回。嵌套数组的起点也会进来,但调用方按"节点数最多"
-/// 取舍,外层真实数组自然胜出。
+/// 收集文本里所有**顶层**平衡的 `[...]` 子串(忽略字符串字面量内的方
+/// 括号),按出现顺序返回。抓到一个数组后跳过其整段,**不下探嵌套的
+/// children 数组**——否则 `[{frame, children:[a,b,c]}]` 这种嵌套格式会
+/// 把内层 `[a,b,c]`(3 个)当候选,按"节点数最多"错误压过外层
+/// `[root]`(1 个)。散文里并列的括号(如 `[step 1]` 与真正的数组)互
+/// 不嵌套,仍各自作为顶层候选。
 fn balanced_arrays(text: &str) -> Vec<&str> {
     let bytes = text.as_bytes();
     let mut out = Vec::new();
-    for (i, &b) in bytes.iter().enumerate() {
-        if b == b'[' {
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'[' {
             if let Some(end) = balanced_end(bytes, i) {
                 out.push(&text[i..=end]);
+                i = end + 1; // 跳过整段,不把嵌套 children 当独立候选
+                continue;
             }
         }
+        i += 1;
     }
     out
 }
@@ -223,5 +230,21 @@ mod tests {
         assert_eq!(nodes.len(), 2);
         assert_eq!(nodes[0].id_str(), "a");
         assert_eq!(nodes[1].id_str(), "b");
+    }
+
+    #[test]
+    fn parse_nodes_returns_outer_array_not_nested_children() {
+        // 嵌套格式:外层只有 1 个 root frame,其 children 有 3 个。只收
+        // 顶层数组,返回外层 [root],而不是内层 [a,b,c](Codex review)。
+        let text = r#"[
+          { "type": "frame", "id": "root", "name": "Root", "x": 0, "y": 0, "width": 300, "height": 200, "children": [
+            { "type": "frame", "id": "a", "name": "A", "x": 0, "y": 0, "width": 100, "height": 50, "children": [] },
+            { "type": "frame", "id": "b", "name": "B", "x": 0, "y": 0, "width": 100, "height": 50, "children": [] },
+            { "type": "frame", "id": "c", "name": "C", "x": 0, "y": 0, "width": 100, "height": 50, "children": [] }
+          ] }
+        ]"#;
+        let nodes = parse_nodes(text).expect("parse");
+        assert_eq!(nodes.len(), 1);
+        assert_eq!(nodes[0].id_str(), "root");
     }
 }
