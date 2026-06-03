@@ -15,47 +15,61 @@ impl std::fmt::Display for ParseError {
     }
 }
 
-/// 从 LLM 文本里抽 JSON 数组并反序列化为 canonical `PenNode` 树。
+/// 从 LLM 文本里抽 JSON 并反序列化为 canonical `PenNode` 树,鲁棒应对弱模型
+/// 的各种脏输出:数组前的推理散文 / 不闭合的散文括号 / 数组里混入坏元素 /
+/// 嵌套 children / DeepSeek 的 JSONL 裸对象 / `{"nodes":[…]}` 这类带标签的
+/// 包裹对象。
 ///
-/// 弱模型常在真正的 ```json 数组之前写带 `[` 的推理散文(例如
-/// `[step 1]`)。老逻辑只取第一个 `[` 会抓到散文括号,serde 在裸词处
-/// 报 `expected ident`,整段子任务直接丢失。这里改为扫描文本里**每一
-/// 个**平衡的 `[...]` 候选,逐个走完整 parse 管线,返回**节点数最多**
-/// 的非空结果(真正的节点数组通常最大;散文括号 parse 失败被跳过)。
-/// 该逻辑严格泛化老的"第一个括号"——老的候选仍在集合内。
-/// 空数组 / 全部候选失败视为错误。
+/// 收集两类候选——(a) 每个平衡的 `[...]`(数组形态);(b) 所有顶层 `{...}`
+/// 合起来当一个结果(JSONL / 裸对象形态)——逐个解析,取**总节点数(含后代)
+/// 最多**的有效结果。按总数(而非顶层数)比较是关键:完整树天然压过任何被
+/// 误抓的内层 children / 字段数组(`{root, children:[a,b]}` 里 root 子树 3 >
+/// children 2),于是无需任何 colon/label 启发式,带标签的真数组也不会被误跳。
+/// 全部候选失败 / 无候选视为错误。
 pub fn parse_nodes(text: &str) -> Result<Vec<PenNode>, ParseError> {
     let mut best: Option<Vec<PenNode>> = None;
+    let mut best_total = 0usize;
     let mut last_err: Option<ParseError> = None;
+    // (a) Array-form candidates: each balanced `[...]`.
     for candidate in balanced_spans(text, b'[', b']') {
         match try_parse_candidate(candidate) {
             Ok(nodes) => {
-                if best.as_ref().is_none_or(|b| nodes.len() > b.len()) {
+                let total = total_nodes(&nodes);
+                if best.is_none() || total > best_total {
+                    best_total = total;
                     best = Some(nodes);
                 }
             }
             Err(e) => last_err = Some(e),
         }
     }
-    if let Some(nodes) = best {
-        return Ok(nodes);
+    // (b) Bare-object / JSONL form: all top-level `{...}` as one result.
+    let objs = collect_bare_objects(text);
+    if !objs.is_empty() {
+        let total = total_nodes(&objs);
+        if best.is_none() || total > best_total {
+            best = Some(objs);
+        }
     }
-    // Fallback: some models (DeepSeek) emit JSONL — bare top-level `{...}`
-    // objects (one per line, inside a ```json fence) with no enclosing
-    // `[ ]`. The array scan above only sees their inner `fill:[...]`
-    // sub-arrays, so collect the top-level objects and deserialize each
-    // as a PenNode.
-    if let Some(nodes) = try_parse_jsonl(text) {
-        return Ok(nodes);
-    }
-    Err(last_err.unwrap_or_else(|| ParseError("no JSON array or objects found".into())))
+    best.ok_or_else(|| {
+        last_err.unwrap_or_else(|| ParseError("no JSON array or objects found".into()))
+    })
 }
 
-/// JSONL / bare-object fallback: collect every top-level `{...}` object
-/// and deserialize each as a `PenNode` (tolerant — non-node objects are
-/// skipped). `None` when nothing parses, so the caller surfaces the
-/// array-path error instead.
-fn try_parse_jsonl(text: &str) -> Option<Vec<PenNode>> {
+/// 递归总节点数(含后代),复用 cleanup 的后代计数。用于在候选间取"最完整"
+/// 的解析结果。
+fn total_nodes(nodes: &[PenNode]) -> usize {
+    nodes.len()
+        + nodes
+            .iter()
+            .map(crate::cleanup::count_descendants)
+            .sum::<usize>()
+}
+
+/// JSONL / bare-object 收集:把每个顶层 `{...}` 解析为一个 `PenNode`(非节点
+/// 对象——如 `{"nodes":[…]}` 这种无 `type` 的包裹——被跳过)。返回全部成功
+/// 解析的顶层节点;由 [`parse_nodes`] 与数组形态按总节点数比较择优。
+fn collect_bare_objects(text: &str) -> Vec<PenNode> {
     let mut nodes = Vec::new();
     for obj in balanced_spans(text, b'{', b'}') {
         let Ok(mut value) = serde_json::from_str::<serde_json::Value>(obj) else {
@@ -66,7 +80,7 @@ fn try_parse_jsonl(text: &str) -> Option<Vec<PenNode>> {
             nodes.push(node);
         }
     }
-    (!nodes.is_empty()).then_some(nodes)
+    nodes
 }
 
 /// 走完整 parse 管线解析单个候选 `[...]`:serde `Value` → normalize →
@@ -136,21 +150,46 @@ fn normalize_generated_node_json(value: &mut serde_json::Value) {
     }
 }
 
-/// 收集文本里所有**顶层**平衡的 `open..close` 子串(`[...]` 或 `{...}`;
-/// 忽略字符串字面量内的括号),按出现顺序返回。抓到一段后跳过其整段,
-/// **不下探嵌套**——否则 `[{frame, children:[a,b,c]}]` 这种嵌套格式会把
-/// 内层 `[a,b,c]`(3 个)当候选、按"节点数最多"错误压过外层 `[root]`
-/// (1 个)。散文里并列的括号(如 `[step 1]` 与真正的数组)互不嵌套,仍
-/// 各自作为顶层候选。
+/// 收集文本里可作为候选的 `open..close` 子串(`[...]` 或 `{...}`),按出现
+/// 顺序返回。字符串字面量内的括号忽略。两条规则保证对脏输入鲁棒:
+/// - **独立尝试**每个 `open`:`balanced_end` 未闭合即跳过该位置(+1 前进)。
+///   于是散文里**不闭合的 `[`**(如 "options [1,2…")不会污染后续——其后真正
+///   的数组仍被独立找到。(不能用累积深度,否则一个不闭合括号会把后面全压到
+///   深度 >0、整段漏掉。)
+/// - **跳过整段**(skip-past):捕获一段后跳到其尾后,内层子串(数组里的嵌套
+///   children、对象里的字段数组等)不会被当独立候选。
+///
+/// 不在此处按"是否字段值 / 嵌套"过滤——交给 [`parse_nodes`] 按总节点数择优:
+/// 完整树天然压过被误抓的内层数组,也不会误伤 `{"nodes":[…]}` 这类带标签的
+/// 真数组(colon-skip 曾把它一并跳掉)。
 fn balanced_spans(text: &str, open: u8, close: u8) -> Vec<&str> {
     let bytes = text.as_bytes();
     let mut out = Vec::new();
+    let mut in_str = false;
+    let mut esc = false;
     let mut i = 0;
     while i < bytes.len() {
-        if bytes[i] == open {
+        let c = bytes[i];
+        if in_str {
+            if esc {
+                esc = false;
+            } else if c == b'\\' {
+                esc = true;
+            } else if c == b'"' {
+                in_str = false;
+            }
+            i += 1;
+            continue;
+        }
+        if c == b'"' {
+            in_str = true;
+            i += 1;
+            continue;
+        }
+        if c == open {
             if let Some(end) = balanced_end(bytes, i, open, close) {
                 out.push(&text[i..=end]);
-                i = end + 1; // 跳过整段,不把嵌套子串当独立候选
+                i = end + 1; // skip the captured span — nested sub-spans aren't separate candidates
                 continue;
             }
         }
@@ -283,6 +322,49 @@ mod tests {
         // {...} 逐个解析。
         let text = "```json\n{\"type\":\"frame\",\"id\":\"a\",\"name\":\"A\",\"x\":0,\"y\":0,\"width\":100,\"height\":50,\"children\":[]}\n{\"type\":\"frame\",\"id\":\"b\",\"name\":\"B\",\"x\":0,\"y\":0,\"width\":100,\"height\":50,\"children\":[]}\n```";
         let nodes = parse_nodes(text).expect("JSONL fallback should parse bare objects");
+        assert_eq!(nodes.len(), 2);
+        assert_eq!(nodes[0].id_str(), "a");
+        assert_eq!(nodes[1].id_str(), "b");
+    }
+
+    #[test]
+    fn parse_nodes_bare_object_returns_top_level_not_nested_children() {
+        // 单个裸对象(无数组包裹)带真实嵌套 children。合并深度判定下,
+        // children:[...] 在 {} 内(深度>0)不被数组路径当节点数组,返回顶层
+        // root 而不是内层 [a,b](Codex review)。
+        let text = r#"{ "type": "frame", "id": "root", "name": "Root", "x": 0, "y": 0, "width": 300, "height": 200, "children": [
+            { "type": "frame", "id": "a", "name": "A", "x": 0, "y": 0, "width": 100, "height": 50, "children": [] },
+            { "type": "frame", "id": "b", "name": "B", "x": 0, "y": 0, "width": 100, "height": 50, "children": [] }
+        ] }"#;
+        let nodes = parse_nodes(text).expect("parse");
+        assert_eq!(nodes.len(), 1);
+        assert_eq!(nodes[0].id_str(), "root");
+    }
+
+    #[test]
+    fn parse_nodes_finds_array_after_unmatched_prose_bracket() {
+        // 散文里有个不闭合的 `[`(如 "options [1, 2 …"),其后才是真数组。
+        // 独立尝试每个 `[` + 不闭合即跳过,后面的真数组不被漏掉(Codex
+        // review;修上一轮 combined-depth 引入的回归)。
+        let text = "Consider options [a and b, then build:\n```json\n[{ \"type\": \"frame\", \"id\": \"hero\", \"name\": \"Hero\", \"x\": 0, \"y\": 0, \"width\": 200, \"height\": 100, \"children\": [] }]\n```";
+        let nodes =
+            parse_nodes(text).expect("should find the real array after an unmatched prose bracket");
+        assert_eq!(nodes.len(), 1);
+        assert_eq!(nodes[0].id_str(), "hero");
+    }
+
+    #[test]
+    fn parse_nodes_reads_labelled_wrapper_object() {
+        // 模型把节点数组包进带标签的对象 {"nodes":[...]}。colon-skip 曾把
+        // "nodes":[...] 一并跳掉;现在按总节点数择优——wrapper 无 type 解析
+        // 失败,数组路径取出 [a,b](Codex review)。
+        let text = r#"```json
+{ "nodes": [
+  { "type": "frame", "id": "a", "name": "A", "x": 0, "y": 0, "width": 100, "height": 50, "children": [] },
+  { "type": "frame", "id": "b", "name": "B", "x": 0, "y": 0, "width": 100, "height": 50, "children": [] }
+] }
+```"#;
+        let nodes = parse_nodes(text).expect("labelled wrapper array should be parsed");
         assert_eq!(nodes.len(), 2);
         assert_eq!(nodes[0].id_str(), "a");
         assert_eq!(nodes[1].id_str(), "b");
