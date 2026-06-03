@@ -26,3 +26,7 @@ futures = "0.3"
 # `tokio` for the runtime that `Orchestrator::run` (async) runs on.
 # `rt-multi-thread` so the LLM HTTP client can spawn its own tasks.
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+# Persist the produced PenDocument to a `.op` (canonical serde_json,
+# same shape as `persistence::save_to_path`) when `OPENPENCIL_SMOKE_OUT`
+# is set — lets the headless render / screenshot step pick up the result.
+serde_json = { workspace = true }

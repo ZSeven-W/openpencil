@@ -3063,6 +3063,7 @@ dependencies = [
  "futures",
  "op-editor-core",
  "op-orchestrator",
+ "serde_json",
  "tokio",
 ]
 
