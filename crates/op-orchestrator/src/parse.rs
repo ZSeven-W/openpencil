@@ -27,7 +27,7 @@ impl std::fmt::Display for ParseError {
 pub fn parse_nodes(text: &str) -> Result<Vec<PenNode>, ParseError> {
     let mut best: Option<Vec<PenNode>> = None;
     let mut last_err: Option<ParseError> = None;
-    for candidate in balanced_arrays(text) {
+    for candidate in balanced_spans(text, b'[', b']') {
         match try_parse_candidate(candidate) {
             Ok(nodes) => {
                 if best.as_ref().is_none_or(|b| nodes.len() > b.len()) {
@@ -37,7 +37,36 @@ pub fn parse_nodes(text: &str) -> Result<Vec<PenNode>, ParseError> {
             Err(e) => last_err = Some(e),
         }
     }
-    best.ok_or_else(|| last_err.unwrap_or_else(|| ParseError("no JSON array found".into())))
+    if let Some(nodes) = best {
+        return Ok(nodes);
+    }
+    // Fallback: some models (DeepSeek) emit JSONL — bare top-level `{...}`
+    // objects (one per line, inside a ```json fence) with no enclosing
+    // `[ ]`. The array scan above only sees their inner `fill:[...]`
+    // sub-arrays, so collect the top-level objects and deserialize each
+    // as a PenNode.
+    if let Some(nodes) = try_parse_jsonl(text) {
+        return Ok(nodes);
+    }
+    Err(last_err.unwrap_or_else(|| ParseError("no JSON array or objects found".into())))
+}
+
+/// JSONL / bare-object fallback: collect every top-level `{...}` object
+/// and deserialize each as a `PenNode` (tolerant — non-node objects are
+/// skipped). `None` when nothing parses, so the caller surfaces the
+/// array-path error instead.
+fn try_parse_jsonl(text: &str) -> Option<Vec<PenNode>> {
+    let mut nodes = Vec::new();
+    for obj in balanced_spans(text, b'{', b'}') {
+        let Ok(mut value) = serde_json::from_str::<serde_json::Value>(obj) else {
+            continue;
+        };
+        normalize_generated_node_json(&mut value);
+        if let Ok(node) = serde_json::from_value::<PenNode>(value) {
+            nodes.push(node);
+        }
+    }
+    (!nodes.is_empty()).then_some(nodes)
 }
 
 /// 走完整 parse 管线解析单个候选 `[...]`:serde `Value` → normalize →
@@ -107,21 +136,21 @@ fn normalize_generated_node_json(value: &mut serde_json::Value) {
     }
 }
 
-/// 收集文本里所有**顶层**平衡的 `[...]` 子串(忽略字符串字面量内的方
-/// 括号),按出现顺序返回。抓到一个数组后跳过其整段,**不下探嵌套的
-/// children 数组**——否则 `[{frame, children:[a,b,c]}]` 这种嵌套格式会
-/// 把内层 `[a,b,c]`(3 个)当候选,按"节点数最多"错误压过外层
-/// `[root]`(1 个)。散文里并列的括号(如 `[step 1]` 与真正的数组)互
-/// 不嵌套,仍各自作为顶层候选。
-fn balanced_arrays(text: &str) -> Vec<&str> {
+/// 收集文本里所有**顶层**平衡的 `open..close` 子串(`[...]` 或 `{...}`;
+/// 忽略字符串字面量内的括号),按出现顺序返回。抓到一段后跳过其整段,
+/// **不下探嵌套**——否则 `[{frame, children:[a,b,c]}]` 这种嵌套格式会把
+/// 内层 `[a,b,c]`(3 个)当候选、按"节点数最多"错误压过外层 `[root]`
+/// (1 个)。散文里并列的括号(如 `[step 1]` 与真正的数组)互不嵌套,仍
+/// 各自作为顶层候选。
+fn balanced_spans(text: &str, open: u8, close: u8) -> Vec<&str> {
     let bytes = text.as_bytes();
     let mut out = Vec::new();
     let mut i = 0;
     while i < bytes.len() {
-        if bytes[i] == b'[' {
-            if let Some(end) = balanced_end(bytes, i) {
+        if bytes[i] == open {
+            if let Some(end) = balanced_end(bytes, i, open, close) {
                 out.push(&text[i..=end]);
-                i = end + 1; // 跳过整段,不把嵌套 children 当独立候选
+                i = end + 1; // 跳过整段,不把嵌套子串当独立候选
                 continue;
             }
         }
@@ -130,9 +159,9 @@ fn balanced_arrays(text: &str) -> Vec<&str> {
     out
 }
 
-/// 从 `start`(指向 `[`)起找平衡的 `]` 字节下标;忽略字符串内的方
+/// 从 `start`(指向 `open`)起找平衡的 `close` 字节下标;忽略字符串内的
 /// 括号。未闭合返回 `None`。
-fn balanced_end(bytes: &[u8], start: usize) -> Option<usize> {
+fn balanced_end(bytes: &[u8], start: usize, open: u8, close: u8) -> Option<usize> {
     let mut depth = 0i32;
     let mut in_str = false;
     let mut esc = false;
@@ -147,16 +176,15 @@ fn balanced_end(bytes: &[u8], start: usize) -> Option<usize> {
             }
             continue;
         }
-        match c {
-            b'"' => in_str = true,
-            b'[' => depth += 1,
-            b']' => {
-                depth -= 1;
-                if depth == 0 {
-                    return Some(i);
-                }
+        if c == b'"' {
+            in_str = true;
+        } else if c == open {
+            depth += 1;
+        } else if c == close {
+            depth -= 1;
+            if depth == 0 {
+                return Some(i);
             }
-            _ => {}
         }
     }
     None
@@ -246,5 +274,17 @@ mod tests {
         let nodes = parse_nodes(text).expect("parse");
         assert_eq!(nodes.len(), 1);
         assert_eq!(nodes[0].id_str(), "root");
+    }
+
+    #[test]
+    fn parse_nodes_reads_jsonl_bare_objects() {
+        // DeepSeek 输出 JSONL:```json 围栏里每行一个裸对象,无 [ ] 包裹。
+        // 数组路径只看到内层 children:[] 空数组(失败),JSONL 回退按顶层
+        // {...} 逐个解析。
+        let text = "```json\n{\"type\":\"frame\",\"id\":\"a\",\"name\":\"A\",\"x\":0,\"y\":0,\"width\":100,\"height\":50,\"children\":[]}\n{\"type\":\"frame\",\"id\":\"b\",\"name\":\"B\",\"x\":0,\"y\":0,\"width\":100,\"height\":50,\"children\":[]}\n```";
+        let nodes = parse_nodes(text).expect("JSONL fallback should parse bare objects");
+        assert_eq!(nodes.len(), 2);
+        assert_eq!(nodes[0].id_str(), "a");
+        assert_eq!(nodes[1].id_str(), "b");
     }
 }
