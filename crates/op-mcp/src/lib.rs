@@ -102,6 +102,7 @@ pub mod json_serializer;
 pub mod node_attr_tools;
 #[cfg(test)]
 mod node_attr_tools_tests;
+mod node_shape_defaults;
 pub mod open_document;
 #[cfg(test)]
 mod open_document_tests;
