@@ -2,6 +2,7 @@
 
 use std::collections::BTreeMap;
 
+use op_editor_core::default_leaf_node_size;
 use serde_json::Value;
 
 use crate::{ToolErrorCode, ToolOutcome};
@@ -77,13 +78,14 @@ fn ts_insert_node_params(raw: &str) -> Result<InsertNodeParams, ToolOutcome> {
             )
         })?;
     let name = json_string_field(obj, &["name", "content"]).unwrap_or_else(|| kind.clone());
+    let (default_width, default_height) = default_leaf_node_size(&kind);
     Ok(InsertNodeParams {
         kind,
         name,
         x: json_i32_field(obj, "x", Some(0))?,
         y: json_i32_field(obj, "y", Some(0))?,
-        width: json_i32_field(obj, "width", Some(100))?,
-        height: json_i32_field(obj, "height", Some(100))?,
+        width: json_i32_field(obj, "width", Some(default_width))?,
+        height: json_i32_field(obj, "height", Some(default_height))?,
         fill_hex: json_fill_hex_field(obj)?,
     })
 }
@@ -185,5 +187,40 @@ fn json_scalar_to_string(value: &Value) -> Option<String> {
         Value::Number(n) => Some(n.to_string()),
         Value::Bool(v) => Some(v.to_string()),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn ts_data_args(data: &str) -> BTreeMap<String, String> {
+        BTreeMap::from([("data".to_string(), data.to_string())])
+    }
+
+    #[test]
+    fn ts_text_data_defaults_to_compact_text_bounds() {
+        let params = match insert_node_params(&ts_data_args(r#"{"type":"text","name":"Text"}"#)) {
+            Ok(params) => params,
+            Err(_) => panic!("text data should parse"),
+        };
+
+        assert_eq!(params.kind, "text");
+        assert_eq!(params.name, "Text");
+        assert_eq!(params.width, 48);
+        assert_eq!(params.height, 20);
+    }
+
+    #[test]
+    fn ts_non_text_data_keeps_square_default_bounds() {
+        let params =
+            match insert_node_params(&ts_data_args(r#"{"type":"rectangle","name":"Card"}"#)) {
+                Ok(params) => params,
+                Err(_) => panic!("rectangle data should parse"),
+            };
+
+        assert_eq!(params.kind, "rect");
+        assert_eq!(params.width, 100);
+        assert_eq!(params.height, 100);
     }
 }

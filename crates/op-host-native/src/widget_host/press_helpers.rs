@@ -5,6 +5,17 @@
 use super::WidgetHostNative;
 use op_editor_ui::Point2D;
 
+fn create_initial_size_for_tool(tool: op_editor_core::Tool) -> (f64, f64) {
+    if matches!(tool, op_editor_core::Tool::Text) {
+        (
+            f64::from(op_editor_core::DEFAULT_TEXT_NODE_WIDTH),
+            f64::from(op_editor_core::DEFAULT_TEXT_NODE_HEIGHT),
+        )
+    } else {
+        (1.0, 1.0)
+    }
+}
+
 impl WidgetHostNative {
     /// Spawn a fresh node for the active shape / frame / text tool at
     /// `doc_point`. Returns the new node's id when the tool maps to a
@@ -19,11 +30,7 @@ impl WidgetHostNative {
         // Click-create default size: Text needs room for its
         // placeholder glyphs; shape tools start 1×1 so a drag
         // immediately sizes the node to the cursor.
-        let (init_w, init_h) = if matches!(self.editor_state.tool, op_editor_core::Tool::Text) {
-            (96.0_f64, 24.0_f64)
-        } else {
-            (1.0, 1.0)
-        };
+        let (init_w, init_h) = create_initial_size_for_tool(self.editor_state.tool);
         let id = self.editor_state.create_node_for_tool(
             self.editor_state.tool,
             &mut self.next_node_id,
@@ -758,5 +765,19 @@ pub(in crate::widget_host) fn color_target(
         op_editor_core::ColorTarget::EffectColor(i) => {
             op_editor_core::ui_draft::ColorTarget::EffectColor(i)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::create_initial_size_for_tool;
+    use op_editor_core::Tool;
+
+    #[test]
+    fn text_tool_initial_size_uses_compact_text_bounds() {
+        let (w, h) = create_initial_size_for_tool(Tool::Text);
+
+        assert_eq!(w, f64::from(op_editor_core::DEFAULT_TEXT_NODE_WIDTH));
+        assert_eq!(h, f64::from(op_editor_core::DEFAULT_TEXT_NODE_HEIGHT));
     }
 }
