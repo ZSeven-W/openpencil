@@ -54,11 +54,16 @@ mod window_state;
 use op_host_native::{NativeBackend, SharedSkiaContext, SharedSkiaError, WidgetHostNative};
 use std::path::PathBuf;
 use std::time::Instant;
-use winit::event_loop::{ControlFlow, EventLoop};
+use winit::event_loop::{ControlFlow, EventLoop, EventLoopProxy};
 use winit::window::Window;
 
 const INITIAL_VIEWPORT_W: f32 = 1440.0;
 const INITIAL_VIEWPORT_H: f32 = 900.0;
+
+#[derive(Clone, Copy, Debug)]
+enum DesktopEvent {
+    McpWake,
+}
 
 struct DesktopApp {
     window: Option<Window>,
@@ -122,6 +127,8 @@ struct DesktopApp {
     /// Background auto-search jobs that replace generated empty image
     /// nodes with freely licensed remote images.
     image_search: image_search_session::ImageSearchSession,
+    /// Cross-thread wake handle used by live MCP connection threads.
+    mcp_wake_proxy: Option<EventLoopProxy<DesktopEvent>>,
     iconify_job: Option<iconify_host::IconifyJob>,
     /// Document to open once the window is ready — set from argv by
     /// the file-association launch path (`openpencil-desktop X.op`).
@@ -242,6 +249,7 @@ impl DesktopApp {
             current_figma_import: None,
             model_probe: model_discovery::ModelProbe::spawn(),
             image_search: image_search_session::ImageSearchSession::new(),
+            mcp_wake_proxy: None,
             iconify_job: None,
             initial_file,
             app_menu: None,
@@ -782,7 +790,7 @@ fn main() {
         return;
     }
     let initial_file = initial_file_from_argv();
-    let mut event_loop_builder = EventLoop::builder();
+    let mut event_loop_builder = EventLoop::<DesktopEvent>::with_user_event();
     #[cfg(target_os = "macos")]
     {
         use winit::platform::macos::{ActivationPolicy, EventLoopBuilderExtMacOS};
@@ -796,9 +804,11 @@ fn main() {
         }
     };
     event_loop.set_control_flow(ControlFlow::Wait);
+    let mcp_wake_proxy = event_loop.create_proxy();
     // Give the non-bundled binary a proper Dock name + icon.
     macos_app::apply();
     let mut app = DesktopApp::new(initial_file);
+    app.mcp_wake_proxy = Some(mcp_wake_proxy);
     app.force_live_mcp_port = live_mcp_port_from_argv();
     if let Err(err) = event_loop.run_app(&mut app) {
         eprintln!("openpencil-desktop: run_app exited with error: {err}");

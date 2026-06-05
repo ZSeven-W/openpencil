@@ -25,10 +25,12 @@ const MAX_LIVE_CONNS: usize = 64;
 /// Maximum UI-thread MCP requests to drain in one redraw. A client that
 /// enqueues a large burst should not be able to monopolize the frame.
 const UI_PUMP_REQUEST_BUDGET: usize = 8;
-/// Deeply nested `.op` documents recurse through serde + schema loading before
-/// the UI thread sees the document. The default per-thread stack is too small
-/// for stress inputs, so live connection threads reserve a larger stack.
-const LIVE_CONN_STACK_SIZE: usize = 512 * 1024 * 1024;
+/// Per-request HTTP connection stack. Deep JSON deserialization is handled by
+/// `serde_stacker`; reserving hundreds of MB per short-lived localhost request
+/// makes large live-canvas syncs look like runaway desktop memory growth.
+const LIVE_CONN_STACK_SIZE: usize = 16 * 1024 * 1024;
+const _: () = assert!(LIVE_CONN_STACK_SIZE <= 16 * 1024 * 1024);
+type UiWake = Arc<dyn Fn() + Send + Sync + 'static>;
 
 pub(crate) struct McpLiveServer {
     port: u16,
@@ -75,7 +77,15 @@ enum UiRequest {
 }
 
 impl McpLiveServer {
+    #[cfg(test)]
     pub(crate) fn start(port: u16) -> Result<Self, String> {
+        Self::start_with_wake(port, || {})
+    }
+
+    pub(crate) fn start_with_wake<F>(port: u16, wake_ui: F) -> Result<Self, String>
+    where
+        F: Fn() + Send + Sync + 'static,
+    {
         let listener = TcpListener::bind(("127.0.0.1", port))
             .map_err(|e| format!("bind 127.0.0.1:{port}: {e}"))?;
         let bound_port = listener
@@ -91,9 +101,19 @@ impl McpLiveServer {
         let server_token = token.clone();
         let quit_flag = Arc::new(AtomicBool::new(false));
         let server_quit = Arc::clone(&quit_flag);
+        let wake_ui: UiWake = Arc::new(wake_ui);
         thread::Builder::new()
             .name("op-mcp-live-http".into())
-            .spawn(move || server_loop(listener, req_tx, stop_rx, server_token, server_quit))
+            .spawn(move || {
+                server_loop(
+                    listener,
+                    req_tx,
+                    stop_rx,
+                    server_token,
+                    server_quit,
+                    wake_ui,
+                )
+            })
             .map_err(|e| format!("spawn MCP live server: {e}"))?;
         eprintln!("openpencil-desktop mcp: listening on 127.0.0.1:{bound_port}/mcp");
         Ok(Self {
@@ -197,6 +217,7 @@ fn server_loop(
     stop_rx: Receiver<()>,
     token: String,
     quit_flag: Arc<AtomicBool>,
+    wake_ui: UiWake,
 ) {
     // Serializes only *stateful* requests so a concurrent multi-apply batch
     // can't interleave. Stateless probes (`ping`/`initialize`) bypass it, so
@@ -234,6 +255,7 @@ fn server_loop(
                 let lock = Arc::clone(&stateful_lock);
                 let quit = Arc::clone(&quit_flag);
                 let conns = Arc::clone(&conn_count);
+                let wake = Arc::clone(&wake_ui);
                 let spawned = thread::Builder::new()
                     .name("op-mcp-live-conn".into())
                     .stack_size(LIVE_CONN_STACK_SIZE)
@@ -246,7 +268,8 @@ fn server_loop(
                         let mut stream = stream;
                         let _ = stream.set_read_timeout(Some(UI_ACK_TIMEOUT));
                         let _ = stream.set_write_timeout(Some(UI_ACK_TIMEOUT));
-                        if let Err(e) = serve_connection(&mut stream, &req_tx, &token, &lock, &quit)
+                        if let Err(e) =
+                            serve_connection(&mut stream, &req_tx, &token, &lock, &quit, &wake)
                         {
                             eprintln!("openpencil-desktop mcp: {e}");
                             let _ = crate::mcp_serve::write_mcp_http_response(
@@ -279,6 +302,7 @@ fn serve_connection<S: std::io::Read + std::io::Write>(
     token: &str,
     stateful_lock: &Mutex<()>,
     quit_flag: &AtomicBool,
+    wake_ui: &UiWake,
 ) -> Result<(), String> {
     let req = crate::mcp_serve::read_http_request(stream)?;
     if req.method == "OPTIONS" {
@@ -289,7 +313,7 @@ fn serve_connection<S: std::io::Read + std::io::Write>(
     // client (`setSyncDocument` → POST `{document}`) drive THIS editor's
     // on-screen canvas, mirroring `apps/web/server/api/mcp/document.post.ts`.
     if crate::mcp_serve::is_document_sync_route(&req.method, &req.path) {
-        return serve_document_sync(stream, req_tx, stateful_lock, &req.body);
+        return serve_document_sync(stream, req_tx, wake_ui, stateful_lock, &req.body);
     }
     if req.path != "/mcp" && req.path != "/" {
         return crate::mcp_serve::write_mcp_http_response(
@@ -310,6 +334,7 @@ fn serve_connection<S: std::io::Read + std::io::Write>(
     if let Some(id) = crate::mcp_serve::shutdown_request_id(&req.body, token) {
         write_json_rpc_response(stream, &crate::mcp_serve::shutdown_ok_response(&id))?;
         quit_flag.store(true, Ordering::Release);
+        wake_ui();
         return Ok(());
     }
     // Stateless handshake/liveness methods must NOT block on the UI thread or
@@ -343,11 +368,11 @@ fn serve_connection<S: std::io::Read + std::io::Write>(
     {
         return write_json_rpc_response(stream, &response);
     }
-    let mut state = request_snapshot(req_tx)?;
+    let mut state = request_snapshot(req_tx, wake_ui)?;
     let response = crate::mcp_serve::process_message_with_applier(
         &mut state,
         &req.body,
-        |local_state, cmd| match request_apply(req_tx, cmd.clone()) {
+        |local_state, cmd| match request_apply(req_tx, wake_ui, cmd.clone()) {
             Ok(ack) => {
                 if ack.applied {
                     let _ = local_state.apply(cmd.clone());
@@ -376,6 +401,7 @@ static LIVE_SYNC_VERSION: AtomicU64 = AtomicU64::new(0);
 fn serve_document_sync<S: std::io::Read + std::io::Write>(
     stream: &mut S,
     req_tx: &Sender<UiRequest>,
+    wake_ui: &UiWake,
     stateful_lock: &Mutex<()>,
     body: &str,
 ) -> Result<(), String> {
@@ -413,7 +439,7 @@ fn serve_document_sync<S: std::io::Read + std::io::Write>(
     let _guard = stateful_lock
         .lock()
         .unwrap_or_else(|poison| poison.into_inner());
-    match request_replace(req_tx, loaded.value) {
+    match request_replace(req_tx, wake_ui, loaded.value) {
         Ok(()) => {
             let version = LIVE_SYNC_VERSION.fetch_add(1, Ordering::Relaxed) + 1;
             crate::mcp_serve::write_mcp_http_response(
@@ -443,19 +469,25 @@ fn write_json_rpc_response<S: std::io::Write>(
     }
 }
 
-fn request_snapshot(req_tx: &Sender<UiRequest>) -> Result<EditorState, String> {
+fn request_snapshot(req_tx: &Sender<UiRequest>, wake_ui: &UiWake) -> Result<EditorState, String> {
     let (ack_tx, ack_rx) = mpsc::sync_channel(1);
     req_tx
         .send(UiRequest::Snapshot { ack: ack_tx })
         .map_err(|_| "UI thread is not accepting MCP snapshot requests".to_string())?;
+    wake_ui();
     recv_with_timeout(ack_rx.recv_timeout(UI_ACK_TIMEOUT), "snapshot")
 }
 
-fn request_apply(req_tx: &Sender<UiRequest>, cmd: EditorCommand) -> Result<ApplyAck, String> {
+fn request_apply(
+    req_tx: &Sender<UiRequest>,
+    wake_ui: &UiWake,
+    cmd: EditorCommand,
+) -> Result<ApplyAck, String> {
     let (ack_tx, ack_rx) = mpsc::sync_channel(1);
     req_tx
         .send(UiRequest::Apply { cmd, ack: ack_tx })
         .map_err(|_| "UI thread is not accepting MCP apply requests".to_string())?;
+    wake_ui();
     recv_with_timeout(ack_rx.recv_timeout(UI_ACK_TIMEOUT), "apply")
 }
 
@@ -465,6 +497,7 @@ fn request_apply(req_tx: &Sender<UiRequest>, cmd: EditorCommand) -> Result<Apply
 /// and surface as HTTP 400.)
 fn request_replace(
     req_tx: &Sender<UiRequest>,
+    wake_ui: &UiWake,
     doc: jian_ops_schema::PenDocument,
 ) -> Result<(), String> {
     let (ack_tx, ack_rx) = mpsc::sync_channel(1);
@@ -474,6 +507,7 @@ fn request_replace(
             ack: ack_tx,
         })
         .map_err(|_| "UI thread is not accepting MCP document-sync requests".to_string())?;
+    wake_ui();
     recv_with_timeout(ack_rx.recv_timeout(UI_ACK_TIMEOUT), "document-sync")
 }
 
@@ -535,6 +569,40 @@ mod tests {
         let token = make_live_token();
         assert!(token.contains('-'), "{token}");
         assert!(!token.starts_with('-') && !token.ends_with('-'), "{token}");
+    }
+
+    #[test]
+    fn snapshot_request_wakes_ui_event_loop_after_queueing() {
+        let (req_tx, req_rx) = mpsc::channel();
+        let wake_count = Arc::new(AtomicUsize::new(0));
+        let wake_ui: UiWake = {
+            let wake_count = Arc::clone(&wake_count);
+            Arc::new(move || {
+                wake_count.fetch_add(1, Ordering::AcqRel);
+            })
+        };
+
+        let requester = thread::spawn(move || request_snapshot(&req_tx, &wake_ui));
+        let request = req_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("snapshot request should be queued");
+        let wake_deadline = std::time::Instant::now() + Duration::from_secs(1);
+        while wake_count.load(Ordering::Acquire) == 0 && std::time::Instant::now() < wake_deadline {
+            thread::sleep(Duration::from_millis(1));
+        }
+        assert_eq!(
+            wake_count.load(Ordering::Acquire),
+            1,
+            "queueing a UI request must wake winit instead of relying on idle polling"
+        );
+        let UiRequest::Snapshot { ack } = request else {
+            panic!("expected snapshot request");
+        };
+        ack.send(EditorState::new()).expect("ack snapshot");
+        requester
+            .join()
+            .expect("requester thread should not panic")
+            .expect("snapshot request should complete");
     }
 
     #[test]

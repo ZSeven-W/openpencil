@@ -3,8 +3,8 @@
 
 use crate::{
     chat_attachment, chat_session, cursor_icon, design_session, figma_import_session, frame,
-    git_jobs, menu, persistence, settings_io, window_state, DesktopApp, INITIAL_VIEWPORT_H,
-    INITIAL_VIEWPORT_W,
+    git_jobs, menu, persistence, settings_io, window_state, DesktopApp, DesktopEvent,
+    INITIAL_VIEWPORT_H, INITIAL_VIEWPORT_W,
 };
 use op_host_native::{NativeBackend, ProviderError, SharedSkiaContext, SharedSkiaError};
 use std::time::{Duration, Instant};
@@ -15,35 +15,27 @@ use winit::event::{
 use winit::event_loop::{ActiveEventLoop, ControlFlow};
 use winit::window::{Window, WindowId};
 
-impl ApplicationHandler for DesktopApp {
+impl ApplicationHandler<DesktopEvent> for DesktopApp {
     fn new_events(&mut self, event_loop: &ActiveEventLoop, cause: StartCause) {
         // Live MCP requests must not wait for `RedrawRequested`. Window systems
         // may throttle redraws while a window is occluded or while a previous
         // paint is expensive, but CLI/MCP snapshot/apply acks should still be
         // drained as soon as the event loop wakes. Applies mark the document
         // dirty and schedule a paint; snapshots just ack with no repaint.
-        let mcp_requested_repaint = if self.poll_mcp_server() {
+        if self.poll_mcp_server() {
             self.request_redraw(true);
-            true
-        } else {
-            false
-        };
+        }
         if self.mcp_shutdown_requested() {
             event_loop.exit();
             return;
         }
-        // When a WaitUntil deadline fires, only some wakeups need a paint
-        // (caret blink, streaming chat, imports, background jobs). A pure
-        // live-MCP poll tick should drain queued MCP requests without
-        // repainting the whole canvas every 100 ms while the editor is idle.
-        if matches!(cause, StartCause::ResumeTimeReached { .. }) {
-            if self.resume_time_needs_redraw() {
-                self.request_redraw(true);
-            } else if self.mcp_server_active() && !mcp_requested_repaint {
-                event_loop.set_control_flow(ControlFlow::WaitUntil(
-                    Instant::now() + Duration::from_millis(100),
-                ));
-            }
+        // When a WaitUntil deadline fires, only timed UI activity needs a paint
+        // (caret blink, streaming chat, imports, background jobs). Live MCP uses
+        // `DesktopEvent::McpWake`, so an idle server no longer creates timer
+        // ticks just to poll for possible requests.
+        if matches!(cause, StartCause::ResumeTimeReached { .. }) && self.resume_time_needs_redraw()
+        {
+            self.request_redraw(true);
         }
         // Native-menu selections arrive on `muda`'s global channel.
         // A menu click wakes the event loop, so draining here — at
@@ -285,6 +277,19 @@ impl ApplicationHandler for DesktopApp {
             event_loop.set_control_flow(ControlFlow::WaitUntil(
                 Instant::now() + Duration::from_millis(500),
             ));
+        }
+    }
+
+    fn user_event(&mut self, event_loop: &ActiveEventLoop, event: DesktopEvent) {
+        match event {
+            DesktopEvent::McpWake => {
+                if self.poll_mcp_server() {
+                    self.request_redraw(true);
+                }
+                if self.mcp_shutdown_requested() {
+                    event_loop.exit();
+                }
+            }
         }
     }
 
@@ -583,7 +588,7 @@ impl ApplicationHandler for DesktopApp {
                     event_loop.set_control_flow(ControlFlow::WaitUntil(
                         Instant::now() + Duration::from_millis(33),
                     ));
-                } else if self.current_figma_import.is_some() || self.mcp_server_active() {
+                } else if self.current_figma_import.is_some() {
                     event_loop.set_control_flow(ControlFlow::WaitUntil(
                         Instant::now() + Duration::from_millis(100),
                     ));
