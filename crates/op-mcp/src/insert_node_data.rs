@@ -135,3 +135,66 @@ fn schema_node_type(kind: &str) -> String {
         other => other.into(),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use jian_ops_schema::node::PenNode;
+    use jian_ops_schema::sizing::SizingBehavior;
+
+    fn args_with_data(data: &str) -> BTreeMap<String, String> {
+        BTreeMap::from([("data".to_string(), data.to_string())])
+    }
+
+    fn numeric_size(value: &Option<SizingBehavior>) -> Option<i32> {
+        match value {
+            Some(SizingBehavior::Number(n)) => Some(n.round() as i32),
+            _ => None,
+        }
+    }
+
+    #[test]
+    fn preserved_text_data_defaults_missing_bounds_to_compact_text_size() {
+        let node = ts_data_node(&args_with_data(
+            r#"{"type":"text","name":"Label","content":"CLI text"}"#,
+        ))
+        .expect("text data parses")
+        .expect("text content preserves subtree");
+        let PenNode::Text(text) = node else {
+            panic!("expected text node");
+        };
+
+        assert_eq!(
+            numeric_size(&text.width),
+            Some(op_editor_core::DEFAULT_TEXT_NODE_WIDTH)
+        );
+        assert_eq!(
+            numeric_size(&text.height),
+            Some(op_editor_core::DEFAULT_TEXT_NODE_HEIGHT)
+        );
+    }
+
+    #[test]
+    fn preserved_nested_text_data_defaults_missing_bounds_to_compact_text_size() {
+        let node = ts_data_node(&args_with_data(
+            r#"{"type":"frame","name":"Card","width":200,"height":120,"children":[{"type":"text","name":"Label","content":"CLI text"}]}"#,
+        ))
+        .expect("frame data parses")
+        .expect("children preserve subtree");
+        let PenNode::Frame(frame) = node else {
+            panic!("expected frame node");
+        };
+        let [PenNode::Text(text)] = frame.children.as_deref().expect("frame children") else {
+            panic!("expected one text child");
+        };
+
+        assert_eq!(
+            numeric_size(&text.width),
+            Some(op_editor_core::DEFAULT_TEXT_NODE_WIDTH)
+        );
+        assert_eq!(
+            numeric_size(&text.height),
+            Some(op_editor_core::DEFAULT_TEXT_NODE_HEIGHT)
+        );
+    }
+}

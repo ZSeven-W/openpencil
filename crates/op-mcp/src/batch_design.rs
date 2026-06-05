@@ -419,6 +419,7 @@ pub(crate) fn normalize_node_shape(value: &mut serde_json::Value) {
     if let Some(padding) = obj.get_mut("padding") {
         normalize_padding(padding);
     }
+    super::node_shape_defaults::normalize_text_default_bounds(obj);
     normalize_layout_keyword(obj, "justifyContent");
     normalize_layout_keyword(obj, "alignItems");
     if let Some(serde_json::Value::Array(children)) = obj.get_mut("children") {
