@@ -34,6 +34,7 @@ pub mod host_support;
 pub mod icon_picker_state;
 pub mod image_node_props;
 pub mod mutators;
+pub mod node_defaults;
 pub mod node_id;
 pub mod page_mutators;
 pub mod path_bounds;
@@ -138,6 +139,10 @@ pub use history::{EditorSnapshot, History, HISTORY_CAP};
 pub use icon_picker_state::{IconPickerRemoteIcon, IconPickerRemoteState, IconifyLoadMoreRequest};
 pub use image_node_props::image_node_summary;
 pub use jian_ops_schema::{DesignMdColor, DesignMdSpec, DesignMdTypography, PenDocument};
+pub use node_defaults::{
+    default_leaf_node_size, DEFAULT_LEAF_NODE_SIZE, DEFAULT_TEXT_NODE_HEIGHT,
+    DEFAULT_TEXT_NODE_WIDTH,
+};
 pub use node_id::NodeId;
 pub use pen_node_ext::PenNodeExt;
 pub use render_backend::*;

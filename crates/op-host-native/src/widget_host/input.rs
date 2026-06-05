@@ -412,7 +412,10 @@ impl WidgetHostNative {
             let min_y = drag.start_doc_y.min(cur.y);
             // Text needs room for placeholder glyphs.
             let (min_w, min_h) = match self.editor_state.tool {
-                op_editor_core::Tool::Text => (96.0_f32, 24.0_f32),
+                op_editor_core::Tool::Text => (
+                    op_editor_core::DEFAULT_TEXT_NODE_WIDTH as f32,
+                    op_editor_core::DEFAULT_TEXT_NODE_HEIGHT as f32,
+                ),
                 _ => (1.0_f32, 1.0_f32),
             };
             let w = (drag.start_doc_x - cur.x).abs().max(min_w);
