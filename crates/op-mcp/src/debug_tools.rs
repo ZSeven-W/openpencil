@@ -42,7 +42,51 @@ const DEBUG_TOOLS_ENV: &str = "OPENPENCIL_DEBUG_TOOLS";
 /// `tools/list` consult this, so a client with the flag unset never
 /// sees `debug_validation_report` at all (not just `ToolFailed` on call).
 pub fn debug_tools_enabled() -> bool {
+    // Tests force the gate via a thread-local override instead of mutating
+    // process-global env — `setenv` races any concurrent `getenv` (e.g.
+    // `temp_dir()` reading `TMPDIR`) in parallel tests, which is UB.
+    #[cfg(test)]
+    if let Some(forced) = debug_gate_override::get() {
+        return forced;
+    }
     std::env::var(DEBUG_TOOLS_ENV).is_ok_and(|v| v == "1")
+}
+
+/// Test-only thread-local override for [`debug_tools_enabled`]. The debug
+/// tool `call()`s run on the test thread, so a thread-local is visible.
+#[cfg(test)]
+pub(crate) mod debug_gate_override {
+    use std::cell::Cell;
+
+    thread_local! {
+        static GATE: Cell<Option<bool>> = const { Cell::new(None) };
+    }
+
+    pub(crate) fn get() -> Option<bool> {
+        GATE.with(|gate| gate.get())
+    }
+
+    pub(crate) fn set(value: Option<bool>) {
+        GATE.with(|gate| gate.set(value));
+    }
+
+    /// RAII guard that forces the gate and resets it on drop, so a
+    /// panicking test can't leak the forced value into another test on
+    /// the same thread.
+    pub(crate) struct Guard;
+
+    impl Guard {
+        pub(crate) fn forcing(value: bool) -> Self {
+            set(Some(value));
+            Guard
+        }
+    }
+
+    impl Drop for Guard {
+        fn drop(&mut self) {
+            set(None);
+        }
+    }
 }
 
 /// First-party `debug_validation_report` tool — runs the
@@ -388,7 +432,9 @@ mod tests {
         let screenshot = debug_screenshot_snapshot();
 
         // Gate closed — the tool rejects regardless of document state.
-        std::env::remove_var(DEBUG_TOOLS_ENV);
+        // Forced via a thread-local (no process-global env mutation); the
+        // guard resets the gate on drop, even if an assertion panics.
+        let _gate = debug_gate_override::Guard::forcing(false);
         match bad.call(&empty) {
             ToolOutcome::Err(code, msg) => {
                 assert_eq!(code, ToolErrorCode::ToolFailed);
@@ -405,7 +451,7 @@ mod tests {
         }
 
         // Gate open — a known-bad document reports its issue.
-        std::env::set_var(DEBUG_TOOLS_ENV, "1");
+        debug_gate_override::set(Some(true));
         match bad.call(&empty) {
             ToolOutcome::Ok(out) => {
                 assert_eq!(out.get("count"), Some(&"1".to_string()));
@@ -488,7 +534,7 @@ mod tests {
             other => panic!("expected live-canvas screenshot error, got {other:?}"),
         }
 
-        std::env::remove_var(DEBUG_TOOLS_ENV);
+        // `_gate` resets the override to None on drop.
         let _ = std::fs::remove_dir_all(&log_dir);
     }
 

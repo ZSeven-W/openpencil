@@ -13,6 +13,22 @@ use jian_ops_schema::node::PenNode;
 use serde_json::{json, Value};
 
 use crate::batch_design::normalize_node_shape;
+use crate::element_basic_alias_builders::basic_alias_node_value;
+use crate::element_calendar_alias_builders::calendar_alias_node_value;
+use crate::element_complex_alias_builders::complex_alias_node_value;
+use crate::element_content_alias_builders::content_alias_node_value;
+use crate::element_feedback_alias_builders::feedback_alias_node_value;
+use crate::element_flow_alias_builders::flow_alias_node_value;
+use crate::element_input_alias_builders::input_alias_node_value;
+use crate::element_misc_alias_builders::misc_alias_node_value;
+use crate::element_ported_cards_a::ported_cards_a_alias_node_value;
+use crate::element_ported_cards_b::ported_cards_b_alias_node_value;
+use crate::element_ported_inputs::ported_inputs_alias_node_value;
+use crate::element_ported_nav::ported_nav_alias_node_value;
+use crate::element_ported_rows_a::ported_rows_a_alias_node_value;
+use crate::element_ported_rows_b::ported_rows_b_alias_node_value;
+use crate::element_ported_shells::ported_shells_alias_node_value;
+use crate::element_visual_alias_builders::visual_alias_node_value;
 use crate::{ToolErrorCode, ToolOutcome};
 
 static NEXT_ELEMENT_ID: AtomicU64 = AtomicU64::new(1);
@@ -25,9 +41,52 @@ pub(crate) fn semantic_alias_node(
         "add_heading_v0" | "add_heading_v1" => build_heading(args)?,
         "add_body_text_v0" | "add_body_text_v1" => build_body_text(args)?,
         "add_text_button_v0" | "add_text_button_v1" => build_text_button(args)?,
+        "add_checkbox_v0" => build_checkbox(args, false)?,
+        "add_checkbox_v1" => build_checkbox(args, true)?,
+        "add_radio_v0" => build_radio(args, false)?,
+        "add_radio_v1" => build_radio(args, true)?,
+        "add_segmented_control_v0" => build_segmented_control(args, false)?,
+        "add_segmented_control_v1" => build_segmented_control(args, true)?,
+        "add_switch_v0" | "add_switch_v1" => build_switch(args)?,
         "add_form_field_v0" | "add_form_field_v1" => build_form_field(args)?,
         "add_section_header_v0" | "add_section_header_v1" => build_section_header(args)?,
-        _ => return Ok(None),
+        _ => {
+            if let Some(value) = basic_alias_node_value(tool, args)? {
+                value
+            } else if let Some(value) = feedback_alias_node_value(tool, args)? {
+                value
+            } else if let Some(value) = visual_alias_node_value(tool, args)? {
+                value
+            } else if let Some(value) = calendar_alias_node_value(tool, args)? {
+                value
+            } else if let Some(value) = content_alias_node_value(tool, args)? {
+                value
+            } else if let Some(value) = flow_alias_node_value(tool, args)? {
+                value
+            } else if let Some(value) = input_alias_node_value(tool, args)? {
+                value
+            } else if let Some(value) = misc_alias_node_value(tool, args)? {
+                value
+            } else if let Some(value) = complex_alias_node_value(tool, args)? {
+                value
+            } else if let Some(value) = ported_rows_a_alias_node_value(tool, args)? {
+                value
+            } else if let Some(value) = ported_rows_b_alias_node_value(tool, args)? {
+                value
+            } else if let Some(value) = ported_inputs_alias_node_value(tool, args)? {
+                value
+            } else if let Some(value) = ported_cards_a_alias_node_value(tool, args)? {
+                value
+            } else if let Some(value) = ported_cards_b_alias_node_value(tool, args)? {
+                value
+            } else if let Some(value) = ported_nav_alias_node_value(tool, args)? {
+                value
+            } else if let Some(value) = ported_shells_alias_node_value(tool, args)? {
+                value
+            } else {
+                return Ok(None);
+            }
+        }
     };
     pen_node_from_value(value).map(Some)
 }
@@ -122,6 +181,252 @@ fn build_text_button(args: &BTreeMap<String, String>) -> Result<Value, ToolOutco
         "padding": [12, 20],
         "cornerRadius": 8,
         "children": children,
+    }))
+}
+
+fn build_checkbox(
+    args: &BTreeMap<String, String>,
+    theme_aware: bool,
+) -> Result<Value, ToolOutcome> {
+    let label = required(args, "label")?;
+    let checked = bool_arg(args, "checked");
+    let theme = args.get("theme").map(String::as_str).unwrap_or("light");
+    let (accent_color, border_color) = if theme_aware {
+        match theme {
+            "dark" => ("#60A5FA", "#334155"),
+            "system" => ("$color-accent", "$color-border"),
+            _ => ("#2563EB", "#9CA3AF"),
+        }
+    } else {
+        ("#2563EB", "#9CA3AF")
+    };
+
+    let mut box_node = json!({
+        "id": next_id("checkbox_box"),
+        "type": "frame",
+        "name": if checked { "Checkbox (checked)" } else { "Checkbox" },
+        "role": if checked { "checkbox-checked" } else { "checkbox" },
+        "width": 20,
+        "height": 20,
+        "cornerRadius": 4,
+        "layout": "horizontal",
+        "alignItems": "center",
+        "justifyContent": "center",
+        "children": [],
+    });
+    if checked {
+        box_node["fill"] = json!([{ "type": "solid", "color": accent_color }]);
+        box_node["children"] = json!([{
+            "id": next_id("checkbox_check"),
+            "type": "icon_font",
+            "name": "Check",
+            "iconFontName": "check",
+            "iconFontFamily": "lucide",
+            "width": 14,
+            "height": 14,
+            "fill": [{ "type": "solid", "color": "#FFFFFF" }],
+        }]);
+    } else {
+        box_node["fill"] = json!([]);
+        box_node["stroke"] = json!({
+            "thickness": 1.5,
+            "fill": [{ "type": "solid", "color": border_color }],
+        });
+    }
+
+    Ok(json!({
+        "id": next_id("checkbox_row"),
+        "type": "frame",
+        "name": format!("Checkbox Row ({label})"),
+        "role": "checkbox-row",
+        "layout": "horizontal",
+        "alignItems": "center",
+        "gap": 8,
+        "children": [
+            box_node,
+            {
+                "id": next_id("checkbox_label"),
+                "type": "text",
+                "name": "Label",
+                "role": "label",
+                "content": label,
+                "fontSize": 14,
+                "fontWeight": 400,
+            }
+        ],
+    }))
+}
+
+fn build_radio(args: &BTreeMap<String, String>, theme_aware: bool) -> Result<Value, ToolOutcome> {
+    let label = required(args, "label")?;
+    let selected = bool_arg(args, "selected");
+    let theme = args.get("theme").map(String::as_str).unwrap_or("light");
+    let ring_color = if selected {
+        "#2563EB"
+    } else if theme_aware {
+        match theme {
+            "dark" => "#334155",
+            "system" => "$color-border",
+            _ => "#9CA3AF",
+        }
+    } else {
+        "#9CA3AF"
+    };
+
+    let mut outer = json!({
+        "id": next_id("radio_outer"),
+        "type": "frame",
+        "name": if selected { "Radio (selected)" } else { "Radio" },
+        "role": if selected { "radio-selected" } else { "radio" },
+        "width": 20,
+        "height": 20,
+        "cornerRadius": 10,
+        "fill": [],
+        "stroke": {
+            "thickness": 1.5,
+            "fill": [{ "type": "solid", "color": ring_color }],
+        },
+        "layout": "horizontal",
+        "alignItems": "center",
+        "justifyContent": "center",
+        "children": [],
+    });
+    if selected {
+        outer["children"] = json!([{
+            "id": next_id("radio_dot"),
+            "type": "frame",
+            "name": "Dot",
+            "role": "radio-dot",
+            "width": 10,
+            "height": 10,
+            "cornerRadius": 5,
+            "fill": [{ "type": "solid", "color": "#2563EB" }],
+        }]);
+    }
+
+    Ok(json!({
+        "id": next_id("radio_row"),
+        "type": "frame",
+        "name": format!("Radio Row ({label})"),
+        "role": "radio-row",
+        "layout": "horizontal",
+        "alignItems": "center",
+        "gap": 8,
+        "children": [
+            outer,
+            {
+                "id": next_id("radio_label"),
+                "type": "text",
+                "name": "Label",
+                "role": "label",
+                "content": label,
+                "fontSize": 14,
+                "fontWeight": 400,
+            }
+        ],
+    }))
+}
+
+fn build_switch(args: &BTreeMap<String, String>) -> Result<Value, ToolOutcome> {
+    let active = bool_arg(args, "active");
+    Ok(json!({
+        "id": next_id("switch"),
+        "type": "frame",
+        "name": if active { "Switch (on)" } else { "Switch (off)" },
+        "role": "switch",
+        "width": 51,
+        "height": 31,
+        "cornerRadius": 16,
+        "fill": [{ "type": "solid", "color": if active { "#34C759" } else { "#E5E5EA" } }],
+        "layout": "horizontal",
+        "alignItems": "center",
+        "justifyContent": if active { "flex-end" } else { "flex-start" },
+        "padding": [2],
+        "children": [{
+            "id": next_id("switch_thumb"),
+            "type": "frame",
+            "name": "Thumb",
+            "role": "switch-thumb",
+            "width": 27,
+            "height": 27,
+            "cornerRadius": 14,
+            "fill": [{ "type": "solid", "color": "#FFFFFF" }],
+        }],
+    }))
+}
+
+fn build_segmented_control(
+    args: &BTreeMap<String, String>,
+    theme_aware: bool,
+) -> Result<Value, ToolOutcome> {
+    let items = parse_segment_items(args)?;
+    let theme = args.get("theme").map(String::as_str).unwrap_or("light");
+    let (track_bg, active_bg, active_label, inactive_label) = if theme_aware {
+        match theme {
+            "dark" => ("#334155", "#1E293B", "#F1F5F9", "#94A3B8"),
+            "system" => (
+                "$color-surface-2",
+                "$color-surface",
+                "$color-text-primary",
+                "$color-text-muted",
+            ),
+            _ => ("#F3F4F6", "#FFFFFF", "#111827", "#4B5563"),
+        }
+    } else {
+        ("#F3F4F6", "#FFFFFF", "#111827", "#4B5563")
+    };
+
+    let segments: Vec<Value> = items
+        .into_iter()
+        .map(|item| {
+            let mut segment = json!({
+                "id": next_id("segment"),
+                "type": "frame",
+                "name": format!("Segment ({})", item.label),
+                "role": if item.active { "segment-active" } else { "segment" },
+                "width": "fill_container",
+                "height": "fill_container",
+                "cornerRadius": 6,
+                "layout": "horizontal",
+                "alignItems": "center",
+                "justifyContent": "center",
+                "children": [{
+                    "id": next_id("segment_label"),
+                    "type": "text",
+                    "name": "Label",
+                    "role": "label",
+                    "content": item.label,
+                    "fontSize": 13,
+                    "fontWeight": if item.active { 600 } else { 500 },
+                    "fill": [{
+                        "type": "solid",
+                        "color": if item.active { active_label } else { inactive_label },
+                    }],
+                }],
+            });
+            segment["fill"] = if item.active {
+                json!([{ "type": "solid", "color": active_bg }])
+            } else {
+                json!([])
+            };
+            segment
+        })
+        .collect();
+
+    Ok(json!({
+        "id": next_id("segmented_control"),
+        "type": "frame",
+        "name": "Segmented Control",
+        "role": "segmented-control",
+        "width": "fill_container",
+        "height": 32,
+        "cornerRadius": 8,
+        "fill": [{ "type": "solid", "color": track_bg }],
+        "layout": "horizontal",
+        "alignItems": "center",
+        "gap": 4,
+        "padding": [4],
+        "children": segments,
     }))
 }
 
@@ -301,6 +606,45 @@ fn required<'a>(args: &'a BTreeMap<String, String>, key: &str) -> Result<&'a str
 
 fn bool_arg(args: &BTreeMap<String, String>, key: &str) -> bool {
     matches!(args.get(key).map(String::as_str), Some("true" | "1"))
+}
+
+struct SegmentItem {
+    label: String,
+    active: bool,
+}
+
+fn parse_segment_items(args: &BTreeMap<String, String>) -> Result<Vec<SegmentItem>, ToolOutcome> {
+    let raw = required(args, "items")?;
+    let value: Value = serde_json::from_str(raw).map_err(|e| {
+        ToolOutcome::Err(
+            ToolErrorCode::InvalidArgument,
+            format!("items must be a JSON array: {e}"),
+        )
+    })?;
+    let Some(items) = value.as_array() else {
+        return Err(ToolOutcome::Err(
+            ToolErrorCode::InvalidArgument,
+            "items must be a JSON array".into(),
+        ));
+    };
+    let mut out = Vec::with_capacity(items.len());
+    for item in items {
+        let label = item
+            .get("label")
+            .and_then(Value::as_str)
+            .filter(|label| !label.trim().is_empty())
+            .ok_or_else(|| {
+                ToolOutcome::Err(
+                    ToolErrorCode::InvalidArgument,
+                    "items[].label is required".into(),
+                )
+            })?;
+        out.push(SegmentItem {
+            label: label.to_string(),
+            active: item.get("active").and_then(Value::as_bool).unwrap_or(false),
+        });
+    }
+    Ok(out)
 }
 
 fn next_id(prefix: &str) -> String {

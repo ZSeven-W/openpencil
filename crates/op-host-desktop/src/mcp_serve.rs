@@ -57,7 +57,7 @@ use op_mcp::{
 pub(crate) mod file_path;
 
 /// Load a `.op` file into an `EditorState` via the schema compat layer.
-fn load_editor_state(path: &Path) -> Result<EditorState, String> {
+pub(crate) fn load_editor_state(path: &Path) -> Result<EditorState, String> {
     let src = std::fs::read_to_string(path).map_err(|e| format!("read {}: {e}", path.display()))?;
     let loaded =
         jian_ops_schema::load_str(&src).map_err(|e| format!("parse {}: {e}", path.display()))?;
@@ -118,13 +118,15 @@ where
             return Ok(sniff_id_raw(trimmed).map(|id| initialize_response(&id)));
         }
         Some("tools/list") => {
-            return Ok(sniff_id_raw(trimmed).map(|id| tools_list_response(&id, state)));
+            return Ok(sniff_id_raw(trimmed)
+                .map(|id| tools_list_response(&id, state, debug_tools_enabled())));
         }
         Some("notifications/initialized") | Some("initialized") => {
             return Ok(None); // notification — no response required
         }
         Some("ping") => {
-            return Ok(sniff_id_raw(trimmed).map(|id| ping_response(&id)));
+            return Ok(sniff_id_raw(trimmed)
+                .map(|id| ping_response(&id, headless_token_from_env().as_deref())));
         }
         _ => {}
     }
@@ -190,6 +192,24 @@ pub fn run_cli_if_requested() -> bool {
         }
         return true;
     }
+    if first == "--serve-web" {
+        let Some(port_arg) = args.next() else {
+            eprintln!("openpencil-desktop --serve-web: missing <port> arg");
+            std::process::exit(2);
+        };
+        let Ok(port) = port_arg.parse::<u16>() else {
+            eprintln!("openpencil-desktop --serve-web: <port> must be a u16, got {port_arg:?}");
+            std::process::exit(2);
+        };
+        // The document path is optional — without it the daemon starts on an
+        // empty document (the web shell can then sync one in).
+        let path = args.next().map(PathBuf::from);
+        if let Err(e) = crate::web_canvas_server::run_web_canvas(path, port) {
+            eprintln!("openpencil-desktop --serve-web: {e}");
+            std::process::exit(1);
+        }
+        return true;
+    }
     // Unknown leading arg → fall through to GUI mode for now.
     false
 }
@@ -222,6 +242,11 @@ pub fn run(path: PathBuf) -> Result<(), String> {
 /// Streamable-HTTP transport — enough for HTTP MCP clients that POST
 /// one request per connection. Blocks for the listener's lifetime.
 pub fn run_http(path: PathBuf, port: u16) -> Result<(), String> {
+    // Bound a slow/stalled peer: with bodies now up to 256 MiB, a connection
+    // that opens and then dribbles (or never finishes) its body must not pin
+    // this thread indefinitely. The live server sets the same kind of timeout
+    // on its accepted sockets (`mcp_live.rs`).
+    const HTTP_IO_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
     let mut state = load_editor_state(&path)?;
     let listener = std::net::TcpListener::bind(("127.0.0.1", port))
         .map_err(|e| format!("bind 127.0.0.1:{port}: {e}"))?;
@@ -229,8 +254,15 @@ pub fn run_http(path: PathBuf, port: u16) -> Result<(), String> {
     for stream in listener.incoming() {
         match stream {
             Ok(mut s) => {
-                if let Err(e) = serve_http_connection(&mut s, &mut state, &path) {
-                    eprintln!("openpencil-desktop --mcp-http: {e}");
+                let _ = s.set_read_timeout(Some(HTTP_IO_TIMEOUT));
+                let _ = s.set_write_timeout(Some(HTTP_IO_TIMEOUT));
+                match serve_http_connection(&mut s, &mut state, &path) {
+                    Ok(true) => {
+                        eprintln!("openpencil-desktop --mcp-http: shutdown requested; exiting");
+                        break;
+                    }
+                    Ok(false) => {}
+                    Err(e) => eprintln!("openpencil-desktop --mcp-http: {e}"),
                 }
             }
             Err(e) => eprintln!("openpencil-desktop --mcp-http: accept: {e}"),
@@ -243,31 +275,42 @@ pub fn run_http(path: PathBuf, port: u16) -> Result<(), String> {
 /// body through [`process_message`], write the JSON-RPC reply back as
 /// an `application/json` response. Generic over the stream so it is
 /// unit-testable without a real socket.
+/// Returns `Ok(true)` when the client requested a (token-authed) graceful
+/// shutdown — the caller (`run_http`) then stops the accept loop and the
+/// process exits cleanly, so `op stop` never has to signal a pid.
 fn serve_http_connection<S: std::io::Read + std::io::Write>(
     stream: &mut S,
     state: &mut EditorState,
     path: &std::path::Path,
-) -> Result<(), String> {
+) -> Result<bool, String> {
     let req = read_http_request(stream)?;
     if req.method == "OPTIONS" {
-        return write_mcp_http_response(stream, "204 No Content", "");
+        return write_mcp_http_response(stream, "204 No Content", "").map(|()| false);
     }
     if req.path != "/mcp" && req.path != "/" {
-        return write_mcp_http_response(stream, "404 Not Found", r#"{"error":"Not found"}"#);
+        return write_mcp_http_response(stream, "404 Not Found", r#"{"error":"Not found"}"#)
+            .map(|()| false);
     }
     if req.method != "POST" {
         return write_mcp_http_response(
             stream,
             "400 Bad Request",
             r#"{"jsonrpc":"2.0","error":{"code":-32000,"message":"Invalid or missing session ID"},"id":null}"#,
-        );
+        )
+        .map(|()| false);
+    }
+    if let Some(id) = shutdown_request_id(&req.body, &headless_token_from_env().unwrap_or_default())
+    {
+        write_mcp_http_response(stream, "200 OK", &shutdown_ok_response(&id))?;
+        return Ok(true);
     }
     match process_message(state, path, &req.body)? {
-        Some(response) => write_mcp_http_response(stream, "200 OK", &response),
-        None => write_mcp_http_response(stream, "202 Accepted", ""),
+        Some(response) => write_mcp_http_response(stream, "200 OK", &response).map(|()| false),
+        None => write_mcp_http_response(stream, "202 Accepted", "").map(|()| false),
     }
 }
 
+#[derive(Debug)]
 pub(crate) struct HttpRequest {
     pub method: String,
     pub path: String,
@@ -280,7 +323,17 @@ pub(crate) struct HttpRequest {
 /// malformed peer can't exhaust memory.
 pub(crate) fn read_http_request<S: std::io::Read>(stream: &mut S) -> Result<HttpRequest, String> {
     const MAX_HEADER: usize = 64 * 1024;
-    const MAX_BODY: usize = 8 * 1024 * 1024;
+    // Body ceiling. A whole-document live sync (`/api/mcp/document`), or an
+    // `insert_node` carrying an embedded base64 image, is legitimately large —
+    // realistic image-heavy designs run to tens of MiB, so the old 8 MiB cap
+    // rejected them. 64 MiB comfortably accepts realistic documents while
+    // bounding peak memory: the doc-sync path parses the body into a
+    // `serde_json::Value` and reserializes the inner document before the
+    // canonical load, so actual peak is a few× the body — a 64 MiB ceiling
+    // keeps that within a sane envelope for this localhost, single-user server.
+    // The body is read incrementally (below), so a lying `Content-Length` can't
+    // force an up-front allocation.
+    const MAX_BODY: usize = 64 * 1024 * 1024;
     let mut head: Vec<u8> = Vec::new();
     let mut byte = [0u8; 1];
     loop {
@@ -308,26 +361,54 @@ pub(crate) fn read_http_request<S: std::io::Read>(stream: &mut S) -> Result<Http
         .next()
         .ok_or_else(|| "request method missing".to_string())?
         .to_ascii_uppercase();
+    // Strip any `?query` from the request target so exact-path routing
+    // (`/api/mcp/document`, `/mcp`, …) isn't defeated by `/api/mcp/document?x=1`.
     let path = request_parts
         .next()
         .ok_or_else(|| "request path missing".to_string())?
+        .split('?')
+        .next()
+        .unwrap_or("")
         .to_string();
+    // Parse `Content-Length` via `split_once(':')` — byte-slicing a `&str`
+    // (e.g. `l[..15]`) would panic if a crafted header puts a multibyte UTF-8
+    // boundary mid-slice; that panic would also bypass the live server's
+    // connection-count decrement. A malformed length falls back to 0 (empty
+    // body) rather than erroring.
     let content_length = headers
         .lines()
         .find_map(|l| {
-            let l = l.trim();
-            (l.len() >= 15 && l[..15].eq_ignore_ascii_case("content-length:"))
-                .then(|| l[15..].trim().parse::<usize>().ok())
+            let (name, value) = l.trim().split_once(':')?;
+            name.eq_ignore_ascii_case("content-length")
+                .then(|| value.trim().parse::<usize>().ok())
                 .flatten()
         })
         .unwrap_or(0);
     if content_length > MAX_BODY {
-        return Err("request body exceeds 8 MiB".into());
+        return Err(format!(
+            "request body exceeds {} MiB",
+            MAX_BODY / (1024 * 1024)
+        ));
     }
-    let mut body = vec![0u8; content_length];
-    stream
-        .read_exact(&mut body)
-        .map_err(|e| format!("http body read: {e}"))?;
+    // Read the body incrementally so memory tracks bytes ACTUALLY received,
+    // not the peer-declared Content-Length: a lying or oversized length can't
+    // force a big up-front allocation — the buffer grows only as bytes arrive,
+    // and a stalled peer trips the socket read timeout instead of pinning a
+    // thread indefinitely.
+    let mut body = Vec::with_capacity(content_length.min(64 * 1024));
+    let mut remaining = content_length;
+    let mut chunk = [0u8; 64 * 1024];
+    while remaining > 0 {
+        let want = remaining.min(chunk.len());
+        let n = stream
+            .read(&mut chunk[..want])
+            .map_err(|e| format!("http body read: {e}"))?;
+        if n == 0 {
+            return Err("connection closed before body completed".into());
+        }
+        body.extend_from_slice(&chunk[..n]);
+        remaining -= n;
+    }
     Ok(HttpRequest {
         method,
         path,
@@ -457,11 +538,11 @@ fn rebuild_registry(doc: &EditorState) -> ToolRegistry {
     r.register(Box::new(move_node_snapshot()));
     r.register(Box::new(copy_node_snapshot()));
     r.register(Box::new(replace_node_snapshot()));
-    r.register(Box::new(batch_design_snapshot()));
+    r.register(Box::new(batch_design_snapshot(doc)));
     r.register(Box::new(get_design_prompt_snapshot(doc)));
     r.register(Box::new(design_skeleton_snapshot()));
     r.register(Box::new(design_content_snapshot()));
-    r.register(Box::new(design_refine_snapshot()));
+    r.register(Box::new(design_refine_snapshot(doc)));
     r.register(Box::new(set_variable_number_snapshot(doc)));
     r.register(Box::new(set_variable_string_snapshot(doc)));
     r.register(Box::new(set_variable_boolean_snapshot(doc)));
@@ -650,23 +731,16 @@ fn walk_top_level(bytes: &[u8], i: &mut usize, target: &str, string_only: bool) 
     }
 }
 
-fn initialize_response(id_raw: &str) -> String {
-    // Spec: `initialize` returns protocolVersion + capabilities +
-    // serverInfo. We declare only `tools` capabilities — no
-    // resources / prompts / completion are exposed yet.
-    format!(
-        r#"{{"jsonrpc":"2.0","id":{id_raw},"result":{{"protocolVersion":"2024-11-05","capabilities":{{"tools":{{"listChanged":false}}}},"serverInfo":{{"name":"openpencil-mcp","version":"0.1.0"}}}}}}"#
-    )
-}
+mod wire;
+pub(crate) use wire::*;
 
-fn ping_response(id_raw: &str) -> String {
-    format!(r#"{{"jsonrpc":"2.0","id":{id_raw},"result":{{}}}}"#)
-}
+mod doc_sync;
+pub(crate) use doc_sync::*;
 
-fn tools_list_response(id_raw: &str, state: &EditorState) -> String {
+fn tools_list_response(id_raw: &str, state: &EditorState, debug_enabled: bool) -> String {
     let mut entries: Vec<String> = TOOL_SCHEMAS.iter().map(|s| (*s).to_string()).collect();
     entries.extend(op_mcp::element_tools::element_tool_schemas(state));
-    if debug_tools_enabled() {
+    if debug_enabled {
         entries.extend(DEBUG_TOOL_SCHEMAS.iter().map(|s| (*s).to_string()));
     }
     format!(
@@ -675,122 +749,10 @@ fn tools_list_response(id_raw: &str, state: &EditorState) -> String {
     )
 }
 
-const TOOL_SCHEMAS: &[&str] = &[
-    // --- read tools ---
-    r#"{"name":"open_document","description":"Open the current Rust MCP document, or the TS-compatible filePath target for this call, and return metadata, context summary, and design prompt.","inputSchema":{"type":"object","properties":{"filePath":{"type":"string","description":"Optional target .op file path; omit to use the server document"}}}}"#,
-    r#"{"name":"save_document","description":"Save the current Rust MCP document snapshot to a .op file. Used by the Rust HTTP CLI to match TS `op save`.","inputSchema":{"type":"object","properties":{"filePath":{"type":"string","description":"Target .op file path"}},"required":["filePath"]}}"#,
-    r#"{"name":"get_document_info","description":"Summarize the open document (page count, active page, etc).","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
-    r#"{"name":"get_selection","description":"Return the current selection state (ids, count).","inputSchema":{"type":"object","properties":{"filePath":{"type":"string","description":"Optional target .op file path; omit to use the server document"},"readDepth":{"type":"number","description":"How deep to include children in selected nodes; default 2"}}}}"#,
-    r#"{"name":"get_node","description":"Read a node by id with depth-limited descendants.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string","description":"u64 node id"}},"required":["node_id"]}}"#,
-    r#"{"name":"list_pages","description":"List page ids + names. Result includes page_count, active_page_index, ids, and names as comma-separated strings.","inputSchema":{"type":"object","properties":{"filePath":{"type":"string","description":"Optional target .op file path; omit to use the server document"}}}}"#,
-    r#"{"name":"list_variables","description":"List design variables with kinds.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
-    r#"{"name":"get_variables","description":"Return all design variables and theme axes as JSON strings. TS-compatible read alias for variables/theme metadata.","inputSchema":{"type":"object","properties":{"filePath":{"type":"string","description":"Optional target .op file path; omit to use the server document"}}}}"#,
-    r#"{"name":"save_theme_preset","description":"Save the current document themes and variables as a reusable .optheme preset file.","inputSchema":{"type":"object","properties":{"presetPath":{"type":"string","description":"Path for the output .optheme file"},"name":{"type":"string","description":"Display name for the preset; defaults to file name"},"filePath":{"type":"string","description":"Optional target .op file path; omit to use the server document"}},"required":["presetPath"]}}"#,
-    r#"{"name":"load_theme_preset","description":"Load a .optheme preset file and merge its themes and variables into the live document.","inputSchema":{"type":"object","properties":{"presetPath":{"type":"string","description":"Path to the .optheme file to load"},"filePath":{"type":"string","description":"Optional target .op file path; omit to use the server document"}},"required":["presetPath"]}}"#,
-    r#"{"name":"list_theme_presets","description":"List valid .optheme preset files in a directory.","inputSchema":{"type":"object","properties":{"directory":{"type":"string","description":"Directory to scan for .optheme files"}},"required":["directory"]}}"#,
-    r#"{"name":"get_design_md","description":"Get the document design.md spec and markdown, falling back to best-effort extraction from variables and typography.","inputSchema":{"type":"object","properties":{"filePath":{"type":"string","description":"Optional target .op file path; omit to use the server document"}}}}"#,
-    r#"{"name":"set_design_md","description":"Import design.md markdown into the live document, or pass autoExtract=true to derive it from current variables and typography.","inputSchema":{"type":"object","properties":{"filePath":{"type":"string","description":"Optional target .op file path; omit to use the server document"},"markdown":{"type":"string","description":"Raw design.md markdown"},"autoExtract":{"type":"boolean","description":"Derive design.md from the current document"}}}}"#,
-    r#"{"name":"export_design_md","description":"Export design.md markdown, falling back to best-effort extraction when none is persisted.","inputSchema":{"type":"object","properties":{"filePath":{"type":"string","description":"Optional target .op file path; omit to use the server document"}}}}"#,
-    r#"{"name":"get_style_guide_tags","description":"Return all available style guide tags for filtering light/dark visual styles.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
-    r#"{"name":"get_style_guide","description":"Return a style guide by name or best tag match. Provide tags array/string, name, and optional platform.","inputSchema":{"type":"object","properties":{"tags":{"type":"array","items":{"type":"string"}},"name":{"type":"string"},"platform":{"type":"string","enum":["webapp","mobile","landing-page","slides"]}}}}"#,
-    r#"{"name":"get_active_theme","description":"Return the active theme axis pinning per axis.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
-    r#"{"name":"list_components","description":"List registered components (saved Frames / Groups promoted via Save as Component). Returns count + a `;`-separated record of `name|id` pairs.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
-    r#"{"name":"get_component","description":"Fetch one component by id with detail: name, root node kind, and the subtree's leaf count.","inputSchema":{"type":"object","properties":{"component_id":{"type":"string","description":"positive u64 component id"}},"required":["component_id"]}}"#,
-    r#"{"name":"batch_get","description":"Search and read nodes from the document. With no patterns/nodeIds, returns top-level children. Supports type/name regex patterns, nodeIds, parentId, readDepth, searchDepth, and pageId.","inputSchema":{"type":"object","properties":{"filePath":{"type":"string","description":"Optional target .op file path; omit to use the server document"},"patterns":{"type":"array","items":{"type":"object","properties":{"type":{"type":"string"},"name":{"type":"string"},"reusable":{"type":"boolean"}}}},"nodeIds":{"type":"array","items":{"type":"string"}},"parentId":{"type":"string"},"readDepth":{"type":"number"},"searchDepth":{"type":"number"},"pageId":{"type":"string"},"resolveRefs":{"type":"boolean"},"resolve_refs":{"type":"boolean"}}}}"#,
-    r#"{"name":"read_nodes","description":"Read nodes with depth control. Omit nodeIds to return top-level page children; depth=0 truncates children to \"...\", depth=-1 returns full subtrees. includeVariables=true attaches variables/themes JSON strings.","inputSchema":{"type":"object","properties":{"filePath":{"type":"string","description":"Optional target .op file path; omit to use the server document"},"nodeIds":{"type":"array","items":{"type":"string"},"description":"Node ids to read; omit for top-level children"},"depth":{"type":"number","description":"0=node only, 1=direct children, -1=full subtree"},"pageId":{"type":"string"},"includeVariables":{"type":"boolean"}}}}"#,
-    r#"{"name":"codegen_plan","description":"Submit a code generation plan. In file-backed Rust MCP this reports the same live-canvas requirement as TS standalone mode because pipeline state is stored in App memory.","inputSchema":{"type":"object","properties":{"plan":{"type":"object","description":"CodePlanFromAI: { chunks, sharedStyles, rootLayout }"},"filePath":{"type":"string"},"pageId":{"type":"string"}},"required":["plan"]}}"#,
-    r#"{"name":"codegen_submit_chunk","description":"Submit generated code for one chunk. In file-backed Rust MCP this reports the same live-canvas requirement as TS standalone mode.","inputSchema":{"type":"object","properties":{"planId":{"type":"string"},"result":{"type":"object","description":"ChunkResult: { chunkId, code, contract }"},"status":{"type":"string","enum":["failed","skipped"]}},"required":["planId","result"]}}"#,
-    r#"{"name":"codegen_assemble","description":"Retrieve all chunk results for final assembly. In file-backed Rust MCP this reports the same live-canvas requirement as TS standalone mode.","inputSchema":{"type":"object","properties":{"planId":{"type":"string"},"framework":{"type":"string","enum":["react","vue","svelte","html","flutter","swiftui","compose","react-native"]}},"required":["planId","framework"]}}"#,
-    r#"{"name":"codegen_clean","description":"Manually clean up an abandoned codegen plan. Idempotent; without live canvas state returns ok=true and deleted=false.","inputSchema":{"type":"object","properties":{"planId":{"type":"string"}},"required":["planId"]}}"#,
-    r#"{"name":"search_all_unique_properties","description":"Recursively search unique style property values under the provided parent node ids. Result `properties` is a JSON object keyed by requested property names.","inputSchema":{"type":"object","properties":{"parents":{"type":"array","items":{"type":"string"},"description":"Parent node ids to search; descendants and the parent itself are included"},"properties":{"type":"array","items":{"type":"string","enum":["fillColor","textColor","strokeColor","strokeThickness","cornerRadius","padding","gap","fontSize","fontFamily","fontWeight"]}},"pageId":{"type":"string"},"filePath":{"type":"string","description":"Optional target .op file path; omit to use the server document"}},"required":["parents","properties"]}}"#,
-    r#"{"name":"replace_all_matching_properties","description":"Recursively replace matching style property values under parent node ids. Returns replacedCount and applies one bulk edit when matches exist.","inputSchema":{"type":"object","properties":{"parents":{"type":"array","items":{"type":"string"}},"properties":{"type":"object","description":"property -> array of {from,to} replacement rules"},"pageId":{"type":"string"},"filePath":{"type":"string","description":"Optional target .op file path; omit to use the server document"}},"required":["parents","properties"]}}"#,
-    r#"{"name":"snapshot_layout","description":"Return a depth-limited layout snapshot. Result `layout` is a `;`-separated record of `id|x|y|w|h` (ints, doc-px).","inputSchema":{"type":"object","properties":{"filePath":{"type":"string","description":"Optional target .op file path; omit to use the server document"},"parentId":{"type":"string"},"maxDepth":{"type":"string","description":"u32 depth, default 1 when arguments are present"},"pageId":{"type":"string"}}}}"#,
-    r#"{"name":"find_empty_space","description":"Find padded empty canvas space in one direction for placing new content.","inputSchema":{"type":"object","properties":{"filePath":{"type":"string","description":"Optional target .op file path; omit to use the server document"},"width":{"type":"string","description":"i32 doc-px"},"height":{"type":"string","description":"i32 doc-px"},"padding":{"type":"string","description":"i32 doc-px, default 50"},"direction":{"type":"string","enum":["top","right","bottom","left"]},"nodeId":{"type":"string"},"pageId":{"type":"string"}},"required":["width","height","direction"]}}"#,
-    r#"{"name":"get_canvas_bounds","description":"Return the union bounding box of every top-level node on the active page (x/y/w/h ints + has_content true/false).","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
-    r#"{"name":"find_node_by_name","description":"Locate the first node whose name matches (case-sensitive, exact) anywhere on the active page. Returns id + kind. ToolFailed when no match.","inputSchema":{"type":"object","properties":{"name":{"type":"string"}},"required":["name"]}}"#,
-    r#"{"name":"get_node_parent","description":"Return the parent id of node_id on the active page. parent_id=0 means the node is at the page root. depth is distance from root.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string","description":"positive u64 node id"}},"required":["node_id"]}}"#,
-    r#"{"name":"get_node_children","description":"List the immediate children of a node. Returns count + comma-separated ids + per-child (child_<i>_id/kind/name/x/y/width/height). Known leaves and empty containers return count=0 (NOT an error). Only an unknown node_id returns ToolFailed.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string","description":"positive u64 node id"}},"required":["node_id"]}}"#,
-    r#"{"name":"count_nodes","description":"Return total node count across all pages + a per-page breakdown. Result `per_page` is `;`-separated `index|count` records.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
-    r#"{"name":"list_node_kinds","description":"Return a per-kind histogram of nodes on the active page (frame/group/rect/ellipse/polygon/line/text/path/other). Result `kinds` is `;`-separated `kind|count` records.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
-    r#"{"name":"get_history_depth","description":"Return undo + redo stack sizes. Useful before bulk rollback to know how many steps are available.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
-    r#"{"name":"get_viewport","description":"Return current canvas pan + zoom. pan_x/pan_y are i32 doc-px; zoom_percent is the zoom * 100 as int.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
-    r#"{"name":"get_selection_set","description":"Return every id in the multi-select set (vs get_selection which returns only the anchor). Result: count + comma-separated ids + anchor.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
-    r#"{"name":"clear_selection","description":"Drop the current multi-select. No args.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
-    r#"{"name":"set_selection","description":"Set selection to a single node by id (scoped to the ACTIVE page only). Rejects unknown ids and ids that live on a non-active page — switch the active page first with set_active_page.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string","description":"positive u64 node id on the active page"}},"required":["node_id"]}}"#,
-    r#"{"name":"set_viewport","description":"Set canvas pan + zoom. Pass any subset of pan_x / pan_y / zoom_percent — omitted axes are left unchanged. zoom_percent clamps to [10, 2000].","inputSchema":{"type":"object","properties":{"pan_x":{"type":"string","description":"i32 doc-px"},"pan_y":{"type":"string","description":"i32 doc-px"},"zoom_percent":{"type":"string","description":"int * 100 (100 == 1.0×)"}}}}"#,
-    r#"{"name":"set_node_hidden","description":"Toggle a node's visibility (layer-panel eye icon). value is \"true\" to hide.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string"},"value":{"type":"string","enum":["true","false"]}},"required":["node_id","value"]}}"#,
-    r#"{"name":"set_node_locked","description":"Toggle a node's lock (layer-panel padlock icon). value is \"true\" to lock.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string"},"value":{"type":"string","enum":["true","false"]}},"required":["node_id","value"]}}"#,
-    r#"{"name":"set_node_collapsed","description":"Toggle a node's layer-panel disclosure state. value is \"true\" to collapse.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string"},"value":{"type":"string","enum":["true","false"]}},"required":["node_id","value"]}}"#,
-    r#"{"name":"set_active_tool","description":"Change the active canvas tool (left toolbar). Accepts select / rect / ellipse / polygon / line / pen / text / frame / hand.","inputSchema":{"type":"object","properties":{"tool":{"type":"string","enum":["select","rect","ellipse","polygon","line","pen","text","frame","hand"]}},"required":["tool"]}}"#,
-    r#"{"name":"undo","description":"Pop the last history snapshot. Returns false when the past stack is empty.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
-    r#"{"name":"redo","description":"Push the last undone snapshot back. Returns false when the redo stack is empty.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
-    r#"{"name":"duplicate_selected","description":"Duplicate the currently-selected node and select the clone. Optional offset_px shifts the clone (default 10).","inputSchema":{"type":"object","properties":{"offset_px":{"type":"string","description":"i32 doc-px shift (default 10)"}}}}"#,
-    r#"{"name":"delete_selected","description":"Delete the currently-selected node. Returns false when nothing is selected. Undoable.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
-    r#"{"name":"nudge_selected","description":"Translate the currently-selected node by (dx, dy) doc-px. Both 0 rejects.","inputSchema":{"type":"object","properties":{"dx":{"type":"string","description":"i32 doc-px"},"dy":{"type":"string","description":"i32 doc-px"}},"required":["dx","dy"]}}"#,
-    r#"{"name":"group_selected","description":"Wrap the multi-selected siblings in a new Group. Cmd+G equivalent. Rejects when selection is empty / single / spans parents.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
-    r#"{"name":"ungroup_selected","description":"Replace the selected Group with its children. Cmd+Shift+G equivalent. Rejects when anchor is not a Group.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
-    r#"{"name":"reorder_selected","description":"Move the currently-selected node forward (\"up\") or back (\"down\") in z-order. Mirrors layer-panel [ / ].","inputSchema":{"type":"object","properties":{"direction":{"type":"string","enum":["up","down"]}},"required":["direction"]}}"#,
-    r#"{"name":"set_node_rotation","description":"Set node rotation in degrees on a node by id.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string"},"degrees":{"type":"string","description":"finite f32 rotation in degrees"}},"required":["node_id","degrees"]}}"#,
-    r#"{"name":"set_node_text","description":"Set text content on a Text-kind node by id. Rejects non-Text kinds.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string"},"text":{"type":"string"}},"required":["node_id","text"]}}"#,
-    r#"{"name":"set_node_corner_radius","description":"Set corner-radius (non-negative doc-px) on a node by id. Honored at paint time for Rect / Frame; other kinds accept the write but the radius is invisible.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string"},"radius":{"type":"string","description":"non-negative finite f32"}},"required":["node_id","radius"]}}"#,
-    r#"{"name":"set_node_font_size","description":"Set font size (positive finite doc-px) on a Text-kind node by id. Rejects non-Text kinds.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string"},"font_size":{"type":"string","description":"positive finite f32 doc-px"}},"required":["node_id","font_size"]}}"#,
-    r#"{"name":"set_node_font_weight","description":"Set OpenType font weight (1..=1000) on a Text-kind node by id. Rejects non-Text kinds and out-of-range weights.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string"},"font_weight":{"type":"string","description":"u16 in 1..=1000 (e.g. 400=Regular, 700=Bold)"}},"required":["node_id","font_weight"]}}"#,
-    r##"{"name":"set_node_stroke_hex","description":"Set the stroke color on a node. Existing stroke gets its color overwritten; missing stroke gets a fresh 1 doc-px stroke attached at the parsed color so the change is visible immediately.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string"},"hex":{"type":"string","description":"#rgb / #rrggbb / #rrggbbaa"}},"required":["node_id","hex"]}}"##,
-    r#"{"name":"set_node_stroke_width","description":"Set the stroke width (doc-px) on a node. width=0 clears the stroke; width>0 on a node without an existing stroke attaches a fresh black-default stroke at that width.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string"},"width":{"type":"string","description":"non-negative finite f32 doc-px"}},"required":["node_id","width"]}}"#,
-    r#"{"name":"align_selected","description":"Align or distribute the current multi-selection. Mirrors the PropertyPanel Align section. Distribute variants silently no-op for fewer than 3 selected nodes.","inputSchema":{"type":"object","properties":{"action":{"type":"string","description":"one of left, center_h, right, top, center_v, bottom, distribute_h, distribute_v"}},"required":["action"]}}"#,
-    r##"{"name":"set_node_fill_hex","description":"Set the fill color on a node by id. Sister tool to set_node_stroke_hex; one-call color change without the other update_node fields.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string"},"hex":{"type":"string","description":"#rgb / #rrggbb / #rrggbbaa"}},"required":["node_id","hex"]}}"##,
-    r#"{"name":"set_node_flip","description":"Mirror a node horizontally / vertically. Pass any subset of flip_x / flip_y as \"true\"/\"false\"; omitted axes are left unchanged. At least one axis is required.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string"},"flip_x":{"type":"string","enum":["true","false"]},"flip_y":{"type":"string","enum":["true","false"]}},"required":["node_id"]}}"#,
-    r#"{"name":"set_ellipse_arc","description":"Set arc geometry on an Ellipse node: start_angle / sweep_angle (degrees) carve a pie/arc, inner_radius (0.0..=1.0 fraction) carves a donut hole. Pass any subset; omitted fields are left unchanged. Rejects non-Ellipse kinds.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string"},"start_angle":{"type":"string","description":"finite degrees"},"sweep_angle":{"type":"string","description":"finite degrees"},"inner_radius":{"type":"string","description":"0.0..=1.0 fraction"}},"required":["node_id"]}}"#,
-    r#"{"name":"add_node_effect","description":"Append a visual effect to a node with default parameters. kind is shadow / blur / background_blur. Frame/Group/Rectangle and the leaf shapes accept effects; IconFont/Ref do not.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string"},"kind":{"type":"string","enum":["shadow","blur","background_blur"]}},"required":["node_id","kind"]}}"#,
-    r#"{"name":"remove_node_effect","description":"Remove the effect at a 0-based index from a node's effect list. The list is cleared once empty.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string"},"index":{"type":"string","description":"0-based u32 effect index"}},"required":["node_id","index"]}}"#,
-    r#"{"name":"set_node_name","description":"Rename a node by id. Empty names (after trim) are rejected so the LayerPanel never shows blank rows.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string"},"name":{"type":"string"}},"required":["node_id","name"]}}"#,
-    r#"{"name":"set_selection_set","description":"Replace the multi-selection (active page only) with the supplied comma-separated node_ids. Empty list clears the selection. Unknown ids AND ids that live on a non-active page drop silently.","inputSchema":{"type":"object","properties":{"node_ids":{"type":"string","description":"comma-separated positive u64 active-page node ids; empty string clears"}},"required":["node_ids"]}}"#,
-    r#"{"name":"toggle_node_selection","description":"Shift-click parity: toggle node_id in the multi-selection (scoped to the ACTIVE page only). Already-selected ⇒ remove (anchor reassigns to last surviving id); otherwise add as new anchor. Rejects unknown ids and ids that live on a non-active page.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string","description":"positive u64 node id on the active page"}},"required":["node_id"]}}"#,
-    r#"{"name":"cycle_active_axis_value","description":"Advance the active value for a theme axis to its next entry (wrapping back to the first). Seeds the axis to its first value when nothing is set. Rejects unknown axes and axes whose values list is empty.","inputSchema":{"type":"object","properties":{"axis":{"type":"string","description":"theme axis name (e.g. \"mode\", \"density\")"}},"required":["axis"]}}"#,
-    r#"{"name":"copy_selected","description":"Cmd+C parity. Deep-clones the active-page selection into the document's internal clipboard. Apply-time false when nothing is selected.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
-    r#"{"name":"cut_selected","description":"Cmd+X parity. Copies the selection then deletes it. History snapshot pushed so undo restores both clipboard and tree.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
-    r#"{"name":"paste_clipboard","description":"Cmd+V parity. Pastes the document clipboard as top-level siblings on the active page, offset by offset_px doc-px (defaults to 10). Mints fresh ids past max_node_id(). Replaces selection with the new ids. Apply-time false when the clipboard is empty or id-space is exhausted.","inputSchema":{"type":"object","properties":{"offset_px":{"type":"string","description":"i32 doc-px offset; defaults to 10 when omitted"}},"required":[]}}"#,
-    // --- write tools ---
-    r##"{"name":"set_variable_color","description":"Set a Color-kind variable's value.","inputSchema":{"type":"object","properties":{"name":{"type":"string"},"hex":{"type":"string","description":"#rgb / #rrggbb / #rrggbbaa"}},"required":["name","hex"]}}"##,
-    r#"{"name":"batch_design","description":"Insert or refine design content. Accepts nodes_json, I(parent,nodeJson) insert operations, or one-at-a-time U/D/M refine operations.","inputSchema":{"type":"object","properties":{"filePath":{"type":"string","description":"Optional target .op file path; omit to use the server document"},"nodes_json":{"type":"string","description":"JSON array of simple leaf descriptors"},"operations":{"type":"string","description":"TS batch_design DSL, e.g. root=I(null,{...}), U(\"n1\",{\"x\":10}), D(\"n1\"), M(\"n1\",null)"},"postProcess":{"type":"boolean"},"canvasWidth":{"type":"number"},"pageId":{"type":"string"}}}}"#,
-    r#"{"name":"get_design_prompt","description":"Get OpenPencil design-generation prompt knowledge. Pass section for a focused subset; omit it for all sections. style and design-md are derived from the live document's design.md when present.","inputSchema":{"type":"object","properties":{"section":{"type":"string","description":"Prompt section name, e.g. all, layout, style, design-md, elements, codegen-react"},"filePath":{"type":"string","description":"Optional target .op file path; omit to use the server document"}},"required":[]}}"#,
-    r#"{"name":"design_skeleton","description":"Layered design workflow phase 1: create a root frame plus section frames. Accepts TS-style rootFrame/sections plus optional canvasWidth/pageId; legacy nodes_json/operations payloads remain accepted for compatibility.","inputSchema":{"type":"object","properties":{"filePath":{"type":"string","description":"Optional target .op file path; omit to use the server document"},"rootFrame":{"type":"object","description":"Root frame definition: name, width, height, layout, gap, fill, padding"},"sections":{"type":"array","description":"Section frame definitions; each item needs name and may include height, layout, padding, gap, fill, role, justifyContent, alignItems"},"styleGuide":{"type":"object","description":"Optional style guide metadata"},"canvasWidth":{"type":"number","description":"Canvas width for section contentWidth estimates"},"pageId":{"type":"string","description":"Target page ID or index"},"nodes_json":{"type":"string","description":"Legacy JSON array of simple leaf descriptors"},"operations":{"type":"string","description":"Legacy TS batch_design DSL"}},"required":["rootFrame","sections"]}}"#,
-    r#"{"name":"design_content","description":"Layered design workflow phase 2: fill child nodes into a section frame created by design_skeleton. Accepts TS-style sectionId/children plus optional postProcess/canvasWidth/pageId; legacy nodes_json/operations payloads remain accepted for compatibility.","inputSchema":{"type":"object","properties":{"filePath":{"type":"string","description":"Optional target .op file path; omit to use the server document"},"sectionId":{"type":"string","description":"ID of the section frame from design_skeleton"},"children":{"type":"array","description":"Child node definitions to insert under the section"},"postProcess":{"type":"boolean","description":"Apply post-processing after insertion; default true in the TS MCP"},"canvasWidth":{"type":"number","description":"Canvas width for post-processing; default 1200"},"pageId":{"type":"string","description":"Target page ID or index"},"nodes_json":{"type":"string","description":"Legacy JSON array of simple leaf descriptors"},"operations":{"type":"string","description":"Legacy TS batch_design DSL with I(parent,nodeJson) inserts or single U/D/M refine op"}},"required":["sectionId","children"]}}"#,
-    r#"{"name":"design_refine","description":"Layered design workflow phase 3: polish an existing design root. Accepts rootId plus optional canvasWidth/pageId and runs deterministic cleanup; legacy nodes_json/operations payloads remain accepted for compatibility.","inputSchema":{"type":"object","properties":{"filePath":{"type":"string","description":"Optional target .op file path; omit to use the server document"},"rootId":{"type":"string","description":"ID of the root frame to refine"},"canvasWidth":{"type":"number","description":"Canvas width for cleanup heuristics"},"pageId":{"type":"string","description":"Target page ID or index"},"nodes_json":{"type":"string","description":"Legacy JSON array of simple leaf descriptors"},"operations":{"type":"string","description":"Legacy TS batch_design DSL"}}}}"#,
-    r#"{"name":"set_variable_number","description":"Set a Number-kind variable's value (decimal, may be negative or fractional).","inputSchema":{"type":"object","properties":{"name":{"type":"string"},"value":{"type":"string"}},"required":["name","value"]}}"#,
-    r#"{"name":"set_variable_string","description":"Set a String-kind variable's value (free-form text).","inputSchema":{"type":"object","properties":{"name":{"type":"string"},"value":{"type":"string"}},"required":["name","value"]}}"#,
-    r#"{"name":"set_variable_boolean","description":"Set a Boolean-kind variable's value (\"true\" or \"false\").","inputSchema":{"type":"object","properties":{"name":{"type":"string"},"value":{"type":"string","enum":["true","false"]}},"required":["name","value"]}}"#,
-    r#"{"name":"set_variables","description":"Add/update or replace the document variables map. Accepts TS-style variables object and optional replace boolean.","inputSchema":{"type":"object","properties":{"filePath":{"type":"string","description":"Optional target .op file path; omit to use the server document"},"variables":{"type":"object","description":"name -> { type, value } variable definitions"},"replace":{"type":"boolean","description":"Replace all variables instead of merging"}},"required":["variables"]}}"#,
-    r#"{"name":"set_themes","description":"Add/update or replace theme axes. Accepts TS-style themes object and optional replace boolean.","inputSchema":{"type":"object","properties":{"filePath":{"type":"string","description":"Optional target .op file path; omit to use the server document"},"themes":{"type":"object","description":"axis name -> variant names array"},"replace":{"type":"boolean","description":"Replace all theme axes instead of merging"}},"required":["themes"]}}"#,
-    r##"{"name":"create_variable","description":"Create a new design-token variable. kind is color/number/boolean/string; default_value is parsed per kind (hex for color, decimal for number, true/false for boolean, free text for string). Rejects empty/duplicate names and bad defaults.","inputSchema":{"type":"object","properties":{"name":{"type":"string"},"kind":{"type":"string","enum":["color","number","boolean","string"]},"default_value":{"type":"string","description":"hex / decimal / true|false / text per kind"}},"required":["name","kind","default_value"]}}"##,
-    r#"{"name":"delete_variable","description":"Delete a design-token variable by name. Also drops any node $ref pointing at it. Rejects unknown names.","inputSchema":{"type":"object","properties":{"name":{"type":"string"}},"required":["name"]}}"#,
-    r#"{"name":"rename_variable","description":"Rename a design-token variable and rewrite every node $ref pointing at it. Rejects unknown old_name, empty new_name, or a new_name colliding with a different variable.","inputSchema":{"type":"object","properties":{"old_name":{"type":"string"},"new_name":{"type":"string"}},"required":["old_name","new_name"]}}"#,
-    r#"{"name":"instantiate_component","description":"Drop a clone of a registered component's root subtree onto the active page. component_id is the id returned by list_components.","inputSchema":{"type":"object","properties":{"component_id":{"type":"string","description":"positive u64 component id"}},"required":["component_id"]}}"#,
-    r#"{"name":"create_component","description":"Promote an existing Frame or Group on the active page to a registered component. Use list_components afterwards to see it, instantiate_component to drop a clone.","inputSchema":{"type":"object","properties":{"node_id":{"type":"string","description":"positive u64 node id"},"name":{"type":"string"}},"required":["node_id","name"]}}"#,
-    r#"{"name":"delete_component","description":"Remove a component from the registry by id. Live instances already on the page are NOT affected — they're independent clones.","inputSchema":{"type":"object","properties":{"component_id":{"type":"string","description":"positive u64 component id"}},"required":["component_id"]}}"#,
-    r#"{"name":"rename_component","description":"Rename a registered component. Name must be non-empty / non-whitespace.","inputSchema":{"type":"object","properties":{"component_id":{"type":"string","description":"positive u64 component id"},"name":{"type":"string"}},"required":["component_id","name"]}}"#,
-    r#"{"name":"set_active_page","description":"Switch which page is the active target for subsequent inserts / batch_design / design_* commands. index is 0-based.","inputSchema":{"type":"object","properties":{"index":{"type":"string","description":"0-based page index"}},"required":["index"]}}"#,
-    r#"{"name":"add_page","description":"Append a fresh page and switch the active page to it. Optional name and children mirror the TS MCP page tool. Returns false on id-space exhaustion or an empty name.","inputSchema":{"type":"object","properties":{"filePath":{"type":"string","description":"Optional target .op file path; omit to use the server document"},"name":{"type":"string","description":"Page name (default: Page N)"},"children":{"type":"array","items":{"type":"object"},"description":"Initial child nodes for the new page; omitted creates the default blank frame"}}}}"#,
-    r#"{"name":"rename_page","description":"Set a page's display name. Accepts TS-style pageId or legacy index. Name must be non-empty / non-whitespace.","inputSchema":{"type":"object","properties":{"filePath":{"type":"string","description":"Optional target .op file path; omit to use the server document"},"pageId":{"type":"string","description":"Page id returned by list_pages"},"index":{"type":"string","description":"0-based page index (legacy)"},"name":{"type":"string"}},"required":["name"]}}"#,
-    r#"{"name":"delete_page","description":"Remove a page by index or pageId. The applier keeps the active page valid (clamps if needed).","inputSchema":{"type":"object","properties":{"filePath":{"type":"string","description":"Optional target .op file path; omit to use the server document"},"pageId":{"type":"string","description":"Page id returned by list_pages"},"index":{"type":"string","description":"0-based page index (legacy)"}}}}"#,
-    r#"{"name":"remove_page","description":"TS-compatible alias for delete_page. Removes a page by pageId or index.","inputSchema":{"type":"object","properties":{"filePath":{"type":"string","description":"Optional target .op file path; omit to use the server document"},"pageId":{"type":"string","description":"Page id returned by list_pages"},"index":{"type":"string","description":"0-based page index"}}}}"#,
-    r#"{"name":"duplicate_page","description":"Clone a page and switch the active page to the clone. Accepts TS-style pageId or legacy index; optional name overrides the clone name.","inputSchema":{"type":"object","properties":{"filePath":{"type":"string","description":"Optional target .op file path; omit to use the server document"},"pageId":{"type":"string","description":"Page id returned by list_pages"},"index":{"type":"string","description":"0-based page index (legacy)"},"name":{"type":"string","description":"Optional clone name"}}}}"#,
-    r#"{"name":"reorder_page","description":"Move a page. Accepts TS-style pageId + index or legacy from + to. Target is clamped to [0, page_count).","inputSchema":{"type":"object","properties":{"filePath":{"type":"string","description":"Optional target .op file path; omit to use the server document"},"pageId":{"type":"string","description":"Page id returned by list_pages"},"index":{"type":"string","description":"0-based target page index"},"from":{"type":"string","description":"0-based source page index (legacy)"},"to":{"type":"string","description":"0-based target page index (legacy)"}}}}"#,
-    r#"{"name":"set_active_axis_value","description":"Pin a theme axis to one of its allowed values.","inputSchema":{"type":"object","properties":{"axis":{"type":"string"},"value":{"type":"string"}},"required":["axis","value"]}}"#,
-    r#"{"name":"insert_node","description":"Create a new leaf node on the active or requested page. Accepts Rust flat fields or TS-style data object.","inputSchema":{"type":"object","properties":{"filePath":{"type":"string","description":"Optional target .op file path; omit to use the server document"},"kind":{"type":"string","enum":["frame","group","rect","ellipse","polygon","line","text","path"]},"name":{"type":"string"},"x":{"type":"string"},"y":{"type":"string"},"width":{"type":"string"},"height":{"type":"string"},"fill_hex":{"type":"string"},"parent":{"type":"string","description":"optional parent node id; empty/0/null/root omitted = page root"},"data":{"type":"object","description":"TS-style PenNode data; rich fields are preserved as a subtree"},"postProcess":{"type":"boolean","description":"Accepted for TS compatibility; Rust leaf insert path ignores post-processing"},"canvasWidth":{"type":"number","description":"Accepted for TS compatibility; Rust leaf insert path ignores post-processing width"},"pageId":{"type":"string","description":"optional target page id or legacy page index; omitted = active page"}}}}"#,
-    r#"{"name":"update_node","description":"Patch fields on an existing node. Accepts Rust flat fields or TS-style nodeId + data object.","inputSchema":{"type":"object","properties":{"filePath":{"type":"string","description":"Optional target .op file path; omit to use the server document"},"node_id":{"type":"string"},"nodeId":{"type":"string"},"x":{"type":"string"},"y":{"type":"string"},"width":{"type":"string"},"height":{"type":"string"},"name":{"type":"string"},"fill_hex":{"type":"string"},"data":{"type":"object","description":"TS-style shallow patch data; rich fields such as content/fontSize are preserved"},"postProcess":{"type":"boolean","description":"Accepted for TS compatibility; Rust patch path ignores post-processing"},"canvasWidth":{"type":"number","description":"Accepted for TS compatibility; Rust patch path ignores post-processing width"},"pageId":{"type":"string","description":"optional target page id or legacy page index; omitted = active page"}}}}"#,
-    r#"{"name":"import_svg","description":"Parse an SVG document and insert the resulting nodes on the active or requested page. Accepts inline svg or TS-style svgPath. Supports rect/circle/ellipse/line/polyline/polygon and path (M/L/H/V/C/S/Q/T/Z).","inputSchema":{"type":"object","properties":{"filePath":{"type":"string","description":"Optional target .op file path; omit to use the server document"},"svg":{"type":"string","description":"SVG document text"},"svgPath":{"type":"string","description":"local SVG file path"},"x":{"type":"string","description":"i32 doc-px x offset (default 0)"},"y":{"type":"string","description":"i32 doc-px y offset (default 0)"},"parent":{"type":"string","description":"optional parent node id; empty/0/root omitted = page root"},"maxDim":{"type":"number","description":"Accepted for TS compatibility; Rust SVG path currently preserves parsed dimensions"},"postProcess":{"type":"boolean","description":"Accepted for TS compatibility; Rust SVG path ignores post-processing"},"canvasWidth":{"type":"number","description":"Accepted for TS compatibility; Rust SVG path ignores post-processing width"},"pageId":{"type":"string","description":"optional target page id or legacy page index; omitted = active page"}}}}"#,
-    r#"{"name":"delete_node","description":"Remove a node + descendants from its parent. Accepts Rust node_id or TS nodeId, plus optional pageId.","inputSchema":{"type":"object","properties":{"filePath":{"type":"string","description":"Optional target .op file path; omit to use the server document"},"node_id":{"type":"string"},"nodeId":{"type":"string"},"pageId":{"type":"string","description":"optional target page id or legacy page index; omitted = active page"}}}}"#,
-    r#"{"name":"move_node","description":"Reparent a node. Accepts Rust node_id/target_parent_id or TS nodeId/parent, plus optional index and pageId.","inputSchema":{"type":"object","properties":{"filePath":{"type":"string","description":"Optional target .op file path; omit to use the server document"},"node_id":{"type":"string"},"nodeId":{"type":"string"},"target_parent_id":{"type":"string"},"parent":{"type":"string","description":"target parent node id; empty/0/null/root omitted = page root"},"index":{"type":"string","description":"optional insertion index within target parent/root"},"pageId":{"type":"string","description":"optional target page id or legacy page index; omitted = active page"}}}}"#,
-    r#"{"name":"copy_node","description":"Deep-clone a subtree with fresh ids under a new parent. Accepts Rust node_id or TS sourceId/nodeId, plus optional parent/overrides/pageId.","inputSchema":{"type":"object","properties":{"filePath":{"type":"string","description":"Optional target .op file path; omit to use the server document"},"node_id":{"type":"string"},"sourceId":{"type":"string"},"nodeId":{"type":"string"},"target_parent_id":{"type":"string"},"parent":{"type":"string","description":"target parent node id; empty/0/null/root omitted = page root"},"overrides":{"type":"object","description":"TS-style shallow properties to apply to the cloned root; id is ignored"},"pageId":{"type":"string","description":"optional target page id or legacy page index; omitted = active page"}}}}"#,
-    r#"{"name":"replace_node","description":"Swap an existing node at the same parent slot with a freshly-built leaf. Accepts Rust flat fields or TS-style nodeId + data object. Set drop_children=true to discard a container's subtree.","inputSchema":{"type":"object","properties":{"filePath":{"type":"string","description":"Optional target .op file path; omit to use the server document"},"node_id":{"type":"string"},"nodeId":{"type":"string"},"kind":{"type":"string","enum":["frame","group","rect","ellipse","polygon","line","text","path"]},"name":{"type":"string"},"x":{"type":"string"},"y":{"type":"string"},"width":{"type":"string"},"height":{"type":"string"},"fill_hex":{"type":"string"},"data":{"type":"object","description":"TS-style PenNode data; rich fields are preserved as a subtree"},"postProcess":{"type":"boolean","description":"Accepted for TS compatibility; Rust replace path ignores post-processing"},"canvasWidth":{"type":"number","description":"Accepted for TS compatibility; Rust replace path ignores post-processing width"},"drop_children":{"type":"string","enum":["true","false"]},"dropChildren":{"type":"string","enum":["true","false"]},"pageId":{"type":"string","description":"optional target page id or legacy page index; omitted = active page"}}}}"#,
-];
-
-const DEBUG_TOOL_SCHEMAS: &[&str] = &[
-    r#"{"name":"debug_validation_report","description":"Run the op-design-lint detectors over the active page and return the design-issue list. Read-only, no parameters. Result: count + categories (`;`-separated `category|count`) + issues (JSON-serialized Issue array). Gated behind the OPENPENCIL_DEBUG_TOOLS=1 env flag.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
-    r#"{"name":"debug_logs_tail","description":"Read the tail of ~/.openpencil/logs/server-YYYY-MM-DD.log with API keys and Authorization headers redacted. Gated behind OPENPENCIL_DEBUG_TOOLS=1.","inputSchema":{"type":"object","properties":{"tailLines":{"type":"number","description":"Maximum lines to return (default 100, max 500)."},"sinceMs":{"type":"number","description":"Unix ms timestamp; only return lines newer than this."},"grep":{"type":"string","description":"Regex to filter lines by content after redaction."}}}}"#,
-    r#"{"name":"debug_screenshot","description":"Capture a PNG screenshot of the live canvas via the renderer. File-backed Rust MCP reports the same no-live-canvas error as TS standalone mode. Gated behind OPENPENCIL_DEBUG_TOOLS=1.","inputSchema":{"type":"object","properties":{"target":{"type":"string","enum":["node","root"]},"nodeId":{"type":"string","description":"Required when target=node."},"padding":{"type":"number"},"dpr":{"type":"number"},"timeoutMs":{"type":"number","description":"Default 15000, max 60000."}},"required":["target"]}}"#,
-];
+mod schemas;
+pub(crate) use schemas::{DEBUG_TOOL_SCHEMAS, TOOL_SCHEMAS};
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod wire_tests;

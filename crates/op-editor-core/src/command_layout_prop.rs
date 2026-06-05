@@ -36,13 +36,12 @@ fn parse_justify_content(s: &str) -> Option<JustifyContent> {
 
 // ── helper: parse align_items keyword ────────────────────────────────────────
 
+// Accepts the full CSS-ish alias set TS tolerates (incl. `stretch`,
+// `flex-start`, `baseline`, …) via the canonical schema's `from_css`, so a
+// set-layout command carrying any value a TS builder/file emits is honored
+// rather than silently rejected.
 fn parse_align_items(s: &str) -> Option<AlignItems> {
-    match s {
-        "start" => Some(AlignItems::Start),
-        "center" => Some(AlignItems::Center),
-        "end" => Some(AlignItems::End),
-        _ => None,
-    }
+    AlignItems::from_css(s)
 }
 
 // ── helper: parse layout keyword ─────────────────────────────────────────────

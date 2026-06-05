@@ -479,6 +479,9 @@ fn layout_align_of(node: &PenNode) -> LayoutAlignValue {
         AlignItems::Start => LayoutAlignValue::Start,
         AlignItems::Center => LayoutAlignValue::Center,
         AlignItems::End => LayoutAlignValue::End,
+        // `stretch` renders as start (see jian resolve_align), so the
+        // panel surfaces Start — matching the rendered alignment.
+        AlignItems::Stretch => LayoutAlignValue::Start,
     }
 }
 

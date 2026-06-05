@@ -17,6 +17,7 @@ use op_editor_core::geometry::{aggregate_bounds, DocRect};
 use op_editor_core::pen_node_ext::PenNodeExt;
 use op_editor_core::walkers::find_node;
 use op_editor_core::{EditorState, NodeId};
+use serde_json::{json, Map, Value};
 
 use super::{McpTool, ToolErrorCode, ToolOutcome};
 use crate::read_nodes::node_snapshot_value;
@@ -25,19 +26,25 @@ use crate::read_nodes::node_snapshot_value;
 
 /// Canonical lowercase label for a `PenNode` variant — the string set
 /// every read tool emits + every write tool accepts.
+/// Node `type` label — the node's own serialized `type` tag (jian
+/// `#[serde(tag = "type", rename_all = "snake_case")]`), which is also
+/// exactly TS `PenNodeType`. Read tools that surface a node's kind MUST
+/// use this so their output matches both the canonical `.op` JSON and the
+/// TS MCP (`rectangle`, not `rect`; `image`/`icon_font`/`ref`, not `other`).
 pub(crate) fn kind_label(node: &PenNode) -> &'static str {
     match node {
         PenNode::Frame(_) => "frame",
         PenNode::Group(_) => "group",
-        PenNode::Rectangle(_) => "rect",
+        PenNode::Rectangle(_) => "rectangle",
         PenNode::Ellipse(_) => "ellipse",
         PenNode::Polygon(_) => "polygon",
         PenNode::Line(_) => "line",
         PenNode::Text(_) => "text",
         PenNode::Path(_) => "path",
-        PenNode::TextInput(_) | PenNode::Image(_) | PenNode::IconFont(_) | PenNode::Ref(_) => {
-            "other"
-        }
+        PenNode::TextInput(_) => "text_input",
+        PenNode::Image(_) => "image",
+        PenNode::IconFont(_) => "icon_font",
+        PenNode::Ref(_) => "ref",
     }
 }
 
@@ -130,27 +137,19 @@ impl McpTool for GetSelection {
             .iter()
             .map(|node| node_snapshot_value(node, depth))
             .collect();
-        let nodes_json = match serde_json::to_string(&nodes) {
-            Ok(json) => json,
-            Err(e) => {
-                return ToolOutcome::Err(
-                    ToolErrorCode::Internal,
-                    format!("serialize selection nodes failed: {e}"),
-                );
-            }
-        };
-
-        let mut out = BTreeMap::new();
-        out.insert("selected_id".into(), self.selected_id.clone());
-        out.insert("kind".into(), self.kind.clone());
-        out.insert("x".into(), self.x.to_string());
-        out.insert("y".into(), self.y.to_string());
-        out.insert("width".into(), self.width.to_string());
-        out.insert("height".into(), self.height.to_string());
-        out.insert("selectedIds".into(), self.selected_ids_json.clone());
-        out.insert("activePageId".into(), self.active_page_id.clone());
-        out.insert("nodes".into(), nodes_json);
-        ToolOutcome::Ok(out)
+        // Emit EXACTLY TS get-selection's shape — { selectedIds, activePageId,
+        // nodes } — with NATIVE JSON values. The old BTreeMap<String,String>
+        // path stringified every value (selectedIds became "[\"n10\"]", nodes
+        // a stringified array) and leaked Rust-only selected_id/kind/x/y/w/h
+        // keys; OkJson embeds the object verbatim so it matches the TS handler.
+        let selected_ids: serde_json::Value =
+            serde_json::from_str(&self.selected_ids_json).unwrap_or_else(|_| serde_json::json!([]));
+        let out = serde_json::json!({
+            "selectedIds": selected_ids,
+            "activePageId": self.active_page_id,
+            "nodes": nodes,
+        });
+        ToolOutcome::OkJson(out.to_string())
     }
 }
 
@@ -242,13 +241,12 @@ fn active_page_id(state: &EditorState) -> String {
 
 // --- list_pages ------------------------------------------------------
 
-/// First-party `list_pages` tool — page count, active index, and a
-/// comma-separated list of page names.
+/// First-party `list_pages` tool — page count, active index, and the
+/// `{id,name}` of every page as a nested JSON array.
 pub struct ListPages {
     pub page_count: usize,
     pub active_page_index: usize,
-    pub ids: String,
-    pub names: String,
+    pub pages: Vec<(String, String)>,
 }
 
 impl McpTool for ListPages {
@@ -256,40 +254,35 @@ impl McpTool for ListPages {
         "list_pages"
     }
     fn call(&self, _args: &BTreeMap<String, String>) -> ToolOutcome {
-        let mut out = BTreeMap::new();
-        out.insert("page_count".into(), self.page_count.to_string());
-        out.insert(
-            "active_page_index".into(),
-            self.active_page_index.to_string(),
-        );
-        out.insert("ids".into(), self.ids.clone());
-        out.insert("names".into(), self.names.clone());
-        ToolOutcome::Ok(out)
+        let pages: Vec<Value> = self
+            .pages
+            .iter()
+            .map(|(id, name)| json!({ "id": id, "name": name }))
+            .collect();
+        ToolOutcome::OkJson(
+            json!({
+                "pageCount": self.page_count,
+                "activePageIndex": self.active_page_index,
+                "pages": pages,
+            })
+            .to_string(),
+        )
     }
 }
 
 pub fn list_pages_snapshot(state: &EditorState) -> ListPages {
-    let (ids, names) = match state.doc.pages.as_ref() {
-        Some(pages) => (
-            pages
-                .iter()
-                .map(|p| p.id.clone())
-                .collect::<Vec<_>>()
-                .join(","),
-            pages
-                .iter()
-                .map(|p| p.name.clone())
-                .collect::<Vec<_>>()
-                .join(","),
-        ),
+    let pages = match state.doc.pages.as_ref() {
+        Some(pages) => pages
+            .iter()
+            .map(|p| (p.id.clone(), p.name.clone()))
+            .collect(),
         // Single-page fallback: one implicit "Page 1".
-        None => ("0".to_string(), "Page 1".to_string()),
+        None => vec![("0".to_string(), "Page 1".to_string())],
     };
     ListPages {
         page_count: state.page_count(),
         active_page_index: state.ui.active_page_index,
-        ids,
-        names,
+        pages,
     }
 }
 
@@ -427,22 +420,12 @@ impl McpTool for ListVariables {
         "list_variables"
     }
     fn call(&self, _args: &BTreeMap<String, String>) -> ToolOutcome {
-        let mut out = BTreeMap::new();
-        out.insert("count".into(), self.variables.len().to_string());
-        let encoded: Vec<String> = self
+        let variables: Vec<Value> = self
             .variables
             .iter()
-            .map(|v| {
-                format!(
-                    "{}|{}|{}",
-                    escape_record_field(&v.name),
-                    escape_record_field(&v.kind),
-                    escape_record_field(&v.value),
-                )
-            })
+            .map(|v| json!({ "name": v.name, "kind": v.kind, "value": v.value }))
             .collect();
-        out.insert("variables".into(), encoded.join(";"));
-        ToolOutcome::Ok(out)
+        ToolOutcome::OkJson(json!({ "variables": variables }).to_string())
     }
 }
 
@@ -477,22 +460,6 @@ pub fn unescape_record_field(s: &str) -> String {
             }
         } else {
             out.push(c);
-        }
-    }
-    out
-}
-
-/// Three-level escape set (`\`, `;`, `|`, `,`) — only `get_active_
-/// theme.options` needs it.
-pub(crate) fn escape_layered_field(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    for c in s.chars() {
-        match c {
-            '\\' => out.push_str("\\\\"),
-            ';' => out.push_str("\\;"),
-            '|' => out.push_str("\\|"),
-            ',' => out.push_str("\\,"),
-            c => out.push(c),
         }
     }
     out
@@ -544,35 +511,20 @@ impl McpTool for GetActiveTheme {
         "get_active_theme"
     }
     fn call(&self, _args: &BTreeMap<String, String>) -> ToolOutcome {
-        let active_encoded: Vec<String> = self
+        // `active` = current axis→value selection; `themes` = available
+        // values per axis (doc.themes, the same `Record<string,string[]>`
+        // shape TS getThemes returns). Emitted as nested JSON objects.
+        let active: Map<String, Value> = self
             .active
             .iter()
-            .map(|(axis, value)| {
-                format!(
-                    "{}|{}",
-                    escape_record_field(axis),
-                    escape_record_field(value)
-                )
-            })
+            .map(|(axis, value)| (axis.clone(), json!(value)))
             .collect();
-        let options_encoded: Vec<String> = self
+        let themes: Map<String, Value> = self
             .options
             .iter()
-            .map(|(axis, values)| {
-                let escaped_values: Vec<String> =
-                    values.iter().map(|v| escape_layered_field(v)).collect();
-                format!(
-                    "{}|{}",
-                    escape_layered_field(axis),
-                    escaped_values.join(",")
-                )
-            })
+            .map(|(axis, values)| (axis.clone(), json!(values)))
             .collect();
-        let mut out = BTreeMap::new();
-        out.insert("axes".into(), active_encoded.join(";"));
-        out.insert("options".into(), options_encoded.join(";"));
-        out.insert("axis_count".into(), self.options.len().to_string());
-        ToolOutcome::Ok(out)
+        ToolOutcome::OkJson(json!({ "active": active, "themes": themes }).to_string())
     }
 }
 
@@ -688,9 +640,11 @@ pub fn get_component_snapshot(state: &EditorState) -> GetComponent {
 
 // The remaining read tools live in `read_tools.rs` (800-line cap).
 pub use super::read_tools::{
-    count_nodes_snapshot, find_empty_space_snapshot, find_node_by_name_snapshot,
-    get_canvas_bounds_snapshot, get_history_depth_snapshot, get_node_parent_snapshot,
-    get_selection_set_snapshot, get_viewport_snapshot, list_node_kinds_snapshot,
-    snapshot_layout_snapshot, CountNodes, FindEmptySpace, FindNodeByName, GetCanvasBounds,
-    GetHistoryDepth, GetNodeParent, GetSelectionSet, GetViewport, ListNodeKinds, SnapshotLayout,
+    find_empty_space_snapshot, snapshot_layout_snapshot, FindEmptySpace, SnapshotLayout,
+};
+pub use super::read_tools_extra::{
+    count_nodes_snapshot, find_node_by_name_snapshot, get_canvas_bounds_snapshot,
+    get_history_depth_snapshot, get_node_parent_snapshot, get_selection_set_snapshot,
+    get_viewport_snapshot, list_node_kinds_snapshot, CountNodes, FindNodeByName, GetCanvasBounds,
+    GetHistoryDepth, GetNodeParent, GetSelectionSet, GetViewport, ListNodeKinds,
 };

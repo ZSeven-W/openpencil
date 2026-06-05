@@ -228,6 +228,45 @@ fn node_drag_snap_does_not_trap_incremental_cursor_motion() {
 }
 
 #[test]
+fn node_drag_skips_smart_guides_for_large_documents() {
+    let mut nodes = vec![
+        r#"{"type":"rectangle","id":"moving","name":"moving","x":90,"y":0,"width":10,"height":10}"#
+            .to_string(),
+        r#"{"type":"rectangle","id":"guide","name":"guide","x":105,"y":100,"width":100,"height":20}"#
+            .to_string(),
+    ];
+    for i in 0..1000 {
+        nodes.push(format!(
+            r#"{{"type":"rectangle","id":"filler-{i}","name":"filler-{i}","x":{},"y":{},"width":8,"height":8}}"#,
+            1000 + i * 10,
+            1000 + i * 10
+        ));
+    }
+    let doc = format!(r#"{{"version":"0.8.0","children":[{}]}}"#, nodes.join(","));
+    let mut host = WidgetHostNative::new();
+    seed(&mut host, &doc);
+    host.editor_state_mut()
+        .set_single_selection(NodeId::new("moving"));
+    host.editor_state_mut().viewport.zoom = 1.0;
+    host.node_drag = Some(NodeDragState {
+        last_screen_x: 500.0,
+        last_screen_y: 500.0,
+        press_screen_x: 500.0,
+        press_screen_y: 500.0,
+        moved: true,
+    });
+
+    assert!(host.apply_cursor_move(502.0, 500.0));
+
+    let moved = node_xy(&host, "moving");
+    assert_eq!(
+        moved.0, 92.0,
+        "large documents should prioritize direct cursor tracking over smart-guide snap"
+    );
+    assert!(host.editor_state().editor_ui.active_guides.is_empty());
+}
+
+#[test]
 fn host_carries_editor_state_as_source_of_truth() {
     // A fresh host opens with the demo sample seeded onto
     // `EditorState` — the host's single source of truth.

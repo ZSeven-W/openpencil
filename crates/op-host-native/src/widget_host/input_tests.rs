@@ -7,8 +7,8 @@
 
 use super::{CursorHint, WidgetHostNative};
 use op_editor_core::ui_draft::PropertyFocus;
-use op_editor_core::NodeId;
 use op_editor_core::PenNodeExt;
+use op_editor_core::{own_bounds, NodeId};
 
 /// Seed a host's `editor_state` from a canonical `.op` JSON snippet.
 fn seed(host: &mut WidgetHostNative, json: &str) {
@@ -17,6 +17,225 @@ fn seed(host: &mut WidgetHostNative, json: &str) {
         .value;
     *host.editor_state_mut() = op_editor_core::EditorState::from_document(doc);
     host.mark_paint_dirty_for_test();
+}
+
+#[test]
+fn layer_hover_does_not_refresh_stale_canvas_layout_scene() {
+    let mut host = WidgetHostNative::new();
+    seed(
+        &mut host,
+        r#"{"version":"0.8.0","children":[{"type":"rectangle","id":"n1","name":"n1","x":0,"y":0,"width":100,"height":50}]}"#,
+    );
+    host.editor_state_mut().editor_ui.hovered_layer_id = Some(NodeId::new("n1"));
+    host.mark_paint_dirty_for_test();
+
+    let panel = op_editor_ui::widgets::LayerPanel::from_editor(host.editor_state());
+    let rect = op_editor_ui::Rect {
+        origin: op_editor_ui::Point2D::new(0.0, op_editor_ui::widgets::TOP_BAR_HEIGHT),
+        size: op_editor_ui::Point2D::new(
+            host.editor_state().editor_ui.layer_panel_width,
+            800.0 - op_editor_ui::widgets::TOP_BAR_HEIGHT,
+        ),
+    };
+    let regions = panel.regions(rect);
+    let x = 48.0;
+    let y = regions.layers_rows_top + 8.0;
+
+    assert!(!host.update_layer_hover(x, y, 1200.0, 800.0));
+    assert!(
+        host.editor_state_dirty,
+        "layer hover should not rebuild or clear the stale canvas layout scene"
+    );
+}
+
+#[test]
+fn layer_row_selection_does_not_dirty_canvas_layout_scene() {
+    let mut host = WidgetHostNative::new();
+    seed(
+        &mut host,
+        r#"{"version":"0.8.0","children":[{"type":"rectangle","id":"n1","name":"n1","x":0,"y":0,"width":100,"height":50},{"type":"rectangle","id":"n2","name":"n2","x":120,"y":0,"width":100,"height":50}]}"#,
+    );
+    let _ = host.layout_scene();
+    assert!(!host.editor_state_dirty);
+
+    let panel = op_editor_ui::widgets::LayerPanel::from_editor(host.editor_state());
+    let rect = op_editor_ui::Rect {
+        origin: op_editor_ui::Point2D::new(0.0, op_editor_ui::widgets::TOP_BAR_HEIGHT),
+        size: op_editor_ui::Point2D::new(
+            host.editor_state().editor_ui.layer_panel_width,
+            800.0 - op_editor_ui::widgets::TOP_BAR_HEIGHT,
+        ),
+    };
+    let regions = panel.regions(rect);
+    let x = 48.0;
+    let y = regions.layers_rows_top + 8.0;
+
+    assert!(host.apply_click(x, y, 1200.0, 800.0));
+    assert_eq!(host.editor_state().selection.anchor, NodeId::new("n1"));
+    assert!(
+        !host.editor_state_dirty,
+        "selecting a layer row should not invalidate canvas layout"
+    );
+}
+
+#[test]
+fn layer_right_press_does_not_dirty_canvas_layout_scene() {
+    let mut host = WidgetHostNative::new();
+    seed(
+        &mut host,
+        r#"{"version":"0.8.0","children":[{"type":"rectangle","id":"n1","name":"n1","x":0,"y":0,"width":100,"height":50},{"type":"rectangle","id":"n2","name":"n2","x":120,"y":0,"width":100,"height":50}]}"#,
+    );
+    let _ = host.layout_scene();
+    assert!(!host.editor_state_dirty);
+
+    let panel = op_editor_ui::widgets::LayerPanel::from_editor(host.editor_state());
+    let rect = op_editor_ui::Rect {
+        origin: op_editor_ui::Point2D::new(0.0, op_editor_ui::widgets::TOP_BAR_HEIGHT),
+        size: op_editor_ui::Point2D::new(
+            host.editor_state().editor_ui.layer_panel_width,
+            800.0 - op_editor_ui::widgets::TOP_BAR_HEIGHT,
+        ),
+    };
+    let regions = panel.regions(rect);
+    let x = 48.0;
+    let y = regions.layers_rows_top + 8.0;
+
+    assert!(host.apply_right_press(x, y, 1200.0, 800.0));
+    assert_eq!(host.editor_state().selection.anchor, NodeId::new("n1"));
+    assert!(host.editor_state().editor_ui.layer_context_menu.is_some());
+    assert!(
+        !host.editor_state_dirty,
+        "right-clicking a layer row should not invalidate canvas layout"
+    );
+}
+
+#[test]
+fn layer_right_press_does_not_refresh_stale_canvas_layout_scene() {
+    let mut host = WidgetHostNative::new();
+    seed(
+        &mut host,
+        r#"{"version":"0.8.0","children":[{"type":"rectangle","id":"n1","name":"n1","x":0,"y":0,"width":100,"height":50}]}"#,
+    );
+    host.mark_paint_dirty_for_test();
+
+    let panel = op_editor_ui::widgets::LayerPanel::from_editor(host.editor_state());
+    let rect = op_editor_ui::Rect {
+        origin: op_editor_ui::Point2D::new(0.0, op_editor_ui::widgets::TOP_BAR_HEIGHT),
+        size: op_editor_ui::Point2D::new(
+            host.editor_state().editor_ui.layer_panel_width,
+            800.0 - op_editor_ui::widgets::TOP_BAR_HEIGHT,
+        ),
+    };
+    let regions = panel.regions(rect);
+    let x = 48.0;
+    let y = regions.layers_rows_top + 8.0;
+
+    assert!(host.apply_right_press(x, y, 1200.0, 800.0));
+    assert!(
+        host.editor_state_dirty,
+        "right-clicking a layer row should not rebuild or clear a stale canvas layout scene"
+    );
+}
+
+#[test]
+fn canvas_node_selection_does_not_dirty_canvas_layout_scene() {
+    let mut host = WidgetHostNative::new();
+    seed(
+        &mut host,
+        &three_rects(
+            [
+                (360.0, 180.0, 80.0, 40.0),
+                (480.0, 180.0, 80.0, 40.0),
+                (600.0, 180.0, 80.0, 40.0),
+            ],
+            ["n10", "n11", "n12"],
+        ),
+    );
+    let viewport_w = 1440.0;
+    let viewport_h = 900.0;
+    let (cx0, cy0, _cw, _ch) = host.canvas_region(viewport_w, viewport_h);
+    let _ = host.layout_scene();
+    assert!(!host.editor_state_dirty);
+
+    assert!(host.apply_press(
+        cx0 + 360.0 + 20.0,
+        cy0 + 180.0 + 20.0,
+        viewport_w,
+        viewport_h
+    ));
+
+    assert_eq!(host.editor_state().selection.anchor, NodeId::new("n10"));
+    assert!(
+        !host.editor_state_dirty,
+        "selecting a canvas node should not invalidate canvas layout"
+    );
+}
+
+#[test]
+fn node_drag_smart_guides_do_not_refresh_layout_scene_on_each_move() {
+    let mut host = WidgetHostNative::new();
+    seed(
+        &mut host,
+        &three_rects(
+            [
+                (360.0, 180.0, 80.0, 40.0),
+                (480.0, 180.0, 80.0, 40.0),
+                (600.0, 180.0, 80.0, 40.0),
+            ],
+            ["n10", "n11", "n12"],
+        ),
+    );
+    let viewport_w = 1440.0;
+    let viewport_h = 900.0;
+    let (cx0, cy0, _cw, _ch) = host.canvas_region(viewport_w, viewport_h);
+    let _ = host.layout_scene();
+    assert!(!host.editor_state_dirty);
+    let scene_x_before = host
+        .layout_scene
+        .active_page()
+        .and_then(|p| p.find("n10"))
+        .expect("scene node")
+        .bounds
+        .origin
+        .x;
+
+    assert!(host.apply_press(
+        cx0 + 360.0 + 20.0,
+        cy0 + 180.0 + 20.0,
+        viewport_w,
+        viewport_h
+    ));
+    assert!(host.node_drag.is_some(), "press should start a node drag");
+    assert!(host.apply_cursor_move(cx0 + 360.0 + 30.0, cy0 + 180.0 + 20.0));
+
+    let moved = op_editor_core::walkers::find_node(
+        host.editor_state().active_children(),
+        &NodeId::new("n10"),
+    )
+    .expect("moved node");
+    assert_eq!(own_bounds(moved).x, 370.0);
+    let scene_x_after = host
+        .layout_scene
+        .active_page()
+        .and_then(|p| p.find("n10"))
+        .expect("patched scene node")
+        .bounds
+        .origin
+        .x;
+    assert_eq!(
+        scene_x_after,
+        scene_x_before + 10.0,
+        "node drag should patch the current layout scene without a rebuild"
+    );
+    assert!(
+        !host.editor_state_dirty,
+        "node drag should not force a full layout-scene rebuild on every move"
+    );
+    assert!(host.apply_release_with_viewport(viewport_w, viewport_h));
+    assert!(
+        host.editor_state_dirty,
+        "node drag release should schedule one full layout-scene reconciliation"
+    );
 }
 
 /// Three top-level rect nodes at the given `(x, y, w, h)` boxes.

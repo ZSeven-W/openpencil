@@ -577,7 +577,10 @@ mod tests {
         assert_eq!(path.width, Some(SizingBehavior::Number(10.0)));
         assert_eq!(path.height, Some(SizingBehavior::Number(10.0)));
         // Committed as a compound `d` (node-local coords), not anchors.
-        assert!(path.anchors.is_none(), "result uses a compound d, not anchors");
+        assert!(
+            path.anchors.is_none(),
+            "result uses a compound d, not anchors"
+        );
         assert_eq!(
             path.d.as_deref(),
             Some("M 10.00 10.00 L 0.00 0.00 L 10.00 0.00 Z")

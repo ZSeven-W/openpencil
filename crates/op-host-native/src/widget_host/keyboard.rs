@@ -677,8 +677,7 @@ impl WidgetHostNative {
         // either way so it never falls through to the global chat send.
         if self.git_author_focus_active() {
             let panel = &mut self.editor_state.editor_ui.git_panel;
-            if !panel.author_name_draft.trim().is_empty()
-                && panel.author_email_draft.contains('@')
+            if !panel.author_name_draft.trim().is_empty() && panel.author_email_draft.contains('@')
             {
                 panel.pending_action = Some(op_editor_core::GitPanelAction::SaveAuthor);
             }

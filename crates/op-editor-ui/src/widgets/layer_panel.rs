@@ -11,8 +11,9 @@ use crate::theme::Theme;
 use crate::widgets::editor_state_ext::theme_for;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::layer_panel_walkers::{
-    apply_layer_rename, icon_for_node, kind_label, layer_regions, pages_from_state, walk,
-    walk_excluding, LayerRegions, RenameView, WalkCx,
+    apply_layer_rename, icon_for_node, kind_label, layer_regions, layers_content_width,
+    pages_content_width, pages_from_state, walk, walk_excluding, LayerRegionInput, LayerRegions,
+    RenameView, WalkCx,
 };
 use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
 use crate::{Color, Point2D, Rect, TextLayout};
@@ -48,7 +49,7 @@ pub struct LayerItem {
     pub label: String,
     pub kind_label: String,
     pub icon: Icon,
-    pub depth: u8,
+    pub depth: usize,
     pub selected: bool,
     pub has_children: bool,
     pub hidden: bool,
@@ -89,6 +90,8 @@ pub struct LayerPanel {
     /// Scroll offsets (px) for the bounded Pages / Layers regions.
     pub pages_scroll: f32,
     pub layers_scroll: f32,
+    pub pages_h_scroll: f32,
+    pub layers_h_scroll: f32,
 }
 
 impl LayerPanel {
@@ -117,6 +120,8 @@ impl LayerPanel {
             rename_caret: state.ui.layer_rename.as_ref().map(|r| r.caret).unwrap_or(0),
             pages_scroll: state.editor_ui.layer_pages_scroll,
             layers_scroll: state.editor_ui.layer_layers_scroll,
+            pages_h_scroll: state.editor_ui.layer_pages_h_scroll,
+            layers_h_scroll: state.editor_ui.layer_layers_h_scroll,
         }
     }
 
@@ -170,6 +175,8 @@ impl LayerPanel {
             rename_caret: state.ui.layer_rename.as_ref().map(|r| r.caret).unwrap_or(0),
             pages_scroll: state.editor_ui.layer_pages_scroll,
             layers_scroll: state.editor_ui.layer_layers_scroll,
+            pages_h_scroll: state.editor_ui.layer_pages_h_scroll,
+            layers_h_scroll: state.editor_ui.layer_layers_h_scroll,
         }
     }
 
@@ -188,6 +195,8 @@ impl LayerPanel {
             rename_caret: 0,
             pages_scroll: 0.0,
             layers_scroll: 0.0,
+            pages_h_scroll: 0.0,
+            layers_h_scroll: 0.0,
         }
     }
 
@@ -202,13 +211,17 @@ impl LayerPanel {
     /// `pub` so the host's wheel handler can route a scroll to the
     /// region under the cursor.
     pub fn regions(&self, rect: Rect) -> LayerRegions {
-        layer_regions(
+        layer_regions(LayerRegionInput {
             rect,
-            self.pages.len(),
-            self.items.len(),
-            self.pages_scroll,
-            self.layers_scroll,
-        )
+            pages_len: self.pages.len(),
+            items_len: self.items.len(),
+            pages_scroll: self.pages_scroll,
+            layers_scroll: self.layers_scroll,
+            pages_h_scroll: self.pages_h_scroll,
+            layers_h_scroll: self.layers_h_scroll,
+            pages_content_w: pages_content_width(&self.pages, rect.size.x),
+            layers_content_w: layers_content_width(&self.items, rect.size.x),
+        })
     }
 
     /// Drop target for a drag-in-progress. Over a row: top-25 %
@@ -386,8 +399,8 @@ impl LayerPanel {
                 // rows. Painted at `inner.origin.x + indent`
                 // where indent = ROW_PAD_X + depth*12.
                 if item.has_children {
-                    let indent = ROW_PAD_X + f32::from(item.depth) * 12.0;
-                    let chev_x = inner.origin.x + indent;
+                    let indent = ROW_PAD_X + item.depth as f32 * 12.0;
+                    let chev_x = inner.origin.x + indent - r.layers_h_scroll;
                     if point.x >= chev_x - slop
                         && point.x <= chev_x + 14.0 + slop
                         && point.y >= icon_y - slop
@@ -631,7 +644,7 @@ impl Widget for LayerPanel {
                 cx.backend.fill_round_rect(row, 6.0, self.theme.muted);
             }
 
-            let indent = ROW_PAD_X + f32::from(item.depth) * 12.0;
+            let indent = ROW_PAD_X + item.depth as f32 * 12.0;
             let dim = |c: Color, factor: f32| -> Color {
                 Color {
                     r: c.r,
@@ -646,6 +659,9 @@ impl Widget for LayerPanel {
             } else {
                 dim(self.theme.muted_foreground, dim_factor)
             };
+            cx.backend.save();
+            cx.backend.clip_rect(row);
+            cx.backend.translate(Point2D::new(-r.layers_h_scroll, 0.0));
             if item.has_children {
                 let chev_icon = if item.collapsed {
                     Icon::ChevronRight
@@ -676,7 +692,7 @@ impl Widget for LayerPanel {
                 dim(self.theme.card_foreground, dim_factor)
             };
             let label_x = icon_x + 20.0;
-            let label_max_x = row.origin.x + row.size.x - 8.0 - 14.0 - 22.0 - 4.0;
+            let label_max_x = row.origin.x + r.layers_content_w - 16.0;
             let available_w = (label_max_x - label_x).max(0.0);
             if item.renaming {
                 paint_rename_input(
@@ -702,6 +718,7 @@ impl Widget for LayerPanel {
                 cx.backend
                     .draw_text(&label, Point2D::new(label_x, row.origin.y + 17.0));
             }
+            cx.backend.restore();
             let trailing_right = row.origin.x + row.size.x - 8.0;
             let lock_x = trailing_right - 14.0;
             let eye_x = lock_x - 22.0;

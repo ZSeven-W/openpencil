@@ -47,6 +47,7 @@ use crate::selection::SelectionState;
 use crate::tool::Tool;
 use crate::ui_draft::UiDraftState;
 use crate::viewport::Viewport;
+use jian_ops_schema::node::PenNode;
 
 /// The editor's runtime state — the canonical document plus the
 /// editor-only state layered on top of it.
@@ -118,6 +119,83 @@ impl EditorState {
     /// the document uses the default single-page fallback.
     pub fn new() -> Self {
         Self::from_document(empty_document())
+    }
+
+    /// Replace the live document wholesale — a whole-document sync from an
+    /// external client (e.g. a TS app pushing its canvas via REST
+    /// `/api/mcp/document`, mirroring `setSyncDocument`). All document-derived
+    /// transient state is reset the same way [`from_document`](Self::from_document)
+    /// initializes it:
+    /// - `selection` cleared (old node IDs may be gone),
+    /// - `components` rebuilt from the new tree,
+    /// - `history` reset — a remote sync is not an undoable local edit, so undo
+    ///   must NOT restore the pre-sync document, and
+    /// - `ui` draft state reset — it stashes pre-edit snapshots
+    ///   (`pending_pen_history` / `pending_color_history` /
+    ///   `pending_text_edit_history`) and in-progress edits keyed by old node
+    ///   IDs (`pen_in_progress`, `text_editing`, …). Keeping them would let a
+    ///   sync that lands mid-edit commit a STALE pre-sync snapshot and resurrect
+    ///   the old document via undo, and would point edits at nodes that no
+    ///   longer exist.
+    ///
+    /// Editor chrome (`editor_ui` settings, `chat`, `clipboard`, `ui_kits`,
+    /// viewport, tool) is PRESERVED so a sync never wipes the user's settings —
+    /// including the live MCP server config — or their view. Within `editor_ui`,
+    /// only the document-derived transient bits (hover/context-menu/collapsed
+    /// layers/guides/in-progress property edits, all keyed by old node ids) are
+    /// cleared via [`EditorUiState::clear_document_derived`].
+    pub fn replace_document(&mut self, doc: jian_ops_schema::PenDocument) {
+        self.components = ComponentLibrary::from_document(&doc);
+        let old_doc = std::mem::replace(&mut self.doc, doc);
+        self.selection = SelectionState::empty();
+        self.history = History::new();
+        self.ui = UiDraftState::new();
+        self.editor_ui.clear_document_derived();
+        drop_document_after_replace(old_doc);
+    }
+}
+
+fn drop_document_after_replace(doc: jian_ops_schema::PenDocument) {
+    if document_max_depth(&doc) <= 512 {
+        drop(doc);
+        return;
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let _ = std::thread::Builder::new()
+            .name("op-doc-drop".into())
+            .stack_size(512 * 1024 * 1024)
+            .spawn(move || drop(doc));
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        drop(doc);
+    }
+}
+
+fn document_max_depth(doc: &jian_ops_schema::PenDocument) -> usize {
+    let mut max = 0;
+    let mut stack: Vec<(&PenNode, usize)> = doc.children.iter().map(|node| (node, 1)).collect();
+    if let Some(pages) = doc.pages.as_ref() {
+        for page in pages {
+            stack.extend(page.children.iter().map(|node| (node, 1)));
+        }
+    }
+    while let Some((node, depth)) = stack.pop() {
+        max = max.max(depth);
+        if let Some(children) = node_children(node) {
+            stack.extend(children.iter().map(|child| (child, depth + 1)));
+        }
+    }
+    max
+}
+
+fn node_children(node: &PenNode) -> Option<&[PenNode]> {
+    match node {
+        PenNode::Frame(n) => n.children.as_deref(),
+        PenNode::Group(n) => n.children.as_deref(),
+        PenNode::Rectangle(n) => n.children.as_deref(),
+        _ => None,
     }
 }
 
@@ -197,5 +275,74 @@ mod tests {
         let b = EditorState::new();
         assert_eq!(a.doc, b.doc);
         assert_eq!(a.tool, b.tool);
+    }
+
+    #[test]
+    fn replace_document_swaps_doc_but_preserves_editor_chrome() {
+        let mut s = EditorState::new();
+        // Mutate preserved chrome state a remote sync must NOT wipe.
+        s.editor_ui.sidebar_open = false;
+        s.editor_ui.agent_settings.mcp_server.port = 4321;
+        s.viewport.pan_x = 123.0;
+        s.viewport.pan_y = 456.0;
+        // Document-derived transient editor_ui state keyed by old node ids —
+        // must be cleared so it can't point at nodes the sync removed.
+        s.editor_ui.hovered_layer_id = Some(crate::NodeId::new("old-1"));
+        s.editor_ui
+            .collapsed_layers
+            .insert(crate::NodeId::new("old-2"));
+        s.editor_ui.padding_edit_mode_anchor = "old-3".to_string();
+        // Set by a prior Figma import — must not carry into the synced doc.
+        s.editor_ui.preserve_authored_geometry = true;
+
+        let mut doc = empty_document();
+        doc.name = Some("Synced".to_string());
+        s.replace_document(doc);
+
+        // Document swapped; doc-derived transient state reset.
+        assert_eq!(s.doc.name.as_deref(), Some("Synced"));
+        assert!(s.selection.is_empty());
+        assert!(!s.history.can_undo());
+        // Settings-level editor chrome preserved across the sync.
+        assert!(!s.editor_ui.sidebar_open);
+        assert_eq!(s.editor_ui.agent_settings.mcp_server.port, 4321);
+        assert_eq!(s.viewport.pan_x, 123.0);
+        assert_eq!(s.viewport.pan_y, 456.0);
+        // Document-derived editor_ui state cleared (no stale node-id refs).
+        assert!(s.editor_ui.hovered_layer_id.is_none());
+        assert!(s.editor_ui.collapsed_layers.is_empty());
+        assert!(s.editor_ui.padding_edit_mode_anchor.is_empty());
+        assert!(!s.editor_ui.preserve_authored_geometry);
+    }
+
+    #[test]
+    fn replace_document_clears_stale_draft_state_so_undo_cannot_resurrect_old_doc() {
+        let mut s = EditorState::new();
+        // Simulate a sync that lands mid-edit: a pre-edit snapshot of the OLD
+        // document is stashed in the draft state, plus an in-progress edit
+        // keyed by an old node id and a live property-input draft.
+        let mut pre_sync = empty_document();
+        pre_sync.name = Some("PRE-SYNC".to_string());
+        s.ui.pending_pen_history = Some(crate::history::EditorSnapshot {
+            doc: pre_sync,
+            selection: SelectionState::empty(),
+            active_page_index: 0,
+            components: ComponentLibrary::default(),
+        });
+        s.ui.pen_in_progress = Some(crate::NodeId::new("n7"));
+        s.ui.property_input_draft = "stale".to_string();
+
+        let mut doc = empty_document();
+        doc.name = Some("Synced".to_string());
+        s.replace_document(doc);
+
+        // The stale pre-sync snapshot is gone — it can never be committed to
+        // history and resurrected via undo.
+        assert!(s.ui.pending_pen_history.is_none());
+        assert!(s.ui.pending_color_history.is_none());
+        assert!(s.ui.pending_text_edit_history.is_none());
+        assert!(s.ui.pen_in_progress.is_none());
+        assert!(s.ui.property_input_draft.is_empty());
+        assert!(!s.history.can_undo() && !s.history.can_redo());
     }
 }

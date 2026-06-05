@@ -219,7 +219,6 @@ impl WidgetHostNative {
     /// position. Returns `true` if the hover state changed.
     pub fn update_layer_hover(&mut self, x: f32, y: f32, viewport_w: f32, viewport_h: f32) -> bool {
         use op_editor_ui::widgets::{LayerPanel, LayerPanelHit};
-        self.refresh_layout_scene();
         let sidebar_open = self.editor_state.editor_ui.sidebar_open;
         let panel_w = self.editor_state.editor_ui.layer_panel_width;
         // A top-most floating panel covers the layer rail when dragged
@@ -253,9 +252,26 @@ impl WidgetHostNative {
         if changed {
             self.editor_state.editor_ui.hovered_layer_id = new_layer_ec;
             self.editor_state.editor_ui.hovered_page_index = new_page;
-            self.mark_dirty();
         }
         changed
+    }
+
+    pub fn cursor_over_layer_panel(
+        &self,
+        x: f32,
+        y: f32,
+        viewport_w: f32,
+        viewport_h: f32,
+    ) -> bool {
+        self.editor_state.editor_ui.sidebar_open
+            && !self.over_topmost_panel(x, y, viewport_w, viewport_h)
+            && y >= TOP_BAR_HEIGHT
+            && x >= 0.0
+            && x <= self.editor_state.editor_ui.layer_panel_width
+    }
+
+    pub fn layer_drag_in_progress(&self) -> bool {
+        self.layer_drag.is_some()
     }
 
     /// True when the cursor is over a draggable node inside the

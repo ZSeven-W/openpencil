@@ -3,11 +3,12 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use jian_ops_schema::node::PenNode;
+use jian_ops_schema::variable::VariableScalar;
 use op_editor_core::pen_node_ext::PenNodeExt;
 use op_editor_core::walkers::find_node;
 use op_editor_core::{EditorState, NodeId};
 use regex::{Regex, RegexBuilder};
-use serde_json::Value;
+use serde_json::{json, Value};
 
 use super::read_nodes::{node_snapshot_value, page_nodes_snapshots, PageNodes};
 use super::{McpTool, ToolErrorCode, ToolOutcome};
@@ -17,6 +18,10 @@ type ToolCallError = (ToolErrorCode, String);
 pub struct BatchGet {
     pages: Vec<PageNodes>,
     active_page_id: String,
+    /// Snapshot of every variable resolved to its concrete scalar under the
+    /// active theme (name → value), for `resolveRefs=true`. Mirrors the
+    /// inputs TS `resolveNodeForCanvas` resolves against.
+    resolved_vars: BTreeMap<String, VariableScalar>,
 }
 
 struct SearchPattern {
@@ -31,15 +36,10 @@ impl McpTool for BatchGet {
     }
 
     fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
-        if matches!(
+        let resolve_refs = matches!(
             arg_alias(args, &["resolveRefs", "resolve_refs"]),
             Some("true")
-        ) {
-            return ToolOutcome::Err(
-                ToolErrorCode::InvalidArgument,
-                "resolveRefs is not supported by Rust MCP batch_get yet".into(),
-            );
-        }
+        );
         let page = match self.page_nodes(args) {
             Ok(page) => page,
             Err((code, msg)) => return ToolOutcome::Err(code, msg),
@@ -94,31 +94,144 @@ impl McpTool for BatchGet {
             }
         }
 
-        let values: Vec<Value> = nodes
+        let mut values: Vec<Value> = nodes
             .iter()
             .map(|node| node_snapshot_value(node, read_depth))
             .collect();
-        let nodes_json = match serde_json::to_string(&values) {
-            Ok(json) => json,
-            Err(e) => {
-                return ToolOutcome::Err(
-                    ToolErrorCode::Internal,
-                    format!("serialize nodes failed: {e}"),
-                );
+        // resolveRefs=true: expand `$variable` refs to their concrete value
+        // under the active theme (mirrors TS resolveNodeForCanvas — fill /
+        // stroke colors + opacity / gap / padding numeric refs).
+        if resolve_refs {
+            for value in &mut values {
+                resolve_refs_in_node(value, &self.resolved_vars);
             }
-        };
-        let mut out = BTreeMap::new();
-        out.insert("count".into(), values.len().to_string());
-        out.insert("nodes".into(), nodes_json);
-        ToolOutcome::Ok(out)
+        }
+        // TS `batch_get` returns `{ nodes: [...] }` (nodes is a JSON ARRAY,
+        // no `count`). Emit the nested JSON verbatim via OkJson so the wire
+        // result matches byte-for-byte instead of a flat `{count, nodes:"<str>"}`.
+        match serde_json::to_string(&json!({ "nodes": values })) {
+            Ok(json) => ToolOutcome::OkJson(json),
+            Err(e) => ToolOutcome::Err(
+                ToolErrorCode::Internal,
+                format!("serialize nodes failed: {e}"),
+            ),
+        }
+    }
+}
+
+/// Resolve a `$name` ref string against the snapshot map. `None` for a
+/// non-ref (no `$`) or unknown name — callers leave such values unchanged
+/// (matching TS, which only rewrites genuine refs it can resolve).
+fn resolve_ref_value(s: &str, vars: &BTreeMap<String, VariableScalar>) -> Option<Value> {
+    let name = s.strip_prefix('$')?;
+    Some(match vars.get(name)? {
+        VariableScalar::Str(v) => Value::String(v.clone()),
+        VariableScalar::Num(n) => json!(n),
+        VariableScalar::Bool(b) => json!(b),
+    })
+}
+
+/// Resolve a `$ref` `color` string field of an object in place (used for
+/// solid fills, gradient stops, and shadow effects).
+fn resolve_color_in_obj(
+    obj: &mut serde_json::Map<String, Value>,
+    vars: &BTreeMap<String, VariableScalar>,
+) {
+    if let Some(Value::String(raw)) = obj.get("color") {
+        if let Some(Value::String(resolved)) = resolve_ref_value(raw, vars) {
+            obj.insert("color".into(), Value::String(resolved));
+        }
+    }
+}
+
+/// Resolve color refs in one fill: its own `color` (solid) AND any gradient
+/// `stops[].color` (linear/radial gradient bodies).
+fn resolve_color_field(fill: &mut Value, vars: &BTreeMap<String, VariableScalar>) {
+    if let Value::Object(obj) = fill {
+        resolve_color_in_obj(obj, vars);
+        if let Some(Value::Array(stops)) = obj.get_mut("stops") {
+            for stop in stops {
+                if let Value::Object(stop_obj) = stop {
+                    resolve_color_in_obj(stop_obj, vars);
+                }
+            }
+        }
+    }
+}
+
+/// Recursively resolve `$variable` refs in a serialized node, targeting the
+/// ref-bearing fields TS `resolveNodeForCanvas` covers: fill colors (solid +
+/// gradient stops), stroke-fill colors, shadow/effect colors, and the
+/// `opacity` / `gap` / `padding` / `cornerRadius` numeric slots. Unresolved
+/// refs are left verbatim (visible `$name`), never replaced with a wrong
+/// value. Known subset vs TS (refs left unresolved, not mis-resolved): text
+/// `content` / typography font refs; themed vars with no `theme:none` default
+/// when the active theme is empty (TS fills it via `getDefaultTheme`); the
+/// default-palette fallback for un-seeded refs.
+pub(crate) fn resolve_refs_in_node(value: &mut Value, vars: &BTreeMap<String, VariableScalar>) {
+    let Value::Object(map) = value else {
+        return;
+    };
+    if let Some(Value::Array(fills)) = map.get_mut("fill") {
+        for fill in fills {
+            resolve_color_field(fill, vars);
+        }
+    }
+    if let Some(Value::Object(stroke)) = map.get_mut("stroke") {
+        if let Some(Value::Array(fills)) = stroke.get_mut("fill") {
+            for fill in fills {
+                resolve_color_field(fill, vars);
+            }
+        }
+    }
+    // Shadow/effect colors (`effects[].color`).
+    if let Some(Value::Array(effects)) = map.get_mut("effects") {
+        for effect in effects {
+            if let Value::Object(effect_obj) = effect {
+                resolve_color_in_obj(effect_obj, vars);
+            }
+        }
+    }
+    // Numeric refs: opacity/gap/padding/cornerRadius resolve only when the
+    // slot is a `$ref` string (numeric/array values are left untouched).
+    for key in ["opacity", "gap", "padding", "cornerRadius"] {
+        if let Some(slot @ Value::String(_)) = map.get_mut(key) {
+            if let Value::String(raw) = slot {
+                if let Some(resolved) = resolve_ref_value(raw, vars) {
+                    *slot = resolved;
+                }
+            }
+        }
+    }
+    if let Some(Value::Array(children)) = map.get_mut("children") {
+        for child in children {
+            resolve_refs_in_node(child, vars);
+        }
     }
 }
 
 pub fn batch_get_snapshot(state: &EditorState) -> BatchGet {
     let (pages, active_page_id) = page_nodes_snapshots(state);
+    // Resolve every variable to its concrete scalar under the active theme
+    // now, so `resolveRefs=true` reads stay `&self` (no live state needed).
+    let resolved_vars = state
+        .doc
+        .variables
+        .as_ref()
+        .map(|vars| {
+            vars.keys()
+                .filter_map(|name| {
+                    state
+                        .resolve_variable(name)
+                        .map(|scalar| (name.clone(), scalar.clone()))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
     BatchGet {
         pages,
         active_page_id,
+        resolved_vars,
     }
 }
 

@@ -55,6 +55,7 @@ pub mod uikit;
 pub mod variables;
 pub mod viewport;
 pub mod walkers;
+pub mod web_sync;
 
 #[cfg(test)]
 mod command_attr_tests;
@@ -136,7 +137,7 @@ pub use geometry::{aggregate_bounds, own_bounds, union_aggregate_bounds, DocRect
 pub use history::{EditorSnapshot, History, HISTORY_CAP};
 pub use icon_picker_state::{IconPickerRemoteIcon, IconPickerRemoteState, IconifyLoadMoreRequest};
 pub use image_node_props::image_node_summary;
-pub use jian_ops_schema::{DesignMdColor, DesignMdSpec, DesignMdTypography};
+pub use jian_ops_schema::{DesignMdColor, DesignMdSpec, DesignMdTypography, PenDocument};
 pub use node_id::NodeId;
 pub use pen_node_ext::PenNodeExt;
 pub use render_backend::*;

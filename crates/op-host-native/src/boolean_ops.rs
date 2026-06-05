@@ -405,6 +405,9 @@ mod tests {
         let sel = vec!["n10".to_string(), "n11".to_string()];
         let r = compute_boolean_op(&scene, &sel, BooleanOp::Union)
             .expect("union of two svg-path-only nodes computes");
-        assert!(!r.contours.is_empty(), "chained boolean op must yield a contour");
+        assert!(
+            !r.contours.is_empty(),
+            "chained boolean op must yield a contour"
+        );
     }
 }

@@ -46,28 +46,45 @@ fn main() {
 fn run(args: &[String]) -> Result<String, String> {
     let Parsed {
         port,
+        port_explicit,
         pretty,
         command,
     } = parse_args(args)?;
+    // For commands that talk to a running server, resolve the live
+    // editor's published port (`~/.openpencil/.op-mcp-port`) unless the user
+    // pinned `--port` explicitly. `op start` keeps the requested port.
+    let needs_server = matches!(
+        command,
+        Command::Status
+            | Command::ToolsList
+            | Command::ToolCall { .. }
+            | Command::ToolCallJson { .. }
+    );
+    let target_port = if port_explicit || !needs_server {
+        port
+    } else {
+        app_control_cli::discover_running_port().unwrap_or(port)
+    };
     let out = match command {
         Command::Help => USAGE.to_string(),
         Command::Version => version_json(),
-        Command::Status => status_json(port),
-        Command::StartMcp { document_path } => {
-            app_control_cli::run_start(port, document_path.as_deref())?
-        }
+        Command::Status => status_json(target_port),
+        Command::StartMcp {
+            document_path,
+            headless,
+        } => app_control_cli::run_start(port, document_path.as_deref(), headless)?,
         Command::StopMcp => app_control_cli::run_stop()?,
         Command::InstallSkill { target } => skill_install_cli::run_install(target.as_deref())?,
         Command::UninstallSkill { target } => skill_install_cli::run_uninstall(target.as_deref())?,
-        Command::ToolsList => post(port, &tools_list_body())?,
+        Command::ToolsList => post(target_port, &tools_list_body())?,
         Command::ImportFigma { fig_path, out_path } => {
             figma_cli::run_import_figma(&fig_path, &out_path)?
         }
         Command::ToolCall { tool, args } => {
-            post(port, &tool_call_body(&tool, &args_to_json(&args)))?
+            post(target_port, &tool_call_body(&tool, &args_to_json(&args)))?
         }
         Command::ToolCallJson { tool, args_json } => {
-            post(port, &tool_call_body(&tool, &args_json))?
+            post(target_port, &tool_call_body(&tool, &args_json))?
         }
     };
     Ok(if pretty { pretty_json(&out) } else { out })
@@ -76,6 +93,10 @@ fn run(args: &[String]) -> Result<String, String> {
 #[derive(Debug, PartialEq, Eq)]
 struct Parsed {
     port: u16,
+    /// Whether `--port` was passed explicitly. When false, server-bound
+    /// commands resolve the running editor's port via discovery instead
+    /// of assuming the default.
+    port_explicit: bool,
     pretty: bool,
     command: Command,
 }
@@ -87,6 +108,7 @@ enum Command {
     Status,
     StartMcp {
         document_path: Option<String>,
+        headless: bool,
     },
     StopMcp,
     InstallSkill {
@@ -117,6 +139,7 @@ type Flags = BTreeMap<String, Option<String>>;
 /// low-level MCP tool arguments.
 fn parse_args(args: &[String]) -> Result<Parsed, String> {
     let mut port = DEFAULT_PORT;
+    let mut port_explicit = false;
     let mut pretty = false;
     let mut positionals = Vec::new();
     let mut flags: Flags = BTreeMap::new();
@@ -158,6 +181,7 @@ fn parse_args(args: &[String]) -> Result<Parsed, String> {
                     port = raw_port
                         .parse::<u16>()
                         .map_err(|_| format!("--port must be a u16, got {raw_port:?}"))?;
+                    port_explicit = true;
                 }
                 "pretty" => pretty = true,
                 "help" => {
@@ -195,6 +219,7 @@ fn parse_args(args: &[String]) -> Result<Parsed, String> {
     };
     Ok(Parsed {
         port,
+        port_explicit,
         pretty,
         command,
     })
@@ -208,6 +233,7 @@ fn command_from_positionals(positionals: &[String], flags: &Flags) -> Result<Com
         "status" => Ok(Command::Status),
         "start" => Ok(Command::StartMcp {
             document_path: flag_value(flags, "file"),
+            headless: flags.contains_key("headless"),
         }),
         "stop" => Ok(Command::StopMcp),
         "install" => Ok(Command::InstallSkill {
@@ -226,7 +252,11 @@ fn command_from_positionals(positionals: &[String], flags: &Flags) -> Result<Com
         "save" => {
             let file_path =
                 resolve_file_path_arg(&required_pos(positionals, 1, "Usage: op save <file.op>")?);
-            tool_call("save_document", vec![pair("filePath", file_path)])
+            let mut args = vec![pair("filePath", file_path)];
+            if let Some(source) = flag_value(flags, "file") {
+                args.push(pair("sourceFilePath", resolve_file_path_arg(&source)));
+            }
+            tool_call("save_document", args)
         }
         "get" => map_get(flags),
         "selection" => map_selection(flags),

@@ -35,6 +35,7 @@ mod keyboard_input;
 mod macos_app;
 mod mcp_integrations;
 mod mcp_live;
+mod mcp_port_file;
 mod mcp_runtime;
 mod mcp_serve;
 mod menu;
@@ -47,6 +48,7 @@ mod render_cli;
 mod settings_io;
 mod tcc_selftest;
 mod update_check;
+mod web_canvas_server;
 mod window_state;
 
 use op_host_native::{NativeBackend, SharedSkiaContext, SharedSkiaError, WidgetHostNative};
@@ -179,6 +181,20 @@ struct DesktopApp {
     last_git_refresh: Instant,
     /// Live in-process MCP HTTP server, started from Settings -> MCP.
     mcp_server: Option<mcp_live::McpLiveServer>,
+    /// When set (via the `--live-mcp[=port]` launch flag used by
+    /// `op start`), the editor force-enables the live MCP server on
+    /// this port during `resumed()`, regardless of the persisted
+    /// `agent_settings.mcp_server.running` toggle. This is what lets
+    /// `op start` bring up a live-rendering canvas the CLI can drive. When
+    /// the live server binds, `reconcile_mcp_server_from_settings` updates
+    /// this to the actually-bound port (it never mutates persisted settings
+    /// for a forced launch).
+    force_live_mcp_port: Option<u16>,
+    /// Test-only override for the CLI-integration home dir. When set, MCP
+    /// CLI detection + config writes target this dir (env-free), so tests
+    /// don't have to mutate process-global `CODEX_HOME`/`HOME`. `None` in
+    /// production (real home via `dirs::home_dir`).
+    mcp_integrations_home: Option<PathBuf>,
 }
 
 impl DesktopApp {
@@ -245,6 +261,8 @@ impl DesktopApp {
             git_clone_origin: None,
             last_git_refresh: Instant::now(),
             mcp_server: None,
+            force_live_mcp_port: None,
+            mcp_integrations_home: None,
         }
     }
 
@@ -646,10 +664,20 @@ impl DesktopApp {
 
     fn drain_pending_cursor_move(&mut self) -> bool {
         if let Some((cx, cy)) = self.pending_cursor_move.take() {
+            let over_layer_panel = self.host.cursor_over_layer_panel(
+                cx,
+                cy,
+                self.viewport_width,
+                self.viewport_height,
+            );
             let hover_changed =
                 self.host
                     .update_layer_hover(cx, cy, self.viewport_width, self.viewport_height);
-            let cursor_changed = self.host.apply_cursor_move(cx, cy);
+            let cursor_changed = if over_layer_panel && !self.host.layer_drag_in_progress() {
+                false
+            } else {
+                self.host.apply_cursor_move(cx, cy)
+            };
             hover_changed || cursor_changed
         } else {
             false
@@ -680,6 +708,43 @@ fn initial_file_from_argv() -> Option<PathBuf> {
         (persistence::is_supported_document(p) || persistence::is_supported_figma_import(p))
             && p.is_file()
     })
+}
+
+/// Default port for the live MCP server when `--live-mcp` is passed
+/// without an explicit port. Mirrors the TS `pen-mcp` default (3100)
+/// and the `op` CLI default so the CLI finds the editor out of the box.
+const DEFAULT_LIVE_MCP_PORT: u16 = 3100;
+
+/// Parse `--live-mcp` / `--live-mcp=<port>` / `--live-mcp <port>` from
+/// argv. Returns the requested live MCP port (the GUI then force-enables
+/// `McpLiveServer` on it during `resumed()`), or `None` when the flag is
+/// absent. `op start` uses this to bring up a live-rendering editor the
+/// CLI can drive; double-clicking the app (no flag) keeps the persisted
+/// settings-gated behavior.
+fn live_mcp_port_from_argv() -> Option<u16> {
+    parse_live_mcp_port(std::env::args().skip(1))
+}
+
+/// Pure `--live-mcp` parser (extracted for testing). Accepts
+/// `--live-mcp`, `--live-mcp=<port>`, and `--live-mcp <port>`.
+fn parse_live_mcp_port<I: Iterator<Item = String>>(args: I) -> Option<u16> {
+    let mut args = args;
+    while let Some(arg) = args.next() {
+        if arg == "--live-mcp" {
+            // An immediately-following numeric arg is the port; anything
+            // else (a file path, another flag, or nothing) falls back to
+            // the default — the non-port arg is left for argv scanners
+            // that read the real process argv independently.
+            if let Some(port) = args.next().and_then(|next| next.parse::<u16>().ok()) {
+                return Some(port);
+            }
+            return Some(DEFAULT_LIVE_MCP_PORT);
+        }
+        if let Some(value) = arg.strip_prefix("--live-mcp=") {
+            return Some(value.parse::<u16>().unwrap_or(DEFAULT_LIVE_MCP_PORT));
+        }
+    }
+    None
 }
 
 /// Pop a native dialog offering to open the download page when a
@@ -734,6 +799,7 @@ fn main() {
     // Give the non-bundled binary a proper Dock name + icon.
     macos_app::apply();
     let mut app = DesktopApp::new(initial_file);
+    app.force_live_mcp_port = live_mcp_port_from_argv();
     if let Err(err) = event_loop.run_app(&mut app) {
         eprintln!("openpencil-desktop: run_app exited with error: {err}");
         std::process::exit(1);
@@ -742,6 +808,24 @@ fn main() {
         eprintln!("openpencil-desktop: fatal error during run: {err}");
         std::process::exit(1);
     }
+}
+
+/// Unwrap an MCP `tools/call` reply to the inner tool-result JSON text, so
+/// tests assert on the flat result fields directly. Strips an HTTP envelope
+/// first (live-server tests pass the raw HTTP response). Mirrors the CLI's
+/// `unwrap_mcp_reply`.
+#[cfg(test)]
+pub(crate) fn tool_text(response: &str) -> String {
+    let body = response
+        .split_once("\r\n\r\n")
+        .map(|(_, body)| body)
+        .unwrap_or(response)
+        .trim();
+    let value: serde_json::Value = serde_json::from_str(body).expect("json-rpc reply");
+    value["result"]["content"][0]["text"]
+        .as_str()
+        .expect("tools/call content text")
+        .to_string()
 }
 
 #[cfg(test)]

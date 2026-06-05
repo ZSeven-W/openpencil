@@ -17,10 +17,10 @@
 //! `fit_content`). Computed absolute scene-coord rects are baked
 //! into each `NodePayload.bounds`.
 
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, rc::Rc};
 
 use jian_core::document::NodeTree;
-use jian_core::layout::LayoutEngine;
+use jian_core::layout::{measure::MeasureBackend, LayoutEngine};
 use jian_ops_schema::{
     node::base::PenNodeBase,
     node::container::CornerRadius,
@@ -45,6 +45,11 @@ use crate::payload::{
 /// small enough to avoid pathological taffy work.
 const ROOT_FALLBACK_W: f32 = 1440.0;
 const ROOT_FALLBACK_H: f32 = 900.0;
+
+thread_local! {
+    static LAYOUT_MEASURE_BACKEND: Rc<dyn MeasureBackend> =
+        Rc::new(jian_skia::SkiaMeasure::new());
+}
 
 pub struct LoadedDoc {
     pub payload: DocPayload,
@@ -229,7 +234,7 @@ fn compute_layout(root: &PenNode, out: &mut BTreeMap<String, [f32; 4]>) {
     // 10% error cascades through every flex parent. SkiaMeasure
     // matches what the canvas painter actually draws so the
     // engine + paint agree on widths.
-    let mut engine = LayoutEngine::with_backend(std::rc::Rc::new(jian_skia::SkiaMeasure::new()));
+    let mut engine = LayoutEngine::with_backend(layout_measure_backend());
     let Ok(taffy_roots) = engine.build(&tree) else {
         return;
     };
@@ -256,6 +261,10 @@ fn compute_layout(root: &PenNode, out: &mut BTreeMap<String, [f32; 4]>) {
             );
         }
     }
+}
+
+fn layout_measure_backend() -> Rc<dyn MeasureBackend> {
+    LAYOUT_MEASURE_BACKEND.with(Rc::clone)
 }
 
 /// `(base.x, base.y)` for any `PenNode`, defaulting to `(0, 0)`

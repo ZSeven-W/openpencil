@@ -103,7 +103,6 @@ impl WidgetHostNative {
         use op_editor_core::editor_ui_state::LayerContextMenuState;
         use op_editor_core::ui_draft::LayerContextTarget;
         use op_editor_ui::widgets::{LayerPanel, LayerPanelHit};
-        self.refresh_layout_scene();
         let layer_rect = Rect {
             origin: Point2D::new(0.0, TOP_BAR_HEIGHT),
             size: Point2D::new(
@@ -126,7 +125,6 @@ impl WidgetHostNative {
                     anchor_y: y,
                     hovered_row: None,
                 });
-                self.mark_dirty();
                 return true;
             }
             Some(LayerPanelHit::Page(idx)) => {
@@ -136,7 +134,6 @@ impl WidgetHostNative {
                     anchor_y: y,
                     hovered_row: None,
                 });
-                self.mark_dirty();
                 return true;
             }
             _ => {}
@@ -148,7 +145,6 @@ impl WidgetHostNative {
             .take()
             .is_some()
         {
-            self.mark_dirty();
             return true;
         }
         false
@@ -805,7 +801,6 @@ impl WidgetHostNative {
                                 moved: false,
                             });
                         }
-                        self.mark_dirty();
                         return true;
                     }
                     // Plain click: keep a multi-set when clicking
@@ -822,7 +817,6 @@ impl WidgetHostNative {
                         press_screen_y: y,
                         moved: false,
                     });
-                    self.mark_dirty();
                     return true;
                 }
                 // Empty canvas press — start a marquee.
@@ -830,7 +824,6 @@ impl WidgetHostNative {
                     let was_set = !self.editor_state.selection.set.is_empty();
                     if was_set {
                         self.editor_state.clear_selection();
-                        self.mark_dirty();
                     }
                     was_set
                 } else {

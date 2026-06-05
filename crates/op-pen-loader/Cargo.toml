@@ -29,3 +29,4 @@ op-editor-core = { path = "../op-editor-core" }
 # Payload DTOs round-trip through serde JSON.
 serde = { workspace = true }
 serde_json = { workspace = true }
+serde_stacker = { workspace = true }

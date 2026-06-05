@@ -742,6 +742,12 @@ pub struct EditorUiState {
     /// Vertical scroll offset (px, ≥ 0) of the LayerPanel's 图层
     /// (Layers) section row viewport.
     pub layer_layers_scroll: f32,
+    /// Horizontal scroll offset (px, ≥ 0) of the LayerPanel's 页面
+    /// row content. The row chrome stays fixed; only tree content shifts.
+    pub layer_pages_h_scroll: f32,
+    /// Horizontal scroll offset (px, ≥ 0) of the LayerPanel's 图层
+    /// tree content. Needed for deeply nested layer trees.
+    pub layer_layers_h_scroll: f32,
     /// "Import from Figma" modal.
     pub figma_import_open: bool,
     /// True while a `.fig` is being parsed on a worker thread. Paint
@@ -993,6 +999,8 @@ impl Default for EditorUiState {
             property_panel_scroll: 0.0,
             layer_pages_scroll: 0.0,
             layer_layers_scroll: 0.0,
+            layer_pages_h_scroll: 0.0,
+            layer_layers_h_scroll: 0.0,
             figma_import_open: false,
             figma_import_in_progress: false,
             file_drop_active: false,
@@ -1073,6 +1081,39 @@ impl EditorUiState {
     /// A fresh UI state — sidebar open, dark theme, no menus open.
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Clear transient UI state that references specific document nodes/pages
+    /// or the (now-cleared) selection, so a wholesale document replacement
+    /// ([`crate::EditorState::replace_document`]) can't leave hover highlights,
+    /// an open layer context menu, collapsed-layer entries, alignment guides,
+    /// or in-progress property edits pointing at nodes that no longer exist.
+    /// Settings, theme/locale, panel sizes, recent files, the Git panel, and
+    /// agent/MCP config are PRESERVED — they are not document-derived.
+    pub fn clear_document_derived(&mut self) {
+        self.hovered_layer_id = None;
+        self.hovered_page_index = None;
+        self.layer_context_menu = None;
+        self.layer_pages_scroll = 0.0;
+        self.layer_layers_scroll = 0.0;
+        self.layer_pages_h_scroll = 0.0;
+        self.layer_layers_h_scroll = 0.0;
+        self.collapsed_layers.clear();
+        self.last_layer_click = None;
+        self.last_canvas_click = None;
+        self.active_guides.clear();
+        self.padding_edit_mode = None;
+        self.padding_edit_mode_anchor = String::new();
+        self.padding_mode_popover_open = false;
+        self.axis_dropdown_open = None;
+        self.variable_row_focus = None;
+        self.effect_param_focus = None;
+        // Document-derived: set true only by a Figma import to keep that
+        // document's authored absolute geometry. A replacement document must
+        // not inherit it (it would force the new tree through the
+        // preserve-geometry layout path) — matches file-open, which resets it
+        // via a fresh `editor_ui`.
+        self.preserve_authored_geometry = false;
     }
 }
 

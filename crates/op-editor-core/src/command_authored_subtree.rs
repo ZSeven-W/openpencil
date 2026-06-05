@@ -18,8 +18,13 @@ impl EditorState {
             return false;
         }
         if parent_id.is_real() {
+            // Accept any container (matches `cmd_insert_subtree`), including an
+            // empty one whose `children` is still `None` — the insert below
+            // initializes it via `children_mut()` (`get_or_insert_with`). Using
+            // `children().is_some()` here would wrongly REJECT a valid insert
+            // under an empty Frame/Group.
             match walkers::find_node(self.active_children(), parent_id) {
-                Some(parent) if parent.children().is_some() => {}
+                Some(parent) if parent.is_container() => {}
                 _ => return false,
             }
         }
@@ -53,6 +58,12 @@ fn collect_authored_ids(
     live: &HashSet<NodeId>,
     incoming: &mut HashSet<NodeId>,
 ) -> bool {
+    // Every authored node MUST carry a valid (non-empty), doc-unique id — that
+    // is the whole point of the authored path (vs `cmd_insert_subtree`, which
+    // remaps ids and so tolerates an empty/garbage id). Callers that mint ids
+    // (e.g. `batch_design`, which assigns a fresh `n{N}` to every node via
+    // `remap_subtree_ids_mapping` before emitting `InsertAuthoredSubtree`)
+    // always satisfy this; an empty id here is a malformed input and rejected.
     let Some(id) = NodeId::new_opt(node.id_str()) else {
         return false;
     };

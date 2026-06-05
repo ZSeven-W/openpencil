@@ -25,8 +25,10 @@ pub(crate) fn detect_enabled_clis() -> [bool; 6] {
     detect_enabled_clis_for_home(&home, true)
 }
 
-#[cfg(test)]
-fn set_cli_enabled_at_home(
+/// Like [`set_cli_enabled`] but against an explicit home dir and without
+/// reading `CODEX_HOME` (`use_env = false`). Used by tests to redirect CLI
+/// config writes to a temp dir WITHOUT mutating process-global env.
+pub(crate) fn set_cli_enabled_at_home(
     cli: McpCli,
     enabled: bool,
     port: u16,
@@ -36,8 +38,8 @@ fn set_cli_enabled_at_home(
     set_cli_enabled_at_path(cli, enabled, port, path)
 }
 
-#[cfg(test)]
-fn detect_enabled_clis_at_home(home: &Path) -> [bool; 6] {
+/// Like [`detect_enabled_clis`] but against an explicit home dir (no env).
+pub(crate) fn detect_enabled_clis_at_home(home: &Path) -> [bool; 6] {
     detect_enabled_clis_for_home(home, false)
 }
 

@@ -12,9 +12,15 @@ use super::{RequestId, ToolErrorCode, ToolResponse};
 /// ...}}` shape any MCP client expects.
 pub fn response_to_json(r: &ToolResponse) -> String {
     let (id_repr, body) = match r {
-        ToolResponse::Ok { id, result, .. } => (
+        ToolResponse::Ok {
+            id, result, json, ..
+        } => (
             id_to_json(id),
-            format!(r#""result":{}"#, btree_to_json(result)),
+            match json {
+                // Nested-JSON read result: embed verbatim as the wire result.
+                Some(raw) => format!(r#""result":{raw}"#),
+                None => format!(r#""result":{}"#, btree_to_json(result)),
+            },
         ),
         ToolResponse::Err { id, code, message } => (
             id_to_json(id),
@@ -22,6 +28,40 @@ pub fn response_to_json(r: &ToolResponse) -> String {
                 r#""error":{{"code":{},"message":{}}}"#,
                 error_code_to_int(*code),
                 json_escape(message),
+            ),
+        ),
+    };
+    format!(r#"{{"jsonrpc":"2.0","id":{},{}}}"#, id_repr, body)
+}
+
+/// JSON-RPC serializer for a *tool* result in the MCP-spec `tools/call`
+/// shape, matching TS `pen-mcp` (`server.ts`): the tool's data rides inside
+/// `result.content` as a single `text` block (the flat result map serialized
+/// to a JSON string), and a tool-level failure becomes `isError:true` in the
+/// result — NOT a JSON-RPC `error` (those are reserved for transport/parse
+/// failures, still emitted via [`response_to_json`]). External MCP clients
+/// (Claude Code / Codex) require this envelope.
+pub fn tool_response_to_json(r: &ToolResponse) -> String {
+    let (id_repr, body) = match r {
+        ToolResponse::Ok {
+            id, result, json, ..
+        } => {
+            // Nested-JSON read result rides verbatim in the text block;
+            // otherwise the flat string-map is encoded as the text.
+            let text = match json {
+                Some(raw) => json_escape(raw),
+                None => json_escape(&btree_to_json(result)),
+            };
+            (
+                id_to_json(id),
+                format!(r#""result":{{"content":[{{"type":"text","text":{text}}}]}}"#),
+            )
+        }
+        ToolResponse::Err { id, message, .. } => (
+            id_to_json(id),
+            format!(
+                r#""result":{{"content":[{{"type":"text","text":{}}}],"isError":true}}"#,
+                json_escape(&format!("Error: {message}")),
             ),
         ),
     };

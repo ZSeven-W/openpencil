@@ -282,7 +282,14 @@ impl GitPanel<'_> {
         let t = self.theme;
         let left = rect.origin.x + READY_PAD;
         let top = rect.origin.y + COMMIT_TOP;
-        self.text(cx, self.t("git.author.heading"), left, top + 16.0, 13.0, t.foreground);
+        self.text(
+            cx,
+            self.t("git.author.heading"),
+            left,
+            top + 16.0,
+            13.0,
+            t.foreground,
+        );
         self.text(
             cx,
             self.t("git.author.subheading"),
@@ -292,7 +299,14 @@ impl GitPanel<'_> {
             t.muted_foreground,
         );
         let (name_input, email_input, save, cancel) = self.author_form_rects(rect);
-        self.text(cx, self.t("git.author.nameLabel"), left, top + 54.0, 11.0, t.muted_foreground);
+        self.text(
+            cx,
+            self.t("git.author.nameLabel"),
+            left,
+            top + 54.0,
+            11.0,
+            t.muted_foreground,
+        );
         self.paint_menu_input(
             cx,
             name_input,
@@ -300,7 +314,14 @@ impl GitPanel<'_> {
             self.t("git.author.namePlaceholder"),
             self.state.author_name_focused,
         );
-        self.text(cx, self.t("git.author.emailLabel"), left, top + 98.0, 11.0, t.muted_foreground);
+        self.text(
+            cx,
+            self.t("git.author.emailLabel"),
+            left,
+            top + 98.0,
+            11.0,
+            t.muted_foreground,
+        );
         self.paint_menu_input(
             cx,
             email_input,
@@ -394,58 +415,61 @@ impl GitPanel<'_> {
         if self.state.author_prompt {
             self.paint_author_form(cx, rect);
         } else {
-        let box_r = self.ready_commit_box(rect);
-        cx.backend.fill_round_rect(box_r, 8.0, t.card);
-        let border = if self.state.commit_focused {
-            alpha(t.primary, 0.50)
-        } else {
-            alpha(t.border, 0.70)
-        };
-        cx.backend.stroke_round_rect(box_r, 8.0, border, 1.0);
-        let msg = &self.state.commit_message;
-        if msg.is_empty() && !self.state.commit_focused {
-            self.text(
-                cx,
-                self.t("git.commit.placeholder"),
-                box_r.origin.x + 12.0,
-                box_r.origin.y + 22.0,
-                12.0,
-                alpha(t.muted_foreground, 0.70),
-            );
-        } else {
-            // Draw the message, then a separate blinking caret bar
-            // (not an inline `|`) so it animates on the same cadence as
-            // the chat / property inputs instead of sitting static.
-            let text_x = box_r.origin.x + 12.0;
-            let baseline = box_r.origin.y + 22.0;
-            self.text(cx, msg, text_x, baseline, 12.0, t.foreground);
-            let blink =
-                jian_core::anim::blink_visible(self.now_ms, self.state.commit_caret_anchor_ms, 500);
-            if self.state.commit_focused && blink {
-                let caret_x = text_x + cx.backend.measure_text(msg, 12.0) + 1.0;
-                cx.backend.fill_rect(
-                    Rect {
-                        origin: Point2D::new(caret_x, box_r.origin.y + 10.0),
-                        size: Point2D::new(1.5, 15.0),
-                    },
-                    t.foreground,
+            let box_r = self.ready_commit_box(rect);
+            cx.backend.fill_round_rect(box_r, 8.0, t.card);
+            let border = if self.state.commit_focused {
+                alpha(t.primary, 0.50)
+            } else {
+                alpha(t.border, 0.70)
+            };
+            cx.backend.stroke_round_rect(box_r, 8.0, border, 1.0);
+            let msg = &self.state.commit_message;
+            if msg.is_empty() && !self.state.commit_focused {
+                self.text(
+                    cx,
+                    self.t("git.commit.placeholder"),
+                    box_r.origin.x + 12.0,
+                    box_r.origin.y + 22.0,
+                    12.0,
+                    alpha(t.muted_foreground, 0.70),
+                );
+            } else {
+                // Draw the message, then a separate blinking caret bar
+                // (not an inline `|`) so it animates on the same cadence as
+                // the chat / property inputs instead of sitting static.
+                let text_x = box_r.origin.x + 12.0;
+                let baseline = box_r.origin.y + 22.0;
+                self.text(cx, msg, text_x, baseline, 12.0, t.foreground);
+                let blink = jian_core::anim::blink_visible(
+                    self.now_ms,
+                    self.state.commit_caret_anchor_ms,
+                    500,
+                );
+                if self.state.commit_focused && blink {
+                    let caret_x = text_x + cx.backend.measure_text(msg, 12.0) + 1.0;
+                    cx.backend.fill_rect(
+                        Rect {
+                            origin: Point2D::new(caret_x, box_r.origin.y + 10.0),
+                            size: Point2D::new(1.5, 15.0),
+                        },
+                        t.foreground,
+                    );
+                }
+            }
+            let btn = self.ready_commit_btn(rect);
+            self.paint_milestone_button(cx, btn, self.ready_can_commit());
+            // "未检测到变更" hint — shown to the left of the button after a
+            // milestone save was skipped for having no changes (TS-style guard).
+            if self.state.commit_no_changes {
+                self.text(
+                    cx,
+                    self.t("git.history.diff.noChanges"),
+                    box_r.origin.x + 4.0,
+                    btn.origin.y + btn.size.y / 2.0 + 4.0,
+                    11.0,
+                    alpha(t.destructive, 0.90),
                 );
             }
-        }
-        let btn = self.ready_commit_btn(rect);
-        self.paint_milestone_button(cx, btn, self.ready_can_commit());
-        // "未检测到变更" hint — shown to the left of the button after a
-        // milestone save was skipped for having no changes (TS-style guard).
-        if self.state.commit_no_changes {
-            self.text(
-                cx,
-                self.t("git.history.diff.noChanges"),
-                box_r.origin.x + 4.0,
-                btn.origin.y + btn.size.y / 2.0 + 4.0,
-                11.0,
-                alpha(t.destructive, 0.90),
-            );
-        }
         }
         // Divider below the commit box / form, just above the history.
         cx.backend.fill_rect(

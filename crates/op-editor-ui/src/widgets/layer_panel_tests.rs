@@ -455,3 +455,53 @@ fn drop_target_at_in_empty_area_below_rows_drops_at_end() {
     assert_eq!(drop.anchor, panel.items.last().unwrap().node_id);
     assert!((drop.indicator_y - rows_bottom).abs() < 0.5);
 }
+
+fn nested_frame_doc(depth: usize) -> String {
+    let mut src = String::from(r#"{"version":"0.8.0","children":["#);
+    for i in 0..depth {
+        src.push_str(&format!(
+            r##"{{"type":"frame","id":"nest-{i:05}","name":"Nested Layer {i:05}","x":8,"y":6,"width":400,"height":220,"fill":[{{"type":"solid","color":"#ffffff20"}}],"stroke":{{"thickness":1,"fill":[{{"type":"solid","color":"#0088ff"}}]}},"children":["##
+        ));
+    }
+    for _ in 0..depth {
+        src.push_str("]}");
+    }
+    src.push_str("]}");
+    src
+}
+
+#[test]
+fn deep_layer_tree_exposes_horizontal_scroll_range() {
+    let state = state_from(&nested_frame_doc(50));
+    let panel = LayerPanel::from_editor(&state);
+    let rect = Rect {
+        origin: Point2D::new(0.0, 0.0),
+        size: Point2D::new(LAYER_PANEL_WIDTH, 700.0),
+    };
+
+    let regions = panel.regions(rect);
+
+    assert!(
+        regions.layers_content_w > rect.size.x,
+        "deep layer content should be wider than the fixed panel viewport"
+    );
+    assert!(
+        regions.layers_max_h_scroll > 0.0,
+        "deep layer rows need a horizontal scroll range"
+    );
+}
+
+#[test]
+fn layer_horizontal_scroll_offset_is_clamped() {
+    let mut state = state_from(&nested_frame_doc(50));
+    state.editor_ui.layer_layers_h_scroll = 10_000.0;
+    let panel = LayerPanel::from_editor(&state);
+    let rect = Rect {
+        origin: Point2D::new(0.0, 0.0),
+        size: Point2D::new(LAYER_PANEL_WIDTH, 700.0),
+    };
+
+    let regions = panel.regions(rect);
+
+    assert_eq!(regions.layers_h_scroll, regions.layers_max_h_scroll);
+}

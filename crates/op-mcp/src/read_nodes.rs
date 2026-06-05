@@ -58,35 +58,43 @@ impl McpTool for ReadNodes {
             .iter()
             .map(|node| node_snapshot_value(node, depth))
             .collect();
-        let nodes_json = match serde_json::to_string(&nodes) {
-            Ok(json) => json,
-            Err(e) => {
-                return ToolOutcome::Err(
-                    ToolErrorCode::Internal,
-                    format!("serialize nodes failed: {e}"),
-                );
-            }
-        };
-        let mut out = BTreeMap::new();
-        out.insert("count".into(), nodes.len().to_string());
-        out.insert("nodes".into(), nodes_json);
+        // Match TS read-nodes EXACTLY: { nodes, variables?, themes? } with
+        // NATIVE JSON values and NO Rust-only `count` key (TS ReadNodesResult
+        // has none; cf. batch_get which also dropped `count`). The old path
+        // stringified the nodes/variables/themes arrays into String values.
+        let mut out = serde_json::Map::new();
+        out.insert("nodes".into(), Value::Array(nodes));
         if include_variables {
-            out.insert("variables".into(), self.variables_json.clone());
-            out.insert("themes".into(), self.themes_json.clone());
+            let variables: Value = serde_json::from_str(&self.variables_json)
+                .unwrap_or_else(|_| serde_json::json!({}));
+            let themes: Value =
+                serde_json::from_str(&self.themes_json).unwrap_or_else(|_| serde_json::json!([]));
+            out.insert("variables".into(), variables);
+            out.insert("themes".into(), themes);
         }
-        ToolOutcome::Ok(out)
+        ToolOutcome::OkJson(Value::Object(out).to_string())
     }
 }
 
 pub fn read_nodes_snapshot(state: &EditorState) -> ReadNodes {
     let (pages, active_page_id) = page_nodes_snapshots(state);
-    let variables = state.doc.variables.clone().unwrap_or_default();
-    let themes = state.doc.themes.clone().unwrap_or_default();
+    // Match TS read-nodes EXACTLY (handleReadNodes): variables = doc.variables
+    // ?? {} (absent → empty OBJECT); themes = doc.themes ?? [] (absent → empty
+    // ARRAY, NOT an empty object). `unwrap_or_default()` would have collapsed an
+    // absent themes map to `{}`, diverging from TS's `[]` for variable-only docs.
+    let variables_json = match state.doc.variables.as_ref() {
+        Some(v) => serde_json::to_string(v).unwrap_or_else(|_| "{}".into()),
+        None => "{}".into(),
+    };
+    let themes_json = match state.doc.themes.as_ref() {
+        Some(t) => serde_json::to_string(t).unwrap_or_else(|_| "[]".into()),
+        None => "[]".into(),
+    };
     ReadNodes {
         pages,
         active_page_id,
-        variables_json: serde_json::to_string(&variables).unwrap_or_else(|_| "{}".into()),
-        themes_json: serde_json::to_string(&themes).unwrap_or_else(|_| "{}".into()),
+        variables_json,
+        themes_json,
     }
 }
 

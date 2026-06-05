@@ -178,6 +178,21 @@ impl LayoutScene {
         }
         acc
     }
+
+    /// Translate selected render subtrees in-place without rebuilding the
+    /// full layout scene. Used by live node drags: the canonical
+    /// `EditorState` is still updated first, but simple absolute moves can
+    /// keep paint in sync by patching the current scene until release-time
+    /// layout reconciliation.
+    pub fn translate_nodes(&mut self, ids: &[String], dx: f32, dy: f32) -> bool {
+        if ids.is_empty() || (dx == 0.0 && dy == 0.0) {
+            return false;
+        }
+        let Some(page) = self.pages.get_mut(self.active_page_index) else {
+            return false;
+        };
+        page.translate_nodes(ids, dx, dy)
+    }
 }
 
 impl ScenePage {
@@ -193,6 +208,23 @@ impl ScenePage {
         }
         None
     }
+
+    fn translate_nodes(&mut self, ids: &[String], dx: f32, dy: f32) -> bool {
+        translate_matching_nodes(&mut self.children, ids, dx, dy)
+    }
+}
+
+fn translate_matching_nodes(nodes: &mut [SceneNode], ids: &[String], dx: f32, dy: f32) -> bool {
+    let mut changed = false;
+    for node in nodes {
+        if ids.iter().any(|id| id == &node.id) {
+            node.translate_subtree(dx, dy);
+            changed = true;
+        } else if translate_matching_nodes(&mut node.children, ids, dx, dy) {
+            changed = true;
+        }
+    }
+    changed
 }
 
 /// One resolved page — an artboard / page id + name + the top-level
@@ -381,6 +413,30 @@ impl SceneNode {
             }
         }
         None
+    }
+
+    fn translate_subtree(&mut self, dx: f32, dy: f32) {
+        self.bounds.origin.x += dx;
+        self.bounds.origin.y += dy;
+        for point in &mut self.points {
+            point.x += dx;
+            point.y += dy;
+        }
+        for anchor in &mut self.path_anchors {
+            anchor.pos.x += dx;
+            anchor.pos.y += dy;
+            if let Some(handle) = anchor.handle_in.as_mut() {
+                handle.x += dx;
+                handle.y += dy;
+            }
+            if let Some(handle) = anchor.handle_out.as_mut() {
+                handle.x += dx;
+                handle.y += dy;
+            }
+        }
+        for child in &mut self.children {
+            child.translate_subtree(dx, dy);
+        }
     }
 
     /// Resolved bounds for selection / rotation-pivot math: the node's
@@ -587,6 +643,65 @@ mod tests {
         child.bounds = Rect::xywh(0.0, 0.0, 999.0, 999.0);
         frame.children = vec![child];
         assert_eq!(frame.aggregate_bounds(), Rect::xywh(0.0, 0.0, 100.0, 200.0));
+    }
+
+    #[test]
+    fn translate_nodes_moves_matching_subtree_once() {
+        let mut child = SceneNode::leaf("child", NodeKind::Rect);
+        child.bounds = Rect::xywh(10.0, 20.0, 30.0, 40.0);
+        let mut parent = SceneNode::leaf("parent", NodeKind::Group);
+        parent.bounds = Rect::xywh(0.0, 0.0, 100.0, 100.0);
+        parent.children = vec![child];
+        let mut scene = LayoutScene {
+            pages: vec![ScenePage {
+                id: "p".into(),
+                name: "P".into(),
+                children: vec![parent],
+            }],
+            active_page_index: 0,
+        };
+
+        assert!(scene.translate_nodes(&["parent".into(), "child".into()], 5.0, 7.0));
+        let page = scene.active_page().expect("active page");
+        let parent = page.find("parent").expect("parent");
+        let child = page.find("child").expect("child");
+        assert_eq!(parent.bounds.origin, Point2D::new(5.0, 7.0));
+        assert_eq!(child.bounds.origin, Point2D::new(15.0, 27.0));
+    }
+
+    #[test]
+    fn translate_nodes_moves_path_absolute_geometry() {
+        let mut path = SceneNode::leaf("path", NodeKind::Path);
+        path.bounds = Rect::xywh(1.0, 2.0, 30.0, 40.0);
+        path.points = vec![Point2D::new(3.0, 4.0)];
+        path.path_anchors = vec![SceneAnchor {
+            pos: Point2D::new(5.0, 6.0),
+            handle_in: Some(Point2D::new(7.0, 8.0)),
+            handle_out: Some(Point2D::new(9.0, 10.0)),
+            point_type: ScenePointType::Corner,
+        }];
+        let mut scene = LayoutScene {
+            pages: vec![ScenePage {
+                id: "p".into(),
+                name: "P".into(),
+                children: vec![path],
+            }],
+            active_page_index: 0,
+        };
+
+        assert!(scene.translate_nodes(&["path".into()], 11.0, 13.0));
+        let path = scene.active_page().and_then(|p| p.find("path")).unwrap();
+        assert_eq!(path.bounds.origin, Point2D::new(12.0, 15.0));
+        assert_eq!(path.points[0], Point2D::new(14.0, 17.0));
+        assert_eq!(path.path_anchors[0].pos, Point2D::new(16.0, 19.0));
+        assert_eq!(
+            path.path_anchors[0].handle_in,
+            Some(Point2D::new(18.0, 21.0))
+        );
+        assert_eq!(
+            path.path_anchors[0].handle_out,
+            Some(Point2D::new(20.0, 23.0))
+        );
     }
 
     #[test]

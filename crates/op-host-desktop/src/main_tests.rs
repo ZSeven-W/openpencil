@@ -76,9 +76,22 @@ fn live_mcp_http_server_applies_write_requests_to_editor_state() {
 
     use op_editor_core::PenNodeExt;
 
-    fn unused_port() -> u16 {
-        let listener = TcpListener::bind(("127.0.0.1", 0)).expect("bind ephemeral port");
-        listener.local_addr().expect("local addr").port()
+    fn start_live_server() -> (mcp_live::McpLiveServer, u16) {
+        // `bind(0)` to grab an ephemeral port, then re-`start` on that port,
+        // has a TOCTOU window where the OS can reassign the port between the
+        // probe-listener drop and the server bind — so a single attempt
+        // occasionally fails. Retry with a fresh port each time to remove the
+        // flake (the failure that masqueraded as a test regression).
+        for _ in 0..20 {
+            let port = {
+                let listener = TcpListener::bind(("127.0.0.1", 0)).expect("bind ephemeral port");
+                listener.local_addr().expect("local addr").port()
+            };
+            if let Ok(server) = mcp_live::McpLiveServer::start(port) {
+                return (server, port);
+            }
+        }
+        panic!("could not start MCP server on an unused port after 20 attempts");
     }
 
     fn post_json(port: u16, body: &str) -> String {
@@ -94,8 +107,7 @@ fn live_mcp_http_server_applies_write_requests_to_editor_state() {
         out
     }
 
-    let port = unused_port();
-    let mut server = mcp_live::McpLiveServer::start(port).expect("start MCP server");
+    let (mut server, port) = start_live_server();
     let mut state = op_editor_core::EditorState::new();
     let body = r##"{"jsonrpc":"2.0","id":1,"method":"insert_node","params":{"kind":"rect","name":"From MCP","x":"10","y":"20","width":"100","height":"50","fill_hex":"#00ff00"}}"##;
     let (tx, rx) = mpsc::channel();
@@ -117,7 +129,10 @@ fn live_mcp_http_server_applies_write_requests_to_editor_state() {
     };
 
     assert!(response.starts_with("HTTP/1.1 200 OK"), "{response}");
-    assert!(response.contains(r#""wrote":"true""#), "{response}");
+    assert!(
+        tool_text(&response).contains(r#""wrote":"true""#),
+        "{response}"
+    );
     assert!(
         state
             .active_children()
@@ -128,15 +143,91 @@ fn live_mcp_http_server_applies_write_requests_to_editor_state() {
 }
 
 #[test]
+fn live_mcp_http_server_waits_for_split_http_request() {
+    use std::io::{Read, Write};
+    use std::net::{TcpListener, TcpStream};
+    use std::sync::mpsc;
+    use std::time::{Duration, Instant};
+
+    fn start_live_server() -> (mcp_live::McpLiveServer, u16) {
+        for _ in 0..20 {
+            let port = {
+                let listener = TcpListener::bind(("127.0.0.1", 0)).expect("bind ephemeral port");
+                listener.local_addr().expect("local addr").port()
+            };
+            if let Ok(server) = mcp_live::McpLiveServer::start(port) {
+                return (server, port);
+            }
+        }
+        panic!("could not start MCP server on an unused port after 20 attempts");
+    }
+
+    fn post_ping_in_chunks(port: u16) -> String {
+        let body = r#"{"jsonrpc":"2.0","id":7,"method":"ping"}"#;
+        let mut stream = TcpStream::connect(("127.0.0.1", port)).expect("connect MCP server");
+        stream
+            .set_read_timeout(Some(Duration::from_secs(2)))
+            .expect("set read timeout");
+        let head = format!(
+            "POST /mcp HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: {}\r\n",
+            body.len()
+        );
+        stream.write_all(head.as_bytes()).expect("write head");
+        stream.flush().expect("flush head");
+        std::thread::sleep(Duration::from_millis(50));
+        stream
+            .write_all(format!("\r\n{body}").as_bytes())
+            .expect("write body");
+        let mut out = String::new();
+        stream.read_to_string(&mut out).expect("read response");
+        out
+    }
+
+    let (_server, port) = start_live_server();
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        let _ = tx.send(post_ping_in_chunks(port));
+    });
+
+    let started = Instant::now();
+    let response = loop {
+        if let Ok(response) = rx.try_recv() {
+            break response;
+        }
+        assert!(
+            started.elapsed() < Duration::from_secs(3),
+            "split HTTP request timed out"
+        );
+        std::thread::sleep(Duration::from_millis(10));
+    };
+
+    assert!(response.starts_with("HTTP/1.1 200 OK"), "{response}");
+    assert!(response.contains(r#""mode":"live""#), "{response}");
+}
+
+#[test]
 fn live_mcp_http_server_routes_file_path_requests_to_target_file() {
     use std::io::{Read, Write};
     use std::net::{TcpListener, TcpStream};
     use std::sync::mpsc;
     use std::time::{Duration, Instant};
 
-    fn unused_port() -> u16 {
-        let listener = TcpListener::bind(("127.0.0.1", 0)).expect("bind ephemeral port");
-        listener.local_addr().expect("local addr").port()
+    fn start_live_server() -> (mcp_live::McpLiveServer, u16) {
+        // `bind(0)` to grab an ephemeral port, then re-`start` on that port,
+        // has a TOCTOU window where the OS can reassign the port between the
+        // probe-listener drop and the server bind — so a single attempt
+        // occasionally fails. Retry with a fresh port each time to remove the
+        // flake (the failure that masqueraded as a test regression).
+        for _ in 0..20 {
+            let port = {
+                let listener = TcpListener::bind(("127.0.0.1", 0)).expect("bind ephemeral port");
+                listener.local_addr().expect("local addr").port()
+            };
+            if let Ok(server) = mcp_live::McpLiveServer::start(port) {
+                return (server, port);
+            }
+        }
+        panic!("could not start MCP server on an unused port after 20 attempts");
     }
 
     fn post_json(port: u16, body: &str) -> String {
@@ -176,8 +267,7 @@ fn live_mcp_http_server_routes_file_path_requests_to_target_file() {
         .expect("write doc");
     }
 
-    let port = unused_port();
-    let mut server = mcp_live::McpLiveServer::start(port).expect("start MCP server");
+    let (mut server, port) = start_live_server();
     let mut state = op_editor_core::EditorState::new();
     let dir = std::env::temp_dir().join(format!(
         "openpencil-live-mcp-filepath-{}",
@@ -215,8 +305,94 @@ fn live_mcp_http_server_routes_file_path_requests_to_target_file() {
 }
 
 #[test]
+fn live_mcp_http_server_replaces_document_via_rest_document_sync() {
+    use op_editor_core::PenNodeExt;
+    use std::io::{Read, Write};
+    use std::net::{TcpListener, TcpStream};
+    use std::sync::mpsc;
+    use std::time::{Duration, Instant};
+
+    fn start_live_server() -> (mcp_live::McpLiveServer, u16) {
+        for _ in 0..20 {
+            let port = {
+                let listener = TcpListener::bind(("127.0.0.1", 0)).expect("bind ephemeral port");
+                listener.local_addr().expect("local addr").port()
+            };
+            if let Ok(server) = mcp_live::McpLiveServer::start(port) {
+                return (server, port);
+            }
+        }
+        panic!("could not start MCP server on an unused port after 20 attempts");
+    }
+
+    fn post(port: u16, path: &str, body: &str) -> String {
+        let mut stream = TcpStream::connect(("127.0.0.1", port)).expect("connect MCP server");
+        let req = format!(
+            "POST {path} HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: {}\r\n\r\n{}",
+            body.len(),
+            body
+        );
+        stream.write_all(req.as_bytes()).expect("write request");
+        let mut out = String::new();
+        stream.read_to_string(&mut out).expect("read response");
+        out
+    }
+
+    let (mut server, port) = start_live_server();
+    let mut state = op_editor_core::EditorState::new();
+    // Preserved chrome state a whole-document sync must NOT wipe.
+    state.editor_ui.sidebar_open = false;
+
+    // A TS whole-doc-sync client (`setSyncDocument`) POSTs `{document}` to
+    // `/api/mcp/document` — the same REST shape `document.post.ts` serves.
+    let body = r##"{"document":{"version":"1.0.0","children":[{"id":"n9","type":"rectangle","name":"Synced Rect","x":5,"y":6,"width":80,"height":40,"fill":[{"type":"solid","color":"#123456"}]}]},"sourceClientId":"ts-app"}"##;
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        let _ = tx.send(post(port, "/api/mcp/document", body));
+    });
+
+    let started = Instant::now();
+    let response = loop {
+        server.pump(&mut state);
+        if let Ok(response) = rx.try_recv() {
+            break response;
+        }
+        assert!(
+            started.elapsed() < Duration::from_secs(2),
+            "document sync timed out"
+        );
+        std::thread::sleep(Duration::from_millis(10));
+    };
+
+    assert!(response.starts_with("HTTP/1.1 200 OK"), "{response}");
+    assert!(response.contains(r#""ok":true"#), "{response}");
+    assert!(response.contains(r#""version":"#), "{response}");
+    // The live document was replaced with the synced tree...
+    assert!(
+        state
+            .active_children()
+            .iter()
+            .any(|node| node.base().name.as_deref() == Some("Synced Rect")),
+        "REST document sync should replace the live editor document"
+    );
+    // ...while preserved editor chrome survived the sync.
+    assert!(
+        !state.editor_ui.sidebar_open,
+        "document sync must not reset editor_ui"
+    );
+}
+
+#[test]
 fn startup_mcp_bootstrap_starts_live_server_for_enabled_cli() {
+    // Env-free CLI-integration home (bootstrap's detect/write target it,
+    // never the real home / `CODEX_HOME`).
+    let home = std::env::temp_dir().join(format!(
+        "openpencil-mcp-bootstrap-start-{}",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&home);
     let mut app = DesktopApp::new(None);
+    app.mcp_integrations_home = Some(home.clone());
     let settings = &mut app.host.editor_state_mut().editor_ui.agent_settings;
     settings.mcp_server.port = 0;
     settings.mcp_server.running = false;
@@ -252,6 +428,7 @@ fn startup_mcp_bootstrap_starts_live_server_for_enabled_cli() {
         app.mcp_server.as_ref().expect("server").port(),
         "settings should reflect the bound port so the server is not restarted on every reconcile"
     );
+    let _ = std::fs::remove_dir_all(home);
 }
 
 #[test]
@@ -260,24 +437,17 @@ fn startup_mcp_bootstrap_updates_cli_config_after_port_fallback() {
 
     let busy = TcpListener::bind(("127.0.0.1", 0)).expect("bind busy port");
     let busy_port = busy.local_addr().expect("busy port addr").port();
-    let codex_home = std::env::temp_dir().join(format!(
-        "openpencil-mcp-bootstrap-codex-{}",
+    // Redirect CLI-config detection + writes to a temp home via the override
+    // — no process-global `CODEX_HOME`/`HOME` mutation, so this test never
+    // races another test's env access.
+    let home = std::env::temp_dir().join(format!(
+        "openpencil-mcp-bootstrap-home-{}",
         std::process::id()
     ));
-    struct CodexHomeGuard(Option<std::ffi::OsString>);
-    impl Drop for CodexHomeGuard {
-        fn drop(&mut self) {
-            if let Some(value) = self.0.take() {
-                std::env::set_var("CODEX_HOME", value);
-            } else {
-                std::env::remove_var("CODEX_HOME");
-            }
-        }
-    }
-    let _guard = CodexHomeGuard(std::env::var_os("CODEX_HOME"));
-    std::env::set_var("CODEX_HOME", &codex_home);
+    let _ = std::fs::remove_dir_all(&home);
 
     let mut app = DesktopApp::new(None);
+    app.mcp_integrations_home = Some(home.clone());
     let settings = &mut app.host.editor_state_mut().editor_ui.agent_settings;
     settings.mcp_server.port = busy_port;
     settings.mcp_server.running = false;
@@ -291,7 +461,7 @@ fn startup_mcp_bootstrap_updates_cli_config_after_port_fallback() {
 
     let bound_port = app.mcp_server.as_ref().expect("server").port();
     assert_ne!(bound_port, busy_port);
-    let codex_config = std::fs::read_to_string(codex_home.join("config.toml"))
+    let codex_config = std::fs::read_to_string(home.join(".codex").join("config.toml"))
         .expect("Codex config should be written");
     assert!(
         codex_config.contains(&format!("http://127.0.0.1:{bound_port}/mcp")),
@@ -302,7 +472,7 @@ fn startup_mcp_bootstrap_updates_cli_config_after_port_fallback() {
         "{codex_config}"
     );
 
-    let _ = std::fs::remove_dir_all(codex_home);
+    let _ = std::fs::remove_dir_all(home);
 }
 
 #[test]
@@ -323,4 +493,77 @@ fn manual_mcp_start_falls_back_to_available_port_when_requested_port_is_busy() {
     assert!(settings.mcp_server.running);
     assert_ne!(server.port(), busy_port);
     assert_eq!(settings.mcp_server.port, server.port());
+}
+
+#[test]
+fn forced_live_mcp_starts_without_persisting_settings() {
+    let mut app = DesktopApp::new(None);
+    {
+        let settings = &mut app.host.editor_state_mut().editor_ui.agent_settings;
+        settings.mcp_server.running = false;
+        settings.mcp_server.port = 3100;
+    }
+    // `op start --live-mcp` forces the server on (ephemeral port 0 here to
+    // avoid clashing with a real 3100 server during tests).
+    app.force_live_mcp_port = Some(0);
+
+    assert!(app.reconcile_mcp_server_from_settings());
+    assert!(app.mcp_server_active());
+    let bound = app.mcp_server.as_ref().expect("server").port();
+
+    // A forced launch must NOT mutate / persist the user's settings.
+    let settings = &app.host.editor_state().editor_ui.agent_settings;
+    assert!(
+        !settings.mcp_server.running,
+        "forced launch must not flip persisted running=true"
+    );
+    assert_eq!(
+        settings.mcp_server.port, 3100,
+        "forced launch must not persist the bound port"
+    );
+    // The runtime force port tracks the bound port so the next reconcile is
+    // a no-op (no restart loop).
+    assert_eq!(app.force_live_mcp_port, Some(bound));
+    assert!(!app.reconcile_mcp_server_from_settings());
+}
+
+#[test]
+fn disabling_mcp_server_reports_change_so_caller_clears_port_file() {
+    let mut app = DesktopApp::new(None);
+    app.force_live_mcp_port = Some(0);
+    assert!(app.reconcile_mcp_server_from_settings());
+    assert!(app.mcp_server_active());
+    // Drop the force flag and disable in settings → reconcile must stop the
+    // server AND return true so the caller removes the discovery file.
+    app.force_live_mcp_port = None;
+    app.host
+        .editor_state_mut()
+        .editor_ui
+        .agent_settings
+        .mcp_server
+        .running = false;
+    assert!(app.reconcile_mcp_server_from_settings());
+    assert!(!app.mcp_server_active());
+}
+
+#[test]
+fn parse_live_mcp_port_accepts_all_three_forms() {
+    let v = |xs: &[&str]| parse_live_mcp_port(xs.iter().map(|s| s.to_string()));
+    // `--live-mcp <port>`
+    assert_eq!(v(&["--live-mcp", "3100"]), Some(3100));
+    // `--live-mcp=<port>`
+    assert_eq!(v(&["--live-mcp=4321"]), Some(4321));
+    // bare `--live-mcp` (with a following non-port arg) → default port
+    assert_eq!(v(&["--live-mcp", "/tmp/a.op"]), Some(DEFAULT_LIVE_MCP_PORT));
+    assert_eq!(v(&["--live-mcp"]), Some(DEFAULT_LIVE_MCP_PORT));
+    // absent → None (normal GUI launch keeps settings-gated MCP behavior)
+    assert_eq!(v(&["/tmp/a.op"]), None);
+    assert_eq!(v(&[]), None);
+}
+
+#[test]
+fn default_live_mcp_port_matches_ts_and_cli_default() {
+    // CLI default + TS pen-mcp default are both 3100; they must agree so
+    // `op start` and `op <tool>` find each other out of the box.
+    assert_eq!(DEFAULT_LIVE_MCP_PORT, 3100);
 }
