@@ -78,7 +78,7 @@ impl DesktopApp {
         if let Some(mut server) = self.mcp_server.take() {
             server.stop();
         }
-        match mcp_live::McpLiveServer::start(port) {
+        match mcp_live::McpLiveServer::start_with_wake(port, self.mcp_wake_callback()) {
             Ok(server) => {
                 let bound_port = server.port();
                 self.mcp_server = Some(server);
@@ -88,7 +88,7 @@ impl DesktopApp {
             Err(err) => {
                 eprintln!("openpencil-desktop mcp: failed to start on {port}: {err}");
                 if port != 0 {
-                    match mcp_live::McpLiveServer::start(0) {
+                    match mcp_live::McpLiveServer::start_with_wake(0, self.mcp_wake_callback()) {
                         Ok(server) => {
                             let bound_port = server.port();
                             eprintln!(
@@ -117,6 +117,15 @@ impl DesktopApp {
                     self.host.mark_editor_state_dirty();
                 }
                 true
+            }
+        }
+    }
+
+    fn mcp_wake_callback(&self) -> impl Fn() + Send + Sync + 'static {
+        let proxy = self.mcp_wake_proxy.clone();
+        move || {
+            if let Some(proxy) = proxy.as_ref() {
+                let _ = proxy.send_event(super::DesktopEvent::McpWake);
             }
         }
     }
