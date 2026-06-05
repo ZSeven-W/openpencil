@@ -72,7 +72,14 @@ impl WidgetHostNative {
     /// lands over it — the Pages section if the cursor is above the
     /// Layers row viewport, otherwise the Layers section. Returns
     /// `true` when the cursor was over the panel.
-    fn try_scroll_layer_panel(&mut self, x: f32, y: f32, delta: f32, viewport_height: f32) -> bool {
+    fn try_scroll_layer_panel(
+        &mut self,
+        x: f32,
+        y: f32,
+        delta_x: f32,
+        delta_y: f32,
+        viewport_height: f32,
+    ) -> bool {
         use op_editor_ui::widgets::{LayerPanel, TOP_BAR_HEIGHT};
         use op_editor_ui::Rect;
         if !self.editor_state.editor_ui.sidebar_open {
@@ -87,20 +94,44 @@ impl WidgetHostNative {
             return false;
         }
         let r = LayerPanel::from_editor(&self.editor_state).regions(rect);
+        let mut changed = false;
         if y >= r.layers_rows_top {
-            let next = (self.editor_state.editor_ui.layer_layers_scroll - delta)
-                .clamp(0.0, r.layers_max_scroll);
-            if next != self.editor_state.editor_ui.layer_layers_scroll {
-                self.editor_state.editor_ui.layer_layers_scroll = next;
-                self.mark_dirty();
+            if delta_y != 0.0 {
+                let next = (self.editor_state.editor_ui.layer_layers_scroll - delta_y)
+                    .clamp(0.0, r.layers_max_scroll);
+                if next != self.editor_state.editor_ui.layer_layers_scroll {
+                    self.editor_state.editor_ui.layer_layers_scroll = next;
+                    changed = true;
+                }
+            }
+            if delta_x != 0.0 {
+                let next = (self.editor_state.editor_ui.layer_layers_h_scroll - delta_x)
+                    .clamp(0.0, r.layers_max_h_scroll);
+                if next != self.editor_state.editor_ui.layer_layers_h_scroll {
+                    self.editor_state.editor_ui.layer_layers_h_scroll = next;
+                    changed = true;
+                }
             }
         } else {
-            let next = (self.editor_state.editor_ui.layer_pages_scroll - delta)
-                .clamp(0.0, r.pages_max_scroll);
-            if next != self.editor_state.editor_ui.layer_pages_scroll {
-                self.editor_state.editor_ui.layer_pages_scroll = next;
-                self.mark_dirty();
+            if delta_y != 0.0 {
+                let next = (self.editor_state.editor_ui.layer_pages_scroll - delta_y)
+                    .clamp(0.0, r.pages_max_scroll);
+                if next != self.editor_state.editor_ui.layer_pages_scroll {
+                    self.editor_state.editor_ui.layer_pages_scroll = next;
+                    changed = true;
+                }
             }
+            if delta_x != 0.0 {
+                let next = (self.editor_state.editor_ui.layer_pages_h_scroll - delta_x)
+                    .clamp(0.0, r.pages_max_h_scroll);
+                if next != self.editor_state.editor_ui.layer_pages_h_scroll {
+                    self.editor_state.editor_ui.layer_pages_h_scroll = next;
+                    changed = true;
+                }
+            }
+        }
+        if changed {
+            self.mark_dirty();
         }
         true
     }
@@ -213,7 +244,12 @@ impl WidgetHostNative {
         }
         // Left-rail LayerPanel — a wheel over it scrolls its Pages /
         // Layers section instead of zooming.
-        if self.try_scroll_layer_panel(x, y, delta_y, viewport_height) {
+        let (layer_dx, layer_dy) = if self.shift_held {
+            (delta_y, 0.0)
+        } else {
+            (0.0, delta_y)
+        };
+        if self.try_scroll_layer_panel(x, y, layer_dx, layer_dy, viewport_height) {
             return true;
         }
         if !self.over_canvas(x, y, viewport_width, viewport_height) {
@@ -340,7 +376,7 @@ impl WidgetHostNative {
         }
         // Left-rail LayerPanel — a trackpad pan over it scrolls its
         // Pages / Layers section instead of panning the canvas.
-        if self.try_scroll_layer_panel(x, y, dy, viewport_height) {
+        if self.try_scroll_layer_panel(x, y, dx, dy, viewport_height) {
             return true;
         }
         if !self.over_canvas(x, y, viewport_width, viewport_height) {

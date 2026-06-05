@@ -1,6 +1,5 @@
 //! `batch_design` write tool + nodes_json parser. Carved off
-//! `write_tools.rs` to stay under the 800-line cap once the
-//! batch surface landed.
+//! `write_tools.rs` to stay under the 800-line cap.
 
 use std::collections::BTreeMap;
 
@@ -8,44 +7,33 @@ use jian_ops_schema::node::PenNode;
 use op_editor_core::{NodeId, PenNodeExt};
 
 use super::batch_direct_ops::parse_single_direct_operation;
-use super::batch_layered::{
-    dispatch_design_content, dispatch_design_refine, dispatch_design_skeleton,
-};
+use super::batch_layered::{dispatch_design_content, dispatch_design_skeleton};
 use super::batch_page::{command_with_outer_page_id, optional_page_id};
 use super::write_tools::{validate_hex, ALLOWED_KINDS};
 use super::{BatchInsertItem, EditorCommand, McpTool, ToolErrorCode, ToolOutcome};
 
-/// First-party `batch_design` tool — insert N leaf nodes on the
-/// active page in one atomic shot. Mirrors TS `batch_design` for
-/// the leaf subset.
-///
-/// Wire shape: one scalar string arg `nodes_json` carrying a JSON
-/// array of node descriptors. The shell-core parser rejects
-/// structured args at the top level (so an LLM can't sneak a
-/// nested object past scalar contracts), but a JSON array
-/// embedded inside a quoted string round-trips cleanly. Each
-/// array entry is `{"kind":"...","name":"...","x":N,"y":N,
-/// "width":N,"height":N,"fill_hex":"#..."}` — the same shape
-/// `insert_node` accepts, minus the wire wrapping.
-///
-/// The tool parses the inner JSON, validates EVERY entry, and
-/// emits `McpCommand::BatchInsert { items: ... }`. The apply
-/// path is all-or-nothing: a single bad entry rejects the whole
-/// batch so the LLM never sees a partial design tree.
-pub struct BatchDesign;
-
-impl McpTool for BatchDesign {
-    fn name(&self) -> &str {
-        "batch_design"
-    }
-    fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
-        dispatch_batch_design(args, None)
-    }
-}
-
-pub fn batch_design_snapshot() -> BatchDesign {
-    BatchDesign
-}
+// First-party `batch_design` tool — insert N leaf nodes on the
+// active page in one atomic shot. Mirrors TS `batch_design` for
+// the leaf subset.
+//
+// Wire shape: one scalar string arg `nodes_json` carrying a JSON
+// array of node descriptors. The shell-core parser rejects
+// structured args at the top level (so an LLM can't sneak a
+// nested object past scalar contracts), but a JSON array
+// embedded inside a quoted string round-trips cleanly. Each
+// array entry is `{"kind":"...","name":"...","x":N,"y":N,
+// "width":N,"height":N,"fill_hex":"#..."}` — the same shape
+// `insert_node` accepts, minus the wire wrapping.
+//
+// The tool parses the inner JSON, validates EVERY entry, and
+// emits `McpCommand::BatchInsert { items: ... }`. The apply
+// path is all-or-nothing: a single bad entry rejects the whole
+// batch so the LLM never sees a partial design tree.
+// The `batch_design` tool (BatchDesign + batch_design_snapshot) lives in
+// `batch_design_result.rs` so it can hold a document snapshot and emit TS's
+// `{results:[{binding,nodeId}], nodeCount}` for the operations path (it
+// predicts the host-assigned ids off the snapshot). Non-operations paths fall
+// back to `dispatch_batch_design` here.
 
 /// Shared core for `design_skeleton` / `design_content` /
 /// `design_refine`. Each phase tool dispatches here with a label
@@ -55,11 +43,11 @@ pub fn batch_design_snapshot() -> BatchDesign {
 /// metadata. A future patch may grow per-phase apply semantics
 /// (e.g. `design_refine` patching existing nodes via UpdateNode
 /// batches) once a richer command exists.
-fn dispatch_phase(args: &BTreeMap<String, String>, phase: &'static str) -> ToolOutcome {
+pub(crate) fn dispatch_phase(args: &BTreeMap<String, String>, phase: &'static str) -> ToolOutcome {
     dispatch_batch_design(args, Some(phase))
 }
 
-fn dispatch_batch_design(
+pub(crate) fn dispatch_batch_design(
     args: &BTreeMap<String, String>,
     phase: Option<&'static str>,
 ) -> ToolOutcome {
@@ -70,6 +58,7 @@ fn dispatch_batch_design(
                 parent_id,
                 nodes,
                 count,
+                ..
             }) => {
                 let mut out = BTreeMap::new();
                 out.insert("wrote".into(), "true".into());
@@ -133,31 +122,37 @@ enum ParentRef {
     Ref(String),
 }
 
-enum ParsedOperations {
+pub(crate) enum ParsedOperations {
     Insert {
         parent_id: NodeId,
         nodes: Vec<PenNode>,
         count: usize,
+        /// One binding name per top-level `I()` op, used to trace post-remap
+        /// ids back to bindings for TS's `results:[{binding,nodeId}]`.
+        bindings: Vec<String>,
     },
     Direct(EditorCommand),
 }
 
-fn parse_operations(input: &str) -> Result<ParsedOperations, String> {
+pub(crate) fn parse_operations(input: &str) -> Result<ParsedOperations, String> {
     let lines = split_operations(input);
     if lines.len() == 1 {
         if let Some(command) = parse_single_direct_operation(&lines[0])? {
             return Ok(ParsedOperations::Direct(command));
         }
     }
-    let (parent_id, nodes, count) = parse_insert_operations(input)?;
+    let (parent_id, nodes, count, bindings) = parse_insert_operations(input)?;
     Ok(ParsedOperations::Insert {
         parent_id,
         nodes,
         count,
+        bindings,
     })
 }
 
-fn parse_insert_operations(input: &str) -> Result<(NodeId, Vec<PenNode>, usize), String> {
+type InsertForest = (NodeId, Vec<PenNode>, usize, Vec<String>);
+
+fn parse_insert_operations(input: &str) -> Result<InsertForest, String> {
     let lines = split_operations(input);
     if lines.is_empty() {
         return Err("operations must contain at least one I(parent, node) operation".into());
@@ -174,8 +169,13 @@ fn parse_insert_operations(input: &str) -> Result<(NodeId, Vec<PenNode>, usize),
             serde_json::from_str(data).map_err(|e| format!("{binding}: invalid node JSON: {e}"))?;
         normalize_node_shape(&mut value);
         ensure_node_ids(&mut value, &mut tmp_id);
-        let node: PenNode = serde_json::from_value(value)
+        let mut node: PenNode = serde_json::from_value(value)
             .map_err(|e| format!("{binding}: invalid PenNode payload: {e}"))?;
+        // Stamp the binding as the node's authored id so the post-insert remap
+        // (which the `batch_design` tool simulates) can be traced back to its
+        // binding for the TS `results:[{binding,nodeId}]` map. The host remaps
+        // every id at apply, so this authored id is transient + harmless.
+        node.base_mut().id = binding.clone();
         binding_to_idx.insert(binding.clone(), inserts.len());
         inserts.push(ParsedInsert {
             binding,
@@ -183,7 +183,9 @@ fn parse_insert_operations(input: &str) -> Result<(NodeId, Vec<PenNode>, usize),
             node,
         });
     }
-    assemble_insert_forest(inserts, &binding_to_idx)
+    let bindings: Vec<String> = inserts.iter().map(|i| i.binding.clone()).collect();
+    let (parent_id, nodes, count) = assemble_insert_forest(inserts, &binding_to_idx)?;
+    Ok((parent_id, nodes, count, bindings))
 }
 
 fn assemble_insert_forest(
@@ -414,9 +416,36 @@ pub(crate) fn normalize_node_shape(value: &mut serde_json::Value) {
     if let Some(stroke) = obj.get_mut("stroke") {
         normalize_stroke(stroke);
     }
+    if let Some(padding) = obj.get_mut("padding") {
+        normalize_padding(padding);
+    }
+    normalize_layout_keyword(obj, "justifyContent");
+    normalize_layout_keyword(obj, "alignItems");
     if let Some(serde_json::Value::Array(children)) = obj.get_mut("children") {
         for child in children {
             normalize_node_shape(child);
+        }
+    }
+}
+
+fn normalize_layout_keyword(obj: &mut serde_json::Map<String, serde_json::Value>, key: &str) {
+    let Some(serde_json::Value::String(value)) = obj.get_mut(key) else {
+        return;
+    };
+    let normalized = match (key, value.as_str()) {
+        ("justifyContent" | "alignItems", "flex-start") => "start",
+        ("justifyContent" | "alignItems", "flex-end") => "end",
+        ("justifyContent", "space-between") => "space_between",
+        ("justifyContent", "space-around") => "space_around",
+        _ => return,
+    };
+    *value = normalized.to_string();
+}
+
+fn normalize_padding(value: &mut serde_json::Value) {
+    if let Some(items) = value.as_array() {
+        if items.len() == 1 {
+            *value = items[0].clone();
         }
     }
 }
@@ -510,25 +539,10 @@ pub fn design_content_snapshot() -> DesignContent {
     DesignContent
 }
 
-/// `design_refine` — phase 3 of the layered design workflow.
-/// Accepts the TS layered-workflow `rootId` shape and emits a
-/// targeted refine command. Legacy batch-like payloads still route
-/// through `dispatch_phase` for compatibility.
-pub struct DesignRefine;
-impl McpTool for DesignRefine {
-    fn name(&self) -> &str {
-        "design_refine"
-    }
-    fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
-        if args.contains_key("rootId") || args.contains_key("root_id") {
-            return dispatch_design_refine(args);
-        }
-        dispatch_phase(args, "refine")
-    }
-}
-pub fn design_refine_snapshot() -> DesignRefine {
-    DesignRefine
-}
+// `design_refine` (the DesignRefine tool + design_refine_snapshot) lives in
+// `design_refine_result.rs` so it can build TS's rich `{rootId, totalNodeCount,
+// fixes[], layoutSnapshot}` result (it needs a document snapshot + the layout
+// helper, which would push this file over the 800-line cap).
 
 /// Hand-rolled parser for the `nodes_json` payload. Shell-core
 /// stays serde-free so the wasm32 bundle doesn't grow. Returns a

@@ -461,6 +461,7 @@ fn format_align(ai: &jian_ops_schema::node::AlignItems) -> &'static str {
         AlignItems::Start => "start",
         AlignItems::Center => "center",
         AlignItems::End => "end",
+        AlignItems::Stretch => "stretch",
     }
 }
 

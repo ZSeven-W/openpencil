@@ -2,12 +2,11 @@
 
 use std::collections::BTreeMap;
 
-use op_editor_core::{NodeId, PenNodeExt};
+use op_editor_core::{EditorState, NodeId, PenNodeExt};
 
-use super::batch_design::{
-    design_content_snapshot, design_refine_snapshot, design_skeleton_snapshot,
-};
-use super::{parse_tool_call, EditorCommand, McpTool, ToolOutcome};
+use super::batch_design::{design_content_snapshot, design_skeleton_snapshot};
+use super::design_refine_result::design_refine_snapshot;
+use super::{parse_tool_call, EditorCommand, McpTool, ToolErrorCode, ToolOutcome};
 
 #[test]
 fn design_content_children_insert_under_section_with_page_id() {
@@ -64,6 +63,43 @@ fn design_content_counts_nested_nodes_and_reports_default_post_processing() {
                 .any(|warning| warning
                     .as_str()
                     .is_some_and(|text| text.contains("without textGrowth"))));
+        }
+        other => panic!("expected design_content InsertSubtree, got {other:?}"),
+    }
+}
+
+#[test]
+fn design_content_defaults_missing_type_to_frame_and_warns() {
+    // TS assignIds (design-content.ts) defaults a node missing `type` to
+    // "frame" and warns instead of erroring. Rust must mirror that.
+    let tool = design_content_snapshot();
+    let mut args = BTreeMap::new();
+    args.insert("sectionId".into(), "section-1".into());
+    args.insert(
+        "children".into(),
+        r##"[{"name":"Mystery","width":"fill_container","height":"fit_content"}]"##.into(),
+    );
+
+    match tool.call(&args) {
+        ToolOutcome::OkWithCommand(result, EditorCommand::InsertSubtree { nodes, .. }) => {
+            assert_eq!(nodes.len(), 1);
+            let value = serde_json::to_value(&nodes[0]).expect("node json");
+            assert_eq!(
+                value["type"], "frame",
+                "missing type should default to frame"
+            );
+            let warnings: serde_json::Value =
+                serde_json::from_str(result.get("warnings").expect("warnings json")).unwrap();
+            assert!(
+                warnings
+                    .as_array()
+                    .expect("warnings array")
+                    .iter()
+                    .any(|warning| warning
+                        .as_str()
+                        .is_some_and(|text| text.contains("missing type"))),
+                "expected a missing-type warning, got {warnings}"
+            );
         }
         other => panic!("expected design_content InsertSubtree, got {other:?}"),
     }
@@ -161,28 +197,70 @@ fn design_skeleton_root_sections_emit_authored_subtree_with_section_ids() {
 }
 
 #[test]
-fn design_refine_root_id_emits_refine_command_with_page_id() {
-    let tool = design_refine_snapshot();
+fn design_refine_root_id_returns_ts_result_and_refine_command() {
+    let mut state = EditorState::new();
+    assert!(state.apply(EditorCommand::InsertNode {
+        kind: "frame".into(),
+        name: "Root".into(),
+        x: 0,
+        y: 0,
+        width: 300,
+        height: 200,
+        fill_hex: None,
+        target_parent: NodeId::NONE,
+        page_id: None,
+    }));
+    let root_id = state.active_children()[0].base().id.clone();
+
+    let tool = design_refine_snapshot(&state);
     let mut args = BTreeMap::new();
-    args.insert("rootId".into(), "root-1".into());
+    args.insert("rootId".into(), root_id.clone());
     args.insert("canvasWidth".into(), "375".into());
-    args.insert("pageId".into(), "page-2".into());
 
     match tool.call(&args) {
-        ToolOutcome::OkWithCommand(
-            result,
+        ToolOutcome::OkJsonWithCommand(
+            json,
             EditorCommand::RefineDesign {
-                root_id,
+                root_id: cmd_root,
                 canvas_width,
                 page_id,
             },
         ) => {
-            assert_eq!(result.get("phase"), Some(&"refine".to_string()));
-            assert_eq!(result.get("rootId"), Some(&"root-1".to_string()));
-            assert_eq!(root_id.as_str(), "root-1");
+            // The host still applies the same targeted refine command.
+            assert_eq!(cmd_root.as_str(), root_id);
             assert_eq!(canvas_width, Some(375));
-            assert_eq!(page_id.as_deref(), Some("page-2"));
+            assert_eq!(page_id, None); // refines the active page (no pageId given)
+                                       // TS design-refine result shape: { rootId, totalNodeCount, fixes[], layoutSnapshot[] }.
+            let v: serde_json::Value = serde_json::from_str(&json).expect("refine json");
+            assert_eq!(v["rootId"], serde_json::json!(root_id));
+            assert!(
+                v["totalNodeCount"].as_u64().is_some_and(|n| n >= 1),
+                "totalNodeCount must be a number: {v}"
+            );
+            assert!(v["fixes"].is_array(), "fixes must be an array: {v}");
+            assert!(
+                v["layoutSnapshot"].is_array(),
+                "layoutSnapshot must be an array: {v}"
+            );
         }
-        other => panic!("expected design_refine RefineDesign command, got {other:?}"),
+        other => panic!("expected OkJsonWithCommand RefineDesign, got {other:?}"),
+    }
+}
+
+#[test]
+fn design_refine_missing_root_errors_like_ts() {
+    // TS design-refine throws "Root node not found: <id>" when the root is
+    // absent; Rust must surface the same rather than apply a no-op.
+    let state = EditorState::new();
+    let tool = design_refine_snapshot(&state);
+    let mut args = BTreeMap::new();
+    args.insert("rootId".into(), "missing-root".into());
+
+    match tool.call(&args) {
+        ToolOutcome::Err(code, msg) => {
+            assert_eq!(code, ToolErrorCode::ToolFailed);
+            assert!(msg.contains("Root node not found"), "{msg}");
+        }
+        other => panic!("expected Root-not-found error, got {other:?}"),
     }
 }

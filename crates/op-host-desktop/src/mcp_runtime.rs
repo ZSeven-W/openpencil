@@ -4,7 +4,10 @@ use super::{mcp_integrations, mcp_live, DesktopApp};
 
 impl DesktopApp {
     pub(crate) fn bootstrap_mcp_runtime_from_settings(&mut self) -> bool {
-        let detected_flags = mcp_integrations::detect_enabled_clis();
+        let detected_flags = match &self.mcp_integrations_home {
+            Some(home) => mcp_integrations::detect_enabled_clis_at_home(home),
+            None => mcp_integrations::detect_enabled_clis(),
+        };
         let settings = &mut self.host.editor_state_mut().editor_ui.agent_settings;
         let mut changed = false;
         for (idx, detected) in detected_flags.iter().copied().enumerate() {
@@ -32,24 +35,36 @@ impl DesktopApp {
         changed
     }
 
+    /// Reconcile the live MCP server against settings + the `--live-mcp`
+    /// force flag. Returns `true` when the server's running-state or port
+    /// changed (so the caller refreshes the discovery file). A forced
+    /// (`op start`) launch starts the server WITHOUT mutating or persisting
+    /// the user's settings — the runtime force port is updated to the bound
+    /// port instead, so a one-off `op start` never rewrites saved prefs.
     pub(crate) fn reconcile_mcp_server_from_settings(&mut self) -> bool {
-        let desired = self
+        let setting_running = self
             .host
             .editor_state()
             .editor_ui
             .agent_settings
             .mcp_server
             .running;
-        let port = self
+        let setting_port = self
             .host
             .editor_state()
             .editor_ui
             .agent_settings
             .mcp_server
             .port;
+        let forced = self.force_live_mcp_port.is_some();
+        let desired = setting_running || forced;
+        let port = self.force_live_mcp_port.unwrap_or(setting_port);
+
         if !desired {
+            // Report the change so the caller removes the stale port file.
             if let Some(mut server) = self.mcp_server.take() {
                 server.stop();
+                return true;
             }
             return false;
         }
@@ -67,18 +82,8 @@ impl DesktopApp {
             Ok(server) => {
                 let bound_port = server.port();
                 self.mcp_server = Some(server);
-                if bound_port != port {
-                    self.host
-                        .editor_state_mut()
-                        .editor_ui
-                        .agent_settings
-                        .mcp_server
-                        .port = bound_port;
-                    self.host.mark_editor_state_dirty();
-                    true
-                } else {
-                    false
-                }
+                self.note_bound_mcp_port(forced, setting_running, bound_port);
+                true
             }
             Err(err) => {
                 eprintln!("openpencil-desktop mcp: failed to start on {port}: {err}");
@@ -90,15 +95,7 @@ impl DesktopApp {
                                 "openpencil-desktop mcp: fell back to 127.0.0.1:{bound_port}/mcp"
                             );
                             self.mcp_server = Some(server);
-                            let settings = &mut self
-                                .host
-                                .editor_state_mut()
-                                .editor_ui
-                                .agent_settings
-                                .mcp_server;
-                            settings.running = true;
-                            settings.port = bound_port;
-                            self.host.mark_editor_state_dirty();
+                            self.note_bound_mcp_port(forced, setting_running, bound_port);
                             return true;
                         }
                         Err(fallback_err) => {
@@ -108,14 +105,40 @@ impl DesktopApp {
                         }
                     }
                 }
-                self.host
-                    .editor_state_mut()
-                    .editor_ui
-                    .agent_settings
-                    .mcp_server
-                    .running = false;
-                self.host.mark_editor_state_dirty();
+                // Couldn't start. Only clear the *persisted* toggle when the
+                // user (not the transient force flag) requested it.
+                if setting_running && !forced {
+                    self.host
+                        .editor_state_mut()
+                        .editor_ui
+                        .agent_settings
+                        .mcp_server
+                        .running = false;
+                    self.host.mark_editor_state_dirty();
+                }
                 true
+            }
+        }
+    }
+
+    /// Record the actually-bound MCP port. A forced (`--live-mcp`) launch
+    /// updates the runtime force port only — never the persisted settings —
+    /// so later reconciles see the bound port and don't restart, and a
+    /// one-off `op start` leaves saved prefs untouched. A user-enabled
+    /// server persists the bound port into settings (existing behavior).
+    fn note_bound_mcp_port(&mut self, forced: bool, setting_running: bool, bound: u16) {
+        if forced {
+            self.force_live_mcp_port = Some(bound);
+        } else if setting_running {
+            let settings = &mut self
+                .host
+                .editor_state_mut()
+                .editor_ui
+                .agent_settings
+                .mcp_server;
+            if settings.port != bound {
+                settings.port = bound;
+                self.host.mark_editor_state_dirty();
             }
         }
     }
@@ -124,15 +147,37 @@ impl DesktopApp {
         let Some(server) = self.mcp_server.as_mut() else {
             return false;
         };
-        let changed = server.pump(self.host.editor_state_mut());
-        if changed {
+        let outcome = server.pump(self.host.editor_state_mut());
+        if outcome.layout_dirty {
             self.host.mark_editor_state_dirty();
         }
-        changed
+        outcome.repaint
     }
 
     pub(crate) fn mcp_server_active(&self) -> bool {
         self.mcp_server.is_some()
+    }
+
+    /// Whether the live MCP server received a token-authed `op stop`
+    /// (`openpencil/shutdown`) and the editor should quit.
+    pub(crate) fn mcp_shutdown_requested(&self) -> bool {
+        self.mcp_server
+            .as_ref()
+            .is_some_and(|server| server.shutdown_requested())
+    }
+
+    /// Publish (or retract) the live MCP server's port to the TS-compatible
+    /// discovery file `~/.openpencil/.op-mcp-port` so the `op` CLI can find this
+    /// editor's on-screen canvas. Called from the app lifecycle (after the
+    /// launch bootstrap and after a settings-driven reconcile), NOT from
+    /// `reconcile_mcp_server_from_settings` itself — keeping reconcile free
+    /// of filesystem side effects so unit tests don't touch the real home
+    /// directory. Best-effort; failures are non-fatal.
+    pub(crate) fn publish_live_mcp_port(&self) {
+        match self.mcp_server.as_ref() {
+            Some(server) => crate::mcp_port_file::write(server.port(), server.token()),
+            None => crate::mcp_port_file::remove(),
+        }
     }
 
     pub(crate) fn reconcile_mcp_cli_integrations(
@@ -149,6 +194,7 @@ impl DesktopApp {
             return false;
         }
 
+        let home_override = self.mcp_integrations_home.clone();
         let mut reverted = false;
         for (idx, cli) in op_editor_core::agent_settings::McpCli::ALL
             .iter()
@@ -160,7 +206,15 @@ impl DesktopApp {
             if !flag_changed && !enabled_port_changed {
                 continue;
             }
-            if let Err(err) = mcp_integrations::set_cli_enabled(cli, after_flags[idx], port) {
+            // Test override targets a temp home (env-free); production reads
+            // the real home (+ `CODEX_HOME`).
+            let result = match &home_override {
+                Some(home) => {
+                    mcp_integrations::set_cli_enabled_at_home(cli, after_flags[idx], port, home)
+                }
+                None => mcp_integrations::set_cli_enabled(cli, after_flags[idx], port),
+            };
+            if let Err(err) = result {
                 eprintln!(
                     "openpencil-desktop mcp: failed to update {} integration: {err}",
                     cli.label()

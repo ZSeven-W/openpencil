@@ -1,6 +1,9 @@
 //! MCP (Model Context Protocol) request / response types.
 //! Mirrors the wire shape `packages/pen-mcp` uses for its stdio +
 //! HTTP server. v1 scope: protocol types + tool registry trait.
+// Some ported element builders nest `json!` subtrees deeply enough to
+// exceed the default macro recursion limit (128).
+#![recursion_limit = "512"]
 //!
 //! ## op-editor-core port (Phase 5 Task 5.1)
 //!
@@ -18,6 +21,7 @@
 use std::collections::BTreeMap;
 
 pub mod batch_design;
+pub mod batch_design_result;
 #[cfg(test)]
 mod batch_design_tests;
 mod batch_direct_ops;
@@ -46,13 +50,49 @@ mod design_md_tools_tests;
 pub mod design_prompt;
 #[cfg(test)]
 mod design_prompt_tests;
+pub mod design_refine_result;
 pub mod document_save;
 #[cfg(test)]
 mod document_save_tests;
 mod element_alias_builders;
 #[cfg(test)]
+mod element_atom_alias_tests;
+mod element_basic_alias_builders;
+mod element_calendar_alias_builders;
+mod element_complex_alias_builders;
+mod element_content_alias_builders;
+mod element_content_alias_support;
+#[cfg(test)]
+mod element_content_alias_tests;
+mod element_feedback_alias_builders;
+#[cfg(test)]
+mod element_feedback_alias_tests;
+mod element_flow_alias_builders;
+#[cfg(test)]
+mod element_flow_alias_tests;
+mod element_input_alias_builders;
+#[cfg(test)]
+mod element_input_alias_tests;
+mod element_misc_alias_builders;
+#[cfg(test)]
+mod element_misc_alias_tests;
+#[cfg(test)]
 mod element_parser_tests;
+mod element_ported_cards_a;
+mod element_ported_cards_b;
+mod element_ported_helpers;
+mod element_ported_inputs;
+mod element_ported_nav;
+mod element_ported_rows_a;
+mod element_ported_rows_b;
+mod element_ported_shells;
 pub mod element_tools;
+#[cfg(test)]
+mod element_tools_parity_tests;
+mod element_ts_schema;
+mod element_visual_alias_builders;
+#[cfg(test)]
+mod element_visual_alias_tests;
 pub mod extra_read_tools;
 #[cfg(test)]
 mod extra_read_tools_tests;
@@ -71,6 +111,7 @@ pub mod read_nodes;
 #[cfg(test)]
 mod read_nodes_tests;
 pub mod read_tools;
+pub mod read_tools_extra;
 pub mod reparent_tools;
 #[cfg(test)]
 mod replace_node_tests;
@@ -105,6 +146,8 @@ mod write_tools_tests;
 // Cross-cutting tests for the crate spine — stdio dispatch + parser
 // invariants + a few read-tool registry round-trips.
 #[cfg(test)]
+mod mcp_read_tests;
+#[cfg(test)]
 mod mcp_tests;
 
 // The MCP command DTO is now `op_editor_core::EditorCommand` — the
@@ -119,9 +162,9 @@ pub use op_editor_core::{
 // using `mcp::parse_tool_call` / `mcp::GetDocumentInfo` after the
 // split. Mirrors the `widgets::*` re-export pattern.
 pub use batch_design::{
-    batch_design_snapshot, design_content_snapshot, design_refine_snapshot,
-    design_skeleton_snapshot, BatchDesign, DesignContent, DesignRefine, DesignSkeleton,
+    design_content_snapshot, design_skeleton_snapshot, DesignContent, DesignSkeleton,
 };
+pub use batch_design_result::{batch_design_snapshot, BatchDesign};
 pub use batch_get::{batch_get_snapshot, BatchGet};
 pub use bulk_vars::{
     get_variables_snapshot, set_themes_snapshot, set_variables_snapshot, GetVariables, SetThemes,
@@ -145,9 +188,10 @@ pub use design_md_tools::{
     GetDesignMd, SetDesignMd,
 };
 pub use design_prompt::{get_design_prompt_snapshot, GetDesignPrompt};
+pub use design_refine_result::{design_refine_snapshot, DesignRefine};
 pub use document_save::{save_document_snapshot, SaveDocument};
 pub use extra_read_tools::{get_node_children_snapshot, ChildRecord, GetNodeChildren};
-pub use json_serializer::response_to_json;
+pub use json_serializer::{response_to_json, tool_response_to_json};
 pub use node_attr_tools::{
     add_node_effect_snapshot, remove_node_effect_snapshot, set_ellipse_arc_snapshot,
     set_node_corner_radius_snapshot, set_node_fill_hex_snapshot, set_node_flip_snapshot,
@@ -246,6 +290,12 @@ pub enum ToolResponse {
         /// The registry surfaces it so callers don't need to
         /// re-walk the tool list.
         command: Option<EditorCommand>,
+        /// Pre-serialized nested-JSON result (from
+        /// `ToolOutcome::OkJson`). When `Some`, the serializers emit it
+        /// verbatim as the wire `result` instead of encoding `result`
+        /// (the flat map) — so read tools match TS's arbitrary-JSON
+        /// shapes byte-for-byte. `None` ⇒ use the flat-map encoding.
+        json: Option<String>,
     },
     Err {
         id: RequestId,
@@ -279,6 +329,21 @@ pub enum ToolErrorCode {
 pub enum ToolOutcome {
     Ok(BTreeMap<String, String>),
     OkWithCommand(BTreeMap<String, String>, EditorCommand),
+    /// A read tool returning a TS-identical nested-JSON result. The
+    /// `String` is the already-serialized JSON object (e.g.
+    /// `serde_json::to_string(&value)`); it rides verbatim into the wire
+    /// `result` (and the `content[].text` of the tools/call envelope),
+    /// bypassing the flat string-map encoding. Used where TS `pen-mcp`
+    /// returns arbitrary nested JSON (snapshot_layout, batch_get, …) so
+    /// the two stacks serialize byte-identical tool results.
+    OkJson(String),
+    /// A write tool returning a TS-identical nested-JSON result AND a command
+    /// the host applies (like `OkWithCommand`, but the wire `result` is the
+    /// verbatim JSON instead of the flat string-map). Used by design tools
+    /// (`design_refine`, `batch_design`) whose TS handlers return rich nested
+    /// results (`fixes[]`, `layoutSnapshot`, `results[]`, …) while still
+    /// mutating the document. The host applies `command`; the client sees `json`.
+    OkJsonWithCommand(String, EditorCommand),
     Err(ToolErrorCode, String),
 }
 
@@ -319,11 +384,25 @@ impl ToolRegistry {
                 id: call.id,
                 result,
                 command: None,
+                json: None,
             },
             ToolOutcome::OkWithCommand(result, command) => ToolResponse::Ok {
                 id: call.id,
                 result,
                 command: Some(command),
+                json: None,
+            },
+            ToolOutcome::OkJson(json) => ToolResponse::Ok {
+                id: call.id,
+                result: BTreeMap::new(),
+                command: None,
+                json: Some(json),
+            },
+            ToolOutcome::OkJsonWithCommand(json, command) => ToolResponse::Ok {
+                id: call.id,
+                result: BTreeMap::new(),
+                command: Some(command),
+                json: Some(json),
             },
             ToolOutcome::Err(code, message) => ToolResponse::Err {
                 id: call.id,
@@ -347,11 +426,12 @@ impl ToolRegistry {
 /// through `registry`, write each response (followed by `\n`) to
 /// `writer`. Loops until EOF or a write error. Pure stdlib I/O.
 ///
-/// **Read-only path** — when a tool returns `ToolOutcome::
-/// OkWithCommand`, this function REJECTS it as `ToolErrorCode::
-/// Internal` so the client never sees a misleading success for a
-/// mutation that was never applied. Hosts that need write tools
-/// should use [`run_stdio_with_applier`].
+/// **Read-only path** — when a tool returns a command-bearing response
+/// (`ToolOutcome::OkWithCommand` or `OkJsonWithCommand`, i.e. any
+/// `ToolResponse::Ok { command: Some(_), .. }`), this function REJECTS it as
+/// `ToolErrorCode::Internal` so the client never sees a misleading success
+/// for a mutation that was never applied. Hosts that need write tools should
+/// use [`run_stdio_with_applier`].
 pub fn run_stdio<R: std::io::BufRead, W: std::io::Write>(
     registry: &ToolRegistry,
     reader: &mut R,
@@ -431,7 +511,10 @@ where
                 };
             }
         }
-        writeln!(writer, "{}", response_to_json(&response))?;
+        // Tool results use the MCP-spec `content[]` envelope (with
+        // `isError` for tool-level failures); only transport/parse errors
+        // above use the JSON-RPC `error` shape.
+        writeln!(writer, "{}", tool_response_to_json(&response))?;
         writer.flush()?;
     }
 }

@@ -619,6 +619,7 @@ fn parse_children(raw: &str) -> Result<ParsedChildren, String> {
     let mut next_id = 1usize;
     let mut warnings = Vec::new();
     for child in children.iter_mut() {
+        default_missing_type(child, &mut warnings);
         normalize_node_shape(child);
         ensure_child_node_ids(child, &mut next_id);
         collect_content_warnings(child, &mut warnings);
@@ -631,6 +632,33 @@ fn parse_children(raw: &str) -> Result<ParsedChildren, String> {
         count,
         warnings,
     })
+}
+
+/// TS `assignIds` (design-content.ts) defaults a node missing `type` to
+/// "frame" and emits a warning, recursively. Without this a missing-type
+/// node hard-errors at PenNode deserialization in Rust, diverging from TS
+/// which renders it as a frame and just warns the LLM.
+fn default_missing_type(value: &mut Value, warnings: &mut Vec<String>) {
+    let Value::Object(obj) = value else {
+        return;
+    };
+    if !obj.contains_key("type") {
+        let name = obj
+            .get("name")
+            .or_else(|| obj.get("id"))
+            .and_then(Value::as_str)
+            .unwrap_or("node")
+            .to_string();
+        warnings.push(format!(
+            "Node \"{name}\" missing type - defaulting to \"frame\""
+        ));
+        obj.insert("type".into(), Value::String("frame".into()));
+    }
+    if let Some(Value::Array(children)) = obj.get_mut("children") {
+        for child in children {
+            default_missing_type(child, warnings);
+        }
+    }
 }
 
 fn ensure_child_node_ids(value: &mut Value, next: &mut usize) {

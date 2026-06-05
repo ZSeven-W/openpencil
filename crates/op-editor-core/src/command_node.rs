@@ -282,8 +282,10 @@ fn insert_into_parent(
 
 impl EditorState {
     /// Compute the numeric seed for the next editor-minted `n{N}` id —
-    /// `max_node_id() + 1`. `None` on `u64` exhaustion.
-    pub(crate) fn next_node_id_seed(&self) -> Option<u64> {
+    /// `max_node_id() + 1`. `None` on `u64` exhaustion. Pub so the
+    /// `batch_design` MCP tool can predict (off a doc snapshot) the ids the
+    /// host will allocate at apply, mirroring `cmd_insert_subtree`'s seed.
+    pub fn next_node_id_seed(&self) -> Option<u64> {
         self.max_node_id().checked_add(1).map(|n| n.max(1))
     }
 
@@ -746,13 +748,41 @@ pub(crate) fn remap_subtree_ids(
     next_id: &mut u64,
     taken: &mut HashSet<NodeId>,
 ) -> bool {
+    remap_subtree_ids_mapping(nodes, next_id, taken).is_some()
+}
+
+/// Like [`remap_subtree_ids`] but returns the `(old_id, new_id)` pairs in
+/// depth-first allocation order (`None` on id-space exhaustion). The mutation
+/// is IDENTICAL to `remap_subtree_ids` — that wrapper just discards the map.
+/// The `batch_design` MCP tool runs this on a CLONE of the to-be-inserted
+/// forest to PREDICT the ids the host will assign (single-user localhost MCP:
+/// the tool's snapshot == the live doc at apply, and the apply runs the exact
+/// same allocation), so it can report TS's `results:[{binding,nodeId}]`.
+pub fn remap_subtree_ids_mapping(
+    nodes: &mut [PenNode],
+    next_id: &mut u64,
+    taken: &mut HashSet<NodeId>,
+) -> Option<Vec<(String, String)>> {
+    let mut map = Vec::new();
+    remap_collect(nodes, next_id, taken, &mut map).then_some(map)
+}
+
+fn remap_collect(
+    nodes: &mut [PenNode],
+    next_id: &mut u64,
+    taken: &mut HashSet<NodeId>,
+    map: &mut Vec<(String, String)>,
+) -> bool {
     for node in nodes.iter_mut() {
         let Some(fresh) = walkers::alloc_n_id(next_id, taken) else {
             return false;
         };
-        node.base_mut().id = fresh.as_str().to_string();
+        let old = node.base().id.clone();
+        let new = fresh.as_str().to_string();
+        node.base_mut().id = new.clone();
+        map.push((old, new));
         if let Some(children) = node.children_mut() {
-            if !remap_subtree_ids(children, next_id, taken) {
+            if !remap_collect(children, next_id, taken, map) {
                 return false;
             }
         }

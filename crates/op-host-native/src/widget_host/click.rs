@@ -308,7 +308,9 @@ impl WidgetHostNative {
         self.editor_state.editor_ui.chat_model_picker_hover = None;
         let was_focused = self.editor_state.chat.focused || picker_was_open;
         self.editor_state.chat.focused = false;
-        self.mark_dirty();
+        if was_focused {
+            self.mark_dirty();
+        }
         let (cx0, _cy0, _cw, _ch) = self.canvas_region(viewport_width, viewport_height);
         let toolbar = Toolbar::for_editor(&self.editor_state);
         let toolbar_h = toolbar
@@ -397,7 +399,6 @@ impl WidgetHostNative {
                     } else {
                         self.editor_state.set_single_selection(ec_id);
                     }
-                    self.mark_dirty();
                     return true;
                 }
                 H::ToggleHidden(node_id) => {

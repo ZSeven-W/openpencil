@@ -91,6 +91,9 @@ features = [
   "PointerEvent",
   "WheelEvent",
   "Window",
+  # Used only by the (opt-in) `live-sync` glue to poll the web-canvas daemon.
+  "XmlHttpRequest",
+  "XmlHttpRequestEventTarget",
 ]
 
 [features]
@@ -105,3 +108,10 @@ web = []
 skia = ["dep:skia-safe", "dep:op-editor-core", "dep:op-pen-loader", "wasm-libc-shim"]
 # Internal feature toggled on by `skia` to flip the cfg-target dep.
 wasm-libc-shim = ["dep:wasm-libc-shim"]
+# Opt-in live-canvas sync glue: polls the web-canvas daemon and applies newer
+# documents to the live shell. Requires `skia` (drives the real WebBackend) and
+# therefore an EMSDK build env. OFF by default so it never affects the `web`
+# stub or a normal `skia` build. NOTE: this glue is UNVERIFIED — it could not be
+# compile-checked without EMSDK; enable it with EMSDK set and verify in a
+# browser. The protocol core it calls (`op_editor_core::web_sync`) IS verified.
+live-sync = ["skia"]

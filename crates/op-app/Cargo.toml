@@ -26,10 +26,10 @@ op-editor-ui = { path = "../op-editor-ui" }
 # wasm. Mirrors op-host-native's own target gate so op-app stays
 # wasm32-clean and mobile-checkable.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-op-host-native = { path = "../op-host-native", version = "0.1.0" }
+op-host-native = { path = "../op-host-native", version = "0.8.0" }
 
 # Web host (wasm32-unknown-unknown bundle entry). Only resolved on
 # the wasm32 target where op-host-web's cdylib / wasm-bindgen setup
 # applies.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-op-host-web = { path = "../op-host-web", version = "0.1.0" }
+op-host-web = { path = "../op-host-web", version = "0.8.0" }

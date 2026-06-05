@@ -1,104 +1,26 @@
 #!/usr/bin/env node
 
-import { createServer } from 'node:http';
+import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { MCP_DEFAULT_PORT } from './constants';
+import { DEBUG_TOOL_DEFINITIONS } from './routes/debug-routes';
 
-// Route modules
+// Tool dispatch core (no side effects — safe to import from tests).
 import {
-  DOCUMENT_TOOL_DEFINITIONS,
-  DOCUMENT_TOOL_NAMES,
-  handleDocumentToolCall,
-} from './routes/document-routes';
-import { NODE_TOOL_DEFINITIONS, NODE_TOOL_NAMES, handleNodeToolCall } from './routes/node-routes';
-import {
-  DESIGN_TOOL_DEFINITIONS,
-  DESIGN_TOOL_NAMES,
-  handleDesignToolCall,
-  D0_SPIKE_TOOL_DEFINITIONS,
-  D0_SPIKE_TOOL_NAMES,
-  handleD0SpikeToolCall,
-} from './routes/design-routes';
-import {
-  VARIABLE_TOOL_DEFINITIONS,
-  VARIABLE_TOOL_NAMES,
-  handleVariableToolCall,
-} from './routes/variable-routes';
-import {
-  CODEGEN_TOOL_DEFINITIONS,
-  CODEGEN_TOOL_NAMES,
-  handleCodegenToolCall,
-} from './routes/codegen-routes';
-import {
-  STYLE_GUIDE_TOOL_DEFINITIONS,
-  STYLE_GUIDE_TOOL_NAMES,
-  handleStyleGuideToolCall,
-} from './routes/style-guide-routes';
-import {
-  STYLE_OPS_TOOL_DEFINITIONS,
-  STYLE_OPS_TOOL_NAMES,
-  handleStyleOpsToolCall,
-} from './routes/style-operations-routes';
-import {
-  DEBUG_TOOL_DEFINITIONS,
-  DEBUG_TOOL_NAMES,
-  handleDebugToolCall,
-} from './routes/debug-routes';
+  pkg,
+  DEBUG_ENABLED,
+  TOOL_DEFINITIONS,
+  handleToolCall,
+  handlePlainJsonRpc,
+} from './tool-dispatch';
 
-const pkg = { name: '@zseven-w/pen-mcp', version: '0.6.0' };
-
-const DEBUG_ENABLED =
-  process.env.OPENPENCIL_DEBUG_TOOLS === '1' || process.argv.includes('--debug');
-
-const D0_SPIKE_ENABLED = process.env.OPENPENCIL_D0_SPIKE === '1';
-
-/**
- * MCP content block types supported by this server's tool handlers.
- * Phase 1 tools all return string (wrapped to a single text block); Phase 2
- * will add `debug_screenshot` which returns ToolContent[] directly.
- * See Decision 6 in docs/superpowers/specs/2026-04-06-mcp-debug-tools-design.md
- */
-export type ToolContent =
-  | { type: 'text'; text: string }
-  | { type: 'image'; data: string; mimeType: string };
-
-// --- Tool definitions (shared across all Server instances) ---
-
-const TOOL_DEFINITIONS = [
-  ...DOCUMENT_TOOL_DEFINITIONS,
-  ...NODE_TOOL_DEFINITIONS,
-  ...DESIGN_TOOL_DEFINITIONS,
-  ...VARIABLE_TOOL_DEFINITIONS,
-  ...CODEGEN_TOOL_DEFINITIONS,
-  ...STYLE_GUIDE_TOOL_DEFINITIONS,
-  ...STYLE_OPS_TOOL_DEFINITIONS,
-  ...(DEBUG_ENABLED ? DEBUG_TOOL_DEFINITIONS : []),
-  ...(D0_SPIKE_ENABLED ? D0_SPIKE_TOOL_DEFINITIONS : []),
-];
-
-// --- Tool execution handler ---
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- MCP args are validated at runtime by the protocol
-async function handleToolCall(
-  name: string,
-  args: Record<string, unknown> | undefined,
-): Promise<string | ToolContent[]> {
-  const a = args ?? {};
-  if (DOCUMENT_TOOL_NAMES.has(name)) return handleDocumentToolCall(name, a);
-  if (NODE_TOOL_NAMES.has(name)) return handleNodeToolCall(name, a);
-  if (DESIGN_TOOL_NAMES.has(name)) return handleDesignToolCall(name, a);
-  if (VARIABLE_TOOL_NAMES.has(name)) return handleVariableToolCall(name, a);
-  if (CODEGEN_TOOL_NAMES.has(name)) return handleCodegenToolCall(name, a);
-  if (STYLE_GUIDE_TOOL_NAMES.has(name)) return handleStyleGuideToolCall(name, a);
-  if (STYLE_OPS_TOOL_NAMES.has(name)) return handleStyleOpsToolCall(name, a);
-  if (DEBUG_ENABLED && DEBUG_TOOL_NAMES.has(name)) return handleDebugToolCall(name, a);
-  if (D0_SPIKE_ENABLED && D0_SPIKE_TOOL_NAMES.has(name)) return handleD0SpikeToolCall(name, a);
-  throw new Error(`Unknown tool: ${name}`);
-}
+// Re-export so existing `import type { ToolContent } from '../server'` keep
+// working (debug-routes.ts, debug-screenshot.ts). Type-only, so no cycle.
+export type { ToolContent } from './tool-dispatch';
 
 /** Register tool handlers on a Server instance. */
 function registerTools(server: Server): void {
@@ -127,6 +49,31 @@ function registerTools(server: Server): void {
 
 // --- HTTP server helper ---
 
+/**
+ * Read and JSON-parse a request body. On parse failure, write a JSON-RPC
+ * -32700 (Parse error) response and return `undefined` — the caller must
+ * `return` immediately. Shared by the plain-JSON-RPC and streamable-HTTP POST
+ * paths so a malformed body never rejects the async request handler (which
+ * would otherwise hang the client instead of replying). No valid JSON parses
+ * to `undefined`, so it is a safe sentinel.
+ */
+async function readJsonBody(
+  req: IncomingMessage,
+  res: ServerResponse,
+): Promise<unknown | undefined> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of req) chunks.push(chunk as Buffer);
+  try {
+    return JSON.parse(Buffer.concat(chunks).toString());
+  } catch {
+    res.writeHead(400, { 'Content-Type': 'application/json' });
+    res.end(
+      JSON.stringify({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } }),
+    );
+    return undefined;
+  }
+}
+
 function startHttpServer(port: number): void {
   // Per-session transport map: each client gets its own Server + Transport
   const sessions = new Map<string, { transport: StreamableHTTPServerTransport; server: Server }>();
@@ -151,13 +98,33 @@ function startHttpServer(port: number): void {
 
     const sessionId = req.headers['mcp-session-id'] as string | undefined;
 
+    // Plain JSON-RPC clients (e.g. the Rust `op` CLI) POST `{jsonrpc,...}`
+    // with NO `mcp-session-id` and NO `text/event-stream` Accept — the SDK
+    // streamable-HTTP path below requires SSE negotiation. Handle plain
+    // JSON-RPC directly so a JSON-RPC client can drive this server
+    // cross-stack, alongside the streamable-HTTP transport (no regression:
+    // SDK clients always send `Accept: …text/event-stream`).
+    const accept = (req.headers['accept'] as string | undefined) ?? '';
+    if (req.method === 'POST' && !sessionId && !accept.includes('text/event-stream')) {
+      const msg = await readJsonBody(req, res);
+      if (msg === undefined) return;
+      const reply = await handlePlainJsonRpc(msg);
+      if (reply === null) {
+        res.writeHead(202);
+        res.end();
+        return;
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(reply));
+      return;
+    }
+
     // Route to existing session
     if (sessionId && sessions.has(sessionId)) {
       const session = sessions.get(sessionId)!;
       if (req.method === 'POST') {
-        const chunks: Buffer[] = [];
-        for await (const chunk of req) chunks.push(chunk as Buffer);
-        const body = JSON.parse(Buffer.concat(chunks).toString());
+        const body = await readJsonBody(req, res);
+        if (body === undefined) return;
         await session.transport.handleRequest(req, res, body);
       } else {
         await session.transport.handleRequest(req, res);
@@ -189,9 +156,8 @@ function startHttpServer(port: number): void {
 
       await mcpServer.connect(transport);
 
-      const chunks: Buffer[] = [];
-      for await (const chunk of req) chunks.push(chunk as Buffer);
-      const body = JSON.parse(Buffer.concat(chunks).toString());
+      const body = await readJsonBody(req, res);
+      if (body === undefined) return;
       await transport.handleRequest(req, res, body);
       return;
     }

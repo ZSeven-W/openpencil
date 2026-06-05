@@ -7,8 +7,11 @@ USAGE:
   op help                                 show this message
 
 COMMON COMMANDS:
-  op start [--file path.op] [--port N]     start Rust MCP HTTP server
-  op stop                                  stop Rust MCP HTTP server
+  op start [--file path.op] [--port N]     launch the live editor (live canvas);
+                                           op <tool> then drives the on-screen canvas
+  op start --headless [--file path.op]     run the windowless file-backed MCP server
+                                           (CI / display-less agents)
+  op stop                                  stop the running editor / MCP server
   op install [--target T]                  install openpencil-skill for AI agents
   op uninstall [--target T]                uninstall openpencil-skill
   op status                               check whether MCP HTTP is reachable
@@ -44,10 +47,12 @@ COMMON COMMANDS:
   op codegen:clean <planId>
 
 GLOBAL FLAGS:
-  --port <n>      MCP HTTP port (default: 3100)
+  --port <n>      MCP HTTP port (default: 3100). When omitted, server-bound
+                  commands auto-discover the live editor via
+                  ~/.openpencil/.op-mcp-port (verified with a JSON-RPC ping)
   --pretty        pretty-print JSON replies
   --file <path>   `op start` document path; otherwise target .op file for
-                  tools that accept filePath (omit for the server document)
+                  tools that accept filePath (omit for the live canvas)
   --page <id>     target page ID for tools that support pageId
 
 The server must be running at:

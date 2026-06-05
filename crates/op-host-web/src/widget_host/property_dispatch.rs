@@ -5,6 +5,20 @@
 use super::WidgetHost;
 
 impl WidgetHost {
+    /// Swap a synced document into the live editor state via the shared, tested
+    /// `EditorState::replace_document`, then `mark_dirty()` so the next paint
+    /// re-derives the layout scene from the NEW document. Without the
+    /// `mark_dirty()` the web host's `refresh_layout_scene()` is a no-op (the
+    /// dirty flag isn't set), so the repaint would present the STALE scene yet
+    /// succeed — and `WebSyncClient::sync` would then commit the version against
+    /// a stale paint. Used by the opt-in `live-sync` glue. Lives here (not
+    /// `widget_host.rs`) to keep that spine under the 800-line cap.
+    #[cfg(feature = "live-sync")]
+    pub(crate) fn replace_document(&mut self, doc: op_editor_core::PenDocument) {
+        self.editor_state.replace_document(doc);
+        self.mark_dirty();
+    }
+
     pub(in crate::widget_host) fn apply_property_action(
         &mut self,
         action: op_editor_ui::widgets::PropertyPanelAction,

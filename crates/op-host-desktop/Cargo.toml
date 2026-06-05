@@ -58,7 +58,7 @@ role = "Editor"
 # Phase 7.3 reorg: openpencil-shell-core dissolved — widget facade /
 # render-backend / layout scene paths resolve through op-editor-ui.
 op-editor-ui = { path = "../op-editor-ui" }
-op-host-native = { path = "../op-host-native", version = "0.1.0" }
+op-host-native = { path = "../op-host-native", version = "0.8.0" }
 # Phase 5 strangler reorg: the stdio MCP server (`mcp_serve.rs`) drives an
 # `op_editor_core::EditorState` (canonical `.op` document) instead of the
 # old shell-core `Document`.

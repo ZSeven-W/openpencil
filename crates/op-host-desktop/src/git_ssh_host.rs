@@ -54,10 +54,14 @@ impl DesktopApp {
             // there's no host to bind to; the key is still stored for later.
             if let Some(host) = &host {
                 let existing = auth.get(host).ok().flatten();
-                let safe_to_bind =
-                    matches!(existing, None | Some(op_git::Credential::Ssh { .. }));
+                let safe_to_bind = matches!(existing, None | Some(op_git::Credential::Ssh { .. }));
                 if safe_to_bind {
-                    auth.set(host, op_git::Credential::Ssh { key_name: name.clone() })?;
+                    auth.set(
+                        host,
+                        op_git::Credential::Ssh {
+                            key_name: name.clone(),
+                        },
+                    )?;
                 }
             }
             Ok::<(), op_git::GitError>(())

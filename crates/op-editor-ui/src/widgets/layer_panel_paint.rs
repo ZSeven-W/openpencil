@@ -54,7 +54,7 @@ pub(super) fn paint_drag_ghost(
         a: 0.85,
         ..theme.foreground
     };
-    let icon_x = row.origin.x + ROW_PAD_X + f32::from(ghost.depth) * 12.0 + 18.0;
+    let icon_x = row.origin.x + ROW_PAD_X + ghost.depth as f32 * 12.0 + 18.0;
     draw_icon(
         cx.backend,
         ghost.icon,

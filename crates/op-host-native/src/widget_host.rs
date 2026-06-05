@@ -80,6 +80,8 @@ mod property_dispatch;
 mod property_layout_dispatch;
 mod property_popovers;
 mod scroll;
+#[cfg(test)]
+mod scroll_tests;
 mod settings_caret;
 #[cfg(test)]
 mod settings_caret_tests;

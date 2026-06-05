@@ -11,6 +11,7 @@ use op_editor_ui::{Point2D, Rect};
 /// before a move is committed. A pure click with sub-pixel jitter then
 /// never mutates the document — kills "first click breaks the layout".
 const NODE_DRAG_THRESHOLD_PX: f32 = 4.0;
+const MAX_SMART_GUIDE_NODES: usize = 1_000;
 
 impl WidgetHostNative {
     /// True iff a text-input surface owns the keyboard.
@@ -106,37 +107,34 @@ impl WidgetHostNative {
 
     /// Snap node drags to nearby top-level edge/centre guides.
     fn apply_smart_guides(&mut self) -> (f64, f64) {
-        use op_editor_core::align_guides::compute_alignment_guides;
+        use op_editor_core::{
+            aggregate_bounds, align_guides::compute_alignment_guides, PenNodeExt,
+        };
         /// Snap range in doc-px.
         const GUIDE_THRESHOLD: f64 = 6.0;
 
-        self.refresh_layout_scene();
+        if self.editor_state.active_children().len() > MAX_SMART_GUIDE_NODES {
+            self.editor_state.editor_ui.active_guides.clear();
+            return (0.0, 0.0);
+        }
+
         let selected = self.editor_state.selection.anchor.as_str().to_string();
-        // Collect AABBs off the layout scene, then drop the borrow so
-        // the snap translate can mutate `editor_state`.
-        let (moving, others): (Option<[f64; 4]>, Vec<[f64; 4]>) =
-            match self.layout_scene.active_page() {
-                Some(page) => {
-                    let mut moving = None;
-                    let mut others = Vec::new();
-                    for n in &page.children {
-                        let b = n.bounds;
-                        let aabb = [
-                            b.origin.x as f64,
-                            b.origin.y as f64,
-                            b.size.x as f64,
-                            b.size.y as f64,
-                        ];
-                        if n.id == selected {
-                            moving = Some(aabb);
-                        } else {
-                            others.push(aabb);
-                        }
-                    }
-                    (moving, others)
-                }
-                None => (None, Vec::new()),
-            };
+        // Smart guides are a drag-time affordance, so keep them off the
+        // layout-scene hot path. The previous version refreshed the whole
+        // layout scene on every cursor move; with 100+ nodes that made node
+        // movement feel stuck. This mirrors the prior top-level-only behavior
+        // but reads the current canonical tree directly after translation.
+        let mut moving = None;
+        let mut others = Vec::new();
+        for node in self.editor_state.active_children() {
+            let b = aggregate_bounds(node);
+            let aabb = [b.x, b.y, b.w, b.h];
+            if node.id_str() == selected {
+                moving = Some(aabb);
+            } else {
+                others.push(aabb);
+            }
+        }
         let Some(m) = moving else {
             self.editor_state.editor_ui.active_guides.clear();
             return (0.0, 0.0);
@@ -153,9 +151,61 @@ impl WidgetHostNative {
         snap
     }
 
+    fn apply_node_drag_cursor_move(&mut self, x: f32, y: f32) -> Option<bool> {
+        let drag = self.node_drag?;
+        if !drag.moved
+            && (x - drag.press_screen_x).abs() <= NODE_DRAG_THRESHOLD_PX
+            && (y - drag.press_screen_y).abs() <= NODE_DRAG_THRESHOLD_PX
+        {
+            return Some(false);
+        }
+        if !drag.moved {
+            if let Some(d) = self.node_drag.as_mut() {
+                d.moved = true;
+            }
+        }
+        let zoom = self.editor_state.viewport.zoom.max(0.0001);
+        let prev_screen_x = drag.last_screen_x;
+        let prev_screen_y = drag.last_screen_y;
+        let dx = (x - prev_screen_x) / zoom;
+        let dy = (y - prev_screen_y) / zoom;
+        if dx != 0.0 || dy != 0.0 {
+            if let Some(drag) = self.node_drag.as_mut() {
+                drag.last_screen_x = x;
+                drag.last_screen_y = y;
+            }
+            self.editor_state.translate_selected(dx as f64, dy as f64);
+            let (snap_dx, snap_dy) = self.apply_smart_guides();
+            let scene_dx = dx as f64 + snap_dx;
+            let scene_dy = dy as f64 + snap_dy;
+            if !self.editor_state_dirty {
+                let ids: Vec<String> = self
+                    .editor_state
+                    .selection
+                    .set
+                    .iter()
+                    .map(|id| id.as_str().to_string())
+                    .collect();
+                let _ = self
+                    .layout_scene
+                    .translate_nodes(&ids, scene_dx as f32, scene_dy as f32);
+            } else {
+                self.mark_dirty();
+            }
+            if let Some(drag) = self.node_drag.as_mut() {
+                if snap_dx != 0.0 {
+                    drag.last_screen_x = prev_screen_x;
+                }
+                if snap_dy != 0.0 {
+                    drag.last_screen_y = prev_screen_y;
+                }
+            }
+            return Some(true);
+        }
+        Some(false)
+    }
+
     pub fn apply_cursor_move(&mut self, x: f32, y: f32) -> bool {
-        // Keep hit-tests on the current layout-resolved scene.
-        self.refresh_layout_scene();
         if self.editor_state.editor_ui.agent_settings_open && self.update_agent_settings_hover(x, y)
         {
             return true;
@@ -220,6 +270,9 @@ impl WidgetHostNative {
                     return true;
                 }
             }
+        }
+        if let Some(consumed) = self.apply_node_drag_cursor_move(x, y) {
+            return consumed;
         }
         // Pen rubber-band — track cursor doc coord for preview.
         if self.editor_state.ui.pen_in_progress.is_some() {
@@ -370,49 +423,6 @@ impl WidgetHostNative {
             self.mark_dirty();
             return true;
         }
-        if let Some(drag) = self.node_drag {
-            // Threshold gate: a pure click with sub-pixel jitter must not
-            // move (or re-flow) anything. Until the cursor has travelled
-            // past NODE_DRAG_THRESHOLD_PX from the press point, swallow the
-            // move; once it crosses, the drag latches and moves for the
-            // rest of the gesture.
-            if !drag.moved
-                && (x - drag.press_screen_x).abs() <= NODE_DRAG_THRESHOLD_PX
-                && (y - drag.press_screen_y).abs() <= NODE_DRAG_THRESHOLD_PX
-            {
-                return false;
-            }
-            if !drag.moved {
-                if let Some(d) = self.node_drag.as_mut() {
-                    d.moved = true;
-                }
-            }
-            let zoom = self.editor_state.viewport.zoom.max(0.0001);
-            let prev_screen_x = drag.last_screen_x;
-            let prev_screen_y = drag.last_screen_y;
-            let dx = (x - prev_screen_x) / zoom;
-            let dy = (y - prev_screen_y) / zoom;
-            if dx != 0.0 || dy != 0.0 {
-                if let Some(drag) = self.node_drag.as_mut() {
-                    drag.last_screen_x = x;
-                    drag.last_screen_y = y;
-                }
-                self.editor_state.translate_selected(dx as f64, dy as f64);
-                let (snap_dx, snap_dy) = self.apply_smart_guides();
-                if let Some(drag) = self.node_drag.as_mut() {
-                    // Keep snapped axes accumulating instead of eating small moves.
-                    if snap_dx != 0.0 {
-                        drag.last_screen_x = prev_screen_x;
-                    }
-                    if snap_dy != 0.0 {
-                        drag.last_screen_y = prev_screen_y;
-                    }
-                }
-                self.mark_dirty();
-                return true;
-            }
-            return false;
-        }
         // Path-anchor / handle drag: always write current cursor position.
         if self.path_anchor_drag.is_some() {
             use super::AnchorDragTarget;
@@ -434,6 +444,7 @@ impl WidgetHostNative {
             // Motion detection is frame-agnostic; writes start after first move.
             let is_move = (doc.x - start.x).abs() > 0.001 || (doc.y - start.y).abs() > 0.001;
             if is_move || already_moved {
+                self.refresh_layout_scene();
                 // Write anchor / handle coords in the path's local frame.
                 let local = match self
                     .layout_scene
@@ -500,6 +511,7 @@ impl WidgetHostNative {
             // Do not mutate until the cursor first travels.
             let is_move = (doc.x - start.x).abs() > 0.001 || (doc.y - start.y).abs() > 0.001;
             if is_move || already_moved {
+                self.refresh_layout_scene();
                 if let Some(cmd) = self.arc_drag_command(&id, handle, doc) {
                     if self.editor_state.apply(cmd) {
                         self.mark_dirty();
@@ -708,6 +720,7 @@ impl WidgetHostNative {
         if self.node_drag.take().is_some() {
             // Drag ended — drop the transient smart-guide lines.
             self.editor_state.editor_ui.active_guides.clear();
+            self.mark_dirty();
             return true;
         }
         if let Some(drag) = self.path_anchor_drag.take() {
@@ -784,6 +797,7 @@ impl WidgetHostNative {
         if self.node_drag.take().is_some() {
             // Drag ended — drop the transient smart-guide lines.
             self.editor_state.editor_ui.active_guides.clear();
+            self.mark_dirty();
             return true;
         }
         if self.marquee_drag.take().is_some() {

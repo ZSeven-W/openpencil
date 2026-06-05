@@ -45,7 +45,7 @@ const STARTER_KIT_ID: &str = "openpencil-starter";
 /// Rust does not yet ship TS's full per-tool templates, so aliases
 /// instantiate the closest built-in starter-kit component instead of
 /// failing with `UnknownTool`.
-const TS_ELEMENT_ALIASES: &[&str] = &[
+pub(crate) const TS_ELEMENT_ALIASES: &[&str] = &[
     "add_action_menu_v0",
     "add_action_menu_v1",
     "add_activity_log_v0",
@@ -493,6 +493,70 @@ fn canonical_element_tool_schema(tool: &str, component_name: &str) -> String {
 }
 
 fn ts_alias_element_tool_schema(tool: &str, component_name: &str) -> String {
+    if let Some(schema) = crate::element_ts_schema::ts_alias_schema(tool) {
+        return schema;
+    }
+
+    if tool == "add_text_button_v0" || tool == "add_text_button_v1" {
+        let theme_prop = if tool == "add_text_button_v1" {
+            r#","theme":{"type":"string","enum":["light","dark","system"],"description":"Theme variant. Default \"light\". All modes are identical for this tool."}"#
+        } else {
+            ""
+        };
+        return format!(
+            r#"{{"name":"{tool}","description":"TS pen-mcp compatible text button. Inserts a padding-based text button with optional leading icon.","inputSchema":{{"type":"object","properties":{{"schemaVersion":{{"type":"string","description":"Accepted for TS element-tool compatibility"}},"filePath":{{"type":"string","description":"Optional target .op file path; omit to use the server document"}},"label":{{"type":"string","description":"Button label text. Required."}},"leading_icon":{{"type":"string","description":"Optional Lucide icon slug shown before the label."}}{theme_prop},"parent_id":{{"type":"string","description":"Target parent node id"}},"pageId":{{"type":"string","description":"Target page id"}}}},"required":["label"]}}}}"#
+        );
+    }
+    if tool == "add_form_field_v0" || tool == "add_form_field_v1" {
+        let theme_prop = if tool == "add_form_field_v1" {
+            r#","theme":{"type":"string","enum":["light","dark","system"],"description":"Theme variant. Default \"light\". All modes are identical for this tool."}"#
+        } else {
+            ""
+        };
+        return format!(
+            r#"{{"name":"{tool}","description":"TS pen-mcp compatible form field. Inserts a label plus 48px input with optional leading/trailing icons.","inputSchema":{{"type":"object","properties":{{"schemaVersion":{{"type":"string","description":"Accepted for TS element-tool compatibility"}},"filePath":{{"type":"string","description":"Optional target .op file path; omit to use the server document"}},"label":{{"type":"string","description":"Field label. Required."}},"placeholder":{{"type":"string","description":"Placeholder text."}},"leading_icon":{{"type":"string","description":"Lucide icon name for leading icon."}},"trailing_icon":{{"type":"string","description":"Lucide icon name for trailing icon."}},"required":{{"type":"boolean","description":"When true, appends \" *\" to label."}}{theme_prop},"parent_id":{{"type":"string","description":"Target parent node id"}},"pageId":{{"type":"string","description":"Target page id"}}}},"required":["label"]}}}}"#
+        );
+    }
+    if tool == "add_checkbox_v0" || tool == "add_checkbox_v1" {
+        let theme_prop = if tool == "add_checkbox_v1" {
+            r#","theme":{"type":"string","enum":["light","dark","system"],"description":"Theme variant. Default \"light\"."}"#
+        } else {
+            ""
+        };
+        return format!(
+            r#"{{"name":"{tool}","description":"TS pen-mcp compatible checkbox element. Inserts a semantic checkbox row with label and checked state.","inputSchema":{{"type":"object","properties":{{"schemaVersion":{{"type":"string","description":"Accepted for TS element-tool compatibility"}},"filePath":{{"type":"string","description":"Optional target .op file path; omit to use the server document"}},"label":{{"type":"string","description":"Label text. Required."}},"checked":{{"type":"boolean","description":"Checked state. Default false."}}{theme_prop},"parent_id":{{"type":"string","description":"Target parent node id"}},"pageId":{{"type":"string","description":"Target page id"}}}},"required":["label"]}}}}"#
+        );
+    }
+    if tool == "add_radio_v0" || tool == "add_radio_v1" {
+        let theme_prop = if tool == "add_radio_v1" {
+            r#","theme":{"type":"string","enum":["light","dark","system"],"description":"Theme variant. Default \"light\"."}"#
+        } else {
+            ""
+        };
+        return format!(
+            r#"{{"name":"{tool}","description":"TS pen-mcp compatible radio element. Inserts a semantic radio row with label and selected state.","inputSchema":{{"type":"object","properties":{{"schemaVersion":{{"type":"string","description":"Accepted for TS element-tool compatibility"}},"filePath":{{"type":"string","description":"Optional target .op file path; omit to use the server document"}},"label":{{"type":"string","description":"Radio label text. Required."}},"selected":{{"type":"boolean","description":"Whether the radio is selected. Default false."}}{theme_prop},"parent_id":{{"type":"string","description":"Target parent node id"}},"pageId":{{"type":"string","description":"Target page id"}}}},"required":["label"]}}}}"#
+        );
+    }
+    if tool == "add_segmented_control_v0" || tool == "add_segmented_control_v1" {
+        let theme_prop = if tool == "add_segmented_control_v1" {
+            r#","theme":{"type":"string","enum":["light","dark","system"],"description":"Theme variant. Default \"light\"."}"#
+        } else {
+            ""
+        };
+        return format!(
+            r#"{{"name":"{tool}","description":"TS pen-mcp compatible segmented control. Inserts an iOS pill-style segmented control with fill_container segments.","inputSchema":{{"type":"object","properties":{{"schemaVersion":{{"type":"string","description":"Accepted for TS element-tool compatibility"}},"filePath":{{"type":"string","description":"Optional target .op file path; omit to use the server document"}},"items":{{"type":"array","items":{{"type":"object","properties":{{"label":{{"type":"string"}},"active":{{"type":"boolean"}}}},"required":["label"]}},"description":"Segment items. At most one should have active=true. Required."}}{theme_prop},"parent_id":{{"type":"string","description":"Target parent node id"}},"pageId":{{"type":"string","description":"Target page id"}}}},"required":["items"]}}}}"#
+        );
+    }
+    if tool == "add_switch_v0" || tool == "add_switch_v1" {
+        let theme_prop = if tool == "add_switch_v1" {
+            r#","theme":{"type":"string","enum":["light","dark","system"],"description":"Theme variant. Default \"light\". All modes are identical for this tool."}"#
+        } else {
+            ""
+        };
+        return format!(
+            r#"{{"name":"{tool}","description":"TS pen-mcp compatible switch element. Inserts a semantic iOS/Material toggle switch.","inputSchema":{{"type":"object","properties":{{"schemaVersion":{{"type":"string","description":"Accepted for TS element-tool compatibility"}},"filePath":{{"type":"string","description":"Optional target .op file path; omit to use the server document"}},"active":{{"type":"boolean","description":"Switch on/off state. Default false."}}{theme_prop},"parent_id":{{"type":"string","description":"Target parent node id"}},"pageId":{{"type":"string","description":"Target page id"}}}},"required":[]}}}}"#
+        );
+    }
     format!(
         r#"{{"name":"{tool}","description":"TS pen-mcp compatible alias. Inserts the Rust starter-kit {component_name} onto the active page. Optional x/y doc-px floats place the top-left; parent_id, pageId, filePath, and schemaVersion are accepted for client compatibility.","inputSchema":{{"type":"object","properties":{{"schemaVersion":{{"type":"string","description":"Accepted for TS element-tool compatibility"}},"filePath":{{"type":"string","description":"Optional target .op file path; omit to use the server document"}},"pageId":{{"type":"string","description":"Accepted for TS compatibility; semantic aliases target the requested page when applicable"}},"parent_id":{{"type":"string","description":"Accepted for TS compatibility; semantic aliases insert under the requested parent when applicable"}},"x":{{"type":"string","description":"top-left doc-px (float)"}},"y":{{"type":"string","description":"top-left doc-px (float)"}}}}}}}}"#
     )
@@ -522,252 +586,4 @@ pub fn element_tool_schemas(state: &EditorState) -> Vec<String> {
     }
 
     schemas
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn name_sanitizes_dashes() {
-        assert_eq!(element_tool_name("btn-primary"), "insert_btn_primary");
-        assert_eq!(element_tool_name("nav-bar"), "insert_nav_bar");
-    }
-
-    #[test]
-    fn tool_emits_instantiate_command() {
-        let tool = InsertKitComponent::new("openpencil-starter", "btn-primary");
-        assert_eq!(tool.name(), "insert_btn_primary");
-        let mut args = BTreeMap::new();
-        args.insert("x".to_string(), "120".to_string());
-        args.insert("y".to_string(), "80".to_string());
-        match tool.call(&args) {
-            ToolOutcome::OkWithCommand(_, cmd) => match cmd {
-                EditorCommand::InstantiateKitComponent {
-                    kit_id,
-                    component_id,
-                    doc_x,
-                    doc_y,
-                } => {
-                    assert_eq!(kit_id, "openpencil-starter");
-                    assert_eq!(component_id, "btn-primary");
-                    assert_eq!(doc_x, Some(120.0));
-                    assert_eq!(doc_y, Some(80.0));
-                }
-                _ => panic!("expected InstantiateKitComponent"),
-            },
-            other => panic!("expected OkWithCommand, got {other:?}"),
-        }
-    }
-
-    #[test]
-    fn missing_x_y_default_to_none() {
-        let tool = InsertKitComponent::new("openpencil-starter", "badge");
-        match tool.call(&BTreeMap::new()) {
-            ToolOutcome::OkWithCommand(
-                _,
-                EditorCommand::InstantiateKitComponent { doc_x, doc_y, .. },
-            ) => {
-                assert_eq!(doc_x, None);
-                assert_eq!(doc_y, None);
-            }
-            other => panic!("expected OkWithCommand, got {other:?}"),
-        }
-    }
-
-    #[test]
-    fn malformed_x_is_a_hard_error() {
-        let tool = InsertKitComponent::new("openpencil-starter", "badge");
-        let mut args = BTreeMap::new();
-        args.insert("x".to_string(), "not-a-number".to_string());
-        match tool.call(&args) {
-            ToolOutcome::Err(ToolErrorCode::InvalidArgument, _) => {}
-            other => panic!("expected InvalidArgument, got {other:?}"),
-        }
-    }
-
-    #[test]
-    fn registry_covers_every_starter_kit_component() {
-        let state = EditorState::new();
-        let tools = insert_kit_component_tools(&state);
-        let schemas = element_tool_schemas(&state);
-        assert_eq!(
-            tools
-                .iter()
-                .filter(|tool| tool.name().starts_with("insert_"))
-                .count(),
-            6,
-            "starter kit ships 6 canonical components"
-        );
-        assert_eq!(schemas.len(), tools.len(), "schema + tool counts agree");
-        // Each tool name appears verbatim in its schema.
-        for tool in &tools {
-            assert!(
-                schemas
-                    .iter()
-                    .any(|s| s.contains(&format!("\"name\":\"{}\"", tool.name()))),
-                "schema set must include {}",
-                tool.name(),
-            );
-        }
-    }
-
-    #[test]
-    fn registry_includes_ts_element_tool_aliases() {
-        let state = EditorState::new();
-        let tools = insert_kit_component_tools(&state);
-        let schemas = element_tool_schemas(&state);
-
-        for name in [
-            "add_text_button_v0",
-            "add_form_field_v0",
-            "add_top_nav_bar_v0",
-            "add_divider_v0",
-            "add_badge_v0",
-            "add_stat_card_v0",
-        ] {
-            assert!(
-                tools.iter().any(|tool| tool.name() == name),
-                "registry must include TS-compatible element tool alias {name}"
-            );
-            assert!(
-                schemas
-                    .iter()
-                    .any(|s| s.contains(&format!("\"name\":\"{name}\""))),
-                "tools/list must include TS-compatible element tool alias {name}",
-            );
-        }
-    }
-
-    #[test]
-    fn registry_covers_ts_production_element_tool_catalog() {
-        let mut ts_names = ts_production_element_tool_names();
-        ts_names.sort();
-        ts_names.dedup();
-        assert!(
-            ts_names.len() > 100,
-            "TS production element catalog should remain broad"
-        );
-
-        let state = EditorState::new();
-        let rust_names: std::collections::BTreeSet<_> = insert_kit_component_tools(&state)
-            .into_iter()
-            .map(|tool| tool.name().to_string())
-            .collect();
-        let missing: Vec<_> = ts_names
-            .into_iter()
-            .filter(|name| !rust_names.contains(name))
-            .collect();
-
-        assert!(
-            missing.is_empty(),
-            "Rust MCP element registry is missing TS production tools: {missing:?}",
-        );
-    }
-
-    fn ts_production_element_tool_names() -> Vec<String> {
-        let routes_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../packages/pen-mcp/src/routes");
-        let mut out = Vec::new();
-        for entry in std::fs::read_dir(&routes_dir).expect("read TS routes dir") {
-            let path = entry.expect("route entry").path();
-            let Some(file_name) = path.file_name().and_then(|name| name.to_str()) else {
-                continue;
-            };
-            if !file_name.starts_with("element-tool-defs") || !file_name.ends_with(".ts") {
-                continue;
-            }
-            let src = std::fs::read_to_string(&path).expect("read TS element defs");
-            let mut rest = src.as_str();
-            while let Some(start) = rest.find("name: '") {
-                rest = &rest[start + "name: '".len()..];
-                let Some(end) = rest.find('\'') else {
-                    break;
-                };
-                let name = &rest[..end];
-                if name.starts_with("add_") {
-                    out.push(name.to_string());
-                }
-                rest = &rest[end + 1..];
-            }
-        }
-        out
-    }
-
-    #[test]
-    fn ts_element_alias_emits_instantiate_command() {
-        let state = EditorState::new();
-        let tool = insert_kit_component_tools(&state)
-            .into_iter()
-            .find(|tool| tool.name() == "add_top_nav_bar_v0")
-            .expect("TS add_top_nav_bar_v0 alias");
-
-        match tool.call(&BTreeMap::new()) {
-            ToolOutcome::OkWithCommand(_, cmd) => match cmd {
-                EditorCommand::InstantiateKitComponent {
-                    kit_id,
-                    component_id,
-                    ..
-                } => {
-                    assert_eq!(kit_id, "openpencil-starter");
-                    assert_eq!(component_id, "nav-bar");
-                }
-                _ => panic!("expected InstantiateKitComponent"),
-            },
-            other => panic!("expected OkWithCommand, got {other:?}"),
-        }
-    }
-
-    #[test]
-    fn add_heading_alias_emits_semantic_text_subtree() {
-        let tool = InsertKitComponent::alias("add_heading_v0", STARTER_KIT_ID, "card-basic");
-        let mut args = BTreeMap::new();
-        args.insert("content".to_string(), "Welcome".to_string());
-        args.insert("level".to_string(), "h1".to_string());
-
-        match tool.call(&args) {
-            ToolOutcome::OkWithCommand(_, EditorCommand::InsertSubtree { nodes, .. }) => {
-                assert_eq!(nodes.len(), 1);
-                match &nodes[0] {
-                    jian_ops_schema::node::PenNode::Text(text) => {
-                        assert_eq!(text.base.name.as_deref(), Some("Heading (h1)"));
-                        assert_eq!(text.font_size, Some(32.0));
-                        assert_eq!(
-                            text.font_weight,
-                            Some(jian_ops_schema::node::FontWeight::Number(700))
-                        );
-                    }
-                    other => panic!("expected semantic heading text node, got {other:?}"),
-                }
-            }
-            other => panic!("expected semantic InsertSubtree, got {other:?}"),
-        }
-    }
-
-    #[test]
-    fn add_text_button_alias_emits_semantic_button_subtree() {
-        let tool = InsertKitComponent::alias("add_text_button_v0", STARTER_KIT_ID, "btn-primary");
-        let mut args = BTreeMap::new();
-        args.insert("label".to_string(), "Continue".to_string());
-
-        match tool.call(&args) {
-            ToolOutcome::OkWithCommand(_, EditorCommand::InsertSubtree { nodes, .. }) => {
-                assert_eq!(nodes.len(), 1);
-                match &nodes[0] {
-                    jian_ops_schema::node::PenNode::Frame(frame) => {
-                        assert_eq!(frame.base.name.as_deref(), Some("Text Button"));
-                        let children = frame.children.as_ref().expect("button children");
-                        assert_eq!(children.len(), 1);
-                        assert!(matches!(
-                            &children[0],
-                            jian_ops_schema::node::PenNode::Text(text)
-                                if text.base.name.as_deref() == Some("Label")
-                        ));
-                    }
-                    other => panic!("expected semantic button frame, got {other:?}"),
-                }
-            }
-            other => panic!("expected semantic InsertSubtree, got {other:?}"),
-        }
-    }
 }

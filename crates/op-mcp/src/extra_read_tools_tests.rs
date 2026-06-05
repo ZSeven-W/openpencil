@@ -35,7 +35,7 @@ fn get_node_children_returns_count_and_ids_for_known_parent() {
             assert_eq!(out.get("count"), Some(&"2".to_string()));
             assert_eq!(out.get("ids"), Some(&"n20,n21".to_string()));
             assert_eq!(out.get("child_0_id"), Some(&"n20".to_string()));
-            assert_eq!(out.get("child_0_kind"), Some(&"rect".to_string()));
+            assert_eq!(out.get("child_0_kind"), Some(&"rectangle".to_string()));
             assert_eq!(out.get("child_1_kind"), Some(&"text".to_string()));
         }
         other => panic!("expected Ok, got {other:?}"),

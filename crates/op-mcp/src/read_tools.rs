@@ -9,9 +9,11 @@ use std::collections::BTreeMap;
 use jian_ops_schema::node::PenNode;
 use op_editor_core::geometry::aggregate_bounds;
 use op_editor_core::pen_node_ext::PenNodeExt;
-use op_editor_core::EditorState;
+use op_editor_core::walkers::find_node;
+use op_editor_core::{EditorState, NodeId};
+use serde_json::{json, Map, Value};
 
-use super::tools::{active_children, kind_label};
+use super::tools::kind_label;
 use super::{McpTool, ToolErrorCode, ToolOutcome};
 
 type ToolCallError = (ToolErrorCode, String);
@@ -22,7 +24,6 @@ type ToolCallError = (ToolErrorCode, String);
 /// node on the active page, optionally filtered by page / parent /
 /// depth for TS CLI compatibility.
 pub struct SnapshotLayout {
-    pub items: Vec<(String, i32, i32, i32, i32)>,
     pages: Vec<PageLayout>,
     active_page_id: String,
 }
@@ -36,12 +37,16 @@ struct PageLayout {
 #[derive(Clone)]
 struct LayoutRecord {
     id: String,
+    name: Option<String>,
+    type_label: &'static str,
     ancestors: Vec<String>,
     depth: u32,
-    x: i32,
-    y: i32,
-    w: i32,
-    h: i32,
+    // Document-space coords kept as f64 (TS `LayoutEntry` returns raw
+    // numbers); truncating to i32 would drop fractional positions/sizes.
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
 }
 
 impl McpTool for SnapshotLayout {
@@ -66,9 +71,13 @@ impl McpTool for SnapshotLayout {
             None => 1,
         };
         let parent_id = arg_alias(args, &["parentId", "parent_id", "parent"]);
-        let parent_depth = match parent_id {
+        // TS calls `computeLayoutTree(parent.children, …)` with the default
+        // `parentX/parentY = 0`, so a `parentId` query returns coords RELATIVE
+        // to that parent (not document-absolute). Our records are page-rooted
+        // absolute, so subtract the parent's absolute origin to match.
+        let (parent_depth, parent_offset) = match parent_id {
             Some(id) => match page.records.iter().find(|r| r.id == id) {
-                Some(parent) => Some(parent.depth),
+                Some(parent) => (Some(parent.depth), (parent.x, parent.y)),
                 None => {
                     return ToolOutcome::Err(
                         ToolErrorCode::ToolFailed,
@@ -76,7 +85,7 @@ impl McpTool for SnapshotLayout {
                     );
                 }
             },
-            None => None,
+            None => (None, (0.0, 0.0)),
         };
         let selected: Vec<&LayoutRecord> = page
             .records
@@ -89,35 +98,73 @@ impl McpTool for SnapshotLayout {
                 _ => record.depth <= max_depth,
             })
             .collect();
-        let layout_items = self.layout_items(args, &selected);
-        let encoded: Vec<String> = layout_items
-            .iter()
-            .map(|(id, x, y, w, h)| format!("{id}|{x}|{y}|{w}|{h}"))
-            .collect();
-        let mut out = BTreeMap::new();
-        out.insert("count".into(), layout_items.len().to_string());
-        out.insert("layout".into(), encoded.join(";"));
-        ToolOutcome::Ok(out)
+        // TS `snapshot_layout` returns `{ layout: LayoutEntry[] }` — a nested
+        // tree of {id,name?,type,x,y,width,height,children?} with absolute
+        // coords. Roots are the page's top-level nodes (or `parentId`'s direct
+        // children); children nest up to maxDepth. The flat `selected` set is
+        // already depth-bounded, so we just re-nest it by parent.
+        let root_key = parent_id.unwrap_or("");
+        let layout = layout_children_values(&selected, root_key, parent_offset);
+        ToolOutcome::OkJson(json!({ "layout": layout }).to_string())
     }
 }
 
-pub fn snapshot_layout_snapshot(state: &EditorState) -> SnapshotLayout {
-    let items = active_children(state)
+/// Build the ordered list of `LayoutEntry` JSON objects whose immediate
+/// parent (in document order) is `parent_key` (`""` for page-roots), each
+/// recursively carrying its own children — mirrors TS `computeLayoutTree`.
+/// `offset` is subtracted from every coord so a `parentId` query returns
+/// parent-relative coords (TS passes `parentX/Y = 0`); it is `(0, 0)` for a
+/// page-level query (coords stay document-absolute).
+fn layout_children_values(
+    selected: &[&LayoutRecord],
+    parent_key: &str,
+    offset: (f64, f64),
+) -> Vec<Value> {
+    selected
         .iter()
-        .map(|n| {
-            let b = aggregate_bounds(n);
-            (
-                n.id_str().to_string(),
-                b.x as i32,
-                b.y as i32,
-                b.w as i32,
-                b.h as i32,
-            )
-        })
-        .collect();
+        .filter(|record| record.ancestors.last().map(String::as_str).unwrap_or("") == parent_key)
+        .map(|record| layout_entry_value(record, selected, offset))
+        .collect()
+}
+
+/// Serialize a document coordinate the way JS `JSON.stringify` does: a
+/// whole number as an integer (`100`, not `100.0`), a fractional value as a
+/// decimal — so the wire bytes match TS `LayoutEntry` numbers exactly.
+fn js_number(v: f64) -> Value {
+    if v.is_finite() && v.fract() == 0.0 && v.abs() < 9_007_199_254_740_992.0 {
+        json!(v as i64)
+    } else {
+        json!(v)
+    }
+}
+
+fn layout_entry_value(
+    record: &LayoutRecord,
+    selected: &[&LayoutRecord],
+    offset: (f64, f64),
+) -> Value {
+    let mut obj = Map::new();
+    obj.insert("id".into(), json!(record.id));
+    // TS `LayoutEntry.name` is optional — omit when the node is unnamed
+    // (JSON.stringify drops `undefined`).
+    if let Some(name) = &record.name {
+        obj.insert("name".into(), json!(name));
+    }
+    obj.insert("type".into(), json!(record.type_label));
+    obj.insert("x".into(), js_number(record.x - offset.0));
+    obj.insert("y".into(), js_number(record.y - offset.1));
+    obj.insert("width".into(), js_number(record.w));
+    obj.insert("height".into(), js_number(record.h));
+    let children = layout_children_values(selected, &record.id, offset);
+    if !children.is_empty() {
+        obj.insert("children".into(), Value::Array(children));
+    }
+    Value::Object(obj)
+}
+
+pub fn snapshot_layout_snapshot(state: &EditorState) -> SnapshotLayout {
     let (pages, active_page_id) = page_layout_snapshots(state);
     SnapshotLayout {
-        items,
         pages,
         active_page_id,
     }
@@ -136,20 +183,6 @@ impl SnapshotLayout {
                     format!("page not found: {target}"),
                 )
             })
-    }
-
-    fn layout_items(
-        &self,
-        args: &BTreeMap<String, String>,
-        selected: &[&LayoutRecord],
-    ) -> Vec<(String, i32, i32, i32, i32)> {
-        if args.is_empty() {
-            return self.items.clone();
-        }
-        selected
-            .iter()
-            .map(|r| (r.id.clone(), r.x, r.y, r.w, r.h))
-            .collect()
     }
 }
 
@@ -290,38 +323,97 @@ fn page_space_snapshots(state: &EditorState) -> (Vec<PageSpace>, String) {
     }
 }
 
+/// `(x, y, w, h)` for one node mirroring TS `getNodeBounds` (tree-utils.ts):
+/// authored `base.x/y` (parent-relative), and numeric width/height or 100
+/// when missing/keyword/zero (TS `w || 100`). A `ref` node with no numeric
+/// width adopts the referenced node's dimensions (looked up in `all_nodes`),
+/// exactly as TS does.
+fn node_bounds(n: &PenNode, all_nodes: &[PenNode]) -> (f64, f64, f64, f64) {
+    let base = n.base();
+    let numeric = |px: Option<f64>| px.filter(|&v| v != 0.0);
+    let mut w = numeric(n.width_px());
+    let mut h = numeric(n.height_px());
+    // TS: `if (node.type === 'ref' && !w)` → take the referenced component's
+    // numeric dims (or 100). The lookup walks the whole page tree (allNodes).
+    if w.is_none() {
+        if let PenNode::Ref(r) = n {
+            if let Some(target) = NodeId::new_opt(r.target.clone()) {
+                if let Some(comp) = find_node(all_nodes, &target) {
+                    w = numeric(comp.width_px());
+                    h = numeric(comp.height_px());
+                }
+            }
+        }
+    }
+    (
+        base.x.unwrap_or(0.0),
+        base.y.unwrap_or(0.0),
+        w.unwrap_or(100.0),
+        h.unwrap_or(100.0),
+    )
+}
+
 fn layout_records(nodes: &[PenNode]) -> Vec<LayoutRecord> {
+    layout_records_in(nodes, nodes)
+}
+
+/// Build a TS `computeLayoutTree(roots, all_nodes, max_depth)`-equivalent
+/// `LayoutEntry[]` JSON for an arbitrary subtree (depth-limited, document-
+/// absolute coords). Used by `design_refine` for its `layoutSnapshot` result.
+pub(crate) fn subtree_layout_value(
+    roots: &[PenNode],
+    all_nodes: &[PenNode],
+    max_depth: u32,
+) -> Value {
+    let records = layout_records_in(roots, all_nodes);
+    let selected: Vec<&LayoutRecord> = records.iter().filter(|r| r.depth <= max_depth).collect();
+    Value::Array(layout_children_values(&selected, "", (0.0, 0.0)))
+}
+
+/// Like [`layout_records`] but with a distinct `all_nodes` scope for ref-node
+/// dim lookup (mirrors TS `computeLayoutTree(roots, allChildren, …)`), so a
+/// subtree can be laid out against the whole page's ref targets.
+fn layout_records_in(roots: &[PenNode], all_nodes: &[PenNode]) -> Vec<LayoutRecord> {
     fn walk(
         nodes: &[PenNode],
+        all_nodes: &[PenNode],
         ancestors: &[String],
         depth: u32,
-        parent_x: i32,
-        parent_y: i32,
+        parent_x: f64,
+        parent_y: f64,
         out: &mut Vec<LayoutRecord>,
     ) {
         for n in nodes {
-            let b = aggregate_bounds(n);
-            let x = parent_x + b.x as i32;
-            let y = parent_y + b.y as i32;
+            // Mirror TS `getNodeBounds`: x/y are the node's OWN authored
+            // offset (relative to parent), w/h are the numeric width/height or
+            // 100 when missing/keyword (`w || 100`). Then accumulate the
+            // parent's absolute position for document-absolute x/y, exactly as
+            // TS `computeLayoutTree`'s `absX = parentX + bounds.x`. (kept f64:
+            // TS returns raw numbers, never i32-truncated.)
+            let b = node_bounds(n, all_nodes);
+            let x = parent_x + b.0;
+            let y = parent_y + b.1;
             let id = n.id_str().to_string();
             out.push(LayoutRecord {
                 id: id.clone(),
+                name: n.base().name.clone(),
+                type_label: kind_label(n),
                 ancestors: ancestors.to_vec(),
                 depth,
                 x,
                 y,
-                w: b.w as i32,
-                h: b.h as i32,
+                w: b.2,
+                h: b.3,
             });
             if let Some(children) = n.children() {
                 let mut child_ancestors = ancestors.to_vec();
                 child_ancestors.push(id.clone());
-                walk(children, &child_ancestors, depth + 1, x, y, out);
+                walk(children, all_nodes, &child_ancestors, depth + 1, x, y, out);
             }
         }
     }
     let mut out = Vec::new();
-    walk(nodes, &[], 0, 0, 0, &mut out);
+    walk(roots, all_nodes, &[], 0, 0.0, 0.0, &mut out);
     out
 }
 
@@ -417,339 +509,5 @@ fn optional_i32_arg(
             )
         }),
         None => Ok(default),
-    }
-}
-
-// --- get_canvas_bounds -----------------------------------------------
-
-/// First-party `get_canvas_bounds` tool — union bounding box of every
-/// top-level node on the active page.
-pub struct GetCanvasBounds {
-    pub bounds: Option<(i32, i32, i32, i32)>,
-}
-
-impl McpTool for GetCanvasBounds {
-    fn name(&self) -> &str {
-        "get_canvas_bounds"
-    }
-    fn call(&self, _args: &BTreeMap<String, String>) -> ToolOutcome {
-        let mut out = BTreeMap::new();
-        match self.bounds {
-            Some((x, y, w, h)) => {
-                out.insert("x".into(), x.to_string());
-                out.insert("y".into(), y.to_string());
-                out.insert("w".into(), w.to_string());
-                out.insert("h".into(), h.to_string());
-                out.insert("has_content".into(), "true".into());
-            }
-            None => {
-                out.insert("x".into(), "0".into());
-                out.insert("y".into(), "0".into());
-                out.insert("w".into(), "0".into());
-                out.insert("h".into(), "0".into());
-                out.insert("has_content".into(), "false".into());
-            }
-        }
-        ToolOutcome::Ok(out)
-    }
-}
-
-pub fn get_canvas_bounds_snapshot(state: &EditorState) -> GetCanvasBounds {
-    let children = active_children(state);
-    if children.is_empty() {
-        return GetCanvasBounds { bounds: None };
-    }
-    let mut min_x = f64::INFINITY;
-    let mut min_y = f64::INFINITY;
-    let mut max_x = f64::NEG_INFINITY;
-    let mut max_y = f64::NEG_INFINITY;
-    for n in children {
-        let b = aggregate_bounds(n);
-        if b.is_empty() {
-            continue;
-        }
-        min_x = min_x.min(b.x);
-        min_y = min_y.min(b.y);
-        max_x = max_x.max(b.x + b.w);
-        max_y = max_y.max(b.y + b.h);
-    }
-    if !min_x.is_finite() {
-        return GetCanvasBounds { bounds: None };
-    }
-    GetCanvasBounds {
-        bounds: Some((
-            min_x as i32,
-            min_y as i32,
-            (max_x - min_x) as i32,
-            (max_y - min_y) as i32,
-        )),
-    }
-}
-
-// --- find_node_by_name -----------------------------------------------
-
-/// First-party `find_node_by_name` tool — locate the first node whose
-/// `name` matches the arg, anywhere on the active page.
-pub struct FindNodeByName {
-    pub index: Vec<(String, String, String)>,
-}
-
-impl McpTool for FindNodeByName {
-    fn name(&self) -> &str {
-        "find_node_by_name"
-    }
-    fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
-        let Some(query) = args.get("name") else {
-            return ToolOutcome::Err(ToolErrorCode::MissingArgument, "name is required".into());
-        };
-        let Some((_, id, kind)) = self.index.iter().find(|(n, _, _)| n == query) else {
-            return ToolOutcome::Err(
-                ToolErrorCode::ToolFailed,
-                format!("no node named {query:?} on the active page"),
-            );
-        };
-        let mut out = BTreeMap::new();
-        out.insert("id".into(), id.to_string());
-        out.insert("kind".into(), kind.clone());
-        ToolOutcome::Ok(out)
-    }
-}
-
-pub fn find_node_by_name_snapshot(state: &EditorState) -> FindNodeByName {
-    fn walk(nodes: &[PenNode], out: &mut Vec<(String, String, String)>) {
-        for n in nodes {
-            out.push((
-                n.base().name.clone().unwrap_or_default(),
-                n.id_str().to_string(),
-                kind_label(n).to_string(),
-            ));
-            if let Some(children) = n.children() {
-                walk(children, out);
-            }
-        }
-    }
-    let mut index = Vec::new();
-    walk(active_children(state), &mut index);
-    FindNodeByName { index }
-}
-
-// --- get_node_parent -------------------------------------------------
-
-/// First-party `get_node_parent` tool — parent id of `node_id` on the
-/// active page.
-pub struct GetNodeParent {
-    pub index: Vec<(String, String, u32)>,
-}
-
-impl McpTool for GetNodeParent {
-    fn name(&self) -> &str {
-        "get_node_parent"
-    }
-    fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
-        let Some(raw) = args.get("node_id") else {
-            return ToolOutcome::Err(ToolErrorCode::MissingArgument, "node_id is required".into());
-        };
-        let node_id: &str = raw.as_str();
-        let Some((_, parent_id, depth)) = self.index.iter().find(|(id, _, _)| id == node_id) else {
-            return ToolOutcome::Err(
-                ToolErrorCode::ToolFailed,
-                format!("node {node_id} not found on active page"),
-            );
-        };
-        let mut out = BTreeMap::new();
-        out.insert("parent_id".into(), parent_id.to_string());
-        out.insert("depth".into(), depth.to_string());
-        ToolOutcome::Ok(out)
-    }
-}
-
-pub fn get_node_parent_snapshot(state: &EditorState) -> GetNodeParent {
-    fn walk(nodes: &[PenNode], parent: &str, depth: u32, out: &mut Vec<(String, String, u32)>) {
-        for n in nodes {
-            out.push((n.id_str().to_string(), parent.to_string(), depth));
-            if let Some(children) = n.children() {
-                walk(children, n.id_str(), depth + 1, out);
-            }
-        }
-    }
-    let mut index = Vec::new();
-    walk(active_children(state), "", 0, &mut index);
-    GetNodeParent { index }
-}
-
-// --- count_nodes -----------------------------------------------------
-
-/// First-party `count_nodes` tool — total node count + per-page
-/// breakdown.
-pub struct CountNodes {
-    pub per_page: Vec<u32>,
-}
-
-impl McpTool for CountNodes {
-    fn name(&self) -> &str {
-        "count_nodes"
-    }
-    fn call(&self, _args: &BTreeMap<String, String>) -> ToolOutcome {
-        let total: u32 = self.per_page.iter().sum();
-        let encoded: Vec<String> = self
-            .per_page
-            .iter()
-            .enumerate()
-            .map(|(i, c)| format!("{i}|{c}"))
-            .collect();
-        let mut out = BTreeMap::new();
-        out.insert("total".into(), total.to_string());
-        out.insert("per_page".into(), encoded.join(";"));
-        ToolOutcome::Ok(out)
-    }
-}
-
-pub fn count_nodes_snapshot(state: &EditorState) -> CountNodes {
-    fn walk(nodes: &[PenNode]) -> u32 {
-        nodes
-            .iter()
-            .map(|n| 1u32 + n.children().map(|c| walk(c)).unwrap_or(0))
-            .sum()
-    }
-    let per_page = match state.doc.pages.as_ref() {
-        Some(pages) => pages.iter().map(|p| walk(&p.children)).collect(),
-        None => vec![walk(&state.doc.children)],
-    };
-    CountNodes { per_page }
-}
-
-// --- list_node_kinds -------------------------------------------------
-
-/// First-party `list_node_kinds` tool — per-kind histogram of nodes on
-/// the active page.
-pub struct ListNodeKinds {
-    pub histogram: Vec<(String, u32)>,
-}
-
-impl McpTool for ListNodeKinds {
-    fn name(&self) -> &str {
-        "list_node_kinds"
-    }
-    fn call(&self, _args: &BTreeMap<String, String>) -> ToolOutcome {
-        let encoded: Vec<String> = self
-            .histogram
-            .iter()
-            .map(|(k, c)| format!("{k}|{c}"))
-            .collect();
-        let mut out = BTreeMap::new();
-        out.insert("distinct".into(), self.histogram.len().to_string());
-        out.insert("kinds".into(), encoded.join(";"));
-        ToolOutcome::Ok(out)
-    }
-}
-
-pub fn list_node_kinds_snapshot(state: &EditorState) -> ListNodeKinds {
-    fn walk(nodes: &[PenNode], counts: &mut BTreeMap<&'static str, u32>) {
-        for n in nodes {
-            *counts.entry(kind_label(n)).or_insert(0) += 1;
-            if let Some(children) = n.children() {
-                walk(children, counts);
-            }
-        }
-    }
-    let mut counts: BTreeMap<&'static str, u32> = BTreeMap::new();
-    walk(active_children(state), &mut counts);
-    let histogram = counts
-        .into_iter()
-        .map(|(k, v)| (k.to_string(), v))
-        .collect();
-    ListNodeKinds { histogram }
-}
-
-// --- get_history_depth -----------------------------------------------
-
-/// First-party `get_history_depth` tool — undo + redo stack sizes.
-pub struct GetHistoryDepth {
-    pub past: usize,
-    pub future: usize,
-}
-
-impl McpTool for GetHistoryDepth {
-    fn name(&self) -> &str {
-        "get_history_depth"
-    }
-    fn call(&self, _args: &BTreeMap<String, String>) -> ToolOutcome {
-        let mut out = BTreeMap::new();
-        out.insert("past".into(), self.past.to_string());
-        out.insert("future".into(), self.future.to_string());
-        ToolOutcome::Ok(out)
-    }
-}
-
-pub fn get_history_depth_snapshot(state: &EditorState) -> GetHistoryDepth {
-    GetHistoryDepth {
-        past: state.history.past.len(),
-        future: state.history.future.len(),
-    }
-}
-
-// --- get_viewport ----------------------------------------------------
-
-/// First-party `get_viewport` tool — current pan + zoom state.
-pub struct GetViewport {
-    pub pan_x: i32,
-    pub pan_y: i32,
-    pub zoom_percent: i32,
-}
-
-impl McpTool for GetViewport {
-    fn name(&self) -> &str {
-        "get_viewport"
-    }
-    fn call(&self, _args: &BTreeMap<String, String>) -> ToolOutcome {
-        let mut out = BTreeMap::new();
-        out.insert("pan_x".into(), self.pan_x.to_string());
-        out.insert("pan_y".into(), self.pan_y.to_string());
-        out.insert("zoom_percent".into(), self.zoom_percent.to_string());
-        ToolOutcome::Ok(out)
-    }
-}
-
-pub fn get_viewport_snapshot(state: &EditorState) -> GetViewport {
-    let v = state.viewport;
-    GetViewport {
-        pan_x: v.pan_x as i32,
-        pan_y: v.pan_y as i32,
-        zoom_percent: (v.zoom * 100.0).round() as i32,
-    }
-}
-
-// --- get_selection_set -----------------------------------------------
-
-/// First-party `get_selection_set` tool — every id in the multi-select
-/// set (vs `get_selection` which returns only the anchor).
-pub struct GetSelectionSet {
-    pub anchor: String,
-    pub ids: Vec<String>,
-}
-
-impl McpTool for GetSelectionSet {
-    fn name(&self) -> &str {
-        "get_selection_set"
-    }
-    fn call(&self, _args: &BTreeMap<String, String>) -> ToolOutcome {
-        let encoded = self.ids.join(",");
-        let mut out = BTreeMap::new();
-        out.insert("count".into(), self.ids.len().to_string());
-        out.insert("ids".into(), encoded);
-        out.insert("anchor".into(), self.anchor.clone());
-        ToolOutcome::Ok(out)
-    }
-}
-
-pub fn get_selection_set_snapshot(state: &EditorState) -> GetSelectionSet {
-    GetSelectionSet {
-        anchor: state.selection.anchor.as_str().to_string(),
-        ids: state
-            .selection
-            .set
-            .iter()
-            .map(|id| id.as_str().to_string())
-            .collect(),
     }
 }

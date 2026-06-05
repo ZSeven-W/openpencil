@@ -49,12 +49,14 @@ fn target_file_call(
     let Some(call) = op_mcp::parse_tool_call(line.trim()) else {
         return Ok(None);
     };
-    if call.tool == "save_document" {
-        return Ok(None);
-    }
+    let source_arg = if call.tool == "save_document" {
+        "sourceFilePath"
+    } else {
+        "filePath"
+    };
     let Some(raw) = call
         .arguments
-        .get("filePath")
+        .get(source_arg)
         .map(|value| value.trim())
         .filter(|value| !value.is_empty())
     else {

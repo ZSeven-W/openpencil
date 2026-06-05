@@ -21,6 +21,9 @@ mod boolean_ops;
 pub mod event;
 #[cfg(feature = "skia")]
 mod widget_host;
+// Pure web_sys IO (no skia) — compiled always so it compile-checks on the
+// wasm32 web stub without EMSDK; only `mount()` (skia) actually wires it up.
+mod live_sync;
 
 // Force the wasm32-unknown-unknown libc/libcxx/libm shim to be linked
 // even though no Rust code calls it — its `#[no_mangle]` symbols are
@@ -105,6 +108,20 @@ struct Listener {
 
 #[cfg(feature = "skia")]
 impl Inner {
+    /// Apply a daemon `/api/mcp/document` response body to the live shell.
+    /// `WebSyncClient::sync` runs the apply closure only for a newer document and
+    /// commits that exact version only when the closure returns `true` (swap +
+    /// repaint both succeeded) — so the committed version is never stale and a
+    /// failed repaint is retried on the next poll. Used by the opt-in `live-sync`
+    /// poll loop.
+    #[cfg(feature = "live-sync")]
+    fn apply_sync_body(&mut self, body: &str, sync: &mut op_editor_core::web_sync::WebSyncClient) {
+        let _ = sync.sync(body, |doc, _version| {
+            self.host.replace_document(doc);
+            self.repaint().is_ok()
+        });
+    }
+
     /// Phase B inspector paint. Called from `mount()` for the first
     /// frame and from every closure body after a state mutation.
     /// Returns the present error if the ImageData round-trip failed.
@@ -686,6 +703,24 @@ pub fn mount(canvas_id: &str) -> Result<WebShell, JsValue> {
         }
         ime_textarea.remove();
         return Err(e);
+    }
+
+    // Opt-in live-canvas sync: poll the web-canvas daemon so external MCP/CLI
+    // edits repaint this browser canvas. The `on_response` closure (skia side)
+    // owns the `WebSyncClient` and applies a newer document via the shell; the
+    // pure web_sys polling lives in `live_sync`. Default daemon origin/cadence.
+    #[cfg(feature = "live-sync")]
+    {
+        let sync = std::rc::Rc::new(std::cell::RefCell::new(
+            op_editor_core::web_sync::WebSyncClient::new(),
+        ));
+        let inner_for_sync = inner.clone();
+        let on_response: std::rc::Rc<dyn Fn(String)> = std::rc::Rc::new(move |text: String| {
+            inner_for_sync
+                .borrow_mut()
+                .apply_sync_body(&text, &mut sync.borrow_mut());
+        });
+        let _ = live_sync::start("http://127.0.0.1:3100", 400, on_response);
     }
 
     Ok(WebShell {

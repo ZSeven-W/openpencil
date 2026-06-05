@@ -185,16 +185,14 @@ fn build_container_node(
         }
     });
 
-    // alignItems
+    // alignItems — TS `buildNodeFromSpec` assigns `spec.alignItems` raw
+    // (no validation); fold the value through the canonical `from_css` so
+    // `stretch`/`baseline`/… are stored (as their canonical variant) rather
+    // than dropped.
     let align_items = obj
         .get("alignItems")
         .and_then(|v| v.as_str())
-        .and_then(|s| match s {
-            "start" => Some(AlignItems::Start),
-            "center" => Some(AlignItems::Center),
-            "end" => Some(AlignItems::End),
-            _ => None,
-        });
+        .and_then(AlignItems::from_css);
 
     // justifyContent
     let justify_content =

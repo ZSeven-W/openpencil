@@ -13,6 +13,7 @@ use crate::widgets::icons::Icon;
 use crate::widgets::layer_panel::{
     LAYER_ROW_HEIGHT, PAGE_ROW_HEIGHT, SECTION_GAP, SECTION_HEADER_HEIGHT,
 };
+use crate::widgets::layer_panel_paint::{approx_text_width, ROW_FONT};
 use crate::Rect;
 use op_editor_core::NodeId;
 
@@ -121,7 +122,7 @@ fn to_doc_id(id: &str) -> NodeId {
 }
 
 /// Build one `LayerItem` from a `PenNode` (without recursing).
-fn item_for(node: &PenNode, cx: &WalkCx<'_>, depth: u8) -> LayerItem {
+fn item_for(node: &PenNode, cx: &WalkCx<'_>, depth: usize) -> LayerItem {
     let base = node.base();
     let canon = op_editor_core::NodeId::new(base.id.clone());
     let has_children = node.children().map(|c| !c.is_empty()).unwrap_or(false);
@@ -145,16 +146,19 @@ fn item_for(node: &PenNode, cx: &WalkCx<'_>, depth: u8) -> LayerItem {
 /// Recursively flatten `node` and its (non-collapsed) subtree into
 /// `out`. Collapsed nodes hide their children from the LayerPanel —
 /// a tree-view-only concern, canvas paint is unaffected.
-pub(super) fn walk(node: &PenNode, cx: &WalkCx<'_>, depth: u8, out: &mut Vec<LayerItem>) {
-    let item = item_for(node, cx, depth);
-    let collapsed = item.collapsed;
-    out.push(item);
-    if collapsed {
-        return;
-    }
-    if let Some(children) = node.children() {
-        for child in children {
-            walk(child, cx, depth.saturating_add(1), out);
+pub(super) fn walk(node: &PenNode, cx: &WalkCx<'_>, depth: usize, out: &mut Vec<LayerItem>) {
+    let mut stack = vec![(node, depth)];
+    while let Some((node, depth)) = stack.pop() {
+        let item = item_for(node, cx, depth);
+        let collapsed = item.collapsed;
+        out.push(item);
+        if collapsed {
+            continue;
+        }
+        if let Some(children) = node.children() {
+            for child in children.iter().rev() {
+                stack.push((child, depth.saturating_add(1)));
+            }
         }
     }
 }
@@ -166,23 +170,46 @@ pub(super) fn walk_excluding(
     node: &PenNode,
     cx: &WalkCx<'_>,
     excluded: &NodeId,
-    depth: u8,
+    depth: usize,
     out: &mut Vec<LayerItem>,
 ) {
-    if node.base().id == excluded.as_str() {
-        return;
-    }
-    let item = item_for(node, cx, depth);
-    let collapsed = item.collapsed;
-    out.push(item);
-    if collapsed {
-        return;
-    }
-    if let Some(children) = node.children() {
-        for child in children {
-            walk_excluding(child, cx, excluded, depth.saturating_add(1), out);
+    let mut stack = vec![(node, depth)];
+    while let Some((node, depth)) = stack.pop() {
+        if node.base().id == excluded.as_str() {
+            continue;
+        }
+        let item = item_for(node, cx, depth);
+        let collapsed = item.collapsed;
+        out.push(item);
+        if collapsed {
+            continue;
+        }
+        if let Some(children) = node.children() {
+            for child in children.iter().rev() {
+                stack.push((child, depth.saturating_add(1)));
+            }
         }
     }
+}
+
+fn layer_item_content_w(item: &LayerItem) -> f32 {
+    let indent = super::layer_panel::ROW_PAD_X + item.depth as f32 * 12.0;
+    let label_w = approx_text_width(&item.label, ROW_FONT);
+    6.0 + indent + 18.0 + 20.0 + label_w + 24.0
+}
+
+pub(super) fn layers_content_width(items: &[LayerItem], viewport_w: f32) -> f32 {
+    items
+        .iter()
+        .map(layer_item_content_w)
+        .fold(viewport_w, f32::max)
+}
+
+pub(super) fn pages_content_width(pages: &[PageItem], viewport_w: f32) -> f32 {
+    pages
+        .iter()
+        .map(|page| super::layer_panel::ROW_PAD_X + approx_text_width(&page.label, ROW_FONT) + 48.0)
+        .fold(viewport_w, f32::max)
 }
 
 /// Human-readable kind label for the layer row's `kind_label`.
@@ -239,6 +266,9 @@ pub struct LayerRegions {
     pub pages_scroll: f32,
     /// Largest valid Pages scroll offset (`content - viewport`).
     pub pages_max_scroll: f32,
+    pub pages_h_scroll: f32,
+    pub pages_max_h_scroll: f32,
+    pub pages_content_w: f32,
     /// y of the Layers section header.
     pub layers_header_y: f32,
     /// Top y of the clipped layer-row viewport.
@@ -249,25 +279,50 @@ pub struct LayerRegions {
     pub layers_scroll: f32,
     /// Largest valid Layers scroll offset (`content - viewport`).
     pub layers_max_scroll: f32,
+    pub layers_h_scroll: f32,
+    pub layers_max_h_scroll: f32,
+    pub layers_content_w: f32,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct LayerRegionInput {
+    pub rect: Rect,
+    pub pages_len: usize,
+    pub items_len: usize,
+    pub pages_scroll: f32,
+    pub layers_scroll: f32,
+    pub pages_h_scroll: f32,
+    pub layers_h_scroll: f32,
+    pub pages_content_w: f32,
+    pub layers_content_w: f32,
 }
 
 /// Compute the bounded Pages / Layers scroll-region geometry for a
 /// LayerPanel painted into `rect`. `pages_scroll` / `layers_scroll`
 /// are the raw stored offsets; the returned values are clamped to
 /// each region's scrollable range.
-pub fn layer_regions(
-    rect: Rect,
-    pages_len: usize,
-    items_len: usize,
-    pages_scroll: f32,
-    layers_scroll: f32,
-) -> LayerRegions {
+pub fn layer_regions(input: LayerRegionInput) -> LayerRegions {
+    let LayerRegionInput {
+        rect,
+        pages_len,
+        items_len,
+        pages_scroll,
+        layers_scroll,
+        pages_h_scroll,
+        layers_h_scroll,
+        pages_content_w,
+        layers_content_w,
+    } = input;
+
     let pages_header_y = rect.origin.y + 8.0;
     let pages_rows_top = pages_header_y + SECTION_HEADER_HEIGHT;
     let pages_content = pages_len as f32 * PAGE_ROW_HEIGHT;
     let pages_view_h = pages_content.min(LAYER_PAGES_VIEW_MAX);
     let pages_max_scroll = (pages_content - pages_view_h).max(0.0);
     let pages_scroll = pages_scroll.clamp(0.0, pages_max_scroll);
+    let pages_content_w = pages_content_w.max(rect.size.x);
+    let pages_max_h_scroll = (pages_content_w - rect.size.x).max(0.0);
+    let pages_h_scroll = pages_h_scroll.clamp(0.0, pages_max_h_scroll);
 
     let layers_header_y = pages_rows_top + pages_view_h + SECTION_GAP;
     let layers_rows_top = layers_header_y + SECTION_HEADER_HEIGHT;
@@ -275,6 +330,9 @@ pub fn layer_regions(
     let layers_content = items_len.max(1) as f32 * LAYER_ROW_HEIGHT;
     let layers_max_scroll = (layers_content - layers_view_h).max(0.0);
     let layers_scroll = layers_scroll.clamp(0.0, layers_max_scroll);
+    let layers_content_w = layers_content_w.max(rect.size.x);
+    let layers_max_h_scroll = (layers_content_w - rect.size.x).max(0.0);
+    let layers_h_scroll = layers_h_scroll.clamp(0.0, layers_max_h_scroll);
 
     LayerRegions {
         pages_header_y,
@@ -282,10 +340,16 @@ pub fn layer_regions(
         pages_view_h,
         pages_scroll,
         pages_max_scroll,
+        pages_h_scroll,
+        pages_max_h_scroll,
+        pages_content_w,
         layers_header_y,
         layers_rows_top,
         layers_view_h,
         layers_scroll,
         layers_max_scroll,
+        layers_h_scroll,
+        layers_max_h_scroll,
+        layers_content_w,
     }
 }

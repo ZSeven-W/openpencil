@@ -17,11 +17,33 @@ use winit::window::{Window, WindowId};
 
 impl ApplicationHandler for DesktopApp {
     fn new_events(&mut self, event_loop: &ActiveEventLoop, cause: StartCause) {
-        // When the WaitUntil deadline fires, the next redraw paints
-        // the next caret-blink phase. winit doesn't auto-redraw on
-        // ResumeTimeReached, so we have to request it here.
-        if matches!(cause, StartCause::ResumeTimeReached { .. }) {
+        // Live MCP requests must not wait for `RedrawRequested`. Window systems
+        // may throttle redraws while a window is occluded or while a previous
+        // paint is expensive, but CLI/MCP snapshot/apply acks should still be
+        // drained as soon as the event loop wakes. Applies mark the document
+        // dirty and schedule a paint; snapshots just ack with no repaint.
+        let mcp_requested_repaint = if self.poll_mcp_server() {
             self.request_redraw(true);
+            true
+        } else {
+            false
+        };
+        if self.mcp_shutdown_requested() {
+            event_loop.exit();
+            return;
+        }
+        // When a WaitUntil deadline fires, only some wakeups need a paint
+        // (caret blink, streaming chat, imports, background jobs). A pure
+        // live-MCP poll tick should drain queued MCP requests without
+        // repainting the whole canvas every 100 ms while the editor is idle.
+        if matches!(cause, StartCause::ResumeTimeReached { .. }) {
+            if self.resume_time_needs_redraw() {
+                self.request_redraw(true);
+            } else if self.mcp_server_active() && !mcp_requested_repaint {
+                event_loop.set_control_flow(ControlFlow::WaitUntil(
+                    Instant::now() + Duration::from_millis(100),
+                ));
+            }
         }
         // Native-menu selections arrive on `muda`'s global channel.
         // A menu click wakes the event loop, so draining here — at
@@ -230,9 +252,18 @@ impl ApplicationHandler for DesktopApp {
         // first paint so the launch document shows immediately.
         self.drain_opened_files();
 
-        if self.bootstrap_mcp_runtime_from_settings() {
+        // `op start` launches us with `--live-mcp[=port]`. The force flag is
+        // honored directly by `reconcile_mcp_server_from_settings` (via
+        // `force_live_mcp_port`) WITHOUT mutating or persisting the user's
+        // MCP settings — mirroring TS's always-on editor MCP sync — so a
+        // one-off `op start` never rewrites the user's saved settings.
+        let bootstrap_changed = self.bootstrap_mcp_runtime_from_settings();
+        if bootstrap_changed && self.force_live_mcp_port.is_none() {
             settings_io::save(self.host.editor_state());
         }
+        // Publish (or clean up) the live MCP discovery file now that the
+        // launch-time server state is settled, so `op` can find this canvas.
+        self.publish_live_mcp_port();
 
         if self.try_init_render_context(event_loop) {
             if let (Some(ctx), Some(backend)) = (self.ctx.as_mut(), self.backend.as_mut()) {
@@ -499,6 +530,12 @@ impl ApplicationHandler for DesktopApp {
                 if self.poll_mcp_server() {
                     self.redraw_dirty = true;
                 }
+                // A token-authed `op stop` asked the live MCP server to quit
+                // — exit the event loop cleanly (runs `exiting()`, saving
+                // window state + settings and removing the discovery file).
+                if self.mcp_shutdown_requested() {
+                    event_loop.exit();
+                }
                 // Keep an open Git panel fresh against external repo
                 // changes — re-request a snapshot at most every 2 s.
                 // The query runs on a worker thread, so this never
@@ -595,41 +632,56 @@ impl ApplicationHandler for DesktopApp {
             WindowEvent::CursorMoved { position, .. } => {
                 self.cursor_x = position.x as f32 / self.dpi;
                 self.cursor_y = position.y as f32 / self.dpi;
-                // `cursor_hint` hit-tests the layout-resolved render
-                // scene. A mutation since the last paint may have left
-                // the scene stale (`editor_state_dirty`), so refresh it
-                // first — otherwise a post-mutation / pre-paint cursor
-                // move reads stale geometry and picks the wrong hint.
-                let _ = self.host.layout_scene();
+                let over_layer_panel = self.host.cursor_over_layer_panel(
+                    self.cursor_x,
+                    self.cursor_y,
+                    self.viewport_width,
+                    self.viewport_height,
+                );
                 if let Some(window) = self.window.as_ref() {
-                    let viewport_w = window.inner_size().width as f32 / self.dpi;
-                    let viewport_h = window.inner_size().height as f32 / self.dpi;
-                    let hint =
-                        self.host
-                            .cursor_hint(self.cursor_x, self.cursor_y, viewport_w, viewport_h);
-                    use op_host_native::CursorHint;
-                    if matches!(hint, CursorHint::Rotate) {
-                        if let Some(c) = self.rotate_cursor.as_ref() {
-                            window.set_cursor(winit::window::Cursor::Custom(c.clone()));
-                        } else {
-                            window.set_cursor(winit::window::CursorIcon::Grabbing);
-                        }
+                    if self.host.is_dragging_node() {
+                        window.set_cursor(winit::window::CursorIcon::Move);
+                    } else if over_layer_panel {
+                        window.set_cursor(winit::window::CursorIcon::Default);
                     } else {
-                        let icon = match hint {
-                            CursorHint::Default => winit::window::CursorIcon::Default,
-                            CursorHint::NotAllowed => winit::window::CursorIcon::NotAllowed,
-                            CursorHint::Move => winit::window::CursorIcon::Move,
-                            CursorHint::Grab => winit::window::CursorIcon::Grab,
-                            CursorHint::Grabbing => winit::window::CursorIcon::Grabbing,
-                            CursorHint::Crosshair => winit::window::CursorIcon::Crosshair,
-                            CursorHint::Text => winit::window::CursorIcon::Text,
-                            CursorHint::ResizeEw => winit::window::CursorIcon::EwResize,
-                            CursorHint::ResizeNs => winit::window::CursorIcon::NsResize,
-                            CursorHint::ResizeNwse => winit::window::CursorIcon::NwseResize,
-                            CursorHint::ResizeNesw => winit::window::CursorIcon::NeswResize,
-                            CursorHint::Rotate => unreachable!(),
-                        };
-                        window.set_cursor(icon);
+                        // `cursor_hint` hit-tests the layout-resolved render
+                        // scene. A mutation since the last paint may have left
+                        // the scene stale (`editor_state_dirty`), so refresh it
+                        // only when the pointer is outside the LayerPanel and a
+                        // canvas/overlay hint could need scene geometry.
+                        let _ = self.host.layout_scene();
+                        let viewport_w = window.inner_size().width as f32 / self.dpi;
+                        let viewport_h = window.inner_size().height as f32 / self.dpi;
+                        let hint = self.host.cursor_hint(
+                            self.cursor_x,
+                            self.cursor_y,
+                            viewport_w,
+                            viewport_h,
+                        );
+                        use op_host_native::CursorHint;
+                        if matches!(hint, CursorHint::Rotate) {
+                            if let Some(c) = self.rotate_cursor.as_ref() {
+                                window.set_cursor(winit::window::Cursor::Custom(c.clone()));
+                            } else {
+                                window.set_cursor(winit::window::CursorIcon::Grabbing);
+                            }
+                        } else {
+                            let icon = match hint {
+                                CursorHint::Default => winit::window::CursorIcon::Default,
+                                CursorHint::NotAllowed => winit::window::CursorIcon::NotAllowed,
+                                CursorHint::Move => winit::window::CursorIcon::Move,
+                                CursorHint::Grab => winit::window::CursorIcon::Grab,
+                                CursorHint::Grabbing => winit::window::CursorIcon::Grabbing,
+                                CursorHint::Crosshair => winit::window::CursorIcon::Crosshair,
+                                CursorHint::Text => winit::window::CursorIcon::Text,
+                                CursorHint::ResizeEw => winit::window::CursorIcon::EwResize,
+                                CursorHint::ResizeNs => winit::window::CursorIcon::NsResize,
+                                CursorHint::ResizeNwse => winit::window::CursorIcon::NwseResize,
+                                CursorHint::ResizeNesw => winit::window::CursorIcon::NeswResize,
+                                CursorHint::Rotate => unreachable!(),
+                            };
+                            window.set_cursor(icon);
+                        }
                     }
                 }
                 // Coalesce cursor moves — apply once per redraw, not per 1000 Hz input event.
@@ -917,6 +969,7 @@ impl ApplicationHandler for DesktopApp {
             _ => {}
         }
         if self.reconcile_mcp_server_from_settings() {
+            self.publish_live_mcp_port();
             self.request_redraw(true);
         }
         if self.reconcile_mcp_cli_integrations(mcp_cli_before) {
@@ -949,6 +1002,7 @@ impl ApplicationHandler for DesktopApp {
         settings_io::save(self.host.editor_state());
         if let Some(mut server) = self.mcp_server.take() {
             server.stop();
+            crate::mcp_port_file::remove();
         }
         // Save window geometry for next launch. Guarded on a window
         // having existed — a failed startup reaches `exiting` with
@@ -979,6 +1033,36 @@ fn render_surface_not_ready(err: &SharedSkiaError) -> bool {
 }
 
 impl DesktopApp {
+    fn resume_time_needs_redraw(&self) -> bool {
+        self.current_chat.is_some()
+            || self.current_design.is_some()
+            || self.current_figma_import.is_some()
+            || self.host.next_animation_deadline_ms().is_some()
+            || self.update_probe.is_pending()
+            || self.image_search.is_pending()
+            || self
+                .iconify_job
+                .as_ref()
+                .is_some_and(crate::iconify_host::IconifyJob::is_pending)
+            || self
+                .git_pull_job
+                .as_ref()
+                .is_some_and(git_jobs::GitPullJob::is_pending)
+            || self
+                .git_push_job
+                .as_ref()
+                .is_some_and(git_jobs::GitPushJob::is_pending)
+            || self
+                .git_status_job
+                .as_ref()
+                .is_some_and(git_jobs::GitStatusJob::is_pending)
+            || self
+                .git_diff_job
+                .as_ref()
+                .is_some_and(git_jobs::GitDiffJob::is_pending)
+            || self.host.editor_state().editor_ui.git_panel.open
+    }
+
     fn try_init_render_context(&mut self, event_loop: &ActiveEventLoop) -> bool {
         if self.ctx.is_some() && self.backend.is_some() {
             return true;

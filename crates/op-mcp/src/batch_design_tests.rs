@@ -5,15 +5,15 @@
 //! `EditorState::apply` checks; the apply-path correctness is covered
 //! by `op-editor-core`'s `command_tests.rs`.
 
-use super::batch_design::*;
 use super::test_fixtures::sample;
 use super::{BatchInsertItem, EditorCommand, McpTool, ToolErrorCode, ToolOutcome};
+use crate::batch_design_snapshot;
 use op_editor_core::PenNodeExt;
 use std::collections::BTreeMap;
 
 #[test]
 fn batch_design_requires_nodes_json() {
-    let tool = batch_design_snapshot();
+    let tool = batch_design_snapshot(&sample());
     match tool.call(&BTreeMap::new()) {
         ToolOutcome::Err(code, msg) => {
             assert_eq!(code, ToolErrorCode::MissingArgument);
@@ -25,7 +25,7 @@ fn batch_design_requires_nodes_json() {
 
 #[test]
 fn batch_design_rejects_empty_array() {
-    let tool = batch_design_snapshot();
+    let tool = batch_design_snapshot(&sample());
     let mut args = BTreeMap::new();
     args.insert("nodes_json".into(), "[]".into());
     match tool.call(&args) {
@@ -36,7 +36,7 @@ fn batch_design_rejects_empty_array() {
 
 #[test]
 fn batch_design_parses_minimal_two_node_array() {
-    let tool = batch_design_snapshot();
+    let tool = batch_design_snapshot(&sample());
     let mut args = BTreeMap::new();
     args.insert(
         "nodes_json".into(),
@@ -62,7 +62,7 @@ fn batch_design_parses_minimal_two_node_array() {
 
 #[test]
 fn batch_design_nodes_json_accepts_outer_page_id() {
-    let tool = batch_design_snapshot();
+    let tool = batch_design_snapshot(&sample());
     let mut args = BTreeMap::new();
     args.insert("pageId".into(), "page-2".into());
     args.insert(
@@ -81,7 +81,7 @@ fn batch_design_nodes_json_accepts_outer_page_id() {
 
 #[test]
 fn batch_design_accepts_ts_insert_operations_tree() {
-    let tool = batch_design_snapshot();
+    let tool = batch_design_snapshot(&sample());
     let mut args = BTreeMap::new();
     args.insert(
         "operations".into(),
@@ -91,15 +91,32 @@ label=I(root, {"type":"text","name":"Greeting","content":"Hello","width":120,"he
     );
 
     match tool.call(&args) {
-        ToolOutcome::OkWithCommand(
-            result,
-            EditorCommand::InsertSubtree {
+        ToolOutcome::OkJsonWithCommand(
+            json,
+            EditorCommand::InsertAuthoredSubtree {
                 nodes,
                 parent_id,
                 page_id,
             },
         ) => {
-            assert_eq!(result.get("count"), Some(&"2".to_string()));
+            // TS result shape: { results:[{binding,nodeId}], nodeCount }.
+            let v: serde_json::Value = serde_json::from_str(&json).expect("batch_design json");
+            let results = v["results"].as_array().expect("results array");
+            assert_eq!(results.len(), 2);
+            let bindings: Vec<&str> = results
+                .iter()
+                .map(|r| r["binding"].as_str().expect("binding"))
+                .collect();
+            assert!(
+                bindings.contains(&"root") && bindings.contains(&"label"),
+                "{v}"
+            );
+            assert!(
+                results.iter().all(|r| r["nodeId"].as_str().is_some()),
+                "{v}"
+            );
+            assert!(v["nodeCount"].as_u64().is_some_and(|n| n >= 2), "{v}");
+            // The emitted command is unchanged.
             assert!(!parent_id.is_real());
             assert!(page_id.is_none());
             assert_eq!(nodes.len(), 1);
@@ -111,13 +128,37 @@ label=I(root, {"type":"text","name":"Greeting","content":"Hello","width":120,"he
                 Some("Greeting")
             );
         }
-        other => panic!("expected InsertSubtree command, got {other:?}"),
+        other => panic!("expected OkJsonWithCommand InsertAuthoredSubtree, got {other:?}"),
     }
 }
 
 #[test]
+fn batch_design_normalizes_ts_layout_keywords() {
+    let tool = batch_design_snapshot(&sample());
+    let mut args = BTreeMap::new();
+    args.insert(
+        "operations".into(),
+        r##"root=I(null, {"type":"frame","name":"Toolbar","layout":"horizontal","alignItems":"flex-start","justifyContent":"space-between","padding":[2],"children":[{"type":"frame","name":"Button","layout":"horizontal","alignItems":"flex-end","justifyContent":"flex-end"}]})"##
+            .into(),
+    );
+
+    let ToolOutcome::OkJsonWithCommand(_, EditorCommand::InsertAuthoredSubtree { nodes, .. }) =
+        tool.call(&args)
+    else {
+        panic!("expected InsertSubtree command");
+    };
+
+    let value = serde_json::to_value(&nodes[0]).expect("node json");
+    assert_eq!(value["alignItems"], "start");
+    assert_eq!(value["justifyContent"], "space_between");
+    assert_eq!(value["padding"].as_f64(), Some(2.0));
+    assert_eq!(value["children"][0]["alignItems"], "end");
+    assert_eq!(value["children"][0]["justifyContent"], "end");
+}
+
+#[test]
 fn batch_design_insert_operations_accept_outer_page_id() {
-    let tool = batch_design_snapshot();
+    let tool = batch_design_snapshot(&sample());
     let mut args = BTreeMap::new();
     args.insert("pageId".into(), "page-2".into());
     args.insert(
@@ -126,9 +167,9 @@ fn batch_design_insert_operations_accept_outer_page_id() {
     );
 
     match tool.call(&args) {
-        ToolOutcome::OkWithCommand(
+        ToolOutcome::OkJsonWithCommand(
             _,
-            EditorCommand::InsertSubtree {
+            EditorCommand::InsertAuthoredSubtree {
                 nodes,
                 parent_id,
                 page_id,
@@ -138,13 +179,13 @@ fn batch_design_insert_operations_accept_outer_page_id() {
             assert!(!parent_id.is_real());
             assert_eq!(page_id.as_deref(), Some("page-2"));
         }
-        other => panic!("expected InsertSubtree with page id, got {other:?}"),
+        other => panic!("expected InsertAuthoredSubtree with page id, got {other:?}"),
     }
 }
 
 #[test]
 fn batch_design_insert_operations_apply_as_one_nested_subtree() {
-    let tool = batch_design_snapshot();
+    let tool = batch_design_snapshot(&sample());
     let mut args = BTreeMap::new();
     args.insert(
         "operations".into(),
@@ -153,7 +194,7 @@ title=I(card, {"type":"text","name":"Title","content":"Ready","width":100,"heigh
             .into(),
     );
     let cmd = match tool.call(&args) {
-        ToolOutcome::OkWithCommand(_, cmd) => cmd,
+        ToolOutcome::OkJsonWithCommand(_, cmd) => cmd,
         other => panic!("expected command, got {other:?}"),
     };
 
@@ -167,8 +208,93 @@ title=I(card, {"type":"text","name":"Title","content":"Ready","width":100,"heigh
 }
 
 #[test]
+fn batch_design_results_predict_the_applied_node_ids() {
+    // The whole point: the binding->nodeId map the tool REPORTS must equal the
+    // ids the host actually ASSIGNS at apply (single-user localhost: the tool
+    // predicts off the same doc the apply mutates, running the same allocation).
+    let mut state = sample();
+    let tool = batch_design_snapshot(&state);
+    let mut args = BTreeMap::new();
+    args.insert(
+        "operations".into(),
+        r##"card=I(null, {"type":"frame","name":"Card","width":200,"height":120})
+title=I(card, {"type":"text","name":"Title","content":"Ready","width":100,"height":24})"##
+            .into(),
+    );
+
+    let (json, cmd) = match tool.call(&args) {
+        ToolOutcome::OkJsonWithCommand(json, cmd) => (json, cmd),
+        other => panic!("expected OkJsonWithCommand, got {other:?}"),
+    };
+    let v: serde_json::Value = serde_json::from_str(&json).expect("json");
+    let mut predicted = std::collections::BTreeMap::new();
+    for r in v["results"].as_array().expect("results") {
+        predicted.insert(
+            r["binding"].as_str().unwrap().to_string(),
+            r["nodeId"].as_str().unwrap().to_string(),
+        );
+    }
+
+    // Apply against the SAME doc the snapshot was taken from.
+    assert!(state.apply(cmd));
+    let root = state.active_children().last().expect("inserted card");
+    assert_eq!(root.base().name.as_deref(), Some("Card"));
+    assert_eq!(
+        root.base().id,
+        predicted["card"],
+        "predicted card id must equal the applied id"
+    );
+    let child = &root.children().expect("children")[0];
+    assert_eq!(child.base().name.as_deref(), Some("Title"));
+    assert_eq!(
+        child.base().id,
+        predicted["title"],
+        "predicted title id must equal the applied id"
+    );
+}
+
+#[test]
+fn batch_design_authored_ids_reject_on_concurrent_collision() {
+    // The robustness guarantee: if the doc changes between the tool's snapshot
+    // and the apply (e.g. a concurrent edit on the live desktop canvas) so an
+    // assigned authored id now collides, InsertAuthoredSubtree REJECTS (the
+    // applier demotes to an error) — it NEVER silently lands a different id.
+    let mut state = sample();
+    let tool = batch_design_snapshot(&state); // snapshot at the current id seed
+    let mut args = BTreeMap::new();
+    args.insert(
+        "operations".into(),
+        r##"card=I(null, {"type":"frame","name":"Card","width":200,"height":120})"##.into(),
+    );
+    let cmd = match tool.call(&args) {
+        ToolOutcome::OkJsonWithCommand(_, cmd) => cmd,
+        other => panic!("expected OkJsonWithCommand, got {other:?}"),
+    };
+
+    // Simulate a concurrent edit that grabs the very id the tool assigned
+    // (the next minted id == the tool's first authored id).
+    assert!(state.apply(EditorCommand::InsertNode {
+        kind: "rect".into(),
+        name: "Concurrent".into(),
+        x: 0,
+        y: 0,
+        width: 10,
+        height: 10,
+        fill_hex: None,
+        target_parent: op_editor_core::NodeId::NONE,
+        page_id: None,
+    }));
+
+    // The authored id now collides → the command must be rejected, not remapped.
+    assert!(
+        !state.apply(cmd),
+        "an authored-id collision must reject, never silently land a different id"
+    );
+}
+
+#[test]
 fn batch_design_direct_operation_accepts_outer_page_id() {
-    let tool = batch_design_snapshot();
+    let tool = batch_design_snapshot(&sample());
     let mut args = BTreeMap::new();
     args.insert("pageId".into(), "page-2".into());
     args.insert("operations".into(), r##"U("n11", {"x":80})"##.into());
@@ -189,7 +315,7 @@ fn batch_design_direct_operation_accepts_outer_page_id() {
 
 #[test]
 fn batch_design_direct_update_preserves_rich_ts_patch_fields() {
-    let tool = batch_design_snapshot();
+    let tool = batch_design_snapshot(&sample());
     let mut args = BTreeMap::new();
     args.insert("pageId".into(), "page-2".into());
     args.insert(
@@ -217,7 +343,7 @@ fn batch_design_direct_update_preserves_rich_ts_patch_fields() {
 
 #[test]
 fn batch_design_accepts_single_update_operation() {
-    let tool = batch_design_snapshot();
+    let tool = batch_design_snapshot(&sample());
     let mut args = BTreeMap::new();
     args.insert(
         "operations".into(),
@@ -255,7 +381,7 @@ fn batch_design_accepts_single_update_operation() {
 
 #[test]
 fn batch_design_accepts_single_delete_operation() {
-    let tool = batch_design_snapshot();
+    let tool = batch_design_snapshot(&sample());
     let mut args = BTreeMap::new();
     args.insert("operations".into(), r##"D("n14")"##.into());
 
@@ -271,7 +397,7 @@ fn batch_design_accepts_single_delete_operation() {
 
 #[test]
 fn batch_design_accepts_single_move_operation_without_index() {
-    let tool = batch_design_snapshot();
+    let tool = batch_design_snapshot(&sample());
     let mut args = BTreeMap::new();
     args.insert("operations".into(), r##"M("n14", null)"##.into());
 
@@ -297,7 +423,7 @@ fn batch_design_accepts_single_move_operation_without_index() {
 
 #[test]
 fn batch_design_accepts_single_copy_operation_with_overrides() {
-    let tool = batch_design_snapshot();
+    let tool = batch_design_snapshot(&sample());
     let mut args = BTreeMap::new();
     args.insert(
         "operations".into(),
@@ -337,7 +463,7 @@ fn batch_design_accepts_single_copy_operation_with_overrides() {
 
 #[test]
 fn batch_design_accepts_bound_single_copy_operation() {
-    let tool = batch_design_snapshot();
+    let tool = batch_design_snapshot(&sample());
     let mut args = BTreeMap::new();
     args.insert("operations".into(), r##"copied=C("n12", null)"##.into());
 
@@ -362,7 +488,7 @@ fn batch_design_accepts_bound_single_copy_operation() {
 
 #[test]
 fn batch_design_accepts_single_replace_operation() {
-    let tool = batch_design_snapshot();
+    let tool = batch_design_snapshot(&sample());
     let mut args = BTreeMap::new();
     args.insert(
         "operations".into(),
@@ -404,7 +530,7 @@ fn batch_design_accepts_single_replace_operation() {
 
 #[test]
 fn batch_design_accepts_bound_single_replace_operation() {
-    let tool = batch_design_snapshot();
+    let tool = batch_design_snapshot(&sample());
     let mut args = BTreeMap::new();
     args.insert(
         "operations".into(),
@@ -437,7 +563,7 @@ fn batch_design_accepts_bound_single_replace_operation() {
 
 #[test]
 fn batch_design_accepts_single_image_operation_without_fetcher() {
-    let tool = batch_design_snapshot();
+    let tool = batch_design_snapshot(&sample());
     let mut args = BTreeMap::new();
     args.insert(
         "operations".into(),
@@ -466,7 +592,7 @@ fn batch_design_accepts_single_image_operation_without_fetcher() {
 
 #[test]
 fn batch_design_accepts_bound_single_image_operation_without_fetcher() {
-    let tool = batch_design_snapshot();
+    let tool = batch_design_snapshot(&sample());
     let mut args = BTreeMap::new();
     args.insert(
         "operations".into(),
@@ -498,7 +624,7 @@ fn batch_design_accepts_bound_single_image_operation_without_fetcher() {
 
 #[test]
 fn batch_design_rejects_unknown_kind_in_any_item() {
-    let tool = batch_design_snapshot();
+    let tool = batch_design_snapshot(&sample());
     let mut args = BTreeMap::new();
     args.insert(
         "nodes_json".into(),
@@ -513,7 +639,7 @@ fn batch_design_rejects_unknown_kind_in_any_item() {
 
 #[test]
 fn batch_design_rejects_negative_geometry() {
-    let tool = batch_design_snapshot();
+    let tool = batch_design_snapshot(&sample());
     let mut args = BTreeMap::new();
     args.insert(
         "nodes_json".into(),
@@ -527,7 +653,7 @@ fn batch_design_rejects_negative_geometry() {
 
 #[test]
 fn batch_design_rejects_malformed_json() {
-    let tool = batch_design_snapshot();
+    let tool = batch_design_snapshot(&sample());
     for bad in [
         "not json",
         "{}",
@@ -549,7 +675,7 @@ fn batch_design_rejects_malformed_json() {
 
 #[test]
 fn batch_design_accepts_single_move_operation_with_index() {
-    let tool = batch_design_snapshot();
+    let tool = batch_design_snapshot(&sample());
     let mut args = BTreeMap::new();
     args.insert("operations".into(), r##"M("n14", "n10", 2)"##.into());
 
@@ -571,7 +697,7 @@ fn batch_design_accepts_single_move_operation_with_index() {
 
 #[test]
 fn batch_design_accepts_bound_single_move_operation() {
-    let tool = batch_design_snapshot();
+    let tool = batch_design_snapshot(&sample());
     let mut args = BTreeMap::new();
     args.insert("operations".into(), r##"moved=M("n14", "n10", 1)"##.into());
 
