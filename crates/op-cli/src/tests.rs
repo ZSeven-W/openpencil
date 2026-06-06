@@ -288,11 +288,12 @@ fn parse_args_maps_ts_open_to_open_document() {
 
     let with_path =
         parse_args(&["open".to_string(), "/tmp/design.op".to_string()]).expect("parse open path");
+    let design_path = resolve_file_path_arg("/tmp/design.op");
     assert_eq!(
         with_path.command,
         Command::ToolCall {
             tool: "open_document".to_string(),
-            args: vec![("filePath".to_string(), "/tmp/design.op".to_string())],
+            args: vec![("filePath".to_string(), design_path)],
         }
     );
 }
@@ -300,11 +301,12 @@ fn parse_args_maps_ts_open_to_open_document() {
 #[test]
 fn parse_args_maps_ts_save_to_save_document_tool() {
     let p = parse_args(&["save".to_string(), "/tmp/copy.op".to_string()]).expect("parse save");
+    let copy_path = resolve_file_path_arg("/tmp/copy.op");
     assert_eq!(
         p.command,
         Command::ToolCall {
             tool: "save_document".to_string(),
-            args: vec![("filePath".to_string(), "/tmp/copy.op".to_string())],
+            args: vec![("filePath".to_string(), copy_path)],
         }
     );
 }
@@ -318,13 +320,15 @@ fn parse_args_maps_ts_save_file_flag_to_source_document() {
         "/tmp/source.op".to_string(),
     ])
     .expect("parse save --file");
+    let copy_path = resolve_file_path_arg("/tmp/copy.op");
+    let source_path = resolve_file_path_arg("/tmp/source.op");
     assert_eq!(
         p.command,
         Command::ToolCall {
             tool: "save_document".to_string(),
             args: vec![
-                ("filePath".to_string(), "/tmp/copy.op".to_string()),
-                ("sourceFilePath".to_string(), "/tmp/source.op".to_string()),
+                ("filePath".to_string(), copy_path),
+                ("sourceFilePath".to_string(), source_path),
             ],
         }
     );
@@ -625,10 +629,11 @@ fn parse_args_maps_codegen_plan_to_structured_mcp_args() {
     match p.command {
         Command::ToolCallJson { tool, args_json } => {
             assert_eq!(tool, "codegen_plan");
+            let design_path = resolve_file_path_arg("/tmp/design.op");
             assert_eq!(
                 serde_json::from_str::<serde_json::Value>(&args_json).expect("args json"),
                 serde_json::json!({
-                    "filePath": "/tmp/design.op",
+                    "filePath": design_path,
                     "pageId": "page-1",
                     "plan": {
                         "chunks": [],

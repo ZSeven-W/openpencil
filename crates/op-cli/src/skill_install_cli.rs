@@ -333,11 +333,27 @@ fn remove_path(path: &Path) -> Result<(), String> {
     let Ok(metadata) = fs::symlink_metadata(path) else {
         return Ok(());
     };
-    if metadata.file_type().is_symlink() || metadata.is_file() {
+    if metadata.file_type().is_symlink() {
+        remove_symlink_path(path)
+    } else if metadata.is_file() {
         fs::remove_file(path).map_err(|e| format!("remove {}: {e}", path.display()))
     } else {
         fs::remove_dir_all(path).map_err(|e| format!("remove {}: {e}", path.display()))
     }
+}
+
+#[cfg(windows)]
+fn remove_symlink_path(path: &Path) -> Result<(), String> {
+    if path.is_dir() {
+        fs::remove_dir(path).map_err(|e| format!("remove {}: {e}", path.display()))
+    } else {
+        fs::remove_file(path).map_err(|e| format!("remove {}: {e}", path.display()))
+    }
+}
+
+#[cfg(not(windows))]
+fn remove_symlink_path(path: &Path) -> Result<(), String> {
+    fs::remove_file(path).map_err(|e| format!("remove {}: {e}", path.display()))
 }
 
 fn read_json_object(path: &Path) -> Result<Map<String, Value>, String> {
