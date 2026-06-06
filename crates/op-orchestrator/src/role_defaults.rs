@@ -139,6 +139,11 @@ pub fn detect_theme_from_fill(fill: Option<&str>) -> Theme {
 
 fn parse_hex_rgb(hex: &str) -> Option<(u8, u8, u8)> {
     let h = hex.strip_prefix('#')?;
+    // Reject non-ASCII before byte-slicing below (a multi-byte char could make
+    // `h[0..2]` land mid-codepoint and panic).
+    if !h.is_ascii() {
+        return None;
+    }
     let h = match h.len() {
         3 => h.chars().flat_map(|c| [c, c]).collect::<String>(),
         6 | 8 => h.to_string(),

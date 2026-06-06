@@ -27,7 +27,9 @@ use serde_json::{json, Value};
 /// the WCAG curve used for theme detection). `None` on a non-hex string.
 fn hex_luminance(hex: &str) -> Option<f64> {
     let h = hex.strip_prefix('#').unwrap_or(hex);
-    if h.len() < 6 {
+    // Reject non-ASCII BEFORE byte-slicing: a multi-byte char (e.g. "#héllo")
+    // can pass the length check yet make `h[0..2]` land mid-codepoint → panic.
+    if !h.is_ascii() || h.len() < 6 {
         return None;
     }
     let r = u8::from_str_radix(&h[0..2], 16).ok()? as f64 / 255.0;

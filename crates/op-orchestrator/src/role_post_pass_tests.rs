@@ -181,6 +181,17 @@ fn input_siblings_unified_to_first() {
     );
 }
 
+#[test]
+fn non_ascii_color_does_not_panic() {
+    // A malformed multi-byte color string must not panic the byte-slicer.
+    let mut btn = json!({
+        "type":"frame","role":"button","fill":[{"type":"solid","color":"#héllo!"}],
+        "children":[{"type":"text","id":"t","content":"Go"}]
+    });
+    fix_button_foreground_contrast(&mut btn); // must not panic; bg unparseable → skip
+    assert!(btn["children"][0].get("fill").is_none());
+}
+
 // ── post_pass_forest integration (round-trips through PenNode) ────────────
 
 #[test]

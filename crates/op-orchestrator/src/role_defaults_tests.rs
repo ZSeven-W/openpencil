@@ -28,6 +28,9 @@ fn theme_from_fill_luminance() {
     // Unresolved ref / missing → default light.
     assert_eq!(detect_theme_from_fill(Some("$color-bg")), Theme::Light);
     assert_eq!(detect_theme_from_fill(None), Theme::Light);
+    // Malformed multi-byte color must not panic the byte-slicer → default light.
+    assert_eq!(detect_theme_from_fill(Some("#héllo!")), Theme::Light);
+    assert_eq!(detect_theme_from_fill(Some("redʔ")), Theme::Light);
 }
 
 // ── apply_role_defaults: set-if-absent ────────────────────────────────────
