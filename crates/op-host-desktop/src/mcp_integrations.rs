@@ -237,10 +237,22 @@ mod tests {
     use super::*;
 
     fn temp_home(name: &str) -> PathBuf {
+        let thread = std::thread::current();
+        let thread_name = thread.name().unwrap_or("test");
+        let safe_thread_name: String = thread_name
+            .chars()
+            .map(|ch| {
+                if ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_') {
+                    ch
+                } else {
+                    '-'
+                }
+            })
+            .collect();
         let path = std::env::temp_dir().join(format!(
             "openpencil-mcp-{name}-{}-{}",
             std::process::id(),
-            std::thread::current().name().unwrap_or("test")
+            safe_thread_name
         ));
         let _ = fs::remove_dir_all(&path);
         fs::create_dir_all(&path).expect("create temp home");
