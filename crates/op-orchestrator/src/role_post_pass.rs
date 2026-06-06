@@ -1,18 +1,26 @@
-//! Cross-node contrast post-pass — P2 increment **I3**.
+//! Cross-node post-pass — P2 increments **I3** (contrast) + **I4** (layout
+//! properties).
 //!
-//! Port of the CONTRAST fixes from `resolveTreePostPass` in role-resolver.ts:
-//! `fixButtonForegroundContrast`, `fixSectionAlternation`,
-//! `fixOrphanContainerContrast`, `fixInputSiblingConsistency`, plus the color
-//! helpers (`hexLuminance`, `hasFill`, `hasVisibleFill`, `getFirstSolidColor`,
-//! `needsLuminanceContrastOverride`, `resolveColorMaybeRef`). Runs AFTER role
+//! Port of `resolveTreePostPass` from role-resolver.ts. Runs AFTER role
 //! resolution (I1/I2), so it keys off the roles those passes set.
 //!
+//! - **I3 contrast cluster**: `fixButtonForegroundContrast`,
+//!   `fixSectionAlternation`, `fixOrphanContainerContrast`,
+//!   `fixInputSiblingConsistency`, plus the color helpers (`hexLuminance`,
+//!   `hasFill`, `hasVisibleFill`, `getFirstSolidColor`,
+//!   `needsLuminanceContrastOverride`, `resolveColorMaybeRef`).
+//! - **I4 layout-PROPERTY cluster** (pure property sets — no layout recompute):
+//!   `equalizeCardRow`, `normalizeFormInputWidths`,
+//!   `normalizeInputTrailingIconAlignment`, and the `clipContent`-for-image
+//!   branch. DEFERRED from I4: `fixHorizontalOverflow` (recomputes pixel
+//!   widths / parent width → would fight jian/taffy layout), `fixTextHeights` +
+//!   the frame-height expansion (need text measurement), and
+//!   `repairPlaceholderIcons` (needs the icon catalog).
+//!
 //! Operates on a JSON Value tree (serialize the sub-agent forest → fix →
-//! deserialize): fills/effects/colors are far simpler to read and mutate as
-//! JSON than across the typed schema, and it mirrors the TS code, which mutates
-//! the plain node objects. The layout fixes (`equalizeCardRow`,
-//! `fixHorizontalOverflow`, `fixTextHeights`) are increment I4 and overlap
-//! Kayshen's taffy work — NOT included here.
+//! deserialize): fills/effects/sizes are far simpler to read and mutate as JSON
+//! than across the typed schema, and it mirrors the TS code, which mutates the
+//! plain node objects.
 //!
 //! `resolveColorMaybeRef`: Rust has no document-variable context at sub-agent
 //! time, so a `$color-*` ref resolves to `None` and the dependent fix is
@@ -422,12 +430,227 @@ fn fix_input_sibling_consistency(node: &mut Value) {
     }
 }
 
+// ── I4: layout-property fixes (no layout recompute / no font metrics) ───────
+
+/// Read a width/height as a pixel number (port of `toSizeNumber`, default 0 for
+/// `fill_container`/`fit_content`/missing).
+fn size_number(node: &Value, key: &str) -> f64 {
+    node.get(key).and_then(Value::as_f64).unwrap_or(0.0)
+}
+
+/// Equalize a row of fixed-width card frames to `fill_container` so they stretch
+/// evenly (port of `equalizeCardRow`). Pure property fix — taffy then lays out.
+fn equalize_card_row(node: &mut Value) {
+    if node.get("layout").and_then(Value::as_str) != Some("horizontal") {
+        return;
+    }
+    if node.get("width").and_then(Value::as_str) == Some("fit_content") {
+        return;
+    }
+    let Some(children) = node.get("children").and_then(Value::as_array) else {
+        return;
+    };
+    if children.len() < 2 {
+        return;
+    }
+    let candidates: Vec<usize> = children
+        .iter()
+        .enumerate()
+        .filter(|(_, c)| {
+            c.get("type").and_then(Value::as_str) == Some("frame")
+                && !matches!(role_of(c), Some("divider") | Some("phone-mockup"))
+                && size_number(c, "height") > 88.0
+        })
+        .map(|(i, _)| i)
+        .collect();
+    // Already an explicit fill_container card in the row → nothing to equalize.
+    if candidates
+        .iter()
+        .any(|&i| children[i].get("width").and_then(Value::as_str) == Some("fill_container"))
+    {
+        return;
+    }
+    let fixed: Vec<usize> = candidates
+        .into_iter()
+        .filter(|&i| {
+            children[i]
+                .get("width")
+                .and_then(Value::as_f64)
+                .map(|w| w > 0.0)
+                .unwrap_or(false)
+        })
+        .collect();
+    if fixed.len() < 2 {
+        return;
+    }
+    let widths: Vec<f64> = fixed
+        .iter()
+        .map(|&i| size_number(&children[i], "width"))
+        .collect();
+    let max_w = widths.iter().cloned().fold(0.0_f64, f64::max);
+    let min_w = widths.iter().cloned().fold(f64::INFINITY, f64::min);
+    if max_w <= 0.0 || min_w / max_w >= 0.6 {
+        return; // widths already similar → leave alone
+    }
+    let heights: Vec<f64> = fixed
+        .iter()
+        .map(|&i| size_number(&children[i], "height"))
+        .collect();
+    let max_h = heights.iter().cloned().fold(0.0_f64, f64::max);
+    let min_h = heights.iter().cloned().fold(f64::INFINITY, f64::min);
+    if max_h <= 0.0 || min_h / max_h <= 0.5 {
+        return; // heights too dissimilar → probably not a card row
+    }
+    let Some(children) = node.get_mut("children").and_then(Value::as_array_mut) else {
+        return;
+    };
+    for &i in &fixed {
+        children[i]["width"] = json!("fill_container");
+        children[i]["height"] = json!("fill_container");
+    }
+}
+
+/// When a vertical group has a `fill_container` frame sibling, promote
+/// fixed-width inputs to `fill_container` too (port of `normalizeFormInputWidths`).
+fn normalize_form_input_widths(node: &mut Value) {
+    if node.get("layout").and_then(Value::as_str) != Some("vertical") {
+        return;
+    }
+    if node.get("width").and_then(Value::as_str) == Some("fit_content") {
+        return;
+    }
+    let Some(children) = node.get("children").and_then(Value::as_array) else {
+        return;
+    };
+    if children.len() < 2 {
+        return;
+    }
+    let has_fill_sibling = children.iter().any(|c| {
+        c.get("type").and_then(Value::as_str) == Some("frame")
+            && c.get("width").and_then(Value::as_str) == Some("fill_container")
+            && role_of(c) != Some("divider")
+    });
+    if !has_fill_sibling {
+        return;
+    }
+    let targets: Vec<usize> = children
+        .iter()
+        .enumerate()
+        .filter(|(_, c)| {
+            c.get("type").and_then(Value::as_str) == Some("frame")
+                && matches!(role_of(c), Some("input") | Some("form-input"))
+                && c.get("width").and_then(Value::as_f64).is_some()
+        })
+        .map(|(i, _)| i)
+        .collect();
+    let Some(children) = node.get_mut("children").and_then(Value::as_array_mut) else {
+        return;
+    };
+    for i in targets {
+        children[i]["width"] = json!("fill_container");
+    }
+}
+
+fn is_icon_like(node: &Value) -> bool {
+    match node.get("type").and_then(Value::as_str) {
+        Some("path") | Some("image") => true,
+        Some("frame") => {
+            if matches!(role_of(node), Some("icon") | Some("icon-button")) {
+                return true;
+            }
+            let w = size_number(node, "width");
+            let h = size_number(node, "height");
+            w > 0.0 && h > 0.0 && w.max(h) <= 32.0
+        }
+        _ => false,
+    }
+}
+
+/// In an input row with a trailing icon, make the text children `fill_container`
+/// so the icon is pushed right while text stays left (port of
+/// `normalizeInputTrailingIconAlignment`).
+fn normalize_input_trailing_icon_alignment(node: &mut Value) {
+    if !matches!(role_of(node), Some("input") | Some("form-input")) {
+        return;
+    }
+    match node.get("justifyContent").and_then(Value::as_str) {
+        None | Some("start") => {}
+        _ => return,
+    }
+    let Some(children) = node.get("children").and_then(Value::as_array) else {
+        return;
+    };
+    let visible: Vec<usize> = children
+        .iter()
+        .enumerate()
+        .filter(|(_, c)| c.get("visible").and_then(Value::as_bool) != Some(false))
+        .map(|(i, _)| i)
+        .collect();
+    if visible.len() < 2 {
+        return;
+    }
+    let last = *visible.last().unwrap();
+    if !is_icon_like(&children[last]) {
+        return;
+    }
+    let text_idxs: Vec<usize> = visible[..visible.len() - 1]
+        .iter()
+        .copied()
+        .filter(|&i| children[i].get("type").and_then(Value::as_str) == Some("text"))
+        .collect();
+    if text_idxs.is_empty() {
+        return;
+    }
+    let Some(children) = node.get_mut("children").and_then(Value::as_array_mut) else {
+        return;
+    };
+    for i in text_idxs {
+        if children[i].get("width").and_then(Value::as_str) != Some("fill_container") {
+            children[i]["width"] = json!("fill_container");
+        }
+        if children[i].get("textGrowth").is_none() {
+            children[i]["textGrowth"] = json!("fixed-width");
+        }
+    }
+}
+
+/// Clip a rounded frame that contains an image so the image respects the
+/// corner radius (port of the `clipContent` branch of resolveTreePostPass).
+fn apply_clip_content_for_image(node: &mut Value) {
+    if node.get("clipContent").and_then(Value::as_bool) == Some(true) {
+        return;
+    }
+    if corner_radius(node) <= 0.0 {
+        return;
+    }
+    let has_image = node
+        .get("children")
+        .and_then(Value::as_array)
+        .map(|a| {
+            a.iter()
+                .any(|c| c.get("type").and_then(Value::as_str) == Some("image"))
+        })
+        .unwrap_or(false);
+    if has_image {
+        node["clipContent"] = json!(true);
+    }
+}
+
 // ── walk ──────────────────────────────────────────────────────────────────
 
 fn post_pass_value(node: &mut Value, parent_fill: Option<Value>) {
     if node.get("type").and_then(Value::as_str) != Some("frame") {
         return;
     }
+    // I4 layout-property fixes (TS resolveTreePostPass order 1/3/4/8). The
+    // pixel-recomputing `fixHorizontalOverflow` and the font-metric fixes
+    // (`fixTextHeights`, frame-height expansion) are deferred — they overlap
+    // jian/taffy layout + need text measurement.
+    equalize_card_row(node);
+    normalize_form_input_widths(node);
+    normalize_input_trailing_icon_alignment(node);
+    apply_clip_content_for_image(node);
+    // I3 contrast fixes (TS order 9-12).
     fix_button_foreground_contrast(node);
     fix_section_alternation(node);
     fix_orphan_container_contrast(node, parent_fill.as_ref());
