@@ -27,7 +27,17 @@ use crate::model_profile::ModelTier;
 /// * `skills`                 — The full resolved skill list from `resolve_skills`.
 /// * `tier`                   — The model's capability tier.
 /// * `is_mobile_screen`       — Whether the plan is a full mobile screen.
-/// * `has_explicit_style_guide` — A style guide or design.md is in effect.
+/// * `has_design_system_substitute` — Another styling source already covers
+///   what `design-system` provides, so it can be dropped. On the Rust path this
+///   is `has_design_md` (the design-md skill) OR `noStyleGuideMatch` (the
+///   `style-defaults` skill loads). Pass `false` ONLY in the gap case — a style
+///   guide is NAMED but there is no design.md and no style-defaults — because
+///   Rust has not ported the TS `buildSubAgentStyleGuideInstruction` block, so
+///   `design-system` is then the only styling guidance left. Passing `true`
+///   there would suppress it with nothing to replace it; passing `false` in the
+///   `noStyleGuideMatch` case would inject `design-system`'s conflicting
+///   "output ONLY a JSON token object" header alongside `style-defaults`
+///   (Codex review 2026-06-06).
 /// * `minimal_skills`         — When `true`, keep only `schema` + `jsonl-format`.
 /// * `reduced_complexity`     — When `true` AND `tier == Basic`, narrow to the
 ///   `retryAllowed` 8-skill set (excludes `elements`).
@@ -35,7 +45,7 @@ pub fn apply_skill_filter<T: SkillNamed>(
     skills: Vec<T>,
     tier: ModelTier,
     is_mobile_screen: bool,
-    has_explicit_style_guide: bool,
+    has_design_system_substitute: bool,
     minimal_skills: bool,
     reduced_complexity: bool,
 ) -> Vec<T> {
@@ -56,7 +66,7 @@ pub fn apply_skill_filter<T: SkillNamed>(
         skills,
         tier,
         is_mobile_screen,
-        has_explicit_style_guide,
+        has_design_system_substitute,
         reduced_complexity,
     )
 }
@@ -68,10 +78,20 @@ fn compact_subagent_skills<T: SkillNamed>(
     skills: Vec<T>,
     tier: ModelTier,
     is_mobile_screen: bool,
-    has_explicit_style_guide: bool,
+    has_design_system_substitute: bool,
     reduced_complexity: bool,
 ) -> Vec<T> {
-    // Base filter (all tiers): mobile/desktop + explicit-style-guide drops.
+    // Base filter (all tiers): mobile/desktop drops + a design-system drop
+    // gated on whether another styling source already covers it. TS drops
+    // `design-system` whenever an explicit style guide OR design.md is in
+    // effect (it then injects `buildSubAgentStyleGuideInstruction` or the
+    // design-md skill as the replacement). Rust has ported the design-md skill
+    // AND the `style-defaults` skill (noStyleGuideMatch), but NOT the
+    // style-guide block — so the caller passes `has_design_system_substitute =
+    // has_design_md || no_style_guide_match`. That drops design-system when
+    // design-md or style-defaults covers styling (avoiding a redundant,
+    // conflicting "output ONLY JSON tokens" header) and keeps it only in the
+    // gap case: a style guide is named but neither covers it (Codex 2026-06-06).
     let mut next: Vec<T> = skills
         .into_iter()
         .filter(|s| {
@@ -84,7 +104,7 @@ fn compact_subagent_skills<T: SkillNamed>(
             if !is_mobile_screen && name == "mobile-app" {
                 return false;
             }
-            if has_explicit_style_guide && name == "design-system" {
+            if has_design_system_substitute && name == "design-system" {
                 return false;
             }
             true
@@ -114,6 +134,15 @@ fn compact_subagent_skills<T: SkillNamed>(
             "text-rules",
             "variables",
             "design-md",
+            // `design-system` is NOT in the TS allow-set (TS injects a
+            // style-guide replacement). Rust keeps it in the allow-set so the
+            // gap case survives — a Basic-tier model with a NAMED style guide
+            // but no design.md and no style-defaults. In every other case the
+            // base filter above has already dropped it (design-md OR
+            // style-defaults covers styling), so this entry only matters for
+            // the gap case. Remove once buildSubAgentStyleGuideInstruction is
+            // ported. (Codex review 2026-06-06.)
+            "design-system",
             "mobile-app",
             "icon-catalog",
             "style-defaults",
@@ -133,6 +162,15 @@ fn compact_subagent_skills<T: SkillNamed>(
                 "style-defaults",
                 "design-md",
                 "variables",
+                // Kept here for the SAME reason it's in ALLOWED above: Rust has
+                // no style-guide instruction block, so a Basic-tier retry with a
+                // selected guide (where `style-defaults` does NOT load —
+                // noStyleGuideMatch is false) would otherwise have zero styling
+                // guidance. The base filter still drops it when design-md (the
+                // genuine replacement) is present; and when style-defaults IS
+                // present, the lower-priority design-system is trimmed first
+                // under the tight retry budget. (Codex review 2026-06-06.)
+                "design-system",
             ];
             next.retain(|s| RETRY_ALLOWED.contains(&s.skill_name()));
         }
@@ -250,11 +288,78 @@ mod tests {
     }
 
     #[test]
-    fn base_filter_drops_design_system_when_explicit_style_guide() {
+    fn base_filter_drops_design_system_when_substitute_present() {
         let input = skills(&["schema", "design-system", "layout"]);
-        // has_explicit_style_guide = true → design-system dropped.
+        // has_design_system_substitute = true — another styling source covers
+        // it (the design-md skill, OR style-defaults on noStyleGuideMatch). The
+        // caller computes this as `has_design_md || no_style_guide_match`, so
+        // this same drop handles BOTH the design.md case and the
+        // no-style-guide case (Codex 2026-06-06: don't keep a conflicting
+        // design-system alongside style-defaults).
         let out = apply_skill_filter(input, ModelTier::Full, false, true, false, false);
         assert_eq!(names(&out), vec!["schema", "layout"]);
+    }
+
+    #[test]
+    fn design_system_kept_only_in_gap_case() {
+        // Regression guard (Codex 2026-06-06): in the GAP case — a style-guide
+        // NAME is selected but no design.md and no style-defaults — Rust injects
+        // no replacement block, so design-system is the only styling guidance
+        // left and must NOT be suppressed. The caller passes
+        // has_design_system_substitute=false only for that case.
+        // Full tier:
+        let out = apply_skill_filter(
+            skills(&["schema", "design-system", "layout"]),
+            ModelTier::Full,
+            false,
+            false, // no replacement
+            false,
+            false,
+        );
+        assert!(
+            names(&out).contains(&"design-system"),
+            "Full tier must keep design-system when nothing replaces it"
+        );
+        // Basic tier (allow-set must include design-system as a fallback):
+        let out_basic = apply_skill_filter(
+            skills(&["schema", "design-system", "layout"]),
+            ModelTier::Basic,
+            false,
+            false,
+            false,
+            false,
+        );
+        assert!(
+            names(&out_basic).contains(&"design-system"),
+            "Basic tier must keep design-system when nothing replaces it"
+        );
+        // Basic-tier REDUCED retry must also keep it (Codex 2026-06-06 #2):
+        // the retry kernel had dropped design-system unconditionally.
+        let out_reduced = apply_skill_filter(
+            skills(&["schema", "design-system", "layout"]),
+            ModelTier::Basic,
+            false,
+            false, // no replacement
+            false,
+            true, // reduced_complexity
+        );
+        assert!(
+            names(&out_reduced).contains(&"design-system"),
+            "Basic reduced retry must keep design-system when nothing replaces it"
+        );
+        // …but WITH a replacement (design.md), the reduced retry still drops it.
+        let out_reduced_replaced = apply_skill_filter(
+            skills(&["schema", "design-system", "layout"]),
+            ModelTier::Basic,
+            false,
+            true, // replacement present
+            false,
+            true,
+        );
+        assert!(
+            !names(&out_reduced_replaced).contains(&"design-system"),
+            "Basic reduced retry drops design-system when design-md replaces it"
+        );
     }
 
     #[test]

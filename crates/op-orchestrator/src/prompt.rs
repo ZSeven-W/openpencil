@@ -230,7 +230,6 @@ pub fn build_subagent_prompt(
     // `selectedStyleGuideContent` content field has no Rust equivalent yet),
     // so `style_guide_name.is_some()` is the faithful proxy for "a guide was
     // selected". Port of the flag block in orchestrator-sub-agent.ts:396-416.
-    let has_explicit_style_guide = plan.style_guide_name.is_some() || req.design_md.is_some();
     let no_style_guide_match = plan.style_guide_name.is_none() && !has_design_md;
 
     let mut flags = HashMap::new();
@@ -265,11 +264,21 @@ pub fn build_subagent_prompt(
     };
     let resolved = resolve_generation_skills(&subtask.label, &opts);
     let is_mobile_screen = is_mobile_full_screen(plan);
+    // `design-system` should be dropped when ANOTHER styling source already
+    // covers its role: the `design-md` skill (`has_design_md`) OR the
+    // `style-defaults` skill (which loads on `noStyleGuideMatch`). Keep it ONLY
+    // in the gap case — a style guide is named, but no design.md and no
+    // style-defaults — because Rust has not ported the style-guide instruction
+    // block, so dropping it there would leave sub-agents with no styling
+    // guidance. Conversely, keeping it alongside style-defaults would inject
+    // the conflicting "output ONLY a JSON token object" header into a
+    // no-style-guide prompt (Codex review 2026-06-06).
+    let design_system_covered = has_design_md || no_style_guide_match;
     let filtered = apply_skill_filter(
         resolved,
         tier,
         is_mobile_screen,
-        has_explicit_style_guide,
+        design_system_covered,
         minimal_skills,
         reduced_complexity,
     );

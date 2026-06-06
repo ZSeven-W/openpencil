@@ -309,6 +309,52 @@ fn subagent_prompt_basic_tier_swaps_in_simplified_format_skill() {
     );
 }
 
+/// design-system is dropped when another styling source covers it (no style
+/// guide → style-defaults loads) but kept in the gap case (a guide is named,
+/// so style-defaults does NOT load and Rust injects no style-guide block).
+/// Codex review 2026-06-06: keeping design-system alongside style-defaults
+/// injected a conflicting "output ONLY JSON tokens" header.
+#[test]
+fn subagent_prompt_drops_design_system_only_when_styling_covered() {
+    const DESIGN_SYSTEM_ONLY: &str = "design system architect";
+    const STYLE_DEFAULTS_ONLY: &str = "VISUAL STYLE POLICY";
+
+    // No style guide named, no design.md → noStyleGuideMatch → style-defaults
+    // loads and covers styling, so design-system must be dropped.
+    let covered =
+        build_subagent_prompt(&subtask(), &plan(), &req(), AbortFlag::new(), false, false);
+    assert!(
+        covered.system_prompt.contains(STYLE_DEFAULTS_ONLY),
+        "no-style-guide prompt should load style-defaults"
+    );
+    assert!(
+        !covered.system_prompt.contains(DESIGN_SYSTEM_ONLY),
+        "design-system must be dropped when style-defaults already covers styling"
+    );
+
+    // Gap case: a style guide IS named (no design.md). style-defaults does NOT
+    // load, Rust injects no style-guide block → design-system is the only
+    // styling guidance and must be kept.
+    let mut gap_plan = plan();
+    gap_plan.style_guide_name = Some("saas-clean-light".into());
+    let gap = build_subagent_prompt(
+        &subtask(),
+        &gap_plan,
+        &req(),
+        AbortFlag::new(),
+        false,
+        false,
+    );
+    assert!(
+        !gap.system_prompt.contains(STYLE_DEFAULTS_ONLY),
+        "named style guide should NOT load style-defaults (noStyleGuideMatch is false)"
+    );
+    assert!(
+        gap.system_prompt.contains(DESIGN_SYSTEM_ONLY),
+        "design-system must be kept in the gap case (only styling guidance left)"
+    );
+}
+
 // ── C4: timeout wiring tests ──────────────────────────────────────────────
 
 /// Rich/Minimal mode sets profile-derived timeouts (not None).
