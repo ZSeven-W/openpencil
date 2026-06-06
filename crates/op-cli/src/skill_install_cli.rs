@@ -3,7 +3,7 @@ use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-const BUNDLE_JSON: &str = include_str!("../../../apps/cli/src/commands/skill-bundle.json");
+const BUNDLE_JSON: &str = include_str!("../assets/skill-bundle.json");
 const REPO: &str = "zseven-w/openpencil-skill";
 const REPO_URL: &str = "https://github.com/zseven-w/openpencil-skill.git";
 const SKILL_NAME: &str = "openpencil-skill";
