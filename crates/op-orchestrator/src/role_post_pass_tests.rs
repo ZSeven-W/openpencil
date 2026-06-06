@@ -224,6 +224,26 @@ fn card_row_left_alone_when_widths_similar() {
 }
 
 #[test]
+fn badge_pill_tag_rows_are_not_equalized() {
+    // The dashboard-pass (equalizeHorizontalSiblings) excludes badge/pill/tag,
+    // so a row of those keeps its widths even with a low width ratio.
+    for role in ["badge", "pill", "tag"] {
+        let mut row = json!({
+            "type":"frame","layout":"horizontal","children":[
+                {"type":"frame","role":role,"width":240,"height":200,"children":[]},
+                {"type":"frame","role":role,"width":120,"height":210,"children":[]}
+            ]
+        });
+        equalize_card_row(&mut row);
+        assert_eq!(
+            row["children"][0]["width"],
+            json!(240),
+            "{role} row must not be equalized"
+        );
+    }
+}
+
+#[test]
 fn form_inputs_promoted_when_fill_sibling_present() {
     let mut form = json!({
         "type":"frame","layout":"vertical","children":[

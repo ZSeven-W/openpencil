@@ -439,7 +439,10 @@ fn size_number(node: &Value, key: &str) -> f64 {
 }
 
 /// Equalize a row of fixed-width card frames to `fill_container` so they stretch
-/// evenly (port of `equalizeCardRow`). Pure property fix — taffy then lays out.
+/// evenly (port of `equalizeCardRow` AND the near-identical
+/// `equalizeHorizontalSiblings` in design-canvas-ops.ts — the dashboard 等宽
+/// pass; the badge/pill/tag exclusions come from the latter). Pure property fix
+/// — taffy then lays out.
 fn equalize_card_row(node: &mut Value) {
     if node.get("layout").and_then(Value::as_str) != Some("horizontal") {
         return;
@@ -458,7 +461,14 @@ fn equalize_card_row(node: &mut Value) {
         .enumerate()
         .filter(|(_, c)| {
             c.get("type").and_then(Value::as_str) == Some("frame")
-                && !matches!(role_of(c), Some("divider") | Some("phone-mockup"))
+                && !matches!(
+                    role_of(c),
+                    Some("divider")
+                        | Some("phone-mockup")
+                        | Some("badge")
+                        | Some("pill")
+                        | Some("tag")
+                )
                 && size_number(c, "height") > 88.0
         })
         .map(|(i, _)| i)
