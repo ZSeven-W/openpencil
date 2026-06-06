@@ -38,6 +38,7 @@ pub mod concurrent;
 pub mod prompt;
 pub mod role_defaults;
 pub mod role_infer;
+pub mod role_post_pass;
 pub mod run;
 pub mod run_dashboard;
 pub mod scaffold;

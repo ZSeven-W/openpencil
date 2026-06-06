@@ -1,0 +1,463 @@
+//! Cross-node contrast post-pass — P2 increment **I3**.
+//!
+//! Port of the CONTRAST fixes from `resolveTreePostPass` in role-resolver.ts:
+//! `fixButtonForegroundContrast`, `fixSectionAlternation`,
+//! `fixOrphanContainerContrast`, `fixInputSiblingConsistency`, plus the color
+//! helpers (`hexLuminance`, `hasFill`, `hasVisibleFill`, `getFirstSolidColor`,
+//! `needsLuminanceContrastOverride`, `resolveColorMaybeRef`). Runs AFTER role
+//! resolution (I1/I2), so it keys off the roles those passes set.
+//!
+//! Operates on a JSON Value tree (serialize the sub-agent forest → fix →
+//! deserialize): fills/effects/colors are far simpler to read and mutate as
+//! JSON than across the typed schema, and it mirrors the TS code, which mutates
+//! the plain node objects. The layout fixes (`equalizeCardRow`,
+//! `fixHorizontalOverflow`, `fixTextHeights`) are increment I4 and overlap
+//! Kayshen's taffy work — NOT included here.
+//!
+//! `resolveColorMaybeRef`: Rust has no document-variable context at sub-agent
+//! time, so a `$color-*` ref resolves to `None` and the dependent fix is
+//! skipped — matching the TS behavior when a ref doesn't resolve to a hex.
+
+use jian_ops_schema::node::PenNode;
+use serde_json::{json, Value};
+
+// ── color helpers ───────────────────────────────────────────────────────────
+
+/// Perceived luminance 0..1 (port of `hexLuminance` — 0.299/0.587/0.114, NOT
+/// the WCAG curve used for theme detection). `None` on a non-hex string.
+fn hex_luminance(hex: &str) -> Option<f64> {
+    let h = hex.strip_prefix('#').unwrap_or(hex);
+    if h.len() < 6 {
+        return None;
+    }
+    let r = u8::from_str_radix(&h[0..2], 16).ok()? as f64 / 255.0;
+    let g = u8::from_str_radix(&h[2..4], 16).ok()? as f64 / 255.0;
+    let b = u8::from_str_radix(&h[4..6], 16).ok()? as f64 / 255.0;
+    Some(0.299 * r + 0.587 * g + 0.114 * b)
+}
+
+fn fill_array(node: &Value) -> Option<&Vec<Value>> {
+    node.get("fill").and_then(Value::as_array)
+}
+
+/// Any declared fill entry (visible or not). Port of `hasFill`.
+fn has_fill(node: &Value) -> bool {
+    fill_array(node).map(|a| !a.is_empty()).unwrap_or(false)
+}
+
+/// True when the parent's fill field (passed down the walk) is non-empty.
+fn fill_present(fill: Option<&Value>) -> bool {
+    fill.and_then(Value::as_array)
+        .map(|a| !a.is_empty())
+        .unwrap_or(false)
+}
+
+fn is_invisible_color(color: &str) -> bool {
+    let c = color.trim().to_lowercase();
+    if c == "transparent" || c == "none" {
+        return true;
+    }
+    // 8-digit hex with 00 alpha (#RRGGBB00) — valid but draws nothing.
+    c.len() == 9 && c.starts_with('#') && c.ends_with("00")
+}
+
+fn is_fill_invisible(fill: &Value) -> bool {
+    if let Some(op) = fill.get("opacity").and_then(Value::as_f64) {
+        if op <= 0.0 {
+            return true;
+        }
+    }
+    if fill.get("type").and_then(Value::as_str) == Some("solid") {
+        if let Some(color) = fill.get("color").and_then(Value::as_str) {
+            return is_invisible_color(color);
+        }
+    }
+    false
+}
+
+/// Will the node paint a visible color? Port of `hasVisibleFill`.
+fn has_visible_fill(node: &Value) -> bool {
+    let Some(arr) = fill_array(node) else {
+        return false;
+    };
+    let Some(first) = arr.first() else {
+        return false;
+    };
+    !is_fill_invisible(first)
+}
+
+/// First solid fill's color string. Port of `getFirstSolidColor`.
+fn get_first_solid_color(node: &Value) -> Option<String> {
+    fill_array(node)?
+        .iter()
+        .find(|f| f.get("type").and_then(Value::as_str) == Some("solid"))
+        .and_then(|f| f.get("color").and_then(Value::as_str))
+        .map(str::to_string)
+}
+
+/// Resolve a `$color-*` ref to a hex — Rust has no doc-variable context at
+/// sub-agent time, so refs resolve to `None` and the dependent fix is skipped
+/// (port of `resolveColorMaybeRef`'s unresolved path).
+fn resolve_color_maybe_ref(color: &str) -> Option<String> {
+    if color.trim_start().starts_with('$') {
+        None
+    } else {
+        Some(color.to_string())
+    }
+}
+
+/// |Δluminance| < 0.5 → too close, needs a contrast override (port of
+/// `needsLuminanceContrastOverride`).
+fn needs_luminance_contrast_override(fg: &str, bg: &str) -> bool {
+    match (hex_luminance(fg), hex_luminance(bg)) {
+        (Some(f), Some(b)) => (f - b).abs() < 0.5,
+        _ => false,
+    }
+}
+
+fn role_of(node: &Value) -> Option<&str> {
+    node.get("role").and_then(Value::as_str)
+}
+
+fn corner_radius(node: &Value) -> f64 {
+    match node.get("cornerRadius") {
+        Some(Value::Number(n)) => n.as_f64().unwrap_or(0.0),
+        Some(Value::Array(a)) => a.first().and_then(Value::as_f64).unwrap_or(0.0),
+        _ => 0.0,
+    }
+}
+
+fn solid_fill(color: &str) -> Value {
+    json!([{ "type": "solid", "color": color }])
+}
+
+// ── fixButtonForegroundContrast ──────────────────────────────────────────────
+
+fn fix_button_foreground_contrast(node: &mut Value) {
+    if !matches!(role_of(node), Some("button") | Some("icon-button")) {
+        return;
+    }
+    // A transparent button has no bg to compute contrast against.
+    if !has_visible_fill(node) {
+        return;
+    }
+    let Some(bg_raw) = get_first_solid_color(node) else {
+        return;
+    };
+    let Some(bg) = resolve_color_maybe_ref(&bg_raw) else {
+        return;
+    };
+    let Some(lum) = hex_luminance(&bg) else {
+        return; // unparseable bg → can't pick safely, skip
+    };
+
+    let fg = if lum < 0.5 { "#FFFFFF" } else { "#0F172A" };
+    let fg_fill = solid_fill(fg);
+
+    let Some(children) = node.get("children").and_then(Value::as_array) else {
+        return;
+    };
+    // PASS 1: a sibling text's resolved color is the reference foreground —
+    // text + icon in a button read as one unit.
+    let mut reference_fg: Option<String> = None;
+    for child in children {
+        if child.get("type").and_then(Value::as_str) != Some("text") {
+            continue;
+        }
+        if !has_visible_fill(child) {
+            continue;
+        }
+        if let Some(tc) = get_first_solid_color(child) {
+            if let Some(resolved) = resolve_color_maybe_ref(&tc) {
+                reference_fg = Some(resolved);
+                break;
+            }
+        }
+    }
+    let final_fg_fill = reference_fg
+        .as_ref()
+        .map(|c| solid_fill(c))
+        .unwrap_or_else(|| fg_fill.clone());
+
+    // PASS 2: apply foreground to children.
+    let Some(children) = node.get_mut("children").and_then(Value::as_array_mut) else {
+        return;
+    };
+    for child in children.iter_mut() {
+        match child.get("type").and_then(Value::as_str) {
+            Some("text") => {
+                if !has_visible_fill(child) {
+                    child["fill"] = fg_fill.clone();
+                }
+            }
+            Some("icon_font") => {
+                if !has_visible_fill(child) {
+                    child["fill"] = final_fg_fill.clone();
+                    continue;
+                }
+                if let Some(reference) = &reference_fg {
+                    let existing =
+                        get_first_solid_color(child).and_then(|c| resolve_color_maybe_ref(&c));
+                    if let Some(existing) = existing {
+                        if existing.to_lowercase() != reference.to_lowercase() {
+                            child["fill"] = final_fg_fill.clone();
+                        }
+                    }
+                } else {
+                    // Icon-only button: luminance-delta override.
+                    let existing =
+                        get_first_solid_color(child).and_then(|c| resolve_color_maybe_ref(&c));
+                    if let Some(existing) = existing {
+                        if needs_luminance_contrast_override(&existing, &bg) {
+                            child["fill"] = fg_fill.clone();
+                        }
+                    }
+                }
+            }
+            Some("path") => {
+                let has_stroke = child.get("stroke").map(|s| !s.is_null()).unwrap_or(false);
+                let has_stroke_fill = child
+                    .get("stroke")
+                    .and_then(|s| s.get("fill"))
+                    .and_then(Value::as_array)
+                    .map(|a| !a.is_empty())
+                    .unwrap_or(false);
+                if has_visible_fill(child) {
+                    // already styled
+                } else if has_stroke && !has_stroke_fill {
+                    child["stroke"]["fill"] = final_fg_fill.clone();
+                } else if !has_stroke {
+                    child["fill"] = final_fg_fill.clone();
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+// ── fixSectionAlternation ────────────────────────────────────────────────────
+
+const SECTION_ROLES: &[&str] = &["section", "hero", "cta-section", "stats-section", "footer"];
+const ALTERNATING_BG: [&str; 2] = ["#FFFFFF", "#F8FAFC"];
+
+fn fix_section_alternation(node: &mut Value) {
+    if node.get("layout").and_then(Value::as_str) != Some("vertical") {
+        return;
+    }
+    // Only alternate on light-themed pages (the hardcoded white strips would
+    // fight a dark page background).
+    if let Some(bg) = get_first_solid_color(node) {
+        if hex_luminance(&bg).map(|l| l < 0.5).unwrap_or(false) {
+            return;
+        }
+    }
+    let Some(children) = node.get_mut("children").and_then(Value::as_array_mut) else {
+        return;
+    };
+    // Group consecutive section-role children into runs.
+    let mut runs: Vec<Vec<usize>> = Vec::new();
+    let mut current: Vec<usize> = Vec::new();
+    for (i, child) in children.iter().enumerate() {
+        let is_section = child.get("type").and_then(Value::as_str) == Some("frame")
+            && role_of(child)
+                .map(|r| SECTION_ROLES.contains(&r))
+                .unwrap_or(false);
+        if is_section {
+            current.push(i);
+        } else if !current.is_empty() {
+            runs.push(std::mem::take(&mut current));
+        }
+    }
+    if !current.is_empty() {
+        runs.push(current);
+    }
+    for run in runs {
+        let unfilled = run.iter().filter(|&&i| !has_fill(&children[i])).count();
+        if unfilled < 3 {
+            continue;
+        }
+        let mut idx = 0;
+        for &i in &run {
+            if !has_fill(&children[i]) {
+                children[i]["fill"] = solid_fill(ALTERNATING_BG[idx % 2]);
+                idx += 1;
+            }
+        }
+    }
+}
+
+// ── fixOrphanContainerContrast ───────────────────────────────────────────────
+
+const STRUCTURAL_DENYLIST: &[&str] = &[
+    "section",
+    "row",
+    "column",
+    "centered-content",
+    "form-group",
+    "feature-grid",
+    "screenshot-frame",
+    "phone-mockup",
+    "navbar",
+    "nav-links",
+    "hero",
+    "footer",
+    "cta-section",
+    "stats-section",
+    "table",
+    "table-row",
+    "table-header",
+    "spacer",
+    "divider",
+];
+const CARD_LIKE_ALLOWLIST: &[&str] = &[
+    "card",
+    "stat-card",
+    "pricing-card",
+    "feature-card",
+    "image-card",
+    "testimonial",
+];
+
+fn is_ring_like_decorative(node: &Value) -> bool {
+    let id = node.get("id").and_then(Value::as_str).unwrap_or("");
+    let name = node.get("name").and_then(Value::as_str).unwrap_or("");
+    let label = format!("{id} {name}").to_lowercase();
+    if !(label.contains("ring")
+        || label.contains("circle")
+        || label.contains("progress")
+        || label.contains("activity"))
+    {
+        return false;
+    }
+    if node.get("stroke").map(Value::is_null).unwrap_or(true) {
+        return false;
+    }
+    let w = node.get("width").and_then(Value::as_f64).unwrap_or(0.0);
+    let h = node.get("height").and_then(Value::as_f64).unwrap_or(0.0);
+    if w <= 0.0 || h <= 0.0 {
+        return false;
+    }
+    let roughly_square = (w - h).abs() <= 2.0_f64.max(w.max(h) * 0.08);
+    if !roughly_square {
+        return false;
+    }
+    corner_radius(node) >= w.min(h) * 0.35
+}
+
+fn fix_orphan_container_contrast(node: &mut Value, parent_fill: Option<&Value>) {
+    if parent_fill.is_none() {
+        return; // root has no parent context
+    }
+    if has_fill(node) || fill_present(parent_fill) {
+        return;
+    }
+    if is_ring_like_decorative(node) {
+        return;
+    }
+    if corner_radius(node) <= 0.0 {
+        return;
+    }
+    if node
+        .get("children")
+        .and_then(Value::as_array)
+        .map(|a| a.is_empty())
+        .unwrap_or(true)
+    {
+        return;
+    }
+    if let Some(role) = role_of(node) {
+        if STRUCTURAL_DENYLIST.contains(&role) || !CARD_LIKE_ALLOWLIST.contains(&role) {
+            return;
+        }
+    }
+    node["fill"] = solid_fill("#FFFFFF");
+    node["effects"] = json!([
+        { "type": "shadow", "offsetX": 0, "offsetY": 1, "blur": 3, "spread": 0, "color": "#0000001A" },
+        { "type": "shadow", "offsetX": 0, "offsetY": 1, "blur": 2, "spread": -1, "color": "#0000000F" }
+    ]);
+}
+
+// ── fixInputSiblingConsistency ───────────────────────────────────────────────
+
+fn fix_input_sibling_consistency(node: &mut Value) {
+    if node.get("layout").and_then(Value::as_str) != Some("vertical") {
+        return;
+    }
+    let Some(children) = node.get_mut("children").and_then(Value::as_array_mut) else {
+        return;
+    };
+    let input_idxs: Vec<usize> = children
+        .iter()
+        .enumerate()
+        .filter(|(_, c)| {
+            c.get("type").and_then(Value::as_str) == Some("frame")
+                && matches!(role_of(c), Some("input") | Some("form-input"))
+                && has_fill(c)
+        })
+        .map(|(i, _)| i)
+        .collect();
+    if input_idxs.len() < 2 {
+        return;
+    }
+    let Some(first_color) = get_first_solid_color(&children[input_idxs[0]]) else {
+        return;
+    };
+    let all_match = input_idxs
+        .iter()
+        .all(|&i| get_first_solid_color(&children[i]).as_deref() == Some(first_color.as_str()));
+    if all_match {
+        return;
+    }
+    let source_fill = children[input_idxs[0]].get("fill").cloned();
+    let source_stroke = children[input_idxs[0]].get("stroke").cloned();
+    for &i in &input_idxs[1..] {
+        if let Some(fill) = &source_fill {
+            children[i]["fill"] = fill.clone();
+        }
+        if let Some(stroke) = &source_stroke {
+            children[i]["stroke"] = stroke.clone();
+        }
+    }
+}
+
+// ── walk ──────────────────────────────────────────────────────────────────
+
+fn post_pass_value(node: &mut Value, parent_fill: Option<Value>) {
+    if node.get("type").and_then(Value::as_str) != Some("frame") {
+        return;
+    }
+    fix_button_foreground_contrast(node);
+    fix_section_alternation(node);
+    fix_orphan_container_contrast(node, parent_fill.as_ref());
+    fix_input_sibling_consistency(node);
+
+    // Recurse — children see THIS node's (possibly just-set) fill as their
+    // parent fill, matching TS passing `currentRoot` down post-mutation.
+    // `Some(Null)` distinguishes "parent exists but has no fill" (orphan fix
+    // should still fire) from `None` = "no parent / root" (orphan fix skips).
+    let this_fill = Some(node.get("fill").cloned().unwrap_or(Value::Null));
+    if let Some(children) = node.get_mut("children").and_then(Value::as_array_mut) {
+        for child in children.iter_mut() {
+            post_pass_value(child, this_fill.clone());
+        }
+    }
+}
+
+/// Run the contrast post-pass over a forest of sub-agent section roots. Each
+/// root is round-tripped through JSON; on any (de)serialize failure that root
+/// is left untouched (a fix can never drop a node).
+pub fn post_pass_forest(nodes: &mut [PenNode]) {
+    for node in nodes.iter_mut() {
+        let Ok(mut v) = serde_json::to_value(&*node) else {
+            continue;
+        };
+        post_pass_value(&mut v, None);
+        if let Ok(new_node) = serde_json::from_value::<PenNode>(v) {
+            *node = new_node;
+        }
+    }
+}
+
+#[cfg(test)]
+#[path = "role_post_pass_tests.rs"]
+mod tests;

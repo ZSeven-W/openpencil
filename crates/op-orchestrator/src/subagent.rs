@@ -96,6 +96,9 @@ pub async fn run_subtask(
         crate::role_defaults::detect_theme_from_fill(first_solid)
     };
     crate::role_infer::resolve_forest_roles(&mut nodes, canvas_width, theme);
+    // Cross-node contrast post-pass (I3) runs AFTER role resolution (it keys off
+    // the roles I1/I2 set) and before the fallback sizing normalize.
+    crate::role_post_pass::post_pass_forest(&mut nodes);
     normalize_section_roots_for_parent_layout(&mut nodes);
     let node_count = nodes.len();
 
