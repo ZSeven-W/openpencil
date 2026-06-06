@@ -385,16 +385,19 @@ impl EditorState {
         if !sel.is_real() || !self.is_editable(&sel) {
             return;
         }
+        let is_flow_child = walkers::is_flow_child_of_flex(self.active_children(), &sel);
         if let Some(node) = find_node_mut(self.active_children_mut(), &sel) {
             // Only write a real rect — container nodes that derive
             // their size from children keep deriving it.
             let own = own_bounds(node);
             if own.w > 0.0 || own.h > 0.0 {
-                node.base_mut().x = Some(bounds.x);
-                node.base_mut().y = Some(bounds.y);
+                if !is_flow_child {
+                    node.base_mut().x = Some(bounds.x);
+                    node.base_mut().y = Some(bounds.y);
+                }
                 node.set_width_px(bounds.w);
                 node.set_height_px(bounds.h);
-            } else {
+            } else if !is_flow_child {
                 node.base_mut().x = Some(bounds.x);
                 node.base_mut().y = Some(bounds.y);
             }
@@ -404,9 +407,9 @@ impl EditorState {
     /// Translate every node in the selection set by `(dx, dy)` doc
     /// px. Containers cascade; an ancestor-already-in-set dedup
     /// stops descendants shifting twice.
-    pub fn translate_selected(&mut self, dx: f64, dy: f64) {
-        if self.selection.set.is_empty() {
-            return;
+    pub fn translate_selected(&mut self, dx: f64, dy: f64) -> bool {
+        if self.selection.set.is_empty() || (dx == 0.0 && dy == 0.0) {
+            return false;
         }
         let editable: Vec<NodeId> = self
             .selection
@@ -416,9 +419,10 @@ impl EditorState {
             .cloned()
             .collect();
         if editable.is_empty() {
-            return;
+            return false;
         }
         let children = self.active_children_mut();
+        let mut moved = false;
         for target in &editable {
             // A child of an auto-layout (flex) parent is engine-positioned;
             // materializing x/y here flips it to Position::Absolute in
@@ -431,9 +435,11 @@ impl EditorState {
             if !walkers::is_ancestor_in_set(children, target, &editable) {
                 if let Some(node) = find_node_mut(children, target) {
                     walkers::translate_subtree(node, dx, dy);
+                    moved = true;
                 }
             }
         }
+        moved
     }
 
     // --- Tree ops ----------------------------------------------------

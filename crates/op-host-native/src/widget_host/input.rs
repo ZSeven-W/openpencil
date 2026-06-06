@@ -174,22 +174,29 @@ impl WidgetHostNative {
                 drag.last_screen_x = x;
                 drag.last_screen_y = y;
             }
-            self.editor_state.translate_selected(dx as f64, dy as f64);
-            let (snap_dx, snap_dy) = self.apply_smart_guides();
+            let translated = self.editor_state.translate_selected(dx as f64, dy as f64);
+            let (snap_dx, snap_dy) = if translated {
+                self.apply_smart_guides()
+            } else {
+                self.editor_state.editor_ui.active_guides.clear();
+                (0.0, 0.0)
+            };
             let scene_dx = dx as f64 + snap_dx;
             let scene_dy = dy as f64 + snap_dy;
-            if !self.editor_state_dirty {
+            if translated && !self.editor_state_dirty {
+                let children = self.editor_state.active_children();
                 let ids: Vec<String> = self
                     .editor_state
                     .selection
                     .set
                     .iter()
+                    .filter(|id| !op_editor_core::walkers::is_flow_child_of_flex(children, id))
                     .map(|id| id.as_str().to_string())
                     .collect();
                 let _ = self
                     .layout_scene
                     .translate_nodes(&ids, scene_dx as f32, scene_dy as f32);
-            } else {
+            } else if translated {
                 self.mark_dirty();
             }
             if let Some(drag) = self.node_drag.as_mut() {

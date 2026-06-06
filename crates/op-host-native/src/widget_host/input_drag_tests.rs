@@ -267,6 +267,49 @@ fn node_drag_skips_smart_guides_for_large_documents() {
 }
 
 #[test]
+fn node_drag_keeps_flex_child_in_layout_flow() {
+    let mut host = WidgetHostNative::new();
+    seed(
+        &mut host,
+        r#"{"version":"0.8.0","children":[{
+          "type":"frame","id":"frame","name":"frame","x":100,"y":100,
+          "width":200,"height":200,"layout":"vertical","gap":8,
+          "children":[
+            {"type":"rectangle","id":"child","name":"child","width":80,"height":24}
+          ]
+        }]}"#,
+    );
+    host.editor_state_mut()
+        .set_single_selection(NodeId::new("child"));
+    host.mark_paint_dirty_for_test();
+    let _ = host.layout_scene();
+    assert!(!host.editor_state_dirty);
+    let scene_before = scene_node_xy(&host, "child");
+    host.node_drag = Some(NodeDragState {
+        last_screen_x: 500.0,
+        last_screen_y: 500.0,
+        press_screen_x: 500.0,
+        press_screen_y: 500.0,
+        moved: true,
+    });
+
+    assert!(host.apply_cursor_move(520.0, 500.0));
+
+    let child = op_editor_core::walkers::find_node(
+        host.editor_state().active_children(),
+        &NodeId::new("child"),
+    )
+    .expect("child node");
+    assert_eq!(child.base().x, None, "flex child must not materialize x");
+    assert_eq!(child.base().y, None, "flex child must not materialize y");
+    assert_eq!(
+        scene_node_xy(&host, "child"),
+        scene_before,
+        "dragging a flex child should not patch the layout scene away from flow"
+    );
+}
+
+#[test]
 fn host_carries_editor_state_as_source_of_truth() {
     // A fresh host opens with the demo sample seeded onto
     // `EditorState` — the host's single source of truth.
@@ -292,6 +335,15 @@ fn node_xy(host: &WidgetHostNative, id: &str) -> (f64, f64) {
         .find(|n| n.base().id == id)
         .expect("node present");
     (n.base().x.unwrap_or(0.0), n.base().y.unwrap_or(0.0))
+}
+
+fn scene_node_xy(host: &WidgetHostNative, id: &str) -> (f32, f32) {
+    let n = host
+        .layout_scene
+        .active_page()
+        .and_then(|p| p.find(id))
+        .expect("scene node present");
+    (n.bounds.origin.x, n.bounds.origin.y)
 }
 
 /// Read a path anchor's `(x, y)` from the host's `editor_state.doc`.

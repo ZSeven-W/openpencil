@@ -11,7 +11,7 @@
 use crate::command::{BatchInsertItem, EditorCommand, NodeFlag, VariableScalarPayload};
 use crate::node_id::NodeId;
 use crate::pen_node_ext::PenNodeExt;
-use crate::test_support::{rect, sample, state_with};
+use crate::test_support::{flex_frame, flow_rect, rect, sample, state_with};
 use crate::walkers::find_node;
 use jian_ops_schema::node::PenNode;
 use jian_ops_schema::variable::{VariableDefinition, VariableKind, VariableScalar, VariableValue};
@@ -478,6 +478,27 @@ fn nudge_selected_translates_and_records_history() {
     assert_eq!(n.base().x, Some(5.0));
     assert_eq!(n.base().y, Some(7.0));
     assert!(s.history.can_undo());
+}
+
+#[test]
+fn nudge_selected_flex_child_is_no_op_without_history() {
+    let mut s = state_with(vec![flex_frame(
+        "n1",
+        "Flex",
+        0.0,
+        0.0,
+        200.0,
+        300.0,
+        vec![flow_rect("n2", "A", 80.0, 24.0)],
+    )]);
+    s.set_single_selection(id("n2"));
+
+    assert!(!s.apply(EditorCommand::NudgeSelected { dx: 5, dy: 7 }));
+
+    let n = find_node(s.active_children(), &id("n2")).unwrap();
+    assert_eq!(n.base().x, None);
+    assert_eq!(n.base().y, None);
+    assert!(!s.history.can_undo());
 }
 
 #[test]
