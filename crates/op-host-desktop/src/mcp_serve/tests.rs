@@ -495,6 +495,21 @@ fn write_named_doc(path: &std::path::Path, node_id: &str, name: &str) {
     .expect("write doc");
 }
 
+fn assert_response_file_path_matches(response: &str, expected: &std::path::Path) {
+    let tool_text = crate::tool_text(response);
+    let result: serde_json::Value = serde_json::from_str(&tool_text).expect("tool result JSON");
+    let actual = result["filePath"]
+        .as_str()
+        .expect("open_document response filePath");
+    let actual = std::path::PathBuf::from(actual)
+        .canonicalize()
+        .expect("canonicalize actual response filePath");
+    let expected = expected
+        .canonicalize()
+        .expect("canonicalize expected response filePath");
+    assert_eq!(actual, expected, "{response}");
+}
+
 #[test]
 fn process_message_reads_document_from_ts_file_path_arg() {
     let (dir, primary_path, alternate_path) = temp_doc_paths("read");
@@ -532,7 +547,7 @@ fn process_message_open_document_reports_ts_file_path_target() {
         .expect("dispatch")
         .expect("response");
 
-    assert!(response.contains(&alternate), "{response}");
+    assert_response_file_path_matches(&response, &alternate_path);
     assert!(!response.contains("warning"), "{response}");
     assert!(!response.contains("does not reopen files"), "{response}");
     let _ = std::fs::remove_dir_all(dir);
@@ -554,11 +569,11 @@ fn process_message_open_document_creates_missing_ts_file_path_target() {
         .expect("dispatch")
         .expect("response");
 
-    assert!(response.contains(&alternate), "{response}");
     assert!(
         alternate_path.exists(),
         "open_document should create the target .op file"
     );
+    assert_response_file_path_matches(&response, &alternate_path);
     let created = std::fs::read_to_string(&alternate_path).expect("created document");
     assert!(created.contains(r#""version""#), "{created}");
     let _ = std::fs::remove_dir_all(dir);
