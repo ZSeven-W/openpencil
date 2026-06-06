@@ -330,26 +330,57 @@ fn normalize_generated_node_json(value: &mut serde_json::Value) {
                 );
             }
 
-            for child in object.values_mut() {
+            for (key, child) in object.iter_mut() {
+                // 数值型设计 token(`$type-*-size` 等)只在**数值字段**上就地解析
+                // 成数字 —— canonical PenNode 的 fontSize/gap/… 是 f64,模型却按
+                // prompt 用这些 `$ref` 字符串(否则整 root 报废,实测方舟 metrics)。
+                // 但**只限数值字段**:文本 `content`/`name` 里若恰好是 token 串
+                // (如设计系统展示页),必须保持字符串(Codex review)。
+                if NUMERIC_TOKEN_FIELDS.contains(&key.as_str()) {
+                    if let serde_json::Value::String(s) = child {
+                        if let Some(n) = resolve_numeric_design_token(s) {
+                            // Whole numbers MUST serialize as integers: `fontWeight`
+                            // is `FontWeight::Number(u32)`, which rejects a float
+                            // (700.0) — only `700` deserializes. f64 fields
+                            // (fontSize/gap/…) accept an integer just fine (Codex
+                            // review).
+                            *child = if n.fract() == 0.0 {
+                                serde_json::json!(n as i64)
+                            } else {
+                                serde_json::json!(n)
+                            };
+                            continue;
+                        }
+                    }
+                }
                 normalize_generated_node_json(child);
-            }
-        }
-        serde_json::Value::String(s) => {
-            // 数值型设计 token(`$type-*-size` 等)就地解析成数字 —— canonical
-            // PenNode 的 fontSize/lineHeight/gap/… 是 f64,模型却按 prompt 用这些
-            // `$ref` 字符串,否则反序列化失败、整个 root 报废(实测方舟 metrics)。
-            if let Some(n) = resolve_numeric_design_token(s) {
-                *value = serde_json::json!(n);
             }
         }
         _ => {}
     }
 }
 
+/// 接受数值型设计 token 解析的字段(canonical PenNode 里是 f64 的几何 / 排版
+/// 字段)。其他字段(content / name / color / iconFontName / …)里的 token 串
+/// 保持原样,不被改写成数字。
+const NUMERIC_TOKEN_FIELDS: &[&str] = &[
+    "fontSize",
+    "fontWeight",
+    "lineHeight",
+    "letterSpacing",
+    "gap",
+    "padding",
+    "cornerRadius",
+    "width",
+    "height",
+];
+
 /// 把**数值型**设计 token 字符串解析成 prompt 文档化的默认数值:
-/// `$type-{tier}-{size|line-height|letter-spacing}`、`$spacing-{1..5}`、
-/// `$radius-{sm|md|lg}`。颜色 / weight 等非纯数值 token 返回 `None`(保持字符串
-/// —— 颜色 `$color-*` 在 fill 里合法,weight 是字符串型按字符串反序列化)。
+/// `$type-{tier}-{size|weight|line-height|letter-spacing}`、`$spacing-{1..5}`、
+/// `$radius-{sm|md|lg}`。weight 也解析成数字 —— `FontWeight` 是 untagged
+/// `{Number, Keyword}`,接受数字;未解析的 `$type-*-weight` 串会被当 keyword
+/// 反序列化、再被字重解析器当未知值退回默认字重(标题该 700 却渲成 400,Codex
+/// review)。颜色 `$color-*` 等非数值 token 返回 `None`(在 fill 里合法、保持字符串)。
 fn resolve_numeric_design_token(s: &str) -> Option<f64> {
     if let Some(rest) = s.strip_prefix("$type-") {
         if let Some(t) = rest.strip_suffix("-letter-spacing") {
@@ -363,20 +394,26 @@ fn resolve_numeric_design_token(s: &str) -> Option<f64> {
             (t, "lh")
         } else if let Some(t) = rest.strip_suffix("-size") {
             (t, "size")
+        } else if let Some(t) = rest.strip_suffix("-weight") {
+            (t, "weight")
         } else {
             return None;
         };
-        // (size, line-height) per the prompt's typography scale.
-        let (size, lh) = match tier {
-            "display" => (64.0, 1.0),
-            "h1" => (24.0, 1.2),
-            "h2" => (20.0, 1.25),
-            "h3" => (16.0, 1.3),
-            "body" => (14.0, 1.5),
-            "caption" => (12.0, 1.4),
+        // (size, weight, line-height) per the prompt's typography scale.
+        let (size, weight, lh) = match tier {
+            "display" => (64.0, 700.0, 1.0),
+            "h1" => (24.0, 600.0, 1.2),
+            "h2" => (20.0, 600.0, 1.25),
+            "h3" => (16.0, 600.0, 1.3),
+            "body" => (14.0, 400.0, 1.5),
+            "caption" => (12.0, 400.0, 1.4),
             _ => return None,
         };
-        return Some(if prop == "size" { size } else { lh });
+        return Some(match prop {
+            "size" => size,
+            "weight" => weight,
+            _ => lh,
+        });
     }
     if let Some(n) = s.strip_prefix("$spacing-") {
         return match n {
