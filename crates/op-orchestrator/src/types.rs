@@ -384,10 +384,11 @@ pub struct DesignRequest {
     /// Port of `VALIDATION_ENABLED` in `ai-runtime-config.ts:109`.
     #[serde(default = "default_validation_enabled")]
     pub validation_enabled: bool,
-    /// 是否在编排器执行前运行视觉参考(visual-ref)流水线(S4)。
-    /// 默认 `false`(host 明确选择才启用)。
-    /// Port of the `executeVisualRefOrchestration` vs `executeOrchestration`
-    /// dispatch pattern in `visual-ref-orchestrator.ts`.
+    /// Vestigial flag — reserved, never read. The visual-ref pipeline (S4)
+    /// was removed as dead code (2026-06-06): it ported a TS pipeline upstream
+    /// had already deleted (commit 0f12b6e9) and nothing dispatched on this
+    /// flag. Kept (not removed) to avoid churning the ~40 `DesignRequest`
+    /// construction sites; defaults `false`.
     #[serde(default = "default_visual_ref_enabled")]
     pub visual_ref_enabled: bool,
 }
