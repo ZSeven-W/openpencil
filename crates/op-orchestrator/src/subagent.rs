@@ -76,6 +76,11 @@ pub async fn run_subtask(
     if is_blank_container_forest(&nodes) {
         return fail("blank container root produced no content nodes".into());
     }
+    // Semantic role inference (P2 I1) runs BEFORE the fallback sizing
+    // normalize, so the existing role-aware cleanup passes (nav-surface repair,
+    // section logic) see inferred roles. Honors the semantic-before-fallback
+    // ordering (memory feedback_post_processing_order).
+    crate::role_infer::resolve_forest_roles(&mut nodes);
     normalize_section_roots_for_parent_layout(&mut nodes);
     let node_count = nodes.len();
 
