@@ -176,6 +176,43 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: mobile-${{ matrix.target }}
+      - name: Configure Android NDK toolchain
+        if: startsWith(matrix.target, 'aarch64-linux-android') || startsWith(matrix.target, 'x86_64-linux-android')
+        shell: bash
+        run: |
+          NDK_HOME="${ANDROID_NDK_LATEST_HOME:-${ANDROID_NDK_HOME:-${ANDROID_NDK_ROOT:-}}}"
+          if [ -z "$NDK_HOME" ]; then
+            SDK_HOME="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+            if [ -z "$SDK_HOME" ]; then
+              echo "Android SDK root is not available on this runner" >&2
+              exit 1
+            fi
+            NDK_HOME="$(find "$SDK_HOME/ndk" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
+          fi
+          TOOLCHAIN="$NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          echo "ANDROID_NDK_HOME=$NDK_HOME" >> "$GITHUB_ENV"
+          API_LEVEL=21
+          case "${{ matrix.target }}" in
+            aarch64-linux-android)
+              CC="$TOOLCHAIN/aarch64-linux-android${API_LEVEL}-clang"
+              CXX="$TOOLCHAIN/aarch64-linux-android${API_LEVEL}-clang++"
+              echo "CC_aarch64_linux_android=$CC" >> "$GITHUB_ENV"
+              echo "CXX_aarch64_linux_android=$CXX" >> "$GITHUB_ENV"
+              echo "AR_aarch64_linux_android=$TOOLCHAIN/llvm-ar" >> "$GITHUB_ENV"
+              echo "CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=$CC" >> "$GITHUB_ENV"
+              ;;
+            x86_64-linux-android)
+              CC="$TOOLCHAIN/x86_64-linux-android${API_LEVEL}-clang"
+              CXX="$TOOLCHAIN/x86_64-linux-android${API_LEVEL}-clang++"
+              echo "CC_x86_64_linux_android=$CC" >> "$GITHUB_ENV"
+              echo "CXX_x86_64_linux_android=$CXX" >> "$GITHUB_ENV"
+              echo "AR_x86_64_linux_android=$TOOLCHAIN/llvm-ar" >> "$GITHUB_ENV"
+              echo "CARGO_TARGET_X86_64_LINUX_ANDROID_LINKER=$CC" >> "$GITHUB_ENV"
+              ;;
+          esac
+          test -x "$CC"
+          test -x "$CXX"
+          test -x "$TOOLCHAIN/llvm-ar"
       # Step 1a spec §11 mobile invariants verify on iOS / Android cargo check:
       # - op-editor-ui wasm32/ios/android-clean (no platform deps) — the
       #   widget facade / editor-UI composition crate.
