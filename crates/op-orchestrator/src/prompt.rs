@@ -21,6 +21,9 @@ use crate::timeouts::{
     apply_profile_to_timeouts, builtin_planning_timeouts, orchestrator_timeouts, sub_agent_timeouts,
 };
 use crate::types::{AbortFlag, CallRequest, DesignRequest, PlanningMode, PlanningPrompt};
+use op_ai_skills::style_guide::{
+    extract_style_guide_values, select_style_guide, style_guide_registry, SelectOptions,
+};
 use std::collections::HashMap;
 
 /// sub-agent 阶段要求模型产出的 JSON 形状说明。
@@ -185,6 +188,83 @@ fn is_mobile_full_screen(plan: &OrchestratorPlan) -> bool {
     plan.subtasks.len() >= 2
 }
 
+/// Build the sub-agent style-guide instruction block for the planner-selected
+/// guide. Port of `buildSubAgentStyleGuideInstruction`
+/// (orchestrator-sub-agent-compact.ts:78-124).
+///
+/// RUST ADAPTATION: TS emits `$color-*` refs (which it seeds into
+/// `doc.variables`); Rust does NOT seed style-guide vars, so refs wouldn't
+/// resolve — we emit the guide's concrete HEX values instead. Same effect:
+/// the sub-agent uses the selected palette rather than inventing one.
+/// Returns `None` when no guide name is set or it isn't in the registry.
+fn build_style_guide_instruction(
+    style_guide_name: Option<&str>,
+    tier: ModelTier,
+) -> Option<String> {
+    let name = style_guide_name?;
+    let opts = SelectOptions {
+        name: Some(name.to_string()),
+        ..Default::default()
+    };
+    let guide = select_style_guide(style_guide_registry(), &opts)?;
+    let v = extract_style_guide_values(&guide.content);
+
+    let color_line = |label: &str, hex: &Option<String>| -> Option<String> {
+        hex.as_ref().map(|h| format!("- {label}: {h}"))
+    };
+    let colors: Vec<String> = [
+        color_line("Background", &v.colors.background),
+        color_line("Surface", &v.colors.surface),
+        color_line("Accent", &v.colors.accent),
+        color_line("Text", &v.colors.text_primary),
+        color_line("Secondary text", &v.colors.text_secondary),
+        color_line("Muted text", &v.colors.text_muted),
+        color_line("Border", &v.colors.border),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+
+    // Full tier: the whole guide + an exact-hex palette appendix.
+    if tier == ModelTier::Full {
+        let mut s = format!(
+            "VISUAL STYLE GUIDE (follow these specifications exactly):\n{}",
+            guide.content.trim()
+        );
+        if !colors.is_empty() {
+            s.push_str(
+                "\n\nPALETTE — use these EXACT hex colors, do NOT invent a conflicting palette:\n",
+            );
+            s.push_str(&colors.join("\n"));
+        }
+        return Some(s);
+    }
+
+    // Standard/Basic: a compact summary.
+    let mut lines = vec![format!("VISUAL STYLE GUIDE SUMMARY ({name}):")];
+    let tags: Vec<String> = guide.tags.iter().take(6).cloned().collect();
+    if !tags.is_empty() {
+        lines.push(format!("- Tags: {}", tags.join(", ")));
+    }
+    lines.extend(colors);
+    if let Some(f) = &v.typography.display_font {
+        lines.push(format!("- Heading font: {f}"));
+    }
+    if let Some(f) = &v.typography.body_font {
+        lines.push(format!("- Body font: {f}"));
+    }
+    if let Some(r) = v.radius.card {
+        lines.push(format!("- Card radius: {r}"));
+    }
+    if let Some(r) = v.radius.button {
+        lines.push(format!("- Button radius: {r}"));
+    }
+    lines.push(
+        "Use these EXACT hex colors in your fills — do not invent a conflicting palette.".into(),
+    );
+    Some(lines.join("\n"))
+}
+
 /// 单个 sub-agent 的 LLM 调用输入。
 ///
 /// * `reduced_complexity` — When `true` and the model is Basic tier,
@@ -264,16 +344,19 @@ pub fn build_subagent_prompt(
     };
     let resolved = resolve_generation_skills(&subtask.label, &opts);
     let is_mobile_screen = is_mobile_full_screen(plan);
-    // `design-system` should be dropped when ANOTHER styling source already
-    // covers its role: the `design-md` skill (`has_design_md`) OR the
-    // `style-defaults` skill (which loads on `noStyleGuideMatch`). Keep it ONLY
-    // in the gap case — a style guide is named, but no design.md and no
-    // style-defaults — because Rust has not ported the style-guide instruction
-    // block, so dropping it there would leave sub-agents with no styling
-    // guidance. Conversely, keeping it alongside style-defaults would inject
-    // the conflicting "output ONLY a JSON token object" header into a
-    // no-style-guide prompt (Codex review 2026-06-06).
-    let design_system_covered = has_design_md || no_style_guide_match;
+    // Look up the planner-selected style guide by name and build a block that
+    // injects its palette/fonts into the sub-agent prompt (port of
+    // `buildSubAgentStyleGuideInstruction`). When present this REPLACES the
+    // generic `design-system` skill.
+    let style_guide_instruction =
+        build_style_guide_instruction(plan.style_guide_name.as_deref(), tier);
+    // `design-system` is dropped when ANOTHER styling source already covers it:
+    // the `design-md` skill (`has_design_md`), the `style-defaults` skill (loads
+    // on `noStyleGuideMatch`), OR the style-guide instruction block just built.
+    // Keeping it alongside any of those would inject design-system's conflicting
+    // "output ONLY a JSON token object" header redundantly (Codex review).
+    let design_system_covered =
+        has_design_md || no_style_guide_match || style_guide_instruction.is_some();
     let filtered = apply_skill_filter(
         resolved,
         tier,
@@ -294,6 +377,12 @@ pub fn build_subagent_prompt(
     // `jsonl-format` + `jsonl-format-simplified` skills both teach `_parent`,
     // so this agrees with whichever skill the tier loads (no contradiction).
     system_prompt.push_str(NODE_FORMAT);
+    // Append the selected style guide's palette/fonts so the sub-agent follows
+    // it instead of inventing a conflicting one.
+    if let Some(sg) = &style_guide_instruction {
+        system_prompt.push_str("\n\n");
+        system_prompt.push_str(sg);
+    }
 
     let section_list = plan
         .subtasks

@@ -309,18 +309,18 @@ fn subagent_prompt_basic_tier_swaps_in_simplified_format_skill() {
     );
 }
 
-/// design-system is dropped when another styling source covers it (no style
-/// guide → style-defaults loads) but kept in the gap case (a guide is named,
-/// so style-defaults does NOT load and Rust injects no style-guide block).
-/// Codex review 2026-06-06: keeping design-system alongside style-defaults
-/// injected a conflicting "output ONLY JSON tokens" header.
+/// design-system is dropped whenever another styling source covers it:
+/// (a) no style guide → `style-defaults` loads; (b) a guide IS named → the
+/// style-guide instruction block (G2) is injected. In both cases the generic
+/// design-system skill is replaced, not kept alongside (Codex review +
+/// buildSubAgentStyleGuideInstruction port).
 #[test]
-fn subagent_prompt_drops_design_system_only_when_styling_covered() {
+fn subagent_prompt_drops_design_system_when_styling_covered() {
     const DESIGN_SYSTEM_ONLY: &str = "design system architect";
     const STYLE_DEFAULTS_ONLY: &str = "VISUAL STYLE POLICY";
 
-    // No style guide named, no design.md → noStyleGuideMatch → style-defaults
-    // loads and covers styling, so design-system must be dropped.
+    // (a) No style guide named, no design.md → noStyleGuideMatch → style-defaults
+    // loads and covers styling, so design-system is dropped.
     let covered =
         build_subagent_prompt(&subtask(), &plan(), &req(), AbortFlag::new(), false, false);
     assert!(
@@ -329,29 +329,27 @@ fn subagent_prompt_drops_design_system_only_when_styling_covered() {
     );
     assert!(
         !covered.system_prompt.contains(DESIGN_SYSTEM_ONLY),
-        "design-system must be dropped when style-defaults already covers styling"
+        "design-system dropped when style-defaults covers styling"
     );
 
-    // Gap case: a style guide IS named (no design.md). style-defaults does NOT
-    // load, Rust injects no style-guide block → design-system is the only
-    // styling guidance and must be kept.
-    let mut gap_plan = plan();
-    gap_plan.style_guide_name = Some("saas-clean-light".into());
-    let gap = build_subagent_prompt(
-        &subtask(),
-        &gap_plan,
-        &req(),
-        AbortFlag::new(),
-        false,
-        false,
+    // (b) A style guide IS named → G2 injects its palette/fonts block, which
+    // REPLACES design-system. style-defaults does NOT load (noStyleGuideMatch
+    // false).
+    let mut sg_plan = plan();
+    sg_plan.style_guide_name = Some("saas-clean-light".into());
+    let with_guide =
+        build_subagent_prompt(&subtask(), &sg_plan, &req(), AbortFlag::new(), false, false);
+    assert!(
+        with_guide.system_prompt.contains("VISUAL STYLE GUIDE"),
+        "named style guide injects its instruction block"
     );
     assert!(
-        !gap.system_prompt.contains(STYLE_DEFAULTS_ONLY),
-        "named style guide should NOT load style-defaults (noStyleGuideMatch is false)"
+        !with_guide.system_prompt.contains(DESIGN_SYSTEM_ONLY),
+        "design-system dropped when the style-guide block replaces it"
     );
     assert!(
-        gap.system_prompt.contains(DESIGN_SYSTEM_ONLY),
-        "design-system must be kept in the gap case (only styling guidance left)"
+        !with_guide.system_prompt.contains(STYLE_DEFAULTS_ONLY),
+        "named style guide should NOT load style-defaults"
     );
 }
 
