@@ -140,21 +140,21 @@ fn schema_node_type(kind: &str) -> String {
 mod tests {
     use super::*;
     use jian_ops_schema::node::PenNode;
-    use jian_ops_schema::sizing::SizingBehavior;
+    use jian_ops_schema::sizing::{SizingBehavior, SizingKeyword};
 
     fn args_with_data(data: &str) -> BTreeMap<String, String> {
         BTreeMap::from([("data".to_string(), data.to_string())])
     }
 
-    fn numeric_size(value: &Option<SizingBehavior>) -> Option<i32> {
-        match value {
-            Some(SizingBehavior::Number(n)) => Some(n.round() as i32),
-            _ => None,
-        }
+    fn is_fit_content(value: &Option<SizingBehavior>) -> bool {
+        matches!(
+            value,
+            Some(SizingBehavior::Keyword(SizingKeyword::FitContent))
+        )
     }
 
     #[test]
-    fn preserved_text_data_defaults_missing_bounds_to_compact_text_size() {
+    fn preserved_text_data_defaults_missing_bounds_to_fit_content_size() {
         let node = ts_data_node(&args_with_data(
             r#"{"type":"text","name":"Label","content":"Text"}"#,
         ))
@@ -164,18 +164,12 @@ mod tests {
             panic!("expected text node");
         };
 
-        assert_eq!(
-            numeric_size(&text.width),
-            Some(op_editor_core::DEFAULT_TEXT_NODE_WIDTH)
-        );
-        assert_eq!(
-            numeric_size(&text.height),
-            Some(op_editor_core::DEFAULT_TEXT_NODE_HEIGHT)
-        );
+        assert!(is_fit_content(&text.width));
+        assert!(is_fit_content(&text.height));
     }
 
     #[test]
-    fn preserved_text_data_fits_default_width_to_long_content() {
+    fn preserved_text_data_defaults_long_content_to_fit_content_size() {
         let node = ts_data_node(&args_with_data(
             r#"{"type":"text","name":"Label","content":"N4068-测试-35","fontSize":14}"#,
         ))
@@ -185,19 +179,12 @@ mod tests {
             panic!("expected text node");
         };
 
-        let width = numeric_size(&text.width).expect("numeric text width");
-        assert!(
-            width > op_editor_core::DEFAULT_TEXT_NODE_WIDTH,
-            "long CLI-generated labels need a content-sized selection box, got {width}"
-        );
-        assert_eq!(
-            numeric_size(&text.height),
-            Some(op_editor_core::DEFAULT_TEXT_NODE_HEIGHT)
-        );
+        assert!(is_fit_content(&text.width));
+        assert!(is_fit_content(&text.height));
     }
 
     #[test]
-    fn preserved_nested_text_data_defaults_missing_bounds_to_compact_text_size() {
+    fn preserved_nested_text_data_defaults_missing_bounds_to_fit_content_size() {
         let node = ts_data_node(&args_with_data(
             r#"{"type":"frame","name":"Card","width":200,"height":120,"children":[{"type":"text","name":"Label","content":"Text"}]}"#,
         ))
@@ -210,18 +197,12 @@ mod tests {
             panic!("expected one text child");
         };
 
-        assert_eq!(
-            numeric_size(&text.width),
-            Some(op_editor_core::DEFAULT_TEXT_NODE_WIDTH)
-        );
-        assert_eq!(
-            numeric_size(&text.height),
-            Some(op_editor_core::DEFAULT_TEXT_NODE_HEIGHT)
-        );
+        assert!(is_fit_content(&text.width));
+        assert!(is_fit_content(&text.height));
     }
 
     #[test]
-    fn preserved_nested_text_data_fits_default_width_to_long_content() {
+    fn preserved_nested_text_data_defaults_long_content_to_fit_content_size() {
         let node = ts_data_node(&args_with_data(
             r#"{"type":"frame","name":"Card","width":200,"height":120,"children":[{"type":"text","name":"Label","content":"N4076-测试-6","fontSize":14}]}"#,
         ))
@@ -234,14 +215,7 @@ mod tests {
             panic!("expected one text child");
         };
 
-        let width = numeric_size(&text.width).expect("numeric text width");
-        assert!(
-            width > op_editor_core::DEFAULT_TEXT_NODE_WIDTH,
-            "nested CLI-generated labels need a content-sized selection box, got {width}"
-        );
-        assert_eq!(
-            numeric_size(&text.height),
-            Some(op_editor_core::DEFAULT_TEXT_NODE_HEIGHT)
-        );
+        assert!(is_fit_content(&text.width));
+        assert!(is_fit_content(&text.height));
     }
 }

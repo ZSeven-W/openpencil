@@ -11,6 +11,7 @@ use op_editor_core::geometry::aggregate_bounds;
 use op_editor_core::pen_node_ext::PenNodeExt;
 use op_editor_core::walkers::find_node;
 use op_editor_core::{EditorState, NodeId};
+use op_editor_ui::layout_scene::{NodeKind, SceneNode};
 use serde_json::{json, Map, Value};
 
 use super::tools::kind_label;
@@ -24,8 +25,7 @@ type ToolCallError = (ToolErrorCode, String);
 /// node on the active page, optionally filtered by page / parent /
 /// depth for TS CLI compatibility.
 pub struct SnapshotLayout {
-    pages: Vec<PageLayout>,
-    active_page_id: String,
+    state: EditorState,
 }
 
 #[derive(Clone)]
@@ -38,7 +38,7 @@ struct PageLayout {
 struct LayoutRecord {
     id: String,
     name: Option<String>,
-    type_label: &'static str,
+    type_label: String,
     ancestors: Vec<String>,
     depth: u32,
     // Document-space coords kept as f64 (TS `LayoutEntry` returns raw
@@ -49,12 +49,19 @@ struct LayoutRecord {
     h: f64,
 }
 
+#[derive(Clone)]
+struct NodeMeta {
+    name: Option<String>,
+    type_label: String,
+}
+
 impl McpTool for SnapshotLayout {
     fn name(&self) -> &str {
         "snapshot_layout"
     }
     fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
-        let page = match self.page_layout(args) {
+        let (pages, active_page_id) = page_layout_snapshots(&self.state);
+        let page = match page_layout(&pages, &active_page_id, args) {
             Ok(page) => page,
             Err((code, msg)) => return ToolOutcome::Err(code, msg),
         };
@@ -150,7 +157,7 @@ fn layout_entry_value(
     if let Some(name) = &record.name {
         obj.insert("name".into(), json!(name));
     }
-    obj.insert("type".into(), json!(record.type_label));
+    obj.insert("type".into(), json!(&record.type_label));
     obj.insert("x".into(), js_number(record.x - offset.0));
     obj.insert("y".into(), js_number(record.y - offset.1));
     obj.insert("width".into(), js_number(record.w));
@@ -163,27 +170,24 @@ fn layout_entry_value(
 }
 
 pub fn snapshot_layout_snapshot(state: &EditorState) -> SnapshotLayout {
-    let (pages, active_page_id) = page_layout_snapshots(state);
     SnapshotLayout {
-        pages,
-        active_page_id,
+        state: state.clone(),
     }
 }
 
-impl SnapshotLayout {
-    fn page_layout(&self, args: &BTreeMap<String, String>) -> Result<&PageLayout, ToolCallError> {
-        let id = arg_alias(args, &["pageId", "page_id", "page"]);
-        let target = id.unwrap_or(self.active_page_id.as_str());
-        self.pages
-            .iter()
-            .find(|page| page.id == target)
-            .ok_or_else(|| {
-                (
-                    ToolErrorCode::ToolFailed,
-                    format!("page not found: {target}"),
-                )
-            })
-    }
+fn page_layout<'a>(
+    pages: &'a [PageLayout],
+    active_page_id: &'a str,
+    args: &BTreeMap<String, String>,
+) -> Result<&'a PageLayout, ToolCallError> {
+    let id = arg_alias(args, &["pageId", "page_id", "page"]);
+    let target = id.unwrap_or(active_page_id);
+    pages.iter().find(|page| page.id == target).ok_or_else(|| {
+        (
+            ToolErrorCode::ToolFailed,
+            format!("page not found: {target}"),
+        )
+    })
 }
 
 // --- find_empty_space -----------------------------------------------
@@ -287,25 +291,45 @@ impl FindEmptySpace {
 }
 
 fn page_layout_snapshots(state: &EditorState) -> (Vec<PageLayout>, String) {
+    let scene = op_pen_loader::editor_state_to_layout_scene(state);
     match state.doc.pages.as_ref() {
         Some(pages) if !pages.is_empty() => {
             let active = state.ui.active_page_index.min(pages.len() - 1);
             let out = pages
                 .iter()
-                .map(|page| PageLayout {
-                    id: page.id.clone(),
-                    records: layout_records(&page.children),
+                .enumerate()
+                .map(|(idx, page)| {
+                    let mut meta = BTreeMap::new();
+                    collect_node_meta(&page.children, &mut meta);
+                    let records = scene
+                        .pages
+                        .get(idx)
+                        .map(|scene_page| scene_layout_records(&scene_page.children, &meta))
+                        .unwrap_or_default();
+                    PageLayout {
+                        id: page.id.clone(),
+                        records,
+                    }
                 })
                 .collect();
             (out, pages[active].id.clone())
         }
-        _ => (
-            vec![PageLayout {
-                id: "0".into(),
-                records: layout_records(&state.doc.children),
-            }],
-            "0".into(),
-        ),
+        _ => {
+            let mut meta = BTreeMap::new();
+            collect_node_meta(&state.doc.children, &mut meta);
+            let records = scene
+                .pages
+                .first()
+                .map(|page| scene_layout_records(&page.children, &meta))
+                .unwrap_or_default();
+            (
+                vec![PageLayout {
+                    id: "0".into(),
+                    records,
+                }],
+                "0".into(),
+            )
+        }
     }
 }
 
@@ -353,8 +377,72 @@ fn node_bounds(n: &PenNode, all_nodes: &[PenNode]) -> (f64, f64, f64, f64) {
     )
 }
 
-fn layout_records(nodes: &[PenNode]) -> Vec<LayoutRecord> {
-    layout_records_in(nodes, nodes)
+fn collect_node_meta(nodes: &[PenNode], out: &mut BTreeMap<String, NodeMeta>) {
+    for node in nodes {
+        out.insert(
+            node.id_str().to_string(),
+            NodeMeta {
+                name: node.base().name.clone(),
+                type_label: kind_label(node).to_string(),
+            },
+        );
+        if let Some(children) = node.children() {
+            collect_node_meta(children, out);
+        }
+    }
+}
+
+fn scene_layout_records(
+    roots: &[SceneNode],
+    meta: &BTreeMap<String, NodeMeta>,
+) -> Vec<LayoutRecord> {
+    fn walk(
+        nodes: &[SceneNode],
+        meta: &BTreeMap<String, NodeMeta>,
+        ancestors: &[String],
+        depth: u32,
+        out: &mut Vec<LayoutRecord>,
+    ) {
+        for node in nodes {
+            let id = node.id.clone();
+            let node_meta = meta.get(&id);
+            let bounds = node.aggregate_bounds();
+            out.push(LayoutRecord {
+                id: id.clone(),
+                name: node_meta.and_then(|m| m.name.clone()),
+                type_label: node_meta
+                    .map(|m| m.type_label.clone())
+                    .unwrap_or_else(|| scene_kind_label(&node.kind).to_string()),
+                ancestors: ancestors.to_vec(),
+                depth,
+                x: f64::from(bounds.origin.x),
+                y: f64::from(bounds.origin.y),
+                w: f64::from(bounds.size.x),
+                h: f64::from(bounds.size.y),
+            });
+            let mut child_ancestors = ancestors.to_vec();
+            child_ancestors.push(id);
+            walk(&node.children, meta, &child_ancestors, depth + 1, out);
+        }
+    }
+
+    let mut out = Vec::new();
+    walk(roots, meta, &[], 0, &mut out);
+    out
+}
+
+fn scene_kind_label(kind: &NodeKind) -> &str {
+    match kind {
+        NodeKind::Frame => "frame",
+        NodeKind::Group => "group",
+        NodeKind::Rect => "rectangle",
+        NodeKind::Ellipse => "ellipse",
+        NodeKind::Polygon => "polygon",
+        NodeKind::Line => "line",
+        NodeKind::Path => "path",
+        NodeKind::Text => "text",
+        NodeKind::Other(label) => label.as_str(),
+    }
 }
 
 /// Build a TS `computeLayoutTree(roots, all_nodes, max_depth)`-equivalent
@@ -397,7 +485,7 @@ fn layout_records_in(roots: &[PenNode], all_nodes: &[PenNode]) -> Vec<LayoutReco
             out.push(LayoutRecord {
                 id: id.clone(),
                 name: n.base().name.clone(),
-                type_label: kind_label(n),
+                type_label: kind_label(n).to_string(),
                 ancestors: ancestors.to_vec(),
                 depth,
                 x,

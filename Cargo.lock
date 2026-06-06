@@ -3034,6 +3034,8 @@ dependencies = [
  "op-ai-skills",
  "op-design-lint",
  "op-editor-core",
+ "op-editor-ui",
+ "op-pen-loader",
  "regex",
  "serde_json",
 ]
