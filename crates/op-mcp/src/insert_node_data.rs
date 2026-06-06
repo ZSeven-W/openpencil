@@ -156,7 +156,7 @@ mod tests {
     #[test]
     fn preserved_text_data_defaults_missing_bounds_to_compact_text_size() {
         let node = ts_data_node(&args_with_data(
-            r#"{"type":"text","name":"Label","content":"CLI text"}"#,
+            r#"{"type":"text","name":"Label","content":"Text"}"#,
         ))
         .expect("text data parses")
         .expect("text content preserves subtree");
@@ -175,9 +175,31 @@ mod tests {
     }
 
     #[test]
+    fn preserved_text_data_fits_default_width_to_long_content() {
+        let node = ts_data_node(&args_with_data(
+            r#"{"type":"text","name":"Label","content":"N4068-测试-35","fontSize":14}"#,
+        ))
+        .expect("text data parses")
+        .expect("text content preserves subtree");
+        let PenNode::Text(text) = node else {
+            panic!("expected text node");
+        };
+
+        let width = numeric_size(&text.width).expect("numeric text width");
+        assert!(
+            width > op_editor_core::DEFAULT_TEXT_NODE_WIDTH,
+            "long CLI-generated labels need a content-sized selection box, got {width}"
+        );
+        assert_eq!(
+            numeric_size(&text.height),
+            Some(op_editor_core::DEFAULT_TEXT_NODE_HEIGHT)
+        );
+    }
+
+    #[test]
     fn preserved_nested_text_data_defaults_missing_bounds_to_compact_text_size() {
         let node = ts_data_node(&args_with_data(
-            r#"{"type":"frame","name":"Card","width":200,"height":120,"children":[{"type":"text","name":"Label","content":"CLI text"}]}"#,
+            r#"{"type":"frame","name":"Card","width":200,"height":120,"children":[{"type":"text","name":"Label","content":"Text"}]}"#,
         ))
         .expect("frame data parses")
         .expect("children preserve subtree");
@@ -191,6 +213,31 @@ mod tests {
         assert_eq!(
             numeric_size(&text.width),
             Some(op_editor_core::DEFAULT_TEXT_NODE_WIDTH)
+        );
+        assert_eq!(
+            numeric_size(&text.height),
+            Some(op_editor_core::DEFAULT_TEXT_NODE_HEIGHT)
+        );
+    }
+
+    #[test]
+    fn preserved_nested_text_data_fits_default_width_to_long_content() {
+        let node = ts_data_node(&args_with_data(
+            r#"{"type":"frame","name":"Card","width":200,"height":120,"children":[{"type":"text","name":"Label","content":"N4076-测试-6","fontSize":14}]}"#,
+        ))
+        .expect("frame data parses")
+        .expect("children preserve subtree");
+        let PenNode::Frame(frame) = node else {
+            panic!("expected frame node");
+        };
+        let [PenNode::Text(text)] = frame.children.as_deref().expect("frame children") else {
+            panic!("expected one text child");
+        };
+
+        let width = numeric_size(&text.width).expect("numeric text width");
+        assert!(
+            width > op_editor_core::DEFAULT_TEXT_NODE_WIDTH,
+            "nested CLI-generated labels need a content-sized selection box, got {width}"
         );
         assert_eq!(
             numeric_size(&text.height),
