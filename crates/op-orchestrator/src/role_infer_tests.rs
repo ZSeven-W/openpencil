@@ -1,5 +1,11 @@
 use super::*;
+use crate::role_defaults::{RoleCtx, Theme};
 use op_editor_core::PenNodeExt;
+
+/// Root context for the tree-walk tests (desktop width, light theme).
+fn ctx() -> RoleCtx {
+    RoleCtx::root(1200.0, Theme::Light)
+}
 
 /// Build a frame `PenNode` from a JSON spec (easiest faithful construction).
 fn node(value: serde_json::Value) -> PenNode {
@@ -102,14 +108,14 @@ fn explicit_role_is_never_overwritten() {
     let mut n = node(serde_json::json!({
         "type":"frame","id":"x","name":"Header","role":"custom-thing","children":[]
     }));
-    resolve_tree_roles(&mut n, None);
+    resolve_tree_roles(&mut n, &ctx());
     assert_eq!(role_of(&n).as_deref(), Some("custom-thing"));
 }
 
 #[test]
 fn inferred_role_is_written_back() {
     let mut n = frame("Navbar");
-    resolve_tree_roles(&mut n, None);
+    resolve_tree_roles(&mut n, &ctx());
     assert_eq!(role_of(&n).as_deref(), Some("navbar"));
 }
 
@@ -122,7 +128,7 @@ fn page_chrome_role_stripped_inside_card_parent() {
             {"type":"frame","id":"hd","name":"Header","children":[]}
         ]
     }));
-    resolve_tree_roles(&mut card, None);
+    resolve_tree_roles(&mut card, &ctx());
     // "Pricing Card" → `card` (the `\bcard\b` pattern wins over `pricing`).
     assert_eq!(role_of(&card).as_deref(), Some("card"));
     let inner = &card.children().unwrap()[0];
@@ -133,7 +139,7 @@ fn page_chrome_role_stripped_inside_card_parent() {
 fn page_chrome_role_kept_outside_card_parent() {
     // The same "Header" at the top level (no card parent) DOES become navbar.
     let mut n = frame("Header");
-    resolve_tree_roles(&mut n, None);
+    resolve_tree_roles(&mut n, &ctx());
     assert_eq!(role_of(&n).as_deref(), Some("navbar"));
 }
 
@@ -143,21 +149,43 @@ fn card_role_stripped_on_tiny_node() {
     let mut tiny = node(serde_json::json!({
         "type":"frame","id":"d","name":"Stat Dot","width":6,"height":6,"children":[]
     }));
-    resolve_tree_roles(&mut tiny, None);
+    resolve_tree_roles(&mut tiny, &ctx());
     assert_eq!(role_of(&tiny), None);
     // A normally-sized stat card keeps the role. ("Stat Panel", not "Stat
     // Card", so the `stat` pattern wins — `\bcard\b` would override to `card`.)
     let mut big = node(serde_json::json!({
         "type":"frame","id":"c","name":"Stat Panel","width":200,"height":120,"children":[]
     }));
-    resolve_tree_roles(&mut big, None);
+    resolve_tree_roles(&mut big, &ctx());
     assert_eq!(role_of(&big).as_deref(), Some("stat-card"));
+}
+
+#[test]
+fn explicit_tiny_card_role_is_stripped() {
+    // An LLM-emitted role:"stat-card" on a 6×6 frame must be STRIPPED (not just
+    // inferred ones), so the I2 defaults pass never inflates a dot into a card.
+    let mut tiny = node(serde_json::json!({
+        "type":"frame","id":"d","name":"Indicator","role":"stat-card",
+        "width":6,"height":6,"children":[]
+    }));
+    resolve_tree_roles(&mut tiny, &ctx());
+    assert_eq!(
+        role_of(&tiny),
+        None,
+        "explicit tiny card role must be stripped"
+    );
+    // …but an explicit non-card role on a tiny node is left alone.
+    let mut dot = node(serde_json::json!({
+        "type":"frame","id":"x","name":"Dot","role":"badge","width":6,"height":6,"children":[]
+    }));
+    resolve_tree_roles(&mut dot, &ctx());
+    assert_eq!(role_of(&dot).as_deref(), Some("badge"));
 }
 
 #[test]
 fn forest_helper_resolves_each_root() {
     let mut forest = vec![frame("Navbar"), frame("Footer")];
-    resolve_forest_roles(&mut forest);
+    resolve_forest_roles(&mut forest, 1200.0, Theme::Light);
     assert_eq!(role_of(&forest[0]).as_deref(), Some("navbar"));
     assert_eq!(role_of(&forest[1]).as_deref(), Some("footer"));
 }

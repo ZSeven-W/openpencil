@@ -76,11 +76,26 @@ pub async fn run_subtask(
     if is_blank_container_forest(&nodes) {
         return fail("blank container root produced no content nodes".into());
     }
-    // Semantic role inference (P2 I1) runs BEFORE the fallback sizing
-    // normalize, so the existing role-aware cleanup passes (nav-surface repair,
-    // section logic) see inferred roles. Honors the semantic-before-fallback
-    // ordering (memory feedback_post_processing_order).
-    crate::role_infer::resolve_forest_roles(&mut nodes);
+    // Semantic role inference + role-default injection (P2 I1/I2) on the parsed
+    // subtree, BEFORE the fallback sizing normalize (semantic-before-fallback,
+    // memory feedback_post_processing_order). Canvas width + theme come from the
+    // plan's root frame — the page background drives light/dark default colors.
+    let canvas_width = plan.root_frame.width;
+    let theme = {
+        let first_solid = plan
+            .root_frame
+            .fill
+            .as_ref()
+            .and_then(|fills| {
+                fills
+                    .iter()
+                    .find(|f| f.kind == "solid" || f.kind.is_empty())
+            })
+            .map(|f| f.color.as_str())
+            .filter(|c| !c.is_empty());
+        crate::role_defaults::detect_theme_from_fill(first_solid)
+    };
+    crate::role_infer::resolve_forest_roles(&mut nodes, canvas_width, theme);
     normalize_section_roots_for_parent_layout(&mut nodes);
     let node_count = nodes.len();
 
