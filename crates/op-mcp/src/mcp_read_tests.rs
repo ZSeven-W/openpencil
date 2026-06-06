@@ -156,11 +156,11 @@ fn snapshot_layout_parent_id_returns_parent_relative_coords() {
 }
 
 #[test]
-fn snapshot_layout_unsized_node_defaults_to_100_like_ts_get_node_bounds() {
+fn snapshot_layout_unsized_node_uses_scene_aggregate_bounds() {
     use crate::test_fixtures::{group, rect};
-    // TS getNodeBounds returns `w || 100`: a node with no numeric width/height
-    // (keyword / missing / zero) reports 100×100, and x/y default to 0. A
-    // bounds-less group must match that (NOT a union of its children).
+    // `snapshot_layout` reports the same bounds the live canvas selection
+    // overlay uses. A bounds-less group resolves to the union of its children
+    // instead of the old TS `w || 100` placeholder.
     let g = group("g1", "G", vec![rect("r1", "a", 10.0, 20.0, 30.0, 40.0)]);
     let s = state_with(vec![g]);
     let mut r = ToolRegistry::default();
@@ -179,10 +179,61 @@ fn snapshot_layout_unsized_node_defaults_to_100_like_ts_get_node_bounds() {
             let root = &v["layout"][0];
             assert_eq!(root["id"], "g1");
             assert_eq!(root["type"], "group");
-            assert_eq!(root["x"], 0, "unsized group x = base.x (None→0): {root}");
-            assert_eq!(root["y"], 0, "{root}");
-            assert_eq!(root["width"], 100, "unsized → 100 (TS w||100): {root}");
-            assert_eq!(root["height"], 100, "{root}");
+            assert_eq!(root["x"], 10, "aggregate x follows child bounds: {root}");
+            assert_eq!(root["y"], 20, "aggregate y follows child bounds: {root}");
+            assert_eq!(
+                root["width"], 30,
+                "aggregate width follows child bounds: {root}"
+            );
+            assert_eq!(
+                root["height"], 40,
+                "aggregate height follows child bounds: {root}"
+            );
+        }
+        other => panic!("expected OkJson layout, got {other:?}"),
+    }
+}
+
+#[test]
+fn snapshot_layout_resolves_fit_content_text_to_measured_bounds() {
+    let src = r##"{
+      "version":"1.0.0","pages":[{"id":"p","name":"P","children":[
+        {"type":"text","id":"t1","name":"Label","x":10,"y":20,
+         "width":"fit_content","height":"fit_content",
+         "content":"N490-测试-9","fontSize":14}
+      ]}],"children":[]
+    }"##;
+    let parsed = jian_ops_schema::load_str(src).expect("parse .op fixture");
+    let s = op_editor_core::EditorState::from_document(parsed.value);
+    let mut r = ToolRegistry::default();
+    r.register(Box::new(snapshot_layout_snapshot(&s)));
+    let mut args = BTreeMap::new();
+    args.insert("maxDepth".into(), "0".into());
+    match r.dispatch(ToolCall {
+        id: RequestId::Num(1),
+        tool: "snapshot_layout".into(),
+        arguments: args,
+    }) {
+        ToolResponse::Ok {
+            json: Some(raw), ..
+        } => {
+            let v: serde_json::Value = serde_json::from_str(&raw).expect("layout json");
+            let text = &v["layout"][0];
+            assert_eq!(text["id"], "t1");
+            assert_eq!(text["x"], 10);
+            assert_eq!(text["y"], 20);
+            let width = text["width"].as_f64().expect("numeric width");
+            let height = text["height"].as_f64().expect("numeric height");
+            assert!(
+                width > op_editor_core::DEFAULT_TEXT_NODE_WIDTH as f64,
+                "fit_content text should use measured content width, got {width}: {text}"
+            );
+            assert_ne!(width, 100.0, "fit_content text must not use 100 fallback");
+            assert!(height >= 14.0, "height should fit the font, got {height}");
+            assert_ne!(
+                height, 100.0,
+                "fit_content text height must not use 100 fallback"
+            );
         }
         other => panic!("expected OkJson layout, got {other:?}"),
     }

@@ -160,6 +160,33 @@ fn text_typography_fields_flow_through_to_scene() {
 }
 
 #[test]
+fn fit_content_text_resolves_scene_bounds_to_measured_text() {
+    let src = r##"{
+      "version":"1.0.0","pages":[{"id":"p","name":"P","children":[
+        {"type":"text","id":"t","x":10,"y":20,
+         "width":"fit_content","height":"fit_content",
+         "content":"N490-测试-9","fontSize":14,
+         "fill":[{"type":"solid","color":"#0F172A"}]}
+      ]}],"children":[]
+    }"##;
+    let scene = editor_state_to_layout_scene(&state_from(src));
+    let n = scene.pages[0].find("t").expect("text node in scene");
+
+    assert_eq!(n.bounds.origin.x, 10.0);
+    assert_eq!(n.bounds.origin.y, 20.0);
+    assert!(
+        n.bounds.size.x > op_editor_core::DEFAULT_TEXT_NODE_WIDTH as f32,
+        "fit_content text should resolve to measured content width, got {}",
+        n.bounds.size.x
+    );
+    assert!(
+        n.bounds.size.y >= 14.0,
+        "fit_content text should resolve to measured content height, got {}",
+        n.bounds.size.y
+    );
+}
+
+#[test]
 fn no_variable_ref_keeps_authored_fill() {
     // Without a registered `$ref`, the node keeps its authored fill.
     let src = r##"{
