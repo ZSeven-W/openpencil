@@ -3084,6 +3084,7 @@ dependencies = [
  "futures",
  "op-editor-core",
  "op-orchestrator",
+ "reqwest 0.12.28",
  "serde_json",
  "tokio",
 ]
