@@ -8,7 +8,9 @@
 use std::fmt;
 
 use futures::StreamExt;
-use op_ai::chat_provider::{ChatDelta, ChatProvider, ChatRequest, EffortLevel, StopReason};
+use op_ai::chat_provider::{
+    ChatDelta, ChatProvider, ChatRequest, EffortLevel, StopReason, ThinkingMode,
+};
 use op_editor_core::{BuiltinAgentConfig, BuiltinAgentKind};
 use serde_json::{json, Value};
 use tokio::sync::mpsc;
@@ -99,6 +101,12 @@ impl ChatProvider for ConfiguredBuiltinProvider {
         let provider = self.clone();
         let system_prompt = request.system_prompt;
         let max_output_tokens = request.max_output_tokens.max(1);
+        // Only force MiniMax thinking off when the CALLER asked for it
+        // (the orchestrator sets `Disabled`; normal chat defaults to
+        // `Adaptive` and must keep M3's reasoning). Codex review caught
+        // an earlier version disabling thinking unconditionally for all
+        // MiniMax chat.
+        let disable_thinking = request.thinking == ThinkingMode::Disabled;
         let (tx, rx) = mpsc::channel::<ChatDelta>(64);
         shared_runtime().spawn(async move {
             let _guard = guard;
@@ -108,7 +116,15 @@ impl ChatProvider for ConfiguredBuiltinProvider {
                         .await
                 }
                 BuiltinAgentKind::OpenAiCompat => {
-                    run_openai_chat(provider, system_prompt, prompt, max_output_tokens, &tx).await
+                    run_openai_chat(
+                        provider,
+                        system_prompt,
+                        prompt,
+                        max_output_tokens,
+                        disable_thinking,
+                        &tx,
+                    )
+                    .await
                 }
             };
             match emitted_done {
@@ -134,11 +150,19 @@ impl ChatProvider for ConfiguredBuiltinProvider {
     }
 }
 
+/// MiniMax M 系("MiniMax-M*"、旧 "abab*")是推理模型,其思考由 MiniMax 专属的
+/// `thinking` body 字段控制。据模型名判定,以便只对它发关思考字段。
+fn is_minimax_model(model: &str) -> bool {
+    let m = model.to_ascii_lowercase();
+    m.starts_with("minimax") || m.starts_with("abab")
+}
+
 async fn run_openai_chat(
     provider: ConfiguredBuiltinProvider,
     system_prompt: String,
     prompt: String,
     max_output_tokens: u32,
+    disable_thinking: bool,
     tx: &mpsc::Sender<ChatDelta>,
 ) -> Result<bool, String> {
     let url = provider.endpoint("/chat/completions");
@@ -153,12 +177,23 @@ async fn run_openai_chat(
         "role": "user",
         "content": prompt,
     }));
-    let body = json!({
+    let mut body = json!({
         "model": provider.model,
         "stream": true,
         "max_tokens": max_output_tokens,
         "messages": messages,
     });
+    // MiniMax M 系是推理模型,默认把 `<think>…</think>` 注进 `content`,既烧光
+    // 输出预算(JSON 被截断)又逼解析层去剥 think。当调用方明确要求关思考时
+    // (`disable_thinking`,如编排器的设计子任务),在线级关掉(实测确认 MiniMax
+    // 接受 `thinking:{type:"disabled"}` 返回干净 content)。普通对话用 `Adaptive`、
+    // 不会进这里,保留 M3 推理。仅对 MiniMax 加此字段,不碰别的 openai-compat
+    // provider(DeepSeek / 方舟 / Qwen)。
+    if disable_thinking && is_minimax_model(&provider.model) {
+        if let Some(obj) = body.as_object_mut() {
+            obj.insert("thinking".into(), json!({ "type": "disabled" }));
+        }
+    }
     let resp = reqwest::Client::new()
         .post(&url)
         .bearer_auth(&provider.api_key)
@@ -462,6 +497,17 @@ mod tests {
             parse_anthropic_sse_data(data),
             Some(ChatDelta::TextDelta("hello".into()))
         );
+    }
+
+    #[test]
+    fn is_minimax_model_gates_thinking_field() {
+        // 仅 MiniMax 模型加 `thinking:{type:disabled}`;别的 provider 不加。
+        assert!(is_minimax_model("MiniMax-M3"));
+        assert!(is_minimax_model("MiniMax-M2.7"));
+        assert!(is_minimax_model("abab6.5s-chat"));
+        assert!(!is_minimax_model("deepseek-v4-pro"));
+        assert!(!is_minimax_model("qwen3-coder-plus"));
+        assert!(!is_minimax_model("ark-code-latest"));
     }
 
     #[test]
