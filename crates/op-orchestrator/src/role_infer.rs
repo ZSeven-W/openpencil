@@ -19,6 +19,8 @@ use jian_ops_schema::sizing::SizingBehavior;
 use op_editor_core::PenNodeExt;
 use regex::Regex;
 
+use crate::role_defaults::{apply_role_defaults, node_layout_string, RoleCtx, Theme};
+
 /// Exact (case-insensitive) name → role. Port of `NAME_EXACT_MAP`.
 fn exact_role(lower: &str) -> Option<&'static str> {
     Some(match lower {
@@ -193,43 +195,72 @@ fn is_absurdly_tiny_for_card_role(node: &PenNode) -> bool {
 /// - a card-family role on an absurdly tiny node ("Status Dot" → stat-card) is
 ///   dropped.
 fn resolve_node_role(node: &mut PenNode, parent_role: Option<&str>) {
-    if node.base().role.is_some() {
-        return; // AI-explicit role wins
+    // Effective role: an explicit (AI-emitted) role wins; otherwise infer one
+    // from the node name.
+    let mut role: Option<String> = node.base().role.clone();
+    if role.is_none() {
+        if let Some(inferred) = infer_role_from_name(node) {
+            // The page-chrome-in-card guard applies ONLY to INFERRED roles (TS
+            // resolveNodeRole runs it inside the `if (!role)` branch): a card's
+            // inner "Header" must not be inferred as a navbar.
+            let drop_page_chrome = PAGE_CHROME_ROLES.contains(&inferred)
+                && parent_role
+                    .map(|p| CARD_LIKE_ROLES.contains(&p))
+                    .unwrap_or(false);
+            if !drop_page_chrome {
+                role = Some(inferred.to_string());
+            }
+        }
     }
-    let Some(role) = infer_role_from_name(node) else {
+
+    let Some(role_str) = role else {
         return;
     };
-    if PAGE_CHROME_ROLES.contains(&role)
-        && parent_role
-            .map(|p| CARD_LIKE_ROLES.contains(&p))
-            .unwrap_or(false)
-    {
+
+    // Tiny-card guard — applies to BOTH explicit and inferred roles, matching
+    // the post-inference guard in TS resolveNodeRole (which `delete`s the role).
+    // A card-family role on a node too small to be a card (a name-inferred
+    // "Status Dot" → stat-card, OR an LLM-emitted `role:"card"` on a 6×6 frame)
+    // is STRIPPED so the I2 defaults pass injects no card padding/shadow onto a
+    // dot. (Codex review 2026-06-06.)
+    if CARD_LIKE_ROLES.contains(&role_str.as_str()) && is_absurdly_tiny_for_card_role(node) {
+        node.base_mut().role = None;
         return;
     }
-    if CARD_LIKE_ROLES.contains(&role) && is_absurdly_tiny_for_card_role(node) {
-        return;
-    }
-    node.base_mut().role = Some(role.to_string());
+
+    node.base_mut().role = Some(role_str);
 }
 
-/// Walk the tree depth-first, inferring + writing roles. Passes the resolved
-/// parent role down so the page-chrome-in-card guard sees it. Port of
-/// `resolveTreeRoles` (I1 subset: inference only, no `applyDefaults`).
-pub fn resolve_tree_roles(node: &mut PenNode, parent_role: Option<&str>) {
-    resolve_node_role(node, parent_role);
-    let this_role = node.base().role.clone();
+/// Walk the tree depth-first: infer + write the role (I1), then inject the
+/// role's defaults (I2). Threads the [`RoleCtx`] down so the page-chrome-in-card
+/// guard and the parent-aware / theme-aware / canvas-width-aware defaults see
+/// the right context. Port of `resolveTreeRoles`.
+pub fn resolve_tree_roles(node: &mut PenNode, ctx: &RoleCtx) {
+    resolve_node_role(node, ctx.parent_role.as_deref());
+    if let Some(role) = node.base().role.clone() {
+        apply_role_defaults(node, &role, ctx);
+    }
+    // The defaults pass may have just set this node's layout, so read it AFTER.
+    let child_ctx = RoleCtx {
+        parent_role: node.base().role.clone(),
+        parent_layout: node_layout_string(node),
+        canvas_width: ctx.canvas_width,
+        theme: ctx.theme,
+    };
     if let Some(children) = node.children_mut() {
         for child in children.iter_mut() {
-            resolve_tree_roles(child, this_role.as_deref());
+            resolve_tree_roles(child, &child_ctx);
         }
     }
 }
 
-/// Convenience for a forest of section roots (a sub-agent subtree). Each root's
-/// parent is the page, whose role we don't track here, so `parent_role = None`.
-pub fn resolve_forest_roles(nodes: &mut [PenNode]) {
+/// Resolve a forest of section roots (a sub-agent subtree). Each root's parent
+/// is the page, whose role we don't track here, so `parent_role = None`.
+/// `canvas_width` + `theme` come from the plan's root frame.
+pub fn resolve_forest_roles(nodes: &mut [PenNode], canvas_width: f64, theme: Theme) {
+    let ctx = RoleCtx::root(canvas_width, theme);
     for node in nodes.iter_mut() {
-        resolve_tree_roles(node, None);
+        resolve_tree_roles(node, &ctx);
     }
 }
 

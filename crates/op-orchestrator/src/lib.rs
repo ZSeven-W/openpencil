@@ -36,6 +36,7 @@ pub mod cleanup;
 pub(crate) mod cleanup_typography;
 pub mod concurrent;
 pub mod prompt;
+pub mod role_defaults;
 pub mod role_infer;
 pub mod run;
 pub mod run_dashboard;
