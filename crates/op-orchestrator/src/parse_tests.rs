@@ -174,23 +174,50 @@ fn resolve_numeric_design_token_table() {
     );
     assert_eq!(resolve_numeric_design_token("$spacing-3"), Some(12.0));
     assert_eq!(resolve_numeric_design_token("$radius-md"), Some(8.0));
-    // colors / weight / sizing keywords stay strings (not numeric tokens).
+    // weight tokens resolve to numbers too (FontWeight accepts a number);
+    // unresolved weight tokens would degrade text to the default weight.
+    assert_eq!(
+        resolve_numeric_design_token("$type-body-weight"),
+        Some(400.0)
+    );
+    assert_eq!(
+        resolve_numeric_design_token("$type-display-weight"),
+        Some(700.0)
+    );
+    assert_eq!(resolve_numeric_design_token("$type-h2-weight"), Some(600.0));
+    // colors / sizing keywords stay strings (not numeric tokens).
     assert_eq!(resolve_numeric_design_token("$color-accent"), None);
-    assert_eq!(resolve_numeric_design_token("$type-body-weight"), None);
     assert_eq!(resolve_numeric_design_token("fill_container"), None);
 }
 
 #[test]
 fn normalize_resolves_numeric_token_and_wraps_bare_fill() {
     let mut v = serde_json::json!({
-        "type":"text","id":"x","fontSize":"$type-caption-size","fill":"$color-surface"
+        "type":"text","id":"x",
+        "fontSize":"$type-caption-size",
+        "fontWeight":"$type-display-weight",
+        // token-like strings in NON-numeric fields must stay strings — a
+        // design-system showcase may legitimately display "$spacing-3" as text.
+        "content":"$spacing-3",
+        "name":"$type-caption-size",
+        "fill":"$color-surface"
     });
     normalize_generated_node_json(&mut v);
-    assert_eq!(v["fontSize"], serde_json::json!(12.0));
+    // Whole numbers serialize as integers so `fontWeight` (FontWeight::Number(u32))
+    // accepts them — a float (700.0) would fail to deserialize.
+    assert_eq!(v["fontSize"], serde_json::json!(12)); // numeric field → integer
+    assert_eq!(v["fontWeight"], serde_json::json!(700)); // weight → integer, not 700.0
+    assert!(v["fontWeight"].is_i64()); // not a float
+    assert_eq!(v["content"], serde_json::json!("$spacing-3")); // text content preserved
+    assert_eq!(v["name"], serde_json::json!("$type-caption-size")); // name preserved
     assert_eq!(
         v["fill"],
         serde_json::json!([{"type":"solid","color":"$color-surface"}])
     );
+    // The normalized node must round-trip into the canonical schema — this is the
+    // real regression guard: a float fontWeight would fail here.
+    serde_json::from_value::<PenNode>(v)
+        .expect("normalized node must deserialize into canonical PenNode");
 }
 
 #[test]
