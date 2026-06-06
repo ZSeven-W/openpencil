@@ -470,38 +470,53 @@ fn nested_frame_doc(depth: usize) -> String {
     src
 }
 
+fn run_deep_layer_fixture(test: impl FnOnce() + Send + 'static) {
+    let handle = std::thread::Builder::new()
+        .name("op-layer-panel-deep-fixture".into())
+        .stack_size(64 * 1024 * 1024)
+        .spawn(test)
+        .expect("spawn deep layer fixture test");
+    if let Err(payload) = handle.join() {
+        std::panic::resume_unwind(payload);
+    }
+}
+
 #[test]
 fn deep_layer_tree_exposes_horizontal_scroll_range() {
-    let state = state_from(&nested_frame_doc(50));
-    let panel = LayerPanel::from_editor(&state);
-    let rect = Rect {
-        origin: Point2D::new(0.0, 0.0),
-        size: Point2D::new(LAYER_PANEL_WIDTH, 700.0),
-    };
+    run_deep_layer_fixture(|| {
+        let state = state_from(&nested_frame_doc(50));
+        let panel = LayerPanel::from_editor(&state);
+        let rect = Rect {
+            origin: Point2D::new(0.0, 0.0),
+            size: Point2D::new(LAYER_PANEL_WIDTH, 700.0),
+        };
 
-    let regions = panel.regions(rect);
+        let regions = panel.regions(rect);
 
-    assert!(
-        regions.layers_content_w > rect.size.x,
-        "deep layer content should be wider than the fixed panel viewport"
-    );
-    assert!(
-        regions.layers_max_h_scroll > 0.0,
-        "deep layer rows need a horizontal scroll range"
-    );
+        assert!(
+            regions.layers_content_w > rect.size.x,
+            "deep layer content should be wider than the fixed panel viewport"
+        );
+        assert!(
+            regions.layers_max_h_scroll > 0.0,
+            "deep layer rows need a horizontal scroll range"
+        );
+    });
 }
 
 #[test]
 fn layer_horizontal_scroll_offset_is_clamped() {
-    let mut state = state_from(&nested_frame_doc(50));
-    state.editor_ui.layer_layers_h_scroll = 10_000.0;
-    let panel = LayerPanel::from_editor(&state);
-    let rect = Rect {
-        origin: Point2D::new(0.0, 0.0),
-        size: Point2D::new(LAYER_PANEL_WIDTH, 700.0),
-    };
+    run_deep_layer_fixture(|| {
+        let mut state = state_from(&nested_frame_doc(50));
+        state.editor_ui.layer_layers_h_scroll = 10_000.0;
+        let panel = LayerPanel::from_editor(&state);
+        let rect = Rect {
+            origin: Point2D::new(0.0, 0.0),
+            size: Point2D::new(LAYER_PANEL_WIDTH, 700.0),
+        };
 
-    let regions = panel.regions(rect);
+        let regions = panel.regions(rect);
 
-    assert_eq!(regions.layers_h_scroll, regions.layers_max_h_scroll);
+        assert_eq!(regions.layers_h_scroll, regions.layers_max_h_scroll);
+    });
 }
