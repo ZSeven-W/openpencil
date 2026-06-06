@@ -21,22 +21,21 @@ use op_mcp::{
     codegen_clean_snapshot, codegen_plan_snapshot, codegen_submit_chunk_snapshot,
     copy_node_snapshot, copy_selected_snapshot, count_nodes_snapshot, create_component_snapshot,
     create_variable_snapshot, cut_selected_snapshot, cycle_active_axis_value_snapshot,
-    debug_logs_tail_snapshot, debug_screenshot_snapshot, debug_tools_enabled,
-    debug_validation_report_snapshot, delete_component_snapshot, delete_node_snapshot,
-    delete_page_snapshot, delete_selected_snapshot, delete_variable_snapshot,
-    design_content_snapshot, design_refine_snapshot, design_skeleton_snapshot,
-    document_info_snapshot, duplicate_page_snapshot, duplicate_selected_snapshot,
-    export_design_md_snapshot, find_empty_space_snapshot, find_node_by_name_snapshot,
-    get_active_theme_snapshot, get_canvas_bounds_snapshot, get_component_snapshot,
-    get_design_md_snapshot, get_design_prompt_snapshot, get_history_depth_snapshot,
-    get_node_children_snapshot, get_node_parent_snapshot, get_node_snapshot,
-    get_selection_set_snapshot, get_style_guide_snapshot, get_style_guide_tags_snapshot,
-    get_variables_snapshot, get_viewport_snapshot, group_selected_snapshot, import_svg_snapshot,
-    insert_node_snapshot, instantiate_component_snapshot, list_components_snapshot,
-    list_node_kinds_snapshot, list_pages_snapshot, list_theme_presets_snapshot,
-    list_variables_snapshot, load_theme_preset_snapshot, move_node_snapshot,
-    nudge_selected_snapshot, open_document_snapshot, paste_clipboard_snapshot, read_nodes_snapshot,
-    redo_snapshot, remove_node_effect_snapshot, remove_page_snapshot, rename_component_snapshot,
+    debug_tools_enabled, delete_component_snapshot, delete_node_snapshot, delete_page_snapshot,
+    delete_selected_snapshot, delete_variable_snapshot, design_content_snapshot,
+    design_refine_snapshot, design_skeleton_snapshot, document_info_snapshot,
+    duplicate_page_snapshot, duplicate_selected_snapshot, export_design_md_snapshot,
+    find_empty_space_snapshot, find_node_by_name_snapshot, get_active_theme_snapshot,
+    get_canvas_bounds_snapshot, get_component_snapshot, get_design_md_snapshot,
+    get_design_prompt_snapshot, get_history_depth_snapshot, get_node_children_snapshot,
+    get_node_parent_snapshot, get_node_snapshot, get_selection_set_snapshot,
+    get_style_guide_snapshot, get_style_guide_tags_snapshot, get_variables_snapshot,
+    get_viewport_snapshot, group_selected_snapshot, import_svg_snapshot, insert_node_snapshot,
+    instantiate_component_snapshot, list_components_snapshot, list_node_kinds_snapshot,
+    list_pages_snapshot, list_theme_presets_snapshot, list_variables_snapshot,
+    load_theme_preset_snapshot, move_node_snapshot, nudge_selected_snapshot,
+    open_document_snapshot, paste_clipboard_snapshot, read_nodes_snapshot, redo_snapshot,
+    remove_node_effect_snapshot, remove_page_snapshot, rename_component_snapshot,
     rename_page_snapshot, rename_variable_snapshot, reorder_page_snapshot,
     reorder_selected_snapshot, replace_all_matching_properties_snapshot, replace_node_snapshot,
     run_stdio_with_applier, save_document_snapshot, save_theme_preset_snapshot,
@@ -52,6 +51,10 @@ use op_mcp::{
     set_variables_snapshot, set_viewport_snapshot, snapshot_layout_snapshot,
     toggle_node_selection_snapshot, undo_snapshot, ungroup_selected_snapshot, update_node_snapshot,
     McpTool, ToolRegistry,
+};
+#[cfg(feature = "mcp-debug-tools")]
+use op_mcp::{
+    debug_logs_tail_snapshot, debug_screenshot_snapshot, debug_validation_report_snapshot,
 };
 
 pub(crate) mod file_path;
@@ -512,6 +515,7 @@ fn rebuild_registry(doc: &EditorState, requested_tool: Option<&str>) -> ToolRegi
     register_tool!("get_history_depth", get_history_depth_snapshot(doc));
     register_tool!("get_viewport", get_viewport_snapshot(doc));
     register_tool!("get_selection_set", get_selection_set_snapshot(doc));
+    #[cfg(feature = "mcp-debug-tools")]
     if debug_tools_enabled() {
         register_tool!(
             "debug_validation_report",
@@ -775,6 +779,9 @@ pub(crate) use doc_sync::*;
 fn tools_list_response(id_raw: &str, state: &EditorState, debug_enabled: bool) -> String {
     let mut entries: Vec<String> = TOOL_SCHEMAS.iter().map(|s| (*s).to_string()).collect();
     entries.extend(op_mcp::element_tools::element_tool_schemas(state));
+    #[cfg(not(feature = "mcp-debug-tools"))]
+    let _ = debug_enabled;
+    #[cfg(feature = "mcp-debug-tools")]
     if debug_enabled {
         entries.extend(DEBUG_TOOL_SCHEMAS.iter().map(|s| (*s).to_string()));
     }
@@ -785,6 +792,9 @@ fn tools_list_response(id_raw: &str, state: &EditorState, debug_enabled: bool) -
 }
 
 mod schemas;
+#[cfg(not(feature = "mcp-debug-tools"))]
+pub(crate) use schemas::TOOL_SCHEMAS;
+#[cfg(feature = "mcp-debug-tools")]
 pub(crate) use schemas::{DEBUG_TOOL_SCHEMAS, TOOL_SCHEMAS};
 
 #[cfg(test)]

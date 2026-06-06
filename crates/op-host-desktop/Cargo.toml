@@ -13,6 +13,10 @@ description = "OpenPencil desktop host — winit + skia-safe binary that drives 
 name = "openpencil-desktop"
 path = "src/main.rs"
 
+[features]
+default = []
+mcp-debug-tools = ["op-mcp/debug-tools"]
+
 # File-association metadata for `cargo-bundle` (`cargo bundle`). This
 # declares OpenPencil as the OS-level handler for `.op` / `.pen`
 # documents: macOS writes `CFBundleDocumentTypes` into the `.app`

@@ -10,10 +10,14 @@ description = "OpenPencil MCP server — JSON-RPC tool registry over op-editor-c
 name = "op_mcp"
 path = "src/lib.rs"
 
+[features]
+default = []
+debug-tools = ["dep:op-design-lint"]
+
 [dependencies]
 jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema" }
 op-ai-skills = { path = "../op-ai-skills" }
-op-design-lint = { path = "../op-design-lint" }
+op-design-lint = { path = "../op-design-lint", optional = true }
 op-editor-core = { path = "../op-editor-core" }
 op-editor-ui = { path = "../op-editor-ui" }
 op-pen-loader = { path = "../op-pen-loader" }
