@@ -3056,6 +3056,7 @@ dependencies = [
  "jian-ops-schema",
  "op-ai-skills",
  "op-editor-core",
+ "regex",
  "serde",
  "serde_json",
  "tokio",
