@@ -192,6 +192,75 @@ fn non_ascii_color_does_not_panic() {
     assert!(btn["children"][0].get("fill").is_none());
 }
 
+// ── I4: layout-property fixes ─────────────────────────────────────────────
+
+#[test]
+fn card_row_equalized_to_fill_container() {
+    // Two fixed-width cards of unequal width (240 vs 120 → ratio 0.5 < 0.6) and
+    // similar height → both promoted to fill_container.
+    let mut row = json!({
+        "type":"frame","layout":"horizontal","children":[
+            {"type":"frame","width":240,"height":200,"children":[]},
+            {"type":"frame","width":120,"height":210,"children":[]}
+        ]
+    });
+    equalize_card_row(&mut row);
+    assert_eq!(row["children"][0]["width"], json!("fill_container"));
+    assert_eq!(row["children"][1]["width"], json!("fill_container"));
+    assert_eq!(row["children"][0]["height"], json!("fill_container"));
+}
+
+#[test]
+fn card_row_left_alone_when_widths_similar() {
+    // 200 vs 190 → ratio 0.95 ≥ 0.6 → leave widths as-is.
+    let mut row = json!({
+        "type":"frame","layout":"horizontal","children":[
+            {"type":"frame","width":200,"height":200,"children":[]},
+            {"type":"frame","width":190,"height":200,"children":[]}
+        ]
+    });
+    equalize_card_row(&mut row);
+    assert_eq!(row["children"][0]["width"], json!(200));
+}
+
+#[test]
+fn form_inputs_promoted_when_fill_sibling_present() {
+    let mut form = json!({
+        "type":"frame","layout":"vertical","children":[
+            {"type":"frame","role":"input","width":"fill_container"},
+            {"type":"frame","role":"input","width":200}
+        ]
+    });
+    normalize_form_input_widths(&mut form);
+    assert_eq!(form["children"][1]["width"], json!("fill_container"));
+}
+
+#[test]
+fn trailing_icon_pushes_text_to_fill() {
+    let mut input = json!({
+        "type":"frame","role":"input","children":[
+            {"type":"text","content":"Search"},
+            {"type":"frame","role":"icon","width":20,"height":20}
+        ]
+    });
+    normalize_input_trailing_icon_alignment(&mut input);
+    assert_eq!(input["children"][0]["width"], json!("fill_container"));
+    assert_eq!(input["children"][0]["textGrowth"], json!("fixed-width"));
+}
+
+#[test]
+fn clip_content_set_for_rounded_image_frame() {
+    let mut card = json!({
+        "type":"frame","cornerRadius":12,"children":[{"type":"image","id":"img"}]
+    });
+    apply_clip_content_for_image(&mut card);
+    assert_eq!(card["clipContent"], json!(true));
+    // No image → untouched.
+    let mut plain = json!({"type":"frame","cornerRadius":12,"children":[{"type":"text"}]});
+    apply_clip_content_for_image(&mut plain);
+    assert!(plain.get("clipContent").is_none());
+}
+
 // ── post_pass_forest integration (round-trips through PenNode) ────────────
 
 #[test]
