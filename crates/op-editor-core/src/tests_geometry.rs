@@ -156,6 +156,34 @@ fn set_selected_bounds_overwrites_a_leaf_rect() {
 }
 
 #[test]
+fn set_selected_bounds_keeps_flex_children_flow_positioned() {
+    use crate::test_support::{flex_frame, flow_rect};
+    let mut s = state_with(vec![flex_frame(
+        "n1",
+        "Flex",
+        0.0,
+        0.0,
+        200.0,
+        300.0,
+        vec![flow_rect("n2", "A", 80.0, 24.0)],
+    )]);
+    s.set_single_selection(NodeId::new("n2"));
+
+    s.set_selected_bounds(DocRect {
+        x: 100.0,
+        y: 200.0,
+        w: 96.0,
+        h: 32.0,
+    });
+
+    let c = find_node(s.active_children(), &NodeId::new("n2")).unwrap();
+    assert_eq!(c.base().x, None, "flex child must not materialize x");
+    assert_eq!(c.base().y, None, "flex child must not materialize y");
+    assert_eq!(c.width_px(), Some(96.0));
+    assert_eq!(c.height_px(), Some(32.0));
+}
+
+#[test]
 fn set_selected_rotation_writes_degrees() {
     let mut s = state_with(vec![rect("n1", "A", 0.0, 0.0, 50.0, 50.0)]);
     s.set_single_selection(NodeId::new("n1"));

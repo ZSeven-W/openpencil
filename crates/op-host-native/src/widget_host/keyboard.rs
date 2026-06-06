@@ -596,10 +596,13 @@ impl WidgetHostNative {
         if self.editor_state.selection.is_empty() {
             return false;
         }
-        self.editor_state.commit_history();
-        self.editor_state.translate_selected(dx as f64, dy as f64);
-        self.mark_dirty();
-        true
+        let snap = self.editor_state.snapshot_for_history();
+        if self.editor_state.translate_selected(dx as f64, dy as f64) {
+            self.editor_state.history_push_past(snap);
+            self.mark_dirty();
+            return true;
+        }
+        false
     }
 
     pub fn apply_send(&mut self) -> bool {

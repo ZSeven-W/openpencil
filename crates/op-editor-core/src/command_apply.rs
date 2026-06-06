@@ -607,9 +607,12 @@ impl EditorState {
                     return false;
                 }
                 let snap = self.snapshot_for_history();
-                self.translate_selected(dx as f64, dy as f64);
-                self.history_push_past(snap);
-                true
+                if self.translate_selected(dx as f64, dy as f64) {
+                    self.history_push_past(snap);
+                    true
+                } else {
+                    false
+                }
             }
             EditorCommand::GroupSelected => {
                 let Some(mut next_id) = self.next_node_id_seed() else {
