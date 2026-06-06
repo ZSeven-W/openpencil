@@ -24,14 +24,25 @@ use std::collections::HashMap;
 
 /// sub-agent 阶段要求模型产出的 JSON 形状说明。
 const NODE_FORMAT: &str = r#"
-Respond with a JSON array of canonical PenNode objects for THIS section only.
-Each node is tagged by "type" (frame/group/rectangle/ellipse/line/polygon/path/
-text/text_input/image/icon_font). Frames/groups nest children via "children".
-Example: [ { "type": "frame", "id": "<prefix>-1", "name": "Card", "x": 0, "y": 0,
-"width": 1200, "height": 200, "children": [] } ]
+Respond with THIS section's canonical PenNode objects in the FLAT _parent format:
+output ONE JSON object per line (NO enclosing [ ] array), each tagged by "type"
+(frame/group/rectangle/ellipse/line/polygon/path/text/text_input/image/icon_font)
+and carrying "_parent" — null for the section root, else the id of its parent
+node (which MUST appear on an earlier line).
+EVERY non-root node MUST set "_parent". Do NOT emit a flat list of siblings with
+no _parent links, and do NOT rely on a "children" array — a flat list renders
+BROKEN: a horizontal row whose items are not _parent-linked to it collapses into
+a vertical stack. Express the WHOLE tree through _parent (row -> its cards -> each
+card's texts/icons).
+Example (a horizontal row of two cards inside a section):
+{"_parent":null,"id":"<prefix>-root","type":"frame","name":"Section","width":"fill_container","height":"fit_content","layout":"vertical","gap":16}
+{"_parent":"<prefix>-root","id":"<prefix>-row","type":"frame","name":"Row","width":"fill_container","height":"fit_content","layout":"horizontal","gap":16}
+{"_parent":"<prefix>-row","id":"<prefix>-card1","type":"frame","name":"Card","width":"fill_container","height":"fill_container","layout":"vertical","cornerRadius":12}
+{"_parent":"<prefix>-card1","id":"<prefix>-card1-title","type":"text","name":"Title","content":"Revenue","fontSize":14}
+{"_parent":"<prefix>-row","id":"<prefix>-card2","type":"frame","name":"Card","width":"fill_container","height":"fill_container","layout":"vertical","cornerRadius":12}
 ALL field names are camelCase: cornerRadius, fontSize, fontWeight, justifyContent,
 alignItems, clipContent. Geometry fields are x, y, width, height. Never snake_case.
-Output ONLY the JSON array."#;
+Output ONLY the JSON lines."#;
 
 /// Rich 模式 system prompt 末尾后缀 —— verbatim,`orchestrator.ts:1382-1383`。
 const RICH_SUFFIX: &str = "\n\n---\nCRITICAL OUTPUT FORMAT ENFORCEMENT:\n\
@@ -189,6 +200,10 @@ pub fn build_subagent_prompt(
         .collect::<Vec<_>>()
         .join("\n\n");
     system_prompt.push_str("\n\n");
+    // Flat `_parent` for ALL tiers — validated that Basic-tier models
+    // (MiniMax M2.7/M3 are Basic) emit clean `_parent` trees with it. The
+    // `jsonl-format` + `jsonl-format-simplified` skills both teach `_parent`,
+    // so this agrees with whichever skill the tier loads (no contradiction).
     system_prompt.push_str(NODE_FORMAT);
 
     let section_list = plan
@@ -223,13 +238,13 @@ Overall design: {}\n\n\
 CRITICAL LAYOUT CONSTRAINTS:\n\
 - Root frame: id=\"{}-root\", width=\"fill_container\", height=\"fit_content\", layout=\"vertical\". NEVER use fixed pixel height on root -- let content determine height.\n\
 - Target content amount: ~{:.0}px tall. Generate enough elements to fill this area.\n\
-- ALL nodes must be descendants of the root frame. No floating/orphan nodes.\n\
+- ALL nodes must be descendants of the root frame -- every non-root node must be nested under its parent (row -> its cards -> each card's content), in whichever format the system prompt specifies. No floating/orphan nodes; a flat sibling list with no parent links collapses into a vertical stack.\n\
 - NEVER set x or y on children inside layout frames.\n\
 - Use \"fill_container\" for children that stretch, \"fit_content\" for shrink-wrap sizing.\n\
 - SECTION BACKGROUND: do NOT set fill on your section root frame. Only set fill on cards, buttons, chips, badges, and other visually distinct components.\n\
 - TYPOGRAPHY HIERARCHY: Do NOT make every text bold. Use 700 only for primary headings, 600 for buttons/key labels, 500 for short chips/nav labels, and 400 for body text, placeholders, subtitles, metadata, and captions.\n\
 - ICONS: use icon_font with lucide iconFontName; never use path nodes for icons.\n\
-- IDs prefix=\"{}-\". Output ONLY the JSON array.",
+- IDs prefix=\"{}-\". Output ONLY the structured nodes in the EXACT format the system prompt specifies above -- no prose, no extra wrapping.",
         section_list,
         subtask.label,
         subtask.region.height,
