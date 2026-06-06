@@ -1,6 +1,6 @@
 ---
 name: jsonl-format-simplified
-description: Simplified nested JSON format for basic tier models
+description: Simplified flat _parent JSONL format for basic tier models
 phase: [generation]
 trigger:
   flags: [isBasicTier]
@@ -14,13 +14,13 @@ CRITICAL — OUTPUT-MODE PRIORITY: If a separate `OUTPUT FORMAT — EMIT AS TOOL
 The TYPES / RULES / DESIGN SYSTEM TOKENS sections below describe the underlying PenNode schema and apply to EITHER mode — they tell you the shape of node arguments inside an `<op_tool>` call, and the shape of nodes in raw JSONL.
 
 TYPES:
-frame (width,height,layout,gap,padding,justifyContent,alignItems,cornerRadius,fill,children), rectangle (width,height,cornerRadius,fill), text (content,fontFamily,fontSize,fontWeight,fill,width,textAlign), icon_font (iconFontName,width,height,fill)
-SHARED: id, type, name
+frame (width,height,layout,gap,padding,justifyContent,alignItems,cornerRadius,fill), rectangle (width,height,cornerRadius,fill), text (content,fontFamily,fontSize,fontWeight,fill,width,textAlign), icon_font (iconFontName,width,height,fill)
+SHARED: id, type, name, _parent
 
 RULES:
 
-- Root: type="frame", width="fill_container", height="fit_content", layout="vertical".
-- Children go in "children" arrays. No x/y on layout children.
+- Root: type="frame", width="fill_container", height="fit_content", layout="vertical", _parent=null.
+- Every node carries "_parent" — null for the root, else its parent's id. No x/y on layout children.
 - width/height: number | "fill_container" | "fit_content".
 - fill: [{"type":"solid","color":"#hex" | "$color-*"}].
 - Text: never set height. Use width="fill_container" for wrapping text.
@@ -38,60 +38,14 @@ USE refs for standard semantic colors and typography sizes/weights/line-heights 
 
 — JSONL FALLBACK MODE — the section below applies ONLY when there is no `<op_tool>` instruction earlier in the prompt; if `<op_tool>` mode is in effect, ignore the EXAMPLE below and emit `<op_tool>` tags instead.
 
-Generate a UI section as a nested JSON tree. Output a single ```json block with a single root object containing nested "children" arrays.
+Output one JSON object per line (NO enclosing [ ] array, NO "children" field). Each line carries "_parent" — null for the root, else its parent's id (which appears on an earlier line). Express the WHOLE tree via _parent; a flat list of siblings with no _parent links renders BROKEN (collapses into a vertical stack).
 
 EXAMPLE:
 
 ```json
-{
-  "id": "root",
-  "type": "frame",
-  "name": "Hero",
-  "width": "fill_container",
-  "height": "fit_content",
-  "layout": "vertical",
-  "gap": 24,
-  "padding": [48, 24],
-  "fill": [{ "type": "solid", "color": "$color-bg-deep" }],
-  "children": [
-    {
-      "id": "title",
-      "type": "text",
-      "name": "Headline",
-      "content": "Learn Smarter",
-      "fontSize": 48,
-      "fontWeight": 700,
-      "fontFamily": "Space Grotesk",
-      "fill": [{ "type": "solid", "color": "$color-text-primary" }]
-    },
-    {
-      "id": "desc",
-      "type": "text",
-      "name": "Description",
-      "content": "AI-powered learning",
-      "fontSize": "$type-body-size",
-      "width": "fill_container",
-      "fill": [{ "type": "solid", "color": "$color-text-muted" }]
-    },
-    {
-      "id": "cta",
-      "type": "frame",
-      "name": "CTA",
-      "padding": [14, 28],
-      "cornerRadius": 10,
-      "justifyContent": "center",
-      "fill": [{ "type": "solid", "color": "$color-accent" }],
-      "children": [
-        {
-          "id": "cta-text",
-          "type": "text",
-          "content": "Get Started",
-          "fontSize": 16,
-          "fontWeight": 600,
-          "fill": [{ "type": "solid", "color": "#FFFFFF" }]
-        }
-      ]
-    }
-  ]
-}
+{"_parent":null,"id":"root","type":"frame","name":"Hero","width":"fill_container","height":"fit_content","layout":"vertical","gap":24,"padding":[48,24],"fill":[{"type":"solid","color":"$color-bg-deep"}]}
+{"_parent":"root","id":"title","type":"text","name":"Headline","content":"Learn Smarter","fontSize":48,"fontWeight":700,"fontFamily":"Space Grotesk","fill":[{"type":"solid","color":"$color-text-primary"}]}
+{"_parent":"root","id":"desc","type":"text","name":"Description","content":"AI-powered learning","width":"fill_container","fill":[{"type":"solid","color":"$color-text-muted"}]}
+{"_parent":"root","id":"cta","type":"frame","name":"CTA","padding":[14,28],"cornerRadius":10,"justifyContent":"center","fill":[{"type":"solid","color":"$color-accent"}]}
+{"_parent":"cta","id":"cta-text","type":"text","content":"Get Started","fontSize":16,"fontWeight":600,"fill":[{"type":"solid","color":"#FFFFFF"}]}
 ```
