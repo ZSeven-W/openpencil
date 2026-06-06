@@ -12,8 +12,9 @@
 
 use crate::compact_prompt::build_compact_planning_prompt;
 use crate::compact_skills::apply_skill_filter;
+use crate::design_md_policy::build_design_md_style_policy;
 use crate::design_type::{detect_design_type, DesignType};
-use crate::model_profile::resolve_model_profile;
+use crate::model_profile::{resolve_model_profile, ModelTier};
 use crate::plan::{OrchestratorPlan, Subtask};
 use crate::style_guide_context::build_planning_style_guide_context;
 use crate::timeouts::{
@@ -159,14 +160,29 @@ pub fn build_orchestrator_prompt(
     }
 }
 
-/// 把解析出的 skill 列表返回(供下游过滤)。
-fn resolve_generation_skills(message: &str) -> Vec<op_ai_skills::ResolvedSkill> {
-    let ctx = op_ai_skills::resolve_skills(
-        op_ai_skills::Phase::Generation,
-        message,
-        &op_ai_skills::ResolveOptions::default(),
-    );
-    ctx.skills
+/// 解析 generation 阶段 skill 列表,带 flag/dynamic/budget 选项(供下游过滤)。
+fn resolve_generation_skills(
+    message: &str,
+    opts: &op_ai_skills::ResolveOptions,
+) -> Vec<op_ai_skills::ResolvedSkill> {
+    op_ai_skills::resolve_skills(op_ai_skills::Phase::Generation, message, opts).skills
+}
+
+/// 该 plan 是否代表一整屏移动端页面。
+///
+/// Port of `computeIsMobileFullScreen` (orchestrator-plan-classify.ts:41-58):
+/// 窄(≤480)且高(≥480)即整屏;窄而高度为 0/auto 时用 subtask 数 ≥2
+/// 区分"整屏多区块页面"与单卡片 Type 0 组件。TS 的 WeakMap memo 是为了
+/// 跨 status-bar strip 保持一致——Rust 在 strip 之后的最终 plan 上直接算,
+/// 无需 memo。
+fn is_mobile_full_screen(plan: &OrchestratorPlan) -> bool {
+    if plan.root_frame.width > 480.0 {
+        return false;
+    }
+    if plan.root_frame.height >= 480.0 {
+        return true;
+    }
+    plan.subtasks.len() >= 2
 }
 
 /// 单个 sub-agent 的 LLM 调用输入。
@@ -191,8 +207,72 @@ pub fn build_subagent_prompt(
     // Resolve the full generation skill set, then apply tier-gated filtering.
     let model_id = req.model.as_deref().unwrap_or("");
     let tier = resolve_model_profile(model_id).tier;
-    let resolved = resolve_generation_skills(&subtask.label);
-    let filtered = apply_skill_filter(resolved, tier, minimal_skills, reduced_complexity);
+
+    // design.md payload for the `{{designMdContent}}` template. If the
+    // structured policy summary is empty (a bare-minimum design.md with only
+    // free-form text), fall back to the raw markdown so the sub-agent still
+    // sees the spec. Port of orchestrator-sub-agent.ts:379-384.
+    let design_md_content = req
+        .design_md
+        .as_ref()
+        .map(|spec| {
+            let structured = build_design_md_style_policy(spec);
+            let structured = structured.trim();
+            if structured.is_empty() {
+                spec.raw.trim().to_string()
+            } else {
+                structured.to_string()
+            }
+        })
+        .unwrap_or_default();
+    let has_design_md = !design_md_content.is_empty();
+    // Rust `OrchestratorPlan` carries only the style-guide NAME (the TS
+    // `selectedStyleGuideContent` content field has no Rust equivalent yet),
+    // so `style_guide_name.is_some()` is the faithful proxy for "a guide was
+    // selected". Port of the flag block in orchestrator-sub-agent.ts:396-416.
+    let has_explicit_style_guide = plan.style_guide_name.is_some() || req.design_md.is_some();
+    let no_style_guide_match = plan.style_guide_name.is_none() && !has_design_md;
+
+    let mut flags = HashMap::new();
+    flags.insert("isBasicTier".to_string(), tier == ModelTier::Basic);
+    flags.insert("hasDesignMd".to_string(), has_design_md);
+    // No existing-document variable context is wired into `DesignRequest`
+    // (TS sources this from `request.context.variables`), so this is always
+    // false on the Rust path today.
+    flags.insert("hasVariables".to_string(), false);
+    flags.insert("noStyleGuideMatch".to_string(), no_style_guide_match);
+    // Element-tools (N-tool) path is not ported to Rust (feature-flag off in
+    // TS production); `elements`/`elements-cookbook` therefore stay gated off.
+    flags.insert("hasMcpTools".to_string(), false);
+
+    let mut dynamic_content = HashMap::new();
+    if has_design_md {
+        dynamic_content.insert("designMdContent".to_string(), design_md_content);
+    }
+
+    // Tier-scaled budget override (orchestrator-sub-agent.ts:414-415).
+    let budget_override = match tier {
+        ModelTier::Basic => Some(5200),
+        ModelTier::Standard => Some(6500),
+        ModelTier::Full => None,
+    };
+
+    let opts = op_ai_skills::ResolveOptions {
+        flags,
+        dynamic_content,
+        budget_override,
+        ..Default::default()
+    };
+    let resolved = resolve_generation_skills(&subtask.label, &opts);
+    let is_mobile_screen = is_mobile_full_screen(plan);
+    let filtered = apply_skill_filter(
+        resolved,
+        tier,
+        is_mobile_screen,
+        has_explicit_style_guide,
+        minimal_skills,
+        reduced_complexity,
+    );
 
     let mut system_prompt = filtered
         .iter()
