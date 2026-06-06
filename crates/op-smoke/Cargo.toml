@@ -30,3 +30,11 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 # same shape as `persistence::save_to_path`) when `OPENPENCIL_SMOKE_OUT`
 # is set — lets the headless render / screenshot step pick up the result.
 serde_json = { workspace = true }
+# Direct openai-compat HTTP client for the smoke harness (OPENPENCIL_SMOKE_DIRECT=1)
+# — lets it send the MiniMax `thinking:{type:disabled}` field the vendored agent
+# QueryEngine can't, so M3 (reasoning) can be validated headless. rustls-tls +
+# json mirror op-host-desktop so the workspace shares one TLS backend.
+reqwest = { version = "0.12", default-features = false, features = [
+  "rustls-tls",
+  "json",
+] }
