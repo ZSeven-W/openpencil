@@ -256,6 +256,59 @@ fn subagent_prompt_reduced_complexity_full_tier_is_noop() {
     );
 }
 
+/// Regression guard for the flag-passing fix: a Basic-tier model must load
+/// `jsonl-format-simplified` (gated by the `isBasicTier` flag) and drop the
+/// verbose `jsonl-format`, while a Full-tier model keeps the verbose one.
+/// Before the fix, `resolve_generation_skills` passed empty flags, so the
+/// simplified skill could NEVER load for the weak models it targets.
+#[test]
+fn subagent_prompt_basic_tier_swaps_in_simplified_format_skill() {
+    // Verbose-only marker (lives solely in jsonl-format.md) and simplified-only
+    // marker (the parenthesized rectangle arg list lives solely in
+    // jsonl-format-simplified.md).
+    const VERBOSE_ONLY: &str = "imageSearchQuery MUST be UNIQUE";
+    const SIMPLIFIED_ONLY: &str = "rectangle (width,height,cornerRadius,fill)";
+
+    let basic_req = DesignRequest {
+        prompt: "a page".into(),
+        model: Some("claude-haiku".into()), // Basic tier
+        provider: None,
+        design_md: None,
+        concurrency: 1,
+        append_context: None,
+        validation_enabled: true,
+        visual_ref_enabled: false,
+    };
+    let basic_cr = build_subagent_prompt(
+        &subtask(),
+        &plan(),
+        &basic_req,
+        AbortFlag::new(),
+        false,
+        false,
+    );
+    // req() is model "claude" → Full tier.
+    let full_cr =
+        build_subagent_prompt(&subtask(), &plan(), &req(), AbortFlag::new(), false, false);
+
+    assert!(
+        basic_cr.system_prompt.contains(SIMPLIFIED_ONLY),
+        "Basic tier must load jsonl-format-simplified"
+    );
+    assert!(
+        !basic_cr.system_prompt.contains(VERBOSE_ONLY),
+        "Basic tier must NOT carry the verbose jsonl-format (deduped by simplified)"
+    );
+    assert!(
+        full_cr.system_prompt.contains(VERBOSE_ONLY),
+        "Full tier must keep the verbose jsonl-format"
+    );
+    assert!(
+        !full_cr.system_prompt.contains(SIMPLIFIED_ONLY),
+        "Full tier must NOT load jsonl-format-simplified (isBasicTier is false)"
+    );
+}
+
 // ── C4: timeout wiring tests ──────────────────────────────────────────────
 
 /// Rich/Minimal mode sets profile-derived timeouts (not None).
