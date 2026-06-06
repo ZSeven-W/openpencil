@@ -90,9 +90,24 @@ jobs:
         if: runner.os == 'Linux'
         run: bash tools/check-widget-boundary.sh
 
-      - name: Install Bun
+      - name: Install Bun (retry on transient infra flake)
         if: runner.os == 'Linux'
-        uses: oven-sh/setup-bun@v2
+        run: |
+          # `oven-sh/setup-bun@v2` intermittently fails the Bun download and
+          # reds the whole Rust Check job even though every Rust step passed.
+          # Install via the official script with a real retry loop instead.
+          # `pipefail` is REQUIRED: without it `curl | bash` returns bash's exit
+          # status, masking a curl download failure (the very flake we retry).
+          set -o pipefail
+          ok=0
+          for i in 1 2 3; do
+            if curl -fsSL https://bun.sh/install | bash; then ok=1; break; fi
+            echo "::warning::Bun install attempt $i failed; retrying in 5s"; sleep 5
+          done
+          if [ "$ok" -ne 1 ]; then
+            echo "::error::Bun install failed after 3 attempts"; exit 1
+          fi
+          echo "$HOME/.bun/bin" >> "$GITHUB_PATH"
 
       - name: Install JS deps
         if: runner.os == 'Linux'
