@@ -28,6 +28,20 @@ fn tools_list_response_includes_all_registered_tools() {
         !r.contains("debug_validation_report"),
         "production tools/list must not advertise the debug tool: {r}"
     );
+    #[cfg(not(feature = "mcp-debug-tools"))]
+    {
+        let r_forced_debug = tools_list_response("3", &state, true);
+        for name in [
+            "debug_validation_report",
+            "debug_logs_tail",
+            "debug_screenshot",
+        ] {
+            assert!(
+                !r_forced_debug.contains(name),
+                "formal release catalog must exclude {name} even if debug listing is requested: {r_forced_debug}"
+            );
+        }
+    }
     // UIKit element tools are appended dynamically — one per
     // built-in starter-kit component (6) — and ride alongside
     // the static schemas in the tools/list response.
@@ -172,8 +186,10 @@ fn tools_list_response_includes_all_registered_tools() {
         assert!(r.contains(name), "tools/list must include {name}: {r}");
     }
 
-    // Gate open (debug_enabled = true) — the debug tools join the catalog.
+    // Gate open (debug_enabled = true) — internal debug builds can opt in
+    // to the debug tools catalog.
     let r_debug = tools_list_response("3", &state, true);
+    #[cfg(feature = "mcp-debug-tools")]
     for name in [
         "debug_validation_report",
         "debug_logs_tail",
@@ -184,6 +200,11 @@ fn tools_list_response_includes_all_registered_tools() {
             "debug tools/list must advertise {name}: {r_debug}"
         );
     }
+    #[cfg(not(feature = "mcp-debug-tools"))]
+    assert!(
+        !r_debug.contains("debug_validation_report"),
+        "default release feature set must not include debug tools: {r_debug}"
+    );
 }
 
 #[test]
