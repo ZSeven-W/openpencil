@@ -11,3 +11,9 @@ pub mod parse;
 pub mod pipeline;
 pub mod prompts;
 pub mod types;
+
+pub use pipeline::CodegenPipeline;
+pub use types::{
+    AssetFile, ChunkContract, ChunkResult, CodePlan, CodegenInput, ExecutableChunk, PendingRequest,
+    PipelineStep, PlannedChunk, RequestId, RequestKind,
+};
