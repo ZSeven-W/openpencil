@@ -217,8 +217,8 @@ pub fn chunk_request(
         );
         for c in dep_contracts {
             // Mirror codegen-prompts.ts:88-90: include exported props
-            // (name: type) and slot names so the dependent chunk knows the
-            // upstream component's surface.
+            // (name: type), slot names, and import sources so the dependent
+            // chunk knows the upstream component's surface AND what it pulls in.
             let props = c
                 .exported_props
                 .iter()
@@ -231,8 +231,20 @@ pub fn chunk_request(
                 .map(|s| s.name.clone())
                 .collect::<Vec<_>>()
                 .join(", ");
+            let imports = c
+                .imports
+                .iter()
+                .map(|i| {
+                    if i.specifiers.is_empty() {
+                        i.source.clone()
+                    } else {
+                        format!("{} from {}", i.specifiers.join(", "), i.source)
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join("; ");
             user_message.push_str(&format!(
-                "- `{}` (chunk: {}): props=[{props}], slots=[{slots}]\n",
+                "- `{}` (chunk: {}): props=[{props}], slots=[{slots}], imports=[{imports}]\n",
                 c.component_name, c.chunk_id
             ));
         }
@@ -362,7 +374,8 @@ mod tests {
 
     #[test]
     fn chunk_request_includes_dep_props_and_slots() {
-        // FIX 2: dependency contract summaries carry exported props + slots.
+        // FIX 2: dependency contract summaries carry exported props, slots,
+        // and import sources.
         let dep = ChunkContract {
             chunk_id: "d1".into(),
             component_name: "Card".into(),
@@ -375,11 +388,16 @@ mod tests {
                 name: "footer".into(),
                 description: "card footer".into(),
             }],
+            imports: vec![crate::ai::types::ImportDef {
+                source: "lucide-react".into(),
+                specifiers: vec!["Star".into()],
+            }],
             ..Default::default()
         };
         let r = chunk_request(RequestId(2), "c1", "[]", "Hero", &[dep], &[], &input());
         assert!(r.user_message.contains("props=[title: string]"));
         assert!(r.user_message.contains("slots=[footer]"));
+        assert!(r.user_message.contains("imports=[Star from lucide-react]"));
     }
 
     #[test]
