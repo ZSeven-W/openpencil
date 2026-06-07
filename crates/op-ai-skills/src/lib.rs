@@ -19,6 +19,7 @@
 use include_dir::{include_dir, Dir};
 
 pub mod budget;
+pub mod compose;
 pub mod frontmatter;
 pub mod loader;
 pub mod memory;
@@ -27,6 +28,7 @@ pub mod resolver;
 pub mod style_guide;
 pub mod types;
 
+pub use compose::compose_system_prompt;
 pub use loader::{get_skill_by_name, get_skill_registry, get_skills_by_phase, SkillEntry};
 pub use resolve::resolve_skills;
 pub use types::{
