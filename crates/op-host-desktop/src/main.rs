@@ -15,6 +15,7 @@ mod chat_runtime;
 mod chat_session;
 mod chat_subprocess;
 mod clipboard;
+mod codegen_session;
 mod commit_diff_host;
 mod commit_diff_semantic;
 mod cursor_icon;

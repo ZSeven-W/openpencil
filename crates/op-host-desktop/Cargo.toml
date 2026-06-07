@@ -69,6 +69,10 @@ op-host-native = { path = "../op-host-native", version = "0.8.0" }
 op-editor-core = { path = "../op-editor-core" }
 # D′ architecture: pre-validation adapter translates PlannedFix → EditorCommand.
 op-design-lint = { path = "../op-design-lint" }
+# AI code-generation pipeline. The `ai` feature compiles the pull-based
+# `CodegenPipeline` (`op_codegen::ai`) that `codegen_session.rs` drives on
+# a worker thread to back the Code panel's Generate button.
+op-codegen = { path = "../op-codegen", features = ["ai"] }
 # Locale tables — git dialog strings go through `op_i18n::translate`
 # so they are localized like the rest of the chrome.
 op-i18n = { path = "../op-i18n" }
@@ -157,6 +161,10 @@ arboard = "3"
 # inline image content blocks (Claude SDK) or a base64 body field
 # (HTTP-server transport). Same pure-Rust crate op-figma uses.
 base64 = "0.22"
+# Packs generated code + extracted assets into a downloadable bundle for
+# the Code panel's Export Bundle action. Only store/deflate is needed for
+# small text + image payloads.
+zip = "2"
 # 2D affine transforms used by PNG export's bounds walker so nested
 # rotated containers don't clip their children. Pinned to the same
 # version shell-core uses for `Point2D = glam::Vec2`.
