@@ -2873,8 +2873,12 @@ dependencies = [
 name = "op-codegen"
 version = "0.8.0"
 dependencies = [
+ "base64",
  "jian-ops-schema",
+ "op-ai",
  "op-editor-core",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
