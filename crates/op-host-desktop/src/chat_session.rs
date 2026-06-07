@@ -349,7 +349,9 @@ fn provider_for_agent(agent_idx: usize) -> Option<Box<dyn ChatProvider>> {
     }
 }
 
-fn provider_for_selected_model(host: &WidgetHostNative) -> Option<Box<dyn ChatProvider>> {
+pub(crate) fn provider_for_selected_model(
+    host: &WidgetHostNative,
+) -> Option<Box<dyn ChatProvider>> {
     if let Some(entry) = host.editor_state().chat.selected_model_entry() {
         if let Some(id) = entry.builtin_provider_id.as_deref() {
             return provider_for_builtin(host.editor_state(), id);
