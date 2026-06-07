@@ -83,6 +83,81 @@ fn compact_nodes(nodes_json: &str) -> String {
     }
 }
 
+/// Render a planning node-tree summary that PRESERVES each node's `id`. Port
+/// of `pen-core::nodeTreeToSummary` (used by the TS planning prompt). Unlike
+/// `compact_nodes` / `strip_noise`, this keeps ids so the planner can emit
+/// `nodeIds` that reference real nodes (without ids, hydration drops every
+/// chunk). Each line is:
+/// `  - [id] type "name" (WxH) [role] [N children]` with 2-space indent per
+/// depth. Falls back to the input verbatim if it isn't parseable JSON.
+fn summarize_nodes_with_ids(nodes_json: &str) -> String {
+    match serde_json::from_str::<serde_json::Value>(nodes_json) {
+        Ok(serde_json::Value::Array(items)) => {
+            let mut out = String::new();
+            summarize_node_list(&items, 0, &mut out);
+            out
+        }
+        // A single object (not wrapped in an array) is still summarizable.
+        Ok(value @ serde_json::Value::Object(_)) => {
+            let mut out = String::new();
+            summarize_node_list(std::slice::from_ref(&value), 0, &mut out);
+            out
+        }
+        _ => nodes_json.to_string(),
+    }
+}
+
+fn summarize_node_list(nodes: &[serde_json::Value], depth: usize, out: &mut String) {
+    let indent = "  ".repeat(depth);
+    for node in nodes {
+        let serde_json::Value::Object(map) = node else {
+            continue;
+        };
+        let id = map
+            .get("id")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("");
+        let ty = map
+            .get("type")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("");
+        let name = map
+            .get("name")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("");
+        let width = json_dim(map.get("width"));
+        let height = json_dim(map.get("height"));
+        let role = map.get("role").and_then(serde_json::Value::as_str);
+        let children = map.get("children").and_then(serde_json::Value::as_array);
+        let child_count = children.map(|c| c.len()).unwrap_or(0);
+
+        if !out.is_empty() {
+            out.push('\n');
+        }
+        out.push_str(&format!(
+            "{indent}- [{id}] {ty} \"{name}\" ({width}x{height})"
+        ));
+        if let Some(role) = role.filter(|r| !r.is_empty()) {
+            out.push_str(&format!(" [{role}]"));
+        }
+        if child_count > 0 {
+            out.push_str(&format!(" [{child_count} children]"));
+        }
+        if let Some(children) = children.filter(|c| !c.is_empty()) {
+            summarize_node_list(children, depth + 1, out);
+        }
+    }
+}
+
+/// Format a width/height field like the TS summary (`n.width ?? '?'`).
+fn json_dim(value: Option<&serde_json::Value>) -> String {
+    match value {
+        Some(serde_json::Value::Number(n)) => n.to_string(),
+        Some(serde_json::Value::String(s)) => s.clone(),
+        _ => "?".to_string(),
+    }
+}
+
 /// Build the planning request. `strict` appends an "ONLY valid JSON"
 /// instruction to the USER message (the TS appends it to the system prompt,
 /// but since the proxy owns system-prompt assembly we carry it in the user
@@ -94,8 +169,12 @@ pub fn plan_request(id: RequestId, input: &CodegenInput, strict: bool) -> Pendin
         input.framework.as_wire()
     ));
     user_message.push('\n');
-    user_message.push_str("Nodes (JSON):\n");
-    user_message.push_str(&compact_nodes(&input.nodes_json));
+    // PLANNING ONLY: embed a node-tree SUMMARY that PRESERVES each node's id
+    // (TS uses `nodeTreeToSummary`). The planner returns `nodeIds` referencing
+    // these ids, so stripping them (as the chunk request does) would make
+    // hydration drop every chunk. Mirrors `codegen-prompts.ts::buildPlanningPrompt`.
+    user_message.push_str("Node tree:\n");
+    user_message.push_str(&summarize_nodes_with_ids(&input.nodes_json));
     user_message.push('\n');
     user_message.push_str("\nAnalyze this node tree and output a JSON code generation plan.");
     if strict {
@@ -137,8 +216,23 @@ pub fn chunk_request(
             "The following components are available from upstream chunks. Import and use them:\n\n",
         );
         for c in dep_contracts {
+            // Mirror codegen-prompts.ts:88-90: include exported props
+            // (name: type) and slot names so the dependent chunk knows the
+            // upstream component's surface.
+            let props = c
+                .exported_props
+                .iter()
+                .map(|p| format!("{}: {}", p.name, p.ty))
+                .collect::<Vec<_>>()
+                .join(", ");
+            let slots = c
+                .slots
+                .iter()
+                .map(|s| s.name.clone())
+                .collect::<Vec<_>>()
+                .join(", ");
             user_message.push_str(&format!(
-                "- `{}` (chunk: {})\n",
+                "- `{}` (chunk: {}): props=[{props}], slots=[{slots}]\n",
                 c.component_name, c.chunk_id
             ));
         }
@@ -242,6 +336,50 @@ mod tests {
         assert_eq!(r.skills, vec!["codegen-planning"]);
         assert!(r.user_message.contains("frame"));
         assert!(!r.user_message.contains("ONLY valid JSON"));
+    }
+
+    #[test]
+    fn planning_request_preserves_node_ids() {
+        // FIX 1: the planning prompt must include each node's id so the
+        // planner can return `nodeIds` that hydrate against real nodes.
+        let mut input = input();
+        input.nodes_json = "[{\"type\":\"frame\",\"id\":\"n1\",\"children\":[]}]".into();
+        let r = plan_request(RequestId(1), &input, false);
+        assert!(r.user_message.contains("n1"));
+        assert!(r.user_message.contains("[n1]"));
+    }
+
+    #[test]
+    fn planning_summary_preserves_nested_ids() {
+        let mut input = input();
+        input.nodes_json =
+            "[{\"type\":\"frame\",\"id\":\"root\",\"children\":[{\"type\":\"text\",\"id\":\"child\"}]}]"
+                .into();
+        let r = plan_request(RequestId(1), &input, false);
+        assert!(r.user_message.contains("[root]"));
+        assert!(r.user_message.contains("[child]"));
+    }
+
+    #[test]
+    fn chunk_request_includes_dep_props_and_slots() {
+        // FIX 2: dependency contract summaries carry exported props + slots.
+        let dep = ChunkContract {
+            chunk_id: "d1".into(),
+            component_name: "Card".into(),
+            exported_props: vec![crate::ai::types::PropDef {
+                name: "title".into(),
+                ty: "string".into(),
+                required: true,
+            }],
+            slots: vec![crate::ai::types::SlotDef {
+                name: "footer".into(),
+                description: "card footer".into(),
+            }],
+            ..Default::default()
+        };
+        let r = chunk_request(RequestId(2), "c1", "[]", "Hero", &[dep], &[], &input());
+        assert!(r.user_message.contains("props=[title: string]"));
+        assert!(r.user_message.contains("slots=[footer]"));
     }
 
     #[test]

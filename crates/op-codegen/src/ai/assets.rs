@@ -4,6 +4,9 @@
 //! data-URLs out into concrete asset files, and rewrites each `src` /
 //! `fill.url` to a stable `./assets/<file>` path so prompts ship paths
 //! instead of multi-KB base64 blobs.
+//!
+//! PARITY TODO: consumer-view enrichment (enrichNodeLocallyForAIConsumerView)
+//! not yet ported — see structure-bundle/codegen-assets.
 
 use base64::Engine;
 use serde_json::Value;

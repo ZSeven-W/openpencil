@@ -60,10 +60,10 @@ pub struct CodegenPipeline {
     input: CodegenInput,
     /// Sanitized node JSON (asset data-URLs swapped for `./assets/...`).
     sanitized_nodes_json: String,
-    /// Parsed Value of the sanitized nodes, for per-chunk subset slicing.
-    sanitized_nodes_value: Value,
-    /// Set of node ids present in the sanitized tree (for hydration).
-    node_id_index: std::collections::HashSet<String>,
+    /// Recursive id → node Value map, deep-walking `children`. Built ONCE so
+    /// hydration (id presence) and per-chunk node serialization both resolve
+    /// nested ids, not just top-level ones (TS `indexNodes` / `hydratePlan`).
+    node_map: HashMap<String, Value>,
     assets: Vec<AssetFile>,
 
     phase: Phase,
@@ -95,14 +95,16 @@ impl CodegenPipeline {
         let (sanitized_nodes_json, assets) = extract_codegen_assets(&input.nodes_json);
         let sanitized_nodes_value =
             serde_json::from_str(&sanitized_nodes_json).unwrap_or(Value::Null);
-        let mut node_id_index = std::collections::HashSet::new();
-        collect_node_ids(&sanitized_nodes_value, &mut node_id_index);
+        // Deep-walk the sanitized tree ONCE into an id → node map (TS
+        // `indexNodes`), so both hydration and chunk-node slicing resolve
+        // nested ids.
+        let mut node_map = HashMap::new();
+        index_nodes(&sanitized_nodes_value, &mut node_map);
 
         Self {
             input,
             sanitized_nodes_json,
-            sanitized_nodes_value,
-            node_id_index,
+            node_map,
             assets,
             phase: Phase::Planning,
             next_id: 0,
@@ -246,7 +248,7 @@ impl CodegenPipeline {
                 chunk
                     .node_ids
                     .iter()
-                    .any(|id| self.node_id_index.contains(id))
+                    .any(|id| self.node_map.contains_key(id))
             })
             .map(|chunk| ExecutableChunk {
                 plan: chunk.clone(),
@@ -356,12 +358,11 @@ impl CodegenPipeline {
         // Parse the buffered chunk response.
         let mut result = parse_chunk_response(&flight.buffer, chunk_id);
 
-        // Empty code is treated like a failure (TS retries an empty/throwing
-        // call). If retry already used, the chunk fails.
-        if result.code.is_empty() {
-            self.fail_or_retry_chunk(idx);
-            return;
-        }
+        // TS (code-generation-pipeline.ts:296-342) only retries a chunk on a
+        // THROWN stream error (our `on_error`). A successfully-parsed result —
+        // even one with empty/poor code — flows through `validate_contract`
+        // and ends Done (valid) or Degraded (invalid); it is never failed by
+        // empty code. Retry-once lives ONLY on the `on_error` path.
 
         // Force a valid PascalCase component name from the suggested label
         // when the model returned an empty / non-PascalCase one.
@@ -412,24 +413,19 @@ impl CodegenPipeline {
             .map(|c| c.status)
     }
 
-    /// Serialize the subset of top-level sanitized nodes whose `id` is in
-    /// `node_ids` (the simple approach the task spec calls for).
+    /// Serialize exactly the nodes whose `id` is in `node_ids`, in `node_ids`
+    /// order, resolved from the RECURSIVE id map (TS `hydratePlan` resolves
+    /// each id from `nodeMap`, so a nested child id yields just that child —
+    /// not the whole tree). Falls back to the whole sanitized tree only when
+    /// none of the ids resolve.
     fn chunk_nodes_json(&self, node_ids: &[String]) -> String {
-        let wanted: std::collections::HashSet<&str> = node_ids.iter().map(|s| s.as_str()).collect();
-        if let Value::Array(items) = &self.sanitized_nodes_value {
-            let subset: Vec<&Value> = items
-                .iter()
-                .filter(|item| {
-                    item.get("id")
-                        .and_then(Value::as_str)
-                        .map(|id| wanted.contains(id))
-                        .unwrap_or(false)
-                })
-                .collect();
-            if !subset.is_empty() {
-                return serde_json::to_string(&subset)
-                    .unwrap_or_else(|_| self.sanitized_nodes_json.clone());
-            }
+        let subset: Vec<&Value> = node_ids
+            .iter()
+            .filter_map(|id| self.node_map.get(id))
+            .collect();
+        if !subset.is_empty() {
+            return serde_json::to_string(&subset)
+                .unwrap_or_else(|_| self.sanitized_nodes_json.clone());
         }
         // Fallback: pass the whole sanitized tree (still valid input for the
         // chunk prompt; hints just won't narrow).
@@ -489,9 +485,10 @@ impl CodegenPipeline {
 
         if flight.error.is_some() {
             if self.assembly_retried {
-                // Second failure → best-effort fallback to concatenation.
+                // Second failure → best-effort fallback to concatenation of
+                // ONLY the chunks that produced code (TS filters empty ones).
                 self.assembly_done = Some(false);
-                let code = self.build_chunk_blocks();
+                let code = self.build_fallback_code();
                 let step = PipelineStep::Done {
                     code,
                     degraded: true,
@@ -517,12 +514,48 @@ impl CodegenPipeline {
         step
     }
 
-    /// `"// ── {name} ({status}) ──\n\n{code}"` per chunk, joined by "\n\n".
-    /// Skipped / failed chunks contribute empty code. Mirrors the TS
-    /// assembly fallback concatenation block.
+    /// Per-chunk block sent to the assembly AI. Carries the status header,
+    /// the chunk code, and — for non-failed chunks — the contract detail
+    /// (TS `chunksSection`, codegen-prompts.ts:142-153): successful chunks
+    /// emit `Contract: {json}`; degraded chunks emit the "infer from code"
+    /// NOTE; failed chunks contribute an empty code block.
     fn build_chunk_blocks(&self) -> String {
         self.chunks
             .iter()
+            .map(|c| {
+                let name = if c.exec.plan.name.is_empty() {
+                    c.exec.plan.id.as_str()
+                } else {
+                    c.exec.plan.name.as_str()
+                };
+                let status = assembly_status_label(c.status);
+                let code = self.chunk_code(c);
+                let detail = match status {
+                    "successful" => c
+                        .result
+                        .as_ref()
+                        .and_then(|r| serde_json::to_string(&r.contract).ok())
+                        .map(|json| format!("\nContract: {json}"))
+                        .unwrap_or_default(),
+                    "degraded" => "\n*NOTE: No contract available. Infer component name and \
+                                    imports from the code.*"
+                        .to_string(),
+                    _ => String::new(),
+                };
+                format!("// ── {name} ({status}) ──\n\n{code}{detail}")
+            })
+            .collect::<Vec<_>>()
+            .join("\n\n")
+    }
+
+    /// Best-effort fallback when assembly fails twice: concatenate ONLY the
+    /// chunks that actually produced code (TS code-generation-pipeline.ts:
+    /// 451-454 filters to `c.code` first), joined by the status header. An
+    /// empty failed/skipped chunk must NOT contribute a header-only section.
+    fn build_fallback_code(&self) -> String {
+        self.chunks
+            .iter()
+            .filter(|c| !self.chunk_code(c).is_empty())
             .map(|c| {
                 let name = if c.exec.plan.name.is_empty() {
                     c.exec.plan.id.as_str()
@@ -537,17 +570,22 @@ impl CodegenPipeline {
             .join("\n\n")
     }
 
+    /// Full rootLayout + sharedStyles for the assembly prompt (TS
+    /// codegen-prompts.ts:170-171 sends `Root layout: {json}` and
+    /// `Shared styles: {json}`), so the assembler has direction / gap /
+    /// responsive + every shared-style name available.
     fn build_plan_summary(&self) -> String {
-        let direction = self
+        let root_layout_json = self
             .plan
             .as_ref()
-            .map(|p| p.root_layout.direction.as_str())
-            .filter(|d| !d.is_empty())
-            .unwrap_or("column");
-        format!(
-            "Root layout direction: {direction}. Chunk count: {}.",
-            self.chunks.len()
-        )
+            .and_then(|p| serde_json::to_string(&p.root_layout).ok())
+            .unwrap_or_else(|| "{}".to_string());
+        let shared_styles_json = self
+            .plan
+            .as_ref()
+            .and_then(|p| serde_json::to_string(&p.shared_styles).ok())
+            .unwrap_or_else(|| "[]".to_string());
+        format!("Root layout: {root_layout_json}\nShared styles: {shared_styles_json}")
     }
 
     fn chunk_code<'a>(&self, c: &'a ChunkState) -> &'a str {
@@ -660,21 +698,25 @@ fn assembly_status_label(status: ChunkStatus) -> &'static str {
     }
 }
 
-/// Walk the node JSON Value tree collecting every `id` field, so hydration
-/// can drop planned chunks that reference no real node (TS: `indexNodes`).
-fn collect_node_ids(value: &Value, out: &mut std::collections::HashSet<String>) {
+/// Deep-walk the node JSON tree into an id → node Value map (TS
+/// `indexNodes`, code-generation-pipeline.ts:49-55). Recurses through
+/// `children` so nested ids resolve to their own subtree node. Used by both
+/// hydration (id presence) and per-chunk node serialization. The first node
+/// seen for an id wins (matching the TS Map insert order — top-level before
+/// descendants).
+fn index_nodes(value: &Value, out: &mut HashMap<String, Value>) {
     match value {
         Value::Array(items) => {
             for item in items {
-                collect_node_ids(item, out);
+                index_nodes(item, out);
             }
         }
         Value::Object(map) => {
             if let Some(id) = map.get("id").and_then(Value::as_str) {
-                out.insert(id.to_string());
+                out.entry(id.to_string()).or_insert_with(|| value.clone());
             }
-            for v in map.values() {
-                collect_node_ids(v, out);
+            if let Some(children) = map.get("children") {
+                index_nodes(children, out);
             }
         }
         _ => {}
@@ -790,6 +832,190 @@ mod tests {
             PipelineStep::Done { code, degraded, .. } => {
                 assert!(degraded);
                 assert!(code.contains("Root"));
+            }
+            other => panic!("expected degraded Done, got {other:?}"),
+        }
+    }
+
+    /// Drive `p` through planning with `plan_json`, returning the dispatched
+    /// chunk request ids (in order).
+    fn run_planning(p: &mut CodegenPipeline, plan_json: &str) -> Vec<RequestId> {
+        let id = match p.step() {
+            PipelineStep::Dispatch(r) => r[0].id,
+            other => panic!("expected planning dispatch, got {other:?}"),
+        };
+        p.on_delta(id, plan_json);
+        p.on_complete(id);
+        match p.step() {
+            PipelineStep::Dispatch(r) => r.iter().map(|q| q.id).collect(),
+            other => panic!("expected chunk dispatch, got {other:?}"),
+        }
+    }
+
+    // ── FIX 3: parsed-but-poor chunk is Degraded, not Failed ──────────────
+
+    #[test]
+    fn chunk_with_code_but_no_contract_ends_degraded_not_failed() {
+        let mut p = CodegenPipeline::new(input());
+        let chunk_ids = run_planning(
+            &mut p,
+            "{\"chunks\":[{\"id\":\"c1\",\"name\":\"Root\",\"nodeIds\":[\"n1\"],\"role\":\"r\",\"suggestedComponentName\":\"Root\",\"dependencies\":[]}],\"sharedStyles\":[],\"rootLayout\":{\"direction\":\"column\",\"gap\":0,\"responsive\":false}}",
+        );
+        let cid = chunk_ids[0];
+        // Non-empty code with NO contract and NO matching component name in
+        // the body → validation fails → Degraded (never retried/Failed).
+        p.on_delta(cid, "const x = 1; // no component, no contract");
+        p.on_complete(cid);
+        // Advancing to assembly proves the chunk settled (Degraded) and the
+        // pipeline proceeded rather than retrying.
+        let asm = match p.step() {
+            PipelineStep::Dispatch(r) => r,
+            other => panic!("expected assembly dispatch, got {other:?}"),
+        };
+        assert_eq!(asm[0].kind, RequestKind::Assembly);
+        let prog = p.progress();
+        assert_eq!(prog.chunks[0].status, ChunkStatus::Degraded);
+    }
+
+    #[test]
+    fn chunk_on_error_retries_once_then_fails() {
+        let mut p = CodegenPipeline::new(input());
+        let chunk_ids = run_planning(
+            &mut p,
+            "{\"chunks\":[{\"id\":\"c1\",\"name\":\"Root\",\"nodeIds\":[\"n1\"],\"role\":\"r\",\"suggestedComponentName\":\"Root\",\"dependencies\":[]}],\"sharedStyles\":[],\"rootLayout\":{\"direction\":\"column\",\"gap\":0,\"responsive\":false}}",
+        );
+        // First on_error → retry (re-dispatch the same chunk).
+        p.on_error(chunk_ids[0], "stream broke".into());
+        let retry = match p.step() {
+            PipelineStep::Dispatch(r) => r,
+            other => panic!("expected retry dispatch, got {other:?}"),
+        };
+        assert!(matches!(retry[0].kind, RequestKind::Chunk { .. }));
+        // Second on_error → Failed. The only chunk failed → assembly has no
+        // code → terminal Failed.
+        p.on_error(retry[0].id, "stream broke again".into());
+        match p.step() {
+            PipelineStep::Failed { message } => {
+                assert!(message.contains("no code to assemble"));
+            }
+            other => panic!("expected Failed, got {other:?}"),
+        }
+    }
+
+    // ── FIX 4: recursive id resolution selects the nested child ───────────
+
+    #[test]
+    fn chunk_node_json_resolves_nested_child_not_whole_tree() {
+        let mut input = input();
+        // A frame whose child is the chunk's only node_id. The child carries a
+        // distinctive name/type so we can confirm slicing (the chunk request's
+        // `compact_nodes` strips the raw `id` field, so we assert on content).
+        input.nodes_json =
+            "[{\"type\":\"frame\",\"id\":\"root\",\"name\":\"RootFrame\",\"children\":[{\"type\":\"text\",\"id\":\"label\",\"name\":\"HelloChild\"}]}]"
+                .into();
+        let mut p = CodegenPipeline::new(input);
+        // Capture the chunk dispatch directly so we can inspect its user msg.
+        let plan_id = match p.step() {
+            PipelineStep::Dispatch(r) => r[0].id,
+            other => panic!("expected planning dispatch, got {other:?}"),
+        };
+        p.on_delta(plan_id, "{\"chunks\":[{\"id\":\"c1\",\"name\":\"Label\",\"nodeIds\":[\"label\"],\"role\":\"r\",\"suggestedComponentName\":\"Label\",\"dependencies\":[]}],\"sharedStyles\":[],\"rootLayout\":{\"direction\":\"column\",\"gap\":0,\"responsive\":false}}");
+        p.on_complete(plan_id);
+        let chunk_reqs = match p.step() {
+            PipelineStep::Dispatch(r) => r,
+            other => panic!("expected chunk dispatch, got {other:?}"),
+        };
+        // The chunk request's user message must carry the CHILD node, not the
+        // whole frame tree.
+        let msg = &chunk_reqs[0].user_message;
+        assert!(msg.contains("HelloChild"));
+        assert!(msg.contains("text"));
+        // The parent frame must NOT be embedded (we sliced just the child).
+        assert!(!msg.contains("RootFrame"));
+        assert!(!msg.contains("frame"));
+    }
+
+    // ── FIX 5: assembly carries full rootLayout + sharedStyles ────────────
+
+    #[test]
+    fn assembly_request_includes_layout_gap_and_shared_style_name() {
+        let mut p = CodegenPipeline::new(input());
+        let chunk_ids = run_planning(
+            &mut p,
+            "{\"chunks\":[{\"id\":\"c1\",\"name\":\"Root\",\"nodeIds\":[\"n1\"],\"role\":\"r\",\"suggestedComponentName\":\"Root\",\"dependencies\":[]}],\"sharedStyles\":[{\"name\":\"brandPrimary\",\"description\":\"main\"}],\"rootLayout\":{\"direction\":\"row\",\"gap\":24,\"responsive\":true}}",
+        );
+        p.on_delta(
+            chunk_ids[0],
+            "export default function Root(){ return null }\n---CONTRACT---\n{\"componentName\":\"Root\"}",
+        );
+        p.on_complete(chunk_ids[0]);
+        let asm = match p.step() {
+            PipelineStep::Dispatch(r) => r,
+            other => panic!("expected assembly dispatch, got {other:?}"),
+        };
+        let msg = &asm[0].user_message;
+        assert!(msg.contains("\"gap\":24"));
+        assert!(msg.contains("\"responsive\":true"));
+        assert!(msg.contains("brandPrimary"));
+    }
+
+    // ── FIX 6: fallback filters empty-code chunks ─────────────────────────
+
+    #[test]
+    fn assembly_fallback_skips_empty_code_chunks() {
+        let mut input = input();
+        input.nodes_json =
+            "[{\"type\":\"frame\",\"id\":\"a\",\"children\":[]},{\"type\":\"frame\",\"id\":\"b\",\"children\":[]}]"
+                .into();
+        let mut p = CodegenPipeline::new(input);
+        // Two independent chunks. `c1` (Good) produces code; `c2` (Bad) errors
+        // twice → Failed (empty code).
+        let chunk_ids = run_planning(
+            &mut p,
+            "{\"chunks\":[\
+                {\"id\":\"c1\",\"name\":\"Good\",\"nodeIds\":[\"a\"],\"role\":\"r\",\"suggestedComponentName\":\"Good\",\"dependencies\":[]},\
+                {\"id\":\"c2\",\"name\":\"Bad\",\"nodeIds\":[\"b\"],\"role\":\"r\",\"suggestedComponentName\":\"Bad\",\"dependencies\":[]}\
+             ],\"sharedStyles\":[],\"rootLayout\":{\"direction\":\"column\",\"gap\":0,\"responsive\":false}}",
+        );
+        assert_eq!(chunk_ids.len(), 2);
+        // Chunks dispatch in plan order: chunk_ids[0] = c1 (Good),
+        // chunk_ids[1] = c2 (Bad).
+        let good_id = chunk_ids[0];
+        let bad_id = chunk_ids[1];
+        // Resolve Good with code.
+        p.on_delta(
+            good_id,
+            "export default function Good(){}\n---CONTRACT---\n{\"componentName\":\"Good\"}",
+        );
+        p.on_complete(good_id);
+        // Error Bad twice → Failed.
+        p.on_error(bad_id, "boom".into());
+        // step to re-dispatch Bad's retry
+        let retry = match p.step() {
+            PipelineStep::Dispatch(r) => r,
+            other => panic!("expected Bad retry dispatch, got {other:?}"),
+        };
+        p.on_error(retry[0].id, "boom2".into());
+        // Now assembly dispatches; fail it twice.
+        let a1 = match p.step() {
+            PipelineStep::Dispatch(r) => r[0].id,
+            other => panic!("expected assembly dispatch, got {other:?}"),
+        };
+        p.on_error(a1, "asm boom".into());
+        let a2 = match p.step() {
+            PipelineStep::Dispatch(r) => r[0].id,
+            other => panic!("expected assembly retry dispatch, got {other:?}"),
+        };
+        p.on_error(a2, "asm boom2".into());
+        match p.step() {
+            PipelineStep::Done { code, degraded, .. } => {
+                assert!(degraded);
+                // The good chunk's code is present...
+                assert!(code.contains("function Good"));
+                assert!(code.contains("Good (successful)"));
+                // ...and the failed chunk contributes NO header-only section.
+                assert!(!code.contains("Bad (failed)"));
+                assert!(!code.contains("Bad"));
             }
             other => panic!("expected degraded Done, got {other:?}"),
         }
