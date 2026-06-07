@@ -25,7 +25,9 @@
 
 use op_editor_ui::layout_scene::{regular_polygon_points, LayoutScene, SceneNode, ScenePage};
 use op_editor_ui::layout_scene::{Effect, NodeKind};
-use op_editor_ui::{Color, Point2D, Rect};
+use op_editor_ui::{
+    Color, ImageAdjustments, ImageDrawMode, Point2D, Rect, RenderBackend, TextLayout,
+};
 use skia_safe::{Canvas, EncodedImageFormat, Paint, PaintStyle, Path, PathBuilder};
 use std::path::Path as StdPath;
 
@@ -311,10 +313,21 @@ fn own_paint_corners(n: &SceneNode) -> Option<Vec<glam::Vec2>> {
                 nr.origin.y + nr.size.y,
             )
         }
+        NodeKind::Other(tag) if tag == "icon_font" => {
+            if n.text.as_ref().is_none_or(|s| s.trim().is_empty()) {
+                return None;
+            }
+            let nr = normalize_rect(n.bounds);
+            (
+                nr.origin.x,
+                nr.origin.y,
+                nr.origin.x + nr.size.x,
+                nr.origin.y + nr.size.y,
+            )
+        }
         NodeKind::Other(_) => {
-            // `icon_font` and any other tagged kind paint no fill rect
-            // in export; their bounds still bound the glyph for the
-            // surface size when a fill is present.
+            // Unknown tagged kinds paint no own silhouette in export;
+            // their bounds still contribute when authored with fill/stroke.
             if n.fill.is_none() && n.stroke.is_none() {
                 return None;
             }
@@ -408,9 +421,12 @@ pub(crate) fn paint_node(canvas: &Canvas, node: &SceneNode) {
         NodeKind::Rect | NodeKind::Frame => {
             paint_rect(canvas, world_rect, node);
         }
+        NodeKind::Other(tag) if tag == "icon_font" => {
+            paint_icon_font(canvas, world_rect, node);
+        }
         NodeKind::Other(_) => {
-            // Tagged kinds (e.g. `icon_font`) have no rect silhouette
-            // in export; skip own paint, still recurse children.
+            // Unknown tagged kinds have no rect silhouette in export;
+            // skip own paint, still recurse children.
         }
         NodeKind::Ellipse => {
             paint_oval(canvas, world_rect, node);
@@ -574,6 +590,85 @@ fn paint_text(canvas: &Canvas, rect: Rect, node: &SceneNode) {
     for line in text.split('\n') {
         canvas.draw_str(line, (r.origin.x, baseline_y), &font, &paint);
         baseline_y += line_h;
+    }
+}
+
+fn paint_icon_font(canvas: &Canvas, rect: Rect, node: &SceneNode) {
+    let mut backend = IconExportBackend { canvas };
+    op_editor_ui::widgets::icons::paint_icon_font_node(
+        &mut backend,
+        node.font_family.as_str(),
+        node.text.as_deref().unwrap_or(""),
+        normalize_rect(rect),
+        node.fill,
+    );
+}
+
+struct IconExportBackend<'a> {
+    canvas: &'a Canvas,
+}
+
+impl RenderBackend for IconExportBackend<'_> {
+    fn begin_frame(&mut self) {}
+    fn end_frame(&mut self) {}
+    fn fill_rect(&mut self, _rect: Rect, _color: Color) {}
+    fn stroke_rect(&mut self, _rect: Rect, _color: Color, _width: f32) {}
+    fn draw_text(&mut self, _layout: &TextLayout, _origin: Point2D) {}
+    fn clip_rect(&mut self, _rect: Rect) {}
+    fn stroke_line(&mut self, _from: Point2D, _to: Point2D, _color: Color, _width: f32) {}
+    fn fill_round_rect(&mut self, _rect: Rect, _radius: f32, _color: Color) {}
+    fn stroke_round_rect(&mut self, _rect: Rect, _radius: f32, _color: Color, _width: f32) {}
+
+    fn stroke_svg_path(&mut self, d: &str, top_left: Point2D, size: f32, color: Color, width: f32) {
+        let Some(path) = skia_safe::utils::parse_path::from_svg(d) else {
+            return;
+        };
+        let scale = size / 24.0;
+        let mut matrix = skia_safe::Matrix::new_identity();
+        matrix.set_scale_translate((scale, scale), (top_left.x, top_left.y));
+        let path = path.with_transform(&matrix);
+        let mut paint = make_stroke(color, width);
+        paint.set_stroke_cap(skia_safe::PaintCap::Round);
+        paint.set_stroke_join(skia_safe::PaintJoin::Round);
+        self.canvas.draw_path(&path, &paint);
+    }
+
+    fn fill_svg_path(&mut self, d: &str, top_left: Point2D, size: f32, viewbox: f32, color: Color) {
+        let Some(path) = skia_safe::utils::parse_path::from_svg(d) else {
+            return;
+        };
+        let scale = size / viewbox.max(1.0);
+        let mut matrix = skia_safe::Matrix::new_identity();
+        matrix.set_scale_translate((scale, scale), (top_left.x, top_left.y));
+        let path = path.with_transform(&matrix);
+        self.canvas.draw_path(&path, &make_fill(color));
+    }
+
+    fn draw_image(&mut self, _rect: Rect, _image_id: u64, _encoded: &[u8]) {}
+    fn draw_image_with_mode(
+        &mut self,
+        _rect: Rect,
+        _image_id: u64,
+        _encoded: &[u8],
+        _mode: ImageDrawMode,
+    ) {
+    }
+    fn draw_image_with_options(
+        &mut self,
+        _rect: Rect,
+        _image_id: u64,
+        _encoded: &[u8],
+        _mode: ImageDrawMode,
+        _adjustments: ImageAdjustments,
+        _opacity: f32,
+    ) {
+    }
+    fn save(&mut self) {}
+    fn restore(&mut self) {}
+    fn translate(&mut self, _offset: Point2D) {}
+    fn resize(&mut self, _width: u32, _height: u32) {}
+    fn dpi_scale(&self) -> f32 {
+        1.0
     }
 }
 

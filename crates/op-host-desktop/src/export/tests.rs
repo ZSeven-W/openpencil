@@ -4,7 +4,7 @@
 
 use super::test_support::{filled_rect, scene_with};
 use super::*;
-use op_editor_ui::layout_scene::SceneNode;
+use op_editor_ui::layout_scene::{NodeKind, SceneNode};
 
 #[test]
 fn raster_format_extension_lookup() {
@@ -243,6 +243,53 @@ fn export_node_raster_crops_to_the_named_node() {
     let expected = (40.0 + MARGIN * 2.0) as u32;
     assert_eq!(png_width, expected);
     assert_eq!(png_height, expected);
+    let _ = std::fs::remove_file(&tmp);
+}
+
+#[test]
+fn export_node_raster_paints_icon_font_glyphs() {
+    let mut icon = SceneNode::leaf("home-icon", NodeKind::Other("icon_font".into()));
+    icon.bounds = Rect::xywh(0.0, 0.0, 32.0, 32.0);
+    icon.text = Some("home".into());
+    icon.font_family = "lucide".into();
+    icon.fill = Some(Color {
+        r: 0.0,
+        g: 0.0,
+        b: 0.0,
+        a: 1.0,
+    });
+
+    let scene = scene_with(vec![icon]);
+    let tmp = std::env::temp_dir().join(format!("op-export-icon-{}.png", std::process::id()));
+    let res = export_node_raster(&scene, "home-icon", &tmp, RasterFormat::Png, 1.0);
+    assert!(res.is_ok(), "export_node_raster icon failed: {res:?}");
+
+    let bytes = std::fs::read(&tmp).unwrap();
+    let image = skia_safe::Image::from_encoded(skia_safe::Data::new_copy(&bytes))
+        .expect("decode exported icon PNG");
+    let width = image.width();
+    let height = image.height();
+    let info = skia_safe::ImageInfo::new(
+        (width, height),
+        skia_safe::ColorType::RGBA8888,
+        skia_safe::AlphaType::Unpremul,
+        None,
+    );
+    let stride = width as usize * 4;
+    let mut pixels = vec![0u8; stride * height as usize];
+    let ok = image.read_pixels(
+        &info,
+        pixels.as_mut_slice(),
+        stride,
+        (0, 0),
+        skia_safe::image::CachingHint::Allow,
+    );
+    assert!(ok, "read exported icon pixels");
+    let painted = pixels.chunks_exact(4).filter(|rgba| rgba[3] > 0).count();
+    assert!(
+        painted > 20,
+        "expected icon export to contain painted glyph pixels, got {painted}"
+    );
     let _ = std::fs::remove_file(&tmp);
 }
 
