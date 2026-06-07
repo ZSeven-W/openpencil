@@ -19,6 +19,7 @@
 //! Roll back plan-derived variables only when NOTHING survived across all roots.
 //! Port of `orchestrator.ts:1101-1158`.
 
+use crate::cleanup_layout::root_content_height;
 use crate::cleanup_typography::repair_overbold_text_hierarchy;
 use crate::plan::OrchestratorPlan;
 use crate::types::{DocSink, OrchestratorError, SubtaskOutcome};
@@ -227,25 +228,14 @@ struct MobileSectionRepairs {
 }
 
 /// Pass ③:根 frame 高度自适应到内容。把根 frame 的高度设为其
-/// 直接子节点的像素高度之和(无显式像素高度的子节点跳过)。
+/// 直接子节点的内容高度之和；`fit_content` 容器会按子节点估算。
 /// 对齐 TS `adjustRootFrameHeightToContent`。
 fn adjust_root_height_to_content(sink: &mut dyn DocSink, root_id: &str) {
     let total: Option<i32> = {
         let Some(root) = find_root(sink.state(), root_id) else {
             return;
         };
-        let Some(children) = root.children() else {
-            return;
-        };
-        if children.is_empty() {
-            return;
-        }
-        let sum: f64 = children.iter().filter_map(|c| c.height_px()).sum();
-        if sum > 0.0 {
-            Some(sum.round() as i32)
-        } else {
-            None
-        }
+        root_content_height(root)
     };
     let current_height = find_root(sink.state(), root_id).and_then(|root| root.height_px());
     if let Some(height) = total.filter(|height| {

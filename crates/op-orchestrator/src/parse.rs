@@ -318,17 +318,14 @@ fn normalize_generated_node_json(value: &mut serde_json::Value) {
                 object.insert("src".into(), serde_json::Value::String(String::new()));
             }
 
-            // `fill` given as a bare color string/ref → wrap into the canonical
-            // `[{ "type":"solid", "color": <string> }]` sequence. PenNode's fill
-            // is a sequence; models commonly shorthand it as a plain color
-            // (实测方舟 `"fill":"$color-success-text"` 否则整 root 报废)。
-            if let Some(serde_json::Value::String(color)) = object.get("fill") {
-                let color = color.clone();
-                object.insert(
-                    "fill".into(),
-                    serde_json::json!([{ "type": "solid", "color": color }]),
-                );
+            // `fill` given as a bare color/ref or one fill object → wrap into
+            // the canonical fill array. PenNode's fill is a sequence; models
+            // commonly shorthand it (实测方舟/DeepSeek 否则整 root 报废)。
+            if let Some(fill) = object.get_mut("fill") {
+                normalize_fill_json(fill);
             }
+            normalize_stroke_json(object);
+            normalize_layout_enum_json(object);
 
             for (key, child) in object.iter_mut() {
                 // 数值型设计 token(`$type-*-size` 等)只在**数值字段**上就地解析
@@ -360,6 +357,132 @@ fn normalize_generated_node_json(value: &mut serde_json::Value) {
     }
 }
 
+fn normalize_layout_enum_json(object: &mut serde_json::Map<String, serde_json::Value>) {
+    if let Some(serde_json::Value::String(layout)) = object.get_mut("layout") {
+        if let Some(normalized) = normalize_layout_mode(layout) {
+            *layout = normalized.to_string();
+        }
+    }
+    if let Some(serde_json::Value::String(justify)) = object.get_mut("justifyContent") {
+        if let Some(normalized) = normalize_justify_content(justify) {
+            *justify = normalized.to_string();
+        }
+    }
+}
+
+fn normalize_layout_mode(value: &str) -> Option<&'static str> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "row" | "rows" | "hstack" | "horizontal" => Some("horizontal"),
+        "column" | "columns" | "vstack" | "vertical" => Some("vertical"),
+        "none" => Some("none"),
+        _ => None,
+    }
+}
+
+fn normalize_justify_content(value: &str) -> Option<&'static str> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "start" | "flex-start" | "left" | "top" => Some("start"),
+        "center" | "middle" => Some("center"),
+        "end" | "flex-end" | "right" | "bottom" => Some("end"),
+        "space_between" | "space-between" | "space between" => Some("space_between"),
+        "space_around" | "space-around" | "space around" => Some("space_around"),
+        "space_evenly" | "space-evenly" | "space evenly" => Some("space_around"),
+        _ => None,
+    }
+}
+
+fn normalize_stroke_json(object: &mut serde_json::Map<String, serde_json::Value>) {
+    let stroke_width = object
+        .remove("strokeWidth")
+        .or_else(|| object.remove("stroke-width"))
+        .and_then(number_from_json);
+    let Some(mut stroke) = object.remove("stroke") else {
+        return;
+    };
+
+    if let serde_json::Value::Array(mut items) = stroke {
+        stroke = if items.is_empty() {
+            serde_json::Value::Null
+        } else {
+            items.remove(0)
+        };
+    }
+
+    let normalized = match stroke {
+        serde_json::Value::String(color) => serde_json::json!({
+            "thickness": stroke_width.unwrap_or(1.0),
+            "fill": [{ "type": "solid", "color": color }]
+        }),
+        serde_json::Value::Object(mut stroke_obj) => {
+            let color = stroke_obj
+                .remove("color")
+                .and_then(string_from_json)
+                .or_else(|| {
+                    stroke_obj.get("type").and_then(|ty| {
+                        (ty.as_str() == Some("solid")).then(|| "#000000".to_string())
+                    })
+                });
+            stroke_obj.remove("type");
+            if let Some(fill) = stroke_obj.get_mut("fill") {
+                normalize_fill_json(fill);
+            } else if let Some(color) = color {
+                stroke_obj.insert(
+                    "fill".into(),
+                    serde_json::json!([{ "type": "solid", "color": color }]),
+                );
+            }
+            if !stroke_obj.contains_key("thickness") {
+                stroke_obj.insert(
+                    "thickness".into(),
+                    serde_json::json!(stroke_width.unwrap_or(1.0)),
+                );
+            }
+            serde_json::Value::Object(stroke_obj)
+        }
+        _ => return,
+    };
+
+    object.insert("stroke".into(), normalized);
+}
+
+fn normalize_fill_json(fill: &mut serde_json::Value) {
+    match fill {
+        serde_json::Value::String(color) => {
+            *fill = serde_json::json!([{ "type": "solid", "color": color.clone() }]);
+        }
+        serde_json::Value::Object(_) => {
+            let single = std::mem::take(fill);
+            *fill = serde_json::Value::Array(vec![single]);
+        }
+        serde_json::Value::Array(items) => {
+            for item in items {
+                if let serde_json::Value::String(color) = item {
+                    *item = serde_json::json!({ "type": "solid", "color": color.clone() });
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+fn number_from_json(value: serde_json::Value) -> Option<f64> {
+    match value {
+        serde_json::Value::Number(n) => n.as_f64(),
+        serde_json::Value::String(s) => s
+            .parse::<f64>()
+            .ok()
+            .or_else(|| resolve_numeric_design_token(&s)),
+        _ => None,
+    }
+}
+
+fn string_from_json(value: serde_json::Value) -> Option<String> {
+    match value {
+        serde_json::Value::String(s) if !s.trim().is_empty() => Some(s),
+        _ => None,
+    }
+}
+
 /// 接受数值型设计 token 解析的字段(canonical PenNode 里是 f64 的几何 / 排版
 /// 字段)。其他字段(content / name / color / iconFontName / …)里的 token 串
 /// 保持原样,不被改写成数字。
@@ -371,6 +494,8 @@ const NUMERIC_TOKEN_FIELDS: &[&str] = &[
     "gap",
     "padding",
     "cornerRadius",
+    "thickness",
+    "strokeWidth",
     "width",
     "height",
 ];
