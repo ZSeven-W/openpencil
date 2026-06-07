@@ -128,6 +128,13 @@ pub struct CodegenState {
     pub pending_generate: bool,
     /// Set by Regenerate; drained by the host codegen session (P3).
     pub pending_regenerate: bool,
+    /// Set by the Code panel's Download action; drained by the desktop
+    /// codegen-export drain (Task 5) which pops a save dialog + writes the
+    /// generated code (single file, or a .zip when there are image assets).
+    pub pending_download: bool,
+    /// Set by Export AI Bundle; drained by the desktop codegen-export drain
+    /// which writes a structure-bundle .zip.
+    pub pending_export_bundle: bool,
 }
 
 impl Default for CodegenState {
@@ -144,6 +151,8 @@ impl Default for CodegenState {
             copied_at: None,
             pending_generate: false,
             pending_regenerate: false,
+            pending_download: false,
+            pending_export_bundle: false,
         }
     }
 }
@@ -175,5 +184,7 @@ mod tests {
         assert!(s.error.is_none());
         assert!(!s.pending_generate);
         assert!(!s.pending_regenerate);
+        assert!(!s.pending_download);
+        assert!(!s.pending_export_bundle);
     }
 }
