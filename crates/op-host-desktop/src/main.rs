@@ -117,6 +117,16 @@ struct DesktopApp {
     /// routes `Intent::Design` here (when an `agent::Provider` is
     /// available), `Intent::Chat` to `current_chat`.
     current_design: Option<design_session::DesignSession>,
+    /// In-flight code-generation turn, if any. The Code panel raises
+    /// `codegen.pending_generate` / `pending_regenerate`;
+    /// `codegen_session::launch_codegen_if_pending` drains that into a
+    /// `CodegenSession` here and `pump` streams pipeline progress into
+    /// `editor_state.codegen` each frame.
+    current_codegen: Option<codegen_session::CodegenSession>,
+    /// The last completed generation result kept host-side (asset bytes
+    /// plus bundle JSON) for Download / Export Bundle — not carried in
+    /// the wasm-clean `editor_state`.
+    codegen_last_result: Option<codegen_session::CodegenResult>,
     /// In-flight `.fig` import — worker thread that parses on a
     /// background thread so the editor UI keeps repainting. The pump
     /// in `RedrawRequested` swaps in the parsed document when the
@@ -248,6 +258,8 @@ impl DesktopApp {
             error: None,
             current_chat: None,
             current_design: None,
+            current_codegen: None,
+            codegen_last_result: None,
             current_figma_import: None,
             model_probe: model_discovery::ModelProbe::spawn(),
             image_search: image_search_session::ImageSearchSession::new(),
