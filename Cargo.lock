@@ -3141,6 +3141,7 @@ dependencies = [
  "console_error_panic_hook",
  "jian-core",
  "js-sys",
+ "op-codegen",
  "op-editor-core",
  "op-editor-ui",
  "op-pen-loader",
