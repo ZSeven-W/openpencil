@@ -133,35 +133,126 @@ fn try_parse_contract(s: &str, chunk_id: &str) -> Option<ChunkContract> {
 /// Infer a contract from code when no JSON was emitted (pipeline.ts:183-213).
 fn infer_contract_from_code(code: &str, chunk_id: &str) -> ChunkContract {
     let component_name = infer_component_name(code).unwrap_or_default();
+    // Mirror TS `inferContractFromCode`: also harvest `import ... from '...'`
+    // sources (specifiers left empty, matching the TS port).
+    let imports = infer_imports_from_code(code);
     ChunkContract {
         chunk_id: chunk_id.to_string(),
         component_name,
-        css_classes: Vec::new(),
-        css_variables: Vec::new(),
+        imports,
+        ..ChunkContract::default()
     }
 }
 
-/// Extract a component name from common export forms (pipeline.ts:188-195).
+/// Extract `import ... from '<source>'` sources (TS: `inferContractFromCode`
+/// import regex). Specifiers are left empty, mirroring the TS port.
+fn infer_imports_from_code(code: &str) -> Vec<crate::ai::types::ImportDef> {
+    let mut imports = Vec::new();
+    let mut rest = code;
+    while let Some(import_idx) = rest.find("import ") {
+        // Always advance at least past this `import ` so the loop terminates.
+        let next_scan_start = import_idx + "import ".len();
+        let after_import = &rest[import_idx..];
+        // Find the `from` keyword, then the quoted source after it.
+        if let Some(from_idx) = after_import.find(" from ") {
+            let after_from = &after_import[from_idx + " from ".len()..];
+            let trimmed = after_from.trim_start();
+            if let Some(quote) = trimmed.chars().next().filter(|&c| c == '\'' || c == '"') {
+                let body = &trimmed[1..];
+                if let Some(end) = body.find(quote) {
+                    let source = &body[..end];
+                    if !source.is_empty() {
+                        imports.push(crate::ai::types::ImportDef {
+                            source: source.to_string(),
+                            specifiers: Vec::new(),
+                        });
+                    }
+                    // Advance just past the closing quote of `body` within
+                    // `rest`, computed via byte offsets so we never land on a
+                    // multi-byte boundary.
+                    let body_off = byte_offset_in(rest, body);
+                    rest = &rest[body_off + end + quote.len_utf8()..];
+                    continue;
+                }
+            }
+        }
+        // No well-formed `from '...'` after this `import` — skip it.
+        rest = &rest[next_scan_start..];
+    }
+    imports
+}
+
+/// Byte offset of `sub` within `parent` (both must be the same allocation —
+/// `sub` is a sub-slice of `parent`). Panic-free; clamps to `parent.len()`.
+fn byte_offset_in(parent: &str, sub: &str) -> usize {
+    let parent_start = parent.as_ptr() as usize;
+    let sub_start = sub.as_ptr() as usize;
+    sub_start.saturating_sub(parent_start).min(parent.len())
+}
+
+/// Extract a component name from common export forms (pipeline.ts:188-194).
+/// Ordering + guards mirror the TS `exportMatch` chain exactly:
+///   export default function Name → export function PascalName →
+///   (non-SFC) export default class Name → Kotlin `fun PascalName(` →
+///   SwiftUI `struct Name: View` → Dart/Flutter `class Name extends`.
 fn infer_component_name(code: &str) -> Option<String> {
-    if let Some(n) = capture_after(code, "export default function ", |c| {
-        c.is_ascii_alphanumeric() || c == '_'
-    }) {
+    let is_sfc = code.contains("<script") || code.contains("<template") || code.contains("<style");
+
+    let ident = |c: char| c.is_ascii_alphanumeric() || c == '_';
+
+    // export default function Name  (\w name, any case)
+    if let Some(n) = capture_after(code, "export default function ", ident) {
         return Some(n);
     }
-    if let Some(n) = capture_after(code, "export function ", |c| {
-        c.is_ascii_alphanumeric() || c == '_'
-    }) {
+    // export function PascalName  (PascalCase only)
+    if let Some(n) = capture_after(code, "export function ", ident) {
         if n.chars().next().is_some_and(|c| c.is_ascii_uppercase()) {
             return Some(n);
         }
     }
+    // export default class Name  (\w name) — only when NOT an SFC.
+    if !is_sfc {
+        if let Some(n) = capture_after(code, "export default class ", ident) {
+            return Some(n);
+        }
+    }
+    // Kotlin: fun PascalName(  (PascalCase only)
+    if let Some(n) = capture_fun_pascal(code) {
+        return Some(n);
+    }
+    // SwiftUI: struct Name: View
     if let Some(n) = capture_between(code, "struct ", ": View") {
         return Some(n.trim().to_string());
     }
-    if let Some(n) = capture_after(code, "class ", |c| c.is_ascii_alphanumeric() || c == '_') {
+    // Dart/Flutter: class Name extends
+    if let Some(n) = capture_after(code, "class ", ident) {
         if code.contains(&format!("class {n} extends")) {
             return Some(n);
         }
+    }
+    None
+}
+
+/// Kotlin `fun PascalName(` — port of /fun\s+([A-Z]\w*)\s*\(/. Captures a
+/// PascalCase identifier after `fun ` that is followed by `(` (allowing
+/// whitespace before the paren).
+fn capture_fun_pascal(code: &str) -> Option<String> {
+    let mut rest = code;
+    while let Some(idx) = rest.find("fun ") {
+        let after = &rest[idx + "fun ".len()..];
+        let after = after.trim_start();
+        let name: String = after
+            .chars()
+            .take_while(|&c| c.is_ascii_alphanumeric() || c == '_')
+            .collect();
+        if name.chars().next().is_some_and(|c| c.is_ascii_uppercase()) {
+            // Must be followed by `(` (optionally after whitespace).
+            let tail = after[name.len()..].trim_start();
+            if tail.starts_with('(') {
+                return Some(name);
+            }
+        }
+        rest = &rest[idx + "fun ".len()..];
     }
     None
 }
@@ -247,9 +338,16 @@ fn find_json_fence(resp: &str) -> Option<(&str, &str)> {
 }
 
 /// Find a trailing `{...}` object containing "componentName" (no nesting).
+/// END-ANCHORED to mirror the TS regex `(\{[^{}]*"componentName"[^{}]*\})\s*$`:
+/// the closing `}` must be the LAST non-whitespace char of the response, so a
+/// `{...} trailing text` shape falls through to strategy 4 (inference).
 fn find_trailing_component_object(resp: &str) -> Option<String> {
     let trimmed = resp.trim_end();
     let end = trimmed.rfind('}')?;
+    // The `}` must be the last non-whitespace char (regex `\}\s*$`).
+    if end != trimmed.len() - 1 {
+        return None;
+    }
     let start = trimmed[..end].rfind('{')?;
     let obj = &trimmed[start..=end];
     if obj.contains("\"componentName\"") && !obj[1..obj.len() - 1].contains('{') {
@@ -313,6 +411,76 @@ mod tests {
         let r = parse_chunk_response(resp, "c4");
         assert_eq!(r.contract.component_name, "Footer");
         assert!(!r.code.contains("```"));
+    }
+
+    #[test]
+    fn infer_kotlin_fun_pascal_case() {
+        // Kotlin Composable: `fun Card(` → Card (PascalCase only).
+        let r = parse_chunk_response("fun Card() { }", "x");
+        assert_eq!(r.contract.component_name, "Card");
+    }
+
+    #[test]
+    fn infer_export_default_class_when_not_sfc() {
+        let r = parse_chunk_response("export default class Widget extends X {}", "x");
+        assert_eq!(r.contract.component_name, "Widget");
+    }
+
+    #[test]
+    fn infer_skips_export_default_class_for_sfc() {
+        // An SFC marker (`<template>`) must suppress the class-name pattern
+        // (TS guard `!isSFC`); falls through with no inferred name.
+        let r = parse_chunk_response(
+            "<template><div/></template>\nexport default class Widget {}",
+            "x",
+        );
+        assert_eq!(r.contract.component_name, "");
+    }
+
+    #[test]
+    fn infer_harvests_import_sources() {
+        let r = parse_chunk_response(
+            "import { useState } from 'react'\nexport default function App(){}",
+            "x",
+        );
+        assert_eq!(r.contract.component_name, "App");
+        assert_eq!(r.contract.imports.len(), 1);
+        assert_eq!(r.contract.imports[0].source, "react");
+    }
+
+    #[test]
+    fn infer_harvests_multiple_import_sources() {
+        let r = parse_chunk_response(
+            "import { useState } from \"react\"\nimport clsx from 'clsx'\nexport default function App(){}",
+            "x",
+        );
+        let sources: Vec<&str> = r
+            .contract
+            .imports
+            .iter()
+            .map(|i| i.source.as_str())
+            .collect();
+        assert_eq!(sources, vec!["react", "clsx"]);
+    }
+
+    #[test]
+    fn trailing_object_must_end_at_brace() {
+        // strategy 3 requires the `}` be the last non-whitespace char.
+        // A trailing-text response must NOT use strategy 3; it falls through
+        // to strategy 4 inference (which finds the exported function name).
+        let resp = "export default function Card(){}\n{\"componentName\":\"Wrong\"} trailing text";
+        let r = parse_chunk_response(resp, "x");
+        assert_eq!(r.contract.component_name, "Card");
+        // The JSON object remains part of code (not stripped as a contract).
+        assert!(r.code.contains("componentName"));
+    }
+
+    #[test]
+    fn trailing_object_used_when_ending_exactly_at_brace() {
+        let resp = "export default function Card(){}\n{\"componentName\":\"Card\"}";
+        let r = parse_chunk_response(resp, "x");
+        assert_eq!(r.contract.component_name, "Card");
+        assert!(!r.code.contains("componentName"));
     }
 
     #[test]

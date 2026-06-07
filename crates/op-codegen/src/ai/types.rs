@@ -3,7 +3,7 @@
 
 use op_ai::chat_provider::{EffortLevel, ThinkingMode};
 use op_editor_core::codegen::Framework;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 /// Stable id correlating a dispatched request with its streamed deltas.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -28,14 +28,14 @@ pub struct CodePlan {
     pub root_layout: RootLayout,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 pub struct SharedStyle {
     pub name: String,
     #[serde(default)]
     pub description: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 pub struct RootLayout {
     #[serde(default)]
     pub direction: String,
@@ -70,17 +70,52 @@ pub struct ExecutableChunk {
     pub order: usize,
 }
 
+/// A prop a chunk component exposes. Parity with TS `PropDef`.
+#[derive(Debug, Clone, Default, PartialEq, Deserialize, Serialize)]
+pub struct PropDef {
+    #[serde(default)]
+    pub name: String,
+    #[serde(default, rename = "type")]
+    pub ty: String,
+    #[serde(default)]
+    pub required: bool,
+}
+
+/// A slot a chunk component exposes. Parity with TS `SlotDef`.
+#[derive(Debug, Clone, Default, PartialEq, Deserialize, Serialize)]
+pub struct SlotDef {
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub description: String,
+}
+
+/// An import a chunk component declares. Parity with TS `ImportDef`.
+#[derive(Debug, Clone, Default, PartialEq, Deserialize, Serialize)]
+pub struct ImportDef {
+    #[serde(default)]
+    pub source: String,
+    #[serde(default)]
+    pub specifiers: Vec<String>,
+}
+
 /// Structured metadata each chunk emits. Parity with TS `ChunkContract`.
-#[derive(Debug, Clone, Default, PartialEq, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Deserialize, Serialize)]
 pub struct ChunkContract {
     #[serde(default, rename = "chunkId")]
     pub chunk_id: String,
     #[serde(default, rename = "componentName")]
     pub component_name: String,
+    #[serde(default, rename = "exportedProps")]
+    pub exported_props: Vec<PropDef>,
+    #[serde(default)]
+    pub slots: Vec<SlotDef>,
     #[serde(default, rename = "cssClasses")]
     pub css_classes: Vec<String>,
     #[serde(default, rename = "cssVariables")]
     pub css_variables: Vec<String>,
+    #[serde(default)]
+    pub imports: Vec<ImportDef>,
 }
 
 /// A chunk's generated code + parsed contract. Parity with TS `ChunkResult`.
@@ -174,5 +209,33 @@ mod tests {
         let c: ChunkContract = serde_json::from_str(r#"{"componentName":"Card"}"#).unwrap();
         assert_eq!(c.component_name, "Card");
         assert!(c.css_classes.is_empty());
+        assert!(c.exported_props.is_empty());
+        assert!(c.slots.is_empty());
+        assert!(c.imports.is_empty());
+    }
+
+    #[test]
+    fn chunk_contract_deserializes_props_slots_imports() {
+        let json = r#"{
+            "componentName": "Card",
+            "exportedProps": [
+                {"name": "title", "type": "string", "required": true},
+                {"name": "subtitle", "type": "string", "required": false}
+            ],
+            "slots": [{"name": "footer", "description": "card footer area"}],
+            "imports": [{"source": "react", "specifiers": ["useState"]}]
+        }"#;
+        let c: ChunkContract = serde_json::from_str(json).unwrap();
+        assert_eq!(c.exported_props.len(), 2);
+        assert_eq!(c.exported_props[0].name, "title");
+        assert_eq!(c.exported_props[0].ty, "string");
+        assert!(c.exported_props[0].required);
+        assert!(!c.exported_props[1].required);
+        assert_eq!(c.slots.len(), 1);
+        assert_eq!(c.slots[0].name, "footer");
+        assert_eq!(c.slots[0].description, "card footer area");
+        assert_eq!(c.imports.len(), 1);
+        assert_eq!(c.imports[0].source, "react");
+        assert_eq!(c.imports[0].specifiers, vec!["useState"]);
     }
 }
