@@ -2,9 +2,9 @@
 //! `main.rs` to keep that file under the 800-line cap.
 
 use crate::{
-    chat_attachment, chat_session, cursor_icon, design_session, figma_import_session, frame,
-    git_jobs, menu, persistence, settings_io, window_state, DesktopApp, DesktopEvent,
-    INITIAL_VIEWPORT_H, INITIAL_VIEWPORT_W,
+    chat_attachment, chat_session, codegen_session, cursor_icon, design_session,
+    figma_import_session, frame, git_jobs, menu, persistence, settings_io, window_state,
+    DesktopApp, DesktopEvent, INITIAL_VIEWPORT_H, INITIAL_VIEWPORT_W,
 };
 use op_host_native::{NativeBackend, ProviderError, SharedSkiaContext, SharedSkiaError};
 use std::time::{Duration, Instant};
@@ -458,6 +458,22 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
                 if chat_session::pump(&mut self.host, &mut self.current_chat) {
                     self.redraw_dirty = true;
                 }
+                // Launch a pending Generate / Regenerate from the Code
+                // panel, then pump the in-flight codegen pipeline's
+                // progress into `editor_state.codegen` this frame.
+                if codegen_session::launch_codegen_if_pending(
+                    &mut self.host,
+                    &mut self.current_codegen,
+                ) {
+                    self.redraw_dirty = true;
+                }
+                if codegen_session::pump(
+                    &mut self.host,
+                    &mut self.current_codegen,
+                    &mut self.codegen_last_result,
+                ) {
+                    self.redraw_dirty = true;
+                }
                 // Drain a finished background `.fig` parse — applies
                 // the imported document + clears the loading overlay
                 // flag. Rebinds Git + window title on success
@@ -584,7 +600,10 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
                 // overlay's spinner. Chat + design need ~30 fps for
                 // streaming deltas; Figma import is a one-shot result
                 // but the overlay's spinner needs frames to animate.
-                if self.current_chat.is_some() || self.current_design.is_some() {
+                if self.current_chat.is_some()
+                    || self.current_design.is_some()
+                    || self.current_codegen.is_some()
+                {
                     event_loop.set_control_flow(ControlFlow::WaitUntil(
                         Instant::now() + Duration::from_millis(33),
                     ));
@@ -1041,6 +1060,7 @@ impl DesktopApp {
     fn resume_time_needs_redraw(&self) -> bool {
         self.current_chat.is_some()
             || self.current_design.is_some()
+            || self.current_codegen.is_some()
             || self.current_figma_import.is_some()
             || self.host.next_animation_deadline_ms().is_some()
             || self.update_probe.is_pending()

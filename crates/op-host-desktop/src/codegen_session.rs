@@ -128,9 +128,6 @@ pub(crate) fn run_pipeline(
 impl CodegenSession {
     /// Spawn a worker that drives the pipeline against `provider`. Returns
     /// immediately — the model turns run off the UI thread.
-    // Called from `launch_codegen_if_pending`, itself wired into the event
-    // loop in Task 4.
-    #[allow(dead_code)]
     pub fn start(provider: Box<dyn ChatProvider>, input: CodegenInput) -> Self {
         let (tx, rx) = std::sync::mpsc::channel();
         std::thread::Builder::new()
@@ -150,8 +147,6 @@ impl CodegenSession {
 /// Clears `current` once the turn finishes and parks the completed result
 /// (asset bytes) in `last_result`. Returns true when state changed so the
 /// caller can dirty the redraw.
-// Wired into the event loop in Task 4.
-#[allow(dead_code)]
 pub fn pump(
     host: &mut WidgetHostNative,
     current: &mut Option<CodegenSession>,
@@ -230,8 +225,6 @@ pub fn pump(
 /// provider; a missing selection or unconfigured model surfaces an inline
 /// error instead of starting a turn. Returns true when state changed (a turn
 /// launched OR an error was written).
-// Wired into the event loop in Task 4.
-#[allow(dead_code)]
 pub fn launch_codegen_if_pending(
     host: &mut WidgetHostNative,
     current: &mut Option<CodegenSession>,
