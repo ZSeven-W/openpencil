@@ -118,6 +118,10 @@ pub struct PropertyPanel {
     /// Focused effect-parameter value, if any — drives the Effects
     /// section's editable value boxes.
     pub effect_param_focus: Option<op_editor_core::editor_ui_state::EffectParamFocus>,
+    /// Code-generation state painted by the Code tab. Cloned from the
+    /// `EditorState` at construction (like `snapshot`) so the panel
+    /// owns an immutable view; generation logic is wired later (P3).
+    pub codegen: op_editor_core::codegen::CodegenState,
 }
 
 impl PropertyPanel {
@@ -254,6 +258,7 @@ impl PropertyPanel {
             } else {
                 ui.effect_param_focus
             },
+            codegen: state.codegen.clone(),
         }
     }
 
@@ -468,7 +473,7 @@ fn rect_contains(r: Rect, p: Point2D) -> bool {
         && p.y <= r.origin.y + r.size.y
 }
 
-use crate::widgets::property_panel_code::paint_code_placeholder;
+use crate::widgets::property_panel_code::paint_code_panel;
 
 impl Widget for PropertyPanel {
     fn id(&self) -> WidgetId {
@@ -513,7 +518,7 @@ impl Widget for PropertyPanel {
         };
         let caps = self.capabilities();
         if matches!(self.tab, op_editor_core::PropertyTab::Code) {
-            paint_code_placeholder(cx, &self.theme, &self.snapshot, x, tab_bottom, w);
+            paint_code_panel(cx, &self.theme, &self.codegen, x, tab_bottom, w);
             return;
         }
         // Section content scrolls below the pinned tab strip; clip it
