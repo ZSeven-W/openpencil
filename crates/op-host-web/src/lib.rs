@@ -30,11 +30,19 @@ mod live_sync;
 // compiles them. UNVERIFIED: these need an EMSDK wasm32 build + a browser; run
 // tools/check-wasm-bundle.sh.
 #[cfg(feature = "codegen")]
+mod codegen_web;
+#[cfg(feature = "codegen")]
 mod raf_pump;
 #[cfg(feature = "codegen")]
 mod web_ai_transport;
 #[cfg(feature = "codegen")]
 mod web_clipboard;
+
+/// Daemon origin the codegen session posts AI turns to (same origin the
+/// opt-in `live-sync` glue polls). The web shell has no model-discovery /
+/// daemon-base selection UI yet, so this is fixed to the default port.
+#[cfg(feature = "codegen")]
+const DAEMON_BASE: &str = "http://127.0.0.1:3100";
 
 // Force the wasm32-unknown-unknown libc/libcxx/libm shim to be linked
 // even though no Rust code calls it — its `#[no_mangle]` symbols are
@@ -168,6 +176,35 @@ impl Inner {
         }
         Ok(())
     }
+}
+
+/// Drain a pending Generate / Regenerate raised by the Code panel's press
+/// dispatch and launch a web codegen run. Mirrors the desktop
+/// `launch_codegen_if_pending`: the flags are cleared FIRST so a failed launch
+/// doesn't re-fire every frame, then `start_codegen` drives the pipeline over
+/// async XHR + an rAF pump.
+///
+/// The caller MUST NOT hold an `inner` borrow when calling this — `start_codegen`
+/// borrows `inner` itself (and the rAF pump it starts borrows it again later).
+#[cfg(feature = "codegen")]
+fn drain_pending_codegen(inner: &Rc<RefCell<Inner>>) {
+    let pending = {
+        let b = inner.borrow();
+        let cg = &b.host.editor_state().codegen;
+        cg.pending_generate || cg.pending_regenerate
+    };
+    if !pending {
+        return;
+    }
+    // Clear the flags before launching so a missing-selection error path (which
+    // surfaces inline) isn't re-triggered on the next press.
+    {
+        let mut bm = inner.borrow_mut();
+        let cg = &mut bm.host.editor_state_mut().codegen;
+        cg.pending_generate = false;
+        cg.pending_regenerate = false;
+    }
+    codegen_web::start_codegen(inner.clone(), DAEMON_BASE.to_string());
 }
 
 /// Build a Jian `Modifiers` bitset from a W3C `KeyboardEvent`. Mirrors
@@ -477,23 +514,32 @@ pub fn mount(canvas_id: &str) -> Result<WebShell, JsValue> {
                     if button != 0 && button != 2 {
                         return;
                     }
-                    let mut inner = inner_md.borrow_mut();
-                    inner.host.set_modifier_shift(evt.shift_key());
-                    inner.host.set_now_ms(now_ms_perf());
-                    let (w, h) = (
-                        inner.backend.canvas_width() as f32,
-                        inner.backend.canvas_height() as f32,
-                    );
-                    let x = evt.offset_x() as f32;
-                    let y = evt.offset_y() as f32;
-                    let consumed = if button == 2 {
-                        inner.host.apply_right_press(x, y, w, h)
-                    } else {
-                        inner.host.apply_press(x, y, w, h)
-                    };
-                    if consumed {
-                        let _ = inner.repaint();
+                    {
+                        let mut inner = inner_md.borrow_mut();
+                        inner.host.set_modifier_shift(evt.shift_key());
+                        inner.host.set_now_ms(now_ms_perf());
+                        let (w, h) = (
+                            inner.backend.canvas_width() as f32,
+                            inner.backend.canvas_height() as f32,
+                        );
+                        let x = evt.offset_x() as f32;
+                        let y = evt.offset_y() as f32;
+                        let consumed = if button == 2 {
+                            inner.host.apply_right_press(x, y, w, h)
+                        } else {
+                            inner.host.apply_press(x, y, w, h)
+                        };
+                        if consumed {
+                            let _ = inner.repaint();
+                        }
+                        // `inner` borrow dropped here before the codegen drain,
+                        // which re-borrows `inner` inside `start_codegen`.
                     }
+                    // A Code-panel Generate / Regenerate click raised a pending
+                    // flag during `apply_press`; launch the codegen run now that
+                    // the borrow is released.
+                    #[cfg(feature = "codegen")]
+                    drain_pending_codegen(&inner_md);
                 },
             )?;
         }

@@ -216,9 +216,101 @@ impl WidgetHost {
                 self.editor_state.commit_history();
                 let _ = self.editor_state.set_selected_padding_mode_shape(mode);
             }
+            A::Codegen(codegen_action) => {
+                self.apply_codegen_action(codegen_action);
+            }
             _ => {}
         }
         self.mark_dirty();
+    }
+
+    /// Dispatch a Code-panel action. `SelectFramework` is pure
+    /// `editor_state.codegen` state (works without the `codegen`
+    /// feature); `Generate` / `Regenerate` raise the pending flags the
+    /// `lib.rs` drain turns into a `codegen_web::start_codegen` launch
+    /// (the dispatch has no `Inner` / daemon base in scope — mirror of
+    /// the desktop pending-flag + `launch_codegen_if_pending` pattern);
+    /// `Copy` / `Download` are browser IO via `web_clipboard`. Asset
+    /// bundles are a web-v1 no-op (no zip path).
+    fn apply_codegen_action(
+        &mut self,
+        action: op_editor_ui::widgets::property_panel_action::CodegenAction,
+    ) {
+        use op_editor_core::codegen::CodegenPhase;
+        use op_editor_ui::widgets::property_panel_action::CodegenAction;
+        let cg = &mut self.editor_state.codegen;
+        match action {
+            CodegenAction::SelectFramework(fw) => {
+                cg.framework = fw;
+            }
+            CodegenAction::Generate => {
+                cg.pending_generate = true;
+                cg.phase = CodegenPhase::Generating;
+                cg.error = None;
+            }
+            CodegenAction::Regenerate => {
+                cg.pending_regenerate = true;
+                cg.phase = CodegenPhase::Generating;
+                cg.error = None;
+            }
+            CodegenAction::Cancel => {
+                cg.pending_generate = false;
+                cg.pending_regenerate = false;
+                cg.phase = if cg.code.is_empty() {
+                    CodegenPhase::Idle
+                } else {
+                    CodegenPhase::Complete
+                };
+            }
+            CodegenAction::Copy => {
+                cg.copied_at = Some(self.now_ms);
+                #[cfg(feature = "codegen")]
+                crate::web_clipboard::copy_text(&cg.code);
+            }
+            CodegenAction::Download => {
+                #[cfg(feature = "codegen")]
+                {
+                    let ext = framework_ext(cg.framework);
+                    let _ = crate::web_clipboard::download_bytes(
+                        &format!("component.{ext}"),
+                        "text/plain",
+                        cg.code.as_bytes(),
+                    );
+                }
+            }
+            CodegenAction::ExportBundle => {
+                // Web v1: no zip bundle path — download the raw component as a
+                // single file, same as Download. A future web bundle would
+                // stream a .zip via a JS bridge.
+                // TODO: web bundle zip.
+                #[cfg(feature = "codegen")]
+                {
+                    let ext = framework_ext(cg.framework);
+                    let _ = crate::web_clipboard::download_bytes(
+                        &format!("component.{ext}"),
+                        "text/plain",
+                        cg.code.as_bytes(),
+                    );
+                }
+            }
+        }
+    }
+}
+
+/// File extension for the active framework's generated component file.
+/// Mirrors the desktop `codegen_session::framework_ext` + the TS download
+/// naming (`component.<ext>`). Only used by the `codegen` web download path.
+#[cfg(feature = "codegen")]
+fn framework_ext(fw: op_editor_core::codegen::Framework) -> &'static str {
+    use op_editor_core::codegen::Framework;
+    match fw {
+        Framework::React | Framework::ReactNative => "tsx",
+        Framework::Vue => "vue",
+        Framework::Svelte => "svelte",
+        Framework::Html => "html",
+        Framework::Flutter => "dart",
+        Framework::SwiftUi => "swift",
+        Framework::Compose => "kt",
     }
 }
 

@@ -35,6 +35,14 @@ op-pen-loader = { path = "../op-pen-loader", optional = true }
 # the new web modules it backs (web_ai_transport / raf_pump / web_clipboard)
 # are UNVERIFIED — they could not be compile-checked on wasm32 without EMSDK.
 op-codegen = { path = "../op-codegen", features = ["ai"], optional = true }
+# P5 web codegen session: `build_codegen_input` resolves the selection into
+# `PenNode` subtrees (jian-ops-schema), serializes them (serde_json), and
+# constructs the pipeline `CodegenInput` whose param enums come from op-ai.
+# All optional + behind `codegen` so the wasm32-clean stub baseline never
+# pulls them. NOTE: UNVERIFIED on wasm32 (needs EMSDK).
+op-ai = { path = "../op-ai", optional = true }
+jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema", optional = true }
+serde_json = { workspace = true, optional = true }
 # Step 1b §3.6: handwritten DOM mirror consumes accesskit::TreeUpdate (0.24).
 accesskit = "0.24"
 console_error_panic_hook = "0.1"
@@ -126,7 +134,7 @@ wasm-libc-shim = ["dep:wasm-libc-shim"]
 # WebBackend) + the `op-codegen` AI pipeline. OFF by default so it never
 # touches the `web` stub or a plain `skia` build. NOTE: UNVERIFIED — the new
 # modules need an EMSDK wasm32 build + a browser; run tools/check-wasm-bundle.sh.
-codegen = ["skia", "dep:op-codegen"]
+codegen = ["skia", "dep:op-codegen", "dep:op-ai", "dep:jian-ops-schema", "dep:serde_json"]
 # Opt-in live-canvas sync glue: polls the web-canvas daemon and applies newer
 # documents to the live shell. Requires `skia` (drives the real WebBackend) and
 # therefore an EMSDK build env. OFF by default so it never affects the `web`
