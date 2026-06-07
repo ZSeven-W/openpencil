@@ -21,6 +21,21 @@ use op_host_native::WidgetHostNative;
 
 use crate::chat_session::provider_for_selected_model;
 
+/// File extension for the active framework's generated component file.
+/// Mirrors the TS download naming (`component.<ext>`).
+fn framework_ext(fw: op_editor_core::codegen::Framework) -> &'static str {
+    use op_editor_core::codegen::Framework;
+    match fw {
+        Framework::React | Framework::ReactNative => "tsx",
+        Framework::Vue => "vue",
+        Framework::Svelte => "svelte",
+        Framework::Html => "html",
+        Framework::Flutter => "dart",
+        Framework::SwiftUi => "swift",
+        Framework::Compose => "kt",
+    }
+}
+
 /// Streamed from the worker to the UI pump.
 pub enum CodegenDelta {
     Progress(CodeGenProgress),
@@ -36,13 +51,16 @@ pub enum CodegenDelta {
 pub struct CodegenSession {
     pub(crate) rx: Receiver<CodegenDelta>,
     pub(crate) finished: bool,
+    /// Raw (pre-asset-sanitization) selected-nodes JSON captured at launch —
+    /// carried here so the terminal `Done` can build the COMPLETE result
+    /// (the pipeline doesn't echo the raw selection back).
+    pub(crate) raw: String,
+    /// Target framework captured at launch, for the file extension.
+    pub(crate) framework: op_editor_core::codegen::Framework,
 }
 
 /// The completed result kept HOST-SIDE for Download / Export Bundle — asset
 /// bytes are not carried in the wasm-clean `editor_state`.
-// `framework_ext` / `raw_nodes_json` / `sanitized_nodes_json` are populated
-// in a later P3 task (Task 5); kept here so the type is stable.
-#[allow(dead_code)]
 #[derive(Default, Clone)]
 pub struct CodegenResult {
     pub code: String,
@@ -127,8 +145,15 @@ pub(crate) fn run_pipeline(
 
 impl CodegenSession {
     /// Spawn a worker that drives the pipeline against `provider`. Returns
-    /// immediately — the model turns run off the UI thread.
-    pub fn start(provider: Box<dyn ChatProvider>, input: CodegenInput) -> Self {
+    /// immediately — the model turns run off the UI thread. `raw` (the raw
+    /// selected-nodes JSON) and `framework` are stashed on the session so the
+    /// terminal `Done` can assemble the COMPLETE `CodegenResult`.
+    pub fn start(
+        provider: Box<dyn ChatProvider>,
+        input: CodegenInput,
+        raw: String,
+        framework: op_editor_core::codegen::Framework,
+    ) -> Self {
         let (tx, rx) = std::sync::mpsc::channel();
         std::thread::Builder::new()
             .name("op-codegen-turn".into())
@@ -139,6 +164,8 @@ impl CodegenSession {
         CodegenSession {
             rx,
             finished: false,
+            raw,
+            framework,
         }
     }
 }
@@ -185,12 +212,17 @@ pub fn pump(
                     cg.pending_generate = false;
                     cg.pending_regenerate = false;
                 }
+                // `extract_codegen_assets` returns (sanitized_json, assets);
+                // we only need the sanitized JSON here — the Done assets
+                // already carry the extracted bytes.
+                let sanitized_nodes_json =
+                    op_codegen::ai::assets::extract_codegen_assets(&session.raw).0;
                 *last_result = Some(CodegenResult {
                     code,
-                    framework_ext: String::new(), // set in Task 5
+                    framework_ext: framework_ext(session.framework).into(),
                     assets,
-                    raw_nodes_json: String::new(),
-                    sanitized_nodes_json: String::new(),
+                    raw_nodes_json: session.raw.clone(),
+                    sanitized_nodes_json,
                 });
                 session.finished = true;
                 changed = true;
@@ -242,12 +274,14 @@ pub fn launch_codegen_if_pending(
         cg.pending_generate = false;
         cg.pending_regenerate = false;
     }
-    let Some((input, _raw)) = crate::codegen_input::build_codegen_input(host.editor_state()) else {
+    let Some((input, raw)) = crate::codegen_input::build_codegen_input(host.editor_state()) else {
         let cg = &mut host.editor_state_mut().codegen;
         cg.error = Some("Select nodes to generate code".into());
         cg.phase = op_editor_core::codegen::CodegenPhase::Error;
         return true;
     };
+    // Capture the target framework BEFORE `input` is moved into the worker.
+    let framework = host.editor_state().codegen.framework;
     let Some(provider) = provider_for_selected_model(host) else {
         let cg = &mut host.editor_state_mut().codegen;
         cg.error = Some("No model configured".into());
@@ -260,7 +294,7 @@ pub fn launch_codegen_if_pending(
         cg.error = None;
         cg.phase = op_editor_core::codegen::CodegenPhase::Generating;
     }
-    *current = Some(CodegenSession::start(provider, input));
+    *current = Some(CodegenSession::start(provider, input, raw, framework));
     true
 }
 
@@ -286,6 +320,18 @@ mod tests {
             let next = self.scripts.lock().unwrap().pop_front().unwrap_or_default();
             Box::new(next.into_iter())
         }
+    }
+
+    #[test]
+    fn framework_ext_maps_every_framework() {
+        assert_eq!(framework_ext(Framework::React), "tsx");
+        assert_eq!(framework_ext(Framework::ReactNative), "tsx");
+        assert_eq!(framework_ext(Framework::Vue), "vue");
+        assert_eq!(framework_ext(Framework::Svelte), "svelte");
+        assert_eq!(framework_ext(Framework::Html), "html");
+        assert_eq!(framework_ext(Framework::Flutter), "dart");
+        assert_eq!(framework_ext(Framework::SwiftUi), "swift");
+        assert_eq!(framework_ext(Framework::Compose), "kt");
     }
 
     fn turn(text: &str) -> Vec<ChatDelta> {

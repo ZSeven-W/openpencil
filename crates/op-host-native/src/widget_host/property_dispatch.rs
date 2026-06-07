@@ -282,7 +282,8 @@ impl WidgetHostNative {
             // Code panel actions. SelectFramework / Cancel / Copy fully
             // work; Generate / Regenerate raise pending flags + flip the
             // phase (the host codegen session that drains them is P3);
-            // Download / ExportBundle stay host-file-IO stubs (P3/P4).
+            // Download / ExportBundle raise pending flags drained by the
+            // desktop codegen-export pass (rfd save dialog + fs/zip write).
             A::Codegen(codegen_action) => {
                 use op_editor_core::codegen::CodegenPhase;
                 use op_editor_ui::widgets::property_panel_action::CodegenAction;
@@ -319,8 +320,12 @@ impl WidgetHostNative {
                         let code = cg.code.clone();
                         self.editor_state.chat.queue_copy_text(code);
                     }
-                    CodegenAction::Download => { /* P3: host file save (rfd dialog + fs/zip) */ }
-                    CodegenAction::ExportBundle => { /* P3/P4: write AI structure bundle zip */ }
+                    CodegenAction::Download => {
+                        cg.pending_download = true;
+                    }
+                    CodegenAction::ExportBundle => {
+                        cg.pending_export_bundle = true;
+                    }
                 }
             }
         }
