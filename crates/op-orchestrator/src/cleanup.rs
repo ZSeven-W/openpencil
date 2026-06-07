@@ -30,6 +30,9 @@ use op_editor_core::{
     FillType, LayoutPropValue, NodeId, PenNodeExt,
 };
 
+#[path = "cleanup_mobile_dense.rs"]
+mod cleanup_mobile_dense;
+
 /// 递归统计 `node` 下的后代数(不含自身)。
 ///
 /// Exposed `pub(crate)` so scaffold builders can pre-compute the same
@@ -651,6 +654,7 @@ pub fn run_cleanup_passes(sink: &mut dyn DocSink, _plan: &OrchestratorPlan, root
         remove_duplicate_status_bars(sink, root_id);
         repair_light_mobile_nav_surfaces(sink, root_id);
         repair_mobile_content_sections(sink, root_id);
+        cleanup_mobile_dense::repair_dense_mobile_rows(sink, root_id);
         repair_overbold_text_hierarchy(sink, root_id);
         adjust_root_height_to_content(sink, root_id);
     }
@@ -767,3 +771,7 @@ mod tests_c1;
 #[cfg(test)]
 #[path = "cleanup_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "cleanup_mobile_dense_tests.rs"]
+mod tests_mobile_dense;
