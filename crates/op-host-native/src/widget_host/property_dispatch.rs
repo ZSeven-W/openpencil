@@ -279,6 +279,9 @@ impl WidgetHostNative {
                 self.editor_state.editor_ui.pending_file_action =
                     Some(op_editor_core::editor_ui_state::FileAction::PickFillImage);
             }
+            // Code panel actions — codegen session wiring is P3; the
+            // host will dispatch these once the session module lands.
+            A::Codegen(_) => {}
         }
         self.mark_dirty();
     }
