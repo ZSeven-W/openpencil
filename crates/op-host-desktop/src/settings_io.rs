@@ -29,6 +29,7 @@ struct BuiltinAgentPayload {
     preset: Option<String>,
     display_name: String,
     kind: String,
+    #[serde(default)]
     api_key: String,
     model: String,
     base_url: String,

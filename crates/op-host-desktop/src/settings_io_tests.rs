@@ -136,6 +136,34 @@ fn duplicate_auto_named_builtin_agents_are_deduped_on_load() {
 }
 
 #[test]
+fn builtin_agent_payload_without_api_key_loads_as_empty_key() {
+    let settings = r#"{
+        "version": 1,
+        "builtin_agents": [
+            {
+                "id": "builtin-2",
+                "preset": "bailian-coding",
+                "display_name": "百炼CP",
+                "kind": "openai-compat",
+                "model": "qwen3-coder-plus",
+                "base_url": "https://coding.dashscope.aliyuncs.com/v1",
+                "enabled": false
+            }
+        ]
+    }"#;
+    let payload: SettingsPayload = serde_json::from_str(settings).unwrap();
+    let mut dst = EditorState::new();
+
+    apply_payload(&mut dst, payload);
+
+    assert_eq!(dst.editor_ui.agent_settings.builtin_agents.len(), 1);
+    let agent = &dst.editor_ui.agent_settings.builtin_agents[0];
+    assert_eq!(agent.display_name, "百炼CP");
+    assert!(agent.api_key.is_empty());
+    assert!(!agent.enabled);
+}
+
+#[test]
 fn acp_agents_round_trip_through_payload() {
     let mut src = EditorState::new();
     let mut env = std::collections::BTreeMap::new();
