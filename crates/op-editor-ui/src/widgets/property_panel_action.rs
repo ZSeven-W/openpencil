@@ -184,6 +184,20 @@ pub enum LayoutJustifyValue {
     SpaceAround,
 }
 
+/// Actions the Code panel emits. SelectFramework + Copy mutate state
+/// directly; Generate/Regenerate/Cancel raise pending flags the host
+/// codegen session (P3) drains; Download/ExportBundle are host file IO.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum CodegenAction {
+    SelectFramework(op_editor_core::codegen::Framework),
+    Generate,
+    Regenerate,
+    Cancel,
+    Copy,
+    Download,
+    ExportBundle,
+}
+
 /// Button / checkbox actions in the property panel that don't
 /// map to a text input. The host dispatches these in `apply_press`
 /// after the text-input hit-test misses.
@@ -303,4 +317,26 @@ pub enum PropertyPanelAction {
     /// User picked a padding edit mode in the gear popover — host pins
     /// `editor_ui.padding_edit_mode` + reshapes the value.
     SetPaddingMode(op_editor_core::PaddingEditMode),
+    /// Code panel action — see `CodegenAction`.
+    Codegen(CodegenAction),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn codegen_action_wraps_into_property_action() {
+        use op_editor_core::codegen::Framework;
+        let a = PropertyPanelAction::Codegen(CodegenAction::SelectFramework(Framework::Vue));
+        assert_eq!(
+            a,
+            PropertyPanelAction::Codegen(CodegenAction::SelectFramework(Framework::Vue))
+        );
+        // distinct variants are not equal
+        assert_ne!(
+            PropertyPanelAction::Codegen(CodegenAction::Generate),
+            PropertyPanelAction::Codegen(CodegenAction::Copy)
+        );
+    }
 }
