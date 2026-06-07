@@ -12,6 +12,12 @@
 //! node-accessor helpers, and the test suite; per-framework markup
 //! generators live in the sibling `codegen_targets` module.
 
+/// AI-driven code-generation pipeline (planning → chunk → assembly).
+/// Gated behind the `ai` feature so the deterministic generators stay
+/// dependency-light.
+#[cfg(feature = "ai")]
+pub mod ai;
+
 mod codegen_targets;
 
 pub use crate::codegen_targets::{
