@@ -123,6 +123,11 @@ pub struct CodegenState {
     pub error: Option<String>,
     /// Frame at which "Copied" was shown, to time the transient label.
     pub copied_at: Option<u64>,
+    /// Set by the Code panel's Generate action; drained by the host codegen
+    /// session (P3). Mirror of `chat.pending_send`.
+    pub pending_generate: bool,
+    /// Set by Regenerate; drained by the host codegen session (P3).
+    pub pending_regenerate: bool,
 }
 
 impl Default for CodegenState {
@@ -137,6 +142,8 @@ impl Default for CodegenState {
             selection_snapshot: Vec::new(),
             error: None,
             copied_at: None,
+            pending_generate: false,
+            pending_regenerate: false,
         }
     }
 }
@@ -166,5 +173,7 @@ mod tests {
         assert!(s.code.is_empty());
         assert!(!s.degraded);
         assert!(s.error.is_none());
+        assert!(!s.pending_generate);
+        assert!(!s.pending_regenerate);
     }
 }
