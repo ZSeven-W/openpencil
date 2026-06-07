@@ -14,7 +14,7 @@ use std::thread;
 use op_ai::chat_provider::{ChatDelta, ChatProvider, ChatRequest, CliName};
 use op_editor_core::{ChatMessage, ChatToolCall, EditorState};
 use op_host_native::WidgetHostNative;
-use op_orchestrator::{classify_intent, DesignRequest, Intent};
+use op_orchestrator::{classify_intent, Intent};
 
 use crate::chat_acp::AcpProvider;
 use crate::chat_builtin_http::ConfiguredBuiltinProvider;
@@ -23,6 +23,10 @@ use crate::chat_copilot::CopilotProvider;
 use crate::chat_provider_llm::ChatProviderLlmClient;
 use crate::chat_subprocess::SubprocessProvider;
 use crate::design_session::DesignSession;
+
+#[path = "chat_design_request.rs"]
+mod chat_design_request;
+use chat_design_request::build_design_request;
 
 /// One in-flight chat turn. The worker thread owns the provider and
 /// drains `provider.send()` into the channel; [`poll`] consumes
@@ -214,20 +218,7 @@ pub fn launch_if_pending(
                 host.mark_editor_state_dirty();
             }
             let initial_state = host.editor_state().clone();
-            let request = DesignRequest {
-                prompt: user_text,
-                // The chosen chat agent decides its own model; the
-                // orchestrator only passes through `req.model` when
-                // it explicitly overrides per sub-call (it doesn't
-                // today).
-                model: None,
-                provider: None,
-                design_md: initial_state.doc.design_md.clone(),
-                append_context: None,
-                concurrency: 1,
-                validation_enabled: false,
-                visual_ref_enabled: false,
-            };
+            let request = build_design_request(user_text, &initial_state);
             *current_design = Some(DesignSession::start(llm, request, initial_state));
             return true;
         }

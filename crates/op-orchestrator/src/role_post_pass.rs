@@ -29,6 +29,8 @@
 use jian_ops_schema::node::PenNode;
 use serde_json::{json, Value};
 
+use crate::role_layout_post_pass::{fix_horizontal_overflow, fix_text_heights, size_number};
+
 // ── color helpers ───────────────────────────────────────────────────────────
 
 /// Perceived luminance 0..1 (port of `hexLuminance` — 0.299/0.587/0.114, NOT
@@ -432,12 +434,6 @@ fn fix_input_sibling_consistency(node: &mut Value) {
 
 // ── I4: layout-property fixes (no layout recompute / no font metrics) ───────
 
-/// Read a width/height as a pixel number (port of `toSizeNumber`, default 0 for
-/// `fill_container`/`fit_content`/missing).
-fn size_number(node: &Value, key: &str) -> f64 {
-    node.get(key).and_then(Value::as_f64).unwrap_or(0.0)
-}
-
 /// Equalize a row of fixed-width card frames to `fill_container` so they stretch
 /// evenly (port of `equalizeCardRow` AND the near-identical
 /// `equalizeHorizontalSiblings` in design-canvas-ops.ts — the dashboard 等宽
@@ -648,17 +644,25 @@ fn apply_clip_content_for_image(node: &mut Value) {
 
 // ── walk ──────────────────────────────────────────────────────────────────
 
-fn post_pass_value(node: &mut Value, parent_fill: Option<Value>) {
+fn post_pass_value(node: &mut Value, parent_fill: Option<Value>, canvas_width: f64) {
     if node.get("type").and_then(Value::as_str) != Some("frame") {
         return;
     }
-    // I4 layout-property fixes (TS resolveTreePostPass order 1/3/4/8). The
-    // pixel-recomputing `fixHorizontalOverflow` and the font-metric fixes
-    // (`fixTextHeights`, frame-height expansion) are deferred — they overlap
-    // jian/taffy layout + need text measurement.
+    // I4 layout-property fixes (TS resolveTreePostPass order 1/2/3/4/6/8).
+    // Still deferred: frame-height expansion (needs intrinsic measurement) and
+    // placeholder icon repair (needs the icon catalog).
     equalize_card_row(node);
+    fix_horizontal_overflow(node, canvas_width);
     normalize_form_input_widths(node);
     normalize_input_trailing_icon_alignment(node);
+    if node
+        .get("layout")
+        .and_then(Value::as_str)
+        .map(|layout| layout != "none")
+        .unwrap_or(false)
+    {
+        fix_text_heights(node);
+    }
     apply_clip_content_for_image(node);
     // I3 contrast fixes (TS order 9-12).
     fix_button_foreground_contrast(node);
@@ -673,7 +677,7 @@ fn post_pass_value(node: &mut Value, parent_fill: Option<Value>) {
     let this_fill = Some(node.get("fill").cloned().unwrap_or(Value::Null));
     if let Some(children) = node.get_mut("children").and_then(Value::as_array_mut) {
         for child in children.iter_mut() {
-            post_pass_value(child, this_fill.clone());
+            post_pass_value(child, this_fill.clone(), canvas_width);
         }
     }
 }
@@ -681,12 +685,12 @@ fn post_pass_value(node: &mut Value, parent_fill: Option<Value>) {
 /// Run the contrast post-pass over a forest of sub-agent section roots. Each
 /// root is round-tripped through JSON; on any (de)serialize failure that root
 /// is left untouched (a fix can never drop a node).
-pub fn post_pass_forest(nodes: &mut [PenNode]) {
+pub fn post_pass_forest(nodes: &mut [PenNode], canvas_width: f64) {
     for node in nodes.iter_mut() {
         let Ok(mut v) = serde_json::to_value(&*node) else {
             continue;
         };
-        post_pass_value(&mut v, None);
+        post_pass_value(&mut v, None, canvas_width);
         if let Ok(new_node) = serde_json::from_value::<PenNode>(v) {
             *node = new_node;
         }
