@@ -29,6 +29,12 @@ op-editor-ui = { path = "../op-editor-ui" }
 # keeping it optional preserves the wasm32-clean stub baseline.
 op-editor-core = { path = "../op-editor-core", optional = true }
 op-pen-loader = { path = "../op-pen-loader", optional = true }
+# P4b web AI-streaming foundation: the codegen/AI pipeline. Optional + behind
+# the `codegen` feature (which also pulls `skia`) so the wasm32-clean stub
+# baseline (`--no-default-features --features web`) never compiles it. NOTE:
+# the new web modules it backs (web_ai_transport / raf_pump / web_clipboard)
+# are UNVERIFIED — they could not be compile-checked on wasm32 without EMSDK.
+op-codegen = { path = "../op-codegen", features = ["ai"], optional = true }
 # Step 1b §3.6: handwritten DOM mirror consumes accesskit::TreeUpdate (0.24).
 accesskit = "0.24"
 console_error_panic_hook = "0.1"
@@ -74,7 +80,10 @@ wasm-libc-shim = { path = "../wasm-libc-shim", optional = true }
 [dependencies.web-sys]
 version = "0.3"
 features = [
+  "Blob",
+  "BlobPropertyBag",
   "CanvasRenderingContext2d",
+  "Clipboard",
   "CompositionEvent",
   "console",
   "Document",
@@ -82,13 +91,17 @@ features = [
   "Event",
   "EventTarget",
   "FocusEvent",
+  "HtmlAnchorElement",
   "HtmlCanvasElement",
   "HtmlElement",
   "ImageData",
   "KeyboardEvent",
   "MouseEvent",
+  "Navigator",
   "Performance",
   "PointerEvent",
+  "ProgressEvent",
+  "Url",
   "WheelEvent",
   "Window",
   # Used only by the (opt-in) `live-sync` glue to poll the web-canvas daemon.
@@ -108,6 +121,12 @@ web = []
 skia = ["dep:skia-safe", "dep:op-editor-core", "dep:op-pen-loader", "wasm-libc-shim"]
 # Internal feature toggled on by `skia` to flip the cfg-target dep.
 wasm-libc-shim = ["dep:wasm-libc-shim"]
+# P4b web AI-streaming foundation: enables the codegen/AI web modules
+# (web_ai_transport / raf_pump / web_clipboard). Pulls `skia` (the real
+# WebBackend) + the `op-codegen` AI pipeline. OFF by default so it never
+# touches the `web` stub or a plain `skia` build. NOTE: UNVERIFIED — the new
+# modules need an EMSDK wasm32 build + a browser; run tools/check-wasm-bundle.sh.
+codegen = ["skia", "dep:op-codegen"]
 # Opt-in live-canvas sync glue: polls the web-canvas daemon and applies newer
 # documents to the live shell. Requires `skia` (drives the real WebBackend) and
 # therefore an EMSDK build env. OFF by default so it never affects the `web`

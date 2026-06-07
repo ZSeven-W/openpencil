@@ -25,6 +25,17 @@ mod widget_host;
 // wasm32 web stub without EMSDK; only `mount()` (skia) actually wires it up.
 mod live_sync;
 
+// P4b web AI-streaming foundation — gated behind the `codegen` feature (which
+// pulls `skia` + `op-codegen`), so the wasm32-clean stub baseline never
+// compiles them. UNVERIFIED: these need an EMSDK wasm32 build + a browser; run
+// tools/check-wasm-bundle.sh.
+#[cfg(feature = "codegen")]
+mod raf_pump;
+#[cfg(feature = "codegen")]
+mod web_ai_transport;
+#[cfg(feature = "codegen")]
+mod web_clipboard;
+
 // Force the wasm32-unknown-unknown libc/libcxx/libm shim to be linked
 // even though no Rust code calls it — its `#[no_mangle]` symbols are
 // referenced only by the C++ side of the wasm (Skia static lib). Without
