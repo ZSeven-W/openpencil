@@ -187,6 +187,15 @@ pub(crate) fn handle_web_canvas_request(
                 },
             }
         }
+        ("GET", "/api/ai/models") => WebReply {
+            // JSON array of model ids the AI proxy can serve (the
+            // configured built-in agents). The web bundle queries this
+            // to populate its model picker without bundling a static
+            // list or holding API keys. `POST /api/ai/stream` is a
+            // streaming route handled in the connection loop, not here.
+            status: "200 OK",
+            body: crate::ai_proxy::models_json(&state.editor),
+        },
         _ => WebReply {
             status: "404 Not Found",
             body: r#"{"ok":false,"error":"Not found. Use /api/mcp/document, /api/mcp/server, or /mcp."}"#
@@ -275,6 +284,29 @@ fn serve_one<S: Read + Write>(
         let rx = hub.subscribe();
         let current = state.lock().unwrap_or_else(|p| p.into_inner()).version;
         return serve_sse(stream, rx, current);
+    }
+    // AI proxy stream: the browser bundle POSTs a model request and we
+    // stream the provider's `ChatDelta`s back as SSE. Streaming route
+    // (long-lived socket write), so handled here rather than in the
+    // whole-body REST handler. Parse the body + build the provider
+    // under the state lock, then DROP the lock before the long stream
+    // — `proxy_provider` returns an owned `Box<dyn ChatProvider>`, so
+    // nothing borrows the editor across the stream.
+    if req.method == "POST" && req.path == "/api/ai/stream" {
+        let Some(ai_req) = crate::ai_proxy::parse_ai_stream_body(&req.body) else {
+            return crate::ai_proxy::write_sse_error(stream, "invalid request body")
+                .map_err(|e| format!("ai stream error: {e}"));
+        };
+        let provider = {
+            let guard = state.lock().unwrap_or_else(|p| p.into_inner());
+            crate::ai_proxy::proxy_provider(&guard.editor, &ai_req.model)
+        };
+        let Some(provider) = provider else {
+            return crate::ai_proxy::write_sse_error(stream, "no model configured")
+                .map_err(|e| format!("ai stream error: {e}"));
+        };
+        return crate::ai_proxy::stream_ai_response(stream, ai_req, provider.as_ref())
+            .map_err(|e| format!("ai stream: {e}"));
     }
     // All `/api/mcp/*` REST paths go to the REST handler — including ones this
     // daemon doesn't implement yet, which it answers with 404 rather than
@@ -466,6 +498,22 @@ mod tests {
     fn unknown_route_404s() {
         let r = handle_web_canvas_request("DELETE", "/whatever", "", &mut fresh_state());
         assert!(r.status.starts_with("404"));
+    }
+
+    #[test]
+    fn get_ai_models_returns_json_array() {
+        // The AI proxy model list is served as a JSON array — empty
+        // when nothing is configured, but always well-formed JSON the
+        // web bundle can `JSON.parse`.
+        let r = handle_web_canvas_request("GET", "/api/ai/models", "", &mut fresh_state());
+        assert!(r.status.starts_with("200"));
+        let parsed: serde_json::Value =
+            serde_json::from_str(&r.body).expect("models body is valid JSON");
+        assert!(
+            parsed.is_array(),
+            "models body must be a JSON array: {}",
+            r.body
+        );
     }
 
     // --- serve_one routing (socket-level, via a mock stream) ---
