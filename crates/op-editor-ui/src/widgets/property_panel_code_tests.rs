@@ -142,7 +142,7 @@ fn code_action_rects_narrow_has_scroll_chevrons() {
 /// no chevron inset) back to that chip's framework.
 #[test]
 fn framework_at_hits_first_chip() {
-    let chips = framework_chip_rects(0.0, 0.0, 0.0);
+    let chips = framework_chip_rects(0.0, 0.0, 2000.0, 0.0);
     let (first_fw, first_rect) = chips[0];
     assert_eq!(first_fw, Framework::React);
     let p = center(first_rect);
@@ -237,7 +237,7 @@ fn code_action_rects_generate_center_round_trips() {
 /// scrolls), and a positive scroll shifts every chip left by that amount.
 #[test]
 fn framework_chips_single_row_and_scroll() {
-    let chips = framework_chip_rects(0.0, 0.0, 0.0);
+    let chips = framework_chip_rects(0.0, 0.0, 2000.0, 0.0);
     assert_eq!(chips.len(), 8);
     for (_, r) in &chips {
         assert!(r.size.x > 0.0 && r.size.y > 0.0);
@@ -248,7 +248,7 @@ fn framework_chips_single_row_and_scroll() {
     // Wider than a 280px panel → must scroll to reach the trailing chips.
     assert!(framework_row_overflow(280.0) > 0.0);
     // A positive scroll shifts each chip left by exactly that amount.
-    let scrolled = framework_chip_rects(0.0, 0.0, 40.0);
+    let scrolled = framework_chip_rects(0.0, 0.0, 2000.0, 40.0);
     for ((_, a), (_, b)) in chips.iter().zip(scrolled.iter()) {
         assert!((a.origin.x - b.origin.x - 40.0).abs() < 0.01);
     }
