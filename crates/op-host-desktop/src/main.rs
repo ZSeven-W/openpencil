@@ -3,6 +3,7 @@
 
 #![cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
 
+mod ai_proxy;
 mod app_handler;
 mod chat_acp;
 mod chat_attachment;
