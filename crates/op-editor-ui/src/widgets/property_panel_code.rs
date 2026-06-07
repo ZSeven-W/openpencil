@@ -1,10 +1,9 @@
 //! Code-tab paint for the PropertyPanel. Renders the
 //! `op_editor_core::codegen::CodegenState` in its three live phases
-//! (Idle / Generating / Complete) plus an Error fallback. The
-//! generation pipeline itself is wired later (P3); this module only
-//! PAINTS the state and mirrors the existing property-panel paint
-//! idioms (full-width filled action buttons, framework chips, status
-//! glyphs) rather than inventing new primitives.
+//! (Idle / Generating / Complete) plus an Error fallback. The generation
+//! pipeline is wired later (P3); this module only PAINTS the state. The
+//! Idle empty state is a centered badge + title + buttons (TS parity);
+//! the other phases reuse full-width action buttons + status glyphs.
 
 use crate::theme::Theme;
 use crate::widgets::icons::{draw_icon, Icon};
@@ -18,9 +17,8 @@ use crate::{Color, Point2D, Rect, TextLayout};
 use op_editor_core::codegen::{ChunkStatus, CodegenPhase, CodegenState, Framework};
 
 /// Map a click on the Code tab to its action (framework chip / button), or
-/// `None`. Extracted from `property_panel.rs::hit_test_action` to keep that
-/// spine under the 800-line cap. Uses the same content origin the painter
-/// does (panel left, pinned tab-strip bottom, panel width).
+/// `None`. Uses the same content origin the painter does (panel left,
+/// pinned tab-strip bottom, panel width).
 pub fn code_action_hit(
     panel_rect: Rect,
     state: &CodegenState,
@@ -43,6 +41,14 @@ pub fn code_action_hit(
 const CHIP_HEIGHT: f32 = 26.0;
 const CHIP_PAD_X: f32 = 12.0;
 const CHIP_GAP: f32 = 6.0;
+/// Extra space below the chip row for the divider line that separates the
+/// framework selector from the phase body (TS parity).
+const CHIP_DIVIDER_GAP: f32 = 8.0;
+/// Centered Idle empty-state metrics (TS parity).
+const BADGE_SIZE: f32 = 56.0;
+const IDLE_TOP_PAD: f32 = 28.0;
+const IDLE_BTN_H: f32 = 40.0;
+const IDLE_BTN_W_MAX: f32 = 220.0;
 /// Height of a progress / status row (chunk, planning, assembly).
 const PROGRESS_ROW_H: f32 = 24.0;
 /// Code-preview area height + the max number of lines it shows.
@@ -50,8 +56,7 @@ const CODE_AREA_H: f32 = 220.0;
 const CODE_LINE_H: f32 = 16.0;
 const CODE_MAX_LINES: usize = 13;
 
-/// Draw a 13px system-ui line of text at `(px, py)` (baseline), using
-/// the same `single_run` idiom the rest of the panel uses.
+/// Draw a 13px system-ui line of text at the `(px, py)` baseline.
 fn draw_line(cx: &mut PaintCx<'_>, text: &str, color: Color, px: f32, py: f32) {
     let layout = TextLayout::single_run(text, "system-ui", 13.0, to_jian_color(color), origin());
     cx.backend.draw_text(&layout, Point2D::new(px, py));
@@ -61,8 +66,7 @@ fn origin() -> Point2D {
     Point2D::new(0.0, 0.0)
 }
 
-/// Geometry for a full-width action button at `y`. Shared by the painter
-/// and `code_action_rects` so a click lands on the drawn button.
+/// Geometry for a full-width action button at `y`. Painter + hit-test.
 fn full_button_rect(x: f32, y: f32, w: f32) -> Rect {
     Rect {
         origin: Point2D::new(x + PAD_X, y),
@@ -70,14 +74,9 @@ fn full_button_rect(x: f32, y: f32, w: f32) -> Rect {
     }
 }
 
-/// y after a full-width button row + its trailing gap.
-fn full_button_advance(y: f32) -> f32 {
-    y + INPUT_HEIGHT + 12.0
-}
-
 /// Paint a full-width action button at `y`. `filled` → primary fill +
-/// primary-foreground label; otherwise a muted outline (border stroke)
-/// + foreground label. Returns the y after the button + its gap.
+/// primary-foreground label; else a muted outline + foreground label.
+/// Returns the y after the button + its trailing gap.
 fn paint_full_button(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
@@ -101,51 +100,62 @@ fn paint_full_button(
         theme.foreground
     };
     let tw = cx.backend.measure_text(label, 13.0);
-    draw_line(
-        cx,
-        label,
-        text_color,
-        btn.origin.x + (btn.size.x - tw) / 2.0,
-        btn.origin.y + 19.0,
-    );
-    full_button_advance(y)
+    let tx = btn.origin.x + (btn.size.x - tw) / 2.0;
+    draw_line(cx, label, text_color, tx, btn.origin.y + 19.0);
+    y + INPUT_HEIGHT + 12.0
 }
 
 /// Backend-free advance estimate for a chip label at 13px, matching the
 /// `RenderBackend::measure_text` trait-default heuristic (0.55 × size per
-/// ASCII char, 1.0 × size per non-ASCII). Both the painter and the
-/// hit-test walker measure chips through THIS helper — not
-/// `cx.backend.measure_text` — so the chip wrapping math is identical
-/// whether or not a real typeface is mounted. Framework wire tokens are
-/// all ASCII, so the heuristic is exact here.
+/// ASCII char) so painter + hit-test wrap identically. Wire tokens are
+/// all ASCII → exact here.
 fn chip_label_width(label: &str) -> f32 {
     label.chars().fold(0.0, |w, c| {
         w + if c.is_ascii() { 13.0 * 0.55 } else { 13.0 }
     })
 }
 
-/// Pure-geometry walker for the framework chip row — one `(Framework,
-/// Rect)` per `Framework::ALL`, with the SAME wrapping math the painter
-/// applies. `paint_framework_chips` draws these rects and
-/// `code_action_rects` hit-tests them, so paint + click can't drift.
-fn framework_chip_rects(x: f32, y: f32, w: f32) -> Vec<(Framework, Rect)> {
-    let left = x + PAD_X;
-    let right = x + w - PAD_X;
-    let mut chip_x = left;
-    let mut chip_y = y;
+/// Total width of the single-row framework strip (all chips + inter-gaps).
+fn framework_row_width() -> f32 {
+    let mut total = 0.0;
+    for (i, fw) in Framework::ALL.iter().enumerate() {
+        if i > 0 {
+            total += CHIP_GAP;
+        }
+        total += chip_label_width(fw.as_wire()) + CHIP_PAD_X * 2.0;
+    }
+    total
+}
+
+/// How far the framework strip can scroll before its right edge reaches the
+/// usable width (0 when every chip already fits). The host clamps
+/// `framework_scroll` to `[0, this]`.
+pub fn framework_row_overflow(w: f32) -> f32 {
+    (framework_row_width() - (w - PAD_X * 2.0)).max(0.0)
+}
+
+/// The y-band `[top, bottom]` of the framework tab strip, given the panel's
+/// top-left y. The host routes a wheel over this band into the horizontal
+/// `framework_scroll` instead of the panel's vertical scroll.
+pub fn framework_row_band(panel_top: f32) -> (f32, f32) {
+    let top = panel_top + TAB_HEIGHT + SECTION_HEADER_HEIGHT;
+    (top, top + CHIP_HEIGHT)
+}
+
+/// Pure-geometry walker for the single-row framework strip — one
+/// `(Framework, Rect)` per `Framework::ALL`, laid left→right and shifted by
+/// `-scroll`. Chips may fall partly/fully outside the visible band (the
+/// painter clips; off-band chips take no in-panel clicks). Paint + hit-test
+/// share this so they can't drift.
+fn framework_chip_rects(x: f32, y: f32, scroll: f32) -> Vec<(Framework, Rect)> {
+    let mut chip_x = x + PAD_X - scroll;
     let mut out = Vec::with_capacity(Framework::ALL.len());
     for fw in Framework::ALL {
         let chip_w = chip_label_width(fw.as_wire()) + CHIP_PAD_X * 2.0;
-        // Wrap to a new row when this chip would overflow the usable
-        // width (but never wrap the very first chip on a row).
-        if chip_x > left && chip_x + chip_w > right {
-            chip_x = left;
-            chip_y += CHIP_HEIGHT + CHIP_GAP;
-        }
         out.push((
             fw,
             Rect {
-                origin: Point2D::new(chip_x, chip_y),
+                origin: Point2D::new(chip_x, y),
                 size: Point2D::new(chip_w, CHIP_HEIGHT),
             },
         ));
@@ -154,19 +164,14 @@ fn framework_chip_rects(x: f32, y: f32, w: f32) -> Vec<(Framework, Rect)> {
     out
 }
 
-/// The y after the chip row + its trailing gap — the start of the
-/// phase-specific body. Derived from the last chip's rect so it tracks
-/// the (multi-row) wrapping exactly.
-fn chips_body_top(x: f32, y: f32, w: f32) -> f32 {
-    let rects = framework_chip_rects(x, y, w);
-    let last_y = rects.last().map(|(_, r)| r.origin.y).unwrap_or(y);
-    last_y + CHIP_HEIGHT + SECTION_GAP
+/// The y after the single-row chip strip + divider + trailing gap — the
+/// start of the phase-specific body.
+fn chips_body_top(y: f32) -> f32 {
+    y + CHIP_HEIGHT + CHIP_DIVIDER_GAP + SECTION_GAP
 }
 
-/// Paint the framework tab row: one small rounded-rect chip per
-/// `Framework::ALL`, wrapping to a new line when the row exceeds the
-/// usable width. The active framework chip uses the primary palette;
-/// inactive chips use muted. Returns the y after the (multi-row) strip.
+/// Paint the framework tab row (active = blue filled pill, inactive =
+/// plain text) + a divider below it. Returns the y after the strip.
 fn paint_framework_chips(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
@@ -175,14 +180,29 @@ fn paint_framework_chips(
     y: f32,
     w: f32,
 ) -> f32 {
-    for (fw, chip) in framework_chip_rects(x, y, w) {
+    let usable = (w - PAD_X * 2.0).max(0.0);
+    let band = Rect {
+        origin: Point2D::new(x + PAD_X, y),
+        size: Point2D::new(usable, CHIP_HEIGHT),
+    };
+    // Clip the strip so scrolled-off chips don't bleed past the panel edges.
+    cx.backend.save();
+    cx.backend.clip_rect(band);
+    for (fw, chip) in framework_chip_rects(x, y, state.framework_scroll) {
+        // Skip chips fully outside the visible band (cheap cull).
+        if chip.origin.x + chip.size.x < band.origin.x
+            || chip.origin.x > band.origin.x + band.size.x
+        {
+            continue;
+        }
         let active = state.framework == fw;
-        let (fill, text_color) = if active {
-            (theme.primary, theme.primary_foreground)
+        // Active = blue filled pill; inactive = plain text (no fill box).
+        let text_color = if active {
+            cx.backend.fill_round_rect(chip, 6.0, theme.primary);
+            theme.primary_foreground
         } else {
-            (theme.muted, theme.muted_foreground)
+            theme.muted_foreground
         };
-        cx.backend.fill_round_rect(chip, 6.0, fill);
         draw_line(
             cx,
             fw.as_wire(),
@@ -191,12 +211,20 @@ fn paint_framework_chips(
             chip.origin.y + 17.0,
         );
     }
-    chips_body_top(x, y, w)
+    cx.backend.restore();
+    // A thin divider line below the strip, spanning the padded width.
+    let dy = y + CHIP_HEIGHT + CHIP_DIVIDER_GAP / 2.0;
+    cx.backend.fill_rect(
+        Rect {
+            origin: Point2D::new(x + PAD_X, dy),
+            size: Point2D::new(usable, 1.0),
+        },
+        theme.border,
+    );
+    chips_body_top(y)
 }
 
-/// Map a `ChunkStatus` to its trailing status glyph + tint. Pending /
-/// Skipped read as a dim Minus, Running as a Loader, Done as a primary
-/// Check, Degraded / Failed as an AlertTriangle.
+/// Map a `ChunkStatus` to its trailing status glyph + tint.
 fn status_glyph(theme: &Theme, status: ChunkStatus) -> (Icon, Color) {
     match status {
         ChunkStatus::Pending | ChunkStatus::Skipped => (Icon::Minus, theme.muted_foreground),
@@ -207,7 +235,6 @@ fn status_glyph(theme: &Theme, status: ChunkStatus) -> (Icon, Color) {
 }
 
 /// Paint one progress row: left label + a trailing status glyph.
-// Paint-context + geometry args threaded through; a struct adds no gain.
 #[allow(clippy::too_many_arguments)]
 fn paint_progress_row(
     cx: &mut PaintCx<'_>,
@@ -231,9 +258,8 @@ fn paint_progress_row(
     y + PROGRESS_ROW_H
 }
 
-/// Glyph for the planning / assembly rows, whose state is a tri-state
-/// `Option<bool>` (None = not started/dim, Some(false) = running,
-/// Some(true) = done).
+/// Glyph for the tri-state planning / assembly rows (None = dim,
+/// Some(false) = running, Some(true) = done).
 fn phase_glyph(theme: &Theme, done: Option<bool>) -> (Icon, Color) {
     match done {
         None => (Icon::Minus, theme.muted_foreground),
@@ -242,69 +268,132 @@ fn phase_glyph(theme: &Theme, done: Option<bool>) -> (Icon, Color) {
     }
 }
 
-/// y of the Idle phase's first (Generate) button — past the hint row and
-/// the optional error row. Shared by the painter and `code_action_rects`.
-fn idle_generate_y(state: &CodegenState, y: f32) -> f32 {
-    let mut y = y + 28.0 + SECTION_GAP;
+/// A centered fixed-height button rect at `top`, clamped to width.
+fn idle_btn_rect(x: f32, w: f32, top: f32) -> Rect {
+    let bw = (w - 2.0 * PAD_X).min(IDLE_BTN_W_MAX);
+    Rect {
+        origin: Point2D::new(x + (w - bw) / 2.0, top),
+        size: Point2D::new(bw, IDLE_BTN_H),
+    }
+}
+
+/// y of the centered Idle Generate button. Shared by painter + hit-test.
+fn idle_generate_y(state: &CodegenState, body_y: f32) -> f32 {
+    // badge + title(16) + subtitle(20) + gap(24), then the button.
+    let mut y = body_y + IDLE_TOP_PAD + BADGE_SIZE + 16.0 + 20.0 + 24.0;
     if state.error.is_some() {
         y += PROGRESS_ROW_H;
     }
     y
 }
 
-/// Idle body: a hint + a primary "Generate <fw>" button + a secondary
-/// "Export AI Bundle" button. Any error is surfaced above the buttons.
+/// Draw `label` centered horizontally in `[x, x+w]` at baseline `py`.
+fn draw_centered_line(cx: &mut PaintCx<'_>, text: &str, color: Color, x: f32, w: f32, py: f32) {
+    let tw = cx.backend.measure_text(text, 13.0);
+    draw_line(cx, text, color, x + (w - tw) / 2.0, py);
+}
+
+/// Paint a centered 16px-icon + 13px-label group inside `rect`. `filled`
+/// → primary fill; else a borderless text button in the foreground color.
+fn paint_centered_icon_label(
+    cx: &mut PaintCx<'_>,
+    theme: &Theme,
+    icon: Icon,
+    label: &str,
+    rect: Rect,
+    filled: bool,
+) {
+    let content_color = if filled {
+        cx.backend
+            .fill_round_rect(rect, INPUT_RADIUS, theme.primary);
+        theme.primary_foreground
+    } else {
+        theme.foreground
+    };
+    let icon_sz = 16.0;
+    let gap = 6.0;
+    let label_w = cx.backend.measure_text(label, 13.0);
+    let total = icon_sz + gap + label_w;
+    let start_x = rect.origin.x + (rect.size.x - total) / 2.0;
+    let cy = rect.origin.y + rect.size.y / 2.0;
+    draw_icon(
+        cx.backend,
+        icon,
+        Point2D::new(start_x, cy - icon_sz / 2.0),
+        icon_sz,
+        content_color,
+        1.6,
+    );
+    draw_line(cx, label, content_color, start_x + icon_sz + gap, cy + 5.0);
+}
+
+/// Idle body (centered empty state, TS parity): a sparkle badge, title,
+/// subtitle, a primary "Generate <Framework>" button, and a borderless
+/// "Export AI Bundle" text button. Any error surfaces above the buttons.
 fn paint_idle_body(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
     state: &CodegenState,
     x: f32,
-    y: f32,
+    body_y: f32,
     w: f32,
 ) -> f32 {
+    // 1. Sparkle badge — a light rounded square with a centered icon.
+    let badge = Rect {
+        origin: Point2D::new(x + (w - BADGE_SIZE) / 2.0, body_y + IDLE_TOP_PAD),
+        size: Point2D::new(BADGE_SIZE, BADGE_SIZE),
+    };
+    cx.backend.fill_round_rect(badge, 12.0, theme.muted);
+    let icon_sz = 24.0;
     draw_icon(
         cx.backend,
         Icon::Sparkles,
-        Point2D::new(x + PAD_X, y),
-        20.0,
-        theme.muted_foreground,
+        Point2D::new(
+            badge.origin.x + (BADGE_SIZE - icon_sz) / 2.0,
+            badge.origin.y + (BADGE_SIZE - icon_sz) / 2.0,
+        ),
+        icon_sz,
+        theme.primary,
         1.6,
     );
-    draw_line(
-        cx,
-        "Generate code for the selection",
-        theme.muted_foreground,
-        x + PAD_X + 28.0,
-        y + 15.0,
-    );
-    let mut y = idle_generate_y(state, y);
+    let badge_bottom = badge.origin.y + BADGE_SIZE;
+    // 2. Title — the panel only shows for a live selection, so ≥ 1.
+    let n = state.selection_snapshot.len().max(1);
+    let title = format!("{n} node selected");
+    draw_centered_line(cx, &title, theme.foreground, x, w, badge_bottom + 18.0);
+    // 3. Subtitle.
+    let sub = "Generate production-ready code";
+    draw_centered_line(cx, sub, theme.muted_foreground, x, w, badge_bottom + 38.0);
+    let gen = idle_generate_y(state, body_y);
+    // 4. Optional error row, above the Generate button.
     if let Some(err) = state.error.as_ref() {
-        // The error row sits one PROGRESS_ROW_H above the button, which
-        // `idle_generate_y` already accounted for — draw it there.
-        draw_line(
+        draw_centered_line(
             cx,
             err,
             theme.destructive,
-            x + PAD_X,
-            y - PROGRESS_ROW_H + 14.0,
+            x,
+            w,
+            gen - PROGRESS_ROW_H + 14.0,
         );
     }
-    let generate = format!("Generate {}", state.framework.as_wire());
-    y = paint_full_button(cx, theme, &generate, x, y, w, true);
-    y = paint_full_button(cx, theme, "Export AI Bundle", x, y, w, false);
-    y
+    // 5. Generate button — primary fill + sparkle + "Generate <Framework>".
+    let generate = format!("Generate {}", state.framework.display_name());
+    let gen_rect = idle_btn_rect(x, w, gen);
+    paint_centered_icon_label(cx, theme, Icon::Sparkles, &generate, gen_rect, true);
+    // 6. Export bundle — borderless text button with a braces icon.
+    let by = gen + IDLE_BTN_H + 12.0;
+    let bundle = idle_btn_rect(x, w, by);
+    paint_centered_icon_label(cx, theme, Icon::Braces, "Export AI Bundle", bundle, false);
+    by + IDLE_BTN_H + 12.0
 }
 
-/// y of the Generating phase's Cancel button — past the header,
-/// planning, per-chunk, and assembly rows + the trailing section gap.
-/// Shared by the painter and `code_action_rects`.
+/// y of the Generating Cancel button — past header + planning + chunks +
+/// assembly rows + the trailing gap. Shared by painter + hit-test.
 fn generating_cancel_y(state: &CodegenState, y: f32) -> f32 {
-    // header + planning + chunks + assembly rows, then SECTION_GAP.
     y + PROGRESS_ROW_H * (3 + state.progress.chunks.len()) as f32 + SECTION_GAP
 }
 
-/// Generating body: a header, a planning row, one row per chunk, an
-/// assembly row, and a full-width Cancel button.
+/// Generating body: header + planning/chunk/assembly rows + Cancel button.
 fn paint_generating_body(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
@@ -337,9 +426,8 @@ fn paint_code_area(cx: &mut PaintCx<'_>, theme: &Theme, code: &str, x: f32, y: f
     cx.backend.fill_round_rect(rect, INPUT_RADIUS, theme.muted);
     cx.backend
         .stroke_round_rect(rect, INPUT_RADIUS, theme.border, 1.0);
-    // The backend's clip stack is stateful (skia canvas) — save /
-    // restore around the clipped text so the clip doesn't leak into
-    // the buttons painted below.
+    // Save / restore around the clipped text so the stateful skia clip
+    // doesn't leak into the buttons painted below.
     cx.backend.save();
     cx.backend.clip_rect(rect);
     let mut line_y = rect.origin.y + 16.0;
@@ -360,8 +448,7 @@ fn paint_code_area(cx: &mut PaintCx<'_>, theme: &Theme, code: &str, x: f32, y: f
     y + CODE_AREA_H + 12.0
 }
 
-/// Paint a small icon + label button at `rect`, used for the Complete
-/// phase's action row (Copy / Download / AI Bundle / Regenerate).
+/// Paint a small icon + label button at `rect` (Complete-phase row).
 fn paint_action_chip(cx: &mut PaintCx<'_>, theme: &Theme, icon: Icon, label: &str, rect: Rect) {
     cx.backend.fill_round_rect(rect, INPUT_RADIUS, theme.muted);
     cx.backend
@@ -383,9 +470,8 @@ fn paint_action_chip(cx: &mut PaintCx<'_>, theme: &Theme, icon: Icon, label: &st
     );
 }
 
-/// y at which the Complete phase's 4-chip action row sits — accounts
-/// for the optional degraded + assets notice rows and the code-preview
-/// area above it. Shared by the painter and `code_action_rects`.
+/// y of the Complete 4-chip action row — past the optional notices and
+/// the code-preview area. Shared by painter + hit-test.
 fn complete_action_row_y(state: &CodegenState, y: f32) -> f32 {
     let mut y = y;
     if state.degraded {
@@ -394,14 +480,12 @@ fn complete_action_row_y(state: &CodegenState, y: f32) -> f32 {
     if !state.assets.is_empty() {
         y += PROGRESS_ROW_H;
     }
-    // The code-preview area advances by its height + the trailing gap;
-    // mirror `paint_code_area`'s return without painting.
+    // Mirror `paint_code_area`'s advance (area height + gap) without paint.
     y + CODE_AREA_H + 12.0
 }
 
 /// Geometry for the Complete phase's 4 action chips (Copy / Save /
-/// Bundle / Regen), left-to-right across the usable width. Both the
-/// painter and `code_action_rects` consume these rects.
+/// Bundle / Regen), spread across the usable width. Painter + hit-test.
 fn action_chip_rects(x: f32, y: f32, w: f32) -> [Rect; 4] {
     let usable = w - PAD_X * 2.0;
     let gap = 8.0;
@@ -412,9 +496,7 @@ fn action_chip_rects(x: f32, y: f32, w: f32) -> [Rect; 4] {
     })
 }
 
-/// Complete body: optional degraded warning + asset notice, the code
-/// preview area, and an action row (Copy / Download / AI Bundle /
-/// Regenerate).
+/// Complete body: optional notices, code preview, 4-chip action row.
 fn paint_complete_body(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
@@ -447,7 +529,6 @@ fn paint_complete_body(
         y += PROGRESS_ROW_H;
     }
     y = paint_code_area(cx, theme, &state.code, x, y, w);
-    // Action row: 4 small buttons spread across the usable width.
     let actions = [
         (Icon::Copy, "Copy"),
         (Icon::Download, "Save"),
@@ -461,14 +542,12 @@ fn paint_complete_body(
     y + INPUT_HEIGHT + 12.0
 }
 
-/// y of the Error phase's Regenerate button — past the error-text row.
-/// Shared by the painter and `code_action_rects`.
+/// y of the Error Regenerate button — past the error-text row.
 fn error_regenerate_y(y: f32) -> f32 {
     y + PROGRESS_ROW_H + SECTION_GAP
 }
 
-/// Error body: the error text in the destructive color + a full-width
-/// Regenerate button.
+/// Error body: error text (destructive) + a full-width Regenerate button.
 fn paint_error_body(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
@@ -482,9 +561,8 @@ fn paint_error_body(
     paint_full_button(cx, theme, "Regenerate", x, error_regenerate_y(y), w, true)
 }
 
-/// Paint the full Code panel from `state`. Layout: a framework chip
-/// row, then a phase-specific body. Returns the y after the painted
-/// content.
+/// Paint the full Code panel from `state`: framework chip row + a
+/// phase-specific body. Returns the y after the painted content.
 pub fn paint_code_panel(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
@@ -493,8 +571,7 @@ pub fn paint_code_panel(
     y: f32,
     w: f32,
 ) -> f32 {
-    // A faint section label keeps the panel head consistent with the
-    // Design tab's section headers.
+    // A faint section label keeps the panel head consistent with Design.
     let mut y = paint_section_label(cx, theme, "Code", x, y, w);
     y = paint_framework_chips(cx, theme, state, x, y, w);
     match state.phase {
@@ -505,13 +582,9 @@ pub fn paint_code_panel(
     }
 }
 
-/// Hit-test geometry for the Code panel — the clickable rects the panel
-/// draws, in draw order. Takes the SAME `(x, y, w)` content origin the
-/// host passes to `paint_code_panel` (panel left, tab-strip bottom,
-/// panel width). Reuses the panel's shared geometry helpers
-/// (`framework_chip_rects` / `full_button_rect` / `action_chip_rects`
-/// and the per-phase `*_y` offsets) so a click always lands on what is
-/// drawn — paint and hit-test cannot drift.
+/// Hit-test geometry for the Code panel — the clickable rects, in draw
+/// order. Takes the SAME `(x, y, w)` origin `paint_code_panel` uses and
+/// reuses its shared geometry helpers so paint + hit-test can't drift.
 pub fn code_action_rects(
     x: f32,
     y: f32,
@@ -519,22 +592,23 @@ pub fn code_action_rects(
     state: &CodegenState,
 ) -> Vec<(CodegenAction, Rect)> {
     let mut out: Vec<(CodegenAction, Rect)> = Vec::new();
-    // Section label sits first, then the framework chip row.
+    // Section label, then the framework chip row, then the phase body.
     let chips_y = y + SECTION_HEADER_HEIGHT;
-    for (fw, rect) in framework_chip_rects(x, chips_y, w) {
+    let (band_l, band_r) = (x + PAD_X, x + w - PAD_X);
+    for (fw, rect) in framework_chip_rects(x, chips_y, state.framework_scroll) {
+        // Only chips overlapping the visible band are clickable.
+        if rect.origin.x + rect.size.x <= band_l || rect.origin.x >= band_r {
+            continue;
+        }
         out.push((CodegenAction::SelectFramework(fw), rect));
     }
-    // Phase-specific body starts after the chip row + its gap.
-    let body_y = chips_body_top(x, chips_y, w);
+    let body_y = chips_body_top(chips_y);
     match state.phase {
         CodegenPhase::Idle => {
             let gen_y = idle_generate_y(state, body_y);
-            out.push((CodegenAction::Generate, full_button_rect(x, gen_y, w)));
-            let bundle_y = full_button_advance(gen_y);
-            out.push((
-                CodegenAction::ExportBundle,
-                full_button_rect(x, bundle_y, w),
-            ));
+            out.push((CodegenAction::Generate, idle_btn_rect(x, w, gen_y)));
+            let bundle_y = gen_y + IDLE_BTN_H + 12.0;
+            out.push((CodegenAction::ExportBundle, idle_btn_rect(x, w, bundle_y)));
         }
         CodegenPhase::Generating => {
             let cancel_y = generating_cancel_y(state, body_y);
@@ -557,214 +631,5 @@ pub fn code_action_rects(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::widgets::PaintCx;
-    use op_editor_core::codegen::{
-        AssetMeta, ChunkProgress, ChunkStatus, CodeGenProgress, Framework,
-    };
-
-    /// No-op `RenderBackend` for paint smoke tests — counts nothing,
-    /// just satisfies the trait so `paint_code_panel` can run headless.
-    #[derive(Default)]
-    struct StubBackend;
-    impl crate::RenderBackend for StubBackend {
-        fn begin_frame(&mut self) {}
-        fn end_frame(&mut self) {}
-        fn fill_rect(&mut self, _: Rect, _: Color) {}
-        fn stroke_rect(&mut self, _: Rect, _: Color, _: f32) {}
-        fn draw_text(&mut self, _: &TextLayout, _: Point2D) {}
-        fn clip_rect(&mut self, _: Rect) {}
-        fn stroke_line(&mut self, _: Point2D, _: Point2D, _: Color, _: f32) {}
-        fn fill_round_rect(&mut self, _: Rect, _: f32, _: Color) {}
-        fn stroke_round_rect(&mut self, _: Rect, _: f32, _: Color, _: f32) {}
-        fn stroke_svg_path(&mut self, _: &str, _: Point2D, _: f32, _: Color, _: f32) {}
-        fn save(&mut self) {}
-        fn restore(&mut self) {}
-        fn translate(&mut self, _: Point2D) {}
-        fn resize(&mut self, _: u32, _: u32) {}
-        fn dpi_scale(&self) -> f32 {
-            1.0
-        }
-    }
-
-    fn paint(state: &CodegenState) -> f32 {
-        let mut backend = StubBackend;
-        let mut cx = PaintCx {
-            backend: &mut backend,
-        };
-        paint_code_panel(&mut cx, &Theme::dark(), state, 0.0, 0.0, 300.0)
-    }
-
-    #[test]
-    fn paint_code_panel_does_not_panic_each_phase() {
-        // Idle.
-        let idle = CodegenState::default();
-        assert!(paint(&idle) > 0.0);
-
-        // Generating with 2 chunks (one running, one pending).
-        let generating = CodegenState {
-            phase: CodegenPhase::Generating,
-            framework: Framework::Vue,
-            progress: CodeGenProgress {
-                planning_done: Some(true),
-                chunks: vec![
-                    ChunkProgress {
-                        chunk_id: "a".into(),
-                        name: "Header".into(),
-                        status: ChunkStatus::Running,
-                    },
-                    ChunkProgress {
-                        chunk_id: "b".into(),
-                        name: "Footer".into(),
-                        status: ChunkStatus::Pending,
-                    },
-                ],
-                assembly_done: None,
-            },
-            ..CodegenState::default()
-        };
-        assert!(paint(&generating) > 0.0);
-
-        // Complete with code + one asset, degraded.
-        let complete = CodegenState {
-            phase: CodegenPhase::Complete,
-            code: "fn main() {\n    println!(\"hi\");\n}\n".into(),
-            degraded: true,
-            assets: vec![AssetMeta {
-                relative_path: "logo.svg".into(),
-                byte_len: 42,
-            }],
-            ..CodegenState::default()
-        };
-        assert!(paint(&complete) > 0.0);
-
-        // Error.
-        let error = CodegenState {
-            phase: CodegenPhase::Error,
-            error: Some("model timeout".into()),
-            ..CodegenState::default()
-        };
-        assert!(paint(&error) > 0.0);
-    }
-
-    fn contains(r: Rect, p: Point2D) -> bool {
-        p.x >= r.origin.x
-            && p.x <= r.origin.x + r.size.x
-            && p.y >= r.origin.y
-            && p.y <= r.origin.y + r.size.y
-    }
-
-    fn center(r: Rect) -> Point2D {
-        Point2D::new(r.origin.x + r.size.x / 2.0, r.origin.y + r.size.y / 2.0)
-    }
-
-    #[test]
-    fn code_action_rects_idle_has_generate_and_bundle() {
-        let mut s = op_editor_core::codegen::CodegenState::default(); // Idle, React
-        let rects = code_action_rects(0.0, 0.0, 280.0, &s);
-        assert!(rects
-            .iter()
-            .any(|(a, _)| matches!(a, CodegenAction::Generate)));
-        assert!(rects
-            .iter()
-            .any(|(a, _)| matches!(a, CodegenAction::ExportBundle)));
-        // all 8 framework chips present
-        let chips = rects
-            .iter()
-            .filter(|(a, _)| matches!(a, CodegenAction::SelectFramework(_)))
-            .count();
-        assert_eq!(chips, 8);
-        let _ = &mut s;
-    }
-
-    #[test]
-    fn code_action_rects_complete_has_copy_and_regen() {
-        // Struct-update form (not `default()` + field reassignment) so
-        // the pre-commit clippy `field_reassign_with_default` gate stays
-        // clean; assertions match the spec's Complete-phase test.
-        let s = CodegenState {
-            phase: CodegenPhase::Complete,
-            code: "x".into(),
-            ..CodegenState::default()
-        };
-        let rects = code_action_rects(0.0, 0.0, 280.0, &s);
-        assert!(rects.iter().any(|(a, _)| matches!(a, CodegenAction::Copy)));
-        assert!(rects
-            .iter()
-            .any(|(a, _)| matches!(a, CodegenAction::Regenerate)));
-    }
-
-    #[test]
-    fn code_action_rects_generating_has_cancel_and_chips() {
-        let s = CodegenState {
-            phase: CodegenPhase::Generating,
-            ..CodegenState::default()
-        };
-        let rects = code_action_rects(0.0, 0.0, 280.0, &s);
-        assert!(rects
-            .iter()
-            .any(|(a, _)| matches!(a, CodegenAction::Cancel)));
-        assert_eq!(
-            rects
-                .iter()
-                .filter(|(a, _)| matches!(a, CodegenAction::SelectFramework(_)))
-                .count(),
-            8
-        );
-    }
-
-    #[test]
-    fn code_action_rects_error_has_regenerate_only_button() {
-        let s = CodegenState {
-            phase: CodegenPhase::Error,
-            error: Some("boom".into()),
-            ..CodegenState::default()
-        };
-        let rects = code_action_rects(0.0, 0.0, 280.0, &s);
-        let buttons: Vec<_> = rects
-            .iter()
-            .filter(|(a, _)| !matches!(a, CodegenAction::SelectFramework(_)))
-            .collect();
-        assert_eq!(buttons.len(), 1);
-        assert!(matches!(buttons[0].0, CodegenAction::Regenerate));
-    }
-
-    /// The geometry round-trips: a click at a button's centre hits that
-    /// button's rect and no other action's rect (the layout the host's
-    /// `hit_test_action` walks).
-    #[test]
-    fn code_action_rects_generate_center_round_trips() {
-        let s = CodegenState::default(); // Idle.
-        let rects = code_action_rects(0.0, 0.0, 280.0, &s);
-        let (_, gen_rect) = rects
-            .iter()
-            .find(|(a, _)| matches!(a, CodegenAction::Generate))
-            .expect("Generate rect present");
-        let p = center(*gen_rect);
-        // Exactly one action contains the Generate button's centre, and
-        // it is Generate (full-width button + chips don't overlap it).
-        let hits: Vec<_> = rects
-            .iter()
-            .filter(|(_, r)| contains(*r, p))
-            .map(|(a, _)| *a)
-            .collect();
-        assert_eq!(hits, vec![CodegenAction::Generate]);
-    }
-
-    /// The framework chips wrap onto multiple rows at the real panel
-    /// width (280 px), and every chip carries a positive-size rect.
-    #[test]
-    fn framework_chips_wrap_and_have_size() {
-        let chips = framework_chip_rects(0.0, 0.0, 280.0);
-        assert_eq!(chips.len(), 8);
-        for (_, r) in &chips {
-            assert!(r.size.x > 0.0 && r.size.y > 0.0);
-        }
-        // At 280px the 8 wire tokens don't fit on one row → at least
-        // two distinct chip rows.
-        let rows: std::collections::BTreeSet<i32> =
-            chips.iter().map(|(_, r)| r.origin.y as i32).collect();
-        assert!(rows.len() >= 2);
-    }
-}
+#[path = "property_panel_code_tests.rs"]
+mod tests;

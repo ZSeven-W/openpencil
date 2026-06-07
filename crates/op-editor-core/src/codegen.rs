@@ -46,6 +46,20 @@ impl Framework {
         Framework::ALL.into_iter().find(|f| f.as_wire() == s)
     }
 
+    /// Human display name (capitalized), for UI labels. TS parity.
+    pub fn display_name(self) -> &'static str {
+        match self {
+            Framework::React => "React",
+            Framework::Vue => "Vue",
+            Framework::Svelte => "Svelte",
+            Framework::Html => "HTML",
+            Framework::Flutter => "Flutter",
+            Framework::SwiftUi => "SwiftUI",
+            Framework::Compose => "Compose",
+            Framework::ReactNative => "React Native",
+        }
+    }
+
     /// The framework-specific knowledge skill name (e.g. "codegen-react").
     pub fn skill_name(self) -> &'static str {
         match self {
@@ -110,9 +124,13 @@ pub struct AssetMeta {
 }
 
 /// The Code panel's full state. Mirror of `ChatState`'s role for chat.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// `PartialEq` only (not `Eq`) — `framework_scroll` carries an `f32`.
+#[derive(Debug, Clone, PartialEq)]
 pub struct CodegenState {
     pub framework: Framework,
+    /// Horizontal scroll offset (px, ≥ 0) of the framework tab strip, so the
+    /// single-row selector scrolls to reach off-screen frameworks (TS parity).
+    pub framework_scroll: f32,
     pub phase: CodegenPhase,
     pub progress: CodeGenProgress,
     pub code: String,
@@ -141,6 +159,7 @@ impl Default for CodegenState {
     fn default() -> Self {
         Self {
             framework: Framework::React,
+            framework_scroll: 0.0,
             phase: CodegenPhase::Idle,
             progress: CodeGenProgress::default(),
             code: String::new(),
@@ -172,6 +191,10 @@ mod tests {
             Some(Framework::ReactNative)
         );
         assert_eq!(Framework::from_wire("nope"), None);
+        // display_name is the capitalized UI label (TS parity).
+        assert_eq!(Framework::React.display_name(), "React");
+        assert_eq!(Framework::ReactNative.display_name(), "React Native");
+        assert_eq!(Framework::SwiftUi.display_name(), "SwiftUI");
     }
 
     #[test]

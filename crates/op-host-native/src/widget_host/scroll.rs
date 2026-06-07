@@ -59,6 +59,27 @@ impl WidgetHostNative {
         if !rect_contains(property_rect, Point2D::new(x, y)) {
             return false;
         }
+        // Code tab: a wheel over the framework strip scrolls it horizontally
+        // (it's a single row), not the panel vertically.
+        if matches!(
+            self.editor_state.editor_ui.property_tab,
+            op_editor_core::PropertyTab::Code
+        ) {
+            let (band_top, band_bottom) =
+                op_editor_ui::widgets::property_panel_code::framework_row_band(
+                    property_rect.origin.y,
+                );
+            if y >= band_top && y <= band_bottom {
+                let max = op_editor_ui::widgets::property_panel_code::framework_row_overflow(pw);
+                let cg = &mut self.editor_state.codegen;
+                let next = (cg.framework_scroll - delta).clamp(0.0, max);
+                if next != cg.framework_scroll {
+                    cg.framework_scroll = next;
+                    self.mark_dirty();
+                }
+                return true;
+            }
+        }
         let max = (panel.content_height(property_rect) - property_rect.size.y).max(0.0);
         let next = (self.editor_state.editor_ui.property_panel_scroll - delta).clamp(0.0, max);
         if next != self.editor_state.editor_ui.property_panel_scroll {
