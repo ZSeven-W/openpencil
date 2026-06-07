@@ -134,6 +134,33 @@ impl WidgetHost {
     pub fn set_now_ms(&mut self, now_ms: u64) {
         self.now_ms = now_ms;
     }
+
+    /// Borrow the canonical-model editor state — the host's single source of
+    /// truth. Mirrors the native host's accessor; used by the web codegen
+    /// session (`codegen_web`) to read the selection + codegen state.
+    #[cfg(feature = "codegen")]
+    pub fn editor_state(&self) -> &op_editor_core::EditorState {
+        &self.editor_state
+    }
+
+    /// Mutable borrow of the canonical-model editor state. Callers that mutate
+    /// through this MUST call [`mark_editor_state_dirty`] afterwards, else the
+    /// paint snapshot goes stale. Used by the web codegen pump to stream
+    /// progress into `editor_state.codegen`.
+    ///
+    /// [`mark_editor_state_dirty`]: WidgetHost::mark_editor_state_dirty
+    #[cfg(feature = "codegen")]
+    pub fn editor_state_mut(&mut self) -> &mut op_editor_core::EditorState {
+        &mut self.editor_state
+    }
+
+    /// Public dirty-flag — mirrors the native host. Web codegen mutates
+    /// `editor_state` through `editor_state_mut()` and calls this so the next
+    /// paint re-derives the layout scene.
+    #[cfg(feature = "codegen")]
+    pub fn mark_editor_state_dirty(&mut self) {
+        self.editor_state_dirty = true;
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
