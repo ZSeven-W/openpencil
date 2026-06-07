@@ -158,7 +158,18 @@ impl CodegenSession {
         std::thread::Builder::new()
             .name("op-codegen-turn".into())
             .spawn(move || {
-                run_pipeline(provider.as_ref(), input, &tx);
+                // Guard against a panic in the pipeline / provider so the UI
+                // receives a terminal error instead of hanging in `Generating`
+                // (the receiver would otherwise only observe a channel
+                // disconnect — see pump's Disconnected branch).
+                let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    run_pipeline(provider.as_ref(), input, &tx);
+                }));
+                if outcome.is_err() {
+                    let _ = tx.send(CodegenDelta::Failed(
+                        "Code generation failed unexpectedly".into(),
+                    ));
+                }
             })
             .expect("spawn op-codegen-turn worker");
         CodegenSession {
@@ -238,6 +249,17 @@ pub fn pump(
             }
             Err(std::sync::mpsc::TryRecvError::Empty) => break,
             Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                // The worker dropped its sender without a terminal Done/Failed
+                // (e.g. an unexpected early exit). Surface an error rather than
+                // leaving the UI stuck in `Generating` with no live session.
+                if !session.finished {
+                    let cg = &mut host.editor_state_mut().codegen;
+                    cg.error = Some("Code generation ended unexpectedly".into());
+                    cg.phase = op_editor_core::codegen::CodegenPhase::Error;
+                    cg.pending_generate = false;
+                    cg.pending_regenerate = false;
+                    changed = true;
+                }
                 session.finished = true;
                 break;
             }
