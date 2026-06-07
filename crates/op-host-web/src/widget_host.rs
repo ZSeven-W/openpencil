@@ -417,31 +417,94 @@ impl WidgetHost {
 
     /// Cursor-move handler — drives canvas pan-drag, marquee
     /// drag, chat drag, or no-op.
+    pub(in crate::widget_host) fn update_agent_settings_hover(&mut self, x: f32, y: f32) -> bool {
+        use op_editor_core::AgentSettingsTab;
+        use op_editor_ui::widgets::agent_settings_panel::{AgentSettingsHit, AgentSettingsPanel};
+        let point = Point2D::new(x, y);
+        let (copy_hover, add_provider_hover, add_acp_hover, new_hover) = {
+            let panel = AgentSettingsPanel::for_editor(&self.editor_state);
+            let panel_rect = panel.rect(self.last_viewport_w, self.last_viewport_h);
+            let hit = panel.hit_test(panel_rect, point);
+            let is_agents = matches!(
+                self.editor_state.editor_ui.agent_settings.tab,
+                AgentSettingsTab::Agents
+            );
+            let copy_hover = matches!(
+                self.editor_state.editor_ui.agent_settings.tab,
+                AgentSettingsTab::Mcp
+            ) && matches!(hit, AgentSettingsHit::CopyMcpClientConfig);
+            let add_provider_hover = is_agents && matches!(hit, AgentSettingsHit::AddProvider);
+            let add_acp_hover = is_agents && matches!(hit, AgentSettingsHit::AddAcpAgent);
+            let new_hover = panel.builtin_preset_hover_at(panel_rect, point);
+            (copy_hover, add_provider_hover, add_acp_hover, new_hover)
+        };
+        let mut changed = false;
+        if copy_hover
+            != self
+                .editor_state
+                .editor_ui
+                .agent_settings
+                .hover_mcp_client_config_copy
+        {
+            self.editor_state
+                .editor_ui
+                .agent_settings
+                .hover_mcp_client_config_copy = copy_hover;
+            changed = true;
+        }
+        if new_hover
+            != self
+                .editor_state
+                .editor_ui
+                .agent_settings
+                .builtin_preset_menu_hover
+        {
+            self.editor_state
+                .editor_ui
+                .agent_settings
+                .builtin_preset_menu_hover = new_hover;
+            changed = true;
+        }
+        if add_provider_hover
+            != self
+                .editor_state
+                .editor_ui
+                .agent_settings
+                .hover_add_provider
+        {
+            self.editor_state
+                .editor_ui
+                .agent_settings
+                .hover_add_provider = add_provider_hover;
+            changed = true;
+        }
+        if add_acp_hover
+            != self
+                .editor_state
+                .editor_ui
+                .agent_settings
+                .hover_add_acp_agent
+        {
+            self.editor_state
+                .editor_ui
+                .agent_settings
+                .hover_add_acp_agent = add_acp_hover;
+            changed = true;
+        }
+        if changed {
+            self.mark_dirty();
+        }
+        changed
+    }
+
     pub fn apply_cursor_move(&mut self, x: f32, y: f32) -> bool {
         // Refresh the derived paint doc once up front so every hit-test
         // below (layer context menu, layer drag, align toolbar) reads
         // current geometry, never a stale snapshot.
         self.refresh_layout_scene();
-        if self.editor_state.editor_ui.agent_settings_open {
-            use op_editor_ui::widgets::agent_settings_panel::AgentSettingsPanel;
-            let point = Point2D::new(x, y);
-            let panel = AgentSettingsPanel::for_editor(&self.editor_state);
-            let panel_rect = panel.rect(self.last_viewport_w, self.last_viewport_h);
-            let new_hover = panel.builtin_preset_hover_at(panel_rect, point);
-            if new_hover
-                != self
-                    .editor_state
-                    .editor_ui
-                    .agent_settings
-                    .builtin_preset_menu_hover
-            {
-                self.editor_state
-                    .editor_ui
-                    .agent_settings
-                    .builtin_preset_menu_hover = new_hover;
-                self.mark_dirty();
-                return true;
-            }
+        if self.editor_state.editor_ui.agent_settings_open && self.update_agent_settings_hover(x, y)
+        {
+            return true;
         }
         if let Some(state) = self.editor_state.editor_ui.layer_context_menu.clone() {
             use op_editor_ui::widgets::layer_context_menu::LayerContextMenu;
@@ -551,6 +614,52 @@ impl WidgetHost {
         // native widget_host/input.rs ordering).
         if self.update_toolbar_hover(x, y) {
             return true;
+        }
+        // TopBar chrome-button hover wash (sidebar / file-menu / figma /
+        // theme / locale / fullscreen / agent chip). The git button is
+        // compiled out on wasm32; every other button lights up the same
+        // as native. Reuses the click hit-test so paint can't drift.
+        {
+            use op_editor_ui::widgets::{TopBar, TOP_BAR_HEIGHT};
+            let tb_rect = Rect {
+                origin: Point2D::new(0.0, 0.0),
+                size: Point2D::new(self.last_viewport_w, TOP_BAR_HEIGHT),
+            };
+            let new_hover = TopBar::for_editor_ui(&self.editor_state.editor_ui)
+                .hit_test(tb_rect, Point2D::new(x, y))
+                .map(op_editor_ui::widgets::editor_state_ext::topbar_button_hover);
+            if new_hover != self.editor_state.editor_ui.topbar_button_hover {
+                self.editor_state.editor_ui.topbar_button_hover = new_hover;
+                self.mark_dirty();
+                return true;
+            }
+        }
+        // StatusBar control hover wash (search / zoom-out / zoom-in).
+        {
+            let new_hover = self
+                .status_bar_rect(self.last_viewport_w, self.last_viewport_h)
+                .and_then(|r| {
+                    op_editor_ui::widgets::StatusBar::for_editor(&self.editor_state)
+                        .control_at(r, Point2D::new(x, y))
+                });
+            if new_hover != self.editor_state.editor_ui.statusbar_hover {
+                self.editor_state.editor_ui.statusbar_hover = new_hover;
+                self.mark_dirty();
+                return true;
+            }
+        }
+        // AI chat header buttons (chevron / maximize / new chat) hover.
+        if let Some(chat_rect) = self.ai_chat_rect(self.last_viewport_w, self.last_viewport_h) {
+            use op_editor_ui::widgets::AIChatPlaceholder;
+            let new_hover = AIChatPlaceholder::from_editor_at(&self.editor_state, self.now_ms)
+                .hit_test(chat_rect, Point2D::new(x, y))
+                .as_ref()
+                .and_then(op_editor_ui::widgets::editor_state_ext::chat_header_hover);
+            if new_hover != self.editor_state.editor_ui.chat_header_hover {
+                self.editor_state.editor_ui.chat_header_hover = new_hover;
+                self.mark_dirty();
+                return true;
+            }
         }
         // No drag active — sync align toolbar hover. AFTER all drag
         // branches so an active drag isn't intercepted (codex CONCERN

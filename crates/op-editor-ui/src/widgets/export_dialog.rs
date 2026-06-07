@@ -130,7 +130,11 @@ impl ExportDialog {
             if !fmt.is_implemented() {
                 self.paint_disabled_pill(backend, theme, rect, fmt.label());
             } else {
-                self.paint_pill(backend, theme, rect, fmt.label(), selected);
+                let hovered = ui.export_dialog_hover
+                    == Some(op_editor_core::ExportDialogButton::Format(
+                        crate::widgets::editor_state_ext::export_format(fmt),
+                    ));
+                self.paint_pill(backend, theme, rect, fmt.label(), selected, hovered);
             }
         }
 
@@ -150,15 +154,30 @@ impl ExportDialog {
         for (i, lbl) in ["1x", "2x", "3x"].iter().enumerate() {
             let s = (i as u8) + 1;
             let selected = scale_index(ui.export_scale) == s;
-            self.paint_pill(backend, theme, self.scale_pill_rect(i), lbl, selected);
+            let hovered =
+                ui.export_dialog_hover == Some(op_editor_core::ExportDialogButton::Scale(s));
+            self.paint_pill(
+                backend,
+                theme,
+                self.scale_pill_rect(i),
+                lbl,
+                selected,
+                hovered,
+            );
         }
 
         // Footer buttons.
         let (cancel, export) = self.button_rects();
         backend.fill_round_rect(cancel, 6.0, theme.muted);
+        if ui.export_dialog_hover == Some(op_editor_core::ExportDialogButton::Cancel) {
+            backend.fill_round_rect(cancel, 6.0, theme.button_hover);
+        }
         backend.stroke_round_rect(cancel, 6.0, theme.border, 1.0);
         paint_centered_label(backend, "Cancel", 13.0, theme.foreground, cancel);
         backend.fill_round_rect(export, 6.0, theme.primary);
+        if ui.export_dialog_hover == Some(op_editor_core::ExportDialogButton::Export) {
+            backend.fill_round_rect(export, 6.0, theme.button_hover);
+        }
         paint_centered_label(backend, "Export", 13.0, theme.primary_foreground, export);
     }
 
@@ -183,9 +202,14 @@ impl ExportDialog {
         rect: Rect,
         label: &str,
         selected: bool,
+        hovered: bool,
     ) {
         let bg = if selected { theme.primary } else { theme.muted };
         backend.fill_round_rect(rect, PILL_RADIUS, bg);
+        // Hover brightens the pill (TS `hover:bg-accent` / `hover:bg-primary/90`).
+        if hovered {
+            backend.fill_round_rect(rect, PILL_RADIUS, theme.button_hover);
+        }
         backend.stroke_round_rect(rect, PILL_RADIUS, theme.border, 1.0);
         let color = if selected {
             theme.primary_foreground

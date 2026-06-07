@@ -15,7 +15,7 @@ use crate::theme::Theme;
 use crate::widgets::editor_state_ext::theme_for;
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect};
-use op_editor_core::{EditorState, GitPanelState};
+use op_editor_core::{EditorState, GitButton, GitPanelState};
 
 /// Panel width in logical px (TS ready/history popover is `w-[420px]`).
 pub const GIT_PANEL_WIDTH: f32 = 420.0;
@@ -270,6 +270,29 @@ impl<'a> GitPanel<'a> {
             locale: state.editor_ui.locale,
             now_ms,
         })
+    }
+
+    /// Whether the cursor is over the button `hit` represents — drives
+    /// the per-button hover wash. Compares the canonical `button_hover`
+    /// (set by the host from the same hit-test) against `hit`'s mirror.
+    /// `false` for non-button hits (inputs / dismiss / branch trigger).
+    pub(super) fn is_hovered(&self, hit: GitPanelHit) -> bool {
+        let mapped = crate::widgets::editor_state_ext::git_button_hover(hit);
+        mapped.is_some() && self.state.button_hover == mapped
+    }
+
+    /// Paint a `theme.button_hover` wash over `rect` (corner radius `r`)
+    /// when the cursor is over the button `hit` represents.
+    pub(super) fn wash_if_hovered(
+        &self,
+        cx: &mut PaintCx<'_>,
+        rect: Rect,
+        r: f32,
+        hit: GitPanelHit,
+    ) {
+        if self.is_hovered(hit) {
+            cx.backend.fill_round_rect(rect, r, self.theme.button_hover);
+        }
     }
 
     /// Translate `key` through the locale tables — the panel paints
@@ -568,27 +591,30 @@ impl<'a> GitPanel<'a> {
         let rects = Self::action_rects(rect, self.state.merging);
         if self.state.merging {
             self.paint_merge_banner(cx, rects.input);
-            self.paint_button(
+            self.paint_button_with_hit(
                 cx,
                 rects.buttons[0],
                 self.t("git.panel.abortMerge"),
                 true,
                 false,
+                Some(GitPanelHit::AbortMerge),
             );
-            self.paint_button(
+            self.paint_button_with_hit(
                 cx,
                 rects.buttons[1],
                 self.t("git.panel.refresh"),
                 true,
                 false,
+                Some(GitPanelHit::Refresh),
             );
             let can_complete = self.state.conflicted_files.is_empty();
-            self.paint_button(
+            self.paint_button_with_hit(
                 cx,
                 rects.buttons[2],
                 self.t("git.panel.complete"),
                 can_complete,
                 true,
+                Some(GitPanelHit::CompleteMerge),
             );
         } else {
             self.paint_input(cx, rects.input);
@@ -596,34 +622,38 @@ impl<'a> GitPanel<'a> {
             // exactly the staged set, so nothing staged is a no-op.
             let commit_enabled = !self.state.commit_message.trim().is_empty()
                 && self.state.changed_files.iter().any(|f| f.staged);
-            self.paint_button(
+            self.paint_button_with_hit(
                 cx,
                 rects.buttons[0],
                 self.t("git.panel.commit"),
                 commit_enabled,
                 true,
+                Some(GitPanelHit::Commit),
             );
-            self.paint_button(
+            self.paint_button_with_hit(
                 cx,
                 rects.buttons[1],
                 self.t("git.panel.refresh"),
                 true,
                 false,
+                Some(GitPanelHit::Refresh),
             );
             // Pull / Push are disabled while their op already runs.
-            self.paint_button(
+            self.paint_button_with_hit(
                 cx,
                 rects.buttons[2],
                 self.t("git.panel.pull"),
                 !self.state.pulling,
                 false,
+                Some(GitPanelHit::Pull),
             );
-            self.paint_button(
+            self.paint_button_with_hit(
                 cx,
                 rects.buttons[3],
                 self.t("git.panel.push"),
                 !self.state.pushing,
                 false,
+                Some(GitPanelHit::Push),
             );
         }
 
@@ -759,6 +789,10 @@ impl<'a> GitPanel<'a> {
                 let is_current = Some(name) == self.state.branch.as_ref();
                 if is_current {
                     cx.backend.fill_round_rect(*row, 4.0, self.theme.muted);
+                } else if self.state.button_hover == Some(GitButton::SwitchBranch(i)) {
+                    // Switch-on-click row gets a hover wash.
+                    cx.backend
+                        .fill_round_rect(*row, 4.0, self.theme.button_hover);
                 }
                 let (marker, color) = if is_current {
                     ("● ", self.theme.primary)
@@ -777,7 +811,12 @@ impl<'a> GitPanel<'a> {
                 // Non-current branches carry a "merge into current"
                 // button at the row's right edge.
                 if !is_current {
-                    self.paint_glyph_button(cx, Self::branch_merge_button(*row), "⤵");
+                    self.paint_glyph_button(
+                        cx,
+                        Self::branch_merge_button(*row),
+                        "⤵",
+                        self.state.button_hover == Some(GitButton::MergeBranch(i)),
+                    );
                 }
             }
         }
@@ -791,14 +830,16 @@ impl<'a> GitPanel<'a> {
     }
 
     /// Paint one action button. `enabled` dims a disabled button;
-    /// `primary` paints the accent (Commit) style.
-    pub(super) fn paint_button(
+    /// `primary` paints the accent (Commit) style; `hit` (when `Some`)
+    /// drives the per-button `theme.button_hover` wash.
+    pub(super) fn paint_button_with_hit(
         &self,
         cx: &mut PaintCx<'_>,
         rect: Rect,
         label: &str,
         enabled: bool,
         primary: bool,
+        hit: Option<GitPanelHit>,
     ) {
         let (fill, text_color) = match (enabled, primary) {
             (true, true) => (self.theme.primary, self.theme.primary_foreground),
@@ -806,6 +847,11 @@ impl<'a> GitPanel<'a> {
             (false, _) => (self.theme.muted, self.theme.muted_foreground),
         };
         cx.backend.fill_round_rect(rect, 6.0, fill);
+        // Hover wash — only when actionable + the cursor is on this button.
+        if enabled && hit.is_some_and(|h| self.is_hovered(h)) {
+            cx.backend
+                .fill_round_rect(rect, 6.0, self.theme.button_hover);
+        }
         if !primary {
             cx.backend
                 .stroke_round_rect(rect, 6.0, self.theme.border, 1.0);

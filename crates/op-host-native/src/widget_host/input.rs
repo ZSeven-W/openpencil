@@ -217,6 +217,39 @@ impl WidgetHostNative {
         {
             return true;
         }
+        // Modal export dialog — owns the cursor while open. Update its
+        // per-button hover wash (format / scale / cancel / export) and
+        // swallow the move so lower-layer hovers don't fire beneath the
+        // scrim.
+        if self.editor_state.editor_ui.export_dialog_open {
+            use op_editor_ui::widgets::ExportDialog;
+            let dlg = ExportDialog::centered(self.last_viewport_w, self.last_viewport_h);
+            let new_hover = dlg
+                .hit_test(Point2D::new(x, y))
+                .map(op_editor_ui::widgets::editor_state_ext::export_dialog_button);
+            let changed = new_hover != self.editor_state.editor_ui.export_dialog_hover;
+            if changed {
+                self.editor_state.editor_ui.export_dialog_hover = new_hover;
+                self.mark_dirty();
+            }
+            return changed;
+        }
+        // Modal Figma-import dialog — owns the cursor while open. Hover
+        // the close `✕` + the browse drop-zone.
+        if self.editor_state.editor_ui.figma_import_open {
+            use op_editor_ui::widgets::figma_import::FigmaImportModal;
+            let modal = FigmaImportModal::for_editor(&self.editor_state);
+            let panel = modal.rect(self.last_viewport_w, self.last_viewport_h);
+            let new_hover = op_editor_ui::widgets::editor_state_ext::figma_import_button(
+                modal.hit_test(panel, Point2D::new(x, y)),
+            );
+            let changed = new_hover != self.editor_state.editor_ui.figma_import_hover;
+            if changed {
+                self.editor_state.editor_ui.figma_import_hover = new_hover;
+                self.mark_dirty();
+            }
+            return changed;
+        }
         if let Some(state) = self.editor_state.ui.color_picker.clone() {
             if let Some(kind) = state.drag {
                 use op_editor_core::ui_draft::ColorPickerDrag;
@@ -246,17 +279,63 @@ impl WidgetHostNative {
             self.mark_dirty();
             return true;
         }
+        // Design-MD panel hover (close / import / export / remove /
+        // section headers).
+        if self.editor_state.editor_ui.design_md_panel_open {
+            use op_editor_ui::widgets::design_md_panel::DesignMdPanel;
+            if let Some(panel_rect) =
+                self.design_md_panel_rect(self.last_viewport_w, self.last_viewport_h)
+            {
+                let new_hover = DesignMdPanel::for_editor(&self.editor_state)
+                    .and_then(|p| p.hover_at(panel_rect, Point2D::new(x, y)));
+                if new_hover != self.editor_state.editor_ui.design_md_hover {
+                    self.editor_state.editor_ui.design_md_hover = new_hover;
+                    self.mark_dirty();
+                    return true;
+                }
+            }
+        }
         if let Some(d) = self.component_browser_drag {
             self.editor_state.editor_ui.component_browser_pos =
                 Some((x - d.grab_dx, y - d.grab_dy));
             self.mark_dirty();
             return true;
         }
+        // Component-browser panel hover (close / category pills / cards).
+        if self.editor_state.editor_ui.component_browser_open {
+            use op_editor_ui::widgets::component_browser_panel::ComponentBrowserPanel;
+            if let Some(panel_rect) =
+                self.component_browser_panel_rect(self.last_viewport_w, self.last_viewport_h)
+            {
+                let new_hover = ComponentBrowserPanel::for_editor(&self.editor_state)
+                    .and_then(|p| p.hover_at(panel_rect, Point2D::new(x, y)));
+                if new_hover != self.editor_state.editor_ui.component_browser_hover {
+                    self.editor_state.editor_ui.component_browser_hover = new_hover;
+                    self.mark_dirty();
+                    return true;
+                }
+            }
+        }
         if let Some(d) = self.icon_picker_drag {
             self.editor_state.editor_ui.icon_picker_panel_pos =
                 Some((x - d.grab_dx, y - d.grab_dy));
             self.mark_dirty();
             return true;
+        }
+        // Icon-picker panel hover (close / icon rows / load-more).
+        if self.editor_state.editor_ui.icon_picker_open {
+            use op_editor_ui::widgets::icon_picker_panel::IconPickerPanel;
+            if let Some(panel_rect) =
+                self.icon_picker_panel_rect(self.last_viewport_w, self.last_viewport_h)
+            {
+                let new_hover = IconPickerPanel::for_editor(&self.editor_state)
+                    .and_then(|p| p.hover_at(panel_rect, Point2D::new(x, y)));
+                if new_hover != self.editor_state.editor_ui.icon_picker_hover {
+                    self.editor_state.editor_ui.icon_picker_hover = new_hover;
+                    self.mark_dirty();
+                    return true;
+                }
+            }
         }
         if let Some(field) = self.image_adjustment_drag {
             if let Some(panel) =
@@ -362,6 +441,24 @@ impl WidgetHostNative {
                 return true;
             }
         }
+        // TopBar chrome-button hover wash (sidebar / file-menu / figma /
+        // theme / locale / fullscreen / git / agent chip). Reuses the
+        // click hit-test so paint + hover can never drift.
+        {
+            use op_editor_ui::widgets::{TopBar, TOP_BAR_HEIGHT};
+            let tb_rect = Rect {
+                origin: Point2D::new(0.0, 0.0),
+                size: Point2D::new(self.last_viewport_w, TOP_BAR_HEIGHT),
+            };
+            let new_hover = TopBar::for_editor_ui(&self.editor_state.editor_ui)
+                .hit_test(tb_rect, Point2D::new(x, y))
+                .map(op_editor_ui::widgets::editor_state_ext::topbar_button_hover);
+            if new_hover != self.editor_state.editor_ui.topbar_button_hover {
+                self.editor_state.editor_ui.topbar_button_hover = new_hover;
+                self.mark_dirty();
+                return true;
+            }
+        }
         // Open chat model-picker — track the model row under the
         // cursor so the dropdown paints a hover wash. `model_at`
         // returns `None` off the rows (headers / padding / off the
@@ -389,6 +486,22 @@ impl WidgetHostNative {
                     self.mark_dirty();
                     return true;
                 }
+            }
+        }
+        // AI chat header buttons (chevron / maximize / new chat) hover.
+        // The chat panel is itself the topmost surface, so this is NOT
+        // gated on `over_topmost`; hit_test returns None off the panel,
+        // which clears any stale header hover.
+        if let Some(chat_rect) = self.ai_chat_rect(self.last_viewport_w, self.last_viewport_h) {
+            use op_editor_ui::widgets::AIChatPlaceholder;
+            let new_hover = AIChatPlaceholder::from_editor_at(&self.editor_state, self.now_ms)
+                .hit_test(chat_rect, Point2D::new(x, y))
+                .as_ref()
+                .and_then(op_editor_ui::widgets::editor_state_ext::chat_header_hover);
+            if new_hover != self.editor_state.editor_ui.chat_header_hover {
+                self.editor_state.editor_ui.chat_header_hover = new_hover;
+                self.mark_dirty();
+                return true;
             }
         }
         if self.update_chat_design_hover(x, y, over_topmost) {
@@ -682,6 +795,57 @@ impl WidgetHostNative {
         if self.update_toolbar_hover(x, y, over_topmost) {
             return true;
         }
+        // StatusBar control hover wash (search / zoom-out / zoom-in).
+        // Suppressed under a floating panel so it doesn't light up
+        // beneath the chat / a dropdown.
+        {
+            let new_hover = if over_topmost {
+                None
+            } else {
+                self.status_bar_rect(self.last_viewport_w, self.last_viewport_h)
+                    .and_then(|r| {
+                        op_editor_ui::widgets::StatusBar::for_editor(&self.editor_state)
+                            .control_at(r, Point2D::new(x, y))
+                    })
+            };
+            if new_hover != self.editor_state.editor_ui.statusbar_hover {
+                self.editor_state.editor_ui.statusbar_hover = new_hover;
+                self.mark_dirty();
+                return true;
+            }
+        }
+        // Variables panel (right rail; shown only with no selection)
+        // hover — rows / axis chips / open-dropdown items.
+        if !over_topmost && !self.editor_state.property_panel_visible() {
+            let has_variables = self
+                .editor_state
+                .doc
+                .variables
+                .as_ref()
+                .map(|v| !v.is_empty())
+                .unwrap_or(false);
+            if has_variables {
+                use op_editor_ui::widgets::variables_panel::VariablesPanel;
+                use op_editor_ui::widgets::TOP_BAR_HEIGHT;
+                let vars = VariablesPanel::for_editor(&self.editor_state);
+                let vars_rect = Rect {
+                    origin: Point2D::new(
+                        self.last_viewport_w - self.editor_state.editor_ui.property_panel_width,
+                        TOP_BAR_HEIGHT + 8.0,
+                    ),
+                    size: Point2D::new(
+                        self.editor_state.editor_ui.property_panel_width,
+                        vars.intrinsic_height(),
+                    ),
+                };
+                let new_hover = vars.hover_at(vars_rect, Point2D::new(x, y));
+                if new_hover != self.editor_state.editor_ui.variables_panel_hover {
+                    self.editor_state.editor_ui.variables_panel_hover = new_hover;
+                    self.mark_dirty();
+                    return true;
+                }
+            }
+        }
         // Align toolbar hover after drag detection.
         let new_hover = if self.editor_state.selection_count() >= 2 && !over_topmost {
             self.align_toolbar_hit(x, y, self.last_viewport_w, self.last_viewport_h)
@@ -691,6 +855,39 @@ impl WidgetHostNative {
         let new_hover_ec = new_hover;
         if new_hover_ec != self.editor_state.editor_ui.align_toolbar_hover {
             self.editor_state.editor_ui.align_toolbar_hover = new_hover_ec;
+            self.mark_dirty();
+            return true;
+        }
+        // Code-panel framework-strip hover wash. Only tracks when a node is
+        // selected (the inspector owns the rail) AND the Code tab is active;
+        // `framework_at` returns None off the strip band, which clears any
+        // stale highlight so the wash follows the cursor and drops on exit.
+        let new_fw_hover = if !over_topmost
+            && self.editor_state.property_panel_visible()
+            && matches!(
+                self.editor_state.editor_ui.property_tab,
+                op_editor_core::PropertyTab::Code
+            ) {
+            use op_editor_ui::widgets::{property_panel_code, TOP_BAR_HEIGHT};
+            let pw = self.editor_state.editor_ui.property_panel_width;
+            let panel_x = self.last_viewport_w - pw;
+            let (band_top, band_bottom) = property_panel_code::framework_row_band(TOP_BAR_HEIGHT);
+            if y >= band_top && y <= band_bottom && x >= panel_x && x <= self.last_viewport_w {
+                property_panel_code::framework_at(
+                    panel_x,
+                    band_top,
+                    pw,
+                    Point2D::new(x, y),
+                    self.editor_state.codegen.framework_scroll,
+                )
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        if new_fw_hover != self.editor_state.codegen.framework_hover {
+            self.editor_state.codegen.framework_hover = new_fw_hover;
             self.mark_dirty();
             return true;
         }

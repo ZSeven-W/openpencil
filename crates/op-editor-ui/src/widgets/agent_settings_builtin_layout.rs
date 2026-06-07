@@ -1,4 +1,5 @@
 use crate::widgets::agent_settings_builtin_parts;
+use crate::widgets::agent_settings_switch::{SETTINGS_SWITCH_H, SETTINGS_SWITCH_W};
 use crate::{Point2D, Rect};
 use op_editor_core::agent_settings::{AgentSettings, SettingsFocus};
 
@@ -13,8 +14,6 @@ const ADD_W: f32 = 96.0;
 pub(super) const TOP_HEADER_RIGHT_INSET: f32 = 12.0;
 const FIELD_LABEL_W: f32 = 68.0;
 const FIELD_H: f32 = 24.0;
-const SWITCH_W: f32 = 34.0;
-const SWITCH_H: f32 = 20.0;
 const ACTION_W: f32 = 24.0;
 
 pub(super) fn is_editing(settings: &AgentSettings, index: usize) -> bool {
@@ -60,17 +59,17 @@ pub(super) fn card_rect(x: f32, y: f32, w: f32, h: f32) -> Rect {
 pub(super) fn compact_switch_rect(card: Rect) -> Rect {
     Rect {
         origin: Point2D::new(
-            card.origin.x + card.size.x - 12.0 - SWITCH_W - 8.0 - ACTION_W * 2.0 - 4.0,
-            card.origin.y + (card.size.y - SWITCH_H) / 2.0,
+            card.origin.x + card.size.x - 12.0 - SETTINGS_SWITCH_W - 8.0 - ACTION_W * 2.0 - 4.0,
+            card.origin.y + (card.size.y - SETTINGS_SWITCH_H) / 2.0,
         ),
-        size: Point2D::new(SWITCH_W, SWITCH_H),
+        size: Point2D::new(SETTINGS_SWITCH_W, SETTINGS_SWITCH_H),
     }
 }
 
 pub(super) fn compact_edit_rect(card: Rect) -> Rect {
     Rect {
         origin: Point2D::new(
-            compact_switch_rect(card).origin.x + SWITCH_W + 8.0,
+            compact_switch_rect(card).origin.x + SETTINGS_SWITCH_W + 8.0,
             card.origin.y + (card.size.y - ACTION_W) / 2.0,
         ),
         size: Point2D::new(ACTION_W, ACTION_W),

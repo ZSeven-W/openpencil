@@ -96,6 +96,8 @@ pub struct ComponentBrowserPanel<'a> {
     locale: Locale,
     /// Currently-active category filter (`None` = All).
     active_category: Option<ComponentCategory>,
+    /// Which target the cursor is over — drives the hover wash.
+    hover: Option<op_editor_core::ComponentBrowserButton>,
 }
 
 impl<'a> ComponentBrowserPanel<'a> {
@@ -109,7 +111,38 @@ impl<'a> ComponentBrowserPanel<'a> {
             theme: theme_for(&state.editor_ui),
             locale: state.editor_ui.locale,
             active_category: state.editor_ui.component_browser_category,
+            hover: state.editor_ui.component_browser_hover,
         })
+    }
+
+    /// Resolve a pointer to a hoverable target (close / category pill /
+    /// card). Shares the same `close_rect` / `pill_rects` / `card_rects`
+    /// geometry as [`Self::hit_test`] so the wash lands on the clicked
+    /// area; cards are index-addressable so no string ids are needed.
+    pub fn hover_at(
+        &self,
+        panel: Rect,
+        point: Point2D,
+    ) -> Option<op_editor_core::ComponentBrowserButton> {
+        use op_editor_core::ComponentBrowserButton as B;
+        if !contains(panel, point) {
+            return None;
+        }
+        if contains(Self::close_rect(panel), point) {
+            return Some(B::Close);
+        }
+        if point.y <= panel.origin.y + HEADER_H {
+            return None;
+        }
+        for (rect, cat) in self.pill_rects(panel) {
+            if contains(rect, point) {
+                return Some(B::Category(cat));
+            }
+        }
+        self.card_rects(panel)
+            .into_iter()
+            .position(|r| contains(r, point))
+            .map(B::Card)
     }
 
     fn t(&self, key: &'static str) -> &'static str {
@@ -285,6 +318,10 @@ impl<'a> ComponentBrowserPanel<'a> {
         );
         let close = Self::close_rect(rect);
         cx.backend.fill_round_rect(close, 6.0, self.theme.muted);
+        if self.hover == Some(op_editor_core::ComponentBrowserButton::Close) {
+            cx.backend
+                .fill_round_rect(close, 6.0, self.theme.button_hover);
+        }
         draw_icon(
             cx.backend,
             Icon::Close,
@@ -346,6 +383,10 @@ impl<'a> ComponentBrowserPanel<'a> {
                 (self.theme.muted, self.theme.muted_foreground)
             };
             cx.backend.fill_round_rect(pill, PILL_H / 2.0, fill);
+            if self.hover == Some(op_editor_core::ComponentBrowserButton::Category(cat)) {
+                cx.backend
+                    .fill_round_rect(pill, PILL_H / 2.0, self.theme.button_hover);
+            }
             let label = self.label_for(cat);
             self.text(
                 cx,
@@ -391,8 +432,11 @@ impl<'a> ComponentBrowserPanel<'a> {
                 self.theme.muted_foreground,
             );
         } else {
-            for ((_, comp), card_rect) in filtered.iter().zip(self.card_rects(rect)) {
-                self.paint_card(cx, card_rect, comp);
+            for (i, ((_, comp), card_rect)) in
+                filtered.iter().zip(self.card_rects(rect)).enumerate()
+            {
+                let hovered = self.hover == Some(op_editor_core::ComponentBrowserButton::Card(i));
+                self.paint_card(cx, card_rect, comp, hovered);
             }
         }
         cx.backend.restore();
@@ -409,8 +453,12 @@ impl<'a> ComponentBrowserPanel<'a> {
 
     /// Paint one component card — surface fill + a tinted preview rect
     /// hinting at the component's footprint + the component name.
-    fn paint_card(&self, cx: &mut PaintCx<'_>, rect: Rect, comp: &KitComponent) {
+    fn paint_card(&self, cx: &mut PaintCx<'_>, rect: Rect, comp: &KitComponent, hovered: bool) {
         cx.backend.fill_round_rect(rect, 8.0, self.theme.muted);
+        if hovered {
+            cx.backend
+                .fill_round_rect(rect, 8.0, self.theme.button_hover);
+        }
         cx.backend
             .stroke_round_rect(rect, 8.0, self.theme.border, 1.0);
         // Preview rect — scaled down to fit, anchored centre-top.

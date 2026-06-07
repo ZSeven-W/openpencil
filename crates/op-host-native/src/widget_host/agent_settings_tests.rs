@@ -796,3 +796,37 @@ fn image_search_test_tracks_invalid_and_testing_status_like_ts() {
             .images_search_ready
     );
 }
+
+#[test]
+fn copying_mcp_client_config_records_feedback_time() {
+    let mut host = WidgetHostNative::new();
+    host.set_now_ms(4_321);
+    host.editor_state_mut().editor_ui.agent_settings.tab = AgentSettingsTab::Mcp;
+    host.editor_state_mut()
+        .editor_ui
+        .agent_settings
+        .mcp_server
+        .running = true;
+
+    let (content_x, content_y, content_w) = agent_settings_content_metrics(&host);
+    let client_config_y = content_y + 36.0 + 52.0 + 8.0;
+
+    assert!(host.dispatch_agent_settings_press(
+        content_x + content_w - 22.0,
+        client_config_y + 18.0,
+        1200.0,
+        800.0
+    ));
+
+    assert_eq!(
+        host.editor_state()
+            .editor_ui
+            .agent_settings
+            .mcp_client_config_copied_at_ms,
+        Some(4_321)
+    );
+    assert_eq!(
+        host.editor_state().chat.pending_copy_text.as_deref(),
+        Some("{\n  \"type\": \"http\",\n  \"url\": \"http://127.0.0.1:3100/mcp\"\n}")
+    );
+}

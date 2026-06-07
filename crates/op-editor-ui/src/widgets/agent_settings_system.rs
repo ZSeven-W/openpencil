@@ -6,6 +6,9 @@
 
 use crate::theme::Theme;
 use crate::widgets::agent_settings_i18n::t as t_settings;
+use crate::widgets::agent_settings_switch::{
+    paint_settings_switch, SETTINGS_SWITCH_H, SETTINGS_SWITCH_W,
+};
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
 use op_editor_core::agent_settings::AgentSettings;
@@ -13,9 +16,6 @@ use op_editor_core::editor_ui_state::EditorUiState;
 
 const TITLE_H: f32 = 36.0;
 const CARD_H: f32 = 58.0;
-const SWITCH_W: f32 = 36.0;
-const SWITCH_H: f32 = 20.0;
-const SWITCH_KNOB: f32 = 14.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SystemHit {
@@ -38,10 +38,10 @@ fn auto_update_switch_rect(content: Rect) -> Rect {
     let card = auto_update_card_rect(content);
     Rect {
         origin: Point2D::new(
-            card.origin.x + card.size.x - 16.0 - SWITCH_W,
-            card.origin.y + (CARD_H - SWITCH_H) / 2.0,
+            card.origin.x + card.size.x - 16.0 - SETTINGS_SWITCH_W,
+            card.origin.y + (CARD_H - SETTINGS_SWITCH_H) / 2.0,
         ),
-        size: Point2D::new(SWITCH_W, SWITCH_H),
+        size: Point2D::new(SETTINGS_SWITCH_W, SETTINGS_SWITCH_H),
     }
 }
 
@@ -99,36 +99,12 @@ pub(super) fn paint_system_tab(
         Point2D::new(card.origin.x + 16.0, card.origin.y + 46.0),
     );
 
-    paint_switch(
+    paint_settings_switch(
         cx,
         theme,
         auto_update_switch_rect(content),
         settings.auto_update_enabled,
     );
-}
-
-fn paint_switch(cx: &mut PaintCx<'_>, theme: &Theme, rect: Rect, enabled: bool) {
-    let track_color = if enabled {
-        theme.primary
-    } else {
-        theme.background
-    };
-    cx.backend
-        .fill_round_rect(rect, SWITCH_H / 2.0, track_color);
-    if !enabled {
-        cx.backend
-            .stroke_round_rect(rect, SWITCH_H / 2.0, theme.border, 1.0);
-    }
-    let knob_x = if enabled {
-        rect.origin.x + SWITCH_W - SWITCH_KNOB - 3.0
-    } else {
-        rect.origin.x + 3.0
-    };
-    let knob = Rect {
-        origin: Point2D::new(knob_x, rect.origin.y + (SWITCH_H - SWITCH_KNOB) / 2.0),
-        size: Point2D::new(SWITCH_KNOB, SWITCH_KNOB),
-    };
-    cx.backend.fill_oval(knob, theme.foreground);
 }
 
 fn rect_contains(r: Rect, p: Point2D) -> bool {

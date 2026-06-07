@@ -98,24 +98,30 @@ impl WidgetHostNative {
     /// over that button in the ready view). Returns `true` when the hover
     /// state flipped (a repaint is due).
     pub(in crate::widget_host) fn update_git_panel_ready_hover(&mut self, x: f32, y: f32) -> bool {
-        let hovered = self
+        let hit = self
             .git_panel_rect(self.last_viewport_w, self.last_viewport_h)
             .and_then(|body| {
-                GitPanel::for_editor(&self.editor_state).map(|p| {
-                    matches!(
-                        p.hit_test(body, Point2D::new(x, y)),
-                        Some(GitPanelHit::BranchPicker)
-                    )
-                })
-            })
-            .unwrap_or(false);
-        if hovered != self.editor_state.editor_ui.git_panel.branch_button_hovered {
-            self.editor_state.editor_ui.git_panel.branch_button_hovered = hovered;
-            self.mark_dirty();
-            true
-        } else {
-            false
+                GitPanel::for_editor(&self.editor_state)
+                    .and_then(|p| p.hit_test(body, Point2D::new(x, y)))
+            });
+        // The `⎇ <branch> ▾` trigger keeps its own bool wash; the plain
+        // action buttons (pull / push / overflow / commit / milestone /
+        // refresh) light up via `button_hover`.
+        let branch_hovered = matches!(hit, Some(GitPanelHit::BranchPicker));
+        let button_hover = hit.and_then(op_editor_ui::widgets::editor_state_ext::git_button_hover);
+        let mut changed = false;
+        if branch_hovered != self.editor_state.editor_ui.git_panel.branch_button_hovered {
+            self.editor_state.editor_ui.git_panel.branch_button_hovered = branch_hovered;
+            changed = true;
         }
+        if button_hover != self.editor_state.editor_ui.git_panel.button_hover {
+            self.editor_state.editor_ui.git_panel.button_hover = button_hover;
+            changed = true;
+        }
+        if changed {
+            self.mark_dirty();
+        }
+        changed
     }
 
     /// Whether `(x, y)` is over the *disabled* empty-state Init card —

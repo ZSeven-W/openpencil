@@ -903,6 +903,7 @@ impl WidgetHostNative {
             self.editor_state.editor_ui.icon_picker_open = false;
             self.editor_state.editor_ui.icon_picker_replace_selection = false;
             self.editor_state.editor_ui.icon_picker_search.clear();
+            self.editor_state.editor_ui.icon_picker_hover = None;
             self.mark_dirty();
             return true;
         }
@@ -917,6 +918,7 @@ impl WidgetHostNative {
         }
         if self.editor_state.editor_ui.component_browser_open {
             self.editor_state.editor_ui.component_browser_open = false;
+            self.editor_state.editor_ui.component_browser_hover = None;
             self.mark_dirty();
             return true;
         }

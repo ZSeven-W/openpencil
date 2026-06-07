@@ -155,6 +155,7 @@ impl GitPanel<'_> {
                 t.card
             };
             cx.backend.fill_round_rect(*row, 8.0, bg);
+            self.wash_if_hovered(cx, *row, 8.0, GitPanelHit::TrackedPickerRow(i));
             cx.backend.stroke_round_rect(*row, 8.0, border, 1.0);
             // Leading icon — Check when selected, else FileText.
             let icon = if selected {
@@ -236,13 +237,21 @@ impl GitPanel<'_> {
             t.foreground,
         );
         let enabled = self.state.tracked_picker_selected.is_some();
-        self.paint_button(cx, bind, self.t("git.picker.bindButton"), enabled, false);
-        self.paint_button(
+        self.paint_button_with_hit(
+            cx,
+            bind,
+            self.t("git.picker.bindButton"),
+            enabled,
+            false,
+            Some(GitPanelHit::TrackedPickerBind),
+        );
+        self.paint_button_with_hit(
             cx,
             open,
             self.t("git.picker.bindAndOpenButton"),
             enabled,
             true,
+            Some(GitPanelHit::TrackedPickerBindOpen),
         );
     }
 
@@ -274,7 +283,14 @@ impl GitPanel<'_> {
             t.muted_foreground,
         );
         let close = self.tracked_picker_empty_close(panel_rect);
-        self.paint_button(cx, close, self.t("git.picker.empty.close"), true, false);
+        self.paint_button_with_hit(
+            cx,
+            close,
+            self.t("git.picker.empty.close"),
+            true,
+            false,
+            Some(GitPanelHit::TrackedPickerBack),
+        );
     }
 
     /// Hit-test the tracked-file picker subview.

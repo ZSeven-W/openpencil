@@ -12,26 +12,43 @@ use super::{
 };
 
 impl WidgetHost {
-    /// `true` when `(x, y)` is over the StatusBar search icon.
-    pub(in crate::widget_host) fn status_bar_search_hit(
+    /// The floating bottom-right StatusBar pill rect, or `None` when
+    /// the canvas is too narrow to float it (matches the paint guard).
+    pub(in crate::widget_host) fn status_bar_rect(
         &self,
-        x: f32,
-        y: f32,
         viewport_w: f32,
         viewport_h: f32,
-    ) -> bool {
+    ) -> Option<Rect> {
         let (canvas_left, _top, canvas_w, canvas_h) = self.canvas_region(viewport_w, viewport_h);
         if canvas_w <= STATUS_BAR_WIDTH + STATUS_INSET * 2.0 {
-            return false;
+            return None;
         }
         let canvas_right = canvas_left + canvas_w;
-        let origin_x = canvas_right - STATUS_BAR_WIDTH - STATUS_INSET;
-        let origin_y = TOP_BAR_HEIGHT + canvas_h - STATUS_BAR_HEIGHT - STATUS_INSET;
-        const SEARCH_SECTION_W: f32 = 38.0;
-        x >= origin_x
-            && x <= origin_x + SEARCH_SECTION_W
-            && y >= origin_y
-            && y <= origin_y + STATUS_BAR_HEIGHT
+        Some(Rect {
+            origin: Point2D::new(
+                canvas_right - STATUS_BAR_WIDTH - STATUS_INSET,
+                TOP_BAR_HEIGHT + canvas_h - STATUS_BAR_HEIGHT - STATUS_INSET,
+            ),
+            size: Point2D::new(STATUS_BAR_WIDTH, STATUS_BAR_HEIGHT),
+        })
+    }
+
+    /// Step the canvas zoom from a StatusBar `[-]` / `[+]` click,
+    /// anchored at the canvas-region centre so the visible content
+    /// scales in place (≈ ±20 % per click via `Viewport::zoom_at`).
+    pub(in crate::widget_host) fn status_bar_zoom(
+        &mut self,
+        zoom_in: bool,
+        viewport_w: f32,
+        viewport_h: f32,
+    ) {
+        const STEP: f32 = 120.0;
+        let (cx0, cy0, cw, ch) = self.canvas_region(viewport_w, viewport_h);
+        let center = Point2D::new(cx0 + cw / 2.0, cy0 + ch / 2.0);
+        self.editor_state
+            .viewport
+            .zoom_at(center, if zoom_in { STEP } else { -STEP });
+        self.mark_dirty();
     }
 
     /// Zoom + pan so the active page's content is framed within the canvas.
@@ -190,11 +207,24 @@ impl WidgetHost {
         if rename_committed || text_edit_committed {
             self.mark_dirty();
         }
-        // StatusBar search icon → frame the page content in the
-        // viewport (floating bottom-right; hit-tests above the canvas).
-        if self.status_bar_search_hit(x, y, viewport_width, viewport_height) {
-            self.zoom_to_fit(viewport_width, viewport_height);
-            return true;
+        // StatusBar controls — Search frames content, `[-]` / `[+]`
+        // step the zoom (floating bottom-right; hit-tests above the
+        // canvas).
+        if let Some(r) = self.status_bar_rect(viewport_width, viewport_height) {
+            use op_editor_core::StatusBarButton;
+            let bar = op_editor_ui::widgets::StatusBar::for_editor(&self.editor_state);
+            if let Some(btn) = bar.control_at(r, Point2D::new(x, y)) {
+                match btn {
+                    StatusBarButton::Search => self.zoom_to_fit(viewport_width, viewport_height),
+                    StatusBarButton::ZoomOut => {
+                        self.status_bar_zoom(false, viewport_width, viewport_height)
+                    }
+                    StatusBarButton::ZoomIn => {
+                        self.status_bar_zoom(true, viewport_width, viewport_height)
+                    }
+                }
+                return true;
+            }
         }
         if self.editor_state.editor_ui.agent_settings_open
             && self.dispatch_agent_settings_press(x, y, viewport_width, viewport_height)

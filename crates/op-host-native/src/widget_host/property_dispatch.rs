@@ -329,6 +329,19 @@ impl WidgetHostNative {
                     CodegenAction::ExportBundle => {
                         cg.pending_export_bundle = true;
                     }
+                    CodegenAction::ScrollFrameworksLeft | CodegenAction::ScrollFrameworksRight => {
+                        let pw = self.editor_state.editor_ui.property_panel_width;
+                        let max =
+                            op_editor_ui::widgets::property_panel_code::framework_row_overflow(pw);
+                        let step = 100.0;
+                        let cg = &mut self.editor_state.codegen;
+                        cg.framework_scroll =
+                            if matches!(codegen_action, CodegenAction::ScrollFrameworksLeft) {
+                                (cg.framework_scroll - step).clamp(0.0, max)
+                            } else {
+                                (cg.framework_scroll + step).clamp(0.0, max)
+                            };
+                    }
                 }
             }
         }
@@ -359,9 +372,11 @@ impl WidgetHostNative {
             }
             Some(ExportDialogHit::Cancel) => {
                 self.editor_state.editor_ui.export_dialog_open = false;
+                self.editor_state.editor_ui.export_dialog_hover = None;
             }
             Some(ExportDialogHit::Export) => {
                 self.editor_state.editor_ui.export_dialog_open = false;
+                self.editor_state.editor_ui.export_dialog_hover = None;
                 self.editor_state.editor_ui.pending_file_action =
                     Some(FileAction::ExportImageConfirm);
             }
@@ -369,6 +384,7 @@ impl WidgetHostNative {
                 if !dlg.contains(point) {
                     // Outside click — dismiss like Cancel.
                     self.editor_state.editor_ui.export_dialog_open = false;
+                    self.editor_state.editor_ui.export_dialog_hover = None;
                 }
             }
         }
@@ -390,10 +406,12 @@ impl WidgetHostNative {
         match modal.hit_test(panel_rect, op_editor_ui::Point2D::new(x, y)) {
             FigmaImportHit::Close | FigmaImportHit::Outside => {
                 self.editor_state.editor_ui.figma_import_open = false;
+                self.editor_state.editor_ui.figma_import_hover = None;
             }
             FigmaImportHit::DropZone => {
                 self.editor_state.editor_ui.pending_file_action = Some(FileAction::ImportFigma);
                 self.editor_state.editor_ui.figma_import_open = false;
+                self.editor_state.editor_ui.figma_import_hover = None;
             }
             FigmaImportHit::Inside => {}
         }

@@ -196,6 +196,10 @@ pub enum CodegenAction {
     Copy,
     Download,
     ExportBundle,
+    /// Scroll the framework tab strip one step left (left chevron).
+    ScrollFrameworksLeft,
+    /// Scroll the framework tab strip one step right (right chevron).
+    ScrollFrameworksRight,
 }
 
 /// Button / checkbox actions in the property panel that don't

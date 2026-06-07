@@ -39,8 +39,12 @@ pub fn code_action_hit(
 
 /// Height of a framework chip + the gap below the chip row.
 const CHIP_HEIGHT: f32 = 26.0;
-const CHIP_PAD_X: f32 = 12.0;
-const CHIP_GAP: f32 = 6.0;
+const CHIP_PAD_X: f32 = 9.0;
+const CHIP_GAP: f32 = 2.0;
+/// Width of each scroll-chevron zone reserved at the strip ends when the
+/// framework row overflows. Paint + hit-test inset the chip clip band by
+/// this on each side so chips never paint under the chevrons.
+const CHEVRON_ZONE_W: f32 = 18.0;
 /// Extra space below the chip row for the divider line that separates the
 /// framework selector from the phase body (TS parity).
 const CHIP_DIVIDER_GAP: f32 = 8.0;
@@ -170,6 +174,72 @@ fn chips_body_top(y: f32) -> f32 {
     y + CHIP_HEIGHT + CHIP_DIVIDER_GAP + SECTION_GAP
 }
 
+/// The left + right scroll-chevron zone rects when the strip overflows the
+/// usable width, else `None`. Anchored to the padded band ends at chip y.
+/// Shared by paint + hit-test so the clickable zones match the painted
+/// chevrons exactly.
+fn framework_chevron_zones(x: f32, y: f32, w: f32) -> Option<(Rect, Rect)> {
+    if framework_row_overflow(w) <= 0.0 {
+        return None;
+    }
+    let band_l = x + PAD_X;
+    let band_r = x + w - PAD_X;
+    let left = Rect {
+        origin: Point2D::new(band_l, y),
+        size: Point2D::new(CHEVRON_ZONE_W, CHIP_HEIGHT),
+    };
+    let right = Rect {
+        origin: Point2D::new(band_r - CHEVRON_ZONE_W, y),
+        size: Point2D::new(CHEVRON_ZONE_W, CHIP_HEIGHT),
+    };
+    Some((left, right))
+}
+
+/// The framework whose visible (scrolled, band-clipped) chip rect contains
+/// `point`, or `None`. Shares `framework_chip_rects` so it agrees with both
+/// paint + click hit-test. Chips fully under a chevron zone (when the strip
+/// overflows) are excluded so a hover doesn't leak behind the arrows.
+pub fn framework_at(x: f32, y: f32, w: f32, point: Point2D, scroll: f32) -> Option<Framework> {
+    let usable = (w - PAD_X * 2.0).max(0.0);
+    let overflow = framework_row_overflow(w) > 0.0;
+    let inset = if overflow { CHEVRON_ZONE_W } else { 0.0 };
+    let band_l = x + PAD_X + inset;
+    let band_r = x + PAD_X + usable - inset;
+    framework_chip_rects(x, y, scroll)
+        .into_iter()
+        .filter(|(_, r)| r.origin.x + r.size.x > band_l && r.origin.x < band_r)
+        .find(|(_, r)| {
+            point.x >= r.origin.x.max(band_l)
+                && point.x <= (r.origin.x + r.size.x).min(band_r)
+                && point.y >= r.origin.y
+                && point.y <= r.origin.y + r.size.y
+        })
+        .map(|(fw, _)| fw)
+}
+
+/// Paint a single scroll chevron centred in `zone` over a subtle muted
+/// background. `enabled` controls the glyph tint (dimmed at a scroll end).
+fn paint_chevron(cx: &mut PaintCx<'_>, theme: &Theme, icon: Icon, zone: Rect, enabled: bool) {
+    cx.backend.fill_round_rect(zone, 6.0, theme.muted);
+    let glyph = 14.0;
+    let color = if enabled {
+        theme.foreground
+    } else {
+        theme.muted_foreground
+    };
+    draw_icon(
+        cx.backend,
+        icon,
+        Point2D::new(
+            zone.origin.x + (zone.size.x - glyph) / 2.0,
+            zone.origin.y + (zone.size.y - glyph) / 2.0,
+        ),
+        glyph,
+        color,
+        1.6,
+    );
+}
+
 /// Paint the framework tab row (active = blue filled pill, inactive =
 /// plain text) + a divider below it. Returns the y after the strip.
 fn paint_framework_chips(
@@ -181,9 +251,13 @@ fn paint_framework_chips(
     w: f32,
 ) -> f32 {
     let usable = (w - PAD_X * 2.0).max(0.0);
+    // When the strip overflows, scroll chevrons occupy a zone at each end;
+    // inset the chip clip band so chips never paint under them.
+    let zones = framework_chevron_zones(x, y, w);
+    let inset = if zones.is_some() { CHEVRON_ZONE_W } else { 0.0 };
     let band = Rect {
-        origin: Point2D::new(x + PAD_X, y),
-        size: Point2D::new(usable, CHIP_HEIGHT),
+        origin: Point2D::new(x + PAD_X + inset, y),
+        size: Point2D::new((usable - inset * 2.0).max(0.0), CHIP_HEIGHT),
     };
     // Clip the strip so scrolled-off chips don't bleed past the panel edges.
     cx.backend.save();
@@ -196,22 +270,44 @@ fn paint_framework_chips(
             continue;
         }
         let active = state.framework == fw;
-        // Active = blue filled pill; inactive = plain text (no fill box).
+        // Active = blue filled pill; inactive = plain text, with a subtle
+        // muted wash when hovered.
         let text_color = if active {
             cx.backend.fill_round_rect(chip, 6.0, theme.primary);
             theme.primary_foreground
         } else {
+            if state.framework_hover == Some(fw) {
+                cx.backend.fill_round_rect(chip, 6.0, theme.muted);
+            }
             theme.muted_foreground
         };
-        draw_line(
-            cx,
-            fw.as_wire(),
-            text_color,
-            chip.origin.x + CHIP_PAD_X,
-            chip.origin.y + 17.0,
-        );
+        // Centre the label horizontally + vertically in the chip using the
+        // real measured advance (13px baseline ≈ vertical centre + ~0.35em).
+        let tw = cx.backend.measure_text(fw.as_wire(), 13.0);
+        let tx = chip.origin.x + (chip.size.x - tw) / 2.0;
+        let ty = chip.origin.y + chip.size.y / 2.0 + 4.5;
+        draw_line(cx, fw.as_wire(), text_color, tx, ty);
     }
     cx.backend.restore();
+    // Scroll chevrons (only when the strip overflows). Each sits over a
+    // subtle muted background; dim the one that can't scroll further.
+    if let Some((left, right)) = zones {
+        let max = framework_row_overflow(w);
+        paint_chevron(
+            cx,
+            theme,
+            Icon::ChevronLeft,
+            left,
+            state.framework_scroll > 0.0,
+        );
+        paint_chevron(
+            cx,
+            theme,
+            Icon::ChevronRight,
+            right,
+            state.framework_scroll < max,
+        );
+    }
     // A thin divider line below the strip, spanning the padded width.
     let dy = y + CHIP_HEIGHT + CHIP_DIVIDER_GAP / 2.0;
     cx.backend.fill_rect(
@@ -594,9 +690,17 @@ pub fn code_action_rects(
     let mut out: Vec<(CodegenAction, Rect)> = Vec::new();
     // Section label, then the framework chip row, then the phase body.
     let chips_y = y + SECTION_HEADER_HEIGHT;
-    let (band_l, band_r) = (x + PAD_X, x + w - PAD_X);
+    // When the strip overflows, the scroll chevrons take precedence over
+    // chips at the band ends (pushed first → win the topmost hit-test).
+    let zones = framework_chevron_zones(x, chips_y, w);
+    if let Some((left, right)) = zones {
+        out.push((CodegenAction::ScrollFrameworksLeft, left));
+        out.push((CodegenAction::ScrollFrameworksRight, right));
+    }
+    let inset = if zones.is_some() { CHEVRON_ZONE_W } else { 0.0 };
+    let (band_l, band_r) = (x + PAD_X + inset, x + w - PAD_X - inset);
     for (fw, rect) in framework_chip_rects(x, chips_y, state.framework_scroll) {
-        // Only chips overlapping the visible band are clickable.
+        // Only chips overlapping the visible (chevron-inset) band are clickable.
         if rect.origin.x + rect.size.x <= band_l || rect.origin.x >= band_r {
             continue;
         }

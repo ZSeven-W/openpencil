@@ -158,12 +158,13 @@ impl GitPanel<'_> {
             form.focus == Some(CloneField::Dest) && !form.cloning,
             form.caret_anchor_ms,
         );
-        self.paint_button(
+        self.paint_button_with_hit(
             cx,
             layout.dest_pick,
             self.t("git.wizard.clone.destPickButton"),
             !form.cloning,
             false,
+            Some(GitPanelHit::CloneDestPick),
         );
         // Error line (validation or a failed `git clone`).
         if let Some(err) = &form.error {
@@ -171,19 +172,21 @@ impl GitPanel<'_> {
         }
         // Cancel / Clone.
         // Cancel stays enabled during a clone — it abandons the job.
-        self.paint_button(
+        self.paint_button_with_hit(
             cx,
             layout.cancel,
             self.t("git.wizard.clone.cancel"),
             true,
             false,
+            Some(GitPanelHit::CloneCancel),
         );
-        self.paint_button(
+        self.paint_button_with_hit(
             cx,
             layout.submit,
             self.t("git.wizard.clone.submit"),
             self.clone_can_submit(),
             true,
+            Some(GitPanelHit::CloneSubmit),
         );
     }
 

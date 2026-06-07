@@ -302,14 +302,21 @@ impl WidgetHostNative {
         use op_editor_ui::widgets::agent_settings_panel::AgentSettingsPanel;
         self.refresh_layout_scene();
         let point = Point2D::new(x, y);
-        let (new_nav, new_card, new_builtin, new_acp, new_preset_hover) = {
+        let (
+            new_nav,
+            new_card,
+            new_builtin,
+            new_acp,
+            new_preset_hover,
+            new_copy_hover,
+            new_add_provider_hover,
+            new_add_acp_hover,
+        ) = {
             let panel = AgentSettingsPanel::for_editor(&self.editor_state);
             let panel_rect = panel.rect(self.last_viewport_w, self.last_viewport_h);
             let nav = panel.nav_at(panel_rect, point);
-            let is_agents = matches!(
-                self.editor_state.editor_ui.agent_settings.tab,
-                AgentSettingsTab::Agents
-            );
+            let tab = self.editor_state.editor_ui.agent_settings.tab;
+            let is_agents = matches!(tab, AgentSettingsTab::Agents);
             let card = if is_agents {
                 panel.card_at(panel_rect, point).unwrap_or(usize::MAX)
             } else {
@@ -332,7 +339,32 @@ impl WidgetHostNative {
             } else {
                 None
             };
-            (nav, card, builtin, acp, preset_hover)
+            let hit = panel.hit_test(panel_rect, point);
+            let copy_hover = matches!(tab, AgentSettingsTab::Mcp)
+                && matches!(
+                    hit,
+                    op_editor_ui::widgets::agent_settings_panel::AgentSettingsHit::CopyMcpClientConfig
+                );
+            let add_provider_hover = is_agents
+                && matches!(
+                    hit,
+                    op_editor_ui::widgets::agent_settings_panel::AgentSettingsHit::AddProvider
+                );
+            let add_acp_hover = is_agents
+                && matches!(
+                    hit,
+                    op_editor_ui::widgets::agent_settings_panel::AgentSettingsHit::AddAcpAgent
+                );
+            (
+                nav,
+                card,
+                builtin,
+                acp,
+                preset_hover,
+                copy_hover,
+                add_provider_hover,
+                add_acp_hover,
+            )
         };
         let mut changed = false;
         if new_nav != self.editor_state.editor_ui.agent_settings.hover_nav {
@@ -371,6 +403,45 @@ impl WidgetHostNative {
                 .editor_ui
                 .agent_settings
                 .builtin_preset_menu_hover = new_preset_hover;
+            changed = true;
+        }
+        if new_copy_hover
+            != self
+                .editor_state
+                .editor_ui
+                .agent_settings
+                .hover_mcp_client_config_copy
+        {
+            self.editor_state
+                .editor_ui
+                .agent_settings
+                .hover_mcp_client_config_copy = new_copy_hover;
+            changed = true;
+        }
+        if new_add_provider_hover
+            != self
+                .editor_state
+                .editor_ui
+                .agent_settings
+                .hover_add_provider
+        {
+            self.editor_state
+                .editor_ui
+                .agent_settings
+                .hover_add_provider = new_add_provider_hover;
+            changed = true;
+        }
+        if new_add_acp_hover
+            != self
+                .editor_state
+                .editor_ui
+                .agent_settings
+                .hover_add_acp_agent
+        {
+            self.editor_state
+                .editor_ui
+                .agent_settings
+                .hover_add_acp_agent = new_add_acp_hover;
             changed = true;
         }
         if changed {
@@ -529,25 +600,24 @@ impl WidgetHostNative {
         })
     }
 
-    /// `true` when `(x, y)` is over the StatusBar's search icon — the
-    /// left section of the pill before the `[- N% +]` zoom cluster.
-    /// `SIDE_PAD(14) + ICON(14) + half SECTION_GAP(9) ≈ 37 px`; 38 is
-    /// a generous target that stops short of the minus button.
-    pub(in crate::widget_host) fn status_bar_search_hit(
-        &self,
-        x: f32,
-        y: f32,
+    /// Step the canvas zoom from a StatusBar `[-]` / `[+]` click,
+    /// anchored at the canvas-region centre so the visible content
+    /// scales in place. `zoom_in` picks the sign; the magnitude maps
+    /// to ≈ ±20 % per click through `Viewport::zoom_at`.
+    pub(in crate::widget_host) fn status_bar_zoom(
+        &mut self,
+        zoom_in: bool,
         viewport_w: f32,
         viewport_h: f32,
-    ) -> bool {
-        let Some(r) = self.status_bar_rect(viewport_w, viewport_h) else {
-            return false;
-        };
-        const SEARCH_SECTION_W: f32 = 38.0;
-        x >= r.origin.x
-            && x <= r.origin.x + SEARCH_SECTION_W
-            && y >= r.origin.y
-            && y <= r.origin.y + r.size.y
+    ) {
+        // `zoom_at` factor is `exp(delta * 0.0015)`; ±120 ≈ ±20 %.
+        const STEP: f32 = 120.0;
+        let (cx0, cy0, cw, ch) = self.canvas_region(viewport_w, viewport_h);
+        let center = op_editor_ui::Point2D::new(cx0 + cw / 2.0, cy0 + ch / 2.0);
+        self.editor_state
+            .viewport
+            .zoom_at(center, if zoom_in { STEP } else { -STEP });
+        self.mark_dirty();
     }
 
     /// Zoom + pan so the active page's content is framed within the

@@ -9,6 +9,7 @@ use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::top_bar::*;
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
+use op_editor_core::TopBarButton;
 
 impl TopBar {
     pub(super) fn paint_chrome(&self, cx: &mut PaintCx<'_>, rect: Rect) {
@@ -119,19 +120,38 @@ impl TopBar {
         // sidebar toggle │ file-menu │ Figma — each group split by a
         // TS-style 1×14 divider (4 px gap each side).
         let panel_left_x = rect.origin.x + PAD + self.left_inset();
-        paint_icon_button(cx, &self.theme, panel_left_x, center_y, Icon::PanelLeft);
+        paint_icon_button(
+            cx,
+            &self.theme,
+            panel_left_x,
+            center_y,
+            Icon::PanelLeft,
+            self.is_hovered(TopBarButton::ToggleSidebar),
+        );
         // Divider between the sidebar toggle and the file-menu.
         let divider1_x = panel_left_x + ICON_BUTTON + DIVIDER_GAP;
         paint_divider(cx, &self.theme, divider1_x, center_y);
         // File-menu compound: folder + tight chevron in one button.
         let file_menu_x = divider1_x + DIVIDER_W + DIVIDER_GAP;
-        paint_file_menu_button(cx, &self.theme, file_menu_x, center_y);
+        paint_file_menu_button(
+            cx,
+            &self.theme,
+            file_menu_x,
+            center_y,
+            self.is_hovered(TopBarButton::ToggleFileMenu),
+        );
         // Divider before the Figma import affordance.
         let divider2_x = file_menu_x + FILE_MENU_BUTTON_WIDTH + DIVIDER_GAP;
         paint_divider(cx, &self.theme, divider2_x, center_y);
         // Figma import button.
         let figma_x = divider2_x + DIVIDER_W + DIVIDER_GAP;
-        paint_figma_button(cx, &self.theme, figma_x, center_y);
+        paint_figma_button(
+            cx,
+            &self.theme,
+            figma_x,
+            center_y,
+            self.is_hovered(TopBarButton::OpenFigmaImport),
+        );
 
         // ── Centered file name ─────────────────────────────────
         let name = TextLayout::single_run(
@@ -159,12 +179,21 @@ impl TopBar {
         // which has no git backend to paint a panel.
         if GIT_BUTTON_AVAILABLE {
             let git_rect = self.git_button_rect(rect);
+            let git_color = paint_hover_bg(
+                cx,
+                &self.theme,
+                git_rect,
+                self.is_hovered(TopBarButton::ToggleGitPanel),
+            );
             draw_icon(
                 cx.backend,
                 Icon::GitBranch,
-                Point2D::new(git_rect.origin.x, glyph_top(center_y, ICON_SIZE)),
+                Point2D::new(
+                    Self::git_icon_left(git_rect),
+                    glyph_top(center_y, ICON_SIZE),
+                ),
                 ICON_SIZE,
-                self.theme.muted_foreground,
+                git_color,
                 1.4,
             );
             if let Some(branch) = self.git_branch.as_deref() {
@@ -172,12 +201,15 @@ impl TopBar {
                     branch,
                     "system-ui",
                     11.0,
-                    to_jian_color(self.theme.muted_foreground),
+                    to_jian_color(git_color),
                     Point2D::new(0.0, 0.0),
                 );
                 cx.backend.draw_text(
                     &label,
-                    Point2D::new(git_rect.origin.x + ICON_SIZE + 6.0, center_y + 4.0),
+                    Point2D::new(
+                        Self::git_icon_left(git_rect) + ICON_SIZE + 6.0,
+                        center_y + 4.0,
+                    ),
                 );
             }
         }
@@ -188,7 +220,14 @@ impl TopBar {
         let mut rx = rect.origin.x + rect.size.x - PAD - ICON_BUTTON;
 
         // Fullscreen.
-        paint_icon_button(cx, &self.theme, rx, center_y, Icon::Maximize);
+        paint_icon_button(
+            cx,
+            &self.theme,
+            rx,
+            center_y,
+            Icon::Maximize,
+            self.is_hovered(TopBarButton::ToggleFullscreen),
+        );
         rx -= ICON_BUTTON;
 
         // Theme toggle — Sun in dark mode (click → light); Moon in
@@ -197,7 +236,14 @@ impl TopBar {
             op_editor_core::ThemeMode::Dark => Icon::Sun,
             op_editor_core::ThemeMode::Light => Icon::Moon,
         };
-        paint_icon_button(cx, &self.theme, rx, center_y, theme_icon);
+        paint_icon_button(
+            cx,
+            &self.theme,
+            rx,
+            center_y,
+            theme_icon,
+            self.is_hovered(TopBarButton::ToggleTheme),
+        );
         rx -= GLOBE_BUTTON_WIDTH;
 
         // i18n globe + chevron-down (single hit-target).
@@ -205,13 +251,20 @@ impl TopBar {
             origin: Point2D::new(rx, center_y - ICON_BUTTON / 2.0),
             size: Point2D::new(GLOBE_BUTTON_WIDTH, ICON_BUTTON),
         };
+        let globe_color = paint_hover_bg(
+            cx,
+            &self.theme,
+            globe_button,
+            self.is_hovered(TopBarButton::ToggleLocale),
+        );
+        let locale_glyph_x = Self::locale_glyph_left(globe_button);
         // Globe glyph at the left half.
         draw_icon(
             cx.backend,
             Icon::Globe,
-            Point2D::new(globe_button.origin.x + 4.0, center_y - ICON_SIZE / 2.0),
+            Point2D::new(locale_glyph_x, center_y - ICON_SIZE / 2.0),
             ICON_SIZE,
-            self.theme.muted_foreground,
+            globe_color,
             1.4,
         );
         // Chevron-down at the right side, smaller.
@@ -219,11 +272,11 @@ impl TopBar {
             cx.backend,
             Icon::ChevronDown,
             Point2D::new(
-                globe_button.origin.x + 4.0 + ICON_SIZE + 4.0,
+                locale_glyph_x + ICON_SIZE + COMPOUND_GLYPH_GAP,
                 center_y - CHEVRON_SIZE / 2.0,
             ),
             CHEVRON_SIZE,
-            self.theme.muted_foreground,
+            globe_color,
             1.4,
         );
         // `rx` now points at the LEFT edge of the globe button —
@@ -250,6 +303,11 @@ impl TopBar {
             ),
             size: Point2D::new(chip_w, 26.0),
         };
+        // Hover wash behind the whole chip (TS `hover:bg-accent`).
+        if self.is_hovered(TopBarButton::OpenAgentSettings) {
+            cx.backend
+                .fill_round_rect(chip_rect, BUTTON_RADIUS, self.theme.button_hover);
+        }
         // Leading icons (no border ring — TS empty-state chip has no
         // outline). The empty state shows the single LayoutGrid
         // set-up affordance; the active chip stacks one brand logo

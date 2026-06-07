@@ -219,12 +219,24 @@ impl WidgetHostNative {
             }
         }
 
-        // StatusBar search icon → frame the page content in the
-        // viewport (floating bottom-right, so it hit-tests above the
-        // canvas / toolbar).
-        if self.status_bar_search_hit(x, y, viewport_width, viewport_height) {
-            self.zoom_to_fit(viewport_width, viewport_height);
-            return true;
+        // StatusBar controls — Search frames content, `[-]` / `[+]`
+        // step the zoom. Floating bottom-right, so it hit-tests above
+        // the canvas / toolbar.
+        if let Some(r) = self.status_bar_rect(viewport_width, viewport_height) {
+            use op_editor_core::StatusBarButton;
+            let bar = op_editor_ui::widgets::StatusBar::for_editor(&self.editor_state);
+            if let Some(btn) = bar.control_at(r, Point2D::new(x, y)) {
+                match btn {
+                    StatusBarButton::Search => self.zoom_to_fit(viewport_width, viewport_height),
+                    StatusBarButton::ZoomOut => {
+                        self.status_bar_zoom(false, viewport_width, viewport_height)
+                    }
+                    StatusBarButton::ZoomIn => {
+                        self.status_bar_zoom(true, viewport_width, viewport_height)
+                    }
+                }
+                return true;
+            }
         }
 
         if let Some(state) = self.editor_state.editor_ui.layer_context_menu.clone() {

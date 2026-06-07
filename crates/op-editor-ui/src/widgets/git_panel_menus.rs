@@ -272,13 +272,21 @@ impl GitPanel<'_> {
                 self.state.branch_create_focused,
             );
             // Ghost Cancel + primary Create, right-aligned (TS picker:271-285).
-            self.paint_button(cx, cancel, self.t("git.branch.cancel"), true, false);
-            self.paint_button(
+            self.paint_button_with_hit(
+                cx,
+                cancel,
+                self.t("git.branch.cancel"),
+                true,
+                false,
+                Some(GitPanelHit::BranchPickerCancel),
+            );
+            self.paint_button_with_hit(
                 cx,
                 submit,
                 self.t("git.branch.createSubmit"),
                 !self.state.branch_create_draft.trim().is_empty(),
                 true,
+                Some(GitPanelHit::BranchCreateSubmit),
             );
             return;
         }
@@ -513,6 +521,7 @@ impl GitPanel<'_> {
         cx.backend.stroke_round_rect(panel, 8.0, t.border, 1.0);
         let rows = self.overflow_row_rects(panel_rect);
         for (item, row) in self.overflow_items().iter().zip(rows.iter()) {
+            self.wash_if_hovered(cx, *row, 6.0, item.hit);
             // Leaf icon (TS size=13 strokeWidth=1.75, muted).
             draw_icon(
                 cx.backend,
@@ -732,12 +741,13 @@ impl GitPanel<'_> {
             self.t("git.remote.urlPlaceholder"),
             self.state.remote_focused,
         );
-        self.paint_button(
+        self.paint_button_with_hit(
             cx,
             set,
             self.t("git.remote.saveButton"),
             !self.state.remote_draft.trim().is_empty(),
             true,
+            Some(GitPanelHit::SetRemote),
         );
 
         // ── Ahead/behind + Fetch + stored-credentials section (TS rows) ──
@@ -761,12 +771,13 @@ impl GitPanel<'_> {
             .replace("{{behind}}", &self.state.behind.to_string());
         self.text(cx, &ab, left, top + 21.0, 11.0, t.muted_foreground);
         // 获取 button (enabled when a remote exists).
-        self.paint_button(
+        self.paint_button_with_hit(
             cx,
             self.remote_settings_fetch_rect(panel_rect),
             self.t("git.remote.fetchButton"),
             !self.state.remotes.is_empty(),
             false,
+            Some(GitPanelHit::FetchRemote),
         );
         // Credentials row.
         let d2 = top + 8.0 + 30.0;

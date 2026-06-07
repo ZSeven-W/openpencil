@@ -18,6 +18,9 @@ pub const TOP_BAR_HEIGHT: f32 = 40.0;
 // widgets keep their own `ICON_SIZE`.
 pub(super) const ICON_SIZE: f32 = 14.0;
 pub(super) const ICON_BUTTON: f32 = 28.0;
+/// Corner radius of a top-bar button's hover background. Smaller than
+/// the floating toolbar's 8 px to suit the 28 px-tall chrome buttons.
+pub(super) const BUTTON_RADIUS: f32 = 6.0;
 /// Globe locale-picker button — wider than a normal icon button so a
 /// chevron-down sits next to the globe glyph (signals the dropdown).
 pub(super) const GLOBE_BUTTON_WIDTH: f32 = 44.0;
@@ -26,6 +29,8 @@ pub(super) const GLOBE_BUTTON_WIDTH: f32 = 44.0;
 /// separate icon buttons (4 px between glyphs vs ICON_BUTTON + 4).
 pub(super) const FILE_MENU_BUTTON_WIDTH: f32 = 46.0;
 pub(super) const CHEVRON_SIZE: f32 = 10.0;
+pub(super) const COMPOUND_GLYPH_GAP: f32 = 4.0;
+pub(super) const GIT_BUTTON_PAD_X: f32 = (ICON_BUTTON - ICON_SIZE) / 2.0;
 pub(super) const PAD: f32 = 12.0;
 /// Top-bar vertical divider geometry (TS `w-px h-3.5 bg-border/60
 /// mx-1`): 1 px wide, 14 px tall, 4 px gap on each side.
@@ -122,6 +127,9 @@ pub struct TopBar {
     /// beside the file name. `None` = no branch (the button still
     /// paints, icon-only, as a toggle for the git panel).
     pub git_branch: Option<String>,
+    /// Which chrome button the cursor is over — drives the per-button
+    /// `theme.button_hover` wash. `None` = no hover.
+    pub hover: Option<op_editor_core::TopBarButton>,
 }
 
 impl TopBar {
@@ -140,6 +148,7 @@ impl TopBar {
             fullscreen: false,
             theme_mode: op_editor_core::ThemeMode::Dark,
             git_branch: None,
+            hover: None,
         }
     }
 
@@ -177,7 +186,14 @@ impl TopBar {
             fullscreen: ui.window_fullscreen,
             theme_mode: ui.theme_mode,
             git_branch: ui.git_panel.branch.clone(),
+            hover: ui.topbar_button_hover,
         }
+    }
+
+    /// True when the cursor is resting on `button` — drives the
+    /// per-button hover wash in `paint_chrome`.
+    pub(super) fn is_hovered(&self, button: op_editor_core::TopBarButton) -> bool {
+        self.hover == Some(button)
     }
 
     /// Left-edge reservation for the window controls. Collapses to
@@ -279,6 +295,11 @@ impl TopBar {
         }
     }
 
+    pub(super) fn locale_glyph_left(globe_button: Rect) -> f32 {
+        let group_w = ICON_SIZE + COMPOUND_GLYPH_GAP + CHEVRON_SIZE;
+        globe_button.origin.x + (globe_button.size.x - group_w) / 2.0
+    }
+
     /// Git-panel toggle button — sits just right of the centred file
     /// name. Width holds the branch glyph plus an optional branch
     /// label. Shared by paint + hit-test so they can't drift.
@@ -303,8 +324,12 @@ impl TopBar {
             .unwrap_or(0.0);
         Rect {
             origin: Point2D::new(filename_right + 10.0, center_y - ICON_BUTTON / 2.0),
-            size: Point2D::new(ICON_SIZE + 8.0 + branch_w, ICON_BUTTON),
+            size: Point2D::new(GIT_BUTTON_PAD_X * 2.0 + ICON_SIZE + branch_w, ICON_BUTTON),
         }
+    }
+
+    pub(super) fn git_icon_left(git_button: Rect) -> f32 {
+        git_button.origin.x + GIT_BUTTON_PAD_X
     }
 
     /// Center-x of the Git-panel toggle button when it is shown
@@ -488,37 +513,67 @@ impl Widget for TopBar {
     }
 }
 
+/// Paint the `theme.button_hover` background behind a chrome button
+/// when the cursor rests on it, and return the glyph color to use:
+/// `theme.foreground` while hovered (the wash lifts the icon), else
+/// `theme.muted_foreground`. Centralises the hover treatment so every
+/// top-bar button reads identically.
+pub(super) fn paint_hover_bg(
+    cx: &mut PaintCx<'_>,
+    theme: &Theme,
+    rect: Rect,
+    hovered: bool,
+) -> Color {
+    if hovered {
+        cx.backend
+            .fill_round_rect(rect, BUTTON_RADIUS, theme.button_hover);
+        theme.foreground
+    } else {
+        theme.muted_foreground
+    }
+}
+
 pub(super) fn paint_icon_button(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
     x: f32,
     center_y: f32,
     icon: Icon,
+    hovered: bool,
 ) {
+    let button_rect = Rect {
+        origin: Point2D::new(x, center_y - ICON_BUTTON / 2.0),
+        size: Point2D::new(ICON_BUTTON, ICON_BUTTON),
+    };
+    let color = paint_hover_bg(cx, theme, button_rect, hovered);
     let icon_origin = Point2D::new(
         x + (ICON_BUTTON - ICON_SIZE) / 2.0,
         center_y - ICON_SIZE / 2.0,
     );
-    draw_icon(
-        cx.backend,
-        icon,
-        icon_origin,
-        ICON_SIZE,
-        theme.muted_foreground,
-        1.4,
-    );
+    draw_icon(cx.backend, icon, icon_origin, ICON_SIZE, color, 1.4);
 }
 
 /// File-menu compound: folder glyph + tighter chevron, both inside
 /// a single 46×28 hit-target. The chevron gap is ~4 px instead of
 /// ICON_BUTTON-wide as it used to render.
-pub(super) fn paint_file_menu_button(cx: &mut PaintCx<'_>, theme: &Theme, x: f32, center_y: f32) {
+pub(super) fn paint_file_menu_button(
+    cx: &mut PaintCx<'_>,
+    theme: &Theme,
+    x: f32,
+    center_y: f32,
+    hovered: bool,
+) {
+    let button_rect = Rect {
+        origin: Point2D::new(x, center_y - ICON_BUTTON / 2.0),
+        size: Point2D::new(FILE_MENU_BUTTON_WIDTH, ICON_BUTTON),
+    };
+    let color = paint_hover_bg(cx, theme, button_rect, hovered);
     draw_icon(
         cx.backend,
         Icon::FolderOpen,
         Point2D::new(x + 6.0, center_y - ICON_SIZE / 2.0),
         ICON_SIZE,
-        theme.muted_foreground,
+        color,
         1.4,
     );
     draw_icon(
@@ -526,12 +581,23 @@ pub(super) fn paint_file_menu_button(cx: &mut PaintCx<'_>, theme: &Theme, x: f32
         Icon::ChevronDown,
         Point2D::new(x + 6.0 + ICON_SIZE + 4.0, center_y - CHEVRON_SIZE / 2.0),
         CHEVRON_SIZE,
-        theme.muted_foreground,
+        color,
         1.4,
     );
 }
 
-pub(super) fn paint_figma_button(cx: &mut PaintCx<'_>, theme: &Theme, x: f32, center_y: f32) {
+pub(super) fn paint_figma_button(
+    cx: &mut PaintCx<'_>,
+    theme: &Theme,
+    x: f32,
+    center_y: f32,
+    hovered: bool,
+) {
+    let button_rect = Rect {
+        origin: Point2D::new(x, center_y - ICON_BUTTON / 2.0),
+        size: Point2D::new(ICON_BUTTON, ICON_BUTTON),
+    };
+    let color = paint_hover_bg(cx, theme, button_rect, hovered);
     crate::widgets::brand_icons::paint_figma_logo(
         cx.backend,
         Point2D::new(
@@ -539,7 +605,7 @@ pub(super) fn paint_figma_button(cx: &mut PaintCx<'_>, theme: &Theme, x: f32, ce
             center_y - ICON_SIZE / 2.0,
         ),
         ICON_SIZE,
-        theme.muted_foreground,
+        color,
     );
 }
 
@@ -585,6 +651,10 @@ pub(super) fn to_jian_color(c: Color) -> jian_core::scene::Color {
 mod tests {
     use super::*;
 
+    fn nearly_eq(a: f32, b: f32) -> bool {
+        (a - b).abs() < 0.01
+    }
+
     #[test]
     fn untitled_carries_default_chinese_label() {
         let bar = TopBar::untitled();
@@ -610,6 +680,17 @@ mod tests {
     }
 
     #[test]
+    fn for_editor_ui_picks_up_button_hover() {
+        let ui = EditorUiState {
+            topbar_button_hover: Some(op_editor_core::TopBarButton::ToggleTheme),
+            ..Default::default()
+        };
+        let bar = TopBar::for_editor_ui(&ui);
+        assert!(bar.is_hovered(op_editor_core::TopBarButton::ToggleTheme));
+        assert!(!bar.is_hovered(op_editor_core::TopBarButton::ToggleSidebar));
+    }
+
+    #[test]
     fn maximize_button_hit_tests_to_toggle_fullscreen() {
         let bar = TopBar::untitled();
         let rect = Rect {
@@ -629,6 +710,43 @@ mod tests {
         assert_eq!(
             bar.hit_test(rect, Point2D::new(sun_cx, cy)),
             Some(TopBarHit::ToggleTheme),
+        );
+    }
+
+    #[test]
+    fn locale_button_glyph_group_is_centered_in_hover_rect() {
+        let rect = Rect {
+            origin: Point2D::new(0.0, 0.0),
+            size: Point2D::new(1000.0, TOP_BAR_HEIGHT),
+        };
+        let globe_rect = TopBar::globe_rect(rect);
+        let glyph_group_left = TopBar::locale_glyph_left(globe_rect);
+        let glyph_group_right = glyph_group_left + ICON_SIZE + COMPOUND_GLYPH_GAP + CHEVRON_SIZE;
+        let glyph_group_center = (glyph_group_left + glyph_group_right) / 2.0;
+        let hover_center = globe_rect.origin.x + globe_rect.size.x / 2.0;
+
+        assert!(
+            nearly_eq(glyph_group_center, hover_center),
+            "locale glyph group should be centered in its hover rect"
+        );
+    }
+
+    #[test]
+    fn icon_only_git_button_centers_glyph_in_hover_rect() {
+        let mut bar = TopBar::untitled();
+        bar.git_branch = None;
+        let rect = Rect {
+            origin: Point2D::new(0.0, 0.0),
+            size: Point2D::new(1000.0, TOP_BAR_HEIGHT),
+        };
+        let git_rect = bar.git_button_rect(rect);
+        let icon_left = TopBar::git_icon_left(git_rect);
+        let icon_center = icon_left + ICON_SIZE / 2.0;
+        let hover_center = git_rect.origin.x + git_rect.size.x / 2.0;
+
+        assert!(
+            nearly_eq(icon_center, hover_center),
+            "icon-only git button should center the branch glyph in its hover rect"
         );
     }
 }

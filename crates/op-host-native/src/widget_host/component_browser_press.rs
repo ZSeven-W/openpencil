@@ -33,6 +33,7 @@ impl WidgetHostNative {
         match hit {
             ComponentBrowserHit::Close => {
                 self.editor_state.editor_ui.component_browser_open = false;
+                self.editor_state.editor_ui.component_browser_hover = None;
             }
             ComponentBrowserHit::DragHeader => {
                 self.component_browser_drag = Some(ComponentBrowserDragState {

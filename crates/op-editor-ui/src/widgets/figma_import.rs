@@ -30,6 +30,8 @@ pub struct FigmaImportModal {
     pub theme: Theme,
     /// Active UI locale — drives the modal's `t` copy lookup.
     locale: Locale,
+    /// Which target the cursor is over — drives the hover wash.
+    hover: Option<op_editor_core::FigmaImportButton>,
 }
 
 impl FigmaImportModal {
@@ -38,6 +40,7 @@ impl FigmaImportModal {
             id: WidgetId::new(5400),
             theme: theme_for(&state.editor_ui),
             locale: state.editor_ui.locale,
+            hover: state.editor_ui.figma_import_hover,
         }
     }
 
@@ -132,20 +135,40 @@ impl Widget for FigmaImportModal {
             Point2D::new(rect.origin.x + PAD, rect.origin.y + 26.0),
         );
 
-        // Close X — smaller stroke, tighter.
+        // Close X — smaller stroke, tighter. Hover wash + foreground.
         let close = close_rect(rect);
+        let close_hovered = self.hover == Some(op_editor_core::FigmaImportButton::Close);
+        if close_hovered {
+            // Pad the wash out a little so it reads as a button around
+            // the 14 px glyph rather than hugging it.
+            let pad = 5.0;
+            let bg = Rect {
+                origin: Point2D::new(close.origin.x - pad, close.origin.y - pad),
+                size: Point2D::new(close.size.x + pad * 2.0, close.size.y + pad * 2.0),
+            };
+            cx.backend.fill_round_rect(bg, 6.0, self.theme.button_hover);
+        }
         draw_icon(
             cx.backend,
             Icon::Close,
             close.origin,
             close.size.x,
-            self.theme.muted_foreground,
+            if close_hovered {
+                self.theme.foreground
+            } else {
+                self.theme.muted_foreground
+            },
             1.6,
         );
 
         // Compact info panel with a small Figma glyph for character.
         let drop = drop_zone_rect(rect);
         cx.backend.fill_round_rect(drop, 10.0, self.theme.muted);
+        // Brighten the browse drop-zone on hover (it's clickable).
+        if self.hover == Some(op_editor_core::FigmaImportButton::DropZone) {
+            cx.backend
+                .fill_round_rect(drop, 10.0, self.theme.button_hover);
+        }
         cx.backend
             .stroke_round_rect(drop, 10.0, self.theme.border, 1.0);
 

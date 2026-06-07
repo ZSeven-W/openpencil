@@ -6,7 +6,7 @@
 //! PenNode gets an Ours / Theirs choice, then "Apply" re-runs the
 //! merge with those choices and completes it.
 
-use crate::widgets::git_panel::{truncate, GitPanel, BUTTON_H, FOOTER_H, PAD};
+use crate::widgets::git_panel::{truncate, GitPanel, GitPanelHit, BUTTON_H, FOOTER_H, PAD};
 use crate::widgets::PaintCx;
 use crate::{Point2D, Rect};
 
@@ -134,19 +134,21 @@ impl GitPanel<'_> {
             // Ours / Theirs choice buttons — the picked side is the
             // accent (primary) one; a structural conflict greys out
             // Theirs since it can only resolve to Ours.
-            self.paint_button(
+            self.paint_button_with_hit(
                 cx,
                 *ours_rect,
                 self.t("git.panel.ours"),
                 true,
                 !row.take_theirs,
+                Some(GitPanelHit::MergeChoiceOurs(i)),
             );
-            self.paint_button(
+            self.paint_button_with_hit(
                 cx,
                 *theirs_rect,
                 self.t("git.panel.theirs"),
                 row.theirs_allowed,
                 row.take_theirs,
+                Some(GitPanelHit::MergeChoiceTheirs(i)),
             );
             let label_x = theirs_rect.origin.x + theirs_rect.size.x + 10.0;
             let baseline = ours_rect.origin.y + ours_rect.size.y / 2.0 + 4.0;
@@ -161,8 +163,22 @@ impl GitPanel<'_> {
         }
 
         // Apply / Cancel.
-        self.paint_button(cx, layout.apply, self.t("git.panel.applyMerge"), true, true);
-        self.paint_button(cx, layout.cancel, self.t("common.cancel"), true, false);
+        self.paint_button_with_hit(
+            cx,
+            layout.apply,
+            self.t("git.panel.applyMerge"),
+            true,
+            true,
+            Some(GitPanelHit::ApplyMergeResolution),
+        );
+        self.paint_button_with_hit(
+            cx,
+            layout.cancel,
+            self.t("common.cancel"),
+            true,
+            false,
+            Some(GitPanelHit::CancelMergeResolution),
+        );
 
         // Footer — note any conflicts beyond the shown cap.
         let footer = if total > MAX_ROWS {
