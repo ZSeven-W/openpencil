@@ -21,7 +21,8 @@ op-editor-core = { path = "../op-editor-core" }
 op-ai = { path = "../op-ai", optional = true }
 serde = { workspace = true, features = ["derive"], optional = true }
 serde_json = { workspace = true, optional = true }
+base64 = { version = "0.22", optional = true }
 
 [features]
 # Gates the AI code-generation pipeline (src/ai/). Off by default.
-ai = ["dep:op-ai", "dep:serde", "dep:serde_json"]
+ai = ["dep:op-ai", "dep:serde", "dep:serde_json", "dep:base64"]
