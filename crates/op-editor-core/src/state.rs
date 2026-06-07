@@ -40,6 +40,7 @@
 //! constructor is provided so the type is usable + testable.
 
 use crate::chat::ChatState;
+use crate::codegen::CodegenState;
 use crate::components::ComponentLibrary;
 use crate::editor_ui_state::EditorUiState;
 use crate::history::History;
@@ -81,6 +82,10 @@ pub struct EditorState {
     /// AI chat sub-state — message transcript, input draft, panel
     /// anchor, model catalog. Mirrors shell-core's `Document.chat`.
     pub chat: ChatState,
+    /// Code-generation sub-state — framework selection, phase,
+    /// progress, generated code, and pending-action flags. Read by
+    /// the Code panel painter; drained by the host codegen session.
+    pub codegen: CodegenState,
     /// Component library — reusable design-system subtrees. Mirrors
     /// shell-core's `Document.components`.
     pub components: ComponentLibrary,
@@ -108,6 +113,7 @@ impl EditorState {
             ui: UiDraftState::new(),
             editor_ui: EditorUiState::new(),
             chat: ChatState::default(),
+            codegen: CodegenState::default(),
             components,
             ui_kits: crate::uikit::builtin_kits(),
         }
