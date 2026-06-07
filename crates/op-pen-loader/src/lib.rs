@@ -22,8 +22,10 @@
 mod adapter;
 mod authored_geometry;
 mod effects;
+mod layout_repair;
 mod layout_scene;
 mod path_bounds;
+mod style_payload;
 
 pub mod payload;
 pub mod variables;
