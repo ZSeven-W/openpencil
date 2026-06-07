@@ -187,6 +187,63 @@ fn fit_content_text_resolves_scene_bounds_to_measured_text() {
 }
 
 #[test]
+fn fit_content_stack_reserves_missing_height_text_before_next_section() {
+    let src = r##"{
+      "version":"1.0.0",
+      "children":[{
+        "type":"frame","id":"root","width":390,"height":844,
+        "layout":"vertical","gap":0,
+        "children":[
+          {"type":"frame","id":"status","width":"fill_container","height":62},
+          {"type":"frame","id":"header","width":"fill_container","height":"fit_content",
+           "layout":"vertical","padding":[20,24],"children":[{
+            "type":"frame","id":"header-row","width":"fill_container","height":"fit_content",
+            "layout":"horizontal","gap":12,"children":[
+              {"type":"frame","id":"greeting-block","width":"fit_content","height":"fit_content",
+               "layout":"vertical","gap":4,"children":[
+                {"type":"text","id":"greeting","width":"fit_content",
+                 "content":"Good morning, Alex","fontSize":24},
+                {"type":"text","id":"date","width":"fit_content",
+                 "content":"Tuesday, June 7","fontSize":14}
+              ]},
+              {"type":"frame","id":"avatar","width":44,"height":44}
+            ]}]},
+          {"type":"frame","id":"weekly","width":"fill_container","height":"fit_content",
+           "layout":"vertical","padding":[0,24],"children":[{
+            "type":"frame","id":"card","width":"fill_container","height":"fit_content",
+            "layout":"vertical","padding":20,"children":[
+              {"type":"text","id":"title","content":"Weekly Streak","fontSize":16}
+            ]}]}
+        ]
+      }]
+    }"##;
+    let scene = editor_state_to_layout_scene(&state_from(src));
+    let page = scene.active_page().expect("active page");
+    let header = page.find("header").expect("header");
+    let header_row = page.find("header-row").expect("header row");
+    let greeting_block = page.find("greeting-block").expect("greeting block");
+    let greeting = page.find("greeting").expect("greeting text");
+    let date = page.find("date").expect("date text");
+    let weekly = page.find("weekly").expect("weekly section");
+
+    assert!(
+        date.bounds.size.y >= 14.0,
+        "missing-height text should still measure; got {}",
+        date.bounds.size.y
+    );
+    assert!(
+        weekly.bounds.origin.y >= date.bounds.origin.y + date.bounds.size.y,
+        "next vertical sibling must not overlap measured text: header={:?} row={:?} greeting_block={:?} greeting={:?} date={:?} weekly={:?}",
+        header.bounds,
+        header_row.bounds,
+        greeting_block.bounds,
+        greeting.bounds,
+        date.bounds,
+        weekly.bounds
+    );
+}
+
+#[test]
 fn no_variable_ref_keeps_authored_fill() {
     // Without a registered `$ref`, the node keeps its authored fill.
     let src = r##"{
