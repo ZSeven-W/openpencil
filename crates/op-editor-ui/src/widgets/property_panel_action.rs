@@ -205,6 +205,9 @@ pub enum CodegenAction {
 /// `PartialEq` only (not `Eq`) — `AdjustEffectParam` carries an `f32`.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum PropertyPanelAction {
+    /// User clicked a tab in the pinned Design / Code strip — the host
+    /// switches `editor_ui.property_tab`.
+    SetPropertyTab(op_editor_core::PropertyTab),
     SetFlexLayout(op_editor_core::FlexLayout),
     ToggleSizeFillWidth,
     ToggleSizeFillHeight,

@@ -343,20 +343,21 @@ impl PropertyPanel {
     /// missed every clickable shape. Called AFTER `hit_test` so
     /// text inputs win over the action rects they overlap with.
     pub fn hit_test_action(&self, panel_rect: Rect, point: Point2D) -> Option<PropertyPanelAction> {
+        // Design / Code tab strip — clickable on either tab, incl. multi-select.
+        if let Some(tab) = sections::tab_strip_hit(
+            &self.labels,
+            panel_rect.origin.x,
+            panel_rect.origin.y,
+            point,
+        ) {
+            return Some(PropertyPanelAction::SetPropertyTab(tab));
+        }
         if self.is_multi {
             // Multi-select inputs / toggles are inert in v1.
             return None;
         }
         if matches!(self.tab, op_editor_core::PropertyTab::Code) {
-            // Same content origin the Code paint uses: panel left, the
-            // pinned tab-strip bottom (`+ TAB_HEIGHT`), panel width.
-            let cy0 = panel_rect.origin.y + crate::widgets::property_panel_inputs::TAB_HEIGHT;
-            let rects =
-                code_action_rects(panel_rect.origin.x, cy0, panel_rect.size.x, &self.codegen);
-            return rects
-                .into_iter()
-                .find(|(_, r)| rect_contains(*r, point))
-                .map(|(a, _)| PropertyPanelAction::Codegen(a));
+            return code_action_hit(panel_rect, &self.codegen, point);
         }
         if self.image_fill_popover_open {
             if let Some(action) = sections::image_fill_popover_action_at(
@@ -484,7 +485,7 @@ fn rect_contains(r: Rect, p: Point2D) -> bool {
         && p.y <= r.origin.y + r.size.y
 }
 
-use crate::widgets::property_panel_code::{code_action_rects, paint_code_panel};
+use crate::widgets::property_panel_code::{code_action_hit, paint_code_panel};
 
 impl Widget for PropertyPanel {
     fn id(&self) -> WidgetId {
