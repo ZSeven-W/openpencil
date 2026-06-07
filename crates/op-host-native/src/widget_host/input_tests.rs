@@ -1252,3 +1252,66 @@ fn icon_picker_header_drag_moves_the_panel() {
     assert_eq!(moved.origin.y, start.origin.y + 44.0);
     assert!(host.apply_release_with_viewport(viewport_w, viewport_h));
 }
+
+#[test]
+fn codegen_select_framework_updates_state() {
+    use op_editor_core::codegen::Framework;
+    use op_editor_ui::widgets::property_panel_action::CodegenAction;
+    use op_editor_ui::widgets::PropertyPanelAction;
+    let mut host = WidgetHostNative::new();
+
+    host.apply_property_action(PropertyPanelAction::Codegen(
+        CodegenAction::SelectFramework(Framework::Vue),
+    ));
+
+    assert_eq!(host.editor_state().codegen.framework, Framework::Vue);
+}
+
+#[test]
+fn codegen_generate_raises_pending_and_generating_phase() {
+    use op_editor_core::codegen::CodegenPhase;
+    use op_editor_ui::widgets::property_panel_action::CodegenAction;
+    use op_editor_ui::widgets::PropertyPanelAction;
+    let mut host = WidgetHostNative::new();
+
+    host.apply_property_action(PropertyPanelAction::Codegen(CodegenAction::Generate));
+
+    assert!(host.editor_state().codegen.pending_generate);
+    assert_eq!(host.editor_state().codegen.phase, CodegenPhase::Generating);
+}
+
+#[test]
+fn codegen_copy_queues_code_to_system_clipboard() {
+    use op_editor_ui::widgets::property_panel_action::CodegenAction;
+    use op_editor_ui::widgets::PropertyPanelAction;
+    let mut host = WidgetHostNative::new();
+    host.set_now_ms(4242);
+    host.editor_state_mut().codegen.code = "export const App = () => null;".to_string();
+
+    host.apply_property_action(PropertyPanelAction::Codegen(CodegenAction::Copy));
+
+    assert_eq!(host.editor_state().codegen.copied_at, Some(4242));
+    assert_eq!(
+        host.editor_state().chat.pending_copy_text.as_deref(),
+        Some("export const App = () => null;"),
+    );
+}
+
+#[test]
+fn codegen_cancel_resets_phase_by_code_presence() {
+    use op_editor_core::codegen::CodegenPhase;
+    use op_editor_ui::widgets::property_panel_action::CodegenAction;
+    use op_editor_ui::widgets::PropertyPanelAction;
+    let mut host = WidgetHostNative::new();
+    // No code yet → Cancel falls back to Idle.
+    host.apply_property_action(PropertyPanelAction::Codegen(CodegenAction::Generate));
+    host.apply_property_action(PropertyPanelAction::Codegen(CodegenAction::Cancel));
+    assert!(!host.editor_state().codegen.pending_generate);
+    assert_eq!(host.editor_state().codegen.phase, CodegenPhase::Idle);
+
+    // With code present → Cancel returns to Complete.
+    host.editor_state_mut().codegen.code = "rendered".to_string();
+    host.apply_property_action(PropertyPanelAction::Codegen(CodegenAction::Generate));
+    host.apply_property_action(PropertyPanelAction::Codegen(CodegenAction::Cancel));
+    assert_eq!(host.editor_state().codegen.phase, CodegenPhase::Complete);
+}

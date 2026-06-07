@@ -279,9 +279,50 @@ impl WidgetHostNative {
                 self.editor_state.editor_ui.pending_file_action =
                     Some(op_editor_core::editor_ui_state::FileAction::PickFillImage);
             }
-            // Code panel actions — codegen session wiring is P3; the
-            // host will dispatch these once the session module lands.
-            A::Codegen(_) => {}
+            // Code panel actions. SelectFramework / Cancel / Copy fully
+            // work; Generate / Regenerate raise pending flags + flip the
+            // phase (the host codegen session that drains them is P3);
+            // Download / ExportBundle stay host-file-IO stubs (P3/P4).
+            A::Codegen(codegen_action) => {
+                use op_editor_core::codegen::CodegenPhase;
+                use op_editor_ui::widgets::property_panel_action::CodegenAction;
+                let cg = &mut self.editor_state.codegen;
+                match codegen_action {
+                    CodegenAction::SelectFramework(fw) => {
+                        cg.framework = fw;
+                    }
+                    CodegenAction::Generate => {
+                        cg.pending_generate = true;
+                        cg.phase = CodegenPhase::Generating;
+                        cg.error = None;
+                    }
+                    CodegenAction::Regenerate => {
+                        cg.pending_regenerate = true;
+                        cg.phase = CodegenPhase::Generating;
+                        cg.error = None;
+                    }
+                    CodegenAction::Cancel => {
+                        cg.pending_generate = false;
+                        cg.pending_regenerate = false;
+                        cg.phase = if cg.code.is_empty() {
+                            CodegenPhase::Idle
+                        } else {
+                            CodegenPhase::Complete
+                        };
+                    }
+                    CodegenAction::Copy => {
+                        cg.copied_at = Some(self.now_ms);
+                        // Push the generated code onto the system
+                        // clipboard via the same queue the MCP-config
+                        // copy uses; the desktop runner drains
+                        // `chat.pending_copy_text` into the OS clipboard.
+                        let code = cg.code.clone();
+                        self.editor_state.chat.queue_copy_text(code);
+                    }
+                    CodegenAction::Download => { /* P3: host file save (rfd dialog + fs/zip) */ }
+                    CodegenAction::ExportBundle => { /* P3/P4: write AI structure bundle zip */ }
+                }
+            }
         }
         self.mark_dirty();
     }
