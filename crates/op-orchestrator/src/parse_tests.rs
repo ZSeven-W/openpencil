@@ -221,6 +221,53 @@ fn normalize_resolves_numeric_token_and_wraps_bare_fill() {
 }
 
 #[test]
+fn parse_nodes_renest_keeps_parent_with_stroke_shorthand() {
+    // DeepSeek/Ark often emit a card parent with `stroke:{type:"solid",color}`
+    // plus child nodes linked by `_parent`. The parent must be normalized
+    // instead of dropped; otherwise its valid children get promoted to root and
+    // render outside the card row.
+    let text = r##"[
+          { "type": "frame", "id": "section", "name": "KPI Cards Section", "width": "fill_container", "height": "fit_content", "layout": "vertical", "_parent": null },
+          { "type": "frame", "id": "row", "name": "Card Row", "width": "fill_container", "height": "fit_content", "layout": "horizontal", "gap": 20, "_parent": "section" },
+          { "type": "frame", "id": "card", "name": "Revenue Card", "width": "fill_container", "height": "fit_content", "layout": "vertical", "padding": [16, 16], "fill": "#FFFFFF", "stroke": { "type": "solid", "color": "#E2E8F0" }, "strokeWidth": 1, "_parent": "row" },
+          { "type": "frame", "id": "top", "name": "Top Row", "width": "fill_container", "height": "fit_content", "layout": "horizontal", "_parent": "card" },
+          { "type": "text", "id": "value", "name": "Metric Value", "content": "$45,231", "fontSize": 28, "_parent": "card" }
+        ]"##;
+
+    let nodes = parse_nodes(text).expect("stroke shorthand parent should be normalized");
+
+    assert_eq!(nodes.len(), 1);
+    let section = &nodes[0];
+    let row = &section.children().expect("section children")[0];
+    let card = &row.children().expect("row children")[0];
+    assert_eq!(card.id_str(), "card");
+    assert_eq!(card.children().expect("card children").len(), 2);
+    assert_eq!(crate::cleanup::count_descendants(section), 4);
+}
+
+#[test]
+fn parse_nodes_renest_normalizes_css_justify_content() {
+    // Models often use CSS spelling for justifyContent. Rust's canonical
+    // schema stores snake_case; without normalization the chart row parent is
+    // dropped and its bars become root siblings.
+    let text = r##"[
+          { "type": "frame", "id": "chart", "name": "Chart", "width": "fill_container", "height": "fit_content", "layout": "vertical", "_parent": null },
+          { "type": "frame", "id": "bars", "name": "Chart Bars", "width": "fill_container", "height": 160, "layout": "horizontal", "justifyContent": "space-between", "alignItems": "flex-end", "_parent": "chart" },
+          { "type": "frame", "id": "mon", "name": "Mon Column", "width": "fill_container", "height": "fit_content", "layout": "vertical", "_parent": "bars" },
+          { "type": "frame", "id": "tue", "name": "Tue Column", "width": "fill_container", "height": "fit_content", "layout": "vertical", "_parent": "bars" }
+        ]"##;
+
+    let nodes = parse_nodes(text).expect("CSS justifyContent should be normalized");
+
+    assert_eq!(nodes.len(), 1);
+    let chart = &nodes[0];
+    let bars = &chart.children().expect("chart children")[0];
+    assert_eq!(bars.id_str(), "bars");
+    assert_eq!(bars.children().expect("bars children").len(), 2);
+    assert_eq!(crate::cleanup::count_descendants(chart), 3);
+}
+
+#[test]
 fn parse_nodes_renests_flat_parent_array() {
     // 扁平 `_parent` 数组(M2.7 形态):root + 一个横向 row + row 的 3 个
     // 子项,全是兄弟、靠 `_parent` 指父。移植 TS parseJsonlToTree 后应重组

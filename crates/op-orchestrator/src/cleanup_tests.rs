@@ -143,6 +143,53 @@ fn cleanup_does_not_shrink_fixed_mobile_root_to_partial_child_sum() {
 }
 
 #[test]
+fn cleanup_expands_zero_height_desktop_root_from_fit_content_children() {
+    let mut sink = VecDocSink::new();
+    let tree: PenNode = serde_json::from_value(json!({
+        "type": "frame",
+        "id": "root",
+        "name": "Dashboard",
+        "width": 1200,
+        "height": 0,
+        "layout": "vertical",
+        "fill": [{ "type": "solid", "color": "#FFFFFF" }],
+        "children": [
+            {
+                "type": "frame",
+                "id": "section",
+                "name": "Fit Content Section",
+                "width": "fill_container",
+                "height": "fit_content",
+                "layout": "vertical",
+                "gap": 12,
+                "children": [
+                    {"type": "frame", "id": "header", "width": "fill_container", "height": 64},
+                    {"type": "frame", "id": "chart", "width": "fill_container", "height": 240}
+                ]
+            }
+        ]
+    }))
+    .expect("desktop root json");
+    sink.state.apply(EditorCommand::InsertSubtree {
+        nodes: vec![tree],
+        parent_id: NodeId::NONE,
+        page_id: None,
+    });
+    let root_id = sink.state.active_children()[0].id_str().to_string();
+    sink.applied.clear();
+
+    run_cleanup_passes(&mut sink, &plan(), &[&root_id]);
+
+    let root = sink
+        .state
+        .active_children()
+        .iter()
+        .find(|n| n.id_str() == root_id)
+        .expect("root survives cleanup");
+    assert_eq!(root.height_px(), Some(316.0));
+}
+
+#[test]
 fn cleanup_recolors_safe_dark_bottom_nav_on_light_mobile_root() {
     let mut sink = VecDocSink::new();
     let tree: PenNode = serde_json::from_value(json!({
