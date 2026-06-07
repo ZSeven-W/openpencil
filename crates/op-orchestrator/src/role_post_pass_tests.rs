@@ -269,6 +269,46 @@ fn trailing_icon_pushes_text_to_fill() {
 }
 
 #[test]
+fn horizontal_overflow_reduces_gap_before_expanding_parent() {
+    let mut row = json!({
+        "type":"frame","layout":"horizontal","width":300,"padding":[16,16,16,16],"gap":24,
+        "children":[
+            {"type":"frame","width":130,"height":44},
+            {"type":"frame","width":130,"height":44}
+        ]
+    });
+    fix_horizontal_overflow(&mut row, 375.0);
+    assert_eq!(row["gap"], json!(8.0));
+    assert_eq!(row["width"], json!(300));
+}
+
+#[test]
+fn horizontal_overflow_uses_fill_when_needed_width_nears_canvas() {
+    let mut row = json!({
+        "type":"frame","layout":"horizontal","width":220,"padding":[16,16,16,16],"gap":16,
+        "children":[
+            {"type":"frame","width":180,"height":44},
+            {"type":"frame","width":180,"height":44}
+        ]
+    });
+    fix_horizontal_overflow(&mut row, 375.0);
+    assert_eq!(row["width"], json!("fill_container"));
+}
+
+#[test]
+fn text_heights_removed_unless_fixed_width_height() {
+    let mut root = json!({
+        "type":"frame","layout":"vertical","children":[
+            {"type":"text","content":"Long address text","height":18,"textGrowth":"fixed-width"},
+            {"type":"text","content":"Pinned","height":18,"textGrowth":"fixed-width-height"}
+        ]
+    });
+    fix_text_heights(&mut root);
+    assert!(root["children"][0].get("height").is_none());
+    assert_eq!(root["children"][1]["height"], json!(18));
+}
+
+#[test]
 fn clip_content_set_for_rounded_image_frame() {
     let mut card = json!({
         "type":"frame","cornerRadius":12,"children":[{"type":"image","id":"img"}]
@@ -293,7 +333,7 @@ fn post_pass_forest_round_trips_and_fills_orphan_card() {
         ]
     }))
     .unwrap()];
-    post_pass_forest(&mut nodes);
+    post_pass_forest(&mut nodes, 375.0);
     let v = serde_json::to_value(&nodes[0]).unwrap();
     assert_eq!(
         v["children"][0]["fill"],
