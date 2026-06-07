@@ -347,6 +347,17 @@ impl PropertyPanel {
             // Multi-select inputs / toggles are inert in v1.
             return None;
         }
+        if matches!(self.tab, op_editor_core::PropertyTab::Code) {
+            // Same content origin the Code paint uses: panel left, the
+            // pinned tab-strip bottom (`+ TAB_HEIGHT`), panel width.
+            let cy0 = panel_rect.origin.y + crate::widgets::property_panel_inputs::TAB_HEIGHT;
+            let rects =
+                code_action_rects(panel_rect.origin.x, cy0, panel_rect.size.x, &self.codegen);
+            return rects
+                .into_iter()
+                .find(|(_, r)| rect_contains(*r, point))
+                .map(|(a, _)| PropertyPanelAction::Codegen(a));
+        }
         if self.image_fill_popover_open {
             if let Some(action) = sections::image_fill_popover_action_at(
                 self.scrolled_rect(panel_rect),
@@ -473,7 +484,7 @@ fn rect_contains(r: Rect, p: Point2D) -> bool {
         && p.y <= r.origin.y + r.size.y
 }
 
-use crate::widgets::property_panel_code::paint_code_panel;
+use crate::widgets::property_panel_code::{code_action_rects, paint_code_panel};
 
 impl Widget for PropertyPanel {
     fn id(&self) -> WidgetId {
