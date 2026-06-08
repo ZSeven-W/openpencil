@@ -32,6 +32,7 @@ use skia_safe::{Canvas, EncodedImageFormat, Paint, PaintStyle, Path, PathBuilder
 use std::path::Path as StdPath;
 
 mod export_svg;
+mod svg_path;
 
 pub use export_svg::export_svg;
 
@@ -357,6 +358,24 @@ fn own_paint_corners(n: &SceneNode) -> Option<Vec<glam::Vec2>> {
             )
         }
         NodeKind::Path => {
+            if n.svg_path.is_some() && (n.fill.is_some() || n.stroke.is_some()) {
+                let nr = normalize_rect(n.bounds);
+                return Some(vec![
+                    glam::Vec2::new(nr.origin.x - stroke_pad, nr.origin.y - stroke_pad),
+                    glam::Vec2::new(
+                        nr.origin.x + nr.size.x + stroke_pad,
+                        nr.origin.y - stroke_pad,
+                    ),
+                    glam::Vec2::new(
+                        nr.origin.x + nr.size.x + stroke_pad,
+                        nr.origin.y + nr.size.y + stroke_pad,
+                    ),
+                    glam::Vec2::new(
+                        nr.origin.x - stroke_pad,
+                        nr.origin.y + nr.size.y + stroke_pad,
+                    ),
+                ]);
+            }
             if n.points.is_empty() {
                 return None;
             }
@@ -450,7 +469,11 @@ pub(crate) fn paint_node(canvas: &Canvas, node: &SceneNode) {
             );
         }
         NodeKind::Path => {
-            paint_polyline(canvas, node);
+            if node.svg_path.is_some() {
+                svg_path::paint(canvas, node);
+            } else {
+                paint_polyline(canvas, node);
+            }
         }
         NodeKind::Text => paint_text(canvas, world_rect, node),
         // Group has no own paint — children handle render.
