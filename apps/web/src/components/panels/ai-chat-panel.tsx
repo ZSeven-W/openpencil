@@ -391,7 +391,7 @@ export default function AIChatPanel() {
     <div
       ref={panelRef}
       className={cn(
-        'absolute z-50 flex flex-col overflow-hidden rounded-xl border border-border bg-card/95 shadow-lg backdrop-blur-sm',
+        'absolute z-50 flex flex-col overflow-hidden rounded-xl border border-border bg-card/95 shadow-md backdrop-blur-sm',
         isMaximized ? 'inset-3' : !dragStyle && CORNER_CLASSES[panelCorner],
       )}
       style={isMaximized ? undefined : { ...dragStyle, width: panelWidth, height: panelHeight }}
