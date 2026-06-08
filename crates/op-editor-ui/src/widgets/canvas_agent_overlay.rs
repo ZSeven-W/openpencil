@@ -74,10 +74,15 @@ fn paint_agent_badge(cx: &mut PaintCx<'_>, frame: Rect, color: Color, name: &str
     };
     cx.backend
         .fill_round_rect(badge, BADGE_H / 2.0, Color { a: 0.92, ..color });
-    // Contrast-aware foreground — dark glyphs on light agent colours
-    // (yellow / mint), white on dark ones — so the name stays legible.
-    let luminance = 0.299 * color.r + 0.587 * color.g + 0.114 * color.b;
-    let fg = if luminance > 0.6 { 0.12_f32 } else { 1.0_f32 };
+    // Contrast-aware foreground via WCAG relative luminance — dark glyphs
+    // on light agent colours (coral / yellow / mint / teal / orange),
+    // white only on the genuinely dark one (purple), so the name reads on
+    // every palette entry. 0.179 is the standard black-vs-white crossover.
+    let fg = if relative_luminance(color) > 0.179 {
+        0.12_f32
+    } else {
+        1.0_f32
+    };
     let fg_u8 = (fg * 255.0) as u8;
     // Pulsing status dot in the foreground colour.
     cx.backend.fill_round_rect(
@@ -104,6 +109,19 @@ fn paint_agent_badge(cx: &mut PaintCx<'_>, frame: Rect, color: Color, name: &str
         &label,
         Point2D::new(badge.origin.x + PAD + DOT + 5.0, badge.origin.y + 13.0),
     );
+}
+
+/// WCAG relative luminance of an opaque colour (gamma-corrected). Used
+/// to pick a readable badge foreground.
+fn relative_luminance(c: Color) -> f32 {
+    fn lin(v: f32) -> f32 {
+        if v <= 0.03928 {
+            v / 12.92
+        } else {
+            ((v + 0.055) / 1.055).powf(2.4)
+        }
+    }
+    0.2126 * lin(c.r) + 0.7152 * lin(c.g) + 0.0722 * lin(c.b)
 }
 
 /// Parse a `#RRGGBB` hex string into an opaque [`Color`]. Returns `None`
@@ -135,5 +153,17 @@ mod tests {
     fn rejects_short_or_non_ascii_hex() {
         assert!(parse_hex("#FFF").is_none());
         assert!(parse_hex("#非ascii").is_none());
+    }
+
+    #[test]
+    fn badge_foreground_is_legible_on_every_palette_color() {
+        // `true` = the badge would use dark glyphs (light background).
+        let dark = |hex: &str| relative_luminance(parse_hex(hex).unwrap()) > 0.179;
+        assert!(dark("#FF6B6B"), "coral");
+        assert!(dark("#4ECDC4"), "teal");
+        assert!(dark("#FFD93D"), "yellow");
+        assert!(dark("#A8E6CF"), "mint");
+        assert!(dark("#FF8A5C"), "orange");
+        assert!(!dark("#6C5CE7"), "purple is dark enough for white text");
     }
 }
