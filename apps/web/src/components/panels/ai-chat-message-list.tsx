@@ -57,7 +57,7 @@ export function AIChatMessageList({
 
   return (
     <>
-      <div className="min-h-0 flex-1 overflow-y-auto rounded-b-xl bg-background/80 px-3.5 py-3">
+      <div className="min-h-0 flex-1 overflow-y-auto rounded-b-xl bg-background/80 px-3.5 pt-4 pb-3">
         {messages.length === 0 ? (
           <AIChatQuickActions onSend={onSend} disabled={quickActionsDisabled} />
         ) : (
