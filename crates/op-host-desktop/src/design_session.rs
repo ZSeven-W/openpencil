@@ -176,6 +176,10 @@ impl DesignSession {
                 }
             }
         }
+        if self.finished {
+            // Drop any agent-team canvas indicators once the turn ends.
+            op_editor_core::agent_indicators::clear();
+        }
         DesignPoll {
             progress,
             summary,

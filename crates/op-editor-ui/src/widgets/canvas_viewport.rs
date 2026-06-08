@@ -425,6 +425,14 @@ impl<'a> Widget for CanvasViewport<'a> {
                     cull,
                 );
             }
+            // Per-agent breathing borders while a concurrent generation runs.
+            super::canvas_agent_overlay::paint_agent_frame_indicators(
+                cx,
+                &page.children,
+                viewport_origin,
+                viewport.zoom,
+                self.now_ms,
+            );
         }
 
         // 3a. Smart-guide alignment lines (magenta) — painted over the
