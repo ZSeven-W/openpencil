@@ -81,22 +81,24 @@ fn wrapped_lines(
 }
 
 /// Paint the floating chat panel shell. TS uses
-/// `rounded-xl border bg-card/95 shadow-2xl backdrop-blur-sm`;
-/// Skia here has no blur primitive, so we layer translucent rounded
-/// rects behind the card to give the panel a comparable lift.
+/// `rounded-xl border bg-card/95 shadow-lg backdrop-blur-sm`;
+/// Skia here has no blur primitive, so we layer two translucent
+/// rounded rects behind the card to give the panel a comparable lift.
+/// Offsets are kept small and alphas low so the pair reads as one
+/// soft drop shadow rather than a heavy stacked band under the panel.
 pub(crate) fn paint_panel_surface(cx: &mut PaintCx<'_>, theme: &Theme, rect: Rect) {
     let shadow_outer = Rect {
-        origin: Point2D::new(rect.origin.x, rect.origin.y + 18.0),
+        origin: Point2D::new(rect.origin.x, rect.origin.y + 10.0),
         size: rect.size,
     };
     let shadow_inner = Rect {
-        origin: Point2D::new(rect.origin.x, rect.origin.y + 8.0),
+        origin: Point2D::new(rect.origin.x, rect.origin.y + 4.0),
         size: rect.size,
     };
     cx.backend
-        .fill_round_rect(shadow_outer, 14.0, with_alpha(Color::BLACK, 0.14));
+        .fill_round_rect(shadow_outer, 14.0, with_alpha(Color::BLACK, 0.09));
     cx.backend
-        .fill_round_rect(shadow_inner, 14.0, with_alpha(Color::BLACK, 0.2));
+        .fill_round_rect(shadow_inner, 14.0, with_alpha(Color::BLACK, 0.11));
     cx.backend
         .fill_round_rect(rect, 14.0, with_alpha(theme.card, 0.95));
     cx.backend.stroke_round_rect(rect, 14.0, theme.border, 1.0);

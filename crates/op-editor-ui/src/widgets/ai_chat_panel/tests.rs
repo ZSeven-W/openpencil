@@ -3,6 +3,7 @@
 //! 800-line cap.
 
 use super::*;
+use crate::widgets::ai_chat_hit::{AIChatHit, ChatResizeEdge};
 
 #[test]
 fn layout_reports_fixed_size() {
