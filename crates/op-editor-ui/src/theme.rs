@@ -96,7 +96,8 @@ impl Theme {
             button_hover: rgba(0xff, 0xff, 0xff, 0.06),
             row_selected: rgb(0x26, 0x26, 0x26),
             row_selected_primary: rgba(0x3b, 0x82, 0xf6, 0.18),
-            canvas_surface: rgb(0x18, 0x18, 0x18),
+            // Matches TS CANVAS_BACKGROUND_DARK (#1a1a1a).
+            canvas_surface: rgb(0x1a, 0x1a, 0x1a),
         }
     }
 
@@ -122,7 +123,9 @@ impl Theme {
             button_hover: rgba(0x00, 0x00, 0x00, 0.06),
             row_selected: rgb(0xe5, 0xe5, 0xe5),
             row_selected_primary: rgba(0x3b, 0x82, 0xf6, 0.15),
-            canvas_surface: rgb(0xfa, 0xfa, 0xfa),
+            // Matches TS CANVAS_BACKGROUND_LIGHT (#e5e5e5) — a clear grey so the
+            // white frame/page reads against the canvas instead of vanishing.
+            canvas_surface: rgb(0xe5, 0xe5, 0xe5),
         }
     }
 }
