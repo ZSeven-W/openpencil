@@ -4,7 +4,8 @@
 
 use super::test_support::{filled_rect, scene_with};
 use super::*;
-use op_editor_ui::layout_scene::{NodeKind, SceneNode};
+use op_editor_ui::layout_scene::{NodeKind, SceneNode, SceneStroke};
+use op_editor_ui::Rect;
 
 #[test]
 fn raster_format_extension_lookup() {
@@ -294,6 +295,41 @@ fn export_node_raster_paints_icon_font_glyphs() {
 }
 
 #[test]
+fn export_node_raster_paints_svg_path_d_stroke() {
+    let mut path = SceneNode::leaf("activity-line", NodeKind::Path);
+    path.bounds = Rect::xywh(0.0, 0.0, 120.0, 60.0);
+    path.svg_path = Some("M 0,50 L 40,20 L 80,35 L 120,5".into());
+    path.stroke = Some(SceneStroke {
+        color: Color {
+            r: 0.0,
+            g: 0.2,
+            b: 1.0,
+            a: 1.0,
+        },
+        width: 3.0,
+    });
+
+    let scene = scene_with(vec![path]);
+    let tmp = std::env::temp_dir().join(format!(
+        "op-export-svg-path-stroke-{}.png",
+        std::process::id()
+    ));
+    let res = export_node_raster(&scene, "activity-line", &tmp, RasterFormat::Png, 1.0);
+    assert!(
+        res.is_ok(),
+        "export_node_raster svg path stroke failed: {res:?}"
+    );
+
+    let bytes = std::fs::read(&tmp).unwrap();
+    let painted = visible_pixel_count(&bytes);
+    assert!(
+        painted > 20,
+        "expected svg path stroke export to contain painted pixels, got {painted}"
+    );
+    let _ = std::fs::remove_file(&tmp);
+}
+
+#[test]
 fn export_node_raster_errors_on_unknown_id() {
     let scene = scene_with(vec![filled_rect(
         "n10",
@@ -312,4 +348,28 @@ fn export_node_raster_errors_on_unknown_id() {
     let res = export_node_raster(&scene, "ghost", &tmp, RasterFormat::Png, 1.0);
     assert!(res.is_err(), "expected Err on unknown id, got {res:?}");
     assert!(res.unwrap_err().contains("not found"));
+}
+
+fn visible_pixel_count(bytes: &[u8]) -> usize {
+    let image = skia_safe::Image::from_encoded(skia_safe::Data::new_copy(bytes))
+        .expect("decode exported PNG");
+    let width = image.width();
+    let height = image.height();
+    let info = skia_safe::ImageInfo::new(
+        (width, height),
+        skia_safe::ColorType::RGBA8888,
+        skia_safe::AlphaType::Unpremul,
+        None,
+    );
+    let stride = width as usize * 4;
+    let mut pixels = vec![0u8; stride * height as usize];
+    let ok = image.read_pixels(
+        &info,
+        pixels.as_mut_slice(),
+        stride,
+        (0, 0),
+        skia_safe::image::CachingHint::Allow,
+    );
+    assert!(ok, "read exported PNG pixels");
+    pixels.chunks_exact(4).filter(|rgba| rgba[3] > 0).count()
 }
