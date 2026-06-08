@@ -42,8 +42,12 @@ pub(super) const DIVIDER_GAP: f32 = 4.0;
 /// has none, so the button is compiled out there — otherwise it would
 /// toggle an invisible panel (Codex stop-time review).
 pub(super) const GIT_BUTTON_AVAILABLE: bool = !cfg!(target_arch = "wasm32");
-/// Gap between the stacked per-agent brand icons in the chip.
-pub(super) const AGENT_ICON_GAP: f32 = 4.0;
+/// Stacked agent-icon metrics — mirror TS `top-bar.tsx`
+/// (`w-5 h-5 rounded-md bg-foreground/10 ring-1 ring-card` chips
+/// overlapped by `-space-x-1.5`).
+pub(super) const AGENT_ICON_CHIP: f32 = 20.0;
+pub(super) const AGENT_ICON_LOGO: f32 = 12.0;
+pub(super) const AGENT_ICON_OVERLAP: f32 = 6.0;
 /// Diameter of a macOS-style window-control dot.
 pub(super) const TRAFFIC_DOT: f32 = 12.0;
 /// Centre-to-centre spacing of the 3 window-control dots.
@@ -223,15 +227,15 @@ impl TopBar {
     }
 
     /// Width of the chip's leading-icon cluster: the single
-    /// `LayoutGrid` glyph in the empty state, or one brand icon per
-    /// connected provider (with `AGENT_ICON_GAP` between them) in the
+    /// `LayoutGrid` glyph in the empty state, or one brand chip per
+    /// connected provider (overlapped by `AGENT_ICON_OVERLAP`) in the
     /// active state. Paint + hit-test both size the chip off this.
     pub(super) fn agent_icons_width(&self) -> f32 {
         if self.agent_count == 0 {
             ICON_SIZE
         } else {
             let n = self.agent_count.max(1) as f32;
-            n * ICON_SIZE + (n - 1.0) * AGENT_ICON_GAP
+            AGENT_ICON_CHIP + (n - 1.0) * (AGENT_ICON_CHIP - AGENT_ICON_OVERLAP)
         }
     }
 
