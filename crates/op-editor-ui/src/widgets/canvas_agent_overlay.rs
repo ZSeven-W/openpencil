@@ -72,8 +72,10 @@ fn paint_agent_badge(cx: &mut PaintCx<'_>, frame: Rect, color: Color, name: &str
         origin: Point2D::new(frame.origin.x, frame.origin.y - BADGE_H - 4.0),
         size: Point2D::new(PAD + DOT + 5.0 + name_w + PAD, BADGE_H),
     };
-    cx.backend
-        .fill_round_rect(badge, BADGE_H / 2.0, Color { a: 0.92, ..color });
+    // Opaque fill: a translucent badge would composite over the (theme-
+    // dependent) canvas, shifting the real background luminance away from
+    // the value the foreground-contrast pick below is computed against.
+    cx.backend.fill_round_rect(badge, BADGE_H / 2.0, color);
     // Contrast-aware foreground via WCAG relative luminance — dark glyphs
     // on light agent colours (coral / yellow / mint / teal / orange),
     // white only on the genuinely dark one (purple), so the name reads on
