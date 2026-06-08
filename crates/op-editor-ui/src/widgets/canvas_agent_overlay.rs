@@ -6,7 +6,7 @@
 
 use crate::layout_scene::SceneNode;
 use crate::widgets::PaintCx;
-use crate::{Color, Point2D, Rect};
+use crate::{Color, Point2D, Rect, TextLayout};
 
 /// One full breathe (0 → 1 → 0) per this many ms.
 const GLOW_PERIOD_MS: u64 = 1200;
@@ -55,7 +55,50 @@ pub(crate) fn paint_agent_frame_indicators(
         );
         cx.backend
             .stroke_round_rect(screen, 8.0, Color { a: breath, ..color }, 1.5);
+        paint_agent_badge(cx, screen, color, &tag.name, breath);
     }
+}
+
+/// A small pill above the frame's top-left: agent colour background, a
+/// pulsing white status dot, and the agent's name — so the user can tell
+/// which agent owns which frame.
+fn paint_agent_badge(cx: &mut PaintCx<'_>, frame: Rect, color: Color, name: &str, breath: f32) {
+    const BADGE_H: f32 = 18.0;
+    const PAD: f32 = 7.0;
+    const DOT: f32 = 6.0;
+    let font = 11.0;
+    let name_w = cx.backend.measure_text(name, font);
+    let badge = Rect {
+        origin: Point2D::new(frame.origin.x, frame.origin.y - BADGE_H - 4.0),
+        size: Point2D::new(PAD + DOT + 5.0 + name_w + PAD, BADGE_H),
+    };
+    cx.backend
+        .fill_round_rect(badge, BADGE_H / 2.0, Color { a: 0.92, ..color });
+    // Pulsing white status dot.
+    cx.backend.fill_round_rect(
+        Rect {
+            origin: Point2D::new(badge.origin.x + PAD, badge.origin.y + (BADGE_H - DOT) / 2.0),
+            size: Point2D::new(DOT, DOT),
+        },
+        DOT / 2.0,
+        Color {
+            r: 1.0,
+            g: 1.0,
+            b: 1.0,
+            a: 0.55 + breath * 0.45,
+        },
+    );
+    let label = TextLayout::single_run(
+        name,
+        "system-ui",
+        font,
+        jian_core::scene::Color::rgba(255, 255, 255, 255),
+        Point2D::new(0.0, 0.0),
+    );
+    cx.backend.draw_text(
+        &label,
+        Point2D::new(badge.origin.x + PAD + DOT + 5.0, badge.origin.y + 13.0),
+    );
 }
 
 /// Parse a `#RRGGBB` hex string into an opaque [`Color`]. Returns `None`
