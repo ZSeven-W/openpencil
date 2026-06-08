@@ -7,6 +7,7 @@
 //! editor-only state (selection, tool, viewport, history, transient
 //! UI drafts).
 
+pub mod agent_indicators;
 pub mod agent_settings;
 pub mod agent_settings_builtin_presets;
 pub mod align;
