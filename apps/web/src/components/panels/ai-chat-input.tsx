@@ -142,7 +142,7 @@ export function AIChatInput({ input, setInput, onSend }: AIChatInputProps) {
         placeholder={isStreaming ? t('ai.generating') : t('ai.designWithAgent')}
         disabled={isStreaming}
         rows={2}
-        className="w-full bg-transparent text-sm text-foreground placeholder-muted-foreground px-3.5 pt-3 pb-2 resize-none outline-none max-h-28 min-h-[52px]"
+        className="w-full bg-transparent text-sm text-foreground placeholder-muted-foreground px-3.5 pt-4 pb-2 resize-none outline-none max-h-28 min-h-[52px]"
       />
 
       {/* --- Bottom bar: model selector + concurrency + selected + attach + send --- */}
