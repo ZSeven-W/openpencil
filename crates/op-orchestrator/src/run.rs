@@ -484,13 +484,27 @@ async fn run_concurrent_path(
 
     // Tag each group's root frame with a distinct agent identity so the
     // canvas can paint a per-agent breathing border while the team works.
-    // Cleared at the start of every concurrent run (host clears it again
-    // once generation finishes).
     let identities = crate::agent_identity::assign_agent_identities(actual_root_ids.len());
-    op_editor_core::agent_indicators::clear();
+    // `begin` bumps the run epoch and clears any prior indicators. The
+    // guard below clears on every exit path (finish / error / cancelled
+    // worker), but only while this run is still the active epoch — a newer
+    // run that started in the meantime keeps its own indicators.
+    let epoch = op_editor_core::agent_indicators::begin();
     for (root_id, identity) in actual_root_ids.iter().zip(identities.iter()) {
-        op_editor_core::agent_indicators::add_frame(root_id, &identity.color, &identity.name);
+        op_editor_core::agent_indicators::add_frame(
+            epoch,
+            root_id,
+            &identity.color,
+            &identity.name,
+        );
     }
+    struct IndicatorGuard(u64);
+    impl Drop for IndicatorGuard {
+        fn drop(&mut self) {
+            op_editor_core::agent_indicators::clear_if_epoch(self.0);
+        }
+    }
+    let _indicator_guard = IndicatorGuard(epoch);
 
     on_progress(Progress::ScaffoldDone);
 

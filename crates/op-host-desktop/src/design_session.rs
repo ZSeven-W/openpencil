@@ -65,15 +65,6 @@ pub struct DesignSession {
     finished: bool,
 }
 
-impl Drop for DesignSession {
-    fn drop(&mut self) {
-        // Whatever ended the turn — normal finish, Stop, or New Chat —
-        // drop the agent-team canvas indicators so they can't keep a
-        // stale breathing border (and its 30fps redraw) alive.
-        op_editor_core::agent_indicators::clear();
-    }
-}
-
 /// Progress / completion events emitted by the worker.
 pub enum DesignDelta {
     /// One `op_orchestrator::Progress` event.
@@ -184,10 +175,6 @@ impl DesignSession {
                     break;
                 }
             }
-        }
-        if self.finished {
-            // Drop any agent-team canvas indicators once the turn ends.
-            op_editor_core::agent_indicators::clear();
         }
         DesignPoll {
             progress,
