@@ -81,24 +81,24 @@ fn wrapped_lines(
 }
 
 /// Paint the floating chat panel shell. TS uses
-/// `rounded-xl border bg-card/95 shadow-lg backdrop-blur-sm`;
-/// Skia here has no blur primitive, so we layer two translucent
-/// rounded rects behind the card to give the panel a comparable lift.
-/// Offsets are kept small and alphas low so the pair reads as one
-/// soft drop shadow rather than a heavy stacked band under the panel.
+/// `rounded-xl border bg-card/95 shadow-lg backdrop-blur-sm`; Skia here
+/// has no blur primitive, so we fake one with two translucent rounded
+/// rects behind the card. The near layer carries most of the (light)
+/// shadow right at the panel edge; the far layer is very faint so the
+/// shadow fades out instead of ending in a hard full-width grey band.
 pub(crate) fn paint_panel_surface(cx: &mut PaintCx<'_>, theme: &Theme, rect: Rect) {
-    let shadow_outer = Rect {
-        origin: Point2D::new(rect.origin.x, rect.origin.y + 10.0),
+    let shadow_far = Rect {
+        origin: Point2D::new(rect.origin.x, rect.origin.y + 8.0),
         size: rect.size,
     };
-    let shadow_inner = Rect {
-        origin: Point2D::new(rect.origin.x, rect.origin.y + 4.0),
+    let shadow_near = Rect {
+        origin: Point2D::new(rect.origin.x, rect.origin.y + 3.0),
         size: rect.size,
     };
     cx.backend
-        .fill_round_rect(shadow_outer, 14.0, with_alpha(Color::BLACK, 0.09));
+        .fill_round_rect(shadow_far, 14.0, with_alpha(Color::BLACK, 0.02));
     cx.backend
-        .fill_round_rect(shadow_inner, 14.0, with_alpha(Color::BLACK, 0.11));
+        .fill_round_rect(shadow_near, 14.0, with_alpha(Color::BLACK, 0.06));
     cx.backend
         .fill_round_rect(rect, 14.0, with_alpha(theme.card, 0.95));
     cx.backend.stroke_round_rect(rect, 14.0, theme.border, 1.0);
@@ -159,6 +159,15 @@ pub(crate) fn paint_examples(
         cx.backend.stroke_round_rect(*card, 8.0, card_border, 1.0);
         cx.backend.save();
         cx.backend.clip_rect(*card);
+        let title_lines = wrapped_lines(
+            cx,
+            &ex.title,
+            card.size.x - EXAMPLE_CARD_PAD * 2.0 - 20.0,
+            EXAMPLE_TITLE_FONT,
+            2,
+        );
+        // Vertically center the emoji against the (possibly two-line) title
+        // block so a wrapped title doesn't leave the icon stuck at the top.
         let emoji_layout = TextLayout::single_run(
             ex.emoji,
             "system-ui",
@@ -166,19 +175,14 @@ pub(crate) fn paint_examples(
             to_jian_color(title_color),
             Point2D::new(0.0, 0.0),
         );
+        let emoji_center_offset =
+            title_lines.len().saturating_sub(1) as f32 * EXAMPLE_SUBTITLE_LINE_H / 2.0;
         cx.backend.draw_text(
             &emoji_layout,
             Point2D::new(
                 card.origin.x + EXAMPLE_CARD_PAD,
-                card.origin.y + EXAMPLE_CARD_PAD + 10.0,
+                card.origin.y + EXAMPLE_CARD_PAD + 10.0 + emoji_center_offset,
             ),
-        );
-        let title_lines = wrapped_lines(
-            cx,
-            &ex.title,
-            card.size.x - EXAMPLE_CARD_PAD * 2.0 - 20.0,
-            EXAMPLE_TITLE_FONT,
-            2,
         );
         for (line_index, line) in title_lines.iter().enumerate() {
             let title_layout = TextLayout::single_run(
