@@ -480,6 +480,10 @@ pub struct GitPanelState {
     /// button. Drives its `hover:bg-accent` wash. Updated by the host on
     /// cursor-move.
     pub branch_button_hovered: bool,
+    /// Which plain Git action button (pull / push / overflow / commit /
+    /// milestone / refresh) the cursor is over — drives its
+    /// `theme.button_hover` wash. Updated by the host on cursor-move.
+    pub button_hover: Option<crate::git_button_state::GitButton>,
     /// Ready-state header: whether the `…` overflow popover is open
     /// (switch-tracked / clear-author / remote-settings › / SSH-keys › /
     /// close-repo). Mirrors the TS header's local `overflowOpen`.
@@ -718,6 +722,10 @@ pub struct EditorUiState {
     /// Raster export scale (1.0 / 2.0 / 3.0). Default 2.0.
     pub export_scale: f32,
     pub export_dialog_open: bool,
+    /// Which modal export-dialog button the cursor is over — drives the
+    /// per-button `theme.button_hover` wash. Updated by the host on
+    /// cursor-move while the dialog is open.
+    pub export_dialog_hover: Option<crate::export_dialog_state::ExportDialogButton>,
     pub export_format: ExportFormat,
     /// Property-panel Export section: the scale dropdown's inline
     /// select popup is open. Mutually exclusive with
@@ -750,6 +758,9 @@ pub struct EditorUiState {
     pub layer_layers_h_scroll: f32,
     /// "Import from Figma" modal.
     pub figma_import_open: bool,
+    /// Which Figma-import target the cursor is over (close / drop-zone)
+    /// — drives the `theme.button_hover` wash. Host updates on cursor-move.
+    pub figma_import_hover: Option<crate::figma_import_state::FigmaImportButton>,
     /// True while a `.fig` is being parsed on a worker thread. Paint
     /// uses this to show a "正在解析 Figma 文件…" overlay so the user
     /// gets feedback during the multi-second parse (a 2-3 MB .fig with
@@ -800,6 +811,9 @@ pub struct EditorUiState {
     pub icon_picker_panel_pos: Option<(f32, f32)>,
     /// Live text filter for the native Lucide icon picker.
     pub icon_picker_search: String,
+    /// Which icon-picker target the cursor is over (close / row /
+    /// load-more) — drives the `theme.button_hover` wash.
+    pub icon_picker_hover: Option<crate::icon_picker_button_state::IconPickerButton>,
     /// Remote Iconify search results appended by the desktop host.
     pub icon_picker_remote: crate::icon_picker_state::IconPickerRemoteState,
     /// Queued "load more" request drained asynchronously by desktop.
@@ -826,6 +840,9 @@ pub struct EditorUiState {
     /// Hovered chat design JSON card `(message_index, block_index)`;
     /// drives the TS-style hover reveal of the card's copy affordance.
     pub chat_design_block_hover: Option<(usize, usize)>,
+    /// Which bare chat header button (chevron / maximize / new-chat)
+    /// the cursor is over — drives their `theme.button_hover` wash.
+    pub chat_header_hover: Option<crate::chat_button_state::ChatHeaderButton>,
     /// Index into `AgentProvider::ALL` of the agent driving the chat.
     pub chat_selected_agent: usize,
 
@@ -833,6 +850,14 @@ pub struct EditorUiState {
     /// Cursor is over the TopBar's window-control (traffic-light)
     /// cluster — reveals the close / minimise / maximise glyphs.
     pub topbar_traffic_hover: bool,
+    /// Which TopBar chrome button the cursor is over — drives the
+    /// `theme.button_hover` wash on the sidebar / file-menu / figma /
+    /// theme / locale / fullscreen / git / agent-chip buttons.
+    pub topbar_button_hover: Option<crate::topbar_state::TopBarButton>,
+    /// Which floating status-bar control the cursor is over — drives
+    /// the `theme.button_hover` wash on the search / zoom-out / zoom-in
+    /// controls.
+    pub statusbar_hover: Option<crate::statusbar_state::StatusBarButton>,
     /// Window is in fullscreen. macOS hides the native traffic
     /// lights then, so the TopBar drops its left-edge reservation.
     pub window_fullscreen: bool,
@@ -884,6 +909,9 @@ pub struct EditorUiState {
     pub font_weight_picker_hover: Option<usize>,
     /// Active-theme axis whose value picker is open; `None` = closed.
     pub axis_dropdown_open: Option<String>,
+    /// Which variables-panel target the cursor is over (row / axis chip
+    /// / dropdown item) — drives the `theme.button_hover` wash.
+    pub variables_panel_hover: Option<crate::variables_panel_state::VariablesPanelButton>,
     /// Editor focus for a non-color variable row (Number / String).
     pub variable_row_focus: Option<VariableRowFocus>,
     /// Editor focus on an effect-parameter value (Effects section).
@@ -934,6 +962,9 @@ pub struct EditorUiState {
     // --- Design-MD panel --------------------------------------------
     /// Whether the floating Design-MD panel is shown.
     pub design_md_panel_open: bool,
+    /// Which design-md-panel button the cursor is over (close / import
+    /// / export / remove / section header) — drives the hover wash.
+    pub design_md_hover: Option<crate::design_md_button_state::DesignMdButton>,
     /// Top-left corner of the Design-MD panel in logical px. `None`
     /// until first opened — the host then centres it on the viewport.
     pub design_md_panel_pos: Option<(f32, f32)>,
@@ -956,6 +987,9 @@ pub struct EditorUiState {
     pub component_browser_search: String,
     /// Active category pill (`None` = all categories).
     pub component_browser_category: Option<crate::uikit::ComponentCategory>,
+    /// Which component-browser target the cursor is over (close /
+    /// category pill / card) — drives the `theme.button_hover` wash.
+    pub component_browser_hover: Option<crate::component_browser_state::ComponentBrowserButton>,
     /// Active kit filter (`None` = every loaded kit). Kept for the
     /// future imported-kits surface; v1 ships one built-in kit.
     pub component_browser_kit_id: Option<String>,
@@ -992,6 +1026,7 @@ impl Default for EditorUiState {
             file_name_display: None,
             export_scale: 2.0,
             export_dialog_open: false,
+            export_dialog_hover: None,
             export_format: ExportFormat::Png,
             export_scale_picker_open: false,
             export_format_picker_open: false,
@@ -1002,6 +1037,7 @@ impl Default for EditorUiState {
             layer_pages_h_scroll: 0.0,
             layer_layers_h_scroll: 0.0,
             figma_import_open: false,
+            figma_import_hover: None,
             figma_import_in_progress: false,
             file_drop_active: false,
             preserve_authored_geometry: false,
@@ -1020,6 +1056,7 @@ impl Default for EditorUiState {
             icon_picker_replace_selection: false,
             icon_picker_panel_pos: None,
             icon_picker_search: String::new(),
+            icon_picker_hover: None,
             icon_picker_remote: crate::icon_picker_state::IconPickerRemoteState::default(),
             icon_picker_load_more_request: None,
             chat_model_picker_open: false,
@@ -1029,8 +1066,11 @@ impl Default for EditorUiState {
             chat_model_picker_caret_anchor_ms: 0,
             chat_model_picker_hover: None,
             chat_design_block_hover: None,
+            chat_header_hover: None,
             chat_selected_agent: 0,
             topbar_traffic_hover: false,
+            topbar_button_hover: None,
+            statusbar_hover: None,
             window_fullscreen: false,
             pending_fullscreen_toggle: false,
             align_toolbar_hover: None,
@@ -1051,6 +1091,7 @@ impl Default for EditorUiState {
             font_weight_picker_open: false,
             font_weight_picker_hover: None,
             axis_dropdown_open: None,
+            variables_panel_hover: None,
             variable_row_focus: None,
             effect_param_focus: None,
             hovered_layer_id: None,
@@ -1064,6 +1105,7 @@ impl Default for EditorUiState {
             update_status: UpdateStatus::Idle,
             git_panel: GitPanelState::default(),
             design_md_panel_open: false,
+            design_md_hover: None,
             design_md_panel_pos: None,
             design_md_expanded: 0b0000_0111,
             design_md_request: None,
@@ -1071,6 +1113,7 @@ impl Default for EditorUiState {
             component_browser_pos: None,
             component_browser_search: String::new(),
             component_browser_category: None,
+            component_browser_hover: None,
             component_browser_kit_id: None,
             component_browser_pending_insert: None,
         }

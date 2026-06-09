@@ -74,6 +74,8 @@ pub struct DesignMdPanel<'a> {
     locale: Locale,
     /// Bitmask of expanded sections (bit 0 = theme … 5 = notes).
     expanded: u8,
+    /// Which target the cursor is over — drives the hover wash.
+    hover: Option<op_editor_core::DesignMdButton>,
 }
 
 /// One rendered line within a section body.
@@ -128,7 +130,22 @@ impl<'a> DesignMdPanel<'a> {
             theme: theme_for(&state.editor_ui),
             locale: state.editor_ui.locale,
             expanded: state.editor_ui.design_md_expanded,
+            hover: state.editor_ui.design_md_hover,
         })
+    }
+
+    /// Resolve a pointer to a hoverable button. Reuses [`Self::hit_test`]
+    /// and keeps only the button variants (drag-header / inside → None).
+    pub fn hover_at(&self, panel: Rect, point: Point2D) -> Option<op_editor_core::DesignMdButton> {
+        use op_editor_core::DesignMdButton as B;
+        match self.hit_test(panel, point)? {
+            DesignMdHit::Close => Some(B::Close),
+            DesignMdHit::Import => Some(B::Import),
+            DesignMdHit::Export => Some(B::Export),
+            DesignMdHit::Remove => Some(B::Remove),
+            DesignMdHit::ToggleSection(i) => Some(B::ToggleSection(i)),
+            DesignMdHit::DragHeader | DesignMdHit::Inside => None,
+        }
     }
 
     /// Translate `key` through the active locale tables.
@@ -349,9 +366,10 @@ impl<'a> DesignMdPanel<'a> {
             self.theme.foreground,
         );
         let [import, export, close] = Self::header_buttons(rect);
-        self.icon_button(cx, import, Icon::FolderOpen);
-        self.icon_button(cx, export, Icon::Download);
-        self.icon_button(cx, close, Icon::Close);
+        use op_editor_core::DesignMdButton as B;
+        self.icon_button(cx, import, Icon::FolderOpen, self.hover == Some(B::Import));
+        self.icon_button(cx, export, Icon::Download, self.hover == Some(B::Export));
+        self.icon_button(cx, close, Icon::Close, self.hover == Some(B::Close));
         cx.backend.fill_rect(
             Rect {
                 origin: Point2D::new(rect.origin.x, rect.origin.y + HEADER_H),
@@ -419,13 +437,22 @@ impl<'a> DesignMdPanel<'a> {
         }
         // Footer "remove" link.
         let remove = self.remove_rect(rect);
+        let remove_hovered = self.hover == Some(op_editor_core::DesignMdButton::Remove);
+        if remove_hovered {
+            cx.backend
+                .fill_round_rect(remove, 6.0, self.theme.button_hover);
+        }
         self.text(
             cx,
             self.t("designMd.remove"),
             remove.origin.x,
             remove.origin.y + 13.0,
             11.0,
-            self.theme.muted_foreground,
+            if remove_hovered {
+                self.theme.foreground
+            } else {
+                self.theme.muted_foreground
+            },
         );
     }
 
@@ -433,6 +460,10 @@ impl<'a> DesignMdPanel<'a> {
     fn paint_section_header(&self, cx: &mut PaintCx<'_>, sec: &SectionLayout) {
         cx.backend
             .fill_round_rect(sec.header, 7.0, self.theme.muted);
+        if self.hover == Some(op_editor_core::DesignMdButton::ToggleSection(sec.index)) {
+            cx.backend
+                .fill_round_rect(sec.header, 7.0, self.theme.button_hover);
+        }
         let chevron = if sec.expanded { "▾" } else { "▸" };
         let baseline = sec.header.origin.y + SECTION_HEADER_H / 2.0 + 4.0;
         self.text(
@@ -583,14 +614,22 @@ impl<'a> DesignMdPanel<'a> {
     }
 
     /// Paint one square header icon button.
-    fn icon_button(&self, cx: &mut PaintCx<'_>, rect: Rect, icon: Icon) {
+    fn icon_button(&self, cx: &mut PaintCx<'_>, rect: Rect, icon: Icon, hovered: bool) {
         cx.backend.fill_round_rect(rect, 6.0, self.theme.muted);
+        if hovered {
+            cx.backend
+                .fill_round_rect(rect, 6.0, self.theme.button_hover);
+        }
         draw_icon(
             cx.backend,
             icon,
             Point2D::new(rect.origin.x + 5.0, rect.origin.y + 5.0),
             BTN - 10.0,
-            self.theme.muted_foreground,
+            if hovered {
+                self.theme.foreground
+            } else {
+                self.theme.muted_foreground
+            },
             1.5,
         );
     }

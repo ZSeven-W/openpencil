@@ -98,6 +98,9 @@ pub struct AIChatPlaceholder<'a> {
     /// Last focus / edit timestamp for the model-picker search caret.
     pub model_picker_caret_anchor_ms: u64,
     pub design_hover: Option<(usize, usize)>,
+    /// Which bare header button the cursor is over (chevron / maximize
+    /// / new chat) — drives their `theme.button_hover` wash.
+    pub header_hover: Option<op_editor_core::ChatHeaderButton>,
     /// Localised empty-state example cards.
     pub(crate) examples: [ExampleCard; 4],
     /// Active UI locale.
@@ -131,6 +134,7 @@ impl<'a> AIChatPlaceholder<'a> {
             model_picker_caret: ui.chat_model_picker_caret,
             model_picker_caret_anchor_ms: ui.chat_model_picker_caret_anchor_ms,
             design_hover: ui.chat_design_block_hover,
+            header_hover: ui.chat_header_hover,
             examples: example_cards(ui.locale),
             locale: ui.locale,
         }
@@ -272,13 +276,22 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
         paint_panel_body_chrome(cx, &self.theme, rect, sep_y);
 
         // Expanded header.
+        use op_editor_core::ChatHeaderButton;
         let header_y = rect.origin.y + 8.0;
+        let chevron_x = rect.origin.x + PAD;
+        let chevron_color = paint_header_btn_bg(
+            cx,
+            &self.theme,
+            chevron_x,
+            header_y,
+            self.header_hover == Some(ChatHeaderButton::ToggleCollapse),
+        );
         draw_icon(
             cx.backend,
             Icon::ChevronDown,
-            Point2D::new(rect.origin.x + PAD, header_y),
+            Point2D::new(chevron_x, header_y),
             18.0,
-            self.theme.muted_foreground,
+            chevron_color,
             1.4,
         );
         let title = TextLayout::single_run(
@@ -292,20 +305,36 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
             &title,
             Point2D::new(rect.origin.x + PAD + 28.0, header_y + 14.0),
         );
+        let maximize_x = rect.origin.x + rect.size.x - PAD - 50.0;
+        let maximize_color = paint_header_btn_bg(
+            cx,
+            &self.theme,
+            maximize_x,
+            header_y,
+            self.header_hover == Some(ChatHeaderButton::ToggleMaximize),
+        );
         draw_icon(
             cx.backend,
             self.maximize_icon(),
-            Point2D::new(rect.origin.x + rect.size.x - PAD - 50.0, header_y),
+            Point2D::new(maximize_x, header_y),
             18.0,
-            self.theme.muted_foreground,
+            maximize_color,
             1.4,
+        );
+        let new_chat_x = rect.origin.x + rect.size.x - PAD - 22.0;
+        let new_chat_color = paint_header_btn_bg(
+            cx,
+            &self.theme,
+            new_chat_x,
+            header_y,
+            self.header_hover == Some(ChatHeaderButton::NewChat),
         );
         draw_icon(
             cx.backend,
             Icon::Plus,
-            Point2D::new(rect.origin.x + rect.size.x - PAD - 22.0, header_y),
+            Point2D::new(new_chat_x, header_y),
             18.0,
-            self.theme.muted_foreground,
+            new_chat_color,
             1.4,
         );
 
@@ -608,6 +637,30 @@ fn draw_label(cx: &mut PaintCx<'_>, text: &str, size: f32, color: Color, x: f32,
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(&label, Point2D::new(x, y));
+}
+
+/// Paint the `theme.button_hover` wash behind a bare header glyph
+/// (18 px, drawn at `(icon_x, header_y)`) when the cursor rests on it,
+/// returning the glyph color: foreground while hovered, muted
+/// otherwise. The wash is a 24 px square centred on the glyph.
+fn paint_header_btn_bg(
+    cx: &mut PaintCx<'_>,
+    theme: &Theme,
+    icon_x: f32,
+    header_y: f32,
+    hovered: bool,
+) -> Color {
+    if hovered {
+        let center = Point2D::new(icon_x + 9.0, header_y + 9.0);
+        let r = Rect {
+            origin: Point2D::new(center.x - 12.0, center.y - 12.0),
+            size: Point2D::new(24.0, 24.0),
+        };
+        cx.backend.fill_round_rect(r, 6.0, theme.button_hover);
+        theme.foreground
+    } else {
+        theme.muted_foreground
+    }
 }
 
 pub(crate) fn to_jian_color(c: Color) -> jian_core::scene::Color {

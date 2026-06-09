@@ -440,6 +440,8 @@ pub struct AgentSettings {
     pub scroll_y: f32,
     pub mcp_server: McpServer,
     pub mcp_cli_enabled: [bool; 6],
+    pub mcp_client_config_copied_at_ms: Option<u64>,
+    pub hover_mcp_client_config_copy: bool,
     pub images_advanced_open: bool,
     pub images_search_ready: bool,
     pub images_search_test_status: ImageTestStatus,
@@ -461,6 +463,8 @@ pub struct AgentSettings {
     pub hover_builtin_agent: usize,
     /// Index into `acp_agents` of the hovered ACP agent card.
     pub hover_acp_agent: usize,
+    pub hover_add_provider: bool,
+    pub hover_add_acp_agent: bool,
     /// Sidebar nav item under the cursor; `None` = no hover.
     pub hover_nav: Option<AgentSettingsTab>,
 }
@@ -482,6 +486,8 @@ impl Default for AgentSettings {
             scroll_y: 0.0,
             mcp_server: McpServer::default(),
             mcp_cli_enabled: [false; 6],
+            mcp_client_config_copied_at_ms: None,
+            hover_mcp_client_config_copy: false,
             images_advanced_open: false,
             images_search_ready: true,
             images_search_test_status: ImageTestStatus::Idle,
@@ -496,6 +502,8 @@ impl Default for AgentSettings {
             hover_provider: usize::MAX,
             hover_builtin_agent: usize::MAX,
             hover_acp_agent: usize::MAX,
+            hover_add_provider: false,
+            hover_add_acp_agent: false,
             hover_nav: None,
         }
     }

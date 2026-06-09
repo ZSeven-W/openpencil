@@ -296,6 +296,17 @@ impl WidgetHost {
                     );
                 }
             }
+            CodegenAction::ScrollFrameworksLeft | CodegenAction::ScrollFrameworksRight => {
+                let pw = self.editor_state.editor_ui.property_panel_width;
+                let max = op_editor_ui::widgets::property_panel_code::framework_row_overflow(pw);
+                let step = 100.0;
+                let cg = &mut self.editor_state.codegen;
+                cg.framework_scroll = if matches!(action, CodegenAction::ScrollFrameworksLeft) {
+                    (cg.framework_scroll - step).clamp(0.0, max)
+                } else {
+                    (cg.framework_scroll + step).clamp(0.0, max)
+                };
+            }
         }
     }
 }

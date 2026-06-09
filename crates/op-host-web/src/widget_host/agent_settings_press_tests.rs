@@ -196,3 +196,41 @@ fn image_generation_profile_header_click_toggles_editor_closed() {
     assert_eq!(host.editor_state.editor_ui.agent_settings.focus, None);
     assert!(host.editor_state.editor_ui.settings_input_draft.is_empty());
 }
+
+#[test]
+fn copying_mcp_client_config_records_feedback_time() {
+    let mut host = WidgetHost::new();
+    host.set_now_ms(4_321);
+    host.editor_state.editor_ui.agent_settings.tab = AgentSettingsTab::Mcp;
+    host.editor_state
+        .editor_ui
+        .agent_settings
+        .mcp_server
+        .running = true;
+
+    let panel = AgentSettingsPanel::for_editor(&host.editor_state);
+    let rect = panel.rect(1200.0, 800.0);
+    let content_x = rect.origin.x + 200.0 + 24.0;
+    let content_y = rect.origin.y + 24.0;
+    let content_w = rect.size.x - 200.0 - 48.0;
+    let client_config_y = content_y + 36.0 + 52.0 + 8.0;
+
+    assert!(host.dispatch_agent_settings_press(
+        content_x + content_w - 22.0,
+        client_config_y + 18.0,
+        1200.0,
+        800.0
+    ));
+
+    assert_eq!(
+        host.editor_state
+            .editor_ui
+            .agent_settings
+            .mcp_client_config_copied_at_ms,
+        Some(4_321)
+    );
+    assert_eq!(
+        host.editor_state.chat.pending_copy_text.as_deref(),
+        Some("{\n  \"type\": \"http\",\n  \"url\": \"http://127.0.0.1:3100/mcp\"\n}")
+    );
+}

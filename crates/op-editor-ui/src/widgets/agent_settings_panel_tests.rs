@@ -1,4 +1,5 @@
 use crate::widgets::agent_settings_panel::{AgentSettingsHit, AgentSettingsPanel};
+use crate::widgets::icons::Icon;
 use crate::widgets::{PaintCx, Widget};
 use crate::{Color, Point2D, Rect, RenderBackend, TextLayout};
 use op_editor_core::agent_settings::{
@@ -266,6 +267,70 @@ fn mcp_running_client_config_paints_copy_icon_like_ts() {
                 && (at.y - icon_origin.y).abs() < 0.01
         }),
         "running MCP client config should expose a TS-like copy icon button"
+    );
+}
+
+#[test]
+fn copied_mcp_client_config_paints_check_feedback_like_ts() {
+    let mut state = EditorState::default();
+    state.editor_ui.agent_settings.tab = AgentSettingsTab::Mcp;
+    state.editor_ui.agent_settings.mcp_server.running = true;
+    state
+        .editor_ui
+        .agent_settings
+        .mcp_client_config_copied_at_ms = Some(1_000);
+    let panel = AgentSettingsPanel::for_editor_at(&state, 1_500);
+    let rect = panel.rect(1200.0, 800.0);
+    let mut backend = CaptureBackend::default();
+    let mut cx = PaintCx {
+        backend: &mut backend,
+    };
+
+    panel.paint(&mut cx, rect);
+
+    let check_paths = Icon::Check.paths();
+    let copy_paths = Icon::Copy.paths();
+    assert!(
+        backend
+            .svg_strokes
+            .iter()
+            .any(|(path, _, _)| check_paths.contains(&path.as_str())),
+        "recent MCP client config copy should replace the copy glyph with check feedback"
+    );
+    assert!(
+        !backend
+            .svg_strokes
+            .iter()
+            .any(|(path, _, _)| copy_paths.contains(&path.as_str())),
+        "copy glyph should not be visible while copied feedback is active"
+    );
+}
+
+#[test]
+fn expired_mcp_client_config_copy_feedback_restores_copy_icon() {
+    let mut state = EditorState::default();
+    state.editor_ui.agent_settings.tab = AgentSettingsTab::Mcp;
+    state.editor_ui.agent_settings.mcp_server.running = true;
+    state
+        .editor_ui
+        .agent_settings
+        .mcp_client_config_copied_at_ms = Some(1_000);
+    let panel = AgentSettingsPanel::for_editor_at(&state, 3_100);
+    let rect = panel.rect(1200.0, 800.0);
+    let mut backend = CaptureBackend::default();
+    let mut cx = PaintCx {
+        backend: &mut backend,
+    };
+
+    panel.paint(&mut cx, rect);
+
+    let copy_paths = Icon::Copy.paths();
+    assert!(
+        backend
+            .svg_strokes
+            .iter()
+            .any(|(path, _, _)| copy_paths.contains(&path.as_str())),
+        "expired MCP client config copy feedback should restore the copy glyph"
     );
 }
 

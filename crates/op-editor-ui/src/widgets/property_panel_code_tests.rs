@@ -113,6 +113,44 @@ fn code_action_rects_idle_has_generate_and_bundle() {
         .filter(|(a, _)| matches!(a, CodegenAction::SelectFramework(_)))
         .count();
     assert_eq!(chips, 8);
+    // No overflow at 2000px → no scroll chevrons.
+    assert_eq!(framework_row_overflow(2000.0), 0.0);
+    assert!(!rects
+        .iter()
+        .any(|(a, _)| matches!(a, CodegenAction::ScrollFrameworksLeft)));
+    assert!(!rects
+        .iter()
+        .any(|(a, _)| matches!(a, CodegenAction::ScrollFrameworksRight)));
+}
+
+/// At a narrow width the strip overflows, so `code_action_rects` exposes the
+/// left + right scroll-chevron zones (the FIX-1 step buttons).
+#[test]
+fn code_action_rects_narrow_has_scroll_chevrons() {
+    let s = CodegenState::default(); // Idle, React.
+    assert!(framework_row_overflow(280.0) > 0.0);
+    let rects = code_action_rects(0.0, 0.0, 280.0, &s);
+    assert!(rects
+        .iter()
+        .any(|(a, _)| matches!(a, CodegenAction::ScrollFrameworksLeft)));
+    assert!(rects
+        .iter()
+        .any(|(a, _)| matches!(a, CodegenAction::ScrollFrameworksRight)));
+}
+
+/// `framework_at` maps a point inside the first chip (scroll 0, wide width →
+/// no chevron inset) back to that chip's framework.
+#[test]
+fn framework_at_hits_first_chip() {
+    let chips = framework_chip_rects(0.0, 0.0, 0.0);
+    let (first_fw, first_rect) = chips[0];
+    assert_eq!(first_fw, Framework::React);
+    let p = center(first_rect);
+    // Wide width so there's no overflow → no chevron zones eat the edge.
+    assert_eq!(
+        framework_at(0.0, 0.0, 2000.0, p, 0.0),
+        Some(Framework::React)
+    );
 }
 
 #[test]
@@ -157,9 +195,18 @@ fn code_action_rects_error_has_regenerate_only_button() {
         ..CodegenState::default()
     };
     let rects = code_action_rects(0.0, 0.0, 280.0, &s);
+    // Phase-body buttons only — exclude the framework chips + the scroll
+    // chevrons (strip controls present at this narrow, overflowing width).
     let buttons: Vec<_> = rects
         .iter()
-        .filter(|(a, _)| !matches!(a, CodegenAction::SelectFramework(_)))
+        .filter(|(a, _)| {
+            !matches!(
+                a,
+                CodegenAction::SelectFramework(_)
+                    | CodegenAction::ScrollFrameworksLeft
+                    | CodegenAction::ScrollFrameworksRight
+            )
+        })
         .collect();
     assert_eq!(buttons.len(), 1);
     assert!(matches!(buttons[0].0, CodegenAction::Regenerate));

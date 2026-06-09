@@ -117,6 +117,9 @@ pub mod agent_settings_panel;
 mod agent_settings_panel_geometry;
 #[cfg(test)]
 mod agent_settings_panel_tests;
+mod agent_settings_switch;
+#[cfg(test)]
+mod agent_settings_switch_style_tests;
 pub mod agent_settings_system;
 mod ai_chat_checklist;
 mod ai_chat_hit;

@@ -12,6 +12,7 @@ pub mod agent_settings_builtin_presets;
 pub mod align;
 pub mod align_guides;
 pub mod chat;
+pub mod chat_button_state;
 mod chat_design_apply;
 pub mod clipboard;
 pub mod codegen;
@@ -24,14 +25,20 @@ pub mod command_node;
 pub mod command_node_attrs;
 pub mod command_refine;
 pub mod command_style_replace;
+pub mod component_browser_state;
 pub mod components;
 pub mod design_md;
+pub mod design_md_button_state;
 pub mod editor_ui_state;
+pub mod export_dialog_state;
+pub mod figma_import_state;
 pub mod fills;
 pub mod geometry;
+pub mod git_button_state;
 pub mod grouping;
 pub mod history;
 pub mod host_support;
+pub mod icon_picker_button_state;
 pub mod icon_picker_state;
 pub mod image_node_props;
 pub mod mutators;
@@ -47,14 +54,17 @@ pub mod rename;
 pub mod render_backend;
 pub mod selection;
 pub mod state;
+pub mod statusbar_state;
 pub mod svg_import;
 pub mod svg_path_bounds;
 mod svg_path_data;
 pub mod tool;
 pub mod toolbar_state;
+pub mod topbar_state;
 pub mod ui_draft;
 pub mod uikit;
 pub mod variables;
+pub mod variables_panel_state;
 pub mod viewport;
 pub mod walkers;
 pub mod web_sync;
@@ -115,13 +125,16 @@ pub use chat::{
     AgentProvider, ChatAnchor, ChatImage, ChatMessage, ChatRole, ChatState, ChatToolCall,
     ModelEntry,
 };
+pub use chat_button_state::ChatHeaderButton;
 pub use color_picker::{hsv_to_rgb, parse_hex_alpha, parse_hex_rgb, rgb_to_hex, rgb_to_hsv};
 pub use command::{
     BatchInsertItem, EditorCommand, EffectField, LayoutPropValue, NodeFlag, StylePropValue,
     StylePropertyReplacement, VariableScalarPayload,
 };
+pub use component_browser_state::ComponentBrowserButton;
 pub use components::{Component, ComponentLibrary};
 pub use design_md::{extract_design_md_from_document, generate_design_md, parse_design_md};
+pub use design_md_button_state::DesignMdButton;
 pub use editor_ui_state::{
     BooleanOp, CloneField, CloneFormState, CommitDiffPatch, CommitDiffSummary, CommitDiffView,
     DesignMdRequest, EditorUiState, ExportFormat, FileAction, FileMenuChoice, FillType, FlexLayout,
@@ -131,12 +144,16 @@ pub use editor_ui_state::{
     MergeResolveState, PaddingEditMode, PageRenameState, PropertyTab, RecentFile, ShapeChoice,
     ThemeMode, UpdateStatus, VariableRowFocus,
 };
+pub use export_dialog_state::ExportDialogButton;
+pub use figma_import_state::FigmaImportButton;
 pub use fills::{
     first_fill_type, first_image_fill_summary, first_solid_fill_hex, first_solid_fill_opacity,
     first_solid_stroke_hex, node_effects, ImageFillSummary,
 };
 pub use geometry::{aggregate_bounds, own_bounds, union_aggregate_bounds, DocRect};
+pub use git_button_state::GitButton;
 pub use history::{EditorSnapshot, History, HISTORY_CAP};
+pub use icon_picker_button_state::IconPickerButton;
 pub use icon_picker_state::{IconPickerRemoteIcon, IconPickerRemoteState, IconifyLoadMoreRequest};
 pub use image_node_props::image_node_summary;
 pub use jian_ops_schema::{DesignMdColor, DesignMdSpec, DesignMdTypography, PenDocument};
@@ -149,12 +166,15 @@ pub use pen_node_ext::PenNodeExt;
 pub use render_backend::*;
 pub use selection::SelectionState;
 pub use state::EditorState;
+pub use statusbar_state::StatusBarButton;
 pub use tool::Tool;
 pub use toolbar_state::{ToolbarAction, ToolbarHover};
+pub use topbar_state::TopBarButton;
 pub use ui_draft::{
     ColorPickerDrag, ColorPickerState, ColorTarget, LayerContextTarget, LayerRenameState,
     PropertyFocus, UiDraftState, VariableUiState,
 };
 pub use uikit::{builtin_kits, ComponentCategory, KitComponent, UIKit};
+pub use variables_panel_state::VariablesPanelButton;
 pub use viewport::Viewport;
 pub use walkers::ReorderDirection;

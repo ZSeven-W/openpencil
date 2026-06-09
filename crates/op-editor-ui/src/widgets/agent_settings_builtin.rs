@@ -15,6 +15,7 @@ use crate::widgets::agent_settings_form_actions::{
     cancel_button_rect, paint_form_actions, save_button_rect,
 };
 use crate::widgets::agent_settings_i18n::t as t_settings;
+use crate::widgets::agent_settings_switch::paint_settings_switch;
 use crate::widgets::brand_icons::{paint_brand_logo, BrandLogo};
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::PaintCx;
@@ -271,9 +272,12 @@ pub fn paint_builtin_section(
         theme,
         t_settings(ui, "settings.agents.builtin"),
         t_settings(ui, "settings.agents.addProvider"),
-        content.origin.x,
-        y,
-        content.size.x,
+        HeaderFrame {
+            x: content.origin.x,
+            y,
+            w: content.size.x,
+        },
+        settings.hover_add_provider,
     );
     y = paint_subtitle(
         cx,
@@ -324,14 +328,20 @@ pub fn paint_builtin_section(
     y
 }
 
+#[derive(Debug, Clone, Copy)]
+struct HeaderFrame {
+    x: f32,
+    y: f32,
+    w: f32,
+}
+
 fn paint_header(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
     title: &str,
     action: &str,
-    x: f32,
-    y: f32,
-    w: f32,
+    frame: HeaderFrame,
+    action_hover: bool,
 ) -> f32 {
     let layout = TextLayout::single_run(
         title,
@@ -340,7 +350,15 @@ fn paint_header(
         to_jian(theme.foreground),
         Point2D::new(0.0, 0.0),
     );
-    cx.backend.draw_text(&layout, Point2D::new(x, y + 18.0));
+    cx.backend
+        .draw_text(&layout, Point2D::new(frame.x, frame.y + 18.0));
+    if action_hover {
+        let rect = Rect {
+            origin: Point2D::new(frame.x + frame.w - TOP_HEADER_RIGHT_INSET - 96.0, frame.y),
+            size: Point2D::new(96.0, 24.0),
+        };
+        cx.backend.fill_round_rect(rect, 6.0, theme.button_hover);
+    }
     let action_w = cx.backend.measure_text(action, 12.0);
     let act = TextLayout::single_run(
         action,
@@ -351,9 +369,12 @@ fn paint_header(
     );
     cx.backend.draw_text(
         &act,
-        Point2D::new(x + w - TOP_HEADER_RIGHT_INSET - action_w, y + 18.0),
+        Point2D::new(
+            frame.x + frame.w - TOP_HEADER_RIGHT_INSET - action_w,
+            frame.y + 18.0,
+        ),
     );
-    y + HEADER_HEIGHT
+    frame.y + HEADER_HEIGHT
 }
 
 fn paint_subtitle(cx: &mut PaintCx<'_>, theme: &Theme, text: &str, x: f32, y: f32) -> f32 {
@@ -573,7 +594,7 @@ fn paint_compact_builtin_agent_card(
         );
     }
 
-    paint_switch(cx, theme, compact_switch_rect(card), agent.enabled);
+    paint_settings_switch(cx, theme, compact_switch_rect(card), agent.enabled);
     if settings.hover_builtin_agent == index {
         paint_action(
             cx,
@@ -697,26 +718,6 @@ fn draw_text(cx: &mut PaintCx<'_>, text: &str, size: f32, color: Color, x: f32, 
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(&layout, Point2D::new(x, y));
-}
-
-fn paint_switch(cx: &mut PaintCx<'_>, theme: &Theme, rect: Rect, enabled: bool) {
-    let bg = if enabled { theme.primary } else { theme.muted };
-    cx.backend.fill_round_rect(rect, rect.size.y / 2.0, bg);
-    cx.backend
-        .stroke_round_rect(rect, rect.size.y / 2.0, theme.border, 1.0);
-    let knob_x = if enabled {
-        rect.origin.x + rect.size.x - 17.0
-    } else {
-        rect.origin.x + 3.0
-    };
-    cx.backend.fill_round_rect(
-        Rect {
-            origin: Point2D::new(knob_x, rect.origin.y + 3.0),
-            size: Point2D::new(14.0, 14.0),
-        },
-        7.0,
-        theme.primary_foreground,
-    );
 }
 
 fn paint_action(cx: &mut PaintCx<'_>, theme: &Theme, rect: Rect, icon: Icon, color: Color) {

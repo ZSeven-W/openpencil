@@ -7,11 +7,12 @@
 //! per-line-coloured unified diff with intra-line change highlight.
 
 use crate::widgets::git_panel::{
-    truncate, GitPanel, DIFF_VIEW_HEIGHT, FOOTER_H, GIT_DIFF_PANEL_WIDTH, HEADER_BASELINE, PAD,
+    truncate, GitPanel, GitPanelHit, DIFF_VIEW_HEIGHT, FOOTER_H, GIT_DIFF_PANEL_WIDTH,
+    HEADER_BASELINE, PAD,
 };
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect};
-use op_editor_core::GitDiffView;
+use op_editor_core::{GitButton, GitDiffView};
 
 /// Diff body line height.
 const DIFF_LINE_H: f32 = 14.0;
@@ -151,11 +152,12 @@ impl GitPanel<'_> {
             self.theme.foreground,
         );
         let [bl, br, up, down, close] = Self::diff_header_buttons(rect);
-        self.paint_glyph_button(cx, bl, "◀");
-        self.paint_glyph_button(cx, br, "▶");
-        self.paint_glyph_button(cx, up, "▲");
-        self.paint_glyph_button(cx, down, "▼");
-        self.paint_glyph_button(cx, close, "✕");
+        let h = self.state.button_hover;
+        self.paint_glyph_button(cx, bl, "◀", h == Some(GitButton::DiffScrollLeft));
+        self.paint_glyph_button(cx, br, "▶", h == Some(GitButton::DiffScrollRight));
+        self.paint_glyph_button(cx, up, "▲", h == Some(GitButton::DiffScrollUp));
+        self.paint_glyph_button(cx, down, "▼", h == Some(GitButton::DiffScrollDown));
+        self.paint_glyph_button(cx, close, "✕", h == Some(GitButton::CloseDiff));
         self.divider(cx, left, top + 42.0, rect.size.x);
 
         // Body — a visible window of diff lines, per-line coloured,
@@ -196,8 +198,15 @@ impl GitPanel<'_> {
 
         // Per-hunk "Stage" buttons — only for a single working-tree
         // file's diff (`@@` headers in view).
-        for (_, btn) in self.diff_hunk_buttons(rect) {
-            self.paint_button(cx, btn, self.t("git.panel.stage"), true, false);
+        for (hunk, btn) in self.diff_hunk_buttons(rect) {
+            self.paint_button_with_hit(
+                cx,
+                btn,
+                self.t("git.panel.stage"),
+                true,
+                false,
+                Some(GitPanelHit::StageHunk(hunk)),
+            );
         }
 
         // Footer — scroll position + close hint.
@@ -352,8 +361,18 @@ impl GitPanel<'_> {
 
     /// Paint one small square glyph button — the diff-view controls
     /// and the branch-row "merge into current" button.
-    pub(super) fn paint_glyph_button(&self, cx: &mut PaintCx<'_>, rect: Rect, glyph: &str) {
+    pub(super) fn paint_glyph_button(
+        &self,
+        cx: &mut PaintCx<'_>,
+        rect: Rect,
+        glyph: &str,
+        hovered: bool,
+    ) {
         cx.backend.fill_round_rect(rect, 5.0, self.theme.muted);
+        if hovered {
+            cx.backend
+                .fill_round_rect(rect, 5.0, self.theme.button_hover);
+        }
         cx.backend
             .stroke_round_rect(rect, 5.0, self.theme.border, 1.0);
         let baseline = rect.origin.y + rect.size.y / 2.0 + 4.0;

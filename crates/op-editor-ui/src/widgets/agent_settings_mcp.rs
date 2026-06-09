@@ -5,6 +5,9 @@ use crate::widgets::agent_settings_caret::{
     caret_x_for_text, paint_caret, settings_caret_for_focus,
 };
 use crate::widgets::agent_settings_i18n::t as t_settings;
+use crate::widgets::agent_settings_switch::{
+    paint_settings_switch, SETTINGS_SWITCH_H, SETTINGS_SWITCH_W,
+};
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
@@ -15,6 +18,7 @@ const TITLE_H: f32 = 36.0;
 const SERVER_CARD_H: f32 = 52.0;
 const CLIENT_CONFIG_H: f32 = 58.0;
 const CLIENT_CONFIG_GAP: f32 = 8.0;
+const CLIENT_CONFIG_COPY_FEEDBACK_MS: u64 = 2_000;
 const SECTION_GAP: f32 = 28.0;
 const SECTION_TITLE_H: f32 = 28.0;
 const SUBTITLE_H: f32 = 20.0;
@@ -22,15 +26,18 @@ const ROW_GAP_BEFORE_GRID: f32 = 12.0;
 const CELL_H: f32 = 52.0;
 const CELL_VGAP: f32 = 12.0;
 const CELL_HGAP: f32 = 16.0;
-const TOGGLE_W: f32 = 36.0;
-const TOGGLE_H: f32 = 20.0;
-const TOGGLE_KNOB: f32 = 14.0;
 const BTN_W: f32 = 72.0;
 const BTN_H: f32 = 28.0;
 const PORT_FIELD_W: f32 = 64.0;
 const PORT_FIELD_H: f32 = 28.0;
 const CLIENT_COPY_BTN: f32 = 20.0;
 const CLIENT_COPY_ICON: f32 = 10.0;
+const COPY_FEEDBACK_GREEN: Color = Color {
+    r: 0.13,
+    g: 0.77,
+    b: 0.37,
+    a: 1.0,
+};
 
 fn server_card_top(content: Rect) -> f32 {
     content.origin.y + TITLE_H
@@ -179,7 +186,7 @@ pub(super) fn paint_mcp_tab(
         Point2D::new(content.origin.x, content.origin.y + 20.0),
     );
     paint_server_card(cx, theme, settings, ui, content, now_ms);
-    paint_client_config(cx, theme, settings, ui, content);
+    paint_client_config(cx, theme, settings, ui, content, now_ms);
 
     let mut y =
         server_card_top(content) + SERVER_CARD_H + client_config_block_h(settings) + SECTION_GAP;
@@ -366,6 +373,7 @@ fn paint_client_config(
     settings: &AgentSettings,
     ui: &EditorUiState,
     content: Rect,
+    now_ms: u64,
 ) {
     if !settings.mcp_server.running {
         return;
@@ -385,15 +393,24 @@ fn paint_client_config(
         Point2D::new(rect.origin.x + 12.0, rect.origin.y + 18.0),
     );
     let copy = client_config_copy_button_rect(content);
+    if settings.hover_mcp_client_config_copy {
+        cx.backend.fill_round_rect(copy, 6.0, theme.button_hover);
+    }
+    let copied = mcp_client_config_copy_feedback_active(settings, now_ms);
+    let (icon, icon_color) = if copied {
+        (Icon::Check, COPY_FEEDBACK_GREEN)
+    } else {
+        (Icon::Copy, theme.muted_foreground)
+    };
     draw_icon(
         cx.backend,
-        Icon::Copy,
+        icon,
         Point2D::new(
             copy.origin.x + (CLIENT_COPY_BTN - CLIENT_COPY_ICON) / 2.0,
             copy.origin.y + (CLIENT_COPY_BTN - CLIENT_COPY_ICON) / 2.0,
         ),
         CLIENT_COPY_ICON,
-        theme.muted_foreground,
+        icon_color,
         1.5,
     );
     let config = settings.mcp_server.client_config_display_text();
@@ -416,13 +433,17 @@ fn paint_client_config(
     );
 }
 
+fn mcp_client_config_copy_feedback_active(settings: &AgentSettings, now_ms: u64) -> bool {
+    settings
+        .mcp_client_config_copied_at_ms
+        .map(|copied_at| now_ms.saturating_sub(copied_at) < CLIENT_CONFIG_COPY_FEEDBACK_MS)
+        .unwrap_or(false)
+}
+
 fn paint_cli_cell(cx: &mut PaintCx<'_>, theme: &Theme, cli: McpCli, enabled: bool, cell: Rect) {
     let bg = if enabled { theme.muted } else { theme.card };
     cx.backend.fill_round_rect(cell, 10.0, bg);
-    let border_color = if enabled { theme.primary } else { theme.border };
-    let border_w = if enabled { 1.5 } else { 1.0 };
-    cx.backend
-        .stroke_round_rect(cell, 10.0, border_color, border_w);
+    cx.backend.stroke_round_rect(cell, 10.0, theme.border, 1.0);
 
     let label_fg = if enabled {
         theme.foreground
@@ -443,32 +464,12 @@ fn paint_cli_cell(cx: &mut PaintCx<'_>, theme: &Theme, cli: McpCli, enabled: boo
 
     let toggle = Rect {
         origin: Point2D::new(
-            cell.origin.x + cell.size.x - 16.0 - TOGGLE_W,
-            cell.origin.y + (CELL_H - TOGGLE_H) / 2.0,
+            cell.origin.x + cell.size.x - 16.0 - SETTINGS_SWITCH_W,
+            cell.origin.y + (CELL_H - SETTINGS_SWITCH_H) / 2.0,
         ),
-        size: Point2D::new(TOGGLE_W, TOGGLE_H),
+        size: Point2D::new(SETTINGS_SWITCH_W, SETTINGS_SWITCH_H),
     };
-    let track_color = if enabled {
-        theme.primary
-    } else {
-        theme.background
-    };
-    cx.backend
-        .fill_round_rect(toggle, TOGGLE_H / 2.0, track_color);
-    if !enabled {
-        cx.backend
-            .stroke_round_rect(toggle, TOGGLE_H / 2.0, theme.border, 1.0);
-    }
-    let knob_x = if enabled {
-        toggle.origin.x + TOGGLE_W - TOGGLE_KNOB - 3.0
-    } else {
-        toggle.origin.x + 3.0
-    };
-    let knob = Rect {
-        origin: Point2D::new(knob_x, toggle.origin.y + (TOGGLE_H - TOGGLE_KNOB) / 2.0),
-        size: Point2D::new(TOGGLE_KNOB, TOGGLE_KNOB),
-    };
-    cx.backend.fill_oval(knob, theme.foreground);
+    paint_settings_switch(cx, theme, toggle, enabled);
 }
 
 fn rect_contains(r: Rect, p: Point2D) -> bool {

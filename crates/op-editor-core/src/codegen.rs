@@ -131,6 +131,9 @@ pub struct CodegenState {
     /// Horizontal scroll offset (px, ≥ 0) of the framework tab strip, so the
     /// single-row selector scrolls to reach off-screen frameworks (TS parity).
     pub framework_scroll: f32,
+    /// The inactive framework chip the cursor is hovering, for a subtle
+    /// background highlight. `None` when the cursor is off the strip.
+    pub framework_hover: Option<Framework>,
     pub phase: CodegenPhase,
     pub progress: CodeGenProgress,
     pub code: String,
@@ -160,6 +163,7 @@ impl Default for CodegenState {
         Self {
             framework: Framework::React,
             framework_scroll: 0.0,
+            framework_hover: None,
             phase: CodegenPhase::Idle,
             progress: CodeGenProgress::default(),
             code: String::new(),

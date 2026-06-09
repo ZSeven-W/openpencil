@@ -162,6 +162,7 @@ pub fn paint_acp_section(
         t_settings(ui, "settings.agents.addAcp"),
         content,
         y,
+        settings.hover_add_acp_agent,
     );
     y = paint_subtitle(
         cx,
@@ -212,6 +213,7 @@ fn paint_header(
     action: &str,
     content: Rect,
     y: f32,
+    action_hover: bool,
 ) -> f32 {
     draw_text(
         cx,
@@ -221,6 +223,10 @@ fn paint_header(
         content.origin.x,
         y + 18.0,
     );
+    if action_hover {
+        cx.backend
+            .fill_round_rect(add_agent_rect(content, y), 6.0, theme.button_hover);
+    }
     let action_w = cx.backend.measure_text(action, 12.0);
     draw_text(
         cx,

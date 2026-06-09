@@ -111,6 +111,10 @@ impl WidgetHostNative {
             }
             AgentSettingsHit::CopyMcpClientConfig => {
                 self.commit_settings_focus_if_any();
+                self.editor_state
+                    .editor_ui
+                    .agent_settings
+                    .mcp_client_config_copied_at_ms = Some(self.now_ms);
                 let config = self
                     .editor_state
                     .editor_ui

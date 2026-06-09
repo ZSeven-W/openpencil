@@ -5,7 +5,7 @@
 //! a one-line remote summary, a URL input + "Set" / "SSH" buttons,
 //! and an HTTPS-credential (`username:token`) input + "Login".
 
-use crate::widgets::git_panel::{truncate, GitPanel, INPUT_H, PAD, SECTION_GAP};
+use crate::widgets::git_panel::{truncate, GitPanel, GitPanelHit, INPUT_H, PAD, SECTION_GAP};
 use crate::widgets::PaintCx;
 use crate::{Point2D, Rect};
 
@@ -126,9 +126,23 @@ impl GitPanel<'_> {
             self.state.remote_focused,
             self.t("git.panel.remotePlaceholder"),
         );
-        self.paint_button(cx, layout.set_button, self.t("git.panel.set"), true, false);
+        self.paint_button_with_hit(
+            cx,
+            layout.set_button,
+            self.t("git.panel.set"),
+            true,
+            false,
+            Some(GitPanelHit::SetRemote),
+        );
         // "SSH" is a protocol name — the same in every locale.
-        self.paint_button(cx, layout.ssh_button, "SSH", true, false);
+        self.paint_button_with_hit(
+            cx,
+            layout.ssh_button,
+            "SSH",
+            true,
+            false,
+            Some(GitPanelHit::SetupSshAuth),
+        );
         // HTTPS-credential input (token masked) + "Login" button.
         self.paint_section_input(
             cx,
@@ -137,12 +151,13 @@ impl GitPanel<'_> {
             self.state.https_focused,
             self.t("git.panel.httpsPlaceholder"),
         );
-        self.paint_button(
+        self.paint_button_with_hit(
             cx,
             layout.login_button,
             self.t("git.panel.login"),
             true,
             false,
+            Some(GitPanelHit::SetHttpsAuth),
         );
     }
 

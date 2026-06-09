@@ -15,7 +15,7 @@ use crate::widgets::git_panel::{contains, truncate, GitPanel, GitPanelHit, PAD};
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect};
-use op_editor_core::{CommitDiffSummary, CommitDiffView};
+use op_editor_core::{CommitDiffSummary, CommitDiffView, GitButton};
 
 /// Header bar height (TS `px-2.5 py-1.5` around a 28 px `icon-sm`
 /// button = 6 + 28 + 6 = 40 px row).
@@ -331,8 +331,22 @@ impl GitPanel<'_> {
         );
         let can_save = !self.state.author_name_draft.trim().is_empty()
             && self.state.author_email_draft.contains('@');
-        self.paint_button(cx, cancel, self.t("git.author.cancel"), true, false);
-        self.paint_button(cx, save, self.t("git.author.submit"), can_save, true);
+        self.paint_button_with_hit(
+            cx,
+            cancel,
+            self.t("git.author.cancel"),
+            true,
+            false,
+            Some(GitPanelHit::AuthorCancel),
+        );
+        self.paint_button_with_hit(
+            cx,
+            save,
+            self.t("git.author.submit"),
+            can_save,
+            true,
+            Some(GitPanelHit::AuthorSave),
+        );
     }
 
     pub(super) fn paint_ready(&self, cx: &mut PaintCx<'_>, rect: Rect) {
@@ -394,10 +408,25 @@ impl GitPanel<'_> {
 
         // Pull / Push / Overflow icon buttons.
         let (pull_r, push_r, overflow_r) = self.ready_header_buttons(rect);
-        self.paint_ready_icon(cx, pull_r, Icon::ArrowDown, self.pull_enabled());
-        self.paint_ready_icon(cx, push_r, Icon::ArrowUp, self.push_enabled());
+        self.paint_ready_icon(
+            cx,
+            pull_r,
+            Icon::ArrowDown,
+            self.pull_enabled(),
+            self.state.button_hover == Some(GitButton::Pull),
+        );
+        self.paint_ready_icon(
+            cx,
+            push_r,
+            Icon::ArrowUp,
+            self.push_enabled(),
+            self.state.button_hover == Some(GitButton::Push),
+        );
         // Overflow `…` — TS colors this `text-muted-foreground` at size 13,
         // dimmer than the pull / push glyphs (git-panel-header.tsx:127-129).
+        if self.state.button_hover == Some(GitButton::Overflow) {
+            cx.backend.fill_round_rect(overflow_r, 6.0, t.button_hover);
+        }
         let overflow_s = 13.0;
         draw_icon(
             cx.backend,
@@ -457,7 +486,12 @@ impl GitPanel<'_> {
                 }
             }
             let btn = self.ready_commit_btn(rect);
-            self.paint_milestone_button(cx, btn, self.ready_can_commit());
+            self.paint_milestone_button(
+                cx,
+                btn,
+                self.ready_can_commit(),
+                self.state.button_hover == Some(GitButton::CommitMilestone),
+            );
             // "未检测到变更" hint — shown to the left of the button after a
             // milestone save was skipped for having no changes (TS-style guard).
             if self.state.commit_no_changes {
@@ -651,6 +685,10 @@ impl GitPanel<'_> {
             }
         }
         let (restore, copy) = self.commit_card_button_rects(rect, card_top);
+        if let Some(e) = self.state.expanded_commit {
+            self.wash_if_hovered(cx, restore, 6.0, GitPanelHit::RestoreCommit(e));
+            self.wash_if_hovered(cx, copy, 6.0, GitPanelHit::CopyCommitHash(e));
+        }
         // 恢复 — outline button.
         cx.backend.stroke_round_rect(restore, 6.0, t.border, 1.0);
         self.center_label(
@@ -755,7 +793,20 @@ impl GitPanel<'_> {
 
     /// One ghost icon button — a faint rounded slot + a centred glyph,
     /// dimmed when disabled.
-    fn paint_ready_icon(&self, cx: &mut PaintCx<'_>, rect: Rect, icon: Icon, enabled: bool) {
+    fn paint_ready_icon(
+        &self,
+        cx: &mut PaintCx<'_>,
+        rect: Rect,
+        icon: Icon,
+        enabled: bool,
+        hovered: bool,
+    ) {
+        // Ghost icon button — a `theme.button_hover` wash signals the
+        // cursor is over it (matches the TS `hover:bg-accent` controls).
+        if hovered {
+            cx.backend
+                .fill_round_rect(rect, 6.0, self.theme.button_hover);
+        }
         // TS: enabled = currentColor (foreground), disabled = full
         // text-muted-foreground — no half-alpha (git-panel-remote-controls.tsx).
         let color = if enabled {
@@ -777,11 +828,22 @@ impl GitPanel<'_> {
     /// [`GitPanel::paint_button`], the disabled state stays primary-blue
     /// at half opacity (TS `disabled:opacity-50`) instead of going grey,
     /// and the signpost icon sits to the left of the centred label.
-    fn paint_milestone_button(&self, cx: &mut PaintCx<'_>, rect: Rect, enabled: bool) {
+    fn paint_milestone_button(
+        &self,
+        cx: &mut PaintCx<'_>,
+        rect: Rect,
+        enabled: bool,
+        hovered: bool,
+    ) {
         let t = self.theme;
         let factor = if enabled { 1.0 } else { 0.5 };
         cx.backend
             .fill_round_rect(rect, 6.0, alpha(t.primary, factor));
+        // Brighten the primary fill on hover (TS `hover:bg-primary/90`
+        // reads as a subtle lift); only while actionable.
+        if enabled && hovered {
+            cx.backend.fill_round_rect(rect, 6.0, t.button_hover);
+        }
 
         let label = self.t("git.commit.submitButton");
         let icon_s = 11.0;

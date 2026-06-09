@@ -35,6 +35,7 @@ impl WidgetHostNative {
         match hit {
             DesignMdHit::Close => {
                 self.editor_state.editor_ui.design_md_panel_open = false;
+                self.editor_state.editor_ui.design_md_hover = None;
             }
             DesignMdHit::DragHeader => {
                 self.design_md_drag = Some(DesignMdDragState {

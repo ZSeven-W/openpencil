@@ -95,6 +95,8 @@ pub struct VariablesPanel {
     editing_row: Option<usize>,
     /// Draft buffer for the row in edit focus.
     editing_draft: String,
+    /// Which target the cursor is over — drives the hover wash.
+    hover: Option<op_editor_core::VariablesPanelButton>,
 }
 
 impl VariablesPanel {
@@ -142,12 +144,35 @@ impl VariablesPanel {
                 VariableRowFocus::String(i) => i,
             }),
             editing_draft: state.ui.property_input_draft.clone(),
+            hover: state.editor_ui.variables_panel_hover,
         }
     }
 
     /// Number of variable rows the panel paints.
     pub fn row_count(&self) -> usize {
         self.rows.len()
+    }
+
+    /// Resolve a pointer to a hoverable target (row / axis chip /
+    /// dropdown item). Mirrors [`Self::hit_test`] but returns
+    /// index-only [`op_editor_core::VariablesPanelButton`] for the wash.
+    pub fn hover_at(
+        &self,
+        rect: Rect,
+        point: Point2D,
+    ) -> Option<op_editor_core::VariablesPanelButton> {
+        use op_editor_core::VariablesPanelButton as B;
+        match self.hit_test(rect, point)? {
+            VariablesPanelHit::Row(i) => Some(B::Row(i)),
+            VariablesPanelHit::AxisChip(i) => Some(B::AxisChip(i)),
+            VariablesPanelHit::AxisDropdownItem { axis, value } => {
+                // Recover the value's index within the open axis list so
+                // the wash needs no owned strings.
+                self.axis_values(&axis)
+                    .and_then(|vals| vals.iter().position(|v| *v == value))
+                    .map(B::DropdownItem)
+            }
+        }
     }
 
     /// Number of axis chips in the header. May be zero — a document
@@ -325,13 +350,17 @@ impl Widget for VariablesPanel {
         // Active theme chips.
         if !self.chips.is_empty() {
             let mut x = rect.origin.x + PAD_X;
-            for chip in &self.chips {
+            for (chip_idx, chip) in self.chips.iter().enumerate() {
                 let w = chip_width(chip);
                 let chip_rect = Rect {
                     origin: Point2D::new(x, y),
                     size: Point2D::new(w, CHIP_HEIGHT),
                 };
                 cx.backend.fill_round_rect(chip_rect, 4.0, theme.muted);
+                if self.hover == Some(op_editor_core::VariablesPanelButton::AxisChip(chip_idx)) {
+                    cx.backend
+                        .fill_round_rect(chip_rect, 4.0, theme.button_hover);
+                }
                 let label = format!("{}: {}", chip.axis, chip.value);
                 let layout = crate::TextLayout::single_run(
                     &label,
@@ -354,6 +383,10 @@ impl Widget for VariablesPanel {
                 origin: Point2D::new(rect.origin.x, y),
                 size: Point2D::new(rect.size.x, ROW_HEIGHT),
             };
+            // Hover wash on the row under the cursor.
+            if self.hover == Some(op_editor_core::VariablesPanelButton::Row(idx)) {
+                cx.backend.fill_rect(row, theme.button_hover);
+            }
             // Name on the left.
             let name_layout = crate::TextLayout::single_run(
                 &var.name,
@@ -424,12 +457,17 @@ impl Widget for VariablesPanel {
                     for (i, v) in values.iter().enumerate() {
                         let row_y = menu_y + (i as f32) * DROPDOWN_ROW_HEIGHT;
                         let is_active = *v == active_value;
+                        let item_rect = Rect {
+                            origin: Point2D::new(menu_rect.origin.x + 2.0, row_y),
+                            size: Point2D::new(menu_rect.size.x - 4.0, DROPDOWN_ROW_HEIGHT),
+                        };
                         if is_active {
-                            let highlight = Rect {
-                                origin: Point2D::new(menu_rect.origin.x + 2.0, row_y),
-                                size: Point2D::new(menu_rect.size.x - 4.0, DROPDOWN_ROW_HEIGHT),
-                            };
-                            cx.backend.fill_round_rect(highlight, 4.0, theme.muted);
+                            cx.backend.fill_round_rect(item_rect, 4.0, theme.muted);
+                        }
+                        if self.hover == Some(op_editor_core::VariablesPanelButton::DropdownItem(i))
+                        {
+                            cx.backend
+                                .fill_round_rect(item_rect, 4.0, theme.button_hover);
                         }
                         let label = crate::TextLayout::single_run(
                             v,

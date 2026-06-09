@@ -129,8 +129,22 @@ impl GitPanel<'_> {
         }
         // Footer — 导入现有密钥 (outline) + 生成新密钥 (primary).
         let (import, generate) = self.ssh_keys_footer_rects(panel_rect);
-        self.paint_button(cx, import, self.t("git.ssh.importAction"), true, false);
-        self.paint_button(cx, generate, self.t("git.ssh.generateAction"), true, true);
+        self.paint_button_with_hit(
+            cx,
+            import,
+            self.t("git.ssh.importAction"),
+            true,
+            false,
+            Some(GitPanelHit::SshImportKey),
+        );
+        self.paint_button_with_hit(
+            cx,
+            generate,
+            self.t("git.ssh.generateAction"),
+            true,
+            true,
+            Some(GitPanelHit::SshGenerateKey),
+        );
     }
 
     /// Hit-test the SSH-keys subview.
