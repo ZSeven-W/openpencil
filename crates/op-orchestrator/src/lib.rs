@@ -7,6 +7,7 @@
 //! Plan B 提供"零件"(类型 + intent/plan/parse/normalize/variables);
 //! Plan C 在 `run` 模块接出四阶段主轴。
 
+pub mod agent_identity;
 pub mod compact_prompt;
 pub mod compact_skills;
 pub mod dashboard_columns;
