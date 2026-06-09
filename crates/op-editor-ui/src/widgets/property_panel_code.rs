@@ -131,11 +131,23 @@ fn framework_row_width() -> f32 {
     total
 }
 
-/// How far the framework strip can scroll before its right edge reaches the
-/// usable width (0 when every chip already fits). The host clamps
-/// `framework_scroll` to `[0, this]`.
+/// True when the framework strip is wider than the usable panel width and
+/// must scroll — i.e. the chevron controls appear and the chips inset past
+/// them.
+fn framework_overflows(w: f32) -> bool {
+    framework_row_width() > (w - PAD_X * 2.0).max(0.0)
+}
+
+/// The maximum horizontal scroll of the framework strip (0 when it fits).
+/// When it overflows, the two chevron zones each consume `CHEVRON_ZONE_W`
+/// of the usable width, so the chips scroll within the narrower middle band.
+/// The host clamps `framework_scroll` to `[0, this]`.
 pub fn framework_row_overflow(w: f32) -> f32 {
-    (framework_row_width() - (w - PAD_X * 2.0)).max(0.0)
+    let usable = (w - PAD_X * 2.0).max(0.0);
+    if framework_row_width() <= usable {
+        return 0.0;
+    }
+    (framework_row_width() - (usable - 2.0 * CHEVRON_ZONE_W)).max(0.0)
 }
 
 /// The y-band `[top, bottom]` of the framework tab strip, given the panel's
@@ -151,8 +163,15 @@ pub fn framework_row_band(panel_top: f32) -> (f32, f32) {
 /// `-scroll`. Chips may fall partly/fully outside the visible band (the
 /// painter clips; off-band chips take no in-panel clicks). Paint + hit-test
 /// share this so they can't drift.
-fn framework_chip_rects(x: f32, y: f32, scroll: f32) -> Vec<(Framework, Rect)> {
-    let mut chip_x = x + PAD_X - scroll;
+fn framework_chip_rects(x: f32, y: f32, w: f32, scroll: f32) -> Vec<(Framework, Rect)> {
+    // When the strip overflows, inset past the left chevron zone so the
+    // first/last chips sit between the arrows instead of behind them.
+    let inset = if framework_overflows(w) {
+        CHEVRON_ZONE_W
+    } else {
+        0.0
+    };
+    let mut chip_x = x + PAD_X + inset - scroll;
     let mut out = Vec::with_capacity(Framework::ALL.len());
     for fw in Framework::ALL {
         let chip_w = chip_label_width(fw.as_wire()) + CHIP_PAD_X * 2.0;
@@ -179,7 +198,7 @@ fn chips_body_top(y: f32) -> f32 {
 /// Shared by paint + hit-test so the clickable zones match the painted
 /// chevrons exactly.
 fn framework_chevron_zones(x: f32, y: f32, w: f32) -> Option<(Rect, Rect)> {
-    if framework_row_overflow(w) <= 0.0 {
+    if !framework_overflows(w) {
         return None;
     }
     let band_l = x + PAD_X;
@@ -205,7 +224,7 @@ pub fn framework_at(x: f32, y: f32, w: f32, point: Point2D, scroll: f32) -> Opti
     let inset = if overflow { CHEVRON_ZONE_W } else { 0.0 };
     let band_l = x + PAD_X + inset;
     let band_r = x + PAD_X + usable - inset;
-    framework_chip_rects(x, y, scroll)
+    framework_chip_rects(x, y, w, scroll)
         .into_iter()
         .filter(|(_, r)| r.origin.x + r.size.x > band_l && r.origin.x < band_r)
         .find(|(_, r)| {
@@ -262,7 +281,7 @@ fn paint_framework_chips(
     // Clip the strip so scrolled-off chips don't bleed past the panel edges.
     cx.backend.save();
     cx.backend.clip_rect(band);
-    for (fw, chip) in framework_chip_rects(x, y, state.framework_scroll) {
+    for (fw, chip) in framework_chip_rects(x, y, w, state.framework_scroll) {
         // Skip chips fully outside the visible band (cheap cull).
         if chip.origin.x + chip.size.x < band.origin.x
             || chip.origin.x > band.origin.x + band.size.x
@@ -699,7 +718,7 @@ pub fn code_action_rects(
     }
     let inset = if zones.is_some() { CHEVRON_ZONE_W } else { 0.0 };
     let (band_l, band_r) = (x + PAD_X + inset, x + w - PAD_X - inset);
-    for (fw, rect) in framework_chip_rects(x, chips_y, state.framework_scroll) {
+    for (fw, rect) in framework_chip_rects(x, chips_y, w, state.framework_scroll) {
         // Only chips overlapping the visible (chevron-inset) band are clickable.
         if rect.origin.x + rect.size.x <= band_l || rect.origin.x >= band_r {
             continue;
