@@ -1,3 +1,4 @@
+use super::code_i18n::CodePanelStrings;
 use super::{action_hovered, draw_line, origin};
 use crate::theme::Theme;
 use crate::widgets::icons::{draw_icon, Icon};
@@ -48,13 +49,13 @@ pub(super) fn code_area_y(state: &CodegenState, y: f32, progress_row_h: f32) -> 
     y
 }
 
-pub(super) fn action_chip_rects(x: f32, y: f32, w: f32) -> [Rect; 4] {
+pub(super) fn action_chip_rects(x: f32, y: f32, w: f32, strings: CodePanelStrings) -> [Rect; 4] {
     let usable = w - PAD_X * 2.0;
     let preferred = [
-        action_chip_width("Copy"),
-        action_chip_width("Save"),
-        action_chip_width("Bundle"),
-        action_chip_width("Regen"),
+        action_chip_width(strings.copy()),
+        action_chip_width(strings.save()),
+        action_chip_width(strings.bundle()),
+        action_chip_width(strings.regen()),
     ];
     let preferred_total =
         preferred.iter().sum::<f32>() + ACTION_CHIP_GAP * (preferred.len() - 1) as f32;
@@ -85,6 +86,7 @@ pub(super) fn paint_complete_body_in_panel(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
     state: &CodegenState,
+    strings: CodePanelStrings,
     layout: CompleteLayout,
 ) -> f32 {
     let mut y = layout.y;
@@ -99,7 +101,7 @@ pub(super) fn paint_complete_body_in_panel(
         );
         draw_line(
             cx,
-            "Generated with degraded chunks",
+            strings.generated_degraded(),
             theme.muted_foreground,
             layout.x + PAD_X + 22.0,
             y + 16.0,
@@ -107,7 +109,7 @@ pub(super) fn paint_complete_body_in_panel(
         y += layout.progress_row_h;
     }
     if !state.assets.is_empty() {
-        let notice = format!("Includes {} asset(s)", state.assets.len());
+        let notice = strings.includes_assets(state.assets.len());
         draw_line(
             cx,
             &notice,
@@ -128,12 +130,12 @@ pub(super) fn paint_complete_body_in_panel(
         code_rect,
     );
     let actions = [
-        (Icon::Copy, "Copy", CodegenHover::Copy),
-        (Icon::Download, "Save", CodegenHover::Download),
-        (Icon::Sparkles, "Bundle", CodegenHover::ExportBundle),
-        (Icon::RefreshCw, "Regen", CodegenHover::Regenerate),
+        (Icon::Copy, strings.copy(), CodegenHover::Copy),
+        (Icon::Download, strings.save(), CodegenHover::Download),
+        (Icon::Sparkles, strings.bundle(), CodegenHover::ExportBundle),
+        (Icon::RefreshCw, strings.regen(), CodegenHover::Regenerate),
     ];
-    let rects = action_chip_rects(layout.x, y, layout.w);
+    let rects = action_chip_rects(layout.x, y, layout.w, strings);
     for ((icon, label, hover), rect) in actions.iter().zip(rects) {
         paint_action_chip(cx, theme, *icon, label, rect, action_hovered(state, *hover));
     }

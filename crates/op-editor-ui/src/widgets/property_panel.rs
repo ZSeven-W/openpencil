@@ -371,7 +371,12 @@ impl PropertyPanel {
             return None;
         }
         if matches!(self.tab, op_editor_core::PropertyTab::Code) {
-            return code_action_hit(panel_rect, &self.codegen, point);
+            return crate::widgets::property_panel_code::code_action_hit_with_locale(
+                panel_rect,
+                &self.codegen,
+                point,
+                self.locale,
+            );
         }
         if self.image_fill_popover_open {
             if let Some(action) = sections::image_fill_popover_action_at(
@@ -539,8 +544,6 @@ fn rect_contains(r: Rect, p: Point2D) -> bool {
         && p.y <= r.origin.y + r.size.y
 }
 
-use crate::widgets::property_panel_code::{code_action_hit, paint_code_panel_in_panel};
-
 impl Widget for PropertyPanel {
     fn id(&self) -> WidgetId {
         self.id
@@ -595,7 +598,14 @@ impl Widget for PropertyPanel {
         };
         let caps = self.capabilities();
         if matches!(self.tab, op_editor_core::PropertyTab::Code) {
-            paint_code_panel_in_panel(cx, &self.theme, &self.codegen, rect, self.now_ms);
+            crate::widgets::property_panel_code::paint_code_panel_in_panel_with_locale(
+                cx,
+                &self.theme,
+                &self.codegen,
+                self.locale,
+                rect,
+                self.now_ms,
+            );
             return;
         }
         // Section content scrolls below the pinned tab strip; clip it

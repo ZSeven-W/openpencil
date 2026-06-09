@@ -153,7 +153,7 @@ fn image_generation_profile_test_tracks_testing_status_like_ts() {
     let content_x = rect.origin.x + 200.0 + 24.0;
     let content_y = rect.origin.y + 24.0;
     let gen_top = content_y + 36.0 + 24.0 + 28.0;
-    let row_y = gen_top + 36.0;
+    let row_y = gen_top + 36.0 + 8.0;
     let api_field_y = row_y + 32.0 + 8.0 + 36.0 * 2.0;
 
     assert!(host.dispatch_agent_settings_press(
@@ -194,7 +194,7 @@ fn image_generation_provider_select_commits_and_closes_menu() {
     let content_x = rect.origin.x + 200.0 + 24.0;
     let content_y = rect.origin.y + 24.0;
     let gen_top = content_y + 36.0 + 24.0 + 28.0;
-    let row_y = gen_top + 36.0;
+    let row_y = gen_top + 36.0 + 8.0;
     let provider_y = row_y + 32.0 + 8.0 + 36.0;
 
     assert!(host.dispatch_agent_settings_press(
@@ -210,6 +210,13 @@ fn image_generation_provider_select_commits_and_closes_menu() {
             .image_gen_provider_menu_open,
         Some(0)
     );
+    assert_eq!(
+        host.editor_state.editor_ui.agent_settings.focus,
+        Some(SettingsFocus::ImageGenProfile {
+            index: 0,
+            field: ImageGenField::Name,
+        })
+    );
 
     assert!(host.dispatch_agent_settings_press(
         content_x + 110.0 + 20.0,
@@ -223,6 +230,13 @@ fn image_generation_provider_select_commits_and_closes_menu() {
     assert_eq!(profile.provider, ImageGenProvider::Gemini);
     assert!(profile.model.is_empty());
     assert!(settings.image_gen_provider_menu_open.is_none());
+    assert_eq!(
+        settings.focus,
+        Some(SettingsFocus::ImageGenProfile {
+            index: 0,
+            field: ImageGenField::Name,
+        })
+    );
 }
 
 #[test]
@@ -244,7 +258,7 @@ fn image_generation_profile_header_click_toggles_editor_closed() {
     let content_x = rect.origin.x + 200.0 + 24.0;
     let content_y = rect.origin.y + 24.0;
     let gen_top = content_y + 36.0 + 24.0 + 28.0;
-    let row_y = gen_top + 36.0;
+    let row_y = gen_top + 36.0 + 8.0;
 
     assert!(host.dispatch_agent_settings_press(content_x + 72.0, row_y + 16.0, 1200.0, 800.0));
 

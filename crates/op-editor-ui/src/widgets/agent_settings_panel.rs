@@ -370,6 +370,22 @@ impl<'a> AgentSettingsPanel<'a> {
         )
     }
 
+    pub fn image_gen_profile_test_button_hover_at(
+        &self,
+        panel: Rect,
+        point: Point2D,
+    ) -> Option<usize> {
+        if !rect_contains(panel, point) {
+            return None;
+        }
+        let scrolled = Point2D::new(point.x, point.y + self.settings.scroll_y);
+        agent_settings_images::profile_test_button_hover_at(
+            content_rect(panel),
+            &self.settings,
+            scrolled,
+        )
+    }
+
     /// Total content height for the active tab. Host uses this to
     /// clamp `scroll_y` so the bottom of the list never floats
     /// above the panel bottom.
@@ -447,7 +463,7 @@ fn paint_panel(
         }
     }
     cx.backend.restore();
-    paint_close(cx, theme, panel);
+    paint_close(cx, theme, settings, panel);
 }
 
 fn paint_sidebar(
@@ -519,8 +535,11 @@ fn paint_sidebar(
     }
 }
 
-fn paint_close(cx: &mut PaintCx<'_>, theme: &Theme, panel: Rect) {
+fn paint_close(cx: &mut PaintCx<'_>, theme: &Theme, settings: &AgentSettings, panel: Rect) {
     let close = close_rect(panel);
+    if settings.hover_agent_settings_close {
+        cx.backend.fill_round_rect(close, 6.0, theme.button_hover);
+    }
     draw_icon(
         cx.backend,
         Icon::Close,

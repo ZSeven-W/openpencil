@@ -863,6 +863,8 @@ pub struct EditorUiState {
     /// Hovered chat design JSON card `(message_index, block_index)`;
     /// drives the TS-style hover reveal of the card's copy affordance.
     pub chat_design_block_hover: Option<(usize, usize)>,
+    /// Index of the empty-state quick action card under the cursor.
+    pub chat_example_hover: Option<usize>,
     /// Which bare chat header button (chevron / maximize / new-chat)
     /// the cursor is over — drives their `theme.button_hover` wash.
     pub chat_header_hover: Option<crate::chat_button_state::ChatHeaderButton>,
@@ -938,6 +940,8 @@ pub struct EditorUiState {
     pub font_weight_picker_hover: Option<usize>,
     /// Active-theme axis whose value picker is open; `None` = closed.
     pub axis_dropdown_open: Option<String>,
+    /// Whether the Variables right-rail panel is explicitly open.
+    pub variables_panel_open: bool,
     /// Which variables-panel target the cursor is over (row / axis chip
     /// / dropdown item) — drives the `theme.button_hover` wash.
     pub variables_panel_hover: Option<crate::variables_panel_state::VariablesPanelButton>,
@@ -1100,6 +1104,7 @@ impl Default for EditorUiState {
             chat_model_picker_caret_anchor_ms: 0,
             chat_model_picker_hover: None,
             chat_design_block_hover: None,
+            chat_example_hover: None,
             chat_header_hover: None,
             chat_footer_hover: None,
             chat_selected_agent: 0,
@@ -1127,6 +1132,7 @@ impl Default for EditorUiState {
             font_weight_picker_open: false,
             font_weight_picker_hover: None,
             axis_dropdown_open: None,
+            variables_panel_open: false,
             variables_panel_hover: None,
             variable_row_focus: None,
             effect_param_focus: None,

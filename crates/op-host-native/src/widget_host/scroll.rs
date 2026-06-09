@@ -9,6 +9,37 @@ use op_editor_ui::widgets::GitPanel;
 use op_editor_ui::Point2D;
 
 impl WidgetHostNative {
+    fn try_scroll_chat_checklist(
+        &mut self,
+        x: f32,
+        y: f32,
+        delta: f32,
+        viewport_width: f32,
+        viewport_height: f32,
+    ) -> bool {
+        use op_editor_ui::widgets::AIChatPlaceholder;
+        let point = Point2D::new(x, y);
+        let Some(chat_rect) = self.ai_chat_rect(viewport_width, viewport_height) else {
+            return false;
+        };
+        let (checklist, max) = {
+            let panel = AIChatPlaceholder::from_editor_at(&self.editor_state, self.now_ms);
+            let Some(checklist) = panel.fixed_checklist_bounds(chat_rect) else {
+                return false;
+            };
+            (checklist, panel.fixed_checklist_scroll_max())
+        };
+        if !rect_contains(checklist, point) {
+            return false;
+        }
+        let next = (self.editor_state.chat.checklist_scroll - delta).clamp(0.0, max);
+        if next != self.editor_state.chat.checklist_scroll {
+            self.editor_state.chat.checklist_scroll = next;
+            self.mark_dirty();
+        }
+        true
+    }
+
     fn try_scroll_agent_preset_menu(
         &mut self,
         x: f32,
@@ -217,6 +248,9 @@ impl WidgetHostNative {
                 }
             }
         }
+        if self.try_scroll_chat_checklist(x, y, delta_y, viewport_width, viewport_height) {
+            return true;
+        }
         // Agent-settings modal owns wheel.
         if self.editor_state.editor_ui.agent_settings_open {
             use op_editor_ui::widgets::agent_settings_panel::AgentSettingsPanel;
@@ -347,6 +381,9 @@ impl WidgetHostNative {
                     return true;
                 }
             }
+        }
+        if self.try_scroll_chat_checklist(x, y, dy, viewport_width, viewport_height) {
+            return true;
         }
         // Agent-settings modal owns trackpad scroll same as wheel.
         if self.editor_state.editor_ui.agent_settings_open {

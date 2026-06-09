@@ -11,6 +11,7 @@ use op_editor_core::EditorState;
 #[derive(Default)]
 struct CaptureBackend {
     fills: Vec<(Rect, Color)>,
+    round_fills: Vec<(Rect, Color)>,
     icon_strokes: Vec<(Point2D, f32, usize)>,
     svg_strokes: Vec<(String, Point2D, f32)>,
     text_points: Vec<Point2D>,
@@ -29,7 +30,9 @@ impl RenderBackend for CaptureBackend {
     }
     fn clip_rect(&mut self, _: Rect) {}
     fn stroke_line(&mut self, _: Point2D, _: Point2D, _: Color, _: f32) {}
-    fn fill_round_rect(&mut self, _: Rect, _: f32, _: Color) {}
+    fn fill_round_rect(&mut self, rect: Rect, _: f32, color: Color) {
+        self.round_fills.push((rect, color));
+    }
     fn stroke_round_rect(&mut self, _: Rect, _: f32, _: Color, _: f32) {}
     fn stroke_svg_path(&mut self, d: &str, at: Point2D, size: f32, _: Color, _: f32) {
         self.icon_strokes.push((at, size, self.ops.len()));
@@ -100,6 +103,32 @@ fn close_button_paints_after_scrollable_content() {
     assert!(
         close_idx > restore_idx,
         "close button must paint above clipped, scrollable content"
+    );
+}
+
+#[test]
+fn close_button_hover_paints_visible_wash() {
+    let mut state = EditorState::default();
+    state.editor_ui.agent_settings.hover_agent_settings_close = true;
+    let panel = AgentSettingsPanel::for_editor(&state);
+    let rect = panel.rect(1200.0, 800.0);
+    let mut backend = CaptureBackend::default();
+    let mut cx = PaintCx {
+        backend: &mut backend,
+    };
+
+    panel.paint(&mut cx, rect);
+
+    let close = Rect {
+        origin: Point2D::new(rect.origin.x + rect.size.x - 32.0, rect.origin.y + 16.0),
+        size: Point2D::new(16.0, 16.0),
+    };
+    assert!(
+        backend
+            .round_fills
+            .iter()
+            .any(|(fill, color)| *fill == close && color_eq(*color, panel.theme.button_hover)),
+        "hovered close button should paint a visible hover wash"
     );
 }
 
@@ -684,10 +713,10 @@ fn images_tab_profile_rows_expose_active_and_remove_targets() {
     let content_w = rect.size.x - 200.0 - 48.0;
 
     let gen_top = content_y + 36.0 + 24.0 + 28.0;
-    let row_y = gen_top + 36.0;
+    let row_y = gen_top + 36.0 + 8.0;
 
     assert_eq!(
-        panel.hit_test(rect, crate::Point2D::new(content_x + 15.0, row_y + 16.0)),
+        panel.hit_test(rect, crate::Point2D::new(content_x + 24.0, row_y + 16.0)),
         AgentSettingsHit::SetActiveGenConfig(0)
     );
     assert_eq!(
@@ -710,8 +739,8 @@ fn images_tab_profile_row_paints_expand_chevron_before_delete_like_ts() {
     let content_y = rect.origin.y + 24.0;
     let content_w = rect.size.x - 200.0 - 48.0;
     let gen_top = content_y + 36.0 + 24.0 + 28.0;
-    let row_y = gen_top + 36.0;
-    let chevron_origin = crate::Point2D::new(content_x + content_w - 44.0, row_y + 10.0);
+    let row_y = gen_top + 36.0 + 8.0;
+    let chevron_origin = crate::Point2D::new(content_x + content_w - 52.0, row_y + 10.0);
 
     let mut backend = CaptureBackend::default();
     let mut cx = PaintCx {

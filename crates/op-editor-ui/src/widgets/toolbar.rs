@@ -4,7 +4,7 @@
 //! Layout matches `apps/web/src/components/editor/toolbar.tsx`:
 //! tools at the top (Select / Rect / Text / Frame / Hand), a hairline
 //! separator, undo/redo, another separator, then panel toggles
-//! (Code / Design system).
+//! (Variables / Design system).
 //!
 //! Active tool gets a `theme.primary` filled rounded square + the
 //! white foreground icon. Inactive items render the icon in
@@ -57,7 +57,7 @@ pub enum ToolbarItem {
 pub enum ToolbarAction {
     Undo,
     Redo,
-    ToggleCodePanel,
+    ToggleVariablesPanel,
     ToggleDesignPanel,
 }
 
@@ -88,7 +88,7 @@ pub struct Toolbar {
 
 impl Toolbar {
     /// Default Step 4 set — TS app order:
-    /// Select / Rect / Text / Frame / Hand · Undo / Redo · Code / Design.
+    /// Select / Rect / Text / Frame / Hand · Undo / Redo · Variables / Design.
     pub fn default_set() -> Self {
         Self::for_editor(&EditorState::new())
     }
@@ -110,7 +110,7 @@ impl Toolbar {
                 ToolbarItem::Action(ToolbarAction::Undo, Icon::Undo),
                 ToolbarItem::Action(ToolbarAction::Redo, Icon::Redo),
                 ToolbarItem::Separator,
-                ToolbarItem::Action(ToolbarAction::ToggleCodePanel, Icon::Braces),
+                ToolbarItem::Action(ToolbarAction::ToggleVariablesPanel, Icon::Braces),
                 ToolbarItem::Action(ToolbarAction::ToggleDesignPanel, Icon::BookOpen),
             ],
             active: state.tool,

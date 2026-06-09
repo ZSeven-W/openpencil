@@ -1,0 +1,154 @@
+use super::ai_chat_transcript::{
+    build_transcript, TextBubble, BODY_FONT, BUBBLE_PAD, CHAR_UNIT_PX, LINE_H,
+};
+use super::ai_chat_transcript_text::char_display_units;
+use crate::theme::Theme;
+use crate::widgets::PaintCx;
+use crate::{Point2D, Rect};
+use op_editor_core::chat::{ChatMessage, ChatRole, ChatTranscriptSelection};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct TranscriptTextHit {
+    pub message_index: usize,
+    pub offset: usize,
+}
+
+pub(crate) fn transcript_text_offset_at(
+    messages: &[ChatMessage],
+    body_rect: Rect,
+    point: Point2D,
+    locale: op_editor_core::Locale,
+) -> Option<TranscriptTextHit> {
+    if !rect_contains(body_rect, point) {
+        return None;
+    }
+    for item in build_transcript(messages, body_rect, locale) {
+        if item.role != ChatRole::User {
+            continue;
+        }
+        let Some(bubble) = &item.bubble else {
+            continue;
+        };
+        if bubble.typing || bubble.completion.is_some() || !rect_contains(bubble.rect, point) {
+            continue;
+        }
+        let text = &messages[item.msg_index].content;
+        if text.is_empty() || bubble.lines.is_empty() {
+            continue;
+        }
+        let text_top = bubble.rect.origin.y + BUBBLE_PAD;
+        let line_idx = ((point.y - text_top).max(0.0) / LINE_H)
+            .floor()
+            .clamp(0.0, (bubble.lines.len() - 1) as f32) as usize;
+        let line = &bubble.lines[line_idx];
+        let line_offsets = line_start_offsets(text, &bubble.lines);
+        let line_start = *line_offsets.get(line_idx).unwrap_or(&0);
+        let line_offset = line_offset_at_x(line, point.x - (bubble.rect.origin.x + BUBBLE_PAD));
+        let offset = previous_char_boundary(text, (line_start + line_offset).min(text.len()));
+        return Some(TranscriptTextHit {
+            message_index: item.msg_index,
+            offset,
+        });
+    }
+    None
+}
+
+pub(crate) fn paint_user_bubble_selection(
+    cx: &mut PaintCx<'_>,
+    theme: &Theme,
+    text: &str,
+    bubble: &TextBubble,
+    selection: ChatTranscriptSelection,
+) {
+    if selection.is_collapsed() || text.is_empty() || bubble.lines.is_empty() {
+        return;
+    }
+    let (start, end) = selection.ordered();
+    let start = previous_char_boundary(text, start.min(text.len()));
+    let end = previous_char_boundary(text, end.min(text.len()));
+    if start >= end {
+        return;
+    }
+    let offsets = line_start_offsets(text, &bubble.lines);
+    let text_x = bubble.rect.origin.x + BUBBLE_PAD;
+    let mut baseline = bubble.rect.origin.y + BUBBLE_PAD + 11.0;
+    for (i, line) in bubble.lines.iter().enumerate() {
+        let line_start = *offsets.get(i).unwrap_or(&0);
+        let line_end = (line_start + line.len()).min(text.len());
+        if end > line_start && start < line_end {
+            let local_start =
+                previous_char_boundary(line, start.saturating_sub(line_start).min(line.len()));
+            let local_end =
+                previous_char_boundary(line, end.saturating_sub(line_start).min(line.len()));
+            let x0 = text_x + line_x_at_offset(line, local_start);
+            let x1 = text_x + line_x_at_offset(line, local_end);
+            if x1 > x0 {
+                cx.backend.fill_round_rect(
+                    Rect::xywh(
+                        x0 - 2.0,
+                        baseline - BODY_FONT - 2.0,
+                        x1 - x0 + 4.0,
+                        BODY_FONT + 6.0,
+                    ),
+                    3.0,
+                    crate::widgets::text_selection::selection_color(theme),
+                );
+            }
+        }
+        baseline += LINE_H;
+    }
+}
+
+fn rect_contains(rect: Rect, point: Point2D) -> bool {
+    point.x >= rect.origin.x
+        && point.x <= rect.origin.x + rect.size.x
+        && point.y >= rect.origin.y
+        && point.y <= rect.origin.y + rect.size.y
+}
+
+fn line_start_offsets(text: &str, lines: &[String]) -> Vec<usize> {
+    let mut out = Vec::with_capacity(lines.len());
+    let mut search_from = 0;
+    for line in lines {
+        if line.is_empty() {
+            out.push(search_from.min(text.len()));
+            continue;
+        }
+        let next = text[search_from..]
+            .find(line)
+            .map(|rel| search_from + rel)
+            .unwrap_or(search_from);
+        out.push(next);
+        search_from = (next + line.len()).min(text.len());
+    }
+    out
+}
+
+fn line_offset_at_x(line: &str, x: f32) -> usize {
+    if x <= 0.0 {
+        return 0;
+    }
+    let mut px = 0.0;
+    for (idx, ch) in line.char_indices() {
+        let w = char_display_units(ch) as f32 * CHAR_UNIT_PX;
+        if x < px + w / 2.0 {
+            return idx;
+        }
+        px += w;
+    }
+    line.len()
+}
+
+fn line_x_at_offset(line: &str, offset: usize) -> f32 {
+    line.char_indices()
+        .take_while(|(idx, _)| *idx < offset)
+        .map(|(_, ch)| char_display_units(ch) as f32 * CHAR_UNIT_PX)
+        .sum()
+}
+
+fn previous_char_boundary(text: &str, mut index: usize) -> usize {
+    while index > 0 && !text.is_char_boundary(index) {
+        index -= 1;
+    }
+    index
+}

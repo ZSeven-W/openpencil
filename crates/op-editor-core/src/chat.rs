@@ -288,6 +288,49 @@ impl ChatAnchor {
 pub const DEFAULT_CHAT_PANEL_WIDTH: f32 = 360.0;
 pub const DEFAULT_CHAT_PANEL_HEIGHT: f32 = 520.0;
 
+/// Byte-offset text selection inside one chat transcript message.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ChatTranscriptSelection {
+    pub message_index: usize,
+    pub anchor: usize,
+    pub focus: usize,
+}
+
+impl ChatTranscriptSelection {
+    pub fn ordered(self) -> (usize, usize) {
+        if self.anchor <= self.focus {
+            (self.anchor, self.focus)
+        } else {
+            (self.focus, self.anchor)
+        }
+    }
+
+    pub fn is_collapsed(self) -> bool {
+        self.anchor == self.focus
+    }
+}
+
+/// Byte-offset text selection inside the chat input draft.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ChatInputSelection {
+    pub anchor: usize,
+    pub focus: usize,
+}
+
+impl ChatInputSelection {
+    pub fn ordered(self) -> (usize, usize) {
+        if self.anchor <= self.focus {
+            (self.anchor, self.focus)
+        } else {
+            (self.focus, self.anchor)
+        }
+    }
+
+    pub fn is_collapsed(self) -> bool {
+        self.anchor == self.focus
+    }
+}
+
 /// Floating AI chat panel state — mirrors shell-core's `ChatState`
 /// (messages, input draft, focused flag, panel anchor, model catalog).
 #[derive(Debug, Clone)]
@@ -298,6 +341,10 @@ pub struct ChatState {
     /// True after Cmd/Ctrl+A while the chat textarea owns the
     /// keyboard. The next edit replaces the whole input.
     pub input_select_all: bool,
+    /// Byte-offset selection/caret inside the input draft.
+    pub input_selection: Option<ChatInputSelection>,
+    /// Text selection inside a visible transcript user message.
+    pub transcript_selection: Option<ChatTranscriptSelection>,
     /// Which canvas corner the floating chat panel snaps to.
     pub anchor: ChatAnchor,
     /// Non-maximized panel width. TS persists this as
@@ -319,6 +366,8 @@ pub struct ChatState {
     /// Collapsed state for the fixed "Pencil it out" design checklist
     /// pinned above the input, mirroring the TS checklist header.
     pub checklist_collapsed: bool,
+    /// Vertical scroll offset inside the fixed design checklist rows.
+    pub checklist_scroll: f32,
     /// Last user-action timestamp (focus / keystroke) in ms — drives
     /// the caret blink phase. Reset on focus and on every key event.
     pub caret_anchor_ms: u64,
@@ -388,6 +437,8 @@ impl Default for ChatState {
             input: String::new(),
             focused: false,
             input_select_all: false,
+            input_selection: None,
+            transcript_selection: None,
             anchor: ChatAnchor::BottomLeft,
             panel_width: DEFAULT_CHAT_PANEL_WIDTH,
             panel_height: DEFAULT_CHAT_PANEL_HEIGHT,
@@ -395,6 +446,7 @@ impl Default for ChatState {
             collapsed: false,
             maximized: false,
             checklist_collapsed: false,
+            checklist_scroll: 0.0,
             caret_anchor_ms: 0,
             pending_send: None,
             pending_new_chat: false,
@@ -467,6 +519,8 @@ impl ChatState {
         self.messages.push(ChatMessage::user(trimmed));
         self.messages.push(ChatMessage::assistant(echo));
         self.input.clear();
+        self.input_select_all = false;
+        self.input_selection = None;
     }
 
     /// Real-send entry point. Pushes the user message + an empty
@@ -509,6 +563,9 @@ impl ChatState {
         // Empty streaming assistant bubble — provider deltas append here.
         self.messages.push(ChatMessage::assistant_streaming());
         self.input.clear();
+        self.input_select_all = false;
+        self.input_selection = None;
+        self.checklist_scroll = 0.0;
         self.pending_send = Some(trimmed);
         true
     }
@@ -550,9 +607,13 @@ impl ChatState {
     pub fn new_chat(&mut self) {
         self.messages.clear();
         self.input.clear();
+        self.input_select_all = false;
+        self.input_selection = None;
         self.pending_send = None;
         self.pending_stop_chat = false;
         self.pending_copy_text = None;
+        self.transcript_selection = None;
+        self.checklist_scroll = 0.0;
         self.pending_attachments.clear();
         self.pending_attachment_pick = false;
         self.pending_new_chat = true;
@@ -560,6 +621,109 @@ impl ChatState {
 
     pub fn queue_copy_text(&mut self, text: impl Into<String>) {
         self.pending_copy_text = Some(text.into());
+    }
+
+    pub fn selected_transcript_text(&self) -> Option<&str> {
+        let selection = self.transcript_selection?;
+        if selection.is_collapsed() {
+            return None;
+        }
+        let text = &self.messages.get(selection.message_index)?.content;
+        if text.is_empty() {
+            return None;
+        }
+        let (start, end) = selection.ordered();
+        let start = previous_char_boundary(text, start.min(text.len()));
+        let end = previous_char_boundary(text, end.min(text.len()));
+        (start < end).then_some(&text[start..end])
+    }
+
+    pub fn set_input_caret(&mut self, offset: usize) {
+        let caret = previous_char_boundary(&self.input, offset.min(self.input.len()));
+        self.input_select_all = false;
+        self.input_selection = Some(ChatInputSelection {
+            anchor: caret,
+            focus: caret,
+        });
+    }
+
+    pub fn input_caret(&self) -> usize {
+        self.input_selection
+            .map(|selection| {
+                previous_char_boundary(&self.input, selection.focus.min(self.input.len()))
+            })
+            .unwrap_or(self.input.len())
+    }
+
+    pub fn selected_input_range(&self) -> Option<(usize, usize)> {
+        if self.input.is_empty() {
+            return None;
+        }
+        if self.input_select_all {
+            return Some((0, self.input.len()));
+        }
+        let selection = self.input_selection?;
+        if selection.is_collapsed() {
+            return None;
+        }
+        let (start, end) = selection.ordered();
+        let start = previous_char_boundary(&self.input, start.min(self.input.len()));
+        let end = previous_char_boundary(&self.input, end.min(self.input.len()));
+        (start < end).then_some((start, end))
+    }
+
+    pub fn selected_input_text(&self) -> Option<&str> {
+        let (start, end) = self.selected_input_range()?;
+        Some(&self.input[start..end])
+    }
+
+    pub fn insert_input_text(&mut self, text: &str) -> bool {
+        if text.is_empty() {
+            return false;
+        }
+        let (start, end) = self.selected_input_range().unwrap_or_else(|| {
+            let caret = self.input_caret();
+            (caret, caret)
+        });
+        self.input.replace_range(start..end, text);
+        let caret = start + text.len();
+        self.input_select_all = false;
+        self.input_selection = Some(ChatInputSelection {
+            anchor: caret,
+            focus: caret,
+        });
+        true
+    }
+
+    pub fn delete_input_selection(&mut self) -> bool {
+        let Some((start, end)) = self.selected_input_range() else {
+            return false;
+        };
+        self.input.replace_range(start..end, "");
+        self.input_select_all = false;
+        self.input_selection = Some(ChatInputSelection {
+            anchor: start,
+            focus: start,
+        });
+        true
+    }
+
+    pub fn backspace_input(&mut self) -> bool {
+        if self.delete_input_selection() {
+            return true;
+        }
+        let caret = self.input_caret();
+        if caret == 0 || self.input.is_empty() {
+            return false;
+        }
+        let start = previous_char_boundary(&self.input, caret.saturating_sub(1));
+        self.input.replace_range(start..caret, "");
+        self.input_select_all = false;
+        self.input_selection = Some(ChatInputSelection {
+            anchor: start,
+            focus: start,
+        });
+        true
     }
 
     /// Flip the collapsed state of message `idx`'s thinking block.
@@ -619,6 +783,9 @@ impl ChatState {
     /// Flip the fixed design-checklist panel state.
     pub fn toggle_checklist_collapsed(&mut self) {
         self.checklist_collapsed = !self.checklist_collapsed;
+        if self.checklist_collapsed {
+            self.checklist_scroll = 0.0;
+        }
     }
 
     /// Advance the thinking-mode selector one step:
@@ -671,6 +838,13 @@ impl ChatState {
             self.pending_attachments.remove(index);
         }
     }
+}
+
+fn previous_char_boundary(text: &str, mut index: usize) -> usize {
+    while index > 0 && !text.is_char_boundary(index) {
+        index -= 1;
+    }
+    index
 }
 
 #[cfg(test)]
@@ -741,6 +915,30 @@ mod tests {
         assert!(!chat.begin_send());
         assert!(chat.messages.is_empty());
         assert!(chat.pending_send.is_none());
+    }
+
+    #[test]
+    fn input_selection_replaces_only_selected_range() {
+        let mut chat = ChatState {
+            input: "abcdef".into(),
+            input_selection: Some(ChatInputSelection {
+                anchor: 1,
+                focus: 3,
+            }),
+            ..Default::default()
+        };
+
+        assert_eq!(chat.selected_input_text(), Some("bc"));
+        assert!(chat.insert_input_text("X"));
+
+        assert_eq!(chat.input, "aXdef");
+        assert_eq!(
+            chat.input_selection,
+            Some(ChatInputSelection {
+                anchor: 2,
+                focus: 2,
+            })
+        );
     }
 
     #[test]

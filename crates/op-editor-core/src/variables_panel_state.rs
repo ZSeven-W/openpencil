@@ -10,6 +10,14 @@
 /// Which variables-panel target the cursor is over. `None` = no hover.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VariablesPanelButton {
+    /// Close button on the floating variables manager.
+    Close,
+    /// Header-level add affordance.
+    HeaderAdd,
+    /// Preset dropdown affordance in the modal header.
+    PresetMenu,
+    /// Footer "add variable" affordance.
+    AddVariable,
     /// A variable row, by index.
     Row(usize),
     /// An active-theme axis chip in the header, by index.

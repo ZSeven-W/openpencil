@@ -296,6 +296,78 @@ fn ai_chat_new_chat_click_clears_transcript_and_queues_abort() {
 }
 
 #[test]
+fn dragging_user_transcript_text_selects_and_copy_queues_text() {
+    let prompt = "生成一个设计精良的美食应用移动端首页";
+    let mut host = WidgetHostNative::new();
+    host.editor_state_mut()
+        .chat
+        .messages
+        .push(op_editor_core::ChatMessage::user(prompt));
+    let viewport_w = 1200.0;
+    let viewport_h = 800.0;
+    let rect = host
+        .ai_chat_rect(viewport_w, viewport_h)
+        .expect("chat panel visible");
+    let y = rect.origin.y + 74.0;
+    let start_x = rect.origin.x + 96.0;
+    let end_x = rect.origin.x + 338.0;
+
+    assert!(host.apply_press(start_x, y, viewport_w, viewport_h));
+    assert!(host.apply_cursor_move(end_x, y));
+    assert!(host.apply_release_with_viewport(viewport_w, viewport_h));
+
+    assert_eq!(
+        host.editor_state().chat.selected_transcript_text(),
+        Some(prompt)
+    );
+    assert!(host.apply_copy());
+    assert_eq!(
+        host.editor_state().chat.pending_copy_text.as_deref(),
+        Some(prompt)
+    );
+}
+
+#[test]
+fn user_transcript_text_uses_text_cursor() {
+    let prompt = "生成一个设计精良的美食应用移动端首页";
+    let mut host = WidgetHostNative::new();
+    host.editor_state_mut()
+        .chat
+        .messages
+        .push(op_editor_core::ChatMessage::user(prompt));
+    let viewport_w = 1200.0;
+    let viewport_h = 800.0;
+    let rect = host
+        .ai_chat_rect(viewport_w, viewport_h)
+        .expect("chat panel visible");
+    let x = rect.origin.x + 96.0;
+    let y = rect.origin.y + 74.0;
+
+    assert_eq!(
+        host.cursor_hint(x, y, viewport_w, viewport_h),
+        CursorHint::Text
+    );
+}
+
+#[test]
+fn chat_input_text_uses_text_cursor() {
+    let mut host = WidgetHostNative::new();
+    host.editor_state_mut().chat.input = "abcdef".into();
+    let viewport_w = 1200.0;
+    let viewport_h = 800.0;
+    let rect = host
+        .ai_chat_rect(viewport_w, viewport_h)
+        .expect("chat panel visible");
+    let x = rect.origin.x + 32.0;
+    let y = rect.origin.y + textarea_center_y_for_test();
+
+    assert_eq!(
+        host.cursor_hint(x, y, viewport_w, viewport_h),
+        CursorHint::Text
+    );
+}
+
+#[test]
 fn ai_chat_east_edge_shows_resize_cursor() {
     let host = WidgetHostNative::new();
     let rect = host
@@ -414,6 +486,117 @@ fn ai_chat_streaming_attachment_click_does_not_open_picker() {
     assert!(!host.editor_state().chat.pending_attachment_pick);
 }
 
+fn toolbar_action_point_for_test(
+    host: &WidgetHostNative,
+    action: op_editor_ui::widgets::ToolbarAction,
+    viewport_w: f32,
+    viewport_h: f32,
+) -> (f32, f32) {
+    let toolbar = op_editor_ui::widgets::Toolbar::for_editor(host.editor_state());
+    let rect = host.toolbar_rect(viewport_w, viewport_h);
+    let min_x = rect.origin.x.floor() as i32;
+    let max_x = (rect.origin.x + rect.size.x).ceil() as i32;
+    let min_y = rect.origin.y.floor() as i32;
+    let max_y = (rect.origin.y + rect.size.y).ceil() as i32;
+    let mut hits = Vec::new();
+    for y in min_y..=max_y {
+        for x in min_x..=max_x {
+            if toolbar.hit_test(rect, op_editor_ui::Point2D::new(x as f32, y as f32))
+                == Some(op_editor_ui::widgets::ToolbarHit::Action(action))
+            {
+                hits.push((x as f32, y as f32));
+            }
+        }
+    }
+    let (sum_x, sum_y) = hits
+        .iter()
+        .fold((0.0, 0.0), |(sx, sy), (x, y)| (sx + *x, sy + *y));
+    let count = hits.len().max(1) as f32;
+    assert!(
+        !hits.is_empty(),
+        "toolbar action {action:?} should expose a hit target"
+    );
+    (sum_x / count, sum_y / count)
+}
+
+#[test]
+fn toolbar_panel_actions_open_variables_and_design_panels() {
+    let mut host = WidgetHostNative::new();
+    seed(
+        &mut host,
+        r#"{"version":"0.8.0","children":[{"type":"rectangle","id":"n1","name":"n1","x":0,"y":0,"width":100,"height":50}]}"#,
+    );
+    host.editor_state_mut().editor_ui.property_tab = op_editor_core::PropertyTab::Design;
+    host.editor_state_mut().chat.collapsed = true;
+    let viewport_w = 1200.0;
+    let viewport_h = 800.0;
+
+    let (variables_x, variables_y) = toolbar_action_point_for_test(
+        &host,
+        op_editor_ui::widgets::ToolbarAction::ToggleVariablesPanel,
+        viewport_w,
+        viewport_h,
+    );
+    let toolbar = op_editor_ui::widgets::Toolbar::for_editor(host.editor_state());
+    assert_eq!(
+        toolbar.hit_test(
+            host.toolbar_rect(viewport_w, viewport_h),
+            op_editor_ui::Point2D::new(variables_x, variables_y)
+        ),
+        Some(op_editor_ui::widgets::ToolbarHit::Action(
+            op_editor_ui::widgets::ToolbarAction::ToggleVariablesPanel
+        ))
+    );
+    assert!(!host.editor_state().right_rail_visible());
+    assert!(host.apply_press(variables_x, variables_y, viewport_w, viewport_h));
+    assert!(host.editor_state().editor_ui.variables_panel_open);
+    assert!(!host.editor_state().right_rail_visible());
+    assert_eq!(
+        host.editor_state().editor_ui.property_tab,
+        op_editor_core::PropertyTab::Design
+    );
+    assert!(host.apply_press(variables_x, variables_y, viewport_w, viewport_h));
+    assert!(!host.editor_state().editor_ui.variables_panel_open);
+    assert!(!host.editor_state().right_rail_visible());
+
+    let (design_x, design_y) = toolbar_action_point_for_test(
+        &host,
+        op_editor_ui::widgets::ToolbarAction::ToggleDesignPanel,
+        viewport_w,
+        viewport_h,
+    );
+    assert!(host.apply_press(design_x, design_y, viewport_w, viewport_h));
+    assert!(host.editor_state().editor_ui.design_md_panel_open);
+}
+
+#[test]
+fn explicit_variables_modal_keeps_property_rail_and_handles_rows() {
+    let mut host = WidgetHostNative::new();
+    seed(
+        &mut host,
+        r##"{"version":"0.8.0","children":[{"type":"frame","id":"frame-1","name":"Frame","x":0,"y":0,"width":100,"height":50}]}"##,
+    );
+    host.editor_state_mut().selection.anchor = NodeId::new("frame-1");
+    host.editor_state_mut().selection.set = vec![NodeId::new("frame-1")];
+    host.editor_state_mut().create_variable(
+        "spacing-md",
+        jian_ops_schema::variable::VariableKind::Number,
+        jian_ops_schema::variable::VariableScalar::Num(16.0),
+    );
+    host.editor_state_mut().editor_ui.variables_panel_open = true;
+    let viewport_w = 1200.0;
+    let viewport_h = 800.0;
+    let modal = op_editor_ui::widgets::VariablesModal::for_editor(host.editor_state());
+    let modal_rect = modal.rect(viewport_w, viewport_h);
+    let row_x = modal_rect.origin.x + 100.0;
+    let row_y = modal_rect.origin.y + 78.0 + 64.0 + 22.0;
+
+    assert!(host.editor_state().property_panel_visible());
+    assert!(host.editor_state().right_rail_visible());
+    assert!(host.dispatch_variables_modal_press(row_x, row_y, viewport_w, viewport_h));
+    assert!(host.editor_state().editor_ui.variable_row_focus.is_some());
+}
+
 fn toolbar_center_y_for_test() -> f32 {
     op_editor_ui::widgets::AI_CHAT_HEIGHT - 19.0
 }
@@ -424,6 +607,64 @@ fn textarea_center_y_for_test() -> f32 {
     op_editor_ui::widgets::AI_CHAT_HEIGHT - (INPUT_AREA_HEIGHT + INPUT_TOOLBAR_HEIGHT)
         + 1.0
         + INPUT_AREA_HEIGHT / 2.0
+}
+
+#[test]
+fn chat_input_click_clears_select_all_without_erasing_text() {
+    let mut host = WidgetHostNative::new();
+    let viewport_w = 1200.0;
+    let viewport_h = 800.0;
+    let rect = host.ai_chat_rect(viewport_w, viewport_h).unwrap();
+    host.editor_state_mut().chat.input = "设计一个现代的移动端登录页面".into();
+    host.editor_state_mut().chat.focused = true;
+    host.editor_state_mut().chat.input_select_all = true;
+
+    assert!(host.apply_press(
+        rect.origin.x + 80.0,
+        rect.origin.y + textarea_center_y_for_test(),
+        viewport_w,
+        viewport_h
+    ));
+
+    assert_eq!(
+        host.editor_state().chat.input,
+        "设计一个现代的移动端登录页面"
+    );
+    assert!(host.editor_state().chat.focused);
+    assert!(!host.editor_state().chat.input_select_all);
+}
+
+#[test]
+fn chat_input_drag_selects_partial_text_and_replaces_it() {
+    let mut host = WidgetHostNative::new();
+    let viewport_w = 1200.0;
+    let viewport_h = 800.0;
+    let rect = host.ai_chat_rect(viewport_w, viewport_h).unwrap();
+    host.editor_state_mut().chat.input = "abcdef".into();
+    host.editor_state_mut().chat.focused = true;
+    let text_x = rect.origin.x + 24.0;
+    let text_y = rect.origin.y + textarea_center_y_for_test();
+
+    assert!(host.apply_press(text_x + 6.6, text_y, viewport_w, viewport_h));
+    assert_eq!(
+        host.editor_state().chat.input_selection,
+        Some(op_editor_core::chat::ChatInputSelection {
+            anchor: 1,
+            focus: 1
+        })
+    );
+    assert!(host.apply_cursor_move(text_x + 19.8, text_y));
+    assert_eq!(
+        host.editor_state().chat.input_selection,
+        Some(op_editor_core::chat::ChatInputSelection {
+            anchor: 1,
+            focus: 3
+        })
+    );
+    assert!(host.apply_release());
+    assert!(host.apply_text('X'));
+
+    assert_eq!(host.editor_state().chat.input, "aXdef");
 }
 
 #[test]

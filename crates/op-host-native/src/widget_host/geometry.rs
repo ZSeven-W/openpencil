@@ -10,8 +10,8 @@
 use super::helpers::{rect_contains, PANEL_RESIZE_GUTTER, STATUS_INSET};
 use super::{CursorHint, PanelResizeKind, WidgetHostNative};
 use op_editor_ui::widgets::{
-    rotation_corner_at_point, selection_handle_at_point, AIChatPlaceholder, ChatResizeEdge,
-    STATUS_BAR_HEIGHT, STATUS_BAR_WIDTH, TOP_BAR_HEIGHT,
+    rotation_corner_at_point, selection_handle_at_point, AIChatHit, AIChatPlaceholder,
+    ChatResizeEdge, STATUS_BAR_HEIGHT, STATUS_BAR_WIDTH, TOP_BAR_HEIGHT,
 };
 use op_editor_ui::{Point2D, Rect};
 
@@ -101,7 +101,9 @@ impl WidgetHostNative {
             // under a floating panel covering the rail.
             changed |= ui.property_action_hover.take().is_some();
             changed |= ui.property_tab_hover.take().is_some();
-            changed |= ui.variables_panel_hover.take().is_some();
+            if !ui.variables_panel_open {
+                changed |= ui.variables_panel_hover.take().is_some();
+            }
             if let Some(menu) = ui.layer_context_menu.as_mut() {
                 changed |= menu.hovered_row.take().is_some();
             }
@@ -316,12 +318,18 @@ impl WidgetHostNative {
             new_builtin,
             new_acp,
             new_preset_hover,
+            new_close_hover,
             new_server_hover,
             new_copy_hover,
             new_add_provider_hover,
             new_add_acp_hover,
             new_image_search_test_hover,
             new_image_add_hover,
+            new_image_profile_header_hover,
+            new_image_profile_remove_hover,
+            new_image_profile_provider_hover,
+            new_image_profile_test_hover,
+            new_image_provider_option_hover,
         ) = {
             let panel = AgentSettingsPanel::for_editor(&self.editor_state);
             let panel_rect = panel.rect(self.last_viewport_w, self.last_viewport_h);
@@ -352,6 +360,10 @@ impl WidgetHostNative {
                 None
             };
             let hit = panel.hit_test(panel_rect, point);
+            let close_hover = matches!(
+                hit,
+                op_editor_ui::widgets::agent_settings_panel::AgentSettingsHit::Close
+            );
             let copy_hover = matches!(tab, AgentSettingsTab::Mcp)
                 && matches!(
                     hit,
@@ -376,18 +388,70 @@ impl WidgetHostNative {
                 is_images && panel.image_search_test_button_hover_at(panel_rect, point);
             let image_add_hover =
                 is_images && panel.image_gen_add_button_hover_at(panel_rect, point);
+            let image_profile_header_hover = if is_images {
+                match hit {
+                    op_editor_ui::widgets::agent_settings_panel::AgentSettingsHit::ToggleGenConfigEditor(
+                        index,
+                    ) => Some(index),
+                    _ => None,
+                }
+            } else {
+                None
+            };
+            let image_profile_remove_hover = if is_images {
+                match hit {
+                    op_editor_ui::widgets::agent_settings_panel::AgentSettingsHit::RemoveGenConfig(
+                        index,
+                    ) => Some(index),
+                    _ => None,
+                }
+            } else {
+                None
+            };
+            let image_profile_provider_hover = if is_images {
+                match hit {
+                    op_editor_ui::widgets::agent_settings_panel::AgentSettingsHit::ToggleGenProviderMenu(
+                        index,
+                    ) => Some(index),
+                    _ => None,
+                }
+            } else {
+                None
+            };
+            let image_profile_test_hover = if is_images {
+                panel.image_gen_profile_test_button_hover_at(panel_rect, point)
+            } else {
+                None
+            };
+            let image_provider_option_hover = if is_images {
+                match hit {
+                    op_editor_ui::widgets::agent_settings_panel::AgentSettingsHit::SelectGenProvider {
+                        index,
+                        provider,
+                    } => Some((index, provider)),
+                    _ => None,
+                }
+            } else {
+                None
+            };
             (
                 nav,
                 card,
                 builtin,
                 acp,
                 preset_hover,
+                close_hover,
                 server_hover,
                 copy_hover,
                 add_provider_hover,
                 add_acp_hover,
                 image_search_test_hover,
                 image_add_hover,
+                image_profile_header_hover,
+                image_profile_remove_hover,
+                image_profile_provider_hover,
+                image_profile_test_hover,
+                image_provider_option_hover,
             )
         };
         let mut changed = false;
@@ -427,6 +491,19 @@ impl WidgetHostNative {
                 .editor_ui
                 .agent_settings
                 .builtin_preset_menu_hover = new_preset_hover;
+            changed = true;
+        }
+        if new_close_hover
+            != self
+                .editor_state
+                .editor_ui
+                .agent_settings
+                .hover_agent_settings_close
+        {
+            self.editor_state
+                .editor_ui
+                .agent_settings
+                .hover_agent_settings_close = new_close_hover;
             changed = true;
         }
         if new_copy_hover
@@ -507,6 +584,71 @@ impl WidgetHostNative {
                 .hover_image_gen_add_button = new_image_add_hover;
             changed = true;
         }
+        if new_image_profile_header_hover
+            != self
+                .editor_state
+                .editor_ui
+                .agent_settings
+                .hover_image_gen_profile_header
+        {
+            self.editor_state
+                .editor_ui
+                .agent_settings
+                .hover_image_gen_profile_header = new_image_profile_header_hover;
+            changed = true;
+        }
+        if new_image_profile_remove_hover
+            != self
+                .editor_state
+                .editor_ui
+                .agent_settings
+                .hover_image_gen_profile_remove
+        {
+            self.editor_state
+                .editor_ui
+                .agent_settings
+                .hover_image_gen_profile_remove = new_image_profile_remove_hover;
+            changed = true;
+        }
+        if new_image_profile_provider_hover
+            != self
+                .editor_state
+                .editor_ui
+                .agent_settings
+                .hover_image_gen_profile_provider
+        {
+            self.editor_state
+                .editor_ui
+                .agent_settings
+                .hover_image_gen_profile_provider = new_image_profile_provider_hover;
+            changed = true;
+        }
+        if new_image_profile_test_hover
+            != self
+                .editor_state
+                .editor_ui
+                .agent_settings
+                .hover_image_gen_profile_test
+        {
+            self.editor_state
+                .editor_ui
+                .agent_settings
+                .hover_image_gen_profile_test = new_image_profile_test_hover;
+            changed = true;
+        }
+        if new_image_provider_option_hover
+            != self
+                .editor_state
+                .editor_ui
+                .agent_settings
+                .hover_image_gen_provider_option
+        {
+            self.editor_state
+                .editor_ui
+                .agent_settings
+                .hover_image_gen_provider_option = new_image_provider_option_hover;
+            changed = true;
+        }
         if changed {
             self.mark_dirty();
         }
@@ -532,6 +674,15 @@ impl WidgetHostNative {
         }
         if let Some(edge) = self.chat_resize_hover(x, y, viewport_w, viewport_h) {
             return Self::chat_resize_cursor(edge);
+        }
+        if let Some(chat_rect) = self.ai_chat_rect(viewport_w, viewport_h) {
+            let panel = AIChatPlaceholder::from_editor(&self.editor_state);
+            match panel.hit_test(chat_rect, Point2D::new(x, y)) {
+                Some(AIChatHit::SelectInputText(_) | AIChatHit::SelectTranscriptText(_, _)) => {
+                    return CursorHint::Text;
+                }
+                _ => {}
+            }
         }
         // Any floating overlay (panels, Git popover, Toolbar /
         // StatusBar / chat, open dropdowns) — a neutral cursor over

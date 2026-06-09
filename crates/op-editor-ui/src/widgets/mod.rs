@@ -126,6 +126,7 @@ mod agent_settings_switch_style_tests;
 pub mod agent_settings_system;
 mod ai_chat_checklist;
 mod ai_chat_hit;
+pub(crate) mod ai_chat_input_text;
 pub mod ai_chat_model_picker;
 #[cfg(test)]
 mod ai_chat_model_picker_tests;
@@ -139,6 +140,8 @@ mod ai_chat_transcript_apply_tests;
 pub(crate) mod ai_chat_transcript_completion;
 pub(crate) mod ai_chat_transcript_design;
 pub(crate) mod ai_chat_transcript_hit;
+pub(crate) mod ai_chat_transcript_paint_parts;
+pub(crate) mod ai_chat_transcript_selection;
 pub(crate) mod ai_chat_transcript_steps;
 pub(crate) mod ai_chat_transcript_text;
 pub(crate) mod ai_chat_transcript_tools;
@@ -173,6 +176,7 @@ pub mod shape_picker;
 pub mod status_bar;
 pub mod top_bar;
 mod top_bar_paint;
+pub mod variables_modal;
 pub mod variables_panel;
 
 pub use dropdown::{Dropdown, DropdownState};
@@ -218,6 +222,7 @@ pub use top_bar::{TopBar, TopBarHit, WindowControl, TOP_BAR_HEIGHT};
 pub use layer_panel::{DropPosition, DropTarget, LayerPanelHit, LAYER_PANEL_WIDTH};
 pub use property_panel::PROPERTY_PANEL_WIDTH;
 pub use toolbar::{ToolbarAction, ToolbarHit, TOOLBAR_WIDTH};
+pub use variables_modal::{VariablesModal, VariablesModalHit};
 
 /// Stable identifier assigned by the widget host. Used by accesskit
 /// (`accesskit::NodeId(WidgetId.0)`), the DOM mirror, and event routing.

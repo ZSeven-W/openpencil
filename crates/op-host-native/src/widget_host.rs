@@ -90,6 +90,7 @@ mod shape_picker_press;
 mod shortcuts;
 #[cfg(test)]
 mod theme_tests;
+mod toolbar_actions;
 mod toolbar_hover;
 mod viewport_fit;
 
@@ -176,6 +177,10 @@ pub struct WidgetHostNative {
     pub(in crate::widget_host) image_adjustment_drag: Option<op_editor_core::ImageAdjustmentField>,
     /// Active generated-code preview text selection drag.
     pub(in crate::widget_host) code_selection_drag: Option<CodeSelectionDragState>,
+    /// Active chat input text selection drag.
+    pub(in crate::widget_host) chat_input_selection_drag: Option<ChatInputSelectionDragState>,
+    /// Active chat transcript text selection drag.
+    pub(in crate::widget_host) chat_text_selection_drag: Option<ChatTextSelectionDragState>,
     /// Active panel-resize drag — set when the cursor is pressed
     /// within the resize gutter of LayerPanel's right edge or
     /// PropertyPanel's left edge.
@@ -410,6 +415,17 @@ pub(in crate::widget_host) struct CodeSelectionDragState {
 }
 
 #[derive(Debug, Clone, Copy)]
+pub(in crate::widget_host) struct ChatInputSelectionDragState {
+    pub(in crate::widget_host) anchor: usize,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(in crate::widget_host) struct ChatTextSelectionDragState {
+    pub(in crate::widget_host) message_index: usize,
+    pub(in crate::widget_host) anchor: usize,
+}
+
+#[derive(Debug, Clone, Copy)]
 pub(in crate::widget_host) struct ChatDragState {
     /// Pointer offset within the panel rect when the drag began.
     /// Subtracting from the live cursor position gives the panel
@@ -470,6 +486,8 @@ impl WidgetHostNative {
             icon_picker_drag: None,
             image_adjustment_drag: None,
             code_selection_drag: None,
+            chat_input_selection_drag: None,
+            chat_text_selection_drag: None,
             panel_resize: None,
             node_drag: None,
             path_anchor_drag: None,

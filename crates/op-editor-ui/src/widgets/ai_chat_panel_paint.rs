@@ -134,6 +134,7 @@ pub(crate) fn paint_examples(
     tip_label: &str,
     examples: &[ExampleCard; 4],
     disabled: bool,
+    hover: Option<usize>,
 ) {
     let opacity = if disabled { 0.6 } else { 1.0 };
     let hint = TextLayout::single_run(
@@ -154,9 +155,22 @@ pub(crate) fn paint_examples(
     let card_border = with_alpha(theme.border, opacity);
     let title_color = with_alpha(theme.foreground, opacity);
     let subtitle_color = with_alpha(theme.muted_foreground, opacity);
-    for (card, ex) in example_card_rects(rect).iter().zip(examples.iter()) {
+    for (idx, (card, ex)) in example_card_rects(rect)
+        .iter()
+        .zip(examples.iter())
+        .enumerate()
+    {
         cx.backend.fill_round_rect(*card, 8.0, card_bg);
-        cx.backend.stroke_round_rect(*card, 8.0, card_border, 1.0);
+        let hovered = !disabled && hover == Some(idx);
+        if hovered {
+            cx.backend.fill_round_rect(*card, 8.0, theme.button_hover);
+        }
+        let border = if hovered {
+            with_alpha(theme.primary, 0.35)
+        } else {
+            card_border
+        };
+        cx.backend.stroke_round_rect(*card, 8.0, border, 1.0);
         cx.backend.save();
         cx.backend.clip_rect(*card);
         let title_lines = wrapped_lines(
@@ -329,6 +343,7 @@ mod tests {
             "Tip",
             &examples,
             false,
+            None,
         );
 
         assert_eq!(

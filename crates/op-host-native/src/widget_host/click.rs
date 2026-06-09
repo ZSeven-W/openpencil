@@ -140,6 +140,17 @@ impl WidgetHostNative {
                     }
                     AIChatHit::FocusInput => {
                         self.editor_state.chat.focused = true;
+                        self.editor_state.chat.input_select_all = false;
+                        self.editor_state.chat.input_selection = None;
+                        self.editor_state.chat.transcript_selection = None;
+                        self.editor_state.chat.caret_anchor_ms = self.now_ms;
+                        self.mark_dirty();
+                        return true;
+                    }
+                    AIChatHit::SelectInputText(offset) => {
+                        self.editor_state.chat.focused = true;
+                        self.editor_state.chat.set_input_caret(offset);
+                        self.editor_state.chat.transcript_selection = None;
                         self.editor_state.chat.caret_anchor_ms = self.now_ms;
                         self.mark_dirty();
                         return true;
@@ -157,6 +168,9 @@ impl WidgetHostNative {
                     AIChatHit::Example(text) => {
                         self.editor_state.chat.input = text;
                         self.editor_state.chat.focused = true;
+                        self.editor_state.chat.input_select_all = false;
+                        self.editor_state.chat.input_selection = None;
+                        self.editor_state.chat.transcript_selection = None;
                         self.editor_state.chat.caret_anchor_ms = self.now_ms;
                         self.mark_dirty();
                         return true;
@@ -295,6 +309,18 @@ impl WidgetHostNative {
                     AIChatHit::ApplyDesignBlock(msg_idx, text) => {
                         return self.apply_chat_design_block(msg_idx, &text);
                     }
+                    AIChatHit::SelectTranscriptText(message_index, offset) => {
+                        self.editor_state.chat.transcript_selection =
+                            Some(op_editor_core::chat::ChatTranscriptSelection {
+                                message_index,
+                                anchor: offset,
+                                focus: offset,
+                            });
+                        self.editor_state.codegen.code_selection = None;
+                        self.editor_state.chat.focused = false;
+                        self.mark_dirty();
+                        return true;
+                    }
                     AIChatHit::ToggleChecklist => {
                         self.editor_state.chat.toggle_checklist_collapsed();
                         self.mark_dirty();
@@ -313,6 +339,8 @@ impl WidgetHostNative {
         self.editor_state.editor_ui.chat_model_picker_hover = None;
         let was_focused = self.editor_state.chat.focused || picker_was_open;
         self.editor_state.chat.focused = false;
+        self.editor_state.chat.input_select_all = false;
+        self.editor_state.chat.input_selection = None;
         if was_focused {
             self.mark_dirty();
         }
@@ -337,7 +365,9 @@ impl WidgetHostNative {
                     self.mark_dirty();
                     return true;
                 }
-                op_editor_ui::widgets::ToolbarHit::Action(_) => return false,
+                op_editor_ui::widgets::ToolbarHit::Action(action) => {
+                    return self.dispatch_toolbar_action(action);
+                }
                 op_editor_ui::widgets::ToolbarHit::ToggleShapePicker => {
                     self.editor_state.editor_ui.shape_picker_open =
                         !self.editor_state.editor_ui.shape_picker_open;

@@ -549,9 +549,9 @@ fn image_generation_profile_buttons_add_activate_and_remove() {
         Some(first.as_str())
     );
 
-    let second_row_y = gen_top + 36.0 + 32.0 + 6.0;
+    let second_row_y = gen_top + 36.0 + 8.0 + 32.0 + 6.0;
     assert!(host.dispatch_agent_settings_press(
-        content_x + 15.0,
+        content_x + 23.0,
         second_row_y + 16.0,
         1200.0,
         800.0
@@ -634,7 +634,7 @@ fn image_generation_provider_click_opens_menu_without_changing_profile() {
     let content_x = rect.origin.x + 200.0 + 24.0;
     let content_y = rect.origin.y + 24.0;
     let gen_top = content_y + 36.0 + 24.0 + 28.0;
-    let row_y = gen_top + 36.0;
+    let row_y = gen_top + 36.0 + 8.0;
     let provider_y = row_y + 32.0 + 8.0 + 36.0;
 
     assert!(host.dispatch_agent_settings_press(
@@ -651,7 +651,13 @@ fn image_generation_provider_click_opens_menu_without_changing_profile() {
         .image_gen_profiles[0];
     assert_eq!(profile.provider, ImageGenProvider::OpenAi);
     assert_eq!(profile.model, "dall-e-3");
-    assert!(host.editor_state().editor_ui.agent_settings.focus.is_none());
+    assert_eq!(
+        host.editor_state().editor_ui.agent_settings.focus,
+        Some(SettingsFocus::ImageGenProfile {
+            index: 0,
+            field: ImageGenField::Name,
+        })
+    );
     assert_eq!(
         host.editor_state()
             .editor_ui
@@ -671,6 +677,13 @@ fn image_generation_provider_click_opens_menu_without_changing_profile() {
     assert_eq!(profile.provider, ImageGenProvider::Gemini);
     assert!(profile.model.is_empty());
     assert!(settings.image_gen_provider_menu_open.is_none());
+    assert_eq!(
+        settings.focus,
+        Some(SettingsFocus::ImageGenProfile {
+            index: 0,
+            field: ImageGenField::Name,
+        })
+    );
 }
 
 #[test]
@@ -692,7 +705,7 @@ fn image_generation_profile_header_click_toggles_editor_closed() {
     let content_x = rect.origin.x + 200.0 + 24.0;
     let content_y = rect.origin.y + 24.0;
     let gen_top = content_y + 36.0 + 24.0 + 28.0;
-    let row_y = gen_top + 36.0;
+    let row_y = gen_top + 36.0 + 8.0;
 
     assert!(host.dispatch_agent_settings_press(content_x + 72.0, row_y + 16.0, 1200.0, 800.0));
 
@@ -895,5 +908,40 @@ fn image_settings_button_hover_tracks_cursor() {
             .editor_ui
             .agent_settings
             .hover_image_search_test_button
+    );
+}
+
+#[test]
+fn image_provider_menu_option_hover_tracks_cursor() {
+    let mut host = WidgetHostNative::new();
+    host.last_viewport_w = 1200.0;
+    host.last_viewport_h = 800.0;
+    host.editor_state_mut().editor_ui.agent_settings_open = true;
+    host.editor_state_mut().editor_ui.agent_settings.tab = AgentSettingsTab::Images;
+    host.editor_state_mut()
+        .editor_ui
+        .agent_settings
+        .add_image_gen_profile();
+    host.editor_state_mut().editor_ui.agent_settings.focus = Some(SettingsFocus::ImageGenProfile {
+        index: 0,
+        field: ImageGenField::Name,
+    });
+    host.editor_state_mut()
+        .editor_ui
+        .agent_settings
+        .image_gen_provider_menu_open = Some(0);
+
+    let (content_x, content_y, _) = agent_settings_content_metrics(&host);
+    let provider_x = content_x + 8.0 + 110.0 + 20.0;
+    let provider_y = content_y + 36.0 + 24.0 + 28.0 + 36.0 + 8.0 + 32.0 + 8.0 + 36.0;
+
+    assert!(host.update_agent_settings_hover(provider_x, provider_y + 24.0 + 2.0 * 24.0 + 12.0));
+
+    assert_eq!(
+        host.editor_state()
+            .editor_ui
+            .agent_settings
+            .hover_image_gen_provider_option,
+        Some((0, ImageGenProvider::Replicate))
     );
 }

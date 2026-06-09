@@ -10,6 +10,7 @@ use op_editor_core::EditorState;
 struct CaptureBackend {
     fills: Vec<(Rect, Color)>,
     round_fills: Vec<(Rect, Color)>,
+    round_strokes: Vec<(Rect, Color)>,
 }
 
 impl RenderBackend for CaptureBackend {
@@ -25,7 +26,9 @@ impl RenderBackend for CaptureBackend {
     fn fill_round_rect(&mut self, rect: Rect, _: f32, color: Color) {
         self.round_fills.push((rect, color));
     }
-    fn stroke_round_rect(&mut self, _: Rect, _: f32, _: Color, _: f32) {}
+    fn stroke_round_rect(&mut self, rect: Rect, _: f32, color: Color, _: f32) {
+        self.round_strokes.push((rect, color));
+    }
     fn stroke_svg_path(&mut self, _: &str, _: Point2D, _: f32, _: Color, _: f32) {}
     fn save(&mut self) {}
     fn restore(&mut self) {}
@@ -152,7 +155,7 @@ fn images_tab_expanded_profile_fields_are_focusable() {
     let content_y = rect.origin.y + 24.0;
 
     let gen_top = content_y + 36.0 + 24.0 + 28.0;
-    let row_y = gen_top + 36.0;
+    let row_y = gen_top + 36.0 + 8.0;
     let api_field_y = row_y + 32.0 + 8.0 + 36.0 * 2.0;
 
     assert_eq!(
@@ -195,7 +198,7 @@ fn images_tab_profile_test_is_disabled_while_testing_like_ts() {
     let content_y = rect.origin.y + 24.0;
 
     let gen_top = content_y + 36.0 + 24.0 + 28.0;
-    let row_y = gen_top + 36.0;
+    let row_y = gen_top + 36.0 + 8.0;
     let api_field_y = row_y + 32.0 + 8.0 + 36.0 * 2.0;
 
     assert_eq!(
@@ -221,7 +224,7 @@ fn images_tab_expanded_profile_provider_row_is_clickable() {
     let content_x = rect.origin.x + 200.0 + 24.0;
     let content_y = rect.origin.y + 24.0;
     let gen_top = content_y + 36.0 + 24.0 + 28.0;
-    let row_y = gen_top + 36.0;
+    let row_y = gen_top + 36.0 + 8.0;
     let provider_y = row_y + 32.0 + 8.0 + 36.0;
 
     assert_eq!(
@@ -249,11 +252,12 @@ fn images_tab_provider_menu_selected_highlight_fills_option_content() {
     let content_x = rect.origin.x + 200.0 + 24.0;
     let content_y = rect.origin.y + 24.0;
     let content_w = rect.size.x - 200.0 - 48.0;
+    let row_inset = 8.0;
     let gen_top = content_y + 36.0 + 24.0 + 28.0;
-    let row_y = gen_top + 36.0;
+    let row_y = gen_top + 36.0 + 8.0;
     let provider = Rect {
-        origin: Point2D::new(content_x + 110.0, row_y + 32.0 + 8.0 + 36.0),
-        size: Point2D::new(content_w - 110.0 - 12.0, 24.0),
+        origin: Point2D::new(content_x + row_inset + 110.0, row_y + 32.0 + 8.0 + 36.0),
+        size: Point2D::new(content_w - row_inset * 2.0 - 110.0 - 12.0, 24.0),
     };
     let expected = Rect {
         origin: Point2D::new(
@@ -275,5 +279,242 @@ fn images_tab_provider_menu_selected_highlight_fills_option_content() {
             .iter()
             .any(|(fill, color)| rect_eq(*fill, expected) && color_eq(*color, panel.theme.muted)),
         "selected provider option should fill the menu content row"
+    );
+}
+
+#[test]
+fn images_tab_provider_menu_hover_paints_option_wash() {
+    let mut state = EditorState::default();
+    state.editor_ui.agent_settings.tab = AgentSettingsTab::Images;
+    state.editor_ui.agent_settings.add_image_gen_profile();
+    state.editor_ui.agent_settings.image_gen_profiles[0].provider = ImageGenProvider::OpenAi;
+    state.editor_ui.agent_settings.focus = Some(SettingsFocus::ImageGenProfile {
+        index: 0,
+        field: ImageGenField::Name,
+    });
+    state.editor_ui.agent_settings.image_gen_provider_menu_open = Some(0);
+    state
+        .editor_ui
+        .agent_settings
+        .hover_image_gen_provider_option = Some((0, ImageGenProvider::Replicate));
+    let panel = AgentSettingsPanel::for_editor(&state);
+    let rect = panel.rect(1200.0, 800.0);
+    let content_x = rect.origin.x + 200.0 + 24.0;
+    let content_y = rect.origin.y + 24.0;
+    let content_w = rect.size.x - 200.0 - 48.0;
+    let row_inset = 8.0;
+    let gen_top = content_y + 36.0 + 24.0 + 28.0;
+    let row_y = gen_top + 36.0 + 8.0;
+    let provider = Rect {
+        origin: Point2D::new(content_x + row_inset + 110.0, row_y + 32.0 + 8.0 + 36.0),
+        size: Point2D::new(content_w - row_inset * 2.0 - 110.0 - 12.0, 24.0),
+    };
+    let expected = Rect {
+        origin: Point2D::new(
+            provider.origin.x + 4.0,
+            provider.origin.y + 24.0 + 2.0 * 24.0 + 1.0,
+        ),
+        size: Point2D::new(provider.size.x - 8.0, 22.0),
+    };
+    let mut backend = CaptureBackend::default();
+    let mut cx = PaintCx {
+        backend: &mut backend,
+    };
+
+    panel.paint(&mut cx, rect);
+
+    assert!(
+        backend.round_fills.iter().any(|(fill, color)| {
+            rect_eq(*fill, expected) && color_eq(*color, panel.theme.button_hover)
+        }),
+        "hovered provider option should paint a visible hover wash"
+    );
+}
+
+#[test]
+fn images_tab_profile_controls_hover_paints_visible_washes() {
+    let mut state = EditorState::default();
+    state.editor_ui.agent_settings.tab = AgentSettingsTab::Images;
+    state.editor_ui.agent_settings.add_image_gen_profile();
+    state.editor_ui.agent_settings.focus = Some(SettingsFocus::ImageGenProfile {
+        index: 0,
+        field: ImageGenField::Name,
+    });
+    state
+        .editor_ui
+        .agent_settings
+        .hover_image_gen_profile_header = Some(0);
+    state
+        .editor_ui
+        .agent_settings
+        .hover_image_gen_profile_remove = Some(0);
+    state
+        .editor_ui
+        .agent_settings
+        .hover_image_gen_profile_provider = Some(0);
+    state.editor_ui.agent_settings.hover_image_gen_profile_test = Some(0);
+    let panel = AgentSettingsPanel::for_editor(&state);
+    let rect = panel.rect(1200.0, 800.0);
+    let content_x = rect.origin.x + 200.0 + 24.0;
+    let content_y = rect.origin.y + 24.0;
+    let content_w = rect.size.x - 200.0 - 48.0;
+    let row = Rect {
+        origin: Point2D::new(content_x + 8.0, content_y + 36.0 + 24.0 + 28.0 + 36.0 + 8.0),
+        size: Point2D::new(content_w - 16.0, 32.0 + 8.0 + 5.0 * 36.0),
+    };
+    let expected_standard = [
+        Rect {
+            origin: row.origin,
+            size: Point2D::new(row.size.x, 32.0),
+        },
+        Rect {
+            origin: Point2D::new(row.origin.x + row.size.x - 30.0, row.origin.y + 2.0),
+            size: Point2D::new(28.0, 28.0),
+        },
+        Rect {
+            origin: Point2D::new(row.origin.x + 110.0, row.origin.y + 40.0 + 36.0),
+            size: Point2D::new(row.size.x - 110.0 - 12.0, 24.0),
+        },
+    ];
+    let test_button = Rect {
+        origin: Point2D::new(
+            row.origin.x + row.size.x - 12.0 - 56.0,
+            row.origin.y + 40.0 + 72.0,
+        ),
+        size: Point2D::new(56.0, 24.0),
+    };
+    let mut backend = CaptureBackend::default();
+    let mut cx = PaintCx {
+        backend: &mut backend,
+    };
+
+    panel.paint(&mut cx, rect);
+
+    for rect in expected_standard {
+        assert!(
+            backend.round_fills.iter().any(|(fill, color)| {
+                rect_eq(*fill, rect) && color_eq(*color, panel.theme.button_hover)
+            }),
+            "hovered image generation profile control should paint a visible hover wash at {rect:?}"
+        );
+    }
+    assert!(
+        backend.round_fills.iter().any(|(fill, color)| {
+            rect_eq(*fill, test_button)
+                && !color_eq(*color, panel.theme.muted)
+                && color.a > panel.theme.button_hover.a + 0.01
+        }),
+        "hovered profile test button should paint a stronger visible hover wash"
+    );
+}
+
+#[test]
+fn disabled_image_gen_profile_test_hover_uses_visible_wash() {
+    let mut state = EditorState::default();
+    state.editor_ui.agent_settings.tab = AgentSettingsTab::Images;
+    state.editor_ui.agent_settings.add_image_gen_profile();
+    state.editor_ui.agent_settings.focus = Some(SettingsFocus::ImageGenProfile {
+        index: 0,
+        field: ImageGenField::Name,
+    });
+    state.editor_ui.agent_settings.hover_image_gen_profile_test = Some(0);
+    let panel = AgentSettingsPanel::for_editor(&state);
+    let rect = panel.rect(1200.0, 800.0);
+    let content_x = rect.origin.x + 200.0 + 24.0;
+    let content_y = rect.origin.y + 24.0;
+    let content_w = rect.size.x - 200.0 - 48.0;
+    let row = Rect {
+        origin: Point2D::new(content_x + 8.0, content_y + 36.0 + 24.0 + 28.0 + 36.0 + 8.0),
+        size: Point2D::new(content_w - 16.0, 32.0 + 8.0 + 5.0 * 36.0),
+    };
+    let test_button = Rect {
+        origin: Point2D::new(
+            row.origin.x + row.size.x - 12.0 - 56.0,
+            row.origin.y + 40.0 + 72.0,
+        ),
+        size: Point2D::new(56.0, 24.0),
+    };
+    let mut backend = CaptureBackend::default();
+    let mut cx = PaintCx {
+        backend: &mut backend,
+    };
+
+    panel.paint(&mut cx, rect);
+
+    assert!(
+        backend.round_fills.iter().any(|(fill, color)| {
+            rect_eq(*fill, test_button)
+                && !color_eq(*color, panel.theme.muted)
+                && color.a > panel.theme.button_hover.a + 0.01
+        }),
+        "disabled profile test button hover should paint a visible wash"
+    );
+}
+
+#[test]
+fn expanded_image_gen_profile_starts_below_add_button_with_clear_gap() {
+    let mut state = EditorState::default();
+    state.editor_ui.agent_settings.tab = AgentSettingsTab::Images;
+    state.editor_ui.agent_settings.add_image_gen_profile();
+    state.editor_ui.agent_settings.focus = Some(SettingsFocus::ImageGenProfile {
+        index: 0,
+        field: ImageGenField::Name,
+    });
+    let panel = AgentSettingsPanel::for_editor(&state);
+    let rect = panel.rect(1200.0, 800.0);
+    let content_y = rect.origin.y + 24.0;
+    let gen_top = content_y + 36.0 + 24.0 + 28.0;
+    let add_button_bottom = gen_top + 4.0 + 28.0;
+    let mut backend = CaptureBackend::default();
+    let mut cx = PaintCx {
+        backend: &mut backend,
+    };
+
+    panel.paint(&mut cx, rect);
+
+    let card = backend
+        .round_strokes
+        .iter()
+        .find_map(|(stroke, color)| {
+            (stroke.size.y > 120.0 && color_eq(*color, panel.theme.primary)).then_some(*stroke)
+        })
+        .expect("expanded active image generation profile should paint a card stroke");
+    assert!(
+        card.origin.y >= add_button_bottom + 12.0,
+        "expanded image generation profile should leave a clear gap below the add button"
+    );
+}
+
+#[test]
+fn expanded_image_gen_profile_card_is_inset_from_content_clip_edges() {
+    let mut state = EditorState::default();
+    state.editor_ui.agent_settings.tab = AgentSettingsTab::Images;
+    state.editor_ui.agent_settings.add_image_gen_profile();
+    state.editor_ui.agent_settings.focus = Some(SettingsFocus::ImageGenProfile {
+        index: 0,
+        field: ImageGenField::Name,
+    });
+    let panel = AgentSettingsPanel::for_editor(&state);
+    let rect = panel.rect(1200.0, 800.0);
+    let content_x = rect.origin.x + 200.0 + 24.0;
+    let content_w = rect.size.x - 200.0 - 48.0;
+    let mut backend = CaptureBackend::default();
+    let mut cx = PaintCx {
+        backend: &mut backend,
+    };
+
+    panel.paint(&mut cx, rect);
+
+    let card = backend
+        .round_strokes
+        .iter()
+        .find_map(|(stroke, color)| {
+            (stroke.size.y > 120.0 && color_eq(*color, panel.theme.primary)).then_some(*stroke)
+        })
+        .expect("expanded active image generation profile should paint a card stroke");
+    assert!(
+        card.origin.x >= content_x + 8.0
+            && card.origin.x + card.size.x <= content_x + content_w - 8.0,
+        "profile card should leave horizontal room inside the clipped content area"
     );
 }

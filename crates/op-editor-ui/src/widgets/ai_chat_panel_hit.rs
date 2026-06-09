@@ -6,7 +6,7 @@ use super::ai_chat_panel::{
     AIChatPlaceholder, INPUT_AREA_HEIGHT, PAD, RESIZE_CORNER, RESIZE_GUTTER,
 };
 use crate::widgets::ai_chat_checklist::{
-    fixed_checklist_height, fixed_checklist_rect, HEADER_H, PROGRESS_H,
+    fixed_checklist_height, fixed_checklist_max_scroll, fixed_checklist_rect, HEADER_H, PROGRESS_H,
 };
 use crate::widgets::ai_chat_hit::{AIChatHit, ChatResizeEdge};
 use crate::widgets::ai_chat_panel_controls::attachment_row_hit;
@@ -14,6 +14,16 @@ use crate::widgets::ai_chat_panel_paint::example_card_rects;
 use crate::{Point2D, Rect};
 
 impl<'a> AIChatPlaceholder<'a> {
+    pub fn fixed_checklist_bounds(&self, rect: Rect) -> Option<Rect> {
+        let checklist_h =
+            fixed_checklist_height(&self.state.messages, self.state.checklist_collapsed);
+        (checklist_h > 0.0).then(|| fixed_checklist_rect(rect, self.input_height(), checklist_h))
+    }
+
+    pub fn fixed_checklist_scroll_max(&self) -> f32 {
+        fixed_checklist_max_scroll(&self.state.messages, self.state.checklist_collapsed)
+    }
+
     pub fn hit_test(&self, rect: Rect, point: Point2D) -> Option<AIChatHit> {
         if let Some(edge) = self.resize_edge_at(rect, point) {
             return Some(AIChatHit::Resize(edge));
@@ -86,6 +96,22 @@ impl<'a> AIChatPlaceholder<'a> {
             let attach_top = input_rect.origin.y + INPUT_AREA_HEIGHT;
             let attach_h = self.attachment_row_h();
             let toolbar_top = attach_top + attach_h;
+            if point.y < attach_top {
+                if self.is_streaming() {
+                    return Some(AIChatHit::Inside);
+                }
+                let text_area = Rect {
+                    origin: input_rect.origin,
+                    size: Point2D::new(input_rect.size.x, INPUT_AREA_HEIGHT),
+                };
+                let offset = crate::widgets::ai_chat_input_text::input_text_offset_at(
+                    &self.state.input,
+                    text_area,
+                    point,
+                )
+                .unwrap_or(self.state.input.len());
+                return Some(AIChatHit::SelectInputText(offset));
+            }
             // Staged-attachment strip — present only when attachments
             // are staged; a chip click removes that attachment.
             if attach_h > 0.0 && point.y >= attach_top && point.y < toolbar_top {
@@ -161,6 +187,17 @@ impl<'a> AIChatPlaceholder<'a> {
         // tool-call collapsible header toggles it. Checked before the
         // drag-handle fallback so the headers are interactive.
         if !self.state.messages.is_empty() {
+            if let Some(hit) = crate::widgets::ai_chat_transcript::transcript_text_offset_at(
+                &self.state.messages,
+                self.body_rect(rect),
+                point,
+                self.locale,
+            ) {
+                return Some(AIChatHit::SelectTranscriptText(
+                    hit.message_index,
+                    hit.offset,
+                ));
+            }
             if let Some(hit) = crate::widgets::ai_chat_transcript::transcript_hit(
                 &self.state.messages,
                 self.body_rect(rect),
@@ -287,6 +324,19 @@ impl<'a> AIChatPlaceholder<'a> {
             });
         }
         None
+    }
+
+    pub fn example_hover_at(&self, rect: Rect, point: Point2D) -> Option<usize> {
+        if !self.state.messages.is_empty()
+            || self.state.available_models.is_empty()
+            || self.is_streaming()
+            || self.state.collapsed
+        {
+            return None;
+        }
+        example_card_rects(rect)
+            .iter()
+            .position(|card| rect_contains(*card, point))
     }
 }
 

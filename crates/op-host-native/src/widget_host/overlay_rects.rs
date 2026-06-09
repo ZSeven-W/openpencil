@@ -211,6 +211,9 @@ impl WidgetHostNative {
         self.design_md_panel_rect(viewport_w, viewport_h)
             .is_some_and(|r| rect_contains(r, p))
             || self
+                .variables_modal_rect(viewport_w, viewport_h)
+                .is_some_and(|r| rect_contains(r, p))
+            || self
                 .icon_picker_panel_rect(viewport_w, viewport_h)
                 .is_some_and(|r| rect_contains(r, p))
             || self
@@ -310,6 +313,18 @@ impl WidgetHostNative {
             origin: Point2D::new(x, y),
             size: Point2D::new(DESIGN_MD_PANEL_W, DESIGN_MD_PANEL_H),
         })
+    }
+
+    pub(in crate::widget_host) fn variables_modal_rect(
+        &self,
+        viewport_w: f32,
+        viewport_h: f32,
+    ) -> Option<Rect> {
+        if !self.editor_state.editor_ui.variables_panel_open {
+            return None;
+        }
+        let modal = op_editor_ui::widgets::VariablesModal::for_editor(&self.editor_state);
+        Some(modal.rect(viewport_w, viewport_h))
     }
 
     pub(in crate::widget_host) fn shape_picker_rect(

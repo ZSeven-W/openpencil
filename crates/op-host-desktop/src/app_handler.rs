@@ -270,10 +270,10 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
             }
         }
 
-        // The auto-update probe spawned in `new()` is likely still
-        // running. Wake the loop soon so its result is drained even
-        // if the user never touches the freshly opened window.
-        if self.update_probe.is_pending() {
+        // Startup background probes are likely still running. Wake
+        // the loop soon so their results are drained even if the user
+        // never touches the freshly opened window.
+        if self.update_probe.is_pending() || self.model_probe.is_pending() {
             event_loop.set_control_flow(ControlFlow::WaitUntil(
                 Instant::now() + Duration::from_millis(500),
             ));
@@ -623,6 +623,7 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
                     let deadline = self.clock_start + Duration::from_millis(deadline_ms);
                     event_loop.set_control_flow(ControlFlow::WaitUntil(deadline));
                 } else if self.update_probe.is_pending()
+                    || self.model_probe.is_pending()
                     || self.image_search.is_pending()
                     || self
                         .iconify_job
@@ -645,9 +646,9 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
                         .as_ref()
                         .is_some_and(git_jobs::GitDiffJob::is_pending)
                 {
-                    // Keep waking ~2 Hz until the background update
-                    // probe / git pull / git status query lands so its
-                    // result is drained even while the app is idle.
+                    // Keep waking ~2 Hz until background probes/jobs
+                    // land so results are drained even while the app
+                    // is idle.
                     event_loop.set_control_flow(ControlFlow::WaitUntil(
                         Instant::now() + Duration::from_millis(500),
                     ));
@@ -1072,6 +1073,7 @@ impl DesktopApp {
             || self.current_figma_import.is_some()
             || self.host.next_animation_deadline_ms().is_some()
             || self.update_probe.is_pending()
+            || self.model_probe.is_pending()
             || self.image_search.is_pending()
             || self
                 .iconify_job

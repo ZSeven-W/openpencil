@@ -235,11 +235,16 @@ pub(super) fn paint_profile_test_button(
     ui: &EditorUiState,
     profile: &ImageGenProfile,
     btn: Rect,
+    hovered: bool,
 ) {
     let enabled =
         !profile.api_key.trim().is_empty() && profile.test_status != ImageTestStatus::Testing;
     paint_profile_test_status(cx, theme, profile, btn);
     cx.backend.fill_round_rect(btn, 6.0, theme.muted);
+    if hovered {
+        cx.backend
+            .fill_round_rect(btn, 6.0, profile_button_hover_color(theme));
+    }
     cx.backend.stroke_round_rect(btn, 6.0, theme.border, 1.0);
     let label = crate::widgets::agent_settings_i18n::t(ui, "settings.images.test");
     let label_w = cx.backend.measure_text(label, 11.0);
@@ -261,6 +266,15 @@ pub(super) fn paint_profile_test_button(
             btn.origin.y + btn.size.y / 2.0 + 4.0,
         ),
     );
+}
+
+fn profile_button_hover_color(theme: &Theme) -> Color {
+    Color {
+        r: theme.foreground.r,
+        g: theme.foreground.g,
+        b: theme.foreground.b,
+        a: 0.12,
+    }
 }
 
 fn paint_profile_test_status(
@@ -310,6 +324,7 @@ pub(super) fn paint_provider_field(
     profile: &ImageGenProfile,
     input: Rect,
     label_x: f32,
+    hovered: bool,
 ) {
     let label_lay = TextLayout::single_run(
         "Provider",
@@ -321,6 +336,9 @@ pub(super) fn paint_provider_field(
     cx.backend
         .draw_text(&label_lay, Point2D::new(label_x, input.origin.y + 16.0));
     cx.backend.fill_round_rect(input, 6.0, theme.card);
+    if hovered {
+        cx.backend.fill_round_rect(input, 6.0, theme.button_hover);
+    }
     cx.backend.stroke_round_rect(input, 6.0, theme.border, 1.0);
     let value = ellipsize(cx, profile.provider.label(), input.size.x - 28.0, 11.0);
     let value_lay = TextLayout::single_run(
@@ -349,6 +367,7 @@ pub(super) fn paint_provider_menu(
     theme: &Theme,
     input: Rect,
     selected: ImageGenProvider,
+    hovered: Option<ImageGenProvider>,
 ) {
     let menu = Rect {
         origin: Point2D::new(input.origin.x, input.origin.y + input.size.y),
@@ -361,21 +380,22 @@ pub(super) fn paint_provider_menu(
     cx.backend.stroke_round_rect(menu, 6.0, theme.border, 1.0);
     for (index, provider) in ImageGenProvider::ALL.iter().enumerate() {
         let option_y = menu.origin.y + index as f32 * PROVIDER_OPTION_H;
+        let option_rect = Rect {
+            origin: Point2D::new(
+                menu.origin.x + PROVIDER_OPTION_PAD_X,
+                option_y + PROVIDER_OPTION_PAD_Y,
+            ),
+            size: Point2D::new(
+                menu.size.x - PROVIDER_OPTION_PAD_X * 2.0,
+                PROVIDER_OPTION_H - PROVIDER_OPTION_PAD_Y * 2.0,
+            ),
+        };
         if *provider == selected {
-            cx.backend.fill_round_rect(
-                Rect {
-                    origin: Point2D::new(
-                        menu.origin.x + PROVIDER_OPTION_PAD_X,
-                        option_y + PROVIDER_OPTION_PAD_Y,
-                    ),
-                    size: Point2D::new(
-                        menu.size.x - PROVIDER_OPTION_PAD_X * 2.0,
-                        PROVIDER_OPTION_H - PROVIDER_OPTION_PAD_Y * 2.0,
-                    ),
-                },
-                5.0,
-                theme.muted,
-            );
+            cx.backend.fill_round_rect(option_rect, 5.0, theme.muted);
+        }
+        if hovered == Some(*provider) {
+            cx.backend
+                .fill_round_rect(option_rect, 5.0, theme.button_hover);
         }
         let label = TextLayout::single_run(
             provider.label(),

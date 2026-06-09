@@ -2,13 +2,14 @@
 //! native press/click split and keeps `EditorState` as source of truth.
 use op_editor_ui::widgets::{
     AIChatHit, AIChatPlaceholder, LayerPanel, LayerPanelHit, LocalePicker, PropertyPanel, Toolbar,
-    TopBar, TopBarHit, STATUS_BAR_HEIGHT, STATUS_BAR_WIDTH, TOP_BAR_HEIGHT,
+    TopBar, TopBarHit, VariablesModal, VariablesModalHit, STATUS_BAR_HEIGHT, STATUS_BAR_WIDTH,
+    TOP_BAR_HEIGHT,
 };
 use op_editor_ui::{Point2D, Rect};
 
 use super::{
-    rect_contains, ChatDragState, CodeSelectionDragState, DragState, LayerDragState,
-    MarqueeDragState, WidgetHost, STATUS_INSET,
+    rect_contains, ChatDragState, ChatInputSelectionDragState, ChatTextSelectionDragState,
+    CodeSelectionDragState, DragState, LayerDragState, MarqueeDragState, WidgetHost, STATUS_INSET,
 };
 use op_editor_core::codegen::CodeSelection;
 
@@ -268,6 +269,35 @@ impl WidgetHost {
             return true;
         }
 
+        if self.editor_state.editor_ui.variables_panel_open {
+            let toolbar_rect = self.toolbar_rect(viewport_width);
+            let toolbar = Toolbar::for_editor(&self.editor_state);
+            if let Some(op_editor_ui::widgets::ToolbarHit::Action(
+                op_editor_ui::widgets::ToolbarAction::ToggleVariablesPanel,
+            )) = toolbar.hit_test(toolbar_rect, Point2D::new(x, y))
+            {
+                return self.dispatch_toolbar_action(
+                    op_editor_ui::widgets::ToolbarAction::ToggleVariablesPanel,
+                );
+            }
+            let modal = VariablesModal::for_editor(&self.editor_state);
+            let rect = modal.rect(viewport_width, viewport_height);
+            match modal.hit_test(rect, Point2D::new(x, y)) {
+                VariablesModalHit::Close | VariablesModalHit::Outside => {
+                    self.editor_state.editor_ui.variables_panel_open = false;
+                    self.editor_state.editor_ui.variables_panel_hover = None;
+                    self.editor_state.editor_ui.axis_dropdown_open = None;
+                    self.mark_dirty();
+                    return true;
+                }
+                VariablesModalHit::AddVariable | VariablesModalHit::HeaderAdd => {
+                    self.create_default_variable_from_modal();
+                    return true;
+                }
+                _ => return true,
+            }
+        }
+
         // 0b. TopBar — sidebar toggle + chrome buttons. Mirrors the
         //     native host so web + native behave identically.
         let top_bar_rect = Rect {
@@ -443,6 +473,7 @@ impl WidgetHost {
                     focus: anchor,
                 });
                 self.code_selection_drag = Some(CodeSelectionDragState { anchor });
+                self.editor_state.chat.transcript_selection = None;
                 self.editor_state.codegen.framework_hover = None;
                 self.editor_state.codegen.action_hover = None;
                 self.editor_state.chat.focused = false;
@@ -484,6 +515,37 @@ impl WidgetHost {
                 if matches!(hit, AIChatHit::Resize(_)) {
                     return true;
                 }
+                if let AIChatHit::SelectInputText(anchor) = hit {
+                    self.chat_input_selection_drag = Some(ChatInputSelectionDragState { anchor });
+                    self.editor_state.chat.focused = true;
+                    self.editor_state.chat.input_select_all = false;
+                    self.editor_state.chat.input_selection =
+                        Some(op_editor_core::chat::ChatInputSelection {
+                            anchor,
+                            focus: anchor,
+                        });
+                    self.editor_state.chat.transcript_selection = None;
+                    self.editor_state.codegen.code_selection = None;
+                    self.editor_state.chat.caret_anchor_ms = self.now_ms;
+                    self.mark_dirty();
+                    return true;
+                }
+                if let AIChatHit::SelectTranscriptText(message_index, anchor) = hit {
+                    self.chat_text_selection_drag = Some(ChatTextSelectionDragState {
+                        message_index,
+                        anchor,
+                    });
+                    self.editor_state.chat.transcript_selection =
+                        Some(op_editor_core::chat::ChatTranscriptSelection {
+                            message_index,
+                            anchor,
+                            focus: anchor,
+                        });
+                    self.editor_state.codegen.code_selection = None;
+                    self.editor_state.chat.focused = false;
+                    self.mark_dirty();
+                    return true;
+                }
                 if matches!(hit, AIChatHit::DragHandle) {
                     self.chat_drag = Some(ChatDragState {
                         grab_dx: x - chat_rect.origin.x,
@@ -516,16 +578,8 @@ impl WidgetHost {
                         return true;
                     }
                     op_editor_ui::widgets::ToolbarHit::Action(action) => {
-                        use op_editor_ui::widgets::ToolbarAction;
                         self.editor_state.editor_ui.shape_picker_open = false;
-                        let acted = match action {
-                            ToolbarAction::Undo => self.editor_state.undo(),
-                            ToolbarAction::Redo => self.editor_state.redo(),
-                            _ => false,
-                        };
-                        if acted {
-                            self.mark_dirty();
-                        }
+                        let acted = self.dispatch_toolbar_action(action);
                         return acted || rename_committed;
                     }
                     op_editor_ui::widgets::ToolbarHit::ToggleShapePicker => {
@@ -687,6 +741,17 @@ impl WidgetHost {
                     }
                     AIChatHit::FocusInput => {
                         self.editor_state.chat.focused = true;
+                        self.editor_state.chat.input_select_all = false;
+                        self.editor_state.chat.input_selection = None;
+                        self.editor_state.chat.transcript_selection = None;
+                        self.mark_dirty();
+                        return true;
+                    }
+                    AIChatHit::SelectInputText(offset) => {
+                        self.editor_state.chat.focused = true;
+                        self.editor_state.chat.set_input_caret(offset);
+                        self.editor_state.chat.transcript_selection = None;
+                        self.editor_state.chat.caret_anchor_ms = self.now_ms;
                         self.mark_dirty();
                         return true;
                     }
@@ -704,6 +769,9 @@ impl WidgetHost {
                     AIChatHit::Example(text) => {
                         self.editor_state.chat.input = text;
                         self.editor_state.chat.focused = true;
+                        self.editor_state.chat.input_select_all = false;
+                        self.editor_state.chat.input_selection = None;
+                        self.editor_state.chat.transcript_selection = None;
                         self.mark_dirty();
                         return true;
                     }
@@ -833,6 +901,18 @@ impl WidgetHost {
                     AIChatHit::ApplyDesignBlock(msg_idx, text) => {
                         return self.apply_chat_design_block(msg_idx, &text);
                     }
+                    AIChatHit::SelectTranscriptText(message_index, offset) => {
+                        self.editor_state.chat.transcript_selection =
+                            Some(op_editor_core::chat::ChatTranscriptSelection {
+                                message_index,
+                                anchor: offset,
+                                focus: offset,
+                            });
+                        self.editor_state.codegen.code_selection = None;
+                        self.editor_state.chat.focused = false;
+                        self.mark_dirty();
+                        return true;
+                    }
                     AIChatHit::ToggleChecklist => {
                         self.editor_state.chat.toggle_checklist_collapsed();
                         self.mark_dirty();
@@ -846,6 +926,8 @@ impl WidgetHost {
         self.editor_state.editor_ui.chat_model_picker_open = false;
         let was_focused = self.editor_state.chat.focused || picker_was_open;
         self.editor_state.chat.focused = false;
+        self.editor_state.chat.input_select_all = false;
+        self.editor_state.chat.input_selection = None;
         self.mark_dirty();
 
         let toolbar_rect = self.toolbar_rect(viewport_w);
@@ -858,16 +940,7 @@ impl WidgetHost {
                     return true;
                 }
                 op_editor_ui::widgets::ToolbarHit::Action(action) => {
-                    use op_editor_ui::widgets::ToolbarAction;
-                    let acted = match action {
-                        ToolbarAction::Undo => self.editor_state.undo(),
-                        ToolbarAction::Redo => self.editor_state.redo(),
-                        _ => false,
-                    };
-                    if acted {
-                        self.mark_dirty();
-                    }
-                    return acted;
+                    return self.dispatch_toolbar_action(action);
                 }
                 op_editor_ui::widgets::ToolbarHit::ToggleShapePicker => {
                     let v = &mut self.editor_state.editor_ui.shape_picker_open;
@@ -930,5 +1003,27 @@ impl WidgetHost {
         // Defocusing the chat input itself is a visible change —
         // the caller should still repaint to drop the caret.
         was_focused
+    }
+
+    fn create_default_variable_from_modal(&mut self) {
+        use jian_ops_schema::variable::{VariableKind, VariableScalar};
+        let existing = self.editor_state.doc.variables.as_ref();
+        let mut idx = 1;
+        let name = loop {
+            let candidate = format!("variable-{idx}");
+            if existing.map_or(true, |vars| !vars.contains_key(&candidate)) {
+                break candidate;
+            }
+            idx += 1;
+        };
+        let snap = self.editor_state.snapshot_for_history();
+        if self.editor_state.create_variable(
+            &name,
+            VariableKind::Color,
+            VariableScalar::Str("#000000".into()),
+        ) {
+            self.editor_state.history_push_past(snap);
+        }
+        self.mark_dirty();
     }
 }

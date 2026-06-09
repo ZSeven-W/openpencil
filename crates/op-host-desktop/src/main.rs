@@ -231,12 +231,21 @@ impl DesktopApp {
         // Baseline for the unsaved-changes prompt — the fresh,
         // empty document is by definition "saved" (nothing to lose).
         let saved_doc_fingerprint = persistence::document_fingerprint(host.editor_state());
-        let update_probe = update_check::UpdateProbe::for_auto_check(
-            host.editor_state()
-                .editor_ui
-                .agent_settings
-                .auto_update_enabled,
-        );
+        let update_probe = if cfg!(test) {
+            update_check::UpdateProbe::idle()
+        } else {
+            update_check::UpdateProbe::for_auto_check(
+                host.editor_state()
+                    .editor_ui
+                    .agent_settings
+                    .auto_update_enabled,
+            )
+        };
+        let model_probe = if cfg!(test) {
+            model_discovery::ModelProbe::idle()
+        } else {
+            model_discovery::ModelProbe::spawn()
+        };
         Self {
             window: None,
             ctx: None,
@@ -263,7 +272,7 @@ impl DesktopApp {
             current_codegen: None,
             codegen_last_result: None,
             current_figma_import: None,
-            model_probe: model_discovery::ModelProbe::spawn(),
+            model_probe,
             image_search: image_search_session::ImageSearchSession::new(),
             mcp_wake_proxy: None,
             iconify_job: None,
