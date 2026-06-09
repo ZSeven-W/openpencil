@@ -123,7 +123,11 @@ fn is_sparse_right_panel_row(node: &PenNode, root_width: f64) -> bool {
     let Some(last) = children.last() else {
         return false;
     };
-    if !contains_any(&identity_haystack(last), &["right", "insight", "panel"]) {
+    // Require the trailing column to actually signal a right-rail / insights
+    // panel. A bare "panel" match was too broad — ordinary two-column rows
+    // whose second child merely contains "panel" in its name would be
+    // rewritten to the full desktop width.
+    if !contains_any(&identity_haystack(last), &["right", "insight"]) {
         return false;
     }
     let numeric_sum: f64 = children.iter().filter_map(width_px).sum();
