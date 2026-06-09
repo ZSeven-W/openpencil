@@ -90,6 +90,7 @@ pub(super) fn paint_rename_input(
     available_w: f32,
     now_ms: u64,
     caret_anchor_ms: u64,
+    select_all: bool,
 ) {
     let input_w = available_w.max(40.0);
     let input_h = LAYER_ROW_HEIGHT - 4.0;
@@ -111,6 +112,18 @@ pub(super) fn paint_rename_input(
     };
     cx.backend.save();
     cx.backend.clip_rect(clip);
+    // Ctrl/Cmd+A highlights the whole rename draft (painted behind it).
+    if select_all {
+        crate::widgets::text_selection::paint_single_line_selection(
+            cx,
+            theme,
+            draft,
+            x - scroll_x,
+            row_y + 17.0,
+            ROW_FONT,
+            clip.origin.x + clip.size.x,
+        );
+    }
     let text = TextLayout::single_run(
         draft,
         "system-ui",

@@ -365,6 +365,18 @@ impl<'a> ComponentBrowserPanel<'a> {
         } else {
             (query, self.theme.foreground)
         };
+        // Ctrl/Cmd+A highlights the whole query (painted behind the text).
+        if self.state.editor_ui.component_browser_select_all && !query.is_empty() {
+            crate::widgets::text_selection::paint_single_line_selection(
+                cx,
+                &self.theme,
+                query,
+                search_rect.origin.x + 30.0,
+                search_rect.origin.y + 19.0,
+                12.0,
+                search_rect.origin.x + search_rect.size.x - 8.0,
+            );
+        }
         self.text(
             cx,
             search_text,

@@ -87,6 +87,9 @@ pub struct LayerPanel {
     /// Caret position (char index) for the active inline rename — the
     /// single renaming row reads this to place its blinking caret.
     pub rename_caret: usize,
+    /// Whether Ctrl/Cmd+A selected the whole rename draft — drives the
+    /// select-all highlight behind the inline rename text.
+    pub rename_select_all: bool,
     /// Scroll offsets (px) for the bounded Pages / Layers regions.
     pub pages_scroll: f32,
     pub layers_scroll: f32,
@@ -118,6 +121,12 @@ impl LayerPanel {
             now_ms: 0,
             caret_anchor_ms: 0,
             rename_caret: state.ui.layer_rename.as_ref().map(|r| r.caret).unwrap_or(0),
+            rename_select_all: state
+                .ui
+                .layer_rename
+                .as_ref()
+                .map(|r| r.select_all)
+                .unwrap_or(false),
             pages_scroll: state.editor_ui.layer_pages_scroll,
             layers_scroll: state.editor_ui.layer_layers_scroll,
             pages_h_scroll: state.editor_ui.layer_pages_h_scroll,
@@ -173,6 +182,12 @@ impl LayerPanel {
             now_ms: 0,
             caret_anchor_ms: 0,
             rename_caret: state.ui.layer_rename.as_ref().map(|r| r.caret).unwrap_or(0),
+            rename_select_all: state
+                .ui
+                .layer_rename
+                .as_ref()
+                .map(|r| r.select_all)
+                .unwrap_or(false),
             pages_scroll: state.editor_ui.layer_pages_scroll,
             layers_scroll: state.editor_ui.layer_layers_scroll,
             pages_h_scroll: state.editor_ui.layer_pages_h_scroll,
@@ -193,6 +208,7 @@ impl LayerPanel {
             now_ms: 0,
             caret_anchor_ms: 0,
             rename_caret: 0,
+            rename_select_all: false,
             pages_scroll: 0.0,
             layers_scroll: 0.0,
             pages_h_scroll: 0.0,
@@ -561,6 +577,7 @@ impl Widget for LayerPanel {
                     available_w,
                     self.now_ms,
                     self.caret_anchor_ms,
+                    self.rename_select_all,
                 );
             } else {
                 let display = truncate_to_fit(&page.label, ROW_FONT, available_w);
@@ -705,6 +722,7 @@ impl Widget for LayerPanel {
                     available_w,
                     self.now_ms,
                     self.caret_anchor_ms,
+                    self.rename_select_all,
                 );
             } else {
                 let display = truncate_to_fit(&item.label, ROW_FONT, available_w);

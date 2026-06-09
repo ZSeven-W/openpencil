@@ -284,6 +284,11 @@ pub struct EditCaret {
     pub editing: String,
     pub anchor_ms: u64,
     pub now_ms: u64,
+    /// Ctrl/Cmd+A selected the whole text — paint the select-all wash.
+    pub select_all: bool,
+    /// Pre-resolved selection wash color (theme isn't reachable in the
+    /// `paint_node` walker, so the viewport stashes it here).
+    pub selection_color: Color,
 }
 
 pub struct CanvasViewport<'a> {
@@ -309,6 +314,8 @@ pub struct CanvasViewport<'a> {
     /// blink anchor.
     pub(super) text_editing: Option<String>,
     pub(super) text_edit_caret_anchor_ms: u64,
+    /// Ctrl/Cmd+A selected the editing text node's whole content.
+    pub(super) text_edit_select_all: bool,
     /// Background fill outside any Frame.
     pub canvas_background: Color,
     pub theme: Theme,
@@ -360,6 +367,7 @@ impl<'a> CanvasViewport<'a> {
                 .as_ref()
                 .map(|id| id.as_str().to_string()),
             text_edit_caret_anchor_ms: state.ui.text_edit_caret_anchor_ms,
+            text_edit_select_all: state.ui.text_edit_select_all,
             canvas_background: theme.canvas_surface,
             theme,
             now_ms: 0,
@@ -403,6 +411,8 @@ impl<'a> Widget for CanvasViewport<'a> {
                 editing: id.clone(),
                 anchor_ms: self.text_edit_caret_anchor_ms,
                 now_ms: self.now_ms,
+                select_all: self.text_edit_select_all,
+                selection_color: crate::widgets::text_selection::selection_color(&self.theme),
             });
             // Cull rect — anything fully outside this rect (with a
             // generous margin for stroke widths / rotated handles /
