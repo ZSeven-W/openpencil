@@ -137,6 +137,23 @@ pub fn clear_if_epoch(epoch: u64) {
     }
 }
 
+/// End the run identified by `epoch`: if it's still the active run, clear
+/// its indicators *and retire the epoch* (bump it), so any registration
+/// still in flight from that run's worker no-ops instead of re-populating
+/// the set we just cleared. A no-op if a newer run already took over.
+///
+/// This is what the host calls when a turn is stopped: `clear_if_epoch`
+/// alone would clear, but a worker mid `add_frame` loop (scaffold just
+/// built, first cancel-detecting channel op not yet reached) would re-add
+/// under the unchanged epoch. Retiring the epoch closes that window.
+pub fn end_if_epoch(epoch: u64) {
+    let mut r = REGISTRY.lock().unwrap();
+    if r.epoch == epoch {
+        r.clear_maps();
+        r.epoch += 1;
+    }
+}
+
 /// `true` while any node / frame indicator is active — the paint loop
 /// uses this to keep requesting redraws so the breathing animates.
 pub fn is_active() -> bool {
@@ -204,5 +221,27 @@ mod tests {
         clear_if_epoch(e2);
         assert!(snapshot().frames.is_empty());
         assert!(!is_active());
+
+        // end_if_epoch retires the epoch: after the host ends a run, a
+        // worker still mid-registration under it can't re-populate.
+        let e3 = begin();
+        add_frame(e3, "f3", "#FFD93D", "Pixel");
+        end_if_epoch(e3);
+        assert!(snapshot().frames.is_empty(), "end_if_epoch clears");
+        add_frame(e3, "late", "#FFD93D", "Pixel"); // in-flight registration
+        assert!(
+            snapshot().frames.is_empty(),
+            "registration under a retired epoch no-ops"
+        );
+
+        // end_if_epoch on a stale epoch must not touch the live run.
+        let e4 = begin();
+        add_frame(e4, "f4", "#6C5CE7", "Echo");
+        end_if_epoch(e3);
+        assert!(
+            snapshot().frames.contains_key("f4"),
+            "end_if_epoch ignores a stale epoch"
+        );
+        clear();
     }
 }

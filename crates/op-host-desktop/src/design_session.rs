@@ -63,6 +63,22 @@ pub struct DesignSession {
     delta_rx: Receiver<DesignDelta>,
     cmd_rx: Receiver<DesignCmdReq>,
     finished: bool,
+    /// Agent-team canvas-indicator epoch for this turn (see
+    /// [`op_editor_core::agent_indicators`]). Minted on `start`; the
+    /// [`Drop`] impl clears it so stop / new-chat wipes the breathing
+    /// borders immediately instead of waiting for the worker to unwind.
+    indicator_epoch: u64,
+}
+
+impl Drop for DesignSession {
+    fn drop(&mut self) {
+        // Stop / new-chat / completion all drop the session. Clear this
+        // turn's agent-team indicators right away and retire the epoch —
+        // epoch-scoped, so if a newer turn already began it keeps its own,
+        // and a worker still mid-registration for this turn can't re-add
+        // after we've cleared.
+        op_editor_core::agent_indicators::end_if_epoch(self.indicator_epoch);
+    }
 }
 
 /// Progress / completion events emitted by the worker.
@@ -120,6 +136,13 @@ impl DesignSession {
         let (delta_tx, delta_rx) = mpsc::channel::<DesignDelta>();
         let (cmd_tx, cmd_rx) = mpsc::channel::<DesignCmdReq>();
 
+        // Mint this turn's indicator epoch on the UI thread BEFORE spawning
+        // the worker. `begin` clears any prior turn's borders immediately
+        // and hands us the epoch so Drop can target exactly this run — the
+        // worker registers its frames under the same epoch via
+        // `with_indicator_epoch` below.
+        let indicator_epoch = op_editor_core::agent_indicators::begin();
+
         thread::Builder::new()
             .name("op-design-turn".into())
             .spawn(move || {
@@ -138,14 +161,18 @@ impl DesignSession {
                 let mut on_progress = move |p: Progress| {
                     let _ = delta_tx_for_progress.send(DesignDelta::Progress(p));
                 };
-                let summary = shared_runtime().block_on(Orchestrator::new().run(
-                    request,
-                    &mut sink,
-                    &llm,
-                    &mut on_progress,
-                    &abort,
-                    &providers,
-                ));
+                let summary = shared_runtime().block_on(
+                    Orchestrator::new()
+                        .with_indicator_epoch(indicator_epoch)
+                        .run(
+                            request,
+                            &mut sink,
+                            &llm,
+                            &mut on_progress,
+                            &abort,
+                            &providers,
+                        ),
+                );
                 let _ = delta_tx.send(DesignDelta::Done(summary));
             })
             .expect("spawn op-design-turn thread");
@@ -154,6 +181,7 @@ impl DesignSession {
             delta_rx,
             cmd_rx,
             finished: false,
+            indicator_epoch,
         }
     }
 
@@ -207,6 +235,9 @@ impl DesignSession {
             delta_rx,
             cmd_rx,
             finished: false,
+            // No real turn behind these channels — epoch 0 never matches a
+            // live run, so the Drop clear is a harmless no-op.
+            indicator_epoch: 0,
         }
     }
 }
