@@ -3,7 +3,7 @@
 //! Pure geometry; the painting half stays in `ai_chat_panel.rs`.
 
 use super::ai_chat_panel::{
-    AIChatPlaceholder, INPUT_AREA_HEIGHT, MODEL_CHIP_W, PAD, RESIZE_CORNER, RESIZE_GUTTER,
+    AIChatPlaceholder, INPUT_AREA_HEIGHT, PAD, RESIZE_CORNER, RESIZE_GUTTER,
 };
 use crate::widgets::ai_chat_checklist::{
     fixed_checklist_height, fixed_checklist_rect, HEADER_H, PROGRESS_H,
@@ -30,12 +30,8 @@ impl<'a> AIChatPlaceholder<'a> {
             return Some(AIChatHit::ToggleCollapse);
         }
         let can_use_model = !self.state.available_models.is_empty();
-        // Expanded: chevron-down at top-left toggles collapse.
-        let chevron_rect = Rect {
-            origin: rect.origin,
-            size: Point2D::new(36.0, 32.0),
-        };
-        if rect_contains(chevron_rect, point) {
+        // Expanded: chevron + "New Chat" title group toggles collapse.
+        if rect_contains(self.expanded_header_title_rect(rect), point) {
             return Some(AIChatHit::ToggleCollapse);
         }
         let header_y = rect.origin.y + 8.0;
@@ -58,13 +54,7 @@ impl<'a> AIChatPlaceholder<'a> {
         // `bottom - input_h` and the input block one pixel below it
         // (`sep_y + 1`). An earlier `- PAD` here put the hit targets
         // ~17 px above where they are painted.
-        let input_rect = Rect {
-            origin: Point2D::new(
-                rect.origin.x + PAD,
-                rect.origin.y + rect.size.y - input_h + 1.0,
-            ),
-            size: Point2D::new(rect.size.x - PAD * 2.0, input_h),
-        };
+        let input_rect = self.input_rect(rect);
         // Model-picker dropdown — an overlay above the chip. When
         // open it behaves modally: a row click selects, any other
         // click dismisses it. Hit-tested before the input so a row
@@ -110,27 +100,28 @@ impl<'a> AIChatPlaceholder<'a> {
                 }
                 return Some(AIChatHit::FocusInput);
             }
-            // Bottom toolbar strip — its left `MODEL_CHIP_W` is the
-            // model chip (opens / closes the picker), with attach +
-            // send icon buttons on the right.
+            // Bottom toolbar strip — model picker and Agent Team chip
+            // on the left, with attach + send icon buttons on the right.
             if point.y >= toolbar_top {
-                if point.x <= input_rect.origin.x + MODEL_CHIP_W {
+                let footer = self.footer_layout(rect, input_rect, toolbar_top);
+                if rect_contains(footer.model, point) {
                     return Some(if can_use_model {
                         AIChatHit::ToggleModelPicker
                     } else {
                         AIChatHit::FocusInput
                     });
                 }
-                let send_x = input_rect.origin.x + input_rect.size.x - 32.0;
-                let attach_x = send_x - 32.0;
-                if point.x >= attach_x && point.x < send_x {
+                if rect_contains(footer.agent_team, point) {
+                    return Some(AIChatHit::CycleAgentTeam);
+                }
+                if rect_contains(footer.attach, point) {
                     return Some(if self.is_streaming() {
                         AIChatHit::Inside
                     } else {
                         AIChatHit::AddAttachment
                     });
                 }
-                if point.x >= send_x {
+                if rect_contains(footer.send, point) {
                     return Some(if self.is_streaming() {
                         AIChatHit::Stop
                     } else if can_use_model
@@ -257,6 +248,45 @@ impl<'a> AIChatPlaceholder<'a> {
             point.y,
             self.locale,
         )
+    }
+
+    pub fn footer_hover_at(
+        &self,
+        rect: Rect,
+        point: Point2D,
+    ) -> Option<op_editor_core::ChatFooterButton> {
+        if self.state.collapsed || self.model_picker_open {
+            return None;
+        }
+        let input_rect = self.input_rect(rect);
+        if !rect_contains(input_rect, point) {
+            return None;
+        }
+        let attach_h = self.attachment_row_h();
+        let toolbar_top = input_rect.origin.y + INPUT_AREA_HEIGHT + attach_h;
+        if point.y < toolbar_top {
+            return None;
+        }
+        let footer = self.footer_layout(rect, input_rect, toolbar_top);
+        if !self.state.available_models.is_empty() && rect_contains(footer.model, point) {
+            return Some(op_editor_core::ChatFooterButton::ModelPicker);
+        }
+        if rect_contains(footer.agent_team, point) {
+            return Some(op_editor_core::ChatFooterButton::AgentTeam);
+        }
+        if !self.is_streaming() && rect_contains(footer.attach, point) {
+            return Some(op_editor_core::ChatFooterButton::AddAttachment);
+        }
+        if rect_contains(footer.send, point) {
+            return Some(if self.is_streaming() {
+                op_editor_core::ChatFooterButton::Stop
+            } else if !self.state.available_models.is_empty() {
+                op_editor_core::ChatFooterButton::Send
+            } else {
+                return None;
+            });
+        }
+        None
     }
 }
 

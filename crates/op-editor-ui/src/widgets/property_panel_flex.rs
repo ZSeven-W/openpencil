@@ -432,6 +432,7 @@ fn paint_alignment_and_gap(
             "",
             edit.focus == Some(PropertyFocus::LayoutGap),
             edit.caret_at(PropertyFocus::LayoutGap),
+            edit.select_all_at(PropertyFocus::LayoutGap),
         );
     }
 
@@ -500,6 +501,7 @@ fn paint_padding_inputs(
             edit.value_for(focus, &value),
             edit.focus == Some(focus),
             edit.caret_at(focus),
+            edit.select_all_at(focus),
         );
     };
     let cell = |col: f32, row: f32| Rect {

@@ -14,7 +14,12 @@ use crate::widgets::property_panel_inputs::{
 };
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
-use op_editor_core::codegen::{ChunkStatus, CodegenPhase, CodegenState, Framework};
+use op_editor_core::codegen::{CodegenHover, CodegenPhase, CodegenState, Framework};
+
+#[path = "property_panel_code_complete.rs"]
+mod complete;
+#[path = "property_panel_code_generating.rs"]
+mod generating;
 
 /// Map a click on the Code tab to its action (framework chip / button), or
 /// `None`. Uses the same content origin the painter does (panel left,
@@ -24,22 +29,108 @@ pub fn code_action_hit(
     state: &CodegenState,
     point: Point2D,
 ) -> Option<PropertyPanelAction> {
-    let cy0 = panel_rect.origin.y + TAB_HEIGHT;
     let inside = |r: Rect| {
         point.x >= r.origin.x
             && point.x <= r.origin.x + r.size.x
             && point.y >= r.origin.y
             && point.y <= r.origin.y + r.size.y
     };
-    code_action_rects(panel_rect.origin.x, cy0, panel_rect.size.x, state)
+    code_action_rects_in_panel(panel_rect, state)
         .into_iter()
         .find(|(_, r)| inside(*r))
         .map(|(a, _)| PropertyPanelAction::Codegen(a))
 }
 
+/// Map a cursor point over the Code panel to the hover state the hosts store
+/// on `CodegenState`. Shares `code_action_rects` with click hit-testing.
+pub fn code_hover_at(
+    panel_rect: Rect,
+    state: &CodegenState,
+    point: Point2D,
+) -> (Option<Framework>, Option<CodegenHover>) {
+    let inside = |r: Rect| {
+        point.x >= r.origin.x
+            && point.x <= r.origin.x + r.size.x
+            && point.y >= r.origin.y
+            && point.y <= r.origin.y + r.size.y
+    };
+    let hit = code_action_rects_in_panel(panel_rect, state)
+        .into_iter()
+        .find(|(_, r)| inside(*r))
+        .map(|(a, _)| a);
+    match hit {
+        Some(CodegenAction::SelectFramework(fw)) => (Some(fw), None),
+        Some(action) => (None, hover_for_action(action)),
+        None => (None, None),
+    }
+}
+
+/// Map a point inside the generated-code preview to a byte offset in
+/// `state.code`. Returns `None` when the Code tab is not in Complete phase
+/// or the point is outside the preview card.
+pub fn code_text_offset_at(
+    panel_rect: Rect,
+    state: &CodegenState,
+    point: Point2D,
+) -> Option<usize> {
+    code_text_offset_at_in_panel(panel_rect, state, point)
+}
+
+pub fn code_preview_rect(panel_rect: Rect, state: &CodegenState) -> Option<Rect> {
+    if !matches!(state.phase, CodegenPhase::Complete) {
+        return None;
+    }
+    Some(complete::code_area_rect_for_panel(
+        state,
+        complete_layout(panel_rect),
+    ))
+}
+
+pub fn code_preview_max_scroll(panel_rect: Rect, state: &CodegenState) -> Option<f32> {
+    if !matches!(state.phase, CodegenPhase::Complete) {
+        return None;
+    }
+    Some(complete::code_preview_max_scroll(
+        state,
+        complete_layout(panel_rect),
+    ))
+}
+
+fn complete_layout(panel_rect: Rect) -> complete::CompleteLayout {
+    complete::CompleteLayout {
+        x: panel_rect.origin.x,
+        y: code_body_y(panel_rect),
+        w: panel_rect.size.x,
+        progress_row_h: PROGRESS_ROW_H,
+        panel_bottom: Some(panel_bottom(panel_rect)),
+    }
+}
+
+fn code_body_y(panel_rect: Rect) -> f32 {
+    let tab_bottom = panel_rect.origin.y + TAB_HEIGHT;
+    let chips_y = tab_bottom + SECTION_HEADER_HEIGHT;
+    chips_body_top(chips_y)
+}
+
+fn panel_bottom(panel_rect: Rect) -> f32 {
+    panel_rect.origin.y + panel_rect.size.y
+}
+
+fn code_text_offset_at_in_panel(
+    panel_rect: Rect,
+    state: &CodegenState,
+    point: Point2D,
+) -> Option<usize> {
+    if !matches!(state.phase, CodegenPhase::Complete) {
+        return None;
+    }
+    complete::code_text_offset_at_in_panel(state, point, complete_layout(panel_rect))
+}
+
 /// Height of a framework chip + the gap below the chip row.
-const CHIP_HEIGHT: f32 = 26.0;
-const CHIP_PAD_X: f32 = 9.0;
+const CHIP_HEIGHT: f32 = 22.0;
+const CHIP_PAD_X: f32 = 8.0;
+const CHIP_FONT_SIZE: f32 = 11.0;
 const CHIP_GAP: f32 = 2.0;
 /// Width of each scroll-chevron zone reserved at the strip ends when the
 /// framework row overflows. Paint + hit-test inset the chip clip band by
@@ -49,16 +140,60 @@ const CHEVRON_ZONE_W: f32 = 18.0;
 /// framework selector from the phase body (TS parity).
 const CHIP_DIVIDER_GAP: f32 = 8.0;
 /// Centered Idle empty-state metrics (TS parity).
-const BADGE_SIZE: f32 = 56.0;
-const IDLE_TOP_PAD: f32 = 28.0;
-const IDLE_BTN_H: f32 = 40.0;
-const IDLE_BTN_W_MAX: f32 = 220.0;
+const BADGE_SIZE: f32 = 44.0;
+const IDLE_TOP_PAD: f32 = 24.0;
+const IDLE_BTN_H: f32 = 34.0;
+const IDLE_BTN_W_MAX: f32 = 200.0;
 /// Height of a progress / status row (chunk, planning, assembly).
 const PROGRESS_ROW_H: f32 = 24.0;
-/// Code-preview area height + the max number of lines it shows.
-const CODE_AREA_H: f32 = 220.0;
-const CODE_LINE_H: f32 = 16.0;
-const CODE_MAX_LINES: usize = 13;
+
+#[derive(Clone, Copy)]
+struct CodePanelLayout {
+    x: f32,
+    y: f32,
+    w: f32,
+    panel_bottom: Option<f32>,
+}
+
+fn hover_for_action(action: CodegenAction) -> Option<CodegenHover> {
+    match action {
+        CodegenAction::SelectFramework(_) => None,
+        CodegenAction::Generate => Some(CodegenHover::Generate),
+        CodegenAction::Regenerate => Some(CodegenHover::Regenerate),
+        CodegenAction::Cancel => Some(CodegenHover::Cancel),
+        CodegenAction::Copy => Some(CodegenHover::Copy),
+        CodegenAction::Download => Some(CodegenHover::Download),
+        CodegenAction::ExportBundle => Some(CodegenHover::ExportBundle),
+        CodegenAction::ScrollFrameworksLeft => Some(CodegenHover::ScrollFrameworksLeft),
+        CodegenAction::ScrollFrameworksRight => Some(CodegenHover::ScrollFrameworksRight),
+    }
+}
+
+fn action_hovered(state: &CodegenState, hover: CodegenHover) -> bool {
+    state.action_hover == Some(hover)
+}
+
+fn paint_primary_hover_overlay(cx: &mut PaintCx<'_>, rect: Rect, radius: f32) {
+    cx.backend.fill_round_rect(
+        rect,
+        radius,
+        Color {
+            r: 1.0,
+            g: 1.0,
+            b: 1.0,
+            a: 0.14,
+        },
+    );
+}
+
+fn code_neutral_hover_color(theme: &Theme) -> Color {
+    Color {
+        r: theme.foreground.r,
+        g: theme.foreground.g,
+        b: theme.foreground.b,
+        a: 0.12,
+    }
+}
 
 /// Draw a 13px system-ui line of text at the `(px, py)` baseline.
 fn draw_line(cx: &mut PaintCx<'_>, text: &str, color: Color, px: f32, py: f32) {
@@ -78,6 +213,12 @@ fn full_button_rect(x: f32, y: f32, w: f32) -> Rect {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+struct FullButtonStyle {
+    filled: bool,
+    hovered: bool,
+}
+
 /// Paint a full-width action button at `y`. `filled` → primary fill +
 /// primary-foreground label; else a muted outline + foreground label.
 /// Returns the y after the button + its trailing gap.
@@ -88,17 +229,24 @@ fn paint_full_button(
     x: f32,
     y: f32,
     w: f32,
-    filled: bool,
+    style: FullButtonStyle,
 ) -> f32 {
     let btn = full_button_rect(x, y, w);
-    if filled {
+    if style.filled {
         cx.backend.fill_round_rect(btn, INPUT_RADIUS, theme.primary);
+        if style.hovered {
+            paint_primary_hover_overlay(cx, btn, INPUT_RADIUS);
+        }
     } else {
         cx.backend.fill_round_rect(btn, INPUT_RADIUS, theme.muted);
+        if style.hovered {
+            cx.backend
+                .fill_round_rect(btn, INPUT_RADIUS, code_neutral_hover_color(theme));
+        }
         cx.backend
             .stroke_round_rect(btn, INPUT_RADIUS, theme.border, 1.0);
     }
-    let text_color = if filled {
+    let text_color = if style.filled {
         theme.primary_foreground
     } else {
         theme.foreground
@@ -109,13 +257,30 @@ fn paint_full_button(
     y + INPUT_HEIGHT + 12.0
 }
 
-/// Backend-free advance estimate for a chip label at 13px, matching the
+fn framework_tab_label(fw: Framework) -> &'static str {
+    match fw {
+        Framework::React => "React",
+        Framework::Vue => "Vue",
+        Framework::Svelte => "Svelte",
+        Framework::Html => "HTML",
+        Framework::Flutter => "Flutter",
+        Framework::SwiftUi => "SwiftUI",
+        Framework::Compose => "Compose",
+        Framework::ReactNative => "RN",
+    }
+}
+
+/// Backend-free advance estimate for a chip label at 11px, matching the
 /// `RenderBackend::measure_text` trait-default heuristic (0.55 × size per
-/// ASCII char) so painter + hit-test wrap identically. Wire tokens are
-/// all ASCII → exact here.
+/// ASCII char) so painter + hit-test wrap identically. TS tab labels are
+/// all ASCII, so the same label drives geometry and paint.
 fn chip_label_width(label: &str) -> f32 {
     label.chars().fold(0.0, |w, c| {
-        w + if c.is_ascii() { 13.0 * 0.55 } else { 13.0 }
+        w + if c.is_ascii() {
+            CHIP_FONT_SIZE * 0.55
+        } else {
+            CHIP_FONT_SIZE
+        }
     })
 }
 
@@ -126,7 +291,7 @@ fn framework_row_width() -> f32 {
         if i > 0 {
             total += CHIP_GAP;
         }
-        total += chip_label_width(fw.as_wire()) + CHIP_PAD_X * 2.0;
+        total += chip_label_width(framework_tab_label(*fw)) + CHIP_PAD_X * 2.0;
     }
     total
 }
@@ -174,7 +339,7 @@ fn framework_chip_rects(x: f32, y: f32, w: f32, scroll: f32) -> Vec<(Framework, 
     let mut chip_x = x + PAD_X + inset - scroll;
     let mut out = Vec::with_capacity(Framework::ALL.len());
     for fw in Framework::ALL {
-        let chip_w = chip_label_width(fw.as_wire()) + CHIP_PAD_X * 2.0;
+        let chip_w = chip_label_width(framework_tab_label(fw)) + CHIP_PAD_X * 2.0;
         out.push((
             fw,
             Rect {
@@ -238,8 +403,19 @@ pub fn framework_at(x: f32, y: f32, w: f32, point: Point2D, scroll: f32) -> Opti
 
 /// Paint a single scroll chevron centred in `zone` over a subtle muted
 /// background. `enabled` controls the glyph tint (dimmed at a scroll end).
-fn paint_chevron(cx: &mut PaintCx<'_>, theme: &Theme, icon: Icon, zone: Rect, enabled: bool) {
+fn paint_chevron(
+    cx: &mut PaintCx<'_>,
+    theme: &Theme,
+    icon: Icon,
+    zone: Rect,
+    enabled: bool,
+    hovered: bool,
+) {
     cx.backend.fill_round_rect(zone, 6.0, theme.muted);
+    if hovered {
+        cx.backend
+            .fill_round_rect(zone, 6.0, code_neutral_hover_color(theme));
+    }
     let glyph = 14.0;
     let color = if enabled {
         theme.foreground
@@ -301,11 +477,19 @@ fn paint_framework_chips(
             theme.muted_foreground
         };
         // Centre the label horizontally + vertically in the chip using the
-        // real measured advance (13px baseline ≈ vertical centre + ~0.35em).
-        let tw = cx.backend.measure_text(fw.as_wire(), 13.0);
+        // real measured advance (11px baseline ≈ vertical centre + ~0.35em).
+        let label = framework_tab_label(fw);
+        let tw = cx.backend.measure_text(label, CHIP_FONT_SIZE);
         let tx = chip.origin.x + (chip.size.x - tw) / 2.0;
-        let ty = chip.origin.y + chip.size.y / 2.0 + 4.5;
-        draw_line(cx, fw.as_wire(), text_color, tx, ty);
+        let ty = chip.origin.y + chip.size.y / 2.0 + 4.0;
+        let layout = TextLayout::single_run(
+            label,
+            "system-ui",
+            CHIP_FONT_SIZE,
+            to_jian_color(text_color),
+            origin(),
+        );
+        cx.backend.draw_text(&layout, Point2D::new(tx, ty));
     }
     cx.backend.restore();
     // Scroll chevrons (only when the strip overflows). Each sits over a
@@ -318,6 +502,7 @@ fn paint_framework_chips(
             Icon::ChevronLeft,
             left,
             state.framework_scroll > 0.0,
+            action_hovered(state, CodegenHover::ScrollFrameworksLeft),
         );
         paint_chevron(
             cx,
@@ -325,6 +510,7 @@ fn paint_framework_chips(
             Icon::ChevronRight,
             right,
             state.framework_scroll < max,
+            action_hovered(state, CodegenHover::ScrollFrameworksRight),
         );
     }
     // A thin divider line below the strip, spanning the padded width.
@@ -337,50 +523,6 @@ fn paint_framework_chips(
         theme.border,
     );
     chips_body_top(y)
-}
-
-/// Map a `ChunkStatus` to its trailing status glyph + tint.
-fn status_glyph(theme: &Theme, status: ChunkStatus) -> (Icon, Color) {
-    match status {
-        ChunkStatus::Pending | ChunkStatus::Skipped => (Icon::Minus, theme.muted_foreground),
-        ChunkStatus::Running => (Icon::Loader, theme.primary),
-        ChunkStatus::Done => (Icon::Check, theme.primary),
-        ChunkStatus::Degraded | ChunkStatus::Failed => (Icon::AlertTriangle, theme.destructive),
-    }
-}
-
-/// Paint one progress row: left label + a trailing status glyph.
-#[allow(clippy::too_many_arguments)]
-fn paint_progress_row(
-    cx: &mut PaintCx<'_>,
-    theme: &Theme,
-    label: &str,
-    icon: Icon,
-    icon_color: Color,
-    x: f32,
-    y: f32,
-    w: f32,
-) -> f32 {
-    draw_line(cx, label, theme.foreground, x + PAD_X, y + 16.0);
-    draw_icon(
-        cx.backend,
-        icon,
-        Point2D::new(x + w - PAD_X - 16.0, y + 4.0),
-        16.0,
-        icon_color,
-        1.6,
-    );
-    y + PROGRESS_ROW_H
-}
-
-/// Glyph for the tri-state planning / assembly rows (None = dim,
-/// Some(false) = running, Some(true) = done).
-fn phase_glyph(theme: &Theme, done: Option<bool>) -> (Icon, Color) {
-    match done {
-        None => (Icon::Minus, theme.muted_foreground),
-        Some(false) => (Icon::Loader, theme.primary),
-        Some(true) => (Icon::Check, theme.primary),
-    }
 }
 
 /// A centered fixed-height button rect at `top`, clamped to width.
@@ -417,12 +559,20 @@ fn paint_centered_icon_label(
     label: &str,
     rect: Rect,
     filled: bool,
+    hovered: bool,
 ) {
     let content_color = if filled {
         cx.backend
             .fill_round_rect(rect, INPUT_RADIUS, theme.primary);
+        if hovered {
+            paint_primary_hover_overlay(cx, rect, INPUT_RADIUS);
+        }
         theme.primary_foreground
     } else {
+        if hovered {
+            cx.backend
+                .fill_round_rect(rect, INPUT_RADIUS, code_neutral_hover_color(theme));
+        }
         theme.foreground
     };
     let icon_sz = 16.0;
@@ -459,7 +609,7 @@ fn paint_idle_body(
         size: Point2D::new(BADGE_SIZE, BADGE_SIZE),
     };
     cx.backend.fill_round_rect(badge, 12.0, theme.muted);
-    let icon_sz = 24.0;
+    let icon_sz = 18.0;
     draw_icon(
         cx.backend,
         Icon::Sparkles,
@@ -494,167 +644,28 @@ fn paint_idle_body(
     // 5. Generate button — primary fill + sparkle + "Generate <Framework>".
     let generate = format!("Generate {}", state.framework.display_name());
     let gen_rect = idle_btn_rect(x, w, gen);
-    paint_centered_icon_label(cx, theme, Icon::Sparkles, &generate, gen_rect, true);
+    paint_centered_icon_label(
+        cx,
+        theme,
+        Icon::Sparkles,
+        &generate,
+        gen_rect,
+        true,
+        action_hovered(state, CodegenHover::Generate),
+    );
     // 6. Export bundle — borderless text button with a braces icon.
     let by = gen + IDLE_BTN_H + 12.0;
     let bundle = idle_btn_rect(x, w, by);
-    paint_centered_icon_label(cx, theme, Icon::Braces, "Export AI Bundle", bundle, false);
-    by + IDLE_BTN_H + 12.0
-}
-
-/// y of the Generating Cancel button — past header + planning + chunks +
-/// assembly rows + the trailing gap. Shared by painter + hit-test.
-fn generating_cancel_y(state: &CodegenState, y: f32) -> f32 {
-    y + PROGRESS_ROW_H * (3 + state.progress.chunks.len()) as f32 + SECTION_GAP
-}
-
-/// Generating body: header + planning/chunk/assembly rows + Cancel button.
-fn paint_generating_body(
-    cx: &mut PaintCx<'_>,
-    theme: &Theme,
-    state: &CodegenState,
-    x: f32,
-    mut y: f32,
-    w: f32,
-) -> f32 {
-    draw_line(cx, "Generating…", theme.foreground, x + PAD_X, y + 16.0);
-    y += PROGRESS_ROW_H;
-    let (plan_icon, plan_color) = phase_glyph(theme, state.progress.planning_done);
-    y = paint_progress_row(cx, theme, "Planning", plan_icon, plan_color, x, y, w);
-    for chunk in &state.progress.chunks {
-        let (icon, color) = status_glyph(theme, chunk.status);
-        y = paint_progress_row(cx, theme, &chunk.name, icon, color, x, y, w);
-    }
-    let (asm_icon, asm_color) = phase_glyph(theme, state.progress.assembly_done);
-    y = paint_progress_row(cx, theme, "Assembly", asm_icon, asm_color, x, y, w);
-    y += SECTION_GAP;
-    paint_full_button(cx, theme, "Cancel", x, y, w, false)
-}
-
-/// Paint the bordered code-preview area + the lines of `state.code`
-/// clipped to it, in a monospace face. Returns the y after the rect.
-fn paint_code_area(cx: &mut PaintCx<'_>, theme: &Theme, code: &str, x: f32, y: f32, w: f32) -> f32 {
-    let rect = Rect {
-        origin: Point2D::new(x + PAD_X, y),
-        size: Point2D::new(w - PAD_X * 2.0, CODE_AREA_H),
-    };
-    cx.backend.fill_round_rect(rect, INPUT_RADIUS, theme.muted);
-    cx.backend
-        .stroke_round_rect(rect, INPUT_RADIUS, theme.border, 1.0);
-    // Save / restore around the clipped text so the stateful skia clip
-    // doesn't leak into the buttons painted below.
-    cx.backend.save();
-    cx.backend.clip_rect(rect);
-    let mut line_y = rect.origin.y + 16.0;
-    // PARITY TODO: scroll + syntax highlight — v1 simply clips overflow.
-    for line in code.split('\n').take(CODE_MAX_LINES) {
-        let layout = TextLayout::single_run(
-            line,
-            "monospace",
-            12.0,
-            to_jian_color(theme.foreground),
-            origin(),
-        );
-        cx.backend
-            .draw_text(&layout, Point2D::new(rect.origin.x + 10.0, line_y));
-        line_y += CODE_LINE_H;
-    }
-    cx.backend.restore();
-    y + CODE_AREA_H + 12.0
-}
-
-/// Paint a small icon + label button at `rect` (Complete-phase row).
-fn paint_action_chip(cx: &mut PaintCx<'_>, theme: &Theme, icon: Icon, label: &str, rect: Rect) {
-    cx.backend.fill_round_rect(rect, INPUT_RADIUS, theme.muted);
-    cx.backend
-        .stroke_round_rect(rect, INPUT_RADIUS, theme.border, 1.0);
-    draw_icon(
-        cx.backend,
-        icon,
-        Point2D::new(rect.origin.x + 8.0, rect.origin.y + 7.0),
-        14.0,
-        theme.foreground,
-        1.4,
-    );
-    draw_line(
+    paint_centered_icon_label(
         cx,
-        label,
-        theme.foreground,
-        rect.origin.x + 26.0,
-        rect.origin.y + 19.0,
+        theme,
+        Icon::Braces,
+        "Export AI Bundle",
+        bundle,
+        false,
+        action_hovered(state, CodegenHover::ExportBundle),
     );
-}
-
-/// y of the Complete 4-chip action row — past the optional notices and
-/// the code-preview area. Shared by painter + hit-test.
-fn complete_action_row_y(state: &CodegenState, y: f32) -> f32 {
-    let mut y = y;
-    if state.degraded {
-        y += PROGRESS_ROW_H;
-    }
-    if !state.assets.is_empty() {
-        y += PROGRESS_ROW_H;
-    }
-    // Mirror `paint_code_area`'s advance (area height + gap) without paint.
-    y + CODE_AREA_H + 12.0
-}
-
-/// Geometry for the Complete phase's 4 action chips (Copy / Save /
-/// Bundle / Regen), spread across the usable width. Painter + hit-test.
-fn action_chip_rects(x: f32, y: f32, w: f32) -> [Rect; 4] {
-    let usable = w - PAD_X * 2.0;
-    let gap = 8.0;
-    let btn_w = (usable - gap * 3.0) / 4.0;
-    std::array::from_fn(|i| Rect {
-        origin: Point2D::new(x + PAD_X + (btn_w + gap) * i as f32, y),
-        size: Point2D::new(btn_w, INPUT_HEIGHT),
-    })
-}
-
-/// Complete body: optional notices, code preview, 4-chip action row.
-fn paint_complete_body(
-    cx: &mut PaintCx<'_>,
-    theme: &Theme,
-    state: &CodegenState,
-    x: f32,
-    mut y: f32,
-    w: f32,
-) -> f32 {
-    if state.degraded {
-        draw_icon(
-            cx.backend,
-            Icon::AlertTriangle,
-            Point2D::new(x + PAD_X, y + 4.0),
-            16.0,
-            theme.muted_foreground,
-            1.6,
-        );
-        draw_line(
-            cx,
-            "Generated with degraded chunks",
-            theme.muted_foreground,
-            x + PAD_X + 22.0,
-            y + 16.0,
-        );
-        y += PROGRESS_ROW_H;
-    }
-    if !state.assets.is_empty() {
-        let notice = format!("Includes {} asset(s)", state.assets.len());
-        draw_line(cx, &notice, theme.muted_foreground, x + PAD_X, y + 16.0);
-        y += PROGRESS_ROW_H;
-    }
-    y = paint_code_area(cx, theme, &state.code, x, y, w);
-    let actions = [
-        (Icon::Copy, "Copy"),
-        (Icon::Download, "Save"),
-        (Icon::Sparkles, "Bundle"),
-        (Icon::RefreshCw, "Regen"),
-    ];
-    let rects = action_chip_rects(x, y, w);
-    for ((icon, label), rect) in actions.iter().zip(rects) {
-        paint_action_chip(cx, theme, *icon, label, rect);
-    }
-    y + INPUT_HEIGHT + 12.0
+    by + IDLE_BTN_H + 12.0
 }
 
 /// y of the Error Regenerate button — past the error-text row.
@@ -673,7 +684,18 @@ fn paint_error_body(
 ) -> f32 {
     let msg = state.error.as_deref().unwrap_or("Generation failed");
     draw_line(cx, msg, theme.destructive, x + PAD_X, y + 16.0);
-    paint_full_button(cx, theme, "Regenerate", x, error_regenerate_y(y), w, true)
+    paint_full_button(
+        cx,
+        theme,
+        "Regenerate",
+        x,
+        error_regenerate_y(y),
+        w,
+        FullButtonStyle {
+            filled: true,
+            hovered: action_hovered(state, CodegenHover::Regenerate),
+        },
+    )
 }
 
 /// Paint the full Code panel from `state`: framework chip row + a
@@ -686,13 +708,85 @@ pub fn paint_code_panel(
     y: f32,
     w: f32,
 ) -> f32 {
+    paint_code_panel_at(cx, theme, state, x, y, w, 0)
+}
+
+/// Paint the full Code panel with a host clock for animated affordances.
+pub fn paint_code_panel_at(
+    cx: &mut PaintCx<'_>,
+    theme: &Theme,
+    state: &CodegenState,
+    x: f32,
+    y: f32,
+    w: f32,
+    now_ms: u64,
+) -> f32 {
+    paint_code_panel_with_bottom(
+        cx,
+        theme,
+        state,
+        CodePanelLayout {
+            x,
+            y,
+            w,
+            panel_bottom: None,
+        },
+        now_ms,
+    )
+}
+
+/// Paint the full Code panel using the containing PropertyPanel rect. Complete
+/// code previews use the panel bottom so they can fill the remaining height.
+pub fn paint_code_panel_in_panel(
+    cx: &mut PaintCx<'_>,
+    theme: &Theme,
+    state: &CodegenState,
+    panel_rect: Rect,
+    now_ms: u64,
+) -> f32 {
+    paint_code_panel_with_bottom(
+        cx,
+        theme,
+        state,
+        CodePanelLayout {
+            x: panel_rect.origin.x,
+            y: panel_rect.origin.y + TAB_HEIGHT,
+            w: panel_rect.size.x,
+            panel_bottom: Some(panel_bottom(panel_rect)),
+        },
+        now_ms,
+    )
+}
+
+fn paint_code_panel_with_bottom(
+    cx: &mut PaintCx<'_>,
+    theme: &Theme,
+    state: &CodegenState,
+    layout: CodePanelLayout,
+    now_ms: u64,
+) -> f32 {
     // A faint section label keeps the panel head consistent with Design.
-    let mut y = paint_section_label(cx, theme, "Code", x, y, w);
+    let x = layout.x;
+    let w = layout.w;
+    let mut y = paint_section_label(cx, theme, "Code", x, layout.y, w);
     y = paint_framework_chips(cx, theme, state, x, y, w);
     match state.phase {
         CodegenPhase::Idle => paint_idle_body(cx, theme, state, x, y, w),
-        CodegenPhase::Generating => paint_generating_body(cx, theme, state, x, y, w),
-        CodegenPhase::Complete => paint_complete_body(cx, theme, state, x, y, w),
+        CodegenPhase::Generating => {
+            generating::paint_generating_body(cx, theme, state, x, y, w, now_ms)
+        }
+        CodegenPhase::Complete => complete::paint_complete_body_in_panel(
+            cx,
+            theme,
+            state,
+            complete::CompleteLayout {
+                x,
+                y,
+                w,
+                progress_row_h: PROGRESS_ROW_H,
+                panel_bottom: layout.panel_bottom,
+            },
+        ),
         CodegenPhase::Error => paint_error_body(cx, theme, state, x, y, w),
     }
 }
@@ -705,6 +799,29 @@ pub fn code_action_rects(
     y: f32,
     w: f32,
     state: &CodegenState,
+) -> Vec<(CodegenAction, Rect)> {
+    code_action_rects_with_bottom(x, y, w, state, None)
+}
+
+pub fn code_action_rects_in_panel(
+    panel_rect: Rect,
+    state: &CodegenState,
+) -> Vec<(CodegenAction, Rect)> {
+    code_action_rects_with_bottom(
+        panel_rect.origin.x,
+        panel_rect.origin.y + TAB_HEIGHT,
+        panel_rect.size.x,
+        state,
+        Some(panel_bottom(panel_rect)),
+    )
+}
+
+fn code_action_rects_with_bottom(
+    x: f32,
+    y: f32,
+    w: f32,
+    state: &CodegenState,
+    panel_bottom: Option<f32>,
 ) -> Vec<(CodegenAction, Rect)> {
     let mut out: Vec<(CodegenAction, Rect)> = Vec::new();
     // Section label, then the framework chip row, then the phase body.
@@ -719,11 +836,19 @@ pub fn code_action_rects(
     let inset = if zones.is_some() { CHEVRON_ZONE_W } else { 0.0 };
     let (band_l, band_r) = (x + PAD_X + inset, x + w - PAD_X - inset);
     for (fw, rect) in framework_chip_rects(x, chips_y, w, state.framework_scroll) {
-        // Only chips overlapping the visible (chevron-inset) band are clickable.
-        if rect.origin.x + rect.size.x <= band_l || rect.origin.x >= band_r {
-            continue;
+        // Clamp the clickable rect to the visible (chevron-inset) band so a
+        // chip's scrolled-off / clipped portion is NOT clickable (matches the
+        // painter's clip and the hover hit-test in `framework_at`).
+        let left = rect.origin.x.max(band_l);
+        let right = (rect.origin.x + rect.size.x).min(band_r);
+        if right - left <= 0.0 {
+            continue; // fully outside the visible band
         }
-        out.push((CodegenAction::SelectFramework(fw), rect));
+        let clipped = Rect {
+            origin: Point2D::new(left, rect.origin.y),
+            size: Point2D::new(right - left, rect.size.y),
+        };
+        out.push((CodegenAction::SelectFramework(fw), clipped));
     }
     let body_y = chips_body_top(chips_y);
     match state.phase {
@@ -734,12 +859,21 @@ pub fn code_action_rects(
             out.push((CodegenAction::ExportBundle, idle_btn_rect(x, w, bundle_y)));
         }
         CodegenPhase::Generating => {
-            let cancel_y = generating_cancel_y(state, body_y);
+            let cancel_y = generating::generating_cancel_y(state, body_y);
             out.push((CodegenAction::Cancel, full_button_rect(x, cancel_y, w)));
         }
         CodegenPhase::Complete => {
-            let row_y = complete_action_row_y(state, body_y);
-            let [copy, save, bundle, regen] = action_chip_rects(x, row_y, w);
+            let row_y = complete::complete_action_row_y_in_panel(
+                state,
+                complete::CompleteLayout {
+                    x,
+                    y: body_y,
+                    w,
+                    progress_row_h: PROGRESS_ROW_H,
+                    panel_bottom,
+                },
+            );
+            let [copy, save, bundle, regen] = complete::action_chip_rects(x, row_y, w);
             out.push((CodegenAction::Copy, copy));
             out.push((CodegenAction::Download, save));
             out.push((CodegenAction::ExportBundle, bundle));

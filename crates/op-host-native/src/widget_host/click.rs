@@ -245,6 +245,11 @@ impl WidgetHostNative {
                         self.mark_dirty();
                         return true;
                     }
+                    AIChatHit::CycleAgentTeam => {
+                        self.editor_state.chat.cycle_agent_team_size();
+                        self.mark_dirty();
+                        return true;
+                    }
                     AIChatHit::AddAttachment => {
                         // The desktop event loop drains this flag,
                         // opens a native file picker, and stages the

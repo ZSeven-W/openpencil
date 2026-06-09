@@ -69,6 +69,8 @@ pub struct PropertyPanel {
     pub draft: String,
     /// Caret byte-offset into `draft` (ASCII drafts → char index).
     pub caret_pos: usize,
+    /// Whether Ctrl/Cmd+A selected the full focused draft.
+    pub select_all: bool,
     /// Caret-blink anchor (ms since host start) for the focused
     /// input. Drives the same `jian_core::anim::blink_visible`
     /// helper the chat caret uses.
@@ -97,6 +99,8 @@ pub struct PropertyPanel {
     pub is_multi: bool,
     /// Active header tab — toggled by Cmd+Shift+C.
     pub tab: op_editor_core::PropertyTab,
+    /// Header tab currently hovered. Used only for the pinned tab strip.
+    pub tab_hover: Option<op_editor_core::PropertyTab>,
     /// Current export format + scale, shown on the Export section's
     /// two dropdowns. Clicking a dropdown opens its inline select
     /// popup (NOT the Export modal).
@@ -122,6 +126,9 @@ pub struct PropertyPanel {
     /// `EditorState` at construction (like `snapshot`) so the panel
     /// owns an immutable view; generation logic is wired later (P3).
     pub codegen: op_editor_core::codegen::CodegenState,
+    /// Index into `action_button_rects_with_fill_picker` of the action
+    /// button the cursor is over — drives its `theme.button_hover` wash.
+    pub action_hover: Option<usize>,
 }
 
 impl PropertyPanel {
@@ -230,6 +237,7 @@ impl PropertyPanel {
             } else {
                 state.ui.property_caret_pos
             },
+            select_all: !is_multi && state.ui.property_draft_select_all,
             caret_anchor_ms: state.ui.property_caret_anchor_ms,
             now_ms,
             flex_layout,
@@ -240,11 +248,17 @@ impl PropertyPanel {
             font_family_picker_open: ui.font_family_picker_open,
             font_weight_picker_open: ui.font_weight_picker_open,
             font_weight_picker_hover: ui.font_weight_picker_hover,
+            action_hover: if is_multi {
+                None
+            } else {
+                ui.property_action_hover
+            },
             padding_edit_mode,
             padding_mode_popover_open: ui.padding_mode_popover_open,
             padding_mode_popover_hover: ui.padding_mode_popover_hover,
             is_multi,
             tab: ui.property_tab,
+            tab_hover: ui.property_tab_hover,
             export_format: ui.export_format,
             export_scale: ui.export_scale,
             export_scale_picker_open: ui.export_scale_picker_open,
@@ -476,6 +490,46 @@ impl PropertyPanel {
         }
         None
     }
+
+    /// Index into `action_button_rects_with_fill_picker` of the action
+    /// button under `point`, or `None`. Design-tab single-select only —
+    /// drives the per-button `theme.button_hover` wash. Shares the
+    /// walker geometry with `hit_test_action` + paint so it can't drift.
+    pub fn action_hover_index(&self, panel_rect: Rect, point: Point2D) -> Option<usize> {
+        if self.is_multi || matches!(self.tab, op_editor_core::PropertyTab::Code) {
+            return None;
+        }
+        if !self.point_in_section_viewport(panel_rect, point) {
+            return None;
+        }
+        sections::action_button_rects_with_fill_picker(
+            self.scrolled_rect(panel_rect),
+            self.visible_sections(),
+            &self.snapshot.effects,
+            self.fill_type_picker_open,
+            self.font_family_picker_open,
+            self.font_weight_picker_open,
+            self.export_scale_picker_open,
+            self.export_format_picker_open,
+            self.padding_mode_popover_open,
+        )
+        .iter()
+        .position(|(_, r)| rect_contains(*r, point))
+    }
+
+    /// Pinned Design / Code tab under the cursor.
+    pub fn tab_hover_at(
+        &self,
+        panel_rect: Rect,
+        point: Point2D,
+    ) -> Option<op_editor_core::PropertyTab> {
+        sections::tab_strip_hit(
+            &self.labels,
+            panel_rect.origin.x,
+            panel_rect.origin.y,
+            point,
+        )
+    }
 }
 
 fn rect_contains(r: Rect, p: Point2D) -> bool {
@@ -485,7 +539,7 @@ fn rect_contains(r: Rect, p: Point2D) -> bool {
         && p.y <= r.origin.y + r.size.y
 }
 
-use crate::widgets::property_panel_code::{code_action_hit, paint_code_panel};
+use crate::widgets::property_panel_code::{code_action_hit, paint_code_panel_in_panel};
 
 impl Widget for PropertyPanel {
     fn id(&self) -> WidgetId {
@@ -519,18 +573,29 @@ impl Widget for PropertyPanel {
         // The Design / Code tab strip is pinned to the panel top —
         // painted fixed, above (and never scrolled with) the section
         // content.
-        let tab_bottom =
-            sections::paint_tab_strip(cx, &self.theme, &self.labels, self.tab, x, rect.origin.y, w);
+        let tab_bottom = sections::paint_tab_strip(
+            cx,
+            &self.theme,
+            &self.labels,
+            sections::TabStripState {
+                active: self.tab,
+                hover: self.tab_hover,
+            },
+            x,
+            rect.origin.y,
+            w,
+        );
         let edit_ctx = sections::EditContext {
             focus: self.focus,
             draft: self.draft.as_str(),
             caret: self.caret_pos,
+            select_all: self.select_all,
             caret_anchor_ms: self.caret_anchor_ms,
             now_ms: self.now_ms,
         };
         let caps = self.capabilities();
         if matches!(self.tab, op_editor_core::PropertyTab::Code) {
-            paint_code_panel(cx, &self.theme, &self.codegen, x, tab_bottom, w);
+            paint_code_panel_in_panel(cx, &self.theme, &self.codegen, rect, self.now_ms);
             return;
         }
         // Section content scrolls below the pinned tab strip; clip it
@@ -762,6 +827,26 @@ impl Widget for PropertyPanel {
                 self.export_format,
                 self.export_picker_hover,
             );
+        }
+        // Per-button hover wash — one translucent overlay on the action
+        // button under the cursor (flex / size / fill / effects / export
+        // / create-component). Index into the same walker the host's
+        // hover update + hit-test use, so it lands exactly on the button.
+        if let Some(i) = self.action_hover {
+            let rects = sections::action_button_rects_with_fill_picker(
+                self.scrolled_rect(rect),
+                self.visible_sections(),
+                &self.snapshot.effects,
+                self.fill_type_picker_open,
+                self.font_family_picker_open,
+                self.font_weight_picker_open,
+                self.export_scale_picker_open,
+                self.export_format_picker_open,
+                self.padding_mode_popover_open,
+            );
+            if let Some((_, r)) = rects.get(i) {
+                cx.backend.fill_round_rect(*r, 6.0, self.theme.button_hover);
+            }
         }
         cx.backend.restore();
     }

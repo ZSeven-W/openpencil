@@ -1,12 +1,10 @@
-//! State-layer mirror of the AI chat panel's bare header buttons.
+//! State-layer mirror of the AI chat panel's hoverable buttons.
 //!
 //! The chat panel's full hit enum (`op_editor_ui::widgets::AIChatHit`)
 //! carries owned `String` payloads, so it is not `Copy` and can't live
-//! on `EditorUiState`. The header chevron / maximize / new-chat glyphs
-//! are the only chat controls painted without their own background, so
-//! they are the ones that need a `theme.button_hover` wash. This small
-//! `Copy` enum captures just those for the hover state — same wasm32-
-//! clean discipline as `topbar_state` / `statusbar_state`.
+//! on `EditorUiState`. These small `Copy` enums capture just the chat
+//! controls that need hover paint state — same wasm32-clean discipline
+//! as `topbar_state` / `statusbar_state`.
 
 /// Which bare header button of the AI chat panel the cursor is over.
 /// `None` on `EditorUiState.chat_header_hover` = no hover wash. The
@@ -20,4 +18,20 @@ pub enum ChatHeaderButton {
     ToggleMaximize,
     /// Plus glyph in the header — starts a new chat.
     NewChat,
+}
+
+/// Which footer control of the AI chat panel the cursor is over.
+/// `None` on `EditorUiState.chat_footer_hover` = no hover wash.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ChatFooterButton {
+    /// Bottom-left model chip — opens the model picker.
+    ModelPicker,
+    /// Compact Agent Team size chip in the bottom toolbar.
+    AgentTeam,
+    /// Paperclip attachment button.
+    AddAttachment,
+    /// Send button in its normal idle state.
+    Send,
+    /// Stop button shown while a response streams.
+    Stop,
 }

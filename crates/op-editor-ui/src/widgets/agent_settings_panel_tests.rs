@@ -13,6 +13,7 @@ struct CaptureBackend {
     fills: Vec<(Rect, Color)>,
     icon_strokes: Vec<(Point2D, f32, usize)>,
     svg_strokes: Vec<(String, Point2D, f32)>,
+    text_points: Vec<Point2D>,
     ops: Vec<&'static str>,
 }
 
@@ -23,7 +24,9 @@ impl RenderBackend for CaptureBackend {
         self.fills.push((rect, color));
     }
     fn stroke_rect(&mut self, _: Rect, _: Color, _: f32) {}
-    fn draw_text(&mut self, _: &TextLayout, _: Point2D) {}
+    fn draw_text(&mut self, _: &TextLayout, point: Point2D) {
+        self.text_points.push(point);
+    }
     fn clip_rect(&mut self, _: Rect) {}
     fn stroke_line(&mut self, _: Point2D, _: Point2D, _: Color, _: f32) {}
     fn fill_round_rect(&mut self, _: Rect, _: f32, _: Color) {}
@@ -770,6 +773,57 @@ fn focused_image_search_field_paints_visible_caret_at_blink_on_phase() {
     panel.paint(&mut cx, rect);
 
     assert_eq!(caret_fills(&backend.fills, panel.theme.foreground).len(), 1);
+}
+
+#[test]
+fn focused_empty_image_search_placeholder_leaves_gap_after_caret() {
+    let mut state = EditorState::default();
+    state.editor_ui.agent_settings.tab = AgentSettingsTab::Images;
+    state.editor_ui.agent_settings.images_advanced_open = true;
+    state.editor_ui.agent_settings.focus =
+        Some(SettingsFocus::ImageSearch(ImageSearchField::ClientSecret));
+    state.editor_ui.settings_input_draft.clear();
+    state.editor_ui.settings_input_caret_focus =
+        Some(SettingsFocus::ImageSearch(ImageSearchField::ClientSecret));
+    state.editor_ui.settings_input_caret = Some(0);
+
+    let panel = AgentSettingsPanel::for_editor_at(&state, 100);
+    let rect = panel.rect(1200.0, 800.0);
+    let content_x = rect.origin.x + 200.0 + 24.0;
+    let content_y = rect.origin.y + 24.0;
+    let content_w = rect.size.x - 200.0 - 48.0;
+    let secret_y = content_y + 36.0 + 24.0 + 22.0 + 36.0 + 10.0;
+    let field = Rect {
+        origin: Point2D::new(content_x + 110.0, secret_y),
+        size: Point2D::new(content_w - 110.0, 36.0),
+    };
+    let text_baseline_y = field.origin.y + 36.0 / 2.0 + 5.0;
+    let mut backend = CaptureBackend::default();
+    let mut cx = PaintCx {
+        backend: &mut backend,
+    };
+
+    panel.paint(&mut cx, rect);
+
+    let caret = caret_fills(&backend.fills, panel.theme.foreground)
+        .into_iter()
+        .next()
+        .expect("focused empty image search field should paint a caret");
+    let placeholder = backend
+        .text_points
+        .iter()
+        .copied()
+        .find(|point| {
+            (point.y - text_baseline_y).abs() < 0.01
+                && point.x > field.origin.x
+                && point.x < field.origin.x + field.size.x
+        })
+        .expect("empty focused image search field should paint its placeholder");
+
+    assert!(
+        placeholder.x >= caret.origin.x + 6.0,
+        "focused placeholder should leave a visible gap after the caret"
+    );
 }
 
 #[test]

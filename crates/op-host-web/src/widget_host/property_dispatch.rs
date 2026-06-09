@@ -250,11 +250,15 @@ impl WidgetHost {
                 cg.pending_generate = true;
                 cg.phase = CodegenPhase::Generating;
                 cg.error = None;
+                cg.code_scroll = 0.0;
+                cg.code_selection = None;
             }
             CodegenAction::Regenerate => {
                 cg.pending_regenerate = true;
                 cg.phase = CodegenPhase::Generating;
                 cg.error = None;
+                cg.code_scroll = 0.0;
+                cg.code_selection = None;
             }
             CodegenAction::Cancel => {
                 cg.pending_generate = false;
@@ -268,7 +272,9 @@ impl WidgetHost {
             CodegenAction::Copy => {
                 cg.copied_at = Some(self.now_ms);
                 #[cfg(feature = "codegen")]
-                crate::web_clipboard::copy_text(&cg.code);
+                {
+                    crate::web_clipboard::copy_text(&cg.code);
+                }
             }
             CodegenAction::Download => {
                 #[cfg(feature = "codegen")]

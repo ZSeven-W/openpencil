@@ -11,7 +11,7 @@ pub(crate) fn build_design_request(prompt: String, state: &EditorState) -> Desig
         provider: None,
         design_md: state.doc.design_md.clone(),
         append_context: None,
-        concurrency: 1,
+        concurrency: state.chat.agent_team_size,
         validation_enabled: true,
         visual_ref_enabled: false,
     }
@@ -24,13 +24,14 @@ mod tests {
 
     #[test]
     fn built_in_design_requests_enable_validation() {
-        let state = EditorState::new();
+        let mut state = EditorState::new();
+        state.chat.agent_team_size = 4;
 
         let req = build_design_request("draw a mobile settings screen".into(), &state);
 
         assert!(req.validation_enabled);
         assert!(!req.visual_ref_enabled);
-        assert_eq!(req.concurrency, 1);
+        assert_eq!(req.concurrency, 4);
         assert_eq!(req.model, None);
     }
 }

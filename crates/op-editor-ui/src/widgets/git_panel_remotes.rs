@@ -195,7 +195,19 @@ impl GitPanel<'_> {
             // box (shared `commit_caret_anchor_ms`), rather than a static
             // `|`. The host wakes the loop while these inputs are focused
             // so the toggle actually animates.
+            if focused && self.state.input_select_all && !shown.is_empty() {
+                crate::widgets::text_selection::paint_single_line_selection(
+                    cx,
+                    &self.theme,
+                    shown,
+                    text_x,
+                    baseline,
+                    11.0,
+                    rect.origin.x + rect.size.x - 8.0,
+                );
+            }
             let caret = focused
+                && !self.state.input_select_all
                 && jian_core::anim::blink_visible(
                     self.now_ms,
                     self.state.commit_caret_anchor_ms,

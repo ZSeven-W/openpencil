@@ -12,7 +12,7 @@ use op_ai::chat_provider::{ChatDelta, ChatProvider, ChatRequest, EffortLevel, St
 use tokio::sync::mpsc;
 
 use crate::chat_attachment::TempGuard;
-use crate::chat_runtime::{shared_runtime, BlockingRecvIter};
+use crate::chat_runtime::{prompt_with_system_prompt, shared_runtime, BlockingRecvIter};
 
 /// `ChatProvider` backed by a third-party ACP agent.
 pub struct AcpProvider {
@@ -77,6 +77,7 @@ impl ChatProvider for AcpProvider {
         if !directive.is_empty() {
             prompt = format!("{directive}\n\n{prompt}");
         }
+        prompt = prompt_with_system_prompt(&request.system_prompt, prompt);
         let (tx, rx) = mpsc::channel::<ChatDelta>(64);
         shared_runtime().spawn(async move {
             run_acp_turn(config, prompt, guard, tx).await;

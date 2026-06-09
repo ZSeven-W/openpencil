@@ -7,15 +7,26 @@ impl WidgetHost {
             return false;
         };
         let ui = &mut self.editor_state.editor_ui;
-        if !settings_accepts(focus, &ui.settings_input_draft, c) {
+        let replacing_all = ui.settings_input_select_all;
+        let accepts_draft = if replacing_all {
+            ""
+        } else {
+            ui.settings_input_draft.as_str()
+        };
+        if !settings_accepts(focus, accepts_draft, c) {
             return false;
         }
-        let caret = settings_caret_position(
+        let mut caret = settings_caret_position(
             &ui.settings_input_draft,
             ui.settings_input_caret,
             ui.settings_input_caret_focus,
             focus,
         );
+        if replacing_all {
+            ui.settings_input_draft.clear();
+            ui.settings_input_select_all = false;
+            caret = 0;
+        }
         ui.settings_input_draft.insert(caret, c);
         ui.settings_input_caret = Some(caret + c.len_utf8());
         ui.settings_input_caret_focus = Some(focus);
@@ -29,6 +40,15 @@ impl WidgetHost {
             return false;
         };
         let ui = &mut self.editor_state.editor_ui;
+        if ui.settings_input_select_all {
+            ui.settings_input_draft.clear();
+            ui.settings_input_caret = Some(0);
+            ui.settings_input_caret_focus = Some(focus);
+            ui.settings_input_select_all = false;
+            ui.settings_input_caret_anchor_ms = self.now_ms;
+            self.mark_dirty();
+            return true;
+        }
         let caret = settings_caret_position(
             &ui.settings_input_draft,
             ui.settings_input_caret,
@@ -53,6 +73,7 @@ impl WidgetHost {
             return false;
         };
         let ui = &mut self.editor_state.editor_ui;
+        ui.settings_input_select_all = false;
         let caret = settings_caret_position(
             &ui.settings_input_draft,
             ui.settings_input_caret,
@@ -73,6 +94,7 @@ impl WidgetHost {
     pub(in crate::widget_host) fn clear_settings_caret(&mut self) {
         self.editor_state.editor_ui.settings_input_caret = None;
         self.editor_state.editor_ui.settings_input_caret_focus = None;
+        self.editor_state.editor_ui.settings_input_select_all = false;
     }
 }
 

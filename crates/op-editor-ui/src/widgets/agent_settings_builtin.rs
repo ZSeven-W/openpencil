@@ -5,14 +5,17 @@ use crate::widgets::agent_settings_builtin_draft;
 use crate::widgets::agent_settings_builtin_layout::{
     add_provider_rect, card_height, card_rect, compact_edit_rect, compact_remove_rect,
     compact_switch_rect, draft_card_height, expanded_card_height, field_input_rect, is_editing,
-    rect_contains, CARD_GAP, EMPTY_HEIGHT, HEADER_HEIGHT, SUBTITLE_HEIGHT, TOP_HEADER_RIGHT_INSET,
+    rect_contains, CARD_GAP, EMPTY_HEIGHT, HEADER_HEIGHT, SUBTITLE_HEIGHT,
 };
 use crate::widgets::agent_settings_builtin_parts;
 use crate::widgets::agent_settings_caret::{
-    caret_x_for_text, paint_caret, settings_caret_for_focus,
+    caret_x_for_text, paint_caret, paint_settings_selection, settings_caret_for_focus,
 };
 use crate::widgets::agent_settings_form_actions::{
     cancel_button_rect, paint_form_actions, save_button_rect,
+};
+use crate::widgets::agent_settings_header_action::{
+    header_action_rect, header_action_text_baseline_y, header_action_text_x,
 };
 use crate::widgets::agent_settings_i18n::t as t_settings;
 use crate::widgets::agent_settings_switch::paint_settings_switch;
@@ -352,14 +355,19 @@ fn paint_header(
     );
     cx.backend
         .draw_text(&layout, Point2D::new(frame.x, frame.y + 18.0));
-    if action_hover {
-        let rect = Rect {
-            origin: Point2D::new(frame.x + frame.w - TOP_HEADER_RIGHT_INSET - 96.0, frame.y),
-            size: Point2D::new(96.0, 24.0),
-        };
-        cx.backend.fill_round_rect(rect, 6.0, theme.button_hover);
-    }
     let action_w = cx.backend.measure_text(action, 12.0);
+    let action_rect = header_action_rect(
+        Rect {
+            origin: Point2D::new(frame.x, frame.y),
+            size: Point2D::new(frame.w, HEADER_HEIGHT),
+        },
+        frame.y,
+        action_w,
+    );
+    if action_hover {
+        cx.backend
+            .fill_round_rect(action_rect, 6.0, theme.button_hover);
+    }
     let act = TextLayout::single_run(
         action,
         "system-ui",
@@ -370,8 +378,8 @@ fn paint_header(
     cx.backend.draw_text(
         &act,
         Point2D::new(
-            frame.x + frame.w - TOP_HEADER_RIGHT_INSET - action_w,
-            frame.y + 18.0,
+            header_action_text_x(action_rect, action_w),
+            header_action_text_baseline_y(action_rect),
         ),
     );
     frame.y + HEADER_HEIGHT
@@ -676,6 +684,17 @@ fn paint_field(
     );
     let clipped = ellipsize(cx, value, input.size.x - 12.0, 11.0);
     let text_x = input.origin.x + 6.0;
+    if focused && ui.settings_input_select_all && !value.is_empty() {
+        paint_settings_selection(
+            cx,
+            theme,
+            value,
+            text_x,
+            input.origin.y + 16.0,
+            11.0,
+            input.origin.x + input.size.x - 8.0,
+        );
+    }
     draw_text(
         cx,
         &clipped,

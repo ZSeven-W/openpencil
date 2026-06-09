@@ -41,6 +41,10 @@ impl WidgetHost {
         if !self.editor_state.chat.focused {
             return false;
         }
+        if self.editor_state.chat.input_select_all {
+            self.editor_state.chat.input.clear();
+            self.editor_state.chat.input_select_all = false;
+        }
         self.editor_state.chat.input.push(c);
         self.mark_dirty();
         true
@@ -68,6 +72,12 @@ impl WidgetHost {
             return self.apply_chat_model_picker_backspace();
         }
         if self.editor_state.chat.focused {
+            if self.editor_state.chat.input_select_all {
+                self.editor_state.chat.input.clear();
+                self.editor_state.chat.input_select_all = false;
+                self.mark_dirty();
+                return true;
+            }
             if self.editor_state.chat.input.pop().is_some() {
                 self.mark_dirty();
                 return true;
@@ -142,6 +152,12 @@ impl WidgetHost {
             || self.editor_state.editor_ui.chat_model_picker_open
             || self.editor_state.chat.focused
         {
+            if self.editor_state.chat.focused && self.editor_state.chat.input_select_all {
+                self.editor_state.chat.input.clear();
+                self.editor_state.chat.input_select_all = false;
+                self.mark_dirty();
+                return true;
+            }
             return false;
         }
         if self.editor_state.selection.is_empty() {
@@ -214,10 +230,57 @@ impl WidgetHost {
     /// Cmd/Ctrl+A — replace selection with every top-level node
     /// on the active page (TS `setSelection(topLevelIds, …)`).
     pub fn apply_select_all(&mut self) -> bool {
-        if self.input_active() {
-            return false;
+        if self.apply_input_select_all() {
+            return true;
         }
         if self.editor_state.select_all_top_level() {
+            self.mark_dirty();
+            return true;
+        }
+        false
+    }
+
+    fn apply_input_select_all(&mut self) -> bool {
+        if let Some(focus) = self.editor_state.editor_ui.agent_settings.focus {
+            let ui = &mut self.editor_state.editor_ui;
+            ui.settings_input_select_all = true;
+            ui.settings_input_caret = Some(ui.settings_input_draft.len());
+            ui.settings_input_caret_focus = Some(focus);
+            ui.settings_input_caret_anchor_ms = self.now_ms;
+            self.mark_dirty();
+            return true;
+        }
+        if let Some(rename) = self.editor_state.ui.layer_rename.as_mut() {
+            rename.select_all = true;
+            rename.caret = rename.draft.chars().count();
+            self.editor_state.editor_ui.rename_caret_anchor_ms = self.now_ms;
+            self.mark_dirty();
+            return true;
+        }
+        if self.editor_state.ui.text_editing.is_some() {
+            self.editor_state.ui.text_edit_select_all = true;
+            self.editor_state.ui.text_edit_caret_anchor_ms = self.now_ms;
+            self.mark_dirty();
+            return true;
+        }
+        if self.editor_state.ui.property_focus.is_some() {
+            let ui = &mut self.editor_state.ui;
+            ui.property_draft_select_all = true;
+            ui.property_caret_pos = ui.property_input_draft.len();
+            ui.property_caret_anchor_ms = self.now_ms;
+            self.mark_dirty();
+            return true;
+        }
+        if self.editor_state.editor_ui.chat_model_picker_open {
+            let ui = &mut self.editor_state.editor_ui;
+            ui.chat_model_picker_select_all = true;
+            ui.chat_model_picker_caret = Some(ui.chat_model_picker_search.len());
+            ui.chat_model_picker_caret_anchor_ms = self.now_ms;
+            self.mark_dirty();
+            return true;
+        }
+        if self.editor_state.chat.focused {
+            self.editor_state.chat.input_select_all = true;
             self.mark_dirty();
             return true;
         }
@@ -228,6 +291,13 @@ impl WidgetHost {
     pub fn apply_copy(&mut self) -> bool {
         if self.input_active() {
             return false;
+        }
+        if let Some(text) = self.editor_state.codegen.selected_code_text() {
+            #[cfg(feature = "codegen")]
+            crate::web_clipboard::copy_text(text);
+            #[cfg(not(feature = "codegen"))]
+            let _ = text;
+            return true;
         }
         if self.editor_state.copy_selected() {
             self.mark_dirty();
@@ -339,6 +409,7 @@ impl WidgetHost {
         }
         if self.editor_state.ui.property_focus.take().is_some() {
             self.editor_state.ui.property_input_draft.clear();
+            self.editor_state.ui.property_draft_select_all = false;
             self.mark_dirty();
             return true;
         }
@@ -367,12 +438,14 @@ impl WidgetHost {
             self.editor_state.editor_ui.chat_model_picker_scroll = 0.0;
             self.editor_state.editor_ui.chat_model_picker_search.clear();
             self.editor_state.editor_ui.chat_model_picker_caret = None;
+            self.editor_state.editor_ui.chat_model_picker_select_all = false;
             self.editor_state.editor_ui.chat_model_picker_hover = None;
             self.mark_dirty();
             return true;
         }
         if self.editor_state.chat.focused {
             self.editor_state.chat.focused = false;
+            self.editor_state.chat.input_select_all = false;
             self.mark_dirty();
             return true;
         }

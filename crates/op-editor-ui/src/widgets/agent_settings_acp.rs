@@ -3,10 +3,13 @@
 use crate::theme::Theme;
 use crate::widgets::agent_settings_acp_draft;
 use crate::widgets::agent_settings_caret::{
-    caret_x_for_text, paint_caret, settings_caret_for_focus,
+    caret_x_for_text, paint_caret, paint_settings_selection, settings_caret_for_focus,
 };
 use crate::widgets::agent_settings_form_actions::{
     cancel_button_rect, paint_form_actions, save_button_rect,
+};
+use crate::widgets::agent_settings_header_action::{
+    header_action_rect, header_action_text_baseline_y, header_action_text_x,
 };
 use crate::widgets::agent_settings_i18n::t as t_settings;
 use crate::widgets::icons::{draw_icon, Icon};
@@ -24,8 +27,6 @@ const COMPACT_CARD_H: f32 = 60.0;
 const EXPANDED_CARD_H: f32 = 332.0;
 const DRAFT_CARD_H: f32 = 370.0;
 const CARD_GAP: f32 = 8.0;
-const TOP_HEADER_RIGHT_INSET: f32 = 12.0;
-const ADD_W: f32 = 96.0;
 const FIELD_H: f32 = 28.0;
 const ENV_FIELD_H: f32 = 64.0;
 const ACTION_W: f32 = 24.0;
@@ -223,18 +224,19 @@ fn paint_header(
         content.origin.x,
         y + 18.0,
     );
+    let action_w = cx.backend.measure_text(action, 12.0);
+    let action_rect = header_action_rect(content, y, action_w);
     if action_hover {
         cx.backend
-            .fill_round_rect(add_agent_rect(content, y), 6.0, theme.button_hover);
+            .fill_round_rect(action_rect, 6.0, theme.button_hover);
     }
-    let action_w = cx.backend.measure_text(action, 12.0);
     draw_text(
         cx,
         action,
         12.0,
         theme.primary,
-        content.origin.x + content.size.x - TOP_HEADER_RIGHT_INSET - action_w,
-        y + 18.0,
+        header_action_text_x(action_rect, action_w),
+        header_action_text_baseline_y(action_rect),
     );
     y + HEADER_H
 }
@@ -532,6 +534,17 @@ fn paint_field(
     };
     let clipped = ellipsize(cx, shown, input.size.x - 12.0, 11.0);
     let text_x = input.origin.x + 6.0;
+    if focused && ui.settings_input_select_all && !value.is_empty() {
+        paint_settings_selection(
+            cx,
+            theme,
+            &value,
+            text_x,
+            input.origin.y + 16.0,
+            11.0,
+            input.origin.x + input.size.x - 8.0,
+        );
+    }
     draw_text(
         cx,
         &clipped,
@@ -661,13 +674,7 @@ fn card_height(settings: &AgentSettings, index: usize) -> f32 {
 }
 
 fn add_agent_rect(content: Rect, y: f32) -> Rect {
-    Rect {
-        origin: Point2D::new(
-            content.origin.x + content.size.x - TOP_HEADER_RIGHT_INSET - ADD_W,
-            y,
-        ),
-        size: Point2D::new(ADD_W, 24.0),
-    }
+    header_action_rect(content, y, 0.0)
 }
 
 fn card_rect(x: f32, y: f32, w: f32, h: f32) -> Rect {

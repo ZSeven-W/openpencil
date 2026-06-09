@@ -107,7 +107,18 @@ impl GitPanel<'_> {
                 self.theme.muted_foreground,
             );
         } else {
-            let shown = if self.state.commit_focused {
+            if self.state.commit_focused && self.state.input_select_all && !msg.is_empty() {
+                crate::widgets::text_selection::paint_single_line_selection(
+                    cx,
+                    &self.theme,
+                    msg,
+                    text_x,
+                    baseline,
+                    12.0,
+                    rect.origin.x + rect.size.x - 8.0,
+                );
+            }
+            let shown = if self.state.commit_focused && !self.state.input_select_all {
                 format!("{msg}|")
             } else {
                 msg.clone()

@@ -7,9 +7,10 @@ use op_editor_ui::widgets::{
 use op_editor_ui::{Point2D, Rect};
 
 use super::{
-    rect_contains, ChatDragState, DragState, LayerDragState, MarqueeDragState, WidgetHost,
-    STATUS_INSET,
+    rect_contains, ChatDragState, CodeSelectionDragState, DragState, LayerDragState,
+    MarqueeDragState, WidgetHost, STATUS_INSET,
 };
+use op_editor_core::codegen::CodeSelection;
 
 impl WidgetHost {
     /// The floating bottom-right StatusBar pill rect, or `None` when
@@ -43,8 +44,12 @@ impl WidgetHost {
         viewport_h: f32,
     ) {
         const STEP: f32 = 120.0;
-        let (cx0, cy0, cw, ch) = self.canvas_region(viewport_w, viewport_h);
-        let center = Point2D::new(cx0 + cw / 2.0, cy0 + ch / 2.0);
+        // `Viewport::zoom_at` works in CANVAS-LOCAL coords (the wheel
+        // path feeds it `window_pt - canvas_origin`), so the anchor is
+        // the canvas-region centre relative to the canvas origin — not
+        // the window-space centre.
+        let (_cx0, _cy0, cw, ch) = self.canvas_region(viewport_w, viewport_h);
+        let center = Point2D::new(cw / 2.0, ch / 2.0);
         self.editor_state
             .viewport
             .zoom_at(center, if zoom_in { STEP } else { -STEP });
@@ -432,6 +437,18 @@ impl WidgetHost {
                     (viewport_height - TOP_BAR_HEIGHT).max(0.0),
                 ),
             };
+            if let Some(anchor) = self.code_text_offset_at_screen(x, y) {
+                self.editor_state.codegen.code_selection = Some(CodeSelection {
+                    anchor,
+                    focus: anchor,
+                });
+                self.code_selection_drag = Some(CodeSelectionDragState { anchor });
+                self.editor_state.codegen.framework_hover = None;
+                self.editor_state.codegen.action_hover = None;
+                self.editor_state.chat.focused = false;
+                self.mark_dirty();
+                return true;
+            }
             if let Some(action) = panel.hit_test_action(property_rect, Point2D::new(x, y)) {
                 // Anchor the colour picker at the clicked y so it
                 // pops next to the swatch row, not at the panel top.
@@ -765,6 +782,11 @@ impl WidgetHost {
                     }
                     AIChatHit::CycleEffort => {
                         self.editor_state.chat.cycle_effort_level();
+                        self.mark_dirty();
+                        return true;
+                    }
+                    AIChatHit::CycleAgentTeam => {
+                        self.editor_state.chat.cycle_agent_team_size();
                         self.mark_dirty();
                         return true;
                     }

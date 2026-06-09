@@ -1,6 +1,7 @@
 use super::WidgetHost;
 use op_editor_core::agent_settings::{
-    AgentSettingsTab, BuiltinAgentField, ImageGenField, ImageTestStatus, SettingsFocus,
+    AgentSettingsTab, BuiltinAgentField, ImageGenField, ImageGenProvider, ImageTestStatus,
+    SettingsFocus,
 };
 use op_editor_ui::widgets::agent_settings_panel::AgentSettingsPanel;
 
@@ -171,6 +172,60 @@ fn image_generation_profile_test_tracks_testing_status_like_ts() {
 }
 
 #[test]
+fn image_generation_provider_select_commits_and_closes_menu() {
+    let mut host = WidgetHost::new();
+    host.editor_state.editor_ui.agent_settings.tab = AgentSettingsTab::Images;
+    host.editor_state
+        .editor_ui
+        .agent_settings
+        .add_image_gen_profile();
+    host.editor_state
+        .editor_ui
+        .agent_settings
+        .image_gen_profiles[0]
+        .model = "dall-e-3".into();
+    host.editor_state.editor_ui.agent_settings.focus = Some(SettingsFocus::ImageGenProfile {
+        index: 0,
+        field: ImageGenField::Name,
+    });
+
+    let panel = AgentSettingsPanel::for_editor(&host.editor_state);
+    let rect = panel.rect(1200.0, 800.0);
+    let content_x = rect.origin.x + 200.0 + 24.0;
+    let content_y = rect.origin.y + 24.0;
+    let gen_top = content_y + 36.0 + 24.0 + 28.0;
+    let row_y = gen_top + 36.0;
+    let provider_y = row_y + 32.0 + 8.0 + 36.0;
+
+    assert!(host.dispatch_agent_settings_press(
+        content_x + 110.0 + 20.0,
+        provider_y + 12.0,
+        1200.0,
+        800.0
+    ));
+    assert_eq!(
+        host.editor_state
+            .editor_ui
+            .agent_settings
+            .image_gen_provider_menu_open,
+        Some(0)
+    );
+
+    assert!(host.dispatch_agent_settings_press(
+        content_x + 110.0 + 20.0,
+        provider_y + 60.0,
+        1200.0,
+        800.0
+    ));
+
+    let settings = &host.editor_state.editor_ui.agent_settings;
+    let profile = &settings.image_gen_profiles[0];
+    assert_eq!(profile.provider, ImageGenProvider::Gemini);
+    assert!(profile.model.is_empty());
+    assert!(settings.image_gen_provider_menu_open.is_none());
+}
+
+#[test]
 fn image_generation_profile_header_click_toggles_editor_closed() {
     let mut host = WidgetHost::new();
     host.editor_state.editor_ui.agent_settings.tab = AgentSettingsTab::Images;
@@ -232,5 +287,77 @@ fn copying_mcp_client_config_records_feedback_time() {
     assert_eq!(
         host.editor_state.chat.pending_copy_text.as_deref(),
         Some("{\n  \"type\": \"http\",\n  \"url\": \"http://127.0.0.1:3100/mcp\"\n}")
+    );
+}
+
+#[test]
+fn mcp_server_button_hover_tracks_cursor() {
+    let mut host = WidgetHost::new();
+    host.last_viewport_w = 1200.0;
+    host.last_viewport_h = 800.0;
+    host.editor_state.editor_ui.agent_settings_open = true;
+    host.editor_state.editor_ui.agent_settings.tab = AgentSettingsTab::Mcp;
+    host.editor_state
+        .editor_ui
+        .agent_settings
+        .mcp_server
+        .running = true;
+
+    let panel = AgentSettingsPanel::for_editor(&host.editor_state);
+    let rect = panel.rect(1200.0, 800.0);
+    let content_x = rect.origin.x + 200.0 + 24.0;
+    let content_y = rect.origin.y + 24.0;
+    let content_w = rect.size.x - 200.0 - 48.0;
+    let server_card_y = content_y + 36.0;
+    let button_x = content_x + content_w - 16.0 - 72.0;
+
+    assert!(host.update_agent_settings_hover(button_x + 36.0, server_card_y + 26.0,));
+    assert!(
+        host.editor_state
+            .editor_ui
+            .agent_settings
+            .hover_mcp_server_button
+    );
+}
+
+#[test]
+fn image_settings_button_hover_tracks_cursor() {
+    let mut host = WidgetHost::new();
+    host.last_viewport_w = 1200.0;
+    host.last_viewport_h = 800.0;
+    host.editor_state.editor_ui.agent_settings_open = true;
+    host.editor_state.editor_ui.agent_settings.tab = AgentSettingsTab::Images;
+    host.editor_state
+        .editor_ui
+        .agent_settings
+        .images_advanced_open = true;
+
+    let panel = AgentSettingsPanel::for_editor(&host.editor_state);
+    let rect = panel.rect(1200.0, 800.0);
+    let content_x = rect.origin.x + 200.0 + 24.0;
+    let content_y = rect.origin.y + 24.0;
+    let content_w = rect.size.x - 200.0 - 48.0;
+
+    assert!(host.update_agent_settings_hover(content_x + content_w - 28.0, content_y + 196.0,));
+    assert!(
+        host.editor_state
+            .editor_ui
+            .agent_settings
+            .hover_image_search_test_button
+    );
+
+    assert!(host.update_agent_settings_hover(content_x + content_w - 36.0, content_y + 260.0,));
+    assert!(
+        host.editor_state
+            .editor_ui
+            .agent_settings
+            .hover_image_gen_add_button
+    );
+    assert!(
+        !host
+            .editor_state
+            .editor_ui
+            .agent_settings
+            .hover_image_search_test_button
     );
 }

@@ -338,6 +338,18 @@ pub fn hit_test(content: Rect, settings: &AgentSettings, scrolled: Point2D) -> I
     ImagesHit::None
 }
 
+pub fn search_test_button_hover_at(
+    content: Rect,
+    settings: &AgentSettings,
+    scrolled: Point2D,
+) -> bool {
+    settings.images_advanced_open && rect_contains(test_btn_rect(content, settings), scrolled)
+}
+
+pub fn add_gen_button_hover_at(content: Rect, settings: &AgentSettings, scrolled: Point2D) -> bool {
+    rect_contains(add_btn_rect(content, settings), scrolled)
+}
+
 pub(super) fn paint_images_tab(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
@@ -487,6 +499,10 @@ pub(super) fn paint_images_tab(
         let test_btn = test_btn_rect(content, settings);
         paint_search_test_status(cx, theme, settings, test_btn);
         cx.backend.fill_round_rect(test_btn, 6.0, theme.muted);
+        if settings.hover_image_search_test_button {
+            cx.backend
+                .fill_round_rect(test_btn, 6.0, image_button_hover_color(theme));
+        }
         cx.backend
             .stroke_round_rect(test_btn, 6.0, theme.border, 1.0);
         let test_label = t_settings(ui, "settings.images.test");
@@ -524,6 +540,10 @@ pub(super) fn paint_images_tab(
         .draw_text(&gen_title, Point2D::new(content.origin.x, gen_top + 20.0));
     let add_btn = add_btn_rect(content, settings);
     cx.backend.fill_round_rect(add_btn, 6.0, theme.muted);
+    if settings.hover_image_gen_add_button {
+        cx.backend
+            .fill_round_rect(add_btn, 6.0, image_button_hover_color(theme));
+    }
     cx.backend
         .stroke_round_rect(add_btn, 6.0, theme.border, 1.0);
     let add_label = t_settings(ui, "settings.images.add");
@@ -565,6 +585,15 @@ pub(super) fn paint_images_tab(
             let row = profile_row_rect(content, settings, index);
             paint_profile_row(cx, theme, settings, ui, profile, index, row, now_ms);
         }
+    }
+}
+
+fn image_button_hover_color(theme: &Theme) -> Color {
+    Color {
+        r: theme.foreground.r,
+        g: theme.foreground.g,
+        b: theme.foreground.b,
+        a: 0.12,
     }
 }
 

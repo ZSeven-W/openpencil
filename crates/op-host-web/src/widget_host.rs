@@ -54,6 +54,8 @@ mod boolean_toolbar_tests;
 mod chat_design_apply;
 #[cfg(test)]
 mod chat_design_apply_tests;
+#[cfg(test)]
+mod chat_design_hover_tests;
 mod chat_model_picker_caret;
 #[cfg(test)]
 mod chat_model_picker_caret_tests;
@@ -61,6 +63,8 @@ mod keyboard;
 mod paint;
 mod press;
 mod property_dispatch;
+#[cfg(test)]
+mod property_hover_tests;
 mod scroll;
 mod settings_caret;
 #[cfg(test)]
@@ -101,6 +105,8 @@ pub struct WidgetHost {
     /// Active image-fill adjustment slider drag in the floating
     /// property popover.
     image_adjustment_drag: Option<op_editor_core::ImageAdjustmentField>,
+    /// Active generated-code preview text selection drag.
+    code_selection_drag: Option<CodeSelectionDragState>,
     /// Active marquee rect-select drag. Mirrors the native host —
     /// drag a rect on empty canvas with the Select tool, every
     /// intersecting top-level node joins (or extends) the
@@ -177,6 +183,11 @@ struct ChatDragState {
     pos_y: f32,
 }
 
+#[derive(Debug, Clone, Copy)]
+struct CodeSelectionDragState {
+    anchor: usize,
+}
+
 /// Active marquee rect-select state, mirroring the native host.
 /// Endpoints are SCREEN coords so paint can draw without re-
 /// deriving the canvas→screen transform; release converts to doc
@@ -222,6 +233,7 @@ impl WidgetHost {
             drag: None,
             chat_drag: None,
             image_adjustment_drag: None,
+            code_selection_drag: None,
             marquee_drag: None,
             layer_drag: None,
             next_node_id: 100,
@@ -290,6 +302,49 @@ impl WidgetHost {
     fn over_canvas(&self, x: f32, y: f32, viewport_w: f32, viewport_h: f32) -> bool {
         let (cx0, cy0, cw, ch) = self.canvas_region(viewport_w, viewport_h);
         x >= cx0 && x <= cx0 + cw && y >= cy0 && y <= cy0 + ch
+    }
+
+    pub(in crate::widget_host) fn code_text_offset_at_screen(
+        &self,
+        x: f32,
+        y: f32,
+    ) -> Option<usize> {
+        if !self.editor_state.property_panel_visible()
+            || !matches!(
+                self.editor_state.editor_ui.property_tab,
+                op_editor_core::PropertyTab::Code
+            )
+        {
+            return None;
+        }
+        let pw = self.editor_state.editor_ui.property_panel_width;
+        let panel_x = self.last_viewport_w - pw;
+        if x < panel_x || x > self.last_viewport_w {
+            return None;
+        }
+        let panel_rect = Rect {
+            origin: Point2D::new(panel_x, TOP_BAR_HEIGHT),
+            size: Point2D::new(pw, (self.last_viewport_h - TOP_BAR_HEIGHT).max(0.0)),
+        };
+        op_editor_ui::widgets::property_panel_code::code_text_offset_at(
+            panel_rect,
+            &self.editor_state.codegen,
+            Point2D::new(x, y),
+        )
+    }
+
+    fn apply_code_selection_drag_cursor_move(&mut self, x: f32, y: f32) -> bool {
+        let Some(anchor) = self.code_selection_drag.map(|drag| drag.anchor) else {
+            return false;
+        };
+        if let Some(focus) = self.code_text_offset_at_screen(x, y) {
+            let next = Some(op_editor_core::codegen::CodeSelection { anchor, focus });
+            if self.editor_state.codegen.code_selection != next {
+                self.editor_state.codegen.code_selection = next;
+                self.mark_dirty();
+            }
+        }
+        true
     }
 
     /// Wheel zoom centered on the cursor when over the canvas.
@@ -421,7 +476,15 @@ impl WidgetHost {
         use op_editor_core::AgentSettingsTab;
         use op_editor_ui::widgets::agent_settings_panel::{AgentSettingsHit, AgentSettingsPanel};
         let point = Point2D::new(x, y);
-        let (copy_hover, add_provider_hover, add_acp_hover, new_hover) = {
+        let (
+            server_hover,
+            copy_hover,
+            add_provider_hover,
+            add_acp_hover,
+            image_search_test_hover,
+            image_add_hover,
+            new_hover,
+        ) = {
             let panel = AgentSettingsPanel::for_editor(&self.editor_state);
             let panel_rect = panel.rect(self.last_viewport_w, self.last_viewport_h);
             let hit = panel.hit_test(panel_rect, point);
@@ -429,16 +492,49 @@ impl WidgetHost {
                 self.editor_state.editor_ui.agent_settings.tab,
                 AgentSettingsTab::Agents
             );
+            let is_images = matches!(
+                self.editor_state.editor_ui.agent_settings.tab,
+                AgentSettingsTab::Images
+            );
             let copy_hover = matches!(
                 self.editor_state.editor_ui.agent_settings.tab,
                 AgentSettingsTab::Mcp
             ) && matches!(hit, AgentSettingsHit::CopyMcpClientConfig);
+            let server_hover = matches!(
+                self.editor_state.editor_ui.agent_settings.tab,
+                AgentSettingsTab::Mcp
+            ) && matches!(hit, AgentSettingsHit::ToggleMcpServer);
             let add_provider_hover = is_agents && matches!(hit, AgentSettingsHit::AddProvider);
             let add_acp_hover = is_agents && matches!(hit, AgentSettingsHit::AddAcpAgent);
+            let image_search_test_hover =
+                is_images && panel.image_search_test_button_hover_at(panel_rect, point);
+            let image_add_hover =
+                is_images && panel.image_gen_add_button_hover_at(panel_rect, point);
             let new_hover = panel.builtin_preset_hover_at(panel_rect, point);
-            (copy_hover, add_provider_hover, add_acp_hover, new_hover)
+            (
+                server_hover,
+                copy_hover,
+                add_provider_hover,
+                add_acp_hover,
+                image_search_test_hover,
+                image_add_hover,
+                new_hover,
+            )
         };
         let mut changed = false;
+        if server_hover
+            != self
+                .editor_state
+                .editor_ui
+                .agent_settings
+                .hover_mcp_server_button
+        {
+            self.editor_state
+                .editor_ui
+                .agent_settings
+                .hover_mcp_server_button = server_hover;
+            changed = true;
+        }
         if copy_hover
             != self
                 .editor_state
@@ -489,6 +585,32 @@ impl WidgetHost {
                 .editor_ui
                 .agent_settings
                 .hover_add_acp_agent = add_acp_hover;
+            changed = true;
+        }
+        if image_search_test_hover
+            != self
+                .editor_state
+                .editor_ui
+                .agent_settings
+                .hover_image_search_test_button
+        {
+            self.editor_state
+                .editor_ui
+                .agent_settings
+                .hover_image_search_test_button = image_search_test_hover;
+            changed = true;
+        }
+        if image_add_hover
+            != self
+                .editor_state
+                .editor_ui
+                .agent_settings
+                .hover_image_gen_add_button
+        {
+            self.editor_state
+                .editor_ui
+                .agent_settings
+                .hover_image_gen_add_button = image_add_hover;
             changed = true;
         }
         if changed {
@@ -544,6 +666,9 @@ impl WidgetHost {
                     return true;
                 }
             }
+        }
+        if self.apply_code_selection_drag_cursor_move(x, y) {
+            return true;
         }
         if let Some(m) = self.marquee_drag.as_mut() {
             m.current_screen_x = x;
@@ -661,6 +786,98 @@ impl WidgetHost {
                 return true;
             }
         }
+        if let Some(chat_rect) = self.ai_chat_rect(self.last_viewport_w, self.last_viewport_h) {
+            use op_editor_ui::widgets::AIChatPlaceholder;
+            let new_hover = AIChatPlaceholder::from_editor_at(&self.editor_state, self.now_ms)
+                .footer_hover_at(chat_rect, Point2D::new(x, y));
+            if new_hover != self.editor_state.editor_ui.chat_footer_hover {
+                self.editor_state.editor_ui.chat_footer_hover = new_hover;
+                self.mark_dirty();
+                return true;
+            }
+        } else if self
+            .editor_state
+            .editor_ui
+            .chat_footer_hover
+            .take()
+            .is_some()
+        {
+            self.mark_dirty();
+            return true;
+        }
+        // PropertyPanel tab/action hover wash. Shown with a selection.
+        let mut property_hover_changed = false;
+        if self.editor_state.property_panel_visible() {
+            use op_editor_ui::widgets::{PropertyPanel, TOP_BAR_HEIGHT};
+            if let Some(panel) = PropertyPanel::for_selection(&self.editor_state) {
+                let property_rect = Rect {
+                    origin: Point2D::new(
+                        self.last_viewport_w - self.editor_state.editor_ui.property_panel_width,
+                        TOP_BAR_HEIGHT,
+                    ),
+                    size: Point2D::new(
+                        self.editor_state.editor_ui.property_panel_width,
+                        (self.last_viewport_h - TOP_BAR_HEIGHT).max(0.0),
+                    ),
+                };
+                let point = Point2D::new(x, y);
+                let new_tab_hover = panel.tab_hover_at(property_rect, point);
+                if new_tab_hover != self.editor_state.editor_ui.property_tab_hover {
+                    self.editor_state.editor_ui.property_tab_hover = new_tab_hover;
+                    property_hover_changed = true;
+                }
+                let new_action_hover = panel.action_hover_index(property_rect, point);
+                if new_action_hover != self.editor_state.editor_ui.property_action_hover {
+                    self.editor_state.editor_ui.property_action_hover = new_action_hover;
+                    property_hover_changed = true;
+                }
+            }
+        } else if self
+            .editor_state
+            .editor_ui
+            .property_tab_hover
+            .take()
+            .is_some()
+        {
+            property_hover_changed = true;
+        }
+        // Code-panel hover wash. Reuses the panel's click geometry for
+        // framework chips, scroll chevrons, and body actions.
+        let (new_fw_hover, new_action_hover) = if self.editor_state.property_panel_visible()
+            && matches!(
+                self.editor_state.editor_ui.property_tab,
+                op_editor_core::PropertyTab::Code
+            ) {
+            let pw = self.editor_state.editor_ui.property_panel_width;
+            let panel_x = self.last_viewport_w - pw;
+            let panel_rect = Rect {
+                origin: Point2D::new(panel_x, TOP_BAR_HEIGHT),
+                size: Point2D::new(pw, (self.last_viewport_h - TOP_BAR_HEIGHT).max(0.0)),
+            };
+            if x >= panel_x && x <= self.last_viewport_w {
+                op_editor_ui::widgets::property_panel_code::code_hover_at(
+                    panel_rect,
+                    &self.editor_state.codegen,
+                    Point2D::new(x, y),
+                )
+            } else {
+                (None, None)
+            }
+        } else {
+            (None, None)
+        };
+        if new_fw_hover != self.editor_state.codegen.framework_hover
+            || new_action_hover != self.editor_state.codegen.action_hover
+        {
+            self.editor_state.codegen.framework_hover = new_fw_hover;
+            self.editor_state.codegen.action_hover = new_action_hover;
+            self.mark_dirty();
+            return true;
+        }
+        if property_hover_changed {
+            self.mark_dirty();
+            return true;
+        }
         // No drag active — sync align toolbar hover. AFTER all drag
         // branches so an active drag isn't intercepted (codex CONCERN
         // — mirrors native widget_host/input.rs ordering).
@@ -751,6 +968,9 @@ impl WidgetHost {
             self.commit_marquee_selection(m, viewport_w, viewport_h);
             return true;
         }
+        if self.code_selection_drag.take().is_some() {
+            return true;
+        }
         if let Some(d) = self.layer_drag.take() {
             return self.commit_layer_drag(d, viewport_h);
         }
@@ -783,6 +1003,9 @@ impl WidgetHost {
             // Can't compute the doc-space marquee rect without a
             // viewport; drop without committing. The viewport-
             // aware variant is the one runners should call.
+            return true;
+        }
+        if self.code_selection_drag.take().is_some() {
             return true;
         }
         if self.layer_drag.take().is_some() {

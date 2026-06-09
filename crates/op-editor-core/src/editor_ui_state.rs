@@ -454,6 +454,9 @@ pub struct CloneFormState {
     /// Caret-blink anchor for the focused field — same cadence as the
     /// commit input.
     pub caret_anchor_ms: u64,
+    /// True after Cmd/Ctrl+A in the focused clone input. The next edit
+    /// replaces the whole focused field.
+    pub input_select_all: bool,
 }
 
 /// Git panel state — a plain-data snapshot the desktop host fills
@@ -506,6 +509,9 @@ pub struct GitPanelState {
     pub branch_create_draft: String,
     /// Whether the `新建分支` name input holds keyboard focus.
     pub branch_create_focused: bool,
+    /// True after Cmd/Ctrl+A in whichever Git-panel text field is
+    /// focused. The next edit replaces that whole field.
+    pub input_select_all: bool,
     /// Number of changed (dirty) files in the working tree.
     pub dirty_count: usize,
     /// Commits the current branch is ahead of its upstream — gates the
@@ -738,6 +744,14 @@ pub struct EditorUiState {
     /// (drives the row hover highlight). `None` when no popup is
     /// open or the cursor is off every row.
     pub export_picker_hover: Option<usize>,
+    /// Index into the PropertyPanel's `action_button_rects_with_fill_picker`
+    /// walker of the action button the cursor is over — drives its
+    /// `theme.button_hover` wash. Stable per frame (same VisibleSections
+    /// + fill-picker state feed paint + the host hover update).
+    pub property_action_hover: Option<usize>,
+    /// PropertyPanel Design / Code tab currently under the cursor. Drives a
+    /// visible pill on inactive tabs.
+    pub property_tab_hover: Option<PropertyTab>,
     /// Vertical scroll offset of the right-rail PropertyPanel, in px
     /// (≥ 0). A wheel / trackpad pan over the inspector advances it;
     /// paint + hit-test shift the section content up by this amount
@@ -787,6 +801,9 @@ pub struct EditorUiState {
     pub settings_input_caret: Option<usize>,
     /// Focus identity that owns [`Self::settings_input_caret`].
     pub settings_input_caret_focus: Option<crate::agent_settings::SettingsFocus>,
+    /// True after Cmd/Ctrl+A in the focused settings input. The next
+    /// edit replaces the whole draft.
+    pub settings_input_select_all: bool,
     /// Last focus / edit timestamp for focused settings-modal inputs.
     pub settings_input_caret_anchor_ms: u64,
 
@@ -811,6 +828,9 @@ pub struct EditorUiState {
     pub icon_picker_panel_pos: Option<(f32, f32)>,
     /// Live text filter for the native Lucide icon picker.
     pub icon_picker_search: String,
+    /// True after Cmd/Ctrl+A in the icon search box. The next edit
+    /// replaces the whole search query.
+    pub icon_picker_select_all: bool,
     /// Which icon-picker target the cursor is over (close / row /
     /// load-more) — drives the `theme.button_hover` wash.
     pub icon_picker_hover: Option<crate::icon_picker_button_state::IconPickerButton>,
@@ -831,6 +851,9 @@ pub struct EditorUiState {
     pub chat_model_picker_search: String,
     /// Byte caret for the chat model-picker search box.
     pub chat_model_picker_caret: Option<usize>,
+    /// True after Cmd/Ctrl+A in the model-picker search box. The next
+    /// edit replaces the whole search query.
+    pub chat_model_picker_select_all: bool,
     /// Last focus / edit timestamp for the chat model-picker search
     /// caret blink cycle.
     pub chat_model_picker_caret_anchor_ms: u64,
@@ -843,8 +866,14 @@ pub struct EditorUiState {
     /// Which bare chat header button (chevron / maximize / new-chat)
     /// the cursor is over — drives their `theme.button_hover` wash.
     pub chat_header_hover: Option<crate::chat_button_state::ChatHeaderButton>,
+    /// Which bottom-toolbar chat control the cursor is over.
+    pub chat_footer_hover: Option<crate::chat_button_state::ChatFooterButton>,
     /// Index into `AgentProvider::ALL` of the agent driving the chat.
     pub chat_selected_agent: usize,
+
+    /// True after Cmd/Ctrl+A in the component-browser search box. The
+    /// next edit replaces the whole search query.
+    pub component_browser_select_all: bool,
 
     // --- Window chrome ---------------------------------------------
     /// Cursor is over the TopBar's window-control (traffic-light)
@@ -1031,6 +1060,8 @@ impl Default for EditorUiState {
             export_scale_picker_open: false,
             export_format_picker_open: false,
             export_picker_hover: None,
+            property_action_hover: None,
+            property_tab_hover: None,
             property_panel_scroll: 0.0,
             layer_pages_scroll: 0.0,
             layer_layers_scroll: 0.0,
@@ -1047,6 +1078,7 @@ impl Default for EditorUiState {
             settings_input_draft: String::new(),
             settings_input_caret: None,
             settings_input_caret_focus: None,
+            settings_input_select_all: false,
             settings_input_caret_anchor_ms: 0,
             shape_picker_open: false,
             shape_picker_hover: None,
@@ -1056,6 +1088,7 @@ impl Default for EditorUiState {
             icon_picker_replace_selection: false,
             icon_picker_panel_pos: None,
             icon_picker_search: String::new(),
+            icon_picker_select_all: false,
             icon_picker_hover: None,
             icon_picker_remote: crate::icon_picker_state::IconPickerRemoteState::default(),
             icon_picker_load_more_request: None,
@@ -1063,11 +1096,14 @@ impl Default for EditorUiState {
             chat_model_picker_scroll: 0.0,
             chat_model_picker_search: String::new(),
             chat_model_picker_caret: None,
+            chat_model_picker_select_all: false,
             chat_model_picker_caret_anchor_ms: 0,
             chat_model_picker_hover: None,
             chat_design_block_hover: None,
             chat_header_hover: None,
+            chat_footer_hover: None,
             chat_selected_agent: 0,
+            component_browser_select_all: false,
             topbar_traffic_hover: false,
             topbar_button_hover: None,
             statusbar_hover: None,

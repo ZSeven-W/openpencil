@@ -139,6 +139,7 @@ impl GitPanel<'_> {
             &form.url,
             self.t("git.wizard.clone.urlPlaceholder"),
             form.focus == Some(CloneField::Url) && !form.cloning,
+            form.input_select_all,
             form.caret_anchor_ms,
         );
         // Destination field + folder-pick button.
@@ -156,6 +157,7 @@ impl GitPanel<'_> {
             &form.dest,
             self.t("git.wizard.clone.destPlaceholder"),
             form.focus == Some(CloneField::Dest) && !form.cloning,
+            form.input_select_all,
             form.caret_anchor_ms,
         );
         self.paint_button_with_hit(
@@ -192,6 +194,7 @@ impl GitPanel<'_> {
 
     /// One bordered text field with a placeholder + blinking caret —
     /// same visual language as the ready-view commit box.
+    #[allow(clippy::too_many_arguments)]
     fn paint_clone_input(
         &self,
         cx: &mut PaintCx<'_>,
@@ -199,6 +202,7 @@ impl GitPanel<'_> {
         value: &str,
         placeholder: &str,
         focused: bool,
+        select_all: bool,
         anchor_ms: u64,
     ) {
         let t = self.theme;
@@ -226,6 +230,17 @@ impl GitPanel<'_> {
         // bleeds past the border.
         cx.backend.save();
         cx.backend.clip_rect(rect);
+        if focused && select_all && !value.is_empty() {
+            crate::widgets::text_selection::paint_single_line_selection(
+                cx,
+                &t,
+                value,
+                text_x,
+                baseline,
+                12.0,
+                rect.origin.x + rect.size.x - 10.0,
+            );
+        }
         self.text(cx, value, text_x, baseline, 12.0, t.foreground);
         if focused && jian_core::anim::blink_visible(self.now_ms, anchor_ms, 500) {
             let caret_x = text_x + cx.backend.measure_text(value, 12.0) + 1.0;

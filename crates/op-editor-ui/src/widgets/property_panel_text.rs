@@ -343,6 +343,7 @@ pub fn paint_text_section(
         edit.value_for(PropertyFocus::FontSize, &font_size),
         edit.focus == Some(PropertyFocus::FontSize),
         edit.caret_at(PropertyFocus::FontSize),
+        edit.select_all_at(PropertyFocus::FontSize),
     );
     y += INPUT_HEIGHT + 6.0;
 
@@ -388,6 +389,7 @@ pub fn paint_text_section(
         Some("%"),
         edit.focus == Some(PropertyFocus::LineHeight),
         edit.caret_at(PropertyFocus::LineHeight),
+        edit.select_all_at(PropertyFocus::LineHeight),
     );
     // Letter-spacing — `|A|` text prefix (TS NumberInput `label="|A|"`).
     let letter_spacing = format_panel_number(text.letter_spacing);
@@ -402,6 +404,7 @@ pub fn paint_text_section(
         edit.value_for(PropertyFocus::LetterSpacing, &letter_spacing),
         edit.focus == Some(PropertyFocus::LetterSpacing),
         edit.caret_at(PropertyFocus::LetterSpacing),
+        edit.select_all_at(PropertyFocus::LetterSpacing),
     );
     y += INPUT_HEIGHT + 8.0;
 

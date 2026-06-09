@@ -46,6 +46,8 @@ pub struct EditContext<'a> {
     pub draft: &'a str,
     /// Caret byte-index into `draft` (drafts are ASCII).
     pub caret: usize,
+    /// Whether Ctrl/Cmd+A selected the focused draft.
+    pub select_all: bool,
     pub caret_anchor_ms: u64,
     pub now_ms: u64,
 }
@@ -78,6 +80,12 @@ pub struct PropertyLabels {
     pub hug_width: &'static str,
     pub hug_height: &'static str,
     pub clip_content: &'static str,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct TabStripState {
+    pub active: op_editor_core::PropertyTab,
+    pub hover: Option<op_editor_core::PropertyTab>,
 }
 
 impl PropertyLabels {
@@ -151,6 +159,29 @@ impl<'a> EditContext<'a> {
             Some(self.caret.min(self.draft.len()))
         } else {
             None
+        }
+    }
+
+    pub fn select_all_at(&self, focus: PropertyFocus) -> bool {
+        self.focus == Some(focus) && self.select_all && !self.draft.is_empty()
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn paint_selection_at(
+        &self,
+        cx: &mut PaintCx<'_>,
+        theme: &Theme,
+        focus: PropertyFocus,
+        value: &str,
+        text_x: f32,
+        baseline_y: f32,
+        font_size: f32,
+        max_x: f32,
+    ) {
+        if self.select_all_at(focus) {
+            crate::widgets::text_selection::paint_single_line_selection(
+                cx, theme, value, text_x, baseline_y, font_size, max_x,
+            );
         }
     }
 }
@@ -229,13 +260,21 @@ pub fn paint_tab_strip(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
     labels: &PropertyLabels,
-    active: op_editor_core::PropertyTab,
+    state: TabStripState,
     x: f32,
     y: f32,
     width: f32,
 ) -> f32 {
     use op_editor_core::PropertyTab;
     let (design_rect, code_rect) = tab_strip_rects(labels, x, y);
+    let active = state.active;
+    let hover = state.hover;
+    if matches!(hover, Some(PropertyTab::Design)) && !matches!(active, PropertyTab::Design) {
+        cx.backend.fill_round_rect(design_rect, 6.0, theme.muted);
+    }
+    if matches!(hover, Some(PropertyTab::Code)) && !matches!(active, PropertyTab::Code) {
+        cx.backend.fill_round_rect(code_rect, 6.0, theme.muted);
+    }
     if matches!(active, PropertyTab::Design) {
         cx.backend.fill_round_rect(design_rect, 6.0, theme.muted);
     } else {
@@ -400,6 +439,7 @@ pub fn paint_position_section(
         edit.value_for(PropertyFocus::PositionX, &x_value),
         edit.focus == Some(PropertyFocus::PositionX),
         edit.caret_at(PropertyFocus::PositionX),
+        edit.select_all_at(PropertyFocus::PositionX),
     );
     let y_value = snapshot.y.to_string();
     paint_input_with_prefix_focused(
@@ -410,6 +450,7 @@ pub fn paint_position_section(
         edit.value_for(PropertyFocus::PositionY, &y_value),
         edit.focus == Some(PropertyFocus::PositionY),
         edit.caret_at(PropertyFocus::PositionY),
+        edit.select_all_at(PropertyFocus::PositionY),
     );
     y += INPUT_HEIGHT + 6.0;
     // Rotation input — TS uses RotateCw glyph; we render with an
@@ -428,6 +469,7 @@ pub fn paint_position_section(
         Some("°"),
         edit.focus == Some(PropertyFocus::Rotation),
         edit.caret_at(PropertyFocus::Rotation),
+        edit.select_all_at(PropertyFocus::Rotation),
     );
     if show_radius {
         // Corner radius (R) — editable input bound to Node::corner_radius
@@ -445,6 +487,7 @@ pub fn paint_position_section(
             edit.value_for(PropertyFocus::PositionR, &r_value),
             edit.focus == Some(PropertyFocus::PositionR),
             edit.caret_at(PropertyFocus::PositionR),
+            edit.select_all_at(PropertyFocus::PositionR),
         );
     }
     y += INPUT_HEIGHT + 12.0;
@@ -555,6 +598,7 @@ pub fn paint_size_section(
             edit.value_for(PropertyFocus::SizeW, &w_value),
             edit.focus == Some(PropertyFocus::SizeW),
             edit.caret_at(PropertyFocus::SizeW),
+            edit.select_all_at(PropertyFocus::SizeW),
         );
     }
     if h_visible {
@@ -568,6 +612,7 @@ pub fn paint_size_section(
             edit.value_for(PropertyFocus::SizeH, &h_value),
             edit.focus == Some(PropertyFocus::SizeH),
             edit.caret_at(PropertyFocus::SizeH),
+            edit.select_all_at(PropertyFocus::SizeH),
         );
     }
     // Collapse the whole input row when BOTH dimensions are fill/hug —
@@ -720,6 +765,16 @@ pub fn paint_stroke_section(
         Point2D::new(0.0, 0.0),
     );
     let hex_x = hex_rect.origin.x + 30.0;
+    edit.paint_selection_at(
+        cx,
+        theme,
+        PropertyFocus::StrokeHex,
+        hex_text,
+        hex_x,
+        hex_rect.origin.y + 19.0,
+        12.0,
+        hex_rect.origin.x + hex_rect.size.x - 8.0,
+    );
     cx.backend
         .draw_text(&hex_layout, Point2D::new(hex_x, hex_rect.origin.y + 19.0));
     if let Some(pos) = edit.caret_at(PropertyFocus::StrokeHex) {
@@ -755,6 +810,16 @@ pub fn paint_stroke_section(
         Point2D::new(0.0, 0.0),
     );
     let w_x = w_rect.origin.x + 12.0;
+    edit.paint_selection_at(
+        cx,
+        theme,
+        PropertyFocus::StrokeWidth,
+        w_text,
+        w_x,
+        w_rect.origin.y + 19.0,
+        12.0,
+        w_rect.origin.x + w_rect.size.x - 8.0,
+    );
     cx.backend
         .draw_text(&w_layout, Point2D::new(w_x, w_rect.origin.y + 19.0));
     if let Some(pos) = edit.caret_at(PropertyFocus::StrokeWidth) {

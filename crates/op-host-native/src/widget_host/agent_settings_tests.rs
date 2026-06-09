@@ -830,3 +830,70 @@ fn copying_mcp_client_config_records_feedback_time() {
         Some("{\n  \"type\": \"http\",\n  \"url\": \"http://127.0.0.1:3100/mcp\"\n}")
     );
 }
+
+#[test]
+fn mcp_server_button_hover_tracks_cursor() {
+    let mut host = WidgetHostNative::new();
+    host.last_viewport_w = 1200.0;
+    host.last_viewport_h = 800.0;
+    host.editor_state_mut().editor_ui.agent_settings_open = true;
+    host.editor_state_mut().editor_ui.agent_settings.tab = AgentSettingsTab::Mcp;
+    host.editor_state_mut()
+        .editor_ui
+        .agent_settings
+        .mcp_server
+        .running = true;
+
+    let (content_x, content_y, content_w) = agent_settings_content_metrics(&host);
+    let server_card_y = content_y + 36.0;
+    let button_x = content_x + content_w - 16.0 - 72.0;
+
+    assert!(host.update_agent_settings_hover(button_x + 36.0, server_card_y + 26.0,));
+    assert!(
+        host.editor_state()
+            .editor_ui
+            .agent_settings
+            .hover_mcp_server_button
+    );
+}
+
+#[test]
+fn image_settings_button_hover_tracks_cursor() {
+    let mut host = WidgetHostNative::new();
+    host.last_viewport_w = 1200.0;
+    host.last_viewport_h = 800.0;
+    host.editor_state_mut().editor_ui.agent_settings_open = true;
+    host.editor_state_mut().editor_ui.agent_settings.tab = AgentSettingsTab::Images;
+    host.editor_state_mut()
+        .editor_ui
+        .agent_settings
+        .images_advanced_open = true;
+
+    let (content_x, content_y, content_w) = agent_settings_content_metrics(&host);
+    let test_x = content_x + content_w - 28.0;
+    let test_y = content_y + 196.0;
+    assert!(host.update_agent_settings_hover(test_x, test_y));
+    assert!(
+        host.editor_state()
+            .editor_ui
+            .agent_settings
+            .hover_image_search_test_button
+    );
+
+    let add_x = content_x + content_w - 36.0;
+    let add_y = content_y + 260.0;
+    assert!(host.update_agent_settings_hover(add_x, add_y));
+    assert!(
+        host.editor_state()
+            .editor_ui
+            .agent_settings
+            .hover_image_gen_add_button
+    );
+    assert!(
+        !host
+            .editor_state()
+            .editor_ui
+            .agent_settings
+            .hover_image_search_test_button
+    );
+}

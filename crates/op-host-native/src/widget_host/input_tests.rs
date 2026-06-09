@@ -354,6 +354,31 @@ fn ai_chat_stop_click_keeps_transcript_and_queues_abort() {
 }
 
 #[test]
+fn ai_chat_agent_team_click_cycles_team_size() {
+    let mut host = WidgetHostNative::new();
+    host.editor_state_mut()
+        .chat
+        .available_models
+        .push(op_editor_core::chat::ModelEntry::new(
+            op_editor_core::chat::AgentProvider::CodexCli,
+            "gpt-5",
+            "GPT-5",
+        ));
+    let viewport_w = 1200.0;
+    let viewport_h = 800.0;
+    let rect = host.ai_chat_rect(viewport_w, viewport_h).unwrap();
+    let x = rect.origin.x + 105.0;
+    let y = rect.origin.y + toolbar_center_y_for_test();
+
+    assert!(host.apply_click(x, y, viewport_w, viewport_h));
+    assert_eq!(host.editor_state().chat.agent_team_size, 2);
+
+    host.editor_state_mut().chat.agent_team_size = 6;
+    assert!(host.apply_click(x, y, viewport_w, viewport_h));
+    assert_eq!(host.editor_state().chat.agent_team_size, 1);
+}
+
+#[test]
 fn ai_chat_streaming_textarea_click_does_not_focus_disabled_input() {
     let mut host = WidgetHostNative::new();
     host.editor_state_mut()
@@ -1170,6 +1195,69 @@ fn chat_model_picker_open_owns_keyboard_search() {
 }
 
 #[test]
+fn select_all_in_chat_input_replaces_next_typed_text() {
+    let mut host = WidgetHostNative::new();
+    host.editor_state_mut().chat.focused = true;
+    host.editor_state_mut().chat.input = "abcdef".into();
+
+    assert!(host.apply_select_all());
+    assert_eq!(host.editor_state().chat.input, "abcdef");
+    assert!(host.apply_text('X'));
+    assert_eq!(host.editor_state().chat.input, "X");
+}
+
+#[test]
+fn select_all_in_settings_input_replaces_next_typed_text() {
+    let mut host = WidgetHostNative::new();
+    {
+        let ui = &mut host.editor_state_mut().editor_ui;
+        ui.agent_settings.focus = Some(
+            op_editor_core::agent_settings::SettingsFocus::BuiltinAgentDraft(
+                op_editor_core::agent_settings::BuiltinAgentField::BaseUrl,
+            ),
+        );
+        ui.settings_input_draft = "https://example.invalid".into();
+    }
+
+    assert!(host.apply_select_all());
+    assert!(host.apply_text('x'));
+    assert_eq!(host.editor_state().editor_ui.settings_input_draft, "x");
+    assert_eq!(host.editor_state().editor_ui.settings_input_caret, Some(1));
+}
+
+#[test]
+fn select_all_in_property_input_replaces_next_typed_text() {
+    let mut host = WidgetHostNative::new();
+    host.editor_state_mut().ui.property_focus = Some(PropertyFocus::PositionX);
+    host.editor_state_mut().ui.property_input_draft = "123".into();
+    host.editor_state_mut().ui.property_caret_pos = 3;
+
+    assert!(host.apply_select_all());
+    assert!(host.apply_text('4'));
+    assert_eq!(host.editor_state().ui.property_input_draft, "4");
+    assert_eq!(host.editor_state().ui.property_caret_pos, 1);
+}
+
+#[test]
+fn select_all_in_chat_model_picker_replaces_next_typed_text() {
+    let mut host = WidgetHostNative::new();
+    {
+        let ui = &mut host.editor_state_mut().editor_ui;
+        ui.chat_model_picker_open = true;
+        ui.chat_model_picker_search = "gpt".into();
+        ui.chat_model_picker_caret = Some(3);
+    }
+
+    assert!(host.apply_select_all());
+    assert!(host.apply_text('x'));
+    assert_eq!(host.editor_state().editor_ui.chat_model_picker_search, "x");
+    assert_eq!(
+        host.editor_state().editor_ui.chat_model_picker_caret,
+        Some(1)
+    );
+}
+
+#[test]
 fn shape_picker_icon_row_opens_icon_picker() {
     let mut host = WidgetHostNative::new();
     let viewport_w = 1440.0;
@@ -1295,6 +1383,184 @@ fn codegen_copy_queues_code_to_system_clipboard() {
         host.editor_state().chat.pending_copy_text.as_deref(),
         Some("export const App = () => null;"),
     );
+}
+
+#[test]
+fn codegen_copy_button_queues_full_code_even_with_selection() {
+    use op_editor_core::codegen::CodeSelection;
+    use op_editor_ui::widgets::property_panel_action::CodegenAction;
+    use op_editor_ui::widgets::PropertyPanelAction;
+    let mut host = WidgetHostNative::new();
+    host.set_now_ms(4242);
+    host.editor_state_mut().codegen.code = "export const App = () => null;".to_string();
+    host.editor_state_mut().codegen.code_selection = Some(CodeSelection {
+        anchor: 7,
+        focus: 12,
+    });
+
+    host.apply_property_action(PropertyPanelAction::Codegen(CodegenAction::Copy));
+
+    assert_eq!(host.editor_state().codegen.copied_at, Some(4242));
+    assert_eq!(
+        host.editor_state().chat.pending_copy_text.as_deref(),
+        Some("export const App = () => null;"),
+    );
+}
+
+#[test]
+fn shortcut_copy_prefers_selected_code_text() {
+    use op_editor_core::codegen::CodeSelection;
+    let mut host = WidgetHostNative::new();
+    host.editor_state_mut().codegen.code = "export const App = () => null;".to_string();
+    host.editor_state_mut().codegen.code_selection = Some(CodeSelection {
+        anchor: 7,
+        focus: 12,
+    });
+
+    assert!(host.apply_copy());
+    assert_eq!(
+        host.editor_state().chat.pending_copy_text.as_deref(),
+        Some("const"),
+    );
+}
+
+#[test]
+fn codegen_hover_tracks_idle_generate_button() {
+    use op_editor_core::codegen::CodegenHover;
+    use op_editor_core::PropertyTab;
+    use op_editor_ui::widgets::property_panel_action::CodegenAction;
+    use op_editor_ui::widgets::property_panel_inputs::TAB_HEIGHT;
+    use op_editor_ui::widgets::{property_panel_code, TOP_BAR_HEIGHT};
+    let mut host = WidgetHostNative::new();
+    seed(
+        &mut host,
+        r#"{"version":"0.8.0","children":[{"type":"rectangle","id":"n-code","name":"n-code","x":0,"y":0,"width":100,"height":50}]}"#,
+    );
+    host.last_viewport_w = 1200.0;
+    host.last_viewport_h = 800.0;
+    host.editor_state_mut()
+        .set_single_selection(NodeId::new("n-code"));
+    host.editor_state_mut().editor_ui.property_tab = PropertyTab::Code;
+
+    let pw = host.editor_state().editor_ui.property_panel_width;
+    let panel_x = host.last_viewport_w - pw;
+    let (_, generate_rect) = property_panel_code::code_action_rects(
+        panel_x,
+        TOP_BAR_HEIGHT + TAB_HEIGHT,
+        pw,
+        &host.editor_state().codegen,
+    )
+    .into_iter()
+    .find(|(action, _)| matches!(action, CodegenAction::Generate))
+    .expect("Generate rect present");
+    let point = op_editor_ui::Point2D::new(
+        generate_rect.origin.x + generate_rect.size.x / 2.0,
+        generate_rect.origin.y + generate_rect.size.y / 2.0,
+    );
+
+    assert!(host.apply_cursor_move(point.x, point.y));
+    assert_eq!(
+        host.editor_state().codegen.action_hover,
+        Some(CodegenHover::Generate)
+    );
+
+    assert!(host.apply_cursor_move(panel_x - 12.0, TOP_BAR_HEIGHT + TAB_HEIGHT));
+    assert_eq!(host.editor_state().codegen.action_hover, None);
+}
+
+#[test]
+fn codegen_preview_drag_selects_code_text() {
+    use op_editor_core::codegen::{CodeSelection, CodegenPhase};
+    use op_editor_core::PropertyTab;
+    use op_editor_ui::widgets::TOP_BAR_HEIGHT;
+    let mut host = WidgetHostNative::new();
+    seed(
+        &mut host,
+        r#"{"version":"0.8.0","children":[{"type":"rectangle","id":"n-code","name":"n-code","x":0,"y":0,"width":100,"height":50}]}"#,
+    );
+    let viewport_w = 1200.0;
+    let viewport_h = 800.0;
+    host.editor_state_mut()
+        .set_single_selection(NodeId::new("n-code"));
+    host.editor_state_mut().editor_ui.property_tab = PropertyTab::Code;
+    host.editor_state_mut().codegen.phase = CodegenPhase::Complete;
+    host.editor_state_mut().codegen.code = "import React\nconst n = 1".into();
+
+    let panel_x = viewport_w - host.editor_state().editor_ui.property_panel_width;
+    let char_w = 11.0 * 0.55;
+    let start = op_editor_ui::Point2D::new(panel_x + 66.0, TOP_BAR_HEIGHT + 112.0);
+    let end = op_editor_ui::Point2D::new(panel_x + 66.0 + char_w * 6.0, TOP_BAR_HEIGHT + 112.0);
+
+    assert!(host.apply_press(start.x, start.y, viewport_w, viewport_h));
+    assert!(host.apply_cursor_move(end.x, end.y));
+    assert_eq!(
+        host.editor_state().codegen.code_selection,
+        Some(CodeSelection {
+            anchor: 0,
+            focus: 6
+        })
+    );
+    assert!(host.apply_release_with_viewport(viewport_w, viewport_h));
+}
+
+#[test]
+fn codegen_preview_wheel_scrolls_code_not_property_panel() {
+    use op_editor_core::codegen::CodegenPhase;
+    use op_editor_core::PropertyTab;
+    use op_editor_ui::widgets::TOP_BAR_HEIGHT;
+    let mut host = WidgetHostNative::new();
+    seed(
+        &mut host,
+        r#"{"version":"0.8.0","children":[{"type":"rectangle","id":"n-code","name":"n-code","x":0,"y":0,"width":100,"height":50}]}"#,
+    );
+    let viewport_w = 1200.0;
+    let viewport_h = 800.0;
+    host.editor_state_mut()
+        .set_single_selection(NodeId::new("n-code"));
+    host.editor_state_mut().editor_ui.property_tab = PropertyTab::Code;
+    host.editor_state_mut().codegen.phase = CodegenPhase::Complete;
+    host.editor_state_mut().codegen.code = (0..100)
+        .map(|i| format!("line-{i:02}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    let panel_x = viewport_w - host.editor_state().editor_ui.property_panel_width;
+    assert!(host.apply_wheel(
+        panel_x + 80.0,
+        TOP_BAR_HEIGHT + 112.0,
+        -160.0,
+        viewport_w,
+        viewport_h
+    ));
+
+    assert!(host.editor_state().codegen.code_scroll > 0.0);
+    assert_eq!(host.editor_state().editor_ui.property_panel_scroll, 0.0);
+}
+
+#[test]
+fn property_tab_hover_tracks_inactive_design_tab() {
+    use op_editor_core::PropertyTab;
+    use op_editor_ui::widgets::TOP_BAR_HEIGHT;
+    let mut host = WidgetHostNative::new();
+    seed(
+        &mut host,
+        r#"{"version":"0.8.0","children":[{"type":"rectangle","id":"n-tabs","name":"n-tabs","x":0,"y":0,"width":100,"height":50}]}"#,
+    );
+    host.last_viewport_w = 1200.0;
+    host.last_viewport_h = 800.0;
+    host.editor_state_mut()
+        .set_single_selection(NodeId::new("n-tabs"));
+    host.editor_state_mut().editor_ui.property_tab = PropertyTab::Code;
+
+    let panel_x = host.last_viewport_w - host.editor_state().editor_ui.property_panel_width;
+    assert!(host.apply_cursor_move(panel_x + 40.0, TOP_BAR_HEIGHT + 18.0));
+    assert_eq!(
+        host.editor_state().editor_ui.property_tab_hover,
+        Some(PropertyTab::Design)
+    );
+
+    assert!(host.apply_cursor_move(panel_x - 12.0, TOP_BAR_HEIGHT + 18.0));
+    assert_eq!(host.editor_state().editor_ui.property_tab_hover, None);
 }
 
 #[test]

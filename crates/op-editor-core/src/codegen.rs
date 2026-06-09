@@ -95,6 +95,43 @@ pub enum CodegenPhase {
     Error,
 }
 
+/// Byte-offset text selection inside the generated code preview.
+/// Offsets are clamped by the painter/hit-test against the currently
+/// visible code text, so stale ranges after regeneration are harmless.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CodeSelection {
+    pub anchor: usize,
+    pub focus: usize,
+}
+
+impl CodeSelection {
+    pub fn ordered(self) -> (usize, usize) {
+        if self.anchor <= self.focus {
+            (self.anchor, self.focus)
+        } else {
+            (self.focus, self.anchor)
+        }
+    }
+
+    pub fn is_collapsed(self) -> bool {
+        self.anchor == self.focus
+    }
+}
+
+/// Code panel non-framework hover target. Framework chips keep their own
+/// `framework_hover` because their state carries a selected framework value.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CodegenHover {
+    Generate,
+    Regenerate,
+    Cancel,
+    Copy,
+    Download,
+    ExportBundle,
+    ScrollFrameworksLeft,
+    ScrollFrameworksRight,
+}
+
 /// One chunk's progress row for the panel (id + display name + status).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ChunkProgress {
@@ -134,9 +171,15 @@ pub struct CodegenState {
     /// The inactive framework chip the cursor is hovering, for a subtle
     /// background highlight. `None` when the cursor is off the strip.
     pub framework_hover: Option<Framework>,
+    /// Non-framework button / chevron the cursor is hovering.
+    pub action_hover: Option<CodegenHover>,
     pub phase: CodegenPhase,
     pub progress: CodeGenProgress,
     pub code: String,
+    /// Vertical scroll offset (px, >= 0) inside the generated-code preview.
+    pub code_scroll: f32,
+    /// Text selection inside the generated-code preview.
+    pub code_selection: Option<CodeSelection>,
     pub degraded: bool,
     pub assets: Vec<AssetMeta>,
     /// Node ids the last generation ran against — to detect selection drift.
@@ -164,9 +207,12 @@ impl Default for CodegenState {
             framework: Framework::React,
             framework_scroll: 0.0,
             framework_hover: None,
+            action_hover: None,
             phase: CodegenPhase::Idle,
             progress: CodeGenProgress::default(),
             code: String::new(),
+            code_scroll: 0.0,
+            code_selection: None,
             degraded: false,
             assets: Vec::new(),
             selection_snapshot: Vec::new(),
@@ -178,6 +224,29 @@ impl Default for CodegenState {
             pending_export_bundle: false,
         }
     }
+}
+
+impl CodegenState {
+    pub fn selected_code_text(&self) -> Option<&str> {
+        let selection = self.code_selection?;
+        if selection.is_collapsed() || self.code.is_empty() {
+            return None;
+        }
+        let (start, end) = selection.ordered();
+        let start = previous_char_boundary(&self.code, start.min(self.code.len()));
+        let end = previous_char_boundary(&self.code, end.min(self.code.len()));
+        if start >= end {
+            return None;
+        }
+        Some(&self.code[start..end])
+    }
+}
+
+fn previous_char_boundary(text: &str, mut index: usize) -> usize {
+    while index > 0 && !text.is_char_boundary(index) {
+        index -= 1;
+    }
+    index
 }
 
 #[cfg(test)]
@@ -207,11 +276,26 @@ mod tests {
         assert_eq!(s.framework, Framework::React);
         assert_eq!(s.phase, CodegenPhase::Idle);
         assert!(s.code.is_empty());
+        assert_eq!(s.code_scroll, 0.0);
         assert!(!s.degraded);
         assert!(s.error.is_none());
         assert!(!s.pending_generate);
         assert!(!s.pending_regenerate);
         assert!(!s.pending_download);
         assert!(!s.pending_export_bundle);
+    }
+
+    #[test]
+    fn selected_code_text_returns_non_collapsed_range() {
+        let s = CodegenState {
+            code: "import React\nconst n = 1".into(),
+            code_selection: Some(CodeSelection {
+                anchor: 0,
+                focus: 6,
+            }),
+            ..CodegenState::default()
+        };
+
+        assert_eq!(s.selected_code_text(), Some("import"));
     }
 }

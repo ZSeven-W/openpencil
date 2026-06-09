@@ -174,6 +174,8 @@ pub struct WidgetHostNative {
     /// Active image-fill adjustment slider drag in the floating
     /// property popover.
     pub(in crate::widget_host) image_adjustment_drag: Option<op_editor_core::ImageAdjustmentField>,
+    /// Active generated-code preview text selection drag.
+    pub(in crate::widget_host) code_selection_drag: Option<CodeSelectionDragState>,
     /// Active panel-resize drag — set when the cursor is pressed
     /// within the resize gutter of LayerPanel's right edge or
     /// PropertyPanel's left edge.
@@ -403,6 +405,11 @@ pub(in crate::widget_host) struct ArcHandleDragState {
 }
 
 #[derive(Debug, Clone, Copy)]
+pub(in crate::widget_host) struct CodeSelectionDragState {
+    pub(in crate::widget_host) anchor: usize,
+}
+
+#[derive(Debug, Clone, Copy)]
 pub(in crate::widget_host) struct ChatDragState {
     /// Pointer offset within the panel rect when the drag began.
     /// Subtracting from the live cursor position gives the panel
@@ -462,6 +469,7 @@ impl WidgetHostNative {
             component_browser_drag: None,
             icon_picker_drag: None,
             image_adjustment_drag: None,
+            code_selection_drag: None,
             panel_resize: None,
             node_drag: None,
             path_anchor_drag: None,

@@ -47,7 +47,7 @@ use tokio::process::Command;
 use tokio::sync::mpsc;
 use tokio::time::timeout;
 
-use crate::chat_runtime::{shared_runtime, BlockingRecvIter};
+use crate::chat_runtime::{prompt_with_system_prompt, shared_runtime, BlockingRecvIter};
 
 /// `ChatProvider` impl backed by a locally-spawned HTTP server CLI.
 /// Construct via [`HttpServerProvider::for_cli`] (Codex / OpenCode)
@@ -133,7 +133,7 @@ impl ChatProvider for HttpServerProvider {
         let serve_args = Arc::new(self.serve_args.clone());
         let chat_path = self.chat_path.clone();
         let timeout_dur = self.listen_timeout;
-        let prompt = request.user_message;
+        let prompt = prompt_with_system_prompt(&request.system_prompt, request.user_message);
         // Per-turn knobs travel as body fields. Attachments are
         // base64-encoded so the JSON payload stays text.
         let thinking_str = request.thinking.as_str();

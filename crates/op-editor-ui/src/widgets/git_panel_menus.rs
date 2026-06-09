@@ -870,21 +870,26 @@ impl GitPanel<'_> {
             let shown = truncate(value, 30);
             // Blink the caret on the shared commit-caret cadence (the host
             // wakes the loop for this input's focus), instead of a static `|`.
+            let text_x = rect.origin.x + 8.0;
+            if focused && self.state.input_select_all && !shown.is_empty() {
+                crate::widgets::text_selection::paint_single_line_selection(
+                    cx,
+                    &t,
+                    &shown,
+                    text_x,
+                    baseline,
+                    11.0,
+                    rect.origin.x + rect.size.x - 8.0,
+                );
+            }
             let blink =
                 jian_core::anim::blink_visible(self.now_ms, self.state.commit_caret_anchor_ms, 500);
-            let shown = if focused && blink {
+            let shown = if focused && blink && !self.state.input_select_all {
                 format!("{shown}|")
             } else {
                 shown
             };
-            self.text(
-                cx,
-                &shown,
-                rect.origin.x + 8.0,
-                baseline,
-                11.0,
-                t.foreground,
-            );
+            self.text(cx, &shown, text_x, baseline, 11.0, t.foreground);
         }
     }
 }

@@ -95,11 +95,19 @@ impl WidgetHostNative {
             changed |= ui.align_toolbar_hover.take().is_some();
             changed |= ui.chat_model_picker_hover.take().is_some();
             changed |= ui.chat_design_block_hover.take().is_some();
+            changed |= ui.chat_footer_hover.take().is_some();
             changed |= ui.export_picker_hover.take().is_some();
+            // Right-rail panel hovers — cleared so a wash doesn't linger
+            // under a floating panel covering the rail.
+            changed |= ui.property_action_hover.take().is_some();
+            changed |= ui.property_tab_hover.take().is_some();
+            changed |= ui.variables_panel_hover.take().is_some();
             if let Some(menu) = ui.layer_context_menu.as_mut() {
                 changed |= menu.hovered_row.take().is_some();
             }
         }
+        changed |= self.editor_state.codegen.framework_hover.take().is_some();
+        changed |= self.editor_state.codegen.action_hover.take().is_some();
         if changed {
             self.mark_dirty();
         }
@@ -308,15 +316,19 @@ impl WidgetHostNative {
             new_builtin,
             new_acp,
             new_preset_hover,
+            new_server_hover,
             new_copy_hover,
             new_add_provider_hover,
             new_add_acp_hover,
+            new_image_search_test_hover,
+            new_image_add_hover,
         ) = {
             let panel = AgentSettingsPanel::for_editor(&self.editor_state);
             let panel_rect = panel.rect(self.last_viewport_w, self.last_viewport_h);
             let nav = panel.nav_at(panel_rect, point);
             let tab = self.editor_state.editor_ui.agent_settings.tab;
             let is_agents = matches!(tab, AgentSettingsTab::Agents);
+            let is_images = matches!(tab, AgentSettingsTab::Images);
             let card = if is_agents {
                 panel.card_at(panel_rect, point).unwrap_or(usize::MAX)
             } else {
@@ -345,6 +357,11 @@ impl WidgetHostNative {
                     hit,
                     op_editor_ui::widgets::agent_settings_panel::AgentSettingsHit::CopyMcpClientConfig
                 );
+            let server_hover = matches!(tab, AgentSettingsTab::Mcp)
+                && matches!(
+                    hit,
+                    op_editor_ui::widgets::agent_settings_panel::AgentSettingsHit::ToggleMcpServer
+                );
             let add_provider_hover = is_agents
                 && matches!(
                     hit,
@@ -355,15 +372,22 @@ impl WidgetHostNative {
                     hit,
                     op_editor_ui::widgets::agent_settings_panel::AgentSettingsHit::AddAcpAgent
                 );
+            let image_search_test_hover =
+                is_images && panel.image_search_test_button_hover_at(panel_rect, point);
+            let image_add_hover =
+                is_images && panel.image_gen_add_button_hover_at(panel_rect, point);
             (
                 nav,
                 card,
                 builtin,
                 acp,
                 preset_hover,
+                server_hover,
                 copy_hover,
                 add_provider_hover,
                 add_acp_hover,
+                image_search_test_hover,
+                image_add_hover,
             )
         };
         let mut changed = false;
@@ -418,6 +442,19 @@ impl WidgetHostNative {
                 .hover_mcp_client_config_copy = new_copy_hover;
             changed = true;
         }
+        if new_server_hover
+            != self
+                .editor_state
+                .editor_ui
+                .agent_settings
+                .hover_mcp_server_button
+        {
+            self.editor_state
+                .editor_ui
+                .agent_settings
+                .hover_mcp_server_button = new_server_hover;
+            changed = true;
+        }
         if new_add_provider_hover
             != self
                 .editor_state
@@ -442,6 +479,32 @@ impl WidgetHostNative {
                 .editor_ui
                 .agent_settings
                 .hover_add_acp_agent = new_add_acp_hover;
+            changed = true;
+        }
+        if new_image_search_test_hover
+            != self
+                .editor_state
+                .editor_ui
+                .agent_settings
+                .hover_image_search_test_button
+        {
+            self.editor_state
+                .editor_ui
+                .agent_settings
+                .hover_image_search_test_button = new_image_search_test_hover;
+            changed = true;
+        }
+        if new_image_add_hover
+            != self
+                .editor_state
+                .editor_ui
+                .agent_settings
+                .hover_image_gen_add_button
+        {
+            self.editor_state
+                .editor_ui
+                .agent_settings
+                .hover_image_gen_add_button = new_image_add_hover;
             changed = true;
         }
         if changed {
@@ -612,8 +675,12 @@ impl WidgetHostNative {
     ) {
         // `zoom_at` factor is `exp(delta * 0.0015)`; ±120 ≈ ±20 %.
         const STEP: f32 = 120.0;
-        let (cx0, cy0, cw, ch) = self.canvas_region(viewport_w, viewport_h);
-        let center = op_editor_ui::Point2D::new(cx0 + cw / 2.0, cy0 + ch / 2.0);
+        // `Viewport::zoom_at` works in CANVAS-LOCAL coordinates (every
+        // other call feeds it `window_pt - canvas_origin`), so the
+        // anchor is the canvas-region centre relative to the canvas
+        // origin — NOT the window-space centre.
+        let (_cx0, _cy0, cw, ch) = self.canvas_region(viewport_w, viewport_h);
+        let center = op_editor_ui::Point2D::new(cw / 2.0, ch / 2.0);
         self.editor_state
             .viewport
             .zoom_at(center, if zoom_in { STEP } else { -STEP });

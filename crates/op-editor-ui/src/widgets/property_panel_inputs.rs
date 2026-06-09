@@ -88,10 +88,11 @@ pub fn paint_input_with_prefix(
     prefix: &str,
     value: &str,
 ) {
-    paint_input_with_prefix_focused(cx, theme, rect, prefix, value, false, None);
+    paint_input_with_prefix_focused(cx, theme, rect, prefix, value, false, None, false);
 }
 
 /// `paint_input_with_prefix` with explicit focus + caret toggle.
+#[allow(clippy::too_many_arguments)]
 pub fn paint_input_with_prefix_focused(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
@@ -100,6 +101,7 @@ pub fn paint_input_with_prefix_focused(
     value: &str,
     focused: bool,
     caret: Option<usize>,
+    select_all: bool,
 ) {
     cx.backend.fill_round_rect(rect, INPUT_RADIUS, theme.muted);
     if focused {
@@ -123,6 +125,17 @@ pub fn paint_input_with_prefix_focused(
     let prefix_w = cx.backend.measure_text(prefix, 12.0);
     let value_x = rect.origin.x + 10.0 + prefix_w + 8.0;
     let baseline_y = rect.origin.y + rect.size.y / 2.0 + 4.0;
+    if focused && select_all && !value.is_empty() {
+        crate::widgets::text_selection::paint_single_line_selection(
+            cx,
+            theme,
+            value,
+            value_x,
+            baseline_y,
+            12.0,
+            rect.origin.x + rect.size.x - 8.0,
+        );
+    }
     let value_layout = TextLayout::single_run(
         value,
         "system-ui",
@@ -154,9 +167,10 @@ pub fn paint_input_with_suffix(
     value: &str,
     unit: &str,
 ) {
-    paint_input_with_suffix_focused(cx, theme, rect, value, unit, false, None);
+    paint_input_with_suffix_focused(cx, theme, rect, value, unit, false, None, false);
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn paint_input_with_suffix_focused(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
@@ -165,6 +179,7 @@ pub fn paint_input_with_suffix_focused(
     unit: &str,
     focused: bool,
     caret: Option<usize>,
+    select_all: bool,
 ) {
     cx.backend.fill_round_rect(rect, INPUT_RADIUS, theme.muted);
     if focused {
@@ -176,6 +191,17 @@ pub fn paint_input_with_suffix_focused(
     // this is +19 (unchanged); for the compact 20px gap row it becomes
     // +14 so the value isn't pinned to the bottom.
     let baseline_y = rect.origin.y + rect.size.y / 2.0 + 4.0;
+    if focused && select_all && !value.is_empty() {
+        crate::widgets::text_selection::paint_single_line_selection(
+            cx,
+            theme,
+            value,
+            value_x,
+            baseline_y,
+            12.0,
+            rect.origin.x + rect.size.x - 18.0,
+        );
+    }
     let value_layout = TextLayout::single_run(
         value,
         "system-ui",
@@ -219,7 +245,7 @@ pub fn paint_input_with_icon(
     value: &str,
     unit: Option<&str>,
 ) {
-    paint_input_with_icon_focused(cx, theme, rect, icon, value, unit, false, None);
+    paint_input_with_icon_focused(cx, theme, rect, icon, value, unit, false, None, false);
 }
 
 // Paint-context + geometry args threaded through; a struct adds no gain.
@@ -233,6 +259,7 @@ pub fn paint_input_with_icon_focused(
     unit: Option<&str>,
     focused: bool,
     caret: Option<usize>,
+    select_all: bool,
 ) {
     cx.backend.fill_round_rect(rect, INPUT_RADIUS, theme.muted);
     if focused {
@@ -253,6 +280,17 @@ pub fn paint_input_with_icon_focused(
     );
     let value_x = rect.origin.x + 30.0;
     let baseline_y = rect.origin.y + 19.0;
+    if focused && select_all && !value.is_empty() {
+        crate::widgets::text_selection::paint_single_line_selection(
+            cx,
+            theme,
+            value,
+            value_x,
+            baseline_y,
+            12.0,
+            rect.origin.x + rect.size.x - 18.0,
+        );
+    }
     let value_layout = TextLayout::single_run(
         value,
         "system-ui",

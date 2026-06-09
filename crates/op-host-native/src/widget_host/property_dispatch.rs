@@ -299,11 +299,15 @@ impl WidgetHostNative {
                         cg.pending_generate = true;
                         cg.phase = CodegenPhase::Generating;
                         cg.error = None;
+                        cg.code_scroll = 0.0;
+                        cg.code_selection = None;
                     }
                     CodegenAction::Regenerate => {
                         cg.pending_regenerate = true;
                         cg.phase = CodegenPhase::Generating;
                         cg.error = None;
+                        cg.code_scroll = 0.0;
+                        cg.code_selection = None;
                     }
                     CodegenAction::Cancel => {
                         cg.pending_generate = false;
@@ -320,8 +324,7 @@ impl WidgetHostNative {
                         // clipboard via the same queue the MCP-config
                         // copy uses; the desktop runner drains
                         // `chat.pending_copy_text` into the OS clipboard.
-                        let code = cg.code.clone();
-                        self.editor_state.chat.queue_copy_text(code);
+                        self.editor_state.chat.queue_copy_text(cg.code.clone());
                     }
                     CodegenAction::Download => {
                         cg.pending_download = true;

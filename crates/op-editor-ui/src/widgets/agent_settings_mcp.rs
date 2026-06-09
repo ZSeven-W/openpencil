@@ -2,7 +2,7 @@
 
 use crate::theme::Theme;
 use crate::widgets::agent_settings_caret::{
-    caret_x_for_text, paint_caret, settings_caret_for_focus,
+    caret_x_for_text, paint_caret, paint_settings_selection, settings_caret_for_focus,
 };
 use crate::widgets::agent_settings_i18n::t as t_settings;
 use crate::widgets::agent_settings_switch::{
@@ -313,6 +313,17 @@ fn paint_server_card(
     );
     let port_x = port_field.origin.x + (PORT_FIELD_W - port_w) / 2.0;
     let port_y = port_field.origin.y + PORT_FIELD_H / 2.0 + 5.0;
+    if focused && ui.settings_input_select_all && !port_str.is_empty() {
+        paint_settings_selection(
+            cx,
+            theme,
+            &port_str,
+            port_x,
+            port_y,
+            12.0,
+            port_field.origin.x + port_field.size.x - 8.0,
+        );
+    }
     cx.backend
         .draw_text(&port_layout, Point2D::new(port_x, port_y));
     if focused {
@@ -342,6 +353,9 @@ fn paint_server_card(
         theme.primary_foreground
     };
     cx.backend.fill_round_rect(btn, 6.0, btn_bg);
+    if settings.hover_mcp_server_button {
+        cx.backend.fill_round_rect(btn, 6.0, theme.button_hover);
+    }
     if running {
         cx.backend.stroke_round_rect(btn, 6.0, theme.border, 1.0);
     }

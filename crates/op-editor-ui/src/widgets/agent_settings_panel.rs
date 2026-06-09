@@ -346,6 +346,30 @@ impl<'a> AgentSettingsPanel<'a> {
         agent_settings_builtin::preset_scroll_max_at(content_rect(panel), &self.settings, scrolled)
     }
 
+    pub fn image_search_test_button_hover_at(&self, panel: Rect, point: Point2D) -> bool {
+        if !rect_contains(panel, point) {
+            return false;
+        }
+        let scrolled = Point2D::new(point.x, point.y + self.settings.scroll_y);
+        agent_settings_images::search_test_button_hover_at(
+            content_rect(panel),
+            &self.settings,
+            scrolled,
+        )
+    }
+
+    pub fn image_gen_add_button_hover_at(&self, panel: Rect, point: Point2D) -> bool {
+        if !rect_contains(panel, point) {
+            return false;
+        }
+        let scrolled = Point2D::new(point.x, point.y + self.settings.scroll_y);
+        agent_settings_images::add_gen_button_hover_at(
+            content_rect(panel),
+            &self.settings,
+            scrolled,
+        )
+    }
+
     /// Total content height for the active tab. Host uses this to
     /// clamp `scroll_y` so the bottom of the list never floats
     /// above the panel bottom.

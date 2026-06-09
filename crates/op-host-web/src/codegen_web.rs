@@ -361,6 +361,8 @@ fn start_pump(inner: Rc<RefCell<crate::Inner>>, shared: Shared) {
                 }
                 WebCodegenDelta::Done { code, degraded } => {
                     cg.code = code;
+                    cg.code_scroll = 0.0;
+                    cg.code_selection = None;
                     cg.degraded = degraded;
                     // Asset bytes are not carried on web v1.
                     cg.assets = Vec::new();

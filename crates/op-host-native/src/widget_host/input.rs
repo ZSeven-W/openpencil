@@ -2,6 +2,7 @@
 
 use super::helpers::{resize_bounds, PANEL_MAX_WIDTH, PANEL_MIN_WIDTH};
 use super::{PanelResizeKind, WidgetHostNative};
+use op_editor_core::codegen::CodeSelection;
 use op_editor_ui::widgets::{
     ChatResizeEdge, AI_CHAT_MAX_RATIO, AI_CHAT_MIN_HEIGHT, AI_CHAT_MIN_WIDTH,
 };
@@ -212,6 +213,52 @@ impl WidgetHostNative {
         Some(false)
     }
 
+    pub(in crate::widget_host) fn code_text_offset_at_screen(
+        &self,
+        x: f32,
+        y: f32,
+    ) -> Option<usize> {
+        if !self.editor_state.property_panel_visible()
+            || !matches!(
+                self.editor_state.editor_ui.property_tab,
+                op_editor_core::PropertyTab::Code
+            )
+        {
+            return None;
+        }
+        let pw = self.editor_state.editor_ui.property_panel_width;
+        let panel_x = self.last_viewport_w - pw;
+        if x < panel_x || x > self.last_viewport_w {
+            return None;
+        }
+        let panel_rect = Rect {
+            origin: Point2D::new(panel_x, op_editor_ui::widgets::TOP_BAR_HEIGHT),
+            size: Point2D::new(
+                pw,
+                (self.last_viewport_h - op_editor_ui::widgets::TOP_BAR_HEIGHT).max(0.0),
+            ),
+        };
+        op_editor_ui::widgets::property_panel_code::code_text_offset_at(
+            panel_rect,
+            &self.editor_state.codegen,
+            Point2D::new(x, y),
+        )
+    }
+
+    fn apply_code_selection_drag_cursor_move(&mut self, x: f32, y: f32) -> bool {
+        let Some(anchor) = self.code_selection_drag.map(|drag| drag.anchor) else {
+            return false;
+        };
+        if let Some(focus) = self.code_text_offset_at_screen(x, y) {
+            let next = Some(CodeSelection { anchor, focus });
+            if self.editor_state.codegen.code_selection != next {
+                self.editor_state.codegen.code_selection = next;
+                self.mark_dirty();
+            }
+        }
+        true
+    }
+
     pub fn apply_cursor_move(&mut self, x: f32, y: f32) -> bool {
         if self.editor_state.editor_ui.agent_settings_open && self.update_agent_settings_hover(x, y)
         {
@@ -356,6 +403,9 @@ impl WidgetHostNative {
                     return true;
                 }
             }
+        }
+        if self.apply_code_selection_drag_cursor_move(x, y) {
+            return true;
         }
         if let Some(consumed) = self.apply_node_drag_cursor_move(x, y) {
             return consumed;
@@ -503,6 +553,25 @@ impl WidgetHostNative {
                 self.mark_dirty();
                 return true;
             }
+        }
+        if let Some(chat_rect) = self.ai_chat_rect(self.last_viewport_w, self.last_viewport_h) {
+            use op_editor_ui::widgets::AIChatPlaceholder;
+            let new_hover = AIChatPlaceholder::from_editor_at(&self.editor_state, self.now_ms)
+                .footer_hover_at(chat_rect, Point2D::new(x, y));
+            if new_hover != self.editor_state.editor_ui.chat_footer_hover {
+                self.editor_state.editor_ui.chat_footer_hover = new_hover;
+                self.mark_dirty();
+                return true;
+            }
+        } else if self
+            .editor_state
+            .editor_ui
+            .chat_footer_hover
+            .take()
+            .is_some()
+        {
+            self.mark_dirty();
+            return true;
         }
         if self.update_chat_design_hover(x, y, over_topmost) {
             return true;
@@ -814,6 +883,42 @@ impl WidgetHostNative {
                 return true;
             }
         }
+        // PropertyPanel tab/action hover wash. Shown with a selection.
+        let mut property_hover_changed = false;
+        if !over_topmost && self.editor_state.property_panel_visible() {
+            use op_editor_ui::widgets::{PropertyPanel, TOP_BAR_HEIGHT};
+            if let Some(panel) = PropertyPanel::for_selection(&self.editor_state) {
+                let property_rect = Rect {
+                    origin: Point2D::new(
+                        self.last_viewport_w - self.editor_state.editor_ui.property_panel_width,
+                        TOP_BAR_HEIGHT,
+                    ),
+                    size: Point2D::new(
+                        self.editor_state.editor_ui.property_panel_width,
+                        (self.last_viewport_h - TOP_BAR_HEIGHT).max(0.0),
+                    ),
+                };
+                let point = Point2D::new(x, y);
+                let new_tab_hover = panel.tab_hover_at(property_rect, point);
+                if new_tab_hover != self.editor_state.editor_ui.property_tab_hover {
+                    self.editor_state.editor_ui.property_tab_hover = new_tab_hover;
+                    property_hover_changed = true;
+                }
+                let new_action_hover = panel.action_hover_index(property_rect, point);
+                if new_action_hover != self.editor_state.editor_ui.property_action_hover {
+                    self.editor_state.editor_ui.property_action_hover = new_action_hover;
+                    property_hover_changed = true;
+                }
+            }
+        } else if self
+            .editor_state
+            .editor_ui
+            .property_tab_hover
+            .take()
+            .is_some()
+        {
+            property_hover_changed = true;
+        }
         // Variables panel (right rail; shown only with no selection)
         // hover — rows / axis chips / open-dropdown items.
         if !over_topmost && !self.editor_state.property_panel_visible() {
@@ -858,11 +963,10 @@ impl WidgetHostNative {
             self.mark_dirty();
             return true;
         }
-        // Code-panel framework-strip hover wash. Only tracks when a node is
-        // selected (the inspector owns the rail) AND the Code tab is active;
-        // `framework_at` returns None off the strip band, which clears any
-        // stale highlight so the wash follows the cursor and drops on exit.
-        let new_fw_hover = if !over_topmost
+        // Code-panel hover wash. Reuses Code-panel action geometry so
+        // framework chips, scroll chevrons, and body buttons share click and
+        // hover hit-testing.
+        let (new_fw_hover, new_action_hover) = if !over_topmost
             && self.editor_state.property_panel_visible()
             && matches!(
                 self.editor_state.editor_ui.property_tab,
@@ -871,23 +975,31 @@ impl WidgetHostNative {
             use op_editor_ui::widgets::{property_panel_code, TOP_BAR_HEIGHT};
             let pw = self.editor_state.editor_ui.property_panel_width;
             let panel_x = self.last_viewport_w - pw;
-            let (band_top, band_bottom) = property_panel_code::framework_row_band(TOP_BAR_HEIGHT);
-            if y >= band_top && y <= band_bottom && x >= panel_x && x <= self.last_viewport_w {
-                property_panel_code::framework_at(
-                    panel_x,
-                    band_top,
-                    pw,
+            let panel_rect = Rect {
+                origin: Point2D::new(panel_x, TOP_BAR_HEIGHT),
+                size: Point2D::new(pw, (self.last_viewport_h - TOP_BAR_HEIGHT).max(0.0)),
+            };
+            if x >= panel_x && x <= self.last_viewport_w {
+                property_panel_code::code_hover_at(
+                    panel_rect,
+                    &self.editor_state.codegen,
                     Point2D::new(x, y),
-                    self.editor_state.codegen.framework_scroll,
                 )
             } else {
-                None
+                (None, None)
             }
         } else {
-            None
+            (None, None)
         };
-        if new_fw_hover != self.editor_state.codegen.framework_hover {
+        if new_fw_hover != self.editor_state.codegen.framework_hover
+            || new_action_hover != self.editor_state.codegen.action_hover
+        {
             self.editor_state.codegen.framework_hover = new_fw_hover;
+            self.editor_state.codegen.action_hover = new_action_hover;
+            self.mark_dirty();
+            return true;
+        }
+        if property_hover_changed {
             self.mark_dirty();
             return true;
         }
@@ -928,6 +1040,9 @@ impl WidgetHostNative {
             // Drag ended — drop the transient smart-guide lines.
             self.editor_state.editor_ui.active_guides.clear();
             self.mark_dirty();
+            return true;
+        }
+        if self.code_selection_drag.take().is_some() {
             return true;
         }
         if let Some(drag) = self.path_anchor_drag.take() {
@@ -1005,6 +1120,9 @@ impl WidgetHostNative {
             // Drag ended — drop the transient smart-guide lines.
             self.editor_state.editor_ui.active_guides.clear();
             self.mark_dirty();
+            return true;
+        }
+        if self.code_selection_drag.take().is_some() {
             return true;
         }
         if self.marquee_drag.take().is_some() {

@@ -253,6 +253,7 @@ pub fn paint_model_picker(
     hover: Option<usize>,
     search: &str,
     caret: Option<usize>,
+    select_all: bool,
     now_ms: u64,
     caret_anchor_ms: u64,
     locale: op_editor_core::Locale,
@@ -268,6 +269,7 @@ pub fn paint_model_picker(
         rect,
         search,
         caret,
+        select_all,
         now_ms,
         caret_anchor_ms,
         locale,
@@ -445,6 +447,7 @@ fn paint_search_row(
     rect: Rect,
     search: &str,
     caret: Option<usize>,
+    select_all: bool,
     now_ms: u64,
     caret_anchor_ms: u64,
     locale: op_editor_core::Locale,
@@ -488,6 +491,17 @@ fn paint_search_row(
         Point2D::new(0.0, 0.0),
     );
     let text_x = search_rect.origin.x + 28.0;
+    if select_all && !raw.is_empty() {
+        crate::widgets::text_selection::paint_single_line_selection(
+            cx,
+            theme,
+            raw,
+            text_x,
+            search_rect.origin.y + 17.0,
+            12.0,
+            search_rect.origin.x + search_rect.size.x - 24.0,
+        );
+    }
     cx.backend
         .draw_text(&layout, Point2D::new(text_x, search_rect.origin.y + 17.0));
     if jian_core::anim::blink_visible(now_ms, caret_anchor_ms, 500) {

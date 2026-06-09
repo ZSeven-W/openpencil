@@ -42,6 +42,13 @@ fn body() -> Rect {
     Rect::xywh(0.0, 0.0, 340.0, 300.0)
 }
 
+fn rect_close(actual: Rect, expected: Rect) -> bool {
+    (actual.origin.x - expected.origin.x).abs() < 0.01
+        && (actual.origin.y - expected.origin.y).abs() < 0.01
+        && (actual.size.x - expected.size.x).abs() < 0.01
+        && (actual.size.y - expected.size.y).abs() < 0.01
+}
+
 #[test]
 fn build_transcript_empty_messages_is_empty() {
     assert!(build_transcript(&[], body(), op_editor_core::Locale::EnUs).is_empty());
@@ -77,8 +84,58 @@ fn assistant_answer_uses_plain_text_height_without_bubble_padding() {
 }
 
 #[test]
+fn done_summary_renders_as_compact_completion_card() {
+    let msg = ChatMessage::assistant("Done — 4 subtask(s) succeeded, 0 failed, 4 node(s) total.");
+    let body = body();
+    let items = build_transcript(
+        std::slice::from_ref(&msg),
+        body,
+        op_editor_core::Locale::EnUs,
+    );
+    let bubble = items[0].bubble.as_ref().expect("completion bubble");
+
+    assert!(
+        bubble.completion.is_some(),
+        "Done summary should use completion card styling"
+    );
+    assert!(
+        bubble.rect.size.x < body.size.x,
+        "completion card should not take the full transcript width"
+    );
+    assert!(
+        bubble.rect.size.y > LINE_H,
+        "completion card should have a compact card height instead of raw text height"
+    );
+
+    let mut backend = TranscriptPaintBackend::default();
+    let mut cx = PaintCx {
+        backend: &mut backend,
+    };
+    paint_transcript(
+        &mut cx,
+        &crate::Theme::light(),
+        body,
+        &[msg],
+        0,
+        op_editor_core::Locale::EnUs,
+    );
+
+    assert!(
+        backend.round_rects.iter().any(|(rect, radius)| {
+            rect_close(*rect, bubble.rect) && (*radius - 10.0).abs() < 1e-4
+        }),
+        "completion card should paint a rounded status surface"
+    );
+    assert!(
+        backend.texts.iter().any(|text| text == "Done"),
+        "completion card should show a concise title"
+    );
+}
+
+#[test]
 fn user_bubbles_remain_compact_and_right_aligned() {
-    let msg = ChatMessage::user("user prompt");
+    let prompt = "user prompt";
+    let msg = ChatMessage::user(prompt);
     let body = body();
     let items = build_transcript(
         std::slice::from_ref(&msg),
@@ -87,15 +144,41 @@ fn user_bubbles_remain_compact_and_right_aligned() {
     );
     let bubble = items[0].bubble.as_ref().expect("user bubble");
 
-    assert!((bubble.rect.size.x - body.size.x * BUBBLE_FRAC).abs() < 1e-4);
+    let expected_w = (text_unit_width(prompt) + 2.0 * BUBBLE_PAD)
+        .max(USER_BUBBLE_MIN_W)
+        .min(body.size.x * USER_BUBBLE_MAX_FRAC);
+    assert!((bubble.rect.size.x - expected_w).abs() < 1e-4);
     assert!(
         (bubble.rect.origin.x + bubble.rect.size.x - (body.origin.x + body.size.x)).abs() < 1e-4
+    );
+}
+
+#[test]
+fn transcript_keeps_latest_user_prompt_when_completion_tail_is_tight() {
+    let messages = [
+        ChatMessage::user("生成一个设计精良的美食应用移动端首页"),
+        ChatMessage::assistant("Done — 4 subtask(s) succeeded, 0 failed, 4 node(s) total."),
+    ];
+    let tight_body = Rect::xywh(0.0, 0.0, 340.0, 64.0);
+
+    let items = build_transcript(&messages, tight_body, op_editor_core::Locale::EnUs);
+
+    assert_eq!(items.len(), 2, "latest user prompt should stay visible");
+    assert_eq!(items[0].role, ChatRole::User);
+    assert_eq!(items[1].role, ChatRole::Assistant);
+    let user = items[0].bubble.as_ref().expect("user prompt bubble");
+    let completion = items[1].bubble.as_ref().expect("completion card");
+    assert!(completion.completion.is_some());
+    assert!(
+        completion.rect.origin.y >= user.rect.origin.y + user.rect.size.y + MSG_GAP,
+        "completion card needs breathing room after the prompt"
     );
 }
 
 #[derive(Default)]
 struct TranscriptPaintBackend {
     round_rects: Vec<(Rect, f32)>,
+    round_rect_colors: Vec<crate::Color>,
     ovals: usize,
     texts: Vec<String>,
     svg_strokes: Vec<(Point2D, f32)>,
@@ -116,8 +199,9 @@ impl crate::RenderBackend for TranscriptPaintBackend {
     fn restore(&mut self) {}
     fn translate(&mut self, _: Point2D) {}
     fn stroke_line(&mut self, _: Point2D, _: Point2D, _: crate::Color, _: f32) {}
-    fn fill_round_rect(&mut self, rect: Rect, radius: f32, _: crate::Color) {
+    fn fill_round_rect(&mut self, rect: Rect, radius: f32, color: crate::Color) {
         self.round_rects.push((rect, radius));
+        self.round_rect_colors.push(color);
     }
     fn stroke_round_rect(&mut self, _: Rect, _: f32, _: crate::Color, _: f32) {}
     fn stroke_svg_path(&mut self, _: &str, point: Point2D, size: f32, _: crate::Color, _: f32) {
@@ -155,6 +239,7 @@ fn paint_transcript_leaves_assistant_answer_unframed() {
 #[test]
 fn paint_transcript_keeps_user_answer_bubble_background() {
     let messages = [ChatMessage::user("user prompt")];
+    let theme = crate::Theme::dark();
     let mut backend = TranscriptPaintBackend::default();
     let mut cx = PaintCx {
         backend: &mut backend,
@@ -162,7 +247,7 @@ fn paint_transcript_keeps_user_answer_bubble_background() {
 
     paint_transcript(
         &mut cx,
-        &crate::Theme::dark(),
+        &theme,
         body(),
         &messages,
         0,
@@ -170,6 +255,8 @@ fn paint_transcript_keeps_user_answer_bubble_background() {
     );
 
     assert_eq!(backend.round_rects.len(), 1);
+    assert_eq!(backend.round_rect_colors[0], theme.row_selected_primary);
+    assert_ne!(backend.round_rect_colors[0], theme.primary);
 }
 
 #[test]

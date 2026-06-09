@@ -30,6 +30,20 @@ fn assert_close(actual: f32, expected: f32) {
     );
 }
 
+fn rect_close(actual: Rect, expected: Rect) -> bool {
+    (actual.origin.x - expected.origin.x).abs() < 0.01
+        && (actual.origin.y - expected.origin.y).abs() < 0.01
+        && (actual.size.x - expected.size.x).abs() < 0.01
+        && (actual.size.y - expected.size.y).abs() < 0.01
+}
+
+fn color_close(actual: crate::Color, expected: crate::Color) -> bool {
+    (actual.r - expected.r).abs() < 0.001
+        && (actual.g - expected.g).abs() < 0.001
+        && (actual.b - expected.b).abs() < 0.001
+        && (actual.a - expected.a).abs() < 0.001
+}
+
 #[test]
 fn paint_collapsed_bar_matches_ts_minimized_bar_style() {
     let mut s = EditorState::new();
@@ -61,6 +75,30 @@ fn paint_collapsed_bar_matches_ts_minimized_bar_style() {
     assert_close(backend.svg_strokes[0].1, 13.0);
     assert_close(backend.svg_strokes[1].0.x, rect.size.x - 12.0 - 12.0);
     assert_close(backend.svg_strokes[1].1, 12.0);
+}
+
+#[test]
+fn paint_collapsed_bar_hover_adds_visible_feedback_across_pill() {
+    let mut s = EditorState::new();
+    s.chat.collapsed = true;
+    s.editor_ui.chat_header_hover = Some(op_editor_core::ChatHeaderButton::ToggleCollapse);
+    let panel = AIChatPlaceholder::from_editor(&s);
+    let rect = Rect::xywh(0.0, 0.0, AI_CHAT_COLLAPSED_WIDTH, AI_CHAT_COLLAPSED_HEIGHT);
+    let mut backend = PanelPaintBackend::default();
+    let mut cx = PaintCx {
+        backend: &mut backend,
+    };
+
+    panel.paint(&mut cx, rect);
+
+    assert!(
+        backend.round_rects.iter().any(|(r, radius, color)| {
+            rect_close(*r, rect)
+                && *radius >= 8.0
+                && color_close(*color, chat_neutral_hover_color(&panel.theme))
+        }),
+        "collapsed New Chat hover should paint a visible wash across the full pill"
+    );
 }
 
 #[test]
@@ -224,6 +262,182 @@ fn hit_test_resolves_bottom_toolbar_actions() {
 }
 
 #[test]
+fn footer_hover_maps_bottom_toolbar_actions() {
+    let mut s = EditorState::new();
+    seed_available_model(&mut s);
+    s.chat.input = "design a login page".into();
+    let panel = AIChatPlaceholder::from_editor(&s);
+    let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
+    let y = toolbar_center_y();
+
+    assert_eq!(
+        panel.footer_hover_at(rect, Point2D::new(PAD + 8.0, y)),
+        Some(op_editor_core::ChatFooterButton::ModelPicker)
+    );
+    assert_eq!(
+        panel.footer_hover_at(rect, Point2D::new(AI_CHAT_WIDTH - PAD - 52.0, y)),
+        Some(op_editor_core::ChatFooterButton::AddAttachment)
+    );
+    assert_eq!(
+        panel.footer_hover_at(rect, Point2D::new(AI_CHAT_WIDTH - PAD - 16.0, y)),
+        Some(op_editor_core::ChatFooterButton::Send)
+    );
+}
+
+#[test]
+fn footer_agent_team_chip_is_clickable_and_hoverable() {
+    let mut s = EditorState::new();
+    seed_available_model(&mut s);
+    let panel = AIChatPlaceholder::from_editor(&s);
+    let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
+    let input = panel.input_rect(rect);
+    let toolbar_top = input.origin.y + INPUT_AREA_HEIGHT;
+    let footer = panel.footer_layout(rect, input, toolbar_top);
+    let point = Point2D::new(
+        footer.agent_team.origin.x + footer.agent_team.size.x / 2.0,
+        footer.agent_team.origin.y + footer.agent_team.size.y / 2.0,
+    );
+
+    assert_eq!(panel.hit_test(rect, point), Some(AIChatHit::CycleAgentTeam));
+    assert_eq!(
+        panel.footer_hover_at(rect, point),
+        Some(op_editor_core::ChatFooterButton::AgentTeam)
+    );
+}
+
+#[test]
+fn paint_send_button_hover_adds_visible_feedback() {
+    let mut s = EditorState::new();
+    seed_available_model(&mut s);
+    s.chat.input = "design a login page".into();
+    s.editor_ui.chat_footer_hover = Some(op_editor_core::ChatFooterButton::Send);
+    let panel = AIChatPlaceholder::from_editor(&s);
+    let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
+    let mut backend = PanelPaintBackend::default();
+    let mut cx = PaintCx {
+        backend: &mut backend,
+    };
+
+    panel.paint(&mut cx, rect);
+
+    let send_rect = Rect {
+        origin: Point2D::new(AI_CHAT_WIDTH - PAD - 24.0, toolbar_center_y() - 24.0 / 2.0),
+        size: Point2D::new(24.0, 24.0),
+    };
+    let fills: Vec<_> = backend
+        .round_rects
+        .iter()
+        .filter(|(r, _, _)| rect_close(*r, send_rect))
+        .collect();
+
+    assert!(
+        fills.len() >= 2,
+        "hovered send button should paint feedback over its base fill"
+    );
+}
+
+#[test]
+fn paint_footer_neutral_hovers_use_visible_feedback() {
+    let cases = [
+        op_editor_core::ChatFooterButton::ModelPicker,
+        op_editor_core::ChatFooterButton::AgentTeam,
+        op_editor_core::ChatFooterButton::AddAttachment,
+        op_editor_core::ChatFooterButton::Send,
+    ];
+
+    for hover in cases {
+        let mut s = EditorState::new();
+        seed_available_model(&mut s);
+        s.editor_ui.chat_footer_hover = Some(hover);
+        let panel = AIChatPlaceholder::from_editor(&s);
+        let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
+        let input = panel.input_rect(rect);
+        let toolbar_top = input.origin.y + INPUT_AREA_HEIGHT;
+        let footer = panel.footer_layout(rect, input, toolbar_top);
+        let target = match hover {
+            op_editor_core::ChatFooterButton::ModelPicker => footer.model,
+            op_editor_core::ChatFooterButton::AgentTeam => footer.agent_team,
+            op_editor_core::ChatFooterButton::AddAttachment => footer.attach,
+            op_editor_core::ChatFooterButton::Send => footer.send,
+            op_editor_core::ChatFooterButton::Stop => unreachable!(),
+        };
+        let mut backend = PanelPaintBackend::default();
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+
+        panel.paint(&mut cx, rect);
+
+        assert!(
+            backend.round_rects.iter().any(|(r, _, color)| {
+                rect_close(*r, target)
+                    && !color_close(*color, panel.theme.muted)
+                    && color.a > panel.theme.button_hover.a + 0.01
+            }),
+            "{hover:?} hover should paint a visible neutral wash"
+        );
+    }
+}
+
+#[test]
+fn paint_model_picker_hover_stays_inside_model_chip() {
+    let mut s = EditorState::new();
+    seed_available_model(&mut s);
+    s.editor_ui.chat_footer_hover = Some(op_editor_core::ChatFooterButton::ModelPicker);
+    let panel = AIChatPlaceholder::from_editor(&s);
+    let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
+    let input = panel.input_rect(rect);
+    let toolbar_top = input.origin.y + INPUT_AREA_HEIGHT;
+    let footer = panel.footer_layout(rect, input, toolbar_top);
+    let mut backend = PanelPaintBackend::default();
+    let mut cx = PaintCx {
+        backend: &mut backend,
+    };
+
+    panel.paint(&mut cx, rect);
+
+    let hover = backend
+        .round_rects
+        .iter()
+        .find(|(r, _, color)| {
+            rect_close(*r, footer.model)
+                && color_close(*color, chat_neutral_hover_color(&panel.theme))
+        })
+        .expect("model picker hover should paint a visible wash");
+
+    assert!(
+        hover.0.origin.x + hover.0.size.x <= footer.agent_team.origin.x - 6.0,
+        "model hover should leave visible spacing before the Agent Team chip"
+    );
+}
+
+#[test]
+fn paint_expanded_header_title_hover_adds_visible_feedback_across_label() {
+    let mut s = EditorState::new();
+    s.editor_ui.chat_header_hover = Some(op_editor_core::ChatHeaderButton::ToggleCollapse);
+    let panel = AIChatPlaceholder::from_editor(&s);
+    let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
+    let mut backend = PanelPaintBackend::default();
+    let mut cx = PaintCx {
+        backend: &mut backend,
+    };
+
+    panel.paint(&mut cx, rect);
+
+    assert!(
+        backend.round_rects.iter().any(|(r, _, color)| {
+            r.origin.x <= PAD
+                && r.origin.y <= 6.0
+                && r.size.x >= 108.0
+                && r.size.y >= 28.0
+                && r.size.y <= 34.0
+                && color_close(*color, chat_neutral_hover_color(&panel.theme))
+        }),
+        "expanded New Chat title hover should cover the label, not only the chevron"
+    );
+}
+
+#[test]
 fn hit_test_resolves_model_search_clear_button() {
     let mut s = EditorState::new();
     seed_available_model(&mut s);
@@ -317,6 +531,16 @@ fn hit_test_header_returns_drag_handle() {
 }
 
 #[test]
+fn hit_test_header_title_text_toggles_collapse_for_hover_feedback() {
+    let s = EditorState::new();
+    let panel = AIChatPlaceholder::from_editor(&s);
+    let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
+    let p = Point2D::new(PAD + 64.0, 18.0);
+
+    assert_eq!(panel.hit_test(rect, p), Some(AIChatHit::ToggleCollapse));
+}
+
+#[test]
 fn resize_edge_at_resolves_all_ts_handles_when_not_maximized() {
     let s = EditorState::new();
     let panel = AIChatPlaceholder::from_editor(&s);
@@ -407,6 +631,29 @@ fn body_rect_reserves_space_for_fixed_step_checklist() {
     assert!(
         body.origin.y + body.size.y < legacy_bottom - 1.0,
         "fixed step checklist should reserve bottom space outside transcript"
+    );
+}
+
+#[test]
+fn default_height_preserves_transcript_space_above_full_checklist() {
+    let mut s = EditorState::new();
+    let mut message = op_editor_core::ChatMessage::assistant_streaming();
+    message.content = (0..17)
+        .map(|idx| {
+            format!(r#"<step title="Subtask {idx}" status="done">Generated section {idx}</step>"#)
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    s.chat.messages.push(message);
+
+    let panel = AIChatPlaceholder::from_editor(&s);
+    let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
+    let body = panel.body_rect(rect);
+
+    assert!(
+        body.size.y >= 150.0,
+        "default chat panel height should leave room for prior chat above the pinned checklist, got {}",
+        body.size.y
     );
 }
 

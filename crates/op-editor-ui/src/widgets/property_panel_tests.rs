@@ -7,9 +7,43 @@
 use super::property_panel::{PropertyPanel, PropertyPanelAction};
 use super::property_panel_sections as sections;
 use super::property_panel_test_support::{state_from, visible_for};
-use crate::widgets::Widget;
-use crate::{Color, Point2D, Rect};
-use op_editor_core::{EditorState, NodeId};
+use crate::widgets::{PaintCx, Widget};
+use crate::{Color, Point2D, Rect, TextLayout};
+use op_editor_core::{EditorState, NodeId, PropertyTab};
+
+#[derive(Default)]
+struct RoundFillBackend {
+    fills: Vec<(Rect, Color)>,
+}
+
+impl crate::RenderBackend for RoundFillBackend {
+    fn begin_frame(&mut self) {}
+    fn end_frame(&mut self) {}
+    fn fill_rect(&mut self, _: Rect, _: Color) {}
+    fn stroke_rect(&mut self, _: Rect, _: Color, _: f32) {}
+    fn draw_text(&mut self, _: &TextLayout, _: Point2D) {}
+    fn clip_rect(&mut self, _: Rect) {}
+    fn stroke_line(&mut self, _: Point2D, _: Point2D, _: Color, _: f32) {}
+    fn fill_round_rect(&mut self, rect: Rect, _: f32, color: Color) {
+        self.fills.push((rect, color));
+    }
+    fn stroke_round_rect(&mut self, _: Rect, _: f32, _: Color, _: f32) {}
+    fn stroke_svg_path(&mut self, _: &str, _: Point2D, _: f32, _: Color, _: f32) {}
+    fn save(&mut self) {}
+    fn restore(&mut self) {}
+    fn translate(&mut self, _: Point2D) {}
+    fn resize(&mut self, _: u32, _: u32) {}
+    fn dpi_scale(&self) -> f32 {
+        1.0
+    }
+}
+
+fn color_eq(a: Color, b: Color) -> bool {
+    (a.r - b.r).abs() < 0.001
+        && (a.g - b.g).abs() < 0.001
+        && (a.b - b.b).abs() < 0.001
+        && (a.a - b.a).abs() < 0.001
+}
 
 #[test]
 fn for_selection_with_real_node_builds_snapshot() {
@@ -28,6 +62,35 @@ fn for_selection_with_real_node_builds_snapshot() {
 fn for_selection_without_selection_returns_none() {
     let state = EditorState::new();
     assert!(PropertyPanel::for_selection(&state).is_none());
+}
+
+#[test]
+fn inactive_property_tab_hover_paints_pill_background() {
+    let mut state = EditorState::sample();
+    state.editor_ui.property_tab = PropertyTab::Code;
+    state.editor_ui.property_tab_hover = Some(PropertyTab::Design);
+    let panel = PropertyPanel::for_selection(&state).expect("sample doc has a selection");
+    let rect = Rect {
+        origin: Point2D::new(0.0, 0.0),
+        size: Point2D::new(280.0, 700.0),
+    };
+    let mut backend = RoundFillBackend::default();
+    {
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+        panel.paint(&mut cx, rect);
+    }
+
+    let muted_pills = backend
+        .fills
+        .iter()
+        .filter(|(_, color)| color_eq(*color, panel.theme.muted))
+        .count();
+    assert!(
+        muted_pills >= 2,
+        "active Code tab and hovered inactive Design tab should both paint a visible pill"
+    );
 }
 
 #[test]
