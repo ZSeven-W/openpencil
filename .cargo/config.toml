@@ -6,3 +6,12 @@ git-fetch-with-cli = true
 
 [term]
 verbose = false
+
+[alias]
+# Native desktop dev loop — incremental rebuild + relaunch on save
+# (needs `cargo install cargo-watch`). Pass extra binary args after `--`,
+# e.g. `cargo dev-desktop -- --live-mcp`.
+dev-desktop = "watch -w crates -w vendor -x 'run -p op-host-desktop'"
+# Fast UI inner loop — verify widget layout/paint geometry without
+# launching a window (~0.05s).
+test-ui = "test -p op-editor-ui"
