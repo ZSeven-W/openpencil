@@ -790,7 +790,7 @@ impl WidgetHostNative {
         let mut idx = 1;
         let name = loop {
             let candidate = format!("variable-{idx}");
-            if existing.map_or(true, |vars| !vars.contains_key(&candidate)) {
+            if existing.is_none_or(|vars| !vars.contains_key(&candidate)) {
                 break candidate;
             }
             idx += 1;

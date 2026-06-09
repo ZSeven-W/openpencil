@@ -677,11 +677,10 @@ impl WidgetHostNative {
         }
         if let Some(chat_rect) = self.ai_chat_rect(viewport_w, viewport_h) {
             let panel = AIChatPlaceholder::from_editor(&self.editor_state);
-            match panel.hit_test(chat_rect, Point2D::new(x, y)) {
-                Some(AIChatHit::SelectInputText(_) | AIChatHit::SelectTranscriptText(_, _)) => {
-                    return CursorHint::Text;
-                }
-                _ => {}
+            if let Some(AIChatHit::SelectInputText(_) | AIChatHit::SelectTranscriptText(_, _)) =
+                panel.hit_test(chat_rect, Point2D::new(x, y))
+            {
+                return CursorHint::Text;
             }
         }
         // Any floating overlay (panels, Git popover, Toolbar /

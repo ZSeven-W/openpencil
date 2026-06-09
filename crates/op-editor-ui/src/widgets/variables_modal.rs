@@ -114,10 +114,7 @@ impl VariablesModal {
         let w = usable_w.min(VARIABLES_MODAL_MAX_W);
         let h = usable_h.min(VARIABLES_MODAL_MAX_H);
         let x = ((viewport_w - w) / 2.0).max(16.0);
-        let y = TOP_BAR_HEIGHT
-            + ((viewport_h - TOP_BAR_HEIGHT - h) / 2.0)
-                .max(24.0)
-                .min(72.0);
+        let y = TOP_BAR_HEIGHT + ((viewport_h - TOP_BAR_HEIGHT - h) / 2.0).clamp(24.0, 72.0);
         Rect {
             origin: Point2D::new(x, y),
             size: Point2D::new(w, h),
@@ -314,12 +311,17 @@ fn paint_header(
     rect: Rect,
 ) {
     let plus = header_add_rect(rect);
-    icon_button(cx, theme, plus, Icon::Plus, hover == Some(VariablesPanelButton::HeaderAdd));
+    icon_button(
+        cx,
+        theme,
+        plus,
+        Icon::Plus,
+        hover == Some(VariablesPanelButton::HeaderAdd),
+    );
 
     let preset = preset_button_rect(rect);
     if hover == Some(VariablesPanelButton::PresetMenu) {
-        cx.backend
-            .fill_round_rect(preset, 8.0, theme.button_hover);
+        cx.backend.fill_round_rect(preset, 8.0, theme.button_hover);
     }
     draw_icon(
         cx.backend,
@@ -340,14 +342,23 @@ fn paint_header(
     draw_icon(
         cx.backend,
         Icon::ChevronDown,
-        Point2D::new(preset.origin.x + preset.size.x - 22.0, preset.origin.y + 8.0),
+        Point2D::new(
+            preset.origin.x + preset.size.x - 22.0,
+            preset.origin.y + 8.0,
+        ),
         18.0,
         theme.muted_foreground,
         1.6,
     );
 
     let close = close_rect(rect);
-    icon_button(cx, theme, close, Icon::Close, hover == Some(VariablesPanelButton::Close));
+    icon_button(
+        cx,
+        theme,
+        close,
+        Icon::Close,
+        hover == Some(VariablesPanelButton::Close),
+    );
 
     divider(cx, theme, rect.origin.y + HEADER_H, rect);
 }
@@ -389,13 +400,20 @@ fn paint_axis_header(
             1.5,
         );
     } else {
-        for idx in 0..chips.len() {
+        for (idx, chip_info) in chips.iter().enumerate() {
             let chip = axis_chip_rect(rect, idx);
             let hovered = hover == Some(VariablesPanelButton::AxisChip(idx));
-            cx.backend
-                .fill_round_rect(chip, 8.0, if hovered { theme.button_hover } else { theme.muted });
+            cx.backend.fill_round_rect(
+                chip,
+                8.0,
+                if hovered {
+                    theme.button_hover
+                } else {
+                    theme.muted
+                },
+            );
             cx.backend.stroke_round_rect(chip, 8.0, theme.border, 1.0);
-            let label = format!("{}: {}", chips[idx].axis, chips[idx].value);
+            let label = format!("{}: {}", chip_info.axis, chip_info.value);
             draw_text(
                 cx,
                 &label,
@@ -417,8 +435,7 @@ fn paint_axis_header(
 
     let plus = header_column_add_rect(rect);
     if hover == Some(VariablesPanelButton::HeaderAdd) {
-        cx.backend
-            .fill_round_rect(plus, 8.0, theme.button_hover);
+        cx.backend.fill_round_rect(plus, 8.0, theme.button_hover);
     }
     draw_icon(
         cx.backend,
@@ -489,8 +506,7 @@ fn draw_variable_value(cx: &mut PaintCx<'_>, theme: Theme, row: &ModalRow, row_r
             };
             cx.backend
                 .fill_round_rect(swatch, 5.0, parse_hex(hex).unwrap_or(theme.muted));
-            cx.backend
-                .stroke_round_rect(swatch, 5.0, theme.border, 1.0);
+            cx.backend.stroke_round_rect(swatch, 5.0, theme.border, 1.0);
             draw_text(
                 cx,
                 hex,
@@ -530,8 +546,7 @@ fn paint_footer(
     divider(cx, theme, footer_top, rect);
     let btn = footer_add_rect(rect);
     if hover == Some(VariablesPanelButton::AddVariable) {
-        cx.backend
-            .fill_round_rect(btn, 8.0, theme.button_hover);
+        cx.backend.fill_round_rect(btn, 8.0, theme.button_hover);
     }
     draw_icon(
         cx.backend,
@@ -559,13 +574,7 @@ fn paint_footer(
     );
 }
 
-fn icon_button(
-    cx: &mut PaintCx<'_>,
-    theme: Theme,
-    rect: Rect,
-    icon: Icon,
-    hovered: bool,
-) {
+fn icon_button(cx: &mut PaintCx<'_>, theme: Theme, rect: Rect, icon: Icon, hovered: bool) {
     if hovered {
         cx.backend.fill_round_rect(rect, 8.0, theme.button_hover);
     }
@@ -648,7 +657,10 @@ fn footer_add_rect(rect: Rect) -> Rect {
 fn body_rect(rect: Rect) -> Rect {
     Rect {
         origin: Point2D::new(rect.origin.x, rect.origin.y + HEADER_H + AXIS_HEADER_H),
-        size: Point2D::new(rect.size.x, rect.size.y - HEADER_H - AXIS_HEADER_H - FOOTER_H),
+        size: Point2D::new(
+            rect.size.x,
+            rect.size.y - HEADER_H - AXIS_HEADER_H - FOOTER_H,
+        ),
     }
 }
 
@@ -663,7 +675,10 @@ fn axis_chip_rect(rect: Rect, idx: usize) -> Rect {
 fn inset(rect: Rect, x: f32, y: f32) -> Rect {
     Rect {
         origin: Point2D::new(rect.origin.x + x, rect.origin.y + y),
-        size: Point2D::new((rect.size.x - x * 2.0).max(0.0), (rect.size.y - y * 2.0).max(0.0)),
+        size: Point2D::new(
+            (rect.size.x - x * 2.0).max(0.0),
+            (rect.size.y - y * 2.0).max(0.0),
+        ),
     }
 }
 
