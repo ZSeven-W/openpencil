@@ -566,6 +566,16 @@ fn paint_text_node(
                 | crate::layout_scene::SceneTextAlign::Justify => world_rect.origin.x,
             };
             let y = first_baseline_y + idx as f32 * line_h;
+            // Ctrl/Cmd+A wash behind each line of the editing text node.
+            if let Some(c) = edit_caret {
+                if c.select_all && c.editing == node.id && line_w > 0.5 {
+                    let hl = Rect {
+                        origin: Point2D::new(x, y - font_size),
+                        size: Point2D::new(line_w, font_size * 1.2),
+                    };
+                    cx.backend.fill_round_rect(hl, 2.0, c.selection_color);
+                }
+            }
             draw_text_line(
                 cx.backend,
                 line,

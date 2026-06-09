@@ -286,6 +286,18 @@ impl<'a> IconPickerPanel<'a> {
         } else {
             self.theme.foreground
         };
+        // Ctrl/Cmd+A highlights the whole query (painted behind the text).
+        if self.state.editor_ui.icon_picker_select_all && !raw_query.is_empty() {
+            crate::widgets::text_selection::paint_single_line_selection(
+                cx,
+                &self.theme,
+                raw_query,
+                search.origin.x + 30.0,
+                search.origin.y + 18.0,
+                12.0,
+                search.origin.x + search.size.x - 8.0,
+            );
+        }
         let layout = TextLayout::single_run(
             search_text,
             "system-ui",
