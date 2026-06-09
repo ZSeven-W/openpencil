@@ -324,30 +324,39 @@ impl TopBar {
                 1.4,
             );
         } else {
-            // Light rounded backdrop behind the brand icon(s) — the TS active
-            // chip shows the provider glyph in a `bg-muted` rounded box.
-            let pad = 4.0;
-            cx.backend.fill_round_rect(
-                Rect {
-                    origin: Point2D::new(chip_rect.origin.x + 8.0 - pad, icons_y - pad),
-                    size: Point2D::new(icons_w + pad * 2.0, ICON_SIZE + pad * 2.0),
-                },
-                5.0,
-                self.theme.muted,
-            );
+            // Stacked brand chips — one rounded `bg-foreground/10` square per
+            // connected provider, overlapped with a card-coloured ring so each
+            // stays distinct (TS `top-bar.tsx`: `-space-x-1.5 ring-1 ring-card`).
+            let chip_top = center_y - AGENT_ICON_CHIP / 2.0;
+            let step = AGENT_ICON_CHIP - AGENT_ICON_OVERLAP;
+            let logo_inset = (AGENT_ICON_CHIP - AGENT_ICON_LOGO) / 2.0;
             let mut ix = chip_rect.origin.x + 8.0;
             for (i, provider) in op_editor_core::AgentProvider::ALL.iter().enumerate() {
                 if !self.connected[i] {
                     continue;
                 }
+                let chip_box = Rect {
+                    origin: Point2D::new(ix, chip_top),
+                    size: Point2D::new(AGENT_ICON_CHIP, AGENT_ICON_CHIP),
+                };
+                cx.backend.fill_round_rect(
+                    chip_box,
+                    5.0,
+                    Color {
+                        a: 0.1,
+                        ..self.theme.foreground
+                    },
+                );
+                cx.backend
+                    .stroke_round_rect(chip_box, 5.0, self.theme.card, 1.0);
                 crate::widgets::ai_chat_model_picker::paint_provider_logo(
                     cx,
                     *provider,
-                    Point2D::new(ix, icons_y),
-                    ICON_SIZE,
+                    Point2D::new(ix + logo_inset, center_y - AGENT_ICON_LOGO / 2.0),
+                    AGENT_ICON_LOGO,
                     self.theme.foreground,
                 );
-                ix += ICON_SIZE + AGENT_ICON_GAP;
+                ix += step;
             }
         }
         let mut text_x = chip_rect.origin.x + 8.0 + icons_w + 6.0;
