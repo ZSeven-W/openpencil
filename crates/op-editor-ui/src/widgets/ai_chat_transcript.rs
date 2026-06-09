@@ -16,7 +16,7 @@ use crate::theme::Theme;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::PaintCx;
 use crate::{Point2D, Rect, TextLayout};
-use op_editor_core::chat::{ChatMessage, ChatRole};
+use op_editor_core::chat::{ChatMessage, ChatRole, ChatTranscriptSelection};
 
 use super::ai_chat_transcript_completion::{
     completion_card_rect, paint_completion_card, parse_completion_summary, CompletionSummary,
@@ -25,6 +25,9 @@ use super::ai_chat_transcript_design::{
     extract_design_json_blocks, paint_design_block, place_design_blocks, DesignBlock,
 };
 pub(crate) use super::ai_chat_transcript_hit::{transcript_hit, TranscriptHit};
+use super::ai_chat_transcript_paint_parts::{paint_action_step, paint_collapsible};
+use super::ai_chat_transcript_selection::paint_user_bubble_selection;
+pub(crate) use super::ai_chat_transcript_selection::transcript_text_offset_at;
 use super::ai_chat_transcript_steps::{
     extract_step_blocks, split_design_progress, strip_tool_call_xml, ParsedStep, ParsedStepStatus,
 };
@@ -35,11 +38,11 @@ use super::ai_chat_transcript_tools::{
 };
 
 /// Body text size used throughout the transcript.
-const BODY_FONT: f32 = 12.0;
+pub(crate) const BODY_FONT: f32 = 12.0;
 /// Height of one wrapped text line.
-const LINE_H: f32 = 16.0;
+pub(crate) const LINE_H: f32 = 16.0;
 /// Inner padding inside a bubble / block box.
-const BUBBLE_PAD: f32 = 8.0;
+pub(crate) const BUBBLE_PAD: f32 = 8.0;
 /// Text shown in the TS-style empty streaming assistant pill.
 const TYPING_LABEL: &str = "Thinking";
 /// Text shown when a completed assistant action only contained hidden
@@ -56,17 +59,17 @@ const TYPING_DOT: f32 = 4.0;
 /// Horizontal gap between animated typing dots.
 const TYPING_DOT_GAP: f32 = 2.0;
 /// Height of a collapsible header row (thinking / tool-calls).
-const HEADER_H: f32 = 22.0;
+pub(crate) const HEADER_H: f32 = 22.0;
 /// Vertical gap between two messages.
 const MSG_GAP: f32 = 12.0;
 /// Vertical gap between sub-blocks within one message.
 const SUB_GAP: f32 = 4.0;
 /// Height of one compact design-progress step row.
-const ACTION_STEP_H: f32 = 28.0;
+pub(crate) const ACTION_STEP_H: f32 = 28.0;
 /// Height of one detail line under a progress step.
-const ACTION_DETAIL_LINE_H: f32 = 14.0;
+pub(crate) const ACTION_DETAIL_LINE_H: f32 = 14.0;
 /// Gap between the progress title row and detail lines.
-const ACTION_DETAIL_GAP: f32 = 4.0;
+pub(crate) const ACTION_DETAIL_GAP: f32 = 4.0;
 /// Vertical gap between compact design-progress rows.
 const ACTION_STEP_GAP: f32 = 4.0;
 /// Side length of an image thumbnail box.
@@ -75,7 +78,7 @@ const IMG_THUMB: f32 = 60.0;
 const IMG_GAP: f32 = 4.0;
 /// Approximate device px per wrap *unit* at [`BODY_FONT`]. Drives the
 /// unit budget handed to [`wrap_units`].
-const CHAR_UNIT_PX: f32 = 6.6;
+pub(crate) const CHAR_UNIT_PX: f32 = 6.6;
 /// Maximum user bubble width as a fraction of the transcript body width.
 const USER_BUBBLE_MAX_FRAC: f32 = 0.78;
 /// Minimum user bubble width so very short prompts still read as a chip.
@@ -513,7 +516,7 @@ pub(crate) fn build_transcript_with_design_hover(
 
 /// Draw one wrapped text line. Small shared helper so the bubble,
 /// thinking body and tool list paint identically.
-fn draw_line(
+pub(crate) fn draw_line(
     cx: &mut PaintCx<'_>,
     text: &str,
     x: f32,
@@ -529,147 +532,6 @@ fn draw_line(
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(&layout, Point2D::new(x, baseline_y));
-}
-
-fn paint_action_step(cx: &mut PaintCx<'_>, theme: &Theme, step: &ActionStep) {
-    cx.backend.fill_round_rect(step.rect, 6.0, theme.muted);
-    cx.backend
-        .stroke_round_rect(step.rect, 6.0, theme.border, 1.0);
-    let icon_box = Rect::xywh(
-        step.rect.origin.x + 10.0,
-        step.rect.origin.y + 7.0,
-        14.0,
-        14.0,
-    );
-    if step.failed {
-        draw_icon(
-            cx.backend,
-            Icon::XCircle,
-            Point2D::new(icon_box.origin.x, icon_box.origin.y),
-            14.0,
-            theme.destructive,
-            1.7,
-        );
-    } else if step.done {
-        draw_icon(
-            cx.backend,
-            Icon::Check,
-            Point2D::new(icon_box.origin.x, icon_box.origin.y),
-            14.0,
-            theme.primary,
-            2.1,
-        );
-    } else {
-        let color = if step.active {
-            theme.primary
-        } else {
-            theme.muted_foreground
-        };
-        let r = if step.active { 4.0 } else { 3.0 };
-        let center = Point2D::new(icon_box.origin.x + 7.0, icon_box.origin.y + 7.0);
-        cx.backend.fill_oval(
-            Rect::xywh(center.x - r, center.y - r, r * 2.0, r * 2.0),
-            color,
-        );
-    }
-    let label_color = if step.active {
-        theme.foreground
-    } else if step.failed {
-        theme.destructive
-    } else {
-        theme.muted_foreground
-    };
-    draw_line(
-        cx,
-        &step.label,
-        step.rect.origin.x + 32.0,
-        step.rect.origin.y + 18.0,
-        11.0,
-        label_color,
-    );
-    draw_icon(
-        cx.backend,
-        if step.expanded {
-            Icon::ChevronDown
-        } else {
-            Icon::ChevronRight
-        },
-        Point2D::new(
-            step.rect.origin.x + step.rect.size.x - 20.0,
-            step.rect.origin.y + 7.0,
-        ),
-        14.0,
-        theme.muted_foreground,
-        1.5,
-    );
-    if step.expanded && !step.details.is_empty() {
-        cx.backend.save();
-        cx.backend.clip_rect(step.rect);
-        let mut baseline = step.rect.origin.y + ACTION_STEP_H + ACTION_DETAIL_GAP + 9.0;
-        for line in &step.details {
-            draw_line(
-                cx,
-                line,
-                step.rect.origin.x + 32.0,
-                baseline,
-                10.0,
-                theme.muted_foreground,
-            );
-            baseline += ACTION_DETAIL_LINE_H;
-        }
-        cx.backend.restore();
-    }
-}
-
-/// Paint a collapsible block — header row (chevron + label) plus,
-/// when expanded, a tinted body box with the wrapped lines.
-fn paint_collapsible(cx: &mut PaintCx<'_>, theme: &Theme, block: &Collapsible) {
-    cx.backend.fill_round_rect(block.header, 6.0, theme.muted);
-    let icon = if block.collapsed {
-        Icon::ChevronRight
-    } else {
-        Icon::ChevronDown
-    };
-    draw_icon(
-        cx.backend,
-        icon,
-        Point2D::new(
-            block.header.origin.x + 6.0,
-            block.header.origin.y + (HEADER_H - 14.0) / 2.0,
-        ),
-        14.0,
-        theme.muted_foreground,
-        1.5,
-    );
-    draw_line(
-        cx,
-        &block.label,
-        block.header.origin.x + 26.0,
-        block.header.origin.y + HEADER_H / 2.0 + 4.0,
-        11.0,
-        theme.muted_foreground,
-    );
-    if !block.collapsed && !block.lines.is_empty() {
-        cx.backend
-            .fill_round_rect(block.body, 6.0, theme.background);
-        // Clip to the body box — a pathological unbroken token can't
-        // bleed past the estimated wrap width.
-        cx.backend.save();
-        cx.backend.clip_rect(block.body);
-        let mut baseline = block.body.origin.y + BUBBLE_PAD + 11.0;
-        for line in &block.lines {
-            draw_line(
-                cx,
-                line,
-                block.body.origin.x + BUBBLE_PAD,
-                baseline,
-                BODY_FONT,
-                theme.muted_foreground,
-            );
-            baseline += LINE_H;
-        }
-        cx.backend.restore();
-    }
 }
 
 /// Paint the animated "assistant is typing" dots after the label.
@@ -713,6 +575,7 @@ pub(crate) fn paint_transcript(
     paint_transcript_with_design_hover(cx, theme, body_rect, messages, now_ms, locale, None);
 }
 
+#[cfg(test)]
 pub(crate) fn paint_transcript_with_design_hover(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
@@ -721,6 +584,28 @@ pub(crate) fn paint_transcript_with_design_hover(
     now_ms: u64,
     locale: op_editor_core::Locale,
     design_hover: Option<(usize, usize)>,
+) {
+    paint_transcript_with_selection(
+        cx,
+        theme,
+        body_rect,
+        messages,
+        now_ms,
+        locale,
+        design_hover,
+        None,
+    );
+}
+
+pub(crate) fn paint_transcript_with_selection(
+    cx: &mut PaintCx<'_>,
+    theme: &Theme,
+    body_rect: Rect,
+    messages: &[ChatMessage],
+    now_ms: u64,
+    locale: op_editor_core::Locale,
+    design_hover: Option<(usize, usize)>,
+    selection: Option<ChatTranscriptSelection>,
 ) {
     cx.backend.save();
     cx.backend.clip_rect(body_rect);
@@ -770,6 +655,19 @@ pub(crate) fn paint_transcript_with_design_hover(
                 cx.backend.clip_rect(bubble.rect);
                 if item.role == ChatRole::User {
                     cx.backend.fill_round_rect(bubble.rect, 8.0, bg);
+                }
+                if item.role == ChatRole::User {
+                    if let Some(selection) =
+                        selection.filter(|selection| selection.message_index == item.msg_index)
+                    {
+                        paint_user_bubble_selection(
+                            cx,
+                            theme,
+                            &messages[item.msg_index].content,
+                            bubble,
+                            selection,
+                        );
+                    }
                 }
                 let text_x = match item.role {
                     ChatRole::User => bubble.rect.origin.x + BUBBLE_PAD,

@@ -99,6 +99,8 @@ pub struct AIChatPlaceholder<'a> {
     /// Last focus / edit timestamp for the model-picker search caret.
     pub model_picker_caret_anchor_ms: u64,
     pub design_hover: Option<(usize, usize)>,
+    /// Empty-state quick action card under the cursor.
+    pub example_hover: Option<usize>,
     /// Which bare header button the cursor is over (chevron / maximize
     /// / new chat) — drives their `theme.button_hover` wash.
     pub header_hover: Option<op_editor_core::ChatHeaderButton>,
@@ -138,6 +140,7 @@ impl<'a> AIChatPlaceholder<'a> {
             model_picker_select_all: ui.chat_model_picker_select_all,
             model_picker_caret_anchor_ms: ui.chat_model_picker_caret_anchor_ms,
             design_hover: ui.chat_design_block_hover,
+            example_hover: ui.chat_example_hover,
             header_hover: ui.chat_header_hover,
             footer_hover: ui.chat_footer_hover,
             examples: example_cards(ui.locale),
@@ -436,9 +439,10 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
                 &self.label_tip_select_elements,
                 &self.examples,
                 !can_use_model || self.is_streaming(),
+                self.example_hover,
             );
         } else {
-            crate::widgets::ai_chat_transcript::paint_transcript_with_design_hover(
+            crate::widgets::ai_chat_transcript::paint_transcript_with_selection(
                 cx,
                 &self.theme,
                 self.body_rect(rect),
@@ -446,6 +450,7 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
                 self.now_ms,
                 self.locale,
                 self.design_hover,
+                self.state.transcript_selection,
             );
         }
         if checklist_h > 0.0 {
@@ -455,94 +460,22 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
                 fixed_checklist_rect(rect, input_h, checklist_h),
                 &self.state.messages,
                 self.state.checklist_collapsed,
+                self.state.checklist_scroll,
             );
         }
-
-        // Borderless textarea: wrap to 3 visible rows, anchored to bottom.
         let input_rect = Rect {
             origin: Point2D::new(rect.origin.x + PAD, sep_y + 1.0),
             size: Point2D::new(rect.size.x - PAD * 2.0, INPUT_AREA_HEIGHT),
         };
-        /// Baseline-to-baseline gap for the wrapped input.
-        const LINE_H: f32 = 18.0;
-        /// Text inset inside the borderless textarea region.
-        const TEXT_X_PAD: f32 = 8.0;
-        /// Approximate text ascent used to vertically centre 1-2 visible rows.
-        const BASELINE_ASCENT: f32 = 14.0;
-        const MAX_LINES: usize = 3;
-        let text_x = input_rect.origin.x + TEXT_X_PAD;
-        let text_max_x = input_rect.origin.x + input_rect.size.x - TEXT_X_PAD;
-        let text_w = (input_rect.size.x - TEXT_X_PAD * 2.0).max(24.0);
-        let is_placeholder = self.state.input.is_empty();
-        let (text, color) = if is_placeholder {
-            (
-                self.label_input_placeholder.as_str(),
-                self.theme.muted_foreground,
-            )
-        } else {
-            (self.state.input.as_str(), self.theme.foreground)
-        };
-        let wrapped =
-            crate::widgets::canvas_viewport_overlay::wrap_text(cx.backend, text, 14.0, text_w, 400);
-        // Anchor to the bottom — keep the last `MAX_LINES` rows, the
-        // ones nearest the (end-anchored) caret.
-        let start = wrapped.len().saturating_sub(MAX_LINES);
-        let visible = &wrapped[start..];
-        let visible_rows = visible.len().max(1) as f32;
-        let block_h = visible_rows * LINE_H;
-        let first_baseline = ((INPUT_AREA_HEIGHT - block_h) / 2.0 + BASELINE_ASCENT)
-            .clamp(BASELINE_ASCENT, INPUT_AREA_HEIGHT - 4.0);
-        cx.backend.save();
-        cx.backend.clip_rect(input_rect);
-        for (i, line) in visible.iter().enumerate() {
-            let baseline = input_rect.origin.y + first_baseline + i as f32 * LINE_H;
-            if self.state.input_select_all && !is_placeholder {
-                crate::widgets::text_selection::paint_single_line_selection(
-                    cx,
-                    &self.theme,
-                    line,
-                    text_x,
-                    baseline,
-                    14.0,
-                    text_max_x,
-                );
-            }
-            let label = TextLayout::single_run(
-                line,
-                "system-ui",
-                14.0,
-                to_jian_color(color),
-                Point2D::new(0.0, 0.0),
-            );
-            cx.backend.draw_text(&label, Point2D::new(text_x, baseline));
-        }
-        cx.backend.restore();
-        let caret_visible = self.state.focused
-            && jian_core::anim::blink_visible(self.now_ms, self.state.caret_anchor_ms, 500);
-        if caret_visible {
-            // The caret tracks the input's end. On an empty buffer it
-            // sits at the start of line 0 (the placeholder text is not
-            // part of the buffer); otherwise after the last wrapped
-            // row's glyphs.
-            let (caret_x, caret_line) = if is_placeholder {
-                (text_x, 0usize)
-            } else {
-                let last = visible.last().map(String::as_str).unwrap_or("");
-                (
-                    text_x + cx.backend.measure_text(last, 14.0),
-                    visible.len().saturating_sub(1),
-                )
-            };
-            let caret_top =
-                input_rect.origin.y + first_baseline + caret_line as f32 * LINE_H - 13.0;
-            cx.backend.fill_rect(
-                Rect {
-                    origin: Point2D::new(caret_x, caret_top),
-                    size: Point2D::new(1.5, 17.0),
-                },
-                self.theme.foreground,
-            );
-        }
+        crate::widgets::ai_chat_input_text::paint_input_text_area(
+            cx,
+            &self.theme,
+            self.state,
+            input_rect,
+            INPUT_AREA_HEIGHT,
+            self.now_ms,
+            &self.label_input_placeholder,
+        );
 
         // Staged-attachment strip — between the textarea and the
         // controls row, present only when attachments are staged.

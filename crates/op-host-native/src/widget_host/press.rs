@@ -9,9 +9,9 @@
 
 use super::helpers::{rect_contains, TOOLBAR_INSET_X, TOOLBAR_INSET_Y};
 use super::{
-    ChatDragState, ChatResizeState, CodeSelectionDragState, CreateDragState, DragState,
-    HandleDragState, NodeDragState, PanelResize, PanelResizeKind, RotateDragState,
-    WidgetHostNative,
+    ChatDragState, ChatInputSelectionDragState, ChatResizeState, ChatTextSelectionDragState,
+    CodeSelectionDragState, CreateDragState, DragState, HandleDragState, NodeDragState,
+    PanelResize, PanelResizeKind, RotateDragState, WidgetHostNative,
 };
 use op_editor_core::codegen::CodeSelection;
 use op_editor_ui::widgets::{
@@ -333,6 +333,24 @@ impl WidgetHostNative {
             return true;
         }
 
+        // 0a1. Variables modal — explicit toolbar manager. It is a
+        // top-level floating surface: inside clicks are handled here,
+        // outside clicks close it instead of falling through to canvas
+        // selection or the right rail.
+        if self.editor_state.editor_ui.variables_panel_open {
+            let toolbar_rect = self.toolbar_rect(viewport_width, viewport_height);
+            let toolbar = Toolbar::for_editor(&self.editor_state);
+            if let Some(op_editor_ui::widgets::ToolbarHit::Action(
+                op_editor_ui::widgets::ToolbarAction::ToggleVariablesPanel,
+            )) = toolbar.hit_test(toolbar_rect, Point2D::new(x, y))
+            {
+                return self.dispatch_toolbar_action(
+                    op_editor_ui::widgets::ToolbarAction::ToggleVariablesPanel,
+                );
+            }
+            return self.dispatch_variables_modal_press(x, y, viewport_width, viewport_height);
+        }
+
         // 0b. TopBar — sidebar toggle button + theme + locale picker.
         self.refresh_layout_scene();
         let top_bar_rect = Rect {
@@ -508,6 +526,7 @@ impl WidgetHostNative {
                     focus: anchor,
                 });
                 self.code_selection_drag = Some(CodeSelectionDragState { anchor });
+                self.editor_state.chat.transcript_selection = None;
                 self.editor_state.codegen.framework_hover = None;
                 self.editor_state.codegen.action_hover = None;
                 self.editor_state.chat.focused = false;
@@ -579,6 +598,37 @@ impl WidgetHostNative {
                     self.mark_dirty();
                     return true;
                 }
+                if let AIChatHit::SelectInputText(anchor) = hit {
+                    self.chat_input_selection_drag = Some(ChatInputSelectionDragState { anchor });
+                    self.editor_state.chat.focused = true;
+                    self.editor_state.chat.input_select_all = false;
+                    self.editor_state.chat.input_selection =
+                        Some(op_editor_core::chat::ChatInputSelection {
+                            anchor,
+                            focus: anchor,
+                        });
+                    self.editor_state.chat.transcript_selection = None;
+                    self.editor_state.codegen.code_selection = None;
+                    self.editor_state.chat.caret_anchor_ms = self.now_ms;
+                    self.mark_dirty();
+                    return true;
+                }
+                if let AIChatHit::SelectTranscriptText(message_index, anchor) = hit {
+                    self.chat_text_selection_drag = Some(ChatTextSelectionDragState {
+                        message_index,
+                        anchor,
+                    });
+                    self.editor_state.chat.transcript_selection =
+                        Some(op_editor_core::chat::ChatTranscriptSelection {
+                            message_index,
+                            anchor,
+                            focus: anchor,
+                        });
+                    self.editor_state.codegen.code_selection = None;
+                    self.editor_state.chat.focused = false;
+                    self.mark_dirty();
+                    return true;
+                }
                 if matches!(hit, AIChatHit::DragHandle) {
                     self.chat_drag = Some(ChatDragState {
                         grab_dx: x - chat_rect.origin.x,
@@ -622,15 +672,9 @@ impl WidgetHostNative {
                         return true;
                     }
                     op_editor_ui::widgets::ToolbarHit::Action(action) => {
-                        use op_editor_ui::widgets::ToolbarAction;
                         self.editor_state.editor_ui.shape_picker_open = false;
                         self.editor_state.editor_ui.shape_picker_hover = None;
-                        let acted = match action {
-                            ToolbarAction::Undo => self.editor_state.undo(),
-                            ToolbarAction::Redo => self.editor_state.redo(),
-                            _ => false,
-                        };
-                        self.mark_dirty();
+                        let acted = self.dispatch_toolbar_action(action);
                         return acted || rename_committed || text_edit_committed;
                     }
                     op_editor_ui::widgets::ToolbarHit::ToggleShapePicker => {

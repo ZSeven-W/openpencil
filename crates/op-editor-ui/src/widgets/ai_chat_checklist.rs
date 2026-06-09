@@ -127,10 +127,21 @@ pub(crate) fn fixed_checklist_height(messages: &[ChatMessage], collapsed: bool) 
     if collapsed {
         return PROGRESS_H + HEADER_H;
     }
-    let list_h =
-        items.iter().map(item_height).sum::<f32>() + (count.saturating_sub(1) as f32 * ITEM_GAP);
-    let list_h = list_h.min(MAX_LIST_H);
+    let list_h = item_list_height(&items).min(MAX_LIST_H);
     PROGRESS_H + HEADER_H + list_h + BOTTOM_PAD
+}
+
+pub(crate) fn fixed_checklist_content_height(messages: &[ChatMessage]) -> f32 {
+    let items = fixed_checklist_items(messages);
+    item_list_height(&items)
+}
+
+pub(crate) fn fixed_checklist_max_scroll(messages: &[ChatMessage], collapsed: bool) -> f32 {
+    if collapsed {
+        return 0.0;
+    }
+    let content_h = fixed_checklist_content_height(messages);
+    (content_h - content_h.min(MAX_LIST_H)).max(0.0)
 }
 
 pub(crate) fn fixed_checklist_rect(panel_rect: Rect, input_h: f32, height: f32) -> Rect {
@@ -143,12 +154,19 @@ pub(crate) fn fixed_checklist_rect(panel_rect: Rect, input_h: f32, height: f32) 
     )
 }
 
+pub(crate) fn fixed_checklist_list_rect(rect: Rect) -> Rect {
+    let top = rect.origin.y + PROGRESS_H + HEADER_H;
+    let bottom = rect.origin.y + rect.size.y - BOTTOM_PAD;
+    Rect::xywh(rect.origin.x, top, rect.size.x, (bottom - top).max(0.0))
+}
+
 pub(crate) fn paint_fixed_checklist(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
     rect: Rect,
     messages: &[ChatMessage],
     collapsed: bool,
+    scroll: f32,
 ) {
     let items = fixed_checklist_items(messages);
     if items.is_empty() {
@@ -224,23 +242,37 @@ pub(crate) fn paint_fixed_checklist(
         return;
     }
 
-    let mut y = header_y + HEADER_H;
+    let list_rect = fixed_checklist_list_rect(rect);
+    let list_bottom = list_rect.origin.y + list_rect.size.y;
+    let scroll = scroll.clamp(0.0, fixed_checklist_max_scroll(messages, collapsed));
+    cx.backend.save();
+    cx.backend.clip_rect(list_rect);
+    let mut y = list_rect.origin.y - scroll;
     for item in &items {
         let height = item_height(item);
-        if y + height > rect.origin.y + rect.size.y - BOTTOM_PAD {
-            break;
+        if y + height >= list_rect.origin.y && y <= list_bottom {
+            paint_item(
+                cx,
+                theme,
+                item,
+                rect.origin.x + PAD,
+                y,
+                rect.size.x - PAD * 2.0,
+            );
         }
-        paint_item(
-            cx,
-            theme,
-            item,
-            rect.origin.x + PAD,
-            y,
-            rect.size.x - PAD * 2.0,
-        );
         y += height + ITEM_GAP;
     }
     cx.backend.restore();
+    cx.backend.restore();
+}
+
+fn item_list_height(items: &[ChecklistItem]) -> f32 {
+    if items.is_empty() {
+        0.0
+    } else {
+        items.iter().map(item_height).sum::<f32>()
+            + (items.len().saturating_sub(1) as f32 * ITEM_GAP)
+    }
 }
 
 fn item_height(item: &ChecklistItem) -> f32 {
@@ -533,6 +565,20 @@ Choose layout
         let detailed_h = fixed_checklist_height(&[detailed], false);
 
         assert!(detailed_h > plain_h);
+    }
+
+    #[test]
+    fn fixed_checklist_reports_scroll_overflow_for_many_steps() {
+        let mut message = ChatMessage::assistant_streaming();
+        message.content = (0..11)
+            .map(|idx| format!(r#"<step title="Task {idx}" status="done"></step>"#))
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        let messages = [message];
+
+        assert!(fixed_checklist_max_scroll(&messages, false) > 0.0);
+        assert_eq!(fixed_checklist_max_scroll(&messages, true), 0.0);
     }
 
     #[test]

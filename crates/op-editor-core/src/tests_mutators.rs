@@ -545,6 +545,21 @@ fn rebuild_chat_models_syncs_agent_to_selected_model_provider() {
 }
 
 #[test]
+fn rebuild_chat_models_keeps_connected_provider_selectable_without_discovery() {
+    let mut s = sample();
+    s.chat.discovered_models.clear();
+    s.editor_ui.agent_settings.connected = [false, true, false, false, false];
+
+    s.rebuild_chat_models();
+
+    assert!(s
+        .chat
+        .available_models
+        .iter()
+        .any(|m| m.provider == crate::AgentProvider::CodexCli));
+}
+
+#[test]
 fn rebuild_chat_models_includes_ready_builtin_agents() {
     let mut s = sample();
     let id = s.editor_ui.agent_settings.add_builtin_agent_with_defaults(
@@ -674,6 +689,11 @@ fn right_rail_visible_true_on_selection_or_variables() {
     s.clear_selection();
     // No selection + no variables → hidden.
     assert!(!s.right_rail_visible());
+    // Opening the explicit variables manager is a floating modal, not
+    // a right-rail occupant.
+    s.editor_ui.variables_panel_open = true;
+    assert!(!s.right_rail_visible());
+    s.editor_ui.variables_panel_open = false;
     // A persisted variable alone makes the rail visible.
     s.create_variable(
         "brand",

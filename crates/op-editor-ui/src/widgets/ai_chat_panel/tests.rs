@@ -175,6 +175,7 @@ fn no_model_disables_quick_action_cards() {
     let p = Point2D::new(PAD + card_w / 2.0, HEADER_HEIGHT + 32.0 + 35.0);
 
     assert_eq!(panel.hit_test(rect, p), Some(AIChatHit::DragHandle));
+    assert_eq!(panel.example_hover_at(rect, p), None);
 }
 
 #[test]
@@ -281,6 +282,46 @@ fn footer_hover_maps_bottom_toolbar_actions() {
     assert_eq!(
         panel.footer_hover_at(rect, Point2D::new(AI_CHAT_WIDTH - PAD - 16.0, y)),
         Some(op_editor_core::ChatFooterButton::Send)
+    );
+}
+
+#[test]
+fn example_hover_maps_quick_action_cards() {
+    let mut s = EditorState::new();
+    seed_available_model(&mut s);
+    let panel = AIChatPlaceholder::from_editor(&s);
+    let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
+    let cards = crate::widgets::ai_chat_panel_paint::example_card_rects(rect);
+    let p = Point2D::new(
+        cards[1].origin.x + cards[1].size.x / 2.0,
+        cards[1].origin.y + cards[1].size.y / 2.0,
+    );
+
+    assert_eq!(panel.example_hover_at(rect, p), Some(1));
+}
+
+#[test]
+fn paint_quick_action_card_hover_adds_visible_feedback() {
+    let mut s = EditorState::new();
+    seed_available_model(&mut s);
+    s.editor_ui.chat_example_hover = Some(0);
+    let panel = AIChatPlaceholder::from_editor(&s);
+    let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
+    let cards = crate::widgets::ai_chat_panel_paint::example_card_rects(rect);
+    let mut backend = PanelPaintBackend::default();
+    let mut cx = PaintCx {
+        backend: &mut backend,
+    };
+
+    panel.paint(&mut cx, rect);
+
+    assert!(
+        backend.round_rects.iter().any(|(r, radius, color)| {
+            rect_close(*r, cards[0])
+                && *radius == 8.0
+                && color_close(*color, panel.theme.button_hover)
+        }),
+        "hovered quick-action card should paint a visible hover wash"
     );
 }
 

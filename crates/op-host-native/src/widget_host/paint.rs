@@ -11,8 +11,8 @@ use op_editor_ui::widgets::editor_state_ext::theme_for;
 use op_editor_ui::widgets::{
     variables_panel::VariablesPanel, AIChatPlaceholder, AlignToolbar, CanvasViewport,
     ComponentBrowserPanel, DesignMdPanel, GitPanel, IconPickerPanel, LayerPanel, LayoutCx,
-    LocalePicker, PaintCx, PropertyPanel, ShapePicker, StatusBar, Toolbar, TopBar, Widget,
-    STATUS_BAR_HEIGHT, STATUS_BAR_WIDTH, TOOLBAR_WIDTH, TOP_BAR_HEIGHT,
+    LocalePicker, PaintCx, PropertyPanel, ShapePicker, StatusBar, Toolbar, TopBar, VariablesModal,
+    Widget, STATUS_BAR_HEIGHT, STATUS_BAR_WIDTH, TOOLBAR_WIDTH, TOP_BAR_HEIGHT,
 };
 use op_editor_ui::{Point2D, Rect, RenderBackend};
 
@@ -150,7 +150,9 @@ impl WidgetHostNative {
             canvas.paint(&mut cx, canvas_rect);
         }
 
-        // 5. PropertyPanel — only when selection.
+        // 5. PropertyPanel — selection inspector in the shared right rail.
+        // Explicit Variables uses a floating manager and no longer suppresses
+        // the inspector.
         let property_panel = PropertyPanel::for_selection_at(&self.editor_state, self.now_ms);
         let has_property = property_panel.is_some();
         let property_panel_width = ui.property_panel_width;
@@ -169,40 +171,21 @@ impl WidgetHostNative {
             panel.paint(&mut cx, property_rect);
         }
 
-        // 5b. VariablesPanel — paints whenever the document has
-        //     variables (so users with themed `.op` files see them
-        //     immediately without needing to select a node). Sits in
-        //     the same right-rail column as PropertyPanel. When a
-        //     selection is active, PropertyPanel owns the rail and
-        //     VariablesPanel paints below it; when no selection, the
-        //     Variables panel anchors at the top so it's not hidden.
-        let has_variables = self
+        // 5b. VariablesPanel — auto-shows existing variables only when
+        // the inspector is absent. The explicit toolbar action paints
+        // a floating VariablesModal later in the overlay stack.
+        let has_variable_table = self
             .editor_state
             .doc
             .variables
             .as_ref()
             .map(|v| !v.is_empty())
             .unwrap_or(false);
-        // The PropertyPanel owns the right rail whenever a node is
-        // selected (TS parity); painting the opaque VariablesPanel over
-        // it obscured the inspector (e.g. the flex alignment grid) and
-        // its press handler swallowed those clicks. Only show Variables
-        // when there is no selection inspector.
-        if has_variables && !has_property {
+        let show_variables = has_variable_table && !has_property;
+        if show_variables {
             let vars = VariablesPanel::for_editor(&self.editor_state);
             let intrinsic = vars.intrinsic_height();
-            let top_y = if has_property {
-                // Below PropertyPanel — naive offset uses the
-                // PropertyPanel's own intrinsic height proxy. The
-                // property panel paints to fill the rail, so we put
-                // Variables at the bottom of the rail above the
-                // status bar; users scroll the property pane
-                // separately. Approximate: anchor to bottom-of-rail.
-                let bottom_pad = STATUS_BAR_HEIGHT + 16.0;
-                (viewport_height - bottom_pad - intrinsic).max(TOP_BAR_HEIGHT + 8.0)
-            } else {
-                TOP_BAR_HEIGHT + 8.0
-            };
+            let top_y = TOP_BAR_HEIGHT + 8.0;
             let vars_rect = Rect {
                 origin: Point2D::new(right_rail_x, top_y),
                 size: Point2D::new(property_panel_width, intrinsic),
@@ -379,6 +362,18 @@ impl WidgetHostNative {
                 backend: &mut *frame,
             };
             picker.paint(&mut cx, picker_rect);
+        }
+
+        // 10ab. Variables manager — explicit `{}` toolbar surface. No scrim:
+        // it behaves like the large variables manager and can sit over the
+        // canvas/rail without changing canvas layout.
+        if ui.variables_panel_open {
+            let modal = VariablesModal::for_editor(&self.editor_state);
+            let modal_rect = modal.rect(viewport_width, viewport_height);
+            let mut cx = PaintCx {
+                backend: &mut *frame,
+            };
+            modal.paint(&mut cx, modal_rect);
         }
 
         // 10b. File-menu dropdown — anchored under TopBar's

@@ -273,11 +273,13 @@ impl WidgetHostNative {
         if !self.editor_state.chat.focused {
             return false;
         }
-        if self.editor_state.chat.input_select_all {
-            self.editor_state.chat.input.clear();
-            self.editor_state.chat.input_select_all = false;
+        if c.is_control() {
+            return false;
         }
-        self.editor_state.chat.input.push(c);
+        let mut s = [0u8; 4];
+        self.editor_state
+            .chat
+            .insert_input_text(c.encode_utf8(&mut s));
         self.editor_state.chat.caret_anchor_ms = self.now_ms;
         self.mark_dirty();
         true
@@ -293,11 +295,7 @@ impl WidgetHostNative {
         if !self.editor_state.chat.focused || text.is_empty() {
             return false;
         }
-        if self.editor_state.chat.input_select_all {
-            self.editor_state.chat.input.clear();
-            self.editor_state.chat.input_select_all = false;
-        }
-        self.editor_state.chat.input.push_str(text);
+        self.editor_state.chat.insert_input_text(text);
         self.editor_state.chat.caret_anchor_ms = self.now_ms;
         self.mark_dirty();
         true
@@ -332,7 +330,20 @@ impl WidgetHostNative {
         if !self.editor_state.chat.focused || self.editor_state.chat.input.is_empty() {
             return None;
         }
+        if let Some(selected) = self
+            .editor_state
+            .chat
+            .selected_input_text()
+            .map(str::to_string)
+        {
+            self.editor_state.chat.delete_input_selection();
+            self.editor_state.chat.caret_anchor_ms = self.now_ms;
+            self.mark_dirty();
+            return Some(selected);
+        }
         let taken = std::mem::take(&mut self.editor_state.chat.input);
+        self.editor_state.chat.input_select_all = false;
+        self.editor_state.chat.input_selection = None;
         self.editor_state.chat.caret_anchor_ms = self.now_ms;
         self.mark_dirty();
         Some(taken)
@@ -526,14 +537,7 @@ impl WidgetHostNative {
             return false;
         }
         if self.editor_state.chat.focused {
-            if self.editor_state.chat.input_select_all {
-                self.editor_state.chat.input.clear();
-                self.editor_state.chat.input_select_all = false;
-                self.editor_state.chat.caret_anchor_ms = self.now_ms;
-                self.mark_dirty();
-                return true;
-            }
-            if self.editor_state.chat.input.pop().is_some() {
+            if self.editor_state.chat.backspace_input() {
                 self.editor_state.chat.caret_anchor_ms = self.now_ms;
                 self.mark_dirty();
                 return true;
@@ -600,9 +604,7 @@ impl WidgetHostNative {
             }
             return false;
         }
-        if self.editor_state.chat.focused && self.editor_state.chat.input_select_all {
-            self.editor_state.chat.input.clear();
-            self.editor_state.chat.input_select_all = false;
+        if self.editor_state.chat.focused && self.editor_state.chat.delete_input_selection() {
             self.editor_state.chat.caret_anchor_ms = self.now_ms;
             self.mark_dirty();
             return true;

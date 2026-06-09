@@ -15,6 +15,7 @@ fn default_settings_are_quiescent() {
     assert!(s.image_gen_profiles.is_empty());
     assert!(s.active_image_gen_profile_id.is_none());
     assert!(s.image_gen_provider_menu_open.is_none());
+    assert!(s.hover_image_gen_provider_option.is_none());
     assert!(!s.images_advanced_open);
     assert!(s.openverse_client_id.is_empty());
     assert!(s.openverse_client_secret.is_empty());

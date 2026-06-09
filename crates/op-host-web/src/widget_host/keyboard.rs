@@ -41,11 +41,14 @@ impl WidgetHost {
         if !self.editor_state.chat.focused {
             return false;
         }
-        if self.editor_state.chat.input_select_all {
-            self.editor_state.chat.input.clear();
-            self.editor_state.chat.input_select_all = false;
+        if c.is_control() {
+            return false;
         }
-        self.editor_state.chat.input.push(c);
+        let mut s = [0u8; 4];
+        self.editor_state
+            .chat
+            .insert_input_text(c.encode_utf8(&mut s));
+        self.editor_state.chat.caret_anchor_ms = self.now_ms;
         self.mark_dirty();
         true
     }
@@ -72,13 +75,8 @@ impl WidgetHost {
             return self.apply_chat_model_picker_backspace();
         }
         if self.editor_state.chat.focused {
-            if self.editor_state.chat.input_select_all {
-                self.editor_state.chat.input.clear();
-                self.editor_state.chat.input_select_all = false;
-                self.mark_dirty();
-                return true;
-            }
-            if self.editor_state.chat.input.pop().is_some() {
+            if self.editor_state.chat.backspace_input() {
+                self.editor_state.chat.caret_anchor_ms = self.now_ms;
                 self.mark_dirty();
                 return true;
             }
@@ -152,9 +150,8 @@ impl WidgetHost {
             || self.editor_state.editor_ui.chat_model_picker_open
             || self.editor_state.chat.focused
         {
-            if self.editor_state.chat.focused && self.editor_state.chat.input_select_all {
-                self.editor_state.chat.input.clear();
-                self.editor_state.chat.input_select_all = false;
+            if self.editor_state.chat.focused && self.editor_state.chat.delete_input_selection() {
+                self.editor_state.chat.caret_anchor_ms = self.now_ms;
                 self.mark_dirty();
                 return true;
             }
@@ -271,6 +268,16 @@ impl WidgetHost {
             self.mark_dirty();
             return true;
         }
+        if self.editor_state.editor_ui.icon_picker_open {
+            self.editor_state.editor_ui.icon_picker_select_all = true;
+            self.mark_dirty();
+            return true;
+        }
+        if self.editor_state.editor_ui.component_browser_open {
+            self.editor_state.editor_ui.component_browser_select_all = true;
+            self.mark_dirty();
+            return true;
+        }
         if self.editor_state.editor_ui.chat_model_picker_open {
             let ui = &mut self.editor_state.editor_ui;
             ui.chat_model_picker_select_all = true;
@@ -281,6 +288,12 @@ impl WidgetHost {
         }
         if self.editor_state.chat.focused {
             self.editor_state.chat.input_select_all = true;
+            self.editor_state.chat.input_selection =
+                Some(op_editor_core::chat::ChatInputSelection {
+                    anchor: 0,
+                    focus: self.editor_state.chat.input.len(),
+                });
+            self.editor_state.chat.caret_anchor_ms = self.now_ms;
             self.mark_dirty();
             return true;
         }
@@ -289,6 +302,21 @@ impl WidgetHost {
 
     /// Cmd/Ctrl+C — copy the selection into the clipboard.
     pub fn apply_copy(&mut self) -> bool {
+        if self.editor_state.chat.focused {
+            if let Some(text) = self
+                .editor_state
+                .chat
+                .selected_input_text()
+                .map(str::to_string)
+            {
+                #[cfg(feature = "codegen")]
+                crate::web_clipboard::copy_text(&text);
+                #[cfg(not(feature = "codegen"))]
+                self.editor_state.chat.queue_copy_text(text);
+                return true;
+            }
+            return false;
+        }
         if self.input_active() {
             return false;
         }
@@ -297,6 +325,18 @@ impl WidgetHost {
             crate::web_clipboard::copy_text(text);
             #[cfg(not(feature = "codegen"))]
             let _ = text;
+            return true;
+        }
+        if let Some(text) = self
+            .editor_state
+            .chat
+            .selected_transcript_text()
+            .map(str::to_string)
+        {
+            #[cfg(feature = "codegen")]
+            crate::web_clipboard::copy_text(&text);
+            #[cfg(not(feature = "codegen"))]
+            self.editor_state.chat.queue_copy_text(text);
             return true;
         }
         if self.editor_state.copy_selected() {
@@ -466,7 +506,9 @@ impl WidgetHost {
             || ui.text_editing.is_some()
             || ui.property_focus.is_some()
             || self.editor_state.editor_ui.agent_settings.focus.is_some()
+            || self.editor_state.editor_ui.icon_picker_open
             || self.editor_state.editor_ui.chat_model_picker_open
+            || self.editor_state.editor_ui.component_browser_open
             || self.editor_state.chat.focused
     }
 

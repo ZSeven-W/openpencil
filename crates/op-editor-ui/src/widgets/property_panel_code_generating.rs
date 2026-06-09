@@ -1,3 +1,4 @@
+use super::code_i18n::CodePanelStrings;
 use super::{action_hovered, code_neutral_hover_color, paint_full_button, FullButtonStyle};
 use crate::theme::Theme;
 use crate::widgets::icons::{draw_icon, Icon};
@@ -21,6 +22,7 @@ pub(super) fn paint_generating_body(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
     state: &CodegenState,
+    strings: CodePanelStrings,
     x: f32,
     y: f32,
     w: f32,
@@ -30,7 +32,7 @@ pub(super) fn paint_generating_body(
     cx.backend.fill_round_rect(card, CARD_RADIUS, theme.muted);
     cx.backend
         .stroke_round_rect(card, CARD_RADIUS, theme.border, 1.0);
-    paint_header(cx, theme, state, card);
+    paint_header(cx, theme, state, strings, card);
 
     let mut row_y = card.origin.y + CARD_PAD_Y + HEADER_H;
     paint_step(
@@ -38,11 +40,12 @@ pub(super) fn paint_generating_body(
         theme,
         StepPaint {
             rect: step_rect(card, row_y),
-            label: "Planning",
+            label: strings.planning(),
             status: phase_status(state.progress.planning_done),
             first: true,
             last: step_count(state) == 1,
             now_ms,
+            strings,
         },
     );
     row_y += STEP_H;
@@ -58,6 +61,7 @@ pub(super) fn paint_generating_body(
                 first: false,
                 last: false,
                 now_ms,
+                strings,
             },
         );
         row_y += STEP_H;
@@ -68,18 +72,19 @@ pub(super) fn paint_generating_body(
         theme,
         StepPaint {
             rect: step_rect(card, row_y),
-            label: "Assembly",
+            label: strings.assembly(),
             status: phase_status(state.progress.assembly_done),
             first: false,
             last: true,
             now_ms,
+            strings,
         },
     );
 
     paint_full_button(
         cx,
         theme,
-        "Cancel",
+        strings.cancel(),
         x,
         generating_cancel_y(state, y),
         w,
@@ -113,7 +118,13 @@ fn step_rect(card: Rect, y: f32) -> Rect {
     }
 }
 
-fn paint_header(cx: &mut PaintCx<'_>, theme: &Theme, state: &CodegenState, card: Rect) {
+fn paint_header(
+    cx: &mut PaintCx<'_>,
+    theme: &Theme,
+    state: &CodegenState,
+    strings: CodePanelStrings,
+    card: Rect,
+) {
     let badge = Rect {
         origin: Point2D::new(card.origin.x + 12.0, card.origin.y + 12.0),
         size: Point2D::new(24.0, 24.0),
@@ -130,7 +141,7 @@ fn paint_header(cx: &mut PaintCx<'_>, theme: &Theme, state: &CodegenState, card:
     );
     draw_text(
         cx,
-        &format!("Generating {}", state.framework.display_name()),
+        &strings.generating_framework(state.framework),
         12.0,
         theme.foreground,
         card.origin.x + 44.0,
@@ -138,7 +149,7 @@ fn paint_header(cx: &mut PaintCx<'_>, theme: &Theme, state: &CodegenState, card:
     );
     draw_text(
         cx,
-        "Preparing production code",
+        strings.preparing_production(),
         10.0,
         theme.muted_foreground,
         card.origin.x + 44.0,
@@ -154,6 +165,7 @@ struct StepPaint<'a> {
     first: bool,
     last: bool,
     now_ms: u64,
+    strings: CodePanelStrings,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -203,7 +215,8 @@ fn paint_step(cx: &mut PaintCx<'_>, theme: &Theme, step: StepPaint<'_>) {
         );
     }
 
-    let (icon, icon_color, label_color, status_label) = step_style(theme, step.status);
+    let (icon, icon_color, label_color, status_label) =
+        step_style(theme, step.status, step.strings);
     paint_step_icon(cx, icon, icon_color, Point2D::new(center_x, center_y), step);
     draw_text(
         cx,
@@ -248,27 +261,36 @@ fn loader_rotation_radians(now_ms: u64) -> f32 {
     (now_ms as f32 % PERIOD_MS) / PERIOD_MS * std::f32::consts::TAU
 }
 
-fn step_style(theme: &Theme, status: StepStatus) -> (Icon, Color, Color, &'static str) {
+fn step_style(
+    theme: &Theme,
+    status: StepStatus,
+    strings: CodePanelStrings,
+) -> (Icon, Color, Color, &'static str) {
     match status {
         StepStatus::Waiting => (
             Icon::Minus,
             theme.muted_foreground,
             theme.muted_foreground,
-            "Waiting",
+            strings.waiting(),
         ),
-        StepStatus::Running => (Icon::Loader, theme.primary, theme.foreground, "Running"),
-        StepStatus::Done => (Icon::Check, theme.primary, theme.foreground, "Done"),
+        StepStatus::Running => (
+            Icon::Loader,
+            theme.primary,
+            theme.foreground,
+            strings.running(),
+        ),
+        StepStatus::Done => (Icon::Check, theme.primary, theme.foreground, strings.done()),
         StepStatus::Failed => (
             Icon::AlertTriangle,
             theme.destructive,
             theme.destructive,
-            "Issue",
+            strings.issue(),
         ),
         StepStatus::Skipped => (
             Icon::Minus,
             theme.muted_foreground,
             theme.muted_foreground,
-            "Skipped",
+            strings.skipped(),
         ),
     }
 }

@@ -35,6 +35,12 @@ pub struct ModelProbe {
 }
 
 impl ModelProbe {
+    /// Idle probe with no worker attached. Used by tests and by any
+    /// future caller that wants to opt out of startup discovery.
+    pub fn idle() -> Self {
+        Self { rx: None }
+    }
+
     /// Spawn the discovery worker. Returns immediately.
     pub fn spawn() -> Self {
         let (tx, rx) = mpsc::channel();
@@ -42,6 +48,19 @@ impl ModelProbe {
             let _ = tx.send(discover_models());
         });
         Self { rx: Some(rx) }
+    }
+
+    /// Whether discovery is still in flight. The desktop runner uses
+    /// this to keep waking the idle event loop until the worker result
+    /// is drained into the chat model catalog.
+    pub fn is_pending(&self) -> bool {
+        self.rx.is_some()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn pending_for_test() -> (Self, mpsc::Sender<Vec<ModelEntry>>) {
+        let (tx, rx) = mpsc::channel();
+        (Self { rx: Some(rx) }, tx)
     }
 
     /// If discovery has finished, move its models into the host's
@@ -574,6 +593,15 @@ mod tests {
     #[test]
     fn discovery_order_matches_ts_default_provider_order() {
         assert_eq!(discovery_provider_order(), AgentProvider::ALL);
+    }
+
+    #[test]
+    fn model_probe_reports_pending_state() {
+        let idle = ModelProbe::idle();
+        assert!(!idle.is_pending());
+
+        let (pending, _tx) = ModelProbe::pending_for_test();
+        assert!(pending.is_pending());
     }
 
     #[test]

@@ -71,6 +71,7 @@ mod settings_caret;
 mod settings_caret_tests;
 #[cfg(test)]
 mod theme_tests;
+mod toolbar_actions;
 
 pub(in crate::widget_host) const TOOLBAR_INSET_X: f32 = 12.0;
 pub(in crate::widget_host) const TOOLBAR_INSET_Y: f32 = 12.0;
@@ -107,6 +108,10 @@ pub struct WidgetHost {
     image_adjustment_drag: Option<op_editor_core::ImageAdjustmentField>,
     /// Active generated-code preview text selection drag.
     code_selection_drag: Option<CodeSelectionDragState>,
+    /// Active chat input text selection drag.
+    chat_input_selection_drag: Option<ChatInputSelectionDragState>,
+    /// Active chat transcript text selection drag.
+    chat_text_selection_drag: Option<ChatTextSelectionDragState>,
     /// Active marquee rect-select drag. Mirrors the native host —
     /// drag a rect on empty canvas with the Select tool, every
     /// intersecting top-level node joins (or extends) the
@@ -188,6 +193,17 @@ struct CodeSelectionDragState {
     anchor: usize,
 }
 
+#[derive(Debug, Clone, Copy)]
+struct ChatInputSelectionDragState {
+    anchor: usize,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct ChatTextSelectionDragState {
+    message_index: usize,
+    anchor: usize,
+}
+
 /// Active marquee rect-select state, mirroring the native host.
 /// Endpoints are SCREEN coords so paint can draw without re-
 /// deriving the canvas→screen transform; release converts to doc
@@ -234,6 +250,8 @@ impl WidgetHost {
             chat_drag: None,
             image_adjustment_drag: None,
             code_selection_drag: None,
+            chat_input_selection_drag: None,
+            chat_text_selection_drag: None,
             marquee_drag: None,
             layer_drag: None,
             next_node_id: 100,
@@ -288,8 +306,8 @@ impl WidgetHost {
         } else {
             0.0
         };
-        let has_property = self.editor_state.property_panel_visible();
-        let canvas_right = if has_property {
+        let rail_occupied = self.editor_state.right_rail_visible();
+        let canvas_right = if rail_occupied {
             viewport_w - self.editor_state.editor_ui.property_panel_width
         } else {
             viewport_w
@@ -347,6 +365,107 @@ impl WidgetHost {
         true
     }
 
+    fn chat_transcript_text_offset_at_screen(&self, x: f32, y: f32) -> Option<(usize, usize)> {
+        let chat_rect = self.ai_chat_rect(self.last_viewport_w, self.last_viewport_h)?;
+        match op_editor_ui::widgets::AIChatPlaceholder::from_editor_at(
+            &self.editor_state,
+            self.now_ms,
+        )
+        .hit_test(chat_rect, Point2D::new(x, y))
+        {
+            Some(op_editor_ui::widgets::AIChatHit::SelectTranscriptText(message_index, offset)) => {
+                Some((message_index, offset))
+            }
+            _ => None,
+        }
+    }
+
+    fn chat_input_text_offset_at_screen(&self, x: f32, y: f32) -> Option<usize> {
+        let chat_rect = self.ai_chat_rect(self.last_viewport_w, self.last_viewport_h)?;
+        match op_editor_ui::widgets::AIChatPlaceholder::from_editor_at(
+            &self.editor_state,
+            self.now_ms,
+        )
+        .hit_test(chat_rect, Point2D::new(x, y))
+        {
+            Some(op_editor_ui::widgets::AIChatHit::SelectInputText(offset)) => Some(offset),
+            _ => None,
+        }
+    }
+
+    fn apply_chat_input_selection_drag_cursor_move(&mut self, x: f32, y: f32) -> bool {
+        let Some(drag) = self.chat_input_selection_drag else {
+            return false;
+        };
+        if let Some(focus) = self.chat_input_text_offset_at_screen(x, y) {
+            let next = Some(op_editor_core::chat::ChatInputSelection {
+                anchor: drag.anchor,
+                focus,
+            });
+            if self.editor_state.chat.input_selection != next {
+                self.editor_state.chat.input_selection = next;
+                self.editor_state.chat.input_select_all = false;
+                self.editor_state.chat.focused = true;
+                self.editor_state.chat.caret_anchor_ms = self.now_ms;
+                self.mark_dirty();
+            }
+        }
+        true
+    }
+
+    fn apply_chat_text_selection_drag_cursor_move(&mut self, x: f32, y: f32) -> bool {
+        let Some(drag) = self.chat_text_selection_drag else {
+            return false;
+        };
+        if let Some((message_index, focus)) = self.chat_transcript_text_offset_at_screen(x, y) {
+            if message_index == drag.message_index {
+                let next = Some(op_editor_core::chat::ChatTranscriptSelection {
+                    message_index,
+                    anchor: drag.anchor,
+                    focus,
+                });
+                if self.editor_state.chat.transcript_selection != next {
+                    self.editor_state.chat.transcript_selection = next;
+                    self.mark_dirty();
+                }
+            }
+        }
+        true
+    }
+
+    fn try_scroll_chat_checklist(
+        &mut self,
+        x: f32,
+        y: f32,
+        delta: f32,
+        viewport_width: f32,
+        viewport_height: f32,
+    ) -> bool {
+        let point = Point2D::new(x, y);
+        let Some(chat_rect) = self.ai_chat_rect(viewport_width, viewport_height) else {
+            return false;
+        };
+        let (checklist, max) = {
+            let panel = op_editor_ui::widgets::AIChatPlaceholder::from_editor_at(
+                &self.editor_state,
+                self.now_ms,
+            );
+            let Some(checklist) = panel.fixed_checklist_bounds(chat_rect) else {
+                return false;
+            };
+            (checklist, panel.fixed_checklist_scroll_max())
+        };
+        if !rect_contains(checklist, point) {
+            return false;
+        }
+        let next = (self.editor_state.chat.checklist_scroll - delta).clamp(0.0, max);
+        if next != self.editor_state.chat.checklist_scroll {
+            self.editor_state.chat.checklist_scroll = next;
+            self.mark_dirty();
+        }
+        true
+    }
+
     /// Wheel zoom centered on the cursor when over the canvas.
     pub fn apply_wheel(
         &mut self,
@@ -384,6 +503,9 @@ impl WidgetHost {
                 return true;
             }
         }
+        if self.try_scroll_chat_checklist(x, y, delta_y, viewport_width, viewport_height) {
+            return true;
+        }
         // Side rails scroll their panels instead of zooming the
         // canvas (`widget_host/scroll.rs`).
         if self.try_scroll_property_panel(x, y, delta_y, viewport_width, viewport_height) {
@@ -418,6 +540,11 @@ impl WidgetHost {
         viewport_width: f32,
         viewport_height: f32,
     ) -> bool {
+        self.last_viewport_w = viewport_width;
+        self.last_viewport_h = viewport_height;
+        if self.try_scroll_chat_checklist(x, y, dy, viewport_width, viewport_height) {
+            return true;
+        }
         if !self.over_canvas(x, y, viewport_width, viewport_height) {
             return false;
         }
@@ -477,12 +604,18 @@ impl WidgetHost {
         use op_editor_ui::widgets::agent_settings_panel::{AgentSettingsHit, AgentSettingsPanel};
         let point = Point2D::new(x, y);
         let (
+            close_hover,
             server_hover,
             copy_hover,
             add_provider_hover,
             add_acp_hover,
             image_search_test_hover,
             image_add_hover,
+            image_profile_header_hover,
+            image_profile_remove_hover,
+            image_profile_provider_hover,
+            image_profile_test_hover,
+            image_provider_option_hover,
             new_hover,
         ) = {
             let panel = AgentSettingsPanel::for_editor(&self.editor_state);
@@ -500,6 +633,7 @@ impl WidgetHost {
                 self.editor_state.editor_ui.agent_settings.tab,
                 AgentSettingsTab::Mcp
             ) && matches!(hit, AgentSettingsHit::CopyMcpClientConfig);
+            let close_hover = matches!(hit, AgentSettingsHit::Close);
             let server_hover = matches!(
                 self.editor_state.editor_ui.agent_settings.tab,
                 AgentSettingsTab::Mcp
@@ -510,18 +644,76 @@ impl WidgetHost {
                 is_images && panel.image_search_test_button_hover_at(panel_rect, point);
             let image_add_hover =
                 is_images && panel.image_gen_add_button_hover_at(panel_rect, point);
+            let image_profile_header_hover = if is_images {
+                match hit {
+                    AgentSettingsHit::ToggleGenConfigEditor(index) => Some(index),
+                    _ => None,
+                }
+            } else {
+                None
+            };
+            let image_profile_remove_hover = if is_images {
+                match hit {
+                    AgentSettingsHit::RemoveGenConfig(index) => Some(index),
+                    _ => None,
+                }
+            } else {
+                None
+            };
+            let image_profile_provider_hover = if is_images {
+                match hit {
+                    AgentSettingsHit::ToggleGenProviderMenu(index) => Some(index),
+                    _ => None,
+                }
+            } else {
+                None
+            };
+            let image_profile_test_hover = if is_images {
+                panel.image_gen_profile_test_button_hover_at(panel_rect, point)
+            } else {
+                None
+            };
+            let image_provider_option_hover = if is_images {
+                match hit {
+                    AgentSettingsHit::SelectGenProvider { index, provider } => {
+                        Some((index, provider))
+                    }
+                    _ => None,
+                }
+            } else {
+                None
+            };
             let new_hover = panel.builtin_preset_hover_at(panel_rect, point);
             (
+                close_hover,
                 server_hover,
                 copy_hover,
                 add_provider_hover,
                 add_acp_hover,
                 image_search_test_hover,
                 image_add_hover,
+                image_profile_header_hover,
+                image_profile_remove_hover,
+                image_profile_provider_hover,
+                image_profile_test_hover,
+                image_provider_option_hover,
                 new_hover,
             )
         };
         let mut changed = false;
+        if close_hover
+            != self
+                .editor_state
+                .editor_ui
+                .agent_settings
+                .hover_agent_settings_close
+        {
+            self.editor_state
+                .editor_ui
+                .agent_settings
+                .hover_agent_settings_close = close_hover;
+            changed = true;
+        }
         if server_hover
             != self
                 .editor_state
@@ -613,6 +805,71 @@ impl WidgetHost {
                 .hover_image_gen_add_button = image_add_hover;
             changed = true;
         }
+        if image_profile_header_hover
+            != self
+                .editor_state
+                .editor_ui
+                .agent_settings
+                .hover_image_gen_profile_header
+        {
+            self.editor_state
+                .editor_ui
+                .agent_settings
+                .hover_image_gen_profile_header = image_profile_header_hover;
+            changed = true;
+        }
+        if image_profile_remove_hover
+            != self
+                .editor_state
+                .editor_ui
+                .agent_settings
+                .hover_image_gen_profile_remove
+        {
+            self.editor_state
+                .editor_ui
+                .agent_settings
+                .hover_image_gen_profile_remove = image_profile_remove_hover;
+            changed = true;
+        }
+        if image_profile_provider_hover
+            != self
+                .editor_state
+                .editor_ui
+                .agent_settings
+                .hover_image_gen_profile_provider
+        {
+            self.editor_state
+                .editor_ui
+                .agent_settings
+                .hover_image_gen_profile_provider = image_profile_provider_hover;
+            changed = true;
+        }
+        if image_profile_test_hover
+            != self
+                .editor_state
+                .editor_ui
+                .agent_settings
+                .hover_image_gen_profile_test
+        {
+            self.editor_state
+                .editor_ui
+                .agent_settings
+                .hover_image_gen_profile_test = image_profile_test_hover;
+            changed = true;
+        }
+        if image_provider_option_hover
+            != self
+                .editor_state
+                .editor_ui
+                .agent_settings
+                .hover_image_gen_provider_option
+        {
+            self.editor_state
+                .editor_ui
+                .agent_settings
+                .hover_image_gen_provider_option = image_provider_option_hover;
+            changed = true;
+        }
         if changed {
             self.mark_dirty();
         }
@@ -666,6 +923,12 @@ impl WidgetHost {
                     return true;
                 }
             }
+        }
+        if self.apply_chat_text_selection_drag_cursor_move(x, y) {
+            return true;
+        }
+        if self.apply_chat_input_selection_drag_cursor_move(x, y) {
+            return true;
         }
         if self.apply_code_selection_drag_cursor_move(x, y) {
             return true;
@@ -805,6 +1068,25 @@ impl WidgetHost {
             self.mark_dirty();
             return true;
         }
+        if let Some(chat_rect) = self.ai_chat_rect(self.last_viewport_w, self.last_viewport_h) {
+            use op_editor_ui::widgets::AIChatPlaceholder;
+            let new_hover = AIChatPlaceholder::from_editor_at(&self.editor_state, self.now_ms)
+                .example_hover_at(chat_rect, Point2D::new(x, y));
+            if new_hover != self.editor_state.editor_ui.chat_example_hover {
+                self.editor_state.editor_ui.chat_example_hover = new_hover;
+                self.mark_dirty();
+                return true;
+            }
+        } else if self
+            .editor_state
+            .editor_ui
+            .chat_example_hover
+            .take()
+            .is_some()
+        {
+            self.mark_dirty();
+            return true;
+        }
         // PropertyPanel tab/action hover wash. Shown with a selection.
         let mut property_hover_changed = false;
         if self.editor_state.property_panel_visible() {
@@ -855,10 +1137,11 @@ impl WidgetHost {
                 size: Point2D::new(pw, (self.last_viewport_h - TOP_BAR_HEIGHT).max(0.0)),
             };
             if x >= panel_x && x <= self.last_viewport_w {
-                op_editor_ui::widgets::property_panel_code::code_hover_at(
+                op_editor_ui::widgets::property_panel_code::code_hover_at_with_locale(
                     panel_rect,
                     &self.editor_state.codegen,
                     Point2D::new(x, y),
+                    self.editor_state.editor_ui.locale,
                 )
             } else {
                 (None, None)
@@ -971,6 +1254,12 @@ impl WidgetHost {
         if self.code_selection_drag.take().is_some() {
             return true;
         }
+        if self.chat_input_selection_drag.take().is_some() {
+            return true;
+        }
+        if self.chat_text_selection_drag.take().is_some() {
+            return true;
+        }
         if let Some(d) = self.layer_drag.take() {
             return self.commit_layer_drag(d, viewport_h);
         }
@@ -1006,6 +1295,12 @@ impl WidgetHost {
             return true;
         }
         if self.code_selection_drag.take().is_some() {
+            return true;
+        }
+        if self.chat_input_selection_drag.take().is_some() {
+            return true;
+        }
+        if self.chat_text_selection_drag.take().is_some() {
             return true;
         }
         if self.layer_drag.take().is_some() {

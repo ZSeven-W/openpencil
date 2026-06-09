@@ -63,3 +63,31 @@ fn layer_panel_trackpad_pan_scrolls_horizontally() {
         assert!(host.editor_state().editor_ui.layer_layers_h_scroll > 0.0);
     });
 }
+
+#[test]
+fn chat_checklist_wheel_scrolls_pinned_task_list() {
+    let mut host = WidgetHostNative::new();
+    let viewport_w = 1200.0;
+    let viewport_h = 800.0;
+    let mut message = op_editor_core::ChatMessage::assistant_streaming();
+    message.content = (0..11)
+        .map(|idx| format!(r#"<step title="Task {idx}" status="done"></step>"#))
+        .collect::<Vec<_>>()
+        .join("\n");
+    host.editor_state_mut().chat.messages.push(message);
+
+    let chat_rect = host.ai_chat_rect(viewport_w, viewport_h).unwrap();
+    let panel = op_editor_ui::widgets::AIChatPlaceholder::from_editor(host.editor_state());
+    let checklist = panel.fixed_checklist_bounds(chat_rect).unwrap();
+    assert!(panel.fixed_checklist_scroll_max() > 0.0);
+
+    assert!(host.apply_wheel(
+        checklist.origin.x + checklist.size.x / 2.0,
+        checklist.origin.y + checklist.size.y - 16.0,
+        -80.0,
+        viewport_w,
+        viewport_h
+    ));
+
+    assert!(host.editor_state().chat.checklist_scroll > 0.0);
+}

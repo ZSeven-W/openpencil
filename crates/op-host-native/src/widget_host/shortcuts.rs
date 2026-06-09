@@ -7,11 +7,32 @@ use op_editor_core::ReorderDirection;
 impl WidgetHostNative {
     /// Cmd-C — copy selection to clipboard.
     pub fn apply_copy(&mut self) -> bool {
+        if self.editor_state.chat.focused {
+            if let Some(text) = self
+                .editor_state
+                .chat
+                .selected_input_text()
+                .map(str::to_string)
+            {
+                self.editor_state.chat.queue_copy_text(text);
+                return true;
+            }
+            return false;
+        }
         if self.input_active() {
             return false;
         }
         if let Some(text) = self.editor_state.codegen.selected_code_text() {
             self.editor_state.chat.queue_copy_text(text.to_string());
+            return true;
+        }
+        if let Some(text) = self
+            .editor_state
+            .chat
+            .selected_transcript_text()
+            .map(str::to_string)
+        {
+            self.editor_state.chat.queue_copy_text(text);
             return true;
         }
         // Clipboard is transient editor state — no paint change.
@@ -142,6 +163,11 @@ impl WidgetHostNative {
         }
         if self.editor_state.chat.focused {
             self.editor_state.chat.input_select_all = true;
+            self.editor_state.chat.input_selection =
+                Some(op_editor_core::chat::ChatInputSelection {
+                    anchor: 0,
+                    focus: self.editor_state.chat.input.len(),
+                });
             self.editor_state.chat.caret_anchor_ms = self.now_ms;
             self.mark_dirty();
             return true;

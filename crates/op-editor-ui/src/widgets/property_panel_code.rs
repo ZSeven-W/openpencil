@@ -14,8 +14,12 @@ use crate::widgets::property_panel_inputs::{
 };
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
+use code_i18n::CodePanelStrings;
 use op_editor_core::codegen::{CodegenHover, CodegenPhase, CodegenState, Framework};
+use op_i18n::Locale;
 
+#[path = "property_panel_code_i18n.rs"]
+mod code_i18n;
 #[path = "property_panel_code_complete.rs"]
 mod complete;
 #[path = "property_panel_code_generating.rs"]
@@ -29,13 +33,22 @@ pub fn code_action_hit(
     state: &CodegenState,
     point: Point2D,
 ) -> Option<PropertyPanelAction> {
+    code_action_hit_with_locale(panel_rect, state, point, Locale::EnUs)
+}
+
+pub fn code_action_hit_with_locale(
+    panel_rect: Rect,
+    state: &CodegenState,
+    point: Point2D,
+    locale: Locale,
+) -> Option<PropertyPanelAction> {
     let inside = |r: Rect| {
         point.x >= r.origin.x
             && point.x <= r.origin.x + r.size.x
             && point.y >= r.origin.y
             && point.y <= r.origin.y + r.size.y
     };
-    code_action_rects_in_panel(panel_rect, state)
+    code_action_rects_in_panel_with_locale(panel_rect, state, locale)
         .into_iter()
         .find(|(_, r)| inside(*r))
         .map(|(a, _)| PropertyPanelAction::Codegen(a))
@@ -48,13 +61,22 @@ pub fn code_hover_at(
     state: &CodegenState,
     point: Point2D,
 ) -> (Option<Framework>, Option<CodegenHover>) {
+    code_hover_at_with_locale(panel_rect, state, point, Locale::EnUs)
+}
+
+pub fn code_hover_at_with_locale(
+    panel_rect: Rect,
+    state: &CodegenState,
+    point: Point2D,
+    locale: Locale,
+) -> (Option<Framework>, Option<CodegenHover>) {
     let inside = |r: Rect| {
         point.x >= r.origin.x
             && point.x <= r.origin.x + r.size.x
             && point.y >= r.origin.y
             && point.y <= r.origin.y + r.size.y
     };
-    let hit = code_action_rects_in_panel(panel_rect, state)
+    let hit = code_action_rects_in_panel_with_locale(panel_rect, state, locale)
         .into_iter()
         .find(|(_, r)| inside(*r))
         .map(|(a, _)| a);
@@ -599,6 +621,7 @@ fn paint_idle_body(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
     state: &CodegenState,
+    strings: CodePanelStrings,
     x: f32,
     body_y: f32,
     w: f32,
@@ -624,10 +647,10 @@ fn paint_idle_body(
     let badge_bottom = badge.origin.y + BADGE_SIZE;
     // 2. Title — the panel only shows for a live selection, so ≥ 1.
     let n = state.selection_snapshot.len().max(1);
-    let title = format!("{n} node selected");
+    let title = strings.selected_nodes(n);
     draw_centered_line(cx, &title, theme.foreground, x, w, badge_bottom + 18.0);
     // 3. Subtitle.
-    let sub = "Generate production-ready code";
+    let sub = strings.idle_subtitle();
     draw_centered_line(cx, sub, theme.muted_foreground, x, w, badge_bottom + 38.0);
     let gen = idle_generate_y(state, body_y);
     // 4. Optional error row, above the Generate button.
@@ -642,7 +665,7 @@ fn paint_idle_body(
         );
     }
     // 5. Generate button — primary fill + sparkle + "Generate <Framework>".
-    let generate = format!("Generate {}", state.framework.display_name());
+    let generate = strings.generate_framework(state.framework);
     let gen_rect = idle_btn_rect(x, w, gen);
     paint_centered_icon_label(
         cx,
@@ -660,7 +683,7 @@ fn paint_idle_body(
         cx,
         theme,
         Icon::Braces,
-        "Export AI Bundle",
+        strings.export_ai_bundle(),
         bundle,
         false,
         action_hovered(state, CodegenHover::ExportBundle),
@@ -678,16 +701,20 @@ fn paint_error_body(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
     state: &CodegenState,
+    strings: CodePanelStrings,
     x: f32,
     y: f32,
     w: f32,
 ) -> f32 {
-    let msg = state.error.as_deref().unwrap_or("Generation failed");
+    let msg = state
+        .error
+        .as_deref()
+        .unwrap_or(strings.generation_failed());
     draw_line(cx, msg, theme.destructive, x + PAD_X, y + 16.0);
     paint_full_button(
         cx,
         theme,
-        "Regenerate",
+        strings.regenerate(),
         x,
         error_regenerate_y(y),
         w,
@@ -708,7 +735,7 @@ pub fn paint_code_panel(
     y: f32,
     w: f32,
 ) -> f32 {
-    paint_code_panel_at(cx, theme, state, x, y, w, 0)
+    paint_code_panel_at_with_locale(cx, theme, state, Locale::EnUs, x, y, w, 0)
 }
 
 /// Paint the full Code panel with a host clock for animated affordances.
@@ -721,10 +748,24 @@ pub fn paint_code_panel_at(
     w: f32,
     now_ms: u64,
 ) -> f32 {
+    paint_code_panel_at_with_locale(cx, theme, state, Locale::EnUs, x, y, w, now_ms)
+}
+
+pub fn paint_code_panel_at_with_locale(
+    cx: &mut PaintCx<'_>,
+    theme: &Theme,
+    state: &CodegenState,
+    locale: Locale,
+    x: f32,
+    y: f32,
+    w: f32,
+    now_ms: u64,
+) -> f32 {
     paint_code_panel_with_bottom(
         cx,
         theme,
         state,
+        CodePanelStrings::new(locale),
         CodePanelLayout {
             x,
             y,
@@ -744,10 +785,22 @@ pub fn paint_code_panel_in_panel(
     panel_rect: Rect,
     now_ms: u64,
 ) -> f32 {
+    paint_code_panel_in_panel_with_locale(cx, theme, state, Locale::EnUs, panel_rect, now_ms)
+}
+
+pub fn paint_code_panel_in_panel_with_locale(
+    cx: &mut PaintCx<'_>,
+    theme: &Theme,
+    state: &CodegenState,
+    locale: Locale,
+    panel_rect: Rect,
+    now_ms: u64,
+) -> f32 {
     paint_code_panel_with_bottom(
         cx,
         theme,
         state,
+        CodePanelStrings::new(locale),
         CodePanelLayout {
             x: panel_rect.origin.x,
             y: panel_rect.origin.y + TAB_HEIGHT,
@@ -762,23 +815,25 @@ fn paint_code_panel_with_bottom(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
     state: &CodegenState,
+    strings: CodePanelStrings,
     layout: CodePanelLayout,
     now_ms: u64,
 ) -> f32 {
     // A faint section label keeps the panel head consistent with Design.
     let x = layout.x;
     let w = layout.w;
-    let mut y = paint_section_label(cx, theme, "Code", x, layout.y, w);
+    let mut y = paint_section_label(cx, theme, strings.title(), x, layout.y, w);
     y = paint_framework_chips(cx, theme, state, x, y, w);
     match state.phase {
-        CodegenPhase::Idle => paint_idle_body(cx, theme, state, x, y, w),
+        CodegenPhase::Idle => paint_idle_body(cx, theme, state, strings, x, y, w),
         CodegenPhase::Generating => {
-            generating::paint_generating_body(cx, theme, state, x, y, w, now_ms)
+            generating::paint_generating_body(cx, theme, state, strings, x, y, w, now_ms)
         }
         CodegenPhase::Complete => complete::paint_complete_body_in_panel(
             cx,
             theme,
             state,
+            strings,
             complete::CompleteLayout {
                 x,
                 y,
@@ -787,7 +842,7 @@ fn paint_code_panel_with_bottom(
                 panel_bottom: layout.panel_bottom,
             },
         ),
-        CodegenPhase::Error => paint_error_body(cx, theme, state, x, y, w),
+        CodegenPhase::Error => paint_error_body(cx, theme, state, strings, x, y, w),
     }
 }
 
@@ -800,12 +855,20 @@ pub fn code_action_rects(
     w: f32,
     state: &CodegenState,
 ) -> Vec<(CodegenAction, Rect)> {
-    code_action_rects_with_bottom(x, y, w, state, None)
+    code_action_rects_with_bottom(x, y, w, state, None, CodePanelStrings::new(Locale::EnUs))
 }
 
 pub fn code_action_rects_in_panel(
     panel_rect: Rect,
     state: &CodegenState,
+) -> Vec<(CodegenAction, Rect)> {
+    code_action_rects_in_panel_with_locale(panel_rect, state, Locale::EnUs)
+}
+
+pub fn code_action_rects_in_panel_with_locale(
+    panel_rect: Rect,
+    state: &CodegenState,
+    locale: Locale,
 ) -> Vec<(CodegenAction, Rect)> {
     code_action_rects_with_bottom(
         panel_rect.origin.x,
@@ -813,6 +876,7 @@ pub fn code_action_rects_in_panel(
         panel_rect.size.x,
         state,
         Some(panel_bottom(panel_rect)),
+        CodePanelStrings::new(locale),
     )
 }
 
@@ -822,6 +886,7 @@ fn code_action_rects_with_bottom(
     w: f32,
     state: &CodegenState,
     panel_bottom: Option<f32>,
+    strings: CodePanelStrings,
 ) -> Vec<(CodegenAction, Rect)> {
     let mut out: Vec<(CodegenAction, Rect)> = Vec::new();
     // Section label, then the framework chip row, then the phase body.
@@ -873,7 +938,7 @@ fn code_action_rects_with_bottom(
                     panel_bottom,
                 },
             );
-            let [copy, save, bundle, regen] = complete::action_chip_rects(x, row_y, w);
+            let [copy, save, bundle, regen] = complete::action_chip_rects(x, row_y, w, strings);
             out.push((CodegenAction::Copy, copy));
             out.push((CodegenAction::Download, save));
             out.push((CodegenAction::ExportBundle, bundle));

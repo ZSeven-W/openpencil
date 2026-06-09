@@ -441,6 +441,7 @@ pub struct AgentSettings {
     pub mcp_server: McpServer,
     pub mcp_cli_enabled: [bool; 6],
     pub mcp_client_config_copied_at_ms: Option<u64>,
+    pub hover_agent_settings_close: bool,
     pub hover_mcp_server_button: bool,
     pub hover_mcp_client_config_copy: bool,
     pub images_advanced_open: bool,
@@ -453,6 +454,11 @@ pub struct AgentSettings {
     pub image_gen_profiles: Vec<ImageGenProfile>,
     pub active_image_gen_profile_id: Option<String>,
     pub image_gen_provider_menu_open: Option<usize>,
+    pub hover_image_gen_provider_option: Option<(usize, ImageGenProvider)>,
+    pub hover_image_gen_profile_header: Option<usize>,
+    pub hover_image_gen_profile_remove: Option<usize>,
+    pub hover_image_gen_profile_provider: Option<usize>,
+    pub hover_image_gen_profile_test: Option<usize>,
     pub next_image_gen_profile_id: u64,
     /// Whether the desktop host should check GitHub releases on
     /// startup. Manual "Check for Updates" stays available.
@@ -490,6 +496,7 @@ impl Default for AgentSettings {
             mcp_server: McpServer::default(),
             mcp_cli_enabled: [false; 6],
             mcp_client_config_copied_at_ms: None,
+            hover_agent_settings_close: false,
             hover_mcp_server_button: false,
             hover_mcp_client_config_copy: false,
             images_advanced_open: false,
@@ -502,6 +509,11 @@ impl Default for AgentSettings {
             image_gen_profiles: Vec::new(),
             active_image_gen_profile_id: None,
             image_gen_provider_menu_open: None,
+            hover_image_gen_provider_option: None,
+            hover_image_gen_profile_header: None,
+            hover_image_gen_profile_remove: None,
+            hover_image_gen_profile_provider: None,
+            hover_image_gen_profile_test: None,
             next_image_gen_profile_id: 1,
             auto_update_enabled: true,
             focus: None,
@@ -766,6 +778,11 @@ impl AgentSettings {
             return false;
         }
         self.image_gen_provider_menu_open = None;
+        self.hover_image_gen_provider_option = None;
+        self.hover_image_gen_profile_header = None;
+        self.hover_image_gen_profile_remove = None;
+        self.hover_image_gen_profile_provider = None;
+        self.hover_image_gen_profile_test = None;
         if self.active_image_gen_profile_id.as_deref() == Some(id) {
             self.active_image_gen_profile_id =
                 self.image_gen_profiles.first().map(|p| p.id.clone());

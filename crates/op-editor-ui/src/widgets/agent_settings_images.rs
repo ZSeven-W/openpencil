@@ -30,8 +30,12 @@ const BODY_GAP: f32 = 14.0;
 const REGISTER_ROW_H: f32 = 36.0;
 const PROFILE_ROW_H: f32 = 32.0;
 const PROFILE_ROW_GAP: f32 = 6.0;
+const PROFILE_ROW_INSET_X: f32 = 8.0;
+const PROFILE_LIST_TOP_GAP: f32 = 8.0;
 const ACTIVE_DOT: f32 = 14.0;
-const DELETE_W: f32 = 24.0;
+const DELETE_W: f32 = 32.0;
+const DELETE_HOVER_INSET: f32 = 2.0;
+const DELETE_ICON: f32 = 12.0;
 const CHEVRON_W: f32 = 24.0;
 const PROFILE_FORM_TOP: f32 = 40.0;
 const PROFILE_FIELD_H: f32 = 24.0;
@@ -78,7 +82,7 @@ pub(super) fn content_height(settings: &AgentSettings) -> f32 {
     if settings.images_advanced_open {
         h += advanced_body_h();
     }
-    h + SECTION_GAP + SECTION_TITLE_H + profile_list_h(settings) + 24.0
+    h + SECTION_GAP + SECTION_TITLE_H + PROFILE_LIST_TOP_GAP + profile_list_h(settings) + 24.0
 }
 
 fn profile_list_h(settings: &AgentSettings) -> f32 {
@@ -103,27 +107,23 @@ fn profile_row_h(settings: &AgentSettings, index: usize) -> f32 {
     }
 }
 
+#[rustfmt::skip]
 fn advanced_toggle_rect(content: Rect) -> Rect {
-    Rect {
-        origin: Point2D::new(content.origin.x, content.origin.y + TITLE_H),
-        size: Point2D::new(140.0, ADVANCED_ROW_H),
-    }
+    Rect::xywh(content.origin.x, content.origin.y + TITLE_H, 140.0, ADVANCED_ROW_H)
 }
 
 fn register_link_y(content: Rect) -> f32 {
     content.origin.y + TITLE_H + ADVANCED_ROW_H + SUBTITLE_H + ROW_H + ROW_VGAP + ROW_H + BODY_GAP
 }
 
+#[rustfmt::skip]
 fn search_field_rect(content: Rect, index: usize) -> Rect {
     let y = content.origin.y
         + TITLE_H
         + ADVANCED_ROW_H
         + SUBTITLE_H
         + if index == 0 { 0.0 } else { ROW_H + ROW_VGAP };
-    Rect {
-        origin: Point2D::new(content.origin.x + LABEL_W, y),
-        size: Point2D::new(content.size.x - LABEL_W, ROW_H),
-    }
+    Rect::xywh(content.origin.x + LABEL_W, y, content.size.x - LABEL_W, ROW_H)
 }
 
 fn has_search_credentials(settings: &AgentSettings) -> bool {
@@ -140,33 +140,23 @@ fn profile_test_enabled(profile: &ImageGenProfile) -> bool {
     !profile.api_key.trim().is_empty() && profile.test_status != ImageTestStatus::Testing
 }
 
+#[rustfmt::skip]
 fn test_btn_rect(content: Rect, settings: &AgentSettings) -> Rect {
     if !settings.images_advanced_open {
-        return Rect {
-            origin: Point2D::new(0.0, 0.0),
-            size: Point2D::new(0.0, 0.0),
-        };
+        return Rect::xywh(0.0, 0.0, 0.0, 0.0);
     }
     let y = register_link_y(content) + (REGISTER_ROW_H - BTN_H) / 2.0;
-    Rect {
-        origin: Point2D::new(content.origin.x + content.size.x - TEST_BTN_W, y),
-        size: Point2D::new(TEST_BTN_W, BTN_H),
-    }
+    Rect::xywh(content.origin.x + content.size.x - TEST_BTN_W, y, TEST_BTN_W, BTN_H)
 }
 
+#[rustfmt::skip]
 fn add_btn_rect(content: Rect, settings: &AgentSettings) -> Rect {
     let top = image_gen_section_top(content, settings);
-    Rect {
-        origin: Point2D::new(
-            content.origin.x + content.size.x - ADD_BTN_W,
-            top + (SECTION_TITLE_H - BTN_H) / 2.0,
-        ),
-        size: Point2D::new(ADD_BTN_W, BTN_H),
-    }
+    Rect::xywh(content.origin.x + content.size.x - ADD_BTN_W, top + (SECTION_TITLE_H - BTN_H) / 2.0, ADD_BTN_W, BTN_H)
 }
 
 fn profile_row_rect(content: Rect, settings: &AgentSettings, index: usize) -> Rect {
-    let top = image_gen_section_top(content, settings) + SECTION_TITLE_H;
+    let top = image_gen_section_top(content, settings) + SECTION_TITLE_H + PROFILE_LIST_TOP_GAP;
     let y = settings
         .image_gen_profiles
         .iter()
@@ -175,57 +165,43 @@ fn profile_row_rect(content: Rect, settings: &AgentSettings, index: usize) -> Re
         .fold(top, |acc, (i, _)| {
             acc + profile_row_h(settings, i) + PROFILE_ROW_GAP
         });
-    Rect {
-        origin: Point2D::new(content.origin.x, y),
-        size: Point2D::new(content.size.x, profile_row_h(settings, index)),
-    }
+    Rect::xywh(
+        content.origin.x + PROFILE_ROW_INSET_X,
+        y,
+        (content.size.x - PROFILE_ROW_INSET_X * 2.0).max(0.0),
+        profile_row_h(settings, index),
+    )
 }
 
+#[rustfmt::skip]
 fn profile_active_rect(row: Rect) -> Rect {
-    Rect {
-        origin: Point2D::new(
-            row.origin.x + 8.0,
-            row.origin.y + (PROFILE_ROW_H - ACTIVE_DOT) / 2.0,
-        ),
-        size: Point2D::new(ACTIVE_DOT, ACTIVE_DOT),
-    }
+    Rect::xywh(row.origin.x + 8.0, row.origin.y + (PROFILE_ROW_H - ACTIVE_DOT) / 2.0, ACTIVE_DOT, ACTIVE_DOT)
 }
 
+#[rustfmt::skip]
 fn profile_remove_rect(row: Rect) -> Rect {
-    Rect {
-        origin: Point2D::new(
-            row.origin.x + row.size.x - DELETE_W,
-            row.origin.y + (PROFILE_ROW_H - DELETE_W) / 2.0,
-        ),
-        size: Point2D::new(DELETE_W, DELETE_W),
-    }
+    Rect::xywh(row.origin.x + row.size.x - DELETE_W, row.origin.y, DELETE_W, PROFILE_ROW_H)
 }
 
+#[rustfmt::skip]
+fn profile_remove_hover_rect(row: Rect) -> Rect {
+    let target = profile_remove_rect(row);
+    Rect::xywh(target.origin.x + DELETE_HOVER_INSET, target.origin.y + DELETE_HOVER_INSET, target.size.x - DELETE_HOVER_INSET * 2.0, target.size.y - DELETE_HOVER_INSET * 2.0)
+}
+
+#[rustfmt::skip]
 fn profile_chevron_rect(row: Rect) -> Rect {
-    Rect {
-        origin: Point2D::new(
-            row.origin.x + row.size.x - DELETE_W - CHEVRON_W,
-            row.origin.y + (PROFILE_ROW_H - CHEVRON_W) / 2.0,
-        ),
-        size: Point2D::new(CHEVRON_W, CHEVRON_W),
-    }
+    Rect::xywh(row.origin.x + row.size.x - DELETE_W - CHEVRON_W, row.origin.y + (PROFILE_ROW_H - CHEVRON_W) / 2.0, CHEVRON_W, CHEVRON_W)
 }
 
+#[rustfmt::skip]
 fn profile_header_rect(row: Rect) -> Rect {
-    Rect {
-        origin: row.origin,
-        size: Point2D::new(row.size.x, PROFILE_ROW_H),
-    }
+    Rect::xywh(row.origin.x, row.origin.y, row.size.x, PROFILE_ROW_H)
 }
 
+#[rustfmt::skip]
 fn profile_field_rect(row: Rect, field_index: usize) -> Rect {
-    Rect {
-        origin: Point2D::new(
-            row.origin.x + LABEL_W,
-            row.origin.y + PROFILE_FORM_TOP + field_index as f32 * ROW_H,
-        ),
-        size: Point2D::new(row.size.x - LABEL_W - 12.0, PROFILE_FIELD_H),
-    }
+    Rect::xywh(row.origin.x + LABEL_W, row.origin.y + PROFILE_FORM_TOP + field_index as f32 * ROW_H, row.size.x - LABEL_W - 12.0, PROFILE_FIELD_H)
 }
 
 fn profile_input_rect(row: Rect, field: ImageGenField) -> Rect {
@@ -236,30 +212,20 @@ fn profile_input_rect(row: Rect, field: ImageGenField) -> Rect {
     input
 }
 
+#[rustfmt::skip]
 fn profile_test_btn_rect(row: Rect) -> Rect {
     let input = profile_field_rect(row, profile_field_index(ImageGenField::ApiKey));
-    Rect {
-        origin: Point2D::new(
-            input.origin.x + input.size.x - PROFILE_TEST_BTN_W,
-            input.origin.y,
-        ),
-        size: Point2D::new(PROFILE_TEST_BTN_W, PROFILE_FIELD_H),
-    }
+    Rect::xywh(input.origin.x + input.size.x - PROFILE_TEST_BTN_W, input.origin.y, PROFILE_TEST_BTN_W, PROFILE_FIELD_H)
 }
 
 fn profile_provider_rect(row: Rect) -> Rect {
     profile_field_rect(row, 1)
 }
 
+#[rustfmt::skip]
 fn profile_provider_option_rect(row: Rect, option_index: usize) -> Rect {
     let provider = profile_provider_rect(row);
-    Rect {
-        origin: Point2D::new(
-            provider.origin.x,
-            provider.origin.y + provider.size.y + option_index as f32 * PROVIDER_OPTION_H,
-        ),
-        size: Point2D::new(provider.size.x, PROVIDER_OPTION_H),
-    }
+    Rect::xywh(provider.origin.x, provider.origin.y + provider.size.y + option_index as f32 * PROVIDER_OPTION_H, provider.size.x, PROVIDER_OPTION_H)
 }
 
 fn profile_field_index(field: ImageGenField) -> usize {
@@ -348,6 +314,17 @@ pub fn search_test_button_hover_at(
 
 pub fn add_gen_button_hover_at(content: Rect, settings: &AgentSettings, scrolled: Point2D) -> bool {
     rect_contains(add_btn_rect(content, settings), scrolled)
+}
+
+pub fn profile_test_button_hover_at(
+    content: Rect,
+    settings: &AgentSettings,
+    scrolled: Point2D,
+) -> Option<usize> {
+    (0..settings.image_gen_profiles.len()).find(|&index| {
+        let row = profile_row_rect(content, settings, index);
+        is_editing_profile(settings, index) && rect_contains(profile_test_btn_rect(row), scrolled)
+    })
 }
 
 pub(super) fn paint_images_tab(
@@ -577,7 +554,7 @@ pub(super) fn paint_images_tab(
             &hint_lay,
             Point2D::new(
                 content.origin.x + (content.size.x - hint_w) / 2.0,
-                gen_top + SECTION_TITLE_H + 48.0,
+                gen_top + SECTION_TITLE_H + PROFILE_LIST_TOP_GAP + 48.0,
             ),
         );
     } else {
@@ -661,6 +638,10 @@ fn paint_profile_row(
     } else {
         cx.backend.stroke_round_rect(row, 6.0, theme.border, 1.0);
     }
+    if settings.hover_image_gen_profile_header == Some(index) {
+        cx.backend
+            .fill_round_rect(profile_header_rect(row), 6.0, theme.button_hover);
+    }
     let dot = profile_active_rect(row);
     if active {
         cx.backend.fill_oval(dot, theme.primary);
@@ -725,14 +706,19 @@ fn paint_profile_row(
         1.5,
     );
 
+    let remove_hover = profile_remove_hover_rect(row);
+    if settings.hover_image_gen_profile_remove == Some(index) {
+        cx.backend
+            .fill_round_rect(remove_hover, 6.0, theme.button_hover);
+    }
     draw_icon(
         cx.backend,
         Icon::Trash,
         Point2D::new(
-            profile_remove_rect(row).origin.x + 6.0,
-            profile_remove_rect(row).origin.y + 6.0,
+            remove_hover.origin.x + (remove_hover.size.x - DELETE_ICON) / 2.0,
+            remove_hover.origin.y + (remove_hover.size.y - DELETE_ICON) / 2.0,
         ),
-        12.0,
+        DELETE_ICON,
         theme.muted_foreground,
         1.5,
     );
@@ -752,11 +738,28 @@ fn paint_profile_row(
                 now_ms,
             );
         }
-        paint_profile_test_button(cx, theme, ui, profile, profile_test_btn_rect(row));
+        paint_profile_test_button(
+            cx,
+            theme,
+            ui,
+            profile,
+            profile_test_btn_rect(row),
+            settings.hover_image_gen_profile_test == Some(index),
+        );
         let provider_rect = profile_provider_rect(row);
-        paint_provider_field(cx, theme, profile, provider_rect, row.origin.x + 12.0);
+        paint_provider_field(
+            cx,
+            theme,
+            profile,
+            provider_rect,
+            row.origin.x + 12.0,
+            settings.hover_image_gen_profile_provider == Some(index),
+        );
         if settings.image_gen_provider_menu_open == Some(index) {
-            paint_provider_menu(cx, theme, provider_rect, profile.provider);
+            let hovered = settings
+                .hover_image_gen_provider_option
+                .and_then(|(hover_index, provider)| (hover_index == index).then_some(provider));
+            paint_provider_menu(cx, theme, provider_rect, profile.provider, hovered);
         }
     }
 }

@@ -4,7 +4,8 @@ use super::helpers::{resize_bounds, PANEL_MAX_WIDTH, PANEL_MIN_WIDTH};
 use super::{PanelResizeKind, WidgetHostNative};
 use op_editor_core::codegen::CodeSelection;
 use op_editor_ui::widgets::{
-    ChatResizeEdge, AI_CHAT_MAX_RATIO, AI_CHAT_MIN_HEIGHT, AI_CHAT_MIN_WIDTH,
+    AIChatHit, AIChatPlaceholder, ChatResizeEdge, AI_CHAT_MAX_RATIO, AI_CHAT_MIN_HEIGHT,
+    AI_CHAT_MIN_WIDTH,
 };
 use op_editor_ui::{Point2D, Rect};
 
@@ -259,6 +260,68 @@ impl WidgetHostNative {
         true
     }
 
+    fn chat_transcript_text_offset_at_screen(&self, x: f32, y: f32) -> Option<(usize, usize)> {
+        let chat_rect = self.ai_chat_rect(self.last_viewport_w, self.last_viewport_h)?;
+        match AIChatPlaceholder::from_editor_at(&self.editor_state, self.now_ms)
+            .hit_test(chat_rect, Point2D::new(x, y))
+        {
+            Some(AIChatHit::SelectTranscriptText(message_index, offset)) => {
+                Some((message_index, offset))
+            }
+            _ => None,
+        }
+    }
+
+    fn chat_input_text_offset_at_screen(&self, x: f32, y: f32) -> Option<usize> {
+        let chat_rect = self.ai_chat_rect(self.last_viewport_w, self.last_viewport_h)?;
+        match AIChatPlaceholder::from_editor_at(&self.editor_state, self.now_ms)
+            .hit_test(chat_rect, Point2D::new(x, y))
+        {
+            Some(AIChatHit::SelectInputText(offset)) => Some(offset),
+            _ => None,
+        }
+    }
+
+    fn apply_chat_input_selection_drag_cursor_move(&mut self, x: f32, y: f32) -> bool {
+        let Some(drag) = self.chat_input_selection_drag else {
+            return false;
+        };
+        if let Some(focus) = self.chat_input_text_offset_at_screen(x, y) {
+            let next = Some(op_editor_core::chat::ChatInputSelection {
+                anchor: drag.anchor,
+                focus,
+            });
+            if self.editor_state.chat.input_selection != next {
+                self.editor_state.chat.input_selection = next;
+                self.editor_state.chat.input_select_all = false;
+                self.editor_state.chat.focused = true;
+                self.editor_state.chat.caret_anchor_ms = self.now_ms;
+                self.mark_dirty();
+            }
+        }
+        true
+    }
+
+    fn apply_chat_text_selection_drag_cursor_move(&mut self, x: f32, y: f32) -> bool {
+        let Some(drag) = self.chat_text_selection_drag else {
+            return false;
+        };
+        if let Some((message_index, focus)) = self.chat_transcript_text_offset_at_screen(x, y) {
+            if message_index == drag.message_index {
+                let next = Some(op_editor_core::chat::ChatTranscriptSelection {
+                    message_index,
+                    anchor: drag.anchor,
+                    focus,
+                });
+                if self.editor_state.chat.transcript_selection != next {
+                    self.editor_state.chat.transcript_selection = next;
+                    self.mark_dirty();
+                }
+            }
+        }
+        true
+    }
+
     pub fn apply_cursor_move(&mut self, x: f32, y: f32) -> bool {
         if self.editor_state.editor_ui.agent_settings_open && self.update_agent_settings_hover(x, y)
         {
@@ -404,6 +467,12 @@ impl WidgetHostNative {
                 }
             }
         }
+        if self.apply_chat_text_selection_drag_cursor_move(x, y) {
+            return true;
+        }
+        if self.apply_chat_input_selection_drag_cursor_move(x, y) {
+            return true;
+        }
         if self.apply_code_selection_drag_cursor_move(x, y) {
             return true;
         }
@@ -433,6 +502,17 @@ impl WidgetHostNative {
         // Suppress lower-overlay hover while a floating panel is on top.
         let over_topmost =
             self.over_topmost_panel(x, y, self.last_viewport_w, self.last_viewport_h);
+        if self.editor_state.editor_ui.variables_panel_open {
+            use op_editor_ui::widgets::VariablesModal;
+            let modal = VariablesModal::for_editor(&self.editor_state);
+            let rect = modal.rect(self.last_viewport_w, self.last_viewport_h);
+            let new_hover = modal.hover_at(rect, Point2D::new(x, y));
+            if new_hover != self.editor_state.editor_ui.variables_panel_hover {
+                self.editor_state.editor_ui.variables_panel_hover = new_hover;
+                self.mark_dirty();
+                return true;
+            }
+        }
         // Fold stale-hover clearing into the final repaint signal.
         let cleared = over_topmost && self.clear_lower_overlay_hover();
         if let Some(state) = self
@@ -567,6 +647,25 @@ impl WidgetHostNative {
             .editor_state
             .editor_ui
             .chat_footer_hover
+            .take()
+            .is_some()
+        {
+            self.mark_dirty();
+            return true;
+        }
+        if let Some(chat_rect) = self.ai_chat_rect(self.last_viewport_w, self.last_viewport_h) {
+            use op_editor_ui::widgets::AIChatPlaceholder;
+            let new_hover = AIChatPlaceholder::from_editor_at(&self.editor_state, self.now_ms)
+                .example_hover_at(chat_rect, Point2D::new(x, y));
+            if new_hover != self.editor_state.editor_ui.chat_example_hover {
+                self.editor_state.editor_ui.chat_example_hover = new_hover;
+                self.mark_dirty();
+                return true;
+            }
+        } else if self
+            .editor_state
+            .editor_ui
+            .chat_example_hover
             .take()
             .is_some()
         {
@@ -919,17 +1018,19 @@ impl WidgetHostNative {
         {
             property_hover_changed = true;
         }
-        // Variables panel (right rail; shown only with no selection)
-        // hover — rows / axis chips / open-dropdown items.
+        // Variables panel (right rail) hover — auto-shown variables
+        // yield to PropertyPanel. The explicit toolbar manager is handled
+        // above as VariablesModal hover.
         if !over_topmost && !self.editor_state.property_panel_visible() {
-            let has_variables = self
+            let has_variable_table = self
                 .editor_state
                 .doc
                 .variables
                 .as_ref()
                 .map(|v| !v.is_empty())
                 .unwrap_or(false);
-            if has_variables {
+            let show_variables = has_variable_table && !self.editor_state.property_panel_visible();
+            if show_variables {
                 use op_editor_ui::widgets::variables_panel::VariablesPanel;
                 use op_editor_ui::widgets::TOP_BAR_HEIGHT;
                 let vars = VariablesPanel::for_editor(&self.editor_state);
@@ -980,10 +1081,11 @@ impl WidgetHostNative {
                 size: Point2D::new(pw, (self.last_viewport_h - TOP_BAR_HEIGHT).max(0.0)),
             };
             if x >= panel_x && x <= self.last_viewport_w {
-                property_panel_code::code_hover_at(
+                property_panel_code::code_hover_at_with_locale(
                     panel_rect,
                     &self.editor_state.codegen,
                     Point2D::new(x, y),
+                    self.editor_state.editor_ui.locale,
                 )
             } else {
                 (None, None)
@@ -1043,6 +1145,12 @@ impl WidgetHostNative {
             return true;
         }
         if self.code_selection_drag.take().is_some() {
+            return true;
+        }
+        if self.chat_input_selection_drag.take().is_some() {
+            return true;
+        }
+        if self.chat_text_selection_drag.take().is_some() {
             return true;
         }
         if let Some(drag) = self.path_anchor_drag.take() {
@@ -1123,6 +1231,12 @@ impl WidgetHostNative {
             return true;
         }
         if self.code_selection_drag.take().is_some() {
+            return true;
+        }
+        if self.chat_input_selection_drag.take().is_some() {
+            return true;
+        }
+        if self.chat_text_selection_drag.take().is_some() {
             return true;
         }
         if self.marquee_drag.take().is_some() {

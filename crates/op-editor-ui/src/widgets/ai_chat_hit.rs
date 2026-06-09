@@ -6,6 +6,8 @@ pub enum AIChatHit {
     Inside,
     /// Click landed on the input area — host should focus chat.
     FocusInput,
+    /// Press landed on selectable input text at a byte offset.
+    SelectInputText(usize),
     /// Click landed on the send affordance.
     Send,
     /// Click landed on the stop affordance shown during a streaming
@@ -71,6 +73,8 @@ pub enum AIChatHit {
     CopyDesignBlock(String),
     /// Click on an expanded design JSON card's apply affordance.
     ApplyDesignBlock(usize, String),
+    /// Press on selectable transcript text.
+    SelectTranscriptText(usize, usize),
     /// Click on the fixed "Pencil it out" checklist header — host
     /// toggles the checklist body between expanded and collapsed.
     ToggleChecklist,

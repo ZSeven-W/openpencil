@@ -157,12 +157,10 @@ impl EditorState {
             .any(|id| find_node(children, id).is_some())
     }
 
-    /// True when ANY widget occupies the right rail — PropertyPanel
-    /// (gated on selection) OR VariablesPanel (gated on a non-empty
-    /// persisted variable table). Faithful port of shell-core's
-    /// `Document::right_rail_visible`; the persisted variables that
-    /// shell-core read from `var_table.variables` live on
-    /// `EditorState.doc.variables` in the canonical model.
+    /// True when any widget occupies the right rail: PropertyPanel
+    /// (gated on selection) or an auto-shown VariablesPanel for a
+    /// persisted variable table. The explicit toolbar Variables action
+    /// opens a floating manager instead of taking over the rail.
     pub fn right_rail_visible(&self) -> bool {
         self.property_panel_visible() || self.doc.variables.as_ref().is_some_and(|v| !v.is_empty())
     }
@@ -619,6 +617,16 @@ impl EditorState {
             .cloned();
         let connected = self.editor_ui.agent_settings.connected;
         self.chat.rebuild_available_models(&connected);
+        for (idx, provider) in crate::AgentProvider::ALL.iter().enumerate() {
+            if !connected[idx]
+                || connected_provider_has_model(&self.chat.available_models, *provider)
+            {
+                continue;
+            }
+            self.chat
+                .available_models
+                .extend(default_models_for_connected_provider(*provider));
+        }
         self.chat.available_models.extend(
             self.editor_ui
                 .agent_settings
@@ -679,6 +687,42 @@ impl EditorState {
         }
         Ok(())
     }
+}
+
+fn connected_provider_has_model(
+    models: &[crate::ModelEntry],
+    provider: crate::AgentProvider,
+) -> bool {
+    models.iter().any(|entry| {
+        entry.provider == provider
+            && entry.builtin_provider_id.is_none()
+            && entry.acp_agent_id().is_none()
+    })
+}
+
+fn default_models_for_connected_provider(provider: crate::AgentProvider) -> Vec<crate::ModelEntry> {
+    let models: &[(&str, &str)] = match provider {
+        crate::AgentProvider::ClaudeCode => &[
+            ("default", "Default"),
+            ("sonnet", "Sonnet"),
+            ("opus", "Opus"),
+            ("haiku", "Haiku"),
+        ],
+        crate::AgentProvider::CodexCli => &[("gpt-5.5", "GPT-5.5")],
+        crate::AgentProvider::GeminiCli => &[
+            ("gemini-2.5-pro", "Gemini 2.5 Pro"),
+            ("gemini-2.5-flash", "Gemini 2.5 Flash"),
+        ],
+        crate::AgentProvider::GithubCopilot => &[
+            ("gpt-5", "GPT-5"),
+            ("claude-sonnet-4.5", "Claude Sonnet 4.5"),
+        ],
+        crate::AgentProvider::OpenCode => &[],
+    };
+    models
+        .iter()
+        .map(|(value, display_name)| crate::ModelEntry::new(provider, *value, *display_name))
+        .collect()
 }
 
 // --- Free helpers ----------------------------------------------------
