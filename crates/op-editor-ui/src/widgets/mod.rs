@@ -74,6 +74,7 @@ pub mod toolbar;
 
 // Step 3 — center canvas that renders document nodes as actual
 // visual primitives (frame fills, rect strokes, text strings).
+mod canvas_agent_overlay;
 pub mod canvas_viewport;
 mod canvas_viewport_image;
 pub mod canvas_viewport_overlay;
