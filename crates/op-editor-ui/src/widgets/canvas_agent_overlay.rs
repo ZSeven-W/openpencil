@@ -74,7 +74,12 @@ fn paint_agent_badge(cx: &mut PaintCx<'_>, frame: Rect, color: Color, name: &str
     };
     cx.backend
         .fill_round_rect(badge, BADGE_H / 2.0, Color { a: 0.92, ..color });
-    // Pulsing white status dot.
+    // Contrast-aware foreground — dark glyphs on light agent colours
+    // (yellow / mint), white on dark ones — so the name stays legible.
+    let luminance = 0.299 * color.r + 0.587 * color.g + 0.114 * color.b;
+    let fg = if luminance > 0.6 { 0.12_f32 } else { 1.0_f32 };
+    let fg_u8 = (fg * 255.0) as u8;
+    // Pulsing status dot in the foreground colour.
     cx.backend.fill_round_rect(
         Rect {
             origin: Point2D::new(badge.origin.x + PAD, badge.origin.y + (BADGE_H - DOT) / 2.0),
@@ -82,9 +87,9 @@ fn paint_agent_badge(cx: &mut PaintCx<'_>, frame: Rect, color: Color, name: &str
         },
         DOT / 2.0,
         Color {
-            r: 1.0,
-            g: 1.0,
-            b: 1.0,
+            r: fg,
+            g: fg,
+            b: fg,
             a: 0.55 + breath * 0.45,
         },
     );
@@ -92,7 +97,7 @@ fn paint_agent_badge(cx: &mut PaintCx<'_>, frame: Rect, color: Color, name: &str
         name,
         "system-ui",
         font,
-        jian_core::scene::Color::rgba(255, 255, 255, 255),
+        jian_core::scene::Color::rgba(fg_u8, fg_u8, fg_u8, 255),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
