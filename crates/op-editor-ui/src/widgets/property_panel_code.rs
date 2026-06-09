@@ -751,6 +751,7 @@ pub fn paint_code_panel_at(
     paint_code_panel_at_with_locale(cx, theme, state, Locale::EnUs, x, y, w, now_ms)
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn paint_code_panel_at_with_locale(
     cx: &mut PaintCx<'_>,
     theme: &Theme,

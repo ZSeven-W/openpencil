@@ -18,6 +18,7 @@ pub(super) fn generating_cancel_y(state: &CodegenState, y: f32) -> f32 {
     y + CARD_PAD_Y + HEADER_H + step_count(state) as f32 * STEP_H + CANCEL_GAP
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn paint_generating_body(
     cx: &mut PaintCx<'_>,
     theme: &Theme,

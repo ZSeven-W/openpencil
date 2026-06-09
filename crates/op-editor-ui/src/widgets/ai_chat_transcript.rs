@@ -597,6 +597,7 @@ pub(crate) fn paint_transcript_with_design_hover(
     );
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn paint_transcript_with_selection(
     cx: &mut PaintCx<'_>,
     theme: &Theme,

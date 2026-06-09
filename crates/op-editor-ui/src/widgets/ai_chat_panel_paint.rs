@@ -126,6 +126,7 @@ pub(crate) fn paint_panel_body_chrome(cx: &mut PaintCx<'_>, theme: &Theme, rect:
 }
 
 /// Paint the empty-state hint line + the 2×2 example-card grid.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn paint_examples(
     cx: &mut PaintCx<'_>,
     theme: &Theme,

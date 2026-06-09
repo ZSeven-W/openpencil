@@ -4,7 +4,6 @@ use crate::theme::Theme;
 use crate::widgets::ai_chat_panel::to_jian_color;
 use crate::widgets::ai_chat_transcript::CHAR_UNIT_PX;
 use crate::widgets::ai_chat_transcript_text::char_display_units;
-use crate::widgets::canvas_viewport_overlay::wrap_text;
 use crate::widgets::text_selection::selection_color;
 use crate::widgets::PaintCx;
 use crate::{Point2D, Rect, TextLayout};
@@ -76,7 +75,7 @@ pub(crate) fn paint_input_text_area(
     } else {
         (state.input.as_str(), theme.foreground)
     };
-    let wrapped = wrap_text(cx.backend, text, INPUT_FONT, text_w, 400);
+    let wrapped = wrap_input_approx(text, text_w);
     let start = wrapped.len().saturating_sub(INPUT_MAX_LINES);
     let visible = &wrapped[start..];
     let first_baseline = input_first_baseline(visible.len(), input_area_h);
@@ -145,7 +144,7 @@ pub(crate) fn paint_input_text_area(
     } else {
         let last = visible.last().map(String::as_str).unwrap_or("");
         (
-            text_x + cx.backend.measure_text(last, INPUT_FONT),
+            text_x + measure_prefix(last, last.len()),
             visible.len().saturating_sub(1),
         )
     };
@@ -159,6 +158,7 @@ pub(crate) fn paint_input_text_area(
     );
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn paint_wrapped_input_selection(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
@@ -192,8 +192,8 @@ pub(crate) fn paint_wrapped_input_selection(
             previous_char_boundary(line, start.saturating_sub(line_start).min(line.len()));
         let local_end =
             previous_char_boundary(line, end.saturating_sub(line_start).min(line.len()));
-        let x0 = text_x + measure_prefix(cx, line, local_start);
-        let x1 = text_x + measure_prefix(cx, line, local_end);
+        let x0 = text_x + measure_prefix(line, local_start);
+        let x1 = text_x + measure_prefix(line, local_end);
         if x1 <= x0 {
             continue;
         }
@@ -212,7 +212,7 @@ pub(crate) fn paint_wrapped_input_selection(
 }
 
 pub(crate) fn input_caret_position(
-    cx: &mut PaintCx<'_>,
+    _cx: &mut PaintCx<'_>,
     text: &str,
     wrapped: &[String],
     visible_start: usize,
@@ -228,9 +228,9 @@ pub(crate) fn input_caret_position(
     let offset = previous_char_boundary(text, offset.min(text.len()));
     let offsets = line_start_offsets(text, wrapped);
     let mut line_i = visible_start.min(wrapped.len().saturating_sub(1));
-    for i in visible_start..wrapped.len() {
+    for (i, line) in wrapped.iter().enumerate().skip(visible_start) {
         let start = *offsets.get(i).unwrap_or(&0);
-        let end = (start + wrapped[i].len()).min(text.len());
+        let end = (start + line.len()).min(text.len());
         if offset >= start && offset <= end {
             line_i = i;
             break;
@@ -240,7 +240,7 @@ pub(crate) fn input_caret_position(
     let line_start = *offsets.get(line_i).unwrap_or(&0);
     let local = previous_char_boundary(line, offset.saturating_sub(line_start).min(line.len()));
     Some((
-        input_text_x(input_rect) + measure_prefix(cx, line, local),
+        input_text_x(input_rect) + measure_prefix(line, local),
         line_i.saturating_sub(visible_start),
     ))
 }
@@ -301,12 +301,15 @@ fn line_offset_at_x(line: &str, x: f32) -> usize {
     line.len()
 }
 
-fn measure_prefix(cx: &mut PaintCx<'_>, line: &str, offset: usize) -> f32 {
+fn measure_prefix(line: &str, offset: usize) -> f32 {
     if offset == 0 {
         return 0.0;
     }
-    cx.backend
-        .measure_text(&line[..offset.min(line.len())], INPUT_FONT)
+    let offset = previous_char_boundary(line, offset.min(line.len()));
+    line[..offset]
+        .chars()
+        .map(|ch| char_display_units(ch) as f32 * CHAR_UNIT_PX)
+        .sum()
 }
 
 fn previous_char_boundary(text: &str, mut index: usize) -> usize {
@@ -321,4 +324,78 @@ fn rect_contains(rect: Rect, point: Point2D) -> bool {
         && point.x <= rect.origin.x + rect.size.x
         && point.y >= rect.origin.y
         && point.y <= rect.origin.y + rect.size.y
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{Color, RenderBackend};
+
+    #[derive(Default)]
+    struct CaptureBackend {
+        text_draws: Vec<(String, Point2D)>,
+    }
+
+    impl RenderBackend for CaptureBackend {
+        fn begin_frame(&mut self) {}
+        fn end_frame(&mut self) {}
+        fn fill_rect(&mut self, _: Rect, _: Color) {}
+        fn stroke_rect(&mut self, _: Rect, _: Color, _: f32) {}
+        fn draw_text(&mut self, layout: &TextLayout, origin: Point2D) {
+            if let Some(run) = layout.runs().first() {
+                self.text_draws.push((run.content.clone(), origin));
+            }
+        }
+        fn clip_rect(&mut self, _: Rect) {}
+        fn stroke_line(&mut self, _: Point2D, _: Point2D, _: Color, _: f32) {}
+        fn fill_round_rect(&mut self, _: Rect, _: f32, _: Color) {}
+        fn stroke_round_rect(&mut self, _: Rect, _: f32, _: Color, _: f32) {}
+        fn stroke_svg_path(&mut self, _: &str, _: Point2D, _: f32, _: Color, _: f32) {}
+        fn save(&mut self) {}
+        fn restore(&mut self) {}
+        fn translate(&mut self, _: Point2D) {}
+        fn resize(&mut self, _: u32, _: u32) {}
+        fn dpi_scale(&self) -> f32 {
+            1.0
+        }
+    }
+
+    #[test]
+    fn input_hit_testing_matches_painted_wrapping_for_chinese_text() {
+        let input = "设计一个现代的移动端登录页面，包含邮箱输入框";
+        let input_rect = Rect::xywh(20.0, 100.0, 202.0, 72.0);
+        let state = ChatState {
+            input: input.to_owned(),
+            ..ChatState::default()
+        };
+
+        let mut backend = CaptureBackend::default();
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+        paint_input_text_area(
+            &mut cx,
+            &Theme::light(),
+            &state,
+            input_rect,
+            input_rect.size.y,
+            0,
+            "",
+        );
+
+        assert!(
+            backend.text_draws.len() >= 2,
+            "test input should paint across multiple lines: {:?}",
+            backend.text_draws
+        );
+        let first_painted_line = &backend.text_draws[0].0;
+        let second_painted_origin = backend.text_draws[1].1;
+        let click_near_start_of_second_line =
+            Point2D::new(second_painted_origin.x + 1.0, second_painted_origin.y - 8.0);
+
+        assert_eq!(
+            input_text_offset_at(input, input_rect, click_near_start_of_second_line),
+            Some(first_painted_line.len())
+        );
+    }
 }
