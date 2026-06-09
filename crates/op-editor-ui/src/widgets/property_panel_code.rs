@@ -8,14 +8,36 @@
 
 use crate::theme::Theme;
 use crate::widgets::icons::{draw_icon, Icon};
-use crate::widgets::property_panel_action::CodegenAction;
+use crate::widgets::property_panel_action::{CodegenAction, PropertyPanelAction};
 use crate::widgets::property_panel_inputs::{
     paint_section_label, to_jian_color, INPUT_HEIGHT, INPUT_RADIUS, PAD_X, SECTION_GAP,
-    SECTION_HEADER_HEIGHT,
+    SECTION_HEADER_HEIGHT, TAB_HEIGHT,
 };
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
 use op_editor_core::codegen::{ChunkStatus, CodegenPhase, CodegenState, Framework};
+
+/// Map a click on the Code tab to its action (framework chip / button), or
+/// `None`. Extracted from `property_panel.rs::hit_test_action` to keep that
+/// spine under the 800-line cap. Uses the same content origin the painter
+/// does (panel left, pinned tab-strip bottom, panel width).
+pub fn code_action_hit(
+    panel_rect: Rect,
+    state: &CodegenState,
+    point: Point2D,
+) -> Option<PropertyPanelAction> {
+    let cy0 = panel_rect.origin.y + TAB_HEIGHT;
+    let inside = |r: Rect| {
+        point.x >= r.origin.x
+            && point.x <= r.origin.x + r.size.x
+            && point.y >= r.origin.y
+            && point.y <= r.origin.y + r.size.y
+    };
+    code_action_rects(panel_rect.origin.x, cy0, panel_rect.size.x, state)
+        .into_iter()
+        .find(|(_, r)| inside(*r))
+        .map(|(a, _)| PropertyPanelAction::Codegen(a))
+}
 
 /// Height of a framework chip + the gap below the chip row.
 const CHIP_HEIGHT: f32 = 26.0;

@@ -25,6 +25,9 @@ impl WidgetHost {
     ) {
         use op_editor_ui::widgets::PropertyPanelAction as A;
         match action {
+            A::SetPropertyTab(tab) => {
+                self.editor_state.editor_ui.property_tab = tab;
+            }
             A::SetFlexLayout(mode) => {
                 self.editor_state.editor_ui.flex_layout = mode;
             }

@@ -169,6 +169,62 @@ pub use crate::widgets::property_panel_layout::{
 
 // ── Tab strip ─────────────────────────────────────────────────────
 
+/// Backend-free estimate of `measure_text(label, 13.0)` for the tab strip,
+/// so `paint_tab_strip` and `tab_strip_hit` derive identical geometry and a
+/// click always lands on what's drawn (CJK-aware: ASCII ~0.55em, full-width
+/// glyphs ~1em at 13 px).
+fn tab_label_width(label: &str) -> f32 {
+    label
+        .chars()
+        .map(|c| if c.is_ascii() { 7.0 } else { 13.0 })
+        .sum()
+}
+
+/// The two tab rects (Design, Code) for the pinned strip at panel top-left
+/// `(x, y)`. Single source of truth shared by paint + hit-test.
+fn tab_strip_rects(labels: &PropertyLabels, x: f32, y: f32) -> (Rect, Rect) {
+    let pad = 14.0;
+    let tab_y = y + 6.0;
+    let design_w = (tab_label_width(labels.tab_design) + 24.0).max(48.0);
+    let design_rect = Rect {
+        origin: Point2D::new(x + pad, tab_y),
+        size: Point2D::new(design_w, 26.0),
+    };
+    let code_w = (tab_label_width(labels.tab_code) + 24.0).max(48.0);
+    let code_rect = Rect {
+        origin: Point2D::new(design_rect.origin.x + design_rect.size.x + 6.0, tab_y),
+        size: Point2D::new(code_w, 26.0),
+    };
+    (design_rect, code_rect)
+}
+
+/// Hit-test the pinned Design / Code tab strip. `x`/`y` are the panel's
+/// top-left (unscrolled — the strip is pinned). Returns the tab the point
+/// lands on, or `None`. Geometry comes from [`tab_strip_rects`], the same
+/// source `paint_tab_strip` uses, so clicks match the painted tabs.
+pub fn tab_strip_hit(
+    labels: &PropertyLabels,
+    x: f32,
+    y: f32,
+    point: Point2D,
+) -> Option<op_editor_core::PropertyTab> {
+    use op_editor_core::PropertyTab;
+    let (design_rect, code_rect) = tab_strip_rects(labels, x, y);
+    let inside = |r: Rect| {
+        point.x >= r.origin.x
+            && point.x <= r.origin.x + r.size.x
+            && point.y >= r.origin.y
+            && point.y <= r.origin.y + r.size.y
+    };
+    if inside(design_rect) {
+        Some(PropertyTab::Design)
+    } else if inside(code_rect) {
+        Some(PropertyTab::Code)
+    } else {
+        None
+    }
+}
+
 pub fn paint_tab_strip(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
@@ -179,18 +235,7 @@ pub fn paint_tab_strip(
     width: f32,
 ) -> f32 {
     use op_editor_core::PropertyTab;
-    let pad = 14.0;
-    let tab_y = y + 6.0;
-    let design_w = (cx.backend.measure_text(labels.tab_design, 13.0) + 24.0).max(48.0);
-    let design_rect = Rect {
-        origin: Point2D::new(x + pad, tab_y),
-        size: Point2D::new(design_w, 26.0),
-    };
-    let code_w = (cx.backend.measure_text(labels.tab_code, 13.0) + 24.0).max(48.0);
-    let code_rect = Rect {
-        origin: Point2D::new(design_rect.origin.x + design_rect.size.x + 6.0, tab_y),
-        size: Point2D::new(code_w, 26.0),
-    };
+    let (design_rect, code_rect) = tab_strip_rects(labels, x, y);
     if matches!(active, PropertyTab::Design) {
         cx.backend.fill_round_rect(design_rect, 6.0, theme.muted);
     } else {
