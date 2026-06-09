@@ -217,6 +217,8 @@ pub fn pump(
                 {
                     let cg = &mut host.editor_state_mut().codegen;
                     cg.code = code.clone();
+                    cg.code_scroll = 0.0;
+                    cg.code_selection = None;
                     cg.degraded = degraded;
                     cg.assets = metas;
                     cg.phase = op_editor_core::codegen::CodegenPhase::Complete;

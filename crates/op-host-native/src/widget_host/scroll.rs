@@ -65,6 +65,7 @@ impl WidgetHostNative {
             self.editor_state.editor_ui.property_tab,
             op_editor_core::PropertyTab::Code
         ) {
+            let point = Point2D::new(x, y);
             let (band_top, band_bottom) =
                 op_editor_ui::widgets::property_panel_code::framework_row_band(
                     property_rect.origin.y,
@@ -75,6 +76,25 @@ impl WidgetHostNative {
                 let next = (cg.framework_scroll - delta).clamp(0.0, max);
                 if next != cg.framework_scroll {
                     cg.framework_scroll = next;
+                    self.mark_dirty();
+                }
+                return true;
+            }
+            if op_editor_ui::widgets::property_panel_code::code_preview_rect(
+                property_rect,
+                &self.editor_state.codegen,
+            )
+            .is_some_and(|rect| rect_contains(rect, point))
+            {
+                let max = op_editor_ui::widgets::property_panel_code::code_preview_max_scroll(
+                    property_rect,
+                    &self.editor_state.codegen,
+                )
+                .unwrap_or(0.0);
+                let cg = &mut self.editor_state.codegen;
+                let next = (cg.code_scroll - delta).clamp(0.0, max);
+                if next != cg.code_scroll {
+                    cg.code_scroll = next;
                     self.mark_dirty();
                 }
                 return true;

@@ -42,7 +42,7 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::Command;
 use tokio::sync::mpsc;
 
-use crate::chat_runtime::{shared_runtime, BlockingRecvIter};
+use crate::chat_runtime::{prompt_with_system_prompt, shared_runtime, BlockingRecvIter};
 
 /// How the user's prompt reaches the CLI. Claude Code's `--print`
 /// mode requires the prompt as a positional argv after `--` and
@@ -383,6 +383,7 @@ impl ChatProvider for SubprocessProvider {
         if !directive.is_empty() {
             prompt = format!("{directive}\n\n{prompt}");
         }
+        prompt = prompt_with_system_prompt(&request.system_prompt, prompt);
         let mut args_with_prompt = self.args.clone();
         // PromptMode::PositionalArg: append `-- <prompt>` so the CLI
         // picks up the message as a CLI argument (Claude Code mode).

@@ -286,7 +286,7 @@ impl ChatAnchor {
 }
 
 pub const DEFAULT_CHAT_PANEL_WIDTH: f32 = 360.0;
-pub const DEFAULT_CHAT_PANEL_HEIGHT: f32 = 400.0;
+pub const DEFAULT_CHAT_PANEL_HEIGHT: f32 = 520.0;
 
 /// Floating AI chat panel state — mirrors shell-core's `ChatState`
 /// (messages, input draft, focused flag, panel anchor, model catalog).
@@ -295,6 +295,9 @@ pub struct ChatState {
     pub messages: Vec<ChatMessage>,
     pub input: String,
     pub focused: bool,
+    /// True after Cmd/Ctrl+A while the chat textarea owns the
+    /// keyboard. The next edit replaces the whole input.
+    pub input_select_all: bool,
     /// Which canvas corner the floating chat panel snaps to.
     pub anchor: ChatAnchor,
     /// Non-maximized panel width. TS persists this as
@@ -354,6 +357,8 @@ pub struct ChatState {
     pub thinking_mode: ThinkingMode,
     /// Per-turn reasoning-effort selector.
     pub effort_level: EffortLevel,
+    /// Number of parallel sub-agents used for the next design turn.
+    pub agent_team_size: u32,
     /// Files staged for the next turn (images the user pasted / picked).
     /// Drained by the host into `ChatRequest::attachments`, then cleared.
     pub pending_attachments: Vec<ChatAttachment>,
@@ -382,6 +387,7 @@ impl Default for ChatState {
             messages: Vec::new(),
             input: String::new(),
             focused: false,
+            input_select_all: false,
             anchor: ChatAnchor::BottomLeft,
             panel_width: DEFAULT_CHAT_PANEL_WIDTH,
             panel_height: DEFAULT_CHAT_PANEL_HEIGHT,
@@ -399,6 +405,7 @@ impl Default for ChatState {
             selected_model: 0,
             thinking_mode: ThinkingMode::Adaptive,
             effort_level: EffortLevel::Low,
+            agent_team_size: 1,
             pending_attachments: Vec::new(),
             pending_attachment_pick: false,
         }
@@ -635,6 +642,15 @@ impl ChatState {
         };
     }
 
+    /// Advance the Agent Team size selector one step: 1x → 2x → … → 6x → 1x.
+    pub fn cycle_agent_team_size(&mut self) {
+        self.agent_team_size = if (1..6).contains(&self.agent_team_size) {
+            self.agent_team_size + 1
+        } else {
+            1
+        };
+    }
+
     /// Stage a file for the next turn. Rejected (returns `false`) when
     /// the per-turn attachment cap is already reached or the file
     /// exceeds [`MAX_ATTACHMENT_BYTES`].
@@ -763,6 +779,17 @@ mod tests {
         assert_eq!(chat.effort_level, EffortLevel::Max);
         chat.cycle_effort_level();
         assert_eq!(chat.effort_level, EffortLevel::Low);
+    }
+
+    #[test]
+    fn cycle_agent_team_size_wraps_one_through_six() {
+        let mut chat = ChatState::default();
+        assert_eq!(chat.agent_team_size, 1);
+        chat.cycle_agent_team_size();
+        assert_eq!(chat.agent_team_size, 2);
+        chat.agent_team_size = 6;
+        chat.cycle_agent_team_size();
+        assert_eq!(chat.agent_team_size, 1);
     }
 
     #[test]

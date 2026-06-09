@@ -147,6 +147,9 @@ pub struct LayerRenameState {
     /// Char-based — not byte-based — so left/right movement and
     /// insert/delete land on whole characters in CJK names.
     pub caret: usize,
+    /// True after Cmd/Ctrl+A while this inline rename owns the
+    /// keyboard. The next edit replaces the whole draft.
+    pub select_all: bool,
 }
 
 /// Which control of the HSV colour picker a drag is currently
@@ -246,6 +249,9 @@ pub struct UiDraftState {
     pub layer_rename: Option<LayerRenameState>,
     /// Canvas Text node in inline text-edit mode.
     pub text_editing: Option<NodeId>,
+    /// True after Cmd/Ctrl+A while inline text-edit owns the keyboard.
+    /// The next edit replaces the whole plain text content.
+    pub text_edit_select_all: bool,
     /// Caret-blink anchor (ms) for the inline text editor.
     pub text_edit_caret_anchor_ms: u64,
     /// In-progress Pen-tool path. `Some(id)` while the user is

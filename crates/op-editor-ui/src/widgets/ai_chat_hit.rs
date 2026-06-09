@@ -46,6 +46,9 @@ pub enum AIChatHit {
     /// Click on the effort chip — host cycles
     /// `ChatState::effort_level`.
     CycleEffort,
+    /// Click on the footer Agent Team chip — host cycles
+    /// `ChatState::agent_team_size`.
+    CycleAgentTeam,
     /// Click on the attach button — host opens a file picker and
     /// stages the chosen file via `ChatState::add_attachment`.
     AddAttachment,

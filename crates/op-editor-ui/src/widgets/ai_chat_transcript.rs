@@ -18,6 +18,9 @@ use crate::widgets::PaintCx;
 use crate::{Point2D, Rect, TextLayout};
 use op_editor_core::chat::{ChatMessage, ChatRole};
 
+use super::ai_chat_transcript_completion::{
+    completion_card_rect, paint_completion_card, parse_completion_summary, CompletionSummary,
+};
 use super::ai_chat_transcript_design::{
     extract_design_json_blocks, paint_design_block, place_design_blocks, DesignBlock,
 };
@@ -55,7 +58,7 @@ const TYPING_DOT_GAP: f32 = 2.0;
 /// Height of a collapsible header row (thinking / tool-calls).
 const HEADER_H: f32 = 22.0;
 /// Vertical gap between two messages.
-const MSG_GAP: f32 = 10.0;
+const MSG_GAP: f32 = 12.0;
 /// Vertical gap between sub-blocks within one message.
 const SUB_GAP: f32 = 4.0;
 /// Height of one compact design-progress step row.
@@ -73,8 +76,10 @@ const IMG_GAP: f32 = 4.0;
 /// Approximate device px per wrap *unit* at [`BODY_FONT`]. Drives the
 /// unit budget handed to [`wrap_units`].
 const CHAR_UNIT_PX: f32 = 6.6;
-/// Bubble width as a fraction of the transcript body width.
-const BUBBLE_FRAC: f32 = 0.84;
+/// Maximum user bubble width as a fraction of the transcript body width.
+const USER_BUBBLE_MAX_FRAC: f32 = 0.78;
+/// Minimum user bubble width so very short prompts still read as a chip.
+const USER_BUBBLE_MIN_W: f32 = 56.0;
 
 /// A collapsible block (thinking text or tool-call list) — a
 /// clickable `header` row plus an optional `body` box. When
@@ -105,6 +110,7 @@ pub(crate) struct TextBubble {
     pub rect: Rect,
     pub lines: Vec<String>,
     pub typing: bool,
+    pub completion: Option<CompletionSummary>,
 }
 
 /// One fully-placed message in the transcript — absolute rects ready
@@ -187,17 +193,16 @@ fn build_item(
     design_hover: Option<(usize, usize)>,
 ) -> (TranscriptItem, f32) {
     let is_user = msg.role == ChatRole::User;
-    let bubble_w = if is_user {
-        body.size.x * BUBBLE_FRAC
+    let mut bubble_w = if is_user {
+        body.size.x * USER_BUBBLE_MAX_FRAC
     } else {
         body.size.x
     };
-    let x = if is_user {
+    let mut x = if is_user {
         body.origin.x + body.size.x - bubble_w
     } else {
         body.origin.x
     };
-    let budget = unit_budget(bubble_w - 2.0 * BUBBLE_PAD);
     let mut y = top;
     let (mut progress_steps, thinking_text) = split_design_progress(&msg.thinking);
     let raw_visible_content = if is_user {
@@ -221,7 +226,27 @@ fn build_item(
             block.applied = true;
         }
     }
+    let mut user_bubble_lines = if is_user && !visible_content.is_empty() {
+        let max_w = body.size.x * USER_BUBBLE_MAX_FRAC;
+        let max_budget = unit_budget(max_w - 2.0 * BUBBLE_PAD);
+        let lines = wrap_units(&visible_content, max_budget);
+        let content_w = lines
+            .iter()
+            .map(|line| text_unit_width(line))
+            .fold(0.0, f32::max);
+        bubble_w = (content_w + 2.0 * BUBBLE_PAD)
+            .max(USER_BUBBLE_MIN_W)
+            .min(max_w);
+        x = body.origin.x + body.size.x - bubble_w;
+        Some(lines)
+    } else {
+        None
+    };
+    let budget = unit_budget(bubble_w - 2.0 * BUBBLE_PAD);
     let has_progress_steps = !progress_steps.is_empty();
+    let completion_summary = (!is_user)
+        .then(|| parse_completion_summary(&visible_content))
+        .flatten();
 
     let build_collapsible = |present: bool,
                              collapsed: bool,
@@ -341,6 +366,7 @@ fn build_item(
             rect: r,
             lines: Vec::new(),
             typing: true,
+            completion: None,
         })
     } else if automated_placeholder {
         let lines = vec![AUTOMATED_ACTION_LABEL.to_string()];
@@ -350,9 +376,21 @@ fn build_item(
             rect: r,
             lines,
             typing: false,
+            completion: None,
+        })
+    } else if let Some(summary) = completion_summary {
+        let r = completion_card_rect(x, y, bubble_w);
+        y += r.size.y;
+        Some(TextBubble {
+            rect: r,
+            lines: Vec::new(),
+            typing: false,
+            completion: Some(summary),
         })
     } else if !visible_content.is_empty() {
-        let lines = wrap_units(&visible_content, budget);
+        let lines = user_bubble_lines
+            .take()
+            .unwrap_or_else(|| wrap_units(&visible_content, budget));
         let h = if is_user {
             lines.len() as f32 * LINE_H + 2.0 * BUBBLE_PAD
         } else {
@@ -364,6 +402,7 @@ fn build_item(
             rect: r,
             lines,
             typing: false,
+            completion: None,
         })
     } else {
         None
@@ -450,6 +489,16 @@ pub(crate) fn build_transcript_with_design_hover(
         }
         used += h;
         start = i;
+    }
+    // Keep the latest turn's prompt attached to its assistant result.
+    // The fixed design checklist can squeeze the transcript enough
+    // that the generic tail-fit pass would otherwise show only the
+    // terminal "Done" card, making the prior prompt look erased.
+    if start > 0
+        && messages[start].role == ChatRole::Assistant
+        && messages[start - 1].role == ChatRole::User
+    {
+        start -= 1;
     }
     // Pass 2 — place the visible tail from the body top.
     let mut items = Vec::new();
@@ -690,7 +739,7 @@ pub(crate) fn paint_transcript_with_design_hover(
         }
         if let Some(bubble) = &item.bubble {
             let (bg, fg) = match item.role {
-                ChatRole::User => (theme.primary, theme.primary_foreground),
+                ChatRole::User => (theme.row_selected_primary, theme.foreground),
                 ChatRole::Assistant => (theme.muted, theme.foreground),
             };
             if bubble.typing {
@@ -713,6 +762,8 @@ pub(crate) fn paint_transcript_with_design_hover(
                     bubble.rect.origin.y + bubble.rect.size.y / 2.0,
                     now_ms,
                 );
+            } else if let Some(summary) = bubble.completion {
+                paint_completion_card(cx, theme, bubble.rect, summary);
             } else {
                 // Clip to the bubble — over-long tokens stay inside.
                 cx.backend.save();

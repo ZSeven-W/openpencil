@@ -468,13 +468,24 @@ impl GitPanel<'_> {
                 // the chat / property inputs instead of sitting static.
                 let text_x = box_r.origin.x + 12.0;
                 let baseline = box_r.origin.y + 22.0;
+                if self.state.commit_focused && self.state.input_select_all && !msg.is_empty() {
+                    crate::widgets::text_selection::paint_single_line_selection(
+                        cx,
+                        &t,
+                        msg,
+                        text_x,
+                        baseline,
+                        12.0,
+                        box_r.origin.x + box_r.size.x - 12.0,
+                    );
+                }
                 self.text(cx, msg, text_x, baseline, 12.0, t.foreground);
                 let blink = jian_core::anim::blink_visible(
                     self.now_ms,
                     self.state.commit_caret_anchor_ms,
                     500,
                 );
-                if self.state.commit_focused && blink {
+                if self.state.commit_focused && blink && !self.state.input_select_all {
                     let caret_x = text_x + cx.backend.measure_text(msg, 12.0) + 1.0;
                     cx.backend.fill_rect(
                         Rect {

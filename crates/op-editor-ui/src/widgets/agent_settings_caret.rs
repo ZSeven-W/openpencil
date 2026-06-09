@@ -44,6 +44,20 @@ pub(super) fn paint_caret(
     );
 }
 
+pub(super) fn paint_settings_selection(
+    cx: &mut PaintCx<'_>,
+    theme: &Theme,
+    value: &str,
+    text_x: f32,
+    baseline_y: f32,
+    size: f32,
+    max_x: f32,
+) {
+    crate::widgets::text_selection::paint_single_line_selection(
+        cx, theme, value, text_x, baseline_y, size, max_x,
+    );
+}
+
 fn clamp_boundary(value: &str, pos: usize) -> usize {
     let mut pos = pos.min(value.len());
     while pos > 0 && !value.is_char_boundary(pos) {

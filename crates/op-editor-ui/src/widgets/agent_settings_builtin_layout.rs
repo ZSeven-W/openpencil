@@ -1,4 +1,5 @@
 use crate::widgets::agent_settings_builtin_parts;
+use crate::widgets::agent_settings_header_action::header_action_rect;
 use crate::widgets::agent_settings_switch::{SETTINGS_SWITCH_H, SETTINGS_SWITCH_W};
 use crate::{Point2D, Rect};
 use op_editor_core::agent_settings::{AgentSettings, SettingsFocus};
@@ -10,8 +11,6 @@ const COMPACT_CARD_HEIGHT: f32 = 60.0;
 const EXPANDED_CARD_HEIGHT: f32 = 196.0;
 const DRAFT_ACTION_HEIGHT: f32 = 36.0;
 pub(super) const CARD_GAP: f32 = 8.0;
-const ADD_W: f32 = 96.0;
-pub(super) const TOP_HEADER_RIGHT_INSET: f32 = 12.0;
 const FIELD_LABEL_W: f32 = 68.0;
 const FIELD_H: f32 = 24.0;
 const ACTION_W: f32 = 24.0;
@@ -40,13 +39,7 @@ pub(super) fn draft_card_height(settings: &AgentSettings) -> f32 {
 }
 
 pub(super) fn add_provider_rect(content: Rect, y: f32) -> Rect {
-    Rect {
-        origin: Point2D::new(
-            content.origin.x + content.size.x - TOP_HEADER_RIGHT_INSET - ADD_W,
-            y,
-        ),
-        size: Point2D::new(ADD_W, 24.0),
-    }
+    header_action_rect(content, y, 0.0)
 }
 
 pub(super) fn card_rect(x: f32, y: f32, w: f32, h: f32) -> Rect {

@@ -292,6 +292,16 @@ pub fn paint_fill_section(
         Point2D::new(0.0, 0.0),
     );
     let pct_x = pct_rect.origin.x + 10.0;
+    edit.paint_selection_at(
+        cx,
+        theme,
+        PropertyFocus::FillOpacity,
+        pct_text,
+        pct_x,
+        pct_rect.origin.y + 19.0,
+        12.0,
+        pct_rect.origin.x + pct_rect.size.x - 8.0,
+    );
     cx.backend
         .draw_text(&pct, Point2D::new(pct_x, pct_rect.origin.y + 19.0));
     if let Some(pos) = edit.caret_at(PropertyFocus::FillOpacity) {
@@ -391,6 +401,16 @@ fn paint_fill_solid_body(
         Point2D::new(0.0, 0.0),
     );
     let hex_x = hex_rect.origin.x + 30.0;
+    edit.paint_selection_at(
+        cx,
+        theme,
+        PropertyFocus::FillHex,
+        hex_text,
+        hex_x,
+        hex_rect.origin.y + 19.0,
+        12.0,
+        hex_rect.origin.x + hex_rect.size.x - 8.0,
+    );
     cx.backend
         .draw_text(&hex_layout, Point2D::new(hex_x, hex_rect.origin.y + 19.0));
     if let Some(pos) = edit.caret_at(PropertyFocus::FillHex) {
@@ -455,6 +475,16 @@ fn paint_fill_gradient_body(
             Point2D::new(0.0, 0.0),
         );
         let value_x = angle_rect.origin.x + 44.0;
+        edit.paint_selection_at(
+            cx,
+            theme,
+            angle_focus,
+            value_text,
+            value_x,
+            angle_rect.origin.y + 19.0,
+            12.0,
+            angle_rect.origin.x + angle_rect.size.x - 8.0,
+        );
         cx.backend
             .draw_text(&value, Point2D::new(value_x, angle_rect.origin.y + 19.0));
         if let Some(pos) = edit.caret_at(angle_focus) {
@@ -542,6 +572,16 @@ fn paint_fill_gradient_body(
             Point2D::new(0.0, 0.0),
         );
         let hex_text_x = hex_rect.origin.x + 30.0;
+        edit.paint_selection_at(
+            cx,
+            theme,
+            hex_focus,
+            hex_text,
+            hex_text_x,
+            hex_rect.origin.y + 19.0,
+            12.0,
+            hex_rect.origin.x + hex_rect.size.x - 8.0,
+        );
         cx.backend.draw_text(
             &hex_layout,
             Point2D::new(hex_text_x, hex_rect.origin.y + 19.0),
@@ -580,6 +620,16 @@ fn paint_fill_gradient_body(
             Point2D::new(0.0, 0.0),
         );
         let pct_x = pct_rect.origin.x + 12.0;
+        edit.paint_selection_at(
+            cx,
+            theme,
+            offset_focus,
+            pct_text,
+            pct_x,
+            pct_rect.origin.y + 19.0,
+            12.0,
+            pct_rect.origin.x + pct_rect.size.x - 8.0,
+        );
         cx.backend
             .draw_text(&pct_layout, Point2D::new(pct_x, pct_rect.origin.y + 19.0));
         if let Some(pos) = edit.caret_at(offset_focus) {

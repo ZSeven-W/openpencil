@@ -153,6 +153,16 @@ fn paint_labeled_input(
         .draw_text(&prefix_layout, Point2D::new(prefix_x, baseline_y));
     let prefix_w = cx.backend.measure_text(prefix, 12.0);
     let value_x = prefix_x + prefix_w + 8.0;
+    edit.paint_selection_at(
+        cx,
+        theme,
+        focus,
+        value,
+        value_x,
+        baseline_y,
+        12.0,
+        rect.origin.x + rect.size.x - 8.0,
+    );
     let value_layout = TextLayout::single_run(
         value,
         "system-ui",

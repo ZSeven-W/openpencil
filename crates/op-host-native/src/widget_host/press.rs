@@ -9,9 +9,11 @@
 
 use super::helpers::{rect_contains, TOOLBAR_INSET_X, TOOLBAR_INSET_Y};
 use super::{
-    ChatDragState, ChatResizeState, CreateDragState, DragState, HandleDragState, NodeDragState,
-    PanelResize, PanelResizeKind, RotateDragState, WidgetHostNative,
+    ChatDragState, ChatResizeState, CodeSelectionDragState, CreateDragState, DragState,
+    HandleDragState, NodeDragState, PanelResize, PanelResizeKind, RotateDragState,
+    WidgetHostNative,
 };
+use op_editor_core::codegen::CodeSelection;
 use op_editor_ui::widgets::{
     rotation_corner_at_point, selection_handle_at_point, AIChatHit, AIChatPlaceholder, LayoutCx,
     LocalePicker, PropertyPanel, Toolbar, TopBar, TopBarHit, Widget, TOOLBAR_WIDTH, TOP_BAR_HEIGHT,
@@ -499,6 +501,19 @@ impl WidgetHostNative {
                     (viewport_height - TOP_BAR_HEIGHT).max(0.0),
                 ),
             };
+            if let Some(anchor) = self.code_text_offset_at_screen(x, y) {
+                self.commit_property_focus_if_any();
+                self.editor_state.codegen.code_selection = Some(CodeSelection {
+                    anchor,
+                    focus: anchor,
+                });
+                self.code_selection_drag = Some(CodeSelectionDragState { anchor });
+                self.editor_state.codegen.framework_hover = None;
+                self.editor_state.codegen.action_hover = None;
+                self.editor_state.chat.focused = false;
+                self.mark_dirty();
+                return true;
+            }
             // Button / checkbox click first (flex modes + size flags).
             if let Some(action) = panel.hit_test_action(property_rect, Point2D::new(x, y)) {
                 self.commit_property_focus_if_any();

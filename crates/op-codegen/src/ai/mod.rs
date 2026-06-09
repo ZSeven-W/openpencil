@@ -7,6 +7,7 @@
 
 pub mod assets;
 pub mod bundle;
+pub(crate) mod fallback_plan;
 pub mod parse;
 pub mod pipeline;
 pub mod prompts;

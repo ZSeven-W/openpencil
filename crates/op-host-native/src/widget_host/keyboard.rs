@@ -28,6 +28,14 @@ impl WidgetHostNative {
             let now = self.now_ms;
             if let Some(form) = self.editor_state.editor_ui.git_panel.clone_form.as_mut() {
                 if !form.cloning {
+                    if form.input_select_all {
+                        match form.focus {
+                            Some(op_editor_core::CloneField::Url) => form.url.clear(),
+                            Some(op_editor_core::CloneField::Dest) => form.dest.clear(),
+                            None => {}
+                        }
+                        form.input_select_all = false;
+                    }
                     match form.focus {
                         Some(op_editor_core::CloneField::Url) => form.url.push(c),
                         Some(op_editor_core::CloneField::Dest) => form.dest.push(c),
@@ -45,6 +53,10 @@ impl WidgetHostNative {
             if !c.is_control() {
                 let now = self.now_ms;
                 let panel = &mut self.editor_state.editor_ui.git_panel;
+                if panel.input_select_all {
+                    panel.commit_message.clear();
+                    panel.input_select_all = false;
+                }
                 panel.commit_message.push(c);
                 panel.commit_no_changes = false;
                 // Keep the caret solid while typing (reset the blink).
@@ -57,7 +69,12 @@ impl WidgetHostNative {
         // …then the Git panel's remote-URL input.
         if self.git_remote_focus_active() {
             if !c.is_control() {
-                self.editor_state.editor_ui.git_panel.remote_draft.push(c);
+                let panel = &mut self.editor_state.editor_ui.git_panel;
+                if panel.input_select_all {
+                    panel.remote_draft.clear();
+                    panel.input_select_all = false;
+                }
+                panel.remote_draft.push(c);
                 self.mark_dirty();
                 return true;
             }
@@ -66,7 +83,12 @@ impl WidgetHostNative {
         // …then the Git panel's HTTPS-credential input.
         if self.git_https_focus_active() {
             if !c.is_control() {
-                self.editor_state.editor_ui.git_panel.https_draft.push(c);
+                let panel = &mut self.editor_state.editor_ui.git_panel;
+                if panel.input_select_all {
+                    panel.https_draft.clear();
+                    panel.input_select_all = false;
+                }
+                panel.https_draft.push(c);
                 self.mark_dirty();
                 return true;
             }
@@ -77,6 +99,14 @@ impl WidgetHostNative {
             if !c.is_control() {
                 let now = self.now_ms;
                 let panel = &mut self.editor_state.editor_ui.git_panel;
+                if panel.input_select_all {
+                    if panel.author_email_focused {
+                        panel.author_email_draft.clear();
+                    } else {
+                        panel.author_name_draft.clear();
+                    }
+                    panel.input_select_all = false;
+                }
                 if panel.author_email_focused {
                     panel.author_email_draft.push(c);
                 } else {
@@ -92,6 +122,10 @@ impl WidgetHostNative {
             if !c.is_control() {
                 let now = self.now_ms;
                 let panel = &mut self.editor_state.editor_ui.git_panel;
+                if panel.input_select_all {
+                    panel.branch_create_draft.clear();
+                    panel.input_select_all = false;
+                }
                 panel.branch_create_draft.push(c);
                 // Keep the caret solid while typing (reset the blink).
                 panel.commit_caret_anchor_ms = now;
@@ -120,17 +154,27 @@ impl WidgetHostNative {
             return false;
         }
         if let Some(focus) = self.editor_state.editor_ui.variable_row_focus {
-            self.editor_state.ui.property_draft_select_all = false;
+            let replacing_all = self.editor_state.ui.property_draft_select_all;
+            let draft_for_allowed = if replacing_all {
+                ""
+            } else {
+                self.editor_state.ui.property_input_draft.as_str()
+            };
             let allowed = match focus {
                 VariableRowFocus::Number(_) => {
                     c.is_ascii_digit()
-                        || (c == '-' && self.editor_state.ui.property_input_draft.is_empty())
-                        || (c == '.' && !self.editor_state.ui.property_input_draft.contains('.'))
+                        || (c == '-' && draft_for_allowed.is_empty())
+                        || (c == '.' && !draft_for_allowed.contains('.'))
                 }
                 VariableRowFocus::String(_) => !c.is_control(),
             };
             if !allowed {
                 return false;
+            }
+            if replacing_all {
+                self.editor_state.ui.property_input_draft.clear();
+                self.editor_state.ui.property_caret_pos = 0;
+                self.editor_state.ui.property_draft_select_all = false;
             }
             self.editor_state.ui.property_input_draft.push(c);
             self.editor_state.ui.property_caret_anchor_ms = self.now_ms;
@@ -140,16 +184,24 @@ impl WidgetHostNative {
         if self.editor_state.editor_ui.effect_param_focus.is_some() {
             // Effect-param value box — numeric, caret-aware insert
             // into the shared draft (same as a numeric property).
-            self.editor_state.ui.property_draft_select_all = false;
+            let replacing_all = self.editor_state.ui.property_draft_select_all;
             let draft = &self.editor_state.ui.property_input_draft;
-            let pos = self.editor_state.ui.property_caret_pos.min(draft.len());
+            let pos = if replacing_all {
+                0
+            } else {
+                self.editor_state.ui.property_caret_pos.min(draft.len())
+            };
             let allowed = c.is_ascii_digit()
-                || (c == '-' && pos == 0 && !draft.starts_with('-'))
-                || (c == '.' && !draft.contains('.'));
+                || (c == '-' && pos == 0 && (replacing_all || !draft.starts_with('-')))
+                || (c == '.' && (replacing_all || !draft.contains('.')));
             if !allowed {
                 return false;
             }
             let draft = &mut self.editor_state.ui.property_input_draft;
+            if replacing_all {
+                draft.clear();
+                self.editor_state.ui.property_draft_select_all = false;
+            }
             draft.insert(pos, c);
             self.editor_state.ui.property_caret_pos = pos + 1;
             self.editor_state.ui.property_caret_anchor_ms = self.now_ms;
@@ -157,30 +209,40 @@ impl WidgetHostNative {
             return true;
         }
         if let Some(focus) = self.editor_state.ui.property_focus {
-            self.editor_state.ui.property_draft_select_all = false;
+            let replacing_all = self.editor_state.ui.property_draft_select_all;
             let is_hex_focus = focus.is_hex();
             // Caret byte-index — drafts are ASCII so it is also the
             // char index. `-` / `#` are gated on the caret being at
             // the start, NOT on the draft being empty: typing `-` at
             // the head of an existing `40` is a valid edit (`-40`).
             let draft = &self.editor_state.ui.property_input_draft;
-            let pos = self.editor_state.ui.property_caret_pos.min(draft.len());
+            let pos = if replacing_all {
+                0
+            } else {
+                self.editor_state.ui.property_caret_pos.min(draft.len())
+            };
             let allowed = if is_hex_focus {
                 // Cap at 7 chars (`#RRGGBB`) — per-stop alpha is
                 // preserved at commit time so the user never types
                 // raw alpha digits.
-                draft.len() < 7
+                (replacing_all || draft.len() < 7)
                     && (c.is_ascii_hexdigit() || (c == '#' && pos == 0 && !draft.starts_with('#')))
             } else {
                 c.is_ascii_digit()
-                    || (c == '-' && pos == 0 && !draft.starts_with('-'))
-                    || (c == '.' && focus.accepts_decimal() && !draft.contains('.'))
+                    || (c == '-' && pos == 0 && (replacing_all || !draft.starts_with('-')))
+                    || (c == '.'
+                        && focus.accepts_decimal()
+                        && (replacing_all || !draft.contains('.')))
             };
             if !allowed {
                 return false;
             }
             // Insert at the caret and advance it.
             let draft = &mut self.editor_state.ui.property_input_draft;
+            if replacing_all {
+                draft.clear();
+                self.editor_state.ui.property_draft_select_all = false;
+            }
             draft.insert(pos, c);
             self.editor_state.ui.property_caret_pos = pos + 1;
             self.editor_state.ui.property_caret_anchor_ms = self.now_ms;
@@ -188,6 +250,10 @@ impl WidgetHostNative {
             return true;
         }
         if self.editor_state.editor_ui.icon_picker_open && !c.is_control() {
+            if self.editor_state.editor_ui.icon_picker_select_all {
+                self.editor_state.editor_ui.icon_picker_search.clear();
+                self.editor_state.editor_ui.icon_picker_select_all = false;
+            }
             self.editor_state.editor_ui.icon_picker_search.push(c);
             self.mark_dirty();
             return true;
@@ -196,12 +262,20 @@ impl WidgetHostNative {
             return self.apply_chat_model_picker_text(c);
         }
         if self.editor_state.editor_ui.component_browser_open && !c.is_control() {
+            if self.editor_state.editor_ui.component_browser_select_all {
+                self.editor_state.editor_ui.component_browser_search.clear();
+                self.editor_state.editor_ui.component_browser_select_all = false;
+            }
             self.editor_state.editor_ui.component_browser_search.push(c);
             self.mark_dirty();
             return true;
         }
         if !self.editor_state.chat.focused {
             return false;
+        }
+        if self.editor_state.chat.input_select_all {
+            self.editor_state.chat.input.clear();
+            self.editor_state.chat.input_select_all = false;
         }
         self.editor_state.chat.input.push(c);
         self.editor_state.chat.caret_anchor_ms = self.now_ms;
@@ -218,6 +292,10 @@ impl WidgetHostNative {
     pub fn chat_input_paste(&mut self, text: &str) -> bool {
         if !self.editor_state.chat.focused || text.is_empty() {
             return false;
+        }
+        if self.editor_state.chat.input_select_all {
+            self.editor_state.chat.input.clear();
+            self.editor_state.chat.input_select_all = false;
         }
         self.editor_state.chat.input.push_str(text);
         self.editor_state.chat.caret_anchor_ms = self.now_ms;
@@ -270,11 +348,20 @@ impl WidgetHostNative {
             // focused field that isn't mid-clone.
             if let Some(form) = self.editor_state.editor_ui.git_panel.clone_form.as_mut() {
                 if !form.cloning {
-                    match form.focus {
-                        Some(op_editor_core::CloneField::Url) => form.url.pop(),
-                        Some(op_editor_core::CloneField::Dest) => form.dest.pop(),
-                        None => None,
-                    };
+                    if form.input_select_all {
+                        match form.focus {
+                            Some(op_editor_core::CloneField::Url) => form.url.clear(),
+                            Some(op_editor_core::CloneField::Dest) => form.dest.clear(),
+                            None => {}
+                        }
+                        form.input_select_all = false;
+                    } else {
+                        match form.focus {
+                            Some(op_editor_core::CloneField::Url) => form.url.pop(),
+                            Some(op_editor_core::CloneField::Dest) => form.dest.pop(),
+                            None => None,
+                        };
+                    }
                     form.error = None;
                 }
             }
@@ -282,23 +369,48 @@ impl WidgetHostNative {
             return true;
         }
         if self.git_commit_focus_active() {
-            self.editor_state.editor_ui.git_panel.commit_message.pop();
+            let panel = &mut self.editor_state.editor_ui.git_panel;
+            if panel.input_select_all {
+                panel.commit_message.clear();
+                panel.input_select_all = false;
+            } else {
+                panel.commit_message.pop();
+            }
             self.mark_dirty();
             return true;
         }
         if self.git_remote_focus_active() {
-            self.editor_state.editor_ui.git_panel.remote_draft.pop();
+            let panel = &mut self.editor_state.editor_ui.git_panel;
+            if panel.input_select_all {
+                panel.remote_draft.clear();
+                panel.input_select_all = false;
+            } else {
+                panel.remote_draft.pop();
+            }
             self.mark_dirty();
             return true;
         }
         if self.git_https_focus_active() {
-            self.editor_state.editor_ui.git_panel.https_draft.pop();
+            let panel = &mut self.editor_state.editor_ui.git_panel;
+            if panel.input_select_all {
+                panel.https_draft.clear();
+                panel.input_select_all = false;
+            } else {
+                panel.https_draft.pop();
+            }
             self.mark_dirty();
             return true;
         }
         if self.git_author_focus_active() {
             let panel = &mut self.editor_state.editor_ui.git_panel;
-            if panel.author_email_focused {
+            if panel.input_select_all {
+                if panel.author_email_focused {
+                    panel.author_email_draft.clear();
+                } else {
+                    panel.author_name_draft.clear();
+                }
+                panel.input_select_all = false;
+            } else if panel.author_email_focused {
                 panel.author_email_draft.pop();
             } else {
                 panel.author_name_draft.pop();
@@ -307,11 +419,13 @@ impl WidgetHostNative {
             return true;
         }
         if self.git_branch_create_focus_active() {
-            self.editor_state
-                .editor_ui
-                .git_panel
-                .branch_create_draft
-                .pop();
+            let panel = &mut self.editor_state.editor_ui.git_panel;
+            if panel.input_select_all {
+                panel.branch_create_draft.clear();
+                panel.input_select_all = false;
+            } else {
+                panel.branch_create_draft.pop();
+            }
             self.mark_dirty();
             return true;
         }
@@ -332,7 +446,14 @@ impl WidgetHostNative {
             return ok;
         }
         if self.editor_state.editor_ui.variable_row_focus.is_some() {
-            self.editor_state.ui.property_draft_select_all = false;
+            if self.editor_state.ui.property_draft_select_all {
+                self.editor_state.ui.property_input_draft.clear();
+                self.editor_state.ui.property_caret_pos = 0;
+                self.editor_state.ui.property_draft_select_all = false;
+                self.editor_state.ui.property_caret_anchor_ms = self.now_ms;
+                self.mark_dirty();
+                return true;
+            }
             if self.editor_state.ui.property_input_draft.pop().is_some() {
                 self.editor_state.ui.property_caret_anchor_ms = self.now_ms;
                 self.mark_dirty();
@@ -343,7 +464,14 @@ impl WidgetHostNative {
         if self.editor_state.ui.property_focus.is_some()
             || self.editor_state.editor_ui.effect_param_focus.is_some()
         {
-            self.editor_state.ui.property_draft_select_all = false;
+            if self.editor_state.ui.property_draft_select_all {
+                self.editor_state.ui.property_input_draft.clear();
+                self.editor_state.ui.property_caret_pos = 0;
+                self.editor_state.ui.property_draft_select_all = false;
+                self.editor_state.ui.property_caret_anchor_ms = self.now_ms;
+                self.mark_dirty();
+                return true;
+            }
             // Delete the char before the caret, then pull it back.
             let draft = &mut self.editor_state.ui.property_input_draft;
             let pos = self.editor_state.ui.property_caret_pos.min(draft.len());
@@ -357,6 +485,12 @@ impl WidgetHostNative {
             return false;
         }
         if self.editor_state.editor_ui.icon_picker_open {
+            if self.editor_state.editor_ui.icon_picker_select_all {
+                self.editor_state.editor_ui.icon_picker_search.clear();
+                self.editor_state.editor_ui.icon_picker_select_all = false;
+                self.mark_dirty();
+                return true;
+            }
             if self
                 .editor_state
                 .editor_ui
@@ -373,6 +507,12 @@ impl WidgetHostNative {
             return self.apply_chat_model_picker_backspace();
         }
         if self.editor_state.editor_ui.component_browser_open {
+            if self.editor_state.editor_ui.component_browser_select_all {
+                self.editor_state.editor_ui.component_browser_search.clear();
+                self.editor_state.editor_ui.component_browser_select_all = false;
+                self.mark_dirty();
+                return true;
+            }
             if self
                 .editor_state
                 .editor_ui
@@ -386,6 +526,13 @@ impl WidgetHostNative {
             return false;
         }
         if self.editor_state.chat.focused {
+            if self.editor_state.chat.input_select_all {
+                self.editor_state.chat.input.clear();
+                self.editor_state.chat.input_select_all = false;
+                self.editor_state.chat.caret_anchor_ms = self.now_ms;
+                self.mark_dirty();
+                return true;
+            }
             if self.editor_state.chat.input.pop().is_some() {
                 self.editor_state.chat.caret_anchor_ms = self.now_ms;
                 self.mark_dirty();
@@ -409,7 +556,14 @@ impl WidgetHostNative {
     /// otherwise deletes the selected node.
     pub fn apply_delete(&mut self) -> bool {
         if self.editor_state.editor_ui.variable_row_focus.is_some() {
-            self.editor_state.ui.property_draft_select_all = false;
+            if self.editor_state.ui.property_draft_select_all {
+                self.editor_state.ui.property_input_draft.clear();
+                self.editor_state.ui.property_caret_pos = 0;
+                self.editor_state.ui.property_draft_select_all = false;
+                self.editor_state.ui.property_caret_anchor_ms = self.now_ms;
+                self.mark_dirty();
+                return true;
+            }
             if self.editor_state.ui.property_input_draft.pop().is_some() {
                 self.editor_state.ui.property_caret_anchor_ms = self.now_ms;
                 self.mark_dirty();
@@ -432,6 +586,26 @@ impl WidgetHostNative {
                 self.mark_dirty();
             }
             return ok;
+        }
+        if self.editor_state.ui.property_focus.is_some()
+            || self.editor_state.editor_ui.effect_param_focus.is_some()
+        {
+            if self.editor_state.ui.property_draft_select_all {
+                self.editor_state.ui.property_input_draft.clear();
+                self.editor_state.ui.property_caret_pos = 0;
+                self.editor_state.ui.property_draft_select_all = false;
+                self.editor_state.ui.property_caret_anchor_ms = self.now_ms;
+                self.mark_dirty();
+                return true;
+            }
+            return false;
+        }
+        if self.editor_state.chat.focused && self.editor_state.chat.input_select_all {
+            self.editor_state.chat.input.clear();
+            self.editor_state.chat.input_select_all = false;
+            self.editor_state.chat.caret_anchor_ms = self.now_ms;
+            self.mark_dirty();
+            return true;
         }
         // Don't delete the selected node when any text input owns
         // the keyboard — property focus, effect-param focus, or the
@@ -573,6 +747,7 @@ impl WidgetHostNative {
         }
         let len = self.editor_state.ui.property_input_draft.len();
         let pos = self.editor_state.ui.property_caret_pos.min(len);
+        self.editor_state.ui.property_draft_select_all = false;
         let next = if forward {
             (pos + 1).min(len)
         } else {
@@ -770,6 +945,7 @@ impl WidgetHostNative {
                     .clone_form
                     .as_mut()
                     .unwrap();
+                form.input_select_all = false;
                 form.focus.take().is_some()
             };
             if !defocused {
@@ -791,6 +967,7 @@ impl WidgetHostNative {
             panel.branch_picker_mode = op_editor_core::GitBranchPickerMode::List;
             panel.branch_create_draft.clear();
             panel.branch_create_focused = false;
+            panel.input_select_all = false;
             self.mark_dirty();
             return true;
         }
@@ -802,24 +979,28 @@ impl WidgetHostNative {
             panel.author_prompt = false;
             panel.author_name_focused = false;
             panel.author_email_focused = false;
+            panel.input_select_all = false;
             self.mark_dirty();
             return true;
         }
         // Escape defocuses the Git commit input (the panel stays open).
         if self.git_commit_focus_active() {
             self.editor_state.editor_ui.git_panel.commit_focused = false;
+            self.editor_state.editor_ui.git_panel.input_select_all = false;
             self.mark_dirty();
             return true;
         }
         // …and the Git remote-URL input.
         if self.git_remote_focus_active() {
             self.editor_state.editor_ui.git_panel.remote_focused = false;
+            self.editor_state.editor_ui.git_panel.input_select_all = false;
             self.mark_dirty();
             return true;
         }
         // …and the Git HTTPS-credential input.
         if self.git_https_focus_active() {
             self.editor_state.editor_ui.git_panel.https_focused = false;
+            self.editor_state.editor_ui.git_panel.input_select_all = false;
             self.mark_dirty();
             return true;
         }
@@ -903,6 +1084,7 @@ impl WidgetHostNative {
             self.editor_state.editor_ui.icon_picker_open = false;
             self.editor_state.editor_ui.icon_picker_replace_selection = false;
             self.editor_state.editor_ui.icon_picker_search.clear();
+            self.editor_state.editor_ui.icon_picker_select_all = false;
             self.editor_state.editor_ui.icon_picker_hover = None;
             self.mark_dirty();
             return true;
@@ -912,12 +1094,14 @@ impl WidgetHostNative {
             self.editor_state.editor_ui.chat_model_picker_scroll = 0.0;
             self.editor_state.editor_ui.chat_model_picker_search.clear();
             self.editor_state.editor_ui.chat_model_picker_caret = None;
+            self.editor_state.editor_ui.chat_model_picker_select_all = false;
             self.editor_state.editor_ui.chat_model_picker_hover = None;
             self.mark_dirty();
             return true;
         }
         if self.editor_state.editor_ui.component_browser_open {
             self.editor_state.editor_ui.component_browser_open = false;
+            self.editor_state.editor_ui.component_browser_select_all = false;
             self.editor_state.editor_ui.component_browser_hover = None;
             self.mark_dirty();
             return true;
@@ -934,6 +1118,7 @@ impl WidgetHostNative {
         }
         if self.editor_state.chat.focused {
             self.editor_state.chat.focused = false;
+            self.editor_state.chat.input_select_all = false;
             self.mark_dirty();
             return true;
         }

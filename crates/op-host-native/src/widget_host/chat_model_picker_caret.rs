@@ -6,7 +6,14 @@ impl WidgetHostNative {
             return false;
         }
         let ui = &mut self.editor_state.editor_ui;
-        let caret = caret_position(&ui.chat_model_picker_search, ui.chat_model_picker_caret);
+        let replacing_all = ui.chat_model_picker_select_all;
+        let caret = if replacing_all {
+            ui.chat_model_picker_search.clear();
+            ui.chat_model_picker_select_all = false;
+            0
+        } else {
+            caret_position(&ui.chat_model_picker_search, ui.chat_model_picker_caret)
+        };
         ui.chat_model_picker_search.insert(caret, c);
         ui.chat_model_picker_caret = Some(caret + c.len_utf8());
         ui.chat_model_picker_caret_anchor_ms = self.now_ms;
@@ -21,6 +28,16 @@ impl WidgetHostNative {
             return false;
         }
         let ui = &mut self.editor_state.editor_ui;
+        if ui.chat_model_picker_select_all {
+            ui.chat_model_picker_search.clear();
+            ui.chat_model_picker_caret = Some(0);
+            ui.chat_model_picker_select_all = false;
+            ui.chat_model_picker_scroll = 0.0;
+            ui.chat_model_picker_hover = None;
+            ui.chat_model_picker_caret_anchor_ms = self.now_ms;
+            self.mark_dirty();
+            return true;
+        }
         let caret = caret_position(&ui.chat_model_picker_search, ui.chat_model_picker_caret);
         if caret > 0 {
             let start = previous_boundary(&ui.chat_model_picker_search, caret);
@@ -41,6 +58,7 @@ impl WidgetHostNative {
             return false;
         }
         let ui = &mut self.editor_state.editor_ui;
+        ui.chat_model_picker_select_all = false;
         let caret = caret_position(&ui.chat_model_picker_search, ui.chat_model_picker_caret);
         ui.chat_model_picker_caret = Some(if forward {
             next_boundary(&ui.chat_model_picker_search, caret)

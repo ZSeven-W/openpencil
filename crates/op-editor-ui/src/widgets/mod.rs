@@ -69,6 +69,7 @@ mod property_panel_test_support;
 mod property_panel_tests;
 pub mod property_panel_text;
 pub mod property_panel_visibility;
+mod text_selection;
 pub mod toolbar;
 
 // Step 3 — center canvas that renders document nodes as actual
@@ -107,6 +108,7 @@ mod agent_settings_builtin_parts;
 mod agent_settings_builtin_tests;
 mod agent_settings_caret;
 mod agent_settings_form_actions;
+mod agent_settings_header_action;
 pub mod agent_settings_i18n;
 pub mod agent_settings_images;
 mod agent_settings_images_parts;
@@ -133,6 +135,7 @@ pub mod ai_chat_panel_paint;
 pub mod ai_chat_transcript;
 #[cfg(test)]
 mod ai_chat_transcript_apply_tests;
+pub(crate) mod ai_chat_transcript_completion;
 pub(crate) mod ai_chat_transcript_design;
 pub(crate) mod ai_chat_transcript_hit;
 pub(crate) mod ai_chat_transcript_steps;

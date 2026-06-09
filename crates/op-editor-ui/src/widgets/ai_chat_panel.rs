@@ -31,7 +31,6 @@ pub(crate) const RESIZE_GUTTER: f32 = 4.0;
 pub(crate) const RESIZE_CORNER: f32 = 12.0;
 pub(crate) const INPUT_AREA_HEIGHT: f32 = 56.0;
 const INPUT_TOOLBAR_HEIGHT: f32 = 40.0;
-pub(crate) const MODEL_CHIP_W: f32 = 150.0;
 const INPUT_BASE_HEIGHT: f32 = INPUT_AREA_HEIGHT + INPUT_TOOLBAR_HEIGHT;
 
 #[derive(Debug, Clone)]
@@ -95,12 +94,16 @@ pub struct AIChatPlaceholder<'a> {
     pub model_picker_search: String,
     /// Byte caret for the model-picker search query.
     pub model_picker_caret: Option<usize>,
+    /// Whether Ctrl/Cmd+A selected the full model-picker query.
+    pub model_picker_select_all: bool,
     /// Last focus / edit timestamp for the model-picker search caret.
     pub model_picker_caret_anchor_ms: u64,
     pub design_hover: Option<(usize, usize)>,
     /// Which bare header button the cursor is over (chevron / maximize
     /// / new chat) — drives their `theme.button_hover` wash.
     pub header_hover: Option<op_editor_core::ChatHeaderButton>,
+    /// Which bottom-toolbar chat control the cursor is over.
+    pub footer_hover: Option<op_editor_core::ChatFooterButton>,
     /// Localised empty-state example cards.
     pub(crate) examples: [ExampleCard; 4],
     /// Active UI locale.
@@ -132,9 +135,11 @@ impl<'a> AIChatPlaceholder<'a> {
             model_picker_hover: ui.chat_model_picker_hover,
             model_picker_search: ui.chat_model_picker_search.clone(),
             model_picker_caret: ui.chat_model_picker_caret,
+            model_picker_select_all: ui.chat_model_picker_select_all,
             model_picker_caret_anchor_ms: ui.chat_model_picker_caret_anchor_ms,
             design_hover: ui.chat_design_block_hover,
             header_hover: ui.chat_header_hover,
+            footer_hover: ui.chat_footer_hover,
             examples: example_cards(ui.locale),
             locale: ui.locale,
         }
@@ -189,20 +194,88 @@ impl<'a> AIChatPlaceholder<'a> {
         }
     }
 
+    pub(crate) fn expanded_header_title_rect(&self, rect: Rect) -> Rect {
+        let x = rect.origin.x + PAD - 8.0;
+        let right_limit = rect.origin.x + rect.size.x - PAD - 58.0;
+        let w = (28.0 + footer_label_width(&self.label_new_chat, 14.0) + 22.0)
+            .max(112.0)
+            .min((right_limit - x).max(36.0));
+        Rect {
+            origin: Point2D::new(x, rect.origin.y + 3.0),
+            size: Point2D::new(w, 30.0),
+        }
+    }
+
     pub fn model_picker_bounds(&self, rect: Rect) -> Option<Rect> {
         if !self.model_picker_open {
             return None;
         }
+        let input_rect = self.input_rect(rect);
+        Some(self.model_picker_rect(rect, input_rect))
+    }
+
+    pub(crate) fn input_rect(&self, rect: Rect) -> Rect {
         let input_h = self.input_height();
-        let input_rect = Rect {
+        Rect {
             origin: Point2D::new(
                 rect.origin.x + PAD,
                 rect.origin.y + rect.size.y - input_h + 1.0,
             ),
             size: Point2D::new(rect.size.x - PAD * 2.0, input_h),
-        };
-        Some(self.model_picker_rect(rect, input_rect))
+        }
     }
+
+    pub(crate) fn footer_layout(
+        &self,
+        rect: Rect,
+        input_rect: Rect,
+        toolbar_top: f32,
+    ) -> FooterLayout {
+        let toolbar_center_y = toolbar_top + INPUT_TOOLBAR_HEIGHT / 2.0;
+        let selected = self.state.selected_model_entry();
+        let model_name: &str = selected
+            .map(|m| m.display_name.as_str())
+            .unwrap_or(self.label_no_models.as_str());
+        let model_w = footer_label_width(model_name, 12.0);
+        let agent_team_x = input_rect.origin.x + 20.0 + model_w + 4.0 + 18.0;
+        let model = Rect {
+            origin: Point2D::new(input_rect.origin.x - 6.0, toolbar_center_y - 14.0),
+            size: Point2D::new((agent_team_x - input_rect.origin.x).max(44.0), 28.0),
+        };
+        let agent_team = Rect {
+            origin: Point2D::new(agent_team_x, toolbar_center_y - 10.0),
+            size: Point2D::new(28.0, 20.0),
+        };
+        let rx = rect.origin.x + rect.size.x - PAD;
+        let attach = Rect {
+            origin: Point2D::new(rx - 58.0, toolbar_center_y - 12.0),
+            size: Point2D::new(24.0, 24.0),
+        };
+        let send = Rect {
+            origin: Point2D::new(rx - 24.0, toolbar_center_y - 12.0),
+            size: Point2D::new(24.0, 24.0),
+        };
+        FooterLayout {
+            model,
+            agent_team,
+            attach,
+            send,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct FooterLayout {
+    pub(crate) model: Rect,
+    pub(crate) agent_team: Rect,
+    pub(crate) attach: Rect,
+    pub(crate) send: Rect,
+}
+
+fn footer_label_width(label: &str, size: f32) -> f32 {
+    label.chars().fold(0.0, |w, c| {
+        w + if c.is_ascii() { size * 0.55 } else { size }
+    })
 }
 
 impl<'a> Widget for AIChatPlaceholder<'a> {
@@ -220,10 +293,17 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
     }
 
     fn paint(&self, cx: &mut PaintCx<'_>, rect: Rect) {
-        // Collapsed mode mirrors TS AIChatMinimizedBar.
+        // Collapsed TS-style pill.
         if self.state.collapsed {
             cx.backend
                 .fill_round_rect(rect, COLLAPSED_RADIUS, self.theme.card);
+            if self.header_hover == Some(op_editor_core::ChatHeaderButton::ToggleCollapse) {
+                cx.backend.fill_round_rect(
+                    rect,
+                    COLLAPSED_RADIUS,
+                    chat_neutral_hover_color(&self.theme),
+                );
+            }
             cx.backend
                 .stroke_round_rect(rect, COLLAPSED_RADIUS, self.theme.border, 1.0);
             let center_y = rect.origin.y + rect.size.y / 2.0;
@@ -279,13 +359,19 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
         use op_editor_core::ChatHeaderButton;
         let header_y = rect.origin.y + 8.0;
         let chevron_x = rect.origin.x + PAD;
-        let chevron_color = paint_header_btn_bg(
-            cx,
-            &self.theme,
-            chevron_x,
-            header_y,
-            self.header_hover == Some(ChatHeaderButton::ToggleCollapse),
-        );
+        let title_hovered = self.header_hover == Some(ChatHeaderButton::ToggleCollapse);
+        if title_hovered {
+            cx.backend.fill_round_rect(
+                self.expanded_header_title_rect(rect),
+                8.0,
+                chat_neutral_hover_color(&self.theme),
+            );
+        }
+        let chevron_color = if title_hovered {
+            self.theme.foreground
+        } else {
+            self.theme.muted_foreground
+        };
         draw_icon(
             cx.backend,
             Icon::ChevronDown,
@@ -372,21 +458,21 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
             );
         }
 
-        // Textarea region — borderless, 14 px to mirror the TS app's
-        // textarea style. Long input wraps across up to `MAX_LINES`
-        // visible rows; beyond that the view anchors to the bottom
-        // (textarea scroll-to-bottom) so the caret line stays in
-        // sight. `clip_rect` keeps an over-long line from bleeding
-        // past the panel edge.
+        // Borderless textarea: wrap to 3 visible rows, anchored to bottom.
         let input_rect = Rect {
             origin: Point2D::new(rect.origin.x + PAD, sep_y + 1.0),
             size: Point2D::new(rect.size.x - PAD * 2.0, INPUT_AREA_HEIGHT),
         };
         /// Baseline-to-baseline gap for the wrapped input.
         const LINE_H: f32 = 18.0;
-        /// First line's baseline, relative to `input_rect` top.
-        const FIRST_BASELINE: f32 = 20.0;
+        /// Text inset inside the borderless textarea region.
+        const TEXT_X_PAD: f32 = 8.0;
+        /// Approximate text ascent used to vertically centre 1-2 visible rows.
+        const BASELINE_ASCENT: f32 = 14.0;
         const MAX_LINES: usize = 3;
+        let text_x = input_rect.origin.x + TEXT_X_PAD;
+        let text_max_x = input_rect.origin.x + input_rect.size.x - TEXT_X_PAD;
+        let text_w = (input_rect.size.x - TEXT_X_PAD * 2.0).max(24.0);
         let is_placeholder = self.state.input.is_empty();
         let (text, color) = if is_placeholder {
             (
@@ -396,20 +482,31 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
         } else {
             (self.state.input.as_str(), self.theme.foreground)
         };
-        let wrapped = crate::widgets::canvas_viewport_overlay::wrap_text(
-            cx.backend,
-            text,
-            14.0,
-            input_rect.size.x,
-            400,
-        );
+        let wrapped =
+            crate::widgets::canvas_viewport_overlay::wrap_text(cx.backend, text, 14.0, text_w, 400);
         // Anchor to the bottom — keep the last `MAX_LINES` rows, the
         // ones nearest the (end-anchored) caret.
         let start = wrapped.len().saturating_sub(MAX_LINES);
         let visible = &wrapped[start..];
+        let visible_rows = visible.len().max(1) as f32;
+        let block_h = visible_rows * LINE_H;
+        let first_baseline = ((INPUT_AREA_HEIGHT - block_h) / 2.0 + BASELINE_ASCENT)
+            .clamp(BASELINE_ASCENT, INPUT_AREA_HEIGHT - 4.0);
         cx.backend.save();
         cx.backend.clip_rect(input_rect);
         for (i, line) in visible.iter().enumerate() {
+            let baseline = input_rect.origin.y + first_baseline + i as f32 * LINE_H;
+            if self.state.input_select_all && !is_placeholder {
+                crate::widgets::text_selection::paint_single_line_selection(
+                    cx,
+                    &self.theme,
+                    line,
+                    text_x,
+                    baseline,
+                    14.0,
+                    text_max_x,
+                );
+            }
             let label = TextLayout::single_run(
                 line,
                 "system-ui",
@@ -417,9 +514,7 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
                 to_jian_color(color),
                 Point2D::new(0.0, 0.0),
             );
-            let baseline = input_rect.origin.y + FIRST_BASELINE + i as f32 * LINE_H;
-            cx.backend
-                .draw_text(&label, Point2D::new(input_rect.origin.x, baseline));
+            cx.backend.draw_text(&label, Point2D::new(text_x, baseline));
         }
         cx.backend.restore();
         let caret_visible = self.state.focused
@@ -430,16 +525,16 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
             // part of the buffer); otherwise after the last wrapped
             // row's glyphs.
             let (caret_x, caret_line) = if is_placeholder {
-                (input_rect.origin.x, 0usize)
+                (text_x, 0usize)
             } else {
                 let last = visible.last().map(String::as_str).unwrap_or("");
                 (
-                    input_rect.origin.x + cx.backend.measure_text(last, 14.0),
+                    text_x + cx.backend.measure_text(last, 14.0),
                     visible.len().saturating_sub(1),
                 )
             };
             let caret_top =
-                input_rect.origin.y + FIRST_BASELINE + caret_line as f32 * LINE_H - 13.0;
+                input_rect.origin.y + first_baseline + caret_line as f32 * LINE_H - 13.0;
             cx.backend.fill_rect(
                 Rect {
                     origin: Point2D::new(caret_x, caret_top),
@@ -464,9 +559,15 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
         // right (mirrors the TS panel's bottom row).
         let toolbar_y = input_rect.origin.y + INPUT_AREA_HEIGHT + attach_h;
         let toolbar_center_y = toolbar_y + INPUT_TOOLBAR_HEIGHT / 2.0;
+        let footer = self.footer_layout(rect, self.input_rect(rect), toolbar_y);
+        use op_editor_core::ChatFooterButton;
         // Model chip — brand logo of the selected model's provider
         // + its display name + a chevron. Click toggles the picker.
         let mut model_x = rect.origin.x + PAD;
+        if self.footer_hover == Some(ChatFooterButton::ModelPicker) {
+            cx.backend
+                .fill_round_rect(footer.model, 6.0, chat_neutral_hover_color(&self.theme));
+        }
         let selected = self.state.selected_model_entry();
         let chip_color = self.theme.muted_foreground;
         match selected {
@@ -521,15 +622,16 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
             1.4,
         );
         model_x += 18.0;
-        let chip = Rect {
-            origin: Point2D::new(model_x, toolbar_center_y - 10.0),
-            size: Point2D::new(28.0, 20.0),
-        };
-        cx.backend
-            .fill_round_rect(chip, 6.0, self.theme.button_hover);
+        let chip = footer.agent_team;
+        cx.backend.fill_round_rect(chip, 6.0, self.theme.muted);
+        if self.footer_hover == Some(ChatFooterButton::AgentTeam) {
+            cx.backend
+                .fill_round_rect(chip, 6.0, chat_neutral_hover_color(&self.theme));
+        }
+        let team_label = format!("{}x", self.state.agent_team_size);
         draw_label(
             cx,
-            "1x",
+            &team_label,
             11.0,
             self.theme.muted_foreground,
             chip.origin.x + 7.0,
@@ -548,15 +650,13 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
             toolbar_center_y + 4.0,
         );
 
-        // Right cluster — attach + send buttons.
-        let rx = rect.origin.x + rect.size.x - PAD;
-        let attach_size = 24.0;
-        let attach_rect = Rect {
-            origin: Point2D::new(rx - 58.0, toolbar_center_y - attach_size / 2.0),
-            size: Point2D::new(attach_size, attach_size),
-        };
+        let attach_rect = footer.attach;
         cx.backend
-            .fill_round_rect(attach_rect, 6.0, self.theme.button_hover);
+            .fill_round_rect(attach_rect, 6.0, self.theme.muted);
+        if self.footer_hover == Some(ChatFooterButton::AddAttachment) {
+            cx.backend
+                .fill_round_rect(attach_rect, 6.0, chat_neutral_hover_color(&self.theme));
+        }
         draw_icon(
             cx.backend,
             Icon::Paperclip,
@@ -565,11 +665,7 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
             self.theme.muted_foreground,
             1.4,
         );
-        let send_size = 24.0;
-        let send_rect = Rect {
-            origin: Point2D::new(rx - send_size, toolbar_center_y - send_size / 2.0),
-            size: Point2D::new(send_size, send_size),
-        };
+        let send_rect = footer.send;
         // A turn is sendable with text, with staged attachments, or
         // both (TS parity: an attachment-only message is valid).
         let send_active = can_use_model
@@ -591,6 +687,11 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
             (self.theme.muted, self.theme.muted_foreground, Icon::Send)
         };
         cx.backend.fill_round_rect(send_rect, 6.0, send_bg);
+        if self.footer_hover == Some(ChatFooterButton::Send)
+            || self.footer_hover == Some(ChatFooterButton::Stop)
+        {
+            paint_footer_hover_overlay(cx, send_rect, send_active || streaming, &self.theme);
+        }
         draw_icon(
             cx.backend,
             send_icon,
@@ -614,6 +715,7 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
                 self.model_picker_hover,
                 &self.model_picker_search,
                 self.model_picker_caret,
+                self.model_picker_select_all,
                 self.now_ms,
                 self.model_picker_caret_anchor_ms,
                 self.locale,
@@ -637,6 +739,29 @@ fn draw_label(cx: &mut PaintCx<'_>, text: &str, size: f32, color: Color, x: f32,
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(&label, Point2D::new(x, y));
+}
+
+fn paint_footer_hover_overlay(cx: &mut PaintCx<'_>, rect: Rect, bright: bool, theme: &Theme) {
+    let color = if bright {
+        Color {
+            r: 1.0,
+            g: 1.0,
+            b: 1.0,
+            a: 0.14,
+        }
+    } else {
+        chat_neutral_hover_color(theme)
+    };
+    cx.backend.fill_round_rect(rect, 6.0, color);
+}
+
+fn chat_neutral_hover_color(theme: &Theme) -> Color {
+    Color {
+        r: theme.foreground.r,
+        g: theme.foreground.g,
+        b: theme.foreground.b,
+        a: 0.12,
+    }
 }
 
 /// Paint the `theme.button_hover` wash behind a bare header glyph

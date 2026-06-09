@@ -146,6 +146,7 @@ impl DesktopApp {
                         }
                         consumed = true;
                     }
+                    "a" if settings_focused => consumed = self.host.apply_select_all(),
                     _ if settings_focused => {}
                     "d" => consumed = self.host.apply_duplicate(),
                     "a" => consumed = self.host.apply_select_all(),

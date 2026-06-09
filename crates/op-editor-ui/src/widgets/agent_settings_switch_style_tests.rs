@@ -10,6 +10,7 @@ struct CaptureBackend {
     round_fills: Vec<(Rect, Color)>,
     ovals: Vec<(Rect, Color)>,
     round_strokes: Vec<(Rect, Color, f32)>,
+    text_points: Vec<Point2D>,
 }
 
 impl RenderBackend for CaptureBackend {
@@ -17,7 +18,9 @@ impl RenderBackend for CaptureBackend {
     fn end_frame(&mut self) {}
     fn fill_rect(&mut self, _: Rect, _: Color) {}
     fn stroke_rect(&mut self, _: Rect, _: Color, _: f32) {}
-    fn draw_text(&mut self, _: &TextLayout, _: Point2D) {}
+    fn draw_text(&mut self, _: &TextLayout, point: Point2D) {
+        self.text_points.push(point);
+    }
     fn clip_rect(&mut self, _: Rect) {}
     fn stroke_line(&mut self, _: Point2D, _: Point2D, _: Color, _: f32) {}
     fn fill_round_rect(&mut self, rect: Rect, _: f32, color: Color) {
@@ -51,6 +54,16 @@ fn rect_eq(a: Rect, b: Rect) -> bool {
         && (a.origin.y - b.origin.y).abs() < 0.01
         && (a.size.x - b.size.x).abs() < 0.01
         && (a.size.y - b.size.y).abs() < 0.01
+}
+
+fn has_visible_hover_fill(
+    backend: &CaptureBackend,
+    rect: Rect,
+    theme: crate::theme::Theme,
+) -> bool {
+    backend.round_fills.iter().any(|(r, color)| {
+        rect_eq(*r, rect) && !color_eq(*color, theme.muted) && color.a > theme.button_hover.a + 0.01
+    })
 }
 
 fn settings_content_metrics(rect: Rect) -> (f32, f32, f32) {
@@ -110,22 +123,116 @@ fn mcp_client_config_copy_rect(rect: Rect) -> Rect {
     }
 }
 
-fn add_provider_button_rect(rect: Rect) -> Rect {
+fn mcp_server_button_rect(rect: Rect) -> Rect {
     let (content_x, content_y, content_w) = settings_content_metrics(rect);
+    let server_card_y = content_y + 36.0;
     Rect {
-        origin: Point2D::new(content_x + content_w - 12.0 - 96.0, content_y + 12.0),
-        size: Point2D::new(96.0, 24.0),
+        origin: Point2D::new(content_x + content_w - 16.0 - 72.0, server_card_y + 12.0),
+        size: Point2D::new(72.0, 28.0),
     }
 }
 
-fn add_acp_agent_button_rect(rect: Rect) -> Rect {
+fn add_provider_button_rect(rect: Rect, text_w: f32) -> Rect {
+    let (content_x, content_y, content_w) = settings_content_metrics(rect);
+    super::agent_settings_header_action::header_action_rect(
+        Rect {
+            origin: Point2D::new(content_x, content_y),
+            size: Point2D::new(content_w, 0.0),
+        },
+        content_y + 12.0,
+        text_w,
+    )
+}
+
+fn add_acp_agent_button_rect(rect: Rect, text_w: f32) -> Rect {
     let (content_x, content_y, content_w) = settings_content_metrics(rect);
     let builtin_h = 28.0 + 28.0 + 64.0;
     let acp_y = content_y + 12.0 + builtin_h + 28.0;
+    super::agent_settings_header_action::header_action_rect(
+        Rect {
+            origin: Point2D::new(content_x, content_y),
+            size: Point2D::new(content_w, 0.0),
+        },
+        acp_y,
+        text_w,
+    )
+}
+
+fn image_search_test_button_rect(rect: Rect) -> Rect {
+    let (content_x, content_y, content_w) = settings_content_metrics(rect);
+    let register_y = content_y + 36.0 + 24.0 + 22.0 + 36.0 + 10.0 + 36.0 + 14.0;
     Rect {
-        origin: Point2D::new(content_x + content_w - 12.0 - 96.0, acp_y),
-        size: Point2D::new(96.0, 24.0),
+        origin: Point2D::new(content_x + content_w - 56.0, register_y + 4.0),
+        size: Point2D::new(56.0, 28.0),
     }
+}
+
+fn image_gen_add_button_rect(rect: Rect) -> Rect {
+    let (content_x, content_y, content_w) = settings_content_metrics(rect);
+    let advanced_body_h = 22.0 + 36.0 + 10.0 + 36.0 + 14.0 + 36.0;
+    let gen_top = content_y + 36.0 + 24.0 + advanced_body_h + 28.0;
+    Rect {
+        origin: Point2D::new(content_x + content_w - 72.0, gen_top + 4.0),
+        size: Point2D::new(72.0, 28.0),
+    }
+}
+
+#[test]
+fn hovered_mcp_server_button_paints_hover_wash() {
+    let mut state = EditorState::default();
+    state.editor_ui.theme_mode = ThemeMode::Light;
+    state.editor_ui.agent_settings.tab = AgentSettingsTab::Mcp;
+    state.editor_ui.agent_settings.mcp_server.running = true;
+    state.editor_ui.agent_settings.hover_mcp_server_button = true;
+    let panel = AgentSettingsPanel::for_editor(&state);
+    let rect = panel.rect(1200.0, 800.0);
+    let button = mcp_server_button_rect(rect);
+    let mut backend = CaptureBackend::default();
+    let mut cx = PaintCx {
+        backend: &mut backend,
+    };
+
+    panel.paint(&mut cx, rect);
+
+    assert!(
+        backend
+            .round_fills
+            .iter()
+            .any(|(r, color)| rect_eq(*r, button) && color_eq(*color, panel.theme.button_hover)),
+        "hovering the MCP server start/stop button should paint the same subtle wash as other buttons"
+    );
+}
+
+#[test]
+fn hovered_image_settings_buttons_paint_hover_wash() {
+    let mut state = EditorState::default();
+    state.editor_ui.theme_mode = ThemeMode::Light;
+    state.editor_ui.agent_settings.tab = AgentSettingsTab::Images;
+    state.editor_ui.agent_settings.images_advanced_open = true;
+    state
+        .editor_ui
+        .agent_settings
+        .hover_image_search_test_button = true;
+    state.editor_ui.agent_settings.hover_image_gen_add_button = true;
+    let panel = AgentSettingsPanel::for_editor(&state);
+    let rect = panel.rect(1200.0, 800.0);
+    let search_test = image_search_test_button_rect(rect);
+    let add = image_gen_add_button_rect(rect);
+    let mut backend = CaptureBackend::default();
+    let mut cx = PaintCx {
+        backend: &mut backend,
+    };
+
+    panel.paint(&mut cx, rect);
+
+    assert!(
+        has_visible_hover_fill(&backend, search_test, panel.theme),
+        "hovering the image search test button should paint a visible wash over its base fill"
+    );
+    assert!(
+        has_visible_hover_fill(&backend, add, panel.theme),
+        "hovering the image generation add button should paint a visible wash over its base fill"
+    );
 }
 
 #[test]
@@ -364,9 +471,13 @@ fn hovered_agent_add_buttons_paint_hover_wash() {
     state.editor_ui.agent_settings.hover_add_acp_agent = true;
     let panel = AgentSettingsPanel::for_editor(&state);
     let rect = panel.rect(1200.0, 800.0);
-    let add_provider = add_provider_button_rect(rect);
-    let add_acp = add_acp_agent_button_rect(rect);
     let mut backend = CaptureBackend::default();
+    let add_provider_label =
+        op_i18n::translate(state.editor_ui.locale, "settings.agents.addProvider");
+    let add_acp_label = op_i18n::translate(state.editor_ui.locale, "settings.agents.addAcp");
+    let add_provider =
+        add_provider_button_rect(rect, backend.measure_text(add_provider_label, 12.0));
+    let add_acp = add_acp_agent_button_rect(rect, backend.measure_text(add_acp_label, 12.0));
     let mut cx = PaintCx {
         backend: &mut backend,
     };
@@ -387,5 +498,98 @@ fn hovered_agent_add_buttons_paint_hover_wash() {
             .iter()
             .any(|(r, color)| rect_eq(*r, add_acp) && color_eq(*color, panel.theme.button_hover)),
         "hovering the add ACP agent button should paint the same subtle wash as other text buttons"
+    );
+}
+
+#[test]
+fn builtin_add_provider_text_is_centered_in_hover_wash() {
+    let mut state = EditorState::default();
+    state.editor_ui.theme_mode = ThemeMode::Light;
+    state.editor_ui.agent_settings.hover_add_provider = true;
+    let panel = AgentSettingsPanel::for_editor(&state);
+    let rect = panel.rect(1200.0, 800.0);
+    let (content_x, content_y, content_w) = settings_content_metrics(rect);
+    let content = Rect {
+        origin: Point2D::new(content_x, content_y),
+        size: Point2D::new(content_w, 0.0),
+    };
+    let y = content_y + 12.0;
+    let label = op_i18n::translate(state.editor_ui.locale, "settings.agents.addProvider");
+    let mut backend = CaptureBackend::default();
+    let label_w = backend.measure_text(label, 12.0);
+    let hover_rect = super::agent_settings_header_action::header_action_rect(content, y, label_w);
+    let expected_x = super::agent_settings_header_action::header_action_text_x(hover_rect, label_w);
+    let expected_y = hover_rect.origin.y + hover_rect.size.y / 2.0 + 4.0;
+
+    {
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+        super::agent_settings_builtin::paint_builtin_section(
+            &mut cx,
+            &panel.theme,
+            &state.editor_ui.agent_settings,
+            &state.editor_ui,
+            content,
+            y,
+            0,
+        );
+    }
+
+    assert!(
+        backend
+            .round_fills
+            .iter()
+            .any(|(r, color)| rect_eq(*r, hover_rect)
+                && color_eq(*color, panel.theme.button_hover)),
+        "hovering add provider should paint the padded header action rect"
+    );
+    assert!(
+        backend.text_points.len() >= 2,
+        "built-in section should paint title then add-provider action"
+    );
+    let action_point = backend.text_points[1];
+    assert!(
+        (action_point.x - expected_x).abs() < 0.01,
+        "add-provider label should be centered in its hover rect"
+    );
+    assert!(
+        (action_point.y - expected_y).abs() < 0.01,
+        "add-provider label should use balanced vertical padding in its hover rect"
+    );
+}
+
+#[test]
+fn acp_add_agent_text_uses_balanced_vertical_padding_in_hover_wash() {
+    let mut state = EditorState::default();
+    state.editor_ui.theme_mode = ThemeMode::Light;
+    state.editor_ui.agent_settings.hover_add_acp_agent = true;
+    let panel = AgentSettingsPanel::for_editor(&state);
+    let rect = panel.rect(1200.0, 800.0);
+    let label = op_i18n::translate(state.editor_ui.locale, "settings.agents.addAcp");
+    let mut backend = CaptureBackend::default();
+    let hover_rect = add_acp_agent_button_rect(rect, backend.measure_text(label, 12.0));
+    let expected_baseline_y = hover_rect.origin.y + hover_rect.size.y / 2.0 + 4.0;
+
+    {
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+        panel.paint(&mut cx, rect);
+    }
+
+    let acp_action_point = backend
+        .text_points
+        .iter()
+        .copied()
+        .find(|p| {
+            (p.x - hover_rect.origin.x).abs() <= hover_rect.size.x
+                && p.y >= hover_rect.origin.y
+                && p.y <= hover_rect.origin.y + hover_rect.size.y
+        })
+        .expect("ACP add-agent action should be painted inside the hover rect");
+    assert!(
+        (acp_action_point.y - expected_baseline_y).abs() < 0.01,
+        "add-agent label should use the shared centered baseline"
     );
 }

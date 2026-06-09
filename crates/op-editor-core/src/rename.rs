@@ -48,6 +48,7 @@ impl EditorState {
             target: LayerContextTarget::Layer(id),
             draft,
             caret,
+            select_all: false,
         });
         true
     }
@@ -68,6 +69,7 @@ impl EditorState {
             target: LayerContextTarget::Page(idx),
             draft,
             caret,
+            select_all: false,
         });
         true
     }
@@ -77,6 +79,11 @@ impl EditorState {
     pub fn rename_append(&mut self, text: &str) -> bool {
         match self.ui.layer_rename.as_mut() {
             Some(state) => {
+                if state.select_all {
+                    state.draft.clear();
+                    state.caret = 0;
+                    state.select_all = false;
+                }
                 let byte = char_to_byte(&state.draft, state.caret);
                 state.draft.insert_str(byte, text);
                 state.caret += text.chars().count();
@@ -91,6 +98,12 @@ impl EditorState {
     pub fn rename_backspace(&mut self) -> bool {
         match self.ui.layer_rename.as_mut() {
             Some(state) => {
+                if state.select_all {
+                    state.draft.clear();
+                    state.caret = 0;
+                    state.select_all = false;
+                    return true;
+                }
                 if state.caret > 0 {
                     let start = char_to_byte(&state.draft, state.caret - 1);
                     let end = char_to_byte(&state.draft, state.caret);
@@ -109,6 +122,7 @@ impl EditorState {
     pub fn rename_caret_left(&mut self) -> bool {
         match self.ui.layer_rename.as_mut() {
             Some(state) => {
+                state.select_all = false;
                 state.caret = state.caret.saturating_sub(1);
                 true
             }
@@ -121,6 +135,7 @@ impl EditorState {
     pub fn rename_caret_right(&mut self) -> bool {
         match self.ui.layer_rename.as_mut() {
             Some(state) => {
+                state.select_all = false;
                 let len = state.draft.chars().count();
                 state.caret = (state.caret + 1).min(len);
                 true
@@ -187,6 +202,7 @@ impl EditorState {
             return false;
         }
         self.ui.text_editing = Some(id);
+        self.ui.text_edit_select_all = false;
         self.ui.text_edit_last_ms = 0;
         self.ui.pending_text_edit_history = None;
         true
@@ -201,12 +217,16 @@ impl EditorState {
             return false;
         };
         self.maybe_open_text_edit_history(now_ms);
+        let replace_all = std::mem::take(&mut self.ui.text_edit_select_all);
         let Some(node) = find_node_mut(self.active_children_mut(), &id) else {
             return false;
         };
         let Some(content) = text_content_mut(node) else {
             return false;
         };
+        if replace_all {
+            content.clear();
+        }
         content.push_str(text);
         self.ui.text_edit_last_ms = now_ms;
         true
@@ -220,12 +240,18 @@ impl EditorState {
             return false;
         };
         self.maybe_open_text_edit_history(now_ms);
+        let replace_all = std::mem::take(&mut self.ui.text_edit_select_all);
         let Some(node) = find_node_mut(self.active_children_mut(), &id) else {
             return false;
         };
         let Some(content) = text_content_mut(node) else {
             return false;
         };
+        if replace_all {
+            content.clear();
+            self.ui.text_edit_last_ms = now_ms;
+            return true;
+        }
         if content.pop().is_some() {
             self.ui.text_edit_last_ms = now_ms;
             true
@@ -240,6 +266,7 @@ impl EditorState {
     pub fn text_edit_commit(&mut self) -> bool {
         self.ui.pending_text_edit_history = None;
         self.ui.text_edit_last_ms = 0;
+        self.ui.text_edit_select_all = false;
         self.ui.text_editing.take().is_some()
     }
 
@@ -348,6 +375,7 @@ mod tests {
             target: crate::ui_draft::LayerContextTarget::Layer(NodeId::new("n1")),
             draft: "首页".to_string(),
             caret: 2,
+            select_all: false,
         });
         // One left → between the two CJK chars (char index 1, byte 3).
         assert!(s.rename_caret_left());

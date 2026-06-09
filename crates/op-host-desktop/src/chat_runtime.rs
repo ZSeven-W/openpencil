@@ -101,9 +101,7 @@ impl ChatProvider for BuiltInProvider {
     fn send(&self, request: ChatRequest) -> Box<dyn Iterator<Item = ChatDelta> + Send> {
         // Engine handle is shared across turns so the MessageStore
         // accumulates history; `Arc` clone is cheap. Per-turn
-        // overrides on `request.system_prompt` / `max_output_tokens`
-        // are documented as no-ops (see struct comment).
-        let _ = request.system_prompt;
+        // max-token overrides are documented as no-ops (see struct comment).
         let _ = request.max_output_tokens;
         // The engine is built once, so per-turn thinking / effort
         // can't reconfigure it — convey them in-band as a leading
@@ -139,6 +137,7 @@ impl ChatProvider for BuiltInProvider {
         if !preamble.is_empty() {
             prompt = format!("{preamble}\n\n---\n\n{prompt}");
         }
+        prompt = prompt_with_system_prompt(&request.system_prompt, prompt);
         let engine = self.engine.clone();
         let abort = AbortController::new();
         let (tx, rx) = mpsc::channel::<ChatDelta>(64);
@@ -276,6 +275,17 @@ pub fn resolved_skill_preamble(user_message: &str) -> String {
         .map(|s| s.content.as_str())
         .collect::<Vec<_>>()
         .join("\n\n")
+}
+
+/// Prepend a per-turn system prompt for transports that only expose one
+/// prompt string. Empty system prompts leave the user prompt unchanged.
+pub fn prompt_with_system_prompt(system_prompt: &str, prompt: String) -> String {
+    let system_prompt = system_prompt.trim();
+    if system_prompt.is_empty() {
+        prompt
+    } else {
+        format!("{system_prompt}\n\n---\n\n{prompt}")
+    }
 }
 
 #[cfg(test)]
@@ -418,5 +428,13 @@ mod tests {
         // a design prompt must yield a non-empty preamble.
         let preamble = resolved_skill_preamble("design a login form");
         assert!(!preamble.is_empty());
+    }
+
+    #[test]
+    fn prompt_with_system_prompt_prepends_non_empty_system() {
+        let prompt = prompt_with_system_prompt("Return only JSON.", "hello".into());
+        assert!(prompt.starts_with("Return only JSON."));
+        assert!(prompt.ends_with("hello"));
+        assert_eq!(prompt_with_system_prompt("  ", "hello".into()), "hello");
     }
 }

@@ -2,13 +2,14 @@ use crate::widgets::agent_settings_panel::{AgentSettingsHit, AgentSettingsPanel}
 use crate::widgets::{PaintCx, Widget};
 use crate::{Color, Point2D, Rect, RenderBackend, TextLayout};
 use op_editor_core::agent_settings::{
-    AgentSettingsTab, ImageGenField, ImageTestStatus, SettingsFocus,
+    AgentSettingsTab, ImageGenField, ImageGenProvider, ImageTestStatus, SettingsFocus,
 };
 use op_editor_core::EditorState;
 
 #[derive(Default)]
 struct CaptureBackend {
     fills: Vec<(Rect, Color)>,
+    round_fills: Vec<(Rect, Color)>,
 }
 
 impl RenderBackend for CaptureBackend {
@@ -21,7 +22,9 @@ impl RenderBackend for CaptureBackend {
     fn draw_text(&mut self, _: &TextLayout, _: Point2D) {}
     fn clip_rect(&mut self, _: Rect) {}
     fn stroke_line(&mut self, _: Point2D, _: Point2D, _: Color, _: f32) {}
-    fn fill_round_rect(&mut self, _: Rect, _: f32, _: Color) {}
+    fn fill_round_rect(&mut self, rect: Rect, _: f32, color: Color) {
+        self.round_fills.push((rect, color));
+    }
     fn stroke_round_rect(&mut self, _: Rect, _: f32, _: Color, _: f32) {}
     fn stroke_svg_path(&mut self, _: &str, _: Point2D, _: f32, _: Color, _: f32) {}
     fn save(&mut self) {}
@@ -50,6 +53,13 @@ fn caret_fills(fills: &[(Rect, Color)], color: Color) -> Vec<Rect> {
                 .then_some(*rect)
         })
         .collect()
+}
+
+fn rect_eq(a: Rect, b: Rect) -> bool {
+    (a.origin.x - b.origin.x).abs() < 0.01
+        && (a.origin.y - b.origin.y).abs() < 0.01
+        && (a.size.x - b.size.x).abs() < 0.01
+        && (a.size.y - b.size.y).abs() < 0.01
 }
 
 #[test]
@@ -220,5 +230,50 @@ fn images_tab_expanded_profile_provider_row_is_clickable() {
             crate::Point2D::new(content_x + 110.0 + 20.0, provider_y + 12.0)
         ),
         AgentSettingsHit::ToggleGenProviderMenu(0)
+    );
+}
+
+#[test]
+fn images_tab_provider_menu_selected_highlight_fills_option_content() {
+    let mut state = EditorState::default();
+    state.editor_ui.agent_settings.tab = AgentSettingsTab::Images;
+    state.editor_ui.agent_settings.add_image_gen_profile();
+    state.editor_ui.agent_settings.image_gen_profiles[0].provider = ImageGenProvider::OpenAi;
+    state.editor_ui.agent_settings.focus = Some(SettingsFocus::ImageGenProfile {
+        index: 0,
+        field: ImageGenField::Name,
+    });
+    state.editor_ui.agent_settings.image_gen_provider_menu_open = Some(0);
+    let panel = AgentSettingsPanel::for_editor(&state);
+    let rect = panel.rect(1200.0, 800.0);
+    let content_x = rect.origin.x + 200.0 + 24.0;
+    let content_y = rect.origin.y + 24.0;
+    let content_w = rect.size.x - 200.0 - 48.0;
+    let gen_top = content_y + 36.0 + 24.0 + 28.0;
+    let row_y = gen_top + 36.0;
+    let provider = Rect {
+        origin: Point2D::new(content_x + 110.0, row_y + 32.0 + 8.0 + 36.0),
+        size: Point2D::new(content_w - 110.0 - 12.0, 24.0),
+    };
+    let expected = Rect {
+        origin: Point2D::new(
+            provider.origin.x + 4.0,
+            provider.origin.y + provider.size.y + 1.0,
+        ),
+        size: Point2D::new(provider.size.x - 8.0, 22.0),
+    };
+    let mut backend = CaptureBackend::default();
+    let mut cx = PaintCx {
+        backend: &mut backend,
+    };
+
+    panel.paint(&mut cx, rect);
+
+    assert!(
+        backend
+            .round_fills
+            .iter()
+            .any(|(fill, color)| rect_eq(*fill, expected) && color_eq(*color, panel.theme.muted)),
+        "selected provider option should fill the menu content row"
     );
 }

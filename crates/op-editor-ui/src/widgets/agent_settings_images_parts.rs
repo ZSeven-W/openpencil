@@ -2,7 +2,7 @@
 
 use crate::theme::Theme;
 use crate::widgets::agent_settings_caret::{
-    caret_x_for_text, paint_caret, settings_caret_for_focus,
+    caret_x_for_text, paint_caret, paint_settings_selection, settings_caret_for_focus,
 };
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::PaintCx;
@@ -15,7 +15,11 @@ use op_editor_core::editor_ui_state::EditorUiState;
 
 const ROW_H: f32 = 36.0;
 const LABEL_W: f32 = 110.0;
+const INPUT_TEXT_INSET_X: f32 = 12.0;
+const FOCUSED_PLACEHOLDER_GAP: f32 = 8.0;
 const PROVIDER_OPTION_H: f32 = 24.0;
+const PROVIDER_OPTION_PAD_X: f32 = 4.0;
+const PROVIDER_OPTION_PAD_Y: f32 = 1.0;
 
 #[allow(clippy::too_many_arguments)]
 pub(super) fn paint_search_input_row(
@@ -70,8 +74,18 @@ pub(super) fn paint_search_input_row(
     } else {
         text
     };
-    let value = ellipsize(cx, value, field.size.x - 24.0, 13.0);
-    let text_x = field.origin.x + 12.0;
+    let text_x = field.origin.x + INPUT_TEXT_INSET_X;
+    let placeholder_offset = if focused && showing_placeholder {
+        FOCUSED_PLACEHOLDER_GAP
+    } else {
+        0.0
+    };
+    let value = ellipsize(
+        cx,
+        value,
+        field.size.x - INPUT_TEXT_INSET_X * 2.0 - placeholder_offset,
+        13.0,
+    );
     let lay = TextLayout::single_run(
         &value,
         "system-ui",
@@ -83,20 +97,38 @@ pub(super) fn paint_search_input_row(
         }),
         Point2D::new(0.0, 0.0),
     );
+    if focused && ui.settings_input_select_all && !text.is_empty() {
+        paint_settings_selection(
+            cx,
+            theme,
+            text,
+            text_x,
+            field.origin.y + ROW_H / 2.0 + 5.0,
+            13.0,
+            field.origin.x + field.size.x - INPUT_TEXT_INSET_X,
+        );
+    }
     cx.backend.draw_text(
         &lay,
-        Point2D::new(text_x, field.origin.y + ROW_H / 2.0 + 5.0),
+        Point2D::new(
+            text_x + placeholder_offset,
+            field.origin.y + ROW_H / 2.0 + 5.0,
+        ),
     );
     if focused {
         let caret = settings_caret_for_focus(ui, focus);
-        let caret_x = caret_x_for_text(
-            cx,
-            text,
-            caret,
-            text_x,
-            field.origin.x + field.size.x - 12.0,
-            13.0,
-        );
+        let caret_x = if text.is_empty() {
+            text_x
+        } else {
+            caret_x_for_text(
+                cx,
+                text,
+                caret,
+                text_x,
+                field.origin.x + field.size.x - INPUT_TEXT_INSET_X,
+                13.0,
+            )
+        };
         let caret_y = field.origin.y + (ROW_H - 15.0) / 2.0;
         let anchor = ui.settings_input_caret_anchor_ms;
         paint_caret(cx, theme, now_ms, anchor, caret_x, caret_y);
@@ -161,6 +193,17 @@ pub(super) fn paint_profile_field(
     );
     let clipped = ellipsize(cx, value, input.size.x - 12.0, 11.0);
     let text_x = input.origin.x + 6.0;
+    if focused && ui.settings_input_select_all && !value.is_empty() {
+        paint_settings_selection(
+            cx,
+            theme,
+            value,
+            text_x,
+            input.origin.y + 16.0,
+            11.0,
+            input.origin.x + input.size.x - 8.0,
+        );
+    }
     let value_lay = TextLayout::single_run(
         &clipped,
         "system-ui",
@@ -321,10 +364,16 @@ pub(super) fn paint_provider_menu(
         if *provider == selected {
             cx.backend.fill_round_rect(
                 Rect {
-                    origin: Point2D::new(menu.origin.x + 2.0, option_y + 2.0),
-                    size: Point2D::new(menu.size.x - 4.0, PROVIDER_OPTION_H - 4.0),
+                    origin: Point2D::new(
+                        menu.origin.x + PROVIDER_OPTION_PAD_X,
+                        option_y + PROVIDER_OPTION_PAD_Y,
+                    ),
+                    size: Point2D::new(
+                        menu.size.x - PROVIDER_OPTION_PAD_X * 2.0,
+                        PROVIDER_OPTION_H - PROVIDER_OPTION_PAD_Y * 2.0,
+                    ),
                 },
-                4.0,
+                5.0,
                 theme.muted,
             );
         }

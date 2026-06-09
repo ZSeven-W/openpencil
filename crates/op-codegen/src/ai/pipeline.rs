@@ -15,6 +15,7 @@ use op_editor_core::codegen::{ChunkProgress, ChunkStatus, CodeGenProgress};
 use serde_json::Value;
 
 use crate::ai::assets::{collect_chunk_asset_hints, extract_codegen_assets};
+use crate::ai::fallback_plan::fallback_plan_from_nodes_json;
 use crate::ai::parse::{
     clean_code, compute_execution_order, extract_plan_json, parse_chunk_response, sanitize_name,
     validate_contract,
@@ -190,9 +191,13 @@ impl CodegenPipeline {
             .and_then(|json| serde_json::from_str::<CodePlan>(&json).ok());
 
         let Some(plan) = parsed else {
-            return self.handle_planning_failure("Planning failed".to_string());
+            return self.handle_planning_parse_failure();
         };
 
+        self.apply_plan(plan)
+    }
+
+    fn apply_plan(&mut self, plan: CodePlan) -> PipelineStep {
         // Hydrate the plan against the real node tree.
         let exec_chunks = self.hydrate_plan(&plan);
         if exec_chunks.is_empty() {
@@ -219,6 +224,16 @@ impl CodegenPipeline {
             .collect();
         self.phase = Phase::Chunks;
         self.step_chunks()
+    }
+
+    fn handle_planning_parse_failure(&mut self) -> PipelineStep {
+        if !self.planning_retried {
+            return self.handle_planning_failure("Planning failed".to_string());
+        }
+        match fallback_plan_from_nodes_json(&self.sanitized_nodes_json) {
+            Some(plan) => self.apply_plan(plan),
+            None => self.handle_planning_failure("Planning failed".to_string()),
+        }
     }
 
     fn handle_planning_failure(&mut self, message: String) -> PipelineStep {
@@ -781,8 +796,11 @@ mod tests {
     }
 
     #[test]
-    fn planning_parse_failure_retries_once_then_fails() {
-        let mut p = CodegenPipeline::new(input());
+    fn planning_parse_failure_retries_once_then_uses_fallback_plan() {
+        let mut p = CodegenPipeline::new(CodegenInput {
+            nodes_json: r#"[{"type":"frame","id":"hero","name":"Hero","children":[]}]"#.into(),
+            ..input()
+        });
         let id1 = match p.step() {
             PipelineStep::Dispatch(r) => r[0].id,
             _ => panic!(),
@@ -797,7 +815,21 @@ mod tests {
         let id2 = reqs[0].id;
         p.on_delta(id2, "still not json");
         p.on_complete(id2);
-        assert!(matches!(p.step(), PipelineStep::Failed { .. }));
+        let reqs = match p.step() {
+            PipelineStep::Dispatch(r) => r,
+            other => panic!("expected fallback chunk dispatch, got {other:?}"),
+        };
+        assert_eq!(reqs.len(), 1);
+        assert_eq!(
+            reqs[0].kind,
+            RequestKind::Chunk {
+                chunk_id: "chunk-1".into()
+            }
+        );
+        assert!(
+            reqs[0].user_message.contains("Hero"),
+            "fallback plan should preserve the selected node name in the chunk prompt"
+        );
     }
 
     #[test]
