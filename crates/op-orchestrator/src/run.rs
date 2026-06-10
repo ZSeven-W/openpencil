@@ -42,14 +42,30 @@ use crate::variables::{rollback, seed_commands, snapshot_plan_vars};
 use futures::StreamExt;
 use op_editor_core::{EditorCommand, NodeId, PenNodeExt};
 
-/// 设计编排器。S3a 阶段无构造期配置 —— 保留 struct 以便 S3b/S3c
-/// 挂选项。
+/// 设计编排器。
 #[derive(Debug, Default, Clone, Copy)]
-pub struct Orchestrator;
+pub struct Orchestrator {
+    /// Run epoch for the agent-team canvas indicators. The host owns the
+    /// design-turn lifecycle, so it mints the epoch (`agent_indicators::
+    /// begin`) and clears via `clear_if_epoch` the instant the turn is
+    /// stopped — registration in the concurrent path must run under that
+    /// same epoch. `None` for headless / test callers, which then let the
+    /// concurrent path mint its own epoch.
+    agent_indicator_epoch: Option<u64>,
+}
 
 impl Orchestrator {
     pub fn new() -> Self {
-        Orchestrator
+        Self::default()
+    }
+
+    /// Adopt a host-owned indicator epoch. The host clears with
+    /// `agent_indicators::clear_if_epoch(epoch)` on stop / new-chat, so
+    /// the concurrent path registers under this epoch instead of minting
+    /// its own — otherwise the host couldn't target the right run.
+    pub fn with_indicator_epoch(mut self, epoch: u64) -> Self {
+        self.agent_indicator_epoch = Some(epoch);
+        self
     }
 
     /// 跑一次完整编排。见 spec §4 数据流。
@@ -102,6 +118,7 @@ impl Orchestrator {
                 on_progress,
                 abort,
                 providers,
+                self.agent_indicator_epoch,
             )
             .await;
         }
@@ -416,6 +433,7 @@ async fn run_concurrent_path(
     on_progress: &mut dyn FnMut(Progress),
     abort: &AbortFlag,
     providers: &ValidationProviders<'_>,
+    host_epoch: Option<u64>,
 ) -> Result<RunSummary, OrchestratorError> {
     // -- 进入"已动文档"区 --
     sink.begin_undo_batch();
@@ -485,11 +503,13 @@ async fn run_concurrent_path(
     // Tag each group's root frame with a distinct agent identity so the
     // canvas can paint a per-agent breathing border while the team works.
     let identities = crate::agent_identity::assign_agent_identities(actual_root_ids.len());
-    // `begin` bumps the run epoch and clears any prior indicators. The
-    // guard below clears on every exit path (finish / error / cancelled
-    // worker), but only while this run is still the active epoch — a newer
-    // run that started in the meantime keeps its own indicators.
-    let epoch = op_editor_core::agent_indicators::begin();
+    // Adopt the host-minted epoch when present — the host already called
+    // `begin` (bumping the epoch + clearing the prior run) at turn start so
+    // it can clear immediately on stop. Headless / test callers pass `None`
+    // and we mint our own. Either way the guard below clears on every exit
+    // path (finish / error / cancelled worker), but only while this run is
+    // still the active epoch — a newer run keeps its own indicators.
+    let epoch = host_epoch.unwrap_or_else(op_editor_core::agent_indicators::begin);
     for (root_id, identity) in actual_root_ids.iter().zip(identities.iter()) {
         op_editor_core::agent_indicators::add_frame(
             epoch,
