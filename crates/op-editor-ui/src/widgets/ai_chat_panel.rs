@@ -555,19 +555,50 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
             1.4,
         );
         model_x += 18.0;
+        // Concurrency chip — `Zap` + `{n}x`. A solo 1x team rests as a
+        // faint ghost; a staffed team (>1) gets a primary-tinted chip so
+        // the parallel mode reads as active.
         let chip = footer.agent_team;
-        cx.backend.fill_round_rect(chip, 6.0, self.theme.muted);
-        if self.footer_hover == Some(ChatFooterButton::AgentTeam) {
-            cx.backend
-                .fill_round_rect(chip, 6.0, chat_neutral_hover_color(&self.theme));
+        let team_size = self.state.agent_team_size;
+        let team_active = team_size > 1;
+        let conc_color = if team_active {
+            self.theme.primary
+        } else {
+            Color {
+                a: 0.5,
+                ..self.theme.muted_foreground
+            }
+        };
+        let primary_wash = Color {
+            a: 0.1,
+            ..self.theme.primary
+        };
+        if team_active {
+            cx.backend.fill_round_rect(chip, 6.0, primary_wash);
         }
-        let team_label = format!("{}x", self.state.agent_team_size);
+        if self.footer_hover == Some(ChatFooterButton::AgentTeam) {
+            let wash = if team_active {
+                primary_wash
+            } else {
+                chat_neutral_hover_color(&self.theme)
+            };
+            cx.backend.fill_round_rect(chip, 6.0, wash);
+        }
+        draw_icon(
+            cx.backend,
+            Icon::Zap,
+            Point2D::new(chip.origin.x + 4.0, chip.origin.y + 5.0),
+            10.0,
+            conc_color,
+            1.4,
+        );
+        let team_label = format!("{}x", team_size);
         draw_label(
             cx,
             &team_label,
             11.0,
-            self.theme.muted_foreground,
-            chip.origin.x + 7.0,
+            conc_color,
+            chip.origin.x + 16.0,
             chip.origin.y + 14.0,
         );
         model_x += 36.0;
@@ -583,9 +614,9 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
             toolbar_center_y + 4.0,
         );
 
+        // Right cluster — attach + send (TS ghost buttons: bare icons
+        // that only get a wash while hovered).
         let attach_rect = footer.attach;
-        cx.backend
-            .fill_round_rect(attach_rect, 6.0, self.theme.muted);
         if self.footer_hover == Some(ChatFooterButton::AddAttachment) {
             cx.backend
                 .fill_round_rect(attach_rect, 6.0, chat_neutral_hover_color(&self.theme));
@@ -604,26 +635,26 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
         let send_active = can_use_model
             && (!self.state.input.trim().is_empty() || !self.state.pending_attachments.is_empty());
         let streaming = self.is_streaming();
-        let (send_bg, icon_color, send_icon) = if streaming {
-            (
-                self.theme.destructive,
-                self.theme.primary_foreground,
-                Icon::Square,
-            )
+        // TS: streaming → red stop; sendable → primary; otherwise a faded
+        // muted-foreground/30 icon so the send button reads as disabled.
+        let (icon_color, send_icon) = if streaming {
+            (self.theme.destructive, Icon::Square)
         } else if send_active {
+            (self.theme.primary, Icon::Send)
+        } else {
             (
-                self.theme.primary,
-                self.theme.primary_foreground,
+                Color {
+                    a: 0.3,
+                    ..self.theme.muted_foreground
+                },
                 Icon::Send,
             )
-        } else {
-            (self.theme.muted, self.theme.muted_foreground, Icon::Send)
         };
-        cx.backend.fill_round_rect(send_rect, 6.0, send_bg);
         if self.footer_hover == Some(ChatFooterButton::Send)
             || self.footer_hover == Some(ChatFooterButton::Stop)
         {
-            paint_footer_hover_overlay(cx, send_rect, send_active || streaming, &self.theme);
+            cx.backend
+                .fill_round_rect(send_rect, 6.0, chat_neutral_hover_color(&self.theme));
         }
         draw_icon(
             cx.backend,
@@ -672,20 +703,6 @@ fn draw_label(cx: &mut PaintCx<'_>, text: &str, size: f32, color: Color, x: f32,
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(&label, Point2D::new(x, y));
-}
-
-fn paint_footer_hover_overlay(cx: &mut PaintCx<'_>, rect: Rect, bright: bool, theme: &Theme) {
-    let color = if bright {
-        Color {
-            r: 1.0,
-            g: 1.0,
-            b: 1.0,
-            a: 0.14,
-        }
-    } else {
-        chat_neutral_hover_color(theme)
-    };
-    cx.backend.fill_round_rect(rect, 6.0, color);
 }
 
 fn chat_neutral_hover_color(theme: &Theme) -> Color {

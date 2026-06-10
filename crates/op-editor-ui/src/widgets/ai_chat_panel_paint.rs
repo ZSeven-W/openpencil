@@ -119,10 +119,10 @@ pub(crate) fn paint_panel_body_chrome(cx: &mut PaintCx<'_>, theme: &Theme, rect:
             with_alpha(theme.background, 0.8),
         );
     }
-    cx.backend.fill_rect(
-        Rect::xywh(rect.origin.x + PAD, sep_y, rect.size.x - PAD * 2.0, 1.0),
-        theme.border,
-    );
+    // Full-width divider above the input (TS `border-t` spans the whole
+    // panel, not just the padded content column).
+    cx.backend
+        .fill_rect(Rect::xywh(inner_x, sep_y, inner_w, 1.0), theme.border);
 }
 
 /// Paint the empty-state hint line + the 2×2 example-card grid.
