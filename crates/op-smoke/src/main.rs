@@ -236,7 +236,12 @@ impl LlmClient for DirectOpenAiClient {
             // (Volcengine 方舟 — glm/kimi/doubao — confirmed to honor it), so the
             // latest 方舟-hosted reasoning models can be benchmarked clean too.
             let force_disable = std::env::var("OPENPENCIL_SMOKE_DISABLE_THINKING").is_ok();
-            if force_disable || is_minimax_model(&model) {
+            // `OPENPENCIL_SMOKE_KEEP_THINKING=1` keeps reasoning ON even for
+            // MiniMax — ab-v9 showed M3-nothink emits lazy minimal manifests
+            // (17% M3, ~10s answers); this lets the M3-with-think arm be
+            // benchmarked (strip_reasoning handles the <think> blocks).
+            let keep_thinking = std::env::var("OPENPENCIL_SMOKE_KEEP_THINKING").is_ok();
+            if !keep_thinking && (force_disable || is_minimax_model(&model)) {
                 if let Some(obj) = body.as_object_mut() {
                     obj.insert("thinking".into(), serde_json::json!({ "type": "disabled" }));
                 }
