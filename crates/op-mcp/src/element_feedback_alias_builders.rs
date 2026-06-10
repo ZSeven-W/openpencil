@@ -136,13 +136,17 @@ fn build_callout(args: &BTreeMap<String, String>, theme_aware: bool) -> Result<V
 fn build_toast(args: &BTreeMap<String, String>, theme_aware: bool) -> Result<Value, ToolOutcome> {
     let message = required(args, "message")?;
     let theme = args.get("theme").map(String::as_str).unwrap_or("light");
+    // fontSize is a strict-number schema slot — emit 14 in every mode
+    // (the TS `$type-body-size` ref resolves to the same default at
+    // render time; see the fidelity caveat on `build_modal_shell`).
+    // gap accepts an expression ref, so system mode keeps `$spacing-2`.
     let (pill_fill, fg, font_size, gap) = if theme_aware {
         match theme {
             "dark" => (json!("#F1F5F9"), json!("#0F172A"), json!(14), json!(8)),
             "system" => (
                 json!("$color-text-primary"),
                 json!("$color-surface"),
-                json!("$type-body-size"),
+                json!(14),
                 json!("$spacing-2"),
             ),
             _ => (json!("#111827"), json!("#FFFFFF"), json!(14), json!(8)),
