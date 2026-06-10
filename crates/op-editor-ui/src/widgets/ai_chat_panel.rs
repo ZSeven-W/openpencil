@@ -748,3 +748,6 @@ pub(crate) fn to_jian_color(c: Color) -> jian_core::scene::Color {
 #[cfg(test)]
 #[path = "ai_chat_panel/tests.rs"]
 mod tests;
+#[cfg(test)]
+#[path = "ai_chat_panel/tests_paint.rs"]
+mod tests_paint;
