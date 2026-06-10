@@ -568,24 +568,15 @@ fn with_alpha(color: Color, a: f32) -> Color {
 }
 
 pub(crate) fn paint_key_glyph(cx: &mut PaintCx<'_>, top_left: Point2D, size: f32, color: Color) {
-    let cy = top_left.y + size * 0.5;
-    let ring = Rect {
-        origin: Point2D::new(top_left.x, cy - size * 0.28),
-        size: Point2D::new(size * 0.55, size * 0.55),
-    };
-    cx.backend
-        .stroke_round_rect(ring, ring.size.x / 2.0, color, 1.3);
-    cx.backend.stroke_line(
-        Point2D::new(top_left.x + size * 0.52, cy),
-        Point2D::new(top_left.x + size, cy),
+    // Use the real lucide `Key` glyph (TS renders `<Key/>`) rather than a
+    // hand-rolled ring+shaft approximation.
+    crate::widgets::icons::draw_icon(
+        cx.backend,
+        crate::widgets::icons::Icon::Key,
+        top_left,
+        size,
         color,
-        1.3,
-    );
-    cx.backend.stroke_line(
-        Point2D::new(top_left.x + size * 0.82, cy),
-        Point2D::new(top_left.x + size * 0.82, cy + size * 0.25),
-        color,
-        1.3,
+        1.4,
     );
 }
 

@@ -371,9 +371,11 @@ fn paint_send_button_hover_adds_visible_feedback() {
         .filter(|(r, _, _)| rect_close(*r, send_rect))
         .collect();
 
+    // Ghost button: no resting fill, so hover feedback is the only
+    // wash painted over the send rect.
     assert!(
-        fills.len() >= 2,
-        "hovered send button should paint feedback over its base fill"
+        !fills.is_empty(),
+        "hovered send button should paint a hover wash"
     );
 }
 
@@ -839,6 +841,7 @@ struct PanelPaintBackend {
     round_rects: Vec<(Rect, f32, crate::Color)>,
     texts: Vec<(String, f32, jian_core::scene::Color, Point2D)>,
     svg_strokes: Vec<(Point2D, f32, crate::Color, f32)>,
+    svg_paths: Vec<String>,
     stroke_lines: usize,
 }
 
@@ -868,12 +871,13 @@ impl crate::RenderBackend for PanelPaintBackend {
     fn stroke_round_rect(&mut self, _: Rect, _: f32, _: crate::Color, _: f32) {}
     fn stroke_svg_path(
         &mut self,
-        _: &str,
+        d: &str,
         top_left: Point2D,
         size: f32,
         color: crate::Color,
         width: f32,
     ) {
+        self.svg_paths.push(d.to_string());
         self.svg_strokes.push((top_left, size, color, width));
     }
     fn resize(&mut self, _: u32, _: u32) {}
@@ -903,9 +907,12 @@ fn paint_model_chip_uses_key_glyph_for_builtin_model() {
 
     panel.paint(&mut cx, rect);
 
+    let key_paths = crate::widgets::icons::Icon::Key.paths();
     assert!(
-        backend.stroke_lines >= 2,
-        "built-in selected model chip should paint the TS-style Key glyph"
+        key_paths
+            .iter()
+            .all(|kp| backend.svg_paths.iter().any(|p| p == kp)),
+        "built-in selected model chip should paint the lucide Key glyph"
     );
 }
 
