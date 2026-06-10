@@ -68,10 +68,30 @@ pub async fn run_subtask(
         }
     }
 
-    // 解析成 PenNode 树。
-    let mut nodes = match parse_nodes(&text) {
-        Ok(n) => n,
-        Err(e) => return fail(e.to_string()),
+    // 解析成 PenNode 树。manifest 模式（`OPENPENCIL_MANIFEST=1`）先按元素
+    // 清单解析；文本里没有清单行（如重试梯度回落到裸 JSONL prompt 后的
+    // 输出）时回落到既有裸 PenNode 路径，两条路汇入同一套后处理。
+    let mut nodes = if crate::manifest::manifest_enabled() {
+        match crate::manifest::parse_manifest(&text) {
+            Some(outcome) => {
+                for warning in &outcome.warnings {
+                    eprintln!("[manifest] {warning}");
+                }
+                if outcome.nodes.is_empty() {
+                    return fail("manifest parsed but produced no nodes".into());
+                }
+                outcome.nodes
+            }
+            None => match parse_nodes(&text) {
+                Ok(n) => n,
+                Err(e) => return fail(e.to_string()),
+            },
+        }
+    } else {
+        match parse_nodes(&text) {
+            Ok(n) => n,
+            Err(e) => return fail(e.to_string()),
+        }
     };
     if is_blank_container_forest(&nodes) {
         return fail("blank container root produced no content nodes".into());
@@ -130,7 +150,12 @@ fn is_blank_container_forest(nodes: &[PenNode]) -> bool {
 fn has_content_node(node: &PenNode) -> bool {
     match node.children() {
         Some(children) if !children.is_empty() => children.iter().any(has_content_node),
-        _ => !node.is_container(),
+        // A childless rectangle is a visual in its own right (skeleton
+        // line, divider, color block) — `is_container()` lumps it with
+        // Frame/Group because it carries ContainerProps, which made
+        // every skeleton-screen design read as "blank" (ab-v9: the
+        // mobile-loading-skeleton prompt failed on all four models).
+        _ => !node.is_container() || matches!(node, PenNode::Rectangle(_)),
     }
 }
 
@@ -233,6 +258,48 @@ mod tests {
         ));
     }
 
+    /// 离线冒烟：manifest 模式下,stub LLM 输出元素清单 → 解析、修复、
+    /// 组装、role 后处理、InsertSubtree 全链路走通。
+    /// 对并行 runner 安全:flag 置位期间,其它测试的非清单输出在
+    /// `parse_manifest` 返回 `None` 后照常回落 `parse_nodes`。
+    #[test]
+    fn run_subtask_manifest_mode_builds_elements_end_to_end() {
+        std::env::set_var("OPENPENCIL_MANIFEST", "1");
+        let manifest = concat!(
+            "{\"el\":\"section\",\"gap\":16,\"role\":\"stats\"}\n",
+            "{\"el\":\"heading\",\"in\":1,\"content\":\"Revenue Overview\"}\n",
+            "{\"el\":\"stat_card\",\"in\":1,\"label\":\"MRR\",\"value\":\"$48k\"}",
+        );
+        let llm = ScriptedLlm::new(vec![ScriptResponse::Text(manifest.into())]);
+        let mut sink = VecDocSink::new();
+        let outcome = block_on(run_subtask(
+            &subtask(),
+            &plan(),
+            &req(),
+            &llm,
+            &mut sink,
+            &AbortFlag::new(),
+            false,
+            false,
+        ));
+        std::env::remove_var("OPENPENCIL_MANIFEST");
+
+        assert!(outcome.error.is_none(), "{:?}", outcome.error);
+        assert_eq!(outcome.node_count, 1, "one section root");
+        let Some(EditorCommand::InsertSubtree { nodes, .. }) = sink.applied.last() else {
+            panic!("expected InsertSubtree, got {:?}", sink.applied.last());
+        };
+        assert_eq!(nodes.len(), 1);
+        let jian_ops_schema::node::PenNode::Frame(section) = &nodes[0] else {
+            panic!("section root must be a frame");
+        };
+        assert_eq!(
+            section.children.as_ref().map(Vec::len),
+            Some(2),
+            "heading + stat_card nested under the section"
+        );
+    }
+
     #[test]
     fn run_subtask_zero_node_on_garbage() {
         let llm = ScriptedLlm::new(vec![ScriptResponse::Text("the model refused".into())]);
@@ -249,6 +316,29 @@ mod tests {
         ));
         assert_eq!(outcome.node_count, 0);
         assert!(outcome.error.is_some());
+    }
+
+    #[test]
+    fn skeleton_of_bare_rectangles_is_content_not_blank() {
+        // 骨架屏 = frame 根 + 一排无子矩形线条;矩形虽带 ContainerProps
+        // 但它是视觉本体,不能整批判空(ab-v9 全模型踩中)。
+        let llm = ScriptedLlm::new(vec![ScriptResponse::Text(
+            r#"[{"type":"frame","id":"sk-root","name":"Skeleton","width":"fill_container","height":"fit_content","children":[{"type":"rectangle","id":"sk-1","width":"fill_container","height":16,"cornerRadius":8},{"type":"rectangle","id":"sk-2","width":205,"height":16,"cornerRadius":8}]}]"#
+                .into(),
+        )]);
+        let mut sink = VecDocSink::new();
+        let outcome = block_on(run_subtask(
+            &subtask(),
+            &plan(),
+            &req(),
+            &llm,
+            &mut sink,
+            &AbortFlag::new(),
+            false,
+            false,
+        ));
+        assert!(outcome.error.is_none(), "{:?}", outcome.error);
+        assert_eq!(outcome.node_count, 1);
     }
 
     #[test]

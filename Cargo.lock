@@ -3188,6 +3188,7 @@ dependencies = [
  "jian-ops-schema",
  "op-ai-skills",
  "op-editor-core",
+ "op-mcp",
  "regex",
  "serde",
  "serde_json",
