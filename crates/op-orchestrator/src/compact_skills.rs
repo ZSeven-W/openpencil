@@ -129,6 +129,10 @@ fn compact_subagent_skills<T: SkillNamed>(
             "schema",
             "jsonl-format-simplified",
             "jsonl-format",
+            // Manifest output protocol — gated on `hasManifest` at the
+            // resolve layer; a no-op when the flag is off, required when
+            // on (same pattern as `elements` below).
+            "element-manifest",
             "layout",
             "overflow",
             "text-rules",

@@ -74,6 +74,7 @@ mod element_flow_alias_tests;
 mod element_input_alias_builders;
 #[cfg(test)]
 mod element_input_alias_tests;
+pub mod element_manifest;
 mod element_misc_alias_builders;
 #[cfg(test)]
 mod element_misc_alias_tests;

@@ -69,7 +69,7 @@ pub fn parse_nodes(text: &str) -> Result<Vec<PenNode>, ParseError> {
 /// 这样无论 think 在开头、还是"闭合块 + 内容 + 末尾被截断的第二个 think 块"
 /// (Codex review 指出的二段式),都不会把未完成的 think 草稿当真节点解析。
 /// 无 think 标签 → 原样返回(非推理模型安全);末尾截断 → 通常返回空 → 解析失败重试。
-fn strip_reasoning(text: &str) -> &str {
+pub(crate) fn strip_reasoning(text: &str) -> &str {
     // 1) 跳过所有闭合块。
     let after_closed = ["</think>", "</thinking>"]
         .iter()
@@ -139,7 +139,7 @@ const NODE_KINDS: &[&str] = &[
     "ref",
 ];
 
-fn is_node_object(value: &serde_json::Value) -> bool {
+pub(crate) fn is_node_object(value: &serde_json::Value) -> bool {
     value
         .get("type")
         .and_then(serde_json::Value::as_str)
@@ -301,7 +301,7 @@ fn deserialize_roots(roots: Vec<serde_json::Value>) -> Result<Vec<PenNode>, Pars
     Ok(nodes)
 }
 
-fn normalize_generated_node_json(value: &mut serde_json::Value) {
+pub(crate) fn normalize_generated_node_json(value: &mut serde_json::Value) {
     match value {
         serde_json::Value::Array(items) => {
             for item in items {
@@ -573,7 +573,7 @@ fn resolve_numeric_design_token(s: &str) -> Option<f64> {
 /// 不在此处按"是否字段值 / 嵌套"过滤——交给 [`parse_nodes`] 按总节点数择优:
 /// 完整树天然压过被误抓的内层数组,也不会误伤 `{"nodes":[…]}` 这类带标签的
 /// 真数组(colon-skip 曾把它一并跳掉)。
-fn balanced_spans(text: &str, open: u8, close: u8) -> Vec<&str> {
+pub(crate) fn balanced_spans(text: &str, open: u8, close: u8) -> Vec<&str> {
     let bytes = text.as_bytes();
     let mut out = Vec::new();
     let mut in_str = false;

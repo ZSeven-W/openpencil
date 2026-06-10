@@ -655,3 +655,80 @@ fn subagent_prompt_no_append_mode_when_labels_empty() {
         "user_prompt must NOT contain APPEND MODE block when labels is empty"
     );
 }
+
+/// Manifest mode (spec 2026-06-10-element-manifest-v2): the element-manifest
+/// skill + generated catalog replace the raw-JSONL output protocol, on both
+/// Full and Basic tiers, while the default path stays untouched.
+#[test]
+fn subagent_prompt_manifest_mode_swaps_output_protocol() {
+    const VERBOSE_ONLY: &str = "imageSearchQuery MUST be UNIQUE";
+    const SIMPLIFIED_ONLY: &str = "rectangle (width,height,cornerRadius,fill)";
+    const NODE_FORMAT_ONLY: &str = "FLAT _parent format";
+    const MANIFEST_FORMAT_ONLY: &str = "OUTPUT PROTOCOL: ELEMENT MANIFEST JSONL";
+    const MANIFEST_SKILL_ONLY: &str = "ELEMENT MANIFEST OUTPUT FORMAT";
+
+    let basic_req = DesignRequest {
+        prompt: "a page".into(),
+        model: Some("claude-haiku".into()), // Basic tier
+        provider: None,
+        design_md: None,
+        concurrency: 1,
+        append_context: None,
+        validation_enabled: true,
+        visual_ref_enabled: false,
+    };
+    for request in [req(), basic_req] {
+        let cr = build_subagent_prompt_with_manifest(
+            &subtask(),
+            &plan(),
+            &request,
+            AbortFlag::new(),
+            false,
+            false,
+            true,
+        );
+        let model = request.model.as_deref().unwrap_or("");
+        assert!(
+            cr.system_prompt.contains(MANIFEST_SKILL_ONLY),
+            "{model}: element-manifest skill must load"
+        );
+        assert!(
+            cr.system_prompt.contains("- stat_card:"),
+            "{model}: generated catalog must be injected"
+        );
+        assert!(
+            cr.system_prompt.contains(MANIFEST_FORMAT_ONLY),
+            "{model}: manifest output contract replaces NODE_FORMAT"
+        );
+        assert!(
+            !cr.system_prompt.contains(NODE_FORMAT_ONLY),
+            "{model}: NODE_FORMAT must not load in manifest mode"
+        );
+        assert!(
+            !cr.system_prompt.contains(VERBOSE_ONLY) && !cr.system_prompt.contains(SIMPLIFIED_ONLY),
+            "{model}: jsonl-format skills are replaced by the manifest protocol"
+        );
+        assert!(
+            cr.user_prompt.contains("Do NOT create a page wrapper"),
+            "{model}: user prompt swaps the root-frame rule"
+        );
+        assert!(
+            !cr.user_prompt.contains("-root\""),
+            "{model}: no self-authored root id in manifest mode"
+        );
+    }
+
+    // Default path (manifest off) is byte-stable: NODE_FORMAT + no manifest.
+    let off = build_subagent_prompt_with_manifest(
+        &subtask(),
+        &plan(),
+        &req(),
+        AbortFlag::new(),
+        false,
+        false,
+        false,
+    );
+    assert!(off.system_prompt.contains(NODE_FORMAT_ONLY));
+    assert!(!off.system_prompt.contains(MANIFEST_FORMAT_ONLY));
+    assert!(!off.system_prompt.contains(MANIFEST_SKILL_ONLY));
+}

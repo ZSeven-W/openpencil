@@ -11,7 +11,7 @@
 //! 细化项。
 
 use crate::compact_prompt::build_compact_planning_prompt;
-use crate::compact_skills::apply_skill_filter;
+use crate::compact_skills::{apply_skill_filter, SkillNamed};
 use crate::design_md_policy::build_design_md_style_policy;
 use crate::design_type::{detect_design_type, DesignType};
 use crate::model_profile::{resolve_model_profile, ModelTier};
@@ -47,6 +47,15 @@ Example (a horizontal row of two cards inside a section):
 ALL field names are camelCase: cornerRadius, fontSize, fontWeight, justifyContent,
 alignItems, clipContent. Geometry fields are x, y, width, height. Never snake_case.
 Output ONLY the JSON lines."#;
+
+/// manifest 模式（`OPENPENCIL_MANIFEST=1`）的输出协议说明——细则与目录
+/// 在 `element-manifest` skill 里，这里只钉住最终输出契约。
+const MANIFEST_FORMAT: &str = r#"
+OUTPUT PROTOCOL: ELEMENT MANIFEST JSONL. Respond with one {"el":"<kind>",...}
+JSON object per line, exactly as the ELEMENT MANIFEST section above specifies.
+Use catalog kinds for everything they cover; group with {"el":"section"} lines
+and "in" line-number references; NEVER emit id / parent_id / pageId fields.
+Output ONLY the JSONL lines."#;
 
 /// Rich 模式 system prompt 末尾后缀 —— verbatim,`orchestrator.ts:1382-1383`。
 const RICH_SUFFIX: &str = "\n\n---\nCRITICAL OUTPUT FORMAT ENFORCEMENT:\n\
@@ -284,6 +293,34 @@ pub fn build_subagent_prompt(
     reduced_complexity: bool,
     minimal_skills: bool,
 ) -> CallRequest {
+    // Element-manifest protocol (spec 2026-06-10-element-manifest-v2): only on
+    // the full first attempt — the retry ladder (reduced/minimal) falls back
+    // to the smaller raw-JSONL prompt, and `parse_manifest` returning `None`
+    // on such output routes parsing back through `parse_nodes`.
+    let manifest_on = crate::manifest::manifest_enabled() && !reduced_complexity && !minimal_skills;
+    build_subagent_prompt_with_manifest(
+        subtask,
+        plan,
+        req,
+        abort,
+        reduced_complexity,
+        minimal_skills,
+        manifest_on,
+    )
+}
+
+/// Env-independent core of [`build_subagent_prompt`] — `manifest_on` is a
+/// parameter so tests can exercise the manifest wiring without touching
+/// the process-global `OPENPENCIL_MANIFEST` variable.
+fn build_subagent_prompt_with_manifest(
+    subtask: &Subtask,
+    plan: &OrchestratorPlan,
+    req: &DesignRequest,
+    abort: AbortFlag,
+    reduced_complexity: bool,
+    minimal_skills: bool,
+    manifest_on: bool,
+) -> CallRequest {
     // Resolve the full generation skill set, then apply tier-gated filtering.
     let model_id = req.model.as_deref().unwrap_or("");
     let tier = resolve_model_profile(model_id).tier;
@@ -323,10 +360,19 @@ pub fn build_subagent_prompt(
     // Element-tools (N-tool) path is not ported to Rust (feature-flag off in
     // TS production); `elements`/`elements-cookbook` therefore stay gated off.
     flags.insert("hasMcpTools".to_string(), false);
+    flags.insert("hasManifest".to_string(), manifest_on);
 
     let mut dynamic_content = HashMap::new();
     if has_design_md {
         dynamic_content.insert("designMdContent".to_string(), design_md_content);
+    }
+    if manifest_on {
+        // The catalog is generated from the embedded TS schemas so the
+        // prompt can never drift from the builders.
+        dynamic_content.insert(
+            "elementManifestCatalog".to_string(),
+            op_mcp::element_manifest::manifest_catalog(),
+        );
     }
 
     // Tier-scaled budget override (orchestrator-sub-agent.ts:414-415).
@@ -357,7 +403,7 @@ pub fn build_subagent_prompt(
     // "output ONLY a JSON token object" header redundantly (Codex review).
     let design_system_covered =
         has_design_md || no_style_guide_match || style_guide_instruction.is_some();
-    let filtered = apply_skill_filter(
+    let mut filtered = apply_skill_filter(
         resolved,
         tier,
         is_mobile_screen,
@@ -365,6 +411,13 @@ pub fn build_subagent_prompt(
         minimal_skills,
         reduced_complexity,
     );
+    // The manifest protocol REPLACES the raw-JSONL output format —
+    // carrying both would contradict (and burn Basic-tier budget).
+    if manifest_on {
+        filtered.retain(|s| {
+            s.skill_name() != "jsonl-format" && s.skill_name() != "jsonl-format-simplified"
+        });
+    }
 
     let mut system_prompt = filtered
         .iter()
@@ -376,7 +429,12 @@ pub fn build_subagent_prompt(
     // (MiniMax M2.7/M3 are Basic) emit clean `_parent` trees with it. The
     // `jsonl-format` + `jsonl-format-simplified` skills both teach `_parent`,
     // so this agrees with whichever skill the tier loads (no contradiction).
-    system_prompt.push_str(NODE_FORMAT);
+    // Manifest mode swaps in the element-manifest contract instead.
+    system_prompt.push_str(if manifest_on {
+        MANIFEST_FORMAT
+    } else {
+        NODE_FORMAT
+    });
     // Append the selected style guide's palette/fonts so the sub-agent follows
     // it instead of inventing a conflicting one.
     if let Some(sg) = &style_guide_instruction {
@@ -409,28 +467,45 @@ pub fn build_subagent_prompt(
         })
         .unwrap_or_default();
 
+    // Three constraints differ by output protocol: the raw-JSONL path has
+    // the model author its own root frame + ids; the manifest path forbids
+    // exactly that (system-assigned ids, system-owned section root).
+    let (root_rule, nesting_rule, output_rule) = if manifest_on {
+        (
+            "Do NOT create a page wrapper or root frame -- emit element/section manifest lines only; the system wraps them under this section's root automatically.".to_string(),
+            "Group elements with {\"el\":\"section\"} lines and `in` line-number references (see ELEMENT MANIFEST rules). Lines without `in` stack vertically in output order.".to_string(),
+            "Output ONLY manifest JSONL lines in the EXACT format the system prompt specifies above -- no prose, no id fields, no extra wrapping.".to_string(),
+        )
+    } else {
+        (
+            format!("Root frame: id=\"{}-root\", width=\"fill_container\", height=\"fit_content\", layout=\"vertical\". NEVER use fixed pixel height on root -- let content determine height.", subtask.id_prefix),
+            "ALL nodes must be descendants of the root frame -- every non-root node must be nested under its parent (row -> its cards -> each card's content), in whichever format the system prompt specifies. No floating/orphan nodes; a flat sibling list with no parent links collapses into a vertical stack.".to_string(),
+            format!("IDs prefix=\"{}-\". Output ONLY the structured nodes in the EXACT format the system prompt specifies above -- no prose, no extra wrapping.", subtask.id_prefix),
+        )
+    };
     let mut user_prompt = format!(
         "Page sections:\n{}\n\n\
 Generate ONLY \"{}\" (~{:.0}px of content).{}\n\
 Overall design: {}\n\n\
 CRITICAL LAYOUT CONSTRAINTS:\n\
-- Root frame: id=\"{}-root\", width=\"fill_container\", height=\"fit_content\", layout=\"vertical\". NEVER use fixed pixel height on root -- let content determine height.\n\
+- {}\n\
 - Target content amount: ~{:.0}px tall. Generate enough elements to fill this area.\n\
-- ALL nodes must be descendants of the root frame -- every non-root node must be nested under its parent (row -> its cards -> each card's content), in whichever format the system prompt specifies. No floating/orphan nodes; a flat sibling list with no parent links collapses into a vertical stack.\n\
+- {}\n\
 - NEVER set x or y on children inside layout frames.\n\
 - Use \"fill_container\" for children that stretch, \"fit_content\" for shrink-wrap sizing.\n\
 - SECTION BACKGROUND: do NOT set fill on your section root frame. Only set fill on cards, buttons, chips, badges, and other visually distinct components.\n\
 - TYPOGRAPHY HIERARCHY: Do NOT make every text bold. Use 700 only for primary headings, 600 for buttons/key labels, 500 for short chips/nav labels, and 400 for body text, placeholders, subtitles, metadata, and captions.\n\
 - ICONS: use icon_font with lucide iconFontName; never use path nodes for icons.\n\
-- IDs prefix=\"{}-\". Output ONLY the structured nodes in the EXACT format the system prompt specifies above -- no prose, no extra wrapping.",
+- {}",
         section_list,
         subtask.label,
         subtask.region.height,
         my_elements,
         req.prompt,
-        subtask.id_prefix,
+        root_rule,
         subtask.region.height,
-        subtask.id_prefix,
+        nesting_rule,
+        output_rule,
     );
 
     if plan.root_frame.width <= 480.0 {
