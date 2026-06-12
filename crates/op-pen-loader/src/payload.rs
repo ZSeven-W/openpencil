@@ -69,6 +69,11 @@ pub struct NodePayload {
     pub opacity: f32,
     #[serde(default)]
     pub corner_radius: f32,
+    /// Container clips its children to its bounds (canonical
+    /// `clipContent`). The page builders also force this on for root
+    /// frames, which clip like artboards (TS flattener parity).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub clip_content: bool,
     /// Ellipse arc start angle in degrees (`None` = full ellipse).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub arc_start_angle: Option<f32>,
@@ -119,6 +124,20 @@ pub struct NodePayload {
     /// CSS-style font weight (100-900). 0 = default 400. Text-only.
     #[serde(default)]
     pub font_weight: u16,
+    /// Node-level `fontStyle: italic`. Text-only.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub italic: bool,
+    /// Node-level underline decoration. Text-only.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub underline: bool,
+    /// Node-level strikethrough decoration. Text-only.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub strikethrough: bool,
+    /// Per-segment style runs when the canonical text content is
+    /// `TextContent::Styled`. Each run covers `text.len()` bytes of
+    /// the flattened `text` in order; empty for plain text.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub text_runs: Vec<TextRunPayload>,
     /// Line-height multiplier. 0 = renderer default. Text-only.
     #[serde(default)]
     pub line_height: f32,
@@ -169,6 +188,28 @@ fn is_default_polygon_sides(value: &u32) -> bool {
 pub struct StrokePayload {
     pub color: [f32; 4],
     pub width: f32,
+}
+
+/// One styled text segment, flattened in document order. Sentinels
+/// mirror the node-level fields: `0.0` font size / `0` weight / `None`
+/// fill = inherit the node's value. `italic` / `underline` /
+/// `strikethrough` are RESOLVED against the node level already (a
+/// segment without an override inherits the node's flag).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TextRunPayload {
+    pub text: String,
+    #[serde(default)]
+    pub font_size: f32,
+    #[serde(default)]
+    pub font_weight: u16,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fill: Option<[f32; 4]>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub italic: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub underline: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub strikethrough: bool,
 }
 
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]

@@ -26,6 +26,7 @@ mod layout_repair;
 mod layout_scene;
 mod path_bounds;
 mod style_payload;
+mod text_style;
 
 pub mod payload;
 pub mod variables;

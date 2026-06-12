@@ -28,6 +28,7 @@ pub(crate) fn base_payload(base: &PenNodeBase, kind: &str) -> NodePayload {
         flip_y: base.flip_y.unwrap_or(false),
         opacity: base_opacity(base),
         corner_radius: 0.0,
+        clip_content: false,
         arc_start_angle: None,
         arc_sweep_angle: None,
         arc_inner_radius: None,
@@ -43,6 +44,10 @@ pub(crate) fn base_payload(base: &PenNodeBase, kind: &str) -> NodePayload {
         svg_path: None,
         font_size: 0.0,
         font_weight: 0,
+        italic: false,
+        underline: false,
+        strikethrough: false,
+        text_runs: Vec::new(),
         line_height: 0.0,
         letter_spacing: 0.0,
         text_align: String::new(),
@@ -288,7 +293,7 @@ fn apply_alpha(rgba: [f32; 4], opacity: Option<f32>) -> [f32; 4] {
     [rgba[0], rgba[1], rgba[2], rgba[3] * a]
 }
 
-fn parse_hex(s: &str) -> Option<[f32; 4]> {
+pub(crate) fn parse_hex(s: &str) -> Option<[f32; 4]> {
     let s = s.trim().trim_start_matches('#');
     let (r, g, b, a) = match s.len() {
         3 => (
