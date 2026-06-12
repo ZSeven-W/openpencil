@@ -596,3 +596,104 @@ fn pencil_demo_op_fixture_loads() {
         nodes.iter().map(|n| 1 + count_nodes(&n.children)).sum()
     }
 }
+
+#[test]
+fn clip_content_threads_from_schema_and_root_frames_always_clip() {
+    // Root frame (no authored clipContent) clips like an artboard;
+    // nested containers clip only when clipContent:true is authored.
+    let src = r##"{
+      "version":"1.0.0",
+      "pages":[{
+        "id":"p","name":"P",
+        "children":[{
+          "type":"frame","id":"root","width":300,"height":200,
+          "children":[
+            {"type":"frame","id":"clipped","width":100,"height":100,"clipContent":true},
+            {"type":"frame","id":"open","width":100,"height":100},
+            {"type":"group","id":"g","clipContent":true,"children":[]}
+          ]
+        }]
+      }],
+      "children":[]
+    }"##;
+    let r = load(src);
+    let root = &r.payload.pages[0].children[0];
+    assert!(root.clip_content, "root frame clips implicitly (TS rule)");
+    assert!(root.children[0].clip_content, "authored clipContent:true");
+    assert!(!root.children[1].clip_content, "nested frame defaults open");
+    assert!(
+        root.children[2].clip_content,
+        "groups carry clipContent too"
+    );
+}
+
+#[test]
+fn root_group_does_not_clip_implicitly() {
+    let src = r##"{
+      "version":"1.0.0",
+      "pages":[{"id":"p","name":"P","children":[
+        {"type":"group","id":"g","children":[]}
+      ]}],
+      "children":[]
+    }"##;
+    let r = load(src);
+    assert!(
+        !r.payload.pages[0].children[0].clip_content,
+        "the implicit root clip applies to frames only"
+    );
+}
+
+#[test]
+fn styled_text_builds_runs_and_keeps_flat_string() {
+    let src = r##"{
+      "version":"1.0.0",
+      "pages":[{"id":"p","name":"P","children":[
+        {"type":"text","id":"t","fontSize":16,"fontStyle":"italic","underline":true,
+         "content":[
+           {"text":"Hello ","fontWeight":700,"fill":"#ff0000"},
+           {"text":"world","fontSize":24,"fontStyle":"normal","underline":false,"strikethrough":true}
+         ]}
+      ]}],
+      "children":[]
+    }"##;
+    let r = load(src);
+    let t = &r.payload.pages[0].children[0];
+    assert_eq!(t.text.as_deref(), Some("Hello world"));
+    assert!(t.italic, "node-level fontStyle: italic");
+    assert!(t.underline, "node-level underline");
+    assert_eq!(t.text_runs.len(), 2);
+
+    let first = &t.text_runs[0];
+    assert_eq!(first.text, "Hello ");
+    assert_eq!(first.font_weight, 700);
+    assert_eq!(first.font_size, 0.0, "no per-seg size → inherit sentinel");
+    assert_eq!(first.fill, Some([1.0, 0.0, 0.0, 1.0]));
+    assert!(first.italic, "no per-seg style → inherits node italic");
+    assert!(first.underline, "inherits node underline");
+    assert!(!first.strikethrough);
+
+    let second = &t.text_runs[1];
+    assert_eq!(second.text, "world");
+    assert_eq!(second.font_size, 24.0);
+    assert_eq!(second.font_weight, 0, "inherit sentinel");
+    assert_eq!(second.fill, None, "no per-seg fill → inherit node fill");
+    assert!(!second.italic, "explicit normal overrides node italic");
+    assert!(!second.underline, "explicit false overrides node underline");
+    assert!(second.strikethrough);
+}
+
+#[test]
+fn plain_text_has_no_runs() {
+    let src = r##"{
+      "version":"1.0.0",
+      "pages":[{"id":"p","name":"P","children":[
+        {"type":"text","id":"t","content":"plain"}
+      ]}],
+      "children":[]
+    }"##;
+    let r = load(src);
+    let t = &r.payload.pages[0].children[0];
+    assert_eq!(t.text.as_deref(), Some("plain"));
+    assert!(t.text_runs.is_empty());
+    assert!(!t.italic && !t.underline && !t.strikethrough);
+}

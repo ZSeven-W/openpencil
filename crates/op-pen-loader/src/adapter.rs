@@ -24,7 +24,6 @@ use jian_core::layout::{measure::MeasureBackend, LayoutEngine};
 use jian_ops_schema::{
     node::base::PenNodeBase,
     node::container::CornerRadius,
-    node::text::TextContent,
     node::{
         EllipseNode, FontWeight, FrameNode, GroupNode, IconFontNode, ImageNode, LineNode, PathNode,
         PenNode, PolygonNode, RectangleNode, TextInputNode, TextNode,
@@ -196,22 +195,39 @@ fn build_page(id: &str, name: &str, roots: &[PenNode], page_idx: usize) -> PageP
         compute_layout(root, &mut layout_rects);
     }
     let _ = page_idx;
+    let mut children: Vec<NodePayload> = roots
+        .iter()
+        .map(|n| node_to_payload(n, &layout_rects))
+        .collect();
+    mark_root_frame_clips(&mut children);
     PagePayload {
         id: id.to_string(),
         name: name.to_string(),
-        children: roots
-            .iter()
-            .map(|n| node_to_payload(n, &layout_rects))
-            .collect(),
+        children,
     }
 }
 
 fn build_page_preserving_geometry(id: &str, name: &str, roots: &[PenNode]) -> PagePayload {
     let rects = crate::authored_geometry::rects_for_roots(roots);
+    let mut children: Vec<NodePayload> = roots.iter().map(|n| node_to_payload(n, &rects)).collect();
+    mark_root_frame_clips(&mut children);
     PagePayload {
         id: id.to_string(),
         name: name.to_string(),
-        children: roots.iter().map(|n| node_to_payload(n, &rects)).collect(),
+        children,
+    }
+}
+
+/// TS flattener parity (`document-flattener.ts`): ROOT frames clip
+/// their children like artboards even without an authored
+/// `clipContent: true` (`isRootFrame = node.type === 'frame' &&
+/// depth === 0`). Only frames — top-level groups / rects keep their
+/// authored flag.
+fn mark_root_frame_clips(children: &mut [NodePayload]) {
+    for child in children {
+        if child.kind == "frame" {
+            child.clip_content = true;
+        }
     }
 }
 
@@ -466,6 +482,7 @@ fn sizing_to_f32(s: &Option<SizingBehavior>) -> f32 {
 
 fn frame_to_payload(n: &FrameNode, _rects: &BTreeMap<String, [f32; 4]>) -> NodePayload {
     let mut p = base_payload(&n.base, "frame");
+    p.clip_content = n.container.clip_content == Some(true);
     apply_container_style(
         &mut p,
         n.container.fill.as_deref(),
@@ -484,6 +501,7 @@ fn frame_to_payload(n: &FrameNode, _rects: &BTreeMap<String, [f32; 4]>) -> NodeP
 
 fn group_to_payload(n: &GroupNode, _rects: &BTreeMap<String, [f32; 4]>) -> NodePayload {
     let mut p = base_payload(&n.base, "group");
+    p.clip_content = n.container.clip_content == Some(true);
     apply_container_style(
         &mut p,
         n.container.fill.as_deref(),
@@ -502,6 +520,7 @@ fn group_to_payload(n: &GroupNode, _rects: &BTreeMap<String, [f32; 4]>) -> NodeP
 
 fn rect_to_payload(n: &RectangleNode, _rects: &BTreeMap<String, [f32; 4]>) -> NodePayload {
     let mut p = base_payload(&n.base, "rect");
+    p.clip_content = n.container.clip_content == Some(true);
     apply_container_style(
         &mut p,
         n.container.fill.as_deref(),
@@ -615,14 +634,9 @@ fn path_to_payload(n: &PathNode) -> NodePayload {
 
 fn text_to_payload(n: &TextNode) -> NodePayload {
     let mut p = base_payload(&n.base, "text");
-    p.text = Some(match &n.content {
-        TextContent::Plain(s) => s.clone(),
-        TextContent::Styled(segments) => segments
-            .iter()
-            .map(|seg| seg.text.clone())
-            .collect::<Vec<_>>()
-            .join(""),
-    });
+    // Flat string + styled segment runs + node italic/underline/
+    // strikethrough — see `text_style.rs`.
+    crate::text_style::apply_text_content(&mut p, n);
     assign_first_fill(&mut p, n.fill.as_deref());
     p.font_family = n.font_family.clone().unwrap_or_default();
     p.font_size = n.font_size.unwrap_or(0.0) as f32;

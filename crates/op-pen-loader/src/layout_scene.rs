@@ -25,7 +25,7 @@ use op_editor_ui::layout_scene::NodeKind;
 use op_editor_ui::layout_scene::{
     stable_image_source_id, DropShadow, Effect, LayoutScene, SceneFillType, SceneGradient,
     SceneGradientStop, SceneImageFit, SceneNode, ScenePage, SceneStroke, SceneTextAlign,
-    SceneTextVerticalAlign,
+    SceneTextRun, SceneTextVerticalAlign,
 };
 use op_editor_ui::scene_vars::VariableTable;
 use op_editor_ui::Color;
@@ -44,14 +44,38 @@ use crate::payload::{
 /// re-shapes the resolved node tree into a render scene that carries
 /// NO editor state.
 pub fn editor_state_to_layout_scene(state: &op_editor_core::EditorState) -> LayoutScene {
+    // Render-time document preparation (TS parity: the flattener
+    // expands component instances, then `resolveNodeForCanvas` lands
+    // every `$token` as a concrete value — fills / strokes / shadows
+    // / opacity / gap / padding / font-weight / text content). Refs
+    // expand FIRST so the instance subtrees resolve their tokens
+    // too; loaded documents render without any transient editor
+    // cache, and numeric tokens reach the flex solver as real
+    // numbers instead of unparsed expressions. Each pass clones the
+    // tree, so both early-out via cheap detector walks — the common
+    // ref-free / token-free document pays no clone at all.
+    let mut prepared = std::borrow::Cow::Borrowed(&state.doc);
+    if op_editor_core::ref_resolve::document_has_refs(&prepared) {
+        prepared = std::borrow::Cow::Owned(op_editor_core::ref_resolve::resolve_refs_for_canvas(
+            &prepared,
+        ));
+    }
+    if op_editor_core::variables_resolve::document_has_tokens(&prepared) {
+        prepared = std::borrow::Cow::Owned(
+            op_editor_core::variables_resolve::resolve_document_for_canvas(
+                &prepared,
+                &state.ui.variables.active_theme,
+            ),
+        );
+    }
     // The layout-resolved payload — flex layout already baked into
     // every `NodePayload`'s AABB by jian-core's `LayoutEngine`. This
     // is the reusable layout-resolution core; it never touches the
     // shell-core `Document` model.
     let payload: DocPayload = if state.editor_ui.preserve_authored_geometry {
-        crate::adapter::pen_document_to_payload_preserving_geometry(&state.doc).payload
+        crate::adapter::pen_document_to_payload_preserving_geometry(&prepared).payload
     } else {
-        crate::adapter::pen_document_to_payload(&state.doc).payload
+        crate::adapter::pen_document_to_payload(&prepared).payload
     };
     // Variables + active theme + the `fill_refs` / `stroke_refs`
     // caches the editor holds. `editor_state_var_table` folds the
@@ -121,6 +145,7 @@ fn node_payload_to_scene(
         flip_x: node.flip_x,
         flip_y: node.flip_y,
         corner_radius: node.corner_radius,
+        clip_content: node.clip_content,
         // Paint-time `$ref` resolution: a registered fill ref wins,
         // else the node's own fill. Same precedence as the canvas
         // painter's `node_fill` helper.
@@ -139,9 +164,13 @@ fn node_payload_to_scene(
             st
         }),
         text: node.text.clone(),
+        text_runs: text_runs_to_scene(&node.text_runs, cum_opacity),
         font_family: node.font_family.clone(),
         font_size: node.font_size,
         font_weight: node.font_weight,
+        italic: node.italic,
+        underline: node.underline,
+        strikethrough: node.strikethrough,
         line_height: node.line_height,
         letter_spacing: node.letter_spacing,
         text_align: text_align_to_scene(&node.text_align),
@@ -179,6 +208,38 @@ fn node_payload_to_scene(
             .map(|c| node_payload_to_scene(c, var_table, cum_opacity))
             .collect(),
     }
+}
+
+/// Map payload text runs onto scene runs: each segment's `text` length
+/// becomes a byte range into the node's flattened string (the payload
+/// flattens segments in order, so ranges are cumulative). Per-run fill
+/// colours get the node's cumulative opacity folded into their alpha —
+/// same treatment as the node-level fill.
+fn text_runs_to_scene(
+    runs: &[crate::payload::TextRunPayload],
+    cum_opacity: f32,
+) -> Vec<SceneTextRun> {
+    let mut start = 0usize;
+    runs.iter()
+        .map(|run| {
+            let end = start + run.text.len();
+            let scene = SceneTextRun {
+                start,
+                end,
+                font_size: run.font_size,
+                font_weight: run.font_weight,
+                fill: run
+                    .fill
+                    .map(array_to_color)
+                    .map(|c| mul_alpha(c, cum_opacity)),
+                italic: run.italic,
+                underline: run.underline,
+                strikethrough: run.strikethrough,
+            };
+            start = end;
+            scene
+        })
+        .collect()
 }
 
 /// Fold node opacity into an effect's colour. A drop shadow is part

@@ -527,3 +527,160 @@ fn inner_shadow_flag_survives_into_scene() {
     let Effect::DropShadow(s) = &effects[0];
     assert!(s.inner, "inner:true must survive into the scene effect");
 }
+
+#[test]
+fn loaded_document_dollar_ref_fill_resolves_without_any_cache() {
+    // The P0 document-compat repro: a TS-authored / reloaded .op whose
+    // fill IS the `$ref` string. No transient `fill_refs` cache exists
+    // after a load — the render-time resolution pass alone must land
+    // the concrete colour (and the palette fallback must cover tokens
+    // the document never seeded).
+    let src = r##"{
+      "version":"1.0.0",
+      "variables":{"brand":{"type":"color","value":"#ff8800"}},
+      "pages":[{"id":"p","name":"P","children":[
+        {"type":"rectangle","id":"r1","width":100,"height":50,
+         "fill":[{"type":"solid","color":"$brand"}]},
+        {"type":"rectangle","id":"r2","x":0,"y":60,"width":100,"height":50,
+         "fill":[{"type":"solid","color":"$color-surface"}]}
+      ]}],"children":[]
+    }"##;
+    let state = state_from(src);
+    let scene = editor_state_to_layout_scene(&state);
+
+    let r1 = &scene.pages[0].children[0];
+    let fill = r1.fill.expect("$brand fill must resolve from the document");
+    assert!((fill.r - 1.0).abs() < 0.01, "red channel: {}", fill.r);
+    assert!((fill.g - 0.533).abs() < 0.02, "green channel: {}", fill.g);
+
+    // Un-seeded semantic token → built-in palette (#FFFFFF in Light).
+    let r2 = &scene.pages[0].children[1];
+    let fill2 = r2
+        .fill
+        .expect("$color-surface must resolve via the palette fallback");
+    assert!((fill2.r - 1.0).abs() < 0.01);
+    assert!((fill2.g - 1.0).abs() < 0.01);
+    assert!((fill2.b - 1.0).abs() < 0.01);
+}
+
+#[test]
+fn loaded_document_spacing_token_gap_reaches_flex_solver() {
+    // `$spacing-2` (palette fallback = 8) must reach jian's flex pass
+    // as a real number: two 50px-tall children in a vertical frame
+    // land at y=0 and y=58.
+    let src = r##"{
+      "version":"1.0.0",
+      "pages":[{"id":"p","name":"P","children":[
+        {"type":"frame","id":"f","width":200,"height":200,"layout":"vertical","gap":"$spacing-2",
+         "children":[
+           {"type":"rectangle","id":"a","width":50,"height":50},
+           {"type":"rectangle","id":"b","width":50,"height":50}
+         ]}
+      ]}],"children":[]
+    }"##;
+    let state = state_from(src);
+    let scene = editor_state_to_layout_scene(&state);
+    let frame = &scene.pages[0].children[0];
+    assert_eq!(frame.children.len(), 2);
+    let a = &frame.children[0];
+    let b = &frame.children[1];
+    assert!(
+        (b.bounds.origin.y - a.bounds.origin.y - 58.0).abs() < 0.5,
+        "vertical gap must be 8 (got delta {})",
+        b.bounds.origin.y - a.bounds.origin.y
+    );
+}
+
+#[test]
+fn ref_instance_renders_component_subtree_at_instance_position() {
+    // The P0 document-compat repro: a TS-authored .op with a reusable
+    // component + a ref instance must render the instance's full
+    // subtree (previously `PenNode::Ref` collapsed to an empty group).
+    let src = r##"{
+      "version":"1.0.0",
+      "pages":[{"id":"p","name":"P","children":[
+        {"type":"frame","id":"card","name":"Card","reusable":true,"x":0,"y":0,"width":200,"height":100,
+         "fill":[{"type":"solid","color":"#222222"}],
+         "children":[
+           {"type":"rectangle","id":"badge","x":10,"y":10,"width":20,"height":20,
+            "fill":[{"type":"solid","color":"#ff0000"}]}
+         ]},
+        {"type":"ref","id":"inst1","ref":"card","x":300,"y":50}
+      ]}],"children":[]
+    }"##;
+    let state = state_from(src);
+    let scene = editor_state_to_layout_scene(&state);
+    let page = &scene.pages[0];
+    assert_eq!(page.children.len(), 2, "component + expanded instance");
+    let inst = &page.children[1];
+    assert_eq!(inst.id, "inst1");
+    assert!(
+        (inst.bounds.origin.x - 300.0).abs() < 0.5,
+        "instance renders at its own position (x = {})",
+        inst.bounds.origin.x
+    );
+    assert!(
+        (inst.bounds.size.x - 200.0).abs() < 0.5,
+        "instance inherits the component's width (w = {})",
+        inst.bounds.size.x
+    );
+    assert_eq!(inst.children.len(), 1, "subtree expands");
+    assert_eq!(inst.children[0].id, "inst1__badge", "virtual child id");
+    let badge_fill = inst.children[0].fill.expect("badge fill survives");
+    assert!((badge_fill.r - 1.0).abs() < 0.01, "badge stays red");
+}
+
+#[test]
+fn scene_threads_clip_content_flag() {
+    let src = r##"{
+      "version":"1.0.0",
+      "pages":[{"id":"p","name":"P","children":[
+        {"type":"frame","id":"root","width":300,"height":200,
+         "children":[
+           {"type":"frame","id":"clipped","width":100,"height":100,"clipContent":true},
+           {"type":"frame","id":"open","width":100,"height":100}
+         ]}
+      ]}],
+      "children":[]
+    }"##;
+    let scene = editor_state_to_layout_scene(&state_from(src));
+    let root = &scene.pages[0].children[0];
+    assert!(root.clip_content, "root frame clips implicitly");
+    assert!(root
+        .children
+        .iter()
+        .any(|c| c.id == "clipped" && c.clip_content));
+    assert!(root
+        .children
+        .iter()
+        .any(|c| c.id == "open" && !c.clip_content));
+}
+
+#[test]
+fn scene_text_runs_map_segments_onto_byte_ranges() {
+    let src = r##"{
+      "version":"1.0.0",
+      "pages":[{"id":"p","name":"P","children":[
+        {"type":"text","id":"t","opacity":0.5,
+         "content":[
+           {"text":"汉字","fontWeight":700},
+           {"text":"ab","fill":"#00ff00","fontStyle":"italic"}
+         ]}
+      ]}],
+      "children":[]
+    }"##;
+    let scene = editor_state_to_layout_scene(&state_from(src));
+    let t = scene.pages[0].find("t").expect("text node");
+    assert_eq!(t.text.as_deref(), Some("汉字ab"));
+    assert_eq!(t.text_runs.len(), 2);
+    // "汉字" = 6 bytes; ranges are cumulative byte offsets.
+    assert_eq!((t.text_runs[0].start, t.text_runs[0].end), (0, 6));
+    assert_eq!((t.text_runs[1].start, t.text_runs[1].end), (6, 8));
+    assert_eq!(t.text_runs[0].font_weight, 700);
+    assert!(t.text_runs[1].italic);
+    // Node opacity 0.5 folds into the run fill's alpha like the
+    // node-level fill.
+    let fill = t.text_runs[1].fill.expect("per-run fill");
+    assert!((fill.g - 1.0).abs() < 1e-6);
+    assert!((fill.a - 0.5).abs() < 1e-6, "alpha carries cum_opacity");
+}
