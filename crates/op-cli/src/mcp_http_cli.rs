@@ -210,6 +210,51 @@ fn unwrap_mcp_reply(reply: &str) -> Result<String, String> {
     Ok(reply.to_string())
 }
 
+/// Plain HTTP `GET` against `127.0.0.1:port{path}` with the same deadline
+/// discipline as [`post_raw`]; returns `(http_status, body)`.
+fn http_get_raw(port: u16, path: &str, timeout: Duration) -> Result<(u16, String), String> {
+    let addr = SocketAddr::from(([127, 0, 0, 1], port));
+    let mut stream = TcpStream::connect_timeout(&addr, timeout)
+        .map_err(|e| format!("connect 127.0.0.1:{port}: {e}"))?;
+    stream.set_read_timeout(Some(timeout)).ok();
+    stream.set_write_timeout(Some(timeout)).ok();
+    let request = format!("GET {path} HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n");
+    stream
+        .write_all(request.as_bytes())
+        .map_err(|e| format!("http write: {e}"))?;
+    stream.flush().ok();
+    let mut response = String::new();
+    stream
+        .read_to_string(&mut response)
+        .map_err(|e| format!("http read: {e}"))?;
+    let status = parse_status_code(&response).unwrap_or(0);
+    let body = match response.split_once("\r\n\r\n") {
+        Some((_, body)) => body.trim().to_string(),
+        None => response.trim().to_string(),
+    };
+    Ok((status, body))
+}
+
+/// True when `127.0.0.1:port` is the `--serve-web` web-canvas daemon —
+/// `GET /api/mcp/server` reports our identity AND `mode:"web-canvas"`. Used
+/// by `op start --web` so it never "reuses" a plain `--mcp-http` server
+/// (which answers the token ping but serves no browser editor).
+pub(crate) fn web_daemon_running(port: u16) -> bool {
+    match http_get_raw(port, "/api/mcp/server", PING_TIMEOUT) {
+        Ok((status, body)) => (200..300).contains(&status) && is_web_canvas_health(&body),
+        Err(_) => false,
+    }
+}
+
+/// Pure predicate over the `/api/mcp/server` health body (testable without
+/// a socket): the OpenPencil identity marker plus the web-canvas mode.
+fn is_web_canvas_health(body: &str) -> bool {
+    serde_json::from_str::<Value>(body).is_ok_and(|v| {
+        v.get("server").and_then(Value::as_str) == Some(MCP_SERVER_NAME)
+            && v.get("mode").and_then(Value::as_str) == Some("web-canvas")
+    })
+}
+
 /// Send a JSON-RPC `ping` and return the parsed `result` object when the
 /// reply is an OpenPencil MCP server (`result.server == "openpencil-mcp"`).
 /// This distinguishes our `/mcp` JSON-RPC server from a stale TCP listener,
@@ -314,5 +359,22 @@ mod tests {
         // A tools/list reply (result.tools, no content) is returned as-is.
         let reply = r#"{"jsonrpc":"2.0","id":1,"result":{"tools":[]}}"#;
         assert_eq!(unwrap_mcp_reply(reply).unwrap(), reply);
+    }
+
+    #[test]
+    fn web_canvas_health_requires_identity_and_web_mode() {
+        // The `--serve-web` daemon's health shape (extra fields tolerated).
+        assert!(is_web_canvas_health(
+            r#"{"running":true,"port":3100,"localIp":"127.0.0.1","server":"openpencil-mcp","mode":"web-canvas"}"#
+        ));
+        // A plain `--mcp-http` server (no health route → would 404 anyway),
+        // a foreign service, or a missing mode must all be rejected.
+        assert!(!is_web_canvas_health(
+            r#"{"running":true,"port":3100,"server":"openpencil-mcp"}"#
+        ));
+        assert!(!is_web_canvas_health(
+            r#"{"server":"someone-else","mode":"web-canvas"}"#
+        ));
+        assert!(!is_web_canvas_health("not json"));
     }
 }
