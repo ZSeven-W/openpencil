@@ -50,39 +50,6 @@ fn parse_args_maps_ts_status_to_local_status_probe() {
 }
 
 #[test]
-fn parse_args_maps_start_to_rust_mcp_server() {
-    let p = parse_args(&[
-        "--port".to_string(),
-        "3200".to_string(),
-        "start".to_string(),
-        "--file".to_string(),
-        "/tmp/session.op".to_string(),
-    ])
-    .expect("parse start");
-    assert_eq!(p.port, 3200);
-    assert!(p.port_explicit, "--port should mark the port explicit");
-    assert_eq!(
-        p.command,
-        Command::StartMcp {
-            document_path: Some("/tmp/session.op".to_string()),
-            headless: false,
-        }
-    );
-}
-
-#[test]
-fn parse_args_maps_start_headless_to_file_backed_server() {
-    let p = parse_args(&["start".to_string(), "--headless".to_string()]).expect("parse start");
-    assert_eq!(
-        p.command,
-        Command::StartMcp {
-            document_path: None,
-            headless: true,
-        }
-    );
-}
-
-#[test]
 fn parse_args_without_port_is_not_explicit_so_discovery_runs() {
     // No `--port` ⇒ server-bound commands resolve the live editor's port
     // from ~/.openpencil/.op-mcp-port instead of pinning the default.

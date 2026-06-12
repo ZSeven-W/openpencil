@@ -34,12 +34,20 @@ struct RunningMcp {
 /// for it to publish `~/.openpencil/.op-mcp-port`, so subsequent `op <tool>`
 /// calls drive the on-screen canvas in real time (TS parity). Pass
 /// `headless` to instead run the windowless file-backed MCP server
-/// (`--mcp-http`) — useful for CI / display-less agents.
+/// (`--mcp-http`) — useful for CI / display-less agents. Pass `web` to run
+/// the browser editor: the `--serve-web` daemon (static wasm bundle + REST
+/// sync + `/mcp`) is spawned headless and the URL is opened in the browser
+/// (TS `startWeb` parity).
 pub(crate) fn run_start(
     port: u16,
     document_path: Option<&str>,
     headless: bool,
+    web: bool,
+    host: Option<&str>,
 ) -> Result<String, String> {
+    if web {
+        return run_start_web(port, document_path, host);
+    }
     if headless {
         // Reuse an already-running headless server; otherwise launch one.
         if let Some(existing) = reachable_headless_server() {
@@ -126,6 +134,140 @@ fn run_start_live(port: u16, document_path: Option<&str>) -> Result<String, Stri
         "OpenPencil editor did not publish a live MCP server within 15s \
          (expected ~/.openpencil/{LIVE_PORT_FILE_NAME}); it may still be starting"
     ))
+}
+
+/// `op start --web` — spawn the `--serve-web` daemon (headless: static wasm
+/// bundle at `/` + `/pkg/*`, REST sync, JSON-RPC `/mcp`), track it via the
+/// same `$TMPDIR` pid/port/token manager files as the headless server (so
+/// `op stop` / discovery work unchanged — the daemon honors the token-authed
+/// `openpencil/shutdown`), wait until its HTTP port answers our token, then
+/// print the URL and open it in the default browser.
+fn run_start_web(
+    port: u16,
+    document_path: Option<&str>,
+    host: Option<&str>,
+) -> Result<String, String> {
+    // Reuse only an already-running WEB daemon (token-verified ping +
+    // `mode:"web-canvas"` health). A plain `--mcp-http` server answers the
+    // ping too but serves no editor, so reusing it would hand the user a
+    // browser tab full of JSON errors.
+    if let Some(existing) = reachable_headless_server() {
+        if crate::mcp_http_cli::web_daemon_running(existing.port) {
+            let url = format!("http://127.0.0.1:{}", existing.port);
+            open_in_browser(&url);
+            return Ok(start_web_json(existing.pid, existing.port, None, host));
+        }
+        return Err(format!(
+            "a non-web MCP server (pid {}) already owns port {}; run `op stop` first",
+            existing.pid, existing.port
+        ));
+    }
+
+    let binary = find_desktop_binary()?;
+    // An explicit document is created-if-missing (like `--headless`); without
+    // one the daemon starts on an empty document the web shell can sync into.
+    let document = match document_path {
+        Some(path) => {
+            let path = PathBuf::from(path);
+            ensure_document_file(&path)?;
+            Some(path)
+        }
+        None => None,
+    };
+    let token = make_token();
+    let mut command = Command::new(&binary);
+    command.arg("--serve-web").arg(port.to_string());
+    if let Some(doc) = &document {
+        command.arg(doc);
+    }
+    if let Some(host) = host {
+        command.arg("--host").arg(host);
+    }
+    let mut child = command
+        .env("OPENPENCIL_MCP_TOKEN", &token)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .map_err(|e| format!("spawn {} --serve-web: {e}", binary.display()))?;
+
+    let pid = child.id();
+    write_manager_files(pid, port, &token)?;
+
+    // Wait up to ~5s for the daemon's HTTP server to answer. The token-authed
+    // JSON-RPC ping doubles as the identity check (never trust a foreign
+    // listener on the port), exactly like the headless start path.
+    for _ in 0..50 {
+        if crate::mcp_http_cli::mcp_ping_headless(port, &token) {
+            let url = format!("http://127.0.0.1:{port}");
+            open_in_browser(&url);
+            return Ok(start_web_json(pid, port, document.as_deref(), host));
+        }
+        if let Ok(Some(status)) = child.try_wait() {
+            remove_manager_files();
+            return Err(format!(
+                "OpenPencil web daemon exited before accepting connections: {status}"
+            ));
+        }
+        thread::sleep(Duration::from_millis(100));
+    }
+    Err(format!(
+        "OpenPencil web daemon did not respond on 127.0.0.1:{port} within 5s"
+    ))
+}
+
+/// Best-effort default-browser launch, per OS: `open` (macOS),
+/// `cmd /C start` (Windows), `xdg-open` (Linux/BSD). Failures are silent —
+/// the URL is always printed in the `op start --web` JSON, so a missing
+/// opener (SSH session, container) degrades to copy/paste.
+fn open_in_browser(url: &str) {
+    #[cfg(target_os = "macos")]
+    let mut command = {
+        let mut c = Command::new("open");
+        c.arg(url);
+        c
+    };
+    #[cfg(target_os = "windows")]
+    let mut command = {
+        let mut c = Command::new("cmd");
+        // The empty "" is `start`'s window-title slot — without it a quoted
+        // URL would be consumed as the title.
+        c.args(["/C", "start", "", url]);
+        c
+    };
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    let mut command = {
+        let mut c = Command::new("xdg-open");
+        c.arg(url);
+        c
+    };
+    let _ = command
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn();
+}
+
+/// `op start --web` success JSON: the headless `start_json` shape plus
+/// `mode:"web"` (and the non-default bind host when one was requested, so
+/// scripts can derive the LAN URL).
+fn start_web_json(pid: u32, port: u16, document_path: Option<&Path>, host: Option<&str>) -> String {
+    let mut value = json!({
+        "ok": true,
+        "running": true,
+        "mode": "web",
+        "pid": pid,
+        "port": port,
+        "url": format!("http://127.0.0.1:{port}"),
+        "mcpUrl": format!("http://127.0.0.1:{port}/mcp"),
+    });
+    if let Some(host) = host {
+        value["host"] = json!(host);
+    }
+    if let Some(path) = document_path {
+        value["documentPath"] = json!(path.display().to_string());
+    }
+    value.to_string()
 }
 
 /// Legacy windowless mode: spawn `--mcp-http` against a `.op` file and

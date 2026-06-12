@@ -9,6 +9,10 @@ USAGE:
 COMMON COMMANDS:
   op start [--file path.op] [--port N]     launch the live editor (live canvas);
                                            op <tool> then drives the on-screen canvas
+  op start --web [--host H] [--file path.op]
+                                           serve the browser editor (wasm bundle +
+                                           MCP) and open http://127.0.0.1:PORT;
+                                           --host 0.0.0.0 binds for LAN/Docker
   op start --headless [--file path.op]     run the windowless file-backed MCP server
                                            (CI / display-less agents)
   op stop                                  stop the running editor / MCP server
