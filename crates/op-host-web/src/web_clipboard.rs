@@ -65,3 +65,23 @@ pub fn download_bytes(
     web_sys::Url::revoke_object_url(&url)?;
     Ok(())
 }
+
+/// Trigger a browser download of an already-encoded `data:` URL as
+/// `filename`. Same synthetic `<a download>` idiom as
+/// [`download_bytes`], minus the Blob/object-URL round-trip — used by
+/// the Export-image flow, whose payload comes straight from
+/// `HtmlCanvasElement::to_data_url`.
+pub fn download_data_url(filename: &str, url: &str) -> Result<(), wasm_bindgen::JsValue> {
+    let window = web_sys::window()
+        .ok_or_else(|| wasm_bindgen::JsValue::from_str("download: window unavailable"))?;
+    let document = window
+        .document()
+        .ok_or_else(|| wasm_bindgen::JsValue::from_str("download: document unavailable"))?;
+    let anchor = document
+        .create_element("a")?
+        .dyn_into::<web_sys::HtmlAnchorElement>()?;
+    anchor.set_href(url);
+    anchor.set_download(filename);
+    anchor.click();
+    Ok(())
+}

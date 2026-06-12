@@ -28,15 +28,38 @@ impl WidgetHost {
             let mut s = [0u8; 4];
             if self
                 .editor_state
-                .text_edit_append(c.encode_utf8(&mut s), self.now_ms)
+                .text_edit_insert(c.encode_utf8(&mut s), self.now_ms)
             {
                 self.mark_dirty();
                 return true;
             }
             return false;
         }
+        // Font-family picker search box (mirrors the native
+        // font_picker_dispatch routing).
+        if self.editor_state.editor_ui.font_family_picker_open {
+            if c.is_control() {
+                return false;
+            }
+            let ui = &mut self.editor_state.editor_ui;
+            ui.font_picker_search.push(c);
+            ui.font_picker_scroll = 0.0;
+            ui.font_picker_hover = None;
+            self.mark_dirty();
+            return true;
+        }
+        // Icon-picker / component-browser search boxes own typing
+        // while their panels are open (mirrors native routing order:
+        // icon picker → chat model picker → component browser; see
+        // `overlay_keys.rs`).
+        if let Some(changed) = self.icon_picker_text(c) {
+            return changed;
+        }
         if self.editor_state.editor_ui.chat_model_picker_open {
             return self.apply_chat_model_picker_text(c);
+        }
+        if let Some(changed) = self.component_browser_text(c) {
+            return changed;
         }
         if !self.editor_state.chat.focused {
             return false;
@@ -71,8 +94,25 @@ impl WidgetHost {
             }
             return ok;
         }
+        // Font-family picker search box — swallow the key while the
+        // picker is open even on an empty draft (no node deletion).
+        if self.editor_state.editor_ui.font_family_picker_open {
+            let ui = &mut self.editor_state.editor_ui;
+            if ui.font_picker_search.pop().is_some() {
+                ui.font_picker_scroll = 0.0;
+                ui.font_picker_hover = None;
+                self.mark_dirty();
+            }
+            return true;
+        }
+        if let Some(changed) = self.icon_picker_backspace() {
+            return changed;
+        }
         if self.editor_state.editor_ui.chat_model_picker_open {
             return self.apply_chat_model_picker_backspace();
+        }
+        if let Some(changed) = self.component_browser_backspace() {
+            return changed;
         }
         if self.editor_state.chat.focused {
             if self.editor_state.chat.backspace_input() {
@@ -116,9 +156,10 @@ impl WidgetHost {
         if self.editor_state.chat.input.trim().is_empty() {
             return false;
         }
-        // Web keeps the offline echo stub (`ChatState::send`) — no real
-        // provider transport is wired into the browser bundle.
-        self.editor_state.chat.send();
+        // Real send with the AI transport (`codegen`); an honest
+        // offline error on transport-less builds. See
+        // `click.rs::begin_chat_send`.
+        self.begin_chat_send();
         self.mark_dirty();
         true
     }
@@ -405,6 +446,23 @@ impl WidgetHost {
         false
     }
 
+    /// Cmd+Shift+K — toggle the component (UIKit) browser panel.
+    /// Mirrors the native host's `apply_toggle_component_browser`
+    /// (TS `editor-layout.tsx` Cmd+Shift+K → `toggleBrowser`); the
+    /// open-position default is the viewport centre via
+    /// `component_browser_panel_rect`'s `None`-pos fallback.
+    pub fn apply_toggle_component_browser(&mut self) -> bool {
+        let ui = &mut self.editor_state.editor_ui;
+        ui.component_browser_open = !ui.component_browser_open;
+        if !ui.component_browser_open {
+            ui.component_browser_kit_picker_open = false;
+            ui.component_browser_confirm_delete_kit = None;
+            ui.component_browser_hover = None;
+        }
+        self.mark_dirty();
+        true
+    }
+
     /// `[` / `]` — bump the selected node down / up by one
     /// position in its parent's children vec (changing paint
     /// order).
@@ -439,6 +497,26 @@ impl WidgetHost {
             self.mark_dirty();
             return true;
         }
+        // Modal overlays close one per press (mirrors native order:
+        // export dialog → figma import → file menu).
+        if self.editor_state.editor_ui.export_dialog_open {
+            self.editor_state.editor_ui.export_dialog_open = false;
+            self.editor_state.editor_ui.export_dialog_hover = None;
+            self.mark_dirty();
+            return true;
+        }
+        if self.editor_state.editor_ui.figma_import_open {
+            self.editor_state.editor_ui.figma_import_open = false;
+            self.editor_state.editor_ui.figma_import_hover = None;
+            self.mark_dirty();
+            return true;
+        }
+        if self.editor_state.editor_ui.file_menu_open {
+            self.editor_state.editor_ui.file_menu_open = false;
+            self.editor_state.editor_ui.file_menu_hover = None;
+            self.mark_dirty();
+            return true;
+        }
         if self.editor_state.rename_cancel() {
             self.mark_dirty();
             return true;
@@ -453,6 +531,15 @@ impl WidgetHost {
             self.mark_dirty();
             return true;
         }
+        if self.editor_state.editor_ui.font_family_picker_open {
+            let ui = &mut self.editor_state.editor_ui;
+            ui.font_family_picker_open = false;
+            ui.font_picker_search.clear();
+            ui.font_picker_scroll = 0.0;
+            ui.font_picker_hover = None;
+            self.mark_dirty();
+            return true;
+        }
         if self.editor_state.editor_ui.locale_picker_open {
             self.editor_state.editor_ui.locale_picker_open = false;
             self.mark_dirty();
@@ -460,6 +547,39 @@ impl WidgetHost {
         }
         if self.editor_state.editor_ui.shape_picker_open {
             self.editor_state.editor_ui.shape_picker_open = false;
+            self.editor_state.editor_ui.shape_picker_hover = None;
+            self.mark_dirty();
+            return true;
+        }
+        if self.editor_state.editor_ui.icon_picker_open {
+            self.editor_state.editor_ui.icon_picker_open = false;
+            self.editor_state.editor_ui.icon_picker_replace_selection = false;
+            self.editor_state.editor_ui.icon_picker_search.clear();
+            self.editor_state.editor_ui.icon_picker_select_all = false;
+            self.editor_state.editor_ui.icon_picker_hover = None;
+            self.mark_dirty();
+            return true;
+        }
+        if self.editor_state.editor_ui.component_browser_open {
+            // One layer per press: an open kit-filter popover closes
+            // before the panel itself does (mirrors the native host).
+            if self
+                .editor_state
+                .editor_ui
+                .component_browser_kit_picker_open
+            {
+                self.editor_state
+                    .editor_ui
+                    .component_browser_kit_picker_open = false;
+                self.mark_dirty();
+                return true;
+            }
+            self.editor_state.editor_ui.component_browser_open = false;
+            self.editor_state.editor_ui.component_browser_select_all = false;
+            self.editor_state.editor_ui.component_browser_hover = None;
+            self.editor_state
+                .editor_ui
+                .component_browser_confirm_delete_kit = None;
             self.mark_dirty();
             return true;
         }
@@ -512,8 +632,33 @@ impl WidgetHost {
             || self.editor_state.chat.focused
     }
 
-    /// Phase C2 IME forwarding stub — Step 5+ wires per-widget focus.
-    pub fn apply_ime(&mut self, _event: &op_editor_ui::ImeEvent) { // glue:
+    /// IME composition forwarding. Only the final COMMIT lands in the
+    /// focused input — preedit text is not painted (matches the native
+    /// host, which routes winit `Ime::Commit` through `apply_text`
+    /// char-by-char in `app_handler.rs` and ignores `Ime::Preedit`).
+    /// Routing therefore covers every `apply_text` focus branch: chat,
+    /// rename, canvas text edit, property / settings drafts, and the
+    /// picker search boxes. Returns true when any character landed.
+    pub fn apply_ime(&mut self, event: &op_editor_ui::ImeEvent) -> bool {
+        if !matches!(event.kind, op_editor_ui::ImeKind::CompositionEnd) {
+            return false;
+        }
+        self.apply_paste_text(&event.text)
+    }
+
+    /// Route a multi-character text payload (IME commit, clipboard
+    /// paste) into whichever input owns the keyboard, char-by-char
+    /// through `apply_text` so every focus branch + per-field filter
+    /// (numeric / hex drafts) applies unchanged. Returns true when at
+    /// least one character landed.
+    pub fn apply_paste_text(&mut self, text: &str) -> bool {
+        let mut consumed = false;
+        for c in text.chars() {
+            if !c.is_control() && self.apply_text(c) {
+                consumed = true;
+            }
+        }
+        consumed
     }
 
     /// Phase C2 keyboard forwarding stub.

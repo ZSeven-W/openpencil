@@ -41,6 +41,7 @@ use op_editor_ui::widgets::{
 };
 use op_editor_ui::{Point2D, Rect, Theme};
 
+mod a11y_bridge;
 mod agent_settings_mcp_server;
 mod agent_settings_press;
 #[cfg(test)]
@@ -48,6 +49,9 @@ mod agent_settings_press_tests;
 mod ai_chat_geometry;
 #[cfg(test)]
 mod ai_chat_geometry_tests;
+mod blur_inputs;
+#[cfg(test)]
+mod blur_inputs_tests;
 mod boolean_ops;
 #[cfg(test)]
 mod boolean_toolbar_tests;
@@ -59,16 +63,36 @@ mod chat_design_hover_tests;
 mod chat_model_picker_caret;
 #[cfg(test)]
 mod chat_model_picker_caret_tests;
+mod chrome_menu_press;
+mod click;
+mod color_picker_press;
+mod component_browser_press;
+mod cursor_input;
+mod design_md_press;
+// Browser file-IO ingestion (Open / Figma import / clipboard paste)
+// — needs the codegen-gated document-pipeline deps (jian-ops-schema).
+#[cfg(feature = "codegen")]
+mod file_ingest;
+mod icon_picker_press;
+#[cfg(all(test, feature = "codegen"))]
+mod io_tests;
 mod keyboard;
+mod overlay_cursor;
+mod overlay_keys;
+#[cfg(test)]
+mod overlay_press_tests;
+mod overlay_rects;
 mod paint;
 mod press;
 mod property_dispatch;
 #[cfg(test)]
 mod property_hover_tests;
+mod release_input;
 mod scroll;
 mod settings_caret;
 #[cfg(test)]
 mod settings_caret_tests;
+mod shape_picker_press;
 #[cfg(test)]
 mod theme_tests;
 mod toolbar_actions;
@@ -100,6 +124,12 @@ pub struct WidgetHost {
     /// of `layout_scene` — `refresh_layout_scene()` rebuilds + clears
     /// the flag, so a sequence of mutations re-derives once.
     pub(in crate::widget_host) editor_state_dirty: bool,
+    /// Live-sync push gate: raised alongside `editor_state_dirty` but
+    /// consumed by the 2 s document-push tick instead of the paint pass
+    /// (a conservative superset of document edits — the push path's
+    /// content-hash check absorbs UI-only false positives).
+    #[cfg(feature = "live-sync")]
+    doc_sync_dirty: bool,
     pub(in crate::widget_host) theme: Theme,
     drag: Option<DragState>,
     chat_drag: Option<ChatDragState>,
@@ -121,6 +151,13 @@ pub struct WidgetHost {
     /// native host — press a layer row, drag past threshold, drop
     /// before/after the hovered row to reparent.
     pub(in crate::widget_host) layer_drag: Option<LayerDragState>,
+    /// Active floating-panel header drags (Design-MD / Component-
+    /// Browser / Icon-picker). Mirror the native host's per-panel
+    /// drag states; one shared shape since all three carry only the
+    /// grab offset.
+    pub(in crate::widget_host) design_md_drag: Option<PanelDragState>,
+    pub(in crate::widget_host) component_browser_drag: Option<PanelDragState>,
+    pub(in crate::widget_host) icon_picker_drag: Option<PanelDragState>,
     /// Counter for minting fresh `NodeId`s when the user duplicates
     /// a node. Bumped past the highest sample id so new + sample
     /// nodes never collide on the same key. Matches the native
@@ -148,10 +185,18 @@ impl WidgetHost {
 
     /// Borrow the canonical-model editor state — the host's single source of
     /// truth. Mirrors the native host's accessor; used by the web codegen
-    /// session (`codegen_web`) to read the selection + codegen state.
-    #[cfg(feature = "codegen")]
+    /// session (`codegen_web`) to read the selection + codegen state, and by
+    /// the live-sync glue to serialize the document + selection for pushes.
+    #[cfg(any(feature = "codegen", feature = "live-sync"))]
     pub fn editor_state(&self) -> &op_editor_core::EditorState {
         &self.editor_state
+    }
+
+    /// Take the live-sync push gate (see the field docs) — `true` when any
+    /// mutation may have touched the document since the last take.
+    #[cfg(feature = "live-sync")]
+    pub fn take_doc_sync_dirty(&mut self) -> bool {
+        std::mem::take(&mut self.doc_sync_dirty)
     }
 
     /// Mutable borrow of the canonical-model editor state. Callers that mutate
@@ -171,6 +216,10 @@ impl WidgetHost {
     #[cfg(feature = "codegen")]
     pub fn mark_editor_state_dirty(&mut self) {
         self.editor_state_dirty = true;
+        #[cfg(feature = "live-sync")]
+        {
+            self.doc_sync_dirty = true;
+        }
     }
 }
 
@@ -186,6 +235,15 @@ struct ChatDragState {
     grab_dy: f32,
     pos_x: f32,
     pos_y: f32,
+}
+
+/// Header drag on a floating panel (Design-MD / Component-Browser /
+/// Icon-picker) — the panel's top-left follows the cursor minus the
+/// grab offset. Mirrors the native host's `*DragState` trio.
+#[derive(Debug, Clone, Copy)]
+pub(in crate::widget_host) struct PanelDragState {
+    pub(in crate::widget_host) grab_dx: f32,
+    pub(in crate::widget_host) grab_dy: f32,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -245,6 +303,8 @@ impl WidgetHost {
             editor_state,
             layout_scene,
             editor_state_dirty: false,
+            #[cfg(feature = "live-sync")]
+            doc_sync_dirty: false,
             theme: Theme::dark(),
             drag: None,
             chat_drag: None,
@@ -254,6 +314,9 @@ impl WidgetHost {
             chat_text_selection_drag: None,
             marquee_drag: None,
             layer_drag: None,
+            design_md_drag: None,
+            component_browser_drag: None,
+            icon_picker_drag: None,
             next_node_id: 100,
             shift_held: false,
             now_ms: 0,
@@ -294,6 +357,10 @@ impl WidgetHost {
     /// `self.editor_state`.
     pub(in crate::widget_host) fn mark_dirty(&mut self) {
         self.editor_state_dirty = true;
+        #[cfg(feature = "live-sync")]
+        {
+            self.doc_sync_dirty = true;
+        }
     }
 
     pub(in crate::widget_host) fn canvas_region(
@@ -597,778 +664,12 @@ impl WidgetHost {
         changed
     }
 
-    /// Cursor-move handler — drives canvas pan-drag, marquee
-    /// drag, chat drag, or no-op.
-    pub(in crate::widget_host) fn update_agent_settings_hover(&mut self, x: f32, y: f32) -> bool {
-        use op_editor_core::AgentSettingsTab;
-        use op_editor_ui::widgets::agent_settings_panel::{AgentSettingsHit, AgentSettingsPanel};
-        let point = Point2D::new(x, y);
-        let (
-            close_hover,
-            server_hover,
-            copy_hover,
-            add_provider_hover,
-            add_acp_hover,
-            image_search_test_hover,
-            image_add_hover,
-            image_profile_header_hover,
-            image_profile_remove_hover,
-            image_profile_provider_hover,
-            image_profile_test_hover,
-            image_provider_option_hover,
-            new_hover,
-        ) = {
-            let panel = AgentSettingsPanel::for_editor(&self.editor_state);
-            let panel_rect = panel.rect(self.last_viewport_w, self.last_viewport_h);
-            let hit = panel.hit_test(panel_rect, point);
-            let is_agents = matches!(
-                self.editor_state.editor_ui.agent_settings.tab,
-                AgentSettingsTab::Agents
-            );
-            let is_images = matches!(
-                self.editor_state.editor_ui.agent_settings.tab,
-                AgentSettingsTab::Images
-            );
-            let copy_hover = matches!(
-                self.editor_state.editor_ui.agent_settings.tab,
-                AgentSettingsTab::Mcp
-            ) && matches!(hit, AgentSettingsHit::CopyMcpClientConfig);
-            let close_hover = matches!(hit, AgentSettingsHit::Close);
-            let server_hover = matches!(
-                self.editor_state.editor_ui.agent_settings.tab,
-                AgentSettingsTab::Mcp
-            ) && matches!(hit, AgentSettingsHit::ToggleMcpServer);
-            let add_provider_hover = is_agents && matches!(hit, AgentSettingsHit::AddProvider);
-            let add_acp_hover = is_agents && matches!(hit, AgentSettingsHit::AddAcpAgent);
-            let image_search_test_hover =
-                is_images && panel.image_search_test_button_hover_at(panel_rect, point);
-            let image_add_hover =
-                is_images && panel.image_gen_add_button_hover_at(panel_rect, point);
-            let image_profile_header_hover = if is_images {
-                match hit {
-                    AgentSettingsHit::ToggleGenConfigEditor(index) => Some(index),
-                    _ => None,
-                }
-            } else {
-                None
-            };
-            let image_profile_remove_hover = if is_images {
-                match hit {
-                    AgentSettingsHit::RemoveGenConfig(index) => Some(index),
-                    _ => None,
-                }
-            } else {
-                None
-            };
-            let image_profile_provider_hover = if is_images {
-                match hit {
-                    AgentSettingsHit::ToggleGenProviderMenu(index) => Some(index),
-                    _ => None,
-                }
-            } else {
-                None
-            };
-            let image_profile_test_hover = if is_images {
-                panel.image_gen_profile_test_button_hover_at(panel_rect, point)
-            } else {
-                None
-            };
-            let image_provider_option_hover = if is_images {
-                match hit {
-                    AgentSettingsHit::SelectGenProvider { index, provider } => {
-                        Some((index, provider))
-                    }
-                    _ => None,
-                }
-            } else {
-                None
-            };
-            let new_hover = panel.builtin_preset_hover_at(panel_rect, point);
-            (
-                close_hover,
-                server_hover,
-                copy_hover,
-                add_provider_hover,
-                add_acp_hover,
-                image_search_test_hover,
-                image_add_hover,
-                image_profile_header_hover,
-                image_profile_remove_hover,
-                image_profile_provider_hover,
-                image_profile_test_hover,
-                image_provider_option_hover,
-                new_hover,
-            )
-        };
-        let mut changed = false;
-        if close_hover
-            != self
-                .editor_state
-                .editor_ui
-                .agent_settings
-                .hover_agent_settings_close
-        {
-            self.editor_state
-                .editor_ui
-                .agent_settings
-                .hover_agent_settings_close = close_hover;
-            changed = true;
-        }
-        if server_hover
-            != self
-                .editor_state
-                .editor_ui
-                .agent_settings
-                .hover_mcp_server_button
-        {
-            self.editor_state
-                .editor_ui
-                .agent_settings
-                .hover_mcp_server_button = server_hover;
-            changed = true;
-        }
-        if copy_hover
-            != self
-                .editor_state
-                .editor_ui
-                .agent_settings
-                .hover_mcp_client_config_copy
-        {
-            self.editor_state
-                .editor_ui
-                .agent_settings
-                .hover_mcp_client_config_copy = copy_hover;
-            changed = true;
-        }
-        if new_hover
-            != self
-                .editor_state
-                .editor_ui
-                .agent_settings
-                .builtin_preset_menu_hover
-        {
-            self.editor_state
-                .editor_ui
-                .agent_settings
-                .builtin_preset_menu_hover = new_hover;
-            changed = true;
-        }
-        if add_provider_hover
-            != self
-                .editor_state
-                .editor_ui
-                .agent_settings
-                .hover_add_provider
-        {
-            self.editor_state
-                .editor_ui
-                .agent_settings
-                .hover_add_provider = add_provider_hover;
-            changed = true;
-        }
-        if add_acp_hover
-            != self
-                .editor_state
-                .editor_ui
-                .agent_settings
-                .hover_add_acp_agent
-        {
-            self.editor_state
-                .editor_ui
-                .agent_settings
-                .hover_add_acp_agent = add_acp_hover;
-            changed = true;
-        }
-        if image_search_test_hover
-            != self
-                .editor_state
-                .editor_ui
-                .agent_settings
-                .hover_image_search_test_button
-        {
-            self.editor_state
-                .editor_ui
-                .agent_settings
-                .hover_image_search_test_button = image_search_test_hover;
-            changed = true;
-        }
-        if image_add_hover
-            != self
-                .editor_state
-                .editor_ui
-                .agent_settings
-                .hover_image_gen_add_button
-        {
-            self.editor_state
-                .editor_ui
-                .agent_settings
-                .hover_image_gen_add_button = image_add_hover;
-            changed = true;
-        }
-        if image_profile_header_hover
-            != self
-                .editor_state
-                .editor_ui
-                .agent_settings
-                .hover_image_gen_profile_header
-        {
-            self.editor_state
-                .editor_ui
-                .agent_settings
-                .hover_image_gen_profile_header = image_profile_header_hover;
-            changed = true;
-        }
-        if image_profile_remove_hover
-            != self
-                .editor_state
-                .editor_ui
-                .agent_settings
-                .hover_image_gen_profile_remove
-        {
-            self.editor_state
-                .editor_ui
-                .agent_settings
-                .hover_image_gen_profile_remove = image_profile_remove_hover;
-            changed = true;
-        }
-        if image_profile_provider_hover
-            != self
-                .editor_state
-                .editor_ui
-                .agent_settings
-                .hover_image_gen_profile_provider
-        {
-            self.editor_state
-                .editor_ui
-                .agent_settings
-                .hover_image_gen_profile_provider = image_profile_provider_hover;
-            changed = true;
-        }
-        if image_profile_test_hover
-            != self
-                .editor_state
-                .editor_ui
-                .agent_settings
-                .hover_image_gen_profile_test
-        {
-            self.editor_state
-                .editor_ui
-                .agent_settings
-                .hover_image_gen_profile_test = image_profile_test_hover;
-            changed = true;
-        }
-        if image_provider_option_hover
-            != self
-                .editor_state
-                .editor_ui
-                .agent_settings
-                .hover_image_gen_provider_option
-        {
-            self.editor_state
-                .editor_ui
-                .agent_settings
-                .hover_image_gen_provider_option = image_provider_option_hover;
-            changed = true;
-        }
-        if changed {
-            self.mark_dirty();
-        }
-        changed
-    }
-
-    pub fn apply_cursor_move(&mut self, x: f32, y: f32) -> bool {
-        // Refresh the derived paint doc once up front so every hit-test
-        // below (layer context menu, layer drag, align toolbar) reads
-        // current geometry, never a stale snapshot.
-        self.refresh_layout_scene();
-        if self.editor_state.editor_ui.agent_settings_open && self.update_agent_settings_hover(x, y)
-        {
-            return true;
-        }
-        if let Some(state) = self.editor_state.editor_ui.layer_context_menu.clone() {
-            use op_editor_ui::widgets::layer_context_menu::LayerContextMenu;
-            let menu = LayerContextMenu::for_state(&self.editor_state, state.clone());
-            let new_hover = menu.hovered_row_at(Point2D::new(x, y)).map(|i| i as u8);
-            if new_hover != state.hovered_row {
-                self.editor_state.editor_ui.layer_context_menu =
-                    Some(op_editor_core::editor_ui_state::LayerContextMenuState {
-                        hovered_row: new_hover,
-                        ..state
-                    });
-                self.mark_dirty();
-                return true;
-            }
-        }
-        // Export-section select-popup row hover highlight.
-        if self.editor_state.editor_ui.export_scale_picker_open
-            || self.editor_state.editor_ui.export_format_picker_open
-        {
-            if let Some(panel) =
-                op_editor_ui::widgets::PropertyPanel::for_selection(&self.editor_state)
-            {
-                let property_rect = Rect {
-                    origin: Point2D::new(
-                        self.last_viewport_w - self.editor_state.editor_ui.property_panel_width,
-                        op_editor_ui::widgets::TOP_BAR_HEIGHT,
-                    ),
-                    size: Point2D::new(
-                        self.editor_state.editor_ui.property_panel_width,
-                        (self.last_viewport_h - op_editor_ui::widgets::TOP_BAR_HEIGHT).max(0.0),
-                    ),
-                };
-                let new_hover = panel.export_picker_row_at(property_rect, Point2D::new(x, y));
-                if new_hover != self.editor_state.editor_ui.export_picker_hover {
-                    self.editor_state.editor_ui.export_picker_hover = new_hover;
-                    self.mark_dirty();
-                    return true;
-                }
-            }
-        }
-        if self.apply_chat_text_selection_drag_cursor_move(x, y) {
-            return true;
-        }
-        if self.apply_chat_input_selection_drag_cursor_move(x, y) {
-            return true;
-        }
-        if self.apply_code_selection_drag_cursor_move(x, y) {
-            return true;
-        }
-        if let Some(m) = self.marquee_drag.as_mut() {
-            m.current_screen_x = x;
-            m.current_screen_y = y;
-            return true;
-        }
-        if self.layer_drag.is_some() {
-            // Drop the gesture if the source disappeared mid-drag —
-            // see the native host for the rationale.
-            let source_id = self.layer_drag.as_ref().unwrap().source.clone();
-            let still_present = self
-                .layout_scene
-                .active_page()
-                .map(|p| p.find(source_id.as_str()).is_some())
-                .unwrap_or(false);
-            if !still_present {
-                self.layer_drag = None;
-                return true;
-            }
-            let d = self.layer_drag.as_mut().unwrap();
-            d.current_x = x;
-            d.current_y = y;
-            // VERTICAL-ONLY activation (4 px). See the native host
-            // for the rationale: pure horizontal wiggle must not
-            // steal click-feel from row-level gestures.
-            if !d.active && (y - d.start_y).abs() > 4.0 {
-                d.active = true;
-            }
-            return true;
-        }
-        if let Some(d) = self.chat_drag.as_mut() {
-            d.pos_x = x - d.grab_dx;
-            d.pos_y = y - d.grab_dy;
-            return true;
-        }
-        if let Some(field) = self.image_adjustment_drag {
-            if let Some(panel) =
-                op_editor_ui::widgets::PropertyPanel::for_selection(&self.editor_state)
-            {
-                let property_rect = Rect {
-                    origin: Point2D::new(
-                        self.last_viewport_w - self.editor_state.editor_ui.property_panel_width,
-                        op_editor_ui::widgets::TOP_BAR_HEIGHT,
-                    ),
-                    size: Point2D::new(
-                        self.editor_state.editor_ui.property_panel_width,
-                        (self.last_viewport_h - op_editor_ui::widgets::TOP_BAR_HEIGHT).max(0.0),
-                    ),
-                };
-                if let Some(action) = panel.image_adjustment_drag_action(property_rect, field, x) {
-                    self.apply_property_action(action);
-                    return true;
-                }
-            }
-        }
-        if let Some(drag) = self.drag.as_mut() {
-            let dx = x - drag.last_x;
-            let dy = y - drag.last_y;
-            drag.last_x = x;
-            drag.last_y = y;
-            self.editor_state.viewport.pan(dx, dy);
-            self.mark_dirty();
-            return true;
-        }
-        // Toolbar per-button hover wash — AFTER drag detection so a
-        // path-anchor / node / pan drag whose cursor crosses the
-        // toolbar isn't intercepted by the hover update (mirrors
-        // native widget_host/input.rs ordering).
-        if self.update_toolbar_hover(x, y) {
-            return true;
-        }
-        // TopBar chrome-button hover wash (sidebar / file-menu / figma /
-        // theme / locale / fullscreen / agent chip). The git button is
-        // compiled out on wasm32; every other button lights up the same
-        // as native. Reuses the click hit-test so paint can't drift.
-        {
-            use op_editor_ui::widgets::{TopBar, TOP_BAR_HEIGHT};
-            let tb_rect = Rect {
-                origin: Point2D::new(0.0, 0.0),
-                size: Point2D::new(self.last_viewport_w, TOP_BAR_HEIGHT),
-            };
-            let new_hover = TopBar::for_editor_ui(&self.editor_state.editor_ui)
-                .hit_test(tb_rect, Point2D::new(x, y))
-                .map(op_editor_ui::widgets::editor_state_ext::topbar_button_hover);
-            if new_hover != self.editor_state.editor_ui.topbar_button_hover {
-                self.editor_state.editor_ui.topbar_button_hover = new_hover;
-                self.mark_dirty();
-                return true;
-            }
-        }
-        // StatusBar control hover wash (search / zoom-out / zoom-in).
-        {
-            let new_hover = self
-                .status_bar_rect(self.last_viewport_w, self.last_viewport_h)
-                .and_then(|r| {
-                    op_editor_ui::widgets::StatusBar::for_editor(&self.editor_state)
-                        .control_at(r, Point2D::new(x, y))
-                });
-            if new_hover != self.editor_state.editor_ui.statusbar_hover {
-                self.editor_state.editor_ui.statusbar_hover = new_hover;
-                self.mark_dirty();
-                return true;
-            }
-        }
-        // AI chat header buttons (chevron / maximize / new chat) hover.
-        if let Some(chat_rect) = self.ai_chat_rect(self.last_viewport_w, self.last_viewport_h) {
-            use op_editor_ui::widgets::AIChatPlaceholder;
-            let new_hover = AIChatPlaceholder::from_editor_at(&self.editor_state, self.now_ms)
-                .hit_test(chat_rect, Point2D::new(x, y))
-                .as_ref()
-                .and_then(op_editor_ui::widgets::editor_state_ext::chat_header_hover);
-            if new_hover != self.editor_state.editor_ui.chat_header_hover {
-                self.editor_state.editor_ui.chat_header_hover = new_hover;
-                self.mark_dirty();
-                return true;
-            }
-        }
-        if let Some(chat_rect) = self.ai_chat_rect(self.last_viewport_w, self.last_viewport_h) {
-            use op_editor_ui::widgets::AIChatPlaceholder;
-            let new_hover = AIChatPlaceholder::from_editor_at(&self.editor_state, self.now_ms)
-                .footer_hover_at(chat_rect, Point2D::new(x, y));
-            if new_hover != self.editor_state.editor_ui.chat_footer_hover {
-                self.editor_state.editor_ui.chat_footer_hover = new_hover;
-                self.mark_dirty();
-                return true;
-            }
-        } else if self
-            .editor_state
-            .editor_ui
-            .chat_footer_hover
-            .take()
-            .is_some()
-        {
-            self.mark_dirty();
-            return true;
-        }
-        if let Some(chat_rect) = self.ai_chat_rect(self.last_viewport_w, self.last_viewport_h) {
-            use op_editor_ui::widgets::AIChatPlaceholder;
-            let new_hover = AIChatPlaceholder::from_editor_at(&self.editor_state, self.now_ms)
-                .example_hover_at(chat_rect, Point2D::new(x, y));
-            if new_hover != self.editor_state.editor_ui.chat_example_hover {
-                self.editor_state.editor_ui.chat_example_hover = new_hover;
-                self.mark_dirty();
-                return true;
-            }
-        } else if self
-            .editor_state
-            .editor_ui
-            .chat_example_hover
-            .take()
-            .is_some()
-        {
-            self.mark_dirty();
-            return true;
-        }
-        // PropertyPanel tab/action hover wash. Shown with a selection.
-        let mut property_hover_changed = false;
-        if self.editor_state.property_panel_visible() {
-            use op_editor_ui::widgets::{PropertyPanel, TOP_BAR_HEIGHT};
-            if let Some(panel) = PropertyPanel::for_selection(&self.editor_state) {
-                let property_rect = Rect {
-                    origin: Point2D::new(
-                        self.last_viewport_w - self.editor_state.editor_ui.property_panel_width,
-                        TOP_BAR_HEIGHT,
-                    ),
-                    size: Point2D::new(
-                        self.editor_state.editor_ui.property_panel_width,
-                        (self.last_viewport_h - TOP_BAR_HEIGHT).max(0.0),
-                    ),
-                };
-                let point = Point2D::new(x, y);
-                let new_tab_hover = panel.tab_hover_at(property_rect, point);
-                if new_tab_hover != self.editor_state.editor_ui.property_tab_hover {
-                    self.editor_state.editor_ui.property_tab_hover = new_tab_hover;
-                    property_hover_changed = true;
-                }
-                let new_action_hover = panel.action_hover_index(property_rect, point);
-                if new_action_hover != self.editor_state.editor_ui.property_action_hover {
-                    self.editor_state.editor_ui.property_action_hover = new_action_hover;
-                    property_hover_changed = true;
-                }
-            }
-        } else if self
-            .editor_state
-            .editor_ui
-            .property_tab_hover
-            .take()
-            .is_some()
-        {
-            property_hover_changed = true;
-        }
-        // Code-panel hover wash. Reuses the panel's click geometry for
-        // framework chips, scroll chevrons, and body actions.
-        let (new_fw_hover, new_action_hover) = if self.editor_state.property_panel_visible()
-            && matches!(
-                self.editor_state.editor_ui.property_tab,
-                op_editor_core::PropertyTab::Code
-            ) {
-            let pw = self.editor_state.editor_ui.property_panel_width;
-            let panel_x = self.last_viewport_w - pw;
-            let panel_rect = Rect {
-                origin: Point2D::new(panel_x, TOP_BAR_HEIGHT),
-                size: Point2D::new(pw, (self.last_viewport_h - TOP_BAR_HEIGHT).max(0.0)),
-            };
-            if x >= panel_x && x <= self.last_viewport_w {
-                op_editor_ui::widgets::property_panel_code::code_hover_at_with_locale(
-                    panel_rect,
-                    &self.editor_state.codegen,
-                    Point2D::new(x, y),
-                    self.editor_state.editor_ui.locale,
-                )
-            } else {
-                (None, None)
-            }
-        } else {
-            (None, None)
-        };
-        if new_fw_hover != self.editor_state.codegen.framework_hover
-            || new_action_hover != self.editor_state.codegen.action_hover
-        {
-            self.editor_state.codegen.framework_hover = new_fw_hover;
-            self.editor_state.codegen.action_hover = new_action_hover;
-            self.mark_dirty();
-            return true;
-        }
-        if property_hover_changed {
-            self.mark_dirty();
-            return true;
-        }
-        // No drag active — sync align toolbar hover. AFTER all drag
-        // branches so an active drag isn't intercepted (codex CONCERN
-        // — mirrors native widget_host/input.rs ordering).
-        let new_hover = if self.editor_state.selection_count() >= 2 {
-            use op_editor_ui::widgets::{AlignToolbar, TOP_BAR_HEIGHT};
-            let (cx, _, cw, ch) = self.canvas_region(self.last_viewport_w, self.last_viewport_h);
-            let canvas_region = op_editor_ui::Rect {
-                origin: Point2D::new(cx, TOP_BAR_HEIGHT),
-                size: Point2D::new(cw, ch),
-            };
-            AlignToolbar::for_canvas_region(canvas_region, &self.editor_state)
-                .and_then(|tb| tb.hit_test(Point2D::new(x, y)))
-        } else {
-            None
-        };
-        let new_hover_ec = new_hover;
-        if new_hover_ec != self.editor_state.editor_ui.align_toolbar_hover {
-            self.editor_state.editor_ui.align_toolbar_hover = new_hover_ec;
-            self.mark_dirty();
-            return true;
-        }
-        false
-    }
-
-    /// Convert a marquee drag (screen-space) into a doc-space
-    /// rect, ask the document which top-level nodes overlap it,
-    /// and either replace or extend the selection. Mirrors
-    /// native `WidgetHostNative::commit_marquee_selection`.
-    pub(in crate::widget_host) fn commit_marquee_selection(
-        &mut self,
-        m: MarqueeDragState,
-        viewport_w: f32,
-        viewport_h: f32,
-    ) {
-        // Near-zero marquee = a click without drag. Threshold is
-        // measured in SCREEN pixels (2 px) so it stays consistent
-        // regardless of canvas zoom — matches native.
-        let screen_dx = (m.current_screen_x - m.start_screen_x).abs();
-        let screen_dy = (m.current_screen_y - m.start_screen_y).abs();
-        if screen_dx < 2.0 && screen_dy < 2.0 {
-            return;
-        }
-        let (cx0, cy0, _cw, _ch) = self.canvas_region(viewport_w, viewport_h);
-        let p0 = {
-            let local = Point2D::new(m.start_screen_x - cx0, m.start_screen_y - cy0);
-            self.editor_state.viewport.to_document(local)
-        };
-        let p1 = {
-            let local = Point2D::new(m.current_screen_x - cx0, m.current_screen_y - cy0);
-            self.editor_state.viewport.to_document(local)
-        };
-        let x = p0.x.min(p1.x);
-        let y = p0.y.min(p1.y);
-        let w = (p1.x - p0.x).abs();
-        let h = (p1.y - p0.y).abs();
-        let rect = Rect::xywh(x, y, w, h);
-        // `nodes_intersecting_doc_rect` queries the `LayoutScene` —
-        // it returns the resolved-scene node id strings.
-        self.refresh_layout_scene();
-        let ids = self.layout_scene.nodes_intersecting_doc_rect(rect);
-        if m.additive {
-            // ADD-only: every hit joins the set; already-selected
-            // hits stay selected. Shift-marquee never removes.
-            for id in ids {
-                let ec_id = op_editor_core::NodeId::new(&id);
-                if !self.editor_state.is_selected(&ec_id) {
-                    self.editor_state.toggle_selection(ec_id);
-                }
-            }
-            self.mark_dirty();
-        } else if !ids.is_empty() {
-            let ec_ids: Vec<op_editor_core::NodeId> =
-                ids.iter().map(op_editor_core::NodeId::new).collect();
-            let anchor = ec_ids.last().unwrap().clone();
-            self.editor_state.selection.set = ec_ids;
-            self.editor_state.selection.anchor = anchor;
-            self.mark_dirty();
-        }
-    }
-
-    /// Mouse-release handler — commits any marquee drag, snaps a
-    /// chat-panel drag to the nearest corner, or ends the canvas
-    /// pan-drag.
-    pub fn apply_release_with_viewport(&mut self, viewport_w: f32, viewport_h: f32) -> bool {
-        self.last_viewport_w = viewport_w;
-        self.last_viewport_h = viewport_h;
-        if let Some(m) = self.marquee_drag.take() {
-            self.commit_marquee_selection(m, viewport_w, viewport_h);
-            return true;
-        }
-        if self.code_selection_drag.take().is_some() {
-            return true;
-        }
-        if self.chat_input_selection_drag.take().is_some() {
-            return true;
-        }
-        if self.chat_text_selection_drag.take().is_some() {
-            return true;
-        }
-        if let Some(d) = self.layer_drag.take() {
-            return self.commit_layer_drag(d, viewport_h);
-        }
-        if let Some(d) = self.chat_drag.take() {
-            // Use the live panel size (expanded vs collapsed) so a
-            // dragged collapsed pill snaps to the corner closest to
-            // its actual center, matching native.
-            let (panel_w, panel_h) = self.ai_chat_size();
-            let center = Point2D::new(d.pos_x + panel_w / 2.0, d.pos_y + panel_h / 2.0);
-            let (cx0, cy0, cw, ch) = self.canvas_region(viewport_w, viewport_h);
-            self.editor_state.chat.anchor =
-                op_editor_core::ChatAnchor::nearest(center, cx0, cy0, cw, ch);
-            self.mark_dirty();
-            return true;
-        }
-        if self.image_adjustment_drag.take().is_some() {
-            return true;
-        }
-        let was_dragging = self.drag.is_some();
-        self.drag = None;
-        was_dragging
-    }
-
-    /// Mouse-release handler — viewport-less variant. Public host
-    /// API parity with the native shell; the browser runner wires
-    /// the viewport-aware `apply_release_with_viewport` instead.
-    #[allow(dead_code)]
-    pub fn apply_release(&mut self) -> bool {
-        if self.marquee_drag.take().is_some() {
-            // Can't compute the doc-space marquee rect without a
-            // viewport; drop without committing. The viewport-
-            // aware variant is the one runners should call.
-            return true;
-        }
-        if self.code_selection_drag.take().is_some() {
-            return true;
-        }
-        if self.chat_input_selection_drag.take().is_some() {
-            return true;
-        }
-        if self.chat_text_selection_drag.take().is_some() {
-            return true;
-        }
-        if self.layer_drag.take().is_some() {
-            // Same — drop_target_at needs the panel rect (and thus
-            // viewport_h). Drop the candidate without committing.
-            return true;
-        }
-        if self.chat_drag.take().is_some() {
-            return true;
-        }
-        if self.image_adjustment_drag.take().is_some() {
-            return true;
-        }
-        let was_dragging = self.drag.is_some();
-        self.drag = None;
-        was_dragging
-    }
-
-    /// Resolve a layer drag-to-reorder gesture on release. Mirrors
-    /// native `WidgetHostNative::commit_layer_drag`.
-    pub(in crate::widget_host) fn commit_layer_drag(
-        &mut self,
-        d: LayerDragState,
-        viewport_h: f32,
-    ) -> bool {
-        if !d.active {
-            return false;
-        }
-        self.refresh_layout_scene();
-        // Defensive source-validity check (mirrors native) — bail
-        // if the dragged node disappeared between move and release.
-        if self
-            .layout_scene
-            .active_page()
-            .map(|p| p.find(d.source.as_str()).is_none())
-            .unwrap_or(true)
-        {
-            return false;
-        }
-        use op_editor_ui::widgets::{DropPosition, LayerPanel};
-        let layer_rect = self.layer_panel_rect(viewport_h);
-        // Source-excluded panel so the indicator y the user saw and
-        // the row landed on match the post-commit layout — see the
-        // native `commit_layer_drag` for the rationale.
-        let panel = LayerPanel::from_editor_with_drag_source(&self.editor_state, &d.source);
-        let cursor = Point2D::new(d.current_x, d.current_y);
-        let Some(drop) = panel.drop_target_at(layer_rect, cursor) else {
-            return true;
-        };
-        if drop.anchor == d.source {
-            return true;
-        }
-        let source = d.source.clone();
-        let anchor = drop.anchor.clone();
-        match drop.position {
-            DropPosition::Before => {
-                self.editor_state.reorder_before(source, anchor);
-            }
-            DropPosition::After => {
-                self.editor_state.reorder_after(source, anchor);
-            }
-            DropPosition::Into => {
-                self.editor_state.reorder_into(source, anchor);
-            }
-        }
-        self.mark_dirty();
-        true
-    }
+    // Cursor-move dispatch (`apply_cursor_move` /
+    // `update_agent_settings_hover`) lives in
+    // `widget_host/cursor_input.rs`; mouse-release handling
+    // (`apply_release[_with_viewport]` / `commit_marquee_selection` /
+    // `commit_layer_drag`) in `widget_host/release_input.rs` — both
+    // split out to keep this spine file under the 800-line ceiling.
 
     // Keyboard / clipboard handlers (`apply_text` / `apply_backspace`
     // / `apply_send` / `apply_delete` / `apply_duplicate` /

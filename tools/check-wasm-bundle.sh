@@ -53,9 +53,14 @@ need node
 need gzip
 [ -n "${EMSDK:-}" ] || { printf 'EMSDK env var unset (needed for emsdk libcxx headers + wasm-aware clang)\n' >&2; exit 2; }
 
-step 2 5 "Build shell-web wasm32-unknown-unknown with --features skia"
+# `codegen` (which pulls `skia`) is the production browser feature set:
+# it compiles the daemon-backed AI chat (`web_chat`), browser file IO,
+# clipboard/Figma paste, and the codegen pipeline. A skia-only bundle
+# would ship a canvas whose chat can only error ("transport not
+# compiled in") even when `op start --web`'s daemon is serving it.
+step 2 5 "Build shell-web wasm32-unknown-unknown with --features codegen"
 cargo build -p op-host-web \
-  --target wasm32-unknown-unknown --features skia --release >/dev/null
+  --target wasm32-unknown-unknown --features codegen --release >/dev/null
 
 step 3 5 "wasm-bindgen --target web → ${PKG_DIR}/"
 wasm-bindgen --target web --out-dir "${PKG_DIR}" "${TARGET_WASM}" >/dev/null

@@ -1,75 +1,20 @@
 //! Web press handlers split from `widget_host.rs`; mirrors the
 //! native press/click split and keeps `EditorState` as source of truth.
+//! `apply_click` lives in `click.rs`, the StatusBar / overlay rect
+//! helpers in `overlay_rects.rs`, and the per-overlay press
+//! dispatchers in their own sibling modules (mirroring the native
+//! host's layout) so this file stays under the 800-line cap.
 use op_editor_ui::widgets::{
     AIChatHit, AIChatPlaceholder, LayerPanel, LayerPanelHit, LocalePicker, PropertyPanel, Toolbar,
-    TopBar, TopBarHit, VariablesModal, VariablesModalHit, STATUS_BAR_HEIGHT, STATUS_BAR_WIDTH,
-    TOP_BAR_HEIGHT,
+    TopBar, TopBarHit, VariablesModal, VariablesModalHit, TOP_BAR_HEIGHT,
 };
 use op_editor_ui::{Point2D, Rect};
 
 use super::{
     rect_contains, ChatDragState, ChatInputSelectionDragState, ChatTextSelectionDragState,
-    CodeSelectionDragState, DragState, LayerDragState, MarqueeDragState, WidgetHost, STATUS_INSET,
+    CodeSelectionDragState, DragState, LayerDragState, MarqueeDragState, WidgetHost,
 };
 use op_editor_core::codegen::CodeSelection;
-
-impl WidgetHost {
-    /// The floating bottom-right StatusBar pill rect, or `None` when
-    /// the canvas is too narrow to float it (matches the paint guard).
-    pub(in crate::widget_host) fn status_bar_rect(
-        &self,
-        viewport_w: f32,
-        viewport_h: f32,
-    ) -> Option<Rect> {
-        let (canvas_left, _top, canvas_w, canvas_h) = self.canvas_region(viewport_w, viewport_h);
-        if canvas_w <= STATUS_BAR_WIDTH + STATUS_INSET * 2.0 {
-            return None;
-        }
-        let canvas_right = canvas_left + canvas_w;
-        Some(Rect {
-            origin: Point2D::new(
-                canvas_right - STATUS_BAR_WIDTH - STATUS_INSET,
-                TOP_BAR_HEIGHT + canvas_h - STATUS_BAR_HEIGHT - STATUS_INSET,
-            ),
-            size: Point2D::new(STATUS_BAR_WIDTH, STATUS_BAR_HEIGHT),
-        })
-    }
-
-    /// Step the canvas zoom from a StatusBar `[-]` / `[+]` click,
-    /// anchored at the canvas-region centre so the visible content
-    /// scales in place (≈ ±20 % per click via `Viewport::zoom_at`).
-    pub(in crate::widget_host) fn status_bar_zoom(
-        &mut self,
-        zoom_in: bool,
-        viewport_w: f32,
-        viewport_h: f32,
-    ) {
-        const STEP: f32 = 120.0;
-        // `Viewport::zoom_at` works in CANVAS-LOCAL coords (the wheel
-        // path feeds it `window_pt - canvas_origin`), so the anchor is
-        // the canvas-region centre relative to the canvas origin — not
-        // the window-space centre.
-        let (_cx0, _cy0, cw, ch) = self.canvas_region(viewport_w, viewport_h);
-        let center = Point2D::new(cw / 2.0, ch / 2.0);
-        self.editor_state
-            .viewport
-            .zoom_at(center, if zoom_in { STEP } else { -STEP });
-        self.mark_dirty();
-    }
-
-    /// Zoom + pan so the active page's content is framed within the canvas.
-    pub(in crate::widget_host) fn zoom_to_fit(&mut self, viewport_w: f32, viewport_h: f32) {
-        self.refresh_layout_scene();
-        let Some(content) = self.layout_scene.content_bounds() else {
-            return;
-        };
-        let (_l, _t, canvas_w, canvas_h) = self.canvas_region(viewport_w, viewport_h);
-        self.editor_state
-            .viewport
-            .fit_to_with_max_zoom(content, canvas_w, canvas_h, 64.0, 1.0);
-        self.mark_dirty();
-    }
-}
 
 impl WidgetHost {
     /// Right-click handler — opens the LayerPanel context menu on
@@ -213,6 +158,33 @@ impl WidgetHost {
         if rename_committed || text_edit_committed {
             self.mark_dirty();
         }
+        // Floating Design-MD panel — painted top-most, so it
+        // hit-tests first: a click on its rect is the panel's before
+        // any lower layer can claim it (mirrors native press order).
+        if self.dispatch_design_md_press(x, y, viewport_width, viewport_height) {
+            return true;
+        }
+        if self.dispatch_icon_picker_press(x, y, viewport_width, viewport_height) {
+            return true;
+        }
+        // Floating Component-Browser panel — painted just under the
+        // Design-MD panel; hit-tests right after it. A consumed press
+        // may queue an insert — drain it against this viewport (web
+        // has no per-frame runner drain like the desktop loop).
+        if self.dispatch_component_browser_press(x, y, viewport_width, viewport_height) {
+            let _ = self.drain_component_browser_insert(viewport_width, viewport_height);
+            return true;
+        }
+        if self.editor_state.editor_ui.agent_settings_open
+            && self.dispatch_agent_settings_press(x, y, viewport_width, viewport_height)
+        {
+            return true;
+        }
+        // Colour-picker overlay — top-most when open. Falls through
+        // on an outside click (the picker closes as a side effect).
+        if self.dispatch_color_picker_press(x, y, viewport_width, viewport_height) {
+            return true;
+        }
         // StatusBar controls — Search frames content, `[-]` / `[+]`
         // step the zoom (floating bottom-right; hit-tests above the
         // canvas).
@@ -232,11 +204,6 @@ impl WidgetHost {
                 return true;
             }
         }
-        if self.editor_state.editor_ui.agent_settings_open
-            && self.dispatch_agent_settings_press(x, y, viewport_width, viewport_height)
-        {
-            return true;
-        }
         // 0. Layer context menu — top-most overlay when open.
         if let Some(state) = self.editor_state.editor_ui.layer_context_menu.clone() {
             use op_editor_ui::widgets::layer_context_menu::LayerContextMenu;
@@ -247,6 +214,9 @@ impl WidgetHost {
                 self.mark_dirty();
                 return true;
             }
+            // Dismissing the menu on a miss is a blank press — blur
+            // every text input along with it.
+            self.blur_text_inputs_on_blank_press();
             self.editor_state.editor_ui.layer_context_menu = None;
             self.mark_dirty();
             return true;
@@ -264,6 +234,8 @@ impl WidgetHost {
                 self.mark_dirty();
                 return true;
             }
+            // Silent outside-close is a blank press — blur inputs too.
+            self.blur_text_inputs_on_blank_press();
             self.editor_state.editor_ui.locale_picker_open = false;
             self.mark_dirty();
             return true;
@@ -294,8 +266,31 @@ impl WidgetHost {
                     self.create_default_variable_from_modal();
                     return true;
                 }
-                _ => return true,
+                _ => {
+                    // Modal chrome that web doesn't act on — blank
+                    // press; blur the chrome text inputs under it.
+                    self.blur_text_inputs_on_blank_press();
+                    return true;
+                }
             }
+        }
+
+        // 0ab. Shape picker overlay (native press order: before the
+        //      file-menu / export / figma modal blocks).
+        if self.dispatch_shape_picker_press(x, y, viewport_width, viewport_height) {
+            return true;
+        }
+        if self.editor_state.editor_ui.file_menu_open {
+            self.dispatch_file_menu_press(x, y, viewport_width);
+            return true;
+        }
+        if self.editor_state.editor_ui.export_dialog_open {
+            self.dispatch_export_dialog_press(x, y, viewport_width, viewport_height);
+            return true;
+        }
+        if self.editor_state.editor_ui.figma_import_open {
+            self.dispatch_figma_import_press(x, y, viewport_width, viewport_height);
+            return true;
         }
 
         // 0b. TopBar — sidebar toggle + chrome buttons. Mirrors the
@@ -349,7 +344,10 @@ impl WidgetHost {
             return true;
         }
         if rect_contains(top_bar_rect, Point2D::new(x, y)) {
-            return rename_committed || text_edit_committed;
+            // Top-bar gaps eat clicks but don't act — still a blank
+            // press, so every text input blurs.
+            let blurred = self.blur_text_inputs_on_blank_press();
+            return blurred || rename_committed || text_edit_committed;
         }
 
         // 0c0a. Image-fill popover — outside-click dismiss.
@@ -371,6 +369,44 @@ impl WidgetHost {
                 }
             }
             self.editor_state.editor_ui.image_fill_popover_open = false;
+            self.mark_dirty();
+            return true;
+        }
+
+        // 0c0a0. Fill/stroke colour-variable picker — outside-click dismiss.
+        if self
+            .editor_state
+            .editor_ui
+            .property_color_variable_picker_open
+            .is_some()
+        {
+            if let Some(panel) = PropertyPanel::for_selection(&self.editor_state) {
+                let property_rect = Rect {
+                    origin: Point2D::new(
+                        viewport_width - self.editor_state.editor_ui.property_panel_width,
+                        TOP_BAR_HEIGHT,
+                    ),
+                    size: Point2D::new(
+                        self.editor_state.editor_ui.property_panel_width,
+                        (viewport_height - TOP_BAR_HEIGHT).max(0.0),
+                    ),
+                };
+                if let Some(action) = panel.hit_test_action(property_rect, Point2D::new(x, y)) {
+                    use op_editor_ui::widgets::PropertyPanelAction as A;
+                    if matches!(
+                        action,
+                        A::ToggleColorVariablePicker(_)
+                            | A::BindColorVariable { .. }
+                            | A::UnbindColorVariable(_)
+                    ) {
+                        self.apply_property_action(action);
+                        return true;
+                    }
+                }
+            }
+            self.editor_state
+                .editor_ui
+                .property_color_variable_picker_open = None;
             self.mark_dirty();
             return true;
         }
@@ -409,6 +445,42 @@ impl WidgetHost {
             }
             self.editor_state.editor_ui.export_scale_picker_open = false;
             self.editor_state.editor_ui.export_format_picker_open = false;
+            self.mark_dirty();
+            return true;
+        }
+
+        // 0c0b2. Font-family picker — outside-click dismiss. A click
+        //        on an entry / the trigger is applied; one inside the
+        //        popup body (search box / headers) is swallowed.
+        if self.editor_state.editor_ui.font_family_picker_open {
+            use op_editor_ui::widgets::PropertyPanelAction as A;
+            if let Some(panel) = PropertyPanel::for_selection(&self.editor_state) {
+                let property_rect = Rect {
+                    origin: Point2D::new(
+                        viewport_width - self.editor_state.editor_ui.property_panel_width,
+                        TOP_BAR_HEIGHT,
+                    ),
+                    size: Point2D::new(
+                        self.editor_state.editor_ui.property_panel_width,
+                        (viewport_height - TOP_BAR_HEIGHT).max(0.0),
+                    ),
+                };
+                let point = Point2D::new(x, y);
+                if let Some(action) = panel.hit_test_action(property_rect, point) {
+                    if matches!(action, A::SetFontFamilyIndex(_) | A::ToggleFontFamilyPicker) {
+                        self.apply_property_action(action);
+                        return true;
+                    }
+                }
+                if panel.font_picker_contains(property_rect, point) {
+                    return true;
+                }
+            }
+            let ui = &mut self.editor_state.editor_ui;
+            ui.font_family_picker_open = false;
+            ui.font_picker_search.clear();
+            ui.font_picker_scroll = 0.0;
+            ui.font_picker_hover = None;
             self.mark_dirty();
             return true;
         }
@@ -590,7 +662,9 @@ impl WidgetHost {
                     }
                 }
             }
-            return rename_committed || text_edit_committed;
+            // Toolbar padding / gaps eat the click — blank press.
+            let blurred = self.blur_text_inputs_on_blank_press();
+            return blurred || rename_committed || text_edit_committed;
         }
 
         // 3. apply_click — LayerPanel + chat-defocus.
@@ -723,307 +797,9 @@ impl WidgetHost {
             });
             return rename_committed || text_edit_committed;
         }
-        rename_committed || text_edit_committed
-    }
-
-    pub fn apply_click(&mut self, x: f32, y: f32, viewport_w: f32, viewport_h: f32) -> bool {
-        // glue:
-        // Floating chat panel sits on top — check first so its
-        // clicks don't fall through to the canvas.
-        self.refresh_layout_scene();
-        if let Some(chat_rect) = self.ai_chat_rect(viewport_w, viewport_h) {
-            let panel = AIChatPlaceholder::from_editor(&self.editor_state);
-            if let Some(hit) = panel.hit_test(chat_rect, Point2D::new(x, y)) {
-                match hit {
-                    AIChatHit::Inside => {
-                        self.mark_dirty();
-                        return true;
-                    }
-                    AIChatHit::FocusInput => {
-                        self.editor_state.chat.focused = true;
-                        self.editor_state.chat.input_select_all = false;
-                        self.editor_state.chat.input_selection = None;
-                        self.editor_state.chat.transcript_selection = None;
-                        self.mark_dirty();
-                        return true;
-                    }
-                    AIChatHit::SelectInputText(offset) => {
-                        self.editor_state.chat.focused = true;
-                        self.editor_state.chat.set_input_caret(offset);
-                        self.editor_state.chat.transcript_selection = None;
-                        self.editor_state.chat.caret_anchor_ms = self.now_ms;
-                        self.mark_dirty();
-                        return true;
-                    }
-                    AIChatHit::Send => {
-                        // Web keeps the offline echo stub.
-                        self.editor_state.chat.send();
-                        self.mark_dirty();
-                        return true;
-                    }
-                    AIChatHit::Stop => {
-                        self.editor_state.chat.stop_streaming();
-                        self.mark_dirty();
-                        return true;
-                    }
-                    AIChatHit::Example(text) => {
-                        self.editor_state.chat.input = text;
-                        self.editor_state.chat.focused = true;
-                        self.editor_state.chat.input_select_all = false;
-                        self.editor_state.chat.input_selection = None;
-                        self.editor_state.chat.transcript_selection = None;
-                        self.mark_dirty();
-                        return true;
-                    }
-                    AIChatHit::DragHandle => {
-                        return false;
-                    }
-                    AIChatHit::Resize(_) => {
-                        return false;
-                    }
-                    AIChatHit::ToggleCollapse => {
-                        self.editor_state.chat.toggle_collapsed();
-                        self.mark_dirty();
-                        return true;
-                    }
-                    AIChatHit::ToggleMaximize => {
-                        self.editor_state.chat.maximized = !self.editor_state.chat.maximized;
-                        self.editor_state.chat.collapsed = false;
-                        self.editor_state.editor_ui.chat_model_picker_open = false;
-                        self.editor_state.editor_ui.chat_model_picker_search.clear();
-                        self.editor_state.editor_ui.chat_model_picker_caret = None;
-                        self.mark_dirty();
-                        return true;
-                    }
-                    AIChatHit::NewChat => {
-                        self.editor_state.chat.new_chat();
-                        self.editor_state.editor_ui.chat_model_picker_open = false;
-                        self.editor_state.editor_ui.chat_model_picker_scroll = 0.0;
-                        self.editor_state.editor_ui.chat_model_picker_search.clear();
-                        self.editor_state.editor_ui.chat_model_picker_caret = None;
-                        self.editor_state.editor_ui.chat_model_picker_hover = None;
-                        self.mark_dirty();
-                        return true;
-                    }
-                    AIChatHit::ToggleModelPicker => {
-                        let opening = !self.editor_state.editor_ui.chat_model_picker_open;
-                        self.editor_state.editor_ui.chat_model_picker_open = opening;
-                        self.editor_state.editor_ui.chat_model_picker_scroll = 0.0;
-                        self.editor_state.editor_ui.chat_model_picker_search.clear();
-                        self.editor_state.editor_ui.chat_model_picker_caret = Some(0);
-                        self.editor_state.editor_ui.chat_model_picker_hover = None;
-                        if opening {
-                            self.editor_state
-                                .editor_ui
-                                .chat_model_picker_caret_anchor_ms = self.now_ms;
-                        }
-                        self.mark_dirty();
-                        return true;
-                    }
-                    AIChatHit::FocusModelSearch => {
-                        self.editor_state
-                            .editor_ui
-                            .chat_model_picker_caret_anchor_ms = self.now_ms;
-                        self.mark_dirty();
-                        return true;
-                    }
-                    AIChatHit::ClearModelSearch => {
-                        self.editor_state.editor_ui.chat_model_picker_search.clear();
-                        self.editor_state.editor_ui.chat_model_picker_caret = Some(0);
-                        self.editor_state.editor_ui.chat_model_picker_scroll = 0.0;
-                        self.editor_state.editor_ui.chat_model_picker_hover = None;
-                        self.editor_state
-                            .editor_ui
-                            .chat_model_picker_caret_anchor_ms = self.now_ms;
-                        self.mark_dirty();
-                        return true;
-                    }
-                    AIChatHit::SelectModel(idx) => {
-                        self.editor_state.select_chat_model(idx);
-                        self.mark_dirty();
-                        return true;
-                    }
-                    AIChatHit::CycleThinking => {
-                        self.editor_state.chat.cycle_thinking_mode();
-                        self.mark_dirty();
-                        return true;
-                    }
-                    AIChatHit::CycleEffort => {
-                        self.editor_state.chat.cycle_effort_level();
-                        self.mark_dirty();
-                        return true;
-                    }
-                    AIChatHit::CycleAgentTeam => {
-                        self.editor_state.chat.cycle_agent_team_size();
-                        self.mark_dirty();
-                        return true;
-                    }
-                    AIChatHit::AddAttachment => {
-                        // The web shell has no native file picker wired
-                        // yet — staging an attachment is a desktop-only
-                        // path for now. No-op so the click is consumed.
-                        return true;
-                    }
-                    AIChatHit::RemoveAttachment(idx) => {
-                        self.editor_state.chat.remove_attachment(idx);
-                        self.mark_dirty();
-                        return true;
-                    }
-                    AIChatHit::ToggleThinking(idx) => {
-                        self.editor_state.chat.toggle_message_thinking(idx);
-                        self.mark_dirty();
-                        return true;
-                    }
-                    AIChatHit::ToggleToolCalls(idx) => {
-                        self.editor_state.chat.toggle_message_tool_calls(idx);
-                        self.mark_dirty();
-                        return true;
-                    }
-                    AIChatHit::SetToolCallCardExpanded(msg_idx, tool_idx, expanded) => {
-                        self.editor_state
-                            .chat
-                            .set_message_tool_call_expanded(msg_idx, tool_idx, expanded);
-                        self.mark_dirty();
-                        return true;
-                    }
-                    AIChatHit::SetDesignBlockExpanded(msg_idx, block_idx, expanded) => {
-                        self.editor_state
-                            .chat
-                            .set_message_design_block_expanded(msg_idx, block_idx, expanded);
-                        self.mark_dirty();
-                        return true;
-                    }
-                    AIChatHit::CopyDesignBlock(text) => {
-                        self.editor_state.chat.queue_copy_text(text);
-                        self.mark_dirty();
-                        return true;
-                    }
-                    AIChatHit::ApplyDesignBlock(msg_idx, text) => {
-                        return self.apply_chat_design_block(msg_idx, &text);
-                    }
-                    AIChatHit::SelectTranscriptText(message_index, offset) => {
-                        self.editor_state.chat.transcript_selection =
-                            Some(op_editor_core::chat::ChatTranscriptSelection {
-                                message_index,
-                                anchor: offset,
-                                focus: offset,
-                            });
-                        self.editor_state.codegen.code_selection = None;
-                        self.editor_state.chat.focused = false;
-                        self.mark_dirty();
-                        return true;
-                    }
-                    AIChatHit::ToggleChecklist => {
-                        self.editor_state.chat.toggle_checklist_collapsed();
-                        self.mark_dirty();
-                        return true;
-                    }
-                }
-            }
-        }
-        // Click outside the chat panel closes the model picker.
-        let picker_was_open = self.editor_state.editor_ui.chat_model_picker_open;
-        self.editor_state.editor_ui.chat_model_picker_open = false;
-        let was_focused = self.editor_state.chat.focused || picker_was_open;
-        self.editor_state.chat.focused = false;
-        self.editor_state.chat.input_select_all = false;
-        self.editor_state.chat.input_selection = None;
-        self.mark_dirty();
-
-        let toolbar_rect = self.toolbar_rect(viewport_w);
-        let toolbar = Toolbar::for_editor(&self.editor_state);
-        if let Some(hit) = toolbar.hit_test(toolbar_rect, Point2D::new(x, y)) {
-            match hit {
-                op_editor_ui::widgets::ToolbarHit::Tool(tool) => {
-                    self.editor_state.tool = tool;
-                    self.mark_dirty();
-                    return true;
-                }
-                op_editor_ui::widgets::ToolbarHit::Action(action) => {
-                    return self.dispatch_toolbar_action(action);
-                }
-                op_editor_ui::widgets::ToolbarHit::ToggleShapePicker => {
-                    let v = &mut self.editor_state.editor_ui.shape_picker_open;
-                    *v = !*v;
-                    self.mark_dirty();
-                    return true;
-                }
-            }
-        }
-        if !self.editor_state.editor_ui.sidebar_open {
-            return was_focused;
-        }
-        let layer_rect = self.layer_panel_rect(viewport_h);
-        let panel = LayerPanel::from_editor(&self.editor_state);
-        if let Some(hit) = panel.hit_test(layer_rect, Point2D::new(x, y)) {
-            match hit {
-                LayerPanelHit::Page(idx) => {
-                    let _ = self.editor_state.set_active_page(idx);
-                    self.editor_state.clear_selection();
-                    self.mark_dirty();
-                    return true;
-                }
-                LayerPanelHit::Layer(node_id) => {
-                    let ec_id = node_id.clone();
-                    if self.shift_held {
-                        self.editor_state.toggle_selection(ec_id);
-                    } else {
-                        self.editor_state.set_single_selection(ec_id);
-                    }
-                    self.mark_dirty();
-                    return true;
-                }
-                LayerPanelHit::ToggleHidden(node_id) => {
-                    self.editor_state.toggle_node_hidden(&node_id.clone());
-                    self.mark_dirty();
-                    return true;
-                }
-                LayerPanelHit::ToggleLocked(node_id) => {
-                    self.editor_state.toggle_node_locked(&node_id.clone());
-                    self.mark_dirty();
-                    return true;
-                }
-                LayerPanelHit::ToggleCollapsed(node_id) => {
-                    self.editor_state.toggle_node_collapsed(&node_id.clone());
-                    self.mark_dirty();
-                    return true;
-                }
-                LayerPanelHit::AddPage => {
-                    let _ = self.editor_state.add_page();
-                    self.mark_dirty();
-                    return true;
-                }
-                LayerPanelHit::DeletePage(idx) => {
-                    let _ = self.editor_state.remove_page(idx);
-                    self.mark_dirty();
-                    return true;
-                }
-            }
-        }
-        // Defocusing the chat input itself is a visible change —
-        // the caller should still repaint to drop the caret.
-        was_focused
-    }
-
-    fn create_default_variable_from_modal(&mut self) {
-        use jian_ops_schema::variable::{VariableKind, VariableScalar};
-        let existing = self.editor_state.doc.variables.as_ref();
-        let mut idx = 1;
-        let name = loop {
-            let candidate = format!("variable-{idx}");
-            if existing.map_or(true, |vars| !vars.contains_key(&candidate)) {
-                break candidate;
-            }
-            idx += 1;
-        };
-        let snap = self.editor_state.snapshot_for_history();
-        if self.editor_state.create_variable(
-            &name,
-            VariableKind::Color,
-            VariableScalar::Str("#000000".into()),
-        ) {
-            self.editor_state.history_push_past(snap);
-        }
-        self.mark_dirty();
+        // Final fall-through — the press hit no interactive chrome
+        // (panel-rail gaps, property-panel padding, …): blank press.
+        let blurred = self.blur_text_inputs_on_blank_press();
+        blurred || rename_committed || text_edit_committed
     }
 }

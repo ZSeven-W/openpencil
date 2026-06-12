@@ -3,6 +3,7 @@
 //! the 800-line cap (mirrors the native host's `property_dispatch.rs`).
 
 use super::WidgetHost;
+use jian_ops_schema::variable::VariableKind;
 
 impl WidgetHost {
     /// Swap a synced document into the live editor state via the shared, tested
@@ -61,11 +62,15 @@ impl WidgetHost {
                 let ui = &mut self.editor_state.editor_ui;
                 ui.fill_type_picker_open = !ui.fill_type_picker_open;
                 ui.image_fill_popover_open = false;
+                ui.property_color_variable_picker_open = None;
             }
             A::SetFillType(t) => {
                 self.editor_state.set_selected_fill_type(t);
                 self.editor_state.editor_ui.fill_type_picker_open = false;
                 self.editor_state.editor_ui.image_fill_popover_open = false;
+                self.editor_state
+                    .editor_ui
+                    .property_color_variable_picker_open = None;
             }
             A::ToggleImageFillPopover => {
                 let ui = &mut self.editor_state.editor_ui;
@@ -73,6 +78,7 @@ impl WidgetHost {
                 ui.fill_type_picker_open = false;
                 ui.export_scale_picker_open = false;
                 ui.export_format_picker_open = false;
+                ui.property_color_variable_picker_open = None;
             }
             A::CloseImageFillPopover => {
                 self.editor_state.editor_ui.image_fill_popover_open = false;
@@ -90,17 +96,34 @@ impl WidgetHost {
                 self.image_adjustment_drag = None;
                 let _ = self.editor_state.reset_selected_image_adjustments();
             }
+            A::OpenSelectedIconPicker => {
+                // Property-panel icon section → replace-selection
+                // picker (mirrors the native host's arm).
+                let ui = &mut self.editor_state.editor_ui;
+                ui.icon_picker_open = true;
+                ui.icon_picker_replace_selection = true;
+                ui.icon_picker_search.clear();
+                ui.fill_type_picker_open = false;
+                ui.image_fill_popover_open = false;
+                ui.font_family_picker_open = false;
+                ui.font_weight_picker_open = false;
+                ui.export_scale_picker_open = false;
+                ui.export_format_picker_open = false;
+                ui.property_color_variable_picker_open = None;
+            }
             A::ToggleExportScalePicker => {
                 let ui = &mut self.editor_state.editor_ui;
                 ui.export_scale_picker_open = !ui.export_scale_picker_open;
                 ui.export_format_picker_open = false;
                 ui.export_picker_hover = None;
+                ui.property_color_variable_picker_open = None;
             }
             A::ToggleExportFormatPicker => {
                 let ui = &mut self.editor_state.editor_ui;
                 ui.export_format_picker_open = !ui.export_format_picker_open;
                 ui.export_scale_picker_open = false;
                 ui.export_picker_hover = None;
+                ui.property_color_variable_picker_open = None;
             }
             A::SetExportScale(scale) => {
                 let ui = &mut self.editor_state.editor_ui;
@@ -119,9 +142,46 @@ impl WidgetHost {
                     Some(op_editor_core::editor_ui_state::FileAction::ExportImageConfirm);
             }
             A::OpenColorPicker(target) => {
+                self.editor_state
+                    .editor_ui
+                    .property_color_variable_picker_open = None;
                 let _ = self
                     .editor_state
                     .open_color_picker(color_target(target), 0.0);
+            }
+            A::ToggleColorVariablePicker(target) => {
+                let target = color_target(target);
+                let ui = &mut self.editor_state.editor_ui;
+                ui.property_color_variable_picker_open =
+                    if ui.property_color_variable_picker_open == Some(target) {
+                        None
+                    } else {
+                        Some(target)
+                    };
+                ui.fill_type_picker_open = false;
+                ui.image_fill_popover_open = false;
+                ui.export_scale_picker_open = false;
+                ui.export_format_picker_open = false;
+            }
+            A::BindColorVariable { target, index } => {
+                if let Some(name) = color_variable_name_at(&self.editor_state, index) {
+                    self.editor_state.commit_history();
+                    let _ = self
+                        .editor_state
+                        .bind_selected_color_variable(color_target(target), &name);
+                }
+                self.editor_state
+                    .editor_ui
+                    .property_color_variable_picker_open = None;
+            }
+            A::UnbindColorVariable(target) => {
+                self.editor_state.commit_history();
+                let _ = self
+                    .editor_state
+                    .unbind_selected_color_variable(color_target(target));
+                self.editor_state
+                    .editor_ui
+                    .property_color_variable_picker_open = None;
             }
             A::AddEffect => {
                 self.editor_state.add_drop_shadow_to_selected();
@@ -176,6 +236,53 @@ impl WidgetHost {
                 // now. A future implementation would surface a
                 // `<input type="file">` via the JS bridge.
             }
+            A::ToggleFontFamilyPicker => {
+                // The wasm host has no system-font enumeration (the
+                // bundle ships embedded fonts only), so the picker
+                // paints the bundled group + the TS
+                // FALLBACK_SYSTEM_FONTS list — the same set the TS
+                // app shows when `queryLocalFonts` is unavailable.
+                let ui = &mut self.editor_state.editor_ui;
+                ui.font_family_picker_open = !ui.font_family_picker_open;
+                ui.font_picker_search.clear();
+                ui.font_picker_scroll = 0.0;
+                ui.font_picker_hover = None;
+                ui.font_weight_picker_open = false;
+                ui.fill_type_picker_open = false;
+                ui.image_fill_popover_open = false;
+                ui.export_scale_picker_open = false;
+                ui.export_format_picker_open = false;
+                ui.property_color_variable_picker_open = None;
+            }
+            A::SetFontFamilyIndex(index) => {
+                let family = {
+                    let ui = &self.editor_state.editor_ui;
+                    op_editor_ui::widgets::property_panel_typography::font_picker_entries(
+                        &ui.system_font_families,
+                        &ui.font_picker_search,
+                    )
+                    .get(index)
+                    .map(|e| e.family.to_string())
+                };
+                if let Some(family) = family {
+                    let id = self.editor_state.selection.anchor.clone();
+                    if id.is_real() && !family.trim().is_empty() {
+                        self.editor_state.commit_history();
+                        let _ = self.editor_state.apply(
+                            op_editor_core::EditorCommand::SetNodeLayoutProp {
+                                node_id: id,
+                                property: "fontFamily".to_string(),
+                                value: op_editor_core::LayoutPropValue::Keyword(family),
+                            },
+                        );
+                    }
+                }
+                let ui = &mut self.editor_state.editor_ui;
+                ui.font_family_picker_open = false;
+                ui.font_picker_search.clear();
+                ui.font_picker_scroll = 0.0;
+                ui.font_picker_hover = None;
+            }
             A::ToggleFontWeightPicker => {
                 let ui = &mut self.editor_state.editor_ui;
                 ui.font_weight_picker_open = !ui.font_weight_picker_open;
@@ -185,6 +292,7 @@ impl WidgetHost {
                 ui.image_fill_popover_open = false;
                 ui.export_scale_picker_open = false;
                 ui.export_format_picker_open = false;
+                ui.property_color_variable_picker_open = None;
             }
             A::SetFontWeight(choice) => {
                 let id = self.editor_state.selection.anchor.clone();
@@ -207,6 +315,7 @@ impl WidgetHost {
                 ui.image_fill_popover_open = false;
                 ui.export_scale_picker_open = false;
                 ui.export_format_picker_open = false;
+                ui.property_color_variable_picker_open = None;
             }
             A::SetPaddingMode(mode) => {
                 // Scope the pin to the node it was set for (no leak into
@@ -229,12 +338,15 @@ impl WidgetHost {
 
     /// Dispatch a Code-panel action. `SelectFramework` is pure
     /// `editor_state.codegen` state (works without the `codegen`
-    /// feature); `Generate` / `Regenerate` raise the pending flags the
-    /// `lib.rs` drain turns into a `codegen_web::start_codegen` launch
-    /// (the dispatch has no `Inner` / daemon base in scope — mirror of
-    /// the desktop pending-flag + `launch_codegen_if_pending` pattern);
-    /// `Copy` / `Download` are browser IO via `web_clipboard`. Asset
-    /// bundles are a web-v1 no-op (no zip path).
+    /// feature); `Generate` / `Regenerate` / `Cancel` raise the pending
+    /// flags the `lib.rs` mousedown drain turns into
+    /// `codegen_web::drain_codegen_flags` work (the dispatch has no
+    /// `Inner` / daemon base in scope — mirror of the desktop
+    /// pending-flag + `launch_codegen_if_pending` /
+    /// `drain_codegen_cancel_request` pattern); `Copy` / `Download` are
+    /// browser IO via `web_clipboard` (Download produces a
+    /// `component.zip` when the generation returned image assets —
+    /// desktop `codegen_export` layout).
     fn apply_codegen_action(
         &mut self,
         action: op_editor_ui::widgets::property_panel_action::CodegenAction,
@@ -263,6 +375,11 @@ impl WidgetHost {
             CodegenAction::Cancel => {
                 cg.pending_generate = false;
                 cg.pending_regenerate = false;
+                // Raise the cancel intent for the web runner — the drain
+                // aborts the in-flight XHR + parks the run so it actually
+                // stops instead of streaming on and resurrecting the panel
+                // (TS: abort(); native dispatch parity).
+                cg.pending_cancel = true;
                 cg.phase = if cg.code.is_empty() {
                     CodegenPhase::Idle
                 } else {
@@ -279,27 +396,26 @@ impl WidgetHost {
             CodegenAction::Download => {
                 #[cfg(feature = "codegen")]
                 {
-                    let ext = framework_ext(cg.framework);
-                    let _ = crate::web_clipboard::download_bytes(
-                        &format!("component.{ext}"),
-                        "text/plain",
-                        cg.code.as_bytes(),
-                    );
+                    crate::codegen_web::download_generated(&self.editor_state);
                 }
             }
             CodegenAction::ExportBundle => {
-                // Web v1: no zip bundle path — download the raw component as a
-                // single file, same as Download. A future web bundle would
-                // stream a .zip via a JS bridge.
-                // TODO: web bundle zip.
+                // Live structure bundle (TS code-panel.tsx
+                // `handleDownloadStructureBundle` → `buildAIStructureBundle`):
+                // built FRESH from the selection (or active page) at click
+                // time — no completed generation required. Nothing to bundle
+                // returns silently, like the TS handler.
                 #[cfg(feature = "codegen")]
                 {
-                    let ext = framework_ext(cg.framework);
-                    let _ = crate::web_clipboard::download_bytes(
-                        &format!("component.{ext}"),
-                        "text/plain",
-                        cg.code.as_bytes(),
-                    );
+                    if let Some(bytes) =
+                        crate::codegen_bundle::build_live_bundle_zip(&self.editor_state)
+                    {
+                        let _ = crate::web_clipboard::download_bytes(
+                            "bundle.zip",
+                            "application/zip",
+                            &bytes,
+                        );
+                    }
                 }
             }
             CodegenAction::ScrollFrameworksLeft | CodegenAction::ScrollFrameworksRight => {
@@ -317,23 +433,6 @@ impl WidgetHost {
     }
 }
 
-/// File extension for the active framework's generated component file.
-/// Mirrors the desktop `codegen_session::framework_ext` + the TS download
-/// naming (`component.<ext>`). Only used by the `codegen` web download path.
-#[cfg(feature = "codegen")]
-fn framework_ext(fw: op_editor_core::codegen::Framework) -> &'static str {
-    use op_editor_core::codegen::Framework;
-    match fw {
-        Framework::React | Framework::ReactNative => "tsx",
-        Framework::Vue => "vue",
-        Framework::Svelte => "svelte",
-        Framework::Html => "html",
-        Framework::Flutter => "dart",
-        Framework::SwiftUi => "swift",
-        Framework::Compose => "kt",
-    }
-}
-
 /// Public alias for [`color_target`] — used by the press dispatch
 /// in `press.rs` so it can anchor the colour picker at the clicked
 /// y instead of always passing `0.0`.
@@ -341,6 +440,17 @@ pub(in crate::widget_host) fn color_target_public(
     t: op_editor_core::ColorTarget,
 ) -> op_editor_core::ui_draft::ColorTarget {
     color_target(t)
+}
+
+fn color_variable_name_at(state: &op_editor_core::EditorState, index: usize) -> Option<String> {
+    state
+        .doc
+        .variables
+        .as_ref()?
+        .iter()
+        .filter(|(_, def)| matches!(def.kind, VariableKind::Color))
+        .nth(index)
+        .map(|(name, _)| name.clone())
 }
 
 /// Translate a shell-core `ColorTarget` into op-editor-core's.

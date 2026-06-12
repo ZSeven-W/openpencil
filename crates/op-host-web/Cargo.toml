@@ -43,6 +43,12 @@ op-codegen = { path = "../op-codegen", features = ["ai"], optional = true }
 op-ai = { path = "../op-ai", optional = true }
 jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema", optional = true }
 serde_json = { workspace = true, optional = true }
+# Browser file-IO P0: Figma `.fig` parsing + clipboard-HTML decoding for the
+# web shell. Pure-Rust (flate2/miniz_oxide + ruzstd + base64 — wasm32-clean,
+# no C toolchain), so the same crate the desktop host uses compiles for the
+# browser bundle. Optional + behind `codegen` with the rest of the document
+# pipeline deps so the wasm32-clean stub baseline never pulls it.
+op-figma = { path = "../op-figma", optional = true }
 # Step 1b §3.6: handwritten DOM mirror consumes accesskit::TreeUpdate (0.24).
 accesskit = "0.24"
 console_error_panic_hook = "0.1"
@@ -92,18 +98,32 @@ features = [
   "BlobPropertyBag",
   "CanvasRenderingContext2d",
   "Clipboard",
+  # Browser file-IO P0 (paste / drag-drop / hidden file input): the
+  # ClipboardEvent / DataTransfer / DragEvent / File* / HtmlInputElement
+  # bindings below are only *called* from the `codegen`-gated dom_io glue,
+  # but web-sys feature flags are compile-time binding toggles — they keep
+  # the `web` stub baseline compiling unchanged.
+  "ClipboardEvent",
   "CompositionEvent",
   "console",
+  "DataTransfer",
   "Document",
+  "DragEvent",
   "Element",
   "Event",
   "EventTarget",
+  "File",
+  "FileList",
+  "FileReader",
   "FocusEvent",
   "HtmlAnchorElement",
   "HtmlCanvasElement",
   "HtmlElement",
+  "HtmlInputElement",
   "ImageData",
   "KeyboardEvent",
+  # `daemon_base` derives the daemon origin from `window.location`.
+  "Location",
   "MouseEvent",
   "Navigator",
   "Performance",
@@ -126,7 +146,16 @@ web = []
 # When the cargo target is wasm32-unknown-unknown the build also links
 # the libc/libcxx/libm shim crate so the bundle is runtime-loadable.
 # Native targets resolve the target-conditional shim dep to nothing.
-skia = ["dep:skia-safe", "dep:op-editor-core", "dep:op-pen-loader", "wasm-libc-shim"]
+# `jian-ops-schema` rides along for the a11y DOM mirror (`a11y.rs`
+# names `PenNode` for selection announcements) — zero extra weight,
+# it is already a transitive dep of op-editor-core.
+skia = [
+  "dep:skia-safe",
+  "dep:op-editor-core",
+  "dep:op-pen-loader",
+  "dep:jian-ops-schema",
+  "wasm-libc-shim",
+]
 # Internal feature toggled on by `skia` to flip the cfg-target dep.
 wasm-libc-shim = ["dep:wasm-libc-shim"]
 # P4b web AI-streaming foundation: enables the codegen/AI web modules
@@ -134,11 +163,22 @@ wasm-libc-shim = ["dep:wasm-libc-shim"]
 # WebBackend) + the `op-codegen` AI pipeline. OFF by default so it never
 # touches the `web` stub or a plain `skia` build. NOTE: UNVERIFIED — the new
 # modules need an EMSDK wasm32 build + a browser; run tools/check-wasm-bundle.sh.
-codegen = ["skia", "dep:op-codegen", "dep:op-ai", "dep:jian-ops-schema", "dep:serde_json"]
-# Opt-in live-canvas sync glue: polls the web-canvas daemon and applies newer
-# documents to the live shell. Requires `skia` (drives the real WebBackend) and
-# therefore an EMSDK build env. OFF by default so it never affects the `web`
-# stub or a normal `skia` build. NOTE: this glue is UNVERIFIED — it could not be
-# compile-checked without EMSDK; enable it with EMSDK set and verify in a
-# browser. The protocol core it calls (`op_editor_core::web_sync`) IS verified.
-live-sync = ["skia"]
+codegen = [
+  "skia",
+  "live-sync",
+  "dep:op-codegen",
+  "dep:op-ai",
+  "dep:jian-ops-schema",
+  "dep:serde_json",
+  "dep:op-figma",
+]
+# Live-canvas sync glue: bidirectional document + selection sync with the
+# web-canvas daemon (pull/apply on version bumps, local-edit push, selection
+# push — see `live_sync_glue.rs`). Requires `skia` (drives the real
+# WebBackend) + serde_json (document serialization for the push baseline).
+# Included in the production bundle via `codegen` (the bundle gate builds
+# `--features codegen`), matching the TS web app where `use-mcp-sync.ts` is
+# always mounted. Browser round-trip last verified 2026-06-05 (pull
+# direction, headless-Chrome CDP harness); push direction is host-unit-tested
+# (`op_editor_core::web_sync`) + wasm-compile-checked.
+live-sync = ["skia", "dep:serde_json"]

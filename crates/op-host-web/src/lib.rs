@@ -14,35 +14,73 @@
 //! at build time only — for libcxx headers + emsdk's wasm-aware clang
 //! — never linked into the final bundle).
 
+// Hidden accessibility DOM mirror (#58) — sr-only landmarks, live
+// regions and operable tool buttons beside the canvas, synced from
+// `EditorState` on a coarse cadence. Needs the real host, so gated
+// like the other skia modules. See `a11y.rs` for the honest v1 scope.
+#[cfg(feature = "skia")]
+mod a11y;
 #[cfg(feature = "skia")]
 mod backend;
 #[cfg(feature = "skia")]
 mod boolean_ops;
 pub mod event;
 #[cfg(feature = "skia")]
+mod listener;
+#[cfg(feature = "skia")]
 mod widget_host;
 // Pure web_sys IO (no skia) — compiled always so it compile-checks on the
 // wasm32 web stub without EMSDK; only `mount()` (skia) actually wires it up.
 mod live_sync;
+// Bidirectional live-canvas sync glue (pull/apply + push + selection sync) —
+// the protocol decisions over the pure `live_sync` IO. Needs the skia shell
+// (apply + repaint) and the document pipeline, so gated like the other
+// document modules; `codegen` (the production bundle) enables it.
+#[cfg(feature = "live-sync")]
+mod live_sync_glue;
+// Shared daemon base-URL resolution (page origin when served by the daemon,
+// localhost fallback for the dev smoke page). Pure-logic core + a thin
+// `window.location` wrapper; compiled always like `live_sync`.
+mod daemon_base;
+
+// Browser file-IO P0 cluster — the `pending_file_action` consumer
+// (Save / Open / Export / Import dialogs become Blob downloads +
+// hidden `<input type=file>` pickers), DOM paste routing, and file
+// drag-drop ingestion. Gated behind `codegen` (the full browser
+// build) with the rest of the document-pipeline deps (serde_json /
+// jian-ops-schema / op-figma) so neither the `web` stub nor a plain
+// `skia` build pulls them.
+#[cfg(feature = "codegen")]
+mod dom_io;
+#[cfg(feature = "codegen")]
+mod file_actions;
+// Hidden IME composition target builder — extracted from `mount()`
+// to keep this file under the 800-line cap.
+#[cfg(feature = "skia")]
+mod ime_target;
 
 // P4b web AI-streaming foundation — gated behind the `codegen` feature (which
 // pulls `skia` + `op-codegen`), so the wasm32-clean stub baseline never
 // compiles them. UNVERIFIED: these need an EMSDK wasm32 build + a browser; run
 // tools/check-wasm-bundle.sh.
 #[cfg(feature = "codegen")]
+mod codegen_bundle;
+#[cfg(feature = "codegen")]
 mod codegen_web;
 #[cfg(feature = "codegen")]
 mod raf_pump;
 #[cfg(feature = "codegen")]
 mod web_ai_transport;
+// Web Iconify bridge — drains the icon picker's remote-search request
+// directly against api.iconify.design (CORS-open, same as TS).
+#[cfg(feature = "codegen")]
+mod iconify_web;
+// Web chat session — drains `chat.pending_send` / Stop / New Chat and
+// streams real AI turns through the daemon's `/api/ai/stream` proxy.
+#[cfg(feature = "codegen")]
+mod web_chat;
 #[cfg(feature = "codegen")]
 mod web_clipboard;
-
-/// Daemon origin the codegen session posts AI turns to (same origin the
-/// opt-in `live-sync` glue polls). The web shell has no model-discovery /
-/// daemon-base selection UI yet, so this is fixed to the default port.
-#[cfg(feature = "codegen")]
-const DAEMON_BASE: &str = "http://127.0.0.1:3100";
 
 // Force the wasm32-unknown-unknown libc/libcxx/libm shim to be linked
 // even though no Rust code calls it — its `#[no_mangle]` symbols are
@@ -60,7 +98,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 #[cfg(feature = "skia")]
-use op_editor_ui::Modifiers;
+use listener::{add_listener, modifiers_from_keyboard, now_ms_perf, Listener};
 
 /// Long-lived shell handle. The smoke HTML must keep this alive (e.g.
 /// `window.__opShell = mount("op")`) so closures stored on the shell
@@ -103,44 +141,33 @@ pub struct WebShell {
     /// target".)
     #[cfg(feature = "skia")]
     ime_target: web_sys::HtmlElement,
+
+    /// Interval handle driving the hidden accessibility layer's
+    /// coarse state→DOM sync (`a11y::start_pump`). Dropping it clears
+    /// the browser interval; `None` when the pump could not start
+    /// (missing `window`) — the layer then only refreshes on hidden-
+    /// button activations.
+    #[cfg(feature = "skia")]
+    a11y_pump: Option<a11y::A11yPump>,
 }
 
 #[cfg(feature = "skia")]
 struct Inner {
     backend: backend::WebBackend,
     host: widget_host::WidgetHost,
+    /// Hidden accessibility DOM layer (`a11y.rs`). `None` until
+    /// `a11y::wire` mounts it at the tail of `mount()` registration;
+    /// kept on `Inner` so both the interval pump and the hidden
+    /// buttons' click handlers reach it through the shared `Rc`.
+    a11y: Option<a11y::A11yLayer>,
 }
 
-#[cfg(feature = "skia")]
-struct Listener {
-    target: web_sys::EventTarget,
-    name: &'static str,
-    /// Type-erased Closure storage. We use
-    /// `Closure<dyn FnMut(JsValue)>` uniformly across event types and
-    /// runtime-checked `dyn_into::<SpecificEvent>()` inside each
-    /// handler body so `Listener` carries one concrete generic
-    /// argument across the entire vec; mismatched synthetic events
-    /// from same-page JS skip the handler instead of producing a
-    /// wrong-type reference (codex C2.2 R1 CONCERN-3).
-    closure: Closure<dyn FnMut(JsValue)>,
-}
+// `Listener` + `add_listener` + `modifiers_from_keyboard` +
+// `now_ms_perf` live in `listener.rs` — extracted to keep this file
+// under the 800-line cap once the browser file-IO glue landed.
 
 #[cfg(feature = "skia")]
 impl Inner {
-    /// Apply a daemon `/api/mcp/document` response body to the live shell.
-    /// `WebSyncClient::sync` runs the apply closure only for a newer document and
-    /// commits that exact version only when the closure returns `true` (swap +
-    /// repaint both succeeded) — so the committed version is never stale and a
-    /// failed repaint is retried on the next poll. Used by the opt-in `live-sync`
-    /// poll loop.
-    #[cfg(feature = "live-sync")]
-    fn apply_sync_body(&mut self, body: &str, sync: &mut op_editor_core::web_sync::WebSyncClient) {
-        let _ = sync.sync(body, |doc, _version| {
-            self.host.replace_document(doc);
-            self.repaint().is_ok()
-        });
-    }
-
     /// Phase B inspector paint. Called from `mount()` for the first
     /// frame and from every closure body after a state mutation.
     /// Returns the present error if the ImageData round-trip failed.
@@ -178,105 +205,15 @@ impl Inner {
     }
 }
 
-/// Drain a pending Generate / Regenerate raised by the Code panel's press
-/// dispatch and launch a web codegen run. Mirrors the desktop
-/// `launch_codegen_if_pending`: the flags are cleared FIRST so a failed launch
-/// doesn't re-fire every frame, then `start_codegen` drives the pipeline over
-/// async XHR + an rAF pump.
-///
-/// The caller MUST NOT hold an `inner` borrow when calling this — `start_codegen`
-/// borrows `inner` itself (and the rAF pump it starts borrows it again later).
-#[cfg(feature = "codegen")]
-fn drain_pending_codegen(inner: &Rc<RefCell<Inner>>) {
-    let pending = {
-        let b = inner.borrow();
-        let cg = &b.host.editor_state().codegen;
-        cg.pending_generate || cg.pending_regenerate
-    };
-    if !pending {
-        return;
-    }
-    // Clear the flags before launching so a missing-selection error path (which
-    // surfaces inline) isn't re-triggered on the next press.
-    {
-        let mut bm = inner.borrow_mut();
-        let cg = &mut bm.host.editor_state_mut().codegen;
-        cg.pending_generate = false;
-        cg.pending_regenerate = false;
-    }
-    codegen_web::start_codegen(inner.clone(), DAEMON_BASE.to_string());
-}
-
-/// Build a Jian `Modifiers` bitset from a W3C `KeyboardEvent`. Mirrors
-/// the four standard modifier keys; per spec §2.4 we treat
-/// `metaKey` (browser) → `Modifiers::CMD` (Jian) — both name the
-/// "Cmd on macOS / Win key on Windows / Super on Linux" modifier.
-#[cfg(feature = "skia")]
-fn modifiers_from_keyboard(event: &web_sys::KeyboardEvent) -> Modifiers {
-    let mut m = Modifiers::empty();
-    if event.shift_key() {
-        m |= Modifiers::SHIFT;
-    }
-    if event.ctrl_key() {
-        m |= Modifiers::CTRL;
-    }
-    if event.alt_key() {
-        m |= Modifiers::ALT;
-    }
-    if event.meta_key() {
-        m |= Modifiers::CMD;
-    }
-    m
-}
-
-/// Register a JS event listener on `target` and store the Closure in
-/// `listeners` so it stays alive for the WebShell's lifetime. The
-/// helper accepts an `FnMut(SpecificEvent)` and adapts it to the
-/// type-erased `Closure<dyn FnMut(JsValue)>` stored in `Listener`.
-#[cfg(feature = "skia")]
-fn add_listener<E, F, T>(
-    target: &T,
-    name: &'static str,
-    listeners: &mut Vec<Listener>,
-    mut handler: F,
-) -> Result<(), JsValue>
-where
-    E: wasm_bindgen::JsCast + 'static,
-    F: FnMut(E) + 'static,
-    T: Clone + Into<web_sys::EventTarget>,
-{
-    // Clone the target into an owned EventTarget once; we need both
-    // `&EventTarget` for the registration call and an owned
-    // EventTarget to push into the Listener for later cleanup. The
-    // generic over T (`HtmlElement`, `EventTarget`, …) lets call
-    // sites pass a window-target or an HtmlElement-target without
-    // an explicit cast.
-    let target_owned: web_sys::EventTarget = target.clone().into();
-    let closure: Closure<dyn FnMut(JsValue)> = Closure::new(move |raw: JsValue| {
-        // Use `dyn_into` (runtime-checked) instead of
-        // `unchecked_into` so a mismatched synthetic event dispatched
-        // by same-page JS (e.g. `new Event("keydown")` rather than
-        // `new KeyboardEvent("keydown")`) silently skips the handler
-        // instead of producing a wrong-type reference whose getter
-        // calls would return garbage. Codex C2.2 R1 CONCERN-3.
-        let event: E = match raw.dyn_into::<E>() {
-            Ok(e) => e,
-            Err(_) => return,
-        };
-        handler(event);
-    });
-    target_owned.add_event_listener_with_callback(name, closure.as_ref().unchecked_ref())?;
-    listeners.push(Listener {
-        target: target_owned,
-        name,
-        closure,
-    });
-    Ok(())
-}
-
 #[cfg(feature = "skia")]
 impl Drop for WebShell {
     fn drop(&mut self) {
+        // Stop the a11y sync pump first (clears the interval), then
+        // tear its hidden DOM layer down with the rest of the shell.
+        self.a11y_pump = None;
+        if let Some(layer) = self.inner.borrow_mut().a11y.take() {
+            layer.unmount();
+        }
         for l in self.listeners.drain(..) {
             // Best-effort removal; if the target has already been
             // detached from the DOM the call is a no-op. The Closure
@@ -302,24 +239,12 @@ impl Drop for WebShell {
 /// Without the `skia` feature this is a stub that returns the
 /// fields-less `WebShell` after validating the canvas element exists
 /// — useful only for the kickoff §1.2 wasm32-clean compile guard CI.
-/// Wall-clock ms since navigation. Falls back to 0 if either
-/// `window` or `performance` is unavailable (e.g. WebWorker).
-#[cfg(feature = "skia")]
-fn now_ms_perf() -> u64 {
-    web_sys::window()
-        .and_then(|w| w.performance())
-        .map(|p| p.now() as u64)
-        .unwrap_or(0)
-}
-
 #[cfg(feature = "skia")]
 #[wasm_bindgen]
 pub fn mount(canvas_id: &str) -> Result<WebShell, JsValue> {
     use crate::event::{ime, keyboard};
     use wasm_bindgen::JsCast;
-    use web_sys::{
-        CompositionEvent, HtmlCanvasElement, HtmlElement, KeyboardEvent, MouseEvent, WheelEvent,
-    };
+    use web_sys::{CompositionEvent, HtmlCanvasElement, KeyboardEvent, MouseEvent, WheelEvent};
 
     // Install the panic hook on first call so panics print to the browser
     // console instead of being swallowed silently.
@@ -338,47 +263,21 @@ pub fn mount(canvas_id: &str) -> Result<WebShell, JsValue> {
 
     let backend = backend::WebBackend::new(canvas.clone())?;
     let host = widget_host::WidgetHost::new();
-    let inner = Rc::new(RefCell::new(Inner { backend, host }));
+    let inner = Rc::new(RefCell::new(Inner {
+        backend,
+        host,
+        a11y: None,
+    }));
 
     // Phase B inspector paints the first frame synchronously inside
     // mount(); any present error MUST surface as a JS exception so
     // callers do not see Ok with an unpainted canvas.
     inner.borrow_mut().repaint()?;
 
-    // Codex Phase C stop-hook fix: create a hidden <textarea> that
-    // owns the IME composition target. Without this, registering
-    // composition listeners on `window` would surface IME activity
-    // from the browser's URL bar / devtools / any other editable
-    // element on the page as if it were directed at our inspector
-    // TextInput. The textarea is positioned off-screen + transparent
-    // + aria-hidden so it does not interfere with screen readers or
-    // visual layout; programmatic focus on it routes the user's IME
-    // composition through our owned listeners.
-    let ime_textarea = document
-        .create_element("textarea")
-        .map_err(|e| {
-            JsValue::from_str(&format!(
-                "mount: could not create hidden IME textarea: {:?}",
-                e
-            ))
-        })?
-        .dyn_into::<HtmlElement>()
-        .map_err(|_| JsValue::from_str("mount: textarea is not HtmlElement"))?;
-    ime_textarea.set_attribute(
-        "style",
-        "position:fixed;left:-9999px;top:0;width:1px;height:1px;\
-         opacity:0;pointer-events:none;",
-    )?;
-    ime_textarea.set_attribute("aria-hidden", "true")?;
-    ime_textarea.set_attribute("tabindex", "-1")?;
-    let body = document
-        .body()
-        .ok_or_else(|| JsValue::from_str("mount: document.body unavailable"))?;
-    body.append_child(&ime_textarea)?;
-    // Best-effort focus — focus() returns Err if the document is not
-    // visible yet (e.g. tab in background), but the listener
-    // registration still works once the user gives the page focus.
-    let _ = ime_textarea.focus();
+    // Hidden IME composition target (codex Phase C stop-hook fix) —
+    // builder + rationale live in `ime_target.rs` (extracted to keep
+    // this file under the 800-line cap when the a11y wiring landed).
+    let ime_textarea = ime_target::create_hidden_ime_textarea(&document)?;
 
     let mut listeners: Vec<Listener> = Vec::new();
     // Keyboard events still go on window (the user expects shortcuts
@@ -535,11 +434,27 @@ pub fn mount(canvas_id: &str) -> Result<WebShell, JsValue> {
                         // `inner` borrow dropped here before the codegen drain,
                         // which re-borrows `inner` inside `start_codegen`.
                     }
-                    // A Code-panel Generate / Regenerate click raised a pending
-                    // flag during `apply_press`; launch the codegen run now that
-                    // the borrow is released.
+                    // A Code-panel Generate / Regenerate / Cancel click raised a
+                    // pending flag during `apply_press`; launch (or abort) the
+                    // codegen run now that the borrow is released.
                     #[cfg(feature = "codegen")]
-                    drain_pending_codegen(&inner_md);
+                    codegen_web::drain_codegen_flags(&inner_md);
+                    // File-menu / export-dialog / figma-modal / shape-picker /
+                    // fill-image presses raise `pending_file_action`; consume it
+                    // the same borrow-released way (the handlers re-borrow
+                    // `inner` for serialization / pickers / repaint).
+                    #[cfg(feature = "codegen")]
+                    dom_io::drain_pending_file_action(&inner_md);
+                    // Chat Send / Stop / New Chat presses raise their
+                    // `chat.pending_*` flags during `apply_press`; launch /
+                    // abort the streaming turn now that the borrow is released.
+                    #[cfg(feature = "codegen")]
+                    web_chat::drain_chat_flags(&inner_md);
+                    // An icon-picker Load-more press raised the remote
+                    // Iconify search request; fire the browser fetch
+                    // chain now that the borrow is released.
+                    #[cfg(feature = "codegen")]
+                    iconify_web::drain_iconify_request(&inner_md);
                 },
             )?;
         }
@@ -642,6 +557,15 @@ pub fn mount(canvas_id: &str) -> Result<WebShell, JsValue> {
                 listeners,
                 move |evt: KeyboardEvent| {
                     use op_editor_core::ReorderDirection;
+                    // Ignore keystrokes that are part of an in-flight IME
+                    // composition — the hidden textarea's composition
+                    // events own them, and the committed string lands
+                    // through `apply_ime` on compositionend. Without this
+                    // guard CJK input would inject the raw latin
+                    // keystrokes AND the commit (double input).
+                    if evt.is_composing() {
+                        return;
+                    }
                     let mut inner = inner_kt.borrow_mut();
                     let key = evt.key();
                     let is_mod = evt.meta_key() || evt.ctrl_key();
@@ -704,13 +628,28 @@ pub fn mount(canvas_id: &str) -> Result<WebShell, JsValue> {
                             consumed = inner.host.apply_cut();
                         }
                         "v" if is_mod && !shift => {
-                            consumed = inner.host.apply_paste();
+                            // With the codegen browser-IO build the DOM `paste`
+                            // listener owns Cmd+V (system Figma-HTML first, then
+                            // the focused text input, then the internal node
+                            // clipboard — mirroring the native priority); also
+                            // consuming it here would double-paste. Plain skia
+                            // builds keep the internal node clipboard binding.
+                            #[cfg(not(feature = "codegen"))]
+                            {
+                                consumed = inner.host.apply_paste();
+                            }
                         }
                         "z" if is_mod && !shift => {
                             consumed = inner.host.apply_undo();
                         }
                         "Z" if is_mod && shift => {
                             consumed = inner.host.apply_redo();
+                        }
+                        // Cmd+Shift+K — toggle the UIKit browser (TS
+                        // `editor-layout.tsx`). With Shift held the
+                        // W3C `key` is uppercase.
+                        "k" | "K" if is_mod && shift => {
+                            consumed = inner.host.apply_toggle_component_browser();
                         }
                         "y" if is_mod && !shift => {
                             consumed = inner.host.apply_redo();
@@ -739,9 +678,34 @@ pub fn mount(canvas_id: &str) -> Result<WebShell, JsValue> {
                         evt.prevent_default();
                         let _ = inner.repaint();
                     }
+                    // Release the borrow before the chat drain below —
+                    // `drain_chat_flags` re-borrows `inner` (and the rAF pump
+                    // it starts borrows it again on later frames).
+                    drop(inner);
+                    // Enter routed through `apply_send` raised
+                    // `chat.pending_send` (begin_send); launch the streaming
+                    // turn now that the borrow is released.
+                    #[cfg(feature = "codegen")]
+                    web_chat::drain_chat_flags(&inner_kt);
                 },
             )?;
         }
+
+        // ----- browser file IO: DOM paste + file drag-drop -----
+        // Clipboard paste (Figma HTML / plain text / internal node
+        // clipboard) on the window; dragover / dragleave / drop on the
+        // canvas (drives the painted `file_drop_active` overlay and
+        // routes dropped .op/.pen/.fig/image files through the same
+        // ingestion the file menu uses).
+        #[cfg(feature = "codegen")]
+        dom_io::register_io_listeners(&inner, &canvas, &win_target, listeners)?;
+
+        // ----- hidden accessibility DOM mirror (#58) -----
+        // Mounts the sr-only landmark layer + registers its button
+        // listeners into the shared vec. The layer lands on
+        // `Inner.a11y` BEFORE its listeners register, so the unwind
+        // below tears it down on a mid-registration failure.
+        a11y::wire(&document, &canvas, &inner, listeners)?;
 
         Ok(())
     })(&mut listeners);
@@ -758,32 +722,36 @@ pub fn mount(canvas_id: &str) -> Result<WebShell, JsValue> {
                 .target
                 .remove_event_listener_with_callback(l.name, l.closure.as_ref().unchecked_ref());
         }
+        if let Some(layer) = inner.borrow_mut().a11y.take() {
+            layer.unmount();
+        }
         ime_textarea.remove();
         return Err(e);
     }
 
-    // Opt-in live-canvas sync: poll the web-canvas daemon so external MCP/CLI
-    // edits repaint this browser canvas. The `on_response` closure (skia side)
-    // owns the `WebSyncClient` and applies a newer document via the shell; the
-    // pure web_sys polling lives in `live_sync`. Default daemon origin/cadence.
+    // Start the a11y mirror's coarse sync pump (see `a11y.rs` for the
+    // cadence rationale). Best-effort — a missing window leaves the
+    // hidden layer refreshing only on its own button activations.
+    let a11y_pump = a11y::start_pump(&inner);
+
+    // Model discovery: ask the daemon for its model catalog once so the chat
+    // model picker lists real models. Async + best-effort — a missing daemon
+    // leaves the catalog empty and chat sends use the "default" model.
+    #[cfg(feature = "codegen")]
+    web_chat::fetch_models(&inner);
+
+    // Bidirectional live-canvas sync: pull external MCP/CLI document writes
+    // into this canvas (version probe + fetch/apply) AND push local edits +
+    // selection back to the daemon. See `live_sync_glue` for the TS
+    // `use-mcp-sync.ts` parity notes + documented transport divergences.
     #[cfg(feature = "live-sync")]
-    {
-        let sync = std::rc::Rc::new(std::cell::RefCell::new(
-            op_editor_core::web_sync::WebSyncClient::new(),
-        ));
-        let inner_for_sync = inner.clone();
-        let on_response: std::rc::Rc<dyn Fn(String)> = std::rc::Rc::new(move |text: String| {
-            inner_for_sync
-                .borrow_mut()
-                .apply_sync_body(&text, &mut sync.borrow_mut());
-        });
-        let _ = live_sync::start("http://127.0.0.1:3100", 400, on_response);
-    }
+    live_sync_glue::start(&inner);
 
     Ok(WebShell {
         inner,
         listeners,
         ime_target: ime_textarea,
+        a11y_pump,
     })
 }
 
