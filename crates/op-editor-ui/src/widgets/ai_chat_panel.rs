@@ -585,13 +585,9 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
             self.theme.muted_foreground,
             1.4,
         );
-<<<<<<< HEAD
-        model_x += 18.0;
         // Concurrency chip — `Zap` + `{n}x`. A solo 1x team rests as a
         // faint ghost; a staffed team (>1) gets a primary-tinted chip so
         // the parallel mode reads as active.
-=======
->>>>>>> 926f84b6 (feat(editor-ui): canvas + panel widget batch for TS parity)
         let chip = footer.agent_team;
         let team_size = self.state.agent_team_size;
         let team_active = team_size > 1;
@@ -782,13 +778,10 @@ pub(crate) fn to_jian_color(c: Color) -> jian_core::scene::Color {
 #[cfg(test)]
 #[path = "ai_chat_panel/tests.rs"]
 mod tests;
-<<<<<<< HEAD
 #[cfg(test)]
 #[path = "ai_chat_panel/tests_paint.rs"]
 mod tests_paint;
-=======
 
 #[cfg(test)]
 #[path = "ai_chat_panel/tests_transcript.rs"]
 mod tests_transcript;
->>>>>>> 926f84b6 (feat(editor-ui): canvas + panel widget batch for TS parity)
