@@ -1,54 +1,75 @@
 //! Subprocess CLI bridge — spawns an external CLI binary
-//! (Claude Code / Gemini / Copilot) and bridges its stdio into the
+//! (Claude Code / Codex / Gemini) and bridges its stdio into the
 //! shell-core `ChatProvider` shape.
 //!
-//! Per-CLI wire protocol (single-shot mode — multi-turn via
-//! `--resume <session>` lands in a follow-up):
+//! Per-CLI wire protocol (single-shot mode; multi-turn context rides
+//! the history digest — see below):
 //!
 //! - **Claude Code (`claude`)** — invoked as
 //!   `claude --print --verbose --output-format stream-json -- <prompt>`.
 //!   Prompt is a positional argv after `--`. Stdin closes immediately.
-//!   Stdout is line-delimited JSON; we recognize Claude's
-//!   `system` / `assistant` / `result` shapes alongside the generic
-//!   `text` / `thinking` / `tool_use` / `done` / `error` envelope.
-//!   Flag set follows bartolli/anthropic-agent-sdk + Claude Code's
-//!   own documented headless mode (CLAUDE_CODE_ENTRYPOINT env var,
-//!   `--verbose` for full stream-json detail).
-//! - **Gemini CLI (`gemini`)** — `gemini --quiet`; prompt via stdin
-//!   (gemini reads piped stdin as the message).
-//! - **GitHub Copilot CLI (`gh-copilot`)** — `gh-copilot suggest`;
-//!   prompt via stdin.
-//! - **Codex CLI (`codex`)** — `codex exec --json`; prompt as a
-//!   positional argv after `--`.
+//!   Stdout is line-delimited JSON parsed by the generic envelope
+//!   parser ([`parse_line`]). The routed chat path uses the SDK
+//!   adapter (`chat_claude.rs`); this template is the fallback.
+//! - **Codex (`codex`)** — `codex exec --json --skip-git-repo-check
+//!   --sandbox read-only [--model <id>] [--config
+//!   model_reasoning_effort=<level>] -` with the prompt piped via
+//!   stdin (TS parity: `codex-client.ts` uses the `-` stdin prompt on
+//!   all platforms to dodge Windows shell-escaping + argv length
+//!   limits). Child env is allowlist-filtered
+//!   ([`chat_subprocess_quirks::codex_child_env`]); stderr is captured
+//!   for the TS error extraction (`extractCodexCliError`).
+//!   Divergence from TS (documented): TS buffers the whole turn and
+//!   reads `--output-last-message`; Rust streams `item.completed`
+//!   agent messages live — same final text, no temp file.
+//! - **Gemini CLI (`gemini`)** — `gemini -o stream-json
+//!   --approval-mode plan [-m <id>] -p ' '` with the prompt piped via
+//!   stdin (TS parity: `gemini-client.ts::streamGeminiExec`; the
+//!   `-p ' '` marker is the TS quirk — Gemini appends the `-p` value
+//!   after stdin content). Lines parse via
+//!   [`chat_subprocess_quirks::parse_gemini_stream_line`]; child env
+//!   is allowlist-filtered.
+//! - **GitHub Copilot** — no subprocess template. The routed path is
+//!   the official SDK (`chat_copilot.rs`); the old `gh-copilot
+//!   suggest` fallback was stale (the `gh` extension was retired in
+//!   favor of the standalone `copilot` CLI) so `for_cli` now refuses
+//!   instead of shipping a dead argv.
+//! - **OpenCode** — served by the HTTP-server transport
+//!   (`chat_http_server.rs`), not a stdio subprocess.
 //!
-//! Stdout is read line-by-line; recognized structured shapes mapped
-//! to `ChatDelta`; unrecognized lines surface as raw `TextDelta` so
-//! plain-stdout CLIs still produce visible output. On stdout EOF the
-//! bridge reaps the child + interprets exit status — non-zero exit
-//! surfaces as `Error + Done { Aborted }` (codex BLOCK 4 / 5). On
-//! receiver drop the bridge `child.start_kill()` so the user can
-//! navigate away without leaking processes.
+//! Codex / Gemini parse-misses are skipped silently (TS parity — TS
+//! drops unparsed lines); generic custom binaries degrade unparsed
+//! lines to raw `TextDelta` so plain-stdout CLIs still show output.
+//! On stdout EOF the bridge reaps the child + interprets exit status —
+//! non-zero exit surfaces as `Error + Done { Aborted }` (codex BLOCK
+//! 4 / 5), with Codex stderr routed through the TS error extractor.
+//! Codex / Gemini turns also carry the TS 15-minute wall clock
+//! (`<CLI> request timed out after 900s.`). On receiver drop the
+//! bridge `child.start_kill()` so the user can navigate away without
+//! leaking processes.
 //!
 //! Binary lookup falls back through PATH then per-platform default
-//! install paths (npm / yarn / bun globals) — see `find_binary`.
+//! install paths (npm / yarn / bun globals) — see
+//! `chat_spawn::find_binary`.
 
-use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 
 use op_ai::chat_provider::{
-    ChatDelta, ChatProvider, ChatRequest, CliName, EffortLevel, StopReason,
+    ChatDelta, ChatProvider, ChatRequest, CliName, EffortLevel, StopReason, ThinkingMode,
 };
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use tokio::process::Command;
 use tokio::sync::mpsc;
 
 use crate::chat_runtime::{prompt_with_system_prompt, shared_runtime, BlockingRecvIter};
+use crate::chat_spawn::{build_command, exit_status_label, find_binary};
+use crate::chat_subprocess_quirks as quirks;
 
 /// How the user's prompt reaches the CLI. Claude Code's `--print`
 /// mode requires the prompt as a positional argv after `--` and
-/// closes stdin immediately. Gemini / Copilot read the message off
-/// piped stdin. Generic `with_binary` callers can pick either via
-/// [`SubprocessProvider::with_binary_mode`].
+/// closes stdin immediately. Codex (`-` prompt arg) and Gemini read
+/// the message off piped stdin. Generic `with_binary` callers can
+/// pick either via [`SubprocessProvider::with_binary_mode`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PromptMode {
     /// Append `-- <prompt>` to argv; stdin gets closed (no input).
@@ -58,178 +79,12 @@ pub enum PromptMode {
     Stdin,
 }
 
-/// Search for `name` on PATH, then in well-known per-platform install
-/// locations for Node-based CLIs (npm / pnpm / yarn / bun globals,
-/// nvm, volta). Returns the resolved absolute path, or `name` itself
-/// as a fallback so `build_command` can still attempt a bare-name
-/// spawn (errors surface as a normal spawn-failure `ChatDelta::Error`).
-///
-/// Cross-platform: each branch only probes paths that exist on that
-/// OS so we don't pay for filesystem-stat misses on the wrong OS.
-fn find_binary(name: &str) -> String {
-    // PATH-relative entries first (cross-platform).
-    if let Ok(path_env) = std::env::var("PATH") {
-        let sep = if cfg!(windows) { ';' } else { ':' };
-        for dir in path_env.split(sep).filter(|s| !s.is_empty()) {
-            let candidate = std::path::Path::new(dir).join(name);
-            if candidate.is_file() {
-                return candidate.to_string_lossy().into();
-            }
-            // Windows: PATHEXT-style suffix probe so we find
-            // `claude.cmd` / `claude.exe` / `claude.bat` even when the
-            // user typed the bare name.
-            #[cfg(windows)]
-            {
-                for ext in &[".exe", ".cmd", ".bat", ".ps1"] {
-                    let mut with_ext = candidate.clone();
-                    with_ext.set_extension(&ext[1..]);
-                    if with_ext.is_file() {
-                        return with_ext.to_string_lossy().into();
-                    }
-                }
-            }
-        }
-    }
-    // Fall back through well-known install locations. Mirrors
-    // bartolli/anthropic-agent-sdk's `find_cli` for parity with the
-    // reference implementation.
-    let candidates = well_known_install_paths(name);
-    for path in candidates {
-        if path.is_file() {
-            return path.to_string_lossy().into();
-        }
-    }
-    name.into()
-}
+/// TS `DEFAULT_CODEX_TIMEOUT_MS` / `DEFAULT_GEMINI_TIMEOUT_MS` —
+/// both reference clients cap a turn at 15 minutes then SIGTERM.
+const CLI_TURN_TIMEOUT: Duration = Duration::from_secs(15 * 60);
 
-fn well_known_install_paths(name: &str) -> Vec<PathBuf> {
-    let home = dirs::home_dir();
-    let mut out: Vec<PathBuf> = Vec::new();
-    #[cfg(unix)]
-    {
-        if let Some(h) = home.clone() {
-            out.push(h.join(".npm-global/bin").join(name));
-            out.push(h.join(".local/bin").join(name));
-            out.push(h.join(".bun/bin").join(name));
-            out.push(h.join(".volta/bin").join(name));
-            out.push(h.join("node_modules/.bin").join(name));
-            out.push(h.join(".yarn/bin").join(name));
-        }
-        out.push(PathBuf::from("/usr/local/bin").join(name));
-        out.push(PathBuf::from("/opt/homebrew/bin").join(name));
-    }
-    #[cfg(windows)]
-    {
-        let _ = home; // not used directly on Windows
-        if let Ok(appdata) = std::env::var("APPDATA") {
-            for ext in &["cmd", "exe", "bat", "ps1"] {
-                out.push(
-                    PathBuf::from(&appdata)
-                        .join("npm")
-                        .join(format!("{name}.{ext}")),
-                );
-            }
-        }
-        if let Ok(localapp) = std::env::var("LOCALAPPDATA") {
-            for ext in &["cmd", "exe", "bat", "ps1"] {
-                out.push(
-                    PathBuf::from(&localapp)
-                        .join("Programs")
-                        .join(name)
-                        .join(format!("{name}.{ext}")),
-                );
-            }
-        }
-    }
-    out
-}
-
-/// Build a `tokio::process::Command` that spawns `binary` with `args`.
-/// Handles the three desktop platforms identically wherever possible,
-/// and papers over the well-known cross-platform binary-lookup gaps:
-///
-/// - **macOS / Linux**: a bare command name resolves via the usual
-///   PATH execvp lookup. We forward straight to `Command::new`.
-/// - **Windows**: Win32 `CreateProcessW` does **not** honor PATHEXT,
-///   so a bare `claude` only spawns when an exact `claude` (no
-///   extension) is on PATH. npm / bun / Volta / scoop / winget all
-///   ship Node-based CLIs as `claude.cmd` / `claude.bat` / `claude.ps1`
-///   shims. To make those work we route through `cmd /c <binary>`
-///   when the binary doesn't already look like a fully-resolved path
-///   ending in `.exe`. The binary names we ship from `for_cli` are
-///   hardcoded constants (no user-controlled metacharacters) so this
-///   is safe from shell injection. Users passing a custom binary via
-///   `with_binary` are responsible for not embedding shell payload.
-///
-/// On every platform stdin / stdout / stderr are piped, and the child
-/// is detached from any controlling terminal (`process_group(0)` on
-/// Unix so Ctrl-C in the OP terminal doesn't kill the CLI; on Windows
-/// `creation_flags(CREATE_NO_WINDOW)` so spawning the CLI doesn't
-/// pop a console window for users running the GUI build).
-fn build_command(binary: &str, args: &[String]) -> Command {
-    #[cfg(windows)]
-    {
-        // CREATE_NO_WINDOW from winbase.h — keeps the console hidden
-        // when OpenPencil launches from a non-console parent (e.g.,
-        // double-click on the .exe from Explorer).
-        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-        let bare = std::path::Path::new(binary);
-        let has_path_sep = bare
-            .parent()
-            .map(|p| !p.as_os_str().is_empty())
-            .unwrap_or(false);
-        let looks_like_exe = bare
-            .extension()
-            .and_then(|e| e.to_str())
-            .map(|e| e.eq_ignore_ascii_case("exe"))
-            .unwrap_or(false);
-        if has_path_sep || looks_like_exe {
-            let mut cmd = Command::new(binary);
-            cmd.args(args);
-            cmd.creation_flags(CREATE_NO_WINDOW);
-            cmd
-        } else {
-            // Route through `cmd /c` so PATHEXT (.cmd / .bat / .ps1)
-            // expansion kicks in. /c runs the command and exits.
-            let mut cmd = Command::new("cmd");
-            cmd.arg("/c").arg(binary).args(args);
-            cmd.creation_flags(CREATE_NO_WINDOW);
-            cmd
-        }
-    }
-    #[cfg(not(windows))]
-    {
-        let mut cmd = Command::new(binary);
-        cmd.args(args);
-        // process_group(0) puts the child in its own group so signals
-        // sent to OP's pgroup (e.g., Ctrl-C in the terminal that
-        // launched the GUI) don't propagate to the CLI mid-stream.
-        // The chat bridge has its own kill-on-receiver-drop path, so
-        // we never depend on signal propagation for cleanup.
-        #[cfg(unix)]
-        {
-            cmd.process_group(0);
-        }
-        cmd
-    }
-}
-
-/// Stringify an `ExitStatus` for chat error reporting. Cross-platform:
-/// on Unix `.code()` is `None` when killed by signal — show the signal
-/// number instead; on Windows `.code()` is always populated.
-fn exit_status_label(status: &std::process::ExitStatus) -> String {
-    if let Some(code) = status.code() {
-        return code.to_string();
-    }
-    #[cfg(unix)]
-    {
-        use std::os::unix::process::ExitStatusExt;
-        if let Some(sig) = status.signal() {
-            return format!("signal {sig}");
-        }
-    }
-    "?".into()
-}
+/// Cap on the retained Codex stderr tail used for error extraction.
+const STDERR_TAIL_CAP: usize = 64 * 1024;
 
 /// `ChatProvider` impl that bridges to a CLI binary via stdio.
 /// Construct via [`SubprocessProvider::for_cli`] or
@@ -239,24 +94,42 @@ pub struct SubprocessProvider {
     args: Vec<String>,
     label: String,
     prompt_mode: PromptMode,
+    /// Argv flag that selects a model for this CLI (`--model` for
+    /// Codex, `-m` for Gemini — both verified against the TS
+    /// reference clients). `None` = the transport has no model
+    /// selector; `ChatRequest::model` is ignored and the CLI keeps
+    /// its own default.
+    model_flag: Option<&'static str>,
+    /// True when the CLI accepts Codex's native reasoning knob
+    /// (`--config model_reasoning_effort=<level>`). When set, the
+    /// thinking + effort knobs ride that flag instead of the in-band
+    /// directive line (TS parity: `codex-client.ts` never prepends a
+    /// prose directive).
+    native_effort_config: bool,
+    /// Trailing argv appended after the per-turn flags — Codex's `-`
+    /// stdin marker, Gemini's `-p ' '` marker. TS keeps the same
+    /// flag-then-marker order (`codex-client.ts` / `gemini-client.ts`).
+    tail_args: Vec<String>,
+    /// Which known CLI this provider bridges (drives per-CLI env
+    /// filtering, line parsing, stderr capture, and timeout quirks).
+    /// `None` for custom `with_binary` providers — generic behavior.
+    cli: Option<CliName>,
 }
 
 impl SubprocessProvider {
     /// Build a subprocess provider for a known [`CliName`]. Each CLI
-    /// has its own argv template + prompt-routing mode:
-    ///
-    /// - **Claude Code**: `--print --verbose --output-format
-    ///   stream-json`; prompt as positional argv after `--`. Stdin
-    ///   stays closed. Matches `bartolli/anthropic-agent-sdk`
-    ///   reference and Claude Code's own documented headless mode.
-    /// - **Gemini**: `--quiet`; prompt via stdin.
-    /// - **Copilot**: `suggest`; prompt via stdin.
-    /// - **Codex**: `exec --json`; prompt as positional argv.
-    ///
-    /// Returns `None` for OpenCode, whose server protocol is still
-    /// not verified.
+    /// has its own argv template + prompt-routing mode (see module
+    /// docs). Returns `None` for OpenCode (HTTP-server transport
+    /// in `chat_http_server.rs`) and Copilot (official SDK transport
+    /// in `chat_copilot.rs`) — neither has a stdio wire.
     pub fn for_cli(cli: CliName) -> Option<Self> {
-        let (args, prompt_mode): (Vec<String>, PromptMode) = match cli {
+        // Per-CLI model selector (third tuple slot): Codex takes
+        // `--model <id>` and Gemini `-m <id>` — matching the TS
+        // reference (`codex-client.ts` / `gemini-client.ts`). Claude
+        // Code's model rides the SDK adapter (`chat_claude.rs`), so
+        // its subprocess template carries no flag here.
+        type Template = (Vec<String>, PromptMode, Option<&'static str>, Vec<String>);
+        let (args, prompt_mode, model_flag, tail_args): Template = match cli {
             CliName::ClaudeCode => (
                 vec![
                     "--print".into(),
@@ -265,20 +138,46 @@ impl SubprocessProvider {
                     "stream-json".into(),
                 ],
                 PromptMode::PositionalArg,
+                None,
+                Vec::new(),
             ),
-            CliName::Gemini => (vec!["--quiet".into()], PromptMode::Stdin),
-            CliName::Copilot => (vec!["suggest".into()], PromptMode::Stdin),
+            // TS `gemini-client.ts::streamGeminiExec` argv order:
+            // `-o stream-json --approval-mode plan [-m model] -p ' '`,
+            // prompt via stdin.
+            CliName::Gemini => (
+                vec![
+                    "-o".into(),
+                    "stream-json".into(),
+                    "--approval-mode".into(),
+                    "plan".into(),
+                ],
+                PromptMode::Stdin,
+                Some("-m"),
+                vec!["-p".into(), " ".into()],
+            ),
+            // TS `codex-client.ts` argv: `exec --json
+            // --skip-git-repo-check --sandbox read-only [--model]
+            // [--config model_reasoning_effort=…] -` with the prompt
+            // piped via stdin (the `-` marker). `--output-last-message`
+            // is intentionally not ported — Rust streams the agent
+            // message instead of re-reading it from a temp file.
             CliName::Codex => (
                 vec![
                     "exec".into(),
+                    "--json".into(),
+                    "--skip-git-repo-check".into(),
                     "--sandbox".into(),
                     "read-only".into(),
-                    "--skip-git-repo-check".into(),
-                    "--json".into(),
                 ],
-                PromptMode::PositionalArg,
+                PromptMode::Stdin,
+                Some("--model"),
+                vec!["-".into()],
             ),
-            CliName::OpenCode => return None,
+            // Copilot's routed transport is the official SDK
+            // (`chat_copilot.rs`); the old `gh-copilot suggest`
+            // template was a stale dead end. OpenCode chats over its
+            // local HTTP server (`chat_http_server.rs`).
+            CliName::Copilot | CliName::OpenCode => return None,
         };
         let binary = find_binary(cli.default_binary());
         Some(Self {
@@ -286,6 +185,11 @@ impl SubprocessProvider {
             args,
             label: cli.label().into(),
             prompt_mode,
+            model_flag,
+            // Only Codex has the native reasoning-effort config knob.
+            native_effort_config: cli == CliName::Codex,
+            tail_args,
+            cli: Some(cli),
         })
     }
 
@@ -316,7 +220,52 @@ impl SubprocessProvider {
             args,
             label: label.into(),
             prompt_mode,
+            // Custom binaries carry no known model / effort flags;
+            // the request's model is ignored (CLI default applies).
+            model_flag: None,
+            native_effort_config: false,
+            tail_args: Vec::new(),
+            cli: None,
         }
+    }
+
+    /// Argv for one turn: the configured base args plus the model
+    /// selector and (Codex) the native reasoning-effort config when
+    /// the request carries them, then the trailing prompt marker
+    /// (`-` / `-p ' '`). Empty / blank model ids emit no flag at all —
+    /// the CLI keeps its own default.
+    fn turn_args(&self, request: &ChatRequest) -> Vec<String> {
+        let mut args = self.args.clone();
+        if let (Some(flag), Some(model)) = (self.model_flag, request.model_id()) {
+            args.push(flag.into());
+            args.push(model.into());
+        }
+        if self.native_effort_config {
+            if let Some(level) = codex_reasoning_effort(request.thinking, request.effort) {
+                args.push("--config".into());
+                args.push(format!("model_reasoning_effort={level}"));
+            }
+        }
+        args.extend(self.tail_args.iter().cloned());
+        args
+    }
+}
+
+/// Map the per-turn thinking + effort knobs onto Codex's
+/// `model_reasoning_effort` config value. Mirrors TS
+/// `codex-client.ts::resolveCodexEffort`: disabled thinking forces
+/// `low`; `max` folds to Codex's top tier `high`; otherwise the
+/// effort token passes through. The defaulted pair (`Adaptive` +
+/// `Low`) emits no flag so an untouched panel keeps the CLI's own
+/// default — same convention as the in-band directive path.
+fn codex_reasoning_effort(thinking: ThinkingMode, effort: EffortLevel) -> Option<&'static str> {
+    if thinking == ThinkingMode::Disabled {
+        return Some("low");
+    }
+    match (thinking, effort) {
+        (ThinkingMode::Adaptive, EffortLevel::Low) => None,
+        (_, EffortLevel::Max) => Some("high"),
+        (_, e) => Some(e.as_str()),
     }
 }
 
@@ -325,12 +274,11 @@ impl SubprocessProvider {
 /// can substitute a malicious binary; runtime-library paths
 /// (NODE_OPTIONS, PYTHONPATH, etc.) can inject code into Node-based
 /// CLIs. Mirrors bartolli/anthropic-agent-sdk's `DANGEROUS_ENV_VARS`.
-/// Today we don't accept user-supplied env vars from the settings
-/// modal; the constant + scrub is here so the moment we do, the
-/// dangerous-var check is already in place. Returns the env-var
-/// pairs the child will receive (parent env minus the dangerous
-/// names — preserving every safe var so node version managers like
-/// nvm / volta still pick the right Node).
+/// Used for Claude Code + custom binaries; Codex / Gemini get the
+/// stricter TS allowlists (`chat_subprocess_quirks`). Returns the
+/// env-var pairs the child will receive (parent env minus the
+/// dangerous names — preserving every safe var so node version
+/// managers like nvm / volta still pick the right Node).
 fn scrubbed_child_env() -> Vec<(String, String)> {
     const DANGEROUS: &[&str] = &[
         "LD_PRELOAD",
@@ -354,12 +302,14 @@ impl ChatProvider for SubprocessProvider {
 
     fn send(&self, request: ChatRequest) -> Box<dyn Iterator<Item = ChatDelta> + Send> {
         let binary = self.binary.clone();
-        // Build the effective prompt. None of claude `--print` /
-        // gemini / copilot `suggest` expose a portable reasoning
-        // flag, so the thinking + effort knobs travel in-band as a
-        // leading directive line; staged attachments are appended as
-        // `[attached …: <path>]` lines the CLI can read by path. The
-        // guard removes the temp files when the worker task ends.
+        let cli = self.cli;
+        // Build the effective prompt. Neither claude `--print` nor
+        // gemini exposes a portable reasoning flag, so the thinking +
+        // effort knobs travel in-band as a leading directive line
+        // (documented beyond-TS-baseline behavior); staged attachments
+        // are appended as `[attached …: <path>]` lines the CLI can
+        // read by path. The guard removes the temp files when the
+        // worker task ends.
         let (mut prompt, guard) = match crate::chat_attachment::prompt_with_attachments(
             &request.user_message,
             &request.attachments,
@@ -367,24 +317,49 @@ impl ChatProvider for SubprocessProvider {
             Ok(pair) => pair,
             Err(e) => return crate::chat_attachment::attachment_error_turn(e),
         };
-        let mut directive = String::new();
-        if let Some(d) = crate::chat_attachment::thinking_directive(request.thinking) {
-            directive.push_str(d);
-        }
-        if request.effort != EffortLevel::Low {
-            if !directive.is_empty() {
-                directive.push(' ');
+        // CLIs with the native reasoning knob (Codex) get the knobs
+        // as `--config model_reasoning_effort=…` via `turn_args`
+        // instead of the in-band directive — sending both would
+        // double-signal (TS `codex-client.ts` only uses the flag).
+        if !self.native_effort_config {
+            let mut directive = String::new();
+            if let Some(d) = crate::chat_attachment::thinking_directive(request.thinking) {
+                directive.push_str(d);
             }
-            directive.push_str(&format!(
-                "Apply {} reasoning effort.",
-                request.effort.as_str()
-            ));
+            if request.effort != EffortLevel::Low {
+                if !directive.is_empty() {
+                    directive.push(' ');
+                }
+                directive.push_str(&format!(
+                    "Apply {} reasoning effort.",
+                    request.effort.as_str()
+                ));
+            }
+            if !directive.is_empty() {
+                prompt = format!("{directive}\n\n{prompt}");
+            }
         }
-        if !directive.is_empty() {
-            prompt = format!("{directive}\n\n{prompt}");
+        // Single-shot CLI wire: each send spawns a fresh process, so a
+        // compact transcript digest carries cross-turn context in-band
+        // (TS parity baseline is system prompt + last message; the
+        // digest is the documented beyond-baseline extra).
+        let digest = op_ai::chat_history::history_digest(
+            &request.history,
+            op_ai::chat_history::DEFAULT_DIGEST_CHARS,
+        );
+        if !digest.is_empty() {
+            prompt = format!("{digest}\n\n{prompt}");
         }
-        prompt = prompt_with_system_prompt(&request.system_prompt, prompt);
-        let mut args_with_prompt = self.args.clone();
+        // System-prompt framing: Codex + Gemini mirror the TS
+        // GUIDELINES / TASK `buildPrompt` byte-for-byte; everything
+        // else keeps the generic `system\n\n---\n\nprompt` join.
+        prompt = match cli {
+            Some(CliName::Codex) | Some(CliName::Gemini) => {
+                quirks::guidelines_task_prompt(&request.system_prompt, &prompt)
+            }
+            _ => prompt_with_system_prompt(&request.system_prompt, prompt),
+        };
+        let mut args_with_prompt = self.turn_args(&request);
         // PromptMode::PositionalArg: append `-- <prompt>` so the CLI
         // picks up the message as a CLI argument (Claude Code mode).
         // PromptMode::Stdin (default): leave argv untouched; the
@@ -395,7 +370,18 @@ impl ChatProvider for SubprocessProvider {
         }
         let args = Arc::new(args_with_prompt);
         let prompt_mode = self.prompt_mode;
-        let env_pairs = scrubbed_child_env();
+        // Per-CLI child env: Codex / Gemini use the TS allowlists so
+        // unrelated secrets never reach the CLI; Claude Code + custom
+        // binaries keep the scrub-the-dangerous-vars policy.
+        let env_pairs = match cli {
+            Some(CliName::Codex) => quirks::codex_child_env(),
+            Some(CliName::Gemini) => quirks::gemini_child_env(),
+            _ => scrubbed_child_env(),
+        };
+        // TS runs Codex / Gemini under a 15-minute wall clock.
+        let turn_timeout =
+            matches!(cli, Some(CliName::Codex) | Some(CliName::Gemini)).then_some(CLI_TURN_TIMEOUT);
+        let label = self.label.clone();
         let (tx, rx) = mpsc::channel::<ChatDelta>(64);
         shared_runtime().spawn(async move {
             // Keep staged attachment temp files alive for the turn.
@@ -404,9 +390,7 @@ impl ChatProvider for SubprocessProvider {
             cmd.stdin(std::process::Stdio::piped())
                 .stdout(std::process::Stdio::piped())
                 .stderr(std::process::Stdio::piped());
-            // Set the child's env from the scrubbed parent env so
-            // dangerous interposition vars (LD_PRELOAD / NODE_OPTIONS
-            // / DYLD_INSERT_LIBRARIES / ...) never propagate. We
+            // Set the child's env from the per-CLI policy. We
             // env_clear first because tokio::process Command
             // otherwise inherits the parent env verbatim.
             cmd.env_clear();
@@ -426,14 +410,28 @@ impl ChatProvider for SubprocessProvider {
                 }
             };
 
-            // Drain stderr to /dev/null on a sibling task so the CLI
-            // never deadlocks on a full stderr pipe (codex BLOCK 1).
-            // Future work could route it into a status-bar notice
-            // channel; today we just keep the pipe drained.
+            // Drain stderr on a sibling task so the CLI never
+            // deadlocks on a full stderr pipe (codex BLOCK 1). Codex
+            // keeps a bounded tail for the TS error extraction
+            // (`extractCodexCliError`); other CLIs discard it (TS
+            // parity: gemini stream path discards stderr).
+            let stderr_tail: Arc<std::sync::Mutex<String>> = Arc::default();
             if let Some(stderr) = child.stderr.take() {
+                let capture = (cli == Some(CliName::Codex)).then(|| Arc::clone(&stderr_tail));
                 tokio::spawn(async move {
                     let mut lines = BufReader::new(stderr).lines();
-                    while let Ok(Some(_)) = lines.next_line().await {}
+                    while let Ok(Some(line)) = lines.next_line().await {
+                        if let Some(tail) = &capture {
+                            if let Ok(mut buf) = tail.lock() {
+                                buf.push_str(&line);
+                                buf.push('\n');
+                                if buf.len() > STDERR_TAIL_CAP {
+                                    let cut = buf.len() - STDERR_TAIL_CAP;
+                                    buf.drain(..cut);
+                                }
+                            }
+                        }
+                    }
                 });
             }
 
@@ -478,9 +476,13 @@ impl ChatProvider for SubprocessProvider {
                 }
             };
 
+            let deadline = tokio::time::Instant::now()
+                + turn_timeout.unwrap_or(Duration::from_secs(60 * 60 * 24 * 365));
             let mut lines = BufReader::new(stdout).lines();
             let mut emitted_done = false;
             let mut terminal_error = false;
+            let mut emitted_text = false;
+            let mut emitted_error = false;
             loop {
                 // Race the line read against channel closure so the
                 // bridge notices an idle receiver-drop without
@@ -494,9 +496,66 @@ impl ChatProvider for SubprocessProvider {
                         let _ = child.start_kill();
                         break;
                     }
+                    // TS wall clock: SIGTERM + "request timed out"
+                    // (codex-client.ts / gemini-client.ts reject text).
+                    _ = tokio::time::sleep_until(deadline), if turn_timeout.is_some() => {
+                        let secs = turn_timeout.map(|d| d.as_secs()).unwrap_or_default();
+                        let _ = tx
+                            .send(ChatDelta::Error(format!(
+                                "{label} request timed out after {secs}s."
+                            )))
+                            .await;
+                        let _ = tx
+                            .send(ChatDelta::Done {
+                                stop_reason: StopReason::Aborted,
+                            })
+                            .await;
+                        terminal_error = true;
+                        let _ = child.start_kill();
+                        break;
+                    }
                     result = lines.next_line() => match result {
                         Ok(Some(line)) => {
-                            let delta = parse_line(&line);
+                            // Per-CLI parse: Codex / Gemini skip
+                            // unparsed lines (TS parity); generic
+                            // CLIs degrade them to raw text.
+                            let delta = match cli {
+                                Some(CliName::Codex) => quirks::parse_codex_line(&line),
+                                Some(CliName::Gemini) => quirks::parse_gemini_stream_line(&line),
+                                _ => Some(parse_line(&line)),
+                            };
+                            let Some(delta) = delta else { continue };
+                            match &delta {
+                                ChatDelta::TextDelta(_) => emitted_text = true,
+                                ChatDelta::Error(_) => emitted_error = true,
+                                _ => {}
+                            }
+                            // TS `runCodexExec`: a turn that completes
+                            // with no text and no errors is an explicit
+                            // failure ("Codex returned no output."), not
+                            // a silent empty bubble. Codex signals turn
+                            // end in-stream (`turn.completed`), so the
+                            // check rides the Done conversion here; the
+                            // post-EOF branch below covers streams that
+                            // end without a turn event.
+                            let delta = match delta {
+                                ChatDelta::Done { .. }
+                                    if cli == Some(CliName::Codex)
+                                        && !emitted_text
+                                        && !emitted_error =>
+                                {
+                                    emitted_error = true;
+                                    let _ = tx
+                                        .send(ChatDelta::Error(
+                                            "Codex returned no output.".into(),
+                                        ))
+                                        .await;
+                                    ChatDelta::Done {
+                                        stop_reason: StopReason::Aborted,
+                                    }
+                                }
+                                other => other,
+                            };
                             let is_done = matches!(delta, ChatDelta::Done { .. });
                             if tx.send(delta).await.is_err() {
                                 let _ = child.start_kill();
@@ -529,17 +588,48 @@ impl ChatProvider for SubprocessProvider {
 
             // Reap the child + interpret exit status (codex BLOCK 4):
             // non-zero exit with no prior Done surfaces as Error +
-            // Aborted instead of an unrelated `EndTurn`.
+            // Aborted instead of an unrelated `EndTurn`. Codex routes
+            // stderr through the TS extractor and surfaces the TS
+            // "returned no output" error on an empty success.
             let status = child.wait().await.ok();
             if !emitted_done && !terminal_error {
                 let nonzero = status.as_ref().map(|s| !s.success()).unwrap_or(false);
                 if nonzero {
-                    let label = status
-                        .as_ref()
-                        .map(exit_status_label)
-                        .unwrap_or_else(|| "?".into());
+                    // A live-streamed Error already explained the
+                    // failure — don't stack a second message on it
+                    // (TS surfaces exactly one error per turn).
+                    if !emitted_error {
+                        let msg = if cli == Some(CliName::Codex) {
+                            let tail = stderr_tail
+                                .lock()
+                                .map(|buf| buf.clone())
+                                .unwrap_or_default();
+                            quirks::extract_codex_cli_error(&tail).unwrap_or_else(|| {
+                                let code = status
+                                    .as_ref()
+                                    .map(exit_status_label)
+                                    .unwrap_or_else(|| "unknown".into());
+                                format!("Codex exited with code {code}.")
+                            })
+                        } else {
+                            let code = status
+                                .as_ref()
+                                .map(exit_status_label)
+                                .unwrap_or_else(|| "?".into());
+                            format!("CLI exited with status {code}")
+                        };
+                        let _ = tx.send(ChatDelta::Error(msg)).await;
+                    }
                     let _ = tx
-                        .send(ChatDelta::Error(format!("CLI exited with status {label}")))
+                        .send(ChatDelta::Done {
+                            stop_reason: StopReason::Aborted,
+                        })
+                        .await;
+                } else if cli == Some(CliName::Codex) && !emitted_text && !emitted_error {
+                    // TS `runCodexExec`: empty final text + no errors
+                    // = explicit failure, not a silent empty bubble.
+                    let _ = tx
+                        .send(ChatDelta::Error("Codex returned no output.".into()))
                         .await;
                     let _ = tx
                         .send(ChatDelta::Done {
@@ -559,15 +649,18 @@ impl ChatProvider for SubprocessProvider {
     }
 }
 
-/// Parse a single CLI stdout line into a `ChatDelta`. Recognized
-/// shapes documented in module header; everything else degrades to a
-/// raw text delta carrying the line + a trailing newline.
+/// Parse a single CLI stdout line into a `ChatDelta` — the generic
+/// envelope for Claude Code subprocess mode + custom binaries.
+/// Recognized shapes documented in module header; everything else
+/// degrades to a raw text delta carrying the line + a trailing
+/// newline. Codex / Gemini use their own TS-parity parsers in
+/// `chat_subprocess_quirks` (which skip instead of degrade).
 pub(crate) fn parse_line(line: &str) -> ChatDelta {
     let trimmed = line.trim_start();
     if !trimmed.starts_with('{') {
         // Not JSON — surface as raw text so CLIs that just stream
-        // plain stdout (e.g., `gh copilot suggest`) still produce a
-        // visible response in the chat panel.
+        // plain stdout still produce a visible response in the chat
+        // panel.
         let mut s = line.to_string();
         s.push('\n');
         return ChatDelta::TextDelta(s);

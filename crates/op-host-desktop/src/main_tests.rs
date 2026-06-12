@@ -36,6 +36,18 @@ fn cursor_redraw_still_paints_when_layer_hover_changes() {
 }
 
 #[test]
+fn variable_row_input_keeps_resume_time_redraws_active() {
+    let mut app = DesktopApp::new(None);
+    app.host.set_now_ms(240);
+    app.host.editor_state_mut().editor_ui.variable_row_focus =
+        Some(op_editor_core::editor_ui_state::VariableRowFocus::Name(0));
+    app.host.editor_state_mut().ui.property_caret_anchor_ms = 240;
+
+    assert!(app.resume_time_needs_redraw());
+    assert_eq!(app.host.next_animation_deadline_ms(), Some(740));
+}
+
+#[test]
 fn fresh_app_fits_blank_frame_like_ts_canvas_init() {
     let app = DesktopApp::new(None);
     let v = app.host.editor_state().viewport;

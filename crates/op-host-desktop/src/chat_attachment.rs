@@ -4,10 +4,12 @@
 //! The chat panel stages `ChatAttachment`s (raw bytes) on
 //! `ChatState::pending_attachments`; this module bridges them onto
 //! the wire each provider expects:
-//!  - SDK providers (Claude) take inline base64 image blocks —
-//!    [`attachment_to_base64`].
+//!  - HTTP transports (OpenCode data-URL parts, builtin body fields)
+//!    take base64 — [`attachment_to_base64`].
 //!  - CLI subprocesses take file *paths*, so attachments spill to
 //!    temp files that [`TempGuard`] removes once the turn ends.
+//!  - Claude Code gets the TS guided Read-tool flow —
+//!    [`claude_image_prompt`] + [`strip_no_tools_restriction`].
 
 use std::fs;
 use std::io;
@@ -152,6 +154,69 @@ pub fn prompt_with_attachments(
     Ok((prompt, Some(guard)))
 }
 
+/// Build the Claude Code image-turn prompt — TS parity with
+/// `chat.ts:268-282`: each image attachment spills to a temp file and
+/// contributes one guided Read-tool instruction line; an empty user
+/// message falls back to the TS default instruction. Non-image
+/// attachments (which TS never stages) keep the `[attached file:]`
+/// line shape from [`prompt_with_attachments`].
+pub fn claude_image_prompt(
+    user_message: &str,
+    attachments: &[ChatAttachment],
+) -> io::Result<(String, Option<TempGuard>)> {
+    if attachments.is_empty() {
+        return Ok((user_message.to_string(), None));
+    }
+    let guard = write_temp_attachments(attachments)?;
+    let refs = attachments
+        .iter()
+        .zip(guard.paths())
+        .map(|(att, path)| {
+            if att.is_image() {
+                format!(
+                    "First, use the Read tool to read the image file at \"{}\". \
+                     Then analyze it and respond to the user.",
+                    path.display()
+                )
+            } else {
+                format!("[attached file: {}]", path.display())
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let base = if user_message.is_empty() {
+        "Describe what you see in the image."
+    } else {
+        user_message
+    };
+    Ok((format!("{refs}\n\n{base}"), Some(guard)))
+}
+
+/// TS `stripNoToolsRestriction` (`chat.ts:223-225`): blank out any
+/// line carrying a "NEVER use tools"-style instruction (the image
+/// flow needs Claude Code's Read tool), then collapse 3+ consecutive
+/// newlines to two — the literal JS
+/// `.replace(/^.*NEVER use tools.*$/gim, '').replace(/\n{3,}/g, '\n\n')`.
+pub fn strip_no_tools_restriction(system_prompt: &str) -> String {
+    let blanked = system_prompt
+        .lines()
+        .map(|line| {
+            // JS `i` flag — case-insensitive match anywhere in the line.
+            if line.to_lowercase().contains("never use tools") {
+                ""
+            } else {
+                line
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let mut out = blanked;
+    while out.contains("\n\n\n") {
+        out = out.replace("\n\n\n", "\n\n");
+    }
+    out
+}
+
 /// Build a one-shot provider iterator that reports an attachment
 /// staging failure and ends the turn. Providers call this when
 /// `prompt_with_attachments` fails — surfacing the error beats
@@ -272,6 +337,46 @@ mod tests {
         assert_eq!(guard.paths().len(), 1);
         // The appended path is the real temp file.
         assert!(guard.paths()[0].exists());
+    }
+
+    #[test]
+    fn claude_image_prompt_builds_guided_read_flow() {
+        let atts = vec![img("shot.png", b"x")];
+        let (prompt, guard) = claude_image_prompt("what's in this?", &atts).unwrap();
+        assert!(
+            prompt.starts_with("First, use the Read tool to read the image file at \""),
+            "got: {prompt}"
+        );
+        assert!(prompt.contains("Then analyze it and respond to the user."));
+        assert!(prompt.ends_with("\n\nwhat's in this?"));
+        assert!(guard.is_some());
+    }
+
+    #[test]
+    fn claude_image_prompt_defaults_empty_message_to_describe() {
+        // TS: `prompt || 'Describe what you see in the image.'`.
+        let atts = vec![img("shot.png", b"x")];
+        let (prompt, _guard) = claude_image_prompt("", &atts).unwrap();
+        assert!(prompt.ends_with("\n\nDescribe what you see in the image."));
+    }
+
+    #[test]
+    fn claude_image_prompt_without_attachments_is_passthrough() {
+        let (prompt, guard) = claude_image_prompt("hello", &[]).unwrap();
+        assert_eq!(prompt, "hello");
+        assert!(guard.is_none());
+    }
+
+    #[test]
+    fn strip_no_tools_restriction_blanks_lines_and_collapses_newlines() {
+        let system = "You are helpful.\nNEVER use tools for any reason.\nBe concise.";
+        let stripped = strip_no_tools_restriction(system);
+        assert_eq!(stripped, "You are helpful.\n\nBe concise.");
+        // Case-insensitive (JS `i` flag) + 3+-newline collapse.
+        let system = "A\nnever USE tools.\n\nB";
+        assert_eq!(strip_no_tools_restriction(system), "A\n\nB");
+        // No restriction → unchanged.
+        assert_eq!(strip_no_tools_restriction("plain"), "plain");
     }
 
     #[test]

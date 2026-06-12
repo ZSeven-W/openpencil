@@ -59,11 +59,21 @@ fn parse_line_codex_turn_completed() {
 
 #[test]
 fn for_cli_constructs_codex_exec_provider() {
-    let provider = SubprocessProvider::for_cli(CliName::Codex);
-    assert!(
-        provider.is_some(),
-        "Codex CLI should be wired through exec --json"
+    // TS codex-client.ts argv: exec --json --skip-git-repo-check
+    // --sandbox read-only … - (prompt via stdin).
+    let provider = SubprocessProvider::for_cli(CliName::Codex).expect("codex wired");
+    assert_eq!(
+        provider.args,
+        vec![
+            "exec",
+            "--json",
+            "--skip-git-repo-check",
+            "--sandbox",
+            "read-only"
+        ]
     );
+    assert_eq!(provider.prompt_mode, PromptMode::Stdin);
+    assert_eq!(provider.tail_args, vec!["-"]);
 }
 
 #[test]
@@ -125,18 +135,154 @@ fn for_cli_uses_default_binary_per_cli_name() {
         gemini.binary
     );
     assert_eq!(gemini.prompt_mode, PromptMode::Stdin);
-    let copilot = SubprocessProvider::for_cli(CliName::Copilot).unwrap();
-    assert!(
-        copilot.binary.ends_with("gh-copilot"),
-        "binary={}",
-        copilot.binary
+    // TS gemini-client.ts streamGeminiExec argv: `-o stream-json
+    // --approval-mode plan … -p ' '` (prompt via stdin).
+    assert_eq!(
+        gemini.args,
+        vec!["-o", "stream-json", "--approval-mode", "plan"]
     );
-    assert_eq!(copilot.prompt_mode, PromptMode::Stdin);
+    assert_eq!(gemini.tail_args, vec!["-p", " "]);
 }
 
 #[test]
-fn for_cli_rejects_opencode() {
+fn for_cli_rejects_opencode_and_copilot() {
+    // OpenCode chats over its HTTP server (chat_http_server.rs);
+    // Copilot's routed transport is the official SDK
+    // (chat_copilot.rs) — the old `gh-copilot suggest` argv was a
+    // stale dead end, so the subprocess bridge refuses both.
     assert!(SubprocessProvider::for_cli(CliName::OpenCode).is_none());
+    assert!(SubprocessProvider::for_cli(CliName::Copilot).is_none());
+}
+
+/// `ChatRequest` carrying only a model selection (knobs defaulted).
+fn request_with_model(model: Option<&str>) -> ChatRequest {
+    ChatRequest {
+        model: model.map(str::to_string),
+        ..Default::default()
+    }
+}
+
+#[test]
+fn codex_turn_args_append_model_flag_when_selected() {
+    let p = SubprocessProvider::for_cli(CliName::Codex).unwrap();
+    let args = p.turn_args(&request_with_model(Some("gpt-5.5")));
+    let pos = args
+        .iter()
+        .position(|a| a == "--model")
+        .expect("--model flag present");
+    assert_eq!(args[pos + 1], "gpt-5.5");
+    // Model flags come after the base template so the exec subcommand
+    // shape is untouched; the `-` stdin marker stays last (TS order).
+    assert_eq!(args[0], "exec");
+    assert_eq!(args.last().map(String::as_str), Some("-"));
+}
+
+#[test]
+fn codex_turn_args_omit_model_flag_when_unset_or_blank() {
+    let p = SubprocessProvider::for_cli(CliName::Codex).unwrap();
+    // None → CLI default model, no flag.
+    let args = p.turn_args(&request_with_model(None));
+    assert!(!args.iter().any(|a| a == "--model"), "args={args:?}");
+    // Blank → treated as unset; never emit a bare `--model`.
+    let args = p.turn_args(&request_with_model(Some("   ")));
+    assert!(!args.iter().any(|a| a == "--model"), "args={args:?}");
+}
+
+#[test]
+fn codex_turn_args_map_effort_to_reasoning_config() {
+    let p = SubprocessProvider::for_cli(CliName::Codex).unwrap();
+    // Defaulted knobs (Adaptive + Low) emit no config — the CLI
+    // keeps its own default reasoning effort.
+    let args = p.turn_args(&ChatRequest::default());
+    assert!(!args.iter().any(|a| a == "--config"), "args={args:?}");
+    // High passes through; Max folds to Codex's top tier "high";
+    // disabled thinking forces "low" (TS resolveCodexEffort parity).
+    let cases = [
+        (ThinkingMode::Adaptive, EffortLevel::High, "high"),
+        (ThinkingMode::Adaptive, EffortLevel::Max, "high"),
+        (ThinkingMode::Adaptive, EffortLevel::Medium, "medium"),
+        (ThinkingMode::Disabled, EffortLevel::Max, "low"),
+        (ThinkingMode::Enabled, EffortLevel::Low, "low"),
+    ];
+    for (thinking, effort, expected) in cases {
+        let args = p.turn_args(&ChatRequest {
+            thinking,
+            effort,
+            ..Default::default()
+        });
+        let pos = args
+            .iter()
+            .position(|a| a == "--config")
+            .unwrap_or_else(|| panic!("--config missing for {thinking:?}/{effort:?}: {args:?}"));
+        assert_eq!(args[pos + 1], format!("model_reasoning_effort={expected}"));
+    }
+}
+
+#[test]
+fn gemini_turn_args_append_m_flag_when_selected() {
+    let p = SubprocessProvider::for_cli(CliName::Gemini).unwrap();
+    let args = p.turn_args(&request_with_model(Some("gemini-2.5-pro")));
+    let pos = args
+        .iter()
+        .position(|a| a == "-m")
+        .expect("-m flag present");
+    assert_eq!(args[pos + 1], "gemini-2.5-pro");
+    // Gemini has no native effort knob — never a --config arg.
+    assert!(!args.iter().any(|a| a == "--config"));
+    // The `-p ' '` stdin marker trails the model flag (TS order).
+    assert_eq!(args[args.len() - 2], "-p");
+    assert_eq!(args[args.len() - 1], " ");
+}
+
+#[test]
+fn gemini_turn_args_omit_m_flag_when_unset() {
+    let p = SubprocessProvider::for_cli(CliName::Gemini).unwrap();
+    let args = p.turn_args(&request_with_model(None));
+    assert!(!args.iter().any(|a| a == "-m"), "args={args:?}");
+}
+
+#[test]
+fn claude_subprocess_template_ignores_model() {
+    // Claude Code's model rides the SDK adapter (chat_claude.rs); its
+    // subprocess template must not grow a model flag here.
+    let p = SubprocessProvider::for_cli(CliName::ClaudeCode).unwrap();
+    let base = p.args.clone();
+    let args = p.turn_args(&request_with_model(Some("some-model")));
+    assert_eq!(args, base, "Claude Code args must be unchanged");
+}
+
+#[test]
+fn with_binary_provider_ignores_model() {
+    // Custom binaries have no known model flag; the selection is
+    // dropped rather than guessed.
+    let p = SubprocessProvider::with_binary("custom-cli", vec!["run".into()], "custom");
+    let args = p.turn_args(&request_with_model(Some("m1")));
+    assert_eq!(args, vec!["run".to_string()]);
+}
+
+#[test]
+fn codex_reasoning_effort_table_matches_ts_resolver() {
+    // TS codex-client.ts::resolveCodexEffort parity.
+    assert_eq!(
+        codex_reasoning_effort(ThinkingMode::Disabled, EffortLevel::High),
+        Some("low")
+    );
+    assert_eq!(
+        codex_reasoning_effort(ThinkingMode::Adaptive, EffortLevel::Max),
+        Some("high")
+    );
+    assert_eq!(
+        codex_reasoning_effort(ThinkingMode::Adaptive, EffortLevel::Medium),
+        Some("medium")
+    );
+    assert_eq!(
+        codex_reasoning_effort(ThinkingMode::Enabled, EffortLevel::Low),
+        Some("low")
+    );
+    assert_eq!(
+        codex_reasoning_effort(ThinkingMode::Adaptive, EffortLevel::Low),
+        None
+    );
 }
 
 #[test]

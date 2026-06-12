@@ -13,10 +13,12 @@ use winit::event::{
     ElementState, KeyEvent, MouseButton, MouseScrollDelta, StartCause, WindowEvent,
 };
 use winit::event_loop::{ActiveEventLoop, ControlFlow};
+use winit::keyboard::{Key, NamedKey};
 use winit::window::{Window, WindowId};
 
 impl ApplicationHandler<DesktopEvent> for DesktopApp {
     fn new_events(&mut self, event_loop: &ActiveEventLoop, cause: StartCause) {
+        self.refresh_host_clock();
         // Live MCP requests must not wait for `RedrawRequested`. Window systems
         // may throttle redraws while a window is occluded or while a previous
         // paint is expensive, but CLI/MCP snapshot/apply acks should still be
@@ -33,8 +35,7 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
         // (caret blink, streaming chat, imports, background jobs). Live MCP uses
         // `DesktopEvent::McpWake`, so an idle server no longer creates timer
         // ticks just to poll for possible requests.
-        if matches!(cause, StartCause::ResumeTimeReached { .. }) && self.resume_time_needs_redraw()
-        {
+        if self.timed_wake_needs_redraw(&cause) && self.resume_time_needs_redraw() {
             self.request_redraw(true);
         }
         // Native-menu selections arrive on `muda`'s global channel.
@@ -304,8 +305,7 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
         // `apply_backspace` etc. stamp `caret_anchor_ms` with the
         // CURRENT timestamp, not the one captured at the previous
         // RedrawRequested.
-        let now_ms = self.clock_start.elapsed().as_millis() as u64;
-        self.host.set_now_ms(now_ms);
+        self.refresh_host_clock();
         // CursorMoved never changes persisted prefs — skip snapshot
         // on the trackpad hot path.
         let settings_before = match &event {
@@ -458,6 +458,16 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
                 if chat_session::pump(&mut self.host, &mut self.current_chat) {
                     self.redraw_dirty = true;
                 }
+                // Drain a pending Cancel from the Code panel FIRST so a
+                // canceled run is flagged before launch (a same-frame
+                // Regenerate replaces it) and before pump (its remaining
+                // deltas are dropped, never resurrecting the panel).
+                if codegen_session::drain_codegen_cancel_request(
+                    &mut self.host,
+                    &mut self.current_codegen,
+                ) {
+                    self.redraw_dirty = true;
+                }
                 // Launch a pending Generate / Regenerate from the Code
                 // panel, then pump the in-flight codegen pipeline's
                 // progress into `editor_state.codegen` this frame.
@@ -486,6 +496,10 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
                 // the imported document + clears the loading overlay
                 // flag. Rebinds Git + window title on success
                 // (matches the prior synchronous path's outcome).
+                // Drain a finished Figma CLIPBOARD paste decode.
+                if self.pump_figma_clipboard_paste() {
+                    self.redraw_dirty = true;
+                }
                 match figma_import_session::pump(
                     &mut self.host,
                     &mut self.current_figma_import,
@@ -522,11 +536,32 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
                     self.host.mark_editor_state_dirty();
                     self.redraw_dirty = true;
                 }
+                // Property-panel image section: asset check + Search /
+                // Generate popover jobs.
+                if self.image_panel.pump(&mut self.host, &self.current_path) {
+                    self.redraw_dirty = true;
+                }
+                // Drain paint-recorded remote image misses → spawn
+                // fetches; store landed bytes into the painter's
+                // shared cache so this frame (or the next) draws them.
+                if self.remote_images.pump() {
+                    self.redraw_dirty = true;
+                }
                 // Drain background model discovery once it lands.
                 if self.model_probe.poll_into(&mut self.host) {
                     self.redraw_dirty = true;
                 }
+                // #20 theme presets — persist the app-level preset
+                // list when a save / delete / rename marked it dirty.
+                crate::theme_preset_host::persist_if_dirty(self.host.editor_state_mut());
                 if self.drain_iconify_picker() {
+                    self.redraw_dirty = true;
+                }
+                // Drain the connect-time provider probe (Settings →
+                // Agents → Connect) — spawn requested probes, land
+                // finished ones into agent_settings + the model
+                // catalog.
+                if self.drain_provider_connect() {
                     self.redraw_dirty = true;
                 }
                 // Drain the background auto-update probe.
@@ -592,6 +627,7 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
                 }
                 let should_paint = self.prepare_redraw();
                 if should_paint {
+                    self.refresh_host_clock();
                     if let (Some(ctx), Some(backend)) = (self.ctx.as_mut(), self.backend.as_mut()) {
                         frame::paint(
                             ctx,
@@ -615,7 +651,8 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
                     event_loop.set_control_flow(ControlFlow::WaitUntil(
                         Instant::now() + Duration::from_millis(33),
                     ));
-                } else if self.current_figma_import.is_some() {
+                } else if self.current_figma_import.is_some() || self.pending_figma_paste.is_some()
+                {
                     event_loop.set_control_flow(ControlFlow::WaitUntil(
                         Instant::now() + Duration::from_millis(100),
                     ));
@@ -625,10 +662,17 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
                 } else if self.update_probe.is_pending()
                     || self.model_probe.is_pending()
                     || self.image_search.is_pending()
+                    || self.image_panel.is_pending()
+                    // Remote-image fetches in flight, or fresh misses
+                    // the paint above just recorded (the next pump
+                    // picks them up).
+                    || self.remote_images.is_pending()
+                    || op_editor_ui::widgets::canvas_viewport_image::has_pending_remote_image_requests()
                     || self
                         .iconify_job
                         .as_ref()
                         .is_some_and(crate::iconify_host::IconifyJob::is_pending)
+                    || self.provider_connect_pending()
                     || self
                         .git_pull_job
                         .as_ref()
@@ -827,6 +871,12 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
                 if chat_attachment::drain_attachment_pick(&mut self.host) {
                     self.request_redraw(true);
                 }
+                // #20 theme presets — drain the preset dropdown's
+                // pending `.optheme` import / export (blocking rfd
+                // dialog, like `persistence::run_action` below).
+                if crate::theme_preset_host::drain_preset_io(&mut self.host) {
+                    self.request_redraw(true);
+                }
                 if let Some(action) = self
                     .host
                     .editor_state_mut()
@@ -898,6 +948,35 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
                 }
             }
             WindowEvent::MouseInput {
+                state: ElementState::Pressed,
+                button: MouseButton::Middle,
+                ..
+            } => {
+                if self.drain_pending_cursor_move() {
+                    self.redraw_dirty = true;
+                }
+                // Middle-button drag pans regardless of the active
+                // tool (TS parity: e.button === 1 starts a pan).
+                if self.host.apply_pan_press(self.cursor_x, self.cursor_y) {
+                    self.request_redraw(true);
+                }
+            }
+            WindowEvent::MouseInput {
+                state: ElementState::Released,
+                button: MouseButton::Middle,
+                ..
+            } => {
+                if self.drain_pending_cursor_move() {
+                    self.redraw_dirty = true;
+                }
+                let consumed = self
+                    .host
+                    .apply_release_with_viewport(self.viewport_width, self.viewport_height);
+                if consumed {
+                    self.request_redraw(true);
+                }
+            }
+            WindowEvent::MouseInput {
                 state: ElementState::Released,
                 button: MouseButton::Left,
                 ..
@@ -963,17 +1042,44 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
                     self.request_redraw(true);
                 }
             }
-            // CJK composition: macOS / X11 / Wayland route the committed
-            // candidate string through here. We don't paint the preedit
-            // yet; only the final commit is pushed into the focused input.
-            WindowEvent::Ime(winit::event::Ime::Commit(text)) => {
-                let mut consumed = false;
-                for ch in text.chars() {
-                    if self.host.apply_text(ch) {
-                        consumed = true;
+            // CJK composition: preedit updates paint through the
+            // shared overlay (host.apply_ime_preedit) and the OS
+            // candidate window anchors to the focused input via
+            // set_ime_cursor_area; the committed candidate lands
+            // through apply_ime_commit -> apply_text.
+            WindowEvent::Ime(winit::event::Ime::Preedit(text, cursor)) => {
+                let cursor = cursor.map(|(a, b)| (a, b));
+                if self.host.apply_ime_preedit(&text, cursor) {
+                    if let Some(rect) = self
+                        .host
+                        .ime_anchor_rect(self.viewport_width, self.viewport_height)
+                    {
+                        if let Some(window) = self.window.as_ref() {
+                            let dpi = window.scale_factor();
+                            window.set_ime_cursor_area(
+                                winit::dpi::PhysicalPosition::new(
+                                    (rect.origin.x as f64) * dpi,
+                                    ((rect.origin.y + rect.size.y) as f64) * dpi,
+                                ),
+                                winit::dpi::PhysicalSize::new(
+                                    (rect.size.x as f64) * dpi,
+                                    (rect.size.y as f64) * dpi,
+                                ),
+                            );
+                        }
                     }
+                    self.request_redraw(true);
                 }
-                if consumed {
+            }
+            WindowEvent::Ime(winit::event::Ime::Commit(text)) => {
+                if self.host.apply_ime_commit(&text) {
+                    self.request_redraw(true);
+                }
+            }
+            WindowEvent::Ime(winit::event::Ime::Disabled) => {
+                // Focus left the IME-capable surface mid-composition —
+                // drop the preedit so the bubble doesn't linger.
+                if self.host.apply_ime_preedit("", None) {
                     self.request_redraw(true);
                 }
             }
@@ -986,6 +1092,19 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
                 // mouse press can branch on shift+click for
                 // multi-select.
                 self.host.set_modifier_shift(self.shift_modifier);
+            }
+            WindowEvent::KeyboardInput {
+                event:
+                    KeyEvent {
+                        state: ElementState::Released,
+                        logical_key: Key::Named(NamedKey::Space),
+                        ..
+                    },
+                ..
+            } => {
+                // End transient space-pan (the press side lives in
+                // `keyboard_input.rs`).
+                self.host.set_space_pan(false);
             }
             WindowEvent::KeyboardInput {
                 event:
@@ -1025,6 +1144,8 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
         {
             self.request_redraw(true);
         }
+        // Component-Browser kit Import / Export + uikits.json flush.
+        self.drain_kit_io();
     }
 
     fn exiting(&mut self, _event_loop: &ActiveEventLoop) {
@@ -1066,19 +1187,38 @@ fn render_surface_not_ready(err: &SharedSkiaError) -> bool {
 }
 
 impl DesktopApp {
-    fn resume_time_needs_redraw(&self) -> bool {
+    fn refresh_host_clock(&mut self) {
+        let now_ms = self.clock_start.elapsed().as_millis() as u64;
+        self.host.set_now_ms(now_ms);
+    }
+
+    fn timed_wake_needs_redraw(&self, cause: &StartCause) -> bool {
+        match cause {
+            StartCause::ResumeTimeReached { .. } => true,
+            StartCause::WaitCancelled {
+                requested_resume: Some(deadline),
+                ..
+            } => Instant::now() >= *deadline,
+            _ => false,
+        }
+    }
+
+    pub(crate) fn resume_time_needs_redraw(&self) -> bool {
         self.current_chat.is_some()
             || self.current_design.is_some()
             || self.current_codegen.is_some()
             || self.current_figma_import.is_some()
+            || self.pending_figma_paste.is_some()
             || self.host.next_animation_deadline_ms().is_some()
             || self.update_probe.is_pending()
             || self.model_probe.is_pending()
             || self.image_search.is_pending()
+            || self.image_panel.is_pending()
             || self
                 .iconify_job
                 .as_ref()
                 .is_some_and(crate::iconify_host::IconifyJob::is_pending)
+            || self.provider_connect_pending()
             || self
                 .git_pull_job
                 .as_ref()

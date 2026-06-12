@@ -8,10 +8,12 @@
 //!
 //! This module ships the request-handling CORE (`handle_web_canvas_request`,
 //! fully unit-testable without a socket) plus a runnable loop
-//! (`run_web_canvas`, behind `openpencil-desktop --serve-web <port> [doc]`).
-//! The browser-coupled pieces — an SSE endpoint that streams `version` bumps to
-//! connected shells and static serving of the WASM bundle — layer on top and
-//! are verified against the running shell.
+//! (`run_web_canvas`, behind
+//! `openpencil-desktop --serve-web <port> [doc] [--host <addr>]`).
+//! Layered on top: an SSE endpoint that streams `version` bumps to connected
+//! shells, static serving of the host page + WASM bundle (`crate::web_static`
+//! — `GET /` and `GET /pkg/*`), and a token-authed `openpencil/shutdown`
+//! (same contract as `--mcp-http`) so `op stop` works against this daemon.
 
 use std::io::{Read, Write};
 use std::net::TcpListener;
@@ -129,6 +131,11 @@ pub(crate) struct WebReply {
 /// - `GET  /api/mcp/server`   → health `{ok:true,…}` (like `server.get.ts`)
 /// - `GET  /api/mcp/document` → `{document:<doc>,version}` (like `document.get.ts`)
 /// - `POST /api/mcp/document` → whole-doc replace → `{ok:true,version}` (like `document.post.ts`)
+/// - `GET  /api/mcp/version`  → `{version}` — Rust-only cheap change probe; the
+///   TS stack pushes documents over SSE instead, so it never needs one. The
+///   browser shell polls this and fetches the full document only on a bump.
+/// - `GET  /api/mcp/selection` → `{selectedIds,activePageId}` (like `selection.get.ts`)
+/// - `POST /api/mcp/selection` → renderer selection push (like `selection.post.ts`)
 /// - anything else → 404 (the JSON-RPC `/mcp` path + SSE are handled by the
 ///   caller's connection loop, not here).
 pub(crate) fn handle_web_canvas_request(
@@ -187,6 +194,39 @@ pub(crate) fn handle_web_canvas_request(
                 },
             }
         }
+        ("GET", "/api/mcp/version") => WebReply {
+            status: "200 OK",
+            body: format!(r#"{{"version":{}}}"#, state.version),
+        },
+        ("GET", "/api/mcp/selection") => {
+            // TS `selection.get.ts` → `getSyncSelection()` shape:
+            // `{selectedIds, activePageId}`. Read straight off the live
+            // editor selection so MCP clients and the REST route agree.
+            let ids: Vec<&str> = state
+                .editor
+                .selection
+                .set
+                .iter()
+                .map(|id| id.as_str())
+                .collect();
+            let active_page_id = state
+                .editor
+                .doc
+                .pages
+                .as_ref()
+                .and_then(|pages| pages.get(state.editor.ui.active_page_index))
+                .map(|page| page.id.clone());
+            let body = serde_json::json!({
+                "selectedIds": ids,
+                "activePageId": active_page_id,
+            });
+            WebReply {
+                status: "200 OK",
+                body: serde_json::to_string(&body)
+                    .unwrap_or_else(|_| r#"{"selectedIds":[],"activePageId":null}"#.to_string()),
+            }
+        }
+        ("POST", "/api/mcp/selection") => apply_selection_sync(body, state),
         ("GET", "/api/ai/models") => WebReply {
             // JSON array of model ids the AI proxy can serve (the
             // configured built-in agents). The web bundle queries this
@@ -204,26 +244,133 @@ pub(crate) fn handle_web_canvas_request(
     }
 }
 
-/// Run the web-canvas daemon on `127.0.0.1:port`, backed by the document at
-/// `path` (or an empty document when `None`). Serves the whole-document REST
-/// sync + health routes and falls through to the JSON-RPC `/mcp` tool dispatch
-/// (applied against the in-memory document). Blocks for the listener's lifetime.
-pub fn run_web_canvas(path: Option<PathBuf>, port: u16) -> Result<(), String> {
+/// Apply a renderer selection push (`POST /api/mcp/selection`) to the live
+/// editor state, mirroring TS `selection.post.ts` + `setSyncSelection`:
+/// `selectedIds` must be an array (else 400 with the TS error text); the ids
+/// are stored verbatim (TS does no validation — the browser's document is the
+/// same synced document, so its ids are normally live here too); a present,
+/// non-null `activePageId` switches the active page WHEN the id resolves
+/// (documented divergence: TS stores the raw string, Rust keeps a page index
+/// so an unknown id is ignored rather than stored). Selection is not part of
+/// the document, so no version bump / SSE broadcast happens (TS parity).
+fn apply_selection_sync(body: &str, state: &mut WebCanvasState) -> WebReply {
+    let parsed: Option<serde_json::Value> = serde_json::from_str(body).ok();
+    let Some(ids) = parsed
+        .as_ref()
+        .and_then(|v| v.get("selectedIds"))
+        .and_then(|v| v.as_array())
+    else {
+        return WebReply {
+            status: "400 Bad Request",
+            body: crate::mcp_serve::rest_error_body("Missing selectedIds array"),
+        };
+    };
+    let node_ids: Vec<op_editor_core::NodeId> = ids
+        .iter()
+        .filter_map(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+        .map(op_editor_core::NodeId::new)
+        .collect();
+    let editor = &mut state.editor;
+    editor.selection.anchor = node_ids
+        .last()
+        .cloned()
+        .unwrap_or(op_editor_core::NodeId::NONE);
+    editor.selection.set = node_ids;
+    if let Some(page_id) = parsed
+        .as_ref()
+        .and_then(|v| v.get("activePageId"))
+        .and_then(|v| v.as_str())
+    {
+        let index = editor
+            .doc
+            .pages
+            .as_ref()
+            .and_then(|pages| pages.iter().position(|p| p.id == page_id));
+        if let Some(index) = index {
+            let _ = editor.set_active_page(index);
+        }
+    }
+    WebReply {
+        status: "200 OK",
+        body: r#"{"ok":true}"#.to_string(),
+    }
+}
+
+/// Parse the argv tail of `--serve-web <port> [doc] [--host <addr>]` (the
+/// args after `--serve-web` itself). Pure, so the flag shape is unit-testable
+/// without spawning the binary. The host defaults to loopback; `--host
+/// 0.0.0.0` is the LAN/Docker opt-in (no TLS — deploy behind a proxy for
+/// anything beyond a trusted network).
+pub(crate) fn parse_serve_web_args<I: Iterator<Item = String>>(
+    mut args: I,
+) -> Result<(u16, Option<PathBuf>, String), String> {
+    let Some(port_arg) = args.next() else {
+        return Err("missing <port> arg".into());
+    };
+    let Ok(port) = port_arg.parse::<u16>() else {
+        return Err(format!("<port> must be a u16, got {port_arg:?}"));
+    };
+    let mut path: Option<PathBuf> = None;
+    let mut host = "127.0.0.1".to_string();
+    while let Some(arg) = args.next() {
+        if arg == "--host" {
+            host = args.next().ok_or("--host needs a value (e.g. 0.0.0.0)")?;
+        } else if let Some(value) = arg.strip_prefix("--host=") {
+            host = value.to_string();
+        } else if path.is_none() {
+            // The document path is optional — without it the daemon starts
+            // on an empty document (the web shell can then sync one in).
+            path = Some(PathBuf::from(arg));
+        } else {
+            return Err(format!("unexpected arg {arg:?}"));
+        }
+    }
+    if host.is_empty() {
+        return Err("--host must not be empty".into());
+    }
+    Ok((port, path, host))
+}
+
+/// Run the web-canvas daemon on `host:port` (default `127.0.0.1`), backed by
+/// the document at `path` (or an empty document when `None`). Serves the
+/// static host page + bundle, the whole-document REST sync + health routes,
+/// and falls through to the JSON-RPC `/mcp` tool dispatch (applied against
+/// the in-memory document). Blocks until a token-authed shutdown request.
+pub fn run_web_canvas(path: Option<PathBuf>, port: u16, host: &str) -> Result<(), String> {
     let editor = match path {
         Some(p) => crate::mcp_serve::load_editor_state(&p)?,
         None => EditorState::new(),
     };
-    let listener = TcpListener::bind(("127.0.0.1", port))
-        .map_err(|e| format!("bind 127.0.0.1:{port}: {e}"))?;
+    let listener =
+        TcpListener::bind((host, port)).map_err(|e| format!("bind {host}:{port}: {e}"))?;
     let bound = listener.local_addr().map(|a| a.port()).unwrap_or(port);
-    eprintln!("openpencil-desktop --serve-web: listening on 127.0.0.1:{bound}");
+    eprintln!("openpencil-desktop --serve-web: listening on {host}:{bound}");
+    match crate::web_static::resolve_bundle_dir() {
+        Some(dir) => eprintln!(
+            "openpencil-desktop --serve-web: serving web bundle from {}",
+            dir.display()
+        ),
+        None => eprintln!(
+            "openpencil-desktop --serve-web: no web bundle found — `/` serves build \
+             instructions (tools/check-wasm-bundle.sh, or set OPENPENCIL_WEB_BUNDLE_DIR)"
+        ),
+    }
     // Shared across connection threads: the document authority (one writer at a
     // time via the Mutex) + the SSE broadcast hub. Thread-per-connection so a
     // long-lived SSE stream (or a slow client) never blocks other clients.
     let state = Arc::new(Mutex::new(WebCanvasState::new(editor, bound)));
     let hub = Arc::new(SseHub::default());
     let conn_count = Arc::new(AtomicUsize::new(0));
+    // Raised by a connection thread that accepted a token-authed
+    // `openpencil/shutdown`; the accept loop checks it per iteration. The
+    // raiser also pokes the listener with a throwaway connection so a blocked
+    // `accept` wakes up and observes the flag.
+    let shutdown = Arc::new(std::sync::atomic::AtomicBool::new(false));
     for stream in listener.incoming() {
+        if shutdown.load(Ordering::Acquire) {
+            break;
+        }
         let mut s = match stream {
             Ok(s) => s,
             Err(e) => {
@@ -244,37 +391,63 @@ pub fn run_web_canvas(path: Option<PathBuf>, port: u16) -> Result<(), String> {
         let state = Arc::clone(&state);
         let hub = Arc::clone(&hub);
         let conns = Arc::clone(&conn_count);
+        let shutdown_flag = Arc::clone(&shutdown);
         let spawned = thread::Builder::new()
             .name("op-serve-web-conn".into())
             .spawn(move || {
                 let _conn_guard = ConnGuard(conns);
                 let _ = s.set_read_timeout(Some(IO_TIMEOUT));
                 let _ = s.set_write_timeout(Some(IO_TIMEOUT));
-                if let Err(e) = serve_one(&mut s, &state, &hub) {
-                    eprintln!("openpencil-desktop --serve-web: {e}");
+                match serve_one(&mut s, &state, &hub) {
+                    Ok(true) => {
+                        shutdown_flag.store(true, Ordering::Release);
+                        // Wake the (possibly blocked) accept loop. Loopback
+                        // reaches the listener for both the 127.0.0.1 and the
+                        // 0.0.0.0 binds.
+                        let _ = std::net::TcpStream::connect(("127.0.0.1", bound));
+                    }
+                    Ok(false) => {}
+                    Err(e) => eprintln!("openpencil-desktop --serve-web: {e}"),
                 }
             });
         if spawned.is_err() {
             conn_count.fetch_sub(1, Ordering::AcqRel);
         }
     }
+    eprintln!("openpencil-desktop --serve-web: shutdown requested; exiting");
     Ok(())
 }
 
-/// Handle one connection. Routes: SSE live-update stream (`GET
+/// Handle one connection. Routes: static host page + wasm bundle (`GET /`,
+/// `GET /pkg/*` via `crate::web_static`); SSE live-update stream (`GET
 /// /api/mcp/events`); REST whole-doc sync / health (`/api/*` via
 /// [`handle_web_canvas_request`]); else JSON-RPC `/mcp` tool dispatch. A
 /// mutation (REST POST or a mutating tool call) bumps the version and is
 /// broadcast to SSE subscribers. The state `Mutex` is held only across the
 /// in-memory operation, never across the (long-lived) SSE wait.
+///
+/// Returns `Ok(true)` when the client requested a token-authed graceful
+/// shutdown (same `openpencil/shutdown` contract as `--mcp-http`) — the
+/// caller then stops the accept loop so `op stop` never signals a pid.
 fn serve_one<S: Read + Write>(
     stream: &mut S,
     state: &Mutex<WebCanvasState>,
     hub: &SseHub,
-) -> Result<(), String> {
+) -> Result<bool, String> {
     let req = crate::mcp_serve::read_http_request(stream)?;
     if req.method == "OPTIONS" {
-        return crate::mcp_serve::write_mcp_http_response(stream, "204 No Content", "");
+        return crate::mcp_serve::write_mcp_http_response(stream, "204 No Content", "")
+            .map(|()| false);
+    }
+    // Static serving: the host page (`/`) and the wasm-bindgen bundle
+    // (`/pkg/*`). Owns only those paths — everything else falls through.
+    if req.method == "GET" {
+        let bundle_dir = crate::web_static::resolve_bundle_dir();
+        if let Some(reply) =
+            crate::web_static::handle_static_request(&req.path, bundle_dir.as_deref())
+        {
+            return crate::web_static::write_static_response(stream, &reply).map(|()| false);
+        }
     }
     // SSE live-update stream: the browser shell subscribes and re-syncs whenever
     // the document version advances. Subscribe BEFORE reading the current
@@ -283,7 +456,7 @@ fn serve_one<S: Read + Write>(
     if req.method == "GET" && req.path == "/api/mcp/events" {
         let rx = hub.subscribe();
         let current = state.lock().unwrap_or_else(|p| p.into_inner()).version;
-        return serve_sse(stream, rx, current);
+        return serve_sse(stream, rx, current).map(|()| false);
     }
     // AI proxy stream: the browser bundle POSTs a model request and we
     // stream the provider's `ChatDelta`s back as SSE. Streaming route
@@ -295,7 +468,8 @@ fn serve_one<S: Read + Write>(
     if req.method == "POST" && req.path == "/api/ai/stream" {
         let Some(ai_req) = crate::ai_proxy::parse_ai_stream_body(&req.body) else {
             return crate::ai_proxy::write_sse_error(stream, "invalid request body")
-                .map_err(|e| format!("ai stream error: {e}"));
+                .map_err(|e| format!("ai stream error: {e}"))
+                .map(|()| false);
         };
         let provider = {
             let guard = state.lock().unwrap_or_else(|p| p.into_inner());
@@ -303,10 +477,12 @@ fn serve_one<S: Read + Write>(
         };
         let Some(provider) = provider else {
             return crate::ai_proxy::write_sse_error(stream, "no model configured")
-                .map_err(|e| format!("ai stream error: {e}"));
+                .map_err(|e| format!("ai stream error: {e}"))
+                .map(|()| false);
         };
         return crate::ai_proxy::stream_ai_response(stream, ai_req, provider.as_ref())
-            .map_err(|e| format!("ai stream: {e}"));
+            .map_err(|e| format!("ai stream: {e}"))
+            .map(|()| false);
     }
     // All `/api/mcp/*` REST paths go to the REST handler — including ones this
     // daemon doesn't implement yet, which it answers with 404 rather than
@@ -326,7 +502,8 @@ fn serve_one<S: Read + Write>(
             }
             reply
         };
-        return crate::mcp_serve::write_mcp_http_response(stream, reply.status, &reply.body);
+        return crate::mcp_serve::write_mcp_http_response(stream, reply.status, &reply.body)
+            .map(|()| false);
     }
     // JSON-RPC tool dispatch is served ONLY as a POST to `/` or `/mcp`. An
     // unknown path is 404; a known path with the wrong method (e.g. `GET /mcp`)
@@ -336,15 +513,32 @@ fn serve_one<S: Read + Write>(
         return crate::mcp_serve::write_mcp_http_response(
             stream,
             "404 Not Found",
-            r#"{"ok":false,"error":"Not found. Use /api/mcp/document, /api/mcp/server, /api/mcp/events, or /mcp."}"#,
-        );
+            r#"{"ok":false,"error":"Not found. Use /, /pkg/*, /api/mcp/document, /api/mcp/server, /api/mcp/events, or /mcp."}"#,
+        )
+        .map(|()| false);
     }
     if req.method != "POST" {
         return crate::mcp_serve::write_mcp_http_response(
             stream,
             "405 Method Not Allowed",
             r#"{"ok":false,"error":"Method not allowed. POST a JSON-RPC message to /mcp."}"#,
-        );
+        )
+        .map(|()| false);
+    }
+    // Token-authed graceful shutdown (`op stop`): same contract as the
+    // `--mcp-http` server — only the exact per-instance token passed by the
+    // spawning CLI (via OPENPENCIL_MCP_TOKEN) authenticates; a stale file, a
+    // recycled pid, or a random client cannot shut the daemon down.
+    if let Some(id) = crate::mcp_serve::shutdown_request_id(
+        &req.body,
+        &crate::mcp_serve::headless_token_from_env().unwrap_or_default(),
+    ) {
+        crate::mcp_serve::write_mcp_http_response(
+            stream,
+            "200 OK",
+            &crate::mcp_serve::shutdown_ok_response(&id),
+        )?;
+        return Ok(true);
     }
     // JSON-RPC `/mcp` dispatch against the in-memory document. A mutating apply
     // bumps the sync version, broadcast to SSE subscribers so the browser shell
@@ -378,7 +572,7 @@ fn serve_one<S: Read + Write>(
     } else {
         "200 OK"
     };
-    crate::mcp_serve::write_mcp_http_response(stream, status, &response)
+    crate::mcp_serve::write_mcp_http_response(stream, status, &response).map(|()| false)
 }
 
 /// Stream Server-Sent Events to a subscribed client: write the SSE headers,
@@ -436,234 +630,5 @@ fn write_sse_event<S: Write>(stream: &mut S, version: u64) -> Result<(), String>
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn fresh_state() -> WebCanvasState {
-        WebCanvasState::new(EditorState::new(), 3100)
-    }
-
-    // A minimal canonical document body in the TS `setSyncDocument` shape.
-    const SYNC_BODY: &str = r##"{"document":{"version":"1.0.0","children":[{"id":"n9","type":"rectangle","name":"Synced Rect","x":1,"y":2,"width":80,"height":40,"fill":[{"type":"solid","color":"#123456"}]}]},"sourceClientId":"web"}"##;
-
-    #[test]
-    fn server_health_matches_ts_running_port_shape() {
-        let r = handle_web_canvas_request("GET", "/api/mcp/server", "", &mut fresh_state());
-        assert!(r.status.starts_with("200"));
-        // TS `server.get.ts` parity: clients test `running` + `port`.
-        assert!(r.body.contains(r#""running":true"#));
-        assert!(r.body.contains(r#""port":3100"#));
-        assert!(r.body.contains(r#""localIp":"#));
-        assert!(r.body.contains(r#""server":"openpencil-mcp""#));
-    }
-
-    #[test]
-    fn get_document_returns_doc_and_version() {
-        let r = handle_web_canvas_request("GET", "/api/mcp/document", "", &mut fresh_state());
-        assert!(r.status.starts_with("200"));
-        assert!(r.body.contains(r#""document":"#));
-        assert!(r.body.contains(r#""version":0"#));
-    }
-
-    #[test]
-    fn post_document_replaces_doc_and_bumps_version() {
-        use op_editor_core::PenNodeExt;
-        let mut s = fresh_state();
-        let r = handle_web_canvas_request("POST", "/api/mcp/document", SYNC_BODY, &mut s);
-        assert!(r.status.starts_with("200"), "{}", r.body);
-        assert!(r.body.contains(r#""ok":true"#));
-        assert!(r.body.contains(r#""version":1"#));
-        // The in-memory document was replaced with the synced tree.
-        assert!(s
-            .editor
-            .active_children()
-            .iter()
-            .any(|n| n.base().name.as_deref() == Some("Synced Rect")));
-        // A second sync bumps the version again (monotonic).
-        let r2 = handle_web_canvas_request("POST", "/api/mcp/document", SYNC_BODY, &mut s);
-        assert!(r2.body.contains(r#""version":2"#));
-    }
-
-    #[test]
-    fn post_document_rejects_invalid_body_with_400() {
-        let mut s = fresh_state();
-        let r = handle_web_canvas_request("POST", "/api/mcp/document", r#"{"nope":1}"#, &mut s);
-        assert!(r.status.starts_with("400"));
-        assert!(r.body.contains("Missing document in request body"));
-        // A rejected sync must not bump the version.
-        assert_eq!(s.version, 0);
-    }
-
-    #[test]
-    fn unknown_route_404s() {
-        let r = handle_web_canvas_request("DELETE", "/whatever", "", &mut fresh_state());
-        assert!(r.status.starts_with("404"));
-    }
-
-    #[test]
-    fn get_ai_models_returns_json_array() {
-        // The AI proxy model list is served as a JSON array — empty
-        // when nothing is configured, but always well-formed JSON the
-        // web bundle can `JSON.parse`.
-        let r = handle_web_canvas_request("GET", "/api/ai/models", "", &mut fresh_state());
-        assert!(r.status.starts_with("200"));
-        let parsed: serde_json::Value =
-            serde_json::from_str(&r.body).expect("models body is valid JSON");
-        assert!(
-            parsed.is_array(),
-            "models body must be a JSON array: {}",
-            r.body
-        );
-    }
-
-    // --- serve_one routing (socket-level, via a mock stream) ---
-
-    struct MockStream {
-        input: std::io::Cursor<Vec<u8>>,
-        output: Vec<u8>,
-    }
-
-    impl std::io::Read for MockStream {
-        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-            self.input.read(buf)
-        }
-    }
-
-    impl std::io::Write for MockStream {
-        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-            self.output.extend_from_slice(buf);
-            Ok(buf.len())
-        }
-        fn flush(&mut self) -> std::io::Result<()> {
-            Ok(())
-        }
-    }
-
-    /// Drive one request through `serve_one` and return the raw HTTP response.
-    fn serve(method: &str, path: &str, body: &str) -> String {
-        let request = format!(
-            "{method} {path} HTTP/1.1\r\nHost: x\r\nContent-Length: {}\r\n\r\n{body}",
-            body.len()
-        );
-        let mut stream = MockStream {
-            input: std::io::Cursor::new(request.into_bytes()),
-            output: Vec::new(),
-        };
-        let state = Mutex::new(fresh_state());
-        let hub = SseHub::default();
-        serve_one(&mut stream, &state, &hub).expect("serve_one");
-        String::from_utf8_lossy(&stream.output).into_owned()
-    }
-
-    fn mock_stream(request: &str) -> MockStream {
-        MockStream {
-            input: std::io::Cursor::new(request.as_bytes().to_vec()),
-            output: Vec::new(),
-        }
-    }
-
-    #[test]
-    fn sse_hub_broadcasts_version_to_all_subscribers() {
-        let hub = SseHub::default();
-        let a = hub.subscribe();
-        let b = hub.subscribe();
-        hub.broadcast(5);
-        assert_eq!(a.recv().unwrap(), 5);
-        assert_eq!(b.recv().unwrap(), 5);
-    }
-
-    #[test]
-    fn sse_hub_prunes_disconnected_subscribers() {
-        let hub = SseHub::default();
-        let live = hub.subscribe();
-        drop(hub.subscribe()); // a disconnected client (receiver dropped)
-        assert_eq!(hub.subscriber_count(), 2);
-        hub.broadcast(1); // prunes the dropped one
-        assert_eq!(hub.subscriber_count(), 1);
-        assert_eq!(live.recv().unwrap(), 1);
-    }
-
-    #[test]
-    fn write_sse_event_emits_data_frame() {
-        let mut stream = mock_stream("");
-        write_sse_event(&mut stream, 42).expect("write");
-        assert_eq!(
-            String::from_utf8_lossy(&stream.output),
-            "data: {\"version\":42}\n\n"
-        );
-    }
-
-    #[test]
-    fn serve_sse_emits_initial_then_each_version_until_hub_drops() {
-        let (tx, rx) = mpsc::channel();
-        tx.send(9).expect("send"); // one bump, then the sender drops → Disconnected
-        drop(tx);
-        let mut stream = mock_stream("");
-        serve_sse(&mut stream, rx, 7).expect("serve_sse");
-        let out = String::from_utf8_lossy(&stream.output);
-        assert!(out.contains("text/event-stream"), "{out}");
-        assert!(out.contains(r#"data: {"version":7}"#), "{out}"); // initial sync
-        assert!(out.contains(r#"data: {"version":9}"#), "{out}"); // broadcast bump
-    }
-
-    #[test]
-    fn serve_one_post_document_broadcasts_new_version_to_sse() {
-        let state = Mutex::new(fresh_state());
-        let hub = SseHub::default();
-        let sub = hub.subscribe();
-        let request = format!(
-            "POST /api/mcp/document HTTP/1.1\r\nHost: x\r\nContent-Length: {}\r\n\r\n{}",
-            SYNC_BODY.len(),
-            SYNC_BODY
-        );
-        let mut stream = mock_stream(&request);
-        serve_one(&mut stream, &state, &hub).expect("serve_one");
-        // The whole-doc sync bumped the version to 1 and broadcast it.
-        assert_eq!(sub.recv().unwrap(), 1);
-    }
-
-    #[test]
-    fn serve_one_routes_rest_health_and_document() {
-        assert!(serve("GET", "/api/mcp/server", "").contains("200 OK"));
-        assert!(serve("GET", "/api/mcp/document", "").contains("200 OK"));
-        let post = serve("POST", "/api/mcp/document", SYNC_BODY);
-        assert!(post.contains("200 OK"), "{post}");
-        assert!(post.contains(r#""ok":true"#));
-    }
-
-    #[test]
-    fn serve_one_query_string_does_not_break_rest_routing() {
-        // The query string must be stripped before exact-path routing.
-        assert!(serve("GET", "/api/mcp/server?v=2", "").contains("200 OK"));
-    }
-
-    #[test]
-    fn serve_one_post_mcp_dispatches_jsonrpc() {
-        let r = serve(
-            "POST",
-            "/mcp",
-            r#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#,
-        );
-        assert!(r.contains("200 OK"), "{r}");
-    }
-
-    #[test]
-    fn serve_one_get_mcp_is_405_not_a_tool_call() {
-        let r = serve("GET", "/mcp", "");
-        assert!(r.contains("405 Method Not Allowed"), "{r}");
-    }
-
-    #[test]
-    fn serve_one_unknown_path_is_404() {
-        let r = serve("GET", "/favicon.ico", "");
-        assert!(r.contains("404 Not Found"), "{r}");
-    }
-
-    #[test]
-    fn serve_one_unimplemented_api_route_is_404_not_jsonrpc() {
-        // An `/api/mcp/*` route this daemon doesn't implement must 404, not
-        // fall through to JSON-RPC dispatch.
-        let r = serve("GET", "/api/mcp/selection", "");
-        assert!(r.contains("404 Not Found"), "{r}");
-    }
-}
+#[path = "web_canvas_server_tests.rs"]
+mod tests;

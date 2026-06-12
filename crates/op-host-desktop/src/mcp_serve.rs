@@ -197,18 +197,14 @@ pub fn run_cli_if_requested() -> bool {
         return true;
     }
     if first == "--serve-web" {
-        let Some(port_arg) = args.next() else {
-            eprintln!("openpencil-desktop --serve-web: missing <port> arg");
-            std::process::exit(2);
-        };
-        let Ok(port) = port_arg.parse::<u16>() else {
-            eprintln!("openpencil-desktop --serve-web: <port> must be a u16, got {port_arg:?}");
-            std::process::exit(2);
-        };
-        // The document path is optional — without it the daemon starts on an
-        // empty document (the web shell can then sync one in).
-        let path = args.next().map(PathBuf::from);
-        if let Err(e) = crate::web_canvas_server::run_web_canvas(path, port) {
+        // `--serve-web <port> [doc] [--host <addr>]`: doc optional (empty
+        // document otherwise); `--host` opts in to a non-loopback bind.
+        let (port, path, host) = crate::web_canvas_server::parse_serve_web_args(args)
+            .unwrap_or_else(|e| {
+                eprintln!("openpencil-desktop --serve-web: {e}");
+                std::process::exit(2);
+            });
+        if let Err(e) = crate::web_canvas_server::run_web_canvas(path, port, &host) {
             eprintln!("openpencil-desktop --serve-web: {e}");
             std::process::exit(1);
         }
@@ -492,7 +488,7 @@ fn rebuild_registry(doc: &EditorState, requested_tool: Option<&str>) -> ToolRegi
     register_tool!("get_component", get_component_snapshot(doc));
     register_tool!("batch_get", batch_get_snapshot(doc));
     register_tool!("read_nodes", read_nodes_snapshot(doc));
-    register_tool!("codegen_plan", codegen_plan_snapshot());
+    register_tool!("codegen_plan", codegen_plan_snapshot(doc));
     register_tool!("codegen_submit_chunk", codegen_submit_chunk_snapshot());
     register_tool!("codegen_assemble", codegen_assemble_snapshot());
     register_tool!("codegen_clean", codegen_clean_snapshot());
@@ -797,6 +793,8 @@ pub(crate) use schemas::TOOL_SCHEMAS;
 #[cfg(feature = "mcp-debug-tools")]
 pub(crate) use schemas::{DEBUG_TOOL_SCHEMAS, TOOL_SCHEMAS};
 
+#[cfg(test)]
+mod codegen_wire_tests;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]

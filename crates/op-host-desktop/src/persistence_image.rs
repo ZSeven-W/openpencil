@@ -140,3 +140,94 @@ pub fn handle_pick_fill_image(host: &mut WidgetHostNative) {
     let _ = host.editor_state_mut().set_selected_fill_image_url(&url);
     host.mark_editor_state_dirty();
 }
+
+/// Handle the image-section warning row's Relink button: pop the
+/// image file dialog and rewrite the selected `ImageNode.src` —
+/// stored relative to the document when both share a root (TS
+/// `onUpdate({ src: toStoredAssetPath(result.filePath, documentPath) })`).
+pub fn handle_relink_image(host: &mut WidgetHostNative, current_path: Option<&Path>) {
+    let Some(path) = pick_image_path(host) else {
+        return;
+    };
+    let stored = to_stored_asset_path(&path, current_path);
+    let state = host.editor_state_mut();
+    let id = state.selection.anchor.clone();
+    if !id.is_real() {
+        return;
+    }
+    state.commit_history();
+    if let Some(jian_ops_schema::node::PenNode::Image(image)) =
+        op_editor_core::walkers::find_node_mut(state.active_children_mut(), &id)
+    {
+        image.src = stored;
+    }
+    // Drop the stale asset check so the warning row clears on the
+    // next pump (it re-probes the new src).
+    state.editor_ui.image_panel.asset_check = None;
+    host.mark_editor_state_dirty();
+}
+
+/// Port of TS `toStoredAssetPath` (document-assets.ts:87-104): an
+/// absolute picked path becomes document-relative when the document
+/// path shares its prefix (drive / root), else stays absolute.
+/// Separators normalize to `/` either way.
+fn to_stored_asset_path(asset: &Path, document: Option<&Path>) -> String {
+    let normalized = asset.display().to_string().replace('\\', "/");
+    let Some(doc_dir) = document.and_then(Path::parent) else {
+        return normalized;
+    };
+    let base = doc_dir.display().to_string().replace('\\', "/");
+    let base_parts: Vec<&str> = base.split('/').filter(|s| !s.is_empty()).collect();
+    let target_parts: Vec<&str> = normalized.split('/').filter(|s| !s.is_empty()).collect();
+    // Windows drive prefixes must match case-insensitively (TS
+    // extractPathPrefix comparison); on POSIX both prefixes are `/`.
+    let drive = |parts: &[&str]| -> String {
+        parts
+            .first()
+            .filter(|p| p.len() == 2 && p.as_bytes()[1] == b':')
+            .map(|p| p.to_lowercase())
+            .unwrap_or_default()
+    };
+    if drive(&base_parts) != drive(&target_parts) {
+        return normalized;
+    }
+    let mut shared = 0;
+    while shared < base_parts.len()
+        && shared < target_parts.len()
+        && base_parts[shared].eq_ignore_ascii_case(target_parts[shared])
+    {
+        shared += 1;
+    }
+    let ups = base_parts.len() - shared;
+    let mut segments: Vec<String> = std::iter::repeat_n("..".to_string(), ups).collect();
+    segments.extend(target_parts[shared..].iter().map(|s| s.to_string()));
+    if segments.is_empty() {
+        ".".to_string()
+    } else {
+        segments.join("/")
+    }
+}
+
+#[cfg(test)]
+mod relink_tests {
+    use super::to_stored_asset_path;
+    use std::path::Path;
+
+    #[test]
+    fn stored_path_relativizes_against_the_document_dir() {
+        let doc = Path::new("/projects/site/design.op");
+        assert_eq!(
+            to_stored_asset_path(Path::new("/projects/site/assets/a.png"), Some(doc)),
+            "assets/a.png"
+        );
+        assert_eq!(
+            to_stored_asset_path(Path::new("/projects/shared/b.png"), Some(doc)),
+            "../shared/b.png"
+        );
+        // No document → absolute, normalized.
+        assert_eq!(
+            to_stored_asset_path(Path::new("/projects/site/assets/a.png"), None),
+            "/projects/site/assets/a.png"
+        );
+    }
+}

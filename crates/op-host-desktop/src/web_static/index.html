@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OpenPencil</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        background: #18181b;
+      }
+      canvas {
+        display: block;
+      }
+      #op-error {
+        position: fixed;
+        inset: 16px;
+        overflow: auto;
+        padding: 16px;
+        background: #fff;
+        border: 1px solid #ccc;
+        color: #111;
+        font:
+          14px/1.5 ui-monospace,
+          SFMono-Regular,
+          Menlo,
+          monospace;
+        white-space: pre-wrap;
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <!--
+      Production host page for the Rust WASM web shell (op-host-web),
+      served by `openpencil-desktop --serve-web` at `/`. The wasm-bindgen
+      bundle (JS glue + .wasm) is served from `/pkg/*` by the same daemon.
+
+      The hidden IME composition <textarea> the web shell needs is created
+      by `mount()` itself (op-host-web `lib.rs`), so this page only has to
+      provide the <canvas>.
+    -->
+    <canvas id="op"></canvas>
+    <pre id="op-error"></pre>
+    <script type="module">
+      const errorPane = document.getElementById('op-error');
+      const showError = (msg) => {
+        errorPane.textContent = msg;
+        errorPane.style.display = 'block';
+      };
+      // Size the canvas to the window BEFORE mount — the shell reads the
+      // canvas width/height attributes when it builds its raster surface.
+      const canvas = document.getElementById('op');
+      canvas.width = Math.max(1, window.innerWidth);
+      canvas.height = Math.max(1, window.innerHeight);
+      try {
+        const mod = await import('/pkg/op_host_web.js');
+        await mod.default();
+        // Keep the returned WebShell alive for the page lifetime: it owns
+        // the DOM listeners + closures into the wasm module.
+        window.__opShell = mod.mount('op');
+      } catch (e) {
+        showError(
+          [
+            'OpenPencil web shell failed to load.',
+            '',
+            'Expected the wasm-bindgen bundle at /pkg/op_host_web.js.',
+            'Rebuild it with tools/check-wasm-bundle.sh (needs EMSDK), or',
+            'point the daemon at an existing bundle directory via the',
+            'OPENPENCIL_WEB_BUNDLE_DIR environment variable.',
+            '',
+            'Underlying error: ' + (e && e.message ? e.message : String(e)),
+          ].join('\n'),
+        );
+      }
+    </script>
+  </body>
+</html>

@@ -7,9 +7,10 @@
 //! which keeps glyphs + shapes selectable + zoom-clean.
 //!
 //! The export consumes a layout-resolved [`LayoutScene`] — every node
-//! kind paints through the shared `crate::export::paint_node`, the
-//! same painter the raster path uses, so PDF / PNG / SVG stay in
-//! lockstep.
+//! kind paints through the shared `crate::export::paint_nodes`, the
+//! same live-canvas scene painter the raster path uses (see
+//! `export/scene_painter.rs`), so PDF / PNG / screenshots stay in
+//! lockstep with the editor canvas.
 
 use op_editor_ui::layout_scene::LayoutScene;
 use std::path::Path as StdPath;
@@ -45,9 +46,7 @@ pub fn export_pdf(scene: &LayoutScene, target: &StdPath) -> Result<(), String> {
             let mut on_page = pdf.begin_page(skia_safe::Size::new(page_w, page_h), None);
             let canvas = on_page.canvas();
             canvas.translate((PDF_MARGIN - bounds.origin.x, PDF_MARGIN - bounds.origin.y));
-            for node in &page.children {
-                crate::export::paint_node(canvas, node);
-            }
+            crate::export::paint_nodes(canvas, &page.children);
             pdf = on_page.end_page();
         }
         pdf.close();

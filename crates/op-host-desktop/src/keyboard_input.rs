@@ -41,18 +41,28 @@ impl DesktopApp {
                     self.request_redraw(true);
                 }
             }
+            Key::Named(NamedKey::Space) if !self.zoom_modifier && !self.host.input_active_pub() => {
+                // Transient space-pan (TS parity) — released in the
+                // app handler's KeyboardInput Released arm.
+                self.host.set_space_pan(true);
+                consumed = true;
+            }
             Key::Named(NamedKey::Escape) if !self.zoom_modifier => {
                 consumed = self.host.apply_escape();
             }
             Key::Named(NamedKey::ArrowUp) if !self.zoom_modifier && !settings_focused => {
-                // A focused numeric property input steps its value;
-                // otherwise the arrow nudges the selection.
-                consumed =
-                    self.host.apply_property_step(nudge) || self.host.apply_nudge(0.0, -nudge);
+                // The inline canvas text editor moves its caret by
+                // visual line first; then a focused numeric property
+                // input steps its value; otherwise the arrow nudges
+                // the selection.
+                consumed = self.host.apply_text_edit_vertical(false)
+                    || self.host.apply_property_step(nudge)
+                    || self.host.apply_nudge(0.0, -nudge);
             }
             Key::Named(NamedKey::ArrowDown) if !self.zoom_modifier && !settings_focused => {
-                consumed =
-                    self.host.apply_property_step(-nudge) || self.host.apply_nudge(0.0, nudge);
+                consumed = self.host.apply_text_edit_vertical(true)
+                    || self.host.apply_property_step(-nudge)
+                    || self.host.apply_nudge(0.0, nudge);
             }
             Key::Named(NamedKey::ArrowLeft)
                 if !self.zoom_modifier && self.host.settings_focus_active() =>
@@ -64,18 +74,29 @@ impl DesktopApp {
             {
                 consumed = self.host.apply_settings_caret(true);
             }
+            // Cmd/Ctrl+Left / Right — line start / end while the
+            // inline canvas text editor is active (textarea Home/End
+            // parity). Unbound otherwise, so a `false` just drops.
+            Key::Named(NamedKey::ArrowLeft) if self.zoom_modifier && !settings_focused => {
+                consumed = self.host.apply_text_edit_line_edge(false);
+            }
+            Key::Named(NamedKey::ArrowRight) if self.zoom_modifier && !settings_focused => {
+                consumed = self.host.apply_text_edit_line_edge(true);
+            }
             Key::Named(NamedKey::ArrowLeft) if !self.zoom_modifier && !settings_focused => {
-                // An active inline rename moves its caret first, then a
-                // focused property input moves its text caret;
-                // otherwise the arrow nudges the selection.
+                // An active inline rename moves its caret first, then
+                // the canvas text editor, then a focused property
+                // input; otherwise the arrow nudges the selection.
                 consumed = self.host.apply_chat_model_picker_caret(false)
                     || self.host.apply_rename_caret(false)
+                    || self.host.apply_text_edit_caret(false)
                     || self.host.apply_property_caret(false)
                     || self.host.apply_nudge(-nudge, 0.0);
             }
             Key::Named(NamedKey::ArrowRight) if !self.zoom_modifier && !settings_focused => {
                 consumed = self.host.apply_chat_model_picker_caret(true)
                     || self.host.apply_rename_caret(true)
+                    || self.host.apply_text_edit_caret(true)
                     || self.host.apply_property_caret(true)
                     || self.host.apply_nudge(nudge, 0.0);
             }
@@ -95,6 +116,7 @@ impl DesktopApp {
                     "s" => consumed = self.host.apply_boolean_op(BooleanOp::Subtract),
                     "i" => consumed = self.host.apply_boolean_op(BooleanOp::Intersect),
                     "x" => consumed = self.host.apply_boolean_op(BooleanOp::Exclude),
+                    "k" => consumed = self.host.apply_create_component(),
                     _ => {}
                 }
             }
@@ -176,10 +198,18 @@ impl DesktopApp {
                     }
                     "v" => {
                         consumed = if self.host.editor_state().chat.focused {
-                            if let Some(text) = crate::clipboard::get_text() {
-                                self.host.chat_input_paste(&text);
+                            // TS ai-chat-input.tsx:85-94 — clipboard
+                            // image data takes priority over text when
+                            // pasting into the chat input (the paste
+                            // is consumed either way).
+                            if !self.try_paste_image_into_chat() {
+                                if let Some(text) = crate::clipboard::get_text() {
+                                    self.host.chat_input_paste(&text);
+                                }
                             }
                             true
+                        } else if let Some(result) = self.try_figma_clipboard_paste() {
+                            result
                         } else {
                             self.host.apply_paste()
                         };
@@ -223,6 +253,10 @@ impl DesktopApp {
                     "z" => consumed = self.host.apply_redo(),
                     "g" => consumed = self.host.apply_ungroup(),
                     "c" => consumed = self.host.apply_toggle_code_panel(),
+                    "v" => consumed = self.host.apply_toggle_variables_panel(),
+                    "d" => consumed = self.host.apply_toggle_design_md_panel(),
+                    "k" => consumed = self.host.apply_toggle_component_browser(),
+                    "f" => consumed = self.host.apply_open_figma_import(),
                     _ => {}
                 }
             }
@@ -240,6 +274,7 @@ impl DesktopApp {
                     "t" => self.host.apply_set_tool(op_editor_core::Tool::Text),
                     "f" => self.host.apply_set_tool(op_editor_core::Tool::Frame),
                     "p" => self.host.apply_set_tool(op_editor_core::Tool::Pen),
+                    "y" => self.host.apply_set_tool(op_editor_core::Tool::Polygon),
                     "h" => self.host.apply_set_tool(op_editor_core::Tool::Hand),
                     "[" => {
                         consumed = self.host.apply_reorder(ReorderDirection::Down);
@@ -293,6 +328,76 @@ impl DesktopApp {
         }
         if consumed {
             self.request_redraw(true);
+        }
+    }
+    /// Stage a clipboard image as a chat attachment (Cmd+V while the
+    /// chat input is focused). Mirrors the TS chat input's paste
+    /// handler (`ai-chat-input.tsx:85-94`): image data wins over text
+    /// and the paste is consumed even when nothing stages — TS
+    /// filters oversized files after `preventDefault()`, and
+    /// `add_attachment` enforces the same 4 × 5 MB caps here.
+    /// Returns false when the clipboard holds no image (caller falls
+    /// through to the text paste).
+    fn try_paste_image_into_chat(&mut self) -> bool {
+        let Some(png) = crate::clipboard::get_image() else {
+            return false;
+        };
+        // TS names pasted clipboard images "pasted-image.png".
+        self.host
+            .editor_state_mut()
+            .chat
+            .add_attachment(op_editor_core::chat::ChatAttachment {
+                name: "pasted-image.png".to_string(),
+                media_type: "image/png".to_string(),
+                data: png,
+            });
+        true
+    }
+
+    /// Probe the system clipboard for Figma HTML (Cmd+C in Figma) and
+    /// kick off the decode on a worker thread — the base64 + kiwi
+    /// `.fig` parse can be heavy and must not stall the keyboard
+    /// handler. The UI thread only reads the clipboard and sniffs the
+    /// marker; `pump_figma_clipboard_paste` applies the parsed nodes
+    /// on a later frame. `None` when the clipboard holds no Figma
+    /// payload (caller falls back to the internal node clipboard).
+    fn try_figma_clipboard_paste(&mut self) -> Option<bool> {
+        let html = crate::clipboard::get_html()?;
+        if !op_figma::is_figma_clipboard_html(&html) {
+            return None;
+        }
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let nodes = op_figma::extract_figma_clipboard_data(&html)
+                .map(|data| op_figma::figma_clipboard_to_nodes(&data.buffer, Some(&html)).nodes)
+                .unwrap_or_default();
+            let _ = tx.send(nodes);
+        });
+        self.pending_figma_paste = Some(rx);
+        // Consumed — the paste lands asynchronously (or decodes to
+        // nothing and is silently dropped, never raw-HTML-pasted).
+        Some(true)
+    }
+
+    /// Drain a finished clipboard decode — inserts the nodes centred
+    /// on the viewport. Called once per frame by the redraw path.
+    pub(crate) fn pump_figma_clipboard_paste(&mut self) -> bool {
+        let Some(rx) = self.pending_figma_paste.as_ref() else {
+            return false;
+        };
+        match rx.try_recv() {
+            Ok(nodes) => {
+                self.pending_figma_paste = None;
+                !nodes.is_empty()
+                    && self
+                        .host
+                        .paste_figma_nodes(nodes, self.viewport_width, self.viewport_height)
+            }
+            Err(std::sync::mpsc::TryRecvError::Empty) => false,
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                self.pending_figma_paste = None;
+                false
+            }
         }
     }
 }

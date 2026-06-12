@@ -8,31 +8,36 @@
 //! message.
 
 use std::sync::mpsc::{self, Receiver, TryRecvError};
-use std::sync::Arc;
 use std::thread;
 
-use op_ai::chat_provider::{ChatDelta, ChatProvider, ChatRequest, CliName};
-use op_editor_core::{ChatMessage, ChatToolCall, EditorState};
+use op_ai::chat_provider::{ChatDelta, ChatProvider, ChatRequest, ChatToolResult};
+use op_editor_core::{ChatMessage, ChatState, ChatToolCall, EditorState};
 use op_host_native::WidgetHostNative;
-use op_orchestrator::{classify_intent, Intent};
 
-use crate::chat_acp::AcpProvider;
-use crate::chat_builtin_http::ConfiguredBuiltinProvider;
-use crate::chat_claude::ClaudeCodeProvider;
-use crate::chat_copilot::CopilotProvider;
-use crate::chat_provider_llm::ChatProviderLlmClient;
-use crate::chat_subprocess::SubprocessProvider;
-use crate::design_session::DesignSession;
+use crate::chat_canvas_tools::{execute_chat_tool, ChatToolRequest};
 
-#[path = "chat_design_request.rs"]
-mod chat_design_request;
-use chat_design_request::build_design_request;
+// Turn launch + provider routing (split out at the 800-line cap).
+// `launch_if_pending` and friends live in the sibling file; the
+// re-exports keep every external `chat_session::` path stable.
+#[path = "chat_session_launch.rs"]
+mod launch;
+pub(crate) use launch::provider_for_selected_model;
+#[cfg(test)]
+pub(crate) use launch::{
+    builtin_provider_with_tools, clear_fresh_starter_frame_for_design, selected_cli_model_id,
+};
+pub use launch::{drain_new_chat_request, drain_stop_request, launch_if_pending};
 
 /// One in-flight chat turn. The worker thread owns the provider and
 /// drains `provider.send()` into the channel; [`poll`] consumes
 /// whatever is ready without blocking.
 pub struct ChatSession {
     rx: Receiver<ChatDelta>,
+    /// Canvas tool-call requests from the builtin agent loop. `None`
+    /// for providers without tool execution. Drained by [`pump`] each
+    /// frame — the worker blocks on each request's ack, mirroring the
+    /// design session's command channel.
+    tool_rx: Option<Receiver<ChatToolRequest>>,
     finished: bool,
 }
 
@@ -121,6 +126,18 @@ impl ChatSession {
     /// Spawn a worker that drains `provider.send(req)` into a
     /// channel. Returns immediately — the LLM turn runs off-thread.
     pub fn start(provider: Box<dyn ChatProvider>, req: ChatRequest) -> Self {
+        Self::start_with_tools(provider, req, None)
+    }
+
+    /// [`start`](Self::start) plus a canvas tool-request channel for
+    /// tool-executing providers (the builtin agent loop). [`pump`]
+    /// drains `tool_rx` each frame and executes the calls against the
+    /// live editor state.
+    pub fn start_with_tools(
+        provider: Box<dyn ChatProvider>,
+        req: ChatRequest,
+        tool_rx: Option<Receiver<ChatToolRequest>>,
+    ) -> Self {
         let (tx, rx) = mpsc::channel();
         thread::Builder::new()
             .name("op-chat-turn".into())
@@ -136,6 +153,20 @@ impl ChatSession {
             .expect("spawn op-chat-turn thread");
         Self {
             rx,
+            tool_rx,
+            finished: false,
+        }
+    }
+
+    /// Wrap externally-supplied channels — the CLI intent router
+    /// (GAP #33) owns its own worker thread and feeds these directly.
+    pub(crate) fn from_channels(
+        rx: Receiver<ChatDelta>,
+        tool_rx: Option<Receiver<ChatToolRequest>>,
+    ) -> Self {
+        Self {
+            rx,
+            tool_rx,
             finished: false,
         }
     }
@@ -185,261 +216,11 @@ impl ChatSession {
     }
 }
 
-/// Drain `chat.pending_send` (raised by `ChatState::begin_send`) and
-/// route it through the orchestrator intent gate. `Intent::Design`
-/// requests with a configured `agent::Provider` launch into
-/// `current_design`; everything else (chat intent, or design intent
-/// with no Provider available) falls through to the existing
-/// `ChatProvider` path in `current_chat`. A send fired mid-turn
-/// replaces the in-flight session — the old worker thread drains
-/// harmlessly once its channel receiver drops.
-///
-/// Returns true when *any* turn was launched (caller redraws).
-pub fn launch_if_pending(
-    host: &mut WidgetHostNative,
-    current_chat: &mut Option<ChatSession>,
-    current_design: &mut Option<DesignSession>,
-) -> bool {
-    let Some(user_text) = host.editor_state_mut().chat.pending_send.take() else {
-        return false;
-    };
-    host.mark_editor_state_dirty();
-    // Intent gate (op_orchestrator::classify_intent) — design verbs
-    // route to the orchestrator pipeline, which reuses the chat
-    // panel's currently-selected agent as its LLM (via
-    // `ChatProviderLlmClient`). Unwired agents (Codex / OpenCode) fall
-    // through to the chat path so `provider_for_agent` can surface the
-    // unwired-agent error in the assistant bubble.
-    if matches!(classify_intent(&user_text), Intent::Design) {
-        if let Some(provider) = provider_for_selected_model(host) {
-            *current_chat = None;
-            let llm = ChatProviderLlmClient::new(Arc::from(provider));
-            if clear_fresh_starter_frame_for_design(host.editor_state_mut()) {
-                host.mark_editor_state_dirty();
-            }
-            let initial_state = host.editor_state().clone();
-            let request = build_design_request(user_text, &initial_state);
-            *current_design = Some(DesignSession::start(llm, request, initial_state));
-            return true;
-        }
-        // Design intent but the selected agent has no ChatProvider
-        // bridge yet — fall through to the chat path so the unwired
-        // agent error message lands in the assistant bubble.
-    }
-    // Taking the chat path — drop any in-flight design turn so its
-    // worker's next `apply` returns false (channel dropped) and its
-    // `Progress` deltas stop streaming into this turn's fresh bubble
-    // (codex stop-gate: stale design session survived chat fallback,
-    // kept overwriting the new bubble content + applying ack'd
-    // EditorCommands long after the user moved on).
-    *current_design = None;
-    let Some(provider) = provider_for_selected_model(host) else {
-        // Selected agent has no `ChatProvider` bridge yet (Codex /
-        // OpenCode HTTP-server transport). Surface that honestly in
-        // the assistant bubble instead of silently running a
-        // different agent (codex stop-gate: silent reroute to
-        // Claude misled the user about which CLI answered).
-        //
-        // Drop any in-flight session FIRST — otherwise the next
-        // `pump` keeps streaming the previous agent's deltas into
-        // this fresh error bubble (codex stop-gate: stale session
-        // overwrote the unwired-agent error text).
-        *current_chat = None;
-        let name = selected_provider_label(host);
-        let chat = &mut host.editor_state_mut().chat;
-        if let Some(msg) = chat.messages.last_mut() {
-            msg.content = format!(
-                "error: {name} chat is not wired yet — its HTTP-server \
-                 transport is still pending. Pick Claude Code, GitHub \
-                 Copilot, or Gemini CLI via the model chip."
-            );
-            // The turn is aborted — `begin_send` created this bubble
-            // as `streaming`; clear it so the panel doesn't keep
-            // animating a stream that will never arrive.
-            msg.streaming = false;
-        }
-        // This turn consumed the staged attachments (they are already
-        // copied into the user message); drop them so they don't leak
-        // into the next send.
-        chat.pending_attachments.clear();
-        host.mark_editor_state_dirty();
-        // No session started; report the transcript change so the
-        // caller repaints the error.
-        return true;
-    };
-    // Thread the per-turn knobs the chat panel carries into the
-    // request, then clear the staged attachments — they belong to
-    // this turn only.
-    let chat = &mut host.editor_state_mut().chat;
-    let thinking = chat.thinking_mode;
-    let effort = chat.effort_level;
-    let attachments = std::mem::take(&mut chat.pending_attachments);
-    let req = ChatRequest {
-        system_prompt: String::new(),
-        user_message: user_text,
-        max_output_tokens: 4096,
-        thinking,
-        effort,
-        attachments,
-    };
-    *current_chat = Some(ChatSession::start(provider, req));
-    true
-}
-
-/// Drain a New Chat request raised by the widget layer. The transcript
-/// has already been cleared inside `ChatState::new_chat`; this drops
-/// any in-flight workers so stale deltas cannot repopulate it.
-pub fn drain_new_chat_request(
-    host: &mut WidgetHostNative,
-    current_chat: &mut Option<ChatSession>,
-    current_design: &mut Option<DesignSession>,
-) -> bool {
-    if !std::mem::take(&mut host.editor_state_mut().chat.pending_new_chat) {
-        return false;
-    }
-    *current_chat = None;
-    *current_design = None;
-    host.mark_editor_state_dirty();
-    true
-}
-
-/// Drain a Stop request raised by the widget layer. The transcript
-/// has already had its streaming flags cleared; this only drops the
-/// in-flight workers so stale deltas cannot append after cancellation.
-pub fn drain_stop_request(
-    host: &mut WidgetHostNative,
-    current_chat: &mut Option<ChatSession>,
-    current_design: &mut Option<DesignSession>,
-) -> bool {
-    if !std::mem::take(&mut host.editor_state_mut().chat.pending_stop_chat) {
-        return false;
-    }
-    *current_chat = None;
-    *current_design = None;
-    host.mark_editor_state_dirty();
-    true
-}
-
-fn clear_fresh_starter_frame_for_design(state: &mut EditorState) -> bool {
-    if state.doc != EditorState::starter().doc {
-        return false;
-    }
-    state.active_children_mut().clear();
-    state.clear_selection();
-    true
-}
-
-/// Build the `ChatProvider` for an agent index (into
-/// `AgentProvider::ALL`: 0 ClaudeCode, 1 CodexCli, 2 OpenCode,
-/// 3 GithubCopilot, 4 GeminiCli). Claude Code uses its dedicated
-/// SDK adapter; Codex / Copilot / Gemini use the subprocess transport.
-/// Returns `None` for OpenCode — its `ChatProvider` bridge isn't
-/// wired yet; the caller surfaces an explicit error rather than
-/// rerouting to a different agent.
-fn provider_for_agent(agent_idx: usize) -> Option<Box<dyn ChatProvider>> {
-    match agent_idx {
-        0 => Some(Box::new(ClaudeCodeProvider::new())),
-        1 => SubprocessProvider::for_cli(CliName::Codex)
-            .map(|p| Box::new(p) as Box<dyn ChatProvider>),
-        3 => Some(Box::new(CopilotProvider::new())),
-        4 => SubprocessProvider::for_cli(CliName::Gemini)
-            .map(|p| Box::new(p) as Box<dyn ChatProvider>),
-        // 2 OpenCode — no bridge yet.
-        _ => None,
-    }
-}
-
-pub(crate) fn provider_for_selected_model(
-    host: &WidgetHostNative,
-) -> Option<Box<dyn ChatProvider>> {
-    if let Some(entry) = host.editor_state().chat.selected_model_entry() {
-        if let Some(id) = entry.builtin_provider_id.as_deref() {
-            return provider_for_builtin(host.editor_state(), id);
-        }
-        if let Some(id) = entry.acp_agent_id() {
-            return provider_for_acp(host.editor_state(), id);
-        }
-    }
-    provider_for_agent(host.editor_state().editor_ui.chat_selected_agent)
-}
-
-fn provider_for_builtin(state: &EditorState, id: &str) -> Option<Box<dyn ChatProvider>> {
-    let config = state
-        .editor_ui
-        .agent_settings
-        .builtin_agents
-        .iter()
-        .find(|agent| agent.id == id && agent.ready())?;
-    let provider = ConfiguredBuiltinProvider::from_builtin_agent(config)?;
-    Some(Box::new(provider))
-}
-
-fn provider_for_acp(state: &EditorState, id: &str) -> Option<Box<dyn ChatProvider>> {
-    let config = state
-        .editor_ui
-        .agent_settings
-        .acp_agents
-        .iter()
-        .find(|agent| agent.id == id && agent.ready() && agent.connected)?;
-    Some(Box::new(AcpProvider::new(acp_config_for_provider(config))))
-}
-
-fn acp_config_for_provider(agent: &op_editor_core::AcpAgentConfig) -> op_acp::AcpAgentConfig {
-    op_acp::AcpAgentConfig {
-        id: agent.id.clone(),
-        display_name: agent.display_name.clone(),
-        connection_type: match agent.connection_type {
-            op_editor_core::AcpConnectionType::Local => op_acp::ConnectionType::Local,
-            op_editor_core::AcpConnectionType::Remote => op_acp::ConnectionType::Remote,
-        },
-        command: match agent.connection_type {
-            op_editor_core::AcpConnectionType::Local => Some(agent.command.clone()),
-            op_editor_core::AcpConnectionType::Remote => None,
-        },
-        args: agent.args.clone(),
-        env: agent.env.clone(),
-        url: agent.url.clone(),
-        enabled: agent.enabled,
-    }
-}
-
-fn selected_provider_label(host: &WidgetHostNative) -> String {
-    if let Some(entry) = host.editor_state().chat.selected_model_entry() {
-        if let Some(id) = entry.builtin_provider_id.as_deref() {
-            if let Some(agent) = host
-                .editor_state()
-                .editor_ui
-                .agent_settings
-                .builtin_agents
-                .iter()
-                .find(|agent| agent.id == id)
-            {
-                return agent.display_name.clone();
-            }
-        }
-        if let Some(id) = entry.acp_agent_id() {
-            if let Some(agent) = host
-                .editor_state()
-                .editor_ui
-                .agent_settings
-                .acp_agents
-                .iter()
-                .find(|agent| agent.id == id)
-            {
-                return agent.display_name.clone();
-            }
-        }
-    }
-    let agent_idx = host.editor_state().editor_ui.chat_selected_agent;
-    op_editor_core::AgentProvider::ALL
-        .get(agent_idx)
-        .map(|a| a.name().to_string())
-        .unwrap_or_else(|| "This agent".into())
-}
-
 /// Pump the in-flight turn's deltas into the trailing (assistant)
-/// message. Clears `current` once the turn finishes. Returns true
-/// when the transcript changed so the caller can dirty the redraw.
+/// message, then execute any pending canvas tool calls against the
+/// live editor state. Clears `current` once the turn finishes.
+/// Returns true when the transcript changed so the caller can dirty
+/// the redraw.
 pub fn pump(host: &mut WidgetHostNative, current: &mut Option<ChatSession>) -> bool {
     let Some(session) = current.as_mut() else {
         return false;
@@ -451,9 +232,16 @@ pub fn pump(host: &mut WidgetHostNative, current: &mut Option<ChatSession>) -> b
             apply_poll_to_message(msg, &poll);
             changed = true;
         }
-        if changed {
-            host.mark_editor_state_dirty();
-        }
+    }
+    // Execute pending canvas tool calls AFTER folding the deltas in —
+    // the agent loop emits the `ToolUse` delta (which creates the
+    // transcript card) before it forwards the request, so by the time
+    // a request is visible its card already exists.
+    if drain_tool_requests(host.editor_state_mut(), session) {
+        changed = true;
+    }
+    if changed {
+        host.mark_editor_state_dirty();
     }
     if poll.finished {
         *current = None;
@@ -461,320 +249,104 @@ pub fn pump(host: &mut WidgetHostNative, current: &mut Option<ChatSession>) -> b
     changed
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use op_ai::chat_provider::{EchoProvider, StopReason};
-
-    #[test]
-    fn session_streams_echo_provider_deltas_to_completion() {
-        let provider = Box::new(EchoProvider {
-            script: vec![
-                ChatDelta::TextDelta("Hel".into()),
-                ChatDelta::TextDelta("lo".into()),
-                ChatDelta::Done {
-                    stop_reason: StopReason::EndTurn,
-                },
-            ],
-        });
-        let mut session = ChatSession::start(
-            provider,
-            ChatRequest {
-                system_prompt: String::new(),
-                user_message: "hi".into(),
-                max_output_tokens: 256,
-                ..Default::default()
-            },
-        );
-        // Drain to completion — poll in a bounded loop so a stuck
-        // worker fails the test instead of hanging it.
-        let mut acc = String::new();
-        for _ in 0..1000 {
-            let p = session.poll();
-            acc.push_str(&p.text);
-            if p.finished {
-                break;
-            }
-            std::thread::sleep(std::time::Duration::from_millis(1));
+/// Drain every pending canvas tool request from the in-flight turn
+/// and execute it against the live `EditorState` — the chat-loop
+/// mirror of `design_session::pump_commands`. Each request is acked
+/// with its result so the blocked worker resumes; the matching
+/// transcript tool card is updated with the real result. Returns true
+/// when state or transcript changed.
+fn drain_tool_requests(state: &mut EditorState, session: &mut ChatSession) -> bool {
+    let Some(tool_rx) = session.tool_rx.as_ref() else {
+        return false;
+    };
+    let mut requests = Vec::new();
+    loop {
+        match tool_rx.try_recv() {
+            Ok(req) => requests.push(req),
+            Err(TryRecvError::Empty) | Err(TryRecvError::Disconnected) => break,
         }
-        assert!(session.finished(), "session must reach Done");
-        assert_eq!(acc, "Hello");
     }
-
-    #[test]
-    fn poll_splits_thinking_and_tool_calls_from_answer_text() {
-        let provider = Box::new(EchoProvider {
-            script: vec![
-                ChatDelta::Thinking("let me think".into()),
-                ChatDelta::ToolUse {
-                    name: "insert_node".into(),
-                    args: "{\"kind\":\"rect\"}".into(),
-                },
-                ChatDelta::TextDelta("here is the answer".into()),
-                ChatDelta::Done {
-                    stop_reason: StopReason::EndTurn,
-                },
-            ],
-        });
-        let mut session = ChatSession::start(
-            provider,
-            ChatRequest {
-                user_message: "x".into(),
-                max_output_tokens: 64,
-                ..Default::default()
-            },
-        );
-        let mut text = String::new();
-        let mut thinking = String::new();
-        let mut tools = Vec::new();
-        for _ in 0..1000 {
-            let p = session.poll();
-            text.push_str(&p.text);
-            thinking.push_str(&p.thinking);
-            tools.extend(p.tool_calls);
-            if p.finished {
-                break;
+    if requests.is_empty() {
+        return false;
+    }
+    let mut changed = false;
+    for req in requests {
+        // Internal host op from the DESIGN_MODIFY route (GAP #33) —
+        // applies the parsed modification nodes against the live
+        // state. Never advertised to a model; no transcript card.
+        if req.name == crate::chat_intent::APPLY_MODIFICATION_OP {
+            let nodes = serde_json::from_str::<serde_json::Value>(&req.args_json)
+                .ok()
+                .and_then(|v| v.get("nodes").and_then(|n| n.as_array().cloned()))
+                .unwrap_or_default();
+            let (count, mutated) =
+                crate::chat_canvas_tools::apply_design_modification(state, &nodes);
+            if mutated {
+                changed = true;
             }
-            std::thread::sleep(std::time::Duration::from_millis(1));
+            let _ = req.ack.send(ChatToolResult {
+                content: serde_json::json!({ "success": true, "count": count }).to_string(),
+                is_error: false,
+            });
+            continue;
         }
-        assert_eq!(text, "here is the answer", "answer text only");
-        assert_eq!(thinking, "let me think", "thinking routed separately");
-        assert_eq!(tools.len(), 1);
-        assert_eq!(tools[0].name, "insert_node");
-        assert_eq!(tools[0].args, "{\"kind\":\"rect\"}");
-    }
-
-    #[test]
-    fn apply_poll_appends_text_thinking_tools_and_clears_streaming_on_finish() {
-        let mut msg = ChatMessage::assistant_streaming();
-        apply_poll_to_message(
-            &mut msg,
-            &ChatPoll {
-                text: "hi".into(),
-                thinking: "reasoning".into(),
-                tool_calls: vec![ChatToolCall {
-                    name: "t".into(),
-                    args: "{}".into(),
-                }],
-                error: None,
-                finished: false,
-            },
-        );
-        assert_eq!(msg.content, "hi");
-        assert_eq!(msg.thinking, "reasoning");
-        assert_eq!(msg.tool_calls.len(), 1);
-        assert!(msg.streaming, "still streaming until the turn finishes");
-
-        apply_poll_to_message(
-            &mut msg,
-            &ChatPoll {
-                text: "!".into(),
-                thinking: String::new(),
-                tool_calls: vec![],
-                error: None,
-                finished: true,
-            },
-        );
-        assert_eq!(msg.content, "hi!", "text accumulates across polls");
-        assert!(!msg.streaming, "finished clears the streaming flag");
-    }
-
-    #[test]
-    fn apply_poll_expands_modify_tool_process_like_ts_cards() {
-        let mut msg = ChatMessage::assistant_streaming();
-        assert!(msg.tools_collapsed, "assistant messages start collapsed");
-
-        apply_poll_to_message(
-            &mut msg,
-            &ChatPoll {
-                text: String::new(),
-                thinking: String::new(),
-                tool_calls: vec![ChatToolCall {
-                    name: "batch_design".into(),
-                    args: "{}".into(),
-                }],
-                error: None,
-                finished: false,
-            },
-        );
-
-        assert!(
-            !msg.tools_collapsed,
-            "TS opens modify/delete/orchestrate tool cards by default"
-        );
-    }
-
-    #[test]
-    fn apply_poll_keeps_read_tool_process_collapsed_like_ts_cards() {
-        let mut msg = ChatMessage::assistant_streaming();
-
-        apply_poll_to_message(
-            &mut msg,
-            &ChatPoll {
-                text: String::new(),
-                thinking: String::new(),
-                tool_calls: vec![ChatToolCall {
-                    name: "snapshot_layout".into(),
-                    args: "{}".into(),
-                }],
-                error: None,
-                finished: false,
-            },
-        );
-
-        assert!(
-            msg.tools_collapsed,
-            "TS keeps read/create tool cards collapsed by default"
-        );
-    }
-
-    #[test]
-    fn apply_poll_error_replaces_content_and_ends_stream() {
-        let mut msg = ChatMessage::assistant_streaming();
-        msg.content = "partial answer".into();
-        apply_poll_to_message(
-            &mut msg,
-            &ChatPoll {
-                text: String::new(),
-                thinking: String::new(),
-                tool_calls: vec![],
-                error: Some("rate limited".into()),
-                finished: true,
-            },
-        );
-        assert_eq!(msg.content, "error: rate limited");
-        assert!(!msg.streaming);
-    }
-
-    #[test]
-    fn drain_stop_request_drops_session_without_clearing_transcript() {
-        let provider = Box::new(EchoProvider {
-            script: vec![ChatDelta::TextDelta("late".into())],
-        });
-        let mut current = Some(ChatSession::start(
-            provider,
-            ChatRequest {
-                user_message: "x".into(),
-                max_output_tokens: 64,
-                ..Default::default()
-            },
-        ));
-        let mut current_design = None;
-        let mut host = WidgetHostNative::new();
-        host.editor_state_mut()
-            .chat
-            .messages
-            .push(ChatMessage::assistant_streaming());
-
-        assert!(host.editor_state_mut().chat.stop_streaming());
-        assert!(drain_stop_request(
-            &mut host,
-            &mut current,
-            &mut current_design
-        ));
-
-        assert!(current.is_none());
-        assert!(!host.editor_state().chat.pending_stop_chat);
-        assert_eq!(host.editor_state().chat.messages.len(), 1);
-        assert!(!host.editor_state().chat.messages[0].streaming);
-    }
-
-    #[test]
-    fn selected_builtin_model_routes_to_builtin_provider() {
-        let mut host = WidgetHostNative::new();
-        let id = host
-            .editor_state_mut()
-            .editor_ui
-            .agent_settings
-            .add_builtin_agent_with_defaults("Built-in Claude", "sk-test", "claude-sonnet-4-5");
-        host.editor_state_mut().rebuild_chat_models();
-        let idx = host
-            .editor_state()
-            .chat
-            .available_models
-            .iter()
-            .position(|m| m.builtin_provider_id.as_deref() == Some(id.as_str()))
-            .expect("built-in model should be selectable");
-        host.editor_state_mut().select_chat_model(idx);
-
-        let provider = provider_for_selected_model(&host).expect("built-in provider should build");
-        assert_eq!(provider.provider_label(), "Built-in Claude");
-    }
-
-    #[test]
-    fn selected_acp_model_routes_to_acp_provider() {
-        let mut host = WidgetHostNative::new();
-        let id = host
-            .editor_state_mut()
-            .editor_ui
-            .agent_settings
-            .add_acp_agent_config(
-                "Local ACP",
-                op_editor_core::AcpConnectionType::Local,
-                "test-acp-agent",
-                Vec::new(),
-                std::collections::BTreeMap::new(),
-                None,
-                true,
-            );
-        host.editor_state_mut().editor_ui.agent_settings.acp_agents[0].connected = true;
-        host.editor_state_mut().rebuild_chat_models();
-        let idx = host
-            .editor_state()
-            .chat
-            .available_models
-            .iter()
-            .position(|m| m.value == format!("acp:{id}"))
-            .expect("ACP model should be selectable");
-        host.editor_state_mut().select_chat_model(idx);
-
-        let provider = provider_for_selected_model(&host).expect("ACP provider should build");
-        assert_eq!(provider.provider_label(), "ACP: Local ACP");
-    }
-
-    #[test]
-    fn session_surfaces_provider_error() {
-        let provider = Box::new(EchoProvider {
-            script: vec![ChatDelta::Error("boom".into())],
-        });
-        let mut session = ChatSession::start(
-            provider,
-            ChatRequest {
-                system_prompt: String::new(),
-                user_message: "x".into(),
-                max_output_tokens: 0,
-                ..Default::default()
-            },
-        );
-        let mut err = None;
-        for _ in 0..1000 {
-            let p = session.poll();
-            if p.error.is_some() {
-                err = p.error;
-            }
-            if p.finished {
-                break;
-            }
-            std::thread::sleep(std::time::Duration::from_millis(1));
+        let (result, mutated) = execute_chat_tool(state, &req.name, &req.args_json);
+        if mutated {
+            changed = true;
         }
-        assert_eq!(err.as_deref(), Some("boom"));
+        if attach_tool_result_to_transcript(&mut state.chat, &req.name, &result) {
+            changed = true;
+        }
+        // If the ack fails the worker already dropped its receiver
+        // (turn aborted) — nothing to do.
+        let _ = req.ack.send(result);
     }
-
-    #[test]
-    fn design_turn_clears_fresh_starter_frame() {
-        let mut state = op_editor_core::EditorState::starter();
-
-        assert!(clear_fresh_starter_frame_for_design(&mut state));
-        assert!(state.active_children().is_empty());
-        assert!(state.selection.is_empty());
-    }
-
-    #[test]
-    fn design_turn_preserves_non_starter_documents() {
-        let mut state = op_editor_core::EditorState::starter();
-        state.active_children_mut().clear();
-
-        assert!(!clear_fresh_starter_frame_for_design(&mut state));
-        assert!(state.active_children().is_empty());
-    }
+    changed
 }
+
+/// Record an executed tool call's result on its transcript card: the
+/// last matching `status:"running"` envelope gains `result` +
+/// `status: done|error`, which the chat panel's tool card renders as
+/// its Result line (same envelope shape the TS cards use).
+fn attach_tool_result_to_transcript(
+    chat: &mut ChatState,
+    name: &str,
+    result: &ChatToolResult,
+) -> bool {
+    let Some(msg) = chat
+        .messages
+        .last_mut()
+        .filter(|m| m.role == op_editor_core::ChatRole::Assistant)
+    else {
+        return false;
+    };
+    for call in msg.tool_calls.iter_mut().rev() {
+        if call.name != name {
+            continue;
+        }
+        let Ok(mut envelope) = serde_json::from_str::<serde_json::Value>(&call.args) else {
+            continue;
+        };
+        let Some(obj) = envelope.as_object_mut() else {
+            continue;
+        };
+        if obj.get("status").and_then(serde_json::Value::as_str) != Some("running") {
+            continue;
+        }
+        let result_value = serde_json::from_str::<serde_json::Value>(&result.content)
+            .unwrap_or_else(|_| serde_json::Value::String(result.content.clone()));
+        obj.insert("result".into(), result_value);
+        let status = if result.is_error { "error" } else { "done" };
+        obj.insert(
+            "status".into(),
+            serde_json::Value::String(status.to_string()),
+        );
+        call.args = envelope.to_string();
+        return true;
+    }
+    false
+}
+
+#[cfg(test)]
+#[path = "chat_session_tests.rs"]
+mod tests;

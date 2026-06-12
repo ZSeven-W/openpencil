@@ -47,8 +47,8 @@ fn tools_list_response_includes_all_registered_tools() {
     // the static schemas in the tools/list response.
     assert_eq!(
         op_mcp::element_tools::element_tool_schemas(&state).len(),
-        194,
-        "starter kit ships 6 canonical + 188 TS-compatible element tools — update this if the TS catalog changes"
+        225,
+        "builtin kits ship 37 canonical (6 starter + 31 shadcn) + 188 TS-compatible element tools — update this if the TS catalog changes"
     );
     for name in [
         "insert_btn_primary",
