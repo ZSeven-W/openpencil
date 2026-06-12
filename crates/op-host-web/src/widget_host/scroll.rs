@@ -25,6 +25,20 @@ impl WidgetHost {
             origin: Point2D::new(viewport_width - pw, TOP_BAR_HEIGHT),
             size: Point2D::new(pw, (viewport_height - TOP_BAR_HEIGHT).max(0.0)),
         };
+        // A wheel over the open font-family picker scrolls ITS list,
+        // not the panel behind it (mirrors the native host).
+        if self.editor_state.editor_ui.font_family_picker_open
+            && panel.font_picker_contains(property_rect, Point2D::new(x, y))
+        {
+            let max = panel.font_picker_max_scroll(property_rect);
+            let ui = &mut self.editor_state.editor_ui;
+            let next = (ui.font_picker_scroll + delta_y).clamp(0.0, max);
+            if next != ui.font_picker_scroll {
+                ui.font_picker_scroll = next;
+                self.mark_dirty();
+            }
+            return true;
+        }
         if !rect_contains(property_rect, Point2D::new(x, y)) {
             return false;
         }

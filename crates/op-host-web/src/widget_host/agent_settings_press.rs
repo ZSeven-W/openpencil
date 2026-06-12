@@ -675,7 +675,12 @@ impl WidgetHost {
                 self.editor_state.editor_ui.settings_input_draft.clear();
                 self.clear_settings_caret();
             }
-            AgentSettingsHit::Inside => {}
+            AgentSettingsHit::Inside => {
+                // Modal chrome that hit no control — blank press;
+                // commits the focused settings input (and blurs the
+                // rest of the chrome inputs under the modal).
+                self.blur_text_inputs_on_blank_press();
+            }
         }
         let after_mcp = {
             let mcp = self.editor_state.editor_ui.agent_settings.mcp_server;

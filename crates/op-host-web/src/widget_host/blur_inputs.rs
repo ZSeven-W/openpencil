@@ -1,0 +1,53 @@
+//! Blur-on-blank-press — DOM-parity input defocus (web host).
+//!
+//! Mirrors the native host's `widget_host/blur_inputs.rs`: any press
+//! that lands on blank chrome (a panel gap, a popover dismiss, the
+//! bare canvas) commits + defocuses every text input at once instead
+//! of leaving a stale caret eating keystrokes.
+
+use super::WidgetHost;
+
+impl WidgetHost {
+    /// True when any chrome text input holds keyboard focus.
+    fn any_text_input_focused(&self) -> bool {
+        let eui = &self.editor_state.editor_ui;
+        self.editor_state.ui.property_focus.is_some()
+            || eui.agent_settings.focus.is_some()
+            || eui.chat_model_picker_open
+            || self.editor_state.chat.focused
+    }
+
+    /// Commit + defocus every chrome text input. Returns `true` when
+    /// any input was focused (or the chat model-picker popover was
+    /// open) so blank-press callers can report a visible change.
+    pub(in crate::widget_host) fn blur_text_inputs_on_blank_press(&mut self) -> bool {
+        let was_focused = self.any_text_input_focused();
+        // Property focus is keyboard-only on web today (no press path
+        // sets it) — drop it draft-and-all, mirroring `apply_escape`.
+        if self.editor_state.ui.property_focus.take().is_some() {
+            self.editor_state.ui.property_input_draft.clear();
+            self.editor_state.ui.property_draft_select_all = false;
+        }
+        // Settings-modal inputs (MCP port, agent / image-gen fields).
+        self.commit_settings_focus();
+        // Git panel carries no interactive inputs on web yet; defocus
+        // defensively so a future press path can't strand a caret.
+        let _ = self.editor_state.editor_ui.git_panel.defocus_text_inputs();
+        // Chat input + its model-picker popover (same field set as
+        // the picker-close branch in `apply_escape`).
+        let eui = &mut self.editor_state.editor_ui;
+        eui.chat_model_picker_open = false;
+        eui.chat_model_picker_scroll = 0.0;
+        eui.chat_model_picker_search.clear();
+        eui.chat_model_picker_caret = None;
+        eui.chat_model_picker_select_all = false;
+        eui.chat_model_picker_hover = None;
+        self.editor_state.chat.focused = false;
+        self.editor_state.chat.input_select_all = false;
+        self.editor_state.chat.input_selection = None;
+        if was_focused {
+            self.mark_dirty();
+        }
+        was_focused
+    }
+}

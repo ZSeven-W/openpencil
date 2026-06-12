@@ -120,6 +120,19 @@ impl WebBackend {
         self.height
     }
 
+    /// Encode the host `<canvas>`'s current raster as a `data:` URL
+    /// via `HtmlCanvasElement::to_data_url` — the browser's built-in
+    /// PNG / JPEG / WEBP encoder. Used by the web Export-image flow:
+    /// the wasm32 skia build ships no image encoders, so the export
+    /// raster is whatever the last `present()` painted onto the
+    /// canvas (the full editor frame at 1×; `export_scale` and
+    /// per-node cropping are desktop-only for now). A `mime` the
+    /// browser doesn't support silently falls back to `image/png`
+    /// per the HTML spec.
+    pub fn canvas_data_url(&self, mime: &str) -> Result<String, JsValue> {
+        self.canvas_element.to_data_url_with_type(mime)
+    }
+
     /// Snapshot the raster surface and `put_image_data` it onto the host
     /// `<canvas>`'s 2D context. Spec §5.3 raster-fallback contract:
     /// N32_PREMUL surface, RGBA8888 + Unpremul read, full-frame copy each
@@ -446,7 +459,14 @@ impl RenderBackend for WebBackend {
             let Some(typeface) = typeface else {
                 continue;
             };
-            let font = skia_safe::Font::new(typeface, run.font_size);
+            let mut font = skia_safe::Font::new(typeface, run.font_size);
+            // The wasm bundle ships upright faces only — synthesise an
+            // oblique via glyph skew when the layout asks for italic
+            // (keeps advances identical to upright, so wrap/measure
+            // stay consistent).
+            if layout.italic() {
+                font.set_skew_x(-0.25);
+            }
             let jc = run.color;
             let mut paint = skia_safe::Paint::new(
                 skia_safe::Color4f::new(
@@ -483,6 +503,19 @@ impl RenderBackend for WebBackend {
             None,
             true,
         );
+    }
+
+    fn clip_round_rect(&mut self, rect: Rect, radius: f32) {
+        // `clipContent` containers clip children to rounded corners —
+        // mirrors the native backend's `Canvas::clip_rrect`.
+        let rrect = skia_safe::RRect::new_rect_xy(
+            skia_safe::Rect::from_xywh(rect.origin.x, rect.origin.y, rect.size.x, rect.size.y),
+            radius,
+            radius,
+        );
+        self.surface
+            .canvas()
+            .clip_rrect(rrect, skia_safe::ClipOp::Intersect, true);
     }
 
     fn save(&mut self) {

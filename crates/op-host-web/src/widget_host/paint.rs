@@ -1,7 +1,7 @@
 //! Editor-UI composition paint pass for the web `WidgetHost`.
 //! Pulled out of `widget_host.rs` to keep that file under the
 //! 800-line ceiling. Mirrors the structure used by
-//! `openpencil-shell-native/src/widget_host/paint.rs`.
+//! `op-host-native/src/widget_host/paint.rs`.
 //!
 //! `paint` takes `&mut self`: it rebuilds the layout-resolved
 //! `LayoutScene` (`refresh_layout_scene`) at the top of the pass,
@@ -10,30 +10,50 @@
 
 use super::WidgetHost;
 use crate::backend::WebBackend;
+use op_editor_ui::widgets::variables_panel::VariablesPanel;
 use op_editor_ui::widgets::{
-    AIChatPlaceholder, CanvasViewport, LayerPanel, LayoutCx, LocalePicker, PaintCx, PropertyPanel,
-    StatusBar, Toolbar, TopBar, VariablesModal, VariablesPanel, Widget, STATUS_BAR_HEIGHT,
-    STATUS_BAR_WIDTH, TOOLBAR_WIDTH, TOP_BAR_HEIGHT,
+    AIChatPlaceholder, CanvasViewport, ComponentBrowserPanel, DesignMdPanel, IconPickerPanel,
+    LayerPanel, LayoutCx, LocalePicker, PaintCx, PropertyPanel, ShapePicker, StatusBar, Toolbar,
+    TopBar, VariablesModal, Widget, STATUS_BAR_HEIGHT, STATUS_BAR_WIDTH, TOOLBAR_WIDTH,
+    TOP_BAR_HEIGHT,
 };
 use op_editor_ui::{Point2D, Rect, RenderBackend};
 
 use super::{STATUS_INSET, TOOLBAR_INSET_X, TOOLBAR_INSET_Y};
 
 impl WidgetHost {
-    /// Paint the full editor-UI composition. Layer order matches
-    /// the native shell so paint output is cross-platform identical:
-    ///   1. background fill
+    /// Paint the full editor-UI composition onto the live web
+    /// backend. Thin shim over [`WidgetHost::paint_editor`] — kept so
+    /// the browser runner's call site stays unchanged while tests can
+    /// drive the same pass through any `RenderBackend`.
+    // glue:
+    pub fn paint(&mut self, backend: &mut WebBackend, viewport_width: f32, viewport_height: f32) {
+        self.paint_editor(backend, viewport_width, viewport_height);
+    }
+
+    /// Backend-generic composition pass. Layer order matches the
+    /// native shell so paint output is cross-platform identical:
+    ///   1. background fill (+ Figma-import progress early-return)
     ///   2. TopBar
     ///   3. LayerPanel (left rail, sidebar-gated)
-    ///   4. PropertyPanel (right rail, selection-gated)
-    ///   5. CanvasViewport (center band)
+    ///   4. CanvasViewport (center band)
+    ///   5. PropertyPanel (right rail, selection-gated) + variables rail
     ///   6. Toolbar (floating column)
     ///   7. AIChatPlaceholder (floating, painted late so it sits
     ///      on top of toolbar)
-    ///   8. StatusBar (floating bottom-right)
-    ///   9. LocalePicker (top-most overlay)
+    ///   8. StatusBar / AlignToolbar / marquee / property overlays
+    ///   9. ShapePicker / LocalePicker / FileMenu dropdowns
+    ///  10. FigmaImport + Export + Variables + AgentSettings modals
+    ///  11. ColorPicker + LayerContextMenu
+    ///  12. ComponentBrowser / IconPicker / DesignMd floating panels
+    ///  13. file-drop overlay (top-most)
     // glue:
-    pub fn paint(&mut self, backend: &mut WebBackend, viewport_width: f32, viewport_height: f32) {
+    pub(in crate::widget_host) fn paint_editor(
+        &mut self,
+        backend: &mut dyn RenderBackend,
+        viewport_width: f32,
+        viewport_height: f32,
+    ) {
         self.sync_theme_from_editor();
         backend.fill_rect(
             Rect {
@@ -44,6 +64,32 @@ impl WidgetHost {
         );
 
         let dpi = backend.dpi_scale();
+
+        // During a Figma import, keep the frame path independent from
+        // document layout/canvas paint (mirrors native — the parser is
+        // CPU-heavy and repainting the old scene reads as frozen).
+        if self.editor_state.editor_ui.figma_import_in_progress {
+            use op_editor_ui::widgets::figma_import_progress::FigmaImportProgressOverlay;
+            backend.fill_rect(
+                Rect {
+                    origin: Point2D::new(0.0, 0.0),
+                    size: Point2D::new(viewport_width, viewport_height),
+                },
+                op_editor_ui::Color {
+                    r: 0.0,
+                    g: 0.0,
+                    b: 0.0,
+                    a: 0.55,
+                },
+            );
+            let overlay = FigmaImportProgressOverlay::for_editor(&self.editor_state, self.now_ms);
+            let rect = overlay.rect(viewport_width, viewport_height);
+            let mut cx = PaintCx {
+                backend: &mut *backend,
+            };
+            overlay.paint(&mut cx, rect);
+            return;
+        }
 
         // Rebuild the layout-resolved render scene ONCE for the whole
         // paint pass. Every widget builder below reads `editor_state`
@@ -265,6 +311,17 @@ impl WidgetHost {
             panel.paint_overlays(&mut cx, property_rect);
         }
 
+        // ShapePicker — anchored to the right of the toolbar shape
+        // slot; same z-priority as the locale picker (native §9).
+        if ui.shape_picker_open {
+            let picker_rect = self.shape_picker_rect(viewport_width, viewport_height);
+            let picker = ShapePicker::for_editor_ui(&self.editor_state.editor_ui);
+            let mut cx = PaintCx {
+                backend: &mut *backend,
+            };
+            picker.paint(&mut cx, picker_rect);
+        }
+
         if ui.locale_picker_open {
             let picker_rect = self.locale_picker_rect(viewport_width);
             let picker = LocalePicker::for_editor_ui(&self.editor_state.editor_ui);
@@ -274,6 +331,65 @@ impl WidgetHost {
             picker.paint(&mut cx, picker_rect);
         }
 
+        // File-menu dropdown — anchored under TopBar's folder+chevron
+        // button (native §10b).
+        if let Some(menu_rect) = self.file_menu_rect(viewport_width) {
+            use op_editor_ui::widgets::file_menu::FileMenu;
+            // `0` clock — wasm32 has no wall clock and web has no
+            // recent-file list to show ages for.
+            let menu = FileMenu::from_editor_ui(&self.editor_state.editor_ui, 0);
+            let mut cx = PaintCx {
+                backend: &mut *backend,
+            };
+            menu.paint(&mut cx, menu_rect);
+        }
+
+        // Figma import modal — full-viewport scrim + centred card
+        // (native §10c).
+        if ui.figma_import_open {
+            use op_editor_ui::widgets::figma_import::FigmaImportModal;
+            backend.fill_rect(
+                Rect {
+                    origin: Point2D::new(0.0, 0.0),
+                    size: Point2D::new(viewport_width, viewport_height),
+                },
+                op_editor_ui::Color {
+                    r: 0.0,
+                    g: 0.0,
+                    b: 0.0,
+                    a: 0.45,
+                },
+            );
+            let modal = FigmaImportModal::for_editor(&self.editor_state);
+            let modal_rect = modal.rect(viewport_width, viewport_height);
+            let mut cx = PaintCx {
+                backend: &mut *backend,
+            };
+            modal.paint(&mut cx, modal_rect);
+        }
+
+        // Export dialog — full-viewport scrim + centred card
+        // (native §10d).
+        if ui.export_dialog_open {
+            use op_editor_ui::widgets::ExportDialog;
+            backend.fill_rect(
+                Rect {
+                    origin: Point2D::new(0.0, 0.0),
+                    size: Point2D::new(viewport_width, viewport_height),
+                },
+                op_editor_ui::Color {
+                    r: 0.0,
+                    g: 0.0,
+                    b: 0.0,
+                    a: 0.45,
+                },
+            );
+            let dlg = ExportDialog::centered(viewport_width, viewport_height);
+            dlg.paint(&mut *backend, &self.theme, &self.editor_state.editor_ui);
+        }
+
+        // Variables modal — web's `{}` toolbar toggle (the native
+        // shell floats a panel instead; web keeps its modal).
         if ui.variables_panel_open {
             let modal = VariablesModal::for_editor(&self.editor_state);
             let modal_rect = modal.rect(viewport_width, viewport_height);
@@ -283,18 +399,9 @@ impl WidgetHost {
             modal.paint(&mut cx, modal_rect);
         }
 
-        // Layer context menu — right-click overlay, top of stack.
-        if let Some(state) = self.editor_state.editor_ui.layer_context_menu.clone() {
-            use op_editor_ui::widgets::layer_context_menu::LayerContextMenu;
-            let menu = LayerContextMenu::for_state(&self.editor_state, state);
-            let menu_rect = menu.rect();
-            let mut cx = PaintCx {
-                backend: &mut *backend,
-            };
-            menu.paint(&mut cx, menu_rect);
-        }
-
-        // Settings modal — Cmd+, overlay, top-most.
+        // Settings modal — Cmd+, overlay. Painted before the colour
+        // picker / context menu / floating panels, mirroring native
+        // §10a z-order.
         if ui.agent_settings_open {
             use op_editor_ui::widgets::agent_settings_panel::AgentSettingsPanel;
             let panel = AgentSettingsPanel::for_editor_at(&self.editor_state, self.now_ms);
@@ -317,6 +424,89 @@ impl WidgetHost {
                 backend: &mut *backend,
             };
             panel.paint(&mut cx, panel_rect);
+        }
+
+        // Colour picker — floating overlay near the right rail
+        // (native §10b').
+        if let Some(state) = self.editor_state.ui.color_picker.clone() {
+            use op_editor_ui::widgets::color_picker::ColorPicker;
+            let picker = ColorPicker::for_state(&self.editor_state, state);
+            let picker_rect = picker.rect(viewport_width, viewport_height);
+            let mut cx = PaintCx {
+                backend: &mut *backend,
+            };
+            picker.paint(&mut cx, picker_rect);
+        }
+
+        // Layer context menu — right-click overlay above everything
+        // painted so far (native §11).
+        if let Some(state) = self.editor_state.editor_ui.layer_context_menu.clone() {
+            use op_editor_ui::widgets::layer_context_menu::LayerContextMenu;
+            let menu = LayerContextMenu::for_state(&self.editor_state, state);
+            let menu_rect = menu.rect();
+            let mut cx = PaintCx {
+                backend: &mut *backend,
+            };
+            menu.paint(&mut cx, menu_rect);
+        }
+
+        // Floating Component-Browser panel — painted just below the
+        // Design-MD panel so when both are open Design-MD sits
+        // absolute-top (native §11.5).
+        if let (Some(panel), Some(panel_rect)) = (
+            ComponentBrowserPanel::for_editor(&self.editor_state),
+            self.component_browser_panel_rect(viewport_width, viewport_height),
+        ) {
+            let mut cx = PaintCx {
+                backend: &mut *backend,
+            };
+            panel.paint(&mut cx, panel_rect);
+        }
+
+        // Floating Icon picker — opened from the shape-tool dropdown.
+        // Above the component browser, below Design-MD, matching the
+        // press routing order (native §11.7).
+        if let (Some(panel), Some(panel_rect)) = (
+            IconPickerPanel::for_editor(&self.editor_state),
+            self.icon_picker_panel_rect(viewport_width, viewport_height),
+        ) {
+            let mut cx = PaintCx {
+                backend: &mut *backend,
+            };
+            panel.paint(&mut cx, panel_rect);
+        }
+
+        // Floating Design-MD panel — the document's design.md brief.
+        // Painted last among the panels so it is the top-most overlay;
+        // hit-test mirrors this (`press.rs` dispatches it first)
+        // (native §12).
+        if let (Some(panel), Some(panel_rect)) = (
+            DesignMdPanel::for_editor(&self.editor_state),
+            self.design_md_panel_rect(viewport_width, viewport_height),
+        ) {
+            let mut cx = PaintCx {
+                backend: &mut *backend,
+            };
+            panel.paint(&mut cx, panel_rect);
+        }
+
+        // File-drop overlay — top-most layer while a file is dragged
+        // over the window (native §13). The web runner doesn't raise
+        // `file_drop_active` yet; painting the guard keeps z-order
+        // parity for when DOM drag events get wired.
+        if self.editor_state.editor_ui.file_drop_active {
+            let (drop_left, _y, drop_w, drop_h) =
+                self.canvas_region(viewport_width, viewport_height);
+            let drop_rect = Rect {
+                origin: Point2D::new(drop_left, TOP_BAR_HEIGHT),
+                size: Point2D::new(drop_w, drop_h),
+            };
+            op_editor_ui::widgets::file_drop_overlay::paint_file_drop_overlay(
+                &mut *backend,
+                &self.theme,
+                self.editor_state.editor_ui.locale,
+                drop_rect,
+            );
         }
     }
 }
