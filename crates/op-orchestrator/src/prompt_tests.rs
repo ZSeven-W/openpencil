@@ -692,6 +692,19 @@ fn subagent_prompt_manifest_mode_swaps_output_protocol() {
             cr.system_prompt.contains(MANIFEST_SKILL_ONLY),
             "{model}: element-manifest skill must load"
         );
+        // Recency placement: the skill rides at the END of the prompt
+        // (right above the output contract), not at its priority-0
+        // position — long Full-tier prompts buried a top-of-prompt
+        // catalog (ab-v9 deepseek hand-rolled past it).
+        assert!(
+            cr.system_prompt.find(MANIFEST_SKILL_ONLY).unwrap() > 1000,
+            "{model}: manifest skill must sit near the end, not the top"
+        );
+        assert!(
+            cr.system_prompt.find(MANIFEST_SKILL_ONLY).unwrap()
+                < cr.system_prompt.find(MANIFEST_FORMAT_ONLY).unwrap(),
+            "{model}: output contract directly follows the catalog"
+        );
         assert!(
             cr.system_prompt.contains("- stat_card:"),
             "{model}: generated catalog must be injected"

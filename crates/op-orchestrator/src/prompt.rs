@@ -418,12 +418,29 @@ fn build_subagent_prompt_with_manifest(
             s.skill_name() != "jsonl-format" && s.skill_name() != "jsonl-format-simplified"
         });
     }
+    // Pull the element-manifest skill out of priority order and append
+    // it LAST, right above the output contract — recency wins in long
+    // prompts. ab-v9: deepseek's Full-tier prompt runs ~8k tokens and
+    // it kept hand-rolling past a top-of-prompt catalog (58% vs the
+    // Basic-tier models' 85% whose compact prompts kept it close).
+    let manifest_skill = if manifest_on {
+        filtered
+            .iter()
+            .position(|s| s.skill_name() == "element-manifest")
+            .map(|idx| filtered.remove(idx))
+    } else {
+        None
+    };
 
     let mut system_prompt = filtered
         .iter()
         .map(|s| s.content.as_str())
         .collect::<Vec<_>>()
         .join("\n\n");
+    if let Some(skill) = &manifest_skill {
+        system_prompt.push_str("\n\n");
+        system_prompt.push_str(skill.content.as_str());
+    }
     system_prompt.push_str("\n\n");
     // Flat `_parent` for ALL tiers — validated that Basic-tier models
     // (MiniMax M2.7/M3 are Basic) emit clean `_parent` trees with it. The
