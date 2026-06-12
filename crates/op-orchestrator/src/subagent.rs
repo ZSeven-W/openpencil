@@ -155,7 +155,22 @@ fn has_content_node(node: &PenNode) -> bool {
         // Frame/Group because it carries ContainerProps, which made
         // every skeleton-screen design read as "blank" (ab-v9: the
         // mobile-loading-skeleton prompt failed on all four models).
-        _ => !node.is_container() || matches!(node, PenNode::Rectangle(_)),
+        _ => match node {
+            PenNode::Rectangle(_) => true,
+            // A childless frame with explicit paint renders exactly like
+            // that rectangle — same pixels, different spelling. The
+            // otp_input builder's await-input slots (stroked empty
+            // boxes) made the whole manifest read as blank scaffolding,
+            // forcing a retry into the hand-rolled raw fallback.
+            PenNode::Frame(f) => {
+                f.container.stroke.is_some()
+                    || f.container
+                        .fill
+                        .as_ref()
+                        .is_some_and(|fills| !fills.is_empty())
+            }
+            _ => !node.is_container(),
+        },
     }
 }
 
@@ -264,6 +279,9 @@ mod tests {
     /// `parse_manifest` 返回 `None` 后照常回落 `parse_nodes`。
     #[test]
     fn run_subtask_manifest_mode_builds_elements_end_to_end() {
+        let _env = crate::test_support::MANIFEST_ENV_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         std::env::set_var("OPENPENCIL_MANIFEST", "1");
         let manifest = concat!(
             "{\"el\":\"section\",\"gap\":16,\"role\":\"stats\"}\n",
@@ -297,6 +315,41 @@ mod tests {
             section.children.as_ref().map(Vec::len),
             Some(2),
             "heading + stat_card nested under the section"
+        );
+    }
+
+    /// ab-v9.2 现场:`{"el":"otp_input"}` 全空槽位 → builder 产出一排
+    /// 带描边的无子 frame。带显式 paint 的无子 frame 与无子矩形像素
+    /// 等价,必须算内容 —— 此前整树被判"空白容器",manifest 被拒后
+    /// 重试降级到手搓 raw 路径。
+    #[test]
+    fn manifest_element_of_stroked_empty_frames_is_content_not_blank() {
+        let _env = crate::test_support::MANIFEST_ENV_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        std::env::set_var("OPENPENCIL_MANIFEST", "1");
+        let manifest = concat!(
+            "{\"el\":\"section\",\"direction\":\"horizontal\",\"gap\":12}\n",
+            "{\"el\":\"otp_input\",\"in\":1,\"length\":6,\"focused_index\":0}",
+        );
+        let llm = ScriptedLlm::new(vec![ScriptResponse::Text(manifest.into())]);
+        let mut sink = VecDocSink::new();
+        let outcome = block_on(run_subtask(
+            &subtask(),
+            &plan(),
+            &req(),
+            &llm,
+            &mut sink,
+            &AbortFlag::new(),
+            false,
+            false,
+        ));
+        std::env::remove_var("OPENPENCIL_MANIFEST");
+
+        assert!(outcome.error.is_none(), "{:?}", outcome.error);
+        assert_eq!(
+            outcome.node_count, 1,
+            "one section root with the otp element"
         );
     }
 
