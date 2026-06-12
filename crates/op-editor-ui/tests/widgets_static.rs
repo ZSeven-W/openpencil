@@ -2,18 +2,15 @@
 //!
 //! B1 piece: proves the `Widget` trait + `PaintCx` / `LayoutCx` shape
 //! compiles + that a recording backend plugs in via `&mut dyn
-//! RenderBackend`. B2 piece: proves the four inspector widgets (Tree /
-//! PropertyRow / Dropdown / TextInput) paint and emit accesskit nodes
+//! RenderBackend`. B2 piece: proves the remaining OP inspector widgets (Tree /
+//! PropertyRow / TextInput) paint and emit accesskit nodes
 //! with the expected semantic roles.
 
 use op_editor_ui::widgets::{
-    rect, Dropdown, DropdownState, LayoutBox, LayoutCx, PaintCx, PropertyRow, TextInput,
-    TextInputState, TreeWidget, Widget, WidgetId, ROOT_WIDGET_ID,
+    rect, LayoutBox, LayoutCx, PaintCx, PropertyRow, TextInput, TextInputState, TreeWidget, Widget,
+    WidgetId, ROOT_WIDGET_ID,
 };
-use op_editor_ui::{
-    Color, ImeEvent, ImeKind, KeyCode, KeyEvent, KeyLocation, KeyState, KeyValue, Modifiers,
-    NamedKey, Point2D, Rect, RenderBackend, TextLayout,
-};
+use op_editor_ui::{Color, ImeEvent, ImeKind, Point2D, Rect, RenderBackend, TextLayout};
 
 #[derive(Default)]
 struct RecordingBackend {
@@ -162,12 +159,12 @@ fn widget_trait_dispatches_layout_and_paint() {
 }
 
 // ---------------------------------------------------------------------
-// B2: four inspector widgets paint static content + expose semantic
+// B2: inspector widgets paint static content + expose semantic
 // accesskit roles.
 // ---------------------------------------------------------------------
 
 #[test]
-fn four_inspector_widgets_paint_static_content() {
+fn inspector_widgets_paint_static_content() {
     let layout = LayoutCx {
         available_width: 240.0,
         dpi: 1.0,
@@ -175,7 +172,6 @@ fn four_inspector_widgets_paint_static_content() {
     let widgets: Vec<Box<dyn Widget>> = vec![
         Box::new(TreeWidget::sample()),
         Box::new(PropertyRow::new(200, "Width", "960")),
-        Box::new(Dropdown::sample()),
         Box::new(TextInput::sample()),
     ];
     let mut backend = RecordingBackend::default();
@@ -187,24 +183,23 @@ fn four_inspector_widgets_paint_static_content() {
         widget.paint(&mut cx, box_.rect);
     }
 
-    // Each widget paints at least its background fill (4); Tree adds one
-    // more for the selected row → ≥ 5. Stroked rects: PropertyRow,
-    // Dropdown, TextInput each stroke their border (3). Text runs:
-    // PropertyRow has 2 (label+value); Tree has 3 items; Dropdown has 1;
-    // TextInput has 1 → ≥ 7 total.
+    // Each widget paints at least its background fill (3); Tree adds one
+    // more for the selected row -> >= 4. Stroked rects: PropertyRow and
+    // TextInput each stroke their border (2). Text runs: PropertyRow has
+    // 2 (label+value); Tree has 3 items; TextInput has 1 -> >= 6 total.
     assert!(
-        backend.rects >= 5,
-        "fill_rect dispatch ≥ 5 (got {})",
+        backend.rects >= 4,
+        "fill_rect dispatch >= 4 (got {})",
         backend.rects
     );
     assert!(
-        backend.strokes >= 3,
-        "stroke_rect dispatch ≥ 3 (got {})",
+        backend.strokes >= 2,
+        "stroke_rect dispatch >= 2 (got {})",
         backend.strokes
     );
     assert!(
-        backend.text >= 7,
-        "draw_text dispatch ≥ 7 (got {})",
+        backend.text >= 6,
+        "draw_text dispatch >= 6 (got {})",
         backend.text
     );
 }
@@ -229,17 +224,6 @@ fn property_row_advertises_label_and_value() {
     // filtering — see codex B2 R1 CONCERN + the fix in prop_row.rs.
     assert_eq!(node.role(), accesskit::Role::Group);
     assert_eq!(node.label(), Some("Width 960"));
-}
-
-#[test]
-fn dropdown_advertises_combobox_role() {
-    let drop = Dropdown::sample();
-    let node = drop.access_node();
-    assert_eq!(node.role(), accesskit::Role::ComboBox);
-    assert_eq!(node.label(), Some("Blend"));
-    // Sample preserves the closed/first-selected state.
-    assert_eq!(drop.state.selected, 0);
-    assert!(!drop.state.open);
 }
 
 #[test]
@@ -277,18 +261,6 @@ fn text_input_paints_preedit_underline_when_composing() {
 }
 
 #[test]
-fn dropdown_state_independent_state_struct() {
-    // DropdownState lives on its own so input handling can swap it
-    // without taking ownership of the surrounding Dropdown widget.
-    let s = DropdownState {
-        selected: 2,
-        open: true,
-    };
-    assert_eq!(s.selected, 2);
-    assert!(s.open);
-}
-
-#[test]
 fn text_input_state_default_is_empty() {
     let s = TextInputState::default();
     assert_eq!(s.value, "");
@@ -296,27 +268,8 @@ fn text_input_state_default_is_empty() {
 }
 
 // ---------------------------------------------------------------------
-// C2 widget event handlers (apply_ime / apply_key)
+// C2 widget event handlers (apply_ime)
 // ---------------------------------------------------------------------
-
-fn keydown(named: NamedKey) -> KeyEvent {
-    KeyEvent {
-        key: KeyValue::Named(named),
-        code: KeyCode::Unknown(String::new()),
-        location: KeyLocation::Standard,
-        modifiers: Modifiers::empty(),
-        state: KeyState::Pressed,
-        repeat: false,
-        is_composing: false,
-    }
-}
-
-fn keyup(named: NamedKey) -> KeyEvent {
-    KeyEvent {
-        state: KeyState::Released,
-        ..keydown(named)
-    }
-}
 
 #[test]
 fn text_input_apply_ime_start_clears_preedit() {
@@ -389,122 +342,4 @@ fn text_input_apply_ime_double_start_clears_preedit_each_time() {
     });
     assert_eq!(state.preedit, "");
     assert_eq!(state.value, "Frame ");
-}
-
-#[test]
-fn dropdown_apply_key_arrow_down_advances_and_opens() {
-    let mut state = DropdownState {
-        selected: 0,
-        open: false,
-    };
-    state.apply_key(&keydown(NamedKey::ArrowDown), 3);
-    assert_eq!(state.selected, 1);
-    assert!(state.open);
-    state.apply_key(&keydown(NamedKey::ArrowDown), 3);
-    assert_eq!(state.selected, 2);
-    // Saturates at option_count - 1; does not wrap.
-    state.apply_key(&keydown(NamedKey::ArrowDown), 3);
-    assert_eq!(state.selected, 2);
-}
-
-#[test]
-fn dropdown_apply_key_arrow_up_retreats_with_saturating_sub() {
-    let mut state = DropdownState {
-        selected: 1,
-        open: false,
-    };
-    state.apply_key(&keydown(NamedKey::ArrowUp), 3);
-    assert_eq!(state.selected, 0);
-    assert!(state.open);
-    // Already at 0 — saturating_sub holds at 0, no panic.
-    state.apply_key(&keydown(NamedKey::ArrowUp), 3);
-    assert_eq!(state.selected, 0);
-}
-
-#[test]
-fn dropdown_apply_key_enter_and_escape_close() {
-    let mut state = DropdownState {
-        selected: 1,
-        open: true,
-    };
-    state.apply_key(&keydown(NamedKey::Enter), 3);
-    assert!(!state.open);
-    assert_eq!(state.selected, 1);
-
-    state.open = true;
-    state.apply_key(&keydown(NamedKey::Escape), 3);
-    assert!(!state.open);
-    // Escape closes the menu but does NOT mutate selection — confirm
-    // both halves of the close path leave selected stable (codex C2.1
-    // R1 CONCERN-2).
-    assert_eq!(state.selected, 1);
-}
-
-#[test]
-fn dropdown_apply_key_ignores_keyup() {
-    let mut state = DropdownState {
-        selected: 1,
-        open: false,
-    };
-    state.apply_key(&keyup(NamedKey::ArrowDown), 3);
-    // Released event is a no-op.
-    assert_eq!(state.selected, 1);
-    assert!(!state.open);
-}
-
-#[test]
-fn dropdown_apply_key_ignores_zero_options() {
-    let mut state = DropdownState {
-        selected: 0,
-        open: false,
-    };
-    state.apply_key(&keydown(NamedKey::ArrowDown), 0);
-    // No options → no-op rather than panic on `option_count - 1`.
-    assert_eq!(state.selected, 0);
-    assert!(!state.open);
-}
-
-#[test]
-fn dropdown_apply_key_ignores_unrelated_keys() {
-    let mut state = DropdownState {
-        selected: 1,
-        open: true,
-    };
-    state.apply_key(&keydown(NamedKey::Tab), 3);
-    // Tab is not bound; state should be unchanged.
-    assert_eq!(state.selected, 1);
-    assert!(state.open);
-}
-
-#[test]
-fn dropdown_apply_key_ignores_keys_during_ime_composition() {
-    // Spec §2.4 widget rule: skip key dispatch while is_composing is
-    // true. ArrowDown during a CJK composition belongs to the IME's
-    // candidate-picker UI, NOT to the dropdown selection cycle.
-    // Codex Phase C stop-hook (#2): "focused IME textarea lets
-    // composing keys mutate dropdown state."
-    let mut state = DropdownState {
-        selected: 0,
-        open: false,
-    };
-    let composing_arrow = KeyEvent {
-        is_composing: true,
-        ..keydown(NamedKey::ArrowDown)
-    };
-    state.apply_key(&composing_arrow, 3);
-    assert_eq!(state.selected, 0, "composing ArrowDown must not advance");
-    assert!(!state.open, "composing ArrowDown must not open");
-
-    // Same protection for Enter / Escape — IME 'commit' shouldn't
-    // close the dropdown.
-    let mut state2 = DropdownState {
-        selected: 1,
-        open: true,
-    };
-    let composing_enter = KeyEvent {
-        is_composing: true,
-        ..keydown(NamedKey::Enter)
-    };
-    state2.apply_key(&composing_enter, 3);
-    assert!(state2.open, "composing Enter must not close");
 }
