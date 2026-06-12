@@ -142,6 +142,39 @@ fn set_reusable(node: &mut PenNode, reusable: bool) {
     }
 }
 
+/// Swap the node with `id` for `replacement` in place (same sibling
+/// slot), anywhere in `children`. True when the swap happened.
+fn replace_node_in_children(
+    children: &mut Vec<PenNode>,
+    id: &NodeId,
+    replacement: PenNode,
+) -> bool {
+    let mut slot = Some(replacement);
+    replace_node_inner(children, id, &mut slot)
+}
+
+fn replace_node_inner(
+    children: &mut Vec<PenNode>,
+    id: &NodeId,
+    slot: &mut Option<PenNode>,
+) -> bool {
+    if let Some(idx) = children.iter().position(|n| n.id_str() == id.as_str()) {
+        if let Some(replacement) = slot.take() {
+            children[idx] = replacement;
+            return true;
+        }
+        return false;
+    }
+    for child in children.iter_mut() {
+        if let Some(grand) = child.children_mut() {
+            if replace_node_inner(grand, id, slot) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
 fn clear_reusable_in_document(doc: &mut jian_ops_schema::PenDocument, id: &NodeId) {
     if let Some(pages) = doc.pages.as_mut() {
         for page in pages {
@@ -220,6 +253,43 @@ impl EditorState {
         self.set_single_selection(new_id.clone());
         self.history_push_past(snap);
         Some(new_id)
+    }
+
+    /// TS `detachComponent`. A reusable component sheds its flag
+    /// (and registry entry); a `Ref` instance materializes into an
+    /// independent subtree — `descendants` overrides applied,
+    /// instance props overlaid, fresh ids — replacing the Ref in
+    /// place. Returns the surviving node's id.
+    pub fn detach_component(&mut self, node_id: &NodeId) -> Option<NodeId> {
+        let node = walkers::find_node(self.active_children(), node_id)?.clone();
+        match &node {
+            PenNode::Frame(frame) if frame.reusable == Some(true) => {
+                let snap = self.snapshot_for_history();
+                if let Some(live) = walkers::find_node_mut(self.active_children_mut(), node_id) {
+                    set_reusable(live, false);
+                }
+                self.components.remove(node_id);
+                self.history_push_past(snap);
+                Some(node_id.clone())
+            }
+            PenNode::Ref(reference) => {
+                let component =
+                    crate::ref_resolve::find_component_node(&self.doc, &reference.target)?;
+                let merged = crate::ref_resolve::materialize_instance(&node, &component)?;
+                let snap = self.snapshot_for_history();
+                let mut next_id = self.next_node_id_seed()?;
+                let mut taken = self.collect_node_ids();
+                let detached = walkers::deep_clone_with_new_ids(&merged, &mut next_id, &mut taken);
+                let new_id = NodeId::new(detached.base().id.clone());
+                if !replace_node_in_children(self.active_children_mut(), node_id, detached) {
+                    return None;
+                }
+                self.set_single_selection(new_id.clone());
+                self.history_push_past(snap);
+                Some(new_id)
+            }
+            _ => None,
+        }
     }
 
     /// Remove a component registration. If the source frame is still

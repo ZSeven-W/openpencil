@@ -15,6 +15,23 @@ use crate::uikit::ComponentCategory;
 pub enum ComponentBrowserButton {
     /// The header `✕` close button.
     Close,
+    /// The header Download button — export the open document's
+    /// components as a kit file.
+    ExportKit,
+    /// The header Upload button — import a kit file.
+    ImportKit,
+    /// The kit-filter dropdown control on the "Kit:" row.
+    KitFilter,
+    /// A row in the kit-filter popover (`0` = "All", `1..` = kit
+    /// index + 1 in load order).
+    KitOption(usize),
+    /// The Trash button on an imported-kit row, by its index into the
+    /// imported-kits list.
+    KitDelete(usize),
+    /// The inline Delete confirm button on an imported-kit row.
+    KitConfirmDelete(usize),
+    /// The inline Cancel button on an imported-kit row.
+    KitCancelDelete(usize),
     /// A category filter pill (`None` = the "All" pill).
     Category(Option<ComponentCategory>),
     /// A component card, by its index into the filtered grid.

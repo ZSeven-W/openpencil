@@ -30,7 +30,7 @@ fn translate_selected_shifts_a_leaf() {
 }
 
 #[test]
-fn translate_selected_cascades_into_children() {
+fn translate_selected_moves_only_the_container_origin() {
     let mut s = state_with(vec![frame(
         "n1",
         "Frame",
@@ -43,8 +43,10 @@ fn translate_selected_cascades_into_children() {
     s.set_single_selection(NodeId::new("n1"));
     s.translate_selected(5.0, 5.0);
     assert_eq!(node_x(&s, "n1"), 15.0);
-    // Child carries absolute coords — must shift with the parent.
-    assert_eq!(node_x(&s, "n2"), 25.0);
+    // Child coords are parent-relative — they must NOT shift, or the
+    // layout pass moves the child twice (TS commit writes only the
+    // dragged node: skia-interaction-select.ts updateNode(orig.id)).
+    assert_eq!(node_x(&s, "n2"), 20.0);
 }
 
 #[test]
@@ -93,7 +95,7 @@ fn translate_selected_skips_a_directly_selected_flex_child() {
     // frame. Dragging that child must NOT move it (it is engine-
     // positioned); materializing x/y would detach it from flex flow and
     // collapse the siblings. A free-layout child of a free frame still
-    // drags (see `translate_selected_cascades_into_children`).
+    // drags (see `translate_selected_moves_only_the_container_origin`).
     use crate::test_support::{flex_frame, flow_rect};
     let mut s = state_with(vec![flex_frame(
         "n1",
@@ -130,12 +132,15 @@ fn translate_selected_dedups_ancestor_and_descendant() {
         100.0,
         vec![rect("n2", "Child", 10.0, 10.0, 10.0, 10.0)],
     )]);
-    // Both ancestor + descendant selected — child must shift once.
+    // Both ancestor + descendant selected — the dedup skips the
+    // descendant, so its parent-relative coord stays put and it moves
+    // exactly once (carried by the ancestor's origin shift).
     s.clear_selection();
     s.toggle_selection(NodeId::new("n1"));
     s.toggle_selection(NodeId::new("n2"));
     s.translate_selected(5.0, 0.0);
-    assert_eq!(node_x(&s, "n2"), 15.0);
+    assert_eq!(node_x(&s, "n1"), 5.0);
+    assert_eq!(node_x(&s, "n2"), 10.0);
 }
 
 #[test]

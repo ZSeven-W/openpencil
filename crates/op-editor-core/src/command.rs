@@ -462,4 +462,22 @@ pub enum EditorCommand {
         parent_ids: Vec<NodeId>,
         replacements: Vec<StylePropertyReplacement>,
     },
+    /// Apply a sequence of sub-commands atomically: every sub-command
+    /// must succeed, or the editor state is rolled back to the
+    /// pre-batch snapshot and the whole batch reports `false`. Emitted
+    /// by the MCP `batch_design` multi-op program executor so a mixed
+    /// DSL program rides the host applier as ONE command.
+    ///
+    /// RESTRICTED to snapshot-covered sub-commands — those whose
+    /// mutations the rollback snapshot (document, selection, active
+    /// page index, components) can genuinely restore. Commands whose
+    /// primary state lives outside it — `SetActiveTool` (tool),
+    /// `SetViewport` (viewport), `CopySelected` / `CutSelected` /
+    /// `PasteClipboard` (clipboard), `Undo` / `Redo` (the history
+    /// stacks themselves), `SetActiveAxisValue` /
+    /// `CycleActiveAxisValue` (transient active-theme pin) — and
+    /// nested `Batch`es are rejected up front at apply time: the whole
+    /// batch fails with zero state change before any sub-command runs.
+    /// See `command_batch.rs` for the classification.
+    Batch { commands: Vec<EditorCommand> },
 }

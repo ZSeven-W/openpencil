@@ -199,6 +199,11 @@ pub struct CodegenState {
     /// Set by Export AI Bundle; drained by the desktop codegen-export drain
     /// which writes a structure-bundle .zip.
     pub pending_export_bundle: bool,
+    /// Set by the Code panel's Cancel action; drained by the desktop
+    /// codegen-session cancel drain, which raises the in-flight worker's
+    /// shared abort flag so the run actually stops (TS parity:
+    /// `abortRef.current?.abort()`), not just the painted phase.
+    pub pending_cancel: bool,
 }
 
 impl Default for CodegenState {
@@ -222,6 +227,7 @@ impl Default for CodegenState {
             pending_regenerate: false,
             pending_download: false,
             pending_export_bundle: false,
+            pending_cancel: false,
         }
     }
 }
@@ -283,6 +289,7 @@ mod tests {
         assert!(!s.pending_regenerate);
         assert!(!s.pending_download);
         assert!(!s.pending_export_bundle);
+        assert!(!s.pending_cancel);
     }
 
     #[test]

@@ -22,7 +22,12 @@
 //! the active theme appended at the END of the vec (front insertion
 //! would shadow pre-existing entries on other axes).
 
+use crate::fills::{
+    first_solid_fill_hex, first_solid_stroke_hex, set_primary_fill_hex, set_primary_stroke_hex,
+};
 use crate::state::EditorState;
+use crate::ui_draft::ColorTarget;
+use crate::walkers::find_node_mut;
 use jian_ops_schema::variable::{
     ThemedValue, VariableDefinition, VariableKind, VariableScalar, VariableValue,
 };
@@ -47,6 +52,115 @@ impl EditorState {
     pub fn resolve_variable(&self, name: &str) -> Option<&VariableScalar> {
         let def = self.find_variable(name)?;
         resolve_value(&def.value, &self.ui.variables.active_theme)
+    }
+
+    /// Write `$name` into the selected node's fill/stroke colour and
+    /// update the transient variable-ref cache used by paint-time
+    /// resolution. Returns false when the selection is not editable,
+    /// the target is not Fill/Stroke, or `name` is not a Color variable.
+    pub fn bind_selected_color_variable(&mut self, target: ColorTarget, name: &str) -> bool {
+        let Some(name) = normalize_variable_ref_name(name) else {
+            return false;
+        };
+        let Some(def) = self.find_variable(name) else {
+            return false;
+        };
+        if !matches!(def.kind, VariableKind::Color) {
+            return false;
+        }
+
+        let sel = self.selection.anchor.clone();
+        if !sel.is_real() || !self.is_editable(&sel) {
+            return false;
+        }
+        let Some(node) = find_node_mut(self.active_children_mut(), &sel) else {
+            return false;
+        };
+        let value = format!("${name}");
+        let wrote = match target {
+            ColorTarget::Fill => set_primary_fill_hex(node, &value),
+            ColorTarget::Stroke => set_primary_stroke_hex(node, &value),
+            ColorTarget::GradientStop(_) | ColorTarget::EffectColor(_) => false,
+        };
+        if !wrote {
+            return false;
+        }
+        match target {
+            ColorTarget::Fill => {
+                self.ui.variables.fill_refs.insert(sel, name.to_string());
+            }
+            ColorTarget::Stroke => {
+                self.ui.variables.stroke_refs.insert(sel, name.to_string());
+            }
+            ColorTarget::GradientStop(_) | ColorTarget::EffectColor(_) => {}
+        }
+        true
+    }
+
+    /// Resolve the selected node's fill/stroke variable binding back
+    /// into a concrete colour. This mirrors the TS picker `unbind`
+    /// path, which writes the resolved active-theme value.
+    pub fn unbind_selected_color_variable(&mut self, target: ColorTarget) -> bool {
+        let sel = self.selection.anchor.clone();
+        if !sel.is_real() || !self.is_editable(&sel) {
+            return false;
+        }
+        let Some(name) = self
+            .selected_color_variable_name(target)
+            .map(str::to_string)
+        else {
+            return false;
+        };
+        let hex = self
+            .resolve_color_variable_hex(&name)
+            .unwrap_or_else(|| "#000000".to_string());
+        let Some(node) = find_node_mut(self.active_children_mut(), &sel) else {
+            return false;
+        };
+        let wrote = match target {
+            ColorTarget::Fill => set_primary_fill_hex(node, &hex),
+            ColorTarget::Stroke => set_primary_stroke_hex(node, &hex),
+            ColorTarget::GradientStop(_) | ColorTarget::EffectColor(_) => false,
+        };
+        if !wrote {
+            return false;
+        }
+        match target {
+            ColorTarget::Fill => {
+                self.ui.variables.fill_refs.remove(&sel);
+            }
+            ColorTarget::Stroke => {
+                self.ui.variables.stroke_refs.remove(&sel);
+            }
+            ColorTarget::GradientStop(_) | ColorTarget::EffectColor(_) => {}
+        }
+        true
+    }
+
+    /// Current selected node's fill/stroke `$variable` binding name,
+    /// if the authored colour field is a variable reference.
+    pub fn selected_color_variable_name(&self, target: ColorTarget) -> Option<&str> {
+        let node = self.selected_node()?;
+        let raw = match target {
+            ColorTarget::Fill => first_solid_fill_hex(node),
+            ColorTarget::Stroke => first_solid_stroke_hex(node),
+            ColorTarget::GradientStop(_) | ColorTarget::EffectColor(_) => None,
+        }?;
+        raw.strip_prefix('$').filter(|name| !name.is_empty())
+    }
+
+    /// Resolve a Color variable to its active-theme hex string.
+    pub fn resolve_color_variable_hex(&self, name: &str) -> Option<String> {
+        let def = self.find_variable(name)?;
+        if !matches!(def.kind, VariableKind::Color) {
+            return None;
+        }
+        match self.resolve_variable(name)? {
+            VariableScalar::Str(hex) if crate::color_picker::parse_hex_rgb(hex).is_some() => {
+                Some(hex.clone())
+            }
+            _ => None,
+        }
     }
 
     // --- Scalar writes ----------------------------------------------
@@ -79,12 +193,46 @@ impl EditorState {
         self.set_variable_scalar(name, VariableKind::Number, VariableScalar::Num(value))
     }
 
+    /// Write a number into one concrete theme value column.
+    pub fn set_variable_number_for_theme(
+        &mut self,
+        name: &str,
+        axis: &str,
+        theme_value: &str,
+        value: f64,
+    ) -> bool {
+        self.set_variable_scalar_for_theme(
+            name,
+            VariableKind::Number,
+            VariableScalar::Num(value),
+            axis,
+            theme_value,
+        )
+    }
+
     /// Write a string into a `String` variable. Kind-mismatch → false.
     pub fn set_variable_string(&mut self, name: &str, value: impl Into<String>) -> bool {
         self.set_variable_scalar(
             name,
             VariableKind::String,
             VariableScalar::Str(value.into()),
+        )
+    }
+
+    /// Write a string into one concrete theme value column.
+    pub fn set_variable_string_for_theme(
+        &mut self,
+        name: &str,
+        axis: &str,
+        theme_value: &str,
+        value: impl Into<String>,
+    ) -> bool {
+        self.set_variable_scalar_for_theme(
+            name,
+            VariableKind::String,
+            VariableScalar::Str(value.into()),
+            axis,
+            theme_value,
         )
     }
 
@@ -110,6 +258,36 @@ impl EditorState {
             return false;
         }
         write_scalar(&mut def.value, scalar, &active);
+        true
+    }
+
+    fn set_variable_scalar_for_theme(
+        &mut self,
+        name: &str,
+        expect: VariableKind,
+        scalar: VariableScalar,
+        axis: &str,
+        theme_value: &str,
+    ) -> bool {
+        let Some(theme_values) = self
+            .doc
+            .themes
+            .as_ref()
+            .and_then(|themes| themes.get(axis))
+            .cloned()
+        else {
+            return self.set_variable_scalar(name, expect, scalar);
+        };
+        if !theme_values.iter().any(|value| value == theme_value) {
+            return false;
+        }
+        let Some(def) = self.variables_mut().get_mut(name) else {
+            return false;
+        };
+        if def.kind != expect {
+            return false;
+        }
+        write_scalar_for_theme(&mut def.value, scalar, axis, theme_value, &theme_values);
         true
     }
 
@@ -156,7 +334,24 @@ impl EditorState {
     }
 
     /// Delete a variable by name. `false` when the name is unknown.
+    ///
+    /// Every `$name` reference in the node tree is replaced by its
+    /// resolved concrete value FIRST (TS `removeVariable` →
+    /// `replaceVariableRefsInTree(old, null)`), so nodes freeze the
+    /// last resolved colour / number instead of keeping a dangling
+    /// token that fails to resolve on the next load.
     pub fn delete_variable(&mut self, name: &str) -> bool {
+        if !self
+            .doc
+            .variables
+            .as_ref()
+            .is_some_and(|vars| vars.contains_key(name))
+        {
+            return false;
+        }
+        // Resolve-and-replace while the definition still exists —
+        // the concrete replacement value comes from it.
+        self.replace_refs_in_doc(name, None);
         let Some(vars) = self.doc.variables.as_mut() else {
             return false;
         };
@@ -169,10 +364,41 @@ impl EditorState {
         true
     }
 
+    /// Rewrite every `$old` token in the document tree to `$new`
+    /// (rename) or its resolved concrete value (`None`, delete).
+    /// Walks pages AND the single-page fallback children.
+    fn replace_refs_in_doc(&mut self, old: &str, new: Option<&str>) {
+        let vars_snapshot = self.doc.variables.clone();
+        let theme =
+            crate::variables_resolve::effective_theme(&self.doc, &self.ui.variables.active_theme);
+        if let Some(pages) = self.doc.pages.as_mut() {
+            for page in pages {
+                crate::variables_resolve::replace_variable_refs_in_tree(
+                    &mut page.children,
+                    old,
+                    new,
+                    vars_snapshot.as_ref(),
+                    &theme,
+                );
+            }
+        }
+        crate::variables_resolve::replace_variable_refs_in_tree(
+            &mut self.doc.children,
+            old,
+            new,
+            vars_snapshot.as_ref(),
+            &theme,
+        );
+    }
+
     /// Rename a variable. Rejects an unknown `old`, an empty (post-
     /// trim) `new`, or a `new` that collides with a different
-    /// existing variable. `old == new` (after trim) is a no-op
-    /// success. Rewrites every `fill_refs` / `stroke_refs` entry.
+    /// existing variable (DELIBERATE divergence: TS
+    /// `variable-manager.ts` silently overwrites the collision —
+    /// refusing is safer and the panel surfaces the failure).
+    /// `old == new` (after trim) is a no-op success. Rewrites every
+    /// `fill_refs` / `stroke_refs` entry AND every `$old` token in
+    /// the node tree.
     pub fn rename_variable(&mut self, old: &str, new: &str) -> bool {
         let new_trimmed = new.trim();
         if new_trimmed.is_empty() {
@@ -201,6 +427,11 @@ impl EditorState {
                 *v = new_trimmed.to_string();
             }
         }
+        // Rewrite `$old` → `$new` across the node tree so persisted
+        // documents don't keep dangling tokens (TS `renameVariable` →
+        // `replaceVariableRefsInTree(old, new)`).
+        let new_owned = new_trimmed.to_string();
+        self.replace_refs_in_doc(old, Some(&new_owned));
         true
     }
 
@@ -319,7 +550,17 @@ fn resolve_value<'a>(
                     }
                 }
             }
-            entries.iter().find(|e| e.theme.is_none()).map(|e| &e.value)
+            // No themed match → the un-themed default entry → the
+            // FIRST entry (TS `resolveThemedValue` falls back to
+            // `values[0]`). Without the last step a fully-themed
+            // value list — the shape the panel writes once a second
+            // variant exists — resolves to nothing until the user
+            // manually picks an axis value.
+            entries
+                .iter()
+                .find(|e| e.theme.is_none())
+                .or_else(|| entries.first())
+                .map(|e| &e.value)
         }
     }
 }
@@ -362,6 +603,60 @@ fn write_scalar(
             });
         }
     }
+}
+
+fn write_scalar_for_theme(
+    value: &mut VariableValue,
+    scalar: VariableScalar,
+    axis: &str,
+    theme_value: &str,
+    theme_values: &[String],
+) {
+    match value {
+        VariableValue::Scalar(current) => {
+            let fallback = current.clone();
+            let themed = theme_values
+                .iter()
+                .map(|value_name| {
+                    let mut theme = BTreeMap::new();
+                    theme.insert(axis.to_string(), value_name.clone());
+                    ThemedValue {
+                        value: if value_name == theme_value {
+                            scalar.clone()
+                        } else {
+                            fallback.clone()
+                        },
+                        theme: Some(theme),
+                    }
+                })
+                .collect();
+            *value = VariableValue::Themed(themed);
+        }
+        VariableValue::Themed(entries) => {
+            if let Some(entry) = entries.iter_mut().find(|entry| {
+                entry
+                    .theme
+                    .as_ref()
+                    .and_then(|theme| theme.get(axis))
+                    .is_some_and(|value| value == theme_value)
+            }) {
+                entry.value = scalar;
+                return;
+            }
+            let mut theme = BTreeMap::new();
+            theme.insert(axis.to_string(), theme_value.to_string());
+            entries.push(ThemedValue {
+                value: scalar,
+                theme: Some(theme),
+            });
+        }
+    }
+}
+
+fn normalize_variable_ref_name(raw: &str) -> Option<&str> {
+    let trimmed = raw.trim();
+    let name = trimmed.strip_prefix('$').unwrap_or(trimmed);
+    (!name.is_empty()).then_some(name)
 }
 
 #[cfg(test)]

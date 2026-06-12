@@ -88,8 +88,27 @@ pub enum FileAction {
     /// dialog and writes the chosen image into the selected node's
     /// primary fill as `PenFill::Image { url: <data-url> }`.
     PickFillImage,
+    /// User clicked the image-section warning row's Relink button —
+    /// host opens a file dialog and rewrites the selected image
+    /// node's `src` (relative to the document path when possible,
+    /// TS `toStoredAssetPath`).
+    RelinkImage,
     OpenRecent(usize),
     ClearRecent,
+}
+
+/// Theme-preset file IO the host must run (rfd dialog + fs IO live
+/// host-side). Raised by the preset dropdown's Import / Export rows
+/// (TS `variable-theme-manager.tsx:153-164`); drained by the desktop
+/// host (`theme_preset_host.rs`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ThemePresetIo {
+    /// `variables.importPreset` — pick a `.optheme` file and merge
+    /// its themes + variables into the document.
+    Import,
+    /// `variables.exportPreset` — save the current document themes +
+    /// variables as `theme-preset.optheme`.
+    Export,
 }
 
 /// Auto-update status surfaced in the settings modal's System tab.
@@ -625,6 +644,38 @@ impl GitPanelState {
     pub fn header_popovers_allowed(&self) -> bool {
         self.in_repo && !self.merging
     }
+
+    /// Drop keyboard focus from every git-panel text input — commit
+    /// message, remote URL, HTTPS credential, branch-create name, the
+    /// author signature pair, and the clone form's URL / destination.
+    /// Drafts persist (focus flags only) so re-engaging an input shows
+    /// what was typed. Returns `true` when any input was focused so
+    /// blank-press / panel-close callers know to repaint.
+    pub fn defocus_text_inputs(&mut self) -> bool {
+        let clone_focused = self
+            .clone_form
+            .as_mut()
+            .map(|form| {
+                form.input_select_all = false;
+                form.focus.take().is_some()
+            })
+            .unwrap_or(false);
+        let was_focused = clone_focused
+            || self.commit_focused
+            || self.remote_focused
+            || self.https_focused
+            || self.branch_create_focused
+            || self.author_name_focused
+            || self.author_email_focused;
+        self.commit_focused = false;
+        self.remote_focused = false;
+        self.https_focused = false;
+        self.branch_create_focused = false;
+        self.author_name_focused = false;
+        self.author_email_focused = false;
+        self.input_select_all = false;
+        was_focused
+    }
 }
 
 /// File-menu "Recent files" entry — host persists via settings IO.
@@ -670,11 +721,14 @@ pub struct PageRenameState {
     pub draft: String,
 }
 
-/// Editor focus for a non-color variable row in the VariablesPanel.
+/// Editor focus for a variable row cell in the VariablesPanel.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VariableRowFocus {
+    Name(usize),
     Number(usize),
     String(usize),
+    NumberCell { row: usize, variant: usize },
+    StringCell { row: usize, variant: usize },
 }
 
 /// Keyboard focus on an effect-parameter value (the Effects
@@ -929,10 +983,31 @@ pub struct EditorUiState {
     pub size_clip_content: bool,
     /// Whether the fill-type dropdown is open.
     pub fill_type_picker_open: bool,
+    /// Fill/stroke colour-variable dropdown currently open in the
+    /// PropertyPanel; `None` means closed.
+    pub property_color_variable_picker_open: Option<crate::ui_draft::ColorTarget>,
     /// Whether the image-fill editor popover is open.
     pub image_fill_popover_open: bool,
     /// Whether the text font-family picker is open.
     pub font_family_picker_open: bool,
+    /// Live type-ahead filter for the font-family picker (TS
+    /// FontPicker search input).
+    pub font_picker_search: String,
+    /// Scroll offset (px, ≥ 0) of the font-family picker's list
+    /// viewport (TS `max-h-72 overflow-y-auto`).
+    pub font_picker_scroll: f32,
+    /// Index (into the picker's visible entries) of the row under
+    /// the cursor — drives the hover wash.
+    pub font_picker_hover: Option<usize>,
+    /// Host-enumerated system font families (sorted, deduped against
+    /// the bundled set). Empty until a host enumerates; the picker
+    /// then falls back to the TS `FALLBACK_SYSTEM_FONTS` list.
+    pub system_font_families: std::sync::Arc<Vec<String>>,
+    /// Whether a host already ran font enumeration (so an empty list
+    /// is "machine has none" rather than "not loaded yet").
+    pub system_fonts_loaded: bool,
+    /// Image-node section Search / Generate popover state.
+    pub image_panel: crate::image_panel_state::ImagePanelState,
     /// Whether the typography font-weight dropdown is open.
     pub font_weight_picker_open: bool,
     /// Index (into `FontWeightChoice::ALL`) of the weight-dropdown row
@@ -942,6 +1017,27 @@ pub struct EditorUiState {
     pub axis_dropdown_open: Option<String>,
     /// Whether the Variables right-rail panel is explicitly open.
     pub variables_panel_open: bool,
+    pub variables_preset_menu_open: bool,
+    pub variables_add_menu_open: bool,
+    /// Whether the preset dropdown's save-as-name input is showing
+    /// (TS `showPresetNameInput`). The draft lives in
+    /// `UiDraftState::property_input_draft` like the other variables
+    /// inputs; only meaningful while `variables_preset_menu_open`.
+    pub variables_preset_name_focus: bool,
+    /// Pending `.optheme` import / export the desktop host must run.
+    pub pending_theme_preset_io: Option<ThemePresetIo>,
+    /// Theme axis currently shown in the floating variables panel.
+    /// Separate from `ui.variables.active_theme`, which stores the
+    /// concrete value selected for each axis.
+    pub variables_current_axis: Option<String>,
+    /// Theme-axis tab whose rename/delete menu is open.
+    pub variables_theme_menu_axis: Option<String>,
+    /// Variant column whose rename/delete menu is open.
+    pub variables_variant_menu_value: Option<String>,
+    /// Theme-axis name currently being edited in the VariablesPanel.
+    pub variables_theme_rename_axis: Option<String>,
+    /// Variant column value currently being edited in the VariablesPanel.
+    pub variables_variant_rename_value: Option<String>,
     /// Which variables-panel target the cursor is over (row / axis chip
     /// / dropdown item) — drives the `theme.button_hover` wash.
     pub variables_panel_hover: Option<crate::variables_panel_state::VariablesPanelButton>,
@@ -951,6 +1047,10 @@ pub struct EditorUiState {
     /// Shares `UiDraftState.property_input_draft` + caret like the
     /// variable-row focus does.
     pub effect_param_focus: Option<EffectParamFocus>,
+
+    /// In-flight IME composition shown by the preedit overlay; set
+    /// by the host on `Ime::Preedit`, cleared on commit / cancel.
+    pub ime_preedit: Option<crate::ime_state::ImePreedit>,
 
     // --- Layer / page hover + context menu -------------------------
     /// Currently-hovered LayerPanel row, or `None`.
@@ -976,6 +1076,9 @@ pub struct EditorUiState {
     /// Last canvas left-click target + ms; 400 ms same-node re-press
     /// on a Text node promotes to inline text edit.
     pub last_canvas_click: Option<(NodeId, u64)>,
+    /// Last VariablesPanel name-cell click + ms; 400 ms same-row
+    /// re-press promotes to variable rename.
+    pub last_variable_name_click: Option<(usize, u64)>,
     /// Smart-guide lines to paint during the current node drag —
     /// computed each `apply_cursor_move` by `align_guides`, cleared on
     /// drag release. View-only transient state: never serialized,
@@ -1013,6 +1116,15 @@ pub struct EditorUiState {
     // --- Component browser ------------------------------------------
     /// Whether the floating Component-Browser panel is shown.
     pub component_browser_open: bool,
+    /// Canvas node under the cursor (Select tool, no drag) — drives
+    /// the dashed hover outline (TS `hoveredNodeId`).
+    pub canvas_hover_node: Option<NodeId>,
+    /// Frame/group the user "entered" by double-clicking it while
+    /// selected (TS `enteredFrameId`). While set, canvas-click parent
+    /// promotion stops at this container's children instead of
+    /// promoting to the page-root level. Escape and selecting outside
+    /// the container exit it. Transient: never serialized.
+    pub entered_container: Option<NodeId>,
     /// Top-left corner of the Component-Browser panel in logical px;
     /// `None` until first opened — the host then centres it.
     pub component_browser_pos: Option<(f32, f32)>,
@@ -1023,9 +1135,24 @@ pub struct EditorUiState {
     /// Which component-browser target the cursor is over (close /
     /// category pill / card) — drives the `theme.button_hover` wash.
     pub component_browser_hover: Option<crate::component_browser_state::ComponentBrowserButton>,
-    /// Active kit filter (`None` = every loaded kit). Kept for the
-    /// future imported-kits surface; v1 ships one built-in kit.
+    /// Active kit filter (`None` = every loaded kit). Mirrors the TS
+    /// `uikit-store.ts` `activeKitId`.
     pub component_browser_kit_id: Option<String>,
+    /// Whether the kit-filter dropdown popover is open (the TS panel
+    /// uses a native `<select>`; the Rust panel paints a popover).
+    pub component_browser_kit_picker_open: bool,
+    /// Imported-kit id awaiting delete confirmation — the TS panel's
+    /// `confirmDeleteKitId` (Trash press arms it; Delete / Cancel
+    /// resolve it). Transient: never serialized.
+    pub component_browser_confirm_delete_kit: Option<String>,
+    /// A queued kit Import / Export request — set by a header-button
+    /// press, drained by the desktop host (which owns the native file
+    /// dialogs). Transient: never serialized.
+    pub component_browser_kit_request: Option<crate::uikit_io::KitIoRequest>,
+    /// Persistence-dirty flag: raised by `import_kit` / `remove_kit`,
+    /// drained by the desktop host into `uikits.json` (the TS
+    /// `uikit-store.persist()` counterpart).
+    pub ui_kits_changed: bool,
     /// A queued component-instantiate request — `(kit_id, comp_id)`,
     /// set by a card click, drained by the desktop host so it can
     /// run the instantiate against the viewport's centre.
@@ -1127,15 +1254,32 @@ impl Default for EditorUiState {
             size_hug_height: false,
             size_clip_content: false,
             fill_type_picker_open: false,
+            property_color_variable_picker_open: None,
             image_fill_popover_open: false,
             font_family_picker_open: false,
+            font_picker_search: String::new(),
+            font_picker_scroll: 0.0,
+            font_picker_hover: None,
+            system_font_families: std::sync::Arc::new(Vec::new()),
+            system_fonts_loaded: false,
+            image_panel: crate::image_panel_state::ImagePanelState::default(),
             font_weight_picker_open: false,
             font_weight_picker_hover: None,
             axis_dropdown_open: None,
             variables_panel_open: false,
+            variables_preset_menu_open: false,
+            variables_add_menu_open: false,
+            variables_preset_name_focus: false,
+            pending_theme_preset_io: None,
+            variables_current_axis: None,
+            variables_theme_menu_axis: None,
+            variables_variant_menu_value: None,
+            variables_theme_rename_axis: None,
+            variables_variant_rename_value: None,
             variables_panel_hover: None,
             variable_row_focus: None,
             effect_param_focus: None,
+            ime_preedit: None,
             hovered_layer_id: None,
             hovered_page_index: None,
             layer_context_menu: None,
@@ -1143,6 +1287,7 @@ impl Default for EditorUiState {
             rename_caret_anchor_ms: 0,
             last_layer_click: None,
             last_canvas_click: None,
+            last_variable_name_click: None,
             active_guides: Vec::new(),
             update_status: UpdateStatus::Idle,
             git_panel: GitPanelState::default(),
@@ -1152,11 +1297,17 @@ impl Default for EditorUiState {
             design_md_expanded: 0b0000_0111,
             design_md_request: None,
             component_browser_open: false,
+            canvas_hover_node: None,
+            entered_container: None,
             component_browser_pos: None,
             component_browser_search: String::new(),
             component_browser_category: None,
             component_browser_hover: None,
             component_browser_kit_id: None,
+            component_browser_kit_picker_open: false,
+            component_browser_confirm_delete_kit: None,
+            component_browser_kit_request: None,
+            ui_kits_changed: false,
             component_browser_pending_insert: None,
         }
     }
@@ -1166,6 +1317,14 @@ impl EditorUiState {
     /// A fresh UI state — sidebar open, dark theme, no menus open.
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Whether the preset dropdown's save-as-name input owns the
+    /// keyboard. Gated on the menu being open so a stale focus flag
+    /// (e.g. the menu closed by a panel-side `close_variable_menus`)
+    /// can never eat keystrokes.
+    pub fn preset_name_input_active(&self) -> bool {
+        self.variables_preset_menu_open && self.variables_preset_name_focus
     }
 
     /// Clear transient UI state that references specific document nodes/pages
@@ -1186,10 +1345,12 @@ impl EditorUiState {
         self.collapsed_layers.clear();
         self.last_layer_click = None;
         self.last_canvas_click = None;
+        self.entered_container = None;
         self.active_guides.clear();
         self.padding_edit_mode = None;
         self.padding_edit_mode_anchor = String::new();
         self.padding_mode_popover_open = false;
+        self.property_color_variable_picker_open = None;
         self.axis_dropdown_open = None;
         self.variable_row_focus = None;
         self.effect_param_focus = None;

@@ -138,6 +138,23 @@ pub enum LayerContextTarget {
     Page(usize),
 }
 
+/// Right-click context menu on a path anchor / handle (Select tool).
+/// Mirrors TS `PathAnchorContextMenu` (`skia-canvas.tsx:276-332`):
+/// Corner Point / Symmetric Curve / Free Curve / Reset Handles.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PathAnchorMenuState {
+    /// The Path node whose anchor was right-clicked.
+    pub node_id: NodeId,
+    /// Index of the right-clicked anchor (or the anchor owning the
+    /// right-clicked handle).
+    pub anchor_index: usize,
+    /// Menu anchor in viewport coords (the right-click position).
+    pub x: f32,
+    pub y: f32,
+    /// Hovered row index for the menu paint; `None` = no row hovered.
+    pub hovered_row: Option<u8>,
+}
+
 /// Inline rename in progress on a layer or page row.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LayerRenameState {
@@ -187,6 +204,9 @@ pub struct ColorPickerState {
     /// Viewport-y of the click that opened the picker — anchors the
     /// floating panel.
     pub anchor_y: f32,
+    /// Optional viewport-x of the click that opened the picker. When
+    /// absent, the widget keeps the legacy right-rail anchor.
+    pub anchor_x: Option<f32>,
     /// When `Some(name)`, the picker edits the named Color **variable**
     /// instead of the selected node's fill / stroke. The commit path
     /// (`color_picker_set_hsv`) then routes through
@@ -252,6 +272,15 @@ pub struct UiDraftState {
     /// True after Cmd/Ctrl+A while inline text-edit owns the keyboard.
     /// The next edit replaces the whole plain text content.
     pub text_edit_select_all: bool,
+    /// Caret position (byte offset into the edited Text node's plain
+    /// content) for the inline text editor. `None` falls back to the
+    /// end of the content (legacy append-at-end behaviour).
+    pub text_edit_caret: Option<usize>,
+    /// Selection anchor (byte offset) for the inline text editor. A
+    /// selection is active when both this and `text_edit_caret` are
+    /// set and differ; the selected range is `anchor..caret` (either
+    /// order). Cmd/Ctrl+A maps to anchor 0 + caret at content end.
+    pub text_edit_selection_anchor: Option<usize>,
     /// Caret-blink anchor (ms) for the inline text editor.
     pub text_edit_caret_anchor_ms: u64,
     /// In-progress Pen-tool path. `Some(id)` while the user is
@@ -259,10 +288,21 @@ pub struct UiDraftState {
     pub pen_in_progress: Option<NodeId>,
     /// Cursor position in document coords for the Pen-tool rubber band.
     pub pen_cursor_doc: Option<Point2D>,
+    /// True between a Pen-tool press and its release — cursor moves
+    /// mint mirrored bezier handles on the just-placed anchor instead
+    /// of tracking the rubber band (TS `penDraggingHandle`,
+    /// `skia-pen-tool.ts:97-110`).
+    pub pen_dragging_handle: bool,
+    /// Last Pen-tool press `(now_ms, viewport_x, viewport_y)` — drives
+    /// the double-click-finish detection (TS finishes the path on
+    /// `dblclick`; the host detects two presses < 400 ms / < 4 px apart).
+    pub pen_last_press: Option<(u64, f32, f32)>,
     /// Pre-pen history snapshot — captured BEFORE `start_pen_path`
     /// mutates the tree, pushed onto the undo stack only when the
     /// finished path has ≥ 2 anchors. Dropped on a 1-anchor cancel.
     pub pending_pen_history: Option<crate::history::EditorSnapshot>,
+    /// Open right-click menu on a path anchor; `None` when closed.
+    pub path_anchor_menu: Option<PathAnchorMenuState>,
     /// Active HSV colour picker overlay; `None` when closed.
     pub color_picker: Option<ColorPickerState>,
     /// Pre-edit snapshot captured when the colour picker opens;

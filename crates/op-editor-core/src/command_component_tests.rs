@@ -146,3 +146,54 @@ fn delete_component_clears_source_flag_outside_active_page() {
         _ => panic!("expected frame"),
     }
 }
+
+#[test]
+fn detach_component_clears_reusable_flag_and_registry() {
+    let mut s = sample();
+    assert!(s.apply(EditorCommand::CreateComponent {
+        node_id: id("n10"),
+        name: "Hero".into(),
+    }));
+    assert_eq!(s.components.len(), 1);
+
+    let survived = s.detach_component(&id("n10")).expect("detach succeeds");
+    assert_eq!(survived, id("n10"));
+    assert!(s.components.is_empty(), "registry entry drops");
+    match find_node(s.active_children(), &id("n10")).unwrap() {
+        PenNode::Frame(f) => assert_eq!(f.reusable, None, "reusable flag clears"),
+        _ => panic!("expected frame"),
+    }
+    assert!(s.history.can_undo());
+}
+
+#[test]
+fn detach_instance_materializes_overridden_subtree_with_fresh_ids() {
+    let mut s = sample();
+    assert!(s.apply(EditorCommand::CreateComponent {
+        node_id: id("n10"),
+        name: "Hero".into(),
+    }));
+    // Mint an instance by duplicating the reusable frame.
+    s.set_single_selection(id("n10"));
+    let mut next = 1000u64;
+    let inst_id = s
+        .duplicate_selected(&mut next, 10.0)
+        .expect("duplicate mints an instance");
+    match find_node(s.active_children(), &inst_id).unwrap() {
+        PenNode::Ref(r) => assert_eq!(r.target, "n10"),
+        other => panic!("expected ref instance, got {other:?}"),
+    }
+
+    let detached = s.detach_component(&inst_id).expect("instance detaches");
+    let node = find_node(s.active_children(), &detached).expect("detached tree in place");
+    match node {
+        PenNode::Frame(f) => {
+            assert_eq!(f.reusable, None, "detached tree is independent");
+        }
+        other => panic!("expected materialized frame, got {other:?}"),
+    }
+    assert!(
+        find_node(s.active_children(), &inst_id).is_none(),
+        "the ref node itself is gone"
+    );
+}

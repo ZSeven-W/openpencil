@@ -78,38 +78,12 @@ impl McpCli {
     }
 }
 
-/// MCP server status — surfaced on the MCP tab's top card. Default
-/// port mirrors the TS app (`pen-mcp` default 3100).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct McpServer {
-    pub running: bool,
-    pub port: u16,
-}
-
-impl Default for McpServer {
-    fn default() -> Self {
-        Self {
-            running: false,
-            port: 3100,
-        }
-    }
-}
-
-impl McpServer {
-    pub fn client_config_display_text(self) -> String {
-        format!(
-            r#"{{ "type": "http", "url": "http://127.0.0.1:{}/mcp" }}"#,
-            self.port
-        )
-    }
-
-    pub fn client_config_clipboard_text(self) -> String {
-        format!(
-            "{{\n  \"type\": \"http\",\n  \"url\": \"http://127.0.0.1:{}/mcp\"\n}}",
-            self.port
-        )
-    }
-}
+// `McpServer` + the provider connect-lifecycle types live in
+// `agent_settings_connection.rs` (800-line cap); re-exported here so
+// call sites keep the `agent_settings::McpServer` path.
+pub use crate::agent_settings_connection::{
+    McpServer, ProviderConnectOutcome, ProviderConnectPhase, ProviderConnection,
+};
 
 /// Editable inputs on the settings modal that aren't tied to a `Node`
 /// (so they don't fit the property-panel's `PropertyFocus`).
@@ -427,6 +401,12 @@ pub struct ImageGenProfile {
 pub struct AgentSettings {
     pub tab: AgentSettingsTab,
     pub connected: [bool; 5],
+    /// Probe-derived per-provider connect status, indexed like
+    /// `connected`. Runtime-only — not persisted.
+    pub provider_connection: [ProviderConnection; 5],
+    /// Connect-press request seam — the desktop host drains this
+    /// into the async provider probe (`provider_probe_host.rs`).
+    pub pending_provider_connect: Option<AgentProvider>,
     pub builtin_agents: Vec<BuiltinAgentConfig>,
     pub builtin_agent_draft: Option<BuiltinAgentConfig>,
     pub builtin_preset_menu_open: Option<BuiltinAgentPresetMenuTarget>,
@@ -483,6 +463,8 @@ impl Default for AgentSettings {
         Self {
             tab: AgentSettingsTab::Agents,
             connected: [false; 5],
+            provider_connection: Default::default(),
+            pending_provider_connect: None,
             builtin_agents: Vec::new(),
             builtin_agent_draft: None,
             builtin_preset_menu_open: None,
