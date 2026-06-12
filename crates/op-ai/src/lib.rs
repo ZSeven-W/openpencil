@@ -16,5 +16,6 @@
 //! and web shells can build against it.
 
 pub mod agent_settings_state;
+pub mod chat_history;
 pub mod chat_models;
 pub mod chat_provider;
