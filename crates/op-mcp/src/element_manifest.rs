@@ -745,4 +745,51 @@ mod tests {
             failures.join("\n")
         );
     }
+
+    /// 收集子树里所有布局层不解析的 expression gap/padding。Rust 布局链
+    /// 把 Expression 归零(jian-core `container_to_style` 与 op-pen-loader
+    /// `gap_value` 的 `_ => 0` 臂),所以任何 `$spacing-*` ref 都等于
+    /// gap/padding 直接消失。
+    fn collect_expression_layout_refs(node: &PenNode, kind: &str, hits: &mut Vec<String>) {
+        use jian_ops_schema::node::base::NumberOrExpression;
+        use jian_ops_schema::node::container::Padding;
+        let (container, children) = match node {
+            PenNode::Frame(f) => (Some(&f.container), f.children.as_deref()),
+            PenNode::Group(g) => (Some(&g.container), g.children.as_deref()),
+            PenNode::Rectangle(r) => (Some(&r.container), None),
+            _ => (None, None),
+        };
+        if let Some(c) = container {
+            if let Some(NumberOrExpression::Expression(expr)) = c.gap.as_ref() {
+                hits.push(format!("{kind}: gap = {expr:?}"));
+            }
+            if let Some(Padding::Expression(expr)) = c.padding.as_ref() {
+                hits.push(format!("{kind}: padding = {expr:?}"));
+            }
+        }
+        for child in children.unwrap_or(&[]) {
+            collect_expression_layout_refs(child, kind, hits);
+        }
+    }
+
+    /// system 模式布局不变量:任何 kind 在 theme=system 下都不得发
+    /// `$spacing-*` 等 expression gap/padding(2026-06-13 审计:曾有
+    /// modal_shell 的 padding/gap 与 toast 的 gap 三处,system 模式下
+    /// 卡片/胶囊直接坍缩)。颜色 `$color-*` ref 不在此列——scene_vars
+    /// 的 VariableTable 在 paint 期解析 fill/stroke ref。
+    #[test]
+    fn system_mode_never_emits_expression_gap_or_padding() {
+        let mut hits = Vec::new();
+        for kind in known_element_kinds() {
+            let built = build_element(&kind, &args(&[("theme", "system")]))
+                .unwrap_or_else(|err| panic!("{kind} must build in system mode: {err:?}"));
+            collect_expression_layout_refs(&built.node, &kind, &mut hits);
+        }
+        assert!(
+            hits.is_empty(),
+            "{} expression gap/padding emission(s) — the layout chain zeroes these:\n{}",
+            hits.len(),
+            hits.join("\n")
+        );
+    }
 }
