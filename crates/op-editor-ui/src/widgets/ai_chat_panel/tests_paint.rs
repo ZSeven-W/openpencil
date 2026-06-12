@@ -6,21 +6,21 @@
 use super::tests::{seed_available_model, toolbar_center_y};
 use super::*;
 
-fn assert_close(actual: f32, expected: f32) {
+pub(in super::super) fn assert_close(actual: f32, expected: f32) {
     assert!(
         (actual - expected).abs() < 1e-4,
         "expected {actual} to be close to {expected}"
     );
 }
 
-fn rect_close(actual: Rect, expected: Rect) -> bool {
+pub(in super::super) fn rect_close(actual: Rect, expected: Rect) -> bool {
     (actual.origin.x - expected.origin.x).abs() < 0.01
         && (actual.origin.y - expected.origin.y).abs() < 0.01
         && (actual.size.x - expected.size.x).abs() < 0.01
         && (actual.size.y - expected.size.y).abs() < 0.01
 }
 
-fn color_close(actual: crate::Color, expected: crate::Color) -> bool {
+pub(in super::super) fn color_close(actual: crate::Color, expected: crate::Color) -> bool {
     (actual.r - expected.r).abs() < 0.001
         && (actual.g - expected.g).abs() < 0.001
         && (actual.b - expected.b).abs() < 0.001
@@ -215,6 +215,35 @@ fn paint_model_picker_hover_stays_inside_model_chip() {
         hover.0.origin.x + hover.0.size.x <= footer.agent_team.origin.x - 6.0,
         "model hover should leave visible spacing before the Agent Team chip"
     );
+}
+
+#[test]
+fn footer_selection_count_sits_close_to_agent_team_chip() {
+    let mut s = EditorState::new();
+    seed_available_model(&mut s);
+    s.selection.set = vec![op_editor_core::NodeId::new("n1")];
+    s.selection.anchor = op_editor_core::NodeId::new("n1");
+    let panel = AIChatPlaceholder::from_editor(&s);
+    let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
+    let input = panel.input_rect(rect);
+    let toolbar_top = input.origin.y + INPUT_AREA_HEIGHT;
+    let footer = panel.footer_layout(rect, input, toolbar_top);
+    let mut backend = PanelPaintBackend::default();
+    let mut cx = PaintCx {
+        backend: &mut backend,
+    };
+
+    panel.paint(&mut cx, rect);
+
+    let selected_text =
+        op_i18n::translate(panel.locale, "common.selected").replace("{{count}}", "1");
+    let (_, _, _, origin) = backend
+        .texts
+        .iter()
+        .find(|(text, _, _, _)| text == &selected_text)
+        .expect("footer should paint selected-count label");
+    let gap = origin.x - (footer.agent_team.origin.x + footer.agent_team.size.x);
+    assert_close(gap, 4.0);
 }
 
 #[test]
