@@ -40,15 +40,32 @@ const MAX_SECTION_DEPTH: usize = 2;
 
 static NEXT_SECTION_ID: AtomicU64 = AtomicU64::new(1);
 
-/// M2 开关：`OPENPENCIL_MANIFEST=1`（或 `true`/`on`）把内置 agent 的
-/// 子代理输出协议切到元素清单。走环境变量是为了贴合 op-smoke 基准的
-/// per-process 切换习惯（参考 provider 切换），M4 过 ab-v9 门后翻默认值，
-/// 届时本变量保留为回滚开关。
-pub fn manifest_enabled() -> bool {
-    matches!(
-        std::env::var("OPENPENCIL_MANIFEST").as_deref(),
-        Ok("1") | Ok("true") | Ok("on")
-    )
+/// M4 路由表：ab-v9.2 全矩阵（2026-06-12）过 70% KPI 门的弱模型家族
+/// —— minimax-m3 92% / ark-code 92% / glm-5.1 98% / deepseek 83%。
+/// 强模型（Claude / GPT / Gemini 等）无基准数据不翻：目录是弱模型的
+/// 地板，不做强模型的天花板。kimi 同样无数据，待跑分后再进表。
+const MANIFEST_DEFAULT_FAMILIES: &[&str] = &["minimax", "glm", "deepseek", "ark-code"];
+
+/// M2 起的清单协议开关，M4 升级为按模型路由：`OPENPENCIL_MANIFEST`
+/// 保留为双向 override —— `1/true/on` 强制开（op-smoke 基准的
+/// per-process 切换习惯）、`0/false/off` 强制关（回滚开关）；未设置时
+/// 按 model id 家族路由。id 归一化与 `resolve_model_profile` 一致：
+/// strip `provider/` 前缀 → 小写 → 子串命中。空 id（chat 路径没有
+/// 模型信息时）不命中任何家族，走裸 JSONL。
+pub fn manifest_enabled_for_model(model_id: &str) -> bool {
+    match std::env::var("OPENPENCIL_MANIFEST").as_deref() {
+        Ok("1") | Ok("true") | Ok("on") => return true,
+        Ok("0") | Ok("false") | Ok("off") => return false,
+        _ => {}
+    }
+    let normalized = match model_id.find('/') {
+        Some(i) => &model_id[i + 1..],
+        None => model_id,
+    };
+    let lower = normalized.to_lowercase();
+    MANIFEST_DEFAULT_FAMILIES
+        .iter()
+        .any(|family| lower.contains(family))
 }
 
 /// 从 LLM 文本解析元素清单。文本里没有任何 `"el"` 行时返回 `None`，
@@ -724,5 +741,63 @@ Here is the design:
         let outcome = parse_manifest(text).expect("manifest");
         assert_eq!(outcome.nodes.len(), 1);
         assert_eq!(frame_children(&outcome.nodes[0]).len(), 1);
+    }
+
+    // ── M4 按模型路由 ──────────────────────────────────────────────────
+    // 所有用例都持 MANIFEST_ENV_LOCK：函数读进程全局 env，与 subagent
+    // 的 set/remove 测试并行会互相拆台。
+
+    #[test]
+    fn manifest_routes_on_for_benchmarked_families_without_env() {
+        let _guard = crate::test_support::MANIFEST_ENV_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        std::env::remove_var("OPENPENCIL_MANIFEST");
+        for id in [
+            "MiniMax-M3",
+            "MiniMax-M2.7",
+            "glm-5.1",
+            "deepseek-v4-pro",
+            "ark-code-latest",
+            "opencode/glm-5.1", // provider 前缀被剥掉
+        ] {
+            assert!(manifest_enabled_for_model(id), "{id} should route ON");
+        }
+    }
+
+    #[test]
+    fn manifest_routes_off_for_unbenchmarked_models_without_env() {
+        let _guard = crate::test_support::MANIFEST_ENV_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        std::env::remove_var("OPENPENCIL_MANIFEST");
+        for id in [
+            "claude-sonnet-4-6",
+            "claude-haiku",
+            "gpt-4o",
+            "gemini-2.5-pro",
+            "kimi-k2.6", // 无基准数据，刻意不进表
+            "",          // chat 路径没有模型信息 → 裸 JSONL
+        ] {
+            assert!(!manifest_enabled_for_model(id), "{id:?} should route OFF");
+        }
+    }
+
+    #[test]
+    fn manifest_env_overrides_routing_both_ways() {
+        let _guard = crate::test_support::MANIFEST_ENV_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        std::env::set_var("OPENPENCIL_MANIFEST", "1");
+        assert!(
+            manifest_enabled_for_model("claude-sonnet-4-6"),
+            "force-on must beat the family table"
+        );
+        std::env::set_var("OPENPENCIL_MANIFEST", "0");
+        assert!(
+            !manifest_enabled_for_model("MiniMax-M3"),
+            "force-off is the rollback switch"
+        );
+        std::env::remove_var("OPENPENCIL_MANIFEST");
     }
 }
