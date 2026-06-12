@@ -1,12 +1,10 @@
 //! Theme-preset dropdown dispatch — the native seam for #20.
 //!
 //! The dropdown itself is the shared `ThemePresetMenu` widget
-//! (op-editor-ui `widgets/variables_modal/presets.rs`). This module
-//! anchors it under the variables panel's preset button, paints it
-//! OVER the panel's legacy static stub menu (which maps every click
-//! to `TogglePresetMenu`), and routes presses into the
-//! `EditorState` preset store + the pending `.optheme` IO drained by
-//! op-host-desktop `theme_preset_host.rs`.
+//! (op-editor-ui `widgets/variables_preset_menu.rs`). This module
+//! anchors it under the variables panel's preset button and routes
+//! presses into the `EditorState` preset store + the pending
+//! `.optheme` IO drained by op-host-desktop `theme_preset_host.rs`.
 //!
 //! TS flows mirrored: `variable-theme-manager.tsx:131-164` (save /
 //! load / delete / import / export) + the outside-mousedown close at

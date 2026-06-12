@@ -78,6 +78,8 @@ mod icon_picker_press;
 #[cfg(all(test, feature = "codegen"))]
 mod io_tests;
 mod keyboard;
+mod keyboard_edit_ops;
+mod keyboard_settings_commit;
 mod overlay_cursor;
 mod overlay_keys;
 #[cfg(test)]
@@ -97,6 +99,12 @@ mod shape_picker_press;
 #[cfg(test)]
 mod theme_tests;
 mod toolbar_actions;
+mod variables_panel_commit;
+mod variables_panel_geometry;
+mod variables_panel_press;
+mod variables_panel_rows;
+#[cfg(test)]
+mod variables_panel_tests;
 
 pub(in crate::widget_host) const TOOLBAR_INSET_X: f32 = 12.0;
 pub(in crate::widget_host) const TOOLBAR_INSET_Y: f32 = 12.0;
@@ -159,6 +167,11 @@ pub struct WidgetHost {
     pub(in crate::widget_host) design_md_drag: Option<PanelDragState>,
     pub(in crate::widget_host) component_browser_drag: Option<PanelDragState>,
     pub(in crate::widget_host) icon_picker_drag: Option<PanelDragState>,
+    /// Active floating-VariablesPanel resize drag (right / bottom /
+    /// corner edge). Mirrors the native host; the live size is
+    /// written into `editor_ui.variables_panel_size`.
+    pub(in crate::widget_host) variables_resize:
+        Option<op_editor_ui::widgets::variables_panel::VariablesResizeEdge>,
     /// Counter for minting fresh `NodeId`s when the user duplicates
     /// a node. Bumped past the highest sample id so new + sample
     /// nodes never collide on the same key. Matches the native
@@ -318,6 +331,7 @@ impl WidgetHost {
             design_md_drag: None,
             component_browser_drag: None,
             icon_picker_drag: None,
+            variables_resize: None,
             next_node_id: 100,
             shift_held: false,
             now_ms: 0,
@@ -572,6 +586,10 @@ impl WidgetHost {
             }
         }
         if self.try_scroll_chat_checklist(x, y, delta_y, viewport_width, viewport_height) {
+            return true;
+        }
+        // Floating VariablesPanel owns the wheel over its rect.
+        if self.try_scroll_variables_panel(x, y, delta_y, viewport_width, viewport_height) {
             return true;
         }
         // Side rails scroll their panels instead of zooming the

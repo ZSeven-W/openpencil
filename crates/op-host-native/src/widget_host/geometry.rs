@@ -326,6 +326,23 @@ impl WidgetHostNative {
         if let Some(edge) = self.chat_resize_hover(x, y, viewport_w, viewport_h) {
             return Self::chat_resize_cursor(edge);
         }
+        // Floating VariablesPanel resize affordances (TS ew/ns/nwse
+        // cursor strips) — in-flight drag first, then edge hover.
+        if let Some(edge) = self.variables_resize.or_else(|| {
+            self.variables_panel_rect(viewport_w, viewport_h)
+                .and_then(|rect| {
+                    use op_editor_ui::widgets::variables_panel::VariablesPanel;
+                    VariablesPanel::for_editor(&self.editor_state)
+                        .resize_edge_at(rect, Point2D::new(x, y))
+                })
+        }) {
+            use op_editor_ui::widgets::variables_panel::VariablesResizeEdge;
+            return match edge {
+                VariablesResizeEdge::Right => CursorHint::ResizeEw,
+                VariablesResizeEdge::Bottom => CursorHint::ResizeNs,
+                VariablesResizeEdge::Corner => CursorHint::ResizeNwse,
+            };
+        }
         if let Some(chat_rect) = self.ai_chat_rect(viewport_w, viewport_h) {
             let panel = AIChatPlaceholder::from_editor(&self.editor_state);
             if let Some(AIChatHit::SelectInputText(_) | AIChatHit::SelectTranscriptText(_, _)) =

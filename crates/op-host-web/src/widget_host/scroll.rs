@@ -7,6 +7,38 @@ use op_editor_ui::widgets::{LayerPanel, PropertyPanel, TOP_BAR_HEIGHT};
 use op_editor_ui::{Point2D, Rect};
 
 impl WidgetHost {
+    /// Scroll the floating VariablesPanel row list when the wheel
+    /// fires over the open panel (TS `overflow-y-auto` rows region).
+    /// The whole panel rect swallows the event so a wheel over its
+    /// header can't zoom the canvas beneath. Mirrors the native host.
+    pub(in crate::widget_host) fn try_scroll_variables_panel(
+        &mut self,
+        x: f32,
+        y: f32,
+        delta_y: f32,
+        viewport_width: f32,
+        viewport_height: f32,
+    ) -> bool {
+        if !self.editor_state.editor_ui.variables_panel_open {
+            return false;
+        }
+        let Some(panel_rect) = self.variables_panel_rect(viewport_width, viewport_height) else {
+            return false;
+        };
+        if !rect_contains(panel_rect, Point2D::new(x, y)) {
+            return false;
+        }
+        use op_editor_ui::widgets::variables_panel::VariablesPanel;
+        let panel = VariablesPanel::for_editor(&self.editor_state);
+        let max = panel.max_scroll(panel_rect);
+        let next = (self.editor_state.editor_ui.variables_scroll - delta_y).clamp(0.0, max);
+        if next != self.editor_state.editor_ui.variables_scroll {
+            self.editor_state.editor_ui.variables_scroll = next;
+            self.mark_dirty();
+        }
+        true
+    }
+
     /// Scroll the right-rail PropertyPanel when a wheel lands over
     /// it. Returns `true` when the cursor was over the inspector.
     pub(in crate::widget_host) fn try_scroll_property_panel(

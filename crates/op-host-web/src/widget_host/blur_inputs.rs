@@ -12,6 +12,10 @@ impl WidgetHost {
     fn any_text_input_focused(&self) -> bool {
         let eui = &self.editor_state.editor_ui;
         self.editor_state.ui.property_focus.is_some()
+            || eui.variable_row_focus.is_some()
+            || eui.variables_theme_rename_axis.is_some()
+            || eui.variables_variant_rename_value.is_some()
+            || self.variables_search_active()
             || eui.agent_settings.focus.is_some()
             || eui.chat_model_picker_open
             || self.editor_state.chat.focused
@@ -28,6 +32,12 @@ impl WidgetHost {
             self.editor_state.ui.property_input_draft.clear();
             self.editor_state.ui.property_draft_select_all = false;
         }
+        // VariablesPanel drafts COMMIT on blur (header renames + row
+        // cells), mirroring the native blur helper; the search box
+        // just defocuses, keeping its typed filter.
+        self.commit_variables_panel_header_focus_if_any();
+        self.commit_variable_row_focus_if_any();
+        self.editor_state.editor_ui.variables_search_focus = false;
         // Settings-modal inputs (MCP port, agent / image-gen fields).
         self.commit_settings_focus();
         // Git panel carries no interactive inputs on web yet; defocus

@@ -8,7 +8,7 @@
 use op_editor_ui::widgets::TOP_BAR_HEIGHT;
 use op_editor_ui::{Point2D, Rect};
 
-use super::WidgetHost;
+use super::{rect_contains, WidgetHost};
 
 impl WidgetHost {
     /// Sync every agent-settings hover flag from the cursor.
@@ -297,6 +297,12 @@ impl WidgetHost {
         // below (layer context menu, layer drag, align toolbar) reads
         // current geometry, never a stale snapshot.
         self.refresh_layout_scene();
+        // In-flight VariablesPanel edge resize — owns the cursor.
+        if self.variables_resize.is_some()
+            && self.apply_variables_panel_resize(x, y, self.last_viewport_w, self.last_viewport_h)
+        {
+            return true;
+        }
         if self.editor_state.editor_ui.agent_settings_open && self.update_agent_settings_hover(x, y)
         {
             return true;
@@ -423,6 +429,45 @@ impl WidgetHost {
         // toolbar isn't intercepted by the hover update (mirrors
         // native widget_host/input.rs ordering).
         if self.update_toolbar_hover(x, y) {
+            return true;
+        }
+        // Floating VariablesPanel hover wash — mirrors the native
+        // host's hover sync against the SAME rect press dispatch uses.
+        if self.editor_state.editor_ui.variables_panel_open {
+            use op_editor_ui::widgets::variables_panel::VariablesPanel;
+            let point = Point2D::new(x, y);
+            if let Some(vars_rect) =
+                self.variables_panel_rect(self.last_viewport_w, self.last_viewport_h)
+            {
+                if rect_contains(vars_rect, point) {
+                    let new_hover = VariablesPanel::for_editor_at(&self.editor_state, self.now_ms)
+                        .hover_at(vars_rect, point);
+                    let changed = new_hover != self.editor_state.editor_ui.variables_panel_hover;
+                    if changed {
+                        self.editor_state.editor_ui.variables_panel_hover = new_hover;
+                        self.mark_dirty();
+                    }
+                    return changed;
+                }
+            }
+            if self
+                .editor_state
+                .editor_ui
+                .variables_panel_hover
+                .take()
+                .is_some()
+            {
+                self.mark_dirty();
+                return true;
+            }
+        } else if self
+            .editor_state
+            .editor_ui
+            .variables_panel_hover
+            .take()
+            .is_some()
+        {
+            self.mark_dirty();
             return true;
         }
         // TopBar chrome-button hover wash (sidebar / file-menu / figma /

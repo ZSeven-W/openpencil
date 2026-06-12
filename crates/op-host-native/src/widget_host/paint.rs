@@ -525,28 +525,6 @@ impl WidgetHostNative {
             panel.paint(&mut cx, panel_rect);
         }
 
-        // 12.9. IME preedit bubble — above panels/modals so in-flight
-        //       CJK composition is visible no matter which input owns
-        //       the keyboard (settings modal included).
-        if let Some(preedit) = self.editor_state.editor_ui.ime_preedit.clone() {
-            let anchor = self.ime_anchor_rect(viewport_width, viewport_height);
-            let viewport = Rect {
-                origin: Point2D::new(0.0, 0.0),
-                size: Point2D::new(viewport_width, viewport_height),
-            };
-            let mut cx = PaintCx {
-                backend: &mut *frame,
-            };
-            op_editor_ui::widgets::ime_preedit_overlay::paint_ime_preedit(
-                &mut cx,
-                &self.theme,
-                viewport,
-                anchor,
-                &preedit.text,
-                preedit.cursor,
-            );
-        }
-
         // 13. File-drop overlay — top-most layer, above every panel and
         //     modal, while a file is dragged over the window.
         if self.editor_state.editor_ui.file_drop_active {

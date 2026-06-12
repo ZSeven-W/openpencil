@@ -14,8 +14,7 @@ use op_editor_ui::widgets::variables_panel::VariablesPanel;
 use op_editor_ui::widgets::{
     AIChatPlaceholder, CanvasViewport, ComponentBrowserPanel, DesignMdPanel, IconPickerPanel,
     LayerPanel, LayoutCx, LocalePicker, PaintCx, PropertyPanel, ShapePicker, StatusBar, Toolbar,
-    TopBar, VariablesModal, Widget, STATUS_BAR_HEIGHT, STATUS_BAR_WIDTH, TOOLBAR_WIDTH,
-    TOP_BAR_HEIGHT,
+    TopBar, Widget, STATUS_BAR_HEIGHT, STATUS_BAR_WIDTH, TOOLBAR_WIDTH, TOP_BAR_HEIGHT,
 };
 use op_editor_ui::{Point2D, Rect, RenderBackend};
 
@@ -184,23 +183,12 @@ impl WidgetHost {
             panel.paint(&mut cx, property_rect);
         }
 
-        let has_variable_table = self
-            .editor_state
-            .doc
-            .variables
-            .as_ref()
-            .map(|v| !v.is_empty())
-            .unwrap_or(false);
-        let show_variables = has_variable_table && property_panel.is_none();
-        if show_variables {
-            let vars = VariablesPanel::for_editor(&self.editor_state);
-            let vars_rect = Rect {
-                origin: Point2D::new(
-                    viewport_width - ui.property_panel_width,
-                    TOP_BAR_HEIGHT + 8.0,
-                ),
-                size: Point2D::new(ui.property_panel_width, vars.intrinsic_height()),
-            };
+        // 5b. VariablesPanel — mirrors TS' `{}` toolbar toggle as a
+        //     floating canvas overlay next to the toolbar (#21: same
+        //     interactive grid as the native host; the old read-only
+        //     right-rail copy is gone).
+        if let Some(vars_rect) = self.variables_panel_rect(viewport_width, viewport_height) {
+            let vars = VariablesPanel::for_editor_at(&self.editor_state, self.now_ms);
             let mut cx = PaintCx {
                 backend: &mut *backend,
             };
@@ -386,17 +374,6 @@ impl WidgetHost {
             );
             let dlg = ExportDialog::centered(viewport_width, viewport_height);
             dlg.paint(&mut *backend, &self.theme, &self.editor_state.editor_ui);
-        }
-
-        // Variables modal — web's `{}` toolbar toggle (the native
-        // shell floats a panel instead; web keeps its modal).
-        if ui.variables_panel_open {
-            let modal = VariablesModal::for_editor(&self.editor_state);
-            let modal_rect = modal.rect(viewport_width, viewport_height);
-            let mut cx = PaintCx {
-                backend: &mut *backend,
-            };
-            modal.paint(&mut cx, modal_rect);
         }
 
         // Settings modal — Cmd+, overlay. Painted before the colour

@@ -1,6 +1,4 @@
-//! Theme-preset dropdown — the functional preset menu for the
-//! variables manager surfaces (modal + the native variables panel,
-//! which anchors it from the host side).
+//! Theme-preset dropdown — the functional preset menu for variables panels.
 //!
 //! TS source: `apps/web/src/components/panels/variable-theme-manager.tsx`
 //! :287-377 — popover `w-56` (224 px), `py-1`, `rounded-xl`, rows:
@@ -13,8 +11,8 @@
 //!   of only on row hover (TS `opacity-0 group-hover:opacity-100`) —
 //!   the Rust variables surfaces track no live row hover yet.
 //! - The popover is LEFT-aligned to its anchor; TS uses `right-0`
-//!   (right-aligned to the preset button). Left keeps it covering the
-//!   native panel's legacy stub menu rect exactly (cosmetic).
+//!   (right-aligned to the preset button). Left alignment keeps the
+//!   host-side anchor simple and stable.
 
 use crate::theme::Theme;
 use crate::widgets::editor_state_ext::theme_for;

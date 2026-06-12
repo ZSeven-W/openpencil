@@ -275,6 +275,21 @@ fn footer_selection_count_sits_close_to_agent_team_chip() {
 }
 
 #[test]
+fn multiline_input_expands_above_footer_toolbar() {
+    let mut s = EditorState::new();
+    s.chat.input =
+        "是的是啊打撒但是 codex 是的撒的 sad 是的撒d大城市多少是多少啊打撒打撒的".repeat(3);
+    let panel = AIChatPlaceholder::from_editor(&s);
+    let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
+
+    assert!(
+        panel.input_area_height_for_rect(rect) > INPUT_AREA_HEIGHT,
+        "multi-line chat input should grow so wrapped text does not overlap the footer toolbar"
+    );
+    assert!(panel.input_height() > INPUT_BASE_HEIGHT);
+}
+
+#[test]
 fn paint_send_button_hover_adds_visible_feedback() {
     let mut s = EditorState::new();
     seed_available_model(&mut s);

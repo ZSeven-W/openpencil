@@ -2,9 +2,7 @@
 //! out of `ai_chat_panel.rs` to keep that file under the 800-line cap.
 //! Pure geometry; the painting half stays in `ai_chat_panel.rs`.
 
-use super::ai_chat_panel::{
-    AIChatPlaceholder, INPUT_AREA_HEIGHT, PAD, RESIZE_CORNER, RESIZE_GUTTER,
-};
+use super::ai_chat_panel::{AIChatPlaceholder, PAD, RESIZE_CORNER, RESIZE_GUTTER};
 use crate::widgets::ai_chat_checklist::{
     fixed_checklist_height, fixed_checklist_max_scroll, fixed_checklist_rect, HEADER_H, PROGRESS_H,
 };
@@ -17,7 +15,8 @@ impl<'a> AIChatPlaceholder<'a> {
     pub fn fixed_checklist_bounds(&self, rect: Rect) -> Option<Rect> {
         let checklist_h =
             fixed_checklist_height(&self.state.messages, self.state.checklist_collapsed);
-        (checklist_h > 0.0).then(|| fixed_checklist_rect(rect, self.input_height(), checklist_h))
+        (checklist_h > 0.0)
+            .then(|| fixed_checklist_rect(rect, self.input_height_for_rect(rect), checklist_h))
     }
 
     pub fn fixed_checklist_scroll_max(&self) -> f32 {
@@ -59,12 +58,12 @@ impl<'a> AIChatPlaceholder<'a> {
         if rect_contains(new_chat_rect, point) {
             return Some(AIChatHit::NewChat);
         }
-        let input_h = self.input_height();
         // Must match `paint` exactly: paint draws the separator at
         // `bottom - input_h` and the input block one pixel below it
         // (`sep_y + 1`). An earlier `- PAD` here put the hit targets
         // ~17 px above where they are painted.
         let input_rect = self.input_rect(rect);
+        let input_area_h = self.input_area_height_for_rect(rect);
         // Model-picker dropdown — an overlay above the chip. When
         // open it behaves modally: a row click selects, any other
         // click dismisses it. Hit-tested before the input so a row
@@ -93,16 +92,19 @@ impl<'a> AIChatPlaceholder<'a> {
             return Some(AIChatHit::ToggleModelPicker);
         }
         if rect_contains(input_rect, point) {
-            let attach_top = input_rect.origin.y + INPUT_AREA_HEIGHT;
+            let attach_top = input_rect.origin.y + input_area_h;
             let attach_h = self.attachment_row_h();
             let toolbar_top = attach_top + attach_h;
             if point.y < attach_top {
                 if self.is_streaming() {
                     return Some(AIChatHit::Inside);
                 }
+                if self.state.input.is_empty() {
+                    return Some(AIChatHit::FocusInput);
+                }
                 let text_area = Rect {
                     origin: input_rect.origin,
-                    size: Point2D::new(input_rect.size.x, INPUT_AREA_HEIGHT),
+                    size: Point2D::new(input_rect.size.x, input_area_h),
                 };
                 let offset = crate::widgets::ai_chat_input_text::input_text_offset_at(
                     &self.state.input,
@@ -169,6 +171,7 @@ impl<'a> AIChatPlaceholder<'a> {
         let checklist_h =
             fixed_checklist_height(&self.state.messages, self.state.checklist_collapsed);
         if checklist_h > 0.0 {
+            let input_h = self.input_height_for_rect(rect);
             let checklist = fixed_checklist_rect(rect, input_h, checklist_h);
             if rect_contains(checklist, point) {
                 let header = Rect::xywh(
@@ -300,7 +303,7 @@ impl<'a> AIChatPlaceholder<'a> {
             return None;
         }
         let attach_h = self.attachment_row_h();
-        let toolbar_top = input_rect.origin.y + INPUT_AREA_HEIGHT + attach_h;
+        let toolbar_top = input_rect.origin.y + self.input_area_height_for_rect(rect) + attach_h;
         if point.y < toolbar_top {
             return None;
         }

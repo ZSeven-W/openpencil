@@ -1,6 +1,6 @@
 //! Non-press input handlers on `WidgetHostNative`. press -> press.rs.
 
-use super::helpers::{resize_bounds, PANEL_MAX_WIDTH, PANEL_MIN_WIDTH};
+use super::helpers::{rect_contains, resize_bounds, PANEL_MAX_WIDTH, PANEL_MIN_WIDTH};
 use super::{DragState, PanelResizeKind, WidgetHostNative};
 use op_editor_core::codegen::CodeSelection;
 use op_editor_ui::widgets::{
@@ -35,6 +35,7 @@ impl WidgetHostNative {
                 .is_some()
             // #20: preset dropdown's save-as-name input.
             || self.editor_state.editor_ui.preset_name_input_active()
+            || self.variables_search_active()
             || self.editor_state.editor_ui.effect_param_focus.is_some()
             || self.editor_state.editor_ui.agent_settings.focus.is_some()
             || self.editor_state.editor_ui.icon_picker_open
@@ -51,6 +52,14 @@ impl WidgetHostNative {
 
     pub fn settings_focus_active(&self) -> bool {
         self.editor_state.editor_ui.agent_settings.focus.is_some()
+    }
+
+    /// Whether the variables-panel search input owns the keyboard.
+    /// Gated on the panel being open so a stale focus flag can't eat
+    /// keystrokes after the panel closes.
+    pub fn variables_search_active(&self) -> bool {
+        self.editor_state.editor_ui.variables_panel_open
+            && self.editor_state.editor_ui.variables_search_focus
     }
 
     /// Whether the visible Git commit-message input owns the keyboard.
@@ -344,6 +353,12 @@ impl WidgetHostNative {
     }
 
     pub fn apply_cursor_move(&mut self, x: f32, y: f32) -> bool {
+        // In-flight VariablesPanel edge resize — owns the cursor.
+        if self.variables_resize.is_some()
+            && self.apply_variables_panel_resize(x, y, self.last_viewport_w, self.last_viewport_h)
+        {
+            return true;
+        }
         if self.editor_state.editor_ui.agent_settings_open && self.update_agent_settings_hover(x, y)
         {
             return true;
@@ -472,6 +487,34 @@ impl WidgetHostNative {
                     self.mark_dirty();
                     return true;
                 }
+            }
+        }
+        if self.editor_state.editor_ui.variables_panel_open {
+            let point = Point2D::new(x, y);
+            if let Some(panel_rect) =
+                self.variables_panel_rect(self.last_viewport_w, self.last_viewport_h)
+            {
+                if rect_contains(panel_rect, point) {
+                    use op_editor_ui::widgets::variables_panel::VariablesPanel;
+                    let new_hover = VariablesPanel::for_editor_at(&self.editor_state, self.now_ms)
+                        .hover_at(panel_rect, point);
+                    let changed = new_hover != self.editor_state.editor_ui.variables_panel_hover;
+                    if changed {
+                        self.editor_state.editor_ui.variables_panel_hover = new_hover;
+                        self.mark_dirty();
+                    }
+                    return changed;
+                }
+            }
+            if self
+                .editor_state
+                .editor_ui
+                .variables_panel_hover
+                .take()
+                .is_some()
+            {
+                self.mark_dirty();
+                return true;
             }
         }
         if let Some(field) = self.image_adjustment_drag {
@@ -1079,6 +1122,9 @@ impl WidgetHostNative {
         if self.panel_resize.take().is_some() {
             return true;
         }
+        if self.variables_resize.take().is_some() {
+            return true;
+        }
         if self.chat_resize.take().is_some() {
             return true;
         }
@@ -1184,6 +1230,9 @@ impl WidgetHostNative {
             return true;
         }
         if self.panel_resize.take().is_some() {
+            return true;
+        }
+        if self.variables_resize.take().is_some() {
             return true;
         }
         if self.chat_resize.take().is_some() {

@@ -23,6 +23,7 @@ impl WidgetHostNative {
             || eui.variables_variant_rename_value.is_some()
             // #20: preset dropdown's save-as-name input.
             || eui.preset_name_input_active()
+            || self.variables_search_active()
             || eui.agent_settings.focus.is_some()
             || eui.chat_model_picker_open
             || self.editor_state.chat.focused
@@ -57,6 +58,9 @@ impl WidgetHostNative {
         // #20: the preset-name input discards on blur (TS closes the
         // popover's input on outside mousedown without saving).
         eui.variables_preset_name_focus = false;
+        // Variables-panel search box defocuses; its typed filter
+        // persists (TS keeps the input value on blur).
+        eui.variables_search_focus = false;
         eui.chat_model_picker_open = false;
         eui.chat_model_picker_scroll = 0.0;
         eui.chat_model_picker_search.clear();

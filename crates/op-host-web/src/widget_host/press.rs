@@ -6,7 +6,7 @@
 //! host's layout) so this file stays under the 800-line cap.
 use op_editor_ui::widgets::{
     AIChatHit, AIChatPlaceholder, LayerPanel, LayerPanelHit, LocalePicker, PropertyPanel, Toolbar,
-    TopBar, TopBarHit, VariablesModal, VariablesModalHit, TOP_BAR_HEIGHT,
+    TopBar, TopBarHit, TOP_BAR_HEIGHT,
 };
 use op_editor_ui::{Point2D, Rect};
 
@@ -241,38 +241,12 @@ impl WidgetHost {
             return true;
         }
 
-        if self.editor_state.editor_ui.variables_panel_open {
-            let toolbar_rect = self.toolbar_rect(viewport_width);
-            let toolbar = Toolbar::for_editor(&self.editor_state);
-            if let Some(op_editor_ui::widgets::ToolbarHit::Action(
-                op_editor_ui::widgets::ToolbarAction::ToggleVariablesPanel,
-            )) = toolbar.hit_test(toolbar_rect, Point2D::new(x, y))
-            {
-                return self.dispatch_toolbar_action(
-                    op_editor_ui::widgets::ToolbarAction::ToggleVariablesPanel,
-                );
-            }
-            let modal = VariablesModal::for_editor(&self.editor_state);
-            let rect = modal.rect(viewport_width, viewport_height);
-            match modal.hit_test(rect, Point2D::new(x, y)) {
-                VariablesModalHit::Close | VariablesModalHit::Outside => {
-                    self.editor_state.editor_ui.variables_panel_open = false;
-                    self.editor_state.editor_ui.variables_panel_hover = None;
-                    self.editor_state.editor_ui.axis_dropdown_open = None;
-                    self.mark_dirty();
-                    return true;
-                }
-                VariablesModalHit::AddVariable | VariablesModalHit::HeaderAdd => {
-                    self.create_default_variable_from_modal();
-                    return true;
-                }
-                _ => {
-                    // Modal chrome that web doesn't act on — blank
-                    // press; blur the chrome text inputs under it.
-                    self.blur_text_inputs_on_blank_press();
-                    return true;
-                }
-            }
+        // 0aa. Floating VariablesPanel — full interactive grid
+        //      mirroring the native host (#21). A press inside the
+        //      panel rect dispatches; outside presses fall through to
+        //      the normal layers (the panel floats, it isn't modal).
+        if self.dispatch_variables_panel_press(x, y, viewport_width, viewport_height) {
+            return true;
         }
 
         // 0ab. Shape picker overlay (native press order: before the

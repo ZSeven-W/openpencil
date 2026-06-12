@@ -35,6 +35,64 @@ impl WidgetHost {
             }
             return false;
         }
+        // Variables-panel search filter — live append (mirrors the
+        // native host's append/pop discipline).
+        if self.variables_search_active() && !c.is_control() {
+            self.editor_state.editor_ui.variables_search.push(c);
+            self.editor_state.ui.property_caret_anchor_ms = self.now_ms;
+            self.editor_state.editor_ui.variables_scroll = 0.0;
+            self.mark_dirty();
+            return true;
+        }
+        // Variables-panel theme/variant header rename drafts.
+        if (self
+            .editor_state
+            .editor_ui
+            .variables_theme_rename_axis
+            .is_some()
+            || self
+                .editor_state
+                .editor_ui
+                .variables_variant_rename_value
+                .is_some())
+            && !c.is_control()
+        {
+            self.variables_draft_insert(c);
+            return true;
+        }
+        // Variables-panel row/cell drafts — per-kind char gates
+        // mirror the native host (numeric / free text / hex).
+        if let Some(focus) = self.editor_state.editor_ui.variable_row_focus {
+            use op_editor_core::editor_ui_state::VariableRowFocus;
+            let replacing_all = self.editor_state.ui.property_draft_select_all;
+            let draft = &self.editor_state.ui.property_input_draft;
+            let len_after_clear = if replacing_all { 0 } else { draft.len() };
+            let allowed = match focus {
+                VariableRowFocus::Name(_) => !c.is_control(),
+                VariableRowFocus::Number(_) | VariableRowFocus::NumberCell { .. } => {
+                    c.is_ascii_digit()
+                        || (c == '-' && (replacing_all || (len_after_clear == 0)))
+                        || (c == '.' && (replacing_all || !draft.contains('.')))
+                }
+                VariableRowFocus::String(_) | VariableRowFocus::StringCell { .. } => {
+                    !c.is_control()
+                }
+                // Inline color hex — `#` only at the front, hex digits
+                // after, capped at `#rrggbb`.
+                VariableRowFocus::ColorCell { .. } => {
+                    if c == '#' {
+                        len_after_clear == 0
+                    } else {
+                        c.is_ascii_hexdigit() && len_after_clear < 7
+                    }
+                }
+            };
+            if !allowed {
+                return false;
+            }
+            self.variables_draft_insert(c);
+            return true;
+        }
         // Font-family picker search box (mirrors the native
         // font_picker_dispatch routing).
         if self.editor_state.editor_ui.font_family_picker_open {
@@ -93,6 +151,32 @@ impl WidgetHost {
                 self.mark_dirty();
             }
             return ok;
+        }
+        // Variables-panel search filter — pop one char.
+        if self.variables_search_active() {
+            if self.editor_state.editor_ui.variables_search.pop().is_some() {
+                self.editor_state.ui.property_caret_anchor_ms = self.now_ms;
+                self.editor_state.editor_ui.variables_scroll = 0.0;
+                self.mark_dirty();
+                return true;
+            }
+            return false;
+        }
+        // Variables-panel header rename + row/cell drafts share the
+        // property draft machinery.
+        if self
+            .editor_state
+            .editor_ui
+            .variables_theme_rename_axis
+            .is_some()
+            || self
+                .editor_state
+                .editor_ui
+                .variables_variant_rename_value
+                .is_some()
+            || self.editor_state.editor_ui.variable_row_focus.is_some()
+        {
+            return self.variables_draft_backspace();
         }
         // Font-family picker search box — swallow the key while the
         // picker is open even on an empty draft (no node deletion).
@@ -153,6 +237,31 @@ impl WidgetHost {
             }
             return ok;
         }
+        // Enter in the variables search box just blurs it (the
+        // filter is already live).
+        if self.variables_search_active() {
+            self.editor_state.editor_ui.variables_search_focus = false;
+            self.mark_dirty();
+            return true;
+        }
+        if self
+            .editor_state
+            .editor_ui
+            .variables_theme_rename_axis
+            .is_some()
+            || self
+                .editor_state
+                .editor_ui
+                .variables_variant_rename_value
+                .is_some()
+        {
+            self.commit_variables_panel_header_focus_if_any();
+            return true;
+        }
+        if self.editor_state.editor_ui.variable_row_focus.is_some() {
+            self.commit_variable_row_focus_if_any();
+            return true;
+        }
         if self.editor_state.chat.input.trim().is_empty() {
             return false;
         }
@@ -188,6 +297,18 @@ impl WidgetHost {
         // through to `delete_selected` would drop the node behind the
         // focused field.
         if self.editor_state.ui.property_focus.is_some()
+            || self.editor_state.editor_ui.variable_row_focus.is_some()
+            || self.variables_search_active()
+            || self
+                .editor_state
+                .editor_ui
+                .variables_theme_rename_axis
+                .is_some()
+            || self
+                .editor_state
+                .editor_ui
+                .variables_variant_rename_value
+                .is_some()
             || self.editor_state.editor_ui.chat_model_picker_open
             || self.editor_state.chat.focused
         {
@@ -204,277 +325,6 @@ impl WidgetHost {
         let snap = self.editor_state.snapshot_for_history();
         if self.editor_state.delete_selected() {
             self.editor_state.history_push_past(snap);
-            self.mark_dirty();
-            return true;
-        }
-        false
-    }
-
-    /// Cmd/Ctrl+D — duplicate the selected node as a sibling
-    /// offset by ~10 doc px. Selection follows the clone.
-    pub fn apply_duplicate(&mut self) -> bool {
-        if self.input_active() {
-            return false;
-        }
-        if self.editor_state.selection.is_empty() {
-            return false;
-        }
-        self.editor_state.commit_history();
-        let dup = self
-            .editor_state
-            .duplicate_selected(&mut self.next_node_id, 10.0)
-            .is_some();
-        if dup {
-            self.mark_dirty();
-        }
-        dup
-    }
-
-    /// Left / Right arrow during an inline rename — moves the rename
-    /// caret one character. Returns whether a rename is active, so the
-    /// caller falls back to node-nudge when it isn't.
-    pub fn apply_rename_caret(&mut self, forward: bool) -> bool {
-        let moved = if forward {
-            self.editor_state.rename_caret_right()
-        } else {
-            self.editor_state.rename_caret_left()
-        };
-        if moved {
-            self.editor_state.editor_ui.rename_caret_anchor_ms = self.now_ms;
-            self.mark_dirty();
-        }
-        moved
-    }
-
-    /// Arrow-key nudge — translate the selected node by
-    /// `(dx, dy)` document px. Shift-arrow callers pass 10 px;
-    /// plain arrows pass 1 px.
-    pub fn apply_nudge(&mut self, dx: f32, dy: f32) -> bool {
-        if self.input_active() {
-            return false;
-        }
-        if self.editor_state.selection.is_empty() {
-            return false;
-        }
-        let snap = self.editor_state.snapshot_for_history();
-        if self.editor_state.translate_selected(dx as f64, dy as f64) {
-            self.editor_state.history_push_past(snap);
-            self.mark_dirty();
-            return true;
-        }
-        false
-    }
-
-    /// Cmd/Ctrl+A — replace selection with every top-level node
-    /// on the active page (TS `setSelection(topLevelIds, …)`).
-    pub fn apply_select_all(&mut self) -> bool {
-        if self.apply_input_select_all() {
-            return true;
-        }
-        if self.editor_state.select_all_top_level() {
-            self.mark_dirty();
-            return true;
-        }
-        false
-    }
-
-    fn apply_input_select_all(&mut self) -> bool {
-        if let Some(focus) = self.editor_state.editor_ui.agent_settings.focus {
-            let ui = &mut self.editor_state.editor_ui;
-            ui.settings_input_select_all = true;
-            ui.settings_input_caret = Some(ui.settings_input_draft.len());
-            ui.settings_input_caret_focus = Some(focus);
-            ui.settings_input_caret_anchor_ms = self.now_ms;
-            self.mark_dirty();
-            return true;
-        }
-        if let Some(rename) = self.editor_state.ui.layer_rename.as_mut() {
-            rename.select_all = true;
-            rename.caret = rename.draft.chars().count();
-            self.editor_state.editor_ui.rename_caret_anchor_ms = self.now_ms;
-            self.mark_dirty();
-            return true;
-        }
-        if self.editor_state.ui.text_editing.is_some() {
-            self.editor_state.ui.text_edit_select_all = true;
-            self.editor_state.ui.text_edit_caret_anchor_ms = self.now_ms;
-            self.mark_dirty();
-            return true;
-        }
-        if self.editor_state.ui.property_focus.is_some() {
-            let ui = &mut self.editor_state.ui;
-            ui.property_draft_select_all = true;
-            ui.property_caret_pos = ui.property_input_draft.len();
-            ui.property_caret_anchor_ms = self.now_ms;
-            self.mark_dirty();
-            return true;
-        }
-        if self.editor_state.editor_ui.icon_picker_open {
-            self.editor_state.editor_ui.icon_picker_select_all = true;
-            self.mark_dirty();
-            return true;
-        }
-        if self.editor_state.editor_ui.component_browser_open {
-            self.editor_state.editor_ui.component_browser_select_all = true;
-            self.mark_dirty();
-            return true;
-        }
-        if self.editor_state.editor_ui.chat_model_picker_open {
-            let ui = &mut self.editor_state.editor_ui;
-            ui.chat_model_picker_select_all = true;
-            ui.chat_model_picker_caret = Some(ui.chat_model_picker_search.len());
-            ui.chat_model_picker_caret_anchor_ms = self.now_ms;
-            self.mark_dirty();
-            return true;
-        }
-        if self.editor_state.chat.focused {
-            self.editor_state.chat.input_select_all = true;
-            self.editor_state.chat.input_selection =
-                Some(op_editor_core::chat::ChatInputSelection {
-                    anchor: 0,
-                    focus: self.editor_state.chat.input.len(),
-                });
-            self.editor_state.chat.caret_anchor_ms = self.now_ms;
-            self.mark_dirty();
-            return true;
-        }
-        false
-    }
-
-    /// Cmd/Ctrl+C — copy the selection into the clipboard.
-    pub fn apply_copy(&mut self) -> bool {
-        if self.editor_state.chat.focused {
-            if let Some(text) = self
-                .editor_state
-                .chat
-                .selected_input_text()
-                .map(str::to_string)
-            {
-                #[cfg(feature = "codegen")]
-                crate::web_clipboard::copy_text(&text);
-                #[cfg(not(feature = "codegen"))]
-                self.editor_state.chat.queue_copy_text(text);
-                return true;
-            }
-            return false;
-        }
-        if self.input_active() {
-            return false;
-        }
-        if let Some(text) = self.editor_state.codegen.selected_code_text() {
-            #[cfg(feature = "codegen")]
-            crate::web_clipboard::copy_text(text);
-            #[cfg(not(feature = "codegen"))]
-            let _ = text;
-            return true;
-        }
-        if let Some(text) = self
-            .editor_state
-            .chat
-            .selected_transcript_text()
-            .map(str::to_string)
-        {
-            #[cfg(feature = "codegen")]
-            crate::web_clipboard::copy_text(&text);
-            #[cfg(not(feature = "codegen"))]
-            self.editor_state.chat.queue_copy_text(text);
-            return true;
-        }
-        if self.editor_state.copy_selected() {
-            self.mark_dirty();
-            return true;
-        }
-        false
-    }
-
-    /// Cmd/Ctrl+X — copy then delete the selection.
-    pub fn apply_cut(&mut self) -> bool {
-        if self.input_active() {
-            return false;
-        }
-        if self.editor_state.selection.is_empty() {
-            return false;
-        }
-        self.editor_state.commit_history();
-        if self.editor_state.cut_selected() {
-            self.mark_dirty();
-            return true;
-        }
-        false
-    }
-
-    /// Cmd/Ctrl+V — paste the clipboard at the active page,
-    /// offset by 10 doc px from the originals. Selection follows
-    /// the new clones.
-    pub fn apply_paste(&mut self) -> bool {
-        if self.input_active() {
-            return false;
-        }
-        if self.editor_state.clipboard.is_empty() {
-            return false;
-        }
-        self.editor_state.commit_history();
-        let pasted = !self
-            .editor_state
-            .paste_clipboard(&mut self.next_node_id, 10.0)
-            .is_empty();
-        if pasted {
-            self.mark_dirty();
-        }
-        pasted
-    }
-
-    pub fn apply_undo(&mut self) -> bool {
-        if self.editor_state.ui.layer_rename.is_some() || self.editor_state.chat.focused {
-            return false;
-        }
-        if self.editor_state.undo() {
-            self.mark_dirty();
-            return true;
-        }
-        false
-    }
-
-    pub fn apply_redo(&mut self) -> bool {
-        if self.editor_state.ui.layer_rename.is_some() || self.editor_state.chat.focused {
-            return false;
-        }
-        if self.editor_state.redo() {
-            self.mark_dirty();
-            return true;
-        }
-        false
-    }
-
-    /// Cmd+Shift+K — toggle the component (UIKit) browser panel.
-    /// Mirrors the native host's `apply_toggle_component_browser`
-    /// (TS `editor-layout.tsx` Cmd+Shift+K → `toggleBrowser`); the
-    /// open-position default is the viewport centre via
-    /// `component_browser_panel_rect`'s `None`-pos fallback.
-    pub fn apply_toggle_component_browser(&mut self) -> bool {
-        let ui = &mut self.editor_state.editor_ui;
-        ui.component_browser_open = !ui.component_browser_open;
-        if !ui.component_browser_open {
-            ui.component_browser_kit_picker_open = false;
-            ui.component_browser_confirm_delete_kit = None;
-            ui.component_browser_hover = None;
-        }
-        self.mark_dirty();
-        true
-    }
-
-    /// `[` / `]` — bump the selected node down / up by one
-    /// position in its parent's children vec (changing paint
-    /// order).
-    pub fn apply_reorder(&mut self, direction: op_editor_core::ReorderDirection) -> bool {
-        if self.input_active() {
-            return false;
-        }
-        if self.editor_state.selection.is_empty() {
-            return false;
-        }
-        self.editor_state.commit_history();
-        if self.editor_state.reorder_selected(direction) {
             self.mark_dirty();
             return true;
         }
@@ -529,6 +379,44 @@ impl WidgetHost {
             self.editor_state.ui.property_input_draft.clear();
             self.editor_state.ui.property_draft_select_all = false;
             self.mark_dirty();
+            return true;
+        }
+        // Escape blurs the variables search box (the typed filter is
+        // kept — clearing it would surprise mid-search).
+        if self.variables_search_active() {
+            self.editor_state.editor_ui.variables_search_focus = false;
+            self.mark_dirty();
+            return true;
+        }
+        // Escape closes an open variable-row `⋯` menu.
+        if self
+            .editor_state
+            .editor_ui
+            .variables_row_menu
+            .take()
+            .is_some()
+        {
+            self.mark_dirty();
+            return true;
+        }
+        // Escape COMMITS variables header renames + row drafts
+        // (mirrors the native host's escape behavior).
+        if self
+            .editor_state
+            .editor_ui
+            .variables_theme_rename_axis
+            .is_some()
+            || self
+                .editor_state
+                .editor_ui
+                .variables_variant_rename_value
+                .is_some()
+        {
+            self.commit_variables_panel_header_focus_if_any();
+            return true;
+        }
+        if self.editor_state.editor_ui.variable_row_focus.is_some() {
+            self.commit_variable_row_focus_if_any();
             return true;
         }
         if self.editor_state.editor_ui.font_family_picker_open {
@@ -625,11 +513,77 @@ impl WidgetHost {
         ui.layer_rename.is_some()
             || ui.text_editing.is_some()
             || ui.property_focus.is_some()
+            || self.editor_state.editor_ui.variable_row_focus.is_some()
+            || self
+                .editor_state
+                .editor_ui
+                .variables_theme_rename_axis
+                .is_some()
+            || self
+                .editor_state
+                .editor_ui
+                .variables_variant_rename_value
+                .is_some()
+            || self.variables_search_active()
             || self.editor_state.editor_ui.agent_settings.focus.is_some()
             || self.editor_state.editor_ui.icon_picker_open
             || self.editor_state.editor_ui.chat_model_picker_open
             || self.editor_state.editor_ui.component_browser_open
             || self.editor_state.chat.focused
+    }
+
+    /// Caret-aware insert into the shared variables draft
+    /// (`ui.property_input_draft`), honoring select-all replacement.
+    fn variables_draft_insert(&mut self, c: char) {
+        let replacing_all = self.editor_state.ui.property_draft_select_all;
+        let pos = if replacing_all {
+            0
+        } else {
+            let draft = &self.editor_state.ui.property_input_draft;
+            let mut p = self.editor_state.ui.property_caret_pos.min(draft.len());
+            while p > 0 && !draft.is_char_boundary(p) {
+                p -= 1;
+            }
+            p
+        };
+        if replacing_all {
+            self.editor_state.ui.property_input_draft.clear();
+            self.editor_state.ui.property_caret_pos = 0;
+            self.editor_state.ui.property_draft_select_all = false;
+        }
+        self.editor_state.ui.property_input_draft.insert(pos, c);
+        self.editor_state.ui.property_caret_pos = pos + c.len_utf8();
+        self.editor_state.ui.property_caret_anchor_ms = self.now_ms;
+        self.mark_dirty();
+    }
+
+    /// Caret-aware backspace on the shared variables draft.
+    fn variables_draft_backspace(&mut self) -> bool {
+        if self.editor_state.ui.property_draft_select_all {
+            self.editor_state.ui.property_input_draft.clear();
+            self.editor_state.ui.property_caret_pos = 0;
+            self.editor_state.ui.property_draft_select_all = false;
+            self.editor_state.ui.property_caret_anchor_ms = self.now_ms;
+            self.mark_dirty();
+            return true;
+        }
+        let draft = &mut self.editor_state.ui.property_input_draft;
+        let mut pos = self.editor_state.ui.property_caret_pos.min(draft.len());
+        while pos > 0 && !draft.is_char_boundary(pos) {
+            pos -= 1;
+        }
+        if pos == 0 {
+            return false;
+        }
+        let mut prev = pos - 1;
+        while prev > 0 && !draft.is_char_boundary(prev) {
+            prev -= 1;
+        }
+        draft.drain(prev..pos);
+        self.editor_state.ui.property_caret_pos = prev;
+        self.editor_state.ui.property_caret_anchor_ms = self.now_ms;
+        self.mark_dirty();
+        true
     }
 
     /// IME composition forwarding. Only the final COMMIT lands in the
@@ -663,191 +617,5 @@ impl WidgetHost {
 
     /// Phase C2 keyboard forwarding stub.
     pub fn apply_key(&mut self, _event: &op_editor_ui::KeyEvent) { // glue:
-    }
-
-    /// Commit the in-progress settings-modal input draft (currently
-    /// just the MCP server port). Parses u16, clamps ≥1024, writes
-    /// back, clears focus + draft. Mirrors the native helper.
-    pub(super) fn commit_settings_focus(&mut self) {
-        use op_editor_core::agent_settings::{
-            AcpAgentField, BuiltinAgentField, ImageGenField, SettingsFocus,
-        };
-        let Some(focus) = self.editor_state.editor_ui.agent_settings.focus.take() else {
-            return;
-        };
-        let draft = std::mem::take(&mut self.editor_state.editor_ui.settings_input_draft);
-        self.clear_settings_caret();
-        match focus {
-            SettingsFocus::McpPort => {
-                if let Ok(port) = draft.trim().parse::<u16>() {
-                    self.editor_state.editor_ui.agent_settings.mcp_server.port = port.max(1024);
-                }
-            }
-            SettingsFocus::ImageSearch(field) => match field {
-                op_editor_core::agent_settings::ImageSearchField::ClientId => {
-                    self.editor_state
-                        .editor_ui
-                        .agent_settings
-                        .openverse_client_id = draft.trim().to_string();
-                }
-                op_editor_core::agent_settings::ImageSearchField::ClientSecret => {
-                    self.editor_state
-                        .editor_ui
-                        .agent_settings
-                        .openverse_client_secret = draft.trim().to_string();
-                }
-            },
-            SettingsFocus::BuiltinAgent { index, field } => {
-                if let Some(agent) = self
-                    .editor_state
-                    .editor_ui
-                    .agent_settings
-                    .builtin_agents
-                    .get_mut(index)
-                {
-                    match field {
-                        BuiltinAgentField::DisplayName => {
-                            if !draft.trim().is_empty() {
-                                agent.display_name = draft.trim().to_string();
-                            }
-                        }
-                        BuiltinAgentField::ApiKey => agent.api_key = draft.trim().to_string(),
-                        BuiltinAgentField::Model => agent.model = draft.trim().to_string(),
-                        BuiltinAgentField::BaseUrl => {
-                            agent.base_url = if draft.trim().is_empty() {
-                                agent.kind.default_base_url().to_string()
-                            } else {
-                                draft.trim().to_string()
-                            };
-                        }
-                    }
-                    self.editor_state.rebuild_chat_models();
-                }
-            }
-            SettingsFocus::BuiltinAgentDraft(field) => {
-                if let Some(agent) = self
-                    .editor_state
-                    .editor_ui
-                    .agent_settings
-                    .builtin_agent_draft
-                    .as_mut()
-                {
-                    match field {
-                        BuiltinAgentField::DisplayName => {
-                            if !draft.trim().is_empty() {
-                                agent.display_name = draft.trim().to_string();
-                            }
-                        }
-                        BuiltinAgentField::ApiKey => agent.api_key = draft.trim().to_string(),
-                        BuiltinAgentField::Model => agent.model = draft.trim().to_string(),
-                        BuiltinAgentField::BaseUrl => {
-                            agent.base_url = if draft.trim().is_empty() {
-                                agent.kind.default_base_url().to_string()
-                            } else {
-                                draft.trim().to_string()
-                            };
-                        }
-                    }
-                }
-            }
-            SettingsFocus::ImageGenProfile { index, field } => {
-                if let Some(profile) = self
-                    .editor_state
-                    .editor_ui
-                    .agent_settings
-                    .image_gen_profiles
-                    .get_mut(index)
-                {
-                    match field {
-                        ImageGenField::Name => profile.name = draft.trim().to_string(),
-                        ImageGenField::ApiKey => profile.api_key = draft.trim().to_string(),
-                        ImageGenField::Model => profile.model = draft.trim().to_string(),
-                        ImageGenField::BaseUrl => {
-                            profile.base_url = if draft.trim().is_empty() {
-                                None
-                            } else {
-                                Some(draft.trim().to_string())
-                            };
-                        }
-                    }
-                }
-            }
-            SettingsFocus::AcpAgent { index, field } => {
-                if let Some(agent) = self
-                    .editor_state
-                    .editor_ui
-                    .agent_settings
-                    .acp_agents
-                    .get_mut(index)
-                {
-                    match field {
-                        AcpAgentField::DisplayName => {
-                            if !draft.trim().is_empty() {
-                                agent.display_name = draft.trim().to_string();
-                            }
-                        }
-                        AcpAgentField::Command => {
-                            agent.command = draft.trim().to_string();
-                            agent.connected = false;
-                        }
-                        AcpAgentField::Args => {
-                            agent.set_args_text(&draft);
-                            agent.connected = false;
-                        }
-                        AcpAgentField::Env => {
-                            agent.set_env_text(&draft);
-                            agent.connected = false;
-                        }
-                        AcpAgentField::Url => {
-                            agent.url = if draft.trim().is_empty() {
-                                None
-                            } else {
-                                Some(draft.trim().to_string())
-                            };
-                            agent.connected = false;
-                        }
-                    }
-                    self.editor_state.rebuild_chat_models();
-                }
-            }
-            SettingsFocus::AcpAgentDraft(field) => {
-                if let Some(agent) = self
-                    .editor_state
-                    .editor_ui
-                    .agent_settings
-                    .acp_agent_draft
-                    .as_mut()
-                {
-                    match field {
-                        AcpAgentField::DisplayName => {
-                            if !draft.trim().is_empty() {
-                                agent.display_name = draft.trim().to_string();
-                            }
-                        }
-                        AcpAgentField::Command => {
-                            agent.command = draft.trim().to_string();
-                            agent.connected = false;
-                        }
-                        AcpAgentField::Args => {
-                            agent.set_args_text(&draft);
-                            agent.connected = false;
-                        }
-                        AcpAgentField::Env => {
-                            agent.set_env_text(&draft);
-                            agent.connected = false;
-                        }
-                        AcpAgentField::Url => {
-                            agent.url = if draft.trim().is_empty() {
-                                None
-                            } else {
-                                Some(draft.trim().to_string())
-                            };
-                            agent.connected = false;
-                        }
-                    }
-                }
-            }
-        }
-        self.mark_dirty();
     }
 }
