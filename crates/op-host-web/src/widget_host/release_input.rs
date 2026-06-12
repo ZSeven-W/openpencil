@@ -75,6 +75,9 @@ impl WidgetHost {
         if self.release_overlay_drags() {
             return true;
         }
+        if self.variables_resize.take().is_some() {
+            return true;
+        }
         if let Some(m) = self.marquee_drag.take() {
             self.commit_marquee_selection(m, viewport_w, viewport_h);
             return true;
@@ -117,6 +120,9 @@ impl WidgetHost {
     #[allow(dead_code)]
     pub fn apply_release(&mut self) -> bool {
         if self.release_overlay_drags() {
+            return true;
+        }
+        if self.variables_resize.take().is_some() {
             return true;
         }
         if self.marquee_drag.take().is_some() {

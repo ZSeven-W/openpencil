@@ -197,8 +197,8 @@ pub mod shape_picker;
 pub mod status_bar;
 pub mod top_bar;
 mod top_bar_paint;
-pub mod variables_modal;
 pub mod variables_panel;
+mod variables_preset_menu;
 
 pub use dropdown::{Dropdown, DropdownState};
 pub use prop_row::PropertyRow;
@@ -243,7 +243,7 @@ pub use top_bar::{TopBar, TopBarHit, WindowControl, TOP_BAR_HEIGHT};
 pub use layer_panel::{DropPosition, DropTarget, LayerPanelHit, LAYER_PANEL_WIDTH};
 pub use property_panel::PROPERTY_PANEL_WIDTH;
 pub use toolbar::{ToolbarAction, ToolbarHit, TOOLBAR_WIDTH};
-pub use variables_modal::{PresetMenuHit, ThemePresetMenu, VariablesModal, VariablesModalHit};
+pub use variables_preset_menu::{PresetMenuHit, ThemePresetMenu};
 
 /// Stable identifier assigned by the widget host. Used by accesskit
 /// (`accesskit::NodeId(WidgetId.0)`), the DOM mirror, and event routing.

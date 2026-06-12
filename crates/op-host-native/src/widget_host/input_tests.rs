@@ -547,10 +547,15 @@ fn toolbar_panel_actions_open_variables_and_design_panels() {
             op_editor_ui::widgets::ToolbarAction::ToggleVariablesPanel
         ))
     );
+    // The VariablesPanel is a floating canvas overlay (TS
+    // `variables-panel.tsx` absolute-positioned panel), NOT a
+    // right-rail tab — toggling it must not affect the rail.
+    // Mirrors `right_rail_visible_true_on_selection_only` in
+    // op-editor-core::tests_mutators.
     assert!(!host.editor_state().right_rail_visible());
     assert!(host.apply_press(variables_x, variables_y, viewport_w, viewport_h));
     assert!(host.editor_state().editor_ui.variables_panel_open);
-    assert!(host.editor_state().right_rail_visible());
+    assert!(!host.editor_state().right_rail_visible());
     assert_eq!(
         host.editor_state().editor_ui.property_tab,
         op_editor_core::PropertyTab::Design

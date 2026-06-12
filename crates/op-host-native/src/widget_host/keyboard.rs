@@ -153,6 +153,18 @@ impl WidgetHostNative {
             }
             return false;
         }
+        // Variables-panel search filter — live append, no draft /
+        // commit machinery (TS controlled `<input>`; same append/pop
+        // discipline as the font-picker search).
+        if self.variables_search_active() && !c.is_control() {
+            self.editor_state.editor_ui.variables_search.push(c);
+            self.editor_state.ui.property_caret_anchor_ms = self.now_ms;
+            // A narrower list invalidates the scroll offset — the
+            // widget clamps, but reset for a stable reveal-from-top.
+            self.editor_state.editor_ui.variables_scroll = 0.0;
+            self.mark_dirty();
+            return true;
+        }
         if (self
             .editor_state
             .editor_ui
@@ -205,6 +217,17 @@ impl WidgetHostNative {
                 }
                 VariableRowFocus::String(_) | VariableRowFocus::StringCell { .. } => {
                     !c.is_control()
+                }
+                // Inline color hex — `#` only at the front, hex
+                // digits after, capped at `#rrggbb` (same gating as
+                // the property panel's FillHex draft).
+                VariableRowFocus::ColorCell { .. } => {
+                    let len_after_clear = if replacing_all { 0 } else { draft.len() };
+                    if c == '#' {
+                        len_after_clear == 0
+                    } else {
+                        c.is_ascii_hexdigit() && len_after_clear < 7
+                    }
                 }
             };
             if !allowed {
@@ -503,6 +526,16 @@ impl WidgetHostNative {
                 self.mark_dirty();
             }
             return ok;
+        }
+        // Variables-panel search filter — pop one char.
+        if self.variables_search_active() {
+            if self.editor_state.editor_ui.variables_search.pop().is_some() {
+                self.editor_state.ui.property_caret_anchor_ms = self.now_ms;
+                self.editor_state.editor_ui.variables_scroll = 0.0;
+                self.mark_dirty();
+                return true;
+            }
+            return false;
         }
         if self
             .editor_state
@@ -1074,6 +1107,13 @@ impl WidgetHostNative {
         if self.commit_variables_preset_name_if_any() {
             return true;
         }
+        // Enter in the variables search box just blurs it (the filter
+        // is already live).
+        if self.variables_search_active() {
+            self.editor_state.editor_ui.variables_search_focus = false;
+            self.mark_dirty();
+            return true;
+        }
         if self
             .editor_state
             .editor_ui
@@ -1133,6 +1173,24 @@ impl WidgetHostNative {
         // #20: Escape closes the preset-name input only — the
         // preset dropdown stays open (variable-theme-manager.tsx:299).
         if self.escape_variables_preset_name() {
+            return true;
+        }
+        // Escape blurs the variables search box (the typed filter is
+        // kept — clearing it would surprise mid-search).
+        if self.variables_search_active() {
+            self.editor_state.editor_ui.variables_search_focus = false;
+            self.mark_dirty();
+            return true;
+        }
+        // Escape closes an open variable-row `⋯` menu.
+        if self
+            .editor_state
+            .editor_ui
+            .variables_row_menu
+            .take()
+            .is_some()
+        {
+            self.mark_dirty();
             return true;
         }
         // Escape steps out of the clone wizard: first defocus the active

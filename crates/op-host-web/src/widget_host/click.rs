@@ -310,28 +310,6 @@ impl WidgetHost {
         #[cfg(not(feature = "codegen"))]
         apply_offline_chat_error(&mut self.editor_state.chat);
     }
-
-    pub(in crate::widget_host) fn create_default_variable_from_modal(&mut self) {
-        use jian_ops_schema::variable::{VariableKind, VariableScalar};
-        let existing = self.editor_state.doc.variables.as_ref();
-        let mut idx = 1;
-        let name = loop {
-            let candidate = format!("variable-{idx}");
-            if existing.map_or(true, |vars| !vars.contains_key(&candidate)) {
-                break candidate;
-            }
-            idx += 1;
-        };
-        let snap = self.editor_state.snapshot_for_history();
-        if self.editor_state.create_variable(
-            &name,
-            VariableKind::Color,
-            VariableScalar::Str("#000000".into()),
-        ) {
-            self.editor_state.history_push_past(snap);
-        }
-        self.mark_dirty();
-    }
 }
 
 /// Honest assistant-side error a `codegen`-less build shows per send —

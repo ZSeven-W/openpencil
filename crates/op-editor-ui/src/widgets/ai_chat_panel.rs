@@ -160,7 +160,33 @@ impl<'a> AIChatPlaceholder<'a> {
     /// Total input-block height, including the attachment row when
     /// attachments are staged.
     pub(crate) fn input_height(&self) -> f32 {
-        INPUT_BASE_HEIGHT + self.attachment_row_h()
+        self.input_height_for_width(self.state.panel_width)
+    }
+
+    pub(crate) fn input_area_height_for_input_width(&self, input_w: f32) -> f32 {
+        let lines = crate::widgets::ai_chat_input_text::visible_input_line_count(
+            &self.state.input,
+            input_w,
+        );
+        INPUT_AREA_HEIGHT
+            + (lines.saturating_sub(1) as f32) * crate::widgets::ai_chat_input_text::INPUT_LINE_H
+    }
+
+    pub(crate) fn input_area_height_for_width(&self, panel_w: f32) -> f32 {
+        let input_w = (panel_w - PAD * 2.0).max(0.0);
+        self.input_area_height_for_input_width(input_w)
+    }
+
+    pub(crate) fn input_height_for_width(&self, panel_w: f32) -> f32 {
+        self.input_area_height_for_width(panel_w) + INPUT_TOOLBAR_HEIGHT + self.attachment_row_h()
+    }
+
+    pub(crate) fn input_area_height_for_rect(&self, rect: Rect) -> f32 {
+        self.input_area_height_for_width(rect.size.x)
+    }
+
+    pub(crate) fn input_height_for_rect(&self, rect: Rect) -> f32 {
+        self.input_height_for_width(rect.size.x)
     }
 
     fn maximize_icon(&self) -> Icon {
@@ -174,7 +200,7 @@ impl<'a> AIChatPlaceholder<'a> {
     pub(crate) fn body_rect(&self, rect: Rect) -> Rect {
         let body_top = rect.origin.y + HEADER_HEIGHT + 14.0; // gap before first bubble
         let body_bottom = rect.origin.y + rect.size.y
-            - self.input_height()
+            - self.input_height_for_rect(rect)
             - PAD
             - 8.0
             - fixed_checklist_height(&self.state.messages, self.state.checklist_collapsed);
@@ -189,7 +215,8 @@ impl<'a> AIChatPlaceholder<'a> {
             &self.state.available_models,
             &self.model_picker_search,
         );
-        let toolbar_top = input_rect.origin.y + INPUT_AREA_HEIGHT + self.attachment_row_h();
+        let toolbar_top =
+            input_rect.origin.y + self.input_area_height_for_rect(rect) + self.attachment_row_h();
         let bottom = toolbar_top - 4.0;
         Rect {
             origin: Point2D::new(rect.origin.x + PAD, bottom - height),
@@ -218,7 +245,7 @@ impl<'a> AIChatPlaceholder<'a> {
     }
 
     pub fn input_rect(&self, rect: Rect) -> Rect {
-        let input_h = self.input_height();
+        let input_h = self.input_height_for_rect(rect);
         Rect {
             origin: Point2D::new(
                 rect.origin.x + PAD,
@@ -354,7 +381,7 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
 
         paint_panel_surface(cx, &self.theme, rect);
         let can_use_model = !self.state.available_models.is_empty();
-        let input_h = self.input_height();
+        let input_h = self.input_height_for_rect(rect);
         let sep_y = rect.origin.y + rect.size.y - input_h;
         paint_panel_body_chrome(cx, &self.theme, rect, sep_y);
 
@@ -465,14 +492,18 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
         }
         let input_rect = Rect {
             origin: Point2D::new(rect.origin.x + PAD, sep_y + 1.0),
-            size: Point2D::new(rect.size.x - PAD * 2.0, INPUT_AREA_HEIGHT),
+            size: Point2D::new(
+                rect.size.x - PAD * 2.0,
+                self.input_area_height_for_rect(rect),
+            ),
         };
+        let input_area_h = input_rect.size.y;
         crate::widgets::ai_chat_input_text::paint_input_text_area(
             cx,
             &self.theme,
             self.state,
             input_rect,
-            INPUT_AREA_HEIGHT,
+            input_area_h,
             self.now_ms,
             &self.label_input_placeholder,
         );
@@ -482,7 +513,7 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
         let attach_h = self.attachment_row_h();
         if attach_h > 0.0 {
             let attach_rect = Rect {
-                origin: Point2D::new(input_rect.origin.x, input_rect.origin.y + INPUT_AREA_HEIGHT),
+                origin: Point2D::new(input_rect.origin.x, input_rect.origin.y + input_area_h),
                 size: Point2D::new(input_rect.size.x, attach_h),
             };
             paint_attachment_row(cx, &self.theme, attach_rect, self.state);
@@ -490,7 +521,7 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
 
         // Bottom toolbar — model picker on the left, send on the
         // right (mirrors the TS panel's bottom row).
-        let toolbar_y = input_rect.origin.y + INPUT_AREA_HEIGHT + attach_h;
+        let toolbar_y = input_rect.origin.y + input_area_h + attach_h;
         let toolbar_center_y = toolbar_y + INPUT_TOOLBAR_HEIGHT / 2.0;
         let footer = self.footer_layout(rect, self.input_rect(rect), toolbar_y);
         use op_editor_core::ChatFooterButton;

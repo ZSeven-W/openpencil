@@ -119,8 +119,11 @@ mod toolbar_hover;
 mod variables_panel_commit;
 mod variables_panel_geometry;
 mod variables_panel_press;
+mod variables_panel_row_press;
 #[cfg(test)]
 mod variables_panel_tests;
+#[cfg(test)]
+mod variables_panel_ux_tests;
 mod variables_preset_press;
 mod viewport_fit;
 
@@ -230,6 +233,11 @@ pub struct WidgetHostNative {
     /// within the resize gutter of LayerPanel's right edge or
     /// PropertyPanel's left edge.
     pub(in crate::widget_host) panel_resize: Option<PanelResize>,
+    /// Active floating-VariablesPanel resize drag (right / bottom /
+    /// corner edge, TS pointer-capture handles). The live size is
+    /// written into `editor_ui.variables_panel_size`.
+    pub(in crate::widget_host) variables_resize:
+        Option<op_editor_ui::widgets::variables_panel::VariablesResizeEdge>,
     /// Active node-drag — set when the user presses on a node in
     /// the canvas with the Select tool. Tracks the document-space
     /// cursor anchor so each `apply_cursor_move` translates the
@@ -558,6 +566,7 @@ impl WidgetHostNative {
             text_edit_selection_drag: None,
             text_measure: None,
             panel_resize: None,
+            variables_resize: None,
             node_drag: None,
             path_anchor_drag: None,
             arc_handle_drag: None,

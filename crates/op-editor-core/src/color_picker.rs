@@ -130,6 +130,7 @@ impl EditorState {
             anchor_y,
             anchor_x: None,
             variable: None,
+            variable_theme: None,
             alpha,
         });
         true
@@ -148,7 +149,7 @@ impl EditorState {
         variable: impl Into<String>,
         anchor_y: f32,
     ) -> bool {
-        self.open_color_picker_for_variable_with_anchor(variable, None, anchor_y)
+        self.open_color_picker_for_variable_with_anchor(variable, None, None, anchor_y)
     }
 
     /// Same as [`Self::open_color_picker_for_variable`], but anchors
@@ -159,28 +160,57 @@ impl EditorState {
         anchor_x: f32,
         anchor_y: f32,
     ) -> bool {
-        self.open_color_picker_for_variable_with_anchor(variable, Some(anchor_x), anchor_y)
+        self.open_color_picker_for_variable_with_anchor(variable, None, Some(anchor_x), anchor_y)
+    }
+
+    /// Variant-column-targeted picker open (#19). Seeds HSV from the
+    /// variable's value under exactly `(axis, theme_value)` — NOT the
+    /// active theme — and arms the commit path to write that themed
+    /// entry. Mirrors TS `variable-row.tsx` ColorCell + setValueForTheme.
+    pub fn open_color_picker_for_variable_theme_at(
+        &mut self,
+        variable: impl Into<String>,
+        axis: impl Into<String>,
+        theme_value: impl Into<String>,
+        anchor_x: f32,
+        anchor_y: f32,
+    ) -> bool {
+        self.open_color_picker_for_variable_with_anchor(
+            variable,
+            Some((axis.into(), theme_value.into())),
+            Some(anchor_x),
+            anchor_y,
+        )
     }
 
     fn open_color_picker_for_variable_with_anchor(
         &mut self,
         variable: impl Into<String>,
+        variable_theme: Option<(String, String)>,
         anchor_x: Option<f32>,
         anchor_y: f32,
     ) -> bool {
         let name = variable.into();
         // Resolve the variable's current colour to seed HSV. Reject
         // unknown names, non-Color kinds, and non-hex scalars.
-        let is_color = matches!(
-            self.find_variable(&name).map(|d| &d.kind),
-            Some(jian_ops_schema::variable::VariableKind::Color)
-        );
-        if !is_color {
+        let Some(def) = self.find_variable(&name) else {
+            return false;
+        };
+        if !matches!(def.kind, jian_ops_schema::variable::VariableKind::Color) {
             return false;
         }
-        let scalar = match self.resolve_variable(&name) {
-            Some(jian_ops_schema::variable::VariableScalar::Str(s)) => s.clone(),
-            _ => return false,
+        // Variant-targeted opens seed from THAT column's value (TS
+        // ColorCell shows the per-column value); the active-theme
+        // resolve only serves the plain (row-level) open.
+        let scalar = match &variable_theme {
+            Some((axis, value)) => match variant_scalar(&def.value, axis, value) {
+                Some(jian_ops_schema::variable::VariableScalar::Str(s)) => s.clone(),
+                _ => return false,
+            },
+            None => match self.resolve_variable(&name) {
+                Some(jian_ops_schema::variable::VariableScalar::Str(s)) => s.clone(),
+                _ => return false,
+            },
         };
         let Some(rgb) = parse_hex_rgb(&scalar) else {
             return false;
@@ -199,6 +229,7 @@ impl EditorState {
             anchor_y,
             anchor_x,
             variable: Some(name),
+            variable_theme,
             alpha: 1.0,
         });
         true
@@ -220,14 +251,20 @@ impl EditorState {
         state.val = val.clamp(0.0, 1.0);
         let target = state.target;
         let variable = state.variable.clone();
+        let variable_theme = state.variable_theme.clone();
         let (r, g, b) = hsv_to_rgb(state.hue, state.sat, state.val);
         let hex = rgb_to_hex(r, g, b);
         if let Some(name) = variable {
             // Variable-mode commit — write through the variable so
-            // every node referencing it repaints. `set_variable_color`
-            // applies the same theme-routing discipline variable edits
-            // land through.
-            self.set_variable_color(&name, &hex);
+            // every node referencing it repaints. A variant-targeted
+            // open (#19) writes exactly the clicked theme column;
+            // otherwise `set_variable_color` applies the active-theme
+            // routing discipline.
+            if let Some((axis, value)) = variable_theme {
+                self.set_variable_color_for_theme(&name, &axis, &value, &hex);
+            } else {
+                self.set_variable_color(&name, &hex);
+            }
             return true;
         }
         match target {
@@ -340,6 +377,32 @@ fn scalar_as_hex(s: &jian_ops_schema::variable::VariableScalar) -> Option<String
     match s {
         jian_ops_schema::variable::VariableScalar::Str(hex) => Some(hex.clone()),
         _ => None,
+    }
+}
+
+/// Scalar shown in one variant column: exact `(axis, value)` match →
+/// untagged (`theme: None`) entry → first entry. Same fallback chain
+/// as the panel grid (TS `variable-row.tsx getValueForTheme`).
+fn variant_scalar<'a>(
+    value: &'a jian_ops_schema::variable::VariableValue,
+    axis: &str,
+    theme_value: &str,
+) -> Option<&'a jian_ops_schema::variable::VariableScalar> {
+    use jian_ops_schema::variable::VariableValue;
+    match value {
+        VariableValue::Scalar(s) => Some(s),
+        VariableValue::Themed(entries) => entries
+            .iter()
+            .find(|entry| {
+                entry
+                    .theme
+                    .as_ref()
+                    .and_then(|theme| theme.get(axis))
+                    .is_some_and(|v| v == theme_value)
+            })
+            .or_else(|| entries.iter().find(|entry| entry.theme.is_none()))
+            .or_else(|| entries.first())
+            .map(|entry| &entry.value),
     }
 }
 
@@ -686,6 +749,68 @@ mod tests {
             Some(VariableScalar::Str(hex)) => assert_eq!(hex, "#ff0000"),
             other => panic!("expected red, got {other:?}"),
         }
+    }
+
+    // --- Variant-targeted picker (#19) -------------------------------
+
+    /// State with one Color variable and a 2-variant Theme-1 axis,
+    /// active theme pinned to Light.
+    fn state_with_two_variant_color(hex: &str) -> EditorState {
+        let mut s = state_with_color_var("brand", hex);
+        let mut themes = std::collections::BTreeMap::new();
+        themes.insert(
+            "Theme-1".to_string(),
+            vec!["Light".to_string(), "Dark".to_string()],
+        );
+        s.doc.themes = Some(themes);
+        s.ui.variables
+            .active_theme
+            .insert("Theme-1".into(), "Light".into());
+        s
+    }
+
+    #[test]
+    fn variant_targeted_picker_writes_the_clicked_column() {
+        // Click the Dark column swatch while the canvas renders Light:
+        // the commit must land in Dark, leaving Light untouched (this
+        // was the #19 wrong-cell-write bug).
+        let mut s = state_with_two_variant_color("#ff8800");
+        assert!(s.open_color_picker_for_variable_theme_at("brand", "Theme-1", "Dark", 10.0, 20.0));
+        let state = s.ui.color_picker.as_ref().expect("picker open");
+        assert_eq!(
+            state.variable_theme,
+            Some(("Theme-1".to_string(), "Dark".to_string()))
+        );
+        assert!(s.color_picker_set_hsv(0.0, 1.0, 1.0)); // → red
+                                                        // Active theme (Light) still resolves the original colour.
+        assert_eq!(
+            s.resolve_variable("brand"),
+            Some(&VariableScalar::Str("#ff8800".into()))
+        );
+        // The Dark entry carries the new red.
+        s.ui.variables
+            .active_theme
+            .insert("Theme-1".into(), "Dark".into());
+        assert_eq!(
+            s.resolve_variable("brand"),
+            Some(&VariableScalar::Str("#ff0000".into()))
+        );
+    }
+
+    #[test]
+    fn variant_targeted_picker_seeds_hsv_from_that_column() {
+        let mut s = state_with_two_variant_color("#ff0000");
+        // Materialize a green Dark entry, keep Light red.
+        assert!(s.set_variable_color_for_theme("brand", "Theme-1", "Dark", "#00ff00"));
+        assert!(s.open_color_picker_for_variable_theme_at("brand", "Theme-1", "Dark", 0.0, 0.0));
+        let state = s.ui.color_picker.as_ref().expect("picker open");
+        // Green hue ≈ 120°, not red's 0° (which an active-theme seed
+        // would have produced).
+        assert!(
+            (state.hue - 120.0).abs() < 1.0,
+            "expected green seed, hue {}",
+            state.hue
+        );
     }
 
     #[test]

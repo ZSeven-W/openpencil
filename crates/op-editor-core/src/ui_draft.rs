@@ -215,6 +215,13 @@ pub struct ColorPickerState {
     /// any code that pattern-matches on it without checking `variable`.
     /// Ported from shell-core's `ColorPickerState::variable`.
     pub variable: Option<String>,
+    /// When `Some((axis, value))` alongside `variable`, the picker
+    /// edits that variable's THEMED value for exactly the clicked
+    /// variant column instead of routing through the active theme.
+    /// Mirrors TS `variable-row.tsx setValueForTheme` — clicking the
+    /// "Dark" column swatch writes the Dark entry even while the
+    /// canvas renders Light. Unused in node mode.
+    pub variable_theme: Option<(String, String)>,
     /// Alpha (`0..=1`) the picker preserves on every commit. Seeded
     /// from the target's current colour at open time so adjusting
     /// SV / hue on a transparent gradient stop (`#00000000`) keeps

@@ -188,6 +188,31 @@ impl EditorState {
         true
     }
 
+    /// Write a hex into one concrete theme value column of a `Color`
+    /// variable. Mirrors TS `variable-row.tsx:93-108 setValueForTheme`
+    /// — the clicked variant column gets the new value; a scalar
+    /// value materializes the full themed array first. `false` when
+    /// the variable is unknown, not Color-kind, or the hex doesn't
+    /// parse.
+    pub fn set_variable_color_for_theme(
+        &mut self,
+        name: &str,
+        axis: &str,
+        theme_value: &str,
+        hex: &str,
+    ) -> bool {
+        if crate::color_picker::parse_hex_rgb(hex).is_none() {
+            return false;
+        }
+        self.set_variable_scalar_for_theme(
+            name,
+            VariableKind::Color,
+            VariableScalar::Str(hex.trim().to_string()),
+            axis,
+            theme_value,
+        )
+    }
+
     /// Write a number into a `Number` variable. Kind-mismatch → false.
     pub fn set_variable_number(&mut self, name: &str, value: f64) -> bool {
         self.set_variable_scalar(name, VariableKind::Number, VariableScalar::Num(value))
@@ -239,6 +264,25 @@ impl EditorState {
     /// Write a boolean into a `Boolean` variable. Kind-mismatch → false.
     pub fn set_variable_boolean(&mut self, name: &str, value: bool) -> bool {
         self.set_variable_scalar(name, VariableKind::Boolean, VariableScalar::Bool(value))
+    }
+
+    /// Write a boolean into one concrete theme value column. Rust-only
+    /// extension (TS boolean rows are inert) — keeps boolean cells
+    /// consistent with the variant-targeted number/string/color writes.
+    pub fn set_variable_boolean_for_theme(
+        &mut self,
+        name: &str,
+        axis: &str,
+        theme_value: &str,
+        value: bool,
+    ) -> bool {
+        self.set_variable_scalar_for_theme(
+            name,
+            VariableKind::Boolean,
+            VariableScalar::Bool(value),
+            axis,
+            theme_value,
+        )
     }
 
     /// Shared kind-checked scalar writer for number / string /
@@ -719,6 +763,106 @@ mod tests {
         assert!(!s.set_variable_color("brand", "nothex"));
         // Unknown name → rejected.
         assert!(!s.set_variable_color("missing", "#000000"));
+    }
+
+    #[test]
+    fn set_variable_color_for_theme_targets_the_clicked_variant() {
+        let mut s = doc_with_color_var("brand", "#111111");
+        let mut themes = BTreeMap::new();
+        themes.insert(
+            "Theme-1".to_string(),
+            vec!["Light".to_string(), "Dark".to_string()],
+        );
+        s.doc.themes = Some(themes);
+        // Canvas is pinned to Light — the write must still land in
+        // the clicked Dark column (TS setValueForTheme parity).
+        s.ui.variables
+            .active_theme
+            .insert("Theme-1".into(), "Light".into());
+        assert!(s.set_variable_color_for_theme("brand", "Theme-1", "Dark", "#abcdef"));
+        // Scalar materialized into a per-variant themed array; the
+        // untouched Light column keeps the old scalar.
+        let def = s.find_variable("brand").unwrap();
+        let VariableValue::Themed(entries) = &def.value else {
+            panic!("expected themed value, got {:?}", def.value);
+        };
+        assert_eq!(entries.len(), 2);
+        let value_for = |variant: &str| {
+            entries
+                .iter()
+                .find(|e| {
+                    e.theme
+                        .as_ref()
+                        .and_then(|t| t.get("Theme-1"))
+                        .is_some_and(|v| v == variant)
+                })
+                .map(|e| e.value.clone())
+        };
+        assert_eq!(
+            value_for("Light"),
+            Some(VariableScalar::Str("#111111".into()))
+        );
+        assert_eq!(
+            value_for("Dark"),
+            Some(VariableScalar::Str("#abcdef".into()))
+        );
+        // Active theme (Light) still resolves the old colour.
+        assert_eq!(
+            s.resolve_variable("brand"),
+            Some(&VariableScalar::Str("#111111".into()))
+        );
+    }
+
+    #[test]
+    fn set_variable_color_for_theme_rejects_bad_inputs() {
+        let mut s = doc_with_color_var("brand", "#111111");
+        let mut themes = BTreeMap::new();
+        themes.insert("Theme-1".to_string(), vec!["Light".to_string()]);
+        s.doc.themes = Some(themes);
+        // Bad hex → rejected.
+        assert!(!s.set_variable_color_for_theme("brand", "Theme-1", "Light", "nothex"));
+        // Undeclared variant → rejected.
+        assert!(!s.set_variable_color_for_theme("brand", "Theme-1", "Sepia", "#222222"));
+        // Kind mismatch → rejected.
+        s.create_variable("n", VariableKind::Number, VariableScalar::Num(1.0));
+        assert!(!s.set_variable_color_for_theme("n", "Theme-1", "Light", "#222222"));
+        // Value untouched after the rejections.
+        assert_eq!(
+            s.resolve_variable("brand"),
+            Some(&VariableScalar::Str("#111111".into()))
+        );
+    }
+
+    #[test]
+    fn set_variable_boolean_for_theme_targets_the_clicked_variant() {
+        let mut s = state_with(vec![]);
+        let mut themes = BTreeMap::new();
+        themes.insert(
+            "Theme-1".to_string(),
+            vec!["Light".to_string(), "Dark".to_string()],
+        );
+        s.doc.themes = Some(themes);
+        s.ui.variables
+            .active_theme
+            .insert("Theme-1".into(), "Light".into());
+        s.create_variable("flag", VariableKind::Boolean, VariableScalar::Bool(false));
+        assert!(s.set_variable_boolean_for_theme("flag", "Theme-1", "Dark", true));
+        // Light (active) still false; Dark column flipped.
+        assert_eq!(
+            s.resolve_variable("flag"),
+            Some(&VariableScalar::Bool(false))
+        );
+        let def = s.find_variable("flag").unwrap();
+        let VariableValue::Themed(entries) = &def.value else {
+            panic!("expected themed value");
+        };
+        assert!(entries.iter().any(|e| {
+            e.value == VariableScalar::Bool(true)
+                && e.theme
+                    .as_ref()
+                    .and_then(|t| t.get("Theme-1"))
+                    .is_some_and(|v| v == "Dark")
+        }));
     }
 
     #[test]

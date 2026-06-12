@@ -23,6 +23,16 @@ pub(crate) fn input_text_width(input_rect: Rect) -> f32 {
     (input_rect.size.x - INPUT_TEXT_X_PAD * 2.0).max(24.0)
 }
 
+pub(crate) fn visible_input_line_count(text: &str, input_rect_width: f32) -> usize {
+    if text.is_empty() {
+        return 1;
+    }
+    let text_width = (input_rect_width - INPUT_TEXT_X_PAD * 2.0).max(24.0);
+    wrap_input_approx(text, text_width)
+        .len()
+        .clamp(1, INPUT_MAX_LINES)
+}
+
 pub(crate) fn input_first_baseline(visible_rows: usize, input_area_h: f32) -> f32 {
     let rows = visible_rows.max(1) as f32;
     let block_h = rows * INPUT_LINE_H;

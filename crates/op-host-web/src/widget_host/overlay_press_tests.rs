@@ -63,6 +63,23 @@ fn painted_inside(backend: &CaptureBackend, target: Rect) -> bool {
 }
 
 #[test]
+fn variables_panel_open_does_not_paint_legacy_modal() {
+    let mut host = WidgetHost::new();
+    host.editor_state.editor_ui.variables_panel_open = true;
+    let mut backend = CaptureBackend::default();
+
+    host.paint_editor(&mut backend, W, H);
+
+    assert!(
+        !backend
+            .round_fills
+            .iter()
+            .any(|r| r.size.x > W * 0.5 && r.size.y > H * 0.5),
+        "variables_panel_open should not paint the legacy variables modal"
+    );
+}
+
+#[test]
 fn shape_picker_paints_and_row_press_selects_tool() {
     let mut host = WidgetHost::new();
     host.editor_state.editor_ui.shape_picker_open = true;

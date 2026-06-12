@@ -727,8 +727,22 @@ pub enum VariableRowFocus {
     Name(usize),
     Number(usize),
     String(usize),
-    NumberCell { row: usize, variant: usize },
-    StringCell { row: usize, variant: usize },
+    NumberCell {
+        row: usize,
+        variant: usize,
+    },
+    StringCell {
+        row: usize,
+        variant: usize,
+    },
+    /// Inline hex editing of a Color cell under one variant column
+    /// (TS `variable-row.tsx` ColorCell hex `<input>`). The draft is
+    /// committed only when it parses as a full `#rrggbb`, mirroring
+    /// TS's `/^#[0-9a-fA-F]{6}$/` gate.
+    ColorCell {
+        row: usize,
+        variant: usize,
+    },
 }
 
 /// Keyboard focus on an effect-parameter value (the Effects
@@ -1043,13 +1057,27 @@ pub struct EditorUiState {
     pub variables_panel_hover: Option<crate::variables_panel_state::VariablesPanelButton>,
     /// Editor focus for a non-color variable row (Number / String).
     pub variable_row_focus: Option<VariableRowFocus>,
+    /// Live search filter for the variables panel rows (TS
+    /// `variables-panel.tsx` search box). Case-insensitive substring
+    /// match on the variable name; transient, never serialized.
+    pub variables_search: String,
+    /// Whether the variables-panel search box owns the keyboard.
+    pub variables_search_focus: bool,
+    /// Vertical scroll offset (px) of the variables row list.
+    pub variables_scroll: f32,
+    /// Variable row whose `⋯` overflow menu (Rename / Delete) is open.
+    /// Indexes the UNFILTERED `doc.variables` order.
+    pub variables_row_menu: Option<usize>,
+    /// User-resized panel size; `None` = the 820x480 default. Mirrors
+    /// TS's transient React state (resets each session, not persisted).
+    pub variables_panel_size: Option<(f32, f32)>,
     /// Editor focus on an effect-parameter value (Effects section).
     /// Shares `UiDraftState.property_input_draft` + caret like the
     /// variable-row focus does.
     pub effect_param_focus: Option<EffectParamFocus>,
 
-    /// In-flight IME composition shown by the preedit overlay; set
-    /// by the host on `Ime::Preedit`, cleared on commit / cancel.
+    /// Legacy in-flight IME composition cache. The native host clears
+    /// this defensively but no longer paints a separate preedit bubble.
     pub ime_preedit: Option<crate::ime_state::ImePreedit>,
 
     // --- Layer / page hover + context menu -------------------------
@@ -1278,6 +1306,11 @@ impl Default for EditorUiState {
             variables_variant_rename_value: None,
             variables_panel_hover: None,
             variable_row_focus: None,
+            variables_search: String::new(),
+            variables_search_focus: false,
+            variables_scroll: 0.0,
+            variables_row_menu: None,
+            variables_panel_size: None,
             effect_param_focus: None,
             ime_preedit: None,
             hovered_layer_id: None,
@@ -1353,6 +1386,14 @@ impl EditorUiState {
         self.property_color_variable_picker_open = None;
         self.axis_dropdown_open = None;
         self.variable_row_focus = None;
+        // Document-derived variables-panel transients: the search
+        // filter, scroll offset and open row menu all reference the
+        // replaced document's variable list. The panel SIZE is a panel
+        // metric and is preserved.
+        self.variables_search.clear();
+        self.variables_search_focus = false;
+        self.variables_scroll = 0.0;
+        self.variables_row_menu = None;
         self.effect_param_focus = None;
         // Document-derived: set true only by a Figma import to keep that
         // document's authored absolute geometry. A replacement document must

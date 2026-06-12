@@ -65,6 +65,38 @@ impl WidgetHostNative {
         true
     }
 
+    /// Scroll the floating VariablesPanel row list when the wheel /
+    /// trackpad fires over the open panel (TS `overflow-y-auto` rows
+    /// region). The whole panel rect swallows the event so a wheel
+    /// over its header can't zoom the canvas beneath.
+    fn try_scroll_variables_panel(
+        &mut self,
+        x: f32,
+        y: f32,
+        delta_y: f32,
+        viewport_width: f32,
+        viewport_height: f32,
+    ) -> bool {
+        if !self.editor_state.editor_ui.variables_panel_open {
+            return false;
+        }
+        let Some(panel_rect) = self.variables_panel_rect(viewport_width, viewport_height) else {
+            return false;
+        };
+        if !rect_contains(panel_rect, Point2D::new(x, y)) {
+            return false;
+        }
+        use op_editor_ui::widgets::variables_panel::VariablesPanel;
+        let panel = VariablesPanel::for_editor(&self.editor_state);
+        let max = panel.max_scroll(panel_rect);
+        let next = (self.editor_state.editor_ui.variables_scroll - delta_y).clamp(0.0, max);
+        if next != self.editor_state.editor_ui.variables_scroll {
+            self.editor_state.editor_ui.variables_scroll = next;
+            self.mark_dirty();
+        }
+        true
+    }
+
     /// Scroll the right-rail PropertyPanel when a wheel / trackpad
     /// pan lands over it. `delta` is the vertical scroll delta
     /// (wheel `delta_y` or pan `dy`). Returns `true` when the cursor
@@ -256,6 +288,10 @@ impl WidgetHostNative {
         if self.try_scroll_chat_checklist(x, y, delta_y, viewport_width, viewport_height) {
             return true;
         }
+        // Floating VariablesPanel owns the wheel over its rect.
+        if self.try_scroll_variables_panel(x, y, delta_y, viewport_width, viewport_height) {
+            return true;
+        }
         // Agent-settings modal owns wheel.
         if self.editor_state.editor_ui.agent_settings_open {
             use op_editor_ui::widgets::agent_settings_panel::AgentSettingsPanel;
@@ -388,6 +424,10 @@ impl WidgetHostNative {
             }
         }
         if self.try_scroll_chat_checklist(x, y, dy, viewport_width, viewport_height) {
+            return true;
+        }
+        // Floating VariablesPanel owns trackpad pans over its rect.
+        if self.try_scroll_variables_panel(x, y, dy, viewport_width, viewport_height) {
             return true;
         }
         // Agent-settings modal owns trackpad scroll same as wheel.
