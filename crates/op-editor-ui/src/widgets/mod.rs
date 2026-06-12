@@ -4,8 +4,8 @@
 //!
 //! Two layers in one module:
 //!
-//! - **Primitives** (Phase B1+B2): the four reusable building blocks
-//!   `TreeWidget` / `PropertyRow` / `Dropdown` / `TextInput`.
+//! - **Primitives** (Phase B1+B2): the remaining OP-local building blocks
+//!   `TreeWidget` / `PropertyRow` / `TextInput`.
 //! - **Compositions** (Step 2): `LayerPanel` / `PropertyPanel` /
 //!   `Toolbar` — view models built from an `op_editor_core::EditorState`
 //!   that compose the primitives into the actual editor UI surface.
