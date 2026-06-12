@@ -640,8 +640,13 @@ impl<'a> ComponentBrowserPanel<'a> {
         size: f32,
         color: Color,
     ) {
-        let layout =
-            TextLayout::single_run(s, "system-ui", size, to_jian(color), Point2D::new(0.0, 0.0));
+        let layout = TextLayout::single_run(
+            s,
+            "system-ui",
+            size,
+            (color).to_jian(),
+            Point2D::new(0.0, 0.0),
+        );
         cx.backend.draw_text(&layout, Point2D::new(x, baseline));
     }
 }
@@ -659,11 +664,4 @@ pub(in crate::widgets) fn truncate(s: &str, max: usize) -> String {
     }
     let kept: String = s.chars().take(max.saturating_sub(1)).collect();
     format!("{kept}…")
-}
-
-fn to_jian(c: Color) -> jian_core::scene::Color {
-    fn ch(v: f32) -> u8 {
-        (v.clamp(0.0, 1.0) * 255.0).round() as u8
-    }
-    jian_core::scene::Color::rgba(ch(c.r), ch(c.g), ch(c.b), ch(c.a))
 }

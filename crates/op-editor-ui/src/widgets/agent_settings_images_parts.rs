@@ -39,7 +39,7 @@ pub(super) fn paint_search_input_row(
         label,
         "system-ui",
         13.0,
-        to_jian(theme.muted_foreground),
+        (theme.muted_foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend
@@ -90,11 +90,12 @@ pub(super) fn paint_search_input_row(
         &value,
         "system-ui",
         13.0,
-        to_jian(if showing_placeholder {
+        (if showing_placeholder {
             theme.muted_foreground
         } else {
             theme.foreground
-        }),
+        })
+        .to_jian(),
         Point2D::new(0.0, 0.0),
     );
     if focused && ui.settings_input_select_all && !text.is_empty() {
@@ -171,7 +172,7 @@ pub(super) fn paint_profile_field(
         label,
         "system-ui",
         11.0,
-        to_jian(theme.muted_foreground),
+        (theme.muted_foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend
@@ -208,7 +209,7 @@ pub(super) fn paint_profile_field(
         &clipped,
         "system-ui",
         11.0,
-        to_jian(theme.foreground),
+        (theme.foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend
@@ -252,11 +253,12 @@ pub(super) fn paint_profile_test_button(
         label,
         "system-ui",
         11.0,
-        to_jian(if enabled {
+        (if enabled {
             theme.foreground
         } else {
             theme.muted_foreground
-        }),
+        })
+        .to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
@@ -307,7 +309,7 @@ fn paint_profile_test_status(
                 label,
                 "system-ui",
                 10.0,
-                to_jian(theme.destructive),
+                (theme.destructive).to_jian(),
                 Point2D::new(0.0, 0.0),
             );
             cx.backend.draw_text(
@@ -330,7 +332,7 @@ pub(super) fn paint_provider_field(
         "Provider",
         "system-ui",
         11.0,
-        to_jian(theme.muted_foreground),
+        (theme.muted_foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend
@@ -345,7 +347,7 @@ pub(super) fn paint_provider_field(
         &value,
         "system-ui",
         11.0,
-        to_jian(theme.foreground),
+        (theme.foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
@@ -401,7 +403,7 @@ pub(super) fn paint_provider_menu(
             provider.label(),
             "system-ui",
             11.0,
-            to_jian(theme.foreground),
+            (theme.foreground).to_jian(),
             Point2D::new(0.0, 0.0),
         );
         cx.backend.draw_text(
@@ -423,11 +425,4 @@ pub(super) fn ellipsize(cx: &mut PaintCx<'_>, value: &str, max_w: f32, size: f32
         out.pop();
     }
     format!("{out}...")
-}
-
-fn to_jian(c: Color) -> jian_core::scene::Color {
-    fn ch(v: f32) -> u8 {
-        (v.clamp(0.0, 1.0) * 255.0).round() as u8
-    }
-    jian_core::scene::Color::rgba(ch(c.r), ch(c.g), ch(c.b), ch(c.a))
 }

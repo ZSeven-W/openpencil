@@ -354,7 +354,7 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
                 &self.label_new_chat,
                 "system-ui",
                 12.0,
-                to_jian_color(self.theme.muted_foreground),
+                (self.theme.muted_foreground).to_jian(),
                 Point2D::new(0.0, 0.0),
             );
             cx.backend.draw_text(
@@ -414,7 +414,7 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
             &self.label_new_chat,
             "system-ui",
             14.0,
-            to_jian_color(self.theme.foreground),
+            (self.theme.foreground).to_jian(),
             Point2D::new(0.0, 0.0),
         );
         cx.backend.draw_text(
@@ -570,7 +570,7 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
             model_name,
             "system-ui",
             12.0,
-            to_jian_color(chip_color),
+            (chip_color).to_jian(),
             Point2D::new(0.0, 0.0),
         );
         cx.backend
@@ -729,7 +729,7 @@ fn draw_label(cx: &mut PaintCx<'_>, text: &str, size: f32, color: Color, x: f32,
         text,
         "system-ui",
         size,
-        to_jian_color(color),
+        (color).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(&label, Point2D::new(x, y));
@@ -766,13 +766,6 @@ fn paint_header_btn_bg(
     } else {
         theme.muted_foreground
     }
-}
-
-pub(crate) fn to_jian_color(c: Color) -> jian_core::scene::Color {
-    fn ch(v: f32) -> u8 {
-        (v.clamp(0.0, 1.0) * 255.0).round() as u8
-    }
-    jian_core::scene::Color::rgba(ch(c.r), ch(c.g), ch(c.b), ch(c.a))
 }
 
 #[cfg(test)]

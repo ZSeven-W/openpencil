@@ -14,21 +14,6 @@
 
 use op_editor_ui::{Color, Point2D, Rect};
 
-/// OP-flavoured (`f32` 0..=1 RGBA) → Jian (`u8` packed RGBA) color.
-///
-/// Spec §5.2 / round 5 CONCERN-R5-3: jian-core `Color` is `Color(pub u32)`
-/// without named constants; OP `Color::{RED, GREEN, BLUE, BLACK, WHITE,
-/// TRANSPARENT}` lives in shell-core. This helper closes the gap.
-pub fn to_jian_color(c: Color) -> jian_core::scene::Color {
-    fn channel(v: f32) -> u8 {
-        // `clamp` first — `as u8` saturates negative to 0 but unconstrained
-        // > 1.0 would wrap (e.g. 256.0 → 0). Use `.clamp` then `*255`.
-        let scaled = (v.clamp(0.0, 1.0) * 255.0).round();
-        scaled as u8
-    }
-    jian_core::scene::Color::rgba(channel(c.r), channel(c.g), channel(c.b), channel(c.a))
-}
-
 /// OP `Rect` (`origin / size: Vec2`) → Jian `euclid::Rect<f32>`.
 pub fn to_jian_rect(r: Rect) -> jian_core::geometry::Rect {
     jian_core::geometry::Rect::new(
@@ -273,7 +258,7 @@ impl NativeBackend {
         // alpha was dropped — a translucent fill (e.g. the 12 %
         // marquee-selection band) painted fully opaque. Carry the
         // alpha through `Paint.opacity` the way `stroke_rect` does.
-        let mut paint = jian_core::render::Paint::solid(to_jian_color(color));
+        let mut paint = jian_core::render::Paint::solid((color).to_jian());
         paint.opacity = color.a.clamp(0.0, 1.0);
         let op = jian_core::render::DrawOp::Rect {
             rect: to_jian_rect(rect),
@@ -294,7 +279,7 @@ impl NativeBackend {
         let paint = jian_core::render::Paint {
             fill: None,
             stroke: Some(jian_core::render::StrokeOp {
-                color: to_jian_color(color),
+                color: (color).to_jian(),
                 width,
             }),
             opacity: color.a.clamp(0.0, 1.0),

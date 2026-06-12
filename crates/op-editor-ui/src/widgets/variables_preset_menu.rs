@@ -234,7 +234,7 @@ impl ThemePresetMenu {
                 cx,
                 op_i18n::translate(self.locale, "variables.noPresets"),
                 12.0,
-                with_alpha(theme.muted_foreground, 0.5),
+                (theme.muted_foreground).with_alpha(0.5),
                 empty.origin.x + PAD_X,
                 empty.origin.y + 21.0,
             );
@@ -362,7 +362,7 @@ fn separator(cx: &mut PaintCx<'_>, theme: Theme, menu: Rect, y: f32) {
             origin: Point2D::new(menu.origin.x + 1.0, y),
             size: Point2D::new(menu.size.x - 2.0, 1.0),
         },
-        with_alpha(theme.border, 0.5),
+        (theme.border).with_alpha(0.5),
     );
 }
 
@@ -371,17 +371,10 @@ fn draw_text(cx: &mut PaintCx<'_>, text: &str, size: f32, color: Color, x: f32, 
         text,
         "system-ui",
         size,
-        crate::widgets::property_panel_inputs::to_jian_color(color),
+        (color).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(&layout, Point2D::new(x, baseline_y));
-}
-
-fn with_alpha(color: Color, alpha: f32) -> Color {
-    Color {
-        a: color.a * alpha,
-        ..color
-    }
 }
 
 fn boundary_at_or_before(value: &str, pos: usize) -> usize {

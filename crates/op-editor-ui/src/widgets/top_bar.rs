@@ -637,13 +637,6 @@ pub(super) fn paint_divider(cx: &mut PaintCx<'_>, theme: &Theme, x: f32, center_
     );
 }
 
-pub(super) fn to_jian_color(c: Color) -> jian_core::scene::Color {
-    fn ch(v: f32) -> u8 {
-        (v.clamp(0.0, 1.0) * 255.0).round() as u8
-    }
-    jian_core::scene::Color::rgba(ch(c.r), ch(c.g), ch(c.b), ch(c.a))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

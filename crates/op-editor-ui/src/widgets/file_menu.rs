@@ -355,7 +355,7 @@ fn paint_row(
         label,
         "system-ui",
         13.0,
-        to_jian(theme.foreground),
+        (theme.foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
@@ -368,7 +368,7 @@ fn paint_row(
             shortcut,
             "system-ui",
             SHORTCUT_FONT,
-            to_jian(theme.muted_foreground),
+            (theme.muted_foreground).to_jian(),
             Point2D::new(0.0, 0.0),
         );
         cx.backend.draw_text(
@@ -409,7 +409,7 @@ fn paint_row_disabled(
         label,
         "system-ui",
         13.0,
-        to_jian(dim),
+        (dim).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
@@ -422,7 +422,7 @@ fn paint_row_disabled(
             shortcut,
             "system-ui",
             SHORTCUT_FONT,
-            to_jian(dim),
+            (dim).to_jian(),
             Point2D::new(0.0, 0.0),
         );
         cx.backend.draw_text(
@@ -463,7 +463,7 @@ fn paint_recent_row(
         &display_name,
         "system-ui",
         13.0,
-        to_jian(theme.foreground),
+        (theme.foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
@@ -474,7 +474,7 @@ fn paint_recent_row(
         &entry.age,
         "system-ui",
         SHORTCUT_FONT,
-        to_jian(theme.muted_foreground),
+        (theme.muted_foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
@@ -519,7 +519,7 @@ fn paint_empty(cx: &mut PaintCx<'_>, theme: &Theme, x: f32, y: f32, label: &str)
         label,
         "system-ui",
         12.0,
-        to_jian(theme.muted_foreground),
+        (theme.muted_foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
@@ -533,7 +533,7 @@ fn paint_header(cx: &mut PaintCx<'_>, theme: &Theme, x: f32, y: f32, label: &str
         label,
         "system-ui",
         11.0,
-        to_jian(theme.muted_foreground),
+        (theme.muted_foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
@@ -575,11 +575,4 @@ fn format_age(ui: &EditorUiState, elapsed_secs: u64) -> String {
         op_i18n::translate(locale, "fileMenu.daysAgo")
             .replace("{{count}}", &(elapsed_secs / 86400).to_string())
     }
-}
-
-fn to_jian(c: Color) -> jian_core::scene::Color {
-    fn ch(v: f32) -> u8 {
-        (v.clamp(0.0, 1.0) * 255.0).round() as u8
-    }
-    jian_core::scene::Color::rgba(ch(c.r), ch(c.g), ch(c.b), ch(c.a))
 }

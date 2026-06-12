@@ -38,13 +38,6 @@ struct SliceStyle {
     color: Color,
 }
 
-fn to_jian_color(c: Color) -> jian_core::scene::Color {
-    fn ch(v: f32) -> u8 {
-        (v.clamp(0.0, 1.0) * 255.0).round() as u8
-    }
-    jian_core::scene::Color::rgba(ch(c.r), ch(c.g), ch(c.b), ch(c.a))
-}
-
 /// Map a painted line's byte range `[line_start, line_end)` onto run
 /// ranges. Returns `(slice_start, slice_end, run_index)` triples in
 /// flat-text byte coords; `None` run index = node-level style (gaps,
@@ -168,7 +161,7 @@ fn draw_slice(
     letter_spacing: f32,
     justify_extra: f32,
 ) -> (f32, f32) {
-    let jc = to_jian_color(style.color);
+    let jc = (style.color).to_jian();
     if letter_spacing.abs() < f32::EPSILON && justify_extra <= 0.0 {
         backend.draw_text(
             &TextLayout::single_run(slice, family, style.font_size, jc, Point2D::ZERO)

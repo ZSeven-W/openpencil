@@ -49,6 +49,18 @@ mod tests {
         assert!(!r.contains(Point2D::new(9.99, 20.0)));
         assert!(!r.contains(Point2D::new(10.0, 70.01)));
     }
+
+    #[test]
+    fn with_alpha_overrides_only_alpha() {
+        let c = Color::RED.with_alpha(0.5);
+        assert_eq!((c.r, c.g, c.b, c.a), (1.0, 0.0, 0.0, 0.5));
+    }
+
+    #[test]
+    fn to_jian_round_trips_named_colors() {
+        let j = Color::WHITE.to_jian();
+        assert_eq!(j, jian_core::scene::Color::rgba(255, 255, 255, 255));
+    }
 }
 
 impl Rect {
@@ -132,6 +144,17 @@ impl Color {
         b: 0.0,
         a: 0.0,
     };
+
+    pub const fn with_alpha(self, a: f32) -> Self {
+        Self { a, ..self }
+    }
+
+    pub fn to_jian(self) -> jian_core::scene::Color {
+        fn ch(v: f32) -> u8 {
+            (v.clamp(0.0, 1.0) * 255.0).round() as u8
+        }
+        jian_core::scene::Color::rgba(ch(self.r), ch(self.g), ch(self.b), ch(self.a))
+    }
 }
 
 /// OP's TextLayout — defined at the OP layer after v19 removed parley; a thin

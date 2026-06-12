@@ -343,7 +343,7 @@ fn paint_header(
         title,
         "system-ui",
         15.0,
-        to_jian(theme.foreground),
+        (theme.foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend
@@ -365,7 +365,7 @@ fn paint_header(
         action,
         "system-ui",
         12.0,
-        to_jian(theme.primary),
+        (theme.primary).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
@@ -383,7 +383,7 @@ fn paint_subtitle(cx: &mut PaintCx<'_>, theme: &Theme, text: &str, x: f32, y: f3
         text,
         "system-ui",
         12.0,
-        to_jian(theme.muted_foreground),
+        (theme.muted_foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(&layout, Point2D::new(x, y + 16.0));
@@ -396,7 +396,7 @@ fn paint_empty(cx: &mut PaintCx<'_>, theme: &Theme, text: &str, x: f32, y: f32, 
         text,
         "system-ui",
         13.0,
-        to_jian(theme.muted_foreground),
+        (theme.muted_foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend
@@ -726,7 +726,7 @@ fn draw_text(cx: &mut PaintCx<'_>, text: &str, size: f32, color: Color, x: f32, 
         text,
         "system-ui",
         size,
-        to_jian(color),
+        (color).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(&layout, Point2D::new(x, y));
@@ -761,11 +761,4 @@ fn mask_key(api_key: &str) -> String {
     } else {
         "***".to_string()
     }
-}
-
-fn to_jian(c: Color) -> jian_core::scene::Color {
-    fn ch(v: f32) -> u8 {
-        (v.clamp(0.0, 1.0) * 255.0).round() as u8
-    }
-    jian_core::scene::Color::rgba(ch(c.r), ch(c.g), ch(c.b), ch(c.a))
 }

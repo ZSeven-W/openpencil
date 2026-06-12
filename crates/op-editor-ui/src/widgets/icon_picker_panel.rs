@@ -6,7 +6,7 @@ use crate::widgets::icon_catalog::{search_icons, IconCatalogEntry, IconRenderSty
 use crate::widgets::{
     draw_icon, draw_icon_catalog_entry, draw_icon_data, Icon, IconPathData, PaintCx,
 };
-use crate::{Color, Point2D, Rect, TextLayout};
+use crate::{Point2D, Rect, TextLayout};
 use op_editor_core::{EditorState, IconPickerRemoteIcon, Locale};
 
 pub const ICON_PICKER_PANEL_W: f32 = 320.0;
@@ -237,7 +237,7 @@ impl<'a> IconPickerPanel<'a> {
             self.t("icon.title"),
             "system-ui",
             13.0,
-            to_jian(self.theme.foreground),
+            (self.theme.foreground).to_jian(),
             Point2D::new(0.0, 0.0),
         );
         cx.backend.draw_text(
@@ -302,7 +302,7 @@ impl<'a> IconPickerPanel<'a> {
             search_text,
             "system-ui",
             12.0,
-            to_jian(color),
+            (color).to_jian(),
             Point2D::new(0.0, 0.0),
         );
         cx.backend.draw_text(
@@ -316,7 +316,7 @@ impl<'a> IconPickerPanel<'a> {
             self.t("icon.noIconsFound"),
             "system-ui",
             12.0,
-            to_jian(self.theme.muted_foreground),
+            (self.theme.muted_foreground).to_jian(),
             Point2D::new(0.0, 0.0),
         );
         cx.backend.draw_text(
@@ -367,7 +367,7 @@ impl<'a> IconPickerPanel<'a> {
             &label,
             "system-ui",
             12.0,
-            to_jian(self.theme.foreground),
+            (self.theme.foreground).to_jian(),
             Point2D::new(0.0, 0.0),
         );
         cx.backend
@@ -394,7 +394,7 @@ impl<'a> IconPickerPanel<'a> {
             label,
             "system-ui",
             12.0,
-            to_jian(self.theme.foreground),
+            (self.theme.foreground).to_jian(),
             Point2D::new(0.0, 0.0),
         );
         cx.backend.draw_text(
@@ -419,11 +419,4 @@ fn truncate(text: &str, max_chars: usize) -> String {
     let mut out: String = text.chars().take(max_chars.saturating_sub(1)).collect();
     out.push_str("...");
     out
-}
-
-fn to_jian(c: Color) -> jian_core::scene::Color {
-    fn ch(v: f32) -> u8 {
-        (v.clamp(0.0, 1.0) * 255.0).round() as u8
-    }
-    jian_core::scene::Color::rgba(ch(c.r), ch(c.g), ch(c.b), ch(c.a))
 }

@@ -83,7 +83,7 @@ pub mod widget_host;
     target_os = "ios",
     target_os = "android"
 ))]
-pub use backend::{to_jian_color, to_jian_rect, NativeBackend};
+pub use backend::{to_jian_rect, NativeBackend};
 #[cfg(any(
     target_os = "macos",
     target_os = "linux",

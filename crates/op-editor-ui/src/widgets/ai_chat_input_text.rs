@@ -1,7 +1,6 @@
 //! Chat input text hit-testing and selection paint helpers.
 
 use crate::theme::Theme;
-use crate::widgets::ai_chat_panel::to_jian_color;
 use crate::widgets::ai_chat_transcript::CHAR_UNIT_PX;
 use crate::widgets::ai_chat_transcript_text::char_display_units;
 use crate::widgets::text_selection::selection_color;
@@ -120,7 +119,7 @@ pub(crate) fn paint_input_text_area(
             line,
             "system-ui",
             INPUT_FONT,
-            to_jian_color(color),
+            (color).to_jian(),
             Point2D::new(0.0, 0.0),
         );
         cx.backend.draw_text(&label, Point2D::new(text_x, baseline));

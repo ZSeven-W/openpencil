@@ -179,7 +179,7 @@ impl Widget for StatusBar {
             &zoom_text,
             "system-ui",
             12.0,
-            to_jian_color(self.theme.foreground),
+            (self.theme.foreground).to_jian(),
             Point2D::new(0.0, 0.0),
         );
         cx.backend
@@ -207,13 +207,6 @@ impl Widget for StatusBar {
         node.set_label("Zoom controls");
         node
     }
-}
-
-fn to_jian_color(c: Color) -> jian_core::scene::Color {
-    fn ch(v: f32) -> u8 {
-        (v.clamp(0.0, 1.0) * 255.0).round() as u8
-    }
-    jian_core::scene::Color::rgba(ch(c.r), ch(c.g), ch(c.b), ch(c.a))
 }
 
 /// True when `point` lands inside the square zoom target centred on

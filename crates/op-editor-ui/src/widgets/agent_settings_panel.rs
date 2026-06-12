@@ -9,7 +9,7 @@ use crate::widgets::agent_settings_mcp::{self, McpHit};
 use crate::widgets::agent_settings_panel_card::paint_agent_card;
 use crate::widgets::agent_settings_panel_geometry::{
     acp_section_y, agent_card_rect_at, agent_card_rect_in, close_rect, connect_btn_rect_at,
-    content_rect, disconnect_btn_rect_at, nav_item_rect, tab_i18n_label, to_jian,
+    content_rect, disconnect_btn_rect_at, nav_item_rect, tab_i18n_label,
 };
 use crate::widgets::agent_settings_system::{self, SystemHit};
 use crate::widgets::editor_state_ext::theme_for;
@@ -488,7 +488,7 @@ fn paint_sidebar(
         t_settings(ui, "settings.title"),
         "system-ui",
         15.0,
-        to_jian(theme.foreground),
+        (theme.foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
@@ -527,7 +527,7 @@ fn paint_sidebar(
             tab_i18n_label(ui, *tab),
             "system-ui",
             13.0,
-            to_jian(icon_color),
+            (icon_color).to_jian(),
             Point2D::new(0.0, 0.0),
         );
         cx.backend
@@ -582,7 +582,7 @@ fn paint_agents_tab(
                 t_settings(ui, "settings.agents.claudeHint"),
                 "system-ui",
                 12.0,
-                to_jian(theme.muted_foreground),
+                (theme.muted_foreground).to_jian(),
                 Point2D::new(0.0, 0.0),
             );
             cx.backend
@@ -623,7 +623,7 @@ fn paint_section_header_inset(
         title,
         "system-ui",
         15.0,
-        to_jian(theme.foreground),
+        (theme.foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(&layout, Point2D::new(x, y + 18.0));
@@ -633,7 +633,7 @@ fn paint_section_header_inset(
             action,
             "system-ui",
             12.0,
-            to_jian(theme.primary),
+            (theme.primary).to_jian(),
             Point2D::new(0.0, 0.0),
         );
         cx.backend

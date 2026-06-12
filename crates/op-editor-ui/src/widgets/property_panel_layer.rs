@@ -2,8 +2,7 @@
 
 use crate::theme::Theme;
 use crate::widgets::property_panel_inputs::{
-    paint_section_divider, paint_section_label, to_jian_color, INPUT_HEIGHT, INPUT_RADIUS, PAD_X,
-    SECTION_GAP,
+    paint_section_divider, paint_section_label, INPUT_HEIGHT, INPUT_RADIUS, PAD_X, SECTION_GAP,
 };
 use crate::widgets::property_panel_sections::{EditContext, PropertyLabels};
 use crate::widgets::property_panel_snapshot::{EllipseArcSummary, NodeSnapshot};
@@ -146,7 +145,7 @@ fn paint_labeled_input(
         prefix,
         "system-ui",
         12.0,
-        to_jian_color(theme.muted_foreground),
+        (theme.muted_foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend
@@ -167,7 +166,7 @@ fn paint_labeled_input(
         value,
         "system-ui",
         12.0,
-        to_jian_color(theme.foreground),
+        (theme.foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend
@@ -190,7 +189,7 @@ fn paint_labeled_input(
             unit,
             "system-ui",
             12.0,
-            to_jian_color(theme.muted_foreground),
+            (theme.muted_foreground).to_jian(),
             Point2D::new(0.0, 0.0),
         );
         cx.backend.draw_text(

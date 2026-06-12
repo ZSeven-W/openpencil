@@ -10,8 +10,7 @@ use crate::theme::Theme;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::property_panel::EffectSummary;
 use crate::widgets::property_panel_inputs::{
-    paint_section_divider, paint_section_label_with_add, to_jian_color, INPUT_RADIUS, PAD_X,
-    SECTION_GAP,
+    paint_section_divider, paint_section_label_with_add, INPUT_RADIUS, PAD_X, SECTION_GAP,
 };
 use crate::widgets::property_panel_layout::{
     effect_block_height, effect_color_rect, effect_has_color_row, effect_param_fields,
@@ -77,7 +76,7 @@ fn paint_effect_card(
         eff.kind.label(),
         "system-ui",
         12.0,
-        to_jian_color(theme.foreground),
+        (theme.foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
@@ -159,7 +158,7 @@ fn paint_param_input(
         label,
         "system-ui",
         12.0,
-        to_jian_color(theme.muted_foreground),
+        (theme.muted_foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     let label_x = rect.origin.x + 10.0;
@@ -178,7 +177,7 @@ fn paint_param_input(
         text,
         "system-ui",
         12.0,
-        to_jian_color(theme.foreground),
+        (theme.foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend
@@ -204,7 +203,7 @@ fn paint_effect_color_row(cx: &mut PaintCx<'_>, theme: &Theme, color: Color, rec
         "颜色",
         "system-ui",
         12.0,
-        to_jian_color(theme.muted_foreground),
+        (theme.muted_foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     let label_x = rect.origin.x + 10.0;
@@ -231,7 +230,7 @@ fn paint_effect_color_row(cx: &mut PaintCx<'_>, theme: &Theme, color: Color, rec
         &text,
         "system-ui",
         12.0,
-        to_jian_color(theme.foreground),
+        (theme.foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(

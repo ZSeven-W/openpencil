@@ -105,7 +105,7 @@ impl ExportDialog {
             "Export",
             FONT_FAMILY,
             15.0,
-            to_jian(theme.foreground),
+            (theme.foreground).to_jian(),
             Point2D::new(0.0, 0.0),
         );
         backend.draw_text(
@@ -120,7 +120,7 @@ impl ExportDialog {
             "Format",
             FONT_FAMILY,
             12.0,
-            to_jian(theme.muted_foreground),
+            (theme.muted_foreground).to_jian(),
             Point2D::new(0.0, 0.0),
         );
         backend.draw_text(&fmt_label, Point2D::new(self.rect.origin.x + PAD, body_y));
@@ -144,7 +144,7 @@ impl ExportDialog {
             "Scale",
             FONT_FAMILY,
             12.0,
-            to_jian(theme.muted_foreground),
+            (theme.muted_foreground).to_jian(),
             Point2D::new(0.0, 0.0),
         );
         backend.draw_text(
@@ -300,7 +300,7 @@ fn paint_centered_label(
         text,
         FONT_FAMILY,
         size,
-        to_jian(color),
+        (color).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     let y_offset = (rect.size.y - size) / 2.0 + size * 0.75;
@@ -311,13 +311,6 @@ fn paint_centered_label(
             rect.origin.y + y_offset,
         ),
     );
-}
-
-fn to_jian(c: Color) -> jian_core::scene::Color {
-    fn ch(v: f32) -> u8 {
-        (v.clamp(0.0, 1.0) * 255.0).round() as u8
-    }
-    jian_core::scene::Color::rgba(ch(c.r), ch(c.g), ch(c.b), ch(c.a))
 }
 
 /// Map a stored `export_scale` (1.0 / 2.0 / 3.0) to a UI index

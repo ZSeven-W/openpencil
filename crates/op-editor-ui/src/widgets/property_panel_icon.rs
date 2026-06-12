@@ -5,8 +5,8 @@ use crate::widgets::icon_catalog::lookup_icon;
 use crate::widgets::icons::{draw_icon, draw_icon_catalog_entry, Icon};
 use crate::widgets::property_panel::PropertyPanelAction;
 use crate::widgets::property_panel_inputs::{
-    paint_dropdown, paint_section_divider, paint_section_label, to_jian_color, INPUT_HEIGHT, PAD_X,
-    SECTION_GAP, SECTION_HEADER_HEIGHT,
+    paint_dropdown, paint_section_divider, paint_section_label, INPUT_HEIGHT, PAD_X, SECTION_GAP,
+    SECTION_HEADER_HEIGHT,
 };
 use crate::widgets::PaintCx;
 use crate::{Point2D, Rect, TextLayout};
@@ -108,7 +108,7 @@ fn paint_icon_name_row(cx: &mut PaintCx<'_>, theme: &Theme, rect: Rect, family: 
         name,
         "system-ui",
         12.0,
-        to_jian_color(theme.foreground),
+        (theme.foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(

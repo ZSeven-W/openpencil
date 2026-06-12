@@ -11,7 +11,6 @@
 //! *unit* budget, never live text measurement — so paint and
 //! hit-test compute identical rects without sharing a backend.
 
-use super::ai_chat_panel::to_jian_color;
 use crate::theme::Theme;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::PaintCx;
@@ -528,7 +527,7 @@ pub(crate) fn draw_line(
         text,
         "system-ui",
         size,
-        to_jian_color(color),
+        (color).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(&layout, Point2D::new(x, baseline_y));

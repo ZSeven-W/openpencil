@@ -8,8 +8,7 @@ use crate::widgets::property_panel::{
 };
 use crate::widgets::property_panel_inputs::{
     paint_input_with_icon_focused, paint_input_with_prefix_focused, paint_section_divider,
-    paint_section_label, to_jian_color, INPUT_HEIGHT, INPUT_RADIUS, PAD_X, SECTION_GAP,
-    SECTION_HEADER_HEIGHT,
+    paint_section_label, INPUT_HEIGHT, INPUT_RADIUS, PAD_X, SECTION_GAP, SECTION_HEADER_HEIGHT,
 };
 use crate::widgets::property_panel_sections::EditContext;
 use crate::widgets::property_panel_typography::display_font_family;
@@ -260,7 +259,7 @@ pub fn paint_text_section(
         family_name,
         family_name,
         12.0,
-        to_jian_color(theme.foreground),
+        (theme.foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
@@ -297,7 +296,7 @@ pub fn paint_text_section(
         weight_label,
         "system-ui",
         12.0,
-        to_jian_color(theme.foreground),
+        (theme.foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
@@ -333,7 +332,7 @@ pub fn paint_text_section(
 
     // Caption row — 行高 (left) / 字间距 (right), small muted labels
     // above the inputs (TS `text-[9px] justify-between`).
-    let caption_color = to_jian_color(theme.muted_foreground);
+    let caption_color = (theme.muted_foreground).to_jian();
     let lh_caption = TextLayout::single_run(
         op_i18n::translate(locale, "text.lineHeight"),
         "system-ui",
@@ -456,11 +455,12 @@ pub fn paint_font_weight_picker(
             &row_label,
             "system-ui",
             12.0,
-            to_jian_color(if is_active {
+            (if is_active {
                 theme.primary
             } else {
                 theme.foreground
-            }),
+            })
+            .to_jian(),
             Point2D::new(0.0, 0.0),
         );
         cx.backend.draw_text(
@@ -563,7 +563,7 @@ fn paint_text_growth_row(
             label,
             "system-ui",
             10.0,
-            to_jian_color(color),
+            (color).to_jian(),
             Point2D::new(0.0, 0.0),
         );
         let label_w = cx.backend.measure_text(label, 10.0);
@@ -638,7 +638,7 @@ fn paint_align_row<T: Copy + PartialEq>(
         op_i18n::translate(locale, label_key),
         "system-ui",
         11.0,
-        to_jian_color(theme.muted_foreground),
+        (theme.muted_foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend

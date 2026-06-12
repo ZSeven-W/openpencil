@@ -15,7 +15,7 @@ use crate::theme::Theme;
 use crate::widgets::editor_state_ext::{doc_shape_choice, theme_for, translate};
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
-use crate::{Color, Point2D, Rect, TextLayout};
+use crate::{Point2D, Rect, TextLayout};
 use op_editor_core::editor_ui_state::EditorUiState;
 use op_editor_core::Tool;
 
@@ -207,11 +207,12 @@ impl Widget for ShapePicker {
                 &row.label,
                 "system-ui",
                 13.0,
-                to_jian_color(if active {
+                (if active {
                     self.theme.primary
                 } else {
                     self.theme.foreground
-                }),
+                })
+                .to_jian(),
                 Point2D::new(0.0, 0.0),
             );
             cx.backend.draw_text(
@@ -229,13 +230,6 @@ impl Widget for ShapePicker {
         node.set_label("Shape tools");
         node
     }
-}
-
-fn to_jian_color(c: Color) -> jian_core::scene::Color {
-    fn ch(v: f32) -> u8 {
-        (v.clamp(0.0, 1.0) * 255.0).round() as u8
-    }
-    jian_core::scene::Color::rgba(ch(c.r), ch(c.g), ch(c.b), ch(c.a))
 }
 
 #[cfg(test)]

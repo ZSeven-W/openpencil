@@ -13,7 +13,6 @@
 //! bubble rather than inline at the caret; inline rendering would
 //! need per-input paint surgery across ten input surfaces.
 
-use crate::widgets::property_panel_inputs::to_jian_color;
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout, Theme};
 
@@ -70,7 +69,7 @@ pub fn paint_ime_preedit(
             text,
             "system-ui",
             FONT_SIZE,
-            to_jian_color(theme.foreground),
+            (theme.foreground).to_jian(),
             Point2D::new(0.0, 0.0),
         ),
         origin,

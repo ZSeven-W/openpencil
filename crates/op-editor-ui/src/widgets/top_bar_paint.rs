@@ -158,7 +158,7 @@ impl TopBar {
             &self.file_name,
             "system-ui",
             13.0,
-            to_jian_color(self.theme.foreground),
+            (self.theme.foreground).to_jian(),
             Point2D::new(0.0, 0.0),
         );
         // Approximate text width; skia textlayout would tell us the
@@ -201,7 +201,7 @@ impl TopBar {
                     branch,
                     "system-ui",
                     11.0,
-                    to_jian_color(git_color),
+                    (git_color).to_jian(),
                     Point2D::new(0.0, 0.0),
                 );
                 cx.backend.draw_text(
@@ -382,7 +382,7 @@ impl TopBar {
             chip_text,
             "system-ui",
             11.0,
-            to_jian_color(self.theme.muted_foreground),
+            (self.theme.muted_foreground).to_jian(),
             Point2D::new(0.0, 0.0),
         );
         // 11 px text centred on the bar's center line (ascent ≈ 8 px).

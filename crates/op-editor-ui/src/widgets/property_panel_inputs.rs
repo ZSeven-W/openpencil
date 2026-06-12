@@ -76,7 +76,7 @@ pub fn paint_section_label(
         label,
         "system-ui",
         12.0,
-        to_jian_color(theme.foreground),
+        (theme.foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend
@@ -145,7 +145,7 @@ pub fn paint_input_with_prefix_focused(
         prefix,
         "system-ui",
         12.0,
-        to_jian_color(theme.muted_foreground),
+        (theme.muted_foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
@@ -173,7 +173,7 @@ pub fn paint_input_with_prefix_focused(
         value,
         "system-ui",
         12.0,
-        to_jian_color(theme.foreground),
+        (theme.foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend
@@ -239,7 +239,7 @@ pub fn paint_input_with_suffix_focused(
         value,
         "system-ui",
         12.0,
-        to_jian_color(theme.foreground),
+        (theme.foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend
@@ -260,7 +260,7 @@ pub fn paint_input_with_suffix_focused(
         unit,
         "system-ui",
         12.0,
-        to_jian_color(theme.muted_foreground),
+        (theme.muted_foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
@@ -328,7 +328,7 @@ pub fn paint_input_with_icon_focused(
         value,
         "system-ui",
         12.0,
-        to_jian_color(theme.foreground),
+        (theme.foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend
@@ -355,7 +355,7 @@ pub fn paint_input_with_icon_focused(
             u,
             "system-ui",
             12.0,
-            to_jian_color(theme.muted_foreground),
+            (theme.muted_foreground).to_jian(),
             Point2D::new(0.0, 0.0),
         );
         cx.backend.draw_text(
@@ -372,7 +372,7 @@ pub fn paint_dropdown(cx: &mut PaintCx<'_>, theme: &Theme, rect: Rect, value: &s
         value,
         "system-ui",
         12.0,
-        to_jian_color(theme.foreground),
+        (theme.foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
@@ -394,11 +394,4 @@ pub fn format_color_hex(c: Color) -> String {
     let g = (c.g.clamp(0.0, 1.0) * 255.0).round() as u8;
     let b = (c.b.clamp(0.0, 1.0) * 255.0).round() as u8;
     format!("#{:02X}{:02X}{:02X}", r, g, b)
-}
-
-pub fn to_jian_color(c: Color) -> jian_core::scene::Color {
-    fn ch(v: f32) -> u8 {
-        (v.clamp(0.0, 1.0) * 255.0).round() as u8
-    }
-    jian_core::scene::Color::rgba(ch(c.r), ch(c.g), ch(c.b), ch(c.a))
 }

@@ -6,7 +6,7 @@ use crate::widgets::agent_settings_panel::{
     PAD, SECTION_GAP, SIDEBAR_WIDTH,
 };
 use crate::widgets::{agent_settings_acp, agent_settings_builtin};
-use crate::{Color, Point2D, Rect};
+use crate::{Point2D, Rect};
 use op_editor_core::agent_settings::{AgentSettings, AgentSettingsTab};
 use op_editor_core::editor_ui_state::EditorUiState;
 
@@ -93,11 +93,4 @@ pub(super) fn agent_card_rect_in(panel: Rect, index: usize, settings: &AgentSett
         }
     }
     agent_card_rect_at(content.origin.x, y, content.size.x)
-}
-
-pub(super) fn to_jian(c: Color) -> jian_core::scene::Color {
-    fn ch(v: f32) -> u8 {
-        (v.clamp(0.0, 1.0) * 255.0).round() as u8
-    }
-    jian_core::scene::Color::rgba(ch(c.r), ch(c.g), ch(c.b), ch(c.a))
 }

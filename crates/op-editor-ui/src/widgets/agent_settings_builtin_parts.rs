@@ -366,7 +366,7 @@ fn draw_text(cx: &mut PaintCx<'_>, text: &str, size: f32, color: Color, x: f32, 
         text,
         "system-ui",
         size,
-        to_jian(color),
+        (color).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(&layout, Point2D::new(x, y));
@@ -381,13 +381,6 @@ fn ellipsize(cx: &mut PaintCx<'_>, value: &str, max_w: f32, size: f32) -> String
         out.pop();
     }
     format!("{out}...")
-}
-
-fn to_jian(c: Color) -> jian_core::scene::Color {
-    fn ch(v: f32) -> u8 {
-        (v.clamp(0.0, 1.0) * 255.0).round() as u8
-    }
-    jian_core::scene::Color::rgba(ch(c.r), ch(c.g), ch(c.b), ch(c.a))
 }
 
 #[cfg(test)]

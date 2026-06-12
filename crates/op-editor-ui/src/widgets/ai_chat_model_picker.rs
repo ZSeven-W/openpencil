@@ -7,7 +7,6 @@
 use crate::theme::Theme;
 use crate::widgets::brand_icons::{paint_brand_logo, paint_opencode_logo, BrandLogo};
 use crate::widgets::icons::{draw_icon, Icon};
-use crate::widgets::property_panel_inputs::to_jian_color;
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
 use op_editor_core::chat::{AgentProvider, ModelEntry};
@@ -274,7 +273,7 @@ pub fn paint_model_picker(
             empty,
             "system-ui",
             12.0,
-            to_jian_color(theme.muted_foreground),
+            (theme.muted_foreground).to_jian(),
             Point2D::new(0.0, 0.0),
         );
         let w = cx.backend.measure_text(empty, 12.0);
@@ -327,7 +326,7 @@ pub fn paint_model_picker(
                 label,
                 "system-ui",
                 10.0,
-                to_jian_color(theme.muted_foreground),
+                (theme.muted_foreground).to_jian(),
                 Point2D::new(0.0, 0.0),
             );
             cx.backend
@@ -382,7 +381,7 @@ pub fn paint_model_picker(
                 name,
                 "system-ui",
                 12.0,
-                to_jian_color(color),
+                (color).to_jian(),
                 Point2D::new(0.0, 0.0),
             );
             cx.backend
@@ -458,7 +457,7 @@ fn paint_search_row(
         size: Point2D::new(rect.size.x - 16.0, 24.0),
     };
     cx.backend
-        .fill_round_rect(search_rect, 6.0, with_alpha(theme.muted, 0.5));
+        .fill_round_rect(search_rect, 6.0, (theme.muted).with_alpha(0.5));
     draw_icon(
         cx.backend,
         Icon::Search,
@@ -480,7 +479,7 @@ fn paint_search_row(
         label,
         "system-ui",
         12.0,
-        to_jian_color(color),
+        (color).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     let text_x = search_rect.origin.x + 28.0;
@@ -547,17 +546,13 @@ fn paint_badge(cx: &mut PaintCx<'_>, theme: &Theme, text: &str, right_x: f32, y:
         text,
         "system-ui",
         9.0,
-        to_jian_color(theme.muted_foreground),
+        (theme.muted_foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
         &layout,
         Point2D::new(rect.origin.x + 4.0, rect.origin.y + 11.0),
     );
-}
-
-fn with_alpha(color: Color, a: f32) -> Color {
-    Color { a, ..color }
 }
 
 pub(crate) fn paint_key_glyph(cx: &mut PaintCx<'_>, top_left: Point2D, size: f32, color: Color) {

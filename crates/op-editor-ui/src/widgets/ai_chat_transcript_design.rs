@@ -1,4 +1,3 @@
-use super::ai_chat_panel::to_jian_color;
 use crate::theme::Theme;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::PaintCx;
@@ -445,7 +444,7 @@ pub(crate) fn paint_design_block(cx: &mut PaintCx<'_>, theme: &Theme, block: &De
         &block.label,
         "system-ui",
         11.0,
-        to_jian_color(color),
+        (color).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend
@@ -499,7 +498,7 @@ pub(crate) fn paint_design_block(cx: &mut PaintCx<'_>, theme: &Theme, block: &De
                 line,
                 "monospace",
                 9.0,
-                to_jian_color(theme.muted_foreground),
+                (theme.muted_foreground).to_jian(),
                 Point2D::new(0.0, 0.0),
             );
             cx.backend
@@ -520,7 +519,7 @@ pub(crate) fn paint_design_block(cx: &mut PaintCx<'_>, theme: &Theme, block: &De
             "Apply to Canvas",
             "system-ui",
             10.0,
-            to_jian_color(theme.muted_foreground),
+            (theme.muted_foreground).to_jian(),
             Point2D::new(0.0, 0.0),
         );
         let text_x = apply.origin.x + (apply.size.x - 84.0).max(0.0) / 2.0;

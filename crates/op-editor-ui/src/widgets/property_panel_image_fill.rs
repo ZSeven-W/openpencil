@@ -7,7 +7,6 @@ use crate::theme::Theme;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::property_panel::{NodeSnapshot, PropertyPanelAction};
 use crate::widgets::property_panel_image_preview::paint_image_preview;
-use crate::widgets::property_panel_inputs::to_jian_color;
 use crate::widgets::property_panel_layout::{
     action_button_rects_with_fill_picker, VisibleSections,
 };
@@ -460,7 +459,7 @@ fn paint_label(
         label,
         "system-ui",
         size,
-        to_jian_color(color),
+        (color).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(&layout, Point2D::new(x, baseline_y));
