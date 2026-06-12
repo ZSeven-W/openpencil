@@ -9,6 +9,7 @@ use crate::pen_node_ext::PenNodeExt;
 use crate::test_support::{frame, group, rect, sample, state_with};
 use crate::walkers::{find_node, ReorderDirection};
 use jian_ops_schema::style::PenFill;
+use jian_ops_schema::variable::{VariableKind, VariableScalar};
 
 // --- Selection -------------------------------------------------------
 
@@ -494,6 +495,47 @@ fn set_selected_fill_type_rejects_locked_node() {
     assert!(!s.set_selected_fill_type(crate::FillType::LinearGradient));
 }
 
+#[test]
+fn bind_selected_color_variable_writes_fill_and_stroke_refs() {
+    let mut s = three_rects();
+    assert!(s.create_variable(
+        "color-1",
+        VariableKind::Color,
+        VariableScalar::Str("#000000".into()),
+    ));
+    s.set_single_selection(NodeId::new("n1"));
+
+    assert!(s.bind_selected_color_variable(crate::ColorTarget::Fill, "color-1"));
+    assert_eq!(
+        crate::fills::first_solid_fill_hex(
+            find_node(s.active_children(), &NodeId::new("n1")).unwrap()
+        ),
+        Some("$color-1")
+    );
+    assert_eq!(
+        s.ui.variables
+            .fill_refs
+            .get(&NodeId::new("n1"))
+            .map(String::as_str),
+        Some("color-1")
+    );
+
+    assert!(s.bind_selected_color_variable(crate::ColorTarget::Stroke, "color-1"));
+    assert_eq!(
+        crate::fills::first_solid_stroke_hex(
+            find_node(s.active_children(), &NodeId::new("n1")).unwrap()
+        ),
+        Some("$color-1")
+    );
+    assert_eq!(
+        s.ui.variables
+            .stroke_refs
+            .get(&NodeId::new("n1"))
+            .map(String::as_str),
+        Some("color-1")
+    );
+}
+
 // --- Chat model (Gap 2) ---------------------------------------------
 
 #[test]
@@ -683,28 +725,34 @@ fn property_panel_visible_tracks_selection() {
 }
 
 #[test]
-fn right_rail_visible_true_on_selection_or_variables() {
-    use jian_ops_schema::variable::{VariableKind, VariableScalar};
+fn right_rail_visible_true_on_selection_only() {
     let mut s = three_rects();
     s.clear_selection();
-    // No selection + no variables → hidden.
+    // No selection → hidden.
     assert!(!s.right_rail_visible());
-    // Opening the explicit variables manager is a floating modal, not
-    // a right-rail occupant.
+    // The VariablesPanel is a floating canvas overlay, not a right-rail panel.
     s.editor_ui.variables_panel_open = true;
     assert!(!s.right_rail_visible());
     s.editor_ui.variables_panel_open = false;
-    // A persisted variable alone makes the rail visible.
-    s.create_variable(
-        "brand",
-        VariableKind::Color,
-        VariableScalar::Str("#ff0000".into()),
-    );
-    assert!(s.right_rail_visible());
-    // Selection alone also makes it visible.
-    s.delete_variable("brand");
+    // Selection makes it visible.
     s.set_single_selection(NodeId::new("n1"));
     assert!(s.right_rail_visible());
+}
+
+#[test]
+fn right_rail_stays_visible_on_code_tab_without_selection() {
+    let mut s = three_rects();
+    s.clear_selection();
+    // Design tab + no selection → hidden (baseline).
+    assert!(!s.right_rail_visible());
+    // The Code tab is selection-independent (TS falls back to the active
+    // page's children), so the rail must stay open with no selection.
+    s.editor_ui.property_tab = crate::PropertyTab::Code;
+    assert!(s.property_panel_visible());
+    assert!(s.right_rail_visible());
+    // Back to Design without a selection → hidden again.
+    s.editor_ui.property_tab = crate::PropertyTab::Design;
+    assert!(!s.right_rail_visible());
 }
 
 #[test]

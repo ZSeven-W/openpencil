@@ -93,6 +93,15 @@ pub struct EditorState {
     /// kits. Read by the Component-Browser panel and instantiated
     /// from there. Transient (not part of the `.op` file).
     pub ui_kits: Vec<crate::uikit::UIKit>,
+    /// Saved theme presets — app-level like `ui_kits` (TS
+    /// `theme-preset-store.ts` persists them in localStorage; the
+    /// desktop host mirrors them in `theme-presets.json`). Not part
+    /// of the `.op` file and not undo history.
+    pub theme_presets: Vec<crate::theme_presets::ThemePreset>,
+    /// Raised by every preset-list mutation; the desktop host drains
+    /// it into a persist (TS `persist()` runs inline on each store
+    /// write).
+    pub theme_presets_dirty: bool,
 }
 
 impl EditorState {
@@ -116,6 +125,8 @@ impl EditorState {
             codegen: CodegenState::default(),
             components,
             ui_kits: crate::uikit::builtin_kits(),
+            theme_presets: Vec::new(),
+            theme_presets_dirty: false,
         }
     }
 

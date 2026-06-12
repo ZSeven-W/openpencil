@@ -1,0 +1,2613 @@
+{
+  "document": {
+    "version": "1.0.0",
+    "name": "shadcn UI",
+    "children": [
+      {
+        "id": "shadcn-btn-primary",
+        "type": "frame",
+        "name": "Primary Button",
+        "reusable": true,
+        "x": 0,
+        "y": 0,
+        "width": 120,
+        "height": 40,
+        "layout": "horizontal",
+        "justifyContent": "center",
+        "alignItems": "center",
+        "padding": [
+          0,
+          20,
+          0,
+          20
+        ],
+        "cornerRadius": 8,
+        "fill": [
+          {
+            "type": "solid",
+            "color": "#18181B"
+          }
+        ],
+        "children": [
+          {
+            "id": "shadcn-btn-primary-label",
+            "type": "text",
+            "name": "Label",
+            "content": "Button",
+            "fontSize": 14,
+            "fontWeight": 600,
+            "fill": [
+              {
+                "type": "solid",
+                "color": "#FAFAFA"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "shadcn-btn-secondary",
+        "type": "frame",
+        "name": "Secondary Button",
+        "reusable": true,
+        "x": 140,
+        "y": 0,
+        "width": 120,
+        "height": 40,
+        "layout": "horizontal",
+        "justifyContent": "center",
+        "alignItems": "center",
+        "padding": [
+          0,
+          20,
+          0,
+          20
+        ],
+        "cornerRadius": 8,
+        "fill": [
+          {
+            "type": "solid",
+            "color": "#F4F4F5"
+          }
+        ],
+        "stroke": {
+          "thickness": 1,
+          "fill": [
+            {
+              "type": "solid",
+              "color": "#E4E4E7"
+            }
+          ]
+        },
+        "children": [
+          {
+            "id": "shadcn-btn-secondary-label",
+            "type": "text",
+            "name": "Label",
+            "content": "Button",
+            "fontSize": 14,
+            "fontWeight": 600,
+            "fill": [
+              {
+                "type": "solid",
+                "color": "#18181B"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "shadcn-btn-ghost",
+        "type": "frame",
+        "name": "Ghost Button",
+        "reusable": true,
+        "x": 280,
+        "y": 0,
+        "width": 120,
+        "height": 40,
+        "layout": "horizontal",
+        "justifyContent": "center",
+        "alignItems": "center",
+        "padding": [
+          0,
+          20,
+          0,
+          20
+        ],
+        "cornerRadius": 8,
+        "children": [
+          {
+            "id": "shadcn-btn-ghost-label",
+            "type": "text",
+            "name": "Label",
+            "content": "Button",
+            "fontSize": 14,
+            "fontWeight": 600,
+            "fill": [
+              {
+                "type": "solid",
+                "color": "#18181B"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "shadcn-btn-destructive",
+        "type": "frame",
+        "name": "Destructive Button",
+        "reusable": true,
+        "x": 420,
+        "y": 0,
+        "width": 120,
+        "height": 40,
+        "layout": "horizontal",
+        "justifyContent": "center",
+        "alignItems": "center",
+        "padding": [
+          0,
+          20,
+          0,
+          20
+        ],
+        "cornerRadius": 8,
+        "fill": [
+          {
+            "type": "solid",
+            "color": "#EF4444"
+          }
+        ],
+        "children": [
+          {
+            "id": "shadcn-btn-destructive-label",
+            "type": "text",
+            "name": "Label",
+            "content": "Delete",
+            "fontSize": 14,
+            "fontWeight": 600,
+            "fill": [
+              {
+                "type": "solid",
+                "color": "#FAFAFA"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "shadcn-input-text",
+        "type": "frame",
+        "name": "Text Input",
+        "reusable": true,
+        "x": 0,
+        "y": 60,
+        "width": 240,
+        "height": 40,
+        "layout": "horizontal",
+        "alignItems": "center",
+        "padding": [
+          0,
+          12,
+          0,
+          12
+        ],
+        "cornerRadius": 8,
+        "fill": [
+          {
+            "type": "solid",
+            "color": "#FFFFFF"
+          }
+        ],
+        "stroke": {
+          "thickness": 1,
+          "fill": [
+            {
+              "type": "solid",
+              "color": "#E4E4E7"
+            }
+          ]
+        },
+        "children": [
+          {
+            "id": "shadcn-input-text-placeholder",
+            "type": "text",
+            "name": "Placeholder",
+            "content": "Enter text...",
+            "fontSize": 14,
+            "fill": [
+              {
+                "type": "solid",
+                "color": "#A1A1AA"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "shadcn-input-textarea",
+        "type": "frame",
+        "name": "Textarea",
+        "reusable": true,
+        "x": 260,
+        "y": 60,
+        "width": 240,
+        "height": 96,
+        "layout": "vertical",
+        "padding": 12,
+        "cornerRadius": 8,
+        "fill": [
+          {
+            "type": "solid",
+            "color": "#FFFFFF"
+          }
+        ],
+        "stroke": {
+          "thickness": 1,
+          "fill": [
+            {
+              "type": "solid",
+              "color": "#E4E4E7"
+            }
+          ]
+        },
+        "children": [
+          {
+            "id": "shadcn-input-textarea-placeholder",
+            "type": "text",
+            "name": "Placeholder",
+            "content": "Enter description...",
+            "fontSize": 14,
+            "fill": [
+              {
+                "type": "solid",
+                "color": "#A1A1AA"
+              }
+            ],
+            "width": "fill_container"
+          }
+        ]
+      },
+      {
+        "id": "shadcn-input-checkbox",
+        "type": "frame",
+        "name": "Checkbox",
+        "reusable": true,
+        "x": 0,
+        "y": 176,
+        "width": 160,
+        "height": 24,
+        "layout": "horizontal",
+        "gap": 8,
+        "alignItems": "center",
+        "children": [
+          {
+            "id": "shadcn-input-checkbox-box",
+            "type": "rectangle",
+            "name": "Box",
+            "width": 18,
+            "height": 18,
+            "cornerRadius": 4,
+            "fill": [
+              {
+                "type": "solid",
+                "color": "#18181B"
+              }
+            ],
+            "stroke": {
+              "thickness": 1,
+              "fill": [
+                {
+                  "type": "solid",
+                  "color": "#18181B"
+                }
+              ]
+            }
+          },
+          {
+            "id": "shadcn-input-checkbox-label",
+            "type": "text",
+            "name": "Label",
+            "content": "Checkbox label",
+            "fontSize": 14,
+            "fill": [
+              {
+                "type": "solid",
+                "color": "#18181B"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "shadcn-input-toggle",
+        "type": "frame",
+        "name": "Toggle Switch",
+        "reusable": true,
+        "x": 180,
+        "y": 176,
+        "width": 44,
+        "height": 24,
+        "cornerRadius": 12,
+        "fill": [
+          {
+            "type": "solid",
+            "color": "#18181B"
+          }
+        ],
+        "children": [
+          {
+            "id": "shadcn-input-toggle-thumb",
+            "type": "ellipse",
+            "name": "Thumb",
+            "x": 22,
+            "y": 2,
+            "width": 20,
+            "height": 20,
+            "fill": [
+              {
+                "type": "solid",
+                "color": "#FFFFFF"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "shadcn-input-radio",
+        "type": "frame",
+        "name": "Radio Button",
+        "reusable": true,
+        "x": 240,
+        "y": 176,
+        "width": 160,
+        "height": 24,
+        "layout": "horizontal",
+        "gap": 8,
+        "alignItems": "center",
+        "children": [
+          {
+            "id": "shadcn-input-radio-circle",
+            "type": "ellipse",
+            "name": "Circle",
+            "width": 18,
+            "height": 18,
+            "fill": [
+              {
+                "type": "solid",
+                "color": "#FFFFFF"
+              }
+            ],
+            "stroke": {
+              "thickness": 2,
+              "fill": [
+                {
+                  "type": "solid",
+                  "color": "#18181B"
+                }
+              ]
+            }
+          },
+          {
+            "id": "shadcn-input-radio-label",
+            "type": "text",
+            "name": "Label",
+            "content": "Radio label",
+            "fontSize": 14,
+            "fill": [
+              {
+                "type": "solid",
+                "color": "#18181B"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "shadcn-card-basic",
+        "type": "frame",
+        "name": "Basic Card",
+        "reusable": true,
+        "x": 0,
+        "y": 220,
+        "width": 280,
+        "height": 160,
+        "layout": "vertical",
+        "gap": 8,
+        "padding": 20,
+        "cornerRadius": 12,
+        "fill": [
+          {
+            "type": "solid",
+            "color": "#FFFFFF"
+          }
+        ],
+        "stroke": {
+          "thickness": 1,
+          "fill": [
+            {
+              "type": "solid",
+              "color": "#E4E4E7"
+            }
+          ]
+        },
+        "effects": [
+          {
+            "type": "shadow",
+            "offsetX": 0,
+            "offsetY": 1,
+            "blur": 3,
+            "spread": 0,
+            "color": "rgba(0,0,0,0.05)"
+          }
+        ],
+        "children": [
+          {
+            "id": "shadcn-card-basic-title",
+            "type": "text",
+            "name": "Title",
+            "content": "Card Title",
+            "fontSize": 18,
+            "fontWeight": 600,
+            "fill": [
+              {
+                "type": "solid",
+                "color": "#18181B"
+              }
+            ]
+          },
+          {
+            "id": "shadcn-card-basic-desc",
+            "type": "text",
+            "name": "Description",
+            "content": "Card description goes here with some supporting text.",
+            "fontSize": 14,
+            "lineHeight": 1.5,
+            "fill": [
+              {
+                "type": "solid",
+                "color": "#71717A"
+              }
+            ],
+            "width": "fill_container"
+          }
+        ]
+      },
+      {
+        "id": "shadcn-card-stats",
+        "type": "frame",
+        "name": "Stats Card",
+        "reusable": true,
+        "x": 300,
+        "y": 220,
+        "width": 200,
+        "height": 120,
+        "layout": "vertical",
+        "gap": 4,
+        "padding": 20,
+        "cornerRadius": 12,
+        "fill": [
+          {
+            "type": "solid",
+            "color": "#FFFFFF"
+          }
+        ],
+        "stroke": {
+          "thickness": 1,
+          "fill": [
+            {
+              "type": "solid",
+              "color": "#E4E4E7"
+            }
+          ]
+        },
+        "effects": [
+          {
+            "type": "shadow",
+            "offsetX": 0,
+            "offsetY": 1,
+            "blur": 3,
+            "spread": 0,
+            "color": "rgba(0,0,0,0.05)"
+          }
+        ],
+        "children": [
+          {
+            "id": "shadcn-card-stats-label",
+            "type": "text",
+            "name": "Label",
+            "content": "Total Revenue",
+            "fontSize": 12,
+            "fontWeight": 500,
+            "fill": [
+              {
+                "type": "solid",
+                "color": "#71717A"
+              }
+            ]
+          },
+          {
+            "id": "shadcn-card-stats-value",
+            "type": "text",
+            "name": "Value",
+            "content": "$45,231",
+            "fontSize": 28,
+            "fontWeight": 700,
+            "fill": [
+              {
+                "type": "solid",
+                "color": "#18181B"
+              }
+            ]
+          },
+          {
+            "id": "shadcn-card-stats-change",
+            "type": "text",
+            "name": "Change",
+            "content": "+20.1% from last month",
+            "fontSize": 12,
+            "fill": [
+              {
+                "type": "solid",
+                "color": "#16A34A"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "shadcn-card-image",
+        "type": "frame",
+        "name": "Image Card",
+        "reusable": true,
+        "x": 520,
+        "y": 220,
+        "width": 280,
+        "height": 240,
+        "layout": "vertical",
+        "cornerRadius": 12,
+        "fill": [
+          {
+            "type": "solid",
+            "color": "#FFFFFF"
+          }
+        ],
+        "stroke": {
+          "thickness": 1,
+          "fill": [
+            {
+              "type": "solid",
+              "color": "#E4E4E7"
+            }
+          ]
+        },
+        "effects": [
+          {
+            "type": "shadow",
+            "offsetX": 0,
+            "offsetY": 1,
+            "blur": 3,
+            "spread": 0,
+            "color": "rgba(0,0,0,0.05)"
+          }
+        ],
+        "children": [
+          {
+            "id": "shadcn-card-image-placeholder",
+            "type": "rectangle",
+            "name": "Image",
+            "width": "fill_container",
+            "height": 140,
+            "fill": [
+              {
+                "type": "solid",
+                "color": "#F4F4F5"
+              }
+            ],
+            "cornerRadius": [
+              12,
+              12,
+              0,
+              0
+            ]
+          },
+          {
+            "id": "shadcn-card-image-body",
+            "type": "frame",
+            "name": "Body",
+            "width": "fill_container",
+            "layout": "vertical",
+            "gap": 4,
+            "padding": [
+              12,
+              16,
+              16,
+              16
+            ],
+            "children": [
+              {
+                "id": "shadcn-card-image-title",
+                "type": "text",
+                "name": "Title",
+                "content": "Card Title",
+                "fontSize": 16,
+                "fontWeight": 600,
+                "fill": [
+                  {
+                    "type": "solid",
+                    "color": "#18181B"
+                  }
+                ]
+              },
+              {
+                "id": "shadcn-card-image-desc",
+                "type": "text",
+                "name": "Description",
+                "content": "Brief description text.",
+                "fontSize": 13,
+                "fill": [
+                  {
+                    "type": "solid",
+                    "color": "#71717A"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "shadcn-nav-bar",
+        "type": "frame",
+        "name": "Navbar",
+        "reusable": true,
+        "x": 0,
+        "y": 480,
+        "width": 800,
+        "height": 56,
+        "layout": "horizontal",
+        "alignItems": "center",
+        "justifyContent": "space_between",
+        "padding": [
+          0,
+          24,
+          0,
+          24
+        ],
+        "fill": [
+          {
+            "type": "solid",
+            "color": "#FFFFFF"
+          }
+        ],
+        "stroke": {
+          "thickness": 1,
+          "fill": [
+            {
+              "type": "solid",
+              "color": "#E4E4E7"
+            }
+          ]
+        },
+        "children": [
+          {
+            "id": "shadcn-nav-bar-brand",
+            "type": "text",
+            "name": "Brand",
+            "content": "Brand",
+            "fontSize": 18,
+            "fontWeight": 700,
+            "fill": [
+              {
+                "type": "solid",
+                "color": "#18181B"
+              }
+            ]
+          },
+          {
+            "id": "shadcn-nav-bar-links",
+            "type": "frame",
+            "name": "Links",
+            "layout": "horizontal",
+            "gap": 24,
+            "alignItems": "center",
+            "children": [
+              {
+                "id": "shadcn-nav-bar-link-1",
+                "type": "text",
+                "name": "Link",
+                "content": "Home",
+                "fontSize": 14,
+                "fontWeight": 500,
+                "fill": [
+                  {
+                    "type": "solid",
+                    "color": "#18181B"
+                  }
+                ]
+              },
+              {
+                "id": "shadcn-nav-bar-link-2",
+                "type": "text",
+                "name": "Link",
+                "content": "Products",
+                "fontSize": 14,
+                "fontWeight": 500,
+                "fill": [
+                  {
+                    "type": "solid",
+                    "color": "#71717A"
+                  }
+                ]
+              },
+              {
+                "id": "shadcn-nav-bar-link-3",
+                "type": "text",
+                "name": "Link",
+                "content": "About",
+                "fontSize": 14,
+                "fontWeight": 500,
+                "fill": [
+                  {
+                    "type": "solid",
+                    "color": "#71717A"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "shadcn-tab-bar",
+        "type": "frame",
+        "name": "Tab Bar",
+        "reusable": true,
+        "x": 0,
+        "y": 556,
+        "width": 400,
+        "height": 40,
+        "layout": "horizontal",
+        "gap": 0,
+        "alignItems": "center",
+        "fill": [
+          {
+            "type": "solid",
+            "color": "#FFFFFF"
+          }
+        ],
+        "stroke": {
+          "thickness": 1,
+          "fill": [
+            {
+              "type": "solid",
+              "color": "#E4E4E7"
+            }
+          ]
+        },
+        "cornerRadius": 8,
+        "children": [
+          {
+            "id": "shadcn-tab-bar-tab-1",
+            "type": "frame",
+            "name": "Tab Active",
+            "height": "fill_container",
+            "width": "fill_container",
+            "layout": "horizontal",
+            "justifyContent": "center",
+            "alignItems": "center",
+            "fill": [
+              {
+                "type": "solid",
+                "color": "#18181B"
+              }
+            ],
+            "cornerRadius": [
+              8,
+              0,
+              0,
+              8
+            ],
+            "children": [
+              {
+                "id": "shadcn-tab-bar-tab-1-label",
+                "type": "text",
+                "name": "Label",
+                "content": "Tab 1",
+                "fontSize": 13,
+                "fontWeight": 600,
+                "fill": [
+                  {
+                    "type": "solid",
+                    "color": "#FAFAFA"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "shadcn-tab-bar-tab-2",
+            "type": "frame",
+            "name": "Tab",
+            "height": "fill_container",
+            "width": "fill_container",
+            "layout": "horizontal",
+            "justifyContent": "center",
+            "alignItems": "center",
+            "children": [
+              {
+                "id": "shadcn-tab-bar-tab-2-label",
+                "type": "text",
+                "name": "Label",
+                "content": "Tab 2",
+                "fontSize": 13,
+                "fontWeight": 500,
+                "fill": [
+                  {
+                    "type": "solid",
+                    "color": "#71717A"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "shadcn-tab-bar-tab-3",
+            "type": "frame",
+            "name": "Tab",
+            "height": "fill_container",
+            "width": "fill_container",
+            "layout": "horizontal",
+            "justifyContent": "center",
+            "alignItems": "center",
+            "cornerRadius": [
+              0,
+              8,
+              8,
+              0
+            ],
+            "children": [
+              {
+                "id": "shadcn-tab-bar-tab-3-label",
+                "type": "text",
+                "name": "Label",
+                "content": "Tab 3",
+                "fontSize": 13,
+                "fontWeight": 500,
+                "fill": [
+                  {
+                    "type": "solid",
+                    "color": "#71717A"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "shadcn-breadcrumb",
+        "type": "frame",
+        "name": "Breadcrumb",
+        "reusable": true,
+        "x": 420,
+        "y": 556,
+        "width": 280,
+        "height": 32,
+        "layout": "horizontal",
+        "gap": 8,
+        "alignItems": "center",
+        "children": [
+          {
+            "id": "shadcn-breadcrumb-home",
+            "type": "text",
+            "name": "Home",
+            "content": "Home",
+            "fontSize": 13,
+            "fill": [
+              {
+                "type": "solid",
+                "color": "#71717A"
+              }
+            ]
+          },
+          {
+            "id": "shadcn-breadcrumb-sep-1",
+            "type": "text",
+            "name": "Separator",
+            "content": "/",
+            "fontSize": 13,
+            "fill": [
+              {
+                "type": "solid",
+                "color": "#E4E4E7"
+              }
+            ]
+          },
+          {
+            "id": "shadcn-breadcrumb-section",
+            "type": "text",
+            "name": "Section",
+            "content": "Section",
+            "fontSize": 13,
+            "fill": [
+              {
+                "type": "solid",
+                "color": "#71717A"
+              }
+            ]
+          },
+          {
+            "id": "shadcn-breadcrumb-sep-2",
+            "type": "text",
+            "name": "Separator",
+            "content": "/",
+            "fontSize": 13,
+            "fill": [
+              {
+                "type": "solid",
+                "color": "#E4E4E7"
+              }
+            ]
+          },
+          {
+            "id": "shadcn-breadcrumb-current",
+            "type": "text",
+            "name": "Current",
+            "content": "Current Page",
+            "fontSize": 13,
+            "fontWeight": 500,
+            "fill": [
+              {
+                "type": "solid",
+                "color": "#18181B"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "shadcn-alert-banner",
+        "type": "frame",
+        "name": "Alert Banner",
+        "reusable": true,
+        "x": 0,
+        "y": 616,
+        "width": 400,
+        "height": 56,
+        "layout": "horizontal",
+        "gap": 12,
+        "alignItems": "center",
+        "padding": [
+          0,
+          16,
+          0,
+          16
+        ],
+        "cornerRadius": 8,
+        "fill": [
+          {
+            "type": "solid",
+            "color": "#F4F4F5"
+          }
+        ],
+        "stroke": {
+          "thickness": 1,
+          "fill": [
+            {
+              "type": "solid",
+              "color": "#E4E4E7"
+            }
+          ]
+        },
+        "children": [
+          {
+            "id": "shadcn-alert-banner-icon",
+            "type": "ellipse",
+            "name": "Icon",
+            "width": 8,
+            "height": 8,
+            "fill": [
+              {
+                "type": "solid",
+                "color": "#18181B"
+              }
+            ]
+          },
+          {
+            "id": "shadcn-alert-banner-text",
+            "type": "text",
+            "name": "Message",
+            "content": "This is an informational alert message.",
+            "fontSize": 14,
+            "fill": [
+              {
+                "type": "solid",
+                "color": "#18181B"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "shadcn-badge",
+        "type": "frame",
+        "name": "Badge",
+        "reusable": true,
+        "x": 420,
+        "y": 616,
+        "width": 64,
+        "height": 24,
+        "layout": "horizontal",
+        "justifyContent": "center",
+        "alignItems": "center",
+        "padding": [
+          0,
+          10,
+          0,
+          10
+        ],
+        "cornerRadius": 12,
+        "fill": [
+          {
+            "type": "solid",
+            "color": "#F4F4F5"
+          }
+        ],
+        "children": [
+          {
+            "id": "shadcn-badge-label",
+            "type": "text",
+            "name": "Label",
+            "content": "Badge",
+            "fontSize": 12,
+            "fontWeight": 500,
+            "fill": [
+              {
+                "type": "solid",
+                "color": "#18181B"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "shadcn-avatar",
+        "type": "frame",
+        "name": "Avatar",
+        "reusable": true,
+        "x": 504,
+        "y": 616,
+        "width": 40,
+        "height": 40,
+        "cornerRadius": 20,
+        "fill": [
+          {
+            "type": "solid",
+            "color": "#F4F4F5"
+          }
+        ],
+        "layout": "horizontal",
+        "justifyContent": "center",
+        "alignItems": "center",
+        "children": [
+          {
+            "id": "shadcn-avatar-initials",
+            "type": "text",
+            "name": "Initials",
+            "content": "JD",
+            "fontSize": 14,
+            "fontWeight": 600,
+            "fill": [
+              {
+                "type": "solid",
+                "color": "#18181B"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "shadcn-divider",
+        "type": "frame",
+        "name": "Divider",
+        "reusable": true,
+        "x": 0,
+        "y": 692,
+        "width": 400,
+        "height": 1,
+        "fill": [
+          {
+            "type": "solid",
+            "color": "#E4E4E7"
+          }
+        ]
+      },
+      {
+        "id": "shadcn-btn-outline",
+        "type": "frame",
+        "name": "Outline Button",
+        "reusable": true,
+        "x": 560,
+        "y": 0,
+        "width": 120,
+        "height": 40,
+        "layout": "horizontal",
+        "justifyContent": "center",
+        "alignItems": "center",
+        "padding": [
+          0,
+          20,
+          0,
+          20
+        ],
+        "cornerRadius": 8,
+        "stroke": {
+          "thickness": 1,
+          "fill": [
+            {
+              "type": "solid",
+              "color": "#E4E4E7"
+            }
+          ]
+        },
+        "children": [
+          {
+            "id": "shadcn-btn-outline-label",
+            "type": "text",
+            "name": "Label",
+            "content": "Button",
+            "fontSize": 14,
+            "fontWeight": 600,
+            "fill": [
+              {
+                "type": "solid",
+                "color": "#18181B"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "shadcn-btn-link",
+        "type": "frame",
+        "name": "Link Button",
+        "reusable": true,
+        "x": 700,
+        "y": 0,
+        "width": 120,
+        "height": 40,
+        "layout": "horizontal",
+        "justifyContent": "center",
+        "alignItems": "center",
+        "padding": [
+          0,
+          20,
+          0,
+          20
+        ],
+        "cornerRadius": 8,
+        "children": [
+          {
+            "id": "shadcn-btn-link-label",
+            "type": "text",
+            "name": "Label",
+            "content": "Button",
+            "fontSize": 14,
+            "fontWeight": 600,
+            "fill": [
+              {
+                "type": "solid",
+                "color": "#18181B"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "shadcn-input-select",
+        "type": "frame",
+        "name": "Select",
+        "reusable": true,
+        "x": 0,
+        "y": 720,
+        "width": 240,
+        "height": 40,
+        "layout": "horizontal",
+        "justifyContent": "space_between",
+        "alignItems": "center",
+        "padding": [
+          0,
+          12,
+          0,
+          12
+        ],
+        "cornerRadius": 8,
+        "fill": [
+          {
+            "type": "solid",
+            "color": "#FFFFFF"
+          }
+        ],
+        "stroke": {
+          "thickness": 1,
+          "fill": [
+            {
+              "type": "solid",
+              "color": "#E4E4E7"
+            }
+          ]
+        },
+        "children": [
+          {
+            "id": "shadcn-input-select-value",
+            "type": "text",
+            "name": "Placeholder",
+            "content": "Select an option...",
+            "fontSize": 14,
+            "fill": [
+              {
+                "type": "solid",
+                "color": "#A1A1AA"
+              }
+            ]
+          },
+          {
+            "id": "shadcn-input-select-chevron",
+            "type": "text",
+            "name": "Chevron",
+            "content": "▾",
+            "fontSize": 12,
+            "fill": [
+              {
+                "type": "solid",
+                "color": "#71717A"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "shadcn-input-slider",
+        "type": "frame",
+        "name": "Slider",
+        "reusable": true,
+        "x": 260,
+        "y": 728,
+        "width": 200,
+        "height": 24,
+        "children": [
+          {
+            "id": "shadcn-input-slider-track",
+            "type": "rectangle",
+            "name": "Track",
+            "x": 0,
+            "y": 10,
+            "width": 200,
+            "height": 4,
+            "cornerRadius": 2,
+            "fill": [
+              {
+                "type": "solid",
+                "color": "#E4E4E7"
+              }
+            ]
+          },
+          {
+            "id": "shadcn-input-slider-fill",
+            "type": "rectangle",
+            "name": "Fill",
+            "x": 0,
+            "y": 10,
+            "width": 120,
+            "height": 4,
+            "cornerRadius": 2,
+            "fill": [
+              {
+                "type": "solid",
+                "color": "#18181B"
+              }
+            ]
+          },
+          {
+            "id": "shadcn-input-slider-thumb",
+            "type": "ellipse",
+            "name": "Thumb",
+            "x": 112,
+            "y": 4,
+            "width": 16,
+            "height": 16,
+            "fill": [
+              {
+                "type": "solid",
+                "color": "#FFFFFF"
+              }
+            ],
+            "stroke": {
+              "thickness": 2,
+              "fill": [
+                {
+                  "type": "solid",
+                  "color": "#18181B"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "shadcn-dialog",
+        "type": "frame",
+        "name": "Dialog",
+        "reusable": true,
+        "x": 0,
+        "y": 780,
+        "width": 400,
+        "height": 200,
+        "layout": "vertical",
+        "gap": 16,
+        "padding": 24,
+        "cornerRadius": 12,
+        "fill": [
+          {
+            "type": "solid",
+            "color": "#FFFFFF"
+          }
+        ],
+        "stroke": {
+          "thickness": 1,
+          "fill": [
+            {
+              "type": "solid",
+              "color": "#E4E4E7"
+            }
+          ]
+        },
+        "effects": [
+          {
+            "type": "shadow",
+            "offsetX": 0,
+            "offsetY": 4,
+            "blur": 16,
+            "spread": -2,
+            "color": "rgba(0,0,0,0.1)"
+          }
+        ],
+        "children": [
+          {
+            "id": "shadcn-dialog-title",
+            "type": "text",
+            "name": "Title",
+            "content": "Are you absolutely sure?",
+            "fontSize": 18,
+            "fontWeight": 600,
+            "fill": [
+              {
+                "type": "solid",
+                "color": "#18181B"
+              }
+            ],
+            "width": "fill_container"
+          },
+          {
+            "id": "shadcn-dialog-desc",
+            "type": "text",
+            "name": "Description",
+            "content": "This action cannot be undone. This will permanently delete your account and remove your data from our servers.",
+            "fontSize": 14,
+            "lineHeight": 1.5,
+            "fill": [
+              {
+                "type": "solid",
+                "color": "#71717A"
+              }
+            ],
+            "width": "fill_container"
+          },
+          {
+            "id": "shadcn-dialog-footer",
+            "type": "frame",
+            "name": "Footer",
+            "width": "fill_container",
+            "height": 36,
+            "layout": "horizontal",
+            "gap": 8,
+            "justifyContent": "end",
+            "alignItems": "center",
+            "children": [
+              {
+                "id": "shadcn-dialog-cancel",
+                "type": "frame",
+                "name": "Cancel",
+                "width": 80,
+                "height": 36,
+                "layout": "horizontal",
+                "justifyContent": "center",
+                "alignItems": "center",
+                "cornerRadius": 8,
+                "stroke": {
+                  "thickness": 1,
+                  "fill": [
+                    {
+                      "type": "solid",
+                      "color": "#E4E4E7"
+                    }
+                  ]
+                },
+                "children": [
+                  {
+                    "id": "shadcn-dialog-cancel-label",
+                    "type": "text",
+                    "name": "Label",
+                    "content": "Cancel",
+                    "fontSize": 14,
+                    "fontWeight": 500,
+                    "fill": [
+                      {
+                        "type": "solid",
+                        "color": "#18181B"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "id": "shadcn-dialog-confirm",
+                "type": "frame",
+                "name": "Confirm",
+                "width": 80,
+                "height": 36,
+                "layout": "horizontal",
+                "justifyContent": "center",
+                "alignItems": "center",
+                "cornerRadius": 8,
+                "fill": [
+                  {
+                    "type": "solid",
+                    "color": "#18181B"
+                  }
+                ],
+                "children": [
+                  {
+                    "id": "shadcn-dialog-confirm-label",
+                    "type": "text",
+                    "name": "Label",
+                    "content": "Continue",
+                    "fontSize": 14,
+                    "fontWeight": 500,
+                    "fill": [
+                      {
+                        "type": "solid",
+                        "color": "#FAFAFA"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "shadcn-dropdown-menu",
+        "type": "frame",
+        "name": "Dropdown Menu",
+        "reusable": true,
+        "x": 420,
+        "y": 780,
+        "width": 200,
+        "height": 176,
+        "layout": "vertical",
+        "padding": 4,
+        "cornerRadius": 8,
+        "fill": [
+          {
+            "type": "solid",
+            "color": "#FFFFFF"
+          }
+        ],
+        "stroke": {
+          "thickness": 1,
+          "fill": [
+            {
+              "type": "solid",
+              "color": "#E4E4E7"
+            }
+          ]
+        },
+        "effects": [
+          {
+            "type": "shadow",
+            "offsetX": 0,
+            "offsetY": 4,
+            "blur": 12,
+            "spread": -2,
+            "color": "rgba(0,0,0,0.08)"
+          }
+        ],
+        "children": [
+          {
+            "id": "shadcn-dropdown-item-1",
+            "type": "frame",
+            "name": "Item",
+            "width": "fill_container",
+            "height": 32,
+            "layout": "horizontal",
+            "alignItems": "center",
+            "padding": [
+              0,
+              8,
+              0,
+              8
+            ],
+            "cornerRadius": 4,
+            "children": [
+              {
+                "id": "shadcn-dropdown-item-1-label",
+                "type": "text",
+                "name": "Label",
+                "content": "Edit",
+                "fontSize": 13,
+                "fill": [
+                  {
+                    "type": "solid",
+                    "color": "#18181B"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "shadcn-dropdown-item-2",
+            "type": "frame",
+            "name": "Item",
+            "width": "fill_container",
+            "height": 32,
+            "layout": "horizontal",
+            "alignItems": "center",
+            "padding": [
+              0,
+              8,
+              0,
+              8
+            ],
+            "cornerRadius": 4,
+            "children": [
+              {
+                "id": "shadcn-dropdown-item-2-label",
+                "type": "text",
+                "name": "Label",
+                "content": "Duplicate",
+                "fontSize": 13,
+                "fill": [
+                  {
+                    "type": "solid",
+                    "color": "#18181B"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "shadcn-dropdown-sep-1",
+            "type": "frame",
+            "name": "Separator",
+            "width": "fill_container",
+            "height": 1,
+            "fill": [
+              {
+                "type": "solid",
+                "color": "#E4E4E7"
+              }
+            ]
+          },
+          {
+            "id": "shadcn-dropdown-item-3",
+            "type": "frame",
+            "name": "Item",
+            "width": "fill_container",
+            "height": 32,
+            "layout": "horizontal",
+            "alignItems": "center",
+            "padding": [
+              0,
+              8,
+              0,
+              8
+            ],
+            "cornerRadius": 4,
+            "children": [
+              {
+                "id": "shadcn-dropdown-item-3-label",
+                "type": "text",
+                "name": "Label",
+                "content": "Archive",
+                "fontSize": 13,
+                "fill": [
+                  {
+                    "type": "solid",
+                    "color": "#18181B"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "shadcn-dropdown-sep-2",
+            "type": "frame",
+            "name": "Separator",
+            "width": "fill_container",
+            "height": 1,
+            "fill": [
+              {
+                "type": "solid",
+                "color": "#E4E4E7"
+              }
+            ]
+          },
+          {
+            "id": "shadcn-dropdown-item-delete",
+            "type": "frame",
+            "name": "Destructive Item",
+            "width": "fill_container",
+            "height": 32,
+            "layout": "horizontal",
+            "alignItems": "center",
+            "padding": [
+              0,
+              8,
+              0,
+              8
+            ],
+            "cornerRadius": 4,
+            "children": [
+              {
+                "id": "shadcn-dropdown-item-delete-label",
+                "type": "text",
+                "name": "Label",
+                "content": "Delete",
+                "fontSize": 13,
+                "fill": [
+                  {
+                    "type": "solid",
+                    "color": "#EF4444"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "shadcn-pagination",
+        "type": "frame",
+        "name": "Pagination",
+        "reusable": true,
+        "x": 0,
+        "y": 1000,
+        "width": 220,
+        "height": 36,
+        "layout": "horizontal",
+        "gap": 4,
+        "alignItems": "center",
+        "children": [
+          {
+            "id": "shadcn-pagination-prev",
+            "type": "frame",
+            "name": "Previous",
+            "width": 36,
+            "height": 36,
+            "layout": "horizontal",
+            "justifyContent": "center",
+            "alignItems": "center",
+            "cornerRadius": 8,
+            "stroke": {
+              "thickness": 1,
+              "fill": [
+                {
+                  "type": "solid",
+                  "color": "#E4E4E7"
+                }
+              ]
+            },
+            "children": [
+              {
+                "id": "shadcn-pagination-prev-icon",
+                "type": "text",
+                "name": "Icon",
+                "content": "‹",
+                "fontSize": 16,
+                "fill": [
+                  {
+                    "type": "solid",
+                    "color": "#18181B"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "shadcn-pagination-p1",
+            "type": "frame",
+            "name": "Page 1",
+            "width": 36,
+            "height": 36,
+            "layout": "horizontal",
+            "justifyContent": "center",
+            "alignItems": "center",
+            "cornerRadius": 8,
+            "fill": [
+              {
+                "type": "solid",
+                "color": "#18181B"
+              }
+            ],
+            "children": [
+              {
+                "id": "shadcn-pagination-p1-label",
+                "type": "text",
+                "name": "Label",
+                "content": "1",
+                "fontSize": 13,
+                "fontWeight": 500,
+                "fill": [
+                  {
+                    "type": "solid",
+                    "color": "#FAFAFA"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "shadcn-pagination-p2",
+            "type": "frame",
+            "name": "Page 2",
+            "width": 36,
+            "height": 36,
+            "layout": "horizontal",
+            "justifyContent": "center",
+            "alignItems": "center",
+            "cornerRadius": 8,
+            "stroke": {
+              "thickness": 1,
+              "fill": [
+                {
+                  "type": "solid",
+                  "color": "#E4E4E7"
+                }
+              ]
+            },
+            "children": [
+              {
+                "id": "shadcn-pagination-p2-label",
+                "type": "text",
+                "name": "Label",
+                "content": "2",
+                "fontSize": 13,
+                "fill": [
+                  {
+                    "type": "solid",
+                    "color": "#18181B"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "shadcn-pagination-p3",
+            "type": "frame",
+            "name": "Page 3",
+            "width": 36,
+            "height": 36,
+            "layout": "horizontal",
+            "justifyContent": "center",
+            "alignItems": "center",
+            "cornerRadius": 8,
+            "stroke": {
+              "thickness": 1,
+              "fill": [
+                {
+                  "type": "solid",
+                  "color": "#E4E4E7"
+                }
+              ]
+            },
+            "children": [
+              {
+                "id": "shadcn-pagination-p3-label",
+                "type": "text",
+                "name": "Label",
+                "content": "3",
+                "fontSize": 13,
+                "fill": [
+                  {
+                    "type": "solid",
+                    "color": "#18181B"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "shadcn-pagination-next",
+            "type": "frame",
+            "name": "Next",
+            "width": 36,
+            "height": 36,
+            "layout": "horizontal",
+            "justifyContent": "center",
+            "alignItems": "center",
+            "cornerRadius": 8,
+            "stroke": {
+              "thickness": 1,
+              "fill": [
+                {
+                  "type": "solid",
+                  "color": "#E4E4E7"
+                }
+              ]
+            },
+            "children": [
+              {
+                "id": "shadcn-pagination-next-icon",
+                "type": "text",
+                "name": "Icon",
+                "content": "›",
+                "fontSize": 16,
+                "fill": [
+                  {
+                    "type": "solid",
+                    "color": "#18181B"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "shadcn-toast",
+        "type": "frame",
+        "name": "Toast",
+        "reusable": true,
+        "x": 0,
+        "y": 1060,
+        "width": 360,
+        "height": 64,
+        "layout": "horizontal",
+        "gap": 12,
+        "alignItems": "center",
+        "padding": [
+          0,
+          16,
+          0,
+          16
+        ],
+        "cornerRadius": 12,
+        "fill": [
+          {
+            "type": "solid",
+            "color": "#FFFFFF"
+          }
+        ],
+        "stroke": {
+          "thickness": 1,
+          "fill": [
+            {
+              "type": "solid",
+              "color": "#E4E4E7"
+            }
+          ]
+        },
+        "effects": [
+          {
+            "type": "shadow",
+            "offsetX": 0,
+            "offsetY": 4,
+            "blur": 12,
+            "spread": -2,
+            "color": "rgba(0,0,0,0.08)"
+          }
+        ],
+        "children": [
+          {
+            "id": "shadcn-toast-content",
+            "type": "frame",
+            "name": "Content",
+            "layout": "vertical",
+            "gap": 2,
+            "children": [
+              {
+                "id": "shadcn-toast-title",
+                "type": "text",
+                "name": "Title",
+                "content": "Event created",
+                "fontSize": 14,
+                "fontWeight": 600,
+                "fill": [
+                  {
+                    "type": "solid",
+                    "color": "#18181B"
+                  }
+                ]
+              },
+              {
+                "id": "shadcn-toast-desc",
+                "type": "text",
+                "name": "Description",
+                "content": "Your event has been created successfully.",
+                "fontSize": 13,
+                "fill": [
+                  {
+                    "type": "solid",
+                    "color": "#71717A"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "shadcn-progress",
+        "type": "frame",
+        "name": "Progress",
+        "reusable": true,
+        "x": 0,
+        "y": 1144,
+        "width": 240,
+        "height": 8,
+        "cornerRadius": 4,
+        "fill": [
+          {
+            "type": "solid",
+            "color": "#E4E4E7"
+          }
+        ],
+        "children": [
+          {
+            "id": "shadcn-progress-fill",
+            "type": "rectangle",
+            "name": "Fill",
+            "x": 0,
+            "y": 0,
+            "width": 156,
+            "height": 8,
+            "cornerRadius": 4,
+            "fill": [
+              {
+                "type": "solid",
+                "color": "#18181B"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "shadcn-skeleton",
+        "type": "frame",
+        "name": "Skeleton",
+        "reusable": true,
+        "x": 260,
+        "y": 1060,
+        "width": 280,
+        "height": 92,
+        "layout": "vertical",
+        "gap": 12,
+        "children": [
+          {
+            "id": "shadcn-skeleton-line-1",
+            "type": "rectangle",
+            "name": "Line",
+            "width": "fill_container",
+            "height": 20,
+            "cornerRadius": 4,
+            "fill": [
+              {
+                "type": "solid",
+                "color": "#F4F4F5"
+              }
+            ]
+          },
+          {
+            "id": "shadcn-skeleton-line-2",
+            "type": "rectangle",
+            "name": "Line",
+            "width": "fill_container",
+            "height": 16,
+            "cornerRadius": 4,
+            "fill": [
+              {
+                "type": "solid",
+                "color": "#F4F4F5"
+              }
+            ]
+          },
+          {
+            "id": "shadcn-skeleton-line-3",
+            "type": "rectangle",
+            "name": "Line",
+            "width": 180,
+            "height": 16,
+            "cornerRadius": 4,
+            "fill": [
+              {
+                "type": "solid",
+                "color": "#F4F4F5"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "shadcn-tooltip",
+        "type": "frame",
+        "name": "Tooltip",
+        "reusable": true,
+        "x": 260,
+        "y": 1172,
+        "width": 120,
+        "height": 32,
+        "layout": "horizontal",
+        "justifyContent": "center",
+        "alignItems": "center",
+        "padding": [
+          0,
+          12,
+          0,
+          12
+        ],
+        "cornerRadius": 6,
+        "fill": [
+          {
+            "type": "solid",
+            "color": "#18181B"
+          }
+        ],
+        "children": [
+          {
+            "id": "shadcn-tooltip-text",
+            "type": "text",
+            "name": "Text",
+            "content": "Tooltip text",
+            "fontSize": 12,
+            "fill": [
+              {
+                "type": "solid",
+                "color": "#FAFAFA"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "shadcn-table",
+        "type": "frame",
+        "name": "Table",
+        "reusable": true,
+        "x": 0,
+        "y": 1220,
+        "width": 480,
+        "height": 148,
+        "layout": "vertical",
+        "cornerRadius": 8,
+        "fill": [
+          {
+            "type": "solid",
+            "color": "#FFFFFF"
+          }
+        ],
+        "stroke": {
+          "thickness": 1,
+          "fill": [
+            {
+              "type": "solid",
+              "color": "#E4E4E7"
+            }
+          ]
+        },
+        "children": [
+          {
+            "id": "shadcn-table-header",
+            "type": "frame",
+            "name": "Header Row",
+            "width": "fill_container",
+            "height": 40,
+            "layout": "horizontal",
+            "alignItems": "center",
+            "padding": [
+              0,
+              16,
+              0,
+              16
+            ],
+            "fill": [
+              {
+                "type": "solid",
+                "color": "#F4F4F5"
+              }
+            ],
+            "cornerRadius": [
+              8,
+              8,
+              0,
+              0
+            ],
+            "children": [
+              {
+                "id": "shadcn-table-h1",
+                "type": "text",
+                "name": "Name",
+                "content": "Name",
+                "fontSize": 13,
+                "fontWeight": 600,
+                "fill": [
+                  {
+                    "type": "solid",
+                    "color": "#18181B"
+                  }
+                ],
+                "width": "fill_container"
+              },
+              {
+                "id": "shadcn-table-h2",
+                "type": "text",
+                "name": "Status",
+                "content": "Status",
+                "fontSize": 13,
+                "fontWeight": 600,
+                "fill": [
+                  {
+                    "type": "solid",
+                    "color": "#18181B"
+                  }
+                ],
+                "width": "fill_container"
+              },
+              {
+                "id": "shadcn-table-h3",
+                "type": "text",
+                "name": "Amount",
+                "content": "Amount",
+                "fontSize": 13,
+                "fontWeight": 600,
+                "fill": [
+                  {
+                    "type": "solid",
+                    "color": "#18181B"
+                  }
+                ],
+                "width": "fill_container"
+              }
+            ]
+          },
+          {
+            "id": "shadcn-table-sep-1",
+            "type": "frame",
+            "name": "Separator",
+            "width": "fill_container",
+            "height": 1,
+            "fill": [
+              {
+                "type": "solid",
+                "color": "#E4E4E7"
+              }
+            ]
+          },
+          {
+            "id": "shadcn-table-row-1",
+            "type": "frame",
+            "name": "Row",
+            "width": "fill_container",
+            "height": 40,
+            "layout": "horizontal",
+            "alignItems": "center",
+            "padding": [
+              0,
+              16,
+              0,
+              16
+            ],
+            "children": [
+              {
+                "id": "shadcn-table-r1c1",
+                "type": "text",
+                "name": "Name",
+                "content": "John Doe",
+                "fontSize": 13,
+                "fill": [
+                  {
+                    "type": "solid",
+                    "color": "#18181B"
+                  }
+                ],
+                "width": "fill_container"
+              },
+              {
+                "id": "shadcn-table-r1c2",
+                "type": "text",
+                "name": "Status",
+                "content": "Active",
+                "fontSize": 13,
+                "fill": [
+                  {
+                    "type": "solid",
+                    "color": "#71717A"
+                  }
+                ],
+                "width": "fill_container"
+              },
+              {
+                "id": "shadcn-table-r1c3",
+                "type": "text",
+                "name": "Amount",
+                "content": "$250.00",
+                "fontSize": 13,
+                "fill": [
+                  {
+                    "type": "solid",
+                    "color": "#18181B"
+                  }
+                ],
+                "width": "fill_container"
+              }
+            ]
+          },
+          {
+            "id": "shadcn-table-sep-2",
+            "type": "frame",
+            "name": "Separator",
+            "width": "fill_container",
+            "height": 1,
+            "fill": [
+              {
+                "type": "solid",
+                "color": "#E4E4E7"
+              }
+            ]
+          },
+          {
+            "id": "shadcn-table-row-2",
+            "type": "frame",
+            "name": "Row",
+            "width": "fill_container",
+            "height": 40,
+            "layout": "horizontal",
+            "alignItems": "center",
+            "padding": [
+              0,
+              16,
+              0,
+              16
+            ],
+            "children": [
+              {
+                "id": "shadcn-table-r2c1",
+                "type": "text",
+                "name": "Name",
+                "content": "Jane Smith",
+                "fontSize": 13,
+                "fill": [
+                  {
+                    "type": "solid",
+                    "color": "#18181B"
+                  }
+                ],
+                "width": "fill_container"
+              },
+              {
+                "id": "shadcn-table-r2c2",
+                "type": "text",
+                "name": "Status",
+                "content": "Pending",
+                "fontSize": 13,
+                "fill": [
+                  {
+                    "type": "solid",
+                    "color": "#71717A"
+                  }
+                ],
+                "width": "fill_container"
+              },
+              {
+                "id": "shadcn-table-r2c3",
+                "type": "text",
+                "name": "Amount",
+                "content": "$150.00",
+                "fontSize": 13,
+                "fill": [
+                  {
+                    "type": "solid",
+                    "color": "#18181B"
+                  }
+                ],
+                "width": "fill_container"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "meta": {
+    "shadcn-btn-primary": {
+      "category": "buttons",
+      "tags": [
+        "button",
+        "primary",
+        "cta",
+        "action"
+      ]
+    },
+    "shadcn-btn-secondary": {
+      "category": "buttons",
+      "tags": [
+        "button",
+        "secondary",
+        "outline"
+      ]
+    },
+    "shadcn-btn-ghost": {
+      "category": "buttons",
+      "tags": [
+        "button",
+        "ghost",
+        "text",
+        "link"
+      ]
+    },
+    "shadcn-btn-destructive": {
+      "category": "buttons",
+      "tags": [
+        "button",
+        "destructive",
+        "danger",
+        "delete"
+      ]
+    },
+    "shadcn-input-text": {
+      "category": "inputs",
+      "tags": [
+        "input",
+        "text",
+        "field",
+        "form"
+      ]
+    },
+    "shadcn-input-textarea": {
+      "category": "inputs",
+      "tags": [
+        "textarea",
+        "multiline",
+        "text",
+        "form"
+      ]
+    },
+    "shadcn-input-checkbox": {
+      "category": "inputs",
+      "tags": [
+        "checkbox",
+        "check",
+        "toggle",
+        "form"
+      ]
+    },
+    "shadcn-input-toggle": {
+      "category": "inputs",
+      "tags": [
+        "toggle",
+        "switch",
+        "on",
+        "off"
+      ]
+    },
+    "shadcn-input-radio": {
+      "category": "inputs",
+      "tags": [
+        "radio",
+        "option",
+        "select",
+        "form"
+      ]
+    },
+    "shadcn-card-basic": {
+      "category": "cards",
+      "tags": [
+        "card",
+        "container",
+        "surface",
+        "basic"
+      ]
+    },
+    "shadcn-card-stats": {
+      "category": "cards",
+      "tags": [
+        "card",
+        "stats",
+        "metric",
+        "dashboard",
+        "kpi"
+      ]
+    },
+    "shadcn-card-image": {
+      "category": "cards",
+      "tags": [
+        "card",
+        "image",
+        "media",
+        "thumbnail"
+      ]
+    },
+    "shadcn-nav-bar": {
+      "category": "navigation",
+      "tags": [
+        "navbar",
+        "header",
+        "navigation",
+        "top"
+      ]
+    },
+    "shadcn-tab-bar": {
+      "category": "navigation",
+      "tags": [
+        "tab",
+        "tabs",
+        "navigation",
+        "segment"
+      ]
+    },
+    "shadcn-breadcrumb": {
+      "category": "navigation",
+      "tags": [
+        "breadcrumb",
+        "navigation",
+        "path"
+      ]
+    },
+    "shadcn-alert-banner": {
+      "category": "feedback",
+      "tags": [
+        "alert",
+        "banner",
+        "notification",
+        "info"
+      ]
+    },
+    "shadcn-badge": {
+      "category": "feedback",
+      "tags": [
+        "badge",
+        "tag",
+        "chip",
+        "label",
+        "status"
+      ]
+    },
+    "shadcn-avatar": {
+      "category": "feedback",
+      "tags": [
+        "avatar",
+        "user",
+        "profile",
+        "icon"
+      ]
+    },
+    "shadcn-divider": {
+      "category": "layout",
+      "tags": [
+        "divider",
+        "separator",
+        "line",
+        "hr"
+      ]
+    },
+    "shadcn-btn-outline": {
+      "category": "buttons",
+      "tags": [
+        "button",
+        "outline",
+        "border"
+      ]
+    },
+    "shadcn-btn-link": {
+      "category": "buttons",
+      "tags": [
+        "button",
+        "link",
+        "text",
+        "anchor"
+      ]
+    },
+    "shadcn-input-select": {
+      "category": "inputs",
+      "tags": [
+        "select",
+        "dropdown",
+        "picker",
+        "form"
+      ]
+    },
+    "shadcn-input-slider": {
+      "category": "inputs",
+      "tags": [
+        "slider",
+        "range",
+        "input",
+        "form"
+      ]
+    },
+    "shadcn-dialog": {
+      "category": "cards",
+      "tags": [
+        "dialog",
+        "modal",
+        "popup",
+        "alert"
+      ]
+    },
+    "shadcn-dropdown-menu": {
+      "category": "navigation",
+      "tags": [
+        "dropdown",
+        "menu",
+        "context",
+        "popover"
+      ]
+    },
+    "shadcn-pagination": {
+      "category": "navigation",
+      "tags": [
+        "pagination",
+        "pager",
+        "pages",
+        "navigation"
+      ]
+    },
+    "shadcn-toast": {
+      "category": "feedback",
+      "tags": [
+        "toast",
+        "notification",
+        "snackbar",
+        "message"
+      ]
+    },
+    "shadcn-progress": {
+      "category": "feedback",
+      "tags": [
+        "progress",
+        "bar",
+        "loading",
+        "indicator"
+      ]
+    },
+    "shadcn-skeleton": {
+      "category": "feedback",
+      "tags": [
+        "skeleton",
+        "loading",
+        "placeholder",
+        "shimmer"
+      ]
+    },
+    "shadcn-tooltip": {
+      "category": "feedback",
+      "tags": [
+        "tooltip",
+        "hint",
+        "popover",
+        "info"
+      ]
+    },
+    "shadcn-table": {
+      "category": "layout",
+      "tags": [
+        "table",
+        "data",
+        "grid",
+        "rows",
+        "columns"
+      ]
+    }
+  }
+}

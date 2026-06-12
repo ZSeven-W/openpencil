@@ -259,6 +259,71 @@ impl EditorState {
         Some(id)
     }
 
+    /// Insert a remote icon with baked SVG path data, centered at the
+    /// given document point (GAP #26). When `svg_path_d` is `Some`,
+    /// this builds a `Path` node carrying the fetched `d` plus an
+    /// `iconId` — mirroring the TS toolbar's `parseSvgToNodes` insert
+    /// (`toolbar.tsx::handleIconSelect`) and the shape the REPLACE
+    /// path already writes — so a remote Iconify glyph renders its
+    /// real geometry instead of the fallback dot. Without path data
+    /// it falls back to [`EditorState::insert_icon_font_node_at`].
+    pub fn insert_icon_node_at(
+        &mut self,
+        icon_name: &str,
+        family: &str,
+        svg_path_d: Option<&str>,
+        center_x: f64,
+        center_y: f64,
+    ) -> Option<NodeId> {
+        let icon_name = icon_name.trim();
+        if icon_name.is_empty() {
+            return None;
+        }
+        let Some(d) = svg_path_d.map(str::trim).filter(|d| !d.is_empty()) else {
+            return self.insert_icon_font_node_at(icon_name, family, center_x, center_y);
+        };
+        const SIZE: f64 = 32.0;
+        let safe = self.max_node_id().checked_add(1)?;
+        let id = NodeId::new(format!("n{}", safe));
+        let icon_id = format!("{}:{}", family.trim(), icon_name);
+        self.commit_history();
+        let node = PenNode::Path(PathNode {
+            base: PenNodeBase {
+                id: id.as_str().to_string(),
+                name: Some(icon_id.clone()),
+                x: Some(center_x - SIZE / 2.0),
+                y: Some(center_y - SIZE / 2.0),
+                ..Default::default()
+            },
+            icon_id: Some(icon_id),
+            d: Some(d.to_string()),
+            anchors: None,
+            closed: None,
+            width: Some(SizingBehavior::Number(SIZE)),
+            height: Some(SizingBehavior::Number(SIZE)),
+            fill: Some(vec![jian_ops_schema::style::PenFill::Solid(
+                jian_ops_schema::style::SolidFillBody {
+                    color: "#111827".to_string(),
+                    explain: None,
+                    opacity: None,
+                    blend_mode: None,
+                },
+            )]),
+            stroke: None,
+            effects: None,
+            state: None,
+            bindings: None,
+            events: None,
+            lifecycle: None,
+            semantics: None,
+            gestures: None,
+            route: None,
+        });
+        self.active_children_mut().push(node);
+        self.set_single_selection(id.clone());
+        Some(id)
+    }
+
     /// Replace the selected icon node with another Lucide glyph.
     /// `icon_font` nodes update their name/family directly. Path
     /// icons update `iconId` and optionally replace their SVG `d`

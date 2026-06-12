@@ -293,31 +293,69 @@ pub fn deep_clone_with_new_ids(
     clone
 }
 
-/// Translate `node` and its whole subtree by `(dx, dy)` document px.
-/// Free-layout children carry document-absolute coords, so moving a
-/// container must shift the descendants too or they detach.
+/// Translate the subtree rooted at `node` by `(dx, dy)` document px.
 ///
-/// Auto-layout (flex) containers are the exception: their children are
-/// flow-positioned by the layout engine and re-flow under the moved
-/// origin on their own. Cascading into them would materialize an
-/// explicit `x` / `y` onto each flow child, which jian-core reads as
-/// an absolutely positioned node — collapsing every child to the
-/// frame's top-left on the next re-layout. So move only the flex
-/// container's own origin and stop.
+/// Only the root's own `x` / `y` move. Child coords in the canonical
+/// schema are PARENT-RELATIVE (jian-core's layout engine resolves a
+/// child AABB against its parent origin), so shifting the root alone
+/// carries the whole subtree visually. Cascading the delta into
+/// descendants — as a doc-absolute model would need — double-shifts
+/// every nested free-layout child (proven by layout probe), and TS
+/// agrees: the drag commit writes only the dragged node
+/// (`skia-interaction-select.ts` `docStore.updateNode(orig.id,
+/// {x: orig.x + dx, y: orig.y + dy})`; same in pen-engine's
+/// `select-handler.ts`). It would also materialize explicit `x` / `y`
+/// onto flex flow children, detaching them from auto-layout flow.
 pub fn translate_subtree(node: &mut PenNode, dx: f64, dy: f64) {
-    {
-        let base = node.base_mut();
-        base.x = Some(base.x.unwrap_or(0.0) + dx);
-        base.y = Some(base.y.unwrap_or(0.0) + dy);
+    let base = node.base_mut();
+    base.x = Some(base.x.unwrap_or(0.0) + dx);
+    base.y = Some(base.y.unwrap_or(0.0) + dy);
+}
+
+/// Locate `target`'s parent container anywhere in the forest.
+/// `Some((None, idx))` when `target` sits at the top level,
+/// `Some((Some(parent_id), idx))` for a nested target, `None` when
+/// absent from the forest entirely.
+pub fn find_parent_and_index(
+    children: &[PenNode],
+    target: &NodeId,
+) -> Option<(Option<NodeId>, usize)> {
+    if let Some(idx) = children.iter().position(|n| n.id_str() == target.as_str()) {
+        return Some((None, idx));
     }
-    if node.is_auto_layout_container() {
-        return;
-    }
-    if let Some(children) = node.children_mut() {
-        for child in children {
-            translate_subtree(child, dx, dy);
+    for child in children {
+        if let Some(grand) = child.children() {
+            if let Some((parent, idx)) = find_parent_and_index(grand, target) {
+                return Some((parent.or_else(|| NodeId::new_opt(child.id_str())), idx));
+            }
         }
     }
+    None
+}
+
+/// Insert `node` into the container `parent` (`None` = top level) at
+/// `index` (clamped to the child count; `None` = append). False when
+/// the parent container no longer exists or cannot hold children.
+pub fn insert_into_parent(
+    children: &mut Vec<PenNode>,
+    parent: Option<&NodeId>,
+    index: Option<usize>,
+    node: PenNode,
+) -> bool {
+    let Some(parent_id) = parent else {
+        let at = index.unwrap_or(children.len()).min(children.len());
+        children.insert(at, node);
+        return true;
+    };
+    let Some(container) = find_node_mut(children, parent_id) else {
+        return false;
+    };
+    let Some(slot) = container.children_mut() else {
+        return false;
+    };
+    let at = index.unwrap_or(slot.len()).min(slot.len());
+    slot.insert(at, node);
+    true
 }
 
 /// True when `target`'s immediate parent (anywhere in the forest) is an

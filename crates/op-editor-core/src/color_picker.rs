@@ -91,6 +91,17 @@ impl EditorState {
         let Some(node) = self.selected_node() else {
             return false;
         };
+        // A Ref anchor seeds from the merged instance display node so
+        // the picker opens on the override-effective colour instead of
+        // the Ref's (always-empty) own fill (#000000 fallback).
+        let display_node;
+        let node = match crate::instance_override::resolve_instance_display_node(&self.doc, node) {
+            Some(display) => {
+                display_node = display;
+                &display_node
+            }
+            None => node,
+        };
         let current_hex = match target {
             ColorTarget::Fill => first_solid_fill_hex(node).map(str::to_string),
             ColorTarget::Stroke => first_solid_stroke_hex(node).map(str::to_string),
@@ -117,6 +128,7 @@ impl EditorState {
             val: v,
             drag: None,
             anchor_y,
+            anchor_x: None,
             variable: None,
             alpha,
         });
@@ -134,6 +146,26 @@ impl EditorState {
     pub fn open_color_picker_for_variable(
         &mut self,
         variable: impl Into<String>,
+        anchor_y: f32,
+    ) -> bool {
+        self.open_color_picker_for_variable_with_anchor(variable, None, anchor_y)
+    }
+
+    /// Same as [`Self::open_color_picker_for_variable`], but anchors
+    /// the floating picker near the clicked variable swatch.
+    pub fn open_color_picker_for_variable_at(
+        &mut self,
+        variable: impl Into<String>,
+        anchor_x: f32,
+        anchor_y: f32,
+    ) -> bool {
+        self.open_color_picker_for_variable_with_anchor(variable, Some(anchor_x), anchor_y)
+    }
+
+    fn open_color_picker_for_variable_with_anchor(
+        &mut self,
+        variable: impl Into<String>,
+        anchor_x: Option<f32>,
         anchor_y: f32,
     ) -> bool {
         let name = variable.into();
@@ -165,6 +197,7 @@ impl EditorState {
             val: v,
             drag: None,
             anchor_y,
+            anchor_x,
             variable: Some(name),
             alpha: 1.0,
         });
@@ -264,6 +297,17 @@ impl EditorState {
             let before = snapshot_variable_hex(&snap, name, &self.ui.variables.active_theme);
             let after = self.resolve_variable(name).and_then(scalar_as_hex);
             before != after
+        } else if matches!(
+            self.selected_node(),
+            Some(jian_ops_schema::node::PenNode::Ref(_))
+        ) {
+            // Instance anchors keep their colours in `descendants`
+            // overrides — the per-target colour readers see `None` on
+            // a Ref, so compare the whole node instead. An override
+            // edit must still land exactly one undo entry.
+            let sel = self.selection.anchor.clone();
+            let snap_children = snapshot_active_children(&snap);
+            crate::walkers::find_node(snap_children, &sel) != self.selected_node()
         } else {
             let sel = self.selection.anchor.clone();
             let snap_children = snapshot_active_children(&snap);

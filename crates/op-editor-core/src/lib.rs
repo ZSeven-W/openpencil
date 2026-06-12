@@ -10,6 +10,7 @@
 pub mod agent_indicators;
 pub mod agent_settings;
 pub mod agent_settings_builtin_presets;
+pub mod agent_settings_connection;
 pub mod align;
 pub mod align_guides;
 pub mod chat;
@@ -21,6 +22,7 @@ pub mod color_picker;
 pub mod command;
 pub mod command_apply;
 pub mod command_authored_subtree;
+pub mod command_batch;
 pub mod command_layout_prop;
 pub mod command_node;
 pub mod command_node_attrs;
@@ -30,6 +32,7 @@ pub mod component_browser_state;
 pub mod components;
 pub mod design_md;
 pub mod design_md_button_state;
+pub mod drag_mutators;
 pub mod editor_ui_state;
 pub mod export_dialog_state;
 pub mod figma_import_state;
@@ -42,30 +45,41 @@ pub mod host_support;
 pub mod icon_picker_button_state;
 pub mod icon_picker_state;
 pub mod image_node_props;
+pub mod image_panel_state;
+pub mod ime_state;
+pub mod instance_override;
 pub mod mutators;
 pub mod node_defaults;
 pub mod node_id;
 pub mod page_mutators;
 pub mod path_bounds;
+pub mod path_edit;
 pub mod pen;
 pub mod pen_node_ext;
 pub mod property_edit_mutators;
 pub mod property_panel_state;
+pub mod ref_resolve;
 pub mod rename;
 pub mod render_backend;
 pub mod selection;
+pub mod selection_resolve;
 pub mod state;
 pub mod statusbar_state;
 pub mod svg_import;
 pub mod svg_path_bounds;
 mod svg_path_data;
+pub mod text_edit;
+pub mod theme_presets;
 pub mod tool;
 pub mod toolbar_state;
 pub mod topbar_state;
 pub mod ui_draft;
 pub mod uikit;
+pub mod uikit_io;
+pub mod uikit_shadcn;
 pub mod variables;
 pub mod variables_panel_state;
+pub mod variables_resolve;
 pub mod viewport;
 pub mod walkers;
 pub mod web_sync;
@@ -76,6 +90,8 @@ mod command_attr_tests;
 mod command_authored_subtree_tests;
 #[cfg(test)]
 mod command_batch_page_tests;
+#[cfg(test)]
+mod command_batch_tests;
 #[cfg(test)]
 mod command_component_tests;
 #[cfg(test)]
@@ -105,6 +121,8 @@ mod tests_agent_settings;
 #[cfg(test)]
 mod tests_agent_settings_draft;
 #[cfg(test)]
+mod tests_drag_mutators;
+#[cfg(test)]
 mod tests_geometry;
 #[cfg(test)]
 mod tests_mutators;
@@ -115,7 +133,7 @@ pub use agent_settings::{
     AcpAgentConfig, AcpAgentField, AcpConnectionType, AgentSettings, AgentSettingsDrag,
     AgentSettingsTab, BuiltinAgentConfig, BuiltinAgentField, BuiltinAgentKind, ImageGenField,
     ImageGenProfile, ImageGenProvider, ImageSearchField, ImageTestStatus, McpCli, McpServer,
-    SettingsFocus,
+    ProviderConnectOutcome, ProviderConnectPhase, ProviderConnection, SettingsFocus,
 };
 pub use agent_settings_builtin_presets::{
     builtin_agent_preset, infer_builtin_agent_preset, normalize_builtin_agent_preset,
@@ -157,6 +175,10 @@ pub use history::{EditorSnapshot, History, HISTORY_CAP};
 pub use icon_picker_button_state::IconPickerButton;
 pub use icon_picker_state::{IconPickerRemoteIcon, IconPickerRemoteState, IconifyLoadMoreRequest};
 pub use image_node_props::image_node_summary;
+pub use instance_override::{
+    apply_instance_override, resolve_instance_display_node, InstanceWriteScope,
+    INSTANCE_DIRECT_PROPS,
+};
 pub use jian_ops_schema::{DesignMdColor, DesignMdSpec, DesignMdTypography, PenDocument};
 pub use node_defaults::{
     default_leaf_node_size, DEFAULT_LEAF_NODE_SIZE, DEFAULT_TEXT_NODE_HEIGHT,
@@ -168,14 +190,16 @@ pub use render_backend::*;
 pub use selection::SelectionState;
 pub use state::EditorState;
 pub use statusbar_state::StatusBarButton;
+pub use theme_presets::ThemePreset;
 pub use tool::Tool;
 pub use toolbar_state::{ToolbarAction, ToolbarHover};
 pub use topbar_state::TopBarButton;
 pub use ui_draft::{
     ColorPickerDrag, ColorPickerState, ColorTarget, LayerContextTarget, LayerRenameState,
-    PropertyFocus, UiDraftState, VariableUiState,
+    PathAnchorMenuState, PropertyFocus, UiDraftState, VariableUiState,
 };
 pub use uikit::{builtin_kits, ComponentCategory, KitComponent, UIKit};
+pub use uikit_io::KitIoRequest;
 pub use variables_panel_state::VariablesPanelButton;
 pub use viewport::Viewport;
 pub use walkers::ReorderDirection;

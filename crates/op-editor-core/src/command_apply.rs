@@ -779,6 +779,7 @@ impl EditorState {
                 parent_ids,
                 replacements,
             } => self.cmd_replace_all_matching_properties(&page_id, &parent_ids, &replacements),
+            EditorCommand::Batch { commands } => self.cmd_batch(commands),
         }
     }
 }

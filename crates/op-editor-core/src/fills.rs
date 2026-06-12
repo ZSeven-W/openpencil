@@ -89,7 +89,7 @@ pub fn node_fills_mut(node: &mut PenNode) -> Option<&mut Vec<PenFill>> {
 }
 
 /// Borrow a node's `stroke`, if the variant carries one.
-fn node_stroke_mut(node: &mut PenNode) -> Option<&mut Option<PenStroke>> {
+pub(crate) fn node_stroke_mut(node: &mut PenNode) -> Option<&mut Option<PenStroke>> {
     match node {
         PenNode::Frame(n) => Some(&mut n.container.stroke),
         PenNode::Group(n) => Some(&mut n.container.stroke),
@@ -134,6 +134,48 @@ fn node_effects_mut(node: &mut PenNode) -> Option<&mut Vec<PenEffect>> {
         PenNode::Text(n) => Some(n.effects.get_or_insert_with(Vec::new)),
         PenNode::TextInput(n) => Some(n.effects.get_or_insert_with(Vec::new)),
         PenNode::Image(n) => Some(n.effects.get_or_insert_with(Vec::new)),
+        PenNode::IconFont(_) | PenNode::Ref(_) => None,
+    }
+}
+
+/// Read-only view of a node's stroke fill list, when present — for
+/// token-detection walks that must not materialize anything.
+pub(crate) fn node_stroke_fills(node: &PenNode) -> Option<&Vec<PenFill>> {
+    node_stroke(node)?.fill.as_ref()
+}
+
+/// Mutably borrow a node's existing `fill` list WITHOUT materializing
+/// an empty one — for tree walks (e.g. `$ref` resolution) that must
+/// not change which nodes carry a `fill` field.
+pub(crate) fn node_fills_opt_mut(node: &mut PenNode) -> Option<&mut Vec<PenFill>> {
+    match node {
+        PenNode::Frame(n) => n.container.fill.as_mut(),
+        PenNode::Group(n) => n.container.fill.as_mut(),
+        PenNode::Rectangle(n) => n.container.fill.as_mut(),
+        PenNode::Ellipse(n) => n.fill.as_mut(),
+        PenNode::Polygon(n) => n.fill.as_mut(),
+        PenNode::Path(n) => n.fill.as_mut(),
+        PenNode::Text(n) => n.fill.as_mut(),
+        PenNode::TextInput(n) => n.fill.as_mut(),
+        PenNode::IconFont(n) => n.fill.as_mut(),
+        PenNode::Line(_) | PenNode::Image(_) | PenNode::Ref(_) => None,
+    }
+}
+
+/// Mutably borrow a node's existing `effects` list WITHOUT
+/// materializing an empty one — companion to [`node_fills_opt_mut`].
+pub(crate) fn node_effects_opt_mut(node: &mut PenNode) -> Option<&mut Vec<PenEffect>> {
+    match node {
+        PenNode::Frame(n) => n.container.effects.as_mut(),
+        PenNode::Group(n) => n.container.effects.as_mut(),
+        PenNode::Rectangle(n) => n.container.effects.as_mut(),
+        PenNode::Ellipse(n) => n.effects.as_mut(),
+        PenNode::Polygon(n) => n.effects.as_mut(),
+        PenNode::Path(n) => n.effects.as_mut(),
+        PenNode::Line(n) => n.effects.as_mut(),
+        PenNode::Text(n) => n.effects.as_mut(),
+        PenNode::TextInput(n) => n.effects.as_mut(),
+        PenNode::Image(n) => n.effects.as_mut(),
         PenNode::IconFont(_) | PenNode::Ref(_) => None,
     }
 }

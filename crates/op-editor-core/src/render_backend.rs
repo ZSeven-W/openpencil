@@ -125,6 +125,11 @@ impl Color {
 #[derive(Debug, Clone)]
 pub struct TextLayout {
     runs: Vec<TextRun>,
+    /// Whether every run renders with an italic (slanted) face.
+    /// Carried at the OP layer because `jian_core::render::TextRun`
+    /// has no slant field; backends read it via [`TextLayout::italic`]
+    /// when resolving typefaces.
+    italic: bool,
 }
 
 /// Raster image placement mode. Matches the canonical image-fill /
@@ -194,7 +199,10 @@ impl TextLayout {
             align: TextAlign::Start,
             line_height: 0.0,
         };
-        Self { runs: vec![run] }
+        Self {
+            runs: vec![run],
+            italic: false,
+        }
     }
 
     /// View of the already-shaped TextRun collection.
@@ -212,6 +220,19 @@ impl TextLayout {
         self
     }
 
+    /// Request an italic (slanted) face for every run. Backends with
+    /// a real font manager resolve a slanted typeface; single-face
+    /// backends synthesise an oblique via glyph skew.
+    pub fn with_italic(mut self, italic: bool) -> Self {
+        self.italic = italic;
+        self
+    }
+
+    /// Whether the layout renders italic. See [`TextLayout::with_italic`].
+    pub fn italic(&self) -> bool {
+        self.italic
+    }
+
     /// Translates every run's origin (NativeBackend::draw_text adds this on top
     /// of the widget origin). Returns a new layout; the original is unchanged.
     pub fn translated(&self, offset: Point2D) -> Self {
@@ -225,7 +246,10 @@ impl TextLayout {
                 r2
             })
             .collect();
-        Self { runs }
+        Self {
+            runs,
+            italic: self.italic,
+        }
     }
 }
 
@@ -261,6 +285,16 @@ pub trait RenderBackend {
     fn stroke_rect(&mut self, rect: Rect, color: Color, width: f32);
     fn draw_text(&mut self, layout: &TextLayout, origin: Point2D);
     fn clip_rect(&mut self, rect: Rect);
+
+    /// Intersect the clip with a rounded rectangle — used by `clipContent`
+    /// containers so children clip to the frame's rounded corners.
+    /// Default degrades to the sharp [`RenderBackend::clip_rect`] so
+    /// backends without an rrect-clip primitive still constrain
+    /// children to the box (corners just clip square).
+    fn clip_round_rect(&mut self, rect: Rect, radius: f32) {
+        let _ = radius;
+        self.clip_rect(rect);
+    }
 
     // Step 4 visual lift — line + rounded rect primitives so widgets can
     // draw lucide-style icons and shadcn-style chip / panel / button
@@ -472,8 +506,9 @@ pub trait RenderBackend {
         mode: ImageDrawMode,
         adjustments: ImageAdjustments,
         opacity: f32,
+        corner_radius: f32,
     ) {
-        let _ = (adjustments, opacity);
+        let _ = (adjustments, opacity, corner_radius);
         self.draw_image_with_mode(rect, image_id, encoded, mode);
     }
 
@@ -585,5 +620,22 @@ pub trait RenderBackend {
             };
         }
         w
+    }
+
+    /// Like `measure_text_weighted` but also slant-aware, so styled
+    /// text-run slices measure with the same (weight, italic) typeface
+    /// `draw_text` paints with. Default forwards to the weighted
+    /// measure — synthetic-oblique backends (glyph skew) keep upright
+    /// advances anyway; only backends that resolve a REAL italic face
+    /// need to override.
+    fn measure_text_styled(
+        &mut self,
+        text: &str,
+        font_size: f32,
+        weight: u16,
+        italic: bool,
+    ) -> f32 {
+        let _ = italic;
+        self.measure_text_weighted(text, font_size, weight)
     }
 }

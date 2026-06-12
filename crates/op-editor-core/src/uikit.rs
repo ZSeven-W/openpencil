@@ -31,6 +31,37 @@ pub enum ComponentCategory {
     Other,
 }
 
+impl ComponentCategory {
+    /// The TS `ComponentCategory` string literal — used by the kit
+    /// persistence file so it round-trips with the TS store shape.
+    pub fn as_ts_str(self) -> &'static str {
+        match self {
+            ComponentCategory::Buttons => "buttons",
+            ComponentCategory::Inputs => "inputs",
+            ComponentCategory::Cards => "cards",
+            ComponentCategory::Navigation => "navigation",
+            ComponentCategory::Layout => "layout",
+            ComponentCategory::Feedback => "feedback",
+            ComponentCategory::DataDisplay => "data-display",
+            ComponentCategory::Other => "other",
+        }
+    }
+
+    /// Inverse of [`Self::as_ts_str`]; unknown strings map to `Other`.
+    pub fn from_ts_str(s: &str) -> ComponentCategory {
+        match s {
+            "buttons" => ComponentCategory::Buttons,
+            "inputs" => ComponentCategory::Inputs,
+            "cards" => ComponentCategory::Cards,
+            "navigation" => ComponentCategory::Navigation,
+            "layout" => ComponentCategory::Layout,
+            "feedback" => ComponentCategory::Feedback,
+            "data-display" => ComponentCategory::DataDisplay,
+            _ => ComponentCategory::Other,
+        }
+    }
+}
+
 /// One reusable component in a [`UIKit`]. The `template` is the
 /// `PenNode` tree the browser clones on click — its ids carry the
 /// `kit-<slug>` prefix so they never collide with the editor's
@@ -54,13 +85,22 @@ pub struct KitComponent {
     pub template: PenNode,
 }
 
-/// A bundle of reusable components — built-in or (future) imported.
+/// A bundle of reusable components — built-in or imported from a
+/// `.op` kit file (see `uikit_io.rs` for the import/export pipeline).
 #[derive(Debug, Clone)]
 pub struct UIKit {
     pub id: String,
     pub name: String,
+    /// Source document's format version (TS `UIKit.version`); the
+    /// built-in kits carry the kit-file format literal `"1.0.0"`.
+    pub version: String,
     pub built_in: bool,
     pub components: Vec<KitComponent>,
+    /// `$variable` definitions carried by the kit's backing document.
+    /// On instantiate, referenced definitions are copied into the
+    /// target document (TS `component-browser-card.tsx:24-34`).
+    pub variables:
+        Option<std::collections::BTreeMap<String, jian_ops_schema::variable::VariableDefinition>>,
 }
 
 // ---------------------------------------------------------------------------
@@ -315,7 +355,9 @@ pub fn builtin_starter_kit() -> UIKit {
     UIKit {
         id: "openpencil-starter".to_string(),
         name: "OpenPencil Starter".to_string(),
+        version: "1.0.0".to_string(),
         built_in: true,
+        variables: None,
         components: vec![
             comp(
                 "btn-primary",
@@ -375,10 +417,11 @@ pub fn builtin_starter_kit() -> UIKit {
     }
 }
 
-/// All built-in kits the editor ships with. v1 has one starter kit;
-/// future kits append here.
+/// All built-in kits the editor ships with: the starter kit plus the
+/// embedded 31-component shadcn kit (TS built-in parity, GAP #23 —
+/// see `uikit_shadcn.rs`).
 pub fn builtin_kits() -> Vec<UIKit> {
-    vec![builtin_starter_kit()]
+    vec![builtin_starter_kit(), crate::uikit_shadcn::shadcn_kit()]
 }
 
 impl EditorState {
@@ -395,28 +438,54 @@ impl EditorState {
         doc_x: f64,
         doc_y: f64,
     ) -> Option<NodeId> {
-        let (template, label) = {
-            let comp = self
-                .ui_kits
-                .iter()
-                .find(|k| k.id == kit_id)?
-                .components
-                .iter()
-                .find(|c| c.id == component_id)?;
-            (comp.template.clone(), comp.name.clone())
+        let (template, label, kit_vars) = {
+            let kit = self.ui_kits.iter().find(|k| k.id == kit_id)?;
+            let comp = kit.components.iter().find(|c| c.id == component_id)?;
+            (
+                comp.template.clone(),
+                comp.name.clone(),
+                kit.variables.clone(),
+            )
         };
         let snap = self.snapshot_for_history();
+        // Copy referenced `$variable` definitions from the kit into the
+        // target document so kit fills/spacing keep resolving (TS
+        // `component-browser-card.tsx:24-34`: only definitions absent
+        // from the target document are copied). Divergence: TS issues
+        // per-variable `setVariable` store actions (each undoable);
+        // Rust folds the copies into the SAME history snapshot as the
+        // insert so the whole instantiate is one undo step.
+        if let Some(vars) = kit_vars {
+            let mut refs = std::collections::BTreeSet::new();
+            crate::uikit_io::collect_template_variable_refs(&template, &mut refs);
+            for r in refs {
+                let name = r.strip_prefix('$').unwrap_or(&r);
+                if let Some(def) = vars.get(name) {
+                    let doc_vars = self.doc.variables.get_or_insert_with(Default::default);
+                    if !doc_vars.contains_key(name) {
+                        doc_vars.insert(name.to_string(), def.clone());
+                    }
+                }
+            }
+        }
         let mut next_id = self.max_node_id().checked_add(1)?;
         let mut taken = std::collections::HashSet::new();
         let mut clone = walkers::deep_clone_with_new_ids(&template, &mut next_id, &mut taken);
-        // Children carry document-absolute coords, so positioning the
-        // instantiated component is a subtree translate from the
-        // template's root origin to `(doc_x, doc_y)` — moving only the
-        // root would leave descendants at the template coordinates.
+        // Template children are authored parent-relative, so placing
+        // the instance only needs the ROOT origin moved to
+        // `(doc_x, doc_y)` — descendants ride along at their authored
+        // offsets (`translate_subtree` shifts the root alone).
         let dx = doc_x - clone.base().x.unwrap_or(0.0);
         let dy = doc_y - clone.base().y.unwrap_or(0.0);
         walkers::translate_subtree(&mut clone, dx, dy);
         clone.base_mut().name = Some(label);
+        // TS deletes the clone's root `reusable` flag so the inserted
+        // instance is standalone (`component-browser-card.tsx:36-40`);
+        // without this an instantiated imported-kit component would be
+        // re-collected by the next kit export.
+        if let PenNode::Frame(f) = &mut clone {
+            f.reusable = None;
+        }
         let new_id = NodeId::new(clone.base().id.clone());
         self.active_children_mut().push(clone);
         self.set_single_selection(new_id.clone());
@@ -465,12 +534,13 @@ mod tests {
     }
 
     #[test]
-    fn instantiate_translates_descendants_into_doc_space() {
+    fn instantiate_keeps_descendants_parent_relative() {
         // The Primary Button template has a child label at (32, 12)
         // relative to its (0, 0) root. After instantiating at
-        // (200, 300), the label's absolute position must be
-        // (232, 312) — `instantiate_kit_component` translates the
-        // whole subtree, not only the root.
+        // (200, 300), only the ROOT origin moves — the label keeps
+        // its authored parent-relative (32, 12) and the layout pass
+        // resolves it to (232, 312) on screen. Rewriting the label to
+        // absolute coords would double-shift it at layout time.
         let mut state = EditorState::new();
         let _ = state
             .instantiate_kit_component("openpencil-starter", "btn-primary", 200.0, 300.0)
@@ -487,8 +557,8 @@ mod tests {
                 .expect("label"),
             _ => panic!("expected Frame"),
         };
-        assert_eq!(label.base().x, Some(232.0));
-        assert_eq!(label.base().y, Some(312.0));
+        assert_eq!(label.base().x, Some(32.0));
+        assert_eq!(label.base().y, Some(12.0));
     }
 
     #[test]

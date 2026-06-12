@@ -12,7 +12,7 @@
 //! [`EditorState::active_children_mut`] hide that fork so the
 //! mutators stay page-model-agnostic.
 
-use crate::geometry::{own_bounds, union_aggregate_bounds, DocRect};
+use crate::geometry::{union_aggregate_bounds, DocRect};
 use crate::history::EditorSnapshot;
 use crate::node_id::NodeId;
 use crate::pen_node_ext::PenNodeExt;
@@ -144,9 +144,16 @@ impl EditorState {
     }
 
     /// Right-rail PropertyPanel visibility gate. Visible when at least
-    /// one id in the selection set resolves on the active page.
-    /// Faithful port of shell-core's `Document::property_panel_visible`.
+    /// one id in the selection set resolves on the active page, OR when
+    /// the Code tab is active — the Code panel is selection-independent
+    /// (the TS code-panel falls back to the active page's children), so
+    /// clearing the selection must not collapse the rail and strand the
+    /// tab. Otherwise a faithful port of shell-core's
+    /// `Document::property_panel_visible`.
     pub fn property_panel_visible(&self) -> bool {
+        if self.editor_ui.property_tab == crate::PropertyTab::Code {
+            return true;
+        }
         if self.selection.set.is_empty() {
             return false;
         }
@@ -157,12 +164,10 @@ impl EditorState {
             .any(|id| find_node(children, id).is_some())
     }
 
-    /// True when any widget occupies the right rail: PropertyPanel
-    /// (gated on selection) or an auto-shown VariablesPanel for a
-    /// persisted variable table. The explicit toolbar Variables action
-    /// opens a floating manager instead of taking over the rail.
+    /// True when any widget occupies the right rail: currently only
+    /// the PropertyPanel, gated on selection.
     pub fn right_rail_visible(&self) -> bool {
-        self.property_panel_visible() || self.doc.variables.as_ref().is_some_and(|v| !v.is_empty())
+        self.property_panel_visible()
     }
 
     /// Union of `aggregate_bounds` across the selected nodes.
@@ -375,36 +380,14 @@ impl EditorState {
         }
     }
 
-    /// Overwrite the anchor node's axis-aligned bounds (doc-space
-    /// `x`/`y` + `width`/`height`). No-op when the node is locked /
-    /// hidden / missing.
-    pub fn set_selected_bounds(&mut self, bounds: DocRect) {
-        let sel = self.selection.anchor.clone();
-        if !sel.is_real() || !self.is_editable(&sel) {
-            return;
-        }
-        let is_flow_child = walkers::is_flow_child_of_flex(self.active_children(), &sel);
-        if let Some(node) = find_node_mut(self.active_children_mut(), &sel) {
-            // Only write a real rect — container nodes that derive
-            // their size from children keep deriving it.
-            let own = own_bounds(node);
-            if own.w > 0.0 || own.h > 0.0 {
-                if !is_flow_child {
-                    node.base_mut().x = Some(bounds.x);
-                    node.base_mut().y = Some(bounds.y);
-                }
-                node.set_width_px(bounds.w);
-                node.set_height_px(bounds.h);
-            } else if !is_flow_child {
-                node.base_mut().x = Some(bounds.x);
-                node.base_mut().y = Some(bounds.y);
-            }
-        }
-    }
+    // `set_selected_bounds` (handle-drag resize, incl. descendant
+    // scaling) lives in `drag_mutators.rs` — split out to keep this
+    // file under the 800-line ceiling.
 
     /// Translate every node in the selection set by `(dx, dy)` doc
-    /// px. Containers cascade; an ancestor-already-in-set dedup
-    /// stops descendants shifting twice.
+    /// px. Containers carry their subtree (child coords are parent-
+    /// relative); an ancestor-already-in-set dedup stops descendants
+    /// shifting twice.
     pub fn translate_selected(&mut self, dx: f64, dy: f64) -> bool {
         if self.selection.set.is_empty() || (dx == 0.0 && dy == 0.0) {
             return false;
@@ -426,7 +409,7 @@ impl EditorState {
             // materializing x/y here flips it to Position::Absolute in
             // jian-core and detaches it from flex flow. A free drag of
             // such a node is a no-op (it cannot move independently of the
-            // layout engine). Checked before the cascade dedup.
+            // layout engine). Checked before the ancestor dedup.
             if walkers::is_flow_child_of_flex(children, target) {
                 continue;
             }
@@ -746,8 +729,11 @@ fn subtree_all_editable(node: &PenNode) -> bool {
 
 /// Recursive helper for `duplicate_selected` — finds the target,
 /// deep-clones it with fresh ids, offsets the clone, and inserts it
-/// as the next sibling. Returns the clone's id.
-fn duplicate_in_children(
+/// as the next sibling. Returns the clone's id. Also the paste path
+/// for reusable components (`clipboard.rs`), which mirrors TS
+/// `duplicateNode`: the minted instance lands next to the live
+/// component, not at the paste anchor.
+pub(crate) fn duplicate_in_children(
     children: &mut Vec<PenNode>,
     target: &NodeId,
     next_id: &mut u64,
@@ -755,6 +741,28 @@ fn duplicate_in_children(
     offset: f64,
 ) -> Option<NodeId> {
     if let Some(idx) = children.iter().position(|n| n.id_str() == target.as_str()) {
+        // TS parity: duplicating a reusable component mints a Ref
+        // INSTANCE pointing at it, not a deep clone — the duplicate
+        // tracks future component edits. Position offsets like a
+        // clone; size/name/props inherit through the render-time
+        // ref expansion.
+        if let PenNode::Frame(frame) = &children[idx] {
+            if frame.reusable == Some(true) {
+                let new_id = walkers::alloc_n_id(next_id, taken)?;
+                let x = frame.base.x.unwrap_or(0.0) + offset;
+                let y = frame.base.y.unwrap_or(0.0) + offset;
+                let instance: PenNode = serde_json::from_value(serde_json::json!({
+                    "type": "ref",
+                    "id": new_id.as_str(),
+                    "ref": frame.base.id,
+                    "x": x,
+                    "y": y,
+                }))
+                .ok()?;
+                children.insert(idx + 1, instance);
+                return Some(new_id);
+            }
+        }
         let size = walkers::subtree_size(&children[idx]);
         next_id.checked_add(size)?;
         let mut clone = walkers::deep_clone_with_new_ids(&children[idx], next_id, taken);

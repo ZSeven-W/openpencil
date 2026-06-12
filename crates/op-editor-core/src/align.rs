@@ -9,8 +9,9 @@
 //!
 //! Distribute requires 3+ nodes; fewer silently no-ops.
 //!
-//! All deltas go through [`crate::walkers::translate_subtree`], so
-//! containers cascade to their descendants exactly like drag-move.
+//! All deltas go through [`crate::walkers::translate_subtree`]: only
+//! the moved node's own origin shifts, and its descendants ride along
+//! because child coords are parent-relative — exactly like drag-move.
 //! An ancestor-already-in-set dedup stops a descendant moving twice.
 
 use crate::geometry::{aggregate_bounds, union_aggregate_bounds, DocRect};
@@ -96,8 +97,8 @@ impl EditorState {
 /// Move each editable node so its edge / center matches `reference`.
 ///
 /// Ancestor-in-set dedup: when both an ancestor and a descendant are
-/// selected, only the ancestor moves — the descendant cascades via
-/// `translate_subtree`.
+/// selected, only the ancestor moves — the descendant rides along
+/// (its coords are parent-relative).
 fn apply_align(
     children: &mut [PenNode],
     editable: &[NodeId],
@@ -373,7 +374,7 @@ mod tests {
         s.selection.set = vec![NodeId::new("n10"), NodeId::new("n20"), NodeId::new("n30")];
         s.selection.anchor = NodeId::new("n30");
         assert!(s.align_selected(AlignAction::Left));
-        // Frame already at x=0; child cascades, so it keeps x=150.
+        // Frame already at x=0; the child's parent-relative x stays 150.
         assert_eq!(bx(&s, "n10").x, 0.0);
         assert_eq!(bx(&s, "n20").x, 150.0);
         assert_eq!(bx(&s, "n30").x, 0.0);
