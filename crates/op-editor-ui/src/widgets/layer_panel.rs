@@ -61,6 +61,10 @@ pub struct LayerItem {
     pub is_container: bool,
     /// Active inline-rename target — paints the input instead.
     pub renaming: bool,
+    /// Reusable COMPONENT definition — Diamond icon + #a855f7 tint.
+    pub is_reusable: bool,
+    /// Component INSTANCE (`Ref`) — Diamond icon + #9281f7 tint.
+    pub is_instance: bool,
 }
 
 /// Pages-section row.
@@ -154,6 +158,8 @@ impl LayerPanel {
             hovered: false,
             is_container: matches!(node, PenNode::Frame(_) | PenNode::Group(_)),
             renaming: false,
+            is_reusable: matches!(node, PenNode::Frame(f) if f.reusable == Some(true)),
+            is_instance: matches!(node, PenNode::Ref(_)),
         })
     }
 
@@ -671,8 +677,20 @@ impl Widget for LayerPanel {
                 }
             };
             let dim_factor = if item.hidden { 0.45 } else { 1.0 };
+            // Component / instance rows tint purple like TS
+            // (`text-purple-400` #a855f7 / instance #9281f7);
+            // selection still wins so the selected row reads as one.
+            let component_tint = if item.is_reusable {
+                Some(crate::widgets::property_panel_inputs::COMPONENT_ACCENT)
+            } else if item.is_instance {
+                Some(crate::widgets::property_panel_inputs::INSTANCE_ACCENT)
+            } else {
+                None
+            };
             let icon_color = if item.selected {
                 dim(self.theme.primary, dim_factor)
+            } else if let Some(tint) = component_tint {
+                dim(tint, dim_factor)
             } else {
                 dim(self.theme.muted_foreground, dim_factor)
             };
@@ -705,6 +723,8 @@ impl Widget for LayerPanel {
             );
             let label_color = if item.selected {
                 dim(self.theme.primary, dim_factor)
+            } else if let Some(tint) = component_tint {
+                dim(tint, dim_factor)
             } else {
                 dim(self.theme.card_foreground, dim_factor)
             };

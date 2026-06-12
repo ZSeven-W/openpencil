@@ -283,6 +283,13 @@ pub(super) const DOWNLOAD: &[&str] = &[
     "M12 15V3",
 ];
 
+// Lucide `upload.svg`.
+pub(super) const UPLOAD: &[&str] = &[
+    "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4",
+    "M17 8l-5-5-5 5",
+    "M12 3v12",
+];
+
 // Lucide `file-text.svg`.
 pub(super) const FILE_TEXT: &[&str] = &[
     "M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z",
@@ -761,4 +768,40 @@ pub(super) const MILESTONE: &[&str] = &[
 /// lucide `wrench` — used by TS for delegated/orchestrated tool cards.
 pub(super) const WRENCH: &[&str] = &[
     "M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94z",
+];
+
+/// lucide `squares-unite` (0.545.0) — Boolean Union menu row.
+pub(super) const SQUARES_UNITE: &[&str] = &[
+    "M4 16a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v3a1 1 0 0 0 1 1h3a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H10a2 2 0 0 1-2-2v-3a1 1 0 0 0-1-1z",
+];
+
+/// lucide `squares-subtract` — Boolean Subtract row.
+pub(super) const SQUARES_SUBTRACT: &[&str] = &[
+    "M10 22a2 2 0 0 1-2-2",
+    "M16 22h-2",
+    "M16 4a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h3a1 1 0 0 0 1-1v-5a2 2 0 0 1 2-2h5a1 1 0 0 0 1-1z",
+    "M20 8a2 2 0 0 1 2 2",
+    "M22 14v2",
+    "M22 20a2 2 0 0 1-2 2",
+];
+
+/// lucide `squares-intersect` — Boolean Intersect row.
+pub(super) const SQUARES_INTERSECT: &[&str] = &[
+    "M10 22a2 2 0 0 1-2-2",
+    "M14 2a2 2 0 0 1 2 2",
+    "M16 22h-2",
+    "M2 10V8",
+    "M2 4a2 2 0 0 1 2-2",
+    "M20 8a2 2 0 0 1 2 2",
+    "M22 14v2",
+    "M22 20a2 2 0 0 1-2 2",
+    "M4 16a2 2 0 0 1-2-2",
+    "M8 10a2 2 0 0 1 2-2h5a1 1 0 0 1 1 1v5a2 2 0 0 1-2 2H9a1 1 0 0 1-1-1z",
+    "M8 2h2",
+];
+
+/// lucide `squares-exclude` — Boolean Exclude row.
+pub(super) const SQUARES_EXCLUDE: &[&str] = &[
+    "M16 12v2a2 2 0 0 1-2 2H9a1 1 0 0 0-1 1v3a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2h0",
+    "M4 16a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v3a1 1 0 0 1-1 1h-5a2 2 0 0 0-2 2v2",
 ];

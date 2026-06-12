@@ -16,6 +16,8 @@ pub const SECTION_GAP: f32 = 8.0;
 pub const ROW_HEIGHT: f32 = 28.0;
 pub const INPUT_HEIGHT: f32 = 30.0;
 pub const INPUT_RADIUS: f32 = 8.0;
+pub const COLOR_VARIABLE_BUTTON_W: f32 = 28.0;
+pub const COLOR_VARIABLE_GAP: f32 = 6.0;
 pub const SECTION_HEADER_HEIGHT: f32 = 24.0;
 pub const TAB_HEIGHT: f32 = 36.0;
 pub const HEADER_HEIGHT: f32 = 30.0;
@@ -30,6 +32,37 @@ pub const CREATE_COMPONENT_ICON: f32 = 14.0;
 /// Total vertical space the create-component block consumes.
 pub const CREATE_COMPONENT_BLOCK_H: f32 =
     CREATE_COMPONENT_PAD_TOP + CREATE_COMPONENT_BTN_H + CREATE_COMPONENT_PAD_BOTTOM;
+/// Gap between the instance variant's two rows (Go to component /
+/// Detach instance).
+pub const CREATE_COMPONENT_ROW_GAP: f32 = 6.0;
+
+/// Component / instance accent colours — TS `text-purple-400`
+/// (#a855f7) for components, `#9281f7` for instances.
+pub const COMPONENT_ACCENT: Color = Color {
+    r: 0xA8 as f32 / 255.0,
+    g: 0x55 as f32 / 255.0,
+    b: 0xF7 as f32 / 255.0,
+    a: 1.0,
+};
+pub const INSTANCE_ACCENT: Color = Color {
+    r: 0x92 as f32 / 255.0,
+    g: 0x81 as f32 / 255.0,
+    b: 0xF7 as f32 / 255.0,
+    a: 1.0,
+};
+
+/// Vertical space the create-component block consumes for the given
+/// button variant — the instance variant stacks a second row. Paint
+/// + BOTH layout walkers must read this so y-offsets never drift.
+pub fn create_component_block_height(
+    state: crate::widgets::property_panel_visibility::ComponentButtonState,
+) -> f32 {
+    use crate::widgets::property_panel_visibility::ComponentButtonState as S;
+    match state {
+        S::Create | S::DetachComponent => CREATE_COMPONENT_BLOCK_H,
+        S::Instance => CREATE_COMPONENT_BLOCK_H + CREATE_COMPONENT_BTN_H + CREATE_COMPONENT_ROW_GAP,
+    }
+}
 
 pub fn paint_section_label(
     cx: &mut PaintCx<'_>,

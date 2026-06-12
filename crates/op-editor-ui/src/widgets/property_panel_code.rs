@@ -645,9 +645,16 @@ fn paint_idle_body(
         1.6,
     );
     let badge_bottom = badge.origin.y + BADGE_SIZE;
-    // 2. Title — the panel only shows for a live selection, so ≥ 1.
-    let n = state.selection_snapshot.len().max(1);
-    let title = strings.selected_nodes(n);
+    // 2. Title — live generation-target count (selection, else the active
+    //    page's children; the panel builder pre-fills `selection_snapshot`
+    //    with the live ids). An empty page mirrors the TS hardcoded
+    //    'No nodes on page' literal (code-panel.tsx:400 — not i18n'd).
+    let n = state.selection_snapshot.len();
+    let title = if n > 0 {
+        strings.selected_nodes(n)
+    } else {
+        "No nodes on page".to_string()
+    };
     draw_centered_line(cx, &title, theme.foreground, x, w, badge_bottom + 18.0);
     // 3. Subtitle.
     let sub = strings.idle_subtitle();

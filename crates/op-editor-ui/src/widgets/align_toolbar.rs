@@ -324,7 +324,10 @@ fn is_group_break_after(index: usize, boolean_ops: bool) -> bool {
     GROUP_BREAKS.contains(&after) || (boolean_ops && after == ITEMS.len())
 }
 
-fn can_boolean_op(state: &EditorState) -> bool {
+/// TS `canBooleanOp` (`pen-core/src/boolean-ops.ts:194-197`) — at
+/// least two selected nodes, every one a boolean-able shape. Shared
+/// with the layer context menu's `requireBoolean` row gating.
+pub(super) fn can_boolean_op(state: &EditorState) -> bool {
     if state.selection.len() < 2 {
         return false;
     }

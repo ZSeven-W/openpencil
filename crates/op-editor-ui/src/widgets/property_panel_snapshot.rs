@@ -39,7 +39,7 @@ fn node_kind_of(node: &PenNode) -> NodeKind {
 /// editor-state colour parser; 8-char `#RRGGBBAA` is honoured so
 /// gradient stop swatches (and any other authored alpha) round-trip
 /// transparency into paint instead of always reading as opaque.
-fn color_from_hex(hex: &str) -> Option<Color> {
+pub(crate) fn color_from_hex(hex: &str) -> Option<Color> {
     let (r, g, b) = op_editor_core::parse_hex_rgb(hex)?;
     let a = op_editor_core::parse_hex_alpha(hex);
     Some(Color { r, g, b, a })
@@ -104,6 +104,13 @@ pub struct NodeSnapshot {
     pub effects: Vec<EffectSummary>,
     /// Drives per-kind section filtering (Line hides fill, etc.).
     pub kind_variant: crate::layout_scene::NodeKind,
+    /// True when the selection is a component INSTANCE (`Ref`) shown
+    /// through its merged display node — drives the purple badge +
+    /// the Go-to-component / Detach-instance rows.
+    pub is_instance: bool,
+    /// True when the selection is a reusable COMPONENT definition —
+    /// drives the purple badge + the Detach-component button.
+    pub is_reusable: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -293,6 +300,55 @@ impl NodeSnapshot {
     /// "Mixed" or per-axis aggregation is a follow-up; the panel
     /// hides those inputs anyway since `is_multi` flips them
     /// inert.
+    /// Neutral placeholder snapshot for the selection-independent Code
+    /// tab: the panel must stay alive with an EMPTY selection (the TS
+    /// code-panel falls back to the active page's children), but the
+    /// Design sections that read the snapshot are never painted on the
+    /// Code tab, so every field takes the same inert defaults as the
+    /// multi-select aggregate.
+    pub(crate) fn empty_for_code_tab() -> Self {
+        Self {
+            kind: String::new(),
+            name: String::new(),
+            x: 0,
+            y: 0,
+            width: 0,
+            height: 0,
+            rotation_deg: 0.0,
+            corner_radius: 0.0,
+            polygon_sides: None,
+            ellipse_arc: None,
+            flex_layout: op_editor_core::FlexLayout::Free,
+            layout_justify: LayoutJustifyValue::Start,
+            layout_align: LayoutAlignValue::Start,
+            layout_gap: 0.0,
+            layout_padding: LayoutPaddingSummary::ZERO,
+            size_fill_width: false,
+            size_fill_height: false,
+            size_hug_width: false,
+            size_hug_height: false,
+            size_clip_content: false,
+            can_clip_content: false,
+            has_corner_radius: false,
+            can_create_component: false,
+            is_image_node: false,
+            icon: None,
+            text: None,
+            fill: None,
+            fill_opacity: 1.0,
+            stroke: None,
+            gradient_angle: None,
+            gradient_stops: Vec::new(),
+            image_fill: None,
+            effects: Vec::new(),
+            // Neutral default — the Code tab never consults the
+            // kind-driven capability mask.
+            kind_variant: NodeKind::Frame,
+            is_instance: false,
+            is_reusable: false,
+        }
+    }
+
     pub(crate) fn from_multi_selection(state: &EditorState) -> Option<Self> {
         // Confirm at least 2 selected ids resolve on the active
         // page — bails on cross-page selections but NOT on
@@ -352,6 +408,8 @@ impl NodeSnapshot {
             // of `for_kind`, see `paint`. Frame chosen so any
             // future kind-specific lookups paint a neutral default.
             kind_variant: NodeKind::Frame,
+            is_instance: false,
+            is_reusable: false,
         })
     }
 
@@ -413,6 +471,8 @@ impl NodeSnapshot {
                 .map(EffectSummary::from_pen_effect)
                 .collect(),
             kind_variant: kind,
+            is_instance: false,
+            is_reusable: matches!(node, PenNode::Frame(f) if f.reusable == Some(true)),
         }
     }
 }

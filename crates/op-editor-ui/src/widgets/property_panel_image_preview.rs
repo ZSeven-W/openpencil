@@ -21,6 +21,7 @@ pub(crate) fn paint_image_preview(
         mode_to_draw_mode(summary.mode),
         summary_adjustments(summary),
         1.0,
+        0.0,
     );
     cx.backend.restore();
     true
@@ -47,7 +48,7 @@ fn mode_to_draw_mode(mode: op_editor_core::ImageFillMode) -> ImageDrawMode {
     }
 }
 
-fn data_url_bytes(src: &str) -> Option<Vec<u8>> {
+pub(crate) fn data_url_bytes(src: &str) -> Option<Vec<u8>> {
     let after_scheme = src.strip_prefix("data:")?;
     let comma = after_scheme.find(',')?;
     let meta = &after_scheme[..comma];

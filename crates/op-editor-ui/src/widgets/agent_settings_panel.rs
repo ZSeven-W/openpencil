@@ -6,16 +6,16 @@ use crate::widgets::agent_settings_builtin::{self, BuiltinHit};
 use crate::widgets::agent_settings_i18n::t as t_settings;
 use crate::widgets::agent_settings_images::{self, ImagesHit};
 use crate::widgets::agent_settings_mcp::{self, McpHit};
+use crate::widgets::agent_settings_panel_card::paint_agent_card;
 use crate::widgets::agent_settings_panel_geometry::{
     acp_section_y, agent_card_rect_at, agent_card_rect_in, close_rect, connect_btn_rect_at,
     content_rect, disconnect_btn_rect_at, nav_item_rect, rect_contains, tab_i18n_label, to_jian,
 };
 use crate::widgets::agent_settings_system::{self, SystemHit};
-use crate::widgets::brand_icons::{paint_brand_logo, paint_opencode_logo, BrandLogo};
 use crate::widgets::editor_state_ext::theme_for;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::{PaintCx, Widget, WidgetId};
-use crate::{Color, Point2D, Rect, TextLayout};
+use crate::{Point2D, Rect, TextLayout};
 use op_editor_core::agent_settings::{
     AcpAgentField, AgentProvider, AgentSettings, AgentSettingsTab, BuiltinAgentField,
     ImageGenField, ImageSearchField, McpCli,
@@ -36,10 +36,10 @@ pub(super) const CARD_HEIGHT: f32 = 56.0;
 pub(super) const CARD_GAP: f32 = 8.0;
 pub(super) const CONNECT_BTN_W: f32 = 56.0;
 pub(super) const CONNECT_BTN_H: f32 = 28.0;
-const AVATAR_SIZE: f32 = 28.0;
-const AVATAR_ICON: f32 = 16.0;
-const NAME_FONT: f32 = 13.0;
-const SUB_FONT: f32 = 11.0;
+pub(super) const AVATAR_SIZE: f32 = 28.0;
+pub(super) const AVATAR_ICON: f32 = 16.0;
+pub(super) const NAME_FONT: f32 = 13.0;
+pub(super) const SUB_FONT: f32 = 11.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AgentSettingsHit {
@@ -640,150 +640,6 @@ fn paint_section_header_inset(
             .draw_text(&act, Point2D::new(x + w - right_inset - action_w, y + 18.0));
     }
     y + 28.0
-}
-
-fn paint_agent_card(
-    cx: &mut PaintCx<'_>,
-    theme: &Theme,
-    settings: &AgentSettings,
-    ui: &EditorUiState,
-    provider: AgentProvider,
-    card: Rect,
-    index: usize,
-) {
-    let outlined = matches!(provider, AgentProvider::ClaudeCode);
-    let card_hovered = settings.hover_provider == index;
-    if outlined {
-        cx.backend.fill_round_rect(card, 10.0, theme.muted);
-    } else if card_hovered {
-        // Subtle wash on hover so the whole row reads as "I'm
-        // pointing at this card" rather than leaving the hover
-        // signal entirely on the trailing button.
-        cx.backend.fill_round_rect(card, 10.0, theme.accent);
-    }
-    cx.backend.stroke_round_rect(card, 10.0, theme.border, 1.0);
-    let avatar = Rect {
-        origin: Point2D::new(
-            card.origin.x + 12.0,
-            card.origin.y + (CARD_HEIGHT - AVATAR_SIZE) / 2.0,
-        ),
-        size: Point2D::new(AVATAR_SIZE, AVATAR_SIZE),
-    };
-    cx.backend.fill_round_rect(avatar, 6.0, theme.background);
-    let icon_top_left = Point2D::new(
-        avatar.origin.x + (AVATAR_SIZE - AVATAR_ICON) / 2.0,
-        avatar.origin.y + (AVATAR_SIZE - AVATAR_ICON) / 2.0,
-    );
-    match provider {
-        AgentProvider::ClaudeCode => paint_brand_logo(
-            cx.backend,
-            BrandLogo::Claude,
-            icon_top_left,
-            AVATAR_ICON,
-            theme.foreground,
-        ),
-        AgentProvider::CodexCli => paint_brand_logo(
-            cx.backend,
-            BrandLogo::OpenAI,
-            icon_top_left,
-            AVATAR_ICON,
-            theme.foreground,
-        ),
-        AgentProvider::OpenCode => {
-            paint_opencode_logo(cx.backend, icon_top_left, AVATAR_ICON, theme.foreground)
-        }
-        AgentProvider::GithubCopilot => paint_brand_logo(
-            cx.backend,
-            BrandLogo::Copilot,
-            icon_top_left,
-            AVATAR_ICON,
-            theme.foreground,
-        ),
-        AgentProvider::GeminiCli => paint_brand_logo(
-            cx.backend,
-            BrandLogo::Gemini,
-            icon_top_left,
-            AVATAR_ICON,
-            theme.foreground,
-        ),
-    }
-    let text_x = card.origin.x + 12.0 + AVATAR_SIZE + 12.0;
-    let name = TextLayout::single_run(
-        provider.name(),
-        "system-ui",
-        NAME_FONT,
-        to_jian(theme.foreground),
-        Point2D::new(0.0, 0.0),
-    );
-    cx.backend
-        .draw_text(&name, Point2D::new(text_x, card.origin.y + 22.0));
-    let connected = settings.connected[index];
-    let sub_localized = t_settings(ui, provider.subtitle_key());
-    let (sub_color, sub_text) = if connected {
-        (
-            Color {
-                r: 0.34,
-                g: 0.78,
-                b: 0.45,
-                a: 1.0,
-            },
-            format!("✓ {}", sub_localized),
-        )
-    } else {
-        (theme.muted_foreground, sub_localized.to_string())
-    };
-    let sub = TextLayout::single_run(
-        &sub_text,
-        "system-ui",
-        SUB_FONT,
-        to_jian(sub_color),
-        Point2D::new(0.0, 0.0),
-    );
-    cx.backend
-        .draw_text(&sub, Point2D::new(text_x, card.origin.y + 38.0));
-    let hovered = settings.hover_provider == index;
-    if connected {
-        if hovered {
-            let btn = disconnect_btn_rect_at(card);
-            let red = Color {
-                r: 0.93,
-                g: 0.30,
-                b: 0.30,
-                a: 1.0,
-            };
-            cx.backend.fill_round_rect(btn, 6.0, theme.muted);
-            cx.backend.stroke_round_rect(btn, 6.0, red, 1.0);
-            let label = t_settings(ui, "settings.agents.disconnect");
-            let lw = cx.backend.measure_text(label, 12.0);
-            let layout = TextLayout::single_run(
-                label,
-                "system-ui",
-                12.0,
-                to_jian(red),
-                Point2D::new(0.0, 0.0),
-            );
-            cx.backend.draw_text(
-                &layout,
-                Point2D::new(btn.origin.x + (btn.size.x - lw) / 2.0, btn.origin.y + 18.0),
-            );
-        }
-    } else {
-        let btn = connect_btn_rect_at(card);
-        cx.backend.fill_round_rect(btn, 5.0, theme.primary);
-        let label = t_settings(ui, "settings.agents.connect");
-        let lw = cx.backend.measure_text(label, 12.0);
-        let layout = TextLayout::single_run(
-            label,
-            "system-ui",
-            12.0,
-            to_jian(theme.primary_foreground),
-            Point2D::new(0.0, 0.0),
-        );
-        cx.backend.draw_text(
-            &layout,
-            Point2D::new(btn.origin.x + (btn.size.x - lw) / 2.0, btn.origin.y + 18.0),
-        );
-    }
 }
 
 pub fn drag_for_hit(

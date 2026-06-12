@@ -174,10 +174,24 @@ impl SectionCapabilities {
     }
 }
 
+/// Which variant the Create-component block paints + hit-tests —
+/// stateful per TS: plain container → "Create component"; reusable
+/// component → purple "Detach component"; instance → the
+/// "Go to component" + "Detach instance" row pair.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ComponentButtonState {
+    Create,
+    DetachComponent,
+    Instance,
+}
+
 /// Whether each section currently paints.
 #[derive(Debug, Clone, Copy)]
 pub struct VisibleSections {
     pub create_component: bool,
+    /// Which Create-component variant paints (see
+    /// [`ComponentButtonState`]). Only read when `create_component`.
+    pub component_button: ComponentButtonState,
     pub flex_layout: bool,
     pub flex_layout_mode: op_editor_core::FlexLayout,
     /// Resolved padding edit mode (UI pin or derived from values) —
@@ -197,12 +211,19 @@ pub struct VisibleSections {
     pub text: bool,
     pub icon: bool,
     pub image: bool,
+    /// Whether the image section paints the local-asset warning row
+    /// (host asset check flagged the selected node's src).
+    pub image_warning: bool,
     pub opacity: bool,
     pub corner_radius: bool,
     pub polygon_sides: bool,
     pub ellipse_arc: bool,
     pub fill: bool,
     pub stroke: bool,
+    pub color_variable_count: usize,
+    pub fill_variable_bound: bool,
+    pub stroke_variable_bound: bool,
+    pub color_variable_picker_open: Option<op_editor_core::ColorTarget>,
     pub effects: bool,
     pub export: bool,
     pub fill_type: FillType,
@@ -212,6 +233,7 @@ pub struct VisibleSections {
 impl VisibleSections {
     pub const ALL: Self = Self {
         create_component: true,
+        component_button: ComponentButtonState::Create,
         flex_layout: true,
         flex_layout_mode: op_editor_core::FlexLayout::Free,
         padding_edit_mode: op_editor_core::PaddingEditMode::Individual,
@@ -226,12 +248,17 @@ impl VisibleSections {
         text: false,
         icon: false,
         image: false,
+        image_warning: false,
         opacity: true,
         corner_radius: true,
         polygon_sides: false,
         ellipse_arc: false,
         fill: true,
         stroke: true,
+        color_variable_count: 0,
+        fill_variable_bound: false,
+        stroke_variable_bound: false,
+        color_variable_picker_open: None,
         effects: true,
         export: true,
         fill_type: FillType::Solid,

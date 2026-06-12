@@ -6,11 +6,13 @@
 use crate::theme::Theme;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::property_panel::NodeSnapshot;
+use crate::widgets::property_panel_color_variables::paint_color_variable_button;
 use crate::widgets::property_panel_inputs::{
-    format_color_hex, paint_input_with_icon_focused, paint_input_with_prefix_focused,
-    paint_section_divider, paint_section_label, to_jian_color, CREATE_COMPONENT_BLOCK_H,
-    CREATE_COMPONENT_BTN_H, CREATE_COMPONENT_ICON, CREATE_COMPONENT_PAD_TOP, HEADER_HEIGHT,
-    INPUT_HEIGHT, INPUT_RADIUS, PAD_X, SECTION_GAP, TAB_HEIGHT,
+    create_component_block_height, format_color_hex, paint_input_with_icon_focused,
+    paint_input_with_prefix_focused, paint_section_divider, paint_section_label, to_jian_color,
+    COLOR_VARIABLE_BUTTON_W, COLOR_VARIABLE_GAP, COMPONENT_ACCENT, CREATE_COMPONENT_BTN_H,
+    CREATE_COMPONENT_ICON, CREATE_COMPONENT_PAD_TOP, CREATE_COMPONENT_ROW_GAP, HEADER_HEIGHT,
+    INPUT_HEIGHT, INPUT_RADIUS, INSTANCE_ACCENT, PAD_X, SECTION_GAP, TAB_HEIGHT,
 };
 use crate::widgets::PaintCx;
 use crate::{Point2D, Rect, TextLayout};
@@ -62,6 +64,9 @@ pub struct PropertyLabels {
     pub tab_design: &'static str,
     pub tab_code: &'static str,
     pub create_component: &'static str,
+    pub detach_component: &'static str,
+    pub go_to_component: &'static str,
+    pub detach_instance: &'static str,
     pub position: &'static str,
     pub flex_layout: &'static str,
     pub size: &'static str,
@@ -108,6 +113,9 @@ impl PropertyLabels {
             tab_design: pick("rightPanel.design", "Design"),
             tab_code: pick("rightPanel.code", "Code"),
             create_component: pick("property.createComponent", "Create Component"),
+            detach_component: pick("property.detachComponent", "Detach Component"),
+            go_to_component: pick("property.goToComponent", "Go to component"),
+            detach_instance: pick("property.detachInstance", "Detach instance"),
             position: pick("size.position", "Position"),
             flex_layout: pick("layout.flexLayout", "Flex Layout"),
             size: pick("layout.dimensions", "Size"),
@@ -339,15 +347,35 @@ pub fn paint_node_header(
     } else {
         snapshot.name.as_str()
     };
+    // Component / instance badging — TS tints the header purple and
+    // prefixes a Diamond glyph (property-panel.tsx:182-187).
+    let (title_color, badge) = if snapshot.is_reusable {
+        (COMPONENT_ACCENT, true)
+    } else if snapshot.is_instance {
+        (INSTANCE_ACCENT, true)
+    } else {
+        (theme.foreground, false)
+    };
+    let mut text_x = x + PAD_X;
+    if badge {
+        draw_icon(
+            cx.backend,
+            Icon::Diamond,
+            Point2D::new(text_x, y + 11.0),
+            12.0,
+            title_color,
+            1.4,
+        );
+        text_x += 18.0;
+    }
     let label = TextLayout::single_run(
         title,
         "system-ui",
         14.0,
-        to_jian_color(theme.foreground),
+        to_jian_color(title_color),
         Point2D::new(0.0, 0.0),
     );
-    cx.backend
-        .draw_text(&label, Point2D::new(x + PAD_X, y + 22.0));
+    cx.backend.draw_text(&label, Point2D::new(text_x, y + 22.0));
     y + HEADER_HEIGHT
 }
 
@@ -357,43 +385,106 @@ pub fn paint_create_component(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
     labels: &PropertyLabels,
+    state: crate::widgets::property_panel_visibility::ComponentButtonState,
     x: f32,
     y: f32,
     width: f32,
 ) -> f32 {
-    let pad_top = CREATE_COMPONENT_PAD_TOP;
+    use crate::widgets::property_panel_visibility::ComponentButtonState as S;
+    let first_row_y = y + CREATE_COMPONENT_PAD_TOP;
+    match state {
+        // Plain container: "Create component" (neutral).
+        S::Create => paint_component_button(
+            cx,
+            theme,
+            labels.create_component,
+            Icon::Component,
+            theme.foreground,
+            x,
+            first_row_y,
+            width,
+        ),
+        // Reusable component: purple "Detach component" — TS paints
+        // the same slot with the unlink affordance + purple accent.
+        S::DetachComponent => paint_component_button(
+            cx,
+            theme,
+            labels.detach_component,
+            Icon::Diamond,
+            COMPONENT_ACCENT,
+            x,
+            first_row_y,
+            width,
+        ),
+        // Instance: the Go-to-component / Detach-instance row pair.
+        S::Instance => {
+            paint_component_button(
+                cx,
+                theme,
+                labels.go_to_component,
+                Icon::Component,
+                INSTANCE_ACCENT,
+                x,
+                first_row_y,
+                width,
+            );
+            paint_component_button(
+                cx,
+                theme,
+                labels.detach_instance,
+                Icon::Diamond,
+                INSTANCE_ACCENT,
+                x,
+                first_row_y + CREATE_COMPONENT_BTN_H + CREATE_COMPONENT_ROW_GAP,
+                width,
+            );
+        }
+    }
+    y + create_component_block_height(state)
+}
+
+/// One compact button row in the create-component block — shared by
+/// all three [`ComponentButtonState`] variants so their geometry
+/// matches the layout walker's rects exactly.
+#[allow(clippy::too_many_arguments)]
+fn paint_component_button(
+    cx: &mut PaintCx<'_>,
+    theme: &Theme,
+    label_text: &str,
+    icon_glyph: Icon,
+    accent: crate::Color,
+    x: f32,
+    row_y: f32,
+    width: f32,
+) {
     let btn_h = CREATE_COMPONENT_BTN_H;
     let btn_rect = Rect {
-        origin: Point2D::new(x + PAD_X, y + pad_top),
+        origin: Point2D::new(x + PAD_X, row_y),
         size: Point2D::new(width - PAD_X * 2.0, btn_h),
     };
     cx.backend.fill_round_rect(btn_rect, 8.0, theme.muted);
     cx.backend
         .stroke_round_rect(btn_rect, 8.0, theme.border, 1.0);
-    // TS uses Component icon (cluster of 4 small diamonds) for
-    // the "create component" affordance. Diamond is imported in
-    // the same file but used elsewhere (instance indicator). The
-    // icon is vertically centred in the compact button.
     let icon = CREATE_COMPONENT_ICON;
     draw_icon(
         cx.backend,
-        Icon::Component,
+        icon_glyph,
         Point2D::new(
             btn_rect.origin.x + 12.0,
             btn_rect.origin.y + (btn_h - icon) / 2.0,
         ),
         icon,
-        theme.foreground,
+        accent,
         1.3,
     );
     let label = TextLayout::single_run(
-        labels.create_component,
+        label_text,
         "system-ui",
         13.0,
-        to_jian_color(theme.foreground),
+        to_jian_color(accent),
         Point2D::new(0.0, 0.0),
     );
-    let label_w = cx.backend.measure_text(labels.create_component, 13.0);
+    let label_w = cx.backend.measure_text(label_text, 13.0);
     cx.backend.draw_text(
         &label,
         Point2D::new(
@@ -401,7 +492,6 @@ pub fn paint_create_component(
             btn_rect.origin.y + btn_h / 2.0 + 4.5,
         ),
     );
-    y + CREATE_COMPONENT_BLOCK_H
 }
 
 // ── Position section ──────────────────────────────────────────────
@@ -725,6 +815,8 @@ pub fn paint_stroke_section(
     snapshot: &NodeSnapshot,
     edit: &EditContext<'_>,
     labels: &PropertyLabels,
+    stroke_variable_ref: Option<&str>,
+    show_variable_button: bool,
     x: f32,
     y: f32,
     width: f32,
@@ -734,14 +826,19 @@ pub fn paint_stroke_section(
     let stroke_color = snapshot.stroke_swatch_color();
     let stroke_width = snapshot.stroke.map(|s| s.width).unwrap_or(0.0);
     let width_w = 60.0;
+    let variable_w = if show_variable_button {
+        COLOR_VARIABLE_BUTTON_W + COLOR_VARIABLE_GAP
+    } else {
+        0.0
+    };
     let hex_rect = Rect {
         origin: Point2D::new(x + PAD_X, y),
-        size: Point2D::new(usable_w - width_w - 8.0, INPUT_HEIGHT),
+        size: Point2D::new(usable_w - width_w - 8.0 - variable_w, INPUT_HEIGHT),
     };
     let hex_focused = edit.focus == Some(PropertyFocus::StrokeHex);
     cx.backend
         .fill_round_rect(hex_rect, INPUT_RADIUS, theme.muted);
-    if hex_focused {
+    if hex_focused && stroke_variable_ref.is_none() {
         cx.backend
             .stroke_round_rect(hex_rect, INPUT_RADIUS, theme.primary, 1.5);
     }
@@ -756,7 +853,10 @@ pub fn paint_stroke_section(
         stroke_color,
     );
     let hex_owned = format_color_hex(stroke_color);
-    let hex_text = edit.value_for(PropertyFocus::StrokeHex, &hex_owned);
+    let variable_text = stroke_variable_ref.map(|name| format!("${name}"));
+    let hex_text = variable_text
+        .as_deref()
+        .unwrap_or_else(|| edit.value_for(PropertyFocus::StrokeHex, &hex_owned));
     let hex_layout = TextLayout::single_run(
         hex_text,
         "system-ui",
@@ -765,32 +865,47 @@ pub fn paint_stroke_section(
         Point2D::new(0.0, 0.0),
     );
     let hex_x = hex_rect.origin.x + 30.0;
-    edit.paint_selection_at(
-        cx,
-        theme,
-        PropertyFocus::StrokeHex,
-        hex_text,
-        hex_x,
-        hex_rect.origin.y + 19.0,
-        12.0,
-        hex_rect.origin.x + hex_rect.size.x - 8.0,
-    );
+    if stroke_variable_ref.is_none() {
+        edit.paint_selection_at(
+            cx,
+            theme,
+            PropertyFocus::StrokeHex,
+            hex_text,
+            hex_x,
+            hex_rect.origin.y + 19.0,
+            12.0,
+            hex_rect.origin.x + hex_rect.size.x - 8.0,
+        );
+    }
     cx.backend
         .draw_text(&hex_layout, Point2D::new(hex_x, hex_rect.origin.y + 19.0));
-    if let Some(pos) = edit.caret_at(PropertyFocus::StrokeHex) {
-        let w = cx
-            .backend
-            .measure_text(&hex_text[..pos.min(hex_text.len())], 12.0);
-        cx.backend.fill_rect(
+    if stroke_variable_ref.is_none() {
+        if let Some(pos) = edit.caret_at(PropertyFocus::StrokeHex) {
+            let w = cx
+                .backend
+                .measure_text(&hex_text[..pos.min(hex_text.len())], 12.0);
+            cx.backend.fill_rect(
+                Rect {
+                    origin: Point2D::new(hex_x + w, hex_rect.origin.y + 6.0),
+                    size: Point2D::new(1.5, hex_rect.size.y - 12.0),
+                },
+                theme.foreground,
+            );
+        }
+    }
+    if show_variable_button {
+        paint_color_variable_button(
+            cx,
+            theme,
             Rect {
-                origin: Point2D::new(hex_x + w, hex_rect.origin.y + 6.0),
-                size: Point2D::new(1.5, hex_rect.size.y - 12.0),
+                origin: Point2D::new(hex_rect.origin.x + hex_rect.size.x + COLOR_VARIABLE_GAP, y),
+                size: Point2D::new(COLOR_VARIABLE_BUTTON_W, INPUT_HEIGHT),
             },
-            theme.foreground,
+            stroke_variable_ref.is_some(),
         );
     }
     let w_rect = Rect {
-        origin: Point2D::new(hex_rect.origin.x + hex_rect.size.x + 8.0, y),
+        origin: Point2D::new(hex_rect.origin.x + hex_rect.size.x + variable_w + 8.0, y),
         size: Point2D::new(width_w, INPUT_HEIGHT),
     };
     let w_focused = edit.focus == Some(PropertyFocus::StrokeWidth);

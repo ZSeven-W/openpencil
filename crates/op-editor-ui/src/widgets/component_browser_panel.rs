@@ -18,11 +18,17 @@ pub const COMPONENT_BROWSER_PANEL_W: f32 = 520.0;
 /// Panel height in logical px.
 pub const COMPONENT_BROWSER_PANEL_H: f32 = 460.0;
 
-const PAD: f32 = 14.0;
-const HEADER_H: f32 = 40.0;
+pub(in crate::widgets) const PAD: f32 = 14.0;
+pub(in crate::widgets) const HEADER_H: f32 = 40.0;
 const SEARCH_H: f32 = 42.0;
 const PILL_ROW_H: f32 = 36.0;
+/// The "Kit:" filter row below the header (TS kit-selector row).
+pub(in crate::widgets) const KIT_ROW_H: f32 = 28.0;
+/// One imported-kit management row (name / count / delete).
+pub(in crate::widgets) const IMPORTED_ROW_H: f32 = 24.0;
 const CLOSE_BTN: f32 = 24.0;
+/// Gap between the header action buttons (TS `gap-1`).
+const HEADER_BTN_GAP: f32 = 4.0;
 const CARD_GAP: f32 = 8.0;
 const CARD_COLS: usize = 3;
 const CARD_H: f32 = 96.0;
@@ -33,7 +39,7 @@ const PILL_H: f32 = 22.0;
 const PILL_PAD_X: f32 = 10.0;
 const PILL_GAP: f32 = 6.0;
 /// Approximate glyph advance at the 11 px body size.
-const CHAR_W: f32 = 6.0;
+pub(in crate::widgets) const CHAR_W: f32 = 6.0;
 
 /// The 6 categories actually shipped by the built-in starter kit
 /// plus "All" — paint walks this in order and skips a category with
@@ -79,6 +85,24 @@ const CATEGORIES: [(Option<ComponentCategory>, &str); 9] = [
 pub enum ComponentBrowserHit {
     /// The header ✕ — close the panel.
     Close,
+    /// The header Download button — queue a kit export (TS
+    /// `handleExport`).
+    ExportKit,
+    /// The header Upload button — queue a kit import (TS
+    /// `handleImport`).
+    ImportKit,
+    /// The kit-filter dropdown control — open / dismiss the popover.
+    ToggleKitPicker,
+    /// A kit-picker popover row — set the kit filter (`None` = All).
+    SelectKitFilter(Option<String>),
+    /// The Trash button on an imported-kit row — arm the inline
+    /// delete confirmation (TS `setConfirmDeleteKitId`).
+    RequestDeleteKit(String),
+    /// The inline Delete confirm button — remove the kit (TS
+    /// `handleDeleteKit`).
+    ConfirmDeleteKit(String),
+    /// The inline Cancel button — disarm the confirmation.
+    CancelDeleteKit,
     /// The header bar (not on a button) — start a panel drag.
     DragHeader,
     /// A category pill — set the active category filter.
@@ -90,14 +114,17 @@ pub enum ComponentBrowserHit {
 }
 
 /// The floating Component-Browser panel, built from an [`EditorState`].
+/// Field visibility is widgets-scoped so the kit-management strip
+/// (`component_browser_kits.rs`, sibling at the 800-line cap) can
+/// share geometry + state.
 pub struct ComponentBrowserPanel<'a> {
-    state: &'a EditorState,
-    theme: Theme,
-    locale: Locale,
+    pub(in crate::widgets) state: &'a EditorState,
+    pub(in crate::widgets) theme: Theme,
+    pub(in crate::widgets) locale: Locale,
     /// Currently-active category filter (`None` = All).
     active_category: Option<ComponentCategory>,
     /// Which target the cursor is over — drives the hover wash.
-    hover: Option<op_editor_core::ComponentBrowserButton>,
+    pub(in crate::widgets) hover: Option<op_editor_core::ComponentBrowserButton>,
 }
 
 impl<'a> ComponentBrowserPanel<'a> {
@@ -128,11 +155,24 @@ impl<'a> ComponentBrowserPanel<'a> {
         if !contains(panel, point) {
             return None;
         }
+        // The open kit-picker popover sits over everything else.
+        if self.state.editor_ui.component_browser_kit_picker_open {
+            return self.hover_kit_picker(panel, point);
+        }
         if contains(Self::close_rect(panel), point) {
             return Some(B::Close);
         }
+        if contains(Self::import_rect(panel), point) {
+            return Some(B::ImportKit);
+        }
+        if contains(Self::export_rect(panel), point) {
+            return Some(B::ExportKit);
+        }
         if point.y <= panel.origin.y + HEADER_H {
             return None;
+        }
+        if let Some(hover) = self.hover_kit_strip(panel, point) {
+            return Some(hover);
         }
         for (rect, cat) in self.pill_rects(panel) {
             if contains(rect, point) {
@@ -145,14 +185,25 @@ impl<'a> ComponentBrowserPanel<'a> {
             .map(B::Card)
     }
 
-    fn t(&self, key: &'static str) -> &'static str {
+    pub(in crate::widgets) fn t(&self, key: &'static str) -> &'static str {
         crate::i18n::translate(self.locale, key)
     }
 
-    /// The kits the panel browses. A kit-id filter (future imported
-    /// kits) would narrow this; v1 lists every loaded kit.
-    fn kits(&self) -> &[UIKit] {
+    /// Vertical space the kit strip (filter row + imported-kit rows)
+    /// occupies between the header and the category pills.
+    pub(in crate::widgets) fn kit_strip_height(&self) -> f32 {
+        KIT_ROW_H + self.imported_kits().len() as f32 * IMPORTED_ROW_H
+    }
+
+    /// The kits the panel browses — built-in + imported, load order.
+    pub(in crate::widgets) fn kits(&self) -> &[UIKit] {
         &self.state.ui_kits
+    }
+
+    /// Imported (non-built-in) kits, in load order — the management
+    /// rows under the kit-filter row (TS `importedKits`).
+    pub(in crate::widgets) fn imported_kits(&self) -> Vec<&UIKit> {
+        self.state.ui_kits.iter().filter(|k| !k.built_in).collect()
     }
 
     /// Categories actually present across the in-scope kits — pills
@@ -181,8 +232,9 @@ impl<'a> ComponentBrowserPanel<'a> {
     /// Walk every loaded kit yielding `(kit_id, component)` pairs the
     /// current filters admit (category pill, kit selector, search
     /// query — name + tags substring-match). Paint + hit-test share
-    /// this so indices into the card grid agree.
-    fn filtered(&self) -> Vec<(&str, &KitComponent)> {
+    /// this so indices into the card grid agree. Widgets-scoped so the
+    /// kit-strip sibling's tests can assert the kit filter narrows it.
+    pub(in crate::widgets) fn filtered(&self) -> Vec<(&str, &KitComponent)> {
         let query = self
             .state
             .editor_ui
@@ -215,9 +267,8 @@ impl<'a> ComponentBrowserPanel<'a> {
         out
     }
 
-    /// The three header buttons — currently just `Close`, kept as an
-    /// array for symmetry with the other floating panels (the import
-    /// / export header buttons land when the `.kit` file format does).
+    /// The three header buttons — Download (export), Upload (import),
+    /// ✕ (close), right-aligned in TS order.
     fn close_rect(panel: Rect) -> Rect {
         let y = panel.origin.y + (HEADER_H - CLOSE_BTN) / 2.0;
         Rect {
@@ -226,12 +277,36 @@ impl<'a> ComponentBrowserPanel<'a> {
         }
     }
 
-    /// The pill row's rects + their categories, in paint order.
+    /// Upload — import a kit file (left of the close button).
+    pub(in crate::widgets) fn import_rect(panel: Rect) -> Rect {
+        let close = Self::close_rect(panel);
+        Rect {
+            origin: Point2D::new(close.origin.x - HEADER_BTN_GAP - CLOSE_BTN, close.origin.y),
+            size: Point2D::new(CLOSE_BTN, CLOSE_BTN),
+        }
+    }
+
+    /// Download — export the document's components as a kit (left of
+    /// the import button).
+    pub(in crate::widgets) fn export_rect(panel: Rect) -> Rect {
+        let import = Self::import_rect(panel);
+        Rect {
+            origin: Point2D::new(
+                import.origin.x - HEADER_BTN_GAP - CLOSE_BTN,
+                import.origin.y,
+            ),
+            size: Point2D::new(CLOSE_BTN, CLOSE_BTN),
+        }
+    }
+
+    /// The pill row's rects + their categories, in paint order. The
+    /// pill row sits below the kit strip (TS panel order: header /
+    /// kit selector / imported kits / pills / search / grid).
     fn pill_rects(&self, panel: Rect) -> Vec<(Rect, Option<ComponentCategory>)> {
         let pills = self.visible_categories();
         let mut out = Vec::with_capacity(pills.len());
         let mut x = panel.origin.x + PAD;
-        let y = panel.origin.y + HEADER_H + SEARCH_H + (PILL_ROW_H - PILL_H) / 2.0;
+        let y = panel.origin.y + HEADER_H + self.kit_strip_height() + (PILL_ROW_H - PILL_H) / 2.0;
         for (cat, label_key) in pills {
             let label = self.t(label_key);
             let w = label.chars().count() as f32 * CHAR_W + PILL_PAD_X * 2.0;
@@ -247,12 +322,17 @@ impl<'a> ComponentBrowserPanel<'a> {
         out
     }
 
+    /// Top edge of the (clipped) card grid region.
+    fn grid_clip_top(&self, panel: Rect) -> f32 {
+        panel.origin.y + HEADER_H + self.kit_strip_height() + PILL_ROW_H + SEARCH_H
+    }
+
     /// Card slot rects, in row-major order — paint + hit-test share
     /// this so a click maps onto the right component index.
     fn card_rects(&self, panel: Rect) -> Vec<Rect> {
         let count = self.filtered().len();
         let left = panel.origin.x + PAD;
-        let top = panel.origin.y + HEADER_H + SEARCH_H + PILL_ROW_H + CARD_GAP;
+        let top = self.grid_clip_top(panel) + CARD_GAP;
         let cols = CARD_COLS as f32;
         let inner_w = panel.size.x - PAD * 2.0;
         let card_w = (inner_w - CARD_GAP * (cols - 1.0)) / cols;
@@ -276,12 +356,27 @@ impl<'a> ComponentBrowserPanel<'a> {
         if !contains(panel, point) {
             return None;
         }
+        // While the kit-filter popover is open it behaves like a
+        // native `<select>`: a click either picks an option or
+        // dismisses the popover, nothing else fires.
+        if self.state.editor_ui.component_browser_kit_picker_open {
+            return Some(self.hit_test_kit_picker(panel, point));
+        }
         if contains(Self::close_rect(panel), point) {
             return Some(ComponentBrowserHit::Close);
         }
-        // The header bar (above the pill row) starts a drag.
+        if contains(Self::import_rect(panel), point) {
+            return Some(ComponentBrowserHit::ImportKit);
+        }
+        if contains(Self::export_rect(panel), point) {
+            return Some(ComponentBrowserHit::ExportKit);
+        }
+        // The header bar (above the kit strip) starts a drag.
         if point.y <= panel.origin.y + HEADER_H {
             return Some(ComponentBrowserHit::DragHeader);
+        }
+        if let Some(hit) = self.hit_test_kit_strip(panel, point) {
+            return Some(hit);
         }
         for (rect, cat) in self.pill_rects(panel) {
             if contains(rect, point) {
@@ -330,6 +425,33 @@ impl<'a> ComponentBrowserPanel<'a> {
             self.theme.muted_foreground,
             1.5,
         );
+        // Header kit actions — Download (export) + Upload (import),
+        // TS `component-browser-panel.tsx` header buttons.
+        for (btn, icon, hover_target) in [
+            (
+                Self::export_rect(rect),
+                Icon::Download,
+                op_editor_core::ComponentBrowserButton::ExportKit,
+            ),
+            (
+                Self::import_rect(rect),
+                Icon::Upload,
+                op_editor_core::ComponentBrowserButton::ImportKit,
+            ),
+        ] {
+            if self.hover == Some(hover_target) {
+                cx.backend
+                    .fill_round_rect(btn, 6.0, self.theme.button_hover);
+            }
+            draw_icon(
+                cx.backend,
+                icon,
+                Point2D::new(btn.origin.x + 5.0, btn.origin.y + 5.0),
+                CLOSE_BTN - 10.0,
+                self.theme.muted_foreground,
+                1.5,
+            );
+        }
         cx.backend.fill_rect(
             Rect {
                 origin: Point2D::new(rect.origin.x, rect.origin.y + HEADER_H),
@@ -338,10 +460,16 @@ impl<'a> ComponentBrowserPanel<'a> {
             self.theme.border,
         );
 
+        // Kit-filter row + imported-kit management rows (sibling file).
+        self.paint_kit_strip(cx, rect);
+
         // Search field. The native host routes keyboard input to this
         // filter whenever the panel is open.
         let search_rect = Rect {
-            origin: Point2D::new(rect.origin.x + PAD, rect.origin.y + HEADER_H + 8.0),
+            origin: Point2D::new(
+                rect.origin.x + PAD,
+                rect.origin.y + HEADER_H + self.kit_strip_height() + PILL_ROW_H + 8.0,
+            ),
             size: Point2D::new(rect.size.x - PAD * 2.0, 28.0),
         };
         cx.backend
@@ -409,12 +537,10 @@ impl<'a> ComponentBrowserPanel<'a> {
                 fg,
             );
         }
+        let clip_top = self.grid_clip_top(rect);
         cx.backend.fill_rect(
             Rect {
-                origin: Point2D::new(
-                    rect.origin.x,
-                    rect.origin.y + HEADER_H + SEARCH_H + PILL_ROW_H,
-                ),
+                origin: Point2D::new(rect.origin.x, clip_top),
                 size: Point2D::new(rect.size.x, 1.0),
             },
             self.theme.border,
@@ -424,13 +550,10 @@ impl<'a> ComponentBrowserPanel<'a> {
         // past the panel foot.
         cx.backend.save();
         cx.backend.clip_rect(Rect {
-            origin: Point2D::new(
-                rect.origin.x,
-                rect.origin.y + HEADER_H + SEARCH_H + PILL_ROW_H + 1.0,
-            ),
+            origin: Point2D::new(rect.origin.x, clip_top + 1.0),
             size: Point2D::new(
                 rect.size.x,
-                rect.size.y - HEADER_H - SEARCH_H - PILL_ROW_H - 1.0,
+                (rect.origin.y + rect.size.y - clip_top - 1.0).max(0.0),
             ),
         });
         let filtered = self.filtered();
@@ -439,7 +562,7 @@ impl<'a> ComponentBrowserPanel<'a> {
                 cx,
                 self.t("componentBrowser.empty"),
                 rect.origin.x + rect.size.x / 2.0 - 60.0,
-                rect.origin.y + HEADER_H + SEARCH_H + PILL_ROW_H + 40.0,
+                clip_top + 40.0,
                 12.0,
                 self.theme.muted_foreground,
             );
@@ -452,6 +575,12 @@ impl<'a> ComponentBrowserPanel<'a> {
             }
         }
         cx.backend.restore();
+
+        // Kit-filter popover paints last so it overlays the strip and
+        // anything below it.
+        if self.state.editor_ui.component_browser_kit_picker_open {
+            self.paint_kit_picker(cx, rect);
+        }
     }
 
     /// Translated label for a category — `None` = "All".
@@ -502,21 +631,29 @@ impl<'a> ComponentBrowserPanel<'a> {
         );
     }
 
-    fn text(&self, cx: &mut PaintCx<'_>, s: &str, x: f32, baseline: f32, size: f32, color: Color) {
+    pub(in crate::widgets) fn text(
+        &self,
+        cx: &mut PaintCx<'_>,
+        s: &str,
+        x: f32,
+        baseline: f32,
+        size: f32,
+        color: Color,
+    ) {
         let layout =
             TextLayout::single_run(s, "system-ui", size, to_jian(color), Point2D::new(0.0, 0.0));
         cx.backend.draw_text(&layout, Point2D::new(x, baseline));
     }
 }
 
-fn contains(rect: Rect, point: Point2D) -> bool {
+pub(in crate::widgets) fn contains(rect: Rect, point: Point2D) -> bool {
     point.x >= rect.origin.x
         && point.x <= rect.origin.x + rect.size.x
         && point.y >= rect.origin.y
         && point.y <= rect.origin.y + rect.size.y
 }
 
-fn truncate(s: &str, max: usize) -> String {
+pub(in crate::widgets) fn truncate(s: &str, max: usize) -> String {
     if s.chars().count() <= max {
         return s.to_string();
     }

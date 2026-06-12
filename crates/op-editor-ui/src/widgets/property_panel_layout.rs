@@ -8,14 +8,14 @@
 
 use crate::widgets::property_panel::{EffectKind, EffectSummary, PropertyPanelAction};
 use crate::widgets::property_panel_inputs::{
-    CREATE_COMPONENT_BLOCK_H, CREATE_COMPONENT_BTN_H, CREATE_COMPONENT_PAD_TOP, HEADER_HEIGHT,
-    INPUT_HEIGHT, PAD_X, SECTION_GAP, SECTION_HEADER_HEIGHT, TAB_HEIGHT,
+    COLOR_VARIABLE_BUTTON_W, COLOR_VARIABLE_GAP, CREATE_COMPONENT_BTN_H, CREATE_COMPONENT_PAD_TOP,
+    HEADER_HEIGHT, INPUT_HEIGHT, PAD_X, SECTION_GAP, SECTION_HEADER_HEIGHT, TAB_HEIGHT,
 };
 use crate::{Point2D, Rect};
 use op_editor_core::{EffectField, FillType};
 
 pub(crate) use crate::widgets::property_panel_visibility::SectionCapabilities;
-pub use crate::widgets::property_panel_visibility::VisibleSections;
+pub use crate::widgets::property_panel_visibility::{ComponentButtonState, VisibleSections};
 
 pub use crate::widgets::property_panel_input_layout::editable_input_rects;
 
@@ -40,6 +40,9 @@ pub const EFFECT_ROW_HEIGHT: f32 = EFFECT_TITLE_ROW_HEIGHT;
 
 /// Doc-px a single "−" / "+" stepper click moves an effect parameter.
 pub const EFFECT_PARAM_STEP: f32 = 1.0;
+pub const COLOR_VARIABLE_MENU_W: f32 = 210.0;
+pub const COLOR_VARIABLE_MENU_ROW_H: f32 = 32.0;
+pub const COLOR_VARIABLE_MENU_PAD_Y: f32 = 6.0;
 
 /// The editable scalar params an effect kind exposes, in row order,
 /// each paired with its short row label. Shadow exposes four; the
@@ -247,14 +250,33 @@ pub fn action_button_rects_with_fill_picker(
     y += TAB_HEIGHT;
     y += HEADER_HEIGHT;
     if visible.create_component {
-        out.push((
-            PropertyPanelAction::CreateComponent,
-            Rect {
-                origin: Point2D::new(x0 + PAD_X, y + CREATE_COMPONENT_PAD_TOP),
-                size: Point2D::new(usable_w, CREATE_COMPONENT_BTN_H),
-            },
-        ));
-        y += CREATE_COMPONENT_BLOCK_H;
+        use crate::widgets::property_panel_visibility::ComponentButtonState as CB;
+        let first_row = Rect {
+            origin: Point2D::new(x0 + PAD_X, y + CREATE_COMPONENT_PAD_TOP),
+            size: Point2D::new(usable_w, CREATE_COMPONENT_BTN_H),
+        };
+        match visible.component_button {
+            CB::Create => out.push((PropertyPanelAction::CreateComponent, first_row)),
+            CB::DetachComponent => out.push((PropertyPanelAction::DetachComponent, first_row)),
+            CB::Instance => {
+                out.push((PropertyPanelAction::GoToComponent, first_row));
+                out.push((
+                    PropertyPanelAction::DetachInstance,
+                    Rect {
+                        origin: Point2D::new(
+                            x0 + PAD_X,
+                            first_row.origin.y
+                                + CREATE_COMPONENT_BTN_H
+                                + crate::widgets::property_panel_inputs::CREATE_COMPONENT_ROW_GAP,
+                        ),
+                        size: Point2D::new(usable_w, CREATE_COMPONENT_BTN_H),
+                    },
+                ));
+            }
+        }
+        y += crate::widgets::property_panel_inputs::create_component_block_height(
+            visible.component_button,
+        );
     }
     // Position section.
     y += SECTION_HEADER_HEIGHT;
@@ -343,13 +365,10 @@ pub fn action_button_rects_with_fill_picker(
         out.extend(crate::widgets::property_panel_text::text_action_rects(
             x0, y, usable_w,
         ));
-        if font_family_picker_open {
-            out.extend(
-                crate::widgets::property_panel_text::font_family_picker_action_rects(
-                    x0, y, usable_w,
-                ),
-            );
-        }
+        // The font-family picker is an overlay now (searchable list,
+        // `property_panel_typography.rs`) — its rows are hit-tested
+        // BEFORE this walker, not emitted from it.
+        let _ = font_family_picker_open;
         if font_weight_picker_open {
             out.extend(
                 crate::widgets::property_panel_text::font_weight_picker_action_rects(
@@ -362,15 +381,14 @@ pub fn action_button_rects_with_fill_picker(
     }
 
     if visible.image {
-        y += SECTION_HEADER_HEIGHT;
-        out.push((
-            PropertyPanelAction::ToggleImageFillPopover,
-            Rect {
-                origin: Point2D::new(x0 + PAD_X, y),
-                size: Point2D::new(usable_w, INPUT_HEIGHT),
-            },
-        ));
-        y += INPUT_HEIGHT + 34.0;
+        crate::widgets::property_panel_image_node::push_image_action_rects(
+            &mut out,
+            x0,
+            y,
+            w,
+            visible.image_warning,
+        );
+        y += crate::widgets::property_panel_image_node::image_section_height(visible.image_warning);
         y += SECTION_GAP;
     }
 
@@ -425,13 +443,43 @@ pub fn action_button_rects_with_fill_picker(
                                  // hex-input focus hit-test, so a swatch click opens the
                                  // picker instead of focusing the hex field.
         if visible.fill_type == FillType::Solid {
-            out.push((
-                PropertyPanelAction::OpenColorPicker(op_editor_core::ColorTarget::Fill),
-                Rect {
-                    origin: Point2D::new(x0 + PAD_X, y),
-                    size: Point2D::new(28.0, INPUT_HEIGHT),
-                },
-            ));
+            let show_var = visible.color_variable_count > 0 || visible.fill_variable_bound;
+            let variable_w = if show_var {
+                COLOR_VARIABLE_BUTTON_W + COLOR_VARIABLE_GAP
+            } else {
+                0.0
+            };
+            let hex_w = usable_w - variable_w;
+            if !visible.fill_variable_bound {
+                out.push((
+                    PropertyPanelAction::OpenColorPicker(op_editor_core::ColorTarget::Fill),
+                    Rect {
+                        origin: Point2D::new(x0 + PAD_X, y),
+                        size: Point2D::new(28.0, INPUT_HEIGHT),
+                    },
+                ));
+            }
+            if show_var {
+                let var_rect = Rect {
+                    origin: Point2D::new(x0 + PAD_X + hex_w + COLOR_VARIABLE_GAP, y),
+                    size: Point2D::new(COLOR_VARIABLE_BUTTON_W, INPUT_HEIGHT),
+                };
+                out.push((
+                    PropertyPanelAction::ToggleColorVariablePicker(
+                        op_editor_core::ColorTarget::Fill,
+                    ),
+                    var_rect,
+                ));
+                if visible.color_variable_picker_open == Some(op_editor_core::ColorTarget::Fill) {
+                    push_color_variable_picker_rects(
+                        &mut out,
+                        op_editor_core::ColorTarget::Fill,
+                        var_rect,
+                        visible.color_variable_count,
+                        visible.fill_variable_bound,
+                    );
+                }
+            }
         }
         out.push((
             PropertyPanelAction::RemoveFill,
@@ -501,13 +549,42 @@ pub fn action_button_rects_with_fill_picker(
         // Mirrors paint_stroke_section: header + hex/width row.
         y += SECTION_HEADER_HEIGHT;
         // The stroke hex row's leading colour swatch opens the picker.
-        out.push((
-            PropertyPanelAction::OpenColorPicker(op_editor_core::ColorTarget::Stroke),
-            Rect {
-                origin: Point2D::new(x0 + PAD_X, y),
-                size: Point2D::new(28.0, INPUT_HEIGHT),
-            },
-        ));
+        let show_var = visible.color_variable_count > 0 || visible.stroke_variable_bound;
+        let variable_w = if show_var {
+            COLOR_VARIABLE_BUTTON_W + COLOR_VARIABLE_GAP
+        } else {
+            0.0
+        };
+        let width_w = 60.0;
+        let hex_w = usable_w - width_w - 8.0 - variable_w;
+        if !visible.stroke_variable_bound {
+            out.push((
+                PropertyPanelAction::OpenColorPicker(op_editor_core::ColorTarget::Stroke),
+                Rect {
+                    origin: Point2D::new(x0 + PAD_X, y),
+                    size: Point2D::new(28.0, INPUT_HEIGHT),
+                },
+            ));
+        }
+        if show_var {
+            let var_rect = Rect {
+                origin: Point2D::new(x0 + PAD_X + hex_w + COLOR_VARIABLE_GAP, y),
+                size: Point2D::new(COLOR_VARIABLE_BUTTON_W, INPUT_HEIGHT),
+            };
+            out.push((
+                PropertyPanelAction::ToggleColorVariablePicker(op_editor_core::ColorTarget::Stroke),
+                var_rect,
+            ));
+            if visible.color_variable_picker_open == Some(op_editor_core::ColorTarget::Stroke) {
+                push_color_variable_picker_rects(
+                    &mut out,
+                    op_editor_core::ColorTarget::Stroke,
+                    var_rect,
+                    visible.color_variable_count,
+                    visible.stroke_variable_bound,
+                );
+            }
+        }
         y += INPUT_HEIGHT + 12.0;
         y += SECTION_GAP;
     }
@@ -651,4 +728,36 @@ pub fn action_button_rects_with_fill_picker(
     let _ = y; // suppress unused-write lint if export is last
 
     out
+}
+
+fn push_color_variable_picker_rects(
+    out: &mut Vec<(PropertyPanelAction, Rect)>,
+    target: op_editor_core::ColorTarget,
+    anchor: Rect,
+    count: usize,
+    bound: bool,
+) {
+    let x = anchor.origin.x + anchor.size.x - COLOR_VARIABLE_MENU_W;
+    let y = anchor.origin.y + anchor.size.y + 4.0 + COLOR_VARIABLE_MENU_PAD_Y;
+    let mut row = 0usize;
+    if bound {
+        out.push((
+            PropertyPanelAction::UnbindColorVariable(target),
+            Rect {
+                origin: Point2D::new(x, y),
+                size: Point2D::new(COLOR_VARIABLE_MENU_W, COLOR_VARIABLE_MENU_ROW_H),
+            },
+        ));
+        row += 1;
+    }
+    for index in 0..count {
+        out.push((
+            PropertyPanelAction::BindColorVariable { target, index },
+            Rect {
+                origin: Point2D::new(x, y + row as f32 * COLOR_VARIABLE_MENU_ROW_H),
+                size: Point2D::new(COLOR_VARIABLE_MENU_W, COLOR_VARIABLE_MENU_ROW_H),
+            },
+        ));
+        row += 1;
+    }
 }

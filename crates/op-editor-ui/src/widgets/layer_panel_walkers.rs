@@ -140,6 +140,8 @@ fn item_for(node: &PenNode, cx: &WalkCx<'_>, depth: usize) -> LayerItem {
         hovered: cx.hovered.map(|h| h.as_str() == base.id).unwrap_or(false),
         is_container: matches!(node, PenNode::Frame(_) | PenNode::Group(_)),
         renaming: false,
+        is_reusable: matches!(node, PenNode::Frame(f) if f.reusable == Some(true)),
+        is_instance: matches!(node, PenNode::Ref(_)),
     }
 }
 
@@ -230,9 +232,12 @@ pub(super) fn kind_label(node: &PenNode) -> &'static str {
     }
 }
 
-/// Map a `PenNode` variant onto a LayerPanel row icon.
+/// Map a `PenNode` variant onto a LayerPanel row icon. Reusable
+/// component definitions + Ref instances paint the TS Diamond glyph.
 pub(super) fn icon_for_node(node: &PenNode) -> Icon {
     match node {
+        PenNode::Frame(f) if f.reusable == Some(true) => Icon::Diamond,
+        PenNode::Ref(_) => Icon::Diamond,
         PenNode::Frame(_) => Icon::Hash,
         PenNode::Group(_) => Icon::Square,
         PenNode::Rectangle(_) => Icon::Square,
@@ -243,7 +248,6 @@ pub(super) fn icon_for_node(node: &PenNode) -> Icon {
         PenNode::Text(_) | PenNode::TextInput(_) => Icon::Type,
         PenNode::Image(_) => Icon::Square,
         PenNode::IconFont(_) => Icon::Square,
-        PenNode::Ref(_) => Icon::Square,
     }
 }
 

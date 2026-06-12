@@ -9,6 +9,7 @@ use super::property_panel_sections as sections;
 use super::property_panel_test_support::{state_from, visible_for};
 use crate::widgets::{PaintCx, Widget};
 use crate::{Color, Point2D, Rect, TextLayout};
+use jian_ops_schema::variable::{VariableKind, VariableScalar};
 use op_editor_core::{EditorState, NodeId, PropertyTab};
 
 #[derive(Default)]
@@ -90,6 +91,38 @@ fn for_selection_with_real_node_builds_snapshot() {
 #[test]
 fn for_selection_without_selection_returns_none() {
     let state = EditorState::new();
+    assert!(PropertyPanel::for_selection(&state).is_none());
+}
+
+#[test]
+fn for_selection_code_tab_builds_panel_without_selection() {
+    // The Code tab is selection-independent (TS falls back to the active
+    // page's children), so the panel must stay alive with no selection.
+    let mut state = EditorState::sample();
+    state.clear_selection();
+    state.editor_ui.property_tab = PropertyTab::Code;
+    let panel =
+        PropertyPanel::for_selection(&state).expect("Code tab panel survives empty selection");
+    assert!(matches!(panel.tab, PropertyTab::Code));
+    // The idle node-count label reads the LIVE generation targets — with
+    // an empty selection that is every active-page child.
+    assert_eq!(
+        panel.codegen.selection_snapshot.len(),
+        state.active_children().len()
+    );
+    // Design input rows are never clickable under the Code body.
+    let rect = Rect {
+        origin: Point2D::new(0.0, 0.0),
+        size: Point2D::new(280.0, 700.0),
+    };
+    assert!(panel.hit_test(rect, Point2D::new(140.0, 120.0)).is_none());
+}
+
+#[test]
+fn for_selection_design_tab_still_hides_panel_without_selection() {
+    let mut state = EditorState::sample();
+    state.clear_selection();
+    state.editor_ui.property_tab = PropertyTab::Design;
     assert!(PropertyPanel::for_selection(&state).is_none());
 }
 
@@ -306,6 +339,122 @@ fn hit_test_action_export_section_returns_picker_toggles() {
             Some(PropertyPanelAction::ToggleExportFormatPicker)
         ),
         "click on the format dropdown should toggle the format picker",
+    );
+}
+
+#[test]
+fn color_variables_add_fill_and_stroke_binding_buttons() {
+    let mut state = state_from(
+        r##"{ "version": "0.8.0", "children": [
+              {"type":"rectangle","id":"rect","name":"Rect",
+               "x":40,"y":40,"width":160,"height":100,
+               "fill":[{"type":"solid","color":"#ffffff"}],
+               "stroke":{"thickness":1,"fill":[{"type":"solid","color":"#374151"}]}}
+        ]}"##,
+    );
+    state.set_single_selection(NodeId::new("rect"));
+    assert!(state.create_variable(
+        "color-1",
+        VariableKind::Color,
+        VariableScalar::Str("#000000".into()),
+    ));
+    let panel = PropertyPanel::for_selection(&state).expect("rectangle panel");
+    let rect = Rect {
+        origin: Point2D::new(0.0, 0.0),
+        size: Point2D::new(280.0, 1200.0),
+    };
+
+    let rects = sections::action_button_rects_with_fill_picker(
+        rect,
+        visible_for(&panel),
+        &panel.snapshot.effects,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+    );
+
+    assert!(
+        rects.iter().any(|(action, _)| matches!(
+            action,
+            PropertyPanelAction::ToggleColorVariablePicker(op_editor_core::ColorTarget::Fill)
+        )),
+        "solid fill row should expose a color-variable picker button"
+    );
+    assert!(
+        rects.iter().any(|(action, _)| matches!(
+            action,
+            PropertyPanelAction::ToggleColorVariablePicker(op_editor_core::ColorTarget::Stroke)
+        )),
+        "stroke row should expose a color-variable picker button"
+    );
+}
+
+#[test]
+fn color_variable_picker_emits_bind_and_unbind_rows() {
+    let mut state = state_from(
+        r##"{ "version": "0.8.0", "children": [
+              {"type":"rectangle","id":"rect","name":"Rect",
+               "x":40,"y":40,"width":160,"height":100,
+               "fill":[{"type":"solid","color":"#ffffff"}],
+               "stroke":{"thickness":1,"fill":[{"type":"solid","color":"#374151"}]}}
+        ]}"##,
+    );
+    state.set_single_selection(NodeId::new("rect"));
+    assert!(state.create_variable(
+        "color-1",
+        VariableKind::Color,
+        VariableScalar::Str("#000000".into()),
+    ));
+    state.editor_ui.property_color_variable_picker_open = Some(op_editor_core::ColorTarget::Fill);
+    let panel = PropertyPanel::for_selection(&state).expect("rectangle panel");
+    let rect = Rect {
+        origin: Point2D::new(0.0, 0.0),
+        size: Point2D::new(280.0, 1200.0),
+    };
+    let rects = sections::action_button_rects_with_fill_picker(
+        rect,
+        visible_for(&panel),
+        &panel.snapshot.effects,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+    );
+    assert!(
+        rects.iter().any(|(action, _)| matches!(
+            action,
+            PropertyPanelAction::BindColorVariable {
+                target: op_editor_core::ColorTarget::Fill,
+                index: 0,
+            }
+        )),
+        "open color-variable picker should expose variable rows"
+    );
+
+    assert!(state.bind_selected_color_variable(op_editor_core::ColorTarget::Fill, "color-1"));
+    let panel = PropertyPanel::for_selection(&state).expect("bound rectangle panel");
+    let rects = sections::action_button_rects_with_fill_picker(
+        rect,
+        visible_for(&panel),
+        &panel.snapshot.effects,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+    );
+    assert!(
+        rects.iter().any(|(action, _)| matches!(
+            action,
+            PropertyPanelAction::UnbindColorVariable(op_editor_core::ColorTarget::Fill)
+        )),
+        "bound color field should expose an unbind row"
     );
 }
 
@@ -554,33 +703,34 @@ fn font_family_picker_rows_are_clickable() {
     let mut state = EditorState::sample();
     state.set_single_selection(NodeId::new("n11"));
     state.editor_ui.font_family_picker_open = true;
+    // Type-ahead narrows the overlay to one row (TS search filter) —
+    // "geor" leaves only the fallback-system "Georgia".
+    state.editor_ui.font_picker_search = "geor".to_string();
     let panel = PropertyPanel::for_selection(&state).expect("text panel");
     let rect = Rect {
         origin: Point2D::new(0.0, 0.0),
         size: Point2D::new(280.0, 1200.0),
     };
-    let rects = sections::action_button_rects_with_fill_picker(
+    let entries = panel.font_picker_entries();
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].family, "Georgia");
+    let layout = super::property_panel_typography::font_picker_layout(
         rect,
-        visible_for(&panel),
-        &panel.snapshot.effects,
-        false,
-        true,
-        false,
-        false,
-        false,
-        false,
-    );
-    let georgia = rects
+        panel.visible_sections_for_test(),
+        &entries,
+        0.0,
+    )
+    .expect("picker layout");
+    let georgia = layout
+        .rows
         .iter()
-        .find(|(action, _)| {
+        .find_map(|(row, r)| {
             matches!(
-                action,
-                PropertyPanelAction::SetFontFamily(
-                    super::property_panel::FontFamilyChoice::Georgia
-                )
+                row,
+                super::property_panel_typography::FontPickerRow::Entry(0)
             )
+            .then_some(*r)
         })
-        .map(|(_, r)| *r)
         .expect("Georgia font row");
     let center = Point2D::new(
         georgia.origin.x + georgia.size.x / 2.0,
@@ -588,9 +738,7 @@ fn font_family_picker_rows_are_clickable() {
     );
     assert!(matches!(
         panel.hit_test_action(rect, center),
-        Some(PropertyPanelAction::SetFontFamily(
-            super::property_panel::FontFamilyChoice::Georgia
-        ))
+        Some(PropertyPanelAction::SetFontFamilyIndex(0))
     ));
 }
 

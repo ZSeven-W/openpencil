@@ -244,6 +244,170 @@ fn footer_agent_team_chip_is_clickable_and_hoverable() {
 }
 
 #[test]
+<<<<<<< HEAD
+=======
+fn footer_selection_count_sits_close_to_agent_team_chip() {
+    let mut s = EditorState::new();
+    seed_available_model(&mut s);
+    s.selection.set = vec![op_editor_core::NodeId::new("n1")];
+    s.selection.anchor = op_editor_core::NodeId::new("n1");
+    let panel = AIChatPlaceholder::from_editor(&s);
+    let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
+    let input = panel.input_rect(rect);
+    let toolbar_top = input.origin.y + INPUT_AREA_HEIGHT;
+    let footer = panel.footer_layout(rect, input, toolbar_top);
+    let mut backend = PanelPaintBackend::default();
+    let mut cx = PaintCx {
+        backend: &mut backend,
+    };
+
+    panel.paint(&mut cx, rect);
+
+    let selected_text =
+        op_i18n::translate(panel.locale, "common.selected").replace("{{count}}", "1");
+    let (_, _, _, origin) = backend
+        .texts
+        .iter()
+        .find(|(text, _, _, _)| text == &selected_text)
+        .expect("footer should paint selected-count label");
+    let gap = origin.x - (footer.agent_team.origin.x + footer.agent_team.size.x);
+    assert_close(gap, 4.0);
+}
+
+#[test]
+fn paint_send_button_hover_adds_visible_feedback() {
+    let mut s = EditorState::new();
+    seed_available_model(&mut s);
+    s.chat.input = "design a login page".into();
+    s.editor_ui.chat_footer_hover = Some(op_editor_core::ChatFooterButton::Send);
+    let panel = AIChatPlaceholder::from_editor(&s);
+    let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
+    let mut backend = PanelPaintBackend::default();
+    let mut cx = PaintCx {
+        backend: &mut backend,
+    };
+
+    panel.paint(&mut cx, rect);
+
+    let send_rect = Rect {
+        origin: Point2D::new(AI_CHAT_WIDTH - PAD - 24.0, toolbar_center_y() - 24.0 / 2.0),
+        size: Point2D::new(24.0, 24.0),
+    };
+    let fills: Vec<_> = backend
+        .round_rects
+        .iter()
+        .filter(|(r, _, _)| rect_close(*r, send_rect))
+        .collect();
+
+    assert!(
+        fills.len() >= 2,
+        "hovered send button should paint feedback over its base fill"
+    );
+}
+
+#[test]
+fn paint_footer_neutral_hovers_use_visible_feedback() {
+    let cases = [
+        op_editor_core::ChatFooterButton::ModelPicker,
+        op_editor_core::ChatFooterButton::AgentTeam,
+        op_editor_core::ChatFooterButton::AddAttachment,
+        op_editor_core::ChatFooterButton::Send,
+    ];
+
+    for hover in cases {
+        let mut s = EditorState::new();
+        seed_available_model(&mut s);
+        s.editor_ui.chat_footer_hover = Some(hover);
+        let panel = AIChatPlaceholder::from_editor(&s);
+        let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
+        let input = panel.input_rect(rect);
+        let toolbar_top = input.origin.y + INPUT_AREA_HEIGHT;
+        let footer = panel.footer_layout(rect, input, toolbar_top);
+        let target = match hover {
+            op_editor_core::ChatFooterButton::ModelPicker => footer.model,
+            op_editor_core::ChatFooterButton::AgentTeam => footer.agent_team,
+            op_editor_core::ChatFooterButton::AddAttachment => footer.attach,
+            op_editor_core::ChatFooterButton::Send => footer.send,
+            op_editor_core::ChatFooterButton::Stop => unreachable!(),
+        };
+        let mut backend = PanelPaintBackend::default();
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+
+        panel.paint(&mut cx, rect);
+
+        assert!(
+            backend.round_rects.iter().any(|(r, _, color)| {
+                rect_close(*r, target)
+                    && !color_close(*color, panel.theme.muted)
+                    && color.a > panel.theme.button_hover.a + 0.01
+            }),
+            "{hover:?} hover should paint a visible neutral wash"
+        );
+    }
+}
+
+#[test]
+fn paint_model_picker_hover_stays_inside_model_chip() {
+    let mut s = EditorState::new();
+    seed_available_model(&mut s);
+    s.editor_ui.chat_footer_hover = Some(op_editor_core::ChatFooterButton::ModelPicker);
+    let panel = AIChatPlaceholder::from_editor(&s);
+    let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
+    let input = panel.input_rect(rect);
+    let toolbar_top = input.origin.y + INPUT_AREA_HEIGHT;
+    let footer = panel.footer_layout(rect, input, toolbar_top);
+    let mut backend = PanelPaintBackend::default();
+    let mut cx = PaintCx {
+        backend: &mut backend,
+    };
+
+    panel.paint(&mut cx, rect);
+
+    let hover = backend
+        .round_rects
+        .iter()
+        .find(|(r, _, color)| {
+            rect_close(*r, footer.model)
+                && color_close(*color, chat_neutral_hover_color(&panel.theme))
+        })
+        .expect("model picker hover should paint a visible wash");
+
+    assert!(
+        hover.0.origin.x + hover.0.size.x <= footer.agent_team.origin.x - 6.0,
+        "model hover should leave visible spacing before the Agent Team chip"
+    );
+}
+
+#[test]
+fn paint_expanded_header_title_hover_adds_visible_feedback_across_label() {
+    let mut s = EditorState::new();
+    s.editor_ui.chat_header_hover = Some(op_editor_core::ChatHeaderButton::ToggleCollapse);
+    let panel = AIChatPlaceholder::from_editor(&s);
+    let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
+    let mut backend = PanelPaintBackend::default();
+    let mut cx = PaintCx {
+        backend: &mut backend,
+    };
+
+    panel.paint(&mut cx, rect);
+
+    assert!(
+        backend.round_rects.iter().any(|(r, _, color)| {
+            r.origin.x <= PAD
+                && r.origin.y <= 6.0
+                && r.size.x >= 108.0
+                && r.size.y >= 28.0
+                && r.size.y <= 34.0
+                && color_close(*color, chat_neutral_hover_color(&panel.theme))
+        }),
+        "expanded New Chat title hover should cover the label, not only the chevron"
+    );
+}
+
+#[test]
+>>>>>>> 926f84b6 (feat(editor-ui): canvas + panel widget batch for TS parity)
 fn hit_test_resolves_model_search_clear_button() {
     let mut s = EditorState::new();
     seed_available_model(&mut s);
@@ -420,6 +584,7 @@ fn hit_test_resolves_header_new_chat_button() {
     assert_eq!(panel.hit_test(rect, p), Some(AIChatHit::NewChat));
 }
 
+<<<<<<< HEAD
 #[test]
 fn body_rect_reserves_space_for_fixed_step_checklist() {
     let mut s = EditorState::new();
@@ -596,4 +761,64 @@ fn hit_test_resolves_design_block_copy_button() {
         panel.hit_test(rect, p),
         Some(AIChatHit::CopyDesignBlock(code.to_string()))
     );
+=======
+// Shared paint-assertion infrastructure — also used by the
+// sibling `tests_transcript` module (split at the 800-line cap).
+#[derive(Default)]
+pub(in super::super) struct PanelPaintBackend {
+    pub(in super::super) fills: Vec<(Rect, crate::Color)>,
+    pub(in super::super) round_rects: Vec<(Rect, f32, crate::Color)>,
+    pub(in super::super) texts: Vec<(String, f32, jian_core::scene::Color, Point2D)>,
+    pub(in super::super) svg_strokes: Vec<(Point2D, f32, crate::Color, f32)>,
+    pub(in super::super) stroke_lines: usize,
+}
+
+impl crate::RenderBackend for PanelPaintBackend {
+    fn begin_frame(&mut self) {}
+    fn end_frame(&mut self) {}
+    fn fill_rect(&mut self, rect: Rect, color: crate::Color) {
+        self.fills.push((rect, color));
+    }
+    fn stroke_rect(&mut self, _: Rect, _: crate::Color, _: f32) {}
+    fn draw_text(&mut self, layout: &crate::TextLayout, origin: Point2D) {
+        if let Some(run) = layout.runs().first() {
+            self.texts
+                .push((run.content.clone(), run.font_size, run.color, origin));
+        }
+    }
+    fn clip_rect(&mut self, _: Rect) {}
+    fn save(&mut self) {}
+    fn restore(&mut self) {}
+    fn translate(&mut self, _: Point2D) {}
+    fn stroke_line(&mut self, _: Point2D, _: Point2D, _: crate::Color, _: f32) {
+        self.stroke_lines += 1;
+    }
+    fn fill_round_rect(&mut self, rect: Rect, radius: f32, color: crate::Color) {
+        self.round_rects.push((rect, radius, color));
+    }
+    fn stroke_round_rect(&mut self, _: Rect, _: f32, _: crate::Color, _: f32) {}
+    fn stroke_svg_path(
+        &mut self,
+        _: &str,
+        top_left: Point2D,
+        size: f32,
+        color: crate::Color,
+        width: f32,
+    ) {
+        self.svg_strokes.push((top_left, size, color, width));
+    }
+    fn resize(&mut self, _: u32, _: u32) {}
+    fn dpi_scale(&self) -> f32 {
+        1.0
+    }
+}
+
+pub(in super::super) fn has_fill_rect(fills: &[(Rect, crate::Color)], expected: Rect) -> bool {
+    fills.iter().any(|(rect, _)| {
+        (rect.origin.x - expected.origin.x).abs() < 1e-4
+            && (rect.origin.y - expected.origin.y).abs() < 1e-4
+            && (rect.size.x - expected.size.x).abs() < 1e-4
+            && (rect.size.y - expected.size.y).abs() < 1e-4
+    })
+>>>>>>> 926f84b6 (feat(editor-ui): canvas + panel widget batch for TS parity)
 }

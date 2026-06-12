@@ -4,7 +4,7 @@
 //! and input-rect walker stay under the repository file-size cap.
 
 use crate::widgets::property_panel_inputs::{
-    CREATE_COMPONENT_BLOCK_H, HEADER_HEIGHT, INPUT_HEIGHT, PAD_X, SECTION_GAP,
+    COLOR_VARIABLE_BUTTON_W, COLOR_VARIABLE_GAP, HEADER_HEIGHT, INPUT_HEIGHT, PAD_X, SECTION_GAP,
     SECTION_HEADER_HEIGHT, TAB_HEIGHT,
 };
 use crate::widgets::property_panel_layout::{fill_body_height_with_stops, VisibleSections};
@@ -60,7 +60,10 @@ pub fn editable_input_rects(
     y += TAB_HEIGHT;
     y += HEADER_HEIGHT;
     if visible.create_component {
-        y += CREATE_COMPONENT_BLOCK_H;
+        // Variant-aware: the instance pair adds a second button row.
+        y += crate::widgets::property_panel_inputs::create_component_block_height(
+            visible.component_button,
+        );
     }
     y += SECTION_HEADER_HEIGHT;
     let x_rect = Rect {
@@ -153,8 +156,7 @@ pub fn editable_input_rects(
         y += SECTION_GAP;
     }
     if visible.image {
-        y += SECTION_HEADER_HEIGHT;
-        y += INPUT_HEIGHT + 34.0;
+        y += crate::widgets::property_panel_image_node::image_section_height(visible.image_warning);
         y += SECTION_GAP;
     }
     if visible.opacity {
@@ -210,13 +212,21 @@ pub fn editable_input_rects(
         y += INPUT_HEIGHT + 6.0;
         match visible.fill_type {
             FillType::Solid => {
-                rects.push((
-                    PropertyFocus::FillHex,
-                    Rect {
-                        origin: Point2D::new(x0 + PAD_X, y),
-                        size: Point2D::new(usable_w, INPUT_HEIGHT),
-                    },
-                ));
+                let show_var = visible.color_variable_count > 0 || visible.fill_variable_bound;
+                let variable_w = if show_var {
+                    COLOR_VARIABLE_BUTTON_W + COLOR_VARIABLE_GAP
+                } else {
+                    0.0
+                };
+                if !visible.fill_variable_bound {
+                    rects.push((
+                        PropertyFocus::FillHex,
+                        Rect {
+                            origin: Point2D::new(x0 + PAD_X, y),
+                            size: Point2D::new(usable_w - variable_w, INPUT_HEIGHT),
+                        },
+                    ));
+                }
             }
             FillType::LinearGradient => {
                 rects.push((
@@ -254,18 +264,26 @@ pub fn editable_input_rects(
     if visible.stroke {
         y += SECTION_HEADER_HEIGHT;
         let stroke_width_w = 60.0;
-        let stroke_hex_w = usable_w - stroke_width_w - 8.0;
-        rects.push((
-            PropertyFocus::StrokeHex,
-            Rect {
-                origin: Point2D::new(x0 + PAD_X, y),
-                size: Point2D::new(stroke_hex_w, INPUT_HEIGHT),
-            },
-        ));
+        let show_var = visible.color_variable_count > 0 || visible.stroke_variable_bound;
+        let variable_w = if show_var {
+            COLOR_VARIABLE_BUTTON_W + COLOR_VARIABLE_GAP
+        } else {
+            0.0
+        };
+        let stroke_hex_w = usable_w - stroke_width_w - 8.0 - variable_w;
+        if !visible.stroke_variable_bound {
+            rects.push((
+                PropertyFocus::StrokeHex,
+                Rect {
+                    origin: Point2D::new(x0 + PAD_X, y),
+                    size: Point2D::new(stroke_hex_w, INPUT_HEIGHT),
+                },
+            ));
+        }
         rects.push((
             PropertyFocus::StrokeWidth,
             Rect {
-                origin: Point2D::new(x0 + PAD_X + stroke_hex_w + 8.0, y),
+                origin: Point2D::new(x0 + PAD_X + stroke_hex_w + variable_w + 8.0, y),
                 size: Point2D::new(stroke_width_w, INPUT_HEIGHT),
             },
         ));
