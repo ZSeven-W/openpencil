@@ -27,6 +27,10 @@ use super::{EditorCommand, McpTool, ToolOutcome};
 /// (page node sets + the doc-wide id state) so the operations path can report
 /// the TS result; the mutation still flows through `EditorCommand::InsertSubtree`.
 pub struct BatchDesign {
+    /// Full editor-state snapshot — the multi-op DSL program executor
+    /// (`batch_program.rs`) simulates each program line against a clone
+    /// of this to mirror TS's per-line best-effort semantics.
+    state: EditorState,
     pages: Vec<PageNodes>,
     active_page_id: String,
     existing_ids: HashSet<NodeId>,
@@ -49,9 +53,14 @@ impl McpTool for BatchDesign {
                 count: _,
                 bindings,
             }) => self.insert_with_result(args, parent_id, nodes, bindings),
-            // Direct ops / parse errors keep the flat dispatch (which re-parses
-            // and returns the proper command or the typed error).
-            _ => dispatch_batch_design(args, None),
+            // A single direct op keeps the flat dispatch (which re-parses
+            // and returns the existing command-per-op shape).
+            Ok(ParsedOperations::Direct(_)) => dispatch_batch_design(args, None),
+            // Everything else — multi-line MIXED programs, per-line parse
+            // failures — runs the TS DSL program executor, which collects
+            // per-line errors and applies the surviving lines (TS
+            // `runBatchDesignDsl` best-effort semantics).
+            Err(_) => super::batch_program::run_batch_design_program(&self.state, operations, args),
         }
     }
 }
@@ -59,6 +68,7 @@ impl McpTool for BatchDesign {
 pub fn batch_design_snapshot(state: &EditorState) -> BatchDesign {
     let (pages, active_page_id) = page_nodes_snapshots(state);
     BatchDesign {
+        state: state.clone(),
         pages,
         active_page_id,
         existing_ids: state.collect_node_ids(),

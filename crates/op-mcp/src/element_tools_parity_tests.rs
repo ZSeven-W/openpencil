@@ -133,8 +133,8 @@ fn registry_covers_starter_kit_and_ts_production_aliases() {
             .iter()
             .filter(|tool| tool.name().starts_with("insert_"))
             .count(),
-        6,
-        "starter kit ships 6 canonical components"
+        37,
+        "builtin kits ship 6 starter + 31 shadcn components"
     );
     assert_eq!(schemas.len(), tools.len(), "schema + tool counts agree");
     for tool in &tools {

@@ -126,7 +126,7 @@ pub(crate) fn dispatch_design_content(args: &BTreeMap<String, String>) -> ToolOu
             "children is required".into(),
         );
     };
-    let parsed = match parse_children(children) {
+    let mut parsed = match parse_children(children) {
         Ok(parsed) => parsed,
         Err(message) => return ToolOutcome::Err(ToolErrorCode::InvalidArgument, message),
     };
@@ -141,6 +141,18 @@ pub(crate) fn dispatch_design_content(args: &BTreeMap<String, String>) -> ToolOu
         .or_else(|| args.get("post_process"))
         .map(|raw| !matches!(raw.trim(), "false" | "0"))
         .unwrap_or(true);
+    // `postProcessed: true` must be TRUE: run the deterministic
+    // refine passes (emoji strip, unique ids, layout-child position
+    // sanitize, screen-bounds clamp) on the parsed content before it
+    // is inserted. The TS live-only hook passes (role / icon-path
+    // resolution) are not covered here — that residual divergence is
+    // documented in `command_refine.rs`.
+    let mut post_process_fixes = 0usize;
+    if post_processed {
+        for node in &mut parsed.nodes {
+            post_process_fixes += op_editor_core::command_refine::refine_subtree(node).len();
+        }
+    }
     let warnings_json =
         serde_json::to_string(&parsed.warnings).unwrap_or_else(|_| "[]".to_string());
 
@@ -151,6 +163,7 @@ pub(crate) fn dispatch_design_content(args: &BTreeMap<String, String>) -> ToolOu
     out.insert("insertedCount".into(), parsed.count.to_string());
     out.insert("warnings".into(), warnings_json);
     out.insert("postProcessed".into(), post_processed.to_string());
+    out.insert("postProcessFixes".into(), post_process_fixes.to_string());
     ToolOutcome::OkWithCommand(
         out,
         EditorCommand::InsertSubtree {

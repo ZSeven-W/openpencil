@@ -186,6 +186,106 @@ impl McpTool for DebugLogsTail {
     }
 }
 
+/// Screenshot target — TS `DebugScreenshotParams.target`.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ScreenshotTarget {
+    /// The whole active-page content.
+    Root,
+    /// One node (+ subtree) by id.
+    Node(String),
+}
+
+/// Validated `debug_screenshot` arguments, shared between the headless
+/// tool (which then reports the honest no-live-canvas error) and the
+/// live-GUI MCP server (which routes the request through the raster
+/// export pipeline) — so both paths validate byte-identically.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ScreenshotRequest {
+    pub target: ScreenshotTarget,
+    /// Extra doc-px around the captured bounds (TS default 0).
+    pub padding: Option<f64>,
+    /// Device-pixel-ratio / render scale (TS default 1 headlessly).
+    pub dpr: Option<f64>,
+    /// Render budget — TS `Math.min(timeoutMs ?? 15000, 60000)`.
+    pub timeout_ms: u64,
+}
+
+/// Parse + validate `debug_screenshot` args (TS `debug-screenshot.ts`
+/// contract). Errors carry the typed code + the exact TS messages.
+pub fn parse_screenshot_args(
+    args: &BTreeMap<String, String>,
+) -> Result<ScreenshotRequest, (ToolErrorCode, String)> {
+    let Some(target) = args.get("target") else {
+        return Err((ToolErrorCode::MissingArgument, "target is required".into()));
+    };
+    let target = match target.as_str() {
+        "node" => match args
+            .get("nodeId")
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+        {
+            Some(node_id) => ScreenshotTarget::Node(node_id.to_string()),
+            None => {
+                return Err((
+                    ToolErrorCode::InvalidArgument,
+                    "target=\"node\" requires nodeId".into(),
+                ));
+            }
+        },
+        "root" => ScreenshotTarget::Root,
+        other => {
+            return Err((
+                ToolErrorCode::InvalidArgument,
+                format!("target must be node or root, got {other:?}"),
+            ));
+        }
+    };
+    let padding = parse_f64_arg(args, "padding")?;
+    let dpr = parse_f64_arg(args, "dpr")?;
+    let timeout_ms = match args.get("timeoutMs").or_else(|| args.get("timeout_ms")) {
+        None => 15_000,
+        Some(raw) => raw
+            .trim()
+            .parse::<f64>()
+            .ok()
+            .filter(|v| v.is_finite())
+            .map(|v| (v.max(0.0) as u64).min(60_000))
+            .ok_or_else(|| {
+                (
+                    ToolErrorCode::InvalidArgument,
+                    format!("timeoutMs must be a number, got {raw:?}"),
+                )
+            })?,
+    };
+    Ok(ScreenshotRequest {
+        target,
+        padding,
+        dpr,
+        timeout_ms,
+    })
+}
+
+fn parse_f64_arg(
+    args: &BTreeMap<String, String>,
+    key: &str,
+) -> Result<Option<f64>, (ToolErrorCode, String)> {
+    match args.get(key) {
+        None => Ok(None),
+        Some(raw) => raw
+            .trim()
+            .parse::<f64>()
+            .ok()
+            .filter(|v| v.is_finite())
+            .map(Some)
+            .ok_or_else(|| {
+                (
+                    ToolErrorCode::InvalidArgument,
+                    format!("{key} must be a number, got {raw:?}"),
+                )
+            }),
+    }
+}
+
 impl McpTool for DebugScreenshot {
     fn name(&self) -> &str {
         "debug_screenshot"
@@ -198,23 +298,17 @@ impl McpTool for DebugScreenshot {
                 format!("debug tools are disabled — set {DEBUG_TOOLS_ENV}=1 to enable"),
             );
         }
-        let Some(target) = args.get("target") else {
-            return ToolOutcome::Err(ToolErrorCode::MissingArgument, "target is required".into());
-        };
-        match target.as_str() {
-            "node" if !args.contains_key("nodeId") => ToolOutcome::Err(
-                ToolErrorCode::InvalidArgument,
-                "target=\"node\" requires nodeId".into(),
-            ),
-            "node" | "root" => ToolOutcome::Err(
+        match parse_screenshot_args(args) {
+            // Headless / file-backed MCP has no renderer — same honest
+            // error TS standalone mode reports. The live-GUI server
+            // intercepts `debug_screenshot` BEFORE this tool dispatches
+            // and fulfills it via the raster export pipeline.
+            Ok(_) => ToolOutcome::Err(
                 ToolErrorCode::ToolFailed,
                 "No live canvas available. Ensure an Electron window or /editor tab is running."
                     .into(),
             ),
-            other => ToolOutcome::Err(
-                ToolErrorCode::InvalidArgument,
-                format!("target must be node or root, got {other:?}"),
-            ),
+            Err((code, message)) => ToolOutcome::Err(code, message),
         }
     }
 }
@@ -536,6 +630,56 @@ mod tests {
 
         // `_gate` resets the override to None on drop.
         let _ = std::fs::remove_dir_all(&log_dir);
+    }
+
+    #[test]
+    fn parse_screenshot_args_mirrors_the_ts_contract() {
+        // Missing target.
+        let err = parse_screenshot_args(&BTreeMap::new()).unwrap_err();
+        assert_eq!(
+            err,
+            (ToolErrorCode::MissingArgument, "target is required".into())
+        );
+        // target=node without nodeId.
+        let mut args = BTreeMap::new();
+        args.insert("target".into(), "node".into());
+        let err = parse_screenshot_args(&args).unwrap_err();
+        assert_eq!(
+            err,
+            (
+                ToolErrorCode::InvalidArgument,
+                "target=\"node\" requires nodeId".into()
+            )
+        );
+        // Unknown target.
+        args.insert("target".into(), "page".into());
+        let err = parse_screenshot_args(&args).unwrap_err();
+        assert_eq!(err.0, ToolErrorCode::InvalidArgument);
+        assert!(err.1.contains("target must be node or root"), "{}", err.1);
+        // Full node request with TS timeout cap (min(x, 60000)).
+        args.insert("target".into(), "node".into());
+        args.insert("nodeId".into(), "n7".into());
+        args.insert("padding".into(), "8".into());
+        args.insert("dpr".into(), "2".into());
+        args.insert("timeoutMs".into(), "90000".into());
+        let req = parse_screenshot_args(&args).expect("valid request");
+        assert_eq!(req.target, ScreenshotTarget::Node("n7".into()));
+        assert_eq!(req.padding, Some(8.0));
+        assert_eq!(req.dpr, Some(2.0));
+        assert_eq!(req.timeout_ms, 60_000);
+        // Defaults: TS `timeoutMs ?? 15000`, padding/dpr absent.
+        let mut root = BTreeMap::new();
+        root.insert("target".into(), "root".into());
+        let req = parse_screenshot_args(&root).expect("root request");
+        assert_eq!(req.target, ScreenshotTarget::Root);
+        assert_eq!(req.timeout_ms, 15_000);
+        assert_eq!(req.padding, None);
+        assert_eq!(req.dpr, None);
+        // Non-numeric scalar opts reject with a typed error.
+        root.insert("dpr".into(), "huge".into());
+        let err = parse_screenshot_args(&root).unwrap_err();
+        assert_eq!(err.0, ToolErrorCode::InvalidArgument);
+        assert!(err.1.contains("dpr must be a number"), "{}", err.1);
     }
 
     fn temp_dir(label: &str) -> std::path::PathBuf {
