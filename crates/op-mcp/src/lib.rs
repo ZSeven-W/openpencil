@@ -32,9 +32,13 @@ mod batch_layered;
 #[cfg(test)]
 mod batch_layered_tests;
 mod batch_page;
+mod batch_program;
+#[cfg(test)]
+mod batch_program_tests;
 pub mod bulk_vars;
 #[cfg(test)]
 mod bulk_vars_tests;
+mod codegen_plan_store;
 pub mod codegen_tools;
 #[cfg(test)]
 mod codegen_tools_tests;
@@ -185,7 +189,8 @@ pub use component_tools::{
 #[cfg(feature = "debug-tools")]
 pub use debug_tools::{
     debug_logs_tail_snapshot, debug_screenshot_snapshot, debug_tools_enabled,
-    debug_validation_report_snapshot, DebugLogsTail, DebugScreenshot, DebugValidationReport,
+    debug_validation_report_snapshot, parse_screenshot_args, DebugLogsTail, DebugScreenshot,
+    DebugValidationReport, ScreenshotRequest, ScreenshotTarget,
 };
 #[cfg(not(feature = "debug-tools"))]
 pub fn debug_tools_enabled() -> bool {

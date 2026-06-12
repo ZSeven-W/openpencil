@@ -290,7 +290,7 @@ fn parse_insert_operation(line: &str, index: usize) -> Result<(String, ParentRef
     Ok((binding, parent, data))
 }
 
-fn split_operations(raw: &str) -> Vec<String> {
+pub(crate) fn split_operations(raw: &str) -> Vec<String> {
     let mut out = Vec::new();
     let mut buf = String::new();
     let mut depth = 0i32;
@@ -485,7 +485,7 @@ fn normalize_stroke(value: &mut serde_json::Value) {
     }
 }
 
-fn ensure_node_ids(value: &mut serde_json::Value, next: &mut usize) {
+pub(crate) fn ensure_node_ids(value: &mut serde_json::Value, next: &mut usize) {
     let serde_json::Value::Object(obj) = value else {
         return;
     };

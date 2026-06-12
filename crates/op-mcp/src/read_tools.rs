@@ -86,9 +86,10 @@ impl McpTool for SnapshotLayout {
             Some(id) => match page.records.iter().find(|r| r.id == id) {
                 Some(parent) => (Some(parent.depth), (parent.x, parent.y)),
                 None => {
+                    // TS snapshot-layout.ts:33 throws `Node not found: ${id}`.
                     return ToolOutcome::Err(
                         ToolErrorCode::ToolFailed,
-                        format!("node not found: {id}"),
+                        format!("Node not found: {id}"),
                     );
                 }
             },

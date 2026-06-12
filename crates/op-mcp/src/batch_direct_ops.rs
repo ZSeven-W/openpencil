@@ -57,10 +57,22 @@ fn parse_update_operation(body: &str) -> Result<EditorCommand, String> {
     let mut value: serde_json::Value = serde_json::from_str(body[comma + 1..].trim())
         .map_err(|e| format!("invalid U JSON: {e}"))?;
     normalize_node_shape(&mut value);
+    update_command_from_value(node_id, &value)
+}
+
+/// Build the U() editor command from an already-parsed + normalized
+/// update JSON value. Shared by the single-line direct-op parser above
+/// and the multi-op DSL program executor (`batch_program.rs`), so both
+/// paths route rich patches to `PatchNodeData` and flat geometry
+/// patches to `UpdateNode` identically.
+pub(crate) fn update_command_from_value(
+    node_id: NodeId,
+    value: &serde_json::Value,
+) -> Result<EditorCommand, String> {
     let Some(obj) = value.as_object() else {
         return Err("U() update JSON must be an object".into());
     };
-    if let Some(patch_json) = ts_update_patch_json_value(&value) {
+    if let Some(patch_json) = ts_update_patch_json_value(value) {
         return Ok(EditorCommand::PatchNodeData {
             node_id,
             patch_json,
@@ -236,7 +248,7 @@ fn parse_ref_token(raw: &str) -> Result<String, String> {
     Ok(raw.to_string())
 }
 
-fn split_top_level_args(mut raw: &str) -> Vec<&str> {
+pub(crate) fn split_top_level_args(mut raw: &str) -> Vec<&str> {
     let mut parts = Vec::new();
     loop {
         let trimmed = raw.trim();
