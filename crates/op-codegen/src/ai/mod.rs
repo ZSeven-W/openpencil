@@ -11,6 +11,7 @@ pub(crate) mod fallback_plan;
 pub mod parse;
 pub mod pipeline;
 pub mod prompts;
+pub mod stored_zip;
 pub mod types;
 
 pub use pipeline::CodegenPipeline;

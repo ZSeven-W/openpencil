@@ -23,6 +23,11 @@ serde = { workspace = true, features = ["derive"], optional = true }
 serde_json = { workspace = true, optional = true }
 base64 = { version = "0.22", optional = true }
 
+[dev-dependencies]
+# Round-trip validation for the hand-rolled STORED zip encoder
+# (test-only; never reaches the wasm build).
+zip = "2"
+
 [features]
 # Gates the AI code-generation pipeline (src/ai/). Off by default.
 ai = ["dep:op-ai", "dep:serde", "dep:serde_json", "dep:base64"]
