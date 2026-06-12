@@ -3001,6 +3001,7 @@ dependencies = [
  "op-editor-core",
  "serde",
  "serde_json",
+ "zip",
 ]
 
 [[package]]
@@ -3146,6 +3147,7 @@ dependencies = [
  "op-codegen",
  "op-editor-core",
  "op-editor-ui",
+ "op-figma",
  "op-pen-loader",
  "serde_json",
  "skia-safe",

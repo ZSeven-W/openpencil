@@ -27,11 +27,30 @@
 # fields without compounding them (PlistBuddy `Set` replaces; `Add`
 # would duplicate, so this script clears the entries it rewrites
 # first).
+#
+# CI / cross-build controls (all optional, default = local behavior):
+#   OPENPENCIL_VERSION     CFBundleShortVersionString (default 0.8.0)
+#   OPENPENCIL_TARGET      cargo target triple (e.g. x86_64-apple-darwin);
+#                          builds + bundles for that triple and reads the
+#                          bundle from target/<triple>/release/bundle/osx
+#   OPENPENCIL_BINARY      path to a prebuilt release openpencil-desktop;
+#                          skips this script's own cargo build and is copied
+#                          over the bundled executable afterwards, so the
+#                          shipped binary is EXACTLY the one CI built
+#                          (cargo-bundle still runs `cargo build` internally,
+#                          but with a warm target dir that is a no-op)
+#   OPENPENCIL_CLI_BINARY  path to a prebuilt `op` CLI binary; embedded at
+#                          Contents/MacOS/op so the .app/DMG ships the CLI
+#   MACOS_SIGN_IDENTITY    codesign identity. Defaults to "-" (ad-hoc).
+#                          No signing secrets exist in CI today; when a
+#                          Developer ID cert lands, export this env (plus
+#                          keychain import + notarization in the workflow).
 
 set -euo pipefail
 
 WS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_VERSION="${OPENPENCIL_VERSION:-0.8.0}"
+TARGET_TRIPLE="${OPENPENCIL_TARGET:-}"
 
 # Locate cargo-bundle. Tries PATH first, then a workspace-local
 # fallback under `target/cargo-bundle-host/bin`. When neither
@@ -56,14 +75,24 @@ else
   CARGO_BUNDLE="$CARGO_BUNDLE_HOME/bin/cargo-bundle"
 fi
 
-echo "==> building release binary"
-( cd "$WS_ROOT" && cargo build --release --bin openpencil-desktop )
+if [ -n "${OPENPENCIL_BINARY:-}" ]; then
+  echo "==> skipping cargo build (prebuilt binary: $OPENPENCIL_BINARY)"
+else
+  echo "==> building release binary"
+  ( cd "$WS_ROOT" && cargo build --release --bin openpencil-desktop \
+      ${TARGET_TRIPLE:+--target "$TARGET_TRIPLE"} )
+fi
 
 echo "==> running cargo-bundle"
 ( cd "$WS_ROOT/crates/op-host-desktop" \
-    && "$CARGO_BUNDLE" bundle --bin openpencil-desktop --release --format osx )
+    && "$CARGO_BUNDLE" bundle --bin openpencil-desktop --release --format osx \
+         ${TARGET_TRIPLE:+--target "$TARGET_TRIPLE"} )
 
-OUT_DIR="$WS_ROOT/target/release/bundle/osx"
+if [ -n "$TARGET_TRIPLE" ]; then
+  OUT_DIR="$WS_ROOT/target/$TARGET_TRIPLE/release/bundle/osx"
+else
+  OUT_DIR="$WS_ROOT/target/release/bundle/osx"
+fi
 RAW_APP="$OUT_DIR/op-host-desktop.app"
 APP="$OUT_DIR/OpenPencil.app"
 
@@ -138,6 +167,30 @@ echo "==> patching Info.plist (name, identifier, icon, doc-types, UTI)"
 echo "==> copying icon into Resources/"
 mkdir -p "$APP/Contents/Resources"
 cp "$WS_ROOT/crates/op-host-desktop/assets/icon.icns" "$APP/Contents/Resources/icon.icns"
+
+if [ -n "${OPENPENCIL_BINARY:-}" ]; then
+  echo "==> installing prebuilt binary into Contents/MacOS/"
+  cp "$OPENPENCIL_BINARY" "$APP/Contents/MacOS/openpencil-desktop"
+  chmod 755 "$APP/Contents/MacOS/openpencil-desktop"
+fi
+
+if [ -n "${OPENPENCIL_CLI_BINARY:-}" ]; then
+  echo "==> embedding op CLI into Contents/MacOS/"
+  cp "$OPENPENCIL_CLI_BINARY" "$APP/Contents/MacOS/op"
+  chmod 755 "$APP/Contents/MacOS/op"
+fi
+
+# Sign the bundle. Ad-hoc ("-") by default — enough for local launch and
+# for arm64 Macs which refuse fully unsigned code; Gatekeeper still warns
+# on downloaded DMGs until real Developer ID signing + notarization land
+# (set MACOS_SIGN_IDENTITY when the cert exists). Nested Mach-Os are
+# signed first so we don't need the deprecated `--deep`.
+SIGN_IDENTITY="${MACOS_SIGN_IDENTITY:--}"
+echo "==> codesigning (identity: $SIGN_IDENTITY)"
+if [ -f "$APP/Contents/MacOS/op" ]; then
+  codesign --force --sign "$SIGN_IDENTITY" "$APP/Contents/MacOS/op"
+fi
+codesign --force --sign "$SIGN_IDENTITY" "$APP"
 
 echo "==> registering with LaunchServices"
 LSREG=/System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/LaunchServices.framework/Versions/A/Support/lsregister
