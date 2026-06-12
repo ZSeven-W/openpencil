@@ -145,7 +145,7 @@ impl WidgetHostNative {
             let mut s = [0u8; 4];
             if self
                 .editor_state
-                .text_edit_append(c.encode_utf8(&mut s), self.now_ms)
+                .text_edit_insert(c.encode_utf8(&mut s), self.now_ms)
             {
                 self.editor_state.ui.text_edit_caret_anchor_ms = self.now_ms;
                 self.mark_dirty();
@@ -153,20 +153,59 @@ impl WidgetHostNative {
             }
             return false;
         }
+        if (self
+            .editor_state
+            .editor_ui
+            .variables_theme_rename_axis
+            .is_some()
+            || self
+                .editor_state
+                .editor_ui
+                .variables_variant_rename_value
+                .is_some()
+            // #20: the preset dropdown's save-as-name input shares
+            // the rename draft machinery.
+            || self.editor_state.editor_ui.preset_name_input_active())
+            && !c.is_control()
+        {
+            let replace_selection = self.editor_state.ui.property_draft_select_all;
+            let pos = if replace_selection {
+                0
+            } else {
+                text_boundary_at_or_before(
+                    &self.editor_state.ui.property_input_draft,
+                    self.editor_state.ui.property_caret_pos,
+                )
+            };
+            if replace_selection {
+                self.editor_state.ui.property_input_draft.clear();
+                self.editor_state.ui.property_caret_pos = 0;
+            }
+            self.editor_state.ui.property_draft_select_all = false;
+            self.editor_state.ui.property_input_draft.insert(pos, c);
+            self.editor_state.ui.property_caret_pos = pos + c.len_utf8();
+            self.editor_state.ui.property_caret_anchor_ms = self.now_ms;
+            self.mark_dirty();
+            return true;
+        }
         if let Some(focus) = self.editor_state.editor_ui.variable_row_focus {
             let replacing_all = self.editor_state.ui.property_draft_select_all;
-            let draft_for_allowed = if replacing_all {
-                ""
+            let draft = &self.editor_state.ui.property_input_draft;
+            let pos = if replacing_all {
+                0
             } else {
-                self.editor_state.ui.property_input_draft.as_str()
+                text_boundary_at_or_before(draft, self.editor_state.ui.property_caret_pos)
             };
             let allowed = match focus {
-                VariableRowFocus::Number(_) => {
+                VariableRowFocus::Name(_) => !c.is_control(),
+                VariableRowFocus::Number(_) | VariableRowFocus::NumberCell { .. } => {
                     c.is_ascii_digit()
-                        || (c == '-' && draft_for_allowed.is_empty())
-                        || (c == '.' && !draft_for_allowed.contains('.'))
+                        || (c == '-' && (replacing_all || (pos == 0 && !draft.starts_with('-'))))
+                        || (c == '.' && (replacing_all || !draft.contains('.')))
                 }
-                VariableRowFocus::String(_) => !c.is_control(),
+                VariableRowFocus::String(_) | VariableRowFocus::StringCell { .. } => {
+                    !c.is_control()
+                }
             };
             if !allowed {
                 return false;
@@ -176,7 +215,8 @@ impl WidgetHostNative {
                 self.editor_state.ui.property_caret_pos = 0;
                 self.editor_state.ui.property_draft_select_all = false;
             }
-            self.editor_state.ui.property_input_draft.push(c);
+            self.editor_state.ui.property_input_draft.insert(pos, c);
+            self.editor_state.ui.property_caret_pos = pos + c.len_utf8();
             self.editor_state.ui.property_caret_anchor_ms = self.now_ms;
             self.mark_dirty();
             return true;
@@ -247,6 +287,14 @@ impl WidgetHostNative {
             self.editor_state.ui.property_caret_pos = pos + 1;
             self.editor_state.ui.property_caret_anchor_ms = self.now_ms;
             self.mark_dirty();
+            return true;
+        }
+        // Font-family picker search box (font_picker_dispatch.rs).
+        if self.apply_font_picker_text(c) {
+            return true;
+        }
+        // Image-node Search / Generate popover inputs.
+        if self.apply_image_panel_text(c) {
             return true;
         }
         if self.editor_state.editor_ui.icon_picker_open && !c.is_control() {
@@ -456,6 +504,41 @@ impl WidgetHostNative {
             }
             return ok;
         }
+        if self
+            .editor_state
+            .editor_ui
+            .variables_theme_rename_axis
+            .is_some()
+            || self
+                .editor_state
+                .editor_ui
+                .variables_variant_rename_value
+                .is_some()
+            // #20: preset-name input shares the rename draft.
+            || self.editor_state.editor_ui.preset_name_input_active()
+        {
+            if self.editor_state.ui.property_draft_select_all {
+                self.editor_state.ui.property_input_draft.clear();
+                self.editor_state.ui.property_caret_pos = 0;
+                self.editor_state.ui.property_draft_select_all = false;
+                self.editor_state.ui.property_caret_anchor_ms = self.now_ms;
+                self.mark_dirty();
+                return true;
+            }
+            let pos = text_boundary_at_or_before(
+                &self.editor_state.ui.property_input_draft,
+                self.editor_state.ui.property_caret_pos,
+            );
+            if pos > 0 {
+                let prev = previous_text_boundary(&self.editor_state.ui.property_input_draft, pos);
+                self.editor_state.ui.property_input_draft.drain(prev..pos);
+                self.editor_state.ui.property_caret_pos = prev;
+                self.editor_state.ui.property_caret_anchor_ms = self.now_ms;
+                self.mark_dirty();
+                return true;
+            }
+            return false;
+        }
         if self.editor_state.editor_ui.variable_row_focus.is_some() {
             if self.editor_state.ui.property_draft_select_all {
                 self.editor_state.ui.property_input_draft.clear();
@@ -465,7 +548,15 @@ impl WidgetHostNative {
                 self.mark_dirty();
                 return true;
             }
-            if self.editor_state.ui.property_input_draft.pop().is_some() {
+            self.editor_state.ui.property_draft_select_all = false;
+            let pos = text_boundary_at_or_before(
+                &self.editor_state.ui.property_input_draft,
+                self.editor_state.ui.property_caret_pos,
+            );
+            if pos > 0 {
+                let prev = previous_text_boundary(&self.editor_state.ui.property_input_draft, pos);
+                self.editor_state.ui.property_input_draft.drain(prev..pos);
+                self.editor_state.ui.property_caret_pos = prev;
                 self.editor_state.ui.property_caret_anchor_ms = self.now_ms;
                 self.mark_dirty();
                 return true;
@@ -494,6 +585,14 @@ impl WidgetHostNative {
                 return true;
             }
             return false;
+        }
+        // Font-family picker search box (font_picker_dispatch.rs).
+        if self.apply_font_picker_backspace() {
+            return true;
+        }
+        // Image-node Search / Generate popover inputs.
+        if self.apply_image_panel_backspace() {
+            return true;
         }
         if self.editor_state.editor_ui.icon_picker_open {
             if self.editor_state.editor_ui.icon_picker_select_all {
@@ -544,6 +643,10 @@ impl WidgetHostNative {
             }
             return false;
         }
+        // Pen authoring: Backspace pops the last anchor (`pen_press.rs`).
+        if self.apply_pen_backspace() {
+            return true;
+        }
         if self.editor_state.selection.is_empty() {
             return false;
         }
@@ -559,6 +662,41 @@ impl WidgetHostNative {
     /// Delete — pops a char from rename / text-edit when active;
     /// otherwise deletes the selected node.
     pub fn apply_delete(&mut self) -> bool {
+        if self
+            .editor_state
+            .editor_ui
+            .variables_theme_rename_axis
+            .is_some()
+            || self
+                .editor_state
+                .editor_ui
+                .variables_variant_rename_value
+                .is_some()
+            // #20: preset-name input shares the rename draft.
+            || self.editor_state.editor_ui.preset_name_input_active()
+        {
+            if self.editor_state.ui.property_draft_select_all {
+                self.editor_state.ui.property_input_draft.clear();
+                self.editor_state.ui.property_caret_pos = 0;
+                self.editor_state.ui.property_draft_select_all = false;
+                self.editor_state.ui.property_caret_anchor_ms = self.now_ms;
+                self.mark_dirty();
+                return true;
+            }
+            let pos = text_boundary_at_or_before(
+                &self.editor_state.ui.property_input_draft,
+                self.editor_state.ui.property_caret_pos,
+            );
+            if pos < self.editor_state.ui.property_input_draft.len() {
+                let next = next_text_boundary(&self.editor_state.ui.property_input_draft, pos);
+                self.editor_state.ui.property_input_draft.drain(pos..next);
+                self.editor_state.ui.property_caret_pos = pos;
+                self.editor_state.ui.property_caret_anchor_ms = self.now_ms;
+                self.mark_dirty();
+                return true;
+            }
+            return false;
+        }
         if self.editor_state.editor_ui.variable_row_focus.is_some() {
             if self.editor_state.ui.property_draft_select_all {
                 self.editor_state.ui.property_input_draft.clear();
@@ -568,7 +706,15 @@ impl WidgetHostNative {
                 self.mark_dirty();
                 return true;
             }
-            if self.editor_state.ui.property_input_draft.pop().is_some() {
+            self.editor_state.ui.property_draft_select_all = false;
+            let pos = text_boundary_at_or_before(
+                &self.editor_state.ui.property_input_draft,
+                self.editor_state.ui.property_caret_pos,
+            );
+            if pos < self.editor_state.ui.property_input_draft.len() {
+                let next = next_text_boundary(&self.editor_state.ui.property_input_draft, pos);
+                self.editor_state.ui.property_input_draft.drain(pos..next);
+                self.editor_state.ui.property_caret_pos = pos;
                 self.editor_state.ui.property_caret_anchor_ms = self.now_ms;
                 self.mark_dirty();
                 return true;
@@ -584,7 +730,9 @@ impl WidgetHostNative {
             return ok;
         }
         if self.editor_state.ui.text_editing.is_some() {
-            let ok = self.editor_state.text_edit_backspace(self.now_ms);
+            // Delete is FORWARD deletion at the caret (or removes the
+            // active selection) — textarea parity.
+            let ok = self.editor_state.text_edit_delete_forward(self.now_ms);
             if ok {
                 self.editor_state.ui.text_edit_caret_anchor_ms = self.now_ms;
                 self.mark_dirty();
@@ -708,7 +856,13 @@ impl WidgetHostNative {
             .parse()
             .unwrap_or(0.0);
         let next = current + delta;
+        // Instance-write redirect (GAP #10) — see property_dispatch
+        // for the choke-point note.
+        let instance_scope = self.editor_state.begin_instance_write_for_anchor();
         let _ = self.editor_state.commit_property_edit(focus, next);
+        if let Some(scope) = instance_scope {
+            self.editor_state.finish_instance_write(scope);
+        }
         // Reflect the committed value back into the draft so the
         // field shows it and a further step builds on the new value.
         self.editor_state.ui.property_input_draft = if next.fract() == 0.0 {
@@ -744,16 +898,29 @@ impl WidgetHostNative {
     pub fn apply_property_caret(&mut self, forward: bool) -> bool {
         if self.editor_state.ui.property_focus.is_none()
             && self.editor_state.editor_ui.effect_param_focus.is_none()
+            && self
+                .editor_state
+                .editor_ui
+                .variables_theme_rename_axis
+                .is_none()
+            && self
+                .editor_state
+                .editor_ui
+                .variables_variant_rename_value
+                .is_none()
+            && self.editor_state.editor_ui.variable_row_focus.is_none()
+            // #20: preset-name input shares the rename draft.
+            && !self.editor_state.editor_ui.preset_name_input_active()
         {
             return false;
         }
-        let len = self.editor_state.ui.property_input_draft.len();
-        let pos = self.editor_state.ui.property_caret_pos.min(len);
+        let draft = &self.editor_state.ui.property_input_draft;
+        let pos = text_boundary_at_or_before(draft, self.editor_state.ui.property_caret_pos);
         self.editor_state.ui.property_draft_select_all = false;
         let next = if forward {
-            (pos + 1).min(len)
+            next_text_boundary(draft, pos)
         } else {
-            pos.saturating_sub(1)
+            previous_text_boundary(draft, pos)
         };
         if next != self.editor_state.ui.property_caret_pos {
             self.editor_state.ui.property_caret_pos = next;
@@ -785,6 +952,16 @@ impl WidgetHostNative {
     pub fn apply_send(&mut self) -> bool {
         if self.editor_state.editor_ui.agent_settings.focus.is_some() {
             self.commit_settings_focus_if_any();
+            return true;
+        }
+        // Image-search popover: Enter submits the query; the
+        // generate popover swallows Enter (TS textarea).
+        if self.apply_image_panel_send() {
+            return true;
+        }
+        // Font-family picker: swallow Enter so it can't leak into
+        // chat send / property commit while the overlay is open.
+        if self.editor_state.editor_ui.font_family_picker_open {
             return true;
         }
         // Enter is owned by the clone wizard whenever it is open: a
@@ -880,18 +1057,36 @@ impl WidgetHostNative {
             return ok;
         }
         if self.editor_state.ui.text_editing.is_some() {
-            let ok = self.editor_state.text_edit_commit();
-            if ok {
+            // Enter INSERTS a newline (TS textarea parity) — only
+            // Escape / outside click commit the session. Swallow the
+            // key either way so it never falls through to chat send.
+            if self.editor_state.text_edit_insert("\n", self.now_ms) {
+                self.editor_state.ui.text_edit_caret_anchor_ms = self.now_ms;
                 self.mark_dirty();
             }
+            return true;
+        }
+        if let Some(ok) = self.apply_pen_enter() {
             return ok;
         }
-        if self.editor_state.ui.pen_in_progress.is_some() {
-            let ok = self.editor_state.finish_pen_path();
-            if ok {
-                self.mark_dirty();
-            }
-            return ok;
+        // #20: Enter in the preset-name input saves the preset
+        // (variable-theme-manager.tsx:298).
+        if self.commit_variables_preset_name_if_any() {
+            return true;
+        }
+        if self
+            .editor_state
+            .editor_ui
+            .variables_theme_rename_axis
+            .is_some()
+            || self
+                .editor_state
+                .editor_ui
+                .variables_variant_rename_value
+                .is_some()
+        {
+            self.commit_variables_panel_header_focus_if_any();
+            return true;
         }
         if self.editor_state.editor_ui.variable_row_focus.is_some() {
             self.commit_variable_row_focus_if_any();
@@ -933,6 +1128,11 @@ impl WidgetHostNative {
             self.editor_state.editor_ui.settings_input_draft.clear();
             self.clear_settings_caret();
             self.mark_dirty();
+            return true;
+        }
+        // #20: Escape closes the preset-name input only — the
+        // preset dropdown stays open (variable-theme-manager.tsx:299).
+        if self.escape_variables_preset_name() {
             return true;
         }
         // Escape steps out of the clone wizard: first defocus the active
@@ -1036,8 +1236,8 @@ impl WidgetHostNative {
             self.mark_dirty();
             return true;
         }
-        if self.editor_state.finish_pen_path() {
-            self.mark_dirty();
+        // Anchor-menu close, then pen CANCEL (TS Escape discards).
+        if self.apply_pen_escape() {
             return true;
         }
         if self
@@ -1102,9 +1302,37 @@ impl WidgetHostNative {
             return true;
         }
         if self.editor_state.editor_ui.component_browser_open {
+            // One layer per press: an open kit-filter popover closes
+            // before the panel itself does.
+            if self
+                .editor_state
+                .editor_ui
+                .component_browser_kit_picker_open
+            {
+                self.editor_state
+                    .editor_ui
+                    .component_browser_kit_picker_open = false;
+                self.mark_dirty();
+                return true;
+            }
             self.editor_state.editor_ui.component_browser_open = false;
             self.editor_state.editor_ui.component_browser_select_all = false;
             self.editor_state.editor_ui.component_browser_hover = None;
+            self.editor_state
+                .editor_ui
+                .component_browser_confirm_delete_kit = None;
+            self.mark_dirty();
+            return true;
+        }
+        if self.editor_state.editor_ui.image_panel.search_open
+            || self.editor_state.editor_ui.image_panel.generate_open
+        {
+            self.editor_state.editor_ui.image_panel.close_popovers();
+            self.mark_dirty();
+            return true;
+        }
+        if self.editor_state.editor_ui.font_family_picker_open {
+            self.close_font_picker();
             self.mark_dirty();
             return true;
         }
@@ -1129,6 +1357,44 @@ impl WidgetHostNative {
             self.mark_dirty();
             return true;
         }
+        // TS Escape order (use-tool-shortcuts.ts:38-49): clearing the
+        // selection comes first; the NEXT Escape steps out of the
+        // entered frame/group.
+        if self
+            .editor_state
+            .editor_ui
+            .entered_container
+            .take()
+            .is_some()
+        {
+            self.mark_dirty();
+            return true;
+        }
         false
     }
+}
+
+fn text_boundary_at_or_before(value: &str, pos: usize) -> usize {
+    let mut clipped = pos.min(value.len());
+    while clipped > 0 && !value.is_char_boundary(clipped) {
+        clipped -= 1;
+    }
+    clipped
+}
+
+fn previous_text_boundary(value: &str, pos: usize) -> usize {
+    let pos = text_boundary_at_or_before(value, pos);
+    value[..pos]
+        .char_indices()
+        .last()
+        .map(|(idx, _)| idx)
+        .unwrap_or(0)
+}
+
+fn next_text_boundary(value: &str, pos: usize) -> usize {
+    let pos = text_boundary_at_or_before(value, pos);
+    if pos >= value.len() {
+        return value.len();
+    }
+    pos + value[pos..].chars().next().map(char::len_utf8).unwrap_or(0)
 }

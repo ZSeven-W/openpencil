@@ -550,7 +550,7 @@ fn toolbar_panel_actions_open_variables_and_design_panels() {
     assert!(!host.editor_state().right_rail_visible());
     assert!(host.apply_press(variables_x, variables_y, viewport_w, viewport_h));
     assert!(host.editor_state().editor_ui.variables_panel_open);
-    assert!(!host.editor_state().right_rail_visible());
+    assert!(host.editor_state().right_rail_visible());
     assert_eq!(
         host.editor_state().editor_ui.property_tab,
         op_editor_core::PropertyTab::Design
@@ -570,7 +570,7 @@ fn toolbar_panel_actions_open_variables_and_design_panels() {
 }
 
 #[test]
-fn explicit_variables_modal_keeps_property_rail_and_handles_rows() {
+fn explicit_variables_toolbar_opens_floating_variables_panel() {
     let mut host = WidgetHostNative::new();
     seed(
         &mut host,
@@ -584,16 +584,22 @@ fn explicit_variables_modal_keeps_property_rail_and_handles_rows() {
         jian_ops_schema::variable::VariableScalar::Num(16.0),
     );
     host.editor_state_mut().editor_ui.variables_panel_open = true;
+
     let viewport_w = 1200.0;
     let viewport_h = 800.0;
-    let modal = op_editor_ui::widgets::VariablesModal::for_editor(host.editor_state());
-    let modal_rect = modal.rect(viewport_w, viewport_h);
-    let row_x = modal_rect.origin.x + 100.0;
-    let row_y = modal_rect.origin.y + 78.0 + 64.0 + 22.0;
+    let vars_rect = host.variables_panel_rect(viewport_w, viewport_h).unwrap();
 
-    assert!(host.editor_state().property_panel_visible());
-    assert!(host.editor_state().right_rail_visible());
-    assert!(host.dispatch_variables_modal_press(row_x, row_y, viewport_w, viewport_h));
+    assert!(
+        host.editor_state().right_rail_visible(),
+        "selected frame should still own the right rail"
+    );
+    assert!(host.apply_press(
+        vars_rect.origin.x + 16.0,
+        vars_rect.origin.y + 44.0 + 36.0 + 18.0,
+        viewport_w,
+        viewport_h
+    ));
+    assert!(host.editor_state().editor_ui.variables_panel_open);
     assert!(host.editor_state().editor_ui.variable_row_focus.is_some());
 }
 
@@ -1416,6 +1422,37 @@ fn component_browser_open_owns_keyboard_search() {
     assert_eq!(host.editor_state().editor_ui.component_browser_search, "b");
     assert!(host.apply_escape());
     assert!(!host.editor_state().editor_ui.component_browser_open);
+}
+
+#[test]
+fn component_browser_header_buttons_queue_kit_io_requests() {
+    // Press → dispatch → `component_browser_kit_request` seam: the
+    // desktop runner drains the queued request into the rfd dialogs
+    // (`op-host-desktop/src/kit_io.rs`).
+    let mut host = WidgetHostNative::new();
+    host.editor_state_mut().editor_ui.component_browser_open = true;
+    let (vw, vh) = (1440.0, 900.0);
+    let rect = host
+        .component_browser_panel_rect(vw, vh)
+        .expect("open panel rect");
+    let right = rect.origin.x + rect.size.x;
+    let y = rect.origin.y + 20.0; // header-button row centre (HEADER_H / 2)
+                                  // Header buttons right-aligned: ✕ centre at right-26, Upload
+                                  // (import) at right-54, Download (export) at right-82 — from
+                                  // PAD 14 + 24-px buttons + 4-px gaps.
+    assert!(host.apply_press(right - 54.0, y, vw, vh));
+    assert_eq!(
+        host.editor_state().editor_ui.component_browser_kit_request,
+        Some(op_editor_core::KitIoRequest::Import)
+    );
+    host.editor_state_mut()
+        .editor_ui
+        .component_browser_kit_request = None;
+    assert!(host.apply_press(right - 82.0, y, vw, vh));
+    assert_eq!(
+        host.editor_state().editor_ui.component_browser_kit_request,
+        Some(op_editor_core::KitIoRequest::Export)
+    );
 }
 
 #[test]

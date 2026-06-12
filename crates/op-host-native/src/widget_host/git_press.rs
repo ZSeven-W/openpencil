@@ -53,6 +53,9 @@ impl WidgetHostNative {
             .git_panel_outer_rect(viewport_width, viewport_height)
             .is_some_and(|r| rect_contains(r, Point2D::new(x, y)));
         let now = self.now_ms;
+        // Set by the blank-chrome arm below; the full input blur runs
+        // after the match so it doesn't fight the `panel` borrow.
+        let mut blur_all_inputs = false;
         let panel = &mut self.editor_state.editor_ui.git_panel;
         match hit {
             Some(GitPanelHit::CommitInput) => {
@@ -259,12 +262,9 @@ impl WidgetHostNative {
                 panel.branch_picker_open = false;
                 panel.branch_picker_mode = GitBranchPickerMode::List;
                 panel.branch_create_draft.clear();
-                panel.branch_create_focused = false;
                 panel.overflow_open = false;
                 panel.overflow_view = GitOverflowView::Menu;
-                panel.commit_focused = false;
-                panel.remote_focused = false;
-                panel.https_focused = false;
+                panel.defocus_text_inputs();
             }
             Some(GitPanelHit::AbortMerge) => {
                 panel.pending_action = Some(GitPanelAction::AbortMerge);
@@ -434,18 +434,15 @@ impl WidgetHostNative {
                 panel.merge_resolve = None;
             }
             Some(GitPanelHit::Inside) => {
-                // Panel chrome — swallow the click + defocus inputs.
-                panel.commit_focused = false;
-                panel.remote_focused = false;
-                panel.https_focused = false;
+                // Panel chrome — swallow the click; it's a blank press,
+                // so EVERY text input blurs (git's own + the rest of
+                // the chrome, handled after the match).
+                blur_all_inputs = true;
             }
             None => {
                 // Release the input focus first (clicking away commits
                 // intent to defocus regardless).
-                if panel.commit_focused || panel.remote_focused || panel.https_focused {
-                    panel.commit_focused = false;
-                    panel.remote_focused = false;
-                    panel.https_focused = false;
+                if panel.defocus_text_inputs() {
                     self.mark_dirty();
                 }
                 // A caret-bridge click belongs to the popover — swallow
@@ -454,6 +451,9 @@ impl WidgetHostNative {
                     return false;
                 }
             }
+        }
+        if blur_all_inputs {
+            self.blur_text_inputs_on_blank_press();
         }
         self.mark_dirty();
         true
@@ -467,9 +467,7 @@ impl WidgetHostNative {
     pub(in crate::widget_host) fn close_git_panel(&mut self) {
         let panel = &mut self.editor_state.editor_ui.git_panel;
         panel.open = false;
-        panel.commit_focused = false;
-        panel.remote_focused = false;
-        panel.https_focused = false;
+        panel.defocus_text_inputs();
         panel.branch_picker_open = false;
         panel.overflow_open = false;
         panel.overflow_view = op_editor_core::GitOverflowView::Menu;

@@ -63,9 +63,24 @@ impl WidgetHostNative {
                         .editor_state
                         .viewport
                         .to_document(Point2D::new(cw / 2.0, ch / 2.0));
-                    let inserted = self.editor_state.insert_icon_font_node_at(
+                    // Bake the fetched SVG `d` like the REPLACE path
+                    // above so a remote icon inserts its real glyph
+                    // (Path node + iconId, TS toolbar.tsx:107-122),
+                    // not the fallback dot. Local lucide catalog
+                    // glyphs stay `icon_font` inserts — their
+                    // stroke-art `d` must not be filled as a Path.
+                    let svg_path = self
+                        .editor_state
+                        .editor_ui
+                        .icon_picker_remote
+                        .icons
+                        .iter()
+                        .find(|i| i.collection == collection && i.name == name)
+                        .map(|i| i.d.clone());
+                    let inserted = self.editor_state.insert_icon_node_at(
                         &name,
                         &collection,
+                        svg_path.as_deref(),
                         doc.x as f64,
                         doc.y as f64,
                     );
@@ -98,7 +113,12 @@ impl WidgetHostNative {
                     });
                 }
             }
-            IconPickerHit::Inside => {}
+            IconPickerHit::Inside => {
+                // Panel chrome that hit no control — blank press; blur
+                // the chrome text inputs (the picker's own search box
+                // has no focus flag and stays live while open).
+                self.blur_text_inputs_on_blank_press();
+            }
         }
         self.mark_dirty();
         true

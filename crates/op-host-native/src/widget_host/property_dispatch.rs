@@ -8,6 +8,7 @@
 use super::helpers::parse_hex_color;
 use super::WidgetHostNative;
 use jian_ops_schema::sizing::SizingKeyword;
+use jian_ops_schema::variable::VariableKind;
 use op_editor_core::PropertyFocus;
 
 impl WidgetHostNative {
@@ -16,7 +17,51 @@ impl WidgetHostNative {
         action: op_editor_ui::widgets::PropertyPanelAction,
     ) {
         use op_editor_ui::widgets::PropertyPanelAction as A;
+        // Instance / component lifecycle actions act on the REAL Ref
+        // node, so they dispatch BEFORE the instance-write redirect
+        // scope below swaps in the merged display node.
         match action {
+            A::GoToComponent => {
+                if let Some(jian_ops_schema::node::PenNode::Ref(r)) =
+                    self.editor_state.selected_node()
+                {
+                    let master = op_editor_core::NodeId::new(r.target.clone());
+                    // Cross-page master: selection resolves against the
+                    // ACTIVE page only, so switch pages first.
+                    if let Some(pages) = self.editor_state.doc.pages.as_ref() {
+                        let target_page = pages.iter().position(|page| {
+                            op_editor_core::walkers::find_node(&page.children, &master).is_some()
+                        });
+                        if let Some(idx) = target_page {
+                            if idx != self.editor_state.ui.active_page_index {
+                                let _ = self.editor_state.set_active_page(idx);
+                            }
+                        }
+                    }
+                    self.editor_state.set_single_selection(master);
+                }
+                self.mark_dirty();
+                return;
+            }
+            A::DetachInstance | A::DetachComponent => {
+                let id = self.editor_state.selection.anchor.clone();
+                if id.is_real() {
+                    let _ = self.editor_state.detach_component(&id);
+                }
+                self.mark_dirty();
+                return;
+            }
+            _ => {}
+        }
+        // CHOKE POINT (GAP #10): when the anchor is a Ref, swap in
+        // the merged display node so every anchor-keyed mutator below
+        // writes into it; `finish_instance_write` then routes the
+        // diff onto the RefNode (direct props) / descendants[target]
+        // (overrides). See op-editor-core/src/instance_override.rs.
+        let instance_scope = self.editor_state.begin_instance_write_for_anchor();
+        match action {
+            // Dispatched in the pre-scope match above; unreachable here.
+            A::GoToComponent | A::DetachInstance | A::DetachComponent => {}
             A::SetPropertyTab(tab) => {
                 self.editor_state.editor_ui.property_tab = tab;
             }
@@ -60,11 +105,15 @@ impl WidgetHostNative {
                 ui.image_fill_popover_open = false;
                 ui.font_family_picker_open = false;
                 ui.font_weight_picker_open = false;
+                ui.property_color_variable_picker_open = None;
             }
             A::SetFillType(t) => {
                 self.editor_state.set_selected_fill_type(t);
                 self.editor_state.editor_ui.fill_type_picker_open = false;
                 self.editor_state.editor_ui.image_fill_popover_open = false;
+                self.editor_state
+                    .editor_ui
+                    .property_color_variable_picker_open = None;
             }
             A::AddFill => {
                 let _ = self
@@ -75,6 +124,9 @@ impl WidgetHostNative {
                 let _ = self.editor_state.clear_selected_fills();
                 self.editor_state.editor_ui.fill_type_picker_open = false;
                 self.editor_state.editor_ui.image_fill_popover_open = false;
+                self.editor_state
+                    .editor_ui
+                    .property_color_variable_picker_open = None;
             }
             A::AddGradientStop => {
                 let _ = self.editor_state.add_selected_gradient_stop();
@@ -90,6 +142,7 @@ impl WidgetHostNative {
                 ui.font_weight_picker_open = false;
                 ui.export_scale_picker_open = false;
                 ui.export_format_picker_open = false;
+                ui.property_color_variable_picker_open = None;
             }
             A::CloseImageFillPopover => {
                 self.editor_state.editor_ui.image_fill_popover_open = false;
@@ -118,6 +171,7 @@ impl WidgetHostNative {
                 ui.font_weight_picker_open = false;
                 ui.export_scale_picker_open = false;
                 ui.export_format_picker_open = false;
+                ui.property_color_variable_picker_open = None;
             }
             A::SetTextAlign(value) => {
                 self.set_selected_text_align(value);
@@ -129,17 +183,58 @@ impl WidgetHostNative {
                 self.set_selected_text_growth(value);
             }
             A::ToggleFontFamilyPicker => {
+                let opening = !self.editor_state.editor_ui.font_family_picker_open;
+                if opening {
+                    // Enumerate installed families on first open (TS
+                    // requests Local Font Access inside the click
+                    // gesture for the same reason).
+                    self.ensure_system_fonts_loaded();
+                }
                 let ui = &mut self.editor_state.editor_ui;
-                ui.font_family_picker_open = !ui.font_family_picker_open;
+                ui.font_family_picker_open = opening;
+                ui.font_picker_search.clear();
+                ui.font_picker_scroll = 0.0;
+                ui.font_picker_hover = None;
                 ui.font_weight_picker_open = false;
                 ui.fill_type_picker_open = false;
                 ui.image_fill_popover_open = false;
                 ui.export_scale_picker_open = false;
                 ui.export_format_picker_open = false;
+                ui.property_color_variable_picker_open = None;
             }
-            A::SetFontFamily(choice) => {
-                self.set_selected_text_font_family(choice.family());
-                self.editor_state.editor_ui.font_family_picker_open = false;
+            A::SetFontFamilyIndex(index) => {
+                if let Some(family) = self.font_picker_family_at(index) {
+                    self.set_selected_text_font_family(&family);
+                }
+                self.close_font_picker();
+            }
+            A::ToggleImageSearchPopover => {
+                self.toggle_image_search_popover();
+            }
+            A::ToggleImageGeneratePopover => {
+                self.toggle_image_generate_popover();
+            }
+            A::RunImageSearch => {
+                self.run_image_search();
+            }
+            A::SelectImageSearchResult(index) => {
+                self.select_image_search_result(index);
+            }
+            A::RunImageGenerate => {
+                self.run_image_generate();
+            }
+            A::ApplyGeneratedImage => {
+                self.apply_generated_image();
+            }
+            A::RetryImageGenerate => {
+                self.retry_image_generate();
+            }
+            A::OpenImageGenSettings => {
+                self.open_image_gen_settings();
+            }
+            A::RelinkImage => {
+                self.editor_state.editor_ui.pending_file_action =
+                    Some(op_editor_core::editor_ui_state::FileAction::RelinkImage);
             }
             A::ToggleFontWeightPicker => {
                 let ui = &mut self.editor_state.editor_ui;
@@ -150,6 +245,7 @@ impl WidgetHostNative {
                 ui.image_fill_popover_open = false;
                 ui.export_scale_picker_open = false;
                 ui.export_format_picker_open = false;
+                ui.property_color_variable_picker_open = None;
             }
             A::SetFontWeight(choice) => {
                 self.set_selected_font_weight(choice.value());
@@ -166,6 +262,7 @@ impl WidgetHostNative {
                 ui.image_fill_popover_open = false;
                 ui.export_scale_picker_open = false;
                 ui.export_format_picker_open = false;
+                ui.property_color_variable_picker_open = None;
             }
             A::SetPaddingMode(mode) => {
                 // Scope the pin to the node it was set for so it can't
@@ -180,9 +277,48 @@ impl WidgetHostNative {
             }
             A::OpenColorPicker(target) => {
                 // Fallback anchor when called outside the press path.
+                self.editor_state
+                    .editor_ui
+                    .property_color_variable_picker_open = None;
                 let _ = self
                     .editor_state
                     .open_color_picker(color_target(target), 0.0);
+            }
+            A::ToggleColorVariablePicker(target) => {
+                let target = color_target(target);
+                let ui = &mut self.editor_state.editor_ui;
+                ui.property_color_variable_picker_open =
+                    if ui.property_color_variable_picker_open == Some(target) {
+                        None
+                    } else {
+                        Some(target)
+                    };
+                ui.fill_type_picker_open = false;
+                ui.image_fill_popover_open = false;
+                ui.font_family_picker_open = false;
+                ui.font_weight_picker_open = false;
+                ui.export_scale_picker_open = false;
+                ui.export_format_picker_open = false;
+            }
+            A::BindColorVariable { target, index } => {
+                if let Some(name) = color_variable_name_at(&self.editor_state, index) {
+                    self.editor_state.commit_history();
+                    let _ = self
+                        .editor_state
+                        .bind_selected_color_variable(color_target(target), &name);
+                }
+                self.editor_state
+                    .editor_ui
+                    .property_color_variable_picker_open = None;
+            }
+            A::UnbindColorVariable(target) => {
+                self.editor_state.commit_history();
+                let _ = self
+                    .editor_state
+                    .unbind_selected_color_variable(color_target(target));
+                self.editor_state
+                    .editor_ui
+                    .property_color_variable_picker_open = None;
             }
             A::ToggleExportScalePicker => {
                 let ui = &mut self.editor_state.editor_ui;
@@ -191,6 +327,7 @@ impl WidgetHostNative {
                 ui.font_family_picker_open = false;
                 ui.font_weight_picker_open = false;
                 ui.export_picker_hover = None;
+                ui.property_color_variable_picker_open = None;
             }
             A::ToggleExportFormatPicker => {
                 let ui = &mut self.editor_state.editor_ui;
@@ -199,6 +336,7 @@ impl WidgetHostNative {
                 ui.font_family_picker_open = false;
                 ui.font_weight_picker_open = false;
                 ui.export_picker_hover = None;
+                ui.property_color_variable_picker_open = None;
             }
             A::SetExportScale(scale) => {
                 let ui = &mut self.editor_state.editor_ui;
@@ -282,11 +420,13 @@ impl WidgetHostNative {
                 self.editor_state.editor_ui.pending_file_action =
                     Some(op_editor_core::editor_ui_state::FileAction::PickFillImage);
             }
-            // Code panel actions. SelectFramework / Cancel / Copy fully
-            // work; Generate / Regenerate raise pending flags + flip the
-            // phase (the host codegen session that drains them is P3);
-            // Download / ExportBundle raise pending flags drained by the
-            // desktop codegen-export pass (rfd save dialog + fs/zip write).
+            // Code panel actions. SelectFramework / Copy fully work;
+            // Generate / Regenerate raise pending flags + flip the
+            // phase (drained by the desktop codegen session); Cancel
+            // flips the phase AND raises a pending-cancel intent that
+            // aborts the in-flight worker; Download / ExportBundle raise
+            // pending flags drained by the desktop codegen-export pass
+            // (rfd save dialog + fs/zip write).
             A::Codegen(codegen_action) => {
                 use op_editor_core::codegen::CodegenPhase;
                 use op_editor_ui::widgets::property_panel_action::CodegenAction;
@@ -312,6 +452,11 @@ impl WidgetHostNative {
                     CodegenAction::Cancel => {
                         cg.pending_generate = false;
                         cg.pending_regenerate = false;
+                        // Raise the cancel intent for the desktop runner —
+                        // it aborts the in-flight worker (shared AtomicBool)
+                        // so the run actually stops instead of streaming on
+                        // and resurrecting the panel (TS: abort()).
+                        cg.pending_cancel = true;
                         cg.phase = if cg.code.is_empty() {
                             CodegenPhase::Idle
                         } else {
@@ -347,6 +492,9 @@ impl WidgetHostNative {
                     }
                 }
             }
+        }
+        if let Some(scope) = instance_scope {
+            self.editor_state.finish_instance_write(scope);
         }
         self.mark_dirty();
     }
@@ -384,6 +532,9 @@ impl WidgetHostNative {
                     Some(FileAction::ExportImageConfirm);
             }
             None => {
+                // No control hit — blank press (inside chrome or
+                // outside the dialog): blur the chrome text inputs.
+                self.blur_text_inputs_on_blank_press();
                 if !dlg.contains(point) {
                     // Outside click — dismiss like Cancel.
                     self.editor_state.editor_ui.export_dialog_open = false;
@@ -407,7 +558,13 @@ impl WidgetHostNative {
         let modal = FigmaImportModal::for_editor(&self.editor_state);
         let panel_rect = modal.rect(viewport_w, viewport_h);
         match modal.hit_test(panel_rect, op_editor_ui::Point2D::new(x, y)) {
-            FigmaImportHit::Close | FigmaImportHit::Outside => {
+            FigmaImportHit::Close => {
+                self.editor_state.editor_ui.figma_import_open = false;
+                self.editor_state.editor_ui.figma_import_hover = None;
+            }
+            FigmaImportHit::Outside => {
+                // Outside click — blank press: dismiss + blur inputs.
+                self.blur_text_inputs_on_blank_press();
                 self.editor_state.editor_ui.figma_import_open = false;
                 self.editor_state.editor_ui.figma_import_hover = None;
             }
@@ -416,7 +573,10 @@ impl WidgetHostNative {
                 self.editor_state.editor_ui.figma_import_open = false;
                 self.editor_state.editor_ui.figma_import_hover = None;
             }
-            FigmaImportHit::Inside => {}
+            FigmaImportHit::Inside => {
+                // Blank press on modal chrome — blur chrome inputs.
+                self.blur_text_inputs_on_blank_press();
+            }
         }
         self.mark_dirty();
     }
@@ -454,54 +614,12 @@ impl WidgetHostNative {
                 FileMenuChoice::OpenRecent(i) => FileAction::OpenRecent(i),
                 FileMenuChoice::ClearRecent => FileAction::ClearRecent,
             });
+        } else {
+            // Miss — the dismissing click is a blank press.
+            self.blur_text_inputs_on_blank_press();
         }
         self.editor_state.editor_ui.file_menu_open = false;
         self.editor_state.editor_ui.file_menu_hover = None;
-        self.mark_dirty();
-    }
-
-    /// Commit any pending VariablesPanel row edit (Number / String).
-    pub(in crate::widget_host) fn commit_variable_row_focus_if_any(&mut self) {
-        use op_editor_core::editor_ui_state::VariableRowFocus;
-        let Some(focus) = self.editor_state.editor_ui.variable_row_focus.take() else {
-            return;
-        };
-        self.editor_state.ui.property_draft_select_all = false;
-        let draft = std::mem::take(&mut self.editor_state.ui.property_input_draft);
-        // Resolve the row index → variable name off the editor-state
-        // var-table (the same Vec the VariablesPanel widget walks).
-        let var_table = op_pen_loader::editor_state_var_table(&self.editor_state);
-        let snap = self.editor_state.snapshot_for_history();
-        // Every path below has already cleared focus + drained the
-        // draft, so each exit must finalize through `mark_dirty` or the
-        // derived render scene stays stale after an invalid edit. An
-        // inner closure makes the "did the value commit" branches
-        // return into one place that always marks dirty.
-        let committed = (|| -> bool {
-            match focus {
-                VariableRowFocus::Number(idx) => {
-                    let Some(name) = var_table.variables.get(idx).map(|v| v.name.clone()) else {
-                        return false;
-                    };
-                    let Ok(n) = draft.trim().parse::<f64>() else {
-                        return false;
-                    };
-                    if !n.is_finite() {
-                        return false;
-                    }
-                    self.editor_state.set_variable_number(&name, n)
-                }
-                VariableRowFocus::String(idx) => {
-                    let Some(name) = var_table.variables.get(idx).map(|v| v.name.clone()) else {
-                        return false;
-                    };
-                    self.editor_state.set_variable_string(&name, draft)
-                }
-            }
-        })();
-        if committed {
-            self.editor_state.history_push_past(snap);
-        }
         self.mark_dirty();
     }
 
@@ -518,6 +636,9 @@ impl WidgetHostNative {
             if value.is_finite() {
                 let id = self.editor_state.selection.anchor.clone();
                 if id.is_real() {
+                    // Instance-write redirect (GAP #10) — see
+                    // `apply_property_action` for the choke-point note.
+                    let instance_scope = self.editor_state.begin_instance_write_for_anchor();
                     self.editor_state.commit_history();
                     let _ =
                         self.editor_state
@@ -527,6 +648,9 @@ impl WidgetHostNative {
                                 field: focus.field,
                                 value,
                             });
+                    if let Some(scope) = instance_scope {
+                        self.editor_state.finish_instance_write(scope);
+                    }
                 }
             }
         }
@@ -535,6 +659,7 @@ impl WidgetHostNative {
 
     pub(in crate::widget_host) fn commit_property_focus_if_any(&mut self) {
         // Commit any pending variable-row / effect-param edit first.
+        self.commit_variables_panel_header_focus_if_any();
         self.commit_variable_row_focus_if_any();
         self.commit_effect_param_focus_if_any();
         let Some(focus) = self.editor_state.ui.property_focus.take() else {
@@ -542,6 +667,9 @@ impl WidgetHostNative {
         };
         self.editor_state.ui.property_draft_select_all = false;
         let draft = std::mem::take(&mut self.editor_state.ui.property_input_draft);
+        // Instance-write redirect (GAP #10) — see `apply_property_action`
+        // for the choke-point note.
+        let instance_scope = self.editor_state.begin_instance_write_for_anchor();
         match focus {
             PropertyFocus::FillHex => {
                 let stripped = draft.trim().trim_start_matches('#');
@@ -595,213 +723,8 @@ impl WidgetHostNative {
                 }
             }
         }
-        self.mark_dirty();
-    }
-
-    /// VariablesPanel press dispatcher.
-    pub(in crate::widget_host) fn dispatch_variables_panel_press(
-        &mut self,
-        x: f32,
-        y: f32,
-        viewport_width: f32,
-        _viewport_height: f32,
-    ) -> bool {
-        // Lockstep with paint: auto-shown variables yield to the
-        // PropertyPanel. The toolbar-opened variables manager is a
-        // floating modal handled by `dispatch_variables_modal_press`.
-        if self.editor_state.property_panel_visible() {
-            return false;
-        }
-        let has_variable_table = self
-            .editor_state
-            .doc
-            .variables
-            .as_ref()
-            .map(|v| !v.is_empty())
-            .unwrap_or(false);
-        let show_variables = has_variable_table && !self.editor_state.property_panel_visible();
-        if !show_variables {
-            return false;
-        }
-        use op_editor_ui::widgets::variables_panel::VariablesPanel;
-        use op_editor_ui::widgets::TOP_BAR_HEIGHT;
-        use op_editor_ui::{Point2D, Rect};
-        let vars = VariablesPanel::for_editor(&self.editor_state);
-        let intrinsic = vars.intrinsic_height();
-        let top_y = TOP_BAR_HEIGHT + 8.0;
-        let vars_rect = Rect {
-            origin: Point2D::new(
-                viewport_width - self.editor_state.editor_ui.property_panel_width,
-                top_y,
-            ),
-            size: Point2D::new(self.editor_state.editor_ui.property_panel_width, intrinsic),
-        };
-        let Some(hit) = vars.hit_test(vars_rect, Point2D::new(x, y)) else {
-            return false;
-        };
-        self.dispatch_variables_hit(hit, y)
-    }
-
-    /// Floating VariablesModal press dispatcher.
-    pub(in crate::widget_host) fn dispatch_variables_modal_press(
-        &mut self,
-        x: f32,
-        y: f32,
-        viewport_width: f32,
-        viewport_height: f32,
-    ) -> bool {
-        if !self.editor_state.editor_ui.variables_panel_open {
-            return false;
-        }
-        use op_editor_ui::widgets::{VariablesModal, VariablesModalHit};
-        let modal = VariablesModal::for_editor(&self.editor_state);
-        let rect = modal.rect(viewport_width, viewport_height);
-        match modal.hit_test(rect, op_editor_ui::Point2D::new(x, y)) {
-            VariablesModalHit::Close | VariablesModalHit::Outside => {
-                let ui = &mut self.editor_state.editor_ui;
-                ui.variables_panel_open = false;
-                ui.variables_panel_hover = None;
-                ui.axis_dropdown_open = None;
-                self.mark_dirty();
-                true
-            }
-            VariablesModalHit::AddVariable | VariablesModalHit::HeaderAdd => {
-                self.create_default_variable_from_modal();
-                true
-            }
-            VariablesModalHit::PresetMenu | VariablesModalHit::Inside => true,
-            VariablesModalHit::Row(idx) => {
-                self.dispatch_variable_row_hit(idx, y);
-                true
-            }
-            VariablesModalHit::AxisChip(idx) => {
-                self.dispatch_variable_axis_chip_hit(idx);
-                true
-            }
-            VariablesModalHit::AxisDropdownItem { axis, value } => {
-                self.dispatch_variable_axis_dropdown_hit(axis, value);
-                true
-            }
-        }
-    }
-
-    fn dispatch_variables_hit(
-        &mut self,
-        hit: op_editor_ui::widgets::variables_panel::VariablesPanelHit,
-        y: f32,
-    ) -> bool {
-        use op_editor_ui::widgets::variables_panel::VariablesPanelHit;
-        match hit {
-            VariablesPanelHit::Row(idx) => {
-                self.dispatch_variable_row_hit(idx, y);
-                true
-            }
-            VariablesPanelHit::AxisChip(idx) => {
-                self.dispatch_variable_axis_chip_hit(idx);
-                true
-            }
-            VariablesPanelHit::AxisDropdownItem { axis, value } => {
-                self.dispatch_variable_axis_dropdown_hit(axis, value);
-                true
-            }
-        }
-    }
-
-    fn dispatch_variable_row_hit(&mut self, idx: usize, y: f32) {
-        // Resolve (name, kind) off the editor-state var-table.
-        use op_editor_ui::scene_vars::VariableKind;
-        let var_table = op_pen_loader::editor_state_var_table(&self.editor_state);
-        let Some((name, kind)) = var_table
-            .variables
-            .get(idx)
-            .map(|v| (v.name.clone(), v.kind))
-        else {
-            return;
-        };
-        match kind {
-            VariableKind::Color => {
-                self.commit_property_focus_if_any();
-                let _ = self.editor_state.open_color_picker_for_variable(name, y);
-            }
-            VariableKind::Boolean => {
-                let current = self
-                    .editor_state
-                    .resolve_variable(&name)
-                    .and_then(|s| match s {
-                        jian_ops_schema::variable::VariableScalar::Bool(b) => Some(*b),
-                        _ => None,
-                    })
-                    .unwrap_or(false);
-                self.commit_property_focus_if_any();
-                let snap = self.editor_state.snapshot_for_history();
-                if self.editor_state.set_variable_boolean(&name, !current) {
-                    self.editor_state.history_push_past(snap);
-                }
-            }
-            VariableKind::Number | VariableKind::String => {
-                use jian_ops_schema::variable::VariableScalar;
-                use op_editor_core::editor_ui_state::VariableRowFocus;
-                self.commit_property_focus_if_any();
-                self.commit_variable_row_focus_if_any();
-                let resolved = self.editor_state.resolve_variable(&name).cloned();
-                self.editor_state.ui.property_input_draft = match (&kind, &resolved) {
-                    (VariableKind::Number, Some(VariableScalar::Num(n))) => format!("{n}"),
-                    (VariableKind::String, Some(VariableScalar::Str(s))) => s.clone(),
-                    _ => String::new(),
-                };
-                self.editor_state.editor_ui.variable_row_focus = Some(match kind {
-                    VariableKind::Number => VariableRowFocus::Number(idx),
-                    VariableKind::String => VariableRowFocus::String(idx),
-                    _ => return,
-                });
-                self.editor_state.ui.property_caret_anchor_ms = self.now_ms;
-            }
-        }
-        self.mark_dirty();
-    }
-
-    fn dispatch_variable_axis_chip_hit(&mut self, idx: usize) {
-        let var_table = op_pen_loader::editor_state_var_table(&self.editor_state);
-        let axis = var_table.active_theme.keys().nth(idx).cloned();
-        if let Some(name) = axis {
-            self.commit_property_focus_if_any();
-            if self.editor_state.editor_ui.axis_dropdown_open.as_deref() == Some(name.as_str()) {
-                self.editor_state.editor_ui.axis_dropdown_open = None;
-            } else {
-                self.editor_state.editor_ui.axis_dropdown_open = Some(name);
-            }
-        }
-        self.mark_dirty();
-    }
-
-    fn dispatch_variable_axis_dropdown_hit(&mut self, axis: String, value: String) {
-        self.commit_property_focus_if_any();
-        let snap = self.editor_state.snapshot_for_history();
-        if self.editor_state.set_active_axis_value(&axis, &value) {
-            self.editor_state.history_push_past(snap);
-        }
-        self.editor_state.editor_ui.axis_dropdown_open = None;
-        self.mark_dirty();
-    }
-
-    fn create_default_variable_from_modal(&mut self) {
-        use jian_ops_schema::variable::{VariableKind, VariableScalar};
-        let existing = self.editor_state.doc.variables.as_ref();
-        let mut idx = 1;
-        let name = loop {
-            let candidate = format!("variable-{idx}");
-            if existing.is_none_or(|vars| !vars.contains_key(&candidate)) {
-                break candidate;
-            }
-            idx += 1;
-        };
-        let snap = self.editor_state.snapshot_for_history();
-        if self.editor_state.create_variable(
-            &name,
-            VariableKind::Color,
-            VariableScalar::Str("#000000".into()),
-        ) {
-            self.editor_state.history_push_past(snap);
+        if let Some(scope) = instance_scope {
+            self.editor_state.finish_instance_write(scope);
         }
         self.mark_dirty();
     }
@@ -822,6 +745,17 @@ fn current_stop_alpha(node: &jian_ops_schema::node::PenNode, index: usize) -> Op
     };
     let hex = &stops.get(index)?.color;
     Some(op_editor_core::parse_hex_alpha(hex))
+}
+
+fn color_variable_name_at(state: &op_editor_core::EditorState, index: usize) -> Option<String> {
+    state
+        .doc
+        .variables
+        .as_ref()?
+        .iter()
+        .filter(|(_, def)| matches!(def.kind, VariableKind::Color))
+        .nth(index)
+        .map(|(name, _)| name.clone())
 }
 
 /// Translate a shell-core `ColorTarget` into op-editor-core's.

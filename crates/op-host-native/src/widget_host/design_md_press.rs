@@ -61,7 +61,10 @@ impl WidgetHostNative {
                 self.editor_state.doc.design_md = None;
                 self.editor_state.history_push_past(snap);
             }
-            DesignMdHit::Inside => {}
+            DesignMdHit::Inside => {
+                // Blank press on panel chrome — blur chrome inputs.
+                self.blur_text_inputs_on_blank_press();
+            }
         }
         self.mark_dirty();
         true

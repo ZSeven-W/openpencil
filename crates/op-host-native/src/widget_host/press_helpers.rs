@@ -76,12 +76,24 @@ impl WidgetHostNative {
                     .iter()
                     .position(|x| *x == p)
                     .unwrap_or(0);
-                let v = &mut self.editor_state.editor_ui.agent_settings.connected[idx];
-                *v = !*v;
-                // Connecting / disconnecting a provider changes which
-                // models the chat picker may list — re-derive it from
-                // the discovered catalog against the new mask.
-                self.editor_state.rebuild_chat_models();
+                let settings = &mut self.editor_state.editor_ui.agent_settings;
+                if settings.connected[idx] {
+                    // Disconnect mirrors the TS `disconnectProvider`
+                    // store action — reset the card, no probe.
+                    settings.disconnect_provider(p);
+                    // Disconnecting changes which models the chat
+                    // picker may list — re-derive from the discovered
+                    // catalog against the new mask.
+                    self.editor_state.rebuild_chat_models();
+                } else if !settings.provider_probe_in_flight(p) {
+                    // Connect runs a REAL probe (installed? auth?
+                    // model list?) — raise the request seam; the
+                    // desktop pump (`provider_probe_host.rs`) drains
+                    // it and lands the outcome + models on a later
+                    // frame. Re-presses while Probing are ignored
+                    // (TS disables the button via isConnecting).
+                    settings.begin_provider_connect(p);
+                }
             }
             AgentSettingsHit::ToggleMcpServer => {
                 self.commit_settings_focus_if_any();
@@ -581,7 +593,12 @@ impl WidgetHostNative {
             AgentSettingsHit::CancelAcpAgentDraft => {
                 self.cancel_acp_agent_draft();
             }
-            AgentSettingsHit::Inside => {}
+            AgentSettingsHit::Inside => {
+                // Modal chrome that hit no control — blank press;
+                // commits the focused settings input (and blurs the
+                // rest of the chrome inputs under the modal).
+                self.blur_text_inputs_on_blank_press();
+            }
             AgentSettingsHit::AddGenConfig => {
                 self.commit_settings_focus_if_any();
                 let id = self

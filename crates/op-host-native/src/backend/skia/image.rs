@@ -45,6 +45,7 @@ impl NativeBackend {
             mode,
             ImageAdjustments::default(),
             1.0,
+            0.0,
         );
     }
 
@@ -60,10 +61,24 @@ impl NativeBackend {
         mode: ImageDrawMode,
         adjustments: ImageAdjustments,
         opacity: f32,
+        corner_radius: f32,
     ) {
         let Some(image) = self.cached_image(id, encoded) else {
             return;
         };
+        // Rounded image nodes clip the BITMAP, not just the
+        // placeholder fill/stroke (TS `clipRRect` parity,
+        // node-renderer.ts:1093-1104).
+        let clip_round = corner_radius > 0.5;
+        if clip_round {
+            canvas.save();
+            let rrect = skia_safe::RRect::new_rect_xy(
+                skia_safe::Rect::from_xywh(rect.origin.x, rect.origin.y, rect.size.x, rect.size.y),
+                corner_radius,
+                corner_radius,
+            );
+            canvas.clip_rrect(rrect, skia_safe::ClipOp::Intersect, true);
+        }
         let mut paint = skia_safe::Paint::default();
         paint.set_anti_alias(true);
         // Node-level opacity dims the raster (rasters carry no fill
@@ -91,6 +106,9 @@ impl NativeBackend {
                 canvas.draw_image_rect(&image, None, to_sk_rect(dst), &paint);
                 canvas.restore_to_count(save);
             }
+        }
+        if clip_round {
+            canvas.restore();
         }
     }
 }

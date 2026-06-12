@@ -22,7 +22,9 @@ impl WidgetHostNative {
         if let Some(choice) = picker.hit_test(panel_rect, Point2D::new(x, y)) {
             match choice {
                 ShapeChoice::Tool(tool) => {
-                    let _ = self.editor_state.finish_pen_path();
+                    // TS onToolChange DISCARDS an in-progress pen path
+                    // on tool switch (`skia-pen-tool.ts:38-50`).
+                    self.cancel_pen_on_tool_switch(tool);
                     self.editor_state.editor_ui.shape_tool = tool;
                     self.editor_state.tool = tool;
                 }
@@ -36,6 +38,9 @@ impl WidgetHostNative {
                         Some(op_editor_core::editor_ui_state::FileAction::ImportImageOrSvg);
                 }
             }
+        } else {
+            // Miss — the dismissing click is a blank press.
+            self.blur_text_inputs_on_blank_press();
         }
         self.editor_state.editor_ui.shape_picker_open = false;
         self.editor_state.editor_ui.shape_picker_hover = None;

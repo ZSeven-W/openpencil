@@ -10,8 +10,8 @@
 use super::helpers::{rect_contains, TOOLBAR_INSET_X, TOOLBAR_INSET_Y};
 use super::{
     ChatDragState, ChatInputSelectionDragState, ChatResizeState, ChatTextSelectionDragState,
-    CodeSelectionDragState, CreateDragState, DragState, HandleDragState, NodeDragState,
-    PanelResize, PanelResizeKind, RotateDragState, WidgetHostNative,
+    CodeSelectionDragState, CreateDragState, DragState, HandleDragState, PanelResize,
+    PanelResizeKind, RotateDragState, WidgetHostNative,
 };
 use op_editor_core::codegen::CodeSelection;
 use op_editor_ui::widgets::{
@@ -21,7 +21,9 @@ use op_editor_ui::widgets::{
 use op_editor_ui::{Point2D, Rect};
 
 impl WidgetHostNative {
-    fn dispatch_layer_context_action(
+    // `pub(in crate::widget_host)` so the instance-panel tests can
+    // drive the context-menu rows without simulating menu geometry.
+    pub(in crate::widget_host) fn dispatch_layer_context_action(
         &mut self,
         action: op_editor_ui::widgets::layer_context_menu::LayerContextAction,
         target: op_editor_core::ui_draft::LayerContextTarget,
@@ -52,26 +54,54 @@ impl WidgetHostNative {
             (A::GroupSelection, T::Layer(_)) => {
                 let _ = self.apply_group();
             }
+            // TS boolean rows act on the current selection and push
+            // history explicitly (`layer-panel.tsx:389-407`); the
+            // host's `apply_boolean_op` does both.
+            (
+                A::BooleanUnion | A::BooleanSubtract | A::BooleanIntersect | A::BooleanExclude,
+                T::Layer(_),
+            ) => {
+                use op_editor_core::BooleanOp;
+                let op = match action {
+                    A::BooleanSubtract => BooleanOp::Subtract,
+                    A::BooleanIntersect => BooleanOp::Intersect,
+                    A::BooleanExclude => BooleanOp::Exclude,
+                    _ => BooleanOp::Union,
+                };
+                let _ = self.apply_boolean_op(op);
+            }
             (A::ToggleLock, T::Layer(id)) => {
-                self.editor_state.toggle_node_locked(&id);
+                // TS toggleLock runs through mutateWithHistory
+                // (document-store-node-actions.ts:176-188).
+                self.with_doc_history(|s| s.toggle_node_locked(&id));
             }
             (A::ToggleVisibility, T::Layer(id)) => {
-                self.editor_state.toggle_node_hidden(&id);
+                // TS toggleVisibility runs through mutateWithHistory
+                // (document-store-node-actions.ts:162-174).
+                self.with_doc_history(|s| s.toggle_node_hidden(&id));
             }
             (A::CreateComponent, T::Layer(id)) => {
                 let _ = self.editor_state.create_component_from_node_name(&id);
             }
+            (A::DetachComponent | A::DetachInstance, T::Layer(id)) => {
+                // Reusable component sheds its flag; a Ref instance
+                // materializes into an independent subtree (#22).
+                let _ = self.editor_state.detach_component(&id);
+            }
+            // Page CRUD pushes history in TS
+            // (document-store-pages.ts:19-121) — snapshot-before-
+            // mutate, skipped when the guard rejects the op.
             (A::DuplicatePage, T::Page(idx)) => {
-                let _ = self.editor_state.duplicate_page(idx);
+                self.with_doc_history(|s| s.duplicate_page(idx).is_some());
             }
             (A::MovePageUp, T::Page(idx)) => {
-                let _ = self.editor_state.move_page_up(idx);
+                self.with_doc_history(|s| s.move_page_up(idx));
             }
             (A::MovePageDown, T::Page(idx)) => {
-                let _ = self.editor_state.move_page_down(idx);
+                self.with_doc_history(|s| s.move_page_down(idx));
             }
             (A::DeletePage, T::Page(idx)) => {
-                let _ = self.editor_state.remove_page(idx);
+                self.with_doc_history(|s| s.remove_page(idx));
             }
             (A::RenamePage, T::Page(idx)) => {
                 if self.editor_state.start_rename_page(idx) {
@@ -99,8 +129,15 @@ impl WidgetHostNative {
         if self.over_topmost_panel(x, y, viewport_w, viewport_h) {
             return true;
         }
+        // Select-tool right-click on a path anchor / handle opens the
+        // point-type menu (`pen_press.rs`).
+        if self.try_open_path_anchor_menu(x, y, viewport_w, viewport_h) {
+            return true;
+        }
         if !self.editor_state.editor_ui.sidebar_open {
-            return false;
+            // No layer panel to hit — the right press is blank chrome;
+            // blur inputs like the sidebar-open fall-through below.
+            return self.blur_text_inputs_on_blank_press();
         }
         use op_editor_core::editor_ui_state::LayerContextMenuState;
         use op_editor_core::ui_draft::LayerContextTarget;
@@ -149,7 +186,8 @@ impl WidgetHostNative {
         {
             return true;
         }
-        false
+        // Right-press on blank chrome — blur inputs like a left press.
+        self.blur_text_inputs_on_blank_press()
     }
 
     /// Mouse-press handler. Returns whether anything visible changed.
@@ -166,9 +204,22 @@ impl WidgetHostNative {
         let rename_committed =
             self.editor_state.ui.layer_rename.is_some() && self.editor_state.rename_commit();
         let text_edit_was_active = self.editor_state.ui.text_editing.is_some();
-        let text_edit_committed = self.editor_state.text_edit_commit();
+        // EXCEPTION to commit-on-press: a press INSIDE the edited
+        // text node places the caret instead of committing (TS
+        // textarea parity — a click inside the overlay moves the
+        // caret; only an outside click blurs + commits). The probe
+        // returns `None` whenever any overlay / modal owns the point,
+        // so those presses still commit + route normally.
+        let text_edit_caret_press =
+            self.text_edit_press_offset(x, y, viewport_width, viewport_height);
+        let text_edit_committed =
+            text_edit_caret_press.is_none() && self.editor_state.text_edit_commit();
         if rename_committed || text_edit_committed {
             self.mark_dirty();
+        }
+        if let Some(offset) = text_edit_caret_press {
+            self.place_text_edit_caret(offset);
+            return true;
         }
         // Floating Design-MD panel — painted top-most (`paint.rs`
         // §12), so it hit-tests first: a click on its rect is the
@@ -241,6 +292,13 @@ impl WidgetHostNative {
             }
         }
 
+        // Path-anchor context menu — a row hit dispatches + consumes;
+        // an outside press closes it and FALLS THROUGH (TS parity:
+        // the canvas mousedown still routes). `pen_press.rs`.
+        if self.dispatch_path_anchor_menu_press(x, y) {
+            return true;
+        }
+
         if let Some(state) = self.editor_state.editor_ui.layer_context_menu.clone() {
             use op_editor_ui::widgets::layer_context_menu::LayerContextMenu;
             let menu = LayerContextMenu::for_state(&self.editor_state, state.clone());
@@ -250,6 +308,9 @@ impl WidgetHostNative {
                 self.mark_dirty();
                 return true;
             }
+            // Dismissing the menu on a miss is a blank press — blur
+            // every text input along with it.
+            self.blur_text_inputs_on_blank_press();
             self.editor_state.editor_ui.layer_context_menu = None;
             self.mark_dirty();
             return true;
@@ -327,28 +388,12 @@ impl WidgetHostNative {
                 self.mark_dirty();
                 return true;
             }
+            // Silent outside-close is a blank press — blur inputs too.
+            self.blur_text_inputs_on_blank_press();
             self.editor_state.editor_ui.locale_picker_open = false;
             self.editor_state.editor_ui.locale_picker_hover = None;
             self.mark_dirty();
             return true;
-        }
-
-        // 0a1. Variables modal — explicit toolbar manager. It is a
-        // top-level floating surface: inside clicks are handled here,
-        // outside clicks close it instead of falling through to canvas
-        // selection or the right rail.
-        if self.editor_state.editor_ui.variables_panel_open {
-            let toolbar_rect = self.toolbar_rect(viewport_width, viewport_height);
-            let toolbar = Toolbar::for_editor(&self.editor_state);
-            if let Some(op_editor_ui::widgets::ToolbarHit::Action(
-                op_editor_ui::widgets::ToolbarAction::ToggleVariablesPanel,
-            )) = toolbar.hit_test(toolbar_rect, Point2D::new(x, y))
-            {
-                return self.dispatch_toolbar_action(
-                    op_editor_ui::widgets::ToolbarAction::ToggleVariablesPanel,
-                );
-            }
-            return self.dispatch_variables_modal_press(x, y, viewport_width, viewport_height);
         }
 
         // 0b. TopBar — sidebar toggle button + theme + locale picker.
@@ -427,8 +472,10 @@ impl WidgetHostNative {
             }
         }
         if rect_contains(top_bar_rect, Point2D::new(x, y)) {
-            // Other top-bar gaps eat clicks but don't act.
-            return rename_committed || text_edit_committed;
+            // Other top-bar gaps eat clicks but don't act — still a
+            // blank press, so every text input blurs.
+            let blurred = self.blur_text_inputs_on_blank_press();
+            return blurred || rename_committed || text_edit_committed;
         }
 
         // 0c0a. Image-fill popover — outside-click dismiss.
@@ -468,9 +515,55 @@ impl WidgetHostNative {
             return true;
         }
 
-        // 0c0a1. Text font-family picker — outside-click dismiss.
+        // 0c0a0. Fill/stroke colour-variable picker — outside-click dismiss.
+        if self
+            .editor_state
+            .editor_ui
+            .property_color_variable_picker_open
+            .is_some()
+            && !in_git_panel
+        {
+            self.refresh_layout_scene();
+            if let Some(panel) = PropertyPanel::for_selection(&self.editor_state) {
+                let property_rect = Rect {
+                    origin: Point2D::new(
+                        viewport_width - self.editor_state.editor_ui.property_panel_width,
+                        TOP_BAR_HEIGHT,
+                    ),
+                    size: Point2D::new(
+                        self.editor_state.editor_ui.property_panel_width,
+                        (viewport_height - TOP_BAR_HEIGHT).max(0.0),
+                    ),
+                };
+                if let Some(action) = panel.hit_test_action(property_rect, Point2D::new(x, y)) {
+                    if matches!(
+                        action,
+                        op_editor_ui::widgets::PropertyPanelAction::ToggleColorVariablePicker(_)
+                            | op_editor_ui::widgets::PropertyPanelAction::BindColorVariable { .. }
+                            | op_editor_ui::widgets::PropertyPanelAction::UnbindColorVariable(_)
+                    ) {
+                        self.apply_property_action(action);
+                        return true;
+                    }
+                }
+            }
+            self.editor_state
+                .editor_ui
+                .property_color_variable_picker_open = None;
+            self.mark_dirty();
+            return true;
+        }
+
+        // 0c0a0a. Image-node Search / Generate popovers — overlay
+        // controls win; outside clicks dismiss.
         if !in_git_panel
-            && self.dismiss_font_family_picker_on_press(x, y, viewport_width, viewport_height)
+            && self.dismiss_image_popovers_on_press(x, y, viewport_width, viewport_height)
+        {
+            return true;
+        }
+
+        // 0c0a1. Text font-family picker — outside-click dismiss.
+        if !in_git_panel && self.dismiss_font_picker_on_press(x, y, viewport_width, viewport_height)
         {
             return true;
         }
@@ -493,6 +586,15 @@ impl WidgetHostNative {
         //       outside-click dismiss (`property_dispatch.rs`).
         if !in_git_panel
             && self.dismiss_export_picker_on_press(x, y, viewport_width, viewport_height)
+        {
+            return true;
+        }
+
+        // 0b0. Theme-preset dropdown (#20) — floats above the
+        //       variables panel, so it must win before the panel's
+        //       stub menu mapping (variables_preset_press.rs).
+        if !in_git_panel
+            && self.dispatch_variables_preset_press(x, y, viewport_width, viewport_height)
         {
             return true;
         }
@@ -664,7 +766,9 @@ impl WidgetHostNative {
             if let Some(hit) = toolbar.hit_test(toolbar_rect, Point2D::new(x, y)) {
                 match hit {
                     op_editor_ui::widgets::ToolbarHit::Tool(tool) => {
-                        let _ = self.editor_state.finish_pen_path();
+                        // TS onToolChange DISCARDS an in-progress pen
+                        // path on tool switch (`skia-pen-tool.ts:38-50`).
+                        self.cancel_pen_on_tool_switch(tool);
                         self.editor_state.tool = tool;
                         self.editor_state.editor_ui.shape_picker_open = false;
                         self.editor_state.editor_ui.shape_picker_hover = None;
@@ -685,7 +789,9 @@ impl WidgetHostNative {
                     }
                 }
             }
-            return rename_committed || text_edit_committed;
+            // Toolbar padding / gaps eat the click — blank press.
+            let blurred = self.blur_text_inputs_on_blank_press();
+            return blurred || rename_committed || text_edit_committed;
         }
 
         if let Some(hit) = self.selection_toolbar_hit(x, y, viewport_width, viewport_height) {
@@ -732,6 +838,10 @@ impl WidgetHostNative {
         // 4. Canvas click — branch on the active tool.
         if self.over_canvas(x, y, viewport_width, viewport_height) {
             use op_editor_core::Tool;
+            // Any canvas press blurs the chrome text inputs first —
+            // node hit or not, the pointer left every input (DOM
+            // parity: mousedown anywhere outside an input blurs it).
+            let blurred = self.blur_text_inputs_on_blank_press();
             // A press on the canvas while the Git panel is open dismisses
             // it — the panel is a popover (TS parity: clicking off a
             // popover closes it), and a click inside it was already
@@ -744,12 +854,12 @@ impl WidgetHostNative {
                 return true;
             }
             self.refresh_layout_scene();
-            if matches!(self.editor_state.tool, Tool::Hand) {
+            if matches!(self.editor_state.tool, Tool::Hand) || self.space_pan {
                 self.drag = Some(DragState {
                     last_x: x,
                     last_y: y,
                 });
-                return rename_committed || text_edit_committed;
+                return blurred || rename_committed || text_edit_committed;
             }
             let (cx0, cy0, cw, ch) = self.canvas_region(viewport_width, viewport_height);
             let canvas_rect = Rect {
@@ -760,6 +870,12 @@ impl WidgetHostNative {
             let doc_point = self.editor_state.viewport.to_document(canvas_local);
 
             if matches!(self.editor_state.tool, Tool::Select) {
+                // Path controls hit-test FIRST (TS handleSelectMouseDown,
+                // skia-interaction.ts:277-306) — before arc / resize /
+                // rotation, so anchor dots near a corner stay grabbable.
+                if self.try_path_anchor_press(x, y, viewport_width, viewport_height) {
+                    return true;
+                }
                 // The selected anchor's resolved scene node — shared
                 // by the handle-drag + rotation-drag branches below.
                 let selected_anchor = self.editor_state.selection.anchor.as_str().to_string();
@@ -841,54 +957,10 @@ impl WidgetHostNative {
                     .layout_scene
                     .node_at_doc_point(doc_point, self.editor_state.viewport.zoom)
                 {
+                    // Selection promotion / enter-group / drag start —
+                    // see `canvas_select_drag.rs`.
                     let ec_id = op_editor_core::NodeId::new(&node_id);
-                    // Canvas double-click: 400 ms same-node → enter
-                    // text-edit on Text nodes.
-                    let is_double = matches!(
-                        &self.editor_state.editor_ui.last_canvas_click,
-                        Some((prev, t)) if *prev == ec_id
-                            && self.now_ms.saturating_sub(*t) < 400
-                    );
-                    self.editor_state.editor_ui.last_canvas_click =
-                        Some((ec_id.clone(), self.now_ms));
-                    if is_double
-                        && !text_edit_was_active
-                        && self.editor_state.start_text_edit(ec_id.clone())
-                    {
-                        self.editor_state.ui.text_edit_caret_anchor_ms = self.now_ms;
-                        self.mark_dirty();
-                        return true;
-                    }
-                    if self.shift_held {
-                        // Shift+click toggles set membership.
-                        let was_in_set = self.editor_state.is_selected(&ec_id);
-                        self.editor_state.toggle_selection(ec_id.clone());
-                        if !was_in_set {
-                            self.node_drag = Some(NodeDragState {
-                                last_screen_x: x,
-                                last_screen_y: y,
-                                press_screen_x: x,
-                                press_screen_y: y,
-                                moved: false,
-                            });
-                        }
-                        return true;
-                    }
-                    // Plain click: keep a multi-set when clicking
-                    // inside it (TS parity), else single-select.
-                    let already_in_set = self.editor_state.is_selected(&ec_id);
-                    if !already_in_set || self.editor_state.selection_count() == 1 {
-                        self.editor_state.set_single_selection(ec_id);
-                    }
-                    self.editor_state.commit_history();
-                    self.node_drag = Some(NodeDragState {
-                        last_screen_x: x,
-                        last_screen_y: y,
-                        press_screen_x: x,
-                        press_screen_y: y,
-                        moved: false,
-                    });
-                    return true;
+                    return self.apply_canvas_node_press(ec_id, x, y, text_edit_was_active);
                 }
                 // Empty canvas press — start a marquee.
                 let cleared_now = if !self.shift_held {
@@ -896,6 +968,9 @@ impl WidgetHostNative {
                     if was_set {
                         self.editor_state.clear_selection();
                     }
+                    // Clicking blank canvas steps out of the entered
+                    // container (clearing-exits rule).
+                    self.editor_state.sync_entered_container_with_selection();
                     was_set
                 } else {
                     false
@@ -907,54 +982,12 @@ impl WidgetHostNative {
                     current_screen_y: y,
                     additive: self.shift_held,
                 });
-                return cleared_now;
+                return cleared_now || blurred;
             }
 
-            // Pen tool: anchor edit / author.
+            // Pen tool: anchor edit / author (`pen_press.rs`).
             if matches!(self.editor_state.tool, Tool::Pen) {
-                if self.editor_state.ui.pen_in_progress.is_none() {
-                    if let Some((node_id, anchor_index, target)) =
-                        self.path_anchor_hit(x, y, viewport_width, viewport_height)
-                    {
-                        let ec_id = op_editor_core::NodeId::new(&node_id);
-                        // The anchor's fixed absolute position — handle
-                        // drags offset their delta against it.
-                        let anchor_doc = self
-                            .layout_scene
-                            .active_page()
-                            .and_then(|p| p.find(&node_id))
-                            .and_then(|n| {
-                                n.path_anchors
-                                    .get(anchor_index)
-                                    .map(|a| a.pos)
-                                    .or_else(|| n.points.get(anchor_index).copied())
-                            })
-                            .unwrap_or(doc_point);
-                        let pre = self.editor_state.snapshot_for_history();
-                        self.path_anchor_drag = Some(super::PathAnchorDragState {
-                            node_id: ec_id,
-                            anchor_index,
-                            target,
-                            anchor_doc,
-                            start_doc: doc_point,
-                            shift: self.shift_held,
-                            moved: false,
-                            pre_drag_snapshot: pre,
-                        });
-                        return true;
-                    }
-                }
-                if self.editor_state.ui.pen_in_progress.is_some() {
-                    self.editor_state
-                        .add_pen_point((doc_point.x as f64, doc_point.y as f64));
-                } else {
-                    let _ = self.editor_state.start_pen_path(
-                        &mut self.next_node_id,
-                        (doc_point.x as f64, doc_point.y as f64),
-                    );
-                }
-                self.mark_dirty();
-                return true;
+                return self.apply_pen_tool_press(x, y, viewport_width, viewport_height);
             }
 
             // Shape / Frame / Text tool: spawn a new node + drag.
@@ -975,8 +1008,11 @@ impl WidgetHostNative {
                 last_x: x,
                 last_y: y,
             });
-            return rename_committed || text_edit_committed;
+            return blurred || rename_committed || text_edit_committed;
         }
-        rename_committed || text_edit_committed
+        // Final fall-through — the press hit no interactive chrome
+        // (panel-rail gaps, property-panel padding, …): blank press.
+        let blurred = self.blur_text_inputs_on_blank_press();
+        blurred || rename_committed || text_edit_committed
     }
 }

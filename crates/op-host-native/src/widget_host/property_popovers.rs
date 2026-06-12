@@ -96,41 +96,10 @@ impl WidgetHostNative {
         true
     }
 
-    pub(in crate::widget_host) fn dismiss_font_family_picker_on_press(
-        &mut self,
-        x: f32,
-        y: f32,
-        viewport_width: f32,
-        viewport_height: f32,
-    ) -> bool {
-        use op_editor_ui::widgets::{PropertyPanel, PropertyPanelAction as A, TOP_BAR_HEIGHT};
-        use op_editor_ui::{Point2D, Rect};
-        if !self.editor_state.editor_ui.font_family_picker_open {
-            return false;
-        }
-        self.refresh_layout_scene();
-        if let Some(panel) = PropertyPanel::for_selection(&self.editor_state) {
-            let property_rect = Rect {
-                origin: Point2D::new(
-                    viewport_width - self.editor_state.editor_ui.property_panel_width,
-                    TOP_BAR_HEIGHT,
-                ),
-                size: Point2D::new(
-                    self.editor_state.editor_ui.property_panel_width,
-                    (viewport_height - TOP_BAR_HEIGHT).max(0.0),
-                ),
-            };
-            if let Some(action) = panel.hit_test_action(property_rect, Point2D::new(x, y)) {
-                if matches!(action, A::SetFontFamily(_) | A::ToggleFontFamilyPicker) {
-                    self.apply_property_action(action);
-                    return true;
-                }
-            }
-        }
-        self.editor_state.editor_ui.font_family_picker_open = false;
-        self.mark_dirty();
-        true
-    }
+    // The font-family picker's outside-click dismiss lives in
+    // `font_picker_dispatch.rs` (`dismiss_font_picker_on_press`) —
+    // the searchable overlay needs the contains-swallow the simple
+    // pickers here don't.
 
     pub(in crate::widget_host) fn dismiss_font_weight_picker_on_press(
         &mut self,

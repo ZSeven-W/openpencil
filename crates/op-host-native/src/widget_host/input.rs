@@ -1,7 +1,7 @@
 //! Non-press input handlers on `WidgetHostNative`. press -> press.rs.
 
 use super::helpers::{resize_bounds, PANEL_MAX_WIDTH, PANEL_MIN_WIDTH};
-use super::{PanelResizeKind, WidgetHostNative};
+use super::{DragState, PanelResizeKind, WidgetHostNative};
 use op_editor_core::codegen::CodeSelection;
 use op_editor_ui::widgets::{
     AIChatHit, AIChatPlaceholder, ChatResizeEdge, AI_CHAT_MAX_RATIO, AI_CHAT_MIN_HEIGHT,
@@ -23,6 +23,18 @@ impl WidgetHostNative {
             || ui.text_editing.is_some()
             || ui.property_focus.is_some()
             || self.editor_state.editor_ui.variable_row_focus.is_some()
+            || self
+                .editor_state
+                .editor_ui
+                .variables_theme_rename_axis
+                .is_some()
+            || self
+                .editor_state
+                .editor_ui
+                .variables_variant_rename_value
+                .is_some()
+            // #20: preset dropdown's save-as-name input.
+            || self.editor_state.editor_ui.preset_name_input_active()
             || self.editor_state.editor_ui.effect_param_focus.is_some()
             || self.editor_state.editor_ui.agent_settings.focus.is_some()
             || self.editor_state.editor_ui.icon_picker_open
@@ -167,6 +179,15 @@ impl WidgetHostNative {
             }
         }
         let zoom = self.editor_state.viewport.zoom.max(0.0001);
+        // Net doc-space travel since the press — the release commit
+        // uses it to locate dropped flex children (which never
+        // doc-translate during the drag). Recomputed from the press
+        // anchor so smart-guide rewinds of `last_screen_*` can't
+        // double-count.
+        if let Some(d) = self.node_drag.as_mut() {
+            d.total_dx = ((x - d.press_screen_x) / zoom) as f64;
+            d.total_dy = ((y - d.press_screen_y) / zoom) as f64;
+        }
         let prev_screen_x = drag.last_screen_x;
         let prev_screen_y = drag.last_screen_y;
         let dx = (x - prev_screen_x) / zoom;
@@ -367,6 +388,9 @@ impl WidgetHostNative {
                 let picker = ColorPicker::for_state(&self.editor_state, state.clone());
                 let panel = picker.rect(self.last_viewport_w, self.last_viewport_h);
                 let point = Point2D::new(x, y);
+                // Instance-write redirect (GAP #10) — picker drags on
+                // a Ref anchor route the live colour into descendants.
+                let instance_scope = self.editor_state.begin_instance_write_for_anchor();
                 match kind {
                     ColorPickerDrag::SvBox => {
                         let (s, v) = picker.sv_at(panel, point);
@@ -378,6 +402,9 @@ impl WidgetHostNative {
                             .editor_state
                             .color_picker_set_hsv(h, state.sat, state.val);
                     }
+                }
+                if let Some(scope) = instance_scope {
+                    self.editor_state.finish_instance_write(scope);
                 }
                 self.mark_dirty();
                 return true;
@@ -473,20 +500,18 @@ impl WidgetHostNative {
         if self.apply_chat_input_selection_drag_cursor_move(x, y) {
             return true;
         }
+        if self.apply_text_edit_selection_drag_cursor_move(x, y) {
+            return true;
+        }
         if self.apply_code_selection_drag_cursor_move(x, y) {
             return true;
         }
         if let Some(consumed) = self.apply_node_drag_cursor_move(x, y) {
             return consumed;
         }
-        // Pen rubber-band — track cursor doc coord for preview.
-        if self.editor_state.ui.pen_in_progress.is_some() {
-            let (cx0, cy0) = self.canvas_origin();
-            let canvas_local = Point2D::new(x - cx0, y - cy0);
-            let doc = self.editor_state.viewport.to_document(canvas_local);
-            self.editor_state.ui.pen_cursor_doc = Some(doc);
-            self.mark_dirty();
-            return true;
+        // Pen handle-drag minting + rubber-band (`pen_press.rs`).
+        if let Some(consumed) = self.apply_pen_cursor_move(x, y) {
+            return consumed;
         }
         // Git empty-state Init-card hover — toggles the disabled hint
         // pill (a no-op repaint=false when the panel is closed / the
@@ -499,20 +524,13 @@ impl WidgetHostNative {
         if self.update_git_panel_ready_hover(x, y) {
             return true;
         }
+        // Path-anchor context-menu row hover (`pen_press.rs`).
+        if self.update_path_anchor_menu_hover(x, y) {
+            return true;
+        }
         // Suppress lower-overlay hover while a floating panel is on top.
         let over_topmost =
             self.over_topmost_panel(x, y, self.last_viewport_w, self.last_viewport_h);
-        if self.editor_state.editor_ui.variables_panel_open {
-            use op_editor_ui::widgets::VariablesModal;
-            let modal = VariablesModal::for_editor(&self.editor_state);
-            let rect = modal.rect(self.last_viewport_w, self.last_viewport_h);
-            let new_hover = modal.hover_at(rect, Point2D::new(x, y));
-            if new_hover != self.editor_state.editor_ui.variables_panel_hover {
-                self.editor_state.editor_ui.variables_panel_hover = new_hover;
-                self.mark_dirty();
-                return true;
-            }
-        }
         // Fold stale-hover clearing into the final repaint signal.
         let cleared = over_topmost && self.clear_lower_overlay_hover();
         if let Some(state) = self
@@ -551,6 +569,10 @@ impl WidgetHostNative {
         }
         // Font-weight dropdown row hover (no-op when closed).
         if self.update_font_weight_picker_hover(x, y) {
+            return true;
+        }
+        // Font-family picker entry hover (no-op when closed).
+        if self.update_font_picker_hover(x, y) {
             return true;
         }
         // TopBar window-control cluster — hovering it reveals the
@@ -714,80 +736,9 @@ impl WidgetHostNative {
             self.mark_dirty();
             return true;
         }
-        // Path-anchor / handle drag: always write current cursor position.
-        if self.path_anchor_drag.is_some() {
-            use super::AnchorDragTarget;
-            let (cx0, cy0) = self.canvas_origin();
-            let canvas_local = Point2D::new(x - cx0, y - cy0);
-            let doc = self.editor_state.viewport.to_document(canvas_local);
-            let (id, idx, target, anchor_doc, start, shift, already_moved) = {
-                let d = self.path_anchor_drag.as_ref().unwrap();
-                (
-                    d.node_id.clone(),
-                    d.anchor_index,
-                    d.target,
-                    d.anchor_doc,
-                    d.start_doc,
-                    d.shift,
-                    d.moved,
-                )
-            };
-            // Motion detection is frame-agnostic; writes start after first move.
-            let is_move = (doc.x - start.x).abs() > 0.001 || (doc.y - start.y).abs() > 0.001;
-            if is_move || already_moved {
-                self.refresh_layout_scene();
-                // Write anchor / handle coords in the path's local frame.
-                let local = match self
-                    .layout_scene
-                    .active_page()
-                    .and_then(|p| p.find(id.as_str()))
-                    .filter(|n| n.rotation.abs() > f32::EPSILON)
-                    .map(|n| (n.rotation, n.aggregate_bounds()))
-                {
-                    Some((rot, b)) => {
-                        let c =
-                            Point2D::new(b.origin.x + b.size.x / 2.0, b.origin.y + b.size.y / 2.0);
-                        op_editor_ui::widgets::rotate_point(doc, c, -rot)
-                    }
-                    None => doc,
-                };
-                match target {
-                    AnchorDragTarget::Anchor => {
-                        self.editor_state.set_path_anchor_position(
-                            id,
-                            idx,
-                            (local.x as f64, local.y as f64),
-                        );
-                    }
-                    AnchorDragTarget::Handle(side) => {
-                        // First real move sets the anchor's point type.
-                        if !self
-                            .path_anchor_drag
-                            .as_ref()
-                            .map(|d| d.moved)
-                            .unwrap_or(true)
-                        {
-                            let pt = if shift {
-                                jian_ops_schema::node::PenPathPointType::Independent
-                            } else {
-                                jian_ops_schema::node::PenPathPointType::Mirrored
-                            };
-                            self.editor_state
-                                .set_path_anchor_point_type(id.clone(), idx, pt);
-                        }
-                        let delta = (
-                            (local.x - anchor_doc.x) as f64,
-                            (local.y - anchor_doc.y) as f64,
-                        );
-                        self.editor_state
-                            .set_path_anchor_handle(id, idx, side, Some(delta));
-                    }
-                }
-                self.mark_dirty();
-                if let Some(d) = self.path_anchor_drag.as_mut() {
-                    d.moved = true;
-                }
-            }
+        // Path-anchor / handle drag — TS `movePathControl` semantics
+        // (`pen_press.rs::apply_path_anchor_drag_move`).
+        if self.apply_path_anchor_drag_move(x, y) {
             return true;
         }
         // Ellipse arc-handle drag: recompute arc geometry from the cursor.
@@ -1018,40 +969,6 @@ impl WidgetHostNative {
         {
             property_hover_changed = true;
         }
-        // Variables panel (right rail) hover — auto-shown variables
-        // yield to PropertyPanel. The explicit toolbar manager is handled
-        // above as VariablesModal hover.
-        if !over_topmost && !self.editor_state.property_panel_visible() {
-            let has_variable_table = self
-                .editor_state
-                .doc
-                .variables
-                .as_ref()
-                .map(|v| !v.is_empty())
-                .unwrap_or(false);
-            let show_variables = has_variable_table && !self.editor_state.property_panel_visible();
-            if show_variables {
-                use op_editor_ui::widgets::variables_panel::VariablesPanel;
-                use op_editor_ui::widgets::TOP_BAR_HEIGHT;
-                let vars = VariablesPanel::for_editor(&self.editor_state);
-                let vars_rect = Rect {
-                    origin: Point2D::new(
-                        self.last_viewport_w - self.editor_state.editor_ui.property_panel_width,
-                        TOP_BAR_HEIGHT + 8.0,
-                    ),
-                    size: Point2D::new(
-                        self.editor_state.editor_ui.property_panel_width,
-                        vars.intrinsic_height(),
-                    ),
-                };
-                let new_hover = vars.hover_at(vars_rect, Point2D::new(x, y));
-                if new_hover != self.editor_state.editor_ui.variables_panel_hover {
-                    self.editor_state.editor_ui.variables_panel_hover = new_hover;
-                    self.mark_dirty();
-                    return true;
-                }
-            }
-        }
         // Align toolbar hover after drag detection.
         let new_hover = if self.editor_state.selection_count() >= 2 && !over_topmost {
             self.align_toolbar_hit(x, y, self.last_viewport_w, self.last_viewport_h)
@@ -1105,12 +1022,51 @@ impl WidgetHostNative {
             self.mark_dirty();
             return true;
         }
+        // Canvas hover outline (TS `hoveredNodeId`): track the node
+        // under the cursor while the Select tool idles over the
+        // canvas. Reads the CURRENT layout scene without refreshing
+        // (same discipline as layer-row hover — hover must not
+        // rebuild a stale scene).
+        let hover_eligible = !over_topmost
+            && matches!(self.editor_state.tool, op_editor_core::Tool::Select)
+            && self.over_canvas(x, y, self.last_viewport_w, self.last_viewport_h);
+        let new_canvas_hover = if hover_eligible {
+            // Skip the (full-tree) hover hit-test for sub-3px jitter —
+            // the outline can't visibly change inside that radius and
+            // path-heavy documents pay real cost per walk. The skip
+            // only ever bypasses the WALK; leaving the canvas (the
+            // else branch) always clears, threshold or not.
+            if let Some((hx, hy)) = self.last_hover_probe {
+                if (x - hx).abs() < 3.0 && (y - hy).abs() < 3.0 {
+                    return cleared;
+                }
+            }
+            self.last_hover_probe = Some((x, y));
+            let (cx0, cy0) = self.canvas_origin();
+            let canvas_local = Point2D::new(x - cx0, y - cy0);
+            let doc = self.editor_state.viewport.to_document(canvas_local);
+            self.layout_scene
+                .node_at_doc_point(doc, self.editor_state.viewport.zoom)
+                .map(|id| op_editor_core::NodeId::new(&id))
+        } else {
+            self.last_hover_probe = None;
+            None
+        };
+        if new_canvas_hover != self.editor_state.editor_ui.canvas_hover_node {
+            self.editor_state.editor_ui.canvas_hover_node = new_canvas_hover;
+            self.mark_dirty();
+            return true;
+        }
         // Fold stale-hover clearing into the repaint signal.
         cleared
     }
 
     /// Mouse-release — ends active drag; chat-panel snaps corner.
     pub fn apply_release_with_viewport(&mut self, viewport_w: f32, viewport_h: f32) -> bool {
+        // Pen owns the release while authoring (TS onMouseUp).
+        if self.apply_pen_release() {
+            return true;
+        }
         // Drop color-picker drag.
         if self.editor_state.ui.color_picker.is_some() {
             self.editor_state.color_picker_set_drag(None);
@@ -1138,9 +1094,11 @@ impl WidgetHostNative {
             self.mark_dirty();
             return true;
         }
-        if self.node_drag.take().is_some() {
-            // Drag ended — drop the transient smart-guide lines.
+        if let Some(drag) = self.node_drag.take() {
+            // Drag ended — drop the transient smart-guide lines, then
+            // run the drop policy (auto-layout reorder / reparent).
             self.editor_state.editor_ui.active_guides.clear();
+            let _ = self.commit_node_drag(&drag);
             self.mark_dirty();
             return true;
         }
@@ -1151,6 +1109,9 @@ impl WidgetHostNative {
             return true;
         }
         if self.chat_text_selection_drag.take().is_some() {
+            return true;
+        }
+        if self.text_edit_selection_drag.take().is_some() {
             return true;
         }
         if let Some(drag) = self.path_anchor_drag.take() {
@@ -1206,7 +1167,22 @@ impl WidgetHostNative {
     }
 
     /// Viewport-less release variant — drops viewport-bound drags.
+    /// Begin a canvas pan directly (middle-mouse press) — bypasses
+    /// the tool branch; the shared cursor-move / release paths drive
+    /// and end it like any pan drag.
+    pub fn apply_pan_press(&mut self, x: f32, y: f32) -> bool {
+        self.drag = Some(DragState {
+            last_x: x,
+            last_y: y,
+        });
+        true
+    }
+
     pub fn apply_release(&mut self) -> bool {
+        // Pen owns the release while authoring (TS onMouseUp).
+        if self.apply_pen_release() {
+            return true;
+        }
         if self.panel_resize.take().is_some() {
             return true;
         }
@@ -1224,9 +1200,11 @@ impl WidgetHostNative {
             self.mark_dirty();
             return true;
         }
-        if self.node_drag.take().is_some() {
-            // Drag ended — drop the transient smart-guide lines.
+        if let Some(drag) = self.node_drag.take() {
+            // Drag ended — drop the transient smart-guide lines, then
+            // run the drop policy (auto-layout reorder / reparent).
             self.editor_state.editor_ui.active_guides.clear();
+            let _ = self.commit_node_drag(&drag);
             self.mark_dirty();
             return true;
         }
@@ -1237,6 +1215,9 @@ impl WidgetHostNative {
             return true;
         }
         if self.chat_text_selection_drag.take().is_some() {
+            return true;
+        }
+        if self.text_edit_selection_drag.take().is_some() {
             return true;
         }
         if self.marquee_drag.take().is_some() {
@@ -1281,109 +1262,9 @@ impl WidgetHostNative {
         was_dragging
     }
 
-    /// Build the `SetEllipseArc` command for an in-progress arc-handle
-    /// drag — converts the cursor doc point into start / sweep / inner
-    /// geometry for the dragged handle. `None` for a missing or
-    /// zero-size ellipse.
-    fn arc_drag_command(
-        &self,
-        id: &op_editor_core::NodeId,
-        handle: op_editor_ui::widgets::ArcHandle,
-        doc: Point2D,
-    ) -> Option<op_editor_core::EditorCommand> {
-        use op_editor_core::EditorCommand;
-        use op_editor_ui::widgets::ArcHandle;
-        let node = self.layout_scene.active_page()?.find(id.as_str())?;
-        let b = node.bounds;
-        if b.size.x <= 0.0 || b.size.y <= 0.0 {
-            return None;
-        }
-        let centre = Point2D::new(b.origin.x + b.size.x / 2.0, b.origin.y + b.size.y / 2.0);
-        // Un-rotate the cursor into the ellipse's local frame.
-        let doc = if node.rotation.abs() > f32::EPSILON {
-            op_editor_ui::widgets::rotate_point(doc, centre, -node.rotation)
-        } else {
-            doc
-        };
-        // Cursor offset from the ellipse centre, normalised by the
-        // radii so the angle is the same convention the painter uses.
-        let nx = (doc.x - centre.x) / (b.size.x / 2.0);
-        let ny = (doc.y - centre.y) / (b.size.y / 2.0);
-        let old_start = node.arc_start_angle.unwrap_or(0.0);
-        let old_sweep = node.arc_sweep_angle.unwrap_or(360.0);
-        Some(match handle {
-            ArcHandle::Start => {
-                // Dragging the start handle keeps the end fixed; the
-                // sweep keeps the sign of the existing arc.
-                let new_start = norm360(ny.atan2(nx).to_degrees());
-                let new_sweep = signed_sweep(old_start + old_sweep - new_start, old_sweep);
-                EditorCommand::SetEllipseArc {
-                    node_id: id.clone(),
-                    start_angle: Some(new_start as f64),
-                    sweep_angle: Some(new_sweep as f64),
-                    inner_radius: None,
-                }
-            }
-            ArcHandle::Sweep => {
-                let new_sweep = signed_sweep(ny.atan2(nx).to_degrees() - old_start, old_sweep);
-                EditorCommand::SetEllipseArc {
-                    node_id: id.clone(),
-                    start_angle: None,
-                    sweep_angle: Some(new_sweep as f64),
-                    inner_radius: None,
-                }
-            }
-            ArcHandle::Inner => {
-                let frac = (nx * nx + ny * ny).sqrt().clamp(0.0, 1.0);
-                EditorCommand::SetEllipseArc {
-                    node_id: id.clone(),
-                    start_angle: None,
-                    sweep_angle: None,
-                    inner_radius: Some(frac as f64),
-                }
-            }
-        })
-    }
-}
-
-/// Normalise an angle into `[0, 360)` degrees.
-fn norm360(deg: f32) -> f32 {
-    let s = deg % 360.0;
-    if s < 0.0 {
-        s + 360.0
-    } else {
-        s
-    }
-}
-
-/// Normalise a sweep into `(0, 360]` — a sweep that collapses to 0
-/// snaps to a full 360° circle.
-fn norm_sweep(deg: f32) -> f32 {
-    let s = norm360(deg);
-    if s <= 0.0001 {
-        360.0
-    } else {
-        s
-    }
-}
-
-/// A sweep that keeps the sign of the arc being edited — an
-/// MCP-authored negative (counter-clockwise) sweep stays negative
-/// under a canvas drag instead of flipping to the major arc. A
-/// negative sweep that collapses to 0 snaps to a full -360° circle
-/// (mirroring `norm_sweep`'s positive 0 → 360 rule).
-fn signed_sweep(raw: f32, old_sweep: f32) -> f32 {
-    let pos = norm_sweep(raw);
-    if old_sweep < 0.0 {
-        let neg = pos - 360.0;
-        if neg == 0.0 {
-            -360.0
-        } else {
-            neg
-        }
-    } else {
-        pos
-    }
+    // `arc_drag_command` (the `SetEllipseArc` builder) lives in the
+    // `arc_drag.rs` sibling — relocated when the pen hooks landed
+    // here, to keep this over-cap file from growing.
 }
 
 /// Convert a shell-core `Rect` (screen / doc px) into op-editor-core's

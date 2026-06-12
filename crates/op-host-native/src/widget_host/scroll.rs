@@ -79,6 +79,11 @@ impl WidgetHostNative {
     ) -> bool {
         use op_editor_ui::widgets::{PropertyPanel, TOP_BAR_HEIGHT};
         use op_editor_ui::Rect;
+        // A wheel over the open font-family picker scrolls ITS list,
+        // not the panel behind it (font_picker_dispatch.rs).
+        if self.try_scroll_font_picker(x, y, delta, viewport_width, viewport_height) {
+            return true;
+        }
         let Some(panel) = PropertyPanel::for_selection_at(&self.editor_state, self.now_ms) else {
             return false;
         };
