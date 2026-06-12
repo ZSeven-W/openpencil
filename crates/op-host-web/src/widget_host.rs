@@ -69,6 +69,7 @@ mod color_picker_press;
 mod component_browser_press;
 mod cursor_input;
 mod design_md_press;
+pub(crate) mod icon_ingest;
 // Browser file-IO ingestion (Open / Figma import / clipboard paste)
 // — needs the codegen-gated document-pipeline deps (jian-ops-schema).
 #[cfg(feature = "codegen")]

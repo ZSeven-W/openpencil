@@ -230,13 +230,7 @@ fn parse_collection(
             .map(|v| v as f32)
             .or(default_h)
             .unwrap_or(24.0);
-        if let Some(parsed) =
-            op_editor_ui::widgets::icon_catalog::parse_iconify_body(svg_body, w, h)
-        {
-            let style = match parsed.style {
-                op_editor_ui::widgets::icon_catalog::IconRenderStyle::Stroke => "stroke",
-                op_editor_ui::widgets::icon_catalog::IconRenderStyle::Fill => "fill",
-            };
+        if let Some(parsed) = crate::widget_host::icon_ingest::ingest_iconify_body(svg_body, w, h) {
             out.insert(
                 format!("{collection}:{name}"),
                 IconPickerRemoteIcon {
@@ -244,7 +238,7 @@ fn parse_collection(
                     name: name.clone(),
                     width: parsed.width,
                     height: parsed.height,
-                    style: style.to_string(),
+                    style: parsed.style.to_string(),
                     d: parsed.d,
                 },
             );
