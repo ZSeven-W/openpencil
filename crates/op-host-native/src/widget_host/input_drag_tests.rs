@@ -52,6 +52,7 @@ fn anchor_press_release_without_motion_does_not_push_history() {
         target: crate::widget_host::AnchorDragTarget::Anchor,
         anchor_doc: Point2D::new(50.0, 25.0),
         start_doc: Point2D::new(50.0, 25.0),
+        grab_offset: None,
         shift: false,
         moved: false,
         pre_drag_snapshot: snap,
@@ -90,6 +91,7 @@ fn anchor_drag_back_to_start_lands_at_start() {
         target: crate::widget_host::AnchorDragTarget::Anchor,
         anchor_doc: Point2D::new(50.0, 25.0),
         start_doc: Point2D::new(50.0, 25.0),
+        grab_offset: None,
         shift: false,
         moved: false,
         pre_drag_snapshot: snap,
@@ -130,6 +132,7 @@ fn anchor_drag_with_motion_pushes_one_history_entry() {
         target: crate::widget_host::AnchorDragTarget::Anchor,
         anchor_doc: Point2D::new(50.0, 25.0),
         start_doc: Point2D::new(50.0, 25.0),
+        grab_offset: None,
         shift: false,
         moved: true,
         pre_drag_snapshot: snap,
@@ -214,6 +217,8 @@ fn node_drag_snap_does_not_trap_incremental_cursor_motion() {
         // This test exercises smart-guide accumulation on an already-
         // in-progress drag, not the press-time threshold gate.
         moved: true,
+        total_dx: 0.0,
+        total_dy: 0.0,
     });
 
     for x in (502..=522).step_by(2) {
@@ -254,6 +259,8 @@ fn node_drag_skips_smart_guides_for_large_documents() {
         press_screen_x: 500.0,
         press_screen_y: 500.0,
         moved: true,
+        total_dx: 0.0,
+        total_dy: 0.0,
     });
 
     assert!(host.apply_cursor_move(502.0, 500.0));
@@ -291,6 +298,8 @@ fn node_drag_keeps_flex_child_in_layout_flow() {
         press_screen_x: 500.0,
         press_screen_y: 500.0,
         moved: true,
+        total_dx: 0.0,
+        total_dy: 0.0,
     });
 
     assert!(host.apply_cursor_move(520.0, 500.0));

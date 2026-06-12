@@ -12,7 +12,7 @@
 //! widget-facing trait (spec §5.2.1 mirror surface, no direct impl in
 //! Step 1a; saved for Step 1c+ widget tree).
 
-use op_editor_ui::{Color, Point2D, Rect, TextLayout};
+use op_editor_ui::{Color, Point2D, Rect};
 
 /// OP-flavoured (`f32` 0..=1 RGBA) → Jian (`u8` packed RGBA) color.
 ///
@@ -66,33 +66,6 @@ pub(super) fn to_sk_rect(r: Rect) -> skia_safe::Rect {
     skia_safe::Rect::from_xywh(r.origin.x, r.origin.y, r.size.x, r.size.y)
 }
 
-/// Build a skia `FontStyle` whose weight matches the canonical
-/// schema's CSS-style numeric weight (100-900). Width + slant stay
-/// at the system defaults (Normal / Upright); italic / stretched
-/// variants are a follow-up if `.op` files start authoring them.
-fn font_style_for_weight(weight: u16) -> skia_safe::FontStyle {
-    let w = weight as i32;
-    skia_safe::FontStyle::new(
-        skia_safe::font_style::Weight::from(w),
-        skia_safe::font_style::Width::NORMAL,
-        skia_safe::font_style::Slant::Upright,
-    )
-}
-
-fn primary_font_family(stack: &str) -> Option<&str> {
-    let first = stack.split(',').next()?.trim().trim_matches(['"', '\'']);
-    if first.is_empty()
-        || matches!(
-            first,
-            "system-ui" | "sans-serif" | "serif" | "monospace" | "-apple-system"
-        )
-    {
-        None
-    } else {
-        Some(first)
-    }
-}
-
 /// OP `Color` → `skia_safe::Color4f` — used by the direct-canvas
 /// helpers (stroke_line / fill_round_rect / stroke_round_rect)
 /// that skip the jian DrawOp pipeline.
@@ -113,6 +86,7 @@ mod font_script;
 mod gradient;
 mod image;
 mod path;
+mod text;
 #[cfg(test)]
 use image::{cover_rect, image_adjustment_matrix};
 
@@ -150,12 +124,13 @@ pub struct NativeBackend {
     korean_typeface: Option<skia_safe::Typeface>,
     korean_typeface_tried: bool,
     /// Default-family per-codepoint typeface cache, keyed by
-    /// `(codepoint, weight)`.
-    char_typeface_cache: std::collections::HashMap<(i32, u16), Option<skia_safe::Typeface>>,
+    /// `(codepoint, weight, italic)` — the slant bit keeps italic
+    /// resolutions from shadowing upright ones.
+    char_typeface_cache: std::collections::HashMap<(i32, u16, bool), Option<skia_safe::Typeface>>,
     /// Explicit-family typeface cache for selected text / font picker
-    /// previews, keyed by `(primary family, codepoint, weight)`.
+    /// previews, keyed by `(primary family, codepoint, weight, italic)`.
     family_typeface_cache:
-        std::collections::HashMap<(String, i32, u16), Option<skia_safe::Typeface>>,
+        std::collections::HashMap<(String, i32, u16, bool), Option<skia_safe::Typeface>>,
     /// Decoded-image cache keyed by [`op_editor_core::ChatImage::id`].
     /// `draw_image` decodes the raw bytes once on first sight; later
     /// frames reuse the cached `Image`. A decode failure is cached as
@@ -249,147 +224,6 @@ impl NativeBackend {
         this
     }
 
-    /// Resolve a typeface that covers `c`. Cached per codepoint —
-    /// `FontMgr::match_family_style_character` is fast on first call
-    /// but we still avoid the look-up on every chrome paint.
-    /// Falls back to the cached CJK typeface, then the cached
-    /// Roboto, so a worst-case missing-font system still renders
-    /// something rather than dropping the glyph.
-    fn typeface_for_char(&mut self, c: char, weight: u16) -> Option<skia_safe::Typeface> {
-        // ASCII at weight 400 stays on the bundled Roboto-Regular for
-        // hot chrome paint; non-default weight or non-ASCII falls
-        // through to the system FontMgr, which honours weight.
-        if c.is_ascii() && weight == 400 {
-            return self.ensure_typeface().cloned();
-        }
-        if font_script::is_hangul_codepoint(c) {
-            if let Some(tf) = self.ensure_korean_typeface().cloned() {
-                return Some(tf);
-            }
-        } else if font_script::is_east_asian_codepoint(c) {
-            return self.ensure_cjk_typeface().cloned();
-        }
-        let cp = c as i32;
-        let key = (cp, weight);
-        if let Some(cached) = self.char_typeface_cache.get(&key) {
-            return cached.clone();
-        }
-        let style = font_style_for_weight(weight);
-        let tf = self
-            .font_mgr
-            .match_family_style_character("", style, &[], cp);
-        let resolved = tf.or_else(|| {
-            // CJK fallback path doesn't yet vary by weight — TS app
-            // synthesises bold via paint stroke when the family is
-            // weight-locked. Mirror that downstream of `draw_text`
-            // with `Paint::set_stroke_width` when needed.
-            self.ensure_cjk_typeface().cloned()
-        });
-        self.char_typeface_cache.insert(key, resolved.clone());
-        resolved
-    }
-
-    fn typeface_for_family_char(
-        &mut self,
-        c: char,
-        family: &str,
-        weight: u16,
-    ) -> Option<skia_safe::Typeface> {
-        let Some(primary) = primary_font_family(family) else {
-            return self.typeface_for_char(c, weight);
-        };
-        if font_script::is_hangul_codepoint(c) {
-            if let Some(tf) = self.ensure_korean_typeface().cloned() {
-                return Some(tf);
-            }
-        } else if font_script::is_east_asian_codepoint(c) {
-            return self.ensure_cjk_typeface().cloned();
-        }
-        let key = (primary.to_string(), c as i32, weight);
-        if let Some(cached) = self.family_typeface_cache.get(&key) {
-            return cached.clone();
-        }
-        let style = font_style_for_weight(weight);
-        let resolved = self
-            .font_mgr
-            .match_family_style_character(primary, style, &[], c as i32)
-            .or_else(|| self.typeface_for_char(c, weight));
-        self.family_typeface_cache.insert(key, resolved.clone());
-        resolved
-    }
-
-    /// Split `text` into contiguous segments that share a typeface,
-    /// preserving char order. Glyphs without any covering typeface
-    /// are bucketed with the previous segment so they at least
-    /// occupy space (rather than disappearing).
-    fn segment_text(
-        &mut self,
-        text: &str,
-        family: &str,
-        weight: u16,
-    ) -> Vec<(skia_safe::Typeface, String)> {
-        let mut segments: Vec<(skia_safe::Typeface, String)> = Vec::new();
-        for c in text.chars() {
-            let tf = self.typeface_for_family_char(c, family, weight);
-            let Some(tf) = tf else {
-                if let Some(last) = segments.last_mut() {
-                    last.1.push(c);
-                }
-                continue;
-            };
-            match segments.last_mut() {
-                Some(last) if last.0.unique_id() == tf.unique_id() => last.1.push(c),
-                _ => segments.push((tf, c.to_string())),
-            }
-        }
-        segments
-    }
-
-    /// Lazy-init the Step 4 cached Roboto typeface (ASCII path).
-    fn ensure_typeface(&mut self) -> Option<&skia_safe::Typeface> {
-        if !self.typeface_tried {
-            self.typeface = self.font_mgr.new_from_data(ROBOTO_TTF, None);
-            self.typeface_tried = true;
-        }
-        self.typeface.as_ref()
-    }
-
-    /// Lazy-resolve a system typeface that has CJK glyph coverage.
-    /// Picks whichever font the system FontMgr would use for the
-    /// canonical Han ideograph U+4E00 — on macOS this is PingFang SC,
-    /// on Linux it's Noto Sans CJK, on Windows it's Microsoft YaHei
-    /// or similar. Cached for the lifetime of the backend so we
-    /// don't pay the FontMgr lookup more than once.
-    fn ensure_cjk_typeface(&mut self) -> Option<&skia_safe::Typeface> {
-        if !self.cjk_typeface_tried {
-            self.cjk_typeface = self.font_mgr.match_family_style_character(
-                "",
-                skia_safe::FontStyle::default(),
-                &[],
-                '一' as i32,
-            );
-            self.cjk_typeface_tried = true;
-        }
-        self.cjk_typeface.as_ref()
-    }
-
-    /// Lazy-init the cached Korean (Hangul) typeface, resolved from a
-    /// Hangul syllable so the OS picks a Hangul-covering face (e.g.
-    /// Apple SD Gothic Neo / Noto Sans KR) rather than the Chinese
-    /// font the Han-ideograph match returns.
-    fn ensure_korean_typeface(&mut self) -> Option<&skia_safe::Typeface> {
-        if !self.korean_typeface_tried {
-            self.korean_typeface = self.font_mgr.match_family_style_character(
-                "",
-                skia_safe::FontStyle::default(),
-                &[],
-                '한' as i32,
-            );
-            self.korean_typeface_tried = true;
-        }
-        self.korean_typeface.as_ref()
-    }
-
     /// Convenience constructor for tests and the basic-window demo.
     pub fn with_dpi(dpi: f32) -> Self {
         Self::new(jian_skia::SkiaBackend::new(), dpi)
@@ -472,91 +306,17 @@ impl NativeBackend {
         self.draw_op(canvas, &op);
     }
 
-    /// Measure the rendered horizontal advance of `text` at
-    /// `font_size`. Uses the same per-script typeface dispatch as
-    /// `draw_text` so the measurement matches what's painted.
-    /// Falls back to a conservative heuristic when typefaces
-    /// aren't available.
-    pub fn measure_text(&mut self, text: &str, font_size: f32) -> f32 {
-        self.measure_text_weighted(text, font_size, 400)
-    }
-
-    /// Weight-aware text measurement. Resolves the per-codepoint
-    /// typeface against `FontStyle::new(Weight, ...)` so wrap-pass
-    /// line breaks decided at, say, weight 700 use the same glyph
-    /// advances `draw_text` will paint with at weight 700. Without
-    /// this the wrap pass measured at 400 and paint at 700 — the
-    /// rendered string could then overflow the wrap budget.
-    pub fn measure_text_weighted(&mut self, text: &str, font_size: f32, weight: u16) -> f32 {
-        let segments = self.segment_text(text, "", weight);
-        if segments.is_empty() {
-            return 0.0;
-        }
-        let mut advance = 0.0_f32;
-        for (typeface, segment) in segments {
-            let font = skia_safe::Font::new(&typeface, font_size);
-            let (a, _) = font.measure_str(&segment, None);
-            advance += a;
-        }
-        advance
-    }
-
-    /// Render every shaped run in the layout via cached typefaces +
-    /// `Canvas::draw_str` (Step 4 perf fix — see comment on the
-    /// `typeface` / `cjk_typeface` fields).
-    ///
-    /// Two fast paths + one fallback:
-    ///   - run is ASCII-only → cached Roboto + draw_str
-    ///   - run contains non-ASCII → cached system CJK typeface +
-    ///     draw_str (PingFang / Noto CJK / etc.). PingFang covers
-    ///     Latin too, so mixed CJK + Latin runs render correctly.
-    ///   - the system has no CJK font (rare; Linux without Noto)
-    ///     → fall back to jian-skia's textlayout path so glyphs
-    ///     don't drop. Still slow on that branch, but functional.
-    #[tracing::instrument(skip(self, canvas, layout))]
-    pub fn draw_text(&mut self, canvas: &skia_safe::Canvas, layout: &TextLayout, origin: Point2D) {
-        let runs: Vec<_> = layout.runs().to_vec();
-        for run in runs {
-            let segments =
-                self.segment_text(run.content.as_str(), &run.font_family, run.font_weight);
-            if segments.is_empty() {
-                continue;
-            }
-            let jc = run.color;
-            let mut paint = skia_safe::Paint::new(
-                skia_safe::Color4f::new(
-                    f32::from(jc.r()) / 255.0,
-                    f32::from(jc.g()) / 255.0,
-                    f32::from(jc.b()) / 255.0,
-                    f32::from(jc.a()) / 255.0,
-                ),
-                None,
-            );
-            paint.set_anti_alias(true);
-            // Synthetic bold for typefaces the system serves at one
-            // weight only (notably the bundled Roboto-Regular for
-            // ASCII at weight ≥600). Stroke width scales with size
-            // so 28pt headline gets the same visual weight relative
-            // to its glyph as 13pt body text.
-            let synth_bold = run.font_weight >= 600;
-            if synth_bold {
-                paint.set_style(skia_safe::PaintStyle::StrokeAndFill);
-                paint.set_stroke_width(run.font_size * 0.06);
-            }
-            let mut x = origin.x + run.origin.x;
-            let y = origin.y + run.origin.y;
-            for (typeface, segment) in segments {
-                let font = skia_safe::Font::new(&typeface, run.font_size);
-                canvas.draw_str(&segment, (x, y), &font, &paint);
-                let (advance, _) = font.measure_str(&segment, None);
-                x += advance;
-            }
-        }
-    }
-
     /// Push a clip region. Spec §5.2.1 / plan Step 14f.
     pub fn clip_rect(&self, canvas: &skia_safe::Canvas, rect: Rect) {
         canvas.clip_rect(to_sk_rect(rect), None, None);
+    }
+
+    /// Intersect the clip with a rounded rectangle — `clipContent`
+    /// containers clip children to their rounded corners (TS parity:
+    /// `canvas.clipRRect(..., ClipOp.Intersect, true)`).
+    pub fn clip_round_rect(&self, canvas: &skia_safe::Canvas, rect: Rect, radius: f32) {
+        let rrect = skia_safe::RRect::new_rect_xy(to_sk_rect(rect), radius, radius);
+        canvas.clip_rrect(rrect, skia_safe::ClipOp::Intersect, true);
     }
 
     /// Stroke a single line segment. Step 4 visual lift addition —
@@ -781,6 +541,24 @@ impl NativeBackend {
     pub(crate) fn family_typeface_cache_len(&self) -> usize {
         self.family_typeface_cache.len()
     }
+}
+
+/// Enumerate every installed font family via Skia's `FontMgr` —
+/// feeds the property panel's font-family picker (the native
+/// counterpart of the browser Local Font Access API the TS
+/// `use-system-fonts.ts` hook queries). Names come back in manager
+/// order; the caller sorts / dedupes.
+pub fn enumerate_system_font_families() -> Vec<String> {
+    let mgr = skia_safe::FontMgr::new();
+    let count = mgr.count_families();
+    let mut out = Vec::with_capacity(count);
+    for i in 0..count {
+        let name = mgr.family_name(i);
+        if !name.trim().is_empty() {
+            out.push(name);
+        }
+    }
+    out
 }
 
 #[cfg(test)]

@@ -127,7 +127,9 @@ impl WidgetHostNative {
             return true;
         }
         if self.editor_state.ui.text_editing.is_some() {
-            self.editor_state.ui.text_edit_select_all = true;
+            // Sets the legacy select-all flag AND anchor 0 + caret at
+            // the end so caret-aware ops see the full-range selection.
+            let _ = self.editor_state.text_edit_select_all_now();
             self.editor_state.ui.text_edit_caret_anchor_ms = self.now_ms;
             self.mark_dirty();
             return true;
@@ -269,6 +271,54 @@ impl WidgetHostNative {
         true
     }
 
+    /// Cmd+Shift+V — toggle the floating Variables panel (same
+    /// bookkeeping as the toolbar Braces button).
+    pub fn apply_toggle_variables_panel(&mut self) -> bool {
+        self.commit_variable_row_focus_if_any();
+        self.dispatch_toolbar_action(op_editor_ui::widgets::ToolbarAction::ToggleVariablesPanel)
+    }
+
+    /// Cmd+Shift+D — toggle the floating Design-MD panel.
+    pub fn apply_toggle_design_md_panel(&mut self) -> bool {
+        self.commit_variable_row_focus_if_any();
+        self.dispatch_toolbar_action(op_editor_ui::widgets::ToolbarAction::ToggleDesignPanel)
+    }
+
+    /// Cmd+Shift+K — toggle the component (UIKit) browser panel.
+    pub fn apply_toggle_component_browser(&mut self) -> bool {
+        self.commit_variable_row_focus_if_any();
+        let ui = &mut self.editor_state.editor_ui;
+        ui.component_browser_open = !ui.component_browser_open;
+        self.mark_dirty();
+        true
+    }
+
+    /// Cmd+Shift+F — open the Figma import modal.
+    pub fn apply_open_figma_import(&mut self) -> bool {
+        self.commit_variable_row_focus_if_any();
+        self.editor_state.editor_ui.figma_import_open = true;
+        self.mark_dirty();
+        true
+    }
+
+    /// Cmd+Alt+K — promote the selected node to a component (same
+    /// path as the property-panel Create Component button).
+    pub fn apply_create_component(&mut self) -> bool {
+        self.commit_variable_row_focus_if_any();
+        let id = self.editor_state.selection.anchor.clone();
+        let acted = id.is_real() && self.editor_state.create_component_from_node_name(&id);
+        if acted {
+            self.mark_dirty();
+        }
+        acted
+    }
+
+    /// Space held / released — transient canvas pan (TS space-drag
+    /// parity): while held, a canvas press pans regardless of tool.
+    pub fn set_space_pan(&mut self, held: bool) {
+        self.space_pan = held;
+    }
+
     /// Cmd+, — open / close the floating agent-settings modal.
     pub fn apply_toggle_agent_settings(&mut self) -> bool {
         self.commit_variable_row_focus_if_any();
@@ -282,11 +332,14 @@ impl WidgetHostNative {
     }
 
     /// Single-key tool switch (V / R / O / L / T / F / P / H). Also
-    /// commits any in-flight pen path so switching away from Pen
-    /// doesn't leave a dangling rubber-band.
+    /// DISCARDS any in-flight pen path (TS `onToolChange` resets the
+    /// pen preview without committing, `skia-pen-tool.ts:38-50`).
     pub fn apply_set_tool(&mut self, tool: op_editor_core::Tool) {
+        // Leaving Select must drop the hover outline immediately —
+        // cursor moves stop updating it for other tools.
+        self.editor_state.editor_ui.canvas_hover_node = None;
         self.commit_variable_row_focus_if_any();
-        let _ = self.editor_state.finish_pen_path();
+        self.cancel_pen_on_tool_switch(tool);
         let ec_tool = tool;
         self.editor_state.tool = ec_tool;
         if let op_editor_core::Tool::Rect

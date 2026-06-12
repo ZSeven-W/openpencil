@@ -55,17 +55,15 @@ impl WidgetHostNative {
         }
         let source = d.source.clone();
         let anchor = drop.anchor.clone();
-        match drop.position {
-            DropPosition::Before => {
-                self.editor_state.reorder_before(source, anchor);
-            }
-            DropPosition::After => {
-                self.editor_state.reorder_after(source, anchor);
-            }
-            DropPosition::Into => {
-                self.editor_state.reorder_into(source, anchor);
-            }
-        }
+        // TS moveNode wraps the reorder/reparent in mutateWithHistory
+        // (document-store-node-actions.ts:106-132) — push only when
+        // the mutator actually moved something (a rejected cycle /
+        // missing anchor must not pollute the undo stack).
+        self.with_doc_history(|s| match drop.position {
+            DropPosition::Before => s.reorder_before(source, anchor),
+            DropPosition::After => s.reorder_after(source, anchor),
+            DropPosition::Into => s.reorder_into(source, anchor),
+        });
         self.mark_dirty();
         true
     }
@@ -118,6 +116,9 @@ impl WidgetHostNative {
             self.mark_dirty();
         }
         // Empty marquee on plain press already cleared at start.
+        // A marquee selection landing outside the entered container
+        // steps out of it (selection-outside-exits rule).
+        self.editor_state.sync_entered_container_with_selection();
     }
 
     /// Primary-button click — routes to AI chat / Toolbar / Layer.
@@ -135,6 +136,10 @@ impl WidgetHostNative {
             if let Some(hit) = panel.hit_test(chat_rect, Point2D::new(x, y)) {
                 match hit {
                     AIChatHit::Inside => {
+                        // Panel chrome that hit no control — blank
+                        // press: blur every input (the chat's own
+                        // textarea included, DOM parity).
+                        self.blur_text_inputs_on_blank_press();
                         self.mark_dirty();
                         return true;
                     }
@@ -329,21 +334,11 @@ impl WidgetHostNative {
                 }
             }
         }
-        // Click outside chat panel — defocus the input + close the
-        // model picker if it was open.
-        let picker_was_open = self.editor_state.editor_ui.chat_model_picker_open;
-        self.editor_state.editor_ui.chat_model_picker_open = false;
-        self.editor_state.editor_ui.chat_model_picker_scroll = 0.0;
-        self.editor_state.editor_ui.chat_model_picker_search.clear();
-        self.editor_state.editor_ui.chat_model_picker_caret = None;
-        self.editor_state.editor_ui.chat_model_picker_hover = None;
-        let was_focused = self.editor_state.chat.focused || picker_was_open;
-        self.editor_state.chat.focused = false;
-        self.editor_state.chat.input_select_all = false;
-        self.editor_state.chat.input_selection = None;
-        if was_focused {
-            self.mark_dirty();
-        }
+        // Click outside the chat panel — blank press for the chat
+        // (and every other text input): blur + commit through the
+        // central helper so a panel-gap click can't strand a focused
+        // input behind this block's early-consume return.
+        let was_focused = self.blur_text_inputs_on_blank_press();
         let (cx0, _cy0, _cw, _ch) = self.canvas_region(viewport_width, viewport_height);
         let toolbar = Toolbar::for_editor(&self.editor_state);
         let toolbar_h = toolbar
@@ -437,12 +432,16 @@ impl WidgetHostNative {
                     return true;
                 }
                 H::ToggleHidden(node_id) => {
-                    self.editor_state.toggle_node_hidden(&node_id.clone());
+                    // TS toggleVisibility → mutateWithHistory
+                    // (document-store-node-actions.ts:162-174).
+                    self.with_doc_history(|s| s.toggle_node_hidden(&node_id.clone()));
                     self.mark_dirty();
                     return true;
                 }
                 H::ToggleLocked(node_id) => {
-                    self.editor_state.toggle_node_locked(&node_id.clone());
+                    // TS toggleLock → mutateWithHistory
+                    // (document-store-node-actions.ts:176-188).
+                    self.with_doc_history(|s| s.toggle_node_locked(&node_id.clone()));
                     self.mark_dirty();
                     return true;
                 }
@@ -452,12 +451,18 @@ impl WidgetHostNative {
                     return true;
                 }
                 H::AddPage => {
-                    let _ = self.editor_state.add_page();
+                    // TS addPage pushes history before the insert
+                    // (document-store-pages.ts:19-49).
+                    self.with_doc_history(|s| s.add_page().is_some());
                     self.mark_dirty();
                     return true;
                 }
                 H::DeletePage(idx) => {
-                    let _ = self.editor_state.remove_page(idx);
+                    // TS removePage pushes history after its
+                    // last-page guard (document-store-pages.ts:51-63)
+                    // — `with_doc_history` skips the push when the
+                    // guard rejects the delete.
+                    self.with_doc_history(|s| s.remove_page(idx));
                     self.mark_dirty();
                     return true;
                 }

@@ -10,4 +10,4 @@
 
 pub mod skia;
 
-pub use skia::{to_jian_color, to_jian_rect, NativeBackend};
+pub use skia::{enumerate_system_font_families, to_jian_color, to_jian_rect, NativeBackend};

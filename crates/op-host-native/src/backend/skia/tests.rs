@@ -364,6 +364,7 @@ fn image_draw_respects_node_opacity() {
         op_editor_ui::ImageDrawMode::Stretch,
         op_editor_ui::ImageAdjustments::default(),
         0.5,
+        0.0,
     );
     let img = surface.image_snapshot();
     let pm = img.peek_pixels().expect("peek raster pixels");

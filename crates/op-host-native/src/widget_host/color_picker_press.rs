@@ -34,7 +34,10 @@ impl WidgetHostNative {
             Some(ColorPickerHit::Eyedropper) | Some(ColorPickerHit::Inside) => true,
             Some(hit @ (ColorPickerHit::SvBox | ColorPickerHit::HueSlider)) => {
                 if let Some(kind) = drag_for_hit(hit) {
-                    // Live-apply once for the press point.
+                    // Live-apply once for the press point. Instance
+                    // anchors route through the override redirect
+                    // (GAP #10 choke point — see property_dispatch).
+                    let instance_scope = self.editor_state.begin_instance_write_for_anchor();
                     match hit {
                         ColorPickerHit::SvBox => {
                             let (s, v) = picker.sv_at(panel, point);
@@ -47,6 +50,9 @@ impl WidgetHostNative {
                                 .color_picker_set_hsv(h, state.sat, state.val);
                         }
                         _ => {}
+                    }
+                    if let Some(scope) = instance_scope {
+                        self.editor_state.finish_instance_write(scope);
                     }
                     // `drag_for_hit` returns op-editor-core's
                     // `ColorPickerDrag` — no translation needed.

@@ -42,6 +42,13 @@ mod agent_settings_image_gen_tests;
 #[cfg(test)]
 mod agent_settings_tests;
 mod ai_chat_geometry;
+mod arc_drag;
+mod blur_inputs;
+#[cfg(test)]
+mod blur_inputs_tests;
+mod canvas_select_drag;
+#[cfg(test)]
+mod canvas_select_drag_tests;
 mod chat_design_apply;
 #[cfg(test)]
 mod chat_design_apply_tests;
@@ -59,21 +66,33 @@ mod component_browser_press;
 mod design_md_press;
 #[cfg(test)]
 mod figma_import_tests;
+mod font_picker_dispatch;
 mod frame_backend;
 mod geometry;
+mod geometry_settings_hover;
 #[cfg(test)]
 mod git_panel_placement_tests;
 mod git_press;
 mod helpers;
+mod history_guard;
 mod icon_picker_press;
+mod image_panel_dispatch;
+mod ime;
 mod input;
 #[cfg(test)]
 mod input_drag_tests;
 #[cfg(test)]
 mod input_tests;
+#[cfg(test)]
+mod instance_panel_tests;
 mod keyboard;
 mod overlay_rects;
 mod paint;
+#[cfg(test)]
+mod panel_history_tests;
+mod pen_press;
+#[cfg(test)]
+mod pen_press_tests;
 mod press;
 mod press_helpers;
 mod property_dispatch;
@@ -87,11 +106,22 @@ mod settings_caret;
 mod settings_caret_tests;
 mod settings_dispatch;
 mod shape_picker_press;
+#[cfg(test)]
+mod shortcut_surface_tests;
 mod shortcuts;
+mod text_edit_press;
+#[cfg(test)]
+mod text_edit_press_tests;
 #[cfg(test)]
 mod theme_tests;
 mod toolbar_actions;
 mod toolbar_hover;
+mod variables_panel_commit;
+mod variables_panel_geometry;
+mod variables_panel_press;
+#[cfg(test)]
+mod variables_panel_tests;
+mod variables_preset_press;
 mod viewport_fit;
 
 pub use frame_backend::NativeFrameBackend;
@@ -154,6 +184,12 @@ pub struct WidgetHostNative {
     /// Active canvas pan-drag state — left-button press → motion
     /// → release.
     pub(in crate::widget_host) drag: Option<DragState>,
+    /// True while Space is held — transient pan mode (TS parity):
+    /// canvas presses pan regardless of the active tool.
+    pub(in crate::widget_host) space_pan: bool,
+    /// Last cursor position the canvas-hover hit-test ran at —
+    /// sub-3px moves skip the tree walk (cost guard).
+    pub(in crate::widget_host) last_hover_probe: Option<(f32, f32)>,
     /// Active chat-panel drag state — present while the user
     /// drags the floating AI chat panel by its header. Holds the
     /// transient panel top-left position so paint can place the
@@ -181,6 +217,15 @@ pub struct WidgetHostNative {
     pub(in crate::widget_host) chat_input_selection_drag: Option<ChatInputSelectionDragState>,
     /// Active chat transcript text selection drag.
     pub(in crate::widget_host) chat_text_selection_drag: Option<ChatTextSelectionDragState>,
+    /// Active inline canvas text-edit selection drag — press inside
+    /// the edited Text node placed the caret; dragging extends the
+    /// selection from the press offset.
+    pub(in crate::widget_host) text_edit_selection_drag: Option<TextEditSelectionDragState>,
+    /// Lazily-created measure-only Skia backend for text-edit
+    /// hit-testing OUTSIDE the paint pass (press / drag / arrow-key
+    /// line mapping). Same `measure_text_weighted` implementation the
+    /// paint backend uses, so hit geometry matches painted glyphs.
+    pub(in crate::widget_host) text_measure: Option<crate::NativeBackend>,
     /// Active panel-resize drag — set when the cursor is pressed
     /// within the resize gutter of LayerPanel's right edge or
     /// PropertyPanel's left edge.
@@ -281,6 +326,12 @@ pub(in crate::widget_host) struct NodeDragState {
     /// Latches true once the cursor travels past `NODE_DRAG_THRESHOLD_PX`
     /// so a pure click with sub-pixel jitter never moves anything.
     pub(in crate::widget_host) moved: bool,
+    /// Net cursor travel since the press in DOC px (`(cursor - press)
+    /// / zoom`, refreshed each move). Flex-flow children never
+    /// doc-translate during the drag, so the release commit adds this
+    /// to their scene bounds to find the dropped position.
+    pub(in crate::widget_host) total_dx: f64,
+    pub(in crate::widget_host) total_dy: f64,
 }
 
 /// Active handle-drag — captures the press cursor anchor + the
@@ -367,11 +418,12 @@ pub(in crate::widget_host) enum AnchorDragTarget {
 }
 
 /// Path-anchor drag — tracks which anchor (or which of its bezier
-/// handles) of which Path node is being dragged by the pen tool.
-/// Move dispatches snap the target to the cursor; release commits a
-/// history snapshot ONLY when it actually moved (codex CONCERN: a
-/// press-release without motion pushed a no-op snapshot that
-/// polluted the undo stack).
+/// handles) of which Path node is being dragged (Pen or Select
+/// tool). Move dispatches apply the TS-style cumulative cursor delta
+/// (`movePathControl`, `path-editing.ts:66-114` — the grab offset is
+/// preserved, no snap); release commits a history snapshot ONLY when
+/// it actually moved (codex CONCERN: a press-release without motion
+/// pushed a no-op snapshot that polluted the undo stack).
 #[derive(Debug, Clone)]
 pub(in crate::widget_host) struct PathAnchorDragState {
     pub(in crate::widget_host) node_id: op_editor_core::NodeId,
@@ -381,10 +433,16 @@ pub(in crate::widget_host) struct PathAnchorDragState {
     /// The dragged anchor's absolute doc position, fixed at press —
     /// handle drags compute their offset relative to it.
     pub(in crate::widget_host) anchor_doc: op_editor_ui::Point2D,
-    /// Press cursor doc point — compared against the live cursor to
-    /// decide whether the drag actually moved.
+    /// Press cursor doc point (un-rotated into the node's local frame
+    /// for rotated paths) — base of the cumulative drag delta and the
+    /// did-it-move gate.
     pub(in crate::widget_host) start_doc: op_editor_ui::Point2D,
-    /// Shift held at press — a handle drag with Shift produces
+    /// The grabbed handle's offset at press. `Some` = an existing
+    /// handle, edited with TS `movePathControl` semantics; `None` for
+    /// the anchor body or a Pen-tool ghost mint (deliberate Rust
+    /// superset — TS cannot grab an unset handle).
+    pub(in crate::widget_host) grab_offset: Option<op_editor_ui::Point2D>,
+    /// Shift held at press — a ghost-handle MINT with Shift produces
     /// independent (broken) handles instead of mirrored ones.
     pub(in crate::widget_host) shift: bool,
     /// Set to true on the first cursor-move that mutates the target.
@@ -422,6 +480,13 @@ pub(in crate::widget_host) struct ChatInputSelectionDragState {
 #[derive(Debug, Clone, Copy)]
 pub(in crate::widget_host) struct ChatTextSelectionDragState {
     pub(in crate::widget_host) message_index: usize,
+    pub(in crate::widget_host) anchor: usize,
+}
+
+/// Inline canvas text-edit selection drag — `anchor` is the byte
+/// offset placed by the press; cursor moves extend `anchor..focus`.
+#[derive(Debug, Clone, Copy)]
+pub(in crate::widget_host) struct TextEditSelectionDragState {
     pub(in crate::widget_host) anchor: usize,
 }
 
@@ -479,6 +544,8 @@ impl WidgetHostNative {
             editor_state_dirty: false,
             theme: Theme::dark(),
             drag: None,
+            space_pan: false,
+            last_hover_probe: None,
             chat_drag: None,
             chat_resize: None,
             design_md_drag: None,
@@ -488,6 +555,8 @@ impl WidgetHostNative {
             code_selection_drag: None,
             chat_input_selection_drag: None,
             chat_text_selection_drag: None,
+            text_edit_selection_drag: None,
+            text_measure: None,
             panel_resize: None,
             node_drag: None,
             path_anchor_drag: None,
@@ -704,6 +773,68 @@ impl WidgetHostNative {
         }
     }
 
+    /// Insert nodes parsed from the Figma clipboard, centred on the
+    /// viewport, with fresh ids, batched undo, and the pasted roots
+    /// selected — mirrors TS `use-figma-paste.ts:67-100`.
+    pub fn paste_figma_nodes(
+        &mut self,
+        nodes: Vec<jian_ops_schema::node::PenNode>,
+        viewport_w: f32,
+        viewport_h: f32,
+    ) -> bool {
+        use op_editor_core::PenNodeExt;
+        if nodes.is_empty() {
+            return false;
+        }
+        // Union of the incoming roots' own bounds — the paste centres
+        // this box on the canvas viewport centre.
+        let mut min_x = f64::MAX;
+        let mut min_y = f64::MAX;
+        let mut max_x = f64::MIN;
+        let mut max_y = f64::MIN;
+        for node in &nodes {
+            let b = op_editor_core::own_bounds(node);
+            min_x = min_x.min(b.x);
+            min_y = min_y.min(b.y);
+            max_x = max_x.max(b.x + b.w);
+            max_y = max_y.max(b.y + b.h);
+        }
+        if min_x > max_x {
+            min_x = 0.0;
+            min_y = 0.0;
+            max_x = 0.0;
+            max_y = 0.0;
+        }
+        let (_cx0, _cy0, cw, ch) = self.canvas_region(viewport_w, viewport_h);
+        let canvas_local = op_editor_ui::Point2D::new(cw / 2.0, ch / 2.0);
+        let centre = self.editor_state.viewport.to_document(canvas_local);
+        let dx = centre.x as f64 - (min_x + max_x) / 2.0;
+        let dy = centre.y as f64 - (min_y + max_y) / 2.0;
+
+        let snap = self.editor_state.snapshot_for_history();
+        let mut taken = self.editor_state.collect_node_ids();
+        let mut new_ids = Vec::with_capacity(nodes.len());
+        for node in &nodes {
+            let mut clone = op_editor_core::walkers::deep_clone_with_new_ids(
+                node,
+                &mut self.next_node_id,
+                &mut taken,
+            );
+            op_editor_core::walkers::translate_subtree(&mut clone, dx, dy);
+            new_ids.push(op_editor_core::NodeId::new(clone.base().id.clone()));
+            self.editor_state.active_children_mut().push(clone);
+        }
+        if let Some(anchor) = new_ids.first().cloned() {
+            self.editor_state.set_single_selection(anchor);
+            for id in new_ids.into_iter().skip(1) {
+                self.editor_state.toggle_selection(id);
+            }
+        }
+        self.editor_state.history_push_past(snap);
+        self.mark_dirty();
+        true
+    }
+
     /// Commit any in-progress settings-modal input draft (currently
     /// the MCP port). Used by the desktop runner before persisting
     /// settings on quick-quit so a focused-but-uncommitted port edit
@@ -738,6 +869,24 @@ impl WidgetHostNative {
             ));
         }
         if ui.property_focus.is_some() {
+            return Some(jian_core::anim::next_blink_flip_ms(
+                self.now_ms,
+                ui.property_caret_anchor_ms,
+                500,
+            ));
+        }
+        if self
+            .editor_state
+            .editor_ui
+            .variables_theme_rename_axis
+            .is_some()
+            || self
+                .editor_state
+                .editor_ui
+                .variables_variant_rename_value
+                .is_some()
+            || self.editor_state.editor_ui.variable_row_focus.is_some()
+        {
             return Some(jian_core::anim::next_blink_flip_ms(
                 self.now_ms,
                 ui.property_caret_anchor_ms,

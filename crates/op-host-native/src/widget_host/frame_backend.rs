@@ -41,6 +41,10 @@ impl<'a> RenderBackend for NativeFrameBackend<'a> {
         self.inner.clip_rect(self.canvas, rect);
     }
 
+    fn clip_round_rect(&mut self, rect: Rect, radius: f32) {
+        self.inner.clip_round_rect(self.canvas, rect, radius);
+    }
+
     fn save(&mut self) {
         let _ = self.inner.save(self.canvas);
     }
@@ -200,6 +204,8 @@ impl<'a> RenderBackend for NativeFrameBackend<'a> {
         mode: ImageDrawMode,
         adjustments: ImageAdjustments,
         opacity: f32,
+
+        corner_radius: f32,
     ) {
         self.inner.draw_image_with_options(
             self.canvas,
@@ -209,6 +215,7 @@ impl<'a> RenderBackend for NativeFrameBackend<'a> {
             mode,
             adjustments,
             opacity,
+            corner_radius,
         );
     }
 
@@ -265,5 +272,16 @@ impl<'a> RenderBackend for NativeFrameBackend<'a> {
 
     fn measure_text_weighted(&mut self, text: &str, font_size: f32, weight: u16) -> f32 {
         self.inner.measure_text_weighted(text, font_size, weight)
+    }
+
+    fn measure_text_styled(
+        &mut self,
+        text: &str,
+        font_size: f32,
+        weight: u16,
+        italic: bool,
+    ) -> f32 {
+        self.inner
+            .measure_text_styled(text, font_size, weight, italic)
     }
 }
