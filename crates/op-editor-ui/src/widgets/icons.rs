@@ -164,6 +164,8 @@ pub enum Icon {
     Save,
     /// Lucide `download.svg` — export image menu row.
     Download,
+    /// Lucide `upload.svg` — Component-Browser kit-import button.
+    Upload,
     /// Lucide glyphs surfaced via `Icon::from_name` for canonical
     /// `icon_font` nodes. Covers the names that real `.op` files +
     /// the TS element-builders authored against — extend as new
@@ -255,6 +257,14 @@ pub enum Icon {
     DistributeV,
     /// Custom line-height glyph — typography section's 行高 input prefix.
     LineHeight,
+    /// SquaresUnite — layer context menu Boolean Union row.
+    SquaresUnite,
+    /// SquaresSubtract — Boolean Subtract row.
+    SquaresSubtract,
+    /// SquaresIntersect — Boolean Intersect row.
+    SquaresIntersect,
+    /// SquaresExclude — Boolean Exclude row.
+    SquaresExclude,
 }
 
 impl Icon {
@@ -326,6 +336,7 @@ impl Icon {
             Icon::Wrench => WRENCH,
             Icon::Save => SAVE,
             Icon::Download => DOWNLOAD,
+            Icon::Upload => UPLOAD,
             Icon::FileText => FILE_TEXT,
             Icon::FileSearch => FILE_SEARCH,
             Icon::UserX => USER_X,
@@ -399,6 +410,10 @@ impl Icon {
             Icon::DistributeH => DISTRIBUTE_H,
             Icon::DistributeV => DISTRIBUTE_V,
             Icon::LineHeight => LINE_HEIGHT,
+            Icon::SquaresUnite => SQUARES_UNITE,
+            Icon::SquaresSubtract => SQUARES_SUBTRACT,
+            Icon::SquaresIntersect => SQUARES_INTERSECT,
+            Icon::SquaresExclude => SQUARES_EXCLUDE,
         }
     }
 
@@ -445,6 +460,7 @@ impl Icon {
             "copy" => Icon::Copy,
             "save" => Icon::Save,
             "download" => Icon::Download,
+            "upload" => Icon::Upload,
             "file-text" => Icon::FileText,
             "file-search" => Icon::FileSearch,
             "user-x" => Icon::UserX,

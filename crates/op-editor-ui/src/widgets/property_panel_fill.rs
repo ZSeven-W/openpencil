@@ -8,11 +8,12 @@
 use crate::theme::Theme;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::property_panel::NodeSnapshot;
+use crate::widgets::property_panel_color_variables::paint_color_variable_button;
 use crate::widgets::property_panel_image_preview::paint_image_preview;
 use crate::widgets::property_panel_inputs::{
     format_color_hex, paint_section_divider, paint_section_label_with_add, to_jian_color,
-    CREATE_COMPONENT_BLOCK_H, HEADER_HEIGHT, INPUT_HEIGHT, INPUT_RADIUS, PAD_X, SECTION_GAP,
-    SECTION_HEADER_HEIGHT, TAB_HEIGHT,
+    COLOR_VARIABLE_BUTTON_W, COLOR_VARIABLE_GAP, CREATE_COMPONENT_BLOCK_H, HEADER_HEIGHT,
+    INPUT_HEIGHT, INPUT_RADIUS, PAD_X, SECTION_GAP, SECTION_HEADER_HEIGHT, TAB_HEIGHT,
 };
 use crate::widgets::property_panel_layout::{fill_body_height_with_stops, VisibleSections};
 use crate::widgets::property_panel_sections::{EditContext, PropertyLabels};
@@ -162,6 +163,8 @@ pub fn paint_fill_section(
     labels: &PropertyLabels,
     fill_type: op_editor_core::FillType,
     _fill_picker_open: bool,
+    fill_variable_ref: Option<&str>,
+    show_variable_button: bool,
     locale: op_editor_core::Locale,
     x: f32,
     y: f32,
@@ -344,7 +347,17 @@ pub fn paint_fill_section(
     y += INPUT_HEIGHT + 6.0;
     match fill_type {
         FillType::Solid => {
-            paint_fill_solid_body(cx, theme, edit, fill, x, y, width);
+            paint_fill_solid_body(
+                cx,
+                theme,
+                edit,
+                fill,
+                fill_variable_ref,
+                show_variable_button,
+                x,
+                y,
+                width,
+            );
         }
         FillType::LinearGradient => {
             paint_fill_gradient_body(cx, theme, edit, snapshot, locale, x, y, width, true);
@@ -366,6 +379,8 @@ fn paint_fill_solid_body(
     theme: &Theme,
     edit: &EditContext<'_>,
     fill: Color,
+    variable_ref: Option<&str>,
+    show_variable_button: bool,
     x: f32,
     y: f32,
     width: f32,
@@ -373,14 +388,22 @@ fn paint_fill_solid_body(
     let usable_w = width - PAD_X * 2.0;
     let hex_owned = format_color_hex(fill);
     let hex_focused = edit.focus == Some(PropertyFocus::FillHex);
-    let hex_text = edit.value_for(PropertyFocus::FillHex, &hex_owned);
+    let variable_text = variable_ref.map(|name| format!("${name}"));
+    let hex_text = variable_text
+        .as_deref()
+        .unwrap_or_else(|| edit.value_for(PropertyFocus::FillHex, &hex_owned));
+    let variable_w = if show_variable_button {
+        COLOR_VARIABLE_BUTTON_W + COLOR_VARIABLE_GAP
+    } else {
+        0.0
+    };
     let hex_rect = Rect {
         origin: Point2D::new(x + PAD_X, y),
-        size: Point2D::new(usable_w, INPUT_HEIGHT),
+        size: Point2D::new(usable_w - variable_w, INPUT_HEIGHT),
     };
     cx.backend
         .fill_round_rect(hex_rect, INPUT_RADIUS, theme.muted);
-    if hex_focused {
+    if hex_focused && variable_ref.is_none() {
         cx.backend
             .stroke_round_rect(hex_rect, INPUT_RADIUS, theme.primary, 1.5);
     }
@@ -401,28 +424,43 @@ fn paint_fill_solid_body(
         Point2D::new(0.0, 0.0),
     );
     let hex_x = hex_rect.origin.x + 30.0;
-    edit.paint_selection_at(
-        cx,
-        theme,
-        PropertyFocus::FillHex,
-        hex_text,
-        hex_x,
-        hex_rect.origin.y + 19.0,
-        12.0,
-        hex_rect.origin.x + hex_rect.size.x - 8.0,
-    );
+    if variable_ref.is_none() {
+        edit.paint_selection_at(
+            cx,
+            theme,
+            PropertyFocus::FillHex,
+            hex_text,
+            hex_x,
+            hex_rect.origin.y + 19.0,
+            12.0,
+            hex_rect.origin.x + hex_rect.size.x - 8.0,
+        );
+    }
     cx.backend
         .draw_text(&hex_layout, Point2D::new(hex_x, hex_rect.origin.y + 19.0));
-    if let Some(pos) = edit.caret_at(PropertyFocus::FillHex) {
-        let w = cx
-            .backend
-            .measure_text(&hex_text[..pos.min(hex_text.len())], 12.0);
-        cx.backend.fill_rect(
+    if variable_ref.is_none() {
+        if let Some(pos) = edit.caret_at(PropertyFocus::FillHex) {
+            let w = cx
+                .backend
+                .measure_text(&hex_text[..pos.min(hex_text.len())], 12.0);
+            cx.backend.fill_rect(
+                Rect {
+                    origin: Point2D::new(hex_x + w, hex_rect.origin.y + 6.0),
+                    size: Point2D::new(1.5, hex_rect.size.y - 12.0),
+                },
+                theme.foreground,
+            );
+        }
+    }
+    if show_variable_button {
+        paint_color_variable_button(
+            cx,
+            theme,
             Rect {
-                origin: Point2D::new(hex_x + w, hex_rect.origin.y + 6.0),
-                size: Point2D::new(1.5, hex_rect.size.y - 12.0),
+                origin: Point2D::new(hex_rect.origin.x + hex_rect.size.x + COLOR_VARIABLE_GAP, y),
+                size: Point2D::new(COLOR_VARIABLE_BUTTON_W, INPUT_HEIGHT),
             },
-            theme.foreground,
+            variable_ref.is_some(),
         );
     }
 }

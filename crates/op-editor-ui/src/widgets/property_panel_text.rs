@@ -3,8 +3,8 @@
 use crate::theme::Theme;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::property_panel::{
-    FontFamilyChoice, FontWeightChoice, NodeSnapshot, PropertyPanelAction, TextAlignValue,
-    TextGrowthValue, TextVerticalAlignValue,
+    FontWeightChoice, NodeSnapshot, PropertyPanelAction, TextAlignValue, TextGrowthValue,
+    TextVerticalAlignValue,
 };
 use crate::widgets::property_panel_inputs::{
     paint_input_with_icon_focused, paint_input_with_prefix_focused, paint_section_divider,
@@ -12,6 +12,7 @@ use crate::widgets::property_panel_inputs::{
     SECTION_HEADER_HEIGHT,
 };
 use crate::widgets::property_panel_sections::EditContext;
+use crate::widgets::property_panel_typography::display_font_family;
 use crate::widgets::PaintCx;
 use crate::{Point2D, Rect, TextLayout};
 use op_editor_core::PropertyFocus;
@@ -19,7 +20,7 @@ use op_editor_core::PropertyFocus;
 const FAMILY_ROW_GAP: f32 = 6.0;
 const ALIGN_LABEL_H: f32 = 18.0;
 const BUTTON_H: f32 = 28.0;
-const TEXT_LAYOUT_BLOCK_H: f32 = SECTION_HEADER_HEIGHT + BUTTON_H + 12.0;
+pub(crate) const TEXT_LAYOUT_BLOCK_H: f32 = SECTION_HEADER_HEIGHT + BUTTON_H + 12.0;
 /// Height of the small 行高 / 字间距 caption row painted above the
 /// line-height / letter-spacing inputs (TS `text-[9px]` label row).
 const LH_LS_LABEL_H: f32 = 14.0;
@@ -180,27 +181,6 @@ pub fn text_action_rects(x0: f32, y: f32, usable_w: f32) -> Vec<(PropertyPanelAc
     out
 }
 
-pub fn font_family_picker_action_rects(
-    x0: f32,
-    y: f32,
-    usable_w: f32,
-) -> Vec<(PropertyPanelAction, Rect)> {
-    let family_y = y + TEXT_LAYOUT_BLOCK_H + SECTION_HEADER_HEIGHT + INPUT_HEIGHT + 4.0;
-    FontFamilyChoice::ALL
-        .into_iter()
-        .enumerate()
-        .map(|(i, choice)| {
-            (
-                PropertyPanelAction::SetFontFamily(choice),
-                Rect {
-                    origin: Point2D::new(x0 + PAD_X, family_y + i as f32 * 28.0),
-                    size: Point2D::new(usable_w, 28.0),
-                },
-            )
-        })
-        .collect()
-}
-
 /// Dropdown rows for the weight picker — opens below the left-half
 /// weight trigger of the weight/size row.
 pub fn font_weight_picker_action_rects(
@@ -272,9 +252,13 @@ pub fn paint_text_section(
     };
     cx.backend
         .fill_round_rect(family_rect, INPUT_RADIUS, theme.muted);
+    // The trigger shows the first family of the stack, painted in
+    // that family (TS trigger: `style={{ fontFamily: value }}` +
+    // `displayName(value)`).
+    let family_name = display_font_family(&text.font_family);
     let family = TextLayout::single_run(
-        &text.font_family,
-        "system-ui",
+        family_name,
+        family_name,
         12.0,
         to_jian_color(theme.foreground),
         Point2D::new(0.0, 0.0),
@@ -415,71 +399,8 @@ pub fn paint_text_section(
     y + SECTION_GAP
 }
 
-pub fn paint_font_family_picker(
-    cx: &mut PaintCx<'_>,
-    theme: &Theme,
-    panel_rect: Rect,
-    visible: crate::widgets::property_panel_layout::VisibleSections,
-    active_family: &str,
-) {
-    let x0 = panel_rect.origin.x;
-    let w = panel_rect.size.x;
-    let usable_w = w - PAD_X * 2.0;
-    let Some(text_y) = text_section_top(panel_rect, visible) else {
-        return;
-    };
-    let rows = font_family_picker_action_rects(x0, text_y, usable_w);
-    if rows.is_empty() {
-        return;
-    }
-    let first = rows.first().map(|(_, r)| *r).unwrap();
-    let last = rows.last().map(|(_, r)| *r).unwrap();
-    let pop = Rect {
-        origin: Point2D::new(first.origin.x, first.origin.y - 6.0),
-        size: Point2D::new(
-            first.size.x,
-            last.origin.y + last.size.y - first.origin.y + 12.0,
-        ),
-    };
-    cx.backend.fill_round_rect(pop, 8.0, theme.popover);
-    cx.backend.stroke_round_rect(pop, 8.0, theme.border, 1.0);
-    let active = display_font_family(active_family);
-    for (action, row) in rows {
-        let PropertyPanelAction::SetFontFamily(choice) = action else {
-            continue;
-        };
-        let is_active = choice.family() == active;
-        if is_active {
-            cx.backend
-                .fill_round_rect(row, 6.0, theme.row_selected_primary);
-        }
-        let label = TextLayout::single_run(
-            choice.family(),
-            choice.family(),
-            12.0,
-            to_jian_color(if is_active {
-                theme.primary
-            } else {
-                theme.foreground
-            }),
-            Point2D::new(0.0, 0.0),
-        );
-        cx.backend.draw_text(
-            &label,
-            Point2D::new(row.origin.x + 10.0, row.origin.y + 19.0),
-        );
-        if is_active {
-            draw_icon(
-                cx.backend,
-                Icon::Check,
-                Point2D::new(row.origin.x + row.size.x - 22.0, row.origin.y + 7.0),
-                14.0,
-                theme.primary,
-                1.6,
-            );
-        }
-    }
-}
+// The font-family picker overlay (search + bundled/system groups)
+// lives in `property_panel_typography.rs`.
 
 #[allow(clippy::too_many_arguments)]
 pub fn paint_font_weight_picker(
@@ -559,13 +480,23 @@ pub fn paint_font_weight_picker(
     }
 }
 
-fn text_section_top(
+pub(crate) fn text_section_top(
     panel_rect: Rect,
     visible: crate::widgets::property_panel_layout::VisibleSections,
 ) -> Option<f32> {
     if !visible.text {
         return None;
     }
+    Some(sections_top_before_text(panel_rect, visible))
+}
+
+/// Y of the slot where the Text section would start — the walk over
+/// every section ABOVE it (also the anchor base for the image
+/// section, which follows text in the section order).
+pub(crate) fn sections_top_before_text(
+    panel_rect: Rect,
+    visible: crate::widgets::property_panel_layout::VisibleSections,
+) -> f32 {
     let mut y = panel_rect.origin.y;
     y += crate::widgets::property_panel_inputs::TAB_HEIGHT;
     y += crate::widgets::property_panel_inputs::HEADER_HEIGHT;
@@ -591,7 +522,7 @@ fn text_section_top(
     if visible.icon {
         y += crate::widgets::property_panel_icon::icon_section_height();
     }
-    Some(y)
+    y
 }
 
 fn paint_text_growth_row(
@@ -790,13 +721,4 @@ fn format_panel_number(value: f32) -> String {
     } else {
         format!("{value:.2}")
     }
-}
-
-fn display_font_family(value: &str) -> &str {
-    value
-        .split(',')
-        .next()
-        .unwrap_or(value)
-        .trim()
-        .trim_matches(['"', '\''])
 }

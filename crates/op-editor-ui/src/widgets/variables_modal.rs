@@ -3,6 +3,12 @@
 //! variables. The compact `VariablesPanel` remains the automatic right-rail
 //! fallback for documents that already contain variables.
 
+mod presets;
+#[cfg(test)]
+mod tests;
+
+pub use presets::{PresetMenuHit, ThemePresetMenu};
+
 use crate::theme::Theme;
 use crate::widgets::editor_state_ext::theme_for;
 use crate::widgets::icons::{draw_icon, Icon};
@@ -35,7 +41,12 @@ pub enum VariablesModalHit {
     HeaderAdd,
     Row(usize),
     AxisChip(usize),
-    AxisDropdownItem { axis: String, value: String },
+    AxisDropdownItem {
+        axis: String,
+        value: String,
+    },
+    /// A row inside the open theme-preset dropdown (#20).
+    Preset(PresetMenuHit),
     Inside,
     Outside,
 }
@@ -62,6 +73,9 @@ pub struct VariablesModal {
     themes: Vec<(String, Vec<String>)>,
     dropdown_open: Option<String>,
     hover: Option<VariablesPanelButton>,
+    /// The open theme-preset dropdown, anchored under the header's
+    /// preset button (#20). `None` while closed.
+    preset_menu: Option<ThemePresetMenu>,
 }
 
 impl VariablesModal {
@@ -105,6 +119,8 @@ impl VariablesModal {
             themes,
             dropdown_open: state.editor_ui.axis_dropdown_open.clone(),
             hover: state.editor_ui.variables_panel_hover,
+            preset_menu: ThemePresetMenu::is_open(state)
+                .then(|| ThemePresetMenu::for_editor(state)),
         }
     }
 
@@ -138,11 +154,20 @@ impl VariablesModal {
                 .axis_values(&axis)
                 .and_then(|vals| vals.iter().position(|v| *v == value))
                 .map(B::DropdownItem),
-            VariablesModalHit::Inside | VariablesModalHit::Outside => None,
+            VariablesModalHit::Preset(_)
+            | VariablesModalHit::Inside
+            | VariablesModalHit::Outside => None,
         }
     }
 
     pub fn hit_test(&self, rect: Rect, point: Point2D) -> VariablesModalHit {
+        // The preset dropdown overlays everything else in the modal —
+        // test it first so its rows win over the header underneath.
+        if let Some(menu) = &self.preset_menu {
+            if let Some(hit) = menu.hit_test(menu.menu_rect(preset_button_rect(rect)), point) {
+                return VariablesModalHit::Preset(hit);
+            }
+        }
         if !contains(rect, point) {
             return VariablesModalHit::Outside;
         }
@@ -226,7 +251,6 @@ impl Widget for VariablesModal {
     }
 
     fn paint(&self, cx: &mut PaintCx<'_>, rect: Rect) {
-        paint_shadow(cx, rect);
         cx.backend.fill_round_rect(rect, RADIUS, self.theme.card);
         cx.backend
             .stroke_round_rect(rect, RADIUS, self.theme.border, 1.0);
@@ -235,6 +259,10 @@ impl Widget for VariablesModal {
         paint_body(cx, self.theme, self.locale, self.hover, rect, &self.rows);
         paint_footer(cx, self.theme, self.locale, self.hover, rect);
         self.paint_dropdown(cx, rect);
+        // Preset dropdown paints last — top-most modal overlay.
+        if let Some(menu) = &self.preset_menu {
+            menu.paint(cx, menu.menu_rect(preset_button_rect(rect)));
+        }
     }
 
     fn access_node(&self) -> accesskit::Node {
@@ -284,25 +312,6 @@ impl VariablesModal {
     }
 }
 
-fn paint_shadow(cx: &mut PaintCx<'_>, rect: Rect) {
-    cx.backend.fill_round_rect(
-        Rect {
-            origin: Point2D::new(rect.origin.x, rect.origin.y + 14.0),
-            size: rect.size,
-        },
-        RADIUS,
-        rgba(0, 0, 0, 0.08),
-    );
-    cx.backend.fill_round_rect(
-        Rect {
-            origin: Point2D::new(rect.origin.x, rect.origin.y + 34.0),
-            size: rect.size,
-        },
-        RADIUS,
-        rgba(0, 0, 0, 0.05),
-    );
-}
-
 fn paint_header(
     cx: &mut PaintCx<'_>,
     theme: Theme,
@@ -323,6 +332,9 @@ fn paint_header(
     if hover == Some(VariablesPanelButton::PresetMenu) {
         cx.backend.fill_round_rect(preset, 8.0, theme.button_hover);
     }
+    let preset_label = op_i18n::translate(locale, "variables.presets");
+    let preset_label_size = 15.0;
+    let preset_label_x = preset.origin.x + 28.0;
     draw_icon(
         cx.backend,
         Icon::Save,
@@ -333,19 +345,18 @@ fn paint_header(
     );
     draw_text(
         cx,
-        op_i18n::translate(locale, "variables.presets"),
-        15.0,
+        preset_label,
+        preset_label_size,
         theme.foreground,
-        preset.origin.x + 28.0,
+        preset_label_x,
         preset.origin.y + 23.0,
     );
+    let preset_chevron_x = (preset_label_x + label_width(preset_label, preset_label_size) + 7.0)
+        .min(preset.origin.x + preset.size.x - 22.0);
     draw_icon(
         cx.backend,
         Icon::ChevronDown,
-        Point2D::new(
-            preset.origin.x + preset.size.x - 22.0,
-            preset.origin.y + 8.0,
-        ),
+        Point2D::new(preset_chevron_x, preset.origin.y + 8.0),
         18.0,
         theme.muted_foreground,
         1.6,
@@ -548,6 +559,9 @@ fn paint_footer(
     if hover == Some(VariablesPanelButton::AddVariable) {
         cx.backend.fill_round_rect(btn, 8.0, theme.button_hover);
     }
+    let add_label = op_i18n::translate(locale, "variables.addVariable");
+    let add_label_size = 15.0;
+    let add_label_x = btn.origin.x + 28.0;
     draw_icon(
         cx.backend,
         Icon::Plus,
@@ -558,16 +572,18 @@ fn paint_footer(
     );
     draw_text(
         cx,
-        op_i18n::translate(locale, "variables.addVariable"),
-        15.0,
+        add_label,
+        add_label_size,
         theme.muted_foreground,
-        btn.origin.x + 28.0,
+        add_label_x,
         btn.origin.y + 25.0,
     );
+    let add_chevron_x = (add_label_x + label_width(add_label, add_label_size) + 7.0)
+        .min(btn.origin.x + btn.size.x - 24.0);
     draw_icon(
         cx.backend,
         Icon::ChevronDown,
-        Point2D::new(btn.origin.x + btn.size.x - 24.0, btn.origin.y + 9.0),
+        Point2D::new(add_chevron_x, btn.origin.y + 9.0),
         18.0,
         theme.muted_foreground,
         1.6,
@@ -601,6 +617,10 @@ fn draw_text(cx: &mut PaintCx<'_>, text: &str, size: f32, color: Color, x: f32, 
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(&layout, Point2D::new(x, y));
+}
+
+fn label_width(text: &str, size: f32) -> f32 {
+    text.chars().count() as f32 * size * 0.58
 }
 
 fn divider(cx: &mut PaintCx<'_>, theme: Theme, y: f32, rect: Rect) {
@@ -734,57 +754,5 @@ const fn rgba(r: u8, g: u8, b: u8, a: f32) -> Color {
         g: g as f32 / 255.0,
         b: b as f32 / 255.0,
         a,
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use jian_ops_schema::variable::{VariableKind, VariableScalar};
-
-    #[test]
-    fn modal_rect_matches_large_centered_manager_shape() {
-        let modal = VariablesModal::for_editor(&EditorState::new());
-        let rect = modal.rect(1920.0, 1080.0);
-        assert_eq!(rect.size.x, VARIABLES_MODAL_MAX_W);
-        assert_eq!(rect.size.y, VARIABLES_MODAL_MAX_H);
-        assert!(rect.origin.y >= TOP_BAR_HEIGHT);
-        assert!(rect.origin.x > 100.0);
-    }
-
-    #[test]
-    fn modal_hit_test_resolves_close_and_footer_add() {
-        let modal = VariablesModal::for_editor(&EditorState::new());
-        let rect = modal.rect(1200.0, 800.0);
-        let close = close_rect(rect);
-        assert_eq!(
-            modal.hit_test(rect, close.origin + close.size / 2.0),
-            VariablesModalHit::Close
-        );
-        let add = footer_add_rect(rect);
-        assert_eq!(
-            modal.hit_test(rect, add.origin + add.size / 2.0),
-            VariablesModalHit::AddVariable
-        );
-    }
-
-    #[test]
-    fn modal_hit_test_resolves_variable_rows() {
-        let mut state = EditorState::new();
-        state.create_variable(
-            "brand",
-            VariableKind::Color,
-            VariableScalar::Str("#ff0000".into()),
-        );
-        let modal = VariablesModal::for_editor(&state);
-        let rect = modal.rect(1200.0, 800.0);
-        let body = body_rect(rect);
-        assert_eq!(
-            modal.hit_test(
-                rect,
-                Point2D::new(body.origin.x + PAD_X + 4.0, body.origin.y + ROW_H / 2.0)
-            ),
-            VariablesModalHit::Row(0)
-        );
     }
 }

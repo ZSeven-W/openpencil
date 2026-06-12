@@ -2,57 +2,15 @@
 //! of `canvas_viewport.rs` to keep that file under the 800-line
 //! ceiling.
 
-use crate::layout_scene::{LayoutScene, SceneGradient, SceneNode};
+use crate::layout_scene::{SceneGradient, SceneNode};
 use crate::theme::Theme;
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect};
-use op_editor_core::Viewport;
 
-/// Pen-tool rubber-band — from the last committed anchor of the
-/// in-progress path to the cursor (when both are known). Painted
-/// half-alpha so it reads as a draft segment.
-///
-/// The in-progress path id + cursor doc coord come from the editor's
-/// pen-draft state; the path geometry is read from the resolved
-/// [`LayoutScene`].
-pub fn paint_pen_rubber_band(
-    cx: &mut PaintCx<'_>,
-    scene: &LayoutScene,
-    pen_in_progress: Option<&str>,
-    pen_cursor_doc: Option<Point2D>,
-    canvas_rect: Rect,
-    viewport: &Viewport,
-) {
-    let (Some(pen_id), Some(cursor_doc)) = (pen_in_progress, pen_cursor_doc) else {
-        return;
-    };
-    let Some(page) = scene.active_page() else {
-        return;
-    };
-    let Some(node) = page.find(pen_id) else {
-        return;
-    };
-    let Some(last) = node.points.last().copied() else {
-        return;
-    };
-    let zoom = viewport.zoom;
-    let origin = Point2D::new(
-        canvas_rect.origin.x + viewport.pan_x,
-        canvas_rect.origin.y + viewport.pan_y,
-    );
-    let from = Point2D::new(origin.x + last.x * zoom, origin.y + last.y * zoom);
-    let to = Point2D::new(
-        origin.x + cursor_doc.x * zoom,
-        origin.y + cursor_doc.y * zoom,
-    );
-    let width = node
-        .stroke
-        .map(|s| (s.width * zoom).max(1.0))
-        .unwrap_or((1.5_f32).max(zoom));
-    let mut color = node.stroke.map(|s| s.color).unwrap_or(Color::BLACK);
-    color.a *= 0.5;
-    cx.backend.stroke_line(from, to, color, width);
-}
+// The legacy `paint_pen_rubber_band` (node-stroke-colored straight
+// line) was retired in favor of `canvas_path_overlay.rs`, which ports
+// the TS pen preview verbatim (dashed selection-blue rubber band +
+// anchor/handle dots).
 
 /// Paint a 1 px primary-tinted outline around `world_rect` plus
 /// 8 handle anchors. Container selections paint with a softened

@@ -81,13 +81,15 @@ impl Variable {
                         }
                     }
                 }
-                // Fallback: entry with theme = None.
-                for e in entries {
-                    if e.theme.is_none() {
-                        return Some(&e.value);
-                    }
-                }
-                None
+                // Fallback: entry with theme = None, else the FIRST
+                // entry (TS `resolveThemedValue` falls back to
+                // `values[0]` so fully-themed lists still resolve
+                // before the user picks an axis value).
+                entries
+                    .iter()
+                    .find(|e| e.theme.is_none())
+                    .or_else(|| entries.first())
+                    .map(|e| &e.value)
             }
         }
     }

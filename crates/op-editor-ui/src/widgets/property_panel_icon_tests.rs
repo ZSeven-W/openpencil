@@ -17,6 +17,7 @@ fn visible_for(panel: &PropertyPanel) -> sections::VisibleSections {
     let caps = SectionCapabilities::for_kind(&panel.snapshot.kind_variant);
     sections::VisibleSections {
         create_component: caps.create_component && panel.snapshot.can_create_component,
+        component_button: crate::widgets::property_panel_visibility::ComponentButtonState::Create,
         flex_layout: caps.flex_layout,
         flex_layout_mode: panel.snapshot.flex_layout,
         padding_edit_mode: op_editor_core::PaddingEditMode::from_values(
@@ -36,12 +37,17 @@ fn visible_for(panel: &PropertyPanel) -> sections::VisibleSections {
         text: caps.text && panel.snapshot.text.is_some(),
         icon: panel.snapshot.icon.is_some(),
         image: caps.image && panel.snapshot.is_image_node,
+        image_warning: false,
         opacity: caps.opacity,
         corner_radius: panel.snapshot.has_corner_radius,
         polygon_sides: panel.snapshot.polygon_sides.is_some(),
         ellipse_arc: panel.snapshot.ellipse_arc.is_some(),
         fill: caps.fill,
         stroke: caps.stroke,
+        color_variable_count: panel.color_variable_count,
+        fill_variable_bound: panel.fill_variable_ref.is_some(),
+        stroke_variable_bound: panel.stroke_variable_ref.is_some(),
+        color_variable_picker_open: panel.color_variable_picker_open,
         effects: caps.effects,
         export: caps.export,
         fill_type: panel.fill_type,

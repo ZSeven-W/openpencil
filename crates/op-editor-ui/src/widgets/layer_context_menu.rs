@@ -2,6 +2,15 @@
 //! layer rows (Duplicate / Delete / Create component / Toggle lock /
 //! Toggle visibility) and page rows (Rename / Duplicate / Move up /
 //! Move down / Delete).
+//!
+//! Deliberate divergence from the TS menu
+//! (`apps/web/src/components/panels/layer-context-menu.tsx:30-78`):
+//! a Rename row is added for layer rows (TS renames via row
+//! double-click; the native shell routes both through the same
+//! `start_rename_layer` draft). The four boolean-op rows mirror the
+//! TS `requireBoolean` gating (`canBooleanOp` — ≥ 2 selected, all
+//! boolean-able shapes) and dispatch to the host's skia-backed
+//! `apply_boolean_op`.
 
 use crate::theme::Theme;
 use crate::widgets::editor_state_ext::theme_for;
@@ -25,7 +34,20 @@ pub enum LayerContextAction {
     Duplicate,
     Delete,
     GroupSelection,
+    /// Boolean path ops — TS `boolean-union` etc. rows
+    /// (`layer-context-menu.tsx:35-57`), shown only when
+    /// `canBooleanOp` passes.
+    BooleanUnion,
+    BooleanSubtract,
+    BooleanIntersect,
+    BooleanExclude,
     CreateComponent,
+    /// Shown instead of CreateComponent when the target is a reusable
+    /// component — sheds the `reusable` flag (TS detach case 1).
+    DetachComponent,
+    /// Shown instead of CreateComponent when the target is a `Ref`
+    /// instance — materializes it into an independent subtree.
+    DetachInstance,
     ToggleLock,
     ToggleVisibility,
     // Page-row actions
@@ -65,6 +87,30 @@ const LAYER_ROWS: &[Row] = &[
         icon: Icon::Component,
         action: LayerContextAction::GroupSelection,
         label_key: "layerMenu.groupSelection",
+        destructive: false,
+    },
+    Row {
+        icon: Icon::SquaresUnite,
+        action: LayerContextAction::BooleanUnion,
+        label_key: "layerMenu.booleanUnion",
+        destructive: false,
+    },
+    Row {
+        icon: Icon::SquaresSubtract,
+        action: LayerContextAction::BooleanSubtract,
+        label_key: "layerMenu.booleanSubtract",
+        destructive: false,
+    },
+    Row {
+        icon: Icon::SquaresIntersect,
+        action: LayerContextAction::BooleanIntersect,
+        label_key: "layerMenu.booleanIntersect",
+        destructive: false,
+    },
+    Row {
+        icon: Icon::SquaresExclude,
+        action: LayerContextAction::BooleanExclude,
+        label_key: "layerMenu.booleanExclude",
         destructive: false,
     },
     Row {
@@ -141,16 +187,52 @@ pub struct LayerContextMenu {
 
 impl LayerContextMenu {
     pub fn for_state(state: &EditorState, menu: LayerContextMenuState) -> Self {
-        let rows = match &menu.target {
+        let boolean_ok = super::align_toolbar::can_boolean_op(state);
+        let mut rows = match &menu.target {
             LayerContextTarget::Layer(_) => LAYER_ROWS
                 .iter()
                 .copied()
-                .filter(|row| {
-                    row.action != LayerContextAction::GroupSelection || state.selection_count() > 1
+                .filter(|row| match row.action {
+                    LayerContextAction::GroupSelection => state.selection_count() > 1,
+                    // TS `requireBoolean` rows (`layer-context-menu.tsx:35-57`).
+                    LayerContextAction::BooleanUnion
+                    | LayerContextAction::BooleanSubtract
+                    | LayerContextAction::BooleanIntersect
+                    | LayerContextAction::BooleanExclude => boolean_ok,
+                    _ => true,
                 })
                 .collect(),
             LayerContextTarget::Page(_) => PAGE_ROWS.to_vec(),
         };
+        // Stateful component slot — a reusable component / Ref
+        // instance swaps "Create component" for the matching detach
+        // row (TS layer menu parity, gated on the actual node).
+        if let LayerContextTarget::Layer(id) = &menu.target {
+            use jian_ops_schema::node::PenNode;
+            let detach = match op_editor_core::walkers::find_node(state.active_children(), id) {
+                Some(PenNode::Frame(f)) if f.reusable == Some(true) => Some(Row {
+                    icon: Icon::Diamond,
+                    action: LayerContextAction::DetachComponent,
+                    label_key: "layerMenu.detachComponent",
+                    destructive: false,
+                }),
+                Some(PenNode::Ref(_)) => Some(Row {
+                    icon: Icon::Diamond,
+                    action: LayerContextAction::DetachInstance,
+                    label_key: "layerMenu.detachInstance",
+                    destructive: false,
+                }),
+                _ => None,
+            };
+            if let Some(detach) = detach {
+                if let Some(pos) = rows
+                    .iter()
+                    .position(|r| r.action == LayerContextAction::CreateComponent)
+                {
+                    rows[pos] = detach;
+                }
+            }
+        }
         let hovered_row = menu.hovered_row.map(|i| i as usize);
         Self {
             id: WidgetId::new(3000),

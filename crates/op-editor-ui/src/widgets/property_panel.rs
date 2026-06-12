@@ -23,6 +23,7 @@
 //! Host calls [`PropertyPanel::for_selection`] which returns
 //! `Option<Self>`; `None` = panel hidden entirely.
 
+use crate::layout_scene::SceneStroke;
 use crate::theme::Theme;
 use crate::widgets::editor_state_ext::theme_for;
 use crate::widgets::property_panel_sections as sections;
@@ -39,8 +40,8 @@ pub const PROPERTY_PANEL_WIDTH: f32 = 280.0;
 // `widgets::PropertyPanelAction` / `property_panel::PropertyPanelAction`
 // path is unchanged.
 pub use crate::widgets::property_panel_action::{
-    FontFamilyChoice, FontWeightChoice, LayoutAlignValue, LayoutJustifyValue, PropertyPanelAction,
-    TextAlignValue, TextGrowthValue, TextVerticalAlignValue,
+    FontWeightChoice, LayoutAlignValue, LayoutJustifyValue, PropertyPanelAction, TextAlignValue,
+    TextGrowthValue, TextVerticalAlignValue,
 };
 
 // `SectionCapabilities` lives in `property_panel_layout.rs`
@@ -48,9 +49,51 @@ pub use crate::widgets::property_panel_action::{
 // feeds); re-exported so `property_panel::SectionCapabilities`
 // resolves unchanged.
 pub(crate) use crate::widgets::property_panel_layout::SectionCapabilities;
+use crate::widgets::property_panel_snapshot::color_from_hex;
 pub use crate::widgets::property_panel_snapshot::{
     EffectKind, EffectSummary, EllipseArcSummary, GradientStopSummary, NodeSnapshot,
 };
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ColorVariableOption {
+    pub name: String,
+    pub resolved_hex: Option<String>,
+}
+
+fn color_variable_options(state: &EditorState) -> Vec<ColorVariableOption> {
+    let Some(vars) = state.doc.variables.as_ref() else {
+        return Vec::new();
+    };
+    vars.iter()
+        .filter(|(_, def)| matches!(def.kind, jian_ops_schema::variable::VariableKind::Color))
+        .map(|(name, _)| ColorVariableOption {
+            name: name.clone(),
+            resolved_hex: state.resolve_color_variable_hex(name),
+        })
+        .collect()
+}
+
+fn apply_resolved_variable_colors(
+    state: &EditorState,
+    node: &jian_ops_schema::node::PenNode,
+    snapshot: &mut NodeSnapshot,
+    fill_ref: Option<&str>,
+    stroke_ref: Option<&str>,
+) {
+    if let Some(color) = fill_ref
+        .and_then(|name| state.resolve_color_variable_hex(name))
+        .and_then(|hex| color_from_hex(&hex))
+    {
+        snapshot.fill = Some(color);
+    }
+    if let Some(color) = stroke_ref
+        .and_then(|name| state.resolve_color_variable_hex(name))
+        .and_then(|hex| color_from_hex(&hex))
+    {
+        let width = op_editor_core::fills::node_stroke_width(node).unwrap_or(1.0) as f32;
+        snapshot.stroke = Some(SceneStroke { color, width });
+    }
+}
 
 pub struct PropertyPanel {
     pub id: WidgetId,
@@ -84,8 +127,30 @@ pub struct PropertyPanel {
     /// Active fill type — drives the dropdown label + picker.
     pub fill_type: op_editor_core::FillType,
     pub fill_type_picker_open: bool,
+    pub color_variable_picker_open: Option<op_editor_core::ColorTarget>,
+    pub color_variables: Vec<ColorVariableOption>,
+    pub fill_variable_ref: Option<String>,
+    pub stroke_variable_ref: Option<String>,
+    pub color_variable_count: usize,
     pub image_fill_popover_open: bool,
     pub font_family_picker_open: bool,
+    /// Live type-ahead filter + scroll + hovered entry of the
+    /// font-family picker, plus the host-enumerated system families
+    /// (see `property_panel_typography`).
+    pub font_picker_search: String,
+    pub font_picker_scroll: f32,
+    pub font_picker_hover: Option<usize>,
+    pub system_font_families: std::sync::Arc<Vec<String>>,
+    /// Image-node Search / Generate popover state (cloned from
+    /// `editor_ui.image_panel`; result thumbs are `Arc`s so this
+    /// per-frame clone stays cheap).
+    pub image_panel: op_editor_core::image_panel_state::ImagePanelState,
+    /// Node-derived image-section inputs (seeds + warning) — `Some`
+    /// only when a single image node is selected.
+    pub image_panel_view: Option<crate::widgets::property_panel_image_assets::ImagePanelView>,
+    /// Active image-generation profile summary for the Generate
+    /// popover's configured / not-configured gate.
+    pub image_gen_profile: Option<crate::widgets::property_panel_image_assets::ImageGenProfileView>,
     pub font_weight_picker_open: bool,
     /// Hovered weight-dropdown row index (when the dropdown is open).
     pub font_weight_picker_hover: Option<usize>,
@@ -160,16 +225,64 @@ impl PropertyPanel {
     /// millisecond clock through so the focused-input caret can
     /// blink off the same animation timer as the chat input.
     pub fn for_selection_at(state: &EditorState, now_ms: u64) -> Option<Self> {
-        if state.selection_count() == 1 {
-            let node = state.selected_node()?;
-            let fill_type = op_editor_core::first_fill_type(node);
+        if let Some(panel) = Self::for_selection_nodes(state, now_ms) {
+            return Some(panel);
+        }
+        // The Code tab is selection-independent: the TS code-panel falls
+        // back to the active page's children, so the panel must stay
+        // alive (and the tab reachable) with an empty / unresolvable
+        // selection. The Code body never reads the snapshot, so a
+        // neutral placeholder suffices.
+        if state.editor_ui.property_tab == op_editor_core::PropertyTab::Code {
             return Some(Self::build_from_snapshot(
                 state,
-                NodeSnapshot::from_node(node),
-                fill_type,
+                NodeSnapshot::empty_for_code_tab(),
+                op_editor_core::FillType::Solid,
                 now_ms,
                 false,
+                None,
+                None,
             ));
+        }
+        None
+    }
+
+    /// Selection-driven panel builder — `None` when no selected id
+    /// resolves to a live node (the pre-Code-tab `for_selection_at`).
+    fn for_selection_nodes(state: &EditorState, now_ms: u64) -> Option<Self> {
+        if state.selection_count() == 1 {
+            let node = state.selected_node()?;
+            // An INSTANCE (`Ref`) selection resolves into its merged
+            // display node — component base → descendants[target]
+            // overrides → instance props (TS property-panel.tsx:74-96)
+            // — so the panel exposes the FULL section set. A dangling
+            // ref falls back to the raw node (near-empty mask).
+            let display = op_editor_core::resolve_instance_display_node(&state.doc, node);
+            let is_instance = display.is_some();
+            let display_node = display.unwrap_or_else(|| node.clone());
+            let node = &display_node;
+            let fill_type = op_editor_core::first_fill_type(node);
+            let fill_ref = state
+                .selected_color_variable_name(op_editor_core::ColorTarget::Fill)
+                .map(str::to_string);
+            let stroke_ref = state
+                .selected_color_variable_name(op_editor_core::ColorTarget::Stroke)
+                .map(str::to_string);
+            let mut snapshot = NodeSnapshot::from_node(node);
+            snapshot.is_instance = is_instance;
+            apply_resolved_variable_colors(
+                state,
+                node,
+                &mut snapshot,
+                fill_ref.as_deref(),
+                stroke_ref.as_deref(),
+            );
+            let mut panel = Self::build_from_snapshot(
+                state, snapshot, fill_type, now_ms, false, fill_ref, stroke_ref,
+            );
+            panel.image_panel_view =
+                crate::widgets::property_panel_image_assets::image_panel_view(state, node);
+            return Some(panel);
         }
         if state.selection_count() >= 2 {
             let snapshot = NodeSnapshot::from_multi_selection(state)?;
@@ -179,6 +292,8 @@ impl PropertyPanel {
                 op_editor_core::FillType::Solid,
                 now_ms,
                 true,
+                None,
+                None,
             ));
         }
         None
@@ -190,8 +305,12 @@ impl PropertyPanel {
         fill_type: op_editor_core::FillType,
         now_ms: u64,
         is_multi: bool,
+        fill_variable_ref: Option<String>,
+        stroke_variable_ref: Option<String>,
     ) -> Self {
         let ui = &state.editor_ui;
+        let color_variables = color_variable_options(state);
+        let color_variable_count = color_variables.len();
         let flex_layout = snapshot.flex_layout;
         let size_flags = sections::SizeFlags {
             fill_width: snapshot.size_fill_width,
@@ -213,6 +332,13 @@ impl PropertyPanel {
                 let p = snapshot.layout_padding;
                 op_editor_core::PaddingEditMode::from_values(p.top, p.right, p.bottom, p.left)
             });
+        // The Code tab's idle "N nodes selected" label reads the panel's
+        // codegen snapshot. Overwrite the clone with the LIVE generation
+        // targets (selection, else the active page's children — mirrors
+        // the TS `nodeCount`) so the label tracks what Generate / Export
+        // AI Bundle would actually run against this frame.
+        let mut codegen = state.codegen.clone();
+        codegen.selection_snapshot = live_codegen_target_ids(state);
         Self {
             id: WidgetId::new(2000),
             snapshot,
@@ -244,8 +370,22 @@ impl PropertyPanel {
             size_flags,
             fill_type,
             fill_type_picker_open: ui.fill_type_picker_open,
+            color_variable_picker_open: ui.property_color_variable_picker_open,
+            color_variables,
+            fill_variable_ref,
+            stroke_variable_ref,
+            color_variable_count,
             image_fill_popover_open: ui.image_fill_popover_open,
             font_family_picker_open: ui.font_family_picker_open,
+            font_picker_search: ui.font_picker_search.clone(),
+            font_picker_scroll: ui.font_picker_scroll,
+            font_picker_hover: ui.font_picker_hover,
+            system_font_families: ui.system_font_families.clone(),
+            image_panel: ui.image_panel.clone(),
+            image_panel_view: None,
+            image_gen_profile: crate::widgets::property_panel_image_assets::image_gen_profile_view(
+                state,
+            ),
             font_weight_picker_open: ui.font_weight_picker_open,
             font_weight_picker_hover: ui.font_weight_picker_hover,
             action_hover: if is_multi {
@@ -272,7 +412,7 @@ impl PropertyPanel {
             } else {
                 ui.effect_param_focus
             },
-            codegen: state.codegen.clone(),
+            codegen,
         }
     }
 
@@ -291,7 +431,7 @@ impl PropertyPanel {
     /// paint and every hit-test walker start their y-walk from this
     /// rect, so the panel scrolls as one piece and clicks stay
     /// aligned with what is drawn.
-    fn scrolled_rect(&self, panel_rect: Rect) -> Rect {
+    pub(crate) fn scrolled_rect(&self, panel_rect: Rect) -> Rect {
         Rect {
             origin: Point2D::new(
                 panel_rect.origin.x,
@@ -321,10 +461,18 @@ impl PropertyPanel {
 
     /// Section-visibility mask for the current selection, threaded
     /// into every layout walker so paint + hit-test stay aligned.
-    fn visible_sections(&self) -> sections::VisibleSections {
+    pub(crate) fn visible_sections(&self) -> sections::VisibleSections {
         let caps = self.capabilities();
+        let component_button = if self.snapshot.is_instance {
+            crate::widgets::property_panel_visibility::ComponentButtonState::Instance
+        } else if self.snapshot.is_reusable {
+            crate::widgets::property_panel_visibility::ComponentButtonState::DetachComponent
+        } else {
+            crate::widgets::property_panel_visibility::ComponentButtonState::Create
+        };
         sections::VisibleSections {
             create_component: caps.create_component && self.snapshot.can_create_component,
+            component_button,
             flex_layout: caps.flex_layout,
             flex_layout_mode: self.snapshot.flex_layout,
             padding_edit_mode: self.padding_edit_mode,
@@ -339,12 +487,21 @@ impl PropertyPanel {
             text: caps.text && self.snapshot.text.is_some(),
             icon: self.snapshot.icon.is_some(),
             image: caps.image && self.snapshot.is_image_node,
+            image_warning: caps.image
+                && self
+                    .image_panel_view
+                    .as_ref()
+                    .is_some_and(|v| v.warning.is_some()),
             opacity: caps.opacity,
             corner_radius: self.snapshot.has_corner_radius,
             polygon_sides: self.snapshot.polygon_sides.is_some(),
             ellipse_arc: self.snapshot.ellipse_arc.is_some(),
             fill: caps.fill,
             stroke: caps.stroke,
+            color_variable_count: self.color_variable_count,
+            fill_variable_bound: self.fill_variable_ref.is_some(),
+            stroke_variable_bound: self.stroke_variable_ref.is_some(),
+            color_variable_picker_open: self.color_variable_picker_open,
             effects: caps.effects,
             export: caps.export,
             fill_type: self.fill_type,
@@ -383,6 +540,34 @@ impl PropertyPanel {
                 self.scrolled_rect(panel_rect),
                 self.visible_sections(),
                 &self.snapshot,
+                point,
+            ) {
+                return Some(action);
+            }
+        }
+        // Image Search / Generate popovers — overlay controls win
+        // over everything beneath them (they extend out of the rail).
+        if self.image_panel.search_open || self.image_panel.generate_open {
+            if let Some(action) =
+                crate::widgets::property_panel_image_assets::image_popover_action_at(
+                    self.scrolled_rect(panel_rect),
+                    self.visible_sections(),
+                    &self.image_panel,
+                    self.image_gen_profile.as_ref(),
+                    point,
+                )
+            {
+                return Some(action);
+            }
+        }
+        // Font-family picker rows (searchable overlay).
+        if self.font_family_picker_open {
+            let entries = self.font_picker_entries();
+            if let Some(action) = crate::widgets::property_panel_typography::font_picker_action_at(
+                self.scrolled_rect(panel_rect),
+                self.visible_sections(),
+                &entries,
+                self.font_picker_scroll,
                 point,
             ) {
                 return Some(action);
@@ -474,6 +659,11 @@ impl PropertyPanel {
             )
     }
 
+    // Font-picker / image-popover overlay accessors (entries,
+    // contains, hover index, max scroll) live in
+    // `property_panel_overlay_hit.rs` — same `impl PropertyPanel`,
+    // split for the 800-line cap.
+
     /// Hit-test the panel at `point` and return which input row
     /// (if any) contains the click. The layout walk mirrors the
     /// per-kind section filtering applied in `paint`, so rects
@@ -481,6 +671,11 @@ impl PropertyPanel {
     pub fn hit_test(&self, panel_rect: Rect, point: Point2D) -> Option<PropertyFocus> {
         if self.is_multi {
             // Inputs inert in v1 multi-select aggregate view.
+            return None;
+        }
+        if matches!(self.tab, op_editor_core::PropertyTab::Code) {
+            // The Code tab paints no Design input rows — a click must
+            // not focus an invisible input (paint + hit-test agree).
             return None;
         }
         if !self.point_in_section_viewport(panel_rect, point) {
@@ -542,6 +737,27 @@ fn rect_contains(r: Rect, p: Point2D) -> bool {
         && p.x <= r.origin.x + r.size.x
         && p.y >= r.origin.y
         && p.y <= r.origin.y + r.size.y
+}
+
+/// The node ids a code generation started THIS frame would target:
+/// the selection when present, else the active page's children (TS
+/// `getTargetNodes` / `nodeCount` in code-panel.tsx). Drives the Code
+/// tab's idle node-count label.
+fn live_codegen_target_ids(state: &EditorState) -> Vec<String> {
+    use op_editor_core::PenNodeExt;
+    if !state.selection.set.is_empty() {
+        return state
+            .selection
+            .set
+            .iter()
+            .map(|id| id.as_str().to_string())
+            .collect();
+    }
+    state
+        .active_children()
+        .iter()
+        .map(|n| n.id_str().to_string())
+        .collect()
 }
 
 impl Widget for PropertyPanel {
@@ -630,7 +846,15 @@ impl Widget for PropertyPanel {
         let mut y = tab_bottom - scroll;
         y = sections::paint_node_header(cx, &self.theme, &self.snapshot, x, y, w);
         if caps.create_component && self.snapshot.can_create_component {
-            y = sections::paint_create_component(cx, &self.theme, &self.labels, x, y, w);
+            y = sections::paint_create_component(
+                cx,
+                &self.theme,
+                &self.labels,
+                self.visible_sections().component_button,
+                x,
+                y,
+                w,
+            );
         }
         y = sections::paint_position_section(
             cx,
@@ -700,6 +924,9 @@ impl Widget for PropertyPanel {
                 cx,
                 &self.theme,
                 &self.snapshot,
+                self.image_panel_view
+                    .as_ref()
+                    .and_then(|v| v.warning.as_ref()),
                 self.locale,
                 x,
                 y,
@@ -727,6 +954,8 @@ impl Widget for PropertyPanel {
                 &self.labels,
                 self.fill_type,
                 self.fill_type_picker_open,
+                self.fill_variable_ref.as_deref(),
+                self.color_variable_count > 0 || self.fill_variable_ref.is_some(),
                 self.locale,
                 x,
                 y,
@@ -740,6 +969,8 @@ impl Widget for PropertyPanel {
                 &self.snapshot,
                 &edit_ctx,
                 &self.labels,
+                self.stroke_variable_ref.as_deref(),
+                self.color_variable_count > 0 || self.stroke_variable_ref.is_some(),
                 x,
                 y,
                 w,
@@ -784,11 +1015,17 @@ impl Widget for PropertyPanel {
         }
         if caps.text && self.font_family_picker_open {
             if let Some(text) = self.snapshot.text.as_ref() {
-                crate::widgets::property_panel_text::paint_font_family_picker(
+                let entries = self.font_picker_entries();
+                crate::widgets::property_panel_typography::paint_font_picker(
                     cx,
                     &self.theme,
                     scrolled,
                     self.visible_sections(),
+                    self.locale,
+                    &entries,
+                    &self.font_picker_search,
+                    self.font_picker_scroll,
+                    self.font_picker_hover,
                     &text.font_family,
                 );
             }
@@ -838,6 +1075,26 @@ impl Widget for PropertyPanel {
                 self.export_picker_hover,
             );
         }
+        if let Some(target) = self.color_variable_picker_open {
+            crate::widgets::property_panel_color_variables::paint_color_variable_picker(
+                cx,
+                &self.theme,
+                scrolled,
+                self.visible_sections(),
+                &self.snapshot.effects,
+                &self.color_variables,
+                self.fill_variable_ref.as_deref(),
+                self.stroke_variable_ref.as_deref(),
+                target,
+                self.locale,
+                self.fill_type_picker_open,
+                self.font_family_picker_open,
+                self.font_weight_picker_open,
+                self.export_scale_picker_open,
+                self.export_format_picker_open,
+                self.padding_mode_popover_open,
+            );
+        }
         // Per-button hover wash — one translucent overlay on the action
         // button under the cursor (flex / size / fill / effects / export
         // / create-component). Index into the same walker the host's
@@ -871,10 +1128,16 @@ impl Widget for PropertyPanel {
 impl PropertyPanel {
     /// Paint inspector overlays that are allowed to extend out of the
     /// right rail. Hosts call this late in their composition pass so
-    /// the image-fill popover is above floating canvas controls.
+    /// the image-fill / search / generate popovers sit above floating
+    /// canvas controls.
     pub fn paint_overlays(&self, cx: &mut PaintCx<'_>, rect: Rect) {
         let caps = self.capabilities();
-        if !(caps.fill || caps.image) || !self.image_fill_popover_open {
+        if !(caps.fill || caps.image) {
+            return;
+        }
+        // The Code tab paints no Design sections — none of the
+        // Design-anchored popovers may float over it.
+        if matches!(self.tab, op_editor_core::PropertyTab::Code) {
             return;
         }
         let scroll = self.effective_scroll(rect);
@@ -882,13 +1145,36 @@ impl PropertyPanel {
             origin: Point2D::new(rect.origin.x, rect.origin.y - scroll),
             size: rect.size,
         };
-        sections::paint_image_fill_popover(
-            cx,
-            &self.theme,
-            scrolled,
-            self.visible_sections(),
-            &self.snapshot,
-            self.locale,
-        );
+        if self.image_fill_popover_open {
+            sections::paint_image_fill_popover(
+                cx,
+                &self.theme,
+                scrolled,
+                self.visible_sections(),
+                &self.snapshot,
+                self.locale,
+            );
+        }
+        if caps.image && self.image_panel.search_open {
+            crate::widgets::property_panel_image_popovers::paint_search_popover(
+                cx,
+                &self.theme,
+                scrolled,
+                self.visible_sections(),
+                &self.image_panel,
+                self.now_ms,
+            );
+        }
+        if caps.image && self.image_panel.generate_open {
+            crate::widgets::property_panel_image_popovers::paint_generate_popover(
+                cx,
+                &self.theme,
+                scrolled,
+                self.visible_sections(),
+                &self.image_panel,
+                self.image_gen_profile.as_ref(),
+                self.now_ms,
+            );
+        }
     }
 }

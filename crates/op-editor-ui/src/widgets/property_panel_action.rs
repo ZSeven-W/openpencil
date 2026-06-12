@@ -25,64 +25,9 @@ pub enum TextGrowthValue {
     FixedWidthHeight,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum FontFamilyChoice {
-    Inter,
-    Poppins,
-    Roboto,
-    Montserrat,
-    OpenSans,
-    Lato,
-    Raleway,
-    DmSans,
-    PlayfairDisplay,
-    Nunito,
-    SourceSans3,
-    Arial,
-    Helvetica,
-    Georgia,
-    CourierNew,
-}
-
-impl FontFamilyChoice {
-    pub const ALL: [Self; 15] = [
-        Self::Inter,
-        Self::Poppins,
-        Self::Roboto,
-        Self::Montserrat,
-        Self::OpenSans,
-        Self::Lato,
-        Self::Raleway,
-        Self::DmSans,
-        Self::PlayfairDisplay,
-        Self::Nunito,
-        Self::SourceSans3,
-        Self::Arial,
-        Self::Helvetica,
-        Self::Georgia,
-        Self::CourierNew,
-    ];
-
-    pub fn family(self) -> &'static str {
-        match self {
-            Self::Inter => "Inter",
-            Self::Poppins => "Poppins",
-            Self::Roboto => "Roboto",
-            Self::Montserrat => "Montserrat",
-            Self::OpenSans => "Open Sans",
-            Self::Lato => "Lato",
-            Self::Raleway => "Raleway",
-            Self::DmSans => "DM Sans",
-            Self::PlayfairDisplay => "Playfair Display",
-            Self::Nunito => "Nunito",
-            Self::SourceSans3 => "Source Sans 3",
-            Self::Arial => "Arial",
-            Self::Helvetica => "Helvetica",
-            Self::Georgia => "Georgia",
-            Self::CourierNew => "Courier New",
-        }
-    }
-}
+// The font-family catalogue (bundled + system enumeration + search
+// filter) lives in `property_panel_typography.rs`; the picker emits
+// `SetFontFamilyIndex` into its visible-entries list.
 
 /// Named font-weight options for the typography weight dropdown — a
 /// port of the TS `WEIGHT_OPTIONS` (thin … black).
@@ -226,6 +171,15 @@ pub enum PropertyPanelAction {
     },
     /// User clicked the header "Create Component" affordance.
     CreateComponent,
+    /// User clicked "Detach component" on a reusable component —
+    /// host sheds the `reusable` flag (TS `detachComponent` case 1).
+    DetachComponent,
+    /// User clicked "Go to component" on an instance — host selects
+    /// the master component node.
+    GoToComponent,
+    /// User clicked "Detach instance" — host materializes the Ref
+    /// into an independent subtree (TS `detachComponent` case 2).
+    DetachInstance,
     /// User clicked the Fill section's fill-type dropdown — host
     /// toggles `Document.ui.fill_type_picker_open`.
     ToggleFillTypePicker,
@@ -242,6 +196,17 @@ pub enum PropertyPanelAction {
     /// User clicked a colour swatch (Fill or Stroke section). Host
     /// opens the floating colour picker tied to that target.
     OpenColorPicker(op_editor_core::ColorTarget),
+    /// User clicked the `{}` affordance beside a fill/stroke colour
+    /// row. Host toggles the colour-variable picker for that target.
+    ToggleColorVariablePicker(op_editor_core::ColorTarget),
+    /// User picked a colour variable row from the inline picker.
+    BindColorVariable {
+        target: op_editor_core::ColorTarget,
+        index: usize,
+    },
+    /// User clicked the current variable binding row to resolve it
+    /// back into a concrete colour.
+    UnbindColorVariable(op_editor_core::ColorTarget),
     /// User clicked the Export section's scale dropdown — host
     /// toggles `editor_ui.export_scale_picker_open` (the inline
     /// 1x/2x/3x select popup). Does NOT open the Export modal —
@@ -312,7 +277,36 @@ pub enum PropertyPanelAction {
     SetTextVerticalAlign(TextVerticalAlignValue),
     SetTextGrowth(TextGrowthValue),
     ToggleFontFamilyPicker,
-    SetFontFamily(FontFamilyChoice),
+    /// User clicked a row in the font-family picker. The index is
+    /// into `property_panel_typography::font_picker_entries(...)`
+    /// built from the SAME (system list, search) inputs — the host
+    /// re-derives the list to resolve the family string.
+    SetFontFamilyIndex(usize),
+    /// User clicked the image section's Search button — host toggles
+    /// `editor_ui.image_panel.search_open` (and seeds the query from
+    /// `imageSearchQuery ?? name`, TS `initialQuery`).
+    ToggleImageSearchPopover,
+    /// User clicked the image section's Generate button.
+    ToggleImageGeneratePopover,
+    /// User submitted the search popover's query (Enter or the
+    /// search icon-button).
+    RunImageSearch,
+    /// User clicked a result cell — host writes its thumb URL into
+    /// the selected image node's `src` (TS `onSelect(thumbUrl)`).
+    SelectImageSearchResult(usize),
+    /// User clicked Generate in the generate popover's idle view.
+    RunImageGenerate,
+    /// User clicked Apply on the generated preview — host writes the
+    /// preview URL into the node's `src` and closes the popover.
+    ApplyGeneratedImage,
+    /// User clicked Retry on the preview — back to the idle view.
+    RetryImageGenerate,
+    /// User clicked "Open Settings" in the not-configured view —
+    /// host opens the settings modal on the Images tab.
+    OpenImageGenSettings,
+    /// User clicked Relink on the local-asset warning row — host
+    /// pops a file dialog and rewrites the image node's `src`.
+    RelinkImage,
     /// User clicked the typography weight dropdown — host toggles
     /// `editor_ui.font_weight_picker_open`.
     ToggleFontWeightPicker,

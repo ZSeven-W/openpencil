@@ -40,6 +40,7 @@ mod layer_panel_paint;
 #[cfg(test)]
 mod layer_panel_tests;
 mod layer_panel_walkers;
+pub mod path_anchor_context_menu;
 pub mod property_panel;
 pub mod property_panel_action;
 pub mod property_panel_code;
@@ -50,17 +51,24 @@ pub mod property_panel_flex;
 pub mod property_panel_icon;
 #[cfg(test)]
 mod property_panel_icon_tests;
+pub mod property_panel_image_assets;
+#[cfg(test)]
+mod property_panel_image_assets_tests;
 pub mod property_panel_image_fill;
 #[cfg(test)]
 mod property_panel_image_fill_tests;
 pub mod property_panel_image_node;
+pub mod property_panel_image_popovers;
 mod property_panel_image_preview;
 pub mod property_panel_input_layout;
 pub mod property_panel_inputs;
+#[cfg(test)]
+mod property_panel_instance_tests;
 pub mod property_panel_layer;
 pub mod property_panel_layout;
 #[cfg(test)]
 mod property_panel_multi_select_tests;
+mod property_panel_overlay_hit;
 pub mod property_panel_sections;
 pub mod property_panel_snapshot;
 #[cfg(test)]
@@ -68,6 +76,7 @@ mod property_panel_test_support;
 #[cfg(test)]
 mod property_panel_tests;
 pub mod property_panel_text;
+pub mod property_panel_typography;
 pub mod property_panel_visibility;
 mod text_selection;
 pub mod toolbar;
@@ -75,10 +84,16 @@ pub mod toolbar;
 // Step 3 — center canvas that renders document nodes as actual
 // visual primitives (frame fills, rect strokes, text strings).
 mod canvas_agent_overlay;
+mod canvas_path_overlay;
+pub mod canvas_text_edit;
 pub mod canvas_viewport;
-mod canvas_viewport_image;
+// `pub` for the remote-image miss-queue API (`take_remote_image_requests`
+// / `store_remote_image_bytes` / …) the desktop host drains per frame;
+// the paint entry point itself stays `pub(super)`.
+pub mod canvas_viewport_image;
 pub mod canvas_viewport_overlay;
 pub mod canvas_viewport_paint;
+mod canvas_viewport_text;
 
 // Phase 6 — shell-core-side `theme()` / `t()` derivations over
 // `op_editor_core::EditorUiState` for widgets ported off `Document`.
@@ -108,6 +123,8 @@ mod agent_settings_builtin_parts;
 #[cfg(test)]
 mod agent_settings_builtin_tests;
 mod agent_settings_caret;
+#[cfg(test)]
+mod agent_settings_connect_tests;
 mod agent_settings_form_actions;
 mod agent_settings_header_action;
 pub mod agent_settings_i18n;
@@ -117,6 +134,7 @@ mod agent_settings_images_parts;
 mod agent_settings_images_profile_tests;
 pub mod agent_settings_mcp;
 pub mod agent_settings_panel;
+mod agent_settings_panel_card;
 mod agent_settings_panel_geometry;
 #[cfg(test)]
 mod agent_settings_panel_tests;
@@ -147,6 +165,7 @@ pub(crate) mod ai_chat_transcript_text;
 pub(crate) mod ai_chat_transcript_tools;
 pub mod align_toolbar;
 pub mod color_picker;
+mod component_browser_kits;
 pub mod component_browser_panel;
 pub mod design_md_markdown;
 pub mod design_md_panel;
@@ -171,7 +190,9 @@ mod git_panel_tests;
 mod git_panel_text;
 mod git_panel_tracked_picker;
 pub mod icon_picker_panel;
+pub mod ime_preedit_overlay;
 pub mod locale_picker;
+mod property_panel_color_variables;
 pub mod shape_picker;
 pub mod status_bar;
 pub mod top_bar;
@@ -222,7 +243,7 @@ pub use top_bar::{TopBar, TopBarHit, WindowControl, TOP_BAR_HEIGHT};
 pub use layer_panel::{DropPosition, DropTarget, LayerPanelHit, LAYER_PANEL_WIDTH};
 pub use property_panel::PROPERTY_PANEL_WIDTH;
 pub use toolbar::{ToolbarAction, ToolbarHit, TOOLBAR_WIDTH};
-pub use variables_modal::{VariablesModal, VariablesModalHit};
+pub use variables_modal::{PresetMenuHit, ThemePresetMenu, VariablesModal, VariablesModalHit};
 
 /// Stable identifier assigned by the widget host. Used by accesskit
 /// (`accesskit::NodeId(WidgetId.0)`), the DOM mirror, and event routing.

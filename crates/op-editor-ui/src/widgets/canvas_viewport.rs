@@ -286,6 +286,12 @@ pub struct EditCaret {
     pub now_ms: u64,
     /// Ctrl/Cmd+A selected the whole text — paint the select-all wash.
     pub select_all: bool,
+    /// Caret byte offset into the edited node's plain content.
+    /// `None` falls back to the end of the content.
+    pub caret: Option<usize>,
+    /// Selection anchor byte offset — a highlight paints over
+    /// `anchor..caret` (either order) when set and distinct.
+    pub anchor: Option<usize>,
     /// Pre-resolved selection wash color (theme isn't reachable in the
     /// `paint_node` walker, so the viewport stashes it here).
     pub selection_color: Color,
@@ -307,6 +313,9 @@ pub struct CanvasViewport<'a> {
     /// coord, used to paint the rubber-band preview.
     pub(super) pen_in_progress: Option<String>,
     pub(super) pen_cursor_doc: Option<Point2D>,
+    /// True while the Pen press-drag is minting handles — hides the
+    /// rubber band (TS `isDraggingHandle`).
+    pub(super) pen_dragging_handle: bool,
     /// Smart-guide alignment lines to paint during a node drag —
     /// doc-space, computed by the host's `align_guides` pass.
     pub(super) active_guides: Vec<op_editor_core::align_guides::AlignmentGuide>,
@@ -316,11 +325,22 @@ pub struct CanvasViewport<'a> {
     pub(super) text_edit_caret_anchor_ms: u64,
     /// Ctrl/Cmd+A selected the editing text node's whole content.
     pub(super) text_edit_select_all: bool,
+    /// Caret byte offset + selection anchor for the inline editor.
+    pub(super) text_edit_caret: Option<usize>,
+    pub(super) text_edit_selection_anchor: Option<usize>,
     /// Background fill outside any Frame.
     pub canvas_background: Color,
     pub theme: Theme,
     /// Host ms clock — text-edit caret blink.
     pub now_ms: u64,
+    /// Node under the cursor (excluding selected nodes) — paints the
+    /// dashed hover outline (TS `drawHoverOutline`).
+    pub(super) hovered: Option<String>,
+    /// Top-level frame labels: (scene id, display name, label colour).
+    /// Collected from the canonical tree at build time (the scene
+    /// carries no node names); painted screen-space above each root
+    /// frame (TS `drawFrameLabelColored`).
+    pub(super) frame_labels: Vec<(String, String, Color)>,
 }
 
 /// Spacing (document px) between major grid dots at 100% zoom.
@@ -360,6 +380,7 @@ impl<'a> CanvasViewport<'a> {
                 .as_ref()
                 .map(|id| id.as_str().to_string()),
             pen_cursor_doc: state.ui.pen_cursor_doc.map(|p| Point2D::new(p.x, p.y)),
+            pen_dragging_handle: state.ui.pen_dragging_handle,
             active_guides: state.editor_ui.active_guides.clone(),
             text_editing: state
                 .ui
@@ -368,11 +389,68 @@ impl<'a> CanvasViewport<'a> {
                 .map(|id| id.as_str().to_string()),
             text_edit_caret_anchor_ms: state.ui.text_edit_caret_anchor_ms,
             text_edit_select_all: state.ui.text_edit_select_all,
+            text_edit_caret: state.ui.text_edit_caret,
+            text_edit_selection_anchor: state.ui.text_edit_selection_anchor,
             canvas_background: theme.canvas_surface,
             theme,
             now_ms: 0,
+            hovered: state
+                .editor_ui
+                .canvas_hover_node
+                .as_ref()
+                // The outline is a Select-tool affordance; a stale id
+                // from a previous tool must not paint.
+                .filter(|_| matches!(state.tool, op_editor_core::Tool::Select))
+                .filter(|id| !state.selection.set.iter().any(|s| s == *id))
+                .map(|id| id.as_str().to_string()),
+            frame_labels: collect_frame_labels(state),
         }
     }
+}
+
+/// Root-frame name labels (TS `drawFrameLabelColored` over
+/// `renderNodes` with an empty clip stack): every named top-level
+/// Frame gets a grey label; reusable components purple; instances
+/// (Ref nodes — expanded to frames in the scene) the indigo
+/// instance tint.
+fn collect_frame_labels(state: &EditorState) -> Vec<(String, String, Color)> {
+    use op_editor_core::PenNodeExt;
+    const FRAME_LABEL: Color = Color {
+        r: 0.6,
+        g: 0.6,
+        b: 0.6,
+        a: 1.0,
+    }; // #999999
+    const COMPONENT: Color = Color {
+        r: 0.658,
+        g: 0.333,
+        b: 0.969,
+        a: 1.0,
+    }; // #a855f7
+    const INSTANCE: Color = Color {
+        r: 0.573,
+        g: 0.506,
+        b: 0.969,
+        a: 1.0,
+    }; // #9281f7
+    state
+        .active_children()
+        .iter()
+        .filter_map(|node| {
+            use jian_ops_schema::node::PenNode;
+            let name = node.base().name.clone().unwrap_or_default();
+            if name.is_empty() {
+                return None;
+            }
+            let color = match node {
+                PenNode::Frame(f) if f.reusable == Some(true) => COMPONENT,
+                PenNode::Frame(_) => FRAME_LABEL,
+                PenNode::Ref(_) => INSTANCE,
+                _ => return None,
+            };
+            Some((node.base().id.clone(), name, color))
+        })
+        .collect()
 }
 
 impl<'a> Widget for CanvasViewport<'a> {
@@ -412,6 +490,8 @@ impl<'a> Widget for CanvasViewport<'a> {
                 anchor_ms: self.text_edit_caret_anchor_ms,
                 now_ms: self.now_ms,
                 select_all: self.text_edit_select_all,
+                caret: self.text_edit_caret,
+                anchor: self.text_edit_selection_anchor,
                 selection_color: crate::widgets::text_selection::selection_color(&self.theme),
             });
             // Cull rect — anything fully outside this rect (with a
@@ -443,6 +523,59 @@ impl<'a> Widget for CanvasViewport<'a> {
                 viewport.zoom,
                 self.now_ms,
             );
+            // 3b. Dashed hover outline around the node under the
+            //     cursor (TS `drawHoverOutline`, #3b82f6, 4-4 dash).
+            if let Some(hovered) = self.hovered.as_ref() {
+                if let Some(node) = page.find(hovered) {
+                    const HOVER: Color = Color {
+                        r: 0.231,
+                        g: 0.51,
+                        b: 0.965,
+                        a: 1.0,
+                    };
+                    let b = node.aggregate_bounds();
+                    let screen = Rect {
+                        origin: Point2D::new(
+                            viewport_origin.x + b.origin.x * viewport.zoom,
+                            viewport_origin.y + b.origin.y * viewport.zoom,
+                        ),
+                        size: Point2D::new(b.size.x * viewport.zoom, b.size.y * viewport.zoom),
+                    };
+                    paint_dashed_rect(cx, screen, HOVER, 1.5);
+                }
+            }
+            // 3c. Root-frame name labels — fixed 12 px screen-space,
+            //     18 px above the frame's top edge (TS
+            //     `drawFrameLabelColored`).
+            for (id, name, color) in &self.frame_labels {
+                let Some(node) = page.find(id) else { continue };
+                let b = node.aggregate_bounds();
+                let sx = viewport_origin.x + b.origin.x * viewport.zoom;
+                let sy = viewport_origin.y + b.origin.y * viewport.zoom;
+                if sy < rect.origin.y || sy > rect.origin.y + rect.size.y + 18.0 {
+                    continue;
+                }
+                // Horizontal cull — generous width allowance so a
+                // label whose start is left of the clip still paints
+                // its visible tail.
+                if sx > rect.origin.x + rect.size.x || sx + 600.0 < rect.origin.x {
+                    continue;
+                }
+                let layout = crate::TextLayout::single_run(
+                    name,
+                    "system-ui",
+                    12.0,
+                    jian_core::scene::Color::rgba(
+                        (color.r * 255.0) as u8,
+                        (color.g * 255.0) as u8,
+                        (color.b * 255.0) as u8,
+                        255,
+                    ),
+                    Point2D::new(0.0, 0.0),
+                )
+                .with_font_weight(500);
+                cx.backend.draw_text(&layout, Point2D::new(sx, sy - 18.0));
+            }
         }
 
         // 3a. Smart-guide alignment lines (magenta) — painted over the
@@ -469,16 +602,6 @@ impl<'a> Widget for CanvasViewport<'a> {
                 cx.backend.stroke_line(from, to, GUIDE_COLOR, 1.0);
             }
         }
-
-        // 3b. Pen tool rubber-band from last anchor to cursor.
-        super::canvas_viewport_overlay::paint_pen_rubber_band(
-            cx,
-            self.scene,
-            self.pen_in_progress.as_deref(),
-            self.pen_cursor_doc,
-            rect,
-            viewport,
-        );
 
         // 4. Selection overlay — outlines + handles (single-select only).
         let show_handles = self.selected_set.len() == 1;
@@ -530,82 +653,26 @@ impl<'a> Widget for CanvasViewport<'a> {
             }
         }
 
-        // 4b. Per-anchor handles for the selected Path node when the
-        //     Pen tool is active — anchor dots plus the two bezier
-        //     control handles (line + dot; a faint "ghost" dot when
-        //     the handle is unset, draggable to create it).
-        if matches!(self.tool, op_editor_core::Tool::Pen) && self.selected_set.len() == 1 {
-            if let Some(node) = self
-                .scene
-                .active_page()
-                .and_then(|p| p.find(&self.selected))
-            {
-                if matches!(node.kind, NodeKind::Path) {
-                    let zoom = viewport.zoom;
-                    let to_screen = |p: Point2D| {
-                        Point2D::new(
-                            rect.origin.x + viewport.pan_x + p.x * zoom,
-                            rect.origin.y + viewport.pan_y + p.y * zoom,
-                        )
-                    };
-                    // Rotate the overlay to match the rotated node so
-                    // handles sit on the painted path (handle coords
-                    // are in the node's unrotated local frame).
-                    let rotated = node.rotation.abs() > f32::EPSILON;
-                    if rotated {
-                        let b = node.aggregate_bounds();
-                        let pivot = to_screen(Point2D::new(
-                            b.origin.x + b.size.x / 2.0,
-                            b.origin.y + b.size.y / 2.0,
-                        ));
-                        cx.backend.save();
-                        cx.backend.rotate(node.rotation, pivot);
-                    }
-                    let dot = |cx: &mut PaintCx<'_>, c: Point2D, r: f32, fill, line| {
-                        let b = Rect {
-                            origin: Point2D::new(c.x - r, c.y - r),
-                            size: Point2D::new(r * 2.0, r * 2.0),
-                        };
-                        cx.backend.fill_oval(b, fill);
-                        cx.backend.stroke_oval(b, line, 1.5);
-                    };
-                    let ghost = crate::Color {
-                        a: self.theme.primary.a * 0.4,
-                        ..self.theme.primary
-                    };
-                    for anchor in &node.path_anchors {
-                        let center = to_screen(anchor.pos);
-                        let (hin, hout) = path_handle_positions(anchor, zoom);
-                        for (pos, is_set) in [
-                            (hin, anchor.handle_in.is_some()),
-                            (hout, anchor.handle_out.is_some()),
-                        ] {
-                            let hs = to_screen(pos);
-                            let tint = if is_set { self.theme.primary } else { ghost };
-                            cx.backend.stroke_line(center, hs, tint, 1.0);
-                            dot(cx, hs, 3.0, self.theme.background, tint);
-                        }
-                        // Anchor dot painted last so it sits on top.
-                        dot(cx, center, 4.0, self.theme.background, self.theme.primary);
-                    }
-                    // Paths with no anchor data still show plain dots.
-                    if node.path_anchors.is_empty() {
-                        for p in &node.points {
-                            dot(
-                                cx,
-                                to_screen(*p),
-                                4.0,
-                                self.theme.background,
-                                self.theme.primary,
-                            );
-                        }
-                    }
-                    if rotated {
-                        cx.backend.restore();
-                    }
-                }
-            }
-        }
+        // 4b. Pen + path-editing overlays (`canvas_path_overlay.rs`):
+        //     - TS `drawPenPreview` while a pen session is authoring
+        //       (blue segments + dashed rubber band + anchor dots);
+        //     - the ghost-handle edit overlay when the Pen tool has a
+        //       single Path selected (pre-existing Rust superset);
+        //     - TS `drawPathEditor` for a single selected Path under
+        //       any other tool (Select-tool bezier editing, #5).
+        super::canvas_path_overlay::paint_path_overlays(
+            cx,
+            self.scene,
+            &self.theme,
+            self.tool,
+            self.pen_in_progress.as_deref(),
+            self.pen_cursor_doc,
+            self.pen_dragging_handle,
+            &self.selected,
+            self.selected_set.len(),
+            rect,
+            viewport,
+        );
 
         // 4c. Arc-edit handles for a single-selected Ellipse with the
         //     Select tool — start / sweep / inner-radius grab dots.
@@ -668,6 +735,42 @@ impl<'a> Widget for CanvasViewport<'a> {
 /// so it scrolls with the document content. Dots get sparser as
 /// zoom decreases (skipping every other dot at low zoom) so they
 /// stay visually airy.
+/// Stroke a dashed rectangle as 4 dashed edges (4 px on / 4 px off,
+/// screen-space) — the `RenderBackend` trait has no path-effect
+/// surface, so the dash is segmented by hand; backend-agnostic.
+pub(super) fn paint_dashed_rect(cx: &mut PaintCx<'_>, rect: Rect, color: Color, width: f32) {
+    const ON: f32 = 4.0;
+    const OFF: f32 = 4.0;
+    let mut dash_line = |from: Point2D, to: Point2D| {
+        let dx = to.x - from.x;
+        let dy = to.y - from.y;
+        let len = (dx * dx + dy * dy).sqrt();
+        if len <= f32::EPSILON {
+            return;
+        }
+        let (ux, uy) = (dx / len, dy / len);
+        let mut t = 0.0;
+        while t < len {
+            let end = (t + ON).min(len);
+            cx.backend.stroke_line(
+                Point2D::new(from.x + ux * t, from.y + uy * t),
+                Point2D::new(from.x + ux * end, from.y + uy * end),
+                color,
+                width,
+            );
+            t = end + OFF;
+        }
+    };
+    let tl = rect.origin;
+    let tr = Point2D::new(rect.origin.x + rect.size.x, rect.origin.y);
+    let br = Point2D::new(rect.origin.x + rect.size.x, rect.origin.y + rect.size.y);
+    let bl = Point2D::new(rect.origin.x, rect.origin.y + rect.size.y);
+    dash_line(tl, tr);
+    dash_line(tr, br);
+    dash_line(br, bl);
+    dash_line(bl, tl);
+}
+
 fn paint_grid(cx: &mut PaintCx<'_>, rect: Rect, viewport: &DocViewport, theme: &Theme) {
     let zoom = viewport.zoom.max(0.0001);
     let mut step = GRID_SPACING * zoom;

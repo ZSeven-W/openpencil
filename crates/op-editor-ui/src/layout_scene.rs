@@ -287,6 +287,38 @@ pub enum SceneTextVerticalAlign {
     Bottom,
 }
 
+/// One styled run of a Text node's flattened content — a byte range
+/// into [`SceneNode::text`] plus the per-segment style overrides the
+/// canonical schema's `TextContent::Styled` segments carry. Inherited
+/// (unset) attributes use the sentinel conventions of the node-level
+/// fields (`0.0` font size / `0` weight / `None` fill = inherit).
+///
+/// Runs exist ALONGSIDE the flat string: line wrapping, the text
+/// editor, and hit-testing all stay on the flat text; the painter maps
+/// each wrapped line back onto run byte ranges so painted slices carry
+/// their segment's style. A wrapped line that splits mid-segment keeps
+/// per-slice styling exact; only the WRAP POSITION itself is computed
+/// with node-level metrics (documented v1 approximation).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SceneTextRun {
+    /// Inclusive start byte offset into the node's flat `text`.
+    pub start: usize,
+    /// Exclusive end byte offset into the node's flat `text`.
+    pub end: usize,
+    /// Per-run font size in doc-px. `0.0` = inherit the node's.
+    pub font_size: f32,
+    /// Per-run CSS-style weight (100-900). `0` = inherit the node's.
+    pub font_weight: u16,
+    /// Per-run fill colour. `None` = inherit the node's resolved fill.
+    pub fill: Option<Color>,
+    /// Render this run with an italic (slanted) face.
+    pub italic: bool,
+    /// Stroke an underline beneath this run's painted slices.
+    pub underline: bool,
+    /// Stroke a strikethrough across this run's painted slices.
+    pub strikethrough: bool,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct SceneNode {
     /// Stable node id (the `.op` schema id). Identity for hit-test /
@@ -314,6 +346,12 @@ pub struct SceneNode {
     pub flip_y: bool,
     /// Corner radius in doc-px — honoured by Rect / Frame paint.
     pub corner_radius: f32,
+    /// Whether this container clips its children to its bounds
+    /// (rounded by `corner_radius`, clamped to half the height — TS
+    /// flattener rule). The scene builder also sets this for root
+    /// frames, which clip like artboards even without an authored
+    /// `clipContent: true` (TS `document-flattener.ts` parity).
+    pub clip_content: bool,
     /// Resolved fill colour. `$ref` variable fills are already
     /// resolved against the editor's variables + active theme; a
     /// gradient keeps its first stop here (parity with the current
@@ -333,14 +371,27 @@ pub struct SceneNode {
     /// resolved at build time. `None` = no stroke.
     pub stroke: Option<SceneStroke>,
     /// Text content — `Some` for Text nodes (and the lucide glyph
-    /// name for `icon_font`). `None` for non-text kinds.
+    /// name for `icon_font`). `None` for non-text kinds. Styled text
+    /// is flattened into this string; per-segment styling rides in
+    /// `text_runs`.
     pub text: Option<String>,
+    /// Per-segment style runs over `text` (byte ranges). Empty for
+    /// plain (single-style) text — the painter then uses the
+    /// node-level style for the whole content.
+    pub text_runs: Vec<SceneTextRun>,
     /// CSS font-family stack for text nodes. Empty = renderer default.
     pub font_family: String,
     /// Text size in doc-px. `0.0` = the painter's default (13 px).
     pub font_size: f32,
     /// CSS-style font weight (100-900). `0` = default (400).
     pub font_weight: u16,
+    /// Node-level italic (`fontStyle: italic`). Per-run overrides ride
+    /// in `text_runs`.
+    pub italic: bool,
+    /// Node-level underline decoration.
+    pub underline: bool,
+    /// Node-level strikethrough decoration.
+    pub strikethrough: bool,
     /// Line-height multiplier (`1.2` = 120%). `0.0` = renderer default.
     pub line_height: f32,
     /// Extra tracking in doc-px between glyphs.
@@ -479,14 +530,19 @@ impl SceneNode {
             flip_x: false,
             flip_y: false,
             corner_radius: 0.0,
+            clip_content: false,
             fill: None,
             fill_type: SceneFillType::Solid,
             gradient: None,
             stroke: None,
             text: None,
+            text_runs: Vec::new(),
             font_family: String::new(),
             font_size: 0.0,
             font_weight: 0,
+            italic: false,
+            underline: false,
+            strikethrough: false,
             line_height: 0.0,
             letter_spacing: 0.0,
             text_align: SceneTextAlign::Left,
@@ -578,171 +634,5 @@ impl SceneImageFit {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn empty_scene_has_no_active_page() {
-        let scene = LayoutScene::default();
-        assert!(scene.pages.is_empty());
-        assert!(scene.active_page().is_none());
-    }
-
-    #[test]
-    fn active_page_indexes_into_pages() {
-        let scene = LayoutScene {
-            pages: vec![
-                ScenePage {
-                    id: "a".into(),
-                    name: "A".into(),
-                    children: Vec::new(),
-                },
-                ScenePage {
-                    id: "b".into(),
-                    name: "B".into(),
-                    children: Vec::new(),
-                },
-            ],
-            active_page_index: 1,
-        };
-        assert_eq!(scene.active_page().map(|p| p.id.as_str()), Some("b"));
-    }
-
-    #[test]
-    fn find_locates_a_nested_node() {
-        let mut leaf = SceneNode::leaf("deep", NodeKind::Rect);
-        leaf.bounds = Rect::xywh(0.0, 0.0, 10.0, 10.0);
-        let mut group = SceneNode::leaf("g", NodeKind::Group);
-        group.children = vec![leaf];
-        let page = ScenePage {
-            id: "p".into(),
-            name: "P".into(),
-            children: vec![group],
-        };
-        assert_eq!(page.find("deep").map(|n| n.id.as_str()), Some("deep"));
-        assert!(page.find("missing").is_none());
-    }
-
-    #[test]
-    fn aggregate_bounds_unions_children_for_unbounded_container() {
-        let mut a = SceneNode::leaf("a", NodeKind::Rect);
-        a.bounds = Rect::xywh(10.0, 10.0, 20.0, 20.0);
-        let mut b = SceneNode::leaf("b", NodeKind::Rect);
-        b.bounds = Rect::xywh(50.0, 5.0, 10.0, 40.0);
-        let mut group = SceneNode::leaf("g", NodeKind::Group);
-        group.children = vec![a, b];
-        // Unbounded group → union of children: x 10..60, y 5..45.
-        assert_eq!(group.aggregate_bounds(), Rect::xywh(10.0, 5.0, 50.0, 40.0));
-    }
-
-    #[test]
-    fn aggregate_bounds_keeps_own_bounds_when_bounded() {
-        let mut frame = SceneNode::leaf("f", NodeKind::Frame);
-        frame.bounds = Rect::xywh(0.0, 0.0, 100.0, 200.0);
-        let mut child = SceneNode::leaf("c", NodeKind::Rect);
-        child.bounds = Rect::xywh(0.0, 0.0, 999.0, 999.0);
-        frame.children = vec![child];
-        assert_eq!(frame.aggregate_bounds(), Rect::xywh(0.0, 0.0, 100.0, 200.0));
-    }
-
-    #[test]
-    fn translate_nodes_moves_matching_subtree_once() {
-        let mut child = SceneNode::leaf("child", NodeKind::Rect);
-        child.bounds = Rect::xywh(10.0, 20.0, 30.0, 40.0);
-        let mut parent = SceneNode::leaf("parent", NodeKind::Group);
-        parent.bounds = Rect::xywh(0.0, 0.0, 100.0, 100.0);
-        parent.children = vec![child];
-        let mut scene = LayoutScene {
-            pages: vec![ScenePage {
-                id: "p".into(),
-                name: "P".into(),
-                children: vec![parent],
-            }],
-            active_page_index: 0,
-        };
-
-        assert!(scene.translate_nodes(&["parent".into(), "child".into()], 5.0, 7.0));
-        let page = scene.active_page().expect("active page");
-        let parent = page.find("parent").expect("parent");
-        let child = page.find("child").expect("child");
-        assert_eq!(parent.bounds.origin, Point2D::new(5.0, 7.0));
-        assert_eq!(child.bounds.origin, Point2D::new(15.0, 27.0));
-    }
-
-    #[test]
-    fn translate_nodes_moves_path_absolute_geometry() {
-        let mut path = SceneNode::leaf("path", NodeKind::Path);
-        path.bounds = Rect::xywh(1.0, 2.0, 30.0, 40.0);
-        path.points = vec![Point2D::new(3.0, 4.0)];
-        path.path_anchors = vec![SceneAnchor {
-            pos: Point2D::new(5.0, 6.0),
-            handle_in: Some(Point2D::new(7.0, 8.0)),
-            handle_out: Some(Point2D::new(9.0, 10.0)),
-            point_type: ScenePointType::Corner,
-        }];
-        let mut scene = LayoutScene {
-            pages: vec![ScenePage {
-                id: "p".into(),
-                name: "P".into(),
-                children: vec![path],
-            }],
-            active_page_index: 0,
-        };
-
-        assert!(scene.translate_nodes(&["path".into()], 11.0, 13.0));
-        let path = scene.active_page().and_then(|p| p.find("path")).unwrap();
-        assert_eq!(path.bounds.origin, Point2D::new(12.0, 15.0));
-        assert_eq!(path.points[0], Point2D::new(14.0, 17.0));
-        assert_eq!(path.path_anchors[0].pos, Point2D::new(16.0, 19.0));
-        assert_eq!(
-            path.path_anchors[0].handle_in,
-            Some(Point2D::new(18.0, 21.0))
-        );
-        assert_eq!(
-            path.path_anchors[0].handle_out,
-            Some(Point2D::new(20.0, 23.0))
-        );
-    }
-
-    #[test]
-    fn leaf_node_clears_paint_fields() {
-        let n = SceneNode::leaf("n1", NodeKind::Rect);
-        assert_eq!(n.bounds, Rect::ZERO);
-        assert!(n.fill.is_none());
-        assert!(n.stroke.is_none());
-        assert!(n.children.is_empty());
-        assert_eq!(n.fill_type, SceneFillType::Solid);
-    }
-
-    #[test]
-    fn content_bounds_unions_top_level_nodes() {
-        let mut a = SceneNode::leaf("a", NodeKind::Rect);
-        a.bounds = Rect::xywh(10.0, 20.0, 30.0, 40.0); // → x[10,40] y[20,60]
-        let mut b = SceneNode::leaf("b", NodeKind::Rect);
-        b.bounds = Rect::xywh(100.0, 0.0, 50.0, 10.0); // → x[100,150] y[0,10]
-        let scene = LayoutScene {
-            pages: vec![ScenePage {
-                id: "p".into(),
-                name: "P".into(),
-                children: vec![a, b],
-            }],
-            active_page_index: 0,
-        };
-        let bounds = scene.content_bounds().expect("non-empty page has bounds");
-        // Union: x[10,150] y[0,60] → origin (10,0) size (140,60).
-        assert_eq!(bounds, Rect::xywh(10.0, 0.0, 140.0, 60.0));
-    }
-
-    #[test]
-    fn content_bounds_none_for_empty_page() {
-        let scene = LayoutScene {
-            pages: vec![ScenePage {
-                id: "p".into(),
-                name: "P".into(),
-                children: vec![],
-            }],
-            active_page_index: 0,
-        };
-        assert!(scene.content_bounds().is_none());
-    }
-}
+#[path = "layout_scene_unit_tests.rs"]
+mod tests;
