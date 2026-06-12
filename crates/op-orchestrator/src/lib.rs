@@ -16,6 +16,7 @@ pub mod design_system;
 pub mod design_type;
 pub mod intent;
 pub mod manifest;
+pub mod manifest_hints;
 pub mod model_profile;
 pub mod parse;
 pub mod plan;
