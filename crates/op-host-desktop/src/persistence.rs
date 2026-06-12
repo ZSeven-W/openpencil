@@ -287,6 +287,12 @@ fn preserve_app_preferences(previous: &EditorState, next: &mut EditorState) {
     next.editor_ui.theme_mode = previous.editor_ui.theme_mode;
     next.editor_ui.locale = previous.editor_ui.locale;
     next.editor_ui.recent_files = previous.editor_ui.recent_files.clone();
+    // Imported UIKits are app-level (persisted in `uikits.json`), not
+    // document state — `from_document` reset them to the built-ins.
+    next.ui_kits = previous.ui_kits.clone();
+    // #20: theme presets are app-level too (`theme-presets.json`).
+    next.theme_presets = previous.theme_presets.clone();
+    next.theme_presets_dirty = previous.theme_presets_dirty;
     next.editor_ui.agent_settings = previous.editor_ui.agent_settings.clone();
     next.editor_ui.chat_selected_agent = previous.editor_ui.chat_selected_agent;
     next.chat.discovered_models = previous.chat.discovered_models.clone();
@@ -594,6 +600,10 @@ pub fn run_action(
         }
         FileAction::PickFillImage => {
             crate::persistence_image::handle_pick_fill_image(host);
+            ActionOutcome::Noop
+        }
+        FileAction::RelinkImage => {
+            crate::persistence_image::handle_relink_image(host, current_path.as_deref());
             ActionOutcome::Noop
         }
     }

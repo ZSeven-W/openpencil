@@ -22,14 +22,26 @@ use op_editor_core::walkers::find_node;
 #[allow(dead_code)]
 const DEFAULT_MAX_OUTPUT_TOKENS: u32 = 4096;
 
-/// Build pipeline input from the current selection. Returns the input plus
-/// the RAW selected-nodes JSON (before asset sanitization) for the bundle.
-/// `None` when nothing is selected.
-// Wired into the codegen session launch in a later P3 task.
-#[allow(dead_code)]
+/// Build pipeline input from the current selection, falling back to the
+/// ACTIVE PAGE's children when nothing is selected (TS `getTargetNodes`,
+/// code-panel.tsx:137-142). Returns the input plus the RAW nodes JSON
+/// (before asset sanitization) for the bundle. `None` when there is
+/// nothing to generate from: an empty page with no selection, or a
+/// selection whose ids resolve to no live node (TS no-ops on
+/// `nodes.length === 0`).
 pub fn build_codegen_input(state: &EditorState) -> Option<(CodegenInput, String)> {
     if state.selection.is_empty() {
-        return None;
+        // Whole-page fallback: every top-level child of the active page.
+        let children = state.active_children();
+        if children.is_empty() {
+            return None;
+        }
+        let nodes: Vec<&PenNode> = children.iter().collect();
+        return Some(input_from_nodes(
+            &nodes,
+            state.codegen.framework,
+            state.doc.variables.as_ref(),
+        ));
     }
 
     // Resolve each selected id to its full subtree. The forest is the page
@@ -67,8 +79,6 @@ pub fn build_codegen_input(state: &EditorState) -> Option<(CodegenInput, String)
 /// resolution so it can be unit-tested with hand-built nodes. The second
 /// tuple element is the RAW nodes JSON (identical to `input.nodes_json` here;
 /// asset sanitization is a later, in-pipeline step).
-// Reached only through `build_codegen_input`, itself wired in a later task.
-#[allow(dead_code)]
 fn input_from_nodes(
     nodes: &[&PenNode],
     framework: op_editor_core::codegen::Framework,
@@ -179,9 +189,25 @@ mod tests {
     }
 
     #[test]
-    fn empty_selection_is_none() {
+    fn empty_selection_on_empty_page_is_none() {
+        // No selection AND no page children → nothing to generate from.
         let state = EditorState::new();
         assert!(build_codegen_input(&state).is_none());
+    }
+
+    #[test]
+    fn empty_selection_falls_back_to_active_page_children() {
+        // TS getTargetNodes: no selection → ALL active-page children.
+        let mut state = EditorState::new();
+        state.doc.children = vec![frame("n1", vec![rect("n2")]), frame("n3", vec![])];
+        state.clear_selection();
+
+        let (input, raw) = build_codegen_input(&state).expect("page fallback");
+        assert!(input.nodes_json.contains("n1"));
+        assert!(input.nodes_json.contains("n2"));
+        assert!(input.nodes_json.contains("n3"));
+        assert_eq!(raw, input.nodes_json);
+        assert_eq!(input.framework, state.codegen.framework);
     }
 
     #[test]

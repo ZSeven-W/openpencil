@@ -146,34 +146,14 @@ impl DesignSession {
         thread::Builder::new()
             .name("op-design-turn".into())
             .spawn(move || {
-                let mut sink = RemoteDocSink::new(cmd_tx, initial_state);
-                let abort = AbortFlag::new();
-                let pre_validator = LintPreValidator;
-                let screenshot = SkippedScreenshotProvider;
-                let vision = SkippedVisionLlmClient;
-                let providers = ValidationProviders {
-                    pre_validator: &pre_validator,
-                    screenshot: &screenshot,
-                    vision: &vision,
-                    system_prompt: String::new(),
-                };
-                let delta_tx_for_progress = delta_tx.clone();
-                let mut on_progress = move |p: Progress| {
-                    let _ = delta_tx_for_progress.send(DesignDelta::Progress(p));
-                };
-                let summary = shared_runtime().block_on(
-                    Orchestrator::new()
-                        .with_indicator_epoch(indicator_epoch)
-                        .run(
-                            request,
-                            &mut sink,
-                            &llm,
-                            &mut on_progress,
-                            &abort,
-                            &providers,
-                        ),
-                );
-                let _ = delta_tx.send(DesignDelta::Done(summary));
+                run_design_worker(
+                    llm,
+                    request,
+                    initial_state,
+                    delta_tx,
+                    cmd_tx,
+                    indicator_epoch,
+                )
             })
             .expect("spawn op-design-turn thread");
 
@@ -225,11 +205,13 @@ impl DesignSession {
         out
     }
 
-    /// Test-only ctor — wraps externally-supplied channels so a fake
-    /// worker thread can drive the UI-side pumps end-to-end without
-    /// spinning up a real LLM. Production code goes through
-    /// [`DesignSession::start`].
-    #[cfg(test)]
+    /// Wrap externally-supplied channels. Production consumer: the
+    /// CLI intent router (`chat_session::launch_if_pending`) parks a
+    /// session here BEFORE classification resolves; its worker calls
+    /// [`run_design_worker`] on the sender halves only when the turn
+    /// classifies as a new design, and drops them otherwise (the pump
+    /// then retires the session). Tests drive the UI-side pumps
+    /// through the same ctor with a fake worker.
     pub fn from_channels(delta_rx: Receiver<DesignDelta>, cmd_rx: Receiver<DesignCmdReq>) -> Self {
         Self {
             delta_rx,
@@ -240,6 +222,47 @@ impl DesignSession {
             indicator_epoch: 0,
         }
     }
+}
+
+/// One full design turn against a `RemoteDocSink` — the body of
+/// [`DesignSession::start`]'s worker thread, callable directly by the
+/// CLI intent router's worker (which already runs off the UI thread).
+pub(crate) fn run_design_worker<L: LlmClient + Send>(
+    llm: L,
+    request: DesignRequest,
+    initial_state: EditorState,
+    delta_tx: Sender<DesignDelta>,
+    cmd_tx: Sender<DesignCmdReq>,
+    indicator_epoch: u64,
+) {
+    let mut sink = RemoteDocSink::new(cmd_tx, initial_state);
+    let abort = AbortFlag::new();
+    let pre_validator = LintPreValidator;
+    let screenshot = SkippedScreenshotProvider;
+    let vision = SkippedVisionLlmClient;
+    let providers = ValidationProviders {
+        pre_validator: &pre_validator,
+        screenshot: &screenshot,
+        vision: &vision,
+        system_prompt: String::new(),
+    };
+    let delta_tx_for_progress = delta_tx.clone();
+    let mut on_progress = move |p: Progress| {
+        let _ = delta_tx_for_progress.send(DesignDelta::Progress(p));
+    };
+    let summary = shared_runtime().block_on(
+        Orchestrator::new()
+            .with_indicator_epoch(indicator_epoch)
+            .run(
+                request,
+                &mut sink,
+                &llm,
+                &mut on_progress,
+                &abort,
+                &providers,
+            ),
+    );
+    let _ = delta_tx.send(DesignDelta::Done(summary));
 }
 
 /// Worker-side `DocSink` impl — forwards every mutation to the UI

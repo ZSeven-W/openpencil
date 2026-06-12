@@ -143,10 +143,15 @@ pub fn stream_ai_response<W: Write>(
     let chat_req = ChatRequest {
         system_prompt: system,
         user_message: req.user,
+        // Proxy requests are self-contained — no chat history wire yet.
+        history: Vec::new(),
         max_output_tokens: req.max_output_tokens,
         thinking: req.thinking,
         effort: req.effort,
         attachments: vec![],
+        // The web proxy has no model-picker channel yet; the CLI /
+        // provider default applies.
+        model: None,
     };
     for delta in provider.send(chat_req) {
         out.write_all(delta_to_sse(&delta).as_bytes())?;

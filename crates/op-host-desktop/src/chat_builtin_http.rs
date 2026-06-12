@@ -6,15 +6,19 @@
 //! streaming endpoints and converts SSE payloads into `ChatDelta`s.
 
 use std::fmt;
+use std::sync::Arc;
 
 use futures::StreamExt;
 use op_ai::chat_provider::{
-    ChatDelta, ChatProvider, ChatRequest, EffortLevel, StopReason, ThinkingMode,
+    ChatDelta, ChatHistoryRole, ChatProvider, ChatRequest, ChatToolDef, ChatToolExecutor,
+    EffortLevel, StopReason, ThinkingMode,
 };
 use op_editor_core::{BuiltinAgentConfig, BuiltinAgentKind};
 use serde_json::{json, Value};
 use tokio::sync::mpsc;
 
+use crate::chat_agent_loop::{run_anthropic_agent_loop, run_openai_agent_loop, AgentLoopConfig};
+use crate::chat_canvas_tools::MAX_TOOL_TURNS;
 use crate::chat_runtime::{resolved_skill_preamble, shared_runtime, BlockingRecvIter};
 
 #[derive(Clone)]
@@ -24,6 +28,12 @@ pub struct ConfiguredBuiltinProvider {
     model: String,
     base_url: String,
     label: String,
+    /// Canvas tool defs + executor for the tool-executing agent loop.
+    /// Empty / `None` keeps the plain streaming path (no tools on the
+    /// wire). Wired by the chat path only — the design orchestrator
+    /// uses this provider as a plain LLM and must never see tools.
+    tools: Vec<ChatToolDef>,
+    executor: Option<Arc<dyn ChatToolExecutor>>,
 }
 
 impl ConfiguredBuiltinProvider {
@@ -44,7 +54,23 @@ impl ConfiguredBuiltinProvider {
             model: config.model.trim().to_string(),
             base_url: base_url.to_string(),
             label: label.to_string(),
+            tools: Vec::new(),
+            executor: None,
         })
+    }
+
+    /// Enable the tool-executing agent loop for this provider's turns.
+    /// `tools` are advertised on the wire; `executor` runs each call
+    /// (production: the UI-thread channel bridge in
+    /// `chat_canvas_tools`). Chat path only — see the field docs.
+    pub fn with_canvas_tools(
+        mut self,
+        tools: Vec<ChatToolDef>,
+        executor: Arc<dyn ChatToolExecutor>,
+    ) -> Self {
+        self.tools = tools;
+        self.executor = Some(executor);
+        self
     }
 
     fn endpoint(&self, path: &str) -> String {
@@ -93,13 +119,20 @@ impl ChatProvider for ConfiguredBuiltinProvider {
         if !directive.is_empty() {
             prompt = format!("{directive}\n\n{prompt}");
         }
-        let preamble = resolved_skill_preamble(&request.user_message);
-        if !preamble.is_empty() {
-            prompt = format!("{preamble}\n\n---\n\n{prompt}");
+        // The per-turn system prompt (chat_system_prompt.rs) already
+        // resolves the skill corpus; only fall back to the in-prompt
+        // preamble when the caller sent no system prompt — otherwise
+        // the skills would ride the wire twice.
+        if request.system_prompt.trim().is_empty() {
+            let preamble = resolved_skill_preamble(&request.user_message);
+            if !preamble.is_empty() {
+                prompt = format!("{preamble}\n\n---\n\n{prompt}");
+            }
         }
 
         let provider = self.clone();
         let system_prompt = request.system_prompt;
+        let history = request.history;
         let max_output_tokens = request.max_output_tokens.max(1);
         // Only force MiniMax thinking off when the CALLER asked for it
         // (the orchestrator sets `Disabled`; normal chat defaults to
@@ -110,21 +143,56 @@ impl ChatProvider for ConfiguredBuiltinProvider {
         let (tx, rx) = mpsc::channel::<ChatDelta>(64);
         shared_runtime().spawn(async move {
             let _guard = guard;
-            let emitted_done = match provider.kind {
-                BuiltinAgentKind::Anthropic => {
-                    run_anthropic_chat(provider, system_prompt, prompt, max_output_tokens, &tx)
-                        .await
+            // Tool-capable turns route through the agent loop: tool
+            // defs ride the request, `tool_use` streams back, the
+            // executor runs each call, and `tool_result` rides a
+            // follow-up request — looping until the model stops
+            // calling tools (GAP #32).
+            let emitted_done = if let Some(executor) = provider.executor.clone() {
+                let cfg = AgentLoopConfig {
+                    url: match provider.kind {
+                        BuiltinAgentKind::Anthropic => provider.endpoint("/v1/messages"),
+                        BuiltinAgentKind::OpenAiCompat => provider.endpoint("/chat/completions"),
+                    },
+                    api_key: provider.api_key.clone(),
+                    model: provider.model.clone(),
+                    system_prompt,
+                    history,
+                    user_prompt: prompt,
+                    max_output_tokens,
+                    tools: provider.tools.clone(),
+                    executor,
+                    max_turns: MAX_TOOL_TURNS,
+                };
+                match provider.kind {
+                    BuiltinAgentKind::Anthropic => run_anthropic_agent_loop(cfg, &tx).await,
+                    BuiltinAgentKind::OpenAiCompat => run_openai_agent_loop(cfg, &tx).await,
                 }
-                BuiltinAgentKind::OpenAiCompat => {
-                    run_openai_chat(
-                        provider,
-                        system_prompt,
-                        prompt,
-                        max_output_tokens,
-                        disable_thinking,
-                        &tx,
-                    )
-                    .await
+            } else {
+                match provider.kind {
+                    BuiltinAgentKind::Anthropic => {
+                        run_anthropic_chat(
+                            provider,
+                            system_prompt,
+                            history,
+                            prompt,
+                            max_output_tokens,
+                            &tx,
+                        )
+                        .await
+                    }
+                    BuiltinAgentKind::OpenAiCompat => {
+                        run_openai_chat(
+                            provider,
+                            system_prompt,
+                            history,
+                            prompt,
+                            max_output_tokens,
+                            disable_thinking,
+                            &tx,
+                        )
+                        .await
+                    }
                 }
             };
             match emitted_done {
@@ -160,6 +228,7 @@ fn is_minimax_model(model: &str) -> bool {
 async fn run_openai_chat(
     provider: ConfiguredBuiltinProvider,
     system_prompt: String,
+    history: Vec<(ChatHistoryRole, String)>,
     prompt: String,
     max_output_tokens: u32,
     disable_thinking: bool,
@@ -172,6 +241,11 @@ async fn run_openai_chat(
             "role": "system",
             "content": system_prompt,
         }));
+    }
+    // Prior turns ride as full wire messages (TS parity: the builtin
+    // route seeds the engine with `messages.slice(0, -1)`).
+    for (role, text) in &history {
+        messages.push(json!({ "role": role.as_str(), "content": text }));
     }
     messages.push(json!({
         "role": "user",
@@ -208,21 +282,24 @@ async fn run_openai_chat(
 async fn run_anthropic_chat(
     provider: ConfiguredBuiltinProvider,
     system_prompt: String,
+    history: Vec<(ChatHistoryRole, String)>,
     prompt: String,
     max_output_tokens: u32,
     tx: &mpsc::Sender<ChatDelta>,
 ) -> Result<bool, String> {
     let url = provider.endpoint("/v1/messages");
+    // Prior turns ride as full wire messages ahead of the current
+    // user prompt (TS parity: builtin multi-turn context seeding).
+    let mut messages: Vec<Value> = history
+        .iter()
+        .map(|(role, text)| json!({ "role": role.as_str(), "content": text }))
+        .collect();
+    messages.push(json!({ "role": "user", "content": prompt }));
     let mut body = json!({
         "model": provider.model,
         "max_tokens": max_output_tokens,
         "stream": true,
-        "messages": [
-            {
-                "role": "user",
-                "content": prompt,
-            }
-        ],
+        "messages": messages,
     });
     if !system_prompt.trim().is_empty() {
         body.as_object_mut()
@@ -241,7 +318,7 @@ async fn run_anthropic_chat(
     pump_sse_response(resp, tx, parse_anthropic_sse_data).await
 }
 
-async fn ensure_success(
+pub(crate) async fn ensure_success(
     resp: reqwest::Response,
     provider_label: &str,
 ) -> Result<reqwest::Response, String> {
@@ -426,7 +503,7 @@ fn parse_anthropic_sse_data(data: &str) -> Option<ChatDelta> {
     }
 }
 
-fn map_anthropic_stop_reason(reason: &str) -> StopReason {
+pub(crate) fn map_anthropic_stop_reason(reason: &str) -> StopReason {
     match reason {
         "max_tokens" => StopReason::MaxTokens,
         "tool_use" => StopReason::ToolUse,
@@ -435,7 +512,7 @@ fn map_anthropic_stop_reason(reason: &str) -> StopReason {
     }
 }
 
-fn map_openai_stop_reason(reason: &str) -> StopReason {
+pub(crate) fn map_openai_stop_reason(reason: &str) -> StopReason {
     match reason {
         "length" => StopReason::MaxTokens,
         "tool_calls" | "function_call" => StopReason::ToolUse,

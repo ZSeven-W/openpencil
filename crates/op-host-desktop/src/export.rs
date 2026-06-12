@@ -1,47 +1,59 @@
 //! Raster + SVG export for the active page.
 //!
-//! Renders top-level nodes on the active page of a [`LayoutScene`]
-//! into an off-screen `skia_safe::Surface`, encodes as one of
-//! PNG/JPEG/WEBP, writes to the user-chosen path. SVG goes through a
-//! separate hand-rolled serializer (`export_svg`). Coverage:
-//!   - Rect / Frame / Group : fill + stroke + corner_radius
-//!   - Ellipse              : fill + stroke
-//!   - Polygon              : default-triangle fill + stroke
-//!   - Line                 : diagonal stroke across `bounds`
-//!   - Path                 : polyline through `node.points`
-//!   - Text                 : authored content at the resolved bounds
+//! Raster (PNG/JPEG/WEBP) renders through the SAME scene painter the
+//! live editor canvas uses — `canvas_viewport_paint::paint_node`
+//! driven over an offscreen `skia_safe::Surface` via
+//! `op_host_native::NativeFrameBackend` (see `scene_painter.rs`). The
+//! exported pixels (and the MCP `debug_screenshot` captures that ship
+//! through `screenshot.rs`) therefore match the canvas exactly:
+//! image fills (fit/crop/tile + corner-radius + dashed placeholder),
+//! `clip_content` scopes, styled text runs (weight / italic /
+//! underline / strike / justify), gradients and effects.
 //!
-//! Per-node rotation honoured via `Canvas::rotate`.
+//! SVG goes through a separate hand-rolled serializer (`export_svg`)
+//! — vector output, divergences documented there.
 //!
 //! The scene is layout-resolved: every `SceneNode::bounds` is the
 //! absolute doc-space AABB jian's flex pass produced, and fills are
 //! already `$ref`-resolved. Export draws straight from `bounds` with
-//! no second layout pass — same input the on-screen canvas paints
-//! (`canvas_viewport_paint.rs`).
+//! no second layout pass — same input the on-screen canvas paints.
 //!
 //! Background: PNG / WEBP transparent; JPEG forced white (TS parity
 //! — JPEG has no alpha so a "transparent" JPEG would read as black).
 //! Scale: caller picks @1x / @2x / @3x (TS export dialog parity).
+//! Output size is hard-capped (see [`MAX_RASTER_SIDE_PX`] /
+//! [`MAX_RASTER_TOTAL_PX`]) so a huge document or screenshot padding
+//! can't force a giant UI-thread allocation.
 
-use op_editor_ui::layout_scene::{regular_polygon_points, LayoutScene, SceneNode, ScenePage};
-use op_editor_ui::layout_scene::{Effect, NodeKind};
-use op_editor_ui::{
-    Color, ImageAdjustments, ImageDrawMode, Point2D, Rect, RenderBackend, TextLayout,
-};
-use skia_safe::{Canvas, EncodedImageFormat, Paint, PaintStyle, Path, PathBuilder};
+use op_editor_ui::layout_scene::NodeKind;
+use op_editor_ui::layout_scene::{LayoutScene, SceneNode, ScenePage};
+use op_editor_ui::{Color, Point2D, Rect};
+use skia_safe::{Canvas, EncodedImageFormat};
 use std::path::Path as StdPath;
 
 mod export_svg;
-mod svg_path;
+mod scene_painter;
+pub(crate) mod screenshot;
 
 pub use export_svg::export_svg;
+pub(crate) use scene_painter::{paint_node, paint_nodes};
 
 const MARGIN: f32 = 16.0;
 
-/// Mirrors `canvas_viewport_paint.rs` text paint constants so PNG
-/// export matches what the user sees on the editor canvas at zoom 1.
-/// `canvas_viewport_paint.rs` uses a 13 px default and a baseline at
-/// `(size + 1) * zoom`, with `1.35 × size` line height.
+/// Hard ceilings for the offscreen raster surface. A huge page (or a
+/// `debug_screenshot` request with extreme padding/scale) would
+/// otherwise force a giant UI-thread allocation: 16384 px per side is
+/// the common GPU/skia texture ceiling, and 64 MPx total (~256 MB of
+/// N32 pixels) bounds the worst case. Exceeding either returns a
+/// structured error; the MCP screenshot glue wraps it in the TS-parity
+/// "Renderer reported failure: …" envelope.
+pub(crate) const MAX_RASTER_SIDE_PX: i64 = 16_384;
+pub(crate) const MAX_RASTER_TOTAL_PX: i64 = 64_000_000;
+
+/// Text defaults shared with the SVG serializer (`export_svg.rs`):
+/// 13 px default font size and a near-black ink colour, mirroring the
+/// editor canvas defaults. The raster path no longer uses these — it
+/// paints through the shared scene painter (`scene_painter.rs`).
 const TEXT_DEFAULT_FONT_SIZE: f32 = 13.0;
 const TEXT_DEFAULT_FILL: Color = Color {
     r: 0.08,
@@ -117,9 +129,7 @@ pub fn export_raster(
     };
     let bounds = page_bounds(page).ok_or("nothing to export")?;
     render_raster(bounds, target, format, scale, |canvas| {
-        for node in &page.children {
-            paint_node(canvas, node);
-        }
+        paint_nodes(canvas, &page.children);
     })
 }
 
@@ -173,10 +183,43 @@ fn render_raster(
     scale: f32,
     paint: impl FnOnce(&Canvas),
 ) -> Result<(), String> {
-    let width_px = ((bounds.size.x + MARGIN * 2.0) * scale).round() as i32;
-    let height_px = ((bounds.size.y + MARGIN * 2.0) * scale).round() as i32;
+    let data = render_raster_bytes(bounds, format, scale, MARGIN, paint)?;
+    std::fs::write(target, data).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// In-memory variant of [`render_raster`] — encodes and returns the
+/// raster bytes instead of writing a file. `margin` is the doc-px
+/// border around `bounds` (file exports use the fixed [`MARGIN`]; the
+/// MCP `debug_screenshot` path passes the caller's `padding`).
+pub(crate) fn render_raster_bytes(
+    bounds: Rect,
+    format: RasterFormat,
+    scale: f32,
+    margin: f32,
+    paint: impl FnOnce(&Canvas),
+) -> Result<Vec<u8>, String> {
+    let width_f = ((bounds.size.x + margin * 2.0) * scale).round();
+    let height_f = ((bounds.size.y + margin * 2.0) * scale).round();
+    if !width_f.is_finite() || !height_f.is_finite() {
+        return Err("raster output size is not finite (corrupt bounds / scale)".into());
+    }
+    // `as i64` saturates, so an absurd-but-finite f32 still lands on a
+    // comparable integer instead of UB / wraparound.
+    let width_px = (width_f as i64).max(1);
+    let height_px = (height_f as i64).max(1);
+    if width_px > MAX_RASTER_SIDE_PX
+        || height_px > MAX_RASTER_SIDE_PX
+        || width_px.saturating_mul(height_px) > MAX_RASTER_TOTAL_PX
+    {
+        return Err(format!(
+            "raster output {width_px}x{height_px} px exceeds the size cap \
+             ({MAX_RASTER_SIDE_PX} px per side, {MAX_RASTER_TOTAL_PX} px total) — \
+             lower the scale / padding or export a smaller node"
+        ));
+    }
     let info = skia_safe::ImageInfo::new(
-        (width_px.max(1), height_px.max(1)),
+        (width_px as i32, height_px as i32),
         skia_safe::ColorType::N32,
         skia_safe::AlphaType::Premul,
         None,
@@ -189,14 +232,13 @@ fn render_raster(
         canvas.clear(skia_safe::Color::WHITE);
     }
     canvas.scale((scale, scale));
-    canvas.translate((MARGIN - bounds.origin.x, MARGIN - bounds.origin.y));
+    canvas.translate((margin - bounds.origin.x, margin - bounds.origin.y));
     paint(canvas);
     let image = surface.image_snapshot();
     let data = image
         .encode(None, format.skia(), format.quality())
         .ok_or_else(|| format!("encode {} failed", format.user_label()))?;
-    std::fs::write(target, data.as_bytes()).map_err(|e| e.to_string())?;
-    Ok(())
+    Ok(data.as_bytes().to_vec())
 }
 
 /// Bounding rect over every paintable node on `page`. The scene is
@@ -276,6 +318,26 @@ fn collect_bounds(n: &SceneNode, parent_xform: glam::Affine2, acc: &mut BoundsAc
             let w = local_xform.transform_point2(p);
             acc.add(w.x, w.y, w.x, w.y);
         }
+    }
+    // A `clip_content` container clips its children to its own rect
+    // (the painter pushes the same clip scope the live canvas does —
+    // see `canvas_viewport_paint::push_clip_content`), so child
+    // overflow can never paint outside it. Contribute the container
+    // rect and skip the subtree instead of sizing the surface to the
+    // un-clipped child union. Gate mirrors the painter: only bounded
+    // containers with children actually clip.
+    if n.clip_content && !n.children.is_empty() && n.bounds.size.x > 0.0 && n.bounds.size.y > 0.0 {
+        let nr = normalize_rect(n.bounds);
+        for (x, y) in [
+            (nr.origin.x, nr.origin.y),
+            (nr.origin.x + nr.size.x, nr.origin.y),
+            (nr.origin.x + nr.size.x, nr.origin.y + nr.size.y),
+            (nr.origin.x, nr.origin.y + nr.size.y),
+        ] {
+            let w = local_xform.transform_point2(glam::Vec2::new(x, y));
+            acc.add(w.x, w.y, w.x, w.y);
+        }
+        return;
     }
     for child in &n.children {
         collect_bounds(child, local_xform, acc);
@@ -401,337 +463,6 @@ fn own_paint_corners(n: &SceneNode) -> Option<Vec<glam::Vec2>> {
         glam::Vec2::new(x1 + stroke_pad, y1 + stroke_pad),
         glam::Vec2::new(x0 - stroke_pad, y1 + stroke_pad),
     ])
-}
-
-/// Recursively paint one resolved [`SceneNode`] and its subtree onto
-/// `canvas`. Mirrors `canvas_viewport_paint.rs::paint_node` at zoom 1
-/// so the exported pixels match the on-screen canvas.
-pub(crate) fn paint_node(canvas: &Canvas, node: &SceneNode) {
-    if node.hidden {
-        return;
-    }
-    let world_rect = node.bounds;
-    let pre_rotate = canvas.save();
-    // Rotation pivots around `aggregate_bounds` — own bounds when the
-    // node is bounded, child union for unbounded containers — exactly
-    // like the editor canvas painter.
-    if node.rotation.abs() > f32::EPSILON {
-        let pivot = node.aggregate_bounds();
-        if pivot.size.x != 0.0 || pivot.size.y != 0.0 {
-            let cx = pivot.origin.x + pivot.size.x / 2.0;
-            let cy = pivot.origin.y + pivot.size.y / 2.0;
-            canvas.rotate(node.rotation.to_degrees(), Some((cx, cy).into()));
-        }
-    }
-    // Drop shadows paint behind the node's own fill — only for kinds
-    // a rounded rect / ellipse silhouette can represent (parity with
-    // canvas_viewport_paint.rs).
-    if !node.effects.is_empty()
-        && world_rect.size.x.abs() > 0.0
-        && world_rect.size.y.abs() > 0.0
-        && matches!(
-            node.kind,
-            NodeKind::Frame | NodeKind::Rect | NodeKind::Ellipse
-        )
-    {
-        paint_drop_shadows(canvas, node, world_rect);
-    }
-    match &node.kind {
-        NodeKind::Rect | NodeKind::Frame => {
-            paint_rect(canvas, world_rect, node);
-        }
-        NodeKind::Other(tag) if tag == "icon_font" => {
-            paint_icon_font(canvas, world_rect, node);
-        }
-        NodeKind::Other(_) => {
-            // Unknown tagged kinds have no rect silhouette in export;
-            // skip own paint, still recurse children.
-        }
-        NodeKind::Ellipse => {
-            paint_oval(canvas, world_rect, node);
-        }
-        NodeKind::Polygon => {
-            paint_polygon(canvas, world_rect, node);
-        }
-        NodeKind::Line => {
-            let (color, width) = match node.stroke {
-                Some(s) => (s.color, s.width),
-                None => (node.fill.unwrap_or(Color::BLACK), 1.5),
-            };
-            let paint = make_stroke(color, width);
-            canvas.draw_line(
-                (world_rect.origin.x, world_rect.origin.y),
-                (
-                    world_rect.origin.x + world_rect.size.x,
-                    world_rect.origin.y + world_rect.size.y,
-                ),
-                &paint,
-            );
-        }
-        NodeKind::Path => {
-            if node.svg_path.is_some() {
-                svg_path::paint(canvas, node);
-            } else {
-                paint_polyline(canvas, node);
-            }
-        }
-        NodeKind::Text => paint_text(canvas, world_rect, node),
-        // Group has no own paint — children handle render.
-        NodeKind::Group => {}
-    }
-    for child in &node.children {
-        paint_node(canvas, child);
-    }
-    canvas.restore_to_count(pre_rotate);
-}
-
-/// Paint every `Effect::DropShadow` as a blurred shape behind the
-/// node's fill. Mirrors `canvas_viewport_paint.rs::paint_drop_shadows`
-/// at zoom 1.
-fn paint_drop_shadows(canvas: &Canvas, node: &SceneNode, world_rect: Rect) {
-    let nrect = normalize_rect(world_rect);
-    let radius = if node.kind == NodeKind::Ellipse {
-        nrect.size.x.min(nrect.size.y) / 2.0
-    } else {
-        node.corner_radius
-    };
-    for effect in &node.effects {
-        let Effect::DropShadow(s) = effect;
-        let shadow_rect = Rect {
-            origin: Point2D::new(nrect.origin.x + s.offset_x, nrect.origin.y + s.offset_y),
-            size: nrect.size,
-        };
-        let mut paint = make_fill(s.color);
-        if s.blur > 0.0 {
-            paint.set_mask_filter(skia_safe::MaskFilter::blur(
-                skia_safe::BlurStyle::Normal,
-                s.blur * 0.5,
-                false,
-            ));
-        }
-        let sk_rect = to_sk_rect(shadow_rect);
-        if node.kind == NodeKind::Ellipse {
-            canvas.draw_oval(sk_rect, &paint);
-        } else if radius > 0.5 {
-            canvas.draw_round_rect(sk_rect, radius, radius, &paint);
-        } else {
-            canvas.draw_rect(sk_rect, &paint);
-        }
-    }
-}
-
-fn paint_rect(canvas: &Canvas, rect: Rect, node: &SceneNode) {
-    let nrect = normalize_rect(rect);
-    if nrect.size.x == 0.0 && nrect.size.y == 0.0 {
-        return;
-    }
-    let r = node.corner_radius;
-    let sk_rect = to_sk_rect(nrect);
-    if let Some(fill) = node.fill {
-        let paint = make_fill(fill);
-        if r > 0.5 {
-            canvas.draw_round_rect(sk_rect, r, r, &paint);
-        } else {
-            canvas.draw_rect(sk_rect, &paint);
-        }
-    }
-    if let Some(stroke) = node.stroke {
-        let paint = make_stroke(stroke.color, stroke.width);
-        if r > 0.5 {
-            canvas.draw_round_rect(sk_rect, r, r, &paint);
-        } else {
-            canvas.draw_rect(sk_rect, &paint);
-        }
-    }
-}
-
-fn paint_oval(canvas: &Canvas, rect: Rect, node: &SceneNode) {
-    let nrect = normalize_rect(rect);
-    if nrect.size.x == 0.0 && nrect.size.y == 0.0 {
-        return;
-    }
-    let sk_rect = to_sk_rect(nrect);
-    if let Some(fill) = node.fill {
-        canvas.draw_oval(sk_rect, &make_fill(fill));
-    }
-    if let Some(stroke) = node.stroke {
-        canvas.draw_oval(sk_rect, &make_stroke(stroke.color, stroke.width));
-    }
-}
-
-fn paint_polygon(canvas: &Canvas, rect: Rect, node: &SceneNode) {
-    let rect = normalize_rect(rect);
-    if rect.size.x == 0.0 || rect.size.y == 0.0 {
-        return;
-    }
-    let points = regular_polygon_points(rect, node.polygon_sides);
-    let mut builder = PathBuilder::new();
-    let Some(first) = points.first() else {
-        return;
-    };
-    builder.move_to((first.x, first.y));
-    for p in points.iter().skip(1) {
-        builder.line_to((p.x, p.y));
-    }
-    builder.close();
-    let path: Path = builder.detach();
-    if let Some(fill) = node.fill {
-        canvas.draw_path(&path, &make_fill(fill));
-    }
-    if let Some(stroke) = node.stroke {
-        canvas.draw_path(&path, &make_stroke(stroke.color, stroke.width));
-    }
-}
-
-fn paint_text(canvas: &Canvas, rect: Rect, node: &SceneNode) {
-    let Some(text) = node.text.as_deref() else {
-        return;
-    };
-    if text.is_empty() {
-        return;
-    }
-    let r = normalize_rect(rect);
-    let Some(typeface) =
-        skia_safe::FontMgr::new().legacy_make_typeface(None, skia_safe::FontStyle::default())
-    else {
-        return;
-    };
-    // Match the editor canvas (canvas_viewport_paint.rs): authored
-    // font size with a 13 px default, baseline at origin.y + (size+1),
-    // fill defaults to the near-black ink colour. Multi-line text
-    // splits on `\n` with a 1.35 × size line height.
-    let base_size = if node.font_size > 0.0 {
-        node.font_size
-    } else {
-        TEXT_DEFAULT_FONT_SIZE
-    };
-    let font = skia_safe::Font::from_typeface(typeface, base_size);
-    let color = node.fill.unwrap_or(TEXT_DEFAULT_FILL);
-    let paint = make_fill(color);
-    let line_h = base_size * 1.35;
-    let mut baseline_y = r.origin.y + base_size + 1.0;
-    for line in text.split('\n') {
-        canvas.draw_str(line, (r.origin.x, baseline_y), &font, &paint);
-        baseline_y += line_h;
-    }
-}
-
-fn paint_icon_font(canvas: &Canvas, rect: Rect, node: &SceneNode) {
-    let mut backend = IconExportBackend { canvas };
-    op_editor_ui::widgets::icons::paint_icon_font_node(
-        &mut backend,
-        node.font_family.as_str(),
-        node.text.as_deref().unwrap_or(""),
-        normalize_rect(rect),
-        node.fill,
-    );
-}
-
-struct IconExportBackend<'a> {
-    canvas: &'a Canvas,
-}
-
-impl RenderBackend for IconExportBackend<'_> {
-    fn begin_frame(&mut self) {}
-    fn end_frame(&mut self) {}
-    fn fill_rect(&mut self, _rect: Rect, _color: Color) {}
-    fn stroke_rect(&mut self, _rect: Rect, _color: Color, _width: f32) {}
-    fn draw_text(&mut self, _layout: &TextLayout, _origin: Point2D) {}
-    fn clip_rect(&mut self, _rect: Rect) {}
-    fn stroke_line(&mut self, _from: Point2D, _to: Point2D, _color: Color, _width: f32) {}
-    fn fill_round_rect(&mut self, _rect: Rect, _radius: f32, _color: Color) {}
-    fn stroke_round_rect(&mut self, _rect: Rect, _radius: f32, _color: Color, _width: f32) {}
-
-    fn stroke_svg_path(&mut self, d: &str, top_left: Point2D, size: f32, color: Color, width: f32) {
-        let Some(path) = skia_safe::utils::parse_path::from_svg(d) else {
-            return;
-        };
-        let scale = size / 24.0;
-        let mut matrix = skia_safe::Matrix::new_identity();
-        matrix.set_scale_translate((scale, scale), (top_left.x, top_left.y));
-        let path = path.with_transform(&matrix);
-        let mut paint = make_stroke(color, width);
-        paint.set_stroke_cap(skia_safe::PaintCap::Round);
-        paint.set_stroke_join(skia_safe::PaintJoin::Round);
-        self.canvas.draw_path(&path, &paint);
-    }
-
-    fn fill_svg_path(&mut self, d: &str, top_left: Point2D, size: f32, viewbox: f32, color: Color) {
-        let Some(path) = skia_safe::utils::parse_path::from_svg(d) else {
-            return;
-        };
-        let scale = size / viewbox.max(1.0);
-        let mut matrix = skia_safe::Matrix::new_identity();
-        matrix.set_scale_translate((scale, scale), (top_left.x, top_left.y));
-        let path = path.with_transform(&matrix);
-        self.canvas.draw_path(&path, &make_fill(color));
-    }
-
-    fn draw_image(&mut self, _rect: Rect, _image_id: u64, _encoded: &[u8]) {}
-    fn draw_image_with_mode(
-        &mut self,
-        _rect: Rect,
-        _image_id: u64,
-        _encoded: &[u8],
-        _mode: ImageDrawMode,
-    ) {
-    }
-    fn draw_image_with_options(
-        &mut self,
-        _rect: Rect,
-        _image_id: u64,
-        _encoded: &[u8],
-        _mode: ImageDrawMode,
-        _adjustments: ImageAdjustments,
-        _opacity: f32,
-    ) {
-    }
-    fn save(&mut self) {}
-    fn restore(&mut self) {}
-    fn translate(&mut self, _offset: Point2D) {}
-    fn resize(&mut self, _width: u32, _height: u32) {}
-    fn dpi_scale(&self) -> f32 {
-        1.0
-    }
-}
-
-fn paint_polyline(canvas: &Canvas, node: &SceneNode) {
-    if node.points.len() < 2 {
-        return;
-    }
-    let (color, width) = match node.stroke {
-        Some(s) => (s.color, s.width),
-        None => (node.fill.unwrap_or(Color::BLACK), 1.5),
-    };
-    let mut builder = PathBuilder::new();
-    builder.move_to((node.points[0].x, node.points[0].y));
-    for p in &node.points[1..] {
-        builder.line_to((p.x, p.y));
-    }
-    let path: Path = builder.detach();
-    canvas.draw_path(&path, &make_stroke(color, width));
-}
-
-fn make_fill(c: Color) -> Paint {
-    let mut paint = Paint::new(color_to_sk(c), None);
-    paint.set_anti_alias(true);
-    paint
-}
-
-fn make_stroke(c: Color, width: f32) -> Paint {
-    let mut paint = Paint::new(color_to_sk(c), None);
-    paint.set_anti_alias(true);
-    paint.set_style(PaintStyle::Stroke);
-    paint.set_stroke_width(width.max(0.5));
-    paint
-}
-
-fn color_to_sk(c: Color) -> skia_safe::Color4f {
-    skia_safe::Color4f::new(c.r, c.g, c.b, c.a)
-}
-
-fn to_sk_rect(r: Rect) -> skia_safe::Rect {
-    skia_safe::Rect::from_xywh(r.origin.x, r.origin.y, r.size.x, r.size.y)
 }
 
 /// Defensive normalisation — the layout pass yields positive-extent

@@ -132,10 +132,15 @@ impl ChatProvider for BuiltInProvider {
         }
         // Prepend the resolved generation-phase skill guidance. The
         // BuiltIn engine exposes no separate system-prompt channel, so
-        // the skills ride in front of the user message.
-        let preamble = resolved_skill_preamble(&request.user_message);
-        if !preamble.is_empty() {
-            prompt = format!("{preamble}\n\n---\n\n{prompt}");
+        // the skills ride in front of the user message. Skipped when
+        // the caller sent a per-turn system prompt — that prompt
+        // (chat_system_prompt.rs) already resolves the skill corpus
+        // and the skills must not ride the wire twice.
+        if request.system_prompt.trim().is_empty() {
+            let preamble = resolved_skill_preamble(&request.user_message);
+            if !preamble.is_empty() {
+                prompt = format!("{preamble}\n\n---\n\n{prompt}");
+            }
         }
         prompt = prompt_with_system_prompt(&request.system_prompt, prompt);
         let engine = self.engine.clone();

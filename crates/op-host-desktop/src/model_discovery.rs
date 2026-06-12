@@ -96,7 +96,7 @@ impl ModelProbe {
 }
 
 /// Translate a shell-core `ModelEntry` into op-editor-core's.
-fn model_entry_to_ec(m: ModelEntry) -> op_editor_core::ModelEntry {
+pub(crate) fn model_entry_to_ec(m: ModelEntry) -> op_editor_core::ModelEntry {
     use op_ai::agent_settings_state::AgentProvider as ScP;
     let provider = match m.provider {
         ScP::ClaudeCode => op_editor_core::AgentProvider::ClaudeCode,
@@ -134,14 +134,31 @@ fn discovery_provider_order() -> [AgentProvider; 5] {
 /// Resolve `name` to an executable on `PATH`. On Windows this also
 /// tries the `.exe` / `.cmd` / `.bat` suffixes so npm-installed CLI
 /// shims resolve. Returns `None` when the CLI is not installed.
-fn resolve_cli(name: &str) -> Option<PathBuf> {
-    let path = std::env::var_os("PATH")?;
+///
+/// When the `PATH` walk misses (a Finder/dock launch inherits a
+/// minimal PATH), the standard user-local install directories are
+/// scanned next — the TS resolvers' `posixUserBinDirs()` candidate
+/// list (`cli-resolver-helpers.ts:29-72`). The TS login-shell probe
+/// (`probeViaLoginShell`) is intentionally NOT ported: spawning the
+/// user's interactive shell from the GUI process is slow and
+/// side-effectful.
+pub(crate) fn resolve_cli(name: &str) -> Option<PathBuf> {
     let exts: &[&str] = if cfg!(windows) {
         &["", ".exe", ".cmd", ".bat"]
     } else {
         &[""]
     };
-    for dir in std::env::split_paths(&path) {
+    if let Some(path) = std::env::var_os("PATH") {
+        for dir in std::env::split_paths(&path) {
+            for ext in exts {
+                let candidate = dir.join(format!("{name}{ext}"));
+                if candidate.is_file() {
+                    return Some(candidate);
+                }
+            }
+        }
+    }
+    for dir in user_bin_dirs() {
         for ext in exts {
             let candidate = dir.join(format!("{name}{ext}"));
             if candidate.is_file() {
@@ -152,23 +169,69 @@ fn resolve_cli(name: &str) -> Option<PathBuf> {
     None
 }
 
-/// Claude Code — the `claude` CLI exposes no model-listing command;
-/// `--model` takes documented aliases that always resolve to the
-/// current latest model. We surface those aliases (better than a
-/// dated model-id list) when the CLI is installed.
+/// Standard user-local / package-manager bin directories — the TS
+/// `posixUserBinDirs()` list plus the opencode/npm-global extras the
+/// per-CLI TS resolvers add, applied uniformly (a superset never
+/// hides an install). Windows mirrors the npm-global dir candidates.
+fn user_bin_dirs() -> Vec<PathBuf> {
+    let mut dirs = Vec::new();
+    if cfg!(windows) {
+        if let Some(appdata) = std::env::var_os("APPDATA") {
+            dirs.push(PathBuf::from(appdata).join("npm"));
+        }
+        return dirs;
+    }
+    let Some(home) = dirs::home_dir() else {
+        return dirs;
+    };
+    for rel in [
+        ".bun/bin",
+        ".volta/bin",
+        ".local/bin",
+        ".local/share/mise/shims",
+        ".asdf/shims",
+        "Library/pnpm",
+        ".pnpm-global/bin",
+        ".cargo/bin",
+        ".opencode/bin",
+        ".npm-global/bin",
+    ] {
+        dirs.push(home.join(rel));
+    }
+    dirs.push(PathBuf::from("/usr/local/bin"));
+    dirs.push(PathBuf::from("/opt/homebrew/bin"));
+    // nvm / fnm: enumerate installed node versions best-effort.
+    if let Ok(rd) = std::fs::read_dir(home.join(".nvm/versions/node")) {
+        for entry in rd.flatten() {
+            dirs.push(entry.path().join("bin"));
+        }
+    }
+    if let Ok(rd) = std::fs::read_dir(home.join(".fnm/node-versions")) {
+        for entry in rd.flatten() {
+            dirs.push(entry.path().join("installation/bin"));
+        }
+    }
+    dirs
+}
+
+/// Claude Code — live `initialize` control-request query over the
+/// CLI's stream-json stdio (the same wire the TS Agent SDK's
+/// `supportedModels()` awaits, connect-agent.ts:147-209), falling
+/// back to the TS `FALLBACK_CLAUDE_MODELS` list when the CLI is
+/// installed but didn't answer (proxy/base-URL setups,
+/// connect-agent.ts:216-258).
 fn discover_claude() -> Vec<ModelEntry> {
     if resolve_cli("claude").is_none() {
         return Vec::new();
     }
-    [
-        ("default", "Default"),
-        ("sonnet", "Sonnet"),
-        ("opus", "Opus"),
-        ("haiku", "Haiku"),
-    ]
-    .iter()
-    .map(|(value, name)| ModelEntry::new(AgentProvider::ClaudeCode, *value, *name))
-    .collect()
+    if let crate::provider_probe_models::ClaudeInitResult::Answered(models, _) =
+        crate::provider_probe_models::claude_initialize_query()
+    {
+        if !models.is_empty() {
+            return models;
+        }
+    }
+    crate::provider_probe_models::fallback_claude_models()
 }
 
 /// How long to wait for `codex app-server` to answer `model/list`.
@@ -177,9 +240,11 @@ fn discover_claude() -> Vec<ModelEntry> {
 const CODEX_APP_SERVER_TIMEOUT: Duration = Duration::from_secs(12);
 
 /// Codex CLI — query models via the official App Server protocol
-/// first (most accurate + stable), then the on-disk cache, then a
-/// minimal placeholder so the provider is still selectable when
-/// `codex` is installed but neither source answered.
+/// first (most accurate + stable), then the on-disk cache, then the
+/// bundled `latest-model.md` reference (the TS fresh-install
+/// fallback, connect-agent.ts:554-562), then a minimal placeholder
+/// so the provider is still selectable when `codex` is installed
+/// but no source answered.
 fn discover_codex() -> Vec<ModelEntry> {
     if let Some(models) = codex_models_from_app_server() {
         if !models.is_empty() {
@@ -187,6 +252,12 @@ fn discover_codex() -> Vec<ModelEntry> {
         }
     }
     if let Some(models) = codex_models_from_cache() {
+        if !models.is_empty() {
+            return models;
+        }
+    }
+    if let Some(home) = crate::provider_probe_models::codex_home() {
+        let models = crate::provider_probe_models::codex_models_from_latest_md(&home);
         if !models.is_empty() {
             return models;
         }
@@ -206,7 +277,7 @@ fn discover_codex() -> Vec<ModelEntry> {
 /// `initialize` → `initialized` → `model/list`. Returns `None` on
 /// any failure (CLI missing, spawn error, timeout) so the caller
 /// falls back to the on-disk cache.
-fn codex_models_from_app_server() -> Option<Vec<ModelEntry>> {
+pub(crate) fn codex_models_from_app_server() -> Option<Vec<ModelEntry>> {
     let exe = resolve_cli("codex")?;
     let mut child = Command::new(exe)
         .arg("app-server")
@@ -283,39 +354,58 @@ fn parse_codex_model_list(line: &str) -> Option<Vec<ModelEntry>> {
     )
 }
 
-fn codex_models_from_cache() -> Option<Vec<ModelEntry>> {
-    let path = dirs::home_dir()?.join(".codex").join("models_cache.json");
+pub(crate) fn codex_models_from_cache() -> Option<Vec<ModelEntry>> {
+    let path = crate::provider_probe_models::codex_home()?.join("models_cache.json");
     let raw = std::fs::read_to_string(path).ok()?;
-    let json: serde_json::Value = serde_json::from_str(&raw).ok()?;
-    let arr = json.get("models")?.as_array()?;
-    Some(
-        arr.iter()
-            .filter_map(|m| {
-                let slug = m.get("slug")?.as_str()?;
-                let name = m
-                    .get("display_name")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or(slug);
-                Some(ModelEntry::new(AgentProvider::CodexCli, slug, name))
-            })
-            .collect(),
-    )
+    parse_codex_models_cache(&raw)
 }
 
-/// Gemini CLI — the `gemini` CLI exposes only `-m/--model`, no
-/// listing command, so we surface its documented model names when
-/// the CLI is installed.
+/// Parse Codex's `models_cache.json` — listed models only
+/// (`visibility === "list"`), sorted by ascending `priority` with
+/// missing priorities sinking to 999. The TS cache mapping
+/// (connect-agent.ts:528-549).
+pub(crate) fn parse_codex_models_cache(raw: &str) -> Option<Vec<ModelEntry>> {
+    let json: serde_json::Value = serde_json::from_str(raw).ok()?;
+    let arr = json.get("models")?.as_array()?;
+    let mut keyed: Vec<(i64, ModelEntry)> = arr
+        .iter()
+        .filter_map(|m| {
+            if m.get("visibility").and_then(|v| v.as_str()) != Some("list") {
+                return None;
+            }
+            let slug = m.get("slug")?.as_str()?;
+            let name = m
+                .get("display_name")
+                .and_then(|v| v.as_str())
+                .unwrap_or(slug);
+            let priority = m.get("priority").and_then(|v| v.as_i64()).unwrap_or(999);
+            Some((
+                priority,
+                ModelEntry::new(AgentProvider::CodexCli, slug, name),
+            ))
+        })
+        .collect();
+    // Stable sort keeps the cache order within equal priorities,
+    // like the TS Array.sort.
+    keyed.sort_by_key(|(priority, _)| *priority);
+    Some(keyed.into_iter().map(|(_, model)| model).collect())
+}
+
+/// Gemini CLI — live model listing from the generativelanguage API
+/// using the CLI's own credentials (API key env or OAuth token,
+/// connect-agent.ts:904-973), falling back to the TS
+/// `FALLBACK_GEMINI_MODELS` list when the fetch fails or returns
+/// nothing — gated on the CLI being installed.
 fn discover_gemini() -> Vec<ModelEntry> {
     if resolve_cli("gemini").is_none() {
         return Vec::new();
     }
-    [
-        ("gemini-2.5-pro", "Gemini 2.5 Pro"),
-        ("gemini-2.5-flash", "Gemini 2.5 Flash"),
-    ]
-    .iter()
-    .map(|(value, name)| ModelEntry::new(AgentProvider::GeminiCli, *value, *name))
-    .collect()
+    if let Some(models) = crate::provider_probe_models::gemini_models_from_api() {
+        if !models.is_empty() {
+            return models;
+        }
+    }
+    crate::provider_probe_models::fallback_gemini_models()
 }
 
 /// How long to wait for `copilot --stdio` to answer `models.list`.
@@ -404,7 +494,7 @@ fn copilot_models_from_stdio() -> Option<Vec<ModelEntry>> {
 /// (`Content-Length: <byte len>\r\n\r\n<body>`, no trailing
 /// newline). `body` is ASCII JSON, so `str::len` is the byte
 /// count the header must report.
-fn write_lsp_frame(w: &mut impl Write, body: &str) -> std::io::Result<()> {
+pub(crate) fn write_lsp_frame(w: &mut impl Write, body: &str) -> std::io::Result<()> {
     write!(w, "Content-Length: {}\r\n\r\n{}", body.len(), body)
 }
 
@@ -415,7 +505,7 @@ fn write_lsp_frame(w: &mut impl Write, body: &str) -> std::io::Result<()> {
 /// next-frame header suffix on the same line, so discovery is
 /// robust whether the CLI replies newline-delimited or
 /// Content-Length-framed.
-fn extract_json_object(s: &str) -> Option<&str> {
+pub(crate) fn extract_json_object(s: &str) -> Option<&str> {
     let start = s.find('{')?;
     let bytes = s.as_bytes();
     let mut depth = 0i32;
@@ -449,7 +539,10 @@ fn extract_json_object(s: &str) -> Option<&str> {
 
 /// Parse one JSON-RPC line from `copilot --stdio`; yields the
 /// model list only for the `id:2` (`models.list`) response.
-fn parse_copilot_model_list(line: &str) -> Option<Vec<ModelEntry>> {
+/// Policy-disabled models are dropped — the TS route's
+/// `!m.policy || m.policy.state === 'enabled'` filter
+/// (connect-agent.ts:779-786).
+pub(crate) fn parse_copilot_model_list(line: &str) -> Option<Vec<ModelEntry>> {
     let json: serde_json::Value = serde_json::from_str(extract_json_object(line)?).ok()?;
     if json.get("id")?.as_i64()? != 2 {
         return None;
@@ -459,6 +552,14 @@ fn parse_copilot_model_list(line: &str) -> Option<Vec<ModelEntry>> {
         models
             .iter()
             .filter_map(|m| {
+                // TS: `!m.policy || m.policy.state === 'enabled'` —
+                // a model carrying a policy object is kept only when
+                // that policy's state is exactly "enabled".
+                if let Some(policy) = m.get("policy").filter(|p| !p.is_null()) {
+                    if policy.get("state").and_then(|s| s.as_str()) != Some("enabled") {
+                        return None;
+                    }
+                }
                 let id = m.get("id")?.as_str()?;
                 let name = m.get("name").and_then(|v| v.as_str()).unwrap_or(id);
                 Some(ModelEntry::new(AgentProvider::GithubCopilot, id, name))
@@ -470,7 +571,7 @@ fn parse_copilot_model_list(line: &str) -> Option<Vec<ModelEntry>> {
 /// OpenCode — `opencode models` prints one `provider/model` slug
 /// per line. A real query: parse stdout. Empty when the CLI is
 /// missing or the command fails.
-fn discover_opencode() -> Vec<ModelEntry> {
+pub(crate) fn discover_opencode() -> Vec<ModelEntry> {
     let Some(exe) = resolve_cli("opencode") else {
         return Vec::new();
     };
@@ -493,34 +594,28 @@ mod tests {
     use super::*;
 
     #[test]
-    fn codex_cache_parser_extracts_slug_and_display_name() {
-        // Mirrors the real `models_cache.json` shape; the parser
-        // must skip entries missing a slug and not abort the rest.
-        let json: serde_json::Value = serde_json::from_str(
+    fn codex_cache_parser_filters_visibility_and_sorts_by_priority() {
+        // Mirrors the real `models_cache.json` shape and the TS
+        // mapping (connect-agent.ts:528-549): `visibility === "list"`
+        // only, ascending priority, missing priority sinks to 999,
+        // missing display_name falls back to the slug, and an entry
+        // without a slug is skipped without aborting the rest.
+        let parsed = parse_codex_models_cache(
             r#"{"models":[
-                {"slug":"gpt-5.5","display_name":"GPT-5.5"},
-                {"display_name":"no slug — skipped"},
-                {"slug":"gpt-5.5-codex"}
+                {"slug":"gpt-5.5-codex","display_name":"GPT-5.5 Codex","visibility":"list","priority":2},
+                {"slug":"gpt-internal","display_name":"Hidden","visibility":"hidden","priority":0},
+                {"slug":"gpt-no-visibility","display_name":"No visibility"},
+                {"display_name":"no slug — skipped","visibility":"list"},
+                {"slug":"gpt-5.5","display_name":"GPT-5.5","visibility":"list","priority":1},
+                {"slug":"gpt-unprioritized","visibility":"list"}
             ]}"#,
         )
-        .unwrap();
-        let arr = json.get("models").unwrap().as_array().unwrap();
-        let parsed: Vec<ModelEntry> = arr
-            .iter()
-            .filter_map(|m| {
-                let slug = m.get("slug")?.as_str()?;
-                let name = m
-                    .get("display_name")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or(slug);
-                Some(ModelEntry::new(AgentProvider::CodexCli, slug, name))
-            })
-            .collect();
-        assert_eq!(parsed.len(), 2);
+        .expect("cache parses");
+        let values: Vec<&str> = parsed.iter().map(|m| m.value.as_str()).collect();
+        assert_eq!(values, ["gpt-5.5", "gpt-5.5-codex", "gpt-unprioritized"]);
         assert_eq!(parsed[0].display_name, "GPT-5.5");
         // Missing display_name falls back to the slug.
-        assert_eq!(parsed[1].value, "gpt-5.5-codex");
-        assert_eq!(parsed[1].display_name, "gpt-5.5-codex");
+        assert_eq!(parsed[2].display_name, "gpt-unprioritized");
     }
 
     #[test]
@@ -561,6 +656,25 @@ mod tests {
         assert_eq!(models[0].display_name, "GPT-5 mini");
         // Missing name falls back to the id.
         assert_eq!(models[1].display_name, "claude-haiku-4.5");
+    }
+
+    #[test]
+    fn copilot_parser_policy_filter_matches_ts() {
+        // TS keeps `!m.policy || m.policy.state === 'enabled'`: no
+        // policy → kept, null policy → kept, enabled → kept, any
+        // other state (or a policy missing `state`) → dropped.
+        let models = parse_copilot_model_list(
+            r#"{"jsonrpc":"2.0","id":2,"result":{"models":[
+                {"id":"no-policy"},
+                {"id":"null-policy","policy":null},
+                {"id":"enabled","policy":{"state":"enabled"}},
+                {"id":"disabled","policy":{"state":"disabled"}},
+                {"id":"stateless-policy","policy":{}}
+            ]}}"#,
+        )
+        .expect("id:2 parses");
+        let values: Vec<&str> = models.iter().map(|m| m.value.as_str()).collect();
+        assert_eq!(values, ["no-policy", "null-policy", "enabled"]);
     }
 
     #[test]

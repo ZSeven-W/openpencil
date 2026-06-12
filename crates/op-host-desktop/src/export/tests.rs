@@ -351,6 +351,12 @@ fn export_node_raster_errors_on_unknown_id() {
 }
 
 fn visible_pixel_count(bytes: &[u8]) -> usize {
+    let (_, _, pixels) = decode_rgba(bytes);
+    pixels.chunks_exact(4).filter(|rgba| rgba[3] > 0).count()
+}
+
+/// Decode an exported PNG into `(width, height, unpremul RGBA bytes)`.
+fn decode_rgba(bytes: &[u8]) -> (i32, i32, Vec<u8>) {
     let image = skia_safe::Image::from_encoded(skia_safe::Data::new_copy(bytes))
         .expect("decode exported PNG");
     let width = image.width();
@@ -371,5 +377,221 @@ fn visible_pixel_count(bytes: &[u8]) -> usize {
         skia_safe::image::CachingHint::Allow,
     );
     assert!(ok, "read exported PNG pixels");
-    pixels.chunks_exact(4).filter(|rgba| rgba[3] > 0).count()
+    (width, height, pixels)
+}
+
+/// One RGBA pixel at `(x, y)` from a `decode_rgba` result.
+fn pixel_at(decoded: &(i32, i32, Vec<u8>), x: i32, y: i32) -> [u8; 4] {
+    let (w, h, pixels) = decoded;
+    assert!(x < *w && y < *h, "probe ({x},{y}) outside {w}x{h}");
+    let i = (y as usize * *w as usize + x as usize) * 4;
+    [pixels[i], pixels[i + 1], pixels[i + 2], pixels[i + 3]]
+}
+
+/// Encode a `w`×`h` solid-colour PNG and wrap it as a `data:` URL —
+/// fixture bytes generated at test time so they can't rot.
+fn solid_png_data_url(w: i32, h: i32, color: skia_safe::Color) -> String {
+    use base64::Engine as _;
+    let mut surface = skia_safe::surfaces::raster_n32_premul((w, h)).expect("fixture surface");
+    surface.canvas().clear(color);
+    let image = surface.image_snapshot();
+    let data = image
+        .encode(None, skia_safe::EncodedImageFormat::PNG, 100)
+        .expect("encode fixture PNG");
+    format!(
+        "data:image/png;base64,{}",
+        base64::engine::general_purpose::STANDARD.encode(data.as_bytes())
+    )
+}
+
+/// BLOCK fix probe: an image node (loader shape — `kind=rect` +
+/// `image_src` + grey placeholder fill, `adapter.rs::image_to_payload`)
+/// must export the decoded bitmap, not the placeholder rect. Routed
+/// through the shared canvas painter (`canvas_viewport_image.rs`), so
+/// data-URL decode + shared byte cache + fit semantics all apply.
+#[test]
+fn export_renders_data_url_image_bitmaps() {
+    let mut node = SceneNode::leaf("img", NodeKind::Rect);
+    node.bounds = Rect::xywh(0.0, 0.0, 20.0, 20.0);
+    node.image_src = Some(solid_png_data_url(4, 4, skia_safe::Color::RED));
+    // Loader placeholder fill — must NOT win over the bitmap.
+    node.fill = Some(Color {
+        r: 0.85,
+        g: 0.86,
+        b: 0.88,
+        a: 1.0,
+    });
+    let scene = scene_with(vec![node]);
+    let tmp = std::env::temp_dir().join(format!("op-export-img-{}.png", std::process::id()));
+    let res = export_node_raster(&scene, "img", &tmp, RasterFormat::Png, 1.0);
+    assert!(res.is_ok(), "image export failed: {res:?}");
+    let decoded = decode_rgba(&std::fs::read(&tmp).unwrap());
+    // Image centre = node centre offset by the export MARGIN.
+    let c = pixel_at(&decoded, MARGIN as i32 + 10, MARGIN as i32 + 10);
+    assert!(
+        c[0] > 200 && c[1] < 60 && c[2] < 60 && c[3] > 200,
+        "expected the red bitmap at the node centre, got {c:?}"
+    );
+    let _ = std::fs::remove_file(&tmp);
+}
+
+/// A remote (`https`) source whose bytes were never fetched paints
+/// the SAME placeholder the canvas shows (grey fill + dashed border +
+/// picture glyph) instead of a bare rect.
+#[test]
+fn export_remote_image_without_bytes_paints_the_canvas_placeholder() {
+    let mut node = SceneNode::leaf("remote-img", NodeKind::Rect);
+    node.bounds = Rect::xywh(0.0, 0.0, 40.0, 40.0);
+    node.image_src = Some("https://example.invalid/op-export-remote-test.png".into());
+    node.fill = Some(Color {
+        r: 0.85,
+        g: 0.86,
+        b: 0.88,
+        a: 1.0,
+    });
+    let scene = scene_with(vec![node]);
+    let tmp = std::env::temp_dir().join(format!("op-export-remote-{}.png", std::process::id()));
+    let res = export_node_raster(&scene, "remote-img", &tmp, RasterFormat::Png, 1.0);
+    assert!(res.is_ok(), "remote-image export failed: {res:?}");
+    let decoded = decode_rgba(&std::fs::read(&tmp).unwrap());
+    // The placeholder fill shows where neither the dashed border nor
+    // the centred picture glyph paints. The glyph is 16×16 centred
+    // (min(40,40)×0.4, clamped ≥12 → doc 12..28), so probe doc (6,6):
+    // inside the fill, clear of the glyph box and the 1 px dashed
+    // perimeter.
+    let c = pixel_at(&decoded, MARGIN as i32 + 6, MARGIN as i32 + 6);
+    assert!(
+        c[0] > 190 && c[1] > 190 && c[2] > 190 && c[3] > 200,
+        "expected the grey placeholder fill, got {c:?}"
+    );
+    // …and the dashed-border + picture-glyph art paints on top.
+    assert!(visible_pixel_count(&std::fs::read(&tmp).unwrap()) > 100);
+    let _ = std::fs::remove_file(&tmp);
+}
+
+/// `clip_content` containers trim child overflow exactly like the
+/// canvas (`push_clip_content`): the surface is sized to the clipped
+/// container rect AND no overflowing child pixel paints outside it.
+#[test]
+fn export_clip_content_trims_child_overflow() {
+    let blue = Color {
+        r: 0.0,
+        g: 0.2,
+        b: 1.0,
+        a: 1.0,
+    };
+    let mut frame = SceneNode::leaf("clipper", NodeKind::Frame);
+    frame.bounds = Rect::xywh(0.0, 0.0, 40.0, 40.0);
+    frame.clip_content = true;
+    // Child overflows the frame by 40 px vertically.
+    frame.children = vec![filled_rect("ovf", 0.0, 0.0, 40.0, 80.0, blue)];
+    let scene = scene_with(vec![frame]);
+    let tmp = std::env::temp_dir().join(format!("op-export-clip-{}.png", std::process::id()));
+    let res = export_node_raster(&scene, "clipper", &tmp, RasterFormat::Png, 1.0);
+    assert!(res.is_ok(), "clip export failed: {res:?}");
+    let bytes = std::fs::read(&tmp).unwrap();
+    let decoded = decode_rgba(&bytes);
+    // Surface sized to the clipped frame (40 + 2×MARGIN), not the
+    // un-clipped 80 px child union.
+    let expected = (40.0 + MARGIN * 2.0) as i32;
+    assert_eq!((decoded.0, decoded.1), (expected, expected));
+    // Inside the frame the child paints…
+    let inside = pixel_at(&decoded, MARGIN as i32 + 20, MARGIN as i32 + 20);
+    assert!(
+        inside[2] > 200 && inside[3] > 200,
+        "expected the blue child inside the frame, got {inside:?}"
+    );
+    // …below the frame (doc y > 40, inside the margin band) the
+    // overflow is clipped away — transparent, like the canvas.
+    let below = pixel_at(&decoded, MARGIN as i32 + 20, MARGIN as i32 + 44);
+    assert_eq!(below[3], 0, "overflow must be clipped, got {below:?}");
+    let _ = std::fs::remove_file(&tmp);
+}
+
+/// Output-size caps: per-side and total-pixel ceilings return a
+/// structured error instead of allocating a giant surface. The MCP
+/// screenshot path wraps this in "Renderer reported failure: …".
+#[test]
+fn render_raster_bytes_rejects_oversized_outputs() {
+    // Per-side cap (width).
+    let err = render_raster_bytes(
+        Rect::xywh(0.0, 0.0, 20_000.0, 10.0),
+        RasterFormat::Png,
+        1.0,
+        0.0,
+        |_| {},
+    )
+    .unwrap_err();
+    assert!(err.contains("exceeds the size cap"), "{err}");
+    // Total-pixel cap with both sides under the per-side cap:
+    // 10 000 × 10 000 = 100 MPx > 64 MPx.
+    let err = render_raster_bytes(
+        Rect::xywh(0.0, 0.0, 10_000.0, 10_000.0),
+        RasterFormat::Png,
+        1.0,
+        0.0,
+        |_| {},
+    )
+    .unwrap_err();
+    assert!(err.contains("exceeds the size cap"), "{err}");
+    // Sanity: a normal surface still renders.
+    assert!(render_raster_bytes(
+        Rect::xywh(0.0, 0.0, 64.0, 64.0),
+        RasterFormat::Png,
+        1.0,
+        0.0,
+        |_| {},
+    )
+    .is_ok());
+}
+
+/// Styled-run smoke: the shared text painter (canvas_viewport_text)
+/// drives export text. "HELLO" has no descenders, so painted pixels in
+/// the underline band below the baseline can only come from the styled
+/// run's underline decoration — a path the old mirror painter (plain
+/// `draw_str` loop) did not have at all.
+#[test]
+fn export_paints_styled_text_runs_with_decorations() {
+    use op_editor_ui::layout_scene::SceneTextRun;
+    let mut node = SceneNode::leaf("styled", NodeKind::Text);
+    node.bounds = Rect::xywh(0.0, 0.0, 120.0, 30.0);
+    node.text = Some("HELLO".into());
+    node.font_size = 20.0;
+    node.fill = Some(Color {
+        r: 0.0,
+        g: 0.0,
+        b: 0.0,
+        a: 1.0,
+    });
+    node.text_runs = vec![SceneTextRun {
+        start: 0,
+        end: 5,
+        font_size: 0.0,
+        font_weight: 700,
+        fill: None,
+        italic: false,
+        underline: true,
+        strikethrough: false,
+    }];
+    let scene = scene_with(vec![node]);
+    let tmp = std::env::temp_dir().join(format!("op-export-styled-{}.png", std::process::id()));
+    let res = export_node_raster(&scene, "styled", &tmp, RasterFormat::Png, 1.0);
+    assert!(res.is_ok(), "styled-text export failed: {res:?}");
+    let decoded = decode_rgba(&std::fs::read(&tmp).unwrap());
+    // Underline strokes at baseline (top + font_size = 20) + 0.12 ×
+    // 20 ≈ doc y 22.4 → px rows ~38..40 after the MARGIN offset.
+    let band_y0 = MARGIN as i32 + 22;
+    let mut painted_in_band = 0;
+    for y in band_y0..(band_y0 + 3) {
+        for x in MARGIN as i32..(MARGIN as i32 + 90) {
+            if pixel_at(&decoded, x, y)[3] > 0 {
+                painted_in_band += 1;
+            }
+        }
+    }
+    assert!(
+        painted_in_band > 20,
+        "expected the styled run's underline below the baseline, found {painted_in_band} px"
+    );
+    let _ = std::fs::remove_file(&tmp);
 }

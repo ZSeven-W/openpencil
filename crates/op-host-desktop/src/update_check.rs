@@ -146,6 +146,119 @@ fn fetch_latest_tag() -> Option<String> {
     })
 }
 
+/// Download the platform installer for `version` on a worker thread
+/// and open it when done (macOS mounts the DMG, Windows launches the
+/// NSIS setup, Linux reveals the AppImage after `chmod +x`). Any
+/// failure — unknown platform, network error, missing asset — falls
+/// back to opening the releases page, so the user always ends up
+/// with a path to the update. Mirrors the electron-updater flow
+/// minus signature verification (no signing pipeline yet; the
+/// artifacts are the rust-release.yml installer matrix).
+pub fn download_and_open_installer(version: &str) {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    // One download at a time — a second "Yes" (or re-check) while a
+    // worker is still transferring must not spawn a duplicate writer
+    // onto the same temp path.
+    static IN_FLIGHT: AtomicBool = AtomicBool::new(false);
+    if IN_FLIGHT
+        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+        .is_err()
+    {
+        return;
+    }
+    let version = version.to_string();
+    std::thread::spawn(move || {
+        if !download_and_open_blocking(&version) {
+            open_url(&releases_url());
+        }
+        IN_FLIGHT.store(false, Ordering::SeqCst);
+    });
+}
+
+/// The release-asset filename rust-release.yml publishes for this
+/// platform, or `None` on an unsupported os/arch pair.
+fn installer_asset_name(version: &str) -> Option<String> {
+    asset_name_for(std::env::consts::OS, std::env::consts::ARCH, version)
+}
+
+/// Pure name table — split from [`installer_asset_name`] so tests
+/// cover every platform from any host.
+fn asset_name_for(os: &str, arch: &str, version: &str) -> Option<String> {
+    let arch = match arch {
+        "aarch64" => "arm64",
+        "x86_64" => "x64",
+        _ => return None,
+    };
+    Some(match os {
+        "macos" => format!("OpenPencil-{version}-{arch}-mac.dmg"),
+        "windows" => format!("OpenPencil-{version}-{arch}-win-setup.exe"),
+        "linux" => format!("OpenPencil-{version}-{arch}-linux.AppImage"),
+        _ => return None,
+    })
+}
+
+/// Blocking download + open. Only ever runs on the worker thread.
+fn download_and_open_blocking(version: &str) -> bool {
+    let Some(name) = installer_asset_name(version) else {
+        return false;
+    };
+    let url = format!(
+        "https://github.com/{GITHUB_OWNER}/{GITHUB_REPO}/releases/download/v{version}/{name}"
+    );
+    let dest = std::env::temp_dir().join(&name);
+    let runtime = match tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+    {
+        Ok(rt) => rt,
+        Err(_) => return false,
+    };
+    let downloaded = runtime.block_on(async {
+        let client = reqwest::Client::builder()
+            // Installers run tens of MB — allow a long transfer.
+            .timeout(std::time::Duration::from_secs(600))
+            .user_agent(concat!("openpencil-desktop/", env!("CARGO_PKG_VERSION")))
+            .build()
+            .ok()?;
+        let mut resp = client.get(&url).send().await.ok()?;
+        if !resp.status().is_success() {
+            return None;
+        }
+        // Stream to disk chunk by chunk — installers run tens of MB
+        // and must not be buffered whole in memory.
+        let mut file = std::fs::File::create(&dest).ok()?;
+        use std::io::Write;
+        while let Some(chunk) = resp.chunk().await.ok()? {
+            file.write_all(&chunk).ok()?;
+        }
+        file.flush().ok()?;
+        Some(())
+    });
+    if downloaded.is_none() {
+        return false;
+    }
+    #[cfg(target_os = "linux")]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(&dest, std::fs::Permissions::from_mode(0o755));
+    }
+    open_installer_path(&dest)
+}
+
+/// Open the downloaded installer with the platform launcher.
+fn open_installer_path(path: &std::path::Path) -> bool {
+    #[cfg(target_os = "macos")]
+    let result = std::process::Command::new("open").arg(path).spawn();
+    #[cfg(target_os = "windows")]
+    let result = std::process::Command::new("cmd")
+        .args(["/C", "start", ""])
+        .arg(path)
+        .spawn();
+    #[cfg(target_os = "linux")]
+    let result = std::process::Command::new("xdg-open").arg(path).spawn();
+    result.is_ok()
+}
+
 /// Whether `latest` is a strictly newer version than `current`.
 /// Both are dotted numeric strings (`0.8.0`); a pre-release suffix
 /// (`-beta.1`) is dropped before the numeric compare so a stable
@@ -238,5 +351,28 @@ mod tests {
         let probe = UpdateProbe::for_auto_check(false);
 
         assert!(!probe.is_pending());
+    }
+}
+
+#[cfg(test)]
+mod installer_asset_tests {
+    use super::asset_name_for;
+
+    #[test]
+    fn asset_names_cover_the_release_matrix() {
+        assert_eq!(
+            asset_name_for("macos", "aarch64", "0.9.0").as_deref(),
+            Some("OpenPencil-0.9.0-arm64-mac.dmg")
+        );
+        assert_eq!(
+            asset_name_for("windows", "x86_64", "0.9.0").as_deref(),
+            Some("OpenPencil-0.9.0-x64-win-setup.exe")
+        );
+        assert_eq!(
+            asset_name_for("linux", "aarch64", "0.9.0").as_deref(),
+            Some("OpenPencil-0.9.0-arm64-linux.AppImage")
+        );
+        assert_eq!(asset_name_for("freebsd", "x86_64", "0.9.0"), None);
+        assert_eq!(asset_name_for("macos", "riscv64", "0.9.0"), None);
     }
 }

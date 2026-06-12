@@ -136,7 +136,7 @@ pub(crate) struct OpenverseCredentials {
 }
 
 impl OpenverseCredentials {
-    fn from_state(state: &EditorState) -> Option<Self> {
+    pub(crate) fn from_state(state: &EditorState) -> Option<Self> {
         let settings = &state.editor_ui.agent_settings;
         let client_id = settings.openverse_client_id.trim();
         let client_secret = settings.openverse_client_secret.trim();
@@ -686,7 +686,7 @@ async fn fetch_first_image_url(
     fetch_wikimedia(&client, &query).await
 }
 
-fn simplify_search_query(prompt: &str) -> String {
+pub(crate) fn simplify_search_query(prompt: &str) -> String {
     let mut normalized = String::with_capacity(prompt.len());
     for ch in prompt.to_lowercase().chars() {
         if ch.is_ascii_alphanumeric() || ch.is_ascii_whitespace() || ch == '-' {
@@ -755,7 +755,7 @@ fn openverse_search_url(
     Some(url)
 }
 
-async fn fetch_openverse_token(
+pub(crate) async fn fetch_openverse_token(
     client: &reqwest::Client,
     credentials: &OpenverseCredentials,
 ) -> Option<String> {
@@ -847,7 +847,7 @@ async fn first_renderable_image_src(
     None
 }
 
-async fn fetch_image_data_url(client: &reqwest::Client, url: &str) -> Option<String> {
+pub(crate) async fn fetch_image_data_url(client: &reqwest::Client, url: &str) -> Option<String> {
     let resp = client.get(url).send().await.ok()?;
     if !resp.status().is_success() {
         return None;

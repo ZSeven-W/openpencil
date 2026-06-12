@@ -33,11 +33,27 @@ use op_orchestrator::{CallRequest, LlmChunk, LlmClient, LlmError};
 /// parallel under `concurrency > 1`).
 pub struct ChatProviderLlmClient {
     provider: Arc<dyn ChatProvider>,
+    /// Model id the user picked in the chat model picker, forwarded
+    /// into every `ChatRequest` this adapter builds so design turns
+    /// honor the selection the same way chat turns do. `None` keeps
+    /// the CLI's own default.
+    model: Option<String>,
 }
 
 impl ChatProviderLlmClient {
     pub fn new(provider: Arc<dyn ChatProvider>) -> Self {
-        Self { provider }
+        Self {
+            provider,
+            model: None,
+        }
+    }
+
+    /// Attach the selected model id (from
+    /// `chat_session::selected_cli_model_id`) to every request this
+    /// client issues.
+    pub fn with_model(mut self, model: Option<String>) -> Self {
+        self.model = model;
+        self
     }
 }
 
@@ -77,12 +93,16 @@ impl LlmClient for ChatProviderLlmClient {
             // also unwrap this back into the field.
             system_prompt: String::new(),
             user_message,
+            // The orchestrator composes its own per-request context;
+            // chat-transcript history does not apply here.
+            history: Vec::new(),
             // The orchestrator's prompts can run long (planner system
             // is ~12 KB, sub-agents emit dense JSON). Give them room.
             max_output_tokens: 8192,
             thinking: ThinkingMode::Disabled,
             effort: EffortLevel::Low,
             attachments: vec![],
+            model: self.model.clone(),
         };
 
         // `provider.send` returns a *blocking* iterator. Drain it on a

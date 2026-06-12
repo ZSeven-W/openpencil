@@ -6,15 +6,21 @@
 mod ai_proxy;
 mod app_handler;
 mod chat_acp;
+mod chat_agent_loop;
 mod chat_attachment;
 mod chat_builtin_http;
+mod chat_canvas_tools;
 mod chat_claude;
 mod chat_copilot;
 mod chat_http_server;
+mod chat_intent;
 mod chat_provider_llm;
 mod chat_runtime;
 mod chat_session;
+mod chat_spawn;
 mod chat_subprocess;
+mod chat_subprocess_quirks;
+mod chat_system_prompt;
 mod clipboard;
 mod codegen_export;
 mod codegen_input;
@@ -34,8 +40,12 @@ mod git_overflow_host;
 mod git_session;
 mod git_ssh_host;
 mod iconify_host;
+mod image_generate_host;
+mod image_panel_host;
 mod image_search_session;
 mod keyboard_input;
+mod kit_io;
+mod kit_persistence;
 mod macos_app;
 mod mcp_integrations;
 mod mcp_live;
@@ -48,11 +58,17 @@ mod model_discovery;
 mod persistence;
 mod persistence_image;
 mod pre_validator;
+mod provider_probe;
+mod provider_probe_host;
+mod provider_probe_models;
+mod remote_image_host;
 mod render_cli;
 mod settings_io;
 mod tcc_selftest;
+mod theme_preset_host;
 mod update_check;
 mod web_canvas_server;
+mod web_static;
 mod window_state;
 
 use op_host_native::{NativeBackend, SharedSkiaContext, SharedSkiaError, WidgetHostNative};
@@ -113,11 +129,12 @@ struct DesktopApp {
     /// `chat.pending_send`; the event loop drains that into a
     /// `ChatSession` here and pumps deltas into the transcript.
     current_chat: Option<chat_session::ChatSession>,
-    /// In-flight design-orchestrator turn, if any. Mutually exclusive
-    /// with `current_chat`: `chat_session::launch_if_pending` classifies
-    /// the user's message via `op_orchestrator::classify_intent` and
-    /// routes `Intent::Design` here (when an `agent::Provider` is
-    /// available), `Intent::Chat` to `current_chat`.
+    /// In-flight design-orchestrator turn, if any.
+    /// `chat_session::launch_if_pending` classifies the user's message
+    /// and routes design intent here, chat intent to `current_chat`.
+    /// CLI standard-mode turns (GAP #33) park BOTH sessions while the
+    /// async classifier resolves; the route not taken retires via its
+    /// pump once the worker drops its channels.
     current_design: Option<design_session::DesignSession>,
     /// In-flight code-generation turn, if any. The Code panel raises
     /// `codegen.pending_generate` / `pending_regenerate`;
@@ -134,6 +151,9 @@ struct DesktopApp {
     /// in `RedrawRequested` swaps in the parsed document when the
     /// worker finishes.
     current_figma_import: Option<figma_import_session::FigmaImportSession>,
+    /// In-flight Figma CLIPBOARD paste decode (Cmd+V) — worker sends
+    /// the parsed nodes; the redraw path pumps + inserts them.
+    pending_figma_paste: Option<std::sync::mpsc::Receiver<Vec<jian_ops_schema::node::PenNode>>>,
     /// Background AI-model discovery — probes the installed CLIs
     /// on a worker thread; its result is drained into
     /// `chat.available_models` on a later frame.
@@ -141,9 +161,24 @@ struct DesktopApp {
     /// Background auto-search jobs that replace generated empty image
     /// nodes with freely licensed remote images.
     image_search: image_search_session::ImageSearchSession,
+    /// Property-panel image-section workers: Search / Generate
+    /// popover requests + the local-asset existence check.
+    image_panel: image_panel_host::ImagePanelJobs,
+    /// Background fetches for remote `http(s)` image sources the
+    /// canvas painter recorded as cache misses — fetched bytes land in
+    /// the painter's shared byte cache so the next frame draws them.
+    remote_images: remote_image_host::RemoteImageSession,
     /// Cross-thread wake handle used by live MCP connection threads.
     mcp_wake_proxy: Option<EventLoopProxy<DesktopEvent>>,
     iconify_job: Option<iconify_host::IconifyJob>,
+    /// The `component_browser_open` value last written to
+    /// `uikits.json` — `drain_kit_io` rewrites the store when the live
+    /// value drifts (TS persists `browserOpen` on every toggle).
+    kit_browser_open_persisted: Option<bool>,
+    /// In-flight connect-time provider probe (Settings → Agents →
+    /// Connect) — spawned from the `pending_provider_connect`
+    /// request seam, drained by `drain_provider_connect`.
+    provider_connect_job: Option<provider_probe_host::ProviderConnectJob>,
     /// Document to open once the window is ready — set from argv by
     /// the file-association launch path (`openpencil-desktop X.op`).
     initial_file: Option<PathBuf>,
@@ -224,6 +259,15 @@ impl DesktopApp {
         let fit_blank_frame = initial_file.is_none();
         // Best-effort prefs restore onto the host's `EditorState`.
         settings_io::load(host.editor_state_mut());
+        // Imported UIKits + browser-open flag (`uikits.json`). Skipped
+        // under test like the update / model probes — unit tests must
+        // not see a developer machine's kit store.
+        if !cfg!(test) {
+            kit_persistence::load(host.editor_state_mut());
+            // #20: saved theme presets (`theme-presets.json`).
+            theme_preset_host::load(host.editor_state_mut());
+        }
+        let kit_browser_open_persisted = Some(host.editor_state().editor_ui.component_browser_open);
         if fit_blank_frame {
             host.fit_content_to_viewport(INITIAL_VIEWPORT_W, INITIAL_VIEWPORT_H);
         }
@@ -272,10 +316,15 @@ impl DesktopApp {
             current_codegen: None,
             codegen_last_result: None,
             current_figma_import: None,
+            pending_figma_paste: None,
             model_probe,
             image_search: image_search_session::ImageSearchSession::new(),
+            image_panel: image_panel_host::ImagePanelJobs::new(),
+            remote_images: remote_image_host::RemoteImageSession::new(),
             mcp_wake_proxy: None,
             iconify_job: None,
+            kit_browser_open_persisted,
+            provider_connect_job: None,
             initial_file,
             app_menu: None,
             update_probe,
@@ -793,7 +842,10 @@ fn prompt_update_available(locale: op_editor_core::Locale, version: &str) {
         .set_buttons(rfd::MessageButtons::YesNo)
         .show();
     if matches!(choice, rfd::MessageDialogResult::Yes) {
-        update_check::open_url(&update_check::releases_url());
+        // Download the platform installer in the background and open
+        // it when ready; failures fall back to the releases page
+        // inside the worker.
+        update_check::download_and_open_installer(version);
     }
 }
 

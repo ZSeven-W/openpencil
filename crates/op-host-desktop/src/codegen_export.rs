@@ -30,7 +30,7 @@ pub fn drain_codegen_file_actions(
     if host.editor_state().codegen.pending_export_bundle {
         host.editor_state_mut().codegen.pending_export_bundle = false;
         ran = true;
-        handle_export_bundle(host, last_result);
+        handle_export_bundle(host);
     }
     ran
 }
@@ -69,15 +69,17 @@ fn handle_download(host: &WidgetHostNative, last_result: &Option<CodegenResult>)
 }
 
 /// Save the AI structure bundle (`manifest.json` + raw/sanitized views +
-/// assets) as `bundle.zip`.
-fn handle_export_bundle(host: &WidgetHostNative, last_result: &Option<CodegenResult>) {
-    let Some(result) = last_result else { return };
-    let bundle = op_codegen::ai::bundle::build_structure_bundle(
-        &result.raw_nodes_json,
-        &result.sanitized_nodes_json,
-        &result.assets,
-        op_codegen::ai::bundle::BundleScope::Selection,
-    );
+/// assets) as `bundle.zip`. The bundle is built FRESH from the live
+/// selection (or the active page when nothing is selected) at click time —
+/// TS parity (`handleDownloadStructureBundle` calls `getTargetNodes()`);
+/// no completed generation is required and a stale generation-time
+/// selection is never exported.
+fn handle_export_bundle(host: &WidgetHostNative) {
+    let Some(bundle) = build_live_structure_bundle(host.editor_state()) else {
+        // Nothing to bundle (empty page / unresolvable selection) — the
+        // TS handler returns silently on `nodes.length === 0`.
+        return;
+    };
     let Some(path) = rfd::FileDialog::new()
         .set_file_name("bundle.zip")
         .add_filter("zip", &["zip"])
@@ -89,6 +91,25 @@ fn handle_export_bundle(host: &WidgetHostNative, last_result: &Option<CodegenRes
     if let Err(e) = std::fs::write(&path, bytes) {
         show_save_error(host, Some(&path), &e.to_string());
     }
+}
+
+/// Build the structure bundle from the LIVE editor state: the selection's
+/// subtrees, else the active page's children (the same input-builder the
+/// Generate launch uses), asset-sanitized here because the pipeline isn't
+/// involved. `None` when there is nothing to bundle.
+fn build_live_structure_bundle(
+    state: &op_editor_core::EditorState,
+) -> Option<op_codegen::ai::bundle::StructureBundle> {
+    let (_input, raw) = crate::codegen_input::build_codegen_input(state)?;
+    let scope = if state.selection.is_empty() {
+        op_codegen::ai::bundle::BundleScope::Page
+    } else {
+        op_codegen::ai::bundle::BundleScope::Selection
+    };
+    let (sanitized, assets) = op_codegen::ai::assets::extract_codegen_assets(&raw);
+    Some(op_codegen::ai::bundle::build_structure_bundle(
+        &raw, &sanitized, &assets, scope,
+    ))
 }
 
 /// Pop the shared native Save error dialog.
@@ -179,6 +200,81 @@ mod tests {
         assert!(names.contains(&"assets/img-1.png".to_string()));
         assert!(names.contains(&"assets/img-2.png".to_string()));
         assert_eq!(names.len(), 3);
+    }
+
+    fn rect_node(id: &str) -> jian_ops_schema::node::PenNode {
+        use jian_ops_schema::node::{ContainerProps, PenNode, PenNodeBase, RectangleNode};
+        use jian_ops_schema::sizing::SizingBehavior;
+        PenNode::Rectangle(RectangleNode {
+            base: PenNodeBase {
+                id: id.to_string(),
+                name: Some(id.to_string()),
+                x: Some(0.0),
+                y: Some(0.0),
+                ..Default::default()
+            },
+            container: ContainerProps {
+                width: Some(SizingBehavior::Number(10.0)),
+                height: Some(SizingBehavior::Number(10.0)),
+                ..Default::default()
+            },
+            children: None,
+            state: None,
+            bindings: None,
+            events: None,
+            lifecycle: None,
+            semantics: None,
+            gestures: None,
+            route: None,
+        })
+    }
+
+    /// The bundle bytes for a named in-zip path, as UTF-8.
+    fn file_text(bundle: &op_codegen::ai::bundle::StructureBundle, path: &str) -> String {
+        let bytes = bundle
+            .files
+            .iter()
+            .find(|(p, _)| p == path)
+            .map(|(_, b)| b.clone())
+            .unwrap_or_else(|| panic!("bundle missing {path}"));
+        String::from_utf8(bytes).expect("utf8")
+    }
+
+    /// Export AI Bundle works PRE-generation, against the live selection —
+    /// no completed run is required (TS parity, gap #40).
+    #[test]
+    fn live_bundle_builds_from_selection_without_generation() {
+        let mut state = op_editor_core::EditorState::new();
+        state.doc.children = vec![rect_node("n1"), rect_node("n2")];
+        state.set_single_selection(op_editor_core::NodeId::new("n1"));
+
+        let bundle = super::build_live_structure_bundle(&state).expect("bundle");
+        let raw = file_text(&bundle, "views/raw.json");
+        assert!(raw.contains("n1"), "live selected node in the raw view");
+        assert!(!raw.contains("n2"), "unselected sibling stays out");
+        assert!(file_text(&bundle, "manifest.json").contains("\"scope\": \"selection\""));
+    }
+
+    /// With nothing selected the bundle covers the active page's children
+    /// (the same fallback the Generate input-builder uses) at page scope.
+    #[test]
+    fn live_bundle_falls_back_to_page_children_without_selection() {
+        let mut state = op_editor_core::EditorState::new();
+        state.doc.children = vec![rect_node("n1"), rect_node("n2")];
+        state.clear_selection();
+
+        let bundle = super::build_live_structure_bundle(&state).expect("bundle");
+        let raw = file_text(&bundle, "views/raw.json");
+        assert!(raw.contains("n1") && raw.contains("n2"));
+        assert!(file_text(&bundle, "manifest.json").contains("\"scope\": \"page\""));
+    }
+
+    /// An empty page with no selection has nothing to bundle (the TS
+    /// handler returns silently on zero nodes).
+    #[test]
+    fn live_bundle_is_none_on_empty_page() {
+        let state = op_editor_core::EditorState::new();
+        assert!(super::build_live_structure_bundle(&state).is_none());
     }
 
     #[test]

@@ -14,6 +14,9 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use op_editor_core::{EditorCommand, EditorState};
 
+#[cfg(feature = "mcp-debug-tools")]
+pub(crate) mod screenshot;
+
 /// Per-request budget for a UI-thread snapshot/apply ack. Sized to cover a
 /// large single editor operation without the connection giving up; the CLI
 /// allows even longer per tool call (`POST_TIMEOUT`).
@@ -73,6 +76,16 @@ enum UiRequest {
     ReplaceDocument {
         doc: Box<jian_ops_schema::PenDocument>,
         ack: SyncSender<()>,
+    },
+    /// `debug_screenshot` against the LIVE canvas — the connection
+    /// thread blocks on `ack` while the UI pump renders the active
+    /// page / node through the raster export pipeline
+    /// (`export::screenshot::capture`). Same pending-intent +
+    /// bounded-wait discipline as the chat canvas tools.
+    #[cfg(feature = "mcp-debug-tools")]
+    Screenshot {
+        spec: crate::export::screenshot::CaptureSpec,
+        ack: SyncSender<Result<crate::export::screenshot::ScreenshotPng, String>>,
     },
 }
 
@@ -165,6 +178,11 @@ impl McpLiveServer {
                     let _ = ack.send(());
                     outcome.repaint = true;
                     outcome.layout_dirty = true;
+                }
+                #[cfg(feature = "mcp-debug-tools")]
+                Ok(UiRequest::Screenshot { spec, ack }) => {
+                    // Read-only render of the live state — no repaint needed.
+                    let _ = ack.send(crate::export::screenshot::capture(state, &spec));
                 }
                 Err(TryRecvError::Empty) => break,
                 Err(TryRecvError::Disconnected) => break,
@@ -368,6 +386,20 @@ fn serve_connection<S: std::io::Read + std::io::Write>(
     {
         return write_json_rpc_response(stream, &response);
     }
+    // `debug_screenshot` against the LIVE canvas: route through the
+    // raster export pipeline on the UI thread instead of the generic
+    // dispatch (whose headless tool can only report no-live-canvas).
+    // Gate-closed (`OPENPENCIL_DEBUG_TOOLS` unset) falls through to the
+    // generic dispatch, which reports UnknownTool exactly like the
+    // headless registry that never registered the tool.
+    #[cfg(feature = "mcp-debug-tools")]
+    if let Some(response) =
+        screenshot::maybe_serve(&req.body, op_mcp::debug_tools_enabled(), |shot_req| {
+            request_screenshot(req_tx, wake_ui, shot_req)
+        })
+    {
+        return write_json_rpc_response(stream, &response);
+    }
     let mut state = request_snapshot(req_tx, wake_ui)?;
     let response = crate::mcp_serve::process_message_with_applier(
         &mut state,
@@ -489,6 +521,26 @@ fn request_apply(
         .map_err(|_| "UI thread is not accepting MCP apply requests".to_string())?;
     wake_ui();
     recv_with_timeout(ack_rx.recv_timeout(UI_ACK_TIMEOUT), "apply")
+}
+
+/// Ask the UI thread to render a `debug_screenshot` capture. Bounded
+/// wait per the request's own budget (TS `min(timeoutMs ?? 15000,
+/// 60000)`) — the same recv-timeout discipline the chat canvas tools
+/// use, so a stalled UI pump can never pin the connection thread.
+#[cfg(feature = "mcp-debug-tools")]
+fn request_screenshot(
+    req_tx: &Sender<UiRequest>,
+    wake_ui: &UiWake,
+    req: op_mcp::ScreenshotRequest,
+) -> Result<crate::export::screenshot::ScreenshotPng, String> {
+    let timeout = Duration::from_millis(req.timeout_ms.max(1));
+    let spec = screenshot::capture_spec(&req);
+    let (ack_tx, ack_rx) = mpsc::sync_channel(1);
+    req_tx
+        .send(UiRequest::Screenshot { spec, ack: ack_tx })
+        .map_err(|_| "UI thread is not accepting MCP screenshot requests".to_string())?;
+    wake_ui();
+    recv_with_timeout(ack_rx.recv_timeout(timeout), "screenshot")?
 }
 
 /// Ask the UI thread to swap in an already-loaded document. `Err` means the
@@ -639,6 +691,54 @@ mod tests {
         assert!(!outcome.layout_dirty);
         let acked = acks.iter().filter(|ack| ack.try_recv().is_ok()).count();
         assert_eq!(acked, UI_PUMP_REQUEST_BUDGET);
+    }
+
+    /// The UI pump renders queued screenshot requests off the live
+    /// state through the raster export pipeline — the scripted-channel
+    /// half of the live `debug_screenshot` roundtrip.
+    #[cfg(feature = "mcp-debug-tools")]
+    #[test]
+    fn pump_fulfills_screenshot_requests_off_the_live_state() {
+        let (req_tx, req_rx) = mpsc::channel();
+        let (stop_tx, _stop_rx) = mpsc::channel();
+        let mut server = McpLiveServer {
+            port: 0,
+            token: "test-token".to_string(),
+            quit_flag: Arc::new(AtomicBool::new(false)),
+            req_rx,
+            stop_tx,
+        };
+        let mut state = EditorState::new();
+        assert!(state.apply(EditorCommand::InsertNode {
+            kind: "rect".into(),
+            name: "Shot".into(),
+            x: 5,
+            y: 5,
+            width: 20,
+            height: 10,
+            fill_hex: Some("#ff0000".into()),
+            target_parent: op_editor_core::NodeId::NONE,
+            page_id: None,
+        }));
+
+        let (ack_tx, ack_rx) = mpsc::sync_channel(1);
+        req_tx
+            .send(UiRequest::Screenshot {
+                spec: crate::export::screenshot::CaptureSpec {
+                    node_id: None,
+                    padding: 0.0,
+                    scale: 1.0,
+                },
+                ack: ack_tx,
+            })
+            .expect("queue screenshot request");
+        let _ = server.pump(&mut state);
+        let shot = ack_rx
+            .try_recv()
+            .expect("pump must ack the screenshot")
+            .expect("capture must succeed for a filled rect");
+        assert!(!shot.png_base64.is_empty());
+        assert!(shot.actual_bounds.is_none(), "root capture has no bounds");
     }
 
     #[test]
