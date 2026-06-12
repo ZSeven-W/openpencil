@@ -1,13 +1,67 @@
 name: Rust release artifacts
 
-# Triggered on tag push (v*) — builds release binaries across desktop targets
-# and assembles a GitHub Release draft. The `build` job builds the real
-# `op-host-desktop` crate (winit + skia-safe runner that drives the Rust
-# editor); its shipped executable keeps the stable `openpencil-desktop`
-# name. Full DMG / AppImage / EXE installer packaging lands in Step 1f.
-# The wasm web bundle is currently DEFERRED (see comment block below); when
-# the CI-side C-hard pipeline (emscripten install + EMSDK + symlink hack +
-# wasm-bindgen + wasm-opt) lands it will re-enter the matrix.
+# Triggered on tag push (v*) — builds release binaries across desktop targets,
+# packages real installers per platform, and assembles a GitHub Release draft.
+#
+# Artifact matrix (per platform; <v> = tag version, arch token = x64/arm64 to
+# match electron-builder's `${productName}-${version}-${arch}-…` convention
+# from apps/desktop/electron-builder.yml):
+#   macOS   OpenPencil-<v>-<arch>-mac.dmg        .app via scripts/bundle-macos.sh
+#                                                (.op/.pen/.fig associations in
+#                                                Info.plist, op CLI embedded in
+#                                                Contents/MacOS, ad-hoc signed)
+#           openpencil-desktop-<label>.tar.gz    raw binary (kept)
+#           op-cli-<label>.tar.gz                standalone CLI
+#   Windows OpenPencil-<v>-<arch>-win-setup.exe  NSIS installer (Start-Menu +
+#                                                desktop shortcuts, HKCR
+#                                                .op/.pen ProgID, uninstaller,
+#                                                bundles op.exe)
+#           openpencil-desktop-<label>.zip       portable (kept)
+#           op-cli-<label>.zip                   standalone CLI
+#   Linux   OpenPencil-<v>-<arch>-linux.AppImage both arches (appimagetool
+#                                                1.9.1 ships native x86_64 AND
+#                                                aarch64 builds)
+#           OpenPencil-<v>-<arch>-linux.deb      .desktop + shared-mime-info
+#                                                registration of .op/.pen,
+#                                                bundles usr/bin/op
+#           openpencil-desktop-<label>.tar.gz    raw binary (kept)
+#           op-cli-<label>.tar.gz                standalone CLI
+#
+# Branding: productName "OpenPencil" everywhere (parity with
+# electron-builder.yml). The macOS bundle id stays com.zseven-w.openpencil
+# (the Rust shell identity already registered with LaunchServices via
+# scripts/bundle-macos.sh + op-host-desktop bundle metadata) — intentionally
+# NOT electron's dev.openpencil.app, so the Electron and Rust apps can
+# coexist without fighting over file-association ownership.
+#
+# ─── Local-verification caveats (2026-06-10, macOS dev machine) ────────────
+# Verified locally:
+#   * bash -n on scripts/bundle-macos.sh, package-deb.sh, package-appimage.sh,
+#     package-linux-common.sh
+#   * YAML parse of this file
+#   * package-deb.sh --layout-only and package-appimage.sh layout dry-runs
+#     with stub binaries (payload tree, control file, desktop entry, mime XML)
+#   * appimagetool 1.9.1 pinned release assets (x86_64 + aarch64) exist
+#     (checked via GitHub API); cargo-bundle `--target` flag confirmed
+#     against upstream source (present since v0.9.0)
+# NOT verifiable locally — needs a real tag-push CI run:
+#   * makensis compile of scripts/package-windows.nsi (no makensis on macOS;
+#     NSIS is preinstalled on windows-latest per the runner-images manifest)
+#   * actual AppImage assembly (appimagetool is a Linux ELF; it also
+#     downloads its type2-runtime from GitHub at pack time — needs network)
+#   * dpkg-deb --build (no dpkg locally; only the layout path was dry-run)
+#   * cargo-bundle bootstrap + `--target` bundling + hdiutil DMG creation on
+#     the GitHub macOS runner
+#   * installer smoke tests (NSIS install/uninstall + HKCR assoc, deb
+#     postinst mime refresh, AppImage launch, DMG mount + Gatekeeper)
+#
+# The `build` job builds the real `op-host-desktop` crate (winit + skia-safe
+# runner that drives the Rust editor); its shipped executable keeps the
+# stable `openpencil-desktop` name. The `op` CLI (crates/op-cli, binary name
+# `op`) is built in the same cargo invocation. The wasm web bundle is
+# currently DEFERRED (see comment block below); when the CI-side C-hard
+# pipeline (emscripten install + EMSDK + symlink hack + wasm-bindgen +
+# wasm-opt) lands it will re-enter the matrix.
 
 on:
   push:
@@ -26,6 +80,7 @@ jobs:
             runner: macos-latest
             target: aarch64-apple-darwin
             archive: tar.gz
+            arch: arm64
           # macos-13 (Intel) deprecated; cross-compile x86_64-apple-darwin
           # from Apple Silicon (cargo supports cross-compile to host's other
           # arch out of the box, no `cross` needed).
@@ -33,10 +88,12 @@ jobs:
             runner: macos-latest
             target: x86_64-apple-darwin
             archive: tar.gz
+            arch: x64
           - label: linux-x86_64
             runner: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             archive: tar.gz
+            arch: x64
           # Native ARM64 hosted runner — no `cross`. The cross 0.2.x aarch64
           # image (Ubuntu 16.04 / GCC 5 / FreeType 2.6) is too old to link the
           # modern skia that skia-bindings builds.
@@ -44,15 +101,20 @@ jobs:
             runner: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
             archive: tar.gz
+            arch: arm64
           - label: windows-x86_64
             runner: windows-latest
             target: x86_64-pc-windows-msvc
             archive: zip
+            arch: x64
           # Windows ARM64 — cargo cross-compile from x86_64 windows runner.
+          # The NSIS installer stub stays x86 (runs under emulation on
+          # Windows-on-ARM); the installed payload is native aarch64.
           - label: windows-aarch64
             runner: windows-latest
             target: aarch64-pc-windows-msvc
             archive: zip
+            arch: arm64
     steps:
       - uses: actions/checkout@v4
         with:
@@ -73,21 +135,119 @@ jobs:
             libwayland-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
             libegl1-mesa-dev libgles2-mesa-dev libgbm-dev \
             libfreetype-dev libfontconfig1-dev
+      - name: Compute release version
+        shell: bash
+        run: |
+          # Tag pushes (vX.Y.Z) drive the artifact version; workflow_dispatch
+          # falls back to [workspace.package].version in the root Cargo.toml.
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            echo "OP_VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+          else
+            ver="$(awk -F'"' '/^\[workspace\.package\]/{f=1} f && /^version/{print $2; exit}' Cargo.toml)"
+            echo "OP_VERSION=${ver:-0.0.0}" >> "$GITHUB_ENV"
+          fi
       - name: Build (host)
-        run: cargo build -p op-host-desktop --target ${{ matrix.target }} --release
-      - name: Package archive (unix)
+        run: cargo build -p op-host-desktop -p op-cli --target ${{ matrix.target }} --release
+      - name: Package archives (unix)
         if: matrix.archive == 'tar.gz'
         shell: bash
         run: |
           cd target/${{ matrix.target }}/release
           tar czf ../../../openpencil-desktop-${{ matrix.label }}.tar.gz openpencil-desktop
-      - name: Package archive (windows)
+          tar czf ../../../op-cli-${{ matrix.label }}.tar.gz op
+      - name: Package archives (windows)
         if: matrix.archive == 'zip'
         shell: pwsh
         run: |
           Compress-Archive `
             -Path target\${{ matrix.target }}\release\openpencil-desktop.exe `
             -DestinationPath openpencil-desktop-${{ matrix.label }}.zip
+          Compress-Archive `
+            -Path target\${{ matrix.target }}\release\op.exe `
+            -DestinationPath op-cli-${{ matrix.label }}.zip
+      - name: Package DMG (macos)
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          OPENPENCIL_VERSION: ${{ env.OP_VERSION }}
+          OPENPENCIL_TARGET: ${{ matrix.target }}
+          # Hand the already-built binaries to the bundle script: it skips its
+          # own cargo build and overwrites the bundled executable with exactly
+          # what this workflow built (and embeds the op CLI in Contents/MacOS).
+          OPENPENCIL_BINARY: ${{ github.workspace }}/target/${{ matrix.target }}/release/openpencil-desktop
+          OPENPENCIL_CLI_BINARY: ${{ github.workspace }}/target/${{ matrix.target }}/release/op
+          # Optional real-signing hook. No signing secrets exist today, so
+          # bundle-macos.sh falls back to ad-hoc ("-") signing. When a
+          # Developer ID cert lands, uncomment and add keychain import +
+          # notarization steps:
+          # MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+        run: |
+          bash scripts/bundle-macos.sh
+          APP="target/${{ matrix.target }}/release/bundle/osx/OpenPencil.app"
+          STAGE="$(mktemp -d)"
+          cp -R "$APP" "$STAGE/OpenPencil.app"
+          ln -s /Applications "$STAGE/Applications"
+          # HFS+ instead of the APFS default: mountable on every macOS the
+          # binary itself supports.
+          hdiutil create \
+            -volname "OpenPencil $OP_VERSION" \
+            -srcfolder "$STAGE" \
+            -fs HFS+ -format UDZO -ov \
+            "OpenPencil-$OP_VERSION-${{ matrix.arch }}-mac.dmg"
+      - name: Package NSIS installer (windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          # makensis is preinstalled on windows-latest (runner-images
+          # manifest). Defines are absolute because NSIS resolves relative
+          # paths against the .nsi's own directory (scripts/).
+          makensis `
+            "/DVERSION=$env:OP_VERSION" `
+            "/DARCH=${{ matrix.arch }}" `
+            "/DBIN_DIR=$env:GITHUB_WORKSPACE\target\${{ matrix.target }}\release" `
+            "/DICON_FILE=$env:GITHUB_WORKSPACE\apps\desktop\build\icon.ico" `
+            "/DOUT_FILE=$env:GITHUB_WORKSPACE\OpenPencil-$env:OP_VERSION-${{ matrix.arch }}-win-setup.exe" `
+            scripts\package-windows.nsi
+      - name: Package .deb (linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          case "${{ matrix.target }}" in
+            x86_64-*)  DEB_ARCH=amd64 ;;
+            aarch64-*) DEB_ARCH=arm64 ;;
+            *) echo "unmapped deb arch for ${{ matrix.target }}" >&2; exit 1 ;;
+          esac
+          bash scripts/package-deb.sh \
+            --desktop-bin "target/${{ matrix.target }}/release/openpencil-desktop" \
+            --cli-bin "target/${{ matrix.target }}/release/op" \
+            --icon apps/desktop/build/icon.png \
+            --version "$OP_VERSION" \
+            --arch "$DEB_ARCH" \
+            --out-dir .
+      - name: Package AppImage (linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          case "${{ matrix.target }}" in
+            x86_64-*)  AI_ARCH=x86_64 ;;
+            aarch64-*) AI_ARCH=aarch64 ;;
+            *) echo "unmapped AppImage arch for ${{ matrix.target }}" >&2; exit 1 ;;
+          esac
+          # appimagetool pinned by URL (release 1.9.1 ships native builds for
+          # both runner arches, so each matrix leg packs natively). NOTE:
+          # appimagetool 1.9.x downloads the matching static type2-runtime
+          # from GitHub at pack time — the runner needs network access.
+          curl -fsSL --retry 3 -o /tmp/appimagetool \
+            "https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-${AI_ARCH}.AppImage"
+          chmod +x /tmp/appimagetool
+          bash scripts/package-appimage.sh \
+            --desktop-bin "target/${{ matrix.target }}/release/openpencil-desktop" \
+            --cli-bin "target/${{ matrix.target }}/release/op" \
+            --icon apps/desktop/build/icon.png \
+            --version "$OP_VERSION" \
+            --arch "$AI_ARCH" \
+            --tool /tmp/appimagetool \
+            --out-dir .
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -95,6 +255,12 @@ jobs:
           path: |
             openpencil-desktop-${{ matrix.label }}.tar.gz
             openpencil-desktop-${{ matrix.label }}.zip
+            op-cli-${{ matrix.label }}.tar.gz
+            op-cli-${{ matrix.label }}.zip
+            OpenPencil-*-mac.dmg
+            OpenPencil-*-win-setup.exe
+            OpenPencil-*-linux.AppImage
+            OpenPencil-*-linux.deb
           if-no-files-found: ignore
 
   # Phase 1b release wasm artifact: explicitly DEFERRED (not silently
@@ -132,7 +298,10 @@ jobs:
       - name: Flatten artifacts
         run: |
           mkdir -p release-files
-          find dist -type f \( -name "*.tar.gz" -o -name "*.zip" \) -exec cp {} release-files/ \;
+          find dist -type f \
+            \( -name "*.tar.gz" -o -name "*.zip" -o -name "*.dmg" \
+               -o -name "*.exe" -o -name "*.AppImage" -o -name "*.deb" \) \
+            -exec cp {} release-files/ \;
           ls -la release-files
       - name: Create / update GitHub Release
         uses: softprops/action-gh-release@v2

@@ -489,8 +489,12 @@ real CLI agents, not a stub:
 
 - `ChatState::begin_send` (shell-core `document/chat.rs`) — the
   native send path: pushes the user message + an empty assistant
-  bubble, raises `chat.pending_send`. The web shell keeps the
-  offline `send()` echo stub.
+  bubble, raises `chat.pending_send`. The web shell (with the
+  `codegen` feature — the production bundle) drains it into
+  `web_chat.rs` and streams the turn through the daemon's
+  `/api/ai/stream`; a transport-less build reports an honest
+  per-send error (the old `send()` echo stub is retired from the
+  web send path).
 - `ChatProvider` (shell-core `chat_provider.rs`) is the
   transport-free trait; real impls live desktop-side:
   `chat_runtime.rs` (`BuiltInProvider`, agent-rs), `chat_claude.rs`
