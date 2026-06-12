@@ -80,13 +80,13 @@ pub fn kind_toggle_target(
     card: Rect,
     point: Point2D,
 ) -> Option<BuiltinAgentKind> {
-    if !rect_contains(kind_rect(card), point) {
+    if !(kind_rect(card)).contains(point) {
         return None;
     }
     let options = kind_options(agent);
     options
         .iter()
-        .find(|option| rect_contains(kind_option_rect(card, option.slot), point))
+        .find(|option| (kind_option_rect(card, option.slot)).contains(point))
         .map(|option| option.kind)
         .filter(|kind| *kind != agent.kind)
 }
@@ -273,7 +273,7 @@ pub fn preset_scroll_max() -> f32 {
 }
 
 pub fn preset_menu_contains(card: Rect, point: Point2D) -> bool {
-    rect_contains(preset_menu_rect(card), point)
+    (preset_menu_rect(card)).contains(point)
 }
 
 fn preset_label(key: BuiltinAgentPresetKey) -> &'static str {
@@ -381,13 +381,6 @@ fn ellipsize(cx: &mut PaintCx<'_>, value: &str, max_w: f32, size: f32) -> String
         out.pop();
     }
     format!("{out}...")
-}
-
-fn rect_contains(r: Rect, p: Point2D) -> bool {
-    p.x >= r.origin.x
-        && p.y >= r.origin.y
-        && p.x <= r.origin.x + r.size.x
-        && p.y <= r.origin.y + r.size.y
 }
 
 fn to_jian(c: Color) -> jian_core::scene::Color {

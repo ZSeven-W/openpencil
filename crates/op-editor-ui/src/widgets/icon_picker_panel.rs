@@ -82,10 +82,10 @@ impl<'a> IconPickerPanel<'a> {
         point: Point2D,
     ) -> Option<op_editor_core::IconPickerButton> {
         use op_editor_core::IconPickerButton as B;
-        if !rect_contains(panel, point) {
+        if !(panel).contains(point) {
             return None;
         }
-        if rect_contains(Self::close_rect(panel), point) {
+        if (Self::close_rect(panel)).contains(point) {
             return Some(B::Close);
         }
         if point.y <= panel.origin.y + HEADER_H {
@@ -179,10 +179,10 @@ impl<'a> IconPickerPanel<'a> {
     }
 
     pub fn hit_test(&self, panel: Rect, point: Point2D) -> Option<IconPickerHit> {
-        if !rect_contains(panel, point) {
+        if !(panel).contains(point) {
             return None;
         }
-        if rect_contains(Self::close_rect(panel), point) {
+        if (Self::close_rect(panel)).contains(point) {
             return Some(IconPickerHit::Close);
         }
         if point.y <= panel.origin.y + HEADER_H {
@@ -419,13 +419,6 @@ fn truncate(text: &str, max_chars: usize) -> String {
     let mut out: String = text.chars().take(max_chars.saturating_sub(1)).collect();
     out.push_str("...");
     out
-}
-
-fn rect_contains(r: Rect, p: Point2D) -> bool {
-    p.x >= r.origin.x
-        && p.x <= r.origin.x + r.size.x
-        && p.y >= r.origin.y
-        && p.y <= r.origin.y + r.size.y
 }
 
 fn to_jian(c: Color) -> jian_core::scene::Color {

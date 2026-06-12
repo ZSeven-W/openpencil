@@ -19,7 +19,7 @@ pub(crate) fn transcript_text_offset_at(
     point: Point2D,
     locale: op_editor_core::Locale,
 ) -> Option<TranscriptTextHit> {
-    if !rect_contains(body_rect, point) {
+    if !(body_rect).contains(point) {
         return None;
     }
     for item in build_transcript(messages, body_rect, locale) {
@@ -29,7 +29,7 @@ pub(crate) fn transcript_text_offset_at(
         let Some(bubble) = &item.bubble else {
             continue;
         };
-        if bubble.typing || bubble.completion.is_some() || !rect_contains(bubble.rect, point) {
+        if bubble.typing || bubble.completion.is_some() || !(bubble.rect).contains(point) {
             continue;
         }
         let text = &messages[item.msg_index].content;
@@ -97,13 +97,6 @@ pub(crate) fn paint_user_bubble_selection(
         }
         baseline += LINE_H;
     }
-}
-
-fn rect_contains(rect: Rect, point: Point2D) -> bool {
-    point.x >= rect.origin.x
-        && point.x <= rect.origin.x + rect.size.x
-        && point.y >= rect.origin.y
-        && point.y <= rect.origin.y + rect.size.y
 }
 
 fn line_start_offsets(text: &str, lines: &[String]) -> Vec<usize> {

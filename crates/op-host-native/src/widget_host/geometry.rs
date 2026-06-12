@@ -7,7 +7,7 @@
 //! input-dispatch contract keeps `layout_scene` fresh before any
 //! hit-testing input event (see `widget_host.rs`).
 
-use super::helpers::{rect_contains, PANEL_RESIZE_GUTTER, STATUS_INSET};
+use super::helpers::{PANEL_RESIZE_GUTTER, STATUS_INSET};
 use super::{CursorHint, PanelResizeKind, WidgetHostNative};
 use op_editor_ui::widgets::{
     rotation_corner_at_point, selection_handle_at_point, AIChatHit, AIChatPlaceholder,
@@ -363,7 +363,7 @@ impl WidgetHostNative {
         // it), so don't show the resize cursor over the panel.
         let over_git_panel = self
             .git_panel_outer_rect(viewport_w, viewport_h)
-            .is_some_and(|r| rect_contains(r, Point2D::new(x, y)));
+            .is_some_and(|r| (r).contains(Point2D::new(x, y)));
         if self.is_resizing_panel()
             || (!over_git_panel && self.panel_resize_hover(x, y, viewport_w).is_some())
         {

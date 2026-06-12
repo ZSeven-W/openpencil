@@ -7,7 +7,7 @@
 //! methods (`create_node_for_active_tool`,
 //! `dispatch_agent_settings_press`) live in `press_helpers.rs`.
 
-use super::helpers::{rect_contains, TOOLBAR_INSET_X, TOOLBAR_INSET_Y};
+use super::helpers::{TOOLBAR_INSET_X, TOOLBAR_INSET_Y};
 use super::{
     ChatDragState, ChatInputSelectionDragState, ChatResizeState, ChatTextSelectionDragState,
     CodeSelectionDragState, CreateDragState, DragState, HandleDragState, PanelResize,
@@ -338,7 +338,7 @@ impl WidgetHostNative {
         // rail block in between skips a click it would otherwise own.
         let in_git_panel = self
             .git_panel_outer_rect(viewport_width, viewport_height)
-            .is_some_and(|r| rect_contains(r, Point2D::new(x, y)));
+            .is_some_and(|r| (r).contains(Point2D::new(x, y)));
 
         // 0z. Panel-resize gutter — ±4 px from rail edges.
         if y >= TOP_BAR_HEIGHT && !in_git_panel {
@@ -471,7 +471,7 @@ impl WidgetHostNative {
                 }
             }
         }
-        if rect_contains(top_bar_rect, Point2D::new(x, y)) {
+        if (top_bar_rect).contains(Point2D::new(x, y)) {
             // Other top-bar gaps eat clicks but don't act — still a
             // blank press, so every text input blurs.
             let blurred = self.blur_text_inputs_on_blank_press();
@@ -762,7 +762,7 @@ impl WidgetHostNative {
             origin: Point2D::new(cx0 + TOOLBAR_INSET_X, TOP_BAR_HEIGHT + TOOLBAR_INSET_Y),
             size: Point2D::new(TOOLBAR_WIDTH, toolbar_h),
         };
-        if rect_contains(toolbar_rect, Point2D::new(x, y)) {
+        if (toolbar_rect).contains(Point2D::new(x, y)) {
             if let Some(hit) = toolbar.hit_test(toolbar_rect, Point2D::new(x, y)) {
                 match hit {
                     op_editor_ui::widgets::ToolbarHit::Tool(tool) => {

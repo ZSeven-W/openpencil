@@ -46,7 +46,7 @@ fn auto_update_switch_rect(content: Rect) -> Rect {
 }
 
 pub fn hit_test(content: Rect, scrolled: Point2D) -> SystemHit {
-    if rect_contains(auto_update_switch_rect(content), scrolled) {
+    if (auto_update_switch_rect(content)).contains(scrolled) {
         return SystemHit::ToggleAutoUpdate;
     }
     SystemHit::None
@@ -105,13 +105,6 @@ pub(super) fn paint_system_tab(
         auto_update_switch_rect(content),
         settings.auto_update_enabled,
     );
-}
-
-fn rect_contains(r: Rect, p: Point2D) -> bool {
-    p.x >= r.origin.x
-        && p.y >= r.origin.y
-        && p.x <= r.origin.x + r.size.x
-        && p.y <= r.origin.y + r.size.y
 }
 
 fn to_jian(c: Color) -> jian_core::scene::Color {

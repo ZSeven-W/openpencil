@@ -89,26 +89,26 @@ impl ColorPicker {
     /// Map a press point inside the picker to a hit (or None if the
     /// point is outside the panel rect entirely).
     pub fn hit_test(&self, panel: Rect, point: Point2D) -> Option<ColorPickerHit> {
-        if !rect_contains(panel, point) {
+        if !(panel).contains(point) {
             return None;
         }
         // Close chip sits visually on top of the SV box's top-right
         // corner — check it first so its presses don't get swallowed
         // by the SV drag handler.
         let close = close_rect(panel);
-        if rect_contains(close, point) {
+        if (close).contains(point) {
             return Some(ColorPickerHit::Close);
         }
         let sv = sv_rect(panel);
-        if rect_contains(sv, point) {
+        if (sv).contains(point) {
             return Some(ColorPickerHit::SvBox);
         }
         let hue = hue_rect(panel);
-        if rect_contains(hue, point) {
+        if (hue).contains(point) {
             return Some(ColorPickerHit::HueSlider);
         }
         let eye = eyedropper_rect(panel);
-        if rect_contains(eye, point) {
+        if (eye).contains(point) {
             return Some(ColorPickerHit::Eyedropper);
         }
         Some(ColorPickerHit::Inside)
@@ -449,13 +449,6 @@ fn close_rect(panel: Rect) -> Rect {
         ),
         size: Point2D::new(22.0, 22.0),
     }
-}
-
-fn rect_contains(r: Rect, p: Point2D) -> bool {
-    p.x >= r.origin.x
-        && p.y >= r.origin.y
-        && p.x <= r.origin.x + r.size.x
-        && p.y <= r.origin.y + r.size.y
 }
 
 fn to_jian(c: Color) -> jian_core::scene::Color {

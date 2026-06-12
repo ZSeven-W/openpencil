@@ -130,7 +130,7 @@ impl<'a> FileMenu<'a> {
     /// `point` is in screen space; return the activated row, or None
     /// for clicks on dividers / headers / outside the menu.
     pub fn hit_test(&self, panel: Rect, point: Point2D) -> Option<FileMenuChoice> {
-        if !rect_contains(panel, point) {
+        if !(panel).contains(point) {
             return None;
         }
         let mut y = panel.origin.y + PAD_Y;
@@ -187,20 +187,11 @@ fn paint_row_tint(cx: &mut PaintCx<'_>, theme: &Theme, x: f32, y: f32) {
 }
 
 fn row_hit(x: f32, y: f32, point: Point2D) -> bool {
-    rect_contains(
-        Rect {
-            origin: Point2D::new(x, y),
-            size: Point2D::new(MENU_WIDTH, ROW_HEIGHT),
-        },
-        point,
-    )
-}
-
-fn rect_contains(r: Rect, p: Point2D) -> bool {
-    p.x >= r.origin.x
-        && p.x <= r.origin.x + r.size.x
-        && p.y >= r.origin.y
-        && p.y <= r.origin.y + r.size.y
+    (Rect {
+        origin: Point2D::new(x, y),
+        size: Point2D::new(MENU_WIDTH, ROW_HEIGHT),
+    })
+    .contains(point)
 }
 
 impl<'a> Widget for FileMenu<'a> {

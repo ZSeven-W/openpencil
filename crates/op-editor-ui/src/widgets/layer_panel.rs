@@ -251,7 +251,7 @@ impl LayerPanel {
     /// After. Below-rows area: After-last. Outside / above rows:
     /// None.
     pub fn drop_target_at(&self, rect: Rect, point: Point2D) -> Option<DropTarget> {
-        if !rect_contains(rect, point) {
+        if !(rect).contains(point) {
             return None;
         }
         let r = self.regions(rect);
@@ -325,7 +325,7 @@ impl LayerPanel {
     /// toggles for the trailing icons, or `AddPage` for the `+`
     /// on the Pages section header.
     pub fn hit_test(&self, rect: Rect, point: Point2D) -> Option<LayerPanelHit> {
-        if !rect_contains(rect, point) {
+        if !(rect).contains(point) {
             return None;
         }
         // Pages section header — `+` add-page affordance at top-right.
@@ -357,7 +357,7 @@ impl LayerPanel {
                 origin: Point2D::new(rect.origin.x, y),
                 size: Point2D::new(rect.size.x, PAGE_ROW_HEIGHT),
             };
-            if in_pages && rect_contains(row, point) {
+            if in_pages && (row).contains(point) {
                 // × delete button — only hit-tested when the row is
                 // hovered (paint shows it under the same gate). 14
                 // px icon, right-aligned with 4 px slop.
@@ -383,7 +383,7 @@ impl LayerPanel {
                 origin: Point2D::new(rect.origin.x, y),
                 size: Point2D::new(rect.size.x, LAYER_ROW_HEIGHT),
             };
-            if in_layers && rect_contains(row, point) {
+            if in_layers && (row).contains(point) {
                 // Match the paint geometry — same 14 px icon
                 // boxes positioned at `trailing_right` minus 14 /
                 // 32 (lock / eye). Slop of 4 px around each so
@@ -485,13 +485,6 @@ pub struct DropTarget {
     pub anchor: NodeId,
     pub position: DropPosition,
     pub indicator_y: f32,
-}
-
-fn rect_contains(r: Rect, p: Point2D) -> bool {
-    p.x >= r.origin.x
-        && p.x <= r.origin.x + r.size.x
-        && p.y >= r.origin.y
-        && p.y <= r.origin.y + r.size.y
 }
 
 impl Widget for LayerPanel {

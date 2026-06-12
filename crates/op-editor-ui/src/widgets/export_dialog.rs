@@ -220,11 +220,11 @@ impl ExportDialog {
     }
 
     pub fn hit_test(&self, point: Point2D) -> Option<ExportDialogHit> {
-        if !rect_contains(self.rect, point) {
+        if !(self.rect).contains(point) {
             return None;
         }
         for (i, &fmt) in ExportFormat::ALL.iter().enumerate() {
-            if rect_contains(self.format_pill_rect(i), point) {
+            if (self.format_pill_rect(i)).contains(point) {
                 // Disabled formats swallow the click without changing
                 // the active format. Same as TS — visible but inert.
                 if !fmt.is_implemented() {
@@ -234,15 +234,15 @@ impl ExportDialog {
             }
         }
         for i in 0..3 {
-            if rect_contains(self.scale_pill_rect(i), point) {
+            if (self.scale_pill_rect(i)).contains(point) {
                 return Some(ExportDialogHit::Scale((i as u8) + 1));
             }
         }
         let (cancel, export) = self.button_rects();
-        if rect_contains(cancel, point) {
+        if (cancel).contains(point) {
             return Some(ExportDialogHit::Cancel);
         }
-        if rect_contains(export, point) {
+        if (export).contains(point) {
             return Some(ExportDialogHit::Export);
         }
         None
@@ -336,13 +336,6 @@ pub fn scale_from_index(index: u8) -> f32 {
         3 => 3.0,
         _ => 2.0,
     }
-}
-
-fn rect_contains(r: Rect, p: Point2D) -> bool {
-    p.x >= r.origin.x
-        && p.x < r.origin.x + r.size.x
-        && p.y >= r.origin.y
-        && p.y < r.origin.y + r.size.y
 }
 
 #[cfg(test)]

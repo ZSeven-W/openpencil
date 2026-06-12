@@ -112,13 +112,6 @@ pub(in crate::widget_host) const STATUS_INSET: f32 = 16.0;
 const AICHAT_INSET_BOTTOM: f32 = 12.0;
 const AICHAT_INSET_LEFT: f32 = 12.0;
 
-fn rect_contains(r: Rect, p: Point2D) -> bool {
-    p.x >= r.origin.x
-        && p.x <= r.origin.x + r.size.x
-        && p.y >= r.origin.y
-        && p.y <= r.origin.y + r.size.y
-}
-
 pub struct WidgetHost {
     /// **The host's single source of truth.** All input handlers
     /// mutate this; paint + the input hit-test read the derived
@@ -537,7 +530,7 @@ impl WidgetHost {
             };
             (checklist, panel.fixed_checklist_scroll_max())
         };
-        if !rect_contains(checklist, point) {
+        if !(checklist).contains(point) {
             return false;
         }
         let next = (self.editor_state.chat.checklist_scroll - delta).clamp(0.0, max);
@@ -564,7 +557,7 @@ impl WidgetHost {
             let panel_rect = AgentSettingsPanel::for_editor(&self.editor_state)
                 .rect(viewport_width, viewport_height);
             let point = Point2D::new(x, y);
-            if rect_contains(panel_rect, point) {
+            if (panel_rect).contains(point) {
                 if let Some(max) = AgentSettingsPanel::for_editor(&self.editor_state)
                     .builtin_preset_scroll_max_at(panel_rect, point)
                 {

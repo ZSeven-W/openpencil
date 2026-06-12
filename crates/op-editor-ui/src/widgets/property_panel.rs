@@ -592,7 +592,7 @@ impl PropertyPanel {
         // tested first and short-circuits before the dropdown
         // toggle, otherwise clicking a row would just re-toggle.
         for (action, rect) in rects.into_iter().rev() {
-            if rect_contains(rect, point) {
+            if (rect).contains(point) {
                 return Some(action);
             }
         }
@@ -629,7 +629,7 @@ impl PropertyPanel {
                 PropertyPanelAction::SetExportScale(_) | PropertyPanelAction::SetExportFormat(_)
             )
         })
-        .position(|(_, rect)| rect_contains(rect, point))
+        .position(|(_, rect)| (rect).contains(point))
     }
 
     pub fn image_adjustment_drag_action(
@@ -684,7 +684,7 @@ impl PropertyPanel {
         for (focus, rect) in
             sections::editable_input_rects(self.scrolled_rect(panel_rect), self.visible_sections())
         {
-            if rect_contains(rect, point) {
+            if (rect).contains(point) {
                 return Some(focus);
             }
         }
@@ -714,7 +714,7 @@ impl PropertyPanel {
             self.padding_mode_popover_open,
         )
         .iter()
-        .position(|(_, r)| rect_contains(*r, point))
+        .position(|(_, r)| (*r).contains(point))
     }
 
     /// Pinned Design / Code tab under the cursor.
@@ -730,13 +730,6 @@ impl PropertyPanel {
             point,
         )
     }
-}
-
-fn rect_contains(r: Rect, p: Point2D) -> bool {
-    p.x >= r.origin.x
-        && p.x <= r.origin.x + r.size.x
-        && p.y >= r.origin.y
-        && p.y <= r.origin.y + r.size.y
 }
 
 /// The node ids a code generation started THIS frame would target:

@@ -11,8 +11,8 @@ use op_editor_ui::widgets::{
 use op_editor_ui::{Point2D, Rect};
 
 use super::{
-    rect_contains, ChatDragState, ChatInputSelectionDragState, ChatTextSelectionDragState,
-    CodeSelectionDragState, DragState, LayerDragState, MarqueeDragState, WidgetHost,
+    ChatDragState, ChatInputSelectionDragState, ChatTextSelectionDragState, CodeSelectionDragState,
+    DragState, LayerDragState, MarqueeDragState, WidgetHost,
 };
 use op_editor_core::codegen::CodeSelection;
 
@@ -317,7 +317,7 @@ impl WidgetHost {
             self.mark_dirty();
             return true;
         }
-        if rect_contains(top_bar_rect, Point2D::new(x, y)) {
+        if (top_bar_rect).contains(Point2D::new(x, y)) {
             // Top-bar gaps eat clicks but don't act — still a blank
             // press, so every text input blurs.
             let blurred = self.blur_text_inputs_on_blank_press();
@@ -614,7 +614,7 @@ impl WidgetHost {
         //    that lie outside the chat panel.
         let toolbar_rect = self.toolbar_rect(viewport_width);
         let toolbar = Toolbar::for_editor(&self.editor_state);
-        if rect_contains(toolbar_rect, Point2D::new(x, y)) {
+        if (toolbar_rect).contains(Point2D::new(x, y)) {
             if let Some(hit) = toolbar.hit_test(toolbar_rect, Point2D::new(x, y)) {
                 match hit {
                     op_editor_ui::widgets::ToolbarHit::Tool(tool) => {

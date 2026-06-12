@@ -5,7 +5,7 @@ use crate::widgets::agent_settings_builtin_draft;
 use crate::widgets::agent_settings_builtin_layout::{
     add_provider_rect, card_height, card_rect, compact_edit_rect, compact_remove_rect,
     compact_switch_rect, draft_card_height, expanded_card_height, field_input_rect, is_editing,
-    rect_contains, CARD_GAP, EMPTY_HEIGHT, HEADER_HEIGHT, SUBTITLE_HEIGHT,
+    CARD_GAP, EMPTY_HEIGHT, HEADER_HEIGHT, SUBTITLE_HEIGHT,
 };
 use crate::widgets::agent_settings_builtin_parts;
 use crate::widgets::agent_settings_caret::{
@@ -76,7 +76,7 @@ pub fn content_height(settings: &AgentSettings) -> f32 {
 
 pub fn hit_test(content: Rect, settings: &AgentSettings, point: Point2D) -> BuiltinHit {
     let y = content.origin.y + 12.0;
-    if rect_contains(add_provider_rect(content, y), point) {
+    if (add_provider_rect(content, y)).contains(point) {
         return BuiltinHit::AddProvider;
     }
     let mut card_y = y + HEADER_HEIGHT + SUBTITLE_HEIGHT;
@@ -88,10 +88,7 @@ pub fn hit_test(content: Rect, settings: &AgentSettings, point: Point2D) -> Buil
             card_height(settings, index),
         );
         if is_editing(settings, index) {
-            if rect_contains(
-                agent_settings_builtin_parts::provider_select_rect(card),
-                point,
-            ) {
+            if (agent_settings_builtin_parts::provider_select_rect(card)).contains(point) {
                 return BuiltinHit::TogglePresetMenu(Some(index));
             }
             if settings.builtin_preset_menu_open == Some(BuiltinAgentPresetMenuTarget::Agent(index))
@@ -122,18 +119,17 @@ pub fn hit_test(content: Rect, settings: &AgentSettings, point: Point2D) -> Buil
                 if field == BuiltinAgentField::BaseUrl && !agent.base_url_editable() {
                     continue;
                 }
-                if rect_contains(field_input_rect(settings, card, Some(index), row), point) {
+                if (field_input_rect(settings, card, Some(index), row)).contains(point) {
                     return BuiltinHit::Focus { index, field };
                 }
             }
-        } else if rect_contains(compact_switch_rect(card), point) {
+        } else if (compact_switch_rect(card)).contains(point) {
             return BuiltinHit::ToggleEnabled(index);
-        } else if settings.hover_builtin_agent == index
-            && rect_contains(compact_edit_rect(card), point)
+        } else if settings.hover_builtin_agent == index && (compact_edit_rect(card)).contains(point)
         {
             return BuiltinHit::Edit(index);
         } else if settings.hover_builtin_agent == index
-            && rect_contains(compact_remove_rect(card), point)
+            && (compact_remove_rect(card)).contains(point)
         {
             return BuiltinHit::Remove(index);
         }
@@ -146,10 +142,7 @@ pub fn hit_test(content: Rect, settings: &AgentSettings, point: Point2D) -> Buil
             content.size.x,
             draft_card_height(settings),
         );
-        if rect_contains(
-            agent_settings_builtin_parts::provider_select_rect(card),
-            point,
-        ) {
+        if (agent_settings_builtin_parts::provider_select_rect(card)).contains(point) {
             return BuiltinHit::TogglePresetMenu(None);
         }
         if settings.builtin_preset_menu_open == Some(BuiltinAgentPresetMenuTarget::Draft) {
@@ -179,15 +172,15 @@ pub fn hit_test(content: Rect, settings: &AgentSettings, point: Point2D) -> Buil
             if field == BuiltinAgentField::BaseUrl && !agent.base_url_editable() {
                 continue;
             }
-            if rect_contains(field_input_rect(settings, card, None, row), point) {
+            if (field_input_rect(settings, card, None, row)).contains(point) {
                 return BuiltinHit::FocusDraft(field);
             }
         }
         let form_h = expanded_card_height(settings, None);
-        if rect_contains(save_button_rect(card, form_h), point) {
+        if (save_button_rect(card, form_h)).contains(point) {
             return BuiltinHit::SaveDraft;
         }
-        if rect_contains(cancel_button_rect(card, form_h), point) {
+        if (cancel_button_rect(card, form_h)).contains(point) {
             return BuiltinHit::CancelDraft;
         }
     }
@@ -203,7 +196,7 @@ pub fn card_at(content: Rect, settings: &AgentSettings, point: Point2D) -> Optio
             content.size.x,
             card_height(settings, index),
         );
-        if rect_contains(card, point) {
+        if (card).contains(point) {
             return Some(index);
         }
         card_y += card.size.y + CARD_GAP;

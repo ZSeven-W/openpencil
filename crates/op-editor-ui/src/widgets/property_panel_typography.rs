@@ -239,13 +239,6 @@ pub fn font_picker_layout(
     })
 }
 
-fn rect_contains(r: Rect, p: Point2D) -> bool {
-    p.x >= r.origin.x
-        && p.x <= r.origin.x + r.size.x
-        && p.y >= r.origin.y
-        && p.y <= r.origin.y + r.size.y
-}
-
 /// Whether `point` falls inside the open dropdown (search row or
 /// list). Used by the host's outside-click dismiss so a click inside
 /// the popup body (e.g. the search box) is swallowed without closing.
@@ -257,7 +250,7 @@ pub fn font_picker_contains(
     point: Point2D,
 ) -> bool {
     font_picker_layout(panel_rect, visible, entries, scroll)
-        .is_some_and(|l| rect_contains(l.popup, point))
+        .is_some_and(|l| (l.popup).contains(point))
 }
 
 /// Action for a click at `point` while the dropdown is open —
@@ -283,11 +276,11 @@ pub fn font_picker_entry_index_at(
     point: Point2D,
 ) -> Option<usize> {
     let layout = font_picker_layout(panel_rect, visible, entries, scroll)?;
-    if !rect_contains(layout.viewport, point) {
+    if !(layout.viewport).contains(point) {
         return None;
     }
     layout.rows.iter().find_map(|(row, rect)| match row {
-        FontPickerRow::Entry(i) if rect_contains(*rect, point) => Some(*i),
+        FontPickerRow::Entry(i) if (*rect).contains(point) => Some(*i),
         _ => None,
     })
 }

@@ -41,7 +41,7 @@ pub(crate) fn input_first_baseline(visible_rows: usize, input_area_h: f32) -> f3
 }
 
 pub(crate) fn input_text_offset_at(text: &str, input_rect: Rect, point: Point2D) -> Option<usize> {
-    if !rect_contains(input_rect, point) {
+    if !(input_rect).contains(point) {
         return None;
     }
     if text.is_empty() {
@@ -327,13 +327,6 @@ fn previous_char_boundary(text: &str, mut index: usize) -> usize {
         index -= 1;
     }
     index
-}
-
-fn rect_contains(rect: Rect, point: Point2D) -> bool {
-    point.x >= rect.origin.x
-        && point.x <= rect.origin.x + rect.size.x
-        && point.y >= rect.origin.y
-        && point.y <= rect.origin.y + rect.size.y
 }
 
 #[cfg(test)]

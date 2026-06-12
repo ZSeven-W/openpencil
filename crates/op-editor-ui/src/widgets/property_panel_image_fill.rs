@@ -35,13 +35,6 @@ fn panel_h() -> f32 {
         + PANEL_PAD
 }
 
-fn rect_contains(r: Rect, p: Point2D) -> bool {
-    p.x >= r.origin.x
-        && p.x <= r.origin.x + r.size.x
-        && p.y >= r.origin.y
-        && p.y <= r.origin.y + r.size.y
-}
-
 fn image_body_rect(panel_rect: Rect, visible: VisibleSections) -> Option<Rect> {
     if !visible.image && (!visible.fill || visible.fill_type != op_editor_core::FillType::Image) {
         return None;
@@ -143,13 +136,13 @@ pub fn image_fill_popover_action_at(
         .into_iter()
         .rev()
     {
-        if rect_contains(rect, point) {
+        if (rect).contains(point) {
             return Some(action);
         }
     }
     let pop = popover_rect(panel_rect, visible)?;
     for (field, track) in adjustment_track_rects(pop) {
-        if rect_contains(track, point) {
+        if (track).contains(point) {
             let pct = ((point.x - track.origin.x) / track.size.x).clamp(0.0, 1.0);
             return Some(PropertyPanelAction::SetImageAdjustment {
                 field,
@@ -166,7 +159,7 @@ pub fn image_fill_popover_contains(
     point: Point2D,
 ) -> bool {
     popover_rect(panel_rect, visible)
-        .map(|pop| rect_contains(pop, point))
+        .map(|pop| (pop).contains(point))
         .unwrap_or(false)
 }
 

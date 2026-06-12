@@ -34,13 +34,6 @@ const ATTACH_BTN_W: f32 = 26.0;
 /// fits the ~348 px input strip (`4 * 80 + 3 * GAP = 338`).
 const ATTACH_CHIP_W: f32 = 80.0;
 
-fn rect_contains(r: Rect, p: Point2D) -> bool {
-    p.x >= r.origin.x
-        && p.x <= r.origin.x + r.size.x
-        && p.y >= r.origin.y
-        && p.y <= r.origin.y + r.size.y
-}
-
 fn to_jian_color(c: Color) -> jian_core::scene::Color {
     fn ch(v: f32) -> u8 {
         (v.clamp(0.0, 1.0) * 255.0).round() as u8
@@ -104,13 +97,13 @@ pub(crate) fn attachment_chip_rects(row_rect: Rect, count: usize) -> Vec<Rect> {
 /// Resolve a click inside the controls strip.
 pub fn controls_row_hit(controls_rect: Rect, point: Point2D) -> Option<AIChatHit> {
     let layout = controls_layout(controls_rect);
-    if rect_contains(layout.thinking, point) {
+    if (layout.thinking).contains(point) {
         return Some(AIChatHit::CycleThinking);
     }
-    if rect_contains(layout.effort, point) {
+    if (layout.effort).contains(point) {
         return Some(AIChatHit::CycleEffort);
     }
-    if rect_contains(layout.attach, point) {
+    if (layout.attach).contains(point) {
         return Some(AIChatHit::AddAttachment);
     }
     None
@@ -127,7 +120,7 @@ pub fn attachment_row_hit(
         .iter()
         .enumerate()
     {
-        if rect_contains(*chip, point) {
+        if (*chip).contains(point) {
             return Some(AIChatHit::RemoveAttachment(i));
         }
     }
