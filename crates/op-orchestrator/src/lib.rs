@@ -23,6 +23,7 @@ pub mod plan;
 pub mod plan_normalize;
 pub mod plan_repair;
 pub mod retry;
+pub mod semantic_palette;
 pub mod stub_providers;
 pub mod style_guide_context;
 pub mod timeouts;
