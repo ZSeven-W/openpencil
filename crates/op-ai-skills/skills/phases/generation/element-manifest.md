@@ -34,6 +34,17 @@ visual, you MUST declare the kind instead. Hand-rolled copies score as broken.
   checkbox, avatar, progress_bar, tabs, pagination, skeleton, divider — one
   declared kind beats three hand-rolled primitives, every time.
 
+COVERAGE — DECLARE EVERY COMPONENT THE BRIEF NAMES. A multi-part brief
+is one line per COMPONENT, never one element standing in for the whole.
+Repeated items (6 activity entries, 4 stat cards, 5 table rows) get ONE
+LINE EACH with their real content — do not collapse them into a single
+line or skip the later ones. A typical section runs 4-12 element lines;
+a one-line answer to a multi-part brief is wrong.
+A component is one catalog kind with ALL its text packed into that one
+line's params: a title with its muted subline is ONE section_header line
+(title + subtitle), a value with its delta is ONE stat_card line — do
+NOT shred a component into heading / body_text fragments.
+
 EXAMPLE:
 {"el":"section","gap":20,"padding":[0,24],"role":"stats"}
 {"el":"heading","in":1,"content":"Revenue Overview","level":"h2"}
