@@ -297,7 +297,10 @@ pub fn build_subagent_prompt(
     // the full first attempt — the retry ladder (reduced/minimal) falls back
     // to the smaller raw-JSONL prompt, and `parse_manifest` returning `None`
     // on such output routes parsing back through `parse_nodes`.
-    let manifest_on = crate::manifest::manifest_enabled() && !reduced_complexity && !minimal_skills;
+    let manifest_on =
+        crate::manifest::manifest_enabled_for_model(req.model.as_deref().unwrap_or(""))
+            && !reduced_complexity
+            && !minimal_skills;
     build_subagent_prompt_with_manifest(
         subtask,
         plan,

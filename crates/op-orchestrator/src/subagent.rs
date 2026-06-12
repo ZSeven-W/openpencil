@@ -68,31 +68,33 @@ pub async fn run_subtask(
         }
     }
 
-    // 解析成 PenNode 树。manifest 模式（`OPENPENCIL_MANIFEST=1`）先按元素
-    // 清单解析；文本里没有清单行（如重试梯度回落到裸 JSONL prompt 后的
-    // 输出）时回落到既有裸 PenNode 路径，两条路汇入同一套后处理。
-    let mut nodes = if crate::manifest::manifest_enabled() {
-        match crate::manifest::parse_manifest(&text) {
-            Some(outcome) => {
-                for warning in &outcome.warnings {
-                    eprintln!("[manifest] {warning}");
+    // 解析成 PenNode 树。manifest 模式（按模型路由 + `OPENPENCIL_MANIFEST`
+    // override）先按元素清单解析；文本里没有清单行（如重试梯度回落到裸
+    // JSONL prompt 后的输出）时回落到既有裸 PenNode 路径，两条路汇入同
+    // 一套后处理。
+    let mut nodes =
+        if crate::manifest::manifest_enabled_for_model(req.model.as_deref().unwrap_or("")) {
+            match crate::manifest::parse_manifest(&text) {
+                Some(outcome) => {
+                    for warning in &outcome.warnings {
+                        eprintln!("[manifest] {warning}");
+                    }
+                    if outcome.nodes.is_empty() {
+                        return fail("manifest parsed but produced no nodes".into());
+                    }
+                    outcome.nodes
                 }
-                if outcome.nodes.is_empty() {
-                    return fail("manifest parsed but produced no nodes".into());
-                }
-                outcome.nodes
+                None => match parse_nodes(&text) {
+                    Ok(n) => n,
+                    Err(e) => return fail(e.to_string()),
+                },
             }
-            None => match parse_nodes(&text) {
+        } else {
+            match parse_nodes(&text) {
                 Ok(n) => n,
                 Err(e) => return fail(e.to_string()),
-            },
-        }
-    } else {
-        match parse_nodes(&text) {
-            Ok(n) => n,
-            Err(e) => return fail(e.to_string()),
-        }
-    };
+            }
+        };
     if is_blank_container_forest(&nodes) {
         return fail("blank container root produced no content nodes".into());
     }
