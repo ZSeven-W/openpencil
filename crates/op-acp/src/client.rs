@@ -24,6 +24,31 @@ const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(30);
 /// A prompt turn can run a long while — generous ceiling.
 const PROMPT_TIMEOUT: Duration = Duration::from_secs(600);
 
+/// One MCP server endpoint advertised to the agent in `session/new`
+/// (`mcpServers[]`). Serialized as `{ name, type: "http", url,
+/// headers: [] }` — the shape `claude-agent-acp` accepts (TS parity:
+/// `apps/web/server/api/ai/agent.ts:513-521`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct McpHttpServer {
+    /// Server name the agent prefixes tool ids with
+    /// (`mcp__<name>__*`).
+    pub name: String,
+    /// HTTP endpoint, e.g. `http://127.0.0.1:3100/mcp`.
+    pub url: String,
+}
+
+/// Extra `session/new` payload — MCP tool endpoints + the optional
+/// `_meta.systemPrompt` override.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct NewSessionOptions {
+    /// MCP servers the agent should connect to for tools.
+    pub mcp_servers: Vec<McpHttpServer>,
+    /// Override the agent's default system prompt via
+    /// `_meta.systemPrompt` (claude-agent-acp honors this; agents
+    /// that don't simply ignore the unknown `_meta` key).
+    pub system_prompt_meta: Option<String>,
+}
+
 /// A live ACP connection to one agent.
 pub struct AcpConnection {
     engine: JsonRpcEngine,
@@ -108,10 +133,39 @@ impl AcpConnection {
 
     /// Open a new session, returning its id.
     pub async fn new_session(&self) -> Result<String, AcpError> {
+        self.new_session_with(&NewSessionOptions::default()).await
+    }
+
+    /// Open a new session carrying MCP server endpoints + an optional
+    /// `_meta.systemPrompt` override, returning the session id.
+    ///
+    /// Mirrors the TS host's `session/new` payload
+    /// (`apps/web/server/api/ai/agent.ts:576-580`): `cwd` +
+    /// `mcpServers` (HTTP endpoints the agent connects to for tools)
+    /// + `_meta: { systemPrompt }` (claude-agent-acp honors it; other
+    /// agents ignore unknown `_meta`).
+    pub async fn new_session_with(&self, options: &NewSessionOptions) -> Result<String, AcpError> {
         let cwd = std::env::current_dir()
             .map(|p| p.to_string_lossy().to_string())
             .unwrap_or_else(|_| ".".to_string());
-        let params = serde_json::json!({ "cwd": cwd, "mcpServers": [] });
+        let servers: Vec<Value> = options
+            .mcp_servers
+            .iter()
+            .map(|server| {
+                // NOTE: claude-agent-acp expects `type: 'http' | 'sse'`
+                // (not `transport`) — TS agent.ts:507 comment.
+                serde_json::json!({
+                    "name": server.name,
+                    "type": "http",
+                    "url": server.url,
+                    "headers": [],
+                })
+            })
+            .collect();
+        let mut params = serde_json::json!({ "cwd": cwd, "mcpServers": servers });
+        if let Some(prompt) = &options.system_prompt_meta {
+            params["_meta"] = serde_json::json!({ "systemPrompt": prompt });
+        }
         let result = self
             .engine
             .call(METHOD_SESSION_NEW, params, HANDSHAKE_TIMEOUT)
@@ -350,6 +404,77 @@ mod tests {
         // The streamed chunk reached the notification channel.
         let note = notes.recv().await.expect("a session/update");
         assert_eq!(note.session_id.as_deref(), Some("sess-1"));
+    }
+
+    /// A mock agent that asserts the `session/new` params carry the
+    /// MCP server list + `_meta.systemPrompt`, encoding the verdict in
+    /// the returned session id.
+    async fn mock_agent_checking_session_new(
+        read: impl AsyncRead + Unpin,
+        mut write: impl AsyncWrite + Unpin,
+    ) {
+        let mut buf = BufReader::new(read);
+        while let Ok(Some(frame)) = read_frame(&mut buf).await {
+            let id = frame.get("id").cloned().unwrap_or(Value::Null);
+            let method = frame.get("method").and_then(|m| m.as_str()).unwrap_or("");
+            match method {
+                "initialize" => {
+                    let resp = serde_json::json!({
+                        "jsonrpc": "2.0", "id": id,
+                        "result": { "protocolVersion": 1 }
+                    });
+                    write_frame(&mut write, &resp).await.unwrap();
+                }
+                "session/new" => {
+                    let params = frame.get("params").cloned().unwrap_or(Value::Null);
+                    let server = &params["mcpServers"][0];
+                    let ok = server["name"] == "openpencil"
+                        && server["type"] == "http"
+                        && server["url"] == "http://127.0.0.1:3100/mcp"
+                        && server["headers"].as_array().is_some_and(Vec::is_empty)
+                        && params["_meta"]["systemPrompt"] == "use the canvas tools"
+                        && params["cwd"].as_str().is_some_and(|c| !c.is_empty());
+                    let session_id = if ok { "sess-mcp-ok" } else { "sess-bad" };
+                    let resp = serde_json::json!({
+                        "jsonrpc": "2.0", "id": id,
+                        "result": { "sessionId": session_id }
+                    });
+                    write_frame(&mut write, &resp).await.unwrap();
+                }
+                _ => break,
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn session_new_carries_mcp_servers_and_system_prompt_meta() {
+        let (client_w, agent_r) = tokio::io::duplex(8192);
+        let (agent_w, client_r) = tokio::io::duplex(8192);
+        tokio::spawn(mock_agent_checking_session_new(agent_r, agent_w));
+
+        let mut conn = AcpConnection::new(client_r, client_w, None);
+        conn.initialize("fallback").await.expect("initialize");
+        let options = NewSessionOptions {
+            mcp_servers: vec![McpHttpServer {
+                name: "openpencil".into(),
+                url: "http://127.0.0.1:3100/mcp".into(),
+            }],
+            system_prompt_meta: Some("use the canvas tools".into()),
+        };
+        let session = conn.new_session_with(&options).await.expect("new_session");
+        assert_eq!(
+            session, "sess-mcp-ok",
+            "agent saw a TS-shaped mcpServers + _meta.systemPrompt payload"
+        );
+    }
+
+    #[tokio::test]
+    async fn plain_new_session_sends_empty_server_list_and_no_meta() {
+        // The default payload must stay byte-compatible with the old
+        // `{ cwd, mcpServers: [] }` wire (no `_meta` key at all).
+        let options = NewSessionOptions::default();
+        assert!(options.mcp_servers.is_empty());
+        assert!(options.system_prompt_meta.is_none());
     }
 
     #[tokio::test]

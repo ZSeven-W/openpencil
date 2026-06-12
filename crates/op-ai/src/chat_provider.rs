@@ -55,7 +55,10 @@ impl CliName {
         match self {
             CliName::ClaudeCode => "claude",
             CliName::Gemini => "gemini",
-            CliName::Copilot => "gh-copilot",
+            // The standalone `copilot` CLI (the `gh-copilot` gh
+            // extension is retired; the official SDK + model
+            // discovery both target `copilot`).
+            CliName::Copilot => "copilot",
             CliName::Codex => "codex",
             CliName::OpenCode => "opencode",
         }
@@ -230,10 +233,35 @@ impl ChatAttachment {
     }
 }
 
+/// Author of one prior chat turn carried in [`ChatRequest::history`].
+/// Mirrors the TS chat wire's `role: 'user' | 'assistant'`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ChatHistoryRole {
+    User,
+    Assistant,
+}
+
+impl ChatHistoryRole {
+    /// Lowercase wire token (`"user"` / `"assistant"`).
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ChatHistoryRole::User => "user",
+            ChatHistoryRole::Assistant => "assistant",
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ChatRequest {
     pub system_prompt: String,
     pub user_message: String,
+    /// Prior conversation turns (oldest first), excluding
+    /// `user_message` itself. Transports that speak a real messages
+    /// wire (builtin Anthropic / OpenAI-compatible HTTP) send these
+    /// as full `messages[]` entries; prompt-only CLI transports fold
+    /// them into a compact digest (see `op_ai::chat_history`).
+    /// Text-only by design — attachments stay current-turn-only.
+    pub history: Vec<(ChatHistoryRole, String)>,
     pub max_output_tokens: u32,
     /// Thinking-mode control for this turn (default `Adaptive`).
     pub thinking: ThinkingMode,
@@ -242,6 +270,27 @@ pub struct ChatRequest {
     /// Files attached to this turn (images, …). Empty for a plain
     /// text turn. Each provider maps these onto its own wire format.
     pub attachments: Vec<ChatAttachment>,
+    /// Model id the user picked in the chat model picker (e.g.
+    /// `gpt-5.5`, `claude-sonnet-4-6`). Each transport forwards it on
+    /// its own knob (`--model` for Codex, `-m` for Gemini, SDK
+    /// `options.model` for Claude Code / Copilot). `None` keeps the
+    /// provider's own default — TS parity: every provider in
+    /// `apps/web/server/api/ai/chat.ts` only sets the model when one
+    /// was supplied.
+    pub model: Option<String>,
+}
+
+impl ChatRequest {
+    /// The selected model id, trimmed. Returns `None` when unset or
+    /// blank so transports never emit an empty model flag.
+    pub fn model_id(&self) -> Option<&str> {
+        let m = self.model.as_deref()?.trim();
+        if m.is_empty() {
+            None
+        } else {
+            Some(m)
+        }
+    }
 }
 
 /// Provider abstraction the widget host calls. Implementations live
@@ -252,6 +301,42 @@ pub struct ChatRequest {
 pub trait ChatProvider: Send + Sync {
     fn provider_label(&self) -> &str;
     fn send(&self, request: ChatRequest) -> Box<dyn Iterator<Item = ChatDelta> + Send>;
+}
+
+/// One canvas tool exposed to a tool-capable chat transport (the
+/// builtin Anthropic / OpenAI-compatible agent loop). Mirrors the TS
+/// `ToolDef` in `apps/web/src/services/ai/agent-tools.ts` — name,
+/// description, auth level, and the JSON Schema the wire carries.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChatToolDef {
+    pub name: String,
+    pub description: String,
+    /// TS `AuthLevel` token: `read` / `create` / `modify` / `delete`.
+    /// Rides into the transcript tool-card envelope so the chat panel
+    /// can pick its collapsed/expanded default per level.
+    pub level: String,
+    /// Pre-serialized JSON Schema object for the tool's arguments.
+    pub input_schema_json: String,
+}
+
+/// Result of executing one chat tool call. `content` is the JSON the
+/// model sees as the tool result (TS shape: `{"success":true,"data":…}`
+/// or `{"success":false,"error":…}`); `is_error` marks transport-level
+/// failure so Anthropic `tool_result` blocks can set `is_error`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChatToolResult {
+    pub content: String,
+    pub is_error: bool,
+}
+
+/// Executes one canvas tool call on behalf of a chat agent loop. The
+/// desktop host implements this with a channel bridge that forwards
+/// the call to the UI thread (mutations must run against the live
+/// `EditorState`), mirroring how the design orchestrator's
+/// `RemoteDocSink` forwards `EditorCommand`s. Called from a worker
+/// thread — implementations may block until the host replies.
+pub trait ChatToolExecutor: Send + Sync {
+    fn execute(&self, name: &str, args_json: &str) -> ChatToolResult;
 }
 
 /// Test double — replays a fixed delta script. Lets the chat widget
@@ -388,6 +473,40 @@ mod tests {
     fn chat_request_attachments_default_empty() {
         let req = ChatRequest::default();
         assert!(req.attachments.is_empty());
+    }
+
+    #[test]
+    fn chat_request_model_defaults_to_none() {
+        // No model selected = the CLI keeps its own default; no flag
+        // is ever emitted for the unset case.
+        let req = ChatRequest::default();
+        assert!(req.model.is_none());
+        assert!(req.model_id().is_none());
+    }
+
+    #[test]
+    fn chat_request_model_id_trims_and_rejects_blank() {
+        let mut req = ChatRequest {
+            model: Some("  gpt-5.5  ".into()),
+            ..Default::default()
+        };
+        assert_eq!(req.model_id(), Some("gpt-5.5"));
+        // Blank / whitespace-only ids are treated as unset so a bare
+        // `--model` flag can never reach a CLI.
+        req.model = Some("   ".into());
+        assert!(req.model_id().is_none());
+        req.model = Some(String::new());
+        assert!(req.model_id().is_none());
+    }
+
+    #[test]
+    fn chat_request_history_defaults_empty_and_roles_have_wire_tokens() {
+        // A defaulted request is single-shot — no prior turns. The
+        // role tokens match the TS chat wire vocabulary.
+        let req = ChatRequest::default();
+        assert!(req.history.is_empty());
+        assert_eq!(ChatHistoryRole::User.as_str(), "user");
+        assert_eq!(ChatHistoryRole::Assistant.as_str(), "assistant");
     }
 
     #[test]
