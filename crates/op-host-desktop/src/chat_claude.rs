@@ -496,10 +496,8 @@ mod tests {
         assert!(options.model.is_none());
 
         // A base bundle with a model survives a turn without one.
-        let base = ClaudeAgentOptions {
-            model: Some("opus".into()),
-            ..Default::default()
-        };
+        let mut base = ClaudeAgentOptions::default();
+        base.model = Some("opus".into());
         let options = effective_options(Some(&base), &req, None);
         assert_eq!(options.model.as_deref(), Some("opus"));
     }

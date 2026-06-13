@@ -87,18 +87,6 @@ impl LlmClient for ChatProviderLlmClient {
         } else {
             format!("{}\n\n---\n\n{}", req.system_prompt, req.user_prompt)
         };
-        // MiniMax-M3 needs its reasoning: with thinking disabled it
-        // answers design subtasks in ~10s with lazy minimal output
-        // (ab-v9: 17% expected-shape vs 60% with thinking kept, at an
-        // acceptable ~110s). The parse layer strips `<think>` blocks,
-        // so M3 rides `Adaptive` (no disable field, no directive) with
-        // room for the think tokens; every other model stays disabled —
-        // cleaner and cheaper without.
-        let m3_keeps_thinking = req
-            .model
-            .as_deref()
-            .map(|m| m.to_ascii_lowercase().contains("minimax-m3"))
-            .unwrap_or(false);
         let chat_req = ChatRequest {
             // Kept empty deliberately — see the prepend above. Any CLI
             // that grows a real system-prompt channel later should
@@ -109,14 +97,9 @@ impl LlmClient for ChatProviderLlmClient {
             // chat-transcript history does not apply here.
             history: Vec::new(),
             // The orchestrator's prompts can run long (planner system
-            // is ~12 KB, sub-agents emit dense JSON). Give them room —
-            // and M3's think stream burns budget before the answer.
-            max_output_tokens: if m3_keeps_thinking { 16384 } else { 8192 },
-            thinking: if m3_keeps_thinking {
-                ThinkingMode::Adaptive
-            } else {
-                ThinkingMode::Disabled
-            },
+            // is ~12 KB, sub-agents emit dense JSON). Give them room.
+            max_output_tokens: 8192,
+            thinking: ThinkingMode::Disabled,
             effort: EffortLevel::Low,
             attachments: vec![],
             model: self.model.clone(),
@@ -156,70 +139,5 @@ impl LlmClient for ChatProviderLlmClient {
         });
 
         Box::pin(rx)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use op_orchestrator::AbortFlag;
-    use std::sync::Mutex;
-    use std::time::Duration;
-
-    /// Captures the `ChatRequest` the adapter builds so the thinking
-    /// policy is assertable without a real provider.
-    struct CapturingProvider {
-        seen: Arc<Mutex<Vec<ChatRequest>>>,
-    }
-
-    impl ChatProvider for CapturingProvider {
-        fn provider_label(&self) -> &str {
-            "capture"
-        }
-        fn send(&self, request: ChatRequest) -> Box<dyn Iterator<Item = ChatDelta> + Send> {
-            self.seen.lock().unwrap().push(request);
-            Box::new(std::iter::once(ChatDelta::Done {
-                stop_reason: op_ai::chat_provider::StopReason::EndTurn,
-            }))
-        }
-    }
-
-    fn call_with_model(model: Option<&str>) -> ChatRequest {
-        let seen = Arc::new(Mutex::new(Vec::new()));
-        let client = ChatProviderLlmClient::new(Arc::new(CapturingProvider { seen: seen.clone() }));
-        let req = CallRequest {
-            system_prompt: "sys".into(),
-            user_prompt: "user".into(),
-            model: model.map(String::from),
-            provider: None,
-            timeout: Duration::from_secs(5),
-            abort: AbortFlag::new(),
-            no_text_timeout: None,
-            first_text_timeout: None,
-        };
-        let mut stream = client.call(req);
-        futures::executor::block_on(async {
-            use futures::StreamExt;
-            while stream.next().await.is_some() {}
-        });
-        let captured = seen.lock().unwrap();
-        captured.first().expect("provider was called").clone()
-    }
-
-    /// ab-v9: M3 with thinking disabled emits lazy minimal manifests
-    /// (17% vs 60% with thinking kept) — M3 rides Adaptive with a
-    /// bigger budget, everyone else stays Disabled.
-    #[test]
-    fn minimax_m3_keeps_thinking_others_disable_it() {
-        let m3 = call_with_model(Some("MiniMax-M3"));
-        assert_eq!(m3.thinking, ThinkingMode::Adaptive);
-        assert_eq!(m3.max_output_tokens, 16384);
-
-        let m27 = call_with_model(Some("MiniMax-M2.7"));
-        assert_eq!(m27.thinking, ThinkingMode::Disabled);
-        assert_eq!(m27.max_output_tokens, 8192);
-
-        let unknown = call_with_model(None);
-        assert_eq!(unknown.thinking, ThinkingMode::Disabled);
     }
 }

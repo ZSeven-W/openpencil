@@ -196,7 +196,6 @@ impl<'a> RenderBackend for NativeFrameBackend<'a> {
             .draw_image_with_mode(self.canvas, rect, image_id, encoded, mode);
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn draw_image_with_options(
         &mut self,
         rect: Rect,
@@ -205,6 +204,7 @@ impl<'a> RenderBackend for NativeFrameBackend<'a> {
         mode: ImageDrawMode,
         adjustments: ImageAdjustments,
         opacity: f32,
+
         corner_radius: f32,
     ) {
         self.inner.draw_image_with_options(

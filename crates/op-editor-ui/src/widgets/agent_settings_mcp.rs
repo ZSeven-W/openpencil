@@ -147,19 +147,17 @@ fn client_config_copy_button_rect(content: Rect) -> Rect {
 }
 
 pub fn hit_test(content: Rect, settings: &AgentSettings, scrolled: Point2D) -> McpHit {
-    if rect_contains(server_button_rect(content), scrolled) {
+    if (server_button_rect(content)).contains(scrolled) {
         return McpHit::ToggleServer;
     }
-    if settings.mcp_server.running
-        && rect_contains(client_config_copy_button_rect(content), scrolled)
-    {
+    if settings.mcp_server.running && (client_config_copy_button_rect(content)).contains(scrolled) {
         return McpHit::CopyClientConfig;
     }
-    if !settings.mcp_server.running && rect_contains(port_field_rect(content), scrolled) {
+    if !settings.mcp_server.running && (port_field_rect(content)).contains(scrolled) {
         return McpHit::FocusPort;
     }
     for (i, cli) in McpCli::ALL.iter().enumerate() {
-        if rect_contains(cli_cell_rect(content, settings, i), scrolled) {
+        if (cli_cell_rect(content, settings, i)).contains(scrolled) {
             return McpHit::ToggleCli(*cli);
         }
     }
@@ -484,13 +482,6 @@ fn paint_cli_cell(cx: &mut PaintCx<'_>, theme: &Theme, cli: McpCli, enabled: boo
         size: Point2D::new(SETTINGS_SWITCH_W, SETTINGS_SWITCH_H),
     };
     paint_settings_switch(cx, theme, toggle, enabled);
-}
-
-fn rect_contains(r: Rect, p: Point2D) -> bool {
-    p.x >= r.origin.x
-        && p.y >= r.origin.y
-        && p.x <= r.origin.x + r.size.x
-        && p.y <= r.origin.y + r.size.y
 }
 
 fn ellipsize(cx: &mut PaintCx<'_>, value: &str, max_w: f32, size: f32) -> String {

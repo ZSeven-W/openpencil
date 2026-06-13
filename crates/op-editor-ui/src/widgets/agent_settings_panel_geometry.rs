@@ -95,13 +95,6 @@ pub(super) fn agent_card_rect_in(panel: Rect, index: usize, settings: &AgentSett
     agent_card_rect_at(content.origin.x, y, content.size.x)
 }
 
-pub(super) fn rect_contains(r: Rect, p: Point2D) -> bool {
-    p.x >= r.origin.x
-        && p.y >= r.origin.y
-        && p.x <= r.origin.x + r.size.x
-        && p.y <= r.origin.y + r.size.y
-}
-
 pub(super) fn to_jian(c: Color) -> jian_core::scene::Color {
     fn ch(v: f32) -> u8 {
         (v.clamp(0.0, 1.0) * 255.0).round() as u8

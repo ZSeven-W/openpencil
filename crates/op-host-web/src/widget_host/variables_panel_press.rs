@@ -4,7 +4,6 @@
 //! presses live in `variables_panel_rows.rs`, the draft commits in
 //! `variables_panel_commit.rs`.
 
-use super::{rect_contains, WidgetHost};
 use jian_ops_schema::variable::{VariableKind, VariableScalar};
 use op_editor_ui::widgets::variables_panel::{VariablesPanel, VariablesPanelHit};
 use op_editor_ui::Point2D;
@@ -25,7 +24,7 @@ impl WidgetHost {
             return false;
         };
         let point = Point2D::new(x, y);
-        if !rect_contains(vars_rect, point) {
+        if !(vars_rect).contains(point) {
             return false;
         }
         let vars = VariablesPanel::for_editor(&self.editor_state);

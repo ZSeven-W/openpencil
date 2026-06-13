@@ -142,7 +142,7 @@ impl ShapePicker {
     /// Hit-test the panel — returns the choice on the row under
     /// `point`, or `None` if the cursor is in the chrome / outside.
     pub fn hit_test(&self, panel_rect: Rect, point: Point2D) -> Option<ShapeChoice> {
-        if !rect_contains(panel_rect, point) {
+        if !(panel_rect).contains(point) {
             return None;
         }
         let inner_y = point.y - panel_rect.origin.y - 6.0;
@@ -152,13 +152,6 @@ impl ShapePicker {
         let idx = (inner_y / ROW_HEIGHT) as usize;
         self.rows.get(idx).map(|r| r.choice)
     }
-}
-
-fn rect_contains(r: Rect, p: Point2D) -> bool {
-    p.x >= r.origin.x
-        && p.x <= r.origin.x + r.size.x
-        && p.y >= r.origin.y
-        && p.y <= r.origin.y + r.size.y
 }
 
 impl Widget for ShapePicker {

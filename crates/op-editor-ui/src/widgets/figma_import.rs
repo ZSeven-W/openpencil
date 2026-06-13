@@ -54,13 +54,13 @@ impl FigmaImportModal {
     }
 
     pub fn hit_test(&self, panel: Rect, point: Point2D) -> FigmaImportHit {
-        if !rect_contains(panel, point) {
+        if !(panel).contains(point) {
             return FigmaImportHit::Outside;
         }
-        if rect_contains(close_rect(panel), point) {
+        if (close_rect(panel)).contains(point) {
             return FigmaImportHit::Close;
         }
-        if rect_contains(drop_zone_rect(panel), point) {
+        if (drop_zone_rect(panel)).contains(point) {
             return FigmaImportHit::DropZone;
         }
         FigmaImportHit::Inside
@@ -85,13 +85,6 @@ fn drop_zone_rect(panel: Rect) -> Rect {
         origin: Point2D::new(panel.origin.x + PAD, top),
         size: Point2D::new(panel.size.x - PAD * 2.0, bottom - top),
     }
-}
-
-fn rect_contains(r: Rect, p: Point2D) -> bool {
-    p.x >= r.origin.x
-        && p.x <= r.origin.x + r.size.x
-        && p.y >= r.origin.y
-        && p.y <= r.origin.y + r.size.y
 }
 
 fn t(locale: Locale, key: &str) -> &'static str {

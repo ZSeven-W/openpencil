@@ -1,6 +1,6 @@
 //! Non-press input handlers on `WidgetHostNative`. press -> press.rs.
 
-use super::helpers::{rect_contains, resize_bounds, PANEL_MAX_WIDTH, PANEL_MIN_WIDTH};
+use super::helpers::{resize_bounds, PANEL_MAX_WIDTH, PANEL_MIN_WIDTH};
 use super::{DragState, PanelResizeKind, WidgetHostNative};
 use op_editor_core::codegen::CodeSelection;
 use op_editor_ui::widgets::{
@@ -494,7 +494,7 @@ impl WidgetHostNative {
             if let Some(panel_rect) =
                 self.variables_panel_rect(self.last_viewport_w, self.last_viewport_h)
             {
-                if rect_contains(panel_rect, point) {
+                if (panel_rect).contains(point) {
                     use op_editor_ui::widgets::variables_panel::VariablesPanel;
                     let new_hover = VariablesPanel::for_editor_at(&self.editor_state, self.now_ms)
                         .hover_at(panel_rect, point);
@@ -626,10 +626,7 @@ impl WidgetHostNative {
                 origin: Point2D::new(0.0, 0.0),
                 size: Point2D::new(self.last_viewport_w, TOP_BAR_HEIGHT),
             };
-            let over = super::helpers::rect_contains(
-                TopBar::traffic_cluster_rect(tb_rect),
-                Point2D::new(x, y),
-            );
+            let over = (TopBar::traffic_cluster_rect(tb_rect)).contains(Point2D::new(x, y));
             if over != self.editor_state.editor_ui.topbar_traffic_hover {
                 self.editor_state.editor_ui.topbar_traffic_hover = over;
                 self.mark_dirty();

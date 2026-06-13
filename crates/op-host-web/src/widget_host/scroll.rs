@@ -2,7 +2,6 @@
 //! `widget_host.rs` so the spine stays under the 800-line cap.
 //! Mirrors the native host's `widget_host/scroll.rs`.
 
-use super::{rect_contains, WidgetHost};
 use op_editor_ui::widgets::{LayerPanel, PropertyPanel, TOP_BAR_HEIGHT};
 use op_editor_ui::{Point2D, Rect};
 
@@ -25,7 +24,7 @@ impl WidgetHost {
         let Some(panel_rect) = self.variables_panel_rect(viewport_width, viewport_height) else {
             return false;
         };
-        if !rect_contains(panel_rect, Point2D::new(x, y)) {
+        if !(panel_rect).contains(Point2D::new(x, y)) {
             return false;
         }
         use op_editor_ui::widgets::variables_panel::VariablesPanel;
@@ -71,7 +70,7 @@ impl WidgetHost {
             }
             return true;
         }
-        if !rect_contains(property_rect, Point2D::new(x, y)) {
+        if !(property_rect).contains(Point2D::new(x, y)) {
             return false;
         }
         if matches!(
@@ -97,7 +96,7 @@ impl WidgetHost {
                 property_rect,
                 &self.editor_state.codegen,
             )
-            .is_some_and(|rect| rect_contains(rect, point))
+            .is_some_and(|rect| (rect).contains(point))
             {
                 let max = op_editor_ui::widgets::property_panel_code::code_preview_max_scroll(
                     property_rect,
@@ -140,7 +139,7 @@ impl WidgetHost {
             origin: Point2D::new(0.0, TOP_BAR_HEIGHT),
             size: Point2D::new(pw, (viewport_height - TOP_BAR_HEIGHT).max(0.0)),
         };
-        if !rect_contains(rect, Point2D::new(x, y)) {
+        if !(rect).contains(Point2D::new(x, y)) {
             return false;
         }
         let r = LayerPanel::from_editor(&self.editor_state).regions(rect);

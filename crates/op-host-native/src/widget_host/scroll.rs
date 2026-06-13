@@ -3,7 +3,6 @@
 //! the floating Git panel's open diff into the diff view, and
 //! otherwise zoom / pan the canvas.
 
-use super::helpers::rect_contains;
 use super::WidgetHostNative;
 use op_editor_ui::widgets::GitPanel;
 use op_editor_ui::Point2D;
@@ -29,7 +28,7 @@ impl WidgetHostNative {
             };
             (checklist, panel.fixed_checklist_scroll_max())
         };
-        if !rect_contains(checklist, point) {
+        if !(checklist).contains(point) {
             return false;
         }
         let next = (self.editor_state.chat.checklist_scroll - delta).clamp(0.0, max);
@@ -83,7 +82,7 @@ impl WidgetHostNative {
         let Some(panel_rect) = self.variables_panel_rect(viewport_width, viewport_height) else {
             return false;
         };
-        if !rect_contains(panel_rect, Point2D::new(x, y)) {
+        if !(panel_rect).contains(Point2D::new(x, y)) {
             return false;
         }
         use op_editor_ui::widgets::variables_panel::VariablesPanel;
@@ -124,7 +123,7 @@ impl WidgetHostNative {
             origin: Point2D::new(viewport_width - pw, TOP_BAR_HEIGHT),
             size: Point2D::new(pw, (viewport_height - TOP_BAR_HEIGHT).max(0.0)),
         };
-        if !rect_contains(property_rect, Point2D::new(x, y)) {
+        if !(property_rect).contains(Point2D::new(x, y)) {
             return false;
         }
         // Code tab: a wheel over the framework strip scrolls it horizontally
@@ -152,7 +151,7 @@ impl WidgetHostNative {
                 property_rect,
                 &self.editor_state.codegen,
             )
-            .is_some_and(|rect| rect_contains(rect, point))
+            .is_some_and(|rect| (rect).contains(point))
             {
                 let max = op_editor_ui::widgets::property_panel_code::code_preview_max_scroll(
                     property_rect,
@@ -199,7 +198,7 @@ impl WidgetHostNative {
             origin: Point2D::new(0.0, TOP_BAR_HEIGHT),
             size: Point2D::new(pw, (viewport_height - TOP_BAR_HEIGHT).max(0.0)),
         };
-        if !rect_contains(rect, Point2D::new(x, y)) {
+        if !(rect).contains(Point2D::new(x, y)) {
             return false;
         }
         let r = LayerPanel::from_editor(&self.editor_state).regions(rect);
@@ -254,15 +253,6 @@ impl WidgetHostNative {
         viewport_width: f32,
         viewport_height: f32,
     ) -> bool {
-        // Floating VariablesPanel owns the wheel over its rect — run this
-        // BEFORE `over_topmost_panel`, which also lists the variables panel
-        // and would otherwise swallow the event WITHOUT scrolling (its rows
-        // never advanced because the topmost-panel guard returned first).
-        // `try_scroll_variables_panel` swallows the wheel when over the
-        // panel, so the "don't zoom the canvas beneath" guarantee holds.
-        if self.try_scroll_variables_panel(x, y, delta_y, viewport_width, viewport_height) {
-            return true;
-        }
         // Any top-most floating panel (Design-MD / Component-Browser)
         // owns the wheel before lower layers — a scroll over them
         // never reaches the modal / Git panel / canvas.
@@ -281,7 +271,7 @@ impl WidgetHostNative {
                         .model_picker_bounds(chat_rect)
                 });
             if let Some(picker) = picker {
-                if rect_contains(picker, Point2D::new(x, y)) {
+                if (picker).contains(Point2D::new(x, y)) {
                     let max = max_picker_scroll(
                         &self.editor_state.chat.available_models,
                         &self.editor_state.editor_ui.chat_model_picker_search,
@@ -295,6 +285,10 @@ impl WidgetHostNative {
             }
         }
         if self.try_scroll_chat_checklist(x, y, delta_y, viewport_width, viewport_height) {
+            return true;
+        }
+        // Floating VariablesPanel owns the wheel over its rect.
+        if self.try_scroll_variables_panel(x, y, delta_y, viewport_width, viewport_height) {
             return true;
         }
         // Agent-settings modal owns wheel.
@@ -327,7 +321,7 @@ impl WidgetHostNative {
         // scrolls the diff (vertically; horizontally with Shift held)
         // instead of zooming the canvas.
         if let Some(panel_rect) = self.git_panel_outer_rect(viewport_width, viewport_height) {
-            if rect_contains(panel_rect, Point2D::new(x, y))
+            if (panel_rect).contains(Point2D::new(x, y))
                 && self.editor_state.editor_ui.git_panel.diff.is_some()
             {
                 let panel = GitPanel::for_editor(&self.editor_state);
@@ -415,7 +409,7 @@ impl WidgetHostNative {
                         .model_picker_bounds(chat_rect)
                 });
             if let Some(picker) = picker {
-                if rect_contains(picker, Point2D::new(x, y)) {
+                if (picker).contains(Point2D::new(x, y)) {
                     let max = max_picker_scroll(
                         &self.editor_state.chat.available_models,
                         &self.editor_state.editor_ui.chat_model_picker_search,
@@ -463,7 +457,7 @@ impl WidgetHostNative {
         // Floating Git panel — a trackpad scroll over its open diff
         // pans the diff (dy vertically, dx sideways) like the wheel.
         if let Some(panel_rect) = self.git_panel_outer_rect(viewport_width, viewport_height) {
-            if rect_contains(panel_rect, Point2D::new(x, y))
+            if (panel_rect).contains(Point2D::new(x, y))
                 && self.editor_state.editor_ui.git_panel.diff.is_some()
             {
                 let panel = GitPanel::for_editor(&self.editor_state);

@@ -215,7 +215,3 @@ impl LlmClient for CountingLlm {
 pub(crate) use crate::stub_providers::{
     SkippedPreValidator, SkippedScreenshotProvider, SkippedVisionLlmClient,
 };
-
-/// 串行化会改 `OPENPENCIL_MANIFEST` 的测试 —— env 是进程全局,两个
-/// set/remove 测试并行会互相拆台(一边刚 set 另一边 remove)。
-pub(crate) static MANIFEST_ENV_LOCK: Mutex<()> = Mutex::new(());

@@ -428,13 +428,6 @@ pub fn generate_popover_layout(
 
 // --- Hit-testing ------------------------------------------------------
 
-fn rect_contains(r: Rect, p: Point2D) -> bool {
-    p.x >= r.origin.x
-        && p.x <= r.origin.x + r.size.x
-        && p.y >= r.origin.y
-        && p.y <= r.origin.y + r.size.y
-}
-
 /// Action for a press while one of the popovers is open. `None` for
 /// presses inside the popup body that hit no control (the host
 /// swallows those via [`image_popovers_contain`]).
@@ -447,11 +440,11 @@ pub fn image_popover_action_at(
 ) -> Option<PropertyPanelAction> {
     if state.search_open {
         if let Some(layout) = search_popover_layout(panel_rect, visible, state) {
-            if rect_contains(layout.submit, point) {
+            if (layout.submit).contains(point) {
                 return Some(PropertyPanelAction::RunImageSearch);
             }
             for (i, cell) in layout.cells.iter().enumerate() {
-                if rect_contains(*cell, point) {
+                if (*cell).contains(point) {
                     return Some(PropertyPanelAction::SelectImageSearchResult(i));
                 }
             }
@@ -459,7 +452,7 @@ pub fn image_popover_action_at(
     }
     if state.generate_open {
         if let Some(layout) = generate_popover_layout(panel_rect, visible, state, profile) {
-            if layout.primary.is_some_and(|r| rect_contains(r, point)) {
+            if layout.primary.is_some_and(|r| (r).contains(point)) {
                 return Some(match layout.view {
                     GeneratePopoverView::NotConfigured => PropertyPanelAction::OpenImageGenSettings,
                     GeneratePopoverView::Preview => PropertyPanelAction::ApplyGeneratedImage,
@@ -467,7 +460,7 @@ pub fn image_popover_action_at(
                     GeneratePopoverView::Loading => return None,
                 });
             }
-            if layout.secondary.is_some_and(|r| rect_contains(r, point)) {
+            if layout.secondary.is_some_and(|r| (r).contains(point)) {
                 return Some(PropertyPanelAction::RetryImageGenerate);
             }
         }
@@ -485,13 +478,13 @@ pub fn image_popovers_contain(
 ) -> bool {
     if state.search_open
         && search_popover_layout(panel_rect, visible, state)
-            .is_some_and(|l| rect_contains(l.popup, point))
+            .is_some_and(|l| (l.popup).contains(point))
     {
         return true;
     }
     if state.generate_open
         && generate_popover_layout(panel_rect, visible, state, profile)
-            .is_some_and(|l| rect_contains(l.popup, point))
+            .is_some_and(|l| (l.popup).contains(point))
     {
         return true;
     }

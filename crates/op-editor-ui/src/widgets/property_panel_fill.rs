@@ -374,7 +374,6 @@ pub fn paint_fill_section(
     y + SECTION_GAP
 }
 
-#[allow(clippy::too_many_arguments)]
 fn paint_fill_solid_body(
     cx: &mut PaintCx<'_>,
     theme: &Theme,

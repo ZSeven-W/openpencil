@@ -269,7 +269,9 @@ impl WidgetHostNative {
     /// `skia-pen-tool.ts:94-114`); either way the rubber-band cursor
     /// updates.
     pub(in crate::widget_host) fn apply_pen_cursor_move(&mut self, x: f32, y: f32) -> Option<bool> {
-        self.editor_state.ui.pen_in_progress.as_ref()?;
+        if self.editor_state.ui.pen_in_progress.is_none() {
+            return None;
+        }
         let (cx0, cy0) = self.canvas_origin();
         let canvas_local = Point2D::new(x - cx0, y - cy0);
         let doc = self.editor_state.viewport.to_document(canvas_local);
@@ -298,7 +300,9 @@ impl WidgetHostNative {
     /// open path (TS `onKeyDown('Enter')` → `finalizePen(false)`).
     /// `None` when no session is active.
     pub(in crate::widget_host) fn apply_pen_enter(&mut self) -> Option<bool> {
-        self.editor_state.ui.pen_in_progress.as_ref()?;
+        if self.editor_state.ui.pen_in_progress.is_none() {
+            return None;
+        }
         let ok = self.editor_state.finish_pen_path();
         if ok {
             self.mark_dirty();

@@ -9,7 +9,7 @@ impl VariablesPanel {
     /// Honors `dropdown_open` first so a click on a value row of
     /// the open dropdown overlay wins over the chip / row beneath.
     pub fn hit_test(&self, rect: Rect, point: Point2D) -> Option<VariablesPanelHit> {
-        if !rect_contains(rect, point) {
+        if !(rect).contains(point) {
             return None;
         }
         // Resize handles hug the panel edges and float above content
@@ -17,13 +17,13 @@ impl VariablesPanel {
         if let Some(edge) = self.resize_edge_at(rect, point) {
             return Some(VariablesPanelHit::Resize(edge));
         }
-        if rect_contains(close_rect(rect), point) {
+        if (close_rect(rect)).contains(point) {
             return Some(VariablesPanelHit::Close);
         }
         // Row `⋯` overflow menu — floating overlay above rows AND the
         // footer, so it hit-tests before both.
         if let Some((display_idx, menu)) = self.row_menu_rect(rect) {
-            if rect_contains(menu, point) {
+            if (menu).contains(point) {
                 let source = self.rows[display_idx].source_idx;
                 let row = ((point.y - menu.origin.y) / ADD_VARIABLE_MENU_ROW_HEIGHT).floor();
                 return match row as usize {
@@ -54,7 +54,7 @@ impl VariablesPanel {
             }
         }
         for (idx, axis) in self.theme_tab_labels().iter().enumerate() {
-            if rect_contains(self.theme_tab_rect(rect, idx), point) {
+            if (self.theme_tab_rect(rect, idx)).contains(point) {
                 if *axis == self.active_axis_label() {
                     return Some(VariablesPanelHit::ToggleThemeMenu((*axis).to_string()));
                 }
@@ -66,28 +66,28 @@ impl VariablesPanel {
                 return Some(hit);
             }
         }
-        if self.preset_menu_open && rect_contains(self.preset_menu_rect(rect), point) {
+        if self.preset_menu_open && (self.preset_menu_rect(rect)).contains(point) {
             return Some(VariablesPanelHit::TogglePresetMenu);
         }
-        if rect_contains(self.add_theme_rect(rect), point) {
+        if (self.add_theme_rect(rect)).contains(point) {
             return Some(VariablesPanelHit::AddTheme);
         }
-        if rect_contains(self.preset_rect(rect), point) {
+        if (self.preset_rect(rect)).contains(point) {
             return Some(VariablesPanelHit::TogglePresetMenu);
         }
-        if rect_contains(add_variant_rect(rect), point) {
+        if (add_variant_rect(rect)).contains(point) {
             return Some(VariablesPanelHit::AddVariant);
         }
         for (idx, value) in self.variant_column_labels().iter().enumerate() {
-            if rect_contains(self.variant_header_rect(rect, idx), point) {
+            if (self.variant_header_rect(rect, idx)).contains(point) {
                 return Some(VariablesPanelHit::ToggleVariantMenu((*value).to_string()));
             }
         }
-        if rect_contains(add_variable_rect(rect), point) {
+        if (add_variable_rect(rect)).contains(point) {
             return Some(VariablesPanelHit::ToggleAddVariableMenu);
         }
         // Search filter input.
-        if self.search_visible() && rect_contains(self.search_row_rect(rect), point) {
+        if self.search_visible() && (self.search_row_rect(rect)).contains(point) {
             return Some(VariablesPanelHit::SearchBox);
         }
         // Dropdown overlay — top-most. Paints when the host
@@ -110,7 +110,7 @@ impl VariablesPanel {
                             DROPDOWN_ROW_HEIGHT * (values.len() as f32),
                         ),
                     };
-                    if rect_contains(menu_rect, point) {
+                    if (menu_rect).contains(point) {
                         let row = ((point.y - menu_y_start) / DROPDOWN_ROW_HEIGHT).floor();
                         if row >= 0.0 {
                             let r = row as usize;
@@ -128,7 +128,7 @@ impl VariablesPanel {
         // Theme value chip in the column header.
         if !self.chips.is_empty() {
             for (i, _chip) in self.chips.iter().enumerate() {
-                if rect_contains(self.chip_rect(rect, i), point) {
+                if (self.chip_rect(rect, i)).contains(point) {
                     return Some(VariablesPanelHit::AxisChip(i));
                 }
             }
@@ -137,7 +137,7 @@ impl VariablesPanel {
         // space through the clamped scroll offset, and only points
         // inside the rows viewport count.
         let viewport = self.rows_viewport(rect);
-        if !rect_contains(viewport, point) {
+        if !(viewport).contains(point) {
             return None;
         }
         let idx =
@@ -146,27 +146,27 @@ impl VariablesPanel {
             let i = idx as usize;
             if let Some(row) = self.rows.get(i) {
                 let source = row.source_idx;
-                if rect_contains(self.row_menu_button_rect(rect, i), point) {
+                if (self.row_menu_button_rect(rect, i)).contains(point) {
                     return Some(VariablesPanelHit::RowMenuToggle(source));
                 }
-                if rect_contains(self.name_cell_rect_at(rect, i), point) {
+                if (self.name_cell_rect_at(rect, i)).contains(point) {
                     return Some(VariablesPanelHit::NameCell(source));
                 }
                 let variant_count = self.variant_column_labels().len().max(1);
                 for variant in 0..variant_count {
                     let cell = self.value_cell_rect_at(rect, i, variant, variant_count);
-                    if rect_contains(cell, point) {
+                    if (cell).contains(point) {
                         // Color cells split into a swatch (picker)
                         // and a hex text region (inline editing) —
                         // mirrors TS ColorCell's two inputs.
                         if matches!(row.kind, VariableKind::Color) {
-                            if rect_contains(color_swatch_hit_rect(cell), point) {
+                            if (color_swatch_hit_rect(cell)).contains(point) {
                                 return Some(VariablesPanelHit::ColorSwatch {
                                     row: source,
                                     variant,
                                 });
                             }
-                            if rect_contains(color_hex_rect(cell), point) {
+                            if (color_hex_rect(cell)).contains(point) {
                                 return Some(VariablesPanelHit::ValueCell {
                                     row: source,
                                     variant,
@@ -189,7 +189,7 @@ impl VariablesPanel {
 
 fn add_variable_menu_hit(rect: Rect, point: Point2D) -> Option<VariablesPanelHit> {
     let menu = add_variable_menu_rect(rect);
-    if !rect_contains(menu, point) {
+    if !(menu).contains(point) {
         return None;
     }
     let row = ((point.y - menu.origin.y) / ADD_VARIABLE_MENU_ROW_HEIGHT).floor() as usize;
@@ -207,7 +207,7 @@ fn theme_menu_hit(
     axis: &str,
     theme_count: usize,
 ) -> Option<VariablesPanelHit> {
-    if !rect_contains(rect, point) {
+    if !(rect).contains(point) {
         return None;
     }
     let row = ((point.y - rect.origin.y) / ADD_VARIABLE_MENU_ROW_HEIGHT).floor() as usize;
@@ -224,7 +224,7 @@ fn variant_menu_hit(
     value: &str,
     variant_count: usize,
 ) -> Option<VariablesPanelHit> {
-    if !rect_contains(rect, point) {
+    if !(rect).contains(point) {
         return None;
     }
     let row = ((point.y - rect.origin.y) / ADD_VARIABLE_MENU_ROW_HEIGHT).floor() as usize;

@@ -33,7 +33,6 @@ use std::path::Path as StdPath;
 
 mod export_svg;
 mod scene_painter;
-#[cfg(any(feature = "mcp-debug-tools", test))]
 pub(crate) mod screenshot;
 
 pub use export_svg::export_svg;

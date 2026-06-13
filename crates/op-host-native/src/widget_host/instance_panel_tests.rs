@@ -1,6 +1,5 @@
 //! Instance inspection / override editing host tests (GAP #10 + #22
 //! + #26): property-panel commits on a Ref anchor route through the
-//!
 //! instance-write redirect, the panel's component lifecycle actions
 //! dispatch, context-menu detach rows work, and remote icon inserts
 //! bake their SVG `d`.

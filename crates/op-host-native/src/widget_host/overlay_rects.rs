@@ -8,7 +8,7 @@
 //! cursor hint never bleed a canvas action (Move / Crosshair) through a
 //! floating overlay onto a node underneath.
 
-use super::helpers::{rect_contains, GIT_PANEL_CARET_GAP, TOOLBAR_INSET_X, TOOLBAR_INSET_Y};
+use super::helpers::{GIT_PANEL_CARET_GAP, TOOLBAR_INSET_X, TOOLBAR_INSET_Y};
 use super::WidgetHostNative;
 use op_editor_ui::widgets::{
     AlignToolbar, GitPanel, GitPanelHit, LayoutCx, LocalePicker, ShapePicker, Toolbar, TopBar,
@@ -141,7 +141,7 @@ impl WidgetHostNative {
             .and_then(|body| {
                 GitPanel::for_editor(&self.editor_state).and_then(|p| p.empty_init_card_rect(body))
             })
-            .is_some_and(|card| rect_contains(card, Point2D::new(x, y)))
+            .is_some_and(|card| (card).contains(Point2D::new(x, y)))
     }
 
     /// Floating Component-Browser panel rect — `None` when closed.
@@ -209,16 +209,16 @@ impl WidgetHostNative {
     ) -> bool {
         let p = Point2D::new(x, y);
         self.design_md_panel_rect(viewport_w, viewport_h)
-            .is_some_and(|r| rect_contains(r, p))
+            .is_some_and(|r| (r).contains(p))
             || self
                 .variables_panel_rect(viewport_w, viewport_h)
-                .is_some_and(|r| rect_contains(r, p))
+                .is_some_and(|r| (r).contains(p))
             || self
                 .icon_picker_panel_rect(viewport_w, viewport_h)
-                .is_some_and(|r| rect_contains(r, p))
+                .is_some_and(|r| (r).contains(p))
             || self
                 .component_browser_panel_rect(viewport_w, viewport_h)
-                .is_some_and(|r| rect_contains(r, p))
+                .is_some_and(|r| (r).contains(p))
     }
 
     /// The open File-menu dropdown rect, or `None` when closed. The
@@ -261,29 +261,29 @@ impl WidgetHostNative {
         // toolbar (shown over the canvas for a multi-selection).
         if self
             .git_panel_outer_rect(viewport_w, viewport_h)
-            .is_some_and(|r| rect_contains(r, p))
+            .is_some_and(|r| (r).contains(p))
             || self
                 .status_bar_rect(viewport_w, viewport_h)
-                .is_some_and(|r| rect_contains(r, p))
+                .is_some_and(|r| (r).contains(p))
             || self
                 .ai_chat_rect(viewport_w, viewport_h)
-                .is_some_and(|r| rect_contains(r, p))
-            || rect_contains(self.toolbar_rect(viewport_w, viewport_h), p)
+                .is_some_and(|r| (r).contains(p))
+            || (self.toolbar_rect(viewport_w, viewport_h)).contains(p)
             || self
                 .align_toolbar_rect(viewport_w, viewport_h)
-                .is_some_and(|r| rect_contains(r, p))
+                .is_some_and(|r| (r).contains(p))
         {
             return true;
         }
         // Open dropdowns + the right-click context menu.
-        (ui.shape_picker_open && rect_contains(self.shape_picker_rect(viewport_w, viewport_h), p))
-            || (ui.locale_picker_open && rect_contains(self.locale_picker_rect(viewport_w), p))
+        (ui.shape_picker_open && (self.shape_picker_rect(viewport_w, viewport_h)).contains(p))
+            || (ui.locale_picker_open && (self.locale_picker_rect(viewport_w)).contains(p))
             || self
                 .file_menu_rect(viewport_w)
-                .is_some_and(|r| rect_contains(r, p))
+                .is_some_and(|r| (r).contains(p))
             || self
                 .layer_context_menu_rect()
-                .is_some_and(|r| rect_contains(r, p))
+                .is_some_and(|r| (r).contains(p))
     }
 
     /// Floating Design-MD panel rect — `None` when the panel is

@@ -740,9 +740,7 @@ fn images_tab_profile_row_paints_expand_chevron_before_delete_like_ts() {
     let content_w = rect.size.x - 200.0 - 48.0;
     let gen_top = content_y + 36.0 + 24.0 + 28.0;
     let row_y = gen_top + 36.0 + 8.0;
-    let row_x = content_x + 8.0;
-    let row_w = content_w - 16.0;
-    let chevron_origin = crate::Point2D::new(row_x + row_w - 32.0 - 24.0 + 4.0, row_y + 10.0);
+    let chevron_origin = crate::Point2D::new(content_x + content_w - 52.0, row_y + 10.0);
 
     let mut backend = CaptureBackend::default();
     let mut cx = PaintCx {

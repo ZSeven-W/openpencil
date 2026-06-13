@@ -148,7 +148,7 @@ pub(super) fn code_text_offset_at_in_panel(
     layout: CompleteLayout,
 ) -> Option<usize> {
     let rect = code_area_rect_for_panel(state, layout);
-    if !rect_contains(rect, point) {
+    if !(rect).contains(point) {
         return None;
     }
     let lines = line_spans(&state.code);
@@ -390,13 +390,6 @@ fn code_text_x(rect: Rect) -> f32 {
 
 fn code_text_top(rect: Rect) -> f32 {
     rect.origin.y + CODE_PAD_Y
-}
-
-fn rect_contains(r: Rect, p: Point2D) -> bool {
-    p.x >= r.origin.x
-        && p.x <= r.origin.x + r.size.x
-        && p.y >= r.origin.y
-        && p.y <= r.origin.y + r.size.y
 }
 
 fn paint_highlighted_code_line(

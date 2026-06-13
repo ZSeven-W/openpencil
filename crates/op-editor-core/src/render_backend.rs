@@ -37,6 +37,20 @@ pub struct Rect {
     pub size: Point2D,
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn contains_is_closed_interval() {
+        let r = Rect::xywh(10.0, 20.0, 100.0, 50.0);
+        assert!(r.contains(Point2D::new(10.0, 20.0)));
+        assert!(r.contains(Point2D::new(110.0, 70.0)));
+        assert!(!r.contains(Point2D::new(9.99, 20.0)));
+        assert!(!r.contains(Point2D::new(10.0, 70.01)));
+    }
+}
+
 impl Rect {
     /// Zero-sized rect at the origin. Used by Document::Node as the
     /// "no bounds set" / container-only sentinel, and by tests
@@ -52,6 +66,15 @@ impl Rect {
             origin: Point2D::new(x, y),
             size: Point2D::new(width, height),
         }
+    }
+
+    /// Closed-interval point hit-test. Replaces the hand-rolled
+    /// free-function `rect_contains` copies across the workspace.
+    pub fn contains(&self, p: Point2D) -> bool {
+        p.x >= self.origin.x
+            && p.x <= self.origin.x + self.size.x
+            && p.y >= self.origin.y
+            && p.y <= self.origin.y + self.size.y
     }
 }
 
@@ -498,7 +521,6 @@ pub trait RenderBackend {
     /// Draw a raster image with both placement and image-adjustment
     /// controls. Backends without color-filter support fall back to
     /// mode-aware drawing.
-    #[allow(clippy::too_many_arguments)]
     fn draw_image_with_options(
         &mut self,
         rect: Rect,

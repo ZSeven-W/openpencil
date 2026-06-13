@@ -4,7 +4,7 @@
 //! spine file under the 800-line ceiling.
 
 use op_editor_ui::widgets::SelectionHandle;
-use op_editor_ui::{Color, Point2D, Rect};
+use op_editor_ui::{Color, Rect};
 
 /// Small breathing room from the canvas corner so the chat pill
 /// doesn't visually touch the canvas edge (per 2026-05-10 user
@@ -106,13 +106,6 @@ pub(in crate::widget_host) fn color_to_hex_with_alpha(c: Color) -> String {
     } else {
         format!("#{:02X}{:02X}{:02X}{:02X}", r, g, b, a)
     }
-}
-
-pub(in crate::widget_host) fn rect_contains(r: Rect, p: Point2D) -> bool {
-    p.x >= r.origin.x
-        && p.x <= r.origin.x + r.size.x
-        && p.y >= r.origin.y
-        && p.y <= r.origin.y + r.size.y
 }
 
 /// Resize `start_bounds` by `(dx, dy)` document px in the

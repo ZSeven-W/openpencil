@@ -8,8 +8,6 @@
 use op_editor_ui::widgets::TOP_BAR_HEIGHT;
 use op_editor_ui::{Point2D, Rect};
 
-use super::{rect_contains, WidgetHost};
-
 impl WidgetHost {
     /// Sync every agent-settings hover flag from the cursor.
     /// Returns `true` when any hover state changed.
@@ -439,7 +437,7 @@ impl WidgetHost {
             if let Some(vars_rect) =
                 self.variables_panel_rect(self.last_viewport_w, self.last_viewport_h)
             {
-                if rect_contains(vars_rect, point) {
+                if (vars_rect).contains(point) {
                     let new_hover = VariablesPanel::for_editor_at(&self.editor_state, self.now_ms)
                         .hover_at(vars_rect, point);
                     let changed = new_hover != self.editor_state.editor_ui.variables_panel_hover;

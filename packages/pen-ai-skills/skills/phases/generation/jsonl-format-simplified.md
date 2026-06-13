@@ -15,12 +15,12 @@ The TYPES / RULES / DESIGN SYSTEM TOKENS sections below describe the underlying 
 
 TYPES:
 frame (width,height,layout,gap,padding,justifyContent,alignItems,cornerRadius,fill), rectangle (width,height,cornerRadius,fill), text (content,fontFamily,fontSize,fontWeight,fill,width,textAlign), icon_font (iconFontName,width,height,fill)
-SHARED: id, type, name, \_parent
+SHARED: id, type, name, _parent
 
 RULES:
 
-- Root: type="frame", width="fill_container", height="fit_content", layout="vertical", \_parent=null.
-- Every node carries "\_parent" — null for the root, else its parent's id. No x/y on layout children.
+- Root: type="frame", width="fill_container", height="fit_content", layout="vertical", _parent=null.
+- Every node carries "_parent" — null for the root, else its parent's id. No x/y on layout children.
 - width/height: number | "fill_container" | "fit_content".
 - fill: [{"type":"solid","color":"#hex" | "$color-*"}].
 - Text: never set height. Use width="fill_container" for wrapping text.
@@ -38,7 +38,7 @@ USE refs for standard semantic colors and typography sizes/weights/line-heights 
 
 — JSONL FALLBACK MODE — the section below applies ONLY when there is no `<op_tool>` instruction earlier in the prompt; if `<op_tool>` mode is in effect, ignore the EXAMPLE below and emit `<op_tool>` tags instead.
 
-Output one JSON object per line (NO enclosing [ ] array, NO "children" field). Each line carries "\_parent" — null for the root, else its parent's id (which appears on an earlier line). Express the WHOLE tree via \_parent; a flat list of siblings with no \_parent links renders BROKEN (collapses into a vertical stack).
+Output one JSON object per line (NO enclosing [ ] array, NO "children" field). Each line carries "_parent" — null for the root, else its parent's id (which appears on an earlier line). Express the WHOLE tree via _parent; a flat list of siblings with no _parent links renders BROKEN (collapses into a vertical stack).
 
 EXAMPLE:
 

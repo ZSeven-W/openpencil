@@ -171,7 +171,7 @@ fn load_from(state: &mut EditorState, path: &std::path::Path) {
         .map(|k| k.id.clone())
         .collect();
     for persisted in payload.imported_kits {
-        if persisted.built_in || builtin_ids.contains(&persisted.id) {
+        if persisted.built_in || builtin_ids.iter().any(|id| *id == persisted.id) {
             continue;
         }
         if state.ui_kits.iter().any(|k| k.id == persisted.id) {

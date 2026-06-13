@@ -133,7 +133,7 @@ impl Orchestrator {
         let var_snapshot = snapshot_plan_vars(sink, &plan);
 
         // -- 阶段 2:画布搭建 --
-        for cmd in seed_commands(&plan, &var_snapshot) {
+        for cmd in seed_commands(&plan) {
             sink.apply(cmd);
         }
         let scaffold_root_index = sink.state().active_children().len();
@@ -440,7 +440,7 @@ async fn run_concurrent_path(
     let var_snapshot = snapshot_plan_vars(sink, &plan);
 
     // -- 阶段 2 (并发):变量播种 + N-root scaffold --
-    for cmd in seed_commands(&plan, &var_snapshot) {
+    for cmd in seed_commands(&plan) {
         sink.apply(cmd);
     }
 

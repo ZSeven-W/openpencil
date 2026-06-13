@@ -297,10 +297,7 @@ pub fn build_subagent_prompt(
     // the full first attempt — the retry ladder (reduced/minimal) falls back
     // to the smaller raw-JSONL prompt, and `parse_manifest` returning `None`
     // on such output routes parsing back through `parse_nodes`.
-    let manifest_on =
-        crate::manifest::manifest_enabled_for_model(req.model.as_deref().unwrap_or(""))
-            && !reduced_complexity
-            && !minimal_skills;
+    let manifest_on = crate::manifest::manifest_enabled() && !reduced_complexity && !minimal_skills;
     build_subagent_prompt_with_manifest(
         subtask,
         plan,
@@ -421,29 +418,12 @@ fn build_subagent_prompt_with_manifest(
             s.skill_name() != "jsonl-format" && s.skill_name() != "jsonl-format-simplified"
         });
     }
-    // Pull the element-manifest skill out of priority order and append
-    // it LAST, right above the output contract — recency wins in long
-    // prompts. ab-v9: deepseek's Full-tier prompt runs ~8k tokens and
-    // it kept hand-rolling past a top-of-prompt catalog (58% vs the
-    // Basic-tier models' 85% whose compact prompts kept it close).
-    let manifest_skill = if manifest_on {
-        filtered
-            .iter()
-            .position(|s| s.skill_name() == "element-manifest")
-            .map(|idx| filtered.remove(idx))
-    } else {
-        None
-    };
 
     let mut system_prompt = filtered
         .iter()
         .map(|s| s.content.as_str())
         .collect::<Vec<_>>()
         .join("\n\n");
-    if let Some(skill) = &manifest_skill {
-        system_prompt.push_str("\n\n");
-        system_prompt.push_str(skill.content.as_str());
-    }
     system_prompt.push_str("\n\n");
     // Flat `_parent` for ALL tiers — validated that Basic-tier models
     // (MiniMax M2.7/M3 are Basic) emit clean `_parent` trees with it. The
@@ -487,31 +467,6 @@ fn build_subagent_prompt_with_manifest(
         })
         .unwrap_or_default();
 
-    // Deterministic element nomination (ab-v9.1 de-randomization lever):
-    // weak models miss catalog kinds whose names sit literally in the
-    // brief (setting_row 10/10, toolbar 5/10 despite the word "toolbar").
-    // Token-matching the subtask's own text pulls that recognition step
-    // out of the model's attention. Multi-section plans scan only the
-    // subtask-local text so one section's nouns don't pollute another's
-    // hints; single-section plans scan the whole brief too.
-    let element_hints = if manifest_on {
-        let mut hint_src = subtask.label.clone();
-        if let Some(items) = subtask.elements.as_ref() {
-            hint_src.push(' ');
-            hint_src.push_str(items);
-        }
-        if plan.subtasks.len() <= 1 {
-            hint_src.push(' ');
-            hint_src.push_str(&req.prompt);
-        }
-        crate::manifest_hints::nominate_kinds(
-            &hint_src,
-            &op_mcp::element_manifest::known_element_kinds(),
-        )
-    } else {
-        Vec::new()
-    };
-
     // Three constraints differ by output protocol: the raw-JSONL path has
     // the model author its own root frame + ids; the manifest path forbids
     // exactly that (system-assigned ids, system-owned section root).
@@ -552,16 +507,6 @@ CRITICAL LAYOUT CONSTRAINTS:\n\
         nesting_rule,
         output_rule,
     );
-
-    if !element_hints.is_empty() {
-        user_prompt.push_str(&format!(
-            "\n\nELEMENT HINTS: this section's brief matches these catalog kinds: {}.\n\
-- Check each hinted kind in the catalog and declare it as its own {{\"el\":...}} line unless it clearly does not fit this section.\n\
-- Most specific wins: when a composite hinted kind already contains a smaller hinted one (a setting_row already has its switch), declare ONLY the composite.\n\
-- NEVER hand-compose a hinted kind out of section/text/icon_font lines.",
-            element_hints.join(", ")
-        ));
-    }
 
     if plan.root_frame.width <= 480.0 {
         user_prompt.push_str(

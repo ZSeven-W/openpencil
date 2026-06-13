@@ -213,7 +213,7 @@ pub fn model_at(
 }
 
 pub fn search_clear_hit(rect: Rect, point: Point2D, search: &str) -> bool {
-    !search.is_empty() && rect_contains(search_clear_rect(rect), point)
+    !search.is_empty() && (search_clear_rect(rect)).contains(point)
 }
 
 fn model_list_rect(rect: Rect) -> Rect {
@@ -228,13 +228,6 @@ fn search_clear_rect(rect: Rect) -> Rect {
         origin: Point2D::new(rect.origin.x + rect.size.x - 40.0, rect.origin.y + 7.0),
         size: Point2D::new(32.0, 24.0),
     }
-}
-
-fn rect_contains(rect: Rect, point: Point2D) -> bool {
-    point.x >= rect.origin.x
-        && point.x <= rect.origin.x + rect.size.x
-        && point.y >= rect.origin.y
-        && point.y <= rect.origin.y + rect.size.y
 }
 
 /// Paint the dropdown card + grouped rows. `selected` is the index

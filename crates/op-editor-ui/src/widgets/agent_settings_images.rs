@@ -4,7 +4,7 @@ use crate::theme::Theme;
 use crate::widgets::agent_settings_i18n::t as t_settings;
 use crate::widgets::agent_settings_images_parts::{
     ellipsize, paint_profile_field, paint_profile_test_button, paint_provider_field,
-    paint_provider_menu, paint_search_input_row, rect_contains,
+    paint_provider_menu, paint_search_input_row,
 };
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::PaintCx;
@@ -238,30 +238,28 @@ fn profile_field_index(field: ImageGenField) -> usize {
 }
 
 pub fn hit_test(content: Rect, settings: &AgentSettings, scrolled: Point2D) -> ImagesHit {
-    if rect_contains(advanced_toggle_rect(content), scrolled) {
+    if (advanced_toggle_rect(content)).contains(scrolled) {
         return ImagesHit::ToggleAdvanced;
     }
     if settings.images_advanced_open {
-        if rect_contains(search_field_rect(content, 0), scrolled) {
+        if (search_field_rect(content, 0)).contains(scrolled) {
             return ImagesHit::FocusSearchField(ImageSearchField::ClientId);
         }
-        if rect_contains(search_field_rect(content, 1), scrolled) {
+        if (search_field_rect(content, 1)).contains(scrolled) {
             return ImagesHit::FocusSearchField(ImageSearchField::ClientSecret);
         }
-        if search_test_enabled(settings)
-            && rect_contains(test_btn_rect(content, settings), scrolled)
-        {
+        if search_test_enabled(settings) && (test_btn_rect(content, settings)).contains(scrolled) {
             return ImagesHit::TestSearch;
         }
     }
-    if rect_contains(add_btn_rect(content, settings), scrolled) {
+    if (add_btn_rect(content, settings)).contains(scrolled) {
         return ImagesHit::AddGenConfig;
     }
     for (index, profile) in settings.image_gen_profiles.iter().enumerate() {
         let row = profile_row_rect(content, settings, index);
         if settings.image_gen_provider_menu_open == Some(index) {
             for (option_index, provider) in ImageGenProvider::ALL.iter().enumerate() {
-                if rect_contains(profile_provider_option_rect(row, option_index), scrolled) {
+                if (profile_provider_option_rect(row, option_index)).contains(scrolled) {
                     return ImagesHit::SelectGenProvider {
                         index,
                         provider: *provider,
@@ -269,32 +267,32 @@ pub fn hit_test(content: Rect, settings: &AgentSettings, scrolled: Point2D) -> I
                 }
             }
         }
-        if rect_contains(profile_active_rect(row), scrolled) {
+        if (profile_active_rect(row)).contains(scrolled) {
             return ImagesHit::SetActiveGenConfig(index);
         }
-        if rect_contains(profile_remove_rect(row), scrolled) {
+        if (profile_remove_rect(row)).contains(scrolled) {
             return ImagesHit::RemoveGenConfig(index);
         }
-        if rect_contains(profile_header_rect(row), scrolled) {
+        if (profile_header_rect(row)).contains(scrolled) {
             return ImagesHit::ToggleGenConfigEditor(index);
         }
         if is_editing_profile(settings, index) {
-            if rect_contains(profile_test_btn_rect(row), scrolled) {
+            if (profile_test_btn_rect(row)).contains(scrolled) {
                 if profile_test_enabled(profile) {
                     return ImagesHit::TestGenConfig(index);
                 }
                 return ImagesHit::None;
             }
-            if rect_contains(profile_provider_rect(row), scrolled) {
+            if (profile_provider_rect(row)).contains(scrolled) {
                 return ImagesHit::ToggleGenProviderMenu(index);
             }
             for field in image_gen_fields() {
-                if rect_contains(profile_input_rect(row, field), scrolled) {
+                if (profile_input_rect(row, field)).contains(scrolled) {
                     return ImagesHit::FocusGenConfig { index, field };
                 }
             }
         }
-        if rect_contains(row, scrolled) {
+        if (row).contains(scrolled) {
             return ImagesHit::FocusGenConfig {
                 index,
                 field: ImageGenField::Name,
@@ -309,11 +307,11 @@ pub fn search_test_button_hover_at(
     settings: &AgentSettings,
     scrolled: Point2D,
 ) -> bool {
-    settings.images_advanced_open && rect_contains(test_btn_rect(content, settings), scrolled)
+    settings.images_advanced_open && (test_btn_rect(content, settings)).contains(scrolled)
 }
 
 pub fn add_gen_button_hover_at(content: Rect, settings: &AgentSettings, scrolled: Point2D) -> bool {
-    rect_contains(add_btn_rect(content, settings), scrolled)
+    (add_btn_rect(content, settings)).contains(scrolled)
 }
 
 pub fn profile_test_button_hover_at(
@@ -323,7 +321,7 @@ pub fn profile_test_button_hover_at(
 ) -> Option<usize> {
     (0..settings.image_gen_profiles.len()).find(|&index| {
         let row = profile_row_rect(content, settings, index);
-        is_editing_profile(settings, index) && rect_contains(profile_test_btn_rect(row), scrolled)
+        is_editing_profile(settings, index) && (profile_test_btn_rect(row)).contains(scrolled)
     })
 }
 

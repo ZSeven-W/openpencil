@@ -107,12 +107,9 @@ fn shell_theme_colors(theme_aware: bool, args: &BTreeMap<String, String>) -> She
 /// numbers in every mode. In `system` mode the TS would emit `$type-*` refs
 /// for these; the Rust `fontSize`/`fontWeight`/`lineHeight` schema slots are
 /// strict numbers, and the refs resolve to these same defaults at render
-/// time, so the rendered result is identical. Padding/gap must ALSO stay
-/// numeric in system mode: the schema accepts `$spacing-*` expression refs
-/// but the Rust layout chain zeroes them (jian-core `container_to_style`
-/// and op-pen-loader `gap_value` both fall through Expression to 0), which
-/// collapses the card. 24/12 equal the semantic palette's spacing-5/3
-/// values, so the rendered result matches a resolved ref.
+/// time, so the rendered result is identical. Card padding DOES accept an
+/// expression ref, so in system mode (no explicit override) we faithfully
+/// emit `$spacing-5`; gap likewise emits `$spacing-3`.
 fn build_modal_shell(
     args: &BTreeMap<String, String>,
     theme_aware: bool,
@@ -132,14 +129,19 @@ fn build_modal_shell(
     };
     let c = shell_theme_colors(theme_aware, args);
 
-    // Padding: explicit override (max(12, floor)) wins; absent → 24 in
-    // every mode (numeric — see the fidelity caveat above).
+    // Padding: explicit override (max(12, floor)) wins in every mode; absent +
+    // system → $spacing-5 ref; absent + light/dark → 24.
     let card_padding: Value = match args.get("card_padding").and_then(|v| v.parse::<f64>().ok()) {
         Some(raw) => json!(raw.floor().max(12.0)),
+        None if theme == "system" => json!("$spacing-5"),
         None => json!(24),
     };
-    // gap: 12 in every mode (numeric — see the fidelity caveat above).
-    let card_gap: Value = json!(12);
+    // gap: light/dark → 12, system → $spacing-3.
+    let card_gap: Value = if theme == "system" {
+        json!("$spacing-3")
+    } else {
+        json!(12)
+    };
 
     // Title: v0/light has no fill; v1 dark/system gets textPrimary.
     let mut title_node = json!({

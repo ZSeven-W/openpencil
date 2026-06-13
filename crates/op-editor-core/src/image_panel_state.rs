@@ -158,14 +158,12 @@ mod tests {
 
     #[test]
     fn status_for_requires_exact_node_and_src_match() {
-        let s = ImagePanelState {
-            asset_check: Some(ImageAssetCheck {
-                node_id: "n1".into(),
-                src: "./a.png".into(),
-                status: ImageAssetStatus::Missing,
-            }),
-            ..Default::default()
-        };
+        let mut s = ImagePanelState::default();
+        s.asset_check = Some(ImageAssetCheck {
+            node_id: "n1".into(),
+            src: "./a.png".into(),
+            status: ImageAssetStatus::Missing,
+        });
         assert_eq!(
             s.status_for("n1", "./a.png"),
             Some(ImageAssetStatus::Missing)

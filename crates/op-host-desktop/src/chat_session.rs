@@ -260,8 +260,11 @@ fn drain_tool_requests(state: &mut EditorState, session: &mut ChatSession) -> bo
         return false;
     };
     let mut requests = Vec::new();
-    while let Ok(req) = tool_rx.try_recv() {
-        requests.push(req);
+    loop {
+        match tool_rx.try_recv() {
+            Ok(req) => requests.push(req),
+            Err(TryRecvError::Empty) | Err(TryRecvError::Disconnected) => break,
+        }
     }
     if requests.is_empty() {
         return false;

@@ -13,7 +13,6 @@ use op_editor_core::{
 use op_editor_ui::widgets::{GitPanel, GitPanelHit};
 use op_editor_ui::Point2D;
 
-use super::helpers::rect_contains;
 use super::WidgetHostNative;
 
 impl WidgetHostNative {
@@ -51,7 +50,7 @@ impl WidgetHostNative {
         // `None` for it.
         let on_caret = self
             .git_panel_outer_rect(viewport_width, viewport_height)
-            .is_some_and(|r| rect_contains(r, Point2D::new(x, y)));
+            .is_some_and(|r| (r).contains(Point2D::new(x, y)));
         let now = self.now_ms;
         // Set by the blank-chrome arm below; the full input blur runs
         // after the match so it doesn't fight the `panel` borrow.

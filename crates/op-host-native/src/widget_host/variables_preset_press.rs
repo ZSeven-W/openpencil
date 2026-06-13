@@ -10,7 +10,6 @@
 //! load / delete / import / export) + the outside-mousedown close at
 //! `:53-76`.
 
-use super::helpers::rect_contains;
 use super::WidgetHostNative;
 use op_editor_core::editor_ui_state::ThemePresetIo;
 use op_editor_ui::widgets::{PresetMenuHit, ThemePresetMenu};
@@ -104,7 +103,7 @@ impl WidgetHostNative {
         let Some(hit) = menu.hit_test(rect, point) else {
             let panel_rect = self.variables_panel_rect(viewport_w, viewport_h);
             let on_anchor = panel_rect
-                .is_some_and(|panel| rect_contains(self.variables_preset_anchor(panel), point));
+                .is_some_and(|panel| (self.variables_preset_anchor(panel)).contains(point));
             if !on_anchor {
                 self.close_preset_menu();
                 self.mark_dirty();

@@ -6,7 +6,7 @@
 //! overlay's on-screen rect. Keeping these in a sibling module keeps
 //! `press.rs` under the repo's 800-line cap.
 
-use super::{rect_contains, WidgetHost, STATUS_INSET, TOOLBAR_INSET_X, TOOLBAR_INSET_Y};
+use super::{WidgetHost, STATUS_INSET, TOOLBAR_INSET_X, TOOLBAR_INSET_Y};
 use op_editor_ui::widgets::{
     LayoutCx, ShapePicker, Toolbar, TopBar, Widget, ICON_PICKER_PANEL_H, ICON_PICKER_PANEL_W,
     SHAPE_PICKER_WIDTH, STATUS_BAR_HEIGHT, STATUS_BAR_WIDTH, TOOLBAR_WIDTH, TOP_BAR_HEIGHT,
@@ -216,12 +216,12 @@ impl WidgetHost {
     ) -> bool {
         let p = Point2D::new(x, y);
         self.design_md_panel_rect(viewport_w, viewport_h)
-            .is_some_and(|r| rect_contains(r, p))
+            .is_some_and(|r| (r).contains(p))
             || self
                 .icon_picker_panel_rect(viewport_w, viewport_h)
-                .is_some_and(|r| rect_contains(r, p))
+                .is_some_and(|r| (r).contains(p))
             || self
                 .component_browser_panel_rect(viewport_w, viewport_h)
-                .is_some_and(|r| rect_contains(r, p))
+                .is_some_and(|r| (r).contains(p))
     }
 }

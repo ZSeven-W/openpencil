@@ -1,4 +1,3 @@
-use super::helpers::rect_contains;
 use super::WidgetHostNative;
 use jian_ops_schema::variable::{VariableKind, VariableScalar};
 use op_editor_ui::widgets::variables_panel::{VariablesPanel, VariablesPanelHit};
@@ -20,7 +19,7 @@ impl WidgetHostNative {
             return false;
         };
         let point = Point2D::new(x, y);
-        if !rect_contains(vars_rect, point) {
+        if !(vars_rect).contains(point) {
             return false;
         }
         let vars = VariablesPanel::for_editor(&self.editor_state);

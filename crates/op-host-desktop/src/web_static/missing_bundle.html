@@ -24,10 +24,9 @@
   <body>
     <h1>OpenPencil web bundle not found</h1>
     <p>
-      The <code>--serve-web</code> daemon is running, but the wasm-bindgen bundle (<code
-        >op_host_web.js</code
-      >
-      + <code>op_host_web_bg.wasm</code>) was not found. Directories searched, in order:
+      The <code>--serve-web</code> daemon is running, but the wasm-bindgen
+      bundle (<code>op_host_web.js</code> + <code>op_host_web_bg.wasm</code>)
+      was not found. Directories searched, in order:
     </p>
     <pre><!--BUNDLE_CANDIDATES--></pre>
     <p>How to build the bundle (from the repository root):</p>
@@ -35,8 +34,7 @@
 EMSDK=&lt;path-to-emsdk&gt; tools/check-wasm-bundle.sh
 # runs: cargo build -p op-host-web --target wasm32-unknown-unknown --features skia --release
 #       wasm-bindgen --target web --out-dir crates/op-host-web/pkg
-#       wasm-opt -Oz  (size gate)</pre
-    >
+#       wasm-opt -Oz  (size gate)</pre>
     <p>
       Or point the daemon at an existing bundle directory via
       <code>OPENPENCIL_WEB_BUNDLE_DIR=/path/to/pkg</code>.

@@ -139,10 +139,7 @@ fn build_toast(args: &BTreeMap<String, String>, theme_aware: bool) -> Result<Val
     // fontSize is a strict-number schema slot — emit 14 in every mode
     // (the TS `$type-body-size` ref resolves to the same default at
     // render time; see the fidelity caveat on `build_modal_shell`).
-    // gap must ALSO stay numeric: the layout chain zeroes Expression
-    // gap (jian-core `container_to_style` / op-pen-loader `gap_value`),
-    // so a `$spacing-2` ref would collapse the pill. 8 equals the
-    // semantic palette's spacing-2 value.
+    // gap accepts an expression ref, so system mode keeps `$spacing-2`.
     let (pill_fill, fg, font_size, gap) = if theme_aware {
         match theme {
             "dark" => (json!("#F1F5F9"), json!("#0F172A"), json!(14), json!(8)),
@@ -150,7 +147,7 @@ fn build_toast(args: &BTreeMap<String, String>, theme_aware: bool) -> Result<Val
                 json!("$color-text-primary"),
                 json!("$color-surface"),
                 json!(14),
-                json!(8),
+                json!("$spacing-2"),
             ),
             _ => (json!("#111827"), json!("#FFFFFF"), json!(14), json!(8)),
         }

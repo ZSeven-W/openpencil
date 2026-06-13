@@ -70,7 +70,7 @@ pub fn content_height(settings: &AgentSettings) -> f32 {
 }
 
 pub fn hit_test(content: Rect, settings: &AgentSettings, point: Point2D, y: f32) -> AcpHit {
-    if rect_contains(add_agent_rect(content, y), point) {
+    if (add_agent_rect(content, y)).contains(point) {
         return AcpHit::AddAgent;
     }
     let mut card_y = y + HEADER_H + SUBTITLE_H;
@@ -82,43 +82,40 @@ pub fn hit_test(content: Rect, settings: &AgentSettings, point: Point2D, y: f32)
             card_height(settings, index),
         );
         if is_editing(settings, index) {
-            if rect_contains(type_toggle_rect(card), point) {
+            if (type_toggle_rect(card)).contains(point) {
                 return AcpHit::ToggleConnectionType(index);
             }
             for field in form_fields(agent.connection_type) {
-                if rect_contains(field_input_rect(card, *field), point) {
+                if (field_input_rect(card, *field)).contains(point) {
                     return AcpHit::Focus {
                         index,
                         field: *field,
                     };
                 }
             }
-        } else if settings.hover_acp_agent == index && rect_contains(compact_edit_rect(card), point)
-        {
+        } else if settings.hover_acp_agent == index && (compact_edit_rect(card)).contains(point) {
             return AcpHit::Edit(index);
-        } else if settings.hover_acp_agent == index
-            && rect_contains(compact_remove_rect(card), point)
-        {
+        } else if settings.hover_acp_agent == index && (compact_remove_rect(card)).contains(point) {
             return AcpHit::Remove(index);
-        } else if rect_contains(connection_button_rect(card), point) {
+        } else if (connection_button_rect(card)).contains(point) {
             return AcpHit::ToggleConnected(index);
         }
         card_y += card.size.y + CARD_GAP;
     }
     if let Some(agent) = settings.acp_agent_draft.as_ref() {
         let card = card_rect(content.origin.x, card_y, content.size.x, DRAFT_CARD_H);
-        if rect_contains(type_toggle_rect(card), point) {
+        if (type_toggle_rect(card)).contains(point) {
             return AcpHit::ToggleDraftConnectionType;
         }
         for field in form_fields(agent.connection_type) {
-            if rect_contains(field_input_rect(card, *field), point) {
+            if (field_input_rect(card, *field)).contains(point) {
                 return AcpHit::FocusDraft(*field);
             }
         }
-        if rect_contains(save_button_rect(card, EXPANDED_CARD_H), point) {
+        if (save_button_rect(card, EXPANDED_CARD_H)).contains(point) {
             return AcpHit::SaveDraft;
         }
-        if rect_contains(cancel_button_rect(card, EXPANDED_CARD_H), point) {
+        if (cancel_button_rect(card, EXPANDED_CARD_H)).contains(point) {
             return AcpHit::CancelDraft;
         }
     }
@@ -139,7 +136,7 @@ pub fn card_at(
             content.size.x,
             card_height(settings, index),
         );
-        if rect_contains(card, point) {
+        if (card).contains(point) {
             return Some(index);
         }
         card_y += card.size.y + CARD_GAP;
@@ -759,13 +756,6 @@ fn ellipsize(cx: &mut PaintCx<'_>, value: &str, max_w: f32, size: f32) -> String
         out.pop();
     }
     format!("{out}...")
-}
-
-fn rect_contains(r: Rect, p: Point2D) -> bool {
-    p.x >= r.origin.x
-        && p.y >= r.origin.y
-        && p.x <= r.origin.x + r.size.x
-        && p.y <= r.origin.y + r.size.y
 }
 
 fn to_jian(c: Color) -> jian_core::scene::Color {

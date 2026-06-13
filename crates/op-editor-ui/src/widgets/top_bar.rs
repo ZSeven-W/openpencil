@@ -361,7 +361,7 @@ impl TopBar {
         if cfg!(target_os = "macos") {
             return None;
         }
-        if !rect_contains(rect, point) {
+        if !(rect).contains(point) {
             return None;
         }
         let cy = rect.origin.y + rect.size.y / 2.0;
@@ -391,7 +391,7 @@ impl TopBar {
     ///   - Sun (third from right) → ToggleTheme
     ///   - Globe (fourth from right) → ToggleLocale
     pub fn hit_test(&self, rect: Rect, point: Point2D) -> Option<TopBarHit> {
-        if !rect_contains(rect, point) {
+        if !(rect).contains(point) {
             return None;
         }
         let icon_y = rect.origin.y + 8.0;
@@ -399,7 +399,7 @@ impl TopBar {
             origin: Point2D::new(rect.origin.x + PAD + self.left_inset(), icon_y),
             size: Point2D::new(ICON_BUTTON, ICON_BUTTON),
         };
-        if rect_contains(panel_left_rect, point) {
+        if (panel_left_rect).contains(point) {
             return Some(TopBarHit::ToggleSidebar);
         }
         // Reuse the canonical anchor so the hit area, paint, and
@@ -408,7 +408,7 @@ impl TopBar {
         let file_menu_rect = Self::file_menu_rect(rect, self.fullscreen);
         let file_menu_x = file_menu_rect.origin.x;
         let divider_span = DIVIDER_GAP + DIVIDER_W + DIVIDER_GAP;
-        if rect_contains(file_menu_rect, point) {
+        if (file_menu_rect).contains(point) {
             return Some(TopBarHit::ToggleFileMenu);
         }
         let figma_x = file_menu_x + FILE_MENU_BUTTON_WIDTH + divider_span;
@@ -416,12 +416,12 @@ impl TopBar {
             origin: Point2D::new(figma_x, icon_y),
             size: Point2D::new(ICON_BUTTON, ICON_BUTTON),
         };
-        if rect_contains(figma_rect, point) {
+        if (figma_rect).contains(point) {
             return Some(TopBarHit::OpenFigmaImport);
         }
         // Git-panel toggle, just right of the centred file name
         // (desktop only — see `GIT_BUTTON_AVAILABLE`).
-        if GIT_BUTTON_AVAILABLE && rect_contains(self.git_button_rect(rect), point) {
+        if GIT_BUTTON_AVAILABLE && (self.git_button_rect(rect)).contains(point) {
             return Some(TopBarHit::ToggleGitPanel);
         }
         // Right cluster: Maximize / Sun / Globe-with-chevron (right→left).
@@ -436,18 +436,18 @@ impl TopBar {
             origin: Point2D::new(right - PAD - ICON_BUTTON, icon_y),
             size: Point2D::new(ICON_BUTTON, ICON_BUTTON),
         };
-        if rect_contains(maximize_rect, point) {
+        if (maximize_rect).contains(point) {
             return Some(TopBarHit::ToggleFullscreen);
         }
         let sun_rect = Rect {
             origin: Point2D::new(sun_x, icon_y),
             size: Point2D::new(ICON_BUTTON, ICON_BUTTON),
         };
-        if rect_contains(sun_rect, point) {
+        if (sun_rect).contains(point) {
             return Some(TopBarHit::ToggleTheme);
         }
         let globe = Self::globe_rect(rect);
-        if rect_contains(globe, point) {
+        if (globe).contains(point) {
             return Some(TopBarHit::ToggleLocale);
         }
         // Agent chip hit area — slightly larger than the painted
@@ -476,18 +476,11 @@ impl TopBar {
             ),
             size: Point2D::new(chip_w, rect.size.y - 8.0),
         };
-        if rect_contains(chip_rect, point) {
+        if (chip_rect).contains(point) {
             return Some(TopBarHit::OpenAgentSettings);
         }
         None
     }
-}
-
-pub(super) fn rect_contains(r: Rect, p: Point2D) -> bool {
-    p.x >= r.origin.x
-        && p.x <= r.origin.x + r.size.x
-        && p.y >= r.origin.y
-        && p.y <= r.origin.y + r.size.y
 }
 
 impl Widget for TopBar {

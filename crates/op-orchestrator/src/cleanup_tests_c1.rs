@@ -270,7 +270,6 @@ fn cleanup_concurrent_all_scaffold_only_deletes_all_and_rolls_back_vars() {
     // no content survived.
     let snap = VarSnapshot {
         created: vec!["color-primary".into()],
-        created_axes: vec![],
     };
     cleanup_concurrent_roots(&mut sink, &[&root_a, &root_b], &[0, 0], &snap);
 

@@ -13,7 +13,7 @@ mod hover;
 mod menus;
 mod paint;
 
-use geometry::*;
+pub(self) use geometry::*;
 
 const ROW_HEIGHT: f32 = 44.0;
 const HEADER_HEIGHT: f32 = 44.0;
@@ -457,7 +457,7 @@ impl VariablesPanel {
     /// Resize affordance under `point`, corner-first (TS pointer
     /// handles: 6 px right/bottom strips + a 12 px corner grip).
     pub fn resize_edge_at(&self, rect: Rect, point: Point2D) -> Option<VariablesResizeEdge> {
-        if !rect_contains(rect, point) {
+        if !(rect).contains(point) {
             return None;
         }
         let right = rect.origin.x + rect.size.x;

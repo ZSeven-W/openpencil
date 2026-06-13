@@ -322,57 +322,6 @@ fn clear_remote_registry_for_tests() {
     }
 }
 
-/// Minimal "picture" glyph — frame + sun + mountain strokes scaled
-/// into the centre of `rect` (24px reference art, like the lucide
-/// `image` icon but hand-stroked to avoid an icon-catalog dependency
-/// in the paint path).
-fn paint_picture_glyph(cx: &mut PaintCx<'_>, rect: Rect, color: Color) {
-    let size = (rect.size.x.min(rect.size.y) * 0.4).clamp(12.0, 48.0);
-    let cx0 = rect.origin.x + rect.size.x / 2.0 - size / 2.0;
-    let cy0 = rect.origin.y + rect.size.y / 2.0 - size / 2.0;
-    let w = 1.5;
-    // Frame.
-    cx.backend.stroke_round_rect(
-        Rect {
-            origin: Point2D::new(cx0, cy0),
-            size: Point2D::new(size, size),
-        },
-        size * 0.12,
-        color,
-        w,
-    );
-    // Sun — small circle approximated by a tight round-rect.
-    let sun = size * 0.16;
-    cx.backend.stroke_round_rect(
-        Rect {
-            origin: Point2D::new(cx0 + size * 0.2, cy0 + size * 0.2),
-            size: Point2D::new(sun, sun),
-        },
-        sun / 2.0,
-        color,
-        w,
-    );
-    // Mountain.
-    cx.backend.stroke_line(
-        Point2D::new(cx0 + size * 0.12, cy0 + size * 0.85),
-        Point2D::new(cx0 + size * 0.45, cy0 + size * 0.45),
-        color,
-        w,
-    );
-    cx.backend.stroke_line(
-        Point2D::new(cx0 + size * 0.45, cy0 + size * 0.45),
-        Point2D::new(cx0 + size * 0.7, cy0 + size * 0.7),
-        color,
-        w,
-    );
-    cx.backend.stroke_line(
-        Point2D::new(cx0 + size * 0.7, cy0 + size * 0.7),
-        Point2D::new(cx0 + size * 0.88, cy0 + size * 0.52),
-        color,
-        w,
-    );
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -472,4 +421,55 @@ mod tests {
         let taken = take_remote_image_requests(usize::MAX);
         assert_eq!(taken.len(), REMOTE_MISS_QUEUE_CAP);
     }
+}
+
+/// Minimal "picture" glyph — frame + sun + mountain strokes scaled
+/// into the centre of `rect` (24px reference art, like the lucide
+/// `image` icon but hand-stroked to avoid an icon-catalog dependency
+/// in the paint path).
+fn paint_picture_glyph(cx: &mut PaintCx<'_>, rect: Rect, color: Color) {
+    let size = (rect.size.x.min(rect.size.y) * 0.4).clamp(12.0, 48.0);
+    let cx0 = rect.origin.x + rect.size.x / 2.0 - size / 2.0;
+    let cy0 = rect.origin.y + rect.size.y / 2.0 - size / 2.0;
+    let w = 1.5;
+    // Frame.
+    cx.backend.stroke_round_rect(
+        Rect {
+            origin: Point2D::new(cx0, cy0),
+            size: Point2D::new(size, size),
+        },
+        size * 0.12,
+        color,
+        w,
+    );
+    // Sun — small circle approximated by a tight round-rect.
+    let sun = size * 0.16;
+    cx.backend.stroke_round_rect(
+        Rect {
+            origin: Point2D::new(cx0 + size * 0.2, cy0 + size * 0.2),
+            size: Point2D::new(sun, sun),
+        },
+        sun / 2.0,
+        color,
+        w,
+    );
+    // Mountain.
+    cx.backend.stroke_line(
+        Point2D::new(cx0 + size * 0.12, cy0 + size * 0.85),
+        Point2D::new(cx0 + size * 0.45, cy0 + size * 0.45),
+        color,
+        w,
+    );
+    cx.backend.stroke_line(
+        Point2D::new(cx0 + size * 0.45, cy0 + size * 0.45),
+        Point2D::new(cx0 + size * 0.7, cy0 + size * 0.7),
+        color,
+        w,
+    );
+    cx.backend.stroke_line(
+        Point2D::new(cx0 + size * 0.7, cy0 + size * 0.7),
+        Point2D::new(cx0 + size * 0.88, cy0 + size * 0.52),
+        color,
+        w,
+    );
 }
