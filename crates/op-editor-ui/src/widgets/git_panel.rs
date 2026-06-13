@@ -819,10 +819,8 @@ impl<'a> GitPanel<'a> {
                 let is_current = Some(name) == self.state.branch.as_ref();
                 if is_current {
                     cx.backend.fill_round_rect(*row, 4.0, self.theme.muted);
-                } else if self.state.button_hover == Some(GitButton::SwitchBranch(i)) {
-                    // Switch-on-click row gets a hover wash.
-                    cx.backend
-                        .fill_round_rect(*row, 4.0, self.theme.button_hover);
+                } else {
+                    self.wash_if_hovered(cx, *row, 4.0, GitPanelHit::SwitchBranch(i));
                 }
                 let (marker, color) = if is_current {
                     ("● ", self.theme.primary)
