@@ -602,6 +602,49 @@ fn hovered_agent_add_buttons_paint_hover_wash() {
 }
 
 #[test]
+fn pressed_agent_add_buttons_use_shared_button_feedback() {
+    for (button, label_key, rect_for_label) in [
+        (
+            AgentSettingsButton::AddProvider,
+            "settings.agents.addProvider",
+            add_provider_button_rect as fn(Rect, f32) -> Rect,
+        ),
+        (
+            AgentSettingsButton::AddAcpAgent,
+            "settings.agents.addAcp",
+            add_acp_agent_button_rect as fn(Rect, f32) -> Rect,
+        ),
+    ] {
+        let mut state = EditorState::default();
+        state.editor_ui.theme_mode = ThemeMode::Light;
+        state.editor_ui.agent_settings.tab = AgentSettingsTab::Agents;
+        state.editor_ui.pressed_button = Some(ButtonPressTarget::AgentSettings(button));
+        let panel = AgentSettingsPanel::for_editor(&state);
+        let rect = panel.rect(1200.0, 800.0);
+        let mut backend = CaptureBackend::default();
+        let label = op_i18n::translate(state.editor_ui.locale, label_key);
+        let target = rect_for_label(rect, backend.measure_text(label, 12.0));
+        let expected = panel
+            .theme
+            .button_hover
+            .with_alpha(panel.theme.button_hover.a * 1.8);
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+
+        panel.paint(&mut cx, rect);
+
+        assert!(
+            backend
+                .round_fills
+                .iter()
+                .any(|(r, color)| rect_eq(*r, target) && color_eq(*color, expected)),
+            "pressed {button:?} should paint the shared pressed feedback token"
+        );
+    }
+}
+
+#[test]
 fn builtin_add_provider_text_is_centered_in_hover_wash() {
     let mut state = EditorState::default();
     state.editor_ui.theme_mode = ThemeMode::Light;

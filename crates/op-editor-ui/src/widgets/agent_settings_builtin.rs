@@ -17,6 +17,7 @@ use crate::widgets::agent_settings_header_action::{
 use crate::widgets::agent_settings_i18n::t as t_settings;
 use crate::widgets::agent_settings_switch::paint_settings_switch;
 use crate::widgets::brand_icons::{paint_brand_logo, BrandLogo};
+use crate::widgets::button::paint_ghost_button_feedback;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
@@ -25,7 +26,7 @@ use op_editor_core::agent_settings::{
     BuiltinAgentPresetMenuTarget, SettingsFocus,
 };
 use op_editor_core::editor_ui_state::EditorUiState;
-use op_editor_core::BuiltinAgentPresetKey;
+use op_editor_core::{AgentSettingsButton, BuiltinAgentPresetKey, ButtonPressTarget};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BuiltinHit {
@@ -275,6 +276,9 @@ pub fn paint_builtin_section(
             w: content.size.x,
         },
         settings.hover_add_provider,
+        ui.button_pressed(ButtonPressTarget::AgentSettings(
+            AgentSettingsButton::AddProvider,
+        )),
     );
     y = paint_subtitle(
         cx,
@@ -332,6 +336,7 @@ fn paint_header(
     action: &str,
     frame: HeaderFrame,
     action_hover: bool,
+    action_pressed: bool,
 ) -> f32 {
     let layout = TextLayout::single_run(
         title,
@@ -351,10 +356,7 @@ fn paint_header(
         frame.y,
         action_w,
     );
-    if action_hover {
-        cx.backend
-            .fill_round_rect(action_rect, 6.0, theme.button_hover);
-    }
+    paint_ghost_button_feedback(cx.backend, theme, action_rect, action_hover, action_pressed);
     let act = TextLayout::single_run(
         action,
         "system-ui",

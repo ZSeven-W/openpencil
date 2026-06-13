@@ -5,6 +5,8 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AgentSettingsButton {
     Close,
+    AddProvider,
+    AddAcpAgent,
     McpServer,
     McpClientConfigCopy,
     ImageSearchTest,

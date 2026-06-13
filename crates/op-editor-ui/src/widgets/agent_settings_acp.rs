@@ -9,6 +9,7 @@ use crate::widgets::agent_settings_header_action::{
     header_action_rect, header_action_text_baseline_y, header_action_text_x,
 };
 use crate::widgets::agent_settings_i18n::t as t_settings;
+use crate::widgets::button::paint_ghost_button_feedback;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
@@ -16,6 +17,7 @@ use op_editor_core::agent_settings::{
     AcpAgentConfig, AcpAgentField, AcpConnectionType, AgentSettings, SettingsFocus,
 };
 use op_editor_core::editor_ui_state::EditorUiState;
+use op_editor_core::{AgentSettingsButton, ButtonPressTarget};
 
 const HEADER_H: f32 = 28.0;
 const SUBTITLE_H: f32 = 28.0;
@@ -158,6 +160,9 @@ pub fn paint_acp_section(
         content,
         y,
         settings.hover_add_acp_agent,
+        ui.button_pressed(ButtonPressTarget::AgentSettings(
+            AgentSettingsButton::AddAcpAgent,
+        )),
     );
     y = paint_subtitle(
         cx,
@@ -209,6 +214,7 @@ fn paint_header(
     content: Rect,
     y: f32,
     action_hover: bool,
+    action_pressed: bool,
 ) -> f32 {
     draw_text(
         cx,
@@ -220,10 +226,7 @@ fn paint_header(
     );
     let action_w = cx.backend.measure_text(action, 12.0);
     let action_rect = header_action_rect(content, y, action_w);
-    if action_hover {
-        cx.backend
-            .fill_round_rect(action_rect, 6.0, theme.button_hover);
-    }
+    paint_ghost_button_feedback(cx.backend, theme, action_rect, action_hover, action_pressed);
     draw_text(
         cx,
         action,
