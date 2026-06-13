@@ -28,7 +28,7 @@
 
 use super::WidgetHostNative;
 use op_editor_ui::widgets::path_anchor_context_menu::{
-    PathAnchorContextMenu, PathAnchorMenuAction,
+    MenuHit, PathAnchorContextMenu, PathAnchorMenuAction,
 };
 use op_editor_ui::Point2D;
 
@@ -383,7 +383,7 @@ impl WidgetHostNative {
                 anchor_index,
                 x,
                 y,
-                hovered_row: None,
+                menu: Default::default(),
             });
             self.mark_dirty();
             return true;
@@ -409,10 +409,17 @@ impl WidgetHostNative {
             return false;
         };
         let menu = PathAnchorContextMenu::for_state(&self.editor_state, state.clone());
-        let Some(action) = menu.hit_test(Point2D::new(x, y)) else {
-            self.editor_state.ui.path_anchor_menu = None;
-            self.mark_dirty();
-            return false;
+        let action = match menu.hit(Point2D::new(x, y)) {
+            MenuHit::Row(_) => menu.hit_test(Point2D::new(x, y)),
+            MenuHit::Inside => return true,
+            MenuHit::Outside => {
+                self.editor_state.ui.path_anchor_menu = None;
+                self.mark_dirty();
+                return false;
+            }
+        };
+        let Some(action) = action else {
+            return true;
         };
         use jian_ops_schema::node::PenPathPointType as P;
         let id = state.node_id.clone();
@@ -450,12 +457,11 @@ impl WidgetHostNative {
             return false;
         };
         let menu = PathAnchorContextMenu::for_state(&self.editor_state, state.clone());
-        let new_hover = menu.hovered_row_at(Point2D::new(x, y)).map(|i| i as u8);
-        if new_hover != state.hovered_row {
-            self.editor_state.ui.path_anchor_menu = Some(op_editor_core::PathAnchorMenuState {
-                hovered_row: new_hover,
-                ..state
-            });
+        let new_hover = menu.hovered_row_at(Point2D::new(x, y));
+        if new_hover != state.menu.hover {
+            let mut next = state;
+            next.menu.hover = new_hover;
+            self.editor_state.ui.path_anchor_menu = Some(next);
             self.mark_dirty();
             return true;
         }

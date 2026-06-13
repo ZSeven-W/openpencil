@@ -151,8 +151,8 @@ pub struct PathAnchorMenuState {
     /// Menu anchor in viewport coords (the right-click position).
     pub x: f32,
     pub y: f32,
-    /// Hovered row index for the menu paint; `None` = no row hovered.
-    pub hovered_row: Option<u8>,
+    /// Shared menu interaction state; `hover = None` means no row hovered.
+    pub menu: jian_widgets::components::menu::MenuState,
 }
 
 /// Inline rename in progress on a layer or page row.

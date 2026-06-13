@@ -13,6 +13,7 @@ use crate::theme::Theme;
 use crate::widgets::editor_state_ext::theme_for;
 use crate::widgets::PaintCx;
 use crate::{Point2D, Rect, TextLayout};
+pub use jian_widgets::components::menu::MenuHit;
 use op_editor_core::{EditorState, PathAnchorMenuState};
 
 pub const PATH_ANCHOR_MENU_WIDTH: f32 = 160.0;
@@ -76,10 +77,34 @@ impl PathAnchorContextMenu {
         (idx < ROWS.len()).then_some(idx)
     }
 
-    /// The action under `point`; `None` when outside the menu
-    /// (caller closes it and lets the press route on — TS parity).
+    /// The action under `point`; `None` when the hit is not an
+    /// actionable row. Callers use `hit` to distinguish inside blank
+    /// menu space from an outside dismiss.
     pub fn hit_test(&self, point: Point2D) -> Option<PathAnchorMenuAction> {
-        self.hovered_row_at(point).map(|i| ROWS[i].0)
+        match self.hit(point) {
+            MenuHit::Row(idx) => Some(ROWS[idx].0),
+            MenuHit::Inside | MenuHit::Outside => None,
+        }
+    }
+
+    pub fn hit(&self, point: Point2D) -> MenuHit {
+        let rect = self.rect();
+        if point.x < rect.origin.x
+            || point.x > rect.origin.x + rect.size.x
+            || point.y < rect.origin.y
+            || point.y > rect.origin.y + rect.size.y
+        {
+            return MenuHit::Outside;
+        }
+        if point.y < rect.origin.y + PAD_Y || point.y > rect.origin.y + rect.size.y - PAD_Y {
+            return MenuHit::Inside;
+        }
+        let idx = ((point.y - rect.origin.y - PAD_Y) / ROW_HEIGHT) as usize;
+        if idx < ROWS.len() {
+            MenuHit::Row(idx)
+        } else {
+            MenuHit::Inside
+        }
     }
 
     pub fn paint(&self, cx: &mut PaintCx<'_>) {
@@ -89,7 +114,7 @@ impl PathAnchorContextMenu {
             .stroke_round_rect(rect, 6.0, self.theme.border, 1.0);
         let mut y = rect.origin.y + PAD_Y;
         for (i, (_, label)) in ROWS.iter().enumerate() {
-            if self.state.hovered_row == Some(i as u8) {
+            if self.state.menu.hover == Some(i) {
                 let hover_rect = Rect {
                     origin: Point2D::new(rect.origin.x + 4.0, y + 1.0),
                     size: Point2D::new(rect.size.x - 8.0, ROW_HEIGHT - 2.0),
@@ -132,7 +157,7 @@ mod tests {
                 anchor_index: 0,
                 x: 100.0,
                 y: 50.0,
-                hovered_row: None,
+                menu: Default::default(),
             },
         }
     }
@@ -164,5 +189,17 @@ mod tests {
         let m = menu();
         assert_eq!(m.hit_test(Point2D::new(50.0, 60.0)), None);
         assert_eq!(m.hit_test(Point2D::new(110.0, 300.0)), None);
+    }
+
+    #[test]
+    fn hit_uses_shared_menu_state_protocol() {
+        let mut m = menu();
+        m.state.menu.hover = Some(2);
+        assert_eq!(m.state.menu.hover, Some(2));
+
+        let row_y = 50.0 + PAD_Y + ROW_HEIGHT * 2.5;
+        assert_eq!(m.hit(Point2D::new(110.0, row_y)), MenuHit::Row(2));
+        assert_eq!(m.hit(Point2D::new(110.0, 52.0)), MenuHit::Inside);
+        assert_eq!(m.hit(Point2D::new(50.0, 52.0)), MenuHit::Outside);
     }
 }
