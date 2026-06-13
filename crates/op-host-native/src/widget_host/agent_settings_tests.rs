@@ -659,6 +659,32 @@ fn image_generation_profile_focus_accepts_text_and_commits() {
 }
 
 #[test]
+fn image_generation_add_press_sets_and_release_clears_agent_settings_button() {
+    let mut host = WidgetHostNative::new();
+    host.editor_state_mut().editor_ui.agent_settings.tab = AgentSettingsTab::Images;
+
+    let panel = AgentSettingsPanel::for_editor(host.editor_state());
+    let rect = panel.rect(1200.0, 800.0);
+    let content_x = rect.origin.x + 200.0 + 24.0;
+    let content_y = rect.origin.y + 24.0;
+    let content_w = rect.size.x - 200.0 - 48.0;
+    let gen_top = content_y + 36.0 + 24.0 + 28.0;
+    let add_x = content_x + content_w - 36.0;
+    let add_y = gen_top + 18.0;
+
+    assert!(host.dispatch_agent_settings_press(add_x, add_y, 1200.0, 800.0));
+    assert_eq!(
+        host.editor_state().editor_ui.pressed_button,
+        Some(ButtonPressTarget::AgentSettings(
+            AgentSettingsButton::ImageGenAdd
+        ))
+    );
+
+    assert!(host.apply_release_with_viewport(1200.0, 800.0));
+    assert_eq!(host.editor_state().editor_ui.pressed_button, None);
+}
+
+#[test]
 fn image_generation_provider_click_opens_menu_without_changing_profile() {
     let mut host = WidgetHostNative::new();
     host.editor_state_mut().editor_ui.agent_settings.tab = AgentSettingsTab::Images;
@@ -860,6 +886,15 @@ fn image_search_test_tracks_invalid_and_testing_status_like_ts() {
             .agent_settings
             .images_search_ready
     );
+    assert_eq!(
+        host.editor_state().editor_ui.pressed_button,
+        Some(ButtonPressTarget::AgentSettings(
+            AgentSettingsButton::ImageSearchTest
+        ))
+    );
+
+    assert!(host.apply_release_with_viewport(1200.0, 800.0));
+    assert_eq!(host.editor_state().editor_ui.pressed_button, None);
 }
 
 #[test]
