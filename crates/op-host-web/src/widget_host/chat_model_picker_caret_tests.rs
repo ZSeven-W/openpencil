@@ -7,23 +7,35 @@ fn chat_model_picker_arrows_move_caret_for_insert_and_backspace() {
     {
         let ui = &mut host.editor_state.editor_ui;
         ui.chat_model_picker_open = true;
-        ui.chat_model_picker_search = "abcd".into();
+        ui.chat_model_picker_input.set_text("abcd");
     }
 
     assert!(host.apply_chat_model_picker_caret(false));
     assert!(host.apply_chat_model_picker_caret(false));
-    assert_eq!(host.editor_state.editor_ui.chat_model_picker_caret, Some(2));
+    assert_eq!(
+        host.editor_state.editor_ui.chat_model_picker_input.caret(),
+        2
+    );
 
     assert!(host.apply_text('X'));
     assert_eq!(
-        host.editor_state.editor_ui.chat_model_picker_search,
+        host.editor_state.editor_ui.chat_model_picker_input.text(),
         "abXcd"
     );
-    assert_eq!(host.editor_state.editor_ui.chat_model_picker_caret, Some(3));
+    assert_eq!(
+        host.editor_state.editor_ui.chat_model_picker_input.caret(),
+        3
+    );
 
     assert!(host.apply_backspace());
-    assert_eq!(host.editor_state.editor_ui.chat_model_picker_search, "abcd");
-    assert_eq!(host.editor_state.editor_ui.chat_model_picker_caret, Some(2));
+    assert_eq!(
+        host.editor_state.editor_ui.chat_model_picker_input.text(),
+        "abcd"
+    );
+    assert_eq!(
+        host.editor_state.editor_ui.chat_model_picker_input.caret(),
+        2
+    );
 }
 
 #[test]
@@ -33,8 +45,7 @@ fn chat_model_picker_clear_button_empties_search() {
     {
         let ui = &mut host.editor_state.editor_ui;
         ui.chat_model_picker_open = true;
-        ui.chat_model_picker_search = "231".into();
-        ui.chat_model_picker_caret = Some(3);
+        ui.chat_model_picker_input.set_text("231");
         ui.chat_model_picker_scroll = 10.0;
         ui.chat_model_picker_hover = Some(0);
     }
@@ -47,10 +58,10 @@ fn chat_model_picker_clear_button_empties_search() {
     assert!(host.apply_click(x, y, 1200.0, 800.0));
 
     let ui = &host.editor_state.editor_ui;
-    assert!(ui.chat_model_picker_search.is_empty());
-    assert_eq!(ui.chat_model_picker_caret, Some(0));
+    assert!(ui.chat_model_picker_input.text().is_empty());
+    assert_eq!(ui.chat_model_picker_input.caret(), 0);
     assert_eq!(ui.chat_model_picker_scroll, 0.0);
     assert_eq!(ui.chat_model_picker_hover, None);
     assert!(ui.chat_model_picker_open);
-    assert_eq!(ui.chat_model_picker_caret_anchor_ms, 456);
+    assert_eq!(ui.chat_model_picker_input.next_blink_flip_ms(456), 956);
 }

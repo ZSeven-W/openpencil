@@ -13,7 +13,10 @@ fn top_bar_gap_press_blurs_chat_and_model_picker() {
     let mut host = WidgetHost::new();
     host.editor_state.chat.focused = true;
     host.editor_state.editor_ui.chat_model_picker_open = true;
-    host.editor_state.editor_ui.chat_model_picker_search = "gpt".into();
+    host.editor_state
+        .editor_ui
+        .chat_model_picker_input
+        .set_text("gpt");
 
     // Dead centre of the top bar — between the left file controls and
     // the right chrome chips.
@@ -27,7 +30,8 @@ fn top_bar_gap_press_blurs_chat_and_model_picker() {
     assert!(host
         .editor_state
         .editor_ui
-        .chat_model_picker_search
+        .chat_model_picker_input
+        .text()
         .is_empty());
 }
 

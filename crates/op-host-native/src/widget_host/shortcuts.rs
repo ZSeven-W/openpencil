@@ -178,9 +178,8 @@ impl WidgetHostNative {
         }
         if self.editor_state.editor_ui.chat_model_picker_open {
             let ui = &mut self.editor_state.editor_ui;
-            ui.chat_model_picker_select_all = true;
-            ui.chat_model_picker_caret = Some(ui.chat_model_picker_search.len());
-            ui.chat_model_picker_caret_anchor_ms = self.now_ms;
+            ui.chat_model_picker_input.select_all();
+            ui.chat_model_picker_input.touch(self.now_ms);
             self.mark_dirty();
             return true;
         }

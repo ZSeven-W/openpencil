@@ -55,12 +55,17 @@ fn select_all_in_chat_model_picker_replaces_next_typed_text() {
     {
         let ui = &mut host.editor_state.editor_ui;
         ui.chat_model_picker_open = true;
-        ui.chat_model_picker_search = "gpt".into();
-        ui.chat_model_picker_caret = Some(3);
+        ui.chat_model_picker_input.set_text("gpt");
     }
 
     assert!(host.apply_select_all());
     assert!(host.apply_text('x'));
-    assert_eq!(host.editor_state.editor_ui.chat_model_picker_search, "x");
-    assert_eq!(host.editor_state.editor_ui.chat_model_picker_caret, Some(1));
+    assert_eq!(
+        host.editor_state.editor_ui.chat_model_picker_input.text(),
+        "x"
+    );
+    assert_eq!(
+        host.editor_state.editor_ui.chat_model_picker_input.caret(),
+        1
+    );
 }

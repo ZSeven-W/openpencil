@@ -191,8 +191,10 @@ impl WidgetHostNative {
                         self.editor_state.chat.maximized = !self.editor_state.chat.maximized;
                         self.editor_state.chat.collapsed = false;
                         self.editor_state.editor_ui.chat_model_picker_open = false;
-                        self.editor_state.editor_ui.chat_model_picker_search.clear();
-                        self.editor_state.editor_ui.chat_model_picker_caret = None;
+                        self.editor_state
+                            .editor_ui
+                            .chat_model_picker_input
+                            .set_text("");
                         self.mark_dirty();
                         return true;
                     }
@@ -200,8 +202,10 @@ impl WidgetHostNative {
                         self.editor_state.chat.new_chat();
                         self.editor_state.editor_ui.chat_model_picker_open = false;
                         self.editor_state.editor_ui.chat_model_picker_scroll = 0.0;
-                        self.editor_state.editor_ui.chat_model_picker_search.clear();
-                        self.editor_state.editor_ui.chat_model_picker_caret = None;
+                        self.editor_state
+                            .editor_ui
+                            .chat_model_picker_input
+                            .set_text("");
                         self.editor_state.editor_ui.chat_model_picker_hover = None;
                         self.mark_dirty();
                         return true;
@@ -213,12 +217,15 @@ impl WidgetHostNative {
                         // a stale offset from a prior open never hides
                         // the top of the catalog.
                         self.editor_state.editor_ui.chat_model_picker_scroll = 0.0;
-                        self.editor_state.editor_ui.chat_model_picker_search.clear();
-                        self.editor_state.editor_ui.chat_model_picker_caret = Some(0);
+                        self.editor_state
+                            .editor_ui
+                            .chat_model_picker_input
+                            .set_text("");
                         if opening {
                             self.editor_state
                                 .editor_ui
-                                .chat_model_picker_caret_anchor_ms = self.now_ms;
+                                .chat_model_picker_input
+                                .touch(self.now_ms);
                         }
                         self.editor_state.editor_ui.chat_model_picker_hover = None;
                         self.mark_dirty();
@@ -227,18 +234,22 @@ impl WidgetHostNative {
                     AIChatHit::FocusModelSearch => {
                         self.editor_state
                             .editor_ui
-                            .chat_model_picker_caret_anchor_ms = self.now_ms;
+                            .chat_model_picker_input
+                            .touch(self.now_ms);
                         self.mark_dirty();
                         return true;
                     }
                     AIChatHit::ClearModelSearch => {
-                        self.editor_state.editor_ui.chat_model_picker_search.clear();
-                        self.editor_state.editor_ui.chat_model_picker_caret = Some(0);
+                        self.editor_state
+                            .editor_ui
+                            .chat_model_picker_input
+                            .set_text("");
                         self.editor_state.editor_ui.chat_model_picker_scroll = 0.0;
                         self.editor_state.editor_ui.chat_model_picker_hover = None;
                         self.editor_state
                             .editor_ui
-                            .chat_model_picker_caret_anchor_ms = self.now_ms;
+                            .chat_model_picker_input
+                            .touch(self.now_ms);
                         self.mark_dirty();
                         return true;
                     }

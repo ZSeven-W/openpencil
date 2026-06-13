@@ -668,7 +668,7 @@ impl WidgetHostNative {
                     Point2D::new(x, y),
                     &self.editor_state.chat.available_models,
                     scroll,
-                    &self.editor_state.editor_ui.chat_model_picker_search,
+                    self.editor_state.editor_ui.chat_model_picker_input.text(),
                 );
                 if new_hover != self.editor_state.editor_ui.chat_model_picker_hover {
                     self.editor_state.editor_ui.chat_model_picker_hover = new_hover;

@@ -911,13 +911,12 @@ impl WidgetHostNative {
             );
         }
         if self.editor_state.editor_ui.chat_model_picker_open {
-            return Some(jian_core::anim::next_blink_flip_ms(
-                self.now_ms,
+            return Some(
                 self.editor_state
                     .editor_ui
-                    .chat_model_picker_caret_anchor_ms,
-                500,
-            ));
+                    .chat_model_picker_input
+                    .next_blink_flip_ms(self.now_ms),
+            );
         }
         if self.editor_state.chat.focused {
             return Some(self.editor_state.chat.input.next_blink_flip_ms(self.now_ms));

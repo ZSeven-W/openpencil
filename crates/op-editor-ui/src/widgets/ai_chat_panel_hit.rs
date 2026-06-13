@@ -73,7 +73,7 @@ impl<'a> AIChatPlaceholder<'a> {
             if crate::widgets::ai_chat_model_picker::search_clear_hit(
                 picker,
                 point,
-                &self.model_picker_search,
+                self.model_picker_input.text(),
             ) {
                 return Some(AIChatHit::ClearModelSearch);
             }
@@ -82,7 +82,7 @@ impl<'a> AIChatPlaceholder<'a> {
                 point,
                 &self.state.available_models,
                 self.model_picker_scroll,
-                &self.model_picker_search,
+                self.model_picker_input.text(),
             ) {
                 return Some(AIChatHit::SelectModel(idx));
             }

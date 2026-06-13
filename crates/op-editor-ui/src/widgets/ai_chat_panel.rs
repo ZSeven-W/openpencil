@@ -10,6 +10,7 @@ use crate::widgets::editor_state_ext::{theme_for, translate};
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
 use crate::{Color, Point2D, Rect, TextLayout};
+use jian_core::text_input::TextInputState;
 use op_editor_core::chat::ChatState;
 use op_editor_core::EditorState;
 
@@ -91,14 +92,8 @@ pub struct AIChatPlaceholder<'a> {
     pub model_picker_scroll: f32,
     /// Index into `state.available_models` of the picker row under the cursor.
     pub model_picker_hover: Option<usize>,
-    /// Live model-picker search query.
-    pub model_picker_search: String,
-    /// Byte caret for the model-picker search query.
-    pub model_picker_caret: Option<usize>,
-    /// Whether Ctrl/Cmd+A selected the full model-picker query.
-    pub model_picker_select_all: bool,
-    /// Last focus / edit timestamp for the model-picker search caret.
-    pub model_picker_caret_anchor_ms: u64,
+    /// Text state for the model-picker search query.
+    pub model_picker_input: &'a TextInputState,
     pub design_hover: Option<(usize, usize)>,
     /// Empty-state quick action card under the cursor.
     pub example_hover: Option<usize>,
@@ -136,10 +131,7 @@ impl<'a> AIChatPlaceholder<'a> {
             model_picker_open: ui.chat_model_picker_open,
             model_picker_scroll: ui.chat_model_picker_scroll,
             model_picker_hover: ui.chat_model_picker_hover,
-            model_picker_search: ui.chat_model_picker_search.clone(),
-            model_picker_caret: ui.chat_model_picker_caret,
-            model_picker_select_all: ui.chat_model_picker_select_all,
-            model_picker_caret_anchor_ms: ui.chat_model_picker_caret_anchor_ms,
+            model_picker_input: &ui.chat_model_picker_input,
             design_hover: ui.chat_design_block_hover,
             example_hover: ui.chat_example_hover,
             header_hover: ui.chat_header_hover,
@@ -215,7 +207,7 @@ impl<'a> AIChatPlaceholder<'a> {
     pub(crate) fn model_picker_rect(&self, rect: Rect, input_rect: Rect) -> Rect {
         let height = crate::widgets::ai_chat_model_picker::picker_view_height(
             &self.state.available_models,
-            &self.model_picker_search,
+            self.model_picker_input.text(),
         );
         let toolbar_top =
             input_rect.origin.y + self.input_area_height_for_rect(rect) + self.attachment_row_h();
@@ -710,11 +702,8 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
                 self.state.selected_model,
                 self.model_picker_scroll,
                 self.model_picker_hover,
-                &self.model_picker_search,
-                self.model_picker_caret,
-                self.model_picker_select_all,
+                self.model_picker_input,
                 self.now_ms,
-                self.model_picker_caret_anchor_ms,
                 self.locale,
             );
         }

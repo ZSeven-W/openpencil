@@ -31,7 +31,10 @@ fn top_bar_gap_press_blurs_chat_and_model_picker() {
     seed(&mut host, ONE_RECT);
     host.editor_state_mut().chat.focused = true;
     host.editor_state_mut().editor_ui.chat_model_picker_open = true;
-    host.editor_state_mut().editor_ui.chat_model_picker_search = "gpt".into();
+    host.editor_state_mut()
+        .editor_ui
+        .chat_model_picker_input
+        .set_text("gpt");
 
     // Dead centre of the top bar — between the left file controls and
     // the right chrome chips.
@@ -43,7 +46,7 @@ fn top_bar_gap_press_blurs_chat_and_model_picker() {
         "top-bar gap press must blur the chat input"
     );
     assert!(!state.editor_ui.chat_model_picker_open);
-    assert!(state.editor_ui.chat_model_picker_search.is_empty());
+    assert!(state.editor_ui.chat_model_picker_input.text().is_empty());
 }
 
 #[test]
