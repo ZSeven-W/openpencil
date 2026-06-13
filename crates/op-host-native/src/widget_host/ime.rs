@@ -32,7 +32,7 @@ impl WidgetHostNative {
             || ui.variable_row_focus.is_some()
             || self.editor_state.ui.property_focus.is_some()
             || self.editor_state.chat.focused
-            || ui.icon_picker_open
+            || ui.icon_picker.open
             || ui.component_browser_open
     }
 

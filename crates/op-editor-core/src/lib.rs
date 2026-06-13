@@ -42,7 +42,6 @@ pub mod git_button_state;
 pub mod grouping;
 pub mod history;
 pub mod host_support;
-pub mod icon_picker_button_state;
 pub mod icon_picker_state;
 pub mod image_node_props;
 pub mod image_panel_state;
@@ -173,7 +172,6 @@ pub use fills::{
 pub use geometry::{aggregate_bounds, own_bounds, union_aggregate_bounds, DocRect};
 pub use git_button_state::GitButton;
 pub use history::{EditorSnapshot, History, HISTORY_CAP};
-pub use icon_picker_button_state::IconPickerButton;
 pub use icon_picker_state::{IconPickerRemoteIcon, IconPickerRemoteState, IconifyLoadMoreRequest};
 pub use image_node_props::image_node_summary;
 pub use instance_override::{

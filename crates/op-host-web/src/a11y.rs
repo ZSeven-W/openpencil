@@ -535,7 +535,7 @@ fn focused_input(state: &EditorState) -> Option<(String, String, String)> {
             state.ui.property_input.text().to_owned(),
         ));
     }
-    if ui.icon_picker_open {
+    if ui.icon_picker.open {
         return Some((
             "icon-search".to_string(),
             "Icon search".to_string(),
@@ -698,7 +698,7 @@ mod tests {
     #[test]
     fn focused_input_reports_open_search_popovers() {
         let mut state = EditorState::new();
-        state.editor_ui.icon_picker_open = true;
+        state.editor_ui.icon_picker.open = true;
         state.editor_ui.icon_picker_search = "arrow".to_string();
         let (key, _label, value) = focused_input(&state).expect("icon search");
         assert_eq!(key, "icon-search");

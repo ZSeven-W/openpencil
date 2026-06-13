@@ -688,12 +688,8 @@ impl WidgetHost {
             self.mark_dirty();
             return true;
         }
-        if self.editor_state.editor_ui.icon_picker_open {
-            self.editor_state.editor_ui.icon_picker_open = false;
-            self.editor_state.editor_ui.icon_picker_replace_selection = false;
-            self.editor_state.editor_ui.icon_picker_search.clear();
-            self.editor_state.editor_ui.icon_picker_select_all = false;
-            self.editor_state.editor_ui.icon_picker_hover = None;
+        if self.editor_state.editor_ui.icon_picker.open {
+            self.editor_state.editor_ui.close_icon_picker();
             self.mark_dirty();
             return true;
         }

@@ -11,6 +11,8 @@ use op_editor_core::{EditorState, IconPickerRemoteIcon, Locale};
 
 pub const ICON_PICKER_PANEL_W: f32 = 320.0;
 pub const ICON_PICKER_PANEL_H: f32 = 420.0;
+pub const ICON_PICKER_CLOSE_HOVER: usize = usize::MAX - 1;
+pub const ICON_PICKER_LOAD_MORE_HOVER: usize = usize::MAX;
 const PAD: f32 = 14.0;
 const HEADER_H: f32 = 40.0;
 const SEARCH_H: f32 = 42.0;
@@ -57,36 +59,31 @@ pub struct IconPickerPanel<'a> {
     theme: Theme,
     locale: Locale,
     /// Which target the cursor is over — drives the hover wash.
-    hover: Option<op_editor_core::IconPickerButton>,
+    hover: Option<usize>,
 }
 
 impl<'a> IconPickerPanel<'a> {
     pub fn for_editor(state: &'a EditorState) -> Option<IconPickerPanel<'a>> {
-        if !state.editor_ui.icon_picker_open {
+        if !state.editor_ui.icon_picker.open {
             return None;
         }
         Some(IconPickerPanel {
             state,
             theme: theme_for(&state.editor_ui),
             locale: state.editor_ui.locale,
-            hover: state.editor_ui.icon_picker_hover,
+            hover: state.editor_ui.icon_picker.hover,
         })
     }
 
     /// Resolve a pointer to a hoverable target (close / row / load-more).
     /// Mirrors [`Self::hit_test`]'s row math; rows are index-addressable
     /// so no string ids leak into the hover state.
-    pub fn hover_at(
-        &self,
-        panel: Rect,
-        point: Point2D,
-    ) -> Option<op_editor_core::IconPickerButton> {
-        use op_editor_core::IconPickerButton as B;
+    pub fn hover_at(&self, panel: Rect, point: Point2D) -> Option<usize> {
         if !(panel).contains(point) {
             return None;
         }
         if (Self::close_rect(panel)).contains(point) {
-            return Some(B::Close);
+            return Some(ICON_PICKER_CLOSE_HOVER);
         }
         if point.y <= panel.origin.y + HEADER_H {
             return None;
@@ -99,10 +96,10 @@ impl<'a> IconPickerPanel<'a> {
             let item_cap = capacity.saturating_sub(usize::from(has_more));
             let items = self.rows(item_cap);
             if row < items.len() {
-                return Some(B::Row(row));
+                return Some(row);
             }
             if has_more && row == items.len() && !self.state.editor_ui.icon_picker_remote.loading {
-                return Some(B::LoadMore);
+                return Some(ICON_PICKER_LOAD_MORE_HOVER);
             }
         }
         None
@@ -245,7 +242,7 @@ impl<'a> IconPickerPanel<'a> {
             Point2D::new(panel.origin.x + PAD, panel.origin.y + 25.0),
         );
         let close = Self::close_rect(panel);
-        let close_hovered = self.hover == Some(op_editor_core::IconPickerButton::Close);
+        let close_hovered = self.hover == Some(ICON_PICKER_CLOSE_HOVER);
         if close_hovered {
             cx.backend
                 .fill_round_rect(close, 6.0, self.theme.button_hover);
@@ -332,7 +329,7 @@ impl<'a> IconPickerPanel<'a> {
             size: Point2D::new(panel.size.x - 12.0, ROW_H),
         };
         cx.backend.fill_round_rect(row, 6.0, self.theme.popover);
-        if self.hover == Some(op_editor_core::IconPickerButton::Row(idx)) {
+        if self.hover == Some(idx) {
             cx.backend
                 .fill_round_rect(row, 6.0, self.theme.button_hover);
         }
@@ -381,7 +378,7 @@ impl<'a> IconPickerPanel<'a> {
             size: Point2D::new(panel.size.x - 12.0, ROW_H - 4.0),
         };
         cx.backend.fill_round_rect(row, 6.0, self.theme.muted);
-        if self.hover == Some(op_editor_core::IconPickerButton::LoadMore) {
+        if self.hover == Some(ICON_PICKER_LOAD_MORE_HOVER) {
             cx.backend
                 .fill_round_rect(row, 6.0, self.theme.button_hover);
         }
@@ -419,4 +416,36 @@ fn truncate(text: &str, max_chars: usize) -> String {
     let mut out: String = text.chars().take(max_chars.saturating_sub(1)).collect();
     out.push_str("...");
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn hover_at_uses_select_state_indices_for_close_and_rows() {
+        let mut state = EditorState::default();
+        state.editor_ui.open_icon_picker(false);
+        let panel = IconPickerPanel::for_editor(&state).unwrap();
+        let rect = Rect::xywh(0.0, 0.0, ICON_PICKER_PANEL_W, ICON_PICKER_PANEL_H);
+        let close = IconPickerPanel::close_rect(rect);
+
+        assert_eq!(
+            panel.hover_at(
+                rect,
+                Point2D::new(close.origin.x + close.size.x / 2.0, close.origin.y + 4.0)
+            ),
+            Some(ICON_PICKER_CLOSE_HOVER)
+        );
+        assert_eq!(
+            panel.hover_at(
+                rect,
+                Point2D::new(
+                    rect.origin.x + 20.0,
+                    IconPickerPanel::list_top(rect) + ROW_H / 2.0
+                )
+            ),
+            Some(0)
+        );
+    }
 }

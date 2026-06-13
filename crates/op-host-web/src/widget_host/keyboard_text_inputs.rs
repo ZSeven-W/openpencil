@@ -25,7 +25,7 @@ impl WidgetHost {
                 .is_some()
             || self.variables_search_active()
             || self.editor_state.editor_ui.agent_settings.focus.is_some()
-            || self.editor_state.editor_ui.icon_picker_open
+            || self.editor_state.editor_ui.icon_picker.open
             || self.editor_state.editor_ui.chat_model_picker.open
             || self.editor_state.editor_ui.component_browser_open
             || self.editor_state.chat.focused
