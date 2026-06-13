@@ -118,10 +118,10 @@ impl LayerPanel {
             drag_ghost: None,
             now_ms: 0,
             rename_input: state.ui.layer_rename.as_ref().map(|r| r.input.clone()),
-            pages_scroll: state.editor_ui.layer_pages_scroll,
-            layers_scroll: state.editor_ui.layer_layers_scroll,
-            pages_h_scroll: state.editor_ui.layer_pages_h_scroll,
-            layers_h_scroll: state.editor_ui.layer_layers_h_scroll,
+            pages_scroll: state.editor_ui.layer_pages_scroll.offset,
+            layers_scroll: state.editor_ui.layer_layers_scroll.offset,
+            pages_h_scroll: state.editor_ui.layer_pages_h_scroll.offset,
+            layers_h_scroll: state.editor_ui.layer_layers_h_scroll.offset,
         }
     }
 
@@ -174,10 +174,10 @@ impl LayerPanel {
             drag_ghost: None,
             now_ms: 0,
             rename_input: state.ui.layer_rename.as_ref().map(|r| r.input.clone()),
-            pages_scroll: state.editor_ui.layer_pages_scroll,
-            layers_scroll: state.editor_ui.layer_layers_scroll,
-            pages_h_scroll: state.editor_ui.layer_pages_h_scroll,
-            layers_h_scroll: state.editor_ui.layer_layers_h_scroll,
+            pages_scroll: state.editor_ui.layer_pages_scroll.offset,
+            layers_scroll: state.editor_ui.layer_layers_scroll.offset,
+            pages_h_scroll: state.editor_ui.layer_pages_h_scroll.offset,
+            layers_h_scroll: state.editor_ui.layer_layers_h_scroll.offset,
         }
     }
 

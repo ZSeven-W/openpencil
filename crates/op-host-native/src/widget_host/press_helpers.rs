@@ -68,7 +68,7 @@ impl WidgetHostNative {
             AgentSettingsHit::SelectTab(t) => {
                 self.commit_settings_focus_if_any();
                 self.editor_state.editor_ui.agent_settings.tab = t;
-                self.editor_state.editor_ui.agent_settings.scroll_y = 0.0;
+                self.editor_state.editor_ui.agent_settings.scroll_y.offset = 0.0;
             }
             AgentSettingsHit::Connect(p) => {
                 // `connected` is indexed by `AgentProvider::ALL` order.
@@ -365,7 +365,7 @@ impl WidgetHostNative {
                 let settings = &mut self.editor_state.editor_ui.agent_settings;
                 settings.builtin_preset_menu_open =
                     (settings.builtin_preset_menu_open != Some(target)).then_some(target);
-                settings.builtin_preset_menu_scroll = 0.0;
+                settings.builtin_preset_menu_scroll.offset = 0.0;
                 settings.builtin_preset_menu_hover = None;
             }
             AgentSettingsHit::SelectBuiltinAgentPreset { index, preset } => {
@@ -391,7 +391,8 @@ impl WidgetHostNative {
                 self.editor_state
                     .editor_ui
                     .agent_settings
-                    .builtin_preset_menu_scroll = 0.0;
+                    .builtin_preset_menu_scroll
+                    .offset = 0.0;
                 self.editor_state
                     .editor_ui
                     .agent_settings

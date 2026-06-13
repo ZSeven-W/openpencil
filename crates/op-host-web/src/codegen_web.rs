@@ -545,7 +545,7 @@ fn start_pump(inner: Rc<RefCell<crate::Inner>>, shared: Shared) {
                     assets,
                 } => {
                     cg.code = code;
-                    cg.code_scroll = 0.0;
+                    cg.code_scroll.offset = 0.0;
                     cg.code_selection = None;
                     cg.degraded = degraded;
                     cg.assets = assets;

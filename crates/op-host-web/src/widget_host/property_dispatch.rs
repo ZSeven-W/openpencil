@@ -491,14 +491,14 @@ impl WidgetHost {
                 cg.pending_generate = true;
                 cg.phase = CodegenPhase::Generating;
                 cg.error = None;
-                cg.code_scroll = 0.0;
+                cg.code_scroll.offset = 0.0;
                 cg.code_selection = None;
             }
             CodegenAction::Regenerate => {
                 cg.pending_regenerate = true;
                 cg.phase = CodegenPhase::Generating;
                 cg.error = None;
-                cg.code_scroll = 0.0;
+                cg.code_scroll.offset = 0.0;
                 cg.code_selection = None;
             }
             CodegenAction::Cancel => {
@@ -552,11 +552,12 @@ impl WidgetHost {
                 let max = op_editor_ui::widgets::property_panel_code::framework_row_overflow(pw);
                 let step = 100.0;
                 let cg = &mut self.editor_state.codegen;
-                cg.framework_scroll = if matches!(action, CodegenAction::ScrollFrameworksLeft) {
-                    (cg.framework_scroll - step).clamp(0.0, max)
+                let delta = if matches!(action, CodegenAction::ScrollFrameworksLeft) {
+                    -step
                 } else {
-                    (cg.framework_scroll + step).clamp(0.0, max)
+                    step
                 };
+                cg.framework_scroll.scroll_by(delta, max, 0.0);
             }
         }
     }

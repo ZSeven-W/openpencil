@@ -161,13 +161,13 @@ pub struct AssetMeta {
 }
 
 /// The Code panel's full state. Mirror of `ChatState`'s role for chat.
-/// `PartialEq` only (not `Eq`) — `framework_scroll` carries an `f32`.
+/// `PartialEq` only (not `Eq`) — scroll offsets carry `f32` values.
 #[derive(Debug, Clone, PartialEq)]
 pub struct CodegenState {
     pub framework: Framework,
     /// Horizontal scroll offset (px, ≥ 0) of the framework tab strip, so the
     /// single-row selector scrolls to reach off-screen frameworks (TS parity).
-    pub framework_scroll: f32,
+    pub framework_scroll: jian_core::scroll::ScrollState,
     /// The inactive framework chip the cursor is hovering, for a subtle
     /// background highlight. `None` when the cursor is off the strip.
     pub framework_hover: Option<Framework>,
@@ -177,7 +177,7 @@ pub struct CodegenState {
     pub progress: CodeGenProgress,
     pub code: String,
     /// Vertical scroll offset (px, >= 0) inside the generated-code preview.
-    pub code_scroll: f32,
+    pub code_scroll: jian_core::scroll::ScrollState,
     /// Text selection inside the generated-code preview.
     pub code_selection: Option<CodeSelection>,
     pub degraded: bool,
@@ -210,13 +210,13 @@ impl Default for CodegenState {
     fn default() -> Self {
         Self {
             framework: Framework::React,
-            framework_scroll: 0.0,
+            framework_scroll: Default::default(),
             framework_hover: None,
             action_hover: None,
             phase: CodegenPhase::Idle,
             progress: CodeGenProgress::default(),
             code: String::new(),
-            code_scroll: 0.0,
+            code_scroll: Default::default(),
             code_selection: None,
             degraded: false,
             assets: Vec::new(),
@@ -282,7 +282,7 @@ mod tests {
         assert_eq!(s.framework, Framework::React);
         assert_eq!(s.phase, CodegenPhase::Idle);
         assert!(s.code.is_empty());
-        assert_eq!(s.code_scroll, 0.0);
+        assert_eq!(s.code_scroll.offset, 0.0);
         assert!(!s.degraded);
         assert!(s.error.is_none());
         assert!(!s.pending_generate);
@@ -290,6 +290,17 @@ mod tests {
         assert!(!s.pending_download);
         assert!(!s.pending_export_bundle);
         assert!(!s.pending_cancel);
+    }
+
+    #[test]
+    fn codegen_scroll_fields_use_scroll_state() {
+        let mut s = CodegenState::default();
+
+        s.framework_scroll.offset = 16.0;
+        s.code_scroll.offset = 32.0;
+
+        assert_eq!(s.framework_scroll.offset, 16.0);
+        assert_eq!(s.code_scroll.offset, 32.0);
     }
 
     #[test]

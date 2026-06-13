@@ -251,7 +251,7 @@ impl VariablesPanel {
             search: state.editor_ui.variables_search.clone(),
             search_focus: state.editor_ui.variables_search_focus,
             search_input,
-            scroll: state.editor_ui.variables_scroll,
+            scroll: state.editor_ui.variables_scroll.offset,
             row_menu_open: state.editor_ui.variables_row_menu,
             hover: state.editor_ui.variables_panel_hover,
             editing_name_row: state.editor_ui.variable_row_focus.and_then(|f| match f {

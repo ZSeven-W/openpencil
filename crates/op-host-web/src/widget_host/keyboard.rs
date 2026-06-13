@@ -43,7 +43,7 @@ impl WidgetHost {
         if self.variables_search_active() && !c.is_control() {
             self.editor_state.editor_ui.variables_search.push(c);
             self.editor_state.ui.property_caret_anchor_ms = self.now_ms;
-            self.editor_state.editor_ui.variables_scroll = 0.0;
+            self.editor_state.editor_ui.variables_scroll.offset = 0.0;
             self.mark_dirty();
             return true;
         }
@@ -222,7 +222,7 @@ impl WidgetHost {
         if self.variables_search_active() {
             if self.editor_state.editor_ui.variables_search.pop().is_some() {
                 self.editor_state.ui.property_caret_anchor_ms = self.now_ms;
-                self.editor_state.editor_ui.variables_scroll = 0.0;
+                self.editor_state.editor_ui.variables_scroll.offset = 0.0;
                 self.mark_dirty();
                 return true;
             }

@@ -544,9 +544,12 @@ impl WidgetHost {
         if !(checklist).contains(point) {
             return false;
         }
-        let next = (self.editor_state.chat.checklist_scroll - delta).clamp(0.0, max);
-        if next != self.editor_state.chat.checklist_scroll {
-            self.editor_state.chat.checklist_scroll = next;
+        let before = self.editor_state.chat.checklist_scroll.offset;
+        self.editor_state
+            .chat
+            .checklist_scroll
+            .scroll_by(-delta, max, 0.0);
+        if self.editor_state.chat.checklist_scroll.offset != before {
             self.mark_dirty();
         }
         true
@@ -573,8 +576,9 @@ impl WidgetHost {
                     .builtin_preset_scroll_max_at(panel_rect, point)
                 {
                     let settings = &mut self.editor_state.editor_ui.agent_settings;
-                    settings.builtin_preset_menu_scroll =
-                        (settings.builtin_preset_menu_scroll - delta_y).clamp(0.0, max);
+                    settings
+                        .builtin_preset_menu_scroll
+                        .scroll_by(-delta_y, max, 0.0);
                     self.mark_dirty();
                     return true;
                 }
@@ -582,9 +586,11 @@ impl WidgetHost {
                 let total = panel.content_total_height();
                 let viewport_h_inner = panel_rect.size.y - 48.0;
                 let max_scroll = (total - viewport_h_inner).max(0.0);
-                self.editor_state.editor_ui.agent_settings.scroll_y =
-                    (self.editor_state.editor_ui.agent_settings.scroll_y - delta_y)
-                        .clamp(0.0, max_scroll);
+                self.editor_state
+                    .editor_ui
+                    .agent_settings
+                    .scroll_y
+                    .scroll_by(-delta_y, max_scroll, 0.0);
                 self.mark_dirty();
                 return true;
             }

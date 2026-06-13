@@ -2088,8 +2088,11 @@ fn codegen_preview_wheel_scrolls_code_not_property_panel() {
         viewport_h
     ));
 
-    assert!(host.editor_state().codegen.code_scroll > 0.0);
-    assert_eq!(host.editor_state().editor_ui.property_panel_scroll, 0.0);
+    assert!(host.editor_state().codegen.code_scroll.offset > 0.0);
+    assert_eq!(
+        host.editor_state().editor_ui.property_panel_scroll.offset,
+        0.0
+    );
 }
 
 #[test]

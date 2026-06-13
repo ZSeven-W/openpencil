@@ -403,7 +403,7 @@ impl PropertyPanel {
             export_scale_picker_open: ui.export_scale_picker_open,
             export_format_picker_open: ui.export_format_picker_open,
             export_picker_hover: ui.export_picker_hover,
-            scroll: ui.property_panel_scroll.max(0.0),
+            scroll: ui.property_panel_scroll.offset.max(0.0),
             locale: ui.locale,
             // Inert in the multi-select aggregate view.
             effect_param_focus: if is_multi {

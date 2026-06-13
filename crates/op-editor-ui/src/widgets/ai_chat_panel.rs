@@ -476,7 +476,7 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
                 fixed_checklist_rect(rect, input_h, checklist_h),
                 &self.state.messages,
                 self.state.checklist_collapsed,
-                self.state.checklist_scroll,
+                self.state.checklist_scroll.offset,
             );
         }
         let input_rect = Rect {

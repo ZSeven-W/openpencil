@@ -437,14 +437,14 @@ impl WidgetHostNative {
                         cg.pending_generate = true;
                         cg.phase = CodegenPhase::Generating;
                         cg.error = None;
-                        cg.code_scroll = 0.0;
+                        cg.code_scroll.offset = 0.0;
                         cg.code_selection = None;
                     }
                     CodegenAction::Regenerate => {
                         cg.pending_regenerate = true;
                         cg.phase = CodegenPhase::Generating;
                         cg.error = None;
-                        cg.code_scroll = 0.0;
+                        cg.code_scroll.offset = 0.0;
                         cg.code_selection = None;
                     }
                     CodegenAction::Cancel => {
@@ -481,12 +481,13 @@ impl WidgetHostNative {
                             op_editor_ui::widgets::property_panel_code::framework_row_overflow(pw);
                         let step = 100.0;
                         let cg = &mut self.editor_state.codegen;
-                        cg.framework_scroll =
-                            if matches!(codegen_action, CodegenAction::ScrollFrameworksLeft) {
-                                (cg.framework_scroll - step).clamp(0.0, max)
-                            } else {
-                                (cg.framework_scroll + step).clamp(0.0, max)
-                            };
+                        let delta = if matches!(codegen_action, CodegenAction::ScrollFrameworksLeft)
+                        {
+                            -step
+                        } else {
+                            step
+                        };
+                        cg.framework_scroll.scroll_by(delta, max, 0.0);
                     }
                 }
             }

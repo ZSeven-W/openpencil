@@ -126,7 +126,7 @@ pub(super) fn paint_complete_body_in_panel(
         theme,
         &state.code,
         state.code_selection,
-        state.code_scroll,
+        state.code_scroll.offset,
         code_rect,
     );
     let actions = [
@@ -158,6 +158,7 @@ pub(super) fn code_text_offset_at_in_panel(
     }
     let scroll = state
         .code_scroll
+        .offset
         .clamp(0.0, max_scroll_for_code(&state.code, rect));
     let line_index = ((point.y - code_text_top(rect) + scroll) / CODE_LINE_H)
         .floor()

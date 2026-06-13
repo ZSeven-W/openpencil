@@ -60,7 +60,7 @@ fn layer_panel_trackpad_pan_scrolls_horizontally() {
             viewport_h
         ));
 
-        assert!(host.editor_state().editor_ui.layer_layers_h_scroll > 0.0);
+        assert!(host.editor_state().editor_ui.layer_layers_h_scroll.offset > 0.0);
     });
 }
 
@@ -89,7 +89,7 @@ fn chat_checklist_wheel_scrolls_pinned_task_list() {
         viewport_h
     ));
 
-    assert!(host.editor_state().chat.checklist_scroll > 0.0);
+    assert!(host.editor_state().chat.checklist_scroll.offset > 0.0);
 }
 
 #[test]
