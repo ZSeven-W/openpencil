@@ -130,11 +130,20 @@ impl ExportDialog {
             if !fmt.is_implemented() {
                 self.paint_disabled_pill(backend, theme, rect, fmt.label());
             } else {
-                let hovered = ui.export_dialog_hover
-                    == Some(op_editor_core::ExportDialogButton::Format(
-                        crate::widgets::editor_state_ext::export_format(fmt),
-                    ));
-                self.paint_pill(backend, theme, rect, fmt.label(), selected, hovered);
+                let button = op_editor_core::ExportDialogButton::Format(
+                    crate::widgets::editor_state_ext::export_format(fmt),
+                );
+                let hovered = ui.export_dialog_hover == Some(button);
+                let pressed = export_dialog_pressed(ui, button);
+                self.paint_pill(
+                    backend,
+                    theme,
+                    rect,
+                    fmt.label(),
+                    selected,
+                    hovered,
+                    pressed,
+                );
             }
         }
 
@@ -154,8 +163,9 @@ impl ExportDialog {
         for (i, lbl) in ["1x", "2x", "3x"].iter().enumerate() {
             let s = (i as u8) + 1;
             let selected = scale_index(ui.export_scale) == s;
-            let hovered =
-                ui.export_dialog_hover == Some(op_editor_core::ExportDialogButton::Scale(s));
+            let button = op_editor_core::ExportDialogButton::Scale(s);
+            let hovered = ui.export_dialog_hover == Some(button);
+            let pressed = export_dialog_pressed(ui, button);
             self.paint_pill(
                 backend,
                 theme,
@@ -163,21 +173,30 @@ impl ExportDialog {
                 lbl,
                 selected,
                 hovered,
+                pressed,
             );
         }
 
         // Footer buttons.
         let (cancel, export) = self.button_rects();
         backend.fill_round_rect(cancel, 6.0, theme.muted);
-        if ui.export_dialog_hover == Some(op_editor_core::ExportDialogButton::Cancel) {
-            backend.fill_round_rect(cancel, 6.0, theme.button_hover);
-        }
+        crate::widgets::button::paint_ghost_button_feedback(
+            backend,
+            theme,
+            cancel,
+            ui.export_dialog_hover == Some(op_editor_core::ExportDialogButton::Cancel),
+            export_dialog_pressed(ui, op_editor_core::ExportDialogButton::Cancel),
+        );
         backend.stroke_round_rect(cancel, 6.0, theme.border, 1.0);
         paint_centered_label(backend, "Cancel", 13.0, theme.foreground, cancel);
         backend.fill_round_rect(export, 6.0, theme.primary);
-        if ui.export_dialog_hover == Some(op_editor_core::ExportDialogButton::Export) {
-            backend.fill_round_rect(export, 6.0, theme.button_hover);
-        }
+        crate::widgets::button::paint_ghost_button_feedback(
+            backend,
+            theme,
+            export,
+            ui.export_dialog_hover == Some(op_editor_core::ExportDialogButton::Export),
+            export_dialog_pressed(ui, op_editor_core::ExportDialogButton::Export),
+        );
         paint_centered_label(backend, "Export", 13.0, theme.primary_foreground, export);
     }
 
@@ -203,13 +222,11 @@ impl ExportDialog {
         label: &str,
         selected: bool,
         hovered: bool,
+        pressed: bool,
     ) {
         let bg = if selected { theme.primary } else { theme.muted };
         backend.fill_round_rect(rect, PILL_RADIUS, bg);
-        // Hover brightens the pill (TS `hover:bg-accent` / `hover:bg-primary/90`).
-        if hovered {
-            backend.fill_round_rect(rect, PILL_RADIUS, theme.button_hover);
-        }
+        crate::widgets::button::paint_ghost_button_feedback(backend, theme, rect, hovered, pressed);
         backend.stroke_round_rect(rect, PILL_RADIUS, theme.border, 1.0);
         let color = if selected {
             theme.primary_foreground
@@ -288,6 +305,10 @@ impl ExportDialog {
     }
 }
 
+fn export_dialog_pressed(ui: &EditorUiState, button: op_editor_core::ExportDialogButton) -> bool {
+    ui.pressed_button == Some(op_editor_core::ButtonPressTarget::ExportDialog(button))
+}
+
 fn paint_centered_label(
     backend: &mut dyn RenderBackend,
     text: &str,
@@ -334,6 +355,40 @@ pub fn scale_from_index(index: u8) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[derive(Default)]
+    struct CaptureBackend {
+        round_fills: Vec<(Rect, f32, Color)>,
+    }
+
+    impl RenderBackend for CaptureBackend {
+        fn begin_frame(&mut self) {}
+        fn end_frame(&mut self) {}
+        fn fill_rect(&mut self, _: Rect, _: Color) {}
+        fn stroke_rect(&mut self, _: Rect, _: Color, _: f32) {}
+        fn draw_text(&mut self, _: &TextLayout, _: Point2D) {}
+        fn clip_rect(&mut self, _: Rect) {}
+        fn stroke_line(&mut self, _: Point2D, _: Point2D, _: Color, _: f32) {}
+        fn fill_round_rect(&mut self, rect: Rect, radius: f32, color: Color) {
+            self.round_fills.push((rect, radius, color));
+        }
+        fn stroke_round_rect(&mut self, _: Rect, _: f32, _: Color, _: f32) {}
+        fn stroke_svg_path(&mut self, _: &str, _: Point2D, _: f32, _: Color, _: f32) {}
+        fn save(&mut self) {}
+        fn restore(&mut self) {}
+        fn translate(&mut self, _: Point2D) {}
+        fn resize(&mut self, _: u32, _: u32) {}
+        fn dpi_scale(&self) -> f32 {
+            1.0
+        }
+    }
+
+    fn color_close(a: Color, b: Color) -> bool {
+        (a.r - b.r).abs() < 1e-6
+            && (a.g - b.g).abs() < 1e-6
+            && (a.b - b.b).abs() < 1e-6
+            && (a.a - b.a).abs() < 1e-6
+    }
 
     #[test]
     fn dialog_centers_in_viewport() {
@@ -390,6 +445,30 @@ mod tests {
         let ec = Point2D::new(e.origin.x + e.size.x / 2.0, e.origin.y + e.size.y / 2.0);
         assert_eq!(dlg.hit_test(cc), Some(ExportDialogHit::Cancel));
         assert_eq!(dlg.hit_test(ec), Some(ExportDialogHit::Export));
+    }
+
+    #[test]
+    fn pressed_scale_pill_uses_shared_button_feedback() {
+        let dlg = ExportDialog::centered(1000.0, 800.0);
+        let mut ui = EditorUiState::default();
+        ui.pressed_button = Some(op_editor_core::ButtonPressTarget::ExportDialog(
+            op_editor_core::ExportDialogButton::Scale(1),
+        ));
+        let theme = Theme::dark();
+        let expected = theme.button_hover.with_alpha(theme.button_hover.a * 1.8);
+        let mut backend = CaptureBackend::default();
+        let scale = dlg.scale_pill_rect(0);
+
+        dlg.paint(&mut backend, &theme, &ui);
+
+        assert!(
+            backend.round_fills.iter().any(|(rect, radius, color)| {
+                *rect == scale
+                    && (*radius - PILL_RADIUS).abs() < 0.01
+                    && color_close(*color, expected)
+            }),
+            "pressed scale pill should paint the shared pressed feedback token"
+        );
     }
 
     #[test]
