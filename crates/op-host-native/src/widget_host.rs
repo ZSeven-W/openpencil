@@ -69,6 +69,8 @@ mod color_picker_press;
 mod component_browser_press;
 mod design_md_press;
 #[cfg(test)]
+mod design_md_press_tests;
+#[cfg(test)]
 mod figma_import_tests;
 mod font_picker_dispatch;
 mod frame_backend;

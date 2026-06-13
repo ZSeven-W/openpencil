@@ -13,6 +13,7 @@ pub enum ButtonPressTarget {
     ChatHeader(crate::chat_button_state::ChatHeaderButton),
     ChatFooter(crate::chat_button_state::ChatFooterButton),
     Git(crate::git_button_state::GitButton),
+    DesignMd(crate::design_md_button_state::DesignMdButton),
     ComponentBrowser(crate::component_browser_state::ComponentBrowserButton),
     ExportDialog(crate::export_dialog_state::ExportDialogButton),
     FigmaImport(crate::figma_import_state::FigmaImportButton),

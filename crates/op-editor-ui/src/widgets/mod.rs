@@ -178,6 +178,8 @@ mod component_browser_kits;
 pub mod component_browser_panel;
 pub mod design_md_markdown;
 pub mod design_md_panel;
+#[cfg(test)]
+mod design_md_panel_tests;
 pub mod export_dialog;
 pub mod figma_import;
 pub mod figma_import_progress;

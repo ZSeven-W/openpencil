@@ -12,11 +12,12 @@
 //! click to a [`DesignMdHit`], and owns import / export / drag.
 
 use crate::theme::Theme;
+use crate::widgets::button::{paint_button_feedback_wash, paint_ghost_button_feedback};
 use crate::widgets::design_md_markdown::{parse_blocks, parse_inline, wrap_runs, MdBlock, MdRun};
 use crate::widgets::editor_state_ext::theme_for;
 use crate::widgets::{draw_icon, Icon, PaintCx};
 use crate::{Color, Point2D, Rect, TextLayout};
-use op_editor_core::{DesignMdSpec, EditorState, Locale};
+use op_editor_core::{ButtonPressTarget, DesignMdButton, DesignMdSpec, EditorState, Locale};
 
 /// Panel width in logical px.
 pub const DESIGN_MD_PANEL_W: f32 = 480.0;
@@ -70,12 +71,14 @@ pub enum DesignMdHit {
 /// The floating Design-MD panel, built from an [`EditorState`].
 pub struct DesignMdPanel<'a> {
     spec: Option<&'a DesignMdSpec>,
-    theme: Theme,
+    pub(in crate::widgets) theme: Theme,
     locale: Locale,
     /// Bitmask of expanded sections (bit 0 = theme … 5 = notes).
     expanded: u8,
     /// Which target the cursor is over — drives the hover wash.
-    hover: Option<op_editor_core::DesignMdButton>,
+    hover: Option<DesignMdButton>,
+    /// Which Design-MD target is actively pressed.
+    pub(in crate::widgets) pressed: Option<DesignMdButton>,
 }
 
 /// One rendered line within a section body.
@@ -131,13 +134,17 @@ impl<'a> DesignMdPanel<'a> {
             locale: state.editor_ui.locale,
             expanded: state.editor_ui.design_md_expanded,
             hover: state.editor_ui.design_md_hover,
+            pressed: match state.editor_ui.pressed_button {
+                Some(ButtonPressTarget::DesignMd(button)) => Some(button),
+                _ => None,
+            },
         })
     }
 
     /// Resolve a pointer to a hoverable button. Reuses [`Self::hit_test`]
     /// and keeps only the button variants (drag-header / inside → None).
-    pub fn hover_at(&self, panel: Rect, point: Point2D) -> Option<op_editor_core::DesignMdButton> {
-        use op_editor_core::DesignMdButton as B;
+    pub fn hover_at(&self, panel: Rect, point: Point2D) -> Option<DesignMdButton> {
+        use DesignMdButton as B;
         match self.hit_test(panel, point)? {
             DesignMdHit::Close => Some(B::Close),
             DesignMdHit::Import => Some(B::Import),
@@ -151,6 +158,10 @@ impl<'a> DesignMdPanel<'a> {
     /// Translate `key` through the active locale tables.
     fn t(&self, key: &'static str) -> &'static str {
         crate::i18n::translate(self.locale, key)
+    }
+
+    fn is_pressed(&self, button: DesignMdButton) -> bool {
+        self.pressed == Some(button)
     }
 
     /// Whether the spec carries content worth a section view (a bare
@@ -366,10 +377,28 @@ impl<'a> DesignMdPanel<'a> {
             self.theme.foreground,
         );
         let [import, export, close] = Self::header_buttons(rect);
-        use op_editor_core::DesignMdButton as B;
-        self.icon_button(cx, import, Icon::FolderOpen, self.hover == Some(B::Import));
-        self.icon_button(cx, export, Icon::Download, self.hover == Some(B::Export));
-        self.icon_button(cx, close, Icon::Close, self.hover == Some(B::Close));
+        use DesignMdButton as B;
+        self.icon_button(
+            cx,
+            import,
+            Icon::FolderOpen,
+            self.hover == Some(B::Import),
+            self.is_pressed(B::Import),
+        );
+        self.icon_button(
+            cx,
+            export,
+            Icon::Download,
+            self.hover == Some(B::Export),
+            self.is_pressed(B::Export),
+        );
+        self.icon_button(
+            cx,
+            close,
+            Icon::Close,
+            self.hover == Some(B::Close),
+            self.is_pressed(B::Close),
+        );
         cx.backend.fill_rect(
             Rect {
                 origin: Point2D::new(rect.origin.x, rect.origin.y + HEADER_H),
@@ -437,22 +466,21 @@ impl<'a> DesignMdPanel<'a> {
         }
         // Footer "remove" link.
         let remove = self.remove_rect(rect);
-        let remove_hovered = self.hover == Some(op_editor_core::DesignMdButton::Remove);
-        if remove_hovered {
-            cx.backend
-                .fill_round_rect(remove, 6.0, self.theme.button_hover);
-        }
+        let remove_hovered = self.hover == Some(DesignMdButton::Remove);
+        let remove_color = paint_ghost_button_feedback(
+            cx.backend,
+            &self.theme,
+            remove,
+            remove_hovered,
+            self.is_pressed(DesignMdButton::Remove),
+        );
         self.text(
             cx,
             self.t("designMd.remove"),
             remove.origin.x,
             remove.origin.y + 13.0,
             11.0,
-            if remove_hovered {
-                self.theme.foreground
-            } else {
-                self.theme.muted_foreground
-            },
+            remove_color,
         );
     }
 
@@ -460,10 +488,15 @@ impl<'a> DesignMdPanel<'a> {
     fn paint_section_header(&self, cx: &mut PaintCx<'_>, sec: &SectionLayout) {
         cx.backend
             .fill_round_rect(sec.header, 7.0, self.theme.muted);
-        if self.hover == Some(op_editor_core::DesignMdButton::ToggleSection(sec.index)) {
-            cx.backend
-                .fill_round_rect(sec.header, 7.0, self.theme.button_hover);
-        }
+        let target = DesignMdButton::ToggleSection(sec.index);
+        paint_button_feedback_wash(
+            cx.backend,
+            &self.theme,
+            sec.header,
+            7.0,
+            self.hover == Some(target),
+            self.is_pressed(target),
+        );
         let chevron = if sec.expanded { "▾" } else { "▸" };
         let baseline = sec.header.origin.y + SECTION_HEADER_H / 2.0 + 4.0;
         self.text(
@@ -614,22 +647,23 @@ impl<'a> DesignMdPanel<'a> {
     }
 
     /// Paint one square header icon button.
-    fn icon_button(&self, cx: &mut PaintCx<'_>, rect: Rect, icon: Icon, hovered: bool) {
+    fn icon_button(
+        &self,
+        cx: &mut PaintCx<'_>,
+        rect: Rect,
+        icon: Icon,
+        hovered: bool,
+        pressed: bool,
+    ) {
         cx.backend.fill_round_rect(rect, 6.0, self.theme.muted);
-        if hovered {
-            cx.backend
-                .fill_round_rect(rect, 6.0, self.theme.button_hover);
-        }
+        let icon_color =
+            paint_ghost_button_feedback(cx.backend, &self.theme, rect, hovered, pressed);
         draw_icon(
             cx.backend,
             icon,
             Point2D::new(rect.origin.x + 5.0, rect.origin.y + 5.0),
             BTN - 10.0,
-            if hovered {
-                self.theme.foreground
-            } else {
-                self.theme.muted_foreground
-            },
+            icon_color,
             1.5,
         );
     }
