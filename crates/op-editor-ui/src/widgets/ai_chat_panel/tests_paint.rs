@@ -140,6 +140,30 @@ fn paint_send_button_hover_adds_visible_feedback() {
 }
 
 #[test]
+fn from_editor_picks_up_chat_button_press_targets() {
+    let mut s = EditorState::new();
+    s.editor_ui.pressed_button = Some(op_editor_core::ButtonPressTarget::ChatHeader(
+        op_editor_core::ChatHeaderButton::NewChat,
+    ));
+    let header_panel = AIChatPlaceholder::from_editor(&s);
+    assert_eq!(
+        header_panel.header_pressed,
+        Some(op_editor_core::ChatHeaderButton::NewChat)
+    );
+    assert_eq!(header_panel.footer_pressed, None);
+
+    s.editor_ui.pressed_button = Some(op_editor_core::ButtonPressTarget::ChatFooter(
+        op_editor_core::ChatFooterButton::Send,
+    ));
+    let footer_panel = AIChatPlaceholder::from_editor(&s);
+    assert_eq!(footer_panel.header_pressed, None);
+    assert_eq!(
+        footer_panel.footer_pressed,
+        Some(op_editor_core::ChatFooterButton::Send)
+    );
+}
+
+#[test]
 fn paint_footer_neutral_hovers_use_visible_feedback() {
     let cases = [
         op_editor_core::ChatFooterButton::ModelPicker,

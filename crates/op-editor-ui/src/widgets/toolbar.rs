@@ -84,6 +84,7 @@ pub struct Toolbar {
     /// wash. `None` = no hover (cursor off the bar or over an
     /// active item where the active fill already reads).
     pub hover: Option<op_editor_core::ToolbarHover>,
+    pub pressed: Option<op_editor_core::ToolbarHover>,
 }
 
 impl Toolbar {
@@ -117,6 +118,10 @@ impl Toolbar {
             theme: theme_for(&state.editor_ui),
             shape_tool: state.editor_ui.shape_tool,
             hover: state.editor_ui.toolbar_hover,
+            pressed: match state.editor_ui.pressed_button {
+                Some(op_editor_core::ButtonPressTarget::Toolbar(button)) => Some(button),
+                _ => None,
+            },
         }
     }
 
@@ -138,6 +143,24 @@ impl Toolbar {
                 matches!(hover, H::Action(a) if a == toolbar_action(*action))
             }
             ToolbarItem::ShapeSlot => matches!(hover, H::ShapeSlot) && !self.active.is_shape(),
+            ToolbarItem::Separator => false,
+        }
+    }
+
+    fn item_pressed(&self, item: &ToolbarItem) -> bool {
+        use op_editor_core::ToolbarHover as H;
+        let Some(pressed) = self.pressed else {
+            return false;
+        };
+        match item {
+            ToolbarItem::Tool(tool, _) => {
+                matches!(pressed, H::Tool(t) if t == *tool) && *tool != self.active
+            }
+            ToolbarItem::Action(action, _) => {
+                use crate::widgets::editor_state_ext::toolbar_action;
+                matches!(pressed, H::Action(a) if a == toolbar_action(*action))
+            }
+            ToolbarItem::ShapeSlot => matches!(pressed, H::ShapeSlot) && !self.active.is_shape(),
             ToolbarItem::Separator => false,
         }
     }
@@ -351,7 +374,17 @@ impl Widget for Toolbar {
                     }
                     let active = *tool == self.active;
                     let hovered = self.item_hovered(item);
-                    paint_button(cx, &self.theme, button_x, y, *icon, active, hovered);
+                    let pressed = self.item_pressed(item);
+                    paint_button(
+                        cx,
+                        &self.theme,
+                        button_x,
+                        y,
+                        *icon,
+                        active,
+                        hovered,
+                        pressed,
+                    );
                     y += BUTTON_SIZE;
                     prev_was_item = true;
                 }
@@ -360,7 +393,8 @@ impl Widget for Toolbar {
                         y += BUTTON_GAP;
                     }
                     let hovered = self.item_hovered(item);
-                    paint_button(cx, &self.theme, button_x, y, *icon, false, hovered);
+                    let pressed = self.item_pressed(item);
+                    paint_button(cx, &self.theme, button_x, y, *icon, false, hovered, pressed);
                     y += BUTTON_SIZE;
                     prev_was_item = true;
                 }
@@ -370,6 +404,7 @@ impl Widget for Toolbar {
                     }
                     let active = self.active.is_shape();
                     let hovered = self.item_hovered(item);
+                    let pressed = self.item_pressed(item);
                     paint_button(
                         cx,
                         &self.theme,
@@ -378,6 +413,7 @@ impl Widget for Toolbar {
                         icon_for_shape(self.shape_tool),
                         active,
                         hovered,
+                        pressed,
                     );
                     // Chevron-down sits just BELOW the button,
                     // horizontally centered — matches the TS
@@ -414,6 +450,7 @@ fn paint_button(
     icon: Icon,
     active: bool,
     hovered: bool,
+    pressed: bool,
 ) {
     let button_rect = Rect {
         origin: Point2D::new(x, y),
@@ -423,12 +460,14 @@ fn paint_button(
         cx.backend
             .fill_round_rect(button_rect, BUTTON_RADIUS, theme.primary);
         theme.primary_foreground
-    } else if hovered {
-        cx.backend
-            .fill_round_rect(button_rect, BUTTON_RADIUS, theme.button_hover);
-        theme.foreground
     } else {
-        theme.muted_foreground
+        crate::widgets::button::paint_ghost_button_feedback(
+            cx.backend,
+            theme,
+            button_rect,
+            hovered,
+            pressed,
+        )
     };
     let icon_origin = Point2D::new(
         x + (BUTTON_SIZE - ICON_SIZE) / 2.0,
@@ -519,6 +558,21 @@ mod tests {
         };
         assert_eq!(toolbar.hit_test(rect, Point2D::new(-10.0, -10.0)), None);
         assert_eq!(toolbar.hit_test(rect, Point2D::new(1000.0, 1000.0)), None);
+    }
+
+    #[test]
+    fn for_editor_picks_up_pressed_button() {
+        let mut state = EditorState::new();
+        state.editor_ui.pressed_button = Some(op_editor_core::ButtonPressTarget::Toolbar(
+            op_editor_core::ToolbarHover::Action(op_editor_core::ToolbarAction::Undo),
+        ));
+        let toolbar = Toolbar::for_editor(&state);
+        assert_eq!(
+            toolbar.pressed,
+            Some(op_editor_core::ToolbarHover::Action(
+                op_editor_core::ToolbarAction::Undo
+            ))
+        );
     }
 
     #[test]

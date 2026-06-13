@@ -70,6 +70,10 @@ impl WidgetHost {
     pub fn apply_release_with_viewport(&mut self, viewport_w: f32, viewport_h: f32) -> bool {
         self.last_viewport_w = viewport_w;
         self.last_viewport_h = viewport_h;
+        let button_released = self.editor_state.editor_ui.pressed_button.take().is_some();
+        if button_released {
+            self.mark_dirty();
+        }
         // Colour-picker drag end (non-consuming) + floating-panel
         // header drags — see `widget_host/overlay_cursor.rs`.
         if self.release_overlay_drags() {
@@ -111,7 +115,7 @@ impl WidgetHost {
         }
         let was_dragging = self.drag.is_some();
         self.drag = None;
-        was_dragging
+        was_dragging || button_released
     }
 
     /// Mouse-release handler — viewport-less variant. Public host
@@ -119,6 +123,10 @@ impl WidgetHost {
     /// the viewport-aware `apply_release_with_viewport` instead.
     #[allow(dead_code)]
     pub fn apply_release(&mut self) -> bool {
+        let button_released = self.editor_state.editor_ui.pressed_button.take().is_some();
+        if button_released {
+            self.mark_dirty();
+        }
         if self.release_overlay_drags() {
             return true;
         }
@@ -153,7 +161,7 @@ impl WidgetHost {
         }
         let was_dragging = self.drag.is_some();
         self.drag = None;
-        was_dragging
+        was_dragging || button_released
     }
 
     /// Resolve a layer drag-to-reorder gesture on release. Mirrors

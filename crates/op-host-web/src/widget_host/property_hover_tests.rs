@@ -90,6 +90,30 @@ fn codegen_preview_drag_selects_code_text() {
 }
 
 #[test]
+fn status_bar_press_sets_and_release_clears_pressed_button() {
+    let mut host = WidgetHost::new();
+    let (viewport_w, viewport_h) = (1200.0, 800.0);
+    host.last_viewport_w = viewport_w;
+    host.last_viewport_h = viewport_h;
+    let r = host
+        .status_bar_rect(viewport_w, viewport_h)
+        .expect("status bar visible at this size");
+    let x = r.origin.x + 5.0;
+    let y = r.origin.y + r.size.y / 2.0;
+
+    assert!(host.apply_press(x, y, viewport_w, viewport_h));
+    assert_eq!(
+        host.editor_state.editor_ui.pressed_button,
+        Some(op_editor_core::ButtonPressTarget::StatusBar(
+            op_editor_core::StatusBarButton::Search
+        ))
+    );
+
+    assert!(host.apply_release_with_viewport(viewport_w, viewport_h));
+    assert_eq!(host.editor_state.editor_ui.pressed_button, None);
+}
+
+#[test]
 fn codegen_preview_wheel_scrolls_code_not_property_panel() {
     let mut host = WidgetHost::new();
     host.editor_state = EditorState::sample();

@@ -39,6 +39,7 @@ pub struct StatusBar {
     /// Which control the cursor is over — drives the per-control
     /// `theme.button_hover` wash. `None` = no hover.
     pub hover: Option<StatusBarButton>,
+    pub pressed: Option<StatusBarButton>,
 }
 
 impl StatusBar {
@@ -48,6 +49,7 @@ impl StatusBar {
             zoom_percent: 100,
             theme: Theme::dark(),
             hover: None,
+            pressed: None,
         }
     }
 
@@ -66,6 +68,10 @@ impl StatusBar {
             zoom_percent: zoom.max(1),
             theme: crate::widgets::editor_state_ext::theme_for(&state.editor_ui),
             hover: state.editor_ui.statusbar_hover,
+            pressed: match state.editor_ui.pressed_button {
+                Some(op_editor_core::ButtonPressTarget::StatusBar(button)) => Some(button),
+                _ => None,
+            },
         }
     }
 
@@ -148,6 +154,7 @@ impl Widget for StatusBar {
             center_y,
             StatusBarButton::Search,
             self.hover,
+            self.pressed,
         );
         draw_icon(
             cx.backend,
@@ -164,6 +171,7 @@ impl Widget for StatusBar {
             center_y,
             StatusBarButton::ZoomOut,
             self.hover,
+            self.pressed,
         );
         draw_icon(
             cx.backend,
@@ -191,6 +199,7 @@ impl Widget for StatusBar {
             center_y,
             StatusBarButton::ZoomIn,
             self.hover,
+            self.pressed,
         );
         draw_icon(
             cx.backend,
@@ -226,18 +235,20 @@ fn paint_control_bg(
     center_y: f32,
     control: StatusBarButton,
     hover: Option<StatusBarButton>,
+    pressed: Option<StatusBarButton>,
 ) -> Color {
-    if hover == Some(control) {
-        let cx_center = glyph_x + ICON_SIZE / 2.0;
-        let r = Rect {
-            origin: Point2D::new(cx_center - ZOOM_HIT_HALF, center_y - ZOOM_HIT_HALF),
-            size: Point2D::new(ZOOM_HIT_HALF * 2.0, ZOOM_HIT_HALF * 2.0),
-        };
-        cx.backend.fill_round_rect(r, 6.0, theme.button_hover);
-        theme.foreground
-    } else {
-        theme.muted_foreground
-    }
+    let cx_center = glyph_x + ICON_SIZE / 2.0;
+    let r = Rect {
+        origin: Point2D::new(cx_center - ZOOM_HIT_HALF, center_y - ZOOM_HIT_HALF),
+        size: Point2D::new(ZOOM_HIT_HALF * 2.0, ZOOM_HIT_HALF * 2.0),
+    };
+    crate::widgets::button::paint_ghost_button_feedback(
+        cx.backend,
+        theme,
+        r,
+        hover == Some(control),
+        pressed == Some(control),
+    )
 }
 
 #[cfg(test)]
@@ -286,6 +297,16 @@ mod tests {
         state.editor_ui.statusbar_hover = Some(StatusBarButton::ZoomIn);
         let bar = StatusBar::for_editor(&state);
         assert_eq!(bar.hover, Some(StatusBarButton::ZoomIn));
+    }
+
+    #[test]
+    fn for_editor_picks_up_pressed_button() {
+        let mut state = op_editor_core::EditorState::new();
+        state.editor_ui.pressed_button = Some(op_editor_core::ButtonPressTarget::StatusBar(
+            StatusBarButton::ZoomIn,
+        ));
+        let bar = StatusBar::for_editor(&state);
+        assert_eq!(bar.pressed, Some(StatusBarButton::ZoomIn));
     }
 
     #[test]

@@ -134,6 +134,9 @@ impl WidgetHostNative {
         if let Some(chat_rect) = self.ai_chat_rect(viewport_width, viewport_height) {
             let panel = AIChatPlaceholder::from_editor(&self.editor_state);
             if let Some(hit) = panel.hit_test(chat_rect, Point2D::new(x, y)) {
+                if let Some(target) = chat_button_press_target(&hit) {
+                    self.editor_state.editor_ui.pressed_button = Some(target);
+                }
                 match hit {
                     AIChatHit::Inside => {
                         // Panel chrome that hit no control — blank
@@ -339,6 +342,10 @@ impl WidgetHostNative {
             size: Point2D::new(TOOLBAR_WIDTH, toolbar_h),
         };
         if let Some(hit) = toolbar.hit_test(toolbar_rect, Point2D::new(x, y)) {
+            self.editor_state.editor_ui.pressed_button =
+                Some(op_editor_core::ButtonPressTarget::Toolbar(
+                    op_editor_ui::widgets::editor_state_ext::toolbar_hover(hit),
+                ));
             match hit {
                 op_editor_ui::widgets::ToolbarHit::Tool(tool) => {
                     self.editor_state.tool = tool;
@@ -463,4 +470,19 @@ impl WidgetHostNative {
         // Click hit no chrome — repaint if focus changed.
         was_focused
     }
+}
+
+fn chat_button_press_target(hit: &AIChatHit) -> Option<op_editor_core::ButtonPressTarget> {
+    if let Some(header) = op_editor_ui::widgets::editor_state_ext::chat_header_hover(hit) {
+        return Some(op_editor_core::ButtonPressTarget::ChatHeader(header));
+    }
+    let footer = match hit {
+        AIChatHit::ToggleModelPicker => op_editor_core::ChatFooterButton::ModelPicker,
+        AIChatHit::CycleAgentTeam => op_editor_core::ChatFooterButton::AgentTeam,
+        AIChatHit::AddAttachment => op_editor_core::ChatFooterButton::AddAttachment,
+        AIChatHit::Send => op_editor_core::ChatFooterButton::Send,
+        AIChatHit::Stop => op_editor_core::ChatFooterButton::Stop,
+        _ => return None,
+    };
+    Some(op_editor_core::ButtonPressTarget::ChatFooter(footer))
 }

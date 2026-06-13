@@ -27,6 +27,7 @@ use crate::{Point2D, Rect, RenderBackend};
 pub const MIN_RAIL_WIDTH: f32 = 80.0;
 
 // Phase B primitives.
+pub(crate) mod button;
 pub mod prop_row;
 pub mod text_input;
 pub mod tree;
