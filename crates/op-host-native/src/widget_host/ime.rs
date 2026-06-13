@@ -3,9 +3,10 @@
 //! TS parity target: Electron DOM inputs render preedit inline and
 //! the OS anchors the candidate window at the caret. The Rust shell:
 //!
-//! - `apply_ime_preedit` consumes preedit updates without painting a
-//!   floating overlay. The OS IME owns the in-flight composition UI;
-//!   `Ime::Commit` is the point where text enters OpenPencil.
+//! - Canvas text edit stores preedit in `TextInputState::composition`
+//!   so the canvas painter can render it inline with an underline.
+//! - Other inputs still consume preedit updates without painting a
+//!   floating overlay. `Ime::Commit` is where text enters OpenPencil.
 //! - `apply_ime_commit` clears the preedit and lands the committed
 //!   string through `apply_text` char-by-char, so every focus branch
 //!   + per-field filter (numeric / hex drafts) applies unchanged.
@@ -35,10 +36,23 @@ impl WidgetHostNative {
             || ui.component_browser_open
     }
 
-    /// `Ime::Preedit` — consume composition updates without painting
-    /// a separate floating bubble above the focused input.
-    pub fn apply_ime_preedit(&mut self, _text: &str, _cursor: Option<(usize, usize)>) -> bool {
+    /// `Ime::Preedit` — canvas text edit paints inline composition;
+    /// other inputs keep the legacy no-floating-overlay behavior.
+    pub fn apply_ime_preedit(&mut self, text: &str, cursor: Option<(usize, usize)>) -> bool {
         let had = self.editor_state.editor_ui.ime_preedit.take().is_some();
+        if self.editor_state.ui.text_editing.is_some() {
+            let changed = if text.is_empty() {
+                self.editor_state.text_edit_clear_composition()
+            } else {
+                let cursor = cursor.map(|(_, end)| end).unwrap_or(text.len());
+                self.editor_state
+                    .text_edit_set_composition(text, cursor, self.now_ms)
+            };
+            if changed || had {
+                self.mark_dirty();
+            }
+            return changed || had;
+        }
         if had {
             self.mark_dirty();
         }
@@ -50,6 +64,19 @@ impl WidgetHostNative {
     pub fn apply_ime_commit(&mut self, text: &str) -> bool {
         if self.editor_state.editor_ui.ime_preedit.take().is_some() {
             self.mark_dirty();
+        }
+        if self.editor_state.ui.text_editing.is_some() {
+            let consumed = if text.is_empty() {
+                self.editor_state.text_edit_clear_composition()
+            } else {
+                self.editor_state
+                    .text_edit_set_composition(text, text.len(), self.now_ms)
+                    && self.editor_state.text_edit_commit_composition(self.now_ms)
+            };
+            if consumed {
+                self.mark_dirty();
+            }
+            return consumed;
         }
         let mut consumed = false;
         for ch in text.chars() {
@@ -78,9 +105,23 @@ impl WidgetHostNative {
 #[cfg(test)]
 mod tests {
     use crate::WidgetHostNative;
+    use op_editor_core::NodeId;
+
+    const TEXT_DOC: &str = r#"{"version":"0.8.0","children":[
+      {"type":"text","id":"t1","name":"Label","x":0,"y":0,"width":100,"height":40,
+       "content":"hello","fontSize":20}
+    ]}"#;
 
     fn host() -> WidgetHostNative {
         WidgetHostNative::new()
+    }
+
+    fn start_canvas_text_edit(h: &mut WidgetHostNative) {
+        let doc = jian_ops_schema::load_str(TEXT_DOC)
+            .expect("fixture JSON parses")
+            .value;
+        *h.editor_state_mut() = op_editor_core::EditorState::from_document(doc);
+        assert!(h.editor_state_mut().start_text_edit(NodeId::new("t1")));
     }
 
     #[test]
@@ -117,6 +158,27 @@ mod tests {
         );
         assert!(h.editor_state().editor_ui.ime_preedit.is_none());
         assert!(!h.apply_ime_preedit("", None), "already clear → no-op");
+    }
+
+    #[test]
+    fn canvas_text_edit_preedit_stays_in_composition_until_commit() {
+        let mut h = host();
+        start_canvas_text_edit(&mut h);
+
+        assert!(h.apply_ime_preedit("ni", Some((0, 2))));
+        assert_eq!(h.editor_state().text_edit_content(), Some("hello"));
+        assert_eq!(
+            h.editor_state()
+                .ui
+                .text_edit_input
+                .composition()
+                .map(|c| c.text.as_str()),
+            Some("ni")
+        );
+
+        assert!(h.apply_ime_commit("你"));
+        assert_eq!(h.editor_state().text_edit_content(), Some("hello你"));
+        assert!(h.editor_state().ui.text_edit_input.composition().is_none());
     }
 
     #[test]

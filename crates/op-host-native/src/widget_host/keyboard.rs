@@ -157,7 +157,6 @@ impl WidgetHostNative {
                 .editor_state
                 .text_edit_insert(c.encode_utf8(&mut s), self.now_ms)
             {
-                self.editor_state.ui.text_edit_caret_anchor_ms = self.now_ms;
                 self.mark_dirty();
                 return true;
             }
@@ -510,7 +509,6 @@ impl WidgetHostNative {
         if self.editor_state.ui.text_editing.is_some() {
             let ok = self.editor_state.text_edit_backspace(self.now_ms);
             if ok {
-                self.editor_state.ui.text_edit_caret_anchor_ms = self.now_ms;
                 self.mark_dirty();
             }
             return ok;
@@ -817,7 +815,6 @@ impl WidgetHostNative {
             // active selection) — textarea parity.
             let ok = self.editor_state.text_edit_delete_forward(self.now_ms);
             if ok {
-                self.editor_state.ui.text_edit_caret_anchor_ms = self.now_ms;
                 self.mark_dirty();
             }
             return ok;
@@ -1239,7 +1236,6 @@ impl WidgetHostNative {
             // Escape / outside click commit the session. Swallow the
             // key either way so it never falls through to chat send.
             if self.editor_state.text_edit_insert("\n", self.now_ms) {
-                self.editor_state.ui.text_edit_caret_anchor_ms = self.now_ms;
                 self.mark_dirty();
             }
             return true;

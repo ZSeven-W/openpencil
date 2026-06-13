@@ -172,14 +172,11 @@ impl WidgetHostNative {
     /// shift+click in a textarea) and start the selection drag.
     pub(in crate::widget_host) fn place_text_edit_caret(&mut self, offset: usize) {
         let extend = self.shift_held;
-        let _ = self.editor_state.text_edit_set_caret(offset, extend);
-        let anchor = self
+        let _ = self
             .editor_state
-            .ui
-            .text_edit_selection_anchor
-            .unwrap_or(offset);
+            .text_edit_set_caret(offset, extend, self.now_ms);
+        let anchor = self.editor_state.ui.text_edit_input.selection().anchor;
         self.text_edit_selection_drag = Some(TextEditSelectionDragState { anchor });
-        self.editor_state.ui.text_edit_caret_anchor_ms = self.now_ms;
         self.mark_dirty();
     }
 
@@ -201,17 +198,13 @@ impl WidgetHostNative {
         let p = self.text_edit_doc_point(x, y, &node);
         let focus =
             self.with_text_edit_layout(&node, |layout, backend| layout.offset_at_point(backend, p));
-        let current = (
-            self.editor_state.ui.text_edit_selection_anchor,
-            self.editor_state.ui.text_edit_caret,
-        );
-        if self.editor_state.text_edit_select_range(drag.anchor, focus) {
-            let next = (
-                self.editor_state.ui.text_edit_selection_anchor,
-                self.editor_state.ui.text_edit_caret,
-            );
+        let current = self.editor_state.ui.text_edit_input.selection();
+        if self
+            .editor_state
+            .text_edit_select_range(drag.anchor, focus, self.now_ms)
+        {
+            let next = self.editor_state.ui.text_edit_input.selection();
             if next != current {
-                self.editor_state.ui.text_edit_caret_anchor_ms = self.now_ms;
                 self.mark_dirty();
             }
         }
@@ -235,9 +228,8 @@ impl WidgetHostNative {
         }
         if self
             .editor_state
-            .text_edit_caret_horizontal(forward, self.shift_held)
+            .text_edit_caret_horizontal(forward, self.shift_held, self.now_ms)
         {
-            self.editor_state.ui.text_edit_caret_anchor_ms = self.now_ms;
             self.mark_dirty();
         }
         // Consumed regardless — an arrow over the inline editor must
@@ -255,9 +247,8 @@ impl WidgetHostNative {
         let ranges = self.text_edit_line_ranges().unwrap_or_default();
         if self
             .editor_state
-            .text_edit_caret_vertical(down, self.shift_held, &ranges)
+            .text_edit_caret_vertical(down, self.shift_held, &ranges, self.now_ms)
         {
-            self.editor_state.ui.text_edit_caret_anchor_ms = self.now_ms;
             self.mark_dirty();
         }
         true
@@ -271,9 +262,8 @@ impl WidgetHostNative {
         let ranges = self.text_edit_line_ranges().unwrap_or_default();
         if self
             .editor_state
-            .text_edit_line_edge(forward, self.shift_held, &ranges)
+            .text_edit_line_edge(forward, self.shift_held, &ranges, self.now_ms)
         {
-            self.editor_state.ui.text_edit_caret_anchor_ms = self.now_ms;
             self.mark_dirty();
         }
         true

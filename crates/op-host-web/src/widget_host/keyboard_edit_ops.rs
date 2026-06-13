@@ -90,8 +90,7 @@ impl WidgetHost {
             return true;
         }
         if self.editor_state.ui.text_editing.is_some() {
-            self.editor_state.ui.text_edit_select_all = true;
-            self.editor_state.ui.text_edit_caret_anchor_ms = self.now_ms;
+            let _ = self.editor_state.text_edit_select_all_now(self.now_ms);
             self.mark_dirty();
             return true;
         }

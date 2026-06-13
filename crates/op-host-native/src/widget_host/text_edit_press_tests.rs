@@ -60,7 +60,11 @@ fn start_edit(host: &mut WidgetHostNative, id: &str) {
 }
 
 fn caret(host: &WidgetHostNative) -> Option<usize> {
-    host.editor_state().ui.text_edit_caret
+    host.editor_state()
+        .ui
+        .text_editing
+        .as_ref()
+        .map(|_| host.editor_state().ui.text_edit_input.caret())
 }
 
 fn selection(host: &WidgetHostNative) -> Option<(usize, usize)> {
@@ -284,7 +288,7 @@ fn line_edge_jumps_within_current_line() {
     let mut host = WidgetHostNative::new();
     seed(&mut host, TWO_LINES);
     start_edit(&mut host, "t1");
-    host.editor_state_mut().ui.text_edit_caret = Some(8); // line 1 col 2
+    assert!(host.editor_state_mut().text_edit_set_caret(8, false, 0)); // line 1 col 2
     assert!(host.apply_text_edit_line_edge(false));
     assert_eq!(caret(&host), Some(6));
     assert!(host.apply_text_edit_line_edge(true));
@@ -308,7 +312,7 @@ fn backspace_and_delete_are_caret_aware() {
     let mut host = WidgetHostNative::new();
     seed(&mut host, TWO_LINES);
     start_edit(&mut host, "t1");
-    host.editor_state_mut().ui.text_edit_caret = Some(6); // before 'w'
+    assert!(host.editor_state_mut().text_edit_set_caret(6, false, 0)); // before 'w'
     assert!(host.apply_backspace()); // removes the '\n'
     assert_eq!(host.editor_state().text_edit_content(), Some("helloworld"));
     assert_eq!(caret(&host), Some(5));

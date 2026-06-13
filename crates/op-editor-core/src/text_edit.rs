@@ -5,13 +5,12 @@
 //!
 //! ## Session
 //!
-//! `start_text_edit` enters the session on a `Text` node; the caret
-//! is a BYTE offset into the node's plain content
-//! (`ui.text_edit_caret`), with an optional selection anchor
-//! (`ui.text_edit_selection_anchor`; selection = `anchor..caret` in
-//! either order). Cmd/Ctrl+A maps to anchor 0 + caret at the end
-//! (`text_edit_select_all_now`) while keeping the legacy
-//! `text_edit_select_all` flag for the whole-wash paint.
+//! `start_text_edit` enters the session on a `Text` node and seeds
+//! `ui.text_edit_input` with the node's plain content. The
+//! `TextInputState` owns the draft string, caret, selection,
+//! select-all state, IME composition, and blink anchor; each mutation
+//! syncs the draft back into the Text node so the rest of the editor
+//! continues reading canonical document content.
 //!
 //! ## Keys (TS textarea parity)
 //!
@@ -32,6 +31,7 @@
 
 use crate::node_id::NodeId;
 use crate::state::EditorState;
+use jian_core::text_input::TextInputState;
 use jian_ops_schema::node::{PenNode, TextContent};
 
 /// Coalesce window for text-edit history bursts (ms). A pause longer
@@ -49,11 +49,9 @@ impl EditorState {
         if !matches!(node, PenNode::Text(_)) {
             return false;
         }
-        let len = text_content(node).map(str::len).unwrap_or(0);
+        let content = text_content(node).unwrap_or("").to_owned();
         self.ui.text_editing = Some(id);
-        self.ui.text_edit_select_all = false;
-        self.ui.text_edit_caret = Some(len);
-        self.ui.text_edit_selection_anchor = None;
+        self.ui.text_edit_input = TextInputState::with_text(content);
         self.ui.text_edit_last_ms = 0;
         self.ui.pending_text_edit_history = None;
         true
@@ -64,7 +62,8 @@ impl EditorState {
     pub fn text_edit_content(&self) -> Option<&str> {
         let id = self.ui.text_editing.as_ref()?;
         let node = crate::walkers::find_node(self.active_children(), id)?;
-        text_content(node)
+        text_content(node)?;
+        Some(self.ui.text_edit_input.text())
     }
 
     /// Insert `text` at the caret, replacing the active selection (or
@@ -72,34 +71,24 @@ impl EditorState {
     /// burst coalesce into one undo step. `false` when no session is
     /// active or the node has vanished.
     pub fn text_edit_insert(&mut self, text: &str, now_ms: u64) -> bool {
-        let Some(id) = self.ui.text_editing.clone() else {
+        let Some(id) = self.text_edit_plain_node_id() else {
             return false;
         };
-        let Some(current) = self.text_edit_content().map(str::to_string) else {
-            return false;
-        };
-        let len = current.len();
-        self.maybe_open_text_edit_history(now_ms);
-        // Snap every edge to a char boundary — a stale caret left by
-        // an external content change must never split a codepoint.
-        let (start, end) = match self.text_edit_effective_selection(len) {
-            Some((s, e)) => (
-                prev_boundary_at_or_before(&current, s),
-                prev_boundary_at_or_before(&current, e),
-            ),
-            None => {
-                let caret = prev_boundary_at_or_before(&current, self.text_edit_clamped_caret(len));
-                (caret, caret)
+        let mut input = self.ui.text_edit_input.clone();
+        input.clear_composition();
+        let before = input.text().to_owned();
+        input.insert_str(text, now_ms);
+        let changed = input.text() != before;
+        if changed {
+            self.maybe_open_text_edit_history(now_ms);
+        }
+        self.ui.text_edit_input = input;
+        if changed {
+            if !self.text_edit_sync_input_to_node(&id) {
+                return false;
             }
-        };
-        let Some(content) = self.text_edit_content_mut(&id) else {
-            return false;
-        };
-        content.replace_range(start..end, text);
-        self.ui.text_edit_caret = Some(start + text.len());
-        self.ui.text_edit_selection_anchor = None;
-        self.ui.text_edit_select_all = false;
-        self.ui.text_edit_last_ms = now_ms;
+            self.ui.text_edit_last_ms = now_ms;
+        }
         true
     }
 
@@ -117,41 +106,84 @@ impl EditorState {
     }
 
     fn text_edit_delete(&mut self, now_ms: u64, forward: bool) -> bool {
-        let Some(id) = self.ui.text_editing.clone() else {
+        let Some(id) = self.text_edit_plain_node_id() else {
             return false;
         };
-        let Some(current) = self.text_edit_content().map(str::to_string) else {
+        let mut input = self.ui.text_edit_input.clone();
+        input.clear_composition();
+        let before = input.text().to_owned();
+        if forward {
+            input.delete_forward(now_ms);
+        } else {
+            input.backspace(now_ms);
+        }
+        let changed = input.text() != before;
+        self.ui.text_edit_input = input;
+        if !changed {
             return false;
-        };
-        let len = current.len();
-        let range = match self.text_edit_effective_selection(len) {
-            Some((s, e)) => Some((
-                prev_boundary_at_or_before(&current, s),
-                prev_boundary_at_or_before(&current, e),
-            )),
-            None => {
-                let caret = prev_boundary_at_or_before(&current, self.text_edit_clamped_caret(len));
-                if forward {
-                    (caret < len).then(|| (caret, next_boundary(&current, caret)))
-                } else {
-                    (caret > 0).then(|| (prev_boundary(&current, caret), caret))
-                }
-            }
-        };
-        let Some((start, end)) = range else {
-            // Reset stale selection state even when nothing deletes.
-            self.ui.text_edit_select_all = false;
-            return false;
-        };
+        }
         self.maybe_open_text_edit_history(now_ms);
-        let Some(content) = self.text_edit_content_mut(&id) else {
+        if !self.text_edit_sync_input_to_node(&id) {
+            return false;
+        }
+        self.ui.text_edit_last_ms = now_ms;
+        true
+    }
+
+    /// Update the in-flight IME composition without committing it to
+    /// the Text node. If the composition starts over an active
+    /// selection, the selection replacement is synced and undoable.
+    pub fn text_edit_set_composition(&mut self, text: &str, cursor: usize, now_ms: u64) -> bool {
+        let Some(id) = self.text_edit_plain_node_id() else {
             return false;
         };
-        content.replace_range(start..end, "");
-        self.ui.text_edit_caret = Some(start);
-        self.ui.text_edit_selection_anchor = None;
-        self.ui.text_edit_select_all = false;
-        self.ui.text_edit_last_ms = now_ms;
+        let mut input = self.ui.text_edit_input.clone();
+        let before = input.text().to_owned();
+        input.set_composition(text, cursor, now_ms);
+        let changed = input.text() != before;
+        if changed {
+            self.maybe_open_text_edit_history(now_ms);
+        }
+        self.ui.text_edit_input = input;
+        if changed {
+            if !self.text_edit_sync_input_to_node(&id) {
+                return false;
+            }
+            self.ui.text_edit_last_ms = now_ms;
+        }
+        true
+    }
+
+    pub fn text_edit_clear_composition(&mut self) -> bool {
+        if self.text_edit_plain_node_id().is_none() {
+            return false;
+        }
+        let had = self.ui.text_edit_input.composition().is_some();
+        self.ui.text_edit_input.clear_composition();
+        had
+    }
+
+    pub fn text_edit_commit_composition(&mut self, now_ms: u64) -> bool {
+        let Some(id) = self.text_edit_plain_node_id() else {
+            return false;
+        };
+        if self.ui.text_edit_input.composition().is_none() {
+            return false;
+        }
+        let mut input = self.ui.text_edit_input.clone();
+        let before = input.text().to_owned();
+        input.commit_composition(now_ms);
+        let changed = input.text() != before;
+        if changed {
+            self.maybe_open_text_edit_history(now_ms);
+        }
+        self.ui.text_edit_input = input;
+        if changed {
+            if !self.text_edit_sync_input_to_node(&id) {
+                return false;
+            }
+            self.ui.text_edit_last_ms = now_ms;
+        }
         true
     }
 
@@ -161,58 +193,43 @@ impl EditorState {
     pub fn text_edit_commit(&mut self) -> bool {
         self.ui.pending_text_edit_history = None;
         self.ui.text_edit_last_ms = 0;
-        self.ui.text_edit_select_all = false;
-        self.ui.text_edit_caret = None;
-        self.ui.text_edit_selection_anchor = None;
+        self.ui.text_edit_input = TextInputState::default();
         self.ui.text_editing.take().is_some()
     }
 
     /// Place the caret at byte `offset` (clamped to a char boundary).
     /// `extend == true` keeps / establishes the selection anchor
     /// (Shift+click); otherwise the selection collapses.
-    pub fn text_edit_set_caret(&mut self, offset: usize, extend: bool) -> bool {
-        let Some(content) = self.text_edit_content() else {
+    pub fn text_edit_set_caret(&mut self, offset: usize, extend: bool, now_ms: u64) -> bool {
+        if self.text_edit_plain_node_id().is_none() {
             return false;
         };
-        let offset = prev_boundary_at_or_before(content, offset.min(content.len()));
-        let old_caret = self.text_edit_clamped_caret(content.len());
         if extend {
-            let anchor = self.ui.text_edit_selection_anchor.unwrap_or(old_caret);
-            self.ui.text_edit_selection_anchor = (anchor != offset).then_some(anchor);
+            self.ui.text_edit_input.drag_to(offset, now_ms);
         } else {
-            self.ui.text_edit_selection_anchor = None;
+            self.ui.text_edit_input.set_caret(offset, now_ms);
         }
-        self.ui.text_edit_caret = Some(offset);
-        self.ui.text_edit_select_all = false;
         true
     }
 
     /// Drag-select: anchor stays at the press offset, caret follows
     /// the cursor. Both clamp to char boundaries.
-    pub fn text_edit_select_range(&mut self, anchor: usize, focus: usize) -> bool {
-        let Some(content) = self.text_edit_content() else {
+    pub fn text_edit_select_range(&mut self, anchor: usize, focus: usize, now_ms: u64) -> bool {
+        if self.text_edit_plain_node_id().is_none() {
             return false;
         };
-        let len = content.len();
-        let anchor = prev_boundary_at_or_before(content, anchor.min(len));
-        let focus = prev_boundary_at_or_before(content, focus.min(len));
-        self.ui.text_edit_selection_anchor = (anchor != focus).then_some(anchor);
-        self.ui.text_edit_caret = Some(focus);
-        self.ui.text_edit_select_all = false;
+        self.ui.text_edit_input.set_caret(anchor, now_ms);
+        self.ui.text_edit_input.drag_to(focus, now_ms);
         true
     }
 
-    /// Select the whole content: anchor 0, caret at the end. Keeps
-    /// the legacy `text_edit_select_all` flag set for the whole-wash
-    /// paint path.
-    pub fn text_edit_select_all_now(&mut self) -> bool {
-        let Some(content) = self.text_edit_content() else {
+    /// Select the whole content: anchor 0, caret at the end.
+    pub fn text_edit_select_all_now(&mut self, now_ms: u64) -> bool {
+        if self.text_edit_plain_node_id().is_none() {
             return false;
         };
-        let len = content.len();
-        self.ui.text_edit_select_all = true;
-        self.ui.text_edit_selection_anchor = (len > 0).then_some(0);
-        self.ui.text_edit_caret = Some(len);
+        self.ui.text_edit_input.select_all();
+        self.ui.text_edit_input.touch(now_ms);
         true
     }
 
@@ -220,27 +237,15 @@ impl EditorState {
     /// caret collapses to the selection edge (textarea behaviour);
     /// otherwise it moves one char, clamped at the content bounds.
     /// `extend` (Shift) keeps / establishes the anchor.
-    pub fn text_edit_caret_horizontal(&mut self, forward: bool, extend: bool) -> bool {
-        let Some(content) = self.text_edit_content().map(str::to_string) else {
+    pub fn text_edit_caret_horizontal(&mut self, forward: bool, extend: bool, now_ms: u64) -> bool {
+        if self.text_edit_plain_node_id().is_none() {
             return false;
         };
-        let content = content.as_str();
-        let len = content.len();
-        let caret = self.text_edit_clamped_caret(len);
-        if !extend {
-            if let Some((start, end)) = self.text_edit_effective_selection(len) {
-                self.ui.text_edit_caret = Some(if forward { end } else { start });
-                self.ui.text_edit_selection_anchor = None;
-                self.ui.text_edit_select_all = false;
-                return true;
-            }
-        }
-        let next = if forward {
-            next_boundary(content, caret)
+        if forward {
+            self.ui.text_edit_input.move_right(extend, now_ms);
         } else {
-            prev_boundary(content, caret)
-        };
-        self.text_edit_move_caret_to(next, caret, extend);
+            self.ui.text_edit_input.move_left(extend, now_ms);
+        }
         true
     }
 
@@ -261,14 +266,14 @@ impl EditorState {
         down: bool,
         extend: bool,
         line_ranges: &[(usize, usize)],
+        now_ms: u64,
     ) -> bool {
-        let Some(content) = self.text_edit_content() else {
+        if self.text_edit_plain_node_id().is_none() {
             return false;
         };
-        let content = content.to_string();
+        let content = self.ui.text_edit_input.text().to_owned();
         let len = content.len();
         let mut caret = self.text_edit_clamped_caret(len);
-        let old_caret = caret;
         if !extend {
             // Collapse an active selection to the moving edge first.
             if let Some((start, end)) = self.text_edit_effective_selection(len) {
@@ -277,7 +282,7 @@ impl EditorState {
         }
         if line_ranges.is_empty() {
             let next = if down { len } else { 0 };
-            self.text_edit_move_caret_to(next, old_caret, extend);
+            self.text_edit_move_caret_to(next, extend, now_ms);
             return true;
         }
         let line_idx = line_index_for_offset(line_ranges, caret);
@@ -293,7 +298,7 @@ impl EditorState {
         } else {
             offset_at_column(&content, line_ranges[line_idx - 1], column)
         };
-        self.text_edit_move_caret_to(next, old_caret, extend);
+        self.text_edit_move_caret_to(next, extend, now_ms);
         true
     }
 
@@ -305,11 +310,12 @@ impl EditorState {
         forward: bool,
         extend: bool,
         line_ranges: &[(usize, usize)],
+        now_ms: u64,
     ) -> bool {
-        let Some(content) = self.text_edit_content() else {
+        if self.text_edit_plain_node_id().is_none() {
             return false;
         };
-        let len = content.len();
+        let len = self.ui.text_edit_input.text().len();
         let caret = self.text_edit_clamped_caret(len);
         let next = if line_ranges.is_empty() {
             if forward {
@@ -325,39 +331,47 @@ impl EditorState {
                 start.min(len)
             }
         };
-        self.text_edit_move_caret_to(next, caret, extend);
+        self.text_edit_move_caret_to(next, extend, now_ms);
         true
     }
 
-    /// Shared caret-move bookkeeping: `extend` keeps / establishes
-    /// the anchor (dropping it when collapsed), a plain move clears
-    /// it. The select-all flag drops on any caret motion.
-    fn text_edit_move_caret_to(&mut self, next: usize, old_caret: usize, extend: bool) {
+    fn text_edit_move_caret_to(&mut self, next: usize, extend: bool, now_ms: u64) {
         if extend {
-            let anchor = self.ui.text_edit_selection_anchor.unwrap_or(old_caret);
-            self.ui.text_edit_selection_anchor = (anchor != next).then_some(anchor);
+            self.ui.text_edit_input.drag_to(next, now_ms);
         } else {
-            self.ui.text_edit_selection_anchor = None;
+            self.ui.text_edit_input.set_caret(next, now_ms);
         }
-        self.ui.text_edit_caret = Some(next);
-        self.ui.text_edit_select_all = false;
     }
 
     /// Active selection as an ordered byte range. The select-all flag
     /// counts as `0..len`; a collapsed anchor==caret pair is `None`.
     pub fn text_edit_effective_selection(&self, len: usize) -> Option<(usize, usize)> {
-        if self.ui.text_edit_select_all {
-            return (len > 0).then_some((0, len));
-        }
-        let anchor = self.ui.text_edit_selection_anchor?.min(len);
-        let caret = self.text_edit_clamped_caret(len);
-        (anchor != caret).then(|| (anchor.min(caret), anchor.max(caret)))
+        self.ui
+            .text_edit_input
+            .highlight_range()
+            .map(|(start, end)| (start.min(len), end.min(len)))
+            .filter(|(start, end)| start != end)
     }
 
-    /// The caret byte offset clamped to `len` — `None` (legacy
-    /// append-at-end sessions) falls back to the end.
+    /// The caret byte offset clamped to `len`.
     fn text_edit_clamped_caret(&self, len: usize) -> usize {
-        self.ui.text_edit_caret.unwrap_or(len).min(len)
+        self.ui.text_edit_input.caret().min(len)
+    }
+
+    fn text_edit_plain_node_id(&self) -> Option<NodeId> {
+        let id = self.ui.text_editing.as_ref()?;
+        let node = crate::walkers::find_node(self.active_children(), id)?;
+        text_content(node)?;
+        Some(id.clone())
+    }
+
+    fn text_edit_sync_input_to_node(&mut self, id: &NodeId) -> bool {
+        let text = self.ui.text_edit_input.text().to_owned();
+        let Some(content) = self.text_edit_content_mut(id) else {
+            return false;
+        };
+        *content = text;
+        true
     }
 
     fn text_edit_content_mut(&mut self, id: &NodeId) -> Option<&mut String> {
@@ -403,30 +417,6 @@ fn text_content_node_mut(node: &mut PenNode) -> Option<&mut String> {
         },
         _ => None,
     }
-}
-
-/// Largest char boundary `<= pos` (clamped to `s.len()`).
-fn prev_boundary_at_or_before(s: &str, pos: usize) -> usize {
-    let mut p = pos.min(s.len());
-    while p > 0 && !s.is_char_boundary(p) {
-        p -= 1;
-    }
-    p
-}
-
-/// Char boundary one character BEFORE `pos` (0 at the start).
-fn prev_boundary(s: &str, pos: usize) -> usize {
-    let pos = prev_boundary_at_or_before(s, pos);
-    s[..pos].char_indices().last().map(|(i, _)| i).unwrap_or(0)
-}
-
-/// Char boundary one character AFTER `pos` (`s.len()` at the end).
-fn next_boundary(s: &str, pos: usize) -> usize {
-    let pos = prev_boundary_at_or_before(s, pos);
-    if pos >= s.len() {
-        return s.len();
-    }
-    pos + s[pos..].chars().next().map(char::len_utf8).unwrap_or(0)
 }
 
 /// Index of the visual line containing byte `offset`. An offset in
@@ -491,40 +481,55 @@ mod tests {
         s
     }
 
+    #[test]
+    fn text_edit_uses_shared_text_input_state_for_draft_and_selection() {
+        let mut s = edit("old text");
+        assert_eq!(s.ui.text_edit_input.text(), "old text");
+        assert_eq!(s.ui.text_edit_input.caret(), "old text".len());
+
+        assert!(s.text_edit_select_all_now(0));
+        assert!(s.ui.text_edit_input.is_select_all());
+
+        assert!(s.text_edit_insert("new", 100));
+        assert_eq!(content(&s), "new");
+        assert_eq!(s.ui.text_edit_input.text(), "new");
+        assert_eq!(s.ui.text_edit_input.caret(), 3);
+    }
+
     // --- Insert / delete ---------------------------------------------
 
     #[test]
     fn insert_lands_at_end_after_start() {
         let mut s = doc();
         assert!(s.start_text_edit(NodeId::new("n2")));
-        assert_eq!(s.ui.text_edit_caret, Some(2)); // after "Hi"
+        assert_eq!(s.ui.text_edit_input.caret(), 2); // after "Hi"
         assert!(s.text_edit_insert("!", 100));
         assert_eq!(content(&s), "Hi!");
-        assert_eq!(s.ui.text_edit_caret, Some(3));
+        assert_eq!(s.ui.text_edit_input.caret(), 3);
         assert!(s.text_edit_backspace(150));
         assert_eq!(content(&s), "Hi");
         assert!(s.text_edit_commit());
-        assert_eq!(s.ui.text_edit_caret, None);
+        assert!(s.ui.text_editing.is_none());
     }
 
     #[test]
     fn insert_at_mid_caret() {
         let mut s = edit("Hi");
-        assert!(s.text_edit_caret_horizontal(false, false)); // caret 1
+        assert!(s.text_edit_caret_horizontal(false, false, 0)); // caret 1
         assert!(s.text_edit_insert("X", 100));
         assert_eq!(content(&s), "HXi");
-        assert_eq!(s.ui.text_edit_caret, Some(2));
+        assert_eq!(s.ui.text_edit_input.caret(), 2);
     }
 
     #[test]
     fn backspace_at_mid_caret_removes_prev_char() {
         let mut s = edit("abc");
-        assert!(s.text_edit_set_caret(2, false));
+        assert!(s.text_edit_set_caret(2, false, 0));
         assert!(s.text_edit_backspace(100));
         assert_eq!(content(&s), "ac");
-        assert_eq!(s.ui.text_edit_caret, Some(1));
+        assert_eq!(s.ui.text_edit_input.caret(), 1);
         // At the start — nothing to remove.
-        assert!(s.text_edit_set_caret(0, false));
+        assert!(s.text_edit_set_caret(0, false, 0));
         assert!(!s.text_edit_backspace(150));
         assert_eq!(content(&s), "ac");
     }
@@ -532,58 +537,61 @@ mod tests {
     #[test]
     fn delete_forward_removes_next_char() {
         let mut s = edit("abc");
-        assert!(s.text_edit_set_caret(1, false));
+        assert!(s.text_edit_set_caret(1, false, 0));
         assert!(s.text_edit_delete_forward(100));
         assert_eq!(content(&s), "ac");
-        assert_eq!(s.ui.text_edit_caret, Some(1));
-        assert!(s.text_edit_set_caret(2, false));
+        assert_eq!(s.ui.text_edit_input.caret(), 1);
+        assert!(s.text_edit_set_caret(2, false, 0));
         assert!(!s.text_edit_delete_forward(150), "at end — no-op");
     }
 
     #[test]
     fn insert_replaces_active_selection() {
         let mut s = edit("hello world");
-        assert!(s.text_edit_select_range(6, 11)); // "world"
+        assert!(s.text_edit_select_range(6, 11, 0)); // "world"
         assert!(s.text_edit_insert("there", 100));
         assert_eq!(content(&s), "hello there");
-        assert_eq!(s.ui.text_edit_caret, Some(11));
-        assert_eq!(s.ui.text_edit_selection_anchor, None);
+        assert_eq!(s.ui.text_edit_input.caret(), 11);
+        assert_eq!(s.ui.text_edit_input.highlight_range(), None);
     }
 
     #[test]
     fn backspace_deletes_selection_as_one_unit() {
         let mut s = edit("hello world");
-        assert!(s.text_edit_select_range(11, 5)); // reversed order
+        assert!(s.text_edit_select_range(11, 5, 0)); // reversed order
         assert!(s.text_edit_backspace(100));
         assert_eq!(content(&s), "hello");
-        assert_eq!(s.ui.text_edit_caret, Some(5));
+        assert_eq!(s.ui.text_edit_input.caret(), 5);
     }
 
     #[test]
     fn newline_inserts_instead_of_committing() {
         let mut s = edit("ab");
-        assert!(s.text_edit_set_caret(1, false));
+        assert!(s.text_edit_set_caret(1, false, 0));
         assert!(s.text_edit_insert("\n", 100));
         assert_eq!(content(&s), "a\nb");
         assert!(s.ui.text_editing.is_some(), "session stays open");
-        assert_eq!(s.ui.text_edit_caret, Some(2));
+        assert_eq!(s.ui.text_edit_input.caret(), 2);
     }
 
     #[test]
     fn select_all_then_insert_replaces_everything() {
         let mut s = edit("old text");
-        assert!(s.text_edit_select_all_now());
-        assert!(s.ui.text_edit_select_all);
-        assert_eq!(s.ui.text_edit_selection_anchor, Some(0));
+        assert!(s.text_edit_select_all_now(0));
+        assert!(s.ui.text_edit_input.is_select_all());
+        assert_eq!(
+            s.ui.text_edit_input.selection().ordered(),
+            (0, "old text".len())
+        );
         assert!(s.text_edit_insert("n", 100));
         assert_eq!(content(&s), "n");
-        assert!(!s.ui.text_edit_select_all);
+        assert!(!s.ui.text_edit_input.is_select_all());
     }
 
     #[test]
     fn select_all_then_backspace_clears() {
         let mut s = edit("old text");
-        assert!(s.text_edit_select_all_now());
+        assert!(s.text_edit_select_all_now(0));
         assert!(s.text_edit_backspace(100));
         assert_eq!(content(&s), "");
     }
@@ -591,10 +599,10 @@ mod tests {
     #[test]
     fn cjk_caret_moves_on_char_boundaries() {
         let mut s = edit("首页a");
-        assert!(s.text_edit_caret_horizontal(false, false)); // before 'a' (byte 6)
-        assert_eq!(s.ui.text_edit_caret, Some(6));
-        assert!(s.text_edit_caret_horizontal(false, false)); // byte 3
-        assert_eq!(s.ui.text_edit_caret, Some(3));
+        assert!(s.text_edit_caret_horizontal(false, false, 0)); // before 'a' (byte 6)
+        assert_eq!(s.ui.text_edit_input.caret(), 6);
+        assert!(s.text_edit_caret_horizontal(false, false, 0)); // byte 3
+        assert_eq!(s.ui.text_edit_input.caret(), 3);
         assert!(s.text_edit_insert("X", 100));
         assert_eq!(content(&s), "首X页a");
     }
@@ -605,40 +613,40 @@ mod tests {
     fn horizontal_arrows_clamp_at_bounds() {
         let mut s = edit("ab");
         for _ in 0..5 {
-            assert!(s.text_edit_caret_horizontal(false, false));
+            assert!(s.text_edit_caret_horizontal(false, false, 0));
         }
-        assert_eq!(s.ui.text_edit_caret, Some(0));
+        assert_eq!(s.ui.text_edit_input.caret(), 0);
         for _ in 0..5 {
-            assert!(s.text_edit_caret_horizontal(true, false));
+            assert!(s.text_edit_caret_horizontal(true, false, 0));
         }
-        assert_eq!(s.ui.text_edit_caret, Some(2));
+        assert_eq!(s.ui.text_edit_input.caret(), 2);
     }
 
     #[test]
     fn plain_arrow_collapses_selection_to_edge() {
         let mut s = edit("hello");
-        assert!(s.text_edit_select_range(1, 4));
-        assert!(s.text_edit_caret_horizontal(false, false));
-        assert_eq!(s.ui.text_edit_caret, Some(1), "left collapses to start");
-        assert_eq!(s.ui.text_edit_selection_anchor, None);
-        assert!(s.text_edit_select_range(1, 4));
-        assert!(s.text_edit_caret_horizontal(true, false));
-        assert_eq!(s.ui.text_edit_caret, Some(4), "right collapses to end");
+        assert!(s.text_edit_select_range(1, 4, 0));
+        assert!(s.text_edit_caret_horizontal(false, false, 0));
+        assert_eq!(s.ui.text_edit_input.caret(), 1, "left collapses to start");
+        assert_eq!(s.ui.text_edit_input.highlight_range(), None);
+        assert!(s.text_edit_select_range(1, 4, 0));
+        assert!(s.text_edit_caret_horizontal(true, false, 0));
+        assert_eq!(s.ui.text_edit_input.caret(), 4, "right collapses to end");
     }
 
     #[test]
     fn shift_arrows_extend_then_collapse_selection() {
         let mut s = edit("abcd");
-        assert!(s.text_edit_set_caret(1, false));
-        assert!(s.text_edit_caret_horizontal(true, true));
-        assert!(s.text_edit_caret_horizontal(true, true));
-        assert_eq!(s.ui.text_edit_selection_anchor, Some(1));
-        assert_eq!(s.ui.text_edit_caret, Some(3));
+        assert!(s.text_edit_set_caret(1, false, 0));
+        assert!(s.text_edit_caret_horizontal(true, true, 0));
+        assert!(s.text_edit_caret_horizontal(true, true, 0));
+        assert_eq!(s.ui.text_edit_input.selection().anchor, 1);
+        assert_eq!(s.ui.text_edit_input.caret(), 3);
         assert_eq!(s.text_edit_effective_selection(4), Some((1, 3)));
         // Shrinking back to the anchor drops the selection.
-        assert!(s.text_edit_caret_horizontal(false, true));
-        assert!(s.text_edit_caret_horizontal(false, true));
-        assert_eq!(s.ui.text_edit_selection_anchor, None);
+        assert!(s.text_edit_caret_horizontal(false, true, 0));
+        assert!(s.text_edit_caret_horizontal(false, true, 0));
+        assert_eq!(s.ui.text_edit_input.highlight_range(), None);
         assert_eq!(s.text_edit_effective_selection(4), None);
     }
 
@@ -652,39 +660,39 @@ mod tests {
     #[test]
     fn vertical_down_keeps_char_column() {
         let mut s = edit("hello\nworld wide\nhi");
-        assert!(s.text_edit_set_caret(3, false)); // line 0, col 3
-        assert!(s.text_edit_caret_vertical(true, false, THREE_LINES));
-        assert_eq!(s.ui.text_edit_caret, Some(9), "line 1 col 3");
-        assert!(s.text_edit_caret_vertical(true, false, THREE_LINES));
+        assert!(s.text_edit_set_caret(3, false, 0)); // line 0, col 3
+        assert!(s.text_edit_caret_vertical(true, false, THREE_LINES, 0));
+        assert_eq!(s.ui.text_edit_input.caret(), 9, "line 1 col 3");
+        assert!(s.text_edit_caret_vertical(true, false, THREE_LINES, 0));
         // Line 2 has 2 chars — clamps to its end.
-        assert_eq!(s.ui.text_edit_caret, Some(19));
+        assert_eq!(s.ui.text_edit_input.caret(), 19);
     }
 
     #[test]
     fn vertical_up_from_first_line_goes_to_start() {
         let mut s = edit("hello\nworld");
         let ranges = &[(0, 5), (6, 11)];
-        assert!(s.text_edit_set_caret(3, false));
-        assert!(s.text_edit_caret_vertical(false, false, ranges));
-        assert_eq!(s.ui.text_edit_caret, Some(0));
+        assert!(s.text_edit_set_caret(3, false, 0));
+        assert!(s.text_edit_caret_vertical(false, false, ranges, 0));
+        assert_eq!(s.ui.text_edit_input.caret(), 0);
     }
 
     #[test]
     fn vertical_down_past_last_line_goes_to_end() {
         let mut s = edit("hello\nworld");
         let ranges = &[(0, 5), (6, 11)];
-        assert!(s.text_edit_set_caret(8, false)); // line 1
-        assert!(s.text_edit_caret_vertical(true, false, ranges));
-        assert_eq!(s.ui.text_edit_caret, Some(11));
+        assert!(s.text_edit_set_caret(8, false, 0)); // line 1
+        assert!(s.text_edit_caret_vertical(true, false, ranges, 0));
+        assert_eq!(s.ui.text_edit_input.caret(), 11);
     }
 
     #[test]
     fn vertical_with_shift_extends_selection() {
         let mut s = edit("hello\nworld wide\nhi");
-        assert!(s.text_edit_set_caret(2, false));
-        assert!(s.text_edit_caret_vertical(true, true, THREE_LINES));
-        assert_eq!(s.ui.text_edit_selection_anchor, Some(2));
-        assert_eq!(s.ui.text_edit_caret, Some(8));
+        assert!(s.text_edit_set_caret(2, false, 0));
+        assert!(s.text_edit_caret_vertical(true, true, THREE_LINES, 0));
+        assert_eq!(s.ui.text_edit_input.selection().anchor, 2);
+        assert_eq!(s.ui.text_edit_input.caret(), 8);
         assert_eq!(s.text_edit_effective_selection(19), Some((2, 8)));
     }
 
@@ -693,20 +701,20 @@ mod tests {
         let mut s = edit("hello\nworld");
         let ranges = &[(0, 5), (6, 11)];
         // Caret at byte 5 == end of line 0 (the `\n` gap edge).
-        assert!(s.text_edit_set_caret(5, false));
-        assert!(s.text_edit_caret_vertical(true, false, ranges));
-        assert_eq!(s.ui.text_edit_caret, Some(11), "line 1 col 5 == its end");
+        assert!(s.text_edit_set_caret(5, false, 0));
+        assert!(s.text_edit_caret_vertical(true, false, ranges, 0));
+        assert_eq!(s.ui.text_edit_input.caret(), 11, "line 1 col 5 == its end");
     }
 
     #[test]
     fn line_edge_jumps_to_line_start_and_end() {
         let mut s = edit("hello\nworld wide");
         let ranges = &[(0, 5), (6, 16)];
-        assert!(s.text_edit_set_caret(9, false)); // line 1, col 3
-        assert!(s.text_edit_line_edge(false, false, ranges));
-        assert_eq!(s.ui.text_edit_caret, Some(6));
-        assert!(s.text_edit_line_edge(true, false, ranges));
-        assert_eq!(s.ui.text_edit_caret, Some(16));
+        assert!(s.text_edit_set_caret(9, false, 0)); // line 1, col 3
+        assert!(s.text_edit_line_edge(false, false, ranges, 0));
+        assert_eq!(s.ui.text_edit_input.caret(), 6);
+        assert!(s.text_edit_line_edge(true, false, ranges, 0));
+        assert_eq!(s.ui.text_edit_input.caret(), 16);
     }
 
     // --- Session / history ---------------------------------------------
@@ -746,17 +754,17 @@ mod tests {
     #[test]
     fn caret_moves_push_no_history() {
         let mut s = edit("hello");
-        assert!(s.text_edit_caret_horizontal(false, false));
-        assert!(s.text_edit_set_caret(2, false));
-        assert!(s.text_edit_caret_vertical(true, false, &[(0, 5)]));
+        assert!(s.text_edit_caret_horizontal(false, false, 0));
+        assert!(s.text_edit_set_caret(2, false, 0));
+        assert!(s.text_edit_caret_vertical(true, false, &[(0, 5)], 0));
         assert_eq!(s.history.past.len(), 0);
     }
 
     #[test]
     fn click_set_caret_with_shift_extends() {
         let mut s = edit("hello");
-        assert!(s.text_edit_set_caret(1, false));
-        assert!(s.text_edit_set_caret(4, true));
+        assert!(s.text_edit_set_caret(1, false, 0));
+        assert!(s.text_edit_set_caret(4, true, 0));
         assert_eq!(s.text_edit_effective_selection(5), Some((1, 4)));
     }
 }

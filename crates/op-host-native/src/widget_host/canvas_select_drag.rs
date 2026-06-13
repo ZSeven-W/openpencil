@@ -64,7 +64,7 @@ impl WidgetHostNative {
                 return true;
             }
             if self.editor_state.start_text_edit(ec_id.clone()) {
-                self.editor_state.ui.text_edit_caret_anchor_ms = self.now_ms;
+                self.editor_state.ui.text_edit_input.touch(self.now_ms);
                 self.mark_dirty();
                 return true;
             }

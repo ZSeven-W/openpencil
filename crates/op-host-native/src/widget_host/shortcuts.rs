@@ -161,10 +161,7 @@ impl WidgetHostNative {
             return true;
         }
         if self.editor_state.ui.text_editing.is_some() {
-            // Sets the legacy select-all flag AND anchor 0 + caret at
-            // the end so caret-aware ops see the full-range selection.
-            let _ = self.editor_state.text_edit_select_all_now();
-            self.editor_state.ui.text_edit_caret_anchor_ms = self.now_ms;
+            let _ = self.editor_state.text_edit_select_all_now(self.now_ms);
             self.mark_dirty();
             return true;
         }
