@@ -6,6 +6,7 @@
 
 use crate::theme::Theme;
 use crate::widgets::brand_icons::{paint_brand_logo, paint_opencode_logo, BrandLogo};
+use crate::widgets::button::paint_button_feedback_wash;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::property_panel_text_input::paint_text_input_view_value;
 use crate::widgets::PaintCx;
@@ -281,6 +282,7 @@ pub fn paint_model_picker(
     let search = input.text();
     let scroll = state.scroll.offset;
     let hover = state.hover;
+    let pressed = state.pressed;
     // Card background + border — painted unscrolled so the frame
     // stays put while the rows scroll inside it.
     cx.backend.fill_round_rect(rect, 10.0, theme.card);
@@ -359,16 +361,20 @@ pub fn paint_model_picker(
         } => {
             let is_selected = *idx == selected;
             let is_hovered = hover == Some(*idx);
-            // Hover wash on any non-selected row the cursor is over;
+            let is_pressed = pressed == Some(*idx);
+            // Feedback wash on any non-selected row the cursor is over/pressing;
             // the selected row keeps its own `muted` fill below.
-            if is_hovered && !is_selected {
-                cx.backend.fill_round_rect(
+            if (is_hovered || is_pressed) && !is_selected {
+                paint_button_feedback_wash(
+                    cx.backend,
+                    theme,
                     Rect {
                         origin: Point2D::new(rect.origin.x + 4.0, y + 1.0),
                         size: Point2D::new(rect.size.x - 8.0, h - 2.0),
                     },
                     6.0,
-                    theme.button_hover,
+                    is_hovered,
+                    is_pressed,
                 );
             }
             if is_selected {

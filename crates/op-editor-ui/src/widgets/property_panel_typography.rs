@@ -19,6 +19,7 @@
 //! [`font_picker_action_at`] before the generic action walk.
 
 use crate::theme::Theme;
+use crate::widgets::button::paint_button_feedback_wash;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::property_panel::PropertyPanelAction;
 use crate::widgets::property_panel_inputs::{INPUT_HEIGHT, PAD_X};
@@ -472,9 +473,15 @@ pub fn paint_font_picker(
                 if is_active {
                     cx.backend
                         .fill_round_rect(row_rect, 5.0, theme.row_selected_primary);
-                } else if state.hover == Some(*i) {
-                    cx.backend
-                        .fill_round_rect(row_rect, 5.0, theme.button_hover);
+                } else if state.hover == Some(*i) || state.pressed == Some(*i) {
+                    paint_button_feedback_wash(
+                        cx.backend,
+                        theme,
+                        row_rect,
+                        5.0,
+                        state.hover == Some(*i),
+                        state.pressed == Some(*i),
+                    );
                 }
                 // Each row renders in its own family (TS style
                 // fontFamily: font.family).
@@ -519,6 +526,35 @@ pub fn paint_font_picker(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{Color, RenderBackend};
+
+    #[derive(Default)]
+    struct RoundFillBackend {
+        fills: Vec<(Rect, f32, Color)>,
+    }
+
+    impl RenderBackend for RoundFillBackend {
+        fn begin_frame(&mut self) {}
+        fn end_frame(&mut self) {}
+        fn fill_rect(&mut self, _: Rect, _: Color) {}
+        fn stroke_rect(&mut self, _: Rect, _: Color, _: f32) {}
+        fn draw_text(&mut self, _: &TextLayout, _: Point2D) {}
+        fn clip_rect(&mut self, _: Rect) {}
+        fn stroke_line(&mut self, _: Point2D, _: Point2D, _: Color, _: f32) {}
+        fn fill_round_rect(&mut self, rect: Rect, radius: f32, color: Color) {
+            self.fills.push((rect, radius, color));
+        }
+        fn stroke_round_rect(&mut self, _: Rect, _: f32, _: Color, _: f32) {}
+        fn stroke_svg_path(&mut self, _: &str, _: Point2D, _: f32, _: Color, _: f32) {}
+        fn save(&mut self) {}
+        fn restore(&mut self) {}
+        fn translate(&mut self, _: Point2D) {}
+        fn resize(&mut self, _: u32, _: u32) {}
+        fn dpi_scale(&self) -> f32 {
+            1.0
+        }
+    }
+
     use jian_widgets::components::select::{SelectHit, SelectState};
 
     fn visible_text() -> VisibleSections {
@@ -713,6 +749,51 @@ mod tests {
                 Point2D::new(layout.popup.origin.x - 1.0, layout.popup.origin.y)
             ),
             SelectHit::Outside
+        );
+    }
+
+    #[test]
+    fn pressed_font_picker_entry_uses_shared_select_feedback() {
+        let entries = font_picker_entries(&[], "");
+        let layout = font_picker_layout(panel_rect(), visible_text(), &entries, 0.0).unwrap();
+        let (entry_index, entry_rect) = layout
+            .rows
+            .iter()
+            .find_map(|(row, rect)| match row {
+                FontPickerRow::Entry(i) => Some((*i, *rect)),
+                _ => None,
+            })
+            .unwrap();
+        let mut state = open_state(0.0);
+        state.pressed = Some(entry_index);
+        let theme = Theme::dark();
+        let expected = theme.button_hover.with_alpha(theme.button_hover.a * 1.8);
+        let expected_rect = Rect {
+            origin: Point2D::new(entry_rect.origin.x + 2.0, entry_rect.origin.y),
+            size: Point2D::new(entry_rect.size.x - 4.0, entry_rect.size.y),
+        };
+        let mut backend = RoundFillBackend::default();
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+
+        paint_font_picker(
+            &mut cx,
+            &theme,
+            panel_rect(),
+            visible_text(),
+            op_editor_core::Locale::EnUs,
+            &entries,
+            "",
+            &state,
+            "Not A Listed Font",
+        );
+
+        assert!(
+            backend.fills.iter().any(|(fill, radius, color)| {
+                *fill == expected_rect && (*radius - 5.0).abs() < 0.01 && *color == expected
+            }),
+            "pressed font-picker entry should paint the shared pressed feedback token"
         );
     }
 }
