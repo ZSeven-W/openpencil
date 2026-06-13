@@ -14,8 +14,7 @@ use crate::widgets::property_panel_image_assets::{
 use crate::widgets::property_panel_image_popovers::warning_colors;
 use crate::widgets::property_panel_image_preview::paint_image_preview;
 use crate::widgets::property_panel_inputs::{
-    paint_section_divider, paint_section_label, to_jian_color, INPUT_HEIGHT, INPUT_RADIUS, PAD_X,
-    SECTION_GAP,
+    paint_section_divider, paint_section_label, INPUT_HEIGHT, INPUT_RADIUS, PAD_X, SECTION_GAP,
 };
 use crate::widgets::PaintCx;
 use crate::{Point2D, Rect, TextLayout};
@@ -147,7 +146,7 @@ pub fn paint_image_node_section(
         op_i18n::translate(locale, label_key),
         "system-ui",
         12.0,
-        to_jian_color(theme.foreground),
+        (theme.foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
@@ -217,7 +216,7 @@ fn paint_warning_row(
         warning.message,
         "system-ui",
         10.0,
-        to_jian_color(text),
+        (text).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
@@ -232,7 +231,7 @@ fn paint_warning_row(
         &warning.asset_path,
         "system-ui",
         9.0,
-        to_jian_color(path_color),
+        (path_color).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.save();
@@ -255,7 +254,7 @@ fn paint_warning_row(
         "Relink",
         "system-ui",
         9.0,
-        to_jian_color(text),
+        (text).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     let w = cx.backend.measure_text("Relink", 9.0);
@@ -286,7 +285,7 @@ fn paint_outline_button(cx: &mut PaintCx<'_>, theme: &Theme, rect: Rect, icon: I
         label,
         "system-ui",
         11.0,
-        to_jian_color(theme.foreground),
+        (theme.foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(

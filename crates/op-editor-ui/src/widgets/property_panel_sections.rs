@@ -9,7 +9,7 @@ use crate::widgets::property_panel::NodeSnapshot;
 use crate::widgets::property_panel_color_variables::paint_color_variable_button;
 use crate::widgets::property_panel_inputs::{
     create_component_block_height, format_color_hex, paint_input_with_icon_focused,
-    paint_input_with_prefix_focused, paint_section_divider, paint_section_label, to_jian_color,
+    paint_input_with_prefix_focused, paint_section_divider, paint_section_label,
     COLOR_VARIABLE_BUTTON_W, COLOR_VARIABLE_GAP, COMPONENT_ACCENT, CREATE_COMPONENT_BTN_H,
     CREATE_COMPONENT_ICON, CREATE_COMPONENT_PAD_TOP, CREATE_COMPONENT_ROW_GAP, HEADER_HEIGHT,
     INPUT_HEIGHT, INPUT_RADIUS, INSTANCE_ACCENT, PAD_X, SECTION_GAP, TAB_HEIGHT,
@@ -302,7 +302,7 @@ pub fn paint_tab_strip(
         labels.tab_design,
         "system-ui",
         13.0,
-        to_jian_color(design_color),
+        (design_color).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
@@ -313,7 +313,7 @@ pub fn paint_tab_strip(
         labels.tab_code,
         "system-ui",
         13.0,
-        to_jian_color(code_color),
+        (code_color).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
@@ -372,7 +372,7 @@ pub fn paint_node_header(
         title,
         "system-ui",
         14.0,
-        to_jian_color(title_color),
+        (title_color).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(&label, Point2D::new(text_x, y + 22.0));
@@ -481,7 +481,7 @@ fn paint_component_button(
         label_text,
         "system-ui",
         13.0,
-        to_jian_color(accent),
+        (accent).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     let label_w = cx.backend.measure_text(label_text, 13.0);
@@ -799,7 +799,7 @@ fn paint_check_row(
         label,
         "system-ui",
         12.0,
-        to_jian_color(theme.foreground),
+        (theme.foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(&lbl, Point2D::new(x + 22.0, y + 16.0));
@@ -861,7 +861,7 @@ pub fn paint_stroke_section(
         hex_text,
         "system-ui",
         12.0,
-        to_jian_color(theme.foreground),
+        (theme.foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     let hex_x = hex_rect.origin.x + 30.0;
@@ -921,7 +921,7 @@ pub fn paint_stroke_section(
         w_text,
         "system-ui",
         12.0,
-        to_jian_color(theme.foreground),
+        (theme.foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     let w_x = w_rect.origin.x + 12.0;

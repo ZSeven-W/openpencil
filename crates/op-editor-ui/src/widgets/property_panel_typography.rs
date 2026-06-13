@@ -21,7 +21,7 @@
 use crate::theme::Theme;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::property_panel::PropertyPanelAction;
-use crate::widgets::property_panel_inputs::{to_jian_color, INPUT_HEIGHT, PAD_X};
+use crate::widgets::property_panel_inputs::{INPUT_HEIGHT, PAD_X};
 use crate::widgets::property_panel_layout::VisibleSections;
 use crate::widgets::PaintCx;
 use crate::{Point2D, Rect, TextLayout};
@@ -333,7 +333,7 @@ pub fn paint_font_picker(
             op_i18n::translate(locale, "text.font.search"),
             "system-ui",
             11.0,
-            to_jian_color(theme.muted_foreground),
+            (theme.muted_foreground).to_jian(),
             Point2D::new(0.0, 0.0),
         );
         cx.backend
@@ -350,7 +350,7 @@ pub fn paint_font_picker(
             search,
             "system-ui",
             11.0,
-            to_jian_color(theme.foreground),
+            (theme.foreground).to_jian(),
             Point2D::new(0.0, 0.0),
         );
         cx.backend.draw_text(&draft, Point2D::new(text_x, baseline));
@@ -393,7 +393,7 @@ pub fn paint_font_picker(
                     op_i18n::translate(locale, key),
                     "system-ui",
                     9.0,
-                    to_jian_color(theme.muted_foreground),
+                    (theme.muted_foreground).to_jian(),
                     Point2D::new(0.0, 0.0),
                 );
                 cx.backend.draw_text(
@@ -407,7 +407,7 @@ pub fn paint_font_picker(
                     label_str,
                     "system-ui",
                     11.0,
-                    to_jian_color(theme.muted_foreground),
+                    (theme.muted_foreground).to_jian(),
                     Point2D::new(0.0, 0.0),
                 );
                 let w = cx.backend.measure_text(label_str, 11.0);
@@ -441,11 +441,12 @@ pub fn paint_font_picker(
                     entry.family,
                     entry.family,
                     11.0,
-                    to_jian_color(if is_active {
+                    (if is_active {
                         theme.primary
                     } else {
                         theme.foreground
-                    }),
+                    })
+                    .to_jian(),
                     Point2D::new(0.0, 0.0),
                 );
                 cx.backend.draw_text(

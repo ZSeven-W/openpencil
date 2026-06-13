@@ -2,7 +2,7 @@ use super::code_i18n::CodePanelStrings;
 use super::{action_hovered, code_neutral_hover_color, paint_full_button, FullButtonStyle};
 use crate::theme::Theme;
 use crate::widgets::icons::{draw_icon, Icon};
-use crate::widgets::property_panel_inputs::{to_jian_color, INPUT_HEIGHT, PAD_X};
+use crate::widgets::property_panel_inputs::{INPUT_HEIGHT, PAD_X};
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
 use op_editor_core::codegen::{ChunkStatus, CodegenHover, CodegenState};
@@ -301,7 +301,7 @@ fn draw_text(cx: &mut PaintCx<'_>, text: &str, size: f32, color: Color, x: f32, 
         text,
         "system-ui",
         size,
-        to_jian_color(color),
+        (color).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(&layout, Point2D::new(x, baseline_y));

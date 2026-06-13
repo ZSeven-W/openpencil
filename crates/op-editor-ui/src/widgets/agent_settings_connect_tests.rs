@@ -3,9 +3,7 @@
 //! (`agent-settings-providers-tab.tsx:242-269`).
 
 use crate::widgets::agent_settings_panel::{AgentSettingsHit, AgentSettingsPanel};
-use crate::widgets::agent_settings_panel_geometry::{
-    agent_card_rect_in, connect_btn_rect_at, to_jian,
-};
+use crate::widgets::agent_settings_panel_geometry::{agent_card_rect_in, connect_btn_rect_at};
 use crate::widgets::{PaintCx, Widget};
 use crate::{Color, Point2D, Rect, RenderBackend, TextLayout};
 use op_editor_core::agent_settings::ProviderConnectPhase;
@@ -87,12 +85,13 @@ fn connected_card_paints_probe_connection_info_in_green() {
     let capture = paint_panel(&mut state);
     let (_, color) = find_text(&capture, "✓ Connected via pro (a@b.c)")
         .expect("probe connectionInfo should replace the static subtitle");
-    let green = to_jian(Color {
+    let green = (Color {
         r: 0.34,
         g: 0.78,
         b: 0.45,
         a: 1.0,
-    });
+    })
+    .to_jian();
     assert_eq!(*color, green, "connected info renders in the TS green");
 }
 
@@ -106,7 +105,7 @@ fn failed_probe_paints_error_in_destructive_red() {
     let capture = paint_panel(&mut state);
     let (_, color) =
         find_text(&capture, "Not authenticated").expect("probe error should paint on the card");
-    let destructive = to_jian(crate::theme::Theme::dark().destructive);
+    let destructive = (crate::theme::Theme::dark().destructive).to_jian();
     assert_eq!(*color, destructive);
 }
 
@@ -125,12 +124,13 @@ fn not_installed_card_paints_amber_install_guidance() {
         text.contains("npm install -g @anthropic-ai/gemini-cli"),
         "guidance line should carry the manual install command, got: {text}"
     );
-    let amber = to_jian(Color {
+    let amber = (Color {
         r: 0.96,
         g: 0.62,
         b: 0.04,
         a: 1.0,
-    });
+    })
+    .to_jian();
     assert_eq!(*color, amber);
 }
 
@@ -148,12 +148,13 @@ fn connected_card_with_warning_paints_amber_warning() {
     // info line (TS renders both on separate lines).
     let (_, color) =
         find_text(&capture, "No models found").expect("warning should paint on the card");
-    let amber = to_jian(Color {
+    let amber = (Color {
         r: 0.96,
         g: 0.62,
         b: 0.04,
         a: 1.0,
-    });
+    })
+    .to_jian();
     assert_eq!(*color, amber);
     assert!(find_text(&capture, "✓ Connected via Codex CLI").is_none());
 }

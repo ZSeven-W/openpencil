@@ -176,7 +176,7 @@ pub(super) fn paint_mcp_tab(
         t_settings(ui, "settings.mcp.server"),
         "system-ui",
         14.0,
-        to_jian(theme.foreground),
+        (theme.foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
@@ -192,7 +192,7 @@ pub(super) fn paint_mcp_tab(
         t_settings(ui, "settings.mcp.terminalIntegrations"),
         "system-ui",
         13.0,
-        to_jian(theme.foreground),
+        (theme.foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend
@@ -202,7 +202,7 @@ pub(super) fn paint_mcp_tab(
         t_settings(ui, "settings.mcp.terminalSubtitle1"),
         "system-ui",
         11.0,
-        to_jian(theme.muted_foreground),
+        (theme.muted_foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend
@@ -212,7 +212,7 @@ pub(super) fn paint_mcp_tab(
         t_settings(ui, "settings.mcp.terminalSubtitle2"),
         "system-ui",
         11.0,
-        to_jian(theme.muted_foreground),
+        (theme.muted_foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend
@@ -261,7 +261,7 @@ fn paint_server_card(
         status_text,
         "system-ui",
         12.0,
-        to_jian(theme.foreground),
+        (theme.foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend
@@ -275,7 +275,7 @@ fn paint_server_card(
         port_label_text,
         "system-ui",
         11.0,
-        to_jian(theme.muted_foreground),
+        (theme.muted_foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
@@ -302,11 +302,12 @@ fn paint_server_card(
         &port_str,
         "system-ui",
         12.0,
-        to_jian(if port_editable {
+        (if port_editable {
             theme.foreground
         } else {
             theme.muted_foreground
-        }),
+        })
+        .to_jian(),
         Point2D::new(0.0, 0.0),
     );
     let port_x = port_field.origin.x + (PORT_FIELD_W - port_w) / 2.0;
@@ -367,7 +368,7 @@ fn paint_server_card(
         btn_label,
         "system-ui",
         12.0,
-        to_jian(btn_fg),
+        (btn_fg).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
@@ -397,7 +398,7 @@ fn paint_client_config(
         t_settings(ui, "agents.mcpClientConfig"),
         "system-ui",
         11.0,
-        to_jian(theme.muted_foreground),
+        (theme.muted_foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
@@ -436,7 +437,7 @@ fn paint_client_config(
         &config,
         "monospace",
         10.0,
-        to_jian(theme.muted_foreground),
+        (theme.muted_foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
@@ -466,7 +467,7 @@ fn paint_cli_cell(cx: &mut PaintCx<'_>, theme: &Theme, cli: McpCli, enabled: boo
         cli.label(),
         "system-ui",
         13.0,
-        to_jian(label_fg),
+        (label_fg).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
@@ -493,11 +494,4 @@ fn ellipsize(cx: &mut PaintCx<'_>, value: &str, max_w: f32, size: f32) -> String
         out.pop();
     }
     format!("{out}...")
-}
-
-fn to_jian(c: Color) -> jian_core::scene::Color {
-    fn ch(v: f32) -> u8 {
-        (v.clamp(0.0, 1.0) * 255.0).round() as u8
-    }
-    jian_core::scene::Color::rgba(ch(c.r), ch(c.g), ch(c.b), ch(c.a))
 }

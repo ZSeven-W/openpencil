@@ -2,7 +2,7 @@ use super::code_i18n::CodePanelStrings;
 use super::{action_hovered, draw_line, origin};
 use crate::theme::Theme;
 use crate::widgets::icons::{draw_icon, Icon};
-use crate::widgets::property_panel_inputs::{to_jian_color, INPUT_RADIUS, PAD_X};
+use crate::widgets::property_panel_inputs::{INPUT_RADIUS, PAD_X};
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
 use op_editor_core::codegen::{CodeSelection, CodegenHover, CodegenState};
@@ -215,7 +215,7 @@ fn paint_code_area(
             &n,
             "monospace",
             CODE_FONT_SIZE,
-            to_jian_color(code_line_number_color(theme)),
+            (code_line_number_color(theme)).to_jian(),
             origin(),
         );
         cx.backend.draw_text(
@@ -405,7 +405,7 @@ fn paint_highlighted_code_line(
                 token.text,
                 "monospace",
                 CODE_FONT_SIZE,
-                to_jian_color(syntax_color(theme, token.kind)),
+                (syntax_color(theme, token.kind)).to_jian(),
                 origin(),
             );
             cx.backend.draw_text(&layout, Point2D::new(x, baseline_y));

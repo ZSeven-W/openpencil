@@ -3,7 +3,7 @@
 //! TS pins this process block between transcript and input instead
 //! of letting step rows scroll away with assistant messages.
 
-use super::ai_chat_panel::{to_jian_color, PAD};
+use super::ai_chat_panel::PAD;
 use super::ai_chat_transcript_design::extract_design_json_blocks;
 use super::ai_chat_transcript_steps::{
     extract_step_blocks, split_design_progress, ParsedStep, ParsedStepStatus,
@@ -175,10 +175,10 @@ pub(crate) fn paint_fixed_checklist(
 
     cx.backend.save();
     cx.backend.clip_rect(rect);
-    cx.backend.fill_rect(rect, with_alpha(theme.popover, 0.96));
+    cx.backend.fill_rect(rect, (theme.popover).with_alpha(0.96));
     cx.backend.fill_rect(
         Rect::xywh(rect.origin.x, rect.origin.y, rect.size.x, PROGRESS_H),
-        with_alpha(theme.muted, 0.55),
+        (theme.muted).with_alpha(0.55),
     );
     let completed = items.iter().filter(|item| item.done).count();
     let progress = completed as f32 / items.len() as f32;
@@ -314,7 +314,7 @@ fn paint_item(cx: &mut PaintCx<'_>, theme: &Theme, item: &ChecklistItem, x: f32,
         cx.backend.fill_round_rect(
             Rect::xywh(x, y, w, item_height(item)),
             5.0,
-            with_alpha(theme.primary, 0.08),
+            (theme.primary).with_alpha(0.08),
         );
     }
     let icon_x = x + 2.0;
@@ -322,7 +322,7 @@ fn paint_item(cx: &mut PaintCx<'_>, theme: &Theme, item: &ChecklistItem, x: f32,
     if item.done {
         cx.backend.fill_oval(
             Rect::xywh(icon_x, icon_y, 12.0, 12.0),
-            with_alpha(theme.primary, 0.18),
+            (theme.primary).with_alpha(0.18),
         );
         draw_icon(
             cx.backend,
@@ -345,7 +345,7 @@ fn paint_item(cx: &mut PaintCx<'_>, theme: &Theme, item: &ChecklistItem, x: f32,
         let color = if item.active {
             theme.primary
         } else {
-            with_alpha(theme.muted_foreground, 0.35)
+            (theme.muted_foreground).with_alpha(0.35)
         };
         let r = if item.active { 4.0 } else { 3.0 };
         cx.backend.fill_oval(
@@ -361,7 +361,7 @@ fn paint_item(cx: &mut PaintCx<'_>, theme: &Theme, item: &ChecklistItem, x: f32,
     } else if item.active {
         theme.foreground
     } else {
-        with_alpha(theme.muted_foreground, 0.65)
+        (theme.muted_foreground).with_alpha(0.65)
     };
     draw_label(cx, &item.label, 12.0, color, x + 24.0, y + 15.0);
     if !item.details.is_empty() {
@@ -378,7 +378,7 @@ fn paint_item(cx: &mut PaintCx<'_>, theme: &Theme, item: &ChecklistItem, x: f32,
                 cx,
                 text,
                 10.0,
-                with_alpha(theme.muted_foreground, 0.65),
+                (theme.muted_foreground).with_alpha(0.65),
                 text_x,
                 baseline,
             );
@@ -405,7 +405,7 @@ fn paint_detail_status(cx: &mut PaintCx<'_>, theme: &Theme, status: DetailStatus
         DetailStatus::Done => {
             cx.backend.fill_oval(
                 Rect::xywh(x, y, 10.0, 10.0),
-                with_alpha(theme.primary, 0.16),
+                (theme.primary).with_alpha(0.16),
             );
             draw_icon(
                 cx.backend,
@@ -419,7 +419,7 @@ fn paint_detail_status(cx: &mut PaintCx<'_>, theme: &Theme, status: DetailStatus
         DetailStatus::Pending => {
             cx.backend.fill_oval(
                 Rect::xywh(x + 3.0, y + 3.0, 4.0, 4.0),
-                with_alpha(theme.primary, 0.7),
+                (theme.primary).with_alpha(0.7),
             );
         }
         DetailStatus::Error => {
@@ -440,14 +440,10 @@ fn draw_label(cx: &mut PaintCx<'_>, text: &str, size: f32, color: Color, x: f32,
         text,
         "system-ui",
         size,
-        to_jian_color(color),
+        (color).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(&label, Point2D::new(x, y));
-}
-
-fn with_alpha(color: Color, a: f32) -> Color {
-    Color { a, ..color }
 }
 
 #[cfg(test)]

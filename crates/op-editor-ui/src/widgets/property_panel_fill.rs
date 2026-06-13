@@ -11,9 +11,9 @@ use crate::widgets::property_panel::NodeSnapshot;
 use crate::widgets::property_panel_color_variables::paint_color_variable_button;
 use crate::widgets::property_panel_image_preview::paint_image_preview;
 use crate::widgets::property_panel_inputs::{
-    format_color_hex, paint_section_divider, paint_section_label_with_add, to_jian_color,
-    COLOR_VARIABLE_BUTTON_W, COLOR_VARIABLE_GAP, CREATE_COMPONENT_BLOCK_H, HEADER_HEIGHT,
-    INPUT_HEIGHT, INPUT_RADIUS, PAD_X, SECTION_GAP, SECTION_HEADER_HEIGHT, TAB_HEIGHT,
+    format_color_hex, paint_section_divider, paint_section_label_with_add, COLOR_VARIABLE_BUTTON_W,
+    COLOR_VARIABLE_GAP, CREATE_COMPONENT_BLOCK_H, HEADER_HEIGHT, INPUT_HEIGHT, INPUT_RADIUS, PAD_X,
+    SECTION_GAP, SECTION_HEADER_HEIGHT, TAB_HEIGHT,
 };
 use crate::widgets::property_panel_layout::{fill_body_height_with_stops, VisibleSections};
 use crate::widgets::property_panel_sections::{EditContext, PropertyLabels};
@@ -134,7 +134,7 @@ pub fn paint_fill_type_picker(
             fill_type_label(locale, *t),
             "system-ui",
             13.0,
-            to_jian_color(lbl_color),
+            (lbl_color).to_jian(),
             Point2D::new(0.0, 0.0),
         );
         cx.backend
@@ -256,7 +256,7 @@ pub fn paint_fill_section(
         type_label,
         "system-ui",
         12.0,
-        to_jian_color(theme.foreground),
+        (theme.foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
@@ -291,7 +291,7 @@ pub fn paint_fill_section(
         pct_text,
         "system-ui",
         12.0,
-        to_jian_color(theme.foreground),
+        (theme.foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     let pct_x = pct_rect.origin.x + 10.0;
@@ -323,7 +323,7 @@ pub fn paint_fill_section(
         "%",
         "system-ui",
         12.0,
-        to_jian_color(theme.muted_foreground),
+        (theme.muted_foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
@@ -420,7 +420,7 @@ fn paint_fill_solid_body(
         hex_text,
         "system-ui",
         12.0,
-        to_jian_color(theme.foreground),
+        (theme.foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     let hex_x = hex_rect.origin.x + 30.0;
@@ -496,7 +496,7 @@ fn paint_fill_gradient_body(
             op_i18n::translate(locale, "fill.angle"),
             "system-ui",
             12.0,
-            to_jian_color(theme.muted_foreground),
+            (theme.muted_foreground).to_jian(),
             Point2D::new(0.0, 0.0),
         );
         cx.backend.draw_text(
@@ -509,7 +509,7 @@ fn paint_fill_gradient_body(
             value_text,
             "system-ui",
             12.0,
-            to_jian_color(theme.foreground),
+            (theme.foreground).to_jian(),
             Point2D::new(0.0, 0.0),
         );
         let value_x = angle_rect.origin.x + 44.0;
@@ -541,7 +541,7 @@ fn paint_fill_gradient_body(
             "°",
             "system-ui",
             12.0,
-            to_jian_color(theme.muted_foreground),
+            (theme.muted_foreground).to_jian(),
             Point2D::new(0.0, 0.0),
         );
         cx.backend.draw_text(
@@ -558,7 +558,7 @@ fn paint_fill_gradient_body(
         op_i18n::translate(locale, "fill.stops"),
         "system-ui",
         12.0,
-        to_jian_color(theme.foreground),
+        (theme.foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend
@@ -606,7 +606,7 @@ fn paint_fill_gradient_body(
             hex_text,
             "system-ui",
             12.0,
-            to_jian_color(theme.foreground),
+            (theme.foreground).to_jian(),
             Point2D::new(0.0, 0.0),
         );
         let hex_text_x = hex_rect.origin.x + 30.0;
@@ -654,7 +654,7 @@ fn paint_fill_gradient_body(
             pct_text,
             "system-ui",
             12.0,
-            to_jian_color(theme.foreground),
+            (theme.foreground).to_jian(),
             Point2D::new(0.0, 0.0),
         );
         let pct_x = pct_rect.origin.x + 12.0;
@@ -686,7 +686,7 @@ fn paint_fill_gradient_body(
             "%",
             "system-ui",
             12.0,
-            to_jian_color(theme.muted_foreground),
+            (theme.muted_foreground).to_jian(),
             Point2D::new(0.0, 0.0),
         );
         cx.backend.draw_text(
@@ -833,7 +833,7 @@ fn paint_fill_image_body(
         op_i18n::translate(locale, label_key),
         "system-ui",
         12.0,
-        to_jian_color(theme.foreground),
+        (theme.foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(

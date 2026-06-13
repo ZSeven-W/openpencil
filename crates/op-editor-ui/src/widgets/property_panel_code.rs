@@ -9,8 +9,8 @@ use crate::theme::Theme;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::property_panel_action::{CodegenAction, PropertyPanelAction};
 use crate::widgets::property_panel_inputs::{
-    paint_section_label, to_jian_color, INPUT_HEIGHT, INPUT_RADIUS, PAD_X, SECTION_GAP,
-    SECTION_HEADER_HEIGHT, TAB_HEIGHT,
+    paint_section_label, INPUT_HEIGHT, INPUT_RADIUS, PAD_X, SECTION_GAP, SECTION_HEADER_HEIGHT,
+    TAB_HEIGHT,
 };
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
@@ -219,7 +219,7 @@ fn code_neutral_hover_color(theme: &Theme) -> Color {
 
 /// Draw a 13px system-ui line of text at the `(px, py)` baseline.
 fn draw_line(cx: &mut PaintCx<'_>, text: &str, color: Color, px: f32, py: f32) {
-    let layout = TextLayout::single_run(text, "system-ui", 13.0, to_jian_color(color), origin());
+    let layout = TextLayout::single_run(text, "system-ui", 13.0, (color).to_jian(), origin());
     cx.backend.draw_text(&layout, Point2D::new(px, py));
 }
 
@@ -508,7 +508,7 @@ fn paint_framework_chips(
             label,
             "system-ui",
             CHIP_FONT_SIZE,
-            to_jian_color(text_color),
+            (text_color).to_jian(),
             origin(),
         );
         cx.backend.draw_text(&layout, Point2D::new(tx, ty));

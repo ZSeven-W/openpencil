@@ -7,7 +7,7 @@
 use crate::theme::Theme;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::property_panel::{ColorVariableOption, EffectSummary, PropertyPanelAction};
-use crate::widgets::property_panel_inputs::{to_jian_color, INPUT_RADIUS, PAD_X};
+use crate::widgets::property_panel_inputs::{INPUT_RADIUS, PAD_X};
 use crate::widgets::property_panel_layout::{
     action_button_rects_with_fill_picker, COLOR_VARIABLE_MENU_PAD_Y, COLOR_VARIABLE_MENU_ROW_H,
     COLOR_VARIABLE_MENU_W,
@@ -162,7 +162,7 @@ fn paint_unbind_row(
         text,
         "system-ui",
         12.0,
-        to_jian_color(theme.destructive),
+        (theme.destructive).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend
@@ -202,11 +202,12 @@ fn paint_variable_row(
         &name,
         "ui-monospace",
         12.0,
-        to_jian_color(if active {
+        (if active {
             theme.primary
         } else {
             theme.foreground
-        }),
+        })
+        .to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
@@ -219,7 +220,7 @@ fn paint_variable_row(
             hex,
             "ui-monospace",
             12.0,
-            to_jian_color(theme.muted_foreground),
+            (theme.muted_foreground).to_jian(),
             Point2D::new(0.0, 0.0),
         );
         let hex_w = cx.backend.measure_text(hex, 12.0);

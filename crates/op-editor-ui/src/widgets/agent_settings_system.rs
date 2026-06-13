@@ -10,7 +10,7 @@ use crate::widgets::agent_settings_switch::{
     paint_settings_switch, SETTINGS_SWITCH_H, SETTINGS_SWITCH_W,
 };
 use crate::widgets::PaintCx;
-use crate::{Color, Point2D, Rect, TextLayout};
+use crate::{Point2D, Rect, TextLayout};
 use op_editor_core::agent_settings::AgentSettings;
 use op_editor_core::editor_ui_state::EditorUiState;
 
@@ -63,7 +63,7 @@ pub(super) fn paint_system_tab(
         t_settings(ui, "settings.system.title"),
         "system-ui",
         15.0,
-        to_jian(theme.foreground),
+        (theme.foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
@@ -79,7 +79,7 @@ pub(super) fn paint_system_tab(
         t_settings(ui, "agents.autoUpdate"),
         "system-ui",
         13.0,
-        to_jian(theme.foreground),
+        (theme.foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
@@ -91,7 +91,7 @@ pub(super) fn paint_system_tab(
         t_settings(ui, "settings.autoUpdateDesc"),
         "system-ui",
         11.0,
-        to_jian(theme.muted_foreground),
+        (theme.muted_foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
@@ -105,11 +105,4 @@ pub(super) fn paint_system_tab(
         auto_update_switch_rect(content),
         settings.auto_update_enabled,
     );
-}
-
-fn to_jian(c: Color) -> jian_core::scene::Color {
-    fn ch(v: f32) -> u8 {
-        (v.clamp(0.0, 1.0) * 255.0).round() as u8
-    }
-    jian_core::scene::Color::rgba(ch(c.r), ch(c.g), ch(c.b), ch(c.a))
 }

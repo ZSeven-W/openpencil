@@ -10,9 +10,7 @@ use crate::widgets::agent_settings_i18n::t as t_settings;
 use crate::widgets::agent_settings_panel::{
     AVATAR_ICON, AVATAR_SIZE, CARD_HEIGHT, CONNECT_BTN_W, NAME_FONT, SUB_FONT,
 };
-use crate::widgets::agent_settings_panel_geometry::{
-    connect_btn_rect_at, disconnect_btn_rect_at, to_jian,
-};
+use crate::widgets::agent_settings_panel_geometry::{connect_btn_rect_at, disconnect_btn_rect_at};
 use crate::widgets::brand_icons::{paint_brand_logo, paint_opencode_logo, BrandLogo};
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
@@ -89,7 +87,7 @@ pub(super) fn paint_agent_card(
         provider.name(),
         "system-ui",
         NAME_FONT,
-        to_jian(theme.foreground),
+        (theme.foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend
@@ -146,7 +144,7 @@ pub(super) fn paint_agent_card(
         &sub_text,
         "system-ui",
         SUB_FONT,
-        to_jian(sub_color),
+        (sub_color).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend
@@ -169,7 +167,7 @@ pub(super) fn paint_agent_card(
                 label,
                 "system-ui",
                 12.0,
-                to_jian(red),
+                (red).to_jian(),
                 Point2D::new(0.0, 0.0),
             );
             cx.backend.draw_text(
@@ -193,7 +191,7 @@ pub(super) fn paint_agent_card(
             label,
             "system-ui",
             12.0,
-            to_jian(theme.primary_foreground),
+            (theme.primary_foreground).to_jian(),
             Point2D::new(0.0, 0.0),
         );
         cx.backend.draw_text(

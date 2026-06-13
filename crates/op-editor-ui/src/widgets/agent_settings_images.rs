@@ -338,7 +338,7 @@ pub(super) fn paint_images_tab(
         title_str,
         "system-ui",
         15.0,
-        to_jian(theme.foreground),
+        (theme.foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
@@ -374,7 +374,7 @@ pub(super) fn paint_images_tab(
         status_text,
         "system-ui",
         12.0,
-        to_jian(theme.muted_foreground),
+        (theme.muted_foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
@@ -404,7 +404,7 @@ pub(super) fn paint_images_tab(
         t_settings(ui, "settings.images.advanced"),
         "system-ui",
         13.0,
-        to_jian(theme.foreground),
+        (theme.foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
@@ -418,7 +418,7 @@ pub(super) fn paint_images_tab(
             t_settings(ui, "settings.images.oauthLabel"),
             "system-ui",
             12.0,
-            to_jian(theme.muted_foreground),
+            (theme.muted_foreground).to_jian(),
             Point2D::new(0.0, 0.0),
         );
         cx.backend
@@ -457,7 +457,7 @@ pub(super) fn paint_images_tab(
             link_text,
             "system-ui",
             12.0,
-            to_jian(theme.primary),
+            (theme.primary).to_jian(),
             Point2D::new(0.0, 0.0),
         );
         cx.backend
@@ -486,11 +486,12 @@ pub(super) fn paint_images_tab(
             test_label,
             "system-ui",
             13.0,
-            to_jian(if search_test_enabled(settings) {
+            (if search_test_enabled(settings) {
                 theme.foreground
             } else {
                 theme.muted_foreground
-            }),
+            })
+            .to_jian(),
             Point2D::new(0.0, 0.0),
         );
         cx.backend.draw_text(
@@ -508,7 +509,7 @@ pub(super) fn paint_images_tab(
         t_settings(ui, "settings.images.generation"),
         "system-ui",
         15.0,
-        to_jian(theme.foreground),
+        (theme.foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend
@@ -527,7 +528,7 @@ pub(super) fn paint_images_tab(
         add_label,
         "system-ui",
         13.0,
-        to_jian(theme.foreground),
+        (theme.foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
@@ -545,7 +546,7 @@ pub(super) fn paint_images_tab(
             hint,
             "system-ui",
             13.0,
-            to_jian(theme.muted_foreground),
+            (theme.muted_foreground).to_jian(),
             Point2D::new(0.0, 0.0),
         );
         cx.backend.draw_text(
@@ -601,7 +602,7 @@ fn paint_search_test_status(
                 "Invalid",
                 "system-ui",
                 10.0,
-                to_jian(theme.destructive),
+                (theme.destructive).to_jian(),
                 Point2D::new(0.0, 0.0),
             );
             cx.backend.draw_text(
@@ -665,7 +666,7 @@ fn paint_profile_row(
         &name,
         "system-ui",
         12.0,
-        to_jian(theme.foreground),
+        (theme.foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
@@ -679,7 +680,7 @@ fn paint_profile_row(
         provider,
         "system-ui",
         10.0,
-        to_jian(theme.muted_foreground),
+        (theme.muted_foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
@@ -772,11 +773,4 @@ fn is_editing_profile(settings: &AgentSettings, index: usize) -> bool {
         settings.focus,
         Some(SettingsFocus::ImageGenProfile { index: i, .. }) if i == index
     )
-}
-
-fn to_jian(c: Color) -> jian_core::scene::Color {
-    fn ch(v: f32) -> u8 {
-        (v.clamp(0.0, 1.0) * 255.0).round() as u8
-    }
-    jian_core::scene::Color::rgba(ch(c.r), ch(c.g), ch(c.b), ch(c.a))
 }

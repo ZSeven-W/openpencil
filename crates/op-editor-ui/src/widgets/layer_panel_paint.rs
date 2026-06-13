@@ -67,7 +67,7 @@ pub(super) fn paint_drag_ghost(
         &ghost.label,
         "system-ui",
         ROW_FONT,
-        to_jian_color(fg),
+        (fg).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend
@@ -128,7 +128,7 @@ pub(super) fn paint_rename_input(
         draft,
         "system-ui",
         ROW_FONT,
-        to_jian_color(theme.foreground),
+        (theme.foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend
@@ -162,16 +162,9 @@ pub(super) fn paint_section_header(
         label,
         "system-ui",
         HEADER_FONT,
-        to_jian_color(theme.muted_foreground),
+        (theme.muted_foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend
         .draw_text(&header_text, Point2D::new(x + ROW_PAD_X, y + 19.0));
-}
-
-pub(super) fn to_jian_color(c: Color) -> jian_core::scene::Color {
-    fn ch(v: f32) -> u8 {
-        (v.clamp(0.0, 1.0) * 255.0).round() as u8
-    }
-    jian_core::scene::Color::rgba(ch(c.r), ch(c.g), ch(c.b), ch(c.a))
 }

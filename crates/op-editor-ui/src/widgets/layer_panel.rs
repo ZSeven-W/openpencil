@@ -38,8 +38,7 @@ pub(crate) const LAYER_ROW_HEIGHT: f32 = 28.0;
 pub(crate) const ROW_PAD_X: f32 = 12.0;
 pub(crate) const SECTION_GAP: f32 = 8.0;
 use crate::widgets::layer_panel_paint::{
-    paint_drag_ghost, paint_rename_input, paint_section_header, to_jian_color, truncate_to_fit,
-    ROW_FONT,
+    paint_drag_ghost, paint_rename_input, paint_section_header, truncate_to_fit, ROW_FONT,
 };
 
 /// One row in the layers tree — flat depth-walked view.
@@ -584,11 +583,12 @@ impl Widget for LayerPanel {
                     &display,
                     "system-ui",
                     ROW_FONT,
-                    to_jian_color(if page.active {
+                    (if page.active {
                         self.theme.foreground
                     } else {
                         self.theme.muted_foreground
-                    }),
+                    })
+                    .to_jian(),
                     Point2D::new(0.0, 0.0),
                 );
                 cx.backend
@@ -743,7 +743,7 @@ impl Widget for LayerPanel {
                     &display,
                     "system-ui",
                     ROW_FONT,
-                    to_jian_color(label_color),
+                    (label_color).to_jian(),
                     Point2D::new(0.0, 0.0),
                 );
                 cx.backend

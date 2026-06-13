@@ -7,8 +7,7 @@ use crate::widgets::property_panel::{
 };
 use crate::widgets::property_panel_inputs::{
     paint_input_with_prefix_focused, paint_input_with_suffix_focused, paint_section_divider,
-    paint_section_label, to_jian_color, INPUT_HEIGHT, INPUT_RADIUS, PAD_X, SECTION_GAP,
-    SECTION_HEADER_HEIGHT,
+    paint_section_label, INPUT_HEIGHT, INPUT_RADIUS, PAD_X, SECTION_GAP, SECTION_HEADER_HEIGHT,
 };
 use crate::widgets::property_panel_sections::{EditContext, PropertyLabels};
 use crate::widgets::PaintCx;
@@ -418,7 +417,7 @@ fn paint_alignment_and_gap(
             &gap_text,
             "system-ui",
             12.0,
-            to_jian_color(theme.muted_foreground),
+            (theme.muted_foreground).to_jian(),
             Point2D::new(0.0, 0.0),
         );
         cx.backend
@@ -561,7 +560,7 @@ pub fn paint_padding_mode_popover(
         op_i18n::translate(locale, "padding.paddingValues"),
         "system-ui",
         11.0,
-        to_jian_color(theme.muted_foreground),
+        (theme.muted_foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
@@ -586,7 +585,7 @@ pub fn paint_padding_mode_popover(
             op_i18n::translate(locale, mode.label_key()),
             "system-ui",
             11.0,
-            to_jian_color(theme.foreground),
+            (theme.foreground).to_jian(),
             Point2D::new(0.0, 0.0),
         );
         cx.backend.draw_text(
@@ -712,7 +711,7 @@ fn paint_gap_row_label(
         op_i18n::translate(locale, label_key),
         "system-ui",
         10.0,
-        to_jian_color(theme.muted_foreground),
+        (theme.muted_foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend
@@ -724,7 +723,7 @@ fn paint_sub_label(cx: &mut PaintCx<'_>, theme: &Theme, label: &str, x: f32, y: 
         label,
         "system-ui",
         10.0,
-        to_jian_color(theme.muted_foreground),
+        (theme.muted_foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(&layout, Point2D::new(x, y + 13.0));

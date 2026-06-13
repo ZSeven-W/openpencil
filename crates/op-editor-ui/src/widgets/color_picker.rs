@@ -183,7 +183,7 @@ fn paint_picker(cx: &mut PaintCx<'_>, theme: &Theme, state: &ColorPickerState, p
         title,
         "system-ui",
         13.0,
-        to_jian(theme.foreground),
+        (theme.foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
@@ -238,7 +238,7 @@ fn paint_picker(cx: &mut PaintCx<'_>, theme: &Theme, state: &ColorPickerState, p
             &val_str,
             "system-ui",
             14.0,
-            to_jian(theme.foreground),
+            (theme.foreground).to_jian(),
             Point2D::new(0.0, 0.0),
         );
         cx.backend.draw_text(
@@ -250,7 +250,7 @@ fn paint_picker(cx: &mut PaintCx<'_>, theme: &Theme, state: &ColorPickerState, p
             label,
             "system-ui",
             12.0,
-            to_jian(theme.muted_foreground),
+            (theme.muted_foreground).to_jian(),
             Point2D::new(0.0, 0.0),
         );
         cx.backend.draw_text(
@@ -281,7 +281,7 @@ fn paint_picker(cx: &mut PaintCx<'_>, theme: &Theme, state: &ColorPickerState, p
         &hex_str,
         "system-ui",
         13.0,
-        to_jian(theme.foreground),
+        (theme.foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
@@ -449,13 +449,6 @@ fn close_rect(panel: Rect) -> Rect {
         ),
         size: Point2D::new(22.0, 22.0),
     }
-}
-
-fn to_jian(c: Color) -> jian_core::scene::Color {
-    fn ch(v: f32) -> u8 {
-        (v.clamp(0.0, 1.0) * 255.0).round() as u8
-    }
-    jian_core::scene::Color::rgba(ch(c.r), ch(c.g), ch(c.b), ch(c.a))
 }
 
 /// HSV → RGB, h 0..360, s/v 0..1. Returns alpha 1.

@@ -341,7 +341,7 @@ impl Widget for LayerContextMenu {
                 op_i18n::translate(self.locale, row.label_key),
                 "system-ui",
                 ROW_FONT,
-                to_jian_color(fg),
+                (fg).to_jian(),
                 Point2D::new(0.0, 0.0),
             );
             cx.backend.draw_text(
@@ -356,11 +356,4 @@ impl Widget for LayerContextMenu {
         n.set_label(op_i18n::translate(self.locale, "a11y.layerContextMenu"));
         n
     }
-}
-
-fn to_jian_color(c: Color) -> jian_core::scene::Color {
-    fn ch(v: f32) -> u8 {
-        (v.clamp(0.0, 1.0) * 255.0).round() as u8
-    }
-    jian_core::scene::Color::rgba(ch(c.r), ch(c.g), ch(c.b), ch(c.a))
 }

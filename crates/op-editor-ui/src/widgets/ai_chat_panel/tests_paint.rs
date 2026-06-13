@@ -48,10 +48,7 @@ fn paint_collapsed_bar_matches_ts_minimized_bar_style() {
     assert_eq!(backend.round_rects[0].2, panel.theme.card);
     assert_eq!(backend.texts[0].0, "New Chat");
     assert_close(backend.texts[0].1, 12.0);
-    assert_eq!(
-        backend.texts[0].2,
-        to_jian_color(panel.theme.muted_foreground)
-    );
+    assert_eq!(backend.texts[0].2, (panel.theme.muted_foreground).to_jian());
     assert_close(backend.texts[0].3.x, 12.0 + 13.0 + 6.0);
     assert_eq!(backend.svg_strokes.len(), 2);
     assert_close(backend.svg_strokes[0].0.x, 12.0);
