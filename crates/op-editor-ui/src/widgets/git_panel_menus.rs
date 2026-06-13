@@ -10,6 +10,7 @@
 //! shared between paint + hit-test through the `*_rects` helpers so the
 //! pure-geometry hit-test agrees with paint.
 
+use crate::widgets::button::paint_button_feedback_wash;
 use crate::widgets::git_panel::{contains, truncate, GitPanel, GitPanelHit, PAD};
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::PaintCx;
@@ -299,8 +300,15 @@ impl GitPanel<'_> {
         for (i, row) in rows.iter().enumerate() {
             let bi = if merging { candidates[i] } else { i };
             let is_current = self.state.branches.get(bi) == self.state.branch.as_ref();
-            if self.state.branch_picker_menu.hover == Some(i) && !is_current {
-                cx.backend.fill_round_rect(*row, 6.0, t.button_hover);
+            let hovered = self.state.branch_picker_menu.hover == Some(i);
+            let row_hit = if merging {
+                GitPanelHit::MergeBranch(bi)
+            } else {
+                GitPanelHit::SwitchBranch(bi)
+            };
+            let pressed = self.is_pressed(row_hit);
+            if (hovered || pressed) && !is_current {
+                paint_button_feedback_wash(cx.backend, &self.theme, *row, 6.0, hovered, pressed);
             }
             let name = truncate(
                 self.state
@@ -541,8 +549,10 @@ impl GitPanel<'_> {
         cx.backend.stroke_round_rect(panel, 8.0, t.border, 1.0);
         let rows = self.overflow_row_rects(panel_rect);
         for (i, (item, row)) in self.overflow_items().iter().zip(rows.iter()).enumerate() {
-            if self.state.overflow_menu.hover == Some(i) {
-                cx.backend.fill_round_rect(*row, 6.0, t.button_hover);
+            let hovered = self.state.overflow_menu.hover == Some(i);
+            let pressed = self.is_pressed(item.hit);
+            if hovered || pressed {
+                paint_button_feedback_wash(cx.backend, &self.theme, *row, 6.0, hovered, pressed);
             }
             // Leaf icon (TS size=13 strokeWidth=1.75, muted).
             draw_icon(

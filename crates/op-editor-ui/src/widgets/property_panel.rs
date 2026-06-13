@@ -152,6 +152,7 @@ pub struct PropertyPanel {
     pub font_weight_picker_open: bool,
     /// Hovered weight-dropdown row index (when the dropdown is open).
     pub font_weight_picker_hover: Option<usize>,
+    pub font_weight_picker_pressed: Option<usize>,
     /// Resolved padding edit mode (UI pin or derived from the node's
     /// values) + whether the gear popover is open.
     pub padding_edit_mode: op_editor_core::PaddingEditMode,
@@ -393,6 +394,10 @@ impl PropertyPanel {
             ),
             font_weight_picker_open: ui.font_weight_picker_open,
             font_weight_picker_hover: ui.font_weight_picker_hover,
+            font_weight_picker_pressed: match ui.pressed_button {
+                Some(op_editor_core::ButtonPressTarget::FontWeightPicker(index)) => Some(index),
+                _ => None,
+            },
             action_hover: if is_multi {
                 None
             } else {
@@ -1071,6 +1076,7 @@ impl Widget for PropertyPanel {
                     self.locale,
                     text.font_weight,
                     self.font_weight_picker_hover,
+                    self.font_weight_picker_pressed,
                 );
             }
         }

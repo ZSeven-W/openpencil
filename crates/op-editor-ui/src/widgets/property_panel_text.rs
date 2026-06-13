@@ -1,6 +1,7 @@
 //! Text-specific property section for the native right panel.
 
 use crate::theme::Theme;
+use crate::widgets::button::paint_button_feedback_wash;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::property_panel::{
     FontWeightChoice, NodeSnapshot, PropertyPanelAction, TextAlignValue, TextGrowthValue,
@@ -417,6 +418,7 @@ pub fn paint_font_weight_picker(
     locale: op_editor_core::Locale,
     active_weight: u16,
     hover: Option<usize>,
+    pressed: Option<usize>,
 ) {
     let x0 = panel_rect.origin.x;
     let w = panel_rect.size.x;
@@ -448,9 +450,15 @@ pub fn paint_font_weight_picker(
         if is_active {
             cx.backend
                 .fill_round_rect(row, 6.0, theme.row_selected_primary);
-        } else if hover == Some(i) {
-            // Muted hover wash matching the other dropdowns.
-            cx.backend.fill_round_rect(row, 6.0, theme.button_hover);
+        } else if hover == Some(i) || pressed == Some(i) {
+            paint_button_feedback_wash(
+                cx.backend,
+                theme,
+                row,
+                6.0,
+                hover == Some(i),
+                pressed == Some(i),
+            );
         }
         // "number + name" — e.g. `400 Regular`, `800 Extra Bold`.
         let row_label = format!(

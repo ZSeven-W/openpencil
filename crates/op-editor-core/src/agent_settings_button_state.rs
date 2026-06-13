@@ -23,5 +23,9 @@ pub enum AgentSettingsButton {
     ImageProfileHeader(usize),
     ImageProfileRemove(usize),
     ImageProfileProvider(usize),
+    ImageProviderOption {
+        index: usize,
+        provider: crate::agent_settings::ImageGenProvider,
+    },
     ImageProfileTest(usize),
 }

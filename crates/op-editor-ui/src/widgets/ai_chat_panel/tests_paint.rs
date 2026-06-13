@@ -107,6 +107,33 @@ fn paint_quick_action_card_hover_adds_visible_feedback() {
 }
 
 #[test]
+fn paint_quick_action_card_pressed_uses_shared_feedback() {
+    let mut s = EditorState::new();
+    seed_available_model(&mut s);
+    s.editor_ui.pressed_button = Some(op_editor_core::ButtonPressTarget::ChatExample(0));
+    let panel = AIChatPlaceholder::from_editor(&s);
+    let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
+    let cards = crate::widgets::ai_chat_panel_paint::example_card_rects(rect);
+    let expected = panel
+        .theme
+        .button_hover
+        .with_alpha(panel.theme.button_hover.a * 1.8);
+    let mut backend = PanelPaintBackend::default();
+    let mut cx = PaintCx {
+        backend: &mut backend,
+    };
+
+    panel.paint(&mut cx, rect);
+
+    assert!(
+        backend.round_rects.iter().any(|(r, radius, color)| {
+            rect_close(*r, cards[0]) && *radius == 8.0 && color_close(*color, expected)
+        }),
+        "pressed quick-action card should paint the shared pressed feedback token"
+    );
+}
+
+#[test]
 fn paint_send_button_hover_adds_visible_feedback() {
     let mut s = EditorState::new();
     seed_available_model(&mut s);

@@ -120,6 +120,9 @@ pub fn agent_settings_button(
         W::ToggleGenConfigEditor(index) => Some(O::ImageProfileHeader(index)),
         W::RemoveGenConfig(index) => Some(O::ImageProfileRemove(index)),
         W::ToggleGenProviderMenu(index) => Some(O::ImageProfileProvider(index)),
+        W::SelectGenProvider { index, provider } => {
+            Some(O::ImageProviderOption { index, provider })
+        }
         W::TestGenConfig(index) => Some(O::ImageProfileTest(index)),
         _ => None,
     }

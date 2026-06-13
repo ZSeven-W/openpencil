@@ -94,6 +94,7 @@ pub struct AIChatPlaceholder<'a> {
     pub design_hover: Option<(usize, usize)>,
     /// Empty-state quick action card under the cursor.
     pub example_hover: Option<usize>,
+    pub example_pressed: Option<usize>,
     /// Which bare header button the cursor is over (chevron / maximize
     /// / new chat) — drives their `theme.button_hover` wash.
     pub header_hover: Option<op_editor_core::ChatHeaderButton>,
@@ -131,6 +132,10 @@ impl<'a> AIChatPlaceholder<'a> {
             model_picker_input: &ui.chat_model_picker_input,
             design_hover: ui.chat_design_block_hover,
             example_hover: ui.chat_example_hover,
+            example_pressed: match ui.pressed_button {
+                Some(op_editor_core::ButtonPressTarget::ChatExample(index)) => Some(index),
+                _ => None,
+            },
             header_hover: ui.chat_header_hover,
             footer_hover: ui.chat_footer_hover,
             header_pressed: match ui.pressed_button {
@@ -475,6 +480,7 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
                 &self.examples,
                 !can_use_model || self.is_streaming(),
                 self.example_hover,
+                self.example_pressed,
             );
         } else {
             crate::widgets::ai_chat_transcript::paint_transcript_with_selection(

@@ -387,6 +387,67 @@ fn pressed_branch_switch_row_uses_shared_button_feedback() {
 }
 
 #[test]
+fn ready_branch_picker_pressed_row_uses_shared_button_feedback() {
+    let mut s = state_with(GitPanelState {
+        branch: Some("main".to_string()),
+        branches: vec!["main".to_string(), "feature".to_string()],
+        branch_picker_open: true,
+        ..open_repo()
+    });
+    s.editor_ui.pressed_button = Some(ButtonPressTarget::Git(
+        op_editor_core::GitButton::SwitchBranch(1),
+    ));
+    let panel = GitPanel::for_editor(&s).unwrap();
+    let rect = panel_rect(&panel);
+    let rows = panel.branch_picker_row_rects(rect);
+    let theme = crate::widgets::editor_state_ext::theme_for(&s.editor_ui);
+    let expected = theme.button_hover.with_alpha(theme.button_hover.a * 1.8);
+    let mut backend = RoundFillBackend::default();
+    let mut cx = crate::widgets::PaintCx {
+        backend: &mut backend,
+    };
+
+    panel.paint(&mut cx, rect);
+
+    assert!(
+        backend.fills.iter().any(|(fill, radius, color)| {
+            *fill == rows[1] && (*radius - 6.0).abs() < 0.01 && color_close(*color, expected)
+        }),
+        "pressed ready branch-picker row should paint the shared pressed feedback token"
+    );
+}
+
+#[test]
+fn overflow_menu_pressed_row_uses_shared_button_feedback() {
+    let mut s = state_with(GitPanelState {
+        branch: Some("main".to_string()),
+        overflow_open: true,
+        ..open_repo()
+    });
+    s.editor_ui.pressed_button = Some(ButtonPressTarget::Git(
+        op_editor_core::GitButton::OverflowRemoteSettings,
+    ));
+    let panel = GitPanel::for_editor(&s).unwrap();
+    let rect = panel_rect(&panel);
+    let rows = panel.overflow_row_rects(rect);
+    let theme = crate::widgets::editor_state_ext::theme_for(&s.editor_ui);
+    let expected = theme.button_hover.with_alpha(theme.button_hover.a * 1.8);
+    let mut backend = RoundFillBackend::default();
+    let mut cx = crate::widgets::PaintCx {
+        backend: &mut backend,
+    };
+
+    panel.paint(&mut cx, rect);
+
+    assert!(
+        backend.fills.iter().any(|(fill, radius, color)| {
+            *fill == rows[2] && (*radius - 6.0).abs() < 0.01 && color_close(*color, expected)
+        }),
+        "pressed overflow-menu row should paint the shared pressed feedback token"
+    );
+}
+
+#[test]
 fn ready_commit_button_is_inert_without_a_message() {
     // An empty commit message → the button is not a commit target;
     // the click falls through to the box's focus instead.

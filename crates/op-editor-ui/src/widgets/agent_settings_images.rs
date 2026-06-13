@@ -776,7 +776,16 @@ fn paint_profile_row(
             let hovered = settings
                 .hover_image_gen_provider_option
                 .and_then(|(hover_index, provider)| (hover_index == index).then_some(provider));
-            paint_provider_menu(cx, theme, provider_rect, profile.provider, hovered);
+            let pressed = match ui.pressed_button {
+                Some(ButtonPressTarget::AgentSettings(
+                    AgentSettingsButton::ImageProviderOption {
+                        index: pressed_index,
+                        provider,
+                    },
+                )) if pressed_index == index => Some(provider),
+                _ => None,
+            };
+            paint_provider_menu(cx, theme, provider_rect, profile.provider, hovered, pressed);
         }
     }
 }

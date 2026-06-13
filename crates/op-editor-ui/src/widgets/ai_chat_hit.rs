@@ -13,9 +13,8 @@ pub enum AIChatHit {
     /// Click landed on the stop affordance shown during a streaming
     /// turn.
     Stop,
-    /// Click landed on an example card; payload is the example's
-    /// title (host fills the input with this).
-    Example(String),
+    /// Click landed on an example card; `prompt` fills the input.
+    Example { index: usize, prompt: String },
     /// Click landed on the header / margin — host should start a
     /// drag so the user can move the panel between canvas corners.
     DragHandle,

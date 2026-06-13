@@ -338,6 +338,62 @@ fn images_tab_provider_menu_hover_paints_option_wash() {
 }
 
 #[test]
+fn images_tab_provider_menu_pressed_option_uses_shared_feedback() {
+    let mut state = EditorState::default();
+    state.editor_ui.agent_settings.tab = AgentSettingsTab::Images;
+    state.editor_ui.agent_settings.add_image_gen_profile();
+    state.editor_ui.agent_settings.image_gen_profiles[0].provider = ImageGenProvider::OpenAi;
+    state.editor_ui.agent_settings.focus = Some(SettingsFocus::ImageGenProfile {
+        index: 0,
+        field: ImageGenField::Name,
+    });
+    state.editor_ui.agent_settings.image_gen_provider_menu_open = Some(0);
+    state.editor_ui.pressed_button = Some(ButtonPressTarget::AgentSettings(
+        AgentSettingsButton::ImageProviderOption {
+            index: 0,
+            provider: ImageGenProvider::Replicate,
+        },
+    ));
+    let panel = AgentSettingsPanel::for_editor(&state);
+    let rect = panel.rect(1200.0, 800.0);
+    let content_x = rect.origin.x + 200.0 + 24.0;
+    let content_y = rect.origin.y + 24.0;
+    let content_w = rect.size.x - 200.0 - 48.0;
+    let row_inset = 8.0;
+    let gen_top = content_y + 36.0 + 24.0 + 28.0;
+    let row_y = gen_top + 36.0 + 8.0;
+    let provider = Rect {
+        origin: Point2D::new(content_x + row_inset + 110.0, row_y + 32.0 + 8.0 + 36.0),
+        size: Point2D::new(content_w - row_inset * 2.0 - 110.0 - 12.0, 24.0),
+    };
+    let expected = Rect {
+        origin: Point2D::new(
+            provider.origin.x + 4.0,
+            provider.origin.y + 24.0 + 2.0 * 24.0 + 1.0,
+        ),
+        size: Point2D::new(provider.size.x - 8.0, 22.0),
+    };
+    let expected_color = panel
+        .theme
+        .button_hover
+        .with_alpha(panel.theme.button_hover.a * 1.8);
+    let mut backend = CaptureBackend::default();
+    let mut cx = PaintCx {
+        backend: &mut backend,
+    };
+
+    panel.paint(&mut cx, rect);
+
+    assert!(
+        backend
+            .round_fills
+            .iter()
+            .any(|(fill, color)| { rect_eq(*fill, expected) && color_eq(*color, expected_color) }),
+        "pressed provider option should paint the shared pressed feedback token"
+    );
+}
+
+#[test]
 fn images_tab_profile_controls_hover_paints_visible_washes() {
     let mut state = EditorState::default();
     state.editor_ui.agent_settings.tab = AgentSettingsTab::Images;

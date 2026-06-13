@@ -58,8 +58,8 @@ impl WidgetHost {
                         self.mark_dirty();
                         return true;
                     }
-                    AIChatHit::Example(text) => {
-                        self.editor_state.chat.set_input_text(text);
+                    AIChatHit::Example { prompt, .. } => {
+                        self.editor_state.chat.set_input_text(prompt);
                         self.editor_state.chat.focus_input_at_end(self.now_ms);
                         self.editor_state.chat.transcript_selection = None;
                         self.mark_dirty();
@@ -353,6 +353,9 @@ pub(crate) fn apply_offline_chat_error(chat: &mut op_editor_core::ChatState) -> 
 fn chat_button_press_target(hit: &AIChatHit) -> Option<op_editor_core::ButtonPressTarget> {
     if let Some(header) = op_editor_ui::widgets::editor_state_ext::chat_header_hover(hit) {
         return Some(op_editor_core::ButtonPressTarget::ChatHeader(header));
+    }
+    if let AIChatHit::Example { index, .. } = hit {
+        return Some(op_editor_core::ButtonPressTarget::ChatExample(*index));
     }
     let footer = match hit {
         AIChatHit::ToggleModelPicker => op_editor_core::ChatFooterButton::ModelPicker,

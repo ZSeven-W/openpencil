@@ -2,6 +2,7 @@
 
 use crate::theme::Theme;
 use crate::widgets::agent_settings_caret::{paint_settings_input_view, settings_input_text};
+use crate::widgets::button::paint_button_feedback_wash;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::PaintCx;
 use crate::{Point2D, Rect, TextLayout};
@@ -343,6 +344,7 @@ pub(super) fn paint_provider_menu(
     input: Rect,
     selected: ImageGenProvider,
     hovered: Option<ImageGenProvider>,
+    pressed: Option<ImageGenProvider>,
 ) {
     let menu = Rect {
         origin: Point2D::new(input.origin.x, input.origin.y + input.size.y),
@@ -368,9 +370,10 @@ pub(super) fn paint_provider_menu(
         if *provider == selected {
             cx.backend.fill_round_rect(option_rect, 5.0, theme.muted);
         }
-        if hovered == Some(*provider) {
-            cx.backend
-                .fill_round_rect(option_rect, 5.0, theme.button_hover);
+        let is_hovered = hovered == Some(*provider);
+        let is_pressed = pressed == Some(*provider);
+        if is_hovered || is_pressed {
+            paint_button_feedback_wash(cx.backend, theme, option_rect, 5.0, is_hovered, is_pressed);
         }
         let label = TextLayout::single_run(
             provider.label(),

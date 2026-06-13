@@ -14,6 +14,11 @@ struct TextCaptureBackend {
     origins: Vec<(String, Point2D)>,
 }
 
+#[derive(Default)]
+struct RoundFillBackend {
+    fills: Vec<(Rect, f32, Color)>,
+}
+
 impl crate::RenderBackend for TextCaptureBackend {
     fn begin_frame(&mut self) {}
     fn end_frame(&mut self) {}
@@ -37,6 +42,35 @@ impl crate::RenderBackend for TextCaptureBackend {
     fn dpi_scale(&self) -> f32 {
         1.0
     }
+}
+
+impl crate::RenderBackend for RoundFillBackend {
+    fn begin_frame(&mut self) {}
+    fn end_frame(&mut self) {}
+    fn fill_rect(&mut self, _: Rect, _: Color) {}
+    fn stroke_rect(&mut self, _: Rect, _: Color, _: f32) {}
+    fn draw_text(&mut self, _: &TextLayout, _: Point2D) {}
+    fn clip_rect(&mut self, _: Rect) {}
+    fn stroke_line(&mut self, _: Point2D, _: Point2D, _: Color, _: f32) {}
+    fn fill_round_rect(&mut self, rect: Rect, radius: f32, color: Color) {
+        self.fills.push((rect, radius, color));
+    }
+    fn stroke_round_rect(&mut self, _: Rect, _: f32, _: Color, _: f32) {}
+    fn stroke_svg_path(&mut self, _: &str, _: Point2D, _: f32, _: Color, _: f32) {}
+    fn save(&mut self) {}
+    fn restore(&mut self) {}
+    fn translate(&mut self, _: Point2D) {}
+    fn resize(&mut self, _: u32, _: u32) {}
+    fn dpi_scale(&self) -> f32 {
+        1.0
+    }
+}
+
+fn color_close(a: Color, b: Color) -> bool {
+    (a.r - b.r).abs() < 1e-6
+        && (a.g - b.g).abs() < 1e-6
+        && (a.b - b.b).abs() < 1e-6
+        && (a.a - b.a).abs() < 1e-6
 }
 
 #[test]
@@ -116,4 +150,50 @@ fn code_tab_idle_body_uses_editor_locale() {
     assert!(drawn.contains("导出 AI Bundle"));
     assert!(!drawn.contains("1 node selected"));
     assert!(!drawn.contains("Generate production-ready code"));
+}
+
+#[test]
+fn pressed_font_weight_picker_row_uses_shared_feedback() {
+    let theme = Theme::dark();
+    let panel_rect = Rect {
+        origin: Point2D::new(0.0, 0.0),
+        size: Point2D::new(280.0, 700.0),
+    };
+    let visible = crate::widgets::property_panel_layout::VisibleSections {
+        create_component: false,
+        flex_layout: false,
+        size_options: false,
+        text: true,
+        icon: false,
+        ..crate::widgets::property_panel_layout::VisibleSections::ALL
+    };
+    let rows = crate::widgets::property_panel_text::font_weight_picker_action_rects(
+        panel_rect.origin.x,
+        crate::widgets::property_panel_text::text_section_top(panel_rect, visible).unwrap(),
+        panel_rect.size.x - crate::widgets::property_panel_inputs::PAD_X * 2.0,
+    );
+    let expected_row = rows[0].1;
+    let expected = theme.button_hover.with_alpha(theme.button_hover.a * 1.8);
+    let mut backend = RoundFillBackend::default();
+    let mut cx = PaintCx {
+        backend: &mut backend,
+    };
+
+    crate::widgets::property_panel_text::paint_font_weight_picker(
+        &mut cx,
+        &theme,
+        panel_rect,
+        visible,
+        Locale::EnUs,
+        400,
+        None,
+        Some(0),
+    );
+
+    assert!(
+        backend.fills.iter().any(|(fill, radius, color)| {
+            *fill == expected_row && (*radius - 6.0).abs() < 0.01 && color_close(*color, expected)
+        }),
+        "pressed font-weight picker row should paint the shared pressed feedback token"
+    );
 }
