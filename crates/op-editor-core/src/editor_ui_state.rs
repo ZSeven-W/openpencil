@@ -1004,17 +1004,11 @@ pub struct EditorUiState {
     pub property_color_variable_picker_open: Option<crate::ui_draft::ColorTarget>,
     /// Whether the image-fill editor popover is open.
     pub image_fill_popover_open: bool,
-    /// Whether the text font-family picker is open.
-    pub font_family_picker_open: bool,
+    /// Text font-family picker select state.
+    pub font_picker: jian_widgets::components::select::SelectState,
     /// Live type-ahead filter for the font-family picker (TS
     /// FontPicker search input).
     pub font_picker_search: String,
-    /// Scroll offset (px, ≥ 0) of the font-family picker's list
-    /// viewport (TS `max-h-72 overflow-y-auto`).
-    pub font_picker_scroll: f32,
-    /// Index (into the picker's visible entries) of the row under
-    /// the cursor — drives the hover wash.
-    pub font_picker_hover: Option<usize>,
     /// Host-enumerated system font families (sorted, deduped against
     /// the bundled set). Empty until a host enumerates; the picker
     /// then falls back to the TS `FALLBACK_SYSTEM_FONTS` list.
@@ -1278,10 +1272,8 @@ impl Default for EditorUiState {
             fill_type_picker: jian_widgets::components::select::SelectState::default(),
             property_color_variable_picker_open: None,
             image_fill_popover_open: false,
-            font_family_picker_open: false,
+            font_picker: jian_widgets::components::select::SelectState::default(),
             font_picker_search: String::new(),
-            font_picker_scroll: 0.0,
-            font_picker_hover: None,
             system_font_families: std::sync::Arc::new(Vec::new()),
             system_fonts_loaded: false,
             image_panel: crate::image_panel_state::ImagePanelState::default(),
@@ -1366,6 +1358,28 @@ impl EditorUiState {
         self.fill_type_picker.hover = None;
         self.fill_type_picker.pressed = None;
         self.fill_type_picker.scroll.offset = 0.0;
+        changed
+    }
+
+    pub fn toggle_font_picker(&mut self) {
+        let opening = !self.font_picker.open;
+        self.close_font_picker();
+        if opening {
+            self.font_picker.open = true;
+        }
+    }
+
+    pub fn close_font_picker(&mut self) -> bool {
+        let changed = self.font_picker.open
+            || self.font_picker.hover.is_some()
+            || self.font_picker.pressed.is_some()
+            || self.font_picker.scroll.offset != 0.0
+            || !self.font_picker_search.is_empty();
+        self.font_picker.open = false;
+        self.font_picker.hover = None;
+        self.font_picker.pressed = None;
+        self.font_picker.scroll.offset = 0.0;
+        self.font_picker_search.clear();
         changed
     }
 
@@ -1620,5 +1634,32 @@ mod tests {
         assert_eq!(s.tracked_picker.hover, None);
         assert_eq!(s.tracked_picker.pressed, None);
         assert_eq!(s.tracked_picker.scroll.offset, 0.0);
+    }
+
+    #[test]
+    fn font_picker_helpers_reset_select_interaction_state_and_search() {
+        let mut ui = EditorUiState::new();
+        ui.font_picker_search = "inter".to_string();
+        ui.font_picker.hover = Some(1);
+        ui.font_picker.pressed = Some(1);
+        ui.font_picker.scroll.offset = 24.0;
+
+        ui.toggle_font_picker();
+        assert!(ui.font_picker.open);
+        assert!(ui.font_picker_search.is_empty());
+        assert_eq!(ui.font_picker.hover, None);
+        assert_eq!(ui.font_picker.pressed, None);
+        assert_eq!(ui.font_picker.scroll.offset, 0.0);
+
+        ui.font_picker_search = "roboto".to_string();
+        ui.font_picker.hover = Some(0);
+        ui.font_picker.pressed = Some(0);
+        ui.font_picker.scroll.offset = 24.0;
+        assert!(ui.close_font_picker());
+        assert!(!ui.font_picker.open);
+        assert!(ui.font_picker_search.is_empty());
+        assert_eq!(ui.font_picker.hover, None);
+        assert_eq!(ui.font_picker.pressed, None);
+        assert_eq!(ui.font_picker.scroll.offset, 0.0);
     }
 }

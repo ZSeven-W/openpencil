@@ -237,7 +237,7 @@ pub fn action_button_rects_with_fill_picker(
     visible: VisibleSections,
     effects: &[EffectSummary],
     fill_picker_open: bool,
-    font_family_picker_open: bool,
+    font_picker_open: bool,
     font_weight_picker_open: bool,
     export_scale_picker_open: bool,
     export_format_picker_open: bool,
@@ -371,7 +371,7 @@ pub fn action_button_rects_with_fill_picker(
         // The font-family picker is an overlay now (searchable list,
         // `property_panel_typography.rs`) — its rows are hit-tested
         // BEFORE this walker, not emitted from it.
-        let _ = font_family_picker_open;
+        let _ = font_picker_open;
         if font_weight_picker_open {
             out.extend(
                 crate::widgets::property_panel_text::font_weight_picker_action_rects(

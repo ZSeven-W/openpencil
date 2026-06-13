@@ -25,6 +25,7 @@ use crate::widgets::property_panel_inputs::{INPUT_HEIGHT, PAD_X};
 use crate::widgets::property_panel_layout::VisibleSections;
 use crate::widgets::PaintCx;
 use crate::{Point2D, Rect, TextLayout};
+use jian_widgets::components::select::{SelectHit, SelectState};
 
 /// TS `BUNDLED_FAMILIES` (use-system-fonts.ts:9-21).
 pub const BUNDLED_FONT_FAMILIES: [&str; 11] = [
@@ -243,14 +244,54 @@ pub fn font_picker_layout(
 /// list). Used by the host's outside-click dismiss so a click inside
 /// the popup body (e.g. the search box) is swallowed without closing.
 pub fn font_picker_contains(
+    state: &SelectState,
     panel_rect: Rect,
     visible: VisibleSections,
     entries: &[FontPickerEntry<'_>],
-    scroll: f32,
     point: Point2D,
 ) -> bool {
-    font_picker_layout(panel_rect, visible, entries, scroll)
+    if !state.open {
+        return false;
+    }
+    font_picker_layout(panel_rect, visible, entries, state.scroll.offset)
         .is_some_and(|l| (l.popup).contains(point))
+}
+
+/// Shared select-style hit protocol for the searchable font picker.
+/// Search/header/no-results chrome returns `Inside`; entry rows return
+/// `Row(index)` where `index` addresses [`font_picker_entries`].
+pub fn font_picker_hit(
+    state: &SelectState,
+    panel_rect: Rect,
+    visible: VisibleSections,
+    entries: &[FontPickerEntry<'_>],
+    point: Point2D,
+) -> SelectHit {
+    if !state.open {
+        return SelectHit::Outside;
+    }
+    let Some(layout) = font_picker_layout(panel_rect, visible, entries, state.scroll.offset) else {
+        return SelectHit::Outside;
+    };
+    if !(layout.popup).contains(point) {
+        return SelectHit::Outside;
+    }
+    if !(layout.viewport).contains(point) {
+        return SelectHit::Inside;
+    }
+    layout
+        .rows
+        .iter()
+        .find_map(|(row, rect)| match row {
+            FontPickerRow::Entry(i) if (*rect).contains(point) => Some(SelectHit::Row(*i)),
+            FontPickerRow::GroupBundled | FontPickerRow::GroupSystem | FontPickerRow::NoResults
+                if (*rect).contains(point) =>
+            {
+                Some(SelectHit::Inside)
+            }
+            _ => None,
+        })
+        .unwrap_or(SelectHit::Inside)
 }
 
 /// Action for a click at `point` while the dropdown is open —
@@ -260,11 +301,13 @@ pub fn font_picker_action_at(
     panel_rect: Rect,
     visible: VisibleSections,
     entries: &[FontPickerEntry<'_>],
-    scroll: f32,
+    state: &SelectState,
     point: Point2D,
 ) -> Option<PropertyPanelAction> {
-    font_picker_entry_index_at(panel_rect, visible, entries, scroll, point)
-        .map(PropertyPanelAction::SetFontFamilyIndex)
+    match font_picker_hit(state, panel_rect, visible, entries, point) {
+        SelectHit::Row(index) => Some(PropertyPanelAction::SetFontFamilyIndex(index)),
+        SelectHit::Inside | SelectHit::Outside => None,
+    }
 }
 
 /// Entry index under `point` (hover tracking + hit-test share this).
@@ -272,17 +315,13 @@ pub fn font_picker_entry_index_at(
     panel_rect: Rect,
     visible: VisibleSections,
     entries: &[FontPickerEntry<'_>],
-    scroll: f32,
+    state: &SelectState,
     point: Point2D,
 ) -> Option<usize> {
-    let layout = font_picker_layout(panel_rect, visible, entries, scroll)?;
-    if !(layout.viewport).contains(point) {
-        return None;
+    match font_picker_hit(state, panel_rect, visible, entries, point) {
+        SelectHit::Row(index) => Some(index),
+        SelectHit::Inside | SelectHit::Outside => None,
     }
-    layout.rows.iter().find_map(|(row, rect)| match row {
-        FontPickerRow::Entry(i) if (*rect).contains(point) => Some(*i),
-        _ => None,
-    })
 }
 
 /// Max scroll for the host's wheel handler.
@@ -304,11 +343,13 @@ pub fn paint_font_picker(
     locale: op_editor_core::Locale,
     entries: &[FontPickerEntry<'_>],
     search: &str,
-    scroll: f32,
-    hover: Option<usize>,
+    state: &SelectState,
     active_family: &str,
 ) {
-    let Some(layout) = font_picker_layout(panel_rect, visible, entries, scroll) else {
+    if !state.open {
+        return;
+    }
+    let Some(layout) = font_picker_layout(panel_rect, visible, entries, state.scroll.offset) else {
         return;
     };
     cx.backend.fill_round_rect(layout.popup, 8.0, theme.popover);
@@ -431,7 +472,7 @@ pub fn paint_font_picker(
                 if is_active {
                     cx.backend
                         .fill_round_rect(row_rect, 5.0, theme.row_selected_primary);
-                } else if hover == Some(*i) {
+                } else if state.hover == Some(*i) {
                     cx.backend
                         .fill_round_rect(row_rect, 5.0, theme.button_hover);
                 }
@@ -478,6 +519,7 @@ pub fn paint_font_picker(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use jian_widgets::components::select::{SelectHit, SelectState};
 
     fn visible_text() -> VisibleSections {
         VisibleSections {
@@ -495,6 +537,13 @@ mod tests {
             origin: Point2D::new(0.0, 0.0),
             size: Point2D::new(280.0, 1200.0),
         }
+    }
+
+    fn open_state(scroll: f32) -> SelectState {
+        let mut state = SelectState::default();
+        state.open = true;
+        state.scroll.offset = scroll;
+        state
     }
 
     #[test]
@@ -549,11 +598,17 @@ mod tests {
             rect.origin.y + rect.size.y / 2.0,
         );
         assert_eq!(
-            font_picker_entry_index_at(panel_rect(), visible_text(), &entries, 0.0, centre),
+            font_picker_entry_index_at(
+                panel_rect(),
+                visible_text(),
+                &entries,
+                &open_state(0.0),
+                centre
+            ),
             Some(*expect)
         );
         assert!(matches!(
-            font_picker_action_at(panel_rect(), visible_text(), &entries, 0.0, centre),
+            font_picker_action_at(panel_rect(), visible_text(), &entries, &open_state(0.0), centre),
             Some(PropertyPanelAction::SetFontFamilyIndex(i)) if i == *expect
         ));
     }
@@ -584,7 +639,7 @@ mod tests {
             panel_rect(),
             visible_text(),
             &entries2,
-            layout.max_scroll,
+            &open_state(layout.max_scroll),
             centre,
         );
         assert_ne!(hit, Some(0));
@@ -596,16 +651,68 @@ mod tests {
         let layout = font_picker_layout(panel_rect(), visible_text(), &entries, 0.0).unwrap();
         let in_search = Point2D::new(layout.search.origin.x + 5.0, layout.search.origin.y + 5.0);
         assert!(font_picker_contains(
+            &open_state(0.0),
             panel_rect(),
             visible_text(),
             &entries,
-            0.0,
             in_search
         ));
         // ... and a search-row click maps to NO action (swallowed,
         // keeps the popup open).
-        assert!(
-            font_picker_action_at(panel_rect(), visible_text(), &entries, 0.0, in_search).is_none()
+        assert!(font_picker_action_at(
+            panel_rect(),
+            visible_text(),
+            &entries,
+            &open_state(0.0),
+            in_search
+        )
+        .is_none());
+    }
+
+    #[test]
+    fn font_picker_hit_uses_shared_select_state_protocol() {
+        let entries = font_picker_entries(&[], "");
+        let mut state = SelectState::default();
+        state.open = true;
+        let layout = font_picker_layout(panel_rect(), visible_text(), &entries, 0.0).unwrap();
+        let (row, rect) = layout
+            .rows
+            .iter()
+            .find(|(row, _)| matches!(row, FontPickerRow::Entry(_)))
+            .unwrap();
+        let FontPickerRow::Entry(expect) = row else {
+            unreachable!()
+        };
+
+        assert_eq!(
+            font_picker_hit(
+                &state,
+                panel_rect(),
+                visible_text(),
+                &entries,
+                Point2D::new(rect.origin.x + 8.0, rect.origin.y + 8.0)
+            ),
+            SelectHit::Row(*expect)
+        );
+        assert_eq!(
+            font_picker_hit(
+                &state,
+                panel_rect(),
+                visible_text(),
+                &entries,
+                Point2D::new(layout.search.origin.x + 8.0, layout.search.origin.y + 8.0)
+            ),
+            SelectHit::Inside
+        );
+        assert_eq!(
+            font_picker_hit(
+                &state,
+                panel_rect(),
+                visible_text(),
+                &entries,
+                Point2D::new(layout.popup.origin.x - 1.0, layout.popup.origin.y)
+            ),
+            SelectHit::Outside
         );
     }
 }

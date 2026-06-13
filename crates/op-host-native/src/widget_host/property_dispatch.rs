@@ -103,7 +103,7 @@ impl WidgetHostNative {
                 let ui = &mut self.editor_state.editor_ui;
                 ui.toggle_fill_type_picker();
                 ui.image_fill_popover_open = false;
-                ui.font_family_picker_open = false;
+                ui.close_font_picker();
                 ui.font_weight_picker_open = false;
                 ui.property_color_variable_picker_open = None;
             }
@@ -138,7 +138,7 @@ impl WidgetHostNative {
                 let ui = &mut self.editor_state.editor_ui;
                 ui.image_fill_popover_open = !ui.image_fill_popover_open;
                 ui.close_fill_type_picker();
-                ui.font_family_picker_open = false;
+                ui.close_font_picker();
                 ui.font_weight_picker_open = false;
                 ui.export_scale_picker_open = false;
                 ui.export_format_picker_open = false;
@@ -167,7 +167,7 @@ impl WidgetHostNative {
                 ui.icon_picker_search.clear();
                 ui.close_fill_type_picker();
                 ui.image_fill_popover_open = false;
-                ui.font_family_picker_open = false;
+                ui.close_font_picker();
                 ui.font_weight_picker_open = false;
                 ui.export_scale_picker_open = false;
                 ui.export_format_picker_open = false;
@@ -183,7 +183,7 @@ impl WidgetHostNative {
                 self.set_selected_text_growth(value);
             }
             A::ToggleFontFamilyPicker => {
-                let opening = !self.editor_state.editor_ui.font_family_picker_open;
+                let opening = !self.editor_state.editor_ui.font_picker.open;
                 if opening {
                     // Enumerate installed families on first open (TS
                     // requests Local Font Access inside the click
@@ -191,10 +191,7 @@ impl WidgetHostNative {
                     self.ensure_system_fonts_loaded();
                 }
                 let ui = &mut self.editor_state.editor_ui;
-                ui.font_family_picker_open = opening;
-                ui.font_picker_search.clear();
-                ui.font_picker_scroll = 0.0;
-                ui.font_picker_hover = None;
+                ui.toggle_font_picker();
                 ui.font_weight_picker_open = false;
                 ui.close_fill_type_picker();
                 ui.image_fill_popover_open = false;
@@ -240,7 +237,7 @@ impl WidgetHostNative {
                 let ui = &mut self.editor_state.editor_ui;
                 ui.font_weight_picker_open = !ui.font_weight_picker_open;
                 ui.font_weight_picker_hover = None;
-                ui.font_family_picker_open = false;
+                ui.close_font_picker();
                 ui.close_fill_type_picker();
                 ui.image_fill_popover_open = false;
                 ui.export_scale_picker_open = false;
@@ -257,7 +254,7 @@ impl WidgetHostNative {
                 ui.padding_mode_popover_open = !ui.padding_mode_popover_open;
                 ui.padding_mode_popover_hover = None;
                 ui.font_weight_picker_open = false;
-                ui.font_family_picker_open = false;
+                ui.close_font_picker();
                 ui.close_fill_type_picker();
                 ui.image_fill_popover_open = false;
                 ui.export_scale_picker_open = false;
@@ -295,7 +292,7 @@ impl WidgetHostNative {
                     };
                 ui.close_fill_type_picker();
                 ui.image_fill_popover_open = false;
-                ui.font_family_picker_open = false;
+                ui.close_font_picker();
                 ui.font_weight_picker_open = false;
                 ui.export_scale_picker_open = false;
                 ui.export_format_picker_open = false;
@@ -324,7 +321,7 @@ impl WidgetHostNative {
                 let ui = &mut self.editor_state.editor_ui;
                 ui.export_scale_picker_open = !ui.export_scale_picker_open;
                 ui.export_format_picker_open = false;
-                ui.font_family_picker_open = false;
+                ui.close_font_picker();
                 ui.font_weight_picker_open = false;
                 ui.export_picker_hover = None;
                 ui.property_color_variable_picker_open = None;
@@ -333,7 +330,7 @@ impl WidgetHostNative {
                 let ui = &mut self.editor_state.editor_ui;
                 ui.export_format_picker_open = !ui.export_format_picker_open;
                 ui.export_scale_picker_open = false;
-                ui.font_family_picker_open = false;
+                ui.close_font_picker();
                 ui.font_weight_picker_open = false;
                 ui.export_picker_hover = None;
                 ui.property_color_variable_picker_open = None;

@@ -646,7 +646,7 @@ fn flex_advanced_rows_do_not_overlap_gap_modes() {
 fn font_family_picker_rows_are_clickable() {
     let mut state = EditorState::sample();
     state.set_single_selection(NodeId::new("n11"));
-    state.editor_ui.font_family_picker_open = true;
+    state.editor_ui.font_picker.open = true;
     // Type-ahead narrows the overlay to one row (TS search filter) —
     // "geor" leaves only the fallback-system "Georgia".
     state.editor_ui.font_picker_search = "geor".to_string();

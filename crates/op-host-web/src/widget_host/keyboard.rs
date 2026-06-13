@@ -159,14 +159,14 @@ impl WidgetHost {
         }
         // Font-family picker search box (mirrors the native
         // font_picker_dispatch routing).
-        if self.editor_state.editor_ui.font_family_picker_open {
+        if self.editor_state.editor_ui.font_picker.open {
             if c.is_control() {
                 return false;
             }
             let ui = &mut self.editor_state.editor_ui;
             ui.font_picker_search.push(c);
-            ui.font_picker_scroll = 0.0;
-            ui.font_picker_hover = None;
+            ui.font_picker.scroll.offset = 0.0;
+            ui.font_picker.hover = None;
             self.mark_dirty();
             return true;
         }
@@ -315,11 +315,11 @@ impl WidgetHost {
         }
         // Font-family picker search box — swallow the key while the
         // picker is open even on an empty draft (no node deletion).
-        if self.editor_state.editor_ui.font_family_picker_open {
+        if self.editor_state.editor_ui.font_picker.open {
             let ui = &mut self.editor_state.editor_ui;
             if ui.font_picker_search.pop().is_some() {
-                ui.font_picker_scroll = 0.0;
-                ui.font_picker_hover = None;
+                ui.font_picker.scroll.offset = 0.0;
+                ui.font_picker.hover = None;
                 self.mark_dirty();
             }
             return true;
@@ -669,12 +669,9 @@ impl WidgetHost {
             self.commit_variable_row_focus_if_any();
             return true;
         }
-        if self.editor_state.editor_ui.font_family_picker_open {
+        if self.editor_state.editor_ui.font_picker.open {
             let ui = &mut self.editor_state.editor_ui;
-            ui.font_family_picker_open = false;
-            ui.font_picker_search.clear();
-            ui.font_picker_scroll = 0.0;
-            ui.font_picker_hover = None;
+            ui.close_font_picker();
             self.mark_dirty();
             return true;
         }
