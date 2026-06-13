@@ -115,7 +115,7 @@ pub fn resolve_instance_display_node(doc: &PenDocument, ref_node: &PenNode) -> O
     if let Some(t) = component_map.get("type") {
         merged.insert("type".into(), t.clone());
     }
-    if merged.get("name").map_or(true, Value::is_null) {
+    if merged.get("name").is_none_or(Value::is_null) {
         if let Some(name) = component_map.get("name") {
             merged.insert("name".into(), name.clone());
         }

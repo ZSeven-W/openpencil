@@ -24,7 +24,7 @@ impl WidgetHostNative {
             .collect();
         let mut families = crate::backend::enumerate_system_font_families();
         families.retain(|f| !bundled.contains(&f.to_lowercase()));
-        families.sort_by(|a, b| a.to_lowercase().cmp(&b.to_lowercase()));
+        families.sort_by_key(|a| a.to_lowercase());
         families.dedup();
         self.editor_state.editor_ui.system_font_families = std::sync::Arc::new(families);
         self.editor_state.editor_ui.system_fonts_loaded = true;

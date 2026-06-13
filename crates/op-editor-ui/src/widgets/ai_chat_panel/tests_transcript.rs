@@ -205,8 +205,11 @@ fn paint_model_chip_uses_key_glyph_for_builtin_model() {
 
     panel.paint(&mut cx, rect);
 
+    let key_paths = crate::widgets::icons::Icon::Key.paths();
     assert!(
-        backend.stroke_lines >= 2,
+        key_paths
+            .iter()
+            .all(|kp| backend.svg_paths.iter().any(|p| p == kp)),
         "built-in selected model chip should paint the TS-style Key glyph"
     );
 }

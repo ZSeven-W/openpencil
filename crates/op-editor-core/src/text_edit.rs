@@ -451,12 +451,10 @@ fn line_index_for_offset(line_ranges: &[(usize, usize)], offset: usize) -> usize
 fn offset_at_column(content: &str, range: (usize, usize), column: usize) -> usize {
     let (start, end) = (range.0.min(content.len()), range.1.min(content.len()));
     let line = &content[start..end];
-    let mut taken = 0usize;
-    for (i, _) in line.char_indices() {
+    for (taken, (i, _)) in line.char_indices().enumerate() {
         if taken == column {
             return start + i;
         }
-        taken += 1;
     }
     end
 }

@@ -498,6 +498,7 @@ pub trait RenderBackend {
     /// Draw a raster image with both placement and image-adjustment
     /// controls. Backends without color-filter support fall back to
     /// mode-aware drawing.
+    #[allow(clippy::too_many_arguments)]
     fn draw_image_with_options(
         &mut self,
         rect: Rect,

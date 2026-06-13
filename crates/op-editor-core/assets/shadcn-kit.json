@@ -15,12 +15,7 @@
         "layout": "horizontal",
         "justifyContent": "center",
         "alignItems": "center",
-        "padding": [
-          0,
-          20,
-          0,
-          20
-        ],
+        "padding": [0, 20, 0, 20],
         "cornerRadius": 8,
         "fill": [
           {
@@ -57,12 +52,7 @@
         "layout": "horizontal",
         "justifyContent": "center",
         "alignItems": "center",
-        "padding": [
-          0,
-          20,
-          0,
-          20
-        ],
+        "padding": [0, 20, 0, 20],
         "cornerRadius": 8,
         "fill": [
           {
@@ -108,12 +98,7 @@
         "layout": "horizontal",
         "justifyContent": "center",
         "alignItems": "center",
-        "padding": [
-          0,
-          20,
-          0,
-          20
-        ],
+        "padding": [0, 20, 0, 20],
         "cornerRadius": 8,
         "children": [
           {
@@ -144,12 +129,7 @@
         "layout": "horizontal",
         "justifyContent": "center",
         "alignItems": "center",
-        "padding": [
-          0,
-          20,
-          0,
-          20
-        ],
+        "padding": [0, 20, 0, 20],
         "cornerRadius": 8,
         "fill": [
           {
@@ -185,12 +165,7 @@
         "height": 40,
         "layout": "horizontal",
         "alignItems": "center",
-        "padding": [
-          0,
-          12,
-          0,
-          12
-        ],
+        "padding": [0, 12, 0, 12],
         "cornerRadius": 8,
         "fill": [
           {
@@ -603,12 +578,7 @@
                 "color": "#F4F4F5"
               }
             ],
-            "cornerRadius": [
-              12,
-              12,
-              0,
-              0
-            ]
+            "cornerRadius": [12, 12, 0, 0]
           },
           {
             "id": "shadcn-card-image-body",
@@ -617,12 +587,7 @@
             "width": "fill_container",
             "layout": "vertical",
             "gap": 4,
-            "padding": [
-              12,
-              16,
-              16,
-              16
-            ],
+            "padding": [12, 16, 16, 16],
             "children": [
               {
                 "id": "shadcn-card-image-title",
@@ -667,12 +632,7 @@
         "layout": "horizontal",
         "alignItems": "center",
         "justifyContent": "space_between",
-        "padding": [
-          0,
-          24,
-          0,
-          24
-        ],
+        "padding": [0, 24, 0, 24],
         "fill": [
           {
             "type": "solid",
@@ -801,12 +761,7 @@
                 "color": "#18181B"
               }
             ],
-            "cornerRadius": [
-              8,
-              0,
-              0,
-              8
-            ],
+            "cornerRadius": [8, 0, 0, 8],
             "children": [
               {
                 "id": "shadcn-tab-bar-tab-1-label",
@@ -859,12 +814,7 @@
             "layout": "horizontal",
             "justifyContent": "center",
             "alignItems": "center",
-            "cornerRadius": [
-              0,
-              8,
-              8,
-              0
-            ],
+            "cornerRadius": [0, 8, 8, 0],
             "children": [
               {
                 "id": "shadcn-tab-bar-tab-3-label",
@@ -977,12 +927,7 @@
         "layout": "horizontal",
         "gap": 12,
         "alignItems": "center",
-        "padding": [
-          0,
-          16,
-          0,
-          16
-        ],
+        "padding": [0, 16, 0, 16],
         "cornerRadius": 8,
         "fill": [
           {
@@ -1040,12 +985,7 @@
         "layout": "horizontal",
         "justifyContent": "center",
         "alignItems": "center",
-        "padding": [
-          0,
-          10,
-          0,
-          10
-        ],
+        "padding": [0, 10, 0, 10],
         "cornerRadius": 12,
         "fill": [
           {
@@ -1134,12 +1074,7 @@
         "layout": "horizontal",
         "justifyContent": "center",
         "alignItems": "center",
-        "padding": [
-          0,
-          20,
-          0,
-          20
-        ],
+        "padding": [0, 20, 0, 20],
         "cornerRadius": 8,
         "stroke": {
           "thickness": 1,
@@ -1179,12 +1114,7 @@
         "layout": "horizontal",
         "justifyContent": "center",
         "alignItems": "center",
-        "padding": [
-          0,
-          20,
-          0,
-          20
-        ],
+        "padding": [0, 20, 0, 20],
         "cornerRadius": 8,
         "children": [
           {
@@ -1215,12 +1145,7 @@
         "layout": "horizontal",
         "justifyContent": "space_between",
         "alignItems": "center",
-        "padding": [
-          0,
-          12,
-          0,
-          12
-        ],
+        "padding": [0, 12, 0, 12],
         "cornerRadius": 8,
         "fill": [
           {
@@ -1533,12 +1458,7 @@
             "height": 32,
             "layout": "horizontal",
             "alignItems": "center",
-            "padding": [
-              0,
-              8,
-              0,
-              8
-            ],
+            "padding": [0, 8, 0, 8],
             "cornerRadius": 4,
             "children": [
               {
@@ -1564,12 +1484,7 @@
             "height": 32,
             "layout": "horizontal",
             "alignItems": "center",
-            "padding": [
-              0,
-              8,
-              0,
-              8
-            ],
+            "padding": [0, 8, 0, 8],
             "cornerRadius": 4,
             "children": [
               {
@@ -1608,12 +1523,7 @@
             "height": 32,
             "layout": "horizontal",
             "alignItems": "center",
-            "padding": [
-              0,
-              8,
-              0,
-              8
-            ],
+            "padding": [0, 8, 0, 8],
             "cornerRadius": 4,
             "children": [
               {
@@ -1652,12 +1562,7 @@
             "height": 32,
             "layout": "horizontal",
             "alignItems": "center",
-            "padding": [
-              0,
-              8,
-              0,
-              8
-            ],
+            "padding": [0, 8, 0, 8],
             "cornerRadius": 4,
             "children": [
               {
@@ -1877,12 +1782,7 @@
         "layout": "horizontal",
         "gap": 12,
         "alignItems": "center",
-        "padding": [
-          0,
-          16,
-          0,
-          16
-        ],
+        "padding": [0, 16, 0, 16],
         "cornerRadius": 12,
         "fill": [
           {
@@ -2051,12 +1951,7 @@
         "layout": "horizontal",
         "justifyContent": "center",
         "alignItems": "center",
-        "padding": [
-          0,
-          12,
-          0,
-          12
-        ],
+        "padding": [0, 12, 0, 12],
         "cornerRadius": 6,
         "fill": [
           {
@@ -2115,24 +2010,14 @@
             "height": 40,
             "layout": "horizontal",
             "alignItems": "center",
-            "padding": [
-              0,
-              16,
-              0,
-              16
-            ],
+            "padding": [0, 16, 0, 16],
             "fill": [
               {
                 "type": "solid",
                 "color": "#F4F4F5"
               }
             ],
-            "cornerRadius": [
-              8,
-              8,
-              0,
-              0
-            ],
+            "cornerRadius": [8, 8, 0, 0],
             "children": [
               {
                 "id": "shadcn-table-h1",
@@ -2202,12 +2087,7 @@
             "height": 40,
             "layout": "horizontal",
             "alignItems": "center",
-            "padding": [
-              0,
-              16,
-              0,
-              16
-            ],
+            "padding": [0, 16, 0, 16],
             "children": [
               {
                 "id": "shadcn-table-r1c1",
@@ -2274,12 +2154,7 @@
             "height": 40,
             "layout": "horizontal",
             "alignItems": "center",
-            "padding": [
-              0,
-              16,
-              0,
-              16
-            ],
+            "padding": [0, 16, 0, 16],
             "children": [
               {
                 "id": "shadcn-table-r2c1",
@@ -2332,282 +2207,127 @@
   "meta": {
     "shadcn-btn-primary": {
       "category": "buttons",
-      "tags": [
-        "button",
-        "primary",
-        "cta",
-        "action"
-      ]
+      "tags": ["button", "primary", "cta", "action"]
     },
     "shadcn-btn-secondary": {
       "category": "buttons",
-      "tags": [
-        "button",
-        "secondary",
-        "outline"
-      ]
+      "tags": ["button", "secondary", "outline"]
     },
     "shadcn-btn-ghost": {
       "category": "buttons",
-      "tags": [
-        "button",
-        "ghost",
-        "text",
-        "link"
-      ]
+      "tags": ["button", "ghost", "text", "link"]
     },
     "shadcn-btn-destructive": {
       "category": "buttons",
-      "tags": [
-        "button",
-        "destructive",
-        "danger",
-        "delete"
-      ]
+      "tags": ["button", "destructive", "danger", "delete"]
     },
     "shadcn-input-text": {
       "category": "inputs",
-      "tags": [
-        "input",
-        "text",
-        "field",
-        "form"
-      ]
+      "tags": ["input", "text", "field", "form"]
     },
     "shadcn-input-textarea": {
       "category": "inputs",
-      "tags": [
-        "textarea",
-        "multiline",
-        "text",
-        "form"
-      ]
+      "tags": ["textarea", "multiline", "text", "form"]
     },
     "shadcn-input-checkbox": {
       "category": "inputs",
-      "tags": [
-        "checkbox",
-        "check",
-        "toggle",
-        "form"
-      ]
+      "tags": ["checkbox", "check", "toggle", "form"]
     },
     "shadcn-input-toggle": {
       "category": "inputs",
-      "tags": [
-        "toggle",
-        "switch",
-        "on",
-        "off"
-      ]
+      "tags": ["toggle", "switch", "on", "off"]
     },
     "shadcn-input-radio": {
       "category": "inputs",
-      "tags": [
-        "radio",
-        "option",
-        "select",
-        "form"
-      ]
+      "tags": ["radio", "option", "select", "form"]
     },
     "shadcn-card-basic": {
       "category": "cards",
-      "tags": [
-        "card",
-        "container",
-        "surface",
-        "basic"
-      ]
+      "tags": ["card", "container", "surface", "basic"]
     },
     "shadcn-card-stats": {
       "category": "cards",
-      "tags": [
-        "card",
-        "stats",
-        "metric",
-        "dashboard",
-        "kpi"
-      ]
+      "tags": ["card", "stats", "metric", "dashboard", "kpi"]
     },
     "shadcn-card-image": {
       "category": "cards",
-      "tags": [
-        "card",
-        "image",
-        "media",
-        "thumbnail"
-      ]
+      "tags": ["card", "image", "media", "thumbnail"]
     },
     "shadcn-nav-bar": {
       "category": "navigation",
-      "tags": [
-        "navbar",
-        "header",
-        "navigation",
-        "top"
-      ]
+      "tags": ["navbar", "header", "navigation", "top"]
     },
     "shadcn-tab-bar": {
       "category": "navigation",
-      "tags": [
-        "tab",
-        "tabs",
-        "navigation",
-        "segment"
-      ]
+      "tags": ["tab", "tabs", "navigation", "segment"]
     },
     "shadcn-breadcrumb": {
       "category": "navigation",
-      "tags": [
-        "breadcrumb",
-        "navigation",
-        "path"
-      ]
+      "tags": ["breadcrumb", "navigation", "path"]
     },
     "shadcn-alert-banner": {
       "category": "feedback",
-      "tags": [
-        "alert",
-        "banner",
-        "notification",
-        "info"
-      ]
+      "tags": ["alert", "banner", "notification", "info"]
     },
     "shadcn-badge": {
       "category": "feedback",
-      "tags": [
-        "badge",
-        "tag",
-        "chip",
-        "label",
-        "status"
-      ]
+      "tags": ["badge", "tag", "chip", "label", "status"]
     },
     "shadcn-avatar": {
       "category": "feedback",
-      "tags": [
-        "avatar",
-        "user",
-        "profile",
-        "icon"
-      ]
+      "tags": ["avatar", "user", "profile", "icon"]
     },
     "shadcn-divider": {
       "category": "layout",
-      "tags": [
-        "divider",
-        "separator",
-        "line",
-        "hr"
-      ]
+      "tags": ["divider", "separator", "line", "hr"]
     },
     "shadcn-btn-outline": {
       "category": "buttons",
-      "tags": [
-        "button",
-        "outline",
-        "border"
-      ]
+      "tags": ["button", "outline", "border"]
     },
     "shadcn-btn-link": {
       "category": "buttons",
-      "tags": [
-        "button",
-        "link",
-        "text",
-        "anchor"
-      ]
+      "tags": ["button", "link", "text", "anchor"]
     },
     "shadcn-input-select": {
       "category": "inputs",
-      "tags": [
-        "select",
-        "dropdown",
-        "picker",
-        "form"
-      ]
+      "tags": ["select", "dropdown", "picker", "form"]
     },
     "shadcn-input-slider": {
       "category": "inputs",
-      "tags": [
-        "slider",
-        "range",
-        "input",
-        "form"
-      ]
+      "tags": ["slider", "range", "input", "form"]
     },
     "shadcn-dialog": {
       "category": "cards",
-      "tags": [
-        "dialog",
-        "modal",
-        "popup",
-        "alert"
-      ]
+      "tags": ["dialog", "modal", "popup", "alert"]
     },
     "shadcn-dropdown-menu": {
       "category": "navigation",
-      "tags": [
-        "dropdown",
-        "menu",
-        "context",
-        "popover"
-      ]
+      "tags": ["dropdown", "menu", "context", "popover"]
     },
     "shadcn-pagination": {
       "category": "navigation",
-      "tags": [
-        "pagination",
-        "pager",
-        "pages",
-        "navigation"
-      ]
+      "tags": ["pagination", "pager", "pages", "navigation"]
     },
     "shadcn-toast": {
       "category": "feedback",
-      "tags": [
-        "toast",
-        "notification",
-        "snackbar",
-        "message"
-      ]
+      "tags": ["toast", "notification", "snackbar", "message"]
     },
     "shadcn-progress": {
       "category": "feedback",
-      "tags": [
-        "progress",
-        "bar",
-        "loading",
-        "indicator"
-      ]
+      "tags": ["progress", "bar", "loading", "indicator"]
     },
     "shadcn-skeleton": {
       "category": "feedback",
-      "tags": [
-        "skeleton",
-        "loading",
-        "placeholder",
-        "shimmer"
-      ]
+      "tags": ["skeleton", "loading", "placeholder", "shimmer"]
     },
     "shadcn-tooltip": {
       "category": "feedback",
-      "tags": [
-        "tooltip",
-        "hint",
-        "popover",
-        "info"
-      ]
+      "tags": ["tooltip", "hint", "popover", "info"]
     },
     "shadcn-table": {
       "category": "layout",
-      "tags": [
-        "table",
-        "data",
-        "grid",
-        "rows",
-        "columns"
-      ]
+      "tags": ["table", "data", "grid", "rows", "columns"]
     }
   }
 }

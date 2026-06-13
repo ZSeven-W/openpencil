@@ -3,9 +3,10 @@
 //! Re-exported by the spine so paint / hit / menus resolve them via
 //! `use super::*` exactly as before.
 
-use super::{VariablesPanelHit, ACTION_COLUMN_WIDTH, ADD_VARIABLE_MENU_ROW_HEIGHT,
-    ADD_VARIABLE_MENU_ROWS, ADD_VARIABLE_MENU_WIDTH, FOOTER_HEIGHT, HEADER_HEIGHT,
-    NAME_COLUMN_WIDTH, PAD_X, SWATCH_SIZE};
+use super::{
+    ACTION_COLUMN_WIDTH, ADD_VARIABLE_MENU_ROWS, ADD_VARIABLE_MENU_ROW_HEIGHT,
+    ADD_VARIABLE_MENU_WIDTH, FOOTER_HEIGHT, HEADER_HEIGHT, NAME_COLUMN_WIDTH, PAD_X, SWATCH_SIZE,
+};
 use crate::{Point2D, Rect};
 
 pub(super) fn close_rect(rect: Rect) -> Rect {
@@ -92,4 +93,3 @@ pub(super) fn rect_contains(r: Rect, p: Point2D) -> bool {
         && p.y >= r.origin.y
         && p.y < r.origin.y + r.size.y
 }
-
