@@ -191,4 +191,42 @@ mod tests {
             "pressed add-theme button should paint shared pressed feedback"
         );
     }
+
+    #[test]
+    fn pressed_add_variable_menu_item_paints_shared_feedback() {
+        let mut state = themed_state();
+        state.editor_ui.variables_add_menu_open = true;
+        state.editor_ui.pressed_button = Some(ButtonPressTarget::VariablesPanel(
+            VariablesPanelButton::AddVariableMenuItem(1),
+        ));
+        let panel = VariablesPanel::for_editor(&state);
+        let rect = Rect {
+            origin: Point2D::new(0.0, 0.0),
+            size: Point2D::new(VARIABLES_PANEL_WIDTH, panel.intrinsic_height()),
+        };
+        let menu = add_variable_menu_rect(rect);
+        let row_y = menu.origin.y + ADD_VARIABLE_MENU_ROW_HEIGHT;
+        let expected_rect = Rect {
+            origin: Point2D::new(menu.origin.x + 4.0, row_y + 3.0),
+            size: Point2D::new(menu.size.x - 8.0, ADD_VARIABLE_MENU_ROW_HEIGHT - 6.0),
+        };
+        let expected_color = panel
+            .theme
+            .button_hover
+            .with_alpha(panel.theme.button_hover.a * 1.8);
+        let mut backend = HoverBackend::default();
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+
+        panel.paint(&mut cx, rect);
+
+        assert!(
+            backend
+                .round_fills
+                .iter()
+                .any(|(fill, color)| *fill == expected_rect && *color == expected_color),
+            "pressed add-variable menu item should paint shared pressed feedback"
+        );
+    }
 }
