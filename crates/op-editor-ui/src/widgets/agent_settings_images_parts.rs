@@ -1,9 +1,7 @@
 //! Small drawing/hit-test helpers for the Images settings tab.
 
 use crate::theme::Theme;
-use crate::widgets::agent_settings_caret::{
-    caret_x_for_text, paint_caret, paint_settings_selection, settings_caret_for_focus,
-};
+use crate::widgets::agent_settings_caret::{paint_settings_input_view, settings_input_text};
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
@@ -61,13 +59,12 @@ pub(super) fn paint_search_input_row(
         ImageSearchField::ClientId => settings.openverse_client_id.as_str(),
         ImageSearchField::ClientSecret => settings.openverse_client_secret.as_str(),
     };
-    let text = if focused {
-        ui.settings_input_draft.as_str()
-    } else if matches!(field_kind, ImageSearchField::ClientSecret) && !stored.is_empty() {
+    let fallback = if matches!(field_kind, ImageSearchField::ClientSecret) && !stored.is_empty() {
         "********"
     } else {
         stored
     };
+    let text = settings_input_text(settings, ui, focus, fallback);
     let showing_placeholder = text.is_empty();
     let value = if showing_placeholder {
         placeholder
@@ -80,59 +77,61 @@ pub(super) fn paint_search_input_row(
     } else {
         0.0
     };
-    let value = ellipsize(
-        cx,
-        value,
-        field.size.x - INPUT_TEXT_INSET_X * 2.0 - placeholder_offset,
-        13.0,
-    );
-    let lay = TextLayout::single_run(
-        &value,
-        "system-ui",
-        13.0,
-        (if showing_placeholder {
-            theme.muted_foreground
-        } else {
-            theme.foreground
-        })
-        .to_jian(),
-        Point2D::new(0.0, 0.0),
-    );
-    if focused && ui.settings_input_select_all && !text.is_empty() {
-        paint_settings_selection(
+    if focused {
+        let input_placeholder = if showing_placeholder { "" } else { placeholder };
+        paint_settings_input_view(
             cx,
             theme,
-            text,
-            text_x,
-            field.origin.y + ROW_H / 2.0 + 5.0,
+            ui,
+            field,
             13.0,
-            field.origin.x + field.size.x - INPUT_TEXT_INSET_X,
-        );
-    }
-    cx.backend.draw_text(
-        &lay,
-        Point2D::new(
-            text_x + placeholder_offset,
+            text_x - field.origin.x,
             field.origin.y + ROW_H / 2.0 + 5.0,
-        ),
-    );
-    if focused {
-        let caret = settings_caret_for_focus(ui, focus);
-        let caret_x = if text.is_empty() {
-            text_x
-        } else {
-            caret_x_for_text(
-                cx,
-                text,
-                caret,
-                text_x,
-                field.origin.x + field.size.x - INPUT_TEXT_INSET_X,
+            now_ms,
+            input_placeholder,
+        );
+        if showing_placeholder {
+            let lay = TextLayout::single_run(
+                placeholder,
+                "system-ui",
                 13.0,
-            )
-        };
-        let caret_y = field.origin.y + (ROW_H - 15.0) / 2.0;
-        let anchor = ui.settings_input_caret_anchor_ms;
-        paint_caret(cx, theme, now_ms, anchor, caret_x, caret_y);
+                theme.muted_foreground.to_jian(),
+                Point2D::new(0.0, 0.0),
+            );
+            cx.backend.draw_text(
+                &lay,
+                Point2D::new(
+                    text_x + placeholder_offset,
+                    field.origin.y + ROW_H / 2.0 + 5.0,
+                ),
+            );
+        }
+    } else {
+        let value = ellipsize(
+            cx,
+            value,
+            field.size.x - INPUT_TEXT_INSET_X * 2.0 - placeholder_offset,
+            13.0,
+        );
+        let lay = TextLayout::single_run(
+            &value,
+            "system-ui",
+            13.0,
+            (if showing_placeholder {
+                theme.muted_foreground
+            } else {
+                theme.foreground
+            })
+            .to_jian(),
+            Point2D::new(0.0, 0.0),
+        );
+        cx.backend.draw_text(
+            &lay,
+            Point2D::new(
+                text_x + placeholder_offset,
+                field.origin.y + ROW_H / 2.0 + 5.0,
+            ),
+        );
     }
 }
 
@@ -151,17 +150,14 @@ pub(super) fn paint_profile_field(
 ) {
     let focus = SettingsFocus::ImageGenProfile { index, field };
     let focused = settings.focus == Some(focus);
-    let value = if focused {
-        ui.settings_input_draft.as_str()
-    } else {
-        match field {
-            ImageGenField::Name => profile.name.as_str(),
-            ImageGenField::ApiKey if !profile.api_key.is_empty() => "********",
-            ImageGenField::ApiKey => "",
-            ImageGenField::Model => profile.model.as_str(),
-            ImageGenField::BaseUrl => profile.base_url.as_deref().unwrap_or(""),
-        }
+    let fallback = match field {
+        ImageGenField::Name => profile.name.as_str(),
+        ImageGenField::ApiKey if !profile.api_key.is_empty() => "********",
+        ImageGenField::ApiKey => "",
+        ImageGenField::Model => profile.model.as_str(),
+        ImageGenField::BaseUrl => profile.base_url.as_deref().unwrap_or(""),
     };
+    let value = settings_input_text(settings, ui, focus, fallback);
     let label = match field {
         ImageGenField::Name => "Name",
         ImageGenField::ApiKey => "API Key",
@@ -192,41 +188,30 @@ pub(super) fn paint_profile_field(
         if focused { theme.primary } else { theme.border },
         1.0,
     );
-    let clipped = ellipsize(cx, value, input.size.x - 12.0, 11.0);
     let text_x = input.origin.x + 6.0;
-    if focused && ui.settings_input_select_all && !value.is_empty() {
-        paint_settings_selection(
+    if focused {
+        paint_settings_input_view(
             cx,
             theme,
-            value,
-            text_x,
+            ui,
+            input,
+            11.0,
+            text_x - input.origin.x,
             input.origin.y + 16.0,
-            11.0,
-            input.origin.x + input.size.x - 8.0,
+            now_ms,
+            "",
         );
-    }
-    let value_lay = TextLayout::single_run(
-        &clipped,
-        "system-ui",
-        11.0,
-        (theme.foreground).to_jian(),
-        Point2D::new(0.0, 0.0),
-    );
-    cx.backend
-        .draw_text(&value_lay, Point2D::new(text_x, input.origin.y + 16.0));
-    if focused {
-        let caret = settings_caret_for_focus(ui, focus);
-        let caret_x = caret_x_for_text(
-            cx,
-            value,
-            caret,
-            text_x,
-            input.origin.x + input.size.x - 8.0,
+    } else {
+        let clipped = ellipsize(cx, value, input.size.x - 12.0, 11.0);
+        let value_lay = TextLayout::single_run(
+            &clipped,
+            "system-ui",
             11.0,
+            (theme.foreground).to_jian(),
+            Point2D::new(0.0, 0.0),
         );
-        let caret_y = input.origin.y + 4.5;
-        let anchor = ui.settings_input_caret_anchor_ms;
-        paint_caret(cx, theme, now_ms, anchor, caret_x, caret_y);
+        cx.backend
+            .draw_text(&value_lay, Point2D::new(text_x, input.origin.y + 16.0));
     }
 }
 

@@ -15,6 +15,7 @@ struct CaptureBackend {
     icon_strokes: Vec<(Point2D, f32, usize)>,
     svg_strokes: Vec<(String, Point2D, f32)>,
     text_points: Vec<Point2D>,
+    text_effective_points: Vec<(String, Point2D)>,
     ops: Vec<&'static str>,
 }
 
@@ -25,8 +26,14 @@ impl RenderBackend for CaptureBackend {
         self.fills.push((rect, color));
     }
     fn stroke_rect(&mut self, _: Rect, _: Color, _: f32) {}
-    fn draw_text(&mut self, _: &TextLayout, point: Point2D) {
+    fn draw_text(&mut self, layout: &TextLayout, point: Point2D) {
         self.text_points.push(point);
+        if let Some(run) = layout.runs().first() {
+            self.text_effective_points.push((
+                run.content.clone(),
+                Point2D::new(point.x + run.origin.x, point.y + run.origin.y),
+            ));
+        }
     }
     fn clip_rect(&mut self, _: Rect) {}
     fn stroke_line(&mut self, _: Point2D, _: Point2D, _: Color, _: f32) {}
@@ -65,8 +72,8 @@ fn caret_fills(fills: &[(Rect, Color)], color: Color) -> Vec<Rect> {
         .filter_map(|(rect, fill)| {
             (color_eq(*fill, color)
                 && (rect.size.x - 1.5).abs() < 0.01
-                && (rect.size.y - 15.0).abs() < 0.01)
-                .then_some(*rect)
+                && (14.0..=16.0).contains(&rect.size.y))
+            .then_some(*rect)
         })
         .collect()
 }
@@ -196,7 +203,10 @@ fn focused_builtin_agent_field_paints_visible_caret_at_blink_on_phase() {
         index: 0,
         field: BuiltinAgentField::BaseUrl,
     });
-    state.editor_ui.settings_input_draft = "https://api.minimaxi.com/v1".into();
+    state
+        .editor_ui
+        .settings_input
+        .set_text("https://api.minimaxi.com/v1");
 
     let panel = AgentSettingsPanel::for_editor_at(&state, 100);
     let rect = panel.rect(1200.0, 800.0);
@@ -221,7 +231,10 @@ fn focused_builtin_agent_field_hides_caret_at_blink_off_phase() {
         index: 0,
         field: BuiltinAgentField::BaseUrl,
     });
-    state.editor_ui.settings_input_draft = "https://api.minimaxi.com/v1".into();
+    state
+        .editor_ui
+        .settings_input
+        .set_text("https://api.minimaxi.com/v1");
 
     let panel = AgentSettingsPanel::for_editor_at(&state, 500);
     let rect = panel.rect(1200.0, 800.0);
@@ -243,9 +256,25 @@ fn focused_builtin_agent_field_paints_from_settings_draft() {
         index: 0,
         field: BuiltinAgentField::ApiKey,
     });
-    state.editor_ui.settings_input_draft = "sk-draft".into();
+    state.editor_ui.settings_input.set_text("sk-draft");
 
     let panel = AgentSettingsPanel::for_editor(&state);
+    let rect = panel.rect(1200.0, 800.0);
+    let content_x = rect.origin.x + 200.0 + 24.0;
+    let content_y = rect.origin.y + 24.0;
+    let content_w = rect.size.x - 200.0 - 48.0;
+    let first_card_y = content_y + 12.0 + 28.0 + 28.0;
+    let api_key_input = Rect {
+        origin: Point2D::new(content_x + 12.0 + 68.0, first_card_y + 76.0 + 28.0),
+        size: Point2D::new(content_w - 24.0 - 68.0, 24.0),
+    };
+    let api_key_baseline_y = api_key_input.origin.y + 16.0;
+    let mut backend = CaptureBackend::default();
+    let mut cx = PaintCx {
+        backend: &mut backend,
+    };
+
+    panel.paint(&mut cx, rect);
 
     assert_eq!(
         panel.settings.focus,
@@ -253,6 +282,19 @@ fn focused_builtin_agent_field_paints_from_settings_draft() {
             index: 0,
             field: BuiltinAgentField::ApiKey,
         })
+    );
+    let draft_point = backend
+        .text_effective_points
+        .iter()
+        .find_map(|(text, point)| (text == "sk-draft").then_some(*point))
+        .expect("focused settings draft should paint");
+    assert!(
+        api_key_input.contains(draft_point),
+        "focused settings draft text should render inside the API key field"
+    );
+    assert!(
+        (draft_point.y - api_key_baseline_y).abs() < 0.01,
+        "focused settings draft text should use the same baseline as unfocused text"
     );
 }
 
@@ -449,7 +491,7 @@ fn focused_acp_agent_field_paints_visible_caret_at_blink_on_phase() {
         index: 0,
         field: AcpAgentField::Command,
     });
-    state.editor_ui.settings_input_draft = "node server.js".into();
+    state.editor_ui.settings_input.set_text("node server.js");
 
     let panel = AgentSettingsPanel::for_editor_at(&state, 100);
     let rect = panel.rect(1200.0, 800.0);
@@ -471,7 +513,7 @@ fn focused_empty_acp_command_field_paints_visible_caret_at_blink_on_phase() {
         index: 0,
         field: AcpAgentField::Command,
     });
-    state.editor_ui.settings_input_draft.clear();
+    state.editor_ui.settings_input.set_text("");
 
     let panel = AgentSettingsPanel::for_editor_at(&state, 100);
     let rect = panel.rect(1200.0, 800.0);
@@ -493,7 +535,7 @@ fn focused_acp_agent_field_hides_caret_at_blink_off_phase() {
         index: 0,
         field: AcpAgentField::Command,
     });
-    state.editor_ui.settings_input_draft = "node server.js".into();
+    state.editor_ui.settings_input.set_text("node server.js");
 
     let panel = AgentSettingsPanel::for_editor_at(&state, 500);
     let rect = panel.rect(1200.0, 800.0);
@@ -637,7 +679,7 @@ fn focused_mcp_port_paints_visible_caret_at_blink_on_phase() {
     let mut state = EditorState::default();
     state.editor_ui.agent_settings.tab = AgentSettingsTab::Mcp;
     state.editor_ui.agent_settings.focus = Some(SettingsFocus::McpPort);
-    state.editor_ui.settings_input_draft = "3845".into();
+    state.editor_ui.settings_input.set_text("3845");
 
     let panel = AgentSettingsPanel::for_editor_at(&state, 100);
     let rect = panel.rect(1200.0, 800.0);
@@ -656,7 +698,7 @@ fn focused_mcp_port_hides_caret_at_blink_off_phase() {
     let mut state = EditorState::default();
     state.editor_ui.agent_settings.tab = AgentSettingsTab::Mcp;
     state.editor_ui.agent_settings.focus = Some(SettingsFocus::McpPort);
-    state.editor_ui.settings_input_draft = "3845".into();
+    state.editor_ui.settings_input.set_text("3845");
 
     let panel = AgentSettingsPanel::for_editor_at(&state, 500);
     let rect = panel.rect(1200.0, 800.0);
@@ -790,7 +832,7 @@ fn focused_image_search_field_paints_visible_caret_at_blink_on_phase() {
     state.editor_ui.agent_settings.images_advanced_open = true;
     state.editor_ui.agent_settings.focus =
         Some(SettingsFocus::ImageSearch(ImageSearchField::ClientId));
-    state.editor_ui.settings_input_draft = "openverse-client".into();
+    state.editor_ui.settings_input.set_text("openverse-client");
 
     let panel = AgentSettingsPanel::for_editor_at(&state, 100);
     let rect = panel.rect(1200.0, 800.0);
@@ -811,10 +853,8 @@ fn focused_empty_image_search_placeholder_leaves_gap_after_caret() {
     state.editor_ui.agent_settings.images_advanced_open = true;
     state.editor_ui.agent_settings.focus =
         Some(SettingsFocus::ImageSearch(ImageSearchField::ClientSecret));
-    state.editor_ui.settings_input_draft.clear();
-    state.editor_ui.settings_input_caret_focus =
-        Some(SettingsFocus::ImageSearch(ImageSearchField::ClientSecret));
-    state.editor_ui.settings_input_caret = Some(0);
+    state.editor_ui.settings_input.set_text("");
+    state.editor_ui.settings_input.set_caret(0, 0);
 
     let panel = AgentSettingsPanel::for_editor_at(&state, 100);
     let rect = panel.rect(1200.0, 800.0);
@@ -826,7 +866,7 @@ fn focused_empty_image_search_placeholder_leaves_gap_after_caret() {
         origin: Point2D::new(content_x + 110.0, secret_y),
         size: Point2D::new(content_w - 110.0, 36.0),
     };
-    let text_baseline_y = field.origin.y + 36.0 / 2.0 + 5.0;
+    let placeholder_baseline_y = field.origin.y + 36.0 / 2.0 + 5.0;
     let mut backend = CaptureBackend::default();
     let mut cx = PaintCx {
         backend: &mut backend,
@@ -843,7 +883,7 @@ fn focused_empty_image_search_placeholder_leaves_gap_after_caret() {
         .iter()
         .copied()
         .find(|point| {
-            (point.y - text_baseline_y).abs() < 0.01
+            (point.y - placeholder_baseline_y).abs() < 0.01
                 && point.x > field.origin.x
                 && point.x < field.origin.x + field.size.x
         })
@@ -862,7 +902,7 @@ fn focused_image_search_field_hides_caret_at_blink_off_phase() {
     state.editor_ui.agent_settings.images_advanced_open = true;
     state.editor_ui.agent_settings.focus =
         Some(SettingsFocus::ImageSearch(ImageSearchField::ClientId));
-    state.editor_ui.settings_input_draft = "openverse-client".into();
+    state.editor_ui.settings_input.set_text("openverse-client");
 
     let panel = AgentSettingsPanel::for_editor_at(&state, 500);
     let rect = panel.rect(1200.0, 800.0);

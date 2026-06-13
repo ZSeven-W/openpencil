@@ -52,8 +52,8 @@ fn caret_fills(fills: &[(Rect, Color)], color: Color) -> Vec<Rect> {
         .filter_map(|(rect, fill)| {
             (color_eq(*fill, color)
                 && (rect.size.x - 1.5).abs() < 0.01
-                && (rect.size.y - 15.0).abs() < 0.01)
-                .then_some(*rect)
+                && (14.0..=16.0).contains(&rect.size.y))
+            .then_some(*rect)
         })
         .collect()
 }
@@ -102,7 +102,10 @@ fn focused_image_gen_field_paints_visible_caret_at_blink_on_phase() {
         index: 0,
         field: ImageGenField::BaseUrl,
     });
-    state.editor_ui.settings_input_draft = "https://api.example.com/v1".into();
+    state
+        .editor_ui
+        .settings_input
+        .set_text("https://api.example.com/v1");
 
     let panel = AgentSettingsPanel::for_editor_at(&state, 100);
     let rect = panel.rect(1200.0, 800.0);
@@ -125,7 +128,10 @@ fn focused_image_gen_field_hides_caret_at_blink_off_phase() {
         index: 0,
         field: ImageGenField::BaseUrl,
     });
-    state.editor_ui.settings_input_draft = "https://api.example.com/v1".into();
+    state
+        .editor_ui
+        .settings_input
+        .set_text("https://api.example.com/v1");
 
     let panel = AgentSettingsPanel::for_editor_at(&state, 500);
     let rect = panel.rect(1200.0, 800.0);

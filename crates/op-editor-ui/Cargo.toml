@@ -21,6 +21,7 @@ accesskit = "0.24"
 # Canonical jian render/gesture types + the .op document schema.
 jian-core = { path = "../../vendor/jian/crates/jian-core", version = "0.0.1" }
 jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema" }
+jian-widgets = { path = "../../vendor/jian/crates/jian-widgets", version = "0.0.1" }
 
 # i18n string tables + the canonical editor state model.
 op-i18n = { path = "../op-i18n" }

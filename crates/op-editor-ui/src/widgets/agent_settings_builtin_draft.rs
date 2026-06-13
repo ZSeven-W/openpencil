@@ -25,7 +25,7 @@ fn field_value<'a>(
     fallback: &'a str,
 ) -> &'a str {
     if settings.focus == Some(SettingsFocus::BuiltinAgentDraft(field)) {
-        ui.settings_input_draft.as_str()
+        ui.settings_input.text()
     } else {
         fallback
     }

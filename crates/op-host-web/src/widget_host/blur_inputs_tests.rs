@@ -56,7 +56,7 @@ fn settings_modal_blank_press_commits_mcp_port_draft() {
         let eui = &mut host.editor_state.editor_ui;
         eui.agent_settings_open = true;
         eui.agent_settings.focus = Some(SettingsFocus::McpPort);
-        eui.settings_input_draft = "4321".into();
+        eui.settings_input.set_text("4321");
     }
 
     // Bottom of the modal's sidebar column — below the nav tabs, no

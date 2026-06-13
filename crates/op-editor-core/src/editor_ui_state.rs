@@ -863,17 +863,9 @@ pub struct EditorUiState {
     pub agent_settings_open: bool,
     pub agent_settings: crate::agent_settings::AgentSettings,
     pub agent_settings_drag: Option<crate::agent_settings::AgentSettingsDrag>,
-    /// Draft for the focused settings-modal input (e.g. MCP port).
-    pub settings_input_draft: String,
-    /// Byte caret for the focused settings-modal input.
-    pub settings_input_caret: Option<usize>,
-    /// Focus identity that owns [`Self::settings_input_caret`].
-    pub settings_input_caret_focus: Option<crate::agent_settings::SettingsFocus>,
-    /// True after Cmd/Ctrl+A in the focused settings input. The next
-    /// edit replaces the whole draft.
-    pub settings_input_select_all: bool,
-    /// Last focus / edit timestamp for focused settings-modal inputs.
-    pub settings_input_caret_anchor_ms: u64,
+    /// Draft, caret, selection, and blink state for the focused
+    /// settings-modal input.
+    pub settings_input: jian_core::text_input::TextInputState,
 
     // --- Toolbar shape slot ----------------------------------------
     /// Whether the Toolbar shape-tool dropdown is open.
@@ -1234,11 +1226,7 @@ impl Default for EditorUiState {
             agent_settings_open: false,
             agent_settings: crate::agent_settings::AgentSettings::default(),
             agent_settings_drag: None,
-            settings_input_draft: String::new(),
-            settings_input_caret: None,
-            settings_input_caret_focus: None,
-            settings_input_select_all: false,
-            settings_input_caret_anchor_ms: 0,
+            settings_input: jian_core::text_input::TextInputState::default(),
             shape_picker_open: false,
             shape_picker_hover: None,
             toolbar_hover: None,

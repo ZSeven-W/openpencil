@@ -87,12 +87,10 @@ impl WidgetHostNative {
     }
 
     fn apply_input_select_all(&mut self) -> bool {
-        if let Some(focus) = self.editor_state.editor_ui.agent_settings.focus {
+        if self.editor_state.editor_ui.agent_settings.focus.is_some() {
             let ui = &mut self.editor_state.editor_ui;
-            ui.settings_input_select_all = true;
-            ui.settings_input_caret = Some(ui.settings_input_draft.len());
-            ui.settings_input_caret_focus = Some(focus);
-            ui.settings_input_caret_anchor_ms = self.now_ms;
+            ui.settings_input.select_all();
+            ui.settings_input.touch(self.now_ms);
             self.mark_dirty();
             return true;
         }

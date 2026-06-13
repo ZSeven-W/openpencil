@@ -14,7 +14,7 @@ impl WidgetHost {
         let Some(focus) = self.editor_state.editor_ui.agent_settings.focus.take() else {
             return;
         };
-        let draft = std::mem::take(&mut self.editor_state.editor_ui.settings_input_draft);
+        let draft = self.editor_state.editor_ui.settings_input.text().to_owned();
         self.clear_settings_caret();
         match focus {
             SettingsFocus::McpPort => {

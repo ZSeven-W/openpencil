@@ -3044,6 +3044,7 @@ dependencies = [
  "glam",
  "jian-core",
  "jian-ops-schema",
+ "jian-widgets",
  "op-editor-core",
  "op-i18n",
  "serde",

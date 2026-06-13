@@ -8,9 +8,7 @@ use crate::widgets::agent_settings_builtin_layout::{
     CARD_GAP, EMPTY_HEIGHT, HEADER_HEIGHT, SUBTITLE_HEIGHT,
 };
 use crate::widgets::agent_settings_builtin_parts;
-use crate::widgets::agent_settings_caret::{
-    caret_x_for_text, paint_caret, paint_settings_selection, settings_caret_for_focus,
-};
+use crate::widgets::agent_settings_caret::{paint_settings_input_view, settings_input_text};
 use crate::widgets::agent_settings_form_actions::{
     cancel_button_rect, paint_form_actions, save_button_rect,
 };
@@ -632,17 +630,14 @@ fn paint_field(
         None => SettingsFocus::BuiltinAgentDraft(field),
     };
     let focused = settings.focus == Some(focus);
-    let value = if focused {
-        ui.settings_input_draft.as_str()
-    } else {
-        match field {
-            BuiltinAgentField::DisplayName => agent.display_name.as_str(),
-            BuiltinAgentField::ApiKey if !agent.api_key.is_empty() => "********",
-            BuiltinAgentField::ApiKey => "",
-            BuiltinAgentField::Model => agent.model.as_str(),
-            BuiltinAgentField::BaseUrl => agent.base_url.as_str(),
-        }
+    let fallback = match field {
+        BuiltinAgentField::DisplayName => agent.display_name.as_str(),
+        BuiltinAgentField::ApiKey if !agent.api_key.is_empty() => "********",
+        BuiltinAgentField::ApiKey => "",
+        BuiltinAgentField::Model => agent.model.as_str(),
+        BuiltinAgentField::BaseUrl => agent.base_url.as_str(),
     };
+    let value = settings_input_text(settings, ui, focus, fallback);
     let label = match field {
         BuiltinAgentField::DisplayName => "Name",
         BuiltinAgentField::ApiKey => "API Key",
@@ -675,48 +670,32 @@ fn paint_field(
         if focused { theme.primary } else { theme.border },
         1.0,
     );
-    let clipped = ellipsize(cx, value, input.size.x - 12.0, 11.0);
     let text_x = input.origin.x + 6.0;
-    if focused && ui.settings_input_select_all && !value.is_empty() {
-        paint_settings_selection(
+    if focused {
+        paint_settings_input_view(
             cx,
             theme,
-            value,
+            ui,
+            input,
+            11.0,
+            text_x - input.origin.x,
+            input.origin.y + 16.0,
+            now_ms,
+            "",
+        );
+    } else {
+        let clipped = ellipsize(cx, value, input.size.x - 12.0, 11.0);
+        draw_text(
+            cx,
+            &clipped,
+            11.0,
+            if editable {
+                theme.foreground
+            } else {
+                theme.muted_foreground
+            },
             text_x,
             input.origin.y + 16.0,
-            11.0,
-            input.origin.x + input.size.x - 8.0,
-        );
-    }
-    draw_text(
-        cx,
-        &clipped,
-        11.0,
-        if editable {
-            theme.foreground
-        } else {
-            theme.muted_foreground
-        },
-        text_x,
-        input.origin.y + 16.0,
-    );
-    if focused {
-        let caret = settings_caret_for_focus(ui, focus);
-        let caret_x = caret_x_for_text(
-            cx,
-            value,
-            caret,
-            text_x,
-            input.origin.x + input.size.x - 8.0,
-            11.0,
-        );
-        paint_caret(
-            cx,
-            theme,
-            now_ms,
-            ui.settings_input_caret_anchor_ms,
-            caret_x,
-            input.origin.y + 4.5,
         );
     }
 }

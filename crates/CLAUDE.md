@@ -37,7 +37,7 @@ Document
 └── ui: UiState               (sidebar_open, layer_panel_width, property_panel_width,
                                property_focus, property_input_draft, property_caret_anchor_ms,
                                property_draft_select_all,
-                               settings_input_draft,
+                               settings_input: TextInputState,
                                agent_settings_open, agent_settings (focus, tab, connected[5],
                                mcp_server, mcp_cli_enabled[6], images_*, hover_provider),
                                color_picker, pen_in_progress, pen_cursor_doc,
@@ -279,7 +279,7 @@ Every input path that reasons about the canvas region MUST derive its rects from
 
 ### Settings input editing
 
-`SettingsFocus { McpPort }` is to settings inputs what `PropertyFocus` is to property-panel inputs. Click on the port field → `AgentSettingsHit::FocusMcpPort` → `agent_settings.focus = Some(McpPort)` + `UiState.settings_input_draft` seeded from current port. `apply_text` / `apply_backspace` / `apply_send` / `apply_escape` all route to the draft FIRST (swallowing every keystroke so non-digit chars don't leak into chat / rename / text-edit). Commit parses u16 and clamps ≥1024. Close / Outside / SelectTab / re-Focus all commit any pending draft first so a typed value isn't silently lost.
+`SettingsFocus { McpPort }` is to settings inputs what `PropertyFocus` is to property-panel inputs. Click on the port field → `AgentSettingsHit::FocusMcpPort` → `agent_settings.focus = Some(McpPort)` + `EditorUiState.settings_input: TextInputState` seeded from current port. `apply_text` / `apply_backspace` / caret movement / select-all route through the shared text-input state FIRST (swallowing every keystroke so non-digit chars don't leak into chat / rename / text-edit). `apply_send` commits, parsing u16 and clamping ≥1024. `apply_escape` clears focus and the shared input. Close / Outside / SelectTab / re-Focus all commit any pending draft first so a typed value isn't silently lost.
 
 Mirrored on native (`widget_host/property_dispatch.rs::commit_settings_focus_if_any`) and web (`widget_host/keyboard.rs::commit_settings_focus`).
 
