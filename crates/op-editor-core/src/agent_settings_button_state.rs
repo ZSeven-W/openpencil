@@ -5,4 +5,6 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AgentSettingsButton {
     Close,
+    McpServer,
+    McpClientConfigCopy,
 }
