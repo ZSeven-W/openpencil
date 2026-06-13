@@ -14,4 +14,5 @@ pub enum ButtonPressTarget {
     ChatFooter(crate::chat_button_state::ChatFooterButton),
     Git(crate::git_button_state::GitButton),
     ExportDialog(crate::export_dialog_state::ExportDialogButton),
+    FigmaImport(crate::figma_import_state::FigmaImportButton),
 }

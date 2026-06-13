@@ -1591,15 +1591,15 @@ mod tests {
     #[test]
     fn button_press_target_clears_chrome_button_families() {
         let mut ui = EditorUiState {
-            pressed_button: Some(crate::button_press_state::ButtonPressTarget::ExportDialog(
-                crate::ExportDialogButton::Scale(1),
+            pressed_button: Some(crate::button_press_state::ButtonPressTarget::FigmaImport(
+                crate::FigmaImportButton::DropZone,
             )),
             ..Default::default()
         };
 
         assert!(
-            ui.button_pressed(crate::button_press_state::ButtonPressTarget::ExportDialog(
-                crate::ExportDialogButton::Scale(1),
+            ui.button_pressed(crate::button_press_state::ButtonPressTarget::FigmaImport(
+                crate::FigmaImportButton::DropZone,
             ))
         );
 

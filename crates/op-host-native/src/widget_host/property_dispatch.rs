@@ -560,7 +560,11 @@ impl WidgetHostNative {
         use op_editor_ui::widgets::figma_import::{FigmaImportHit, FigmaImportModal};
         let modal = FigmaImportModal::for_editor(&self.editor_state);
         let panel_rect = modal.rect(viewport_w, viewport_h);
-        match modal.hit_test(panel_rect, op_editor_ui::Point2D::new(x, y)) {
+        let hit = modal.hit_test(panel_rect, op_editor_ui::Point2D::new(x, y));
+        self.editor_state.editor_ui.pressed_button =
+            op_editor_ui::widgets::editor_state_ext::figma_import_button(hit)
+                .map(op_editor_core::ButtonPressTarget::FigmaImport);
+        match hit {
             FigmaImportHit::Close => {
                 self.editor_state.editor_ui.figma_import_open = false;
                 self.editor_state.editor_ui.figma_import_hover = None;

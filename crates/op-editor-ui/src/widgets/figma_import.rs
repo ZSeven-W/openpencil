@@ -32,6 +32,8 @@ pub struct FigmaImportModal {
     locale: Locale,
     /// Which target the cursor is over — drives the hover wash.
     hover: Option<op_editor_core::FigmaImportButton>,
+    /// Which target is currently pressed by the primary pointer.
+    pressed: Option<op_editor_core::FigmaImportButton>,
 }
 
 impl FigmaImportModal {
@@ -41,6 +43,10 @@ impl FigmaImportModal {
             theme: theme_for(&state.editor_ui),
             locale: state.editor_ui.locale,
             hover: state.editor_ui.figma_import_hover,
+            pressed: match state.editor_ui.pressed_button {
+                Some(op_editor_core::ButtonPressTarget::FigmaImport(button)) => Some(button),
+                _ => None,
+            },
         }
     }
 
@@ -131,22 +137,27 @@ impl Widget for FigmaImportModal {
         // Close X — smaller stroke, tighter. Hover wash + foreground.
         let close = close_rect(rect);
         let close_hovered = self.hover == Some(op_editor_core::FigmaImportButton::Close);
-        if close_hovered {
-            // Pad the wash out a little so it reads as a button around
-            // the 14 px glyph rather than hugging it.
-            let pad = 5.0;
-            let bg = Rect {
-                origin: Point2D::new(close.origin.x - pad, close.origin.y - pad),
-                size: Point2D::new(close.size.x + pad * 2.0, close.size.y + pad * 2.0),
-            };
-            cx.backend.fill_round_rect(bg, 6.0, self.theme.button_hover);
-        }
+        let close_pressed = self.pressed == Some(op_editor_core::FigmaImportButton::Close);
+        // Pad the wash out a little so it reads as a button around
+        // the 14 px glyph rather than hugging it.
+        let pad = 5.0;
+        let bg = Rect {
+            origin: Point2D::new(close.origin.x - pad, close.origin.y - pad),
+            size: Point2D::new(close.size.x + pad * 2.0, close.size.y + pad * 2.0),
+        };
+        crate::widgets::button::paint_ghost_button_feedback(
+            cx.backend,
+            &self.theme,
+            bg,
+            close_hovered,
+            close_pressed,
+        );
         draw_icon(
             cx.backend,
             Icon::Close,
             close.origin,
             close.size.x,
-            if close_hovered {
+            if close_hovered || close_pressed {
                 self.theme.foreground
             } else {
                 self.theme.muted_foreground
@@ -158,10 +169,13 @@ impl Widget for FigmaImportModal {
         let drop = drop_zone_rect(rect);
         cx.backend.fill_round_rect(drop, 10.0, self.theme.muted);
         // Brighten the browse drop-zone on hover (it's clickable).
-        if self.hover == Some(op_editor_core::FigmaImportButton::DropZone) {
-            cx.backend
-                .fill_round_rect(drop, 10.0, self.theme.button_hover);
-        }
+        crate::widgets::button::paint_ghost_button_feedback(
+            cx.backend,
+            &self.theme,
+            drop,
+            self.hover == Some(op_editor_core::FigmaImportButton::DropZone),
+            self.pressed == Some(op_editor_core::FigmaImportButton::DropZone),
+        );
         cx.backend
             .stroke_round_rect(drop, 10.0, self.theme.border, 1.0);
 
@@ -234,6 +248,41 @@ impl Widget for FigmaImportModal {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{Color, RenderBackend};
+
+    #[derive(Default)]
+    struct CaptureBackend {
+        round_fills: Vec<(Rect, f32, Color)>,
+    }
+
+    impl RenderBackend for CaptureBackend {
+        fn begin_frame(&mut self) {}
+        fn end_frame(&mut self) {}
+        fn fill_rect(&mut self, _: Rect, _: Color) {}
+        fn stroke_rect(&mut self, _: Rect, _: Color, _: f32) {}
+        fn draw_text(&mut self, _: &TextLayout, _: Point2D) {}
+        fn clip_rect(&mut self, _: Rect) {}
+        fn stroke_line(&mut self, _: Point2D, _: Point2D, _: Color, _: f32) {}
+        fn fill_round_rect(&mut self, rect: Rect, radius: f32, color: Color) {
+            self.round_fills.push((rect, radius, color));
+        }
+        fn stroke_round_rect(&mut self, _: Rect, _: f32, _: Color, _: f32) {}
+        fn stroke_svg_path(&mut self, _: &str, _: Point2D, _: f32, _: Color, _: f32) {}
+        fn save(&mut self) {}
+        fn restore(&mut self) {}
+        fn translate(&mut self, _: Point2D) {}
+        fn resize(&mut self, _: u32, _: u32) {}
+        fn dpi_scale(&self) -> f32 {
+            1.0
+        }
+    }
+
+    fn color_close(a: Color, b: Color) -> bool {
+        (a.r - b.r).abs() < 1e-6
+            && (a.g - b.g).abs() < 1e-6
+            && (a.b - b.b).abs() < 1e-6
+            && (a.a - b.a).abs() < 1e-6
+    }
 
     #[test]
     fn clicking_drop_zone_requests_figma_import() {
@@ -246,5 +295,38 @@ mod tests {
         );
 
         assert_eq!(modal.hit_test(panel, point), FigmaImportHit::DropZone);
+    }
+
+    #[test]
+    fn pressed_close_uses_shared_button_feedback() {
+        let mut state = EditorState::new();
+        state.editor_ui.pressed_button = Some(op_editor_core::ButtonPressTarget::FigmaImport(
+            op_editor_core::FigmaImportButton::Close,
+        ));
+        let modal = FigmaImportModal::for_editor(&state);
+        let panel = modal.rect(800.0, 600.0);
+        let close = close_rect(panel);
+        let pad = 5.0;
+        let bg = Rect {
+            origin: Point2D::new(close.origin.x - pad, close.origin.y - pad),
+            size: Point2D::new(close.size.x + pad * 2.0, close.size.y + pad * 2.0),
+        };
+        let expected = modal
+            .theme
+            .button_hover
+            .with_alpha(modal.theme.button_hover.a * 1.8);
+        let mut backend = CaptureBackend::default();
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+
+        modal.paint(&mut cx, panel);
+
+        assert!(
+            backend.round_fills.iter().any(|(rect, radius, color)| {
+                *rect == bg && (*radius - 6.0).abs() < 0.01 && color_close(*color, expected)
+            }),
+            "pressed close button should paint the shared pressed feedback token"
+        );
     }
 }
