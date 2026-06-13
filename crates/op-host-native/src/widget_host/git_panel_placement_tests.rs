@@ -7,6 +7,7 @@
 
 use super::helpers::GIT_PANEL_CARET_GAP;
 use super::{CursorHint, WidgetHostNative};
+use op_editor_core::{GitFileEntry, GitPanelAction};
 use op_editor_ui::widgets::{GitPanel, TopBar, TOP_BAR_HEIGHT};
 use op_editor_ui::{Point2D, Rect};
 
@@ -41,6 +42,54 @@ fn open_git_popover_is_modal_and_dismisses_on_any_outside_press() {
     assert!(
         !host.editor_state().editor_ui.git_panel.branch_picker_open,
         "an outside press must dismiss the open branch-picker popover"
+    );
+}
+
+#[test]
+fn git_commit_input_uses_text_input_state_for_editing() {
+    let mut host = host_with_git_panel_open();
+    {
+        let panel = &mut host.editor_state_mut().editor_ui.git_panel;
+        panel.in_repo = true;
+        panel.branch = Some("main".to_string());
+        panel.commit_focused = true;
+        panel.commit_input.set_text("设计");
+        panel.changed_files = vec![GitFileEntry {
+            path: "design.op".into(),
+            staged: true,
+            status: 'M',
+        }];
+    }
+
+    assert!(host.apply_select_all());
+    {
+        let panel = &host.editor_state().editor_ui.git_panel;
+        assert!(panel.commit_input.is_select_all());
+        assert!(!panel.input_select_all);
+    }
+
+    assert!(host.apply_text('改'));
+    assert_eq!(
+        host.editor_state().editor_ui.git_panel.commit_input.text(),
+        "改"
+    );
+
+    assert!(host.apply_text('进'));
+    assert_eq!(
+        host.editor_state().editor_ui.git_panel.commit_input.text(),
+        "改进"
+    );
+
+    assert!(host.apply_backspace());
+    assert_eq!(
+        host.editor_state().editor_ui.git_panel.commit_input.text(),
+        "改"
+    );
+
+    assert!(host.apply_send());
+    assert_eq!(
+        host.editor_state().editor_ui.git_panel.pending_action,
+        Some(GitPanelAction::Commit)
     );
 }
 

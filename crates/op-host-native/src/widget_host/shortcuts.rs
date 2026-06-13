@@ -105,8 +105,14 @@ impl WidgetHostNative {
             }
             return false;
         }
-        if self.git_commit_focus_active()
-            || self.git_remote_focus_active()
+        if self.git_commit_focus_active() {
+            let panel = &mut self.editor_state.editor_ui.git_panel;
+            panel.commit_input.select_all();
+            panel.commit_input.touch(self.now_ms);
+            self.mark_dirty();
+            return true;
+        }
+        if self.git_remote_focus_active()
             || self.git_https_focus_active()
             || self.git_branch_create_focus_active()
             || self.git_author_focus_active()

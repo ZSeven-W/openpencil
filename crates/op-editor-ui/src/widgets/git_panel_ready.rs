@@ -15,6 +15,7 @@ use crate::widgets::git_panel::{contains, truncate, GitPanel, GitPanelHit, PAD};
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect};
+use jian_widgets::components::text_area::TextArea;
 use op_editor_core::{CommitDiffSummary, CommitDiffView, GitButton};
 
 /// Header bar height (TS `px-2.5 py-1.5` around a 28 px `icon-sm`
@@ -234,7 +235,7 @@ impl GitPanel<'_> {
     /// commits it in one step, so it does NOT require a pre-staged file
     /// the way the classic staging body's Commit does.
     fn ready_can_commit(&self) -> bool {
-        !self.state.commit_message.trim().is_empty()
+        !self.state.commit_input.text().trim().is_empty()
     }
 
     /// Whether Pull can fire — a configured remote and no in-flight
@@ -452,50 +453,25 @@ impl GitPanel<'_> {
                 alpha(t.border, 0.70)
             };
             cx.backend.stroke_round_rect(box_r, 8.0, border, 1.0);
-            let msg = &self.state.commit_message;
-            if msg.is_empty() && !self.state.commit_focused {
-                self.text(
-                    cx,
-                    self.t("git.commit.placeholder"),
-                    box_r.origin.x + 12.0,
-                    box_r.origin.y + 22.0,
-                    12.0,
-                    alpha(t.muted_foreground, 0.70),
-                );
+            let text_r = Rect {
+                origin: box_r.origin,
+                size: Point2D::new(box_r.size.x, (box_r.size.y - 38.0).max(0.0)),
+            };
+            let placeholder = if self.state.commit_focused {
+                ""
             } else {
-                // Draw the message, then a separate blinking caret bar
-                // (not an inline `|`) so it animates on the same cadence as
-                // the chat / property inputs instead of sitting static.
-                let text_x = box_r.origin.x + 12.0;
-                let baseline = box_r.origin.y + 22.0;
-                if self.state.commit_focused && self.state.input_select_all && !msg.is_empty() {
-                    crate::widgets::text_selection::paint_single_line_selection(
-                        cx,
-                        &t,
-                        msg,
-                        text_x,
-                        baseline,
-                        12.0,
-                        box_r.origin.x + box_r.size.x - 12.0,
-                    );
-                }
-                self.text(cx, msg, text_x, baseline, 12.0, t.foreground);
-                let blink = jian_core::anim::blink_visible(
-                    self.now_ms,
-                    self.state.commit_caret_anchor_ms,
-                    500,
-                );
-                if self.state.commit_focused && blink && !self.state.input_select_all {
-                    let caret_x = text_x + cx.backend.measure_text(msg, 12.0) + 1.0;
-                    cx.backend.fill_rect(
-                        Rect {
-                            origin: Point2D::new(caret_x, box_r.origin.y + 10.0),
-                            size: Point2D::new(1.5, 15.0),
-                        },
-                        t.foreground,
-                    );
-                }
+                self.t("git.commit.placeholder")
+            };
+            TextArea {
+                state: &self.state.commit_input,
+                placeholder,
+                focused: self.state.commit_focused,
+                font_size: 12.0,
+                now_ms: self.now_ms,
+                pad_x: 12.0,
+                max_visible_lines: 2,
             }
+            .paint(cx.backend, text_r, &self.widget_tokens());
             let btn = self.ready_commit_btn(rect);
             self.paint_milestone_button(
                 cx,

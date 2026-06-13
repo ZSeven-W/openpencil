@@ -9,7 +9,8 @@
 
 use crate::widgets::git_panel::GitPanel;
 use crate::widgets::PaintCx;
-use crate::{Color, Rect};
+use crate::{Color, Point2D, Rect};
+use jian_widgets::components::text_area::TextArea;
 
 impl GitPanel<'_> {
     /// The working-tree status line text + colour.
@@ -94,36 +95,27 @@ impl GitPanel<'_> {
         };
         cx.backend.stroke_round_rect(rect, 6.0, border, 1.0);
 
-        let text_x = rect.origin.x + 8.0;
-        let baseline = rect.origin.y + rect.size.y / 2.0 + 4.0;
-        let msg = &self.state.commit_message;
-        if msg.is_empty() && !self.state.commit_focused {
-            self.text(
-                cx,
-                self.t("git.panel.commitPlaceholder"),
-                text_x,
-                baseline,
-                12.0,
-                self.theme.muted_foreground,
-            );
+        let placeholder = if self.state.commit_focused {
+            ""
         } else {
-            if self.state.commit_focused && self.state.input_select_all && !msg.is_empty() {
-                crate::widgets::text_selection::paint_single_line_selection(
-                    cx,
-                    &self.theme,
-                    msg,
-                    text_x,
-                    baseline,
-                    12.0,
-                    rect.origin.x + rect.size.x - 8.0,
-                );
-            }
-            let shown = if self.state.commit_focused && !self.state.input_select_all {
-                format!("{msg}|")
-            } else {
-                msg.clone()
-            };
-            self.text(cx, &shown, text_x, baseline, 12.0, self.theme.foreground);
+            self.t("git.panel.commitPlaceholder")
+        };
+        TextArea {
+            state: &self.state.commit_input,
+            placeholder,
+            focused: self.state.commit_focused,
+            font_size: 12.0,
+            now_ms: self.now_ms,
+            pad_x: 8.0,
+            max_visible_lines: 1,
         }
+        .paint(
+            cx.backend,
+            Rect {
+                origin: rect.origin,
+                size: Point2D::new(rect.size.x, rect.size.y),
+            },
+            &self.widget_tokens(),
+        );
     }
 }

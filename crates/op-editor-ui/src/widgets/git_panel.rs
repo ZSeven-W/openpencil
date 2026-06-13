@@ -620,7 +620,7 @@ impl<'a> GitPanel<'a> {
             self.paint_input(cx, rects.input);
             // Commit needs a message *and* a staged file — it commits
             // exactly the staged set, so nothing staged is a no-op.
-            let commit_enabled = !self.state.commit_message.trim().is_empty()
+            let commit_enabled = !self.state.commit_input.text().trim().is_empty()
                 && self.state.changed_files.iter().any(|f| f.staged);
             self.paint_button_with_hit(
                 cx,

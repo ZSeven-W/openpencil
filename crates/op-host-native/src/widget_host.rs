@@ -926,11 +926,13 @@ impl WidgetHostNative {
         // window never repaints while the commit box is focused, so the
         // caret sits static instead of blinking.
         if self.editor_state.editor_ui.git_panel.commit_focused {
-            return Some(jian_core::anim::next_blink_flip_ms(
-                self.now_ms,
-                self.editor_state.editor_ui.git_panel.commit_caret_anchor_ms,
-                500,
-            ));
+            return Some(
+                self.editor_state
+                    .editor_ui
+                    .git_panel
+                    .commit_input
+                    .next_blink_flip_ms(self.now_ms),
+            );
         }
         // Remote-settings inputs (remote URL + HTTPS username:token) share
         // the same caret cadence; without this wake their caret stays

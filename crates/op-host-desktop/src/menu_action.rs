@@ -114,7 +114,7 @@ impl DesktopApp {
                     // close→reopen can't resurface a stale cloning form.
                     self.git_clone_job = None;
                     let panel = &mut self.host.editor_state_mut().editor_ui.git_panel;
-                    panel.commit_focused = false;
+                    panel.defocus_commit_input(0);
                     panel.remote_focused = false;
                     panel.https_focused = false;
                     panel.diff = None;

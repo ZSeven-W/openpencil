@@ -79,14 +79,9 @@ impl WidgetHostNative {
             if !c.is_control() {
                 let now = self.now_ms;
                 let panel = &mut self.editor_state.editor_ui.git_panel;
-                if panel.input_select_all {
-                    panel.commit_message.clear();
-                    panel.input_select_all = false;
-                }
-                panel.commit_message.push(c);
+                let mut s = [0u8; 4];
+                panel.commit_input.insert_str(c.encode_utf8(&mut s), now);
                 panel.commit_no_changes = false;
-                // Keep the caret solid while typing (reset the blink).
-                panel.commit_caret_anchor_ms = now;
                 self.mark_dirty();
                 return true;
             }
@@ -488,12 +483,7 @@ impl WidgetHostNative {
         }
         if self.git_commit_focus_active() {
             let panel = &mut self.editor_state.editor_ui.git_panel;
-            if panel.input_select_all {
-                panel.commit_message.clear();
-                panel.input_select_all = false;
-            } else {
-                panel.commit_message.pop();
-            }
+            panel.commit_input.backspace(self.now_ms);
             self.mark_dirty();
             return true;
         }
@@ -1214,7 +1204,7 @@ impl WidgetHostNative {
         // message and a staged file (the commit is the staged set).
         if self.git_commit_focus_active() {
             let panel = &mut self.editor_state.editor_ui.git_panel;
-            if !panel.commit_message.trim().is_empty()
+            if !panel.commit_input.text().trim().is_empty()
                 && panel.changed_files.iter().any(|f| f.staged)
             {
                 panel.pending_action = Some(op_editor_core::GitPanelAction::Commit);
@@ -1438,8 +1428,8 @@ impl WidgetHostNative {
         }
         // Escape defocuses the Git commit input (the panel stays open).
         if self.git_commit_focus_active() {
-            self.editor_state.editor_ui.git_panel.commit_focused = false;
-            self.editor_state.editor_ui.git_panel.input_select_all = false;
+            let panel = &mut self.editor_state.editor_ui.git_panel;
+            panel.defocus_commit_input(self.now_ms);
             self.mark_dirty();
             return true;
         }
