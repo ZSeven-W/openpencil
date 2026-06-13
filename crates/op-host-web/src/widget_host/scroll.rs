@@ -5,6 +5,8 @@
 use op_editor_ui::widgets::{LayerPanel, PropertyPanel, TOP_BAR_HEIGHT};
 use op_editor_ui::{Point2D, Rect};
 
+use super::WidgetHost;
+
 impl WidgetHost {
     /// Scroll the floating VariablesPanel row list when the wheel
     /// fires over the open panel (TS `overflow-y-auto` rows region).

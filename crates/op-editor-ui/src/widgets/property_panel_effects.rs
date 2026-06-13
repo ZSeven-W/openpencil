@@ -10,7 +10,8 @@ use crate::theme::Theme;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::property_panel::EffectSummary;
 use crate::widgets::property_panel_inputs::{
-    paint_section_divider, paint_section_label_with_add, INPUT_RADIUS, PAD_X, SECTION_GAP,
+    paint_section_divider, paint_section_label_with_add, paint_text_input_view_value, INPUT_RADIUS,
+    PAD_X, SECTION_GAP,
 };
 use crate::widgets::property_panel_layout::{
     effect_block_height, effect_color_rect, effect_has_color_row, effect_param_fields,
@@ -119,6 +120,8 @@ fn paint_effect_card(
             focused,
             edit.draft,
             caret,
+            focused.then_some(edit.input),
+            edit.now_ms,
             rect,
         );
     }
@@ -140,6 +143,8 @@ fn paint_param_input(
     focused: bool,
     draft: &str,
     caret: Option<usize>,
+    input: Option<&jian_core::text_input::TextInputState>,
+    now_ms: u64,
     rect: Rect,
 ) {
     cx.backend
@@ -173,24 +178,44 @@ fn paint_param_input(
         value_text_owned.as_str()
     };
     let value_x = label_x + label_w + 8.0;
-    let value_layout = TextLayout::single_run(
-        text,
-        "system-ui",
-        12.0,
-        (theme.foreground).to_jian(),
-        Point2D::new(0.0, 0.0),
-    );
-    cx.backend
-        .draw_text(&value_layout, Point2D::new(value_x, baseline_y));
-    if let Some(pos) = caret {
-        let caret_w = cx.backend.measure_text(&text[..pos.min(text.len())], 12.0);
-        cx.backend.fill_rect(
+    if focused && input.is_some() {
+        let input = input.expect("checked above");
+        paint_text_input_view_value(
+            cx,
+            theme,
+            input,
             Rect {
-                origin: Point2D::new(value_x + caret_w, rect.origin.y + 6.0),
-                size: Point2D::new(1.5, rect.size.y - 12.0),
+                origin: Point2D::new(value_x, rect.origin.y),
+                size: Point2D::new(
+                    (rect.origin.x + rect.size.x - 8.0 - value_x).max(0.0),
+                    rect.size.y,
+                ),
             },
-            theme.foreground,
+            12.0,
+            0.0,
+            baseline_y,
+            now_ms,
         );
+    } else {
+        let value_layout = TextLayout::single_run(
+            text,
+            "system-ui",
+            12.0,
+            (theme.foreground).to_jian(),
+            Point2D::new(0.0, 0.0),
+        );
+        cx.backend
+            .draw_text(&value_layout, Point2D::new(value_x, baseline_y));
+        if let Some(pos) = caret {
+            let caret_w = cx.backend.measure_text(&text[..pos.min(text.len())], 12.0);
+            cx.backend.fill_rect(
+                Rect {
+                    origin: Point2D::new(value_x + caret_w, rect.origin.y + 6.0),
+                    size: Point2D::new(1.5, rect.size.y - 12.0),
+                },
+                theme.foreground,
+            );
+        }
     }
 }
 

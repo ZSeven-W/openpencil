@@ -116,6 +116,8 @@ mod text_edit_press_tests;
 mod theme_tests;
 mod toolbar_actions;
 mod toolbar_hover;
+#[cfg(test)]
+mod variables_panel_add_tests;
 mod variables_panel_commit;
 mod variables_panel_geometry;
 mod variables_panel_press;

@@ -80,6 +80,7 @@ mod io_tests;
 mod keyboard;
 mod keyboard_edit_ops;
 mod keyboard_settings_commit;
+mod keyboard_text_inputs;
 mod overlay_cursor;
 mod overlay_keys;
 #[cfg(test)]
@@ -88,8 +89,11 @@ mod overlay_rects;
 mod paint;
 mod press;
 mod property_dispatch;
+mod property_focus_press;
 #[cfg(test)]
 mod property_hover_tests;
+#[cfg(test)]
+mod property_input_tests;
 mod release_input;
 mod scroll;
 mod settings_caret;

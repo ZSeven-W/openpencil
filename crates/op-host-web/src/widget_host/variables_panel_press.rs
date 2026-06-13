@@ -9,6 +9,8 @@ use op_editor_ui::widgets::variables_panel::{VariablesPanel, VariablesPanelHit};
 use op_editor_ui::Point2D;
 use std::collections::BTreeMap;
 
+use super::WidgetHost;
+
 impl WidgetHost {
     pub(in crate::widget_host) fn dispatch_variables_panel_press(
         &mut self,
@@ -37,6 +39,7 @@ impl WidgetHost {
             self.mark_dirty();
             return true;
         };
+        self.commit_property_family_focus_if_any();
         match hit {
             VariablesPanelHit::Resize(edge) => {
                 self.commit_variables_panel_header_focus_if_any();
@@ -148,11 +151,17 @@ impl WidgetHost {
     }
 
     fn start_theme_rename(&mut self, axis: String) -> bool {
+        self.commit_property_focus_if_any();
         self.commit_variables_panel_header_focus_if_any();
-        self.editor_state.ui.property_input_draft = axis.clone();
-        self.editor_state.ui.property_caret_pos = axis.len();
-        self.editor_state.ui.property_draft_select_all = false;
-        self.editor_state.ui.property_caret_anchor_ms = self.now_ms;
+        self.editor_state
+            .editor_ui
+            .variables_header_input
+            .set_text(axis.clone());
+        self.editor_state
+            .editor_ui
+            .variables_header_input
+            .touch(self.now_ms);
+        self.sync_variables_header_input_legacy(false);
         let ui = &mut self.editor_state.editor_ui;
         ui.variables_theme_rename_axis = Some(axis);
         ui.variables_theme_menu_axis = None;
@@ -219,11 +228,17 @@ impl WidgetHost {
     }
 
     fn start_variant_rename(&mut self, value: String) -> bool {
+        self.commit_property_focus_if_any();
         self.commit_variables_panel_header_focus_if_any();
-        self.editor_state.ui.property_input_draft = value.clone();
-        self.editor_state.ui.property_caret_pos = value.len();
-        self.editor_state.ui.property_draft_select_all = false;
-        self.editor_state.ui.property_caret_anchor_ms = self.now_ms;
+        self.editor_state
+            .editor_ui
+            .variables_header_input
+            .set_text(value.clone());
+        self.editor_state
+            .editor_ui
+            .variables_header_input
+            .touch(self.now_ms);
+        self.sync_variables_header_input_legacy(false);
         let ui = &mut self.editor_state.editor_ui;
         ui.variables_variant_rename_value = Some(value);
         ui.variables_variant_menu_value = None;
@@ -412,11 +427,18 @@ impl WidgetHost {
                     .as_ref()
                     .map(|vars| vars.keys().position(|k| k == &name).unwrap_or(0))
                     .unwrap_or(0);
-                self.editor_state.ui.property_input_draft = draft;
-                self.editor_state.ui.property_caret_pos =
-                    self.editor_state.ui.property_input_draft.len();
-                self.editor_state.ui.property_draft_select_all = select_all;
-                self.editor_state.ui.property_caret_anchor_ms = self.now_ms;
+                self.editor_state
+                    .editor_ui
+                    .variable_row_input
+                    .set_text(draft);
+                if select_all {
+                    self.editor_state.editor_ui.variable_row_input.select_all();
+                }
+                self.editor_state
+                    .editor_ui
+                    .variable_row_input
+                    .touch(self.now_ms);
+                self.sync_variable_row_input_legacy(select_all);
                 self.editor_state.editor_ui.variable_row_focus = Some(match focus {
                     VariableRowFocus::NumberCell { variant, .. } => {
                         VariableRowFocus::NumberCell { row, variant }

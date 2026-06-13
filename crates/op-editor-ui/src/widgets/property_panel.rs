@@ -110,6 +110,8 @@ pub struct PropertyPanel {
     /// is focused. The host fills this on click + mutates on
     /// keystroke; the panel paints it as the field's value.
     pub draft: String,
+    /// Shared text input state for the focused property/effect field.
+    pub input: jian_core::text_input::TextInputState,
     /// Caret byte-offset into `draft` (ASCII drafts → char index).
     pub caret_pos: usize,
     /// Whether Ctrl/Cmd+A selected the full focused draft.
@@ -356,14 +358,19 @@ impl PropertyPanel {
             draft: if is_multi {
                 String::new()
             } else {
-                state.ui.property_input_draft.clone()
+                state.ui.property_input.text().to_owned()
+            },
+            input: if is_multi {
+                jian_core::text_input::TextInputState::default()
+            } else {
+                state.ui.property_input.clone()
             },
             caret_pos: if is_multi {
                 0
             } else {
-                state.ui.property_caret_pos
+                state.ui.property_input.caret()
             },
-            select_all: !is_multi && state.ui.property_draft_select_all,
+            select_all: !is_multi && state.ui.property_input.is_select_all(),
             caret_anchor_ms: state.ui.property_caret_anchor_ms,
             now_ms,
             flex_layout,
@@ -800,6 +807,7 @@ impl Widget for PropertyPanel {
         let edit_ctx = sections::EditContext {
             focus: self.focus,
             draft: self.draft.as_str(),
+            input: &self.input,
             caret: self.caret_pos,
             select_all: self.select_all,
             caret_anchor_ms: self.caret_anchor_ms,

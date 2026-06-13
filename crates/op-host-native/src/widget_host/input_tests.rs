@@ -686,10 +686,7 @@ fn escape_closes_one_overlay_per_press_in_priority_order() {
     // fill-type → chat → selection.
     let mut host = WidgetHostNative::new();
     host.editor_state_mut().ui.property_focus = Some(PropertyFocus::PositionX);
-    host.editor_state_mut().ui.property_input_draft = "12".to_string();
-    // Focusing an input seeds the caret at the draft's end (the
-    // press path does this); mirror it so the state is faithful.
-    host.editor_state_mut().ui.property_caret_pos = 2;
+    host.editor_state_mut().ui.property_input.set_text("12");
     host.editor_state_mut().editor_ui.locale_picker_open = true;
     host.editor_state_mut().editor_ui.shape_picker_open = true;
     host.editor_state_mut().editor_ui.fill_type_picker_open = true;
@@ -700,7 +697,7 @@ fn escape_closes_one_overlay_per_press_in_priority_order() {
     // 1. Property focus clears first.
     assert!(host.apply_escape());
     assert!(host.editor_state().ui.property_focus.is_none());
-    assert!(host.editor_state().ui.property_input_draft.is_empty());
+    assert!(host.editor_state().ui.property_input.text().is_empty());
     assert!(host.editor_state().editor_ui.locale_picker_open);
 
     // 2. Locale picker next.
@@ -923,7 +920,7 @@ fn corner_radius_property_focus_updates_selected_rectangle() {
     host.editor_state_mut()
         .set_single_selection(NodeId::new("n62"));
     host.editor_state_mut().ui.property_focus = Some(PropertyFocus::PositionR);
-    host.editor_state_mut().ui.property_input_draft = "24".to_string();
+    host.editor_state_mut().ui.property_input.set_text("24");
 
     host.commit_property_focus_if_any();
 
@@ -949,6 +946,205 @@ fn corner_radius_property_focus_updates_selected_rectangle() {
 }
 
 #[test]
+fn property_focus_commit_reads_text_input_state() {
+    let mut host = WidgetHostNative::new();
+    seed(
+        &mut host,
+        r##"{ "version": "0.8.0", "children": [
+              {"type":"rectangle","id":"n62","name":"Wide",
+               "x":40,"y":40,"width":180,"height":120,
+               "fill":[{"type":"solid","color":"#BDC7D9"}]}
+        ]}"##,
+    );
+    host.editor_state_mut()
+        .set_single_selection(NodeId::new("n62"));
+    host.editor_state_mut().ui.property_focus = Some(PropertyFocus::SizeW);
+    host.editor_state_mut().ui.property_input.set_text("321");
+
+    host.commit_property_focus_if_any();
+
+    let bounds = own_bounds(host.editor_state().selected_node().unwrap());
+    assert_eq!(bounds.w, 321.0);
+    assert!(host.editor_state().ui.property_input.text().is_empty());
+}
+
+#[test]
+fn property_focus_commit_is_undoable() {
+    let mut host = WidgetHostNative::new();
+    seed(
+        &mut host,
+        r##"{ "version": "0.8.0", "children": [
+              {"type":"rectangle","id":"n62","name":"Wide",
+               "x":40,"y":40,"width":180,"height":120,
+               "fill":[{"type":"solid","color":"#BDC7D9"}]}
+        ]}"##,
+    );
+    host.editor_state_mut()
+        .set_single_selection(NodeId::new("n62"));
+    host.editor_state_mut().ui.property_focus = Some(PropertyFocus::SizeW);
+    host.editor_state_mut().ui.property_input.set_text("321");
+
+    host.commit_property_focus_if_any();
+
+    let bounds = own_bounds(host.editor_state().selected_node().unwrap());
+    assert_eq!(bounds.w, 321.0);
+    assert!(host.editor_state().history.can_undo());
+
+    assert!(host.editor_state_mut().undo());
+    let bounds = own_bounds(host.editor_state().selected_node().unwrap());
+    assert_eq!(bounds.w, 180.0);
+}
+
+#[test]
+fn property_press_seeds_text_input_state() {
+    let mut host = WidgetHostNative::new();
+    seed(
+        &mut host,
+        r##"{ "version": "0.8.0", "children": [
+              {"type":"rectangle","id":"n62","name":"Wide",
+               "x":40,"y":40,"width":180,"height":120,
+               "fill":[{"type":"solid","color":"#BDC7D9"}]}
+        ]}"##,
+    );
+    host.editor_state_mut()
+        .set_single_selection(NodeId::new("n62"));
+
+    let viewport_w = 1200.0;
+    let viewport_h = 800.0;
+    let property_rect = host.property_rect(viewport_w, viewport_h);
+    let panel = op_editor_ui::widgets::PropertyPanel::for_selection(host.editor_state())
+        .expect("selection should show the property panel");
+    let mut point = None;
+    'outer: for y in 0..property_rect.size.y as i32 {
+        for x in 0..property_rect.size.x as i32 {
+            let candidate = op_editor_ui::Point2D::new(
+                property_rect.origin.x + x as f32 + 0.5,
+                property_rect.origin.y + y as f32 + 0.5,
+            );
+            if panel.hit_test(property_rect, candidate) == Some(PropertyFocus::SizeW) {
+                point = Some(candidate);
+                break 'outer;
+            }
+        }
+    }
+    let point = point.expect("width input should be hit-testable");
+
+    assert!(host.apply_press(point.x, point.y, viewport_w, viewport_h));
+
+    assert_eq!(
+        host.editor_state().ui.property_focus,
+        Some(PropertyFocus::SizeW)
+    );
+    assert_eq!(host.editor_state().ui.property_input.text(), "180");
+    assert_eq!(host.editor_state().ui.property_input.caret(), 3);
+}
+
+#[test]
+fn effect_param_focus_seeds_text_input_state() {
+    let mut host = WidgetHostNative::new();
+
+    host.apply_property_action(
+        op_editor_ui::widgets::PropertyPanelAction::FocusEffectParam {
+            effect: 0,
+            field: op_editor_core::EffectField::OffsetX,
+            value: 12.5,
+        },
+    );
+
+    assert_eq!(
+        host.editor_state().editor_ui.effect_param_focus,
+        Some(op_editor_core::editor_ui_state::EffectParamFocus {
+            effect: 0,
+            field: op_editor_core::EffectField::OffsetX,
+        })
+    );
+    assert_eq!(host.editor_state().ui.property_input.text(), "12.5");
+    assert_eq!(host.editor_state().ui.property_input.caret(), 4);
+}
+
+#[test]
+fn effect_param_input_uses_text_input_state_for_editing() {
+    let mut host = WidgetHostNative::new();
+    {
+        let editor = host.editor_state_mut();
+        editor.editor_ui.effect_param_focus =
+            Some(op_editor_core::editor_ui_state::EffectParamFocus {
+                effect: 0,
+                field: op_editor_core::EffectField::OffsetX,
+            });
+        editor.ui.property_input.set_text("1234");
+    }
+
+    assert!(host.apply_property_caret(false));
+    assert!(host.apply_property_caret(false));
+    assert_eq!(host.editor_state().ui.property_input.caret(), 2);
+
+    assert!(host.apply_text('9'));
+    assert_eq!(host.editor_state().ui.property_input.text(), "12934");
+    assert_eq!(host.editor_state().ui.property_input.caret(), 3);
+}
+
+#[test]
+fn property_delete_uses_text_input_state() {
+    let mut host = WidgetHostNative::new();
+    host.editor_state_mut()
+        .set_single_selection(NodeId::new("n10"));
+    {
+        let ui = &mut host.editor_state_mut().ui;
+        ui.property_focus = Some(PropertyFocus::PositionX);
+        ui.property_input.set_text("123");
+    }
+    assert!(host.apply_property_caret(false));
+
+    assert!(host.apply_delete());
+
+    assert_eq!(host.editor_state().ui.property_input.text(), "12");
+    assert_eq!(host.editor_state().selection.anchor, NodeId::new("n10"));
+}
+
+#[test]
+fn property_step_reads_and_updates_text_input_state() {
+    let mut host = WidgetHostNative::new();
+    seed(
+        &mut host,
+        r##"{ "version": "0.8.0", "children": [
+              {"type":"rectangle","id":"n62","name":"Wide",
+               "x":40,"y":40,"width":180,"height":120,
+               "fill":[{"type":"solid","color":"#BDC7D9"}]}
+        ]}"##,
+    );
+    host.editor_state_mut()
+        .set_single_selection(NodeId::new("n62"));
+    {
+        let ui = &mut host.editor_state_mut().ui;
+        ui.property_focus = Some(PropertyFocus::SizeW);
+        ui.property_input.set_text("180");
+    }
+
+    assert!(host.apply_property_step(5.0));
+
+    let bounds = own_bounds(host.editor_state().selected_node().unwrap());
+    assert_eq!(bounds.w, 185.0);
+    assert_eq!(host.editor_state().ui.property_input.text(), "185");
+    assert_eq!(host.editor_state().ui.property_input.caret(), 3);
+}
+
+#[test]
+fn property_escape_clears_text_input_state() {
+    let mut host = WidgetHostNative::new();
+    {
+        let ui = &mut host.editor_state_mut().ui;
+        ui.property_focus = Some(PropertyFocus::PositionX);
+        ui.property_input.set_text("123");
+    }
+
+    assert!(host.apply_escape());
+
+    assert!(host.editor_state().ui.property_focus.is_none());
+    assert!(host.editor_state().ui.property_input.text().is_empty());
+}
+
+#[test]
 fn polygon_sides_property_focus_updates_selected_polygon() {
     let mut host = WidgetHostNative::new();
     seed(
@@ -962,7 +1158,7 @@ fn polygon_sides_property_focus_updates_selected_polygon() {
     host.editor_state_mut()
         .set_single_selection(NodeId::new("poly"));
     host.editor_state_mut().ui.property_focus = Some(PropertyFocus::PolygonSides);
-    host.editor_state_mut().ui.property_input_draft = "7".to_string();
+    host.editor_state_mut().ui.property_input.set_text("7");
 
     host.commit_property_focus_if_any();
 
@@ -996,15 +1192,15 @@ fn ellipse_arc_property_focus_updates_selected_ellipse() {
         .set_single_selection(NodeId::new("ell"));
 
     host.editor_state_mut().ui.property_focus = Some(PropertyFocus::EllipseStart);
-    host.editor_state_mut().ui.property_input_draft = "45".to_string();
+    host.editor_state_mut().ui.property_input.set_text("45");
     host.commit_property_focus_if_any();
 
     host.editor_state_mut().ui.property_focus = Some(PropertyFocus::EllipseSweep);
-    host.editor_state_mut().ui.property_input_draft = "180".to_string();
+    host.editor_state_mut().ui.property_input.set_text("180");
     host.commit_property_focus_if_any();
 
     host.editor_state_mut().ui.property_focus = Some(PropertyFocus::EllipseInnerRadius);
-    host.editor_state_mut().ui.property_input_draft = "25".to_string();
+    host.editor_state_mut().ui.property_input.set_text("25");
     host.commit_property_focus_if_any();
 
     let node = host.editor_state().selected_node().unwrap();
@@ -1028,21 +1224,20 @@ fn ellipse_arc_property_focus_updates_selected_ellipse() {
 }
 
 #[test]
-fn backspace_with_property_draft_does_not_delete_selected() {
-    // With a non-empty property draft buffer, Backspace must pop a
-    // char from the draft, not delete the selected node.
+fn backspace_with_property_input_does_not_delete_selected() {
+    // With a non-empty property input, Backspace must pop a char
+    // from the input, not delete the selected node.
     let mut host = WidgetHostNative::new();
     host.editor_state_mut()
         .set_single_selection(NodeId::new("n10"));
     host.editor_state_mut().ui.property_focus = Some(PropertyFocus::PositionX);
-    host.editor_state_mut().ui.property_input_draft = "123".to_string();
-    // Caret at the draft's end, as a real focus seeds it — Backspace
+    host.editor_state_mut().ui.property_input.set_text("123");
+    // Caret at the input's end, as a real focus seeds it — Backspace
     // deletes the char *before* the caret.
-    host.editor_state_mut().ui.property_caret_pos = 3;
 
     assert!(host.apply_backspace());
-    assert_eq!(host.editor_state().ui.property_input_draft, "12");
-    assert_eq!(host.editor_state().ui.property_caret_pos, 2);
+    assert_eq!(host.editor_state().ui.property_input.text(), "12");
+    assert_eq!(host.editor_state().ui.property_input.caret(), 2);
     // Selection must be untouched.
     assert_eq!(host.editor_state().selection.anchor, NodeId::new("n10"));
 }
@@ -1512,13 +1707,39 @@ fn select_all_in_settings_input_replaces_next_typed_text() {
 fn select_all_in_property_input_replaces_next_typed_text() {
     let mut host = WidgetHostNative::new();
     host.editor_state_mut().ui.property_focus = Some(PropertyFocus::PositionX);
-    host.editor_state_mut().ui.property_input_draft = "123".into();
-    host.editor_state_mut().ui.property_caret_pos = 3;
+    host.editor_state_mut().ui.property_input.set_text("123");
 
     assert!(host.apply_select_all());
     assert!(host.apply_text('4'));
-    assert_eq!(host.editor_state().ui.property_input_draft, "4");
-    assert_eq!(host.editor_state().ui.property_caret_pos, 1);
+    assert_eq!(host.editor_state().ui.property_input.text(), "4");
+    assert_eq!(host.editor_state().ui.property_input.caret(), 1);
+}
+
+#[test]
+fn property_input_uses_text_input_state_for_editing() {
+    let mut host = WidgetHostNative::new();
+    {
+        let ui = &mut host.editor_state_mut().ui;
+        ui.property_focus = Some(PropertyFocus::PositionX);
+        ui.property_input.set_text("1234");
+    }
+
+    assert!(host.apply_property_caret(false));
+    assert!(host.apply_property_caret(false));
+    assert_eq!(host.editor_state().ui.property_input.caret(), 2);
+
+    assert!(host.apply_text('9'));
+    assert_eq!(host.editor_state().ui.property_input.text(), "12934");
+    assert_eq!(host.editor_state().ui.property_input.caret(), 3);
+
+    assert!(host.apply_backspace());
+    assert_eq!(host.editor_state().ui.property_input.text(), "1234");
+    assert_eq!(host.editor_state().ui.property_input.caret(), 2);
+
+    assert!(host.apply_select_all());
+    assert!(host.apply_text('5'));
+    assert_eq!(host.editor_state().ui.property_input.text(), "5");
+    assert_eq!(host.editor_state().ui.property_input.caret(), 1);
 }
 
 #[test]

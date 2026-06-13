@@ -132,14 +132,43 @@ impl WidgetHostNative {
             self.mark_dirty();
             return true;
         }
-        if self.editor_state.editor_ui.variable_row_focus.is_some()
+        let variable_header_focus = self
+            .editor_state
+            .editor_ui
+            .variables_theme_rename_axis
+            .is_some()
+            || self
+                .editor_state
+                .editor_ui
+                .variables_variant_rename_value
+                .is_some();
+        if variable_header_focus
+            || self.editor_state.editor_ui.variable_row_focus.is_some()
             || self.editor_state.editor_ui.effect_param_focus.is_some()
             || self.editor_state.ui.property_focus.is_some()
         {
-            let ui = &mut self.editor_state.ui;
-            ui.property_draft_select_all = true;
-            ui.property_caret_pos = ui.property_input_draft.len();
-            ui.property_caret_anchor_ms = self.now_ms;
+            if self.editor_state.ui.property_focus.is_some()
+                || self.editor_state.editor_ui.effect_param_focus.is_some()
+            {
+                let input = &mut self.editor_state.ui.property_input;
+                input.select_all();
+                input.touch(self.now_ms);
+                let ui = &mut self.editor_state.ui;
+                ui.property_input_draft = ui.property_input.text().to_owned();
+                ui.property_caret_pos = ui.property_input.caret();
+                ui.property_draft_select_all = true;
+                ui.property_caret_anchor_ms = self.now_ms;
+            } else if variable_header_focus {
+                let input = &mut self.editor_state.editor_ui.variables_header_input;
+                input.select_all();
+                input.touch(self.now_ms);
+                self.sync_variables_header_input_legacy(true);
+            } else {
+                let input = &mut self.editor_state.editor_ui.variable_row_input;
+                input.select_all();
+                input.touch(self.now_ms);
+                self.sync_variable_row_input_legacy(true);
+            }
             self.mark_dirty();
             return true;
         }

@@ -7,8 +7,9 @@ use crate::widgets::property_panel::{
     TextVerticalAlignValue,
 };
 use crate::widgets::property_panel_inputs::{
-    paint_input_with_icon_focused, paint_input_with_prefix_focused, paint_section_divider,
-    paint_section_label, INPUT_HEIGHT, INPUT_RADIUS, PAD_X, SECTION_GAP, SECTION_HEADER_HEIGHT,
+    paint_input_with_icon_focused_state, paint_input_with_prefix_focused_state,
+    paint_section_divider, paint_section_label, INPUT_HEIGHT, INPUT_RADIUS, PAD_X, SECTION_GAP,
+    SECTION_HEADER_HEIGHT,
 };
 use crate::widgets::property_panel_sections::EditContext;
 use crate::widgets::property_panel_typography::display_font_family;
@@ -315,7 +316,7 @@ pub fn paint_text_section(
         1.5,
     );
     let font_size = format_panel_number(text.font_size);
-    paint_input_with_prefix_focused(
+    paint_input_with_prefix_focused_state(
         cx,
         theme,
         Rect {
@@ -327,6 +328,8 @@ pub fn paint_text_section(
         edit.focus == Some(PropertyFocus::FontSize),
         edit.caret_at(PropertyFocus::FontSize),
         edit.select_all_at(PropertyFocus::FontSize),
+        edit.input_at(PropertyFocus::FontSize),
+        edit.now_ms,
     );
     y += INPUT_HEIGHT + 6.0;
 
@@ -360,7 +363,7 @@ pub fn paint_text_section(
     // Line-height — icon prefix + value + `%` suffix (TS NumberInput
     // with `icon={LineHeightIcon}` + `suffix="%"`).
     let line_height = format_panel_number(text.line_height_percent);
-    paint_input_with_icon_focused(
+    paint_input_with_icon_focused_state(
         cx,
         theme,
         Rect {
@@ -373,10 +376,12 @@ pub fn paint_text_section(
         edit.focus == Some(PropertyFocus::LineHeight),
         edit.caret_at(PropertyFocus::LineHeight),
         edit.select_all_at(PropertyFocus::LineHeight),
+        edit.input_at(PropertyFocus::LineHeight),
+        edit.now_ms,
     );
     // Letter-spacing — `|A|` text prefix (TS NumberInput `label="|A|"`).
     let letter_spacing = format_panel_number(text.letter_spacing);
-    paint_input_with_prefix_focused(
+    paint_input_with_prefix_focused_state(
         cx,
         theme,
         Rect {
@@ -388,6 +393,8 @@ pub fn paint_text_section(
         edit.focus == Some(PropertyFocus::LetterSpacing),
         edit.caret_at(PropertyFocus::LetterSpacing),
         edit.select_all_at(PropertyFocus::LetterSpacing),
+        edit.input_at(PropertyFocus::LetterSpacing),
+        edit.now_ms,
     );
     y += INPUT_HEIGHT + 8.0;
 

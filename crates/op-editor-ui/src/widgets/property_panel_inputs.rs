@@ -10,6 +10,9 @@ use crate::theme::Theme;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
+use jian_core::text_input::TextInputState;
+
+pub(crate) use crate::widgets::property_panel_text_input::paint_text_input_view_value;
 
 pub const PAD_X: f32 = 16.0;
 pub const SECTION_GAP: f32 = 8.0;
@@ -136,6 +139,26 @@ pub fn paint_input_with_prefix_focused(
     caret: Option<usize>,
     select_all: bool,
 ) {
+    paint_input_with_prefix_focused_state(
+        cx, theme, rect, prefix, value, focused, caret, select_all, None, 0,
+    );
+}
+
+/// State-backed variant used while a property input is focused.
+/// Non-focused call sites pass `None` and retain the static paint path.
+#[allow(clippy::too_many_arguments)]
+pub fn paint_input_with_prefix_focused_state(
+    cx: &mut PaintCx<'_>,
+    theme: &Theme,
+    rect: Rect,
+    prefix: &str,
+    value: &str,
+    focused: bool,
+    caret: Option<usize>,
+    select_all: bool,
+    input: Option<&TextInputState>,
+    now_ms: u64,
+) {
     cx.backend.fill_round_rect(rect, INPUT_RADIUS, theme.muted);
     if focused {
         cx.backend
@@ -158,6 +181,26 @@ pub fn paint_input_with_prefix_focused(
     let prefix_w = cx.backend.measure_text(prefix, 12.0);
     let value_x = rect.origin.x + 10.0 + prefix_w + 8.0;
     let baseline_y = rect.origin.y + rect.size.y / 2.0 + 4.0;
+    if focused && input.is_some() {
+        let input = input.expect("checked above");
+        paint_text_input_view_value(
+            cx,
+            theme,
+            input,
+            Rect {
+                origin: Point2D::new(value_x, rect.origin.y),
+                size: Point2D::new(
+                    (rect.origin.x + rect.size.x - 8.0 - value_x).max(0.0),
+                    rect.size.y,
+                ),
+            },
+            12.0,
+            0.0,
+            baseline_y,
+            now_ms,
+        );
+        return;
+    }
     if focused && select_all && !value.is_empty() {
         crate::widgets::text_selection::paint_single_line_selection(
             cx,
@@ -214,6 +257,24 @@ pub fn paint_input_with_suffix_focused(
     caret: Option<usize>,
     select_all: bool,
 ) {
+    paint_input_with_suffix_focused_state(
+        cx, theme, rect, value, unit, focused, caret, select_all, None, 0,
+    );
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn paint_input_with_suffix_focused_state(
+    cx: &mut PaintCx<'_>,
+    theme: &Theme,
+    rect: Rect,
+    value: &str,
+    unit: &str,
+    focused: bool,
+    caret: Option<usize>,
+    select_all: bool,
+    input: Option<&TextInputState>,
+    now_ms: u64,
+) {
     cx.backend.fill_round_rect(rect, INPUT_RADIUS, theme.muted);
     if focused {
         cx.backend
@@ -224,37 +285,54 @@ pub fn paint_input_with_suffix_focused(
     // this is +19 (unchanged); for the compact 20px gap row it becomes
     // +14 so the value isn't pinned to the bottom.
     let baseline_y = rect.origin.y + rect.size.y / 2.0 + 4.0;
-    if focused && select_all && !value.is_empty() {
-        crate::widgets::text_selection::paint_single_line_selection(
+    if focused && input.is_some() {
+        let input = input.expect("checked above");
+        paint_text_input_view_value(
             cx,
             theme,
-            value,
-            value_x,
-            baseline_y,
-            12.0,
-            rect.origin.x + rect.size.x - 18.0,
-        );
-    }
-    let value_layout = TextLayout::single_run(
-        value,
-        "system-ui",
-        12.0,
-        (theme.foreground).to_jian(),
-        Point2D::new(0.0, 0.0),
-    );
-    cx.backend
-        .draw_text(&value_layout, Point2D::new(value_x, baseline_y));
-    if let Some(pos) = caret {
-        let value_w = cx
-            .backend
-            .measure_text(&value[..pos.min(value.len())], 12.0);
-        cx.backend.fill_rect(
+            input,
             Rect {
-                origin: Point2D::new(value_x + value_w, rect.origin.y + 6.0),
-                size: Point2D::new(1.5, rect.size.y - 12.0),
+                origin: Point2D::new(value_x, rect.origin.y),
+                size: Point2D::new((rect.size.x - 28.0).max(0.0), rect.size.y),
             },
-            theme.foreground,
+            12.0,
+            0.0,
+            baseline_y,
+            now_ms,
         );
+    } else {
+        if focused && select_all && !value.is_empty() {
+            crate::widgets::text_selection::paint_single_line_selection(
+                cx,
+                theme,
+                value,
+                value_x,
+                baseline_y,
+                12.0,
+                rect.origin.x + rect.size.x - 18.0,
+            );
+        }
+        let value_layout = TextLayout::single_run(
+            value,
+            "system-ui",
+            12.0,
+            (theme.foreground).to_jian(),
+            Point2D::new(0.0, 0.0),
+        );
+        cx.backend
+            .draw_text(&value_layout, Point2D::new(value_x, baseline_y));
+        if let Some(pos) = caret {
+            let value_w = cx
+                .backend
+                .measure_text(&value[..pos.min(value.len())], 12.0);
+            cx.backend.fill_rect(
+                Rect {
+                    origin: Point2D::new(value_x + value_w, rect.origin.y + 6.0),
+                    size: Point2D::new(1.5, rect.size.y - 12.0),
+                },
+                theme.foreground,
+            );
+        }
     }
     let unit_layout = TextLayout::single_run(
         unit,
@@ -294,6 +372,26 @@ pub fn paint_input_with_icon_focused(
     caret: Option<usize>,
     select_all: bool,
 ) {
+    paint_input_with_icon_focused_state(
+        cx, theme, rect, icon, value, unit, focused, caret, select_all, None, 0,
+    );
+}
+
+// Paint-context + geometry args threaded through; a struct adds no gain.
+#[allow(clippy::too_many_arguments)]
+pub fn paint_input_with_icon_focused_state(
+    cx: &mut PaintCx<'_>,
+    theme: &Theme,
+    rect: Rect,
+    icon: Icon,
+    value: &str,
+    unit: Option<&str>,
+    focused: bool,
+    caret: Option<usize>,
+    select_all: bool,
+    input: Option<&TextInputState>,
+    now_ms: u64,
+) {
     cx.backend.fill_round_rect(rect, INPUT_RADIUS, theme.muted);
     if focused {
         cx.backend
@@ -313,40 +411,59 @@ pub fn paint_input_with_icon_focused(
     );
     let value_x = rect.origin.x + 30.0;
     let baseline_y = rect.origin.y + 19.0;
-    if focused && select_all && !value.is_empty() {
-        crate::widgets::text_selection::paint_single_line_selection(
+    let unit_reserved_w = if unit.is_some() { 22.0 } else { 8.0 };
+    if focused && input.is_some() {
+        let input = input.expect("checked above");
+        paint_text_input_view_value(
             cx,
             theme,
-            value,
-            value_x,
-            baseline_y,
-            12.0,
-            rect.origin.x + rect.size.x - 18.0,
-        );
-    }
-    let value_layout = TextLayout::single_run(
-        value,
-        "system-ui",
-        12.0,
-        (theme.foreground).to_jian(),
-        Point2D::new(0.0, 0.0),
-    );
-    cx.backend
-        .draw_text(&value_layout, Point2D::new(value_x, baseline_y));
-    let value_w = cx.backend.measure_text(value, 12.0);
-    if let Some(pos) = caret {
-        let caret_w = cx
-            .backend
-            .measure_text(&value[..pos.min(value.len())], 12.0);
-        cx.backend.fill_rect(
+            input,
             Rect {
-                origin: Point2D::new(value_x + caret_w, rect.origin.y + 6.0),
-                size: Point2D::new(1.5, rect.size.y - 12.0),
+                origin: Point2D::new(value_x, rect.origin.y),
+                size: Point2D::new(
+                    (rect.origin.x + rect.size.x - unit_reserved_w - value_x).max(0.0),
+                    rect.size.y,
+                ),
             },
-            theme.foreground,
+            12.0,
+            0.0,
+            baseline_y,
+            now_ms,
         );
+    } else {
+        if focused && select_all && !value.is_empty() {
+            crate::widgets::text_selection::paint_single_line_selection(
+                cx,
+                theme,
+                value,
+                value_x,
+                baseline_y,
+                12.0,
+                rect.origin.x + rect.size.x - 18.0,
+            );
+        }
+        let value_layout = TextLayout::single_run(
+            value,
+            "system-ui",
+            12.0,
+            (theme.foreground).to_jian(),
+            Point2D::new(0.0, 0.0),
+        );
+        cx.backend
+            .draw_text(&value_layout, Point2D::new(value_x, baseline_y));
+        if let Some(pos) = caret {
+            let caret_w = cx
+                .backend
+                .measure_text(&value[..pos.min(value.len())], 12.0);
+            cx.backend.fill_rect(
+                Rect {
+                    origin: Point2D::new(value_x + caret_w, rect.origin.y + 6.0),
+                    size: Point2D::new(1.5, rect.size.y - 12.0),
+                },
+                theme.foreground,
+            );
+        }
     }
-    let _ = value_w;
     if let Some(u) = unit {
         // Unit pinned to the box's right edge — keeps the icon
         // input visually consistent with the suffix-only inputs

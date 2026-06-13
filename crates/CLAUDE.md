@@ -35,8 +35,7 @@ Document
 ├── viewport: Viewport        (pan_x / pan_y / zoom + zoom_at + pan)
 ├── chat: ChatState           (messages, input, focused, anchor, collapsed)
 └── ui: UiState               (sidebar_open, layer_panel_width, property_panel_width,
-                               property_focus, property_input_draft, property_caret_anchor_ms,
-                               property_draft_select_all,
+                               property_focus, property_input: TextInputState,
                                settings_input: TextInputState,
                                agent_settings_open, agent_settings (focus, tab, connected[5],
                                mcp_server, mcp_cli_enabled[6], images_*, hover_provider),
@@ -128,13 +127,13 @@ Click anywhere outside the panel closes it silently. Locale lookups for the row 
 
 ## PropertyPanel input editing
 
-`Document.ui` carries the focused property field, a draft buffer, and a caret-blink anchor:
+`Document.ui` carries the focused property field and a shared text input state:
 
 - `property_focus: Option<PropertyFocus>` — `PositionX / PositionY / Rotation / PositionR / SizeW / SizeH / Opacity / FillHex / StrokeHex / StrokeWidth`. **All 10 variants are wired end-to-end:** numeric focuses go through `Document::commit_property_edit` (`PositionR` writes `node.corner_radius`), hex focuses through `set_selected_color(is_fill, color)`.
-- `property_input_draft: String` — live keystrokes accumulate here. `apply_text` is focus-aware:
+- `property_input: TextInputState` — live keystrokes, caret, select-all, blink, and composition state accumulate here. `apply_text` is focus-aware:
   - Numeric focuses (Position / Size / Rotation / Opacity / StrokeWidth) gate `[0-9]`, leading `-`, and a single `.`.
   - Hex focuses (FillHex / StrokeHex) preserve a sticky `#` prefix, accept `[0-9a-fA-F]` only, and cap the draft at 7 chars (`#RRGGBB`). No select-all-on-focus — backspace removes one char at a time, typing appends one.
-- `property_caret_anchor_ms: u64` — drives caret blink off the same `jian_core::anim::blink_visible` cadence as the chat input.
+- `property_input_draft` / caret fields are legacy mirrors while older preset-name and compatibility paint paths are retired.
 
 Hex parsing is forgiving: `parse_hex_color` zero-pads 1-5 char inputs to 6 and expands CSS shorthand `#RGB` → `#RRGGBB`, so mid-edit commits don't visibly "reset" the colour.
 

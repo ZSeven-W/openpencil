@@ -530,7 +530,7 @@ fn focused_input(state: &EditorState) -> Option<(String, String, String)> {
         return Some((
             format!("property:{focus:?}"),
             property_focus_label(focus),
-            state.ui.property_input_draft.clone(),
+            state.ui.property_input.text().to_owned(),
         ));
     }
     if ui.icon_picker_open {
@@ -686,7 +686,7 @@ mod tests {
         assert_eq!(value, "hello");
 
         state.ui.property_focus = Some(PropertyFocus::SizeW);
-        state.ui.property_input_draft = "120".to_string();
+        state.ui.property_input.set_text("120");
         let (key, label, value) = focused_input(&state).expect("property focus");
         assert_eq!(key, "property:SizeW");
         assert_eq!(label, "Width");

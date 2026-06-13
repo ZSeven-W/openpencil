@@ -4,6 +4,28 @@
 
 use super::WidgetHost;
 use jian_ops_schema::variable::VariableKind;
+use op_editor_core::{EffectField, PropertyFocus};
+use op_editor_ui::{widgets::PropertyPanel, Color};
+
+fn effect_param_snapshot_value(
+    state: &op_editor_core::EditorState,
+    effect: usize,
+    field: EffectField,
+) -> Option<f32> {
+    PropertyPanel::for_selection(state)?
+        .snapshot
+        .effects
+        .get(effect)
+        .map(|summary| summary.param_value(field))
+}
+
+fn format_effect_param_value(value: f32) -> String {
+    if value.fract() == 0.0 {
+        format!("{}", value as i64)
+    } else {
+        format!("{value}")
+    }
+}
 
 impl WidgetHost {
     /// Swap a synced document into the live editor state via the shared, tested
@@ -216,13 +238,24 @@ impl WidgetHost {
                             });
                 }
             }
-            A::FocusEffectParam { .. } => {
-                // No-op on web: the web host has no keyboard path for
-                // property / effect-param text inputs (`apply_text`
-                // has no such branch), so setting `effect_param_focus`
-                // here would strand the focus with no way to type,
-                // commit, or Escape out. The `−` / `+` steppers
-                // (`AdjustEffectParam`) remain the web edit path.
+            A::FocusEffectParam {
+                effect,
+                field,
+                value,
+            } => {
+                self.commit_property_focus_if_any();
+                let value =
+                    effect_param_snapshot_value(&self.editor_state, effect, field).unwrap_or(value);
+                let initial = format_effect_param_value(value);
+                let ui = &mut self.editor_state.ui;
+                ui.property_input.set_text(initial.clone());
+                ui.property_input.touch(self.now_ms);
+                ui.property_input_draft = initial;
+                ui.property_caret_pos = ui.property_input.caret();
+                ui.property_caret_anchor_ms = self.now_ms;
+                ui.property_draft_select_all = false;
+                self.editor_state.editor_ui.effect_param_focus =
+                    Some(op_editor_core::editor_ui_state::EffectParamFocus { effect, field });
             }
             A::OpenEffectColorPicker(index) => {
                 let _ = self.editor_state.open_color_picker(
@@ -332,6 +365,110 @@ impl WidgetHost {
                 self.apply_codegen_action(codegen_action);
             }
             _ => {}
+        }
+        self.mark_dirty();
+    }
+
+    pub(in crate::widget_host) fn commit_effect_param_focus_if_any(&mut self) {
+        let Some(focus) = self.editor_state.editor_ui.effect_param_focus.take() else {
+            return;
+        };
+        self.editor_state.ui.property_draft_select_all = false;
+        let draft = self.editor_state.ui.property_input.text().to_owned();
+        self.editor_state.ui.property_input.set_text("");
+        self.editor_state.ui.property_input_draft.clear();
+        self.editor_state.ui.property_caret_pos = 0;
+        if let Ok(value) = draft.trim().parse::<f32>() {
+            if value.is_finite() {
+                let id = self.editor_state.selection.anchor.clone();
+                if id.is_real() {
+                    let instance_scope = self.editor_state.begin_instance_write_for_anchor();
+                    self.editor_state.commit_history();
+                    let _ =
+                        self.editor_state
+                            .apply(op_editor_core::EditorCommand::SetEffectParam {
+                                node_id: id,
+                                index: focus.effect as u32,
+                                field: focus.field,
+                                value,
+                            });
+                    if let Some(scope) = instance_scope {
+                        self.editor_state.finish_instance_write(scope);
+                    }
+                }
+            }
+        }
+        self.mark_dirty();
+    }
+
+    pub(in crate::widget_host) fn commit_property_focus_if_any(&mut self) {
+        self.commit_variables_panel_header_focus_if_any();
+        self.commit_variable_row_focus_if_any();
+        self.commit_effect_param_focus_if_any();
+        let Some(focus) = self.editor_state.ui.property_focus.take() else {
+            return;
+        };
+        self.editor_state.ui.property_draft_select_all = false;
+        let draft = self.editor_state.ui.property_input.text().to_owned();
+        self.editor_state.ui.property_input.set_text("");
+        self.editor_state.ui.property_input_draft.clear();
+        self.editor_state.ui.property_caret_pos = 0;
+        let before = self.editor_state.snapshot_for_history();
+        let instance_scope = self.editor_state.begin_instance_write_for_anchor();
+        match focus {
+            PropertyFocus::FillHex => {
+                let stripped = draft.trim().trim_start_matches('#');
+                if !stripped.is_empty() {
+                    if let Some(color) = parse_hex_color(draft.trim()) {
+                        let _ = self
+                            .editor_state
+                            .set_selected_color(true, &color_to_hex(color));
+                    }
+                }
+            }
+            PropertyFocus::StrokeHex => {
+                let stripped = draft.trim().trim_start_matches('#');
+                if !stripped.is_empty() {
+                    if let Some(color) = parse_hex_color(draft.trim()) {
+                        let _ = self
+                            .editor_state
+                            .set_selected_color(false, &color_to_hex(color));
+                    }
+                }
+            }
+            PropertyFocus::GradientStopHex(index) => {
+                let stripped = draft.trim().trim_start_matches('#');
+                if !stripped.is_empty() {
+                    if let Some(color) = parse_hex_color(draft.trim()) {
+                        let existing_alpha = self
+                            .editor_state
+                            .selected_node()
+                            .and_then(|n| current_stop_alpha(n, index))
+                            .unwrap_or(1.0);
+                        let with_alpha = Color {
+                            r: color.r,
+                            g: color.g,
+                            b: color.b,
+                            a: existing_alpha,
+                        };
+                        let _ = self.editor_state.set_selected_gradient_stop_hex(
+                            index,
+                            &color_to_hex_with_alpha(with_alpha),
+                        );
+                    }
+                }
+            }
+            _ => {
+                if let Ok(value) = draft.trim().parse::<f32>() {
+                    let _ = self.editor_state.commit_property_edit(focus, value);
+                }
+            }
+        }
+        if let Some(scope) = instance_scope {
+            self.editor_state.finish_instance_write(scope);
+        }
+        if self.editor_state.snapshot_for_history() != before {
+            self.editor_state.history_push_past(before);
         }
         self.mark_dirty();
     }
@@ -451,6 +588,187 @@ fn color_variable_name_at(state: &op_editor_core::EditorState, index: usize) -> 
         .filter(|(_, def)| matches!(def.kind, VariableKind::Color))
         .nth(index)
         .map(|(name, _)| name.clone())
+}
+
+pub(in crate::widget_host) fn property_focus_initial(
+    focus: PropertyFocus,
+    panel: &op_editor_ui::widgets::PropertyPanel,
+) -> String {
+    match focus {
+        PropertyFocus::PositionX => panel.snapshot.x.to_string(),
+        PropertyFocus::PositionY => panel.snapshot.y.to_string(),
+        PropertyFocus::SizeW => panel.snapshot.width.to_string(),
+        PropertyFocus::SizeH => panel.snapshot.height.to_string(),
+        PropertyFocus::LayoutGap => format_panel_number(panel.snapshot.layout_gap),
+        PropertyFocus::PaddingTop
+        | PropertyFocus::PaddingRight
+        | PropertyFocus::PaddingBottom
+        | PropertyFocus::PaddingLeft => panel
+            .snapshot
+            .layout_padding
+            .value_for(focus)
+            .map(format_panel_number)
+            .unwrap_or_else(|| "0".to_string()),
+        PropertyFocus::Rotation => (panel.snapshot.rotation_deg.round() as i32).to_string(),
+        PropertyFocus::PositionR => (panel.snapshot.corner_radius.round() as i32).to_string(),
+        PropertyFocus::Opacity => "100".to_string(),
+        PropertyFocus::PolygonSides => panel.snapshot.polygon_sides.unwrap_or(3).to_string(),
+        PropertyFocus::EllipseStart => format_panel_number(
+            panel
+                .snapshot
+                .ellipse_arc
+                .map(|a| a.start_deg)
+                .unwrap_or(0.0),
+        ),
+        PropertyFocus::EllipseSweep => format_panel_number(
+            panel
+                .snapshot
+                .ellipse_arc
+                .map(|a| a.sweep_deg)
+                .unwrap_or(360.0),
+        ),
+        PropertyFocus::EllipseInnerRadius => format_panel_number(
+            panel
+                .snapshot
+                .ellipse_arc
+                .map(|a| a.inner_percent)
+                .unwrap_or(0.0),
+        ),
+        PropertyFocus::FontSize => panel
+            .snapshot
+            .text
+            .as_ref()
+            .map(|t| format_panel_number(t.font_size))
+            .unwrap_or_else(|| "16".to_string()),
+        PropertyFocus::FontWeight => panel
+            .snapshot
+            .text
+            .as_ref()
+            .map(|t| t.font_weight.to_string())
+            .unwrap_or_else(|| "400".to_string()),
+        PropertyFocus::LineHeight => panel
+            .snapshot
+            .text
+            .as_ref()
+            .map(|t| format_panel_number(t.line_height_percent))
+            .unwrap_or_else(|| "120".to_string()),
+        PropertyFocus::LetterSpacing => panel
+            .snapshot
+            .text
+            .as_ref()
+            .map(|t| format_panel_number(t.letter_spacing))
+            .unwrap_or_else(|| "0".to_string()),
+        PropertyFocus::FillOpacity => {
+            ((panel.snapshot.fill_opacity * 100.0).round() as i32).to_string()
+        }
+        PropertyFocus::FillHex => panel
+            .snapshot
+            .fill
+            .map(color_to_hex)
+            .unwrap_or_else(|| "#FFFFFF".to_string()),
+        PropertyFocus::StrokeHex => color_to_hex(panel.snapshot.stroke_swatch_color()),
+        PropertyFocus::StrokeWidth => panel
+            .snapshot
+            .stroke
+            .map(|s| format!("{}", s.width.round() as i32))
+            .unwrap_or_else(|| "1".to_string()),
+        PropertyFocus::GradientAngle => {
+            let a = panel.snapshot.gradient_angle.unwrap_or(0.0);
+            if a.fract() == 0.0 {
+                format!("{}", a as i32)
+            } else {
+                format!("{a}")
+            }
+        }
+        PropertyFocus::GradientStopHex(i) => panel
+            .snapshot
+            .gradient_stops
+            .get(i)
+            .map(|s| op_editor_ui::widgets::property_panel_fill::stop_hex_rgb_only(&s.hex))
+            .unwrap_or_else(|| "#000000".to_string()),
+        PropertyFocus::GradientStopOffset(i) => panel
+            .snapshot
+            .gradient_stops
+            .get(i)
+            .map(|s| ((s.offset * 100.0).round() as i32).to_string())
+            .unwrap_or_else(|| "0".to_string()),
+    }
+}
+
+fn format_panel_number(value: f32) -> String {
+    if value.fract().abs() < f32::EPSILON {
+        format!("{}", value.round() as i32)
+    } else {
+        format!("{value:.2}")
+    }
+}
+
+fn parse_hex_color(s: &str) -> Option<Color> {
+    let trimmed = s.trim().trim_start_matches('#');
+    if trimmed.is_empty() || trimmed.len() > 8 {
+        return None;
+    }
+    if !trimmed.chars().all(|c| c.is_ascii_hexdigit()) {
+        return None;
+    }
+    let canonical = match trimmed.len() {
+        3 => {
+            let mut out = String::with_capacity(6);
+            for c in trimmed.chars() {
+                out.push(c);
+                out.push(c);
+            }
+            out
+        }
+        8 => trimmed.to_string(),
+        7 => format!("{:0>8}", trimmed),
+        _ => format!("{:0>6}", trimmed),
+    };
+    let r = u8::from_str_radix(&canonical[0..2], 16).ok()?;
+    let g = u8::from_str_radix(&canonical[2..4], 16).ok()?;
+    let b = u8::from_str_radix(&canonical[4..6], 16).ok()?;
+    let a = if canonical.len() == 8 {
+        u8::from_str_radix(&canonical[6..8], 16).ok()? as f32 / 255.0
+    } else {
+        1.0
+    };
+    Some(Color {
+        r: r as f32 / 255.0,
+        g: g as f32 / 255.0,
+        b: b as f32 / 255.0,
+        a,
+    })
+}
+
+fn color_to_hex(c: Color) -> String {
+    let r = (c.r.clamp(0.0, 1.0) * 255.0).round() as u8;
+    let g = (c.g.clamp(0.0, 1.0) * 255.0).round() as u8;
+    let b = (c.b.clamp(0.0, 1.0) * 255.0).round() as u8;
+    format!("#{:02X}{:02X}{:02X}", r, g, b)
+}
+
+fn color_to_hex_with_alpha(c: Color) -> String {
+    let r = (c.r.clamp(0.0, 1.0) * 255.0).round() as u8;
+    let g = (c.g.clamp(0.0, 1.0) * 255.0).round() as u8;
+    let b = (c.b.clamp(0.0, 1.0) * 255.0).round() as u8;
+    let a = (c.a.clamp(0.0, 1.0) * 255.0).round() as u8;
+    if a == 255 {
+        format!("#{:02X}{:02X}{:02X}", r, g, b)
+    } else {
+        format!("#{:02X}{:02X}{:02X}{:02X}", r, g, b, a)
+    }
+}
+
+fn current_stop_alpha(node: &jian_ops_schema::node::PenNode, index: usize) -> Option<f32> {
+    use jian_ops_schema::style::PenFill;
+    let first = op_editor_core::fills::node_fills(node).and_then(|f| f.first())?;
+    let stops = match first {
+        PenFill::LinearGradient(b) => &b.stops,
+        PenFill::RadialGradient(b) => &b.stops,
+        _ => return None,
+    };
+    let hex = &stops.get(index)?.color;
+    Some(op_editor_core::parse_hex_alpha(hex))
 }
 
 /// Translate a shell-core `ColorTarget` into op-editor-core's.

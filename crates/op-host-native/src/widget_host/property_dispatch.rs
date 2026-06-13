@@ -396,11 +396,14 @@ impl WidgetHostNative {
                 // `commit_property_focus_if_any`; seed this param's
                 // draft from its current value, caret at the end.
                 let ui = &mut self.editor_state.ui;
-                ui.property_input_draft = if value.fract() == 0.0 {
+                let initial = if value.fract() == 0.0 {
                     format!("{}", value as i64)
                 } else {
                     format!("{value}")
                 };
+                ui.property_input.set_text(initial.clone());
+                ui.property_input.touch(self.now_ms);
+                ui.property_input_draft = initial;
                 ui.property_caret_pos = ui.property_input_draft.len();
                 ui.property_caret_anchor_ms = self.now_ms;
                 ui.property_draft_select_all = false;
@@ -631,7 +634,10 @@ impl WidgetHostNative {
             return;
         };
         self.editor_state.ui.property_draft_select_all = false;
-        let draft = std::mem::take(&mut self.editor_state.ui.property_input_draft);
+        let draft = self.editor_state.ui.property_input.text().to_owned();
+        self.editor_state.ui.property_input.set_text("");
+        self.editor_state.ui.property_input_draft.clear();
+        self.editor_state.ui.property_caret_pos = 0;
         if let Ok(value) = draft.trim().parse::<f32>() {
             if value.is_finite() {
                 let id = self.editor_state.selection.anchor.clone();
@@ -666,9 +672,13 @@ impl WidgetHostNative {
             return;
         };
         self.editor_state.ui.property_draft_select_all = false;
-        let draft = std::mem::take(&mut self.editor_state.ui.property_input_draft);
+        let draft = self.editor_state.ui.property_input.text().to_owned();
+        self.editor_state.ui.property_input.set_text("");
+        self.editor_state.ui.property_input_draft.clear();
+        self.editor_state.ui.property_caret_pos = 0;
         // Instance-write redirect (GAP #10) — see `apply_property_action`
         // for the choke-point note.
+        let before = self.editor_state.snapshot_for_history();
         let instance_scope = self.editor_state.begin_instance_write_for_anchor();
         match focus {
             PropertyFocus::FillHex => {
@@ -725,6 +735,9 @@ impl WidgetHostNative {
         }
         if let Some(scope) = instance_scope {
             self.editor_state.finish_instance_write(scope);
+        }
+        if self.editor_state.snapshot_for_history() != before {
+            self.editor_state.history_push_past(before);
         }
         self.mark_dirty();
     }

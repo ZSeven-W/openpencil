@@ -253,6 +253,13 @@ impl WidgetHostNative {
         viewport_width: f32,
         viewport_height: f32,
     ) -> bool {
+        // Floating VariablesPanel owns wheel events over its rect.
+        // Route it before the generic topmost-overlay guard because
+        // that guard also treats the variables panel as a
+        // hover-suppressing overlay.
+        if self.try_scroll_variables_panel(x, y, delta_y, viewport_width, viewport_height) {
+            return true;
+        }
         // Any top-most floating panel (Design-MD / Component-Browser)
         // owns the wheel before lower layers — a scroll over them
         // never reaches the modal / Git panel / canvas.
@@ -285,10 +292,6 @@ impl WidgetHostNative {
             }
         }
         if self.try_scroll_chat_checklist(x, y, delta_y, viewport_width, viewport_height) {
-            return true;
-        }
-        // Floating VariablesPanel owns the wheel over its rect.
-        if self.try_scroll_variables_panel(x, y, delta_y, viewport_width, viewport_height) {
             return true;
         }
         // Agent-settings modal owns wheel.
@@ -393,6 +396,12 @@ impl WidgetHostNative {
         viewport_width: f32,
         viewport_height: f32,
     ) -> bool {
+        // Floating VariablesPanel owns trackpad pans over its rect.
+        // See `apply_wheel` for why this must precede the topmost
+        // overlay guard.
+        if self.try_scroll_variables_panel(x, y, dy, viewport_width, viewport_height) {
+            return true;
+        }
         // Any top-most floating panel owns trackpad scroll first.
         if self.over_topmost_panel(x, y, viewport_width, viewport_height) {
             return true;
@@ -423,10 +432,6 @@ impl WidgetHostNative {
             }
         }
         if self.try_scroll_chat_checklist(x, y, dy, viewport_width, viewport_height) {
-            return true;
-        }
-        // Floating VariablesPanel owns trackpad pans over its rect.
-        if self.try_scroll_variables_panel(x, y, dy, viewport_width, viewport_height) {
             return true;
         }
         // Agent-settings modal owns trackpad scroll same as wheel.

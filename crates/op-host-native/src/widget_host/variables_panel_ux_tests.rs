@@ -125,7 +125,10 @@ fn color_hex_cell_press_starts_inline_edit_and_commits_to_variant() {
         Some(VariableRowFocus::ColorCell { row: 0, variant: 1 })
     );
     // Draft seeds with the column's 6-char hex (TS toHex7).
-    assert_eq!(host.editor_state().ui.property_input_draft, "#112233");
+    assert_eq!(
+        host.editor_state().editor_ui.variable_row_input.text(),
+        "#112233"
+    );
 
     // Replace with a new full hex and commit on Enter.
     for _ in 0..7 {
@@ -217,9 +220,16 @@ fn row_menu_rename_seeds_select_all_name_focus() {
         host.editor_state().editor_ui.variable_row_focus,
         Some(VariableRowFocus::Name(0))
     );
-    assert_eq!(host.editor_state().ui.property_input_draft, "color-1");
+    assert_eq!(
+        host.editor_state().editor_ui.variable_row_input.text(),
+        "color-1"
+    );
     // TS focuses AND `.select()`s the rename input.
-    assert!(host.editor_state().ui.property_draft_select_all);
+    assert!(host
+        .editor_state()
+        .editor_ui
+        .variable_row_input
+        .is_select_all());
     assert_eq!(host.editor_state().editor_ui.variables_row_menu, None);
 }
 
