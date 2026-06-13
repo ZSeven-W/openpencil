@@ -17,6 +17,7 @@ styles, and lays out the element for you. Declaring elements is ALWAYS better
 than hand-rolling frames: catalog elements come out pixel-correct.
 
 RULES:
+
 - `{"el":"<kind>", ...params}` — one element per line, top-to-bottom visual order.
 - NEVER write `id`, `parent_id`, or `pageId`. Ids are system-assigned; these fields are ignored.
 - Nest with `"in": <line number>` — the 1-based number of an EARLIER `{"el":"section"}` line in YOUR output. Lines without `in` stack vertically at the top level.
@@ -28,6 +29,7 @@ RULES:
 ANTI-PATTERN — DO NOT HAND-COMPOSE CATALOG ELEMENTS. Before writing any raw
 `text` / `icon_font` / `frame` line, scan the catalog: if a kind covers that
 visual, you MUST declare the kind instead. Hand-rolled copies score as broken.
+
 - WRONG: `{"el":"section",...}` + `{"el":"text","content":"Active"}` + `{"el":"icon_font","iconFontName":"x"}`
 - RIGHT: `{"el":"tag","label":"Active","removable":true}`
 - Same rule for: badge, text_button, search_bar, stat_card, list_row, switch,

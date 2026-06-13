@@ -143,7 +143,7 @@ impl AcpConnection {
     /// (`apps/web/server/api/ai/agent.ts:576-580`): `cwd` +
     /// `mcpServers` (HTTP endpoints the agent connects to for tools)
     /// + `_meta: { systemPrompt }` (claude-agent-acp honors it; other
-    /// agents ignore unknown `_meta`).
+    ///   agents ignore unknown `_meta`).
     pub async fn new_session_with(&self, options: &NewSessionOptions) -> Result<String, AcpError> {
         let cwd = std::env::current_dir()
             .map(|p| p.to_string_lossy().to_string())

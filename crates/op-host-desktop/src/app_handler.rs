@@ -1048,7 +1048,6 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
             // set_ime_cursor_area; the committed candidate lands
             // through apply_ime_commit -> apply_text.
             WindowEvent::Ime(winit::event::Ime::Preedit(text, cursor)) => {
-                let cursor = cursor.map(|(a, b)| (a, b));
                 if self.host.apply_ime_preedit(&text, cursor) {
                     if let Some(rect) = self
                         .host

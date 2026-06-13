@@ -144,20 +144,12 @@ fn set_reusable(node: &mut PenNode, reusable: bool) {
 
 /// Swap the node with `id` for `replacement` in place (same sibling
 /// slot), anywhere in `children`. True when the swap happened.
-fn replace_node_in_children(
-    children: &mut Vec<PenNode>,
-    id: &NodeId,
-    replacement: PenNode,
-) -> bool {
+fn replace_node_in_children(children: &mut [PenNode], id: &NodeId, replacement: PenNode) -> bool {
     let mut slot = Some(replacement);
     replace_node_inner(children, id, &mut slot)
 }
 
-fn replace_node_inner(
-    children: &mut Vec<PenNode>,
-    id: &NodeId,
-    slot: &mut Option<PenNode>,
-) -> bool {
+fn replace_node_inner(children: &mut [PenNode], id: &NodeId, slot: &mut Option<PenNode>) -> bool {
     if let Some(idx) = children.iter().position(|n| n.id_str() == id.as_str()) {
         if let Some(replacement) = slot.take() {
             children[idx] = replacement;

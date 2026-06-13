@@ -31,6 +31,7 @@ pub(crate) const RESIZE_GUTTER: f32 = 4.0;
 pub(crate) const RESIZE_CORNER: f32 = 12.0;
 pub(crate) const INPUT_AREA_HEIGHT: f32 = 56.0;
 const INPUT_TOOLBAR_HEIGHT: f32 = 40.0;
+#[cfg(test)]
 const INPUT_BASE_HEIGHT: f32 = INPUT_AREA_HEIGHT + INPUT_TOOLBAR_HEIGHT;
 
 #[derive(Debug, Clone)]
@@ -159,6 +160,7 @@ impl<'a> AIChatPlaceholder<'a> {
 
     /// Total input-block height, including the attachment row when
     /// attachments are staged.
+    #[cfg(test)]
     pub(crate) fn input_height(&self) -> f32 {
         self.input_height_for_width(self.state.panel_width)
     }

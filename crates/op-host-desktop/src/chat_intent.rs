@@ -77,6 +77,7 @@ Reply with EXACTLY one of these tags, nothing else:
 - CHAT — user is asking a question, seeking help, or having a conversation";
 
 /// TS `MODIFY_KEYWORDS` alternatives (the `\b(...)\b/i` regex).
+#[cfg(test)]
 const MODIFY_KEYWORDS: &[&str] = &[
     "change", "modify", "update", "adjust", "resize", "move", "restyle", "refine", "fix", "tweak",
     "edit", "replace", "remove", "delete", "add to", "smaller", "larger", "bigger", "wider",
@@ -84,6 +85,7 @@ const MODIFY_KEYWORDS: &[&str] = &[
 ];
 
 /// TS `CHAT_KEYWORDS` alternatives.
+#[cfg(test)]
 const CHAT_KEYWORDS: &[&str] = &[
     "what is", "how do", "explain", "tell me", "help", "why", "can you", "question", "describe",
 ];
@@ -122,6 +124,7 @@ fn matches_any_word_phrase(text_lower: &str, phrases: &[&str]) -> bool {
 }
 
 /// TS `classifyByKeywords` — verbatim rule order.
+#[cfg(test)]
 pub(crate) fn classify_by_keywords(text: &str) -> DesignIntent {
     let lower = text.to_lowercase();
     let chat = matches_any_word_phrase(&lower, CHAT_KEYWORDS);
