@@ -233,18 +233,26 @@ impl WidgetHost {
         //     sets locale + closes; ANY other hit (including the
         //     Globe button itself) closes the picker AND swallows
         //     the click so the same press doesn't re-toggle open.
-        if self.editor_state.editor_ui.locale_picker_open {
+        if self.editor_state.editor_ui.locale_picker.open {
             let panel_rect = self.locale_picker_rect(viewport_width);
             let picker = LocalePicker::for_editor_ui(&self.editor_state.editor_ui);
-            if let Some(locale) = picker.hit_test(panel_rect, Point2D::new(x, y)) {
-                self.editor_state.editor_ui.locale = locale;
-                self.editor_state.editor_ui.locale_picker_open = false;
-                self.mark_dirty();
-                return true;
+            match picker.hit_popup(panel_rect, Point2D::new(x, y)) {
+                op_editor_ui::widgets::locale_picker::SelectHit::Row(idx) => {
+                    if let Some(locale) = LocalePicker::locale_at(idx) {
+                        self.editor_state.editor_ui.locale = locale;
+                    }
+                    self.editor_state.editor_ui.locale_picker.open = false;
+                    self.editor_state.editor_ui.locale_picker.hover = None;
+                    self.mark_dirty();
+                    return true;
+                }
+                op_editor_ui::widgets::locale_picker::SelectHit::Inside => return true,
+                op_editor_ui::widgets::locale_picker::SelectHit::Outside => {}
             }
             // Silent outside-close is a blank press — blur inputs too.
             self.blur_text_inputs_on_blank_press();
-            self.editor_state.editor_ui.locale_picker_open = false;
+            self.editor_state.editor_ui.locale_picker.open = false;
+            self.editor_state.editor_ui.locale_picker.hover = None;
             self.mark_dirty();
             return true;
         }
@@ -294,8 +302,13 @@ impl WidgetHost {
                         self.editor_state.editor_ui.theme_mode.flipped();
                 }
                 TopBarHit::ToggleLocale => {
-                    let v = &mut self.editor_state.editor_ui.locale_picker_open;
-                    *v = !*v;
+                    let picker = &mut self.editor_state.editor_ui.locale_picker;
+                    picker.open = !picker.open;
+                    picker.hover = None;
+                    picker.pressed = None;
+                    if picker.open {
+                        picker.scroll.offset = 0.0;
+                    }
                 }
                 TopBarHit::OpenAgentSettings => {
                     self.editor_state.editor_ui.agent_settings_open = true;

@@ -40,6 +40,31 @@ impl WidgetHost {
         true
     }
 
+    pub(in crate::widget_host) fn try_scroll_locale_picker(
+        &mut self,
+        x: f32,
+        y: f32,
+        delta_y: f32,
+        viewport_width: f32,
+    ) -> bool {
+        if !self.editor_state.editor_ui.locale_picker.open {
+            return false;
+        }
+        if !(self.locale_picker_rect(viewport_width)).contains(Point2D::new(x, y)) {
+            return false;
+        }
+        let ui = &mut self.editor_state.editor_ui.locale_picker;
+        let next = (ui.scroll.offset - delta_y)
+            .clamp(0.0, op_editor_ui::widgets::LocalePicker::max_scroll());
+        let changed = next != ui.scroll.offset || ui.hover.is_some();
+        ui.scroll.offset = next;
+        ui.hover = None;
+        if changed {
+            self.mark_dirty();
+        }
+        true
+    }
+
     /// Scroll the right-rail PropertyPanel when a wheel lands over
     /// it. Returns `true` when the cursor was over the inspector.
     pub(in crate::widget_host) fn try_scroll_property_panel(

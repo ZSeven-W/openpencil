@@ -782,10 +782,8 @@ pub struct EditorUiState {
     pub theme_mode: ThemeMode,
     /// UI locale — TopBar Globe cycles.
     pub locale: Locale,
-    /// TopBar Globe dropdown open.
-    pub locale_picker_open: bool,
-    /// Locale row currently hovered while the locale picker is open.
-    pub locale_picker_hover: Option<Locale>,
+    /// TopBar Globe dropdown state.
+    pub locale_picker: jian_widgets::components::select::SelectState,
 
     // --- File menu --------------------------------------------------
     /// File-menu dropdown open (anchored under folder + chevron).
@@ -1197,8 +1195,7 @@ impl Default for EditorUiState {
             property_panel_width: 256.0,
             theme_mode: ThemeMode::Dark,
             locale: Locale::ZhCn,
-            locale_picker_open: false,
-            locale_picker_hover: None,
+            locale_picker: jian_widgets::components::select::SelectState::default(),
             file_menu_open: false,
             file_menu_hover: None,
             pending_file_action: None,

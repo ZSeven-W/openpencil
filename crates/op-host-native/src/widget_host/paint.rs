@@ -348,7 +348,7 @@ impl WidgetHostNative {
 
         // 10. LocalePicker — top-most overlay so it covers chat /
         //     toolbar / status when open.
-        if ui.locale_picker_open {
+        if ui.locale_picker.open {
             let picker_rect = self.locale_picker_rect(viewport_width);
             let picker = LocalePicker::for_editor_ui(&self.editor_state.editor_ui);
             let mut cx = PaintCx {

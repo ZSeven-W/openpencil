@@ -83,6 +83,8 @@ mod keyboard;
 mod keyboard_edit_ops;
 mod keyboard_settings_commit;
 mod keyboard_text_inputs;
+#[cfg(test)]
+mod locale_picker_scroll_tests;
 mod overlay_cursor;
 mod overlay_keys;
 #[cfg(test)]
@@ -592,6 +594,9 @@ impl WidgetHost {
         }
         // Floating VariablesPanel owns the wheel over its rect.
         if self.try_scroll_variables_panel(x, y, delta_y, viewport_width, viewport_height) {
+            return true;
+        }
+        if self.try_scroll_locale_picker(x, y, delta_y, viewport_width) {
             return true;
         }
         // Side rails scroll their panels instead of zooming the

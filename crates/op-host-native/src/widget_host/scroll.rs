@@ -96,6 +96,31 @@ impl WidgetHostNative {
         true
     }
 
+    fn try_scroll_locale_picker(
+        &mut self,
+        x: f32,
+        y: f32,
+        delta_y: f32,
+        viewport_width: f32,
+    ) -> bool {
+        if !self.editor_state.editor_ui.locale_picker.open {
+            return false;
+        }
+        if !(self.locale_picker_rect(viewport_width)).contains(Point2D::new(x, y)) {
+            return false;
+        }
+        let ui = &mut self.editor_state.editor_ui.locale_picker;
+        let next = (ui.scroll.offset - delta_y)
+            .clamp(0.0, op_editor_ui::widgets::LocalePicker::max_scroll());
+        let changed = next != ui.scroll.offset || ui.hover.is_some();
+        ui.scroll.offset = next;
+        ui.hover = None;
+        if changed {
+            self.mark_dirty();
+        }
+        true
+    }
+
     /// Scroll the right-rail PropertyPanel when a wheel / trackpad
     /// pan lands over it. `delta` is the vertical scroll delta
     /// (wheel `delta_y` or pan `dy`). Returns `true` when the cursor
@@ -260,6 +285,9 @@ impl WidgetHostNative {
         if self.try_scroll_variables_panel(x, y, delta_y, viewport_width, viewport_height) {
             return true;
         }
+        if self.try_scroll_locale_picker(x, y, delta_y, viewport_width) {
+            return true;
+        }
         // Any top-most floating panel (Design-MD / Component-Browser)
         // owns the wheel before lower layers — a scroll over them
         // never reaches the modal / Git panel / canvas.
@@ -400,6 +428,9 @@ impl WidgetHostNative {
         // See `apply_wheel` for why this must precede the topmost
         // overlay guard.
         if self.try_scroll_variables_panel(x, y, dy, viewport_width, viewport_height) {
+            return true;
+        }
+        if self.try_scroll_locale_picker(x, y, dy, viewport_width) {
             return true;
         }
         // Any top-most floating panel owns trackpad scroll first.
