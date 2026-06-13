@@ -295,6 +295,35 @@ fn image_generation_profile_header_click_toggles_editor_closed() {
 }
 
 #[test]
+fn mcp_server_press_sets_and_release_clears_agent_settings_button() {
+    let mut host = WidgetHost::new();
+    host.editor_state.editor_ui.agent_settings.tab = AgentSettingsTab::Mcp;
+    let panel = AgentSettingsPanel::for_editor(&host.editor_state);
+    let rect = panel.rect(1200.0, 800.0);
+    let content_x = rect.origin.x + 200.0 + 24.0;
+    let content_y = rect.origin.y + 24.0;
+    let content_w = rect.size.x - 200.0 - 48.0;
+    let server_card_top = content_y + 36.0;
+    let button_x = content_x + content_w - 16.0 - 72.0;
+
+    assert!(host.dispatch_agent_settings_press(
+        button_x + 36.0,
+        server_card_top + 26.0,
+        1200.0,
+        800.0
+    ));
+    assert_eq!(
+        host.editor_state.editor_ui.pressed_button,
+        Some(ButtonPressTarget::AgentSettings(
+            AgentSettingsButton::McpServer
+        ))
+    );
+
+    assert!(host.apply_release_with_viewport(1200.0, 800.0));
+    assert_eq!(host.editor_state.editor_ui.pressed_button, None);
+}
+
+#[test]
 fn copying_mcp_client_config_records_feedback_time() {
     let mut host = WidgetHost::new();
     host.set_now_ms(4_321);
@@ -330,6 +359,15 @@ fn copying_mcp_client_config_records_feedback_time() {
         host.editor_state.chat.pending_copy_text.as_deref(),
         Some("{\n  \"type\": \"http\",\n  \"url\": \"http://127.0.0.1:3100/mcp\"\n}")
     );
+    assert_eq!(
+        host.editor_state.editor_ui.pressed_button,
+        Some(ButtonPressTarget::AgentSettings(
+            AgentSettingsButton::McpClientConfigCopy
+        ))
+    );
+
+    assert!(host.apply_release_with_viewport(1200.0, 800.0));
+    assert_eq!(host.editor_state.editor_ui.pressed_button, None);
 }
 
 #[test]

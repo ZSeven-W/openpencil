@@ -469,6 +469,15 @@ fn starting_mcp_server_commits_port_draft_and_clears_focus() {
     assert_eq!(state.editor_ui.agent_settings.mcp_server.port, 3101);
     assert!(state.editor_ui.agent_settings.focus.is_none());
     assert!(state.editor_ui.settings_input.text().is_empty());
+    assert_eq!(
+        state.editor_ui.pressed_button,
+        Some(ButtonPressTarget::AgentSettings(
+            AgentSettingsButton::McpServer
+        ))
+    );
+
+    assert!(host.apply_release_with_viewport(1200.0, 800.0));
+    assert_eq!(host.editor_state().editor_ui.pressed_button, None);
 }
 
 #[test]
@@ -885,6 +894,15 @@ fn copying_mcp_client_config_records_feedback_time() {
         host.editor_state().chat.pending_copy_text.as_deref(),
         Some("{\n  \"type\": \"http\",\n  \"url\": \"http://127.0.0.1:3100/mcp\"\n}")
     );
+    assert_eq!(
+        host.editor_state().editor_ui.pressed_button,
+        Some(ButtonPressTarget::AgentSettings(
+            AgentSettingsButton::McpClientConfigCopy
+        ))
+    );
+
+    assert!(host.apply_release_with_viewport(1200.0, 800.0));
+    assert_eq!(host.editor_state().editor_ui.pressed_button, None);
 }
 
 #[test]

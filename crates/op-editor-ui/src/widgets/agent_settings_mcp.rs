@@ -11,6 +11,7 @@ use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
 use op_editor_core::agent_settings::{AgentSettings, McpCli, SettingsFocus};
 use op_editor_core::editor_ui_state::EditorUiState;
+use op_editor_core::{AgentSettingsButton, ButtonPressTarget};
 
 const TITLE_H: f32 = 36.0;
 const SERVER_CARD_H: f32 = 52.0;
@@ -334,9 +335,15 @@ fn paint_server_card(
         theme.primary_foreground
     };
     cx.backend.fill_round_rect(btn, 6.0, btn_bg);
-    if settings.hover_mcp_server_button {
-        cx.backend.fill_round_rect(btn, 6.0, theme.button_hover);
-    }
+    crate::widgets::button::paint_ghost_button_feedback(
+        cx.backend,
+        theme,
+        btn,
+        settings.hover_mcp_server_button,
+        ui.button_pressed(ButtonPressTarget::AgentSettings(
+            AgentSettingsButton::McpServer,
+        )),
+    );
     if running {
         cx.backend.stroke_round_rect(btn, 6.0, theme.border, 1.0);
     }
@@ -388,9 +395,15 @@ fn paint_client_config(
         Point2D::new(rect.origin.x + 12.0, rect.origin.y + 18.0),
     );
     let copy = client_config_copy_button_rect(content);
-    if settings.hover_mcp_client_config_copy {
-        cx.backend.fill_round_rect(copy, 6.0, theme.button_hover);
-    }
+    crate::widgets::button::paint_ghost_button_feedback(
+        cx.backend,
+        theme,
+        copy,
+        settings.hover_mcp_client_config_copy,
+        ui.button_pressed(ButtonPressTarget::AgentSettings(
+            AgentSettingsButton::McpClientConfigCopy,
+        )),
+    );
     let copied = mcp_client_config_copy_feedback_active(settings, now_ms);
     let (icon, icon_color) = if copied {
         (Icon::Check, COPY_FEEDBACK_GREEN)
