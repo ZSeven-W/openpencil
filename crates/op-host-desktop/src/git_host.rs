@@ -227,7 +227,8 @@ impl DesktopApp {
                     .editor_state()
                     .editor_ui
                     .git_panel
-                    .commit_message
+                    .commit_input
+                    .text()
                     .trim()
                     .to_string();
                 // Commit exactly the staged index — the set the user
@@ -241,8 +242,8 @@ impl DesktopApp {
                     match self.git_session.commit_staged(&message) {
                         Ok(()) => {
                             let panel = &mut self.host.editor_state_mut().editor_ui.git_panel;
-                            panel.commit_message.clear();
-                            panel.commit_focused = false;
+                            panel.commit_input.set_text("");
+                            panel.defocus_commit_input(0);
                         }
                         Err(err) => {
                             self.show_git_op_error_dialog("commit", &err);
@@ -256,7 +257,8 @@ impl DesktopApp {
                     .editor_state()
                     .editor_ui
                     .git_panel
-                    .commit_message
+                    .commit_input
+                    .text()
                     .trim()
                     .to_string();
                 // Ready-view "Save milestone": snapshot the live design
@@ -281,7 +283,7 @@ impl DesktopApp {
                     panel.author_email_focused = false;
                     // Hand keyboard focus to the form, off the (now hidden)
                     // commit box, so typing lands in the name/email fields.
-                    panel.commit_focused = false;
+                    panel.defocus_commit_input(0);
                     panel.commit_no_changes = false;
                 } else if !message.is_empty() {
                     match self.git_session.tracked_file().map(|p| p.to_path_buf()) {
@@ -307,8 +309,8 @@ impl DesktopApp {
                                                 .editor_state_mut()
                                                 .editor_ui
                                                 .git_panel;
-                                            panel.commit_message.clear();
-                                            panel.commit_focused = false;
+                                            panel.commit_input.set_text("");
+                                            panel.defocus_commit_input(0);
                                             panel.commit_no_changes = false;
                                         }
                                         // Nothing changed — keep the message and

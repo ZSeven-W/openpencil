@@ -369,11 +369,11 @@ pub enum GitPanelAction {
     /// Push the current branch to its upstream.
     Push,
     /// Stage + commit the tracked document with the panel's
-    /// `commit_message`.
+    /// `commit_input`.
     Commit,
     /// Ready-view "Save milestone": save the current design to the
     /// tracked `.op`, stage it, and commit with the panel's
-    /// `commit_message` — the TS `commitMilestone` flow. Unlike
+    /// `commit_input` — the TS `commitMilestone` flow. Unlike
     /// [`GitPanelAction::Commit`] (which commits a pre-assembled staged
     /// index) this snapshots the live editor state in one click.
     CommitMilestone,
@@ -482,7 +482,7 @@ pub struct CloneFormState {
 /// from its `GitSession`. The widget layer reads it to paint the
 /// floating Git panel; it carries no git handles, so it stays
 /// wasm-clean. Refreshed whenever the panel is opened.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct GitPanelState {
     /// Whether the floating Git panel is currently shown.
     pub open: bool,
@@ -528,8 +528,9 @@ pub struct GitPanelState {
     pub branch_create_draft: String,
     /// Whether the `新建分支` name input holds keyboard focus.
     pub branch_create_focused: bool,
-    /// True after Cmd/Ctrl+A in whichever Git-panel text field is
-    /// focused. The next edit replaces that whole field.
+    /// True after Cmd/Ctrl+A in a legacy Git-panel text field. The
+    /// next edit replaces that whole field. The commit box owns its
+    /// select-all state inside `commit_input`.
     pub input_select_all: bool,
     /// Number of changed (dirty) files in the working tree.
     pub dirty_count: usize,
@@ -583,7 +584,7 @@ pub struct GitPanelState {
     /// SSH key names for the SSH-keys subview (host-filled on open).
     pub ssh_keys: Vec<String>,
     /// Commit-message draft typed into the panel's input box.
-    pub commit_message: String,
+    pub commit_input: jian_core::text_input::TextInputState,
     /// Whether the commit-message input holds keyboard focus.
     pub commit_focused: bool,
     /// Set when a milestone "save" was skipped because the saved design
@@ -593,7 +594,7 @@ pub struct GitPanelState {
     /// Whether the commit-signature form (`提交署名`) is showing in place of
     /// the commit box — raised when a commit is attempted with no committer
     /// identity (TS `authorPromptVisible`). The pending message stays in
-    /// `commit_message` and the commit re-fires after a successful save.
+    /// `commit_input` and the commit re-fires after a successful save.
     pub author_prompt: bool,
     /// Name / email drafts typed into the commit-signature form.
     pub author_name_draft: String,
@@ -601,9 +602,9 @@ pub struct GitPanelState {
     /// Which signature-form field holds keyboard focus.
     pub author_name_focused: bool,
     pub author_email_focused: bool,
-    /// Caret-blink anchor (ms) for the commit input — reset on focus +
-    /// each keystroke so the caret stays solid while typing, then
-    /// blinks (same cadence as the chat / property inputs).
+    /// Caret-blink anchor (ms) for legacy Git-panel single-line fields
+    /// (remote URL, HTTPS credential, branch create, author form).
+    /// The commit box owns its blink anchor inside `commit_input`.
     pub commit_caret_anchor_ms: u64,
     /// Interactive action requested by a panel click / Enter —
     /// drained and executed by the desktop host.
@@ -645,6 +646,14 @@ impl GitPanelState {
         self.in_repo && !self.merging
     }
 
+    pub fn defocus_commit_input(&mut self, now_ms: u64) -> bool {
+        let was_focused = self.commit_focused;
+        self.commit_focused = false;
+        let commit_caret = self.commit_input.caret();
+        self.commit_input.set_caret(commit_caret, now_ms);
+        was_focused
+    }
+
     /// Drop keyboard focus from every git-panel text input — commit
     /// message, remote URL, HTTPS credential, branch-create name, the
     /// author signature pair, and the clone form's URL / destination.
@@ -660,14 +669,14 @@ impl GitPanelState {
                 form.focus.take().is_some()
             })
             .unwrap_or(false);
+        let commit_focused = self.defocus_commit_input(0);
         let was_focused = clone_focused
-            || self.commit_focused
+            || commit_focused
             || self.remote_focused
             || self.https_focused
             || self.branch_create_focused
             || self.author_name_focused
             || self.author_email_focused;
-        self.commit_focused = false;
         self.remote_focused = false;
         self.https_focused = false;
         self.branch_create_focused = false;

@@ -122,7 +122,7 @@ impl DesktopApp {
         panel.author_name_focused = false;
         panel.author_email_focused = false;
         // Re-fire the deferred commit — the message is still in
-        // `commit_message` and the identity now resolves.
+        // `commit_input` and the identity now resolves.
         panel.pending_action = Some(op_editor_core::GitPanelAction::CommitMilestone);
     }
 

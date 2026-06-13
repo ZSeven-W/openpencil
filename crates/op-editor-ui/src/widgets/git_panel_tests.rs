@@ -255,14 +255,15 @@ fn ready_view_maps_each_header_and_commit_region() {
     // A clean bound repo → the TS ready layout. Its header exposes
     // the branch picker + pull/push + overflow; the commit box is a
     // focus target and its button commits a non-empty message.
+    let mut state = open_repo();
+    state.commit_input.set_text("ship it");
     let s = state_with(GitPanelState {
         branch: Some("main".to_string()),
-        commit_message: "ship it".to_string(),
         // A remote + commits-ahead so pull/push are enabled (they now
         // disable when there's no remote / nothing to push, TS parity).
         remotes: vec!["origin → https://example.com/r.git".to_string()],
         ahead: 1,
-        ..open_repo()
+        ..state
     });
     let panel = GitPanel::for_editor(&s).unwrap();
     let rect = panel_rect(&panel);

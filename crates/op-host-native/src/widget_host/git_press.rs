@@ -59,7 +59,8 @@ impl WidgetHostNative {
         match hit {
             Some(GitPanelHit::CommitInput) => {
                 panel.commit_focused = true;
-                panel.commit_caret_anchor_ms = now;
+                panel.commit_input.touch(now);
+                panel.input_select_all = false;
                 panel.remote_focused = false;
                 panel.https_focused = false;
                 // Re-engaging the input dismisses the stale "no changes" hint.
@@ -67,14 +68,14 @@ impl WidgetHostNative {
             }
             Some(GitPanelHit::RemoteInput) => {
                 panel.remote_focused = true;
-                panel.commit_focused = false;
+                panel.defocus_commit_input(now);
                 panel.https_focused = false;
                 // Seed the shared caret anchor so it starts solid, then blinks.
                 panel.commit_caret_anchor_ms = now;
             }
             Some(GitPanelHit::HttpsInput) => {
                 panel.https_focused = true;
-                panel.commit_focused = false;
+                panel.defocus_commit_input(now);
                 panel.remote_focused = false;
                 panel.commit_caret_anchor_ms = now;
             }
@@ -96,7 +97,7 @@ impl WidgetHostNative {
             Some(GitPanelHit::Commit) => {
                 // Commit the staged set — requires a message and at
                 // least one staged file.
-                if !panel.commit_message.trim().is_empty()
+                if !panel.commit_input.text().trim().is_empty()
                     && panel.changed_files.iter().any(|f| f.staged)
                 {
                     panel.pending_action = Some(GitPanelAction::Commit);
@@ -106,14 +107,14 @@ impl WidgetHostNative {
                 // Ready-view Save milestone — saves the live design to
                 // the tracked .op + stages + commits in one step, so it
                 // only needs a non-empty message (no pre-staged file).
-                if !panel.commit_message.trim().is_empty() {
+                if !panel.commit_input.text().trim().is_empty() {
                     panel.pending_action = Some(GitPanelAction::CommitMilestone);
                 }
             }
             Some(GitPanelHit::AuthorNameInput) => {
                 panel.author_name_focused = true;
                 panel.author_email_focused = false;
-                panel.commit_focused = false;
+                panel.defocus_commit_input(now);
                 panel.remote_focused = false;
                 panel.https_focused = false;
                 panel.commit_caret_anchor_ms = now;
@@ -121,7 +122,7 @@ impl WidgetHostNative {
             Some(GitPanelHit::AuthorEmailInput) => {
                 panel.author_email_focused = true;
                 panel.author_name_focused = false;
-                panel.commit_focused = false;
+                panel.defocus_commit_input(now);
                 panel.remote_focused = false;
                 panel.https_focused = false;
                 panel.commit_caret_anchor_ms = now;
@@ -288,7 +289,7 @@ impl WidgetHostNative {
                 panel.branch_picker_mode = GitBranchPickerMode::Create;
                 panel.branch_create_draft.clear();
                 panel.branch_create_focused = true;
-                panel.commit_focused = false;
+                panel.defocus_commit_input(now);
                 panel.remote_focused = false;
                 panel.https_focused = false;
                 // Seed the shared caret anchor so it starts solid, then blinks.
@@ -300,7 +301,7 @@ impl WidgetHostNative {
             }
             Some(GitPanelHit::BranchCreateInput) => {
                 panel.branch_create_focused = true;
-                panel.commit_focused = false;
+                panel.defocus_commit_input(now);
                 panel.remote_focused = false;
                 panel.https_focused = false;
                 panel.commit_caret_anchor_ms = now;

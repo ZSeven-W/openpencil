@@ -459,7 +459,7 @@ impl WidgetHostNative {
                     if opening {
                         panel.loading = true;
                     } else {
-                        panel.commit_focused = false;
+                        panel.defocus_commit_input(self.now_ms);
                         panel.remote_focused = false;
                         panel.https_focused = false;
                         panel.diff = None;
