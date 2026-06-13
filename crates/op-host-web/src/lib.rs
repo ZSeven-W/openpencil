@@ -160,6 +160,8 @@ struct Inner {
     /// kept on `Inner` so both the interval pump and the hidden
     /// buttons' click handlers reach it through the shared `Rc`.
     a11y: Option<a11y::A11yLayer>,
+    #[cfg(feature = "codegen")]
+    caret_raf_running: bool,
 }
 
 // `Listener` + `add_listener` + `modifiers_from_keyboard` +
@@ -203,6 +205,30 @@ impl Inner {
         }
         Ok(())
     }
+}
+
+#[cfg(feature = "codegen")]
+pub(crate) fn ensure_caret_blink_pump(inner: &Rc<RefCell<Inner>>) {
+    {
+        let mut guard = inner.borrow_mut();
+        if guard.caret_raf_running || !guard.host.caret_animation_active() {
+            return;
+        }
+        guard.caret_raf_running = true;
+    }
+
+    let inner_tick = inner.clone();
+    let tick = Rc::new(move || {
+        let mut guard = inner_tick.borrow_mut();
+        guard.host.set_now_ms(now_ms_perf());
+        if !guard.host.caret_animation_active() {
+            guard.caret_raf_running = false;
+            return false;
+        }
+        let _ = guard.repaint();
+        true
+    });
+    raf_pump::start(tick);
 }
 
 #[cfg(feature = "skia")]
@@ -267,6 +293,8 @@ pub fn mount(canvas_id: &str) -> Result<WebShell, JsValue> {
         backend,
         host,
         a11y: None,
+        #[cfg(feature = "codegen")]
+        caret_raf_running: false,
     }));
 
     // Phase B inspector paints the first frame synchronously inside
@@ -365,6 +393,9 @@ pub fn mount(canvas_id: &str) -> Result<WebShell, JsValue> {
                     let mut inner = inner_cs.borrow_mut();
                     inner.host.apply_ime(&ime::composition_start());
                     let _ = inner.repaint();
+                    drop(inner);
+                    #[cfg(feature = "codegen")]
+                    ensure_caret_blink_pump(&inner_cs);
                 },
             )?;
         }
@@ -379,6 +410,9 @@ pub fn mount(canvas_id: &str) -> Result<WebShell, JsValue> {
                     let mut inner = inner_cu.borrow_mut();
                     inner.host.apply_ime(&ime::composition_update(text, None));
                     let _ = inner.repaint();
+                    drop(inner);
+                    #[cfg(feature = "codegen")]
+                    ensure_caret_blink_pump(&inner_cu);
                 },
             )?;
         }
@@ -393,6 +427,9 @@ pub fn mount(canvas_id: &str) -> Result<WebShell, JsValue> {
                     let mut inner = inner_ce.borrow_mut();
                     inner.host.apply_ime(&ime::composition_end(text));
                     let _ = inner.repaint();
+                    drop(inner);
+                    #[cfg(feature = "codegen")]
+                    ensure_caret_blink_pump(&inner_ce);
                 },
             )?;
         }
@@ -434,6 +471,8 @@ pub fn mount(canvas_id: &str) -> Result<WebShell, JsValue> {
                         // `inner` borrow dropped here before the codegen drain,
                         // which re-borrows `inner` inside `start_codegen`.
                     }
+                    #[cfg(feature = "codegen")]
+                    ensure_caret_blink_pump(&inner_md);
                     // A Code-panel Generate / Regenerate / Cancel click raised a
                     // pending flag during `apply_press`; launch (or abort) the
                     // codegen run now that the borrow is released.
@@ -684,6 +723,10 @@ pub fn mount(canvas_id: &str) -> Result<WebShell, JsValue> {
                     // `drain_chat_flags` re-borrows `inner` (and the rAF pump
                     // it starts borrows it again on later frames).
                     drop(inner);
+                    #[cfg(feature = "codegen")]
+                    if consumed {
+                        ensure_caret_blink_pump(&inner_kt);
+                    }
                     // Enter routed through `apply_send` raised
                     // `chat.pending_send` (begin_send); launch the streaming
                     // turn now that the borrow is released.

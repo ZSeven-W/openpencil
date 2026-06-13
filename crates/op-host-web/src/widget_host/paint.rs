@@ -141,9 +141,7 @@ impl WidgetHost {
                     layer_panel.drag_ghost = Some((item, d.current_y));
                 }
             }
-            // Web has no per-frame time source; caret paints solid
-            // (now == anchor == 0 ⇒ blink_visible returns true).
-            layer_panel.now_ms = 0;
+            layer_panel.now_ms = self.now_ms;
             let mut cx = PaintCx {
                 backend: &mut *backend,
             };
@@ -159,8 +157,8 @@ impl WidgetHost {
         if canvas_w > 0.0 && canvas_h > 0.0 {
             // PAINT path — the canvas reads editor state + the
             // layout-resolved render scene (`refresh_layout_scene`).
-            // Web has no per-frame clock; caret stays solid.
-            let canvas = CanvasViewport::from_editor(&self.editor_state, &self.layout_scene);
+            let mut canvas = CanvasViewport::from_editor(&self.editor_state, &self.layout_scene);
+            canvas.now_ms = self.now_ms;
             let mut cx = PaintCx {
                 backend: &mut *backend,
             };
