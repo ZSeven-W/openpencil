@@ -265,7 +265,7 @@ fn multiline_input_expands_above_footer_toolbar() {
 fn hit_test_resolves_model_search_clear_button() {
     let mut s = EditorState::new();
     seed_available_model(&mut s);
-    s.editor_ui.chat_model_picker_open = true;
+    s.editor_ui.chat_model_picker.open = true;
     s.editor_ui.chat_model_picker_input.set_text("231");
     let panel = AIChatPlaceholder::from_editor(&s);
     let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);

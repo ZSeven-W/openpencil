@@ -1,5 +1,6 @@
 use super::ai_chat_model_picker::*;
 use crate::{Point2D, Rect};
+use jian_widgets::components::select::{SelectHit, SelectState};
 use op_editor_core::chat::{AgentProvider, ModelEntry};
 
 fn entry(p: AgentProvider, v: &str) -> ModelEntry {
@@ -106,6 +107,34 @@ fn model_at_filters_by_search_and_returns_original_index() {
             "5.5"
         ),
         Some(1)
+    );
+}
+
+#[test]
+fn model_picker_hit_uses_shared_select_state_protocol() {
+    let models = vec![
+        entry(AgentProvider::ClaudeCode, "a"),
+        entry(AgentProvider::CodexCli, "b"),
+    ];
+    let mut state = SelectState::default();
+    state.open = true;
+    let rect = Rect {
+        origin: Point2D::new(0.0, 0.0),
+        size: Point2D::new(220.0, picker_view_height(&models, "")),
+    };
+    let first_row_y = MODEL_SEARCH_H + MODEL_PICKER_PAD_Y + MODEL_GROUP_H + MODEL_ROW_H / 2.0;
+
+    assert_eq!(
+        model_picker_hit(&state, rect, Point2D::new(100.0, first_row_y), &models, ""),
+        SelectHit::Row(0)
+    );
+    assert_eq!(
+        model_picker_hit(&state, rect, Point2D::new(100.0, 12.0), &models, ""),
+        SelectHit::Inside
+    );
+    assert_eq!(
+        model_picker_hit(&state, rect, Point2D::new(-1.0, 12.0), &models, ""),
+        SelectHit::Outside
     );
 }
 

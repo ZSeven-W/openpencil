@@ -25,7 +25,7 @@ impl WidgetHostNative {
             || eui.preset_name_input_active()
             || self.variables_search_active()
             || eui.agent_settings.focus.is_some()
-            || eui.chat_model_picker_open
+            || eui.chat_model_picker.open
             || self.editor_state.chat.focused
             || git.commit_focused
             || git.remote_focused
@@ -61,10 +61,7 @@ impl WidgetHostNative {
         // Variables-panel search box defocuses; its typed filter
         // persists (TS keeps the input value on blur).
         eui.variables_search_focus = false;
-        eui.chat_model_picker_open = false;
-        eui.chat_model_picker_scroll = 0.0;
-        eui.chat_model_picker_input.set_text("");
-        eui.chat_model_picker_hover = None;
+        eui.close_chat_model_picker();
         self.editor_state.chat.blur_input(self.now_ms);
         if was_focused {
             self.mark_dirty();

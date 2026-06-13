@@ -76,35 +76,18 @@ impl WidgetHost {
                     AIChatHit::ToggleMaximize => {
                         self.editor_state.chat.maximized = !self.editor_state.chat.maximized;
                         self.editor_state.chat.collapsed = false;
-                        self.editor_state.editor_ui.chat_model_picker_open = false;
-                        self.editor_state
-                            .editor_ui
-                            .chat_model_picker_input
-                            .set_text("");
+                        self.editor_state.editor_ui.close_chat_model_picker();
                         self.mark_dirty();
                         return true;
                     }
                     AIChatHit::NewChat => {
                         self.editor_state.chat.new_chat();
-                        self.editor_state.editor_ui.chat_model_picker_open = false;
-                        self.editor_state.editor_ui.chat_model_picker_scroll = 0.0;
-                        self.editor_state
-                            .editor_ui
-                            .chat_model_picker_input
-                            .set_text("");
-                        self.editor_state.editor_ui.chat_model_picker_hover = None;
+                        self.editor_state.editor_ui.close_chat_model_picker();
                         self.mark_dirty();
                         return true;
                     }
                     AIChatHit::ToggleModelPicker => {
-                        let opening = !self.editor_state.editor_ui.chat_model_picker_open;
-                        self.editor_state.editor_ui.chat_model_picker_open = opening;
-                        self.editor_state.editor_ui.chat_model_picker_scroll = 0.0;
-                        self.editor_state
-                            .editor_ui
-                            .chat_model_picker_input
-                            .set_text("");
-                        self.editor_state.editor_ui.chat_model_picker_hover = None;
+                        let opening = self.editor_state.editor_ui.toggle_chat_model_picker();
                         if opening {
                             self.editor_state
                                 .editor_ui
@@ -127,8 +110,9 @@ impl WidgetHost {
                             .editor_ui
                             .chat_model_picker_input
                             .set_text("");
-                        self.editor_state.editor_ui.chat_model_picker_scroll = 0.0;
-                        self.editor_state.editor_ui.chat_model_picker_hover = None;
+                        self.editor_state.editor_ui.chat_model_picker.scroll.offset = 0.0;
+                        self.editor_state.editor_ui.chat_model_picker.hover = None;
+                        self.editor_state.editor_ui.chat_model_picker.pressed = None;
                         self.editor_state
                             .editor_ui
                             .chat_model_picker_input

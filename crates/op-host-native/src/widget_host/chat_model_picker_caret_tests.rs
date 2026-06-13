@@ -6,7 +6,7 @@ fn chat_model_picker_arrows_move_caret_for_insert_and_backspace() {
     let mut host = WidgetHostNative::new();
     {
         let ui = &mut host.editor_state_mut().editor_ui;
-        ui.chat_model_picker_open = true;
+        ui.chat_model_picker.open = true;
         ui.chat_model_picker_input.set_text("abcd");
     }
 
@@ -53,10 +53,10 @@ fn chat_model_picker_clear_button_empties_search() {
     host.set_now_ms(456);
     {
         let ui = &mut host.editor_state_mut().editor_ui;
-        ui.chat_model_picker_open = true;
+        ui.chat_model_picker.open = true;
         ui.chat_model_picker_input.set_text("231");
-        ui.chat_model_picker_scroll = 10.0;
-        ui.chat_model_picker_hover = Some(0);
+        ui.chat_model_picker.scroll.offset = 10.0;
+        ui.chat_model_picker.hover = Some(0);
     }
     let chat_rect = host.ai_chat_rect(1200.0, 800.0).unwrap();
     let panel = AIChatPlaceholder::from_editor_at(host.editor_state(), 456);
@@ -69,8 +69,8 @@ fn chat_model_picker_clear_button_empties_search() {
     let ui = &host.editor_state().editor_ui;
     assert!(ui.chat_model_picker_input.text().is_empty());
     assert_eq!(ui.chat_model_picker_input.caret(), 0);
-    assert_eq!(ui.chat_model_picker_scroll, 0.0);
-    assert_eq!(ui.chat_model_picker_hover, None);
-    assert!(ui.chat_model_picker_open);
+    assert_eq!(ui.chat_model_picker.scroll.offset, 0.0);
+    assert_eq!(ui.chat_model_picker.hover, None);
+    assert!(ui.chat_model_picker.open);
     assert_eq!(ui.chat_model_picker_input.next_blink_flip_ms(456), 956);
 }

@@ -68,7 +68,7 @@ impl<'a> AIChatPlaceholder<'a> {
         // open it behaves modally: a row click selects, any other
         // click dismisses it. Hit-tested before the input so a row
         // click isn't eaten by the message list beneath.
-        if self.model_picker_open {
+        if self.model_picker.open {
             let picker = self.model_picker_rect(rect, input_rect);
             if crate::widgets::ai_chat_model_picker::search_clear_hit(
                 picker,
@@ -77,17 +77,20 @@ impl<'a> AIChatPlaceholder<'a> {
             ) {
                 return Some(AIChatHit::ClearModelSearch);
             }
-            if let Some(idx) = crate::widgets::ai_chat_model_picker::model_at(
+            match crate::widgets::ai_chat_model_picker::model_picker_hit(
+                self.model_picker,
                 picker,
                 point,
                 &self.state.available_models,
-                self.model_picker_scroll,
                 self.model_picker_input.text(),
             ) {
-                return Some(AIChatHit::SelectModel(idx));
-            }
-            if (picker).contains(point) {
-                return Some(AIChatHit::FocusModelSearch);
+                jian_widgets::components::select::SelectHit::Row(idx) => {
+                    return Some(AIChatHit::SelectModel(idx));
+                }
+                jian_widgets::components::select::SelectHit::Inside => {
+                    return Some(AIChatHit::FocusModelSearch);
+                }
+                jian_widgets::components::select::SelectHit::Outside => {}
             }
             return Some(AIChatHit::ToggleModelPicker);
         }
@@ -295,7 +298,7 @@ impl<'a> AIChatPlaceholder<'a> {
         rect: Rect,
         point: Point2D,
     ) -> Option<op_editor_core::ChatFooterButton> {
-        if self.state.collapsed || self.model_picker_open {
+        if self.state.collapsed || self.model_picker.open {
             return None;
         }
         let input_rect = self.input_rect(rect);

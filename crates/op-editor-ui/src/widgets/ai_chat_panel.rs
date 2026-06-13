@@ -11,6 +11,7 @@ use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
 use crate::{Color, Point2D, Rect, TextLayout};
 use jian_core::text_input::TextInputState;
+use jian_widgets::components::select::SelectState;
 use op_editor_core::chat::ChatState;
 use op_editor_core::EditorState;
 
@@ -86,12 +87,8 @@ pub struct AIChatPlaceholder<'a> {
     /// Number of currently selected canvas nodes, shown in the
     /// bottom toolbar like the TS panel.
     pub(crate) selected_count: usize,
-    /// Whether the model-picker dropdown is open.
-    pub model_picker_open: bool,
-    /// Vertical scroll offset of the open model-picker dropdown.
-    pub model_picker_scroll: f32,
-    /// Index into `state.available_models` of the picker row under the cursor.
-    pub model_picker_hover: Option<usize>,
+    /// Model-picker dropdown interaction state.
+    pub model_picker: &'a SelectState,
     /// Text state for the model-picker search query.
     pub model_picker_input: &'a TextInputState,
     pub design_hover: Option<(usize, usize)>,
@@ -128,9 +125,7 @@ impl<'a> AIChatPlaceholder<'a> {
             label_tip_select_elements: translate(ui, "ai.tipSelectElements").to_string(),
             label_no_models: translate(ui, "ai.noModelsConnected").to_string(),
             selected_count: state.selection_count(),
-            model_picker_open: ui.chat_model_picker_open,
-            model_picker_scroll: ui.chat_model_picker_scroll,
-            model_picker_hover: ui.chat_model_picker_hover,
+            model_picker: &ui.chat_model_picker,
             model_picker_input: &ui.chat_model_picker_input,
             design_hover: ui.chat_design_block_hover,
             example_hover: ui.chat_example_hover,
@@ -231,7 +226,7 @@ impl<'a> AIChatPlaceholder<'a> {
     }
 
     pub fn model_picker_bounds(&self, rect: Rect) -> Option<Rect> {
-        if !self.model_picker_open {
+        if !self.model_picker.open {
             return None;
         }
         let input_rect = self.input_rect(rect);
@@ -692,7 +687,7 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
 
         // Model-picker dropdown paints last so it sits above the
         // message list / examples / input.
-        if self.model_picker_open {
+        if self.model_picker.open {
             let picker = self.model_picker_rect(rect, input_rect);
             crate::widgets::ai_chat_model_picker::paint_model_picker(
                 cx,
@@ -700,8 +695,7 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
                 picker,
                 &self.state.available_models,
                 self.state.selected_model,
-                self.model_picker_scroll,
-                self.model_picker_hover,
+                self.model_picker,
                 self.model_picker_input,
                 self.now_ms,
                 self.locale,

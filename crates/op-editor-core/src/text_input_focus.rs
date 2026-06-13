@@ -30,7 +30,7 @@ impl EditorState {
         if self.editor_ui.agent_settings_open && self.editor_ui.agent_settings.focus.is_some() {
             return Some(&self.editor_ui.settings_input);
         }
-        if self.editor_ui.chat_model_picker_open {
+        if self.editor_ui.chat_model_picker.open {
             return Some(&self.editor_ui.chat_model_picker_input);
         }
         if self.chat.focused {
@@ -88,7 +88,7 @@ impl EditorState {
         if self.editor_ui.agent_settings_open && self.editor_ui.agent_settings.focus.is_some() {
             return Some(&mut self.editor_ui.settings_input);
         }
-        if self.editor_ui.chat_model_picker_open {
+        if self.editor_ui.chat_model_picker.open {
             return Some(&mut self.editor_ui.chat_model_picker_input);
         }
         if self.chat.focused {

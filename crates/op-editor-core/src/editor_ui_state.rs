@@ -918,18 +918,11 @@ pub struct EditorUiState {
     pub icon_picker_load_more_request: Option<crate::icon_picker_state::IconifyLoadMoreRequest>,
 
     // --- AI chat model picker --------------------------------------
-    /// AI chat model-picker dropdown open.
-    pub chat_model_picker_open: bool,
-    /// Vertical scroll offset of the model-picker dropdown, in px.
-    /// Non-zero only when the connected catalog is taller than the
-    /// picker's capped height; the host clamps it on wheel input.
-    pub chat_model_picker_scroll: f32,
+    /// AI chat model-picker dropdown interaction state.
+    pub chat_model_picker: jian_widgets::components::select::SelectState,
     /// Text filter, caret, selection, and blink state for the chat
     /// model-picker search box.
     pub chat_model_picker_input: jian_core::text_input::TextInputState,
-    /// Index into `chat.available_models` of the model row the cursor
-    /// is over, or `None`. Drives the picker's hover-row tint.
-    pub chat_model_picker_hover: Option<usize>,
     /// Hovered chat design JSON card `(message_index, block_index)`;
     /// drives the TS-style hover reveal of the card's copy affordance.
     pub chat_design_block_hover: Option<(usize, usize)>,
@@ -1242,10 +1235,8 @@ impl Default for EditorUiState {
             icon_picker_hover: None,
             icon_picker_remote: crate::icon_picker_state::IconPickerRemoteState::default(),
             icon_picker_load_more_request: None,
-            chat_model_picker_open: false,
-            chat_model_picker_scroll: 0.0,
+            chat_model_picker: jian_widgets::components::select::SelectState::default(),
             chat_model_picker_input: jian_core::text_input::TextInputState::default(),
-            chat_model_picker_hover: None,
             chat_design_block_hover: None,
             chat_example_hover: None,
             chat_header_hover: None,
@@ -1380,6 +1371,29 @@ impl EditorUiState {
         self.font_picker.pressed = None;
         self.font_picker.scroll.offset = 0.0;
         self.font_picker_search.clear();
+        changed
+    }
+
+    pub fn toggle_chat_model_picker(&mut self) -> bool {
+        let opening = !self.chat_model_picker.open;
+        self.close_chat_model_picker();
+        if opening {
+            self.chat_model_picker.open = true;
+        }
+        opening
+    }
+
+    pub fn close_chat_model_picker(&mut self) -> bool {
+        let changed = self.chat_model_picker.open
+            || self.chat_model_picker.hover.is_some()
+            || self.chat_model_picker.pressed.is_some()
+            || self.chat_model_picker.scroll.offset != 0.0
+            || !self.chat_model_picker_input.text().is_empty();
+        self.chat_model_picker.open = false;
+        self.chat_model_picker.hover = None;
+        self.chat_model_picker.pressed = None;
+        self.chat_model_picker.scroll.offset = 0.0;
+        self.chat_model_picker_input.set_text("");
         changed
     }
 
@@ -1661,5 +1675,32 @@ mod tests {
         assert_eq!(ui.font_picker.hover, None);
         assert_eq!(ui.font_picker.pressed, None);
         assert_eq!(ui.font_picker.scroll.offset, 0.0);
+    }
+
+    #[test]
+    fn chat_model_picker_helpers_reset_select_interaction_state_and_search() {
+        let mut ui = EditorUiState::new();
+        ui.chat_model_picker_input.set_text("gpt");
+        ui.chat_model_picker.hover = Some(1);
+        ui.chat_model_picker.pressed = Some(1);
+        ui.chat_model_picker.scroll.offset = 28.0;
+
+        assert!(ui.toggle_chat_model_picker());
+        assert!(ui.chat_model_picker.open);
+        assert!(ui.chat_model_picker_input.text().is_empty());
+        assert_eq!(ui.chat_model_picker.hover, None);
+        assert_eq!(ui.chat_model_picker.pressed, None);
+        assert_eq!(ui.chat_model_picker.scroll.offset, 0.0);
+
+        ui.chat_model_picker_input.set_text("claude");
+        ui.chat_model_picker.hover = Some(0);
+        ui.chat_model_picker.pressed = Some(0);
+        ui.chat_model_picker.scroll.offset = 28.0;
+        assert!(!ui.toggle_chat_model_picker());
+        assert!(!ui.chat_model_picker.open);
+        assert!(ui.chat_model_picker_input.text().is_empty());
+        assert_eq!(ui.chat_model_picker.hover, None);
+        assert_eq!(ui.chat_model_picker.pressed, None);
+        assert_eq!(ui.chat_model_picker.scroll.offset, 0.0);
     }
 }

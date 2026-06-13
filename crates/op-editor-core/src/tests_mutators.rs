@@ -545,13 +545,13 @@ fn select_chat_model_picks_model_and_syncs_agent() {
         crate::ModelEntry::new(crate::AgentProvider::ClaudeCode, "claude", "Claude"),
         crate::ModelEntry::new(crate::AgentProvider::GeminiCli, "gemini", "Gemini"),
     ];
-    s.editor_ui.chat_model_picker_open = true;
+    s.editor_ui.chat_model_picker.open = true;
     s.select_chat_model(1);
     assert_eq!(s.chat.selected_model, 1);
     // GeminiCli is index 4 in AgentProvider::ALL.
     assert_eq!(s.editor_ui.chat_selected_agent, 4);
     // Picker closes on selection.
-    assert!(!s.editor_ui.chat_model_picker_open);
+    assert!(!s.editor_ui.chat_model_picker.open);
 }
 
 #[test]
@@ -562,11 +562,11 @@ fn select_chat_model_bad_index_still_closes_picker() {
         "c",
         "C",
     )];
-    s.editor_ui.chat_model_picker_open = true;
+    s.editor_ui.chat_model_picker.open = true;
     s.select_chat_model(9);
     // Out-of-range index ignored — selected_model unchanged.
     assert_eq!(s.chat.selected_model, 0);
-    assert!(!s.editor_ui.chat_model_picker_open);
+    assert!(!s.editor_ui.chat_model_picker.open);
 }
 
 #[test]
@@ -679,13 +679,13 @@ fn select_chat_model_keeps_agent_sync_unchanged_for_acp_models() {
         crate::ModelEntry::new(crate::AgentProvider::CodexCli, "acp:acp-1", "Local ACP"),
     ];
     s.editor_ui.chat_selected_agent = 0;
-    s.editor_ui.chat_model_picker_open = true;
+    s.editor_ui.chat_model_picker.open = true;
 
     s.select_chat_model(1);
 
     assert_eq!(s.chat.selected_model, 1);
     assert_eq!(s.editor_ui.chat_selected_agent, 0);
-    assert!(!s.editor_ui.chat_model_picker_open);
+    assert!(!s.editor_ui.chat_model_picker.open);
 }
 
 // --- Layer collapse (Gap 3) -----------------------------------------

@@ -177,7 +177,7 @@ impl WidgetHost {
         if let Some(changed) = self.icon_picker_text(c) {
             return changed;
         }
-        if self.editor_state.editor_ui.chat_model_picker_open {
+        if self.editor_state.editor_ui.chat_model_picker.open {
             return self.apply_chat_model_picker_text(c);
         }
         if let Some(changed) = self.component_browser_text(c) {
@@ -327,7 +327,7 @@ impl WidgetHost {
         if let Some(changed) = self.icon_picker_backspace() {
             return changed;
         }
-        if self.editor_state.editor_ui.chat_model_picker_open {
+        if self.editor_state.editor_ui.chat_model_picker.open {
             return self.apply_chat_model_picker_backspace();
         }
         if let Some(changed) = self.component_browser_backspace() {
@@ -457,7 +457,7 @@ impl WidgetHost {
                 .editor_ui
                 .variables_variant_rename_value
                 .is_some()
-            || self.editor_state.editor_ui.chat_model_picker_open
+            || self.editor_state.editor_ui.chat_model_picker.open
             || self.editor_state.chat.focused
         {
             if self.editor_state.ui.property_focus.is_some()
@@ -730,14 +730,8 @@ impl WidgetHost {
             self.mark_dirty();
             return true;
         }
-        if self.editor_state.editor_ui.chat_model_picker_open {
-            self.editor_state.editor_ui.chat_model_picker_open = false;
-            self.editor_state.editor_ui.chat_model_picker_scroll = 0.0;
-            self.editor_state
-                .editor_ui
-                .chat_model_picker_input
-                .set_text("");
-            self.editor_state.editor_ui.chat_model_picker_hover = None;
+        if self.editor_state.editor_ui.chat_model_picker.open {
+            self.editor_state.editor_ui.close_chat_model_picker();
             self.mark_dirty();
             return true;
         }

@@ -542,7 +542,7 @@ fn focused_input(state: &EditorState) -> Option<(String, String, String)> {
             ui.icon_picker_search.clone(),
         ));
     }
-    if ui.chat_model_picker_open {
+    if ui.chat_model_picker.open {
         return Some((
             "model-search".to_string(),
             "Model search".to_string(),
