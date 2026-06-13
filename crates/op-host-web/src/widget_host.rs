@@ -89,6 +89,8 @@ mod overlay_keys;
 mod overlay_press_tests;
 mod overlay_rects;
 mod paint;
+#[cfg(test)]
+mod paint_caret_tests;
 mod press;
 mod property_dispatch;
 mod property_focus_press;
@@ -194,6 +196,10 @@ pub struct WidgetHost {
 impl WidgetHost {
     pub fn set_now_ms(&mut self, now_ms: u64) {
         self.now_ms = now_ms;
+    }
+
+    pub fn caret_animation_active(&self) -> bool {
+        self.editor_state.active_text_input().is_some()
     }
 
     /// Borrow the canonical-model editor state — the host's single source of

@@ -368,6 +368,8 @@ pub(crate) fn wire(
             let _ = guard.repaint();
             sync_now(&mut guard);
         }
+        #[cfg(feature = "codegen")]
+        crate::ensure_caret_blink_pump(&inner_chat);
         // Move DOM focus onto the canvas: a focused <button> re-fires
         // its click on Space/Enter, which would double-handle the
         // user's typing. On the canvas, keystrokes flow through the
