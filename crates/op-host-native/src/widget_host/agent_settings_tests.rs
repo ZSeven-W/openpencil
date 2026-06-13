@@ -3,7 +3,7 @@ use op_editor_core::agent_settings::{
     AcpAgentField, AgentSettingsTab, BuiltinAgentField, ImageGenField, ImageGenProvider,
     ImageSearchField, ImageTestStatus, SettingsFocus,
 };
-use op_editor_core::BuiltinAgentPresetKey;
+use op_editor_core::{AgentSettingsButton, BuiltinAgentPresetKey, ButtonPressTarget};
 use op_editor_ui::widgets::agent_settings_panel::AgentSettingsPanel;
 
 fn agent_settings_content_metrics(host: &WidgetHostNative) -> (f32, f32, f32) {
@@ -22,6 +22,24 @@ fn acp_header_y(content_y: f32) -> f32 {
 
 fn acp_card_y(content_y: f32) -> f32 {
     acp_header_y(content_y) + 28.0 + 28.0
+}
+
+#[test]
+fn close_press_sets_and_release_clears_agent_settings_button() {
+    let mut host = WidgetHostNative::new();
+    let panel = AgentSettingsPanel::for_editor(host.editor_state());
+    let rect = panel.rect(1200.0, 800.0);
+    let close_x = rect.origin.x + rect.size.x - 24.0;
+    let close_y = rect.origin.y + 24.0;
+
+    assert!(host.dispatch_agent_settings_press(close_x, close_y, 1200.0, 800.0));
+    assert_eq!(
+        host.editor_state().editor_ui.pressed_button,
+        Some(ButtonPressTarget::AgentSettings(AgentSettingsButton::Close))
+    );
+
+    assert!(host.apply_release_with_viewport(1200.0, 800.0));
+    assert_eq!(host.editor_state().editor_ui.pressed_button, None);
 }
 
 #[test]

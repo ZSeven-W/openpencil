@@ -23,6 +23,7 @@ use op_editor_core::agent_settings::{
 use op_editor_core::editor_ui_state::EditorUiState;
 use op_editor_core::BuiltinAgentPresetKey;
 use op_editor_core::EditorState;
+use op_editor_core::{AgentSettingsButton, ButtonPressTarget};
 
 pub const PANEL_WIDTH: f32 = 720.0;
 pub const PANEL_HEIGHT: f32 = 720.0;
@@ -464,7 +465,7 @@ fn paint_panel(
         }
     }
     cx.backend.restore();
-    paint_close(cx, theme, settings, panel);
+    paint_close(cx, theme, settings, _ui, panel);
 }
 
 fn paint_sidebar(
@@ -536,11 +537,22 @@ fn paint_sidebar(
     }
 }
 
-fn paint_close(cx: &mut PaintCx<'_>, theme: &Theme, settings: &AgentSettings, panel: Rect) {
+fn paint_close(
+    cx: &mut PaintCx<'_>,
+    theme: &Theme,
+    settings: &AgentSettings,
+    ui: &EditorUiState,
+    panel: Rect,
+) {
     let close = close_rect(panel);
-    if settings.hover_agent_settings_close {
-        cx.backend.fill_round_rect(close, 6.0, theme.button_hover);
-    }
+    let pressed = ui.button_pressed(ButtonPressTarget::AgentSettings(AgentSettingsButton::Close));
+    crate::widgets::button::paint_ghost_button_feedback(
+        cx.backend,
+        theme,
+        close,
+        settings.hover_agent_settings_close,
+        pressed,
+    );
     draw_icon(
         cx.backend,
         Icon::Close,

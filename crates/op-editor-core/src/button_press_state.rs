@@ -15,4 +15,5 @@ pub enum ButtonPressTarget {
     Git(crate::git_button_state::GitButton),
     ExportDialog(crate::export_dialog_state::ExportDialogButton),
     FigmaImport(crate::figma_import_state::FigmaImportButton),
+    AgentSettings(crate::agent_settings_button_state::AgentSettingsButton),
 }

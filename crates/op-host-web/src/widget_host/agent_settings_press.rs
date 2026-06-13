@@ -25,7 +25,11 @@ impl WidgetHost {
         };
         let panel = AgentSettingsPanel::for_editor(&self.editor_state);
         let panel_rect = panel.rect(vw, vh);
-        match panel.hit_test(panel_rect, Point2D::new(x, y)) {
+        let hit = panel.hit_test(panel_rect, Point2D::new(x, y));
+        self.editor_state.editor_ui.pressed_button =
+            op_editor_ui::widgets::editor_state_ext::agent_settings_button(hit)
+                .map(op_editor_core::ButtonPressTarget::AgentSettings);
+        match hit {
             AgentSettingsHit::Close | AgentSettingsHit::Outside => {
                 self.commit_settings_focus();
                 self.editor_state.editor_ui.agent_settings_open = false;
