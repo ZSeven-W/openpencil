@@ -122,10 +122,18 @@ impl WidgetHost {
                 let _ = self.editor_state.remove_page(idx);
             }
             (A::RenamePage, T::Page(idx)) => {
-                let _ = self.editor_state.start_rename_page(idx);
+                if self.editor_state.start_rename_page(idx) {
+                    if let Some(rename) = self.editor_state.ui.layer_rename.as_mut() {
+                        rename.input.touch(self.now_ms);
+                    }
+                }
             }
             (A::RenameLayer, T::Layer(id)) => {
-                let _ = self.editor_state.start_rename_layer(id);
+                if self.editor_state.start_rename_layer(id) {
+                    if let Some(rename) = self.editor_state.ui.layer_rename.as_mut() {
+                        rename.input.touch(self.now_ms);
+                    }
+                }
             }
             _ => {}
         }

@@ -399,7 +399,9 @@ impl WidgetHostNative {
                             }
                         };
                         if started {
-                            self.editor_state.editor_ui.rename_caret_anchor_ms = self.now_ms;
+                            if let Some(rename) = self.editor_state.ui.layer_rename.as_mut() {
+                                rename.input.touch(self.now_ms);
+                            }
                         }
                         self.editor_state.editor_ui.last_layer_click = None;
                         self.mark_dirty();

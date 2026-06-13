@@ -41,12 +41,12 @@ impl<'a> RenameView<'a> {
         match state.ui.layer_rename.as_ref() {
             Some(s) => match &s.target {
                 LayerContextTarget::Page(i) => Self {
-                    page: Some((*i, s.draft.as_str())),
+                    page: Some((*i, s.input.text())),
                     layer: None,
                 },
                 LayerContextTarget::Layer(id) => Self {
                     page: None,
-                    layer: Some((id.as_str(), s.draft.as_str())),
+                    layer: Some((id.as_str(), s.input.text())),
                 },
             },
             None => Self::default(),

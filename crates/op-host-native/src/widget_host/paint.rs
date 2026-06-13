@@ -123,7 +123,6 @@ impl WidgetHostNative {
                 }
             }
             layer_panel.now_ms = self.now_ms;
-            layer_panel.caret_anchor_ms = self.editor_state.editor_ui.rename_caret_anchor_ms;
             let mut cx = PaintCx {
                 backend: &mut *frame,
             };
