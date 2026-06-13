@@ -528,6 +528,7 @@ fn variables_panel_preset_button_toggles_menu() {
     host.editor_state_mut().editor_ui.variables_panel_open = true;
     let rect = host.variables_panel_rect(VIEWPORT_W, VIEWPORT_H).unwrap();
 
+    // Press the preset button (in the header, ~22 px down) — opens the menu.
     assert!(host.apply_press(
         rect.origin.x + 82.0,
         rect.origin.y + 22.0,
@@ -536,9 +537,13 @@ fn variables_panel_preset_button_toggles_menu() {
     ));
     assert!(host.editor_state().editor_ui.variables_preset_menu_open);
 
+    // Press the SAME button again — toggles the menu closed. (A press at
+    // +58 would land in the open dropdown's SaveCurrent row, which focuses
+    // the name input and intentionally keeps the popover open — see
+    // `anchor_press_does_not_double_toggle` for the canonical toggle path.)
     assert!(host.apply_press(
         rect.origin.x + 82.0,
-        rect.origin.y + 58.0,
+        rect.origin.y + 22.0,
         VIEWPORT_W,
         VIEWPORT_H
     ));
