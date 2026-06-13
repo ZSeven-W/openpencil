@@ -112,6 +112,34 @@ impl WidgetHostNative {
                 }
             })
         });
+        let branch_picker_open = self.editor_state.editor_ui.git_panel.branch_picker_open;
+        let branch_picker_hover = panel_body.and_then(|body| {
+            GitPanel::for_editor(&self.editor_state).and_then(|p| {
+                if !branch_picker_open {
+                    return None;
+                }
+                match p.branch_picker_menu_hit(body, point) {
+                    op_editor_ui::widgets::git_panel::MenuHit::Row(idx) => Some(idx),
+                    op_editor_ui::widgets::git_panel::MenuHit::Inside
+                    | op_editor_ui::widgets::git_panel::MenuHit::Outside => None,
+                }
+            })
+        });
+        let overflow_menu_open = self.editor_state.editor_ui.git_panel.overflow_open
+            && self.editor_state.editor_ui.git_panel.overflow_view
+                == op_editor_core::GitOverflowView::Menu;
+        let overflow_menu_hover = panel_body.and_then(|body| {
+            GitPanel::for_editor(&self.editor_state).and_then(|p| {
+                if !overflow_menu_open {
+                    return None;
+                }
+                match p.overflow_menu_hit(body, point) {
+                    op_editor_ui::widgets::git_panel::MenuHit::Row(idx) => Some(idx),
+                    op_editor_ui::widgets::git_panel::MenuHit::Inside
+                    | op_editor_ui::widgets::git_panel::MenuHit::Outside => None,
+                }
+            })
+        });
         // The `⎇ <branch> ▾` trigger keeps its own bool wash; the plain
         // action buttons (pull / push / overflow / commit / milestone /
         // refresh) light up via `button_hover`.
@@ -128,6 +156,25 @@ impl WidgetHostNative {
         }
         if tracked_picker_hover != self.editor_state.editor_ui.git_panel.tracked_picker.hover {
             self.editor_state.editor_ui.git_panel.tracked_picker.hover = tracked_picker_hover;
+            changed = true;
+        }
+        if branch_picker_hover
+            != self
+                .editor_state
+                .editor_ui
+                .git_panel
+                .branch_picker_menu
+                .hover
+        {
+            self.editor_state
+                .editor_ui
+                .git_panel
+                .branch_picker_menu
+                .hover = branch_picker_hover;
+            changed = true;
+        }
+        if overflow_menu_hover != self.editor_state.editor_ui.git_panel.overflow_menu.hover {
+            self.editor_state.editor_ui.git_panel.overflow_menu.hover = overflow_menu_hover;
             changed = true;
         }
         if changed {

@@ -14,6 +14,7 @@ use crate::widgets::git_panel::{contains, truncate, GitPanel, GitPanelHit, PAD};
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect};
+use jian_widgets::components::menu::MenuHit;
 use op_editor_core::{GitBranchPickerMode, GitOverflowView};
 
 /// Dropdown row height (TS menu item ≈ 28 px).
@@ -298,6 +299,9 @@ impl GitPanel<'_> {
         for (i, row) in rows.iter().enumerate() {
             let bi = if merging { candidates[i] } else { i };
             let is_current = self.state.branches.get(bi) == self.state.branch.as_ref();
+            if self.state.branch_picker_menu.hover == Some(i) && !is_current {
+                cx.backend.fill_round_rect(*row, 6.0, t.button_hover);
+            }
             let name = truncate(
                 self.state
                     .branches
@@ -477,6 +481,22 @@ impl GitPanel<'_> {
         }
     }
 
+    pub fn branch_picker_menu_hit(&self, panel_rect: Rect, point: Point2D) -> MenuHit {
+        let panel = self.branch_picker_panel(panel_rect);
+        if !contains(panel, point) {
+            return MenuHit::Outside;
+        }
+        if self.state.branch_picker_mode == GitBranchPickerMode::Create {
+            return MenuHit::Inside;
+        }
+        for (i, row) in self.branch_picker_row_rects(panel_rect).iter().enumerate() {
+            if contains(*row, point) {
+                return MenuHit::Row(i);
+            }
+        }
+        MenuHit::Inside
+    }
+
     // ── Overflow menu ────────────────────────────────────────────────
 
     /// The overflow `…` menu rect, anchored below the overflow button
@@ -520,8 +540,10 @@ impl GitPanel<'_> {
         cx.backend.fill_round_rect(panel, 8.0, t.popover);
         cx.backend.stroke_round_rect(panel, 8.0, t.border, 1.0);
         let rows = self.overflow_row_rects(panel_rect);
-        for (item, row) in self.overflow_items().iter().zip(rows.iter()) {
-            self.wash_if_hovered(cx, *row, 6.0, item.hit);
+        for (i, (item, row)) in self.overflow_items().iter().zip(rows.iter()).enumerate() {
+            if self.state.overflow_menu.hover == Some(i) {
+                cx.backend.fill_round_rect(*row, 6.0, t.button_hover);
+            }
             // Leaf icon (TS size=13 strokeWidth=1.75, muted).
             draw_icon(
                 cx.backend,
@@ -569,20 +591,24 @@ impl GitPanel<'_> {
     /// Hit-test the overflow menu. `None` when the point is outside the
     /// popover (the caller then closes it + falls through).
     pub(super) fn overflow_hit(&self, panel_rect: Rect, point: Point2D) -> Option<GitPanelHit> {
+        match self.overflow_menu_hit(panel_rect, point) {
+            MenuHit::Row(idx) => self.overflow_items().get(idx).map(|item| item.hit),
+            MenuHit::Inside => Some(GitPanelHit::Inside),
+            MenuHit::Outside => None,
+        }
+    }
+
+    pub fn overflow_menu_hit(&self, panel_rect: Rect, point: Point2D) -> MenuHit {
         let panel = self.overflow_panel(panel_rect);
         if !contains(panel, point) {
-            return None;
+            return MenuHit::Outside;
         }
-        for (item, row) in self
-            .overflow_items()
-            .iter()
-            .zip(self.overflow_row_rects(panel_rect).iter())
-        {
+        for (i, row) in self.overflow_row_rects(panel_rect).iter().enumerate() {
             if contains(*row, point) {
-                return Some(item.hit);
+                return MenuHit::Row(i);
             }
         }
-        Some(GitPanelHit::Inside)
+        MenuHit::Inside
     }
 
     /// Paint whichever overflow view is active — the menu or a subview.

@@ -8,7 +8,7 @@
 use super::helpers::GIT_PANEL_CARET_GAP;
 use super::{CursorHint, WidgetHostNative};
 use op_editor_core::{GitFileEntry, GitPanelAction};
-use op_editor_ui::widgets::{GitPanel, TopBar, TOP_BAR_HEIGHT};
+use op_editor_ui::widgets::{GitPanel, GitPanelHit, TopBar, TOP_BAR_HEIGHT};
 use op_editor_ui::{Point2D, Rect};
 
 /// A host with the Git panel open in its no-repo onboarding state
@@ -21,6 +21,24 @@ fn host_with_git_panel_open() -> WidgetHostNative {
     panel.in_repo = false;
     panel.has_saved_file = false;
     host
+}
+
+fn find_git_hit(panel: &GitPanel<'_>, body: Rect, target: GitPanelHit) -> Point2D {
+    let mut y = body.origin.y;
+    let max_y = body.origin.y + body.size.y + 140.0;
+    while y <= max_y {
+        let mut x = body.origin.x;
+        let max_x = body.origin.x + body.size.x;
+        while x <= max_x {
+            let point = Point2D::new(x, y);
+            if panel.hit_test(body, point) == Some(target) {
+                return point;
+            }
+            x += 4.0;
+        }
+        y += 4.0;
+    }
+    panic!("could not find git hit target {target:?}");
 }
 
 #[test]
@@ -365,6 +383,49 @@ fn init_card_hover_tracks_the_card_index_and_not_allowed_cursor() {
     assert_eq!(
         host.editor_state().editor_ui.git_panel.empty_hovered_card,
         None
+    );
+}
+
+#[test]
+fn git_popover_row_hover_uses_shared_menu_state() {
+    let mut host = WidgetHostNative::new();
+    let (vw, vh) = (1400.0, 900.0);
+    host.last_viewport_w = vw;
+    host.last_viewport_h = vh;
+    {
+        let panel = &mut host.editor_state_mut().editor_ui.git_panel;
+        panel.open = true;
+        panel.loading = false;
+        panel.in_repo = true;
+        panel.branch = Some("main".to_string());
+        panel.overflow_open = true;
+    }
+    let body = host.git_panel_rect(vw, vh).expect("panel open");
+    let panel = GitPanel::for_editor(host.editor_state()).expect("panel widget");
+    let point = find_git_hit(&panel, body, GitPanelHit::OverflowRemoteSettings);
+    assert!(host.update_git_panel_ready_hover(point.x, point.y));
+    assert_eq!(
+        host.editor_state().editor_ui.git_panel.overflow_menu.hover,
+        Some(2)
+    );
+
+    {
+        let panel = &mut host.editor_state_mut().editor_ui.git_panel;
+        panel.overflow_open = false;
+        panel.overflow_menu.hover = None;
+        panel.branch_picker_open = true;
+        panel.branches = vec!["main".to_string(), "feature".to_string()];
+    }
+    let panel = GitPanel::for_editor(host.editor_state()).expect("panel widget");
+    let point = find_git_hit(&panel, body, GitPanelHit::SwitchBranch(1));
+    assert!(host.update_git_panel_ready_hover(point.x, point.y));
+    assert_eq!(
+        host.editor_state()
+            .editor_ui
+            .git_panel
+            .branch_picker_menu
+            .hover,
+        Some(1)
     );
 }
 

@@ -15,6 +15,7 @@ use crate::theme::Theme;
 use crate::widgets::editor_state_ext::theme_for;
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect};
+pub use jian_widgets::components::menu::MenuHit;
 pub use jian_widgets::components::select::SelectHit;
 use op_editor_core::{EditorState, GitButton, GitPanelState};
 

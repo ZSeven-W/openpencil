@@ -587,7 +587,7 @@ impl WidgetHostNative {
         viewport_width: f32,
     ) {
         use op_editor_core::editor_ui_state::FileAction;
-        use op_editor_ui::widgets::file_menu::{FileMenu, FileMenuChoice};
+        use op_editor_ui::widgets::file_menu::{FileMenu, FileMenuChoice, MenuHit};
         use op_editor_ui::widgets::top_bar::TopBar;
         self.refresh_layout_scene();
         let top_bar_rect = op_editor_ui::Rect {
@@ -602,23 +602,34 @@ impl WidgetHostNative {
             .unwrap_or(0);
         let menu = FileMenu::from_editor_ui(&self.editor_state.editor_ui, now_secs);
         let menu_rect = menu.rect_at(anchor);
-        if let Some(choice) = menu.hit_test(menu_rect, op_editor_ui::Point2D::new(x, y)) {
-            self.editor_state.editor_ui.pending_file_action = Some(match choice {
-                FileMenuChoice::NewFile => FileAction::New,
-                FileMenuChoice::OpenFile => FileAction::Open,
-                FileMenuChoice::Save => FileAction::Save,
-                FileMenuChoice::SaveAs => FileAction::SaveAs,
-                FileMenuChoice::ExportImage => FileAction::ExportImage,
-                FileMenuChoice::OpenRecent(i) => FileAction::OpenRecent(i),
-                FileMenuChoice::ClearRecent => FileAction::ClearRecent,
-            });
-        } else {
-            // Miss — the dismissing click is a blank press.
-            self.blur_text_inputs_on_blank_press();
+        let point = op_editor_ui::Point2D::new(x, y);
+        match menu.hit(menu_rect, point) {
+            MenuHit::Row(row) => {
+                let Some(choice) = menu.choice_for_row(row) else {
+                    return;
+                };
+                self.editor_state.editor_ui.pending_file_action = Some(match choice {
+                    FileMenuChoice::NewFile => FileAction::New,
+                    FileMenuChoice::OpenFile => FileAction::Open,
+                    FileMenuChoice::Save => FileAction::Save,
+                    FileMenuChoice::SaveAs => FileAction::SaveAs,
+                    FileMenuChoice::ExportImage => FileAction::ExportImage,
+                    FileMenuChoice::OpenRecent(i) => FileAction::OpenRecent(i),
+                    FileMenuChoice::ClearRecent => FileAction::ClearRecent,
+                });
+                self.editor_state.editor_ui.file_menu_open = false;
+                self.editor_state.editor_ui.file_menu.hover = None;
+                self.mark_dirty();
+            }
+            MenuHit::Inside => {}
+            MenuHit::Outside => {
+                // Miss — the dismissing click is a blank press.
+                self.blur_text_inputs_on_blank_press();
+                self.editor_state.editor_ui.file_menu_open = false;
+                self.editor_state.editor_ui.file_menu.hover = None;
+                self.mark_dirty();
+            }
         }
-        self.editor_state.editor_ui.file_menu_open = false;
-        self.editor_state.editor_ui.file_menu_hover = None;
-        self.mark_dirty();
     }
 
     /// Commit a pending effect-parameter edit (Effects section's

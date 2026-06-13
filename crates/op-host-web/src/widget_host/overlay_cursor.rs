@@ -130,11 +130,9 @@ impl WidgetHost {
             // to age (see `dispatch_file_menu_press`).
             let menu = FileMenu::from_editor_ui(&self.editor_state.editor_ui, 0);
             let panel = menu.rect_at(anchor);
-            let new_hover = menu
-                .hovered_at(panel, Point2D::new(x, y))
-                .map(op_editor_ui::widgets::editor_state_ext::file_menu_choice);
-            if new_hover != self.editor_state.editor_ui.file_menu_hover {
-                self.editor_state.editor_ui.file_menu_hover = new_hover;
+            let new_hover = menu.hovered_at(panel, Point2D::new(x, y));
+            if new_hover != self.editor_state.editor_ui.file_menu.hover {
+                self.editor_state.editor_ui.file_menu.hover = new_hover;
                 self.mark_dirty();
                 return true;
             }

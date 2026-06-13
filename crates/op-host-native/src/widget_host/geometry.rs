@@ -89,7 +89,7 @@ impl WidgetHostNative {
         {
             let ui = &mut self.editor_state.editor_ui;
             changed |= ui.canvas_hover_node.take().is_some();
-            changed |= ui.file_menu_hover.take().is_some();
+            changed |= ui.file_menu.hover.take().is_some();
             changed |= ui.locale_picker.hover.take().is_some();
             changed |= ui.shape_picker.hover.take().is_some();
             changed |= ui.fill_type_picker.hover.take().is_some();
@@ -146,11 +146,9 @@ impl WidgetHostNative {
                 .unwrap_or(0);
             let menu = FileMenu::from_editor_ui(&self.editor_state.editor_ui, now_secs);
             let panel = menu.rect_at(anchor);
-            let new_hover = menu
-                .hovered_at(panel, Point2D::new(x, y))
-                .map(op_editor_ui::widgets::editor_state_ext::file_menu_choice);
-            if new_hover != self.editor_state.editor_ui.file_menu_hover {
-                self.editor_state.editor_ui.file_menu_hover = new_hover;
+            let new_hover = menu.hovered_at(panel, Point2D::new(x, y));
+            if new_hover != self.editor_state.editor_ui.file_menu.hover {
+                self.editor_state.editor_ui.file_menu.hover = new_hover;
                 self.mark_dirty();
                 return true;
             }

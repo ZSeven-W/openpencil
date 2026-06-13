@@ -599,7 +599,7 @@ impl WidgetHost {
         }
         if self.editor_state.editor_ui.file_menu_open {
             self.editor_state.editor_ui.file_menu_open = false;
-            self.editor_state.editor_ui.file_menu_hover = None;
+            self.editor_state.editor_ui.file_menu.hover = None;
             self.mark_dirty();
             return true;
         }

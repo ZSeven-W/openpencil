@@ -16,11 +16,10 @@
 //! ### Move STATE, not RENDER code
 //!
 //! Many of these types are *declared* under shell-core's `widgets/`
-//! module — `ExportFormat` in `widgets/export_dialog.rs`,
-//! `FileMenuChoice` in `widgets/file_menu.rs`. They are data/state
-//! enums, not rendering code, so their type definitions belong in
-//! the state layer. The widget *painting / hit-test* code stays in
-//! shell-core untouched.
+//! module — for example `ExportFormat` in `widgets/export_dialog.rs`.
+//! They are data/state enums, not rendering code, so their type
+//! definitions belong in the state layer. The widget *painting /
+//! hit-test* code stays in shell-core untouched.
 //!
 //! All types here are plain data (enums + structs of primitives /
 //! strings / ids), so `op-editor-core` stays wasm32-clean.
@@ -53,19 +52,6 @@ pub use crate::property_panel_state::{
     BooleanOp, ExportFormat, FillType, FlexLayout, ImageAdjustmentField, ImageFillMode,
     PaddingEditMode, PropertyTab,
 };
-
-/// File-menu choices. State enum ported from shell-core's
-/// `widgets/file_menu::FileMenuChoice`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum FileMenuChoice {
-    NewFile,
-    OpenFile,
-    Save,
-    SaveAs,
-    ExportImage,
-    OpenRecent(usize),
-    ClearRecent,
-}
 
 /// File-menu actions the host runner has to handle (rfd dialogs +
 /// serde live host-side, not here). `ExportImage` opens the picker;
@@ -504,6 +490,8 @@ pub struct GitPanelState {
     /// (switch-tracked / clear-author / remote-settings › / SSH-keys › /
     /// close-repo). Mirrors the TS header's local `overflowOpen`.
     pub overflow_open: bool,
+    /// Shared interaction state for the top-level overflow menu rows.
+    pub overflow_menu: jian_widgets::components::menu::MenuState,
     /// Which view the overflow popover is showing — the top-level menu
     /// or one of its subviews (remote settings). Resets to `Menu` each
     /// time the popover closes. Mirrors the TS header's `overflowView`.
@@ -511,6 +499,8 @@ pub struct GitPanelState {
     /// Ready-state header: whether the branch-picker dropdown (opened
     /// from the `⎇ <branch> ▾` button) is open.
     pub branch_picker_open: bool,
+    /// Shared interaction state for branch-picker dropdown rows.
+    pub branch_picker_menu: jian_widgets::components::menu::MenuState,
     /// Current branch name of that repository.
     pub branch: Option<String>,
     /// All local branch names, sorted — the panel lists them for
@@ -803,8 +793,9 @@ pub struct EditorUiState {
     // --- File menu --------------------------------------------------
     /// File-menu dropdown open (anchored under folder + chevron).
     pub file_menu_open: bool,
-    /// File-menu row currently hovered — drives the per-row tint.
-    pub file_menu_hover: Option<FileMenuChoice>,
+    /// Shared file-menu interaction state; `hover = None` means no
+    /// actionable row hovered.
+    pub file_menu: jian_widgets::components::menu::MenuState,
     /// Pending file-menu action for the host runner to handle.
     pub pending_file_action: Option<FileAction>,
     /// Recent files (head = newest, cap 10).
@@ -1194,7 +1185,7 @@ impl Default for EditorUiState {
             locale: Locale::ZhCn,
             locale_picker: jian_widgets::components::select::SelectState::default(),
             file_menu_open: false,
-            file_menu_hover: None,
+            file_menu: Default::default(),
             pending_file_action: None,
             recent_files: Vec::new(),
             file_name_display: None,

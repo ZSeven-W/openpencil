@@ -41,7 +41,11 @@ fn variable_row_input_keeps_resume_time_redraws_active() {
     app.host.set_now_ms(240);
     app.host.editor_state_mut().editor_ui.variable_row_focus =
         Some(op_editor_core::editor_ui_state::VariableRowFocus::Name(0));
-    app.host.editor_state_mut().ui.property_caret_anchor_ms = 240;
+    app.host
+        .editor_state_mut()
+        .editor_ui
+        .variable_row_input
+        .touch(240);
 
     assert!(app.resume_time_needs_redraw());
     assert_eq!(app.host.next_animation_deadline_ms(), Some(740));

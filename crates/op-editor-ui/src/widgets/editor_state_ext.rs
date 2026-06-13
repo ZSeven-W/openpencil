@@ -27,25 +27,6 @@ pub fn translate(ui: &EditorUiState, key: &'static str) -> &'static str {
     crate::i18n::translate(ui.locale, key)
 }
 
-/// Map an `op_editor_core::FileMenuChoice` onto the widget-layer
-/// `widgets::file_menu::FileMenuChoice`. Variant-identical; bridges
-/// the file-menu hover state.
-pub fn doc_file_menu_choice(
-    c: op_editor_core::FileMenuChoice,
-) -> crate::widgets::file_menu::FileMenuChoice {
-    use crate::widgets::file_menu::FileMenuChoice as D;
-    use op_editor_core::FileMenuChoice as O;
-    match c {
-        O::NewFile => D::NewFile,
-        O::OpenFile => D::OpenFile,
-        O::Save => D::Save,
-        O::SaveAs => D::SaveAs,
-        O::ExportImage => D::ExportImage,
-        O::OpenRecent(i) => D::OpenRecent(i),
-        O::ClearRecent => D::ClearRecent,
-    }
-}
-
 /// Map an `op_editor_core::ExportFormat` onto the widget-layer
 /// `widgets::export_dialog::ExportFormat`. Variant-identical.
 pub fn doc_export_format(
@@ -67,29 +48,8 @@ pub fn doc_export_format(
 // The host feeds widget hit-test results back into `EditorState`'s
 // `editor_ui_state`. Most widget hit-tests already emit canonical
 // `op_editor_core` types (`Tool`, `AlignAction`, `PropertyFocus`, …)
-// so no conversion is needed. The three enums below stay widget-local
-// (`file_menu` / `shape_picker` / `export_dialog` own them) and so
-// still need a one-arm-per-variant bridge into the canonical
-// `editor_ui_state` enums the hover / format state fields hold.
-
-/// Map the widget-layer `widgets::file_menu::FileMenuChoice` onto the
-/// canonical `op_editor_core::FileMenuChoice`. Reverse of
-/// [`doc_file_menu_choice`].
-pub fn file_menu_choice(
-    c: crate::widgets::file_menu::FileMenuChoice,
-) -> op_editor_core::FileMenuChoice {
-    use crate::widgets::file_menu::FileMenuChoice as W;
-    use op_editor_core::FileMenuChoice as O;
-    match c {
-        W::NewFile => O::NewFile,
-        W::OpenFile => O::OpenFile,
-        W::Save => O::Save,
-        W::SaveAs => O::SaveAs,
-        W::ExportImage => O::ExportImage,
-        W::OpenRecent(i) => O::OpenRecent(i),
-        W::ClearRecent => O::ClearRecent,
-    }
-}
+// so no conversion is needed. The remaining widget-local enums below
+// still need a one-arm-per-variant bridge into canonical state fields.
 
 /// Map the widget-layer `widgets::toolbar::ToolbarAction` onto the
 /// canonical `op_editor_core::ToolbarAction`. Variant-identical;

@@ -323,6 +323,7 @@ impl WidgetHost {
                 }
                 TopBarHit::ToggleFileMenu => {
                     self.editor_state.editor_ui.file_menu_open ^= true;
+                    self.editor_state.editor_ui.file_menu.hover = None;
                 }
                 TopBarHit::OpenFigmaImport => {
                     self.editor_state.editor_ui.figma_import_open = true;

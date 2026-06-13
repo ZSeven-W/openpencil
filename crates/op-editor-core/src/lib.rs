@@ -156,7 +156,7 @@ pub use design_md::{extract_design_md_from_document, generate_design_md, parse_d
 pub use design_md_button_state::DesignMdButton;
 pub use editor_ui_state::{
     BooleanOp, CloneField, CloneFormState, CommitDiffPatch, CommitDiffSummary, CommitDiffView,
-    DesignMdRequest, EditorUiState, ExportFormat, FileAction, FileMenuChoice, FillType, FlexLayout,
+    DesignMdRequest, EditorUiState, ExportFormat, FileAction, FillType, FlexLayout,
     GitBranchPickerMode, GitCandidateFile, GitCommitSummary, GitDiffTarget, GitDiffView,
     GitFileEntry, GitOverflowView, GitPanelAction, GitPanelState, ImageAdjustmentField,
     ImageFillMode, LayerContextMenuState, Locale, MergeConflictRow, MergeResolveFile,
