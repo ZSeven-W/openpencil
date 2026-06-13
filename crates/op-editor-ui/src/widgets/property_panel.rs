@@ -25,6 +25,7 @@
 
 use crate::layout_scene::SceneStroke;
 use crate::theme::Theme;
+use crate::widgets::button::paint_button_feedback_wash;
 use crate::widgets::editor_state_ext::theme_for;
 use crate::widgets::property_panel_sections as sections;
 use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
@@ -191,6 +192,9 @@ pub struct PropertyPanel {
     /// Index into `action_button_rects_with_fill_picker` of the action
     /// button the cursor is over — drives its `theme.button_hover` wash.
     pub action_hover: Option<usize>,
+    /// Index into `action_button_rects_with_fill_picker` of the action
+    /// button currently pressed by the primary pointer.
+    pub action_pressed: Option<usize>,
 }
 
 impl PropertyPanel {
@@ -391,6 +395,14 @@ impl PropertyPanel {
                 None
             } else {
                 ui.property_action_hover
+            },
+            action_pressed: if is_multi {
+                None
+            } else {
+                match ui.pressed_button {
+                    Some(op_editor_core::ButtonPressTarget::PropertyPanel(i)) => Some(i),
+                    _ => None,
+                }
             },
             padding_edit_mode,
             padding_mode_popover_open: ui.padding_mode_popover_open,
@@ -1107,11 +1119,11 @@ impl Widget for PropertyPanel {
                 self.padding_mode_popover_open,
             );
         }
-        // Per-button hover wash — one translucent overlay on the action
-        // button under the cursor (flex / size / fill / effects / export
-        // / create-component). Index into the same walker the host's
-        // hover update + hit-test use, so it lands exactly on the button.
-        if let Some(i) = self.action_hover {
+        // Per-button feedback wash — one translucent overlay on the action
+        // button under the cursor or primary pointer press (flex / size /
+        // fill / effects / export / create-component). Index into the same
+        // walker the host's hover update + hit-test use.
+        if self.action_hover.is_some() || self.action_pressed.is_some() {
             let rects = sections::action_button_rects_with_fill_picker(
                 self.scrolled_rect(rect),
                 self.visible_sections(),
@@ -1123,8 +1135,24 @@ impl Widget for PropertyPanel {
                 self.export_format_picker_open,
                 self.padding_mode_popover_open,
             );
-            if let Some((_, r)) = rects.get(i) {
-                cx.backend.fill_round_rect(*r, 6.0, self.theme.button_hover);
+            if let Some(i) = self.action_hover {
+                if let Some((_, r)) = rects.get(i) {
+                    paint_button_feedback_wash(
+                        cx.backend,
+                        &self.theme,
+                        *r,
+                        6.0,
+                        true,
+                        self.action_pressed == Some(i),
+                    );
+                }
+            }
+            if let Some(i) = self.action_pressed {
+                if self.action_hover != Some(i) {
+                    if let Some((_, r)) = rects.get(i) {
+                        paint_button_feedback_wash(cx.backend, &self.theme, *r, 6.0, false, true);
+                    }
+                }
             }
         }
         cx.backend.restore();

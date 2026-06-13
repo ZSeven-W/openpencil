@@ -73,6 +73,8 @@ pub mod property_panel_layout;
 #[cfg(test)]
 mod property_panel_multi_select_tests;
 mod property_panel_overlay_hit;
+#[cfg(test)]
+mod property_panel_press_tests;
 pub mod property_panel_sections;
 pub mod property_panel_snapshot;
 #[cfg(test)]
