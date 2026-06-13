@@ -4,7 +4,7 @@ use crate::theme::Theme;
 use crate::widgets::agent_settings_caret::{paint_settings_input_view, settings_input_text};
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::PaintCx;
-use crate::{Color, Point2D, Rect, TextLayout};
+use crate::{Point2D, Rect, TextLayout};
 use op_editor_core::agent_settings::{
     AgentSettings, ImageGenField, ImageGenProfile, ImageGenProvider, ImageSearchField,
     ImageTestStatus, SettingsFocus,
@@ -222,15 +222,13 @@ pub(super) fn paint_profile_test_button(
     profile: &ImageGenProfile,
     btn: Rect,
     hovered: bool,
+    pressed: bool,
 ) {
     let enabled =
         !profile.api_key.trim().is_empty() && profile.test_status != ImageTestStatus::Testing;
     paint_profile_test_status(cx, theme, profile, btn);
     cx.backend.fill_round_rect(btn, 6.0, theme.muted);
-    if hovered {
-        cx.backend
-            .fill_round_rect(btn, 6.0, profile_button_hover_color(theme));
-    }
+    crate::widgets::button::paint_ghost_button_feedback(cx.backend, theme, btn, hovered, pressed);
     cx.backend.stroke_round_rect(btn, 6.0, theme.border, 1.0);
     let label = crate::widgets::agent_settings_i18n::t(ui, "settings.images.test");
     let label_w = cx.backend.measure_text(label, 11.0);
@@ -253,15 +251,6 @@ pub(super) fn paint_profile_test_button(
             btn.origin.y + btn.size.y / 2.0 + 4.0,
         ),
     );
-}
-
-fn profile_button_hover_color(theme: &Theme) -> Color {
-    Color {
-        r: theme.foreground.r,
-        g: theme.foreground.g,
-        b: theme.foreground.b,
-        a: 0.12,
-    }
 }
 
 fn paint_profile_test_status(
@@ -312,6 +301,7 @@ pub(super) fn paint_provider_field(
     input: Rect,
     label_x: f32,
     hovered: bool,
+    pressed: bool,
 ) {
     let label_lay = TextLayout::single_run(
         "Provider",
@@ -323,9 +313,7 @@ pub(super) fn paint_provider_field(
     cx.backend
         .draw_text(&label_lay, Point2D::new(label_x, input.origin.y + 16.0));
     cx.backend.fill_round_rect(input, 6.0, theme.card);
-    if hovered {
-        cx.backend.fill_round_rect(input, 6.0, theme.button_hover);
-    }
+    crate::widgets::button::paint_ghost_button_feedback(cx.backend, theme, input, hovered, pressed);
     cx.backend.stroke_round_rect(input, 6.0, theme.border, 1.0);
     let value = ellipsize(cx, profile.provider.label(), input.size.x - 28.0, 11.0);
     let value_lay = TextLayout::single_run(

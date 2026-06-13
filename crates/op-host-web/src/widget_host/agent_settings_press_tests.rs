@@ -256,6 +256,15 @@ fn image_generation_profile_test_tracks_testing_status_like_ts() {
         .agent_settings
         .image_gen_profiles[0];
     assert_eq!(profile.test_status, ImageTestStatus::Testing);
+    assert_eq!(
+        host.editor_state.editor_ui.pressed_button,
+        Some(ButtonPressTarget::AgentSettings(
+            AgentSettingsButton::ImageProfileTest(0)
+        ))
+    );
+
+    assert!(host.apply_release_with_viewport(1200.0, 800.0));
+    assert_eq!(host.editor_state.editor_ui.pressed_button, None);
 }
 
 #[test]
@@ -304,6 +313,14 @@ fn image_generation_provider_select_commits_and_closes_menu() {
             field: ImageGenField::Name,
         })
     );
+    assert_eq!(
+        host.editor_state.editor_ui.pressed_button,
+        Some(ButtonPressTarget::AgentSettings(
+            AgentSettingsButton::ImageProfileProvider(0)
+        ))
+    );
+    assert!(host.apply_release_with_viewport(1200.0, 800.0));
+    assert_eq!(host.editor_state.editor_ui.pressed_button, None);
 
     assert!(host.dispatch_agent_settings_press(
         content_x + 110.0 + 20.0,
@@ -351,9 +368,17 @@ fn image_generation_profile_header_click_toggles_editor_closed() {
     let row_y = gen_top + 36.0 + 8.0;
 
     assert!(host.dispatch_agent_settings_press(content_x + 72.0, row_y + 16.0, 1200.0, 800.0));
+    assert_eq!(
+        host.editor_state.editor_ui.pressed_button,
+        Some(ButtonPressTarget::AgentSettings(
+            AgentSettingsButton::ImageProfileHeader(0)
+        ))
+    );
 
     assert_eq!(host.editor_state.editor_ui.agent_settings.focus, None);
     assert!(host.editor_state.editor_ui.settings_input.text().is_empty());
+    assert!(host.apply_release_with_viewport(1200.0, 800.0));
+    assert_eq!(host.editor_state.editor_ui.pressed_button, None);
 }
 
 #[test]

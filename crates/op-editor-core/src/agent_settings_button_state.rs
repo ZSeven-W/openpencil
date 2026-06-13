@@ -9,4 +9,8 @@ pub enum AgentSettingsButton {
     McpClientConfigCopy,
     ImageSearchTest,
     ImageGenAdd,
+    ImageProfileHeader(usize),
+    ImageProfileRemove(usize),
+    ImageProfileProvider(usize),
+    ImageProfileTest(usize),
 }

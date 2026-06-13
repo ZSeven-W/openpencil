@@ -639,10 +639,15 @@ fn paint_profile_row(
     } else {
         cx.backend.stroke_round_rect(row, 6.0, theme.border, 1.0);
     }
-    if settings.hover_image_gen_profile_header == Some(index) {
-        cx.backend
-            .fill_round_rect(profile_header_rect(row), 6.0, theme.button_hover);
-    }
+    crate::widgets::button::paint_ghost_button_feedback(
+        cx.backend,
+        theme,
+        profile_header_rect(row),
+        settings.hover_image_gen_profile_header == Some(index),
+        ui.button_pressed(ButtonPressTarget::AgentSettings(
+            AgentSettingsButton::ImageProfileHeader(index),
+        )),
+    );
     let dot = profile_active_rect(row);
     if active {
         cx.backend.fill_oval(dot, theme.primary);
@@ -708,10 +713,15 @@ fn paint_profile_row(
     );
 
     let remove_hover = profile_remove_hover_rect(row);
-    if settings.hover_image_gen_profile_remove == Some(index) {
-        cx.backend
-            .fill_round_rect(remove_hover, 6.0, theme.button_hover);
-    }
+    crate::widgets::button::paint_ghost_button_feedback(
+        cx.backend,
+        theme,
+        remove_hover,
+        settings.hover_image_gen_profile_remove == Some(index),
+        ui.button_pressed(ButtonPressTarget::AgentSettings(
+            AgentSettingsButton::ImageProfileRemove(index),
+        )),
+    );
     draw_icon(
         cx.backend,
         Icon::Trash,
@@ -746,6 +756,9 @@ fn paint_profile_row(
             profile,
             profile_test_btn_rect(row),
             settings.hover_image_gen_profile_test == Some(index),
+            ui.button_pressed(ButtonPressTarget::AgentSettings(
+                AgentSettingsButton::ImageProfileTest(index),
+            )),
         );
         let provider_rect = profile_provider_rect(row);
         paint_provider_field(
@@ -755,6 +768,9 @@ fn paint_profile_row(
             provider_rect,
             row.origin.x + 12.0,
             settings.hover_image_gen_profile_provider == Some(index),
+            ui.button_pressed(ButtonPressTarget::AgentSettings(
+                AgentSettingsButton::ImageProfileProvider(index),
+            )),
         );
         if settings.image_gen_provider_menu_open == Some(index) {
             let hovered = settings

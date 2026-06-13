@@ -4,7 +4,7 @@ use crate::{Color, Point2D, Rect, RenderBackend, TextLayout};
 use op_editor_core::agent_settings::{
     AgentSettingsTab, ImageGenField, ImageGenProvider, ImageTestStatus, SettingsFocus,
 };
-use op_editor_core::EditorState;
+use op_editor_core::{AgentSettingsButton, ButtonPressTarget, EditorState};
 
 #[derive(Default)]
 struct CaptureBackend {
@@ -406,12 +406,78 @@ fn images_tab_profile_controls_hover_paints_visible_washes() {
     }
     assert!(
         backend.round_fills.iter().any(|(fill, color)| {
-            rect_eq(*fill, test_button)
-                && !color_eq(*color, panel.theme.muted)
-                && color.a > panel.theme.button_hover.a + 0.01
+            rect_eq(*fill, test_button) && color_eq(*color, panel.theme.button_hover)
         }),
-        "hovered profile test button should paint a stronger visible hover wash"
+        "hovered profile test button should paint the shared hover token"
     );
+}
+
+#[test]
+fn pressed_image_gen_profile_controls_use_shared_button_feedback() {
+    for button in [
+        AgentSettingsButton::ImageProfileHeader(0),
+        AgentSettingsButton::ImageProfileRemove(0),
+        AgentSettingsButton::ImageProfileProvider(0),
+        AgentSettingsButton::ImageProfileTest(0),
+    ] {
+        let mut state = EditorState::default();
+        state.editor_ui.agent_settings.tab = AgentSettingsTab::Images;
+        state.editor_ui.agent_settings.add_image_gen_profile();
+        state.editor_ui.agent_settings.focus = Some(SettingsFocus::ImageGenProfile {
+            index: 0,
+            field: ImageGenField::Name,
+        });
+        state.editor_ui.pressed_button = Some(ButtonPressTarget::AgentSettings(button));
+        let panel = AgentSettingsPanel::for_editor(&state);
+        let rect = panel.rect(1200.0, 800.0);
+        let content_x = rect.origin.x + 200.0 + 24.0;
+        let content_y = rect.origin.y + 24.0;
+        let content_w = rect.size.x - 200.0 - 48.0;
+        let row = Rect {
+            origin: Point2D::new(content_x + 8.0, content_y + 36.0 + 24.0 + 28.0 + 36.0 + 8.0),
+            size: Point2D::new(content_w - 16.0, 32.0 + 8.0 + 5.0 * 36.0),
+        };
+        let target = match button {
+            AgentSettingsButton::ImageProfileHeader(_) => Rect {
+                origin: row.origin,
+                size: Point2D::new(row.size.x, 32.0),
+            },
+            AgentSettingsButton::ImageProfileRemove(_) => Rect {
+                origin: Point2D::new(row.origin.x + row.size.x - 30.0, row.origin.y + 2.0),
+                size: Point2D::new(28.0, 28.0),
+            },
+            AgentSettingsButton::ImageProfileProvider(_) => Rect {
+                origin: Point2D::new(row.origin.x + 110.0, row.origin.y + 40.0 + 36.0),
+                size: Point2D::new(row.size.x - 110.0 - 12.0, 24.0),
+            },
+            AgentSettingsButton::ImageProfileTest(_) => Rect {
+                origin: Point2D::new(
+                    row.origin.x + row.size.x - 12.0 - 56.0,
+                    row.origin.y + 40.0 + 72.0,
+                ),
+                size: Point2D::new(56.0, 24.0),
+            },
+            _ => unreachable!("case list only includes image profile buttons"),
+        };
+        let expected = panel
+            .theme
+            .button_hover
+            .with_alpha(panel.theme.button_hover.a * 1.8);
+        let mut backend = CaptureBackend::default();
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+
+        panel.paint(&mut cx, rect);
+
+        assert!(
+            backend
+                .round_fills
+                .iter()
+                .any(|(fill, color)| rect_eq(*fill, target) && color_eq(*color, expected)),
+            "pressed {button:?} should paint the shared pressed feedback token"
+        );
+    }
 }
 
 #[test]
@@ -449,11 +515,9 @@ fn disabled_image_gen_profile_test_hover_uses_visible_wash() {
 
     assert!(
         backend.round_fills.iter().any(|(fill, color)| {
-            rect_eq(*fill, test_button)
-                && !color_eq(*color, panel.theme.muted)
-                && color.a > panel.theme.button_hover.a + 0.01
+            rect_eq(*fill, test_button) && color_eq(*color, panel.theme.button_hover)
         }),
-        "disabled profile test button hover should paint a visible wash"
+        "disabled profile test button hover should paint the shared hover token"
     );
 }
 
