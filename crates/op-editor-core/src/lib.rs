@@ -161,8 +161,8 @@ pub use editor_ui_state::{
     GitBranchPickerMode, GitCandidateFile, GitCommitSummary, GitDiffTarget, GitDiffView,
     GitFileEntry, GitOverflowView, GitPanelAction, GitPanelState, ImageAdjustmentField,
     ImageFillMode, LayerContextMenuState, Locale, MergeConflictRow, MergeResolveFile,
-    MergeResolveState, PaddingEditMode, PageRenameState, PropertyTab, RecentFile, ShapeChoice,
-    ThemeMode, UpdateStatus, VariableRowFocus,
+    MergeResolveState, PaddingEditMode, PageRenameState, PropertyTab, RecentFile, ThemeMode,
+    UpdateStatus, VariableRowFocus,
 };
 pub use export_dialog_state::ExportDialogButton;
 pub use figma_import_state::FigmaImportButton;

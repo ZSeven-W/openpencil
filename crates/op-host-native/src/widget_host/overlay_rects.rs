@@ -276,7 +276,7 @@ impl WidgetHostNative {
             return true;
         }
         // Open dropdowns + the right-click context menu.
-        (ui.shape_picker_open && (self.shape_picker_rect(viewport_w, viewport_h)).contains(p))
+        (ui.shape_picker.open && (self.shape_picker_rect(viewport_w, viewport_h)).contains(p))
             || (ui.locale_picker.open && (self.locale_picker_rect(viewport_w)).contains(p))
             || self
                 .file_menu_rect(viewport_w)

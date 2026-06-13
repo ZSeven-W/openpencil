@@ -337,7 +337,7 @@ impl WidgetHostNative {
 
         // 9. ShapePicker — anchored to the right of the toolbar
         //    shape slot; same z-priority as the locale picker.
-        if ui.shape_picker_open {
+        if ui.shape_picker.open {
             let picker_rect = self.shape_picker_rect(viewport_width, viewport_height);
             let picker = ShapePicker::for_editor_ui(&self.editor_state.editor_ui);
             let mut cx = PaintCx {

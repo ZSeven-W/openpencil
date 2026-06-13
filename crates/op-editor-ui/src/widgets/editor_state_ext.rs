@@ -27,22 +27,6 @@ pub fn translate(ui: &EditorUiState, key: &'static str) -> &'static str {
     crate::i18n::translate(ui.locale, key)
 }
 
-/// Map an `op_editor_core::ShapeChoice` onto the widget-layer
-/// `widgets::shape_picker::ShapeChoice`. The state-layer enum carries
-/// `op_editor_core::Tool` in its `Tool` variant; the widget enum
-/// carries the same `op_editor_core::Tool` — pass-through.
-pub fn doc_shape_choice(
-    c: op_editor_core::ShapeChoice,
-) -> crate::widgets::shape_picker::ShapeChoice {
-    use crate::widgets::shape_picker::ShapeChoice as D;
-    use op_editor_core::ShapeChoice as O;
-    match c {
-        O::Tool(t) => D::Tool(t),
-        O::OpenIconPicker => D::OpenIconPicker,
-        O::ImportImageOrSvg => D::ImportImageOrSvg,
-    }
-}
-
 /// Map an `op_editor_core::FileMenuChoice` onto the widget-layer
 /// `widgets::file_menu::FileMenuChoice`. Variant-identical; bridges
 /// the file-menu hover state.
@@ -104,20 +88,6 @@ pub fn file_menu_choice(
         W::ExportImage => O::ExportImage,
         W::OpenRecent(i) => O::OpenRecent(i),
         W::ClearRecent => O::ClearRecent,
-    }
-}
-
-/// Map the widget-layer `widgets::shape_picker::ShapeChoice` onto the
-/// canonical `op_editor_core::ShapeChoice`. Reverse of
-/// [`doc_shape_choice`]; the `Tool` variant carries the same
-/// `op_editor_core::Tool` either way.
-pub fn shape_choice(c: crate::widgets::shape_picker::ShapeChoice) -> op_editor_core::ShapeChoice {
-    use crate::widgets::shape_picker::ShapeChoice as W;
-    use op_editor_core::ShapeChoice as O;
-    match c {
-        W::Tool(t) => O::Tool(t),
-        W::OpenIconPicker => O::OpenIconPicker,
-        W::ImportImageOrSvg => O::ImportImageOrSvg,
     }
 }
 

@@ -25,7 +25,9 @@ impl WidgetHost {
     /// `widget_host/press.rs` (tool write + shape-picker close).
     pub(crate) fn a11y_set_tool(&mut self, tool: op_editor_core::Tool) {
         self.editor_state.tool = tool;
-        self.editor_state.editor_ui.shape_picker_open = false;
+        self.editor_state.editor_ui.shape_picker.open = false;
+        self.editor_state.editor_ui.shape_picker.hover = None;
+        self.editor_state.editor_ui.shape_picker.pressed = None;
         self.mark_dirty();
     }
 
@@ -48,10 +50,10 @@ mod tests {
     #[test]
     fn a11y_set_tool_switches_tool_and_closes_shape_picker() {
         let mut host = WidgetHost::new();
-        host.editor_state.editor_ui.shape_picker_open = true;
+        host.editor_state.editor_ui.shape_picker.open = true;
         host.a11y_set_tool(op_editor_core::Tool::Frame);
         assert_eq!(host.editor_state.tool, op_editor_core::Tool::Frame);
-        assert!(!host.editor_state.editor_ui.shape_picker_open);
+        assert!(!host.editor_state.editor_ui.shape_picker.open);
         assert!(host.editor_state_dirty);
     }
 

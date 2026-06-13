@@ -239,8 +239,13 @@ impl WidgetHost {
                     return self.dispatch_toolbar_action(action);
                 }
                 op_editor_ui::widgets::ToolbarHit::ToggleShapePicker => {
-                    let v = &mut self.editor_state.editor_ui.shape_picker_open;
-                    *v = !*v;
+                    let picker = &mut self.editor_state.editor_ui.shape_picker;
+                    picker.open = !picker.open;
+                    picker.hover = None;
+                    picker.pressed = None;
+                    if picker.open {
+                        picker.scroll.offset = 0.0;
+                    }
                     self.mark_dirty();
                     return true;
                 }

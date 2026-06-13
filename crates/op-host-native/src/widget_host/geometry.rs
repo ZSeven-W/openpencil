@@ -91,7 +91,7 @@ impl WidgetHostNative {
             changed |= ui.canvas_hover_node.take().is_some();
             changed |= ui.file_menu_hover.take().is_some();
             changed |= ui.locale_picker.hover.take().is_some();
-            changed |= ui.shape_picker_hover.take().is_some();
+            changed |= ui.shape_picker.hover.take().is_some();
             changed |= ui.toolbar_hover.take().is_some();
             changed |= ui.align_toolbar_hover.take().is_some();
             changed |= ui.chat_model_picker_hover.take().is_some();
@@ -170,16 +170,18 @@ impl WidgetHostNative {
                 return true;
             }
         }
-        if self.editor_state.editor_ui.shape_picker_open {
+        if self.editor_state.editor_ui.shape_picker.open {
             use op_editor_ui::widgets::shape_picker::ShapePicker;
             self.refresh_layout_scene();
             let panel = self.shape_picker_rect(self.last_viewport_w, self.last_viewport_h);
             let picker = ShapePicker::for_editor_ui(&self.editor_state.editor_ui);
-            let new_hover = picker
-                .hit_test(panel, Point2D::new(x, y))
-                .map(op_editor_ui::widgets::editor_state_ext::shape_choice);
-            if new_hover != self.editor_state.editor_ui.shape_picker_hover {
-                self.editor_state.editor_ui.shape_picker_hover = new_hover;
+            let new_hover = match picker.hit_popup(panel, Point2D::new(x, y)) {
+                op_editor_ui::widgets::shape_picker::SelectHit::Row(idx) => Some(idx),
+                op_editor_ui::widgets::shape_picker::SelectHit::Inside
+                | op_editor_ui::widgets::shape_picker::SelectHit::Outside => None,
+            };
+            if new_hover != self.editor_state.editor_ui.shape_picker.hover {
+                self.editor_state.editor_ui.shape_picker.hover = new_hover;
                 self.mark_dirty();
                 return true;
             }

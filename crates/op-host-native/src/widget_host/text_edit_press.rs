@@ -137,7 +137,7 @@ impl WidgetHostNative {
             || eui.figma_import_open
             || eui.file_menu_open
             || eui.locale_picker.open
-            || eui.shape_picker_open
+            || eui.shape_picker.open
             || eui.layer_context_menu.is_some()
             || self.editor_state.ui.color_picker.is_some()
         {

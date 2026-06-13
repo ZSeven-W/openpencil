@@ -82,7 +82,7 @@ fn variables_panel_open_does_not_paint_legacy_modal() {
 #[test]
 fn shape_picker_paints_and_row_press_selects_tool() {
     let mut host = WidgetHost::new();
-    host.editor_state.editor_ui.shape_picker_open = true;
+    host.editor_state.editor_ui.shape_picker.open = true;
 
     // Painted: the open dropdown's panel background lands at its rect.
     let picker_rect = host.shape_picker_rect(W, H);
@@ -115,19 +115,19 @@ fn shape_picker_paints_and_row_press_selects_tool() {
     assert!(host.apply_press(x, row_y, W, H));
     assert_eq!(host.editor_state.tool, Tool::Ellipse);
     assert_eq!(host.editor_state.editor_ui.shape_tool, Tool::Ellipse);
-    assert!(!host.editor_state.editor_ui.shape_picker_open);
+    assert!(!host.editor_state.editor_ui.shape_picker.open);
 }
 
 #[test]
 fn shape_picker_miss_click_closes_without_tool_change() {
     let mut host = WidgetHost::new();
     let before = host.editor_state.tool;
-    host.editor_state.editor_ui.shape_picker_open = true;
+    host.editor_state.editor_ui.shape_picker.open = true;
 
     // A press far away from the dropdown dismisses it silently and is
     // swallowed (no marquee / selection change underneath).
     assert!(host.apply_press(900.0, 600.0, W, H));
-    assert!(!host.editor_state.editor_ui.shape_picker_open);
+    assert!(!host.editor_state.editor_ui.shape_picker.open);
     assert_eq!(host.editor_state.tool, before);
 }
 
@@ -247,7 +247,7 @@ fn file_menu_row_press_raises_pending_file_action() {
 #[test]
 fn shape_picker_icon_row_opens_icon_picker_panel() {
     let mut host = WidgetHost::new();
-    host.editor_state.editor_ui.shape_picker_open = true;
+    host.editor_state.editor_ui.shape_picker.open = true;
 
     let picker_rect = host.shape_picker_rect(W, H);
     let picker = ShapePicker::for_editor_ui(&host.editor_state.editor_ui);
@@ -268,7 +268,7 @@ fn shape_picker_icon_row_opens_icon_picker_panel() {
 
     assert!(host.apply_press(x, row_y, W, H));
     assert!(host.editor_state.editor_ui.icon_picker_open);
-    assert!(!host.editor_state.editor_ui.shape_picker_open);
+    assert!(!host.editor_state.editor_ui.shape_picker.open);
 
     // The icon-picker panel paints at its centred rect.
     let panel_rect = host

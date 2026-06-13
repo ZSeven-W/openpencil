@@ -67,7 +67,7 @@ pub enum ToolbarHit {
     Tool(Tool),
     Action(ToolbarAction),
     /// User clicked the shape slot — host should toggle the
-    /// shape-tool picker (`Document.ui.shape_picker_open`).
+    /// shape-tool picker (`Document.ui.shape_picker.open`).
     ToggleShapePicker,
 }
 

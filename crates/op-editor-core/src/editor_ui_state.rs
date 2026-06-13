@@ -17,10 +17,10 @@
 //!
 //! Many of these types are *declared* under shell-core's `widgets/`
 //! module — `ExportFormat` in `widgets/export_dialog.rs`,
-//! `FileMenuChoice` in `widgets/file_menu.rs`, `ShapeChoice` in
-//! `widgets/shape_picker.rs`. They are data/state enums, not rendering
-//! code, so their type definitions belong in the state layer. The
-//! widget *painting / hit-test* code stays in shell-core untouched.
+//! `FileMenuChoice` in `widgets/file_menu.rs`. They are data/state
+//! enums, not rendering code, so their type definitions belong in
+//! the state layer. The widget *painting / hit-test* code stays in
+//! shell-core untouched.
 //!
 //! All types here are plain data (enums + structs of primitives /
 //! strings / ids), so `op-editor-core` stays wasm32-clean.
@@ -693,18 +693,6 @@ pub struct RecentFile {
     pub modified_at: u64,
 }
 
-/// Toolbar shape-slot dropdown choice. State enum ported from
-/// shell-core's `widgets/shape_picker::ShapeChoice`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ShapeChoice {
-    /// Pick a shape tool (Rect / Ellipse / Polygon / Line / Pen).
-    Tool(Tool),
-    /// Open the icon picker (host concern; this only reports intent).
-    OpenIconPicker,
-    /// Open a file dialog to import an image / SVG.
-    ImportImageOrSvg,
-}
-
 // What the LayerPanel right-click context menu is acting on — the
 // canonical definition is `ui_draft::LayerContextTarget` (it backs
 // the inline-rename draft too). Re-exported so UI code that
@@ -873,10 +861,8 @@ pub struct EditorUiState {
     pub settings_input: jian_core::text_input::TextInputState,
 
     // --- Toolbar shape slot ----------------------------------------
-    /// Whether the Toolbar shape-tool dropdown is open.
-    pub shape_picker_open: bool,
-    /// Shape-picker row currently hovered.
-    pub shape_picker_hover: Option<ShapeChoice>,
+    /// Toolbar shape-tool dropdown state.
+    pub shape_picker: jian_widgets::components::select::SelectState,
     /// Toolbar button currently hovered — drives the per-button
     /// `theme.button_hover` wash on the vertical tool column.
     pub toolbar_hover: Option<crate::toolbar_state::ToolbarHover>,
@@ -1224,8 +1210,7 @@ impl Default for EditorUiState {
             agent_settings: crate::agent_settings::AgentSettings::default(),
             agent_settings_drag: None,
             settings_input: jian_core::text_input::TextInputState::default(),
-            shape_picker_open: false,
-            shape_picker_hover: None,
+            shape_picker: jian_widgets::components::select::SelectState::default(),
             toolbar_hover: None,
             shape_tool: Tool::Rect,
             icon_picker_open: false,
