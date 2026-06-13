@@ -970,8 +970,8 @@ pub struct EditorUiState {
     pub size_hug_width: bool,
     pub size_hug_height: bool,
     pub size_clip_content: bool,
-    /// Whether the fill-type dropdown is open.
-    pub fill_type_picker_open: bool,
+    /// Fill-type dropdown state in the PropertyPanel.
+    pub fill_type_picker: jian_widgets::components::select::SelectState,
     /// Fill/stroke colour-variable dropdown currently open in the
     /// PropertyPanel; `None` means closed.
     pub property_color_variable_picker_open: Option<crate::ui_draft::ColorTarget>,
@@ -1248,7 +1248,7 @@ impl Default for EditorUiState {
             size_hug_width: false,
             size_hug_height: false,
             size_clip_content: false,
-            fill_type_picker_open: false,
+            fill_type_picker: jian_widgets::components::select::SelectState::default(),
             property_color_variable_picker_open: None,
             image_fill_popover_open: false,
             font_family_picker_open: false,
@@ -1318,6 +1318,28 @@ impl EditorUiState {
     /// A fresh UI state — sidebar open, dark theme, no menus open.
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn toggle_fill_type_picker(&mut self) {
+        let opening = !self.fill_type_picker.open;
+        self.fill_type_picker.open = opening;
+        self.fill_type_picker.hover = None;
+        self.fill_type_picker.pressed = None;
+        if opening {
+            self.fill_type_picker.scroll.offset = 0.0;
+        }
+    }
+
+    pub fn close_fill_type_picker(&mut self) -> bool {
+        let changed = self.fill_type_picker.open
+            || self.fill_type_picker.hover.is_some()
+            || self.fill_type_picker.pressed.is_some()
+            || self.fill_type_picker.scroll.offset != 0.0;
+        self.fill_type_picker.open = false;
+        self.fill_type_picker.hover = None;
+        self.fill_type_picker.pressed = None;
+        self.fill_type_picker.scroll.offset = 0.0;
+        changed
     }
 
     /// Whether the preset dropdown's save-as-name input owns the

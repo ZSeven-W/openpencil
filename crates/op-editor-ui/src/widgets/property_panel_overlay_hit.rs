@@ -6,8 +6,29 @@
 use crate::widgets::property_panel::PropertyPanel;
 use crate::widgets::{property_panel_image_assets, property_panel_typography};
 use crate::{Point2D, Rect};
+use jian_widgets::components::select::SelectHit;
 
 impl PropertyPanel {
+    pub fn fill_type_picker_hit(&self, panel_rect: Rect, point: Point2D) -> SelectHit {
+        if !self.fill_type_picker.open {
+            return SelectHit::Outside;
+        }
+        crate::widgets::property_panel_fill::fill_type_picker_hit(
+            &self.fill_type_picker,
+            self.scrolled_rect(panel_rect),
+            self.visible_sections(),
+            point,
+            &self.theme,
+        )
+    }
+
+    pub fn fill_type_picker_row_at(&self, panel_rect: Rect, point: Point2D) -> Option<usize> {
+        match self.fill_type_picker_hit(panel_rect, point) {
+            SelectHit::Row(idx) => Some(idx),
+            SelectHit::Inside | SelectHit::Outside => None,
+        }
+    }
+
     /// Visible font-picker entries for the current search + host
     /// enumeration — paint, hit-test, and the host dispatch resolve
     /// `SetFontFamilyIndex` against this same list.

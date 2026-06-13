@@ -691,7 +691,7 @@ fn escape_closes_one_overlay_per_press_in_priority_order() {
     host.editor_state_mut().ui.property_input.set_text("12");
     host.editor_state_mut().editor_ui.locale_picker.open = true;
     host.editor_state_mut().editor_ui.shape_picker.open = true;
-    host.editor_state_mut().editor_ui.fill_type_picker_open = true;
+    host.editor_state_mut().editor_ui.fill_type_picker.open = true;
     host.editor_state_mut().chat.focused = true;
     host.editor_state_mut()
         .set_single_selection(NodeId::new("n10"));
@@ -710,11 +710,11 @@ fn escape_closes_one_overlay_per_press_in_priority_order() {
     // 3. Shape picker.
     assert!(host.apply_escape());
     assert!(!host.editor_state().editor_ui.shape_picker.open);
-    assert!(host.editor_state().editor_ui.fill_type_picker_open);
+    assert!(host.editor_state().editor_ui.fill_type_picker.open);
 
     // 4. Fill-type picker.
     assert!(host.apply_escape());
-    assert!(!host.editor_state().editor_ui.fill_type_picker_open);
+    assert!(!host.editor_state().editor_ui.fill_type_picker.open);
     assert!(host.editor_state().chat.focused);
 
     // 5. Chat focus.

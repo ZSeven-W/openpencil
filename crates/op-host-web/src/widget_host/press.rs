@@ -369,6 +369,41 @@ impl WidgetHost {
             return true;
         }
 
+        // 0c0. Fill-type picker — outside-click dismiss. A row
+        // click applies the fill type; a click inside the popup body
+        // is swallowed; any outside click closes the picker.
+        if self.editor_state.editor_ui.fill_type_picker.open {
+            if let Some(panel) = PropertyPanel::for_selection(&self.editor_state) {
+                let property_rect = Rect {
+                    origin: Point2D::new(
+                        viewport_width - self.editor_state.editor_ui.property_panel_width,
+                        TOP_BAR_HEIGHT,
+                    ),
+                    size: Point2D::new(
+                        self.editor_state.editor_ui.property_panel_width,
+                        (viewport_height - TOP_BAR_HEIGHT).max(0.0),
+                    ),
+                };
+                match panel.fill_type_picker_hit(property_rect, Point2D::new(x, y)) {
+                    op_editor_ui::widgets::property_panel_fill::SelectHit::Row(idx) => {
+                        if let Some(fill_type) =
+                            op_editor_ui::widgets::property_panel_fill::fill_type_at(idx)
+                        {
+                            self.apply_property_action(
+                                op_editor_ui::widgets::PropertyPanelAction::SetFillType(fill_type),
+                            );
+                            return true;
+                        }
+                    }
+                    op_editor_ui::widgets::property_panel_fill::SelectHit::Inside => return true,
+                    op_editor_ui::widgets::property_panel_fill::SelectHit::Outside => {}
+                }
+            }
+            self.editor_state.editor_ui.close_fill_type_picker();
+            self.mark_dirty();
+            return true;
+        }
+
         // 0c0a0. Fill/stroke colour-variable picker — outside-click dismiss.
         if self
             .editor_state

@@ -29,6 +29,7 @@ use crate::widgets::editor_state_ext::theme_for;
 use crate::widgets::property_panel_sections as sections;
 use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
 use crate::{Point2D, Rect};
+use jian_widgets::components::select::{SelectHit, SelectState};
 use op_editor_core::PropertyFocus;
 
 use op_editor_core::EditorState;
@@ -124,7 +125,7 @@ pub struct PropertyPanel {
     pub size_flags: sections::SizeFlags,
     /// Active fill type — drives the dropdown label + picker.
     pub fill_type: op_editor_core::FillType,
-    pub fill_type_picker_open: bool,
+    pub fill_type_picker: SelectState,
     pub color_variable_picker_open: Option<op_editor_core::ColorTarget>,
     pub color_variables: Vec<ColorVariableOption>,
     pub fill_variable_ref: Option<String>,
@@ -371,7 +372,7 @@ impl PropertyPanel {
             flex_layout,
             size_flags,
             fill_type,
-            fill_type_picker_open: ui.fill_type_picker_open,
+            fill_type_picker: ui.fill_type_picker.clone(),
             color_variable_picker_open: ui.property_color_variable_picker_open,
             color_variables,
             fill_variable_ref,
@@ -575,6 +576,18 @@ impl PropertyPanel {
                 return Some(action);
             }
         }
+        if self.fill_type_picker.open {
+            match self.fill_type_picker_hit(panel_rect, point) {
+                SelectHit::Row(idx) => {
+                    if let Some(fill_type) = crate::widgets::property_panel_fill::fill_type_at(idx)
+                    {
+                        return Some(PropertyPanelAction::SetFillType(fill_type));
+                    }
+                }
+                SelectHit::Inside => return None,
+                SelectHit::Outside => {}
+            }
+        }
         if !self.point_in_section_viewport(panel_rect, point) {
             return None;
         }
@@ -582,7 +595,7 @@ impl PropertyPanel {
             self.scrolled_rect(panel_rect),
             self.visible_sections(),
             &self.snapshot.effects,
-            self.fill_type_picker_open,
+            self.fill_type_picker.open,
             self.font_family_picker_open,
             self.font_weight_picker_open,
             self.export_scale_picker_open,
@@ -617,7 +630,7 @@ impl PropertyPanel {
             self.scrolled_rect(panel_rect),
             self.visible_sections(),
             &self.snapshot.effects,
-            self.fill_type_picker_open,
+            self.fill_type_picker.open,
             self.font_family_picker_open,
             self.font_weight_picker_open,
             self.export_scale_picker_open,
@@ -701,6 +714,14 @@ impl PropertyPanel {
         if self.is_multi || matches!(self.tab, op_editor_core::PropertyTab::Code) {
             return None;
         }
+        if self.fill_type_picker.open
+            && !matches!(
+                self.fill_type_picker_hit(panel_rect, point),
+                SelectHit::Outside
+            )
+        {
+            return None;
+        }
         if !self.point_in_section_viewport(panel_rect, point) {
             return None;
         }
@@ -708,7 +729,7 @@ impl PropertyPanel {
             self.scrolled_rect(panel_rect),
             self.visible_sections(),
             &self.snapshot.effects,
-            self.fill_type_picker_open,
+            self.fill_type_picker.open,
             self.font_family_picker_open,
             self.font_weight_picker_open,
             self.export_scale_picker_open,
@@ -948,7 +969,7 @@ impl Widget for PropertyPanel {
                 &edit_ctx,
                 &self.labels,
                 self.fill_type,
-                self.fill_type_picker_open,
+                self.fill_type_picker.open,
                 self.fill_variable_ref.as_deref(),
                 self.color_variable_count > 0 || self.fill_variable_ref.is_some(),
                 self.locale,
@@ -998,12 +1019,13 @@ impl Widget for PropertyPanel {
         }
         // Fill-type picker overlay sits on top of everything below
         // the Fill section so it can extend past the section divider.
-        if caps.fill && self.fill_type_picker_open {
+        if caps.fill && self.fill_type_picker.open {
             sections::paint_fill_type_picker(
                 cx,
                 &self.theme,
                 scrolled,
                 self.visible_sections(),
+                &self.fill_type_picker,
                 self.fill_type,
                 self.locale,
             );
@@ -1082,7 +1104,7 @@ impl Widget for PropertyPanel {
                 self.stroke_variable_ref.as_deref(),
                 target,
                 self.locale,
-                self.fill_type_picker_open,
+                self.fill_type_picker.open,
                 self.font_family_picker_open,
                 self.font_weight_picker_open,
                 self.export_scale_picker_open,
@@ -1099,7 +1121,7 @@ impl Widget for PropertyPanel {
                 self.scrolled_rect(rect),
                 self.visible_sections(),
                 &self.snapshot.effects,
-                self.fill_type_picker_open,
+                self.fill_type_picker.open,
                 self.font_family_picker_open,
                 self.font_weight_picker_open,
                 self.export_scale_picker_open,

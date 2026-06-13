@@ -7,6 +7,9 @@
 //! under the 800-line ceiling.
 
 use crate::widgets::property_panel::{EffectKind, EffectSummary, PropertyPanelAction};
+use crate::widgets::property_panel_fill_picker::{
+    fill_type_at, fill_type_picker_rect, FILL_TYPE_COUNT, FILL_TYPE_ROW_HEIGHT,
+};
 use crate::widgets::property_panel_inputs::{
     COLOR_VARIABLE_BUTTON_W, COLOR_VARIABLE_GAP, CREATE_COMPONENT_BTN_H, CREATE_COMPONENT_PAD_TOP,
     HEADER_HEIGHT, INPUT_HEIGHT, PAD_X, SECTION_GAP, SECTION_HEADER_HEIGHT, TAB_HEIGHT,
@@ -414,22 +417,19 @@ pub fn action_button_rects_with_fill_picker(
         };
         out.push((PropertyPanelAction::ToggleFillTypePicker, dropdown_rect));
         if fill_picker_open {
-            let row_h = 32.0;
-            let panel_w = dropdown_rect.size.x;
-            let panel_x = dropdown_rect.origin.x;
-            let panel_y = dropdown_rect.origin.y + dropdown_rect.size.y + 4.0;
-            let types = [
-                FillType::Solid,
-                FillType::LinearGradient,
-                FillType::RadialGradient,
-                FillType::Image,
-            ];
-            for (i, t) in types.iter().enumerate() {
+            let picker_rect = fill_type_picker_rect(panel_rect, visible);
+            for i in 0..FILL_TYPE_COUNT {
+                let Some(t) = fill_type_at(i) else {
+                    continue;
+                };
                 out.push((
-                    PropertyPanelAction::SetFillType(*t),
+                    PropertyPanelAction::SetFillType(t),
                     Rect {
-                        origin: Point2D::new(panel_x, panel_y + 6.0 + i as f32 * row_h),
-                        size: Point2D::new(panel_w, row_h),
+                        origin: Point2D::new(
+                            picker_rect.origin.x,
+                            picker_rect.origin.y + i as f32 * FILL_TYPE_ROW_HEIGHT,
+                        ),
+                        size: Point2D::new(picker_rect.size.x, FILL_TYPE_ROW_HEIGHT),
                     },
                 ));
             }

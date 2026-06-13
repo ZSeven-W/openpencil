@@ -575,20 +575,21 @@ impl WidgetHost {
                     self.editor_state.editor_ui.property_tab_hover = new_tab_hover;
                     property_hover_changed = true;
                 }
+                let new_fill_type_hover = panel.fill_type_picker_row_at(property_rect, point);
+                if new_fill_type_hover != self.editor_state.editor_ui.fill_type_picker.hover {
+                    self.editor_state.editor_ui.fill_type_picker.hover = new_fill_type_hover;
+                    property_hover_changed = true;
+                }
                 let new_action_hover = panel.action_hover_index(property_rect, point);
                 if new_action_hover != self.editor_state.editor_ui.property_action_hover {
                     self.editor_state.editor_ui.property_action_hover = new_action_hover;
                     property_hover_changed = true;
                 }
             }
-        } else if self
-            .editor_state
-            .editor_ui
-            .property_tab_hover
-            .take()
-            .is_some()
-        {
-            property_hover_changed = true;
+        } else {
+            let ui = &mut self.editor_state.editor_ui;
+            property_hover_changed |= ui.property_tab_hover.take().is_some();
+            property_hover_changed |= ui.fill_type_picker.hover.take().is_some();
         }
         // Code-panel hover wash. Reuses the panel's click geometry for
         // framework chips, scroll chevrons, and body actions.

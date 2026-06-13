@@ -82,13 +82,13 @@ impl WidgetHost {
             }
             A::ToggleFillTypePicker => {
                 let ui = &mut self.editor_state.editor_ui;
-                ui.fill_type_picker_open = !ui.fill_type_picker_open;
+                ui.toggle_fill_type_picker();
                 ui.image_fill_popover_open = false;
                 ui.property_color_variable_picker_open = None;
             }
             A::SetFillType(t) => {
                 self.editor_state.set_selected_fill_type(t);
-                self.editor_state.editor_ui.fill_type_picker_open = false;
+                self.editor_state.editor_ui.close_fill_type_picker();
                 self.editor_state.editor_ui.image_fill_popover_open = false;
                 self.editor_state
                     .editor_ui
@@ -97,7 +97,7 @@ impl WidgetHost {
             A::ToggleImageFillPopover => {
                 let ui = &mut self.editor_state.editor_ui;
                 ui.image_fill_popover_open = !ui.image_fill_popover_open;
-                ui.fill_type_picker_open = false;
+                ui.close_fill_type_picker();
                 ui.export_scale_picker_open = false;
                 ui.export_format_picker_open = false;
                 ui.property_color_variable_picker_open = None;
@@ -125,7 +125,7 @@ impl WidgetHost {
                 ui.icon_picker_open = true;
                 ui.icon_picker_replace_selection = true;
                 ui.icon_picker_search.clear();
-                ui.fill_type_picker_open = false;
+                ui.close_fill_type_picker();
                 ui.image_fill_popover_open = false;
                 ui.font_family_picker_open = false;
                 ui.font_weight_picker_open = false;
@@ -180,7 +180,7 @@ impl WidgetHost {
                     } else {
                         Some(target)
                     };
-                ui.fill_type_picker_open = false;
+                ui.close_fill_type_picker();
                 ui.image_fill_popover_open = false;
                 ui.export_scale_picker_open = false;
                 ui.export_format_picker_open = false;
@@ -281,7 +281,7 @@ impl WidgetHost {
                 ui.font_picker_scroll = 0.0;
                 ui.font_picker_hover = None;
                 ui.font_weight_picker_open = false;
-                ui.fill_type_picker_open = false;
+                ui.close_fill_type_picker();
                 ui.image_fill_popover_open = false;
                 ui.export_scale_picker_open = false;
                 ui.export_format_picker_open = false;
@@ -321,7 +321,7 @@ impl WidgetHost {
                 ui.font_weight_picker_open = !ui.font_weight_picker_open;
                 ui.font_weight_picker_hover = None;
                 ui.font_family_picker_open = false;
-                ui.fill_type_picker_open = false;
+                ui.close_fill_type_picker();
                 ui.image_fill_popover_open = false;
                 ui.export_scale_picker_open = false;
                 ui.export_format_picker_open = false;
@@ -344,7 +344,7 @@ impl WidgetHost {
                 ui.padding_mode_popover_open = !ui.padding_mode_popover_open;
                 ui.padding_mode_popover_hover = None;
                 ui.font_weight_picker_open = false;
-                ui.fill_type_picker_open = false;
+                ui.close_fill_type_picker();
                 ui.image_fill_popover_open = false;
                 ui.export_scale_picker_open = false;
                 ui.export_format_picker_open = false;
