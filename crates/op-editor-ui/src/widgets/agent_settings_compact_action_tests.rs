@@ -119,6 +119,17 @@ fn acp_remove_rect(panel: Rect) -> Rect {
     }
 }
 
+fn acp_connection_rect(panel: Rect) -> Rect {
+    let card = acp_card_rect_after_empty_builtin(panel);
+    Rect {
+        origin: Point2D::new(
+            card.origin.x + card.size.x - 12.0 - CONNECT_BTN_W,
+            card.origin.y + (card.size.y - 28.0) / 2.0,
+        ),
+        size: Point2D::new(CONNECT_BTN_W, 28.0),
+    }
+}
+
 #[test]
 fn pressed_builtin_compact_actions_use_shared_button_feedback() {
     for (button, expected_rect) in [
@@ -204,4 +215,37 @@ fn pressed_acp_compact_actions_use_shared_button_feedback() {
             "pressed {button:?} should paint the shared pressed feedback token"
         );
     }
+}
+
+#[test]
+fn pressed_acp_connection_button_uses_shared_button_feedback() {
+    let mut state = EditorState::default();
+    state.editor_ui.theme_mode = ThemeMode::Light;
+    state.editor_ui.agent_settings.tab = AgentSettingsTab::Agents;
+    state.editor_ui.agent_settings.add_acp_agent();
+    state.editor_ui.agent_settings.acp_agents[0].command = "op-agent".into();
+    state.editor_ui.pressed_button = Some(ButtonPressTarget::AgentSettings(
+        AgentSettingsButton::AcpConnection(0),
+    ));
+    let panel = AgentSettingsPanel::for_editor(&state);
+    let rect = panel.rect(1200.0, 800.0);
+    let target = acp_connection_rect(rect);
+    let expected = panel
+        .theme
+        .button_hover
+        .with_alpha(panel.theme.button_hover.a * 1.8);
+    let mut backend = CaptureBackend::default();
+    let mut cx = PaintCx {
+        backend: &mut backend,
+    };
+
+    panel.paint(&mut cx, rect);
+
+    assert!(
+        backend
+            .round_fills
+            .iter()
+            .any(|(r, color)| rect_eq(*r, target) && color_eq(*color, expected)),
+        "pressed ACP connection button should paint the shared pressed feedback token"
+    );
 }

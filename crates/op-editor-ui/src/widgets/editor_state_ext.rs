@@ -110,6 +110,7 @@ pub fn agent_settings_button(
         W::CancelBuiltinAgentDraft => Some(O::BuiltinCancelDraft),
         W::EditAcpAgent(index) => Some(O::AcpEdit(index)),
         W::RemoveAcpAgent(index) => Some(O::AcpRemove(index)),
+        W::ToggleAcpConnected(index) => Some(O::AcpConnection(index)),
         W::SaveAcpAgentDraft => Some(O::AcpSaveDraft),
         W::CancelAcpAgentDraft => Some(O::AcpCancelDraft),
         W::ToggleMcpServer => Some(O::McpServer),

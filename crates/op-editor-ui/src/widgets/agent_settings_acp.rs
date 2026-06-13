@@ -9,10 +9,11 @@ use crate::widgets::agent_settings_header_action::{
     header_action_rect, header_action_text_baseline_y, header_action_text_x,
 };
 use crate::widgets::agent_settings_i18n::t as t_settings;
-use crate::widgets::button::paint_ghost_button_feedback;
+use crate::widgets::button::{paint_ghost_button_feedback, tokens_from_theme};
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
+use jian_widgets::components::button::{Button, ButtonVariant};
 use op_editor_core::agent_settings::{
     AcpAgentConfig, AcpAgentField, AcpConnectionType, AgentSettings, SettingsFocus,
 };
@@ -359,7 +360,7 @@ fn paint_compact_acp_card(
             )),
         );
     }
-    paint_connection_button(cx, theme, ui, agent, card);
+    paint_connection_button(cx, theme, ui, agent, index, card);
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -421,17 +422,35 @@ fn paint_connection_button(
     theme: &Theme,
     ui: &EditorUiState,
     agent: &AcpAgentConfig,
+    index: usize,
     card: Rect,
 ) {
     let btn = connection_button_rect(card);
     let enabled = agent.ready() || agent.connected;
-    let bg = if agent.connected {
-        theme.muted
-    } else if enabled {
-        theme.primary
+    if agent.connected {
+        cx.backend.fill_round_rect(btn, 6.0, theme.muted);
+        cx.backend.stroke_round_rect(btn, 6.0, theme.border, 1.0);
     } else {
-        theme.button_hover
-    };
+        Button {
+            label: "",
+            icon_d: None,
+            variant: if enabled {
+                ButtonVariant::Primary
+            } else {
+                ButtonVariant::Outline
+            },
+            enabled: true,
+            hovered: !enabled,
+            pressed: false,
+            font_size: 12.0,
+        }
+        .paint(cx.backend, btn, &tokens_from_theme(theme));
+    }
+    if ui.button_pressed(ButtonPressTarget::AgentSettings(
+        AgentSettingsButton::AcpConnection(index),
+    )) {
+        paint_ghost_button_feedback(cx.backend, theme, btn, false, true);
+    }
     let fg = if agent.connected {
         Color {
             r: 0.93,
@@ -444,8 +463,6 @@ fn paint_connection_button(
     } else {
         theme.muted_foreground
     };
-    cx.backend.fill_round_rect(btn, 6.0, bg);
-    cx.backend.stroke_round_rect(btn, 6.0, theme.border, 1.0);
     let label = if agent.connected {
         t_settings(ui, "settings.agents.disconnect")
     } else if agent.ready() {
