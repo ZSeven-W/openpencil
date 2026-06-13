@@ -181,7 +181,7 @@ pub enum PropertyPanelAction {
     /// into an independent subtree (TS `detachComponent` case 2).
     DetachInstance,
     /// User clicked the Fill section's fill-type dropdown — host
-    /// toggles `Document.ui.fill_type_picker_open`.
+    /// toggles `Document.ui.fill_type_picker.open`.
     ToggleFillTypePicker,
     /// User picked a fill type from the dropdown.
     SetFillType(op_editor_core::FillType),

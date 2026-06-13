@@ -65,7 +65,7 @@ impl WidgetHostNative {
     /// Close the property pickers that would overlap the popovers.
     fn close_other_property_popovers_for_image(&mut self) {
         let ui = &mut self.editor_state.editor_ui;
-        ui.fill_type_picker_open = false;
+        ui.close_fill_type_picker();
         ui.image_fill_popover_open = false;
         ui.font_weight_picker_open = false;
         ui.export_scale_picker_open = false;

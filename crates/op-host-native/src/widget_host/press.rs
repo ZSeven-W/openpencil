@@ -501,7 +501,7 @@ impl WidgetHostNative {
         }
 
         // 0c0. Fill-type picker — outside-click dismiss.
-        if self.editor_state.editor_ui.fill_type_picker_open && !in_git_panel {
+        if self.editor_state.editor_ui.fill_type_picker.open && !in_git_panel {
             self.refresh_layout_scene();
             if let Some(panel) = PropertyPanel::for_selection(&self.editor_state) {
                 let property_rect = Rect {
@@ -514,18 +514,22 @@ impl WidgetHostNative {
                         (viewport_height - TOP_BAR_HEIGHT).max(0.0),
                     ),
                 };
-                if let Some(action) = panel.hit_test_action(property_rect, Point2D::new(x, y)) {
-                    if matches!(
-                        action,
-                        op_editor_ui::widgets::PropertyPanelAction::SetFillType(_)
-                            | op_editor_ui::widgets::PropertyPanelAction::ToggleFillTypePicker
-                    ) {
-                        self.apply_property_action(action);
-                        return true;
+                match panel.fill_type_picker_hit(property_rect, Point2D::new(x, y)) {
+                    op_editor_ui::widgets::property_panel_fill::SelectHit::Row(idx) => {
+                        if let Some(fill_type) =
+                            op_editor_ui::widgets::property_panel_fill::fill_type_at(idx)
+                        {
+                            self.apply_property_action(
+                                op_editor_ui::widgets::PropertyPanelAction::SetFillType(fill_type),
+                            );
+                            return true;
+                        }
                     }
+                    op_editor_ui::widgets::property_panel_fill::SelectHit::Inside => return true,
+                    op_editor_ui::widgets::property_panel_fill::SelectHit::Outside => {}
                 }
             }
-            self.editor_state.editor_ui.fill_type_picker_open = false;
+            self.editor_state.editor_ui.close_fill_type_picker();
             self.mark_dirty();
             return true;
         }
