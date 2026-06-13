@@ -14,6 +14,7 @@ use op_editor_core::agent_settings::{
     ImageTestStatus, SettingsFocus,
 };
 use op_editor_core::editor_ui_state::EditorUiState;
+use op_editor_core::{AgentSettingsButton, ButtonPressTarget};
 
 const TITLE_H: f32 = 36.0;
 const ADVANCED_ROW_H: f32 = 24.0;
@@ -474,10 +475,15 @@ pub(super) fn paint_images_tab(
         let test_btn = test_btn_rect(content, settings);
         paint_search_test_status(cx, theme, settings, test_btn);
         cx.backend.fill_round_rect(test_btn, 6.0, theme.muted);
-        if settings.hover_image_search_test_button {
-            cx.backend
-                .fill_round_rect(test_btn, 6.0, image_button_hover_color(theme));
-        }
+        crate::widgets::button::paint_ghost_button_feedback(
+            cx.backend,
+            theme,
+            test_btn,
+            settings.hover_image_search_test_button,
+            ui.button_pressed(ButtonPressTarget::AgentSettings(
+                AgentSettingsButton::ImageSearchTest,
+            )),
+        );
         cx.backend
             .stroke_round_rect(test_btn, 6.0, theme.border, 1.0);
         let test_label = t_settings(ui, "settings.images.test");
@@ -516,10 +522,15 @@ pub(super) fn paint_images_tab(
         .draw_text(&gen_title, Point2D::new(content.origin.x, gen_top + 20.0));
     let add_btn = add_btn_rect(content, settings);
     cx.backend.fill_round_rect(add_btn, 6.0, theme.muted);
-    if settings.hover_image_gen_add_button {
-        cx.backend
-            .fill_round_rect(add_btn, 6.0, image_button_hover_color(theme));
-    }
+    crate::widgets::button::paint_ghost_button_feedback(
+        cx.backend,
+        theme,
+        add_btn,
+        settings.hover_image_gen_add_button,
+        ui.button_pressed(ButtonPressTarget::AgentSettings(
+            AgentSettingsButton::ImageGenAdd,
+        )),
+    );
     cx.backend
         .stroke_round_rect(add_btn, 6.0, theme.border, 1.0);
     let add_label = t_settings(ui, "settings.images.add");
@@ -561,15 +572,6 @@ pub(super) fn paint_images_tab(
             let row = profile_row_rect(content, settings, index);
             paint_profile_row(cx, theme, settings, ui, profile, index, row, now_ms);
         }
-    }
-}
-
-fn image_button_hover_color(theme: &Theme) -> Color {
-    Color {
-        r: theme.foreground.r,
-        g: theme.foreground.g,
-        b: theme.foreground.b,
-        a: 0.12,
     }
 }
 

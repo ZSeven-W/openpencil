@@ -56,16 +56,6 @@ fn rect_eq(a: Rect, b: Rect) -> bool {
         && (a.size.y - b.size.y).abs() < 0.01
 }
 
-fn has_visible_hover_fill(
-    backend: &CaptureBackend,
-    rect: Rect,
-    theme: crate::theme::Theme,
-) -> bool {
-    backend.round_fills.iter().any(|(r, color)| {
-        rect_eq(*r, rect) && !color_eq(*color, theme.muted) && color.a > theme.button_hover.a + 0.01
-    })
-}
-
 fn settings_content_metrics(rect: Rect) -> (f32, f32, f32) {
     (
         rect.origin.x + 200.0 + 24.0,
@@ -258,13 +248,59 @@ fn hovered_image_settings_buttons_paint_hover_wash() {
     panel.paint(&mut cx, rect);
 
     assert!(
-        has_visible_hover_fill(&backend, search_test, panel.theme),
-        "hovering the image search test button should paint a visible wash over its base fill"
+        backend.round_fills.iter().any(
+            |(r, color)| rect_eq(*r, search_test) && color_eq(*color, panel.theme.button_hover)
+        ),
+        "hovering the image search test button should paint the shared hover token"
     );
     assert!(
-        has_visible_hover_fill(&backend, add, panel.theme),
-        "hovering the image generation add button should paint a visible wash over its base fill"
+        backend
+            .round_fills
+            .iter()
+            .any(|(r, color)| rect_eq(*r, add) && color_eq(*color, panel.theme.button_hover)),
+        "hovering the image generation add button should paint the shared hover token"
     );
+}
+
+#[test]
+fn pressed_image_settings_buttons_use_shared_button_feedback() {
+    for (button, expected_rect) in [
+        (
+            AgentSettingsButton::ImageSearchTest,
+            image_search_test_button_rect as fn(Rect) -> Rect,
+        ),
+        (
+            AgentSettingsButton::ImageGenAdd,
+            image_gen_add_button_rect as fn(Rect) -> Rect,
+        ),
+    ] {
+        let mut state = EditorState::default();
+        state.editor_ui.theme_mode = ThemeMode::Light;
+        state.editor_ui.agent_settings.tab = AgentSettingsTab::Images;
+        state.editor_ui.agent_settings.images_advanced_open = true;
+        state.editor_ui.pressed_button = Some(ButtonPressTarget::AgentSettings(button));
+        let panel = AgentSettingsPanel::for_editor(&state);
+        let rect = panel.rect(1200.0, 800.0);
+        let target = expected_rect(rect);
+        let expected = panel
+            .theme
+            .button_hover
+            .with_alpha(panel.theme.button_hover.a * 1.8);
+        let mut backend = CaptureBackend::default();
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+
+        panel.paint(&mut cx, rect);
+
+        assert!(
+            backend
+                .round_fills
+                .iter()
+                .any(|(r, color)| rect_eq(*r, target) && color_eq(*color, expected)),
+            "pressed {button:?} should paint the shared pressed feedback token"
+        );
+    }
 }
 
 #[test]

@@ -7,4 +7,6 @@ pub enum AgentSettingsButton {
     Close,
     McpServer,
     McpClientConfigCopy,
+    ImageSearchTest,
+    ImageGenAdd,
 }

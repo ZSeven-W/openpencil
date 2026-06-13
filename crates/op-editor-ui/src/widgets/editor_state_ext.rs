@@ -104,6 +104,8 @@ pub fn agent_settings_button(
         W::Close => Some(O::Close),
         W::ToggleMcpServer => Some(O::McpServer),
         W::CopyMcpClientConfig => Some(O::McpClientConfigCopy),
+        W::TestImageSearch => Some(O::ImageSearchTest),
+        W::AddGenConfig => Some(O::ImageGenAdd),
         _ => None,
     }
 }
