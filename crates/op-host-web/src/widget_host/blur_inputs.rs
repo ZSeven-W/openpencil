@@ -57,9 +57,7 @@ impl WidgetHost {
         eui.chat_model_picker_caret = None;
         eui.chat_model_picker_select_all = false;
         eui.chat_model_picker_hover = None;
-        self.editor_state.chat.focused = false;
-        self.editor_state.chat.input_select_all = false;
-        self.editor_state.chat.input_selection = None;
+        self.editor_state.chat.blur_input(self.now_ms);
         if was_focused {
             self.mark_dirty();
         }

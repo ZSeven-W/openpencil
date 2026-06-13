@@ -110,7 +110,7 @@ fn paint_quick_action_card_hover_adds_visible_feedback() {
 fn paint_send_button_hover_adds_visible_feedback() {
     let mut s = EditorState::new();
     seed_available_model(&mut s);
-    s.chat.input = "design a login page".into();
+    s.chat.set_input_text("design a login page");
     s.editor_ui.chat_footer_hover = Some(op_editor_core::ChatFooterButton::Send);
     let panel = AIChatPlaceholder::from_editor(&s);
     let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);

@@ -924,11 +924,7 @@ impl WidgetHostNative {
             ));
         }
         if self.editor_state.chat.focused {
-            return Some(jian_core::anim::next_blink_flip_ms(
-                self.now_ms,
-                self.editor_state.chat.caret_anchor_ms,
-                500,
-            ));
+            return Some(self.editor_state.chat.input.next_blink_flip_ms(self.now_ms));
         }
         // Git commit textarea caret — same 500 ms cadence the ready
         // panel paints at (`git_panel_ready.rs`). Without this wake the

@@ -63,6 +63,8 @@ mod chat_design_hover_tests;
 mod chat_model_picker_caret;
 #[cfg(test)]
 mod chat_model_picker_caret_tests;
+#[cfg(test)]
+mod chat_send_tests;
 mod chrome_menu_press;
 mod click;
 mod color_picker_press;
@@ -477,15 +479,12 @@ impl WidgetHost {
             return false;
         };
         if let Some(focus) = self.chat_input_text_offset_at_screen(x, y) {
-            let next = Some(op_editor_core::chat::ChatInputSelection {
-                anchor: drag.anchor,
-                focus,
-            });
-            if self.editor_state.chat.input_selection != next {
-                self.editor_state.chat.input_selection = next;
-                self.editor_state.chat.input_select_all = false;
+            if self
+                .editor_state
+                .chat
+                .drag_input_selection(drag.anchor, focus, self.now_ms)
+            {
                 self.editor_state.chat.focused = true;
-                self.editor_state.chat.caret_anchor_ms = self.now_ms;
                 self.mark_dirty();
             }
         }

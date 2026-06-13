@@ -5,6 +5,7 @@ use super::ai_chat_transcript_text::char_display_units;
 use crate::theme::Theme;
 use crate::widgets::PaintCx;
 use crate::{Point2D, Rect};
+use jian_core::text_input::prev_char_boundary;
 use op_editor_core::chat::{ChatMessage, ChatRole, ChatTranscriptSelection};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -44,7 +45,7 @@ pub(crate) fn transcript_text_offset_at(
         let line_offsets = line_start_offsets(text, &bubble.lines);
         let line_start = *line_offsets.get(line_idx).unwrap_or(&0);
         let line_offset = line_offset_at_x(line, point.x - (bubble.rect.origin.x + BUBBLE_PAD));
-        let offset = previous_char_boundary(text, (line_start + line_offset).min(text.len()));
+        let offset = prev_char_boundary(text, (line_start + line_offset).min(text.len()));
         return Some(TranscriptTextHit {
             message_index: item.msg_index,
             offset,
@@ -64,8 +65,8 @@ pub(crate) fn paint_user_bubble_selection(
         return;
     }
     let (start, end) = selection.ordered();
-    let start = previous_char_boundary(text, start.min(text.len()));
-    let end = previous_char_boundary(text, end.min(text.len()));
+    let start = prev_char_boundary(text, start.min(text.len()));
+    let end = prev_char_boundary(text, end.min(text.len()));
     if start >= end {
         return;
     }
@@ -77,9 +78,9 @@ pub(crate) fn paint_user_bubble_selection(
         let line_end = (line_start + line.len()).min(text.len());
         if end > line_start && start < line_end {
             let local_start =
-                previous_char_boundary(line, start.saturating_sub(line_start).min(line.len()));
+                prev_char_boundary(line, start.saturating_sub(line_start).min(line.len()));
             let local_end =
-                previous_char_boundary(line, end.saturating_sub(line_start).min(line.len()));
+                prev_char_boundary(line, end.saturating_sub(line_start).min(line.len()));
             let x0 = text_x + line_x_at_offset(line, local_start);
             let x1 = text_x + line_x_at_offset(line, local_end);
             if x1 > x0 {
@@ -137,11 +138,4 @@ fn line_x_at_offset(line: &str, offset: usize) -> f32 {
         .take_while(|(idx, _)| *idx < offset)
         .map(|(_, ch)| char_display_units(ch) as f32 * CHAR_UNIT_PX)
         .sum()
-}
-
-fn previous_char_boundary(text: &str, mut index: usize) -> usize {
-    while index > 0 && !text.is_char_boundary(index) {
-        index -= 1;
-    }
-    index
 }

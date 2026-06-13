@@ -99,7 +99,7 @@ impl<'a> AIChatPlaceholder<'a> {
                 if self.is_streaming() {
                     return Some(AIChatHit::Inside);
                 }
-                if self.state.input.is_empty() {
+                if self.state.input.text().is_empty() {
                     return Some(AIChatHit::FocusInput);
                 }
                 let text_area = Rect {
@@ -111,7 +111,7 @@ impl<'a> AIChatPlaceholder<'a> {
                     text_area,
                     point,
                 )
-                .unwrap_or(self.state.input.len());
+                .unwrap_or(self.state.input.text().len());
                 return Some(AIChatHit::SelectInputText(offset));
             }
             // Staged-attachment strip — present only when attachments
@@ -153,7 +153,7 @@ impl<'a> AIChatPlaceholder<'a> {
                     return Some(if self.is_streaming() {
                         AIChatHit::Stop
                     } else if can_use_model
-                        && (!self.state.input.trim().is_empty()
+                        && (!self.state.input.text().trim().is_empty()
                             || !self.state.pending_attachments.is_empty())
                     {
                         AIChatHit::Send

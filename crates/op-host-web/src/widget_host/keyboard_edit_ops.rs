@@ -154,13 +154,7 @@ impl WidgetHost {
             return true;
         }
         if self.editor_state.chat.focused {
-            self.editor_state.chat.input_select_all = true;
-            self.editor_state.chat.input_selection =
-                Some(op_editor_core::chat::ChatInputSelection {
-                    anchor: 0,
-                    focus: self.editor_state.chat.input.len(),
-                });
-            self.editor_state.chat.caret_anchor_ms = self.now_ms;
+            self.editor_state.chat.select_all_input(self.now_ms);
             self.mark_dirty();
             return true;
         }

@@ -31,6 +31,7 @@ pub(crate) const RESIZE_GUTTER: f32 = 4.0;
 pub(crate) const RESIZE_CORNER: f32 = 12.0;
 pub(crate) const INPUT_AREA_HEIGHT: f32 = 56.0;
 const INPUT_TOOLBAR_HEIGHT: f32 = 40.0;
+#[cfg(test)]
 const INPUT_BASE_HEIGHT: f32 = INPUT_AREA_HEIGHT + INPUT_TOOLBAR_HEIGHT;
 
 #[derive(Debug, Clone)]
@@ -159,13 +160,14 @@ impl<'a> AIChatPlaceholder<'a> {
 
     /// Total input-block height, including the attachment row when
     /// attachments are staged.
+    #[cfg(test)]
     pub(crate) fn input_height(&self) -> f32 {
         self.input_height_for_width(self.state.panel_width)
     }
 
     pub(crate) fn input_area_height_for_input_width(&self, input_w: f32) -> f32 {
         let lines = crate::widgets::ai_chat_input_text::visible_input_line_count(
-            &self.state.input,
+            self.state.input.text(),
             input_w,
         );
         INPUT_AREA_HEIGHT
@@ -663,7 +665,8 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
         // A turn is sendable with text, with staged attachments, or
         // both (TS parity: an attachment-only message is valid).
         let send_active = can_use_model
-            && (!self.state.input.trim().is_empty() || !self.state.pending_attachments.is_empty());
+            && (!self.state.input.text().trim().is_empty()
+                || !self.state.pending_attachments.is_empty());
         let streaming = self.is_streaming();
         // TS: streaming → red stop; sendable → primary; otherwise a faded
         // muted-foreground/30 icon so the send button reads as disabled.

@@ -103,7 +103,7 @@ mod tests {
         assert!(!h.apply_ime_preedit("nih", Some((0, 3))));
         assert!(h.apply_ime_commit("你好"));
         assert!(h.editor_state().editor_ui.ime_preedit.is_none());
-        assert!(h.editor_state().chat.input.contains("你好"));
+        assert!(h.editor_state().chat.input.text().contains("你好"));
     }
 
     #[test]

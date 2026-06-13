@@ -28,25 +28,27 @@ impl WidgetHost {
                         return true;
                     }
                     AIChatHit::FocusInput => {
-                        self.editor_state.chat.focused = true;
-                        self.editor_state.chat.input_select_all = false;
-                        self.editor_state.chat.input_selection = None;
+                        self.editor_state.chat.focus_input_at_end(self.now_ms);
                         self.editor_state.chat.transcript_selection = None;
                         self.mark_dirty();
                         return true;
                     }
                     AIChatHit::SelectInputText(offset) => {
                         self.editor_state.chat.focused = true;
-                        self.editor_state.chat.set_input_caret(offset);
+                        self.editor_state.chat.set_input_caret(offset, self.now_ms);
                         self.editor_state.chat.transcript_selection = None;
-                        self.editor_state.chat.caret_anchor_ms = self.now_ms;
                         self.mark_dirty();
                         return true;
                     }
                     AIChatHit::Send => {
-                        self.begin_chat_send();
-                        self.mark_dirty();
-                        return true;
+                        if self.editor_state.chat.available_models.is_empty() {
+                            return true;
+                        }
+                        let sent = self.begin_chat_send();
+                        if sent {
+                            self.mark_dirty();
+                        }
+                        return sent;
                     }
                     AIChatHit::Stop => {
                         self.editor_state.chat.stop_streaming();
@@ -54,10 +56,8 @@ impl WidgetHost {
                         return true;
                     }
                     AIChatHit::Example(text) => {
-                        self.editor_state.chat.input = text;
-                        self.editor_state.chat.focused = true;
-                        self.editor_state.chat.input_select_all = false;
-                        self.editor_state.chat.input_selection = None;
+                        self.editor_state.chat.set_input_text(text);
+                        self.editor_state.chat.focus_input_at_end(self.now_ms);
                         self.editor_state.chat.transcript_selection = None;
                         self.mark_dirty();
                         return true;
@@ -302,13 +302,15 @@ impl WidgetHost {
     /// assistant reply; campaign residual "web echo→真流式"). TS parity:
     /// the TS web app never shipped an offline echo — chat errored when
     /// `/api/ai/stream` was unreachable.
-    pub(in crate::widget_host) fn begin_chat_send(&mut self) {
+    pub(in crate::widget_host) fn begin_chat_send(&mut self) -> bool {
         #[cfg(feature = "codegen")]
         {
-            self.editor_state.chat.begin_send();
+            self.editor_state.chat.begin_send()
         }
         #[cfg(not(feature = "codegen"))]
-        apply_offline_chat_error(&mut self.editor_state.chat);
+        {
+            apply_offline_chat_error(&mut self.editor_state.chat)
+        }
     }
 }
 
@@ -348,7 +350,7 @@ mod tests {
     #[test]
     fn offline_chat_error_replaces_echo_stub_with_honest_error() {
         let mut chat = op_editor_core::ChatState::default();
-        chat.input = "design a login page".to_string();
+        chat.set_input_text("design a login page");
         assert!(apply_offline_chat_error(&mut chat));
         // The user message is preserved; the assistant bubble carries
         // the honest unavailability error — never the retired
@@ -370,7 +372,7 @@ mod tests {
     #[test]
     fn offline_chat_error_ignores_empty_input() {
         let mut chat = op_editor_core::ChatState::default();
-        chat.input = "   ".to_string();
+        chat.set_input_text("   ");
         assert!(!apply_offline_chat_error(&mut chat));
         assert!(chat.messages.is_empty());
     }

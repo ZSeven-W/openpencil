@@ -2,7 +2,7 @@
 //! checklist geometry, tool-card / design-block toggles, and paint
 //! assertions. Split out of `tests.rs` at the 800-line cap.
 
-use super::tests::{has_fill_rect, PanelPaintBackend};
+use super::tests::{has_fill_rect, toolbar_center_y, PanelPaintBackend};
 use super::*;
 use crate::widgets::ai_chat_hit::AIChatHit;
 
@@ -205,8 +205,23 @@ fn paint_model_chip_uses_key_glyph_for_builtin_model() {
 
     panel.paint(&mut cx, rect);
 
-    assert!(
-        backend.stroke_lines >= 2,
+    let key_top_left = Point2D::new(
+        rect.origin.x + PAD,
+        rect.origin.y + toolbar_center_y() - 7.0,
+    );
+    let key_strokes = backend
+        .svg_strokes
+        .iter()
+        .filter(|(top_left, size, _, _)| {
+            (top_left.x - key_top_left.x).abs() < 0.01
+                && (top_left.y - key_top_left.y).abs() < 0.01
+                && (*size - 14.0).abs() < 0.01
+        })
+        .count();
+
+    assert_eq!(
+        key_strokes,
+        crate::widgets::icons::Icon::Key.paths().len(),
         "built-in selected model chip should paint the TS-style Key glyph"
     );
 }

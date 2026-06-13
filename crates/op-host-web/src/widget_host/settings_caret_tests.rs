@@ -42,11 +42,11 @@ fn select_all_in_settings_input_replaces_next_typed_text() {
 fn select_all_in_chat_input_replaces_next_typed_text() {
     let mut host = WidgetHost::new();
     host.editor_state.chat.focused = true;
-    host.editor_state.chat.input = "abcdef".into();
+    host.editor_state.chat.set_input_text("abcdef");
 
     assert!(host.apply_select_all());
     assert!(host.apply_text('X'));
-    assert_eq!(host.editor_state.chat.input, "X");
+    assert_eq!(host.editor_state.chat.input.text(), "X");
 }
 
 #[test]

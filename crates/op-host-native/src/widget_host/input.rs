@@ -317,15 +317,12 @@ impl WidgetHostNative {
             return false;
         };
         if let Some(focus) = self.chat_input_text_offset_at_screen(x, y) {
-            let next = Some(op_editor_core::chat::ChatInputSelection {
-                anchor: drag.anchor,
-                focus,
-            });
-            if self.editor_state.chat.input_selection != next {
-                self.editor_state.chat.input_selection = next;
-                self.editor_state.chat.input_select_all = false;
+            if self
+                .editor_state
+                .chat
+                .drag_input_selection(drag.anchor, focus, self.now_ms)
+            {
                 self.editor_state.chat.focused = true;
-                self.editor_state.chat.caret_anchor_ms = self.now_ms;
                 self.mark_dirty();
             }
         }

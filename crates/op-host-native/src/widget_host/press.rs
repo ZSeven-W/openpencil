@@ -708,15 +708,9 @@ impl WidgetHostNative {
                 if let AIChatHit::SelectInputText(anchor) = hit {
                     self.chat_input_selection_drag = Some(ChatInputSelectionDragState { anchor });
                     self.editor_state.chat.focused = true;
-                    self.editor_state.chat.input_select_all = false;
-                    self.editor_state.chat.input_selection =
-                        Some(op_editor_core::chat::ChatInputSelection {
-                            anchor,
-                            focus: anchor,
-                        });
+                    self.editor_state.chat.set_input_caret(anchor, self.now_ms);
                     self.editor_state.chat.transcript_selection = None;
                     self.editor_state.codegen.code_selection = None;
-                    self.editor_state.chat.caret_anchor_ms = self.now_ms;
                     self.mark_dirty();
                     return true;
                 }

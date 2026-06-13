@@ -281,7 +281,7 @@ fn ai_chat_new_chat_click_clears_transcript_and_queues_abort() {
         .chat
         .messages
         .push(op_editor_core::ChatMessage::assistant("old"));
-    host.editor_state_mut().chat.input = "draft".into();
+    host.editor_state_mut().chat.set_input_text("draft");
     let rect = host
         .ai_chat_rect(1200.0, 800.0)
         .expect("chat panel visible");
@@ -291,7 +291,7 @@ fn ai_chat_new_chat_click_clears_transcript_and_queues_abort() {
     assert!(host.apply_click(x, y, 1200.0, 800.0));
 
     assert!(host.editor_state().chat.messages.is_empty());
-    assert!(host.editor_state().chat.input.is_empty());
+    assert!(host.editor_state().chat.input.text().is_empty());
     assert!(host.editor_state().chat.pending_new_chat);
 }
 
@@ -352,7 +352,7 @@ fn user_transcript_text_uses_text_cursor() {
 #[test]
 fn chat_input_text_uses_text_cursor() {
     let mut host = WidgetHostNative::new();
-    host.editor_state_mut().chat.input = "abcdef".into();
+    host.editor_state_mut().chat.set_input_text("abcdef");
     let viewport_w = 1200.0;
     let viewport_h = 800.0;
     let rect = host
@@ -626,9 +626,11 @@ fn chat_input_click_clears_select_all_without_erasing_text() {
     let viewport_w = 1200.0;
     let viewport_h = 800.0;
     let rect = host.ai_chat_rect(viewport_w, viewport_h).unwrap();
-    host.editor_state_mut().chat.input = "设计一个现代的移动端登录页面".into();
+    host.editor_state_mut()
+        .chat
+        .set_input_text("设计一个现代的移动端登录页面");
     host.editor_state_mut().chat.focused = true;
-    host.editor_state_mut().chat.input_select_all = true;
+    host.editor_state_mut().chat.select_all_input(0);
 
     assert!(host.apply_press(
         rect.origin.x + 80.0,
@@ -638,11 +640,11 @@ fn chat_input_click_clears_select_all_without_erasing_text() {
     ));
 
     assert_eq!(
-        host.editor_state().chat.input,
+        host.editor_state().chat.input.text(),
         "设计一个现代的移动端登录页面"
     );
     assert!(host.editor_state().chat.focused);
-    assert!(!host.editor_state().chat.input_select_all);
+    assert!(host.editor_state().chat.input.highlight_range().is_none());
 }
 
 #[test]
@@ -651,31 +653,31 @@ fn chat_input_drag_selects_partial_text_and_replaces_it() {
     let viewport_w = 1200.0;
     let viewport_h = 800.0;
     let rect = host.ai_chat_rect(viewport_w, viewport_h).unwrap();
-    host.editor_state_mut().chat.input = "abcdef".into();
+    host.editor_state_mut().chat.set_input_text("abcdef");
     host.editor_state_mut().chat.focused = true;
     let text_x = rect.origin.x + 24.0;
     let text_y = rect.origin.y + textarea_center_y_for_test();
 
     assert!(host.apply_press(text_x + 6.6, text_y, viewport_w, viewport_h));
     assert_eq!(
-        host.editor_state().chat.input_selection,
-        Some(op_editor_core::chat::ChatInputSelection {
+        host.editor_state().chat.input.selection(),
+        jian_core::text_input::Selection {
             anchor: 1,
             focus: 1
-        })
+        }
     );
     assert!(host.apply_cursor_move(text_x + 19.8, text_y));
     assert_eq!(
-        host.editor_state().chat.input_selection,
-        Some(op_editor_core::chat::ChatInputSelection {
+        host.editor_state().chat.input.selection(),
+        jian_core::text_input::Selection {
             anchor: 1,
             focus: 3
-        })
+        }
     );
     assert!(host.apply_release());
     assert!(host.apply_text('X'));
 
-    assert_eq!(host.editor_state().chat.input, "aXdef");
+    assert_eq!(host.editor_state().chat.input.text(), "aXdef");
 }
 
 #[test]
@@ -1665,7 +1667,7 @@ fn chat_model_picker_open_owns_keyboard_search() {
     assert!(host.apply_text('g'));
     assert!(host.apply_text('p'));
     assert_eq!(host.editor_state().editor_ui.chat_model_picker_search, "gp");
-    assert!(host.editor_state().chat.input.is_empty());
+    assert!(host.editor_state().chat.input.text().is_empty());
     assert!(host.apply_backspace());
     assert_eq!(host.editor_state().editor_ui.chat_model_picker_search, "g");
     assert!(host.apply_escape());
@@ -1676,12 +1678,12 @@ fn chat_model_picker_open_owns_keyboard_search() {
 fn select_all_in_chat_input_replaces_next_typed_text() {
     let mut host = WidgetHostNative::new();
     host.editor_state_mut().chat.focused = true;
-    host.editor_state_mut().chat.input = "abcdef".into();
+    host.editor_state_mut().chat.set_input_text("abcdef");
 
     assert!(host.apply_select_all());
-    assert_eq!(host.editor_state().chat.input, "abcdef");
+    assert_eq!(host.editor_state().chat.input.text(), "abcdef");
     assert!(host.apply_text('X'));
-    assert_eq!(host.editor_state().chat.input, "X");
+    assert_eq!(host.editor_state().chat.input.text(), "X");
 }
 
 #[test]
