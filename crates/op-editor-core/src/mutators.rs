@@ -579,10 +579,7 @@ impl EditorState {
                 }
             }
         }
-        self.editor_ui.chat_model_picker_open = false;
-        self.editor_ui.chat_model_picker_scroll = 0.0;
-        self.editor_ui.chat_model_picker_input.set_text("");
-        self.editor_ui.chat_model_picker_hover = None;
+        self.editor_ui.close_chat_model_picker();
     }
 
     /// Recompute the chat model-picker's `available_models` from the

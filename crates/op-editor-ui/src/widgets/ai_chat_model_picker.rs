@@ -11,6 +11,8 @@ use crate::widgets::property_panel_text_input::paint_text_input_view_value;
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
 use jian_core::text_input::TextInputState;
+pub use jian_widgets::components::select::SelectHit;
+use jian_widgets::components::select::SelectState;
 use op_editor_core::chat::{AgentProvider, ModelEntry};
 
 /// Height of a provider group-header row.
@@ -184,32 +186,60 @@ pub fn model_at(
     scroll: f32,
     search: &str,
 ) -> Option<usize> {
+    let mut state = SelectState::default();
+    state.open = true;
+    state.scroll.offset = scroll;
+    match model_picker_hit(&state, rect, point, models, search) {
+        SelectHit::Row(index) => Some(index),
+        SelectHit::Inside | SelectHit::Outside => None,
+    }
+}
+
+/// Shared select-style hit protocol for the searchable model picker.
+/// Search/header/empty/padding chrome returns `Inside`; model rows
+/// return `Row(index)` where `index` addresses `available_models`.
+pub fn model_picker_hit(
+    state: &SelectState,
+    rect: Rect,
+    point: Point2D,
+    models: &[ModelEntry],
+    search: &str,
+) -> SelectHit {
+    if !state.open {
+        return SelectHit::Outside;
+    }
     if point.x < rect.origin.x
         || point.x > rect.origin.x + rect.size.x
         || point.y < rect.origin.y
         || point.y > rect.origin.y + rect.size.y
     {
-        return None;
+        return SelectHit::Outside;
     }
     let list_rect = model_list_rect(rect);
     if point.y < list_rect.origin.y {
-        return None;
+        return SelectHit::Inside;
     }
-    let mut hit = None;
+    let mut hit = SelectHit::Inside;
     // Walk from a scroll-shifted origin — the same offset paint
     // applies via `translate` — then keep only hits whose row band
     // actually falls inside the (unscrolled) card rect.
-    walk_rows(models, search, list_rect.origin.y - scroll, |row, y, h| {
-        if let Row::Model { idx, .. } = row {
+    walk_rows(
+        models,
+        search,
+        list_rect.origin.y - state.scroll.offset,
+        |row, y, h| {
             if point.y >= y
                 && point.y < y + h
                 && point.y >= list_rect.origin.y
                 && point.y <= rect.origin.y + rect.size.y
             {
-                hit = Some(*idx);
+                hit = match row {
+                    Row::Model { idx, .. } => SelectHit::Row(*idx),
+                    Row::Header { .. } => SelectHit::Inside,
+                };
             }
-        }
-    });
+        },
+    );
     hit
 }
 
@@ -243,13 +273,14 @@ pub fn paint_model_picker(
     rect: Rect,
     models: &[ModelEntry],
     selected: usize,
-    scroll: f32,
-    hover: Option<usize>,
+    state: &SelectState,
     input: &TextInputState,
     now_ms: u64,
     locale: op_editor_core::Locale,
 ) {
     let search = input.text();
+    let scroll = state.scroll.offset;
+    let hover = state.hover;
     // Card background + border — painted unscrolled so the frame
     // stays put while the rows scroll inside it.
     cx.backend.fill_round_rect(rect, 10.0, theme.card);

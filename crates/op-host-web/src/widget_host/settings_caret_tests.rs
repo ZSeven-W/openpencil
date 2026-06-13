@@ -54,7 +54,7 @@ fn select_all_in_chat_model_picker_replaces_next_typed_text() {
     let mut host = WidgetHost::new();
     {
         let ui = &mut host.editor_state.editor_ui;
-        ui.chat_model_picker_open = true;
+        ui.chat_model_picker.open = true;
         ui.chat_model_picker_input.set_text("gpt");
     }
 

@@ -30,7 +30,7 @@ fn top_bar_gap_press_blurs_chat_and_model_picker() {
     let mut host = WidgetHostNative::new();
     seed(&mut host, ONE_RECT);
     host.editor_state_mut().chat.focused = true;
-    host.editor_state_mut().editor_ui.chat_model_picker_open = true;
+    host.editor_state_mut().editor_ui.chat_model_picker.open = true;
     host.editor_state_mut()
         .editor_ui
         .chat_model_picker_input
@@ -45,7 +45,7 @@ fn top_bar_gap_press_blurs_chat_and_model_picker() {
         !state.chat.focused,
         "top-bar gap press must blur the chat input"
     );
-    assert!(!state.editor_ui.chat_model_picker_open);
+    assert!(!state.editor_ui.chat_model_picker.open);
     assert!(state.editor_ui.chat_model_picker_input.text().is_empty());
 }
 

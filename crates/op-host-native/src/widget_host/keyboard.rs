@@ -350,7 +350,7 @@ impl WidgetHostNative {
             self.mark_dirty();
             return true;
         }
-        if self.editor_state.editor_ui.chat_model_picker_open {
+        if self.editor_state.editor_ui.chat_model_picker.open {
             return self.apply_chat_model_picker_text(c);
         }
         if self.editor_state.editor_ui.component_browser_open && !c.is_control() {
@@ -663,7 +663,7 @@ impl WidgetHostNative {
             }
             return false;
         }
-        if self.editor_state.editor_ui.chat_model_picker_open {
+        if self.editor_state.editor_ui.chat_model_picker.open {
             return self.apply_chat_model_picker_backspace();
         }
         if self.editor_state.editor_ui.component_browser_open {
@@ -860,7 +860,7 @@ impl WidgetHostNative {
         if self.editor_state.ui.property_focus.is_some()
             || self.editor_state.editor_ui.effect_param_focus.is_some()
             || self.editor_state.editor_ui.icon_picker_open
-            || self.editor_state.editor_ui.chat_model_picker_open
+            || self.editor_state.editor_ui.chat_model_picker.open
             || self.editor_state.editor_ui.component_browser_open
             || self.editor_state.chat.focused
         {
@@ -1502,14 +1502,8 @@ impl WidgetHostNative {
             self.mark_dirty();
             return true;
         }
-        if self.editor_state.editor_ui.chat_model_picker_open {
-            self.editor_state.editor_ui.chat_model_picker_open = false;
-            self.editor_state.editor_ui.chat_model_picker_scroll = 0.0;
-            self.editor_state
-                .editor_ui
-                .chat_model_picker_input
-                .set_text("");
-            self.editor_state.editor_ui.chat_model_picker_hover = None;
+        if self.editor_state.editor_ui.chat_model_picker.open {
+            self.editor_state.editor_ui.close_chat_model_picker();
             self.mark_dirty();
             return true;
         }

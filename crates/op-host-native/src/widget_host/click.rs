@@ -190,44 +190,24 @@ impl WidgetHostNative {
                     AIChatHit::ToggleMaximize => {
                         self.editor_state.chat.maximized = !self.editor_state.chat.maximized;
                         self.editor_state.chat.collapsed = false;
-                        self.editor_state.editor_ui.chat_model_picker_open = false;
-                        self.editor_state
-                            .editor_ui
-                            .chat_model_picker_input
-                            .set_text("");
+                        self.editor_state.editor_ui.close_chat_model_picker();
                         self.mark_dirty();
                         return true;
                     }
                     AIChatHit::NewChat => {
                         self.editor_state.chat.new_chat();
-                        self.editor_state.editor_ui.chat_model_picker_open = false;
-                        self.editor_state.editor_ui.chat_model_picker_scroll = 0.0;
-                        self.editor_state
-                            .editor_ui
-                            .chat_model_picker_input
-                            .set_text("");
-                        self.editor_state.editor_ui.chat_model_picker_hover = None;
+                        self.editor_state.editor_ui.close_chat_model_picker();
                         self.mark_dirty();
                         return true;
                     }
                     AIChatHit::ToggleModelPicker => {
-                        let opening = !self.editor_state.editor_ui.chat_model_picker_open;
-                        self.editor_state.editor_ui.chat_model_picker_open = opening;
-                        // Reopen the picker un-scrolled / un-hovered so
-                        // a stale offset from a prior open never hides
-                        // the top of the catalog.
-                        self.editor_state.editor_ui.chat_model_picker_scroll = 0.0;
-                        self.editor_state
-                            .editor_ui
-                            .chat_model_picker_input
-                            .set_text("");
+                        let opening = self.editor_state.editor_ui.toggle_chat_model_picker();
                         if opening {
                             self.editor_state
                                 .editor_ui
                                 .chat_model_picker_input
                                 .touch(self.now_ms);
                         }
-                        self.editor_state.editor_ui.chat_model_picker_hover = None;
                         self.mark_dirty();
                         return true;
                     }
@@ -244,8 +224,9 @@ impl WidgetHostNative {
                             .editor_ui
                             .chat_model_picker_input
                             .set_text("");
-                        self.editor_state.editor_ui.chat_model_picker_scroll = 0.0;
-                        self.editor_state.editor_ui.chat_model_picker_hover = None;
+                        self.editor_state.editor_ui.chat_model_picker.scroll.offset = 0.0;
+                        self.editor_state.editor_ui.chat_model_picker.hover = None;
+                        self.editor_state.editor_ui.chat_model_picker.pressed = None;
                         self.editor_state
                             .editor_ui
                             .chat_model_picker_input

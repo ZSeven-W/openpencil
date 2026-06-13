@@ -39,7 +39,7 @@ impl WidgetHostNative {
             || self.editor_state.editor_ui.effect_param_focus.is_some()
             || self.editor_state.editor_ui.agent_settings.focus.is_some()
             || self.editor_state.editor_ui.icon_picker_open
-            || self.editor_state.editor_ui.chat_model_picker_open
+            || self.editor_state.editor_ui.chat_model_picker.open
             || self.editor_state.editor_ui.component_browser_open
             || self.editor_state.chat.focused
             || self.git_commit_focus_active()
@@ -649,11 +649,10 @@ impl WidgetHostNative {
             }
         }
         // Open chat model-picker — track the model row under the
-        // cursor so the dropdown paints a hover wash. `model_at`
-        // returns `None` off the rows (headers / padding / off the
-        // card), which clears any stale highlight.
-        if self.editor_state.editor_ui.chat_model_picker_open && !over_topmost {
-            use op_editor_ui::widgets::ai_chat_model_picker::model_at;
+        // cursor so the dropdown paints a hover wash. Non-row chrome
+        // clears any stale highlight.
+        if self.editor_state.editor_ui.chat_model_picker.open && !over_topmost {
+            use op_editor_ui::widgets::ai_chat_model_picker::{model_picker_hit, SelectHit};
             use op_editor_ui::widgets::AIChatPlaceholder;
             let picker = self
                 .ai_chat_rect(self.last_viewport_w, self.last_viewport_h)
@@ -662,16 +661,18 @@ impl WidgetHostNative {
                         .model_picker_bounds(chat_rect)
                 });
             if let Some(picker) = picker {
-                let scroll = self.editor_state.editor_ui.chat_model_picker_scroll;
-                let new_hover = model_at(
+                let new_hover = match model_picker_hit(
+                    &self.editor_state.editor_ui.chat_model_picker,
                     picker,
                     Point2D::new(x, y),
                     &self.editor_state.chat.available_models,
-                    scroll,
                     self.editor_state.editor_ui.chat_model_picker_input.text(),
-                );
-                if new_hover != self.editor_state.editor_ui.chat_model_picker_hover {
-                    self.editor_state.editor_ui.chat_model_picker_hover = new_hover;
+                ) {
+                    SelectHit::Row(index) => Some(index),
+                    SelectHit::Inside | SelectHit::Outside => None,
+                };
+                if new_hover != self.editor_state.editor_ui.chat_model_picker.hover {
+                    self.editor_state.editor_ui.chat_model_picker.hover = new_hover;
                     self.mark_dirty();
                     return true;
                 }

@@ -145,7 +145,7 @@ impl WidgetHost {
             self.mark_dirty();
             return true;
         }
-        if self.editor_state.editor_ui.chat_model_picker_open {
+        if self.editor_state.editor_ui.chat_model_picker.open {
             let ui = &mut self.editor_state.editor_ui;
             ui.chat_model_picker_input.select_all();
             ui.chat_model_picker_input.touch(self.now_ms);

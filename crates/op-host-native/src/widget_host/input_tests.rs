@@ -1282,7 +1282,7 @@ fn delete_with_model_picker_open_does_not_delete_selected() {
     let mut host = WidgetHostNative::new();
     host.editor_state_mut()
         .set_single_selection(NodeId::new("n10"));
-    host.editor_state_mut().editor_ui.chat_model_picker_open = true;
+    host.editor_state_mut().editor_ui.chat_model_picker.open = true;
 
     assert!(!host.apply_delete());
     assert_eq!(host.editor_state().selection.anchor, NodeId::new("n10"));
@@ -1295,7 +1295,7 @@ fn backspace_with_model_picker_open_edits_search_not_selection() {
     let mut host = WidgetHostNative::new();
     host.editor_state_mut()
         .set_single_selection(NodeId::new("n10"));
-    host.editor_state_mut().editor_ui.chat_model_picker_open = true;
+    host.editor_state_mut().editor_ui.chat_model_picker.open = true;
     host.editor_state_mut()
         .editor_ui
         .chat_model_picker_input
@@ -1316,7 +1316,7 @@ fn shortcuts_gated_while_model_picker_open() {
     let mut host = WidgetHostNative::new();
     host.editor_state_mut()
         .set_single_selection(NodeId::new("n10"));
-    host.editor_state_mut().editor_ui.chat_model_picker_open = true;
+    host.editor_state_mut().editor_ui.chat_model_picker.open = true;
 
     assert!(!host.apply_nudge(1.0, 0.0));
     assert!(!host.apply_duplicate());
@@ -1684,7 +1684,7 @@ fn component_browser_header_buttons_queue_kit_io_requests() {
 #[test]
 fn chat_model_picker_open_owns_keyboard_search() {
     let mut host = WidgetHostNative::new();
-    host.editor_state_mut().editor_ui.chat_model_picker_open = true;
+    host.editor_state_mut().editor_ui.chat_model_picker.open = true;
     host.editor_state_mut().chat.focused = true;
 
     assert!(host.input_active_pub());
@@ -1701,7 +1701,7 @@ fn chat_model_picker_open_owns_keyboard_search() {
         "g"
     );
     assert!(host.apply_escape());
-    assert!(!host.editor_state().editor_ui.chat_model_picker_open);
+    assert!(!host.editor_state().editor_ui.chat_model_picker.open);
 }
 
 #[test]
@@ -1779,7 +1779,7 @@ fn select_all_in_chat_model_picker_replaces_next_typed_text() {
     let mut host = WidgetHostNative::new();
     {
         let ui = &mut host.editor_state_mut().editor_ui;
-        ui.chat_model_picker_open = true;
+        ui.chat_model_picker.open = true;
         ui.chat_model_picker_input.set_text("gpt");
     }
 

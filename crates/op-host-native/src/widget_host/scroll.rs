@@ -296,7 +296,7 @@ impl WidgetHostNative {
         }
         // Open chat model-picker — a wheel over its dropdown scrolls
         // the model list instead of zooming the canvas.
-        if self.editor_state.editor_ui.chat_model_picker_open {
+        if self.editor_state.editor_ui.chat_model_picker.open {
             use op_editor_ui::widgets::ai_chat_model_picker::max_picker_scroll;
             use op_editor_ui::widgets::AIChatPlaceholder;
             let picker = self
@@ -311,9 +311,10 @@ impl WidgetHostNative {
                         &self.editor_state.chat.available_models,
                         self.editor_state.editor_ui.chat_model_picker_input.text(),
                     );
-                    let next = (self.editor_state.editor_ui.chat_model_picker_scroll - delta_y)
+                    let next = (self.editor_state.editor_ui.chat_model_picker.scroll.offset
+                        - delta_y)
                         .clamp(0.0, max);
-                    self.editor_state.editor_ui.chat_model_picker_scroll = next;
+                    self.editor_state.editor_ui.chat_model_picker.scroll.offset = next;
                     self.mark_dirty();
                     return true;
                 }
@@ -439,7 +440,7 @@ impl WidgetHostNative {
         }
         // Open chat model-picker owns trackpad scroll over its
         // dropdown, same as the wheel path.
-        if self.editor_state.editor_ui.chat_model_picker_open {
+        if self.editor_state.editor_ui.chat_model_picker.open {
             use op_editor_ui::widgets::ai_chat_model_picker::max_picker_scroll;
             use op_editor_ui::widgets::AIChatPlaceholder;
             let picker = self
@@ -454,9 +455,9 @@ impl WidgetHostNative {
                         &self.editor_state.chat.available_models,
                         self.editor_state.editor_ui.chat_model_picker_input.text(),
                     );
-                    let next =
-                        (self.editor_state.editor_ui.chat_model_picker_scroll - dy).clamp(0.0, max);
-                    self.editor_state.editor_ui.chat_model_picker_scroll = next;
+                    let next = (self.editor_state.editor_ui.chat_model_picker.scroll.offset - dy)
+                        .clamp(0.0, max);
+                    self.editor_state.editor_ui.chat_model_picker.scroll.offset = next;
                     self.mark_dirty();
                     return true;
                 }

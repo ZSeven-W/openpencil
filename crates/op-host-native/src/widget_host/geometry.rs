@@ -95,7 +95,7 @@ impl WidgetHostNative {
             changed |= ui.fill_type_picker.hover.take().is_some();
             changed |= ui.toolbar_hover.take().is_some();
             changed |= ui.align_toolbar_hover.take().is_some();
-            changed |= ui.chat_model_picker_hover.take().is_some();
+            changed |= ui.chat_model_picker.hover.take().is_some();
             changed |= ui.chat_design_block_hover.take().is_some();
             changed |= ui.chat_footer_hover.take().is_some();
             changed |= ui.export_picker_hover.take().is_some();

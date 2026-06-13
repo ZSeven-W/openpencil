@@ -18,7 +18,7 @@ impl WidgetHost {
             || eui.variables_variant_rename_value.is_some()
             || self.variables_search_active()
             || eui.agent_settings.focus.is_some()
-            || eui.chat_model_picker_open
+            || eui.chat_model_picker.open
             || self.editor_state.chat.focused
     }
 
@@ -50,11 +50,7 @@ impl WidgetHost {
         let _ = self.editor_state.editor_ui.git_panel.defocus_text_inputs();
         // Chat input + its model-picker popover (same field set as
         // the picker-close branch in `apply_escape`).
-        let eui = &mut self.editor_state.editor_ui;
-        eui.chat_model_picker_open = false;
-        eui.chat_model_picker_scroll = 0.0;
-        eui.chat_model_picker_input.set_text("");
-        eui.chat_model_picker_hover = None;
+        self.editor_state.editor_ui.close_chat_model_picker();
         self.editor_state.chat.blur_input(self.now_ms);
         if was_focused {
             self.mark_dirty();

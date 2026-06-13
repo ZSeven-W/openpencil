@@ -29,7 +29,7 @@ pub enum AIChatHit {
     /// Click on the plus affordance in the header.
     NewChat,
     /// Click on the model chip (bottom-left of the input toolbar) —
-    /// host toggles `ui.chat_model_picker_open` to open / close the
+    /// host toggles `ui.chat_model_picker.open` to open / close the
     /// model dropdown.
     ToggleModelPicker,
     /// Click on a model row in the open picker dropdown — payload
