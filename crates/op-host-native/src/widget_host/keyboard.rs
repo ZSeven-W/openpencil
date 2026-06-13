@@ -1135,7 +1135,7 @@ impl WidgetHostNative {
         }
         // Font-family picker: swallow Enter so it can't leak into
         // chat send / property commit while the overlay is open.
-        if self.editor_state.editor_ui.font_family_picker_open {
+        if self.editor_state.editor_ui.font_picker.open {
             return true;
         }
         // Enter is owned by the clone wizard whenever it is open: a
@@ -1543,7 +1543,7 @@ impl WidgetHostNative {
             self.mark_dirty();
             return true;
         }
-        if self.editor_state.editor_ui.font_family_picker_open {
+        if self.editor_state.editor_ui.font_picker.open {
             self.close_font_picker();
             self.mark_dirty();
             return true;

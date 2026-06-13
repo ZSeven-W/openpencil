@@ -483,7 +483,7 @@ impl WidgetHost {
         // 0c0b2. Font-family picker — outside-click dismiss. A click
         //        on an entry / the trigger is applied; one inside the
         //        popup body (search box / headers) is swallowed.
-        if self.editor_state.editor_ui.font_family_picker_open {
+        if self.editor_state.editor_ui.font_picker.open {
             use op_editor_ui::widgets::PropertyPanelAction as A;
             if let Some(panel) = PropertyPanel::for_selection(&self.editor_state) {
                 let property_rect = Rect {
@@ -508,10 +508,7 @@ impl WidgetHost {
                 }
             }
             let ui = &mut self.editor_state.editor_ui;
-            ui.font_family_picker_open = false;
-            ui.font_picker_search.clear();
-            ui.font_picker_scroll = 0.0;
-            ui.font_picker_hover = None;
+            ui.close_font_picker();
             self.mark_dirty();
             return true;
         }

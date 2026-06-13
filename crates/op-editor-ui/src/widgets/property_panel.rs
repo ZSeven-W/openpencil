@@ -132,13 +132,11 @@ pub struct PropertyPanel {
     pub stroke_variable_ref: Option<String>,
     pub color_variable_count: usize,
     pub image_fill_popover_open: bool,
-    pub font_family_picker_open: bool,
+    pub font_picker: SelectState,
     /// Live type-ahead filter + scroll + hovered entry of the
     /// font-family picker, plus the host-enumerated system families
     /// (see `property_panel_typography`).
     pub font_picker_search: String,
-    pub font_picker_scroll: f32,
-    pub font_picker_hover: Option<usize>,
     pub system_font_families: std::sync::Arc<Vec<String>>,
     /// Image-node Search / Generate popover state (cloned from
     /// `editor_ui.image_panel`; result thumbs are `Arc`s so this
@@ -379,10 +377,8 @@ impl PropertyPanel {
             stroke_variable_ref,
             color_variable_count,
             image_fill_popover_open: ui.image_fill_popover_open,
-            font_family_picker_open: ui.font_family_picker_open,
+            font_picker: ui.font_picker.clone(),
             font_picker_search: ui.font_picker_search.clone(),
-            font_picker_scroll: ui.font_picker_scroll,
-            font_picker_hover: ui.font_picker_hover,
             system_font_families: ui.system_font_families.clone(),
             image_panel: ui.image_panel.clone(),
             image_panel_view: None,
@@ -564,13 +560,13 @@ impl PropertyPanel {
             }
         }
         // Font-family picker rows (searchable overlay).
-        if self.font_family_picker_open {
+        if self.font_picker.open {
             let entries = self.font_picker_entries();
             if let Some(action) = crate::widgets::property_panel_typography::font_picker_action_at(
                 self.scrolled_rect(panel_rect),
                 self.visible_sections(),
                 &entries,
-                self.font_picker_scroll,
+                &self.font_picker,
                 point,
             ) {
                 return Some(action);
@@ -596,7 +592,7 @@ impl PropertyPanel {
             self.visible_sections(),
             &self.snapshot.effects,
             self.fill_type_picker.open,
-            self.font_family_picker_open,
+            self.font_picker.open,
             self.font_weight_picker_open,
             self.export_scale_picker_open,
             self.export_format_picker_open,
@@ -631,7 +627,7 @@ impl PropertyPanel {
             self.visible_sections(),
             &self.snapshot.effects,
             self.fill_type_picker.open,
-            self.font_family_picker_open,
+            self.font_picker.open,
             self.font_weight_picker_open,
             self.export_scale_picker_open,
             self.export_format_picker_open,
@@ -730,7 +726,7 @@ impl PropertyPanel {
             self.visible_sections(),
             &self.snapshot.effects,
             self.fill_type_picker.open,
-            self.font_family_picker_open,
+            self.font_picker.open,
             self.font_weight_picker_open,
             self.export_scale_picker_open,
             self.export_format_picker_open,
@@ -1030,7 +1026,7 @@ impl Widget for PropertyPanel {
                 self.locale,
             );
         }
-        if caps.text && self.font_family_picker_open {
+        if caps.text && self.font_picker.open {
             if let Some(text) = self.snapshot.text.as_ref() {
                 let entries = self.font_picker_entries();
                 crate::widgets::property_panel_typography::paint_font_picker(
@@ -1041,8 +1037,7 @@ impl Widget for PropertyPanel {
                     self.locale,
                     &entries,
                     &self.font_picker_search,
-                    self.font_picker_scroll,
-                    self.font_picker_hover,
+                    &self.font_picker,
                     &text.font_family,
                 );
             }
@@ -1105,7 +1100,7 @@ impl Widget for PropertyPanel {
                 target,
                 self.locale,
                 self.fill_type_picker.open,
-                self.font_family_picker_open,
+                self.font_picker.open,
                 self.font_weight_picker_open,
                 self.export_scale_picker_open,
                 self.export_format_picker_open,
@@ -1122,7 +1117,7 @@ impl Widget for PropertyPanel {
                 self.visible_sections(),
                 &self.snapshot.effects,
                 self.fill_type_picker.open,
-                self.font_family_picker_open,
+                self.font_picker.open,
                 self.font_weight_picker_open,
                 self.export_scale_picker_open,
                 self.export_format_picker_open,

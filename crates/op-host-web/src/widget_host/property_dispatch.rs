@@ -127,7 +127,7 @@ impl WidgetHost {
                 ui.icon_picker_search.clear();
                 ui.close_fill_type_picker();
                 ui.image_fill_popover_open = false;
-                ui.font_family_picker_open = false;
+                ui.close_font_picker();
                 ui.font_weight_picker_open = false;
                 ui.export_scale_picker_open = false;
                 ui.export_format_picker_open = false;
@@ -276,10 +276,7 @@ impl WidgetHost {
                 // FALLBACK_SYSTEM_FONTS list — the same set the TS
                 // app shows when `queryLocalFonts` is unavailable.
                 let ui = &mut self.editor_state.editor_ui;
-                ui.font_family_picker_open = !ui.font_family_picker_open;
-                ui.font_picker_search.clear();
-                ui.font_picker_scroll = 0.0;
-                ui.font_picker_hover = None;
+                ui.toggle_font_picker();
                 ui.font_weight_picker_open = false;
                 ui.close_fill_type_picker();
                 ui.image_fill_popover_open = false;
@@ -310,17 +307,13 @@ impl WidgetHost {
                         );
                     }
                 }
-                let ui = &mut self.editor_state.editor_ui;
-                ui.font_family_picker_open = false;
-                ui.font_picker_search.clear();
-                ui.font_picker_scroll = 0.0;
-                ui.font_picker_hover = None;
+                self.editor_state.editor_ui.close_font_picker();
             }
             A::ToggleFontWeightPicker => {
                 let ui = &mut self.editor_state.editor_ui;
                 ui.font_weight_picker_open = !ui.font_weight_picker_open;
                 ui.font_weight_picker_hover = None;
-                ui.font_family_picker_open = false;
+                ui.close_font_picker();
                 ui.close_fill_type_picker();
                 ui.image_fill_popover_open = false;
                 ui.export_scale_picker_open = false;
@@ -344,6 +337,7 @@ impl WidgetHost {
                 ui.padding_mode_popover_open = !ui.padding_mode_popover_open;
                 ui.padding_mode_popover_hover = None;
                 ui.font_weight_picker_open = false;
+                ui.close_font_picker();
                 ui.close_fill_type_picker();
                 ui.image_fill_popover_open = false;
                 ui.export_scale_picker_open = false;
