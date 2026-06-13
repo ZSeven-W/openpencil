@@ -144,7 +144,6 @@ impl WidgetHost {
             // Web has no per-frame time source; caret paints solid
             // (now == anchor == 0 ⇒ blink_visible returns true).
             layer_panel.now_ms = 0;
-            layer_panel.caret_anchor_ms = 0;
             let mut cx = PaintCx {
                 backend: &mut *backend,
             };

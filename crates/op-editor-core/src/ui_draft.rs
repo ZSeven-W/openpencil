@@ -156,17 +156,10 @@ pub struct PathAnchorMenuState {
 }
 
 /// Inline rename in progress on a layer or page row.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct LayerRenameState {
     pub target: LayerContextTarget,
-    pub draft: String,
-    /// Caret position as a CHAR index into `draft` (0..=char_count).
-    /// Char-based — not byte-based — so left/right movement and
-    /// insert/delete land on whole characters in CJK names.
-    pub caret: usize,
-    /// True after Cmd/Ctrl+A while this inline rename owns the
-    /// keyboard. The next edit replaces the whole draft.
-    pub select_all: bool,
+    pub input: jian_core::text_input::TextInputState,
 }
 
 /// Which control of the HSV colour picker a drag is currently

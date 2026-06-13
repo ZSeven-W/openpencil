@@ -1092,8 +1092,6 @@ pub struct EditorUiState {
     /// rebuilt on load, never serialized, and toggling it never pushes
     /// a history entry.
     pub collapsed_layers: HashSet<NodeId>,
-    /// Caret-blink anchor (ms) for an inline layer / page rename.
-    pub rename_caret_anchor_ms: u64,
     /// Last LayerPanel click target + ms; 400 ms re-press → rename.
     pub last_layer_click: Option<(LayerContextTarget, u64)>,
     /// Last canvas left-click target + ms; 400 ms same-node re-press
@@ -1310,7 +1308,6 @@ impl Default for EditorUiState {
             hovered_page_index: None,
             layer_context_menu: None,
             collapsed_layers: HashSet::new(),
-            rename_caret_anchor_ms: 0,
             last_layer_click: None,
             last_canvas_click: None,
             last_variable_name_click: None,

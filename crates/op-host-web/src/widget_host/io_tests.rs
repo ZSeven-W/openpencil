@@ -47,7 +47,8 @@ fn paste_text_routes_to_focused_rename() {
         .layer_rename
         .as_mut()
         .expect("rename active")
-        .select_all = true;
+        .input
+        .select_all();
     assert!(host.apply_paste_text("Hero Section"));
     assert_eq!(
         host.editor_state
@@ -55,7 +56,8 @@ fn paste_text_routes_to_focused_rename() {
             .layer_rename
             .as_ref()
             .expect("rename still active")
-            .draft,
+            .input
+            .text(),
         "Hero Section"
     );
     // The paste went into the rename draft, NOT the chat input.

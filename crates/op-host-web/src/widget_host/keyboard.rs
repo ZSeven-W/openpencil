@@ -19,6 +19,9 @@ impl WidgetHost {
         if self.editor_state.ui.layer_rename.is_some() && !c.is_control() {
             let mut s = [0u8; 4];
             if self.editor_state.rename_append(c.encode_utf8(&mut s)) {
+                if let Some(rename) = self.editor_state.ui.layer_rename.as_mut() {
+                    rename.input.touch(self.now_ms);
+                }
                 self.mark_dirty();
                 return true;
             }
@@ -201,6 +204,9 @@ impl WidgetHost {
         if self.editor_state.ui.layer_rename.is_some() {
             let ok = self.editor_state.rename_backspace();
             if ok {
+                if let Some(rename) = self.editor_state.ui.layer_rename.as_mut() {
+                    rename.input.touch(self.now_ms);
+                }
                 self.mark_dirty();
             }
             return ok;
@@ -418,6 +424,9 @@ impl WidgetHost {
         if self.editor_state.ui.layer_rename.is_some() {
             let ok = self.editor_state.rename_backspace();
             if ok {
+                if let Some(rename) = self.editor_state.ui.layer_rename.as_mut() {
+                    rename.input.touch(self.now_ms);
+                }
                 self.mark_dirty();
             }
             return ok;

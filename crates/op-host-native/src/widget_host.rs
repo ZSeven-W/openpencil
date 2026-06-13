@@ -872,12 +872,8 @@ impl WidgetHostNative {
                 500,
             ));
         }
-        if ui.layer_rename.is_some() {
-            return Some(jian_core::anim::next_blink_flip_ms(
-                self.now_ms,
-                self.editor_state.editor_ui.rename_caret_anchor_ms,
-                500,
-            ));
+        if let Some(rename) = &ui.layer_rename {
+            return Some(rename.input.next_blink_flip_ms(self.now_ms));
         }
         if ui.property_focus.is_some() {
             return Some(jian_core::anim::next_blink_flip_ms(

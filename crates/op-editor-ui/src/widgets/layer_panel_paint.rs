@@ -3,8 +3,10 @@
 
 use crate::theme::Theme;
 use crate::widgets::icons::draw_icon;
+use crate::widgets::property_panel_text_input::paint_text_input_view_value;
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
+use jian_core::text_input::TextInputState;
 
 use super::layer_panel::{LayerItem, LAYER_ROW_HEIGHT, ROW_PAD_X};
 
@@ -75,73 +77,26 @@ pub(super) fn paint_drag_ghost(
 }
 
 /// Paint an inline rename input — flat input look (no boxed
-/// background) with a subtle primary underline + blinking caret.
-/// Tightened caret-to-text gap and uses `blink_visible` so the
-/// caret pulses at the same cadence as the chat / property input.
-// Paint-context + geometry args threaded through; a struct adds no gain.
+/// background) with a subtle primary underline. Text editing,
+/// selection, horizontal scroll, and caret blink are owned by
+/// `TextInputView`.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn paint_rename_input(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
-    draft: &str,
-    caret: usize,
+    input: &TextInputState,
     x: f32,
     row_y: f32,
     available_w: f32,
     now_ms: u64,
-    caret_anchor_ms: u64,
-    select_all: bool,
 ) {
     let input_w = available_w.max(40.0);
     let input_h = LAYER_ROW_HEIGHT - 4.0;
-    // No truncation while editing — full draft scrolls so the caret
-    // stays in view. Use the backend's real glyph measurement so CJK /
-    // capital-heavy strings don't under-scroll (the 0.5-factor
-    // heuristic does for narrow ASCII).
-    let prefix: String = draft.chars().take(caret).collect();
-    let prefix_w = cx.backend.measure_text(&prefix, ROW_FONT);
-    let text_w = cx.backend.measure_text(draft, ROW_FONT);
-    let caret_pad = 2.0;
-    // Anchor the scroll to the caret (so mid-string editing keeps the
-    // caret visible), clamped so we never scroll past the draft end.
-    let max_scroll = (text_w + caret_pad - input_w).max(0.0);
-    let scroll_x = (prefix_w + caret_pad - input_w).max(0.0).min(max_scroll);
-    let clip = Rect {
+    let rect = Rect {
         origin: Point2D::new(x - 2.0, row_y),
         size: Point2D::new(input_w + 4.0, input_h),
     };
-    cx.backend.save();
-    cx.backend.clip_rect(clip);
-    // Ctrl/Cmd+A highlights the whole rename draft (painted behind it).
-    if select_all {
-        crate::widgets::text_selection::paint_single_line_selection(
-            cx,
-            theme,
-            draft,
-            x - scroll_x,
-            row_y + 17.0,
-            ROW_FONT,
-            clip.origin.x + clip.size.x,
-        );
-    }
-    let text = TextLayout::single_run(
-        draft,
-        "system-ui",
-        ROW_FONT,
-        (theme.foreground).to_jian(),
-        Point2D::new(0.0, 0.0),
-    );
-    cx.backend
-        .draw_text(&text, Point2D::new(x - scroll_x, row_y + 17.0));
-    if jian_core::anim::blink_visible(now_ms, caret_anchor_ms, 500) {
-        let caret_x = x + prefix_w - scroll_x;
-        let caret_rect = Rect {
-            origin: Point2D::new(caret_x, row_y + 5.0),
-            size: Point2D::new(1.0, input_h - 6.0),
-        };
-        cx.backend.fill_rect(caret_rect, theme.foreground);
-    }
-    cx.backend.restore();
+    paint_text_input_view_value(cx, theme, input, rect, ROW_FONT, 2.0, row_y + 17.0, now_ms);
     // Subtle underline indicates edit mode without the heavy ring.
     let underline = Rect {
         origin: Point2D::new(x - 2.0, row_y + input_h - 1.0),

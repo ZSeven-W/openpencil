@@ -105,12 +105,16 @@ impl WidgetHostNative {
             }
             (A::RenamePage, T::Page(idx)) => {
                 if self.editor_state.start_rename_page(idx) {
-                    self.editor_state.editor_ui.rename_caret_anchor_ms = self.now_ms;
+                    if let Some(rename) = self.editor_state.ui.layer_rename.as_mut() {
+                        rename.input.touch(self.now_ms);
+                    }
                 }
             }
             (A::RenameLayer, T::Layer(id)) => {
                 if self.editor_state.start_rename_layer(id) {
-                    self.editor_state.editor_ui.rename_caret_anchor_ms = self.now_ms;
+                    if let Some(rename) = self.editor_state.ui.layer_rename.as_mut() {
+                        rename.input.touch(self.now_ms);
+                    }
                 }
             }
             _ => {} // mismatched action/target — no-op

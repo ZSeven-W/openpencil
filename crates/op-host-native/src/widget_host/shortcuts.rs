@@ -118,9 +118,8 @@ impl WidgetHostNative {
             return true;
         }
         if let Some(rename) = self.editor_state.ui.layer_rename.as_mut() {
-            rename.select_all = true;
-            rename.caret = rename.draft.chars().count();
-            self.editor_state.editor_ui.rename_caret_anchor_ms = self.now_ms;
+            rename.input.select_all();
+            rename.input.touch(self.now_ms);
             self.mark_dirty();
             return true;
         }

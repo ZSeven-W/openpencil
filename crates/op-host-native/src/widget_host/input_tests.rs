@@ -749,18 +749,36 @@ fn rename_caret_arrows_move_caret_then_fall_through() {
         .start_rename_layer(NodeId::new("ab")));
     // Draft "ab" seeds caret at the end (2).
     assert_eq!(
-        host.editor_state().ui.layer_rename.as_ref().unwrap().caret,
+        host.editor_state()
+            .ui
+            .layer_rename
+            .as_ref()
+            .unwrap()
+            .input
+            .caret(),
         2
     );
     // Left arrow during rename is consumed and moves the caret.
     assert!(host.apply_rename_caret(false));
     assert_eq!(
-        host.editor_state().ui.layer_rename.as_ref().unwrap().caret,
+        host.editor_state()
+            .ui
+            .layer_rename
+            .as_ref()
+            .unwrap()
+            .input
+            .caret(),
         1
     );
     assert!(host.apply_rename_caret(true));
     assert_eq!(
-        host.editor_state().ui.layer_rename.as_ref().unwrap().caret,
+        host.editor_state()
+            .ui
+            .layer_rename
+            .as_ref()
+            .unwrap()
+            .input
+            .caret(),
         2
     );
     // With no rename active the arrow falls through (not consumed).

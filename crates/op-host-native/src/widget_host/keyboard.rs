@@ -163,7 +163,9 @@ impl WidgetHostNative {
         if self.editor_state.ui.layer_rename.is_some() && !c.is_control() {
             let mut s = [0u8; 4];
             let _ = self.editor_state.rename_append(c.encode_utf8(&mut s));
-            self.editor_state.editor_ui.rename_caret_anchor_ms = self.now_ms;
+            if let Some(rename) = self.editor_state.ui.layer_rename.as_mut() {
+                rename.input.touch(self.now_ms);
+            }
             self.mark_dirty();
             return true;
         }
@@ -548,7 +550,9 @@ impl WidgetHostNative {
         if self.editor_state.ui.layer_rename.is_some() {
             let ok = self.editor_state.rename_backspace();
             if ok {
-                self.editor_state.editor_ui.rename_caret_anchor_ms = self.now_ms;
+                if let Some(rename) = self.editor_state.ui.layer_rename.as_mut() {
+                    rename.input.touch(self.now_ms);
+                }
                 self.mark_dirty();
             }
             return ok;
@@ -851,7 +855,9 @@ impl WidgetHostNative {
         if self.editor_state.ui.layer_rename.is_some() {
             let ok = self.editor_state.rename_backspace();
             if ok {
-                self.editor_state.editor_ui.rename_caret_anchor_ms = self.now_ms;
+                if let Some(rename) = self.editor_state.ui.layer_rename.as_mut() {
+                    rename.input.touch(self.now_ms);
+                }
                 self.mark_dirty();
             }
             return ok;
@@ -1041,7 +1047,9 @@ impl WidgetHostNative {
             self.editor_state.rename_caret_left()
         };
         if moved {
-            self.editor_state.editor_ui.rename_caret_anchor_ms = self.now_ms;
+            if let Some(rename) = self.editor_state.ui.layer_rename.as_mut() {
+                rename.input.touch(self.now_ms);
+            }
             self.mark_dirty();
         }
         moved
