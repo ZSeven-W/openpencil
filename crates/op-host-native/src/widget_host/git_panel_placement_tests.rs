@@ -7,7 +7,7 @@
 
 use super::helpers::GIT_PANEL_CARET_GAP;
 use super::{CursorHint, WidgetHostNative};
-use op_editor_core::{GitFileEntry, GitPanelAction};
+use op_editor_core::{ButtonPressTarget, GitButton, GitFileEntry, GitPanelAction};
 use op_editor_ui::widgets::{GitPanel, GitPanelHit, TopBar, TOP_BAR_HEIGHT};
 use op_editor_ui::{Point2D, Rect};
 
@@ -427,6 +427,31 @@ fn git_popover_row_hover_uses_shared_menu_state() {
             .hover,
         Some(1)
     );
+}
+
+#[test]
+fn git_panel_press_sets_and_release_clears_pressed_button() {
+    let mut host = WidgetHostNative::new();
+    let (vw, vh) = (1400.0, 900.0);
+    {
+        let panel = &mut host.editor_state_mut().editor_ui.git_panel;
+        panel.open = true;
+        panel.loading = false;
+        panel.in_repo = true;
+        panel.branch = Some("main".to_string());
+    }
+    let body = host.git_panel_rect(vw, vh).expect("panel open");
+    let panel = GitPanel::for_editor(host.editor_state()).expect("panel widget");
+    let point = find_git_hit(&panel, body, GitPanelHit::Overflow);
+
+    assert!(host.apply_press(point.x, point.y, vw, vh));
+    assert_eq!(
+        host.editor_state().editor_ui.pressed_button,
+        Some(ButtonPressTarget::Git(GitButton::Overflow))
+    );
+
+    assert!(host.apply_release_with_viewport(vw, vh));
+    assert_eq!(host.editor_state().editor_ui.pressed_button, None);
 }
 
 #[test]

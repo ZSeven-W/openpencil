@@ -7,8 +7,8 @@
 //! inside the Git-panel rect) and before the canvas overlays.
 
 use op_editor_core::{
-    CloneField, CommitDiffView, GitBranchPickerMode, GitDiffTarget, GitOverflowView,
-    GitPanelAction, GitPanelState,
+    ButtonPressTarget, CloneField, CommitDiffView, GitBranchPickerMode, GitDiffTarget,
+    GitOverflowView, GitPanelAction, GitPanelState,
 };
 use op_editor_ui::widgets::{GitPanel, GitPanelHit};
 use op_editor_ui::Point2D;
@@ -44,6 +44,9 @@ impl WidgetHostNative {
         let diff_max_h_scroll = GitPanel::for_editor(&self.editor_state)
             .map(|p| p.diff_max_h_scroll())
             .unwrap_or(0);
+        let pressed_button = hit
+            .and_then(op_editor_ui::widgets::editor_state_ext::git_button_hover)
+            .map(ButtonPressTarget::Git);
         // The caret bridge above the body is painted as part of the
         // popover; a click there must be swallowed (not fall through to
         // the canvas), even though `hit_test` against the body returns
@@ -55,6 +58,7 @@ impl WidgetHostNative {
         // Set by the blank-chrome arm below; the full input blur runs
         // after the match so it doesn't fight the `panel` borrow.
         let mut blur_all_inputs = false;
+        self.editor_state.editor_ui.pressed_button = pressed_button;
         let panel = &mut self.editor_state.editor_ui.git_panel;
         match hit {
             Some(GitPanelHit::CommitInput) => {
