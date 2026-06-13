@@ -70,8 +70,7 @@ impl RenderBackend for SettingsInputBackend<'_> {
 
     fn draw_text(&mut self, layout: &TextLayout, origin: Point2D) {
         let draw_origin = Point2D::new(origin.x, origin.y + self.baseline_delta_y);
-        let layout = layout.translated(Point2D::new(-origin.x, -origin.y));
-        self.inner.draw_text(&layout, draw_origin);
+        self.inner.draw_text(layout, draw_origin);
     }
 
     fn clip_rect(&mut self, rect: Rect) {
