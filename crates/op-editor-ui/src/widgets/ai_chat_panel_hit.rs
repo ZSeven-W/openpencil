@@ -216,9 +216,16 @@ impl<'a> AIChatPlaceholder<'a> {
         }
         if self.state.messages.is_empty() && can_use_model && !self.is_streaming() {
             // Examples grid hit-test (only rendered when no messages).
-            for (card, ex) in example_card_rects(rect).iter().zip(self.examples.iter()) {
+            for (index, (card, ex)) in example_card_rects(rect)
+                .iter()
+                .zip(self.examples.iter())
+                .enumerate()
+            {
                 if (*card).contains(point) {
-                    return Some(AIChatHit::Example(ex.prompt.clone()));
+                    return Some(AIChatHit::Example {
+                        index,
+                        prompt: ex.prompt.clone(),
+                    });
                 }
             }
         }

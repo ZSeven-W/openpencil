@@ -320,9 +320,10 @@ fn hit_test_resolves_first_example_when_empty() {
     let card_w = (AI_CHAT_WIDTH - PAD * 2.0 - 8.0) / 2.0;
     let p = Point2D::new(PAD + card_w / 2.0, HEADER_HEIGHT + 32.0 + 35.0);
     match panel.hit_test(rect, p) {
-        Some(AIChatHit::Example(prompt)) => {
+        Some(AIChatHit::Example { index, prompt }) => {
             // The click payload is the card's full prompt — what the
             // host inserts into the chat input.
+            assert_eq!(index, 0);
             assert_eq!(prompt, panel.examples[0].prompt);
         }
         other => panic!("expected first example hit, got {:?}", other),
@@ -339,7 +340,10 @@ fn hit_test_uses_taller_ts_quick_action_card_height() {
     let p = Point2D::new(PAD + card_w / 2.0, HEADER_HEIGHT + 32.0 + 64.0);
 
     match panel.hit_test(rect, p) {
-        Some(AIChatHit::Example(prompt)) => assert_eq!(prompt, panel.examples[0].prompt),
+        Some(AIChatHit::Example { index, prompt }) => {
+            assert_eq!(index, 0);
+            assert_eq!(prompt, panel.examples[0].prompt);
+        }
         other => panic!("expected first example hit in taller TS-style card, got {other:?}"),
     }
 }

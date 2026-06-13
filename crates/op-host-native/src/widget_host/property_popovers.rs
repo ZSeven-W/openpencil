@@ -127,6 +127,13 @@ impl WidgetHostNative {
             };
             if let Some(action) = panel.hit_test_action(property_rect, Point2D::new(x, y)) {
                 if matches!(action, A::SetFontWeight(_) | A::ToggleFontWeightPicker) {
+                    self.editor_state.editor_ui.pressed_button = match action {
+                        A::SetFontWeight(choice) => op_editor_ui::widgets::FontWeightChoice::ALL
+                            .iter()
+                            .position(|c| *c == choice)
+                            .map(op_editor_core::ButtonPressTarget::FontWeightPicker),
+                        _ => None,
+                    };
                     self.apply_property_action(action);
                     return true;
                 }

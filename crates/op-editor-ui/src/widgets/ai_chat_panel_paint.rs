@@ -5,6 +5,7 @@
 
 use super::ai_chat_panel::{ExampleCard, HEADER_HEIGHT, PAD};
 use crate::theme::Theme;
+use crate::widgets::button::paint_button_feedback_wash;
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
 
@@ -132,6 +133,7 @@ pub(crate) fn paint_examples(
     examples: &[ExampleCard; 4],
     disabled: bool,
     hover: Option<usize>,
+    pressed_index: Option<usize>,
 ) {
     let opacity = if disabled { 0.6 } else { 1.0 };
     let hint = TextLayout::single_run(
@@ -159,10 +161,11 @@ pub(crate) fn paint_examples(
     {
         cx.backend.fill_round_rect(*card, 8.0, card_bg);
         let hovered = !disabled && hover == Some(idx);
-        if hovered {
-            cx.backend.fill_round_rect(*card, 8.0, theme.button_hover);
+        let pressed = !disabled && pressed_index == Some(idx);
+        if hovered || pressed {
+            paint_button_feedback_wash(cx.backend, theme, *card, 8.0, hovered, pressed);
         }
-        let border = if hovered {
+        let border = if hovered || pressed {
             (theme.primary).with_alpha(0.35)
         } else {
             card_border
@@ -340,6 +343,7 @@ mod tests {
             "Tip",
             &examples,
             false,
+            None,
             None,
         );
 
