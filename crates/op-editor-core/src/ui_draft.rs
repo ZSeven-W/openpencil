@@ -269,20 +269,9 @@ pub struct UiDraftState {
     pub layer_rename: Option<LayerRenameState>,
     /// Canvas Text node in inline text-edit mode.
     pub text_editing: Option<NodeId>,
-    /// True after Cmd/Ctrl+A while inline text-edit owns the keyboard.
-    /// The next edit replaces the whole plain text content.
-    pub text_edit_select_all: bool,
-    /// Caret position (byte offset into the edited Text node's plain
-    /// content) for the inline text editor. `None` falls back to the
-    /// end of the content (legacy append-at-end behaviour).
-    pub text_edit_caret: Option<usize>,
-    /// Selection anchor (byte offset) for the inline text editor. A
-    /// selection is active when both this and `text_edit_caret` are
-    /// set and differ; the selected range is `anchor..caret` (either
-    /// order). Cmd/Ctrl+A maps to anchor 0 + caret at content end.
-    pub text_edit_selection_anchor: Option<usize>,
-    /// Caret-blink anchor (ms) for the inline text editor.
-    pub text_edit_caret_anchor_ms: u64,
+    /// Draft, caret, selection, IME composition, and blink state for
+    /// the inline canvas text editor.
+    pub text_edit_input: jian_core::text_input::TextInputState,
     /// In-progress Pen-tool path. `Some(id)` while the user is
     /// click-adding anchors; cleared on Enter / Escape / tool change.
     pub pen_in_progress: Option<NodeId>,

@@ -26,6 +26,7 @@ use crate::widgets::canvas_text_edit::text_edit_layout;
 use crate::widgets::canvas_viewport::EditCaret;
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, RenderBackend, TextLayout};
+use jian_core::text_input::prev_char_boundary;
 
 /// Fully resolved paint style for one line slice.
 #[derive(Clone, Copy)]
@@ -237,7 +238,31 @@ pub(crate) fn paint_text_node(
     zoom: f32,
     edit_caret: &Option<EditCaret>,
 ) {
-    let text = node.text.as_deref().unwrap_or("");
+    let editing = edit_caret.as_ref().filter(|c| c.editing == node.id);
+    let mut edit_node = None;
+    let mut composition_range = None;
+    if let Some(c) = editing {
+        let base = c.input.text();
+        let mut rendered = base.to_owned();
+        if let Some(composition) = c.input.composition() {
+            if !composition.text.is_empty() {
+                let insert_at = prev_char_boundary(base, c.input.caret().min(base.len()));
+                rendered.insert_str(insert_at, &composition.text);
+                let cursor = prev_char_boundary(&composition.text, composition.cursor);
+                composition_range = Some((
+                    insert_at,
+                    insert_at + composition.text.len(),
+                    insert_at + cursor,
+                ));
+            }
+        }
+        let mut clone = node.clone();
+        clone.text = Some(rendered);
+        clone.text_runs.clear();
+        edit_node = Some(clone);
+    }
+    let paint_node = edit_node.as_ref().unwrap_or(node);
+    let text = paint_node.text.as_deref().unwrap_or("");
     // Ink colour follows the resolved fill (defaults to near black).
     let ink = node.fill.unwrap_or(Color {
         r: 0.08,
@@ -245,10 +270,10 @@ pub(crate) fn paint_text_node(
         b: 0.08,
         a: 1.0,
     });
-    let family = if node.font_family.trim().is_empty() {
+    let family = if paint_node.font_family.trim().is_empty() {
         "system-ui"
     } else {
-        node.font_family.as_str()
+        paint_node.font_family.as_str()
     };
     // Shared line layout — the same resolution the inline text editor
     // hit-tests against (`canvas_text_edit`), so caret / selection /
@@ -259,21 +284,19 @@ pub(crate) fn paint_text_node(
     // viewport scale as a canvas transform. The layout (and therefore
     // the text editor) works on the FLAT string with node-level
     // metrics; styled runs only restyle the painted slices.
-    let layout = text_edit_layout(cx.backend, node);
+    let layout = text_edit_layout(cx.backend, paint_node);
     let font_size = layout.font_size;
     let weight = layout.weight;
     let letter_spacing = layout.letter_spacing;
-    let editing = edit_caret.as_ref().filter(|c| c.editing == node.id);
     // Selection wash behind the glyphs: Cmd/Ctrl+A's whole-content
     // wash and a partial anchor..caret drag share the same painter.
     let selection = editing.and_then(|c| {
-        if c.select_all {
-            (!text.is_empty()).then_some((0, text.len()))
-        } else {
-            let caret = c.caret.unwrap_or(text.len()).min(text.len());
-            let anchor = c.anchor?.min(text.len());
-            (anchor != caret).then(|| (anchor.min(caret), anchor.max(caret)))
-        }
+        composition_range.is_none().then(|| {
+            c.input
+                .highlight_range()
+                .map(|(start, end)| (start.min(text.len()), end.min(text.len())))
+                .filter(|(start, end)| start != end)
+        })?
     });
     if let (Some(c), Some((sel_start, sel_end))) = (editing, selection) {
         for hl in layout.selection_rects(cx.backend, sel_start, sel_end) {
@@ -294,21 +317,21 @@ pub(crate) fn paint_text_node(
             }
             let line_start = layout.line_starts[idx];
             let line_end = line_start + line.len();
-            let slices = slice_ranges(&node.text_runs, line_start, line_end);
+            let slices = slice_ranges(&paint_node.text_runs, line_start, line_end);
             let styles: Vec<SliceStyle> = slices
                 .iter()
                 .map(|(_, _, run)| {
                     resolved_slice_style(
-                        node,
+                        paint_node,
                         font_size,
                         weight,
                         ink,
-                        run.map(|i| &node.text_runs[i]),
+                        run.map(|i| &paint_node.text_runs[i]),
                     )
                 })
                 .collect();
             let line_w = measure_slices(cx.backend, text, &slices, &styles, letter_spacing);
-            let x0 = match node.text_align {
+            let x0 = match paint_node.text_align {
                 SceneTextAlign::Center => {
                     world_rect.origin.x + (layout.align_width - line_w).max(0.0) / 2.0
                 }
@@ -319,11 +342,12 @@ pub(crate) fn paint_text_node(
             };
             // Justify spreads the residual width across space gaps on
             // every line except the last (TS Justify parity).
-            let justify_extra = if node.text_align == SceneTextAlign::Justify && idx != last_line {
-                justify_extra_per_gap((layout.align_width - line_w).max(0.0), line)
-            } else {
-                0.0
-            };
+            let justify_extra =
+                if paint_node.text_align == SceneTextAlign::Justify && idx != last_line {
+                    justify_extra_per_gap((layout.align_width - line_w).max(0.0), line)
+                } else {
+                    0.0
+                };
             let baseline_y = first_baseline_y + idx as f32 * layout.line_h;
             let mut x = x0;
             for ((start, end, _), style) in slices.iter().zip(&styles) {
@@ -344,11 +368,25 @@ pub(crate) fn paint_text_node(
             }
         }
     }
+    if let Some((start, end, _)) = composition_range {
+        let thickness = (1.0 / zoom).max(1.0);
+        for rect in layout.selection_rects(cx.backend, start, end) {
+            let y = rect.origin.y + font_size * 1.12;
+            cx.backend.stroke_line(
+                Point2D::new(rect.origin.x, y),
+                Point2D::new(rect.origin.x + rect.size.x, y),
+                ink,
+                thickness,
+            );
+        }
+    }
     // Caret while editing — at the real caret offset (hidden while a
     // selection is active, textarea-style).
     if let Some(c) = editing {
-        if selection.is_none() && jian_core::anim::blink_visible(c.now_ms, c.anchor_ms, 500) {
-            let caret_byte = c.caret.unwrap_or(text.len()).min(text.len());
+        if selection.is_none() && c.input.caret_visible(c.now_ms) {
+            let caret_byte = composition_range
+                .map(|(_, _, cursor)| cursor.min(text.len()))
+                .unwrap_or_else(|| c.input.caret().min(text.len()));
             let (caret_x, line_top) = layout.caret_position(cx.backend, caret_byte);
             let caret = Rect {
                 origin: Point2D::new(caret_x, line_top + 2.0),
@@ -476,6 +514,33 @@ mod tests {
         node.font_size = 20.0;
         node.line_height = 1.0;
         node
+    }
+
+    #[test]
+    fn composition_paints_inline_preedit_underline_and_caret() {
+        let node = text_node("ab");
+        let mut input = jian_core::text_input::TextInputState::with_text("ab");
+        input.set_caret(1, 0);
+        input.set_composition("你", "你".len(), 0);
+        let edit = EditCaret {
+            editing: "t".to_string(),
+            input,
+            now_ms: 0,
+            selection_color: Color::BLUE,
+        };
+        let mut backend = CaptureBackend::default();
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+
+        paint_text_node(&mut cx, &node, node.bounds, 1.0, &Some(edit));
+
+        assert_eq!(backend.contents, vec!["a你b".to_string()]);
+        assert_eq!(backend.lines.len(), 1);
+        let (from, to, _, _) = backend.lines[0];
+        assert_eq!((from.x, to.x), (10.0, 20.0));
+        assert_eq!((from.y, to.y), (22.4, 22.4));
+        assert_eq!(backend.fill_rects, vec![Rect::xywh(20.0, 2.0, 1.0, 23.0)]);
     }
 
     #[test]

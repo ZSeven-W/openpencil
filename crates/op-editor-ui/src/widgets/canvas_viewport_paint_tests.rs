@@ -204,13 +204,19 @@ mod text_tests {
         caret: Option<usize>,
         anchor: Option<usize>,
     ) -> crate::widgets::canvas_viewport::EditCaret {
+        let mut input = jian_core::text_input::TextInputState::with_text("hello\nworld");
+        if let Some(caret) = caret {
+            if let Some(anchor) = anchor {
+                input.set_caret(anchor, 0);
+                input.drag_to(caret, 0);
+            } else {
+                input.set_caret(caret, 0);
+            }
+        }
         crate::widgets::canvas_viewport::EditCaret {
             editing: "t".to_string(),
-            anchor_ms: 0,
+            input,
             now_ms: 0, // blink phase 0 → caret visible
-            select_all: false,
-            caret,
-            anchor,
             selection_color: Color::BLUE,
         }
     }

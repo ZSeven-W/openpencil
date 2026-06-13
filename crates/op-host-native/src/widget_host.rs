@@ -866,11 +866,7 @@ impl WidgetHostNative {
     pub fn next_animation_deadline_ms(&self) -> Option<u64> {
         let ui = &self.editor_state.ui;
         if ui.text_editing.is_some() {
-            return Some(jian_core::anim::next_blink_flip_ms(
-                self.now_ms,
-                ui.text_edit_caret_anchor_ms,
-                500,
-            ));
+            return Some(ui.text_edit_input.next_blink_flip_ms(self.now_ms));
         }
         if let Some(rename) = &ui.layer_rename {
             return Some(rename.input.next_blink_flip_ms(self.now_ms));
