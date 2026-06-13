@@ -13,6 +13,9 @@ use crate::widgets::git_panel::{contains, truncate, GitPanel, GitPanelHit, PAD};
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect};
+use jian_widgets::components::select::{Select, SelectHit, SelectState};
+use jian_widgets::{Density, Tokens};
+use op_editor_core::GitOverflowView;
 
 /// Picker popover width (TS body `w-80` ≈ 320, clamped to the panel).
 const TP_W: f32 = 300.0;
@@ -20,10 +23,10 @@ const TP_W: f32 = 300.0;
 const TP_PAD: f32 = 12.0;
 /// Uppercase header row height.
 const TP_HEADER_H: f32 = 16.0;
-/// One candidate row (TS bordered card: icon box + title + subtitle).
-const TP_ROW_H: f32 = 46.0;
-/// Gap between candidate rows (TS `gap-1.5`).
-const TP_ROW_GAP: f32 = 6.0;
+/// One candidate row, using shared Select touch-density metrics.
+const TP_ROW_H: f32 = 44.0;
+/// Shared Select rows are contiguous; row tint/borders preserve the card look.
+const TP_ROW_GAP: f32 = 0.0;
 /// Footer action-bar height.
 const TP_FOOTER_H: f32 = 28.0;
 /// Gap between the row list and the footer.
@@ -62,18 +65,56 @@ impl GitPanel<'_> {
         }
     }
 
+    fn tracked_picker_list_rect(&self, panel_rect: Rect) -> Rect {
+        let p = self.tracked_picker_panel(panel_rect);
+        Rect {
+            origin: Point2D::new(p.origin.x + TP_PAD, p.origin.y + TP_PAD + TP_HEADER_H + 8.0),
+            size: Point2D::new(
+                p.size.x - TP_PAD * 2.0,
+                TP_ROW_H * self.picker_rows() as f32,
+            ),
+        }
+    }
+
     /// One clickable rect per candidate row (list mode).
     pub(super) fn tracked_picker_row_rects(&self, panel_rect: Rect) -> Vec<Rect> {
-        let p = self.tracked_picker_panel(panel_rect);
-        let left = p.origin.x + TP_PAD;
-        let inner_w = p.size.x - TP_PAD * 2.0;
-        let first = p.origin.y + TP_PAD + TP_HEADER_H + 8.0;
+        let list = self.tracked_picker_list_rect(panel_rect);
         (0..self.picker_rows())
             .map(|i| Rect {
-                origin: Point2D::new(left, first + i as f32 * (TP_ROW_H + TP_ROW_GAP)),
-                size: Point2D::new(inner_w, TP_ROW_H),
+                origin: Point2D::new(list.origin.x, list.origin.y + i as f32 * TP_ROW_H),
+                size: Point2D::new(list.size.x, TP_ROW_H),
             })
             .collect()
+    }
+
+    pub fn tracked_picker_select_hit(&self, panel_rect: Rect, point: Point2D) -> SelectHit {
+        if self.state.candidate_files.is_empty() {
+            return SelectHit::Outside;
+        }
+        let list = self.tracked_picker_list_rect(panel_rect);
+        Select::hit(
+            &self.tracked_picker_select_state(),
+            popup_anchor(list),
+            list,
+            self.picker_rows(),
+            point,
+            &self.tracked_picker_tokens(),
+        )
+    }
+
+    fn tracked_picker_select_state(&self) -> SelectState {
+        let mut state = self.state.tracked_picker.clone();
+        state.open = self.state.overflow_open
+            && self.state.overflow_view == GitOverflowView::TrackedPicker
+            && !self.state.candidate_files.is_empty();
+        state.hover = state.hover.filter(|i| *i < self.picker_rows());
+        state
+    }
+
+    fn tracked_picker_tokens(&self) -> Tokens {
+        let mut tokens = self.widget_tokens();
+        tokens.density = Density::Touch;
+        tokens
     }
 
     /// `(back, bind, bind_open)` footer button rects (list mode).
@@ -144,6 +185,7 @@ impl GitPanel<'_> {
             .enumerate()
         {
             let selected = self.state.tracked_picker_selected == Some(i);
+            let hovered = self.state.tracked_picker.hover == Some(i);
             let border = if selected {
                 t.primary
             } else {
@@ -155,7 +197,9 @@ impl GitPanel<'_> {
                 t.card
             };
             cx.backend.fill_round_rect(*row, 8.0, bg);
-            self.wash_if_hovered(cx, *row, 8.0, GitPanelHit::TrackedPickerRow(i));
+            if hovered {
+                cx.backend.fill_round_rect(*row, 8.0, t.button_hover);
+            }
             cx.backend.stroke_round_rect(*row, 8.0, border, 1.0);
             // Leading icon — Check when selected, else FileText.
             let icon = if selected {
@@ -321,12 +365,19 @@ impl GitPanel<'_> {
                 return Some(GitPanelHit::TrackedPickerBindOpen);
             }
         }
-        for (i, row) in self.tracked_picker_row_rects(panel_rect).iter().enumerate() {
-            if contains(*row, point) {
-                return Some(GitPanelHit::TrackedPickerRow(i));
-            }
+        match self.tracked_picker_select_hit(panel_rect, point) {
+            SelectHit::Row(i) => return Some(GitPanelHit::TrackedPickerRow(i)),
+            SelectHit::Inside => return Some(GitPanelHit::Inside),
+            SelectHit::Outside => {}
         }
         Some(GitPanelHit::Inside)
+    }
+}
+
+fn popup_anchor(popup: Rect) -> Rect {
+    Rect {
+        origin: popup.origin,
+        size: Point2D::new(popup.size.x, 0.0),
     }
 }
 

@@ -193,6 +193,8 @@ mod git_panel_status;
 mod git_panel_tests;
 mod git_panel_text;
 mod git_panel_tracked_picker;
+#[cfg(test)]
+mod git_panel_tracked_picker_tests;
 pub mod icon_picker_panel;
 pub mod ime_preedit_overlay;
 pub mod locale_picker;

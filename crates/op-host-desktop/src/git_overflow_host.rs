@@ -46,7 +46,7 @@ impl DesktopApp {
 
         let panel = &mut self.host.editor_state_mut().editor_ui.git_panel;
         panel.candidate_files = files;
-        panel.tracked_picker_selected = None;
+        panel.open_tracked_picker();
         panel.overflow_view = GitOverflowView::TrackedPicker;
         panel.overflow_open = true;
     }
@@ -59,7 +59,7 @@ impl DesktopApp {
             let panel = &mut self.host.editor_state_mut().editor_ui.git_panel;
             panel.overflow_open = false;
             panel.overflow_view = GitOverflowView::Menu;
-            panel.tracked_picker_selected = None;
+            panel.close_tracked_picker();
             panel.candidate_files.clear();
         }
         if open {

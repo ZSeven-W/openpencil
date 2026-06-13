@@ -98,12 +98,20 @@ impl WidgetHostNative {
     /// over that button in the ready view). Returns `true` when the hover
     /// state flipped (a repaint is due).
     pub(in crate::widget_host) fn update_git_panel_ready_hover(&mut self, x: f32, y: f32) -> bool {
-        let hit = self
-            .git_panel_rect(self.last_viewport_w, self.last_viewport_h)
-            .and_then(|body| {
-                GitPanel::for_editor(&self.editor_state)
-                    .and_then(|p| p.hit_test(body, Point2D::new(x, y)))
-            });
+        let point = Point2D::new(x, y);
+        let panel_body = self.git_panel_rect(self.last_viewport_w, self.last_viewport_h);
+        let hit = panel_body.and_then(|body| {
+            GitPanel::for_editor(&self.editor_state).and_then(|p| p.hit_test(body, point))
+        });
+        let tracked_picker_hover = panel_body.and_then(|body| {
+            GitPanel::for_editor(&self.editor_state).and_then(|p| {
+                match p.tracked_picker_select_hit(body, point) {
+                    op_editor_ui::widgets::git_panel::SelectHit::Row(idx) => Some(idx),
+                    op_editor_ui::widgets::git_panel::SelectHit::Inside
+                    | op_editor_ui::widgets::git_panel::SelectHit::Outside => None,
+                }
+            })
+        });
         // The `⎇ <branch> ▾` trigger keeps its own bool wash; the plain
         // action buttons (pull / push / overflow / commit / milestone /
         // refresh) light up via `button_hover`.
@@ -116,6 +124,10 @@ impl WidgetHostNative {
         }
         if button_hover != self.editor_state.editor_ui.git_panel.button_hover {
             self.editor_state.editor_ui.git_panel.button_hover = button_hover;
+            changed = true;
+        }
+        if tracked_picker_hover != self.editor_state.editor_ui.git_panel.tracked_picker.hover {
+            self.editor_state.editor_ui.git_panel.tracked_picker.hover = tracked_picker_hover;
             changed = true;
         }
         if changed {
