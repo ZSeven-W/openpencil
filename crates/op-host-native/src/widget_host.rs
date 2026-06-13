@@ -105,6 +105,8 @@ mod press;
 mod press_helpers;
 mod property_dispatch;
 mod property_layout_dispatch;
+#[cfg(test)]
+mod property_panel_press_tests;
 mod property_popovers;
 mod scroll;
 #[cfg(test)]

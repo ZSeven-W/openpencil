@@ -598,6 +598,9 @@ impl WidgetHost {
             }
             let point = Point2D::new(x, y);
             if let Some(action) = panel.hit_test_action(property_rect, point) {
+                self.editor_state.editor_ui.pressed_button = panel
+                    .action_hover_index(property_rect, point)
+                    .map(op_editor_core::ButtonPressTarget::PropertyPanel);
                 self.commit_property_focus_if_any();
                 // Anchor the colour picker at the clicked y so it
                 // pops next to the swatch row, not at the panel top.

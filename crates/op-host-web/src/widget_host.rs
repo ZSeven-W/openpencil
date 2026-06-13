@@ -108,6 +108,8 @@ mod property_focus_press;
 mod property_hover_tests;
 #[cfg(test)]
 mod property_input_tests;
+#[cfg(test)]
+mod property_panel_press_tests;
 mod release_input;
 mod scroll;
 mod settings_caret;
