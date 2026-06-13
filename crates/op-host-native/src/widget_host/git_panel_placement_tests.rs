@@ -65,7 +65,6 @@ fn git_commit_input_uses_text_input_state_for_editing() {
     {
         let panel = &host.editor_state().editor_ui.git_panel;
         assert!(panel.commit_input.is_select_all());
-        assert!(!panel.input_select_all);
     }
 
     assert!(host.apply_text('改'));
@@ -91,6 +90,91 @@ fn git_commit_input_uses_text_input_state_for_editing() {
         host.editor_state().editor_ui.git_panel.pending_action,
         Some(GitPanelAction::Commit)
     );
+}
+
+#[test]
+fn git_remote_inputs_use_text_input_state_for_editing() {
+    let mut host = host_with_git_panel_open();
+    {
+        let panel = &mut host.editor_state_mut().editor_ui.git_panel;
+        panel.in_repo = true;
+        panel.branch = Some("main".to_string());
+        panel.remote_focused = true;
+        panel.remote_input.set_text("https://old.example/repo.git");
+    }
+
+    assert!(host.apply_select_all());
+    assert!(host.apply_text('新'));
+    assert_eq!(
+        host.editor_state().editor_ui.git_panel.remote_input.text(),
+        "新"
+    );
+    assert!(host.apply_text('址'));
+    assert_eq!(
+        host.editor_state().editor_ui.git_panel.remote_input.text(),
+        "新址"
+    );
+    assert!(host.apply_backspace());
+    assert_eq!(
+        host.editor_state().editor_ui.git_panel.remote_input.text(),
+        "新"
+    );
+    assert!(host.apply_send());
+    assert_eq!(
+        host.editor_state().editor_ui.git_panel.pending_action,
+        Some(GitPanelAction::SetRemote("新".to_string()))
+    );
+
+    {
+        let panel = &mut host.editor_state_mut().editor_ui.git_panel;
+        panel.pending_action = None;
+        panel.remote_focused = false;
+        panel.https_focused = true;
+        panel.https_input.set_text("user:old-token");
+    }
+    assert!(host.apply_select_all());
+    for c in "user:new-token".chars() {
+        assert!(host.apply_text(c));
+    }
+    assert!(host.apply_send());
+    assert_eq!(
+        host.editor_state().editor_ui.git_panel.pending_action,
+        Some(GitPanelAction::SetHttpsAuth("user:new-token".to_string()))
+    );
+}
+
+#[test]
+fn git_branch_create_input_uses_text_input_state_for_editing() {
+    let mut host = host_with_git_panel_open();
+    {
+        let panel = &mut host.editor_state_mut().editor_ui.git_panel;
+        panel.in_repo = true;
+        panel.branch = Some("main".to_string());
+        panel.branch_picker_open = true;
+        panel.branch_create_focused = true;
+        panel.branch_create_input.set_text("old");
+    }
+
+    assert!(host.apply_select_all());
+    for c in "feature/new".chars() {
+        assert!(host.apply_text(c));
+    }
+    assert_eq!(
+        host.editor_state()
+            .editor_ui
+            .git_panel
+            .branch_create_input
+            .text(),
+        "feature/new"
+    );
+    assert!(host.apply_send());
+    let panel = &host.editor_state().editor_ui.git_panel;
+    assert_eq!(
+        panel.pending_action,
+        Some(GitPanelAction::CreateBranch("feature/new".to_string()))
+    );
+    assert!(panel.branch_create_input.text().is_empty());
+    assert!(!panel.branch_create_focused);
 }
 
 #[test]

@@ -311,7 +311,7 @@ impl GitPanel<'_> {
         self.paint_menu_input(
             cx,
             name_input,
-            &self.state.author_name_draft,
+            &self.state.author_name_input,
             self.t("git.author.namePlaceholder"),
             self.state.author_name_focused,
         );
@@ -326,12 +326,12 @@ impl GitPanel<'_> {
         self.paint_menu_input(
             cx,
             email_input,
-            &self.state.author_email_draft,
+            &self.state.author_email_input,
             self.t("git.author.emailPlaceholder"),
             self.state.author_email_focused,
         );
-        let can_save = !self.state.author_name_draft.trim().is_empty()
-            && self.state.author_email_draft.contains('@');
+        let can_save = !self.state.author_name_input.text().trim().is_empty()
+            && self.state.author_email_input.text().contains('@');
         self.paint_button_with_hit(
             cx,
             cancel,

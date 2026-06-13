@@ -345,12 +345,14 @@ fn branch_picker_dropdown_switches_and_dismisses() {
 
 #[test]
 fn branch_picker_submodes_map_create_input_and_cancel() {
+    let mut create_state = open_repo();
+    create_state.branch_create_input.set_text("feature/new");
     let s = state_with(GitPanelState {
         branch: Some("main".to_string()),
         branches: vec!["feature".to_string(), "main".to_string()],
         branch_picker_open: true,
         branch_picker_mode: GitBranchPickerMode::Create,
-        ..open_repo()
+        ..create_state
     });
     let panel = GitPanel::for_editor(&s).unwrap();
     let rect = panel_rect(&panel);
@@ -359,6 +361,17 @@ fn branch_picker_submodes_map_create_input_and_cancel() {
     assert_eq!(
         panel.hit_test(rect, input_point),
         Some(GitPanelHit::BranchCreateInput)
+    );
+    let submit = Rect {
+        origin: Point2D::new(
+            picker.origin.x + picker.size.x - 18.0 - 64.0,
+            picker.origin.y + 54.0,
+        ),
+        size: Point2D::new(64.0, 24.0),
+    };
+    assert_eq!(
+        panel.hit_test(rect, centre(submit)),
+        Some(GitPanelHit::BranchCreateSubmit)
     );
 
     let s = state_with(GitPanelState {

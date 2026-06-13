@@ -102,8 +102,8 @@ impl DesktopApp {
         let (name, email) = {
             let panel = &self.host.editor_state().editor_ui.git_panel;
             (
-                panel.author_name_draft.trim().to_string(),
-                panel.author_email_draft.trim().to_string(),
+                panel.author_name_input.text().trim().to_string(),
+                panel.author_email_input.text().trim().to_string(),
             )
         };
         // Basic validation (TS validationName / validationEmail). Leave the

@@ -525,13 +525,9 @@ pub struct GitPanelState {
     /// Which branch-picker sub-mode is showing (list / create / merge).
     pub branch_picker_mode: GitBranchPickerMode,
     /// Draft branch name typed into the inline `新建分支` form.
-    pub branch_create_draft: String,
+    pub branch_create_input: jian_core::text_input::TextInputState,
     /// Whether the `新建分支` name input holds keyboard focus.
     pub branch_create_focused: bool,
-    /// True after Cmd/Ctrl+A in a legacy Git-panel text field. The
-    /// next edit replaces that whole field. The commit box owns its
-    /// select-all state inside `commit_input`.
-    pub input_select_all: bool,
     /// Number of changed (dirty) files in the working tree.
     pub dirty_count: usize,
     /// Commits the current branch is ahead of its upstream — gates the
@@ -557,11 +553,11 @@ pub struct GitPanelState {
     /// Configured remotes as display strings — `name → url`.
     pub remotes: Vec<String>,
     /// Draft URL typed into the Remotes section's input box.
-    pub remote_draft: String,
+    pub remote_input: jian_core::text_input::TextInputState,
     /// Whether the remote-URL input holds keyboard focus.
     pub remote_focused: bool,
     /// Draft `username:token` typed into the HTTPS-credential input.
-    pub https_draft: String,
+    pub https_input: jian_core::text_input::TextInputState,
     /// Whether the HTTPS-credential input holds keyboard focus.
     pub https_focused: bool,
     /// Most-recent commits, newest first.
@@ -597,15 +593,11 @@ pub struct GitPanelState {
     /// `commit_input` and the commit re-fires after a successful save.
     pub author_prompt: bool,
     /// Name / email drafts typed into the commit-signature form.
-    pub author_name_draft: String,
-    pub author_email_draft: String,
+    pub author_name_input: jian_core::text_input::TextInputState,
+    pub author_email_input: jian_core::text_input::TextInputState,
     /// Which signature-form field holds keyboard focus.
     pub author_name_focused: bool,
     pub author_email_focused: bool,
-    /// Caret-blink anchor (ms) for legacy Git-panel single-line fields
-    /// (remote URL, HTTPS credential, branch create, author form).
-    /// The commit box owns its blink anchor inside `commit_input`.
-    pub commit_caret_anchor_ms: u64,
     /// Interactive action requested by a panel click / Enter —
     /// drained and executed by the desktop host.
     pub pending_action: Option<GitPanelAction>,
@@ -682,7 +674,16 @@ impl GitPanelState {
         self.branch_create_focused = false;
         self.author_name_focused = false;
         self.author_email_focused = false;
-        self.input_select_all = false;
+        let remote_caret = self.remote_input.caret();
+        self.remote_input.set_caret(remote_caret, 0);
+        let https_caret = self.https_input.caret();
+        self.https_input.set_caret(https_caret, 0);
+        let branch_caret = self.branch_create_input.caret();
+        self.branch_create_input.set_caret(branch_caret, 0);
+        let author_name_caret = self.author_name_input.caret();
+        self.author_name_input.set_caret(author_name_caret, 0);
+        let author_email_caret = self.author_email_input.caret();
+        self.author_email_input.set_caret(author_email_caret, 0);
         was_focused
     }
 }

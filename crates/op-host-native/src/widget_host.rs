@@ -934,18 +934,21 @@ impl WidgetHostNative {
                     .next_blink_flip_ms(self.now_ms),
             );
         }
-        // Remote-settings inputs (remote URL + HTTPS username:token) share
-        // the same caret cadence; without this wake their caret stays
-        // static while focused.
-        if self.editor_state.editor_ui.git_panel.remote_focused
-            || self.editor_state.editor_ui.git_panel.https_focused
-            || self.editor_state.editor_ui.git_panel.branch_create_focused
-        {
-            return Some(jian_core::anim::next_blink_flip_ms(
-                self.now_ms,
-                self.editor_state.editor_ui.git_panel.commit_caret_anchor_ms,
-                500,
-            ));
+        let git = &self.editor_state.editor_ui.git_panel;
+        if git.remote_focused {
+            return Some(git.remote_input.next_blink_flip_ms(self.now_ms));
+        }
+        if git.https_focused {
+            return Some(git.https_input.next_blink_flip_ms(self.now_ms));
+        }
+        if git.branch_create_focused {
+            return Some(git.branch_create_input.next_blink_flip_ms(self.now_ms));
+        }
+        if git.author_name_focused {
+            return Some(git.author_name_input.next_blink_flip_ms(self.now_ms));
+        }
+        if git.author_email_focused {
+            return Some(git.author_email_input.next_blink_flip_ms(self.now_ms));
         }
         // Clone-wizard field caret, and while a `git clone` runs — keep
         // the loop ticking so the caret blinks and `poll_git_clone_job`
