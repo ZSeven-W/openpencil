@@ -2,8 +2,10 @@
 
 use crate::theme::Theme;
 use crate::widgets::agent_settings_i18n::t as t_settings;
+use crate::widgets::button::{paint_ghost_button_feedback, tokens_from_theme};
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
+use jian_widgets::components::button::{Button, ButtonVariant};
 use op_editor_core::editor_ui_state::EditorUiState;
 
 const FORM_BTN_W: f32 = 68.0;
@@ -16,22 +18,26 @@ pub fn paint_form_actions(
     card: Rect,
     form_h: f32,
     can_save: bool,
+    cancel_pressed: bool,
+    save_pressed: bool,
 ) {
     paint_text_button(
         cx,
         theme,
         cancel_button_rect(card, form_h),
         t_settings(ui, "common.cancel"),
-        false,
+        ButtonVariant::Outline,
         true,
+        cancel_pressed,
     );
     paint_text_button(
         cx,
         theme,
         save_button_rect(card, form_h),
         t_settings(ui, "common.save"),
-        true,
+        ButtonVariant::Primary,
         can_save,
+        save_pressed,
     );
 }
 
@@ -60,23 +66,29 @@ fn paint_text_button(
     theme: &Theme,
     rect: Rect,
     label: &str,
-    primary: bool,
+    variant: ButtonVariant,
     enabled: bool,
+    pressed: bool,
 ) {
-    let bg = if primary && enabled {
-        theme.primary
-    } else {
-        theme.button_hover
+    let is_primary = matches!(variant, ButtonVariant::Primary);
+    Button {
+        label: "",
+        icon_d: None,
+        variant,
+        enabled,
+        hovered: !is_primary,
+        pressed,
+        font_size: 11.0,
+    }
+    .paint(cx.backend, rect, &tokens_from_theme(theme));
+    if is_primary && enabled && pressed {
+        paint_ghost_button_feedback(cx.backend, theme, rect, false, true);
+    }
+    let fg = match (is_primary, enabled) {
+        (true, true) => theme.primary_foreground,
+        (_, true) => theme.foreground,
+        _ => theme.muted_foreground,
     };
-    let fg = if primary && enabled {
-        theme.primary_foreground
-    } else if enabled {
-        theme.foreground
-    } else {
-        theme.muted_foreground
-    };
-    cx.backend.fill_round_rect(rect, 6.0, bg);
-    cx.backend.stroke_round_rect(rect, 6.0, theme.border, 1.0);
     let tw = cx.backend.measure_text(label, 11.0);
     draw_text(
         cx,

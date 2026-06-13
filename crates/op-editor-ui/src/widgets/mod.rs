@@ -132,6 +132,8 @@ mod agent_settings_caret;
 mod agent_settings_compact_action_tests;
 #[cfg(test)]
 mod agent_settings_connect_tests;
+#[cfg(test)]
+mod agent_settings_form_action_tests;
 mod agent_settings_form_actions;
 mod agent_settings_header_action;
 pub mod agent_settings_i18n;

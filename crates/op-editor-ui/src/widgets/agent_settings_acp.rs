@@ -200,6 +200,12 @@ pub fn paint_acp_section(
             card,
             EXPANDED_CARD_H,
             ui.acp_agent_draft_ready(),
+            ui.button_pressed(ButtonPressTarget::AgentSettings(
+                AgentSettingsButton::AcpCancelDraft,
+            )),
+            ui.button_pressed(ButtonPressTarget::AgentSettings(
+                AgentSettingsButton::AcpSaveDraft,
+            )),
         );
         y += card.size.y + CARD_GAP;
     }

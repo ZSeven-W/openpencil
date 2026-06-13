@@ -316,7 +316,20 @@ pub fn paint_builtin_section(
         );
         paint_builtin_agent_form(cx, theme, settings, ui, draft, None, card, now_ms);
         let form_h = expanded_card_height(settings, None);
-        paint_form_actions(cx, theme, ui, card, form_h, ui.builtin_agent_draft_ready());
+        paint_form_actions(
+            cx,
+            theme,
+            ui,
+            card,
+            form_h,
+            ui.builtin_agent_draft_ready(),
+            ui.button_pressed(ButtonPressTarget::AgentSettings(
+                AgentSettingsButton::BuiltinCancelDraft,
+            )),
+            ui.button_pressed(ButtonPressTarget::AgentSettings(
+                AgentSettingsButton::BuiltinSaveDraft,
+            )),
+        );
         y += card.size.y + CARD_GAP;
     }
     y
