@@ -77,8 +77,10 @@ impl WidgetHost {
                         self.editor_state.chat.maximized = !self.editor_state.chat.maximized;
                         self.editor_state.chat.collapsed = false;
                         self.editor_state.editor_ui.chat_model_picker_open = false;
-                        self.editor_state.editor_ui.chat_model_picker_search.clear();
-                        self.editor_state.editor_ui.chat_model_picker_caret = None;
+                        self.editor_state
+                            .editor_ui
+                            .chat_model_picker_input
+                            .set_text("");
                         self.mark_dirty();
                         return true;
                     }
@@ -86,8 +88,10 @@ impl WidgetHost {
                         self.editor_state.chat.new_chat();
                         self.editor_state.editor_ui.chat_model_picker_open = false;
                         self.editor_state.editor_ui.chat_model_picker_scroll = 0.0;
-                        self.editor_state.editor_ui.chat_model_picker_search.clear();
-                        self.editor_state.editor_ui.chat_model_picker_caret = None;
+                        self.editor_state
+                            .editor_ui
+                            .chat_model_picker_input
+                            .set_text("");
                         self.editor_state.editor_ui.chat_model_picker_hover = None;
                         self.mark_dirty();
                         return true;
@@ -96,13 +100,16 @@ impl WidgetHost {
                         let opening = !self.editor_state.editor_ui.chat_model_picker_open;
                         self.editor_state.editor_ui.chat_model_picker_open = opening;
                         self.editor_state.editor_ui.chat_model_picker_scroll = 0.0;
-                        self.editor_state.editor_ui.chat_model_picker_search.clear();
-                        self.editor_state.editor_ui.chat_model_picker_caret = Some(0);
+                        self.editor_state
+                            .editor_ui
+                            .chat_model_picker_input
+                            .set_text("");
                         self.editor_state.editor_ui.chat_model_picker_hover = None;
                         if opening {
                             self.editor_state
                                 .editor_ui
-                                .chat_model_picker_caret_anchor_ms = self.now_ms;
+                                .chat_model_picker_input
+                                .touch(self.now_ms);
                         }
                         self.mark_dirty();
                         return true;
@@ -110,18 +117,22 @@ impl WidgetHost {
                     AIChatHit::FocusModelSearch => {
                         self.editor_state
                             .editor_ui
-                            .chat_model_picker_caret_anchor_ms = self.now_ms;
+                            .chat_model_picker_input
+                            .touch(self.now_ms);
                         self.mark_dirty();
                         return true;
                     }
                     AIChatHit::ClearModelSearch => {
-                        self.editor_state.editor_ui.chat_model_picker_search.clear();
-                        self.editor_state.editor_ui.chat_model_picker_caret = Some(0);
+                        self.editor_state
+                            .editor_ui
+                            .chat_model_picker_input
+                            .set_text("");
                         self.editor_state.editor_ui.chat_model_picker_scroll = 0.0;
                         self.editor_state.editor_ui.chat_model_picker_hover = None;
                         self.editor_state
                             .editor_ui
-                            .chat_model_picker_caret_anchor_ms = self.now_ms;
+                            .chat_model_picker_input
+                            .touch(self.now_ms);
                         self.mark_dirty();
                         return true;
                     }

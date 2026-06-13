@@ -1296,10 +1296,16 @@ fn backspace_with_model_picker_open_edits_search_not_selection() {
     host.editor_state_mut()
         .set_single_selection(NodeId::new("n10"));
     host.editor_state_mut().editor_ui.chat_model_picker_open = true;
-    host.editor_state_mut().editor_ui.chat_model_picker_search = "gp".to_string();
+    host.editor_state_mut()
+        .editor_ui
+        .chat_model_picker_input
+        .set_text("gp");
 
     assert!(host.apply_backspace());
-    assert_eq!(host.editor_state().editor_ui.chat_model_picker_search, "g");
+    assert_eq!(
+        host.editor_state().editor_ui.chat_model_picker_input.text(),
+        "g"
+    );
     assert_eq!(host.editor_state().selection.anchor, NodeId::new("n10"));
 }
 
@@ -1684,10 +1690,16 @@ fn chat_model_picker_open_owns_keyboard_search() {
     assert!(host.input_active_pub());
     assert!(host.apply_text('g'));
     assert!(host.apply_text('p'));
-    assert_eq!(host.editor_state().editor_ui.chat_model_picker_search, "gp");
+    assert_eq!(
+        host.editor_state().editor_ui.chat_model_picker_input.text(),
+        "gp"
+    );
     assert!(host.editor_state().chat.input.text().is_empty());
     assert!(host.apply_backspace());
-    assert_eq!(host.editor_state().editor_ui.chat_model_picker_search, "g");
+    assert_eq!(
+        host.editor_state().editor_ui.chat_model_picker_input.text(),
+        "g"
+    );
     assert!(host.apply_escape());
     assert!(!host.editor_state().editor_ui.chat_model_picker_open);
 }
@@ -1768,16 +1780,21 @@ fn select_all_in_chat_model_picker_replaces_next_typed_text() {
     {
         let ui = &mut host.editor_state_mut().editor_ui;
         ui.chat_model_picker_open = true;
-        ui.chat_model_picker_search = "gpt".into();
-        ui.chat_model_picker_caret = Some(3);
+        ui.chat_model_picker_input.set_text("gpt");
     }
 
     assert!(host.apply_select_all());
     assert!(host.apply_text('x'));
-    assert_eq!(host.editor_state().editor_ui.chat_model_picker_search, "x");
     assert_eq!(
-        host.editor_state().editor_ui.chat_model_picker_caret,
-        Some(1)
+        host.editor_state().editor_ui.chat_model_picker_input.text(),
+        "x"
+    );
+    assert_eq!(
+        host.editor_state()
+            .editor_ui
+            .chat_model_picker_input
+            .caret(),
+        1
     );
 }
 

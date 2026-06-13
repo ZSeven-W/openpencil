@@ -581,8 +581,7 @@ impl EditorState {
         }
         self.editor_ui.chat_model_picker_open = false;
         self.editor_ui.chat_model_picker_scroll = 0.0;
-        self.editor_ui.chat_model_picker_search.clear();
-        self.editor_ui.chat_model_picker_caret = None;
+        self.editor_ui.chat_model_picker_input.set_text("");
         self.editor_ui.chat_model_picker_hover = None;
     }
 

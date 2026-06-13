@@ -7,8 +7,10 @@
 use crate::theme::Theme;
 use crate::widgets::brand_icons::{paint_brand_logo, paint_opencode_logo, BrandLogo};
 use crate::widgets::icons::{draw_icon, Icon};
+use crate::widgets::property_panel_text_input::paint_text_input_view_value;
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
+use jian_core::text_input::TextInputState;
 use op_editor_core::chat::{AgentProvider, ModelEntry};
 
 /// Height of a provider group-header row.
@@ -243,29 +245,17 @@ pub fn paint_model_picker(
     selected: usize,
     scroll: f32,
     hover: Option<usize>,
-    search: &str,
-    caret: Option<usize>,
-    select_all: bool,
+    input: &TextInputState,
     now_ms: u64,
-    caret_anchor_ms: u64,
     locale: op_editor_core::Locale,
 ) {
+    let search = input.text();
     // Card background + border — painted unscrolled so the frame
     // stays put while the rows scroll inside it.
     cx.backend.fill_round_rect(rect, 10.0, theme.card);
     cx.backend.stroke_round_rect(rect, 10.0, theme.border, 1.0);
     let row_left = rect.origin.x + 12.0;
-    paint_search_row(
-        cx,
-        theme,
-        rect,
-        search,
-        caret,
-        select_all,
-        now_ms,
-        caret_anchor_ms,
-        locale,
-    );
+    paint_search_row(cx, theme, rect, input, now_ms, locale);
     let list_rect = model_list_rect(rect);
     if visible_model_indices(models, search).is_empty() {
         let empty = op_i18n::translate(locale, "ai.noModelsFound");
@@ -437,13 +427,11 @@ fn paint_search_row(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
     rect: Rect,
-    search: &str,
-    caret: Option<usize>,
-    select_all: bool,
+    input: &TextInputState,
     now_ms: u64,
-    caret_anchor_ms: u64,
     locale: op_editor_core::Locale,
 ) {
+    let raw = input.text();
     let divider_y = rect.origin.y + MODEL_SEARCH_H - 0.5;
     cx.backend.fill_rect(
         Rect {
@@ -466,52 +454,33 @@ fn paint_search_row(
         theme.muted_foreground,
         1.4,
     );
-    let raw = search;
-    let (label, color) = if raw.is_empty() {
-        (
-            op_i18n::translate(locale, "ai.searchModels"),
-            theme.muted_foreground,
-        )
-    } else {
-        (raw, theme.foreground)
-    };
-    let layout = TextLayout::single_run(
-        label,
-        "system-ui",
-        12.0,
-        (color).to_jian(),
-        Point2D::new(0.0, 0.0),
-    );
     let text_x = search_rect.origin.x + 28.0;
-    if select_all && !raw.is_empty() {
-        crate::widgets::text_selection::paint_single_line_selection(
-            cx,
-            theme,
-            raw,
-            text_x,
-            search_rect.origin.y + 17.0,
+    let input_rect = Rect {
+        origin: Point2D::new(text_x, search_rect.origin.y),
+        size: Point2D::new((search_rect.size.x - 52.0).max(0.0), search_rect.size.y),
+    };
+    if raw.is_empty() {
+        let placeholder = op_i18n::translate(locale, "ai.searchModels");
+        let layout = TextLayout::single_run(
+            placeholder,
+            "system-ui",
             12.0,
-            search_rect.origin.x + search_rect.size.x - 24.0,
+            (theme.muted_foreground).to_jian(),
+            Point2D::new(0.0, 0.0),
         );
+        cx.backend
+            .draw_text(&layout, Point2D::new(text_x, search_rect.origin.y + 17.0));
     }
-    cx.backend
-        .draw_text(&layout, Point2D::new(text_x, search_rect.origin.y + 17.0));
-    if jian_core::anim::blink_visible(now_ms, caret_anchor_ms, 500) {
-        let caret_x = if raw.is_empty() {
-            text_x - 4.0
-        } else {
-            let caret = clamp_caret(raw, caret.unwrap_or(raw.len()));
-            text_x + cx.backend.measure_text(&raw[..caret], 12.0) + 1.0
-        };
-        let caret_x = caret_x.min(search_rect.origin.x + search_rect.size.x - 24.0);
-        cx.backend.fill_rect(
-            Rect {
-                origin: Point2D::new(caret_x, search_rect.origin.y + 4.5),
-                size: Point2D::new(1.5, 15.0),
-            },
-            theme.foreground,
-        );
-    }
+    paint_text_input_view_value(
+        cx,
+        theme,
+        input,
+        input_rect,
+        12.0,
+        0.0,
+        search_rect.origin.y + 17.0,
+        now_ms,
+    );
     if !raw.is_empty() {
         draw_icon(
             cx.backend,
@@ -525,14 +494,6 @@ fn paint_search_row(
             1.4,
         );
     }
-}
-
-fn clamp_caret(value: &str, pos: usize) -> usize {
-    let mut pos = pos.min(value.len());
-    while pos > 0 && !value.is_char_boundary(pos) {
-        pos -= 1;
-    }
-    pos
 }
 
 fn paint_badge(cx: &mut PaintCx<'_>, theme: &Theme, text: &str, right_x: f32, y: f32) {

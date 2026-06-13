@@ -544,7 +544,7 @@ fn focused_input(state: &EditorState) -> Option<(String, String, String)> {
         return Some((
             "model-search".to_string(),
             "Model search".to_string(),
-            ui.chat_model_picker_search.clone(),
+            ui.chat_model_picker_input.text().to_owned(),
         ));
     }
     if ui.component_browser_open {
