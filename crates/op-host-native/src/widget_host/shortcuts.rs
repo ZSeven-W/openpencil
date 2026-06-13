@@ -96,11 +96,20 @@ impl WidgetHostNative {
         }
         if self.git_clone_input_active() {
             if let Some(form) = self.editor_state.editor_ui.git_panel.clone_form.as_mut() {
-                if form.focus.is_some() {
-                    form.input_select_all = true;
-                    form.caret_anchor_ms = self.now_ms;
-                    self.mark_dirty();
-                    return true;
+                match form.focus {
+                    Some(op_editor_core::CloneField::Url) => {
+                        form.url_input.select_all();
+                        form.url_input.touch(self.now_ms);
+                        self.mark_dirty();
+                        return true;
+                    }
+                    Some(op_editor_core::CloneField::Dest) => {
+                        form.dest_input.select_all();
+                        form.dest_input.touch(self.now_ms);
+                        self.mark_dirty();
+                        return true;
+                    }
+                    None => {}
                 }
             }
             return false;

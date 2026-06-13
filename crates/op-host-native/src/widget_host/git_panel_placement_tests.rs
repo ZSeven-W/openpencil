@@ -391,7 +391,8 @@ fn clone_wizard_owns_keyboard_and_enter() {
             .clone_form
             .as_ref()
             .unwrap()
-            .url,
+            .url_input
+            .text(),
         "http"
     );
     // Enter on a focused field requests the clone.
@@ -435,7 +436,8 @@ fn hidden_clone_form_does_not_capture_keyboard() {
             .clone_form
             .as_ref()
             .unwrap()
-            .url,
+            .url_input
+            .text(),
         "",
         "a hidden clone form must not capture keystrokes"
     );
@@ -482,7 +484,35 @@ fn clone_wizard_accepts_pasted_url() {
             .clone_form
             .as_ref()
             .unwrap()
-            .url,
+            .url_input
+            .text(),
         "https://github.com/owner/repo.git"
     );
+}
+
+#[test]
+fn clone_wizard_select_all_replaces_only_the_focused_field() {
+    use op_editor_core::{CloneField, CloneFormState};
+    let mut host = host_with_git_panel_open();
+    let mut form = CloneFormState {
+        focus: Some(CloneField::Dest),
+        ..Default::default()
+    };
+    form.url_input.set_text("https://github.com/owner/repo.git");
+    form.dest_input.set_text("/tmp/repo");
+    host.editor_state_mut().editor_ui.git_panel.clone_form = Some(form);
+
+    assert!(host.apply_select_all());
+    assert!(host.apply_text('x'));
+
+    let form = host
+        .editor_state()
+        .editor_ui
+        .git_panel
+        .clone_form
+        .as_ref()
+        .unwrap();
+    assert_eq!(form.url_input.text(), "https://github.com/owner/repo.git");
+    assert_eq!(form.dest_input.text(), "x");
+    assert_eq!(form.dest_input.caret(), 1);
 }

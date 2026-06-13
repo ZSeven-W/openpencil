@@ -91,10 +91,11 @@ impl GitPanel<'_> {
     /// `true` when the form carries both a URL + destination and is not
     /// already cloning — gates the Clone button.
     fn clone_can_submit(&self) -> bool {
-        self.state
-            .clone_form
-            .as_ref()
-            .is_some_and(|f| !f.cloning && !f.url.trim().is_empty() && !f.dest.trim().is_empty())
+        self.state.clone_form.as_ref().is_some_and(|f| {
+            !f.cloning
+                && !f.url_input.text().trim().is_empty()
+                && !f.dest_input.text().trim().is_empty()
+        })
     }
 
     /// Paint the inline clone wizard.
@@ -133,14 +134,16 @@ impl GitPanel<'_> {
             11.0,
             t.muted_foreground,
         );
-        self.paint_clone_input(
+        let url_focused = form.focus == Some(CloneField::Url) && !form.cloning;
+        self.paint_clone_input_frame(cx, layout.url_input, url_focused);
+        self.paint_text_input_view(
             cx,
             layout.url_input,
-            &form.url,
+            &form.url_input,
             self.t("git.wizard.clone.urlPlaceholder"),
-            form.focus == Some(CloneField::Url) && !form.cloning,
-            form.input_select_all,
-            form.caret_anchor_ms,
+            url_focused,
+            12.0,
+            10.0,
         );
         // Destination field + folder-pick button.
         self.text(
@@ -151,14 +154,16 @@ impl GitPanel<'_> {
             11.0,
             t.muted_foreground,
         );
-        self.paint_clone_input(
+        let dest_focused = form.focus == Some(CloneField::Dest) && !form.cloning;
+        self.paint_clone_input_frame(cx, layout.dest_input, dest_focused);
+        self.paint_text_input_view(
             cx,
             layout.dest_input,
-            &form.dest,
+            &form.dest_input,
             self.t("git.wizard.clone.destPlaceholder"),
-            form.focus == Some(CloneField::Dest) && !form.cloning,
-            form.input_select_all,
-            form.caret_anchor_ms,
+            dest_focused,
+            12.0,
+            10.0,
         );
         self.paint_button_with_hit(
             cx,
@@ -192,19 +197,7 @@ impl GitPanel<'_> {
         );
     }
 
-    /// One bordered text field with a placeholder + blinking caret —
-    /// same visual language as the ready-view commit box.
-    #[allow(clippy::too_many_arguments)]
-    fn paint_clone_input(
-        &self,
-        cx: &mut PaintCx<'_>,
-        rect: Rect,
-        value: &str,
-        placeholder: &str,
-        focused: bool,
-        select_all: bool,
-        anchor_ms: u64,
-    ) {
+    fn paint_clone_input_frame(&self, cx: &mut PaintCx<'_>, rect: Rect, focused: bool) {
         let t = self.theme;
         cx.backend.fill_round_rect(rect, 6.0, t.card);
         let border = if focused {
@@ -213,46 +206,6 @@ impl GitPanel<'_> {
             alpha(t.border, 0.7)
         };
         cx.backend.stroke_round_rect(rect, 6.0, border, 1.0);
-        let text_x = rect.origin.x + 10.0;
-        let baseline = rect.origin.y + rect.size.y / 2.0 + 4.0;
-        if value.is_empty() && !focused {
-            self.text(
-                cx,
-                placeholder,
-                text_x,
-                baseline,
-                12.0,
-                alpha(t.muted_foreground, 0.7),
-            );
-            return;
-        }
-        // A long URL / path can exceed the field — clip so it never
-        // bleeds past the border.
-        cx.backend.save();
-        cx.backend.clip_rect(rect);
-        if focused && select_all && !value.is_empty() {
-            crate::widgets::text_selection::paint_single_line_selection(
-                cx,
-                &t,
-                value,
-                text_x,
-                baseline,
-                12.0,
-                rect.origin.x + rect.size.x - 10.0,
-            );
-        }
-        self.text(cx, value, text_x, baseline, 12.0, t.foreground);
-        if focused && jian_core::anim::blink_visible(self.now_ms, anchor_ms, 500) {
-            let caret_x = text_x + cx.backend.measure_text(value, 12.0) + 1.0;
-            cx.backend.fill_rect(
-                Rect {
-                    origin: Point2D::new(caret_x, rect.origin.y + 8.0),
-                    size: Point2D::new(1.5, rect.size.y - 16.0),
-                },
-                t.foreground,
-            );
-        }
-        cx.backend.restore();
     }
 
     /// Map a press inside the clone view onto a [`GitPanelHit`].

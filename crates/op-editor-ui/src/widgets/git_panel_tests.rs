@@ -785,8 +785,10 @@ fn clone_form_takes_over_and_maps_each_target() {
         open: true,
         in_repo: false,
         clone_form: Some(CloneFormState {
-            url: "https://github.com/owner/repo.git".into(),
-            dest: "/tmp/repo".into(),
+            url_input: jian_core::text_input::TextInputState::with_text(
+                "https://github.com/owner/repo.git",
+            ),
+            dest_input: jian_core::text_input::TextInputState::with_text("/tmp/repo"),
             focus: Some(CloneField::Url),
             ..Default::default()
         }),
@@ -833,8 +835,10 @@ fn clone_view_locks_to_cancel_only_while_cloning() {
         open: true,
         in_repo: false,
         clone_form: Some(CloneFormState {
-            url: "https://github.com/owner/repo.git".into(),
-            dest: "/tmp/repo".into(),
+            url_input: jian_core::text_input::TextInputState::with_text(
+                "https://github.com/owner/repo.git",
+            ),
+            dest_input: jian_core::text_input::TextInputState::with_text("/tmp/repo"),
             cloning: true,
             ..Default::default()
         }),

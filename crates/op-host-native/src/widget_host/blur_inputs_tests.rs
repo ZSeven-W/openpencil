@@ -61,12 +61,15 @@ fn canvas_press_defocuses_every_git_input() {
         git.author_name_focused = true;
         git.author_email_focused = true;
         git.branch_create_focused = true;
-        git.clone_form = Some(CloneFormState {
-            url: "https://example.com/repo.git".into(),
-            dest: "/tmp/repo".into(),
+        let mut clone_form = CloneFormState {
             focus: Some(CloneField::Url),
             ..Default::default()
-        });
+        };
+        clone_form
+            .url_input
+            .set_text("https://example.com/repo.git");
+        clone_form.dest_input.set_text("/tmp/repo");
+        git.clone_form = Some(clone_form);
     }
 
     // Empty canvas — right of the chat panel (which floats bottom-left,

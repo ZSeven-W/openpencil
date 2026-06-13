@@ -54,20 +54,16 @@ impl WidgetHostNative {
             let now = self.now_ms;
             if let Some(form) = self.editor_state.editor_ui.git_panel.clone_form.as_mut() {
                 if !form.cloning {
-                    if form.input_select_all {
-                        match form.focus {
-                            Some(op_editor_core::CloneField::Url) => form.url.clear(),
-                            Some(op_editor_core::CloneField::Dest) => form.dest.clear(),
-                            None => {}
-                        }
-                        form.input_select_all = false;
-                    }
+                    let mut s = [0u8; 4];
                     match form.focus {
-                        Some(op_editor_core::CloneField::Url) => form.url.push(c),
-                        Some(op_editor_core::CloneField::Dest) => form.dest.push(c),
+                        Some(op_editor_core::CloneField::Url) => {
+                            form.url_input.insert_str(c.encode_utf8(&mut s), now)
+                        }
+                        Some(op_editor_core::CloneField::Dest) => {
+                            form.dest_input.insert_str(c.encode_utf8(&mut s), now)
+                        }
                         None => {}
                     }
-                    form.caret_anchor_ms = now;
                     form.error = None;
                 }
             }
@@ -452,19 +448,14 @@ impl WidgetHostNative {
             // focused field that isn't mid-clone.
             if let Some(form) = self.editor_state.editor_ui.git_panel.clone_form.as_mut() {
                 if !form.cloning {
-                    if form.input_select_all {
-                        match form.focus {
-                            Some(op_editor_core::CloneField::Url) => form.url.clear(),
-                            Some(op_editor_core::CloneField::Dest) => form.dest.clear(),
-                            None => {}
+                    match form.focus {
+                        Some(op_editor_core::CloneField::Url) => {
+                            form.url_input.backspace(self.now_ms)
                         }
-                        form.input_select_all = false;
-                    } else {
-                        match form.focus {
-                            Some(op_editor_core::CloneField::Url) => form.url.pop(),
-                            Some(op_editor_core::CloneField::Dest) => form.dest.pop(),
-                            None => None,
-                        };
+                        Some(op_editor_core::CloneField::Dest) => {
+                            form.dest_input.backspace(self.now_ms)
+                        }
+                        None => {}
                     }
                     form.error = None;
                 }
@@ -1358,7 +1349,10 @@ impl WidgetHostNative {
                     .clone_form
                     .as_mut()
                     .unwrap();
-                form.input_select_all = false;
+                let url_caret = form.url_input.caret();
+                form.url_input.set_caret(url_caret, self.now_ms);
+                let dest_caret = form.dest_input.caret();
+                form.dest_input.set_caret(dest_caret, self.now_ms);
                 form.focus.take().is_some()
             };
             if !defocused {

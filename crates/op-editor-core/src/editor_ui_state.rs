@@ -457,12 +457,12 @@ pub enum CloneField {
 /// `GitPanelCloneForm`). Reached from the empty-state Clone card. Plain
 /// data so the widget layer stays wasm-clean; the desktop host owns the
 /// folder picker + the `git clone` job.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct CloneFormState {
     /// Remote URL draft.
-    pub url: String,
+    pub url_input: jian_core::text_input::TextInputState,
     /// Local destination-folder draft.
-    pub dest: String,
+    pub dest_input: jian_core::text_input::TextInputState,
     /// Which field has keyboard focus (`None` = no caret).
     pub focus: Option<CloneField>,
     /// `true` while the `git clone` worker runs — disables the form.
@@ -470,12 +470,6 @@ pub struct CloneFormState {
     /// Last clone error (validation or a failed `git clone`), shown
     /// under the fields.
     pub error: Option<String>,
-    /// Caret-blink anchor for the focused field — same cadence as the
-    /// commit input.
-    pub caret_anchor_ms: u64,
-    /// True after Cmd/Ctrl+A in the focused clone input. The next edit
-    /// replaces the whole focused field.
-    pub input_select_all: bool,
 }
 
 /// Git panel state — a plain-data snapshot the desktop host fills
@@ -657,7 +651,10 @@ impl GitPanelState {
             .clone_form
             .as_mut()
             .map(|form| {
-                form.input_select_all = false;
+                let url_caret = form.url_input.caret();
+                form.url_input.set_caret(url_caret, 0);
+                let dest_caret = form.dest_input.caret();
+                form.dest_input.set_caret(dest_caret, 0);
                 form.focus.take().is_some()
             })
             .unwrap_or(false);

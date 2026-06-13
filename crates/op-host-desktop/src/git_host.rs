@@ -771,7 +771,7 @@ impl DesktopApp {
     }
 
     /// Clone wizard "浏览…" — a native folder picker for the clone
-    /// destination, written back into the form's `dest` field.
+    /// destination, written back into the form's destination input.
     fn pick_clone_dest(&mut self) {
         let Some(folder) = rfd::FileDialog::new().pick_folder() else {
             return;
@@ -785,7 +785,7 @@ impl DesktopApp {
             .clone_form
             .as_mut()
         {
-            form.dest = path;
+            form.dest_input.set_text(path);
             form.focus = Some(op_editor_core::CloneField::Dest);
             form.error = None;
         }
@@ -810,7 +810,10 @@ impl DesktopApp {
             else {
                 return;
             };
-            (form.url.trim().to_string(), form.dest.trim().to_string())
+            (
+                form.url_input.text().trim().to_string(),
+                form.dest_input.text().trim().to_string(),
+            )
         };
         let validation = if url.is_empty() {
             Some("git.wizard.clone.validationUrl")
