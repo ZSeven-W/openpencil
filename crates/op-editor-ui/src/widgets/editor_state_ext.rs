@@ -102,6 +102,8 @@ pub fn agent_settings_button(
     use op_editor_core::AgentSettingsButton as O;
     match hit {
         W::Close => Some(O::Close),
+        W::AddProvider => Some(O::AddProvider),
+        W::AddAcpAgent => Some(O::AddAcpAgent),
         W::ToggleMcpServer => Some(O::McpServer),
         W::CopyMcpClientConfig => Some(O::McpClientConfigCopy),
         W::TestImageSearch => Some(O::ImageSearchTest),

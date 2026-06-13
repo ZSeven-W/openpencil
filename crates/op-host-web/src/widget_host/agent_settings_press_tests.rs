@@ -1,7 +1,7 @@
 use super::WidgetHost;
 use op_editor_core::agent_settings::{
-    AgentSettingsTab, BuiltinAgentField, ImageGenField, ImageGenProvider, ImageTestStatus,
-    SettingsFocus,
+    AcpAgentField, AgentSettingsTab, BuiltinAgentField, ImageGenField, ImageGenProvider,
+    ImageTestStatus, SettingsFocus,
 };
 use op_editor_core::{AgentSettingsButton, ButtonPressTarget};
 use op_editor_ui::widgets::agent_settings_panel::AgentSettingsPanel;
@@ -78,6 +78,12 @@ fn add_provider_opens_unsaved_builtin_agent_draft() {
     let add_y = content_y + 24.0;
 
     assert!(host.dispatch_agent_settings_press(add_x, add_y, 1200.0, 800.0));
+    assert_eq!(
+        host.editor_state.editor_ui.pressed_button,
+        Some(ButtonPressTarget::AgentSettings(
+            AgentSettingsButton::AddProvider
+        ))
+    );
 
     let settings = &host.editor_state.editor_ui.agent_settings;
     assert!(settings.builtin_agents.is_empty());
@@ -94,6 +100,48 @@ fn add_provider_opens_unsaved_builtin_agent_draft() {
             .next_blink_flip_ms(1234),
         1734
     );
+
+    assert!(host.apply_release_with_viewport(1200.0, 800.0));
+    assert_eq!(host.editor_state.editor_ui.pressed_button, None);
+}
+
+#[test]
+fn add_acp_agent_press_opens_unsaved_draft() {
+    let mut host = WidgetHost::new();
+    host.set_now_ms(1234);
+    let panel = AgentSettingsPanel::for_editor(&host.editor_state);
+    let rect = panel.rect(1200.0, 800.0);
+    let content_x = rect.origin.x + 200.0 + 24.0;
+    let content_y = rect.origin.y + 24.0;
+    let content_w = rect.size.x - 200.0 - 48.0;
+    let add_x = content_x + content_w - 12.0 - 48.0;
+    let add_y = content_y + 12.0 + 120.0 + 28.0 + 12.0;
+
+    assert!(host.dispatch_agent_settings_press(add_x, add_y, 1200.0, 800.0));
+    assert_eq!(
+        host.editor_state.editor_ui.pressed_button,
+        Some(ButtonPressTarget::AgentSettings(
+            AgentSettingsButton::AddAcpAgent
+        ))
+    );
+
+    let settings = &host.editor_state.editor_ui.agent_settings;
+    assert!(settings.acp_agents.is_empty());
+    assert!(settings.acp_agent_draft.is_some());
+    assert_eq!(
+        settings.focus,
+        Some(SettingsFocus::AcpAgentDraft(AcpAgentField::Command))
+    );
+    assert_eq!(
+        host.editor_state
+            .editor_ui
+            .settings_input
+            .next_blink_flip_ms(1234),
+        1734
+    );
+
+    assert!(host.apply_release_with_viewport(1200.0, 800.0));
+    assert_eq!(host.editor_state.editor_ui.pressed_button, None);
 }
 
 #[test]

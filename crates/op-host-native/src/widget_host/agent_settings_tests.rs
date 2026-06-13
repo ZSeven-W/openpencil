@@ -246,6 +246,12 @@ fn add_provider_opens_unsaved_builtin_agent_draft() {
     let add_y = content_y + 24.0;
 
     assert!(host.dispatch_agent_settings_press(add_x, add_y, 1200.0, 800.0));
+    assert_eq!(
+        host.editor_state().editor_ui.pressed_button,
+        Some(ButtonPressTarget::AgentSettings(
+            AgentSettingsButton::AddProvider
+        ))
+    );
 
     let settings = &host.editor_state().editor_ui.agent_settings;
     assert!(settings.builtin_agents.is_empty());
@@ -262,6 +268,9 @@ fn add_provider_opens_unsaved_builtin_agent_draft() {
             .next_blink_flip_ms(1234),
         1734
     );
+
+    assert!(host.apply_release_with_viewport(1200.0, 800.0));
+    assert_eq!(host.editor_state().editor_ui.pressed_button, None);
 }
 
 #[test]
@@ -336,6 +345,12 @@ fn add_acp_agent_press_opens_unsaved_draft() {
     let add_y = content_y + 12.0 + 120.0 + 28.0 + 12.0;
 
     assert!(host.dispatch_agent_settings_press(add_x, add_y, 1200.0, 800.0));
+    assert_eq!(
+        host.editor_state().editor_ui.pressed_button,
+        Some(ButtonPressTarget::AgentSettings(
+            AgentSettingsButton::AddAcpAgent
+        ))
+    );
 
     let settings = &host.editor_state().editor_ui.agent_settings;
     assert!(settings.acp_agents.is_empty());
@@ -351,6 +366,9 @@ fn add_acp_agent_press_opens_unsaved_draft() {
             .next_blink_flip_ms(1234),
         1734
     );
+
+    assert!(host.apply_release_with_viewport(1200.0, 800.0));
+    assert_eq!(host.editor_state().editor_ui.pressed_button, None);
 }
 
 #[test]
