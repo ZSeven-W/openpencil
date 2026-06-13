@@ -81,7 +81,7 @@ fn hit_test_resolves_input_focus() {
 #[test]
 fn no_model_disables_send_hit() {
     let mut s = EditorState::new();
-    s.chat.input = "design a login page".into();
+    s.chat.set_input_text("design a login page");
     let panel = AIChatPlaceholder::from_editor(&s);
     let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
     let send_x = AI_CHAT_WIDTH - PAD - 20.0;
@@ -116,7 +116,7 @@ fn no_model_disables_model_picker_toggle() {
 fn hit_test_resolves_send_at_right() {
     let mut s = EditorState::new();
     seed_available_model(&mut s);
-    s.chat.input = "design a login page".into();
+    s.chat.set_input_text("design a login page");
     let panel = AIChatPlaceholder::from_editor(&s);
     let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
     let send_x = AI_CHAT_WIDTH - PAD - 20.0;
@@ -168,7 +168,7 @@ fn streaming_attachment_button_is_consumed_without_opening_picker_like_ts() {
 fn hit_test_resolves_bottom_toolbar_actions() {
     let mut s = EditorState::new();
     seed_available_model(&mut s);
-    s.chat.input = "design a login page".into();
+    s.chat.set_input_text("design a login page");
     let panel = AIChatPlaceholder::from_editor(&s);
     let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
     let y = toolbar_center_y();
@@ -190,7 +190,7 @@ fn hit_test_resolves_bottom_toolbar_actions() {
 fn footer_hover_maps_bottom_toolbar_actions() {
     let mut s = EditorState::new();
     seed_available_model(&mut s);
-    s.chat.input = "design a login page".into();
+    s.chat.set_input_text("design a login page");
     let panel = AIChatPlaceholder::from_editor(&s);
     let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
     let y = toolbar_center_y();
@@ -245,10 +245,12 @@ fn footer_agent_team_chip_is_clickable_and_hoverable() {
     );
 }
 
+#[test]
 fn multiline_input_expands_above_footer_toolbar() {
     let mut s = EditorState::new();
-    s.chat.input =
-        "是的是啊打撒但是 codex 是的撒的 sad 是的撒d大城市多少是多少啊打撒打撒的".repeat(3);
+    s.chat.set_input_text(
+        "是的是啊打撒但是 codex 是的撒的 sad 是的撒d大城市多少是多少啊打撒打撒的".repeat(3),
+    );
     let panel = AIChatPlaceholder::from_editor(&s);
     let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
 
@@ -259,6 +261,7 @@ fn multiline_input_expands_above_footer_toolbar() {
     assert!(panel.input_height() > INPUT_BASE_HEIGHT);
 }
 
+#[test]
 fn hit_test_resolves_model_search_clear_button() {
     let mut s = EditorState::new();
     seed_available_model(&mut s);

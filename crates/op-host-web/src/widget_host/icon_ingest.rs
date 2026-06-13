@@ -11,6 +11,7 @@ use op_editor_ui::widgets::icon_catalog::{parse_iconify_body, IconRenderStyle};
 /// Boundary-flattened [`parse_iconify_body`] result: path data, the
 /// resolved viewBox, and the render style as the wire string the
 /// picker rows persist (`"stroke"` / `"fill"`).
+#[cfg_attr(not(feature = "codegen"), allow(dead_code))]
 pub(crate) struct IngestedIcon {
     pub d: String,
     pub width: f32,
@@ -20,6 +21,7 @@ pub(crate) struct IngestedIcon {
 
 /// Parse one Iconify icon `body` into the picker's row shape.
 /// `None` mirrors the catalog parser's rejection (unsupported body).
+#[cfg_attr(not(feature = "codegen"), allow(dead_code))]
 pub(crate) fn ingest_iconify_body(svg_body: &str, w: f32, h: f32) -> Option<IngestedIcon> {
     let parsed = parse_iconify_body(svg_body, w, h)?;
     Some(IngestedIcon {

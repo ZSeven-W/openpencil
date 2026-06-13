@@ -189,8 +189,7 @@ impl WidgetHost {
         let mut s = [0u8; 4];
         self.editor_state
             .chat
-            .insert_input_text(c.encode_utf8(&mut s));
-        self.editor_state.chat.caret_anchor_ms = self.now_ms;
+            .insert_input_text(c.encode_utf8(&mut s), self.now_ms);
         self.mark_dirty();
         true
     }
@@ -329,8 +328,7 @@ impl WidgetHost {
             return changed;
         }
         if self.editor_state.chat.focused {
-            if self.editor_state.chat.backspace_input() {
-                self.editor_state.chat.caret_anchor_ms = self.now_ms;
+            if self.editor_state.chat.backspace_input(self.now_ms) {
                 self.mark_dirty();
                 return true;
             }
@@ -400,15 +398,17 @@ impl WidgetHost {
             self.commit_property_focus_if_any();
             return true;
         }
-        if self.editor_state.chat.input.trim().is_empty() {
+        if self.editor_state.chat.available_models.is_empty() {
             return false;
         }
         // Real send with the AI transport (`codegen`); an honest
         // offline error on transport-less builds. See
         // `click.rs::begin_chat_send`.
-        self.begin_chat_send();
-        self.mark_dirty();
-        true
+        let sent = self.begin_chat_send();
+        if sent {
+            self.mark_dirty();
+        }
+        sent
     }
 
     /// Delete key — selected-node delete; never touches text
@@ -539,8 +539,9 @@ impl WidgetHost {
                 }
                 return false;
             }
-            if self.editor_state.chat.focused && self.editor_state.chat.delete_input_selection() {
-                self.editor_state.chat.caret_anchor_ms = self.now_ms;
+            if self.editor_state.chat.focused
+                && self.editor_state.chat.delete_input_selection(self.now_ms)
+            {
                 self.mark_dirty();
                 return true;
             }
@@ -732,8 +733,7 @@ impl WidgetHost {
             return true;
         }
         if self.editor_state.chat.focused {
-            self.editor_state.chat.focused = false;
-            self.editor_state.chat.input_select_all = false;
+            self.editor_state.chat.blur_input(self.now_ms);
             self.mark_dirty();
             return true;
         }

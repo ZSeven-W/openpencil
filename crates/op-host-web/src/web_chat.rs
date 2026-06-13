@@ -331,7 +331,7 @@ mod tests {
 
     fn chat_with_queued_send(text: &str) -> ChatState {
         let mut chat = ChatState::default();
-        chat.input = text.to_string();
+        chat.set_input_text(text);
         assert!(chat.begin_send());
         chat
     }
@@ -370,7 +370,7 @@ mod tests {
     #[test]
     fn prepare_turn_clears_staged_attachments() {
         let mut chat = ChatState::default();
-        chat.input = "look at this".into();
+        chat.set_input_text("look at this");
         chat.pending_attachments
             .push(op_editor_core::chat::ChatAttachment {
                 name: "a.png".into(),

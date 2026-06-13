@@ -782,7 +782,8 @@ fn images_tab_profile_row_paints_expand_chevron_before_delete_like_ts() {
     let content_w = rect.size.x - 200.0 - 48.0;
     let gen_top = content_y + 36.0 + 24.0 + 28.0;
     let row_y = gen_top + 36.0 + 8.0;
-    let chevron_origin = crate::Point2D::new(content_x + content_w - 52.0, row_y + 10.0);
+    let chevron_origin = crate::Point2D::new(content_x + content_w - 60.0, row_y + 10.0);
+    let delete_origin = crate::Point2D::new(content_x + content_w - 30.0, row_y + 10.0);
 
     let mut backend = CaptureBackend::default();
     let mut cx = PaintCx {
@@ -790,12 +791,28 @@ fn images_tab_profile_row_paints_expand_chevron_before_delete_like_ts() {
     };
     panel.paint(&mut cx, rect);
 
-    assert!(
-        backend.icon_strokes.iter().any(|(at, size, _)| {
-            (*size - 12.0).abs() < 0.01
+    let chevron_idx = backend
+        .icon_strokes
+        .iter()
+        .find_map(|(at, size, idx)| {
+            ((*size - 12.0).abs() < 0.01
                 && (at.x - chevron_origin.x).abs() < 0.01
-                && (at.y - chevron_origin.y).abs() < 0.01
-        }),
+                && (at.y - chevron_origin.y).abs() < 0.01)
+                .then_some(*idx)
+        })
+        .expect("profile rows should paint the TS expand/collapse chevron");
+    let delete_idx = backend
+        .icon_strokes
+        .iter()
+        .find_map(|(at, size, idx)| {
+            ((*size - 12.0).abs() < 0.01
+                && (at.x - delete_origin.x).abs() < 0.01
+                && (at.y - delete_origin.y).abs() < 0.01)
+                .then_some(*idx)
+        })
+        .expect("profile rows should paint the delete icon");
+    assert!(
+        chevron_idx < delete_idx,
         "profile rows should paint the TS expand/collapse chevron before the delete icon"
     );
 }

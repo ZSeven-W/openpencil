@@ -35,11 +35,8 @@ impl WidgetHost {
     /// painted caret restarts its phase like a real click. Callers
     /// should `set_now_ms` first so the anchor is current.
     pub(crate) fn a11y_focus_chat_input(&mut self) {
-        self.editor_state.chat.focused = true;
-        self.editor_state.chat.input_select_all = false;
-        self.editor_state.chat.input_selection = None;
+        self.editor_state.chat.focus_input_at_end(self.now_ms);
         self.editor_state.chat.transcript_selection = None;
-        self.editor_state.chat.caret_anchor_ms = self.now_ms;
         self.mark_dirty();
     }
 }
@@ -62,13 +59,13 @@ mod tests {
     fn a11y_focus_chat_input_focuses_and_clears_selections() {
         let mut host = WidgetHost::new();
         host.set_now_ms(1234);
-        host.editor_state.chat.input_select_all = true;
+        host.editor_state.chat.set_input_text("hello");
+        host.editor_state.chat.select_all_input(0);
         host.a11y_focus_chat_input();
         let chat = &host.editor_state.chat;
         assert!(chat.focused);
-        assert!(!chat.input_select_all);
-        assert!(chat.input_selection.is_none());
+        assert!(chat.input.highlight_range().is_none());
         assert!(chat.transcript_selection.is_none());
-        assert_eq!(chat.caret_anchor_ms, 1234);
+        assert_eq!(chat.input.next_blink_flip_ms(1234), 1734);
     }
 }

@@ -144,19 +144,15 @@ impl WidgetHostNative {
                         return true;
                     }
                     AIChatHit::FocusInput => {
-                        self.editor_state.chat.focused = true;
-                        self.editor_state.chat.input_select_all = false;
-                        self.editor_state.chat.input_selection = None;
+                        self.editor_state.chat.focus_input_at_end(self.now_ms);
                         self.editor_state.chat.transcript_selection = None;
-                        self.editor_state.chat.caret_anchor_ms = self.now_ms;
                         self.mark_dirty();
                         return true;
                     }
                     AIChatHit::SelectInputText(offset) => {
                         self.editor_state.chat.focused = true;
-                        self.editor_state.chat.set_input_caret(offset);
+                        self.editor_state.chat.set_input_caret(offset, self.now_ms);
                         self.editor_state.chat.transcript_selection = None;
-                        self.editor_state.chat.caret_anchor_ms = self.now_ms;
                         self.mark_dirty();
                         return true;
                     }
@@ -171,12 +167,9 @@ impl WidgetHostNative {
                         return true;
                     }
                     AIChatHit::Example(text) => {
-                        self.editor_state.chat.input = text;
-                        self.editor_state.chat.focused = true;
-                        self.editor_state.chat.input_select_all = false;
-                        self.editor_state.chat.input_selection = None;
+                        self.editor_state.chat.set_input_text(text);
+                        self.editor_state.chat.focus_input_at_end(self.now_ms);
                         self.editor_state.chat.transcript_selection = None;
-                        self.editor_state.chat.caret_anchor_ms = self.now_ms;
                         self.mark_dirty();
                         return true;
                     }

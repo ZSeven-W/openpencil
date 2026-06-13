@@ -177,9 +177,9 @@ impl DesktopApp {
                     // to the document *node* clipboard otherwise.
                     "c" => {
                         consumed = if self.host.editor_state().chat.focused {
-                            let text = self.host.editor_state().chat.input.clone();
+                            let text = self.host.editor_state().chat.input.text();
                             if !text.is_empty() {
-                                crate::clipboard::set_text(&text);
+                                crate::clipboard::set_text(text);
                             }
                             true
                         } else {

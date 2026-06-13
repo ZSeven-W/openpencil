@@ -558,7 +558,7 @@ fn focused_input(state: &EditorState) -> Option<(String, String, String)> {
         return Some((
             "chat".to_string(),
             "AI chat input".to_string(),
-            state.chat.input.clone(),
+            state.chat.input.text().to_owned(),
         ));
     }
     None
@@ -679,7 +679,7 @@ mod tests {
         assert!(focused_input(&state).is_none());
 
         state.chat.focused = true;
-        state.chat.input = "hello".to_string();
+        state.chat.set_input_text("hello");
         let (key, label, value) = focused_input(&state).expect("chat focus");
         assert_eq!(key, "chat");
         assert_eq!(label, "AI chat input");

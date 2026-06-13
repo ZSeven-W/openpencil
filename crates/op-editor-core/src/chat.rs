@@ -13,6 +13,8 @@
 /// pending image / file the user staged for the next turn.
 pub use op_ai::chat_provider::{ChatAttachment, EffortLevel, ThinkingMode};
 
+use jian_core::text_input::{prev_char_boundary, Selection, TextInputState};
+
 /// Maximum number of files that can be staged for one chat turn
 /// (TS parity — the web chat input caps at four attachments).
 pub const MAX_ATTACHMENTS: usize = 4;
@@ -310,39 +312,14 @@ impl ChatTranscriptSelection {
     }
 }
 
-/// Byte-offset text selection inside the chat input draft.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ChatInputSelection {
-    pub anchor: usize,
-    pub focus: usize,
-}
-
-impl ChatInputSelection {
-    pub fn ordered(self) -> (usize, usize) {
-        if self.anchor <= self.focus {
-            (self.anchor, self.focus)
-        } else {
-            (self.focus, self.anchor)
-        }
-    }
-
-    pub fn is_collapsed(self) -> bool {
-        self.anchor == self.focus
-    }
-}
-
 /// Floating AI chat panel state — mirrors shell-core's `ChatState`
 /// (messages, input draft, focused flag, panel anchor, model catalog).
 #[derive(Debug, Clone)]
 pub struct ChatState {
     pub messages: Vec<ChatMessage>,
-    pub input: String,
+    /// Text input state for the chat textarea draft.
+    pub input: TextInputState,
     pub focused: bool,
-    /// True after Cmd/Ctrl+A while the chat textarea owns the
-    /// keyboard. The next edit replaces the whole input.
-    pub input_select_all: bool,
-    /// Byte-offset selection/caret inside the input draft.
-    pub input_selection: Option<ChatInputSelection>,
     /// Text selection inside a visible transcript user message.
     pub transcript_selection: Option<ChatTranscriptSelection>,
     /// Which canvas corner the floating chat panel snaps to.
@@ -368,9 +345,6 @@ pub struct ChatState {
     pub checklist_collapsed: bool,
     /// Vertical scroll offset inside the fixed design checklist rows.
     pub checklist_scroll: f32,
-    /// Last user-action timestamp (focus / keystroke) in ms — drives
-    /// the caret blink phase. Reset on focus and on every key event.
-    pub caret_anchor_ms: u64,
     /// Set by `begin_send` to the just-sent user text; the desktop
     /// event loop drains this each frame. `None` = idle.
     pub pending_send: Option<String>,
@@ -434,10 +408,8 @@ impl Default for ChatState {
     fn default() -> Self {
         Self {
             messages: Vec::new(),
-            input: String::new(),
+            input: TextInputState::default(),
             focused: false,
-            input_select_all: false,
-            input_selection: None,
             transcript_selection: None,
             anchor: ChatAnchor::BottomLeft,
             panel_width: DEFAULT_CHAT_PANEL_WIDTH,
@@ -447,7 +419,6 @@ impl Default for ChatState {
             maximized: false,
             checklist_collapsed: false,
             checklist_scroll: 0.0,
-            caret_anchor_ms: 0,
             pending_send: None,
             pending_new_chat: false,
             pending_stop_chat: false,
@@ -511,16 +482,14 @@ impl ChatState {
     /// assistant echo, then clear the buffer. Offline fallback used by
     /// hosts with no real `ChatProvider` wired.
     pub fn send(&mut self) {
-        let trimmed = self.input.trim();
+        let trimmed = self.input.text().trim();
         if trimmed.is_empty() {
             return;
         }
         let echo = format!("(stub) Got it — \"{}\"", trimmed);
         self.messages.push(ChatMessage::user(trimmed));
         self.messages.push(ChatMessage::assistant(echo));
-        self.input.clear();
-        self.input_select_all = false;
-        self.input_selection = None;
+        self.input.set_text("");
     }
 
     /// Real-send entry point. Pushes the user message + an empty
@@ -530,7 +499,7 @@ impl ChatState {
     /// may be queued with text, with staged attachments, or both
     /// (TS parity: an attachment-only message is sendable).
     pub fn begin_send(&mut self) -> bool {
-        let trimmed = self.input.trim().to_string();
+        let trimmed = self.input.text().trim().to_string();
         if trimmed.is_empty() && self.pending_attachments.is_empty() {
             return false;
         }
@@ -562,9 +531,7 @@ impl ChatState {
         self.messages.push(user_msg);
         // Empty streaming assistant bubble — provider deltas append here.
         self.messages.push(ChatMessage::assistant_streaming());
-        self.input.clear();
-        self.input_select_all = false;
-        self.input_selection = None;
+        self.input.set_text("");
         self.checklist_scroll = 0.0;
         self.pending_send = Some(trimmed);
         true
@@ -606,9 +573,7 @@ impl ChatState {
     /// in-flight worker tied to the previous conversation.
     pub fn new_chat(&mut self) {
         self.messages.clear();
-        self.input.clear();
-        self.input_select_all = false;
-        self.input_selection = None;
+        self.input.set_text("");
         self.pending_send = None;
         self.pending_stop_chat = false;
         self.pending_copy_text = None;
@@ -633,97 +598,87 @@ impl ChatState {
             return None;
         }
         let (start, end) = selection.ordered();
-        let start = previous_char_boundary(text, start.min(text.len()));
-        let end = previous_char_boundary(text, end.min(text.len()));
+        let start = prev_char_boundary(text, start.min(text.len()));
+        let end = prev_char_boundary(text, end.min(text.len()));
         (start < end).then_some(&text[start..end])
     }
 
-    pub fn set_input_caret(&mut self, offset: usize) {
-        let caret = previous_char_boundary(&self.input, offset.min(self.input.len()));
-        self.input_select_all = false;
-        self.input_selection = Some(ChatInputSelection {
-            anchor: caret,
-            focus: caret,
-        });
+    pub fn set_input_text(&mut self, text: impl Into<String>) {
+        self.input.set_text(text);
+    }
+
+    pub fn focus_input_at_end(&mut self, now_ms: u64) {
+        self.focused = true;
+        self.input.set_caret(self.input.text().len(), now_ms);
+    }
+
+    pub fn blur_input(&mut self, now_ms: u64) {
+        self.focused = false;
+        self.input.set_caret(self.input.caret(), now_ms);
+    }
+
+    pub fn set_input_caret(&mut self, offset: usize, now_ms: u64) {
+        self.input
+            .set_caret(offset.min(self.input.text().len()), now_ms);
     }
 
     pub fn input_caret(&self) -> usize {
-        self.input_selection
-            .map(|selection| {
-                previous_char_boundary(&self.input, selection.focus.min(self.input.len()))
-            })
-            .unwrap_or(self.input.len())
+        self.input.caret()
+    }
+
+    pub fn input_selection(&self) -> Selection {
+        self.input.selection()
+    }
+
+    pub fn select_all_input(&mut self, now_ms: u64) {
+        self.input.select_all();
+        self.input.touch(now_ms);
+    }
+
+    pub fn drag_input_selection(&mut self, anchor: usize, focus: usize, now_ms: u64) -> bool {
+        let before = self.input.selection();
+        self.input.set_caret(anchor, now_ms);
+        self.input.drag_to(focus, now_ms);
+        before != self.input.selection()
     }
 
     pub fn selected_input_range(&self) -> Option<(usize, usize)> {
-        if self.input.is_empty() {
+        let text = self.input.text();
+        if text.is_empty() {
             return None;
         }
-        if self.input_select_all {
-            return Some((0, self.input.len()));
-        }
-        let selection = self.input_selection?;
-        if selection.is_collapsed() {
-            return None;
-        }
-        let (start, end) = selection.ordered();
-        let start = previous_char_boundary(&self.input, start.min(self.input.len()));
-        let end = previous_char_boundary(&self.input, end.min(self.input.len()));
+        let (start, end) = self.input.highlight_range()?;
+        let start = prev_char_boundary(text, start.min(text.len()));
+        let end = prev_char_boundary(text, end.min(text.len()));
         (start < end).then_some((start, end))
     }
 
     pub fn selected_input_text(&self) -> Option<&str> {
         let (start, end) = self.selected_input_range()?;
-        Some(&self.input[start..end])
+        Some(&self.input.text()[start..end])
     }
 
-    pub fn insert_input_text(&mut self, text: &str) -> bool {
+    pub fn insert_input_text(&mut self, text: &str, now_ms: u64) -> bool {
         if text.is_empty() {
             return false;
         }
-        let (start, end) = self.selected_input_range().unwrap_or_else(|| {
-            let caret = self.input_caret();
-            (caret, caret)
-        });
-        self.input.replace_range(start..end, text);
-        let caret = start + text.len();
-        self.input_select_all = false;
-        self.input_selection = Some(ChatInputSelection {
-            anchor: caret,
-            focus: caret,
-        });
+        self.input.insert_str(text, now_ms);
         true
     }
 
-    pub fn delete_input_selection(&mut self) -> bool {
+    pub fn delete_input_selection(&mut self, now_ms: u64) -> bool {
         let Some((start, end)) = self.selected_input_range() else {
             return false;
         };
-        self.input.replace_range(start..end, "");
-        self.input_select_all = false;
-        self.input_selection = Some(ChatInputSelection {
-            anchor: start,
-            focus: start,
-        });
+        debug_assert!(start < end);
+        self.input.insert_str("", now_ms);
         true
     }
 
-    pub fn backspace_input(&mut self) -> bool {
-        if self.delete_input_selection() {
-            return true;
-        }
-        let caret = self.input_caret();
-        if caret == 0 || self.input.is_empty() {
-            return false;
-        }
-        let start = previous_char_boundary(&self.input, caret.saturating_sub(1));
-        self.input.replace_range(start..caret, "");
-        self.input_select_all = false;
-        self.input_selection = Some(ChatInputSelection {
-            anchor: start,
-            focus: start,
-        });
-        true
+    pub fn backspace_input(&mut self, now_ms: u64) -> bool {
+        let before = (self.input.text().to_owned(), self.input.selection());
+        self.input.backspace(now_ms);
+        before != (self.input.text().to_owned(), self.input.selection())
     }
 
     /// Flip the collapsed state of message `idx`'s thinking block.
@@ -840,40 +795,31 @@ impl ChatState {
     }
 }
 
-fn previous_char_boundary(text: &str, mut index: usize) -> usize {
-    while index > 0 && !text.is_char_boundary(index) {
-        index -= 1;
-    }
-    index
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn begin_send_pushes_user_plus_empty_assistant_and_raises_flag() {
-        let mut chat = ChatState {
-            input: "  design a login page  ".into(),
-            ..Default::default()
-        };
+        let mut chat = ChatState::default();
+        chat.set_input_text("  design a login page  ");
         assert!(chat.begin_send());
         assert_eq!(chat.messages.len(), 2);
         assert_eq!(chat.messages[0].role, ChatRole::User);
         assert_eq!(chat.messages[0].content, "design a login page");
         assert_eq!(chat.messages[1].role, ChatRole::Assistant);
         assert!(chat.messages[1].content.is_empty());
-        assert!(chat.input.is_empty());
+        assert!(chat.input.text().is_empty());
         assert_eq!(chat.pending_send.as_deref(), Some("design a login page"));
     }
 
     #[test]
     fn begin_send_expands_collapsed_panel_for_streaming_turn() {
         let mut chat = ChatState {
-            input: "design a pricing page".into(),
             collapsed: true,
             ..Default::default()
         };
+        chat.set_input_text("design a pricing page");
 
         assert!(chat.begin_send());
 
@@ -885,16 +831,14 @@ mod tests {
 
     #[test]
     fn begin_send_clears_a_prior_interrupted_streaming_bubble() {
-        let mut chat = ChatState {
-            input: "first question".into(),
-            ..Default::default()
-        };
+        let mut chat = ChatState::default();
+        chat.set_input_text("first question");
         assert!(chat.begin_send());
         // messages[1] is the in-flight assistant bubble.
         assert!(chat.messages[1].streaming);
         // The user sends again before the first turn finished — the
         // first turn is now interrupted and will never reach `Done`.
-        chat.input = "second question".into();
+        chat.set_input_text("second question");
         assert!(chat.begin_send());
         assert!(
             !chat.messages[1].streaming,
@@ -908,10 +852,8 @@ mod tests {
 
     #[test]
     fn begin_send_empty_input_no_ops() {
-        let mut chat = ChatState {
-            input: "   ".into(),
-            ..Default::default()
-        };
+        let mut chat = ChatState::default();
+        chat.set_input_text("   ");
         assert!(!chat.begin_send());
         assert!(chat.messages.is_empty());
         assert!(chat.pending_send.is_none());
@@ -919,38 +861,29 @@ mod tests {
 
     #[test]
     fn input_selection_replaces_only_selected_range() {
-        let mut chat = ChatState {
-            input: "abcdef".into(),
-            input_selection: Some(ChatInputSelection {
-                anchor: 1,
-                focus: 3,
-            }),
-            ..Default::default()
-        };
+        let mut chat = ChatState::default();
+        chat.input.set_text("abcdef");
+        chat.input.set_caret(1, 0);
+        chat.input.drag_to(3, 0);
 
         assert_eq!(chat.selected_input_text(), Some("bc"));
-        assert!(chat.insert_input_text("X"));
+        assert!(chat.insert_input_text("X", 10));
 
-        assert_eq!(chat.input, "aXdef");
+        assert_eq!(chat.input.text(), "aXdef");
         assert_eq!(
-            chat.input_selection,
-            Some(ChatInputSelection {
-                anchor: 2,
-                focus: 2,
-            })
+            chat.input.selection(),
+            jian_core::text_input::Selection::caret(2)
         );
     }
 
     #[test]
     fn send_echo_appends_user_and_assistant() {
-        let mut chat = ChatState {
-            input: "hi".into(),
-            ..Default::default()
-        };
+        let mut chat = ChatState::default();
+        chat.set_input_text("hi");
         chat.send();
         assert_eq!(chat.messages.len(), 2);
         assert_eq!(chat.messages[1].role, ChatRole::Assistant);
-        assert!(chat.input.is_empty());
+        assert!(chat.input.text().is_empty());
     }
 
     #[test]
@@ -1015,10 +948,8 @@ mod tests {
 
     #[test]
     fn begin_send_leaves_pending_attachments_for_host_to_drain() {
-        let mut chat = ChatState {
-            input: "design with this".into(),
-            ..Default::default()
-        };
+        let mut chat = ChatState::default();
+        chat.set_input_text("design with this");
         chat.add_attachment(ChatAttachment {
             name: "ref.png".into(),
             media_type: "image/png".into(),
@@ -1087,10 +1018,8 @@ mod tests {
 
     #[test]
     fn begin_send_marks_only_the_assistant_message_streaming() {
-        let mut chat = ChatState {
-            input: "design something".into(),
-            ..Default::default()
-        };
+        let mut chat = ChatState::default();
+        chat.set_input_text("design something");
         assert!(chat.begin_send());
         assert!(!chat.messages[0].streaming, "user message is not streaming");
         assert!(
@@ -1101,10 +1030,8 @@ mod tests {
 
     #[test]
     fn begin_send_copies_image_attachments_into_user_message_with_unique_ids() {
-        let mut chat = ChatState {
-            input: "look at these".into(),
-            ..Default::default()
-        };
+        let mut chat = ChatState::default();
+        chat.set_input_text("look at these");
         chat.add_attachment(ChatAttachment {
             name: "a.png".into(),
             media_type: "image/png".into(),
@@ -1132,10 +1059,8 @@ mod tests {
     fn image_ids_never_collide_across_fresh_chat_states() {
         // A "New Chat" makes a fresh ChatState — its image ids must
         // not restart at 0 and collide with a still-cached decode.
-        let mut a = ChatState {
-            input: "x".into(),
-            ..Default::default()
-        };
+        let mut a = ChatState::default();
+        a.set_input_text("x");
         a.add_attachment(ChatAttachment {
             name: "a.png".into(),
             media_type: "image/png".into(),
@@ -1144,10 +1069,8 @@ mod tests {
         a.begin_send();
         let first_id = a.messages[0].images[0].id;
 
-        let mut b = ChatState {
-            input: "y".into(),
-            ..Default::default()
-        };
+        let mut b = ChatState::default();
+        b.set_input_text("y");
         b.add_attachment(ChatAttachment {
             name: "b.png".into(),
             media_type: "image/png".into(),
@@ -1162,10 +1085,8 @@ mod tests {
 
     #[test]
     fn begin_send_skips_non_image_attachments_for_the_bubble() {
-        let mut chat = ChatState {
-            input: "and a doc".into(),
-            ..Default::default()
-        };
+        let mut chat = ChatState::default();
+        chat.set_input_text("and a doc");
         chat.add_attachment(ChatAttachment {
             name: "notes.txt".into(),
             media_type: "text/plain".into(),

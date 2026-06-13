@@ -191,13 +191,7 @@ impl WidgetHostNative {
             return true;
         }
         if self.editor_state.chat.focused {
-            self.editor_state.chat.input_select_all = true;
-            self.editor_state.chat.input_selection =
-                Some(op_editor_core::chat::ChatInputSelection {
-                    anchor: 0,
-                    focus: self.editor_state.chat.input.len(),
-                });
-            self.editor_state.chat.caret_anchor_ms = self.now_ms;
+            self.editor_state.chat.select_all_input(self.now_ms);
             self.mark_dirty();
             return true;
         }
@@ -278,9 +272,10 @@ impl WidgetHostNative {
         // any pending variable-row edit first so subsequent
         // keystrokes don't keep routing into the variable draft.
         self.commit_variable_row_focus_if_any();
-        self.editor_state.chat.focused = !self.editor_state.chat.focused;
         if self.editor_state.chat.focused {
-            self.editor_state.chat.caret_anchor_ms = self.now_ms;
+            self.editor_state.chat.blur_input(self.now_ms);
+        } else {
+            self.editor_state.chat.focus_input_at_end(self.now_ms);
         }
         self.mark_dirty();
         true
