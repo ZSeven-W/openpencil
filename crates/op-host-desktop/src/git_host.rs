@@ -42,6 +42,7 @@ impl DesktopApp {
                 panel.branch_picker_open = false;
                 panel.overflow_open = false;
                 panel.overflow_view = op_editor_core::GitOverflowView::Menu;
+                panel.close_tracked_picker();
                 // Cleared synchronously — there is nothing to wait for.
                 panel.loading = false;
             }
@@ -123,6 +124,7 @@ impl DesktopApp {
             panel.branch_picker_open = false;
             panel.overflow_open = false;
             panel.overflow_view = op_editor_core::GitOverflowView::Menu;
+            panel.close_tracked_picker();
         }
         // The fresh snapshot has landed — leave the loading state.
         let was_loading = panel.loading;

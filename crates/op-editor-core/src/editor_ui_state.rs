@@ -571,6 +571,8 @@ pub struct GitPanelState {
     pub candidate_files: Vec<GitCandidateFile>,
     /// The picker's currently-selected candidate index, if any.
     pub tracked_picker_selected: Option<usize>,
+    /// Shared select state for the tracked-file picker row list.
+    pub tracked_picker: jian_widgets::components::select::SelectState,
     /// SSH key names for the SSH-keys subview (host-filled on open).
     pub ssh_keys: Vec<String>,
     /// Commit-message draft typed into the panel's input box.
@@ -682,6 +684,31 @@ impl GitPanelState {
         let author_email_caret = self.author_email_input.caret();
         self.author_email_input.set_caret(author_email_caret, 0);
         was_focused
+    }
+
+    /// Open the tracked-file picker row list and reset transient select
+    /// interaction state for a fresh candidate set.
+    pub fn open_tracked_picker(&mut self) {
+        self.tracked_picker.open = true;
+        self.tracked_picker.hover = None;
+        self.tracked_picker.pressed = None;
+        self.tracked_picker.scroll.offset = 0.0;
+        self.tracked_picker_selected = None;
+    }
+
+    /// Close the tracked-file picker and clear its transient selection.
+    pub fn close_tracked_picker(&mut self) -> bool {
+        let changed = self.tracked_picker.open
+            || self.tracked_picker.hover.is_some()
+            || self.tracked_picker.pressed.is_some()
+            || self.tracked_picker.scroll.offset != 0.0
+            || self.tracked_picker_selected.is_some();
+        self.tracked_picker.open = false;
+        self.tracked_picker.hover = None;
+        self.tracked_picker.pressed = None;
+        self.tracked_picker.scroll.offset = 0.0;
+        self.tracked_picker_selected = None;
+        changed
     }
 }
 
@@ -1566,5 +1593,32 @@ mod tests {
         s.in_repo = true;
         s.merging = true;
         assert!(!s.header_popovers_allowed(), "merge in progress");
+    }
+
+    #[test]
+    fn tracked_picker_helpers_reset_select_interaction_state() {
+        let mut s = GitPanelState::default();
+        s.tracked_picker_selected = Some(2);
+        s.tracked_picker.hover = Some(1);
+        s.tracked_picker.pressed = Some(1);
+        s.tracked_picker.scroll.offset = 44.0;
+
+        s.open_tracked_picker();
+        assert!(s.tracked_picker.open);
+        assert_eq!(s.tracked_picker_selected, None);
+        assert_eq!(s.tracked_picker.hover, None);
+        assert_eq!(s.tracked_picker.pressed, None);
+        assert_eq!(s.tracked_picker.scroll.offset, 0.0);
+
+        s.tracked_picker_selected = Some(0);
+        s.tracked_picker.hover = Some(0);
+        s.tracked_picker.pressed = Some(0);
+        s.tracked_picker.scroll.offset = 44.0;
+        assert!(s.close_tracked_picker());
+        assert!(!s.tracked_picker.open);
+        assert_eq!(s.tracked_picker_selected, None);
+        assert_eq!(s.tracked_picker.hover, None);
+        assert_eq!(s.tracked_picker.pressed, None);
+        assert_eq!(s.tracked_picker.scroll.offset, 0.0);
     }
 }

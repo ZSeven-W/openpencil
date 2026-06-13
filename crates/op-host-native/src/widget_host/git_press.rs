@@ -187,6 +187,7 @@ impl WidgetHostNative {
                 panel.branch_picker_open = !panel.branch_picker_open;
                 panel.overflow_open = false;
                 panel.overflow_view = GitOverflowView::Menu;
+                panel.close_tracked_picker();
                 // Always (re)open on the branch list — a prior session's
                 // create / merge sub-mode should never leak back in.
                 panel.branch_picker_mode = GitBranchPickerMode::List;
@@ -199,13 +200,16 @@ impl WidgetHostNative {
                 panel.overflow_open = !panel.overflow_open;
                 panel.overflow_view = GitOverflowView::Menu;
                 panel.branch_picker_open = false;
+                panel.close_tracked_picker();
             }
             Some(GitPanelHit::OverflowRemoteSettings) => {
                 panel.overflow_view = GitOverflowView::RemoteSettings;
+                panel.close_tracked_picker();
             }
             Some(GitPanelHit::OverflowSshKeys) => {
                 // Open the SSH-keys subview (host enumerates the stored keys).
                 panel.pending_action = Some(GitPanelAction::EnterSshKeys);
+                panel.close_tracked_picker();
             }
             Some(GitPanelHit::SshGenerateKey) => {
                 panel.pending_action = Some(GitPanelAction::SetupSshAuth);
@@ -220,26 +224,31 @@ impl WidgetHostNative {
             }
             Some(GitPanelHit::OverflowBack) => {
                 panel.overflow_view = GitOverflowView::Menu;
+                panel.close_tracked_picker();
             }
             Some(GitPanelHit::OverflowSwitchTracked) => {
                 // Host enumerates the repo's `.op` candidates, then flips the
                 // subview to the tracked-file picker.
+                panel.open_tracked_picker();
                 panel.pending_action = Some(GitPanelAction::EnterTrackedPicker);
             }
             Some(GitPanelHit::OverflowClearAuthor) => {
                 panel.pending_action = Some(GitPanelAction::ClearAuthor);
                 panel.overflow_open = false;
                 panel.overflow_view = GitOverflowView::Menu;
+                panel.close_tracked_picker();
             }
             Some(GitPanelHit::OverflowCloseRepo) => {
                 panel.pending_action = Some(GitPanelAction::CloseRepo);
                 panel.overflow_open = false;
                 panel.overflow_view = GitOverflowView::Menu;
+                panel.close_tracked_picker();
             }
             Some(GitPanelHit::TrackedPickerRow(index)) => {
                 // Pure UI — single-select a candidate.
                 if index < panel.candidate_files.len() {
                     panel.tracked_picker_selected = Some(index);
+                    panel.tracked_picker.hover = Some(index);
                 }
             }
             Some(GitPanelHit::TrackedPickerBind) => {
@@ -255,7 +264,7 @@ impl WidgetHostNative {
             Some(GitPanelHit::TrackedPickerBack) => {
                 // Close the picker subview back to the overflow menu.
                 panel.overflow_view = GitOverflowView::Menu;
-                panel.tracked_picker_selected = None;
+                panel.close_tracked_picker();
             }
             Some(GitPanelHit::DismissPopover) => {
                 // Click outside an open popover — close it + swallow.
@@ -264,6 +273,7 @@ impl WidgetHostNative {
                 panel.branch_create_input.set_text("");
                 panel.overflow_open = false;
                 panel.overflow_view = GitOverflowView::Menu;
+                panel.close_tracked_picker();
                 panel.defocus_text_inputs();
             }
             Some(GitPanelHit::AbortMerge) => {
@@ -470,6 +480,7 @@ impl WidgetHostNative {
         panel.branch_picker_open = false;
         panel.overflow_open = false;
         panel.overflow_view = op_editor_core::GitOverflowView::Menu;
+        panel.close_tracked_picker();
         panel.diff = None;
         panel.merge_resolve = None;
         panel.clone_form = None;

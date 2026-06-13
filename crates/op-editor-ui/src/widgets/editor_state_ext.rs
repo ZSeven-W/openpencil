@@ -197,7 +197,6 @@ pub fn git_button_hover(
         W::OverflowClearAuthor => Some(O::OverflowClearAuthor),
         W::OverflowCloseRepo => Some(O::OverflowCloseRepo),
         W::OverflowBack => Some(O::OverflowBack),
-        W::TrackedPickerRow(i) => Some(O::TrackedPickerRow(i)),
         W::TrackedPickerBind => Some(O::TrackedPickerBind),
         W::TrackedPickerBindOpen => Some(O::TrackedPickerBindOpen),
         W::TrackedPickerBack => Some(O::TrackedPickerBack),
