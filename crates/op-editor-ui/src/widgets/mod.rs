@@ -129,6 +129,8 @@ mod agent_settings_builtin_parts;
 mod agent_settings_builtin_tests;
 mod agent_settings_caret;
 #[cfg(test)]
+mod agent_settings_compact_action_tests;
+#[cfg(test)]
 mod agent_settings_connect_tests;
 mod agent_settings_form_actions;
 mod agent_settings_header_action;
