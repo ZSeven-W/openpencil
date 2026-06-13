@@ -80,6 +80,8 @@ mod git_press;
 mod helpers;
 mod history_guard;
 mod icon_picker_press;
+#[cfg(test)]
+mod icon_picker_press_tests;
 mod image_panel_dispatch;
 mod ime;
 mod input;

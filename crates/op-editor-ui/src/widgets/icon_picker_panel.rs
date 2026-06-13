@@ -1,6 +1,7 @@
 //! Native Iconify picker used by the toolbar and icon property row.
 
 use crate::theme::Theme;
+use crate::widgets::button::{paint_button_feedback_wash, paint_ghost_button_feedback};
 use crate::widgets::editor_state_ext::theme_for;
 use crate::widgets::icon_catalog::{search_icons, IconCatalogEntry, IconRenderStyle};
 use crate::widgets::{
@@ -60,6 +61,8 @@ pub struct IconPickerPanel<'a> {
     locale: Locale,
     /// Which target the cursor is over — drives the hover wash.
     hover: Option<usize>,
+    /// Which target is actively pressed — touch-compatible feedback.
+    pressed: Option<usize>,
 }
 
 impl<'a> IconPickerPanel<'a> {
@@ -72,6 +75,7 @@ impl<'a> IconPickerPanel<'a> {
             theme: theme_for(&state.editor_ui),
             locale: state.editor_ui.locale,
             hover: state.editor_ui.icon_picker.hover,
+            pressed: state.editor_ui.icon_picker.pressed,
         })
     }
 
@@ -243,20 +247,20 @@ impl<'a> IconPickerPanel<'a> {
         );
         let close = Self::close_rect(panel);
         let close_hovered = self.hover == Some(ICON_PICKER_CLOSE_HOVER);
-        if close_hovered {
-            cx.backend
-                .fill_round_rect(close, 6.0, self.theme.button_hover);
-        }
+        let close_pressed = self.pressed == Some(ICON_PICKER_CLOSE_HOVER);
+        let icon_color = paint_ghost_button_feedback(
+            cx.backend,
+            &self.theme,
+            close,
+            close_hovered,
+            close_pressed,
+        );
         draw_icon(
             cx.backend,
             Icon::Close,
             Point2D::new(close.origin.x + 5.0, close.origin.y + 5.0),
             14.0,
-            if close_hovered {
-                self.theme.foreground
-            } else {
-                self.theme.muted_foreground
-            },
+            icon_color,
             1.4,
         );
     }
@@ -329,10 +333,14 @@ impl<'a> IconPickerPanel<'a> {
             size: Point2D::new(panel.size.x - 12.0, ROW_H),
         };
         cx.backend.fill_round_rect(row, 6.0, self.theme.popover);
-        if self.hover == Some(idx) {
-            cx.backend
-                .fill_round_rect(row, 6.0, self.theme.button_hover);
-        }
+        paint_button_feedback_wash(
+            cx.backend,
+            &self.theme,
+            row,
+            6.0,
+            self.hover == Some(idx),
+            self.pressed == Some(idx),
+        );
         let icon_pos = Point2D::new(row.origin.x + ROW_PAD_X, y + (ROW_H - ICON_SIZE) / 2.0);
         match item {
             IconRow::Local(icon) => draw_icon_catalog_entry(
@@ -378,10 +386,14 @@ impl<'a> IconPickerPanel<'a> {
             size: Point2D::new(panel.size.x - 12.0, ROW_H - 4.0),
         };
         cx.backend.fill_round_rect(row, 6.0, self.theme.muted);
-        if self.hover == Some(ICON_PICKER_LOAD_MORE_HOVER) {
-            cx.backend
-                .fill_round_rect(row, 6.0, self.theme.button_hover);
-        }
+        paint_button_feedback_wash(
+            cx.backend,
+            &self.theme,
+            row,
+            6.0,
+            self.hover == Some(ICON_PICKER_LOAD_MORE_HOVER),
+            self.pressed == Some(ICON_PICKER_LOAD_MORE_HOVER),
+        );
         let label = if self.state.editor_ui.icon_picker_remote.loading {
             "..."
         } else {
@@ -421,6 +433,56 @@ fn truncate(text: &str, max_chars: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{Color, RenderBackend};
+
+    #[derive(Default)]
+    struct CaptureBackend {
+        round_fills: Vec<(Rect, f32, Color)>,
+    }
+
+    impl RenderBackend for CaptureBackend {
+        fn begin_frame(&mut self) {}
+
+        fn end_frame(&mut self) {}
+
+        fn fill_rect(&mut self, _rect: Rect, _color: Color) {}
+
+        fn stroke_rect(&mut self, _rect: Rect, _color: Color, _width: f32) {}
+
+        fn draw_text(&mut self, _layout: &TextLayout, _origin: Point2D) {}
+
+        fn clip_rect(&mut self, _rect: Rect) {}
+
+        fn stroke_line(&mut self, _from: Point2D, _to: Point2D, _color: Color, _width: f32) {}
+
+        fn fill_round_rect(&mut self, rect: Rect, radius: f32, color: Color) {
+            self.round_fills.push((rect, radius, color));
+        }
+
+        fn stroke_round_rect(&mut self, _rect: Rect, _radius: f32, _color: Color, _width: f32) {}
+
+        fn stroke_svg_path(
+            &mut self,
+            _d: &str,
+            _top_left: Point2D,
+            _size: f32,
+            _color: Color,
+            _width: f32,
+        ) {
+        }
+
+        fn save(&mut self) {}
+
+        fn restore(&mut self) {}
+
+        fn translate(&mut self, _offset: Point2D) {}
+
+        fn resize(&mut self, _width: u32, _height: u32) {}
+
+        fn dpi_scale(&self) -> f32 {
+            1.0
+        }
+    }
 
     #[test]
     fn hover_at_uses_select_state_indices_for_close_and_rows() {
@@ -446,6 +508,84 @@ mod tests {
                 )
             ),
             Some(0)
+        );
+    }
+
+    #[test]
+    fn for_editor_picks_up_pressed_select_state() {
+        let mut state = EditorState::default();
+        state.editor_ui.open_icon_picker(false);
+        state.editor_ui.icon_picker.pressed = Some(ICON_PICKER_CLOSE_HOVER);
+
+        let panel = IconPickerPanel::for_editor(&state).unwrap();
+
+        assert_eq!(panel.pressed, Some(ICON_PICKER_CLOSE_HOVER));
+    }
+
+    #[test]
+    fn pressed_close_button_paints_pressed_feedback() {
+        let mut state = EditorState::default();
+        state.editor_ui.open_icon_picker(false);
+        state.editor_ui.icon_picker.pressed = Some(ICON_PICKER_CLOSE_HOVER);
+        let panel = IconPickerPanel::for_editor(&state).unwrap();
+        let rect = Rect::xywh(0.0, 0.0, ICON_PICKER_PANEL_W, ICON_PICKER_PANEL_H);
+        let close = IconPickerPanel::close_rect(rect);
+        let expected = panel
+            .theme
+            .button_hover
+            .with_alpha(panel.theme.button_hover.a * 1.8);
+        let mut backend = CaptureBackend::default();
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+
+        panel.paint(&mut cx, rect);
+
+        assert!(
+            backend
+                .round_fills
+                .iter()
+                .any(|(fill, radius, color)| *fill == close
+                    && *radius == 6.0
+                    && *color == expected),
+            "pressed close button should paint shared pressed feedback"
+        );
+    }
+
+    #[test]
+    fn pressed_load_more_paints_pressed_feedback() {
+        let mut state = EditorState::default();
+        state.editor_ui.open_icon_picker(false);
+        state.editor_ui.icon_picker_search = "unlikely-remote-only".to_string();
+        state.editor_ui.icon_picker.pressed = Some(ICON_PICKER_LOAD_MORE_HOVER);
+        let panel = IconPickerPanel::for_editor(&state).unwrap();
+        let rect = Rect::xywh(0.0, 0.0, ICON_PICKER_PANEL_W, ICON_PICKER_PANEL_H);
+        let rows = IconPickerPanel::visible_row_capacity(rect);
+        let filtered = panel.rows(rows.saturating_sub(1));
+        let y = IconPickerPanel::list_top(rect) + filtered.len() as f32 * ROW_H;
+        let load_more = Rect {
+            origin: Point2D::new(rect.origin.x + 6.0, y + 2.0),
+            size: Point2D::new(rect.size.x - 12.0, ROW_H - 4.0),
+        };
+        let expected = panel
+            .theme
+            .button_hover
+            .with_alpha(panel.theme.button_hover.a * 1.8);
+        let mut backend = CaptureBackend::default();
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+
+        panel.paint(&mut cx, rect);
+
+        assert!(
+            backend
+                .round_fills
+                .iter()
+                .any(|(fill, radius, color)| *fill == load_more
+                    && *radius == 6.0
+                    && *color == expected),
+            "pressed load-more button should paint shared pressed feedback"
         );
     }
 }
