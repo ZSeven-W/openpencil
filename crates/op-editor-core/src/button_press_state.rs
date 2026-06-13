@@ -12,6 +12,7 @@ pub enum ButtonPressTarget {
     StatusBar(crate::statusbar_state::StatusBarButton),
     ChatHeader(crate::chat_button_state::ChatHeaderButton),
     ChatFooter(crate::chat_button_state::ChatFooterButton),
+    Codegen(crate::codegen::CodegenHover),
     Git(crate::git_button_state::GitButton),
     PropertyPanel(usize),
     VariablesPanel(crate::variables_panel_state::VariablesPanelButton),
