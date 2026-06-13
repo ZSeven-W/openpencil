@@ -40,6 +40,8 @@ mod agent_settings_acp_tests;
 mod agent_settings_compact_press_tests;
 mod agent_settings_draft_dispatch;
 #[cfg(test)]
+mod agent_settings_form_press_tests;
+#[cfg(test)]
 mod agent_settings_image_gen_tests;
 #[cfg(test)]
 mod agent_settings_tests;
