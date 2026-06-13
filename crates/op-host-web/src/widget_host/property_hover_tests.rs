@@ -153,6 +153,46 @@ fn export_dialog_press_sets_and_release_clears_pressed_button() {
 }
 
 #[test]
+fn figma_import_press_sets_and_release_clears_pressed_button() {
+    let mut host = WidgetHost::new();
+    let (viewport_w, viewport_h) = (1200.0, 800.0);
+    host.last_viewport_w = viewport_w;
+    host.last_viewport_h = viewport_h;
+    host.editor_state.editor_ui.figma_import_open = true;
+    let modal =
+        op_editor_ui::widgets::figma_import::FigmaImportModal::for_editor(&host.editor_state);
+    let panel = modal.rect(viewport_w, viewport_h);
+    let mut point = None;
+    let mut y = panel.origin.y;
+    while y <= panel.origin.y + panel.size.y && point.is_none() {
+        let mut x = panel.origin.x;
+        while x <= panel.origin.x + panel.size.x {
+            let p = op_editor_ui::Point2D::new(x, y);
+            if modal.hit_test(panel, p)
+                == op_editor_ui::widgets::figma_import::FigmaImportHit::DropZone
+            {
+                point = Some(p);
+                break;
+            }
+            x += 4.0;
+        }
+        y += 4.0;
+    }
+    let point = point.expect("drop zone is hittable");
+
+    assert!(host.apply_press(point.x, point.y, viewport_w, viewport_h));
+    assert_eq!(
+        host.editor_state.editor_ui.pressed_button,
+        Some(op_editor_core::ButtonPressTarget::FigmaImport(
+            op_editor_core::FigmaImportButton::DropZone
+        ))
+    );
+
+    assert!(host.apply_release_with_viewport(viewport_w, viewport_h));
+    assert_eq!(host.editor_state.editor_ui.pressed_button, None);
+}
+
+#[test]
 fn codegen_preview_wheel_scrolls_code_not_property_panel() {
     let mut host = WidgetHost::new();
     host.editor_state = EditorState::sample();
