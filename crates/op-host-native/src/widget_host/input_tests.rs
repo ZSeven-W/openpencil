@@ -821,6 +821,28 @@ fn status_bar_search_click_frames_content_in_viewport() {
 }
 
 #[test]
+fn status_bar_press_sets_and_release_clears_pressed_button() {
+    let mut host = WidgetHostNative::new();
+    let (vw, vh) = (1200.0, 800.0);
+    let r = host
+        .status_bar_rect(vw, vh)
+        .expect("status bar visible at this size");
+    let x = r.origin.x + 5.0;
+    let y = r.origin.y + r.size.y / 2.0;
+
+    assert!(host.apply_press(x, y, vw, vh));
+    assert_eq!(
+        host.editor_state().editor_ui.pressed_button,
+        Some(op_editor_core::ButtonPressTarget::StatusBar(
+            op_editor_core::StatusBarButton::Search
+        ))
+    );
+
+    assert!(host.apply_release_with_viewport(vw, vh));
+    assert_eq!(host.editor_state().editor_ui.pressed_button, None);
+}
+
+#[test]
 fn pick_fill_image_keeps_image_popover_open_for_mode_selection() {
     let mut host = WidgetHostNative::new();
     host.editor_state_mut().editor_ui.image_fill_popover_open = true;

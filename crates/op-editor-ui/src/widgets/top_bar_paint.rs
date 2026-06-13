@@ -127,6 +127,7 @@ impl TopBar {
             center_y,
             Icon::PanelLeft,
             self.is_hovered(TopBarButton::ToggleSidebar),
+            self.is_pressed(TopBarButton::ToggleSidebar),
         );
         // Divider between the sidebar toggle and the file-menu.
         let divider1_x = panel_left_x + ICON_BUTTON + DIVIDER_GAP;
@@ -139,6 +140,7 @@ impl TopBar {
             file_menu_x,
             center_y,
             self.is_hovered(TopBarButton::ToggleFileMenu),
+            self.is_pressed(TopBarButton::ToggleFileMenu),
         );
         // Divider before the Figma import affordance.
         let divider2_x = file_menu_x + FILE_MENU_BUTTON_WIDTH + DIVIDER_GAP;
@@ -151,6 +153,7 @@ impl TopBar {
             figma_x,
             center_y,
             self.is_hovered(TopBarButton::OpenFigmaImport),
+            self.is_pressed(TopBarButton::OpenFigmaImport),
         );
 
         // ── Centered file name ─────────────────────────────────
@@ -184,6 +187,7 @@ impl TopBar {
                 &self.theme,
                 git_rect,
                 self.is_hovered(TopBarButton::ToggleGitPanel),
+                self.is_pressed(TopBarButton::ToggleGitPanel),
             );
             draw_icon(
                 cx.backend,
@@ -227,6 +231,7 @@ impl TopBar {
             center_y,
             Icon::Maximize,
             self.is_hovered(TopBarButton::ToggleFullscreen),
+            self.is_pressed(TopBarButton::ToggleFullscreen),
         );
         rx -= ICON_BUTTON;
 
@@ -243,6 +248,7 @@ impl TopBar {
             center_y,
             theme_icon,
             self.is_hovered(TopBarButton::ToggleTheme),
+            self.is_pressed(TopBarButton::ToggleTheme),
         );
         rx -= GLOBE_BUTTON_WIDTH;
 
@@ -256,6 +262,7 @@ impl TopBar {
             &self.theme,
             globe_button,
             self.is_hovered(TopBarButton::ToggleLocale),
+            self.is_pressed(TopBarButton::ToggleLocale),
         );
         let locale_glyph_x = Self::locale_glyph_left(globe_button);
         // Globe glyph at the left half.
@@ -304,10 +311,13 @@ impl TopBar {
             size: Point2D::new(chip_w, 26.0),
         };
         // Hover wash behind the whole chip (TS `hover:bg-accent`).
-        if self.is_hovered(TopBarButton::OpenAgentSettings) {
-            cx.backend
-                .fill_round_rect(chip_rect, BUTTON_RADIUS, self.theme.button_hover);
-        }
+        let _ = crate::widgets::button::paint_ghost_button_feedback(
+            cx.backend,
+            &self.theme,
+            chip_rect,
+            self.is_hovered(TopBarButton::OpenAgentSettings),
+            self.is_pressed(TopBarButton::OpenAgentSettings),
+        );
         // Leading icons (no border ring — TS empty-state chip has no
         // outline). The empty state shows the single LayoutGrid
         // set-up affordance; the active chip stacks one brand logo

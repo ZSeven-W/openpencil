@@ -13,6 +13,7 @@ pub mod agent_settings_builtin_presets;
 pub mod agent_settings_connection;
 pub mod align;
 pub mod align_guides;
+pub mod button_press_state;
 pub mod chat;
 pub mod chat_button_state;
 mod chat_design_apply;
@@ -140,6 +141,7 @@ pub use agent_settings_builtin_presets::{
     BuiltinAgentPreset, BuiltinAgentPresetKey, BUILTIN_AGENT_PRESETS,
 };
 pub use align::AlignAction;
+pub use button_press_state::ButtonPressTarget;
 pub use chat::{
     AgentProvider, ChatAnchor, ChatImage, ChatMessage, ChatRole, ChatState, ChatToolCall,
     ModelEntry,

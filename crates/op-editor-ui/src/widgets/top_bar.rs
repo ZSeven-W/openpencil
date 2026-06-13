@@ -18,9 +18,6 @@ pub const TOP_BAR_HEIGHT: f32 = 40.0;
 // widgets keep their own `ICON_SIZE`.
 pub(super) const ICON_SIZE: f32 = 14.0;
 pub(super) const ICON_BUTTON: f32 = 28.0;
-/// Corner radius of a top-bar button's hover background. Smaller than
-/// the floating toolbar's 8 px to suit the 28 px-tall chrome buttons.
-pub(super) const BUTTON_RADIUS: f32 = 6.0;
 /// Globe locale-picker button — wider than a normal icon button so a
 /// chevron-down sits next to the globe glyph (signals the dropdown).
 pub(super) const GLOBE_BUTTON_WIDTH: f32 = 44.0;
@@ -134,6 +131,8 @@ pub struct TopBar {
     /// Which chrome button the cursor is over — drives the per-button
     /// `theme.button_hover` wash. `None` = no hover.
     pub hover: Option<op_editor_core::TopBarButton>,
+    /// Which chrome button is held by the primary pointer.
+    pub pressed: Option<op_editor_core::TopBarButton>,
 }
 
 impl TopBar {
@@ -153,6 +152,7 @@ impl TopBar {
             theme_mode: op_editor_core::ThemeMode::Dark,
             git_branch: None,
             hover: None,
+            pressed: None,
         }
     }
 
@@ -191,6 +191,10 @@ impl TopBar {
             theme_mode: ui.theme_mode,
             git_branch: ui.git_panel.branch.clone(),
             hover: ui.topbar_button_hover,
+            pressed: match ui.pressed_button {
+                Some(op_editor_core::ButtonPressTarget::TopBar(button)) => Some(button),
+                _ => None,
+            },
         }
     }
 
@@ -198,6 +202,10 @@ impl TopBar {
     /// per-button hover wash in `paint_chrome`.
     pub(super) fn is_hovered(&self, button: op_editor_core::TopBarButton) -> bool {
         self.hover == Some(button)
+    }
+
+    pub(super) fn is_pressed(&self, button: op_editor_core::TopBarButton) -> bool {
+        self.pressed == Some(button)
     }
 
     /// Left-edge reservation for the window controls. Collapses to
@@ -510,24 +518,16 @@ impl Widget for TopBar {
     }
 }
 
-/// Paint the `theme.button_hover` background behind a chrome button
-/// when the cursor rests on it, and return the glyph color to use:
-/// `theme.foreground` while hovered (the wash lifts the icon), else
-/// `theme.muted_foreground`. Centralises the hover treatment so every
-/// top-bar button reads identically.
+/// Paint shared ghost-button feedback behind a chrome button and return
+/// the glyph color to use.
 pub(super) fn paint_hover_bg(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
     rect: Rect,
     hovered: bool,
+    pressed: bool,
 ) -> Color {
-    if hovered {
-        cx.backend
-            .fill_round_rect(rect, BUTTON_RADIUS, theme.button_hover);
-        theme.foreground
-    } else {
-        theme.muted_foreground
-    }
+    crate::widgets::button::paint_ghost_button_feedback(cx.backend, theme, rect, hovered, pressed)
 }
 
 pub(super) fn paint_icon_button(
@@ -537,12 +537,13 @@ pub(super) fn paint_icon_button(
     center_y: f32,
     icon: Icon,
     hovered: bool,
+    pressed: bool,
 ) {
     let button_rect = Rect {
         origin: Point2D::new(x, center_y - ICON_BUTTON / 2.0),
         size: Point2D::new(ICON_BUTTON, ICON_BUTTON),
     };
-    let color = paint_hover_bg(cx, theme, button_rect, hovered);
+    let color = paint_hover_bg(cx, theme, button_rect, hovered, pressed);
     let icon_origin = Point2D::new(
         x + (ICON_BUTTON - ICON_SIZE) / 2.0,
         center_y - ICON_SIZE / 2.0,
@@ -559,12 +560,13 @@ pub(super) fn paint_file_menu_button(
     x: f32,
     center_y: f32,
     hovered: bool,
+    pressed: bool,
 ) {
     let button_rect = Rect {
         origin: Point2D::new(x, center_y - ICON_BUTTON / 2.0),
         size: Point2D::new(FILE_MENU_BUTTON_WIDTH, ICON_BUTTON),
     };
-    let color = paint_hover_bg(cx, theme, button_rect, hovered);
+    let color = paint_hover_bg(cx, theme, button_rect, hovered, pressed);
     draw_icon(
         cx.backend,
         Icon::FolderOpen,
@@ -589,12 +591,13 @@ pub(super) fn paint_figma_button(
     x: f32,
     center_y: f32,
     hovered: bool,
+    pressed: bool,
 ) {
     let button_rect = Rect {
         origin: Point2D::new(x, center_y - ICON_BUTTON / 2.0),
         size: Point2D::new(ICON_BUTTON, ICON_BUTTON),
     };
-    let color = paint_hover_bg(cx, theme, button_rect, hovered);
+    let color = paint_hover_bg(cx, theme, button_rect, hovered, pressed);
     crate::widgets::brand_icons::paint_figma_logo(
         cx.backend,
         Point2D::new(
@@ -678,6 +681,19 @@ mod tests {
         let bar = TopBar::for_editor_ui(&ui);
         assert!(bar.is_hovered(op_editor_core::TopBarButton::ToggleTheme));
         assert!(!bar.is_hovered(op_editor_core::TopBarButton::ToggleSidebar));
+    }
+
+    #[test]
+    fn for_editor_ui_picks_up_button_press() {
+        let ui = EditorUiState {
+            pressed_button: Some(op_editor_core::ButtonPressTarget::TopBar(
+                op_editor_core::TopBarButton::ToggleTheme,
+            )),
+            ..Default::default()
+        };
+        let bar = TopBar::for_editor_ui(&ui);
+        assert!(bar.is_pressed(op_editor_core::TopBarButton::ToggleTheme));
+        assert!(!bar.is_pressed(op_editor_core::TopBarButton::ToggleSidebar));
     }
 
     #[test]

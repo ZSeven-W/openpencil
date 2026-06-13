@@ -200,6 +200,8 @@ impl WidgetHost {
             use op_editor_core::StatusBarButton;
             let bar = op_editor_ui::widgets::StatusBar::for_editor(&self.editor_state);
             if let Some(btn) = bar.control_at(r, Point2D::new(x, y)) {
+                self.editor_state.editor_ui.pressed_button =
+                    Some(op_editor_core::ButtonPressTarget::StatusBar(btn));
                 match btn {
                     StatusBarButton::Search => self.zoom_to_fit(viewport_width, viewport_height),
                     StatusBarButton::ZoomOut => {
@@ -209,6 +211,7 @@ impl WidgetHost {
                         self.status_bar_zoom(true, viewport_width, viewport_height)
                     }
                 }
+                self.mark_dirty();
                 return true;
             }
         }
@@ -300,6 +303,9 @@ impl WidgetHost {
         let top_bar = TopBar::for_editor_ui(&self.editor_state.editor_ui);
         if let Some(hit) = top_bar.hit_test(top_bar_rect, Point2D::new(x, y)) {
             self.commit_property_family_focus_if_any();
+            let pressed = op_editor_ui::widgets::editor_state_ext::topbar_button_hover(hit);
+            self.editor_state.editor_ui.pressed_button =
+                Some(op_editor_core::ButtonPressTarget::TopBar(pressed));
             match hit {
                 TopBarHit::ToggleSidebar => {
                     let v = &mut self.editor_state.editor_ui.sidebar_open;

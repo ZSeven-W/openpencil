@@ -924,6 +924,11 @@ pub struct EditorUiState {
     /// Index into `AgentProvider::ALL` of the agent driving the chat.
     pub chat_selected_agent: usize,
 
+    /// Primary-pointer pressed button target. Button feedback is exclusive
+    /// across chrome families, so one field covers toolbar / topbar /
+    /// statusbar / chat buttons without duplicating every hover field.
+    pub pressed_button: Option<crate::button_press_state::ButtonPressTarget>,
+
     /// True after Cmd/Ctrl+A in the component-browser search box. The
     /// next edit replaces the whole search query.
     pub component_browser_select_all: bool,
@@ -1229,6 +1234,7 @@ impl Default for EditorUiState {
             chat_header_hover: None,
             chat_footer_hover: None,
             chat_selected_agent: 0,
+            pressed_button: None,
             component_browser_select_all: false,
             topbar_traffic_hover: false,
             topbar_button_hover: None,
@@ -1315,6 +1321,14 @@ impl EditorUiState {
     /// A fresh UI state — sidebar open, dark theme, no menus open.
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn clear_button_press_target(&mut self) {
+        self.pressed_button = None;
+    }
+
+    pub fn button_pressed(&self, target: crate::button_press_state::ButtonPressTarget) -> bool {
+        self.pressed_button == Some(target)
     }
 
     pub fn toggle_fill_type_picker(&mut self) {
@@ -1572,6 +1586,20 @@ mod tests {
         assert_eq!(s.layer_pages_h_scroll.offset, 48.0);
         assert_eq!(s.layer_layers_h_scroll.offset, 60.0);
         assert_eq!(s.variables_scroll.offset, 72.0);
+    }
+
+    #[test]
+    fn button_press_target_clears_chrome_button_families() {
+        let mut ui = EditorUiState {
+            pressed_button: Some(crate::button_press_state::ButtonPressTarget::TopBar(
+                crate::TopBarButton::ToggleTheme,
+            )),
+            ..Default::default()
+        };
+
+        ui.clear_button_press_target();
+
+        assert_eq!(ui.pressed_button, None);
     }
 
     #[test]
