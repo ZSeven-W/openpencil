@@ -254,6 +254,15 @@ impl WidgetHostNative {
         viewport_width: f32,
         viewport_height: f32,
     ) -> bool {
+        // Floating VariablesPanel owns the wheel over its rect — run this
+        // BEFORE `over_topmost_panel`, which also lists the variables panel
+        // and would otherwise swallow the event WITHOUT scrolling (its rows
+        // never advanced because the topmost-panel guard returned first).
+        // `try_scroll_variables_panel` swallows the wheel when over the
+        // panel, so the "don't zoom the canvas beneath" guarantee holds.
+        if self.try_scroll_variables_panel(x, y, delta_y, viewport_width, viewport_height) {
+            return true;
+        }
         // Any top-most floating panel (Design-MD / Component-Browser)
         // owns the wheel before lower layers — a scroll over them
         // never reaches the modal / Git panel / canvas.
@@ -286,10 +295,6 @@ impl WidgetHostNative {
             }
         }
         if self.try_scroll_chat_checklist(x, y, delta_y, viewport_width, viewport_height) {
-            return true;
-        }
-        // Floating VariablesPanel owns the wheel over its rect.
-        if self.try_scroll_variables_panel(x, y, delta_y, viewport_width, viewport_height) {
             return true;
         }
         // Agent-settings modal owns wheel.
