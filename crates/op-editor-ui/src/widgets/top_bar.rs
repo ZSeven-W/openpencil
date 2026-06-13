@@ -264,7 +264,7 @@ impl TopBar {
 
     /// Returns the on-screen rect of the Globe-plus-chevron locale
     /// button. Used by the host to anchor the LocalePicker dropdown
-    /// directly underneath when `Document.ui.locale_picker_open ==
+    /// directly underneath when `Document.ui.locale_picker.open ==
     /// true`. The button itself is wider than a normal icon button
     /// so the chevron-down has room to render.
     /// Anchor rect for the file-menu dropdown overlay (folder +

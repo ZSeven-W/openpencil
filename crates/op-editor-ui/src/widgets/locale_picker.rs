@@ -1,6 +1,6 @@
 //! `LocalePicker` — dropdown panel listing the 15 native-script
 //! UI locales. Anchored under the TopBar Globe button when
-//! `Document.ui.locale_picker_open == true`.
+//! `Document.ui.locale_picker.open == true`.
 //!
 //! Mirrors the TS app's i18n switcher: vertical list of locale
 //! names, currently-selected row marked with a check icon and
@@ -8,16 +8,16 @@
 
 use crate::theme::Theme;
 use crate::widgets::editor_state_ext::theme_for;
-use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
-use crate::{Point2D, Rect, TextLayout};
+use crate::{Point2D, Rect};
+pub use jian_widgets::components::select::SelectHit;
+use jian_widgets::components::select::{Select, SelectItem, SelectState, MAX_VISIBLE_ROWS};
+use jian_widgets::{Density, Tokens};
 use op_editor_core::editor_ui_state::EditorUiState;
 use op_i18n::Locale;
 
 pub const LOCALE_PICKER_WIDTH: f32 = 200.0;
-const ROW_HEIGHT: f32 = 32.0;
-const ROW_PAD_X: f32 = 12.0;
-const ICON_SIZE: f32 = 16.0;
+const ROW_HEIGHT: f32 = 30.0;
 
 /// Locale rows + selected marker — built fresh from the document
 /// for each paint.
@@ -25,10 +25,7 @@ pub struct LocalePicker {
     pub id: WidgetId,
     pub theme: Theme,
     pub selected: Locale,
-    /// Row currently under the cursor — drives the per-row tint.
-    /// Mirrors `Document.ui.locale_picker_hover`, populated by the
-    /// host on cursor-move while `locale_picker_open == true`.
-    pub hovered: Option<Locale>,
+    pub state: SelectState,
 }
 
 impl LocalePicker {
@@ -37,13 +34,55 @@ impl LocalePicker {
             id: WidgetId::new(5100),
             theme: theme_for(ui),
             selected: ui.locale,
-            hovered: ui.locale_picker_hover,
+            state: ui.locale_picker.clone(),
         }
     }
 
-    /// Total panel height for the 15 locale rows + 6px top/bottom pad.
+    /// Max panel height from the shared Select component.
     pub fn panel_height() -> f32 {
-        ROW_HEIGHT * Locale::ALL.len() as f32 + 12.0
+        ROW_HEIGHT * MAX_VISIBLE_ROWS as f32
+    }
+
+    pub fn row_height() -> f32 {
+        ROW_HEIGHT
+    }
+
+    pub fn max_scroll() -> f32 {
+        Locale::ALL.len().saturating_sub(MAX_VISIBLE_ROWS) as f32 * ROW_HEIGHT
+    }
+
+    pub fn popup_rect(&self, anchor: Rect, viewport: Rect) -> Rect {
+        Select::popup_rect(
+            anchor,
+            viewport,
+            Locale::ALL.len(),
+            &tokens_from_theme(&self.theme),
+        )
+    }
+
+    pub fn hit_select(&self, anchor: Rect, viewport: Rect, point: Point2D) -> SelectHit {
+        Select::hit(
+            &self.state,
+            anchor,
+            viewport,
+            Locale::ALL.len(),
+            point,
+            &tokens_from_theme(&self.theme),
+        )
+    }
+
+    pub fn paint_select(&self, cx: &mut PaintCx<'_>, anchor: Rect, viewport: Rect) {
+        let items = self.items();
+        let select = Select {
+            state: &self.state,
+            items: &items,
+        };
+        select.paint(
+            cx.backend,
+            anchor,
+            viewport,
+            &tokens_from_theme(&self.theme),
+        );
     }
 
     /// Hit-test the panel at `point`. Returns the locale whose row
@@ -51,15 +90,30 @@ impl LocalePicker {
     /// `panel_rect` is the already-computed panel bounds the host
     /// would paint into.
     pub fn hit_test(&self, panel_rect: Rect, point: Point2D) -> Option<Locale> {
-        if !(panel_rect).contains(point) {
-            return None;
+        match self.hit_popup(panel_rect, point) {
+            SelectHit::Row(idx) => Self::locale_at(idx),
+            SelectHit::Inside | SelectHit::Outside => None,
         }
-        let inner_y = point.y - panel_rect.origin.y - 6.0;
-        if inner_y < 0.0 {
-            return None;
-        }
-        let idx = (inner_y / ROW_HEIGHT) as usize;
+    }
+
+    pub fn hit_popup(&self, panel_rect: Rect, point: Point2D) -> SelectHit {
+        let anchor = popup_anchor(panel_rect);
+        self.hit_select(anchor, panel_rect, point)
+    }
+
+    pub fn locale_at(idx: usize) -> Option<Locale> {
         Locale::ALL.get(idx).copied()
+    }
+
+    fn items(&self) -> Vec<SelectItem<'static>> {
+        Locale::ALL
+            .iter()
+            .map(|locale| SelectItem {
+                label: locale.display_name(),
+                selected: *locale == self.selected,
+                disabled: false,
+            })
+            .collect()
     }
 }
 
@@ -78,56 +132,7 @@ impl Widget for LocalePicker {
     }
 
     fn paint(&self, cx: &mut PaintCx<'_>, rect: Rect) {
-        // Panel body.
-        cx.backend.fill_round_rect(rect, 8.0, self.theme.popover);
-        cx.backend
-            .stroke_round_rect(rect, 8.0, self.theme.border, 1.0);
-
-        // Rows.
-        for (idx, &locale) in Locale::ALL.iter().enumerate() {
-            let row_y = rect.origin.y + 6.0 + idx as f32 * ROW_HEIGHT;
-            let row_rect = Rect {
-                origin: Point2D::new(rect.origin.x + 4.0, row_y),
-                size: Point2D::new(rect.size.x - 8.0, ROW_HEIGHT),
-            };
-            let is_selected = locale == self.selected;
-            let is_hovered = !is_selected && self.hovered == Some(locale);
-            if is_selected {
-                cx.backend
-                    .fill_round_rect(row_rect, 6.0, self.theme.row_selected_primary);
-            } else if is_hovered {
-                cx.backend.fill_round_rect(row_rect, 6.0, self.theme.muted);
-            }
-            let label_color = if is_selected {
-                self.theme.primary
-            } else {
-                self.theme.foreground
-            };
-            let label = TextLayout::single_run(
-                locale.display_name(),
-                "system-ui",
-                13.0,
-                (label_color).to_jian(),
-                Point2D::new(0.0, 0.0),
-            );
-            cx.backend.draw_text(
-                &label,
-                Point2D::new(row_rect.origin.x + ROW_PAD_X, row_y + 21.0),
-            );
-            if is_selected {
-                draw_icon(
-                    cx.backend,
-                    Icon::Check,
-                    Point2D::new(
-                        row_rect.origin.x + row_rect.size.x - ICON_SIZE - 10.0,
-                        row_y + (ROW_HEIGHT - ICON_SIZE) / 2.0,
-                    ),
-                    ICON_SIZE,
-                    self.theme.primary,
-                    1.6,
-                );
-            }
-        }
+        self.paint_select(cx, popup_anchor(rect), rect);
     }
 
     fn access_node(&self) -> accesskit::Node {
@@ -137,19 +142,84 @@ impl Widget for LocalePicker {
     }
 }
 
+fn popup_anchor(popup: Rect) -> Rect {
+    Rect {
+        origin: popup.origin,
+        size: Point2D::new(popup.size.x, 0.0),
+    }
+}
+
+fn tokens_from_theme(theme: &Theme) -> Tokens {
+    Tokens {
+        background: theme.background,
+        foreground: theme.foreground,
+        card: theme.card,
+        card_foreground: theme.card_foreground,
+        popover: theme.popover,
+        popover_foreground: theme.popover_foreground,
+        primary: theme.primary,
+        primary_foreground: theme.primary_foreground,
+        muted: theme.muted,
+        muted_foreground: theme.muted_foreground,
+        border: theme.border,
+        accent: theme.accent,
+        accent_foreground: theme.accent_foreground,
+        destructive: theme.destructive,
+        button_hover: theme.button_hover,
+        row_selected: theme.row_selected,
+        row_selected_primary: theme.row_selected_primary,
+        density: Density::Desktop,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use jian_widgets::components::select::SelectHit;
 
     #[test]
-    fn panel_height_covers_15_rows() {
+    fn panel_height_is_capped_to_select_visible_rows() {
         let h = LocalePicker::panel_height();
-        assert!(h > ROW_HEIGHT * 15.0);
+        assert_eq!(h, ROW_HEIGHT * 8.0);
+    }
+
+    #[test]
+    fn hit_select_uses_shared_outside_protocol() {
+        let mut ui = op_editor_core::editor_ui_state::EditorUiState::new();
+        ui.locale_picker.open = true;
+        let picker = LocalePicker::for_editor_ui(&ui);
+        let anchor = Rect {
+            origin: Point2D::new(100.0, 40.0),
+            size: Point2D::new(LOCALE_PICKER_WIDTH, 28.0),
+        };
+        let viewport = Rect {
+            origin: Point2D::new(0.0, 0.0),
+            size: Point2D::new(400.0, 400.0),
+        };
+        let popup = picker.popup_rect(anchor, viewport);
+
+        assert_eq!(
+            picker.hit_select(
+                anchor,
+                viewport,
+                Point2D::new(popup.origin.x + 10.0, popup.origin.y + ROW_HEIGHT * 0.5)
+            ),
+            SelectHit::Row(0)
+        );
+        assert_eq!(
+            picker.hit_select(
+                anchor,
+                viewport,
+                Point2D::new(popup.origin.x - 1.0, popup.origin.y)
+            ),
+            SelectHit::Outside
+        );
     }
 
     #[test]
     fn hit_test_resolves_first_row_to_first_locale() {
-        let ui = op_editor_core::editor_ui_state::EditorUiState::new();
+        let mut ui = op_editor_core::editor_ui_state::EditorUiState::new();
+        ui.locale_picker.open = true;
         let picker = LocalePicker::for_editor_ui(&ui);
         let panel_rect = Rect {
             origin: Point2D::new(100.0, 50.0),
@@ -160,21 +230,38 @@ mod tests {
     }
 
     #[test]
-    fn hit_test_resolves_last_row() {
-        let ui = op_editor_core::editor_ui_state::EditorUiState::new();
+    fn hit_test_resolves_last_visible_row() {
+        let mut ui = op_editor_core::editor_ui_state::EditorUiState::new();
+        ui.locale_picker.open = true;
         let picker = LocalePicker::for_editor_ui(&ui);
         let panel_rect = Rect {
             origin: Point2D::new(0.0, 0.0),
             size: Point2D::new(LOCALE_PICKER_WIDTH, LocalePicker::panel_height()),
         };
-        let last_y = 6.0 + (Locale::ALL.len() as f32 - 0.5) * ROW_HEIGHT;
+        let last_y = (MAX_VISIBLE_ROWS as f32 - 0.5) * ROW_HEIGHT;
         let hit = picker.hit_test(panel_rect, Point2D::new(50.0, last_y));
-        assert_eq!(hit, Some(Locale::ALL[Locale::ALL.len() - 1]));
+        assert_eq!(hit, Some(Locale::ALL[MAX_VISIBLE_ROWS - 1]));
+    }
+
+    #[test]
+    fn hit_test_resolves_scrolled_last_row() {
+        let mut ui = op_editor_core::editor_ui_state::EditorUiState::new();
+        ui.locale_picker.open = true;
+        ui.locale_picker.scroll.offset = LocalePicker::max_scroll();
+        let picker = LocalePicker::for_editor_ui(&ui);
+        let panel_rect = Rect {
+            origin: Point2D::new(0.0, 0.0),
+            size: Point2D::new(LOCALE_PICKER_WIDTH, LocalePicker::panel_height()),
+        };
+        let last_y = (MAX_VISIBLE_ROWS as f32 - 0.5) * ROW_HEIGHT;
+        let hit = picker.hit_test(panel_rect, Point2D::new(50.0, last_y));
+        assert_eq!(hit, Locale::ALL.last().copied());
     }
 
     #[test]
     fn hit_test_outside_returns_none() {
-        let ui = op_editor_core::editor_ui_state::EditorUiState::new();
+        let mut ui = op_editor_core::editor_ui_state::EditorUiState::new();
+        ui.locale_picker.open = true;
         let picker = LocalePicker::for_editor_ui(&ui);
         let panel_rect = Rect {
             origin: Point2D::new(0.0, 0.0),

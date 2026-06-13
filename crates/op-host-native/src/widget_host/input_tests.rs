@@ -689,7 +689,7 @@ fn escape_closes_one_overlay_per_press_in_priority_order() {
     let mut host = WidgetHostNative::new();
     host.editor_state_mut().ui.property_focus = Some(PropertyFocus::PositionX);
     host.editor_state_mut().ui.property_input.set_text("12");
-    host.editor_state_mut().editor_ui.locale_picker_open = true;
+    host.editor_state_mut().editor_ui.locale_picker.open = true;
     host.editor_state_mut().editor_ui.shape_picker_open = true;
     host.editor_state_mut().editor_ui.fill_type_picker_open = true;
     host.editor_state_mut().chat.focused = true;
@@ -700,11 +700,11 @@ fn escape_closes_one_overlay_per_press_in_priority_order() {
     assert!(host.apply_escape());
     assert!(host.editor_state().ui.property_focus.is_none());
     assert!(host.editor_state().ui.property_input.text().is_empty());
-    assert!(host.editor_state().editor_ui.locale_picker_open);
+    assert!(host.editor_state().editor_ui.locale_picker.open);
 
     // 2. Locale picker next.
     assert!(host.apply_escape());
-    assert!(!host.editor_state().editor_ui.locale_picker_open);
+    assert!(!host.editor_state().editor_ui.locale_picker.open);
     assert!(host.editor_state().editor_ui.shape_picker_open);
 
     // 3. Shape picker.
