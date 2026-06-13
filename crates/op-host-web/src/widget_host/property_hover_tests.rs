@@ -114,6 +114,45 @@ fn status_bar_press_sets_and_release_clears_pressed_button() {
 }
 
 #[test]
+fn export_dialog_press_sets_and_release_clears_pressed_button() {
+    let mut host = WidgetHost::new();
+    let (viewport_w, viewport_h) = (1200.0, 800.0);
+    host.last_viewport_w = viewport_w;
+    host.last_viewport_h = viewport_h;
+    host.editor_state.editor_ui.export_dialog_open = true;
+    let dlg = op_editor_ui::widgets::ExportDialog::centered(viewport_w, viewport_h);
+    let mut point = None;
+    let r = dlg.rect();
+    let mut y = r.origin.y;
+    while y <= r.origin.y + r.size.y && point.is_none() {
+        let mut x = r.origin.x;
+        while x <= r.origin.x + r.size.x {
+            let p = op_editor_ui::Point2D::new(x, y);
+            if dlg.hit_test(p)
+                == Some(op_editor_ui::widgets::export_dialog::ExportDialogHit::Scale(1))
+            {
+                point = Some(p);
+                break;
+            }
+            x += 4.0;
+        }
+        y += 4.0;
+    }
+    let point = point.expect("scale 1 pill is hittable");
+
+    assert!(host.apply_press(point.x, point.y, viewport_w, viewport_h));
+    assert_eq!(
+        host.editor_state.editor_ui.pressed_button,
+        Some(op_editor_core::ButtonPressTarget::ExportDialog(
+            op_editor_core::ExportDialogButton::Scale(1)
+        ))
+    );
+
+    assert!(host.apply_release_with_viewport(viewport_w, viewport_h));
+    assert_eq!(host.editor_state.editor_ui.pressed_button, None);
+}
+
+#[test]
 fn codegen_preview_wheel_scrolls_code_not_property_panel() {
     let mut host = WidgetHost::new();
     host.editor_state = EditorState::sample();
