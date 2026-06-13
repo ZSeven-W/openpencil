@@ -684,9 +684,10 @@ impl WidgetHost {
             self.mark_dirty();
             return true;
         }
-        if self.editor_state.editor_ui.shape_picker_open {
-            self.editor_state.editor_ui.shape_picker_open = false;
-            self.editor_state.editor_ui.shape_picker_hover = None;
+        if self.editor_state.editor_ui.shape_picker.open {
+            self.editor_state.editor_ui.shape_picker.open = false;
+            self.editor_state.editor_ui.shape_picker.hover = None;
+            self.editor_state.editor_ui.shape_picker.pressed = None;
             self.mark_dirty();
             return true;
         }

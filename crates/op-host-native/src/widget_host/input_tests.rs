@@ -690,7 +690,7 @@ fn escape_closes_one_overlay_per_press_in_priority_order() {
     host.editor_state_mut().ui.property_focus = Some(PropertyFocus::PositionX);
     host.editor_state_mut().ui.property_input.set_text("12");
     host.editor_state_mut().editor_ui.locale_picker.open = true;
-    host.editor_state_mut().editor_ui.shape_picker_open = true;
+    host.editor_state_mut().editor_ui.shape_picker.open = true;
     host.editor_state_mut().editor_ui.fill_type_picker_open = true;
     host.editor_state_mut().chat.focused = true;
     host.editor_state_mut()
@@ -705,11 +705,11 @@ fn escape_closes_one_overlay_per_press_in_priority_order() {
     // 2. Locale picker next.
     assert!(host.apply_escape());
     assert!(!host.editor_state().editor_ui.locale_picker.open);
-    assert!(host.editor_state().editor_ui.shape_picker_open);
+    assert!(host.editor_state().editor_ui.shape_picker.open);
 
     // 3. Shape picker.
     assert!(host.apply_escape());
-    assert!(!host.editor_state().editor_ui.shape_picker_open);
+    assert!(!host.editor_state().editor_ui.shape_picker.open);
     assert!(host.editor_state().editor_ui.fill_type_picker_open);
 
     // 4. Fill-type picker.
@@ -1803,13 +1803,27 @@ fn shape_picker_icon_row_opens_icon_picker() {
     let mut host = WidgetHostNative::new();
     let viewport_w = 1440.0;
     let viewport_h = 900.0;
-    host.editor_state_mut().editor_ui.shape_picker_open = true;
+    host.editor_state_mut().editor_ui.shape_picker.open = true;
 
     let panel = host.shape_picker_rect(viewport_w, viewport_h);
-    let icon_row_y = panel.origin.y + 6.0 + 32.0 * 4.0 + 16.0;
-    assert!(host.apply_press(panel.origin.x + 24.0, icon_row_y, viewport_w, viewport_h));
+    let picker = op_editor_ui::widgets::ShapePicker::for_editor_ui(&host.editor_state().editor_ui);
+    let x = panel.origin.x + 24.0;
+    let mut probe = panel.origin.y + 2.0;
+    let mut icon_row_y = None;
+    while probe < panel.origin.y + panel.size.y {
+        if matches!(
+            picker.hit_test(panel, op_editor_ui::Point2D::new(x, probe)),
+            Some(op_editor_ui::widgets::ShapeChoice::OpenIconPicker)
+        ) {
+            icon_row_y = Some(probe);
+            break;
+        }
+        probe += 2.0;
+    }
+    let icon_row_y = icon_row_y.expect("icon row present in the shape picker");
+    assert!(host.apply_press(x, icon_row_y, viewport_w, viewport_h));
 
-    assert!(!host.editor_state().editor_ui.shape_picker_open);
+    assert!(!host.editor_state().editor_ui.shape_picker.open);
     assert!(host.editor_state().editor_ui.icon_picker_open);
 }
 

@@ -642,18 +642,27 @@ impl WidgetHost {
                 match hit {
                     op_editor_ui::widgets::ToolbarHit::Tool(tool) => {
                         self.editor_state.tool = tool;
-                        self.editor_state.editor_ui.shape_picker_open = false;
+                        self.editor_state.editor_ui.shape_picker.open = false;
+                        self.editor_state.editor_ui.shape_picker.hover = None;
+                        self.editor_state.editor_ui.shape_picker.pressed = None;
                         self.mark_dirty();
                         return true;
                     }
                     op_editor_ui::widgets::ToolbarHit::Action(action) => {
-                        self.editor_state.editor_ui.shape_picker_open = false;
+                        self.editor_state.editor_ui.shape_picker.open = false;
+                        self.editor_state.editor_ui.shape_picker.hover = None;
+                        self.editor_state.editor_ui.shape_picker.pressed = None;
                         let acted = self.dispatch_toolbar_action(action);
                         return acted || rename_committed || property_focus_committed;
                     }
                     op_editor_ui::widgets::ToolbarHit::ToggleShapePicker => {
-                        let v = &mut self.editor_state.editor_ui.shape_picker_open;
-                        *v = !*v;
+                        let picker = &mut self.editor_state.editor_ui.shape_picker;
+                        picker.open = !picker.open;
+                        picker.hover = None;
+                        picker.pressed = None;
+                        if picker.open {
+                            picker.scroll.offset = 0.0;
+                        }
                         self.mark_dirty();
                         return true;
                     }
