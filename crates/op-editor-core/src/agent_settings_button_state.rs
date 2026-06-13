@@ -13,6 +13,7 @@ pub enum AgentSettingsButton {
     BuiltinCancelDraft,
     AcpEdit(usize),
     AcpRemove(usize),
+    AcpConnection(usize),
     AcpSaveDraft,
     AcpCancelDraft,
     McpServer,

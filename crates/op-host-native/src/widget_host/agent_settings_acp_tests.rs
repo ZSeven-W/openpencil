@@ -1,5 +1,6 @@
 use super::WidgetHostNative;
 use op_editor_core::agent_settings::{AcpAgentField, SettingsFocus};
+use op_editor_core::{AgentSettingsButton, ButtonPressTarget};
 use op_editor_ui::widgets::agent_settings_panel::AgentSettingsPanel;
 
 fn agent_settings_content_metrics(host: &WidgetHostNative) -> (f32, f32, f32) {
@@ -136,14 +137,30 @@ fn acp_agent_connect_press_toggles_connected_state() {
     let card_y = acp_card_y(content_y);
     let button_x = content_x + content_w - 60.0;
     assert!(host.dispatch_agent_settings_press(button_x, card_y + 30.0, 1200.0, 800.0));
+    assert_eq!(
+        host.editor_state().editor_ui.pressed_button,
+        Some(ButtonPressTarget::AgentSettings(
+            AgentSettingsButton::AcpConnection(0)
+        ))
+    );
     assert!(
         host.editor_state().editor_ui.agent_settings.acp_agents[0].connected,
         "configured local ACP agent should become connected after pressing Connect"
     );
+    assert!(host.apply_release_with_viewport(1200.0, 800.0));
+    assert_eq!(host.editor_state().editor_ui.pressed_button, None);
 
     assert!(host.dispatch_agent_settings_press(button_x, card_y + 30.0, 1200.0, 800.0));
+    assert_eq!(
+        host.editor_state().editor_ui.pressed_button,
+        Some(ButtonPressTarget::AgentSettings(
+            AgentSettingsButton::AcpConnection(0)
+        ))
+    );
     assert!(
         !host.editor_state().editor_ui.agent_settings.acp_agents[0].connected,
         "connected ACP agent should become disconnected after pressing Disconnect"
     );
+    assert!(host.apply_release_with_viewport(1200.0, 800.0));
+    assert_eq!(host.editor_state().editor_ui.pressed_button, None);
 }

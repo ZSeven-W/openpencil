@@ -43,6 +43,8 @@ use op_editor_ui::{Point2D, Rect, Theme};
 
 mod a11y_bridge;
 #[cfg(test)]
+mod agent_settings_acp_press_tests;
+#[cfg(test)]
 mod agent_settings_compact_press_tests;
 #[cfg(test)]
 mod agent_settings_form_press_tests;
