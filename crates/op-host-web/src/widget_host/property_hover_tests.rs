@@ -193,6 +193,31 @@ fn figma_import_press_sets_and_release_clears_pressed_button() {
 }
 
 #[test]
+fn component_browser_press_sets_and_release_clears_pressed_button() {
+    let mut host = WidgetHost::new();
+    let (viewport_w, viewport_h) = (1200.0, 800.0);
+    host.last_viewport_w = viewport_w;
+    host.last_viewport_h = viewport_h;
+    host.editor_state.editor_ui.component_browser_open = true;
+    let panel = host
+        .component_browser_panel_rect(viewport_w, viewport_h)
+        .expect("component browser panel visible");
+    let point =
+        op_editor_ui::Point2D::new(panel.origin.x + panel.size.x - 82.0, panel.origin.y + 20.0);
+
+    assert!(host.apply_press(point.x, point.y, viewport_w, viewport_h));
+    assert_eq!(
+        host.editor_state.editor_ui.pressed_button,
+        Some(op_editor_core::ButtonPressTarget::ComponentBrowser(
+            op_editor_core::ComponentBrowserButton::ExportKit
+        ))
+    );
+
+    assert!(host.apply_release_with_viewport(viewport_w, viewport_h));
+    assert_eq!(host.editor_state.editor_ui.pressed_button, None);
+}
+
+#[test]
 fn codegen_preview_wheel_scrolls_code_not_property_panel() {
     let mut host = WidgetHost::new();
     host.editor_state = EditorState::sample();

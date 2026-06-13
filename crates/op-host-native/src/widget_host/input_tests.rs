@@ -1779,6 +1779,29 @@ fn component_browser_header_buttons_queue_kit_io_requests() {
 }
 
 #[test]
+fn component_browser_header_press_sets_and_release_clears_pressed_button() {
+    let mut host = WidgetHostNative::new();
+    host.editor_state_mut().editor_ui.component_browser_open = true;
+    let (vw, vh) = (1440.0, 900.0);
+    let rect = host
+        .component_browser_panel_rect(vw, vh)
+        .expect("open panel rect");
+    let x = rect.origin.x + rect.size.x - 54.0;
+    let y = rect.origin.y + 20.0;
+
+    assert!(host.apply_press(x, y, vw, vh));
+    assert_eq!(
+        host.editor_state().editor_ui.pressed_button,
+        Some(op_editor_core::ButtonPressTarget::ComponentBrowser(
+            op_editor_core::ComponentBrowserButton::ImportKit
+        ))
+    );
+
+    assert!(host.apply_release_with_viewport(vw, vh));
+    assert_eq!(host.editor_state().editor_ui.pressed_button, None);
+}
+
+#[test]
 fn chat_model_picker_open_owns_keyboard_search() {
     let mut host = WidgetHostNative::new();
     host.editor_state_mut().editor_ui.chat_model_picker.open = true;

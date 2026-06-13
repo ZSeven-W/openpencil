@@ -8,10 +8,14 @@
 //! click to a [`ComponentBrowserHit`], and owns the drag + insert.
 
 use crate::theme::Theme;
+use crate::widgets::button::{paint_button_feedback_wash, paint_ghost_button_feedback};
 use crate::widgets::editor_state_ext::theme_for;
 use crate::widgets::{draw_icon, Icon, PaintCx};
 use crate::{Color, Point2D, Rect, TextLayout};
-use op_editor_core::{ComponentCategory, EditorState, KitComponent, Locale, UIKit};
+use op_editor_core::{
+    ButtonPressTarget, ComponentBrowserButton, ComponentCategory, EditorState, KitComponent,
+    Locale, UIKit,
+};
 
 /// Panel width in logical px.
 pub const COMPONENT_BROWSER_PANEL_W: f32 = 520.0;
@@ -124,7 +128,9 @@ pub struct ComponentBrowserPanel<'a> {
     /// Currently-active category filter (`None` = All).
     active_category: Option<ComponentCategory>,
     /// Which target the cursor is over — drives the hover wash.
-    pub(in crate::widgets) hover: Option<op_editor_core::ComponentBrowserButton>,
+    pub(in crate::widgets) hover: Option<ComponentBrowserButton>,
+    /// Which Component-Browser button is actively pressed.
+    pub(in crate::widgets) pressed: Option<ComponentBrowserButton>,
 }
 
 impl<'a> ComponentBrowserPanel<'a> {
@@ -139,6 +145,10 @@ impl<'a> ComponentBrowserPanel<'a> {
             locale: state.editor_ui.locale,
             active_category: state.editor_ui.component_browser_category,
             hover: state.editor_ui.component_browser_hover,
+            pressed: match state.editor_ui.pressed_button {
+                Some(ButtonPressTarget::ComponentBrowser(button)) => Some(button),
+                _ => None,
+            },
         })
     }
 
@@ -146,12 +156,8 @@ impl<'a> ComponentBrowserPanel<'a> {
     /// card). Shares the same `close_rect` / `pill_rects` / `card_rects`
     /// geometry as [`Self::hit_test`] so the wash lands on the clicked
     /// area; cards are index-addressable so no string ids are needed.
-    pub fn hover_at(
-        &self,
-        panel: Rect,
-        point: Point2D,
-    ) -> Option<op_editor_core::ComponentBrowserButton> {
-        use op_editor_core::ComponentBrowserButton as B;
+    pub fn hover_at(&self, panel: Rect, point: Point2D) -> Option<ComponentBrowserButton> {
+        use ComponentBrowserButton as B;
         if !contains(panel, point) {
             return None;
         }
@@ -187,6 +193,10 @@ impl<'a> ComponentBrowserPanel<'a> {
 
     pub(in crate::widgets) fn t(&self, key: &'static str) -> &'static str {
         crate::i18n::translate(self.locale, key)
+    }
+
+    pub(in crate::widgets) fn is_pressed(&self, button: ComponentBrowserButton) -> bool {
+        self.pressed == Some(button)
     }
 
     /// Vertical space the kit strip (filter row + imported-kit rows)
@@ -413,16 +423,21 @@ impl<'a> ComponentBrowserPanel<'a> {
         );
         let close = Self::close_rect(rect);
         cx.backend.fill_round_rect(close, 6.0, self.theme.muted);
-        if self.hover == Some(op_editor_core::ComponentBrowserButton::Close) {
-            cx.backend
-                .fill_round_rect(close, 6.0, self.theme.button_hover);
-        }
+        let close_hovered = self.hover == Some(ComponentBrowserButton::Close);
+        let close_pressed = self.is_pressed(ComponentBrowserButton::Close);
+        let close_color = paint_ghost_button_feedback(
+            cx.backend,
+            &self.theme,
+            close,
+            close_hovered,
+            close_pressed,
+        );
         draw_icon(
             cx.backend,
             Icon::Close,
             Point2D::new(close.origin.x + 5.0, close.origin.y + 5.0),
             CLOSE_BTN - 10.0,
-            self.theme.muted_foreground,
+            close_color,
             1.5,
         );
         // Header kit actions — Download (export) + Upload (import),
@@ -439,16 +454,16 @@ impl<'a> ComponentBrowserPanel<'a> {
                 op_editor_core::ComponentBrowserButton::ImportKit,
             ),
         ] {
-            if self.hover == Some(hover_target) {
-                cx.backend
-                    .fill_round_rect(btn, 6.0, self.theme.button_hover);
-            }
+            let hovered = self.hover == Some(hover_target);
+            let pressed = self.is_pressed(hover_target);
+            let icon_color =
+                paint_ghost_button_feedback(cx.backend, &self.theme, btn, hovered, pressed);
             draw_icon(
                 cx.backend,
                 icon,
                 Point2D::new(btn.origin.x + 5.0, btn.origin.y + 5.0),
                 CLOSE_BTN - 10.0,
-                self.theme.muted_foreground,
+                icon_color,
                 1.5,
             );
         }
@@ -523,10 +538,15 @@ impl<'a> ComponentBrowserPanel<'a> {
                 (self.theme.muted, self.theme.muted_foreground)
             };
             cx.backend.fill_round_rect(pill, PILL_H / 2.0, fill);
-            if self.hover == Some(op_editor_core::ComponentBrowserButton::Category(cat)) {
-                cx.backend
-                    .fill_round_rect(pill, PILL_H / 2.0, self.theme.button_hover);
-            }
+            let target = ComponentBrowserButton::Category(cat);
+            paint_button_feedback_wash(
+                cx.backend,
+                &self.theme,
+                pill,
+                PILL_H / 2.0,
+                self.hover == Some(target),
+                self.is_pressed(target),
+            );
             let label = self.label_for(cat);
             self.text(
                 cx,
@@ -570,8 +590,9 @@ impl<'a> ComponentBrowserPanel<'a> {
             for (i, ((_, comp), card_rect)) in
                 filtered.iter().zip(self.card_rects(rect)).enumerate()
             {
-                let hovered = self.hover == Some(op_editor_core::ComponentBrowserButton::Card(i));
-                self.paint_card(cx, card_rect, comp, hovered);
+                let target = ComponentBrowserButton::Card(i);
+                let hovered = self.hover == Some(target);
+                self.paint_card(cx, card_rect, comp, hovered, self.is_pressed(target));
             }
         }
         cx.backend.restore();
@@ -594,12 +615,16 @@ impl<'a> ComponentBrowserPanel<'a> {
 
     /// Paint one component card — surface fill + a tinted preview rect
     /// hinting at the component's footprint + the component name.
-    fn paint_card(&self, cx: &mut PaintCx<'_>, rect: Rect, comp: &KitComponent, hovered: bool) {
+    fn paint_card(
+        &self,
+        cx: &mut PaintCx<'_>,
+        rect: Rect,
+        comp: &KitComponent,
+        hovered: bool,
+        pressed: bool,
+    ) {
         cx.backend.fill_round_rect(rect, 8.0, self.theme.muted);
-        if hovered {
-            cx.backend
-                .fill_round_rect(rect, 8.0, self.theme.button_hover);
-        }
+        paint_button_feedback_wash(cx.backend, &self.theme, rect, 8.0, hovered, pressed);
         cx.backend
             .stroke_round_rect(rect, 8.0, self.theme.border, 1.0);
         // Preview rect — scaled down to fit, anchored centre-top.

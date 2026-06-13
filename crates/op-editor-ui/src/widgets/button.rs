@@ -50,6 +50,27 @@ pub(crate) fn paint_ghost_button_feedback(
     }
 }
 
+pub(crate) fn paint_button_feedback_wash(
+    backend: &mut dyn RenderBackend,
+    theme: &Theme,
+    rect: Rect,
+    radius: f32,
+    hovered: bool,
+    pressed: bool,
+) -> Color {
+    if hovered || pressed {
+        let color = if pressed {
+            theme.button_hover.with_alpha(theme.button_hover.a * 1.8)
+        } else {
+            theme.button_hover
+        };
+        backend.fill_round_rect(rect, radius, color);
+        theme.foreground
+    } else {
+        theme.muted_foreground
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
