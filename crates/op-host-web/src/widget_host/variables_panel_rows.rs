@@ -34,6 +34,7 @@ impl WidgetHost {
         let Some((name, _)) = self.variable_at(idx) else {
             return true;
         };
+        self.commit_property_focus_if_any();
         self.commit_variable_row_focus_if_any();
         if let Some((axis, value)) = self.variable_axis_value_for_variant(variant) {
             let _ = self
@@ -51,6 +52,7 @@ impl WidgetHost {
 
     /// Toggle a row's `⋯` overflow menu, closing every other menu.
     pub(in crate::widget_host) fn toggle_variable_row_menu(&mut self, idx: usize) -> bool {
+        self.commit_property_focus_if_any();
         self.commit_variables_panel_header_focus_if_any();
         self.commit_variable_row_focus_if_any();
         let was_open = self.editor_state.editor_ui.variables_row_menu == Some(idx);
@@ -68,12 +70,19 @@ impl WidgetHost {
             self.close_variable_menus();
             return true;
         };
+        self.commit_property_focus_if_any();
         self.commit_variables_panel_header_focus_if_any();
         self.commit_variable_row_focus_if_any();
-        self.editor_state.ui.property_caret_pos = name.len();
-        self.editor_state.ui.property_input_draft = name;
-        self.editor_state.ui.property_draft_select_all = true;
-        self.editor_state.ui.property_caret_anchor_ms = self.now_ms;
+        self.editor_state
+            .editor_ui
+            .variable_row_input
+            .set_text(name);
+        self.editor_state.editor_ui.variable_row_input.select_all();
+        self.editor_state
+            .editor_ui
+            .variable_row_input
+            .touch(self.now_ms);
+        self.sync_variable_row_input_legacy(true);
         self.editor_state.editor_ui.variable_row_focus = Some(VariableRowFocus::Name(idx));
         self.close_variable_menus();
         self.mark_dirty();
@@ -116,13 +125,19 @@ impl WidgetHost {
             self.mark_dirty();
             return true;
         };
+        self.commit_property_focus_if_any();
         self.commit_variable_row_focus_if_any();
-        self.editor_state.ui.property_input_draft = name;
-        self.editor_state.ui.property_caret_pos = self.editor_state.ui.property_input_draft.len();
-        self.editor_state.ui.property_draft_select_all = false;
+        self.editor_state
+            .editor_ui
+            .variable_row_input
+            .set_text(name);
+        self.editor_state
+            .editor_ui
+            .variable_row_input
+            .touch(self.now_ms);
+        self.sync_variable_row_input_legacy(false);
         self.editor_state.editor_ui.variable_row_focus = Some(VariableRowFocus::Name(idx));
         self.editor_state.editor_ui.last_variable_name_click = None;
-        self.editor_state.ui.property_caret_anchor_ms = self.now_ms;
         self.mark_dirty();
         true
     }
@@ -141,6 +156,7 @@ impl WidgetHost {
         };
         match kind {
             VariableKind::Color => {
+                self.commit_property_focus_if_any();
                 let _ = self
                     .editor_state
                     .open_color_picker_for_variable_at(name, x, y);
@@ -154,25 +170,35 @@ impl WidgetHost {
                         _ => None,
                     })
                     .unwrap_or(false);
+                self.commit_property_focus_if_any();
                 let snap = self.editor_state.snapshot_for_history();
                 if self.editor_state.set_variable_boolean(&name, !current) {
                     self.editor_state.history_push_past(snap);
                 }
             }
             VariableKind::Number | VariableKind::String => {
+                self.commit_property_focus_if_any();
                 self.commit_variable_row_focus_if_any();
                 let resolved = self.editor_state.resolve_variable(&name).cloned();
-                self.editor_state.ui.property_input_draft = match (&kind, &resolved) {
+                let draft = match (&kind, &resolved) {
                     (VariableKind::Number, Some(VariableScalar::Num(n))) => format!("{n}"),
                     (VariableKind::String, Some(VariableScalar::Str(s))) => s.clone(),
                     _ => String::new(),
                 };
+                self.editor_state
+                    .editor_ui
+                    .variable_row_input
+                    .set_text(draft);
+                self.editor_state
+                    .editor_ui
+                    .variable_row_input
+                    .touch(self.now_ms);
+                self.sync_variable_row_input_legacy(false);
                 self.editor_state.editor_ui.variable_row_focus = Some(match kind {
                     VariableKind::Number => VariableRowFocus::Number(idx),
                     VariableKind::String => VariableRowFocus::String(idx),
                     _ => return true,
                 });
-                self.editor_state.ui.property_caret_anchor_ms = self.now_ms;
             }
         }
         self.close_variable_menus();
@@ -196,6 +222,7 @@ impl WidgetHost {
         };
         match kind {
             VariableKind::Color => {
+                self.commit_property_focus_if_any();
                 self.commit_variable_row_focus_if_any();
                 let scalar = self
                     .variable_axis_value_for_variant(variant)
@@ -209,12 +236,14 @@ impl WidgetHost {
                     Some(VariableScalar::Str(hex)) => hex_7(&hex),
                     _ => "#000000".to_string(),
                 };
-                self.editor_state.ui.property_caret_pos = hex.len();
-                self.editor_state.ui.property_input_draft = hex;
-                self.editor_state.ui.property_draft_select_all = false;
+                self.editor_state.editor_ui.variable_row_input.set_text(hex);
+                self.editor_state
+                    .editor_ui
+                    .variable_row_input
+                    .touch(self.now_ms);
+                self.sync_variable_row_input_legacy(false);
                 self.editor_state.editor_ui.variable_row_focus =
                     Some(VariableRowFocus::ColorCell { row: idx, variant });
-                self.editor_state.ui.property_caret_anchor_ms = self.now_ms;
                 self.close_variable_menus();
                 self.mark_dirty();
                 true
@@ -230,6 +259,7 @@ impl WidgetHost {
                             _ => None,
                         })
                         .unwrap_or(false);
+                    self.commit_property_focus_if_any();
                     let snap = self.editor_state.snapshot_for_history();
                     if self
                         .editor_state
@@ -244,6 +274,7 @@ impl WidgetHost {
                 self.press_variable_row(idx, x, y)
             }
             VariableKind::Number | VariableKind::String => {
+                self.commit_property_focus_if_any();
                 self.commit_variable_row_focus_if_any();
                 let scalar = self
                     .variable_axis_value_for_variant(variant)
@@ -253,20 +284,25 @@ impl WidgetHost {
                             .and_then(|def| scalar_for_axis_value(&def.value, &axis, &value))
                     })
                     .or_else(|| self.editor_state.resolve_variable(&name).cloned());
-                self.editor_state.ui.property_input_draft = match (&kind, &scalar) {
+                let draft = match (&kind, &scalar) {
                     (VariableKind::Number, Some(VariableScalar::Num(n))) => format!("{n}"),
                     (VariableKind::String, Some(VariableScalar::Str(s))) => s.clone(),
                     _ => String::new(),
                 };
-                self.editor_state.ui.property_caret_pos =
-                    self.editor_state.ui.property_input_draft.len();
-                self.editor_state.ui.property_draft_select_all = false;
+                self.editor_state
+                    .editor_ui
+                    .variable_row_input
+                    .set_text(draft);
+                self.editor_state
+                    .editor_ui
+                    .variable_row_input
+                    .touch(self.now_ms);
+                self.sync_variable_row_input_legacy(false);
                 self.editor_state.editor_ui.variable_row_focus = Some(match kind {
                     VariableKind::Number => VariableRowFocus::NumberCell { row: idx, variant },
                     VariableKind::String => VariableRowFocus::StringCell { row: idx, variant },
                     _ => return true,
                 });
-                self.editor_state.ui.property_caret_anchor_ms = self.now_ms;
                 self.close_variable_menus();
                 self.mark_dirty();
                 true

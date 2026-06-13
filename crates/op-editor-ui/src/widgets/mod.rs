@@ -75,6 +75,9 @@ mod property_panel_test_support;
 #[cfg(test)]
 mod property_panel_tests;
 pub mod property_panel_text;
+pub(crate) mod property_panel_text_input;
+#[cfg(test)]
+mod property_panel_text_tests;
 pub mod property_panel_typography;
 pub mod property_panel_visibility;
 mod text_selection;

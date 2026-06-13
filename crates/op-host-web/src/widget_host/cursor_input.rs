@@ -8,6 +8,8 @@
 use op_editor_ui::widgets::TOP_BAR_HEIGHT;
 use op_editor_ui::{Point2D, Rect};
 
+use super::WidgetHost;
+
 impl WidgetHost {
     /// Sync every agent-settings hover flag from the cursor.
     /// Returns `true` when any hover state changed.

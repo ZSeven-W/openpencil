@@ -147,8 +147,8 @@ pub struct VariablesPanel {
     hover: Option<VariablesPanelButton>,
     editing_name_row: Option<usize>,
     editing_value_cell: Option<(usize, usize)>,
-    editing_draft: String,
-    caret_pos: usize,
+    header_input: jian_core::text_input::TextInputState,
+    row_input: jian_core::text_input::TextInputState,
     caret_anchor_ms: u64,
     now_ms: u64,
 }
@@ -263,8 +263,8 @@ impl VariablesPanel {
                 | VariableRowFocus::ColorCell { row, variant } => Some((row, variant)),
                 VariableRowFocus::Name(_) => None,
             }),
-            editing_draft: state.ui.property_input_draft.clone(),
-            caret_pos: state.ui.property_caret_pos,
+            header_input: state.editor_ui.variables_header_input.clone(),
+            row_input: state.editor_ui.variable_row_input.clone(),
             caret_anchor_ms: state.ui.property_caret_anchor_ms,
             now_ms,
         }
@@ -561,7 +561,7 @@ impl VariablesPanel {
     }
 
     fn theme_rename_input_width(&self) -> f32 {
-        (label_width(&self.editing_draft, 13.0) + 28.0).max(96.0)
+        (label_width(self.header_input.text(), 13.0) + 28.0).max(96.0)
     }
 
     fn theme_tab_hit_width(&self, label: &str) -> f32 {
@@ -622,35 +622,40 @@ impl VariablesPanel {
     }
 
     pub fn name_caret_for_row(&self, idx: usize) -> Option<usize> {
-        if self.editing_name_row == Some(idx)
-            && jian_core::anim::blink_visible(self.now_ms, self.caret_anchor_ms, 500)
-        {
-            Some(self.caret_pos.min(self.editing_draft.len()))
-        } else {
-            None
-        }
+        let input = self.name_input_for_row(idx)?;
+        input
+            .caret_visible(self.now_ms)
+            .then(|| input.caret().min(input.text().len()))
     }
 
-    fn rename_text_caret(&self, target: RenameTarget<'_>) -> Option<usize> {
+    fn name_input_for_row(&self, idx: usize) -> Option<&jian_core::text_input::TextInputState> {
+        (self.editing_name_row == Some(idx)).then_some(&self.row_input)
+    }
+
+    fn rename_text_input(
+        &self,
+        target: RenameTarget<'_>,
+    ) -> Option<&jian_core::text_input::TextInputState> {
         let is_active = match target {
             RenameTarget::Theme(axis) => self.renaming_theme.as_deref() == Some(axis),
             RenameTarget::Variant(value) => self.renaming_variant.as_deref() == Some(value),
         };
-        if is_active && jian_core::anim::blink_visible(self.now_ms, self.caret_anchor_ms, 500) {
-            Some(self.caret_pos.min(self.editing_draft.len()))
-        } else {
-            None
-        }
+        is_active.then_some(&self.header_input)
     }
 
     pub fn value_caret_for_cell(&self, row: usize, variant: usize) -> Option<usize> {
-        if self.editing_value_cell == Some((row, variant))
-            && jian_core::anim::blink_visible(self.now_ms, self.caret_anchor_ms, 500)
-        {
-            Some(self.caret_pos.min(self.editing_draft.len()))
-        } else {
-            None
-        }
+        let input = self.value_input_for_cell(row, variant)?;
+        input
+            .caret_visible(self.now_ms)
+            .then(|| input.caret().min(input.text().len()))
+    }
+
+    fn value_input_for_cell(
+        &self,
+        row: usize,
+        variant: usize,
+    ) -> Option<&jian_core::text_input::TextInputState> {
+        (self.editing_value_cell == Some((row, variant))).then_some(&self.row_input)
     }
 
     /// Name pill of the row at DISPLAY position `display_idx`.

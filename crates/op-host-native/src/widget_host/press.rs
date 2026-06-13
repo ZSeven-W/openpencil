@@ -665,6 +665,11 @@ impl WidgetHostNative {
                 let initial = super::press_helpers::property_focus_initial(focus, &panel);
                 // shell-core `PropertyFocus` → op-editor-core.
                 self.editor_state.ui.property_focus = Some(focus);
+                self.editor_state
+                    .ui
+                    .property_input
+                    .set_text(initial.clone());
+                self.editor_state.ui.property_input.touch(self.now_ms);
                 self.editor_state.ui.property_input_draft = initial;
                 // Caret starts at the end of the seeded draft.
                 self.editor_state.ui.property_caret_pos =

@@ -347,7 +347,13 @@ mod tests {
             components: ComponentLibrary::default(),
         });
         s.ui.pen_in_progress = Some(crate::NodeId::new("n7"));
+        s.ui.property_input.set_text("stale");
         s.ui.property_input_draft = "stale".to_string();
+        s.editor_ui.variables_theme_rename_axis = Some("Mode".to_string());
+        s.editor_ui.variables_variant_rename_value = Some("Dark".to_string());
+        s.editor_ui.variables_header_input.set_text("stale header");
+        s.editor_ui.variable_row_focus = Some(crate::editor_ui_state::VariableRowFocus::String(0));
+        s.editor_ui.variable_row_input.set_text("stale row");
 
         let mut doc = empty_document();
         doc.name = Some("Synced".to_string());
@@ -359,7 +365,13 @@ mod tests {
         assert!(s.ui.pending_color_history.is_none());
         assert!(s.ui.pending_text_edit_history.is_none());
         assert!(s.ui.pen_in_progress.is_none());
+        assert!(s.ui.property_input.text().is_empty());
         assert!(s.ui.property_input_draft.is_empty());
+        assert!(s.editor_ui.variables_theme_rename_axis.is_none());
+        assert!(s.editor_ui.variables_variant_rename_value.is_none());
+        assert!(s.editor_ui.variables_header_input.text().is_empty());
+        assert!(s.editor_ui.variable_row_focus.is_none());
+        assert!(s.editor_ui.variable_row_input.text().is_empty());
         assert!(!s.history.can_undo() && !s.history.can_redo());
     }
 }

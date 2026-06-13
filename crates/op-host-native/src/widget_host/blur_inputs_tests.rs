@@ -117,7 +117,7 @@ fn property_panel_gap_press_commits_size_draft() {
     // property-rail gap this test presses.
     host.editor_state_mut().chat.collapsed = true;
     host.editor_state_mut().ui.property_focus = Some(PropertyFocus::SizeW);
-    host.editor_state_mut().ui.property_input_draft = "321".into();
+    host.editor_state_mut().ui.property_input.set_text("321");
 
     // Inside the right rail's edge padding — the input rows are inset
     // from the panel edges, so 2 px from the viewport edge hits no
@@ -144,7 +144,10 @@ fn canvas_press_commits_variables_header_rename() {
     host.editor_state_mut()
         .editor_ui
         .variables_theme_rename_axis = Some("Theme-1".into());
-    host.editor_state_mut().ui.property_input_draft = "Brand".into();
+    host.editor_state_mut()
+        .editor_ui
+        .variables_header_input
+        .set_text("Brand");
 
     // Empty canvas right of the chat panel (floats bottom-left, x ≤ 612).
     assert!(host.apply_press(700.0, 400.0, VW, VH));
@@ -171,7 +174,10 @@ fn canvas_press_commits_variables_variant_header_rename() {
     host.editor_state_mut()
         .editor_ui
         .variables_variant_rename_value = Some("Default".into());
-    host.editor_state_mut().ui.property_input_draft = "Default123213".into();
+    host.editor_state_mut()
+        .editor_ui
+        .variables_header_input
+        .set_text("Default123213");
 
     // Empty canvas right of the chat panel (floats bottom-left, x <= 612).
     assert!(host.apply_press(700.0, 400.0, VW, VH));
@@ -199,7 +205,10 @@ fn canvas_press_commits_implicit_default_variant_rename() {
     host.editor_state_mut()
         .editor_ui
         .variables_variant_rename_value = Some("Default".into());
-    host.editor_state_mut().ui.property_input_draft = "Default123213".into();
+    host.editor_state_mut()
+        .editor_ui
+        .variables_header_input
+        .set_text("Default123213");
 
     // Empty canvas right of the chat panel (floats bottom-left, x <= 612).
     assert!(host.apply_press(700.0, 400.0, VW, VH));

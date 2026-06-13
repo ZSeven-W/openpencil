@@ -95,22 +95,43 @@ impl WidgetHost {
             return true;
         }
         if self.editor_state.ui.property_focus.is_some()
-            || self.editor_state.editor_ui.variable_row_focus.is_some()
-            || self
-                .editor_state
-                .editor_ui
-                .variables_theme_rename_axis
-                .is_some()
+            || self.editor_state.editor_ui.effect_param_focus.is_some()
+        {
+            self.editor_state.ui.property_input.select_all();
+            self.editor_state.ui.property_input.touch(self.now_ms);
+            self.sync_property_input_legacy(true);
+            self.mark_dirty();
+            return true;
+        }
+        let variable_header_focus = self
+            .editor_state
+            .editor_ui
+            .variables_theme_rename_axis
+            .is_some()
             || self
                 .editor_state
                 .editor_ui
                 .variables_variant_rename_value
-                .is_some()
-        {
-            let ui = &mut self.editor_state.ui;
-            ui.property_draft_select_all = true;
-            ui.property_caret_pos = ui.property_input_draft.len();
-            ui.property_caret_anchor_ms = self.now_ms;
+                .is_some();
+        if variable_header_focus || self.editor_state.editor_ui.variable_row_focus.is_some() {
+            if variable_header_focus {
+                self.editor_state
+                    .editor_ui
+                    .variables_header_input
+                    .select_all();
+                self.editor_state
+                    .editor_ui
+                    .variables_header_input
+                    .touch(self.now_ms);
+                self.sync_variables_header_input_legacy(true);
+            } else {
+                self.editor_state.editor_ui.variable_row_input.select_all();
+                self.editor_state
+                    .editor_ui
+                    .variable_row_input
+                    .touch(self.now_ms);
+                self.sync_variable_row_input_legacy(true);
+            }
             self.mark_dirty();
             return true;
         }
@@ -144,6 +165,83 @@ impl WidgetHost {
             return true;
         }
         false
+    }
+
+    pub fn apply_property_caret(&mut self, forward: bool) -> bool {
+        if self.editor_state.ui.property_focus.is_none()
+            && self.editor_state.editor_ui.effect_param_focus.is_none()
+            && self
+                .editor_state
+                .editor_ui
+                .variables_theme_rename_axis
+                .is_none()
+            && self
+                .editor_state
+                .editor_ui
+                .variables_variant_rename_value
+                .is_none()
+            && self.editor_state.editor_ui.variable_row_focus.is_none()
+        {
+            return false;
+        }
+        if self.editor_state.ui.property_focus.is_some()
+            || self.editor_state.editor_ui.effect_param_focus.is_some()
+        {
+            if forward {
+                self.editor_state
+                    .ui
+                    .property_input
+                    .move_right(false, self.now_ms);
+            } else {
+                self.editor_state
+                    .ui
+                    .property_input
+                    .move_left(false, self.now_ms);
+            }
+            self.sync_property_input_legacy(false);
+            self.mark_dirty();
+            return true;
+        }
+        if self
+            .editor_state
+            .editor_ui
+            .variables_theme_rename_axis
+            .is_some()
+            || self
+                .editor_state
+                .editor_ui
+                .variables_variant_rename_value
+                .is_some()
+        {
+            if forward {
+                self.editor_state
+                    .editor_ui
+                    .variables_header_input
+                    .move_right(false, self.now_ms);
+            } else {
+                self.editor_state
+                    .editor_ui
+                    .variables_header_input
+                    .move_left(false, self.now_ms);
+            }
+            self.sync_variables_header_input_legacy(false);
+            self.mark_dirty();
+            return true;
+        }
+        if forward {
+            self.editor_state
+                .editor_ui
+                .variable_row_input
+                .move_right(false, self.now_ms);
+        } else {
+            self.editor_state
+                .editor_ui
+                .variable_row_input
+                .move_left(false, self.now_ms);
+        }
+        self.sync_variable_row_input_legacy(false);
+        self.mark_dirty();
+        true
     }
 
     /// Cmd/Ctrl+C — copy the selection into the clipboard.

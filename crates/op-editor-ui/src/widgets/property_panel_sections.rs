@@ -8,11 +8,12 @@ use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::property_panel::NodeSnapshot;
 use crate::widgets::property_panel_color_variables::paint_color_variable_button;
 use crate::widgets::property_panel_inputs::{
-    create_component_block_height, format_color_hex, paint_input_with_icon_focused,
-    paint_input_with_prefix_focused, paint_section_divider, paint_section_label,
-    COLOR_VARIABLE_BUTTON_W, COLOR_VARIABLE_GAP, COMPONENT_ACCENT, CREATE_COMPONENT_BTN_H,
-    CREATE_COMPONENT_ICON, CREATE_COMPONENT_PAD_TOP, CREATE_COMPONENT_ROW_GAP, HEADER_HEIGHT,
-    INPUT_HEIGHT, INPUT_RADIUS, INSTANCE_ACCENT, PAD_X, SECTION_GAP, TAB_HEIGHT,
+    create_component_block_height, format_color_hex, paint_input_with_icon_focused_state,
+    paint_input_with_prefix_focused_state, paint_section_divider, paint_section_label,
+    paint_text_input_view_value, COLOR_VARIABLE_BUTTON_W, COLOR_VARIABLE_GAP, COMPONENT_ACCENT,
+    CREATE_COMPONENT_BTN_H, CREATE_COMPONENT_ICON, CREATE_COMPONENT_PAD_TOP,
+    CREATE_COMPONENT_ROW_GAP, HEADER_HEIGHT, INPUT_HEIGHT, INPUT_RADIUS, INSTANCE_ACCENT, PAD_X,
+    SECTION_GAP, TAB_HEIGHT,
 };
 use crate::widgets::PaintCx;
 use crate::{Point2D, Rect, TextLayout};
@@ -46,6 +47,7 @@ pub enum PropertyPanelHit {
 pub struct EditContext<'a> {
     pub focus: Option<PropertyFocus>,
     pub draft: &'a str,
+    pub input: &'a jian_core::text_input::TextInputState,
     /// Caret byte-index into `draft` (drafts are ASCII).
     pub caret: usize,
     /// Whether Ctrl/Cmd+A selected the focused draft.
@@ -172,6 +174,37 @@ impl<'a> EditContext<'a> {
 
     pub fn select_all_at(&self, focus: PropertyFocus) -> bool {
         self.focus == Some(focus) && self.select_all && !self.draft.is_empty()
+    }
+
+    pub fn input_at(&self, focus: PropertyFocus) -> Option<&jian_core::text_input::TextInputState> {
+        (self.focus == Some(focus)).then_some(self.input)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn paint_input_view_at(
+        &self,
+        cx: &mut PaintCx<'_>,
+        theme: &Theme,
+        focus: PropertyFocus,
+        rect: Rect,
+        font_size: f32,
+        pad_x: f32,
+        baseline_y: f32,
+    ) -> bool {
+        let Some(input) = self.input_at(focus) else {
+            return false;
+        };
+        paint_text_input_view_value(
+            cx,
+            theme,
+            input,
+            rect,
+            font_size,
+            pad_x,
+            baseline_y,
+            self.now_ms,
+        );
+        true
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -521,7 +554,7 @@ pub fn paint_position_section(
         size: Point2D::new(half_w, INPUT_HEIGHT),
     };
     let x_value = snapshot.x.to_string();
-    paint_input_with_prefix_focused(
+    paint_input_with_prefix_focused_state(
         cx,
         theme,
         x_rect,
@@ -530,9 +563,11 @@ pub fn paint_position_section(
         edit.focus == Some(PropertyFocus::PositionX),
         edit.caret_at(PropertyFocus::PositionX),
         edit.select_all_at(PropertyFocus::PositionX),
+        edit.input_at(PropertyFocus::PositionX),
+        edit.now_ms,
     );
     let y_value = snapshot.y.to_string();
-    paint_input_with_prefix_focused(
+    paint_input_with_prefix_focused_state(
         cx,
         theme,
         y_rect,
@@ -541,6 +576,8 @@ pub fn paint_position_section(
         edit.focus == Some(PropertyFocus::PositionY),
         edit.caret_at(PropertyFocus::PositionY),
         edit.select_all_at(PropertyFocus::PositionY),
+        edit.input_at(PropertyFocus::PositionY),
+        edit.now_ms,
     );
     y += INPUT_HEIGHT + 6.0;
     // Rotation input — TS uses RotateCw glyph; we render with an
@@ -550,7 +587,7 @@ pub fn paint_position_section(
         size: Point2D::new(half_w, INPUT_HEIGHT),
     };
     let rotation_value = format!("{}", snapshot.rotation_deg.round() as i32);
-    paint_input_with_icon_focused(
+    paint_input_with_icon_focused_state(
         cx,
         theme,
         rotation_rect,
@@ -560,6 +597,8 @@ pub fn paint_position_section(
         edit.focus == Some(PropertyFocus::Rotation),
         edit.caret_at(PropertyFocus::Rotation),
         edit.select_all_at(PropertyFocus::Rotation),
+        edit.input_at(PropertyFocus::Rotation),
+        edit.now_ms,
     );
     if show_radius {
         // Corner radius (R) — editable input bound to Node::corner_radius
@@ -569,7 +608,7 @@ pub fn paint_position_section(
             size: Point2D::new(half_w, INPUT_HEIGHT),
         };
         let r_value = format!("{}", snapshot.corner_radius.round() as i32);
-        paint_input_with_prefix_focused(
+        paint_input_with_prefix_focused_state(
             cx,
             theme,
             r_rect,
@@ -578,6 +617,8 @@ pub fn paint_position_section(
             edit.focus == Some(PropertyFocus::PositionR),
             edit.caret_at(PropertyFocus::PositionR),
             edit.select_all_at(PropertyFocus::PositionR),
+            edit.input_at(PropertyFocus::PositionR),
+            edit.now_ms,
         );
     }
     y += INPUT_HEIGHT + 12.0;
@@ -680,7 +721,7 @@ pub fn paint_size_section(
     let h_visible = !flags.fill_height && !flags.hug_height;
     if w_visible {
         let w_value = snapshot.width.to_string();
-        paint_input_with_prefix_focused(
+        paint_input_with_prefix_focused_state(
             cx,
             theme,
             w_rect,
@@ -689,12 +730,14 @@ pub fn paint_size_section(
             edit.focus == Some(PropertyFocus::SizeW),
             edit.caret_at(PropertyFocus::SizeW),
             edit.select_all_at(PropertyFocus::SizeW),
+            edit.input_at(PropertyFocus::SizeW),
+            edit.now_ms,
         );
     }
     if h_visible {
         let h_value = snapshot.height.to_string();
         let h_target = if w_visible { h_rect } else { w_rect };
-        paint_input_with_prefix_focused(
+        paint_input_with_prefix_focused_state(
             cx,
             theme,
             h_target,
@@ -703,6 +746,8 @@ pub fn paint_size_section(
             edit.focus == Some(PropertyFocus::SizeH),
             edit.caret_at(PropertyFocus::SizeH),
             edit.select_all_at(PropertyFocus::SizeH),
+            edit.input_at(PropertyFocus::SizeH),
+            edit.now_ms,
         );
     }
     // Collapse the whole input row when BOTH dimensions are fill/hug —
@@ -857,40 +902,58 @@ pub fn paint_stroke_section(
     let hex_text = variable_text
         .as_deref()
         .unwrap_or_else(|| edit.value_for(PropertyFocus::StrokeHex, &hex_owned));
-    let hex_layout = TextLayout::single_run(
-        hex_text,
-        "system-ui",
-        12.0,
-        (theme.foreground).to_jian(),
-        Point2D::new(0.0, 0.0),
-    );
     let hex_x = hex_rect.origin.x + 30.0;
-    if stroke_variable_ref.is_none() {
-        edit.paint_selection_at(
+    let painted_hex = stroke_variable_ref.is_none()
+        && edit.paint_input_view_at(
             cx,
             theme,
             PropertyFocus::StrokeHex,
-            hex_text,
-            hex_x,
-            hex_rect.origin.y + 19.0,
+            Rect {
+                origin: Point2D::new(hex_x, hex_rect.origin.y),
+                size: Point2D::new(
+                    (hex_rect.origin.x + hex_rect.size.x - 8.0 - hex_x).max(0.0),
+                    hex_rect.size.y,
+                ),
+            },
             12.0,
-            hex_rect.origin.x + hex_rect.size.x - 8.0,
+            0.0,
+            hex_rect.origin.y + 19.0,
         );
-    }
-    cx.backend
-        .draw_text(&hex_layout, Point2D::new(hex_x, hex_rect.origin.y + 19.0));
-    if stroke_variable_ref.is_none() {
-        if let Some(pos) = edit.caret_at(PropertyFocus::StrokeHex) {
-            let w = cx
-                .backend
-                .measure_text(&hex_text[..pos.min(hex_text.len())], 12.0);
-            cx.backend.fill_rect(
-                Rect {
-                    origin: Point2D::new(hex_x + w, hex_rect.origin.y + 6.0),
-                    size: Point2D::new(1.5, hex_rect.size.y - 12.0),
-                },
-                theme.foreground,
+    if !painted_hex {
+        let hex_layout = TextLayout::single_run(
+            hex_text,
+            "system-ui",
+            12.0,
+            (theme.foreground).to_jian(),
+            Point2D::new(0.0, 0.0),
+        );
+        if stroke_variable_ref.is_none() {
+            edit.paint_selection_at(
+                cx,
+                theme,
+                PropertyFocus::StrokeHex,
+                hex_text,
+                hex_x,
+                hex_rect.origin.y + 19.0,
+                12.0,
+                hex_rect.origin.x + hex_rect.size.x - 8.0,
             );
+        }
+        cx.backend
+            .draw_text(&hex_layout, Point2D::new(hex_x, hex_rect.origin.y + 19.0));
+        if stroke_variable_ref.is_none() {
+            if let Some(pos) = edit.caret_at(PropertyFocus::StrokeHex) {
+                let w = cx
+                    .backend
+                    .measure_text(&hex_text[..pos.min(hex_text.len())], 12.0);
+                cx.backend.fill_rect(
+                    Rect {
+                        origin: Point2D::new(hex_x + w, hex_rect.origin.y + 6.0),
+                        size: Point2D::new(1.5, hex_rect.size.y - 12.0),
+                    },
+                    theme.foreground,
+                );
+            }
         }
     }
     if show_variable_button {
@@ -917,37 +980,53 @@ pub fn paint_stroke_section(
     }
     let w_owned = format!("{}", stroke_width.round() as i32);
     let w_text = edit.value_for(PropertyFocus::StrokeWidth, &w_owned);
-    let w_layout = TextLayout::single_run(
-        w_text,
-        "system-ui",
-        12.0,
-        (theme.foreground).to_jian(),
-        Point2D::new(0.0, 0.0),
-    );
     let w_x = w_rect.origin.x + 12.0;
-    edit.paint_selection_at(
+    if !edit.paint_input_view_at(
         cx,
         theme,
         PropertyFocus::StrokeWidth,
-        w_text,
-        w_x,
-        w_rect.origin.y + 19.0,
+        Rect {
+            origin: Point2D::new(w_x, w_rect.origin.y),
+            size: Point2D::new(
+                (w_rect.origin.x + w_rect.size.x - 8.0 - w_x).max(0.0),
+                w_rect.size.y,
+            ),
+        },
         12.0,
-        w_rect.origin.x + w_rect.size.x - 8.0,
-    );
-    cx.backend
-        .draw_text(&w_layout, Point2D::new(w_x, w_rect.origin.y + 19.0));
-    if let Some(pos) = edit.caret_at(PropertyFocus::StrokeWidth) {
-        let w = cx
-            .backend
-            .measure_text(&w_text[..pos.min(w_text.len())], 12.0);
-        cx.backend.fill_rect(
-            Rect {
-                origin: Point2D::new(w_x + w, w_rect.origin.y + 6.0),
-                size: Point2D::new(1.5, w_rect.size.y - 12.0),
-            },
-            theme.foreground,
+        0.0,
+        w_rect.origin.y + 19.0,
+    ) {
+        let w_layout = TextLayout::single_run(
+            w_text,
+            "system-ui",
+            12.0,
+            (theme.foreground).to_jian(),
+            Point2D::new(0.0, 0.0),
         );
+        edit.paint_selection_at(
+            cx,
+            theme,
+            PropertyFocus::StrokeWidth,
+            w_text,
+            w_x,
+            w_rect.origin.y + 19.0,
+            12.0,
+            w_rect.origin.x + w_rect.size.x - 8.0,
+        );
+        cx.backend
+            .draw_text(&w_layout, Point2D::new(w_x, w_rect.origin.y + 19.0));
+        if let Some(pos) = edit.caret_at(PropertyFocus::StrokeWidth) {
+            let w = cx
+                .backend
+                .measure_text(&w_text[..pos.min(w_text.len())], 12.0);
+            cx.backend.fill_rect(
+                Rect {
+                    origin: Point2D::new(w_x + w, w_rect.origin.y + 6.0),
+                    size: Point2D::new(1.5, w_rect.size.y - 12.0),
+                },
+                theme.foreground,
+            );
+        }
     }
     y += INPUT_HEIGHT + 12.0;
     paint_section_divider(cx, theme, x, y, width);

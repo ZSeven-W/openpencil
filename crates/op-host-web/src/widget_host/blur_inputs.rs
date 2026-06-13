@@ -12,6 +12,7 @@ impl WidgetHost {
     fn any_text_input_focused(&self) -> bool {
         let eui = &self.editor_state.editor_ui;
         self.editor_state.ui.property_focus.is_some()
+            || eui.effect_param_focus.is_some()
             || eui.variable_row_focus.is_some()
             || eui.variables_theme_rename_axis.is_some()
             || eui.variables_variant_rename_value.is_some()
@@ -21,17 +22,21 @@ impl WidgetHost {
             || self.editor_state.chat.focused
     }
 
+    pub(in crate::widget_host) fn commit_property_family_focus_if_any(&mut self) -> bool {
+        let was_focused = self.editor_state.ui.property_focus.is_some()
+            || self.editor_state.editor_ui.effect_param_focus.is_some();
+        if was_focused {
+            self.commit_property_focus_if_any();
+        }
+        was_focused
+    }
+
     /// Commit + defocus every chrome text input. Returns `true` when
     /// any input was focused (or the chat model-picker popover was
     /// open) so blank-press callers can report a visible change.
     pub(in crate::widget_host) fn blur_text_inputs_on_blank_press(&mut self) -> bool {
         let was_focused = self.any_text_input_focused();
-        // Property focus is keyboard-only on web today (no press path
-        // sets it) — drop it draft-and-all, mirroring `apply_escape`.
-        if self.editor_state.ui.property_focus.take().is_some() {
-            self.editor_state.ui.property_input_draft.clear();
-            self.editor_state.ui.property_draft_select_all = false;
-        }
+        self.commit_property_family_focus_if_any();
         // VariablesPanel drafts COMMIT on blur (header renames + row
         // cells), mirroring the native blur helper; the search box
         // just defocuses, keeping its typed filter.

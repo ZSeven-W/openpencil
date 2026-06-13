@@ -1026,9 +1026,9 @@ pub struct EditorUiState {
     pub variables_preset_menu_open: bool,
     pub variables_add_menu_open: bool,
     /// Whether the preset dropdown's save-as-name input is showing
-    /// (TS `showPresetNameInput`). The draft lives in
-    /// `UiDraftState::property_input_draft` like the other variables
-    /// inputs; only meaningful while `variables_preset_menu_open`.
+    /// (TS `showPresetNameInput`). This legacy preset-name draft still
+    /// lives in `UiDraftState::property_input_draft`; variables panel
+    /// row/header edits use the text-input states below.
     pub variables_preset_name_focus: bool,
     /// Pending `.optheme` import / export the desktop host must run.
     pub pending_theme_preset_io: Option<ThemePresetIo>,
@@ -1044,11 +1044,15 @@ pub struct EditorUiState {
     pub variables_theme_rename_axis: Option<String>,
     /// Variant column value currently being edited in the VariablesPanel.
     pub variables_variant_rename_value: Option<String>,
+    /// Shared text state for VariablesPanel theme-axis / variant header renames.
+    pub variables_header_input: jian_core::text_input::TextInputState,
     /// Which variables-panel target the cursor is over (row / axis chip
     /// / dropdown item) — drives the `theme.button_hover` wash.
     pub variables_panel_hover: Option<crate::variables_panel_state::VariablesPanelButton>,
     /// Editor focus for a non-color variable row (Number / String).
     pub variable_row_focus: Option<VariableRowFocus>,
+    /// Text state for focused VariablesPanel row/value cells.
+    pub variable_row_input: jian_core::text_input::TextInputState,
     /// Live search filter for the variables panel rows (TS
     /// `variables-panel.tsx` search box). Case-insensitive substring
     /// match on the variable name; transient, never serialized.
@@ -1064,8 +1068,7 @@ pub struct EditorUiState {
     /// TS's transient React state (resets each session, not persisted).
     pub variables_panel_size: Option<(f32, f32)>,
     /// Editor focus on an effect-parameter value (Effects section).
-    /// Shares `UiDraftState.property_input_draft` + caret like the
-    /// variable-row focus does.
+    /// Shares `UiDraftState.property_input` with property-panel fields.
     pub effect_param_focus: Option<EffectParamFocus>,
 
     /// Legacy in-flight IME composition cache. The native host clears
@@ -1292,8 +1295,10 @@ impl Default for EditorUiState {
             variables_variant_menu_value: None,
             variables_theme_rename_axis: None,
             variables_variant_rename_value: None,
+            variables_header_input: jian_core::text_input::TextInputState::default(),
             variables_panel_hover: None,
             variable_row_focus: None,
+            variable_row_input: jian_core::text_input::TextInputState::default(),
             variables_search: String::new(),
             variables_search_focus: false,
             variables_scroll: 0.0,
@@ -1373,7 +1378,11 @@ impl EditorUiState {
         self.padding_mode_popover_open = false;
         self.property_color_variable_picker_open = None;
         self.axis_dropdown_open = None;
+        self.variables_theme_rename_axis = None;
+        self.variables_variant_rename_value = None;
+        self.variables_header_input.set_text("");
         self.variable_row_focus = None;
+        self.variable_row_input.set_text("");
         // Document-derived variables-panel transients: the search
         // filter, scroll offset and open row menu all reference the
         // replaced document's variable list. The panel SIZE is a panel

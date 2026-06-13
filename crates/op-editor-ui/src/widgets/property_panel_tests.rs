@@ -17,11 +17,6 @@ struct RoundFillBackend {
     fills: Vec<(Rect, Color)>,
 }
 
-#[derive(Default)]
-struct TextCaptureBackend {
-    texts: Vec<String>,
-}
-
 impl crate::RenderBackend for RoundFillBackend {
     fn begin_frame(&mut self) {}
     fn end_frame(&mut self) {}
@@ -33,30 +28,6 @@ impl crate::RenderBackend for RoundFillBackend {
     fn fill_round_rect(&mut self, rect: Rect, _: f32, color: Color) {
         self.fills.push((rect, color));
     }
-    fn stroke_round_rect(&mut self, _: Rect, _: f32, _: Color, _: f32) {}
-    fn stroke_svg_path(&mut self, _: &str, _: Point2D, _: f32, _: Color, _: f32) {}
-    fn save(&mut self) {}
-    fn restore(&mut self) {}
-    fn translate(&mut self, _: Point2D) {}
-    fn resize(&mut self, _: u32, _: u32) {}
-    fn dpi_scale(&self) -> f32 {
-        1.0
-    }
-}
-
-impl crate::RenderBackend for TextCaptureBackend {
-    fn begin_frame(&mut self) {}
-    fn end_frame(&mut self) {}
-    fn fill_rect(&mut self, _: Rect, _: Color) {}
-    fn stroke_rect(&mut self, _: Rect, _: Color, _: f32) {}
-    fn draw_text(&mut self, layout: &TextLayout, _: Point2D) {
-        if let Some(run) = layout.runs().first() {
-            self.texts.push(run.content.clone());
-        }
-    }
-    fn clip_rect(&mut self, _: Rect) {}
-    fn stroke_line(&mut self, _: Point2D, _: Point2D, _: Color, _: f32) {}
-    fn fill_round_rect(&mut self, _: Rect, _: f32, _: Color) {}
     fn stroke_round_rect(&mut self, _: Rect, _: f32, _: Color, _: f32) {}
     fn stroke_svg_path(&mut self, _: &str, _: Point2D, _: f32, _: Color, _: f32) {}
     fn save(&mut self) {}
@@ -153,33 +124,6 @@ fn inactive_property_tab_hover_paints_pill_background() {
         muted_pills >= 2,
         "active Code tab and hovered inactive Design tab should both paint a visible pill"
     );
-}
-
-#[test]
-fn code_tab_idle_body_uses_editor_locale() {
-    let mut state = EditorState::sample();
-    state.editor_ui.locale = op_editor_core::Locale::ZhCn;
-    state.editor_ui.property_tab = PropertyTab::Code;
-    let panel = PropertyPanel::for_selection(&state).expect("sample doc has a selection");
-    let rect = Rect {
-        origin: Point2D::new(0.0, 0.0),
-        size: Point2D::new(460.0, 700.0),
-    };
-    let mut backend = TextCaptureBackend::default();
-    {
-        let mut cx = PaintCx {
-            backend: &mut backend,
-        };
-        panel.paint(&mut cx, rect);
-    }
-    let drawn = backend.texts.join("\n");
-    assert!(drawn.contains("代码"));
-    assert!(drawn.contains("1 个节点已选中"));
-    assert!(drawn.contains("生成可用于生产的代码"));
-    assert!(drawn.contains("生成 React"));
-    assert!(drawn.contains("导出 AI Bundle"));
-    assert!(!drawn.contains("1 node selected"));
-    assert!(!drawn.contains("Generate production-ready code"));
 }
 
 #[test]

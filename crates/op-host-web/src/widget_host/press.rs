@@ -275,6 +275,7 @@ impl WidgetHost {
         };
         let top_bar = TopBar::for_editor_ui(&self.editor_state.editor_ui);
         if let Some(hit) = top_bar.hit_test(top_bar_rect, Point2D::new(x, y)) {
+            self.commit_property_family_focus_if_any();
             match hit {
                 TopBarHit::ToggleSidebar => {
                     let v = &mut self.editor_state.editor_ui.sidebar_open;
@@ -514,6 +515,7 @@ impl WidgetHost {
                 ),
             };
             if let Some(anchor) = self.code_text_offset_at_screen(x, y) {
+                self.commit_property_family_focus_if_any();
                 self.editor_state.codegen.code_selection = Some(CodeSelection {
                     anchor,
                     focus: anchor,
@@ -526,7 +528,9 @@ impl WidgetHost {
                 self.mark_dirty();
                 return true;
             }
-            if let Some(action) = panel.hit_test_action(property_rect, Point2D::new(x, y)) {
+            let point = Point2D::new(x, y);
+            if let Some(action) = panel.hit_test_action(property_rect, point) {
+                self.commit_property_focus_if_any();
                 // Anchor the colour picker at the clicked y so it
                 // pops next to the swatch row, not at the panel top.
                 if let op_editor_ui::widgets::PropertyPanelAction::OpenColorPicker(target) = action
@@ -550,7 +554,11 @@ impl WidgetHost {
                 }
                 return true;
             }
+            if let Some(focus) = panel.hit_test(property_rect, point) {
+                return self.focus_property_input_from_press(focus, property_rect, point);
+            }
         }
+        let property_focus_committed = self.commit_property_family_focus_if_any();
 
         // 1. AI chat panel — painted on top of toolbar so a
         //    click inside its rect is consumed here, even when
@@ -626,7 +634,7 @@ impl WidgetHost {
                     op_editor_ui::widgets::ToolbarHit::Action(action) => {
                         self.editor_state.editor_ui.shape_picker_open = false;
                         let acted = self.dispatch_toolbar_action(action);
-                        return acted || rename_committed;
+                        return acted || rename_committed || property_focus_committed;
                     }
                     op_editor_ui::widgets::ToolbarHit::ToggleShapePicker => {
                         let v = &mut self.editor_state.editor_ui.shape_picker_open;
@@ -638,7 +646,7 @@ impl WidgetHost {
             }
             // Toolbar padding / gaps eat the click — blank press.
             let blurred = self.blur_text_inputs_on_blank_press();
-            return blurred || rename_committed || text_edit_committed;
+            return blurred || rename_committed || text_edit_committed || property_focus_committed;
         }
 
         // 3. apply_click — LayerPanel + chat-defocus.
@@ -701,7 +709,7 @@ impl WidgetHost {
                     last_x: x,
                     last_y: y,
                 });
-                return rename_committed || text_edit_committed;
+                return rename_committed || text_edit_committed || property_focus_committed;
             }
             if matches!(self.editor_state.tool, op_editor_core::Tool::Select) {
                 // Convert screen → doc to ask which node (if any)
@@ -761,7 +769,10 @@ impl WidgetHost {
                     current_screen_y: y,
                     additive: self.shift_held,
                 });
-                return cleared_now || rename_committed || text_edit_committed;
+                return cleared_now
+                    || rename_committed
+                    || text_edit_committed
+                    || property_focus_committed;
             }
             // Any other tool on empty canvas — fall back to pan
             // (web doesn't ship shape-creation drag yet).
@@ -769,11 +780,11 @@ impl WidgetHost {
                 last_x: x,
                 last_y: y,
             });
-            return rename_committed || text_edit_committed;
+            return rename_committed || text_edit_committed || property_focus_committed;
         }
         // Final fall-through — the press hit no interactive chrome
         // (panel-rail gaps, property-panel padding, …): blank press.
         let blurred = self.blur_text_inputs_on_blank_press();
-        blurred || rename_committed || text_edit_committed
+        blurred || rename_committed || text_edit_committed || property_focus_committed
     }
 }

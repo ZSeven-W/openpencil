@@ -295,29 +295,45 @@ pub fn paint_fill_section(
         Point2D::new(0.0, 0.0),
     );
     let pct_x = pct_rect.origin.x + 10.0;
-    edit.paint_selection_at(
+    if !edit.paint_input_view_at(
         cx,
         theme,
         PropertyFocus::FillOpacity,
-        pct_text,
-        pct_x,
-        pct_rect.origin.y + 19.0,
+        Rect {
+            origin: Point2D::new(pct_x, pct_rect.origin.y),
+            size: Point2D::new(
+                (pct_rect.origin.x + pct_rect.size.x - 18.0 - pct_x).max(0.0),
+                pct_rect.size.y,
+            ),
+        },
         12.0,
-        pct_rect.origin.x + pct_rect.size.x - 8.0,
-    );
-    cx.backend
-        .draw_text(&pct, Point2D::new(pct_x, pct_rect.origin.y + 19.0));
-    if let Some(pos) = edit.caret_at(PropertyFocus::FillOpacity) {
-        let w = cx
-            .backend
-            .measure_text(&pct_text[..pos.min(pct_text.len())], 12.0);
-        cx.backend.fill_rect(
-            Rect {
-                origin: Point2D::new(pct_x + w, pct_rect.origin.y + 6.0),
-                size: Point2D::new(1.5, pct_rect.size.y - 12.0),
-            },
-            theme.foreground,
+        0.0,
+        pct_rect.origin.y + 19.0,
+    ) {
+        edit.paint_selection_at(
+            cx,
+            theme,
+            PropertyFocus::FillOpacity,
+            pct_text,
+            pct_x,
+            pct_rect.origin.y + 19.0,
+            12.0,
+            pct_rect.origin.x + pct_rect.size.x - 8.0,
         );
+        cx.backend
+            .draw_text(&pct, Point2D::new(pct_x, pct_rect.origin.y + 19.0));
+        if let Some(pos) = edit.caret_at(PropertyFocus::FillOpacity) {
+            let w = cx
+                .backend
+                .measure_text(&pct_text[..pos.min(pct_text.len())], 12.0);
+            cx.backend.fill_rect(
+                Rect {
+                    origin: Point2D::new(pct_x + w, pct_rect.origin.y + 6.0),
+                    size: Point2D::new(1.5, pct_rect.size.y - 12.0),
+                },
+                theme.foreground,
+            );
+        }
     }
     let pct_unit = TextLayout::single_run(
         "%",
@@ -416,40 +432,58 @@ fn paint_fill_solid_body(
         3.0,
         fill,
     );
-    let hex_layout = TextLayout::single_run(
-        hex_text,
-        "system-ui",
-        12.0,
-        (theme.foreground).to_jian(),
-        Point2D::new(0.0, 0.0),
-    );
     let hex_x = hex_rect.origin.x + 30.0;
-    if variable_ref.is_none() {
-        edit.paint_selection_at(
+    let painted_hex = variable_ref.is_none()
+        && edit.paint_input_view_at(
             cx,
             theme,
             PropertyFocus::FillHex,
-            hex_text,
-            hex_x,
-            hex_rect.origin.y + 19.0,
+            Rect {
+                origin: Point2D::new(hex_x, hex_rect.origin.y),
+                size: Point2D::new(
+                    (hex_rect.origin.x + hex_rect.size.x - 8.0 - hex_x).max(0.0),
+                    hex_rect.size.y,
+                ),
+            },
             12.0,
-            hex_rect.origin.x + hex_rect.size.x - 8.0,
+            0.0,
+            hex_rect.origin.y + 19.0,
         );
-    }
-    cx.backend
-        .draw_text(&hex_layout, Point2D::new(hex_x, hex_rect.origin.y + 19.0));
-    if variable_ref.is_none() {
-        if let Some(pos) = edit.caret_at(PropertyFocus::FillHex) {
-            let w = cx
-                .backend
-                .measure_text(&hex_text[..pos.min(hex_text.len())], 12.0);
-            cx.backend.fill_rect(
-                Rect {
-                    origin: Point2D::new(hex_x + w, hex_rect.origin.y + 6.0),
-                    size: Point2D::new(1.5, hex_rect.size.y - 12.0),
-                },
-                theme.foreground,
+    if !painted_hex {
+        let hex_layout = TextLayout::single_run(
+            hex_text,
+            "system-ui",
+            12.0,
+            (theme.foreground).to_jian(),
+            Point2D::new(0.0, 0.0),
+        );
+        if variable_ref.is_none() {
+            edit.paint_selection_at(
+                cx,
+                theme,
+                PropertyFocus::FillHex,
+                hex_text,
+                hex_x,
+                hex_rect.origin.y + 19.0,
+                12.0,
+                hex_rect.origin.x + hex_rect.size.x - 8.0,
             );
+        }
+        cx.backend
+            .draw_text(&hex_layout, Point2D::new(hex_x, hex_rect.origin.y + 19.0));
+        if variable_ref.is_none() {
+            if let Some(pos) = edit.caret_at(PropertyFocus::FillHex) {
+                let w = cx
+                    .backend
+                    .measure_text(&hex_text[..pos.min(hex_text.len())], 12.0);
+                cx.backend.fill_rect(
+                    Rect {
+                        origin: Point2D::new(hex_x + w, hex_rect.origin.y + 6.0),
+                        size: Point2D::new(1.5, hex_rect.size.y - 12.0),
+                    },
+                    theme.foreground,
+                );
+            }
         }
     }
     if show_variable_button {
@@ -505,37 +539,53 @@ fn paint_fill_gradient_body(
         );
         let angle_owned = format_angle(snapshot.gradient_angle.unwrap_or(0.0));
         let value_text = edit.value_for(angle_focus, &angle_owned);
-        let value = TextLayout::single_run(
-            value_text,
-            "system-ui",
-            12.0,
-            (theme.foreground).to_jian(),
-            Point2D::new(0.0, 0.0),
-        );
         let value_x = angle_rect.origin.x + 44.0;
-        edit.paint_selection_at(
+        if !edit.paint_input_view_at(
             cx,
             theme,
             angle_focus,
-            value_text,
-            value_x,
-            angle_rect.origin.y + 19.0,
+            Rect {
+                origin: Point2D::new(value_x, angle_rect.origin.y),
+                size: Point2D::new(
+                    (angle_rect.origin.x + angle_rect.size.x - 18.0 - value_x).max(0.0),
+                    angle_rect.size.y,
+                ),
+            },
             12.0,
-            angle_rect.origin.x + angle_rect.size.x - 8.0,
-        );
-        cx.backend
-            .draw_text(&value, Point2D::new(value_x, angle_rect.origin.y + 19.0));
-        if let Some(pos) = edit.caret_at(angle_focus) {
-            let w = cx
-                .backend
-                .measure_text(&value_text[..pos.min(value_text.len())], 12.0);
-            cx.backend.fill_rect(
-                Rect {
-                    origin: Point2D::new(value_x + w, angle_rect.origin.y + 6.0),
-                    size: Point2D::new(1.5, angle_rect.size.y - 12.0),
-                },
-                theme.foreground,
+            0.0,
+            angle_rect.origin.y + 19.0,
+        ) {
+            let value = TextLayout::single_run(
+                value_text,
+                "system-ui",
+                12.0,
+                (theme.foreground).to_jian(),
+                Point2D::new(0.0, 0.0),
             );
+            edit.paint_selection_at(
+                cx,
+                theme,
+                angle_focus,
+                value_text,
+                value_x,
+                angle_rect.origin.y + 19.0,
+                12.0,
+                angle_rect.origin.x + angle_rect.size.x - 8.0,
+            );
+            cx.backend
+                .draw_text(&value, Point2D::new(value_x, angle_rect.origin.y + 19.0));
+            if let Some(pos) = edit.caret_at(angle_focus) {
+                let w = cx
+                    .backend
+                    .measure_text(&value_text[..pos.min(value_text.len())], 12.0);
+                cx.backend.fill_rect(
+                    Rect {
+                        origin: Point2D::new(value_x + w, angle_rect.origin.y + 6.0),
+                        size: Point2D::new(1.5, angle_rect.size.y - 12.0),
+                    },
+                    theme.foreground,
+                );
+            }
         }
         let unit = TextLayout::single_run(
             "°",
@@ -602,39 +652,55 @@ fn paint_fill_gradient_body(
         // commit time, so the user never types raw alpha digits.
         let hex_owned = stop_hex_rgb_only(&stop.hex);
         let hex_text = edit.value_for(hex_focus, &hex_owned);
-        let hex_layout = TextLayout::single_run(
-            hex_text,
-            "system-ui",
-            12.0,
-            (theme.foreground).to_jian(),
-            Point2D::new(0.0, 0.0),
-        );
         let hex_text_x = hex_rect.origin.x + 30.0;
-        edit.paint_selection_at(
+        if !edit.paint_input_view_at(
             cx,
             theme,
             hex_focus,
-            hex_text,
-            hex_text_x,
-            hex_rect.origin.y + 19.0,
+            Rect {
+                origin: Point2D::new(hex_text_x, hex_rect.origin.y),
+                size: Point2D::new(
+                    (hex_rect.origin.x + hex_rect.size.x - 8.0 - hex_text_x).max(0.0),
+                    hex_rect.size.y,
+                ),
+            },
             12.0,
-            hex_rect.origin.x + hex_rect.size.x - 8.0,
-        );
-        cx.backend.draw_text(
-            &hex_layout,
-            Point2D::new(hex_text_x, hex_rect.origin.y + 19.0),
-        );
-        if let Some(pos) = edit.caret_at(hex_focus) {
-            let w = cx
-                .backend
-                .measure_text(&hex_text[..pos.min(hex_text.len())], 12.0);
-            cx.backend.fill_rect(
-                Rect {
-                    origin: Point2D::new(hex_text_x + w, hex_rect.origin.y + 6.0),
-                    size: Point2D::new(1.5, hex_rect.size.y - 12.0),
-                },
-                theme.foreground,
+            0.0,
+            hex_rect.origin.y + 19.0,
+        ) {
+            let hex_layout = TextLayout::single_run(
+                hex_text,
+                "system-ui",
+                12.0,
+                (theme.foreground).to_jian(),
+                Point2D::new(0.0, 0.0),
             );
+            edit.paint_selection_at(
+                cx,
+                theme,
+                hex_focus,
+                hex_text,
+                hex_text_x,
+                hex_rect.origin.y + 19.0,
+                12.0,
+                hex_rect.origin.x + hex_rect.size.x - 8.0,
+            );
+            cx.backend.draw_text(
+                &hex_layout,
+                Point2D::new(hex_text_x, hex_rect.origin.y + 19.0),
+            );
+            if let Some(pos) = edit.caret_at(hex_focus) {
+                let w = cx
+                    .backend
+                    .measure_text(&hex_text[..pos.min(hex_text.len())], 12.0);
+                cx.backend.fill_rect(
+                    Rect {
+                        origin: Point2D::new(hex_text_x + w, hex_rect.origin.y + 6.0),
+                        size: Point2D::new(1.5, hex_rect.size.y - 12.0),
+                    },
+                    theme.foreground,
+                );
+            }
         }
         let pct_rect = Rect {
             origin: Point2D::new(x + PAD_X + hex_w + 8.0, row_y),
@@ -650,37 +716,53 @@ fn paint_fill_gradient_body(
         }
         let pct_owned = ((stop.offset * 100.0).round() as i32).to_string();
         let pct_text = edit.value_for(offset_focus, &pct_owned);
-        let pct_layout = TextLayout::single_run(
-            pct_text,
-            "system-ui",
-            12.0,
-            (theme.foreground).to_jian(),
-            Point2D::new(0.0, 0.0),
-        );
         let pct_x = pct_rect.origin.x + 12.0;
-        edit.paint_selection_at(
+        if !edit.paint_input_view_at(
             cx,
             theme,
             offset_focus,
-            pct_text,
-            pct_x,
-            pct_rect.origin.y + 19.0,
+            Rect {
+                origin: Point2D::new(pct_x, pct_rect.origin.y),
+                size: Point2D::new(
+                    (pct_rect.origin.x + pct_rect.size.x - 18.0 - pct_x).max(0.0),
+                    pct_rect.size.y,
+                ),
+            },
             12.0,
-            pct_rect.origin.x + pct_rect.size.x - 8.0,
-        );
-        cx.backend
-            .draw_text(&pct_layout, Point2D::new(pct_x, pct_rect.origin.y + 19.0));
-        if let Some(pos) = edit.caret_at(offset_focus) {
-            let w = cx
-                .backend
-                .measure_text(&pct_text[..pos.min(pct_text.len())], 12.0);
-            cx.backend.fill_rect(
-                Rect {
-                    origin: Point2D::new(pct_x + w, pct_rect.origin.y + 6.0),
-                    size: Point2D::new(1.5, pct_rect.size.y - 12.0),
-                },
-                theme.foreground,
+            0.0,
+            pct_rect.origin.y + 19.0,
+        ) {
+            let pct_layout = TextLayout::single_run(
+                pct_text,
+                "system-ui",
+                12.0,
+                (theme.foreground).to_jian(),
+                Point2D::new(0.0, 0.0),
             );
+            edit.paint_selection_at(
+                cx,
+                theme,
+                offset_focus,
+                pct_text,
+                pct_x,
+                pct_rect.origin.y + 19.0,
+                12.0,
+                pct_rect.origin.x + pct_rect.size.x - 8.0,
+            );
+            cx.backend
+                .draw_text(&pct_layout, Point2D::new(pct_x, pct_rect.origin.y + 19.0));
+            if let Some(pos) = edit.caret_at(offset_focus) {
+                let w = cx
+                    .backend
+                    .measure_text(&pct_text[..pos.min(pct_text.len())], 12.0);
+                cx.backend.fill_rect(
+                    Rect {
+                        origin: Point2D::new(pct_x + w, pct_rect.origin.y + 6.0),
+                        size: Point2D::new(1.5, pct_rect.size.y - 12.0),
+                    },
+                    theme.foreground,
+                );
+            }
         }
         let pct_unit = TextLayout::single_run(
             "%",

@@ -259,18 +259,18 @@ pub struct UiDraftState {
     pub active_page_index: usize,
     /// Property-panel input with keyboard focus; `None` = no focus.
     pub property_focus: Option<PropertyFocus>,
-    /// Draft for the focused property input; committed on Enter,
-    /// discarded on Escape.
+    /// Draft, caret, selection, and blink state for the focused
+    /// property-panel input.
+    pub property_input: jian_core::text_input::TextInputState,
+    /// Legacy compatibility mirror for focused property / variables
+    /// inputs while older paint and preset-name paths are being
+    /// migrated. New focused property edits live in `property_input`.
     pub property_input_draft: String,
-    /// Caret position (byte index into `property_input_draft`) for
-    /// the focused property input. Property drafts are ASCII, so a
-    /// byte index is also the char index. Typing inserts here and
-    /// Backspace deletes before it; ← / → move it.
+    /// Legacy compatibility caret mirror for `property_input_draft`.
     pub property_caret_pos: usize,
-    /// Caret-blink anchor (ms) for the focused property input — reset
-    /// on focus and on every keystroke.
+    /// Legacy compatibility caret-blink anchor for older paint paths.
     pub property_caret_anchor_ms: u64,
-    /// Select-all-on-focus flag — next keystroke clears the seeded draft.
+    /// Legacy compatibility select-all mirror for `property_input_draft`.
     pub property_draft_select_all: bool,
     /// Inline rename in progress on a layer or page row.
     pub layer_rename: Option<LayerRenameState>,
