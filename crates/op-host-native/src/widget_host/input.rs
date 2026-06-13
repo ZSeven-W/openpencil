@@ -1101,7 +1101,14 @@ impl WidgetHostNative {
     /// Mouse-release — ends active drag; chat-panel snaps corner.
     pub fn apply_release_with_viewport(&mut self, viewport_w: f32, viewport_h: f32) -> bool {
         let button_released = self.editor_state.editor_ui.pressed_button.take().is_some();
-        if button_released {
+        let icon_picker_released = self
+            .editor_state
+            .editor_ui
+            .icon_picker
+            .pressed
+            .take()
+            .is_some();
+        if button_released || icon_picker_released {
             self.mark_dirty();
         }
         // Pen owns the release while authoring (TS onMouseUp).
@@ -1207,7 +1214,7 @@ impl WidgetHostNative {
         }
         let was_dragging = self.drag.is_some();
         self.drag = None;
-        was_dragging || button_released
+        was_dragging || button_released || icon_picker_released
     }
 
     /// Viewport-less release variant — drops viewport-bound drags.
@@ -1224,7 +1231,14 @@ impl WidgetHostNative {
 
     pub fn apply_release(&mut self) -> bool {
         let button_released = self.editor_state.editor_ui.pressed_button.take().is_some();
-        if button_released {
+        let icon_picker_released = self
+            .editor_state
+            .editor_ui
+            .icon_picker
+            .pressed
+            .take()
+            .is_some();
+        if button_released || icon_picker_released {
             self.mark_dirty();
         }
         // Pen owns the release while authoring (TS onMouseUp).
@@ -1310,7 +1324,7 @@ impl WidgetHostNative {
         }
         let was_dragging = self.drag.is_some();
         self.drag = None;
-        was_dragging || button_released
+        was_dragging || button_released || icon_picker_released
     }
 
     // `arc_drag_command` (the `SetEllipseArc` builder) lives in the
