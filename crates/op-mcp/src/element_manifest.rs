@@ -277,15 +277,18 @@ fn repair_args(
     args: &BTreeMap<String, String>,
     warnings: &mut Vec<String>,
 ) -> BTreeMap<String, String> {
+    // Manifest default theme: `system` (spec D2). The two prerequisites are
+    // now in place — the orchestrator seeds the semantic palette at run start
+    // (`op-orchestrator::semantic_palette` + `variables::seed_commands`, so
+    // `$color-*` refs resolve at paint via scene_vars instead of greying out),
+    // and every v1 builder emits numeric gap/padding in system mode (the
+    // layout chain zeroes `$spacing-*` Expression refs — see the
+    // `system_mode_never_emits_expression_gap_or_padding` invariant). `system`
+    // makes weak-model designs adapt to the document's light/dark axis instead
+    // of baking light-mode hex. Explicit `theme=light|dark` still wins.
     let mut out = args.clone();
-    // Manifest default theme: `light` (spec D2, revised by the 2026-06-10
-    // smoke). `system` emits `$color-*` refs, but the Rust pipeline has no
-    // semantic-palette seeding yet (`variables::seed_commands` is dormant)
-    // — un-seeded refs render as grey fallbacks. Until seeding lands,
-    // default to the v0-parity hex palette; `system` stays opt-in for
-    // documents that carry a palette.
     if tool.ends_with("_v1") && !out.contains_key("theme") {
-        out.insert("theme".to_string(), "light".to_string());
+        out.insert("theme".to_string(), "system".to_string());
     }
     let Some(schema) = ts_alias_schema(tool).and_then(|s| serde_json::from_str::<Value>(&s).ok())
     else {
@@ -650,12 +653,13 @@ mod tests {
     }
 
     #[test]
-    fn v1_kinds_default_to_light_theme() {
-        // `system` becomes the default once semantic-palette seeding
-        // lands; un-seeded `$color-*` refs render grey (2026-06-10 smoke).
+    fn v1_kinds_default_to_system_theme() {
+        // Default flipped to `system` (spec D2, 2026-06-13) now that the
+        // orchestrator seeds the semantic palette and builders emit numeric
+        // gap/padding in system mode — `$color-*` refs resolve at paint.
         let mut warnings = Vec::new();
         let repaired = repair_args("add_stat_card_v1", &BTreeMap::new(), &mut warnings);
-        assert_eq!(repaired.get("theme").map(String::as_str), Some("light"));
+        assert_eq!(repaired.get("theme").map(String::as_str), Some("system"));
     }
 
     #[test]
