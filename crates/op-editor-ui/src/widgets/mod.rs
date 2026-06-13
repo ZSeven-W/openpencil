@@ -27,7 +27,6 @@ use crate::{Point2D, Rect, RenderBackend};
 pub const MIN_RAIL_WIDTH: f32 = 80.0;
 
 // Phase B primitives.
-pub mod dropdown;
 pub mod prop_row;
 pub mod text_input;
 pub mod tree;
@@ -200,7 +199,6 @@ mod top_bar_paint;
 pub mod variables_panel;
 mod variables_preset_menu;
 
-pub use dropdown::{Dropdown, DropdownState};
 pub use prop_row::PropertyRow;
 pub use text_input::{TextInput, TextInputState};
 pub use tree::{TreeItem, TreeWidget};
