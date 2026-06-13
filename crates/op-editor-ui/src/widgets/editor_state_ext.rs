@@ -93,6 +93,19 @@ pub fn figma_import_button(
     }
 }
 
+/// Map a widget-layer `AgentSettingsHit` onto the canonical
+/// `op_editor_core::AgentSettingsButton` for shared pressed feedback.
+pub fn agent_settings_button(
+    hit: crate::widgets::agent_settings_panel::AgentSettingsHit,
+) -> Option<op_editor_core::AgentSettingsButton> {
+    use crate::widgets::agent_settings_panel::AgentSettingsHit as W;
+    use op_editor_core::AgentSettingsButton as O;
+    match hit {
+        W::Close => Some(O::Close),
+        _ => None,
+    }
+}
+
 /// Map a widget-layer `ExportDialogHit` onto the canonical
 /// `op_editor_core::ExportDialogButton` for the modal export dialog's
 /// hover wash. The `Format` arm reuses [`export_format`] to canonicalise

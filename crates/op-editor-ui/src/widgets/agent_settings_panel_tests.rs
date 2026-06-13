@@ -6,7 +6,7 @@ use op_editor_core::agent_settings::{
     AcpAgentField, AgentSettingsTab, BuiltinAgentField, ImageSearchField, ImageTestStatus,
     SettingsFocus,
 };
-use op_editor_core::EditorState;
+use op_editor_core::{AgentSettingsButton, ButtonPressTarget, EditorState};
 
 #[derive(Default)]
 struct CaptureBackend {
@@ -136,6 +136,37 @@ fn close_button_hover_paints_visible_wash() {
             .iter()
             .any(|(fill, color)| *fill == close && color_eq(*color, panel.theme.button_hover)),
         "hovered close button should paint a visible hover wash"
+    );
+}
+
+#[test]
+fn pressed_close_button_uses_shared_button_feedback() {
+    let mut state = EditorState::default();
+    state.editor_ui.pressed_button =
+        Some(ButtonPressTarget::AgentSettings(AgentSettingsButton::Close));
+    let panel = AgentSettingsPanel::for_editor(&state);
+    let rect = panel.rect(1200.0, 800.0);
+    let mut backend = CaptureBackend::default();
+    let mut cx = PaintCx {
+        backend: &mut backend,
+    };
+
+    panel.paint(&mut cx, rect);
+
+    let close = Rect {
+        origin: Point2D::new(rect.origin.x + rect.size.x - 32.0, rect.origin.y + 16.0),
+        size: Point2D::new(16.0, 16.0),
+    };
+    let expected = panel
+        .theme
+        .button_hover
+        .with_alpha(panel.theme.button_hover.a * 1.8);
+    assert!(
+        backend
+            .round_fills
+            .iter()
+            .any(|(fill, color)| *fill == close && color_eq(*color, expected)),
+        "pressed close button should paint the shared pressed feedback token"
     );
 }
 

@@ -10,6 +10,7 @@
 pub mod agent_indicators;
 pub mod agent_settings;
 pub mod agent_settings_builtin_presets;
+pub mod agent_settings_button_state;
 pub mod agent_settings_connection;
 pub mod align;
 pub mod align_guides;
@@ -140,6 +141,7 @@ pub use agent_settings_builtin_presets::{
     builtin_agent_preset, infer_builtin_agent_preset, normalize_builtin_agent_preset,
     BuiltinAgentPreset, BuiltinAgentPresetKey, BUILTIN_AGENT_PRESETS,
 };
+pub use agent_settings_button_state::AgentSettingsButton;
 pub use align::AlignAction;
 pub use button_press_state::ButtonPressTarget;
 pub use chat::{

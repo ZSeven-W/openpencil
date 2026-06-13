@@ -3,7 +3,26 @@ use op_editor_core::agent_settings::{
     AgentSettingsTab, BuiltinAgentField, ImageGenField, ImageGenProvider, ImageTestStatus,
     SettingsFocus,
 };
+use op_editor_core::{AgentSettingsButton, ButtonPressTarget};
 use op_editor_ui::widgets::agent_settings_panel::AgentSettingsPanel;
+
+#[test]
+fn close_press_sets_and_release_clears_agent_settings_button() {
+    let mut host = WidgetHost::new();
+    let panel = AgentSettingsPanel::for_editor(&host.editor_state);
+    let rect = panel.rect(1200.0, 800.0);
+    let close_x = rect.origin.x + rect.size.x - 24.0;
+    let close_y = rect.origin.y + 24.0;
+
+    assert!(host.dispatch_agent_settings_press(close_x, close_y, 1200.0, 800.0));
+    assert_eq!(
+        host.editor_state.editor_ui.pressed_button,
+        Some(ButtonPressTarget::AgentSettings(AgentSettingsButton::Close))
+    );
+
+    assert!(host.apply_release_with_viewport(1200.0, 800.0));
+    assert_eq!(host.editor_state.editor_ui.pressed_button, None);
+}
 
 #[test]
 fn toggling_builtin_kind_commits_focused_api_key_draft() {
