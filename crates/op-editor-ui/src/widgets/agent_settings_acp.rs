@@ -2,9 +2,7 @@
 
 use crate::theme::Theme;
 use crate::widgets::agent_settings_acp_draft;
-use crate::widgets::agent_settings_caret::{
-    caret_x_for_text, paint_caret, paint_settings_selection, settings_caret_for_focus,
-};
+use crate::widgets::agent_settings_caret::{paint_settings_input_view, settings_input_text};
 use crate::widgets::agent_settings_form_actions::{
     cancel_button_rect, paint_form_actions, save_button_rect,
 };
@@ -469,17 +467,14 @@ fn paint_field(
         None => SettingsFocus::AcpAgentDraft(field),
     };
     let focused = settings.focus == Some(focus);
-    let value = if focused {
-        ui.settings_input_draft.clone()
-    } else {
-        match field {
-            AcpAgentField::DisplayName => agent.display_name.clone(),
-            AcpAgentField::Command => agent.command.clone(),
-            AcpAgentField::Args => agent.args_text(),
-            AcpAgentField::Env => agent.env_text(),
-            AcpAgentField::Url => agent.url.clone().unwrap_or_default(),
-        }
+    let fallback = match field {
+        AcpAgentField::DisplayName => agent.display_name.clone(),
+        AcpAgentField::Command => agent.command.clone(),
+        AcpAgentField::Args => agent.args_text(),
+        AcpAgentField::Env => agent.env_text(),
+        AcpAgentField::Url => agent.url.clone().unwrap_or_default(),
     };
+    let value = settings_input_text(settings, ui, focus, &fallback);
     let label = match field {
         AcpAgentField::DisplayName => t_settings(ui, "acp.displayName"),
         AcpAgentField::Command => t_settings(ui, "acp.command"),
@@ -519,50 +514,35 @@ fn paint_field(
         AcpAgentField::Env => t_settings(ui, "acp.envPlaceholder"),
         AcpAgentField::Url => "https://agent.example.com",
     };
-    let shown = if value.is_empty() {
-        placeholder
-    } else {
-        &value
-    };
-    let text_color = if value.is_empty() {
-        theme.muted_foreground
-    } else {
-        theme.foreground
-    };
-    let clipped = ellipsize(cx, shown, input.size.x - 12.0, 11.0);
     let text_x = input.origin.x + 6.0;
-    if focused && ui.settings_input_select_all && !value.is_empty() {
-        paint_settings_selection(
+    if focused {
+        paint_settings_input_view(
             cx,
             theme,
-            &value,
+            ui,
+            input,
+            11.0,
+            text_x - input.origin.x,
+            input.origin.y + 16.0,
+            now_ms,
+            placeholder,
+        );
+    } else {
+        let shown = if value.is_empty() { placeholder } else { value };
+        let text_color = if value.is_empty() {
+            theme.muted_foreground
+        } else {
+            theme.foreground
+        };
+        let clipped = ellipsize(cx, shown, input.size.x - 12.0, 11.0);
+        draw_text(
+            cx,
+            &clipped,
+            11.0,
+            text_color,
             text_x,
             input.origin.y + 16.0,
-            11.0,
-            input.origin.x + input.size.x - 8.0,
         );
-    }
-    draw_text(
-        cx,
-        &clipped,
-        11.0,
-        text_color,
-        text_x,
-        input.origin.y + 16.0,
-    );
-    if focused {
-        let caret = settings_caret_for_focus(ui, focus);
-        let caret_x = caret_x_for_text(
-            cx,
-            &value,
-            caret,
-            text_x,
-            input.origin.x + input.size.x - 8.0,
-            11.0,
-        );
-        let caret_y = input.origin.y + 4.5;
-        let anchor = ui.settings_input_caret_anchor_ms;
-        paint_caret(cx, theme, now_ms, anchor, caret_x, caret_y);
     }
 }
 

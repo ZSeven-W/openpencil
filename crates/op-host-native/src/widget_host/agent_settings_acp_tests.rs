@@ -54,7 +54,8 @@ fn acp_agent_command_field_accepts_text_and_commits() {
     assert!(host
         .editor_state()
         .editor_ui
-        .settings_input_draft
+        .settings_input
+        .text()
         .is_empty());
 }
 
@@ -69,8 +70,10 @@ fn acp_agent_args_field_commits_comma_separated_args() {
         index: 0,
         field: AcpAgentField::Args,
     });
-    host.editor_state_mut().editor_ui.settings_input_draft =
-        " --stdio, --workspace /tmp, , --verbose ".into();
+    host.editor_state_mut()
+        .editor_ui
+        .settings_input
+        .set_text(" --stdio, --workspace /tmp, , --verbose ");
 
     assert!(host.apply_send());
 
@@ -83,7 +86,8 @@ fn acp_agent_args_field_commits_comma_separated_args() {
     assert!(host
         .editor_state()
         .editor_ui
-        .settings_input_draft
+        .settings_input
+        .text()
         .is_empty());
 }
 
@@ -114,7 +118,8 @@ fn acp_agent_remove_press_deletes_agent_and_clears_focus() {
     assert!(host
         .editor_state()
         .editor_ui
-        .settings_input_draft
+        .settings_input
+        .text()
         .is_empty());
 }
 

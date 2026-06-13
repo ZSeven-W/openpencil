@@ -523,7 +523,7 @@ fn focused_input(state: &EditorState) -> Option<(String, String, String)> {
         return Some((
             "settings".to_string(),
             "Settings field".to_string(),
-            ui.settings_input_draft.clone(),
+            ui.settings_input.text().to_owned(),
         ));
     }
     if let Some(focus) = state.ui.property_focus {

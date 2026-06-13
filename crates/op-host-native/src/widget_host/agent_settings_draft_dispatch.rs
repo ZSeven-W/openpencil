@@ -18,7 +18,7 @@ impl WidgetHostNative {
             if field == BuiltinAgentField::BaseUrl && !agent.base_url_editable() {
                 return;
             }
-            self.editor_state.editor_ui.settings_input_draft = match field {
+            let text = match field {
                 BuiltinAgentField::DisplayName => agent.display_name.clone(),
                 BuiltinAgentField::ApiKey => agent.api_key.clone(),
                 BuiltinAgentField::Model => agent.model.clone(),
@@ -26,7 +26,7 @@ impl WidgetHostNative {
             };
             self.editor_state.editor_ui.agent_settings.focus =
                 Some(SettingsFocus::BuiltinAgentDraft(field));
-            self.editor_state.editor_ui.settings_input_caret_anchor_ms = self.now_ms;
+            self.set_settings_input_text(text);
         }
     }
 
@@ -62,7 +62,6 @@ impl WidgetHostNative {
             .is_some()
         {
             self.editor_state.editor_ui.agent_settings.focus = None;
-            self.editor_state.editor_ui.settings_input_draft.clear();
             self.clear_settings_caret();
             self.editor_state.rebuild_chat_models();
         } else {
@@ -76,7 +75,6 @@ impl WidgetHostNative {
             .agent_settings
             .cancel_builtin_agent_draft();
         self.editor_state.editor_ui.agent_settings.focus = None;
-        self.editor_state.editor_ui.settings_input_draft.clear();
         self.clear_settings_caret();
     }
 
@@ -89,7 +87,7 @@ impl WidgetHostNative {
             .acp_agent_draft
             .as_ref()
         {
-            self.editor_state.editor_ui.settings_input_draft = match field {
+            let text = match field {
                 AcpAgentField::DisplayName => agent.display_name.clone(),
                 AcpAgentField::Command => agent.command.clone(),
                 AcpAgentField::Args => agent.args_text(),
@@ -98,7 +96,7 @@ impl WidgetHostNative {
             };
             self.editor_state.editor_ui.agent_settings.focus =
                 Some(SettingsFocus::AcpAgentDraft(field));
-            self.editor_state.editor_ui.settings_input_caret_anchor_ms = self.now_ms;
+            self.set_settings_input_text(text);
         }
     }
 
@@ -120,7 +118,7 @@ impl WidgetHostNative {
                 AcpConnectionType::Local => AcpAgentField::Command,
                 AcpConnectionType::Remote => AcpAgentField::Url,
             };
-            self.editor_state.editor_ui.settings_input_draft = match field {
+            let text = match field {
                 AcpAgentField::Command => agent.command.clone(),
                 AcpAgentField::Args => agent.args_text(),
                 AcpAgentField::Env => agent.env_text(),
@@ -129,7 +127,7 @@ impl WidgetHostNative {
             };
             self.editor_state.editor_ui.agent_settings.focus =
                 Some(SettingsFocus::AcpAgentDraft(field));
-            self.editor_state.editor_ui.settings_input_caret_anchor_ms = self.now_ms;
+            self.set_settings_input_text(text);
         }
     }
 
@@ -152,7 +150,6 @@ impl WidgetHostNative {
             .is_some()
         {
             self.editor_state.editor_ui.agent_settings.focus = None;
-            self.editor_state.editor_ui.settings_input_draft.clear();
             self.clear_settings_caret();
         } else {
             let field = self
@@ -176,7 +173,6 @@ impl WidgetHostNative {
             .agent_settings
             .cancel_acp_agent_draft();
         self.editor_state.editor_ui.agent_settings.focus = None;
-        self.editor_state.editor_ui.settings_input_draft.clear();
         self.clear_settings_caret();
     }
 }

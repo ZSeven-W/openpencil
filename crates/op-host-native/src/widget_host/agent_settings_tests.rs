@@ -49,8 +49,8 @@ fn builtin_agent_api_key_focus_accepts_text_and_rebuilds_models() {
     });
     host.editor_state_mut()
         .editor_ui
-        .settings_input_draft
-        .clear();
+        .settings_input
+        .set_text("");
     for c in "sk-test".chars() {
         assert!(host.apply_text(c));
     }
@@ -132,12 +132,15 @@ fn builtin_agent_compact_edit_focuses_display_name_form() {
         })
     );
     assert_eq!(
-        host.editor_state().editor_ui.settings_input_draft,
+        host.editor_state().editor_ui.settings_input.text(),
         "MiniMax"
     );
     assert_eq!(
-        host.editor_state().editor_ui.settings_input_caret_anchor_ms,
-        1234
+        host.editor_state()
+            .editor_ui
+            .settings_input
+            .next_blink_flip_ms(1234),
+        1734
     );
 }
 
@@ -158,7 +161,10 @@ fn builtin_agent_kind_toggle_commits_focused_api_key_draft() {
         index: 0,
         field: BuiltinAgentField::ApiKey,
     });
-    host.editor_state_mut().editor_ui.settings_input_draft = "sk-kind-toggle".into();
+    host.editor_state_mut()
+        .editor_ui
+        .settings_input
+        .set_text("sk-kind-toggle");
 
     let panel = AgentSettingsPanel::for_editor(host.editor_state());
     let rect = panel.rect(1200.0, 800.0);
@@ -187,7 +193,10 @@ fn pure_builtin_agent_base_url_commit_is_ignored_like_ts_read_only_input() {
         index: 0,
         field: BuiltinAgentField::BaseUrl,
     });
-    host.editor_state_mut().editor_ui.settings_input_draft = "https://example.invalid".into();
+    host.editor_state_mut()
+        .editor_ui
+        .settings_input
+        .set_text("https://example.invalid");
 
     assert!(host.apply_send());
 
@@ -200,7 +209,8 @@ fn pure_builtin_agent_base_url_commit_is_ignored_like_ts_read_only_input() {
     assert!(host
         .editor_state()
         .editor_ui
-        .settings_input_draft
+        .settings_input
+        .text()
         .is_empty());
 }
 
@@ -226,10 +236,13 @@ fn add_provider_opens_unsaved_builtin_agent_draft() {
         settings.focus,
         Some(SettingsFocus::BuiltinAgentDraft(BuiltinAgentField::ApiKey))
     );
-    assert_eq!(host.editor_state().editor_ui.settings_input_draft, "");
+    assert_eq!(host.editor_state().editor_ui.settings_input.text(), "");
     assert_eq!(
-        host.editor_state().editor_ui.settings_input_caret_anchor_ms,
-        1234
+        host.editor_state()
+            .editor_ui
+            .settings_input
+            .next_blink_flip_ms(1234),
+        1734
     );
 }
 
@@ -314,8 +327,11 @@ fn add_acp_agent_press_opens_unsaved_draft() {
         Some(SettingsFocus::AcpAgentDraft(AcpAgentField::Command))
     );
     assert_eq!(
-        host.editor_state().editor_ui.settings_input_caret_anchor_ms,
-        1234
+        host.editor_state()
+            .editor_ui
+            .settings_input
+            .next_blink_flip_ms(1234),
+        1734
     );
 }
 
@@ -401,7 +417,7 @@ fn acp_agent_compact_edit_focuses_display_name_form() {
         })
     );
     assert_eq!(
-        host.editor_state().editor_ui.settings_input_draft,
+        host.editor_state().editor_ui.settings_input.text(),
         "ACP Agent 1"
     );
 }
@@ -411,7 +427,10 @@ fn starting_mcp_server_commits_port_draft_and_clears_focus() {
     let mut host = WidgetHostNative::new();
     host.editor_state_mut().editor_ui.agent_settings.tab = AgentSettingsTab::Mcp;
     host.editor_state_mut().editor_ui.agent_settings.focus = Some(SettingsFocus::McpPort);
-    host.editor_state_mut().editor_ui.settings_input_draft = "3101".into();
+    host.editor_state_mut()
+        .editor_ui
+        .settings_input
+        .set_text("3101");
 
     let panel = AgentSettingsPanel::for_editor(host.editor_state());
     let rect = panel.rect(1200.0, 800.0);
@@ -431,7 +450,7 @@ fn starting_mcp_server_commits_port_draft_and_clears_focus() {
     assert!(state.editor_ui.agent_settings.mcp_server.running);
     assert_eq!(state.editor_ui.agent_settings.mcp_server.port, 3101);
     assert!(state.editor_ui.agent_settings.focus.is_none());
-    assert!(state.editor_ui.settings_input_draft.is_empty());
+    assert!(state.editor_ui.settings_input.text().is_empty());
 }
 
 #[test]
@@ -593,8 +612,8 @@ fn image_generation_profile_focus_accepts_text_and_commits() {
     });
     host.editor_state_mut()
         .editor_ui
-        .settings_input_draft
-        .clear();
+        .settings_input
+        .set_text("");
 
     for c in "Hero Images".chars() {
         assert!(host.apply_text(c));
@@ -607,7 +626,8 @@ fn image_generation_profile_focus_accepts_text_and_commits() {
     assert!(host
         .editor_state()
         .editor_ui
-        .settings_input_draft
+        .settings_input
+        .text()
         .is_empty());
 }
 
@@ -698,7 +718,10 @@ fn image_generation_profile_header_click_toggles_editor_closed() {
         index: 0,
         field: ImageGenField::Name,
     });
-    host.editor_state_mut().editor_ui.settings_input_draft = "Config 1".into();
+    host.editor_state_mut()
+        .editor_ui
+        .settings_input
+        .set_text("Config 1");
 
     let panel = AgentSettingsPanel::for_editor(host.editor_state());
     let rect = panel.rect(1200.0, 800.0);
@@ -713,7 +736,8 @@ fn image_generation_profile_header_click_toggles_editor_closed() {
     assert!(host
         .editor_state()
         .editor_ui
-        .settings_input_draft
+        .settings_input
+        .text()
         .is_empty());
 }
 
@@ -725,8 +749,8 @@ fn image_search_oauth_focus_accepts_text_and_commits() {
         Some(SettingsFocus::ImageSearch(ImageSearchField::ClientId));
     host.editor_state_mut()
         .editor_ui
-        .settings_input_draft
-        .clear();
+        .settings_input
+        .set_text("");
 
     for c in "openverse-client".chars() {
         assert!(host.apply_text(c));
@@ -737,8 +761,8 @@ fn image_search_oauth_focus_accepts_text_and_commits() {
         Some(SettingsFocus::ImageSearch(ImageSearchField::ClientSecret));
     host.editor_state_mut()
         .editor_ui
-        .settings_input_draft
-        .clear();
+        .settings_input
+        .set_text("");
     for c in "openverse-secret".chars() {
         assert!(host.apply_text(c));
     }
@@ -751,7 +775,8 @@ fn image_search_oauth_focus_accepts_text_and_commits() {
     assert!(host
         .editor_state()
         .editor_ui
-        .settings_input_draft
+        .settings_input
+        .text()
         .is_empty());
 }
 

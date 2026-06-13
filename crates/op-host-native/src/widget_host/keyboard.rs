@@ -1165,7 +1165,6 @@ impl WidgetHostNative {
             .take()
             .is_some()
         {
-            self.editor_state.editor_ui.settings_input_draft.clear();
             self.clear_settings_caret();
             self.mark_dirty();
             return true;

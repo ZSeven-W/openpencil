@@ -1,9 +1,7 @@
 //! MCP tab of the settings modal.
 
 use crate::theme::Theme;
-use crate::widgets::agent_settings_caret::{
-    caret_x_for_text, paint_caret, paint_settings_selection, settings_caret_for_focus,
-};
+use crate::widgets::agent_settings_caret::paint_settings_input_view;
 use crate::widgets::agent_settings_i18n::t as t_settings;
 use crate::widgets::agent_settings_switch::{
     paint_settings_switch, SETTINGS_SWITCH_H, SETTINGS_SWITCH_W,
@@ -286,7 +284,7 @@ fn paint_server_card(
     let port_editable = !running;
     let focused = port_editable && matches!(settings.focus, Some(SettingsFocus::McpPort));
     let port_str = if focused {
-        ui.settings_input_draft.clone()
+        ui.settings_input.text().to_owned()
     } else {
         format!("{}", settings.mcp_server.port)
     };
@@ -312,37 +310,21 @@ fn paint_server_card(
     );
     let port_x = port_field.origin.x + (PORT_FIELD_W - port_w) / 2.0;
     let port_y = port_field.origin.y + PORT_FIELD_H / 2.0 + 5.0;
-    if focused && ui.settings_input_select_all && !port_str.is_empty() {
-        paint_settings_selection(
-            cx,
-            theme,
-            &port_str,
-            port_x,
-            port_y,
-            12.0,
-            port_field.origin.x + port_field.size.x - 8.0,
-        );
-    }
-    cx.backend
-        .draw_text(&port_layout, Point2D::new(port_x, port_y));
     if focused {
-        let caret = settings_caret_for_focus(ui, SettingsFocus::McpPort);
-        let caret_x = caret_x_for_text(
-            cx,
-            &port_str,
-            caret,
-            port_x,
-            port_field.origin.x + port_field.size.x - 8.0,
-            12.0,
-        );
-        paint_caret(
+        paint_settings_input_view(
             cx,
             theme,
+            ui,
+            port_field,
+            12.0,
+            port_x - port_field.origin.x,
+            port_y,
             now_ms,
-            ui.settings_input_caret_anchor_ms,
-            caret_x,
-            port_field.origin.y + (PORT_FIELD_H - 15.0) / 2.0,
+            "",
         );
+    } else {
+        cx.backend
+            .draw_text(&port_layout, Point2D::new(port_x, port_y));
     }
 
     let btn_bg = if running { theme.muted } else { theme.primary };

@@ -1499,13 +1499,13 @@ fn select_all_in_settings_input_replaces_next_typed_text() {
                 op_editor_core::agent_settings::BuiltinAgentField::BaseUrl,
             ),
         );
-        ui.settings_input_draft = "https://example.invalid".into();
+        ui.settings_input.set_text("https://example.invalid");
     }
 
     assert!(host.apply_select_all());
     assert!(host.apply_text('x'));
-    assert_eq!(host.editor_state().editor_ui.settings_input_draft, "x");
-    assert_eq!(host.editor_state().editor_ui.settings_input_caret, Some(1));
+    assert_eq!(host.editor_state().editor_ui.settings_input.text(), "x");
+    assert_eq!(host.editor_state().editor_ui.settings_input.caret(), 1);
 }
 
 #[test]

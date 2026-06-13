@@ -905,11 +905,12 @@ impl WidgetHostNative {
         if self.editor_state.editor_ui.agent_settings_open
             && self.editor_state.editor_ui.agent_settings.focus.is_some()
         {
-            return Some(jian_core::anim::next_blink_flip_ms(
-                self.now_ms,
-                self.editor_state.editor_ui.settings_input_caret_anchor_ms,
-                500,
-            ));
+            return Some(
+                self.editor_state
+                    .editor_ui
+                    .settings_input
+                    .next_blink_flip_ms(self.now_ms),
+            );
         }
         if self.editor_state.editor_ui.chat_model_picker_open {
             return Some(jian_core::anim::next_blink_flip_ms(

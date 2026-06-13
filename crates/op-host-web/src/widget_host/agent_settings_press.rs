@@ -87,7 +87,7 @@ impl WidgetHost {
             }
             AgentSettingsHit::FocusSearchField(field) => {
                 self.commit_settings_focus();
-                self.editor_state.editor_ui.settings_input_draft = match field {
+                let text = match field {
                     ImageSearchField::ClientId => self
                         .editor_state
                         .editor_ui
@@ -103,7 +103,7 @@ impl WidgetHost {
                 };
                 self.editor_state.editor_ui.agent_settings.focus =
                     Some(SettingsFocus::ImageSearch(field));
-                self.editor_state.editor_ui.settings_input_caret_anchor_ms = self.now_ms;
+                self.set_settings_input_text(text);
             }
             AgentSettingsHit::TestImageSearch => {
                 self.commit_settings_focus();
@@ -200,13 +200,13 @@ impl WidgetHost {
                     .image_gen_profiles
                     .get(index)
                 {
-                    self.editor_state.editor_ui.settings_input_draft = profile.name.clone();
+                    let text = profile.name.clone();
                     self.editor_state.editor_ui.agent_settings.focus =
                         Some(SettingsFocus::ImageGenProfile {
                             index,
                             field: ImageGenField::Name,
                         });
-                    self.editor_state.editor_ui.settings_input_caret_anchor_ms = self.now_ms;
+                    self.set_settings_input_text(text);
                 }
             }
             AgentSettingsHit::ToggleGenProviderMenu(index) => {
@@ -249,14 +249,14 @@ impl WidgetHost {
             AgentSettingsHit::FocusMcpPort => {
                 self.commit_settings_focus();
                 self.editor_state.editor_ui.agent_settings.focus = Some(SettingsFocus::McpPort);
-                self.editor_state.editor_ui.settings_input_draft = self
+                let text = self
                     .editor_state
                     .editor_ui
                     .agent_settings
                     .mcp_server
                     .port
                     .to_string();
-                self.editor_state.editor_ui.settings_input_caret_anchor_ms = self.now_ms;
+                self.set_settings_input_text(text);
             }
             AgentSettingsHit::FocusBuiltinAgent { index, field } => {
                 self.commit_settings_focus();
@@ -267,7 +267,7 @@ impl WidgetHost {
                     .builtin_agents
                     .get(index)
                 {
-                    self.editor_state.editor_ui.settings_input_draft = match field {
+                    let text = match field {
                         BuiltinAgentField::DisplayName => agent.display_name.clone(),
                         BuiltinAgentField::ApiKey => agent.api_key.clone(),
                         BuiltinAgentField::Model => agent.model.clone(),
@@ -275,7 +275,7 @@ impl WidgetHost {
                     };
                     self.editor_state.editor_ui.agent_settings.focus =
                         Some(SettingsFocus::BuiltinAgent { index, field });
-                    self.editor_state.editor_ui.settings_input_caret_anchor_ms = self.now_ms;
+                    self.set_settings_input_text(text);
                 }
             }
             AgentSettingsHit::FocusBuiltinAgentDraft(field) => {
@@ -287,7 +287,7 @@ impl WidgetHost {
                     .builtin_agent_draft
                     .as_ref()
                 {
-                    self.editor_state.editor_ui.settings_input_draft = match field {
+                    let text = match field {
                         BuiltinAgentField::DisplayName => agent.display_name.clone(),
                         BuiltinAgentField::ApiKey => agent.api_key.clone(),
                         BuiltinAgentField::Model => agent.model.clone(),
@@ -295,7 +295,7 @@ impl WidgetHost {
                     };
                     self.editor_state.editor_ui.agent_settings.focus =
                         Some(SettingsFocus::BuiltinAgentDraft(field));
-                    self.editor_state.editor_ui.settings_input_caret_anchor_ms = self.now_ms;
+                    self.set_settings_input_text(text);
                 }
             }
             AgentSettingsHit::ToggleBuiltinAgentKind(index) => {
@@ -388,13 +388,13 @@ impl WidgetHost {
                     .builtin_agents
                     .get(index)
                 {
-                    self.editor_state.editor_ui.settings_input_draft = agent.display_name.clone();
+                    let text = agent.display_name.clone();
                     self.editor_state.editor_ui.agent_settings.focus =
                         Some(SettingsFocus::BuiltinAgent {
                             index,
                             field: BuiltinAgentField::DisplayName,
                         });
-                    self.editor_state.editor_ui.settings_input_caret_anchor_ms = self.now_ms;
+                    self.set_settings_input_text(text);
                 }
             }
             AgentSettingsHit::RemoveBuiltinAgent(index) => {
@@ -403,7 +403,6 @@ impl WidgetHost {
                 if index < agents.len() {
                     agents.remove(index);
                     self.editor_state.editor_ui.agent_settings.focus = None;
-                    self.editor_state.editor_ui.settings_input_draft.clear();
                     self.clear_settings_caret();
                     self.editor_state.rebuild_chat_models();
                 }
@@ -416,7 +415,7 @@ impl WidgetHost {
                     .begin_builtin_agent_draft();
                 self.editor_state.editor_ui.agent_settings.focus =
                     Some(SettingsFocus::BuiltinAgentDraft(BuiltinAgentField::ApiKey));
-                self.editor_state.editor_ui.settings_input_draft = self
+                let text = self
                     .editor_state
                     .editor_ui
                     .agent_settings
@@ -424,7 +423,7 @@ impl WidgetHost {
                     .as_ref()
                     .map(|agent| agent.api_key.clone())
                     .unwrap_or_default();
-                self.editor_state.editor_ui.settings_input_caret_anchor_ms = self.now_ms;
+                self.set_settings_input_text(text);
             }
             AgentSettingsHit::SaveBuiltinAgentDraft => {
                 self.commit_settings_focus();
@@ -436,14 +435,12 @@ impl WidgetHost {
                     .is_some()
                 {
                     self.editor_state.editor_ui.agent_settings.focus = None;
-                    self.editor_state.editor_ui.settings_input_draft.clear();
                     self.clear_settings_caret();
                     self.editor_state.rebuild_chat_models();
                 } else {
                     self.editor_state.editor_ui.agent_settings.focus =
                         Some(SettingsFocus::BuiltinAgentDraft(BuiltinAgentField::ApiKey));
-                    self.editor_state.editor_ui.settings_input_draft.clear();
-                    self.editor_state.editor_ui.settings_input_caret_anchor_ms = self.now_ms;
+                    self.set_settings_input_text("");
                 }
             }
             AgentSettingsHit::CancelBuiltinAgentDraft => {
@@ -452,7 +449,6 @@ impl WidgetHost {
                     .agent_settings
                     .cancel_builtin_agent_draft();
                 self.editor_state.editor_ui.agent_settings.focus = None;
-                self.editor_state.editor_ui.settings_input_draft.clear();
                 self.clear_settings_caret();
             }
             AgentSettingsHit::FocusAcpAgent { index, field } => {
@@ -464,7 +460,7 @@ impl WidgetHost {
                     .acp_agents
                     .get(index)
                 {
-                    self.editor_state.editor_ui.settings_input_draft = match field {
+                    let text = match field {
                         AcpAgentField::DisplayName => agent.display_name.clone(),
                         AcpAgentField::Command => agent.command.clone(),
                         AcpAgentField::Args => agent.args_text(),
@@ -473,7 +469,7 @@ impl WidgetHost {
                     };
                     self.editor_state.editor_ui.agent_settings.focus =
                         Some(SettingsFocus::AcpAgent { index, field });
-                    self.editor_state.editor_ui.settings_input_caret_anchor_ms = self.now_ms;
+                    self.set_settings_input_text(text);
                 }
             }
             AgentSettingsHit::FocusAcpAgentDraft(field) => {
@@ -485,7 +481,7 @@ impl WidgetHost {
                     .acp_agent_draft
                     .as_ref()
                 {
-                    self.editor_state.editor_ui.settings_input_draft = match field {
+                    let text = match field {
                         AcpAgentField::DisplayName => agent.display_name.clone(),
                         AcpAgentField::Command => agent.command.clone(),
                         AcpAgentField::Args => agent.args_text(),
@@ -494,7 +490,7 @@ impl WidgetHost {
                     };
                     self.editor_state.editor_ui.agent_settings.focus =
                         Some(SettingsFocus::AcpAgentDraft(field));
-                    self.editor_state.editor_ui.settings_input_caret_anchor_ms = self.now_ms;
+                    self.set_settings_input_text(text);
                 }
             }
             AgentSettingsHit::ToggleAcpConnectionType(index) => {
@@ -515,7 +511,7 @@ impl WidgetHost {
                         AcpConnectionType::Local => AcpAgentField::Command,
                         AcpConnectionType::Remote => AcpAgentField::Url,
                     };
-                    self.editor_state.editor_ui.settings_input_draft = match field {
+                    let text = match field {
                         AcpAgentField::Command => agent.command.clone(),
                         AcpAgentField::Args => agent.args_text(),
                         AcpAgentField::Env => agent.env_text(),
@@ -524,7 +520,7 @@ impl WidgetHost {
                     };
                     self.editor_state.editor_ui.agent_settings.focus =
                         Some(SettingsFocus::AcpAgent { index, field });
-                    self.editor_state.editor_ui.settings_input_caret_anchor_ms = self.now_ms;
+                    self.set_settings_input_text(text);
                 }
             }
             AgentSettingsHit::ToggleAcpDraftConnectionType => {
@@ -545,7 +541,7 @@ impl WidgetHost {
                         AcpConnectionType::Local => AcpAgentField::Command,
                         AcpConnectionType::Remote => AcpAgentField::Url,
                     };
-                    self.editor_state.editor_ui.settings_input_draft = match field {
+                    let text = match field {
                         AcpAgentField::Command => agent.command.clone(),
                         AcpAgentField::Args => agent.args_text(),
                         AcpAgentField::Env => agent.env_text(),
@@ -554,7 +550,7 @@ impl WidgetHost {
                     };
                     self.editor_state.editor_ui.agent_settings.focus =
                         Some(SettingsFocus::AcpAgentDraft(field));
-                    self.editor_state.editor_ui.settings_input_caret_anchor_ms = self.now_ms;
+                    self.set_settings_input_text(text);
                 }
             }
             AgentSettingsHit::EditAcpAgent(index) => {
@@ -566,13 +562,13 @@ impl WidgetHost {
                     .acp_agents
                     .get(index)
                 {
-                    self.editor_state.editor_ui.settings_input_draft = agent.display_name.clone();
+                    let text = agent.display_name.clone();
                     self.editor_state.editor_ui.agent_settings.focus =
                         Some(SettingsFocus::AcpAgent {
                             index,
                             field: AcpAgentField::DisplayName,
                         });
-                    self.editor_state.editor_ui.settings_input_caret_anchor_ms = self.now_ms;
+                    self.set_settings_input_text(text);
                 }
             }
             AgentSettingsHit::RemoveAcpAgent(index) => {
@@ -581,7 +577,6 @@ impl WidgetHost {
                 if index < agents.len() {
                     agents.remove(index);
                     self.editor_state.editor_ui.agent_settings.focus = None;
-                    self.editor_state.editor_ui.settings_input_draft.clear();
                     self.clear_settings_caret();
                     self.editor_state.rebuild_chat_models();
                 }
@@ -604,7 +599,7 @@ impl WidgetHost {
                             AcpConnectionType::Local => AcpAgentField::Command,
                             AcpConnectionType::Remote => AcpAgentField::Url,
                         };
-                        self.editor_state.editor_ui.settings_input_draft = match field {
+                        let text = match field {
                             AcpAgentField::Command => agent.command.clone(),
                             AcpAgentField::Args => agent.args_text(),
                             AcpAgentField::Env => agent.env_text(),
@@ -613,7 +608,7 @@ impl WidgetHost {
                         };
                         self.editor_state.editor_ui.agent_settings.focus =
                             Some(SettingsFocus::AcpAgent { index, field });
-                        self.editor_state.editor_ui.settings_input_caret_anchor_ms = self.now_ms;
+                        self.set_settings_input_text(text);
                     }
                     self.editor_state.rebuild_chat_models();
                 }
@@ -626,7 +621,7 @@ impl WidgetHost {
                     .begin_acp_agent_draft();
                 self.editor_state.editor_ui.agent_settings.focus =
                     Some(SettingsFocus::AcpAgentDraft(AcpAgentField::Command));
-                self.editor_state.editor_ui.settings_input_draft = self
+                let text = self
                     .editor_state
                     .editor_ui
                     .agent_settings
@@ -634,7 +629,7 @@ impl WidgetHost {
                     .as_ref()
                     .map(|agent| agent.command.clone())
                     .unwrap_or_default();
-                self.editor_state.editor_ui.settings_input_caret_anchor_ms = self.now_ms;
+                self.set_settings_input_text(text);
             }
             AgentSettingsHit::SaveAcpAgentDraft => {
                 self.commit_settings_focus();
@@ -646,7 +641,6 @@ impl WidgetHost {
                     .is_some()
                 {
                     self.editor_state.editor_ui.agent_settings.focus = None;
-                    self.editor_state.editor_ui.settings_input_draft.clear();
                     self.clear_settings_caret();
                 } else {
                     let field = self
@@ -662,8 +656,7 @@ impl WidgetHost {
                         .unwrap_or(AcpAgentField::Command);
                     self.editor_state.editor_ui.agent_settings.focus =
                         Some(SettingsFocus::AcpAgentDraft(field));
-                    self.editor_state.editor_ui.settings_input_draft.clear();
-                    self.editor_state.editor_ui.settings_input_caret_anchor_ms = self.now_ms;
+                    self.set_settings_input_text("");
                 }
             }
             AgentSettingsHit::CancelAcpAgentDraft => {
@@ -672,7 +665,6 @@ impl WidgetHost {
                     .agent_settings
                     .cancel_acp_agent_draft();
                 self.editor_state.editor_ui.agent_settings.focus = None;
-                self.editor_state.editor_ui.settings_input_draft.clear();
                 self.clear_settings_caret();
             }
             AgentSettingsHit::Inside => {
@@ -705,7 +697,7 @@ impl WidgetHost {
             .image_gen_profiles
             .get(index)
         {
-            self.editor_state.editor_ui.settings_input_draft = match field {
+            let text = match field {
                 ImageGenField::Name => profile.name.clone(),
                 ImageGenField::ApiKey => profile.api_key.clone(),
                 ImageGenField::Model => profile.model.clone(),
@@ -713,7 +705,7 @@ impl WidgetHost {
             };
             self.editor_state.editor_ui.agent_settings.focus =
                 Some(SettingsFocus::ImageGenProfile { index, field });
-            self.editor_state.editor_ui.settings_input_caret_anchor_ms = self.now_ms;
+            self.set_settings_input_text(text);
         }
     }
 }

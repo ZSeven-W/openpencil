@@ -20,7 +20,10 @@ fn toggling_builtin_kind_commits_focused_api_key_draft() {
         index: 0,
         field: BuiltinAgentField::ApiKey,
     });
-    host.editor_state.editor_ui.settings_input_draft = "sk-web".into();
+    host.editor_state
+        .editor_ui
+        .settings_input
+        .set_text("sk-web");
 
     let panel = AgentSettingsPanel::for_editor(&host.editor_state);
     let rect = panel.rect(1200.0, 800.0);
@@ -64,10 +67,13 @@ fn add_provider_opens_unsaved_builtin_agent_draft() {
         settings.focus,
         Some(SettingsFocus::BuiltinAgentDraft(BuiltinAgentField::ApiKey))
     );
-    assert_eq!(host.editor_state.editor_ui.settings_input_draft, "");
+    assert_eq!(host.editor_state.editor_ui.settings_input.text(), "");
     assert_eq!(
-        host.editor_state.editor_ui.settings_input_caret_anchor_ms,
-        1234
+        host.editor_state
+            .editor_ui
+            .settings_input
+            .next_blink_flip_ms(1234),
+        1734
     );
 }
 
@@ -251,7 +257,10 @@ fn image_generation_profile_header_click_toggles_editor_closed() {
         index: 0,
         field: ImageGenField::Name,
     });
-    host.editor_state.editor_ui.settings_input_draft = "Config 1".into();
+    host.editor_state
+        .editor_ui
+        .settings_input
+        .set_text("Config 1");
 
     let panel = AgentSettingsPanel::for_editor(&host.editor_state);
     let rect = panel.rect(1200.0, 800.0);
@@ -263,7 +272,7 @@ fn image_generation_profile_header_click_toggles_editor_closed() {
     assert!(host.dispatch_agent_settings_press(content_x + 72.0, row_y + 16.0, 1200.0, 800.0));
 
     assert_eq!(host.editor_state.editor_ui.agent_settings.focus, None);
-    assert!(host.editor_state.editor_ui.settings_input_draft.is_empty());
+    assert!(host.editor_state.editor_ui.settings_input.text().is_empty());
 }
 
 #[test]
