@@ -82,7 +82,7 @@ pub fn code_hover_at_with_locale(
         .map(|(a, _)| a);
     match hit {
         Some(CodegenAction::SelectFramework(fw)) => (Some(fw), None),
-        Some(action) => (None, hover_for_action(action)),
+        Some(action) => (None, codegen_hover_for_action(action)),
         None => (None, None),
     }
 }
@@ -177,7 +177,7 @@ struct CodePanelLayout {
     panel_bottom: Option<f32>,
 }
 
-fn hover_for_action(action: CodegenAction) -> Option<CodegenHover> {
+pub fn codegen_hover_for_action(action: CodegenAction) -> Option<CodegenHover> {
     match action {
         CodegenAction::SelectFramework(_) => None,
         CodegenAction::Generate => Some(CodegenHover::Generate),
@@ -781,6 +781,7 @@ pub fn paint_code_panel_at_with_locale(
             panel_bottom: None,
         },
         now_ms,
+        None,
     )
 }
 
@@ -804,6 +805,20 @@ pub fn paint_code_panel_in_panel_with_locale(
     panel_rect: Rect,
     now_ms: u64,
 ) -> f32 {
+    paint_code_panel_in_panel_with_locale_and_pressed(
+        cx, theme, state, locale, panel_rect, now_ms, None,
+    )
+}
+
+pub fn paint_code_panel_in_panel_with_locale_and_pressed(
+    cx: &mut PaintCx<'_>,
+    theme: &Theme,
+    state: &CodegenState,
+    locale: Locale,
+    panel_rect: Rect,
+    now_ms: u64,
+    pressed: Option<CodegenHover>,
+) -> f32 {
     paint_code_panel_with_bottom(
         cx,
         theme,
@@ -816,6 +831,7 @@ pub fn paint_code_panel_in_panel_with_locale(
             panel_bottom: Some(panel_bottom(panel_rect)),
         },
         now_ms,
+        pressed,
     )
 }
 
@@ -826,6 +842,7 @@ fn paint_code_panel_with_bottom(
     strings: CodePanelStrings,
     layout: CodePanelLayout,
     now_ms: u64,
+    pressed: Option<CodegenHover>,
 ) -> f32 {
     // A faint section label keeps the panel head consistent with Design.
     let x = layout.x;
@@ -849,6 +866,7 @@ fn paint_code_panel_with_bottom(
                 progress_row_h: PROGRESS_ROW_H,
                 panel_bottom: layout.panel_bottom,
             },
+            pressed,
         ),
         CodegenPhase::Error => paint_error_body(cx, theme, state, strings, x, y, w),
     }

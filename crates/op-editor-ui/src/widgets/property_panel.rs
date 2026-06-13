@@ -189,6 +189,8 @@ pub struct PropertyPanel {
     /// `EditorState` at construction (like `snapshot`) so the panel
     /// owns an immutable view; generation logic is wired later (P3).
     pub codegen: op_editor_core::codegen::CodegenState,
+    /// Pressed Code-tab action currently held by the primary pointer.
+    pub codegen_pressed: Option<op_editor_core::codegen::CodegenHover>,
     /// Index into `action_button_rects_with_fill_picker` of the action
     /// button the cursor is over — drives its `theme.button_hover` wash.
     pub action_hover: Option<usize>,
@@ -424,6 +426,10 @@ impl PropertyPanel {
                 ui.effect_param_focus
             },
             codegen,
+            codegen_pressed: match ui.pressed_button {
+                Some(op_editor_core::ButtonPressTarget::Codegen(hover)) => Some(hover),
+                _ => None,
+            },
         }
     }
 
@@ -838,13 +844,14 @@ impl Widget for PropertyPanel {
         };
         let caps = self.capabilities();
         if matches!(self.tab, op_editor_core::PropertyTab::Code) {
-            crate::widgets::property_panel_code::paint_code_panel_in_panel_with_locale(
+            crate::widgets::property_panel_code::paint_code_panel_in_panel_with_locale_and_pressed(
                 cx,
                 &self.theme,
                 &self.codegen,
                 self.locale,
                 rect,
                 self.now_ms,
+                self.codegen_pressed,
             );
             return;
         }

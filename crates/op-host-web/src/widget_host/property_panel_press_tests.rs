@@ -1,5 +1,8 @@
 use super::WidgetHost;
+use op_editor_core::codegen::{CodegenHover, CodegenPhase};
+use op_editor_core::PropertyTab;
 use op_editor_core::{ButtonPressTarget, NodeId};
+use op_editor_ui::widgets::property_panel_action::CodegenAction;
 use op_editor_ui::widgets::{PropertyPanel, PropertyPanelAction, TOP_BAR_HEIGHT};
 use op_editor_ui::{Point2D, Rect};
 
@@ -70,6 +73,30 @@ fn property_panel_action_press_sets_and_release_clears_pressed_button() {
     assert_eq!(
         host.editor_state.editor_ui.pressed_button,
         Some(ButtonPressTarget::PropertyPanel(expected_index))
+    );
+
+    assert!(host.apply_release_with_viewport(VIEWPORT_W, VIEWPORT_H));
+    assert_eq!(host.editor_state.editor_ui.pressed_button, None);
+}
+
+#[test]
+fn codegen_action_press_sets_and_release_clears_pressed_button() {
+    let mut host = WidgetHost::new();
+    host.editor_state.editor_ui.property_tab = PropertyTab::Code;
+    host.editor_state.codegen.phase = CodegenPhase::Complete;
+    host.editor_state.codegen.code = "fn main() {\n    println!(\"hi\");\n}\n".into();
+
+    let point = point_for_action(&host, |action| {
+        matches!(
+            action,
+            PropertyPanelAction::Codegen(CodegenAction::Regenerate)
+        )
+    });
+
+    assert!(host.apply_press(point.x, point.y, VIEWPORT_W, VIEWPORT_H));
+    assert_eq!(
+        host.editor_state.editor_ui.pressed_button,
+        Some(ButtonPressTarget::Codegen(CodegenHover::Regenerate))
     );
 
     assert!(host.apply_release_with_viewport(VIEWPORT_W, VIEWPORT_H));

@@ -1,6 +1,7 @@
 use super::code_i18n::CodePanelStrings;
 use super::{action_hovered, draw_line, origin};
 use crate::theme::Theme;
+use crate::widgets::button::paint_button_feedback_wash;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::property_panel_inputs::{INPUT_RADIUS, PAD_X};
 use crate::widgets::PaintCx;
@@ -88,6 +89,7 @@ pub(super) fn paint_complete_body_in_panel(
     state: &CodegenState,
     strings: CodePanelStrings,
     layout: CompleteLayout,
+    pressed: Option<CodegenHover>,
 ) -> f32 {
     let mut y = layout.y;
     if state.degraded {
@@ -137,7 +139,15 @@ pub(super) fn paint_complete_body_in_panel(
     ];
     let rects = action_chip_rects(layout.x, y, layout.w, strings);
     for ((icon, label, hover), rect) in actions.iter().zip(rects) {
-        paint_action_chip(cx, theme, *icon, label, rect, action_hovered(state, *hover));
+        paint_action_chip(
+            cx,
+            theme,
+            *icon,
+            label,
+            rect,
+            action_hovered(state, *hover),
+            pressed == Some(*hover),
+        );
     }
     y + ACTION_CHIP_H + 12.0
 }
@@ -649,11 +659,11 @@ fn paint_action_chip(
     label: &str,
     rect: Rect,
     hovered: bool,
+    pressed: bool,
 ) {
     cx.backend.fill_round_rect(rect, INPUT_RADIUS, theme.card);
-    if hovered {
-        cx.backend
-            .fill_round_rect(rect, INPUT_RADIUS, theme.button_hover);
+    if hovered || pressed {
+        paint_button_feedback_wash(cx.backend, theme, rect, INPUT_RADIUS, hovered, pressed);
     }
     cx.backend
         .stroke_round_rect(rect, INPUT_RADIUS, theme.border, 1.0);
