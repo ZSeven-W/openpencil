@@ -332,22 +332,22 @@ fn wheel_over_panel_scrolls_rows_and_clamps() {
 
     // Wheel scroll-down advances the list.
     assert!(host.apply_wheel(cx, cy, -60.0, VIEWPORT_W, VIEWPORT_H));
-    assert!(host.editor_state().editor_ui.variables_scroll > 0.0);
+    assert!(host.editor_state().editor_ui.variables_scroll.offset > 0.0);
 
     // Huge scroll clamps to max.
     assert!(host.apply_wheel(cx, cy, -1.0e6, VIEWPORT_W, VIEWPORT_H));
     let panel = VariablesPanel::for_editor(host.editor_state());
     let max = panel.max_scroll(rect);
     assert!(max > 0.0);
-    assert_eq!(host.editor_state().editor_ui.variables_scroll, max);
+    assert_eq!(host.editor_state().editor_ui.variables_scroll.offset, max);
 
     // Scroll back past the top clamps to 0.
     assert!(host.apply_wheel(cx, cy, 1.0e6, VIEWPORT_W, VIEWPORT_H));
-    assert_eq!(host.editor_state().editor_ui.variables_scroll, 0.0);
+    assert_eq!(host.editor_state().editor_ui.variables_scroll.offset, 0.0);
 
     // A scrolled list maps hits through the offset: with max scroll,
     // the LAST row sits just above the footer.
-    host.editor_state_mut().editor_ui.variables_scroll = max;
+    host.editor_state_mut().editor_ui.variables_scroll.offset = max;
     let panel = VariablesPanel::for_editor(host.editor_state());
     let footer_top = rect.origin.y + rect.size.y - 40.0;
     let hit = panel.hit_test(rect, Point2D::new(rect.origin.x + 60.0, footer_top - 20.0));

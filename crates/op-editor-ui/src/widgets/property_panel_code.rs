@@ -479,7 +479,7 @@ fn paint_framework_chips(
     // Clip the strip so scrolled-off chips don't bleed past the panel edges.
     cx.backend.save();
     cx.backend.clip_rect(band);
-    for (fw, chip) in framework_chip_rects(x, y, w, state.framework_scroll) {
+    for (fw, chip) in framework_chip_rects(x, y, w, state.framework_scroll.offset) {
         // Skip chips fully outside the visible band (cheap cull).
         if chip.origin.x + chip.size.x < band.origin.x
             || chip.origin.x > band.origin.x + band.size.x
@@ -523,7 +523,7 @@ fn paint_framework_chips(
             theme,
             Icon::ChevronLeft,
             left,
-            state.framework_scroll > 0.0,
+            state.framework_scroll.offset > 0.0,
             action_hovered(state, CodegenHover::ScrollFrameworksLeft),
         );
         paint_chevron(
@@ -531,7 +531,7 @@ fn paint_framework_chips(
             theme,
             Icon::ChevronRight,
             right,
-            state.framework_scroll < max,
+            state.framework_scroll.offset < max,
             action_hovered(state, CodegenHover::ScrollFrameworksRight),
         );
     }
@@ -908,7 +908,7 @@ fn code_action_rects_with_bottom(
     }
     let inset = if zones.is_some() { CHEVRON_ZONE_W } else { 0.0 };
     let (band_l, band_r) = (x + PAD_X + inset, x + w - PAD_X - inset);
-    for (fw, rect) in framework_chip_rects(x, chips_y, w, state.framework_scroll) {
+    for (fw, rect) in framework_chip_rects(x, chips_y, w, state.framework_scroll.offset) {
         // Clamp the clickable rect to the visible (chevron-inset) band so a
         // chip's scrolled-off / clipped portion is NOT clickable (matches the
         // painter's clip and the hover hit-test in `framework_at`).

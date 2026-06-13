@@ -4,8 +4,15 @@
 //! otherwise zoom / pan the canvas.
 
 use super::WidgetHostNative;
+use jian_core::scroll::ScrollState;
 use op_editor_ui::widgets::GitPanel;
 use op_editor_ui::Point2D;
+
+fn scroll_by_max(scroll: &mut ScrollState, delta: f32, max: f32) -> bool {
+    let before = scroll.offset;
+    scroll.scroll_by(delta, max, 0.0);
+    scroll.offset != before
+}
 
 impl WidgetHostNative {
     fn try_scroll_chat_checklist(
@@ -31,9 +38,7 @@ impl WidgetHostNative {
         if !(checklist).contains(point) {
             return false;
         }
-        let next = (self.editor_state.chat.checklist_scroll - delta).clamp(0.0, max);
-        if next != self.editor_state.chat.checklist_scroll {
-            self.editor_state.chat.checklist_scroll = next;
+        if scroll_by_max(&mut self.editor_state.chat.checklist_scroll, -delta, max) {
             self.mark_dirty();
         }
         true
@@ -56,9 +61,7 @@ impl WidgetHostNative {
             return false;
         };
         let settings = &mut self.editor_state.editor_ui.agent_settings;
-        let next = (settings.builtin_preset_menu_scroll - delta).clamp(0.0, max);
-        if next != settings.builtin_preset_menu_scroll {
-            settings.builtin_preset_menu_scroll = next;
+        if scroll_by_max(&mut settings.builtin_preset_menu_scroll, -delta, max) {
             self.mark_dirty();
         }
         true
@@ -88,9 +91,11 @@ impl WidgetHostNative {
         use op_editor_ui::widgets::variables_panel::VariablesPanel;
         let panel = VariablesPanel::for_editor(&self.editor_state);
         let max = panel.max_scroll(panel_rect);
-        let next = (self.editor_state.editor_ui.variables_scroll - delta_y).clamp(0.0, max);
-        if next != self.editor_state.editor_ui.variables_scroll {
-            self.editor_state.editor_ui.variables_scroll = next;
+        if scroll_by_max(
+            &mut self.editor_state.editor_ui.variables_scroll,
+            -delta_y,
+            max,
+        ) {
             self.mark_dirty();
         }
         true
@@ -165,9 +170,7 @@ impl WidgetHostNative {
             if y >= band_top && y <= band_bottom {
                 let max = op_editor_ui::widgets::property_panel_code::framework_row_overflow(pw);
                 let cg = &mut self.editor_state.codegen;
-                let next = (cg.framework_scroll - delta).clamp(0.0, max);
-                if next != cg.framework_scroll {
-                    cg.framework_scroll = next;
+                if scroll_by_max(&mut cg.framework_scroll, -delta, max) {
                     self.mark_dirty();
                 }
                 return true;
@@ -184,18 +187,18 @@ impl WidgetHostNative {
                 )
                 .unwrap_or(0.0);
                 let cg = &mut self.editor_state.codegen;
-                let next = (cg.code_scroll - delta).clamp(0.0, max);
-                if next != cg.code_scroll {
-                    cg.code_scroll = next;
+                if scroll_by_max(&mut cg.code_scroll, -delta, max) {
                     self.mark_dirty();
                 }
                 return true;
             }
         }
         let max = (panel.content_height(property_rect) - property_rect.size.y).max(0.0);
-        let next = (self.editor_state.editor_ui.property_panel_scroll - delta).clamp(0.0, max);
-        if next != self.editor_state.editor_ui.property_panel_scroll {
-            self.editor_state.editor_ui.property_panel_scroll = next;
+        if scroll_by_max(
+            &mut self.editor_state.editor_ui.property_panel_scroll,
+            -delta,
+            max,
+        ) {
             self.mark_dirty();
         }
         true
@@ -230,35 +233,39 @@ impl WidgetHostNative {
         let mut changed = false;
         if y >= r.layers_rows_top {
             if delta_y != 0.0 {
-                let next = (self.editor_state.editor_ui.layer_layers_scroll - delta_y)
-                    .clamp(0.0, r.layers_max_scroll);
-                if next != self.editor_state.editor_ui.layer_layers_scroll {
-                    self.editor_state.editor_ui.layer_layers_scroll = next;
+                if scroll_by_max(
+                    &mut self.editor_state.editor_ui.layer_layers_scroll,
+                    -delta_y,
+                    r.layers_max_scroll,
+                ) {
                     changed = true;
                 }
             }
             if delta_x != 0.0 {
-                let next = (self.editor_state.editor_ui.layer_layers_h_scroll - delta_x)
-                    .clamp(0.0, r.layers_max_h_scroll);
-                if next != self.editor_state.editor_ui.layer_layers_h_scroll {
-                    self.editor_state.editor_ui.layer_layers_h_scroll = next;
+                if scroll_by_max(
+                    &mut self.editor_state.editor_ui.layer_layers_h_scroll,
+                    -delta_x,
+                    r.layers_max_h_scroll,
+                ) {
                     changed = true;
                 }
             }
         } else {
             if delta_y != 0.0 {
-                let next = (self.editor_state.editor_ui.layer_pages_scroll - delta_y)
-                    .clamp(0.0, r.pages_max_scroll);
-                if next != self.editor_state.editor_ui.layer_pages_scroll {
-                    self.editor_state.editor_ui.layer_pages_scroll = next;
+                if scroll_by_max(
+                    &mut self.editor_state.editor_ui.layer_pages_scroll,
+                    -delta_y,
+                    r.pages_max_scroll,
+                ) {
                     changed = true;
                 }
             }
             if delta_x != 0.0 {
-                let next = (self.editor_state.editor_ui.layer_pages_h_scroll - delta_x)
-                    .clamp(0.0, r.pages_max_h_scroll);
-                if next != self.editor_state.editor_ui.layer_pages_h_scroll {
-                    self.editor_state.editor_ui.layer_pages_h_scroll = next;
+                if scroll_by_max(
+                    &mut self.editor_state.editor_ui.layer_pages_h_scroll,
+                    -delta_x,
+                    r.pages_max_h_scroll,
+                ) {
                     changed = true;
                 }
             }
@@ -342,9 +349,11 @@ impl WidgetHostNative {
                 let total = panel.content_total_height();
                 let viewport_h_inner = panel_rect.size.y - 48.0;
                 let max_scroll = (total - viewport_h_inner).max(0.0);
-                let next = (self.editor_state.editor_ui.agent_settings.scroll_y - delta_y)
-                    .clamp(0.0, max_scroll);
-                self.editor_state.editor_ui.agent_settings.scroll_y = next;
+                self.editor_state
+                    .editor_ui
+                    .agent_settings
+                    .scroll_y
+                    .scroll_by(-delta_y, max_scroll, 0.0);
                 self.mark_dirty();
                 return true;
             }
@@ -484,9 +493,11 @@ impl WidgetHostNative {
                 let total = panel.content_total_height();
                 let viewport_h_inner = panel_rect.size.y - 48.0;
                 let max_scroll = (total - viewport_h_inner).max(0.0);
-                let next = (self.editor_state.editor_ui.agent_settings.scroll_y - dy)
-                    .clamp(0.0, max_scroll);
-                self.editor_state.editor_ui.agent_settings.scroll_y = next;
+                self.editor_state
+                    .editor_ui
+                    .agent_settings
+                    .scroll_y
+                    .scroll_by(-dy, max_scroll, 0.0);
                 self.mark_dirty();
                 return true;
             }

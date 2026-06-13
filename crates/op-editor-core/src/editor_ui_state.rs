@@ -835,20 +835,20 @@ pub struct EditorUiState {
     /// (≥ 0). A wheel / trackpad pan over the inspector advances it;
     /// paint + hit-test shift the section content up by this amount
     /// so a tall inspector (many effects, etc.) stays reachable.
-    pub property_panel_scroll: f32,
+    pub property_panel_scroll: jian_core::scroll::ScrollState,
     /// Vertical scroll offset (px, ≥ 0) of the LayerPanel's 页面
     /// (Pages) section — that section has a bounded height, so a
     /// long page list scrolls within it.
-    pub layer_pages_scroll: f32,
+    pub layer_pages_scroll: jian_core::scroll::ScrollState,
     /// Vertical scroll offset (px, ≥ 0) of the LayerPanel's 图层
     /// (Layers) section row viewport.
-    pub layer_layers_scroll: f32,
+    pub layer_layers_scroll: jian_core::scroll::ScrollState,
     /// Horizontal scroll offset (px, ≥ 0) of the LayerPanel's 页面
     /// row content. The row chrome stays fixed; only tree content shifts.
-    pub layer_pages_h_scroll: f32,
+    pub layer_pages_h_scroll: jian_core::scroll::ScrollState,
     /// Horizontal scroll offset (px, ≥ 0) of the LayerPanel's 图层
     /// tree content. Needed for deeply nested layer trees.
-    pub layer_layers_h_scroll: f32,
+    pub layer_layers_h_scroll: jian_core::scroll::ScrollState,
     /// "Import from Figma" modal.
     pub figma_import_open: bool,
     /// Which Figma-import target the cursor is over (close / drop-zone)
@@ -1045,7 +1045,7 @@ pub struct EditorUiState {
     /// Whether the variables-panel search box owns the keyboard.
     pub variables_search_focus: bool,
     /// Vertical scroll offset (px) of the variables row list.
-    pub variables_scroll: f32,
+    pub variables_scroll: jian_core::scroll::ScrollState,
     /// Variable row whose `⋯` overflow menu (Rename / Delete) is open.
     /// Indexes the UNFILTERED `doc.variables` order.
     pub variables_row_menu: Option<usize>,
@@ -1198,11 +1198,11 @@ impl Default for EditorUiState {
             export_picker_hover: None,
             property_action_hover: None,
             property_tab_hover: None,
-            property_panel_scroll: 0.0,
-            layer_pages_scroll: 0.0,
-            layer_layers_scroll: 0.0,
-            layer_pages_h_scroll: 0.0,
-            layer_layers_h_scroll: 0.0,
+            property_panel_scroll: Default::default(),
+            layer_pages_scroll: Default::default(),
+            layer_layers_scroll: Default::default(),
+            layer_pages_h_scroll: Default::default(),
+            layer_layers_h_scroll: Default::default(),
             figma_import_open: false,
             figma_import_hover: None,
             figma_import_in_progress: false,
@@ -1274,7 +1274,7 @@ impl Default for EditorUiState {
             variable_row_input: jian_core::text_input::TextInputState::default(),
             variables_search: String::new(),
             variables_search_focus: false,
-            variables_scroll: 0.0,
+            variables_scroll: Default::default(),
             variables_row_menu: None,
             variables_panel_size: None,
             effect_param_focus: None,
@@ -1498,10 +1498,10 @@ impl EditorUiState {
         self.hovered_layer_id = None;
         self.hovered_page_index = None;
         self.layer_context_menu = None;
-        self.layer_pages_scroll = 0.0;
-        self.layer_layers_scroll = 0.0;
-        self.layer_pages_h_scroll = 0.0;
-        self.layer_layers_h_scroll = 0.0;
+        self.layer_pages_scroll.offset = 0.0;
+        self.layer_layers_scroll.offset = 0.0;
+        self.layer_pages_h_scroll.offset = 0.0;
+        self.layer_layers_h_scroll.offset = 0.0;
         self.collapsed_layers.clear();
         self.last_layer_click = None;
         self.last_canvas_click = None;
@@ -1523,7 +1523,7 @@ impl EditorUiState {
         // metric and is preserved.
         self.variables_search.clear();
         self.variables_search_focus = false;
-        self.variables_scroll = 0.0;
+        self.variables_scroll.offset = 0.0;
         self.variables_row_menu = None;
         self.effect_param_focus = None;
         // Document-derived: set true only by a Figma import to keep that
@@ -1553,6 +1553,25 @@ mod tests {
         assert_eq!(c.flex_layout, FlexLayout::Free);
         assert!(c.recent_files.is_empty());
         assert!(c.collapsed_layers.is_empty());
+    }
+
+    #[test]
+    fn editor_pixel_scroll_fields_use_scroll_state() {
+        let mut s = EditorUiState::default();
+
+        s.property_panel_scroll.offset = 12.0;
+        s.layer_pages_scroll.offset = 24.0;
+        s.layer_layers_scroll.offset = 36.0;
+        s.layer_pages_h_scroll.offset = 48.0;
+        s.layer_layers_h_scroll.offset = 60.0;
+        s.variables_scroll.offset = 72.0;
+
+        assert_eq!(s.property_panel_scroll.offset, 12.0);
+        assert_eq!(s.layer_pages_scroll.offset, 24.0);
+        assert_eq!(s.layer_layers_scroll.offset, 36.0);
+        assert_eq!(s.layer_pages_h_scroll.offset, 48.0);
+        assert_eq!(s.layer_layers_h_scroll.offset, 60.0);
+        assert_eq!(s.variables_scroll.offset, 72.0);
     }
 
     #[test]

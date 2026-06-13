@@ -2,10 +2,17 @@
 //! `widget_host.rs` so the spine stays under the 800-line cap.
 //! Mirrors the native host's `widget_host/scroll.rs`.
 
+use jian_core::scroll::ScrollState;
 use op_editor_ui::widgets::{LayerPanel, PropertyPanel, TOP_BAR_HEIGHT};
 use op_editor_ui::{Point2D, Rect};
 
 use super::WidgetHost;
+
+fn scroll_by_max(scroll: &mut ScrollState, delta: f32, max: f32) -> bool {
+    let before = scroll.offset;
+    scroll.scroll_by(delta, max, 0.0);
+    scroll.offset != before
+}
 
 impl WidgetHost {
     /// Scroll the floating VariablesPanel row list when the wheel
@@ -32,9 +39,11 @@ impl WidgetHost {
         use op_editor_ui::widgets::variables_panel::VariablesPanel;
         let panel = VariablesPanel::for_editor(&self.editor_state);
         let max = panel.max_scroll(panel_rect);
-        let next = (self.editor_state.editor_ui.variables_scroll - delta_y).clamp(0.0, max);
-        if next != self.editor_state.editor_ui.variables_scroll {
-            self.editor_state.editor_ui.variables_scroll = next;
+        if scroll_by_max(
+            &mut self.editor_state.editor_ui.variables_scroll,
+            -delta_y,
+            max,
+        ) {
             self.mark_dirty();
         }
         true
@@ -113,9 +122,7 @@ impl WidgetHost {
             if y >= band_top && y <= band_bottom {
                 let max = op_editor_ui::widgets::property_panel_code::framework_row_overflow(pw);
                 let cg = &mut self.editor_state.codegen;
-                let next = (cg.framework_scroll - delta_y).clamp(0.0, max);
-                if next != cg.framework_scroll {
-                    cg.framework_scroll = next;
+                if scroll_by_max(&mut cg.framework_scroll, -delta_y, max) {
                     self.mark_dirty();
                 }
                 return true;
@@ -132,18 +139,18 @@ impl WidgetHost {
                 )
                 .unwrap_or(0.0);
                 let cg = &mut self.editor_state.codegen;
-                let next = (cg.code_scroll - delta_y).clamp(0.0, max);
-                if next != cg.code_scroll {
-                    cg.code_scroll = next;
+                if scroll_by_max(&mut cg.code_scroll, -delta_y, max) {
                     self.mark_dirty();
                 }
                 return true;
             }
         }
         let max = (panel.content_height(property_rect) - property_rect.size.y).max(0.0);
-        let next = (self.editor_state.editor_ui.property_panel_scroll - delta_y).clamp(0.0, max);
-        if next != self.editor_state.editor_ui.property_panel_scroll {
-            self.editor_state.editor_ui.property_panel_scroll = next;
+        if scroll_by_max(
+            &mut self.editor_state.editor_ui.property_panel_scroll,
+            -delta_y,
+            max,
+        ) {
             self.mark_dirty();
         }
         true
@@ -172,17 +179,19 @@ impl WidgetHost {
         }
         let r = LayerPanel::from_editor(&self.editor_state).regions(rect);
         if y >= r.layers_rows_top {
-            let next = (self.editor_state.editor_ui.layer_layers_scroll - delta_y)
-                .clamp(0.0, r.layers_max_scroll);
-            if next != self.editor_state.editor_ui.layer_layers_scroll {
-                self.editor_state.editor_ui.layer_layers_scroll = next;
+            if scroll_by_max(
+                &mut self.editor_state.editor_ui.layer_layers_scroll,
+                -delta_y,
+                r.layers_max_scroll,
+            ) {
                 self.mark_dirty();
             }
         } else {
-            let next = (self.editor_state.editor_ui.layer_pages_scroll - delta_y)
-                .clamp(0.0, r.pages_max_scroll);
-            if next != self.editor_state.editor_ui.layer_pages_scroll {
-                self.editor_state.editor_ui.layer_pages_scroll = next;
+            if scroll_by_max(
+                &mut self.editor_state.editor_ui.layer_pages_scroll,
+                -delta_y,
+                r.pages_max_scroll,
+            ) {
                 self.mark_dirty();
             }
         }

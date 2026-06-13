@@ -149,7 +149,7 @@ impl<'a> AgentSettingsPanel<'a> {
         }
         // Translate the cursor into the scrolled content frame
         // for hit-tests over scrollable rows.
-        let scrolled = Point2D::new(point.x, point.y + self.settings.scroll_y);
+        let scrolled = Point2D::new(point.x, point.y + self.settings.scroll_y.offset);
         match self.settings.tab {
             AgentSettingsTab::Agents => {
                 match agent_settings_builtin::hit_test(
@@ -303,7 +303,7 @@ impl<'a> AgentSettingsPanel<'a> {
         if !(panel).contains(point) {
             return None;
         }
-        let scrolled = Point2D::new(point.x, point.y + self.settings.scroll_y);
+        let scrolled = Point2D::new(point.x, point.y + self.settings.scroll_y.offset);
         (0..AgentProvider::ALL.len())
             .find(|&i| (agent_card_rect_in(panel, i, &self.settings)).contains(scrolled))
     }
@@ -312,7 +312,7 @@ impl<'a> AgentSettingsPanel<'a> {
         if !(panel).contains(point) {
             return None;
         }
-        let scrolled = Point2D::new(point.x, point.y + self.settings.scroll_y);
+        let scrolled = Point2D::new(point.x, point.y + self.settings.scroll_y.offset);
         agent_settings_builtin::card_at(content_rect(panel), &self.settings, scrolled)
     }
 
@@ -321,7 +321,7 @@ impl<'a> AgentSettingsPanel<'a> {
             return None;
         }
         let content = content_rect(panel);
-        let scrolled = Point2D::new(point.x, point.y + self.settings.scroll_y);
+        let scrolled = Point2D::new(point.x, point.y + self.settings.scroll_y.offset);
         let section_y = acp_section_y(content, &self.settings);
         agent_settings_acp::card_at(content, &self.settings, scrolled, section_y)
     }
@@ -334,7 +334,7 @@ impl<'a> AgentSettingsPanel<'a> {
         if !(panel).contains(point) {
             return None;
         }
-        let scrolled = Point2D::new(point.x, point.y + self.settings.scroll_y);
+        let scrolled = Point2D::new(point.x, point.y + self.settings.scroll_y.offset);
         agent_settings_builtin::preset_hover_at(content_rect(panel), &self.settings, scrolled)
     }
 
@@ -342,7 +342,7 @@ impl<'a> AgentSettingsPanel<'a> {
         if !(panel).contains(point) {
             return None;
         }
-        let scrolled = Point2D::new(point.x, point.y + self.settings.scroll_y);
+        let scrolled = Point2D::new(point.x, point.y + self.settings.scroll_y.offset);
         agent_settings_builtin::preset_scroll_max_at(content_rect(panel), &self.settings, scrolled)
     }
 
@@ -350,7 +350,7 @@ impl<'a> AgentSettingsPanel<'a> {
         if !(panel).contains(point) {
             return false;
         }
-        let scrolled = Point2D::new(point.x, point.y + self.settings.scroll_y);
+        let scrolled = Point2D::new(point.x, point.y + self.settings.scroll_y.offset);
         agent_settings_images::search_test_button_hover_at(
             content_rect(panel),
             &self.settings,
@@ -362,7 +362,7 @@ impl<'a> AgentSettingsPanel<'a> {
         if !(panel).contains(point) {
             return false;
         }
-        let scrolled = Point2D::new(point.x, point.y + self.settings.scroll_y);
+        let scrolled = Point2D::new(point.x, point.y + self.settings.scroll_y.offset);
         agent_settings_images::add_gen_button_hover_at(
             content_rect(panel),
             &self.settings,
@@ -378,7 +378,7 @@ impl<'a> AgentSettingsPanel<'a> {
         if !(panel).contains(point) {
             return None;
         }
-        let scrolled = Point2D::new(point.x, point.y + self.settings.scroll_y);
+        let scrolled = Point2D::new(point.x, point.y + self.settings.scroll_y.offset);
         agent_settings_images::profile_test_button_hover_at(
             content_rect(panel),
             &self.settings,
@@ -447,7 +447,8 @@ fn paint_panel(
     let content_rect = content_rect(panel);
     cx.backend.save();
     cx.backend.clip_rect(content_rect);
-    cx.backend.translate(Point2D::new(0.0, -settings.scroll_y));
+    cx.backend
+        .translate(Point2D::new(0.0, -settings.scroll_y.offset));
     match settings.tab {
         AgentSettingsTab::Agents => {
             paint_agents_tab(cx, theme, settings, _ui, content_rect, now_ms)

@@ -377,16 +377,16 @@ fn wheel_scrolls_rows_and_resize_drag_resizes() {
     let cx = rect.origin.x + rect.size.x / 2.0;
     let cy = rect.origin.y + rect.size.y / 2.0;
     assert!(host.apply_wheel(cx, cy, -60.0, W, H));
-    assert!(host.editor_state.editor_ui.variables_scroll > 0.0);
+    assert!(host.editor_state.editor_ui.variables_scroll.offset > 0.0);
     // Huge values clamp.
     assert!(host.apply_wheel(cx, cy, -1.0e6, W, H));
     let panel = VariablesPanel::for_editor(&host.editor_state);
     assert_eq!(
-        host.editor_state.editor_ui.variables_scroll,
+        host.editor_state.editor_ui.variables_scroll.offset,
         panel.max_scroll(rect)
     );
     assert!(host.apply_wheel(cx, cy, 1.0e6, W, H));
-    assert_eq!(host.editor_state.editor_ui.variables_scroll, 0.0);
+    assert_eq!(host.editor_state.editor_ui.variables_scroll.offset, 0.0);
 
     // Right-edge press arms a resize; drag narrows; release ends.
     let edge_x = rect.origin.x + rect.size.x - 2.0;

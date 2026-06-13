@@ -532,7 +532,9 @@ fn complete_code_preview_hit_test_respects_vertical_scroll() {
         .join("\n");
     let state = CodegenState {
         phase: CodegenPhase::Complete,
-        code_scroll: 16.0 * 10.0,
+        code_scroll: jian_core::scroll::ScrollState {
+            offset: 16.0 * 10.0,
+        },
         code,
         ..CodegenState::default()
     };

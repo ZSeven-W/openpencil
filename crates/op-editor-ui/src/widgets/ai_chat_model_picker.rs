@@ -434,19 +434,14 @@ pub fn paint_model_picker(
     // unscrolled card space. Shown only when the content overflows.
     let content_h = picker_list_height(models, search);
     let view_h = list_rect.size.y;
-    if content_h > view_h + 0.5 {
-        let track_h = view_h - 8.0;
-        let thumb_h = (track_h * view_h / content_h).max(24.0);
-        let max_scroll = (content_h - view_h).max(0.0);
-        let t = if max_scroll > 0.0 {
-            (scroll / max_scroll).clamp(0.0, 1.0)
-        } else {
-            0.0
-        };
-        let thumb_y = list_rect.origin.y + 4.0 + t * (track_h - thumb_h);
+    let track_h = (view_h - 8.0).max(0.0);
+    if let Some(thumb_geom) =
+        (jian_core::scroll::ScrollState { offset: scroll }).thumb(track_h, content_h, view_h, 24.0)
+    {
+        let thumb_y = list_rect.origin.y + 4.0 + thumb_geom.offset;
         let thumb = Rect {
             origin: Point2D::new(rect.origin.x + rect.size.x - 6.0, thumb_y),
-            size: Point2D::new(3.0, thumb_h),
+            size: Point2D::new(3.0, thumb_geom.len),
         };
         cx.backend
             .fill_round_rect(thumb, 1.5, theme.muted_foreground);

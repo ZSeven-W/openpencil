@@ -344,7 +344,7 @@ pub struct ChatState {
     /// pinned above the input, mirroring the TS checklist header.
     pub checklist_collapsed: bool,
     /// Vertical scroll offset inside the fixed design checklist rows.
-    pub checklist_scroll: f32,
+    pub checklist_scroll: jian_core::scroll::ScrollState,
     /// Set by `begin_send` to the just-sent user text; the desktop
     /// event loop drains this each frame. `None` = idle.
     pub pending_send: Option<String>,
@@ -418,7 +418,7 @@ impl Default for ChatState {
             collapsed: false,
             maximized: false,
             checklist_collapsed: false,
-            checklist_scroll: 0.0,
+            checklist_scroll: Default::default(),
             pending_send: None,
             pending_new_chat: false,
             pending_stop_chat: false,
@@ -532,7 +532,7 @@ impl ChatState {
         // Empty streaming assistant bubble — provider deltas append here.
         self.messages.push(ChatMessage::assistant_streaming());
         self.input.set_text("");
-        self.checklist_scroll = 0.0;
+        self.checklist_scroll.offset = 0.0;
         self.pending_send = Some(trimmed);
         true
     }
@@ -578,7 +578,7 @@ impl ChatState {
         self.pending_stop_chat = false;
         self.pending_copy_text = None;
         self.transcript_selection = None;
-        self.checklist_scroll = 0.0;
+        self.checklist_scroll.offset = 0.0;
         self.pending_attachments.clear();
         self.pending_attachment_pick = false;
         self.pending_new_chat = true;
@@ -739,7 +739,7 @@ impl ChatState {
     pub fn toggle_checklist_collapsed(&mut self) {
         self.checklist_collapsed = !self.checklist_collapsed;
         if self.checklist_collapsed {
-            self.checklist_scroll = 0.0;
+            self.checklist_scroll.offset = 0.0;
         }
     }
 
@@ -1180,6 +1180,15 @@ mod tests {
 
         chat.toggle_checklist_collapsed();
         assert!(!chat.checklist_collapsed);
+    }
+
+    #[test]
+    fn checklist_scroll_uses_scroll_state() {
+        let mut chat = ChatState::default();
+
+        chat.checklist_scroll.offset = 20.0;
+
+        assert_eq!(chat.checklist_scroll.offset, 20.0);
     }
 
     #[test]

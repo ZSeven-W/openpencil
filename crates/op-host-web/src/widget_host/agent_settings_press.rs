@@ -33,7 +33,7 @@ impl WidgetHost {
             AgentSettingsHit::SelectTab(tab) => {
                 self.commit_settings_focus();
                 self.editor_state.editor_ui.agent_settings.tab = tab;
-                self.editor_state.editor_ui.agent_settings.scroll_y = 0.0;
+                self.editor_state.editor_ui.agent_settings.scroll_y.offset = 0.0;
             }
             AgentSettingsHit::Connect(provider) => {
                 let idx = AgentProvider::ALL
@@ -334,7 +334,7 @@ impl WidgetHost {
                 let settings = &mut self.editor_state.editor_ui.agent_settings;
                 settings.builtin_preset_menu_open =
                     (settings.builtin_preset_menu_open != Some(target)).then_some(target);
-                settings.builtin_preset_menu_scroll = 0.0;
+                settings.builtin_preset_menu_scroll.offset = 0.0;
                 settings.builtin_preset_menu_hover = None;
             }
             AgentSettingsHit::SelectBuiltinAgentPreset { index, preset } => {
@@ -360,7 +360,8 @@ impl WidgetHost {
                 self.editor_state
                     .editor_ui
                     .agent_settings
-                    .builtin_preset_menu_scroll = 0.0;
+                    .builtin_preset_menu_scroll
+                    .offset = 0.0;
                 self.editor_state
                     .editor_ui
                     .agent_settings

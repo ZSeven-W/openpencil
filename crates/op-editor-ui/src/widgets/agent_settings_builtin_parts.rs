@@ -159,8 +159,10 @@ pub fn paint_preset_menu(
     cx.backend.stroke_round_rect(menu, 6.0, theme.border, 1.0);
     cx.backend.save();
     cx.backend.clip_rect(menu);
-    cx.backend
-        .translate(Point2D::new(0.0, -settings.builtin_preset_menu_scroll));
+    cx.backend.translate(Point2D::new(
+        0.0,
+        -settings.builtin_preset_menu_scroll.offset,
+    ));
     for (i, preset) in BUILTIN_AGENT_PRESETS.iter().enumerate() {
         let item = preset_item_rect(card, i);
         let active = agent.preset == preset.key;
@@ -335,21 +337,23 @@ fn preset_menu_view_height() -> f32 {
     preset_content_height().min(max_h)
 }
 
-fn paint_menu_scrollbar(cx: &mut PaintCx<'_>, theme: &Theme, menu: Rect, scroll: f32) {
-    let max = preset_scroll_max();
-    if max <= 0.0 {
-        return;
-    }
+fn paint_menu_scrollbar(
+    cx: &mut PaintCx<'_>,
+    theme: &Theme,
+    menu: Rect,
+    scroll: jian_core::scroll::ScrollState,
+) {
     let content_h = preset_content_height();
-    let thumb_h = (menu.size.y * menu.size.y / content_h).clamp(24.0, menu.size.y);
-    let range = (menu.size.y - thumb_h).max(1.0);
-    let t = (scroll.clamp(0.0, max) / max).clamp(0.0, 1.0);
+    let track_h = (menu.size.y - 8.0).max(0.0);
+    let Some(thumb_geom) = scroll.thumb(track_h, content_h, menu.size.y, 24.0) else {
+        return;
+    };
     let thumb = Rect {
         origin: Point2D::new(
             menu.origin.x + menu.size.x - 5.0,
-            menu.origin.y + 4.0 + t * range,
+            menu.origin.y + 4.0 + thumb_geom.offset,
         ),
-        size: Point2D::new(2.0, (thumb_h - 8.0).max(16.0)),
+        size: Point2D::new(2.0, thumb_geom.len),
     };
     cx.backend.fill_round_rect(
         thumb,

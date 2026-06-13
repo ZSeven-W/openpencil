@@ -93,7 +93,7 @@ pub fn hit_test(content: Rect, settings: &AgentSettings, point: Point2D) -> Buil
                 if let Some(preset) = agent_settings_builtin_parts::preset_at(
                     card,
                     point,
-                    settings.builtin_preset_menu_scroll,
+                    settings.builtin_preset_menu_scroll.offset,
                 ) {
                     return BuiltinHit::SelectPreset {
                         index: Some(index),
@@ -146,7 +146,7 @@ pub fn hit_test(content: Rect, settings: &AgentSettings, point: Point2D) -> Buil
             if let Some(preset) = agent_settings_builtin_parts::preset_at(
                 card,
                 point,
-                settings.builtin_preset_menu_scroll,
+                settings.builtin_preset_menu_scroll.offset,
             ) {
                 return BuiltinHit::SelectPreset {
                     index: None,
@@ -207,7 +207,11 @@ pub fn preset_hover_at(
     point: Point2D,
 ) -> Option<BuiltinAgentPresetKey> {
     let card = open_preset_menu_card(content, settings, point)?;
-    agent_settings_builtin_parts::preset_hover_at(card, point, settings.builtin_preset_menu_scroll)
+    agent_settings_builtin_parts::preset_hover_at(
+        card,
+        point,
+        settings.builtin_preset_menu_scroll.offset,
+    )
 }
 
 pub fn preset_scroll_max_at(

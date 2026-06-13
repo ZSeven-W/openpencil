@@ -410,14 +410,14 @@ pub struct AgentSettings {
     pub builtin_agents: Vec<BuiltinAgentConfig>,
     pub builtin_agent_draft: Option<BuiltinAgentConfig>,
     pub builtin_preset_menu_open: Option<BuiltinAgentPresetMenuTarget>,
-    pub builtin_preset_menu_scroll: f32,
+    pub builtin_preset_menu_scroll: jian_core::scroll::ScrollState,
     pub builtin_preset_menu_hover: Option<BuiltinAgentPresetKey>,
     pub next_builtin_agent_id: u64,
     pub acp_agents: Vec<AcpAgentConfig>,
     pub acp_agent_draft: Option<AcpAgentConfig>,
     pub next_acp_agent_id: u64,
     /// Vertical scroll offset of the right content pane in px.
-    pub scroll_y: f32,
+    pub scroll_y: jian_core::scroll::ScrollState,
     pub mcp_server: McpServer,
     pub mcp_cli_enabled: [bool; 6],
     pub mcp_client_config_copied_at_ms: Option<u64>,
@@ -468,13 +468,13 @@ impl Default for AgentSettings {
             builtin_agents: Vec::new(),
             builtin_agent_draft: None,
             builtin_preset_menu_open: None,
-            builtin_preset_menu_scroll: 0.0,
+            builtin_preset_menu_scroll: Default::default(),
             builtin_preset_menu_hover: None,
             next_builtin_agent_id: 1,
             acp_agents: Vec::new(),
             acp_agent_draft: None,
             next_acp_agent_id: 1,
-            scroll_y: 0.0,
+            scroll_y: Default::default(),
             mcp_server: McpServer::default(),
             mcp_cli_enabled: [false; 6],
             mcp_client_config_copied_at_ms: None,
@@ -586,7 +586,7 @@ impl AgentSettings {
     pub fn cancel_builtin_agent_draft(&mut self) {
         self.builtin_agent_draft = None;
         self.builtin_preset_menu_open = None;
-        self.builtin_preset_menu_scroll = 0.0;
+        self.builtin_preset_menu_scroll.offset = 0.0;
         self.builtin_preset_menu_hover = None;
     }
 
@@ -776,4 +776,20 @@ impl AgentSettings {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AgentSettingsDrag {
     Reserved,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn agent_settings_scroll_fields_use_scroll_state() {
+        let mut s = AgentSettings::default();
+
+        s.builtin_preset_menu_scroll.offset = 18.0;
+        s.scroll_y.offset = 42.0;
+
+        assert_eq!(s.builtin_preset_menu_scroll.offset, 18.0);
+        assert_eq!(s.scroll_y.offset, 42.0);
+    }
 }
