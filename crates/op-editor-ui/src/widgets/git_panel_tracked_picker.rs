@@ -9,6 +9,7 @@
 //! anchored + hit-tested like the remote-settings subview. Geometry is shared
 //! between paint + hit-test through the `*_rects` helpers.
 
+use crate::widgets::button::paint_button_feedback_wash;
 use crate::widgets::git_panel::{contains, truncate, GitPanel, GitPanelHit, PAD};
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::PaintCx;
@@ -197,8 +198,9 @@ impl GitPanel<'_> {
                 t.card
             };
             cx.backend.fill_round_rect(*row, 8.0, bg);
-            if hovered {
-                cx.backend.fill_round_rect(*row, 8.0, t.button_hover);
+            let pressed = self.state.tracked_picker.pressed == Some(i);
+            if hovered || pressed {
+                paint_button_feedback_wash(cx.backend, &self.theme, *row, 8.0, hovered, pressed);
             }
             cx.backend.stroke_round_rect(*row, 8.0, border, 1.0);
             // Leading icon — Check when selected, else FileText.

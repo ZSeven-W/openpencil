@@ -12,6 +12,7 @@
 //! verbatim by the host so it can dispatch to the right place.
 
 use crate::theme::Theme;
+use crate::widgets::button::paint_button_feedback_wash;
 use crate::widgets::editor_state_ext::{theme_for, translate};
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
@@ -194,12 +195,19 @@ impl Widget for ShapePicker {
             };
             let active = matches!(row.choice, ShapeChoice::Tool(t) if t == self.current_shape);
             let hovered = !active && self.state.hover == Some(idx);
+            let pressed = !active && self.state.pressed == Some(idx);
             if active {
                 cx.backend
                     .fill_round_rect(row_rect, 6.0, self.theme.row_selected_primary);
-            } else if hovered {
-                cx.backend
-                    .fill_round_rect(row_rect, 6.0, self.theme.button_hover);
+            } else if hovered || pressed {
+                paint_button_feedback_wash(
+                    cx.backend,
+                    &self.theme,
+                    row_rect,
+                    6.0,
+                    hovered,
+                    pressed,
+                );
             }
             let icon_color = if active {
                 self.theme.primary
@@ -279,6 +287,41 @@ fn tokens_from_theme(theme: &Theme) -> Tokens {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{Color, RenderBackend};
+
+    #[derive(Default)]
+    struct RoundFillBackend {
+        fills: Vec<(Rect, f32, Color)>,
+    }
+
+    impl RenderBackend for RoundFillBackend {
+        fn begin_frame(&mut self) {}
+        fn end_frame(&mut self) {}
+        fn fill_rect(&mut self, _: Rect, _: Color) {}
+        fn stroke_rect(&mut self, _: Rect, _: Color, _: f32) {}
+        fn draw_text(&mut self, _: &TextLayout, _: Point2D) {}
+        fn clip_rect(&mut self, _: Rect) {}
+        fn stroke_line(&mut self, _: Point2D, _: Point2D, _: Color, _: f32) {}
+        fn fill_round_rect(&mut self, rect: Rect, radius: f32, color: Color) {
+            self.fills.push((rect, radius, color));
+        }
+        fn stroke_round_rect(&mut self, _: Rect, _: f32, _: Color, _: f32) {}
+        fn stroke_svg_path(&mut self, _: &str, _: Point2D, _: f32, _: Color, _: f32) {}
+        fn save(&mut self) {}
+        fn restore(&mut self) {}
+        fn translate(&mut self, _: Point2D) {}
+        fn resize(&mut self, _: u32, _: u32) {}
+        fn dpi_scale(&self) -> f32 {
+            1.0
+        }
+    }
+
+    fn color_close(a: Color, b: Color) -> bool {
+        (a.r - b.r).abs() < 1e-6
+            && (a.g - b.g).abs() < 1e-6
+            && (a.b - b.b).abs() < 1e-6
+            && (a.a - b.a).abs() < 1e-6
+    }
 
     #[test]
     fn panel_height_covers_seven_rows() {
@@ -330,5 +373,40 @@ mod tests {
         let last_y = (ROW_COUNT as f32 - 0.5) * ROW_HEIGHT;
         let hit = picker.hit_test(panel_rect, Point2D::new(50.0, last_y));
         assert_eq!(hit, Some(ShapeChoice::Tool(Tool::Pen)));
+    }
+
+    #[test]
+    fn pressed_row_uses_shared_select_feedback() {
+        let mut ui = op_editor_core::editor_ui_state::EditorUiState::new();
+        ui.shape_picker.open = true;
+        ui.shape_picker.pressed = Some(1);
+        let picker = ShapePicker::for_editor_ui(&ui);
+        let panel_rect = Rect {
+            origin: Point2D::new(100.0, 50.0),
+            size: Point2D::new(SHAPE_PICKER_WIDTH, ShapePicker::panel_height()),
+        };
+        let pressed_row = Rect {
+            origin: Point2D::new(panel_rect.origin.x + 4.0, panel_rect.origin.y + ROW_HEIGHT),
+            size: Point2D::new(panel_rect.size.x - 8.0, ROW_HEIGHT),
+        };
+        let expected = picker
+            .theme
+            .button_hover
+            .with_alpha(picker.theme.button_hover.a * 1.8);
+        let mut backend = RoundFillBackend::default();
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+
+        picker.paint(&mut cx, panel_rect);
+
+        assert!(
+            backend.fills.iter().any(|(fill, radius, color)| {
+                *fill == pressed_row
+                    && (*radius - 6.0).abs() < 0.01
+                    && color_close(*color, expected)
+            }),
+            "pressed shape picker row should paint the shared pressed feedback token"
+        );
     }
 }
