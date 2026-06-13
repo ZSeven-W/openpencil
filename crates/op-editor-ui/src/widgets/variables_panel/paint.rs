@@ -1,4 +1,5 @@
 use super::*;
+use crate::widgets::button::paint_button_feedback_wash;
 use crate::widgets::property_panel_text_input::paint_text_input_view_value;
 use crate::widgets::{draw_icon, Icon, PaintCx};
 use crate::{Color, Point2D, Rect};
@@ -12,6 +13,20 @@ const INPUT_PADDING_X: f32 = 8.0;
 const VALUE_INPUT_MIN_WIDTH: f32 = 96.0;
 const VALUE_INPUT_MAX_WIDTH: f32 = 160.0;
 const FOOTER_CHEVRON_LABEL_GAP: f32 = 12.0;
+
+fn paint_feedback(
+    panel: &VariablesPanel,
+    cx: &mut PaintCx<'_>,
+    target: VariablesPanelButton,
+    rect: Rect,
+    radius: f32,
+) {
+    let hovered = panel.hover == Some(target);
+    let pressed = panel.pressed == Some(target);
+    if hovered || pressed {
+        paint_button_feedback_wash(cx.backend, &panel.theme, rect, radius, hovered, pressed);
+    }
+}
 
 pub(super) fn paint_panel(panel: &VariablesPanel, cx: &mut PaintCx<'_>, rect: Rect) {
     let theme = panel.theme;
@@ -117,10 +132,13 @@ fn paint_theme_header(panel: &VariablesPanel, cx: &mut PaintCx<'_>, rect: Rect) 
     let active_axis = panel.active_axis_label();
     for (idx, axis) in panel.theme_tab_labels().iter().enumerate() {
         let is_active = *axis == active_axis;
-        if panel.hover == Some(VariablesPanelButton::ThemeTab(idx)) {
-            cx.backend
-                .fill_round_rect(panel.theme_tab_rect(rect, idx), 8.0, theme.button_hover);
-        }
+        paint_feedback(
+            panel,
+            cx,
+            VariablesPanelButton::ThemeTab(idx),
+            panel.theme_tab_rect(rect, idx),
+            8.0,
+        );
         let color = if is_active {
             theme.foreground
         } else {
@@ -160,10 +178,7 @@ fn paint_theme_header(panel: &VariablesPanel, cx: &mut PaintCx<'_>, rect: Rect) 
     }
 
     let add_theme = panel.add_theme_rect(rect);
-    if panel.hover == Some(VariablesPanelButton::AddTheme) {
-        cx.backend
-            .fill_round_rect(add_theme, 8.0, theme.button_hover);
-    }
+    paint_feedback(panel, cx, VariablesPanelButton::AddTheme, add_theme, 8.0);
     draw_icon(
         cx.backend,
         Icon::Plus,
@@ -174,9 +189,7 @@ fn paint_theme_header(panel: &VariablesPanel, cx: &mut PaintCx<'_>, rect: Rect) 
     );
 
     let preset = panel.preset_rect(rect);
-    if panel.hover == Some(VariablesPanelButton::PresetMenu) {
-        cx.backend.fill_round_rect(preset, 8.0, theme.button_hover);
-    }
+    paint_feedback(panel, cx, VariablesPanelButton::PresetMenu, preset, 8.0);
     let preset_label = panel.labels().preset;
     let preset_label_size = 13.0;
     let preset_label_x = preset.origin.x + 29.0;
@@ -208,9 +221,7 @@ fn paint_theme_header(panel: &VariablesPanel, cx: &mut PaintCx<'_>, rect: Rect) 
     );
 
     let close = close_rect(rect);
-    if panel.hover == Some(VariablesPanelButton::Close) {
-        cx.backend.fill_round_rect(close, 8.0, theme.button_hover);
-    }
+    paint_feedback(panel, cx, VariablesPanelButton::Close, close, 8.0);
     draw_icon(
         cx.backend,
         Icon::Close,
@@ -243,13 +254,13 @@ fn paint_variant_header(
     let col_w = variant_column_width(rect, variants.len());
     for (idx, variant) in variants.iter().enumerate() {
         let x = value_x + col_w * idx as f32;
-        if panel.hover == Some(VariablesPanelButton::VariantHeader(idx)) {
-            cx.backend.fill_round_rect(
-                panel.variant_header_rect(rect, idx),
-                8.0,
-                theme.button_hover,
-            );
-        }
+        paint_feedback(
+            panel,
+            cx,
+            VariablesPanelButton::VariantHeader(idx),
+            panel.variant_header_rect(rect, idx),
+            8.0,
+        );
         if panel.renaming_variant.as_deref() == Some(*variant) {
             let input_state = panel.rename_text_input(RenameTarget::Variant(variant));
             let value = input_state.map(|input| input.text()).unwrap_or(variant);
@@ -286,10 +297,13 @@ fn paint_variant_header(
             );
         }
     }
-    if panel.hover == Some(VariablesPanelButton::AddVariant) {
-        cx.backend
-            .fill_round_rect(add_variant_rect(rect), 8.0, theme.button_hover);
-    }
+    paint_feedback(
+        panel,
+        cx,
+        VariablesPanelButton::AddVariant,
+        add_variant_rect(rect),
+        8.0,
+    );
     draw_icon(
         cx.backend,
         Icon::Plus,
@@ -346,21 +360,21 @@ fn paint_rows(
             break;
         }
         let source = var.source_idx;
-        let row_hovered = matches!(
-            panel.hover,
-            Some(VariablesPanelButton::Row(i)) if i == source
-        ) || matches!(
-            panel.hover,
-            Some(VariablesPanelButton::RowMenuButton(i)) if i == source
-        );
-        if row_hovered {
-            cx.backend.fill_round_rect(
+        let row_hovered = panel.hover == Some(VariablesPanelButton::Row(source))
+            || panel.hover == Some(VariablesPanelButton::RowMenuButton(source));
+        let row_pressed = panel.pressed == Some(VariablesPanelButton::Row(source))
+            || panel.pressed == Some(VariablesPanelButton::RowMenuButton(source));
+        if row_hovered || row_pressed {
+            paint_button_feedback_wash(
+                cx.backend,
+                &theme,
                 Rect {
                     origin: Point2D::new(rect.origin.x + 8.0, y + 3.0),
                     size: Point2D::new(rect.size.x - 16.0, ROW_HEIGHT - 6.0),
                 },
                 8.0,
-                theme.button_hover,
+                row_hovered,
+                row_pressed,
             );
         }
         paint_variable_name_cell(panel, cx, rect, var, idx, y);
@@ -585,9 +599,7 @@ fn paint_footer(
 ) {
     let theme = panel.theme;
     let button = add_variable_rect(rect);
-    if panel.hover == Some(VariablesPanelButton::AddVariable) {
-        cx.backend.fill_round_rect(button, 8.0, theme.button_hover);
-    }
+    paint_feedback(panel, cx, VariablesPanelButton::AddVariable, button, 8.0);
     let center_y = button.origin.y + button.size.y / 2.0;
     let icon_size = 16.0;
     let label_size = 14.0;

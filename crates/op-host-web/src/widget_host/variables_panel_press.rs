@@ -39,6 +39,9 @@ impl WidgetHost {
             self.mark_dirty();
             return true;
         };
+        self.editor_state.editor_ui.pressed_button = vars
+            .hover_at(vars_rect, point)
+            .map(op_editor_core::ButtonPressTarget::VariablesPanel);
         self.commit_property_family_focus_if_any();
         match hit {
             VariablesPanelHit::Resize(edge) => {

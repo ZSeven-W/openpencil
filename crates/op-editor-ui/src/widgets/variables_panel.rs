@@ -4,7 +4,7 @@ use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
 use crate::{Point2D, Rect};
 use jian_ops_schema::variable::{VariableKind, VariableScalar, VariableValue};
 use op_editor_core::editor_ui_state::VariableRowFocus;
-use op_editor_core::{EditorState, Locale, VariablesPanelButton};
+use op_editor_core::{ButtonPressTarget, EditorState, Locale, VariablesPanelButton};
 
 mod geometry;
 mod header;
@@ -146,6 +146,7 @@ pub struct VariablesPanel {
     /// Open `⋯` row menu, keyed by UNFILTERED row index.
     row_menu_open: Option<usize>,
     hover: Option<VariablesPanelButton>,
+    pressed: Option<VariablesPanelButton>,
     editing_name_row: Option<usize>,
     editing_value_cell: Option<(usize, usize)>,
     header_input: jian_core::text_input::TextInputState,
@@ -254,6 +255,10 @@ impl VariablesPanel {
             scroll: state.editor_ui.variables_scroll.offset,
             row_menu_open: state.editor_ui.variables_row_menu,
             hover: state.editor_ui.variables_panel_hover,
+            pressed: match state.editor_ui.pressed_button {
+                Some(ButtonPressTarget::VariablesPanel(button)) => Some(button),
+                _ => None,
+            },
             editing_name_row: state.editor_ui.variable_row_focus.and_then(|f| match f {
                 VariableRowFocus::Name(i) => Some(i),
                 VariableRowFocus::Number(_)

@@ -32,6 +32,9 @@ impl WidgetHostNative {
             self.mark_dirty();
             return true;
         };
+        self.editor_state.editor_ui.pressed_button = vars
+            .hover_at(vars_rect, point)
+            .map(op_editor_core::ButtonPressTarget::VariablesPanel);
         match hit {
             VariablesPanelHit::Resize(edge) => {
                 // Edge press arms a resize drag; cursor moves write the
