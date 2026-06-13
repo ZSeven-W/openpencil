@@ -338,6 +338,9 @@ fn paint_compact_acp_card(
             compact_edit_rect(card),
             Icon::Pencil,
             theme.muted_foreground,
+            ui.button_pressed(ButtonPressTarget::AgentSettings(
+                AgentSettingsButton::AcpEdit(index),
+            )),
         );
         paint_action(
             cx,
@@ -345,6 +348,9 @@ fn paint_compact_acp_card(
             compact_remove_rect(card),
             Icon::Trash,
             theme.muted_foreground,
+            ui.button_pressed(ButtonPressTarget::AgentSettings(
+                AgentSettingsButton::AcpRemove(index),
+            )),
         );
     }
     paint_connection_button(cx, theme, ui, agent, card);
@@ -595,8 +601,15 @@ fn paint_type_toggle(
     }
 }
 
-fn paint_action(cx: &mut PaintCx<'_>, theme: &Theme, rect: Rect, icon: Icon, color: Color) {
-    cx.backend.fill_round_rect(rect, 6.0, theme.button_hover);
+fn paint_action(
+    cx: &mut PaintCx<'_>,
+    theme: &Theme,
+    rect: Rect,
+    icon: Icon,
+    color: Color,
+    pressed: bool,
+) {
+    paint_ghost_button_feedback(cx.backend, theme, rect, true, pressed);
     draw_icon(
         cx.backend,
         icon,

@@ -599,6 +599,9 @@ fn paint_compact_builtin_agent_card(
             compact_edit_rect(card),
             Icon::Pencil,
             theme.muted_foreground,
+            ui.button_pressed(ButtonPressTarget::AgentSettings(
+                AgentSettingsButton::BuiltinEdit(index),
+            )),
         );
         paint_action(
             cx,
@@ -606,6 +609,9 @@ fn paint_compact_builtin_agent_card(
             compact_remove_rect(card),
             Icon::Trash,
             theme.muted_foreground,
+            ui.button_pressed(ButtonPressTarget::AgentSettings(
+                AgentSettingsButton::BuiltinRemove(index),
+            )),
         );
     }
 }
@@ -709,8 +715,15 @@ fn draw_text(cx: &mut PaintCx<'_>, text: &str, size: f32, color: Color, x: f32, 
     cx.backend.draw_text(&layout, Point2D::new(x, y));
 }
 
-fn paint_action(cx: &mut PaintCx<'_>, theme: &Theme, rect: Rect, icon: Icon, color: Color) {
-    cx.backend.fill_round_rect(rect, 6.0, theme.button_hover);
+fn paint_action(
+    cx: &mut PaintCx<'_>,
+    theme: &Theme,
+    rect: Rect,
+    icon: Icon,
+    color: Color,
+    pressed: bool,
+) {
+    paint_ghost_button_feedback(cx.backend, theme, rect, true, pressed);
     draw_icon(
         cx.backend,
         icon,

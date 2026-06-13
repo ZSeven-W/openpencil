@@ -36,6 +36,8 @@ use op_editor_ui::{Rect, Theme};
 
 #[cfg(test)]
 mod agent_settings_acp_tests;
+#[cfg(test)]
+mod agent_settings_compact_press_tests;
 mod agent_settings_draft_dispatch;
 #[cfg(test)]
 mod agent_settings_image_gen_tests;
