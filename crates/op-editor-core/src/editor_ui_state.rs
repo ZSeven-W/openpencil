@@ -733,7 +733,7 @@ pub struct LayerContextMenuState {
     pub anchor_x: f32,
     pub anchor_y: f32,
     /// Hovered row index for the menu paint; `None` = no row hovered.
-    pub hovered_row: Option<u8>,
+    pub menu: jian_widgets::components::menu::MenuState,
 }
 
 /// Inline-rename state for a page row (double-click → rename).

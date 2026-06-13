@@ -1555,7 +1555,7 @@ fn layer_context_create_component_click_promotes_frame() {
         target: LayerContextTarget::Layer(NodeId::new("n10")),
         anchor_x: 100.0,
         anchor_y: 100.0,
-        hovered_row: None,
+        menu: Default::default(),
     });
 
     let create_row_y = 100.0 + 6.0 + 32.0 * 2.0 + 16.0;

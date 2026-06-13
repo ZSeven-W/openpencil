@@ -17,6 +17,7 @@ use crate::widgets::editor_state_ext::theme_for;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
 use crate::{Color, Point2D, Rect, TextLayout};
+pub use jian_widgets::components::menu::MenuHit;
 use op_editor_core::editor_ui_state::{LayerContextMenuState, LayerContextTarget};
 use op_editor_core::EditorState;
 
@@ -179,10 +180,6 @@ pub struct LayerContextMenu {
     rows: Vec<Row>,
     /// Active UI locale — drives row-label translation in `paint`.
     locale: op_editor_core::Locale,
-    /// Index of the currently-hovered row (None when the cursor is
-    /// outside the menu). Host updates via `hovered_row_at` on
-    /// every cursor-move while the menu is open.
-    pub hovered_row: Option<usize>,
 }
 
 impl LayerContextMenu {
@@ -233,14 +230,12 @@ impl LayerContextMenu {
                 }
             }
         }
-        let hovered_row = menu.hovered_row.map(|i| i as usize);
         Self {
             id: WidgetId::new(3000),
             theme: theme_for(&state.editor_ui),
             state: menu,
             rows,
             locale: state.editor_ui.locale,
-            hovered_row,
         }
     }
 
@@ -279,17 +274,31 @@ impl LayerContextMenu {
     /// Hit-test the menu. None when the cursor's outside the menu
     /// (caller closes the menu silently).
     pub fn hit_test(&self, point: Point2D) -> Option<LayerContextAction> {
+        match self.hit(point) {
+            MenuHit::Row(idx) => self.rows.get(idx).map(|r| r.action),
+            MenuHit::Inside | MenuHit::Outside => None,
+        }
+    }
+
+    pub fn hit(&self, point: Point2D) -> MenuHit {
         let rect = self.rect();
         if point.x < rect.origin.x
             || point.x > rect.origin.x + rect.size.x
             || point.y < rect.origin.y + PAD_Y
             || point.y > rect.origin.y + rect.size.y - PAD_Y
         {
-            return None;
+            if (rect).contains(point) {
+                return MenuHit::Inside;
+            }
+            return MenuHit::Outside;
         }
         let local = point.y - rect.origin.y - PAD_Y;
         let idx = (local / ROW_HEIGHT) as usize;
-        self.rows.get(idx).map(|r| r.action)
+        if idx < self.rows.len() {
+            MenuHit::Row(idx)
+        } else {
+            MenuHit::Inside
+        }
     }
 }
 
@@ -316,7 +325,7 @@ impl Widget for LayerContextMenu {
                 origin: Point2D::new(rect.origin.x, y),
                 size: Point2D::new(rect.size.x, ROW_HEIGHT),
             };
-            if self.hovered_row == Some(i) {
+            if self.state.menu.hover == Some(i) {
                 let hover_rect = Rect {
                     origin: Point2D::new(rect.origin.x + 4.0, y + 2.0),
                     size: Point2D::new(rect.size.x - 8.0, ROW_HEIGHT - 4.0),

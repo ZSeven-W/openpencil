@@ -117,7 +117,7 @@ fn context_menu_swaps_create_component_for_detach_rows() {
                 target: LayerContextTarget::Layer(NodeId::new(id)),
                 anchor_x: 0.0,
                 anchor_y: 0.0,
-                hovered_row: None,
+                menu: Default::default(),
             },
         )
     };

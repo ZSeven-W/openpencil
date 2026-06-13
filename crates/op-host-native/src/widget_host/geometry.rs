@@ -105,7 +105,7 @@ impl WidgetHostNative {
             changed |= ui.property_tab_hover.take().is_some();
             changed |= ui.variables_panel_hover.take().is_some();
             if let Some(menu) = ui.layer_context_menu.as_mut() {
-                changed |= menu.hovered_row.take().is_some();
+                changed |= menu.menu.hover.take().is_some();
             }
         }
         changed |= self.editor_state.codegen.framework_hover.take().is_some();
