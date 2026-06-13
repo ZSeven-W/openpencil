@@ -141,6 +141,7 @@ pub struct VariablesPanel {
     add_menu_open: bool,
     search: String,
     search_focus: bool,
+    search_input: jian_core::text_input::TextInputState,
     scroll: f32,
     /// Open `⋯` row menu, keyed by UNFILTERED row index.
     row_menu_open: Option<usize>,
@@ -149,7 +150,6 @@ pub struct VariablesPanel {
     editing_value_cell: Option<(usize, usize)>,
     header_input: jian_core::text_input::TextInputState,
     row_input: jian_core::text_input::TextInputState,
-    caret_anchor_ms: u64,
     now_ms: u64,
 }
 
@@ -228,6 +228,11 @@ impl VariablesPanel {
                     .cloned()
             })
             .or_else(|| themes.first().map(|(axis, _)| axis.clone()));
+        let mut search_input = jian_core::text_input::TextInputState::with_text(
+            state.editor_ui.variables_search.clone(),
+        );
+        search_input.touch(state.ui.property_caret_anchor_ms);
+
         Self {
             rows,
             total_rows,
@@ -245,6 +250,7 @@ impl VariablesPanel {
             add_menu_open: state.editor_ui.variables_add_menu_open,
             search: state.editor_ui.variables_search.clone(),
             search_focus: state.editor_ui.variables_search_focus,
+            search_input,
             scroll: state.editor_ui.variables_scroll,
             row_menu_open: state.editor_ui.variables_row_menu,
             hover: state.editor_ui.variables_panel_hover,
@@ -265,7 +271,6 @@ impl VariablesPanel {
             }),
             header_input: state.editor_ui.variables_header_input.clone(),
             row_input: state.editor_ui.variable_row_input.clone(),
-            caret_anchor_ms: state.ui.property_caret_anchor_ms,
             now_ms,
         }
     }
