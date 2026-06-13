@@ -2,6 +2,7 @@ use super::WidgetHostNative;
 use op_editor_core::agent_settings::{
     AgentSettingsTab, ImageGenField, ImageGenProvider, ImageTestStatus, SettingsFocus,
 };
+use op_editor_core::{AgentSettingsButton, ButtonPressTarget};
 use op_editor_ui::widgets::agent_settings_panel::AgentSettingsPanel;
 
 #[test]
@@ -43,6 +44,15 @@ fn image_generation_profile_test_tracks_testing_status_like_ts() {
         .agent_settings
         .image_gen_profiles[0];
     assert_eq!(profile.test_status, ImageTestStatus::Testing);
+    assert_eq!(
+        host.editor_state().editor_ui.pressed_button,
+        Some(ButtonPressTarget::AgentSettings(
+            AgentSettingsButton::ImageProfileTest(0)
+        ))
+    );
+
+    assert!(host.apply_release_with_viewport(1200.0, 800.0));
+    assert_eq!(host.editor_state().editor_ui.pressed_button, None);
 }
 
 #[test]
