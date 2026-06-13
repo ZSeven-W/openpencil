@@ -149,14 +149,14 @@ impl WidgetHostNative {
             Some(GitPanelHit::CloneUrlInput) => {
                 if let Some(form) = panel.clone_form.as_mut() {
                     form.focus = Some(CloneField::Url);
-                    form.caret_anchor_ms = now;
+                    form.url_input.touch(now);
                     form.error = None;
                 }
             }
             Some(GitPanelHit::CloneDestInput) => {
                 if let Some(form) = panel.clone_form.as_mut() {
                     form.focus = Some(CloneField::Dest);
-                    form.caret_anchor_ms = now;
+                    form.dest_input.touch(now);
                     form.error = None;
                 }
             }

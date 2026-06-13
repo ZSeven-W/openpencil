@@ -954,12 +954,17 @@ impl WidgetHostNative {
         // the loop ticking so the caret blinks and `poll_git_clone_job`
         // drains the worker's result on a later frame.
         if let Some(form) = &self.editor_state.editor_ui.git_panel.clone_form {
-            if form.focus.is_some() || form.cloning {
-                return Some(jian_core::anim::next_blink_flip_ms(
-                    self.now_ms,
-                    form.caret_anchor_ms,
-                    500,
-                ));
+            match form.focus {
+                Some(op_editor_core::CloneField::Url) => {
+                    return Some(form.url_input.next_blink_flip_ms(self.now_ms));
+                }
+                Some(op_editor_core::CloneField::Dest) => {
+                    return Some(form.dest_input.next_blink_flip_ms(self.now_ms));
+                }
+                None if form.cloning => {
+                    return Some(self.now_ms + jian_core::text_input::CARET_BLINK_PERIOD_MS);
+                }
+                None => {}
             }
         }
         None
