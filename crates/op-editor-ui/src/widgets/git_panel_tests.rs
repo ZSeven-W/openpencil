@@ -2,12 +2,46 @@
 //! `git_panel.rs` under the 800-line cap.
 
 use crate::widgets::git_panel::*;
-use crate::{Point2D, Rect};
+use crate::{Color, Point2D, Rect, RenderBackend, TextLayout};
 use op_editor_core::{
-    CloneField, CloneFormState, EditorState, GitBranchPickerMode, GitCandidateFile,
-    GitCommitSummary, GitDiffView, GitFileEntry, GitOverflowView, GitPanelState, MergeConflictRow,
-    MergeResolveFile, MergeResolveState,
+    ButtonPressTarget, CloneField, CloneFormState, EditorState, GitBranchPickerMode,
+    GitCandidateFile, GitCommitSummary, GitDiffView, GitFileEntry, GitOverflowView, GitPanelState,
+    MergeConflictRow, MergeResolveFile, MergeResolveState,
 };
+
+#[derive(Default)]
+struct RoundFillBackend {
+    fills: Vec<(Rect, f32, Color)>,
+}
+
+impl RenderBackend for RoundFillBackend {
+    fn begin_frame(&mut self) {}
+    fn end_frame(&mut self) {}
+    fn fill_rect(&mut self, _: Rect, _: Color) {}
+    fn stroke_rect(&mut self, _: Rect, _: Color, _: f32) {}
+    fn draw_text(&mut self, _: &TextLayout, _: Point2D) {}
+    fn clip_rect(&mut self, _: Rect) {}
+    fn stroke_line(&mut self, _: Point2D, _: Point2D, _: Color, _: f32) {}
+    fn fill_round_rect(&mut self, rect: Rect, radius: f32, color: Color) {
+        self.fills.push((rect, radius, color));
+    }
+    fn stroke_round_rect(&mut self, _: Rect, _: f32, _: Color, _: f32) {}
+    fn stroke_svg_path(&mut self, _: &str, _: Point2D, _: f32, _: Color, _: f32) {}
+    fn save(&mut self) {}
+    fn restore(&mut self) {}
+    fn translate(&mut self, _: Point2D) {}
+    fn resize(&mut self, _: u32, _: u32) {}
+    fn dpi_scale(&self) -> f32 {
+        1.0
+    }
+}
+
+fn color_close(a: Color, b: Color) -> bool {
+    (a.r - b.r).abs() < 1e-6
+        && (a.g - b.g).abs() < 1e-6
+        && (a.b - b.b).abs() < 1e-6
+        && (a.a - b.a).abs() < 1e-6
+}
 
 fn state_with(panel: GitPanelState) -> EditorState {
     let mut s = EditorState::new();
@@ -290,6 +324,33 @@ fn ready_view_maps_each_header_and_commit_region() {
     assert_eq!(
         panel.hit_test(rect, top_left),
         Some(GitPanelHit::CommitInput)
+    );
+}
+
+#[test]
+fn ready_header_pressed_overflow_uses_shared_button_feedback() {
+    let mut s = state_with(GitPanelState {
+        branch: Some("main".to_string()),
+        ..open_repo()
+    });
+    s.editor_ui.pressed_button = Some(ButtonPressTarget::Git(op_editor_core::GitButton::Overflow));
+    let panel = GitPanel::for_editor(&s).unwrap();
+    let rect = panel_rect(&panel);
+    let (_, _, overflow) = panel.ready_header_buttons(rect);
+    let theme = crate::widgets::editor_state_ext::theme_for(&s.editor_ui);
+    let expected = theme.button_hover.with_alpha(theme.button_hover.a * 1.8);
+    let mut backend = RoundFillBackend::default();
+    let mut cx = crate::widgets::PaintCx {
+        backend: &mut backend,
+    };
+
+    panel.paint(&mut cx, rect);
+
+    assert!(
+        backend.fills.iter().any(|(fill, radius, color)| {
+            *fill == overflow && (*radius - 6.0).abs() < 0.01 && color_close(*color, expected)
+        }),
+        "pressed overflow button should paint the shared pressed feedback token"
     );
 }
 
