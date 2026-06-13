@@ -91,11 +91,10 @@ impl WidgetHostNative {
         if self.git_remote_focus_active() {
             if !c.is_control() {
                 let panel = &mut self.editor_state.editor_ui.git_panel;
-                if panel.input_select_all {
-                    panel.remote_draft.clear();
-                    panel.input_select_all = false;
-                }
-                panel.remote_draft.push(c);
+                let mut s = [0u8; 4];
+                panel
+                    .remote_input
+                    .insert_str(c.encode_utf8(&mut s), self.now_ms);
                 self.mark_dirty();
                 return true;
             }
@@ -105,11 +104,10 @@ impl WidgetHostNative {
         if self.git_https_focus_active() {
             if !c.is_control() {
                 let panel = &mut self.editor_state.editor_ui.git_panel;
-                if panel.input_select_all {
-                    panel.https_draft.clear();
-                    panel.input_select_all = false;
-                }
-                panel.https_draft.push(c);
+                let mut s = [0u8; 4];
+                panel
+                    .https_input
+                    .insert_str(c.encode_utf8(&mut s), self.now_ms);
                 self.mark_dirty();
                 return true;
             }
@@ -120,20 +118,16 @@ impl WidgetHostNative {
             if !c.is_control() {
                 let now = self.now_ms;
                 let panel = &mut self.editor_state.editor_ui.git_panel;
-                if panel.input_select_all {
-                    if panel.author_email_focused {
-                        panel.author_email_draft.clear();
-                    } else {
-                        panel.author_name_draft.clear();
-                    }
-                    panel.input_select_all = false;
-                }
+                let mut s = [0u8; 4];
                 if panel.author_email_focused {
-                    panel.author_email_draft.push(c);
+                    panel
+                        .author_email_input
+                        .insert_str(c.encode_utf8(&mut s), now);
                 } else {
-                    panel.author_name_draft.push(c);
+                    panel
+                        .author_name_input
+                        .insert_str(c.encode_utf8(&mut s), now);
                 }
-                panel.commit_caret_anchor_ms = now;
                 self.mark_dirty();
                 return true;
             }
@@ -143,13 +137,10 @@ impl WidgetHostNative {
             if !c.is_control() {
                 let now = self.now_ms;
                 let panel = &mut self.editor_state.editor_ui.git_panel;
-                if panel.input_select_all {
-                    panel.branch_create_draft.clear();
-                    panel.input_select_all = false;
-                }
-                panel.branch_create_draft.push(c);
-                // Keep the caret solid while typing (reset the blink).
-                panel.commit_caret_anchor_ms = now;
+                let mut s = [0u8; 4];
+                panel
+                    .branch_create_input
+                    .insert_str(c.encode_utf8(&mut s), now);
                 self.mark_dirty();
                 return true;
             }
@@ -489,51 +480,29 @@ impl WidgetHostNative {
         }
         if self.git_remote_focus_active() {
             let panel = &mut self.editor_state.editor_ui.git_panel;
-            if panel.input_select_all {
-                panel.remote_draft.clear();
-                panel.input_select_all = false;
-            } else {
-                panel.remote_draft.pop();
-            }
+            panel.remote_input.backspace(self.now_ms);
             self.mark_dirty();
             return true;
         }
         if self.git_https_focus_active() {
             let panel = &mut self.editor_state.editor_ui.git_panel;
-            if panel.input_select_all {
-                panel.https_draft.clear();
-                panel.input_select_all = false;
-            } else {
-                panel.https_draft.pop();
-            }
+            panel.https_input.backspace(self.now_ms);
             self.mark_dirty();
             return true;
         }
         if self.git_author_focus_active() {
             let panel = &mut self.editor_state.editor_ui.git_panel;
-            if panel.input_select_all {
-                if panel.author_email_focused {
-                    panel.author_email_draft.clear();
-                } else {
-                    panel.author_name_draft.clear();
-                }
-                panel.input_select_all = false;
-            } else if panel.author_email_focused {
-                panel.author_email_draft.pop();
+            if panel.author_email_focused {
+                panel.author_email_input.backspace(self.now_ms);
             } else {
-                panel.author_name_draft.pop();
+                panel.author_name_input.backspace(self.now_ms);
             }
             self.mark_dirty();
             return true;
         }
         if self.git_branch_create_focus_active() {
             let panel = &mut self.editor_state.editor_ui.git_panel;
-            if panel.input_select_all {
-                panel.branch_create_draft.clear();
-                panel.input_select_all = false;
-            } else {
-                panel.branch_create_draft.pop();
-            }
+            panel.branch_create_input.backspace(self.now_ms);
             self.mark_dirty();
             return true;
         }
@@ -1215,9 +1184,9 @@ impl WidgetHostNative {
         // Enter in the Git remote-URL input sets `origin`.
         if self.git_remote_focus_active() {
             let panel = &mut self.editor_state.editor_ui.git_panel;
-            if !panel.remote_draft.trim().is_empty() {
+            if !panel.remote_input.text().trim().is_empty() {
                 panel.pending_action = Some(op_editor_core::GitPanelAction::SetRemote(
-                    panel.remote_draft.clone(),
+                    panel.remote_input.text().to_owned(),
                 ));
             }
             self.mark_dirty();
@@ -1226,9 +1195,9 @@ impl WidgetHostNative {
         // Enter in the Git HTTPS-credential input stores it.
         if self.git_https_focus_active() {
             let panel = &mut self.editor_state.editor_ui.git_panel;
-            if !panel.https_draft.trim().is_empty() {
+            if !panel.https_input.text().trim().is_empty() {
                 panel.pending_action = Some(op_editor_core::GitPanelAction::SetHttpsAuth(
-                    panel.https_draft.clone(),
+                    panel.https_input.text().to_owned(),
                 ));
             }
             self.mark_dirty();
@@ -1236,11 +1205,11 @@ impl WidgetHostNative {
         }
         if self.git_branch_create_focus_active() {
             let panel = &mut self.editor_state.editor_ui.git_panel;
-            let name = panel.branch_create_draft.trim().to_string();
+            let name = panel.branch_create_input.text().trim().to_string();
             if !name.is_empty() {
                 panel.pending_action = Some(op_editor_core::GitPanelAction::CreateBranch(name));
                 panel.branch_picker_mode = op_editor_core::GitBranchPickerMode::List;
-                panel.branch_create_draft.clear();
+                panel.branch_create_input.set_text("");
                 panel.branch_create_focused = false;
                 panel.branch_picker_open = false;
             }
@@ -1251,7 +1220,8 @@ impl WidgetHostNative {
         // either way so it never falls through to the global chat send.
         if self.git_author_focus_active() {
             let panel = &mut self.editor_state.editor_ui.git_panel;
-            if !panel.author_name_draft.trim().is_empty() && panel.author_email_draft.contains('@')
+            if !panel.author_name_input.text().trim().is_empty()
+                && panel.author_email_input.text().contains('@')
             {
                 panel.pending_action = Some(op_editor_core::GitPanelAction::SaveAuthor);
             }
@@ -1408,9 +1378,8 @@ impl WidgetHostNative {
         {
             let panel = &mut self.editor_state.editor_ui.git_panel;
             panel.branch_picker_mode = op_editor_core::GitBranchPickerMode::List;
-            panel.branch_create_draft.clear();
+            panel.branch_create_input.set_text("");
             panel.branch_create_focused = false;
-            panel.input_select_all = false;
             self.mark_dirty();
             return true;
         }
@@ -1422,7 +1391,10 @@ impl WidgetHostNative {
             panel.author_prompt = false;
             panel.author_name_focused = false;
             panel.author_email_focused = false;
-            panel.input_select_all = false;
+            let caret = panel.author_name_input.caret();
+            panel.author_name_input.set_caret(caret, self.now_ms);
+            let caret = panel.author_email_input.caret();
+            panel.author_email_input.set_caret(caret, self.now_ms);
             self.mark_dirty();
             return true;
         }
@@ -1435,15 +1407,19 @@ impl WidgetHostNative {
         }
         // …and the Git remote-URL input.
         if self.git_remote_focus_active() {
-            self.editor_state.editor_ui.git_panel.remote_focused = false;
-            self.editor_state.editor_ui.git_panel.input_select_all = false;
+            let panel = &mut self.editor_state.editor_ui.git_panel;
+            panel.remote_focused = false;
+            let caret = panel.remote_input.caret();
+            panel.remote_input.set_caret(caret, self.now_ms);
             self.mark_dirty();
             return true;
         }
         // …and the Git HTTPS-credential input.
         if self.git_https_focus_active() {
-            self.editor_state.editor_ui.git_panel.https_focused = false;
-            self.editor_state.editor_ui.git_panel.input_select_all = false;
+            let panel = &mut self.editor_state.editor_ui.git_panel;
+            panel.https_focused = false;
+            let caret = panel.https_input.caret();
+            panel.https_input.set_caret(caret, self.now_ms);
             self.mark_dirty();
             return true;
         }

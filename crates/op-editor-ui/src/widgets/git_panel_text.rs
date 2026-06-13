@@ -5,6 +5,8 @@
 use super::git_panel::GitPanel;
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, TextLayout};
+use jian_core::text_input::TextInputState;
+use jian_widgets::components::text_input::TextInputView;
 use jian_widgets::{Density, Tokens};
 
 impl GitPanel<'_> {
@@ -61,5 +63,27 @@ impl GitPanel<'_> {
             row_selected_primary: self.theme.row_selected_primary,
             density: Density::Desktop,
         }
+    }
+
+    pub(super) fn paint_text_input_view(
+        &self,
+        cx: &mut PaintCx<'_>,
+        rect: crate::Rect,
+        input: &TextInputState,
+        placeholder: &str,
+        focused: bool,
+        font_size: f32,
+        pad_x: f32,
+    ) {
+        let placeholder = if focused { "" } else { placeholder };
+        TextInputView {
+            state: input,
+            placeholder,
+            focused,
+            font_size,
+            now_ms: self.now_ms,
+            pad_x,
+        }
+        .paint(cx.backend, rect, &self.widget_tokens());
     }
 }

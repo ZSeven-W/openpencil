@@ -373,7 +373,7 @@ impl DesktopApp {
                         }
                     }
                     let panel = &mut self.host.editor_state_mut().editor_ui.git_panel;
-                    panel.remote_draft.clear();
+                    panel.remote_input.set_text("");
                     panel.remote_focused = false;
                 }
             }
@@ -709,7 +709,7 @@ impl DesktopApp {
         match result {
             Ok(()) => {
                 let panel = &mut self.host.editor_state_mut().editor_ui.git_panel;
-                panel.https_draft.clear();
+                panel.https_input.set_text("");
                 panel.https_focused = false;
             }
             Err(err) => {

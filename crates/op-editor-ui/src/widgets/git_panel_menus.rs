@@ -267,7 +267,7 @@ impl GitPanel<'_> {
             self.paint_menu_input(
                 cx,
                 input,
-                &self.state.branch_create_draft,
+                &self.state.branch_create_input,
                 self.t("git.branch.createPlaceholder"),
                 self.state.branch_create_focused,
             );
@@ -284,7 +284,7 @@ impl GitPanel<'_> {
                 cx,
                 submit,
                 self.t("git.branch.createSubmit"),
-                !self.state.branch_create_draft.trim().is_empty(),
+                !self.state.branch_create_input.text().trim().is_empty(),
                 true,
                 Some(GitPanelHit::BranchCreateSubmit),
             );
@@ -737,7 +737,7 @@ impl GitPanel<'_> {
         self.paint_menu_input(
             cx,
             url_input,
-            &self.state.remote_draft,
+            &self.state.remote_input,
             self.t("git.remote.urlPlaceholder"),
             self.state.remote_focused,
         );
@@ -745,7 +745,7 @@ impl GitPanel<'_> {
             cx,
             set,
             self.t("git.remote.saveButton"),
-            !self.state.remote_draft.trim().is_empty(),
+            !self.state.remote_input.text().trim().is_empty(),
             true,
             Some(GitPanelHit::SetRemote),
         );
@@ -844,7 +844,7 @@ impl GitPanel<'_> {
         &self,
         cx: &mut PaintCx<'_>,
         rect: Rect,
-        value: &str,
+        input: &jian_core::text_input::TextInputState,
         placeholder: &str,
         focused: bool,
     ) {
@@ -856,41 +856,7 @@ impl GitPanel<'_> {
             alpha(t.border, 0.70)
         };
         cx.backend.stroke_round_rect(rect, 6.0, border, 1.0);
-        let baseline = rect.origin.y + rect.size.y / 2.0 + 4.0;
-        if value.is_empty() && !focused {
-            self.text(
-                cx,
-                placeholder,
-                rect.origin.x + 8.0,
-                baseline,
-                11.0,
-                alpha(t.muted_foreground, 0.70),
-            );
-        } else {
-            let shown = truncate(value, 30);
-            // Blink the caret on the shared commit-caret cadence (the host
-            // wakes the loop for this input's focus), instead of a static `|`.
-            let text_x = rect.origin.x + 8.0;
-            if focused && self.state.input_select_all && !shown.is_empty() {
-                crate::widgets::text_selection::paint_single_line_selection(
-                    cx,
-                    &t,
-                    &shown,
-                    text_x,
-                    baseline,
-                    11.0,
-                    rect.origin.x + rect.size.x - 8.0,
-                );
-            }
-            let blink =
-                jian_core::anim::blink_visible(self.now_ms, self.state.commit_caret_anchor_ms, 500);
-            let shown = if focused && blink && !self.state.input_select_all {
-                format!("{shown}|")
-            } else {
-                shown
-            };
-            self.text(cx, &shown, text_x, baseline, 11.0, t.foreground);
-        }
+        self.paint_text_input_view(cx, rect, input, placeholder, focused, 11.0, 8.0);
     }
 }
 
