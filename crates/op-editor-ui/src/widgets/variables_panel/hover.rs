@@ -54,6 +54,7 @@ mod tests {
     use crate::Color;
     use jian_ops_schema::variable::{VariableKind, VariableScalar};
     use op_editor_core::variables_panel_state::VariablesPanelButton;
+    use op_editor_core::ButtonPressTarget;
 
     #[derive(Default)]
     struct HoverBackend {
@@ -156,6 +157,38 @@ mod tests {
                 .any(|(fill, color)| *fill == panel.add_theme_rect(rect)
                     && *color == panel.theme.button_hover),
             "add-theme button should paint a hover wash"
+        );
+    }
+
+    #[test]
+    fn pressed_header_targets_paint_shared_feedback() {
+        let mut state = themed_state();
+        state.editor_ui.pressed_button = Some(ButtonPressTarget::VariablesPanel(
+            VariablesPanelButton::AddTheme,
+        ));
+        let panel = VariablesPanel::for_editor(&state);
+        assert_eq!(panel.pressed, Some(VariablesPanelButton::AddTheme));
+        let rect = Rect {
+            origin: Point2D::new(0.0, 0.0),
+            size: Point2D::new(VARIABLES_PANEL_WIDTH, panel.intrinsic_height()),
+        };
+        let expected = panel
+            .theme
+            .button_hover
+            .with_alpha(panel.theme.button_hover.a * 1.8);
+        let mut backend = HoverBackend::default();
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+
+        panel.paint(&mut cx, rect);
+
+        assert!(
+            backend
+                .round_fills
+                .iter()
+                .any(|(fill, color)| *fill == panel.add_theme_rect(rect) && *color == expected),
+            "pressed add-theme button should paint shared pressed feedback"
         );
     }
 }

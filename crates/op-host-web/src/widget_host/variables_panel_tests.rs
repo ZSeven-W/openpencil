@@ -5,7 +5,7 @@
 use super::WidgetHost;
 use jian_ops_schema::variable::{VariableKind, VariableScalar, VariableValue};
 use op_editor_core::editor_ui_state::VariableRowFocus;
-use op_editor_core::{own_bounds, NodeId, PropertyFocus};
+use op_editor_core::{own_bounds, ButtonPressTarget, NodeId, PropertyFocus, VariablesPanelButton};
 use op_editor_ui::widgets::variables_panel::{
     VariablesPanel, VariablesPanelHit, VariablesResizeEdge,
 };
@@ -116,6 +116,29 @@ fn themed_value_for<'a>(
                 .is_some_and(|v| v == variant)
         })
         .map(|e| &e.value)
+}
+
+#[test]
+fn variables_panel_press_sets_and_release_clears_pressed_button() {
+    let mut host = WidgetHost::new();
+    host.editor_state.editor_ui.variables_panel_open = true;
+    assert!(host.editor_state.create_variable(
+        "spacing",
+        VariableKind::Number,
+        VariableScalar::Num(8.0),
+    ));
+
+    let (x, y) = point_for_hit(&host, &VariablesPanelHit::AddTheme);
+    assert!(host.apply_press(x, y, W, H));
+    assert_eq!(
+        host.editor_state.editor_ui.pressed_button,
+        Some(ButtonPressTarget::VariablesPanel(
+            VariablesPanelButton::AddTheme
+        ))
+    );
+
+    assert!(host.apply_release_with_viewport(W, H));
+    assert_eq!(host.editor_state.editor_ui.pressed_button, None);
 }
 
 #[test]

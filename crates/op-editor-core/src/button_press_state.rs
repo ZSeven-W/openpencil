@@ -14,6 +14,7 @@ pub enum ButtonPressTarget {
     ChatFooter(crate::chat_button_state::ChatFooterButton),
     Git(crate::git_button_state::GitButton),
     PropertyPanel(usize),
+    VariablesPanel(crate::variables_panel_state::VariablesPanelButton),
     DesignMd(crate::design_md_button_state::DesignMdButton),
     ComponentBrowser(crate::component_browser_state::ComponentBrowserButton),
     ExportDialog(crate::export_dialog_state::ExportDialogButton),

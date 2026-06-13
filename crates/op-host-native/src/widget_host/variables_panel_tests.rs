@@ -4,10 +4,58 @@ use super::{
 };
 use jian_ops_schema::variable::{VariableKind, VariableScalar, VariableValue};
 use op_editor_core::editor_ui_state::VariableRowFocus;
+use op_editor_core::{ButtonPressTarget, VariablesPanelButton};
+use op_editor_ui::widgets::variables_panel::{VariablesPanel, VariablesPanelHit};
 use op_editor_ui::widgets::{TOOLBAR_WIDTH, TOP_BAR_HEIGHT};
+use op_editor_ui::Point2D;
 
 const VIEWPORT_W: f32 = 1280.0;
 const VIEWPORT_H: f32 = 900.0;
+
+fn point_for_hit(host: &WidgetHostNative, want: &VariablesPanelHit) -> (f32, f32) {
+    let rect = host
+        .variables_panel_rect(VIEWPORT_W, VIEWPORT_H)
+        .expect("variables panel rect");
+    let panel = VariablesPanel::for_editor(host.editor_state());
+    let mut y = rect.origin.y;
+    while y < rect.origin.y + rect.size.y {
+        let mut x = rect.origin.x;
+        while x < rect.origin.x + rect.size.x {
+            if panel
+                .hit_test(rect, Point2D::new(x, y))
+                .is_some_and(|hit| &hit == want)
+            {
+                return (x, y);
+            }
+            x += 2.0;
+        }
+        y += 2.0;
+    }
+    panic!("no panel point maps to {want:?}");
+}
+
+#[test]
+fn variables_panel_press_sets_and_release_clears_pressed_button() {
+    let mut host = WidgetHostNative::new();
+    host.editor_state_mut().editor_ui.variables_panel_open = true;
+    assert!(host.editor_state_mut().create_variable(
+        "spacing",
+        VariableKind::Number,
+        VariableScalar::Num(8.0),
+    ));
+
+    let (x, y) = point_for_hit(&host, &VariablesPanelHit::AddTheme);
+    assert!(host.apply_press(x, y, VIEWPORT_W, VIEWPORT_H));
+    assert_eq!(
+        host.editor_state().editor_ui.pressed_button,
+        Some(ButtonPressTarget::VariablesPanel(
+            VariablesPanelButton::AddTheme
+        ))
+    );
+
+    assert!(host.apply_release_with_viewport(VIEWPORT_W, VIEWPORT_H));
+    assert_eq!(host.editor_state().editor_ui.pressed_button, None);
+}
 
 #[test]
 fn variables_panel_floats_next_to_toolbar_like_ts() {
