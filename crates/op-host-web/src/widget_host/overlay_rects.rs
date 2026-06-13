@@ -186,7 +186,7 @@ impl WidgetHost {
         viewport_w: f32,
         viewport_h: f32,
     ) -> Option<Rect> {
-        if !self.editor_state.editor_ui.icon_picker_open {
+        if !self.editor_state.editor_ui.icon_picker.open {
             return None;
         }
         let ui = &self.editor_state.editor_ui;

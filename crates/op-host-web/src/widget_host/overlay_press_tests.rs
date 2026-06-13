@@ -267,7 +267,7 @@ fn shape_picker_icon_row_opens_icon_picker_panel() {
     let row_y = row_y.expect("icon row present in the shape picker");
 
     assert!(host.apply_press(x, row_y, W, H));
-    assert!(host.editor_state.editor_ui.icon_picker_open);
+    assert!(host.editor_state.editor_ui.icon_picker.open);
     assert!(!host.editor_state.editor_ui.shape_picker.open);
 
     // The icon-picker panel paints at its centred rect.

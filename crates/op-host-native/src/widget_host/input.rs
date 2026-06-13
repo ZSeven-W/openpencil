@@ -38,7 +38,7 @@ impl WidgetHostNative {
             || self.variables_search_active()
             || self.editor_state.editor_ui.effect_param_focus.is_some()
             || self.editor_state.editor_ui.agent_settings.focus.is_some()
-            || self.editor_state.editor_ui.icon_picker_open
+            || self.editor_state.editor_ui.icon_picker.open
             || self.editor_state.editor_ui.chat_model_picker.open
             || self.editor_state.editor_ui.component_browser_open
             || self.editor_state.chat.focused
@@ -472,15 +472,15 @@ impl WidgetHostNative {
             return true;
         }
         // Icon-picker panel hover (close / icon rows / load-more).
-        if self.editor_state.editor_ui.icon_picker_open {
+        if self.editor_state.editor_ui.icon_picker.open {
             use op_editor_ui::widgets::icon_picker_panel::IconPickerPanel;
             if let Some(panel_rect) =
                 self.icon_picker_panel_rect(self.last_viewport_w, self.last_viewport_h)
             {
                 let new_hover = IconPickerPanel::for_editor(&self.editor_state)
                     .and_then(|p| p.hover_at(panel_rect, Point2D::new(x, y)));
-                if new_hover != self.editor_state.editor_ui.icon_picker_hover {
-                    self.editor_state.editor_ui.icon_picker_hover = new_hover;
+                if new_hover != self.editor_state.editor_ui.icon_picker.hover {
+                    self.editor_state.editor_ui.icon_picker.hover = new_hover;
                     self.mark_dirty();
                     return true;
                 }

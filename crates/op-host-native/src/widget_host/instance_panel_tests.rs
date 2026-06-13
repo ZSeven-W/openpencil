@@ -178,7 +178,7 @@ fn context_menu_detach_component_sheds_reusable_flag() {
 fn remote_icon_insert_bakes_svg_d_as_path_node() {
     let mut host = seeded_host();
     let state = host.editor_state_mut();
-    state.editor_ui.icon_picker_open = true;
+    state.editor_ui.icon_picker.open = true;
     state.editor_ui.icon_picker_replace_selection = false;
     state.editor_ui.icon_picker_panel_pos = Some((0.0, 0.0));
     state.editor_ui.icon_picker_search = "zwxq".to_string();

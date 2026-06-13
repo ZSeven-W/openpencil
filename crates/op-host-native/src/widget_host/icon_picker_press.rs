@@ -24,10 +24,7 @@ impl WidgetHostNative {
         };
         match hit {
             IconPickerHit::Close => {
-                self.editor_state.editor_ui.icon_picker_open = false;
-                self.editor_state.editor_ui.icon_picker_replace_selection = false;
-                self.editor_state.editor_ui.icon_picker_search.clear();
-                self.editor_state.editor_ui.icon_picker_hover = None;
+                self.editor_state.editor_ui.close_icon_picker();
             }
             IconPickerHit::DragHeader => {
                 self.icon_picker_drag = Some(IconPickerDragState {
@@ -84,10 +81,7 @@ impl WidgetHostNative {
                         doc.x as f64,
                         doc.y as f64,
                     );
-                    self.editor_state.editor_ui.icon_picker_open = false;
-                    self.editor_state.editor_ui.icon_picker_search.clear();
-                    self.editor_state.editor_ui.icon_picker_replace_selection = false;
-                    self.editor_state.editor_ui.icon_picker_hover = None;
+                    self.editor_state.editor_ui.close_icon_picker();
                     if inserted.is_some() {
                         self.mark_dirty();
                     }

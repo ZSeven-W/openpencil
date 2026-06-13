@@ -341,12 +341,16 @@ impl WidgetHostNative {
         if self.apply_image_panel_text(c) {
             return true;
         }
-        if self.editor_state.editor_ui.icon_picker_open && !c.is_control() {
+        if self.editor_state.editor_ui.icon_picker.open && !c.is_control() {
             if self.editor_state.editor_ui.icon_picker_select_all {
                 self.editor_state.editor_ui.icon_picker_search.clear();
                 self.editor_state.editor_ui.icon_picker_select_all = false;
+                self.editor_state.editor_ui.icon_picker.hover = None;
+                self.editor_state.editor_ui.icon_picker.pressed = None;
             }
             self.editor_state.editor_ui.icon_picker_search.push(c);
+            self.editor_state.editor_ui.icon_picker.hover = None;
+            self.editor_state.editor_ui.icon_picker.pressed = None;
             self.mark_dirty();
             return true;
         }
@@ -644,10 +648,12 @@ impl WidgetHostNative {
         if self.apply_image_panel_backspace() {
             return true;
         }
-        if self.editor_state.editor_ui.icon_picker_open {
+        if self.editor_state.editor_ui.icon_picker.open {
             if self.editor_state.editor_ui.icon_picker_select_all {
                 self.editor_state.editor_ui.icon_picker_search.clear();
                 self.editor_state.editor_ui.icon_picker_select_all = false;
+                self.editor_state.editor_ui.icon_picker.hover = None;
+                self.editor_state.editor_ui.icon_picker.pressed = None;
                 self.mark_dirty();
                 return true;
             }
@@ -658,6 +664,8 @@ impl WidgetHostNative {
                 .pop()
                 .is_some()
             {
+                self.editor_state.editor_ui.icon_picker.hover = None;
+                self.editor_state.editor_ui.icon_picker.pressed = None;
                 self.mark_dirty();
                 return true;
             }
@@ -859,7 +867,7 @@ impl WidgetHostNative {
         // would silently drop the node behind the focused field.
         if self.editor_state.ui.property_focus.is_some()
             || self.editor_state.editor_ui.effect_param_focus.is_some()
-            || self.editor_state.editor_ui.icon_picker_open
+            || self.editor_state.editor_ui.icon_picker.open
             || self.editor_state.editor_ui.chat_model_picker.open
             || self.editor_state.editor_ui.component_browser_open
             || self.editor_state.chat.focused
@@ -1493,12 +1501,8 @@ impl WidgetHostNative {
             self.mark_dirty();
             return true;
         }
-        if self.editor_state.editor_ui.icon_picker_open {
-            self.editor_state.editor_ui.icon_picker_open = false;
-            self.editor_state.editor_ui.icon_picker_replace_selection = false;
-            self.editor_state.editor_ui.icon_picker_search.clear();
-            self.editor_state.editor_ui.icon_picker_select_all = false;
-            self.editor_state.editor_ui.icon_picker_hover = None;
+        if self.editor_state.editor_ui.icon_picker.open {
+            self.editor_state.editor_ui.close_icon_picker();
             self.mark_dirty();
             return true;
         }

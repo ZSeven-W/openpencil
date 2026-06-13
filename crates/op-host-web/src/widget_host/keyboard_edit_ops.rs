@@ -135,7 +135,7 @@ impl WidgetHost {
             self.mark_dirty();
             return true;
         }
-        if self.editor_state.editor_ui.icon_picker_open {
+        if self.editor_state.editor_ui.icon_picker.open {
             self.editor_state.editor_ui.icon_picker_select_all = true;
             self.mark_dirty();
             return true;

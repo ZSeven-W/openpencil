@@ -14,14 +14,18 @@ impl WidgetHost {
     /// Icon-picker search box typing — owns every printable char
     /// while the panel is open.
     pub(in crate::widget_host) fn icon_picker_text(&mut self, c: char) -> Option<bool> {
-        if !self.editor_state.editor_ui.icon_picker_open || c.is_control() {
+        if !self.editor_state.editor_ui.icon_picker.open || c.is_control() {
             return None;
         }
         if self.editor_state.editor_ui.icon_picker_select_all {
             self.editor_state.editor_ui.icon_picker_search.clear();
             self.editor_state.editor_ui.icon_picker_select_all = false;
+            self.editor_state.editor_ui.icon_picker.hover = None;
+            self.editor_state.editor_ui.icon_picker.pressed = None;
         }
         self.editor_state.editor_ui.icon_picker_search.push(c);
+        self.editor_state.editor_ui.icon_picker.hover = None;
+        self.editor_state.editor_ui.icon_picker.pressed = None;
         self.mark_dirty();
         Some(true)
     }
@@ -29,12 +33,14 @@ impl WidgetHost {
     /// Icon-picker search box backspace — swallows the key while the
     /// panel is open even when the draft is already empty.
     pub(in crate::widget_host) fn icon_picker_backspace(&mut self) -> Option<bool> {
-        if !self.editor_state.editor_ui.icon_picker_open {
+        if !self.editor_state.editor_ui.icon_picker.open {
             return None;
         }
         if self.editor_state.editor_ui.icon_picker_select_all {
             self.editor_state.editor_ui.icon_picker_search.clear();
             self.editor_state.editor_ui.icon_picker_select_all = false;
+            self.editor_state.editor_ui.icon_picker.hover = None;
+            self.editor_state.editor_ui.icon_picker.pressed = None;
             self.mark_dirty();
             return Some(true);
         }
@@ -45,6 +51,8 @@ impl WidgetHost {
             .pop()
             .is_some()
         {
+            self.editor_state.editor_ui.icon_picker.hover = None;
+            self.editor_state.editor_ui.icon_picker.pressed = None;
             self.mark_dirty();
             return Some(true);
         }

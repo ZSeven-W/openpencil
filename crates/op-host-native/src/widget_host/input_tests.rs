@@ -1824,13 +1824,13 @@ fn shape_picker_icon_row_opens_icon_picker() {
     assert!(host.apply_press(x, icon_row_y, viewport_w, viewport_h));
 
     assert!(!host.editor_state().editor_ui.shape_picker.open);
-    assert!(host.editor_state().editor_ui.icon_picker_open);
+    assert!(host.editor_state().editor_ui.icon_picker.open);
 }
 
 #[test]
 fn icon_picker_open_owns_keyboard_search() {
     let mut host = WidgetHostNative::new();
-    host.editor_state_mut().editor_ui.icon_picker_open = true;
+    host.editor_state_mut().editor_ui.icon_picker.open = true;
 
     assert!(host.input_active_pub());
     assert!(host.apply_text('h'));
@@ -1839,7 +1839,7 @@ fn icon_picker_open_owns_keyboard_search() {
     assert!(host.apply_backspace());
     assert_eq!(host.editor_state().editor_ui.icon_picker_search, "h");
     assert!(host.apply_escape());
-    assert!(!host.editor_state().editor_ui.icon_picker_open);
+    assert!(!host.editor_state().editor_ui.icon_picker.open);
 }
 
 #[test]
@@ -1847,7 +1847,7 @@ fn icon_picker_click_inserts_icon_font_node() {
     let mut host = WidgetHostNative::new();
     let viewport_w = 1440.0;
     let viewport_h = 900.0;
-    host.editor_state_mut().editor_ui.icon_picker_open = true;
+    host.editor_state_mut().editor_ui.icon_picker.open = true;
     host.editor_state_mut().editor_ui.icon_picker_search = "home".to_string();
 
     let panel = host
@@ -1856,7 +1856,7 @@ fn icon_picker_click_inserts_icon_font_node() {
     let row_y = panel.origin.y + 40.0 + 42.0 + 20.0;
     assert!(host.apply_press(panel.origin.x + 40.0, row_y, viewport_w, viewport_h));
 
-    assert!(!host.editor_state().editor_ui.icon_picker_open);
+    assert!(!host.editor_state().editor_ui.icon_picker.open);
     let icon = host
         .editor_state()
         .doc
@@ -1877,7 +1877,7 @@ fn icon_picker_header_drag_moves_the_panel() {
     let mut host = WidgetHostNative::new();
     let viewport_w = 1440.0;
     let viewport_h = 900.0;
-    host.editor_state_mut().editor_ui.icon_picker_open = true;
+    host.editor_state_mut().editor_ui.icon_picker.open = true;
 
     let start = host
         .icon_picker_panel_rect(viewport_w, viewport_h)

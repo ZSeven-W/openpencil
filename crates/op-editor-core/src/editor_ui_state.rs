@@ -896,8 +896,8 @@ pub struct EditorUiState {
     /// Last-selected shape tool — drives the toolbar shape slot's
     /// icon. Always one of Rect / Ellipse / Polygon / Line / Pen.
     pub shape_tool: Tool,
-    /// Whether the Toolbar's Icon action picker is open.
-    pub icon_picker_open: bool,
+    /// Toolbar/property icon picker interaction state.
+    pub icon_picker: jian_widgets::components::select::SelectState,
     /// True when the icon picker should replace the selected icon
     /// instead of inserting a new icon at the canvas centre.
     pub icon_picker_replace_selection: bool,
@@ -909,9 +909,6 @@ pub struct EditorUiState {
     /// True after Cmd/Ctrl+A in the icon search box. The next edit
     /// replaces the whole search query.
     pub icon_picker_select_all: bool,
-    /// Which icon-picker target the cursor is over (close / row /
-    /// load-more) — drives the `theme.button_hover` wash.
-    pub icon_picker_hover: Option<crate::icon_picker_button_state::IconPickerButton>,
     /// Remote Iconify search results appended by the desktop host.
     pub icon_picker_remote: crate::icon_picker_state::IconPickerRemoteState,
     /// Queued "load more" request drained asynchronously by desktop.
@@ -1227,12 +1224,11 @@ impl Default for EditorUiState {
             shape_picker: jian_widgets::components::select::SelectState::default(),
             toolbar_hover: None,
             shape_tool: Tool::Rect,
-            icon_picker_open: false,
+            icon_picker: jian_widgets::components::select::SelectState::default(),
             icon_picker_replace_selection: false,
             icon_picker_panel_pos: None,
             icon_picker_search: String::new(),
             icon_picker_select_all: false,
-            icon_picker_hover: None,
             icon_picker_remote: crate::icon_picker_state::IconPickerRemoteState::default(),
             icon_picker_load_more_request: None,
             chat_model_picker: jian_widgets::components::select::SelectState::default(),
@@ -1349,6 +1345,30 @@ impl EditorUiState {
         self.fill_type_picker.hover = None;
         self.fill_type_picker.pressed = None;
         self.fill_type_picker.scroll.offset = 0.0;
+        changed
+    }
+
+    pub fn open_icon_picker(&mut self, replace_selection: bool) {
+        self.close_icon_picker();
+        self.icon_picker.open = true;
+        self.icon_picker_replace_selection = replace_selection;
+    }
+
+    pub fn close_icon_picker(&mut self) -> bool {
+        let changed = self.icon_picker.open
+            || self.icon_picker.hover.is_some()
+            || self.icon_picker.pressed.is_some()
+            || self.icon_picker.scroll.offset != 0.0
+            || self.icon_picker_replace_selection
+            || !self.icon_picker_search.is_empty()
+            || self.icon_picker_select_all;
+        self.icon_picker.open = false;
+        self.icon_picker.hover = None;
+        self.icon_picker.pressed = None;
+        self.icon_picker.scroll.offset = 0.0;
+        self.icon_picker_replace_selection = false;
+        self.icon_picker_search.clear();
+        self.icon_picker_select_all = false;
         changed
     }
 
@@ -1702,5 +1722,36 @@ mod tests {
         assert_eq!(ui.chat_model_picker.hover, None);
         assert_eq!(ui.chat_model_picker.pressed, None);
         assert_eq!(ui.chat_model_picker.scroll.offset, 0.0);
+    }
+
+    #[test]
+    fn icon_picker_helpers_reset_select_interaction_state_and_search() {
+        let mut ui = EditorUiState::new();
+        ui.icon_picker_replace_selection = true;
+        ui.icon_picker_search = "home".to_string();
+        ui.icon_picker_select_all = true;
+        ui.icon_picker.hover = Some(1);
+        ui.icon_picker.pressed = Some(1);
+
+        ui.open_icon_picker(false);
+        assert!(ui.icon_picker.open);
+        assert!(!ui.icon_picker_replace_selection);
+        assert!(ui.icon_picker_search.is_empty());
+        assert!(!ui.icon_picker_select_all);
+        assert_eq!(ui.icon_picker.hover, None);
+        assert_eq!(ui.icon_picker.pressed, None);
+
+        ui.icon_picker_replace_selection = true;
+        ui.icon_picker_search = "settings".to_string();
+        ui.icon_picker_select_all = true;
+        ui.icon_picker.hover = Some(0);
+        ui.icon_picker.pressed = Some(0);
+        assert!(ui.close_icon_picker());
+        assert!(!ui.icon_picker.open);
+        assert!(!ui.icon_picker_replace_selection);
+        assert!(ui.icon_picker_search.is_empty());
+        assert!(!ui.icon_picker_select_all);
+        assert_eq!(ui.icon_picker.hover, None);
+        assert_eq!(ui.icon_picker.pressed, None);
     }
 }

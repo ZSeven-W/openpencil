@@ -122,9 +122,7 @@ impl WidgetHost {
                 // Property-panel icon section → replace-selection
                 // picker (mirrors the native host's arm).
                 let ui = &mut self.editor_state.editor_ui;
-                ui.icon_picker_open = true;
-                ui.icon_picker_replace_selection = true;
-                ui.icon_picker_search.clear();
+                ui.open_icon_picker(true);
                 ui.close_fill_type_picker();
                 ui.image_fill_popover_open = false;
                 ui.close_font_picker();

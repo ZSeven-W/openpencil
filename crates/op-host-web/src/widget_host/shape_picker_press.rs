@@ -34,9 +34,7 @@ impl WidgetHost {
                             self.editor_state.tool = tool;
                         }
                         ShapeChoice::OpenIconPicker => {
-                            self.editor_state.editor_ui.icon_picker_open = true;
-                            self.editor_state.editor_ui.icon_picker_replace_selection = false;
-                            self.editor_state.editor_ui.icon_picker_search.clear();
+                            self.editor_state.editor_ui.open_icon_picker(false);
                         }
                         ShapeChoice::ImportImageOrSvg => {
                             // No file-picker service on web yet — raise the same
