@@ -1208,6 +1208,7 @@ impl WidgetHostNative {
                 panel.branch_create_input.set_text("");
                 panel.branch_create_focused = false;
                 panel.branch_picker_open = false;
+                panel.branch_picker_menu.hover = None;
             }
             self.mark_dirty();
             return true;
@@ -1376,6 +1377,7 @@ impl WidgetHostNative {
         {
             let panel = &mut self.editor_state.editor_ui.git_panel;
             panel.branch_picker_mode = op_editor_core::GitBranchPickerMode::List;
+            panel.branch_picker_menu.hover = None;
             panel.branch_create_input.set_text("");
             panel.branch_create_focused = false;
             self.mark_dirty();
@@ -1439,7 +1441,7 @@ impl WidgetHostNative {
         }
         if self.editor_state.editor_ui.file_menu_open {
             self.editor_state.editor_ui.file_menu_open = false;
-            self.editor_state.editor_ui.file_menu_hover = None;
+            self.editor_state.editor_ui.file_menu.hover = None;
             self.mark_dirty();
             return true;
         }

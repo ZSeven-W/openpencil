@@ -891,7 +891,7 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
                     ) {
                         let eui = &mut self.host.editor_state_mut().editor_ui;
                         eui.file_menu_open = false;
-                        eui.file_menu_hover = None;
+                        eui.file_menu.hover = None;
                         eui.export_dialog_open = true;
                         self.host.mark_editor_state_dirty();
                         self.request_redraw(true);

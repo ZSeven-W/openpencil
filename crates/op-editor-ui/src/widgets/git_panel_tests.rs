@@ -454,6 +454,50 @@ fn overflow_menu_maps_its_entries() {
 }
 
 #[test]
+fn git_menus_use_shared_menu_state_protocol() {
+    use jian_widgets::components::menu::{MenuHit, MenuState};
+
+    let s = state_with(GitPanelState {
+        branch: Some("main".to_string()),
+        overflow_open: true,
+        overflow_menu: MenuState { hover: Some(2) },
+        ..open_repo()
+    });
+    let panel = GitPanel::for_editor(&s).unwrap();
+    let rect = panel_rect(&panel);
+    let rows = panel.overflow_row_rects(rect);
+    assert_eq!(panel.state.overflow_menu.hover, Some(2));
+    assert_eq!(
+        panel.overflow_menu_hit(rect, centre(rows[2])),
+        MenuHit::Row(2)
+    );
+    assert_eq!(
+        panel.overflow_menu_hit(rect, Point2D::new(rows[2].origin.x, rows[2].origin.y - 4.0)),
+        MenuHit::Inside
+    );
+
+    let s = state_with(GitPanelState {
+        branch: Some("main".to_string()),
+        branches: vec!["main".to_string(), "feature".to_string()],
+        branch_picker_open: true,
+        branch_picker_menu: MenuState { hover: Some(1) },
+        ..open_repo()
+    });
+    let panel = GitPanel::for_editor(&s).unwrap();
+    let rect = panel_rect(&panel);
+    let rows = panel.branch_picker_row_rects(rect);
+    assert_eq!(panel.state.branch_picker_menu.hover, Some(1));
+    assert_eq!(
+        panel.branch_picker_menu_hit(rect, centre(rows[1])),
+        MenuHit::Row(1)
+    );
+    assert_eq!(
+        panel.branch_picker_menu_hit(rect, Point2D::new(rows[0].origin.x, rows[0].origin.y - 4.0)),
+        MenuHit::Inside
+    );
+}
+
+#[test]
 fn tracked_picker_maps_rows_and_actions() {
     let s = state_with(GitPanelState {
         branch: Some("main".to_string()),

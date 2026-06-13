@@ -185,7 +185,9 @@ impl WidgetHostNative {
                 // Toggle the branch-picker dropdown; close the overflow
                 // menu so only one ready-state popover is open at a time.
                 panel.branch_picker_open = !panel.branch_picker_open;
+                panel.branch_picker_menu.hover = None;
                 panel.overflow_open = false;
+                panel.overflow_menu.hover = None;
                 panel.overflow_view = GitOverflowView::Menu;
                 panel.close_tracked_picker();
                 // Always (re)open on the branch list — a prior session's
@@ -198,22 +200,27 @@ impl WidgetHostNative {
                 // Always (re)open on the top-level menu so a prior
                 // session's subview never leaks back in.
                 panel.overflow_open = !panel.overflow_open;
+                panel.overflow_menu.hover = None;
                 panel.overflow_view = GitOverflowView::Menu;
                 panel.branch_picker_open = false;
+                panel.branch_picker_menu.hover = None;
                 panel.close_tracked_picker();
             }
             Some(GitPanelHit::OverflowRemoteSettings) => {
+                panel.overflow_menu.hover = None;
                 panel.overflow_view = GitOverflowView::RemoteSettings;
                 panel.close_tracked_picker();
             }
             Some(GitPanelHit::OverflowSshKeys) => {
                 // Open the SSH-keys subview (host enumerates the stored keys).
+                panel.overflow_menu.hover = None;
                 panel.pending_action = Some(GitPanelAction::EnterSshKeys);
                 panel.close_tracked_picker();
             }
             Some(GitPanelHit::SshGenerateKey) => {
                 panel.pending_action = Some(GitPanelAction::SetupSshAuth);
                 panel.overflow_open = false;
+                panel.overflow_menu.hover = None;
                 panel.overflow_view = GitOverflowView::Menu;
             }
             Some(GitPanelHit::SshImportKey) => {
@@ -229,18 +236,21 @@ impl WidgetHostNative {
             Some(GitPanelHit::OverflowSwitchTracked) => {
                 // Host enumerates the repo's `.op` candidates, then flips the
                 // subview to the tracked-file picker.
+                panel.overflow_menu.hover = None;
                 panel.open_tracked_picker();
                 panel.pending_action = Some(GitPanelAction::EnterTrackedPicker);
             }
             Some(GitPanelHit::OverflowClearAuthor) => {
                 panel.pending_action = Some(GitPanelAction::ClearAuthor);
                 panel.overflow_open = false;
+                panel.overflow_menu.hover = None;
                 panel.overflow_view = GitOverflowView::Menu;
                 panel.close_tracked_picker();
             }
             Some(GitPanelHit::OverflowCloseRepo) => {
                 panel.pending_action = Some(GitPanelAction::CloseRepo);
                 panel.overflow_open = false;
+                panel.overflow_menu.hover = None;
                 panel.overflow_view = GitOverflowView::Menu;
                 panel.close_tracked_picker();
             }
@@ -269,9 +279,11 @@ impl WidgetHostNative {
             Some(GitPanelHit::DismissPopover) => {
                 // Click outside an open popover — close it + swallow.
                 panel.branch_picker_open = false;
+                panel.branch_picker_menu.hover = None;
                 panel.branch_picker_mode = GitBranchPickerMode::List;
                 panel.branch_create_input.set_text("");
                 panel.overflow_open = false;
+                panel.overflow_menu.hover = None;
                 panel.overflow_view = GitOverflowView::Menu;
                 panel.close_tracked_picker();
                 panel.defocus_text_inputs();
@@ -288,14 +300,17 @@ impl WidgetHostNative {
                 }
                 // Close the branch-picker dropdown after a pick.
                 panel.branch_picker_open = false;
+                panel.branch_picker_menu.hover = None;
             }
             Some(GitPanelHit::MergeBranch(index)) => {
                 if let Some(name) = panel.branches.get(index).cloned() {
                     panel.pending_action = Some(GitPanelAction::MergeBranch(name));
                 }
                 panel.branch_picker_open = false;
+                panel.branch_picker_menu.hover = None;
             }
             Some(GitPanelHit::BranchCreateMode) => {
+                panel.branch_picker_menu.hover = None;
                 panel.branch_picker_mode = GitBranchPickerMode::Create;
                 panel.branch_create_input.set_text("");
                 panel.branch_create_input.touch(now);
@@ -305,6 +320,7 @@ impl WidgetHostNative {
                 panel.https_focused = false;
             }
             Some(GitPanelHit::BranchMergeMode) => {
+                panel.branch_picker_menu.hover = None;
                 panel.branch_picker_mode = GitBranchPickerMode::Merge;
                 panel.branch_create_focused = false;
             }
@@ -323,11 +339,13 @@ impl WidgetHostNative {
                     panel.branch_create_input.set_text("");
                     panel.branch_create_focused = false;
                     panel.branch_picker_open = false;
+                    panel.branch_picker_menu.hover = None;
                 }
             }
             Some(GitPanelHit::BranchPickerCancel) => {
                 // Step a create / merge sub-mode back to the branch list.
                 panel.branch_picker_mode = GitBranchPickerMode::List;
+                panel.branch_picker_menu.hover = None;
                 panel.branch_create_input.set_text("");
                 panel.branch_create_focused = false;
             }
@@ -478,7 +496,9 @@ impl WidgetHostNative {
         panel.open = false;
         panel.defocus_text_inputs();
         panel.branch_picker_open = false;
+        panel.branch_picker_menu.hover = None;
         panel.overflow_open = false;
+        panel.overflow_menu.hover = None;
         panel.overflow_view = op_editor_core::GitOverflowView::Menu;
         panel.close_tracked_picker();
         panel.diff = None;
