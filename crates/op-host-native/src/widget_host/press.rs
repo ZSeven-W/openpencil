@@ -166,7 +166,7 @@ impl WidgetHostNative {
                     target: LayerContextTarget::Layer(ec_id),
                     anchor_x: x,
                     anchor_y: y,
-                    hovered_row: None,
+                    menu: Default::default(),
                 });
                 return true;
             }
@@ -175,7 +175,7 @@ impl WidgetHostNative {
                     target: LayerContextTarget::Page(idx),
                     anchor_x: x,
                     anchor_y: y,
-                    hovered_row: None,
+                    menu: Default::default(),
                 });
                 return true;
             }
@@ -304,13 +304,21 @@ impl WidgetHostNative {
         }
 
         if let Some(state) = self.editor_state.editor_ui.layer_context_menu.clone() {
-            use op_editor_ui::widgets::layer_context_menu::LayerContextMenu;
+            use op_editor_ui::widgets::layer_context_menu::{LayerContextMenu, MenuHit};
             let menu = LayerContextMenu::for_state(&self.editor_state, state.clone());
-            if let Some(action) = menu.hit_test(Point2D::new(x, y)) {
-                self.dispatch_layer_context_action(action, state.target.clone());
-                self.editor_state.editor_ui.layer_context_menu = None;
-                self.mark_dirty();
-                return true;
+            match menu.hit(Point2D::new(x, y)) {
+                MenuHit::Row(_) => {
+                    if let Some(action) = menu.hit_test(Point2D::new(x, y)) {
+                        self.dispatch_layer_context_action(action, state.target.clone());
+                        self.editor_state.editor_ui.layer_context_menu = None;
+                        self.mark_dirty();
+                    }
+                    return true;
+                }
+                MenuHit::Inside => {
+                    return true;
+                }
+                MenuHit::Outside => {}
             }
             // Dismissing the menu on a miss is a blank press — blur
             // every text input along with it.

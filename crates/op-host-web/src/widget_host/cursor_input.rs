@@ -310,13 +310,11 @@ impl WidgetHost {
         if let Some(state) = self.editor_state.editor_ui.layer_context_menu.clone() {
             use op_editor_ui::widgets::layer_context_menu::LayerContextMenu;
             let menu = LayerContextMenu::for_state(&self.editor_state, state.clone());
-            let new_hover = menu.hovered_row_at(Point2D::new(x, y)).map(|i| i as u8);
-            if new_hover != state.hovered_row {
-                self.editor_state.editor_ui.layer_context_menu =
-                    Some(op_editor_core::editor_ui_state::LayerContextMenuState {
-                        hovered_row: new_hover,
-                        ..state
-                    });
+            let new_hover = menu.hovered_row_at(Point2D::new(x, y));
+            if new_hover != state.menu.hover {
+                let mut next = state;
+                next.menu.hover = new_hover;
+                self.editor_state.editor_ui.layer_context_menu = Some(next);
                 self.mark_dirty();
                 return true;
             }
