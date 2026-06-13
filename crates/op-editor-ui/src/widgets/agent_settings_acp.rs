@@ -1,7 +1,6 @@
 //! ACP Agent section for the Agent settings panel.
 
 use crate::theme::Theme;
-use crate::widgets::agent_settings_acp_draft;
 use crate::widgets::agent_settings_caret::{paint_settings_input_view, settings_input_text};
 use crate::widgets::agent_settings_form_actions::{
     cancel_button_rect, paint_form_actions, save_button_rect,
@@ -195,7 +194,7 @@ pub fn paint_acp_section(
             ui,
             card,
             EXPANDED_CARD_H,
-            agent_settings_acp_draft::ready(settings, ui),
+            ui.acp_agent_draft_ready(),
         );
         y += card.size.y + CARD_GAP;
     }

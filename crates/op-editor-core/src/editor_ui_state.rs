@@ -1346,6 +1346,77 @@ impl EditorUiState {
         self.variables_preset_menu_open && self.variables_preset_name_focus
     }
 
+    pub fn builtin_agent_draft_ready(&self) -> bool {
+        use crate::agent_settings::BuiltinAgentField;
+
+        let Some(name) = self.builtin_agent_draft_field_text(BuiltinAgentField::DisplayName) else {
+            return false;
+        };
+        let Some(api_key) = self.builtin_agent_draft_field_text(BuiltinAgentField::ApiKey) else {
+            return false;
+        };
+        let Some(model) = self.builtin_agent_draft_field_text(BuiltinAgentField::Model) else {
+            return false;
+        };
+        !name.trim().is_empty() && !api_key.trim().is_empty() && !model.trim().is_empty()
+    }
+
+    pub fn acp_agent_draft_ready(&self) -> bool {
+        use crate::agent_settings::{AcpAgentField, AcpConnectionType};
+
+        let Some(draft) = self.agent_settings.acp_agent_draft.as_ref() else {
+            return false;
+        };
+        let Some(name) = self.acp_agent_draft_field_text(AcpAgentField::DisplayName) else {
+            return false;
+        };
+        let endpoint_field = match draft.connection_type {
+            AcpConnectionType::Local => AcpAgentField::Command,
+            AcpConnectionType::Remote => AcpAgentField::Url,
+        };
+        let Some(endpoint) = self.acp_agent_draft_field_text(endpoint_field) else {
+            return false;
+        };
+        !name.trim().is_empty() && !endpoint.trim().is_empty()
+    }
+
+    pub fn builtin_agent_draft_field_text(
+        &self,
+        field: crate::agent_settings::BuiltinAgentField,
+    ) -> Option<&str> {
+        use crate::agent_settings::{BuiltinAgentField, SettingsFocus};
+
+        let draft = self.agent_settings.builtin_agent_draft.as_ref()?;
+        if self.agent_settings.focus == Some(SettingsFocus::BuiltinAgentDraft(field)) {
+            return Some(self.settings_input.text());
+        }
+        Some(match field {
+            BuiltinAgentField::DisplayName => draft.display_name.as_str(),
+            BuiltinAgentField::ApiKey => draft.api_key.as_str(),
+            BuiltinAgentField::Model => draft.model.as_str(),
+            BuiltinAgentField::BaseUrl => draft.base_url.as_str(),
+        })
+    }
+
+    pub fn acp_agent_draft_field_text(
+        &self,
+        field: crate::agent_settings::AcpAgentField,
+    ) -> Option<std::borrow::Cow<'_, str>> {
+        use crate::agent_settings::{AcpAgentField, SettingsFocus};
+
+        let draft = self.agent_settings.acp_agent_draft.as_ref()?;
+        if self.agent_settings.focus == Some(SettingsFocus::AcpAgentDraft(field)) {
+            return Some(std::borrow::Cow::Borrowed(self.settings_input.text()));
+        }
+        Some(match field {
+            AcpAgentField::DisplayName => std::borrow::Cow::Borrowed(draft.display_name.as_str()),
+            AcpAgentField::Command => std::borrow::Cow::Borrowed(draft.command.as_str()),
+            AcpAgentField::Args => std::borrow::Cow::Owned(draft.args_text()),
+            AcpAgentField::Env => std::borrow::Cow::Owned(draft.env_text()),
+            AcpAgentField::Url => std::borrow::Cow::Borrowed(draft.url.as_deref().unwrap_or("")),
+        })
+    }
+
     /// Clear transient UI state that references specific document nodes/pages
     /// or the (now-cleared) selection, so a wholesale document replacement
     /// ([`crate::EditorState::replace_document`]) can't leave hover highlights,
@@ -1425,6 +1496,34 @@ mod tests {
         assert_eq!(ExportFormat::ALL.len(), 5);
         assert_eq!(ExportFormat::Png.extension(), "png");
         assert_eq!(ExportFormat::Jpeg.extension(), "jpg");
+    }
+
+    #[test]
+    fn builtin_agent_draft_ready_reads_focused_settings_input() {
+        use crate::agent_settings::{BuiltinAgentField, SettingsFocus};
+
+        let mut ui = EditorUiState::new();
+        ui.agent_settings.begin_builtin_agent_draft();
+        assert!(!ui.builtin_agent_draft_ready());
+
+        ui.agent_settings.focus = Some(SettingsFocus::BuiltinAgentDraft(BuiltinAgentField::ApiKey));
+        ui.settings_input.set_text("sk-test");
+
+        assert!(ui.builtin_agent_draft_ready());
+    }
+
+    #[test]
+    fn acp_agent_draft_ready_reads_focused_settings_input() {
+        use crate::agent_settings::{AcpAgentField, SettingsFocus};
+
+        let mut ui = EditorUiState::new();
+        ui.agent_settings.begin_acp_agent_draft();
+        assert!(!ui.acp_agent_draft_ready());
+
+        ui.agent_settings.focus = Some(SettingsFocus::AcpAgentDraft(AcpAgentField::Command));
+        ui.settings_input.set_text("op-agent");
+
+        assert!(ui.acp_agent_draft_ready());
     }
 
     #[test]

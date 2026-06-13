@@ -1,7 +1,6 @@
 //! Built-in provider section for the Agent settings panel.
 
 use crate::theme::Theme;
-use crate::widgets::agent_settings_builtin_draft;
 use crate::widgets::agent_settings_builtin_layout::{
     add_provider_rect, card_height, card_rect, compact_edit_rect, compact_remove_rect,
     compact_switch_rect, draft_card_height, expanded_card_height, field_input_rect, is_editing,
@@ -309,14 +308,7 @@ pub fn paint_builtin_section(
         );
         paint_builtin_agent_form(cx, theme, settings, ui, draft, None, card, now_ms);
         let form_h = expanded_card_height(settings, None);
-        paint_form_actions(
-            cx,
-            theme,
-            ui,
-            card,
-            form_h,
-            agent_settings_builtin_draft::ready(settings, ui),
-        );
+        paint_form_actions(cx, theme, ui, card, form_h, ui.builtin_agent_draft_ready());
         y += card.size.y + CARD_GAP;
     }
     y
