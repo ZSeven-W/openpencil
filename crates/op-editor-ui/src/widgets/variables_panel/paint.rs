@@ -87,9 +87,7 @@ fn paint_search_row(
             baseline_y,
         );
     }
-    if panel.search_focus
-        && jian_core::anim::blink_visible(panel.now_ms, panel.caret_anchor_ms, 500)
-    {
+    if panel.search_focus && panel.search_input.caret_visible(panel.now_ms) {
         let caret_x = text_x
             + if panel.search.is_empty() {
                 0.0

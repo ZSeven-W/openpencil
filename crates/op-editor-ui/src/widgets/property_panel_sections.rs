@@ -52,7 +52,6 @@ pub struct EditContext<'a> {
     pub caret: usize,
     /// Whether Ctrl/Cmd+A selected the focused draft.
     pub select_all: bool,
-    pub caret_anchor_ms: u64,
     pub now_ms: u64,
 }
 
@@ -156,17 +155,15 @@ impl<'a> EditContext<'a> {
     /// for editable surfaces (effect params) that don't key off a
     /// `PropertyFocus`.
     pub fn caret_blink_on(&self) -> bool {
-        jian_core::anim::blink_visible(self.now_ms, self.caret_anchor_ms, 500)
+        self.input.caret_visible(self.now_ms)
     }
 
     /// Caret byte-offset for `focus` when it is the focused field
     /// and the blink is on — `None` otherwise. Drives caret paint;
     /// the offset is clamped into the draft so a stale value is safe.
     pub fn caret_at(&self, focus: PropertyFocus) -> Option<usize> {
-        if self.focus == Some(focus)
-            && jian_core::anim::blink_visible(self.now_ms, self.caret_anchor_ms, 500)
-        {
-            Some(self.caret.min(self.draft.len()))
+        if self.focus == Some(focus) && self.input.caret_visible(self.now_ms) {
+            Some(self.input.caret().min(self.draft.len()))
         } else {
             None
         }

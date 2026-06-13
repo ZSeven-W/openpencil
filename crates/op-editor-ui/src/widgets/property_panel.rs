@@ -116,11 +116,7 @@ pub struct PropertyPanel {
     pub caret_pos: usize,
     /// Whether Ctrl/Cmd+A selected the full focused draft.
     pub select_all: bool,
-    /// Caret-blink anchor (ms since host start) for the focused
-    /// input. Drives the same `jian_core::anim::blink_visible`
-    /// helper the chat caret uses.
-    pub caret_anchor_ms: u64,
-    /// Host clock ms; paired with `caret_anchor_ms` for caret blink.
+    /// Host clock ms for caret blink.
     pub now_ms: u64,
     /// Active flex-layout button.
     pub flex_layout: op_editor_core::FlexLayout,
@@ -371,7 +367,6 @@ impl PropertyPanel {
                 state.ui.property_input.caret()
             },
             select_all: !is_multi && state.ui.property_input.is_select_all(),
-            caret_anchor_ms: state.ui.property_caret_anchor_ms,
             now_ms,
             flex_layout,
             size_flags,
@@ -810,7 +805,6 @@ impl Widget for PropertyPanel {
             input: &self.input,
             caret: self.caret_pos,
             select_all: self.select_all,
-            caret_anchor_ms: self.caret_anchor_ms,
             now_ms: self.now_ms,
         };
         let caps = self.capabilities();

@@ -69,6 +69,7 @@ pub mod svg_import;
 pub mod svg_path_bounds;
 mod svg_path_data;
 pub mod text_edit;
+pub mod text_input_focus;
 pub mod theme_presets;
 pub mod tool;
 pub mod toolbar_state;

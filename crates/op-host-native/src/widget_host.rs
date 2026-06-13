@@ -282,8 +282,8 @@ pub struct WidgetHostNative {
     /// Bumped past the highest sample id so new + sample nodes
     /// never collide on the same key.
     pub(in crate::widget_host) next_node_id: u64,
-    /// Host-supplied frame timestamp in milliseconds. Drives the
-    /// caret blink via `jian_core::anim::blink_visible`. The
+    /// Host-supplied frame timestamp in milliseconds. Focused
+    /// `TextInputState`s use this for caret blink. The
     /// inspector_window runner refreshes this once per
     /// `RedrawRequested` from a single `Instant` start anchor;
     /// any other host (mobile / browser) installs its own clock.
@@ -864,103 +864,14 @@ impl WidgetHostNative {
     /// Next millisecond at which the host should wake to repaint
     /// the caret blink phase. `None` = no animation pending.
     pub fn next_animation_deadline_ms(&self) -> Option<u64> {
-        let ui = &self.editor_state.ui;
-        if ui.text_editing.is_some() {
-            return Some(ui.text_edit_input.next_blink_flip_ms(self.now_ms));
+        if let Some(input) = self.editor_state.active_text_input() {
+            return Some(input.next_blink_flip_ms(self.now_ms));
         }
-        if let Some(rename) = &ui.layer_rename {
-            return Some(rename.input.next_blink_flip_ms(self.now_ms));
-        }
-        if ui.property_focus.is_some() {
-            return Some(jian_core::anim::next_blink_flip_ms(
-                self.now_ms,
-                ui.property_caret_anchor_ms,
-                500,
-            ));
-        }
-        if self
-            .editor_state
-            .editor_ui
-            .variables_theme_rename_axis
-            .is_some()
-            || self
-                .editor_state
-                .editor_ui
-                .variables_variant_rename_value
-                .is_some()
-            || self.editor_state.editor_ui.variable_row_focus.is_some()
-        {
-            return Some(jian_core::anim::next_blink_flip_ms(
-                self.now_ms,
-                ui.property_caret_anchor_ms,
-                500,
-            ));
-        }
-        if self.editor_state.editor_ui.agent_settings_open
-            && self.editor_state.editor_ui.agent_settings.focus.is_some()
-        {
-            return Some(
-                self.editor_state
-                    .editor_ui
-                    .settings_input
-                    .next_blink_flip_ms(self.now_ms),
-            );
-        }
-        if self.editor_state.editor_ui.chat_model_picker_open {
-            return Some(
-                self.editor_state
-                    .editor_ui
-                    .chat_model_picker_input
-                    .next_blink_flip_ms(self.now_ms),
-            );
-        }
-        if self.editor_state.chat.focused {
-            return Some(self.editor_state.chat.input.next_blink_flip_ms(self.now_ms));
-        }
-        // Git commit textarea caret — same 500 ms cadence the ready
-        // panel paints at (`git_panel_ready.rs`). Without this wake the
-        // window never repaints while the commit box is focused, so the
-        // caret sits static instead of blinking.
-        if self.editor_state.editor_ui.git_panel.commit_focused {
-            return Some(
-                self.editor_state
-                    .editor_ui
-                    .git_panel
-                    .commit_input
-                    .next_blink_flip_ms(self.now_ms),
-            );
-        }
-        let git = &self.editor_state.editor_ui.git_panel;
-        if git.remote_focused {
-            return Some(git.remote_input.next_blink_flip_ms(self.now_ms));
-        }
-        if git.https_focused {
-            return Some(git.https_input.next_blink_flip_ms(self.now_ms));
-        }
-        if git.branch_create_focused {
-            return Some(git.branch_create_input.next_blink_flip_ms(self.now_ms));
-        }
-        if git.author_name_focused {
-            return Some(git.author_name_input.next_blink_flip_ms(self.now_ms));
-        }
-        if git.author_email_focused {
-            return Some(git.author_email_input.next_blink_flip_ms(self.now_ms));
-        }
-        // Clone-wizard field caret, and while a `git clone` runs — keep
-        // the loop ticking so the caret blinks and `poll_git_clone_job`
-        // drains the worker's result on a later frame.
+        // While a `git clone` runs, keep the loop ticking so
+        // `poll_git_clone_job` drains the worker's result later.
         if let Some(form) = &self.editor_state.editor_ui.git_panel.clone_form {
-            match form.focus {
-                Some(op_editor_core::CloneField::Url) => {
-                    return Some(form.url_input.next_blink_flip_ms(self.now_ms));
-                }
-                Some(op_editor_core::CloneField::Dest) => {
-                    return Some(form.dest_input.next_blink_flip_ms(self.now_ms));
-                }
-                None if form.cloning => {
-                    return Some(self.now_ms + jian_core::text_input::CARET_BLINK_PERIOD_MS);
-                }
-                None => {}
+            if form.cloning {
+                return Some(self.now_ms.saturating_add(100));
             }
         }
         None
