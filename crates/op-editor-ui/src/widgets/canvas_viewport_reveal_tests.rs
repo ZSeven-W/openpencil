@@ -136,11 +136,24 @@ fn opening_parent_reveal_prevents_nested_child_transform() {
 }
 
 #[test]
-fn child_reveal_gets_own_transform_after_parent_opening_beat() {
+fn parent_reveal_suppresses_child_transform_through_opening_beat() {
     let frame = frame_with_child();
     let reveals = HashMap::from([("f".to_string(), 1_000), ("c".to_string(), 1_080)]);
 
     let backend = paint_with_reveals(&frame, &reveals, 1_120);
+
+    assert_eq!(
+        backend.scales, 1,
+        "the first beat should read as one coherent streamed group, not stacked child pops"
+    );
+}
+
+#[test]
+fn child_reveal_gets_own_transform_after_parent_opening_beat() {
+    let frame = frame_with_child();
+    let reveals = HashMap::from([("f".to_string(), 1_000), ("c".to_string(), 1_080)]);
+
+    let backend = paint_with_reveals(&frame, &reveals, 1_180);
 
     assert_eq!(
         backend.scales, 2,

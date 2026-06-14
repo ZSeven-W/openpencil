@@ -19,7 +19,7 @@ use std::sync::{LazyLock, Mutex};
 /// Duration of the short generated-node entrance animation.
 pub const REVEAL_DURATION_MS: u64 = 1_520;
 /// Delay between the first generated nodes in one applied batch.
-pub const REVEAL_STAGGER_MS: u64 = 18;
+pub const REVEAL_STAGGER_MS: u64 = 32;
 /// Extra delay for nested generated nodes. Visual traversal order
 /// already places children after parents; keeping this at zero avoids
 /// depth changes compressing adjacent stream slots into the same frame.
@@ -27,11 +27,13 @@ pub const REVEAL_DEPTH_STAGGER_MS: u64 = 0;
 /// Parent reveals suppress child transforms only during their opening
 /// beat. Once the parent has begun settling, delayed children animate
 /// independently so streamed content does not pop in abruptly.
-pub const REVEAL_CHILD_SUPPRESS_FRACTION: f32 = 0.04;
-const REVEAL_FULL_STAGGER_SIBLINGS: u64 = 36;
+pub const REVEAL_CHILD_SUPPRESS_FRACTION: f32 = 0.10;
+const REVEAL_FULL_STAGGER_SIBLINGS: u64 = 18;
 const REVEAL_MID_STAGGER_SIBLINGS: u64 = 72;
-const REVEAL_COMPRESSED_STAGGER_MS: u64 = REVEAL_FRAME_MS;
+const REVEAL_COMPRESSED_STAGGER_MS: u64 = 24;
 const REVEAL_TAIL_STAGGER_MS: u64 = REVEAL_FRAME_MS;
+const REVEAL_MAX_NEW_STARTS_PER_SNAPSHOT: usize = 2;
+const REVEAL_BURST_RECOVERY_STAGGER_MS: u64 = 40;
 const CLOCK_REBASE_THRESHOLD_MS: u64 = 60_000;
 const REVEAL_FRAME_MS: u64 = 16;
 
@@ -61,6 +63,7 @@ pub struct AgentIndicators {
     /// node id → reveal start timestamp. Drives the short new-node
     /// entrance animation after AI applies generated nodes.
     pub reveals: HashMap<String, u64>,
+    last_reveal_snapshot_ms: Option<u64>,
 }
 
 impl AgentIndicators {
@@ -70,6 +73,7 @@ impl AgentIndicators {
         self.frames.clear();
         self.previews.clear();
         self.reveals.clear();
+        self.last_reveal_snapshot_ms = None;
     }
 }
 
@@ -229,6 +233,7 @@ pub fn snapshot_at(now_ms: u64) -> AgentIndicators {
     rebase_external_clock_reveals(&mut r, now_ms);
     r.reveals
         .retain(|_, started| now_ms.saturating_sub(*started) <= REVEAL_DURATION_MS);
+    smooth_overdue_reveal_burst(&mut r, now_ms);
     r.clone()
 }
 
@@ -291,6 +296,40 @@ fn rebase_external_clock_reveals(r: &mut AgentIndicators, now_ms: u64) {
             *slot = started_at;
         }
         next_slot = started_at.saturating_add(REVEAL_STAGGER_MS);
+    }
+}
+
+fn smooth_overdue_reveal_burst(r: &mut AgentIndicators, now_ms: u64) {
+    let Some(prev_ms) = r.last_reveal_snapshot_ms.replace(now_ms) else {
+        return;
+    };
+    if now_ms <= prev_ms {
+        return;
+    }
+    let mut newly_due: Vec<(String, u64)> = r
+        .reveals
+        .iter()
+        .filter_map(|(id, started)| {
+            if *started > prev_ms && *started <= now_ms {
+                Some((id.clone(), *started))
+            } else {
+                None
+            }
+        })
+        .collect();
+    if newly_due.len() <= REVEAL_MAX_NEW_STARTS_PER_SNAPSHOT {
+        return;
+    }
+    newly_due.sort_by(|a, b| a.1.cmp(&b.1).then_with(|| a.0.cmp(&b.0)));
+    let mut next_slot = now_ms.saturating_add(REVEAL_BURST_RECOVERY_STAGGER_MS);
+    for (id, _) in newly_due
+        .into_iter()
+        .skip(REVEAL_MAX_NEW_STARTS_PER_SNAPSHOT)
+    {
+        if let Some(started_at) = r.reveals.get_mut(&id) {
+            *started_at = next_slot;
+        }
+        next_slot = next_slot.saturating_add(REVEAL_BURST_RECOVERY_STAGGER_MS);
     }
 }
 
@@ -421,8 +460,8 @@ mod tests {
 
         let snap = snapshot_at(1_040);
 
-        assert_eq!(snap.reveals.get("external-a"), Some(&1_098));
-        assert_eq!(snap.reveals.get("external-b"), Some(&1_116));
+        assert_eq!(snap.reveals.get("external-a"), Some(&1_112));
+        assert_eq!(snap.reveals.get("external-b"), Some(&1_144));
         clear();
     }
 
@@ -437,17 +476,53 @@ mod tests {
     }
 
     #[test]
+    fn snapshot_reschedules_overdue_reveals_after_frame_gap() {
+        let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let epoch = begin();
+        for i in 0..6 {
+            add_reveal(
+                epoch,
+                &format!("n{i}"),
+                1_000 + i as u64 * REVEAL_STAGGER_MS,
+            );
+        }
+
+        assert_eq!(snapshot_at(1_000).reveals.get("n0"), Some(&1_000));
+        let snap = snapshot_at(1_220);
+        let visible_count = snap
+            .reveals
+            .values()
+            .filter(|started_at| **started_at <= 1_220)
+            .count();
+
+        assert!(
+            visible_count <= 3,
+            "a delayed frame should not let the whole backlog start at once"
+        );
+        assert!(
+            snap.reveals
+                .get("n3")
+                .is_some_and(|started_at| *started_at > 1_220),
+            "overdue nodes beyond the per-frame budget should be queued forward"
+        );
+        end_if_epoch(epoch);
+    }
+
+    #[test]
     fn reveal_offsets_stream_dense_batches_without_shared_frames() {
         let offsets: Vec<u64> = (0..40).map(|i| reveal_offset_ms(1, i)).collect();
 
         assert_eq!(offsets[0], REVEAL_DEPTH_STAGGER_MS);
         assert!(
-            offsets[1] - offsets[0] <= 32,
-            "the first visible nodes should start quickly"
+            offsets
+                .windows(2)
+                .take(18)
+                .all(|pair| pair[1] - pair[0] >= 28),
+            "the first visible nodes need readable gaps instead of near-frame bursts"
         );
         assert!(
-            offsets[20] - offsets[0] <= 380,
-            "the first screenful should not wait behind a slow reveal queue"
+            offsets[20] - offsets[0] <= 760,
+            "the first screenful should still avoid a slow reveal queue"
         );
         assert!(
             offsets
