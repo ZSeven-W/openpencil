@@ -242,15 +242,22 @@ impl TopBar {
         } else {
             Icon::Play
         };
-        paint_icon_button(
-            cx,
-            &self.theme,
-            rx,
-            center_y,
-            preview_icon,
-            self.is_hovered(TopBarButton::TogglePreview),
-            self.is_pressed(TopBarButton::TogglePreview),
-        );
+        if cfg!(target_arch = "wasm32") {
+            // Preview runs the jian runtime, which the web build can't
+            // host yet — paint the Play button disabled (and it's not
+            // hit-tested) so it reads as unavailable, not a dead toggle.
+            paint_icon_button_disabled(cx, &self.theme, rx, center_y, preview_icon);
+        } else {
+            paint_icon_button(
+                cx,
+                &self.theme,
+                rx,
+                center_y,
+                preview_icon,
+                self.is_hovered(TopBarButton::TogglePreview),
+                self.is_pressed(TopBarButton::TogglePreview),
+            );
+        }
         rx -= ICON_BUTTON;
 
         // Theme toggle — Sun in dark mode (click → light); Moon in
