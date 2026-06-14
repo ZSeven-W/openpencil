@@ -98,11 +98,8 @@ impl DesignSession {
     /// Drain every pending apply request.
     pub fn drain_cmd_requests(&mut self) -> Vec<DesignCmdReq> {
         let mut out = Vec::new();
-        loop {
-            match self.cmd_rx.try_recv() {
-                Ok(req) => out.push(req),
-                Err(TryRecvError::Empty) | Err(TryRecvError::Disconnected) => break,
-            }
+        while let Ok(req) = self.cmd_rx.try_recv() {
+            out.push(req);
         }
         out
     }

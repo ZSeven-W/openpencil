@@ -19,6 +19,7 @@ pub(super) fn settings_input_text<'a>(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn paint_settings_input_view(
     cx: &mut PaintCx<'_>,
     theme: &Theme,

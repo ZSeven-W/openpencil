@@ -213,6 +213,7 @@ pub fn paint_acp_section(
     y
 }
 
+#[allow(clippy::too_many_arguments)]
 fn paint_header(
     cx: &mut PaintCx<'_>,
     theme: &Theme,

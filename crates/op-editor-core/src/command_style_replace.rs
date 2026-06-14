@@ -355,6 +355,15 @@ fn node_fill_mut(node: &mut PenNode) -> Option<&mut Vec<PenFill>> {
         PenNode::Text(n) => n.fill.as_mut(),
         PenNode::TextInput(n) => n.fill.as_mut(),
         PenNode::IconFont(n) => n.fill.as_mut(),
+        PenNode::TextArea(n) => n.fill.as_mut(),
+        PenNode::Select(n) => n.fill.as_mut(),
+        PenNode::Switch(n) => n.fill.as_mut(),
+        PenNode::Checkbox(n) => n.fill.as_mut(),
+        PenNode::Slider(n) => n.fill.as_mut(),
+        PenNode::RadioGroup(n) => n.fill.as_mut(),
+        PenNode::NumberInput(n) => n.fill.as_mut(),
+        PenNode::Progress(n) => n.fill.as_mut(),
+        PenNode::Tabs(n) => n.fill.as_mut(),
         PenNode::Line(_) | PenNode::Image(_) | PenNode::Ref(_) => None,
     }
 }
@@ -370,6 +379,15 @@ fn node_stroke_mut(node: &mut PenNode) -> Option<&mut PenStroke> {
         PenNode::Path(n) => n.stroke.as_mut(),
         PenNode::TextInput(n) => n.stroke.as_mut(),
         PenNode::IconFont(n) => n.stroke.as_mut(),
+        PenNode::TextArea(n) => n.stroke.as_mut(),
+        PenNode::Select(n) => n.stroke.as_mut(),
+        PenNode::Switch(n) => n.stroke.as_mut(),
+        PenNode::Checkbox(n) => n.stroke.as_mut(),
+        PenNode::Slider(n) => n.stroke.as_mut(),
+        PenNode::RadioGroup(n) => n.stroke.as_mut(),
+        PenNode::NumberInput(n) => n.stroke.as_mut(),
+        PenNode::Progress(n) => n.stroke.as_mut(),
+        PenNode::Tabs(n) => n.stroke.as_mut(),
         PenNode::Text(_) | PenNode::Image(_) | PenNode::Ref(_) => None,
     }
 }

@@ -65,6 +65,7 @@ impl GitPanel<'_> {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn paint_text_input_view(
         &self,
         cx: &mut PaintCx<'_>,

@@ -102,7 +102,7 @@ impl LineStreamChild {
         let stdout = child
             .stdout
             .take()
-            .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "child stdout was not piped"))?;
+            .ok_or_else(|| io::Error::other("child stdout was not piped"))?;
         Ok(Self {
             stdin: child.stdin.take(),
             lines: Some(BufReader::new(stdout).lines()),

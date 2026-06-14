@@ -282,6 +282,15 @@ fn base(node: &PenNode) -> Option<&jian_ops_schema::node::base::PenNodeBase> {
         PenNode::Rectangle(n) => &n.base,
         PenNode::Text(n) => &n.base,
         PenNode::TextInput(n) => &n.base,
+        PenNode::TextArea(n) => &n.base,
+        PenNode::Select(n) => &n.base,
+        PenNode::Switch(n) => &n.base,
+        PenNode::Checkbox(n) => &n.base,
+        PenNode::Slider(n) => &n.base,
+        PenNode::RadioGroup(n) => &n.base,
+        PenNode::NumberInput(n) => &n.base,
+        PenNode::Progress(n) => &n.base,
+        PenNode::Tabs(n) => &n.base,
         PenNode::IconFont(n) => &n.base,
         PenNode::Image(n) => &n.base,
         PenNode::Ellipse(n) => &n.base,
@@ -306,6 +315,7 @@ fn children(node: &PenNode) -> Option<&[PenNode]> {
         PenNode::Frame(n) => n.children.as_deref(),
         PenNode::Group(n) => n.children.as_deref(),
         PenNode::Rectangle(n) => n.children.as_deref(),
+        PenNode::Tabs(n) => n.children.as_deref(),
         _ => None,
     }
 }

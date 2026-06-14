@@ -28,7 +28,15 @@ fn node_kind_of(node: &PenNode) -> NodeKind {
         PenNode::Polygon(_) => NodeKind::Polygon,
         PenNode::Line(_) => NodeKind::Line,
         PenNode::Path(_) => NodeKind::Path,
-        PenNode::Text(_) | PenNode::TextInput(_) => NodeKind::Text,
+        PenNode::Text(_) | PenNode::TextInput(_) | PenNode::TextArea(_) => NodeKind::Text,
+        PenNode::Select(_)
+        | PenNode::Switch(_)
+        | PenNode::Checkbox(_)
+        | PenNode::Slider(_)
+        | PenNode::RadioGroup(_)
+        | PenNode::NumberInput(_)
+        | PenNode::Progress(_)
+        | PenNode::Tabs(_) => NodeKind::Rect,
         PenNode::Image(_) => NodeKind::Other("image".to_string()),
         PenNode::IconFont(_) => NodeKind::Other("icon_font".to_string()),
         PenNode::Ref(_) => NodeKind::Other("ref".to_string()),
@@ -601,6 +609,15 @@ fn node_width_sizing(node: &PenNode) -> Option<&SizingBehavior> {
         PenNode::Path(n) => n.width.as_ref(),
         PenNode::Text(n) => n.width.as_ref(),
         PenNode::TextInput(n) => n.width.as_ref(),
+        PenNode::TextArea(n) => n.width.as_ref(),
+        PenNode::Select(n) => n.width.as_ref(),
+        PenNode::Switch(n) => n.width.as_ref(),
+        PenNode::Checkbox(n) => n.width.as_ref(),
+        PenNode::Slider(n) => n.width.as_ref(),
+        PenNode::RadioGroup(n) => n.width.as_ref(),
+        PenNode::NumberInput(n) => n.width.as_ref(),
+        PenNode::Progress(n) => n.width.as_ref(),
+        PenNode::Tabs(n) => n.width.as_ref(),
         PenNode::Image(n) => n.width.as_ref(),
         PenNode::IconFont(n) => n.width.as_ref(),
         PenNode::Line(_) | PenNode::Ref(_) => None,
@@ -617,6 +634,15 @@ fn node_height_sizing(node: &PenNode) -> Option<&SizingBehavior> {
         PenNode::Path(n) => n.height.as_ref(),
         PenNode::Text(n) => n.height.as_ref(),
         PenNode::TextInput(n) => n.height.as_ref(),
+        PenNode::TextArea(n) => n.height.as_ref(),
+        PenNode::Select(n) => n.height.as_ref(),
+        PenNode::Switch(n) => n.height.as_ref(),
+        PenNode::Checkbox(n) => n.height.as_ref(),
+        PenNode::Slider(n) => n.height.as_ref(),
+        PenNode::RadioGroup(n) => n.height.as_ref(),
+        PenNode::NumberInput(n) => n.height.as_ref(),
+        PenNode::Progress(n) => n.height.as_ref(),
+        PenNode::Tabs(n) => n.height.as_ref(),
         PenNode::Image(n) => n.height.as_ref(),
         PenNode::IconFont(n) => n.height.as_ref(),
         PenNode::Line(_) | PenNode::Ref(_) => None,

@@ -187,9 +187,11 @@ pub fn model_at(
     scroll: f32,
     search: &str,
 ) -> Option<usize> {
-    let mut state = SelectState::default();
-    state.open = true;
-    state.scroll.offset = scroll;
+    let state = SelectState {
+        open: true,
+        scroll: jian_core::scroll::ScrollState { offset: scroll },
+        ..Default::default()
+    };
     match model_picker_hit(&state, rect, point, models, search) {
         SelectHit::Row(index) => Some(index),
         SelectHit::Inside | SelectHit::Outside => None,

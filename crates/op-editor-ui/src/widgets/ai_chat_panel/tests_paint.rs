@@ -291,7 +291,47 @@ fn footer_selection_count_sits_close_to_agent_team_chip() {
         .find(|(text, _, _, _)| text == &selected_text)
         .expect("footer should paint selected-count label");
     let gap = origin.x - (footer.agent_team.origin.x + footer.agent_team.size.x);
-    assert_close(gap, 4.0);
+    assert_close(gap, 8.0);
+}
+
+#[test]
+fn footer_agent_team_chip_uses_comfortable_pill_spacing() {
+    let mut s = EditorState::new();
+    seed_available_model(&mut s);
+    s.chat.agent_team_size = 2;
+    s.selection.set = vec![op_editor_core::NodeId::new("n1")];
+    s.selection.anchor = op_editor_core::NodeId::new("n1");
+    let panel = AIChatPlaceholder::from_editor(&s);
+    let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
+    let input = panel.input_rect(rect);
+    let toolbar_top = input.origin.y + INPUT_AREA_HEIGHT;
+    let footer = panel.footer_layout(rect, input, toolbar_top);
+    let mut backend = PanelPaintBackend::default();
+    let mut cx = PaintCx {
+        backend: &mut backend,
+    };
+
+    panel.paint(&mut cx, rect);
+
+    assert_close(footer.agent_team.size.x, 36.0);
+    assert_close(footer.agent_team.size.y, 22.0);
+    assert!(
+        backend.round_rects.iter().any(|(r, radius, color)| {
+            rect_close(*r, footer.agent_team)
+                && *radius == 7.0
+                && color_close(*color, panel.theme.primary.with_alpha(0.1))
+        }),
+        "active Agent Team chip should rest as a soft primary-tinted pill"
+    );
+    let selected_text =
+        op_i18n::translate(panel.locale, "common.selected").replace("{{count}}", "1");
+    let (_, _, _, origin) = backend
+        .texts
+        .iter()
+        .find(|(text, _, _, _)| text == &selected_text)
+        .expect("footer should paint selected-count label");
+    let gap = origin.x - (footer.agent_team.origin.x + footer.agent_team.size.x);
+    assert_close(gap, 8.0);
 }
 
 #[test]

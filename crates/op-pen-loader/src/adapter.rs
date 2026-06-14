@@ -25,8 +25,10 @@ use jian_ops_schema::{
     node::base::PenNodeBase,
     node::container::CornerRadius,
     node::{
-        EllipseNode, FontWeight, FrameNode, GroupNode, IconFontNode, ImageNode, LineNode, PathNode,
-        PenNode, PolygonNode, RectangleNode, TextInputNode, TextNode,
+        CheckboxNode, EllipseNode, FontWeight, FrameNode, GroupNode, IconFontNode, ImageNode,
+        LineNode, NumberInputNode, PathNode, PenNode, PolygonNode, ProgressNode, RadioGroupNode,
+        RectangleNode, SelectNode, SliderNode, SwitchNode, TabsNode, TextAreaNode, TextInputNode,
+        TextNode,
     },
     sizing::SizingBehavior,
     PenDocument,
@@ -298,6 +300,15 @@ fn root_authored_origin(n: &PenNode) -> (f32, f32) {
         PenNode::Path(p) => &p.base,
         PenNode::Text(t) => &t.base,
         PenNode::TextInput(t) => &t.base,
+        PenNode::TextArea(t) => &t.base,
+        PenNode::Select(s) => &s.base,
+        PenNode::Switch(s) => &s.base,
+        PenNode::Checkbox(c) => &c.base,
+        PenNode::Slider(s) => &s.base,
+        PenNode::RadioGroup(r) => &r.base,
+        PenNode::NumberInput(n) => &n.base,
+        PenNode::Progress(p) => &p.base,
+        PenNode::Tabs(t) => &t.base,
         PenNode::Image(i) => &i.base,
         PenNode::IconFont(i) => &i.base,
         PenNode::Ref(r) => &r.base,
@@ -330,6 +341,11 @@ fn root_sizing(root: &PenNode) -> (Option<SizingBehavior>, Option<SizingBehavior
         PenNode::Ellipse(e) => (e.width.clone(), e.height.clone()),
         PenNode::Text(t) => (t.width.clone(), t.height.clone()),
         PenNode::TextInput(t) => (t.width.clone(), t.height.clone()),
+        PenNode::TextArea(t) => (t.width.clone(), t.height.clone()),
+        PenNode::Select(s) => (s.width.clone(), s.height.clone()),
+        PenNode::Switch(s) => (s.width.clone(), s.height.clone()),
+        PenNode::Checkbox(c) => (c.width.clone(), c.height.clone()),
+        PenNode::Slider(s) => (s.width.clone(), s.height.clone()),
         PenNode::Image(i) => (i.width.clone(), i.height.clone()),
         PenNode::IconFont(i) => (i.width.clone(), i.height.clone()),
         PenNode::Polygon(p) => (p.width.clone(), p.height.clone()),
@@ -349,6 +365,15 @@ fn node_to_payload(node: &PenNode, rects: &BTreeMap<String, [f32; 4]>) -> NodePa
         PenNode::Path(n) => path_to_payload(n),
         PenNode::Text(n) => text_to_payload(n),
         PenNode::TextInput(n) => text_input_to_payload(n),
+        PenNode::TextArea(n) => text_area_to_payload(n),
+        PenNode::Select(n) => select_to_payload(n),
+        PenNode::Switch(n) => switch_to_payload(n),
+        PenNode::Checkbox(n) => checkbox_to_payload(n),
+        PenNode::Slider(n) => slider_to_payload(n),
+        PenNode::RadioGroup(n) => radio_group_to_payload(n),
+        PenNode::NumberInput(n) => number_input_to_payload(n),
+        PenNode::Progress(n) => progress_to_payload(n),
+        PenNode::Tabs(n) => tabs_to_payload(n, rects),
         PenNode::Image(n) => image_to_payload(n),
         PenNode::IconFont(n) => icon_font_to_payload(n),
         PenNode::Ref(n) => empty_group(&n.base, "ref"),
@@ -724,6 +749,114 @@ fn text_input_to_payload(n: &TextInputNode) -> NodePayload {
     p.text = n.value.clone().or_else(|| n.placeholder.clone());
     assign_first_fill(&mut p, n.fill.as_deref());
     p.stroke = stroke_to_payload(n.stroke.as_ref());
+    p
+}
+
+fn text_area_to_payload(n: &TextAreaNode) -> NodePayload {
+    let mut p = base_payload(&n.base, "text");
+    p.text = n.value.clone().or_else(|| n.placeholder.clone());
+    apply_container_style(
+        &mut p,
+        n.fill.as_deref(),
+        n.stroke.as_ref(),
+        n.corner_radius.as_ref(),
+    );
+    p
+}
+
+fn select_to_payload(n: &SelectNode) -> NodePayload {
+    let mut p = base_payload(&n.base, "text");
+    p.text = n.value.clone().or_else(|| n.placeholder.clone());
+    apply_container_style(
+        &mut p,
+        n.fill.as_deref(),
+        n.stroke.as_ref(),
+        n.corner_radius.as_ref(),
+    );
+    p
+}
+
+fn switch_to_payload(n: &SwitchNode) -> NodePayload {
+    let mut p = base_payload(&n.base, "rect");
+    apply_container_style(
+        &mut p,
+        n.fill.as_deref(),
+        n.stroke.as_ref(),
+        n.corner_radius.as_ref(),
+    );
+    p
+}
+
+fn checkbox_to_payload(n: &CheckboxNode) -> NodePayload {
+    let mut p = base_payload(&n.base, "rect");
+    apply_container_style(
+        &mut p,
+        n.fill.as_deref(),
+        n.stroke.as_ref(),
+        n.corner_radius.as_ref(),
+    );
+    p
+}
+
+fn slider_to_payload(n: &SliderNode) -> NodePayload {
+    let mut p = base_payload(&n.base, "rect");
+    apply_container_style(
+        &mut p,
+        n.fill.as_deref(),
+        n.stroke.as_ref(),
+        n.corner_radius.as_ref(),
+    );
+    p
+}
+
+fn radio_group_to_payload(n: &RadioGroupNode) -> NodePayload {
+    let mut p = base_payload(&n.base, "rect");
+    apply_container_style(
+        &mut p,
+        n.fill.as_deref(),
+        n.stroke.as_ref(),
+        n.corner_radius.as_ref(),
+    );
+    p
+}
+
+fn number_input_to_payload(n: &NumberInputNode) -> NodePayload {
+    let mut p = base_payload(&n.base, "rect");
+    apply_container_style(
+        &mut p,
+        n.fill.as_deref(),
+        n.stroke.as_ref(),
+        n.corner_radius.as_ref(),
+    );
+    p
+}
+
+fn progress_to_payload(n: &ProgressNode) -> NodePayload {
+    let mut p = base_payload(&n.base, "rect");
+    apply_container_style(
+        &mut p,
+        n.fill.as_deref(),
+        n.stroke.as_ref(),
+        n.corner_radius.as_ref(),
+    );
+    p
+}
+
+fn tabs_to_payload(n: &TabsNode, rects: &BTreeMap<String, [f32; 4]>) -> NodePayload {
+    let mut p = base_payload(&n.base, "frame");
+    apply_container_style(
+        &mut p,
+        n.fill.as_deref(),
+        n.stroke.as_ref(),
+        n.corner_radius.as_ref(),
+    );
+    p.children = n
+        .children
+        .as_deref()
+        .unwrap_or(&[])
+        .iter()
+        .map(|c| node_to_payload(c, rects))
+        .collect();
     p
 }
 

@@ -32,7 +32,7 @@ use crate::prompt::build_orchestrator_prompt;
 use crate::retry::{attempt_modes, is_non_retryable};
 use crate::run_dashboard::run_dashboard_path;
 use crate::scaffold::{build_scaffold, build_scaffold_concurrent_mobile};
-use crate::subagent::run_subtask;
+use crate::subagent::{reveal_now_millis, run_subtask_with_reveal_at};
 use crate::types::{
     AbortFlag, DesignRequest, DocSink, LlmChunk, LlmClient, OrchestratorError, Progress,
     RunSummary, SubtaskOutcome, ValidationProviders,
@@ -158,6 +158,7 @@ impl Orchestrator {
                 on_progress,
                 abort,
                 providers,
+                self.agent_indicator_epoch,
             )
             .await;
         }
@@ -262,8 +263,19 @@ impl Orchestrator {
             });
 
             // Attempt 1 — full complexity.
-            let outcome1 =
-                run_subtask(subtask, &plan, &request, llm, sink, abort, false, false).await;
+            let outcome1 = run_subtask_with_reveal_at(
+                subtask,
+                &plan,
+                &request,
+                llm,
+                sink,
+                abort,
+                false,
+                false,
+                self.agent_indicator_epoch,
+                reveal_now_millis(),
+            )
+            .await;
 
             // Evaluate non-retryable predicate once from attempt-1's error
             // (faithful to TS: `isNonRetryable` is computed before the retry
@@ -287,7 +299,7 @@ impl Orchestrator {
                     "subtask failed, retrying (attempt 2)"
                 );
                 Some(
-                    run_subtask(
+                    run_subtask_with_reveal_at(
                         subtask,
                         &plan,
                         &request,
@@ -296,6 +308,8 @@ impl Orchestrator {
                         abort,
                         tier == ModelTier::Basic,
                         false,
+                        self.agent_indicator_epoch,
+                        reveal_now_millis(),
                     )
                     .await,
                 )
@@ -313,7 +327,21 @@ impl Orchestrator {
                     error = outcome_after2.error.as_deref().unwrap_or(""),
                     "subtask still empty after retry, falling back to minimal skills (attempt 3)"
                 );
-                Some(run_subtask(subtask, &plan, &request, llm, sink, abort, true, true).await)
+                Some(
+                    run_subtask_with_reveal_at(
+                        subtask,
+                        &plan,
+                        &request,
+                        llm,
+                        sink,
+                        abort,
+                        true,
+                        true,
+                        self.agent_indicator_epoch,
+                        reveal_now_millis(),
+                    )
+                    .await,
+                )
             } else {
                 None
             };
@@ -540,6 +568,7 @@ async fn run_concurrent_path(
         state_snapshot,
         sink,
         on_progress,
+        host_epoch,
     )
     .await;
 

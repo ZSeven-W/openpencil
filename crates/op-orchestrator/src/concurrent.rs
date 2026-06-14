@@ -15,10 +15,9 @@
 //! ## Task B1
 //! - `BufferDocSink` — a per-worker buffering `DocSink` implementation that
 //!   collects applied `EditorCommand`s into a `Vec` without touching the real
-//!   document.  This is safe because `run_subtask` does NOT call `sink.state()`
-//!   at all — it only calls `sink.apply()`.  (Verified in `subagent.rs`.)
-//!   A snapshot of a pre-concurrent `EditorState` is still carried so that
-//!   `state()` can return something valid if any future caller does read it.
+//!   document. `run_subtask` reads `sink.state()` to bind generated colours to
+//!   the seeded design variables, so each buffer carries a pre-concurrent
+//!   `EditorState` snapshot taken after variable seed + scaffold apply.
 //! - `run_screen_group_worker` — async fn that runs one screen group's subtasks
 //!   in order using the 2-attempt concurrent retry ladder (vs the sequential
 //!   path's 3-attempt tier-gated ladder in `run.rs`).
@@ -41,7 +40,7 @@
 //!
 use crate::plan::{OrchestratorPlan, Subtask};
 use crate::retry::is_non_retryable;
-use crate::subagent::run_subtask;
+use crate::subagent::{apply_command_with_reveal, reveal_now_millis, run_subtask};
 use crate::types::{AbortFlag, DesignRequest, DocSink, LlmClient, Progress, SubtaskOutcome};
 use futures::future::join_all;
 use op_editor_core::{EditorCommand, EditorState};
@@ -131,20 +130,18 @@ pub(crate) fn effective_concurrency(concurrency: u32, screen_group_count: usize)
 /// A per-worker buffering [`DocSink`] that collects every applied
 /// [`EditorCommand`] into an in-memory `Vec` without touching the real document.
 ///
-/// **Design choice (spec §5 implementer note):** `run_subtask` (in `subagent.rs`)
-/// never calls `sink.state()` — it only calls `sink.apply()`.  Therefore the
-/// simplest correct buffer sink is a plain command collector; no document
-/// re-execution is needed.  We still carry a pre-concurrent `EditorState`
-/// snapshot so that any unexpected future `state()` call gets a valid (if
-/// stale) answer rather than a panic or empty document.  The snapshot should
-/// be taken just before the concurrent phase starts (after the N-root scaffold
-/// is applied to the real sink) — that is Task B2's responsibility.
+/// **Design choice (spec §5 implementer note):** the buffer is still a plain
+/// command collector; it does not re-execute worker commands locally. The
+/// pre-concurrent snapshot is read-only context for generation post-processing
+/// such as design-variable colour binding. The snapshot should be taken just
+/// before the concurrent phase starts (after variable seed + N-root scaffold
+/// apply) — that is Task B2's responsibility.
 ///
 /// After all workers finish the orchestrator replays `commands` into the real
 /// `DocSink` in subtask-plan-index order (Task B2: serialized replay).
 pub(crate) struct BufferDocSink {
     /// Snapshot of `EditorState` taken before the concurrent phase.
-    /// Returned by `state()` unchanged — workers do not read it.
+    /// Returned by `state()` unchanged for read-only generation context.
     snapshot: EditorState,
     /// All `EditorCommand`s collected via `apply()` calls.
     pub commands: Vec<EditorCommand>,
@@ -383,6 +380,7 @@ pub(crate) async fn run_concurrent(
     snapshot: EditorState,
     real_sink: &mut dyn DocSink,
     on_progress: &mut dyn FnMut(Progress),
+    host_epoch: Option<u64>,
 ) -> Vec<Option<SubtaskOutcome>> {
     let n = plan.subtasks.len();
     let ec = effective_concurrency(request.concurrency, groups.len());
@@ -442,7 +440,7 @@ pub(crate) async fn run_concurrent(
     let mut worker_results = worker_results;
     for g_idx in replay_order {
         for cmd in worker_results[g_idx].buffer.commands.drain(..) {
-            real_sink.apply(cmd);
+            apply_command_with_reveal(real_sink, cmd, host_epoch, reveal_now_millis());
         }
     }
 

@@ -54,9 +54,10 @@ fn caret_fills(fills: &[(Rect, Color)], theme: Theme) -> Vec<Rect> {
 }
 
 fn open_select_state() -> SelectState {
-    let mut state = SelectState::default();
-    state.open = true;
-    state
+    SelectState {
+        open: true,
+        ..Default::default()
+    }
 }
 
 #[test]

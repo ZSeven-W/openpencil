@@ -181,8 +181,7 @@ pub fn paint_input_with_prefix_focused_state(
     let prefix_w = cx.backend.measure_text(prefix, 12.0);
     let value_x = rect.origin.x + 10.0 + prefix_w + 8.0;
     let baseline_y = rect.origin.y + rect.size.y / 2.0 + 4.0;
-    if focused && input.is_some() {
-        let input = input.expect("checked above");
+    if let (true, Some(input)) = (focused, input) {
         paint_text_input_view_value(
             cx,
             theme,
@@ -285,8 +284,7 @@ pub fn paint_input_with_suffix_focused_state(
     // this is +19 (unchanged); for the compact 20px gap row it becomes
     // +14 so the value isn't pinned to the bottom.
     let baseline_y = rect.origin.y + rect.size.y / 2.0 + 4.0;
-    if focused && input.is_some() {
-        let input = input.expect("checked above");
+    if let (true, Some(input)) = (focused, input) {
         paint_text_input_view_value(
             cx,
             theme,
@@ -412,8 +410,7 @@ pub fn paint_input_with_icon_focused_state(
     let value_x = rect.origin.x + 30.0;
     let baseline_y = rect.origin.y + 19.0;
     let unit_reserved_w = if unit.is_some() { 22.0 } else { 8.0 };
-    if focused && input.is_some() {
-        let input = input.expect("checked above");
+    if let (true, Some(input)) = (focused, input) {
         paint_text_input_view_value(
             cx,
             theme,

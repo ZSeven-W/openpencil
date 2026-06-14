@@ -14,7 +14,7 @@ use crate::model_profile::{resolve_model_profile, ModelTier};
 use crate::plan::OrchestratorPlan;
 use crate::retry::is_non_retryable;
 use crate::scaffold_dashboard::build_scaffold_dashboard;
-use crate::subagent::run_subtask;
+use crate::subagent::{reveal_now_millis, run_subtask_with_reveal_at};
 use crate::types::{
     AbortFlag, DesignRequest, DocSink, LlmClient, OrchestratorError, Progress, RunSummary,
     SubtaskOutcome, ValidationProviders,
@@ -47,6 +47,7 @@ pub(crate) async fn run_dashboard_path(
     on_progress: &mut dyn FnMut(Progress),
     abort: &AbortFlag,
     providers: &ValidationProviders<'_>,
+    host_epoch: Option<u64>,
 ) -> Result<RunSummary, OrchestratorError> {
     let planned_root_id = plan.root_frame.id.clone();
 
@@ -167,7 +168,19 @@ pub(crate) async fn run_dashboard_path(
             label: subtask.label.clone(),
         });
 
-        let outcome1 = run_subtask(subtask, &plan, &request, llm, sink, abort, false, false).await;
+        let outcome1 = run_subtask_with_reveal_at(
+            subtask,
+            &plan,
+            &request,
+            llm,
+            sink,
+            abort,
+            false,
+            false,
+            host_epoch,
+            reveal_now_millis(),
+        )
+        .await;
         let non_retryable = outcome1
             .error
             .as_deref()
@@ -178,7 +191,7 @@ pub(crate) async fn run_dashboard_path(
         };
         let outcome2 = if retryable(&outcome1) {
             Some(
-                run_subtask(
+                run_subtask_with_reveal_at(
                     subtask,
                     &plan,
                     &request,
@@ -187,6 +200,8 @@ pub(crate) async fn run_dashboard_path(
                     abort,
                     tier == ModelTier::Basic,
                     false,
+                    host_epoch,
+                    reveal_now_millis(),
                 )
                 .await,
             )
@@ -195,7 +210,21 @@ pub(crate) async fn run_dashboard_path(
         };
         let outcome_after2 = outcome2.as_ref().unwrap_or(&outcome1);
         let outcome3 = if retryable(outcome_after2) {
-            Some(run_subtask(subtask, &plan, &request, llm, sink, abort, true, true).await)
+            Some(
+                run_subtask_with_reveal_at(
+                    subtask,
+                    &plan,
+                    &request,
+                    llm,
+                    sink,
+                    abort,
+                    true,
+                    true,
+                    host_epoch,
+                    reveal_now_millis(),
+                )
+                .await,
+            )
         } else {
             None
         };

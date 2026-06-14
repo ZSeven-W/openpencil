@@ -6,7 +6,7 @@
 //! `concurrent`, so `use super::*` resolves to `concurrent`.
 
 use super::*;
-use crate::test_support::{CountingLlm, ScriptResponse, ScriptedLlm};
+use crate::test_support::{CountingLlm, ScriptResponse, ScriptedLlm, VecDocSink};
 use futures::executor::block_on;
 use op_editor_core::{EditorState, PenNodeExt};
 
@@ -143,6 +143,7 @@ fn concurrent_two_groups_both_succeed_replays_in_plan_order() {
             Progress::SubtaskFailed { id, .. } => progress_events.push(format!("fail:{id}")),
             _ => {}
         },
+        None,
     ));
 
     // Both subtasks produced 1 node each.
@@ -170,6 +171,73 @@ fn concurrent_two_groups_both_succeed_replays_in_plan_order() {
         progress_events.contains(&"done:s1".to_string()),
         "missing done:s1"
     );
+}
+
+#[test]
+fn concurrent_replay_registers_reveals_for_live_inserted_nodes() {
+    let _guard = crate::agent_indicator_test_support::lock();
+    let mut plan = make_two_screen_plan();
+    for subtask in &mut plan.subtasks {
+        subtask.parent_frame_id = None;
+    }
+    let req = make_req();
+    let groups = group_subtasks_by_screen(&plan.subtasks);
+    let llm = ScriptedLlm::new(vec![
+        ScriptResponse::Text(NODE_JSON.into()),
+        ScriptResponse::Text(NODE_JSON.into()),
+    ]);
+    let abort = AbortFlag::new();
+    let snapshot = EditorState::new();
+    let mut real_sink = VecDocSink::new();
+    let mut progress_events: Vec<Progress> = Vec::new();
+    let epoch = op_editor_core::agent_indicators::begin();
+
+    let outcomes = block_on(run_concurrent(
+        &groups,
+        &plan,
+        &req,
+        &llm,
+        &abort,
+        snapshot,
+        &mut real_sink,
+        &mut |p| progress_events.push(p),
+        Some(epoch),
+    ));
+
+    assert_eq!(outcomes.len(), 2);
+    assert_eq!(outcomes.iter().filter(|o| o.is_some()).count(), 2);
+    let reveal_snapshot = op_editor_core::agent_indicators::snapshot();
+    assert_eq!(
+        reveal_snapshot.reveals.len(),
+        4,
+        "each replayed subtree root and child should reveal"
+    );
+    let mut live_ids = std::collections::HashSet::new();
+    for node in real_sink.state.active_children() {
+        collect_live_ids(node, &mut live_ids);
+    }
+    assert!(
+        reveal_snapshot
+            .reveals
+            .keys()
+            .all(|id| live_ids.contains(id.as_str())),
+        "reveals must use live remapped ids, got {:?} vs {:?}",
+        reveal_snapshot.reveals.keys().collect::<Vec<_>>(),
+        live_ids
+    );
+    op_editor_core::agent_indicators::end_if_epoch(epoch);
+}
+
+fn collect_live_ids(
+    node: &jian_ops_schema::node::PenNode,
+    out: &mut std::collections::HashSet<String>,
+) {
+    out.insert(node.id_str().to_string());
+    if let Some(children) = node.children() {
+        for child in children {
+            collect_live_ids(child, out);
+        }
+    }
 }
 
 /// **Genuine interleaving** — with `concurrency=3` and 3 screen groups, the
@@ -207,6 +275,7 @@ fn concurrent_workers_genuinely_interleave() {
         snapshot,
         &mut real_sink,
         &mut |_| {},
+        None,
     ));
 
     // All 3 workers' LLM calls genuinely overlapped.
@@ -244,6 +313,7 @@ fn concurrent_semaphore_caps_in_flight_calls() {
         snapshot,
         &mut real_sink,
         &mut |_| {},
+        None,
     ));
 
     // The cap-1 semaphore must serialize the LLM calls despite join_all driving
@@ -280,6 +350,7 @@ fn concurrent_semaphore_cap_two_with_three_groups() {
         snapshot,
         &mut real_sink,
         &mut |_| {},
+        None,
     ));
 
     let peak = llm.max_concurrent();
@@ -323,6 +394,7 @@ fn concurrent_replay_is_in_plan_index_order() {
         snapshot,
         &mut real_sink,
         &mut |_| {},
+        None,
     ));
 
     assert_eq!(real_sink.commands.len(), 2);
@@ -383,6 +455,7 @@ fn concurrent_aborts_before_any_work() {
                 started_ids.push(id.clone());
             }
         },
+        None,
     ));
 
     // All outcomes are None (aborted before any subtask ran).
@@ -423,6 +496,7 @@ fn concurrent_progress_fanin_all_events_arrive() {
             Progress::SubtaskDone { id, .. } => events.push(format!("done:{id}")),
             _ => {}
         },
+        None,
     ));
 
     assert_eq!(

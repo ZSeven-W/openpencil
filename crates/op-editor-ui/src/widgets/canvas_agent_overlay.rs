@@ -7,9 +7,16 @@
 use crate::layout_scene::SceneNode;
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
+use std::collections::HashMap;
 
 /// One full breathe (0 → 1 → 0) per this many ms.
 const GLOW_PERIOD_MS: u64 = 1200;
+const REVEAL_ACCENT: Color = Color {
+    r: 0.231,
+    g: 0.510,
+    b: 0.965,
+    a: 1.0,
+};
 
 /// Paint a breathing border around every active-page root frame that an
 /// agent currently owns. `roots` are the page's top-level scene nodes;
@@ -21,7 +28,15 @@ pub(crate) fn paint_agent_frame_indicators(
     zoom: f32,
     now_ms: u64,
 ) {
-    let indicators = op_editor_core::agent_indicators::snapshot();
+    let indicators = op_editor_core::agent_indicators::snapshot_at(now_ms);
+    paint_node_reveal_indicators(
+        cx,
+        roots,
+        viewport_origin,
+        zoom,
+        now_ms,
+        &indicators.reveals,
+    );
     if indicators.frames.is_empty() {
         return;
     }
@@ -57,6 +72,83 @@ pub(crate) fn paint_agent_frame_indicators(
             .stroke_round_rect(screen, 8.0, Color { a: breath, ..color }, 1.5);
         paint_agent_badge(cx, screen, color, &tag.name, breath);
     }
+}
+
+fn paint_node_reveal_indicators(
+    cx: &mut PaintCx<'_>,
+    roots: &[SceneNode],
+    viewport_origin: Point2D,
+    zoom: f32,
+    now_ms: u64,
+    reveals: &HashMap<String, u64>,
+) {
+    for (node_id, started_at) in reveals {
+        let Some(node) = find_scene_node(roots, node_id) else {
+            continue;
+        };
+        let bounds = node.aggregate_bounds();
+        if bounds.size.x <= 0.0 || bounds.size.y <= 0.0 {
+            continue;
+        }
+        let elapsed = now_ms.saturating_sub(*started_at);
+        let t = (elapsed as f32 / op_editor_core::agent_indicators::REVEAL_DURATION_MS as f32)
+            .clamp(0.0, 1.0);
+        let ease = ease_out_cubic(t);
+        let screen = Rect {
+            origin: Point2D::new(
+                viewport_origin.x + bounds.origin.x * zoom,
+                viewport_origin.y + bounds.origin.y * zoom,
+            ),
+            size: Point2D::new(bounds.size.x * zoom, bounds.size.y * zoom),
+        };
+        let animated = lifted_scaled_rect(screen, ease);
+        let tail = 1.0 - t;
+        let radius = 8.0_f32.min(animated.size.y / 2.0);
+        cx.backend
+            .fill_round_rect(animated, radius, REVEAL_ACCENT.with_alpha(0.10 * tail));
+        cx.backend
+            .stroke_round_rect(animated, radius, REVEAL_ACCENT.with_alpha(0.58 * tail), 1.5);
+        let sweep_w = (animated.size.x * 0.22).clamp(18.0, 72.0);
+        let sweep = Rect {
+            origin: Point2D::new(
+                animated.origin.x - sweep_w + (animated.size.x + sweep_w * 2.0) * ease,
+                animated.origin.y - 3.0,
+            ),
+            size: Point2D::new(sweep_w, animated.size.y + 6.0),
+        };
+        cx.backend.save();
+        cx.backend.clip_rect(animated);
+        cx.backend
+            .fill_round_rect(sweep, sweep_w / 2.0, Color::WHITE.with_alpha(0.30 * tail));
+        cx.backend.restore();
+    }
+}
+
+fn find_scene_node<'a>(roots: &'a [SceneNode], id: &str) -> Option<&'a SceneNode> {
+    for root in roots {
+        if let Some(found) = root.find(id) {
+            return Some(found);
+        }
+    }
+    None
+}
+
+fn lifted_scaled_rect(rect: Rect, ease: f32) -> Rect {
+    let scale = 1.0 + (1.0 - ease) * 0.024;
+    let lift = (1.0 - ease) * 6.0;
+    let w = rect.size.x * scale;
+    let h = rect.size.y * scale;
+    Rect {
+        origin: Point2D::new(
+            rect.origin.x + (rect.size.x - w) / 2.0,
+            rect.origin.y + (rect.size.y - h) / 2.0 - lift,
+        ),
+        size: Point2D::new(w, h),
+    }
+}
+
+fn ease_out_cubic(t: f32) -> f32 {
+    1.0 - (1.0 - t).powi(3)
 }
 
 /// A small pill above the frame's top-left: agent colour background, a
@@ -142,6 +234,104 @@ fn parse_hex(hex: &str) -> Option<Color> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::layout_scene::NodeKind;
+    use crate::{RenderBackend, TextLayout};
+    use std::sync::{LazyLock, Mutex};
+
+    static INDICATOR_TEST_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+
+    #[derive(Default)]
+    struct RevealCaptureBackend {
+        round_fills: Vec<Rect>,
+        round_strokes: Vec<Rect>,
+        clips: usize,
+        saves: usize,
+        restores: usize,
+    }
+
+    impl RenderBackend for RevealCaptureBackend {
+        fn begin_frame(&mut self) {}
+        fn end_frame(&mut self) {}
+        fn fill_rect(&mut self, _: Rect, _: Color) {}
+        fn stroke_rect(&mut self, _: Rect, _: Color, _: f32) {}
+        fn draw_text(&mut self, _: &TextLayout, _: Point2D) {}
+        fn clip_rect(&mut self, _: Rect) {
+            self.clips += 1;
+        }
+        fn save(&mut self) {
+            self.saves += 1;
+        }
+        fn restore(&mut self) {
+            self.restores += 1;
+        }
+        fn translate(&mut self, _: Point2D) {}
+        fn stroke_line(&mut self, _: Point2D, _: Point2D, _: Color, _: f32) {}
+        fn fill_round_rect(&mut self, rect: Rect, _: f32, _: Color) {
+            self.round_fills.push(rect);
+        }
+        fn stroke_round_rect(&mut self, rect: Rect, _: f32, _: Color, _: f32) {
+            self.round_strokes.push(rect);
+        }
+        fn stroke_svg_path(&mut self, _: &str, _: Point2D, _: f32, _: Color, _: f32) {}
+        fn resize(&mut self, _: u32, _: u32) {}
+        fn dpi_scale(&self) -> f32 {
+            1.0
+        }
+    }
+
+    fn reveal_root() -> Vec<SceneNode> {
+        let mut node = SceneNode::leaf("new-node", NodeKind::Rect);
+        node.bounds = Rect::xywh(10.0, 20.0, 120.0, 48.0);
+        vec![node]
+    }
+
+    #[test]
+    fn reveal_overlay_paints_lifted_highlight_sweep_and_prunes_after_window() {
+        let _guard = INDICATOR_TEST_LOCK.lock().unwrap();
+        let epoch = op_editor_core::agent_indicators::begin();
+        op_editor_core::agent_indicators::add_reveal(epoch, "new-node", 1_000);
+        let roots = reveal_root();
+        let mut backend = RevealCaptureBackend::default();
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+
+        paint_agent_frame_indicators(&mut cx, &roots, Point2D::new(100.0, 50.0), 2.0, 1_160);
+
+        assert!(
+            backend.round_fills.len() >= 2,
+            "reveal paints a wash plus a clipped sweep"
+        );
+        assert!(
+            !backend.round_strokes.is_empty(),
+            "reveal paints a crisp outline"
+        );
+        assert!(
+            backend.saves > 0 && backend.clips > 0 && backend.restores > 0,
+            "sweep should be clipped to the animated node rect"
+        );
+        let base = Rect::xywh(120.0, 90.0, 240.0, 96.0);
+        let animated = backend.round_fills[0];
+        assert!(
+            animated.origin.y < base.origin.y && animated.size.x > base.size.x,
+            "reveal overlay should read as lifted and slightly scaled"
+        );
+
+        let mut expired_backend = RevealCaptureBackend::default();
+        let mut expired_cx = PaintCx {
+            backend: &mut expired_backend,
+        };
+        paint_agent_frame_indicators(
+            &mut expired_cx,
+            &roots,
+            Point2D::new(100.0, 50.0),
+            2.0,
+            2_000,
+        );
+        assert!(expired_backend.round_fills.is_empty());
+        assert!(expired_backend.round_strokes.is_empty());
+        op_editor_core::agent_indicators::clear();
+    }
 
     #[test]
     fn parses_agent_palette_hex() {

@@ -576,10 +576,11 @@ mod tests {
     }
 
     fn open_state(scroll: f32) -> SelectState {
-        let mut state = SelectState::default();
-        state.open = true;
-        state.scroll.offset = scroll;
-        state
+        SelectState {
+            open: true,
+            scroll: jian_core::scroll::ScrollState { offset: scroll },
+            ..Default::default()
+        }
     }
 
     #[test]
@@ -708,8 +709,10 @@ mod tests {
     #[test]
     fn font_picker_hit_uses_shared_select_state_protocol() {
         let entries = font_picker_entries(&[], "");
-        let mut state = SelectState::default();
-        state.open = true;
+        let state = SelectState {
+            open: true,
+            ..Default::default()
+        };
         let layout = font_picker_layout(panel_rect(), visible_text(), &entries, 0.0).unwrap();
         let (row, rect) = layout
             .rows

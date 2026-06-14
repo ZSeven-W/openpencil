@@ -11,6 +11,7 @@ use op_editor_core::editor_ui_state::EditorUiState;
 const FORM_BTN_W: f32 = 68.0;
 const FORM_BTN_H: f32 = 26.0;
 
+#[allow(clippy::too_many_arguments)]
 pub fn paint_form_actions(
     cx: &mut PaintCx<'_>,
     theme: &Theme,

@@ -243,6 +243,15 @@ fn node_fills(node: &PenNode) -> Option<&Vec<PenFill>> {
         PenNode::Text(n) => n.fill.as_ref(),
         PenNode::TextInput(n) => n.fill.as_ref(),
         PenNode::IconFont(n) => n.fill.as_ref(),
+        PenNode::TextArea(n) => n.fill.as_ref(),
+        PenNode::Select(n) => n.fill.as_ref(),
+        PenNode::Switch(n) => n.fill.as_ref(),
+        PenNode::Checkbox(n) => n.fill.as_ref(),
+        PenNode::Slider(n) => n.fill.as_ref(),
+        PenNode::RadioGroup(n) => n.fill.as_ref(),
+        PenNode::NumberInput(n) => n.fill.as_ref(),
+        PenNode::Progress(n) => n.fill.as_ref(),
+        PenNode::Tabs(n) => n.fill.as_ref(),
         PenNode::Line(_) | PenNode::Image(_) | PenNode::Ref(_) => None,
     }
 }
@@ -270,6 +279,15 @@ pub(crate) fn node_stroke_css(node: &PenNode) -> Option<(String, f32)> {
         PenNode::Line(n) => n.stroke.as_ref(),
         PenNode::TextInput(n) => n.stroke.as_ref(),
         PenNode::IconFont(n) => n.stroke.as_ref(),
+        PenNode::TextArea(n) => n.stroke.as_ref(),
+        PenNode::Select(n) => n.stroke.as_ref(),
+        PenNode::Switch(n) => n.stroke.as_ref(),
+        PenNode::Checkbox(n) => n.stroke.as_ref(),
+        PenNode::Slider(n) => n.stroke.as_ref(),
+        PenNode::RadioGroup(n) => n.stroke.as_ref(),
+        PenNode::NumberInput(n) => n.stroke.as_ref(),
+        PenNode::Progress(n) => n.stroke.as_ref(),
+        PenNode::Tabs(n) => n.stroke.as_ref(),
         PenNode::Text(_) | PenNode::Image(_) | PenNode::Ref(_) => None,
     }?;
     let width = match &stroke.thickness {

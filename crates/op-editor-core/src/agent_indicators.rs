@@ -16,6 +16,9 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::{LazyLock, Mutex};
 
+/// Duration of the short generated-node entrance animation.
+pub const REVEAL_DURATION_MS: u64 = 720;
+
 /// A node's / frame's owning agent — colour hex (e.g. `"#FF6B6B"`) + name.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AgentTag {
@@ -39,6 +42,9 @@ pub struct AgentIndicators {
     /// node ids that are claimed but not yet drawn — drives the preview
     /// pulse fill.
     pub previews: HashSet<String>,
+    /// node id → reveal start timestamp. Drives the short new-node
+    /// entrance animation after AI applies generated nodes.
+    pub reveals: HashMap<String, u64>,
 }
 
 impl AgentIndicators {
@@ -47,6 +53,7 @@ impl AgentIndicators {
         self.nodes.clear();
         self.frames.clear();
         self.previews.clear();
+        self.reveals.clear();
     }
 }
 
@@ -110,6 +117,16 @@ pub fn clear_preview(epoch: u64, node_id: &str) {
     r.previews.remove(node_id);
 }
 
+/// Start a short entrance animation for a node that has just been
+/// materialised by an AI generation command.
+pub fn add_reveal(epoch: u64, node_id: &str, started_at_ms: u64) {
+    let mut r = REGISTRY.lock().unwrap();
+    if r.epoch != epoch {
+        return;
+    }
+    r.reveals.insert(node_id.to_string(), started_at_ms);
+}
+
 /// Clear every indicator — called when a generation finishes / is reset.
 pub fn clear() {
     REGISTRY.lock().unwrap().clear_maps();
@@ -158,12 +175,22 @@ pub fn end_if_epoch(epoch: u64) {
 /// uses this to keep requesting redraws so the breathing animates.
 pub fn is_active() -> bool {
     let r = REGISTRY.lock().unwrap();
-    !r.nodes.is_empty() || !r.frames.is_empty()
+    !r.nodes.is_empty() || !r.frames.is_empty() || !r.reveals.is_empty()
 }
 
 /// A clone of the current indicators for the paint pass to read.
 pub fn snapshot() -> AgentIndicators {
     REGISTRY.lock().unwrap().clone()
+}
+
+/// A clone of the current indicators with reveal animations expired at
+/// `now_ms` pruned. The paint pass calls this every frame so completed
+/// reveal animations stop requesting redraws.
+pub fn snapshot_at(now_ms: u64) -> AgentIndicators {
+    let mut r = REGISTRY.lock().unwrap();
+    r.reveals
+        .retain(|_, started| now_ms.saturating_sub(*started) <= REVEAL_DURATION_MS);
+    r.clone()
 }
 
 #[cfg(test)]
@@ -242,6 +269,20 @@ mod tests {
             snapshot().frames.contains_key("f4"),
             "end_if_epoch ignores a stale epoch"
         );
+        clear();
+    }
+
+    #[test]
+    fn reveal_registration_prunes_after_animation_window() {
+        let epoch = begin();
+        add_reveal(epoch, "n7", 1_000);
+        assert!(is_active(), "reveal should keep the paint loop active");
+        assert_eq!(snapshot_at(1_250).reveals.get("n7"), Some(&1_000));
+        assert!(
+            snapshot_at(2_000).reveals.is_empty(),
+            "expired reveal should be pruned"
+        );
+        assert!(!is_active(), "expired reveal should not keep animating");
         clear();
     }
 }
