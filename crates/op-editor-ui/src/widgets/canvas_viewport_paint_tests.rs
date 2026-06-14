@@ -491,7 +491,9 @@ mod text_tests {
 
 mod path_tests {
     use crate::layout_scene::{NodeKind, SceneAnchor, SceneNode, ScenePointType};
-    use crate::widgets::canvas_viewport_paint::{flatten_path, flatten_path_points, PathPoints};
+    use crate::widgets::canvas_viewport_paint::{
+        flatten_path, flatten_path_points, world_path_points, PathPoints, WorldPathPoints,
+    };
     use crate::{Point2D, Rect};
 
     fn anchor(x: f32, y: f32, hout: Option<Point2D>) -> SceneAnchor {
@@ -521,6 +523,27 @@ mod path_tests {
 
         assert!(matches!(points, PathPoints::Borrowed(_)));
         assert_eq!(points.as_slice(), n.points.as_slice());
+    }
+
+    #[test]
+    fn small_filled_path_world_points_use_stack_buffer() {
+        let points = [
+            Point2D::new(0.0, 0.0),
+            Point2D::new(10.0, 0.0),
+            Point2D::new(10.0, 10.0),
+        ];
+
+        let world = world_path_points(&points, Point2D::new(5.0, 7.0), 2.0);
+
+        assert!(matches!(world, WorldPathPoints::Stack { .. }));
+        assert_eq!(
+            world.as_slice(),
+            &[
+                Point2D::new(5.0, 7.0),
+                Point2D::new(25.0, 7.0),
+                Point2D::new(25.0, 27.0),
+            ]
+        );
     }
 
     #[test]

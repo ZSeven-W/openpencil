@@ -178,6 +178,56 @@ impl<'a> PathPoints<'a> {
     }
 }
 
+const STACK_WORLD_PATH_POINTS: usize = 64;
+
+pub(crate) enum WorldPathPoints {
+    Stack {
+        points: [Point2D; STACK_WORLD_PATH_POINTS],
+        len: usize,
+    },
+    Owned(Vec<Point2D>),
+}
+
+impl WorldPathPoints {
+    pub(crate) fn as_slice(&self) -> &[Point2D] {
+        match self {
+            Self::Stack { points, len } => &points[..*len],
+            Self::Owned(points) => points.as_slice(),
+        }
+    }
+}
+
+fn doc_to_world_point(p: Point2D, viewport_origin: Point2D, zoom: f32) -> Point2D {
+    Point2D::new(
+        viewport_origin.x + p.x * zoom,
+        viewport_origin.y + p.y * zoom,
+    )
+}
+
+pub(crate) fn world_path_points(
+    points: &[Point2D],
+    viewport_origin: Point2D,
+    zoom: f32,
+) -> WorldPathPoints {
+    if points.len() <= STACK_WORLD_PATH_POINTS {
+        let mut stack = [Point2D::ZERO; STACK_WORLD_PATH_POINTS];
+        for (idx, point) in points.iter().copied().enumerate() {
+            stack[idx] = doc_to_world_point(point, viewport_origin, zoom);
+        }
+        return WorldPathPoints::Stack {
+            points: stack,
+            len: points.len(),
+        };
+    }
+    WorldPathPoints::Owned(
+        points
+            .iter()
+            .copied()
+            .map(|p| doc_to_world_point(p, viewport_origin, zoom))
+            .collect(),
+    )
+}
+
 /// Flatten a Path scene node into doc-space points, borrowing the
 /// original point slice for the common handle-free open-path case.
 pub(crate) fn flatten_path_points(node: &SceneNode) -> PathPoints<'_> {
@@ -533,12 +583,6 @@ fn paint_node_inner(
                 }
                 return;
             }
-            let to_world = |p: Point2D| -> Point2D {
-                Point2D::new(
-                    viewport_origin.x + p.x * zoom,
-                    viewport_origin.y + p.y * zoom,
-                )
-            };
             // Bezier-aware: when the path carries anchors with control
             // handles, flatten each cubic segment; otherwise fall back
             // to the straight `points` polyline.
@@ -547,8 +591,9 @@ fn paint_node_inner(
             // A closed path with a fill paints its enclosed area.
             let filled = node.path_closed && node.fill.is_some();
             if filled {
-                let world: Vec<Point2D> = points.iter().map(|p| to_world(*p)).collect();
-                cx.backend.fill_polygon(&world, node.fill.unwrap());
+                let world = world_path_points(points, viewport_origin, zoom);
+                cx.backend
+                    .fill_polygon(world.as_slice(), node.fill.unwrap());
             }
             // Stroke: an explicit stroke always paints; with no
             // stroke, only an UNfilled path strokes (so it stays
@@ -564,8 +609,12 @@ fn paint_node_inner(
             };
             if let Some((color, width)) = stroke {
                 for pair in points.windows(2) {
-                    cx.backend
-                        .stroke_line(to_world(pair[0]), to_world(pair[1]), color, width);
+                    cx.backend.stroke_line(
+                        doc_to_world_point(pair[0], viewport_origin, zoom),
+                        doc_to_world_point(pair[1], viewport_origin, zoom),
+                        color,
+                        width,
+                    );
                 }
             }
         }
