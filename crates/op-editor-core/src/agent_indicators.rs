@@ -17,13 +17,13 @@ use std::collections::{HashMap, HashSet};
 use std::sync::{LazyLock, Mutex};
 
 /// Duration of the short generated-node entrance animation.
-pub const REVEAL_DURATION_MS: u64 = 1_680;
+pub const REVEAL_DURATION_MS: u64 = 1_920;
 /// Delay between the first generated nodes in one applied batch.
-pub const REVEAL_STAGGER_MS: u64 = 48;
+pub const REVEAL_STAGGER_MS: u64 = 40;
 /// Minimum delay before descendants of a newly revealed container begin
 /// their own entrances. This leaves the parent opening beat readable
 /// without making nested content feel stalled.
-pub const REVEAL_CHILD_RUNWAY_MS: u64 = 80;
+pub const REVEAL_CHILD_RUNWAY_MS: u64 = 72;
 /// Extra delay for nested generated nodes. Visual traversal order
 /// already places children after parents; keeping this at zero avoids
 /// depth changes compressing adjacent stream slots into the same frame.
@@ -32,12 +32,12 @@ pub const REVEAL_DEPTH_STAGGER_MS: u64 = 0;
 /// beat. Once the parent has begun settling, delayed children animate
 /// independently so streamed content does not pop in abruptly.
 pub const REVEAL_CHILD_SUPPRESS_FRACTION: f32 = 0.04;
-const REVEAL_FULL_STAGGER_SIBLINGS: u64 = 18;
+const REVEAL_FULL_STAGGER_SIBLINGS: u64 = 24;
 const REVEAL_MID_STAGGER_SIBLINGS: u64 = 72;
 const REVEAL_COMPRESSED_STAGGER_MS: u64 = 32;
 const REVEAL_TAIL_STAGGER_MS: u64 = 24;
 const REVEAL_MAX_NEW_STARTS_PER_SNAPSHOT: usize = 1;
-const REVEAL_BURST_RECOVERY_STAGGER_MS: u64 = REVEAL_STAGGER_MS;
+const REVEAL_BURST_RECOVERY_STAGGER_MS: u64 = 32;
 const CLOCK_REBASE_THRESHOLD_MS: u64 = 60_000;
 const REVEAL_FRAME_MS: u64 = 16;
 
@@ -334,11 +334,18 @@ fn smooth_overdue_reveal_burst(r: &mut AgentIndicators, now_ms: u64) {
     }
     let mut newly_due_seen = 0;
     let mut reschedule_tail = false;
-    let mut next_slot = now_ms.saturating_add(REVEAL_BURST_RECOVERY_STAGGER_MS);
+    let mut next_slot = now_ms;
     for (id, original_start) in ordered {
         if original_start > prev_ms && original_start <= now_ms {
             newly_due_seen += 1;
-            if newly_due_seen > REVEAL_MAX_NEW_STARTS_PER_SNAPSHOT {
+            if newly_due_seen <= REVEAL_MAX_NEW_STARTS_PER_SNAPSHOT {
+                if let Some(started_at) = r.reveals.get_mut(&id) {
+                    *started_at = next_slot;
+                }
+                next_slot = next_slot.saturating_add(REVEAL_BURST_RECOVERY_STAGGER_MS);
+                reschedule_tail = true;
+                continue;
+            } else {
                 reschedule_tail = true;
             }
         }
@@ -452,7 +459,7 @@ mod tests {
             "reveal should stay active long enough to read as a smooth entrance"
         );
         assert!(
-            snapshot_at(2_800).reveals.is_empty(),
+            snapshot_at(3_000).reveals.is_empty(),
             "expired reveal should be pruned"
         );
         assert!(!is_active(), "expired reveal should not keep animating");
@@ -566,6 +573,34 @@ mod tests {
                 .get("n2")
                 .is_some_and(|started_at| *started_at <= 1_220 + REVEAL_BURST_RECOVERY_STAGGER_MS),
             "overdue recovery should stay close enough to feel continuous"
+        );
+        end_if_epoch(epoch);
+    }
+
+    #[test]
+    fn snapshot_replays_first_overdue_reveal_instead_of_jumping_mid_animation() {
+        let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let epoch = begin();
+        for i in 0..6 {
+            add_reveal(
+                epoch,
+                &format!("n{i}"),
+                1_000 + i as u64 * REVEAL_STAGGER_MS,
+            );
+        }
+
+        assert_eq!(snapshot_at(1_000).reveals.get("n0"), Some(&1_000));
+        let snap = snapshot_at(1_220);
+
+        assert_eq!(
+            snap.reveals.get("n1"),
+            Some(&1_220),
+            "the first overdue node should restart at the current frame instead of appearing partway through"
+        );
+        assert_eq!(
+            snap.reveals.get("n2"),
+            Some(&(1_220 + REVEAL_BURST_RECOVERY_STAGGER_MS)),
+            "overdue siblings should recover one-by-one on a tighter cadence"
         );
         end_if_epoch(epoch);
     }
