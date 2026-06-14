@@ -497,6 +497,56 @@ fn frame_label_paint_uses_top_level_scene_nodes() {
 }
 
 #[test]
+fn frame_label_paint_matches_roots_linearly() {
+    let _guard = crate::agent_indicator_test_support::lock();
+    op_editor_core::agent_indicators::clear();
+
+    let mut roots = Vec::new();
+    let mut labels = Vec::new();
+    for i in 0..32 {
+        let mut frame = SceneNode::leaf(format!("frame-{i}"), NodeKind::Frame);
+        frame.bounds = Rect::xywh(i as f32 * 90.0, 0.0, 80.0, 48.0);
+        roots.push(frame);
+        labels.push((
+            format!("frame-{i}"),
+            format!("Frame {i}"),
+            Color {
+                r: 0.6,
+                g: 0.6,
+                b: 0.6,
+                a: 1.0,
+            },
+        ));
+    }
+    let scene = LayoutScene {
+        pages: vec![ScenePage {
+            id: "p".into(),
+            name: "p".into(),
+            children: roots,
+        }],
+        active_page_index: 0,
+    };
+    let mut state = EditorState::new();
+    state.viewport.zoom = 1.0;
+    let mut viewport = CanvasViewport::from_editor(&state, &scene);
+    viewport.frame_labels = labels;
+
+    super::super::canvas_frame_labels::reset_label_match_count();
+    let mut backend = RecordingBackend::default();
+    {
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+        viewport.paint(&mut cx, Rect::xywh(0.0, 0.0, 3_200.0, 240.0));
+    }
+
+    assert!(
+        super::super::canvas_frame_labels::label_match_count() <= 32,
+        "frame label matching should stay linear in the number of top-level roots"
+    );
+}
+
+#[test]
 fn flipped_node_applies_scale_transform() {
     let state = sample_state();
     let mut node = leaf(
