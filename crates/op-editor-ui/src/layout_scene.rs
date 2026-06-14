@@ -28,6 +28,26 @@
 //! scenes too.
 
 use crate::{Color, Point2D, Rect};
+#[cfg(test)]
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+#[cfg(test)]
+static FIND_VISIT_COUNT: AtomicUsize = AtomicUsize::new(0);
+
+#[cfg(test)]
+pub(crate) fn reset_find_visit_count() {
+    FIND_VISIT_COUNT.store(0, Ordering::Relaxed);
+}
+
+#[cfg(test)]
+pub(crate) fn find_visit_count() -> usize {
+    FIND_VISIT_COUNT.load(Ordering::Relaxed)
+}
+
+#[cfg(test)]
+fn record_find_visit() {
+    FIND_VISIT_COUNT.fetch_add(1, Ordering::Relaxed);
+}
 
 /// Node kinds the canvas painter draws. `Other` round-trips unknown
 /// kinds so an unfamiliar serialized node never errors the painter.
@@ -507,6 +527,9 @@ impl SceneNode {
     /// Depth-first search for the node with `id` in this subtree
     /// (self included). Mirrors `SceneNode::find`.
     pub fn find(&self, id: &str) -> Option<&SceneNode> {
+        #[cfg(test)]
+        record_find_visit();
+
         if self.id == id {
             return Some(self);
         }

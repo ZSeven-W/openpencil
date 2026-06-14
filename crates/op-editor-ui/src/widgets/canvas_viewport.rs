@@ -593,11 +593,20 @@ impl<'a> Widget for CanvasViewport<'a> {
 
         // 4. Selection overlay — outlines + handles (single-select only).
         let show_handles = self.selected_set.len() == 1;
-        if let Some(page) = self.scene.active_page() {
-            for id in &self.selected_set {
-                let Some(node) = page.find(id) else {
-                    continue;
-                };
+        let active_page = self.scene.active_page();
+        let single_selected_id = self.selected_set.first().map(String::as_str);
+        let single_selected_node = if show_handles {
+            active_page.and_then(|page| single_selected_id.and_then(|id| page.find(id)))
+        } else {
+            None
+        };
+        let anchor_selected_node = if single_selected_id == Some(self.selected.as_str()) {
+            single_selected_node
+        } else {
+            None
+        };
+        if let Some(page) = active_page {
+            let mut paint_selected_node = |node: &SceneNode| {
                 if node.hidden
                     || indicators.as_ref().is_some_and(|indicators| {
                         indicators
@@ -606,11 +615,11 @@ impl<'a> Widget for CanvasViewport<'a> {
                             .is_some_and(|started_at| self.now_ms < *started_at)
                     })
                 {
-                    continue;
+                    return;
                 }
                 let bounds = node.aggregate_bounds();
                 if bounds.size.x <= 0.0 || bounds.size.y <= 0.0 {
-                    continue;
+                    return;
                 }
                 let world_rect = Rect {
                     origin: Point2D::new(
@@ -645,6 +654,16 @@ impl<'a> Widget for CanvasViewport<'a> {
                 if rotated {
                     cx.backend.restore();
                 }
+            };
+            if let Some(node) = single_selected_node {
+                paint_selected_node(node);
+            } else {
+                for id in &self.selected_set {
+                    let Some(node) = page.find(id) else {
+                        continue;
+                    };
+                    paint_selected_node(node);
+                }
             }
         }
 
@@ -665,6 +684,7 @@ impl<'a> Widget for CanvasViewport<'a> {
             self.pen_dragging_handle,
             &self.selected,
             self.selected_set.len(),
+            anchor_selected_node,
             rect,
             viewport,
         );
@@ -672,11 +692,7 @@ impl<'a> Widget for CanvasViewport<'a> {
         // 4c. Arc-edit handles for a single-selected Ellipse with the
         //     Select tool — start / sweep / inner-radius grab dots.
         if matches!(self.tool, op_editor_core::Tool::Select) && self.selected_set.len() == 1 {
-            if let Some(node) = self
-                .scene
-                .active_page()
-                .and_then(|p| p.find(&self.selected))
-            {
+            if let Some(node) = anchor_selected_node {
                 if let Some(handles) = arc_handle_positions(node) {
                     let zoom = viewport.zoom;
                     let to_screen = |p: Point2D| {
