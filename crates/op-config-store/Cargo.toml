@@ -1,0 +1,11 @@
+[package]
+name = "op-config-store"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "OpenPencil ~/.openpencil file-backed config primitives"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }

@@ -56,12 +56,11 @@ struct AuthFile {
 
 impl AuthStore {
     /// The per-user credential store
-    /// (`<config>/openpencil/git-auth.json`).
+    /// (`~/.openpencil/git-auth.json`).
     pub fn user() -> Result<AuthStore, GitError> {
-        let base =
-            dirs::config_dir().ok_or_else(|| GitError::Io("no user config directory".into()))?;
+        let base = op_config_store::openpencil_dir().map_err(io_error)?;
         Ok(AuthStore {
-            path: base.join("openpencil").join("git-auth.json"),
+            path: base.join(op_config_store::well_known::GIT_AUTH),
         })
     }
 
@@ -104,12 +103,9 @@ impl AuthStore {
 
     /// Read the store file — a missing file is an empty store.
     fn load(&self) -> Result<AuthFile, GitError> {
-        match std::fs::read(&self.path) {
-            Ok(bytes) => serde_json::from_slice(&bytes)
-                .map_err(|e| GitError::Io(format!("parsing credential store: {e}"))),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(AuthFile::default()),
-            Err(e) => Err(GitError::Io(e.to_string())),
-        }
+        op_config_store::read_json_path(&self.path)
+            .map(|value| value.unwrap_or_default())
+            .map_err(io_error)
     }
 
     /// Write the store file atomically: the secrets land in a temp
@@ -117,14 +113,10 @@ impl AuthStore {
     /// *before* any content is written, then it is renamed into
     /// place (rename preserves the mode).
     fn save(&self, file: &AuthFile) -> Result<(), GitError> {
-        if let Some(parent) = self.path.parent() {
-            std::fs::create_dir_all(parent).map_err(|e| GitError::Io(e.to_string()))?;
-        }
-        let json = serde_json::to_vec_pretty(file)
-            .map_err(|e| GitError::Io(format!("serializing credential store: {e}")))?;
-        let tmp = self.path.with_extension("json.tmp");
-        crate::write_private_file(&tmp, &json)?;
-        std::fs::rename(&tmp, &self.path).map_err(|e| GitError::Io(e.to_string()))?;
-        Ok(())
+        op_config_store::write_json_path(&self.path, file).map_err(io_error)
     }
+}
+
+fn io_error(e: std::io::Error) -> GitError {
+    GitError::Io(e.to_string())
 }

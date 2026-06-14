@@ -123,6 +123,36 @@ fn auth_store_file_is_created_owner_only() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+#[cfg(all(unix, not(target_os = "macos")))]
+#[test]
+fn auth_store_at_accepts_non_utf8_file_names() {
+    use std::ffi::OsString;
+    use std::os::unix::ffi::OsStringExt;
+
+    let dir = unique_temp_dir("auth-non-utf8");
+    let path = dir.join(OsString::from_vec(b"git-auth-\xff.json".to_vec()));
+    let store = AuthStore::at(&path);
+
+    store
+        .set(
+            "host",
+            Credential::Ssh {
+                key_name: "id_non_utf8".to_string(),
+            },
+        )
+        .expect("set non-utf8 path");
+
+    let reloaded = AuthStore::at(&path);
+    assert_eq!(
+        reloaded.get("host").expect("get non-utf8 path"),
+        Some(Credential::Ssh {
+            key_name: "id_non_utf8".to_string()
+        })
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[test]
 fn ssh_key_store_rejects_directory_escaping_names() {
     // No `ssh-keygen` needed: name validation runs first, before any

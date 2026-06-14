@@ -17,11 +17,9 @@ description = "Git-backed version control for OpenPencil documents"
 # own git engine. `vendored-openssl` keeps cross-arch macOS checks from
 # depending on a runner-local OpenSSL installation for the target arch.
 git2 = { version = "=0.20.4", features = ["vendored-libgit2", "vendored-openssl"] }
+op-config-store = { path = "../op-config-store" }
 thiserror = { workspace = true }
 # Credential store (`auth.rs`) persistence — the host-keyed token /
 # SSH-key table is serialized to a JSON file.
 serde = { workspace = true }
 serde_json = { workspace = true }
-# Resolves the per-user config directory for the default credential
-# store location (`AuthStore::user`).
-dirs = "5"
