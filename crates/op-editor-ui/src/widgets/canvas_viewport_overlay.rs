@@ -222,30 +222,30 @@ fn wrap_segment(
 ) {
     let chars: Vec<char> = segment.chars().collect();
     let mut current = String::new();
+    let mut probe = String::with_capacity(segment.len());
     let mut i = 0;
     while i < chars.len() {
         let ch = chars[i];
         if is_cjk(ch) {
-            let mut probe = current.clone();
-            probe.push(ch);
+            let mut ch_buf = [0; 4];
+            build_probe(&mut probe, &current, ch.encode_utf8(&mut ch_buf));
             if backend.measure_text_weighted(&probe, font_size, weight) > max_w
                 && !current.is_empty()
             {
                 out.push(std::mem::take(&mut current));
                 current.push(ch);
             } else {
-                current = probe;
+                std::mem::swap(&mut current, &mut probe);
             }
             i += 1;
         } else if ch == ' ' {
-            let mut probe = current.clone();
-            probe.push(' ');
+            build_probe(&mut probe, &current, " ");
             if backend.measure_text_weighted(&probe, font_size, weight) > max_w
                 && !current.is_empty()
             {
                 out.push(std::mem::take(&mut current));
             } else {
-                current = probe;
+                std::mem::swap(&mut current, &mut probe);
             }
             i += 1;
         } else {
@@ -254,21 +254,26 @@ fn wrap_segment(
                 word.push(chars[i]);
                 i += 1;
             }
-            let mut probe = current.clone();
-            probe.push_str(&word);
+            build_probe(&mut probe, &current, &word);
             if backend.measure_text_weighted(&probe, font_size, weight) > max_w
                 && !current.is_empty()
             {
                 out.push(std::mem::take(&mut current));
                 current.push_str(&word);
             } else {
-                current = probe;
+                std::mem::swap(&mut current, &mut probe);
             }
         }
     }
     if !current.is_empty() {
         out.push(current);
     }
+}
+
+fn build_probe(probe: &mut String, current: &str, suffix: &str) {
+    probe.clear();
+    probe.push_str(current);
+    probe.push_str(suffix);
 }
 
 /// Codepoints that wrap per-character (no inter-word spaces).
@@ -435,5 +440,20 @@ mod wrap_tests {
         let regular = wrap_text(&mut b, "hello world", 13.0, 120.0, 400);
         assert_eq!(regular, vec!["hello world"], "weight 400 fits");
         assert!(bold.len() >= 2, "weight 700 must wrap: {:?}", bold);
+    }
+
+    #[test]
+    fn probe_builder_reuses_existing_string_allocation() {
+        let mut probe = String::with_capacity(64);
+        let ptr = probe.as_ptr();
+
+        build_probe(&mut probe, "hello", " world");
+
+        assert_eq!(probe, "hello world");
+        assert_eq!(
+            probe.as_ptr(),
+            ptr,
+            "probe construction should reuse the existing String allocation"
+        );
     }
 }
