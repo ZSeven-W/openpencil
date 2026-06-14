@@ -12,8 +12,8 @@ use crate::widgets::editor_state_ext::theme_for;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::layer_panel_walkers::{
     apply_layer_rename, icon_for_node, kind_label, layer_regions, layers_content_width,
-    pages_content_width, pages_from_state, walk, walk_excluding, LayerRegionInput, LayerRegions,
-    RenameView, WalkCx,
+    pages_content_width, pages_from_state, row_index_at, visible_row_range, walk, walk_excluding,
+    LayerRegionInput, LayerRegions, RenameView, WalkCx,
 };
 use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
 use crate::{Color, Point2D, Rect, TextLayout};
@@ -93,6 +93,8 @@ pub struct LayerPanel {
     pub layers_scroll: f32,
     pub pages_h_scroll: f32,
     pub layers_h_scroll: f32,
+    pub pages_content_w: f32,
+    pub layers_content_w: f32,
 }
 
 impl LayerPanel {
@@ -107,6 +109,8 @@ impl LayerPanel {
             walk(child, &cx, 0, &mut items);
         }
         apply_layer_rename(&mut items, &rename);
+        let pages_content_w = pages_content_width(&pages, LAYER_PANEL_WIDTH);
+        let layers_content_w = layers_content_width(&items, LAYER_PANEL_WIDTH);
         Self {
             id: WidgetId::new(1000),
             pages,
@@ -122,6 +126,8 @@ impl LayerPanel {
             layers_scroll: state.editor_ui.layer_layers_scroll.offset,
             pages_h_scroll: state.editor_ui.layer_pages_h_scroll.offset,
             layers_h_scroll: state.editor_ui.layer_layers_h_scroll.offset,
+            pages_content_w,
+            layers_content_w,
         }
     }
 
@@ -163,6 +169,8 @@ impl LayerPanel {
             walk_excluding(child, &cx, drag_source, 0, &mut items);
         }
         apply_layer_rename(&mut items, &rename);
+        let pages_content_w = pages_content_width(&pages, LAYER_PANEL_WIDTH);
+        let layers_content_w = layers_content_width(&items, LAYER_PANEL_WIDTH);
         Self {
             id: WidgetId::new(1000),
             pages,
@@ -178,6 +186,8 @@ impl LayerPanel {
             layers_scroll: state.editor_ui.layer_layers_scroll.offset,
             pages_h_scroll: state.editor_ui.layer_pages_h_scroll.offset,
             layers_h_scroll: state.editor_ui.layer_layers_h_scroll.offset,
+            pages_content_w,
+            layers_content_w,
         }
     }
 
@@ -197,6 +207,8 @@ impl LayerPanel {
             layers_scroll: 0.0,
             pages_h_scroll: 0.0,
             layers_h_scroll: 0.0,
+            pages_content_w: 0.0,
+            layers_content_w: 0.0,
         }
     }
 
@@ -219,8 +231,8 @@ impl LayerPanel {
             layers_scroll: self.layers_scroll,
             pages_h_scroll: self.pages_h_scroll,
             layers_h_scroll: self.layers_h_scroll,
-            pages_content_w: pages_content_width(&self.pages, rect.size.x),
-            layers_content_w: layers_content_width(&self.items, rect.size.x),
+            pages_content_w: self.pages_content_w,
+            layers_content_w: self.layers_content_w,
         })
     }
 
@@ -242,45 +254,41 @@ impl LayerPanel {
             return None;
         }
         let layers_top = r.layers_rows_top - r.layers_scroll;
-        let mut y = layers_top;
-        for item in &self.items {
-            let row_top = y;
-            let row_bottom = y + LAYER_ROW_HEIGHT;
-            if point.y >= row_top && point.y <= row_bottom {
-                // Three-zone split for container rows: top 25 % →
-                // Before, middle 50 % → Into (child of anchor),
-                // bottom 25 % → After. Non-container rows fall back
-                // to two-zone Before/After (no middle band).
-                let local = point.y - row_top;
-                let position = if item.is_container {
-                    if local < LAYER_ROW_HEIGHT * 0.25 {
-                        DropPosition::Before
-                    } else if local > LAYER_ROW_HEIGHT * 0.75 {
-                        DropPosition::After
-                    } else {
-                        DropPosition::Into
-                    }
-                } else if local < LAYER_ROW_HEIGHT / 2.0 {
+        if let Some((index, row_top)) = row_index_at(
+            self.items.len(),
+            r.layers_rows_top,
+            r.layers_scroll,
+            r.layers_view_h,
+            point.y,
+        ) {
+            let item = &self.items[index];
+            let row_bottom = row_top + LAYER_ROW_HEIGHT;
+            // Container rows use Before / Into / After bands; leaves
+            // fall back to a two-way Before / After split.
+            let local = point.y - row_top;
+            let position = if item.is_container {
+                if local < LAYER_ROW_HEIGHT * 0.25 {
                     DropPosition::Before
-                } else {
+                } else if local > LAYER_ROW_HEIGHT * 0.75 {
                     DropPosition::After
-                };
-                let indicator_y = match position {
-                    DropPosition::Before => row_top,
-                    DropPosition::After => row_bottom,
-                    // For Into the host paints a row-outline
-                    // highlight rather than a horizontal line —
-                    // `indicator_y` is the row TOP so the paint
-                    // helper can derive the full row rect.
-                    DropPosition::Into => row_top,
-                };
-                return Some(DropTarget {
-                    anchor: item.node_id.clone(),
-                    position,
-                    indicator_y,
-                });
-            }
-            y = row_bottom;
+                } else {
+                    DropPosition::Into
+                }
+            } else if local < LAYER_ROW_HEIGHT / 2.0 {
+                DropPosition::Before
+            } else {
+                DropPosition::After
+            };
+            let indicator_y = match position {
+                DropPosition::Before => row_top,
+                DropPosition::After => row_bottom,
+                DropPosition::Into => row_top,
+            };
+            return Some(DropTarget {
+                anchor: item.node_id.clone(),
+                position,
+                indicator_y,
+            });
         }
         // Cursor is below the last row but still inside the panel —
         // drop at end (anchor = last layer, position = After). `y`
@@ -288,6 +296,7 @@ impl LayerPanel {
         // exactly where the indicator paints.
         if point.y > layers_top {
             if let Some(last) = self.items.last() {
+                let y = layers_top + self.items.len() as f32 * LAYER_ROW_HEIGHT;
                 return Some(DropTarget {
                     anchor: last.node_id.clone(),
                     position: DropPosition::After,
@@ -307,11 +316,6 @@ impl LayerPanel {
             return None;
         }
         // Pages section header — `+` add-page affordance at top-right.
-        // Geometry mirrors the paint pass:
-        //   plus_x = rect.origin.x + rect.size.x - ROW_PAD_X - 12.0
-        //   plus_y = (rect.origin.y + 8.0) + (SECTION_HEADER_HEIGHT - 14.0) / 2.0
-        //   size   = 14 px
-        // 4 px slop so a sloppy click still lands.
         let plus_x = rect.origin.x + rect.size.x - ROW_PAD_X - 12.0;
         let plus_y = rect.origin.y + 8.0 + (SECTION_HEADER_HEIGHT - 14.0) / 2.0;
         let slop = 4.0;
@@ -326,92 +330,90 @@ impl LayerPanel {
         // hit when the cursor is inside its (clipped) viewport, so a
         // row scrolled out of view can't be clicked through.
         let r = self.regions(rect);
-        let in_pages = point.y >= r.pages_rows_top && point.y <= r.pages_rows_top + r.pages_view_h;
-        let in_layers =
-            point.y >= r.layers_rows_top && point.y <= r.layers_rows_top + r.layers_view_h;
-        let mut y = r.pages_rows_top - r.pages_scroll;
-        for page in &self.pages {
+        if let Some((index, y)) = row_index_at(
+            self.pages.len(),
+            r.pages_rows_top,
+            r.pages_scroll,
+            r.pages_view_h,
+            point.y,
+        ) {
+            let page = &self.pages[index];
             let row = Rect {
                 origin: Point2D::new(rect.origin.x, y),
                 size: Point2D::new(rect.size.x, PAGE_ROW_HEIGHT),
             };
-            if in_pages && (row).contains(point) {
+            if (row).contains(point) && page.hovered {
                 // × delete button — only hit-tested when the row is
-                // hovered (paint shows it under the same gate). 14
-                // px icon, right-aligned with 4 px slop.
-                if page.hovered {
-                    let close_x = rect.origin.x + rect.size.x - ROW_PAD_X - 14.0;
-                    let close_y = y + (PAGE_ROW_HEIGHT - 14.0) / 2.0;
-                    let slop = 4.0;
-                    if point.x >= close_x - slop
-                        && point.x <= close_x + 14.0 + slop
-                        && point.y >= close_y - slop
-                        && point.y <= close_y + 14.0 + slop
-                    {
-                        return Some(LayerPanelHit::DeletePage(page.page_index));
-                    }
+                // hovered (paint shows it under the same gate).
+                let close_x = rect.origin.x + rect.size.x - ROW_PAD_X - 14.0;
+                let close_y = y + (PAGE_ROW_HEIGHT - 14.0) / 2.0;
+                let slop = 4.0;
+                if point.x >= close_x - slop
+                    && point.x <= close_x + 14.0 + slop
+                    && point.y >= close_y - slop
+                    && point.y <= close_y + 14.0 + slop
+                {
+                    return Some(LayerPanelHit::DeletePage(page.page_index));
                 }
+            }
+            if (row).contains(point) {
                 return Some(LayerPanelHit::Page(page.page_index));
             }
-            y += PAGE_ROW_HEIGHT;
         }
-        y = r.layers_rows_top - r.layers_scroll;
-        for item in &self.items {
+        if let Some((index, y)) = row_index_at(
+            self.items.len(),
+            r.layers_rows_top,
+            r.layers_scroll,
+            r.layers_view_h,
+            point.y,
+        ) {
+            let item = &self.items[index];
             let row = Rect {
                 origin: Point2D::new(rect.origin.x, y),
                 size: Point2D::new(rect.size.x, LAYER_ROW_HEIGHT),
             };
-            if in_layers && (row).contains(point) {
-                // Match the paint geometry — same 14 px icon
-                // boxes positioned at `trailing_right` minus 14 /
-                // 32 (lock / eye). Slop of 4 px around each so
-                // small mouse offsets still register.
-                let inner = Rect {
-                    origin: Point2D::new(row.origin.x + 6.0, y + 2.0),
-                    size: Point2D::new(row.size.x - 12.0, LAYER_ROW_HEIGHT - 4.0),
-                };
-                let trailing_right = inner.origin.x + inner.size.x - 8.0;
-                let lock_x = trailing_right - 14.0;
-                // Widen eye-to-lock gap (was 18 → 22) so 14 px
-                // icons + 4 px slop each side don't overlap.
-                let eye_x = lock_x - 22.0;
-                let icon_y = inner.origin.y + 6.0;
-                let slop = 4.0;
-                let show_eye = item.hovered;
-                let show_lock = item.hovered;
-                if show_lock
-                    && point.x >= lock_x - slop
-                    && point.x <= lock_x + 14.0 + slop
-                    && point.y >= icon_y - slop
-                    && point.y <= icon_y + 14.0 + slop
-                {
-                    return Some(LayerPanelHit::ToggleLocked(item.node_id.clone()));
-                }
-                if show_eye
-                    && point.x >= eye_x - slop
-                    && point.x <= eye_x + 14.0 + slop
-                    && point.y >= icon_y - slop
-                    && point.y <= icon_y + 14.0 + slop
-                {
-                    return Some(LayerPanelHit::ToggleHidden(item.node_id.clone()));
-                }
-                // Leading chevron — only present on container
-                // rows. Painted at `inner.origin.x + indent`
-                // where indent = ROW_PAD_X + depth*12.
-                if item.has_children {
-                    let indent = ROW_PAD_X + item.depth as f32 * 12.0;
-                    let chev_x = inner.origin.x + indent - r.layers_h_scroll;
-                    if point.x >= chev_x - slop
-                        && point.x <= chev_x + 14.0 + slop
-                        && point.y >= icon_y - slop
-                        && point.y <= icon_y + 14.0 + slop
-                    {
-                        return Some(LayerPanelHit::ToggleCollapsed(item.node_id.clone()));
-                    }
-                }
-                return Some(LayerPanelHit::Layer(item.node_id.clone()));
+            if !(row).contains(point) {
+                return None;
             }
-            y += LAYER_ROW_HEIGHT;
+            // Match the paint geometry — same 14 px icon boxes with
+            // 4 px slop so small mouse offsets still register.
+            let inner = Rect {
+                origin: Point2D::new(row.origin.x + 6.0, y + 2.0),
+                size: Point2D::new(row.size.x - 12.0, LAYER_ROW_HEIGHT - 4.0),
+            };
+            let trailing_right = inner.origin.x + inner.size.x - 8.0;
+            let lock_x = trailing_right - 14.0;
+            let eye_x = lock_x - 22.0;
+            let icon_y = inner.origin.y + 6.0;
+            let slop = 4.0;
+            if item.hovered
+                && point.x >= lock_x - slop
+                && point.x <= lock_x + 14.0 + slop
+                && point.y >= icon_y - slop
+                && point.y <= icon_y + 14.0 + slop
+            {
+                return Some(LayerPanelHit::ToggleLocked(item.node_id.clone()));
+            }
+            if item.hovered
+                && point.x >= eye_x - slop
+                && point.x <= eye_x + 14.0 + slop
+                && point.y >= icon_y - slop
+                && point.y <= icon_y + 14.0 + slop
+            {
+                return Some(LayerPanelHit::ToggleHidden(item.node_id.clone()));
+            }
+            if item.has_children {
+                let indent = ROW_PAD_X + item.depth as f32 * 12.0;
+                let chev_x = inner.origin.x + indent - r.layers_h_scroll;
+                if point.x >= chev_x - slop
+                    && point.x <= chev_x + 14.0 + slop
+                    && point.y >= icon_y - slop
+                    && point.y <= icon_y + 14.0 + slop
+                {
+                    return Some(LayerPanelHit::ToggleCollapsed(item.node_id.clone()));
+                }
+            }
+            return Some(LayerPanelHit::Layer(item.node_id.clone()));
         }
         None
     }
@@ -421,43 +423,20 @@ impl LayerPanel {
 pub enum LayerPanelHit {
     Page(usize),
     Layer(NodeId),
-    /// Click on the eye icon — host should toggle the node's
-    /// `hidden` flag.
     ToggleHidden(NodeId),
-    /// Click on the lock icon — host should toggle the node's
-    /// `locked` flag.
     ToggleLocked(NodeId),
-    /// Click on the leading chevron — host should toggle the
-    /// node's `collapsed` flag so children show/hide in the
-    /// layer tree.
     ToggleCollapsed(NodeId),
-    /// Click on the `+` add-page affordance in the Pages section
-    /// header — host should append a fresh page and switch to it.
     AddPage,
-    /// Click on the trailing × on a page row — host should
-    /// remove the page via `Document::remove_page(idx)`. Only
-    /// hit-tested when the row's `hovered` flag is true so the
-    /// affordance stays click-only-on-hover.
     DeletePage(usize),
 }
 
-/// Where a layer-drag would drop relative to the hovered anchor row.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DropPosition {
-    /// Drop slides in immediately ABOVE the anchor row in the
-    /// flat layer list (parent's children vec index decreases by
-    /// one for a same-parent move).
     Before,
-    /// Drop slides in immediately BELOW the anchor row.
     After,
-    /// Drop becomes the LAST child of the anchor (a container —
-    /// Frame / Group). Cursor in the middle band of the row,
-    /// only when the anchor's `NodeKind` can host children.
     Into,
 }
 
-/// Drop-target result: anchor node, drop position, and the
-/// panel-local y where the indicator paints.
 #[derive(Debug, Clone, PartialEq)]
 pub struct DropTarget {
     pub anchor: NodeId,
@@ -522,18 +501,13 @@ impl Widget for LayerPanel {
             origin: Point2D::new(rect.origin.x, r.pages_rows_top),
             size: Point2D::new(rect.size.x, r.pages_view_h),
         });
-        y = r.pages_rows_top - r.pages_scroll;
-        for page in &self.pages {
+        for index in visible_row_range(self.pages.len(), r.pages_scroll, r.pages_view_h) {
+            let page = &self.pages[index];
+            y = r.pages_rows_top - r.pages_scroll + index as f32 * PAGE_ROW_HEIGHT;
             let row = Rect {
                 origin: Point2D::new(rect.origin.x + 6.0, y + 2.0),
                 size: Point2D::new(rect.size.x - 12.0, PAGE_ROW_HEIGHT - 4.0),
             };
-            if row.origin.y + row.size.y < r.pages_rows_top
-                || row.origin.y > r.pages_rows_top + r.pages_view_h
-            {
-                y += PAGE_ROW_HEIGHT;
-                continue;
-            }
             if page.active {
                 cx.backend
                     .fill_round_rect(row, 6.0, self.theme.row_selected);
@@ -585,7 +559,6 @@ impl Widget for LayerPanel {
                     1.4,
                 );
             }
-            y += PAGE_ROW_HEIGHT;
         }
         cx.backend.restore();
 
@@ -615,18 +588,13 @@ impl Widget for LayerPanel {
             origin: Point2D::new(rect.origin.x, r.layers_rows_top),
             size: Point2D::new(rect.size.x, r.layers_view_h),
         });
-        y = r.layers_rows_top - r.layers_scroll;
-        for item in &self.items {
+        for index in visible_row_range(self.items.len(), r.layers_scroll, r.layers_view_h) {
+            let item = &self.items[index];
+            y = r.layers_rows_top - r.layers_scroll + index as f32 * LAYER_ROW_HEIGHT;
             let row = Rect {
                 origin: Point2D::new(rect.origin.x + 6.0, y + 2.0),
                 size: Point2D::new(rect.size.x - 12.0, LAYER_ROW_HEIGHT - 4.0),
             };
-            if row.origin.y + row.size.y < r.layers_rows_top
-                || row.origin.y > r.layers_rows_top + r.layers_view_h
-            {
-                y += LAYER_ROW_HEIGHT;
-                continue;
-            }
             if item.selected {
                 // TS uses bg-blue-500/15 + primary text + primary
                 // icon for the selected layer row.
@@ -775,7 +743,6 @@ impl Widget for LayerPanel {
                     trailing_stroke,
                 );
             }
-            y += LAYER_ROW_HEIGHT;
         }
 
         // Drop-indicator — paints AFTER row chrome so it sits on top.

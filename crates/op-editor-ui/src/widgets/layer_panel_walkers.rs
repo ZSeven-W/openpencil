@@ -374,3 +374,53 @@ pub fn layer_regions(input: LayerRegionInput) -> LayerRegions {
         layers_content_w,
     }
 }
+
+/// Row indexes that can intersect a clipped LayerPanel row viewport.
+///
+/// The panel may contain thousands of layers, but only a small row
+/// window is visible while scrolling. This helper lets paint skip
+/// directly to that window instead of walking every row and checking
+/// each rect.
+pub(super) fn visible_row_range(
+    row_count: usize,
+    scroll: f32,
+    viewport_h: f32,
+) -> std::ops::Range<usize> {
+    if row_count == 0 || viewport_h <= 0.0 {
+        return 0..0;
+    }
+    let start = (scroll.max(0.0) / LAYER_ROW_HEIGHT).floor() as usize;
+    let visible = (viewport_h / LAYER_ROW_HEIGHT).ceil().max(0.0) as usize;
+    let end = start
+        .saturating_add(visible)
+        .saturating_add(2)
+        .min(row_count);
+    start.min(row_count)..end
+}
+
+/// Map a y coordinate inside a clipped LayerPanel row viewport to its
+/// row index plus screen-space row top.
+pub(super) fn row_index_at(
+    row_count: usize,
+    rows_top: f32,
+    scroll: f32,
+    viewport_h: f32,
+    point_y: f32,
+) -> Option<(usize, f32)> {
+    if row_count == 0 || viewport_h <= 0.0 {
+        return None;
+    }
+    if point_y < rows_top || point_y > rows_top + viewport_h {
+        return None;
+    }
+    let local_y = point_y - rows_top + scroll.max(0.0);
+    if local_y < 0.0 {
+        return None;
+    }
+    let index = (local_y / LAYER_ROW_HEIGHT).floor() as usize;
+    if index >= row_count {
+        return None;
+    }
+    let row_top = rows_top - scroll.max(0.0) + index as f32 * LAYER_ROW_HEIGHT;
+    Some((index, row_top))
+}
