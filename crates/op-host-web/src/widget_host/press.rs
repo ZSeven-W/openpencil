@@ -350,6 +350,16 @@ impl WidgetHost {
                         }
                     }
                 }
+                TopBarHit::TogglePreview => {
+                    // Web Preview mode is not wired yet: the jian `Runtime`
+                    // is `!Send`/`Rc`-bound and the web host has no runtime
+                    // owner, so the canvas cannot render a live preview.
+                    // Deliberately a NO-OP — do NOT flip `preview_mode`,
+                    // which would leave the Play/Stop icon claiming the
+                    // canvas is previewing when it is still the static
+                    // design surface (a lying toggle). The button lands
+                    // for real when the web runtime owner is built.
+                }
             }
             self.mark_dirty();
             return true;

@@ -25,10 +25,8 @@ use jian_ops_schema::{
     node::base::PenNodeBase,
     node::container::CornerRadius,
     node::{
-        CheckboxNode, EllipseNode, FontWeight, FrameNode, GroupNode, IconFontNode, ImageNode,
-        LineNode, NumberInputNode, PathNode, PenNode, PolygonNode, ProgressNode, RadioGroupNode,
-        RectangleNode, SelectNode, SliderNode, SwitchNode, TabsNode, TextAreaNode, TextInputNode,
-        TextNode,
+        EllipseNode, FontWeight, FrameNode, GroupNode, IconFontNode, ImageNode, LineNode, PathNode,
+        PenNode, PolygonNode, RectangleNode, TextNode,
     },
     sizing::SizingBehavior,
     PenDocument,
@@ -354,7 +352,8 @@ fn root_sizing(root: &PenNode) -> (Option<SizingBehavior>, Option<SizingBehavior
     }
 }
 
-fn node_to_payload(node: &PenNode, rects: &BTreeMap<String, [f32; 4]>) -> NodePayload {
+pub(crate) fn node_to_payload(node: &PenNode, rects: &BTreeMap<String, [f32; 4]>) -> NodePayload {
+    use crate::widget_payload as wp;
     let mut p = match node {
         PenNode::Frame(n) => frame_to_payload(n, rects),
         PenNode::Group(n) => group_to_payload(n, rects),
@@ -364,16 +363,16 @@ fn node_to_payload(node: &PenNode, rects: &BTreeMap<String, [f32; 4]>) -> NodePa
         PenNode::Polygon(n) => polygon_to_payload(n),
         PenNode::Path(n) => path_to_payload(n),
         PenNode::Text(n) => text_to_payload(n),
-        PenNode::TextInput(n) => text_input_to_payload(n),
-        PenNode::TextArea(n) => text_area_to_payload(n),
-        PenNode::Select(n) => select_to_payload(n),
-        PenNode::Switch(n) => switch_to_payload(n),
-        PenNode::Checkbox(n) => checkbox_to_payload(n),
-        PenNode::Slider(n) => slider_to_payload(n),
-        PenNode::RadioGroup(n) => radio_group_to_payload(n),
-        PenNode::NumberInput(n) => number_input_to_payload(n),
-        PenNode::Progress(n) => progress_to_payload(n),
-        PenNode::Tabs(n) => tabs_to_payload(n, rects),
+        PenNode::TextInput(n) => wp::text_input_to_payload(n),
+        PenNode::TextArea(n) => wp::text_area_to_payload(n),
+        PenNode::Select(n) => wp::select_to_payload(n),
+        PenNode::Switch(n) => wp::switch_to_payload(n),
+        PenNode::Checkbox(n) => wp::checkbox_to_payload(n),
+        PenNode::Slider(n) => wp::slider_to_payload(n),
+        PenNode::RadioGroup(n) => wp::radio_group_to_payload(n),
+        PenNode::NumberInput(n) => wp::number_input_to_payload(n),
+        PenNode::Progress(n) => wp::progress_to_payload(n),
+        PenNode::Tabs(n) => wp::tabs_to_payload(n, rects),
         PenNode::Image(n) => image_to_payload(n),
         PenNode::IconFont(n) => icon_font_to_payload(n),
         PenNode::Ref(n) => empty_group(&n.base, "ref"),
@@ -742,122 +741,6 @@ fn text_vertical_align_keyword(value: &jian_ops_schema::node::TextAlignVertical)
         jian_ops_schema::node::TextAlignVertical::Middle => "middle",
         jian_ops_schema::node::TextAlignVertical::Bottom => "bottom",
     }
-}
-
-fn text_input_to_payload(n: &TextInputNode) -> NodePayload {
-    let mut p = base_payload(&n.base, "text");
-    p.text = n.value.clone().or_else(|| n.placeholder.clone());
-    assign_first_fill(&mut p, n.fill.as_deref());
-    p.stroke = stroke_to_payload(n.stroke.as_ref());
-    p
-}
-
-fn text_area_to_payload(n: &TextAreaNode) -> NodePayload {
-    let mut p = base_payload(&n.base, "text");
-    p.text = n.value.clone().or_else(|| n.placeholder.clone());
-    apply_container_style(
-        &mut p,
-        n.fill.as_deref(),
-        n.stroke.as_ref(),
-        n.corner_radius.as_ref(),
-    );
-    p
-}
-
-fn select_to_payload(n: &SelectNode) -> NodePayload {
-    let mut p = base_payload(&n.base, "text");
-    p.text = n.value.clone().or_else(|| n.placeholder.clone());
-    apply_container_style(
-        &mut p,
-        n.fill.as_deref(),
-        n.stroke.as_ref(),
-        n.corner_radius.as_ref(),
-    );
-    p
-}
-
-fn switch_to_payload(n: &SwitchNode) -> NodePayload {
-    let mut p = base_payload(&n.base, "rect");
-    apply_container_style(
-        &mut p,
-        n.fill.as_deref(),
-        n.stroke.as_ref(),
-        n.corner_radius.as_ref(),
-    );
-    p
-}
-
-fn checkbox_to_payload(n: &CheckboxNode) -> NodePayload {
-    let mut p = base_payload(&n.base, "rect");
-    apply_container_style(
-        &mut p,
-        n.fill.as_deref(),
-        n.stroke.as_ref(),
-        n.corner_radius.as_ref(),
-    );
-    p
-}
-
-fn slider_to_payload(n: &SliderNode) -> NodePayload {
-    let mut p = base_payload(&n.base, "rect");
-    apply_container_style(
-        &mut p,
-        n.fill.as_deref(),
-        n.stroke.as_ref(),
-        n.corner_radius.as_ref(),
-    );
-    p
-}
-
-fn radio_group_to_payload(n: &RadioGroupNode) -> NodePayload {
-    let mut p = base_payload(&n.base, "rect");
-    apply_container_style(
-        &mut p,
-        n.fill.as_deref(),
-        n.stroke.as_ref(),
-        n.corner_radius.as_ref(),
-    );
-    p
-}
-
-fn number_input_to_payload(n: &NumberInputNode) -> NodePayload {
-    let mut p = base_payload(&n.base, "rect");
-    apply_container_style(
-        &mut p,
-        n.fill.as_deref(),
-        n.stroke.as_ref(),
-        n.corner_radius.as_ref(),
-    );
-    p
-}
-
-fn progress_to_payload(n: &ProgressNode) -> NodePayload {
-    let mut p = base_payload(&n.base, "rect");
-    apply_container_style(
-        &mut p,
-        n.fill.as_deref(),
-        n.stroke.as_ref(),
-        n.corner_radius.as_ref(),
-    );
-    p
-}
-
-fn tabs_to_payload(n: &TabsNode, rects: &BTreeMap<String, [f32; 4]>) -> NodePayload {
-    let mut p = base_payload(&n.base, "frame");
-    apply_container_style(
-        &mut p,
-        n.fill.as_deref(),
-        n.stroke.as_ref(),
-        n.corner_radius.as_ref(),
-    );
-    p.children = n
-        .children
-        .as_deref()
-        .unwrap_or(&[])
-        .iter()
-        .map(|c| node_to_payload(c, rects))
-        .collect();
-    p
 }
 
 fn image_to_payload(n: &ImageNode) -> NodePayload {

@@ -16,6 +16,10 @@ path = "src/lib.rs"
 # all resolve through the op-editor-ui crate.
 op-editor-ui = { path = "../op-editor-ui" }
 
+# Canvas Preview (Play) mode serializes the document to JSON before
+# building the jian runtime, so the saved doc is never mutated.
+serde_json = { workspace = true }
+
 # `WidgetHostNative`'s single source of truth — the canonical-model
 # `op_editor_core::EditorState`. The host derives a read-only paint
 # `Document` from it each frame (see `widget_host.rs`).

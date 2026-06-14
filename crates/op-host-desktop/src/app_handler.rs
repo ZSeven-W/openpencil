@@ -340,6 +340,10 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
                 }
                 self.viewport_width = size.width as f32 / self.dpi;
                 self.viewport_height = size.height as f32 / self.dpi;
+                // Re-lay-out the preview runtime (if active) against the
+                // new canvas region so the live scene tracks the resize.
+                self.host
+                    .preview_resize(self.viewport_width, self.viewport_height);
                 // Track geometry for window-state persistence. Only a
                 // *windowed* (non-maximized) size is remembered so a
                 // restart restores a sensible un-maximize size.

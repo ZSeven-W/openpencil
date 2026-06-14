@@ -470,6 +470,14 @@ impl WidgetHostNative {
                     self.mark_dirty();
                     return true;
                 }
+                TopBarHit::TogglePreview => {
+                    // Enter / exit canvas Preview (Play) mode. On enter,
+                    // build the runtime against the current canvas region
+                    // size so layout matches the visible viewport.
+                    let (_cx0, _cy0, cw, ch) = self.canvas_region(viewport_width, viewport_height);
+                    self.toggle_preview((cw, ch));
+                    return true;
+                }
                 TopBarHit::OpenFigmaImport => {
                     self.editor_state.editor_ui.figma_import_open = true;
                     self.mark_dirty();
@@ -506,6 +514,16 @@ impl WidgetHostNative {
             // blank press, so every text input blurs.
             let blurred = self.blur_text_inputs_on_blank_press();
             return blurred || rename_committed || text_edit_committed;
+        }
+
+        // 0b'. Preview (Play) mode — the canvas belongs to the live
+        // runtime, not the editor. The TopBar Play/Stop button was
+        // already handled above; any other press routes into the
+        // runtime (taps on switches / buttons, caret placement) and is
+        // swallowed so no editor selection / node-creation fires.
+        if self.preview.is_some() {
+            self.preview_dispatch_press(x, y, viewport_width, viewport_height);
+            return true;
         }
 
         // 0c0a. Image-fill popover — outside-click dismiss.

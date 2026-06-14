@@ -21,6 +21,34 @@ fn set_single_selection_replaces_set_and_anchor() {
     assert_eq!(s.selection.set, vec![NodeId::new("n10")]);
 }
 
+// --- Preview (Play) mode — document invariance -----------------------
+
+#[test]
+fn enter_exit_preview_leaves_document_byte_identical() {
+    // Phase D5: entering and exiting Preview must NOT mutate the saved
+    // document. The runtime is built host-side from the serialized doc;
+    // the editor state only flips the flag. Assert the canonical
+    // serialization is identical across an enter → exit cycle.
+    let mut s = state_with(vec![frame(
+        "root",
+        "Root",
+        0.0,
+        0.0,
+        200.0,
+        100.0,
+        vec![rect("a", "A", 10.0, 10.0, 50.0, 50.0)],
+    )]);
+    let before = serde_json::to_string(&s.doc).expect("serialize before");
+
+    s.editor_ui.enter_preview();
+    assert!(s.editor_ui.preview_mode);
+    s.editor_ui.exit_preview();
+    assert!(!s.editor_ui.preview_mode);
+
+    let after = serde_json::to_string(&s.doc).expect("serialize after");
+    assert_eq!(before, after, "preview enter→exit must not touch doc");
+}
+
 #[test]
 fn set_single_selection_none_clears() {
     let mut s = sample();

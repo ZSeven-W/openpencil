@@ -139,14 +139,33 @@ impl WidgetHostNative {
             size: Point2D::new(canvas_w, canvas_h),
         };
         if canvas_w > 0.0 && canvas_h > 0.0 {
-            // PAINT path — the canvas reads editor state + the
-            // layout-resolved render scene (`refresh_layout_scene`).
-            let mut canvas = CanvasViewport::from_editor(&self.editor_state, &self.layout_scene);
-            canvas.now_ms = self.now_ms;
-            let mut cx = PaintCx {
-                backend: &mut *frame,
-            };
-            canvas.paint(&mut cx, canvas_rect);
+            if let Some(preview) = self.preview.as_ref() {
+                // PREVIEW path — paint the canvas background, then the
+                // live jian runtime scene transformed by the editor
+                // viewport. The editor's selection / handles / grid do
+                // NOT paint in preview (the runtime owns the surface).
+                frame.fill_rect(canvas_rect, self.theme.canvas_surface);
+                preview.paint(
+                    &mut *frame,
+                    canvas_rect,
+                    (
+                        self.editor_state.viewport.pan_x,
+                        self.editor_state.viewport.pan_y,
+                    ),
+                    self.editor_state.viewport.zoom,
+                    self.now_ms,
+                );
+            } else {
+                // PAINT path — the canvas reads editor state + the
+                // layout-resolved render scene (`refresh_layout_scene`).
+                let mut canvas =
+                    CanvasViewport::from_editor(&self.editor_state, &self.layout_scene);
+                canvas.now_ms = self.now_ms;
+                let mut cx = PaintCx {
+                    backend: &mut *frame,
+                };
+                canvas.paint(&mut cx, canvas_rect);
+            }
         }
 
         // 5. PropertyPanel — only when selection.
@@ -248,16 +267,20 @@ impl WidgetHostNative {
             origin: Point2D::new(canvas_left, TOP_BAR_HEIGHT),
             size: Point2D::new(canvas_w, canvas_h),
         };
-        if let Some(toolbar) = AlignToolbar::for_canvas_region(canvas_region, &self.editor_state) {
-            let hover = self.editor_state.editor_ui.align_toolbar_hover;
-            toolbar.paint(&mut *frame, &self.theme, hover);
+        if self.preview.is_none() {
+            if let Some(toolbar) =
+                AlignToolbar::for_canvas_region(canvas_region, &self.editor_state)
+            {
+                let hover = self.editor_state.editor_ui.align_toolbar_hover;
+                toolbar.paint(&mut *frame, &self.theme, hover);
+            }
         }
 
         // 8.5. Marquee selection rect — painted above canvas but
         //      below the floating pickers / status. Visible only
         //      while the user is dragging a rect-select on empty
-        //      canvas (Select tool).
-        if let Some(m) = self.marquee_drag {
+        //      canvas (Select tool). Never in preview mode.
+        if let Some(m) = self.marquee_drag.filter(|_| self.preview.is_none()) {
             let x0 = m.start_screen_x.min(m.current_screen_x);
             let y0 = m.start_screen_y.min(m.current_screen_y);
             let w = (m.current_screen_x - m.start_screen_x).abs();

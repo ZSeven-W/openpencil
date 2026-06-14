@@ -219,8 +219,8 @@ impl TopBar {
         }
 
         // ── Right cluster ──────────────────────────────────────
-        // Right → left: Maximize | Sun | Globe+Chevron. Globe is a
-        // wider compound button (signals the dropdown affordance).
+        // Right → left: Maximize | Play | Sun | Globe+Chevron. Globe is
+        // a wider compound button (signals the dropdown affordance).
         let mut rx = rect.origin.x + rect.size.x - PAD - ICON_BUTTON;
 
         // Fullscreen.
@@ -232,6 +232,24 @@ impl TopBar {
             Icon::Maximize,
             self.is_hovered(TopBarButton::ToggleFullscreen),
             self.is_pressed(TopBarButton::ToggleFullscreen),
+        );
+        rx -= ICON_BUTTON;
+
+        // Preview (Play) toggle — Square glyph while active (click →
+        // stop), Play glyph while idle (click → enter preview).
+        let preview_icon = if self.preview_active {
+            Icon::Square
+        } else {
+            Icon::Play
+        };
+        paint_icon_button(
+            cx,
+            &self.theme,
+            rx,
+            center_y,
+            preview_icon,
+            self.is_hovered(TopBarButton::TogglePreview),
+            self.is_pressed(TopBarButton::TogglePreview),
         );
         rx -= ICON_BUTTON;
 
