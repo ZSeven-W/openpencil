@@ -3,7 +3,7 @@
 //! design surface (track + knob, box + check, bar, chevron, …).
 
 use crate::layout_scene::{NodeKind, SceneNode, SceneWidget, SceneWidgetOption};
-use crate::widgets::canvas_viewport_widget::paint_widget_visual;
+use crate::widgets::canvas_viewport_widget::{option_label, paint_widget_visual};
 use crate::widgets::PaintCx;
 use crate::{Color, ImageDrawMode, Point2D, Rect, RenderBackend, TextLayout};
 
@@ -307,6 +307,31 @@ fn select_empty_paints_placeholder() {
         b.texts.iter().any(|(t, _)| t == "Choose…"),
         "placeholder painted"
     );
+}
+
+#[test]
+fn select_option_label_borrows_matching_option_text() {
+    let widget = SceneWidget {
+        value_str: Some("pro".into()),
+        options: vec![
+            SceneWidgetOption {
+                value: "basic".into(),
+                label: "Basic".into(),
+            },
+            SceneWidgetOption {
+                value: "pro".into(),
+                label: "Pro Plan".into(),
+            },
+        ],
+        ..Default::default()
+    };
+
+    let label = option_label(&widget, "pro").expect("selected label");
+
+    assert!(std::ptr::eq(
+        label.as_ptr(),
+        widget.options[1].label.as_ptr()
+    ));
 }
 
 #[test]
