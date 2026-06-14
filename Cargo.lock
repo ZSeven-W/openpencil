@@ -3124,6 +3124,7 @@ dependencies = [
  "op-ai",
  "op-ai-skills",
  "op-codegen",
+ "op-config-store",
  "op-design-lint",
  "op-editor-core",
  "op-editor-host-core",
