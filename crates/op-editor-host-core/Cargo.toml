@@ -7,10 +7,22 @@ license.workspace = true
 description = "Transport-free editor host state machines shared by OpenPencil hosts"
 
 [dependencies]
-jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema" }
-op-ai = { path = "../op-ai" }
-op-ai-skills = { path = "../op-ai-skills" }
-op-codegen = { path = "../op-codegen", features = ["ai"] }
+jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema", optional = true }
+op-ai = { path = "../op-ai", optional = true }
+op-ai-skills = { path = "../op-ai-skills", optional = true }
+op-codegen = { path = "../op-codegen", features = ["ai"], optional = true }
 op-editor-core = { path = "../op-editor-core" }
-op-orchestrator = { path = "../op-orchestrator" }
-serde_json = { workspace = true }
+op-orchestrator = { path = "../op-orchestrator", optional = true }
+serde_json = { workspace = true, optional = true }
+
+[features]
+default = ["chat", "codegen", "design"]
+chat = ["dep:op-ai", "dep:serde_json"]
+codegen = [
+  "dep:jian-ops-schema",
+  "dep:op-ai",
+  "dep:op-ai-skills",
+  "dep:op-codegen",
+  "dep:serde_json",
+]
+design = ["dep:op-orchestrator"]

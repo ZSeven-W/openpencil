@@ -18,11 +18,11 @@
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-const PORT_FILE_DIR: &str = ".openpencil";
-const PORT_FILE_NAME: &str = ".op-mcp-port";
-
 fn port_file_path() -> Option<PathBuf> {
-    Some(dirs::home_dir()?.join(PORT_FILE_DIR).join(PORT_FILE_NAME))
+    op_config_store::ConfigStore::user()
+        .ok()?
+        .path(op_config_store::well_known::LIVE_MCP_PORT)
+        .ok()
 }
 
 fn now_millis() -> u64 {
