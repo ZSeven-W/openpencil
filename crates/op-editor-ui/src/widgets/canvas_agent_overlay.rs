@@ -9,6 +9,8 @@ use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
 use op_editor_core::agent_indicators::AgentIndicators;
 use std::collections::HashMap;
+#[cfg(test)]
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 /// One full breathe (0 → 1 → 0) per this many ms.
 const GLOW_PERIOD_MS: u64 = 1200;
@@ -18,6 +20,24 @@ const REVEAL_ACCENT: Color = Color {
     b: 0.965,
     a: 1.0,
 };
+
+#[cfg(test)]
+static REVEAL_WALK_VISITS: AtomicUsize = AtomicUsize::new(0);
+
+#[cfg(test)]
+fn reset_reveal_walk_visits() {
+    REVEAL_WALK_VISITS.store(0, Ordering::Relaxed);
+}
+
+#[cfg(test)]
+fn reveal_walk_visits() -> usize {
+    REVEAL_WALK_VISITS.load(Ordering::Relaxed)
+}
+
+#[cfg(test)]
+fn record_reveal_walk_visit() {
+    REVEAL_WALK_VISITS.fetch_add(1, Ordering::Relaxed);
+}
 
 /// Paint a breathing border around every active-page root frame that an
 /// agent currently owns. `roots` are the page's top-level scene nodes;
@@ -49,14 +69,16 @@ pub(crate) fn paint_agent_frame_indicators_with_snapshot(
     now_ms: u64,
     indicators: &AgentIndicators,
 ) {
-    paint_node_reveal_indicators(
-        cx,
-        roots,
-        viewport_origin,
-        zoom,
-        now_ms,
-        &indicators.reveals,
-    );
+    if !indicators.reveals.is_empty() {
+        paint_node_reveal_indicators(
+            cx,
+            roots,
+            viewport_origin,
+            zoom,
+            now_ms,
+            &indicators.reveals,
+        );
+    }
     if indicators.frames.is_empty() {
         return;
     }
@@ -102,6 +124,9 @@ fn paint_node_reveal_indicators(
     now_ms: u64,
     reveals: &HashMap<String, u64>,
 ) {
+    if reveals.is_empty() {
+        return;
+    }
     for root in roots {
         paint_node_reveal_indicator(cx, root, viewport_origin, zoom, now_ms, reveals, false);
     }
@@ -116,6 +141,9 @@ fn paint_node_reveal_indicator(
     reveals: &HashMap<String, u64>,
     ancestor_revealing: bool,
 ) {
+    #[cfg(test)]
+    record_reveal_walk_visit();
+
     let reveal = reveals
         .get(&node.id)
         .and_then(|started_at| reveal_phase(*started_at, now_ms));
@@ -347,6 +375,45 @@ mod tests {
         let mut node = SceneNode::leaf("new-node", NodeKind::Rect);
         node.bounds = Rect::xywh(10.0, 20.0, 120.0, 48.0);
         vec![node]
+    }
+
+    fn reveal_tree_with_many_nodes(count: usize) -> Vec<SceneNode> {
+        let mut root = SceneNode::leaf("root", NodeKind::Frame);
+        root.bounds = Rect::xywh(0.0, 0.0, 100.0, 100.0);
+        root.children = (0..count)
+            .map(|i| {
+                let mut child = SceneNode::leaf(format!("child-{i}"), NodeKind::Rect);
+                child.bounds = Rect::xywh(i as f32, 0.0, 10.0, 10.0);
+                child
+            })
+            .collect();
+        vec![root]
+    }
+
+    #[test]
+    fn empty_reveal_snapshot_skips_reveal_tree_walk() {
+        let roots = reveal_tree_with_many_nodes(128);
+        let indicators = AgentIndicators::default();
+        let mut backend = RevealCaptureBackend::default();
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+
+        reset_reveal_walk_visits();
+        paint_agent_frame_indicators_with_snapshot(
+            &mut cx,
+            &roots,
+            Point2D::ZERO,
+            1.0,
+            1_000,
+            &indicators,
+        );
+
+        assert_eq!(
+            reveal_walk_visits(),
+            0,
+            "empty reveal snapshots should not walk the scene tree"
+        );
     }
 
     #[test]
