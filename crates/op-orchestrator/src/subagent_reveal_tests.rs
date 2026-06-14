@@ -103,8 +103,66 @@ fn reveal_schedule_keeps_nested_stream_order_across_sibling_groups() {
     assert!(
         [label_0 - row_0, row_1 - label_0, label_1 - row_1]
             .into_iter()
-            .all(|gap| gap >= 16 && gap <= 48),
-        "nearby stream items should have small, readable gaps"
+            .all(|gap| gap >= 16 && gap <= op_editor_core::agent_indicators::REVEAL_CHILD_RUNWAY_MS),
+        "nested stream items should keep frame cadence while giving new containers a runway"
+    );
+    op_editor_core::agent_indicators::end_if_epoch(epoch);
+}
+
+#[test]
+fn reveal_schedule_gives_new_container_children_an_entrance_runway() {
+    let _guard = crate::agent_indicator_test_support::lock();
+    let epoch = op_editor_core::agent_indicators::begin();
+    let ids_before = HashSet::from(["root".to_string()]);
+    let mut state = op_editor_core::EditorState::new();
+    state.doc.children = vec![serde_json::from_value(serde_json::json!({
+        "type": "frame",
+        "id": "root",
+        "name": "Root",
+        "width": 390,
+        "height": 844,
+        "children": [{
+            "type": "frame",
+            "id": "status-bar",
+            "name": "Status Bar",
+            "children": [{
+                "type": "text",
+                "id": "time",
+                "content": "9:41"
+            }, {
+                "type": "frame",
+                "id": "levels",
+                "name": "Levels"
+            }, {
+                "type": "frame",
+                "id": "battery",
+                "name": "Battery"
+            }]
+        }]
+    }))
+    .expect("fixture parses")];
+
+    register_new_node_reveals(&ids_before, &state, Some(epoch), 1_000);
+
+    let snapshot = op_editor_core::agent_indicators::snapshot_at(1_000);
+    let status = *snapshot
+        .reveals
+        .get("status-bar")
+        .expect("status bar reveal");
+    let starts = ["time", "levels", "battery"].map(|id| {
+        *snapshot
+            .reveals
+            .get(id)
+            .unwrap_or_else(|| panic!("{id} reveal"))
+    });
+
+    assert!(
+        starts[0] - status >= 80,
+        "children of a new container need their own runway instead of starting inside the parent's first beat"
+    );
+    assert!(
+        starts.windows(2).all(|pair| pair[1] - pair[0] >= 16),
+        "container children should continue one-per-frame after the runway"
     );
     op_editor_core::agent_indicators::end_if_epoch(epoch);
 }

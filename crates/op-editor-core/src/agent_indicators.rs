@@ -19,7 +19,11 @@ use std::sync::{LazyLock, Mutex};
 /// Duration of the short generated-node entrance animation.
 pub const REVEAL_DURATION_MS: u64 = 1_520;
 /// Delay between the first generated nodes in one applied batch.
-pub const REVEAL_STAGGER_MS: u64 = 22;
+pub const REVEAL_STAGGER_MS: u64 = REVEAL_FRAME_MS;
+/// Minimum delay before descendants of a newly revealed container begin
+/// their own entrances. This leaves the parent opening beat readable
+/// without making nested content feel stalled.
+pub const REVEAL_CHILD_RUNWAY_MS: u64 = REVEAL_FRAME_MS * 6;
 /// Extra delay for nested generated nodes. Visual traversal order
 /// already places children after parents; keeping this at zero avoids
 /// depth changes compressing adjacent stream slots into the same frame.
@@ -27,13 +31,13 @@ pub const REVEAL_DEPTH_STAGGER_MS: u64 = 0;
 /// Parent reveals suppress child transforms only during their opening
 /// beat. Once the parent has begun settling, delayed children animate
 /// independently so streamed content does not pop in abruptly.
-pub const REVEAL_CHILD_SUPPRESS_FRACTION: f32 = 0.10;
+pub const REVEAL_CHILD_SUPPRESS_FRACTION: f32 = 0.08;
 const REVEAL_FULL_STAGGER_SIBLINGS: u64 = 18;
 const REVEAL_MID_STAGGER_SIBLINGS: u64 = 72;
-const REVEAL_COMPRESSED_STAGGER_MS: u64 = 18;
+const REVEAL_COMPRESSED_STAGGER_MS: u64 = REVEAL_FRAME_MS;
 const REVEAL_TAIL_STAGGER_MS: u64 = REVEAL_FRAME_MS;
 const REVEAL_MAX_NEW_STARTS_PER_SNAPSHOT: usize = 1;
-const REVEAL_BURST_RECOVERY_STAGGER_MS: u64 = 20;
+const REVEAL_BURST_RECOVERY_STAGGER_MS: u64 = REVEAL_FRAME_MS;
 const CLOCK_REBASE_THRESHOLD_MS: u64 = 60_000;
 const REVEAL_FRAME_MS: u64 = 16;
 
@@ -315,30 +319,37 @@ fn smooth_overdue_reveal_burst(r: &mut AgentIndicators, now_ms: u64) {
     if now_ms <= prev_ms {
         return;
     }
-    let mut newly_due: Vec<(String, u64)> = r
+    let mut ordered: Vec<(String, u64)> = r
         .reveals
         .iter()
-        .filter_map(|(id, started)| {
-            if *started > prev_ms && *started <= now_ms {
-                Some((id.clone(), *started))
-            } else {
-                None
-            }
-        })
+        .map(|(id, started)| (id.clone(), *started))
         .collect();
-    if newly_due.len() <= REVEAL_MAX_NEW_STARTS_PER_SNAPSHOT {
+    ordered.sort_by(|a, b| a.1.cmp(&b.1).then_with(|| a.0.cmp(&b.0)));
+    let newly_due = ordered
+        .iter()
+        .filter(|(_, started)| *started > prev_ms && *started <= now_ms)
+        .count();
+    if newly_due <= REVEAL_MAX_NEW_STARTS_PER_SNAPSHOT {
         return;
     }
-    newly_due.sort_by(|a, b| a.1.cmp(&b.1).then_with(|| a.0.cmp(&b.0)));
+    let mut newly_due_seen = 0;
+    let mut reschedule_tail = false;
     let mut next_slot = now_ms.saturating_add(REVEAL_BURST_RECOVERY_STAGGER_MS);
-    for (id, _) in newly_due
-        .into_iter()
-        .skip(REVEAL_MAX_NEW_STARTS_PER_SNAPSHOT)
-    {
-        if let Some(started_at) = r.reveals.get_mut(&id) {
-            *started_at = next_slot;
+    for (id, original_start) in ordered {
+        if original_start > prev_ms && original_start <= now_ms {
+            newly_due_seen += 1;
+            if newly_due_seen > REVEAL_MAX_NEW_STARTS_PER_SNAPSHOT {
+                reschedule_tail = true;
+            }
         }
-        next_slot = next_slot.saturating_add(REVEAL_BURST_RECOVERY_STAGGER_MS);
+        if !reschedule_tail {
+            continue;
+        }
+        let scheduled_start = original_start.max(next_slot);
+        if let Some(started_at) = r.reveals.get_mut(&id) {
+            *started_at = scheduled_start;
+        }
+        next_slot = scheduled_start.saturating_add(REVEAL_BURST_RECOVERY_STAGGER_MS);
     }
 }
 
@@ -560,6 +571,39 @@ mod tests {
     }
 
     #[test]
+    fn snapshot_recovery_preserves_stream_order_after_frame_gap() {
+        let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let epoch = begin();
+        for i in 0..16 {
+            add_reveal(epoch, &format!("n{i:02}"), 1_000 + reveal_offset_ms(0, i));
+        }
+
+        assert_eq!(snapshot_at(1_000).reveals.get("n00"), Some(&1_000));
+        let snap = snapshot_at(1_220);
+        let starts: Vec<u64> = (0..16)
+            .map(|i| {
+                *snap
+                    .reveals
+                    .get(&format!("n{i:02}"))
+                    .expect("reveal is retained")
+            })
+            .collect();
+
+        assert!(
+            starts.windows(2).all(|pair| pair[0] < pair[1]),
+            "overdue recovery must preserve stream order instead of letting future nodes jump ahead"
+        );
+        assert!(
+            starts
+                .windows(2)
+                .skip(1)
+                .all(|pair| pair[1] - pair[0] >= REVEAL_FRAME_MS),
+            "recovered starts should stay frame-paced instead of clustering inside one frame"
+        );
+        end_if_epoch(epoch);
+    }
+
+    #[test]
     fn reveal_offsets_stream_dense_batches_without_shared_frames() {
         let offsets: Vec<u64> = (0..40).map(|i| reveal_offset_ms(1, i)).collect();
 
@@ -567,12 +611,12 @@ mod tests {
         assert!(
             offsets
                 .windows(2)
-                .take(18)
-                .all(|pair| pair[1] - pair[0] >= 18),
-            "the first visible nodes need readable gaps without slowing the stream"
+                .take(24)
+                .all(|pair| pair[1] - pair[0] == REVEAL_FRAME_MS),
+            "the first visible nodes should stream at frame cadence, not slower"
         );
         assert!(
-            offsets[20] - offsets[0] <= 480,
+            offsets[20] - offsets[0] <= 340,
             "the first screenful should still avoid a slow reveal queue"
         );
         assert!(
