@@ -390,7 +390,7 @@ mod tests {
             &roots,
             Point2D::new(100.0, 50.0),
             2.0,
-            2_400,
+            2_600,
         );
         assert!(expired_backend.round_fills.is_empty());
         assert!(expired_backend.round_strokes.is_empty());
@@ -437,7 +437,7 @@ mod tests {
     }
 
     #[test]
-    fn parent_reveal_suppresses_nested_child_sweep() {
+    fn opening_parent_reveal_suppresses_nested_child_sweep() {
         let _guard = crate::agent_indicator_test_support::lock();
         let epoch = op_editor_core::agent_indicators::begin();
         op_editor_core::agent_indicators::add_reveal(epoch, "parent", 1_000);
@@ -453,12 +453,12 @@ mod tests {
         let mut cx = PaintCx {
             backend: &mut backend,
         };
-        paint_agent_frame_indicators(&mut cx, &roots, Point2D::new(100.0, 50.0), 2.0, 1_120);
+        paint_agent_frame_indicators(&mut cx, &roots, Point2D::new(100.0, 50.0), 2.0, 1_040);
 
         assert_eq!(
             backend.round_strokes.len(),
             1,
-            "nested child reveal should not add another sweep while parent is active"
+            "nested child reveal should not add another sweep during the parent's opening beat"
         );
         op_editor_core::agent_indicators::end_if_epoch(epoch);
     }

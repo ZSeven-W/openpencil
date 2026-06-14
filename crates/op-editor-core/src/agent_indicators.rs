@@ -17,19 +17,20 @@ use std::collections::{HashMap, HashSet};
 use std::sync::{LazyLock, Mutex};
 
 /// Duration of the short generated-node entrance animation.
-pub const REVEAL_DURATION_MS: u64 = 1_360;
+pub const REVEAL_DURATION_MS: u64 = 1_520;
 /// Delay between the first generated nodes in one applied batch.
-pub const REVEAL_STAGGER_MS: u64 = 24;
-/// Extra delay for nested generated nodes. Keeps child content trailing
-/// its parent without making the stream feel sluggish.
-pub const REVEAL_DEPTH_STAGGER_MS: u64 = 6;
+pub const REVEAL_STAGGER_MS: u64 = 18;
+/// Extra delay for nested generated nodes. Visual traversal order
+/// already places children after parents; keeping this at zero avoids
+/// depth changes compressing adjacent stream slots into the same frame.
+pub const REVEAL_DEPTH_STAGGER_MS: u64 = 0;
 /// Parent reveals suppress child transforms only during their opening
 /// beat. Once the parent has begun settling, delayed children animate
 /// independently so streamed content does not pop in abruptly.
-pub const REVEAL_CHILD_SUPPRESS_FRACTION: f32 = 0.11;
-const REVEAL_FULL_STAGGER_SIBLINGS: u64 = 24;
-const REVEAL_MID_STAGGER_SIBLINGS: u64 = 48;
-const REVEAL_COMPRESSED_STAGGER_MS: u64 = 20;
+pub const REVEAL_CHILD_SUPPRESS_FRACTION: f32 = 0.04;
+const REVEAL_FULL_STAGGER_SIBLINGS: u64 = 36;
+const REVEAL_MID_STAGGER_SIBLINGS: u64 = 72;
+const REVEAL_COMPRESSED_STAGGER_MS: u64 = REVEAL_FRAME_MS;
 const REVEAL_TAIL_STAGGER_MS: u64 = REVEAL_FRAME_MS;
 const CLOCK_REBASE_THRESHOLD_MS: u64 = 60_000;
 const REVEAL_FRAME_MS: u64 = 16;
@@ -384,7 +385,11 @@ mod tests {
         assert!(is_active(), "reveal should keep the paint loop active");
         assert_eq!(snapshot_at(1_250).reveals.get("n7"), Some(&1_000));
         assert!(
-            snapshot_at(2_400).reveals.is_empty(),
+            snapshot_at(2_400).reveals.get("n7").is_some(),
+            "reveal should stay active long enough to read as a smooth entrance"
+        );
+        assert!(
+            snapshot_at(2_600).reveals.is_empty(),
             "expired reveal should be pruned"
         );
         assert!(!is_active(), "expired reveal should not keep animating");
@@ -416,8 +421,8 @@ mod tests {
 
         let snap = snapshot_at(1_040);
 
-        assert_eq!(snap.reveals.get("external-a"), Some(&1_104));
-        assert_eq!(snap.reveals.get("external-b"), Some(&1_128));
+        assert_eq!(snap.reveals.get("external-a"), Some(&1_098));
+        assert_eq!(snap.reveals.get("external-b"), Some(&1_116));
         clear();
     }
 
@@ -439,6 +444,10 @@ mod tests {
         assert!(
             offsets[1] - offsets[0] <= 32,
             "the first visible nodes should start quickly"
+        );
+        assert!(
+            offsets[20] - offsets[0] <= 380,
+            "the first screenful should not wait behind a slow reveal queue"
         );
         assert!(
             offsets
