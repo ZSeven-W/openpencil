@@ -14,6 +14,7 @@
 
 use crate::layout_scene::NodeKind;
 use crate::layout_scene::{regular_polygon_points, LayoutScene, SceneNode};
+use crate::widgets::canvas_viewport_paint::{flatten_path_points, PathPoints};
 use crate::{Point2D, Rect};
 
 impl LayoutScene {
@@ -182,19 +183,20 @@ fn point_in_node(node: &SceneNode, local: Point2D, bounds: Rect, zoom: f32) -> b
     // empty bbox space, and a zero-height stroked path (which fails
     // the positive-area gate below) stays clickable.
     if matches!(node.kind, NodeKind::Path) {
-        let poly = crate::widgets::canvas_viewport_paint::flatten_path(node);
-        if poly.len() < 2 {
+        let poly = path_hit_points(node);
+        let points = poly.as_slice();
+        if points.len() < 2 {
             return false;
         }
         let stroke_half = node.stroke.map(|s| s.width / 2.0).unwrap_or(1.0);
         let slack = 4.0 / zoom.max(0.0001);
-        for seg in poly.windows(2) {
+        for seg in points.windows(2) {
             if distance_point_to_segment(local, seg[0], seg[1]) <= stroke_half + slack {
                 return true;
             }
         }
         // A filled closed path is also hittable across its interior.
-        return node.path_closed && node.fill.is_some() && point_in_polygon(local, &poly);
+        return node.path_closed && node.fill.is_some() && point_in_polygon(local, points);
     }
     // Non-line kinds need real positive area on both axes.
     if bounds.size.x <= 0.0 || bounds.size.y <= 0.0 {
@@ -252,6 +254,10 @@ fn point_in_node(node: &SceneNode, local: Point2D, bounds: Rect, zoom: f32) -> b
         // Frame, Group, Rect, Text, Other, Path — bounds-only hit.
         _ => true,
     }
+}
+
+fn path_hit_points(node: &SceneNode) -> PathPoints<'_> {
+    flatten_path_points(node)
 }
 
 /// Even-odd ray-cast point-in-polygon test over a closed vertex ring.
@@ -422,6 +428,23 @@ mod tests {
                 .as_deref(),
             Some("r")
         );
+    }
+
+    #[test]
+    fn path_hit_points_borrows_handle_free_open_path() {
+        let mut path = leaf("p", NodeKind::Path, Rect::xywh(0.0, 0.0, 100.0, 0.0));
+        path.points = vec![Point2D::new(0.0, 0.0), Point2D::new(100.0, 0.0)];
+
+        let points = path_hit_points(&path);
+
+        match points {
+            crate::widgets::canvas_viewport_paint::PathPoints::Borrowed(slice) => {
+                assert!(std::ptr::eq(slice.as_ptr(), path.points.as_ptr()));
+            }
+            crate::widgets::canvas_viewport_paint::PathPoints::Owned(_) => {
+                panic!("handle-free open path hit-test should borrow points")
+            }
+        }
     }
 
     #[test]
