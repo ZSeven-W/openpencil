@@ -3054,6 +3054,7 @@ dependencies = [
  "op-ai",
  "op-codegen",
  "op-editor-core",
+ "op-orchestrator",
  "serde_json",
 ]
 

@@ -43,185 +43,49 @@
 //! Aborting a turn drops `DesignSession`; the worker's next `apply`
 //! sees the channel closed and returns `false`, ending the turn.
 
-use std::sync::mpsc::{self, Receiver, Sender, SyncSender, TryRecvError};
+use std::sync::mpsc::{self, Sender};
 use std::thread;
 
-use op_editor_core::Viewport;
-use op_editor_core::{DocRect, EditorCommand, EditorState};
+use op_editor_core::{DocRect, EditorState, Viewport};
+pub use op_editor_host_core::design::{
+    DesignCmdAck, DesignCmdOp, DesignCmdReq, DesignDelta, DesignSession, RemoteDocSink,
+};
 use op_editor_ui::widgets::TOP_BAR_HEIGHT;
 use op_host_native::WidgetHostNative;
 use op_orchestrator::{
-    AbortFlag, DesignRequest, DocSink, LlmClient, Orchestrator, OrchestratorError, Progress,
-    RunSummary, SkippedScreenshotProvider, SkippedVisionLlmClient, ValidationProviders,
+    AbortFlag, DesignRequest, LlmClient, Orchestrator, Progress, SkippedScreenshotProvider,
+    SkippedVisionLlmClient, ValidationProviders,
 };
 
 use crate::chat_runtime::shared_runtime;
 use crate::pre_validator::LintPreValidator;
 
-/// One in-flight design turn.
-pub struct DesignSession {
-    delta_rx: Receiver<DesignDelta>,
-    cmd_rx: Receiver<DesignCmdReq>,
-    finished: bool,
-    /// Agent-team canvas-indicator epoch for this turn (see
-    /// [`op_editor_core::agent_indicators`]). Minted on `start`; the
-    /// [`Drop`] impl clears it so stop / new-chat wipes the breathing
-    /// borders immediately instead of waiting for the worker to unwind.
-    indicator_epoch: u64,
-}
+/// Spawn a worker that runs `Orchestrator::run` against a `RemoteDocSink`.
+pub fn start<L: LlmClient + Send + 'static>(
+    llm: L,
+    request: DesignRequest,
+    initial_state: EditorState,
+) -> DesignSession {
+    let (delta_tx, delta_rx) = mpsc::channel::<DesignDelta>();
+    let (cmd_tx, cmd_rx) = mpsc::channel::<DesignCmdReq>();
 
-impl Drop for DesignSession {
-    fn drop(&mut self) {
-        // Stop / new-chat / completion all drop the session. Clear this
-        // turn's agent-team indicators right away and retire the epoch —
-        // epoch-scoped, so if a newer turn already began it keeps its own,
-        // and a worker still mid-registration for this turn can't re-add
-        // after we've cleared.
-        op_editor_core::agent_indicators::end_if_epoch(self.indicator_epoch);
-    }
-}
+    let indicator_epoch = op_editor_core::agent_indicators::begin();
 
-/// Progress / completion events emitted by the worker.
-pub enum DesignDelta {
-    /// One `op_orchestrator::Progress` event.
-    Progress(Progress),
-    /// Terminal event — the orchestrator returned. The session is
-    /// finished once this arrives.
-    Done(Result<RunSummary, OrchestratorError>),
-}
+    thread::Builder::new()
+        .name("op-design-turn".into())
+        .spawn(move || {
+            run_design_worker(
+                llm,
+                request,
+                initial_state,
+                delta_tx,
+                cmd_tx,
+                indicator_epoch,
+            )
+        })
+        .expect("spawn op-design-turn thread");
 
-/// Request from worker to UI to apply one editor mutation (or undo-batch
-/// boundary). The worker blocks until the matching ack arrives.
-pub struct DesignCmdReq {
-    pub op: DesignCmdOp,
-    pub ack: SyncSender<DesignCmdAck>,
-}
-
-/// What the worker is asking the UI to do.
-pub enum DesignCmdOp {
-    Apply(EditorCommand),
-    BeginUndoBatch,
-    EndUndoBatch,
-}
-
-/// UI's reply to one [`DesignCmdReq`]. Carries an `EditorState` clone
-/// so the worker's mirror reflects ID-remapped state.
-pub struct DesignCmdAck {
-    pub applied: bool,
-    pub new_state: EditorState,
-}
-
-/// Result of one non-blocking progress drain.
-pub struct DesignPoll {
-    pub progress: Vec<Progress>,
-    /// Terminal summary when the turn ended; `None` while running.
-    pub summary: Option<Result<RunSummary, OrchestratorError>>,
-    pub finished: bool,
-}
-
-impl DesignSession {
-    /// Spawn a worker that runs `Orchestrator::run` against a
-    /// `RemoteDocSink`. Returns immediately; the LLM turn streams off
-    /// the UI thread.
-    ///
-    /// `llm` is any `LlmClient` implementation — production code passes
-    /// a `ChatProviderLlmClient` wrapping the user's currently-selected
-    /// chat agent (Claude Code / Copilot / Gemini), so the orchestrator
-    /// rides whatever CLI auth the chat panel already has.
-    pub fn start<L: LlmClient + Send + 'static>(
-        llm: L,
-        request: DesignRequest,
-        initial_state: EditorState,
-    ) -> Self {
-        let (delta_tx, delta_rx) = mpsc::channel::<DesignDelta>();
-        let (cmd_tx, cmd_rx) = mpsc::channel::<DesignCmdReq>();
-
-        // Mint this turn's indicator epoch on the UI thread BEFORE spawning
-        // the worker. `begin` clears any prior turn's borders immediately
-        // and hands us the epoch so Drop can target exactly this run — the
-        // worker registers its frames under the same epoch via
-        // `with_indicator_epoch` below.
-        let indicator_epoch = op_editor_core::agent_indicators::begin();
-
-        thread::Builder::new()
-            .name("op-design-turn".into())
-            .spawn(move || {
-                run_design_worker(
-                    llm,
-                    request,
-                    initial_state,
-                    delta_tx,
-                    cmd_tx,
-                    indicator_epoch,
-                )
-            })
-            .expect("spawn op-design-turn thread");
-
-        Self {
-            delta_rx,
-            cmd_rx,
-            finished: false,
-            indicator_epoch,
-        }
-    }
-
-    /// Drain every progress delta ready right now. Non-blocking.
-    pub fn poll_progress(&mut self) -> DesignPoll {
-        let mut progress = Vec::new();
-        let mut summary = None;
-        loop {
-            match self.delta_rx.try_recv() {
-                Ok(DesignDelta::Progress(p)) => progress.push(p),
-                Ok(DesignDelta::Done(r)) => {
-                    self.finished = true;
-                    summary = Some(r);
-                    break;
-                }
-                Err(TryRecvError::Empty) => break,
-                Err(TryRecvError::Disconnected) => {
-                    self.finished = true;
-                    break;
-                }
-            }
-        }
-        DesignPoll {
-            progress,
-            summary,
-            finished: self.finished,
-        }
-    }
-
-    /// Drain every pending apply request. Returns the requests; the
-    /// caller must ack each one or the worker will hang on `recv`.
-    pub fn drain_cmd_requests(&mut self) -> Vec<DesignCmdReq> {
-        let mut out = Vec::new();
-        loop {
-            match self.cmd_rx.try_recv() {
-                Ok(req) => out.push(req),
-                Err(TryRecvError::Empty) => break,
-                Err(TryRecvError::Disconnected) => break,
-            }
-        }
-        out
-    }
-
-    /// Wrap externally-supplied channels. Production consumer: the
-    /// CLI intent router (`chat_session::launch_if_pending`) parks a
-    /// session here BEFORE classification resolves; its worker calls
-    /// [`run_design_worker`] on the sender halves only when the turn
-    /// classifies as a new design, and drops them otherwise (the pump
-    /// then retires the session). Tests drive the UI-side pumps
-    /// through the same ctor with a fake worker.
-    pub fn from_channels(delta_rx: Receiver<DesignDelta>, cmd_rx: Receiver<DesignCmdReq>) -> Self {
-        Self {
-            delta_rx,
-            cmd_rx,
-            finished: false,
-            // No real turn behind these channels — epoch 0 never matches a
-            // live run, so the Drop clear is a harmless no-op.
-            indicator_epoch: 0,
-        }
-    }
+    DesignSession::from_channels_with_epoch(delta_rx, cmd_rx, indicator_epoch)
 }
 
 /// One full design turn against a `RemoteDocSink` — the body of
@@ -263,56 +127,6 @@ pub(crate) fn run_design_worker<L: LlmClient + Send>(
             ),
     );
     let _ = delta_tx.send(DesignDelta::Done(summary));
-}
-
-/// Worker-side `DocSink` impl — forwards every mutation to the UI
-/// thread over an mpsc channel and blocks on the ack. State reads
-/// come from a locally cached mirror updated by each ack.
-pub struct RemoteDocSink {
-    cmd_tx: Sender<DesignCmdReq>,
-    mirror: EditorState,
-}
-
-impl RemoteDocSink {
-    pub fn new(cmd_tx: Sender<DesignCmdReq>, initial_state: EditorState) -> Self {
-        Self {
-            cmd_tx,
-            mirror: initial_state,
-        }
-    }
-
-    fn send_and_wait(&mut self, op: DesignCmdOp) -> bool {
-        let (ack_tx, ack_rx) = mpsc::sync_channel::<DesignCmdAck>(1);
-        let req = DesignCmdReq { op, ack: ack_tx };
-        if self.cmd_tx.send(req).is_err() {
-            return false; // UI dropped the receiver — turn aborted
-        }
-        match ack_rx.recv() {
-            Ok(ack) => {
-                self.mirror = ack.new_state;
-                ack.applied
-            }
-            Err(_) => false,
-        }
-    }
-}
-
-impl DocSink for RemoteDocSink {
-    fn state(&self) -> &EditorState {
-        &self.mirror
-    }
-
-    fn apply(&mut self, cmd: EditorCommand) -> bool {
-        self.send_and_wait(DesignCmdOp::Apply(cmd))
-    }
-
-    fn begin_undo_batch(&mut self) {
-        let _ = self.send_and_wait(DesignCmdOp::BeginUndoBatch);
-    }
-
-    fn end_undo_batch(&mut self) {
-        let _ = self.send_and_wait(DesignCmdOp::EndUndoBatch);
-    }
 }
 
 /// Drain every pending apply request from the in-flight design

@@ -11,4 +11,5 @@ jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema" }
 op-ai = { path = "../op-ai" }
 op-codegen = { path = "../op-codegen", features = ["ai"] }
 op-editor-core = { path = "../op-editor-core" }
+op-orchestrator = { path = "../op-orchestrator" }
 serde_json = { workspace = true }

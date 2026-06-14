@@ -1,6 +1,6 @@
 use super::*;
 use op_editor_core::EditorCommand;
-use op_orchestrator::{RunSummary, SubtaskOutcome};
+use op_orchestrator::{DocSink, RunSummary, SubtaskOutcome};
 use std::time::{Duration, Instant};
 
 /// `RemoteDocSink::apply` blocks until UI acks. When the UI side
