@@ -39,6 +39,15 @@ impl WidgetHostNative {
     /// Typed-char router: settings → rename → text-edit → variable
     /// row → property → chat.
     pub fn apply_text(&mut self, c: char) -> bool {
+        // Preview (Play) mode owns the keyboard: printable chars go to
+        // the live runtime's focused widget, never editor editing.
+        if self.preview.is_some() {
+            if c.is_control() {
+                return false;
+            }
+            let mut s = [0u8; 4];
+            return self.preview_dispatch_text(c.encode_utf8(&mut s));
+        }
         // Settings input owns the keyboard while focused.
         if self.editor_state.editor_ui.agent_settings.focus.is_some() {
             return self.apply_settings_text(c);
@@ -442,6 +451,11 @@ impl WidgetHostNative {
     }
 
     pub fn apply_backspace(&mut self) -> bool {
+        // Preview mode: Backspace edits the focused runtime widget, not
+        // the editor selection.
+        if self.preview.is_some() {
+            return self.preview_dispatch_key("Backspace", false);
+        }
         if self.editor_state.editor_ui.agent_settings.focus.is_some() {
             return self.apply_settings_backspace();
         }
@@ -719,6 +733,11 @@ impl WidgetHostNative {
     /// Delete — pops a char from rename / text-edit when active;
     /// otherwise deletes the selected node.
     pub fn apply_delete(&mut self) -> bool {
+        // Preview mode: Delete edits the focused runtime widget, never
+        // the editor selection.
+        if self.preview.is_some() {
+            return self.preview_dispatch_key("Delete", false);
+        }
         if self
             .editor_state
             .editor_ui
@@ -1132,6 +1151,11 @@ impl WidgetHostNative {
     }
 
     pub fn apply_send(&mut self) -> bool {
+        // Preview mode: Enter goes to the focused runtime widget
+        // (textarea newline / activation), never chat send.
+        if self.preview.is_some() {
+            return self.preview_dispatch_key("Enter", false);
+        }
         if self.editor_state.editor_ui.agent_settings.focus.is_some() {
             self.commit_settings_focus_if_any();
             return true;
@@ -1307,6 +1331,12 @@ impl WidgetHostNative {
     /// Escape — priority cascade: rename → property → pickers →
     /// chat → selection. One layer per press.
     pub fn apply_escape(&mut self) -> bool {
+        // Escape EXITS preview mode (top priority) — drops the runtime
+        // and returns to the design surface.
+        if self.preview.is_some() {
+            self.exit_preview();
+            return true;
+        }
         if self
             .editor_state
             .editor_ui

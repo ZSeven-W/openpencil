@@ -168,8 +168,65 @@ pub struct NodePayload {
     /// Per-image adjustment values from image fills / image nodes.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub image_adjustments: Option<ImageAdjustmentPayload>,
+    /// Composite-widget descriptor for the interactive node family
+    /// (switch / checkbox / slider / progress / select / radio_group /
+    /// text_input / text_area / number_input / tabs). The geometry +
+    /// container style still land on the base `NodePayload` fields (the
+    /// leaf widgets degrade to a `rect` / `text` `kind`), but this
+    /// carries the extra props the design-surface painter needs to draw
+    /// the recognizable static visual (track + knob, box + check, …).
+    /// `None` for ordinary shapes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub widget: Option<WidgetPayload>,
     #[serde(default)]
     pub children: Vec<NodePayload>,
+}
+
+/// Static props for a composite widget node, harvested from the
+/// canonical schema by `adapter.rs`. Sentinels: `None` numeric fields
+/// fall back to the runtime defaults (`min=0`, `max=100`, `step=1`)
+/// the painter mirrors from jian-core's `emit_widget_visual`.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct WidgetPayload {
+    /// Widget family tag (`switch` / `checkbox` / `slider` / `progress`
+    /// / `select` / `radio_group` / `text_input` / `text_area` /
+    /// `number_input` / `tabs`).
+    pub kind: String,
+    /// On/off state for switch / checkbox.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub checked: Option<bool>,
+    /// Numeric value for slider / progress / number_input.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub value_num: Option<f32>,
+    /// String value for select / radio_group / tabs / text inputs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub value_str: Option<String>,
+    /// Placeholder text for inputs / select.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub placeholder: Option<String>,
+    /// Adjacent label (checkbox).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+    /// Range minimum (slider / number_input). `None` = 0.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub min: Option<f32>,
+    /// Range maximum (slider / progress / number_input). `None` = 100.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max: Option<f32>,
+    /// Range step. `None` = 1. Carried for completeness; the static
+    /// visual doesn't quantize.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub step: Option<f32>,
+    /// `(value, label)` option rows for select / radio_group / tabs.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub options: Vec<WidgetOption>,
+}
+
+/// One `value` + `label` option row for select / radio_group / tabs.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct WidgetOption {
+    pub value: String,
+    pub label: String,
 }
 
 fn default_polygon_sides() -> u32 {

@@ -697,3 +697,90 @@ fn plain_text_has_no_runs() {
     assert!(t.text_runs.is_empty());
     assert!(!t.italic && !t.underline && !t.strikethrough);
 }
+
+#[test]
+fn widget_nodes_carry_props_through_to_payload() {
+    // One of each widget family, side by side under a root frame, so
+    // the design-surface painter has the props it needs to draw the
+    // composite static visual.
+    let src = r##"{
+      "version":"1.0.0",
+      "pages":[{"id":"p","name":"P","children":[
+        {"type":"frame","id":"root","x":0,"y":0,"width":600,"height":400,"children":[
+          {"type":"switch","id":"sw","checked":true},
+          {"type":"checkbox","id":"cb","checked":false,"label":"Agree"},
+          {"type":"slider","id":"sl","min":0,"max":50,"step":5,"value":25},
+          {"type":"progress","id":"pg","value":40,"max":80},
+          {"type":"select","id":"se","value":"a",
+           "options":[{"value":"a","label":"Apple"},{"value":"b","label":"Banana"}]},
+          {"type":"radio_group","id":"rg","value":"b",
+           "options":[{"value":"a","label":"A"},{"value":"b","label":"B"}]},
+          {"type":"text_input","id":"ti","value":"hi","placeholder":"Type"},
+          {"type":"number_input","id":"ni","value":7,"min":0,"max":10,"step":1},
+          {"type":"tabs","id":"tb","value":"one",
+           "tabs":[{"value":"one","label":"One"},{"value":"two","label":"Two"}]}
+        ]}
+      ]}],
+      "children":[]
+    }"##;
+    let r = load(src);
+    let kids = &r.payload.pages[0].children[0].children;
+    let by = |kind: &str| {
+        kids.iter()
+            .find(|c| c.widget.as_ref().map(|w| w.kind.as_str()) == Some(kind))
+            .unwrap_or_else(|| panic!("missing widget kind {kind}"))
+            .widget
+            .as_ref()
+            .unwrap()
+    };
+
+    assert_eq!(by("switch").checked, Some(true));
+
+    let cb = by("checkbox");
+    assert_eq!(cb.checked, Some(false));
+    assert_eq!(cb.label.as_deref(), Some("Agree"));
+
+    let sl = by("slider");
+    assert_eq!(sl.value_num, Some(25.0));
+    assert_eq!(
+        (sl.min, sl.max, sl.step),
+        (Some(0.0), Some(50.0), Some(5.0))
+    );
+
+    let pg = by("progress");
+    assert_eq!((pg.value_num, pg.max), (Some(40.0), Some(80.0)));
+
+    let se = by("select");
+    assert_eq!(se.value_str.as_deref(), Some("a"));
+    assert_eq!(se.options.len(), 2);
+    assert_eq!(se.options[0].label, "Apple");
+
+    let rg = by("radio_group");
+    assert_eq!(rg.value_str.as_deref(), Some("b"));
+    assert_eq!(rg.options.len(), 2);
+
+    let ti = by("text_input");
+    assert_eq!(ti.value_str.as_deref(), Some("hi"));
+    assert_eq!(ti.placeholder.as_deref(), Some("Type"));
+
+    let ni = by("number_input");
+    assert_eq!(ni.value_num, Some(7.0));
+
+    let tb = by("tabs");
+    assert_eq!(tb.value_str.as_deref(), Some("one"));
+    assert_eq!(tb.options.len(), 2);
+    assert_eq!(tb.options[1].label, "Two");
+}
+
+#[test]
+fn ordinary_shapes_have_no_widget_descriptor() {
+    let src = r##"{
+      "version":"1.0.0",
+      "pages":[{"id":"p","name":"P","children":[
+        {"type":"rectangle","id":"r","x":0,"y":0,"width":10,"height":10}
+      ]}],
+      "children":[]
+    }"##;
+    let r = load(src);
+    assert!(r.payload.pages[0].children[0].widget.is_none());
+}

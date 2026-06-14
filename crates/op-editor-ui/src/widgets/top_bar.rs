@@ -95,6 +95,8 @@ pub enum TopBarHit {
     /// Maximize icon (rightmost of the right cluster) — toggle window
     /// fullscreen.
     ToggleFullscreen,
+    /// Play / Stop icon — enter / exit canvas Preview (Play) mode.
+    TogglePreview,
 }
 
 pub struct TopBar {
@@ -128,6 +130,9 @@ pub struct TopBar {
     /// beside the file name. `None` = no branch (the button still
     /// paints, icon-only, as a toggle for the git panel).
     pub git_branch: Option<String>,
+    /// Whether the canvas is in Preview (Play) mode — drives the
+    /// Play/Stop toggle glyph (Square when active, Play when idle).
+    pub preview_active: bool,
     /// Which chrome button the cursor is over — drives the per-button
     /// `theme.button_hover` wash. `None` = no hover.
     pub hover: Option<op_editor_core::TopBarButton>,
@@ -151,6 +156,7 @@ impl TopBar {
             fullscreen: false,
             theme_mode: op_editor_core::ThemeMode::Dark,
             git_branch: None,
+            preview_active: false,
             hover: None,
             pressed: None,
         }
@@ -190,6 +196,7 @@ impl TopBar {
             fullscreen: ui.window_fullscreen,
             theme_mode: ui.theme_mode,
             git_branch: ui.git_panel.branch.clone(),
+            preview_active: ui.preview_mode,
             hover: ui.topbar_button_hover,
             pressed: match ui.pressed_button {
                 Some(op_editor_core::ButtonPressTarget::TopBar(button)) => Some(button),
@@ -297,13 +304,24 @@ impl TopBar {
 
     pub fn globe_rect(top_bar_rect: Rect) -> Rect {
         let right = top_bar_rect.origin.x + top_bar_rect.size.x;
-        // Right-cluster layout (right → left): Maximize | Sun | Globe.
-        // Maximize + Sun are normal ICON_BUTTON wide; Globe is the
-        // wider GLOBE_BUTTON_WIDTH so the chevron fits inside it.
-        let globe_x = right - PAD - ICON_BUTTON * 2.0 - GLOBE_BUTTON_WIDTH;
+        // Right-cluster layout (right → left): Maximize | Play | Sun |
+        // Globe. Maximize + Play + Sun are normal ICON_BUTTON wide;
+        // Globe is the wider GLOBE_BUTTON_WIDTH so the chevron fits.
+        let globe_x = right - PAD - ICON_BUTTON * 3.0 - GLOBE_BUTTON_WIDTH;
         Rect {
             origin: Point2D::new(globe_x, top_bar_rect.origin.y + 8.0),
             size: Point2D::new(GLOBE_BUTTON_WIDTH, ICON_BUTTON),
+        }
+    }
+
+    /// Play / Stop toggle button — second from the right (just left of
+    /// Maximize). Shared by paint + hit-test so they can't drift.
+    pub(super) fn preview_button_rect(top_bar_rect: Rect) -> Rect {
+        let right = top_bar_rect.origin.x + top_bar_rect.size.x;
+        let icon_y = top_bar_rect.origin.y + 8.0;
+        Rect {
+            origin: Point2D::new(right - PAD - ICON_BUTTON * 2.0, icon_y),
+            size: Point2D::new(ICON_BUTTON, ICON_BUTTON),
         }
     }
 
@@ -432,11 +450,11 @@ impl TopBar {
         if GIT_BUTTON_AVAILABLE && (self.git_button_rect(rect)).contains(point) {
             return Some(TopBarHit::ToggleGitPanel);
         }
-        // Right cluster: Maximize / Sun / Globe-with-chevron (right→left).
-        // Maximize + Sun are normal ICON_BUTTON wide; Globe is
-        // GLOBE_BUTTON_WIDTH wide because it carries a chevron.
+        // Right cluster: Maximize / Play / Sun / Globe-with-chevron
+        // (right→left). Maximize + Play + Sun are normal ICON_BUTTON
+        // wide; Globe is GLOBE_BUTTON_WIDTH wide (it carries a chevron).
         let right = rect.origin.x + rect.size.x;
-        let sun_x = right - PAD - ICON_BUTTON * 2.0;
+        let sun_x = right - PAD - ICON_BUTTON * 3.0;
         let icon_y = rect.origin.y + 8.0;
         // Maximize (rightmost icon, painted at `right - PAD - ICON_BUTTON`)
         // → toggle fullscreen.
@@ -446,6 +464,10 @@ impl TopBar {
         };
         if (maximize_rect).contains(point) {
             return Some(TopBarHit::ToggleFullscreen);
+        }
+        // Play / Stop (second from right) → toggle Preview mode.
+        if (Self::preview_button_rect(rect)).contains(point) {
+            return Some(TopBarHit::TogglePreview);
         }
         let sun_rect = Rect {
             origin: Point2D::new(sun_x, icon_y),
@@ -704,15 +726,21 @@ mod tests {
             size: Point2D::new(1000.0, TOP_BAR_HEIGHT),
         };
         let cy = 8.0 + ICON_BUTTON / 2.0;
+        // Right cluster (right → left): Maximize | Play | Sun.
         // Rightmost icon (Maximize) → ToggleFullscreen.
         let fs_cx = 1000.0 - PAD - ICON_BUTTON / 2.0;
         assert_eq!(
             bar.hit_test(rect, Point2D::new(fs_cx, cy)),
             Some(TopBarHit::ToggleFullscreen),
         );
-        // The neighbour to its left (Sun) still maps to ToggleTheme —
-        // adjacency unbroken.
-        let sun_cx = 1000.0 - PAD - ICON_BUTTON - ICON_BUTTON / 2.0;
+        // 2nd from right (Play) → TogglePreview.
+        let play_cx = 1000.0 - PAD - ICON_BUTTON - ICON_BUTTON / 2.0;
+        assert_eq!(
+            bar.hit_test(rect, Point2D::new(play_cx, cy)),
+            Some(TopBarHit::TogglePreview),
+        );
+        // 3rd from right (Sun) → ToggleTheme.
+        let sun_cx = 1000.0 - PAD - 2.0 * ICON_BUTTON - ICON_BUTTON / 2.0;
         assert_eq!(
             bar.hit_test(rect, Point2D::new(sun_cx, cy)),
             Some(TopBarHit::ToggleTheme),

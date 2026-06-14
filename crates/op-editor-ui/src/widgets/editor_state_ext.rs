@@ -247,6 +247,7 @@ pub fn topbar_button_hover(
         W::OpenAgentSettings => O::OpenAgentSettings,
         W::ToggleGitPanel => O::ToggleGitPanel,
         W::ToggleFullscreen => O::ToggleFullscreen,
+        W::TogglePreview => O::TogglePreview,
     }
 }
 

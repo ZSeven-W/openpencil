@@ -870,6 +870,20 @@ pub struct EditorUiState {
     /// authored parent-local geometry. The scene builder can use this
     /// flag to skip the expensive flex/text layout pass.
     pub preserve_authored_geometry: bool,
+    // --- Canvas preview (Play) mode -------------------------------
+    /// Whether the canvas is in **Preview** (Play) mode. When `true`,
+    /// the editor stops painting selection/handles + editor chrome
+    /// affordances over the canvas and instead drives a live jian
+    /// runtime (host-local — the runtime is `!Send` so it lives on the
+    /// native host, NOT on this wasm32-clean state). Entering does NOT
+    /// mutate `doc`; exiting drops the runtime and leaves `doc`
+    /// byte-identical. The TopBar Play/Stop button + `Esc` toggle it.
+    pub preview_mode: bool,
+    /// Non-fatal warnings raised when the runtime was last built from
+    /// `doc` for Preview — e.g. legacy role-frames promoted to widget
+    /// nodes (`LegacyRolePromoted`). Surfaced for diagnostics; cleared
+    /// on exit. Never serialized.
+    pub preview_warnings: Vec<String>,
     /// Floating `Cmd+,` agent-settings modal open.
     pub agent_settings_open: bool,
     pub agent_settings: crate::agent_settings::AgentSettings,
@@ -1217,6 +1231,8 @@ impl Default for EditorUiState {
             figma_import_in_progress: false,
             file_drop_active: false,
             preserve_authored_geometry: false,
+            preview_mode: false,
+            preview_warnings: Vec::new(),
             agent_settings_open: false,
             agent_settings: crate::agent_settings::AgentSettings::default(),
             agent_settings_drag: None,
@@ -1330,6 +1346,33 @@ impl EditorUiState {
 
     pub fn clear_button_press_target(&mut self) {
         self.pressed_button = None;
+    }
+
+    /// Enter canvas Preview (Play) mode. The host follows up by
+    /// building the jian runtime from the (unchanged) document; this
+    /// only flips the flag + clears any stale warnings so the host
+    /// knows to build a fresh runtime. Idempotent.
+    pub fn enter_preview(&mut self) {
+        self.preview_mode = true;
+        self.preview_warnings.clear();
+    }
+
+    /// Exit Preview mode. The host follows up by dropping the runtime.
+    /// Clears the warning list. Idempotent.
+    pub fn exit_preview(&mut self) {
+        self.preview_mode = false;
+        self.preview_warnings.clear();
+    }
+
+    /// Flip Preview mode on/off. Returns the new state (`true` =
+    /// now in Preview).
+    pub fn toggle_preview(&mut self) -> bool {
+        if self.preview_mode {
+            self.exit_preview();
+        } else {
+            self.enter_preview();
+        }
+        self.preview_mode
     }
 
     pub fn button_pressed(&self, target: crate::button_press_state::ButtonPressTarget) -> bool {
@@ -1620,6 +1663,41 @@ mod tests {
     fn theme_mode_flips() {
         assert_eq!(ThemeMode::Dark.flipped(), ThemeMode::Light);
         assert_eq!(ThemeMode::Light.flipped(), ThemeMode::Dark);
+    }
+
+    #[test]
+    fn preview_mode_defaults_off() {
+        let ui = EditorUiState::new();
+        assert!(!ui.preview_mode);
+        assert!(ui.preview_warnings.is_empty());
+    }
+
+    #[test]
+    fn preview_toggle_round_trips_and_clears_warnings() {
+        let mut ui = EditorUiState::new();
+        // Enter — flips on + clears stale warnings.
+        ui.preview_warnings.push("stale".to_string());
+        assert!(ui.toggle_preview());
+        assert!(ui.preview_mode);
+        assert!(ui.preview_warnings.is_empty());
+
+        // A warning recorded during preview is dropped on exit.
+        ui.preview_warnings
+            .push("LegacyRolePromoted: button → text_input".to_string());
+        assert!(!ui.toggle_preview());
+        assert!(!ui.preview_mode);
+        assert!(ui.preview_warnings.is_empty());
+    }
+
+    #[test]
+    fn preview_enter_exit_are_idempotent() {
+        let mut ui = EditorUiState::new();
+        ui.enter_preview();
+        ui.enter_preview();
+        assert!(ui.preview_mode);
+        ui.exit_preview();
+        ui.exit_preview();
+        assert!(!ui.preview_mode);
     }
 
     #[test]

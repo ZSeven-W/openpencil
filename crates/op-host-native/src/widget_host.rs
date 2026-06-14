@@ -310,6 +310,11 @@ pub struct WidgetHostNative {
     /// driving the color-picker drag).
     pub(in crate::widget_host) last_viewport_w: f32,
     pub(in crate::widget_host) last_viewport_h: f32,
+    /// Live canvas Preview (Play) session — `Some` while
+    /// `editor_state.editor_ui.preview_mode` is set. Owns the jian
+    /// `Runtime` (host-local; `!Send`). Built on enter from the
+    /// document JSON, dropped on exit so the document stays untouched.
+    pub(in crate::widget_host) preview: Option<crate::preview::PreviewSession>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -595,6 +600,7 @@ impl WidgetHostNative {
             shift_held: false,
             last_viewport_w: 0.0,
             last_viewport_h: 0.0,
+            preview: None,
         }
     }
 
@@ -607,9 +613,146 @@ impl WidgetHostNative {
 
     /// Push the host's monotonic millisecond timestamp into the
     /// host. Drives caret blink + any future time-based
-    /// animations via `jian_core::anim`.
+    /// animations via `jian_core::anim`. Also forwarded to the live
+    /// preview runtime (caret blink in Preview mode).
     pub fn set_now_ms(&mut self, now_ms: u64) {
         self.now_ms = now_ms;
+        if let Some(preview) = self.preview.as_mut() {
+            preview.set_now_ms(now_ms);
+        }
+    }
+
+    /// Whether the canvas is currently in Preview (Play) mode with a
+    /// live runtime.
+    pub fn preview_active(&self) -> bool {
+        self.preview.is_some() && self.editor_state.editor_ui.preview_mode
+    }
+
+    /// Enter Preview (Play) mode: flip the editor flag + build a live
+    /// jian runtime from the current document (which is NOT mutated).
+    /// `canvas_size` is the logical canvas region the runtime lays out
+    /// into. On a build failure the editor stays in design mode and the
+    /// error is recorded in `preview_warnings`. Returns `true` on
+    /// success.
+    pub fn enter_preview(&mut self, canvas_size: (f32, f32)) -> bool {
+        if self.preview.is_some() {
+            return true;
+        }
+        match crate::preview::PreviewSession::enter(&self.editor_state.doc, canvas_size) {
+            Ok(mut session) => {
+                session.set_now_ms(self.now_ms);
+                self.editor_state.editor_ui.enter_preview();
+                self.editor_state.editor_ui.preview_warnings = session.warnings().to_vec();
+                self.preview = Some(session);
+                self.mark_dirty();
+                true
+            }
+            Err(message) => {
+                // Stay in design mode; surface the failure.
+                self.editor_state.editor_ui.preview_mode = false;
+                self.editor_state.editor_ui.preview_warnings = vec![format!("preview: {message}")];
+                self.mark_dirty();
+                false
+            }
+        }
+    }
+
+    /// Exit Preview mode: drop the runtime + clear the editor flag. The
+    /// document is byte-identical to before entering (the runtime never
+    /// touched it). Idempotent.
+    pub fn exit_preview(&mut self) {
+        self.preview = None;
+        self.editor_state.editor_ui.exit_preview();
+        self.mark_dirty();
+    }
+
+    /// Toggle Preview mode. `canvas_size` is the logical canvas region
+    /// (used only on enter). Returns the new state (`true` = in preview).
+    pub fn toggle_preview(&mut self, canvas_size: (f32, f32)) -> bool {
+        if self.preview_active() {
+            self.exit_preview();
+            false
+        } else {
+            self.enter_preview(canvas_size)
+        }
+    }
+
+    /// Re-lay-out the live preview runtime against the canvas region
+    /// derived from the given viewport size. No-op when not in preview.
+    /// The desktop runner calls this from its `Resized` handler.
+    pub fn preview_resize(&mut self, viewport_w: f32, viewport_h: f32) {
+        if self.preview.is_none() {
+            return;
+        }
+        let (_cx0, _cy0, cw, ch) = self.canvas_region(viewport_w, viewport_h);
+        if let Some(preview) = self.preview.as_mut() {
+            preview.resize((cw, ch));
+        }
+    }
+
+    /// Route a printable character into the live preview runtime.
+    /// Returns `true` when consumed by a focused widget. No-op (false)
+    /// when not in preview.
+    pub fn preview_dispatch_text(&mut self, text: &str) -> bool {
+        let consumed = self.preview.as_mut().is_some_and(|p| p.dispatch_text(text));
+        if consumed {
+            self.mark_dirty();
+        }
+        consumed
+    }
+
+    /// Route a screen-space press into the live preview runtime as a
+    /// tap (Down→Up). `canvas_region` is the screen rect of the canvas
+    /// (`(left, top, w, h)`); the press is converted to canvas-local
+    /// then document space via the editor viewport so it matches the
+    /// painted scene transform. No-op (false) when not in preview or the
+    /// press is outside the canvas region.
+    pub fn preview_dispatch_press(
+        &mut self,
+        screen_x: f32,
+        screen_y: f32,
+        viewport_w: f32,
+        viewport_h: f32,
+    ) -> bool {
+        if self.preview.is_none() {
+            return false;
+        }
+        let (cx0, cy0, cw, ch) = self.canvas_region(viewport_w, viewport_h);
+        if screen_x < cx0 || screen_x > cx0 + cw || screen_y < cy0 || screen_y > cy0 + ch {
+            return false;
+        }
+        // Canvas-local → document via the editor viewport (same
+        // transform the preview paint applies, inverted).
+        let canvas_local = op_editor_ui::Point2D::new(screen_x - cx0, screen_y - cy0);
+        let doc = self.editor_state.viewport.to_document(canvas_local);
+        let handled = self
+            .preview
+            .as_mut()
+            .is_some_and(|p| p.dispatch_tap(doc.x, doc.y));
+        self.mark_dirty();
+        handled
+    }
+
+    /// Route a named key into the live preview runtime. `shift` drives
+    /// Shift+Tab focus traversal + selection. Returns `true` when the
+    /// runtime emitted any semantic event.
+    pub fn preview_dispatch_key(&mut self, key: &str, shift: bool) -> bool {
+        use jian_core::gesture::pointer::Modifiers;
+        let mods = if shift {
+            Modifiers::SHIFT
+        } else {
+            Modifiers::empty()
+        };
+        let handled = self
+            .preview
+            .as_mut()
+            .is_some_and(|p| p.dispatch_key(key, mods));
+        // Tab traversal / text edits change focus or content even when
+        // no semantic event fires, so always repaint while in preview.
+        if self.preview.is_some() {
+            self.mark_dirty();
+        }
+        handled
     }
 
     /// Refresh host-level theme tokens from the canonical editor UI
@@ -878,6 +1021,12 @@ impl WidgetHostNative {
     /// the caret blink phase. `None` = no animation pending.
     pub fn next_animation_deadline_ms(&self) -> Option<u64> {
         let mut next = op_editor_core::agent_indicators::next_reveal_deadline_ms(self.now_ms);
+        // While previewing, keep the loop ticking (~30 fps) so the live
+        // runtime's caret blink + any time-driven widget state animates.
+        if self.preview.is_some() {
+            let deadline = self.now_ms.saturating_add(33);
+            next = Some(next.map_or(deadline, |current| current.min(deadline)));
+        }
         if let Some(input) = self.editor_state.active_text_input() {
             let deadline = input.next_blink_flip_ms(self.now_ms);
             next = Some(next.map_or(deadline, |current| current.min(deadline)));

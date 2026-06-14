@@ -18,6 +18,12 @@ const MAX_SMART_GUIDE_NODES: usize = 1_000;
 impl WidgetHostNative {
     /// True iff a text-input surface owns the keyboard.
     pub(in crate::widget_host) fn input_active(&self) -> bool {
+        // Preview (Play) mode disables every editor edit shortcut — the
+        // canvas belongs to the live runtime, so duplicate / nudge /
+        // boolean-op / etc. must all bail.
+        if self.preview.is_some() {
+            return true;
+        }
         let ui = &self.editor_state.ui;
         ui.layer_rename.is_some()
             || ui.text_editing.is_some()

@@ -28,4 +28,6 @@ pub enum TopBarButton {
     ToggleGitPanel,
     /// Maximize icon — toggles window fullscreen.
     ToggleFullscreen,
+    /// Play / Stop icon — enters / exits canvas Preview (Play) mode.
+    TogglePreview,
 }

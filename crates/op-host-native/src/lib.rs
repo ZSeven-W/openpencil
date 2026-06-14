@@ -75,6 +75,16 @@ pub mod canvas_view_stub;
     target_os = "android"
 ))]
 pub mod widget_host;
+// Canvas Preview (Play) mode runtime owner — depends on the OP
+// `RenderBackend` trait (same gate as `widget_host`).
+#[cfg(any(
+    target_os = "macos",
+    target_os = "linux",
+    target_os = "windows",
+    target_os = "ios",
+    target_os = "android"
+))]
+pub mod preview;
 
 #[cfg(any(
     target_os = "macos",
@@ -84,6 +94,14 @@ pub mod widget_host;
     target_os = "android"
 ))]
 pub use backend::{to_jian_rect, NativeBackend};
+#[cfg(any(
+    target_os = "macos",
+    target_os = "linux",
+    target_os = "windows",
+    target_os = "ios",
+    target_os = "android"
+))]
+pub use preview::PreviewSession;
 #[cfg(any(
     target_os = "macos",
     target_os = "linux",

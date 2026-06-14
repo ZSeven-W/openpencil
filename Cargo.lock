@@ -3165,6 +3165,7 @@ dependencies = [
  "op-pen-loader",
  "raw-window-handle",
  "scopeguard",
+ "serde_json",
  "skia-safe",
  "sysinfo",
  "thiserror 1.0.69",
