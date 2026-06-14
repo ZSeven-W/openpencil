@@ -466,7 +466,11 @@ impl TopBar {
             return Some(TopBarHit::ToggleFullscreen);
         }
         // Play / Stop (second from right) → toggle Preview mode.
-        if (Self::preview_button_rect(rect)).contains(point) {
+        // Preview runs the jian runtime, which the wasm/web build can't
+        // host yet, so the button is painted disabled (dimmed) there and
+        // is NOT hittable — a web click is a clear no-action, never a
+        // toggle that silently does nothing.
+        if !cfg!(target_arch = "wasm32") && Self::preview_button_rect(rect).contains(point) {
             return Some(TopBarHit::TogglePreview);
         }
         let sun_rect = Rect {
@@ -571,6 +575,30 @@ pub(super) fn paint_icon_button(
         center_y - ICON_SIZE / 2.0,
     );
     draw_icon(cx.backend, icon, icon_origin, ICON_SIZE, color, 1.4);
+}
+
+/// Icon button painted in a disabled (dimmed, no hover background)
+/// state — for an action the current build can't perform, so it reads
+/// as unavailable rather than an active control that silently no-ops.
+pub(super) fn paint_icon_button_disabled(
+    cx: &mut PaintCx<'_>,
+    theme: &Theme,
+    x: f32,
+    center_y: f32,
+    icon: Icon,
+) {
+    let icon_origin = Point2D::new(
+        x + (ICON_BUTTON - ICON_SIZE) / 2.0,
+        center_y - ICON_SIZE / 2.0,
+    );
+    draw_icon(
+        cx.backend,
+        icon,
+        icon_origin,
+        ICON_SIZE,
+        theme.muted_foreground,
+        1.4,
+    );
 }
 
 /// File-menu compound: folder glyph + tighter chevron, both inside
