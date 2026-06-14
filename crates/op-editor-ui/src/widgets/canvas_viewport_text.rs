@@ -48,19 +48,32 @@ pub(crate) fn slice_ranges(
     line_start: usize,
     line_end: usize,
 ) -> Vec<(usize, usize, Option<usize>)> {
+    let mut out = Vec::new();
+    for_each_slice_range(runs, line_start, line_end, |start, end, run| {
+        out.push((start, end, run));
+    });
+    out
+}
+
+fn for_each_slice_range(
+    runs: &[SceneTextRun],
+    line_start: usize,
+    line_end: usize,
+    mut f: impl FnMut(usize, usize, Option<usize>),
+) {
     if line_start >= line_end {
-        return Vec::new();
+        return;
     }
     if runs.is_empty() {
-        return vec![(line_start, line_end, None)];
+        f(line_start, line_end, None);
+        return;
     }
-    let mut out = Vec::new();
     let mut pos = line_start;
     while pos < line_end {
         match runs.iter().position(|r| r.start <= pos && pos < r.end) {
             Some(i) => {
                 let end = runs[i].end.min(line_end);
-                out.push((pos, end, Some(i)));
+                f(pos, end, Some(i));
                 pos = end;
             }
             None => {
@@ -73,12 +86,11 @@ pub(crate) fn slice_ranges(
                     .min()
                     .unwrap_or(line_end)
                     .min(line_end);
-                out.push((pos, next, None));
+                f(pos, next, None);
                 pos = next;
             }
         }
     }
-    out
 }
 
 /// Residual-width share each ASCII-space gap receives when a line is
@@ -131,23 +143,32 @@ fn resolved_slice_style(
     }
 }
 
-/// Painted width of a line's slices — per-slice styled measure plus
-/// letter-spacing between glyphs (mirrors the flat
-/// `measure_line_width` model when the node has no runs).
-fn measure_slices(
+#[allow(clippy::too_many_arguments)]
+fn measure_line_slices(
     backend: &mut dyn RenderBackend,
+    node: &SceneNode,
     text: &str,
-    slices: &[(usize, usize, Option<usize>)],
-    styles: &[SliceStyle],
+    line_start: usize,
+    line_end: usize,
+    base_font_size: f32,
+    base_weight: u16,
+    ink: Color,
     letter_spacing: f32,
 ) -> f32 {
     let mut w = 0.0;
     let mut chars = 0usize;
-    for ((start, end, _), style) in slices.iter().zip(styles) {
-        let slice = &text[*start..*end];
+    for_each_slice_range(&node.text_runs, line_start, line_end, |start, end, run| {
+        let style = resolved_slice_style(
+            node,
+            base_font_size,
+            base_weight,
+            ink,
+            run.map(|i| &node.text_runs[i]),
+        );
+        let slice = &text[start..end];
         w += backend.measure_text_styled(slice, style.font_size, style.weight, style.italic);
         chars += slice.chars().count();
-    }
+    });
     w + chars.saturating_sub(1) as f32 * letter_spacing
 }
 
@@ -317,20 +338,17 @@ pub(crate) fn paint_text_node(
             }
             let line_start = layout.line_starts[idx];
             let line_end = line_start + line.len();
-            let slices = slice_ranges(&paint_node.text_runs, line_start, line_end);
-            let styles: Vec<SliceStyle> = slices
-                .iter()
-                .map(|(_, _, run)| {
-                    resolved_slice_style(
-                        paint_node,
-                        font_size,
-                        weight,
-                        ink,
-                        run.map(|i| &paint_node.text_runs[i]),
-                    )
-                })
-                .collect();
-            let line_w = measure_slices(cx.backend, text, &slices, &styles, letter_spacing);
+            let line_w = measure_line_slices(
+                cx.backend,
+                paint_node,
+                text,
+                line_start,
+                line_end,
+                font_size,
+                weight,
+                ink,
+                letter_spacing,
+            );
             let x0 = match paint_node.text_align {
                 SceneTextAlign::Center => {
                     world_rect.origin.x + (layout.align_width - line_w).max(0.0) / 2.0
@@ -350,22 +368,34 @@ pub(crate) fn paint_text_node(
                 };
             let baseline_y = first_baseline_y + idx as f32 * layout.line_h;
             let mut x = x0;
-            for ((start, end, _), style) in slices.iter().zip(&styles) {
-                let slice = &text[*start..*end];
-                let slice_x0 = x;
-                let (next_x, glyph_end) = draw_slice(
-                    cx.backend,
-                    slice,
-                    *style,
-                    family,
-                    x,
-                    baseline_y,
-                    letter_spacing,
-                    justify_extra,
-                );
-                decorate_slice(cx.backend, *style, slice_x0, glyph_end, baseline_y);
-                x = next_x;
-            }
+            for_each_slice_range(
+                &paint_node.text_runs,
+                line_start,
+                line_end,
+                |start, end, run| {
+                    let style = resolved_slice_style(
+                        paint_node,
+                        font_size,
+                        weight,
+                        ink,
+                        run.map(|i| &paint_node.text_runs[i]),
+                    );
+                    let slice = &text[start..end];
+                    let slice_x0 = x;
+                    let (next_x, glyph_end) = draw_slice(
+                        cx.backend,
+                        slice,
+                        style,
+                        family,
+                        x,
+                        baseline_y,
+                        letter_spacing,
+                        justify_extra,
+                    );
+                    decorate_slice(cx.backend, style, slice_x0, glyph_end, baseline_y);
+                    x = next_x;
+                },
+            );
         }
     }
     if let Some((start, end, _)) = composition_range {
@@ -447,6 +477,18 @@ mod tests {
             slice_ranges(&runs, 0, 12),
             vec![(0, 4, None), (4, 8, Some(0)), (8, 12, None)]
         );
+    }
+
+    #[test]
+    fn for_each_slice_range_matches_slice_ranges() {
+        let runs = [run(4, 8), run(10, 14)];
+        let mut iterated = Vec::new();
+
+        for_each_slice_range(&runs, 0, 16, |start, end, run| {
+            iterated.push((start, end, run));
+        });
+
+        assert_eq!(iterated, slice_ranges(&runs, 0, 16));
     }
 
     #[test]
