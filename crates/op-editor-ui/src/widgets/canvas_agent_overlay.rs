@@ -127,8 +127,21 @@ fn paint_node_reveal_indicators(
     if reveals.is_empty() {
         return;
     }
+    let mut remaining = reveals.len();
     for root in roots {
-        paint_node_reveal_indicator(cx, root, viewport_origin, zoom, now_ms, reveals, false);
+        if remaining == 0 {
+            break;
+        }
+        paint_node_reveal_indicator(
+            cx,
+            root,
+            viewport_origin,
+            zoom,
+            now_ms,
+            reveals,
+            false,
+            &mut remaining,
+        );
     }
 }
 
@@ -140,13 +153,20 @@ fn paint_node_reveal_indicator(
     now_ms: u64,
     reveals: &HashMap<String, u64>,
     ancestor_revealing: bool,
+    remaining: &mut usize,
 ) {
+    if *remaining == 0 {
+        return;
+    }
+
     #[cfg(test)]
     record_reveal_walk_visit();
 
-    let reveal = reveals
-        .get(&node.id)
-        .and_then(|started_at| reveal_phase(*started_at, now_ms));
+    let reveal_start = reveals.get(&node.id).copied();
+    if reveal_start.is_some() {
+        *remaining = remaining.saturating_sub(1);
+    }
+    let reveal = reveal_start.and_then(|started_at| reveal_phase(started_at, now_ms));
     if let Some((t, ease)) = reveal {
         if !ancestor_revealing {
             paint_reveal_sweep(cx, node, viewport_origin, zoom, t, ease);
@@ -165,7 +185,11 @@ fn paint_node_reveal_indicator(
             now_ms,
             reveals,
             child_ancestor_revealing,
+            remaining,
         );
+        if *remaining == 0 {
+            break;
+        }
     }
 }
 
@@ -413,6 +437,37 @@ mod tests {
             reveal_walk_visits(),
             0,
             "empty reveal snapshots should not walk the scene tree"
+        );
+    }
+
+    #[test]
+    fn reveal_overlay_stops_after_all_reveal_targets_are_found() {
+        let roots = reveal_tree_with_many_nodes(128);
+        let mut indicators = AgentIndicators::default();
+        indicators.reveals.insert("child-0".to_string(), 1_000);
+        let mut backend = RevealCaptureBackend::default();
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+
+        reset_reveal_walk_visits();
+        paint_agent_frame_indicators_with_snapshot(
+            &mut cx,
+            &roots,
+            Point2D::ZERO,
+            1.0,
+            1_000,
+            &indicators,
+        );
+
+        assert!(
+            reveal_walk_visits() <= 2,
+            "a single early reveal should visit only the root and target, not every sibling"
+        );
+        assert_eq!(
+            backend.round_strokes.len(),
+            1,
+            "the target reveal should still paint"
         );
     }
 
