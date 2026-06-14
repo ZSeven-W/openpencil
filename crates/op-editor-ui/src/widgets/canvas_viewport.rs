@@ -481,19 +481,28 @@ impl<'a> Widget for CanvasViewport<'a> {
                     rect.size.y + CULL_MARGIN * 2.0,
                 ),
             };
+            let reveal_schedule = reveal_schedule_for_paint(&indicators.reveals, self.now_ms);
             for child in page.children.iter().rev() {
-                super::canvas_viewport_paint::paint_node_with_reveals(
-                    cx,
-                    child,
-                    viewport_origin,
-                    viewport.zoom,
-                    edit_caret.clone(),
-                    cull,
-                    super::canvas_viewport_paint::RevealSchedule {
-                        starts: &indicators.reveals,
-                        now_ms: self.now_ms,
-                    },
-                );
+                if let Some(reveals) = reveal_schedule {
+                    super::canvas_viewport_paint::paint_node_with_reveals(
+                        cx,
+                        child,
+                        viewport_origin,
+                        viewport.zoom,
+                        edit_caret.clone(),
+                        cull,
+                        reveals,
+                    );
+                } else {
+                    super::canvas_viewport_paint::paint_node(
+                        cx,
+                        child,
+                        viewport_origin,
+                        viewport.zoom,
+                        edit_caret.clone(),
+                        cull,
+                    );
+                }
             }
             super::canvas_agent_overlay::paint_agent_frame_indicators_with_snapshot(
                 cx,
@@ -708,6 +717,16 @@ impl<'a> Widget for CanvasViewport<'a> {
         node.set_label("Canvas");
         node
     }
+}
+
+pub(crate) fn reveal_schedule_for_paint<'a>(
+    reveals: &'a std::collections::HashMap<String, u64>,
+    now_ms: u64,
+) -> Option<super::canvas_viewport_paint::RevealSchedule<'a>> {
+    (!reveals.is_empty()).then_some(super::canvas_viewport_paint::RevealSchedule {
+        starts: reveals,
+        now_ms,
+    })
 }
 
 /// Stroke a dashed rectangle as 4 dashed edges (4 px on / 4 px off,
