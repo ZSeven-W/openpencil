@@ -70,6 +70,7 @@ pub(super) fn paint_path_overlays(
     pen_dragging_handle: bool,
     selected: &str,
     selected_count: usize,
+    selected_node: Option<&SceneNode>,
     canvas_rect: Rect,
     viewport: &Viewport,
 ) {
@@ -92,7 +93,7 @@ pub(super) fn paint_path_overlays(
     if selected_count != 1 {
         return;
     }
-    let Some(node) = page.find(selected) else {
+    let Some(node) = selected_node.or_else(|| page.find(selected)) else {
         return;
     };
     if !matches!(node.kind, crate::layout_scene::NodeKind::Path) || node.hidden {
