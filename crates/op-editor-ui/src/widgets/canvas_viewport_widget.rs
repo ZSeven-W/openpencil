@@ -171,13 +171,13 @@ fn paint_select(cx: &mut PaintCx<'_>, node: &SceneNode, w: &SceneWidget, r: Rect
         Some(text) => Some((text, TEXT_VALUE)),
         None => w
             .placeholder
-            .clone()
+            .as_deref()
             .filter(|s| !s.is_empty())
             .map(|t| (t, TEXT_MUTED)),
     };
     if let Some((text, color)) = label {
         let fs = 14.0 * zoom;
-        draw_label(cx, &text, color, x + 8.0 * zoom, y + (h - fs) / 2.0, fs);
+        draw_label(cx, text, color, x + 8.0 * zoom, y + (h - fs) / 2.0, fs);
     }
     paint_chevron(cx, x + ww - 20.0 * zoom, y + h / 2.0, zoom);
 }
@@ -351,12 +351,12 @@ fn range_fraction(value: Option<f32>, min: f32, max: f32) -> f32 {
 }
 
 /// Look up a select / radio option's display label by its `value`.
-fn option_label(w: &SceneWidget, value: &str) -> Option<String> {
+pub(crate) fn option_label<'a>(w: &'a SceneWidget, value: &str) -> Option<&'a str> {
     w.options.iter().find(|o| o.value == value).map(|o| {
         if o.label.is_empty() {
-            o.value.clone()
+            o.value.as_str()
         } else {
-            o.label.clone()
+            o.label.as_str()
         }
     })
 }
