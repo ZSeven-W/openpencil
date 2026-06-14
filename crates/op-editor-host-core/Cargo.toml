@@ -9,6 +9,7 @@ description = "Transport-free editor host state machines shared by OpenPencil ho
 [dependencies]
 jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema" }
 op-ai = { path = "../op-ai" }
+op-ai-skills = { path = "../op-ai-skills" }
 op-codegen = { path = "../op-codegen", features = ["ai"] }
 op-editor-core = { path = "../op-editor-core" }
 op-orchestrator = { path = "../op-orchestrator" }
