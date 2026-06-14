@@ -29,24 +29,26 @@
 
 use crate::{Color, Point2D, Rect};
 #[cfg(test)]
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::cell::Cell;
 
 #[cfg(test)]
-static FIND_VISIT_COUNT: AtomicUsize = AtomicUsize::new(0);
+thread_local! {
+    static FIND_VISIT_COUNT: Cell<usize> = const { Cell::new(0) };
+}
 
 #[cfg(test)]
 pub(crate) fn reset_find_visit_count() {
-    FIND_VISIT_COUNT.store(0, Ordering::Relaxed);
+    FIND_VISIT_COUNT.with(|count| count.set(0));
 }
 
 #[cfg(test)]
 pub(crate) fn find_visit_count() -> usize {
-    FIND_VISIT_COUNT.load(Ordering::Relaxed)
+    FIND_VISIT_COUNT.with(Cell::get)
 }
 
 #[cfg(test)]
 fn record_find_visit() {
-    FIND_VISIT_COUNT.fetch_add(1, Ordering::Relaxed);
+    FIND_VISIT_COUNT.with(|count| count.set(count.get() + 1));
 }
 
 /// Node kinds the canvas painter draws. `Other` round-trips unknown

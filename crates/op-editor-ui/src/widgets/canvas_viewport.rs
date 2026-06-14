@@ -535,8 +535,12 @@ impl<'a> Widget for CanvasViewport<'a> {
                     paint_dashed_rect(cx, screen, HOVER, 1.5);
                 }
             }
-            for (id, name, color) in &self.frame_labels {
-                let Some(node) = page.find(id) else { continue };
+            for node in &page.children {
+                let Some((_, name, color)) =
+                    self.frame_labels.iter().find(|(id, _, _)| id == &node.id)
+                else {
+                    continue;
+                };
                 let b = node.aggregate_bounds();
                 let sx = viewport_origin.x + b.origin.x * viewport.zoom;
                 let sy = viewport_origin.y + b.origin.y * viewport.zoom;
