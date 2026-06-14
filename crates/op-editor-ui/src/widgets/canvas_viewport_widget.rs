@@ -19,6 +19,7 @@
 use crate::layout_scene::{SceneNode, SceneWidget};
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
+use std::borrow::Cow;
 
 /// Accent colour for "on" / filled portions (Tailwind blue-500).
 const ACCENT: Color = Color::rgb_u8(0x3b, 0x82, 0xf6);
@@ -239,17 +240,7 @@ fn paint_text_field(cx: &mut PaintCx<'_>, node: &SceneNode, w: &SceneWidget, r: 
     let stroke_w = node.stroke.map(|s| s.width).unwrap_or(1.0) * zoom;
     cx.backend.stroke_round_rect(r, radius, TRACK_OFF, stroke_w);
 
-    // number_input shows its numeric value when present.
-    let value = w.value_str.clone().or_else(|| {
-        (w.kind == "number_input")
-            .then(|| w.value_num.map(format_number))
-            .flatten()
-    });
-    let (text, color) = match value.filter(|s| !s.is_empty()) {
-        Some(v) => (Some(v), TEXT_VALUE),
-        None => (w.placeholder.clone().filter(|s| !s.is_empty()), TEXT_MUTED),
-    };
-    if let Some(text) = text {
+    if let Some((text, color)) = text_field_display_text(w) {
         let fs = 14.0 * zoom;
         // text_area top-aligns; single-line inputs vertically centre.
         let ty = if w.kind == "text_area" {
@@ -257,7 +248,7 @@ fn paint_text_field(cx: &mut PaintCx<'_>, node: &SceneNode, w: &SceneWidget, r: 
         } else {
             y + (h - fs) / 2.0
         };
-        draw_label(cx, &text, color, x + 8.0 * zoom, ty, fs);
+        draw_label(cx, text.as_ref(), color, x + 8.0 * zoom, ty, fs);
     }
 }
 
@@ -359,6 +350,26 @@ pub(crate) fn option_label<'a>(w: &'a SceneWidget, value: &str) -> Option<&'a st
             o.label.as_str()
         }
     })
+}
+
+pub(crate) fn text_field_display_text(w: &SceneWidget) -> Option<(Cow<'_, str>, Color)> {
+    let value = match w.value_str.as_deref() {
+        Some(text) => (!text.is_empty()).then_some(Cow::Borrowed(text)),
+        None if w.kind == "number_input" => w
+            .value_num
+            .map(format_number)
+            .filter(|text| !text.is_empty())
+            .map(Cow::Owned),
+        None => None,
+    };
+    match value {
+        Some(text) => Some((text, TEXT_VALUE)),
+        None => w
+            .placeholder
+            .as_deref()
+            .filter(|text| !text.is_empty())
+            .map(|text| (Cow::Borrowed(text), TEXT_MUTED)),
+    }
 }
 
 /// Format a slider / number value without a trailing `.0` for integers.
