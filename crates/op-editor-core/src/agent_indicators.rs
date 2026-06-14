@@ -217,7 +217,7 @@ pub fn end_if_epoch(epoch: u64) {
 /// uses this to keep requesting redraws so the breathing animates.
 pub fn is_active() -> bool {
     let r = REGISTRY.lock().unwrap();
-    !r.nodes.is_empty() || !r.frames.is_empty() || !r.reveals.is_empty()
+    has_active_indicators(&r)
 }
 
 /// A clone of the current indicators for the paint pass to read.
@@ -229,12 +229,21 @@ pub fn snapshot() -> AgentIndicators {
 /// `now_ms` pruned. The paint pass calls this every frame so completed
 /// reveal animations stop requesting redraws.
 pub fn snapshot_at(now_ms: u64) -> AgentIndicators {
+    snapshot_at_if_active(now_ms).unwrap_or_default()
+}
+
+/// A clone of the current indicators after reveal maintenance, or
+/// `None` when there is nothing active for paint to consume.
+pub fn snapshot_at_if_active(now_ms: u64) -> Option<AgentIndicators> {
     let mut r = REGISTRY.lock().unwrap();
+    if !has_active_indicators(&r) {
+        return None;
+    }
     rebase_external_clock_reveals(&mut r, now_ms);
     r.reveals
         .retain(|_, started| now_ms.saturating_sub(*started) <= REVEAL_DURATION_MS);
     smooth_overdue_reveal_burst(&mut r, now_ms);
-    r.clone()
+    has_active_indicators(&r).then(|| r.clone())
 }
 
 /// Next host-clock millisecond needed for generated-node reveal animation.
@@ -331,6 +340,10 @@ fn smooth_overdue_reveal_burst(r: &mut AgentIndicators, now_ms: u64) {
         }
         next_slot = next_slot.saturating_add(REVEAL_BURST_RECOVERY_STAGGER_MS);
     }
+}
+
+fn has_active_indicators(r: &AgentIndicators) -> bool {
+    !r.nodes.is_empty() || !r.frames.is_empty() || !r.reveals.is_empty()
 }
 
 #[cfg(test)]
@@ -433,6 +446,32 @@ mod tests {
         );
         assert!(!is_active(), "expired reveal should not keep animating");
         clear();
+    }
+
+    #[test]
+    fn snapshot_at_if_active_avoids_idle_snapshot_clone() {
+        let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        clear();
+        assert!(
+            snapshot_at_if_active(1_000).is_none(),
+            "idle paint should skip cloning an empty indicator snapshot"
+        );
+
+        let epoch = begin();
+        add_frame(epoch, "frame", "#4ECDC4", "Mochi");
+        assert!(
+            snapshot_at_if_active(1_000).is_some_and(|snap| snap.frames.contains_key("frame")),
+            "active frame indicators still produce a paint snapshot"
+        );
+
+        clear();
+        let epoch = begin();
+        add_reveal(epoch, "expired", 1_000);
+        assert!(
+            snapshot_at_if_active(3_000).is_none(),
+            "an expired reveal should prune and leave no idle snapshot"
+        );
+        end_if_epoch(epoch);
     }
 
     #[test]

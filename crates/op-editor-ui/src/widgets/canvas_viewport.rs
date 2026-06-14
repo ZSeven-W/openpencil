@@ -459,7 +459,7 @@ impl<'a> Widget for CanvasViewport<'a> {
         // 2. Dotted grid — canvas-local, scales with pan/zoom.
         let viewport = &self.viewport;
         super::canvas_viewport_grid::paint_grid(cx, rect, viewport, &self.theme);
-        let indicators = op_editor_core::agent_indicators::snapshot_at(self.now_ms);
+        let indicators = op_editor_core::agent_indicators::snapshot_at_if_active(self.now_ms);
 
         // 3. Walk the active page; clip enforces widget bounds.
         if let Some(page) = self.scene.active_page() {
@@ -481,7 +481,9 @@ impl<'a> Widget for CanvasViewport<'a> {
                     rect.size.y + CULL_MARGIN * 2.0,
                 ),
             };
-            let reveal_schedule = reveal_schedule_for_paint(&indicators.reveals, self.now_ms);
+            let reveal_schedule = indicators
+                .as_ref()
+                .and_then(|indicators| reveal_schedule_for_paint(&indicators.reveals, self.now_ms));
             for child in page.children.iter().rev() {
                 if let Some(reveals) = reveal_schedule {
                     super::canvas_viewport_paint::paint_node_with_reveals(
@@ -504,14 +506,16 @@ impl<'a> Widget for CanvasViewport<'a> {
                     );
                 }
             }
-            super::canvas_agent_overlay::paint_agent_frame_indicators_with_snapshot(
-                cx,
-                &page.children,
-                viewport_origin,
-                viewport.zoom,
-                self.now_ms,
-                &indicators,
-            );
+            if let Some(indicators) = indicators.as_ref() {
+                super::canvas_agent_overlay::paint_agent_frame_indicators_with_snapshot(
+                    cx,
+                    &page.children,
+                    viewport_origin,
+                    viewport.zoom,
+                    self.now_ms,
+                    indicators,
+                );
+            }
             if let Some(hovered) = self.hovered.as_ref() {
                 if let Some(node) = page.find(hovered) {
                     const HOVER: Color = Color {
@@ -595,10 +599,12 @@ impl<'a> Widget for CanvasViewport<'a> {
                     continue;
                 };
                 if node.hidden
-                    || indicators
-                        .reveals
-                        .get(&node.id)
-                        .is_some_and(|started_at| self.now_ms < *started_at)
+                    || indicators.as_ref().is_some_and(|indicators| {
+                        indicators
+                            .reveals
+                            .get(&node.id)
+                            .is_some_and(|started_at| self.now_ms < *started_at)
+                    })
                 {
                     continue;
                 }
