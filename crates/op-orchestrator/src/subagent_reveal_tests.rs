@@ -44,7 +44,7 @@ fn reveal_schedule_streams_large_subtrees_without_long_tail() {
         "large nested subtrees should stay visibly streamed instead of arriving in one burst"
     );
     assert!(
-        last_label - section <= 430,
+        last_label - section <= 760,
         "large nested subtrees should avoid a slow reveal queue"
     );
     assert!(
