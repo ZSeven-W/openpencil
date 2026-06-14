@@ -3052,6 +3052,7 @@ version = "0.8.0"
 dependencies = [
  "jian-ops-schema",
  "op-ai",
+ "op-ai-skills",
  "op-codegen",
  "op-editor-core",
  "op-orchestrator",

@@ -2,4 +2,5 @@
 
 pub mod chat;
 pub mod codegen;
+pub mod codegen_session;
 pub mod design;
