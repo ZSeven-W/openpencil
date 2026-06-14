@@ -32,7 +32,7 @@ const COLLAPSED_CHEVRON_ICON: f32 = 12.0;
 pub(crate) const RESIZE_GUTTER: f32 = 4.0;
 pub(crate) const RESIZE_CORNER: f32 = 12.0;
 pub(crate) const INPUT_AREA_HEIGHT: f32 = 56.0;
-const INPUT_TOOLBAR_HEIGHT: f32 = 40.0;
+pub(crate) const INPUT_TOOLBAR_HEIGHT: f32 = 40.0;
 #[cfg(test)]
 const INPUT_BASE_HEIGHT: f32 = INPUT_AREA_HEIGHT + INPUT_TOOLBAR_HEIGHT;
 
@@ -258,44 +258,6 @@ impl<'a> AIChatPlaceholder<'a> {
             size: Point2D::new(rect.size.x - PAD * 2.0, input_h),
         }
     }
-
-    pub(crate) fn footer_layout(
-        &self,
-        rect: Rect,
-        input_rect: Rect,
-        toolbar_top: f32,
-    ) -> FooterLayout {
-        let toolbar_center_y = toolbar_top + INPUT_TOOLBAR_HEIGHT / 2.0;
-        let selected = self.state.selected_model_entry();
-        let model_name: &str = selected
-            .map(|m| m.display_name.as_str())
-            .unwrap_or(self.label_no_models.as_str());
-        let model_w = footer_label_width(model_name, 12.0);
-        let agent_team_x = input_rect.origin.x + 20.0 + model_w + 4.0 + 18.0;
-        let model = Rect {
-            origin: Point2D::new(input_rect.origin.x - 6.0, toolbar_center_y - 14.0),
-            size: Point2D::new((agent_team_x - input_rect.origin.x).max(44.0), 28.0),
-        };
-        let agent_team = Rect {
-            origin: Point2D::new(agent_team_x, toolbar_center_y - 10.0),
-            size: Point2D::new(28.0, 20.0),
-        };
-        let rx = rect.origin.x + rect.size.x - PAD;
-        let attach = Rect {
-            origin: Point2D::new(rx - 58.0, toolbar_center_y - 12.0),
-            size: Point2D::new(24.0, 24.0),
-        };
-        let send = Rect {
-            origin: Point2D::new(rx - 24.0, toolbar_center_y - 12.0),
-            size: Point2D::new(24.0, 24.0),
-        };
-        FooterLayout {
-            model,
-            agent_team,
-            attach,
-            send,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -306,7 +268,7 @@ pub(crate) struct FooterLayout {
     pub(crate) send: Rect,
 }
 
-fn footer_label_width(label: &str, size: f32) -> f32 {
+pub(crate) fn footer_label_width(label: &str, size: f32) -> f32 {
     label.chars().fold(0.0, |w, c| {
         w + if c.is_ascii() { size * 0.55 } else { size }
     })
@@ -533,15 +495,17 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
             paint_attachment_row(cx, &self.theme, attach_rect, self.state);
         }
 
-        // Bottom toolbar — model picker on the left, send on the
-        // right (mirrors the TS panel's bottom row).
+        // Bottom toolbar — model picker on the left, send on the right.
         let toolbar_y = input_rect.origin.y + input_area_h + attach_h;
         let toolbar_center_y = toolbar_y + INPUT_TOOLBAR_HEIGHT / 2.0;
         let footer = self.footer_layout(rect, self.input_rect(rect), toolbar_y);
         use op_editor_core::ChatFooterButton;
         // Model chip — brand logo of the selected model's provider
         // + its display name + a chevron. Click toggles the picker.
-        let mut model_x = rect.origin.x + PAD;
+        cx.backend
+            .fill_round_rect(footer.model, 7.0, (self.theme.muted).with_alpha(0.22));
+        cx.backend
+            .stroke_round_rect(footer.model, 7.0, (self.theme.border).with_alpha(0.75), 1.0);
         if self.footer_hover == Some(ChatFooterButton::ModelPicker)
             || self.footer_pressed == Some(ChatFooterButton::ModelPicker)
         {
@@ -554,6 +518,9 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
                 ),
             );
         }
+        cx.backend.save();
+        cx.backend.clip_rect(footer.model);
+        let mut model_x = footer.model.origin.x + 6.0;
         let selected = self.state.selected_model_entry();
         let chip_color = self.theme.muted_foreground;
         match selected {
@@ -597,16 +564,18 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
         );
         cx.backend
             .draw_text(&model_label, Point2D::new(model_x, toolbar_center_y + 4.0));
-        let model_w = cx.backend.measure_text(model_name, 12.0);
-        model_x += model_w + 4.0;
         draw_icon(
             cx.backend,
             Icon::ChevronUp,
-            Point2D::new(model_x, toolbar_center_y - 5.0),
+            Point2D::new(
+                footer.model.origin.x + footer.model.size.x - 16.0,
+                toolbar_center_y - 5.0,
+            ),
             10.0,
             self.theme.muted_foreground,
             1.4,
         );
+        cx.backend.restore();
         // Concurrency chip — `Zap` + `{n}x`. A solo 1x team rests as a
         // faint ghost; a staffed team (>1) gets a primary-tinted chip so
         // the parallel mode reads as active.
@@ -621,29 +590,40 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
                 ..self.theme.muted_foreground
             }
         };
-        let primary_wash = Color {
-            a: 0.1,
-            ..self.theme.primary
+        let chip_bg = if team_active {
+            self.theme.primary.with_alpha(0.1)
+        } else {
+            self.theme.muted.with_alpha(0.22)
         };
-        if team_active {
-            cx.backend.fill_round_rect(chip, 6.0, primary_wash);
-        }
+        let chip_border = if team_active {
+            self.theme.primary.with_alpha(0.28)
+        } else {
+            self.theme.border.with_alpha(0.75)
+        };
+        cx.backend.fill_round_rect(chip, 7.0, chip_bg);
+        cx.backend.stroke_round_rect(chip, 7.0, chip_border, 1.0);
         if self.footer_hover == Some(ChatFooterButton::AgentTeam)
             || self.footer_pressed == Some(ChatFooterButton::AgentTeam)
         {
             let wash = if team_active {
-                primary_wash
+                self.theme.primary.with_alpha(
+                    if self.footer_pressed == Some(ChatFooterButton::AgentTeam) {
+                        0.2
+                    } else {
+                        0.14
+                    },
+                )
             } else if self.footer_pressed == Some(ChatFooterButton::AgentTeam) {
                 chat_neutral_feedback_color(&self.theme, true)
             } else {
                 chat_neutral_hover_color(&self.theme)
             };
-            cx.backend.fill_round_rect(chip, 6.0, wash);
+            cx.backend.fill_round_rect(chip, 7.0, wash);
         }
         draw_icon(
             cx.backend,
             Icon::Zap,
-            Point2D::new(chip.origin.x + 4.0, chip.origin.y + 5.0),
+            Point2D::new(chip.origin.x + 7.0, chip.origin.y + 6.0),
             10.0,
             conc_color,
             1.4,
@@ -654,10 +634,10 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
             &team_label,
             11.0,
             conc_color,
-            chip.origin.x + 16.0,
-            chip.origin.y + 14.0,
+            chip.origin.x + 20.0,
+            chip.origin.y + 15.0,
         );
-        model_x = chip.origin.x + chip.size.x + 4.0;
+        let selected_x = chip.origin.x + chip.size.x + 8.0;
         let count = self.selected_count.to_string();
         let selected_label =
             op_i18n::translate(self.locale, "common.selected").replace("{{count}}", &count);
@@ -666,12 +646,11 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
             &selected_label,
             10.0,
             self.theme.muted_foreground,
-            model_x,
+            selected_x,
             toolbar_center_y + 4.0,
         );
 
-        // Right cluster — attach + send (TS ghost buttons: bare icons
-        // that only get a wash while hovered).
+        // Right cluster — attach + send ghost icon buttons.
         let attach_rect = footer.attach;
         if self.footer_hover == Some(ChatFooterButton::AddAttachment)
             || self.footer_pressed == Some(ChatFooterButton::AddAttachment)

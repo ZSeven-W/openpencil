@@ -1689,8 +1689,10 @@ mod tests {
 
     #[test]
     fn tracked_picker_helpers_reset_select_interaction_state() {
-        let mut s = GitPanelState::default();
-        s.tracked_picker_selected = Some(2);
+        let mut s = GitPanelState {
+            tracked_picker_selected: Some(2),
+            ..Default::default()
+        };
         s.tracked_picker.hover = Some(1);
         s.tracked_picker.pressed = Some(1);
         s.tracked_picker.scroll.offset = 44.0;

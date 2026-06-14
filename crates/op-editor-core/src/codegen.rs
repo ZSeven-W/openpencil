@@ -4,6 +4,8 @@
 //! op-codegen::ai; these are the types that crate returns (it depends on
 //! op-editor-core, so the edge is acyclic).
 
+use jian_core::text_input::prev_char_boundary;
+
 /// Target framework for code generation. Wire tokens match TS `Framework`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Framework {
@@ -239,20 +241,13 @@ impl CodegenState {
             return None;
         }
         let (start, end) = selection.ordered();
-        let start = previous_char_boundary(&self.code, start.min(self.code.len()));
-        let end = previous_char_boundary(&self.code, end.min(self.code.len()));
+        let start = prev_char_boundary(&self.code, start.min(self.code.len()));
+        let end = prev_char_boundary(&self.code, end.min(self.code.len()));
         if start >= end {
             return None;
         }
         Some(&self.code[start..end])
     }
-}
-
-fn previous_char_boundary(text: &str, mut index: usize) -> usize {
-    while index > 0 && !text.is_char_boundary(index) {
-        index -= 1;
-    }
-    index
 }
 
 #[cfg(test)]

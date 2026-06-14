@@ -13,8 +13,10 @@ fn fill_type_picker_hit_uses_shared_outside_protocol() {
         origin: Point2D::new(600.0, 48.0),
         size: Point2D::new(256.0, 700.0),
     };
-    let mut state = SelectState::default();
-    state.open = true;
+    let state = SelectState {
+        open: true,
+        ..Default::default()
+    };
     let visible = VisibleSections::ALL;
     let picker = fill_type_picker_rect(panel_rect, visible);
 

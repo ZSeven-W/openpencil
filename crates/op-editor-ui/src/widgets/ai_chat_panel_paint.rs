@@ -93,12 +93,13 @@ pub(crate) fn paint_panel_surface(cx: &mut PaintCx<'_>, theme: &Theme, rect: Rec
         size: rect.size,
     };
     cx.backend
-        .fill_round_rect(shadow_far, 14.0, (Color::BLACK).with_alpha(0.02));
+        .fill_round_rect(shadow_far, 14.0, (Color::BLACK).with_alpha(0.025));
     cx.backend
-        .fill_round_rect(shadow_near, 14.0, (Color::BLACK).with_alpha(0.06));
+        .fill_round_rect(shadow_near, 14.0, (Color::BLACK).with_alpha(0.07));
     cx.backend
-        .fill_round_rect(rect, 14.0, (theme.card).with_alpha(0.95));
-    cx.backend.stroke_round_rect(rect, 14.0, theme.border, 1.0);
+        .fill_round_rect(rect, 14.0, (theme.card).with_alpha(0.98));
+    cx.backend
+        .stroke_round_rect(rect, 14.0, (theme.border).with_alpha(0.82), 1.0);
 }
 
 /// Paint the message body's TS-style background and internal dividers.
@@ -107,19 +108,21 @@ pub(crate) fn paint_panel_body_chrome(cx: &mut PaintCx<'_>, theme: &Theme, rect:
     let inner_w = (rect.size.x - 2.0).max(0.0);
     cx.backend.fill_rect(
         Rect::xywh(inner_x, rect.origin.y + HEADER_HEIGHT, inner_w, 1.0),
-        theme.border,
+        (theme.border).with_alpha(0.75),
     );
     let body_y = rect.origin.y + HEADER_HEIGHT + 1.0;
     if sep_y > body_y {
         cx.backend.fill_rect(
             Rect::xywh(inner_x, body_y, inner_w, sep_y - body_y),
-            (theme.background).with_alpha(0.8),
+            (theme.background).with_alpha(0.72),
         );
     }
     // Full-width divider above the input (TS `border-t` spans the whole
     // panel, not just the padded content column).
-    cx.backend
-        .fill_rect(Rect::xywh(inner_x, sep_y, inner_w, 1.0), theme.border);
+    cx.backend.fill_rect(
+        Rect::xywh(inner_x, sep_y, inner_w, 1.0),
+        (theme.border).with_alpha(0.75),
+    );
 }
 
 /// Paint the empty-state hint line + the 2×2 example-card grid.
@@ -150,8 +153,8 @@ pub(crate) fn paint_examples(
         Point2D::new(rect.origin.x + (rect.size.x - hint_w) / 2.0, hint_y),
     );
 
-    let card_bg = (theme.muted).with_alpha(0.3 * opacity);
-    let card_border = (theme.border).with_alpha(opacity);
+    let card_bg = (theme.card).with_alpha(0.78 * opacity);
+    let card_border = (theme.border).with_alpha(0.78 * opacity);
     let title_color = (theme.foreground).with_alpha(opacity);
     let subtitle_color = (theme.muted_foreground).with_alpha(opacity);
     for (idx, (card, ex)) in example_card_rects(rect)

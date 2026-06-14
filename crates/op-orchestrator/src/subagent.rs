@@ -15,6 +15,8 @@ use futures::StreamExt;
 use jian_ops_schema::node::PenNode;
 use jian_ops_schema::sizing::{SizingBehavior, SizingKeyword};
 use op_editor_core::{EditorCommand, NodeId, PenNodeExt};
+use std::collections::HashSet;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 /// 执行一个 subtask。总是返回 [`SubtaskOutcome`];调用方据
 /// `node_count` 决定继续/停止。
@@ -36,6 +38,34 @@ pub async fn run_subtask(
     abort: &AbortFlag,
     reduced_complexity: bool,
     minimal_skills: bool,
+) -> SubtaskOutcome {
+    run_subtask_with_reveal_at(
+        subtask,
+        plan,
+        req,
+        llm,
+        sink,
+        abort,
+        reduced_complexity,
+        minimal_skills,
+        None,
+        reveal_now_millis(),
+    )
+    .await
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) async fn run_subtask_with_reveal_at(
+    subtask: &Subtask,
+    plan: &OrchestratorPlan,
+    req: &DesignRequest,
+    llm: &dyn LlmClient,
+    sink: &mut dyn DocSink,
+    abort: &AbortFlag,
+    reduced_complexity: bool,
+    minimal_skills: bool,
+    indicator_epoch: Option<u64>,
+    reveal_started_ms: u64,
 ) -> SubtaskOutcome {
     let fail = |msg: String| SubtaskOutcome {
         id: subtask.id.clone(),
@@ -121,6 +151,7 @@ pub async fn run_subtask(
     // Cross-node contrast post-pass (I3) runs AFTER role resolution (it keys off
     // the roles I1/I2 set) and before the fallback sizing normalize.
     crate::role_post_pass::post_pass_forest(&mut nodes, canvas_width);
+    crate::variable_binding::bind_generated_color_variables(&mut nodes, sink.state());
     normalize_section_roots_for_parent_layout(&mut nodes);
     let node_count = nodes.len();
 
@@ -129,11 +160,16 @@ pub async fn run_subtask(
         Some(id) => NodeId::new(id.clone()),
         None => NodeId::NONE,
     };
-    let applied = sink.apply(EditorCommand::InsertSubtree {
-        nodes,
-        parent_id,
-        page_id: None,
-    });
+    let applied = apply_command_with_reveal(
+        sink,
+        EditorCommand::InsertSubtree {
+            nodes,
+            parent_id,
+            page_id: None,
+        },
+        indicator_epoch,
+        reveal_started_ms,
+    );
     if !applied {
         return fail("InsertSubtree rejected by document".into());
     }
@@ -142,6 +178,80 @@ pub async fn run_subtask(
         id: subtask.id.clone(),
         node_count,
         error: None,
+    }
+}
+
+pub(crate) fn reveal_now_millis() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis().min(u128::from(u64::MAX)) as u64)
+        .unwrap_or(0)
+}
+
+pub(crate) fn apply_command_with_reveal(
+    sink: &mut dyn DocSink,
+    cmd: EditorCommand,
+    indicator_epoch: Option<u64>,
+    reveal_started_ms: u64,
+) -> bool {
+    if !matches!(cmd, EditorCommand::InsertSubtree { .. }) {
+        return sink.apply(cmd);
+    }
+    let ids_before = indicator_epoch.map(|_| collect_active_node_ids(sink.state()));
+    let applied = sink.apply(cmd);
+    if applied {
+        if let Some(ids_before) = ids_before.as_ref() {
+            register_new_node_reveals(ids_before, sink.state(), indicator_epoch, reveal_started_ms);
+        }
+    }
+    applied
+}
+
+fn collect_active_node_ids(state: &op_editor_core::EditorState) -> HashSet<String> {
+    let mut out = HashSet::new();
+    for node in state.active_children() {
+        collect_node_ids(node, &mut out);
+    }
+    out
+}
+
+fn collect_node_ids(node: &PenNode, out: &mut HashSet<String>) {
+    out.insert(node.id_str().to_string());
+    if let Some(children) = node.children() {
+        for child in children {
+            collect_node_ids(child, out);
+        }
+    }
+}
+
+pub(crate) fn register_new_node_reveals(
+    ids_before: &HashSet<String>,
+    state: &op_editor_core::EditorState,
+    indicator_epoch: Option<u64>,
+    reveal_started_ms: u64,
+) {
+    let Some(epoch) = indicator_epoch else {
+        return;
+    };
+    for node in state.active_children() {
+        register_node_reveals(node, ids_before, epoch, reveal_started_ms);
+    }
+}
+
+fn register_node_reveals(
+    node: &PenNode,
+    ids_before: &HashSet<String>,
+    epoch: u64,
+    reveal_started_ms: u64,
+) {
+    let id = node.id_str();
+    if !ids_before.contains(id) {
+        op_editor_core::agent_indicators::add_reveal(epoch, id, reveal_started_ms);
+    }
+    if let Some(children) = node.children() {
+        for child in children {
+            register_node_reveals(child, ids_before, epoch, reveal_started_ms);
+        }
     }
 }
 
@@ -273,6 +383,108 @@ mod tests {
             sink.applied.last(),
             Some(EditorCommand::InsertSubtree { .. })
         ));
+    }
+
+    #[test]
+    fn run_subtask_binds_generated_exact_color_to_document_variable() {
+        let llm = ScriptedLlm::new(vec![ScriptResponse::Text(
+            r##"[{"type":"rectangle","id":"card","width":100,"height":50,"fill":[{"type":"solid","color":"#F8FAFC"}]}]"##
+                .into(),
+        )]);
+        let mut sink = VecDocSink::new();
+        sink.apply(EditorCommand::MergeThemePreset {
+            variables: crate::semantic_palette::palette_variables(),
+            themes: crate::semantic_palette::palette_themes(),
+        });
+
+        let outcome = block_on(run_subtask(
+            &subtask(),
+            &plan(),
+            &req(),
+            &llm,
+            &mut sink,
+            &AbortFlag::new(),
+            false,
+            false,
+        ));
+
+        assert!(outcome.error.is_none(), "{:?}", outcome.error);
+        let Some(EditorCommand::InsertSubtree { nodes, .. }) = sink.applied.last() else {
+            panic!("expected InsertSubtree, got {:?}", sink.applied.last());
+        };
+        assert_eq!(
+            op_editor_core::fills::first_solid_fill_hex(&nodes[0]),
+            Some("$color-bg-deep")
+        );
+    }
+
+    #[test]
+    fn run_subtask_binds_generated_near_color_to_document_variable() {
+        let llm = ScriptedLlm::new(vec![ScriptResponse::Text(
+            r##"[{"type":"rectangle","id":"card","width":100,"height":50,"fill":[{"type":"solid","color":"#FFF8F0"}]}]"##
+                .into(),
+        )]);
+        let mut sink = VecDocSink::new();
+        sink.apply(EditorCommand::MergeThemePreset {
+            variables: crate::semantic_palette::palette_variables(),
+            themes: crate::semantic_palette::palette_themes(),
+        });
+
+        let outcome = block_on(run_subtask(
+            &subtask(),
+            &plan(),
+            &req(),
+            &llm,
+            &mut sink,
+            &AbortFlag::new(),
+            false,
+            false,
+        ));
+
+        assert!(outcome.error.is_none(), "{:?}", outcome.error);
+        let Some(EditorCommand::InsertSubtree { nodes, .. }) = sink.applied.last() else {
+            panic!("expected InsertSubtree, got {:?}", sink.applied.last());
+        };
+        assert_eq!(
+            op_editor_core::fills::first_solid_fill_hex(&nodes[0]),
+            Some("$color-surface-3")
+        );
+    }
+
+    #[test]
+    fn run_subtask_registers_reveals_for_live_inserted_nodes() {
+        let _guard = crate::agent_indicator_test_support::lock();
+        let epoch = op_editor_core::agent_indicators::begin();
+        let llm = ScriptedLlm::new(vec![ScriptResponse::Text(NODE_JSON.into())]);
+        let mut sink = VecDocSink::new();
+
+        let outcome = block_on(run_subtask_with_reveal_at(
+            &subtask(),
+            &plan(),
+            &req(),
+            &llm,
+            &mut sink,
+            &AbortFlag::new(),
+            false,
+            false,
+            Some(epoch),
+            1_234,
+        ));
+
+        assert!(outcome.error.is_none(), "{:?}", outcome.error);
+        assert_eq!(outcome.node_count, 1);
+        let live_ids = collect_active_node_ids(sink.state());
+        let snapshot = op_editor_core::agent_indicators::snapshot_at(1_250);
+        assert_eq!(snapshot.reveals.len(), 2);
+        assert!(
+            snapshot
+                .reveals
+                .keys()
+                .all(|id| live_ids.contains(id.as_str())),
+            "reveals must reference live document ids"
+        );
+        assert!(snapshot.reveals.values().all(|started| *started == 1_234));
+        op_editor_core::agent_indicators::end_if_epoch(epoch);
     }
 
     /// 离线冒烟：manifest 模式下,stub LLM 输出元素清单 → 解析、修复、

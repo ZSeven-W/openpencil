@@ -87,6 +87,15 @@ macro_rules! base_arms {
             PenNode::TextInput(n) => &n.base,
             PenNode::Image(n) => &n.base,
             PenNode::IconFont(n) => &n.base,
+            PenNode::TextArea(n) => &n.base,
+            PenNode::Select(n) => &n.base,
+            PenNode::Switch(n) => &n.base,
+            PenNode::Checkbox(n) => &n.base,
+            PenNode::Slider(n) => &n.base,
+            PenNode::RadioGroup(n) => &n.base,
+            PenNode::NumberInput(n) => &n.base,
+            PenNode::Progress(n) => &n.base,
+            PenNode::Tabs(n) => &n.base,
             PenNode::Ref(n) => &n.base,
         }
     };
@@ -106,6 +115,15 @@ macro_rules! base_mut_arms {
             PenNode::TextInput(n) => &mut n.base,
             PenNode::Image(n) => &mut n.base,
             PenNode::IconFont(n) => &mut n.base,
+            PenNode::TextArea(n) => &mut n.base,
+            PenNode::Select(n) => &mut n.base,
+            PenNode::Switch(n) => &mut n.base,
+            PenNode::Checkbox(n) => &mut n.base,
+            PenNode::Slider(n) => &mut n.base,
+            PenNode::RadioGroup(n) => &mut n.base,
+            PenNode::NumberInput(n) => &mut n.base,
+            PenNode::Progress(n) => &mut n.base,
+            PenNode::Tabs(n) => &mut n.base,
             PenNode::Ref(n) => &mut n.base,
         }
     };
@@ -125,6 +143,7 @@ impl PenNodeExt for PenNode {
             PenNode::Frame(n) => n.children.as_ref(),
             PenNode::Group(n) => n.children.as_ref(),
             PenNode::Rectangle(n) => n.children.as_ref(),
+            PenNode::Tabs(n) => n.children.as_ref(),
             PenNode::Ref(n) => n.children.as_ref(),
             _ => None,
         }
@@ -135,6 +154,7 @@ impl PenNodeExt for PenNode {
             PenNode::Frame(n) => Some(n.children.get_or_insert_with(Vec::new)),
             PenNode::Group(n) => Some(n.children.get_or_insert_with(Vec::new)),
             PenNode::Rectangle(n) => Some(n.children.get_or_insert_with(Vec::new)),
+            PenNode::Tabs(n) => Some(n.children.get_or_insert_with(Vec::new)),
             PenNode::Ref(n) => Some(n.children.get_or_insert_with(Vec::new)),
             _ => None,
         }
@@ -143,7 +163,11 @@ impl PenNodeExt for PenNode {
     fn is_container(&self) -> bool {
         matches!(
             self,
-            PenNode::Frame(_) | PenNode::Group(_) | PenNode::Rectangle(_) | PenNode::Ref(_)
+            PenNode::Frame(_)
+                | PenNode::Group(_)
+                | PenNode::Rectangle(_)
+                | PenNode::Tabs(_)
+                | PenNode::Ref(_)
         )
     }
 
@@ -174,6 +198,15 @@ impl PenNodeExt for PenNode {
             PenNode::TextInput(n) => sizing_px(&n.width),
             PenNode::Image(n) => sizing_px(&n.width),
             PenNode::IconFont(n) => sizing_px(&n.width),
+            PenNode::TextArea(n) => sizing_px(&n.width),
+            PenNode::Select(n) => sizing_px(&n.width),
+            PenNode::Switch(n) => sizing_px(&n.width),
+            PenNode::Checkbox(n) => sizing_px(&n.width),
+            PenNode::Slider(n) => sizing_px(&n.width),
+            PenNode::RadioGroup(n) => sizing_px(&n.width),
+            PenNode::NumberInput(n) => sizing_px(&n.width),
+            PenNode::Progress(n) => sizing_px(&n.width),
+            PenNode::Tabs(n) => sizing_px(&n.width),
             PenNode::Line(_) | PenNode::Ref(_) => None,
         }
     }
@@ -190,6 +223,15 @@ impl PenNodeExt for PenNode {
             PenNode::TextInput(n) => sizing_px(&n.height),
             PenNode::Image(n) => sizing_px(&n.height),
             PenNode::IconFont(n) => sizing_px(&n.height),
+            PenNode::TextArea(n) => sizing_px(&n.height),
+            PenNode::Select(n) => sizing_px(&n.height),
+            PenNode::Switch(n) => sizing_px(&n.height),
+            PenNode::Checkbox(n) => sizing_px(&n.height),
+            PenNode::Slider(n) => sizing_px(&n.height),
+            PenNode::RadioGroup(n) => sizing_px(&n.height),
+            PenNode::NumberInput(n) => sizing_px(&n.height),
+            PenNode::Progress(n) => sizing_px(&n.height),
+            PenNode::Tabs(n) => sizing_px(&n.height),
             PenNode::Line(_) | PenNode::Ref(_) => None,
         }
     }
@@ -207,6 +249,15 @@ impl PenNodeExt for PenNode {
             PenNode::TextInput(n) => n.width = Some(v),
             PenNode::Image(n) => n.width = Some(v),
             PenNode::IconFont(n) => n.width = Some(v),
+            PenNode::TextArea(n) => n.width = Some(v),
+            PenNode::Select(n) => n.width = Some(v),
+            PenNode::Switch(n) => n.width = Some(v),
+            PenNode::Checkbox(n) => n.width = Some(v),
+            PenNode::Slider(n) => n.width = Some(v),
+            PenNode::RadioGroup(n) => n.width = Some(v),
+            PenNode::NumberInput(n) => n.width = Some(v),
+            PenNode::Progress(n) => n.width = Some(v),
+            PenNode::Tabs(n) => n.width = Some(v),
             PenNode::Line(_) | PenNode::Ref(_) => {}
         }
     }
@@ -224,6 +275,15 @@ impl PenNodeExt for PenNode {
             PenNode::TextInput(n) => n.height = Some(v),
             PenNode::Image(n) => n.height = Some(v),
             PenNode::IconFont(n) => n.height = Some(v),
+            PenNode::TextArea(n) => n.height = Some(v),
+            PenNode::Select(n) => n.height = Some(v),
+            PenNode::Switch(n) => n.height = Some(v),
+            PenNode::Checkbox(n) => n.height = Some(v),
+            PenNode::Slider(n) => n.height = Some(v),
+            PenNode::RadioGroup(n) => n.height = Some(v),
+            PenNode::NumberInput(n) => n.height = Some(v),
+            PenNode::Progress(n) => n.height = Some(v),
+            PenNode::Tabs(n) => n.height = Some(v),
             PenNode::Line(_) | PenNode::Ref(_) => {}
         }
     }

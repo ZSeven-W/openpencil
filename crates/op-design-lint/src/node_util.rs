@@ -25,7 +25,7 @@ use jian_ops_schema::style::{PenFill, StrokeThickness};
 use jian_ops_schema::variable::{VariableDefinition, VariableScalar, VariableValue};
 use serde_json::Value;
 
-/// The 12 jian `PenNode` kinds, as a flat `Copy` enum. jian models kind via
+/// The 17 jian `PenNode` kinds, as a flat `Copy` enum. jian models kind via
 /// the `PenNode` enum variant + the `"type"` tag; detectors need a cheap
 /// kind discriminant for skip-sets and grouping keys, so this mirrors it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -41,6 +41,15 @@ pub enum NodeKind {
     TextInput,
     Image,
     IconFont,
+    TextArea,
+    Select,
+    Switch,
+    Checkbox,
+    Slider,
+    RadioGroup,
+    NumberInput,
+    Progress,
+    Tabs,
     Ref,
 }
 
@@ -71,6 +80,15 @@ pub fn node_kind(node: &PenNode) -> NodeKind {
         PenNode::TextInput(_) => NodeKind::TextInput,
         PenNode::Image(_) => NodeKind::Image,
         PenNode::IconFont(_) => NodeKind::IconFont,
+        PenNode::TextArea(_) => NodeKind::TextArea,
+        PenNode::Select(_) => NodeKind::Select,
+        PenNode::Switch(_) => NodeKind::Switch,
+        PenNode::Checkbox(_) => NodeKind::Checkbox,
+        PenNode::Slider(_) => NodeKind::Slider,
+        PenNode::RadioGroup(_) => NodeKind::RadioGroup,
+        PenNode::NumberInput(_) => NodeKind::NumberInput,
+        PenNode::Progress(_) => NodeKind::Progress,
+        PenNode::Tabs(_) => NodeKind::Tabs,
         PenNode::Ref(_) => NodeKind::Ref,
     }
 }
@@ -91,6 +109,15 @@ pub fn node_kind_str(node: &PenNode) -> &'static str {
         NodeKind::TextInput => "text_input",
         NodeKind::Image => "image",
         NodeKind::IconFont => "icon_font",
+        NodeKind::TextArea => "text_area",
+        NodeKind::Select => "select",
+        NodeKind::Switch => "switch",
+        NodeKind::Checkbox => "checkbox",
+        NodeKind::Slider => "slider",
+        NodeKind::RadioGroup => "radio_group",
+        NodeKind::NumberInput => "number_input",
+        NodeKind::Progress => "progress",
+        NodeKind::Tabs => "tabs",
         NodeKind::Ref => "ref",
     }
 }
@@ -104,6 +131,7 @@ pub fn children(node: &PenNode) -> &[PenNode] {
         PenNode::Frame(n) => n.children.as_ref(),
         PenNode::Group(n) => n.children.as_ref(),
         PenNode::Rectangle(n) => n.children.as_ref(),
+        PenNode::Tabs(n) => n.children.as_ref(),
         _ => None,
     };
     kids.map(Vec::as_slice).unwrap_or(&[])
@@ -292,6 +320,15 @@ fn base(node: &PenNode) -> &jian_ops_schema::node::PenNodeBase {
         PenNode::TextInput(n) => &n.base,
         PenNode::Image(n) => &n.base,
         PenNode::IconFont(n) => &n.base,
+        PenNode::TextArea(n) => &n.base,
+        PenNode::Select(n) => &n.base,
+        PenNode::Switch(n) => &n.base,
+        PenNode::Checkbox(n) => &n.base,
+        PenNode::Slider(n) => &n.base,
+        PenNode::RadioGroup(n) => &n.base,
+        PenNode::NumberInput(n) => &n.base,
+        PenNode::Progress(n) => &n.base,
+        PenNode::Tabs(n) => &n.base,
         PenNode::Ref(n) => &n.base,
     }
 }
@@ -312,6 +349,15 @@ pub fn node_fills(node: &PenNode) -> Option<&Vec<PenFill>> {
         PenNode::Text(n) => n.fill.as_ref(),
         PenNode::IconFont(n) => n.fill.as_ref(),
         PenNode::TextInput(n) => n.fill.as_ref(),
+        PenNode::TextArea(n) => n.fill.as_ref(),
+        PenNode::Select(n) => n.fill.as_ref(),
+        PenNode::Switch(n) => n.fill.as_ref(),
+        PenNode::Checkbox(n) => n.fill.as_ref(),
+        PenNode::Slider(n) => n.fill.as_ref(),
+        PenNode::RadioGroup(n) => n.fill.as_ref(),
+        PenNode::NumberInput(n) => n.fill.as_ref(),
+        PenNode::Progress(n) => n.fill.as_ref(),
+        PenNode::Tabs(n) => n.fill.as_ref(),
         PenNode::Line(_) | PenNode::Image(_) | PenNode::Ref(_) => None,
     }
 }
@@ -329,6 +375,15 @@ fn stroke(node: &PenNode) -> Option<&jian_ops_schema::style::PenStroke> {
         PenNode::Path(n) => n.stroke.as_ref(),
         PenNode::IconFont(n) => n.stroke.as_ref(),
         PenNode::TextInput(n) => n.stroke.as_ref(),
+        PenNode::TextArea(n) => n.stroke.as_ref(),
+        PenNode::Select(n) => n.stroke.as_ref(),
+        PenNode::Switch(n) => n.stroke.as_ref(),
+        PenNode::Checkbox(n) => n.stroke.as_ref(),
+        PenNode::Slider(n) => n.stroke.as_ref(),
+        PenNode::RadioGroup(n) => n.stroke.as_ref(),
+        PenNode::NumberInput(n) => n.stroke.as_ref(),
+        PenNode::Progress(n) => n.stroke.as_ref(),
+        PenNode::Tabs(n) => n.stroke.as_ref(),
         PenNode::Text(_) | PenNode::Image(_) | PenNode::Ref(_) => None,
     }
 }

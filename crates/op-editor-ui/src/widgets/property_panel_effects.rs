@@ -178,8 +178,7 @@ fn paint_param_input(
         value_text_owned.as_str()
     };
     let value_x = label_x + label_w + 8.0;
-    if focused && input.is_some() {
-        let input = input.expect("checked above");
+    if let (true, Some(input)) = (focused, input) {
         paint_text_input_view_value(
             cx,
             theme,

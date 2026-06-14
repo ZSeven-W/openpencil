@@ -634,6 +634,15 @@ fn set_node_stroke(node: &mut PenNode, stroke: PenStroke) {
         PenNode::Path(n) => n.stroke = Some(stroke),
         PenNode::Line(n) => n.stroke = Some(stroke),
         PenNode::TextInput(n) => n.stroke = Some(stroke),
+        PenNode::TextArea(n) => n.stroke = Some(stroke),
+        PenNode::Select(n) => n.stroke = Some(stroke),
+        PenNode::Switch(n) => n.stroke = Some(stroke),
+        PenNode::Checkbox(n) => n.stroke = Some(stroke),
+        PenNode::Slider(n) => n.stroke = Some(stroke),
+        PenNode::RadioGroup(n) => n.stroke = Some(stroke),
+        PenNode::NumberInput(n) => n.stroke = Some(stroke),
+        PenNode::Progress(n) => n.stroke = Some(stroke),
+        PenNode::Tabs(n) => n.stroke = Some(stroke),
         PenNode::Text(_) | PenNode::IconFont(_) | PenNode::Image(_) | PenNode::Ref(_) => {}
     }
 }
@@ -649,6 +658,15 @@ fn clear_node_fill(node: &mut PenNode) {
         PenNode::Text(n) => n.fill = None,
         PenNode::TextInput(n) => n.fill = None,
         PenNode::IconFont(n) => n.fill = None,
+        PenNode::TextArea(n) => n.fill = None,
+        PenNode::Select(n) => n.fill = None,
+        PenNode::Switch(n) => n.fill = None,
+        PenNode::Checkbox(n) => n.fill = None,
+        PenNode::Slider(n) => n.fill = None,
+        PenNode::RadioGroup(n) => n.fill = None,
+        PenNode::NumberInput(n) => n.fill = None,
+        PenNode::Progress(n) => n.fill = None,
+        PenNode::Tabs(n) => n.fill = None,
         PenNode::Line(_) | PenNode::Image(_) | PenNode::Ref(_) => {}
     }
 }

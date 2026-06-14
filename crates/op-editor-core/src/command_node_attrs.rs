@@ -73,6 +73,15 @@ fn node_effects_slot(node: &mut PenNode) -> Option<&mut Option<Vec<PenEffect>>> 
         PenNode::Text(n) => Some(&mut n.effects),
         PenNode::TextInput(n) => Some(&mut n.effects),
         PenNode::Image(n) => Some(&mut n.effects),
+        PenNode::TextArea(n) => Some(&mut n.effects),
+        PenNode::Select(n) => Some(&mut n.effects),
+        PenNode::Switch(n) => Some(&mut n.effects),
+        PenNode::Checkbox(n) => Some(&mut n.effects),
+        PenNode::Slider(n) => Some(&mut n.effects),
+        PenNode::RadioGroup(n) => Some(&mut n.effects),
+        PenNode::NumberInput(n) => Some(&mut n.effects),
+        PenNode::Progress(n) => Some(&mut n.effects),
+        PenNode::Tabs(n) => Some(&mut n.effects),
         PenNode::IconFont(_) | PenNode::Ref(_) => None,
     }
 }
@@ -90,6 +99,15 @@ fn node_stroke_slot(node: &mut PenNode) -> Option<&mut Option<PenStroke>> {
         PenNode::Line(n) => Some(&mut n.stroke),
         PenNode::TextInput(n) => Some(&mut n.stroke),
         PenNode::IconFont(n) => Some(&mut n.stroke),
+        PenNode::TextArea(n) => Some(&mut n.stroke),
+        PenNode::Select(n) => Some(&mut n.stroke),
+        PenNode::Switch(n) => Some(&mut n.stroke),
+        PenNode::Checkbox(n) => Some(&mut n.stroke),
+        PenNode::Slider(n) => Some(&mut n.stroke),
+        PenNode::RadioGroup(n) => Some(&mut n.stroke),
+        PenNode::NumberInput(n) => Some(&mut n.stroke),
+        PenNode::Progress(n) => Some(&mut n.stroke),
+        PenNode::Tabs(n) => Some(&mut n.stroke),
         PenNode::Text(_) | PenNode::Image(_) | PenNode::Ref(_) => None,
     }
 }

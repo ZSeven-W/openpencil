@@ -226,6 +226,15 @@ pub(super) fn kind_label(node: &PenNode) -> &'static str {
         PenNode::Path(_) => "Path",
         PenNode::Text(_) => "Text",
         PenNode::TextInput(_) => "Text Input",
+        PenNode::TextArea(_) => "Text Area",
+        PenNode::Select(_) => "Select",
+        PenNode::Switch(_) => "Switch",
+        PenNode::Checkbox(_) => "Checkbox",
+        PenNode::Slider(_) => "Slider",
+        PenNode::RadioGroup(_) => "Radio Group",
+        PenNode::NumberInput(_) => "Number Input",
+        PenNode::Progress(_) => "Progress",
+        PenNode::Tabs(_) => "Tabs",
         PenNode::Image(_) => "Image",
         PenNode::IconFont(_) => "Icon",
         PenNode::Ref(_) => "Component",
@@ -245,7 +254,15 @@ pub(super) fn icon_for_node(node: &PenNode) -> Icon {
         PenNode::Polygon(_) => Icon::Triangle,
         PenNode::Line(_) => Icon::Minus,
         PenNode::Path(_) => Icon::PenTool,
-        PenNode::Text(_) | PenNode::TextInput(_) => Icon::Type,
+        PenNode::Text(_) | PenNode::TextInput(_) | PenNode::TextArea(_) => Icon::Type,
+        PenNode::Select(_)
+        | PenNode::Switch(_)
+        | PenNode::Checkbox(_)
+        | PenNode::Slider(_)
+        | PenNode::RadioGroup(_)
+        | PenNode::NumberInput(_)
+        | PenNode::Progress(_)
+        | PenNode::Tabs(_) => Icon::Square,
         PenNode::Image(_) => Icon::Square,
         PenNode::IconFont(_) => Icon::Square,
     }

@@ -153,8 +153,10 @@ fn model_picker_hit_uses_shared_select_state_protocol() {
         entry(AgentProvider::ClaudeCode, "a"),
         entry(AgentProvider::CodexCli, "b"),
     ];
-    let mut state = SelectState::default();
-    state.open = true;
+    let state = SelectState {
+        open: true,
+        ..Default::default()
+    };
     let rect = Rect {
         origin: Point2D::new(0.0, 0.0),
         size: Point2D::new(220.0, picker_view_height(&models, "")),
@@ -182,9 +184,11 @@ fn pressed_model_row_uses_shared_select_feedback() {
         origin: Point2D::new(10.0, 20.0),
         size: Point2D::new(240.0, picker_view_height(&models, "")),
     };
-    let mut state = SelectState::default();
-    state.open = true;
-    state.pressed = Some(0);
+    let state = SelectState {
+        open: true,
+        pressed: Some(0),
+        ..Default::default()
+    };
     let theme = Theme::dark();
     let input = TextInputState::default();
     let mut backend = RoundFillBackend::default();

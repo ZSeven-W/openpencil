@@ -214,6 +214,7 @@ impl ExportDialog {
         paint_centered_label(backend, label, 12.0, theme.muted_foreground, rect);
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn paint_pill(
         &self,
         backend: &mut dyn RenderBackend,
@@ -450,10 +451,12 @@ mod tests {
     #[test]
     fn pressed_scale_pill_uses_shared_button_feedback() {
         let dlg = ExportDialog::centered(1000.0, 800.0);
-        let mut ui = EditorUiState::default();
-        ui.pressed_button = Some(op_editor_core::ButtonPressTarget::ExportDialog(
-            op_editor_core::ExportDialogButton::Scale(1),
-        ));
+        let ui = EditorUiState {
+            pressed_button: Some(op_editor_core::ButtonPressTarget::ExportDialog(
+                op_editor_core::ExportDialogButton::Scale(1),
+            )),
+            ..Default::default()
+        };
         let theme = Theme::dark();
         let expected = theme.button_hover.with_alpha(theme.button_hover.a * 1.8);
         let mut backend = CaptureBackend::default();

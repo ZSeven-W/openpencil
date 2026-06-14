@@ -442,6 +442,7 @@ impl Widget for Toolbar {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn paint_button(
     cx: &mut PaintCx<'_>,
     theme: &Theme,

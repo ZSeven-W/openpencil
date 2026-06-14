@@ -164,6 +164,15 @@ fn base_mut(node: &mut PenNode) -> &mut jian_ops_schema::node::PenNodeBase {
         PenNode::TextInput(n) => &mut n.base,
         PenNode::Image(n) => &mut n.base,
         PenNode::IconFont(n) => &mut n.base,
+        PenNode::TextArea(n) => &mut n.base,
+        PenNode::Select(n) => &mut n.base,
+        PenNode::Switch(n) => &mut n.base,
+        PenNode::Checkbox(n) => &mut n.base,
+        PenNode::Slider(n) => &mut n.base,
+        PenNode::RadioGroup(n) => &mut n.base,
+        PenNode::NumberInput(n) => &mut n.base,
+        PenNode::Progress(n) => &mut n.base,
+        PenNode::Tabs(n) => &mut n.base,
         PenNode::Ref(n) => &mut n.base,
     }
 }

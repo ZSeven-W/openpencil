@@ -33,6 +33,7 @@ pub mod validation_config;
 pub mod validation_dump;
 pub mod validation_fixes;
 pub(crate) mod validation_fixes_b3;
+mod variable_binding;
 pub mod variables;
 
 pub mod append;
@@ -72,3 +73,14 @@ pub use stub_providers::{
     SkippedVisualRefProvider,
 };
 pub use types::*;
+
+#[cfg(test)]
+pub(crate) mod agent_indicator_test_support {
+    use std::sync::{LazyLock, Mutex, MutexGuard};
+
+    static LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+
+    pub(crate) fn lock() -> MutexGuard<'static, ()> {
+        LOCK.lock().unwrap_or_else(|e| e.into_inner())
+    }
+}

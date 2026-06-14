@@ -101,8 +101,10 @@ fn tracked_picker_rows_use_shared_select_hit_protocol() {
 
 #[test]
 fn pressed_tracked_picker_row_uses_shared_select_feedback() {
-    let mut select = SelectState::default();
-    select.pressed = Some(1);
+    let select = SelectState {
+        pressed: Some(1),
+        ..Default::default()
+    };
     let state = state_with(GitPanelState {
         overflow_open: true,
         overflow_view: GitOverflowView::TrackedPicker,
