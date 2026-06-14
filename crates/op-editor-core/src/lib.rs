@@ -28,6 +28,7 @@ pub mod command_batch;
 pub mod command_layout_prop;
 pub mod command_node;
 pub mod command_node_attrs;
+pub mod command_promote;
 pub mod command_refine;
 pub mod command_style_replace;
 pub mod component_browser_state;
@@ -101,6 +102,8 @@ mod command_delete_tests;
 #[cfg(test)]
 mod command_insert_tests;
 #[cfg(test)]
+mod command_promote_tests;
+#[cfg(test)]
 mod command_refine_tests;
 #[cfg(test)]
 mod command_reparent_tests;
@@ -114,6 +117,8 @@ mod command_subtree_tests;
 mod command_tests;
 #[cfg(test)]
 mod command_update_tests;
+#[cfg(test)]
+mod command_widget_tests;
 #[cfg(test)]
 mod svg_import_tests;
 #[cfg(test)]
@@ -154,6 +159,8 @@ pub use command::{
     BatchInsertItem, EditorCommand, EffectField, LayoutPropValue, NodeFlag, StylePropValue,
     StylePropertyReplacement, VariableScalarPayload,
 };
+pub use command_node_attrs::{WidgetNumberField, WidgetTextField};
+pub use command_promote::PromoteResult;
 pub use component_browser_state::ComponentBrowserButton;
 pub use components::{Component, ComponentLibrary};
 pub use design_md::{extract_design_md_from_document, generate_design_md, parse_design_md};
@@ -184,7 +191,7 @@ pub use instance_override::{
 };
 pub use jian_ops_schema::{DesignMdColor, DesignMdSpec, DesignMdTypography, PenDocument};
 pub use node_defaults::{
-    default_leaf_node_size, DEFAULT_LEAF_NODE_SIZE, DEFAULT_TEXT_NODE_HEIGHT,
+    default_leaf_node_size, widget_default_size, DEFAULT_LEAF_NODE_SIZE, DEFAULT_TEXT_NODE_HEIGHT,
     DEFAULT_TEXT_NODE_WIDTH,
 };
 pub use node_id::NodeId;

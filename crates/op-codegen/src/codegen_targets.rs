@@ -12,8 +12,177 @@ use crate::{
     node_hidden, node_is_ellipse, node_is_text, node_origin, node_rotation_deg, node_size,
     node_stroke_css, node_text, parse_color, root_nodes, Codegen, CssVariables,
 };
-use jian_ops_schema::node::PenNode;
+use jian_ops_schema::node::{BoolOrExpression, NumberOrExpression, PenNode};
 use jian_ops_schema::PenDocument;
+
+// --- First-class widget element mapping ----------------------------
+//
+// The 10 form/widget node kinds (text_input / text_area / number_input
+// / select / radio_group / switch / checkbox / slider / progress /
+// tabs) map to real HTML form elements instead of falling through to
+// the generic `<div>` / `<span>` heuristic in `emit_node_html` /
+// `emit_node_jsx`. These helpers return the inner element markup; the
+// per-target emitters keep owning the positioned wrapper. Generated
+// markup is valid in both HTML and JSX (self-closed voids end `/>`,
+// boolean attributes are bare — which JSX accepts), so the two targets
+// share one mapping. `tabs` is the only container: it emits a button
+// tablist from `tabs[]` and recurses children as panels, so its inner
+// recursion is target-specific and handled inline by the caller.
+
+/// Flatten a `BoolOrExpression` to a literal `true`. Expression-bound
+/// checked states can't be resolved statically, so they read as
+/// unchecked — same degrade the other generators apply for `$var`.
+fn bool_or_expr_true(b: &Option<BoolOrExpression>) -> bool {
+    matches!(b, Some(BoolOrExpression::Bool(true)))
+}
+
+/// Flatten a `NumberOrExpression` to its literal value, when concrete.
+/// Expression-bound values read as `None` (no static value attribute).
+fn number_or_expr(n: &Option<NumberOrExpression>) -> Option<f64> {
+    match n {
+        Some(NumberOrExpression::Number(v)) => Some(*v),
+        _ => None,
+    }
+}
+
+/// Emit a single HTML attribute `key="value"` (value html-escaped),
+/// skipping when `value` is `None`. The leading space lets callers
+/// concatenate attributes onto an open tag.
+fn opt_attr(key: &str, value: Option<&str>) -> String {
+    match value {
+        Some(v) => format!(" {}=\"{}\"", key, html_escape(v)),
+        None => String::new(),
+    }
+}
+
+/// Emit a numeric attribute `key="n"` (formatted via `fmt_num`),
+/// skipping when `value` is `None`.
+fn opt_num_attr(key: &str, value: Option<f64>) -> String {
+    match value {
+        Some(v) => format!(" {}=\"{}\"", key, fmt_num(v)),
+        None => String::new(),
+    }
+}
+
+/// Map a first-class widget node to its form-element markup. Returns
+/// `None` for non-widget variants (so the caller falls back to the
+/// generic div/span heuristic). `tabs` is handled by the caller
+/// because its panel children recurse target-specifically; this
+/// helper covers the 9 leaf widget kinds.
+fn widget_markup(node: &PenNode) -> Option<String> {
+    Some(match node {
+        PenNode::TextInput(n) => format!(
+            "<input type=\"text\"{}{} />",
+            opt_attr("placeholder", n.placeholder.as_deref()),
+            opt_attr("value", n.value.as_deref()),
+        ),
+        PenNode::TextArea(n) => format!(
+            "<textarea{}>{}</textarea>",
+            opt_attr("placeholder", n.placeholder.as_deref()),
+            html_escape(n.value.as_deref().unwrap_or_default()),
+        ),
+        PenNode::NumberInput(n) => format!(
+            "<input type=\"number\"{}{}{}{} />",
+            opt_num_attr("min", n.min),
+            opt_num_attr("max", n.max),
+            opt_num_attr("step", n.step),
+            opt_num_attr("value", number_or_expr(&n.value)),
+        ),
+        PenNode::Select(n) => {
+            let mut s = String::from("<select>");
+            for opt in n.options.iter().flatten() {
+                let selected = if n.value.as_deref() == Some(opt.value.as_str()) {
+                    " selected"
+                } else {
+                    ""
+                };
+                s.push_str(&format!(
+                    "<option value=\"{}\"{}>{}</option>",
+                    html_escape(&opt.value),
+                    selected,
+                    html_escape(&opt.label),
+                ));
+            }
+            s.push_str("</select>");
+            s
+        }
+        PenNode::RadioGroup(n) => {
+            let group = n.base.id.as_str();
+            let mut s = String::new();
+            for opt in n.options.iter().flatten() {
+                let checked = if n.value.as_deref() == Some(opt.value.as_str()) {
+                    " checked"
+                } else {
+                    ""
+                };
+                s.push_str(&format!(
+                    "<label><input type=\"radio\" name=\"{}\" value=\"{}\"{} />{}</label>",
+                    html_escape(group),
+                    html_escape(&opt.value),
+                    checked,
+                    html_escape(&opt.label),
+                ));
+            }
+            s
+        }
+        PenNode::Switch(n) => format!(
+            "<input type=\"checkbox\" role=\"switch\"{} />",
+            if bool_or_expr_true(&n.checked) {
+                " checked"
+            } else {
+                ""
+            },
+        ),
+        PenNode::Checkbox(n) => format!(
+            "<input type=\"checkbox\"{} /> <label>{}</label>",
+            if bool_or_expr_true(&n.checked) {
+                " checked"
+            } else {
+                ""
+            },
+            html_escape(n.label.as_deref().unwrap_or_default()),
+        ),
+        PenNode::Slider(n) => format!(
+            "<input type=\"range\"{}{}{}{} />",
+            opt_num_attr("min", n.min),
+            opt_num_attr("max", n.max),
+            opt_num_attr("step", n.step),
+            opt_num_attr("value", number_or_expr(&n.value)),
+        ),
+        PenNode::Progress(n) => format!(
+            "<progress{}{}></progress>",
+            opt_num_attr("value", number_or_expr(&n.value)),
+            opt_num_attr("max", n.max),
+        ),
+        _ => return None,
+    })
+}
+
+/// Emit the tablist `<nav>` of buttons for a `tabs` node — one button
+/// per `tabs[]` entry, the active one (matching `value`) flagged
+/// `aria-selected`. The panel children are recursed by the caller so
+/// HTML / JSX each keep their own child-emit routine.
+fn tabs_nav_markup(node: &PenNode) -> Option<String> {
+    let PenNode::Tabs(n) = node else {
+        return None;
+    };
+    let mut s = String::from("<nav role=\"tablist\">");
+    for tab in n.tabs.iter().flatten() {
+        let selected = if n.value.as_deref() == Some(tab.value.as_str()) {
+            " aria-selected=\"true\""
+        } else {
+            ""
+        };
+        s.push_str(&format!(
+            "<button role=\"tab\" value=\"{}\"{}>{}</button>",
+            html_escape(&tab.value),
+            selected,
+            html_escape(&tab.label),
+        ));
+    }
+    s.push_str("</nav>");
+    Some(s)
+}
 
 /// HTML + inline-CSS generator. Walks the document's node tree and
 /// emits `<div>` per Rect/Frame/Group with absolute positioning and
@@ -73,6 +242,27 @@ fn emit_node_html(out: &mut String, node: &PenNode, depth: usize) {
     let rotation = node_rotation_deg(node);
     if rotation.abs() > f64::EPSILON {
         style.push_str(&format!(";transform:rotate({}deg)", fmt_num(rotation)));
+    }
+    // First-class widgets win over the generic div/span heuristic: nest
+    // the real form element inside the positioned wrapper so absolute
+    // layout is preserved. `tabs` also recurses its panel children.
+    if let Some(widget) = widget_markup(node) {
+        out.push_str(&format!("{indent}<div style=\"{style}\">{widget}</div>\n"));
+        return;
+    }
+    if let Some(nav) = tabs_nav_markup(node) {
+        out.push_str(&format!("{indent}<div style=\"{style}\">{nav}"));
+        let children = node_children(node);
+        if children.is_empty() {
+            out.push_str("</div>\n");
+        } else {
+            out.push('\n');
+            for c in children {
+                emit_node_html(out, c, depth + 1);
+            }
+            out.push_str(&format!("{indent}</div>\n"));
+        }
+        return;
     }
     let body = node_text(node).unwrap_or_default();
     let children = node_children(node);
@@ -202,6 +392,30 @@ fn emit_node_jsx(out: &mut String, node: &PenNode, depth: usize) {
             String::new()
         },
     );
+    // First-class widgets win over the generic div/span heuristic. The
+    // shared form-element markup is JSX-valid (self-closed voids, bare
+    // boolean attributes), so it nests directly inside the positioned
+    // wrapper. `tabs` also recurses its panel children.
+    if let Some(widget) = widget_markup(node) {
+        out.push_str(&format!(
+            "{indent}<div style={{{{{style}}}}}>{widget}</div>\n"
+        ));
+        return;
+    }
+    if let Some(nav) = tabs_nav_markup(node) {
+        out.push_str(&format!("{indent}<div style={{{{{style}}}}}>{nav}"));
+        let children = node_children(node);
+        if children.is_empty() {
+            out.push_str("</div>\n");
+        } else {
+            out.push('\n');
+            for c in children {
+                emit_node_jsx(out, c, depth + 1);
+            }
+            out.push_str(&format!("{indent}</div>\n"));
+        }
+        return;
+    }
     let body = node_text(node).unwrap_or_default();
     let children = node_children(node);
     if children.is_empty() && body.is_empty() {

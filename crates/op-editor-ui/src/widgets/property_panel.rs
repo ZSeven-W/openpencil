@@ -53,7 +53,8 @@ pub use crate::widgets::property_panel_action::{
 pub(crate) use crate::widgets::property_panel_layout::SectionCapabilities;
 use crate::widgets::property_panel_snapshot::color_from_hex;
 pub use crate::widgets::property_panel_snapshot::{
-    EffectKind, EffectSummary, EllipseArcSummary, GradientStopSummary, NodeSnapshot,
+    EffectKind, EffectSummary, EllipseArcSummary, GradientStopSummary, NodeSnapshot, WidgetKind,
+    WidgetSummary,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -508,6 +509,8 @@ impl PropertyPanel {
             clip_content: self.snapshot.can_clip_content,
             text: caps.text && self.snapshot.text.is_some(),
             icon: self.snapshot.icon.is_some(),
+            widget: self.snapshot.widget.as_ref().map(|w| w.kind),
+            widget_checked: self.snapshot.widget.as_ref().is_some_and(|w| w.checked),
             image: caps.image && self.snapshot.is_image_node,
             image_warning: caps.image
                 && self
@@ -945,6 +948,18 @@ impl Widget for PropertyPanel {
         }
         if caps.text && self.snapshot.text.is_some() {
             y = crate::widgets::property_panel_text::paint_text_section(
+                cx,
+                &self.theme,
+                &self.snapshot,
+                &edit_ctx,
+                self.locale,
+                x,
+                y,
+                w,
+            );
+        }
+        if self.snapshot.widget.is_some() {
+            y = crate::widgets::property_panel_widget::paint_widget_section(
                 cx,
                 &self.theme,
                 &self.snapshot,

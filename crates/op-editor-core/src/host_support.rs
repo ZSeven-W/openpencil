@@ -86,10 +86,17 @@ impl EditorState {
         state
     }
 
-    /// Spawn a fresh leaf node for the active shape / frame / text
-    /// tool at `(doc_x, doc_y)`, sized `init_w × init_h`. Returns the
-    /// new node's id on success; `None` for `Select` / `Hand` (no
-    /// creatable kind) or when the id allocator is exhausted.
+    /// Spawn a fresh leaf node for the active shape / frame / text /
+    /// form-widget tool at `(doc_x, doc_y)`, sized `init_w × init_h`.
+    /// Returns the new node's id on success; `None` for `Select` /
+    /// `Hand` (no creatable kind) or when the id allocator is
+    /// exhausted.
+    ///
+    /// Form-widget tools ([`Tool::widget_kind`]) ignore the caller's
+    /// `init_w` / `init_h` and use the widget's spec default box
+    /// ([`crate::widget_default_size`]) so a single click drops a
+    /// correctly-sized widget; non-widget tools keep their existing
+    /// drag-init sizing.
     ///
     /// `next_id` is the host's monotonic id counter — bumped past the
     /// document's highest id so a loaded document with ids near the
@@ -104,8 +111,9 @@ impl EditorState {
         init_h: f64,
     ) -> Option<NodeId> {
         // `(canonical kind, display name)` for each creatable tool.
-        // The Pen tool spawns a `path` named "Path"; other tools map
-        // straight through. `Select` / `Hand` are not creatable.
+        // The Pen tool spawns a `path` named "Path"; form widgets map
+        // through `Tool::widget_kind`; other tools map straight
+        // through. `Select` / `Hand` are not creatable.
         let (kind, name): (&str, &str) = match tool {
             Tool::Rect => ("rect", "Rectangle"),
             Tool::Ellipse => ("ellipse", "Ellipse"),
@@ -114,7 +122,26 @@ impl EditorState {
             Tool::Pen => ("path", "Path"),
             Tool::Frame => ("frame", "Frame"),
             Tool::Text => ("text", "Text"),
+            Tool::TextInput => ("text_input", "Text Input"),
+            Tool::TextArea => ("text_area", "Text Area"),
+            Tool::NumberInput => ("number_input", "Number Input"),
+            Tool::Select_ => ("select", "Select"),
+            Tool::RadioGroup => ("radio_group", "Radio Group"),
+            Tool::Switch => ("switch", "Switch"),
+            Tool::Checkbox => ("checkbox", "Checkbox"),
+            Tool::Slider => ("slider", "Slider"),
+            Tool::Progress => ("progress", "Progress"),
+            Tool::Tabs => ("tabs", "Tabs"),
             Tool::Select | Tool::Hand => return None,
+        };
+        // Widgets click-create at their spec default box; other tools
+        // keep the caller's drag-init size.
+        let (w, h) = match crate::widget_default_size(kind) {
+            Some((dw, dh)) => (dw, dh),
+            None => (
+                init_w.round().max(0.0) as i32,
+                init_h.round().max(0.0) as i32,
+            ),
         };
         // Allocator-collision guard — lift the counter past the
         // document's id space before minting.
@@ -128,12 +155,13 @@ impl EditorState {
             name,
             doc_x.round() as i32,
             doc_y.round() as i32,
-            init_w.round().max(0.0) as i32,
-            init_h.round().max(0.0) as i32,
+            w,
+            h,
         )?;
         // Default paints — match the shell-core host's create path:
         // shape tools get a light-grey body fill; Line / Pen get a
-        // 2-px black stroke; Frame gets a white fill.
+        // 2-px black stroke; Frame gets a white fill. Form widgets keep
+        // the factory's own default props (no extra fill/stroke).
         match tool {
             Tool::Rect | Tool::Ellipse | Tool::Polygon => {
                 set_primary_fill_hex(&mut node, "#BDC7D9");
@@ -144,7 +172,7 @@ impl EditorState {
             Tool::Frame => {
                 set_primary_fill_hex(&mut node, "#FFFFFF");
             }
-            Tool::Text | Tool::Select | Tool::Hand => {}
+            _ => {}
         }
         self.active_children_mut().push(node);
         Some(id)

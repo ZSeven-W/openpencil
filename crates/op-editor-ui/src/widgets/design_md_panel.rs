@@ -19,6 +19,9 @@ use crate::widgets::{draw_icon, Icon, PaintCx};
 use crate::{Color, Point2D, Rect, TextLayout};
 use op_editor_core::{ButtonPressTarget, DesignMdButton, DesignMdSpec, EditorState, Locale};
 
+mod helpers;
+use helpers::{contains, hex_to_color, label_char_w, truncate};
+
 /// Panel width in logical px.
 pub const DESIGN_MD_PANEL_W: f32 = 480.0;
 /// Panel height in logical px.
@@ -26,23 +29,16 @@ pub const DESIGN_MD_PANEL_H: f32 = 560.0;
 
 const PAD: f32 = 14.0;
 const HEADER_H: f32 = 40.0;
-/// Header-button side length + gap.
 const BTN: f32 = 24.0;
 const BTN_GAP: f32 = 6.0;
 const SECTION_HEADER_H: f32 = 28.0;
 const SECTION_GAP: f32 = 6.0;
-/// Body text line height.
 const LINE_H: f32 = 16.0;
-/// Heading line height.
 const HEADING_H: f32 = 18.0;
-/// Colour-swatch row height.
 const COLOR_ROW_H: f32 = 24.0;
 const FOOTER_H: f32 = 22.0;
-/// Gap between markdown blocks.
 const BLOCK_GAP: f32 = 5.0;
-/// Approximate glyph advance at the 11 px body size.
 const CHAR_W: f32 = 6.0;
-/// Body-text left indent inside a section.
 const BODY_INDENT: f32 = 12.0;
 
 /// The 6 design-md sections, in display order. The index doubles as
@@ -56,6 +52,8 @@ pub enum DesignMdHit {
     Close,
     /// The header import button — pick + parse a `.md` file.
     Import,
+    /// The header / empty-state auto-generate button.
+    AutoGenerate,
     /// The header export button — write the design.md to disk.
     Export,
     /// The footer "remove" link — clear `design_md`.
@@ -75,6 +73,7 @@ pub struct DesignMdPanel<'a> {
     locale: Locale,
     /// Bitmask of expanded sections (bit 0 = theme … 5 = notes).
     expanded: u8,
+    scroll: f32,
     /// Which target the cursor is over — drives the hover wash.
     hover: Option<DesignMdButton>,
     /// Which Design-MD target is actively pressed.
@@ -133,6 +132,7 @@ impl<'a> DesignMdPanel<'a> {
             theme: theme_for(&state.editor_ui),
             locale: state.editor_ui.locale,
             expanded: state.editor_ui.design_md_expanded,
+            scroll: state.editor_ui.design_md_scroll.offset,
             hover: state.editor_ui.design_md_hover,
             pressed: match state.editor_ui.pressed_button {
                 Some(ButtonPressTarget::DesignMd(button)) => Some(button),
@@ -148,6 +148,7 @@ impl<'a> DesignMdPanel<'a> {
         match self.hit_test(panel, point)? {
             DesignMdHit::Close => Some(B::Close),
             DesignMdHit::Import => Some(B::Import),
+            DesignMdHit::AutoGenerate => Some(B::AutoGenerate),
             DesignMdHit::Export => Some(B::Export),
             DesignMdHit::Remove => Some(B::Remove),
             DesignMdHit::ToggleSection(i) => Some(B::ToggleSection(i)),
@@ -178,16 +179,38 @@ impl<'a> DesignMdPanel<'a> {
             || s.generation_notes.is_some()
     }
 
-    /// The three header buttons `[import, export, close]`, right-aligned.
-    fn header_buttons(panel: Rect) -> [Rect; 3] {
+    /// The four header buttons `[import, auto-generate, export, close]`, right-aligned.
+    fn header_buttons(panel: Rect) -> [Rect; 4] {
         let y = panel.origin.y + (HEADER_H - BTN) / 2.0;
         let right = panel.origin.x + panel.size.x - PAD;
         let slot = |from_right: f32| Rect {
             origin: Point2D::new(right - (from_right + 1.0) * BTN - from_right * BTN_GAP, y),
             size: Point2D::new(BTN, BTN),
         };
-        // from_right 0 = close (rightmost) … 2 = import.
-        [slot(2.0), slot(1.0), slot(0.0)]
+        // from_right 0 = close (rightmost) … 3 = import.
+        [slot(3.0), slot(2.0), slot(1.0), slot(0.0)]
+    }
+
+    fn empty_action_buttons(panel: Rect) -> [(DesignMdHit, DesignMdButton, Icon, Rect); 2] {
+        let w = 138.0;
+        let h = 32.0;
+        let gap = 10.0;
+        let y = panel.origin.y + panel.size.y / 2.0 + 42.0;
+        let left = panel.origin.x + (panel.size.x - w * 2.0 - gap) / 2.0;
+        [
+            (
+                DesignMdHit::Import,
+                DesignMdButton::Import,
+                Icon::FolderOpen,
+                Rect::xywh(left, y, w, h),
+            ),
+            (
+                DesignMdHit::AutoGenerate,
+                DesignMdButton::AutoGenerate,
+                Icon::Wand2,
+                Rect::xywh(left + w + gap, y, w, h),
+            ),
+        ]
     }
 
     /// The raw markdown content of section `index`, capped at `limit`.
@@ -328,18 +351,37 @@ impl<'a> DesignMdPanel<'a> {
         }
     }
 
+    fn content_bottom(&self, panel: Rect) -> f32 {
+        if !self.has_content() {
+            return panel.origin.y + HEADER_H;
+        }
+        let remove = self.remove_rect(panel);
+        remove.origin.y + remove.size.y + PAD
+    }
+
+    pub fn max_scroll(&self, panel: Rect) -> f32 {
+        (self.content_bottom(panel) - (panel.origin.y + panel.size.y)).max(0.0)
+    }
+
+    fn effective_scroll(&self, panel: Rect) -> f32 {
+        self.scroll.clamp(0.0, self.max_scroll(panel))
+    }
+
     /// Map a click at `point` onto a [`DesignMdHit`]. `None` when the
     /// click is outside the panel rect.
     pub fn hit_test(&self, panel: Rect, point: Point2D) -> Option<DesignMdHit> {
         if !contains(panel, point) {
             return None;
         }
-        let [import, export, close] = Self::header_buttons(panel);
+        let [import, auto, export, close] = Self::header_buttons(panel);
         if contains(close, point) {
             return Some(DesignMdHit::Close);
         }
         if contains(import, point) {
             return Some(DesignMdHit::Import);
+        }
+        if contains(auto, point) {
+            return Some(DesignMdHit::AutoGenerate);
         }
         if contains(export, point) {
             return Some(DesignMdHit::Export);
@@ -349,13 +391,20 @@ impl<'a> DesignMdPanel<'a> {
             return Some(DesignMdHit::DragHeader);
         }
         if self.has_content() {
+            let content_point = Point2D::new(point.x, point.y + self.effective_scroll(panel));
             for sec in self.layout(panel) {
-                if contains(sec.header, point) {
+                if contains(sec.header, content_point) {
                     return Some(DesignMdHit::ToggleSection(sec.index));
                 }
             }
-            if contains(self.remove_rect(panel), point) {
+            if contains(self.remove_rect(panel), content_point) {
                 return Some(DesignMdHit::Remove);
+            }
+        } else {
+            for (hit, _, _, button) in Self::empty_action_buttons(panel) {
+                if contains(button, point) {
+                    return Some(hit);
+                }
             }
         }
         Some(DesignMdHit::Inside)
@@ -376,7 +425,7 @@ impl<'a> DesignMdPanel<'a> {
             13.0,
             self.theme.foreground,
         );
-        let [import, export, close] = Self::header_buttons(rect);
+        let [import, auto, export, close] = Self::header_buttons(rect);
         use DesignMdButton as B;
         self.icon_button(
             cx,
@@ -384,6 +433,13 @@ impl<'a> DesignMdPanel<'a> {
             Icon::FolderOpen,
             self.hover == Some(B::Import),
             self.is_pressed(B::Import),
+        );
+        self.icon_button(
+            cx,
+            auto,
+            Icon::Wand2,
+            self.hover == Some(B::AutoGenerate),
+            self.is_pressed(B::AutoGenerate),
         );
         self.icon_button(
             cx,
@@ -443,29 +499,47 @@ impl<'a> DesignMdPanel<'a> {
             11.0,
             self.theme.muted_foreground,
         );
+        for (_, button, icon, button_rect) in Self::empty_action_buttons(rect) {
+            self.action_button(
+                cx,
+                button_rect,
+                icon,
+                self.t(match button {
+                    DesignMdButton::Import => "designMd.importCta",
+                    DesignMdButton::AutoGenerate => "designMd.autoGenerateCta",
+                    _ => unreachable!("empty action button must be import or auto-generate"),
+                }),
+                self.hover == Some(button),
+                self.is_pressed(button),
+            );
+        }
     }
 
     /// Paint the project name + every present section.
     fn paint_content(&self, cx: &mut PaintCx<'_>, rect: Rect) {
         let left = rect.origin.x + PAD;
+        let scroll = self.effective_scroll(rect);
         if let Some(name) = self.spec.and_then(|s| s.project_name.as_deref()) {
             self.text(
                 cx,
                 &truncate(name, 56),
                 left,
-                rect.origin.y + HEADER_H + SECTION_GAP + 12.0,
+                rect.origin.y + HEADER_H + SECTION_GAP + 12.0 - scroll,
                 13.0,
                 self.theme.foreground,
             );
         }
-        for sec in self.layout(rect) {
+        for mut sec in self.layout(rect) {
+            sec.header.origin.y -= scroll;
+            sec.body_top -= scroll;
             self.paint_section_header(cx, &sec);
             if sec.expanded {
                 self.paint_section_body(cx, rect, &sec);
             }
         }
         // Footer "remove" link.
-        let remove = self.remove_rect(rect);
+        let mut remove = self.remove_rect(rect);
+        remove.origin.y -= scroll;
         let remove_hovered = self.hover == Some(DesignMdButton::Remove);
         let remove_color = paint_ghost_button_feedback(
             cx.backend,
@@ -668,6 +742,33 @@ impl<'a> DesignMdPanel<'a> {
         );
     }
 
+    fn action_button(
+        &self,
+        cx: &mut PaintCx<'_>,
+        rect: Rect,
+        icon: Icon,
+        label: &str,
+        hovered: bool,
+        pressed: bool,
+    ) {
+        cx.backend.fill_round_rect(rect, 8.0, self.theme.muted);
+        let color = paint_ghost_button_feedback(cx.backend, &self.theme, rect, hovered, pressed);
+        let icon_size = 14.0;
+        let gap = 8.0;
+        let text_w: f32 = label.chars().map(label_char_w).sum();
+        let left = rect.origin.x + (rect.size.x - icon_size - gap - text_w) / 2.0;
+        let icon_top = Point2D::new(left, rect.origin.y + (rect.size.y - icon_size) / 2.0);
+        draw_icon(cx.backend, icon, icon_top, icon_size, color, 1.5);
+        self.text(
+            cx,
+            label,
+            left + icon_size + gap,
+            rect.origin.y + rect.size.y / 2.0 + 4.0,
+            11.0,
+            color,
+        );
+    }
+
     /// Draw one line of text.
     fn text(
         &self,
@@ -686,35 +787,5 @@ impl<'a> DesignMdPanel<'a> {
             Point2D::new(0.0, 0.0),
         );
         cx.backend.draw_text(&layout, Point2D::new(x, baseline_y));
-    }
-}
-
-/// Whether `point` is inside `rect`.
-fn contains(rect: Rect, point: Point2D) -> bool {
-    point.x >= rect.origin.x
-        && point.x <= rect.origin.x + rect.size.x
-        && point.y >= rect.origin.y
-        && point.y <= rect.origin.y + rect.size.y
-}
-
-/// Char truncation with an ellipsis.
-fn truncate(s: &str, max: usize) -> String {
-    if s.chars().count() <= max {
-        return s.to_string();
-    }
-    let kept: String = s.chars().take(max.saturating_sub(1)).collect();
-    format!("{kept}…")
-}
-
-/// Parse a `#RRGGBB` hex into a [`Color`], falling back to mid-grey.
-fn hex_to_color(hex: &str) -> Color {
-    match op_editor_core::parse_hex_rgb(hex) {
-        Some((r, g, b)) => Color { r, g, b, a: 1.0 },
-        None => Color {
-            r: 0.5,
-            g: 0.5,
-            b: 0.5,
-            a: 1.0,
-        },
     }
 }

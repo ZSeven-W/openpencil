@@ -50,3 +50,14 @@ pub use jian_core::gesture::{
     MouseButtons, NamedKey, PointerEvent, PointerId, PointerKind, PointerPhase, ScrollMode,
     WheelEvent,
 };
+
+#[cfg(test)]
+pub(crate) mod agent_indicator_test_support {
+    use std::sync::{LazyLock, Mutex, MutexGuard};
+
+    static LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+
+    pub(crate) fn lock() -> MutexGuard<'static, ()> {
+        LOCK.lock().unwrap_or_else(|e| e.into_inner())
+    }
+}

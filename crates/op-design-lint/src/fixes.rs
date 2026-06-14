@@ -41,6 +41,8 @@ fn set_property(node: &mut PenNode, property: FixProperty, suggested: &Value) ->
         FixProperty::Stroke => node_mut::set_stroke_from_json(node, suggested),
         // text-bg-contrast is Info severity — never reaches apply_fixes.
         FixProperty::Fill => false,
+        // widget-a11y is detect-only — the label must be authored, no auto-fix.
+        FixProperty::Label => false,
         // Remove is handled in apply_fixes, never dispatched here.
         FixProperty::Remove => false,
     }

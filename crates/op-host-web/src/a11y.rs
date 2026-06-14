@@ -449,6 +449,16 @@ fn tool_label(tool: Tool) -> &'static str {
         Tool::Text => "Text",
         Tool::Frame => "Frame",
         Tool::Hand => "Hand (pan)",
+        Tool::TextInput => "Text Input",
+        Tool::TextArea => "Text Area",
+        Tool::NumberInput => "Number Input",
+        Tool::Select_ => "Select",
+        Tool::RadioGroup => "Radio Group",
+        Tool::Switch => "Switch",
+        Tool::Checkbox => "Checkbox",
+        Tool::Slider => "Slider",
+        Tool::Progress => "Progress",
+        Tool::Tabs => "Tabs",
     }
 }
 

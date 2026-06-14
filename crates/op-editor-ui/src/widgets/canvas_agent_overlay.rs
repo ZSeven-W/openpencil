@@ -83,6 +83,9 @@ fn paint_node_reveal_indicators(
     reveals: &HashMap<String, u64>,
 ) {
     for (node_id, started_at) in reveals {
+        if now_ms < *started_at {
+            continue;
+        }
         let Some(node) = find_scene_node(roots, node_id) else {
             continue;
         };
@@ -236,9 +239,6 @@ mod tests {
     use super::*;
     use crate::layout_scene::NodeKind;
     use crate::{RenderBackend, TextLayout};
-    use std::sync::{LazyLock, Mutex};
-
-    static INDICATOR_TEST_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
     #[derive(Default)]
     struct RevealCaptureBackend {
@@ -287,7 +287,7 @@ mod tests {
 
     #[test]
     fn reveal_overlay_paints_lifted_highlight_sweep_and_prunes_after_window() {
-        let _guard = INDICATOR_TEST_LOCK.lock().unwrap();
+        let _guard = crate::agent_indicator_test_support::lock();
         let epoch = op_editor_core::agent_indicators::begin();
         op_editor_core::agent_indicators::add_reveal(epoch, "new-node", 1_000);
         let roots = reveal_root();
@@ -331,6 +331,45 @@ mod tests {
         assert!(expired_backend.round_fills.is_empty());
         assert!(expired_backend.round_strokes.is_empty());
         op_editor_core::agent_indicators::clear();
+    }
+
+    #[test]
+    fn future_reveal_overlay_waits_for_start_time() {
+        let _guard = crate::agent_indicator_test_support::lock();
+        let epoch = op_editor_core::agent_indicators::begin();
+        op_editor_core::agent_indicators::add_reveal(epoch, "new-node", 1_500);
+        let roots = reveal_root();
+
+        let mut pending_backend = RevealCaptureBackend::default();
+        let mut pending_cx = PaintCx {
+            backend: &mut pending_backend,
+        };
+        paint_agent_frame_indicators(
+            &mut pending_cx,
+            &roots,
+            Point2D::new(100.0, 50.0),
+            2.0,
+            1_000,
+        );
+        assert!(pending_backend.round_fills.is_empty());
+        assert!(pending_backend.round_strokes.is_empty());
+
+        let mut started_backend = RevealCaptureBackend::default();
+        let mut started_cx = PaintCx {
+            backend: &mut started_backend,
+        };
+        paint_agent_frame_indicators(
+            &mut started_cx,
+            &roots,
+            Point2D::new(100.0, 50.0),
+            2.0,
+            1_500,
+        );
+        assert!(
+            !started_backend.round_fills.is_empty(),
+            "reveal should paint once its scheduled start arrives"
+        );
+        op_editor_core::agent_indicators::end_if_epoch(epoch);
     }
 
     #[test]

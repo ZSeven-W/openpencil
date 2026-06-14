@@ -57,6 +57,36 @@ impl EditorState {
                     Some((value.clamp(0.0, 99.0) / 100.0) as f64),
                 );
             }
+            PropertyFocus::WidgetMin => {
+                if !value.is_finite() {
+                    return false;
+                }
+                return self.cmd_set_node_widget_number(
+                    &sel,
+                    crate::WidgetNumberField::Min,
+                    value as f64,
+                );
+            }
+            PropertyFocus::WidgetMax => {
+                if !value.is_finite() {
+                    return false;
+                }
+                return self.cmd_set_node_widget_number(
+                    &sel,
+                    crate::WidgetNumberField::Max,
+                    value as f64,
+                );
+            }
+            PropertyFocus::WidgetStep => {
+                if !value.is_finite() {
+                    return false;
+                }
+                return self.cmd_set_node_widget_number(
+                    &sel,
+                    crate::WidgetNumberField::Step,
+                    value as f64,
+                );
+            }
             PropertyFocus::FontSize => return self.cmd_set_node_font_size(&sel, value.max(1.0)),
             PropertyFocus::FontWeight => {
                 if !value.is_finite() {
@@ -169,6 +199,9 @@ impl EditorState {
             | PropertyFocus::LineHeight
             | PropertyFocus::LetterSpacing
             | PropertyFocus::LayoutGap
+            | PropertyFocus::WidgetMin
+            | PropertyFocus::WidgetMax
+            | PropertyFocus::WidgetStep
             | PropertyFocus::PaddingTop
             | PropertyFocus::PaddingRight
             | PropertyFocus::PaddingBottom
@@ -177,8 +210,16 @@ impl EditorState {
             }
             // StrokeWidth handled in the first match (before the node
             // borrow). Opacity / FillHex / StrokeHex are applied by the
-            // host commit path, not this numeric commit.
-            PropertyFocus::Opacity | PropertyFocus::FillHex | PropertyFocus::StrokeHex => {}
+            // host commit path, not this numeric commit. The widget
+            // TEXT focuses (placeholder / value / label) are likewise
+            // committed via the host commit path's string arm, not this
+            // numeric one.
+            PropertyFocus::Opacity
+            | PropertyFocus::FillHex
+            | PropertyFocus::StrokeHex
+            | PropertyFocus::WidgetPlaceholder
+            | PropertyFocus::WidgetValue
+            | PropertyFocus::WidgetLabel => {}
             PropertyFocus::FillOpacity => {
                 let _ = self.set_selected_fill_opacity((value / 100.0).clamp(0.0, 1.0));
             }
@@ -191,6 +232,26 @@ impl EditorState {
             PropertyFocus::GradientStopHex(_) => {}
         }
         true
+    }
+
+    /// Write a string-typed widget prop (placeholder / value / label)
+    /// on the anchor node. True on a real, editable selection whose
+    /// variant actually carries the field.
+    pub fn set_selected_widget_text(&mut self, field: crate::WidgetTextField, text: &str) -> bool {
+        let sel = self.selection.anchor.clone();
+        if !sel.is_real() || !self.is_editable(&sel) {
+            return false;
+        }
+        self.cmd_set_node_widget_text(&sel, field, text)
+    }
+
+    /// Set the `checked` flag on the selected Switch / Checkbox node.
+    pub fn set_selected_widget_checked(&mut self, checked: bool) -> bool {
+        let sel = self.selection.anchor.clone();
+        if !sel.is_real() || !self.is_editable(&sel) {
+            return false;
+        }
+        self.cmd_set_node_widget_checked(&sel, checked)
     }
 
     pub fn set_selected_gradient_stop_hex(&mut self, index: usize, hex: &str) -> bool {

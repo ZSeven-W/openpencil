@@ -17,6 +17,7 @@ pub mod spacing;
 pub mod structure;
 pub mod text;
 pub mod typography;
+pub mod widget_a11y;
 
 #[cfg(test)]
 mod siblings_tests;
@@ -26,6 +27,7 @@ pub use spacing::*;
 pub use structure::*;
 pub use text::*;
 pub use typography::*;
+pub use widget_a11y::*;
 
 /// Port of `detectAllIssues` (`detectors.ts:698-724`). Runs the 14 detectors
 /// in the exact TS call order, concatenates their issue lists, and dedups on
@@ -51,6 +53,9 @@ pub fn detect_all(root: &PenNode, doc: &PenDocument) -> Vec<Issue> {
     combined.extend(detect_edge_section_padding(root));
     combined.extend(detect_stacked_horizontal_padding(root));
     combined.extend(detect_text_bg_contrast(root, doc));
+    // Phase E5 — widget a11y. No TS counterpart; runs last so it never
+    // shadows an earlier detector under the `{node_id}:{property}` dedup.
+    combined.extend(detect_unlabeled_inputs(root));
 
     let mut seen = HashSet::new();
     combined

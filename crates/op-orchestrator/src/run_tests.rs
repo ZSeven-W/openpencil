@@ -74,6 +74,15 @@ const PLAN_JSON: &str = r##"{
   ]
 }"##;
 
+const MOBILE_PLAN_JSON: &str = r##"{
+  "rootFrame": { "id": "root", "name": "Mobile Page", "width": 390, "height": 844,
+                 "layout": "vertical", "gap": 0,
+                 "fill": [{ "type": "solid", "color": "#FFF8F0" }] },
+  "subtasks": [
+    { "id": "hero", "label": "Hero", "region": { "width": 390, "height": 300 } }
+  ]
+}"##;
+
 fn node_json(prefix: &str) -> String {
     format!(
         r#"[{{"type":"frame","id":"{prefix}-1","name":"Sec","x":0,"y":0,"width":1200,"height":300,"children":[{{"type":"text","id":"{prefix}-title","content":"{prefix}","fontSize":18}}]}}]"#
@@ -123,6 +132,53 @@ fn run_happy_path_applies_scaffold_and_subtasks() {
         events.iter().any(|e| matches!(e, Progress::CleanupDone)),
         "expected CleanupDone in events"
     );
+}
+
+#[test]
+fn run_mobile_scaffold_reveals_status_bar() {
+    let _guard = crate::agent_indicator_test_support::lock();
+    let epoch = op_editor_core::agent_indicators::begin();
+    let llm = ScriptedLlm::new(vec![
+        ScriptResponse::Text(MOBILE_PLAN_JSON.into()),
+        ScriptResponse::Text(node_json("hero")),
+    ]);
+    let mut sink = VecDocSink::new();
+    let mut events: Vec<Progress> = Vec::new();
+    let mut on_progress = |p: Progress| events.push(p);
+    let mut request = req();
+    request.prompt = "a mobile food app".into();
+    request.validation_enabled = false;
+
+    let summary = futures::executor::block_on(Orchestrator::new().with_indicator_epoch(epoch).run(
+        request,
+        &mut sink,
+        &llm,
+        &mut on_progress,
+        &AbortFlag::new(),
+        &stub_providers(),
+    ))
+    .expect("mobile run ok");
+
+    assert!(!summary.root_frame_id.is_empty());
+    let root = sink.state.active_children().first().expect("root inserted");
+    let status_id = root
+        .children()
+        .expect("mobile root should have children")
+        .iter()
+        .find(|node| {
+            serde_json::to_value(node)
+                .ok()
+                .is_some_and(|v| v["role"] == "status-bar")
+        })
+        .map(|node| node.id_str().to_string())
+        .expect("mobile scaffold should insert a status bar");
+    let snapshot = op_editor_core::agent_indicators::snapshot();
+    assert!(
+        snapshot.reveals.contains_key(&status_id),
+        "status bar should get a reveal animation, got {:?}",
+        snapshot.reveals.keys().collect::<Vec<_>>()
+    );
+    op_editor_core::agent_indicators::end_if_epoch(epoch);
 }
 
 #[test]

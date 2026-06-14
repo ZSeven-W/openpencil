@@ -383,6 +383,19 @@ pub fn action_button_rects_with_fill_picker(
         y += SECTION_GAP;
     }
 
+    if let Some(kind) = visible.widget {
+        crate::widgets::property_panel_widget::push_widget_action_rects(
+            &mut out,
+            kind,
+            visible.widget_checked,
+            x0,
+            y,
+            usable_w,
+        );
+        y += crate::widgets::property_panel_widget::widget_section_height(kind);
+        y += SECTION_GAP;
+    }
+
     if visible.image {
         crate::widgets::property_panel_image_node::push_image_action_rects(
             &mut out,

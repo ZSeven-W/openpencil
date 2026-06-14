@@ -34,6 +34,7 @@ pub enum IssueCategory {
     EdgeSectionPadding,
     TextBgContrast,
     StackedHorizontalPadding,
+    WidgetA11y,
 }
 
 /// The node property a fix targets. The detectors emit only this closed set
@@ -59,6 +60,11 @@ pub enum FixProperty {
     Rotation,
     #[serde(rename = "stroke")]
     Stroke,
+    /// An accessible label / placeholder target (widget-a11y). Detect-only —
+    /// there is no safe auto-fix (the label text must be authored), so the
+    /// apply paths treat it as a no-op like `Fill`.
+    #[serde(rename = "label")]
+    Label,
 }
 
 impl FixProperty {
@@ -77,6 +83,7 @@ impl FixProperty {
             FixProperty::Padding => "padding",
             FixProperty::Rotation => "rotation",
             FixProperty::Stroke => "stroke",
+            FixProperty::Label => "label",
         }
     }
 }

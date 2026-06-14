@@ -318,6 +318,10 @@ pub enum PropertyPanelAction {
     /// User picked a padding edit mode in the gear popover — host pins
     /// `editor_ui.padding_edit_mode` + reshapes the value.
     SetPaddingMode(op_editor_core::PaddingEditMode),
+    /// User clicked the Widget section's `checked` toggle on a Switch
+    /// / Checkbox node — host flips the literal `checked` bool to
+    /// `new_value`.
+    ToggleWidgetChecked(bool),
     /// Code panel action — see `CodegenAction`.
     Codegen(CodegenAction),
 }

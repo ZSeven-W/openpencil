@@ -287,6 +287,58 @@ fn group_kind_recurses_without_own_paint() {
 }
 
 #[test]
+fn selection_overlay_waits_for_future_reveal_nodes() {
+    let _guard = crate::agent_indicator_test_support::lock();
+    let epoch = op_editor_core::agent_indicators::begin();
+    op_editor_core::agent_indicators::add_reveal(epoch, "n2", 1_200);
+
+    let child = leaf(
+        "n2",
+        NodeKind::Rect,
+        Rect::xywh(10.0, 10.0, 50.0, 30.0),
+        Some(Color::RED),
+    );
+    let mut frame = SceneNode::leaf("n1", NodeKind::Frame);
+    frame.bounds = Rect::xywh(0.0, 0.0, 100.0, 100.0);
+    frame.children = vec![child];
+    let scene = LayoutScene {
+        pages: vec![ScenePage {
+            id: "p".into(),
+            name: "p".into(),
+            children: vec![frame],
+        }],
+        active_page_index: 0,
+    };
+    let mut state = sample_state();
+    state.set_single_selection(op_editor_core::NodeId::new("n2"));
+    let mut viewport = CanvasViewport::from_editor(&state, &scene);
+
+    let mut pending_backend = RecordingBackend::default();
+    viewport.now_ms = 1_000;
+    {
+        let mut cx = PaintCx {
+            backend: &mut pending_backend,
+        };
+        viewport.paint(&mut cx, Rect::xywh(0.0, 0.0, 200.0, 200.0));
+    }
+    assert_eq!(pending_backend.strokes, 0);
+
+    let mut started_backend = RecordingBackend::default();
+    viewport.now_ms = 1_200;
+    {
+        let mut cx = PaintCx {
+            backend: &mut started_backend,
+        };
+        viewport.paint(&mut cx, Rect::xywh(0.0, 0.0, 200.0, 200.0));
+    }
+    assert!(
+        started_backend.strokes > 0,
+        "selection overlay should paint once the node starts revealing"
+    );
+    op_editor_core::agent_indicators::end_if_epoch(epoch);
+}
+
+#[test]
 fn flipped_node_applies_scale_transform() {
     let state = sample_state();
     let mut node = leaf(

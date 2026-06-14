@@ -24,6 +24,7 @@ impl DesktopApp {
         let locale = self.host.editor_state().editor_ui.locale;
         match request {
             DesignMdRequest::Import => self.import_design_md(locale),
+            DesignMdRequest::AutoGenerate => self.auto_generate_design_md(),
             DesignMdRequest::Export => self.export_design_md(locale),
         }
     }
@@ -48,8 +49,23 @@ impl DesktopApp {
         let spec = op_editor_core::parse_design_md(&markdown);
         // Snapshot first so the import is a single undo step.
         let snap = self.host.editor_state().snapshot_for_history();
-        self.host.editor_state_mut().doc.design_md = Some(spec);
-        self.host.editor_state_mut().history_push_past(snap);
+        let state = self.host.editor_state_mut();
+        state.doc.design_md = Some(spec);
+        state.editor_ui.design_md_scroll.offset = 0.0;
+        state.history_push_past(snap);
+        self.host.mark_editor_state_dirty();
+    }
+
+    /// Derive a fresh design.md from the open `.op` document. Replaces
+    /// any existing brief and snapshots first so the overwrite is
+    /// undoable.
+    fn auto_generate_design_md(&mut self) {
+        let spec = op_editor_core::extract_design_md_from_document(&self.host.editor_state().doc);
+        let snap = self.host.editor_state().snapshot_for_history();
+        let state = self.host.editor_state_mut();
+        state.doc.design_md = Some(spec);
+        state.editor_ui.design_md_scroll.offset = 0.0;
+        state.history_push_past(snap);
         self.host.mark_editor_state_dirty();
     }
 

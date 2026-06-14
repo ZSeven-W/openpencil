@@ -877,17 +877,20 @@ impl WidgetHostNative {
     /// Next millisecond at which the host should wake to repaint
     /// the caret blink phase. `None` = no animation pending.
     pub fn next_animation_deadline_ms(&self) -> Option<u64> {
+        let mut next = op_editor_core::agent_indicators::next_reveal_deadline_ms(self.now_ms);
         if let Some(input) = self.editor_state.active_text_input() {
-            return Some(input.next_blink_flip_ms(self.now_ms));
+            let deadline = input.next_blink_flip_ms(self.now_ms);
+            next = Some(next.map_or(deadline, |current| current.min(deadline)));
         }
         // While a `git clone` runs, keep the loop ticking so
         // `poll_git_clone_job` drains the worker's result later.
         if let Some(form) = &self.editor_state.editor_ui.git_panel.clone_form {
             if form.cloning {
-                return Some(self.now_ms.saturating_add(100));
+                let deadline = self.now_ms.saturating_add(100);
+                next = Some(next.map_or(deadline, |current| current.min(deadline)));
             }
         }
-        None
+        next
     }
 }
 

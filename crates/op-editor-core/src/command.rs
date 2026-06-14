@@ -480,4 +480,15 @@ pub enum EditorCommand {
     /// batch fails with zero state change before any sub-command runs.
     /// See `command_batch.rs` for the classification.
     Batch { commands: Vec<EditorCommand> },
+    /// Run the "semantic upgrade" migration: promote explicitly-marked
+    /// legacy frames (`role:"input"` / `semantics.role == Input`, etc.)
+    /// into first-class widget nodes, persisting the rewrite into the
+    /// document as a single undoable step. Reports the promotion count
+    /// via the dedicated [`EditorState::promote_legacy_widgets`]
+    /// (`apply` only surfaces the changed-or-not boolean). A
+    /// zero-promotion run is a clean no-op — it never pushes onto the
+    /// undo stack.
+    ///
+    /// [`EditorState::promote_legacy_widgets`]: crate::EditorState::promote_legacy_widgets
+    PromoteLegacyWidgets,
 }

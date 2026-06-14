@@ -3,6 +3,7 @@ use crate::widgets::ai_chat_checklist::{
     fixed_checklist_height, fixed_checklist_rect, paint_fixed_checklist,
 };
 use crate::widgets::ai_chat_panel_controls::{paint_attachment_row, ATTACHMENT_ROW_HEIGHT};
+use crate::widgets::ai_chat_panel_footer::{fit_footer_label, footer_label_baseline};
 use crate::widgets::ai_chat_panel_paint::{
     paint_examples, paint_panel_body_chrome, paint_panel_surface,
 };
@@ -500,8 +501,6 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
         let toolbar_center_y = toolbar_y + INPUT_TOOLBAR_HEIGHT / 2.0;
         let footer = self.footer_layout(rect, self.input_rect(rect), toolbar_y);
         use op_editor_core::ChatFooterButton;
-        // Model chip — brand logo of the selected model's provider
-        // + its display name + a chevron. Click toggles the picker.
         cx.backend
             .fill_round_rect(footer.model, 7.0, (self.theme.muted).with_alpha(0.22));
         cx.backend
@@ -555,15 +554,19 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
         let model_name: &str = selected
             .map(|m| m.display_name.as_str())
             .unwrap_or(self.label_no_models.as_str());
+        let label_w = (footer.model.origin.x + footer.model.size.x - 20.0 - model_x).max(0.0);
+        let model_name = fit_footer_label(model_name, 12.0, label_w);
         let model_label = TextLayout::single_run(
-            model_name,
+            &model_name,
             "system-ui",
             12.0,
             (chip_color).to_jian(),
             Point2D::new(0.0, 0.0),
         );
-        cx.backend
-            .draw_text(&model_label, Point2D::new(model_x, toolbar_center_y + 4.0));
+        cx.backend.draw_text(
+            &model_label,
+            Point2D::new(model_x, footer_label_baseline(toolbar_center_y, 12.0)),
+        );
         draw_icon(
             cx.backend,
             Icon::ChevronUp,
@@ -576,9 +579,6 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
             1.4,
         );
         cx.backend.restore();
-        // Concurrency chip — `Zap` + `{n}x`. A solo 1x team rests as a
-        // faint ghost; a staffed team (>1) gets a primary-tinted chip so
-        // the parallel mode reads as active.
         let chip = footer.agent_team;
         let team_size = self.state.agent_team_size;
         let team_active = team_size > 1;
@@ -635,7 +635,7 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
             11.0,
             conc_color,
             chip.origin.x + 20.0,
-            chip.origin.y + 15.0,
+            footer_label_baseline(toolbar_center_y, 11.0),
         );
         let selected_x = chip.origin.x + chip.size.x + 8.0;
         let count = self.selected_count.to_string();
@@ -647,7 +647,7 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
             10.0,
             self.theme.muted_foreground,
             selected_x,
-            toolbar_center_y + 4.0,
+            footer_label_baseline(toolbar_center_y, 10.0),
         );
 
         // Right cluster — attach + send ghost icon buttons.

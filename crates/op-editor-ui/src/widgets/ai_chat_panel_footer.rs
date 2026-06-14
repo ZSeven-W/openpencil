@@ -25,8 +25,8 @@ impl<'a> AIChatPlaceholder<'a> {
             op_i18n::translate(self.locale, "common.selected").replace("{{count}}", &count);
         let model_x = input_rect.origin.x - 6.0;
         let selected_w = footer_label_width(&selected_label, 10.0);
-        let max_model_w = (attach.origin.x - selected_w - 74.0 - model_x).max(84.0);
-        let desired_model_w = (20.0 + footer_label_width(model_name, 12.0) + 22.0).max(72.0);
+        let max_model_w = (attach.origin.x - selected_w - 62.0 - model_x).max(96.0);
+        let desired_model_w = (26.0 + footer_label_width(model_name, 12.0) + 24.0).max(96.0);
         let model = Rect::xywh(
             model_x,
             toolbar_center_y - 14.0,
@@ -46,4 +46,28 @@ impl<'a> AIChatPlaceholder<'a> {
             send,
         }
     }
+}
+
+pub(crate) fn fit_footer_label(label: &str, size: f32, max_w: f32) -> String {
+    if footer_label_width(label, size) <= max_w {
+        return label.to_string();
+    }
+    let ellipsis_w = footer_label_width("…", size);
+    let budget = (max_w - ellipsis_w).max(0.0);
+    let mut out = String::new();
+    let mut w = 0.0;
+    for ch in label.chars() {
+        let next = footer_label_width(&ch.to_string(), size);
+        if w + next > budget {
+            break;
+        }
+        out.push(ch);
+        w += next;
+    }
+    out.push('…');
+    out
+}
+
+pub(crate) fn footer_label_baseline(center_y: f32, size: f32) -> f32 {
+    center_y + size * 0.35
 }

@@ -41,6 +41,16 @@ export type PenNodeType =
   | 'text'
   | 'image'
   | 'icon_font'
+  | 'text_input'
+  | 'text_area'
+  | 'number_input'
+  | 'select'
+  | 'radio_group'
+  | 'switch'
+  | 'checkbox'
+  | 'slider'
+  | 'progress'
+  | 'tabs'
   | 'ref';
 
 export type SizingBehavior = number | 'fit_content' | 'fill_container' | string;
@@ -210,6 +220,103 @@ export interface IconFontNode extends PenNodeBase {
   stroke?: PenStroke;
 }
 
+// --- Interactive widget nodes (first-class, runtime-interactive in jian) ---
+
+/** Option entry shared by select, radio_group and tabs. */
+export interface SelectOption {
+  value: string;
+  label: string;
+}
+
+/**
+ * Authored per-state style overrides for the auto-derived interaction states.
+ * Loosely typed on the TS side (the jian runtime owns the strict schema);
+ * `Record` keeps the web/MCP product line permissive without duplicating the
+ * runtime's state graph here.
+ */
+export type WidgetStates = Record<string, Record<string, unknown>>;
+
+/** Shared optional fields carried by every interactive widget node. */
+export interface WidgetNodeProps {
+  width?: SizingBehavior;
+  height?: SizingBehavior;
+  fill?: PenFill[];
+  stroke?: PenStroke;
+  effects?: PenEffect[];
+  cornerRadius?: number | [number, number, number, number];
+  states?: WidgetStates;
+  bindings?: Record<string, string>;
+  events?: Record<string, unknown>;
+}
+
+export interface TextInputNode extends PenNodeBase, WidgetNodeProps {
+  type: 'text_input';
+  placeholder?: string;
+  value?: string;
+}
+
+export interface TextAreaNode extends PenNodeBase, WidgetNodeProps {
+  type: 'text_area';
+  placeholder?: string;
+  value?: string;
+  maxVisibleLines?: number;
+}
+
+export interface NumberInputNode extends PenNodeBase, WidgetNodeProps {
+  type: 'number_input';
+  placeholder?: string;
+  value?: number | string;
+  min?: number;
+  max?: number;
+  step?: number;
+}
+
+export interface SelectNode extends PenNodeBase, WidgetNodeProps {
+  type: 'select';
+  placeholder?: string;
+  value?: string;
+  options?: SelectOption[];
+}
+
+export interface RadioGroupNode extends PenNodeBase, WidgetNodeProps {
+  type: 'radio_group';
+  value?: string;
+  options?: SelectOption[];
+}
+
+export interface SwitchNode extends PenNodeBase, WidgetNodeProps {
+  type: 'switch';
+  checked?: boolean | string;
+}
+
+export interface CheckboxNode extends PenNodeBase, WidgetNodeProps {
+  type: 'checkbox';
+  checked?: boolean | string;
+  label?: string;
+}
+
+export interface SliderNode extends PenNodeBase, WidgetNodeProps {
+  type: 'slider';
+  min?: number;
+  max?: number;
+  step?: number;
+  value?: number | string;
+}
+
+export interface ProgressNode extends PenNodeBase, WidgetNodeProps {
+  type: 'progress';
+  value?: number | string;
+  max?: number;
+  indeterminate?: boolean;
+}
+
+export interface TabsNode extends PenNodeBase, WidgetNodeProps {
+  type: 'tabs';
+  tabs?: SelectOption[];
+  value?: string;
+  children?: PenNode[];
+}
+
 export interface RefNode extends PenNodeBase {
   type: 'ref';
   ref: string;
@@ -230,4 +337,14 @@ export type PenNode =
   | TextNode
   | ImageNode
   | IconFontNode
+  | TextInputNode
+  | TextAreaNode
+  | NumberInputNode
+  | SelectNode
+  | RadioGroupNode
+  | SwitchNode
+  | CheckboxNode
+  | SliderNode
+  | ProgressNode
+  | TabsNode
   | RefNode;

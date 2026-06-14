@@ -233,8 +233,15 @@ pub(crate) fn register_new_node_reveals(
     let Some(epoch) = indicator_epoch else {
         return;
     };
+    let mut reveal_index = 0;
     for node in state.active_children() {
-        register_node_reveals(node, ids_before, epoch, reveal_started_ms);
+        register_node_reveals(
+            node,
+            ids_before,
+            epoch,
+            reveal_started_ms,
+            &mut reveal_index,
+        );
     }
 }
 
@@ -243,14 +250,18 @@ fn register_node_reveals(
     ids_before: &HashSet<String>,
     epoch: u64,
     reveal_started_ms: u64,
+    reveal_index: &mut u64,
 ) {
     let id = node.id_str();
     if !ids_before.contains(id) {
-        op_editor_core::agent_indicators::add_reveal(epoch, id, reveal_started_ms);
+        let started_at =
+            reveal_started_ms + *reveal_index * op_editor_core::agent_indicators::REVEAL_STAGGER_MS;
+        op_editor_core::agent_indicators::add_reveal(epoch, id, started_at);
+        *reveal_index += 1;
     }
     if let Some(children) = node.children() {
         for child in children {
-            register_node_reveals(child, ids_before, epoch, reveal_started_ms);
+            register_node_reveals(child, ids_before, epoch, reveal_started_ms, reveal_index);
         }
     }
 }
@@ -452,7 +463,7 @@ mod tests {
     }
 
     #[test]
-    fn run_subtask_registers_reveals_for_live_inserted_nodes() {
+    fn run_subtask_staggers_reveals_for_live_inserted_nodes() {
         let _guard = crate::agent_indicator_test_support::lock();
         let epoch = op_editor_core::agent_indicators::begin();
         let llm = ScriptedLlm::new(vec![ScriptResponse::Text(NODE_JSON.into())]);
@@ -483,7 +494,10 @@ mod tests {
                 .all(|id| live_ids.contains(id.as_str())),
             "reveals must reference live document ids"
         );
-        assert!(snapshot.reveals.values().all(|started| *started == 1_234));
+        let first = snapshot.reveals.values().min().copied().unwrap();
+        let last = snapshot.reveals.values().max().copied().unwrap();
+        assert_eq!(first, 1_234);
+        assert!(last > first, "subtree nodes should reveal progressively");
         op_editor_core::agent_indicators::end_if_epoch(epoch);
     }
 
