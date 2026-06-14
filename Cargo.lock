@@ -2964,6 +2964,7 @@ version = "0.8.0"
 dependencies = [
  "futures-util",
  "op-ai",
+ "op-rpc-transport",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
@@ -2997,6 +2998,7 @@ version = "0.8.0"
 dependencies = [
  "op-config-store",
  "op-figma",
+ "op-rpc-transport",
  "serde_json",
 ]
 
@@ -3229,6 +3231,14 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_stacker",
+]
+
+[[package]]
+name = "op-rpc-transport"
+version = "0.8.0"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

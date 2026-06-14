@@ -1,0 +1,11 @@
+[package]
+name = "op-rpc-transport"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Shared JSON-RPC envelopes and local TCP transport for OpenPencil"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }

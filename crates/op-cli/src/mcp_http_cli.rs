@@ -1,26 +1,12 @@
 use serde_json::Value;
-use std::io::{Read, Write};
-use std::net::{SocketAddr, TcpStream};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{SystemTime, UNIX_EPOCH};
 
-const MCP_PATH: &str = "/mcp";
+use op_rpc_transport::{JsonRpcRequest, TcpJsonRpc, PING_TIMEOUT, POST_TIMEOUT, SHUTDOWN_TIMEOUT};
 
 /// OpenPencil MCP identity marker reported in the `ping` reply's `result`
 /// (mirrors `op-host-desktop` `MCP_SERVER_NAME`). Used to confirm a port
 /// is really our server before routing tool calls / killing a pid.
 const MCP_SERVER_NAME: &str = "openpencil-mcp";
-
-/// Read deadline for a normal tool call. Generous headroom over the live
-/// server's per-apply UI ack budget so a big batch design doesn't time out
-/// CLI-side before the editor finishes.
-const POST_TIMEOUT: Duration = Duration::from_secs(60);
-/// Short deadline for the liveness/identity probe — `ping` is stateless
-/// and never touches the UI thread, so it must return quickly.
-const PING_TIMEOUT: Duration = Duration::from_secs(2);
-/// Deadline for a graceful shutdown ack. A little patient so a headless
-/// server briefly busy with an in-flight op (its accept loop is serial)
-/// still processes the request rather than appearing unresponsive.
-const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(5);
 
 pub(crate) fn status_json(port: u16) -> String {
     // Verify it's genuinely an OpenPencil MCP server (identity ping —
@@ -64,7 +50,8 @@ fn now_millis() -> u64 {
 
 /// JSON-RPC body for `tools/list`.
 pub(crate) fn tools_list_body() -> String {
-    r#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#.to_string()
+    serde_json::to_string(&JsonRpcRequest::new(1, "tools/list", Value::Null))
+        .expect("static JSON-RPC request serializes")
 }
 
 /// JSON-RPC body for a `tools/call` of `tool` with the already-built
@@ -114,50 +101,19 @@ pub(crate) fn json_escape(s: &str) -> String {
     out
 }
 
+#[cfg(test)]
 pub(crate) fn http_request(body: &str) -> String {
-    format!(
-        "POST {MCP_PATH} HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/json\r\n\
-         Content-Length: {}\r\nConnection: close\r\n\r\n{}",
-        body.len(),
-        body
-    )
+    TcpJsonRpc::localhost(0, op_rpc_transport::MCP_PATH).http_post_request(body)
 }
 
 /// POST `body` to `127.0.0.1:port/mcp` with connect + read/write deadlines;
 /// return `(http_status, body)`. `http_status` is 0 when no recognizable
 /// status line was returned. The deadlines stop a stale port whose
 /// service accepts but never replies from hanging the CLI indefinitely.
-fn post_raw(port: u16, body: &str, timeout: Duration) -> Result<(u16, String), String> {
-    let addr = SocketAddr::from(([127, 0, 0, 1], port));
-    let mut stream = TcpStream::connect_timeout(&addr, timeout).map_err(|e| {
-        format!(
-            "cannot reach the editor on 127.0.0.1:{port}: {e}\n\
-             start the OpenPencil MCP server and point clients at http://127.0.0.1:{port}/mcp"
-        )
-    })?;
-    stream.set_read_timeout(Some(timeout)).ok();
-    stream.set_write_timeout(Some(timeout)).ok();
-    stream
-        .write_all(http_request(body).as_bytes())
-        .map_err(|e| format!("http write: {e}"))?;
-    stream.flush().ok();
-    let mut response = String::new();
-    stream
-        .read_to_string(&mut response)
-        .map_err(|e| format!("http read: {e}"))?;
-    let status = parse_status_code(&response).unwrap_or(0);
-    let body = match response.split_once("\r\n\r\n") {
-        Some((_, body)) => body.trim().to_string(),
-        None => response.trim().to_string(),
-    };
-    Ok((status, body))
-}
-
-/// Parse the numeric status from an HTTP status line (`HTTP/1.1 200 OK`).
-fn parse_status_code(response: &str) -> Option<u16> {
-    let mut parts = response.lines().next()?.split_whitespace();
-    let _http_version = parts.next()?;
-    parts.next()?.parse::<u16>().ok()
+fn post_raw(port: u16, body: &str, timeout: std::time::Duration) -> Result<(u16, String), String> {
+    TcpJsonRpc::local_mcp(port)
+        .post_raw(body, timeout)
+        .map(|reply| (reply.status, reply.body))
 }
 
 /// POST `body` to the HTTP MCP server on `127.0.0.1:port` and return the
@@ -212,27 +168,14 @@ fn unwrap_mcp_reply(reply: &str) -> Result<String, String> {
 
 /// Plain HTTP `GET` against `127.0.0.1:port{path}` with the same deadline
 /// discipline as [`post_raw`]; returns `(http_status, body)`.
-fn http_get_raw(port: u16, path: &str, timeout: Duration) -> Result<(u16, String), String> {
-    let addr = SocketAddr::from(([127, 0, 0, 1], port));
-    let mut stream = TcpStream::connect_timeout(&addr, timeout)
-        .map_err(|e| format!("connect 127.0.0.1:{port}: {e}"))?;
-    stream.set_read_timeout(Some(timeout)).ok();
-    stream.set_write_timeout(Some(timeout)).ok();
-    let request = format!("GET {path} HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n");
-    stream
-        .write_all(request.as_bytes())
-        .map_err(|e| format!("http write: {e}"))?;
-    stream.flush().ok();
-    let mut response = String::new();
-    stream
-        .read_to_string(&mut response)
-        .map_err(|e| format!("http read: {e}"))?;
-    let status = parse_status_code(&response).unwrap_or(0);
-    let body = match response.split_once("\r\n\r\n") {
-        Some((_, body)) => body.trim().to_string(),
-        None => response.trim().to_string(),
-    };
-    Ok((status, body))
+fn http_get_raw(
+    port: u16,
+    path: &str,
+    timeout: std::time::Duration,
+) -> Result<(u16, String), String> {
+    TcpJsonRpc::local_mcp(port)
+        .get_raw(path, timeout)
+        .map(|reply| (reply.status, reply.body))
 }
 
 /// True when `127.0.0.1:port` is the `--serve-web` web-canvas daemon —
@@ -261,8 +204,8 @@ fn is_web_canvas_health(body: &str) -> bool {
 /// a third-party JSON-RPC server, or a TS editor (which serves REST at
 /// `/api/mcp/*`, not `/mcp`) — so discovery never mis-routes tool calls.
 fn ping_result(port: u16) -> Option<Value> {
-    let body = r#"{"jsonrpc":"2.0","id":0,"method":"ping"}"#;
-    let (status, body) = post_raw(port, body, PING_TIMEOUT).ok()?;
+    let body = serde_json::to_string(&JsonRpcRequest::new(0, "ping", Value::Null)).ok()?;
+    let (status, body) = post_raw(port, &body, PING_TIMEOUT).ok()?;
     if !(200..300).contains(&status) {
         return None;
     }
@@ -308,10 +251,12 @@ pub(crate) fn request_shutdown(port: u16, token: &str) -> bool {
     if token.is_empty() {
         return false;
     }
-    let body = format!(
-        r#"{{"jsonrpc":"2.0","id":0,"method":"openpencil/shutdown","params":{{"token":"{}"}}}}"#,
-        json_escape(token)
-    );
+    let body = serde_json::to_string(&JsonRpcRequest::new(
+        0,
+        "openpencil/shutdown",
+        serde_json::json!({ "token": token }),
+    ))
+    .expect("shutdown JSON-RPC request serializes");
     match post_raw(port, &body, SHUTDOWN_TIMEOUT) {
         Ok((status, body)) if (200..300).contains(&status) => serde_json::from_str::<Value>(&body)
             .ok()
