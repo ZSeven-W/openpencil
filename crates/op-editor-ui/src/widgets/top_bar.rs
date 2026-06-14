@@ -556,51 +556,6 @@ pub(super) fn paint_hover_bg(
     crate::widgets::button::paint_ghost_button_feedback(cx.backend, theme, rect, hovered, pressed)
 }
 
-pub(super) fn paint_icon_button(
-    cx: &mut PaintCx<'_>,
-    theme: &Theme,
-    x: f32,
-    center_y: f32,
-    icon: Icon,
-    hovered: bool,
-    pressed: bool,
-) {
-    let button_rect = Rect {
-        origin: Point2D::new(x, center_y - ICON_BUTTON / 2.0),
-        size: Point2D::new(ICON_BUTTON, ICON_BUTTON),
-    };
-    let color = paint_hover_bg(cx, theme, button_rect, hovered, pressed);
-    let icon_origin = Point2D::new(
-        x + (ICON_BUTTON - ICON_SIZE) / 2.0,
-        center_y - ICON_SIZE / 2.0,
-    );
-    draw_icon(cx.backend, icon, icon_origin, ICON_SIZE, color, 1.4);
-}
-
-/// Icon button painted in a disabled (dimmed, no hover background)
-/// state — for an action the current build can't perform, so it reads
-/// as unavailable rather than an active control that silently no-ops.
-pub(super) fn paint_icon_button_disabled(
-    cx: &mut PaintCx<'_>,
-    theme: &Theme,
-    x: f32,
-    center_y: f32,
-    icon: Icon,
-) {
-    let icon_origin = Point2D::new(
-        x + (ICON_BUTTON - ICON_SIZE) / 2.0,
-        center_y - ICON_SIZE / 2.0,
-    );
-    draw_icon(
-        cx.backend,
-        icon,
-        icon_origin,
-        ICON_SIZE,
-        theme.muted_foreground,
-        1.4,
-    );
-}
-
 /// File-menu compound: folder glyph + tighter chevron, both inside
 /// a single 46×28 hit-target. The chevron gap is ~4 px instead of
 /// ICON_BUTTON-wide as it used to render.

@@ -5,6 +5,7 @@
 //! here. The geometry / consts / button-rect helpers + the small
 //! free-fn painters live in `top_bar.rs` (re-exported `pub(super)`).
 
+use crate::theme::Theme;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::top_bar::*;
 use crate::widgets::PaintCx;
@@ -433,4 +434,52 @@ impl TopBar {
             center_y,
         );
     }
+}
+
+/// An icon button with hover/pressed background + foreground glyph.
+/// (Lives here, next to its only caller `paint_chrome`, to keep
+/// `top_bar.rs` under the 800-line cap.)
+pub(super) fn paint_icon_button(
+    cx: &mut PaintCx<'_>,
+    theme: &Theme,
+    x: f32,
+    center_y: f32,
+    icon: Icon,
+    hovered: bool,
+    pressed: bool,
+) {
+    let button_rect = Rect {
+        origin: Point2D::new(x, center_y - ICON_BUTTON / 2.0),
+        size: Point2D::new(ICON_BUTTON, ICON_BUTTON),
+    };
+    let color = paint_hover_bg(cx, theme, button_rect, hovered, pressed);
+    let icon_origin = Point2D::new(
+        x + (ICON_BUTTON - ICON_SIZE) / 2.0,
+        center_y - ICON_SIZE / 2.0,
+    );
+    draw_icon(cx.backend, icon, icon_origin, ICON_SIZE, color, 1.4);
+}
+
+/// Icon button painted in a disabled (dimmed, no hover background)
+/// state — for an action the current build can't perform, so it reads
+/// as unavailable rather than an active control that silently no-ops.
+pub(super) fn paint_icon_button_disabled(
+    cx: &mut PaintCx<'_>,
+    theme: &Theme,
+    x: f32,
+    center_y: f32,
+    icon: Icon,
+) {
+    let icon_origin = Point2D::new(
+        x + (ICON_BUTTON - ICON_SIZE) / 2.0,
+        center_y - ICON_SIZE / 2.0,
+    );
+    draw_icon(
+        cx.backend,
+        icon,
+        icon_origin,
+        ICON_SIZE,
+        theme.muted_foreground,
+        1.4,
+    );
 }
