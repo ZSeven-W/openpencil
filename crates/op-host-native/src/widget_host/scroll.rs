@@ -101,6 +101,35 @@ impl WidgetHostNative {
         true
     }
 
+    fn try_scroll_design_md_panel(
+        &mut self,
+        x: f32,
+        y: f32,
+        delta_y: f32,
+        viewport_width: f32,
+        viewport_height: f32,
+    ) -> bool {
+        let Some(panel_rect) = self.design_md_panel_rect(viewport_width, viewport_height) else {
+            return false;
+        };
+        if !(panel_rect).contains(Point2D::new(x, y)) {
+            return false;
+        }
+        let Some(panel) = op_editor_ui::widgets::DesignMdPanel::for_editor(&self.editor_state)
+        else {
+            return false;
+        };
+        let max = panel.max_scroll(panel_rect);
+        if scroll_by_max(
+            &mut self.editor_state.editor_ui.design_md_scroll,
+            -delta_y,
+            max,
+        ) {
+            self.mark_dirty();
+        }
+        true
+    }
+
     fn try_scroll_locale_picker(
         &mut self,
         x: f32,
@@ -297,6 +326,9 @@ impl WidgetHostNative {
         if self.try_scroll_locale_picker(x, y, delta_y, viewport_width) {
             return true;
         }
+        if self.try_scroll_design_md_panel(x, y, delta_y, viewport_width, viewport_height) {
+            return true;
+        }
         // Any top-most floating panel (Design-MD / Component-Browser)
         // owns the wheel before lower layers — a scroll over them
         // never reaches the modal / Git panel / canvas.
@@ -443,6 +475,9 @@ impl WidgetHostNative {
             return true;
         }
         if self.try_scroll_locale_picker(x, y, dy, viewport_width) {
+            return true;
+        }
+        if self.try_scroll_design_md_panel(x, y, dy, viewport_width, viewport_height) {
             return true;
         }
         // Any top-most floating panel owns trackpad scroll first.

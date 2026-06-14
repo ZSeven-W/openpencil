@@ -61,6 +61,10 @@ impl WidgetHost {
                 self.editor_state.editor_ui.design_md_request =
                     Some(op_editor_core::DesignMdRequest::Import);
             }
+            DesignMdHit::AutoGenerate => {
+                self.editor_state.editor_ui.design_md_request =
+                    Some(op_editor_core::DesignMdRequest::AutoGenerate);
+            }
             DesignMdHit::Export => {
                 self.editor_state.editor_ui.design_md_request =
                     Some(op_editor_core::DesignMdRequest::Export);

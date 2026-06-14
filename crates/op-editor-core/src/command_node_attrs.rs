@@ -18,8 +18,76 @@ use crate::node_id::NodeId;
 use crate::pen_node_ext::PenNodeExt;
 use crate::state::EditorState;
 use crate::walkers::find_node_mut;
-use jian_ops_schema::node::{CornerRadius, FontWeight, PenNode, TextContent};
+use jian_ops_schema::node::{
+    BoolOrExpression, CornerRadius, FontWeight, NumberOrExpression, PenNode, TextContent,
+};
 use jian_ops_schema::style::{BlurBody, PenEffect, PenStroke, ShadowBody, StrokeThickness};
+
+/// Which string-typed widget prop a `SetNodeWidgetText` edit targets.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WidgetTextField {
+    /// `placeholder` (TextInput / TextArea / NumberInput / Select).
+    Placeholder,
+    /// String-typed `value` (Select / RadioGroup) or text-widget
+    /// `value` (TextInput / TextArea).
+    Value,
+    /// `label` (Checkbox).
+    Label,
+}
+
+/// Which numeric widget prop a `SetNodeWidgetNumber` edit targets.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WidgetNumberField {
+    /// `min` (Slider / NumberInput).
+    Min,
+    /// `max` (Slider / NumberInput / Progress).
+    Max,
+    /// `step` (Slider / NumberInput).
+    Step,
+    /// Numeric `value` (Slider / NumberInput / Progress).
+    Value,
+}
+
+/// Write a string-typed widget prop. Returns true only when the
+/// node variant actually carries `field`.
+fn write_widget_text(node: &mut PenNode, field: WidgetTextField, next: Option<String>) -> bool {
+    use WidgetTextField as F;
+    match (node, field) {
+        (PenNode::TextInput(n), F::Placeholder) => n.placeholder = next,
+        (PenNode::TextInput(n), F::Value) => n.value = next,
+        (PenNode::TextArea(n), F::Placeholder) => n.placeholder = next,
+        (PenNode::TextArea(n), F::Value) => n.value = next,
+        (PenNode::NumberInput(n), F::Placeholder) => n.placeholder = next,
+        (PenNode::Select(n), F::Placeholder) => n.placeholder = next,
+        (PenNode::Select(n), F::Value) => n.value = next,
+        (PenNode::RadioGroup(n), F::Value) => n.value = next,
+        (PenNode::Checkbox(n), F::Label) => n.label = next,
+        _ => return false,
+    }
+    true
+}
+
+/// Write a numeric widget prop. `min` / `max` / `step` are plain
+/// `f64`; numeric `value` writes a literal `NumberOrExpression`,
+/// overwriting any prior expression binding. Returns true only when
+/// the node variant carries `field`.
+fn write_widget_number(node: &mut PenNode, field: WidgetNumberField, value: f64) -> bool {
+    use WidgetNumberField as F;
+    match (node, field) {
+        (PenNode::Slider(n), F::Min) => n.min = Some(value),
+        (PenNode::Slider(n), F::Max) => n.max = Some(value),
+        (PenNode::Slider(n), F::Step) => n.step = Some(value),
+        (PenNode::Slider(n), F::Value) => n.value = Some(NumberOrExpression::Number(value)),
+        (PenNode::NumberInput(n), F::Min) => n.min = Some(value),
+        (PenNode::NumberInput(n), F::Max) => n.max = Some(value),
+        (PenNode::NumberInput(n), F::Step) => n.step = Some(value),
+        (PenNode::NumberInput(n), F::Value) => n.value = Some(NumberOrExpression::Number(value)),
+        (PenNode::Progress(n), F::Max) => n.max = Some(value),
+        (PenNode::Progress(n), F::Value) => n.value = Some(NumberOrExpression::Number(value)),
+        _ => return false,
+    }
+    true
+}
 
 /// Write a literal corner radius onto whatever variant carries one.
 /// Frame / Group / Rectangle store `CornerRadius` on `container`;
@@ -506,6 +574,77 @@ impl EditorState {
             _ => return false,
         }
         true
+    }
+
+    /// `SetNodeWidgetText` — write a string-typed widget prop
+    /// (`placeholder` / `value` / `label`) on whatever widget variant
+    /// carries it. Non-widget kinds (and a prop a variant doesn't
+    /// have) reject. `value` text widgets keep the value as a plain
+    /// string; the NumberInput / Slider numeric `value` is NOT routed
+    /// here (use [`cmd_set_node_widget_number`]).
+    pub(crate) fn cmd_set_node_widget_text(
+        &mut self,
+        node_id: &NodeId,
+        field: WidgetTextField,
+        text: &str,
+    ) -> bool {
+        if !node_id.is_real() {
+            return false;
+        }
+        let Some(node) = find_node_mut(self.active_children_mut(), node_id) else {
+            return false;
+        };
+        // An empty string clears the optional prop so the serialized
+        // `.op` carries no empty placeholder / value / label.
+        let next = if text.is_empty() {
+            None
+        } else {
+            Some(text.to_string())
+        };
+        write_widget_text(node, field, next)
+    }
+
+    /// `SetNodeWidgetNumber` — write a numeric widget prop (`min` /
+    /// `max` / `step` on Slider / NumberInput, or the numeric `value`
+    /// on Slider / NumberInput / Progress). Rejects non-finite values
+    /// and variants lacking the field.
+    pub(crate) fn cmd_set_node_widget_number(
+        &mut self,
+        node_id: &NodeId,
+        field: WidgetNumberField,
+        value: f64,
+    ) -> bool {
+        if !node_id.is_real() || !value.is_finite() {
+            return false;
+        }
+        let Some(node) = find_node_mut(self.active_children_mut(), node_id) else {
+            return false;
+        };
+        write_widget_number(node, field, value)
+    }
+
+    /// `ToggleNodeWidgetChecked` — flip the `checked` flag on a Switch
+    /// / Checkbox node. Rejects other kinds. An expression-bound
+    /// `checked` is overwritten with a literal bool (the panel's
+    /// checkbox edits a literal value, parity with TS).
+    pub(crate) fn cmd_set_node_widget_checked(&mut self, node_id: &NodeId, checked: bool) -> bool {
+        if !node_id.is_real() {
+            return false;
+        }
+        let Some(node) = find_node_mut(self.active_children_mut(), node_id) else {
+            return false;
+        };
+        match node {
+            PenNode::Switch(n) => {
+                n.checked = Some(BoolOrExpression::Bool(checked));
+                true
+            }
+            PenNode::Checkbox(n) => {
+                n.checked = Some(BoolOrExpression::Bool(checked));
+                true
+            }
+            _ => false,
+        }
     }
 
     /// Replace the colour on the Shadow effect at `index`. Blur

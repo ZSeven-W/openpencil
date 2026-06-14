@@ -14,6 +14,7 @@
 use std::collections::{BTreeMap, HashSet};
 
 use jian_ops_schema::node::PenNode;
+use jian_ops_schema::promote::PromoteNote;
 use op_editor_core::command_node::remap_subtree_ids_mapping;
 use op_editor_core::{EditorState, NodeId, PenNodeExt};
 use serde_json::{json, Value};
@@ -52,7 +53,8 @@ impl McpTool for BatchDesign {
                 nodes,
                 count: _,
                 bindings,
-            }) => self.insert_with_result(args, parent_id, nodes, bindings),
+                promoted,
+            }) => self.insert_with_result(args, parent_id, nodes, bindings, promoted),
             // A single direct op keeps the flat dispatch (which re-parses
             // and returns the existing command-per-op shape).
             Ok(ParsedOperations::Direct(_)) => dispatch_batch_design(args, None),
@@ -83,6 +85,7 @@ impl BatchDesign {
         parent_id: NodeId,
         mut nodes: Vec<PenNode>,
         bindings: Vec<String>,
+        promoted: Vec<PromoteNote>,
     ) -> ToolOutcome {
         let Some(seed0) = self.id_seed else {
             return dispatch_batch_design(args, None); // id-space exhausted → flat path
@@ -119,7 +122,17 @@ impl BatchDesign {
             .unwrap_or(0);
         let node_count = base + map.len();
 
-        let result = json!({ "results": results, "nodeCount": node_count });
+        // Phase E3 — report the legacy role frames normalized into widget
+        // nodes. Omitted entirely (so the result is byte-identical to before)
+        // when nothing was promoted, which is the common case.
+        let mut result = json!({ "results": results, "nodeCount": node_count });
+        if !promoted.is_empty() {
+            let notes: Vec<Value> = promoted
+                .iter()
+                .map(|n| json!({ "nodeId": n.node_id, "fromRole": n.from_role, "to": n.to }))
+                .collect();
+            result["promoted"] = json!(notes);
+        }
         ToolOutcome::OkJsonWithCommand(
             result.to_string(),
             EditorCommand::InsertAuthoredSubtree {

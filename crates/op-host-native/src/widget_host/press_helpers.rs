@@ -729,6 +729,42 @@ pub(in crate::widget_host) fn property_focus_initial(
             .as_ref()
             .map(|t| format_panel_number(t.letter_spacing))
             .unwrap_or_else(|| "0".to_string()),
+        F::WidgetPlaceholder => panel
+            .snapshot
+            .widget
+            .as_ref()
+            .map(|w| w.placeholder.clone())
+            .unwrap_or_default(),
+        F::WidgetValue => panel
+            .snapshot
+            .widget
+            .as_ref()
+            .map(|w| w.value.clone())
+            .unwrap_or_default(),
+        F::WidgetLabel => panel
+            .snapshot
+            .widget
+            .as_ref()
+            .map(|w| w.label.clone())
+            .unwrap_or_default(),
+        F::WidgetMin => panel
+            .snapshot
+            .widget
+            .as_ref()
+            .map(|w| w.min.clone())
+            .unwrap_or_default(),
+        F::WidgetMax => panel
+            .snapshot
+            .widget
+            .as_ref()
+            .map(|w| w.max.clone())
+            .unwrap_or_default(),
+        F::WidgetStep => panel
+            .snapshot
+            .widget
+            .as_ref()
+            .map(|w| w.step.clone())
+            .unwrap_or_default(),
         F::FillOpacity => ((panel.snapshot.fill_opacity * 100.0).round() as i32).to_string(),
         F::FillHex => panel
             .snapshot

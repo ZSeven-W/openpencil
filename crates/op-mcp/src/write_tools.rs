@@ -219,7 +219,25 @@ impl McpTool for InsertNode {
 }
 
 pub(super) const ALLOWED_KINDS: &[&str] = &[
-    "frame", "group", "rect", "ellipse", "polygon", "line", "text", "path",
+    "frame",
+    "group",
+    "rect",
+    "ellipse",
+    "polygon",
+    "line",
+    "text",
+    "path",
+    // Interactive widget family (built by op-editor-core's widget factory).
+    "text_input",
+    "text_area",
+    "number_input",
+    "select",
+    "radio_group",
+    "switch",
+    "checkbox",
+    "slider",
+    "progress",
+    "tabs",
 ];
 
 pub fn insert_node_snapshot() -> InsertNode {

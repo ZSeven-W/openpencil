@@ -1119,6 +1119,8 @@ pub struct EditorUiState {
     /// colors, 2 = typography, 3 = components, 4 = layout, 5 = notes).
     /// Defaults to theme + colors + typography expanded.
     pub design_md_expanded: u8,
+    /// Vertical scroll offset (px) of the Design-MD panel body.
+    pub design_md_scroll: jian_core::scroll::ScrollState,
     /// A queued Design-MD import / export request — set by a panel
     /// click, drained by the desktop host (which owns the native file
     /// dialog). Transient: never serialized.
@@ -1176,6 +1178,8 @@ pub struct EditorUiState {
 pub enum DesignMdRequest {
     /// Pick a `.md` file, parse it, and set `design_md`.
     Import,
+    /// Derive a fresh design.md from the current document.
+    AutoGenerate,
     /// Write the current `design_md` to a `.md` file.
     Export,
 }
@@ -1299,6 +1303,7 @@ impl Default for EditorUiState {
             design_md_hover: None,
             design_md_panel_pos: None,
             design_md_expanded: 0b0000_0111,
+            design_md_scroll: Default::default(),
             design_md_request: None,
             component_browser_open: false,
             canvas_hover_node: None,
@@ -1539,6 +1544,7 @@ impl EditorUiState {
         self.variables_search_focus = false;
         self.variables_scroll.offset = 0.0;
         self.variables_row_menu = None;
+        self.design_md_scroll.offset = 0.0;
         self.effect_param_focus = None;
         // Document-derived: set true only by a Figma import to keep that
         // document's authored absolute geometry. A replacement document must
@@ -1579,6 +1585,7 @@ mod tests {
         s.layer_pages_h_scroll.offset = 48.0;
         s.layer_layers_h_scroll.offset = 60.0;
         s.variables_scroll.offset = 72.0;
+        s.design_md_scroll.offset = 84.0;
 
         assert_eq!(s.property_panel_scroll.offset, 12.0);
         assert_eq!(s.layer_pages_scroll.offset, 24.0);
@@ -1586,6 +1593,7 @@ mod tests {
         assert_eq!(s.layer_pages_h_scroll.offset, 48.0);
         assert_eq!(s.layer_layers_h_scroll.offset, 60.0);
         assert_eq!(s.variables_scroll.offset, 72.0);
+        assert_eq!(s.design_md_scroll.offset, 84.0);
     }
 
     #[test]

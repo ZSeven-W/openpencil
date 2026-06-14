@@ -32,7 +32,7 @@ use crate::prompt::build_orchestrator_prompt;
 use crate::retry::{attempt_modes, is_non_retryable};
 use crate::run_dashboard::run_dashboard_path;
 use crate::scaffold::{build_scaffold, build_scaffold_concurrent_mobile};
-use crate::subagent::{reveal_now_millis, run_subtask_with_reveal_at};
+use crate::subagent::{apply_command_with_reveal, reveal_now_millis, run_subtask_with_reveal_at};
 use crate::types::{
     AbortFlag, DesignRequest, DocSink, LlmChunk, LlmClient, OrchestratorError, Progress,
     RunSummary, SubtaskOutcome, ValidationProviders,
@@ -196,7 +196,12 @@ impl Orchestrator {
             match build_scaffold(&plan, effective_is_mobile) {
                 Ok(cmds) => {
                     for cmd in cmds {
-                        if !sink.apply(cmd) {
+                        if !apply_command_with_reveal(
+                            sink,
+                            cmd,
+                            self.agent_indicator_epoch,
+                            reveal_now_millis(),
+                        ) {
                             rollback(sink, &var_snapshot);
                             sink.end_undo_batch();
                             return Err(OrchestratorError::Internal(
@@ -487,7 +492,7 @@ async fn run_concurrent_path(
     let roots_start_index = sink.state().active_children().len();
 
     for cmd in &scaffold_cmds {
-        if !sink.apply(cmd.clone()) {
+        if !apply_command_with_reveal(sink, cmd.clone(), host_epoch, reveal_now_millis()) {
             rollback(sink, &var_snapshot);
             sink.end_undo_batch();
             return Err(OrchestratorError::Internal(

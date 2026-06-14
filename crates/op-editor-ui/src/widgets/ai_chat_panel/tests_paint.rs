@@ -335,6 +335,95 @@ fn footer_agent_team_chip_uses_comfortable_pill_spacing() {
 }
 
 #[test]
+fn footer_model_dropdown_keeps_short_model_name_readable() {
+    let mut s = EditorState::new();
+    s.chat
+        .available_models
+        .push(op_editor_core::chat::ModelEntry::new(
+            op_editor_core::chat::AgentProvider::CodexCli,
+            "haiku",
+            "Haiku",
+        ));
+    s.selection.set = vec![op_editor_core::NodeId::new("n1")];
+    s.selection.anchor = op_editor_core::NodeId::new("n1");
+    let panel = AIChatPlaceholder::from_editor(&s);
+    let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
+    let input = panel.input_rect(rect);
+    let toolbar_top = input.origin.y + INPUT_AREA_HEIGHT;
+    let footer = panel.footer_layout(rect, input, toolbar_top);
+    let mut backend = PanelPaintBackend::default();
+    let mut cx = PaintCx {
+        backend: &mut backend,
+    };
+
+    panel.paint(&mut cx, rect);
+
+    assert!(
+        footer.model.size.x >= 96.0,
+        "short model names still need a comfortable dropdown width"
+    );
+    assert!(
+        backend.texts.iter().any(|(text, _, _, _)| text == "Haiku"),
+        "short model name should not truncate inside the dropdown"
+    );
+}
+
+#[test]
+fn footer_toolbar_labels_align_and_model_label_leaves_chevron_room() {
+    let mut s = EditorState::new();
+    s.chat
+        .available_models
+        .push(op_editor_core::chat::ModelEntry::new(
+            op_editor_core::chat::AgentProvider::CodexCli,
+            "default",
+            "Default (recommended)",
+        ));
+    s.selection.set = vec![op_editor_core::NodeId::new("n1")];
+    s.selection.anchor = op_editor_core::NodeId::new("n1");
+    let panel = AIChatPlaceholder::from_editor(&s);
+    let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
+    let input = panel.input_rect(rect);
+    let toolbar_top = input.origin.y + INPUT_AREA_HEIGHT;
+    let toolbar_center = toolbar_center_y();
+    let footer = panel.footer_layout(rect, input, toolbar_top);
+    assert!(
+        footer.model.size.x >= 128.0,
+        "model dropdown should be wide enough to show a recognizable model name"
+    );
+    let mut backend = PanelPaintBackend::default();
+    let mut cx = PaintCx {
+        backend: &mut backend,
+    };
+
+    panel.paint(&mut cx, rect);
+
+    let (painted_model, model_size, _, model_origin) = backend
+        .texts
+        .iter()
+        .find(|(text, _, _, _)| text.starts_with("Default") && text.ends_with('…'))
+        .expect("overflowing model label should truncate with an ellipsis");
+    let model_right = model_origin.x + footer_label_width(painted_model, *model_size);
+    let chevron_left = footer.model.origin.x + footer.model.size.x - 16.0;
+    assert!(
+        model_right <= chevron_left - 4.0,
+        "model label should leave room for chevron; label right={model_right}, chevron={chevron_left}"
+    );
+
+    for label in [painted_model.as_str(), "1x", "已选择 1 个"] {
+        let (_, size, _, origin) = backend
+            .texts
+            .iter()
+            .find(|(text, _, _, _)| text == label)
+            .expect("footer label should paint");
+        let visual_center = origin.y - size * 0.35;
+        assert!(
+            (visual_center - toolbar_center).abs() <= 1.0,
+            "{label} should be vertically centered; text center={visual_center}, toolbar={toolbar_center}"
+        );
+    }
+}
+
+#[test]
 fn paint_expanded_header_title_hover_adds_visible_feedback_across_label() {
     let mut s = EditorState::new();
     s.editor_ui.chat_header_hover = Some(op_editor_core::ChatHeaderButton::ToggleCollapse);

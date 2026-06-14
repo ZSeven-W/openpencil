@@ -21,6 +21,7 @@ use crate::widgets::canvas_viewport_overlay::paint_fill_then_stroke;
 use crate::widgets::canvas_viewport_text::paint_text_node;
 use crate::widgets::PaintCx;
 use crate::{Point2D, Rect};
+use std::collections::HashMap;
 
 /// Paint every `Effect::DropShadow` on `node` as a blurred shape
 /// behind its fill. The shadow corner radius matches the node
@@ -219,6 +220,21 @@ fn push_clip_content(cx: &mut PaintCx<'_>, node: &SceneNode, world_rect: Rect, z
     true
 }
 
+/// Reveal timing for nodes that are being streamed onto the canvas.
+#[derive(Clone, Copy)]
+pub(crate) struct RevealSchedule<'a> {
+    pub(crate) starts: &'a HashMap<String, u64>,
+    pub(crate) now_ms: u64,
+}
+
+struct PaintNodeOptions<'a> {
+    viewport_origin: Point2D,
+    zoom: f32,
+    edit_caret: Option<EditCaret>,
+    cull: Rect,
+    reveals: Option<RevealSchedule<'a>>,
+}
+
 /// Recursively paint one resolved [`SceneNode`] and its subtree.
 ///
 /// `viewport_origin` is the canvas-rect origin shifted by the
@@ -233,9 +249,52 @@ pub fn paint_node(
     edit_caret: Option<EditCaret>,
     cull: Rect,
 ) {
+    let options = PaintNodeOptions {
+        viewport_origin,
+        zoom,
+        edit_caret,
+        cull,
+        reveals: None,
+    };
+    paint_node_inner(cx, node, &options);
+}
+
+pub(crate) fn paint_node_with_reveals(
+    cx: &mut PaintCx<'_>,
+    node: &SceneNode,
+    viewport_origin: Point2D,
+    zoom: f32,
+    edit_caret: Option<EditCaret>,
+    cull: Rect,
+    reveals: RevealSchedule<'_>,
+) {
+    let options = PaintNodeOptions {
+        viewport_origin,
+        zoom,
+        edit_caret,
+        cull,
+        reveals: Some(reveals),
+    };
+    paint_node_inner(cx, node, &options);
+}
+
+fn paint_node_inner(cx: &mut PaintCx<'_>, node: &SceneNode, options: &PaintNodeOptions<'_>) {
+    let viewport_origin = options.viewport_origin;
+    let zoom = options.zoom;
+    let edit_caret = &options.edit_caret;
+    let cull = options.cull;
     // Hidden nodes (and their subtree) skip canvas paint entirely.
     // Layer panel still shows them, dimmed, so the user can unhide.
-    if node.hidden {
+    let pending_reveal = options
+        .reveals
+        .and_then(|schedule| {
+            schedule
+                .starts
+                .get(&node.id)
+                .map(|started_at| schedule.now_ms < *started_at)
+        })
+        .unwrap_or(false);
+    if node.hidden || pending_reveal {
         return;
     }
     let world_rect = Rect {
@@ -313,7 +372,7 @@ pub fn paint_node(
             }
             let clipped = push_clip_content(cx, node, world_rect, zoom);
             for child in node.children.iter().rev() {
-                paint_node(cx, child, viewport_origin, zoom, edit_caret.clone(), cull);
+                paint_node_inner(cx, child, options);
             }
             if clipped {
                 cx.backend.restore();
@@ -332,7 +391,7 @@ pub fn paint_node(
             // every recursing container branch, not just Frame.
             let clipped = push_clip_content(cx, node, world_rect, zoom);
             for child in node.children.iter().rev() {
-                paint_node(cx, child, viewport_origin, zoom, edit_caret.clone(), cull);
+                paint_node_inner(cx, child, options);
             }
             if clipped {
                 cx.backend.restore();
@@ -446,7 +505,7 @@ pub fn paint_node(
             cx.backend.save();
             cx.backend.translate(viewport_origin);
             cx.backend.scale(Point2D::new(zoom, zoom), Point2D::ZERO);
-            paint_text_node(cx, node, node.bounds, zoom, &edit_caret);
+            paint_text_node(cx, node, node.bounds, zoom, edit_caret);
             cx.backend.restore();
         }
     }

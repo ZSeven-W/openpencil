@@ -388,9 +388,24 @@ impl WidgetHostNative {
         }
         match self.editor_state.tool {
             Tool::Hand => CursorHint::Grab,
-            Tool::Rect | Tool::Ellipse | Tool::Polygon | Tool::Line | Tool::Pen | Tool::Frame => {
-                CursorHint::Crosshair
-            }
+            // Shapes / Frame / Form-widget tools all place a node on
+            // click — a placement crosshair reads the same for each.
+            Tool::Rect
+            | Tool::Ellipse
+            | Tool::Polygon
+            | Tool::Line
+            | Tool::Pen
+            | Tool::Frame
+            | Tool::TextInput
+            | Tool::TextArea
+            | Tool::NumberInput
+            | Tool::Select_
+            | Tool::RadioGroup
+            | Tool::Switch
+            | Tool::Checkbox
+            | Tool::Slider
+            | Tool::Progress
+            | Tool::Tabs => CursorHint::Crosshair,
             Tool::Text => CursorHint::Text,
             Tool::Select => {
                 let (cx0, cy0, cw, ch) = self.canvas_region(viewport_w, viewport_h);

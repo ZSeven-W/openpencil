@@ -411,6 +411,10 @@ impl WidgetHostNative {
                     0.0,
                 );
             }
+            A::ToggleWidgetChecked(new_value) => {
+                self.editor_state.commit_history();
+                let _ = self.editor_state.set_selected_widget_checked(new_value);
+            }
             A::PickFillImage => {
                 // Queue the file dialog — the desktop runner pops it
                 // on the next frame and writes the chosen image into
@@ -741,6 +745,22 @@ impl WidgetHostNative {
                         );
                     }
                 }
+            }
+            PropertyFocus::WidgetPlaceholder => {
+                let _ = self.editor_state.set_selected_widget_text(
+                    op_editor_core::WidgetTextField::Placeholder,
+                    draft.trim(),
+                );
+            }
+            PropertyFocus::WidgetValue => {
+                let _ = self
+                    .editor_state
+                    .set_selected_widget_text(op_editor_core::WidgetTextField::Value, draft.trim());
+            }
+            PropertyFocus::WidgetLabel => {
+                let _ = self
+                    .editor_state
+                    .set_selected_widget_text(op_editor_core::WidgetTextField::Label, draft.trim());
             }
             _ => {
                 if let Ok(value) = draft.trim().parse::<f32>() {

@@ -58,8 +58,16 @@ Interactive roles:
 - badge: layout=horizontal, padding=[6,12], gap=4, alignItems=center, justifyContent=center, cornerRadius=999
 - tag: layout=horizontal, padding=[4,10], gap=4, alignItems=center, justifyContent=center, cornerRadius=6
 - pill: layout=horizontal, padding=[6,14], gap=6, alignItems=center, justifyContent=center, cornerRadius=999
-- input: height=48, layout=horizontal, padding=[12,16], alignItems=center, cornerRadius=8. In vertical layout: width=fill_container
-- form-input: width=fill_container, height=48, layout=horizontal, padding=[12,16], alignItems=center, cornerRadius=8
+- input / form-input: EMIT a `text_input` node (NOT a frame with role) — height=48, cornerRadius=8, placeholder REQUIRED; width=fill_container in vertical layout. Bind via bindings "bind:value". A legacy `frame role="input"` still loads (auto-promoted) but is deprecated.
+- textarea: EMIT a `text_area` node — multi-line input; props placeholder, value, maxVisibleLines.
+- number-input: EMIT a `number_input` node — props placeholder, value, min, max, step.
+- select / dropdown: EMIT a `select` node — props placeholder, value, options:[{value,label}].
+- radio / radio-group: EMIT a `radio_group` node — props value, options:[{value,label}].
+- switch / toggle: EMIT a `switch` node — prop checked.
+- checkbox: EMIT a `checkbox` node — props checked, label.
+- slider: EMIT a `slider` node — props min, max, step, value.
+- progress / progress-bar: EMIT a `progress` node — props value, max, indeterminate (display-only).
+- tabs: EMIT a `tabs` node — props tabs:[{value,label}], value (active), children[] (one panel per tab).
 - search-bar: layout=horizontal, height=44, padding=[10,16], gap=8, alignItems=center, cornerRadius=22
 
 Display roles:

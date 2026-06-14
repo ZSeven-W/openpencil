@@ -74,6 +74,18 @@ pub enum PropertyFocus {
     LetterSpacing,
     StrokeHex,
     StrokeWidth,
+    /// Widget-section text fields (placeholder / value / label) on a
+    /// widget-kind node (TextInput / Select / Checkbox / …). The host
+    /// commit path writes the raw draft string onto the matching prop.
+    WidgetPlaceholder,
+    WidgetValue,
+    WidgetLabel,
+    /// Widget-section numeric fields — Slider / NumberInput `min` /
+    /// `max` / `step`. Committed through `commit_property_edit` like
+    /// the other numeric focuses.
+    WidgetMin,
+    WidgetMax,
+    WidgetStep,
 }
 
 impl PropertyFocus {
@@ -112,6 +124,9 @@ impl PropertyFocus {
                 | PropertyFocus::FontSize
                 | PropertyFocus::LineHeight
                 | PropertyFocus::LetterSpacing
+                | PropertyFocus::WidgetMin
+                | PropertyFocus::WidgetMax
+                | PropertyFocus::WidgetStep
         )
     }
 }

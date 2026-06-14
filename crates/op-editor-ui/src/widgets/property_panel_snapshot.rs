@@ -5,7 +5,7 @@ use crate::widgets::property_panel_action::{
     LayoutAlignValue, LayoutJustifyValue, TextAlignValue, TextGrowthValue, TextVerticalAlignValue,
 };
 use crate::Color;
-use jian_ops_schema::node::base::NumberOrExpression;
+use jian_ops_schema::node::base::{BoolOrExpression, NumberOrExpression};
 use jian_ops_schema::node::container::LayoutMode;
 use jian_ops_schema::node::container::{AlignItems, JustifyContent, Padding};
 use jian_ops_schema::node::text::{FontWeight, TextAlign, TextAlignVertical, TextGrowth};
@@ -88,6 +88,10 @@ pub struct NodeSnapshot {
     pub is_image_node: bool,
     pub icon: Option<IconSummary>,
     pub text: Option<TextSummary>,
+    /// Form-widget props, `Some` only when the selection is one of the
+    /// widget `PenNode` variants. Drives the Widget section's
+    /// visibility + rows.
+    pub widget: Option<WidgetSummary>,
     pub fill: Option<Color>,
     /// Primary solid-fill opacity in `[0.0, 1.0]` — the Fill
     /// section's `100 %` paints `fill_opacity * 100`.
@@ -126,6 +130,93 @@ pub struct EllipseArcSummary {
     pub start_deg: f32,
     pub sweep_deg: f32,
     pub inner_percent: f32,
+}
+
+/// Which form-widget variant the selected node is — drives the
+/// Widget section's per-kind field set. Mirrors the schema's widget
+/// `PenNode` variants (`states` overrides are out of scope).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WidgetKind {
+    TextInput,
+    TextArea,
+    NumberInput,
+    Select,
+    RadioGroup,
+    Switch,
+    Checkbox,
+    Slider,
+    Progress,
+    Tabs,
+}
+
+impl WidgetKind {
+    /// Whether the kind exposes a `placeholder` field.
+    pub fn has_placeholder(self) -> bool {
+        matches!(
+            self,
+            WidgetKind::TextInput
+                | WidgetKind::TextArea
+                | WidgetKind::NumberInput
+                | WidgetKind::Select
+        )
+    }
+
+    /// Whether the kind exposes a text-typed `value` field the panel
+    /// edits as a string (numeric `value` on Slider / NumberInput /
+    /// Progress is edited through the min/max/step + numeric inputs,
+    /// not the text value row).
+    pub fn has_text_value(self) -> bool {
+        matches!(
+            self,
+            WidgetKind::TextInput
+                | WidgetKind::TextArea
+                | WidgetKind::Select
+                | WidgetKind::RadioGroup
+        )
+    }
+
+    /// Whether the kind carries a `checked` toggle.
+    pub fn has_checked(self) -> bool {
+        matches!(self, WidgetKind::Switch | WidgetKind::Checkbox)
+    }
+
+    /// Whether the kind carries a `label` text field (Checkbox only).
+    pub fn has_label(self) -> bool {
+        matches!(self, WidgetKind::Checkbox)
+    }
+
+    /// Whether the kind exposes the min / max / step numeric trio.
+    pub fn has_range(self) -> bool {
+        matches!(self, WidgetKind::Slider | WidgetKind::NumberInput)
+    }
+}
+
+/// Snapshot of a form-widget node's editable props, formatted for
+/// the Widget section. `None` on the snapshot when the selection
+/// isn't a widget. The `options` / `tabs` list-editor is deferred
+/// (see `property_panel_widget`); the lists are surfaced read-only
+/// as a count so the user can see what's authored.
+#[derive(Debug, Clone, PartialEq)]
+pub struct WidgetSummary {
+    pub kind: WidgetKind,
+    /// `placeholder`, formatted for the input (empty when unset).
+    pub placeholder: String,
+    /// String `value` (text widgets) — empty when unset / numeric.
+    pub value: String,
+    /// `label` (Checkbox) — empty when unset.
+    pub label: String,
+    /// `checked` literal (Switch / Checkbox). `false` for an
+    /// expression-bound or unset value.
+    pub checked: bool,
+    /// `min` / `max` / `step`, formatted (empty when unset).
+    pub min: String,
+    pub max: String,
+    pub step: String,
+    /// Count of authored `options` (Select / RadioGroup) — read-only
+    /// affordance; the row editor is a follow-up.
+    pub option_count: usize,
+    /// Count of authored `tabs` (Tabs) — read-only affordance.
+    pub tab_count: usize,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -342,6 +433,7 @@ impl NodeSnapshot {
             is_image_node: false,
             icon: None,
             text: None,
+            widget: None,
             fill: None,
             fill_opacity: 1.0,
             stroke: None,
@@ -401,6 +493,7 @@ impl NodeSnapshot {
             is_image_node: false,
             icon: None,
             text: None,
+            widget: None,
             fill: None,
             fill_opacity: 1.0,
             stroke: None,
@@ -467,6 +560,7 @@ impl NodeSnapshot {
             is_image_node: matches!(node, PenNode::Image(_)),
             icon: icon_summary_of(node),
             text: text_summary_of(node),
+            widget: widget_summary_of(node),
             fill,
             fill_opacity: op_editor_core::first_solid_fill_opacity(node),
             stroke,
@@ -714,6 +808,107 @@ fn can_create_component(node: &PenNode) -> bool {
         node,
         PenNode::Frame(_) | PenNode::Group(_) | PenNode::Rectangle(_) | PenNode::Ref(_)
     )
+}
+
+/// Format an optional `f64` widget prop for an input box, dropping a
+/// trailing `.0` so `5.0` paints as `5`. Empty when unset.
+fn fmt_widget_num(v: Option<f64>) -> String {
+    match v {
+        Some(n) if n.fract() == 0.0 => format!("{}", n as i64),
+        Some(n) => format!("{n}"),
+        None => String::new(),
+    }
+}
+
+/// Read a `NumberOrExpression` value as a display string — a literal
+/// number drops trailing `.0`; an expression paints verbatim (the
+/// panel can't edit a binding numerically, but should still show it).
+fn fmt_widget_value(v: Option<&NumberOrExpression>) -> String {
+    match v {
+        Some(NumberOrExpression::Number(n)) if n.fract() == 0.0 => format!("{}", *n as i64),
+        Some(NumberOrExpression::Number(n)) => format!("{n}"),
+        Some(NumberOrExpression::Expression(s)) => s.clone(),
+        None => String::new(),
+    }
+}
+
+fn checked_literal(v: Option<&BoolOrExpression>) -> bool {
+    matches!(v, Some(BoolOrExpression::Bool(true)))
+}
+
+/// Build the Widget-section summary for a form-widget `PenNode`.
+/// `None` for every non-widget kind so the section stays hidden.
+fn widget_summary_of(node: &PenNode) -> Option<WidgetSummary> {
+    let base = |kind: WidgetKind| WidgetSummary {
+        kind,
+        placeholder: String::new(),
+        value: String::new(),
+        label: String::new(),
+        checked: false,
+        min: String::new(),
+        max: String::new(),
+        step: String::new(),
+        option_count: 0,
+        tab_count: 0,
+    };
+    match node {
+        PenNode::TextInput(n) => Some(WidgetSummary {
+            placeholder: n.placeholder.clone().unwrap_or_default(),
+            value: n.value.clone().unwrap_or_default(),
+            ..base(WidgetKind::TextInput)
+        }),
+        PenNode::TextArea(n) => Some(WidgetSummary {
+            placeholder: n.placeholder.clone().unwrap_or_default(),
+            value: n.value.clone().unwrap_or_default(),
+            ..base(WidgetKind::TextArea)
+        }),
+        PenNode::NumberInput(n) => Some(WidgetSummary {
+            placeholder: n.placeholder.clone().unwrap_or_default(),
+            value: fmt_widget_value(n.value.as_ref()),
+            min: fmt_widget_num(n.min),
+            max: fmt_widget_num(n.max),
+            step: fmt_widget_num(n.step),
+            ..base(WidgetKind::NumberInput)
+        }),
+        PenNode::Select(n) => Some(WidgetSummary {
+            placeholder: n.placeholder.clone().unwrap_or_default(),
+            value: n.value.clone().unwrap_or_default(),
+            option_count: n.options.as_ref().map_or(0, |o| o.len()),
+            ..base(WidgetKind::Select)
+        }),
+        PenNode::RadioGroup(n) => Some(WidgetSummary {
+            value: n.value.clone().unwrap_or_default(),
+            option_count: n.options.as_ref().map_or(0, |o| o.len()),
+            ..base(WidgetKind::RadioGroup)
+        }),
+        PenNode::Switch(n) => Some(WidgetSummary {
+            checked: checked_literal(n.checked.as_ref()),
+            ..base(WidgetKind::Switch)
+        }),
+        PenNode::Checkbox(n) => Some(WidgetSummary {
+            label: n.label.clone().unwrap_or_default(),
+            checked: checked_literal(n.checked.as_ref()),
+            ..base(WidgetKind::Checkbox)
+        }),
+        PenNode::Slider(n) => Some(WidgetSummary {
+            value: fmt_widget_value(n.value.as_ref()),
+            min: fmt_widget_num(n.min),
+            max: fmt_widget_num(n.max),
+            step: fmt_widget_num(n.step),
+            ..base(WidgetKind::Slider)
+        }),
+        PenNode::Progress(n) => Some(WidgetSummary {
+            value: fmt_widget_value(n.value.as_ref()),
+            max: fmt_widget_num(n.max),
+            ..base(WidgetKind::Progress)
+        }),
+        PenNode::Tabs(n) => Some(WidgetSummary {
+            value: n.value.clone().unwrap_or_default(),
+            tab_count: n.tabs.as_ref().map_or(0, |t| t.len()),
+            ..base(WidgetKind::Tabs)
+        }),
+        _ => None,
+    }
 }
 
 fn text_summary_of(node: &PenNode) -> Option<TextSummary> {

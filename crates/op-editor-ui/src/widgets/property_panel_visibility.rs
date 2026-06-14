@@ -3,6 +3,7 @@
 use op_editor_core::FillType;
 
 use crate::widgets::property_panel_action::{LayoutAlignValue, LayoutJustifyValue};
+use crate::widgets::property_panel_snapshot::WidgetKind;
 
 /// Per-NodeKind toggles for which property-panel sections render.
 #[derive(Debug, Clone, Copy)]
@@ -210,6 +211,14 @@ pub struct VisibleSections {
     pub clip_content: bool,
     pub text: bool,
     pub icon: bool,
+    /// Form-widget section — `Some(kind)` for a widget node, `None`
+    /// otherwise. The kind drives which rows the section paints +
+    /// which input/action rects the layout walkers emit.
+    pub widget: Option<WidgetKind>,
+    /// Current literal `checked` value of a Switch / Checkbox widget —
+    /// the action-rect walker reads it so the toggle action carries
+    /// the NEXT value (`!checked`). Ignored for non-toggle widgets.
+    pub widget_checked: bool,
     pub image: bool,
     /// Whether the image section paints the local-asset warning row
     /// (host asset check flagged the selected node's src).
@@ -247,6 +256,8 @@ impl VisibleSections {
         clip_content: true,
         text: false,
         icon: false,
+        widget: None,
+        widget_checked: false,
         image: false,
         image_warning: false,
         opacity: true,

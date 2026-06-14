@@ -18,6 +18,10 @@ use std::sync::{LazyLock, Mutex};
 
 /// Duration of the short generated-node entrance animation.
 pub const REVEAL_DURATION_MS: u64 = 720;
+/// Delay between generated subtree nodes so applied content appears progressively.
+pub const REVEAL_STAGGER_MS: u64 = 80;
+const CLOCK_REBASE_THRESHOLD_MS: u64 = 60_000;
+const REVEAL_FRAME_MS: u64 = 33;
 
 /// A node's / frame's owning agent — colour hex (e.g. `"#FF6B6B"`) + name.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -188,19 +192,86 @@ pub fn snapshot() -> AgentIndicators {
 /// reveal animations stop requesting redraws.
 pub fn snapshot_at(now_ms: u64) -> AgentIndicators {
     let mut r = REGISTRY.lock().unwrap();
+    rebase_external_clock_reveals(&mut r, now_ms);
     r.reveals
         .retain(|_, started| now_ms.saturating_sub(*started) <= REVEAL_DURATION_MS);
     r.clone()
 }
 
+/// Next host-clock millisecond needed for generated-node reveal animation.
+pub fn next_reveal_deadline_ms(now_ms: u64) -> Option<u64> {
+    let mut r = REGISTRY.lock().unwrap();
+    rebase_external_clock_reveals(&mut r, now_ms);
+    r.reveals
+        .retain(|_, started| now_ms.saturating_sub(*started) <= REVEAL_DURATION_MS);
+    let next_start = r
+        .reveals
+        .values()
+        .filter(|started| **started > now_ms)
+        .min()
+        .copied();
+    let active = r
+        .reveals
+        .values()
+        .any(|started| *started <= now_ms && now_ms.saturating_sub(*started) <= REVEAL_DURATION_MS);
+    match (next_start, active) {
+        (Some(start), true) => Some(start.min(now_ms.saturating_add(REVEAL_FRAME_MS))),
+        (Some(start), false) => Some(start),
+        (None, true) => Some(now_ms.saturating_add(REVEAL_FRAME_MS)),
+        (None, false) => None,
+    }
+}
+
+fn rebase_external_clock_reveals(r: &mut AgentIndicators, now_ms: u64) {
+    let future_floor = now_ms.saturating_add(CLOCK_REBASE_THRESHOLD_MS);
+    let mut external: Vec<(String, u64)> = r
+        .reveals
+        .iter()
+        .filter_map(|(id, started)| {
+            if *started > future_floor {
+                Some((id.clone(), *started))
+            } else {
+                None
+            }
+        })
+        .collect();
+    if external.is_empty() {
+        return;
+    }
+    external.sort_by(|a, b| a.1.cmp(&b.1).then_with(|| a.0.cmp(&b.0)));
+    let batch_start = external[0].1;
+    let local_tail = r
+        .reveals
+        .values()
+        .filter(|started| **started <= future_floor)
+        .max()
+        .copied();
+    let mut next_slot = local_tail
+        .map(|tail| tail.saturating_add(REVEAL_STAGGER_MS))
+        .unwrap_or(now_ms)
+        .max(now_ms);
+    for (id, raw_started) in external {
+        let offset_start = now_ms.saturating_add(raw_started.saturating_sub(batch_start));
+        let started_at = offset_start.max(next_slot);
+        if let Some(slot) = r.reveals.get_mut(&id) {
+            *slot = started_at;
+        }
+        next_slot = started_at.saturating_add(REVEAL_STAGGER_MS);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::{LazyLock, Mutex};
+
+    static TEST_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
     // One test owns the whole flow so it doesn't race the process-global
     // registry against a sibling test under the default parallel runner.
     #[test]
     fn epoch_scopes_registration_and_teardown() {
+        let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         // Round-trip under a live epoch.
         let e1 = begin();
         add_node(e1, "n5", "#FF6B6B", "Nova");
@@ -274,6 +345,7 @@ mod tests {
 
     #[test]
     fn reveal_registration_prunes_after_animation_window() {
+        let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let epoch = begin();
         add_reveal(epoch, "n7", 1_000);
         assert!(is_active(), "reveal should keep the paint loop active");
@@ -283,6 +355,36 @@ mod tests {
             "expired reveal should be pruned"
         );
         assert!(!is_active(), "expired reveal should not keep animating");
+        clear();
+    }
+
+    #[test]
+    fn snapshot_rebases_external_clock_reveals_to_paint_clock() {
+        let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let epoch = begin();
+        add_reveal(epoch, "a", 1_700_000_000_000);
+        add_reveal(epoch, "b", 1_700_000_000_080);
+
+        let snap = snapshot_at(1_000);
+
+        assert_eq!(snap.reveals.get("a"), Some(&1_000));
+        assert_eq!(snap.reveals.get("b"), Some(&1_080));
+        clear();
+    }
+
+    #[test]
+    fn snapshot_queues_external_reveals_after_active_local_tail() {
+        let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let epoch = begin();
+        add_reveal(epoch, "local-a", 1_000);
+        add_reveal(epoch, "local-b", 1_080);
+        add_reveal(epoch, "external-a", 1_700_000_000_000);
+        add_reveal(epoch, "external-b", 1_700_000_000_005);
+
+        let snap = snapshot_at(1_040);
+
+        assert_eq!(snap.reveals.get("external-a"), Some(&1_160));
+        assert_eq!(snap.reveals.get("external-b"), Some(&1_240));
         clear();
     }
 }

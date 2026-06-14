@@ -12,6 +12,8 @@ pub enum DesignMdButton {
     Close,
     /// The header import button.
     Import,
+    /// The header / empty-state auto-generate button.
+    AutoGenerate,
     /// The header export button.
     Export,
     /// The footer "remove" link.

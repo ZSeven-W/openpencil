@@ -19,8 +19,10 @@ use crate::pen_node_ext::PenNodeExt;
 use crate::state::EditorState;
 use crate::walkers;
 use jian_ops_schema::node::{
-    ContainerProps, EllipseNode, FrameNode, GroupNode, LineNode, PathNode, PenNode, PenNodeBase,
-    PolygonNode, RectangleNode, TextContent, TextNode,
+    BoolOrExpression, CheckboxNode, ContainerProps, EllipseNode, FrameNode, GroupNode, LineNode,
+    NumberInputNode, NumberOrExpression, PathNode, PenNode, PenNodeBase, PolygonNode, ProgressNode,
+    RadioGroupNode, RectangleNode, SelectNode, SliderNode, SwitchNode, TabsNode, TextAreaNode,
+    TextContent, TextInputNode, TextNode,
 };
 use jian_ops_schema::sizing::SizingBehavior;
 use std::collections::HashSet;
@@ -199,18 +201,135 @@ pub fn build_leaf_node(
             gestures: None,
             route: None,
         }),
+        // Form-widget kinds (Phase D2) build their own default props.
+        _ => return build_widget_node(kind, base, w, h),
+    };
+    Some(node)
+}
+
+/// Resolve a form-widget `kind` into a canonical-schema widget node
+/// with sensible default props. `base` already carries the id / name /
+/// `(x, y)`; `w` / `h` are the caller's literal `SizingBehavior` (the
+/// widget's default box when minted via a tool, or the requested box
+/// from an `InsertNode` / MCP call). Returns `None` for an unknown
+/// kind so [`build_leaf_node`]'s fall-through can reject it.
+///
+/// Each struct derives `Default`, so `..Default::default()` zeroes
+/// every optional field (fill / stroke / events / bindings / …) and we
+/// only set `base` + width / height + the per-kind props the table in
+/// the Phase D2 spec calls for.
+fn build_widget_node(
+    kind: &str,
+    base: PenNodeBase,
+    w: SizingBehavior,
+    h: SizingBehavior,
+) -> Option<PenNode> {
+    let node = match kind {
+        "text_input" => PenNode::TextInput(TextInputNode {
+            base,
+            width: Some(w),
+            height: Some(h),
+            placeholder: Some("Enter text".to_string()),
+            ..Default::default()
+        }),
+        "text_area" => PenNode::TextArea(TextAreaNode {
+            base,
+            width: Some(w),
+            height: Some(h),
+            placeholder: Some("Enter text".to_string()),
+            ..Default::default()
+        }),
+        "number_input" => PenNode::NumberInput(NumberInputNode {
+            base,
+            width: Some(w),
+            height: Some(h),
+            placeholder: Some("0".to_string()),
+            ..Default::default()
+        }),
+        "select" => PenNode::Select(SelectNode {
+            base,
+            width: Some(w),
+            height: Some(h),
+            placeholder: Some("Select\u{2026}".to_string()),
+            options: Some(Vec::new()),
+            ..Default::default()
+        }),
+        "radio_group" => PenNode::RadioGroup(RadioGroupNode {
+            base,
+            width: Some(w),
+            height: Some(h),
+            options: Some(Vec::new()),
+            ..Default::default()
+        }),
+        "switch" => PenNode::Switch(SwitchNode {
+            base,
+            width: Some(w),
+            height: Some(h),
+            checked: Some(BoolOrExpression::Bool(false)),
+            ..Default::default()
+        }),
+        "checkbox" => PenNode::Checkbox(CheckboxNode {
+            base,
+            width: Some(w),
+            height: Some(h),
+            checked: Some(BoolOrExpression::Bool(false)),
+            label: Some("Label".to_string()),
+            ..Default::default()
+        }),
+        "slider" => PenNode::Slider(SliderNode {
+            base,
+            width: Some(w),
+            height: Some(h),
+            min: Some(0.0),
+            max: Some(100.0),
+            step: Some(1.0),
+            value: Some(NumberOrExpression::Number(50.0)),
+            ..Default::default()
+        }),
+        "progress" => PenNode::Progress(ProgressNode {
+            base,
+            width: Some(w),
+            height: Some(h),
+            value: Some(NumberOrExpression::Number(40.0)),
+            max: Some(100.0),
+            ..Default::default()
+        }),
+        "tabs" => PenNode::Tabs(TabsNode {
+            base,
+            width: Some(w),
+            height: Some(h),
+            tabs: Some(Vec::new()),
+            children: Some(Vec::new()),
+            ..Default::default()
+        }),
         _ => return None,
     };
     Some(node)
 }
 
+/// The ten form-widget kind strings, in spec order. Single source of
+/// truth shared by [`kind_is_valid`] and the default-size table.
+pub const WIDGET_KINDS: [&str; 10] = [
+    "text_input",
+    "text_area",
+    "number_input",
+    "select",
+    "radio_group",
+    "switch",
+    "checkbox",
+    "slider",
+    "progress",
+    "tabs",
+];
+
 /// True when `kind` resolves to a buildable leaf node. Used by the
-/// `BatchInsert` pre-validation pass.
+/// `BatchInsert` pre-validation pass. Covers the original shape /
+/// container / text kinds plus the ten form-widget kinds.
 pub fn kind_is_valid(kind: &str) -> bool {
     matches!(
         kind,
         "frame" | "group" | "rect" | "ellipse" | "polygon" | "line" | "text" | "path"
-    )
+    ) || WIDGET_KINDS.contains(&kind)
 }
 
 /// Replace the node with `target` id with `replacement` at its current

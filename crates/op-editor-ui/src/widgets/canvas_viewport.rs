@@ -463,6 +463,7 @@ impl<'a> Widget for CanvasViewport<'a> {
         // 2. Dotted grid — canvas-local, scales with pan/zoom.
         let viewport = &self.viewport;
         paint_grid(cx, rect, viewport, &self.theme);
+        let reveal_schedule = op_editor_core::agent_indicators::snapshot_at(self.now_ms).reveals;
 
         // 3. Walk the active page; clip enforces widget bounds.
         if let Some(page) = self.scene.active_page() {
@@ -476,9 +477,6 @@ impl<'a> Widget for CanvasViewport<'a> {
                 now_ms: self.now_ms,
                 selection_color: crate::widgets::text_selection::selection_color(&self.theme),
             });
-            // Cull rect — anything fully outside this rect (with a
-            // generous margin for stroke widths / rotated handles /
-            // text overhang) can skip paint entirely.
             const CULL_MARGIN: f32 = 64.0;
             let cull = Rect {
                 origin: Point2D::new(rect.origin.x - CULL_MARGIN, rect.origin.y - CULL_MARGIN),
@@ -488,16 +486,19 @@ impl<'a> Widget for CanvasViewport<'a> {
                 ),
             };
             for child in page.children.iter().rev() {
-                super::canvas_viewport_paint::paint_node(
+                super::canvas_viewport_paint::paint_node_with_reveals(
                     cx,
                     child,
                     viewport_origin,
                     viewport.zoom,
                     edit_caret.clone(),
                     cull,
+                    super::canvas_viewport_paint::RevealSchedule {
+                        starts: &reveal_schedule,
+                        now_ms: self.now_ms,
+                    },
                 );
             }
-            // Per-agent breathing borders while a concurrent generation runs.
             super::canvas_agent_overlay::paint_agent_frame_indicators(
                 cx,
                 &page.children,
@@ -505,8 +506,6 @@ impl<'a> Widget for CanvasViewport<'a> {
                 viewport.zoom,
                 self.now_ms,
             );
-            // 3b. Dashed hover outline around the node under the
-            //     cursor (TS `drawHoverOutline`, #3b82f6, 4-4 dash).
             if let Some(hovered) = self.hovered.as_ref() {
                 if let Some(node) = page.find(hovered) {
                     const HOVER: Color = Color {
@@ -526,9 +525,6 @@ impl<'a> Widget for CanvasViewport<'a> {
                     paint_dashed_rect(cx, screen, HOVER, 1.5);
                 }
             }
-            // 3c. Root-frame name labels — fixed 12 px screen-space,
-            //     18 px above the frame's top edge (TS
-            //     `drawFrameLabelColored`).
             for (id, name, color) in &self.frame_labels {
                 let Some(node) = page.find(id) else { continue };
                 let b = node.aggregate_bounds();
@@ -592,7 +588,11 @@ impl<'a> Widget for CanvasViewport<'a> {
                 let Some(node) = page.find(id) else {
                     continue;
                 };
-                if node.hidden {
+                if node.hidden
+                    || reveal_schedule
+                        .get(&node.id)
+                        .is_some_and(|started_at| self.now_ms < *started_at)
+                {
                     continue;
                 }
                 let bounds = node.aggregate_bounds();

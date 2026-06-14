@@ -93,6 +93,39 @@ fn chat_checklist_wheel_scrolls_pinned_task_list() {
 }
 
 #[test]
+fn design_md_panel_wheel_scrolls_content_without_zooming_canvas() {
+    let mut host = WidgetHostNative::new();
+    let viewport_w = 1200.0;
+    let viewport_h = 800.0;
+    let mut markdown = String::from("# Design System: Long\n\n## Color Palette\n");
+    for index in 0..40 {
+        markdown.push_str(&format!(
+            "- **color-{index:02}** (#{index:02X}{index:02X}{index:02X}) - role {index}\n"
+        ));
+    }
+    host.editor_state_mut().editor_ui.design_md_panel_open = true;
+    host.editor_state_mut().doc.design_md = Some(op_editor_core::parse_design_md(&markdown));
+    let panel_rect = host
+        .design_md_panel_rect(viewport_w, viewport_h)
+        .expect("design.md panel rect");
+    let panel = op_editor_ui::widgets::DesignMdPanel::for_editor(host.editor_state())
+        .expect("design.md panel");
+    assert!(panel.max_scroll(panel_rect) > 0.0);
+    let zoom = host.editor_state().viewport.zoom;
+
+    assert!(host.apply_wheel(
+        panel_rect.origin.x + panel_rect.size.x / 2.0,
+        panel_rect.origin.y + panel_rect.size.y / 2.0,
+        -120.0,
+        viewport_w,
+        viewport_h
+    ));
+
+    assert!(host.editor_state().editor_ui.design_md_scroll.offset > 0.0);
+    assert_eq!(host.editor_state().viewport.zoom, zoom);
+}
+
+#[test]
 fn locale_picker_wheel_scrolls_select_state_without_zooming_canvas() {
     let mut host = WidgetHostNative::new();
     let viewport_w = 1200.0;

@@ -49,6 +49,8 @@ pub(super) fn visible_for(panel: &PropertyPanel) -> sections::VisibleSections {
         clip_content: panel.snapshot.can_clip_content,
         text: caps.text && panel.snapshot.text.is_some(),
         icon: panel.snapshot.icon.is_some(),
+        widget: panel.snapshot.widget.as_ref().map(|w| w.kind),
+        widget_checked: panel.snapshot.widget.as_ref().is_some_and(|w| w.checked),
         image: caps.image && panel.snapshot.is_image_node,
         image_warning: false,
         opacity: caps.opacity,

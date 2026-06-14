@@ -133,6 +133,56 @@ label=I(root, {"type":"text","name":"Greeting","content":"Hello","width":120,"he
 }
 
 #[test]
+fn batch_design_promotes_legacy_role_input_frame_to_text_input() {
+    // Phase E3 — an old-style `frame role="input"` (with a two-way value
+    // binding + a muted-grey placeholder text child) the AI emits must land a
+    // real `text_input` widget node, not a frame. The promotion runs over the
+    // parsed forest before it becomes the inserted command.
+    let tool = batch_design_snapshot(&sample());
+    let mut args = BTreeMap::new();
+    args.insert(
+        "operations".into(),
+        r##"field=I(null, {"type":"frame","name":"Email","role":"input","width":240,"height":40,
+          "fill":[{"type":"solid","color":"#1E1E1E"}],
+          "bindings":{"bind:value":"$state.email"},
+          "children":[{"type":"text","name":"ph","content":"Enter email","width":120,"height":20,
+                       "fill":[{"type":"solid","color":"#9A9A9A"}]}]})"##
+            .into(),
+    );
+
+    match tool.call(&args) {
+        ToolOutcome::OkJsonWithCommand(
+            json,
+            EditorCommand::InsertAuthoredSubtree { nodes, .. },
+        ) => {
+            // The marked frame became a first-class text_input widget node.
+            assert_eq!(nodes.len(), 1);
+            let jian_ops_schema::node::PenNode::TextInput(ti) = &nodes[0] else {
+                panic!(
+                    "expected promotion to PenNode::TextInput, got {:?}",
+                    nodes[0]
+                );
+            };
+            // Muted-grey text child → placeholder; role marker is dropped.
+            assert_eq!(ti.placeholder.as_deref(), Some("Enter email"));
+            assert!(ti.base.role.is_none());
+            // The two-way value binding carried over from the frame.
+            assert!(ti
+                .bindings
+                .as_ref()
+                .is_some_and(|b| b.contains_key("bind:value")));
+            // The JSON result reports the promotion (Phase E3 surface).
+            let v: serde_json::Value = serde_json::from_str(&json).expect("batch_design json");
+            let promoted = v["promoted"].as_array().expect("promoted array");
+            assert_eq!(promoted.len(), 1);
+            assert_eq!(promoted[0]["to"], "text_input");
+            assert_eq!(promoted[0]["fromRole"], "input");
+        }
+        other => panic!("expected InsertAuthoredSubtree, got {other:?}"),
+    }
+}
+
+#[test]
 fn batch_design_normalizes_ts_layout_keywords() {
     let tool = batch_design_snapshot(&sample());
     let mut args = BTreeMap::new();

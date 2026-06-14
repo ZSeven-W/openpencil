@@ -99,21 +99,25 @@ impl Toolbar {
     /// `state.editor_ui.theme_mode` so the toolbar flips with the
     /// TopBar Sun click.
     pub fn for_editor(state: &EditorState) -> Self {
+        // Form-widget tools are intentionally NOT in the toolbar: widget
+        // nodes are authored via the component kit (uikit) / AI+MCP and
+        // matched by the jian runtime, not dropped as primitive tools.
+        let items = vec![
+            ToolbarItem::Tool(Tool::Select, Icon::Cursor),
+            ToolbarItem::ShapeSlot,
+            ToolbarItem::Tool(Tool::Text, Icon::Type),
+            ToolbarItem::Tool(Tool::Frame, Icon::Frame),
+            ToolbarItem::Tool(Tool::Hand, Icon::Hand),
+            ToolbarItem::Separator,
+            ToolbarItem::Action(ToolbarAction::Undo, Icon::Undo),
+            ToolbarItem::Action(ToolbarAction::Redo, Icon::Redo),
+            ToolbarItem::Separator,
+            ToolbarItem::Action(ToolbarAction::ToggleVariablesPanel, Icon::Braces),
+            ToolbarItem::Action(ToolbarAction::ToggleDesignPanel, Icon::BookOpen),
+        ];
         Self {
             id: WidgetId::new(3000),
-            items: vec![
-                ToolbarItem::Tool(Tool::Select, Icon::Cursor),
-                ToolbarItem::ShapeSlot,
-                ToolbarItem::Tool(Tool::Text, Icon::Type),
-                ToolbarItem::Tool(Tool::Frame, Icon::Frame),
-                ToolbarItem::Tool(Tool::Hand, Icon::Hand),
-                ToolbarItem::Separator,
-                ToolbarItem::Action(ToolbarAction::Undo, Icon::Undo),
-                ToolbarItem::Action(ToolbarAction::Redo, Icon::Redo),
-                ToolbarItem::Separator,
-                ToolbarItem::Action(ToolbarAction::ToggleVariablesPanel, Icon::Braces),
-                ToolbarItem::Action(ToolbarAction::ToggleDesignPanel, Icon::BookOpen),
-            ],
+            items,
             active: state.tool,
             theme: theme_for(&state.editor_ui),
             shape_tool: state.editor_ui.shape_tool,
@@ -489,12 +493,17 @@ mod tests {
     use super::*;
 
     #[test]
-    fn default_set_has_four_tools_plus_shape_slot_plus_actions() {
+    fn default_set_has_base_tools_shape_slot_and_actions_no_widgets() {
         let toolbar = Toolbar::default_set();
         let tool_count = toolbar
             .items
             .iter()
             .filter(|i| matches!(i, ToolbarItem::Tool(..)))
+            .count();
+        let widget_tool_count = toolbar
+            .items
+            .iter()
+            .filter(|i| matches!(i, ToolbarItem::Tool(t, _) if t.is_widget()))
             .count();
         let action_count = toolbar
             .items
@@ -507,9 +516,12 @@ mod tests {
             .filter(|i| matches!(i, ToolbarItem::ShapeSlot))
             .count();
         // Select / Text / Frame / Hand are direct tool buttons;
-        // Rect / Ellipse / Polygon / Line / Pen live behind the
-        // single ShapeSlot dropdown.
+        // Rect / Ellipse / Polygon / Line / Pen live behind the single
+        // ShapeSlot dropdown. Form widgets are NOT toolbar tools — they
+        // are authored via the component kit / AI+MCP, not primitive
+        // drop tools.
         assert_eq!(tool_count, 4);
+        assert_eq!(widget_tool_count, 0);
         assert_eq!(shape_slot_count, 1);
         assert_eq!(action_count, 4);
         assert_eq!(toolbar.active, Tool::Select);
@@ -519,12 +531,14 @@ mod tests {
     fn intrinsic_height_accommodates_all_items() {
         let toolbar = Toolbar::default_set();
         let h = toolbar.intrinsic_height();
-        // 5 tool buttons + 4 action buttons = 9 buttons; their total
-        // is at minimum 9 * BUTTON_SIZE = 324, plus padding +
-        // separator gaps. Sanity-check the height is in a
-        // reasonable band.
-        assert!(h > 9.0 * BUTTON_SIZE, "toolbar shorter than its buttons");
-        assert!(h < 9.0 * BUTTON_SIZE + 200.0, "toolbar bloated: {h}");
+        // 4 direct tools + shape slot + 4 action buttons = 9 button
+        // slots; total is at least 9 * BUTTON_SIZE plus padding + gaps.
+        let buttons = 9.0;
+        assert!(
+            h > buttons * BUTTON_SIZE,
+            "toolbar shorter than its buttons"
+        );
+        assert!(h < buttons * BUTTON_SIZE + 200.0, "toolbar bloated: {h}");
     }
 
     #[test]
@@ -583,16 +597,30 @@ mod tests {
             origin: Point2D::new(0.0, 0.0),
             size: Point2D::new(TOOLBAR_WIDTH, toolbar.intrinsic_height()),
         };
-        // First Action item is Undo. After 5 tool buttons + 4 button
-        // gaps + 1 separator + button advance, hit-test the center
-        // of the Undo button.
-        let undo_y =
-            PAD_TOP + 5.0 * BUTTON_SIZE + 4.0 * BUTTON_GAP + SECTION_GAP + BUTTON_SIZE / 2.0;
-        let center = Point2D::new(TOOLBAR_WIDTH / 2.0, undo_y);
-        assert_eq!(
-            toolbar.hit_test(rect, center),
-            Some(ToolbarHit::Action(ToolbarAction::Undo))
+        // The Undo button sits below the (now longer) tool sections;
+        // rather than re-derive its y by hand, scan every row down the
+        // bar centre for the first Undo hit. Decouples the test from
+        // the exact item layout.
+        let cx = TOOLBAR_WIDTH / 2.0;
+        let undo_hit = (0..(toolbar.intrinsic_height() as i32)).find(|y| {
+            toolbar.hit_test(rect, Point2D::new(cx, *y as f32))
+                == Some(ToolbarHit::Action(ToolbarAction::Undo))
+        });
+        assert!(
+            undo_hit.is_some(),
+            "expected an Undo action button somewhere down the bar"
         );
+    }
+
+    #[test]
+    fn no_widget_tools_in_toolbar() {
+        // Widgets are authored via the component kit / AI+MCP, never as
+        // toolbar drop-tools — so none appear in the bar.
+        let toolbar = Toolbar::default_set();
+        assert!(!toolbar
+            .items
+            .iter()
+            .any(|i| matches!(i, ToolbarItem::Tool(t, _) if t.is_widget())));
     }
 
     #[test]

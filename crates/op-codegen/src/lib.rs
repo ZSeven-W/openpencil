@@ -396,7 +396,11 @@ fn css_ident(name: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use jian_ops_schema::node::{EllipseNode, PenNodeBase, RectangleNode, TextContent, TextNode};
+    use jian_ops_schema::node::{
+        BoolOrExpression, CheckboxNode, EllipseNode, NumberInputNode, NumberOrExpression,
+        PenNodeBase, ProgressNode, RadioGroupNode, RectangleNode, SelectNode, SelectOption,
+        SliderNode, SwitchNode, TabsNode, TextAreaNode, TextContent, TextInputNode, TextNode,
+    };
     use jian_ops_schema::page::PenPage;
     use jian_ops_schema::sizing::SizingBehavior;
     use jian_ops_schema::style::{PenFill, SolidFillBody};
@@ -749,5 +753,234 @@ mod tests {
         let html = Html.generate(&doc);
         assert!(html.contains("left:1px"));
         assert!(html.contains("width:30px"));
+    }
+
+    // --- First-class widget node builders ------------------------------
+    //
+    // The widget structs derive `Default`, so the builders only set the
+    // fields a test cares about and lean on `..Default::default()` for
+    // the rest (id, sizing, fills, bindings, …).
+
+    fn base(id: &str) -> PenNodeBase {
+        PenNodeBase {
+            id: id.into(),
+            ..Default::default()
+        }
+    }
+
+    fn option(value: &str, label: &str) -> SelectOption {
+        SelectOption {
+            value: value.into(),
+            label: label.into(),
+        }
+    }
+
+    #[test]
+    fn html_emits_text_input_element() {
+        let node = PenNode::TextInput(TextInputNode {
+            base: base("w1"),
+            placeholder: Some("Email".into()),
+            value: Some("a@b.c".into()),
+            ..Default::default()
+        });
+        let html = Html.generate(&doc_with_nodes(vec![node]));
+        assert!(html.contains("<input type=\"text\""));
+        assert!(html.contains("placeholder=\"Email\""));
+        assert!(html.contains("value=\"a@b.c\""));
+    }
+
+    #[test]
+    fn html_emits_textarea_with_value_body() {
+        let node = PenNode::TextArea(TextAreaNode {
+            base: base("w1"),
+            placeholder: Some("Bio".into()),
+            value: Some("Hi <there>".into()),
+            ..Default::default()
+        });
+        let html = Html.generate(&doc_with_nodes(vec![node]));
+        assert!(html.contains("<textarea"));
+        assert!(html.contains("placeholder=\"Bio\""));
+        // Value lands in the body and is html-escaped like text nodes.
+        assert!(html.contains(">Hi &lt;there&gt;</textarea>"));
+    }
+
+    #[test]
+    fn html_emits_number_input_with_min_max_step() {
+        let node = PenNode::NumberInput(NumberInputNode {
+            base: base("w1"),
+            min: Some(0.0),
+            max: Some(10.0),
+            step: Some(2.0),
+            value: Some(NumberOrExpression::Number(4.0)),
+            ..Default::default()
+        });
+        let html = Html.generate(&doc_with_nodes(vec![node]));
+        assert!(html.contains("<input type=\"number\""));
+        assert!(html.contains("min=\"0\""));
+        assert!(html.contains("max=\"10\""));
+        assert!(html.contains("step=\"2\""));
+        assert!(html.contains("value=\"4\""));
+    }
+
+    #[test]
+    fn html_emits_select_with_options_and_selected() {
+        let node = PenNode::Select(SelectNode {
+            base: base("w1"),
+            value: Some("b".into()),
+            options: Some(vec![option("a", "Apple"), option("b", "Banana")]),
+            ..Default::default()
+        });
+        let html = Html.generate(&doc_with_nodes(vec![node]));
+        assert!(html.contains("<select>"));
+        assert!(html.contains("<option value=\"a\">Apple</option>"));
+        // The current value gets the `selected` flag.
+        assert!(html.contains("<option value=\"b\" selected>Banana</option>"));
+    }
+
+    #[test]
+    fn html_emits_radio_group_with_checked_match() {
+        let node = PenNode::RadioGroup(RadioGroupNode {
+            base: base("grp"),
+            value: Some("y".into()),
+            options: Some(vec![option("y", "Yes"), option("n", "No")]),
+            ..Default::default()
+        });
+        let html = Html.generate(&doc_with_nodes(vec![node]));
+        // name groups the radios; the matching value is checked.
+        assert!(html.contains("type=\"radio\" name=\"grp\" value=\"y\" checked"));
+        assert!(html.contains("type=\"radio\" name=\"grp\" value=\"n\" />No"));
+    }
+
+    #[test]
+    fn html_emits_switch_checkbox_with_role_and_checked() {
+        let node = PenNode::Switch(SwitchNode {
+            base: base("w1"),
+            checked: Some(BoolOrExpression::Bool(true)),
+            ..Default::default()
+        });
+        let html = Html.generate(&doc_with_nodes(vec![node]));
+        assert!(html.contains("<input type=\"checkbox\" role=\"switch\" checked />"));
+    }
+
+    #[test]
+    fn html_emits_checkbox_with_label() {
+        let node = PenNode::Checkbox(CheckboxNode {
+            base: base("w1"),
+            checked: Some(BoolOrExpression::Bool(false)),
+            label: Some("Accept".into()),
+            ..Default::default()
+        });
+        let html = Html.generate(&doc_with_nodes(vec![node]));
+        // Unchecked → no `checked` attribute; label text follows.
+        assert!(html.contains("<input type=\"checkbox\" /> <label>Accept</label>"));
+    }
+
+    #[test]
+    fn html_emits_slider_range_input() {
+        let node = PenNode::Slider(SliderNode {
+            base: base("w1"),
+            min: Some(0.0),
+            max: Some(100.0),
+            step: Some(5.0),
+            value: Some(NumberOrExpression::Number(25.0)),
+            ..Default::default()
+        });
+        let html = Html.generate(&doc_with_nodes(vec![node]));
+        assert!(html.contains("<input type=\"range\""));
+        assert!(html.contains("min=\"0\""));
+        assert!(html.contains("max=\"100\""));
+        assert!(html.contains("step=\"5\""));
+        assert!(html.contains("value=\"25\""));
+    }
+
+    #[test]
+    fn html_emits_progress_with_value_and_max() {
+        let node = PenNode::Progress(ProgressNode {
+            base: base("w1"),
+            value: Some(NumberOrExpression::Number(30.0)),
+            max: Some(100.0),
+            ..Default::default()
+        });
+        let html = Html.generate(&doc_with_nodes(vec![node]));
+        assert!(html.contains("<progress value=\"30\" max=\"100\"></progress>"));
+    }
+
+    #[test]
+    fn html_emits_tabs_tablist_and_panels() {
+        let panel = rect("p1", 0.0, 0.0, 10.0, 10.0, None);
+        let node = PenNode::Tabs(TabsNode {
+            base: base("w1"),
+            tabs: Some(vec![option("one", "One"), option("two", "Two")]),
+            value: Some("two".into()),
+            children: Some(vec![panel]),
+            ..Default::default()
+        });
+        let html = Html.generate(&doc_with_nodes(vec![node]));
+        assert!(html.contains("<nav role=\"tablist\">"));
+        assert!(html.contains("<button role=\"tab\" value=\"one\">One</button>"));
+        // The active tab carries aria-selected.
+        assert!(
+            html.contains("<button role=\"tab\" value=\"two\" aria-selected=\"true\">Two</button>")
+        );
+        // Panel child still recurses (rect → positioned div).
+        assert!(html.contains("width:10px"));
+    }
+
+    #[test]
+    fn react_emits_text_input_element() {
+        let node = PenNode::TextInput(TextInputNode {
+            base: base("w1"),
+            placeholder: Some("Email".into()),
+            ..Default::default()
+        });
+        let s = React.generate(&doc_with_nodes(vec![node]));
+        assert!(s.contains("<input type=\"text\""));
+        assert!(s.contains("placeholder=\"Email\""));
+    }
+
+    #[test]
+    fn react_emits_select_with_options() {
+        let node = PenNode::Select(SelectNode {
+            base: base("w1"),
+            value: Some("a".into()),
+            options: Some(vec![option("a", "Apple")]),
+            ..Default::default()
+        });
+        let s = React.generate(&doc_with_nodes(vec![node]));
+        assert!(s.contains("<select>"));
+        assert!(s.contains("<option value=\"a\" selected>Apple</option>"));
+    }
+
+    #[test]
+    fn react_emits_checkbox_and_progress() {
+        let checkbox = PenNode::Checkbox(CheckboxNode {
+            base: base("c1"),
+            checked: Some(BoolOrExpression::Bool(true)),
+            label: Some("On".into()),
+            ..Default::default()
+        });
+        let progress = PenNode::Progress(ProgressNode {
+            base: base("p1"),
+            value: Some(NumberOrExpression::Number(50.0)),
+            ..Default::default()
+        });
+        let s = React.generate(&doc_with_nodes(vec![checkbox, progress]));
+        assert!(s.contains("<input type=\"checkbox\" checked /> <label>On</label>"));
+        assert!(s.contains("<progress value=\"50\"></progress>"));
+    }
+
+    #[test]
+    fn expression_bound_values_degrade_to_no_attribute() {
+        // A `$var`-bound slider value can't resolve statically, so no
+        // `value` attribute is emitted (same degrade as other generators).
+        let node = PenNode::Slider(SliderNode {
+            base: base("w1"),
+            value: Some(NumberOrExpression::Expression("$progress".into())),
+            ..Default::default()
+        });
+        let html = Html.generate(&doc_with_nodes(vec![node]));
+        assert!(html.contains("<input type=\"range\""));
+        assert!(!html.contains("value="));
+        assert!(!html.contains("$progress"));
     }
 }

@@ -30,6 +30,17 @@ const VALID_NODE_TYPES = new Set([
   'path',
   'text',
   'image',
+  'icon_font',
+  'text_input',
+  'text_area',
+  'number_input',
+  'select',
+  'radio_group',
+  'switch',
+  'checkbox',
+  'slider',
+  'progress',
+  'tabs',
   'ref',
 ]);
 

@@ -43,7 +43,11 @@ fn parse_align_action(s: &str) -> Option<AlignAction> {
     }
 }
 
-/// Resolve a `tool` string into a [`Tool`].
+/// Resolve a `tool` string into a [`Tool`]. Accepts each tool's
+/// stable [`Tool::ident`] token, so the form-widget tools select via
+/// their `snake_case` kind string (`text_input`, `slider`, …; the
+/// dropdown select widget uses `select_widget` to disambiguate from
+/// the `select` pointer tool).
 fn parse_tool(s: &str) -> Option<Tool> {
     match s {
         "select" => Some(Tool::Select),
@@ -55,6 +59,16 @@ fn parse_tool(s: &str) -> Option<Tool> {
         "text" => Some(Tool::Text),
         "frame" => Some(Tool::Frame),
         "hand" => Some(Tool::Hand),
+        "text_input" => Some(Tool::TextInput),
+        "text_area" => Some(Tool::TextArea),
+        "number_input" => Some(Tool::NumberInput),
+        "select_widget" => Some(Tool::Select_),
+        "radio_group" => Some(Tool::RadioGroup),
+        "switch" => Some(Tool::Switch),
+        "checkbox" => Some(Tool::Checkbox),
+        "slider" => Some(Tool::Slider),
+        "progress" => Some(Tool::Progress),
+        "tabs" => Some(Tool::Tabs),
         _ => None,
     }
 }
@@ -780,6 +794,12 @@ impl EditorState {
                 replacements,
             } => self.cmd_replace_all_matching_properties(&page_id, &parent_ids, &replacements),
             EditorCommand::Batch { commands } => self.cmd_batch(commands),
+            // `promote_legacy_widgets` owns its history snapshot — it
+            // pushes onto the undo stack only when at least one frame is
+            // promoted, so a zero-promotion run is a clean no-op. The
+            // promotion count + per-node notes are surfaced by the
+            // dedicated method; here `apply` reports only changed-or-not.
+            EditorCommand::PromoteLegacyWidgets => self.promote_legacy_widgets().changed(),
         }
     }
 }

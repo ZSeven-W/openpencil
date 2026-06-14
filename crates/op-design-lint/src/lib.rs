@@ -18,7 +18,7 @@ pub use detectors::{
     detect_invisible_containers, detect_mixed_sibling_corner_radius, detect_mixed_sibling_padding,
     detect_sibling_inconsistencies, detect_stacked_horizontal_padding, detect_text_bg_contrast,
     detect_text_corner_radius, detect_text_effect, detect_text_explicit_heights,
-    detect_text_stroke, detect_unexpected_rotation,
+    detect_text_stroke, detect_unexpected_rotation, detect_unlabeled_inputs,
 };
 pub use fixes::{apply_fixes, detect_and_fix};
 pub use issue::{FixProperty, FixReport, Issue, IssueCategory, IssueSeverity};

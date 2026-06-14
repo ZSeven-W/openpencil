@@ -48,7 +48,17 @@ pub(super) fn ts_data_node(
             format!("data must be a valid PenNode tree: {e}"),
         )
     })?;
-    Ok(Some(node))
+    // Phase E3 — apply the same legacy-frame normalization the `batch_design`
+    // operations path runs, so a single `insert_node(data: frame role="input")`
+    // also lands a real `text_input` widget node. `promote_in_slice` covers the
+    // root node (when itself marked) AND any marked frames nested in its
+    // children. `insert_node` returns a plain `EditorCommand` with no rich JSON
+    // result, so the collected notes have nowhere to be surfaced here — they
+    // could ride a future result envelope; for now promotion is the contract.
+    let mut nodes = vec![node];
+    let mut _notes = Vec::new();
+    super::batch_design::promote_in_slice(&mut nodes, &mut _notes);
+    Ok(Some(nodes.into_iter().next().expect("single node")))
 }
 
 fn should_preserve_ts_data_node(obj: &serde_json::Map<String, Value>) -> bool {

@@ -84,6 +84,59 @@ fn fresh_app_refits_blank_frame_to_actual_window_size_once() {
 }
 
 #[test]
+fn design_md_auto_generate_extracts_from_document_and_is_undoable() {
+    use jian_ops_schema::variable::{
+        VariableDefinition, VariableKind, VariableScalar, VariableValue,
+    };
+    use std::collections::BTreeMap;
+
+    let mut app = DesktopApp::new(None);
+    let mut variables = BTreeMap::new();
+    variables.insert(
+        "$color-brand".to_string(),
+        VariableDefinition {
+            kind: VariableKind::Color,
+            value: VariableValue::Scalar(VariableScalar::Str("#2563eb".to_string())),
+        },
+    );
+    {
+        let state = app.host.editor_state_mut();
+        state.doc.name = Some("Generated Brief".to_string());
+        state.doc.variables = Some(variables);
+        state.doc.design_md = Some(op_editor_core::parse_design_md(
+            "# Design System: Existing\n\n## Visual Theme\nOld brief",
+        ));
+        state.editor_ui.design_md_request = Some(op_editor_core::DesignMdRequest::AutoGenerate);
+    }
+
+    app.drain_design_md_action();
+
+    let spec = app
+        .host
+        .editor_state()
+        .doc
+        .design_md
+        .as_ref()
+        .expect("auto-generated design.md");
+    assert_eq!(spec.project_name.as_deref(), Some("Generated Brief"));
+    assert!(
+        spec.raw.contains("#2563EB"),
+        "auto-generated design.md should include extracted color variable: {}",
+        spec.raw
+    );
+
+    assert!(app.host.editor_state_mut().undo());
+    let restored = app
+        .host
+        .editor_state()
+        .doc
+        .design_md
+        .as_ref()
+        .expect("previous design.md restored");
+    assert_eq!(restored.project_name.as_deref(), Some("Existing"));
+}
+
+#[test]
 fn live_mcp_http_server_applies_write_requests_to_editor_state() {
     use std::io::{Read, Write};
     use std::net::{TcpListener, TcpStream};

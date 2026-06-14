@@ -126,7 +126,8 @@ fn batchable(cmd: &EditorCommand) -> bool {
         | C::SetNodeName { .. }
         | C::ImportSvg { .. }
         | C::SetNodeLayoutProp { .. }
-        | C::ReplaceAllMatchingProperties { .. } => true,
+        | C::ReplaceAllMatchingProperties { .. }
+        | C::PromoteLegacyWidgets => true,
     }
 }
 

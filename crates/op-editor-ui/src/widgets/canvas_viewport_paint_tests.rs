@@ -537,9 +537,12 @@ mod path_tests {
 
 mod clip_tests {
     use crate::layout_scene::{NodeKind, SceneNode};
-    use crate::widgets::canvas_viewport_paint::paint_node;
+    use crate::widgets::canvas_viewport_paint::{
+        paint_node, paint_node_with_reveals, RevealSchedule,
+    };
     use crate::widgets::PaintCx;
     use crate::{Color, Point2D, Rect, RenderBackend, TextLayout};
+    use std::collections::HashMap;
 
     /// Records the paint-op sequence so the test can assert the clip
     /// brackets the children (and only the children).
@@ -615,6 +618,30 @@ mod clip_tests {
         backend.ops
     }
 
+    fn paint_with_reveals(
+        node: &SceneNode,
+        reveals: &HashMap<String, u64>,
+        now_ms: u64,
+    ) -> Vec<String> {
+        let mut backend = ClipCaptureBackend::default();
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+        paint_node_with_reveals(
+            &mut cx,
+            node,
+            Point2D::ZERO,
+            1.0,
+            None,
+            Rect::xywh(0.0, 0.0, 4000.0, 4000.0),
+            RevealSchedule {
+                starts: reveals,
+                now_ms,
+            },
+        );
+        backend.ops
+    }
+
     #[test]
     fn clip_content_frame_brackets_children_with_sharp_clip() {
         let ops = paint(&frame_with_child(true, 0.0));
@@ -646,6 +673,21 @@ mod clip_tests {
         let ops = paint(&frame_with_child(false, 0.0));
         assert_eq!(
             ops,
+            vec!["fill(0,0)".to_string(), "fill(10,10)".to_string()]
+        );
+    }
+
+    #[test]
+    fn future_reveal_child_waits_before_painting() {
+        let frame = frame_with_child(false, 0.0);
+        let reveals = HashMap::from([("c".to_string(), 1_200)]);
+
+        assert_eq!(
+            paint_with_reveals(&frame, &reveals, 1_000),
+            vec!["fill(0,0)".to_string()]
+        );
+        assert_eq!(
+            paint_with_reveals(&frame, &reveals, 1_200),
             vec!["fill(0,0)".to_string(), "fill(10,10)".to_string()]
         );
     }

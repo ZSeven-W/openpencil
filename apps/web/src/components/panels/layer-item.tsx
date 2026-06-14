@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import type { PenNodeType } from '@/types/pen';
 
-const TYPE_ICONS: Record<PenNodeType, typeof Square> = {
+const TYPE_ICONS: Partial<Record<PenNodeType, typeof Square>> = {
   rectangle: Square,
   ellipse: Circle,
   text: Type,

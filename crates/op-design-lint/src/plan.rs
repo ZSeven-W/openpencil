@@ -158,6 +158,8 @@ pub fn detect_and_plan(doc: &PenDocument) -> Vec<PlannedFix> {
             FixProperty::Stroke => PlannedAction::SetStroke(issue.suggested_value.clone()),
             // Fill is a documented no-op in apply_fixes — skip.
             FixProperty::Fill => continue,
+            // widget-a11y is detect-only (no auto-fix) — skip.
+            FixProperty::Label => continue,
             // Remove is handled above; this arm is unreachable.
             FixProperty::Remove => continue,
         };

@@ -4,6 +4,7 @@
 use std::collections::BTreeMap;
 
 use jian_ops_schema::node::PenNode;
+use jian_ops_schema::promote::{promote_frame, widget_kind_for, PromoteNote};
 use op_editor_core::{NodeId, PenNodeExt};
 
 use super::batch_direct_ops::parse_single_direct_operation;
@@ -58,6 +59,7 @@ pub(crate) fn dispatch_batch_design(
                 parent_id,
                 nodes,
                 count,
+                promoted,
                 ..
             }) => {
                 let mut out = BTreeMap::new();
@@ -66,6 +68,9 @@ pub(crate) fn dispatch_batch_design(
                 if let Some(phase) = phase {
                     out.insert("phase".into(), phase.into());
                 }
+                // Surface Phase E3 promotions so the client sees the
+                // legacy role frames that were normalized into widget nodes.
+                surface_promotions(&mut out, &promoted);
                 ToolOutcome::OkWithCommand(
                     out,
                     EditorCommand::InsertSubtree {
@@ -130,6 +135,9 @@ pub(crate) enum ParsedOperations {
         /// One binding name per top-level `I()` op, used to trace post-remap
         /// ids back to bindings for TS's `results:[{binding,nodeId}]`.
         bindings: Vec<String>,
+        /// Per-node legacy-frame promotions applied to `nodes` (Phase E3).
+        /// Empty when the AI emitted no explicitly-marked role frames.
+        promoted: Vec<PromoteNote>,
     },
     Direct(EditorCommand),
 }
@@ -141,13 +149,86 @@ pub(crate) fn parse_operations(input: &str) -> Result<ParsedOperations, String> 
             return Ok(ParsedOperations::Direct(command));
         }
     }
-    let (parent_id, nodes, count, bindings) = parse_insert_operations(input)?;
+    let (parent_id, mut nodes, _count, bindings) = parse_insert_operations(input)?;
+    // Phase E3 — normalize explicitly-marked legacy frames (`role:"input"`
+    // etc., or `semantics.role == input`) into first-class widget nodes
+    // BEFORE they become the inserted command, so an old-style
+    // `frame role="input"` the AI emits lands a real `text_input` node. Both
+    // consumers (flat `InsertSubtree` + the `BatchDesign` result path's
+    // `InsertAuthoredSubtree`) see the promoted forest. Recount afterwards:
+    // promotion drops the marked frame's children (widget nodes are leaves).
+    let mut promoted = Vec::new();
+    promote_in_slice(&mut nodes, &mut promoted);
+    let count = count_forest(&nodes);
     Ok(ParsedOperations::Insert {
         parent_id,
         nodes,
         count,
         bindings,
+        promoted,
     })
+}
+
+/// Recursive promotion pass mirroring `jian_ops_schema::promote::
+/// promote_document`'s internal slice walker (which isn't `pub`): for every
+/// node, if `widget_kind_for` flags it as an explicitly-marked frame, replace
+/// it in place with the built widget node; otherwise recurse into container
+/// children (Frame / Group / Rectangle / Tabs / Ref). Widget nodes are leaves,
+/// so a promoted frame is never recursed into. `notes` collects one
+/// `PromoteNote` per promotion for the result surface.
+pub(crate) fn promote_in_slice(nodes: &mut [PenNode], notes: &mut Vec<PromoteNote>) {
+    for node in nodes.iter_mut() {
+        if let Some(kind) = widget_kind_for(node) {
+            let PenNode::Frame(frame) = node.clone() else {
+                // `widget_kind_for` only returns Some for a Frame.
+                continue;
+            };
+            let from_role = frame
+                .base
+                .role
+                .clone()
+                .unwrap_or_else(|| "semantics.role=input".into());
+            let id = frame.base.id.clone();
+            *node = promote_frame(&frame, kind);
+            notes.push(PromoteNote {
+                node_id: id,
+                from_role,
+                to: kind.tag(),
+            });
+        } else if let Some(children) = node.children_mut() {
+            promote_in_slice(children, notes);
+        }
+    }
+}
+
+/// Count every node in a forest (subtree-inclusive). Used to keep the flat
+/// `count` accurate after promotion drops a marked frame's children.
+fn count_forest(nodes: &[PenNode]) -> usize {
+    fn count_subtree(node: &PenNode) -> usize {
+        1 + node
+            .children()
+            .map(|c| c.iter().map(count_subtree).sum::<usize>())
+            .unwrap_or(0)
+    }
+    nodes.iter().map(count_subtree).sum()
+}
+
+/// Stamp Phase E3 promotion info into a flat string-map result. No-op when
+/// nothing was promoted, so existing batch_design results are byte-identical
+/// for the common (no legacy frames) case. The `promoted` line mirrors TS's
+/// pipeline-warning convention ("promoted N legacy role frames"); a per-node
+/// `<id>` → `<widget>` summary rides alongside for traceability.
+pub(crate) fn surface_promotions(out: &mut BTreeMap<String, String>, promoted: &[PromoteNote]) {
+    if promoted.is_empty() {
+        return;
+    }
+    out.insert("promoted".into(), promoted.len().to_string());
+    let detail = promoted
+        .iter()
+        .map(|n| format!("{}({} -> {})", n.node_id, n.from_role, n.to))
+        .collect::<Vec<_>>()
+        .join(", ");
+    out.insert("promotedNodes".into(), detail);
 }
 
 type InsertForest = (NodeId, Vec<PenNode>, usize, Vec<String>);
