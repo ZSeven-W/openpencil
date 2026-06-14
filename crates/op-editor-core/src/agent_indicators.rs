@@ -17,13 +17,13 @@ use std::collections::{HashMap, HashSet};
 use std::sync::{LazyLock, Mutex};
 
 /// Duration of the short generated-node entrance animation.
-pub const REVEAL_DURATION_MS: u64 = 1_520;
+pub const REVEAL_DURATION_MS: u64 = 1_680;
 /// Delay between the first generated nodes in one applied batch.
-pub const REVEAL_STAGGER_MS: u64 = REVEAL_FRAME_MS;
+pub const REVEAL_STAGGER_MS: u64 = 48;
 /// Minimum delay before descendants of a newly revealed container begin
 /// their own entrances. This leaves the parent opening beat readable
 /// without making nested content feel stalled.
-pub const REVEAL_CHILD_RUNWAY_MS: u64 = REVEAL_FRAME_MS * 6;
+pub const REVEAL_CHILD_RUNWAY_MS: u64 = 80;
 /// Extra delay for nested generated nodes. Visual traversal order
 /// already places children after parents; keeping this at zero avoids
 /// depth changes compressing adjacent stream slots into the same frame.
@@ -31,13 +31,13 @@ pub const REVEAL_DEPTH_STAGGER_MS: u64 = 0;
 /// Parent reveals suppress child transforms only during their opening
 /// beat. Once the parent has begun settling, delayed children animate
 /// independently so streamed content does not pop in abruptly.
-pub const REVEAL_CHILD_SUPPRESS_FRACTION: f32 = 0.08;
+pub const REVEAL_CHILD_SUPPRESS_FRACTION: f32 = 0.04;
 const REVEAL_FULL_STAGGER_SIBLINGS: u64 = 18;
 const REVEAL_MID_STAGGER_SIBLINGS: u64 = 72;
-const REVEAL_COMPRESSED_STAGGER_MS: u64 = REVEAL_FRAME_MS;
-const REVEAL_TAIL_STAGGER_MS: u64 = REVEAL_FRAME_MS;
+const REVEAL_COMPRESSED_STAGGER_MS: u64 = 32;
+const REVEAL_TAIL_STAGGER_MS: u64 = 24;
 const REVEAL_MAX_NEW_STARTS_PER_SNAPSHOT: usize = 1;
-const REVEAL_BURST_RECOVERY_STAGGER_MS: u64 = REVEAL_FRAME_MS;
+const REVEAL_BURST_RECOVERY_STAGGER_MS: u64 = REVEAL_STAGGER_MS;
 const CLOCK_REBASE_THRESHOLD_MS: u64 = 60_000;
 const REVEAL_FRAME_MS: u64 = 16;
 
@@ -452,7 +452,7 @@ mod tests {
             "reveal should stay active long enough to read as a smooth entrance"
         );
         assert!(
-            snapshot_at(2_600).reveals.is_empty(),
+            snapshot_at(2_800).reveals.is_empty(),
             "expired reveal should be pruned"
         );
         assert!(!is_active(), "expired reveal should not keep animating");
@@ -564,7 +564,7 @@ mod tests {
         assert!(
             snap.reveals
                 .get("n2")
-                .is_some_and(|started_at| *started_at <= 1_244),
+                .is_some_and(|started_at| *started_at <= 1_220 + REVEAL_BURST_RECOVERY_STAGGER_MS),
             "overdue recovery should stay close enough to feel continuous"
         );
         end_if_epoch(epoch);
@@ -611,12 +611,12 @@ mod tests {
         assert!(
             offsets
                 .windows(2)
-                .take(24)
-                .all(|pair| pair[1] - pair[0] == REVEAL_FRAME_MS),
-            "the first visible nodes should stream at frame cadence, not slower"
+                .take(REVEAL_FULL_STAGGER_SIBLINGS as usize)
+                .all(|pair| pair[1] - pair[0] == REVEAL_STAGGER_MS),
+            "the first visible nodes should stream at readable cadence, not bunch into one frame"
         );
         assert!(
-            offsets[20] - offsets[0] <= 340,
+            offsets[20] - offsets[0] <= 1_000,
             "the first screenful should still avoid a slow reveal queue"
         );
         assert!(
@@ -626,8 +626,25 @@ mod tests {
             "stream items should not share an entrance start frame at 60 fps"
         );
         assert!(
-            offsets[39] - offsets[0] < 1_200,
+            offsets[39] - offsets[0] < 1_800,
             "dense generated batches should stay responsive instead of waiting several seconds"
+        );
+    }
+
+    #[test]
+    fn reveal_offsets_keep_first_screen_readable_without_clustering() {
+        let offsets: Vec<u64> = (0..24).map(|i| reveal_offset_ms(0, i)).collect();
+
+        assert!(
+            offsets
+                .windows(2)
+                .take(16)
+                .all(|pair| (40..=64).contains(&(pair[1] - pair[0]))),
+            "the first screenful should stream at a readable cadence instead of bunching into one paint frame"
+        );
+        assert!(
+            offsets[19] - offsets[0] <= 1_100,
+            "readable pacing should still keep the first screenful responsive"
         );
     }
 }

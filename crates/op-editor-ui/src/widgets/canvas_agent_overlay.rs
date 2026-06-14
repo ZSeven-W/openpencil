@@ -229,8 +229,8 @@ fn paint_reveal_sweep(
 
 fn lifted_scaled_rect(rect: Rect, ease: f32) -> Rect {
     let settle = 1.0 - ease;
-    let scale = 0.986 + ease * 0.014;
-    let lift = settle * 5.0;
+    let scale = 0.970 + ease * 0.030;
+    let lift = settle * 8.0;
     let w = rect.size.x * scale;
     let h = rect.size.y * scale;
     Rect {
@@ -457,7 +457,7 @@ mod tests {
             &roots,
             Point2D::new(100.0, 50.0),
             2.0,
-            2_600,
+            2_800,
         );
         assert!(expired_backend.round_fills.is_empty());
         assert!(expired_backend.round_strokes.is_empty());

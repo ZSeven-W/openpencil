@@ -8,6 +8,8 @@ use std::collections::HashMap;
 struct RevealCaptureBackend {
     ops: Vec<String>,
     scales: usize,
+    scale_values: Vec<Point2D>,
+    translations: Vec<Point2D>,
 }
 
 impl RenderBackend for RevealCaptureBackend {
@@ -26,9 +28,12 @@ impl RenderBackend for RevealCaptureBackend {
     fn restore(&mut self) {
         self.ops.push("restore".into());
     }
-    fn translate(&mut self, _: Point2D) {}
-    fn scale(&mut self, _: Point2D, _: Point2D) {
+    fn translate(&mut self, delta: Point2D) {
+        self.translations.push(delta);
+    }
+    fn scale(&mut self, factor: Point2D, _: Point2D) {
         self.scales += 1;
+        self.scale_values.push(factor);
         self.ops.push("scale".into());
     }
     fn stroke_line(&mut self, _: Point2D, _: Point2D, _: Color, _: f32) {}
@@ -119,6 +124,31 @@ fn active_reveal_wraps_node_paint_in_transform() {
 }
 
 #[test]
+fn active_reveal_starts_with_readable_lift_and_scale() {
+    let mut node = SceneNode::leaf("c", NodeKind::Rect);
+    node.bounds = Rect::xywh(10.0, 10.0, 50.0, 30.0);
+    node.fill = Some(Color::RED);
+    let reveals = HashMap::from([("c".to_string(), 1_000)]);
+
+    let backend = paint_with_reveals(&node, &reveals, 1_000);
+
+    assert!(
+        backend
+            .scale_values
+            .first()
+            .is_some_and(|scale| scale.x <= 0.972 && scale.y <= 0.972),
+        "reveal should start with enough scale delta to read as an entrance"
+    );
+    assert!(
+        backend
+            .translations
+            .first()
+            .is_some_and(|delta| delta.y >= 8.0),
+        "reveal should start with enough lift to avoid an instant pop"
+    );
+}
+
+#[test]
 fn opening_parent_reveal_prevents_nested_child_transform() {
     let frame = frame_with_child();
     let reveals = HashMap::from([("f".to_string(), 1_000), ("c".to_string(), 1_040)]);
@@ -138,9 +168,9 @@ fn opening_parent_reveal_prevents_nested_child_transform() {
 #[test]
 fn parent_reveal_suppresses_child_transform_through_opening_beat() {
     let frame = frame_with_child();
-    let reveals = HashMap::from([("f".to_string(), 1_000), ("c".to_string(), 1_080)]);
+    let reveals = HashMap::from([("f".to_string(), 1_000), ("c".to_string(), 1_048)]);
 
-    let backend = paint_with_reveals(&frame, &reveals, 1_120);
+    let backend = paint_with_reveals(&frame, &reveals, 1_056);
 
     assert_eq!(
         backend.scales, 1,

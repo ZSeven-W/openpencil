@@ -40,15 +40,15 @@ fn reveal_schedule_streams_large_subtrees_without_long_tail() {
     let section = *snapshot.reveals.get("section").expect("section reveal");
     let last_label = *snapshot.reveals.get("label-19").expect("last label reveal");
     assert!(
-        last_label - section >= 300,
+        last_label - section >= 800,
         "large nested subtrees should stay visibly streamed instead of arriving in one burst"
     );
     assert!(
-        last_label - section <= 760,
+        last_label - section <= 1_100,
         "large nested subtrees should avoid a slow reveal queue"
     );
     assert!(
-        snapshot.reveals.values().all(|start| *start < 2_000),
+        snapshot.reveals.values().all(|start| *start < 2_100),
         "new content should finish entering within a responsive window"
     );
     op_editor_core::agent_indicators::end_if_epoch(epoch);
@@ -103,8 +103,9 @@ fn reveal_schedule_keeps_nested_stream_order_across_sibling_groups() {
     assert!(
         [label_0 - row_0, row_1 - label_0, label_1 - row_1]
             .into_iter()
-            .all(|gap| gap >= 16 && gap <= op_editor_core::agent_indicators::REVEAL_CHILD_RUNWAY_MS),
-        "nested stream items should keep frame cadence while giving new containers a runway"
+            .all(|gap| gap >= 40
+                && gap <= op_editor_core::agent_indicators::REVEAL_CHILD_RUNWAY_MS),
+        "nested stream items should keep readable cadence while giving new containers a runway"
     );
     op_editor_core::agent_indicators::end_if_epoch(epoch);
 }
@@ -161,8 +162,8 @@ fn reveal_schedule_gives_new_container_children_an_entrance_runway() {
         "children of a new container need their own runway instead of starting inside the parent's first beat"
     );
     assert!(
-        starts.windows(2).all(|pair| pair[1] - pair[0] >= 16),
-        "container children should continue one-per-frame after the runway"
+        starts.windows(2).all(|pair| pair[1] - pair[0] >= 40),
+        "container children should continue at readable cadence after the runway"
     );
     op_editor_core::agent_indicators::end_if_epoch(epoch);
 }
