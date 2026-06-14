@@ -134,17 +134,28 @@ impl TextEditLayout {
 
     /// Alignment-adjusted left edge of `line` (doc space).
     fn line_x(&self, backend: &mut dyn RenderBackend, line: &str) -> f32 {
-        let line_w = measure_line_width(
-            backend,
-            line,
-            self.font_size,
-            self.weight,
-            self.letter_spacing,
-        );
         match self.text_align {
-            SceneTextAlign::Center => self.origin.x + (self.align_width - line_w).max(0.0) / 2.0,
-            SceneTextAlign::Right => self.origin.x + (self.align_width - line_w).max(0.0),
             SceneTextAlign::Left | SceneTextAlign::Justify => self.origin.x,
+            SceneTextAlign::Center => {
+                let line_w = measure_line_width(
+                    backend,
+                    line,
+                    self.font_size,
+                    self.weight,
+                    self.letter_spacing,
+                );
+                self.origin.x + (self.align_width - line_w).max(0.0) / 2.0
+            }
+            SceneTextAlign::Right => {
+                let line_w = measure_line_width(
+                    backend,
+                    line,
+                    self.font_size,
+                    self.weight,
+                    self.letter_spacing,
+                );
+                self.origin.x + (self.align_width - line_w).max(0.0)
+            }
         }
     }
 
@@ -234,14 +245,38 @@ impl TextEditLayout {
         if local_x <= 0.0 {
             return start;
         }
-        for (i, ch) in line.char_indices() {
-            let before = self.prefix_width(backend, line, i);
-            let after = self.prefix_width(backend, line, i + ch.len_utf8());
+        start + self.offset_in_line_at_x(backend, line, local_x)
+    }
+
+    fn offset_in_line_at_x(
+        &self,
+        backend: &mut dyn RenderBackend,
+        line: &str,
+        local_x: f32,
+    ) -> usize {
+        let mut boundaries: Vec<usize> = line.char_indices().map(|(idx, _)| idx).collect();
+        boundaries.push(line.len());
+        let char_count = boundaries.len().saturating_sub(1);
+        if char_count == 0 {
+            return 0;
+        }
+        let mut lo = 0usize;
+        let mut hi = char_count;
+        while lo < hi {
+            let mid = (lo + hi) / 2;
+            let before = self.prefix_width(backend, line, boundaries[mid]);
+            let after = self.prefix_width(backend, line, boundaries[mid + 1]);
             if local_x < (before + after) / 2.0 {
-                return start + i;
+                hi = mid;
+            } else {
+                lo = mid + 1;
             }
         }
-        start + line.len()
+        if lo >= char_count {
+            line.len()
+        } else {
+            boundaries[lo]
+        }
     }
 }
 
@@ -305,6 +340,40 @@ mod tests {
             1.0
         }
         fn measure_text_weighted(&mut self, text: &str, _: f32, _: u16) -> f32 {
+            text.chars().count() as f32 * 10.0
+        }
+    }
+
+    struct CountingBackend {
+        measures: usize,
+    }
+
+    impl CountingBackend {
+        fn reset(&mut self) {
+            self.measures = 0;
+        }
+    }
+
+    impl RenderBackend for CountingBackend {
+        fn begin_frame(&mut self) {}
+        fn end_frame(&mut self) {}
+        fn fill_rect(&mut self, _: Rect, _: Color) {}
+        fn stroke_rect(&mut self, _: Rect, _: Color, _: f32) {}
+        fn draw_text(&mut self, _: &TextLayout, _: Point2D) {}
+        fn clip_rect(&mut self, _: Rect) {}
+        fn save(&mut self) {}
+        fn restore(&mut self) {}
+        fn translate(&mut self, _: Point2D) {}
+        fn stroke_line(&mut self, _: Point2D, _: Point2D, _: Color, _: f32) {}
+        fn fill_round_rect(&mut self, _: Rect, _: f32, _: Color) {}
+        fn stroke_round_rect(&mut self, _: Rect, _: f32, _: Color, _: f32) {}
+        fn stroke_svg_path(&mut self, _: &str, _: Point2D, _: f32, _: Color, _: f32) {}
+        fn resize(&mut self, _: u32, _: u32) {}
+        fn dpi_scale(&self) -> f32 {
+            1.0
+        }
+        fn measure_text_weighted(&mut self, text: &str, _: f32, _: u16) -> f32 {
+            self.measures += 1;
             text.chars().count() as f32 * 10.0
         }
     }
@@ -412,6 +481,36 @@ mod tests {
         // Line width 20 in a 200 box → x starts at 100 + 90.
         assert_eq!(layout.caret_position(&mut b, 0).0, 190.0);
         assert_eq!(layout.offset_at_point(&mut b, Point2D::new(191.0, 55.0)), 0);
+    }
+
+    #[test]
+    fn left_aligned_line_start_caret_skips_alignment_measurement() {
+        let mut b = CountingBackend { measures: 0 };
+        let layout = text_edit_layout(&mut b, &text_node("hello", 200.0));
+
+        b.reset();
+        assert_eq!(layout.caret_position(&mut b, 0), (100.0, 50.0));
+        assert_eq!(
+            b.measures, 0,
+            "left-aligned line_x should not measure a line whose x is already known"
+        );
+    }
+
+    #[test]
+    fn offset_at_point_uses_logarithmic_prefix_measurements_on_long_lines() {
+        let content = "a".repeat(96);
+        let mut b = CountingBackend { measures: 0 };
+        let layout = text_edit_layout(&mut b, &text_node(&content, 2_000.0));
+
+        b.reset();
+        let hit = layout.offset_at_point(&mut b, Point2D::new(904.0, 55.0));
+
+        assert_eq!(hit, 80);
+        assert!(
+            b.measures <= 20,
+            "long-line hit testing should avoid linear prefix measurement, got {} measures",
+            b.measures
+        );
     }
 
     #[test]
