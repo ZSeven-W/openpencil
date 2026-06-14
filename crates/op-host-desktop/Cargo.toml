@@ -67,6 +67,8 @@ op-host-native = { path = "../op-host-native", version = "0.8.0" }
 # `op_editor_core::EditorState` (canonical `.op` document) instead of the
 # old shell-core `Document`.
 op-editor-core = { path = "../op-editor-core" }
+# Transport-free host state machines shared with web/native hosts.
+op-editor-host-core = { path = "../op-editor-host-core" }
 # D′ architecture: pre-validation adapter translates PlannedFix → EditorCommand.
 op-design-lint = { path = "../op-design-lint" }
 # AI code-generation pipeline. The `ai` feature compiles the pull-based

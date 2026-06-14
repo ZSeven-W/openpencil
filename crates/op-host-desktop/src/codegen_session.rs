@@ -19,24 +19,10 @@ use op_ai::chat_provider::{ChatDelta, ChatProvider, ChatRequest};
 use op_codegen::ai::types::{AssetFile, CodegenInput, PipelineStep};
 use op_codegen::ai::CodegenPipeline;
 use op_editor_core::codegen::CodeGenProgress;
+use op_editor_host_core::codegen::framework_ext;
 use op_host_native::WidgetHostNative;
 
 use crate::chat_session::provider_for_selected_model;
-
-/// File extension for the active framework's generated component file.
-/// Mirrors the TS download naming (`component.<ext>`).
-fn framework_ext(fw: op_editor_core::codegen::Framework) -> &'static str {
-    use op_editor_core::codegen::Framework;
-    match fw {
-        Framework::React | Framework::ReactNative => "tsx",
-        Framework::Vue => "vue",
-        Framework::Svelte => "svelte",
-        Framework::Html => "html",
-        Framework::Flutter => "dart",
-        Framework::SwiftUi => "swift",
-        Framework::Compose => "kt",
-    }
-}
 
 /// Streamed from the worker to the UI pump.
 pub enum CodegenDelta {

@@ -39,9 +39,12 @@ use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::rc::Rc;
 
-use op_codegen::ai::types::{AssetFile, CodegenInput, PendingRequest, PipelineStep, RequestId};
+use op_codegen::ai::types::{AssetFile, PendingRequest, PipelineStep, RequestId};
 use op_codegen::ai::CodegenPipeline;
 use op_editor_core::codegen::{CodeGenProgress, CodegenPhase};
+use op_editor_host_core::codegen::{
+    build_codegen_input_value as build_codegen_input, framework_ext,
+};
 
 use crate::web_ai_transport::{post_ai_stream, AiEvent, AiStreamHandle};
 
@@ -169,81 +172,6 @@ pub(crate) fn drain_codegen_flags(inner: &Rc<RefCell<crate::Inner>>) {
             return;
         }
         start_codegen(inner.clone(), crate::daemon_base::daemon_base());
-    }
-}
-
-/// Build pipeline input from the current selection, falling back to the
-/// ACTIVE PAGE's children when nothing is selected (TS `getTargetNodes`,
-/// code-panel.tsx:137-142; desktop `codegen_input::build_codegen_input`
-/// parity). `None` when there is nothing to generate from: an empty page
-/// with no selection, or a selection whose ids resolve to no live node.
-fn build_codegen_input(state: &op_editor_core::EditorState) -> Option<CodegenInput> {
-    use jian_ops_schema::node::PenNode;
-    use op_editor_core::walkers::find_node;
-
-    if state.selection.is_empty() {
-        // Whole-page fallback: every top-level child of the active page.
-        let children = state.active_children();
-        if children.is_empty() {
-            return None;
-        }
-        let nodes: Vec<&PenNode> = children.iter().collect();
-        return Some(input_from_nodes(&nodes, state));
-    }
-
-    // Resolve each selected id to its full subtree. The forest is the page
-    // children when the document is multi-page, else the root `children`.
-    let mut selected: Vec<&PenNode> = Vec::with_capacity(state.selection.set.len());
-    if let Some(pages) = state.doc.pages.as_ref() {
-        for id in &state.selection.set {
-            if let Some(node) = pages.iter().find_map(|page| find_node(&page.children, id)) {
-                selected.push(node);
-            }
-        }
-    } else {
-        for id in &state.selection.set {
-            if let Some(node) = find_node(&state.doc.children, id) {
-                selected.push(node);
-            }
-        }
-    }
-
-    // A selection of ids that resolve to no live node yields no input.
-    if selected.is_empty() {
-        return None;
-    }
-
-    Some(input_from_nodes(&selected, state))
-}
-
-/// Pure core: build a `CodegenInput` from already-resolved nodes + the editor
-/// state's framework / variables (desktop `input_from_nodes` parity, minus
-/// the raw-JSON second return — the web bundle is built live separately).
-fn input_from_nodes(
-    nodes: &[&jian_ops_schema::node::PenNode],
-    state: &op_editor_core::EditorState,
-) -> CodegenInput {
-    use op_ai::chat_provider::{EffortLevel, ThinkingMode};
-
-    /// Default per-request token cap — the per-phase prompt builders override
-    /// this, so it is only a fallback.
-    const DEFAULT_MAX_OUTPUT_TOKENS: u32 = 4096;
-
-    let nodes_json = serde_json::to_string(nodes).unwrap_or_else(|_| "[]".to_string());
-    let variables_json = state
-        .doc
-        .variables
-        .as_ref()
-        .filter(|vars| !vars.is_empty())
-        .map(|vars| serde_json::to_string(vars).unwrap_or_else(|_| "{}".to_string()));
-
-    CodegenInput {
-        nodes_json,
-        framework: state.codegen.framework,
-        variables_json,
-        max_output_tokens: DEFAULT_MAX_OUTPUT_TOKENS,
-        thinking: ThinkingMode::Adaptive,
-        effort: EffortLevel::Low,
     }
 }
 
@@ -590,21 +518,6 @@ fn start_pump(inner: Rc<RefCell<crate::Inner>>, shared: Shared) {
 // ---------------------------------------------------------------------
 // Download (Code panel) — code file, or component.zip when assets exist
 // ---------------------------------------------------------------------
-
-/// File extension for a framework's generated component file. Mirrors the
-/// desktop `codegen_session::framework_ext` + the TS download naming.
-pub(crate) fn framework_ext(fw: op_editor_core::codegen::Framework) -> &'static str {
-    use op_editor_core::codegen::Framework;
-    match fw {
-        Framework::React | Framework::ReactNative => "tsx",
-        Framework::Vue => "vue",
-        Framework::Svelte => "svelte",
-        Framework::Html => "html",
-        Framework::Flutter => "dart",
-        Framework::SwiftUi => "swift",
-        Framework::Compose => "kt",
-    }
-}
 
 /// Download the completed generation: `component.<ext>` (single file), or a
 /// `component.zip` carrying the code + `assets/*` when image assets came back
