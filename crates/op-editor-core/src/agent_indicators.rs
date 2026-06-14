@@ -19,7 +19,7 @@ use std::sync::{LazyLock, Mutex};
 /// Duration of the short generated-node entrance animation.
 pub const REVEAL_DURATION_MS: u64 = 1_520;
 /// Delay between the first generated nodes in one applied batch.
-pub const REVEAL_STAGGER_MS: u64 = 32;
+pub const REVEAL_STAGGER_MS: u64 = 22;
 /// Extra delay for nested generated nodes. Visual traversal order
 /// already places children after parents; keeping this at zero avoids
 /// depth changes compressing adjacent stream slots into the same frame.
@@ -30,10 +30,10 @@ pub const REVEAL_DEPTH_STAGGER_MS: u64 = 0;
 pub const REVEAL_CHILD_SUPPRESS_FRACTION: f32 = 0.10;
 const REVEAL_FULL_STAGGER_SIBLINGS: u64 = 18;
 const REVEAL_MID_STAGGER_SIBLINGS: u64 = 72;
-const REVEAL_COMPRESSED_STAGGER_MS: u64 = 24;
+const REVEAL_COMPRESSED_STAGGER_MS: u64 = 18;
 const REVEAL_TAIL_STAGGER_MS: u64 = REVEAL_FRAME_MS;
-const REVEAL_MAX_NEW_STARTS_PER_SNAPSHOT: usize = 2;
-const REVEAL_BURST_RECOVERY_STAGGER_MS: u64 = 40;
+const REVEAL_MAX_NEW_STARTS_PER_SNAPSHOT: usize = 1;
+const REVEAL_BURST_RECOVERY_STAGGER_MS: u64 = 20;
 const CLOCK_REBASE_THRESHOLD_MS: u64 = 60_000;
 const REVEAL_FRAME_MS: u64 = 16;
 
@@ -460,8 +460,14 @@ mod tests {
 
         let snap = snapshot_at(1_040);
 
-        assert_eq!(snap.reveals.get("external-a"), Some(&1_112));
-        assert_eq!(snap.reveals.get("external-b"), Some(&1_144));
+        assert_eq!(
+            snap.reveals.get("external-a"),
+            Some(&(1_080 + REVEAL_STAGGER_MS))
+        );
+        assert_eq!(
+            snap.reveals.get("external-b"),
+            Some(&(1_080 + REVEAL_STAGGER_MS * 2))
+        );
         clear();
     }
 
@@ -496,14 +502,20 @@ mod tests {
             .count();
 
         assert!(
-            visible_count <= 3,
-            "a delayed frame should not let the whole backlog start at once"
+            visible_count <= 2,
+            "a delayed frame should release at most one new reveal beyond the already-active tail"
         );
         assert!(
             snap.reveals
-                .get("n3")
+                .get("n2")
                 .is_some_and(|started_at| *started_at > 1_220),
             "overdue nodes beyond the per-frame budget should be queued forward"
+        );
+        assert!(
+            snap.reveals
+                .get("n2")
+                .is_some_and(|started_at| *started_at <= 1_244),
+            "overdue recovery should stay close enough to feel continuous"
         );
         end_if_epoch(epoch);
     }
@@ -517,11 +529,11 @@ mod tests {
             offsets
                 .windows(2)
                 .take(18)
-                .all(|pair| pair[1] - pair[0] >= 28),
-            "the first visible nodes need readable gaps instead of near-frame bursts"
+                .all(|pair| pair[1] - pair[0] >= 18),
+            "the first visible nodes need readable gaps without slowing the stream"
         );
         assert!(
-            offsets[20] - offsets[0] <= 760,
+            offsets[20] - offsets[0] <= 480,
             "the first screenful should still avoid a slow reveal queue"
         );
         assert!(
