@@ -669,8 +669,8 @@ fn push_reveal_transform(cx: &mut PaintCx<'_>, rect: Rect, phase: RevealPhase) -
         return false;
     }
     let settle = 1.0 - phase.ease;
-    let lift = 9.0 * settle * (1.0 - phase.t * 0.12);
-    let scale = 0.968 + 0.032 * phase.ease;
+    let lift = 11.0 * settle * (1.0 - phase.t * 0.10);
+    let scale = 0.960 + 0.040 * phase.ease;
     let pivot = Point2D::new(
         rect.origin.x + rect.size.x / 2.0,
         rect.origin.y + rect.size.y / 2.0,

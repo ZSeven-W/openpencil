@@ -158,7 +158,7 @@ fn reveal_schedule_gives_new_container_children_an_entrance_runway() {
     });
 
     assert!(
-        starts[0] - status >= 80,
+        starts[0] - status >= op_editor_core::agent_indicators::REVEAL_CHILD_RUNWAY_MS,
         "children of a new container need their own runway instead of starting inside the parent's first beat"
     );
     assert!(

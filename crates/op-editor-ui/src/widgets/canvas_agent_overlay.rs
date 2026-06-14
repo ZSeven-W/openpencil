@@ -205,11 +205,11 @@ fn paint_reveal_sweep(
     let tail = (1.0 - t * t).clamp(0.0, 1.0);
     let radius = 8.0_f32.min(animated.size.y / 2.0);
     cx.backend
-        .fill_round_rect(animated, radius, REVEAL_ACCENT.with_alpha(0.075 * tail));
+        .fill_round_rect(animated, radius, REVEAL_ACCENT.with_alpha(0.060 * tail));
     cx.backend.stroke_round_rect(
         animated,
         radius,
-        REVEAL_ACCENT.with_alpha(0.42 * tail),
+        REVEAL_ACCENT.with_alpha(0.34 * tail),
         1.25,
     );
     let sweep_w = (animated.size.x * 0.18).clamp(16.0, 64.0);
@@ -223,14 +223,14 @@ fn paint_reveal_sweep(
     cx.backend.save();
     cx.backend.clip_rect(animated);
     cx.backend
-        .fill_round_rect(sweep, sweep_w / 2.0, Color::WHITE.with_alpha(0.24 * tail));
+        .fill_round_rect(sweep, sweep_w / 2.0, Color::WHITE.with_alpha(0.18 * tail));
     cx.backend.restore();
 }
 
 fn lifted_scaled_rect(rect: Rect, ease: f32) -> Rect {
     let settle = 1.0 - ease;
-    let scale = 0.970 + ease * 0.030;
-    let lift = settle * 8.0;
+    let scale = 0.960 + ease * 0.040;
+    let lift = settle * 11.0;
     let w = rect.size.x * scale;
     let h = rect.size.y * scale;
     Rect {
@@ -457,7 +457,7 @@ mod tests {
             &roots,
             Point2D::new(100.0, 50.0),
             2.0,
-            2_800,
+            3_000,
         );
         assert!(expired_backend.round_fills.is_empty());
         assert!(expired_backend.round_strokes.is_empty());
