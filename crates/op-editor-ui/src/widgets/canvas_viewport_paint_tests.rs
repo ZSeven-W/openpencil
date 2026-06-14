@@ -491,7 +491,7 @@ mod text_tests {
 
 mod path_tests {
     use crate::layout_scene::{NodeKind, SceneAnchor, SceneNode, ScenePointType};
-    use crate::widgets::canvas_viewport_paint::flatten_path;
+    use crate::widgets::canvas_viewport_paint::{flatten_path, flatten_path_points, PathPoints};
     use crate::{Point2D, Rect};
 
     fn anchor(x: f32, y: f32, hout: Option<Point2D>) -> SceneAnchor {
@@ -509,6 +509,18 @@ mod path_tests {
         n.points = vec![Point2D::new(0.0, 0.0), Point2D::new(10.0, 0.0)];
         n.path_anchors = vec![anchor(0.0, 0.0, None), anchor(10.0, 0.0, None)];
         assert_eq!(flatten_path(&n), n.points);
+    }
+
+    #[test]
+    fn handle_free_open_path_borrows_points_without_allocating() {
+        let mut n = SceneNode::leaf("p", NodeKind::Path);
+        n.points = vec![Point2D::new(0.0, 0.0), Point2D::new(10.0, 0.0)];
+        n.path_anchors = vec![anchor(0.0, 0.0, None), anchor(10.0, 0.0, None)];
+
+        let points = flatten_path_points(&n);
+
+        assert!(matches!(points, PathPoints::Borrowed(_)));
+        assert_eq!(points.as_slice(), n.points.as_slice());
     }
 
     #[test]

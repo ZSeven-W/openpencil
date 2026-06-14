@@ -164,23 +164,38 @@ fn flatten_segment(
     }
 }
 
-/// Flatten a Path scene node into a doc-space polyline — cubic
-/// segments whose endpoints carry handles are tessellated; a
-/// handle-free path falls back to the straight `points` polyline.
-/// A closed path appends the last-anchor → first-anchor segment.
-pub(crate) fn flatten_path(node: &SceneNode) -> Vec<Point2D> {
+pub(crate) enum PathPoints<'a> {
+    Borrowed(&'a [Point2D]),
+    Owned(Vec<Point2D>),
+}
+
+impl<'a> PathPoints<'a> {
+    pub(crate) fn as_slice(&self) -> &[Point2D] {
+        match self {
+            Self::Borrowed(points) => points,
+            Self::Owned(points) => points.as_slice(),
+        }
+    }
+}
+
+/// Flatten a Path scene node into doc-space points, borrowing the
+/// original point slice for the common handle-free open-path case.
+pub(crate) fn flatten_path_points(node: &SceneNode) -> PathPoints<'_> {
     let anchors = &node.path_anchors;
     let has_handle = anchors
         .iter()
         .any(|a| a.handle_in.is_some() || a.handle_out.is_some());
     if anchors.len() < 2 || !has_handle {
+        if !node.path_closed {
+            return PathPoints::Borrowed(&node.points);
+        }
         let mut out = node.points.clone();
         // Closed handle-free path — link the polyline back to its
         // start so the closing edge is drawn.
         if node.path_closed && out.len() > 2 {
             out.push(out[0]);
         }
-        return out;
+        return PathPoints::Owned(out);
     }
     let mut out = Vec::with_capacity(anchors.len() * 16 + 16);
     out.push(anchors[0].pos);
@@ -190,7 +205,18 @@ pub(crate) fn flatten_path(node: &SceneNode) -> Vec<Point2D> {
     if node.path_closed {
         flatten_segment(&anchors[anchors.len() - 1], &anchors[0], &mut out);
     }
-    out
+    PathPoints::Owned(out)
+}
+
+/// Flatten a Path scene node into a doc-space polyline — cubic
+/// segments whose endpoints carry handles are tessellated; a
+/// handle-free path falls back to the straight `points` polyline.
+/// A closed path appends the last-anchor → first-anchor segment.
+pub(crate) fn flatten_path(node: &SceneNode) -> Vec<Point2D> {
+    match flatten_path_points(node) {
+        PathPoints::Borrowed(points) => points.to_vec(),
+        PathPoints::Owned(points) => points,
+    }
 }
 
 /// Push a children-clip for a `clipContent` container (root frames
@@ -516,11 +542,12 @@ fn paint_node_inner(
             // Bezier-aware: when the path carries anchors with control
             // handles, flatten each cubic segment; otherwise fall back
             // to the straight `points` polyline.
-            let polyline = flatten_path(node);
+            let polyline = flatten_path_points(node);
+            let points = polyline.as_slice();
             // A closed path with a fill paints its enclosed area.
             let filled = node.path_closed && node.fill.is_some();
             if filled {
-                let world: Vec<Point2D> = polyline.iter().map(|p| to_world(*p)).collect();
+                let world: Vec<Point2D> = points.iter().map(|p| to_world(*p)).collect();
                 cx.backend.fill_polygon(&world, node.fill.unwrap());
             }
             // Stroke: an explicit stroke always paints; with no
@@ -536,7 +563,7 @@ fn paint_node_inner(
                 None => None,
             };
             if let Some((color, width)) = stroke {
-                for pair in polyline.windows(2) {
+                for pair in points.windows(2) {
                     cx.backend
                         .stroke_line(to_world(pair[0]), to_world(pair[1]), color, width);
                 }
