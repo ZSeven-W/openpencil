@@ -67,6 +67,8 @@ mod chat_send_tests;
 mod click;
 mod color_picker_press;
 mod component_browser_press;
+#[cfg(test)]
+mod deferred_press_tests;
 mod design_md_press;
 #[cfg(test)]
 mod design_md_press_tests;
@@ -108,6 +110,7 @@ mod property_layout_dispatch;
 #[cfg(test)]
 mod property_panel_press_tests;
 mod property_popovers;
+mod release_feedback;
 mod scroll;
 #[cfg(test)]
 mod scroll_tests;

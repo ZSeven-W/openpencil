@@ -76,6 +76,8 @@ mod click;
 mod color_picker_press;
 mod component_browser_press;
 mod cursor_input;
+#[cfg(test)]
+mod deferred_press_tests;
 mod design_md_press;
 #[cfg(test)]
 mod design_md_press_tests;

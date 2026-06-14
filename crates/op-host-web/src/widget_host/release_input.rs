@@ -3,6 +3,8 @@
 //! teardown. Split out of `widget_host.rs` to keep the spine under
 //! the repo's 800-line cap.
 
+use op_editor_core::{agent_settings::ImageGenField, AgentSettingsButton, ButtonPressTarget};
+use op_editor_ui::widgets::{FontWeightChoice, PropertyPanelAction};
 use op_editor_ui::{Point2D, Rect};
 
 use super::{LayerDragState, MarqueeDragState, WidgetHost};
@@ -70,17 +72,7 @@ impl WidgetHost {
     pub fn apply_release_with_viewport(&mut self, viewport_w: f32, viewport_h: f32) -> bool {
         self.last_viewport_w = viewport_w;
         self.last_viewport_h = viewport_h;
-        let button_released = self.editor_state.editor_ui.pressed_button.take().is_some();
-        let icon_picker_released = self
-            .editor_state
-            .editor_ui
-            .icon_picker
-            .pressed
-            .take()
-            .is_some();
-        if button_released || icon_picker_released {
-            self.mark_dirty();
-        }
+        let pressed_released = self.release_pressed_feedback();
         // Colour-picker drag end (non-consuming) + floating-panel
         // header drags — see `widget_host/overlay_cursor.rs`.
         if self.release_overlay_drags() {
@@ -122,7 +114,7 @@ impl WidgetHost {
         }
         let was_dragging = self.drag.is_some();
         self.drag = None;
-        was_dragging || button_released || icon_picker_released
+        was_dragging || pressed_released
     }
 
     /// Mouse-release handler — viewport-less variant. Public host
@@ -130,17 +122,7 @@ impl WidgetHost {
     /// the viewport-aware `apply_release_with_viewport` instead.
     #[allow(dead_code)]
     pub fn apply_release(&mut self) -> bool {
-        let button_released = self.editor_state.editor_ui.pressed_button.take().is_some();
-        let icon_picker_released = self
-            .editor_state
-            .editor_ui
-            .icon_picker
-            .pressed
-            .take()
-            .is_some();
-        if button_released || icon_picker_released {
-            self.mark_dirty();
-        }
+        let pressed_released = self.release_pressed_feedback();
         if self.release_overlay_drags() {
             return true;
         }
@@ -175,7 +157,63 @@ impl WidgetHost {
         }
         let was_dragging = self.drag.is_some();
         self.drag = None;
-        was_dragging || button_released || icon_picker_released
+        was_dragging || pressed_released
+    }
+
+    fn release_pressed_feedback(&mut self) -> bool {
+        let pressed_button = self.editor_state.editor_ui.pressed_button.take();
+        let button_released = pressed_button.is_some();
+        let chat_model_pressed = self.editor_state.editor_ui.chat_model_picker.pressed.take();
+        let chat_model_released = chat_model_pressed.is_some();
+        let icon_picker_released = self
+            .editor_state
+            .editor_ui
+            .icon_picker
+            .pressed
+            .take()
+            .is_some();
+
+        self.commit_deferred_pressed_button(pressed_button);
+        self.commit_deferred_chat_model(chat_model_pressed);
+
+        let released = button_released || chat_model_released || icon_picker_released;
+        if released {
+            self.mark_dirty();
+        }
+        released
+    }
+
+    fn commit_deferred_pressed_button(&mut self, pressed: Option<ButtonPressTarget>) {
+        match pressed {
+            Some(ButtonPressTarget::FontWeightPicker(index)) => {
+                if let Some(choice) = FontWeightChoice::ALL.get(index).copied() {
+                    self.apply_property_action(PropertyPanelAction::SetFontWeight(choice));
+                }
+            }
+            Some(ButtonPressTarget::AgentSettings(AgentSettingsButton::ImageProviderOption {
+                index,
+                provider,
+            })) => {
+                {
+                    let settings = &mut self.editor_state.editor_ui.agent_settings;
+                    if let Some(profile) = settings.image_gen_profiles.get_mut(index) {
+                        if profile.provider != provider {
+                            profile.provider = provider;
+                            profile.model.clear();
+                        }
+                    }
+                    settings.image_gen_provider_menu_open = None;
+                }
+                self.focus_image_gen_profile(index, ImageGenField::Name);
+            }
+            _ => {}
+        }
+    }
+
+    fn commit_deferred_chat_model(&mut self, pressed: Option<usize>) {
+        if let Some(index) = pressed {
+            self.editor_state.select_chat_model(index);
+        }
     }
 
     /// Resolve a layer drag-to-reorder gesture on release. Mirrors
