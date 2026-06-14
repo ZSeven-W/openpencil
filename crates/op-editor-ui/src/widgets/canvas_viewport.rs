@@ -535,39 +535,14 @@ impl<'a> Widget for CanvasViewport<'a> {
                     paint_dashed_rect(cx, screen, HOVER, 1.5);
                 }
             }
-            for node in &page.children {
-                let Some((_, name, color)) =
-                    self.frame_labels.iter().find(|(id, _, _)| id == &node.id)
-                else {
-                    continue;
-                };
-                let b = node.aggregate_bounds();
-                let sx = viewport_origin.x + b.origin.x * viewport.zoom;
-                let sy = viewport_origin.y + b.origin.y * viewport.zoom;
-                if sy < rect.origin.y || sy > rect.origin.y + rect.size.y + 18.0 {
-                    continue;
-                }
-                // Horizontal cull — generous width allowance so a
-                // label whose start is left of the clip still paints
-                // its visible tail.
-                if sx > rect.origin.x + rect.size.x || sx + 600.0 < rect.origin.x {
-                    continue;
-                }
-                let layout = crate::TextLayout::single_run(
-                    name,
-                    "system-ui",
-                    12.0,
-                    jian_core::scene::Color::rgba(
-                        (color.r * 255.0) as u8,
-                        (color.g * 255.0) as u8,
-                        (color.b * 255.0) as u8,
-                        255,
-                    ),
-                    Point2D::new(0.0, 0.0),
-                )
-                .with_font_weight(500);
-                cx.backend.draw_text(&layout, Point2D::new(sx, sy - 18.0));
-            }
+            super::canvas_frame_labels::paint_frame_labels(
+                cx,
+                &page.children,
+                &self.frame_labels,
+                viewport_origin,
+                viewport,
+                rect,
+            );
         }
 
         // 3a. Smart-guide alignment lines (magenta) — painted over the
