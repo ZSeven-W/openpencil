@@ -98,6 +98,7 @@ pub mod toolbar;
 mod canvas_agent_overlay;
 mod canvas_frame_labels;
 mod canvas_path_overlay;
+mod canvas_selection_overlay;
 pub mod canvas_text_edit;
 pub mod canvas_viewport;
 mod canvas_viewport_grid;

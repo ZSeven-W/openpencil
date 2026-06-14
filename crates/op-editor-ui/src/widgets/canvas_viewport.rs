@@ -585,64 +585,27 @@ impl<'a> Widget for CanvasViewport<'a> {
             None
         };
         if let Some(page) = active_page {
-            let mut paint_selected_node = |node: &SceneNode| {
-                if node.hidden
-                    || indicators.as_ref().is_some_and(|indicators| {
-                        indicators
-                            .reveals
-                            .get(&node.id)
-                            .is_some_and(|started_at| self.now_ms < *started_at)
-                    })
-                {
-                    return;
-                }
-                let bounds = node.aggregate_bounds();
-                if bounds.size.x <= 0.0 || bounds.size.y <= 0.0 {
-                    return;
-                }
-                let world_rect = Rect {
-                    origin: Point2D::new(
-                        rect.origin.x + viewport.pan_x + bounds.origin.x * viewport.zoom,
-                        rect.origin.y + viewport.pan_y + bounds.origin.y * viewport.zoom,
-                    ),
-                    size: Point2D::new(
-                        bounds.size.x * viewport.zoom,
-                        bounds.size.y * viewport.zoom,
-                    ),
-                };
-                let is_container = matches!(
-                    node.kind,
-                    NodeKind::Frame | NodeKind::Group | NodeKind::Other(_)
-                );
-                let rotated = node.rotation.abs() > f32::EPSILON;
-                if rotated {
-                    let pivot = Point2D::new(
-                        world_rect.origin.x + world_rect.size.x / 2.0,
-                        world_rect.origin.y + world_rect.size.y / 2.0,
-                    );
-                    cx.backend.save();
-                    cx.backend.rotate(node.rotation, pivot);
-                }
-                super::canvas_viewport_overlay::paint_selection_overlay(
-                    cx,
-                    world_rect,
-                    &self.theme,
-                    is_container,
-                    show_handles,
-                );
-                if rotated {
-                    cx.backend.restore();
-                }
+            let selection_input = super::canvas_selection_overlay::SelectionPaintInput {
+                theme: &self.theme,
+                indicators: indicators.as_ref(),
+                now_ms: self.now_ms,
+                canvas_rect: rect,
+                viewport,
             };
             if let Some(node) = single_selected_node {
-                paint_selected_node(node);
-            } else {
-                for id in &self.selected_set {
-                    let Some(node) = page.find(id) else {
-                        continue;
-                    };
-                    paint_selected_node(node);
-                }
+                super::canvas_selection_overlay::paint_selected_node(
+                    cx,
+                    node,
+                    &selection_input,
+                    show_handles,
+                );
+            } else if !self.selected_set.is_empty() {
+                super::canvas_selection_overlay::paint_multi_selection_overlays(
+                    cx,
+                    &page.children,
+                    &self.selected_set,
+                    &selection_input,
+                );
             }
         }
 
