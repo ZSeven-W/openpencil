@@ -6,6 +6,7 @@
 use super::*;
 use crate::layout_scene::{LayoutScene, SceneFillType, SceneNode, ScenePage, SceneStroke};
 use crate::{Color, Point2D, Rect, TextLayout};
+use std::collections::HashMap;
 
 /// Records op order; clip-isolated paint = `Save, Clip, Fill, …, Restore`.
 #[derive(Debug, PartialEq, Eq)]
@@ -215,6 +216,20 @@ fn grid_dot_count_matches_painted_dot_batch() {
         crate::widgets::canvas_viewport_grid::grid_dot_count(rect, &viewport.viewport),
         "panned and zoomed grid count should still match the painted batch"
     );
+}
+
+#[test]
+fn empty_reveals_use_plain_node_paint_path() {
+    let empty = HashMap::new();
+    assert!(
+        reveal_schedule_for_paint(&empty, 1_000).is_none(),
+        "idle canvas paint should not give every node an empty reveal lookup"
+    );
+
+    let active = HashMap::from([("n1".to_string(), 1_000)]);
+    let schedule = reveal_schedule_for_paint(&active, 1_250).expect("active reveal schedule");
+    assert_eq!(schedule.now_ms, 1_250);
+    assert!(std::ptr::eq(schedule.starts, &active));
 }
 
 #[test]
