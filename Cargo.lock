@@ -2995,6 +2995,7 @@ dependencies = [
 name = "op-cli"
 version = "0.8.0"
 dependencies = [
+ "op-config-store",
  "op-figma",
  "serde_json",
 ]
@@ -3010,6 +3011,14 @@ dependencies = [
  "serde",
  "serde_json",
  "zip",
+]
+
+[[package]]
+name = "op-config-store"
+version = "0.8.0"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -3067,8 +3076,8 @@ dependencies = [
 name = "op-git"
 version = "0.8.0"
 dependencies = [
- "dirs 5.0.1",
  "git2",
+ "op-config-store",
  "serde",
  "serde_json",
  "thiserror 1.0.69",

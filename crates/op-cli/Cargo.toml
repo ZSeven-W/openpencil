@@ -12,5 +12,6 @@ name = "op"
 path = "src/main.rs"
 
 [dependencies]
+op-config-store = { path = "../op-config-store" }
 op-figma = { path = "../op-figma" }
 serde_json = { workspace = true }

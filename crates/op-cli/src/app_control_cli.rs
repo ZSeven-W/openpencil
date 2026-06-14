@@ -18,8 +18,7 @@ const MINIMAL_DOCUMENT: &str = "{\n  \"version\": \"0.8.0\",\n  \"name\": \"Open
 /// `/api/mcp/*` behind an app URL — sharing one file would let either
 /// stack mis-route to the other. Discovery here always confirms identity
 /// with a JSON-RPC `ping` before trusting the advertised port.
-const LIVE_PORT_FILE_DIR: &str = ".openpencil";
-const LIVE_PORT_FILE_NAME: &str = ".op-mcp-port";
+const LIVE_PORT_FILE_NAME: &str = op_config_store::well_known::LIVE_MCP_PORT;
 
 #[derive(Debug, Clone)]
 struct RunningMcp {
@@ -385,9 +384,13 @@ fn wait_until<F: Fn() -> bool>(still_up: F) {
 
 /// Path to the Rust live discovery file `~/.openpencil/.op-mcp-port`.
 fn live_port_file_path() -> Option<PathBuf> {
-    home_dir()
+    op_config_store::ConfigStore::user()
         .ok()
-        .map(|home| home.join(LIVE_PORT_FILE_DIR).join(LIVE_PORT_FILE_NAME))
+        .and_then(|store| live_port_file_path_in(&store).ok())
+}
+
+fn live_port_file_path_in(store: &op_config_store::ConfigStore) -> std::io::Result<PathBuf> {
+    store.path(op_config_store::well_known::LIVE_MCP_PORT)
 }
 
 /// Read `~/.openpencil/.op-mcp-port` → `(port, pid, token)`. `pid` is 0
@@ -535,14 +538,17 @@ fn make_token() -> String {
 }
 
 fn default_document_path() -> Result<PathBuf, String> {
-    home_dir().map(|home| home.join(".openpencil").join("cli-session.op"))
+    let store = op_config_store::ConfigStore::user().map_err(|e| e.to_string())?;
+    default_document_path_in(&store).map_err(|e| e.to_string())
+}
+
+fn default_document_path_in(store: &op_config_store::ConfigStore) -> std::io::Result<PathBuf> {
+    store.path(op_config_store::well_known::CLI_SESSION)
 }
 
 fn home_dir() -> Result<PathBuf, String> {
-    env::var_os("HOME")
-        .or_else(|| env::var_os("USERPROFILE"))
-        .map(PathBuf::from)
-        .ok_or_else(|| "home directory not available; pass --file <path.op>".to_string())
+    op_config_store::home_dir()
+        .map_err(|_| "home directory not available; pass --file <path.op>".to_string())
 }
 
 fn find_desktop_binary() -> Result<PathBuf, String> {
@@ -675,7 +681,7 @@ fn is_pid_alive(pid: u32) -> bool {
 
 #[cfg(test)]
 mod editor_will_open_tests {
-    use super::editor_will_open;
+    use super::{default_document_path_in, editor_will_open, live_port_file_path_in};
     use std::fs;
 
     #[test]
@@ -699,5 +705,20 @@ mod editor_will_open_tests {
         assert!(!editor_will_open(dir.to_str().unwrap()));
 
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn config_store_paths_keep_live_port_and_session_names() {
+        let root = std::env::temp_dir().join(format!("op-cli-config-paths-{}", std::process::id()));
+        let store = op_config_store::ConfigStore::at(&root);
+
+        assert_eq!(
+            live_port_file_path_in(&store).unwrap(),
+            root.join(".op-mcp-port")
+        );
+        assert_eq!(
+            default_document_path_in(&store).unwrap(),
+            root.join("cli-session.op")
+        );
     }
 }
