@@ -12,7 +12,7 @@ use crate::plan::{OrchestratorPlan, Subtask};
 use crate::prompt::build_subagent_prompt;
 use crate::types::{AbortFlag, DesignRequest, DocSink, LlmChunk, LlmClient, SubtaskOutcome};
 use futures::StreamExt;
-use jian_ops_schema::node::PenNode;
+use jian_ops_schema::node::{ContainerProps, PenNode};
 use jian_ops_schema::sizing::{SizingBehavior, SizingKeyword};
 use op_editor_core::{EditorCommand, NodeId, PenNodeExt};
 use std::collections::HashSet;
@@ -255,7 +255,7 @@ fn register_node_reveals(
     stream_index: &mut u64,
 ) {
     let id = node.id_str();
-    if !ids_before.contains(id) {
+    if !ids_before.contains(id) && should_reveal_node(node, depth) {
         let own_stream_index = *stream_index;
         *stream_index += 1;
         let started_at = reveal_started_ms
@@ -274,6 +274,47 @@ fn register_node_reveals(
             );
         }
     }
+}
+
+fn should_reveal_node(node: &PenNode, depth: u64) -> bool {
+    depth == 0 || node_has_own_visual(node) || node_is_named_structure(node)
+}
+
+fn node_has_own_visual(node: &PenNode) -> bool {
+    match node {
+        PenNode::Frame(n) => {
+            container_has_own_visual(&n.container) || n.image_search_query.is_some()
+        }
+        PenNode::Group(n) => container_has_own_visual(&n.container),
+        PenNode::Rectangle(n) => container_has_own_visual(&n.container),
+        PenNode::Ref(_) => false,
+        PenNode::Text(n) => match &n.content {
+            jian_ops_schema::node::TextContent::Plain(s) => !s.is_empty(),
+            jian_ops_schema::node::TextContent::Styled(segments) => !segments.is_empty(),
+        },
+        _ => true,
+    }
+}
+
+fn container_has_own_visual(container: &ContainerProps) -> bool {
+    container
+        .fill
+        .as_ref()
+        .is_some_and(|fills| !fills.is_empty())
+        || container.stroke.is_some()
+        || container
+            .effects
+            .as_ref()
+            .is_some_and(|effects| !effects.is_empty())
+}
+
+fn node_is_named_structure(node: &PenNode) -> bool {
+    if !node.is_container() {
+        return false;
+    }
+    let base = node.base();
+    base.role.as_deref().is_some_and(|role| !role.is_empty())
+        || base.name.as_deref().is_some_and(|name| !name.is_empty())
 }
 
 fn is_blank_container_forest(nodes: &[PenNode]) -> bool {

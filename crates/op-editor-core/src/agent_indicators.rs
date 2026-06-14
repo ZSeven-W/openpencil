@@ -19,18 +19,18 @@ use std::sync::{LazyLock, Mutex};
 /// Duration of the short generated-node entrance animation.
 pub const REVEAL_DURATION_MS: u64 = 1_360;
 /// Delay between the first generated nodes in one applied batch.
-pub const REVEAL_STAGGER_MS: u64 = 48;
+pub const REVEAL_STAGGER_MS: u64 = 24;
 /// Extra delay for nested generated nodes. Keeps child content trailing
 /// its parent without making the stream feel sluggish.
-pub const REVEAL_DEPTH_STAGGER_MS: u64 = 14;
+pub const REVEAL_DEPTH_STAGGER_MS: u64 = 6;
 /// Parent reveals suppress child transforms only during their opening
 /// beat. Once the parent has begun settling, delayed children animate
 /// independently so streamed content does not pop in abruptly.
 pub const REVEAL_CHILD_SUPPRESS_FRACTION: f32 = 0.11;
-const REVEAL_FULL_STAGGER_SIBLINGS: u64 = 12;
-const REVEAL_MID_STAGGER_SIBLINGS: u64 = 32;
-const REVEAL_COMPRESSED_STAGGER_MS: u64 = 22;
-const REVEAL_TAIL_STAGGER_MS: u64 = 8;
+const REVEAL_FULL_STAGGER_SIBLINGS: u64 = 24;
+const REVEAL_MID_STAGGER_SIBLINGS: u64 = 48;
+const REVEAL_COMPRESSED_STAGGER_MS: u64 = 20;
+const REVEAL_TAIL_STAGGER_MS: u64 = REVEAL_FRAME_MS;
 const CLOCK_REBASE_THRESHOLD_MS: u64 = 60_000;
 const REVEAL_FRAME_MS: u64 = 16;
 
@@ -416,8 +416,8 @@ mod tests {
 
         let snap = snapshot_at(1_040);
 
-        assert_eq!(snap.reveals.get("external-a"), Some(&1_128));
-        assert_eq!(snap.reveals.get("external-b"), Some(&1_176));
+        assert_eq!(snap.reveals.get("external-a"), Some(&1_104));
+        assert_eq!(snap.reveals.get("external-b"), Some(&1_128));
         clear();
     }
 
@@ -436,10 +436,15 @@ mod tests {
         let offsets: Vec<u64> = (0..40).map(|i| reveal_offset_ms(1, i)).collect();
 
         assert_eq!(offsets[0], REVEAL_DEPTH_STAGGER_MS);
-        assert_eq!(offsets[1] - offsets[0], REVEAL_STAGGER_MS);
         assert!(
-            offsets.windows(2).all(|pair| pair[1] > pair[0]),
-            "stream items should not share an entrance start frame"
+            offsets[1] - offsets[0] <= 32,
+            "the first visible nodes should start quickly"
+        );
+        assert!(
+            offsets
+                .windows(2)
+                .all(|pair| pair[1] - pair[0] >= REVEAL_FRAME_MS),
+            "stream items should not share an entrance start frame at 60 fps"
         );
         assert!(
             offsets[39] - offsets[0] < 1_200,
