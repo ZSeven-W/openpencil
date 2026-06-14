@@ -368,11 +368,12 @@ async fn run_opencode_turn(
                             emitted_text = true;
                         }
                         // Forward reasoning deltas as thinking chunks.
-                        if prop_session == Some(session_id.as_str()) && field == Some("reasoning") {
-                            if tx.send(ChatDelta::Thinking(delta.to_string())).await.is_err() {
-                                canceled = true;
-                                break;
-                            }
+                        if prop_session == Some(session_id.as_str())
+                            && field == Some("reasoning")
+                            && tx.send(ChatDelta::Thinking(delta.to_string())).await.is_err()
+                        {
+                            canceled = true;
+                            break;
                         }
                     }
                     // Session went idle — response complete.

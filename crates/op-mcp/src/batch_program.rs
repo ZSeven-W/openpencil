@@ -20,6 +20,7 @@
 //!     `InsertAuthoredSubtree`, the `batch_design_result.rs` id-predict
 //!     discipline),
 //!   - later lines observe earlier lines' mutations.
+//!
 //! The surviving commands ride home as ONE `EditorCommand::Batch`
 //! (atomic at apply; a live-doc divergence rejects the whole batch
 //! rather than landing silently-wrong ids).

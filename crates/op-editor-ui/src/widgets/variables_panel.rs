@@ -13,7 +13,7 @@ mod hover;
 mod menus;
 mod paint;
 
-pub(self) use geometry::*;
+use geometry::*;
 
 const ROW_HEIGHT: f32 = 44.0;
 const HEADER_HEIGHT: f32 = 44.0;

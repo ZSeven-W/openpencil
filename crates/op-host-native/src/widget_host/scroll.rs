@@ -285,10 +285,12 @@ impl WidgetHostNative {
         viewport_width: f32,
         viewport_height: f32,
     ) -> bool {
-        // Floating VariablesPanel owns wheel events over its rect.
-        // Route it before the generic topmost-overlay guard because
-        // that guard also treats the variables panel as a
-        // hover-suppressing overlay.
+        // Floating VariablesPanel owns the wheel over its rect — run this
+        // BEFORE `over_topmost_panel`, which also lists the variables panel
+        // and would otherwise swallow the event WITHOUT scrolling (its rows
+        // never advanced because the topmost-panel guard returned first).
+        // `try_scroll_variables_panel` swallows the wheel when over the
+        // panel, so the "don't zoom the canvas beneath" guarantee holds.
         if self.try_scroll_variables_panel(x, y, delta_y, viewport_width, viewport_height) {
             return true;
         }

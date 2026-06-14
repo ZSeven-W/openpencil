@@ -26,7 +26,7 @@ use op_editor_core::Viewport;
 const SELECTION_BLUE: Color = Color {
     r: 13.0 / 255.0,
     g: 153.0 / 255.0,
-    b: 255.0 / 255.0,
+    b: 1.0,
     a: 1.0,
 };
 /// TS `PEN_ANCHOR_FILL` — `#ffffff`.

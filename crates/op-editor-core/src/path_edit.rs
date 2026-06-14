@@ -245,7 +245,7 @@ fn apply_mirrored_point_type(
         x: -dir.0 * mirror_len,
         y: -dir.1 * mirror_len,
     });
-    anchor.handle_out = has_out.then(|| PenPathHandle {
+    anchor.handle_out = has_out.then_some(PenPathHandle {
         x: dir.0 * mirror_len,
         y: dir.1 * mirror_len,
     });
@@ -289,7 +289,7 @@ impl EditorState {
     /// handles; `Mirrored` snaps symmetric handles seeded from the
     /// existing geometry or tangent defaults; `Independent` keeps the
     /// existing handles, filling absent ones from the defaults.
-    /// History is the caller's responsibility.
+    ///   History is the caller's responsibility.
     pub fn set_path_anchor_point_type_ts(
         &mut self,
         node_id: &NodeId,
@@ -346,6 +346,7 @@ impl EditorState {
     /// - a STORED `Independent` keeps its stored type;
     /// - anything else leaves `point_type` untouched (an untyped
     ///   anchor stays untyped — TS re-infers on the next read).
+    ///
     /// History is the caller's responsibility.
     pub fn move_path_anchor_handle_ts(
         &mut self,

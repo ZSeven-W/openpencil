@@ -232,10 +232,10 @@ fn launch_cli_standard_turn(
     // starter sample clears eagerly when the keyword pre-gate already
     // reads design intent. A keyword-design turn the LLM later
     // classifies as chat loses only the untouched starter sample.
-    if matches!(classify_intent(user_text), Intent::Design) {
-        if clear_fresh_starter_frame_for_design(host.editor_state_mut()) {
-            host.mark_editor_state_dirty();
-        }
+    if matches!(classify_intent(user_text), Intent::Design)
+        && clear_fresh_starter_frame_for_design(host.editor_state_mut())
+    {
+        host.mark_editor_state_dirty();
     }
 
     // Route inputs, post-clear (TS reads the live doc at this point).

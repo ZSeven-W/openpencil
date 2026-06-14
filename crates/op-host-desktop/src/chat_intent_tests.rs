@@ -124,9 +124,8 @@ impl ChatProvider for Scripted {
     fn send(&self, _request: ChatRequest) -> Box<dyn Iterator<Item = ChatDelta> + Send> {
         let deltas = self.deltas.clone();
         let delay = self.delay;
-        Box::new(deltas.into_iter().map(move |d| {
+        Box::new(deltas.into_iter().inspect(move |_| {
             std::thread::sleep(delay);
-            d
         }))
     }
 }

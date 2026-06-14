@@ -57,14 +57,22 @@ kids.forEach((c: any, i: number) => {
     const out: string[] = [];
     function go(x: any): void {
       if (x?.type === 'text') {
-        out.push(typeof x.content === 'string' ? x.content : Array.isArray(x.content) ? x.content.map((s: any) => s.text).join('') : '');
+        out.push(
+          typeof x.content === 'string'
+            ? x.content
+            : Array.isArray(x.content)
+              ? x.content.map((s: any) => s.text).join('')
+              : '',
+        );
       }
       if (x?.children) for (const c of x.children) go(c);
     }
     go(c);
     return out[0] ?? '';
   })();
-  console.log(`  [${i}] ${c.type} x=${c.x} y=${c.y} w=${JSON.stringify((c as any).width)} text=${JSON.stringify(t)}`);
+  console.log(
+    `  [${i}] ${c.type} x=${c.x} y=${c.y} w=${JSON.stringify((c as any).width)} text=${JSON.stringify(t)}`,
+  );
 });
 
 console.log('\nAFTER computeLayoutPositions:');
@@ -74,12 +82,20 @@ after.forEach((c: any, i: number) => {
     const out: string[] = [];
     function go(x: any): void {
       if (x?.type === 'text') {
-        out.push(typeof x.content === 'string' ? x.content : Array.isArray(x.content) ? x.content.map((s: any) => s.text).join('') : '');
+        out.push(
+          typeof x.content === 'string'
+            ? x.content
+            : Array.isArray(x.content)
+              ? x.content.map((s: any) => s.text).join('')
+              : '',
+        );
       }
       if (x?.children) for (const c of x.children) go(c);
     }
     go(c);
     return out[0] ?? '';
   })();
-  console.log(`  [${i}] ${c.type} x=${c.x} y=${c.y} w=${JSON.stringify((c as any).width)} text=${JSON.stringify(t)}`);
+  console.log(
+    `  [${i}] ${c.type} x=${c.x} y=${c.y} w=${JSON.stringify((c as any).width)} text=${JSON.stringify(t)}`,
+  );
 });

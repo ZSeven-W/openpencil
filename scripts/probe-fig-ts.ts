@@ -27,7 +27,11 @@ const decoded = parseFigFile(ab);
 const pages = getFigmaPages(decoded);
 const name = basename(path).replace(/\.fig$/, '');
 const result = figmaAllPagesToPenDocument(decoded, name, 'openpencil');
-resolveImageBlobs(result.document.pages?.flatMap((p) => p.children) ?? [], result.imageBlobs, decoded.imageFiles);
+resolveImageBlobs(
+  result.document.pages?.flatMap((p) => p.children) ?? [],
+  result.imageBlobs,
+  decoded.imageFiles,
+);
 
 if (process.env.OP_DUMP_JSON) {
   const fs = await import('node:fs');
@@ -65,7 +69,9 @@ if (firstPage && drillNeedle) {
     for (const c of root.children) {
       if ((c.name ?? '').includes(drillNeedle)) {
         console.log(`── drilling into ${JSON.stringify(c.name)} ──`);
-        console.log(`width=${JSON.stringify((c as any).width)} height=${JSON.stringify((c as any).height)} layout=${JSON.stringify((c as any).layout)} gap=${JSON.stringify((c as any).gap)}`);
+        console.log(
+          `width=${JSON.stringify((c as any).width)} height=${JSON.stringify((c as any).height)} layout=${JSON.stringify((c as any).layout)} gap=${JSON.stringify((c as any).gap)}`,
+        );
         const kids = (c as any).children ?? [];
         for (let i = 0; i < kids.length; i++) {
           const k = kids[i];
@@ -87,7 +93,12 @@ if (firstPage) {
   const overlaps = findCoLocatedTexts(textNodes);
   console.log(`first-page co-located-text clusters (≥2 nodes sharing x,y): ${overlaps.length}`);
   for (const c of overlaps.slice(0, 10)) {
-    console.log(`   - at (${c.x}, ${c.y}): ${c.texts.slice(0, 4).map((t) => JSON.stringify(t)).join(' | ')}${c.texts.length > 4 ? ' …' : ''}`);
+    console.log(
+      `   - at (${c.x}, ${c.y}): ${c.texts
+        .slice(0, 4)
+        .map((t) => JSON.stringify(t))
+        .join(' | ')}${c.texts.length > 4 ? ' …' : ''}`,
+    );
   }
 }
 
@@ -109,7 +120,7 @@ function digestTree(nodes: PenNode[]): string {
   let h = 0;
   function go(arr: PenNode[]) {
     for (const c of arr) {
-      const sig = `${c.type}|${c.x ?? 0}|${c.y ?? 0}|${('width' in c ? JSON.stringify(c.width) : '')}|${('height' in c ? JSON.stringify(c.height) : '')}`;
+      const sig = `${c.type}|${c.x ?? 0}|${c.y ?? 0}|${'width' in c ? JSON.stringify(c.width) : ''}|${'height' in c ? JSON.stringify(c.height) : ''}`;
       for (let i = 0; i < sig.length; i++) {
         h = (h * 31 + sig.charCodeAt(i)) | 0;
       }
@@ -125,11 +136,12 @@ function collectText(nodes: PenNode[]): Array<{ x: number; y: number; text: stri
   function go(arr: PenNode[]) {
     for (const c of arr) {
       if (c.type === 'text') {
-        const text = typeof c.content === 'string'
-          ? c.content
-          : Array.isArray(c.content)
-            ? c.content.map((s) => s.text).join('')
-            : '';
+        const text =
+          typeof c.content === 'string'
+            ? c.content
+            : Array.isArray(c.content)
+              ? c.content.map((s) => s.text).join('')
+              : '';
         out.push({ x: c.x ?? 0, y: c.y ?? 0, text });
       }
       if ('children' in c && Array.isArray(c.children)) go(c.children);

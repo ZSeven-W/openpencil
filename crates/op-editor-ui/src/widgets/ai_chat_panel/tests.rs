@@ -449,6 +449,7 @@ pub(in super::super) struct PanelPaintBackend {
     pub(in super::super) fills: Vec<(Rect, crate::Color)>,
     pub(in super::super) round_rects: Vec<(Rect, f32, crate::Color)>,
     pub(in super::super) texts: Vec<(String, f32, jian_core::scene::Color, Point2D)>,
+    pub(in super::super) svg_paths: Vec<String>,
     pub(in super::super) svg_strokes: Vec<(Point2D, f32, crate::Color, f32)>,
     pub(in super::super) stroke_lines: usize,
 }
@@ -479,12 +480,13 @@ impl crate::RenderBackend for PanelPaintBackend {
     fn stroke_round_rect(&mut self, _: Rect, _: f32, _: crate::Color, _: f32) {}
     fn stroke_svg_path(
         &mut self,
-        _: &str,
+        d: &str,
         top_left: Point2D,
         size: f32,
         color: crate::Color,
         width: f32,
     ) {
+        self.svg_paths.push(d.to_string());
         self.svg_strokes.push((top_left, size, color, width));
     }
     fn resize(&mut self, _: u32, _: u32) {}

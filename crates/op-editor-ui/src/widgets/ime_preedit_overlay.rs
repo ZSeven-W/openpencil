@@ -104,13 +104,62 @@ fn underline_color(theme: &Theme) -> Color {
 
 #[cfg(test)]
 mod tests {
-    // Painting is exercised through the native host's paint tests;
-    // geometry-only check here keeps the widget honest about empty
-    // input.
+    use super::*;
+
+    #[derive(Default)]
+    struct CountingBackend {
+        ops: usize,
+    }
+
+    impl crate::RenderBackend for CountingBackend {
+        fn begin_frame(&mut self) {}
+        fn end_frame(&mut self) {}
+        fn fill_rect(&mut self, _: Rect, _: Color) {
+            self.ops += 1;
+        }
+        fn stroke_rect(&mut self, _: Rect, _: Color, _: f32) {
+            self.ops += 1;
+        }
+        fn draw_text(&mut self, _: &TextLayout, _: Point2D) {
+            self.ops += 1;
+        }
+        fn clip_rect(&mut self, _: Rect) {}
+        fn stroke_line(&mut self, _: Point2D, _: Point2D, _: Color, _: f32) {
+            self.ops += 1;
+        }
+        fn fill_round_rect(&mut self, _: Rect, _: f32, _: Color) {
+            self.ops += 1;
+        }
+        fn stroke_round_rect(&mut self, _: Rect, _: f32, _: Color, _: f32) {
+            self.ops += 1;
+        }
+        fn stroke_svg_path(&mut self, _: &str, _: Point2D, _: f32, _: Color, _: f32) {}
+        fn save(&mut self) {}
+        fn restore(&mut self) {}
+        fn translate(&mut self, _: Point2D) {}
+        fn resize(&mut self, _: u32, _: u32) {}
+        fn dpi_scale(&self) -> f32 {
+            1.0
+        }
+    }
+
     #[test]
     fn empty_preedit_paints_nothing() {
-        // `paint_ime_preedit` early-returns on empty text — verified
-        // by the host-level test that asserts no bubble rect lands.
-        assert!(true);
+        let mut backend = CountingBackend::default();
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+        let theme = Theme::dark();
+
+        paint_ime_preedit(
+            &mut cx,
+            &theme,
+            Rect::xywh(0.0, 0.0, 320.0, 200.0),
+            None,
+            "",
+            None,
+        );
+
+        assert_eq!(backend.ops, 0);
     }
 }

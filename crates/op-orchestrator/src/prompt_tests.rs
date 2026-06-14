@@ -692,6 +692,19 @@ fn subagent_prompt_manifest_mode_swaps_output_protocol() {
             cr.system_prompt.contains(MANIFEST_SKILL_ONLY),
             "{model}: element-manifest skill must load"
         );
+        // Recency placement: the skill rides at the END of the prompt
+        // (right above the output contract), not at its priority-0
+        // position — long Full-tier prompts buried a top-of-prompt
+        // catalog (ab-v9 deepseek hand-rolled past it).
+        assert!(
+            cr.system_prompt.find(MANIFEST_SKILL_ONLY).unwrap() > 1000,
+            "{model}: manifest skill must sit near the end, not the top"
+        );
+        assert!(
+            cr.system_prompt.find(MANIFEST_SKILL_ONLY).unwrap()
+                < cr.system_prompt.find(MANIFEST_FORMAT_ONLY).unwrap(),
+            "{model}: output contract directly follows the catalog"
+        );
         assert!(
             cr.system_prompt.contains("- stat_card:"),
             "{model}: generated catalog must be injected"
@@ -731,4 +744,48 @@ fn subagent_prompt_manifest_mode_swaps_output_protocol() {
     assert!(off.system_prompt.contains(NODE_FORMAT_ONLY));
     assert!(!off.system_prompt.contains(MANIFEST_FORMAT_ONLY));
     assert!(!off.system_prompt.contains(MANIFEST_SKILL_ONLY));
+}
+
+/// Manifest mode nominates catalog kinds from the subtask's own text and
+/// injects them as an ELEMENT HINTS block; raw mode and hint-less
+/// subtasks stay clean (ab-v9.1 adoption de-randomization).
+#[test]
+fn subagent_prompt_manifest_mode_injects_element_hints() {
+    let mut st = subtask();
+    st.label = "Notification Settings Row".into();
+    st.elements = Some("bell icon, text stack, iOS toggle switch".into());
+    let build = |st: &crate::plan::Subtask, manifest_on: bool| {
+        build_subagent_prompt_with_manifest(
+            st,
+            &plan(),
+            &req(),
+            AbortFlag::new(),
+            false,
+            false,
+            manifest_on,
+        )
+    };
+
+    let cr = build(&st, true);
+    assert!(
+        cr.user_prompt.contains("ELEMENT HINTS:"),
+        "hint block loads"
+    );
+    assert!(
+        cr.user_prompt.contains("setting_row"),
+        "composite kind hinted"
+    );
+    assert!(cr.user_prompt.contains("switch"), "part kind hinted");
+
+    let raw = build(&st, false);
+    assert!(
+        !raw.user_prompt.contains("ELEMENT HINTS"),
+        "raw JSONL mode has no catalog to hint from"
+    );
+
+    let none = build(&subtask(), true);
+    assert!(
+        !none.user_prompt.contains("ELEMENT HINTS"),
+        "no matches must omit the block, not emit it empty"
+    );
 }
