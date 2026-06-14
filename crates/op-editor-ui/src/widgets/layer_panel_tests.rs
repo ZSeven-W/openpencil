@@ -6,6 +6,7 @@
 //! shell-core `Document`.
 
 use super::layer_panel::*;
+use super::layer_panel_walkers::{row_index_at, visible_row_range};
 use super::Widget;
 use crate::{Point2D, Rect};
 use op_editor_core::EditorState;
@@ -519,4 +520,44 @@ fn layer_horizontal_scroll_offset_is_clamped() {
 
         assert_eq!(regions.layers_h_scroll, regions.layers_max_h_scroll);
     });
+}
+
+#[test]
+fn layer_panel_caches_content_widths_on_build() {
+    run_deep_layer_fixture(|| {
+        let state = state_from(&nested_frame_doc(50));
+        let panel = LayerPanel::from_editor(&state);
+        let rect = Rect {
+            origin: Point2D::new(0.0, 0.0),
+            size: Point2D::new(LAYER_PANEL_WIDTH, 700.0),
+        };
+
+        assert!(panel.layers_content_w > rect.size.x);
+        assert_eq!(panel.regions(rect).layers_content_w, panel.layers_content_w);
+        assert_eq!(panel.regions(rect).pages_content_w, panel.pages_content_w);
+    });
+}
+
+#[test]
+fn visible_row_range_jumps_directly_to_scrolled_rows() {
+    let range = visible_row_range(1_000, LAYER_ROW_HEIGHT * 500.0, LAYER_ROW_HEIGHT * 10.0);
+
+    assert_eq!(range.start, 500);
+    assert!(
+        range.end <= 512,
+        "visible range should cover only the viewport plus small overscan, got {range:?}"
+    );
+}
+
+#[test]
+fn row_index_at_maps_scrolled_point_to_item_without_linear_scan() {
+    let rows_top = 80.0;
+    let scroll = LAYER_ROW_HEIGHT * 500.0;
+    let point_y = rows_top + LAYER_ROW_HEIGHT * 2.5;
+
+    let (index, row_top) = row_index_at(1_000, rows_top, scroll, LAYER_ROW_HEIGHT * 10.0, point_y)
+        .expect("point lands on a visible row");
+
+    assert_eq!(index, 502);
+    assert!((row_top - (rows_top + LAYER_ROW_HEIGHT * 2.0)).abs() < 0.01);
 }
