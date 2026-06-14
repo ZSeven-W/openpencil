@@ -233,7 +233,10 @@ pub(crate) fn register_new_node_reveals(
     let Some(epoch) = indicator_epoch else {
         return;
     };
-    let mut stream_index = 0;
+    let mut stream = RevealStream {
+        index: 0,
+        next_start_ms: reveal_started_ms,
+    };
     for node in state.active_children() {
         register_node_reveals(
             node,
@@ -241,9 +244,15 @@ pub(crate) fn register_new_node_reveals(
             epoch,
             reveal_started_ms,
             0,
-            &mut stream_index,
+            None,
+            &mut stream,
         );
     }
+}
+
+struct RevealStream {
+    index: u64,
+    next_start_ms: u64,
 }
 
 fn register_node_reveals(
@@ -252,15 +261,26 @@ fn register_node_reveals(
     epoch: u64,
     reveal_started_ms: u64,
     depth: u64,
-    stream_index: &mut u64,
+    parent_reveal_start_ms: Option<u64>,
+    stream: &mut RevealStream,
 ) {
     let id = node.id_str();
+    let mut own_reveal_start_ms = parent_reveal_start_ms;
     if !ids_before.contains(id) && should_reveal_node(node, depth) {
-        let own_stream_index = *stream_index;
-        *stream_index += 1;
-        let started_at = reveal_started_ms
+        let own_stream_index = stream.index;
+        stream.index += 1;
+        let base_start = reveal_started_ms
             + op_editor_core::agent_indicators::reveal_offset_ms(depth, own_stream_index);
+        let child_runway_start = parent_reveal_start_ms
+            .map(|started_at| {
+                started_at.saturating_add(op_editor_core::agent_indicators::REVEAL_CHILD_RUNWAY_MS)
+            })
+            .unwrap_or(reveal_started_ms);
+        let started_at = base_start.max(child_runway_start).max(stream.next_start_ms);
         op_editor_core::agent_indicators::add_reveal(epoch, id, started_at);
+        stream.next_start_ms =
+            started_at.saturating_add(op_editor_core::agent_indicators::REVEAL_STAGGER_MS);
+        own_reveal_start_ms = Some(started_at);
     }
     if let Some(children) = node.children() {
         for child in children {
@@ -270,7 +290,8 @@ fn register_node_reveals(
                 epoch,
                 reveal_started_ms,
                 depth + 1,
-                stream_index,
+                own_reveal_start_ms,
+                stream,
             );
         }
     }
