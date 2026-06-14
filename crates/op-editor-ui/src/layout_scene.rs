@@ -332,6 +332,13 @@ pub struct SceneNode {
     /// page-root's authored `(x, y)` — paint applies only the
     /// viewport transform.
     pub bounds: Rect,
+    /// Precomputed aggregate subtree bounds for unbounded containers.
+    /// `Rect::ZERO` means "not precomputed" so hand-built tests and
+    /// helpers that mutate `children` after [`SceneNode::leaf`] keep
+    /// the existing recursive behaviour. The loader fills this once,
+    /// bottom up, so hot paint / hit-test paths do not repeatedly
+    /// union large subtrees every frame.
+    pub aggregate_bounds_cache: Rect,
     /// Cumulative node opacity (0.0..=1.0), already multiplied down
     /// the subtree. Fill / stroke / gradient / shadow colours have it
     /// baked into their alpha at scene-build; the painter applies it
@@ -447,8 +454,53 @@ pub struct SceneNode {
     /// selection while its children stay hittable (parity with the
     /// `Document`-bound `hit_test_walk`).
     pub locked: bool,
+    /// Composite-widget descriptor for the interactive node family
+    /// (switch / checkbox / slider / progress / select / radio_group /
+    /// text_input / text_area / number_input / tabs). When set, the
+    /// design-surface painter draws a recognizable static visual
+    /// (track + knob, box + check, chevron, bar, …) instead of the
+    /// bare degraded rect / text. `None` for ordinary shapes.
+    pub widget: Option<SceneWidget>,
     /// Child render nodes, in paint order.
     pub children: Vec<SceneNode>,
+}
+
+/// Static composite-widget props carried on a [`SceneNode`]. Mirrors
+/// `op_pen_loader::WidgetPayload`; the canvas painter reads it to draw
+/// the non-interactive design-time visual that matches the widget's
+/// preview-mode rendering (jian-core's `emit_widget_visual`). Numeric
+/// sentinels fall back to the runtime defaults (`min=0`, `max=100`).
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct SceneWidget {
+    /// Widget family tag (`switch` / `checkbox` / `slider` / `progress`
+    /// / `select` / `radio_group` / `text_input` / `text_area` /
+    /// `number_input` / `tabs`).
+    pub kind: String,
+    /// On/off state for switch / checkbox.
+    pub checked: Option<bool>,
+    /// Numeric value for slider / progress / number_input.
+    pub value_num: Option<f32>,
+    /// String value for select / radio_group / tabs / text inputs.
+    pub value_str: Option<String>,
+    /// Placeholder text for inputs / select.
+    pub placeholder: Option<String>,
+    /// Adjacent label (checkbox).
+    pub label: Option<String>,
+    /// Range minimum (slider / number_input). `None` = 0.
+    pub min: Option<f32>,
+    /// Range maximum (slider / progress / number_input). `None` = 100.
+    pub max: Option<f32>,
+    /// Range step. `None` = 1.
+    pub step: Option<f32>,
+    /// `(value, label)` rows for select / radio_group / tabs.
+    pub options: Vec<SceneWidgetOption>,
+}
+
+/// One `value` + `label` option for select / radio_group / tabs.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct SceneWidgetOption {
+    pub value: String,
+    pub label: String,
 }
 
 impl SceneNode {
@@ -469,6 +521,10 @@ impl SceneNode {
     fn translate_subtree(&mut self, dx: f32, dy: f32) {
         self.bounds.origin.x += dx;
         self.bounds.origin.y += dy;
+        if rect_has_extent(self.aggregate_bounds_cache) {
+            self.aggregate_bounds_cache.origin.x += dx;
+            self.aggregate_bounds_cache.origin.y += dy;
+        }
         for point in &mut self.points {
             point.x += dx;
             point.y += dy;
@@ -491,19 +547,31 @@ impl SceneNode {
     }
 
     /// Resolved bounds for selection / rotation-pivot math: the node's
-    /// own `bounds` when it is bounded, otherwise the union of its
-    /// children's aggregate bounds. Mirrors `SceneNode::aggregate_bounds` so the overlay painter reads the same rect a
-    /// `Document`-bound painter did. Pure geometry over `bounds` +
-    /// `children` — no extra scene state needed.
+    /// own `bounds` when it is bounded, otherwise a loader-precomputed
+    /// subtree rect when available, otherwise the union of children's
+    /// aggregate bounds for hand-built scenes.
     pub fn aggregate_bounds(&self) -> Rect {
-        if self.bounds.size.x > 0.0 || self.bounds.size.y > 0.0 {
+        if rect_has_extent(self.bounds) {
             return self.bounds;
         }
-        let mut iter = self
-            .children
+        if rect_has_extent(self.aggregate_bounds_cache) {
+            return self.aggregate_bounds_cache;
+        }
+        Self::compute_aggregate_bounds(self.bounds, &self.children)
+    }
+
+    /// Compute the aggregate subtree rect from resolved own bounds and
+    /// children. Used by the loader during scene construction and by
+    /// [`aggregate_bounds`](Self::aggregate_bounds) as the uncached
+    /// fallback for hand-built test scenes.
+    pub fn compute_aggregate_bounds(bounds: Rect, children: &[SceneNode]) -> Rect {
+        if rect_has_extent(bounds) {
+            return bounds;
+        }
+        let mut iter = children
             .iter()
             .map(SceneNode::aggregate_bounds)
-            .filter(|r| r.size.x > 0.0 || r.size.y > 0.0);
+            .filter(|r| rect_has_extent(*r));
         let Some(first) = iter.next() else {
             return Rect::ZERO;
         };
@@ -525,6 +593,7 @@ impl SceneNode {
             id: id.into(),
             kind,
             bounds: Rect::ZERO,
+            aggregate_bounds_cache: Rect::ZERO,
             opacity: 1.0,
             rotation: 0.0,
             flip_x: false,
@@ -563,9 +632,14 @@ impl SceneNode {
             effects: Vec::new(),
             hidden: false,
             locked: false,
+            widget: None,
             children: Vec::new(),
         }
     }
+}
+
+fn rect_has_extent(rect: Rect) -> bool {
+    rect.size.x > 0.0 || rect.size.y > 0.0
 }
 
 pub fn stable_image_source_id(src: &str) -> u64 {

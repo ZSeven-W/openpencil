@@ -134,6 +134,24 @@ fn image_cache_decodes_a_valid_png() {
 }
 
 #[test]
+fn dot_point_buffer_reuses_capacity_between_batches() {
+    let mut be = NativeBackend::with_dpi(1.0);
+    let large: Vec<Point2D> = (0..256).map(|i| Point2D::new(i as f32, 0.0)).collect();
+    let small = [Point2D::new(1.0, 2.0), Point2D::new(3.0, 4.0)];
+
+    assert_eq!(be.prepare_dot_points(&large).len(), 256);
+    let large_capacity = be.dot_point_buffer.capacity();
+    assert!(large_capacity >= 256);
+
+    assert_eq!(be.prepare_dot_points(&small).len(), 2);
+    assert_eq!(
+        be.dot_point_buffer.capacity(),
+        large_capacity,
+        "native grid dot conversion should reuse its allocation across frames"
+    );
+}
+
+#[test]
 fn explicit_family_typeface_lookup_is_cached() {
     let mut be = NativeBackend::with_dpi(1.0);
     assert_eq!(be.family_typeface_cache_len(), 0);

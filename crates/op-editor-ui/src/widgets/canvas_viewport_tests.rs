@@ -25,6 +25,7 @@ struct RecordingBackend {
     rects: usize,
     strokes: usize,
     text: usize,
+    dots: usize,
 }
 
 impl crate::RenderBackend for RecordingBackend {
@@ -61,6 +62,10 @@ impl crate::RenderBackend for RecordingBackend {
     }
     fn fill_round_rect(&mut self, _: Rect, _: f32, _: Color) {
         self.rects += 1;
+        self.ops.push(Op::Fill);
+    }
+    fn fill_dots(&mut self, centers: &[Point2D], _: f32, _: Color) {
+        self.dots += centers.len();
         self.ops.push(Op::Fill);
     }
     fn stroke_round_rect(&mut self, _: Rect, _: f32, _: Color, _: f32) {
@@ -179,6 +184,40 @@ fn empty_scene_paints_canvas_background_and_grid_only() {
 }
 
 #[test]
+fn grid_dot_count_matches_painted_dot_batch() {
+    let state = sample_state();
+    let scene = LayoutScene::default();
+    let rect = Rect::xywh(0.0, 0.0, 320.0, 240.0);
+    let paint_dots = |viewport: &CanvasViewport<'_>| -> usize {
+        let mut backend = RecordingBackend::default();
+        {
+            let mut cx = PaintCx {
+                backend: &mut backend,
+            };
+            viewport.paint(&mut cx, rect);
+        }
+        backend.dots
+    };
+
+    let viewport = CanvasViewport::from_editor(&state, &scene);
+    assert_eq!(
+        paint_dots(&viewport),
+        crate::widgets::canvas_viewport_grid::grid_dot_count(rect, &viewport.viewport),
+        "grid allocation capacity should match the dot batch exactly"
+    );
+
+    let mut viewport = CanvasViewport::from_editor(&state, &scene);
+    viewport.viewport.pan_x = 17.0;
+    viewport.viewport.pan_y = -23.0;
+    viewport.viewport.zoom = 0.37;
+    assert_eq!(
+        paint_dots(&viewport),
+        crate::widgets::canvas_viewport_grid::grid_dot_count(rect, &viewport.viewport),
+        "panned and zoomed grid count should still match the painted batch"
+    );
+}
+
+#[test]
 fn unselected_scene_skips_overlay_stroke() {
     let state = sample_state();
     let scene = sample_scene();
@@ -254,6 +293,8 @@ fn paint_with_zero_size_rect_skips_entirely() {
 
 #[test]
 fn group_kind_recurses_without_own_paint() {
+    let _guard = crate::agent_indicator_test_support::lock();
+    op_editor_core::agent_indicators::clear();
     let state = sample_state();
     let inner = leaf(
         "n2",

@@ -19,6 +19,7 @@ use crate::widgets::canvas_viewport::EditCaret;
 use crate::widgets::canvas_viewport_image::paint_image_node;
 use crate::widgets::canvas_viewport_overlay::paint_fill_then_stroke;
 use crate::widgets::canvas_viewport_text::paint_text_node;
+use crate::widgets::canvas_viewport_widget::paint_widget_visual;
 use crate::widgets::PaintCx;
 use crate::{Point2D, Rect};
 use std::collections::HashMap;
@@ -235,6 +236,19 @@ struct PaintNodeOptions<'a> {
     reveals: Option<RevealSchedule<'a>>,
 }
 
+#[derive(Clone, Copy)]
+struct RevealPhase {
+    t: f32,
+    ease: f32,
+}
+
+#[derive(Clone, Copy)]
+enum RevealPaintState {
+    Idle,
+    Pending,
+    Active(RevealPhase),
+}
+
 /// Recursively paint one resolved [`SceneNode`] and its subtree.
 ///
 /// `viewport_origin` is the canvas-rect origin shifted by the
@@ -256,7 +270,7 @@ pub fn paint_node(
         cull,
         reveals: None,
     };
-    paint_node_inner(cx, node, &options);
+    paint_node_inner(cx, node, &options, false);
 }
 
 pub(crate) fn paint_node_with_reveals(
@@ -275,28 +289,39 @@ pub(crate) fn paint_node_with_reveals(
         cull,
         reveals: Some(reveals),
     };
-    paint_node_inner(cx, node, &options);
+    paint_node_inner(cx, node, &options, false);
 }
 
-fn paint_node_inner(cx: &mut PaintCx<'_>, node: &SceneNode, options: &PaintNodeOptions<'_>) {
+fn paint_node_inner(
+    cx: &mut PaintCx<'_>,
+    node: &SceneNode,
+    options: &PaintNodeOptions<'_>,
+    ancestor_revealing: bool,
+) {
     let viewport_origin = options.viewport_origin;
     let zoom = options.zoom;
     let edit_caret = &options.edit_caret;
     let cull = options.cull;
     // Hidden nodes (and their subtree) skip canvas paint entirely.
     // Layer panel still shows them, dimmed, so the user can unhide.
-    let pending_reveal = options
+    let reveal_state = options
         .reveals
-        .and_then(|schedule| {
-            schedule
-                .starts
-                .get(&node.id)
-                .map(|started_at| schedule.now_ms < *started_at)
-        })
-        .unwrap_or(false);
-    if node.hidden || pending_reveal {
+        .map(|schedule| reveal_paint_state(schedule, &node.id))
+        .unwrap_or(RevealPaintState::Idle);
+    if node.hidden || matches!(reveal_state, RevealPaintState::Pending) {
         return;
     }
+    let own_reveal_phase = match reveal_state {
+        RevealPaintState::Active(phase) if !ancestor_revealing => Some(phase),
+        _ => None,
+    };
+    let suppress_descendant_reveals = match reveal_state {
+        RevealPaintState::Active(phase) => {
+            phase.t < op_editor_core::agent_indicators::REVEAL_CHILD_SUPPRESS_FRACTION
+        }
+        _ => false,
+    };
+    let descendant_has_revealing_ancestor = ancestor_revealing || suppress_descendant_reveals;
     let world_rect = Rect {
         origin: Point2D::new(
             viewport_origin.x + node.bounds.origin.x * zoom,
@@ -315,6 +340,10 @@ fn paint_node_inner(cx: &mut PaintCx<'_>, node: &SceneNode, options: &PaintNodeO
             return;
         }
     }
+
+    let reveal_wrapped = own_reveal_phase
+        .map(|phase| push_reveal_transform(cx, world_rect, phase))
+        .unwrap_or(false);
 
     // Wrap the paint in save/transform/restore when the node carries
     // a mirror or non-zero rotation. Both pivot around the node's
@@ -370,9 +399,13 @@ fn paint_node_inner(cx: &mut PaintCx<'_>, node: &SceneNode, options: &PaintNodeO
             } else {
                 paint_fill_then_stroke(cx, node, world_rect, zoom, node.fill);
             }
+            // `tabs` degrades to a `frame` whose children are the tab
+            // panels; paint the minimal tab-bar visual over the frame
+            // fill, then the children render normally below.
+            paint_widget_visual(cx, node, world_rect, zoom);
             let clipped = push_clip_content(cx, node, world_rect, zoom);
             for child in node.children.iter().rev() {
-                paint_node_inner(cx, child, options);
+                paint_node_inner(cx, child, options, descendant_has_revealing_ancestor);
             }
             if clipped {
                 cx.backend.restore();
@@ -391,19 +424,25 @@ fn paint_node_inner(cx: &mut PaintCx<'_>, node: &SceneNode, options: &PaintNodeO
             // every recursing container branch, not just Frame.
             let clipped = push_clip_content(cx, node, world_rect, zoom);
             for child in node.children.iter().rev() {
-                paint_node_inner(cx, child, options);
+                paint_node_inner(cx, child, options, descendant_has_revealing_ancestor);
             }
             if clipped {
                 cx.backend.restore();
             }
         }
         NodeKind::Rect => {
-            // Image nodes land as `kind="rect"` (the loader rewrites
-            // their variant so non-image paths keep working). When a
-            // `src` is carried, paint the bitmap; the grey `fill`
-            // remains as the placeholder visible while the decoder
-            // is missing the bytes (corrupt URL / unsupported codec).
-            if let Some(src) = node.image_src.as_deref() {
+            // Composite widgets that degrade to `rect` (switch /
+            // checkbox / slider / progress / radio_group / number_input
+            // / text_area) paint their recognizable static visual on the
+            // design surface instead of the bare rect.
+            if paint_widget_visual(cx, node, world_rect, zoom) {
+                // painted
+            } else if let Some(src) = node.image_src.as_deref() {
+                // Image nodes land as `kind="rect"` (the loader rewrites
+                // their variant so non-image paths keep working). When a
+                // `src` is carried, paint the bitmap; the grey `fill`
+                // remains as the placeholder visible while the decoder
+                // is missing the bytes (corrupt URL / unsupported codec).
                 paint_image_node(cx, node, world_rect, zoom, src);
             } else {
                 paint_fill_then_stroke(cx, node, world_rect, zoom, node.fill);
@@ -463,6 +502,9 @@ fn paint_node_inner(cx: &mut PaintCx<'_>, node: &SceneNode, options: &PaintNodeO
                 if transformed {
                     cx.backend.restore();
                 }
+                if reveal_wrapped {
+                    cx.backend.restore();
+                }
                 return;
             }
             let to_world = |p: Point2D| -> Point2D {
@@ -501,18 +543,70 @@ fn paint_node_inner(cx: &mut PaintCx<'_>, node: &SceneNode, options: &PaintNodeO
             }
         }
         NodeKind::Text => {
-            let zoom = zoom.max(0.0001);
-            cx.backend.save();
-            cx.backend.translate(viewport_origin);
-            cx.backend.scale(Point2D::new(zoom, zoom), Point2D::ZERO);
-            paint_text_node(cx, node, node.bounds, zoom, edit_caret);
-            cx.backend.restore();
+            // text_input / select degrade to a `text` node but carry a
+            // widget descriptor — paint the box + value/placeholder +
+            // chevron static visual (in world coords) instead of bare
+            // text. Painted before the doc-space text transform so its
+            // own text runs land at the right spot.
+            if paint_widget_visual(cx, node, world_rect, zoom) {
+                // painted
+            } else {
+                let zoom = zoom.max(0.0001);
+                cx.backend.save();
+                cx.backend.translate(viewport_origin);
+                cx.backend.scale(Point2D::new(zoom, zoom), Point2D::ZERO);
+                paint_text_node(cx, node, node.bounds, zoom, edit_caret);
+                cx.backend.restore();
+            }
         }
     }
 
     if transformed {
         cx.backend.restore();
     }
+    if reveal_wrapped {
+        cx.backend.restore();
+    }
+}
+
+fn reveal_paint_state(schedule: RevealSchedule<'_>, node_id: &str) -> RevealPaintState {
+    let Some(started_at) = schedule.starts.get(node_id) else {
+        return RevealPaintState::Idle;
+    };
+    if schedule.now_ms < *started_at {
+        return RevealPaintState::Pending;
+    }
+    let elapsed = schedule.now_ms.saturating_sub(*started_at);
+    if elapsed > op_editor_core::agent_indicators::REVEAL_DURATION_MS {
+        return RevealPaintState::Idle;
+    }
+    let t = (elapsed as f32 / op_editor_core::agent_indicators::REVEAL_DURATION_MS as f32)
+        .clamp(0.0, 1.0);
+    RevealPaintState::Active(RevealPhase {
+        t,
+        ease: ease_in_out_sine(t),
+    })
+}
+
+fn push_reveal_transform(cx: &mut PaintCx<'_>, rect: Rect, phase: RevealPhase) -> bool {
+    if rect.size.x <= 0.0 || rect.size.y <= 0.0 {
+        return false;
+    }
+    let settle = 1.0 - phase.ease;
+    let lift = 6.5 * settle * (1.0 - phase.t * 0.18);
+    let scale = 0.982 + 0.018 * phase.ease;
+    let pivot = Point2D::new(
+        rect.origin.x + rect.size.x / 2.0,
+        rect.origin.y + rect.size.y / 2.0,
+    );
+    cx.backend.save();
+    cx.backend.translate(Point2D::new(0.0, lift));
+    cx.backend.scale(Point2D::new(scale, scale), pivot);
+    true
+}
+
+fn ease_in_out_sine(t: f32) -> f32 {
+    -(std::f32::consts::PI * t).cos() / 2.0 + 0.5
 }
 
 pub(crate) fn paint_svg_path_node(
@@ -581,3 +675,7 @@ pub(crate) fn paint_svg_path_node(
 #[cfg(test)]
 #[path = "canvas_viewport_paint_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "canvas_viewport_reveal_tests.rs"]
+mod reveal_tests;

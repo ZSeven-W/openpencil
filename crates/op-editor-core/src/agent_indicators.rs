@@ -17,11 +17,22 @@ use std::collections::{HashMap, HashSet};
 use std::sync::{LazyLock, Mutex};
 
 /// Duration of the short generated-node entrance animation.
-pub const REVEAL_DURATION_MS: u64 = 720;
-/// Delay between generated subtree nodes so applied content appears progressively.
-pub const REVEAL_STAGGER_MS: u64 = 80;
+pub const REVEAL_DURATION_MS: u64 = 1_360;
+/// Delay between the first generated nodes in one applied batch.
+pub const REVEAL_STAGGER_MS: u64 = 48;
+/// Extra delay for nested generated nodes. Keeps child content trailing
+/// its parent without making the stream feel sluggish.
+pub const REVEAL_DEPTH_STAGGER_MS: u64 = 14;
+/// Parent reveals suppress child transforms only during their opening
+/// beat. Once the parent has begun settling, delayed children animate
+/// independently so streamed content does not pop in abruptly.
+pub const REVEAL_CHILD_SUPPRESS_FRACTION: f32 = 0.11;
+const REVEAL_FULL_STAGGER_SIBLINGS: u64 = 12;
+const REVEAL_MID_STAGGER_SIBLINGS: u64 = 32;
+const REVEAL_COMPRESSED_STAGGER_MS: u64 = 22;
+const REVEAL_TAIL_STAGGER_MS: u64 = 8;
 const CLOCK_REBASE_THRESHOLD_MS: u64 = 60_000;
-const REVEAL_FRAME_MS: u64 = 33;
+const REVEAL_FRAME_MS: u64 = 16;
 
 /// A node's / frame's owning agent — colour hex (e.g. `"#FF6B6B"`) + name.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -129,6 +140,28 @@ pub fn add_reveal(epoch: u64, node_id: &str, started_at_ms: u64) {
         return;
     }
     r.reveals.insert(node_id.to_string(), started_at_ms);
+}
+
+/// Start offset for a generated node inside one applied batch.
+///
+/// The queue follows the visual traversal order of the newly applied
+/// subtree rather than a per-parent sibling index. That keeps nested
+/// content from sharing the same start frame across different parents
+/// while still compressing long tails enough to stay responsive.
+pub fn reveal_offset_ms(depth: u64, stream_index: u64) -> u64 {
+    let full = stream_index.min(REVEAL_FULL_STAGGER_SIBLINGS) * REVEAL_STAGGER_MS;
+    let mid = stream_index
+        .min(REVEAL_MID_STAGGER_SIBLINGS)
+        .saturating_sub(REVEAL_FULL_STAGGER_SIBLINGS)
+        .saturating_mul(REVEAL_COMPRESSED_STAGGER_MS);
+    let tail = stream_index
+        .saturating_sub(REVEAL_MID_STAGGER_SIBLINGS)
+        .saturating_mul(REVEAL_TAIL_STAGGER_MS);
+    depth
+        .saturating_mul(REVEAL_DEPTH_STAGGER_MS)
+        .saturating_add(full)
+        .saturating_add(mid)
+        .saturating_add(tail)
 }
 
 /// Clear every indicator — called when a generation finishes / is reset.
@@ -351,7 +384,7 @@ mod tests {
         assert!(is_active(), "reveal should keep the paint loop active");
         assert_eq!(snapshot_at(1_250).reveals.get("n7"), Some(&1_000));
         assert!(
-            snapshot_at(2_000).reveals.is_empty(),
+            snapshot_at(2_400).reveals.is_empty(),
             "expired reveal should be pruned"
         );
         assert!(!is_active(), "expired reveal should not keep animating");
@@ -383,8 +416,34 @@ mod tests {
 
         let snap = snapshot_at(1_040);
 
-        assert_eq!(snap.reveals.get("external-a"), Some(&1_160));
-        assert_eq!(snap.reveals.get("external-b"), Some(&1_240));
+        assert_eq!(snap.reveals.get("external-a"), Some(&1_128));
+        assert_eq!(snap.reveals.get("external-b"), Some(&1_176));
         clear();
+    }
+
+    #[test]
+    fn active_reveal_deadline_ticks_at_animation_frame_rate() {
+        let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let epoch = begin();
+        add_reveal(epoch, "active", 1_000);
+
+        assert_eq!(next_reveal_deadline_ms(1_100), Some(1_116));
+        end_if_epoch(epoch);
+    }
+
+    #[test]
+    fn reveal_offsets_stream_dense_batches_without_shared_frames() {
+        let offsets: Vec<u64> = (0..40).map(|i| reveal_offset_ms(1, i)).collect();
+
+        assert_eq!(offsets[0], REVEAL_DEPTH_STAGGER_MS);
+        assert_eq!(offsets[1] - offsets[0], REVEAL_STAGGER_MS);
+        assert!(
+            offsets.windows(2).all(|pair| pair[1] > pair[0]),
+            "stream items should not share an entrance start frame"
+        );
+        assert!(
+            offsets[39] - offsets[0] < 1_200,
+            "dense generated batches should stay responsive instead of waiting several seconds"
+        );
     }
 }
