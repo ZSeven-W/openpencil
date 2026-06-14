@@ -2998,6 +2998,7 @@ version = "0.8.0"
 dependencies = [
  "op-config-store",
  "op-figma",
+ "op-process-io",
  "op-rpc-transport",
  "serde_json",
 ]
@@ -3121,6 +3122,7 @@ dependencies = [
  "op-opmerge",
  "op-orchestrator",
  "op-pen-loader",
+ "op-process-io",
  "reqwest 0.12.28",
  "rfd",
  "serde",
@@ -3231,6 +3233,13 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_stacker",
+]
+
+[[package]]
+name = "op-process-io"
+version = "0.8.0"
+dependencies = [
+ "tokio",
 ]
 
 [[package]]

@@ -58,7 +58,8 @@ use std::time::Duration;
 use op_ai::chat_provider::{
     ChatDelta, ChatProvider, ChatRequest, CliName, EffortLevel, StopReason, ThinkingMode,
 };
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use op_process_io::LineStreamChild;
+use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::sync::mpsc;
 
 use crate::chat_runtime::{prompt_with_system_prompt, shared_runtime, BlockingRecvIter};
@@ -387,15 +388,12 @@ impl ChatProvider for SubprocessProvider {
             // Keep staged attachment temp files alive for the turn.
             let _guard = guard;
             let mut cmd = build_command(&binary, &args);
-            cmd.stdin(std::process::Stdio::piped())
-                .stdout(std::process::Stdio::piped())
-                .stderr(std::process::Stdio::piped());
             // Set the child's env from the per-CLI policy. We
             // env_clear first because tokio::process Command
             // otherwise inherits the parent env verbatim.
             cmd.env_clear();
             cmd.envs(env_pairs);
-            let mut child = match cmd.spawn() {
+            let mut child = match LineStreamChild::spawn_command(cmd) {
                 Ok(c) => c,
                 Err(e) => {
                     let _ = tx
@@ -416,7 +414,7 @@ impl ChatProvider for SubprocessProvider {
             // (`extractCodexCliError`); other CLIs discard it (TS
             // parity: gemini stream path discards stderr).
             let stderr_tail: Arc<std::sync::Mutex<String>> = Arc::default();
-            if let Some(stderr) = child.stderr.take() {
+            if let Some(stderr) = child.take_stderr() {
                 let capture = (cli == Some(CliName::Codex)).then(|| Arc::clone(&stderr_tail));
                 tokio::spawn(async move {
                     let mut lines = BufReader::new(stderr).lines();
@@ -435,36 +433,34 @@ impl ChatProvider for SubprocessProvider {
                 });
             }
 
-            if let Some(mut stdin) = child.stdin.take() {
-                match prompt_mode {
-                    PromptMode::Stdin => {
-                        // Feed the user message + close stdin so the
-                        // CLI sees EOF and starts responding. Stdin
-                        // write errors surface as a chat error.
-                        if let Err(e) = stdin.write_all(prompt.as_bytes()).await {
-                            let _ = tx.send(ChatDelta::Error(format!("stdin write: {e}"))).await;
-                            let _ = tx
-                                .send(ChatDelta::Done {
-                                    stop_reason: StopReason::Aborted,
-                                })
-                                .await;
-                            let _ = child.start_kill();
-                            let _ = child.wait().await;
-                            return;
-                        }
-                    }
-                    PromptMode::PositionalArg => {
-                        // No stdin write — prompt is in argv. Close
-                        // stdin immediately so the CLI doesn't sit
-                        // waiting on it (Claude Code's `--print` mode
-                        // exits if stdin stays open with no input).
+            match prompt_mode {
+                PromptMode::Stdin => {
+                    // Feed the user message + close stdin so the CLI
+                    // sees EOF and starts responding. Stdin write
+                    // errors surface as a chat error.
+                    if let Err(e) = child.feed(prompt.as_bytes()).await {
+                        let _ = tx.send(ChatDelta::Error(format!("stdin write: {e}"))).await;
+                        let _ = tx
+                            .send(ChatDelta::Done {
+                                stop_reason: StopReason::Aborted,
+                            })
+                            .await;
+                        let _ = child.start_kill();
+                        let _ = child.wait().await;
+                        return;
                     }
                 }
-                let _ = stdin.shutdown().await; // EOF; ignore close error
+                PromptMode::PositionalArg => {
+                    // No stdin write — prompt is in argv. Close stdin
+                    // immediately so the CLI doesn't sit waiting on it
+                    // (Claude Code's `--print` mode exits if stdin
+                    // stays open with no input).
+                }
             }
+            let _ = child.close_stdin().await; // EOF; ignore close error
 
-            let stdout = match child.stdout.take() {
-                Some(s) => s,
+            let mut lines = match child.take_lines() {
+                Some(lines) => lines,
                 None => {
                     let _ = tx.send(ChatDelta::Error("no stdout from CLI".into())).await;
                     let _ = tx
@@ -478,7 +474,6 @@ impl ChatProvider for SubprocessProvider {
 
             let deadline = tokio::time::Instant::now()
                 + turn_timeout.unwrap_or(Duration::from_secs(60 * 60 * 24 * 365));
-            let mut lines = BufReader::new(stdout).lines();
             let mut emitted_done = false;
             let mut terminal_error = false;
             let mut emitted_text = false;

@@ -1,9 +1,9 @@
+use op_process_io::{spawn_null, wait_for_child_or, wait_until_false, WaitOutcome};
 use serde_json::json;
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 const PID_FILE_NAME: &str = "openpencil-mcp-server.pid";
@@ -101,11 +101,7 @@ fn run_start_live(port: u16, document_path: Option<&str>) -> Result<String, Stri
     if let Some(path) = document_path {
         command.arg(path);
     }
-    let mut child = command
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
+    let mut child = spawn_null(&mut command)
         .map_err(|e| format!("spawn {} --live-mcp: {e}", binary.display()))?;
 
     // Only report a `documentPath` the editor will ACTUALLY open: its
@@ -114,16 +110,20 @@ fn run_start_live(port: u16, document_path: Option<&str>) -> Result<String, Stri
     // claim a document the editor never opened.
     let opened = document_path.filter(|p| editor_will_open(p));
     // Wait up to ~15s for the editor to bind + publish its port.
-    for _ in 0..150 {
-        if let Some((live_port, live_pid)) = reachable_live_port_file() {
+    match wait_for_child_or(&mut child, 150, Duration::from_millis(100), || {
+        reachable_live_port_file()
+    })
+    .map_err(|e| format!("wait for {} --live-mcp: {e}", binary.display()))?
+    {
+        WaitOutcome::Ready((live_port, live_pid)) => {
             return Ok(start_json(live_pid, live_port, opened.map(Path::new)));
         }
-        if let Ok(Some(status)) = child.try_wait() {
+        WaitOutcome::Exited(status) => {
             return Err(format!(
                 "OpenPencil editor exited before serving the live MCP server: {status}"
             ));
         }
-        thread::sleep(Duration::from_millis(100));
+        WaitOutcome::TimedOut => {}
     }
     // Timed out without a verified live server. Report failure honestly
     // rather than a fabricated success on the requested port — the editor
@@ -182,12 +182,8 @@ fn run_start_web(
     if let Some(host) = host {
         command.arg("--host").arg(host);
     }
-    let mut child = command
-        .env("OPENPENCIL_MCP_TOKEN", &token)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
+    command.env("OPENPENCIL_MCP_TOKEN", &token);
+    let mut child = spawn_null(&mut command)
         .map_err(|e| format!("spawn {} --serve-web: {e}", binary.display()))?;
 
     let pid = child.id();
@@ -196,19 +192,23 @@ fn run_start_web(
     // Wait up to ~5s for the daemon's HTTP server to answer. The token-authed
     // JSON-RPC ping doubles as the identity check (never trust a foreign
     // listener on the port), exactly like the headless start path.
-    for _ in 0..50 {
-        if crate::mcp_http_cli::mcp_ping_headless(port, &token) {
+    match wait_for_child_or(&mut child, 50, Duration::from_millis(100), || {
+        crate::mcp_http_cli::mcp_ping_headless(port, &token).then_some(())
+    })
+    .map_err(|e| format!("wait for {} --serve-web: {e}", binary.display()))?
+    {
+        WaitOutcome::Ready(()) => {
             let url = format!("http://127.0.0.1:{port}");
             open_in_browser(&url);
             return Ok(start_web_json(pid, port, document.as_deref(), host));
         }
-        if let Ok(Some(status)) = child.try_wait() {
+        WaitOutcome::Exited(status) => {
             remove_manager_files();
             return Err(format!(
                 "OpenPencil web daemon exited before accepting connections: {status}"
             ));
         }
-        thread::sleep(Duration::from_millis(100));
+        WaitOutcome::TimedOut => {}
     }
     Err(format!(
         "OpenPencil web daemon did not respond on 127.0.0.1:{port} within 5s"
@@ -240,11 +240,7 @@ fn open_in_browser(url: &str) {
         c.arg(url);
         c
     };
-    let _ = command
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn();
+    let _ = spawn_null(&mut command);
 }
 
 /// `op start --web` success JSON: the headless `start_json` shape plus
@@ -282,34 +278,36 @@ fn run_start_headless(port: u16, document_path: Option<&str>) -> Result<String, 
     // Per-instance token passed to the server (echoed in its `ping`) so a
     // later `op stop` can prove the pid in our manager file owns the port.
     let token = make_token();
-    let mut child = Command::new(&binary)
+    let mut command = Command::new(&binary);
+    command
         .arg("--mcp-http")
         .arg(port.to_string())
         .arg(&document)
-        .env("OPENPENCIL_MCP_TOKEN", &token)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
+        .env("OPENPENCIL_MCP_TOKEN", &token);
+    let mut child = spawn_null(&mut command)
         .map_err(|e| format!("spawn {} --mcp-http: {e}", binary.display()))?;
 
     let pid = child.id();
     write_manager_files(pid, port, &token)?;
 
-    for _ in 0..30 {
-        // Confirm the MCP server actually answers WITH our token (not just
-        // an open port), so we never report success for a child that failed
-        // to bind or for an unrelated service on the port.
-        if crate::mcp_http_cli::mcp_ping_headless(port, &token) {
+    // Confirm the MCP server actually answers WITH our token (not just
+    // an open port), so we never report success for a child that failed
+    // to bind or for an unrelated service on the port.
+    match wait_for_child_or(&mut child, 30, Duration::from_millis(100), || {
+        crate::mcp_http_cli::mcp_ping_headless(port, &token).then_some(())
+    })
+    .map_err(|e| format!("wait for {} --mcp-http: {e}", binary.display()))?
+    {
+        WaitOutcome::Ready(()) => {
             return Ok(start_json(pid, port, Some(&document)));
         }
-        if let Ok(Some(status)) = child.try_wait() {
+        WaitOutcome::Exited(status) => {
             remove_manager_files();
             return Err(format!(
                 "OpenPencil MCP server exited before accepting connections: {status}"
             ));
         }
-        thread::sleep(Duration::from_millis(100));
+        WaitOutcome::TimedOut => {}
     }
 
     Err(format!(
@@ -374,12 +372,7 @@ fn remove_live_port_file() {
 /// false (the server stopped responding to its token) or the budget
 /// elapses — used to confirm a graceful shutdown actually took effect.
 fn wait_until<F: Fn() -> bool>(still_up: F) {
-    for _ in 0..30 {
-        if !still_up() {
-            return;
-        }
-        thread::sleep(Duration::from_millis(100));
-    }
+    let _ = wait_until_false(30, Duration::from_millis(100), still_up);
 }
 
 /// Path to the Rust live discovery file `~/.openpencil/.op-mcp-port`.

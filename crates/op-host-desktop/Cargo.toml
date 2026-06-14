@@ -88,6 +88,8 @@ op-orchestrator = { path = "../op-orchestrator" }
 # extracted into op-ai; the `src/chat_*.rs` real transports + the
 # model-discovery path import them through `op_ai::*`.
 op-ai = { path = "../op-ai" }
+# Shared subprocess IO primitives for chat CLI bridges.
+op-process-io = { path = "../op-process-io" }
 # AI skill engine — the BuiltIn agent provider resolves
 # generation-phase prompt skills through it (`chat_runtime.rs`).
 op-ai-skills = { path = "../op-ai-skills" }
