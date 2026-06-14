@@ -4,7 +4,7 @@ use crate::{Color, Point2D, Rect, RenderBackend, TextLayout};
 use op_editor_core::agent_settings::{
     AgentSettingsTab, ImageGenField, ImageGenProvider, ImageTestStatus, SettingsFocus,
 };
-use op_editor_core::EditorState;
+use op_editor_core::{AgentSettingsButton, ButtonPressTarget, EditorState};
 
 #[derive(Default)]
 struct CaptureBackend {
@@ -52,8 +52,8 @@ fn caret_fills(fills: &[(Rect, Color)], color: Color) -> Vec<Rect> {
         .filter_map(|(rect, fill)| {
             (color_eq(*fill, color)
                 && (rect.size.x - 1.5).abs() < 0.01
-                && (rect.size.y - 15.0).abs() < 0.01)
-                .then_some(*rect)
+                && (14.0..=16.0).contains(&rect.size.y))
+            .then_some(*rect)
         })
         .collect()
 }
@@ -102,7 +102,10 @@ fn focused_image_gen_field_paints_visible_caret_at_blink_on_phase() {
         index: 0,
         field: ImageGenField::BaseUrl,
     });
-    state.editor_ui.settings_input_draft = "https://api.example.com/v1".into();
+    state
+        .editor_ui
+        .settings_input
+        .set_text("https://api.example.com/v1");
 
     let panel = AgentSettingsPanel::for_editor_at(&state, 100);
     let rect = panel.rect(1200.0, 800.0);
@@ -125,7 +128,10 @@ fn focused_image_gen_field_hides_caret_at_blink_off_phase() {
         index: 0,
         field: ImageGenField::BaseUrl,
     });
-    state.editor_ui.settings_input_draft = "https://api.example.com/v1".into();
+    state
+        .editor_ui
+        .settings_input
+        .set_text("https://api.example.com/v1");
 
     let panel = AgentSettingsPanel::for_editor_at(&state, 500);
     let rect = panel.rect(1200.0, 800.0);
@@ -332,6 +338,62 @@ fn images_tab_provider_menu_hover_paints_option_wash() {
 }
 
 #[test]
+fn images_tab_provider_menu_pressed_option_uses_shared_feedback() {
+    let mut state = EditorState::default();
+    state.editor_ui.agent_settings.tab = AgentSettingsTab::Images;
+    state.editor_ui.agent_settings.add_image_gen_profile();
+    state.editor_ui.agent_settings.image_gen_profiles[0].provider = ImageGenProvider::OpenAi;
+    state.editor_ui.agent_settings.focus = Some(SettingsFocus::ImageGenProfile {
+        index: 0,
+        field: ImageGenField::Name,
+    });
+    state.editor_ui.agent_settings.image_gen_provider_menu_open = Some(0);
+    state.editor_ui.pressed_button = Some(ButtonPressTarget::AgentSettings(
+        AgentSettingsButton::ImageProviderOption {
+            index: 0,
+            provider: ImageGenProvider::Replicate,
+        },
+    ));
+    let panel = AgentSettingsPanel::for_editor(&state);
+    let rect = panel.rect(1200.0, 800.0);
+    let content_x = rect.origin.x + 200.0 + 24.0;
+    let content_y = rect.origin.y + 24.0;
+    let content_w = rect.size.x - 200.0 - 48.0;
+    let row_inset = 8.0;
+    let gen_top = content_y + 36.0 + 24.0 + 28.0;
+    let row_y = gen_top + 36.0 + 8.0;
+    let provider = Rect {
+        origin: Point2D::new(content_x + row_inset + 110.0, row_y + 32.0 + 8.0 + 36.0),
+        size: Point2D::new(content_w - row_inset * 2.0 - 110.0 - 12.0, 24.0),
+    };
+    let expected = Rect {
+        origin: Point2D::new(
+            provider.origin.x + 4.0,
+            provider.origin.y + 24.0 + 2.0 * 24.0 + 1.0,
+        ),
+        size: Point2D::new(provider.size.x - 8.0, 22.0),
+    };
+    let expected_color = panel
+        .theme
+        .button_hover
+        .with_alpha(panel.theme.button_hover.a * 1.8);
+    let mut backend = CaptureBackend::default();
+    let mut cx = PaintCx {
+        backend: &mut backend,
+    };
+
+    panel.paint(&mut cx, rect);
+
+    assert!(
+        backend
+            .round_fills
+            .iter()
+            .any(|(fill, color)| { rect_eq(*fill, expected) && color_eq(*color, expected_color) }),
+        "pressed provider option should paint the shared pressed feedback token"
+    );
+}
+
+#[test]
 fn images_tab_profile_controls_hover_paints_visible_washes() {
     let mut state = EditorState::default();
     state.editor_ui.agent_settings.tab = AgentSettingsTab::Images;
@@ -400,12 +462,78 @@ fn images_tab_profile_controls_hover_paints_visible_washes() {
     }
     assert!(
         backend.round_fills.iter().any(|(fill, color)| {
-            rect_eq(*fill, test_button)
-                && !color_eq(*color, panel.theme.muted)
-                && color.a > panel.theme.button_hover.a + 0.01
+            rect_eq(*fill, test_button) && color_eq(*color, panel.theme.button_hover)
         }),
-        "hovered profile test button should paint a stronger visible hover wash"
+        "hovered profile test button should paint the shared hover token"
     );
+}
+
+#[test]
+fn pressed_image_gen_profile_controls_use_shared_button_feedback() {
+    for button in [
+        AgentSettingsButton::ImageProfileHeader(0),
+        AgentSettingsButton::ImageProfileRemove(0),
+        AgentSettingsButton::ImageProfileProvider(0),
+        AgentSettingsButton::ImageProfileTest(0),
+    ] {
+        let mut state = EditorState::default();
+        state.editor_ui.agent_settings.tab = AgentSettingsTab::Images;
+        state.editor_ui.agent_settings.add_image_gen_profile();
+        state.editor_ui.agent_settings.focus = Some(SettingsFocus::ImageGenProfile {
+            index: 0,
+            field: ImageGenField::Name,
+        });
+        state.editor_ui.pressed_button = Some(ButtonPressTarget::AgentSettings(button));
+        let panel = AgentSettingsPanel::for_editor(&state);
+        let rect = panel.rect(1200.0, 800.0);
+        let content_x = rect.origin.x + 200.0 + 24.0;
+        let content_y = rect.origin.y + 24.0;
+        let content_w = rect.size.x - 200.0 - 48.0;
+        let row = Rect {
+            origin: Point2D::new(content_x + 8.0, content_y + 36.0 + 24.0 + 28.0 + 36.0 + 8.0),
+            size: Point2D::new(content_w - 16.0, 32.0 + 8.0 + 5.0 * 36.0),
+        };
+        let target = match button {
+            AgentSettingsButton::ImageProfileHeader(_) => Rect {
+                origin: row.origin,
+                size: Point2D::new(row.size.x, 32.0),
+            },
+            AgentSettingsButton::ImageProfileRemove(_) => Rect {
+                origin: Point2D::new(row.origin.x + row.size.x - 30.0, row.origin.y + 2.0),
+                size: Point2D::new(28.0, 28.0),
+            },
+            AgentSettingsButton::ImageProfileProvider(_) => Rect {
+                origin: Point2D::new(row.origin.x + 110.0, row.origin.y + 40.0 + 36.0),
+                size: Point2D::new(row.size.x - 110.0 - 12.0, 24.0),
+            },
+            AgentSettingsButton::ImageProfileTest(_) => Rect {
+                origin: Point2D::new(
+                    row.origin.x + row.size.x - 12.0 - 56.0,
+                    row.origin.y + 40.0 + 72.0,
+                ),
+                size: Point2D::new(56.0, 24.0),
+            },
+            _ => unreachable!("case list only includes image profile buttons"),
+        };
+        let expected = panel
+            .theme
+            .button_hover
+            .with_alpha(panel.theme.button_hover.a * 1.8);
+        let mut backend = CaptureBackend::default();
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+
+        panel.paint(&mut cx, rect);
+
+        assert!(
+            backend
+                .round_fills
+                .iter()
+                .any(|(fill, color)| rect_eq(*fill, target) && color_eq(*color, expected)),
+            "pressed {button:?} should paint the shared pressed feedback token"
+        );
+    }
 }
 
 #[test]
@@ -443,11 +571,9 @@ fn disabled_image_gen_profile_test_hover_uses_visible_wash() {
 
     assert!(
         backend.round_fills.iter().any(|(fill, color)| {
-            rect_eq(*fill, test_button)
-                && !color_eq(*color, panel.theme.muted)
-                && color.a > panel.theme.button_hover.a + 0.01
+            rect_eq(*fill, test_button) && color_eq(*color, panel.theme.button_hover)
         }),
-        "disabled profile test button hover should paint a visible wash"
+        "disabled profile test button hover should paint the shared hover token"
     );
 }
 

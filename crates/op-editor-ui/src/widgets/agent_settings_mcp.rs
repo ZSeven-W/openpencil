@@ -1,9 +1,7 @@
 //! MCP tab of the settings modal.
 
 use crate::theme::Theme;
-use crate::widgets::agent_settings_caret::{
-    caret_x_for_text, paint_caret, paint_settings_selection, settings_caret_for_focus,
-};
+use crate::widgets::agent_settings_caret::paint_settings_input_view;
 use crate::widgets::agent_settings_i18n::t as t_settings;
 use crate::widgets::agent_settings_switch::{
     paint_settings_switch, SETTINGS_SWITCH_H, SETTINGS_SWITCH_W,
@@ -13,6 +11,7 @@ use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
 use op_editor_core::agent_settings::{AgentSettings, McpCli, SettingsFocus};
 use op_editor_core::editor_ui_state::EditorUiState;
+use op_editor_core::{AgentSettingsButton, ButtonPressTarget};
 
 const TITLE_H: f32 = 36.0;
 const SERVER_CARD_H: f32 = 52.0;
@@ -147,19 +146,17 @@ fn client_config_copy_button_rect(content: Rect) -> Rect {
 }
 
 pub fn hit_test(content: Rect, settings: &AgentSettings, scrolled: Point2D) -> McpHit {
-    if rect_contains(server_button_rect(content), scrolled) {
+    if (server_button_rect(content)).contains(scrolled) {
         return McpHit::ToggleServer;
     }
-    if settings.mcp_server.running
-        && rect_contains(client_config_copy_button_rect(content), scrolled)
-    {
+    if settings.mcp_server.running && (client_config_copy_button_rect(content)).contains(scrolled) {
         return McpHit::CopyClientConfig;
     }
-    if !settings.mcp_server.running && rect_contains(port_field_rect(content), scrolled) {
+    if !settings.mcp_server.running && (port_field_rect(content)).contains(scrolled) {
         return McpHit::FocusPort;
     }
     for (i, cli) in McpCli::ALL.iter().enumerate() {
-        if rect_contains(cli_cell_rect(content, settings, i), scrolled) {
+        if (cli_cell_rect(content, settings, i)).contains(scrolled) {
             return McpHit::ToggleCli(*cli);
         }
     }
@@ -178,7 +175,7 @@ pub(super) fn paint_mcp_tab(
         t_settings(ui, "settings.mcp.server"),
         "system-ui",
         14.0,
-        to_jian(theme.foreground),
+        (theme.foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
@@ -194,7 +191,7 @@ pub(super) fn paint_mcp_tab(
         t_settings(ui, "settings.mcp.terminalIntegrations"),
         "system-ui",
         13.0,
-        to_jian(theme.foreground),
+        (theme.foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend
@@ -204,7 +201,7 @@ pub(super) fn paint_mcp_tab(
         t_settings(ui, "settings.mcp.terminalSubtitle1"),
         "system-ui",
         11.0,
-        to_jian(theme.muted_foreground),
+        (theme.muted_foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend
@@ -214,7 +211,7 @@ pub(super) fn paint_mcp_tab(
         t_settings(ui, "settings.mcp.terminalSubtitle2"),
         "system-ui",
         11.0,
-        to_jian(theme.muted_foreground),
+        (theme.muted_foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend
@@ -263,7 +260,7 @@ fn paint_server_card(
         status_text,
         "system-ui",
         12.0,
-        to_jian(theme.foreground),
+        (theme.foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend
@@ -277,7 +274,7 @@ fn paint_server_card(
         port_label_text,
         "system-ui",
         11.0,
-        to_jian(theme.muted_foreground),
+        (theme.muted_foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
@@ -288,7 +285,7 @@ fn paint_server_card(
     let port_editable = !running;
     let focused = port_editable && matches!(settings.focus, Some(SettingsFocus::McpPort));
     let port_str = if focused {
-        ui.settings_input_draft.clone()
+        ui.settings_input.text().to_owned()
     } else {
         format!("{}", settings.mcp_server.port)
     };
@@ -304,46 +301,31 @@ fn paint_server_card(
         &port_str,
         "system-ui",
         12.0,
-        to_jian(if port_editable {
+        (if port_editable {
             theme.foreground
         } else {
             theme.muted_foreground
-        }),
+        })
+        .to_jian(),
         Point2D::new(0.0, 0.0),
     );
     let port_x = port_field.origin.x + (PORT_FIELD_W - port_w) / 2.0;
     let port_y = port_field.origin.y + PORT_FIELD_H / 2.0 + 5.0;
-    if focused && ui.settings_input_select_all && !port_str.is_empty() {
-        paint_settings_selection(
-            cx,
-            theme,
-            &port_str,
-            port_x,
-            port_y,
-            12.0,
-            port_field.origin.x + port_field.size.x - 8.0,
-        );
-    }
-    cx.backend
-        .draw_text(&port_layout, Point2D::new(port_x, port_y));
     if focused {
-        let caret = settings_caret_for_focus(ui, SettingsFocus::McpPort);
-        let caret_x = caret_x_for_text(
-            cx,
-            &port_str,
-            caret,
-            port_x,
-            port_field.origin.x + port_field.size.x - 8.0,
-            12.0,
-        );
-        paint_caret(
+        paint_settings_input_view(
             cx,
             theme,
+            ui,
+            port_field,
+            12.0,
+            port_x - port_field.origin.x,
+            port_y,
             now_ms,
-            ui.settings_input_caret_anchor_ms,
-            caret_x,
-            port_field.origin.y + (PORT_FIELD_H - 15.0) / 2.0,
+            "",
         );
+    } else {
+        cx.backend
+            .draw_text(&port_layout, Point2D::new(port_x, port_y));
     }
 
     let btn_bg = if running { theme.muted } else { theme.primary };
@@ -353,9 +335,15 @@ fn paint_server_card(
         theme.primary_foreground
     };
     cx.backend.fill_round_rect(btn, 6.0, btn_bg);
-    if settings.hover_mcp_server_button {
-        cx.backend.fill_round_rect(btn, 6.0, theme.button_hover);
-    }
+    crate::widgets::button::paint_ghost_button_feedback(
+        cx.backend,
+        theme,
+        btn,
+        settings.hover_mcp_server_button,
+        ui.button_pressed(ButtonPressTarget::AgentSettings(
+            AgentSettingsButton::McpServer,
+        )),
+    );
     if running {
         cx.backend.stroke_round_rect(btn, 6.0, theme.border, 1.0);
     }
@@ -369,7 +357,7 @@ fn paint_server_card(
         btn_label,
         "system-ui",
         12.0,
-        to_jian(btn_fg),
+        (btn_fg).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
@@ -399,7 +387,7 @@ fn paint_client_config(
         t_settings(ui, "agents.mcpClientConfig"),
         "system-ui",
         11.0,
-        to_jian(theme.muted_foreground),
+        (theme.muted_foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
@@ -407,9 +395,15 @@ fn paint_client_config(
         Point2D::new(rect.origin.x + 12.0, rect.origin.y + 18.0),
     );
     let copy = client_config_copy_button_rect(content);
-    if settings.hover_mcp_client_config_copy {
-        cx.backend.fill_round_rect(copy, 6.0, theme.button_hover);
-    }
+    crate::widgets::button::paint_ghost_button_feedback(
+        cx.backend,
+        theme,
+        copy,
+        settings.hover_mcp_client_config_copy,
+        ui.button_pressed(ButtonPressTarget::AgentSettings(
+            AgentSettingsButton::McpClientConfigCopy,
+        )),
+    );
     let copied = mcp_client_config_copy_feedback_active(settings, now_ms);
     let (icon, icon_color) = if copied {
         (Icon::Check, COPY_FEEDBACK_GREEN)
@@ -438,7 +432,7 @@ fn paint_client_config(
         &config,
         "monospace",
         10.0,
-        to_jian(theme.muted_foreground),
+        (theme.muted_foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
@@ -468,7 +462,7 @@ fn paint_cli_cell(cx: &mut PaintCx<'_>, theme: &Theme, cli: McpCli, enabled: boo
         cli.label(),
         "system-ui",
         13.0,
-        to_jian(label_fg),
+        (label_fg).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
@@ -486,13 +480,6 @@ fn paint_cli_cell(cx: &mut PaintCx<'_>, theme: &Theme, cli: McpCli, enabled: boo
     paint_settings_switch(cx, theme, toggle, enabled);
 }
 
-fn rect_contains(r: Rect, p: Point2D) -> bool {
-    p.x >= r.origin.x
-        && p.y >= r.origin.y
-        && p.x <= r.origin.x + r.size.x
-        && p.y <= r.origin.y + r.size.y
-}
-
 fn ellipsize(cx: &mut PaintCx<'_>, value: &str, max_w: f32, size: f32) -> String {
     if cx.backend.measure_text(value, size) <= max_w {
         return value.to_string();
@@ -502,11 +489,4 @@ fn ellipsize(cx: &mut PaintCx<'_>, value: &str, max_w: f32, size: f32) -> String
         out.pop();
     }
     format!("{out}...")
-}
-
-fn to_jian(c: Color) -> jian_core::scene::Color {
-    fn ch(v: f32) -> u8 {
-        (v.clamp(0.0, 1.0) * 255.0).round() as u8
-    }
-    jian_core::scene::Color::rgba(ch(c.r), ch(c.g), ch(c.b), ch(c.a))
 }

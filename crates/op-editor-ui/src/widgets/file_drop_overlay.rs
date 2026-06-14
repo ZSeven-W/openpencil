@@ -8,7 +8,6 @@
 
 use crate::theme::Theme;
 use crate::widgets::icons::{draw_icon, Icon};
-use crate::widgets::property_panel_inputs::to_jian_color;
 use crate::{Color, Point2D, Rect, RenderBackend, TextLayout};
 
 /// Paint the drop overlay across `canvas_rect` (the editor's canvas
@@ -71,7 +70,7 @@ pub fn paint_file_drop_overlay(
         label_text,
         "system-ui",
         14.0,
-        to_jian_color(theme.foreground),
+        (theme.foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     backend.draw_text(

@@ -60,9 +60,11 @@ fn caret_fills(fills: &[(Rect, Color)], theme: Theme) -> Vec<Rect> {
     fills
         .iter()
         .filter_map(|(rect, color)| {
+            let shared_input_caret = (rect.size.y - 16.0).abs() < 0.01;
+            let legacy_caret = (rect.size.y - 18.0).abs() < 0.01;
             (color_eq(*color, theme.foreground)
                 && (rect.size.x - 1.5).abs() < 0.01
-                && (rect.size.y - 18.0).abs() < 0.01)
+                && (shared_input_caret || legacy_caret))
                 .then_some(*rect)
         })
         .collect()
@@ -263,14 +265,13 @@ fn theme_rename_input_reserves_header_space_like_ts() {
         .insert("Theme-1".into(), "Default".into());
     s.editor_ui.variables_current_axis = Some("Theme-1".into());
     s.editor_ui.variables_theme_rename_axis = Some("Theme-1".into());
-    s.ui.property_input_draft = "ewe".into();
+    s.editor_ui.variables_header_input.set_text("ewe");
     let p = VariablesPanel::for_editor(&s);
     let rect = Rect {
         origin: Point2D::new(0.0, 0.0),
         size: Point2D::new(VARIABLES_PANEL_WIDTH, p.intrinsic_height()),
     };
-    let input_end = rect.origin.x + PAD_X - 2.0
-        + (label_width(&s.ui.property_input_draft, 13.0) + 28.0).max(96.0);
+    let input_end = rect.origin.x + PAD_X - 2.0 + (label_width("ewe", 13.0) + 28.0).max(96.0);
 
     assert!(
         p.add_theme_rect(rect).origin.x >= input_end + 4.0,
@@ -290,9 +291,10 @@ fn theme_rename_caret_hides_at_blink_off_phase() {
         .insert("Theme-1".into(), "Default".into());
     s.editor_ui.variables_current_axis = Some("Theme-1".into());
     s.editor_ui.variables_theme_rename_axis = Some("Theme-1".into());
-    s.ui.property_input_draft = "Theme-1".into();
-    s.ui.property_caret_pos = s.ui.property_input_draft.len();
-    s.ui.property_caret_anchor_ms = 0;
+    s.editor_ui.variables_header_input.set_text("Theme-1");
+    s.editor_ui
+        .variables_header_input
+        .set_caret("Theme-1".len(), 0);
     let p = VariablesPanel::for_editor_at(&s, 500);
     let rect = Rect {
         origin: Point2D::new(0.0, 0.0),
@@ -323,9 +325,10 @@ fn variant_rename_caret_blinks_in_painted_header_input() {
         .insert("Theme-1".into(), "Default".into());
     s.editor_ui.variables_current_axis = Some("Theme-1".into());
     s.editor_ui.variables_variant_rename_value = Some("Default".into());
-    s.ui.property_input_draft = "Default".into();
-    s.ui.property_caret_pos = s.ui.property_input_draft.len();
-    s.ui.property_caret_anchor_ms = 0;
+    s.editor_ui.variables_header_input.set_text("Default");
+    s.editor_ui
+        .variables_header_input
+        .set_caret("Default".len(), 0);
     let p_visible = VariablesPanel::for_editor_at(&s, 0);
     let rect = Rect {
         origin: Point2D::new(0.0, 0.0),
@@ -359,8 +362,8 @@ fn variant_rename_caret_blinks_in_painted_header_input() {
 fn editing_variable_name_caret_uses_raw_name_like_ts() {
     let mut s = state_with_three_vars();
     s.editor_ui.variable_row_focus = Some(VariableRowFocus::Name(0));
-    s.ui.property_input_draft = "color-1".into();
-    s.ui.property_caret_pos = 3;
+    s.editor_ui.variable_row_input.set_text("color-1");
+    s.editor_ui.variable_row_input.set_caret(3, 0);
     let p = VariablesPanel::for_editor_at(&s, 0);
 
     assert_eq!(p.name_caret_for_row(0), Some(3));
@@ -371,9 +374,8 @@ fn editing_value_cell_uses_shared_input_chrome() {
     let mut s = EditorState::new();
     s.create_variable("spacing", VariableKind::Number, VariableScalar::Num(16.0));
     s.editor_ui.variable_row_focus = Some(VariableRowFocus::Number(0));
-    s.ui.property_input_draft = "24".into();
-    s.ui.property_caret_pos = s.ui.property_input_draft.len();
-    s.ui.property_caret_anchor_ms = 0;
+    s.editor_ui.variable_row_input.set_text("24");
+    s.editor_ui.variable_row_input.set_caret("24".len(), 0);
     let p = VariablesPanel::for_editor_at(&s, 0);
     let rect = Rect {
         origin: Point2D::new(0.0, 0.0),

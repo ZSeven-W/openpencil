@@ -9,7 +9,6 @@ use crate::widgets::property_panel_image_assets::{
     generate_popover_layout, search_popover_layout, GeneratePopoverView, ImageGenProfileView,
     POPOVER_PAD,
 };
-use crate::widgets::property_panel_inputs::to_jian_color;
 use crate::widgets::property_panel_layout::VisibleSections;
 use crate::widgets::PaintCx;
 use crate::{Color, ImageAdjustments, ImageDrawMode, Point2D, Rect, TextLayout};
@@ -58,7 +57,7 @@ fn paint_centered_label(
         text,
         "system-ui",
         size,
-        to_jian_color(color),
+        (color).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     let w = cx.backend.measure_text(text, size);
@@ -113,7 +112,7 @@ pub fn paint_search_popover(
             "Search images...",
             "system-ui",
             11.0,
-            to_jian_color(theme.muted_foreground),
+            (theme.muted_foreground).to_jian(),
             Point2D::new(0.0, 0.0),
         );
         cx.backend
@@ -123,7 +122,7 @@ pub fn paint_search_popover(
             &state.search_query,
             "system-ui",
             11.0,
-            to_jian_color(theme.foreground),
+            (theme.foreground).to_jian(),
             Point2D::new(0.0, 0.0),
         );
         cx.backend.draw_text(&draft, Point2D::new(text_x, baseline));
@@ -218,7 +217,7 @@ pub fn paint_search_popover(
                 &label,
                 "system-ui",
                 9.0,
-                to_jian_color(theme.muted_foreground),
+                (theme.muted_foreground).to_jian(),
                 Point2D::new(0.0, 0.0),
             );
             cx.backend.draw_text(
@@ -333,7 +332,7 @@ pub fn paint_generate_popover(
                         "Describe the image...",
                         "system-ui",
                         11.0,
-                        to_jian_color(theme.muted_foreground),
+                        (theme.muted_foreground).to_jian(),
                         Point2D::new(0.0, 0.0),
                     );
                     cx.backend
@@ -345,7 +344,7 @@ pub fn paint_generate_popover(
                         &state.generate_prompt,
                         "system-ui",
                         11.0,
-                        to_jian_color(theme.foreground),
+                        (theme.foreground).to_jian(),
                         Point2D::new(0.0, 0.0),
                     );
                     cx.backend
@@ -365,7 +364,7 @@ pub fn paint_generate_popover(
                     &state.generate_error,
                     "system-ui",
                     10.0,
-                    to_jian_color(hex_color(0xef4444, 1.0)), // destructive
+                    (hex_color(0xef4444, 1.0)).to_jian(), // destructive
                     Point2D::new(0.0, 0.0),
                 );
                 cx.backend.draw_text(
@@ -402,7 +401,7 @@ pub fn paint_generate_popover(
                     "Generate",
                     "system-ui",
                     11.0,
-                    to_jian_color(fg),
+                    (fg).to_jian(),
                     Point2D::new(0.0, 0.0),
                 );
                 cx.backend.draw_text(

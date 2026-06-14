@@ -1,10 +1,7 @@
 //! ACP Agent section for the Agent settings panel.
 
 use crate::theme::Theme;
-use crate::widgets::agent_settings_acp_draft;
-use crate::widgets::agent_settings_caret::{
-    caret_x_for_text, paint_caret, paint_settings_selection, settings_caret_for_focus,
-};
+use crate::widgets::agent_settings_caret::{paint_settings_input_view, settings_input_text};
 use crate::widgets::agent_settings_form_actions::{
     cancel_button_rect, paint_form_actions, save_button_rect,
 };
@@ -12,13 +9,16 @@ use crate::widgets::agent_settings_header_action::{
     header_action_rect, header_action_text_baseline_y, header_action_text_x,
 };
 use crate::widgets::agent_settings_i18n::t as t_settings;
+use crate::widgets::button::{paint_ghost_button_feedback, tokens_from_theme};
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
+use jian_widgets::components::button::{Button, ButtonVariant};
 use op_editor_core::agent_settings::{
     AcpAgentConfig, AcpAgentField, AcpConnectionType, AgentSettings, SettingsFocus,
 };
 use op_editor_core::editor_ui_state::EditorUiState;
+use op_editor_core::{AgentSettingsButton, ButtonPressTarget};
 
 const HEADER_H: f32 = 28.0;
 const SUBTITLE_H: f32 = 28.0;
@@ -70,7 +70,7 @@ pub fn content_height(settings: &AgentSettings) -> f32 {
 }
 
 pub fn hit_test(content: Rect, settings: &AgentSettings, point: Point2D, y: f32) -> AcpHit {
-    if rect_contains(add_agent_rect(content, y), point) {
+    if (add_agent_rect(content, y)).contains(point) {
         return AcpHit::AddAgent;
     }
     let mut card_y = y + HEADER_H + SUBTITLE_H;
@@ -82,43 +82,40 @@ pub fn hit_test(content: Rect, settings: &AgentSettings, point: Point2D, y: f32)
             card_height(settings, index),
         );
         if is_editing(settings, index) {
-            if rect_contains(type_toggle_rect(card), point) {
+            if (type_toggle_rect(card)).contains(point) {
                 return AcpHit::ToggleConnectionType(index);
             }
             for field in form_fields(agent.connection_type) {
-                if rect_contains(field_input_rect(card, *field), point) {
+                if (field_input_rect(card, *field)).contains(point) {
                     return AcpHit::Focus {
                         index,
                         field: *field,
                     };
                 }
             }
-        } else if settings.hover_acp_agent == index && rect_contains(compact_edit_rect(card), point)
-        {
+        } else if settings.hover_acp_agent == index && (compact_edit_rect(card)).contains(point) {
             return AcpHit::Edit(index);
-        } else if settings.hover_acp_agent == index
-            && rect_contains(compact_remove_rect(card), point)
-        {
+        } else if settings.hover_acp_agent == index && (compact_remove_rect(card)).contains(point) {
             return AcpHit::Remove(index);
-        } else if rect_contains(connection_button_rect(card), point) {
+        } else if (connection_button_rect(card)).contains(point) {
             return AcpHit::ToggleConnected(index);
         }
         card_y += card.size.y + CARD_GAP;
     }
     if let Some(agent) = settings.acp_agent_draft.as_ref() {
         let card = card_rect(content.origin.x, card_y, content.size.x, DRAFT_CARD_H);
-        if rect_contains(type_toggle_rect(card), point) {
+        if (type_toggle_rect(card)).contains(point) {
             return AcpHit::ToggleDraftConnectionType;
         }
         for field in form_fields(agent.connection_type) {
-            if rect_contains(field_input_rect(card, *field), point) {
+            if (field_input_rect(card, *field)).contains(point) {
                 return AcpHit::FocusDraft(*field);
             }
         }
-        if rect_contains(save_button_rect(card, EXPANDED_CARD_H), point) {
+        if (save_button_rect(card, EXPANDED_CARD_H)).contains(point) {
             return AcpHit::SaveDraft;
         }
-        if rect_contains(cancel_button_rect(card, EXPANDED_CARD_H), point) {
+        if (cancel_button_rect(card, EXPANDED_CARD_H)).contains(point) {
             return AcpHit::CancelDraft;
         }
     }
@@ -139,7 +136,7 @@ pub fn card_at(
             content.size.x,
             card_height(settings, index),
         );
-        if rect_contains(card, point) {
+        if (card).contains(point) {
             return Some(index);
         }
         card_y += card.size.y + CARD_GAP;
@@ -164,6 +161,9 @@ pub fn paint_acp_section(
         content,
         y,
         settings.hover_add_acp_agent,
+        ui.button_pressed(ButtonPressTarget::AgentSettings(
+            AgentSettingsButton::AddAcpAgent,
+        )),
     );
     y = paint_subtitle(
         cx,
@@ -200,7 +200,13 @@ pub fn paint_acp_section(
             ui,
             card,
             EXPANDED_CARD_H,
-            agent_settings_acp_draft::ready(settings, ui),
+            ui.acp_agent_draft_ready(),
+            ui.button_pressed(ButtonPressTarget::AgentSettings(
+                AgentSettingsButton::AcpCancelDraft,
+            )),
+            ui.button_pressed(ButtonPressTarget::AgentSettings(
+                AgentSettingsButton::AcpSaveDraft,
+            )),
         );
         y += card.size.y + CARD_GAP;
     }
@@ -215,6 +221,7 @@ fn paint_header(
     content: Rect,
     y: f32,
     action_hover: bool,
+    action_pressed: bool,
 ) -> f32 {
     draw_text(
         cx,
@@ -226,10 +233,7 @@ fn paint_header(
     );
     let action_w = cx.backend.measure_text(action, 12.0);
     let action_rect = header_action_rect(content, y, action_w);
-    if action_hover {
-        cx.backend
-            .fill_round_rect(action_rect, 6.0, theme.button_hover);
-    }
+    paint_ghost_button_feedback(cx.backend, theme, action_rect, action_hover, action_pressed);
     draw_text(
         cx,
         action,
@@ -341,6 +345,9 @@ fn paint_compact_acp_card(
             compact_edit_rect(card),
             Icon::Pencil,
             theme.muted_foreground,
+            ui.button_pressed(ButtonPressTarget::AgentSettings(
+                AgentSettingsButton::AcpEdit(index),
+            )),
         );
         paint_action(
             cx,
@@ -348,9 +355,12 @@ fn paint_compact_acp_card(
             compact_remove_rect(card),
             Icon::Trash,
             theme.muted_foreground,
+            ui.button_pressed(ButtonPressTarget::AgentSettings(
+                AgentSettingsButton::AcpRemove(index),
+            )),
         );
     }
-    paint_connection_button(cx, theme, ui, agent, card);
+    paint_connection_button(cx, theme, ui, agent, index, card);
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -412,17 +422,35 @@ fn paint_connection_button(
     theme: &Theme,
     ui: &EditorUiState,
     agent: &AcpAgentConfig,
+    index: usize,
     card: Rect,
 ) {
     let btn = connection_button_rect(card);
     let enabled = agent.ready() || agent.connected;
-    let bg = if agent.connected {
-        theme.muted
-    } else if enabled {
-        theme.primary
+    if agent.connected {
+        cx.backend.fill_round_rect(btn, 6.0, theme.muted);
+        cx.backend.stroke_round_rect(btn, 6.0, theme.border, 1.0);
     } else {
-        theme.button_hover
-    };
+        Button {
+            label: "",
+            icon_d: None,
+            variant: if enabled {
+                ButtonVariant::Primary
+            } else {
+                ButtonVariant::Outline
+            },
+            enabled: true,
+            hovered: !enabled,
+            pressed: false,
+            font_size: 12.0,
+        }
+        .paint(cx.backend, btn, &tokens_from_theme(theme));
+    }
+    if ui.button_pressed(ButtonPressTarget::AgentSettings(
+        AgentSettingsButton::AcpConnection(index),
+    )) {
+        paint_ghost_button_feedback(cx.backend, theme, btn, false, true);
+    }
     let fg = if agent.connected {
         Color {
             r: 0.93,
@@ -435,8 +463,6 @@ fn paint_connection_button(
     } else {
         theme.muted_foreground
     };
-    cx.backend.fill_round_rect(btn, 6.0, bg);
-    cx.backend.stroke_round_rect(btn, 6.0, theme.border, 1.0);
     let label = if agent.connected {
         t_settings(ui, "settings.agents.disconnect")
     } else if agent.ready() {
@@ -472,17 +498,14 @@ fn paint_field(
         None => SettingsFocus::AcpAgentDraft(field),
     };
     let focused = settings.focus == Some(focus);
-    let value = if focused {
-        ui.settings_input_draft.clone()
-    } else {
-        match field {
-            AcpAgentField::DisplayName => agent.display_name.clone(),
-            AcpAgentField::Command => agent.command.clone(),
-            AcpAgentField::Args => agent.args_text(),
-            AcpAgentField::Env => agent.env_text(),
-            AcpAgentField::Url => agent.url.clone().unwrap_or_default(),
-        }
+    let fallback = match field {
+        AcpAgentField::DisplayName => agent.display_name.clone(),
+        AcpAgentField::Command => agent.command.clone(),
+        AcpAgentField::Args => agent.args_text(),
+        AcpAgentField::Env => agent.env_text(),
+        AcpAgentField::Url => agent.url.clone().unwrap_or_default(),
     };
+    let value = settings_input_text(settings, ui, focus, &fallback);
     let label = match field {
         AcpAgentField::DisplayName => t_settings(ui, "acp.displayName"),
         AcpAgentField::Command => t_settings(ui, "acp.command"),
@@ -522,50 +545,35 @@ fn paint_field(
         AcpAgentField::Env => t_settings(ui, "acp.envPlaceholder"),
         AcpAgentField::Url => "https://agent.example.com",
     };
-    let shown = if value.is_empty() {
-        placeholder
-    } else {
-        &value
-    };
-    let text_color = if value.is_empty() {
-        theme.muted_foreground
-    } else {
-        theme.foreground
-    };
-    let clipped = ellipsize(cx, shown, input.size.x - 12.0, 11.0);
     let text_x = input.origin.x + 6.0;
-    if focused && ui.settings_input_select_all && !value.is_empty() {
-        paint_settings_selection(
+    if focused {
+        paint_settings_input_view(
             cx,
             theme,
-            &value,
+            ui,
+            input,
+            11.0,
+            text_x - input.origin.x,
+            input.origin.y + 16.0,
+            now_ms,
+            placeholder,
+        );
+    } else {
+        let shown = if value.is_empty() { placeholder } else { value };
+        let text_color = if value.is_empty() {
+            theme.muted_foreground
+        } else {
+            theme.foreground
+        };
+        let clipped = ellipsize(cx, shown, input.size.x - 12.0, 11.0);
+        draw_text(
+            cx,
+            &clipped,
+            11.0,
+            text_color,
             text_x,
             input.origin.y + 16.0,
-            11.0,
-            input.origin.x + input.size.x - 8.0,
         );
-    }
-    draw_text(
-        cx,
-        &clipped,
-        11.0,
-        text_color,
-        text_x,
-        input.origin.y + 16.0,
-    );
-    if focused {
-        let caret = settings_caret_for_focus(ui, focus);
-        let caret_x = caret_x_for_text(
-            cx,
-            &value,
-            caret,
-            text_x,
-            input.origin.x + input.size.x - 8.0,
-            11.0,
-        );
-        let caret_y = input.origin.y + 4.5;
-        let anchor = ui.settings_input_caret_anchor_ms;
-        paint_caret(cx, theme, now_ms, anchor, caret_x, caret_y);
     }
 }
 
@@ -616,8 +624,15 @@ fn paint_type_toggle(
     }
 }
 
-fn paint_action(cx: &mut PaintCx<'_>, theme: &Theme, rect: Rect, icon: Icon, color: Color) {
-    cx.backend.fill_round_rect(rect, 6.0, theme.button_hover);
+fn paint_action(
+    cx: &mut PaintCx<'_>,
+    theme: &Theme,
+    rect: Rect,
+    icon: Icon,
+    color: Color,
+    pressed: bool,
+) {
+    paint_ghost_button_feedback(cx.backend, theme, rect, true, pressed);
     draw_icon(
         cx.backend,
         icon,
@@ -744,7 +759,7 @@ fn draw_text(cx: &mut PaintCx<'_>, text: &str, size: f32, color: Color, x: f32, 
         text,
         "system-ui",
         size,
-        to_jian(color),
+        (color).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(&layout, Point2D::new(x, y));
@@ -759,18 +774,4 @@ fn ellipsize(cx: &mut PaintCx<'_>, value: &str, max_w: f32, size: f32) -> String
         out.pop();
     }
     format!("{out}...")
-}
-
-fn rect_contains(r: Rect, p: Point2D) -> bool {
-    p.x >= r.origin.x
-        && p.y >= r.origin.y
-        && p.x <= r.origin.x + r.size.x
-        && p.y <= r.origin.y + r.size.y
-}
-
-fn to_jian(c: Color) -> jian_core::scene::Color {
-    fn ch(v: f32) -> u8 {
-        (v.clamp(0.0, 1.0) * 255.0).round() as u8
-    }
-    jian_core::scene::Color::rgba(ch(c.r), ch(c.g), ch(c.b), ch(c.a))
 }

@@ -26,17 +26,19 @@ impl WidgetHost {
         let Some(panel_rect) = self.icon_picker_panel_rect(viewport_width, viewport_height) else {
             return false;
         };
-        let hit = IconPickerPanel::for_editor(&self.editor_state)
-            .and_then(|p| p.hit_test(panel_rect, Point2D::new(x, y)));
-        let Some(hit) = hit else {
+        let point = Point2D::new(x, y);
+        let Some((hit, pressed)) = IconPickerPanel::for_editor(&self.editor_state).and_then(|p| {
+            Some((
+                p.hit_test(panel_rect, point)?,
+                p.hover_at(panel_rect, point),
+            ))
+        }) else {
             return false;
         };
+        self.editor_state.editor_ui.icon_picker.pressed = pressed;
         match hit {
             IconPickerHit::Close => {
-                self.editor_state.editor_ui.icon_picker_open = false;
-                self.editor_state.editor_ui.icon_picker_replace_selection = false;
-                self.editor_state.editor_ui.icon_picker_search.clear();
-                self.editor_state.editor_ui.icon_picker_hover = None;
+                self.editor_state.editor_ui.close_icon_picker();
             }
             IconPickerHit::DragHeader => {
                 self.icon_picker_drag = Some(PanelDragState {
@@ -93,10 +95,7 @@ impl WidgetHost {
                         doc.x as f64,
                         doc.y as f64,
                     );
-                    self.editor_state.editor_ui.icon_picker_open = false;
-                    self.editor_state.editor_ui.icon_picker_search.clear();
-                    self.editor_state.editor_ui.icon_picker_replace_selection = false;
-                    self.editor_state.editor_ui.icon_picker_hover = None;
+                    self.editor_state.editor_ui.close_icon_picker();
                     if inserted.is_some() {
                         self.mark_dirty();
                     }

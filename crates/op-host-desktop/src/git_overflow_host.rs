@@ -46,7 +46,7 @@ impl DesktopApp {
 
         let panel = &mut self.host.editor_state_mut().editor_ui.git_panel;
         panel.candidate_files = files;
-        panel.tracked_picker_selected = None;
+        panel.open_tracked_picker();
         panel.overflow_view = GitOverflowView::TrackedPicker;
         panel.overflow_open = true;
     }
@@ -59,7 +59,7 @@ impl DesktopApp {
             let panel = &mut self.host.editor_state_mut().editor_ui.git_panel;
             panel.overflow_open = false;
             panel.overflow_view = GitOverflowView::Menu;
-            panel.tracked_picker_selected = None;
+            panel.close_tracked_picker();
             panel.candidate_files.clear();
         }
         if open {
@@ -102,8 +102,8 @@ impl DesktopApp {
         let (name, email) = {
             let panel = &self.host.editor_state().editor_ui.git_panel;
             (
-                panel.author_name_draft.trim().to_string(),
-                panel.author_email_draft.trim().to_string(),
+                panel.author_name_input.text().trim().to_string(),
+                panel.author_email_input.text().trim().to_string(),
             )
         };
         // Basic validation (TS validationName / validationEmail). Leave the
@@ -122,7 +122,7 @@ impl DesktopApp {
         panel.author_name_focused = false;
         panel.author_email_focused = false;
         // Re-fire the deferred commit — the message is still in
-        // `commit_message` and the identity now resolves.
+        // `commit_input` and the identity now resolves.
         panel.pending_action = Some(op_editor_core::GitPanelAction::CommitMilestone);
     }
 

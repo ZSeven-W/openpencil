@@ -9,7 +9,7 @@ use crate::widgets::agent_settings_mcp::{self, McpHit};
 use crate::widgets::agent_settings_panel_card::paint_agent_card;
 use crate::widgets::agent_settings_panel_geometry::{
     acp_section_y, agent_card_rect_at, agent_card_rect_in, close_rect, connect_btn_rect_at,
-    content_rect, disconnect_btn_rect_at, nav_item_rect, rect_contains, tab_i18n_label, to_jian,
+    content_rect, disconnect_btn_rect_at, nav_item_rect, tab_i18n_label,
 };
 use crate::widgets::agent_settings_system::{self, SystemHit};
 use crate::widgets::editor_state_ext::theme_for;
@@ -23,6 +23,7 @@ use op_editor_core::agent_settings::{
 use op_editor_core::editor_ui_state::EditorUiState;
 use op_editor_core::BuiltinAgentPresetKey;
 use op_editor_core::EditorState;
+use op_editor_core::{AgentSettingsButton, ButtonPressTarget};
 
 pub const PANEL_WIDTH: f32 = 720.0;
 pub const PANEL_HEIGHT: f32 = 720.0;
@@ -136,20 +137,20 @@ impl<'a> AgentSettingsPanel<'a> {
     }
 
     pub fn hit_test(&self, panel: Rect, point: Point2D) -> AgentSettingsHit {
-        if !rect_contains(panel, point) {
+        if !(panel).contains(point) {
             return AgentSettingsHit::Outside;
         }
-        if rect_contains(close_rect(panel), point) {
+        if (close_rect(panel)).contains(point) {
             return AgentSettingsHit::Close;
         }
         for (i, tab) in AgentSettingsTab::ALL.iter().enumerate() {
-            if rect_contains(nav_item_rect(panel, i), point) {
+            if (nav_item_rect(panel, i)).contains(point) {
                 return AgentSettingsHit::SelectTab(*tab);
             }
         }
         // Translate the cursor into the scrolled content frame
         // for hit-tests over scrollable rows.
-        let scrolled = Point2D::new(point.x, point.y + self.settings.scroll_y);
+        let scrolled = Point2D::new(point.x, point.y + self.settings.scroll_y.offset);
         match self.settings.tab {
             AgentSettingsTab::Agents => {
                 match agent_settings_builtin::hit_test(
@@ -216,17 +217,17 @@ impl<'a> AgentSettingsPanel<'a> {
                 }
                 for (i, provider) in AgentProvider::ALL.iter().enumerate() {
                     let card = agent_card_rect_in(panel, i, &self.settings);
-                    if !rect_contains(card, scrolled) {
+                    if !(card).contains(scrolled) {
                         continue;
                     }
                     if self.settings.connected[i] {
                         // Connected card — only the disconnect button
                         // (visible on hover) toggles disconnection.
                         let disc = disconnect_btn_rect_at(card);
-                        if rect_contains(disc, scrolled) {
+                        if (disc).contains(scrolled) {
                             return AgentSettingsHit::Connect(*provider);
                         }
-                    } else if rect_contains(connect_btn_rect_at(card), scrolled) {
+                    } else if (connect_btn_rect_at(card)).contains(scrolled) {
                         return AgentSettingsHit::Connect(*provider);
                     }
                 }
@@ -289,7 +290,7 @@ impl<'a> AgentSettingsPanel<'a> {
     /// target.
     pub fn nav_at(&self, panel: Rect, point: Point2D) -> Option<AgentSettingsTab> {
         for (i, tab) in AgentSettingsTab::ALL.iter().enumerate() {
-            if rect_contains(nav_item_rect(panel, i), point) {
+            if (nav_item_rect(panel, i)).contains(point) {
                 return Some(*tab);
             }
         }
@@ -300,28 +301,28 @@ impl<'a> AgentSettingsPanel<'a> {
     /// screen-space, NOT scrolled), or `None` when the cursor sits
     /// outside every card. Used for hover state.
     pub fn card_at(&self, panel: Rect, point: Point2D) -> Option<usize> {
-        if !rect_contains(panel, point) {
+        if !(panel).contains(point) {
             return None;
         }
-        let scrolled = Point2D::new(point.x, point.y + self.settings.scroll_y);
+        let scrolled = Point2D::new(point.x, point.y + self.settings.scroll_y.offset);
         (0..AgentProvider::ALL.len())
-            .find(|&i| rect_contains(agent_card_rect_in(panel, i, &self.settings), scrolled))
+            .find(|&i| (agent_card_rect_in(panel, i, &self.settings)).contains(scrolled))
     }
 
     pub fn builtin_card_at(&self, panel: Rect, point: Point2D) -> Option<usize> {
-        if !rect_contains(panel, point) {
+        if !(panel).contains(point) {
             return None;
         }
-        let scrolled = Point2D::new(point.x, point.y + self.settings.scroll_y);
+        let scrolled = Point2D::new(point.x, point.y + self.settings.scroll_y.offset);
         agent_settings_builtin::card_at(content_rect(panel), &self.settings, scrolled)
     }
 
     pub fn acp_card_at(&self, panel: Rect, point: Point2D) -> Option<usize> {
-        if !rect_contains(panel, point) {
+        if !(panel).contains(point) {
             return None;
         }
         let content = content_rect(panel);
-        let scrolled = Point2D::new(point.x, point.y + self.settings.scroll_y);
+        let scrolled = Point2D::new(point.x, point.y + self.settings.scroll_y.offset);
         let section_y = acp_section_y(content, &self.settings);
         agent_settings_acp::card_at(content, &self.settings, scrolled, section_y)
     }
@@ -331,26 +332,26 @@ impl<'a> AgentSettingsPanel<'a> {
         panel: Rect,
         point: Point2D,
     ) -> Option<BuiltinAgentPresetKey> {
-        if !rect_contains(panel, point) {
+        if !(panel).contains(point) {
             return None;
         }
-        let scrolled = Point2D::new(point.x, point.y + self.settings.scroll_y);
+        let scrolled = Point2D::new(point.x, point.y + self.settings.scroll_y.offset);
         agent_settings_builtin::preset_hover_at(content_rect(panel), &self.settings, scrolled)
     }
 
     pub fn builtin_preset_scroll_max_at(&self, panel: Rect, point: Point2D) -> Option<f32> {
-        if !rect_contains(panel, point) {
+        if !(panel).contains(point) {
             return None;
         }
-        let scrolled = Point2D::new(point.x, point.y + self.settings.scroll_y);
+        let scrolled = Point2D::new(point.x, point.y + self.settings.scroll_y.offset);
         agent_settings_builtin::preset_scroll_max_at(content_rect(panel), &self.settings, scrolled)
     }
 
     pub fn image_search_test_button_hover_at(&self, panel: Rect, point: Point2D) -> bool {
-        if !rect_contains(panel, point) {
+        if !(panel).contains(point) {
             return false;
         }
-        let scrolled = Point2D::new(point.x, point.y + self.settings.scroll_y);
+        let scrolled = Point2D::new(point.x, point.y + self.settings.scroll_y.offset);
         agent_settings_images::search_test_button_hover_at(
             content_rect(panel),
             &self.settings,
@@ -359,10 +360,10 @@ impl<'a> AgentSettingsPanel<'a> {
     }
 
     pub fn image_gen_add_button_hover_at(&self, panel: Rect, point: Point2D) -> bool {
-        if !rect_contains(panel, point) {
+        if !(panel).contains(point) {
             return false;
         }
-        let scrolled = Point2D::new(point.x, point.y + self.settings.scroll_y);
+        let scrolled = Point2D::new(point.x, point.y + self.settings.scroll_y.offset);
         agent_settings_images::add_gen_button_hover_at(
             content_rect(panel),
             &self.settings,
@@ -375,10 +376,10 @@ impl<'a> AgentSettingsPanel<'a> {
         panel: Rect,
         point: Point2D,
     ) -> Option<usize> {
-        if !rect_contains(panel, point) {
+        if !(panel).contains(point) {
             return None;
         }
-        let scrolled = Point2D::new(point.x, point.y + self.settings.scroll_y);
+        let scrolled = Point2D::new(point.x, point.y + self.settings.scroll_y.offset);
         agent_settings_images::profile_test_button_hover_at(
             content_rect(panel),
             &self.settings,
@@ -447,7 +448,8 @@ fn paint_panel(
     let content_rect = content_rect(panel);
     cx.backend.save();
     cx.backend.clip_rect(content_rect);
-    cx.backend.translate(Point2D::new(0.0, -settings.scroll_y));
+    cx.backend
+        .translate(Point2D::new(0.0, -settings.scroll_y.offset));
     match settings.tab {
         AgentSettingsTab::Agents => {
             paint_agents_tab(cx, theme, settings, _ui, content_rect, now_ms)
@@ -463,7 +465,7 @@ fn paint_panel(
         }
     }
     cx.backend.restore();
-    paint_close(cx, theme, settings, panel);
+    paint_close(cx, theme, settings, _ui, panel);
 }
 
 fn paint_sidebar(
@@ -488,7 +490,7 @@ fn paint_sidebar(
         t_settings(ui, "settings.title"),
         "system-ui",
         15.0,
-        to_jian(theme.foreground),
+        (theme.foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
@@ -527,7 +529,7 @@ fn paint_sidebar(
             tab_i18n_label(ui, *tab),
             "system-ui",
             13.0,
-            to_jian(icon_color),
+            (icon_color).to_jian(),
             Point2D::new(0.0, 0.0),
         );
         cx.backend
@@ -535,11 +537,22 @@ fn paint_sidebar(
     }
 }
 
-fn paint_close(cx: &mut PaintCx<'_>, theme: &Theme, settings: &AgentSettings, panel: Rect) {
+fn paint_close(
+    cx: &mut PaintCx<'_>,
+    theme: &Theme,
+    settings: &AgentSettings,
+    ui: &EditorUiState,
+    panel: Rect,
+) {
     let close = close_rect(panel);
-    if settings.hover_agent_settings_close {
-        cx.backend.fill_round_rect(close, 6.0, theme.button_hover);
-    }
+    let pressed = ui.button_pressed(ButtonPressTarget::AgentSettings(AgentSettingsButton::Close));
+    crate::widgets::button::paint_ghost_button_feedback(
+        cx.backend,
+        theme,
+        close,
+        settings.hover_agent_settings_close,
+        pressed,
+    );
     draw_icon(
         cx.backend,
         Icon::Close,
@@ -582,7 +595,7 @@ fn paint_agents_tab(
                 t_settings(ui, "settings.agents.claudeHint"),
                 "system-ui",
                 12.0,
-                to_jian(theme.muted_foreground),
+                (theme.muted_foreground).to_jian(),
                 Point2D::new(0.0, 0.0),
             );
             cx.backend
@@ -623,7 +636,7 @@ fn paint_section_header_inset(
         title,
         "system-ui",
         15.0,
-        to_jian(theme.foreground),
+        (theme.foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(&layout, Point2D::new(x, y + 18.0));
@@ -633,7 +646,7 @@ fn paint_section_header_inset(
             action,
             "system-ui",
             12.0,
-            to_jian(theme.primary),
+            (theme.primary).to_jian(),
             Point2D::new(0.0, 0.0),
         );
         cx.backend

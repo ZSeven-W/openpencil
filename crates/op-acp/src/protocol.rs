@@ -7,6 +7,10 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+pub use op_rpc_transport::{
+    classify_inbound, Inbound, JsonRpcError, JsonRpcRequest, JsonRpcResponse,
+};
+
 /// ACP protocol version this client speaks (`PROTOCOL_VERSION` in the SDK).
 pub const PROTOCOL_VERSION: u32 = 1;
 
@@ -20,118 +24,6 @@ pub const METHOD_SESSION_PROMPT: &str = "session/prompt";
 pub const METHOD_SESSION_UPDATE: &str = "session/update";
 /// `session/request_permission` — agent asks the client to approve a tool.
 pub const METHOD_REQUEST_PERMISSION: &str = "session/request_permission";
-
-/// An outgoing JSON-RPC request.
-#[derive(Debug, Serialize)]
-pub struct JsonRpcRequest {
-    pub jsonrpc: &'static str,
-    pub id: u64,
-    pub method: String,
-    pub params: Value,
-}
-
-impl JsonRpcRequest {
-    /// Build a `2.0` request.
-    pub fn new(id: u64, method: &str, params: Value) -> Self {
-        Self {
-            jsonrpc: "2.0",
-            id,
-            method: method.to_string(),
-            params,
-        }
-    }
-}
-
-/// An outgoing JSON-RPC response (used to answer agent → client
-/// requests such as `session/request_permission`).
-#[derive(Debug, Serialize)]
-pub struct JsonRpcResponse {
-    pub jsonrpc: &'static str,
-    pub id: Value,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub result: Option<Value>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub error: Option<JsonRpcError>,
-}
-
-impl JsonRpcResponse {
-    /// A success response carrying `result`.
-    pub fn ok(id: Value, result: Value) -> Self {
-        Self {
-            jsonrpc: "2.0",
-            id,
-            result: Some(result),
-            error: None,
-        }
-    }
-}
-
-/// A JSON-RPC error object.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct JsonRpcError {
-    pub code: i64,
-    pub message: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub data: Option<Value>,
-}
-
-/// One decoded inbound JSON-RPC message — a response to one of our
-/// requests, an incoming request from the agent, a notification, or
-/// something unrecognized.
-#[derive(Debug)]
-pub enum Inbound {
-    /// Response to a request we sent (`id` correlates).
-    Response {
-        id: u64,
-        result: Option<Value>,
-        error: Option<JsonRpcError>,
-    },
-    /// A request from the agent (carries the raw `id` to echo back).
-    Request {
-        id: Value,
-        method: String,
-        params: Value,
-    },
-    /// A notification (no `id`).
-    Notification { method: String, params: Value },
-    /// A line that did not parse as a JSON-RPC message.
-    Unknown,
-}
-
-/// Classify one inbound JSON value into an [`Inbound`].
-pub fn classify_inbound(value: &Value) -> Inbound {
-    let obj = match value.as_object() {
-        Some(o) => o,
-        None => return Inbound::Unknown,
-    };
-    let has_method = obj.contains_key("method");
-    let id = obj.get("id");
-    match (has_method, id) {
-        // method + id → a request from the agent.
-        (true, Some(id)) if !id.is_null() => Inbound::Request {
-            id: id.clone(),
-            method: obj["method"].as_str().unwrap_or_default().to_string(),
-            params: obj.get("params").cloned().unwrap_or(Value::Null),
-        },
-        // method, no id → a notification.
-        (true, _) => Inbound::Notification {
-            method: obj["method"].as_str().unwrap_or_default().to_string(),
-            params: obj.get("params").cloned().unwrap_or(Value::Null),
-        },
-        // id, no method → a response to one of our requests.
-        (false, Some(id)) => match id.as_u64() {
-            Some(id) => Inbound::Response {
-                id,
-                result: obj.get("result").cloned(),
-                error: obj
-                    .get("error")
-                    .and_then(|e| serde_json::from_value(e.clone()).ok()),
-            },
-            None => Inbound::Unknown,
-        },
-        _ => Inbound::Unknown,
-    }
-}
 
 /// `initialize` result — only the fields the client reads.
 #[derive(Debug, Default, Deserialize)]

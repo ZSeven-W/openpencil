@@ -87,74 +87,133 @@ impl WidgetHostNative {
     }
 
     fn apply_input_select_all(&mut self) -> bool {
-        if let Some(focus) = self.editor_state.editor_ui.agent_settings.focus {
+        if self.editor_state.editor_ui.agent_settings.focus.is_some() {
             let ui = &mut self.editor_state.editor_ui;
-            ui.settings_input_select_all = true;
-            ui.settings_input_caret = Some(ui.settings_input_draft.len());
-            ui.settings_input_caret_focus = Some(focus);
-            ui.settings_input_caret_anchor_ms = self.now_ms;
+            ui.settings_input.select_all();
+            ui.settings_input.touch(self.now_ms);
             self.mark_dirty();
             return true;
         }
         if self.git_clone_input_active() {
             if let Some(form) = self.editor_state.editor_ui.git_panel.clone_form.as_mut() {
-                if form.focus.is_some() {
-                    form.input_select_all = true;
-                    form.caret_anchor_ms = self.now_ms;
-                    self.mark_dirty();
-                    return true;
+                match form.focus {
+                    Some(op_editor_core::CloneField::Url) => {
+                        form.url_input.select_all();
+                        form.url_input.touch(self.now_ms);
+                        self.mark_dirty();
+                        return true;
+                    }
+                    Some(op_editor_core::CloneField::Dest) => {
+                        form.dest_input.select_all();
+                        form.dest_input.touch(self.now_ms);
+                        self.mark_dirty();
+                        return true;
+                    }
+                    None => {}
                 }
             }
             return false;
         }
-        if self.git_commit_focus_active()
-            || self.git_remote_focus_active()
-            || self.git_https_focus_active()
-            || self.git_branch_create_focus_active()
-            || self.git_author_focus_active()
-        {
+        if self.git_commit_focus_active() {
             let panel = &mut self.editor_state.editor_ui.git_panel;
-            panel.input_select_all = true;
-            panel.commit_caret_anchor_ms = self.now_ms;
+            panel.commit_input.select_all();
+            panel.commit_input.touch(self.now_ms);
+            self.mark_dirty();
+            return true;
+        }
+        if self.git_remote_focus_active() {
+            let panel = &mut self.editor_state.editor_ui.git_panel;
+            panel.remote_input.select_all();
+            panel.remote_input.touch(self.now_ms);
+            self.mark_dirty();
+            return true;
+        }
+        if self.git_https_focus_active() {
+            let panel = &mut self.editor_state.editor_ui.git_panel;
+            panel.https_input.select_all();
+            panel.https_input.touch(self.now_ms);
+            self.mark_dirty();
+            return true;
+        }
+        if self.git_branch_create_focus_active() {
+            let panel = &mut self.editor_state.editor_ui.git_panel;
+            panel.branch_create_input.select_all();
+            panel.branch_create_input.touch(self.now_ms);
+            self.mark_dirty();
+            return true;
+        }
+        if self.git_author_focus_active() {
+            let panel = &mut self.editor_state.editor_ui.git_panel;
+            if panel.author_email_focused {
+                panel.author_email_input.select_all();
+                panel.author_email_input.touch(self.now_ms);
+            } else {
+                panel.author_name_input.select_all();
+                panel.author_name_input.touch(self.now_ms);
+            }
             self.mark_dirty();
             return true;
         }
         if let Some(rename) = self.editor_state.ui.layer_rename.as_mut() {
-            rename.select_all = true;
-            rename.caret = rename.draft.chars().count();
-            self.editor_state.editor_ui.rename_caret_anchor_ms = self.now_ms;
+            rename.input.select_all();
+            rename.input.touch(self.now_ms);
             self.mark_dirty();
             return true;
         }
         if self.editor_state.ui.text_editing.is_some() {
-            // Sets the legacy select-all flag AND anchor 0 + caret at
-            // the end so caret-aware ops see the full-range selection.
-            let _ = self.editor_state.text_edit_select_all_now();
-            self.editor_state.ui.text_edit_caret_anchor_ms = self.now_ms;
+            let _ = self.editor_state.text_edit_select_all_now(self.now_ms);
             self.mark_dirty();
             return true;
         }
-        if self.editor_state.editor_ui.variable_row_focus.is_some()
+        let variable_header_focus = self
+            .editor_state
+            .editor_ui
+            .variables_theme_rename_axis
+            .is_some()
+            || self
+                .editor_state
+                .editor_ui
+                .variables_variant_rename_value
+                .is_some();
+        if variable_header_focus
+            || self.editor_state.editor_ui.variable_row_focus.is_some()
             || self.editor_state.editor_ui.effect_param_focus.is_some()
             || self.editor_state.ui.property_focus.is_some()
         {
-            let ui = &mut self.editor_state.ui;
-            ui.property_draft_select_all = true;
-            ui.property_caret_pos = ui.property_input_draft.len();
-            ui.property_caret_anchor_ms = self.now_ms;
+            if self.editor_state.ui.property_focus.is_some()
+                || self.editor_state.editor_ui.effect_param_focus.is_some()
+            {
+                let input = &mut self.editor_state.ui.property_input;
+                input.select_all();
+                input.touch(self.now_ms);
+                let ui = &mut self.editor_state.ui;
+                ui.property_input_draft = ui.property_input.text().to_owned();
+                ui.property_caret_pos = ui.property_input.caret();
+                ui.property_draft_select_all = true;
+                ui.property_caret_anchor_ms = self.now_ms;
+            } else if variable_header_focus {
+                let input = &mut self.editor_state.editor_ui.variables_header_input;
+                input.select_all();
+                input.touch(self.now_ms);
+                self.sync_variables_header_input_legacy(true);
+            } else {
+                let input = &mut self.editor_state.editor_ui.variable_row_input;
+                input.select_all();
+                input.touch(self.now_ms);
+                self.sync_variable_row_input_legacy(true);
+            }
             self.mark_dirty();
             return true;
         }
-        if self.editor_state.editor_ui.icon_picker_open {
+        if self.editor_state.editor_ui.icon_picker.open {
             self.editor_state.editor_ui.icon_picker_select_all = true;
             self.mark_dirty();
             return true;
         }
-        if self.editor_state.editor_ui.chat_model_picker_open {
+        if self.editor_state.editor_ui.chat_model_picker.open {
             let ui = &mut self.editor_state.editor_ui;
-            ui.chat_model_picker_select_all = true;
-            ui.chat_model_picker_caret = Some(ui.chat_model_picker_search.len());
-            ui.chat_model_picker_caret_anchor_ms = self.now_ms;
+            ui.chat_model_picker_input.select_all();
+            ui.chat_model_picker_input.touch(self.now_ms);
             self.mark_dirty();
             return true;
         }
@@ -164,13 +223,7 @@ impl WidgetHostNative {
             return true;
         }
         if self.editor_state.chat.focused {
-            self.editor_state.chat.input_select_all = true;
-            self.editor_state.chat.input_selection =
-                Some(op_editor_core::chat::ChatInputSelection {
-                    anchor: 0,
-                    focus: self.editor_state.chat.input.len(),
-                });
-            self.editor_state.chat.caret_anchor_ms = self.now_ms;
+            self.editor_state.chat.select_all_input(self.now_ms);
             self.mark_dirty();
             return true;
         }
@@ -251,9 +304,10 @@ impl WidgetHostNative {
         // any pending variable-row edit first so subsequent
         // keystrokes don't keep routing into the variable draft.
         self.commit_variable_row_focus_if_any();
-        self.editor_state.chat.focused = !self.editor_state.chat.focused;
         if self.editor_state.chat.focused {
-            self.editor_state.chat.caret_anchor_ms = self.now_ms;
+            self.editor_state.chat.blur_input(self.now_ms);
+        } else {
+            self.editor_state.chat.focus_input_at_end(self.now_ms);
         }
         self.mark_dirty();
         true

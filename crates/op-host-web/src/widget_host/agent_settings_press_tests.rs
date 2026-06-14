@@ -1,9 +1,28 @@
 use super::WidgetHost;
 use op_editor_core::agent_settings::{
-    AgentSettingsTab, BuiltinAgentField, ImageGenField, ImageGenProvider, ImageTestStatus,
-    SettingsFocus,
+    AcpAgentField, AgentSettingsTab, BuiltinAgentField, ImageGenField, ImageGenProvider,
+    ImageTestStatus, SettingsFocus,
 };
+use op_editor_core::{AgentSettingsButton, ButtonPressTarget};
 use op_editor_ui::widgets::agent_settings_panel::AgentSettingsPanel;
+
+#[test]
+fn close_press_sets_and_release_clears_agent_settings_button() {
+    let mut host = WidgetHost::new();
+    let panel = AgentSettingsPanel::for_editor(&host.editor_state);
+    let rect = panel.rect(1200.0, 800.0);
+    let close_x = rect.origin.x + rect.size.x - 24.0;
+    let close_y = rect.origin.y + 24.0;
+
+    assert!(host.dispatch_agent_settings_press(close_x, close_y, 1200.0, 800.0));
+    assert_eq!(
+        host.editor_state.editor_ui.pressed_button,
+        Some(ButtonPressTarget::AgentSettings(AgentSettingsButton::Close))
+    );
+
+    assert!(host.apply_release_with_viewport(1200.0, 800.0));
+    assert_eq!(host.editor_state.editor_ui.pressed_button, None);
+}
 
 #[test]
 fn toggling_builtin_kind_commits_focused_api_key_draft() {
@@ -20,7 +39,10 @@ fn toggling_builtin_kind_commits_focused_api_key_draft() {
         index: 0,
         field: BuiltinAgentField::ApiKey,
     });
-    host.editor_state.editor_ui.settings_input_draft = "sk-web".into();
+    host.editor_state
+        .editor_ui
+        .settings_input
+        .set_text("sk-web");
 
     let panel = AgentSettingsPanel::for_editor(&host.editor_state);
     let rect = panel.rect(1200.0, 800.0);
@@ -56,6 +78,12 @@ fn add_provider_opens_unsaved_builtin_agent_draft() {
     let add_y = content_y + 24.0;
 
     assert!(host.dispatch_agent_settings_press(add_x, add_y, 1200.0, 800.0));
+    assert_eq!(
+        host.editor_state.editor_ui.pressed_button,
+        Some(ButtonPressTarget::AgentSettings(
+            AgentSettingsButton::AddProvider
+        ))
+    );
 
     let settings = &host.editor_state.editor_ui.agent_settings;
     assert!(settings.builtin_agents.is_empty());
@@ -64,11 +92,56 @@ fn add_provider_opens_unsaved_builtin_agent_draft() {
         settings.focus,
         Some(SettingsFocus::BuiltinAgentDraft(BuiltinAgentField::ApiKey))
     );
-    assert_eq!(host.editor_state.editor_ui.settings_input_draft, "");
+    assert_eq!(host.editor_state.editor_ui.settings_input.text(), "");
     assert_eq!(
-        host.editor_state.editor_ui.settings_input_caret_anchor_ms,
-        1234
+        host.editor_state
+            .editor_ui
+            .settings_input
+            .next_blink_flip_ms(1234),
+        1734
     );
+
+    assert!(host.apply_release_with_viewport(1200.0, 800.0));
+    assert_eq!(host.editor_state.editor_ui.pressed_button, None);
+}
+
+#[test]
+fn add_acp_agent_press_opens_unsaved_draft() {
+    let mut host = WidgetHost::new();
+    host.set_now_ms(1234);
+    let panel = AgentSettingsPanel::for_editor(&host.editor_state);
+    let rect = panel.rect(1200.0, 800.0);
+    let content_x = rect.origin.x + 200.0 + 24.0;
+    let content_y = rect.origin.y + 24.0;
+    let content_w = rect.size.x - 200.0 - 48.0;
+    let add_x = content_x + content_w - 12.0 - 48.0;
+    let add_y = content_y + 12.0 + 120.0 + 28.0 + 12.0;
+
+    assert!(host.dispatch_agent_settings_press(add_x, add_y, 1200.0, 800.0));
+    assert_eq!(
+        host.editor_state.editor_ui.pressed_button,
+        Some(ButtonPressTarget::AgentSettings(
+            AgentSettingsButton::AddAcpAgent
+        ))
+    );
+
+    let settings = &host.editor_state.editor_ui.agent_settings;
+    assert!(settings.acp_agents.is_empty());
+    assert!(settings.acp_agent_draft.is_some());
+    assert_eq!(
+        settings.focus,
+        Some(SettingsFocus::AcpAgentDraft(AcpAgentField::Command))
+    );
+    assert_eq!(
+        host.editor_state
+            .editor_ui
+            .settings_input
+            .next_blink_flip_ms(1234),
+        1734
+    );
+
+    assert!(host.apply_release_with_viewport(1200.0, 800.0));
+    assert_eq!(host.editor_state.editor_ui.pressed_button, None);
 }
 
 #[test]
@@ -131,6 +204,68 @@ fn save_builtin_agent_draft_persists_provider() {
 }
 
 #[test]
+fn image_generation_add_press_sets_and_release_clears_agent_settings_button() {
+    let mut host = WidgetHost::new();
+    host.editor_state.editor_ui.agent_settings.tab = AgentSettingsTab::Images;
+
+    let panel = AgentSettingsPanel::for_editor(&host.editor_state);
+    let rect = panel.rect(1200.0, 800.0);
+    let content_x = rect.origin.x + 200.0 + 24.0;
+    let content_y = rect.origin.y + 24.0;
+    let content_w = rect.size.x - 200.0 - 48.0;
+    let gen_top = content_y + 36.0 + 24.0 + 28.0;
+    let add_x = content_x + content_w - 36.0;
+    let add_y = gen_top + 18.0;
+
+    assert!(host.dispatch_agent_settings_press(add_x, add_y, 1200.0, 800.0));
+    assert_eq!(
+        host.editor_state.editor_ui.pressed_button,
+        Some(ButtonPressTarget::AgentSettings(
+            AgentSettingsButton::ImageGenAdd
+        ))
+    );
+
+    assert!(host.apply_release_with_viewport(1200.0, 800.0));
+    assert_eq!(host.editor_state.editor_ui.pressed_button, None);
+}
+
+#[test]
+fn image_search_test_press_sets_and_release_clears_agent_settings_button() {
+    let mut host = WidgetHost::new();
+    host.editor_state.editor_ui.agent_settings.tab = AgentSettingsTab::Images;
+    host.editor_state
+        .editor_ui
+        .agent_settings
+        .images_advanced_open = true;
+    host.editor_state
+        .editor_ui
+        .agent_settings
+        .openverse_client_id = "client".into();
+    host.editor_state
+        .editor_ui
+        .agent_settings
+        .openverse_client_secret = "secret".into();
+
+    let panel = AgentSettingsPanel::for_editor(&host.editor_state);
+    let rect = panel.rect(1200.0, 800.0);
+    let content_y = rect.origin.y + 24.0;
+    let content_w = rect.size.x - 200.0 - 48.0;
+    let x = rect.origin.x + 200.0 + 24.0 + content_w - 28.0;
+    let y = content_y + 36.0 + 24.0 + 22.0 + 36.0 + 10.0 + 36.0 + 14.0 + 18.0;
+
+    assert!(host.dispatch_agent_settings_press(x, y, 1200.0, 800.0));
+    assert_eq!(
+        host.editor_state.editor_ui.pressed_button,
+        Some(ButtonPressTarget::AgentSettings(
+            AgentSettingsButton::ImageSearchTest
+        ))
+    );
+
+    assert!(host.apply_release_with_viewport(1200.0, 800.0));
+    assert_eq!(host.editor_state.editor_ui.pressed_button, None);
+}
+
+#[test]
 fn image_generation_profile_test_tracks_testing_status_like_ts() {
     let mut host = WidgetHost::new();
     host.editor_state.editor_ui.agent_settings.tab = AgentSettingsTab::Images;
@@ -169,6 +304,15 @@ fn image_generation_profile_test_tracks_testing_status_like_ts() {
         .agent_settings
         .image_gen_profiles[0];
     assert_eq!(profile.test_status, ImageTestStatus::Testing);
+    assert_eq!(
+        host.editor_state.editor_ui.pressed_button,
+        Some(ButtonPressTarget::AgentSettings(
+            AgentSettingsButton::ImageProfileTest(0)
+        ))
+    );
+
+    assert!(host.apply_release_with_viewport(1200.0, 800.0));
+    assert_eq!(host.editor_state.editor_ui.pressed_button, None);
 }
 
 #[test]
@@ -217,6 +361,14 @@ fn image_generation_provider_select_commits_and_closes_menu() {
             field: ImageGenField::Name,
         })
     );
+    assert_eq!(
+        host.editor_state.editor_ui.pressed_button,
+        Some(ButtonPressTarget::AgentSettings(
+            AgentSettingsButton::ImageProfileProvider(0)
+        ))
+    );
+    assert!(host.apply_release_with_viewport(1200.0, 800.0));
+    assert_eq!(host.editor_state.editor_ui.pressed_button, None);
 
     assert!(host.dispatch_agent_settings_press(
         content_x + 110.0 + 20.0,
@@ -227,9 +379,27 @@ fn image_generation_provider_select_commits_and_closes_menu() {
 
     let settings = &host.editor_state.editor_ui.agent_settings;
     let profile = &settings.image_gen_profiles[0];
+    assert_eq!(profile.provider, ImageGenProvider::OpenAi);
+    assert_eq!(profile.model, "dall-e-3");
+    assert_eq!(settings.image_gen_provider_menu_open, Some(0));
+    assert_eq!(
+        host.editor_state.editor_ui.pressed_button,
+        Some(ButtonPressTarget::AgentSettings(
+            AgentSettingsButton::ImageProviderOption {
+                index: 0,
+                provider: ImageGenProvider::Gemini,
+            },
+        ))
+    );
+
+    assert!(host.apply_release_with_viewport(1200.0, 800.0));
+
+    let settings = &host.editor_state.editor_ui.agent_settings;
+    let profile = &settings.image_gen_profiles[0];
     assert_eq!(profile.provider, ImageGenProvider::Gemini);
     assert!(profile.model.is_empty());
     assert!(settings.image_gen_provider_menu_open.is_none());
+    assert_eq!(host.editor_state.editor_ui.pressed_button, None);
     assert_eq!(
         settings.focus,
         Some(SettingsFocus::ImageGenProfile {
@@ -251,7 +421,10 @@ fn image_generation_profile_header_click_toggles_editor_closed() {
         index: 0,
         field: ImageGenField::Name,
     });
-    host.editor_state.editor_ui.settings_input_draft = "Config 1".into();
+    host.editor_state
+        .editor_ui
+        .settings_input
+        .set_text("Config 1");
 
     let panel = AgentSettingsPanel::for_editor(&host.editor_state);
     let rect = panel.rect(1200.0, 800.0);
@@ -261,9 +434,46 @@ fn image_generation_profile_header_click_toggles_editor_closed() {
     let row_y = gen_top + 36.0 + 8.0;
 
     assert!(host.dispatch_agent_settings_press(content_x + 72.0, row_y + 16.0, 1200.0, 800.0));
+    assert_eq!(
+        host.editor_state.editor_ui.pressed_button,
+        Some(ButtonPressTarget::AgentSettings(
+            AgentSettingsButton::ImageProfileHeader(0)
+        ))
+    );
 
     assert_eq!(host.editor_state.editor_ui.agent_settings.focus, None);
-    assert!(host.editor_state.editor_ui.settings_input_draft.is_empty());
+    assert!(host.editor_state.editor_ui.settings_input.text().is_empty());
+    assert!(host.apply_release_with_viewport(1200.0, 800.0));
+    assert_eq!(host.editor_state.editor_ui.pressed_button, None);
+}
+
+#[test]
+fn mcp_server_press_sets_and_release_clears_agent_settings_button() {
+    let mut host = WidgetHost::new();
+    host.editor_state.editor_ui.agent_settings.tab = AgentSettingsTab::Mcp;
+    let panel = AgentSettingsPanel::for_editor(&host.editor_state);
+    let rect = panel.rect(1200.0, 800.0);
+    let content_x = rect.origin.x + 200.0 + 24.0;
+    let content_y = rect.origin.y + 24.0;
+    let content_w = rect.size.x - 200.0 - 48.0;
+    let server_card_top = content_y + 36.0;
+    let button_x = content_x + content_w - 16.0 - 72.0;
+
+    assert!(host.dispatch_agent_settings_press(
+        button_x + 36.0,
+        server_card_top + 26.0,
+        1200.0,
+        800.0
+    ));
+    assert_eq!(
+        host.editor_state.editor_ui.pressed_button,
+        Some(ButtonPressTarget::AgentSettings(
+            AgentSettingsButton::McpServer
+        ))
+    );
+
+    assert!(host.apply_release_with_viewport(1200.0, 800.0));
+    assert_eq!(host.editor_state.editor_ui.pressed_button, None);
 }
 
 #[test]
@@ -302,6 +512,15 @@ fn copying_mcp_client_config_records_feedback_time() {
         host.editor_state.chat.pending_copy_text.as_deref(),
         Some("{\n  \"type\": \"http\",\n  \"url\": \"http://127.0.0.1:3100/mcp\"\n}")
     );
+    assert_eq!(
+        host.editor_state.editor_ui.pressed_button,
+        Some(ButtonPressTarget::AgentSettings(
+            AgentSettingsButton::McpClientConfigCopy
+        ))
+    );
+
+    assert!(host.apply_release_with_viewport(1200.0, 800.0));
+    assert_eq!(host.editor_state.editor_ui.pressed_button, None);
 }
 
 #[test]

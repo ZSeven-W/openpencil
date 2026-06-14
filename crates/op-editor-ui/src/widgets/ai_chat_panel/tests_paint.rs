@@ -48,10 +48,7 @@ fn paint_collapsed_bar_matches_ts_minimized_bar_style() {
     assert_eq!(backend.round_rects[0].2, panel.theme.card);
     assert_eq!(backend.texts[0].0, "New Chat");
     assert_close(backend.texts[0].1, 12.0);
-    assert_eq!(
-        backend.texts[0].2,
-        to_jian_color(panel.theme.muted_foreground)
-    );
+    assert_eq!(backend.texts[0].2, (panel.theme.muted_foreground).to_jian());
     assert_close(backend.texts[0].3.x, 12.0 + 13.0 + 6.0);
     assert_eq!(backend.svg_strokes.len(), 2);
     assert_close(backend.svg_strokes[0].0.x, 12.0);
@@ -110,10 +107,37 @@ fn paint_quick_action_card_hover_adds_visible_feedback() {
 }
 
 #[test]
+fn paint_quick_action_card_pressed_uses_shared_feedback() {
+    let mut s = EditorState::new();
+    seed_available_model(&mut s);
+    s.editor_ui.pressed_button = Some(op_editor_core::ButtonPressTarget::ChatExample(0));
+    let panel = AIChatPlaceholder::from_editor(&s);
+    let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
+    let cards = crate::widgets::ai_chat_panel_paint::example_card_rects(rect);
+    let expected = panel
+        .theme
+        .button_hover
+        .with_alpha(panel.theme.button_hover.a * 1.8);
+    let mut backend = PanelPaintBackend::default();
+    let mut cx = PaintCx {
+        backend: &mut backend,
+    };
+
+    panel.paint(&mut cx, rect);
+
+    assert!(
+        backend.round_rects.iter().any(|(r, radius, color)| {
+            rect_close(*r, cards[0]) && *radius == 8.0 && color_close(*color, expected)
+        }),
+        "pressed quick-action card should paint the shared pressed feedback token"
+    );
+}
+
+#[test]
 fn paint_send_button_hover_adds_visible_feedback() {
     let mut s = EditorState::new();
     seed_available_model(&mut s);
-    s.chat.input = "design a login page".into();
+    s.chat.set_input_text("design a login page");
     s.editor_ui.chat_footer_hover = Some(op_editor_core::ChatFooterButton::Send);
     let panel = AIChatPlaceholder::from_editor(&s);
     let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
@@ -139,6 +163,30 @@ fn paint_send_button_hover_adds_visible_feedback() {
     assert!(
         !fills.is_empty(),
         "hovered send button should paint a hover wash"
+    );
+}
+
+#[test]
+fn from_editor_picks_up_chat_button_press_targets() {
+    let mut s = EditorState::new();
+    s.editor_ui.pressed_button = Some(op_editor_core::ButtonPressTarget::ChatHeader(
+        op_editor_core::ChatHeaderButton::NewChat,
+    ));
+    let header_panel = AIChatPlaceholder::from_editor(&s);
+    assert_eq!(
+        header_panel.header_pressed,
+        Some(op_editor_core::ChatHeaderButton::NewChat)
+    );
+    assert_eq!(header_panel.footer_pressed, None);
+
+    s.editor_ui.pressed_button = Some(op_editor_core::ButtonPressTarget::ChatFooter(
+        op_editor_core::ChatFooterButton::Send,
+    ));
+    let footer_panel = AIChatPlaceholder::from_editor(&s);
+    assert_eq!(footer_panel.header_pressed, None);
+    assert_eq!(
+        footer_panel.footer_pressed,
+        Some(op_editor_core::ChatFooterButton::Send)
     );
 }
 

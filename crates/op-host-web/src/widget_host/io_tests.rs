@@ -12,7 +12,7 @@ fn ime_commit_lands_in_focused_chat_input() {
     host.editor_state.chat.focused = true;
     let evt = crate::event::ime::composition_end("你好".to_string());
     assert!(host.apply_ime(&evt));
-    assert_eq!(host.editor_state.chat.input, "你好");
+    assert_eq!(host.editor_state.chat.input.text(), "你好");
 }
 
 #[test]
@@ -23,7 +23,7 @@ fn ime_preedit_updates_do_not_mutate_the_input() {
     let update = crate::event::ime::composition_update("ni".to_string(), None);
     assert!(!host.apply_ime(&start));
     assert!(!host.apply_ime(&update));
-    assert!(host.editor_state.chat.input.is_empty());
+    assert!(host.editor_state.chat.input.text().is_empty());
 }
 
 #[test]
@@ -31,7 +31,7 @@ fn ime_commit_without_any_focused_input_is_a_no_op() {
     let mut host = WidgetHost::new();
     let evt = crate::event::ime::composition_end("漢字".to_string());
     assert!(!host.apply_ime(&evt));
-    assert!(host.editor_state.chat.input.is_empty());
+    assert!(host.editor_state.chat.input.text().is_empty());
 }
 
 #[test]
@@ -47,7 +47,8 @@ fn paste_text_routes_to_focused_rename() {
         .layer_rename
         .as_mut()
         .expect("rename active")
-        .select_all = true;
+        .input
+        .select_all();
     assert!(host.apply_paste_text("Hero Section"));
     assert_eq!(
         host.editor_state
@@ -55,11 +56,12 @@ fn paste_text_routes_to_focused_rename() {
             .layer_rename
             .as_ref()
             .expect("rename still active")
-            .draft,
+            .input
+            .text(),
         "Hero Section"
     );
     // The paste went into the rename draft, NOT the chat input.
-    assert!(host.editor_state.chat.input.is_empty());
+    assert!(host.editor_state.chat.input.text().is_empty());
 }
 
 #[test]
@@ -67,7 +69,7 @@ fn paste_text_routes_to_focused_chat_input() {
     let mut host = WidgetHost::new();
     host.editor_state.chat.focused = true;
     assert!(host.apply_paste_text("hello web"));
-    assert_eq!(host.editor_state.chat.input, "hello web");
+    assert_eq!(host.editor_state.chat.input.text(), "hello web");
 }
 
 #[test]

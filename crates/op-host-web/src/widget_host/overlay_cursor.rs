@@ -89,15 +89,15 @@ impl WidgetHost {
             return true;
         }
         // Icon-picker panel hover (close / icon rows / load-more).
-        if self.editor_state.editor_ui.icon_picker_open {
+        if self.editor_state.editor_ui.icon_picker.open {
             use op_editor_ui::widgets::icon_picker_panel::IconPickerPanel;
             if let Some(panel_rect) =
                 self.icon_picker_panel_rect(self.last_viewport_w, self.last_viewport_h)
             {
                 let new_hover = IconPickerPanel::for_editor(&self.editor_state)
                     .and_then(|p| p.hover_at(panel_rect, Point2D::new(x, y)));
-                if new_hover != self.editor_state.editor_ui.icon_picker_hover {
-                    self.editor_state.editor_ui.icon_picker_hover = new_hover;
+                if new_hover != self.editor_state.editor_ui.icon_picker.hover {
+                    self.editor_state.editor_ui.icon_picker.hover = new_hover;
                     self.mark_dirty();
                     return true;
                 }
@@ -130,27 +130,49 @@ impl WidgetHost {
             // to age (see `dispatch_file_menu_press`).
             let menu = FileMenu::from_editor_ui(&self.editor_state.editor_ui, 0);
             let panel = menu.rect_at(anchor);
-            let new_hover = menu
-                .hovered_at(panel, Point2D::new(x, y))
-                .map(op_editor_ui::widgets::editor_state_ext::file_menu_choice);
-            if new_hover != self.editor_state.editor_ui.file_menu_hover {
-                self.editor_state.editor_ui.file_menu_hover = new_hover;
+            let new_hover = menu.hovered_at(panel, Point2D::new(x, y));
+            if new_hover != self.editor_state.editor_ui.file_menu.hover {
+                self.editor_state.editor_ui.file_menu.hover = new_hover;
                 self.mark_dirty();
                 return true;
             }
         }
-        if self.editor_state.editor_ui.shape_picker_open {
+        if self.editor_state.editor_ui.shape_picker.open {
             use op_editor_ui::widgets::shape_picker::ShapePicker;
             self.refresh_layout_scene();
             let panel = self.shape_picker_rect(self.last_viewport_w, self.last_viewport_h);
             let picker = ShapePicker::for_editor_ui(&self.editor_state.editor_ui);
-            let new_hover = picker
-                .hit_test(panel, Point2D::new(x, y))
-                .map(op_editor_ui::widgets::editor_state_ext::shape_choice);
-            if new_hover != self.editor_state.editor_ui.shape_picker_hover {
-                self.editor_state.editor_ui.shape_picker_hover = new_hover;
+            let new_hover = match picker.hit_popup(panel, Point2D::new(x, y)) {
+                op_editor_ui::widgets::shape_picker::SelectHit::Row(idx) => Some(idx),
+                op_editor_ui::widgets::shape_picker::SelectHit::Inside
+                | op_editor_ui::widgets::shape_picker::SelectHit::Outside => None,
+            };
+            if new_hover != self.editor_state.editor_ui.shape_picker.hover {
+                self.editor_state.editor_ui.shape_picker.hover = new_hover;
                 self.mark_dirty();
                 return true;
+            }
+        }
+        if self.editor_state.editor_ui.fill_type_picker.open {
+            use op_editor_ui::widgets::{PropertyPanel, TOP_BAR_HEIGHT};
+            self.refresh_layout_scene();
+            if let Some(panel) = PropertyPanel::for_selection(&self.editor_state) {
+                let property_rect = op_editor_ui::Rect {
+                    origin: Point2D::new(
+                        self.last_viewport_w - self.editor_state.editor_ui.property_panel_width,
+                        TOP_BAR_HEIGHT,
+                    ),
+                    size: Point2D::new(
+                        self.editor_state.editor_ui.property_panel_width,
+                        (self.last_viewport_h - TOP_BAR_HEIGHT).max(0.0),
+                    ),
+                };
+                let new_hover = panel.fill_type_picker_row_at(property_rect, Point2D::new(x, y));
+                if new_hover != self.editor_state.editor_ui.fill_type_picker.hover {
+                    self.editor_state.editor_ui.fill_type_picker.hover = new_hover;
+                    self.mark_dirty();
+                    return true;
+                }
             }
         }
         false

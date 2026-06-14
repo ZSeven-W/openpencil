@@ -6,8 +6,8 @@ use crate::widgets::property_panel::{
     LayoutAlignValue, LayoutJustifyValue, NodeSnapshot, PropertyPanelAction,
 };
 use crate::widgets::property_panel_inputs::{
-    paint_input_with_prefix_focused, paint_input_with_suffix_focused, paint_section_divider,
-    paint_section_label, to_jian_color, INPUT_HEIGHT, INPUT_RADIUS, PAD_X, SECTION_GAP,
+    paint_input_with_prefix_focused_state, paint_input_with_suffix_focused_state,
+    paint_section_divider, paint_section_label, INPUT_HEIGHT, INPUT_RADIUS, PAD_X, SECTION_GAP,
     SECTION_HEADER_HEIGHT,
 };
 use crate::widgets::property_panel_sections::{EditContext, PropertyLabels};
@@ -418,13 +418,13 @@ fn paint_alignment_and_gap(
             &gap_text,
             "system-ui",
             12.0,
-            to_jian_color(theme.muted_foreground),
+            (theme.muted_foreground).to_jian(),
             Point2D::new(0.0, 0.0),
         );
         cx.backend
             .draw_text(&muted, Point2D::new(content_x + 10.0, r0_y + 14.0));
     } else {
-        paint_input_with_suffix_focused(
+        paint_input_with_suffix_focused_state(
             cx,
             theme,
             gap_rect,
@@ -433,6 +433,8 @@ fn paint_alignment_and_gap(
             edit.focus == Some(PropertyFocus::LayoutGap),
             edit.caret_at(PropertyFocus::LayoutGap),
             edit.select_all_at(PropertyFocus::LayoutGap),
+            edit.input_at(PropertyFocus::LayoutGap),
+            edit.now_ms,
         );
     }
 
@@ -493,7 +495,7 @@ fn paint_padding_inputs(
     let p = &snapshot.layout_padding;
     let mut input = |focus: PropertyFocus, prefix: &str, value: f32, rect: Rect| {
         let value = format_panel_number(value);
-        paint_input_with_prefix_focused(
+        paint_input_with_prefix_focused_state(
             cx,
             theme,
             rect,
@@ -502,6 +504,8 @@ fn paint_padding_inputs(
             edit.focus == Some(focus),
             edit.caret_at(focus),
             edit.select_all_at(focus),
+            edit.input_at(focus),
+            edit.now_ms,
         );
     };
     let cell = |col: f32, row: f32| Rect {
@@ -561,7 +565,7 @@ pub fn paint_padding_mode_popover(
         op_i18n::translate(locale, "padding.paddingValues"),
         "system-ui",
         11.0,
-        to_jian_color(theme.muted_foreground),
+        (theme.muted_foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
@@ -586,7 +590,7 @@ pub fn paint_padding_mode_popover(
             op_i18n::translate(locale, mode.label_key()),
             "system-ui",
             11.0,
-            to_jian_color(theme.foreground),
+            (theme.foreground).to_jian(),
             Point2D::new(0.0, 0.0),
         );
         cx.backend.draw_text(
@@ -712,7 +716,7 @@ fn paint_gap_row_label(
         op_i18n::translate(locale, label_key),
         "system-ui",
         10.0,
-        to_jian_color(theme.muted_foreground),
+        (theme.muted_foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend
@@ -724,7 +728,7 @@ fn paint_sub_label(cx: &mut PaintCx<'_>, theme: &Theme, label: &str, x: f32, y: 
         label,
         "system-ui",
         10.0,
-        to_jian_color(theme.muted_foreground),
+        (theme.muted_foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(&layout, Point2D::new(x, y + 13.0));

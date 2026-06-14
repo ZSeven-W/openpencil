@@ -7,13 +7,12 @@
 //! inside the Git-panel rect) and before the canvas overlays.
 
 use op_editor_core::{
-    CloneField, CommitDiffView, GitBranchPickerMode, GitDiffTarget, GitOverflowView,
-    GitPanelAction, GitPanelState,
+    ButtonPressTarget, CloneField, CommitDiffView, GitBranchPickerMode, GitDiffTarget,
+    GitOverflowView, GitPanelAction, GitPanelState,
 };
 use op_editor_ui::widgets::{GitPanel, GitPanelHit};
 use op_editor_ui::Point2D;
 
-use super::helpers::rect_contains;
 use super::WidgetHostNative;
 
 impl WidgetHostNative {
@@ -45,22 +44,26 @@ impl WidgetHostNative {
         let diff_max_h_scroll = GitPanel::for_editor(&self.editor_state)
             .map(|p| p.diff_max_h_scroll())
             .unwrap_or(0);
+        let pressed_button = hit
+            .and_then(op_editor_ui::widgets::editor_state_ext::git_button_hover)
+            .map(ButtonPressTarget::Git);
         // The caret bridge above the body is painted as part of the
         // popover; a click there must be swallowed (not fall through to
         // the canvas), even though `hit_test` against the body returns
         // `None` for it.
         let on_caret = self
             .git_panel_outer_rect(viewport_width, viewport_height)
-            .is_some_and(|r| rect_contains(r, Point2D::new(x, y)));
+            .is_some_and(|r| (r).contains(Point2D::new(x, y)));
         let now = self.now_ms;
         // Set by the blank-chrome arm below; the full input blur runs
         // after the match so it doesn't fight the `panel` borrow.
         let mut blur_all_inputs = false;
+        self.editor_state.editor_ui.pressed_button = pressed_button;
         let panel = &mut self.editor_state.editor_ui.git_panel;
         match hit {
             Some(GitPanelHit::CommitInput) => {
                 panel.commit_focused = true;
-                panel.commit_caret_anchor_ms = now;
+                panel.commit_input.touch(now);
                 panel.remote_focused = false;
                 panel.https_focused = false;
                 // Re-engaging the input dismisses the stale "no changes" hint.
@@ -68,36 +71,37 @@ impl WidgetHostNative {
             }
             Some(GitPanelHit::RemoteInput) => {
                 panel.remote_focused = true;
-                panel.commit_focused = false;
+                panel.remote_input.touch(now);
+                panel.defocus_commit_input(now);
                 panel.https_focused = false;
-                // Seed the shared caret anchor so it starts solid, then blinks.
-                panel.commit_caret_anchor_ms = now;
             }
             Some(GitPanelHit::HttpsInput) => {
                 panel.https_focused = true;
-                panel.commit_focused = false;
+                panel.https_input.touch(now);
+                panel.defocus_commit_input(now);
                 panel.remote_focused = false;
-                panel.commit_caret_anchor_ms = now;
             }
             Some(GitPanelHit::SetRemote) => {
-                if !panel.remote_draft.trim().is_empty() {
-                    panel.pending_action =
-                        Some(GitPanelAction::SetRemote(panel.remote_draft.clone()));
+                if !panel.remote_input.text().trim().is_empty() {
+                    panel.pending_action = Some(GitPanelAction::SetRemote(
+                        panel.remote_input.text().to_owned(),
+                    ));
                 }
             }
             Some(GitPanelHit::SetupSshAuth) => {
                 panel.pending_action = Some(GitPanelAction::SetupSshAuth);
             }
             Some(GitPanelHit::SetHttpsAuth) => {
-                if !panel.https_draft.trim().is_empty() {
-                    panel.pending_action =
-                        Some(GitPanelAction::SetHttpsAuth(panel.https_draft.clone()));
+                if !panel.https_input.text().trim().is_empty() {
+                    panel.pending_action = Some(GitPanelAction::SetHttpsAuth(
+                        panel.https_input.text().to_owned(),
+                    ));
                 }
             }
             Some(GitPanelHit::Commit) => {
                 // Commit the staged set — requires a message and at
                 // least one staged file.
-                if !panel.commit_message.trim().is_empty()
+                if !panel.commit_input.text().trim().is_empty()
                     && panel.changed_files.iter().any(|f| f.staged)
                 {
                     panel.pending_action = Some(GitPanelAction::Commit);
@@ -107,25 +111,25 @@ impl WidgetHostNative {
                 // Ready-view Save milestone — saves the live design to
                 // the tracked .op + stages + commits in one step, so it
                 // only needs a non-empty message (no pre-staged file).
-                if !panel.commit_message.trim().is_empty() {
+                if !panel.commit_input.text().trim().is_empty() {
                     panel.pending_action = Some(GitPanelAction::CommitMilestone);
                 }
             }
             Some(GitPanelHit::AuthorNameInput) => {
                 panel.author_name_focused = true;
+                panel.author_name_input.touch(now);
                 panel.author_email_focused = false;
-                panel.commit_focused = false;
+                panel.defocus_commit_input(now);
                 panel.remote_focused = false;
                 panel.https_focused = false;
-                panel.commit_caret_anchor_ms = now;
             }
             Some(GitPanelHit::AuthorEmailInput) => {
                 panel.author_email_focused = true;
+                panel.author_email_input.touch(now);
                 panel.author_name_focused = false;
-                panel.commit_focused = false;
+                panel.defocus_commit_input(now);
                 panel.remote_focused = false;
                 panel.https_focused = false;
-                panel.commit_caret_anchor_ms = now;
             }
             Some(GitPanelHit::AuthorSave) => {
                 panel.pending_action = Some(GitPanelAction::SaveAuthor);
@@ -149,14 +153,14 @@ impl WidgetHostNative {
             Some(GitPanelHit::CloneUrlInput) => {
                 if let Some(form) = panel.clone_form.as_mut() {
                     form.focus = Some(CloneField::Url);
-                    form.caret_anchor_ms = now;
+                    form.url_input.touch(now);
                     form.error = None;
                 }
             }
             Some(GitPanelHit::CloneDestInput) => {
                 if let Some(form) = panel.clone_form.as_mut() {
                     form.focus = Some(CloneField::Dest);
-                    form.caret_anchor_ms = now;
+                    form.dest_input.touch(now);
                     form.error = None;
                 }
             }
@@ -185,31 +189,42 @@ impl WidgetHostNative {
                 // Toggle the branch-picker dropdown; close the overflow
                 // menu so only one ready-state popover is open at a time.
                 panel.branch_picker_open = !panel.branch_picker_open;
+                panel.branch_picker_menu.hover = None;
                 panel.overflow_open = false;
+                panel.overflow_menu.hover = None;
                 panel.overflow_view = GitOverflowView::Menu;
+                panel.close_tracked_picker();
                 // Always (re)open on the branch list — a prior session's
                 // create / merge sub-mode should never leak back in.
                 panel.branch_picker_mode = GitBranchPickerMode::List;
-                panel.branch_create_draft.clear();
+                panel.branch_create_input.set_text("");
                 panel.branch_create_focused = false;
             }
             Some(GitPanelHit::Overflow) => {
                 // Always (re)open on the top-level menu so a prior
                 // session's subview never leaks back in.
                 panel.overflow_open = !panel.overflow_open;
+                panel.overflow_menu.hover = None;
                 panel.overflow_view = GitOverflowView::Menu;
                 panel.branch_picker_open = false;
+                panel.branch_picker_menu.hover = None;
+                panel.close_tracked_picker();
             }
             Some(GitPanelHit::OverflowRemoteSettings) => {
+                panel.overflow_menu.hover = None;
                 panel.overflow_view = GitOverflowView::RemoteSettings;
+                panel.close_tracked_picker();
             }
             Some(GitPanelHit::OverflowSshKeys) => {
                 // Open the SSH-keys subview (host enumerates the stored keys).
+                panel.overflow_menu.hover = None;
                 panel.pending_action = Some(GitPanelAction::EnterSshKeys);
+                panel.close_tracked_picker();
             }
             Some(GitPanelHit::SshGenerateKey) => {
                 panel.pending_action = Some(GitPanelAction::SetupSshAuth);
                 panel.overflow_open = false;
+                panel.overflow_menu.hover = None;
                 panel.overflow_view = GitOverflowView::Menu;
             }
             Some(GitPanelHit::SshImportKey) => {
@@ -220,26 +235,33 @@ impl WidgetHostNative {
             }
             Some(GitPanelHit::OverflowBack) => {
                 panel.overflow_view = GitOverflowView::Menu;
+                panel.close_tracked_picker();
             }
             Some(GitPanelHit::OverflowSwitchTracked) => {
                 // Host enumerates the repo's `.op` candidates, then flips the
                 // subview to the tracked-file picker.
+                panel.overflow_menu.hover = None;
+                panel.open_tracked_picker();
                 panel.pending_action = Some(GitPanelAction::EnterTrackedPicker);
             }
             Some(GitPanelHit::OverflowClearAuthor) => {
                 panel.pending_action = Some(GitPanelAction::ClearAuthor);
                 panel.overflow_open = false;
+                panel.overflow_menu.hover = None;
                 panel.overflow_view = GitOverflowView::Menu;
+                panel.close_tracked_picker();
             }
             Some(GitPanelHit::OverflowCloseRepo) => {
                 panel.pending_action = Some(GitPanelAction::CloseRepo);
                 panel.overflow_open = false;
+                panel.overflow_menu.hover = None;
                 panel.overflow_view = GitOverflowView::Menu;
+                panel.close_tracked_picker();
             }
             Some(GitPanelHit::TrackedPickerRow(index)) => {
-                // Pure UI — single-select a candidate.
                 if index < panel.candidate_files.len() {
-                    panel.tracked_picker_selected = Some(index);
+                    panel.tracked_picker.pressed = Some(index);
+                    panel.tracked_picker.hover = Some(index);
                 }
             }
             Some(GitPanelHit::TrackedPickerBind) => {
@@ -255,15 +277,18 @@ impl WidgetHostNative {
             Some(GitPanelHit::TrackedPickerBack) => {
                 // Close the picker subview back to the overflow menu.
                 panel.overflow_view = GitOverflowView::Menu;
-                panel.tracked_picker_selected = None;
+                panel.close_tracked_picker();
             }
             Some(GitPanelHit::DismissPopover) => {
                 // Click outside an open popover — close it + swallow.
                 panel.branch_picker_open = false;
+                panel.branch_picker_menu.hover = None;
                 panel.branch_picker_mode = GitBranchPickerMode::List;
-                panel.branch_create_draft.clear();
+                panel.branch_create_input.set_text("");
                 panel.overflow_open = false;
+                panel.overflow_menu.hover = None;
                 panel.overflow_view = GitOverflowView::Menu;
+                panel.close_tracked_picker();
                 panel.defocus_text_inputs();
             }
             Some(GitPanelHit::AbortMerge) => {
@@ -278,48 +303,53 @@ impl WidgetHostNative {
                 }
                 // Close the branch-picker dropdown after a pick.
                 panel.branch_picker_open = false;
+                panel.branch_picker_menu.hover = None;
             }
             Some(GitPanelHit::MergeBranch(index)) => {
                 if let Some(name) = panel.branches.get(index).cloned() {
                     panel.pending_action = Some(GitPanelAction::MergeBranch(name));
                 }
                 panel.branch_picker_open = false;
+                panel.branch_picker_menu.hover = None;
             }
             Some(GitPanelHit::BranchCreateMode) => {
+                panel.branch_picker_menu.hover = None;
                 panel.branch_picker_mode = GitBranchPickerMode::Create;
-                panel.branch_create_draft.clear();
+                panel.branch_create_input.set_text("");
+                panel.branch_create_input.touch(now);
                 panel.branch_create_focused = true;
-                panel.commit_focused = false;
+                panel.defocus_commit_input(now);
                 panel.remote_focused = false;
                 panel.https_focused = false;
-                // Seed the shared caret anchor so it starts solid, then blinks.
-                panel.commit_caret_anchor_ms = now;
             }
             Some(GitPanelHit::BranchMergeMode) => {
+                panel.branch_picker_menu.hover = None;
                 panel.branch_picker_mode = GitBranchPickerMode::Merge;
                 panel.branch_create_focused = false;
             }
             Some(GitPanelHit::BranchCreateInput) => {
                 panel.branch_create_focused = true;
-                panel.commit_focused = false;
+                panel.branch_create_input.touch(now);
+                panel.defocus_commit_input(now);
                 panel.remote_focused = false;
                 panel.https_focused = false;
-                panel.commit_caret_anchor_ms = now;
             }
             Some(GitPanelHit::BranchCreateSubmit) => {
-                let name = panel.branch_create_draft.trim().to_string();
+                let name = panel.branch_create_input.text().trim().to_string();
                 if !name.is_empty() {
                     panel.pending_action = Some(GitPanelAction::CreateBranch(name));
                     panel.branch_picker_mode = GitBranchPickerMode::List;
-                    panel.branch_create_draft.clear();
+                    panel.branch_create_input.set_text("");
                     panel.branch_create_focused = false;
                     panel.branch_picker_open = false;
+                    panel.branch_picker_menu.hover = None;
                 }
             }
             Some(GitPanelHit::BranchPickerCancel) => {
                 // Step a create / merge sub-mode back to the branch list.
                 panel.branch_picker_mode = GitBranchPickerMode::List;
-                panel.branch_create_draft.clear();
+                panel.branch_picker_menu.hover = None;
+                panel.branch_create_input.set_text("");
                 panel.branch_create_focused = false;
             }
             Some(GitPanelHit::ShowWorkingDiff) => {
@@ -469,8 +499,11 @@ impl WidgetHostNative {
         panel.open = false;
         panel.defocus_text_inputs();
         panel.branch_picker_open = false;
+        panel.branch_picker_menu.hover = None;
         panel.overflow_open = false;
+        panel.overflow_menu.hover = None;
         panel.overflow_view = op_editor_core::GitOverflowView::Menu;
+        panel.close_tracked_picker();
         panel.diff = None;
         panel.merge_resolve = None;
         panel.clone_form = None;

@@ -368,6 +368,8 @@ pub(crate) fn wire(
             let _ = guard.repaint();
             sync_now(&mut guard);
         }
+        #[cfg(feature = "codegen")]
+        crate::ensure_caret_blink_pump(&inner_chat);
         // Move DOM focus onto the canvas: a focused <button> re-fires
         // its click on Space/Enter, which would double-handle the
         // user's typing. On the canvas, keystrokes flow through the
@@ -523,28 +525,28 @@ fn focused_input(state: &EditorState) -> Option<(String, String, String)> {
         return Some((
             "settings".to_string(),
             "Settings field".to_string(),
-            ui.settings_input_draft.clone(),
+            ui.settings_input.text().to_owned(),
         ));
     }
     if let Some(focus) = state.ui.property_focus {
         return Some((
             format!("property:{focus:?}"),
             property_focus_label(focus),
-            state.ui.property_input_draft.clone(),
+            state.ui.property_input.text().to_owned(),
         ));
     }
-    if ui.icon_picker_open {
+    if ui.icon_picker.open {
         return Some((
             "icon-search".to_string(),
             "Icon search".to_string(),
             ui.icon_picker_search.clone(),
         ));
     }
-    if ui.chat_model_picker_open {
+    if ui.chat_model_picker.open {
         return Some((
             "model-search".to_string(),
             "Model search".to_string(),
-            ui.chat_model_picker_search.clone(),
+            ui.chat_model_picker_input.text().to_owned(),
         ));
     }
     if ui.component_browser_open {
@@ -558,7 +560,7 @@ fn focused_input(state: &EditorState) -> Option<(String, String, String)> {
         return Some((
             "chat".to_string(),
             "AI chat input".to_string(),
-            state.chat.input.clone(),
+            state.chat.input.text().to_owned(),
         ));
     }
     None
@@ -679,14 +681,14 @@ mod tests {
         assert!(focused_input(&state).is_none());
 
         state.chat.focused = true;
-        state.chat.input = "hello".to_string();
+        state.chat.set_input_text("hello");
         let (key, label, value) = focused_input(&state).expect("chat focus");
         assert_eq!(key, "chat");
         assert_eq!(label, "AI chat input");
         assert_eq!(value, "hello");
 
         state.ui.property_focus = Some(PropertyFocus::SizeW);
-        state.ui.property_input_draft = "120".to_string();
+        state.ui.property_input.set_text("120");
         let (key, label, value) = focused_input(&state).expect("property focus");
         assert_eq!(key, "property:SizeW");
         assert_eq!(label, "Width");
@@ -696,7 +698,7 @@ mod tests {
     #[test]
     fn focused_input_reports_open_search_popovers() {
         let mut state = EditorState::new();
-        state.editor_ui.icon_picker_open = true;
+        state.editor_ui.icon_picker.open = true;
         state.editor_ui.icon_picker_search = "arrow".to_string();
         let (key, _label, value) = focused_input(&state).expect("icon search");
         assert_eq!(key, "icon-search");

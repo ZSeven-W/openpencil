@@ -42,6 +42,7 @@ impl DesktopApp {
                 panel.branch_picker_open = false;
                 panel.overflow_open = false;
                 panel.overflow_view = op_editor_core::GitOverflowView::Menu;
+                panel.close_tracked_picker();
                 // Cleared synchronously — there is nothing to wait for.
                 panel.loading = false;
             }
@@ -123,6 +124,7 @@ impl DesktopApp {
             panel.branch_picker_open = false;
             panel.overflow_open = false;
             panel.overflow_view = op_editor_core::GitOverflowView::Menu;
+            panel.close_tracked_picker();
         }
         // The fresh snapshot has landed — leave the loading state.
         let was_loading = panel.loading;
@@ -227,7 +229,8 @@ impl DesktopApp {
                     .editor_state()
                     .editor_ui
                     .git_panel
-                    .commit_message
+                    .commit_input
+                    .text()
                     .trim()
                     .to_string();
                 // Commit exactly the staged index — the set the user
@@ -241,8 +244,8 @@ impl DesktopApp {
                     match self.git_session.commit_staged(&message) {
                         Ok(()) => {
                             let panel = &mut self.host.editor_state_mut().editor_ui.git_panel;
-                            panel.commit_message.clear();
-                            panel.commit_focused = false;
+                            panel.commit_input.set_text("");
+                            panel.defocus_commit_input(0);
                         }
                         Err(err) => {
                             self.show_git_op_error_dialog("commit", &err);
@@ -256,7 +259,8 @@ impl DesktopApp {
                     .editor_state()
                     .editor_ui
                     .git_panel
-                    .commit_message
+                    .commit_input
+                    .text()
                     .trim()
                     .to_string();
                 // Ready-view "Save milestone": snapshot the live design
@@ -281,7 +285,7 @@ impl DesktopApp {
                     panel.author_email_focused = false;
                     // Hand keyboard focus to the form, off the (now hidden)
                     // commit box, so typing lands in the name/email fields.
-                    panel.commit_focused = false;
+                    panel.defocus_commit_input(0);
                     panel.commit_no_changes = false;
                 } else if !message.is_empty() {
                     match self.git_session.tracked_file().map(|p| p.to_path_buf()) {
@@ -307,8 +311,8 @@ impl DesktopApp {
                                                 .editor_state_mut()
                                                 .editor_ui
                                                 .git_panel;
-                                            panel.commit_message.clear();
-                                            panel.commit_focused = false;
+                                            panel.commit_input.set_text("");
+                                            panel.defocus_commit_input(0);
                                             panel.commit_no_changes = false;
                                         }
                                         // Nothing changed — keep the message and
@@ -371,7 +375,7 @@ impl DesktopApp {
                         }
                     }
                     let panel = &mut self.host.editor_state_mut().editor_ui.git_panel;
-                    panel.remote_draft.clear();
+                    panel.remote_input.set_text("");
                     panel.remote_focused = false;
                 }
             }
@@ -707,7 +711,7 @@ impl DesktopApp {
         match result {
             Ok(()) => {
                 let panel = &mut self.host.editor_state_mut().editor_ui.git_panel;
-                panel.https_draft.clear();
+                panel.https_input.set_text("");
                 panel.https_focused = false;
             }
             Err(err) => {
@@ -769,7 +773,7 @@ impl DesktopApp {
     }
 
     /// Clone wizard "浏览…" — a native folder picker for the clone
-    /// destination, written back into the form's `dest` field.
+    /// destination, written back into the form's destination input.
     fn pick_clone_dest(&mut self) {
         let Some(folder) = rfd::FileDialog::new().pick_folder() else {
             return;
@@ -783,7 +787,7 @@ impl DesktopApp {
             .clone_form
             .as_mut()
         {
-            form.dest = path;
+            form.dest_input.set_text(path);
             form.focus = Some(op_editor_core::CloneField::Dest);
             form.error = None;
         }
@@ -808,7 +812,10 @@ impl DesktopApp {
             else {
                 return;
             };
-            (form.url.trim().to_string(), form.dest.trim().to_string())
+            (
+                form.url_input.text().trim().to_string(),
+                form.dest_input.text().trim().to_string(),
+            )
         };
         let validation = if url.is_empty() {
             Some("git.wizard.clone.validationUrl")

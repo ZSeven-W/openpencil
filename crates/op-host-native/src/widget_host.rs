@@ -36,7 +36,11 @@ use op_editor_ui::{Rect, Theme};
 
 #[cfg(test)]
 mod agent_settings_acp_tests;
+#[cfg(test)]
+mod agent_settings_compact_press_tests;
 mod agent_settings_draft_dispatch;
+#[cfg(test)]
+mod agent_settings_form_press_tests;
 #[cfg(test)]
 mod agent_settings_image_gen_tests;
 #[cfg(test)]
@@ -63,7 +67,11 @@ mod chat_send_tests;
 mod click;
 mod color_picker_press;
 mod component_browser_press;
+#[cfg(test)]
+mod deferred_press_tests;
 mod design_md_press;
+#[cfg(test)]
+mod design_md_press_tests;
 #[cfg(test)]
 mod figma_import_tests;
 mod font_picker_dispatch;
@@ -76,6 +84,8 @@ mod git_press;
 mod helpers;
 mod history_guard;
 mod icon_picker_press;
+#[cfg(test)]
+mod icon_picker_press_tests;
 mod image_panel_dispatch;
 mod ime;
 mod input;
@@ -97,7 +107,10 @@ mod press;
 mod press_helpers;
 mod property_dispatch;
 mod property_layout_dispatch;
+#[cfg(test)]
+mod property_panel_press_tests;
 mod property_popovers;
+mod release_feedback;
 mod scroll;
 #[cfg(test)]
 mod scroll_tests;
@@ -116,6 +129,8 @@ mod text_edit_press_tests;
 mod theme_tests;
 mod toolbar_actions;
 mod toolbar_hover;
+#[cfg(test)]
+mod variables_panel_add_tests;
 mod variables_panel_commit;
 mod variables_panel_geometry;
 mod variables_panel_press;
@@ -280,8 +295,8 @@ pub struct WidgetHostNative {
     /// Bumped past the highest sample id so new + sample nodes
     /// never collide on the same key.
     pub(in crate::widget_host) next_node_id: u64,
-    /// Host-supplied frame timestamp in milliseconds. Drives the
-    /// caret blink via `jian_core::anim::blink_visible`. The
+    /// Host-supplied frame timestamp in milliseconds. Focused
+    /// `TextInputState`s use this for caret blink. The
     /// inspector_window runner refreshes this once per
     /// `RedrawRequested` from a single `Instant` start anchor;
     /// any other host (mobile / browser) installs its own clock.
@@ -862,105 +877,14 @@ impl WidgetHostNative {
     /// Next millisecond at which the host should wake to repaint
     /// the caret blink phase. `None` = no animation pending.
     pub fn next_animation_deadline_ms(&self) -> Option<u64> {
-        let ui = &self.editor_state.ui;
-        if ui.text_editing.is_some() {
-            return Some(jian_core::anim::next_blink_flip_ms(
-                self.now_ms,
-                ui.text_edit_caret_anchor_ms,
-                500,
-            ));
+        if let Some(input) = self.editor_state.active_text_input() {
+            return Some(input.next_blink_flip_ms(self.now_ms));
         }
-        if ui.layer_rename.is_some() {
-            return Some(jian_core::anim::next_blink_flip_ms(
-                self.now_ms,
-                self.editor_state.editor_ui.rename_caret_anchor_ms,
-                500,
-            ));
-        }
-        if ui.property_focus.is_some() {
-            return Some(jian_core::anim::next_blink_flip_ms(
-                self.now_ms,
-                ui.property_caret_anchor_ms,
-                500,
-            ));
-        }
-        if self
-            .editor_state
-            .editor_ui
-            .variables_theme_rename_axis
-            .is_some()
-            || self
-                .editor_state
-                .editor_ui
-                .variables_variant_rename_value
-                .is_some()
-            || self.editor_state.editor_ui.variable_row_focus.is_some()
-        {
-            return Some(jian_core::anim::next_blink_flip_ms(
-                self.now_ms,
-                ui.property_caret_anchor_ms,
-                500,
-            ));
-        }
-        if self.editor_state.editor_ui.agent_settings_open
-            && self.editor_state.editor_ui.agent_settings.focus.is_some()
-        {
-            return Some(jian_core::anim::next_blink_flip_ms(
-                self.now_ms,
-                self.editor_state.editor_ui.settings_input_caret_anchor_ms,
-                500,
-            ));
-        }
-        if self.editor_state.editor_ui.chat_model_picker_open {
-            return Some(jian_core::anim::next_blink_flip_ms(
-                self.now_ms,
-                self.editor_state
-                    .editor_ui
-                    .chat_model_picker_caret_anchor_ms,
-                500,
-            ));
-        }
-        if self.editor_state.chat.focused {
-            return Some(jian_core::anim::next_blink_flip_ms(
-                self.now_ms,
-                self.editor_state.chat.caret_anchor_ms,
-                500,
-            ));
-        }
-        // Git commit textarea caret — same 500 ms cadence the ready
-        // panel paints at (`git_panel_ready.rs`). Without this wake the
-        // window never repaints while the commit box is focused, so the
-        // caret sits static instead of blinking.
-        if self.editor_state.editor_ui.git_panel.commit_focused {
-            return Some(jian_core::anim::next_blink_flip_ms(
-                self.now_ms,
-                self.editor_state.editor_ui.git_panel.commit_caret_anchor_ms,
-                500,
-            ));
-        }
-        // Remote-settings inputs (remote URL + HTTPS username:token) share
-        // the same caret cadence; without this wake their caret stays
-        // static while focused.
-        if self.editor_state.editor_ui.git_panel.remote_focused
-            || self.editor_state.editor_ui.git_panel.https_focused
-            || self.editor_state.editor_ui.git_panel.branch_create_focused
-        {
-            return Some(jian_core::anim::next_blink_flip_ms(
-                self.now_ms,
-                self.editor_state.editor_ui.git_panel.commit_caret_anchor_ms,
-                500,
-            ));
-        }
-        // Clone-wizard field caret, and while a `git clone` runs — keep
-        // the loop ticking so the caret blinks and `poll_git_clone_job`
-        // drains the worker's result on a later frame.
+        // While a `git clone` runs, keep the loop ticking so
+        // `poll_git_clone_job` drains the worker's result later.
         if let Some(form) = &self.editor_state.editor_ui.git_panel.clone_form {
-            if form.focus.is_some() || form.cloning {
-                return Some(jian_core::anim::next_blink_flip_ms(
-                    self.now_ms,
-                    form.caret_anchor_ms,
-                    500,
-                ));
+            if form.cloning {
+                return Some(self.now_ms.saturating_add(100));
             }
         }
         None

@@ -15,6 +15,8 @@ use crate::theme::Theme;
 use crate::widgets::editor_state_ext::theme_for;
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect};
+pub use jian_widgets::components::menu::MenuHit;
+pub use jian_widgets::components::select::SelectHit;
 use op_editor_core::{EditorState, GitButton, GitPanelState};
 
 /// Panel width in logical px (TS ready/history popover is `w-[420px]`).
@@ -247,6 +249,8 @@ pub struct GitPanel<'a> {
     /// Wall-clock ms, for caret-blink animation. `0` (hit-test / tests)
     /// just yields a steady un-blinked caret.
     pub(super) now_ms: u64,
+    /// Which Git action button is currently pressed by the primary pointer.
+    pub(super) pressed: Option<GitButton>,
 }
 
 impl<'a> GitPanel<'a> {
@@ -269,6 +273,10 @@ impl<'a> GitPanel<'a> {
             theme: theme_for(&state.editor_ui),
             locale: state.editor_ui.locale,
             now_ms,
+            pressed: match state.editor_ui.pressed_button {
+                Some(op_editor_core::ButtonPressTarget::Git(button)) => Some(button),
+                _ => None,
+            },
         })
     }
 
@@ -281,8 +289,13 @@ impl<'a> GitPanel<'a> {
         mapped.is_some() && self.state.button_hover == mapped
     }
 
-    /// Paint a `theme.button_hover` wash over `rect` (corner radius `r`)
-    /// when the cursor is over the button `hit` represents.
+    pub(super) fn is_pressed(&self, hit: GitPanelHit) -> bool {
+        crate::widgets::editor_state_ext::git_button_hover(hit)
+            .is_some_and(|b| self.pressed == Some(b))
+    }
+
+    /// Paint shared button feedback over `rect` when the cursor is over
+    /// the button `hit` represents.
     pub(super) fn wash_if_hovered(
         &self,
         cx: &mut PaintCx<'_>,
@@ -290,8 +303,25 @@ impl<'a> GitPanel<'a> {
         r: f32,
         hit: GitPanelHit,
     ) {
-        if self.is_hovered(hit) {
-            cx.backend.fill_round_rect(rect, r, self.theme.button_hover);
+        let hovered = self.is_hovered(hit);
+        let pressed = self.is_pressed(hit);
+        if (r - 6.0).abs() < 0.01 {
+            crate::widgets::button::paint_ghost_button_feedback(
+                cx.backend,
+                &self.theme,
+                rect,
+                hovered,
+                pressed,
+            );
+        } else {
+            crate::widgets::button::paint_button_feedback_wash(
+                cx.backend,
+                &self.theme,
+                rect,
+                r,
+                hovered,
+                pressed,
+            );
         }
     }
 
@@ -620,7 +650,7 @@ impl<'a> GitPanel<'a> {
             self.paint_input(cx, rects.input);
             // Commit needs a message *and* a staged file — it commits
             // exactly the staged set, so nothing staged is a no-op.
-            let commit_enabled = !self.state.commit_message.trim().is_empty()
+            let commit_enabled = !self.state.commit_input.text().trim().is_empty()
                 && self.state.changed_files.iter().any(|f| f.staged);
             self.paint_button_with_hit(
                 cx,
@@ -789,10 +819,8 @@ impl<'a> GitPanel<'a> {
                 let is_current = Some(name) == self.state.branch.as_ref();
                 if is_current {
                     cx.backend.fill_round_rect(*row, 4.0, self.theme.muted);
-                } else if self.state.button_hover == Some(GitButton::SwitchBranch(i)) {
-                    // Switch-on-click row gets a hover wash.
-                    cx.backend
-                        .fill_round_rect(*row, 4.0, self.theme.button_hover);
+                } else {
+                    self.wash_if_hovered(cx, *row, 4.0, GitPanelHit::SwitchBranch(i));
                 }
                 let (marker, color) = if is_current {
                     ("● ", self.theme.primary)
@@ -816,6 +844,7 @@ impl<'a> GitPanel<'a> {
                         Self::branch_merge_button(*row),
                         "⤵",
                         self.state.button_hover == Some(GitButton::MergeBranch(i)),
+                        self.pressed == Some(GitButton::MergeBranch(i)),
                     );
                 }
             }
@@ -847,10 +876,17 @@ impl<'a> GitPanel<'a> {
             (false, _) => (self.theme.muted, self.theme.muted_foreground),
         };
         cx.backend.fill_round_rect(rect, 6.0, fill);
-        // Hover wash — only when actionable + the cursor is on this button.
-        if enabled && hit.is_some_and(|h| self.is_hovered(h)) {
-            cx.backend
-                .fill_round_rect(rect, 6.0, self.theme.button_hover);
+        // Hover/pressed wash — only when actionable + the pointer is on this button.
+        if enabled {
+            let hovered = hit.is_some_and(|h| self.is_hovered(h));
+            let pressed = hit.is_some_and(|h| self.is_pressed(h));
+            crate::widgets::button::paint_ghost_button_feedback(
+                cx.backend,
+                &self.theme,
+                rect,
+                hovered,
+                pressed,
+            );
         }
         if !primary {
             cx.backend

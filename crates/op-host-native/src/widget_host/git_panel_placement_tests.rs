@@ -7,7 +7,8 @@
 
 use super::helpers::GIT_PANEL_CARET_GAP;
 use super::{CursorHint, WidgetHostNative};
-use op_editor_ui::widgets::{GitPanel, TopBar, TOP_BAR_HEIGHT};
+use op_editor_core::{ButtonPressTarget, GitButton, GitFileEntry, GitPanelAction};
+use op_editor_ui::widgets::{GitPanel, GitPanelHit, TopBar, TOP_BAR_HEIGHT};
 use op_editor_ui::{Point2D, Rect};
 
 /// A host with the Git panel open in its no-repo onboarding state
@@ -20,6 +21,24 @@ fn host_with_git_panel_open() -> WidgetHostNative {
     panel.in_repo = false;
     panel.has_saved_file = false;
     host
+}
+
+fn find_git_hit(panel: &GitPanel<'_>, body: Rect, target: GitPanelHit) -> Point2D {
+    let mut y = body.origin.y;
+    let max_y = body.origin.y + body.size.y + 140.0;
+    while y <= max_y {
+        let mut x = body.origin.x;
+        let max_x = body.origin.x + body.size.x;
+        while x <= max_x {
+            let point = Point2D::new(x, y);
+            if panel.hit_test(body, point) == Some(target) {
+                return point;
+            }
+            x += 4.0;
+        }
+        y += 4.0;
+    }
+    panic!("could not find git hit target {target:?}");
 }
 
 #[test]
@@ -42,6 +61,138 @@ fn open_git_popover_is_modal_and_dismisses_on_any_outside_press() {
         !host.editor_state().editor_ui.git_panel.branch_picker_open,
         "an outside press must dismiss the open branch-picker popover"
     );
+}
+
+#[test]
+fn git_commit_input_uses_text_input_state_for_editing() {
+    let mut host = host_with_git_panel_open();
+    {
+        let panel = &mut host.editor_state_mut().editor_ui.git_panel;
+        panel.in_repo = true;
+        panel.branch = Some("main".to_string());
+        panel.commit_focused = true;
+        panel.commit_input.set_text("设计");
+        panel.changed_files = vec![GitFileEntry {
+            path: "design.op".into(),
+            staged: true,
+            status: 'M',
+        }];
+    }
+
+    assert!(host.apply_select_all());
+    {
+        let panel = &host.editor_state().editor_ui.git_panel;
+        assert!(panel.commit_input.is_select_all());
+    }
+
+    assert!(host.apply_text('改'));
+    assert_eq!(
+        host.editor_state().editor_ui.git_panel.commit_input.text(),
+        "改"
+    );
+
+    assert!(host.apply_text('进'));
+    assert_eq!(
+        host.editor_state().editor_ui.git_panel.commit_input.text(),
+        "改进"
+    );
+
+    assert!(host.apply_backspace());
+    assert_eq!(
+        host.editor_state().editor_ui.git_panel.commit_input.text(),
+        "改"
+    );
+
+    assert!(host.apply_send());
+    assert_eq!(
+        host.editor_state().editor_ui.git_panel.pending_action,
+        Some(GitPanelAction::Commit)
+    );
+}
+
+#[test]
+fn git_remote_inputs_use_text_input_state_for_editing() {
+    let mut host = host_with_git_panel_open();
+    {
+        let panel = &mut host.editor_state_mut().editor_ui.git_panel;
+        panel.in_repo = true;
+        panel.branch = Some("main".to_string());
+        panel.remote_focused = true;
+        panel.remote_input.set_text("https://old.example/repo.git");
+    }
+
+    assert!(host.apply_select_all());
+    assert!(host.apply_text('新'));
+    assert_eq!(
+        host.editor_state().editor_ui.git_panel.remote_input.text(),
+        "新"
+    );
+    assert!(host.apply_text('址'));
+    assert_eq!(
+        host.editor_state().editor_ui.git_panel.remote_input.text(),
+        "新址"
+    );
+    assert!(host.apply_backspace());
+    assert_eq!(
+        host.editor_state().editor_ui.git_panel.remote_input.text(),
+        "新"
+    );
+    assert!(host.apply_send());
+    assert_eq!(
+        host.editor_state().editor_ui.git_panel.pending_action,
+        Some(GitPanelAction::SetRemote("新".to_string()))
+    );
+
+    {
+        let panel = &mut host.editor_state_mut().editor_ui.git_panel;
+        panel.pending_action = None;
+        panel.remote_focused = false;
+        panel.https_focused = true;
+        panel.https_input.set_text("user:old-token");
+    }
+    assert!(host.apply_select_all());
+    for c in "user:new-token".chars() {
+        assert!(host.apply_text(c));
+    }
+    assert!(host.apply_send());
+    assert_eq!(
+        host.editor_state().editor_ui.git_panel.pending_action,
+        Some(GitPanelAction::SetHttpsAuth("user:new-token".to_string()))
+    );
+}
+
+#[test]
+fn git_branch_create_input_uses_text_input_state_for_editing() {
+    let mut host = host_with_git_panel_open();
+    {
+        let panel = &mut host.editor_state_mut().editor_ui.git_panel;
+        panel.in_repo = true;
+        panel.branch = Some("main".to_string());
+        panel.branch_picker_open = true;
+        panel.branch_create_focused = true;
+        panel.branch_create_input.set_text("old");
+    }
+
+    assert!(host.apply_select_all());
+    for c in "feature/new".chars() {
+        assert!(host.apply_text(c));
+    }
+    assert_eq!(
+        host.editor_state()
+            .editor_ui
+            .git_panel
+            .branch_create_input
+            .text(),
+        "feature/new"
+    );
+    assert!(host.apply_send());
+    let panel = &host.editor_state().editor_ui.git_panel;
+    assert_eq!(
+        panel.pending_action,
+        Some(GitPanelAction::CreateBranch("feature/new".to_string()))
+    );
+    assert!(panel.branch_create_input.text().is_empty());
+    assert!(!panel.branch_create_focused);
 }
 
 #[test]
@@ -236,6 +387,74 @@ fn init_card_hover_tracks_the_card_index_and_not_allowed_cursor() {
 }
 
 #[test]
+fn git_popover_row_hover_uses_shared_menu_state() {
+    let mut host = WidgetHostNative::new();
+    let (vw, vh) = (1400.0, 900.0);
+    host.last_viewport_w = vw;
+    host.last_viewport_h = vh;
+    {
+        let panel = &mut host.editor_state_mut().editor_ui.git_panel;
+        panel.open = true;
+        panel.loading = false;
+        panel.in_repo = true;
+        panel.branch = Some("main".to_string());
+        panel.overflow_open = true;
+    }
+    let body = host.git_panel_rect(vw, vh).expect("panel open");
+    let panel = GitPanel::for_editor(host.editor_state()).expect("panel widget");
+    let point = find_git_hit(&panel, body, GitPanelHit::OverflowRemoteSettings);
+    assert!(host.update_git_panel_ready_hover(point.x, point.y));
+    assert_eq!(
+        host.editor_state().editor_ui.git_panel.overflow_menu.hover,
+        Some(2)
+    );
+
+    {
+        let panel = &mut host.editor_state_mut().editor_ui.git_panel;
+        panel.overflow_open = false;
+        panel.overflow_menu.hover = None;
+        panel.branch_picker_open = true;
+        panel.branches = vec!["main".to_string(), "feature".to_string()];
+    }
+    let panel = GitPanel::for_editor(host.editor_state()).expect("panel widget");
+    let point = find_git_hit(&panel, body, GitPanelHit::SwitchBranch(1));
+    assert!(host.update_git_panel_ready_hover(point.x, point.y));
+    assert_eq!(
+        host.editor_state()
+            .editor_ui
+            .git_panel
+            .branch_picker_menu
+            .hover,
+        Some(1)
+    );
+}
+
+#[test]
+fn git_panel_press_sets_and_release_clears_pressed_button() {
+    let mut host = WidgetHostNative::new();
+    let (vw, vh) = (1400.0, 900.0);
+    {
+        let panel = &mut host.editor_state_mut().editor_ui.git_panel;
+        panel.open = true;
+        panel.loading = false;
+        panel.in_repo = true;
+        panel.branch = Some("main".to_string());
+    }
+    let body = host.git_panel_rect(vw, vh).expect("panel open");
+    let panel = GitPanel::for_editor(host.editor_state()).expect("panel widget");
+    let point = find_git_hit(&panel, body, GitPanelHit::Overflow);
+
+    assert!(host.apply_press(point.x, point.y, vw, vh));
+    assert_eq!(
+        host.editor_state().editor_ui.pressed_button,
+        Some(ButtonPressTarget::Git(GitButton::Overflow))
+    );
+
+    assert!(host.apply_release_with_viewport(vw, vh));
+    assert_eq!(host.editor_state().editor_ui.pressed_button, None);
+}
+
+#[test]
 fn clone_wizard_owns_keyboard_and_enter() {
     use op_editor_core::{CloneField, CloneFormState, GitPanelAction};
     let mut host = host_with_git_panel_open();
@@ -258,7 +477,8 @@ fn clone_wizard_owns_keyboard_and_enter() {
             .clone_form
             .as_ref()
             .unwrap()
-            .url,
+            .url_input
+            .text(),
         "http"
     );
     // Enter on a focused field requests the clone.
@@ -302,7 +522,8 @@ fn hidden_clone_form_does_not_capture_keyboard() {
             .clone_form
             .as_ref()
             .unwrap()
-            .url,
+            .url_input
+            .text(),
         "",
         "a hidden clone form must not capture keystrokes"
     );
@@ -349,7 +570,35 @@ fn clone_wizard_accepts_pasted_url() {
             .clone_form
             .as_ref()
             .unwrap()
-            .url,
+            .url_input
+            .text(),
         "https://github.com/owner/repo.git"
     );
+}
+
+#[test]
+fn clone_wizard_select_all_replaces_only_the_focused_field() {
+    use op_editor_core::{CloneField, CloneFormState};
+    let mut host = host_with_git_panel_open();
+    let mut form = CloneFormState {
+        focus: Some(CloneField::Dest),
+        ..Default::default()
+    };
+    form.url_input.set_text("https://github.com/owner/repo.git");
+    form.dest_input.set_text("/tmp/repo");
+    host.editor_state_mut().editor_ui.git_panel.clone_form = Some(form);
+
+    assert!(host.apply_select_all());
+    assert!(host.apply_text('x'));
+
+    let form = host
+        .editor_state()
+        .editor_ui
+        .git_panel
+        .clone_form
+        .as_ref()
+        .unwrap();
+    assert_eq!(form.url_input.text(), "https://github.com/owner/repo.git");
+    assert_eq!(form.dest_input.text(), "x");
+    assert_eq!(form.dest_input.caret(), 1);
 }

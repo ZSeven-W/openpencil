@@ -20,6 +20,7 @@ impl DesktopApp {
         panel.ssh_keys = names;
         panel.overflow_view = GitOverflowView::SshKeys;
         panel.overflow_open = true;
+        panel.close_tracked_picker();
     }
 
     /// SSH subview "导入现有密钥" — pick a private key file and import it into

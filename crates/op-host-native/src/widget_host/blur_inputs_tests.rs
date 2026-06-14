@@ -30,8 +30,11 @@ fn top_bar_gap_press_blurs_chat_and_model_picker() {
     let mut host = WidgetHostNative::new();
     seed(&mut host, ONE_RECT);
     host.editor_state_mut().chat.focused = true;
-    host.editor_state_mut().editor_ui.chat_model_picker_open = true;
-    host.editor_state_mut().editor_ui.chat_model_picker_search = "gpt".into();
+    host.editor_state_mut().editor_ui.chat_model_picker.open = true;
+    host.editor_state_mut()
+        .editor_ui
+        .chat_model_picker_input
+        .set_text("gpt");
 
     // Dead centre of the top bar — between the left file controls and
     // the right chrome chips.
@@ -42,8 +45,8 @@ fn top_bar_gap_press_blurs_chat_and_model_picker() {
         !state.chat.focused,
         "top-bar gap press must blur the chat input"
     );
-    assert!(!state.editor_ui.chat_model_picker_open);
-    assert!(state.editor_ui.chat_model_picker_search.is_empty());
+    assert!(!state.editor_ui.chat_model_picker.open);
+    assert!(state.editor_ui.chat_model_picker_input.text().is_empty());
 }
 
 #[test]
@@ -58,12 +61,15 @@ fn canvas_press_defocuses_every_git_input() {
         git.author_name_focused = true;
         git.author_email_focused = true;
         git.branch_create_focused = true;
-        git.clone_form = Some(CloneFormState {
-            url: "https://example.com/repo.git".into(),
-            dest: "/tmp/repo".into(),
+        let mut clone_form = CloneFormState {
             focus: Some(CloneField::Url),
             ..Default::default()
-        });
+        };
+        clone_form
+            .url_input
+            .set_text("https://example.com/repo.git");
+        clone_form.dest_input.set_text("/tmp/repo");
+        git.clone_form = Some(clone_form);
     }
 
     // Empty canvas — right of the chat panel (which floats bottom-left,
@@ -87,7 +93,7 @@ fn settings_modal_blank_press_commits_mcp_port_draft() {
         let eui = &mut host.editor_state_mut().editor_ui;
         eui.agent_settings_open = true;
         eui.agent_settings.focus = Some(SettingsFocus::McpPort);
-        eui.settings_input_draft = "4321".into();
+        eui.settings_input.set_text("4321");
     }
 
     // Bottom of the modal's sidebar column — below the nav tabs, no
@@ -117,7 +123,7 @@ fn property_panel_gap_press_commits_size_draft() {
     // property-rail gap this test presses.
     host.editor_state_mut().chat.collapsed = true;
     host.editor_state_mut().ui.property_focus = Some(PropertyFocus::SizeW);
-    host.editor_state_mut().ui.property_input_draft = "321".into();
+    host.editor_state_mut().ui.property_input.set_text("321");
 
     // Inside the right rail's edge padding — the input rows are inset
     // from the panel edges, so 2 px from the viewport edge hits no
@@ -144,7 +150,10 @@ fn canvas_press_commits_variables_header_rename() {
     host.editor_state_mut()
         .editor_ui
         .variables_theme_rename_axis = Some("Theme-1".into());
-    host.editor_state_mut().ui.property_input_draft = "Brand".into();
+    host.editor_state_mut()
+        .editor_ui
+        .variables_header_input
+        .set_text("Brand");
 
     // Empty canvas right of the chat panel (floats bottom-left, x ≤ 612).
     assert!(host.apply_press(700.0, 400.0, VW, VH));
@@ -171,7 +180,10 @@ fn canvas_press_commits_variables_variant_header_rename() {
     host.editor_state_mut()
         .editor_ui
         .variables_variant_rename_value = Some("Default".into());
-    host.editor_state_mut().ui.property_input_draft = "Default123213".into();
+    host.editor_state_mut()
+        .editor_ui
+        .variables_header_input
+        .set_text("Default123213");
 
     // Empty canvas right of the chat panel (floats bottom-left, x <= 612).
     assert!(host.apply_press(700.0, 400.0, VW, VH));
@@ -199,7 +211,10 @@ fn canvas_press_commits_implicit_default_variant_rename() {
     host.editor_state_mut()
         .editor_ui
         .variables_variant_rename_value = Some("Default".into());
-    host.editor_state_mut().ui.property_input_draft = "Default123213".into();
+    host.editor_state_mut()
+        .editor_ui
+        .variables_header_input
+        .set_text("Default123213");
 
     // Empty canvas right of the chat panel (floats bottom-left, x <= 612).
     assert!(host.apply_press(700.0, 400.0, VW, VH));

@@ -27,7 +27,7 @@ impl<'a> AIChatPlaceholder<'a> {
         if let Some(edge) = self.resize_edge_at(rect, point) {
             return Some(AIChatHit::Resize(edge));
         }
-        if !rect_contains(rect, point) {
+        if !(rect).contains(point) {
             return None;
         }
         // When collapsed: anywhere on the pill expands it. Drag
@@ -40,7 +40,7 @@ impl<'a> AIChatPlaceholder<'a> {
         }
         let can_use_model = !self.state.available_models.is_empty();
         // Expanded: chevron + "New Chat" title group toggles collapse.
-        if rect_contains(self.expanded_header_title_rect(rect), point) {
+        if (self.expanded_header_title_rect(rect)).contains(point) {
             return Some(AIChatHit::ToggleCollapse);
         }
         let header_y = rect.origin.y + 8.0;
@@ -48,14 +48,14 @@ impl<'a> AIChatPlaceholder<'a> {
             origin: Point2D::new(rect.origin.x + rect.size.x - PAD - 50.0, header_y),
             size: Point2D::new(22.0, 22.0),
         };
-        if rect_contains(maximize_rect, point) {
+        if (maximize_rect).contains(point) {
             return Some(AIChatHit::ToggleMaximize);
         }
         let new_chat_rect = Rect {
             origin: Point2D::new(rect.origin.x + rect.size.x - PAD - 22.0, header_y),
             size: Point2D::new(22.0, 22.0),
         };
-        if rect_contains(new_chat_rect, point) {
+        if (new_chat_rect).contains(point) {
             return Some(AIChatHit::NewChat);
         }
         // Must match `paint` exactly: paint draws the separator at
@@ -68,30 +68,33 @@ impl<'a> AIChatPlaceholder<'a> {
         // open it behaves modally: a row click selects, any other
         // click dismisses it. Hit-tested before the input so a row
         // click isn't eaten by the message list beneath.
-        if self.model_picker_open {
+        if self.model_picker.open {
             let picker = self.model_picker_rect(rect, input_rect);
             if crate::widgets::ai_chat_model_picker::search_clear_hit(
                 picker,
                 point,
-                &self.model_picker_search,
+                self.model_picker_input.text(),
             ) {
                 return Some(AIChatHit::ClearModelSearch);
             }
-            if let Some(idx) = crate::widgets::ai_chat_model_picker::model_at(
+            match crate::widgets::ai_chat_model_picker::model_picker_hit(
+                self.model_picker,
                 picker,
                 point,
                 &self.state.available_models,
-                self.model_picker_scroll,
-                &self.model_picker_search,
+                self.model_picker_input.text(),
             ) {
-                return Some(AIChatHit::SelectModel(idx));
-            }
-            if rect_contains(picker, point) {
-                return Some(AIChatHit::FocusModelSearch);
+                jian_widgets::components::select::SelectHit::Row(idx) => {
+                    return Some(AIChatHit::SelectModel(idx));
+                }
+                jian_widgets::components::select::SelectHit::Inside => {
+                    return Some(AIChatHit::FocusModelSearch);
+                }
+                jian_widgets::components::select::SelectHit::Outside => {}
             }
             return Some(AIChatHit::ToggleModelPicker);
         }
-        if rect_contains(input_rect, point) {
+        if (input_rect).contains(point) {
             let attach_top = input_rect.origin.y + input_area_h;
             let attach_h = self.attachment_row_h();
             let toolbar_top = attach_top + attach_h;
@@ -99,7 +102,7 @@ impl<'a> AIChatPlaceholder<'a> {
                 if self.is_streaming() {
                     return Some(AIChatHit::Inside);
                 }
-                if self.state.input.is_empty() {
+                if self.state.input.text().is_empty() {
                     return Some(AIChatHit::FocusInput);
                 }
                 let text_area = Rect {
@@ -111,7 +114,7 @@ impl<'a> AIChatPlaceholder<'a> {
                     text_area,
                     point,
                 )
-                .unwrap_or(self.state.input.len());
+                .unwrap_or(self.state.input.text().len());
                 return Some(AIChatHit::SelectInputText(offset));
             }
             // Staged-attachment strip — present only when attachments
@@ -132,28 +135,28 @@ impl<'a> AIChatPlaceholder<'a> {
             // on the left, with attach + send icon buttons on the right.
             if point.y >= toolbar_top {
                 let footer = self.footer_layout(rect, input_rect, toolbar_top);
-                if rect_contains(footer.model, point) {
+                if (footer.model).contains(point) {
                     return Some(if can_use_model {
                         AIChatHit::ToggleModelPicker
                     } else {
                         AIChatHit::FocusInput
                     });
                 }
-                if rect_contains(footer.agent_team, point) {
+                if (footer.agent_team).contains(point) {
                     return Some(AIChatHit::CycleAgentTeam);
                 }
-                if rect_contains(footer.attach, point) {
+                if (footer.attach).contains(point) {
                     return Some(if self.is_streaming() {
                         AIChatHit::Inside
                     } else {
                         AIChatHit::AddAttachment
                     });
                 }
-                if rect_contains(footer.send, point) {
+                if (footer.send).contains(point) {
                     return Some(if self.is_streaming() {
                         AIChatHit::Stop
                     } else if can_use_model
-                        && (!self.state.input.trim().is_empty()
+                        && (!self.state.input.text().trim().is_empty()
                             || !self.state.pending_attachments.is_empty())
                     {
                         AIChatHit::Send
@@ -173,14 +176,14 @@ impl<'a> AIChatPlaceholder<'a> {
         if checklist_h > 0.0 {
             let input_h = self.input_height_for_rect(rect);
             let checklist = fixed_checklist_rect(rect, input_h, checklist_h);
-            if rect_contains(checklist, point) {
+            if (checklist).contains(point) {
                 let header = Rect::xywh(
                     checklist.origin.x,
                     checklist.origin.y + PROGRESS_H,
                     checklist.size.x,
                     HEADER_H,
                 );
-                if rect_contains(header, point) {
+                if (header).contains(point) {
                     return Some(AIChatHit::ToggleChecklist);
                 }
                 return Some(AIChatHit::FocusInput);
@@ -213,9 +216,16 @@ impl<'a> AIChatPlaceholder<'a> {
         }
         if self.state.messages.is_empty() && can_use_model && !self.is_streaming() {
             // Examples grid hit-test (only rendered when no messages).
-            for (card, ex) in example_card_rects(rect).iter().zip(self.examples.iter()) {
-                if rect_contains(*card, point) {
-                    return Some(AIChatHit::Example(ex.prompt.clone()));
+            for (index, (card, ex)) in example_card_rects(rect)
+                .iter()
+                .zip(self.examples.iter())
+                .enumerate()
+            {
+                if (*card).contains(point) {
+                    return Some(AIChatHit::Example {
+                        index,
+                        prompt: ex.prompt.clone(),
+                    });
                 }
             }
         }
@@ -239,7 +249,7 @@ impl<'a> AIChatPlaceholder<'a> {
             rect.size.x + RESIZE_GUTTER * 2.0,
             rect.size.y + RESIZE_GUTTER * 2.0,
         );
-        if !rect_contains(outer, point) {
+        if !(outer).contains(point) {
             return None;
         }
 
@@ -295,11 +305,11 @@ impl<'a> AIChatPlaceholder<'a> {
         rect: Rect,
         point: Point2D,
     ) -> Option<op_editor_core::ChatFooterButton> {
-        if self.state.collapsed || self.model_picker_open {
+        if self.state.collapsed || self.model_picker.open {
             return None;
         }
         let input_rect = self.input_rect(rect);
-        if !rect_contains(input_rect, point) {
+        if !(input_rect).contains(point) {
             return None;
         }
         let attach_h = self.attachment_row_h();
@@ -308,16 +318,16 @@ impl<'a> AIChatPlaceholder<'a> {
             return None;
         }
         let footer = self.footer_layout(rect, input_rect, toolbar_top);
-        if !self.state.available_models.is_empty() && rect_contains(footer.model, point) {
+        if !self.state.available_models.is_empty() && (footer.model).contains(point) {
             return Some(op_editor_core::ChatFooterButton::ModelPicker);
         }
-        if rect_contains(footer.agent_team, point) {
+        if (footer.agent_team).contains(point) {
             return Some(op_editor_core::ChatFooterButton::AgentTeam);
         }
-        if !self.is_streaming() && rect_contains(footer.attach, point) {
+        if !self.is_streaming() && (footer.attach).contains(point) {
             return Some(op_editor_core::ChatFooterButton::AddAttachment);
         }
-        if rect_contains(footer.send, point) {
+        if (footer.send).contains(point) {
             return Some(if self.is_streaming() {
                 op_editor_core::ChatFooterButton::Stop
             } else if !self.state.available_models.is_empty() {
@@ -339,13 +349,6 @@ impl<'a> AIChatPlaceholder<'a> {
         }
         example_card_rects(rect)
             .iter()
-            .position(|card| rect_contains(*card, point))
+            .position(|card| (*card).contains(point))
     }
-}
-
-fn rect_contains(r: Rect, p: Point2D) -> bool {
-    p.x >= r.origin.x
-        && p.x <= r.origin.x + r.size.x
-        && p.y >= r.origin.y
-        && p.y <= r.origin.y + r.size.y
 }

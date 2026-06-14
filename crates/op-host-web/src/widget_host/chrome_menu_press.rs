@@ -17,7 +17,7 @@ impl WidgetHost {
         viewport_width: f32,
     ) {
         use op_editor_core::editor_ui_state::FileAction;
-        use op_editor_ui::widgets::file_menu::{FileMenu, FileMenuChoice};
+        use op_editor_ui::widgets::file_menu::{FileMenu, FileMenuChoice, MenuHit};
         use op_editor_ui::widgets::top_bar::TopBar;
         self.refresh_layout_scene();
         let top_bar_rect = op_editor_ui::Rect {
@@ -31,23 +31,34 @@ impl WidgetHost {
         // clock paints the same menu rows.
         let menu = FileMenu::from_editor_ui(&self.editor_state.editor_ui, 0);
         let menu_rect = menu.rect_at(anchor);
-        if let Some(choice) = menu.hit_test(menu_rect, op_editor_ui::Point2D::new(x, y)) {
-            self.editor_state.editor_ui.pending_file_action = Some(match choice {
-                FileMenuChoice::NewFile => FileAction::New,
-                FileMenuChoice::OpenFile => FileAction::Open,
-                FileMenuChoice::Save => FileAction::Save,
-                FileMenuChoice::SaveAs => FileAction::SaveAs,
-                FileMenuChoice::ExportImage => FileAction::ExportImage,
-                FileMenuChoice::OpenRecent(i) => FileAction::OpenRecent(i),
-                FileMenuChoice::ClearRecent => FileAction::ClearRecent,
-            });
-        } else {
-            // Miss — the dismissing click is a blank press.
-            self.blur_text_inputs_on_blank_press();
+        let point = op_editor_ui::Point2D::new(x, y);
+        match menu.hit(menu_rect, point) {
+            MenuHit::Row(row) => {
+                let Some(choice) = menu.choice_for_row(row) else {
+                    return;
+                };
+                self.editor_state.editor_ui.pending_file_action = Some(match choice {
+                    FileMenuChoice::NewFile => FileAction::New,
+                    FileMenuChoice::OpenFile => FileAction::Open,
+                    FileMenuChoice::Save => FileAction::Save,
+                    FileMenuChoice::SaveAs => FileAction::SaveAs,
+                    FileMenuChoice::ExportImage => FileAction::ExportImage,
+                    FileMenuChoice::OpenRecent(i) => FileAction::OpenRecent(i),
+                    FileMenuChoice::ClearRecent => FileAction::ClearRecent,
+                });
+                self.editor_state.editor_ui.file_menu_open = false;
+                self.editor_state.editor_ui.file_menu.hover = None;
+                self.mark_dirty();
+            }
+            MenuHit::Inside => {}
+            MenuHit::Outside => {
+                // Miss — the dismissing click is a blank press.
+                self.blur_text_inputs_on_blank_press();
+                self.editor_state.editor_ui.file_menu_open = false;
+                self.editor_state.editor_ui.file_menu.hover = None;
+                self.mark_dirty();
+            }
         }
-        self.editor_state.editor_ui.file_menu_open = false;
-        self.editor_state.editor_ui.file_menu_hover = None;
-        self.mark_dirty();
     }
 
     /// Export-dialog press dispatcher.
@@ -64,7 +75,11 @@ impl WidgetHost {
         };
         let dlg = ExportDialog::centered(viewport_w, viewport_h);
         let point = op_editor_ui::Point2D::new(x, y);
-        match dlg.hit_test(point) {
+        let hit = dlg.hit_test(point);
+        self.editor_state.editor_ui.pressed_button = hit
+            .map(op_editor_ui::widgets::editor_state_ext::export_dialog_button)
+            .map(op_editor_core::ButtonPressTarget::ExportDialog);
+        match hit {
             Some(ExportDialogHit::Format(f)) => {
                 self.editor_state.editor_ui.export_format =
                     op_editor_ui::widgets::editor_state_ext::export_format(f);
@@ -108,7 +123,11 @@ impl WidgetHost {
         use op_editor_ui::widgets::figma_import::{FigmaImportHit, FigmaImportModal};
         let modal = FigmaImportModal::for_editor(&self.editor_state);
         let panel_rect = modal.rect(viewport_w, viewport_h);
-        match modal.hit_test(panel_rect, op_editor_ui::Point2D::new(x, y)) {
+        let hit = modal.hit_test(panel_rect, op_editor_ui::Point2D::new(x, y));
+        self.editor_state.editor_ui.pressed_button =
+            op_editor_ui::widgets::editor_state_ext::figma_import_button(hit)
+                .map(op_editor_core::ButtonPressTarget::FigmaImport);
+        match hit {
             FigmaImportHit::Close => {
                 self.editor_state.editor_ui.figma_import_open = false;
                 self.editor_state.editor_ui.figma_import_hover = None;

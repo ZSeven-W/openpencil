@@ -7,7 +7,6 @@ use crate::theme::Theme;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::property_panel::{NodeSnapshot, PropertyPanelAction};
 use crate::widgets::property_panel_image_preview::paint_image_preview;
-use crate::widgets::property_panel_inputs::to_jian_color;
 use crate::widgets::property_panel_layout::{
     action_button_rects_with_fill_picker, VisibleSections,
 };
@@ -33,13 +32,6 @@ fn panel_h() -> f32 {
         + ADJ_HEADER_H
         + op_editor_core::ImageAdjustmentField::ALL.len() as f32 * ADJ_ROW_H
         + PANEL_PAD
-}
-
-fn rect_contains(r: Rect, p: Point2D) -> bool {
-    p.x >= r.origin.x
-        && p.x <= r.origin.x + r.size.x
-        && p.y >= r.origin.y
-        && p.y <= r.origin.y + r.size.y
 }
 
 fn image_body_rect(panel_rect: Rect, visible: VisibleSections) -> Option<Rect> {
@@ -143,13 +135,13 @@ pub fn image_fill_popover_action_at(
         .into_iter()
         .rev()
     {
-        if rect_contains(rect, point) {
+        if (rect).contains(point) {
             return Some(action);
         }
     }
     let pop = popover_rect(panel_rect, visible)?;
     for (field, track) in adjustment_track_rects(pop) {
-        if rect_contains(track, point) {
+        if (track).contains(point) {
             let pct = ((point.x - track.origin.x) / track.size.x).clamp(0.0, 1.0);
             return Some(PropertyPanelAction::SetImageAdjustment {
                 field,
@@ -166,7 +158,7 @@ pub fn image_fill_popover_contains(
     point: Point2D,
 ) -> bool {
     popover_rect(panel_rect, visible)
-        .map(|pop| rect_contains(pop, point))
+        .map(|pop| (pop).contains(point))
         .unwrap_or(false)
 }
 
@@ -467,7 +459,7 @@ fn paint_label(
         label,
         "system-ui",
         size,
-        to_jian_color(color),
+        (color).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(&layout, Point2D::new(x, baseline_y));

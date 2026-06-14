@@ -7,7 +7,7 @@
 //! input-dispatch contract keeps `layout_scene` fresh before any
 //! hit-testing input event (see `widget_host.rs`).
 
-use super::helpers::{rect_contains, PANEL_RESIZE_GUTTER, STATUS_INSET};
+use super::helpers::{PANEL_RESIZE_GUTTER, STATUS_INSET};
 use super::{CursorHint, PanelResizeKind, WidgetHostNative};
 use op_editor_ui::widgets::{
     rotation_corner_at_point, selection_handle_at_point, AIChatHit, AIChatPlaceholder,
@@ -89,12 +89,13 @@ impl WidgetHostNative {
         {
             let ui = &mut self.editor_state.editor_ui;
             changed |= ui.canvas_hover_node.take().is_some();
-            changed |= ui.file_menu_hover.take().is_some();
-            changed |= ui.locale_picker_hover.take().is_some();
-            changed |= ui.shape_picker_hover.take().is_some();
+            changed |= ui.file_menu.hover.take().is_some();
+            changed |= ui.locale_picker.hover.take().is_some();
+            changed |= ui.shape_picker.hover.take().is_some();
+            changed |= ui.fill_type_picker.hover.take().is_some();
             changed |= ui.toolbar_hover.take().is_some();
             changed |= ui.align_toolbar_hover.take().is_some();
-            changed |= ui.chat_model_picker_hover.take().is_some();
+            changed |= ui.chat_model_picker.hover.take().is_some();
             changed |= ui.chat_design_block_hover.take().is_some();
             changed |= ui.chat_footer_hover.take().is_some();
             changed |= ui.export_picker_hover.take().is_some();
@@ -104,7 +105,7 @@ impl WidgetHostNative {
             changed |= ui.property_tab_hover.take().is_some();
             changed |= ui.variables_panel_hover.take().is_some();
             if let Some(menu) = ui.layer_context_menu.as_mut() {
-                changed |= menu.hovered_row.take().is_some();
+                changed |= menu.menu.hover.take().is_some();
             }
         }
         changed |= self.editor_state.codegen.framework_hover.take().is_some();
@@ -145,37 +146,41 @@ impl WidgetHostNative {
                 .unwrap_or(0);
             let menu = FileMenu::from_editor_ui(&self.editor_state.editor_ui, now_secs);
             let panel = menu.rect_at(anchor);
-            let new_hover = menu
-                .hovered_at(panel, Point2D::new(x, y))
-                .map(op_editor_ui::widgets::editor_state_ext::file_menu_choice);
-            if new_hover != self.editor_state.editor_ui.file_menu_hover {
-                self.editor_state.editor_ui.file_menu_hover = new_hover;
+            let new_hover = menu.hovered_at(panel, Point2D::new(x, y));
+            if new_hover != self.editor_state.editor_ui.file_menu.hover {
+                self.editor_state.editor_ui.file_menu.hover = new_hover;
                 self.mark_dirty();
                 return true;
             }
         }
-        if self.editor_state.editor_ui.locale_picker_open {
+        if self.editor_state.editor_ui.locale_picker.open {
             use op_editor_ui::widgets::locale_picker::LocalePicker;
             self.refresh_layout_scene();
             let panel = self.locale_picker_rect(self.last_viewport_w);
             let picker = LocalePicker::for_editor_ui(&self.editor_state.editor_ui);
-            let new_hover = picker.hit_test(panel, Point2D::new(x, y));
-            if new_hover != self.editor_state.editor_ui.locale_picker_hover {
-                self.editor_state.editor_ui.locale_picker_hover = new_hover;
+            let new_hover = match picker.hit_popup(panel, Point2D::new(x, y)) {
+                op_editor_ui::widgets::locale_picker::SelectHit::Row(idx) => Some(idx),
+                op_editor_ui::widgets::locale_picker::SelectHit::Inside
+                | op_editor_ui::widgets::locale_picker::SelectHit::Outside => None,
+            };
+            if new_hover != self.editor_state.editor_ui.locale_picker.hover {
+                self.editor_state.editor_ui.locale_picker.hover = new_hover;
                 self.mark_dirty();
                 return true;
             }
         }
-        if self.editor_state.editor_ui.shape_picker_open {
+        if self.editor_state.editor_ui.shape_picker.open {
             use op_editor_ui::widgets::shape_picker::ShapePicker;
             self.refresh_layout_scene();
             let panel = self.shape_picker_rect(self.last_viewport_w, self.last_viewport_h);
             let picker = ShapePicker::for_editor_ui(&self.editor_state.editor_ui);
-            let new_hover = picker
-                .hit_test(panel, Point2D::new(x, y))
-                .map(op_editor_ui::widgets::editor_state_ext::shape_choice);
-            if new_hover != self.editor_state.editor_ui.shape_picker_hover {
-                self.editor_state.editor_ui.shape_picker_hover = new_hover;
+            let new_hover = match picker.hit_popup(panel, Point2D::new(x, y)) {
+                op_editor_ui::widgets::shape_picker::SelectHit::Row(idx) => Some(idx),
+                op_editor_ui::widgets::shape_picker::SelectHit::Inside
+                | op_editor_ui::widgets::shape_picker::SelectHit::Outside => None,
+            };
+            if new_hover != self.editor_state.editor_ui.shape_picker.hover {
+                self.editor_state.editor_ui.shape_picker.hover = new_hover;
                 self.mark_dirty();
                 return true;
             }
@@ -363,7 +368,7 @@ impl WidgetHostNative {
         // it), so don't show the resize cursor over the panel.
         let over_git_panel = self
             .git_panel_outer_rect(viewport_w, viewport_h)
-            .is_some_and(|r| rect_contains(r, Point2D::new(x, y)));
+            .is_some_and(|r| (r).contains(Point2D::new(x, y)));
         if self.is_resizing_panel()
             || (!over_git_panel && self.panel_resize_hover(x, y, viewport_w).is_some())
         {

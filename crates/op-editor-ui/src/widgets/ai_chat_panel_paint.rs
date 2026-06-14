@@ -3,8 +3,9 @@
 //! lives in `ai_chat_transcript.rs`. Split out of `ai_chat_panel.rs`
 //! to keep that file under the 800-line cap.
 
-use super::ai_chat_panel::{to_jian_color, ExampleCard, HEADER_HEIGHT, PAD};
+use super::ai_chat_panel::{ExampleCard, HEADER_HEIGHT, PAD};
 use crate::theme::Theme;
+use crate::widgets::button::paint_button_feedback_wash;
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
 
@@ -29,10 +30,6 @@ pub(crate) fn example_card_rects(rect: Rect) -> [Rect; 4] {
             size: Point2D::new(card_w, EXAMPLE_CARD_HEIGHT),
         }
     })
-}
-
-fn with_alpha(color: Color, a: f32) -> Color {
-    Color { a, ..color }
 }
 
 fn wrapped_lines(
@@ -96,11 +93,11 @@ pub(crate) fn paint_panel_surface(cx: &mut PaintCx<'_>, theme: &Theme, rect: Rec
         size: rect.size,
     };
     cx.backend
-        .fill_round_rect(shadow_far, 14.0, with_alpha(Color::BLACK, 0.02));
+        .fill_round_rect(shadow_far, 14.0, (Color::BLACK).with_alpha(0.02));
     cx.backend
-        .fill_round_rect(shadow_near, 14.0, with_alpha(Color::BLACK, 0.06));
+        .fill_round_rect(shadow_near, 14.0, (Color::BLACK).with_alpha(0.06));
     cx.backend
-        .fill_round_rect(rect, 14.0, with_alpha(theme.card, 0.95));
+        .fill_round_rect(rect, 14.0, (theme.card).with_alpha(0.95));
     cx.backend.stroke_round_rect(rect, 14.0, theme.border, 1.0);
 }
 
@@ -116,7 +113,7 @@ pub(crate) fn paint_panel_body_chrome(cx: &mut PaintCx<'_>, theme: &Theme, rect:
     if sep_y > body_y {
         cx.backend.fill_rect(
             Rect::xywh(inner_x, body_y, inner_w, sep_y - body_y),
-            with_alpha(theme.background, 0.8),
+            (theme.background).with_alpha(0.8),
         );
     }
     // Full-width divider above the input (TS `border-t` spans the whole
@@ -136,13 +133,14 @@ pub(crate) fn paint_examples(
     examples: &[ExampleCard; 4],
     disabled: bool,
     hover: Option<usize>,
+    pressed_index: Option<usize>,
 ) {
     let opacity = if disabled { 0.6 } else { 1.0 };
     let hint = TextLayout::single_run(
         hint_label,
         "system-ui",
         12.0,
-        to_jian_color(with_alpha(theme.muted_foreground, opacity)),
+        ((theme.muted_foreground).with_alpha(opacity)).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     let hint_y = rect.origin.y + HEADER_HEIGHT + 16.0;
@@ -152,10 +150,10 @@ pub(crate) fn paint_examples(
         Point2D::new(rect.origin.x + (rect.size.x - hint_w) / 2.0, hint_y),
     );
 
-    let card_bg = with_alpha(theme.muted, 0.3 * opacity);
-    let card_border = with_alpha(theme.border, opacity);
-    let title_color = with_alpha(theme.foreground, opacity);
-    let subtitle_color = with_alpha(theme.muted_foreground, opacity);
+    let card_bg = (theme.muted).with_alpha(0.3 * opacity);
+    let card_border = (theme.border).with_alpha(opacity);
+    let title_color = (theme.foreground).with_alpha(opacity);
+    let subtitle_color = (theme.muted_foreground).with_alpha(opacity);
     for (idx, (card, ex)) in example_card_rects(rect)
         .iter()
         .zip(examples.iter())
@@ -163,11 +161,12 @@ pub(crate) fn paint_examples(
     {
         cx.backend.fill_round_rect(*card, 8.0, card_bg);
         let hovered = !disabled && hover == Some(idx);
-        if hovered {
-            cx.backend.fill_round_rect(*card, 8.0, theme.button_hover);
+        let pressed = !disabled && pressed_index == Some(idx);
+        if hovered || pressed {
+            paint_button_feedback_wash(cx.backend, theme, *card, 8.0, hovered, pressed);
         }
-        let border = if hovered {
-            with_alpha(theme.primary, 0.35)
+        let border = if hovered || pressed {
+            (theme.primary).with_alpha(0.35)
         } else {
             card_border
         };
@@ -187,7 +186,7 @@ pub(crate) fn paint_examples(
             ex.emoji,
             "system-ui",
             14.0,
-            to_jian_color(title_color),
+            (title_color).to_jian(),
             Point2D::new(0.0, 0.0),
         );
         let emoji_center_offset =
@@ -204,7 +203,7 @@ pub(crate) fn paint_examples(
                 line,
                 "system-ui",
                 EXAMPLE_TITLE_FONT,
-                to_jian_color(title_color),
+                (title_color).to_jian(),
                 Point2D::new(0.0, 0.0),
             );
             cx.backend.draw_text(
@@ -231,7 +230,7 @@ pub(crate) fn paint_examples(
                 line,
                 "system-ui",
                 EXAMPLE_SUBTITLE_FONT,
-                to_jian_color(subtitle_color),
+                (subtitle_color).to_jian(),
                 Point2D::new(0.0, 0.0),
             );
             cx.backend.draw_text(
@@ -252,7 +251,7 @@ pub(crate) fn paint_examples(
         tip_label,
         "system-ui",
         10.0,
-        to_jian_color(with_alpha(theme.muted_foreground, 0.5)),
+        ((theme.muted_foreground).with_alpha(0.5)).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     let tip_w = cx.backend.measure_text(tip_label, 10.0);
@@ -344,6 +343,7 @@ mod tests {
             "Tip",
             &examples,
             false,
+            None,
             None,
         );
 

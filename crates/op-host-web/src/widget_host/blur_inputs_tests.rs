@@ -12,8 +12,11 @@ const VH: f32 = 800.0;
 fn top_bar_gap_press_blurs_chat_and_model_picker() {
     let mut host = WidgetHost::new();
     host.editor_state.chat.focused = true;
-    host.editor_state.editor_ui.chat_model_picker_open = true;
-    host.editor_state.editor_ui.chat_model_picker_search = "gpt".into();
+    host.editor_state.editor_ui.chat_model_picker.open = true;
+    host.editor_state
+        .editor_ui
+        .chat_model_picker_input
+        .set_text("gpt");
 
     // Dead centre of the top bar — between the left file controls and
     // the right chrome chips.
@@ -23,11 +26,12 @@ fn top_bar_gap_press_blurs_chat_and_model_picker() {
         !host.editor_state.chat.focused,
         "top-bar gap press must blur the chat input"
     );
-    assert!(!host.editor_state.editor_ui.chat_model_picker_open);
+    assert!(!host.editor_state.editor_ui.chat_model_picker.open);
     assert!(host
         .editor_state
         .editor_ui
-        .chat_model_picker_search
+        .chat_model_picker_input
+        .text()
         .is_empty());
 }
 
@@ -56,7 +60,7 @@ fn settings_modal_blank_press_commits_mcp_port_draft() {
         let eui = &mut host.editor_state.editor_ui;
         eui.agent_settings_open = true;
         eui.agent_settings.focus = Some(SettingsFocus::McpPort);
-        eui.settings_input_draft = "4321".into();
+        eui.settings_input.set_text("4321");
     }
 
     // Bottom of the modal's sidebar column — below the nav tabs, no

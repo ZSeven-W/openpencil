@@ -29,6 +29,7 @@ use crate::theme::Theme;
 use crate::widgets::editor_state_ext::theme_for;
 use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
 use crate::{Color, Point2D, Rect};
+use jian_core::text_input::TextInputState;
 use op_editor_core::Viewport as DocViewport;
 
 use op_editor_core::EditorState;
@@ -282,16 +283,8 @@ pub fn selection_handle_at_point(
 pub struct EditCaret {
     /// The node id (scene-space string) being edited.
     pub editing: String,
-    pub anchor_ms: u64,
+    pub input: TextInputState,
     pub now_ms: u64,
-    /// Ctrl/Cmd+A selected the whole text — paint the select-all wash.
-    pub select_all: bool,
-    /// Caret byte offset into the edited node's plain content.
-    /// `None` falls back to the end of the content.
-    pub caret: Option<usize>,
-    /// Selection anchor byte offset — a highlight paints over
-    /// `anchor..caret` (either order) when set and distinct.
-    pub anchor: Option<usize>,
     /// Pre-resolved selection wash color (theme isn't reachable in the
     /// `paint_node` walker, so the viewport stashes it here).
     pub selection_color: Color,
@@ -319,15 +312,10 @@ pub struct CanvasViewport<'a> {
     /// Smart-guide alignment lines to paint during a node drag —
     /// doc-space, computed by the host's `align_guides` pass.
     pub(super) active_guides: Vec<op_editor_core::align_guides::AlignmentGuide>,
-    /// Text node being edited (scene-space string id) + its caret
-    /// blink anchor.
+    /// Text node being edited (scene-space string id) and its shared
+    /// draft/caret/selection state.
     pub(super) text_editing: Option<String>,
-    pub(super) text_edit_caret_anchor_ms: u64,
-    /// Ctrl/Cmd+A selected the editing text node's whole content.
-    pub(super) text_edit_select_all: bool,
-    /// Caret byte offset + selection anchor for the inline editor.
-    pub(super) text_edit_caret: Option<usize>,
-    pub(super) text_edit_selection_anchor: Option<usize>,
+    pub(super) text_edit_input: TextInputState,
     /// Background fill outside any Frame.
     pub canvas_background: Color,
     pub theme: Theme,
@@ -387,10 +375,7 @@ impl<'a> CanvasViewport<'a> {
                 .text_editing
                 .as_ref()
                 .map(|id| id.as_str().to_string()),
-            text_edit_caret_anchor_ms: state.ui.text_edit_caret_anchor_ms,
-            text_edit_select_all: state.ui.text_edit_select_all,
-            text_edit_caret: state.ui.text_edit_caret,
-            text_edit_selection_anchor: state.ui.text_edit_selection_anchor,
+            text_edit_input: state.ui.text_edit_input.clone(),
             canvas_background: theme.canvas_surface,
             theme,
             now_ms: 0,
@@ -487,11 +472,8 @@ impl<'a> Widget for CanvasViewport<'a> {
             );
             let edit_caret = self.text_editing.as_ref().map(|id| EditCaret {
                 editing: id.clone(),
-                anchor_ms: self.text_edit_caret_anchor_ms,
+                input: self.text_edit_input.clone(),
                 now_ms: self.now_ms,
-                select_all: self.text_edit_select_all,
-                caret: self.text_edit_caret,
-                anchor: self.text_edit_selection_anchor,
                 selection_color: crate::widgets::text_selection::selection_color(&self.theme),
             });
             // Cull rect — anything fully outside this rect (with a

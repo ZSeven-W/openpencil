@@ -8,6 +8,7 @@
 use crate::widgets::git_panel::{truncate, GitPanel, GitPanelHit, INPUT_H, PAD, SECTION_GAP};
 use crate::widgets::PaintCx;
 use crate::{Point2D, Rect};
+use jian_core::text_input::{prev_char_boundary, TextInputState};
 
 /// Label baseline offset within the Remotes block.
 const LABEL_OFF: f32 = 8.0;
@@ -122,7 +123,7 @@ impl GitPanel<'_> {
         self.paint_section_input(
             cx,
             layout.input,
-            &self.state.remote_draft,
+            &self.state.remote_input,
             self.state.remote_focused,
             self.t("git.panel.remotePlaceholder"),
         );
@@ -144,10 +145,10 @@ impl GitPanel<'_> {
             Some(GitPanelHit::SetupSshAuth),
         );
         // HTTPS-credential input (token masked) + "Login" button.
-        self.paint_section_input(
+        self.paint_masked_section_input(
             cx,
             layout.https_input,
-            &mask_credential(&self.state.https_draft),
+            &self.state.https_input,
             self.state.https_focused,
             self.t("git.panel.httpsPlaceholder"),
         );
@@ -168,7 +169,7 @@ impl GitPanel<'_> {
         &self,
         cx: &mut PaintCx<'_>,
         rect: Rect,
-        shown: &str,
+        input: &TextInputState,
         focused: bool,
         placeholder: &str,
     ) {
@@ -179,54 +180,74 @@ impl GitPanel<'_> {
             self.theme.border
         };
         cx.backend.stroke_round_rect(rect, 6.0, border, 1.0);
-        let text_x = rect.origin.x + 8.0;
-        let baseline = rect.origin.y + rect.size.y / 2.0 + 4.0;
-        if shown.is_empty() && !focused {
+        self.paint_text_input_view(cx, rect, input, placeholder, focused, 11.0, 8.0);
+    }
+
+    fn paint_masked_section_input(
+        &self,
+        cx: &mut PaintCx<'_>,
+        rect: Rect,
+        input: &TextInputState,
+        focused: bool,
+        placeholder: &str,
+    ) {
+        cx.backend.fill_round_rect(rect, 6.0, self.theme.muted);
+        let border = if focused {
+            self.theme.primary
+        } else {
+            self.theme.border
+        };
+        cx.backend.stroke_round_rect(rect, 6.0, border, 1.0);
+
+        let draft = input.text();
+        if draft.is_empty() && !focused {
             self.text(
                 cx,
                 placeholder,
-                text_x,
-                baseline,
+                rect.origin.x + 8.0,
+                rect.origin.y + rect.size.y / 2.0 + 4.0,
                 11.0,
                 self.theme.muted_foreground,
             );
-        } else {
-            // Blink the caret on the same 500 ms cadence as the commit
-            // box (shared `commit_caret_anchor_ms`), rather than a static
-            // `|`. The host wakes the loop while these inputs are focused
-            // so the toggle actually animates.
-            if focused && self.state.input_select_all && !shown.is_empty() {
-                crate::widgets::text_selection::paint_single_line_selection(
-                    cx,
-                    &self.theme,
-                    shown,
-                    text_x,
-                    baseline,
-                    11.0,
-                    rect.origin.x + rect.size.x - 8.0,
-                );
-            }
-            let caret = focused
-                && !self.state.input_select_all
-                && jian_core::anim::blink_visible(
-                    self.now_ms,
-                    self.state.commit_caret_anchor_ms,
-                    500,
-                );
-            let line = if caret {
-                format!("{shown}|")
-            } else {
-                shown.to_string()
-            };
-            self.text(
-                cx,
-                &truncate(&line, 56),
-                text_x,
-                baseline,
+            return;
+        }
+
+        let shown = mask_credential(draft);
+        let text_x = rect.origin.x + 8.0;
+        let baseline = rect.origin.y + rect.size.y / 2.0 + 4.0;
+        cx.backend.save();
+        cx.backend.clip_rect(rect);
+        if let Some((start, end)) = input.highlight_range() {
+            let x0 = cx.backend.measure_text(
+                &shown[..masked_byte_for_source_byte(draft, &shown, start)],
                 11.0,
+            );
+            let x1 = cx.backend.measure_text(
+                &shown[..masked_byte_for_source_byte(draft, &shown, end)],
+                11.0,
+            );
+            cx.backend.fill_round_rect(
+                Rect {
+                    origin: Point2D::new(text_x + x0, rect.origin.y + 6.0),
+                    size: Point2D::new((x1 - x0).max(1.0), 16.0),
+                },
+                3.0,
+                self.theme.primary.with_alpha(0.35),
+            );
+        }
+        self.text(cx, &shown, text_x, baseline, 11.0, self.theme.foreground);
+        if focused && input.highlight_range().is_none() && input.caret_visible(self.now_ms) {
+            let caret_byte = masked_byte_for_source_byte(draft, &shown, input.caret());
+            let caret_x = text_x + cx.backend.measure_text(&shown[..caret_byte], 11.0) + 1.0;
+            cx.backend.fill_rect(
+                Rect {
+                    origin: Point2D::new(caret_x, rect.origin.y + 7.0),
+                    size: Point2D::new(1.5, 15.0),
+                },
                 self.theme.foreground,
             );
         }
+        cx.backend.restore();
     }
 }
 
@@ -239,4 +260,14 @@ fn mask_credential(draft: &str) -> String {
         Some((user, token)) => format!("{user}:{}", "•".repeat(token.chars().count())),
         None => draft.to_string(),
     }
+}
+
+fn masked_byte_for_source_byte(source: &str, masked: &str, byte: usize) -> usize {
+    let source_byte = prev_char_boundary(source, byte);
+    let chars = source[..source_byte].chars().count();
+    masked
+        .char_indices()
+        .nth(chars)
+        .map(|(i, _)| i)
+        .unwrap_or(masked.len())
 }

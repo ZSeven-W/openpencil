@@ -508,7 +508,7 @@ fn deep_layer_tree_exposes_horizontal_scroll_range() {
 fn layer_horizontal_scroll_offset_is_clamped() {
     run_deep_layer_fixture(|| {
         let mut state = state_from(&nested_frame_doc(50));
-        state.editor_ui.layer_layers_h_scroll = 10_000.0;
+        state.editor_ui.layer_layers_h_scroll.offset = 10_000.0;
         let panel = LayerPanel::from_editor(&state);
         let rect = Rect {
             origin: Point2D::new(0.0, 0.0),

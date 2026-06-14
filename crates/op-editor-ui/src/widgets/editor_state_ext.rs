@@ -27,41 +27,6 @@ pub fn translate(ui: &EditorUiState, key: &'static str) -> &'static str {
     crate::i18n::translate(ui.locale, key)
 }
 
-/// Map an `op_editor_core::ShapeChoice` onto the widget-layer
-/// `widgets::shape_picker::ShapeChoice`. The state-layer enum carries
-/// `op_editor_core::Tool` in its `Tool` variant; the widget enum
-/// carries the same `op_editor_core::Tool` — pass-through.
-pub fn doc_shape_choice(
-    c: op_editor_core::ShapeChoice,
-) -> crate::widgets::shape_picker::ShapeChoice {
-    use crate::widgets::shape_picker::ShapeChoice as D;
-    use op_editor_core::ShapeChoice as O;
-    match c {
-        O::Tool(t) => D::Tool(t),
-        O::OpenIconPicker => D::OpenIconPicker,
-        O::ImportImageOrSvg => D::ImportImageOrSvg,
-    }
-}
-
-/// Map an `op_editor_core::FileMenuChoice` onto the widget-layer
-/// `widgets::file_menu::FileMenuChoice`. Variant-identical; bridges
-/// the file-menu hover state.
-pub fn doc_file_menu_choice(
-    c: op_editor_core::FileMenuChoice,
-) -> crate::widgets::file_menu::FileMenuChoice {
-    use crate::widgets::file_menu::FileMenuChoice as D;
-    use op_editor_core::FileMenuChoice as O;
-    match c {
-        O::NewFile => D::NewFile,
-        O::OpenFile => D::OpenFile,
-        O::Save => D::Save,
-        O::SaveAs => D::SaveAs,
-        O::ExportImage => D::ExportImage,
-        O::OpenRecent(i) => D::OpenRecent(i),
-        O::ClearRecent => D::ClearRecent,
-    }
-}
-
 /// Map an `op_editor_core::ExportFormat` onto the widget-layer
 /// `widgets::export_dialog::ExportFormat`. Variant-identical.
 pub fn doc_export_format(
@@ -83,43 +48,8 @@ pub fn doc_export_format(
 // The host feeds widget hit-test results back into `EditorState`'s
 // `editor_ui_state`. Most widget hit-tests already emit canonical
 // `op_editor_core` types (`Tool`, `AlignAction`, `PropertyFocus`, …)
-// so no conversion is needed. The three enums below stay widget-local
-// (`file_menu` / `shape_picker` / `export_dialog` own them) and so
-// still need a one-arm-per-variant bridge into the canonical
-// `editor_ui_state` enums the hover / format state fields hold.
-
-/// Map the widget-layer `widgets::file_menu::FileMenuChoice` onto the
-/// canonical `op_editor_core::FileMenuChoice`. Reverse of
-/// [`doc_file_menu_choice`].
-pub fn file_menu_choice(
-    c: crate::widgets::file_menu::FileMenuChoice,
-) -> op_editor_core::FileMenuChoice {
-    use crate::widgets::file_menu::FileMenuChoice as W;
-    use op_editor_core::FileMenuChoice as O;
-    match c {
-        W::NewFile => O::NewFile,
-        W::OpenFile => O::OpenFile,
-        W::Save => O::Save,
-        W::SaveAs => O::SaveAs,
-        W::ExportImage => O::ExportImage,
-        W::OpenRecent(i) => O::OpenRecent(i),
-        W::ClearRecent => O::ClearRecent,
-    }
-}
-
-/// Map the widget-layer `widgets::shape_picker::ShapeChoice` onto the
-/// canonical `op_editor_core::ShapeChoice`. Reverse of
-/// [`doc_shape_choice`]; the `Tool` variant carries the same
-/// `op_editor_core::Tool` either way.
-pub fn shape_choice(c: crate::widgets::shape_picker::ShapeChoice) -> op_editor_core::ShapeChoice {
-    use crate::widgets::shape_picker::ShapeChoice as W;
-    use op_editor_core::ShapeChoice as O;
-    match c {
-        W::Tool(t) => O::Tool(t),
-        W::OpenIconPicker => O::OpenIconPicker,
-        W::ImportImageOrSvg => O::ImportImageOrSvg,
-    }
-}
+// so no conversion is needed. The remaining widget-local enums below
+// still need a one-arm-per-variant bridge into canonical state fields.
 
 /// Map the widget-layer `widgets::toolbar::ToolbarAction` onto the
 /// canonical `op_editor_core::ToolbarAction`. Variant-identical;
@@ -160,6 +90,41 @@ pub fn figma_import_button(
         W::Close => Some(O::Close),
         W::DropZone => Some(O::DropZone),
         W::Outside | W::Inside => None,
+    }
+}
+
+/// Map a widget-layer `AgentSettingsHit` onto the canonical
+/// `op_editor_core::AgentSettingsButton` for shared pressed feedback.
+pub fn agent_settings_button(
+    hit: crate::widgets::agent_settings_panel::AgentSettingsHit,
+) -> Option<op_editor_core::AgentSettingsButton> {
+    use crate::widgets::agent_settings_panel::AgentSettingsHit as W;
+    use op_editor_core::AgentSettingsButton as O;
+    match hit {
+        W::Close => Some(O::Close),
+        W::AddProvider => Some(O::AddProvider),
+        W::AddAcpAgent => Some(O::AddAcpAgent),
+        W::EditBuiltinAgent(index) => Some(O::BuiltinEdit(index)),
+        W::RemoveBuiltinAgent(index) => Some(O::BuiltinRemove(index)),
+        W::SaveBuiltinAgentDraft => Some(O::BuiltinSaveDraft),
+        W::CancelBuiltinAgentDraft => Some(O::BuiltinCancelDraft),
+        W::EditAcpAgent(index) => Some(O::AcpEdit(index)),
+        W::RemoveAcpAgent(index) => Some(O::AcpRemove(index)),
+        W::ToggleAcpConnected(index) => Some(O::AcpConnection(index)),
+        W::SaveAcpAgentDraft => Some(O::AcpSaveDraft),
+        W::CancelAcpAgentDraft => Some(O::AcpCancelDraft),
+        W::ToggleMcpServer => Some(O::McpServer),
+        W::CopyMcpClientConfig => Some(O::McpClientConfigCopy),
+        W::TestImageSearch => Some(O::ImageSearchTest),
+        W::AddGenConfig => Some(O::ImageGenAdd),
+        W::ToggleGenConfigEditor(index) => Some(O::ImageProfileHeader(index)),
+        W::RemoveGenConfig(index) => Some(O::ImageProfileRemove(index)),
+        W::ToggleGenProviderMenu(index) => Some(O::ImageProfileProvider(index)),
+        W::SelectGenProvider { index, provider } => {
+            Some(O::ImageProviderOption { index, provider })
+        }
+        W::TestGenConfig(index) => Some(O::ImageProfileTest(index)),
+        _ => None,
     }
 }
 
@@ -227,7 +192,6 @@ pub fn git_button_hover(
         W::OverflowClearAuthor => Some(O::OverflowClearAuthor),
         W::OverflowCloseRepo => Some(O::OverflowCloseRepo),
         W::OverflowBack => Some(O::OverflowBack),
-        W::TrackedPickerRow(i) => Some(O::TrackedPickerRow(i)),
         W::TrackedPickerBind => Some(O::TrackedPickerBind),
         W::TrackedPickerBindOpen => Some(O::TrackedPickerBindOpen),
         W::TrackedPickerBack => Some(O::TrackedPickerBack),

@@ -81,7 +81,7 @@ fn hit_test_resolves_input_focus() {
 #[test]
 fn no_model_disables_send_hit() {
     let mut s = EditorState::new();
-    s.chat.input = "design a login page".into();
+    s.chat.set_input_text("design a login page");
     let panel = AIChatPlaceholder::from_editor(&s);
     let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
     let send_x = AI_CHAT_WIDTH - PAD - 20.0;
@@ -116,7 +116,7 @@ fn no_model_disables_model_picker_toggle() {
 fn hit_test_resolves_send_at_right() {
     let mut s = EditorState::new();
     seed_available_model(&mut s);
-    s.chat.input = "design a login page".into();
+    s.chat.set_input_text("design a login page");
     let panel = AIChatPlaceholder::from_editor(&s);
     let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
     let send_x = AI_CHAT_WIDTH - PAD - 20.0;
@@ -168,7 +168,7 @@ fn streaming_attachment_button_is_consumed_without_opening_picker_like_ts() {
 fn hit_test_resolves_bottom_toolbar_actions() {
     let mut s = EditorState::new();
     seed_available_model(&mut s);
-    s.chat.input = "design a login page".into();
+    s.chat.set_input_text("design a login page");
     let panel = AIChatPlaceholder::from_editor(&s);
     let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
     let y = toolbar_center_y();
@@ -190,7 +190,7 @@ fn hit_test_resolves_bottom_toolbar_actions() {
 fn footer_hover_maps_bottom_toolbar_actions() {
     let mut s = EditorState::new();
     seed_available_model(&mut s);
-    s.chat.input = "design a login page".into();
+    s.chat.set_input_text("design a login page");
     let panel = AIChatPlaceholder::from_editor(&s);
     let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
     let y = toolbar_center_y();
@@ -248,8 +248,9 @@ fn footer_agent_team_chip_is_clickable_and_hoverable() {
 #[test]
 fn multiline_input_expands_above_footer_toolbar() {
     let mut s = EditorState::new();
-    s.chat.input =
-        "是的是啊打撒但是 codex 是的撒的 sad 是的撒d大城市多少是多少啊打撒打撒的".repeat(3);
+    s.chat.set_input_text(
+        "是的是啊打撒但是 codex 是的撒的 sad 是的撒d大城市多少是多少啊打撒打撒的".repeat(3),
+    );
     let panel = AIChatPlaceholder::from_editor(&s);
     let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
 
@@ -264,8 +265,8 @@ fn multiline_input_expands_above_footer_toolbar() {
 fn hit_test_resolves_model_search_clear_button() {
     let mut s = EditorState::new();
     seed_available_model(&mut s);
-    s.editor_ui.chat_model_picker_open = true;
-    s.editor_ui.chat_model_picker_search = "231".into();
+    s.editor_ui.chat_model_picker.open = true;
+    s.editor_ui.chat_model_picker_input.set_text("231");
     let panel = AIChatPlaceholder::from_editor(&s);
     let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
     let input_h = INPUT_BASE_HEIGHT;
@@ -319,9 +320,10 @@ fn hit_test_resolves_first_example_when_empty() {
     let card_w = (AI_CHAT_WIDTH - PAD * 2.0 - 8.0) / 2.0;
     let p = Point2D::new(PAD + card_w / 2.0, HEADER_HEIGHT + 32.0 + 35.0);
     match panel.hit_test(rect, p) {
-        Some(AIChatHit::Example(prompt)) => {
+        Some(AIChatHit::Example { index, prompt }) => {
             // The click payload is the card's full prompt — what the
             // host inserts into the chat input.
+            assert_eq!(index, 0);
             assert_eq!(prompt, panel.examples[0].prompt);
         }
         other => panic!("expected first example hit, got {:?}", other),
@@ -338,7 +340,10 @@ fn hit_test_uses_taller_ts_quick_action_card_height() {
     let p = Point2D::new(PAD + card_w / 2.0, HEADER_HEIGHT + 32.0 + 64.0);
 
     match panel.hit_test(rect, p) {
-        Some(AIChatHit::Example(prompt)) => assert_eq!(prompt, panel.examples[0].prompt),
+        Some(AIChatHit::Example { index, prompt }) => {
+            assert_eq!(index, 0);
+            assert_eq!(prompt, panel.examples[0].prompt);
+        }
         other => panic!("expected first example hit in taller TS-style card, got {other:?}"),
     }
 }

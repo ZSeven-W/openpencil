@@ -1,12 +1,11 @@
 //! Small drawing/hit-test helpers for the Images settings tab.
 
 use crate::theme::Theme;
-use crate::widgets::agent_settings_caret::{
-    caret_x_for_text, paint_caret, paint_settings_selection, settings_caret_for_focus,
-};
+use crate::widgets::agent_settings_caret::{paint_settings_input_view, settings_input_text};
+use crate::widgets::button::paint_button_feedback_wash;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::PaintCx;
-use crate::{Color, Point2D, Rect, TextLayout};
+use crate::{Point2D, Rect, TextLayout};
 use op_editor_core::agent_settings::{
     AgentSettings, ImageGenField, ImageGenProfile, ImageGenProvider, ImageSearchField,
     ImageTestStatus, SettingsFocus,
@@ -39,7 +38,7 @@ pub(super) fn paint_search_input_row(
         label,
         "system-ui",
         13.0,
-        to_jian(theme.muted_foreground),
+        (theme.muted_foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend
@@ -61,13 +60,12 @@ pub(super) fn paint_search_input_row(
         ImageSearchField::ClientId => settings.openverse_client_id.as_str(),
         ImageSearchField::ClientSecret => settings.openverse_client_secret.as_str(),
     };
-    let text = if focused {
-        ui.settings_input_draft.as_str()
-    } else if matches!(field_kind, ImageSearchField::ClientSecret) && !stored.is_empty() {
+    let fallback = if matches!(field_kind, ImageSearchField::ClientSecret) && !stored.is_empty() {
         "********"
     } else {
         stored
     };
+    let text = settings_input_text(settings, ui, focus, fallback);
     let showing_placeholder = text.is_empty();
     let value = if showing_placeholder {
         placeholder
@@ -80,58 +78,61 @@ pub(super) fn paint_search_input_row(
     } else {
         0.0
     };
-    let value = ellipsize(
-        cx,
-        value,
-        field.size.x - INPUT_TEXT_INSET_X * 2.0 - placeholder_offset,
-        13.0,
-    );
-    let lay = TextLayout::single_run(
-        &value,
-        "system-ui",
-        13.0,
-        to_jian(if showing_placeholder {
-            theme.muted_foreground
-        } else {
-            theme.foreground
-        }),
-        Point2D::new(0.0, 0.0),
-    );
-    if focused && ui.settings_input_select_all && !text.is_empty() {
-        paint_settings_selection(
+    if focused {
+        let input_placeholder = if showing_placeholder { "" } else { placeholder };
+        paint_settings_input_view(
             cx,
             theme,
-            text,
-            text_x,
-            field.origin.y + ROW_H / 2.0 + 5.0,
+            ui,
+            field,
             13.0,
-            field.origin.x + field.size.x - INPUT_TEXT_INSET_X,
-        );
-    }
-    cx.backend.draw_text(
-        &lay,
-        Point2D::new(
-            text_x + placeholder_offset,
+            text_x - field.origin.x,
             field.origin.y + ROW_H / 2.0 + 5.0,
-        ),
-    );
-    if focused {
-        let caret = settings_caret_for_focus(ui, focus);
-        let caret_x = if text.is_empty() {
-            text_x
-        } else {
-            caret_x_for_text(
-                cx,
-                text,
-                caret,
-                text_x,
-                field.origin.x + field.size.x - INPUT_TEXT_INSET_X,
+            now_ms,
+            input_placeholder,
+        );
+        if showing_placeholder {
+            let lay = TextLayout::single_run(
+                placeholder,
+                "system-ui",
                 13.0,
-            )
-        };
-        let caret_y = field.origin.y + (ROW_H - 15.0) / 2.0;
-        let anchor = ui.settings_input_caret_anchor_ms;
-        paint_caret(cx, theme, now_ms, anchor, caret_x, caret_y);
+                theme.muted_foreground.to_jian(),
+                Point2D::new(0.0, 0.0),
+            );
+            cx.backend.draw_text(
+                &lay,
+                Point2D::new(
+                    text_x + placeholder_offset,
+                    field.origin.y + ROW_H / 2.0 + 5.0,
+                ),
+            );
+        }
+    } else {
+        let value = ellipsize(
+            cx,
+            value,
+            field.size.x - INPUT_TEXT_INSET_X * 2.0 - placeholder_offset,
+            13.0,
+        );
+        let lay = TextLayout::single_run(
+            &value,
+            "system-ui",
+            13.0,
+            (if showing_placeholder {
+                theme.muted_foreground
+            } else {
+                theme.foreground
+            })
+            .to_jian(),
+            Point2D::new(0.0, 0.0),
+        );
+        cx.backend.draw_text(
+            &lay,
+            Point2D::new(
+                text_x + placeholder_offset,
+                field.origin.y + ROW_H / 2.0 + 5.0,
+            ),
+        );
     }
 }
 
@@ -150,17 +151,14 @@ pub(super) fn paint_profile_field(
 ) {
     let focus = SettingsFocus::ImageGenProfile { index, field };
     let focused = settings.focus == Some(focus);
-    let value = if focused {
-        ui.settings_input_draft.as_str()
-    } else {
-        match field {
-            ImageGenField::Name => profile.name.as_str(),
-            ImageGenField::ApiKey if !profile.api_key.is_empty() => "********",
-            ImageGenField::ApiKey => "",
-            ImageGenField::Model => profile.model.as_str(),
-            ImageGenField::BaseUrl => profile.base_url.as_deref().unwrap_or(""),
-        }
+    let fallback = match field {
+        ImageGenField::Name => profile.name.as_str(),
+        ImageGenField::ApiKey if !profile.api_key.is_empty() => "********",
+        ImageGenField::ApiKey => "",
+        ImageGenField::Model => profile.model.as_str(),
+        ImageGenField::BaseUrl => profile.base_url.as_deref().unwrap_or(""),
     };
+    let value = settings_input_text(settings, ui, focus, fallback);
     let label = match field {
         ImageGenField::Name => "Name",
         ImageGenField::ApiKey => "API Key",
@@ -171,7 +169,7 @@ pub(super) fn paint_profile_field(
         label,
         "system-ui",
         11.0,
-        to_jian(theme.muted_foreground),
+        (theme.muted_foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend
@@ -191,41 +189,30 @@ pub(super) fn paint_profile_field(
         if focused { theme.primary } else { theme.border },
         1.0,
     );
-    let clipped = ellipsize(cx, value, input.size.x - 12.0, 11.0);
     let text_x = input.origin.x + 6.0;
-    if focused && ui.settings_input_select_all && !value.is_empty() {
-        paint_settings_selection(
+    if focused {
+        paint_settings_input_view(
             cx,
             theme,
-            value,
-            text_x,
+            ui,
+            input,
+            11.0,
+            text_x - input.origin.x,
             input.origin.y + 16.0,
-            11.0,
-            input.origin.x + input.size.x - 8.0,
+            now_ms,
+            "",
         );
-    }
-    let value_lay = TextLayout::single_run(
-        &clipped,
-        "system-ui",
-        11.0,
-        to_jian(theme.foreground),
-        Point2D::new(0.0, 0.0),
-    );
-    cx.backend
-        .draw_text(&value_lay, Point2D::new(text_x, input.origin.y + 16.0));
-    if focused {
-        let caret = settings_caret_for_focus(ui, focus);
-        let caret_x = caret_x_for_text(
-            cx,
-            value,
-            caret,
-            text_x,
-            input.origin.x + input.size.x - 8.0,
+    } else {
+        let clipped = ellipsize(cx, value, input.size.x - 12.0, 11.0);
+        let value_lay = TextLayout::single_run(
+            &clipped,
+            "system-ui",
             11.0,
+            (theme.foreground).to_jian(),
+            Point2D::new(0.0, 0.0),
         );
-        let caret_y = input.origin.y + 4.5;
-        let anchor = ui.settings_input_caret_anchor_ms;
-        paint_caret(cx, theme, now_ms, anchor, caret_x, caret_y);
+        cx.backend
+            .draw_text(&value_lay, Point2D::new(text_x, input.origin.y + 16.0));
     }
 }
 
@@ -236,15 +223,13 @@ pub(super) fn paint_profile_test_button(
     profile: &ImageGenProfile,
     btn: Rect,
     hovered: bool,
+    pressed: bool,
 ) {
     let enabled =
         !profile.api_key.trim().is_empty() && profile.test_status != ImageTestStatus::Testing;
     paint_profile_test_status(cx, theme, profile, btn);
     cx.backend.fill_round_rect(btn, 6.0, theme.muted);
-    if hovered {
-        cx.backend
-            .fill_round_rect(btn, 6.0, profile_button_hover_color(theme));
-    }
+    crate::widgets::button::paint_ghost_button_feedback(cx.backend, theme, btn, hovered, pressed);
     cx.backend.stroke_round_rect(btn, 6.0, theme.border, 1.0);
     let label = crate::widgets::agent_settings_i18n::t(ui, "settings.images.test");
     let label_w = cx.backend.measure_text(label, 11.0);
@@ -252,11 +237,12 @@ pub(super) fn paint_profile_test_button(
         label,
         "system-ui",
         11.0,
-        to_jian(if enabled {
+        (if enabled {
             theme.foreground
         } else {
             theme.muted_foreground
-        }),
+        })
+        .to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
@@ -266,15 +252,6 @@ pub(super) fn paint_profile_test_button(
             btn.origin.y + btn.size.y / 2.0 + 4.0,
         ),
     );
-}
-
-fn profile_button_hover_color(theme: &Theme) -> Color {
-    Color {
-        r: theme.foreground.r,
-        g: theme.foreground.g,
-        b: theme.foreground.b,
-        a: 0.12,
-    }
 }
 
 fn paint_profile_test_status(
@@ -307,7 +284,7 @@ fn paint_profile_test_status(
                 label,
                 "system-ui",
                 10.0,
-                to_jian(theme.destructive),
+                (theme.destructive).to_jian(),
                 Point2D::new(0.0, 0.0),
             );
             cx.backend.draw_text(
@@ -325,27 +302,26 @@ pub(super) fn paint_provider_field(
     input: Rect,
     label_x: f32,
     hovered: bool,
+    pressed: bool,
 ) {
     let label_lay = TextLayout::single_run(
         "Provider",
         "system-ui",
         11.0,
-        to_jian(theme.muted_foreground),
+        (theme.muted_foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend
         .draw_text(&label_lay, Point2D::new(label_x, input.origin.y + 16.0));
     cx.backend.fill_round_rect(input, 6.0, theme.card);
-    if hovered {
-        cx.backend.fill_round_rect(input, 6.0, theme.button_hover);
-    }
+    crate::widgets::button::paint_ghost_button_feedback(cx.backend, theme, input, hovered, pressed);
     cx.backend.stroke_round_rect(input, 6.0, theme.border, 1.0);
     let value = ellipsize(cx, profile.provider.label(), input.size.x - 28.0, 11.0);
     let value_lay = TextLayout::single_run(
         &value,
         "system-ui",
         11.0,
-        to_jian(theme.foreground),
+        (theme.foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
@@ -368,6 +344,7 @@ pub(super) fn paint_provider_menu(
     input: Rect,
     selected: ImageGenProvider,
     hovered: Option<ImageGenProvider>,
+    pressed: Option<ImageGenProvider>,
 ) {
     let menu = Rect {
         origin: Point2D::new(input.origin.x, input.origin.y + input.size.y),
@@ -393,15 +370,16 @@ pub(super) fn paint_provider_menu(
         if *provider == selected {
             cx.backend.fill_round_rect(option_rect, 5.0, theme.muted);
         }
-        if hovered == Some(*provider) {
-            cx.backend
-                .fill_round_rect(option_rect, 5.0, theme.button_hover);
+        let is_hovered = hovered == Some(*provider);
+        let is_pressed = pressed == Some(*provider);
+        if is_hovered || is_pressed {
+            paint_button_feedback_wash(cx.backend, theme, option_rect, 5.0, is_hovered, is_pressed);
         }
         let label = TextLayout::single_run(
             provider.label(),
             "system-ui",
             11.0,
-            to_jian(theme.foreground),
+            (theme.foreground).to_jian(),
             Point2D::new(0.0, 0.0),
         );
         cx.backend.draw_text(
@@ -423,18 +401,4 @@ pub(super) fn ellipsize(cx: &mut PaintCx<'_>, value: &str, max_w: f32, size: f32
         out.pop();
     }
     format!("{out}...")
-}
-
-pub(super) fn rect_contains(r: Rect, p: Point2D) -> bool {
-    p.x >= r.origin.x
-        && p.y >= r.origin.y
-        && p.x <= r.origin.x + r.size.x
-        && p.y <= r.origin.y + r.size.y
-}
-
-fn to_jian(c: Color) -> jian_core::scene::Color {
-    fn ch(v: f32) -> u8 {
-        (v.clamp(0.0, 1.0) * 255.0).round() as u8
-    }
-    jian_core::scene::Color::rgba(ch(c.r), ch(c.g), ch(c.b), ch(c.a))
 }

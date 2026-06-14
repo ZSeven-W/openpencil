@@ -15,6 +15,7 @@ use crate::widgets::git_panel::{contains, truncate, GitPanel, GitPanelHit, PAD};
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect};
+use jian_widgets::components::text_area::TextArea;
 use op_editor_core::{CommitDiffSummary, CommitDiffView, GitButton};
 
 /// Header bar height (TS `px-2.5 py-1.5` around a 28 px `icon-sm`
@@ -234,7 +235,7 @@ impl GitPanel<'_> {
     /// commits it in one step, so it does NOT require a pre-staged file
     /// the way the classic staging body's Commit does.
     fn ready_can_commit(&self) -> bool {
-        !self.state.commit_message.trim().is_empty()
+        !self.state.commit_input.text().trim().is_empty()
     }
 
     /// Whether Pull can fire — a configured remote and no in-flight
@@ -310,7 +311,7 @@ impl GitPanel<'_> {
         self.paint_menu_input(
             cx,
             name_input,
-            &self.state.author_name_draft,
+            &self.state.author_name_input,
             self.t("git.author.namePlaceholder"),
             self.state.author_name_focused,
         );
@@ -325,12 +326,12 @@ impl GitPanel<'_> {
         self.paint_menu_input(
             cx,
             email_input,
-            &self.state.author_email_draft,
+            &self.state.author_email_input,
             self.t("git.author.emailPlaceholder"),
             self.state.author_email_focused,
         );
-        let can_save = !self.state.author_name_draft.trim().is_empty()
-            && self.state.author_email_draft.contains('@');
+        let can_save = !self.state.author_name_input.text().trim().is_empty()
+            && self.state.author_email_input.text().contains('@');
         self.paint_button_with_hit(
             cx,
             cancel,
@@ -414,6 +415,7 @@ impl GitPanel<'_> {
             Icon::ArrowDown,
             self.pull_enabled(),
             self.state.button_hover == Some(GitButton::Pull),
+            self.pressed == Some(GitButton::Pull),
         );
         self.paint_ready_icon(
             cx,
@@ -421,12 +423,17 @@ impl GitPanel<'_> {
             Icon::ArrowUp,
             self.push_enabled(),
             self.state.button_hover == Some(GitButton::Push),
+            self.pressed == Some(GitButton::Push),
         );
         // Overflow `…` — TS colors this `text-muted-foreground` at size 13,
         // dimmer than the pull / push glyphs (git-panel-header.tsx:127-129).
-        if self.state.button_hover == Some(GitButton::Overflow) {
-            cx.backend.fill_round_rect(overflow_r, 6.0, t.button_hover);
-        }
+        crate::widgets::button::paint_ghost_button_feedback(
+            cx.backend,
+            &self.theme,
+            overflow_r,
+            self.state.button_hover == Some(GitButton::Overflow),
+            self.pressed == Some(GitButton::Overflow),
+        );
         let overflow_s = 13.0;
         draw_icon(
             cx.backend,
@@ -452,56 +459,32 @@ impl GitPanel<'_> {
                 alpha(t.border, 0.70)
             };
             cx.backend.stroke_round_rect(box_r, 8.0, border, 1.0);
-            let msg = &self.state.commit_message;
-            if msg.is_empty() && !self.state.commit_focused {
-                self.text(
-                    cx,
-                    self.t("git.commit.placeholder"),
-                    box_r.origin.x + 12.0,
-                    box_r.origin.y + 22.0,
-                    12.0,
-                    alpha(t.muted_foreground, 0.70),
-                );
+            let text_r = Rect {
+                origin: box_r.origin,
+                size: Point2D::new(box_r.size.x, (box_r.size.y - 38.0).max(0.0)),
+            };
+            let placeholder = if self.state.commit_focused {
+                ""
             } else {
-                // Draw the message, then a separate blinking caret bar
-                // (not an inline `|`) so it animates on the same cadence as
-                // the chat / property inputs instead of sitting static.
-                let text_x = box_r.origin.x + 12.0;
-                let baseline = box_r.origin.y + 22.0;
-                if self.state.commit_focused && self.state.input_select_all && !msg.is_empty() {
-                    crate::widgets::text_selection::paint_single_line_selection(
-                        cx,
-                        &t,
-                        msg,
-                        text_x,
-                        baseline,
-                        12.0,
-                        box_r.origin.x + box_r.size.x - 12.0,
-                    );
-                }
-                self.text(cx, msg, text_x, baseline, 12.0, t.foreground);
-                let blink = jian_core::anim::blink_visible(
-                    self.now_ms,
-                    self.state.commit_caret_anchor_ms,
-                    500,
-                );
-                if self.state.commit_focused && blink && !self.state.input_select_all {
-                    let caret_x = text_x + cx.backend.measure_text(msg, 12.0) + 1.0;
-                    cx.backend.fill_rect(
-                        Rect {
-                            origin: Point2D::new(caret_x, box_r.origin.y + 10.0),
-                            size: Point2D::new(1.5, 15.0),
-                        },
-                        t.foreground,
-                    );
-                }
+                self.t("git.commit.placeholder")
+            };
+            TextArea {
+                state: &self.state.commit_input,
+                placeholder,
+                focused: self.state.commit_focused,
+                font_size: 12.0,
+                now_ms: self.now_ms,
+                pad_x: 12.0,
+                max_visible_lines: 2,
             }
+            .paint(cx.backend, text_r, &self.widget_tokens());
             let btn = self.ready_commit_btn(rect);
             self.paint_milestone_button(
                 cx,
                 btn,
                 self.ready_can_commit(),
                 self.state.button_hover == Some(GitButton::CommitMilestone),
+                self.pressed == Some(GitButton::CommitMilestone),
             );
             // "未检测到变更" hint — shown to the left of the button after a
             // milestone save was skipped for having no changes (TS-style guard).
@@ -811,12 +794,18 @@ impl GitPanel<'_> {
         icon: Icon,
         enabled: bool,
         hovered: bool,
+        pressed: bool,
     ) {
         // Ghost icon button — a `theme.button_hover` wash signals the
         // cursor is over it (matches the TS `hover:bg-accent` controls).
-        if hovered {
-            cx.backend
-                .fill_round_rect(rect, 6.0, self.theme.button_hover);
+        if enabled {
+            crate::widgets::button::paint_ghost_button_feedback(
+                cx.backend,
+                &self.theme,
+                rect,
+                hovered,
+                pressed,
+            );
         }
         // TS: enabled = currentColor (foreground), disabled = full
         // text-muted-foreground — no half-alpha (git-panel-remote-controls.tsx).
@@ -845,6 +834,7 @@ impl GitPanel<'_> {
         rect: Rect,
         enabled: bool,
         hovered: bool,
+        pressed: bool,
     ) {
         let t = self.theme;
         let factor = if enabled { 1.0 } else { 0.5 };
@@ -852,8 +842,14 @@ impl GitPanel<'_> {
             .fill_round_rect(rect, 6.0, alpha(t.primary, factor));
         // Brighten the primary fill on hover (TS `hover:bg-primary/90`
         // reads as a subtle lift); only while actionable.
-        if enabled && hovered {
-            cx.backend.fill_round_rect(rect, 6.0, t.button_hover);
+        if enabled {
+            crate::widgets::button::paint_ghost_button_feedback(
+                cx.backend,
+                &self.theme,
+                rect,
+                hovered,
+                pressed,
+            );
         }
 
         let label = self.t("git.commit.submitButton");

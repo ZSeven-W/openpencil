@@ -4,9 +4,34 @@
 
 use super::paint::paint_text;
 use super::*;
+use crate::widgets::button::paint_button_feedback_wash;
 use crate::widgets::{draw_icon, Icon, PaintCx};
 use crate::{Point2D, Rect};
+use op_editor_core::variables_panel_state::PresetMenuButton;
 use op_editor_core::VariablesPanelButton;
+
+fn paint_feedback(
+    panel: &VariablesPanel,
+    cx: &mut PaintCx<'_>,
+    target: VariablesPanelButton,
+    rect: Rect,
+    radius: f32,
+) {
+    let hovered = panel.hover == Some(target);
+    let pressed = panel.pressed == Some(target);
+    if hovered || pressed {
+        paint_button_feedback_wash(cx.backend, &panel.theme, rect, radius, hovered, pressed);
+    }
+}
+
+fn preset_menu_row(button: PresetMenuButton) -> usize {
+    match button {
+        PresetMenuButton::SaveCurrent | PresetMenuButton::NameInput => 0,
+        PresetMenuButton::Load(idx) | PresetMenuButton::Delete(idx) => 1 + idx,
+        PresetMenuButton::Import => 2,
+        PresetMenuButton::Export => 3,
+    }
+}
 
 pub(super) fn paint_menus(
     panel: &VariablesPanel,
@@ -27,19 +52,16 @@ pub(super) fn paint_menus(
         ];
         for (idx, (label, icon, color)) in rows.iter().enumerate() {
             let row_y = menu.origin.y + idx as f32 * ADD_VARIABLE_MENU_ROW_HEIGHT;
-            if matches!(
-                panel.hover,
-                Some(VariablesPanelButton::RowMenuItem(i)) if i == idx
-            ) {
-                cx.backend.fill_round_rect(
-                    Rect {
-                        origin: Point2D::new(menu.origin.x + 4.0, row_y + 3.0),
-                        size: Point2D::new(menu.size.x - 8.0, ADD_VARIABLE_MENU_ROW_HEIGHT - 6.0),
-                    },
-                    8.0,
-                    theme.button_hover,
-                );
-            }
+            paint_feedback(
+                panel,
+                cx,
+                VariablesPanelButton::RowMenuItem(idx),
+                Rect {
+                    origin: Point2D::new(menu.origin.x + 4.0, row_y + 3.0),
+                    size: Point2D::new(menu.size.x - 8.0, ADD_VARIABLE_MENU_ROW_HEIGHT - 6.0),
+                },
+                8.0,
+            );
             draw_icon(
                 cx.backend,
                 *icon,
@@ -63,16 +85,11 @@ pub(super) fn paint_menus(
                 labels.export,
             ],
             match panel.hover {
-                Some(VariablesPanelButton::PresetMenuItem(button)) => match button {
-                    op_editor_core::variables_panel_state::PresetMenuButton::SaveCurrent
-                    | op_editor_core::variables_panel_state::PresetMenuButton::NameInput => Some(0),
-                    op_editor_core::variables_panel_state::PresetMenuButton::Load(idx)
-                    | op_editor_core::variables_panel_state::PresetMenuButton::Delete(idx) => {
-                        Some(1 + idx)
-                    }
-                    op_editor_core::variables_panel_state::PresetMenuButton::Import => Some(2),
-                    op_editor_core::variables_panel_state::PresetMenuButton::Export => Some(3),
-                },
+                Some(VariablesPanelButton::PresetMenuItem(button)) => Some(preset_menu_row(button)),
+                _ => None,
+            },
+            match panel.pressed {
+                Some(VariablesPanelButton::PresetMenuItem(button)) => Some(preset_menu_row(button)),
                 _ => None,
             },
         );
@@ -84,6 +101,10 @@ pub(super) fn paint_menus(
             add_variable_menu_rect(rect),
             &[labels.color, labels.number, labels.string],
             match panel.hover {
+                Some(VariablesPanelButton::AddVariableMenuItem(idx)) => Some(idx),
+                _ => None,
+            },
+            match panel.pressed {
                 Some(VariablesPanelButton::AddVariableMenuItem(idx)) => Some(idx),
                 _ => None,
             },
@@ -103,6 +124,10 @@ pub(super) fn paint_menus(
                 Some(VariablesPanelButton::ThemeMenuItem(idx)) => Some(idx),
                 _ => None,
             },
+            match panel.pressed {
+                Some(VariablesPanelButton::ThemeMenuItem(idx)) => Some(idx),
+                _ => None,
+            },
         );
     }
     if let Some(value) = panel.variant_menu_open.as_deref() {
@@ -116,6 +141,10 @@ pub(super) fn paint_menus(
             panel.variant_menu_rect(rect, value),
             &rows,
             match panel.hover {
+                Some(VariablesPanelButton::VariantMenuItem(idx)) => Some(idx),
+                _ => None,
+            },
+            match panel.pressed {
                 Some(VariablesPanelButton::VariantMenuItem(idx)) => Some(idx),
                 _ => None,
             },
@@ -157,14 +186,16 @@ fn paint_axis_dropdown(panel: &VariablesPanel, cx: &mut PaintCx<'_>, rect: Rect)
         .unwrap_or_default();
     for (i, v) in values.iter().enumerate() {
         let row_y = menu_y + (i as f32) * DROPDOWN_ROW_HEIGHT;
-        if panel.hover == Some(VariablesPanelButton::DropdownItem(i)) {
-            let highlight = Rect {
+        paint_feedback(
+            panel,
+            cx,
+            VariablesPanelButton::DropdownItem(i),
+            Rect {
                 origin: Point2D::new(menu_rect.origin.x + 4.0, row_y + 3.0),
                 size: Point2D::new(menu_rect.size.x - 8.0, DROPDOWN_ROW_HEIGHT - 6.0),
-            };
-            cx.backend
-                .fill_round_rect(highlight, 8.0, theme.button_hover);
-        }
+            },
+            8.0,
+        );
         if *v == active_value {
             let highlight = Rect {
                 origin: Point2D::new(menu_rect.origin.x + 4.0, row_y + 3.0),
@@ -189,19 +220,25 @@ fn paint_popover_rows(
     rect: Rect,
     rows: &[&str],
     hover_row: Option<usize>,
+    pressed_row: Option<usize>,
 ) {
     cx.backend.fill_round_rect(rect, 12.0, theme.popover);
     cx.backend.stroke_round_rect(rect, 12.0, theme.border, 1.0);
     for (idx, label) in rows.iter().enumerate() {
         let row_y = rect.origin.y + idx as f32 * ADD_VARIABLE_MENU_ROW_HEIGHT;
-        if hover_row == Some(idx) {
-            cx.backend.fill_round_rect(
+        let hovered = hover_row == Some(idx);
+        let pressed = pressed_row == Some(idx);
+        if hovered || pressed {
+            paint_button_feedback_wash(
+                cx.backend,
+                &theme,
                 Rect {
                     origin: Point2D::new(rect.origin.x + 4.0, row_y + 3.0),
                     size: Point2D::new(rect.size.x - 8.0, ADD_VARIABLE_MENU_ROW_HEIGHT - 6.0),
                 },
                 8.0,
-                theme.button_hover,
+                hovered,
+                pressed,
             );
         }
         paint_text(

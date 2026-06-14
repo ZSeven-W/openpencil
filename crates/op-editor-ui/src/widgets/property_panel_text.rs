@@ -1,14 +1,15 @@
 //! Text-specific property section for the native right panel.
 
 use crate::theme::Theme;
+use crate::widgets::button::paint_button_feedback_wash;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::property_panel::{
     FontWeightChoice, NodeSnapshot, PropertyPanelAction, TextAlignValue, TextGrowthValue,
     TextVerticalAlignValue,
 };
 use crate::widgets::property_panel_inputs::{
-    paint_input_with_icon_focused, paint_input_with_prefix_focused, paint_section_divider,
-    paint_section_label, to_jian_color, INPUT_HEIGHT, INPUT_RADIUS, PAD_X, SECTION_GAP,
+    paint_input_with_icon_focused_state, paint_input_with_prefix_focused_state,
+    paint_section_divider, paint_section_label, INPUT_HEIGHT, INPUT_RADIUS, PAD_X, SECTION_GAP,
     SECTION_HEADER_HEIGHT,
 };
 use crate::widgets::property_panel_sections::EditContext;
@@ -260,7 +261,7 @@ pub fn paint_text_section(
         family_name,
         family_name,
         12.0,
-        to_jian_color(theme.foreground),
+        (theme.foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
@@ -297,7 +298,7 @@ pub fn paint_text_section(
         weight_label,
         "system-ui",
         12.0,
-        to_jian_color(theme.foreground),
+        (theme.foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
@@ -316,7 +317,7 @@ pub fn paint_text_section(
         1.5,
     );
     let font_size = format_panel_number(text.font_size);
-    paint_input_with_prefix_focused(
+    paint_input_with_prefix_focused_state(
         cx,
         theme,
         Rect {
@@ -328,12 +329,14 @@ pub fn paint_text_section(
         edit.focus == Some(PropertyFocus::FontSize),
         edit.caret_at(PropertyFocus::FontSize),
         edit.select_all_at(PropertyFocus::FontSize),
+        edit.input_at(PropertyFocus::FontSize),
+        edit.now_ms,
     );
     y += INPUT_HEIGHT + 6.0;
 
     // Caption row — 行高 (left) / 字间距 (right), small muted labels
     // above the inputs (TS `text-[9px] justify-between`).
-    let caption_color = to_jian_color(theme.muted_foreground);
+    let caption_color = (theme.muted_foreground).to_jian();
     let lh_caption = TextLayout::single_run(
         op_i18n::translate(locale, "text.lineHeight"),
         "system-ui",
@@ -361,7 +364,7 @@ pub fn paint_text_section(
     // Line-height — icon prefix + value + `%` suffix (TS NumberInput
     // with `icon={LineHeightIcon}` + `suffix="%"`).
     let line_height = format_panel_number(text.line_height_percent);
-    paint_input_with_icon_focused(
+    paint_input_with_icon_focused_state(
         cx,
         theme,
         Rect {
@@ -374,10 +377,12 @@ pub fn paint_text_section(
         edit.focus == Some(PropertyFocus::LineHeight),
         edit.caret_at(PropertyFocus::LineHeight),
         edit.select_all_at(PropertyFocus::LineHeight),
+        edit.input_at(PropertyFocus::LineHeight),
+        edit.now_ms,
     );
     // Letter-spacing — `|A|` text prefix (TS NumberInput `label="|A|"`).
     let letter_spacing = format_panel_number(text.letter_spacing);
-    paint_input_with_prefix_focused(
+    paint_input_with_prefix_focused_state(
         cx,
         theme,
         Rect {
@@ -389,6 +394,8 @@ pub fn paint_text_section(
         edit.focus == Some(PropertyFocus::LetterSpacing),
         edit.caret_at(PropertyFocus::LetterSpacing),
         edit.select_all_at(PropertyFocus::LetterSpacing),
+        edit.input_at(PropertyFocus::LetterSpacing),
+        edit.now_ms,
     );
     y += INPUT_HEIGHT + 8.0;
 
@@ -411,6 +418,7 @@ pub fn paint_font_weight_picker(
     locale: op_editor_core::Locale,
     active_weight: u16,
     hover: Option<usize>,
+    pressed: Option<usize>,
 ) {
     let x0 = panel_rect.origin.x;
     let w = panel_rect.size.x;
@@ -442,9 +450,15 @@ pub fn paint_font_weight_picker(
         if is_active {
             cx.backend
                 .fill_round_rect(row, 6.0, theme.row_selected_primary);
-        } else if hover == Some(i) {
-            // Muted hover wash matching the other dropdowns.
-            cx.backend.fill_round_rect(row, 6.0, theme.button_hover);
+        } else if hover == Some(i) || pressed == Some(i) {
+            paint_button_feedback_wash(
+                cx.backend,
+                theme,
+                row,
+                6.0,
+                hover == Some(i),
+                pressed == Some(i),
+            );
         }
         // "number + name" — e.g. `400 Regular`, `800 Extra Bold`.
         let row_label = format!(
@@ -456,11 +470,12 @@ pub fn paint_font_weight_picker(
             &row_label,
             "system-ui",
             12.0,
-            to_jian_color(if is_active {
+            (if is_active {
                 theme.primary
             } else {
                 theme.foreground
-            }),
+            })
+            .to_jian(),
             Point2D::new(0.0, 0.0),
         );
         cx.backend.draw_text(
@@ -563,7 +578,7 @@ fn paint_text_growth_row(
             label,
             "system-ui",
             10.0,
-            to_jian_color(color),
+            (color).to_jian(),
             Point2D::new(0.0, 0.0),
         );
         let label_w = cx.backend.measure_text(label, 10.0);
@@ -638,7 +653,7 @@ fn paint_align_row<T: Copy + PartialEq>(
         op_i18n::translate(locale, label_key),
         "system-ui",
         11.0,
-        to_jian_color(theme.muted_foreground),
+        (theme.muted_foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend

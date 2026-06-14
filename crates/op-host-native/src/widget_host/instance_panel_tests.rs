@@ -44,7 +44,10 @@ fn ref_node(host: &WidgetHostNative) -> &jian_ops_schema::node::RefNode {
 fn fill_hex_commit_on_instance_lands_in_descendants() {
     let mut host = seeded_host();
     host.editor_state_mut().ui.property_focus = Some(op_editor_core::PropertyFocus::FillHex);
-    host.editor_state_mut().ui.property_input_draft = "#ff0000".to_string();
+    host.editor_state_mut()
+        .ui
+        .property_input
+        .set_text("#ff0000");
     host.commit_property_focus_if_any();
     let over = ref_node(&host)
         .descendants
@@ -66,7 +69,7 @@ fn fill_hex_commit_on_instance_lands_in_descendants() {
 fn position_commit_on_instance_writes_the_ref_base() {
     let mut host = seeded_host();
     host.editor_state_mut().ui.property_focus = Some(op_editor_core::PropertyFocus::PositionX);
-    host.editor_state_mut().ui.property_input_draft = "400".to_string();
+    host.editor_state_mut().ui.property_input.set_text("400");
     host.commit_property_focus_if_any();
     let r = ref_node(&host);
     assert_eq!(r.base.x, Some(400.0), "x is an INSTANCE_DIRECT_PROP");
@@ -115,7 +118,7 @@ fn context_menu_swaps_create_component_for_detach_rows() {
                 target: LayerContextTarget::Layer(NodeId::new(id)),
                 anchor_x: 0.0,
                 anchor_y: 0.0,
-                hovered_row: None,
+                menu: Default::default(),
             },
         )
     };
@@ -176,7 +179,7 @@ fn context_menu_detach_component_sheds_reusable_flag() {
 fn remote_icon_insert_bakes_svg_d_as_path_node() {
     let mut host = seeded_host();
     let state = host.editor_state_mut();
-    state.editor_ui.icon_picker_open = true;
+    state.editor_ui.icon_picker.open = true;
     state.editor_ui.icon_picker_replace_selection = false;
     state.editor_ui.icon_picker_panel_pos = Some((0.0, 0.0));
     state.editor_ui.icon_picker_search = "zwxq".to_string();

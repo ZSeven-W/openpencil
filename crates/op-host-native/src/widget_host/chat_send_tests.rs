@@ -14,10 +14,12 @@ fn seed_available_model(host: &mut WidgetHostNative) {
 #[test]
 fn apply_send_ignores_chat_when_no_model_is_available() {
     let mut host = WidgetHostNative::new();
-    host.editor_state_mut().chat.input = "design a login page".into();
+    host.editor_state_mut()
+        .chat
+        .set_input_text("design a login page");
 
     assert!(!host.apply_send());
-    assert_eq!(host.editor_state().chat.input, "design a login page");
+    assert_eq!(host.editor_state().chat.input.text(), "design a login page");
     assert!(host.editor_state().chat.messages.is_empty());
     assert!(host.editor_state().chat.pending_send.is_none());
 }
@@ -26,7 +28,9 @@ fn apply_send_ignores_chat_when_no_model_is_available() {
 fn apply_send_queues_chat_when_model_is_available() {
     let mut host = WidgetHostNative::new();
     seed_available_model(&mut host);
-    host.editor_state_mut().chat.input = "design a login page".into();
+    host.editor_state_mut()
+        .chat
+        .set_input_text("design a login page");
 
     assert!(host.apply_send());
     assert_eq!(

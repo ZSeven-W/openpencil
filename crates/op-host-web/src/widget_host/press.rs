@@ -11,8 +11,8 @@ use op_editor_ui::widgets::{
 use op_editor_ui::{Point2D, Rect};
 
 use super::{
-    rect_contains, ChatDragState, ChatInputSelectionDragState, ChatTextSelectionDragState,
-    CodeSelectionDragState, DragState, LayerDragState, MarqueeDragState, WidgetHost,
+    ChatDragState, ChatInputSelectionDragState, ChatTextSelectionDragState, CodeSelectionDragState,
+    DragState, LayerDragState, MarqueeDragState, WidgetHost,
 };
 use op_editor_core::codegen::CodeSelection;
 
@@ -44,7 +44,7 @@ impl WidgetHost {
                     target: LayerContextTarget::Layer(ec_id),
                     anchor_x: x,
                     anchor_y: y,
-                    hovered_row: None,
+                    menu: Default::default(),
                 });
                 self.mark_dirty();
                 return true;
@@ -54,7 +54,7 @@ impl WidgetHost {
                     target: LayerContextTarget::Page(idx),
                     anchor_x: x,
                     anchor_y: y,
-                    hovered_row: None,
+                    menu: Default::default(),
                 });
                 self.mark_dirty();
                 return true;
@@ -122,10 +122,18 @@ impl WidgetHost {
                 let _ = self.editor_state.remove_page(idx);
             }
             (A::RenamePage, T::Page(idx)) => {
-                let _ = self.editor_state.start_rename_page(idx);
+                if self.editor_state.start_rename_page(idx) {
+                    if let Some(rename) = self.editor_state.ui.layer_rename.as_mut() {
+                        rename.input.touch(self.now_ms);
+                    }
+                }
             }
             (A::RenameLayer, T::Layer(id)) => {
-                let _ = self.editor_state.start_rename_layer(id);
+                if self.editor_state.start_rename_layer(id) {
+                    if let Some(rename) = self.editor_state.ui.layer_rename.as_mut() {
+                        rename.input.touch(self.now_ms);
+                    }
+                }
             }
             _ => {}
         }
@@ -192,6 +200,8 @@ impl WidgetHost {
             use op_editor_core::StatusBarButton;
             let bar = op_editor_ui::widgets::StatusBar::for_editor(&self.editor_state);
             if let Some(btn) = bar.control_at(r, Point2D::new(x, y)) {
+                self.editor_state.editor_ui.pressed_button =
+                    Some(op_editor_core::ButtonPressTarget::StatusBar(btn));
                 match btn {
                     StatusBarButton::Search => self.zoom_to_fit(viewport_width, viewport_height),
                     StatusBarButton::ZoomOut => {
@@ -201,18 +211,27 @@ impl WidgetHost {
                         self.status_bar_zoom(true, viewport_width, viewport_height)
                     }
                 }
+                self.mark_dirty();
                 return true;
             }
         }
         // 0. Layer context menu — top-most overlay when open.
         if let Some(state) = self.editor_state.editor_ui.layer_context_menu.clone() {
-            use op_editor_ui::widgets::layer_context_menu::LayerContextMenu;
+            use op_editor_ui::widgets::layer_context_menu::{LayerContextMenu, MenuHit};
             let menu = LayerContextMenu::for_state(&self.editor_state, state.clone());
-            if let Some(action) = menu.hit_test(Point2D::new(x, y)) {
-                self.dispatch_layer_context_action(action, state.target);
-                self.editor_state.editor_ui.layer_context_menu = None;
-                self.mark_dirty();
-                return true;
+            match menu.hit(Point2D::new(x, y)) {
+                MenuHit::Row(_) => {
+                    if let Some(action) = menu.hit_test(Point2D::new(x, y)) {
+                        self.dispatch_layer_context_action(action, state.target);
+                        self.editor_state.editor_ui.layer_context_menu = None;
+                        self.mark_dirty();
+                    }
+                    return true;
+                }
+                MenuHit::Inside => {
+                    return true;
+                }
+                MenuHit::Outside => {}
             }
             // Dismissing the menu on a miss is a blank press — blur
             // every text input along with it.
@@ -225,18 +244,26 @@ impl WidgetHost {
         //     sets locale + closes; ANY other hit (including the
         //     Globe button itself) closes the picker AND swallows
         //     the click so the same press doesn't re-toggle open.
-        if self.editor_state.editor_ui.locale_picker_open {
+        if self.editor_state.editor_ui.locale_picker.open {
             let panel_rect = self.locale_picker_rect(viewport_width);
             let picker = LocalePicker::for_editor_ui(&self.editor_state.editor_ui);
-            if let Some(locale) = picker.hit_test(panel_rect, Point2D::new(x, y)) {
-                self.editor_state.editor_ui.locale = locale;
-                self.editor_state.editor_ui.locale_picker_open = false;
-                self.mark_dirty();
-                return true;
+            match picker.hit_popup(panel_rect, Point2D::new(x, y)) {
+                op_editor_ui::widgets::locale_picker::SelectHit::Row(idx) => {
+                    if let Some(locale) = LocalePicker::locale_at(idx) {
+                        self.editor_state.editor_ui.locale = locale;
+                    }
+                    self.editor_state.editor_ui.locale_picker.open = false;
+                    self.editor_state.editor_ui.locale_picker.hover = None;
+                    self.mark_dirty();
+                    return true;
+                }
+                op_editor_ui::widgets::locale_picker::SelectHit::Inside => return true,
+                op_editor_ui::widgets::locale_picker::SelectHit::Outside => {}
             }
             // Silent outside-close is a blank press — blur inputs too.
             self.blur_text_inputs_on_blank_press();
-            self.editor_state.editor_ui.locale_picker_open = false;
+            self.editor_state.editor_ui.locale_picker.open = false;
+            self.editor_state.editor_ui.locale_picker.hover = None;
             self.mark_dirty();
             return true;
         }
@@ -275,6 +302,10 @@ impl WidgetHost {
         };
         let top_bar = TopBar::for_editor_ui(&self.editor_state.editor_ui);
         if let Some(hit) = top_bar.hit_test(top_bar_rect, Point2D::new(x, y)) {
+            self.commit_property_family_focus_if_any();
+            let pressed = op_editor_ui::widgets::editor_state_ext::topbar_button_hover(hit);
+            self.editor_state.editor_ui.pressed_button =
+                Some(op_editor_core::ButtonPressTarget::TopBar(pressed));
             match hit {
                 TopBarHit::ToggleSidebar => {
                     let v = &mut self.editor_state.editor_ui.sidebar_open;
@@ -285,14 +316,20 @@ impl WidgetHost {
                         self.editor_state.editor_ui.theme_mode.flipped();
                 }
                 TopBarHit::ToggleLocale => {
-                    let v = &mut self.editor_state.editor_ui.locale_picker_open;
-                    *v = !*v;
+                    let picker = &mut self.editor_state.editor_ui.locale_picker;
+                    picker.open = !picker.open;
+                    picker.hover = None;
+                    picker.pressed = None;
+                    if picker.open {
+                        picker.scroll.offset = 0.0;
+                    }
                 }
                 TopBarHit::OpenAgentSettings => {
                     self.editor_state.editor_ui.agent_settings_open = true;
                 }
                 TopBarHit::ToggleFileMenu => {
                     self.editor_state.editor_ui.file_menu_open ^= true;
+                    self.editor_state.editor_ui.file_menu.hover = None;
                 }
                 TopBarHit::OpenFigmaImport => {
                     self.editor_state.editor_ui.figma_import_open = true;
@@ -317,7 +354,7 @@ impl WidgetHost {
             self.mark_dirty();
             return true;
         }
-        if rect_contains(top_bar_rect, Point2D::new(x, y)) {
+        if (top_bar_rect).contains(Point2D::new(x, y)) {
             // Top-bar gaps eat clicks but don't act — still a blank
             // press, so every text input blurs.
             let blurred = self.blur_text_inputs_on_blank_press();
@@ -343,6 +380,41 @@ impl WidgetHost {
                 }
             }
             self.editor_state.editor_ui.image_fill_popover_open = false;
+            self.mark_dirty();
+            return true;
+        }
+
+        // 0c0. Fill-type picker — outside-click dismiss. A row
+        // click applies the fill type; a click inside the popup body
+        // is swallowed; any outside click closes the picker.
+        if self.editor_state.editor_ui.fill_type_picker.open {
+            if let Some(panel) = PropertyPanel::for_selection(&self.editor_state) {
+                let property_rect = Rect {
+                    origin: Point2D::new(
+                        viewport_width - self.editor_state.editor_ui.property_panel_width,
+                        TOP_BAR_HEIGHT,
+                    ),
+                    size: Point2D::new(
+                        self.editor_state.editor_ui.property_panel_width,
+                        (viewport_height - TOP_BAR_HEIGHT).max(0.0),
+                    ),
+                };
+                match panel.fill_type_picker_hit(property_rect, Point2D::new(x, y)) {
+                    op_editor_ui::widgets::property_panel_fill::SelectHit::Row(idx) => {
+                        if let Some(fill_type) =
+                            op_editor_ui::widgets::property_panel_fill::fill_type_at(idx)
+                        {
+                            self.apply_property_action(
+                                op_editor_ui::widgets::PropertyPanelAction::SetFillType(fill_type),
+                            );
+                            return true;
+                        }
+                    }
+                    op_editor_ui::widgets::property_panel_fill::SelectHit::Inside => return true,
+                    op_editor_ui::widgets::property_panel_fill::SelectHit::Outside => {}
+                }
+            }
+            self.editor_state.editor_ui.close_fill_type_picker();
             self.mark_dirty();
             return true;
         }
@@ -426,7 +498,7 @@ impl WidgetHost {
         // 0c0b2. Font-family picker — outside-click dismiss. A click
         //        on an entry / the trigger is applied; one inside the
         //        popup body (search box / headers) is swallowed.
-        if self.editor_state.editor_ui.font_family_picker_open {
+        if self.editor_state.editor_ui.font_picker.open {
             use op_editor_ui::widgets::PropertyPanelAction as A;
             if let Some(panel) = PropertyPanel::for_selection(&self.editor_state) {
                 let property_rect = Rect {
@@ -451,10 +523,7 @@ impl WidgetHost {
                 }
             }
             let ui = &mut self.editor_state.editor_ui;
-            ui.font_family_picker_open = false;
-            ui.font_picker_search.clear();
-            ui.font_picker_scroll = 0.0;
-            ui.font_picker_hover = None;
+            ui.close_font_picker();
             self.mark_dirty();
             return true;
         }
@@ -486,6 +555,15 @@ impl WidgetHost {
                             | A::SetPaddingMode(_)
                             | A::TogglePaddingModePopover
                     ) {
+                        if let A::SetFontWeight(choice) = action {
+                            self.editor_state.editor_ui.pressed_button =
+                                op_editor_ui::widgets::FontWeightChoice::ALL
+                                    .iter()
+                                    .position(|c| *c == choice)
+                                    .map(op_editor_core::ButtonPressTarget::FontWeightPicker);
+                            self.mark_dirty();
+                            return true;
+                        }
                         self.apply_property_action(action);
                         return true;
                     }
@@ -514,6 +592,7 @@ impl WidgetHost {
                 ),
             };
             if let Some(anchor) = self.code_text_offset_at_screen(x, y) {
+                self.commit_property_family_focus_if_any();
                 self.editor_state.codegen.code_selection = Some(CodeSelection {
                     anchor,
                     focus: anchor,
@@ -526,7 +605,22 @@ impl WidgetHost {
                 self.mark_dirty();
                 return true;
             }
-            if let Some(action) = panel.hit_test_action(property_rect, Point2D::new(x, y)) {
+            let point = Point2D::new(x, y);
+            if let Some(action) = panel.hit_test_action(property_rect, point) {
+                self.editor_state.editor_ui.pressed_button =
+                    if let op_editor_ui::widgets::PropertyPanelAction::Codegen(codegen_action) =
+                        action
+                    {
+                        op_editor_ui::widgets::property_panel_code::codegen_hover_for_action(
+                            codegen_action,
+                        )
+                        .map(op_editor_core::ButtonPressTarget::Codegen)
+                    } else {
+                        panel
+                            .action_hover_index(property_rect, point)
+                            .map(op_editor_core::ButtonPressTarget::PropertyPanel)
+                    };
+                self.commit_property_focus_if_any();
                 // Anchor the colour picker at the clicked y so it
                 // pops next to the swatch row, not at the panel top.
                 if let op_editor_ui::widgets::PropertyPanelAction::OpenColorPicker(target) = action
@@ -550,7 +644,11 @@ impl WidgetHost {
                 }
                 return true;
             }
+            if let Some(focus) = panel.hit_test(property_rect, point) {
+                return self.focus_property_input_from_press(focus, property_rect, point);
+            }
         }
+        let property_focus_committed = self.commit_property_family_focus_if_any();
 
         // 1. AI chat panel — painted on top of toolbar so a
         //    click inside its rect is consumed here, even when
@@ -564,15 +662,9 @@ impl WidgetHost {
                 if let AIChatHit::SelectInputText(anchor) = hit {
                     self.chat_input_selection_drag = Some(ChatInputSelectionDragState { anchor });
                     self.editor_state.chat.focused = true;
-                    self.editor_state.chat.input_select_all = false;
-                    self.editor_state.chat.input_selection =
-                        Some(op_editor_core::chat::ChatInputSelection {
-                            anchor,
-                            focus: anchor,
-                        });
+                    self.editor_state.chat.set_input_caret(anchor, self.now_ms);
                     self.editor_state.chat.transcript_selection = None;
                     self.editor_state.codegen.code_selection = None;
-                    self.editor_state.chat.caret_anchor_ms = self.now_ms;
                     self.mark_dirty();
                     return true;
                 }
@@ -614,23 +706,32 @@ impl WidgetHost {
         //    that lie outside the chat panel.
         let toolbar_rect = self.toolbar_rect(viewport_width);
         let toolbar = Toolbar::for_editor(&self.editor_state);
-        if rect_contains(toolbar_rect, Point2D::new(x, y)) {
+        if (toolbar_rect).contains(Point2D::new(x, y)) {
             if let Some(hit) = toolbar.hit_test(toolbar_rect, Point2D::new(x, y)) {
                 match hit {
                     op_editor_ui::widgets::ToolbarHit::Tool(tool) => {
                         self.editor_state.tool = tool;
-                        self.editor_state.editor_ui.shape_picker_open = false;
+                        self.editor_state.editor_ui.shape_picker.open = false;
+                        self.editor_state.editor_ui.shape_picker.hover = None;
+                        self.editor_state.editor_ui.shape_picker.pressed = None;
                         self.mark_dirty();
                         return true;
                     }
                     op_editor_ui::widgets::ToolbarHit::Action(action) => {
-                        self.editor_state.editor_ui.shape_picker_open = false;
+                        self.editor_state.editor_ui.shape_picker.open = false;
+                        self.editor_state.editor_ui.shape_picker.hover = None;
+                        self.editor_state.editor_ui.shape_picker.pressed = None;
                         let acted = self.dispatch_toolbar_action(action);
-                        return acted || rename_committed;
+                        return acted || rename_committed || property_focus_committed;
                     }
                     op_editor_ui::widgets::ToolbarHit::ToggleShapePicker => {
-                        let v = &mut self.editor_state.editor_ui.shape_picker_open;
-                        *v = !*v;
+                        let picker = &mut self.editor_state.editor_ui.shape_picker;
+                        picker.open = !picker.open;
+                        picker.hover = None;
+                        picker.pressed = None;
+                        if picker.open {
+                            picker.scroll.offset = 0.0;
+                        }
                         self.mark_dirty();
                         return true;
                     }
@@ -638,7 +739,7 @@ impl WidgetHost {
             }
             // Toolbar padding / gaps eat the click — blank press.
             let blurred = self.blur_text_inputs_on_blank_press();
-            return blurred || rename_committed || text_edit_committed;
+            return blurred || rename_committed || text_edit_committed || property_focus_committed;
         }
 
         // 3. apply_click — LayerPanel + chat-defocus.
@@ -701,7 +802,7 @@ impl WidgetHost {
                     last_x: x,
                     last_y: y,
                 });
-                return rename_committed || text_edit_committed;
+                return rename_committed || text_edit_committed || property_focus_committed;
             }
             if matches!(self.editor_state.tool, op_editor_core::Tool::Select) {
                 // Convert screen → doc to ask which node (if any)
@@ -728,7 +829,7 @@ impl WidgetHost {
                         && !text_edit_was_active
                         && self.editor_state.start_text_edit(node_id.clone())
                     {
-                        self.editor_state.ui.text_edit_caret_anchor_ms = self.now_ms;
+                        self.editor_state.ui.text_edit_input.touch(self.now_ms);
                         self.mark_dirty();
                         return true;
                     }
@@ -761,7 +862,10 @@ impl WidgetHost {
                     current_screen_y: y,
                     additive: self.shift_held,
                 });
-                return cleared_now || rename_committed || text_edit_committed;
+                return cleared_now
+                    || rename_committed
+                    || text_edit_committed
+                    || property_focus_committed;
             }
             // Any other tool on empty canvas — fall back to pan
             // (web doesn't ship shape-creation drag yet).
@@ -769,11 +873,11 @@ impl WidgetHost {
                 last_x: x,
                 last_y: y,
             });
-            return rename_committed || text_edit_committed;
+            return rename_committed || text_edit_committed || property_focus_committed;
         }
         // Final fall-through — the press hit no interactive chrome
         // (panel-rail gaps, property-panel padding, …): blank press.
         let blurred = self.blur_text_inputs_on_blank_press();
-        blurred || rename_committed || text_edit_committed
+        blurred || rename_committed || text_edit_committed || property_focus_committed
     }
 }

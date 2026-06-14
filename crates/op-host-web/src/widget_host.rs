@@ -42,6 +42,12 @@ use op_editor_ui::widgets::{
 use op_editor_ui::{Point2D, Rect, Theme};
 
 mod a11y_bridge;
+#[cfg(test)]
+mod agent_settings_acp_press_tests;
+#[cfg(test)]
+mod agent_settings_compact_press_tests;
+#[cfg(test)]
+mod agent_settings_form_press_tests;
 mod agent_settings_mcp_server;
 mod agent_settings_press;
 #[cfg(test)]
@@ -63,12 +69,18 @@ mod chat_design_hover_tests;
 mod chat_model_picker_caret;
 #[cfg(test)]
 mod chat_model_picker_caret_tests;
+#[cfg(test)]
+mod chat_send_tests;
 mod chrome_menu_press;
 mod click;
 mod color_picker_press;
 mod component_browser_press;
 mod cursor_input;
+#[cfg(test)]
+mod deferred_press_tests;
 mod design_md_press;
+#[cfg(test)]
+mod design_md_press_tests;
 pub(crate) mod icon_ingest;
 // Browser file-IO ingestion (Open / Figma import / clipboard paste)
 // — needs the codegen-gated document-pipeline deps (jian-ops-schema).
@@ -80,16 +92,26 @@ mod io_tests;
 mod keyboard;
 mod keyboard_edit_ops;
 mod keyboard_settings_commit;
+mod keyboard_text_inputs;
+#[cfg(test)]
+mod locale_picker_scroll_tests;
 mod overlay_cursor;
 mod overlay_keys;
 #[cfg(test)]
 mod overlay_press_tests;
 mod overlay_rects;
 mod paint;
+#[cfg(test)]
+mod paint_caret_tests;
 mod press;
 mod property_dispatch;
+mod property_focus_press;
 #[cfg(test)]
 mod property_hover_tests;
+#[cfg(test)]
+mod property_input_tests;
+#[cfg(test)]
+mod property_panel_press_tests;
 mod release_input;
 mod scroll;
 mod settings_caret;
@@ -111,13 +133,6 @@ pub(in crate::widget_host) const TOOLBAR_INSET_Y: f32 = 12.0;
 pub(in crate::widget_host) const STATUS_INSET: f32 = 16.0;
 const AICHAT_INSET_BOTTOM: f32 = 12.0;
 const AICHAT_INSET_LEFT: f32 = 12.0;
-
-fn rect_contains(r: Rect, p: Point2D) -> bool {
-    p.x >= r.origin.x
-        && p.x <= r.origin.x + r.size.x
-        && p.y >= r.origin.y
-        && p.y <= r.origin.y + r.size.y
-}
 
 pub struct WidgetHost {
     /// **The host's single source of truth.** All input handlers
@@ -195,6 +210,10 @@ pub struct WidgetHost {
 impl WidgetHost {
     pub fn set_now_ms(&mut self, now_ms: u64) {
         self.now_ms = now_ms;
+    }
+
+    pub fn caret_animation_active(&self) -> bool {
+        self.editor_state.active_text_input().is_some()
     }
 
     /// Borrow the canonical-model editor state — the host's single source of
@@ -480,15 +499,12 @@ impl WidgetHost {
             return false;
         };
         if let Some(focus) = self.chat_input_text_offset_at_screen(x, y) {
-            let next = Some(op_editor_core::chat::ChatInputSelection {
-                anchor: drag.anchor,
-                focus,
-            });
-            if self.editor_state.chat.input_selection != next {
-                self.editor_state.chat.input_selection = next;
-                self.editor_state.chat.input_select_all = false;
+            if self
+                .editor_state
+                .chat
+                .drag_input_selection(drag.anchor, focus, self.now_ms)
+            {
                 self.editor_state.chat.focused = true;
-                self.editor_state.chat.caret_anchor_ms = self.now_ms;
                 self.mark_dirty();
             }
         }
@@ -537,12 +553,15 @@ impl WidgetHost {
             };
             (checklist, panel.fixed_checklist_scroll_max())
         };
-        if !rect_contains(checklist, point) {
+        if !(checklist).contains(point) {
             return false;
         }
-        let next = (self.editor_state.chat.checklist_scroll - delta).clamp(0.0, max);
-        if next != self.editor_state.chat.checklist_scroll {
-            self.editor_state.chat.checklist_scroll = next;
+        let before = self.editor_state.chat.checklist_scroll.offset;
+        self.editor_state
+            .chat
+            .checklist_scroll
+            .scroll_by(-delta, max, 0.0);
+        if self.editor_state.chat.checklist_scroll.offset != before {
             self.mark_dirty();
         }
         true
@@ -564,13 +583,14 @@ impl WidgetHost {
             let panel_rect = AgentSettingsPanel::for_editor(&self.editor_state)
                 .rect(viewport_width, viewport_height);
             let point = Point2D::new(x, y);
-            if rect_contains(panel_rect, point) {
+            if (panel_rect).contains(point) {
                 if let Some(max) = AgentSettingsPanel::for_editor(&self.editor_state)
                     .builtin_preset_scroll_max_at(panel_rect, point)
                 {
                     let settings = &mut self.editor_state.editor_ui.agent_settings;
-                    settings.builtin_preset_menu_scroll =
-                        (settings.builtin_preset_menu_scroll - delta_y).clamp(0.0, max);
+                    settings
+                        .builtin_preset_menu_scroll
+                        .scroll_by(-delta_y, max, 0.0);
                     self.mark_dirty();
                     return true;
                 }
@@ -578,9 +598,11 @@ impl WidgetHost {
                 let total = panel.content_total_height();
                 let viewport_h_inner = panel_rect.size.y - 48.0;
                 let max_scroll = (total - viewport_h_inner).max(0.0);
-                self.editor_state.editor_ui.agent_settings.scroll_y =
-                    (self.editor_state.editor_ui.agent_settings.scroll_y - delta_y)
-                        .clamp(0.0, max_scroll);
+                self.editor_state
+                    .editor_ui
+                    .agent_settings
+                    .scroll_y
+                    .scroll_by(-delta_y, max_scroll, 0.0);
                 self.mark_dirty();
                 return true;
             }
@@ -590,6 +612,9 @@ impl WidgetHost {
         }
         // Floating VariablesPanel owns the wheel over its rect.
         if self.try_scroll_variables_panel(x, y, delta_y, viewport_width, viewport_height) {
+            return true;
+        }
+        if self.try_scroll_locale_picker(x, y, delta_y, viewport_width) {
             return true;
         }
         // Side rails scroll their panels instead of zooming the

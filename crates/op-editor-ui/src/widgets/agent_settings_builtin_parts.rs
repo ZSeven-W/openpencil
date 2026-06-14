@@ -80,13 +80,13 @@ pub fn kind_toggle_target(
     card: Rect,
     point: Point2D,
 ) -> Option<BuiltinAgentKind> {
-    if !rect_contains(kind_rect(card), point) {
+    if !(kind_rect(card)).contains(point) {
         return None;
     }
     let options = kind_options(agent);
     options
         .iter()
-        .find(|option| rect_contains(kind_option_rect(card, option.slot), point))
+        .find(|option| (kind_option_rect(card, option.slot)).contains(point))
         .map(|option| option.kind)
         .filter(|kind| *kind != agent.kind)
 }
@@ -159,8 +159,10 @@ pub fn paint_preset_menu(
     cx.backend.stroke_round_rect(menu, 6.0, theme.border, 1.0);
     cx.backend.save();
     cx.backend.clip_rect(menu);
-    cx.backend
-        .translate(Point2D::new(0.0, -settings.builtin_preset_menu_scroll));
+    cx.backend.translate(Point2D::new(
+        0.0,
+        -settings.builtin_preset_menu_scroll.offset,
+    ));
     for (i, preset) in BUILTIN_AGENT_PRESETS.iter().enumerate() {
         let item = preset_item_rect(card, i);
         let active = agent.preset == preset.key;
@@ -273,7 +275,7 @@ pub fn preset_scroll_max() -> f32 {
 }
 
 pub fn preset_menu_contains(card: Rect, point: Point2D) -> bool {
-    rect_contains(preset_menu_rect(card), point)
+    (preset_menu_rect(card)).contains(point)
 }
 
 fn preset_label(key: BuiltinAgentPresetKey) -> &'static str {
@@ -335,21 +337,23 @@ fn preset_menu_view_height() -> f32 {
     preset_content_height().min(max_h)
 }
 
-fn paint_menu_scrollbar(cx: &mut PaintCx<'_>, theme: &Theme, menu: Rect, scroll: f32) {
-    let max = preset_scroll_max();
-    if max <= 0.0 {
-        return;
-    }
+fn paint_menu_scrollbar(
+    cx: &mut PaintCx<'_>,
+    theme: &Theme,
+    menu: Rect,
+    scroll: jian_core::scroll::ScrollState,
+) {
     let content_h = preset_content_height();
-    let thumb_h = (menu.size.y * menu.size.y / content_h).clamp(24.0, menu.size.y);
-    let range = (menu.size.y - thumb_h).max(1.0);
-    let t = (scroll.clamp(0.0, max) / max).clamp(0.0, 1.0);
+    let track_h = (menu.size.y - 8.0).max(0.0);
+    let Some(thumb_geom) = scroll.thumb(track_h, content_h, menu.size.y, 24.0) else {
+        return;
+    };
     let thumb = Rect {
         origin: Point2D::new(
             menu.origin.x + menu.size.x - 5.0,
-            menu.origin.y + 4.0 + t * range,
+            menu.origin.y + 4.0 + thumb_geom.offset,
         ),
-        size: Point2D::new(2.0, (thumb_h - 8.0).max(16.0)),
+        size: Point2D::new(2.0, thumb_geom.len),
     };
     cx.backend.fill_round_rect(
         thumb,
@@ -366,7 +370,7 @@ fn draw_text(cx: &mut PaintCx<'_>, text: &str, size: f32, color: Color, x: f32, 
         text,
         "system-ui",
         size,
-        to_jian(color),
+        (color).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(&layout, Point2D::new(x, y));
@@ -381,20 +385,6 @@ fn ellipsize(cx: &mut PaintCx<'_>, value: &str, max_w: f32, size: f32) -> String
         out.pop();
     }
     format!("{out}...")
-}
-
-fn rect_contains(r: Rect, p: Point2D) -> bool {
-    p.x >= r.origin.x
-        && p.y >= r.origin.y
-        && p.x <= r.origin.x + r.size.x
-        && p.y <= r.origin.y + r.size.y
-}
-
-fn to_jian(c: Color) -> jian_core::scene::Color {
-    fn ch(v: f32) -> u8 {
-        (v.clamp(0.0, 1.0) * 255.0).round() as u8
-    }
-    jian_core::scene::Color::rgba(ch(c.r), ch(c.g), ch(c.b), ch(c.a))
 }
 
 #[cfg(test)]

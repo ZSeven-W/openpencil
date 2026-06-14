@@ -1,8 +1,9 @@
 use super::code_i18n::CodePanelStrings;
 use super::{action_hovered, draw_line, origin};
 use crate::theme::Theme;
+use crate::widgets::button::paint_button_feedback_wash;
 use crate::widgets::icons::{draw_icon, Icon};
-use crate::widgets::property_panel_inputs::{to_jian_color, INPUT_RADIUS, PAD_X};
+use crate::widgets::property_panel_inputs::{INPUT_RADIUS, PAD_X};
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
 use op_editor_core::codegen::{CodeSelection, CodegenHover, CodegenState};
@@ -88,6 +89,7 @@ pub(super) fn paint_complete_body_in_panel(
     state: &CodegenState,
     strings: CodePanelStrings,
     layout: CompleteLayout,
+    pressed: Option<CodegenHover>,
 ) -> f32 {
     let mut y = layout.y;
     if state.degraded {
@@ -126,7 +128,7 @@ pub(super) fn paint_complete_body_in_panel(
         theme,
         &state.code,
         state.code_selection,
-        state.code_scroll,
+        state.code_scroll.offset,
         code_rect,
     );
     let actions = [
@@ -137,7 +139,15 @@ pub(super) fn paint_complete_body_in_panel(
     ];
     let rects = action_chip_rects(layout.x, y, layout.w, strings);
     for ((icon, label, hover), rect) in actions.iter().zip(rects) {
-        paint_action_chip(cx, theme, *icon, label, rect, action_hovered(state, *hover));
+        paint_action_chip(
+            cx,
+            theme,
+            *icon,
+            label,
+            rect,
+            action_hovered(state, *hover),
+            pressed == Some(*hover),
+        );
     }
     y + ACTION_CHIP_H + 12.0
 }
@@ -148,7 +158,7 @@ pub(super) fn code_text_offset_at_in_panel(
     layout: CompleteLayout,
 ) -> Option<usize> {
     let rect = code_area_rect_for_panel(state, layout);
-    if !rect_contains(rect, point) {
+    if !(rect).contains(point) {
         return None;
     }
     let lines = line_spans(&state.code);
@@ -158,6 +168,7 @@ pub(super) fn code_text_offset_at_in_panel(
     }
     let scroll = state
         .code_scroll
+        .offset
         .clamp(0.0, max_scroll_for_code(&state.code, rect));
     let line_index = ((point.y - code_text_top(rect) + scroll) / CODE_LINE_H)
         .floor()
@@ -215,7 +226,7 @@ fn paint_code_area(
             &n,
             "monospace",
             CODE_FONT_SIZE,
-            to_jian_color(code_line_number_color(theme)),
+            (code_line_number_color(theme)).to_jian(),
             origin(),
         );
         cx.backend.draw_text(
@@ -392,13 +403,6 @@ fn code_text_top(rect: Rect) -> f32 {
     rect.origin.y + CODE_PAD_Y
 }
 
-fn rect_contains(r: Rect, p: Point2D) -> bool {
-    p.x >= r.origin.x
-        && p.x <= r.origin.x + r.size.x
-        && p.y >= r.origin.y
-        && p.y <= r.origin.y + r.size.y
-}
-
 fn paint_highlighted_code_line(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
@@ -412,7 +416,7 @@ fn paint_highlighted_code_line(
                 token.text,
                 "monospace",
                 CODE_FONT_SIZE,
-                to_jian_color(syntax_color(theme, token.kind)),
+                (syntax_color(theme, token.kind)).to_jian(),
                 origin(),
             );
             cx.backend.draw_text(&layout, Point2D::new(x, baseline_y));
@@ -655,11 +659,11 @@ fn paint_action_chip(
     label: &str,
     rect: Rect,
     hovered: bool,
+    pressed: bool,
 ) {
     cx.backend.fill_round_rect(rect, INPUT_RADIUS, theme.card);
-    if hovered {
-        cx.backend
-            .fill_round_rect(rect, INPUT_RADIUS, theme.button_hover);
+    if hovered || pressed {
+        paint_button_feedback_wash(cx.backend, theme, rect, INPUT_RADIUS, hovered, pressed);
     }
     cx.backend
         .stroke_round_rect(rect, INPUT_RADIUS, theme.border, 1.0);

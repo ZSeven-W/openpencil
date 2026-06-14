@@ -17,6 +17,7 @@ use crate::widgets::layer_panel_walkers::{
 };
 use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
 use crate::{Color, Point2D, Rect, TextLayout};
+use jian_core::text_input::TextInputState;
 use op_editor_core::NodeId;
 
 use jian_ops_schema::node::PenNode;
@@ -38,8 +39,7 @@ pub(crate) const LAYER_ROW_HEIGHT: f32 = 28.0;
 pub(crate) const ROW_PAD_X: f32 = 12.0;
 pub(crate) const SECTION_GAP: f32 = 8.0;
 use crate::widgets::layer_panel_paint::{
-    paint_drag_ghost, paint_rename_input, paint_section_header, to_jian_color, truncate_to_fit,
-    ROW_FONT,
+    paint_drag_ghost, paint_rename_input, paint_section_header, truncate_to_fit, ROW_FONT,
 };
 
 /// One row in the layers tree — flat depth-walked view.
@@ -87,13 +87,7 @@ pub struct LayerPanel {
     pub drop_target: Option<DropTarget>,
     pub drag_ghost: Option<(LayerItem, f32)>,
     pub now_ms: u64,
-    pub caret_anchor_ms: u64,
-    /// Caret position (char index) for the active inline rename — the
-    /// single renaming row reads this to place its blinking caret.
-    pub rename_caret: usize,
-    /// Whether Ctrl/Cmd+A selected the whole rename draft — drives the
-    /// select-all highlight behind the inline rename text.
-    pub rename_select_all: bool,
+    pub rename_input: Option<TextInputState>,
     /// Scroll offsets (px) for the bounded Pages / Layers regions.
     pub pages_scroll: f32,
     pub layers_scroll: f32,
@@ -123,18 +117,11 @@ impl LayerPanel {
             drop_target: None,
             drag_ghost: None,
             now_ms: 0,
-            caret_anchor_ms: 0,
-            rename_caret: state.ui.layer_rename.as_ref().map(|r| r.caret).unwrap_or(0),
-            rename_select_all: state
-                .ui
-                .layer_rename
-                .as_ref()
-                .map(|r| r.select_all)
-                .unwrap_or(false),
-            pages_scroll: state.editor_ui.layer_pages_scroll,
-            layers_scroll: state.editor_ui.layer_layers_scroll,
-            pages_h_scroll: state.editor_ui.layer_pages_h_scroll,
-            layers_h_scroll: state.editor_ui.layer_layers_h_scroll,
+            rename_input: state.ui.layer_rename.as_ref().map(|r| r.input.clone()),
+            pages_scroll: state.editor_ui.layer_pages_scroll.offset,
+            layers_scroll: state.editor_ui.layer_layers_scroll.offset,
+            pages_h_scroll: state.editor_ui.layer_pages_h_scroll.offset,
+            layers_h_scroll: state.editor_ui.layer_layers_h_scroll.offset,
         }
     }
 
@@ -186,18 +173,11 @@ impl LayerPanel {
             drop_target: None,
             drag_ghost: None,
             now_ms: 0,
-            caret_anchor_ms: 0,
-            rename_caret: state.ui.layer_rename.as_ref().map(|r| r.caret).unwrap_or(0),
-            rename_select_all: state
-                .ui
-                .layer_rename
-                .as_ref()
-                .map(|r| r.select_all)
-                .unwrap_or(false),
-            pages_scroll: state.editor_ui.layer_pages_scroll,
-            layers_scroll: state.editor_ui.layer_layers_scroll,
-            pages_h_scroll: state.editor_ui.layer_pages_h_scroll,
-            layers_h_scroll: state.editor_ui.layer_layers_h_scroll,
+            rename_input: state.ui.layer_rename.as_ref().map(|r| r.input.clone()),
+            pages_scroll: state.editor_ui.layer_pages_scroll.offset,
+            layers_scroll: state.editor_ui.layer_layers_scroll.offset,
+            pages_h_scroll: state.editor_ui.layer_pages_h_scroll.offset,
+            layers_h_scroll: state.editor_ui.layer_layers_h_scroll.offset,
         }
     }
 
@@ -212,9 +192,7 @@ impl LayerPanel {
             drop_target: None,
             drag_ghost: None,
             now_ms: 0,
-            caret_anchor_ms: 0,
-            rename_caret: 0,
-            rename_select_all: false,
+            rename_input: None,
             pages_scroll: 0.0,
             layers_scroll: 0.0,
             pages_h_scroll: 0.0,
@@ -251,7 +229,7 @@ impl LayerPanel {
     /// After. Below-rows area: After-last. Outside / above rows:
     /// None.
     pub fn drop_target_at(&self, rect: Rect, point: Point2D) -> Option<DropTarget> {
-        if !rect_contains(rect, point) {
+        if !(rect).contains(point) {
             return None;
         }
         let r = self.regions(rect);
@@ -325,7 +303,7 @@ impl LayerPanel {
     /// toggles for the trailing icons, or `AddPage` for the `+`
     /// on the Pages section header.
     pub fn hit_test(&self, rect: Rect, point: Point2D) -> Option<LayerPanelHit> {
-        if !rect_contains(rect, point) {
+        if !(rect).contains(point) {
             return None;
         }
         // Pages section header — `+` add-page affordance at top-right.
@@ -357,7 +335,7 @@ impl LayerPanel {
                 origin: Point2D::new(rect.origin.x, y),
                 size: Point2D::new(rect.size.x, PAGE_ROW_HEIGHT),
             };
-            if in_pages && rect_contains(row, point) {
+            if in_pages && (row).contains(point) {
                 // × delete button — only hit-tested when the row is
                 // hovered (paint shows it under the same gate). 14
                 // px icon, right-aligned with 4 px slop.
@@ -383,7 +361,7 @@ impl LayerPanel {
                 origin: Point2D::new(rect.origin.x, y),
                 size: Point2D::new(rect.size.x, LAYER_ROW_HEIGHT),
             };
-            if in_layers && rect_contains(row, point) {
+            if in_layers && (row).contains(point) {
                 // Match the paint geometry — same 14 px icon
                 // boxes positioned at `trailing_right` minus 14 /
                 // 32 (lock / eye). Slop of 4 px around each so
@@ -487,13 +465,6 @@ pub struct DropTarget {
     pub indicator_y: f32,
 }
 
-fn rect_contains(r: Rect, p: Point2D) -> bool {
-    p.x >= r.origin.x
-        && p.x <= r.origin.x + r.size.x
-        && p.y >= r.origin.y
-        && p.y <= r.origin.y + r.size.y
-}
-
 impl Widget for LayerPanel {
     fn id(&self) -> WidgetId {
         self.id
@@ -576,14 +547,11 @@ impl Widget for LayerPanel {
                 paint_rename_input(
                     cx,
                     &self.theme,
-                    &page.label,
-                    self.rename_caret,
+                    self.rename_input.as_ref().expect("renaming row has input"),
                     label_x,
                     y + 2.0,
                     available_w,
                     self.now_ms,
-                    self.caret_anchor_ms,
-                    self.rename_select_all,
                 );
             } else {
                 let display = truncate_to_fit(&page.label, ROW_FONT, available_w);
@@ -591,11 +559,12 @@ impl Widget for LayerPanel {
                     &display,
                     "system-ui",
                     ROW_FONT,
-                    to_jian_color(if page.active {
+                    (if page.active {
                         self.theme.foreground
                     } else {
                         self.theme.muted_foreground
-                    }),
+                    })
+                    .to_jian(),
                     Point2D::new(0.0, 0.0),
                 );
                 cx.backend
@@ -735,14 +704,11 @@ impl Widget for LayerPanel {
                 paint_rename_input(
                     cx,
                     &self.theme,
-                    &item.label,
-                    self.rename_caret,
+                    self.rename_input.as_ref().expect("renaming row has input"),
                     label_x,
                     row.origin.y,
                     available_w,
                     self.now_ms,
-                    self.caret_anchor_ms,
-                    self.rename_select_all,
                 );
             } else {
                 let display = truncate_to_fit(&item.label, ROW_FONT, available_w);
@@ -750,7 +716,7 @@ impl Widget for LayerPanel {
                     &display,
                     "system-ui",
                     ROW_FONT,
-                    to_jian_color(label_color),
+                    (label_color).to_jian(),
                     Point2D::new(0.0, 0.0),
                 );
                 cx.backend

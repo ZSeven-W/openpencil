@@ -16,8 +16,8 @@
 # `op_editor_ui::widgets::*` must live in the widget_host
 # module (the spec's "any function pulling the widget facade" clause).
 #
-# Reverse direction: op-editor-ui/src/widgets/ MUST contain four impl
-# files (tree, prop_row, dropdown, text_input) AND each file must
+# Reverse direction: op-editor-ui/src/widgets/ MUST contain the remaining
+# OP-owned primitive impl files (tree, prop_row, text_input) AND each file must
 # carry a real `impl Widget for X` — a stale file with the impl
 # removed must not silently pass. (Phase 7.3 reorg: the
 # openpencil-shell-core re-export shim was dissolved; op-host-web
@@ -180,7 +180,7 @@ if [ -n "${core_ref_hits}" ]; then
 fi
 
 # ---------------------------------------------------------------------
-# Reverse R1: each of the four expected widget impl files exists AND
+# Reverse R1: each expected widget impl file exists AND
 # carries a real `impl Widget for X` line that is NOT a Rust
 # line-comment.
 #
@@ -191,7 +191,7 @@ fi
 # grepping; block comments (`/* … */`) are not handled because the
 # Rust style in op-editor-ui/src/widgets/ uses line comments only.
 # ---------------------------------------------------------------------
-required_widgets=("tree" "prop_row" "dropdown" "text_input")
+required_widgets=("tree" "prop_row" "text_input")
 for w in "${required_widgets[@]}"; do
   file="${CORE_WIDGETS}/${w}.rs"
   if [ ! -f "${file}" ]; then

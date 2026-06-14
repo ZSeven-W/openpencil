@@ -15,6 +15,7 @@
 
 use crate::layout_scene::{SceneNode, SceneTextAlign};
 use crate::{Point2D, Rect, RenderBackend};
+use jian_core::text_input::prev_char_boundary;
 
 /// Resolved line layout of a Text node's content.
 pub struct TextEditLayout {
@@ -275,13 +276,6 @@ fn line_start_offsets(text: &str, lines: &[String]) -> Vec<usize> {
         out.push(0);
     }
     out
-}
-
-fn prev_char_boundary(s: &str, mut index: usize) -> usize {
-    while index > 0 && !s.is_char_boundary(index) {
-        index -= 1;
-    }
-    index
 }
 
 #[cfg(test)]

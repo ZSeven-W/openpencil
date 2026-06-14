@@ -1,3 +1,5 @@
+use jian_core::text_input::TextInputState;
+use jian_widgets::components::select::SelectState;
 use op_editor_core::chat::{AgentProvider, ModelEntry};
 use op_editor_core::Locale;
 use op_editor_ui::theme::Theme;
@@ -51,11 +53,19 @@ fn caret_fills(fills: &[(Rect, Color)], theme: Theme) -> Vec<Rect> {
         .collect()
 }
 
+fn open_select_state() -> SelectState {
+    let mut state = SelectState::default();
+    state.open = true;
+    state
+}
+
 #[test]
 fn model_picker_search_paints_visible_caret_at_blink_on_phase() {
     let theme = Theme::dark();
     let models = vec![ModelEntry::new(AgentProvider::CodexCli, "gpt-5", "gpt-5")];
     let rect = Rect::xywh(10.0, 20.0, 240.0, picker_view_height(&models, ""));
+    let input = TextInputState::default();
+    let state = open_select_state();
     let mut backend = CaptureBackend::default();
     let mut cx = PaintCx {
         backend: &mut backend,
@@ -67,13 +77,9 @@ fn model_picker_search_paints_visible_caret_at_blink_on_phase() {
         rect,
         &models,
         0,
-        0.0,
-        None,
-        "",
-        None,
-        false,
+        &state,
+        &input,
         100,
-        0,
         Locale::EnUs,
     );
 
@@ -85,6 +91,8 @@ fn model_picker_search_hides_caret_at_blink_off_phase() {
     let theme = Theme::dark();
     let models = vec![ModelEntry::new(AgentProvider::CodexCli, "gpt-5", "gpt-5")];
     let rect = Rect::xywh(10.0, 20.0, 240.0, picker_view_height(&models, ""));
+    let input = TextInputState::default();
+    let state = open_select_state();
     let mut backend = CaptureBackend::default();
     let mut cx = PaintCx {
         backend: &mut backend,
@@ -96,13 +104,9 @@ fn model_picker_search_hides_caret_at_blink_off_phase() {
         rect,
         &models,
         0,
-        0.0,
-        None,
-        "",
-        None,
-        false,
+        &state,
+        &input,
         500,
-        0,
         Locale::EnUs,
     );
 

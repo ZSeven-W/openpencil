@@ -3,7 +3,7 @@ use crate::widgets::{PaintCx, Widget};
 use crate::{Color, Point2D, Rect, RenderBackend, TextLayout};
 use op_editor_core::agent_settings::{AgentSettingsTab, McpCli};
 use op_editor_core::editor_ui_state::ThemeMode;
-use op_editor_core::EditorState;
+use op_editor_core::{AgentSettingsButton, ButtonPressTarget, EditorState};
 
 #[derive(Default)]
 struct CaptureBackend {
@@ -54,16 +54,6 @@ fn rect_eq(a: Rect, b: Rect) -> bool {
         && (a.origin.y - b.origin.y).abs() < 0.01
         && (a.size.x - b.size.x).abs() < 0.01
         && (a.size.y - b.size.y).abs() < 0.01
-}
-
-fn has_visible_hover_fill(
-    backend: &CaptureBackend,
-    rect: Rect,
-    theme: crate::theme::Theme,
-) -> bool {
-    backend.round_fills.iter().any(|(r, color)| {
-        rect_eq(*r, rect) && !color_eq(*color, theme.muted) && color.a > theme.button_hover.a + 0.01
-    })
 }
 
 fn settings_content_metrics(rect: Rect) -> (f32, f32, f32) {
@@ -204,6 +194,38 @@ fn hovered_mcp_server_button_paints_hover_wash() {
 }
 
 #[test]
+fn pressed_mcp_server_button_uses_shared_button_feedback() {
+    let mut state = EditorState::default();
+    state.editor_ui.theme_mode = ThemeMode::Light;
+    state.editor_ui.agent_settings.tab = AgentSettingsTab::Mcp;
+    state.editor_ui.agent_settings.mcp_server.running = true;
+    state.editor_ui.pressed_button = Some(ButtonPressTarget::AgentSettings(
+        AgentSettingsButton::McpServer,
+    ));
+    let panel = AgentSettingsPanel::for_editor(&state);
+    let rect = panel.rect(1200.0, 800.0);
+    let button = mcp_server_button_rect(rect);
+    let expected = panel
+        .theme
+        .button_hover
+        .with_alpha(panel.theme.button_hover.a * 1.8);
+    let mut backend = CaptureBackend::default();
+    let mut cx = PaintCx {
+        backend: &mut backend,
+    };
+
+    panel.paint(&mut cx, rect);
+
+    assert!(
+        backend
+            .round_fills
+            .iter()
+            .any(|(r, color)| rect_eq(*r, button) && color_eq(*color, expected)),
+        "pressed MCP server button should paint the shared pressed feedback token"
+    );
+}
+
+#[test]
 fn hovered_image_settings_buttons_paint_hover_wash() {
     let mut state = EditorState::default();
     state.editor_ui.theme_mode = ThemeMode::Light;
@@ -226,13 +248,59 @@ fn hovered_image_settings_buttons_paint_hover_wash() {
     panel.paint(&mut cx, rect);
 
     assert!(
-        has_visible_hover_fill(&backend, search_test, panel.theme),
-        "hovering the image search test button should paint a visible wash over its base fill"
+        backend.round_fills.iter().any(
+            |(r, color)| rect_eq(*r, search_test) && color_eq(*color, panel.theme.button_hover)
+        ),
+        "hovering the image search test button should paint the shared hover token"
     );
     assert!(
-        has_visible_hover_fill(&backend, add, panel.theme),
-        "hovering the image generation add button should paint a visible wash over its base fill"
+        backend
+            .round_fills
+            .iter()
+            .any(|(r, color)| rect_eq(*r, add) && color_eq(*color, panel.theme.button_hover)),
+        "hovering the image generation add button should paint the shared hover token"
     );
+}
+
+#[test]
+fn pressed_image_settings_buttons_use_shared_button_feedback() {
+    for (button, expected_rect) in [
+        (
+            AgentSettingsButton::ImageSearchTest,
+            image_search_test_button_rect as fn(Rect) -> Rect,
+        ),
+        (
+            AgentSettingsButton::ImageGenAdd,
+            image_gen_add_button_rect as fn(Rect) -> Rect,
+        ),
+    ] {
+        let mut state = EditorState::default();
+        state.editor_ui.theme_mode = ThemeMode::Light;
+        state.editor_ui.agent_settings.tab = AgentSettingsTab::Images;
+        state.editor_ui.agent_settings.images_advanced_open = true;
+        state.editor_ui.pressed_button = Some(ButtonPressTarget::AgentSettings(button));
+        let panel = AgentSettingsPanel::for_editor(&state);
+        let rect = panel.rect(1200.0, 800.0);
+        let target = expected_rect(rect);
+        let expected = panel
+            .theme
+            .button_hover
+            .with_alpha(panel.theme.button_hover.a * 1.8);
+        let mut backend = CaptureBackend::default();
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+
+        panel.paint(&mut cx, rect);
+
+        assert!(
+            backend
+                .round_fills
+                .iter()
+                .any(|(r, color)| rect_eq(*r, target) && color_eq(*color, expected)),
+            "pressed {button:?} should paint the shared pressed feedback token"
+        );
+    }
 }
 
 #[test]
@@ -463,6 +531,38 @@ fn hovered_mcp_client_config_copy_button_paints_hover_wash() {
 }
 
 #[test]
+fn pressed_mcp_client_config_copy_button_uses_shared_button_feedback() {
+    let mut state = EditorState::default();
+    state.editor_ui.theme_mode = ThemeMode::Light;
+    state.editor_ui.agent_settings.tab = AgentSettingsTab::Mcp;
+    state.editor_ui.agent_settings.mcp_server.running = true;
+    state.editor_ui.pressed_button = Some(ButtonPressTarget::AgentSettings(
+        AgentSettingsButton::McpClientConfigCopy,
+    ));
+    let panel = AgentSettingsPanel::for_editor(&state);
+    let rect = panel.rect(1200.0, 800.0);
+    let copy = mcp_client_config_copy_rect(rect);
+    let expected = panel
+        .theme
+        .button_hover
+        .with_alpha(panel.theme.button_hover.a * 1.8);
+    let mut backend = CaptureBackend::default();
+    let mut cx = PaintCx {
+        backend: &mut backend,
+    };
+
+    panel.paint(&mut cx, rect);
+
+    assert!(
+        backend
+            .round_fills
+            .iter()
+            .any(|(r, color)| rect_eq(*r, copy) && color_eq(*color, expected)),
+        "pressed MCP client config copy button should paint the shared pressed feedback token"
+    );
+}
+
+#[test]
 fn hovered_agent_add_buttons_paint_hover_wash() {
     let mut state = EditorState::default();
     state.editor_ui.theme_mode = ThemeMode::Light;
@@ -499,6 +599,49 @@ fn hovered_agent_add_buttons_paint_hover_wash() {
             .any(|(r, color)| rect_eq(*r, add_acp) && color_eq(*color, panel.theme.button_hover)),
         "hovering the add ACP agent button should paint the same subtle wash as other text buttons"
     );
+}
+
+#[test]
+fn pressed_agent_add_buttons_use_shared_button_feedback() {
+    for (button, label_key, rect_for_label) in [
+        (
+            AgentSettingsButton::AddProvider,
+            "settings.agents.addProvider",
+            add_provider_button_rect as fn(Rect, f32) -> Rect,
+        ),
+        (
+            AgentSettingsButton::AddAcpAgent,
+            "settings.agents.addAcp",
+            add_acp_agent_button_rect as fn(Rect, f32) -> Rect,
+        ),
+    ] {
+        let mut state = EditorState::default();
+        state.editor_ui.theme_mode = ThemeMode::Light;
+        state.editor_ui.agent_settings.tab = AgentSettingsTab::Agents;
+        state.editor_ui.pressed_button = Some(ButtonPressTarget::AgentSettings(button));
+        let panel = AgentSettingsPanel::for_editor(&state);
+        let rect = panel.rect(1200.0, 800.0);
+        let mut backend = CaptureBackend::default();
+        let label = op_i18n::translate(state.editor_ui.locale, label_key);
+        let target = rect_for_label(rect, backend.measure_text(label, 12.0));
+        let expected = panel
+            .theme
+            .button_hover
+            .with_alpha(panel.theme.button_hover.a * 1.8);
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+
+        panel.paint(&mut cx, rect);
+
+        assert!(
+            backend
+                .round_fills
+                .iter()
+                .any(|(r, color)| rect_eq(*r, target) && color_eq(*color, expected)),
+            "pressed {button:?} should paint the shared pressed feedback token"
+        );
+    }
 }
 
 #[test]

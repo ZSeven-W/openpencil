@@ -25,10 +25,12 @@
 
 use crate::layout_scene::SceneStroke;
 use crate::theme::Theme;
+use crate::widgets::button::paint_button_feedback_wash;
 use crate::widgets::editor_state_ext::theme_for;
 use crate::widgets::property_panel_sections as sections;
 use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
 use crate::{Point2D, Rect};
+use jian_widgets::components::select::{SelectHit, SelectState};
 use op_editor_core::PropertyFocus;
 
 use op_editor_core::EditorState;
@@ -110,15 +112,13 @@ pub struct PropertyPanel {
     /// is focused. The host fills this on click + mutates on
     /// keystroke; the panel paints it as the field's value.
     pub draft: String,
+    /// Shared text input state for the focused property/effect field.
+    pub input: jian_core::text_input::TextInputState,
     /// Caret byte-offset into `draft` (ASCII drafts → char index).
     pub caret_pos: usize,
     /// Whether Ctrl/Cmd+A selected the full focused draft.
     pub select_all: bool,
-    /// Caret-blink anchor (ms since host start) for the focused
-    /// input. Drives the same `jian_core::anim::blink_visible`
-    /// helper the chat caret uses.
-    pub caret_anchor_ms: u64,
-    /// Host clock ms; paired with `caret_anchor_ms` for caret blink.
+    /// Host clock ms for caret blink.
     pub now_ms: u64,
     /// Active flex-layout button.
     pub flex_layout: op_editor_core::FlexLayout,
@@ -126,20 +126,18 @@ pub struct PropertyPanel {
     pub size_flags: sections::SizeFlags,
     /// Active fill type — drives the dropdown label + picker.
     pub fill_type: op_editor_core::FillType,
-    pub fill_type_picker_open: bool,
+    pub fill_type_picker: SelectState,
     pub color_variable_picker_open: Option<op_editor_core::ColorTarget>,
     pub color_variables: Vec<ColorVariableOption>,
     pub fill_variable_ref: Option<String>,
     pub stroke_variable_ref: Option<String>,
     pub color_variable_count: usize,
     pub image_fill_popover_open: bool,
-    pub font_family_picker_open: bool,
+    pub font_picker: SelectState,
     /// Live type-ahead filter + scroll + hovered entry of the
     /// font-family picker, plus the host-enumerated system families
     /// (see `property_panel_typography`).
     pub font_picker_search: String,
-    pub font_picker_scroll: f32,
-    pub font_picker_hover: Option<usize>,
     pub system_font_families: std::sync::Arc<Vec<String>>,
     /// Image-node Search / Generate popover state (cloned from
     /// `editor_ui.image_panel`; result thumbs are `Arc`s so this
@@ -154,6 +152,7 @@ pub struct PropertyPanel {
     pub font_weight_picker_open: bool,
     /// Hovered weight-dropdown row index (when the dropdown is open).
     pub font_weight_picker_hover: Option<usize>,
+    pub font_weight_picker_pressed: Option<usize>,
     /// Resolved padding edit mode (UI pin or derived from the node's
     /// values) + whether the gear popover is open.
     pub padding_edit_mode: op_editor_core::PaddingEditMode,
@@ -191,9 +190,14 @@ pub struct PropertyPanel {
     /// `EditorState` at construction (like `snapshot`) so the panel
     /// owns an immutable view; generation logic is wired later (P3).
     pub codegen: op_editor_core::codegen::CodegenState,
+    /// Pressed Code-tab action currently held by the primary pointer.
+    pub codegen_pressed: Option<op_editor_core::codegen::CodegenHover>,
     /// Index into `action_button_rects_with_fill_picker` of the action
     /// button the cursor is over — drives its `theme.button_hover` wash.
     pub action_hover: Option<usize>,
+    /// Index into `action_button_rects_with_fill_picker` of the action
+    /// button currently pressed by the primary pointer.
+    pub action_pressed: Option<usize>,
 }
 
 impl PropertyPanel {
@@ -356,30 +360,32 @@ impl PropertyPanel {
             draft: if is_multi {
                 String::new()
             } else {
-                state.ui.property_input_draft.clone()
+                state.ui.property_input.text().to_owned()
+            },
+            input: if is_multi {
+                jian_core::text_input::TextInputState::default()
+            } else {
+                state.ui.property_input.clone()
             },
             caret_pos: if is_multi {
                 0
             } else {
-                state.ui.property_caret_pos
+                state.ui.property_input.caret()
             },
-            select_all: !is_multi && state.ui.property_draft_select_all,
-            caret_anchor_ms: state.ui.property_caret_anchor_ms,
+            select_all: !is_multi && state.ui.property_input.is_select_all(),
             now_ms,
             flex_layout,
             size_flags,
             fill_type,
-            fill_type_picker_open: ui.fill_type_picker_open,
+            fill_type_picker: ui.fill_type_picker.clone(),
             color_variable_picker_open: ui.property_color_variable_picker_open,
             color_variables,
             fill_variable_ref,
             stroke_variable_ref,
             color_variable_count,
             image_fill_popover_open: ui.image_fill_popover_open,
-            font_family_picker_open: ui.font_family_picker_open,
+            font_picker: ui.font_picker.clone(),
             font_picker_search: ui.font_picker_search.clone(),
-            font_picker_scroll: ui.font_picker_scroll,
-            font_picker_hover: ui.font_picker_hover,
             system_font_families: ui.system_font_families.clone(),
             image_panel: ui.image_panel.clone(),
             image_panel_view: None,
@@ -388,10 +394,22 @@ impl PropertyPanel {
             ),
             font_weight_picker_open: ui.font_weight_picker_open,
             font_weight_picker_hover: ui.font_weight_picker_hover,
+            font_weight_picker_pressed: match ui.pressed_button {
+                Some(op_editor_core::ButtonPressTarget::FontWeightPicker(index)) => Some(index),
+                _ => None,
+            },
             action_hover: if is_multi {
                 None
             } else {
                 ui.property_action_hover
+            },
+            action_pressed: if is_multi {
+                None
+            } else {
+                match ui.pressed_button {
+                    Some(op_editor_core::ButtonPressTarget::PropertyPanel(i)) => Some(i),
+                    _ => None,
+                }
             },
             padding_edit_mode,
             padding_mode_popover_open: ui.padding_mode_popover_open,
@@ -404,7 +422,7 @@ impl PropertyPanel {
             export_scale_picker_open: ui.export_scale_picker_open,
             export_format_picker_open: ui.export_format_picker_open,
             export_picker_hover: ui.export_picker_hover,
-            scroll: ui.property_panel_scroll.max(0.0),
+            scroll: ui.property_panel_scroll.offset.max(0.0),
             locale: ui.locale,
             // Inert in the multi-select aggregate view.
             effect_param_focus: if is_multi {
@@ -413,6 +431,10 @@ impl PropertyPanel {
                 ui.effect_param_focus
             },
             codegen,
+            codegen_pressed: match ui.pressed_button {
+                Some(op_editor_core::ButtonPressTarget::Codegen(hover)) => Some(hover),
+                _ => None,
+            },
         }
     }
 
@@ -561,16 +583,28 @@ impl PropertyPanel {
             }
         }
         // Font-family picker rows (searchable overlay).
-        if self.font_family_picker_open {
+        if self.font_picker.open {
             let entries = self.font_picker_entries();
             if let Some(action) = crate::widgets::property_panel_typography::font_picker_action_at(
                 self.scrolled_rect(panel_rect),
                 self.visible_sections(),
                 &entries,
-                self.font_picker_scroll,
+                &self.font_picker,
                 point,
             ) {
                 return Some(action);
+            }
+        }
+        if self.fill_type_picker.open {
+            match self.fill_type_picker_hit(panel_rect, point) {
+                SelectHit::Row(idx) => {
+                    if let Some(fill_type) = crate::widgets::property_panel_fill::fill_type_at(idx)
+                    {
+                        return Some(PropertyPanelAction::SetFillType(fill_type));
+                    }
+                }
+                SelectHit::Inside => return None,
+                SelectHit::Outside => {}
             }
         }
         if !self.point_in_section_viewport(panel_rect, point) {
@@ -580,8 +614,8 @@ impl PropertyPanel {
             self.scrolled_rect(panel_rect),
             self.visible_sections(),
             &self.snapshot.effects,
-            self.fill_type_picker_open,
-            self.font_family_picker_open,
+            self.fill_type_picker.open,
+            self.font_picker.open,
             self.font_weight_picker_open,
             self.export_scale_picker_open,
             self.export_format_picker_open,
@@ -592,7 +626,7 @@ impl PropertyPanel {
         // tested first and short-circuits before the dropdown
         // toggle, otherwise clicking a row would just re-toggle.
         for (action, rect) in rects.into_iter().rev() {
-            if rect_contains(rect, point) {
+            if (rect).contains(point) {
                 return Some(action);
             }
         }
@@ -615,8 +649,8 @@ impl PropertyPanel {
             self.scrolled_rect(panel_rect),
             self.visible_sections(),
             &self.snapshot.effects,
-            self.fill_type_picker_open,
-            self.font_family_picker_open,
+            self.fill_type_picker.open,
+            self.font_picker.open,
             self.font_weight_picker_open,
             self.export_scale_picker_open,
             self.export_format_picker_open,
@@ -629,7 +663,7 @@ impl PropertyPanel {
                 PropertyPanelAction::SetExportScale(_) | PropertyPanelAction::SetExportFormat(_)
             )
         })
-        .position(|(_, rect)| rect_contains(rect, point))
+        .position(|(_, rect)| (rect).contains(point))
     }
 
     pub fn image_adjustment_drag_action(
@@ -684,7 +718,7 @@ impl PropertyPanel {
         for (focus, rect) in
             sections::editable_input_rects(self.scrolled_rect(panel_rect), self.visible_sections())
         {
-            if rect_contains(rect, point) {
+            if (rect).contains(point) {
                 return Some(focus);
             }
         }
@@ -699,6 +733,14 @@ impl PropertyPanel {
         if self.is_multi || matches!(self.tab, op_editor_core::PropertyTab::Code) {
             return None;
         }
+        if self.fill_type_picker.open
+            && !matches!(
+                self.fill_type_picker_hit(panel_rect, point),
+                SelectHit::Outside
+            )
+        {
+            return None;
+        }
         if !self.point_in_section_viewport(panel_rect, point) {
             return None;
         }
@@ -706,15 +748,15 @@ impl PropertyPanel {
             self.scrolled_rect(panel_rect),
             self.visible_sections(),
             &self.snapshot.effects,
-            self.fill_type_picker_open,
-            self.font_family_picker_open,
+            self.fill_type_picker.open,
+            self.font_picker.open,
             self.font_weight_picker_open,
             self.export_scale_picker_open,
             self.export_format_picker_open,
             self.padding_mode_popover_open,
         )
         .iter()
-        .position(|(_, r)| rect_contains(*r, point))
+        .position(|(_, r)| (*r).contains(point))
     }
 
     /// Pinned Design / Code tab under the cursor.
@@ -730,13 +772,6 @@ impl PropertyPanel {
             point,
         )
     }
-}
-
-fn rect_contains(r: Rect, p: Point2D) -> bool {
-    p.x >= r.origin.x
-        && p.x <= r.origin.x + r.size.x
-        && p.y >= r.origin.y
-        && p.y <= r.origin.y + r.size.y
 }
 
 /// The node ids a code generation started THIS frame would target:
@@ -807,20 +842,21 @@ impl Widget for PropertyPanel {
         let edit_ctx = sections::EditContext {
             focus: self.focus,
             draft: self.draft.as_str(),
+            input: &self.input,
             caret: self.caret_pos,
             select_all: self.select_all,
-            caret_anchor_ms: self.caret_anchor_ms,
             now_ms: self.now_ms,
         };
         let caps = self.capabilities();
         if matches!(self.tab, op_editor_core::PropertyTab::Code) {
-            crate::widgets::property_panel_code::paint_code_panel_in_panel_with_locale(
+            crate::widgets::property_panel_code::paint_code_panel_in_panel_with_locale_and_pressed(
                 cx,
                 &self.theme,
                 &self.codegen,
                 self.locale,
                 rect,
                 self.now_ms,
+                self.codegen_pressed,
             );
             return;
         }
@@ -953,7 +989,7 @@ impl Widget for PropertyPanel {
                 &edit_ctx,
                 &self.labels,
                 self.fill_type,
-                self.fill_type_picker_open,
+                self.fill_type_picker.open,
                 self.fill_variable_ref.as_deref(),
                 self.color_variable_count > 0 || self.fill_variable_ref.is_some(),
                 self.locale,
@@ -1003,17 +1039,18 @@ impl Widget for PropertyPanel {
         }
         // Fill-type picker overlay sits on top of everything below
         // the Fill section so it can extend past the section divider.
-        if caps.fill && self.fill_type_picker_open {
+        if caps.fill && self.fill_type_picker.open {
             sections::paint_fill_type_picker(
                 cx,
                 &self.theme,
                 scrolled,
                 self.visible_sections(),
+                &self.fill_type_picker,
                 self.fill_type,
                 self.locale,
             );
         }
-        if caps.text && self.font_family_picker_open {
+        if caps.text && self.font_picker.open {
             if let Some(text) = self.snapshot.text.as_ref() {
                 let entries = self.font_picker_entries();
                 crate::widgets::property_panel_typography::paint_font_picker(
@@ -1024,8 +1061,7 @@ impl Widget for PropertyPanel {
                     self.locale,
                     &entries,
                     &self.font_picker_search,
-                    self.font_picker_scroll,
-                    self.font_picker_hover,
+                    &self.font_picker,
                     &text.font_family,
                 );
             }
@@ -1040,6 +1076,7 @@ impl Widget for PropertyPanel {
                     self.locale,
                     text.font_weight,
                     self.font_weight_picker_hover,
+                    self.font_weight_picker_pressed,
                 );
             }
         }
@@ -1087,32 +1124,48 @@ impl Widget for PropertyPanel {
                 self.stroke_variable_ref.as_deref(),
                 target,
                 self.locale,
-                self.fill_type_picker_open,
-                self.font_family_picker_open,
+                self.fill_type_picker.open,
+                self.font_picker.open,
                 self.font_weight_picker_open,
                 self.export_scale_picker_open,
                 self.export_format_picker_open,
                 self.padding_mode_popover_open,
             );
         }
-        // Per-button hover wash — one translucent overlay on the action
-        // button under the cursor (flex / size / fill / effects / export
-        // / create-component). Index into the same walker the host's
-        // hover update + hit-test use, so it lands exactly on the button.
-        if let Some(i) = self.action_hover {
+        // Per-button feedback wash — one translucent overlay on the action
+        // button under the cursor or primary pointer press (flex / size /
+        // fill / effects / export / create-component). Index into the same
+        // walker the host's hover update + hit-test use.
+        if self.action_hover.is_some() || self.action_pressed.is_some() {
             let rects = sections::action_button_rects_with_fill_picker(
                 self.scrolled_rect(rect),
                 self.visible_sections(),
                 &self.snapshot.effects,
-                self.fill_type_picker_open,
-                self.font_family_picker_open,
+                self.fill_type_picker.open,
+                self.font_picker.open,
                 self.font_weight_picker_open,
                 self.export_scale_picker_open,
                 self.export_format_picker_open,
                 self.padding_mode_popover_open,
             );
-            if let Some((_, r)) = rects.get(i) {
-                cx.backend.fill_round_rect(*r, 6.0, self.theme.button_hover);
+            if let Some(i) = self.action_hover {
+                if let Some((_, r)) = rects.get(i) {
+                    paint_button_feedback_wash(
+                        cx.backend,
+                        &self.theme,
+                        *r,
+                        6.0,
+                        true,
+                        self.action_pressed == Some(i),
+                    );
+                }
+            }
+            if let Some(i) = self.action_pressed {
+                if self.action_hover != Some(i) {
+                    if let Some((_, r)) = rects.get(i) {
+                        paint_button_feedback_wash(cx.backend, &self.theme, *r, 6.0, false, true);
+                    }
+                }
             }
         }
         cx.backend.restore();

@@ -1,4 +1,6 @@
 use super::*;
+use crate::widgets::button::paint_button_feedback_wash;
+use crate::widgets::property_panel_text_input::paint_text_input_view_value;
 use crate::widgets::{draw_icon, Icon, PaintCx};
 use crate::{Color, Point2D, Rect};
 
@@ -7,11 +9,24 @@ const VARIABLE_NAME_PREFIX_TEXT_GAP: f32 = 2.0;
 const INPUT_RADIUS: f32 = 8.0;
 const INPUT_BORDER_WIDTH: f32 = 1.5;
 const INPUT_FONT_SIZE: f32 = 13.0;
-const INPUT_CARET_HEIGHT: f32 = 18.0;
 const INPUT_PADDING_X: f32 = 8.0;
 const VALUE_INPUT_MIN_WIDTH: f32 = 96.0;
 const VALUE_INPUT_MAX_WIDTH: f32 = 160.0;
 const FOOTER_CHEVRON_LABEL_GAP: f32 = 12.0;
+
+fn paint_feedback(
+    panel: &VariablesPanel,
+    cx: &mut PaintCx<'_>,
+    target: VariablesPanelButton,
+    rect: Rect,
+    radius: f32,
+) {
+    let hovered = panel.hover == Some(target);
+    let pressed = panel.pressed == Some(target);
+    if hovered || pressed {
+        paint_button_feedback_wash(cx.backend, &panel.theme, rect, radius, hovered, pressed);
+    }
+}
 
 pub(super) fn paint_panel(panel: &VariablesPanel, cx: &mut PaintCx<'_>, rect: Rect) {
     let theme = panel.theme;
@@ -87,9 +102,7 @@ fn paint_search_row(
             baseline_y,
         );
     }
-    if panel.search_focus
-        && jian_core::anim::blink_visible(panel.now_ms, panel.caret_anchor_ms, 500)
-    {
+    if panel.search_focus && panel.search_input.caret_visible(panel.now_ms) {
         let caret_x = text_x
             + if panel.search.is_empty() {
                 0.0
@@ -119,10 +132,13 @@ fn paint_theme_header(panel: &VariablesPanel, cx: &mut PaintCx<'_>, rect: Rect) 
     let active_axis = panel.active_axis_label();
     for (idx, axis) in panel.theme_tab_labels().iter().enumerate() {
         let is_active = *axis == active_axis;
-        if panel.hover == Some(VariablesPanelButton::ThemeTab(idx)) {
-            cx.backend
-                .fill_round_rect(panel.theme_tab_rect(rect, idx), 8.0, theme.button_hover);
-        }
+        paint_feedback(
+            panel,
+            cx,
+            VariablesPanelButton::ThemeTab(idx),
+            panel.theme_tab_rect(rect, idx),
+            8.0,
+        );
         let color = if is_active {
             theme.foreground
         } else {
@@ -133,13 +149,16 @@ fn paint_theme_header(panel: &VariablesPanel, cx: &mut PaintCx<'_>, rect: Rect) 
                 origin: Point2D::new(x - 2.0, rect.origin.y + 8.0),
                 size: Point2D::new(panel.theme_rename_input_width(), 28.0),
             };
+            let input_state = panel.rename_text_input(RenameTarget::Theme(axis));
+            let value = input_state.map(|input| input.text()).unwrap_or(axis);
             paint_text_input(
                 cx,
                 theme,
                 input,
-                panel.editing_draft.as_str(),
-                panel.rename_text_caret(RenameTarget::Theme(axis)),
+                value,
+                input_state,
                 INPUT_PADDING_X,
+                panel.now_ms,
             );
         } else {
             paint_text(cx, axis, 13.0, color, x, header::text_baseline(rect, 13.0));
@@ -159,10 +178,7 @@ fn paint_theme_header(panel: &VariablesPanel, cx: &mut PaintCx<'_>, rect: Rect) 
     }
 
     let add_theme = panel.add_theme_rect(rect);
-    if panel.hover == Some(VariablesPanelButton::AddTheme) {
-        cx.backend
-            .fill_round_rect(add_theme, 8.0, theme.button_hover);
-    }
+    paint_feedback(panel, cx, VariablesPanelButton::AddTheme, add_theme, 8.0);
     draw_icon(
         cx.backend,
         Icon::Plus,
@@ -173,9 +189,7 @@ fn paint_theme_header(panel: &VariablesPanel, cx: &mut PaintCx<'_>, rect: Rect) 
     );
 
     let preset = panel.preset_rect(rect);
-    if panel.hover == Some(VariablesPanelButton::PresetMenu) {
-        cx.backend.fill_round_rect(preset, 8.0, theme.button_hover);
-    }
+    paint_feedback(panel, cx, VariablesPanelButton::PresetMenu, preset, 8.0);
     let preset_label = panel.labels().preset;
     let preset_label_size = 13.0;
     let preset_label_x = preset.origin.x + 29.0;
@@ -207,9 +221,7 @@ fn paint_theme_header(panel: &VariablesPanel, cx: &mut PaintCx<'_>, rect: Rect) 
     );
 
     let close = close_rect(rect);
-    if panel.hover == Some(VariablesPanelButton::Close) {
-        cx.backend.fill_round_rect(close, 8.0, theme.button_hover);
-    }
+    paint_feedback(panel, cx, VariablesPanelButton::Close, close, 8.0);
     draw_icon(
         cx.backend,
         Icon::Close,
@@ -242,28 +254,28 @@ fn paint_variant_header(
     let col_w = variant_column_width(rect, variants.len());
     for (idx, variant) in variants.iter().enumerate() {
         let x = value_x + col_w * idx as f32;
-        if panel.hover == Some(VariablesPanelButton::VariantHeader(idx)) {
-            cx.backend.fill_round_rect(
-                panel.variant_header_rect(rect, idx),
-                8.0,
-                theme.button_hover,
-            );
-        }
+        paint_feedback(
+            panel,
+            cx,
+            VariablesPanelButton::VariantHeader(idx),
+            panel.variant_header_rect(rect, idx),
+            8.0,
+        );
         if panel.renaming_variant.as_deref() == Some(*variant) {
+            let input_state = panel.rename_text_input(RenameTarget::Variant(variant));
+            let value = input_state.map(|input| input.text()).unwrap_or(variant);
             let input = Rect {
                 origin: Point2D::new(x - 2.0, header_bottom + 5.0),
-                size: Point2D::new(
-                    (label_width(&panel.editing_draft, 13.0) + 28.0).max(128.0),
-                    26.0,
-                ),
+                size: Point2D::new((label_width(value, 13.0) + 28.0).max(128.0), 26.0),
             };
             paint_text_input(
                 cx,
                 theme,
                 input,
-                panel.editing_draft.as_str(),
-                panel.rename_text_caret(RenameTarget::Variant(variant)),
+                value,
+                input_state,
                 INPUT_PADDING_X,
+                panel.now_ms,
             );
         } else {
             paint_text(
@@ -285,10 +297,13 @@ fn paint_variant_header(
             );
         }
     }
-    if panel.hover == Some(VariablesPanelButton::AddVariant) {
-        cx.backend
-            .fill_round_rect(add_variant_rect(rect), 8.0, theme.button_hover);
-    }
+    paint_feedback(
+        panel,
+        cx,
+        VariablesPanelButton::AddVariant,
+        add_variant_rect(rect),
+        8.0,
+    );
     draw_icon(
         cx.backend,
         Icon::Plus,
@@ -345,21 +360,21 @@ fn paint_rows(
             break;
         }
         let source = var.source_idx;
-        let row_hovered = matches!(
-            panel.hover,
-            Some(VariablesPanelButton::Row(i)) if i == source
-        ) || matches!(
-            panel.hover,
-            Some(VariablesPanelButton::RowMenuButton(i)) if i == source
-        );
-        if row_hovered {
-            cx.backend.fill_round_rect(
+        let row_hovered = panel.hover == Some(VariablesPanelButton::Row(source))
+            || panel.hover == Some(VariablesPanelButton::RowMenuButton(source));
+        let row_pressed = panel.pressed == Some(VariablesPanelButton::Row(source))
+            || panel.pressed == Some(VariablesPanelButton::RowMenuButton(source));
+        if row_hovered || row_pressed {
+            paint_button_feedback_wash(
+                cx.backend,
+                &theme,
                 Rect {
                     origin: Point2D::new(rect.origin.x + 8.0, y + 3.0),
                     size: Point2D::new(rect.size.x - 16.0, ROW_HEIGHT - 6.0),
                 },
                 8.0,
-                theme.button_hover,
+                row_hovered,
+                row_pressed,
             );
         }
         paint_variable_name_cell(panel, cx, rect, var, idx, y);
@@ -421,11 +436,10 @@ fn paint_variable_name_cell(
     cx.backend.fill_round_rect(pill, 8.0, theme.muted);
     // Focus indices are UNFILTERED positions.
     let is_editing = panel.editing_name_row == Some(var.source_idx);
-    let name = if is_editing {
-        panel.editing_draft.as_str()
-    } else {
-        var.name.as_str()
-    };
+    let input_state = panel.name_input_for_row(var.source_idx);
+    let name = input_state
+        .map(|input| input.text())
+        .unwrap_or_else(|| var.name.as_str());
     let text_x = pill.origin.x + 10.0;
     let text_y = pill.origin.y + 20.0;
     if is_editing {
@@ -433,9 +447,10 @@ fn paint_variable_name_cell(
             cx,
             theme,
             pill,
-            panel.editing_draft.as_str(),
-            panel.name_caret_for_row(var.source_idx),
+            name,
+            input_state,
             text_x - pill.origin.x,
+            panel.now_ms,
         );
     } else {
         let display = truncate(name, 24);
@@ -481,6 +496,8 @@ fn paint_value_cell(
             // Inline hex editing (TS ColorCell's text `<input>`) — the
             // swatch stays painted, the hex label swaps for an input.
             if panel.editing_value_cell == Some(cell) {
+                let input_state = panel.value_input_for_cell(cell.0, cell.1);
+                let value = input_state.map(|input| input.text()).unwrap_or("#000000");
                 let input_rect = Rect {
                     origin: Point2D::new(
                         cell_rect.origin.x + SWATCH_SIZE + 6.0,
@@ -492,9 +509,10 @@ fn paint_value_cell(
                     cx,
                     theme,
                     input_rect,
-                    panel.editing_draft.as_str(),
-                    panel.value_caret_for_cell(cell.0, cell.1),
+                    value,
+                    input_state,
                     INPUT_PADDING_X,
+                    panel.now_ms,
                 );
                 return;
             }
@@ -534,11 +552,10 @@ fn paint_value_cell(
                 .or_else(|| var.resolved.as_ref().map(scalar_to_label))
                 .unwrap_or_else(|| "—".into());
             if is_editing {
-                let draft_w = cx
-                    .backend
-                    .measure_text(panel.editing_draft.as_str(), INPUT_FONT_SIZE)
-                    + INPUT_PADDING_X * 2.0
-                    + 8.0;
+                let input_state = panel.value_input_for_cell(cell.0, cell.1);
+                let value = input_state.map(|input| input.text()).unwrap_or("");
+                let draft_w =
+                    cx.backend.measure_text(value, INPUT_FONT_SIZE) + INPUT_PADDING_X * 2.0 + 8.0;
                 let max_cell_w = (cell_rect.size.x - 12.0).max(VALUE_INPUT_MIN_WIDTH);
                 let input_w = draft_w
                     .clamp(VALUE_INPUT_MIN_WIDTH, VALUE_INPUT_MAX_WIDTH)
@@ -554,9 +571,10 @@ fn paint_value_cell(
                     cx,
                     theme,
                     input_rect,
-                    panel.editing_draft.as_str(),
-                    panel.value_caret_for_cell(cell.0, cell.1),
+                    value,
+                    input_state,
                     INPUT_PADDING_X,
+                    panel.now_ms,
                 );
                 return;
             }
@@ -581,9 +599,7 @@ fn paint_footer(
 ) {
     let theme = panel.theme;
     let button = add_variable_rect(rect);
-    if panel.hover == Some(VariablesPanelButton::AddVariable) {
-        cx.backend.fill_round_rect(button, 8.0, theme.button_hover);
-    }
+    paint_feedback(panel, cx, VariablesPanelButton::AddVariable, button, 8.0);
     let center_y = button.origin.y + button.size.y / 2.0;
     let icon_size = 16.0;
     let label_size = 14.0;
@@ -634,14 +650,28 @@ fn paint_text_input(
     theme: Theme,
     rect: Rect,
     value: &str,
-    caret_pos: Option<usize>,
+    input: Option<&jian_core::text_input::TextInputState>,
     padding_x: f32,
+    now_ms: u64,
 ) {
     cx.backend.fill_round_rect(rect, INPUT_RADIUS, theme.muted);
     cx.backend
         .stroke_round_rect(rect, INPUT_RADIUS, theme.primary, INPUT_BORDER_WIDTH);
-    let value_x = rect.origin.x + padding_x;
     let baseline_y = rect.origin.y + rect.size.y / 2.0 + 4.0;
+    if let Some(input) = input {
+        paint_text_input_view_value(
+            cx,
+            &theme,
+            input,
+            rect,
+            INPUT_FONT_SIZE,
+            padding_x,
+            baseline_y,
+            now_ms,
+        );
+        return;
+    }
+    let value_x = rect.origin.x + padding_x;
     paint_text(
         cx,
         value,
@@ -650,37 +680,6 @@ fn paint_text_input(
         value_x,
         baseline_y,
     );
-    if let Some(pos) = caret_pos {
-        let caret_y = rect.origin.y + ((rect.size.y - INPUT_CARET_HEIGHT) / 2.0).max(0.0);
-        paint_caret_in_text(cx, theme, value, pos, value_x, caret_y);
-    }
-}
-
-fn paint_caret_in_text(
-    cx: &mut PaintCx<'_>,
-    theme: Theme,
-    value: &str,
-    pos: usize,
-    x: f32,
-    y: f32,
-) {
-    let clipped = text_boundary_at_or_before(value, pos);
-    let value_w = cx.backend.measure_text(&value[..clipped], 13.0);
-    cx.backend.fill_rect(
-        Rect {
-            origin: Point2D::new(x + value_w, y),
-            size: Point2D::new(1.5, 18.0),
-        },
-        theme.foreground,
-    );
-}
-
-fn text_boundary_at_or_before(value: &str, pos: usize) -> usize {
-    let mut clipped = pos.min(value.len());
-    while clipped > 0 && !value.is_char_boundary(clipped) {
-        clipped -= 1;
-    }
-    clipped
 }
 
 pub(super) fn paint_text(
@@ -695,7 +694,7 @@ pub(super) fn paint_text(
         text,
         "system-ui",
         size,
-        to_jian_color(color),
+        (color).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(&layout, Point2D::new(x, baseline_y));
@@ -750,11 +749,4 @@ fn truncate(s: &str, max: usize) -> String {
     let mut out: String = s.chars().take(max - 1).collect();
     out.push('…');
     out
-}
-
-fn to_jian_color(c: Color) -> jian_core::scene::Color {
-    fn ch(v: f32) -> u8 {
-        (v.clamp(0.0, 1.0) * 255.0).round() as u8
-    }
-    jian_core::scene::Color::rgba(ch(c.r), ch(c.g), ch(c.b), ch(c.a))
 }

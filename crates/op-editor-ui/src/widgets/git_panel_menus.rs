@@ -10,10 +10,12 @@
 //! shared between paint + hit-test through the `*_rects` helpers so the
 //! pure-geometry hit-test agrees with paint.
 
+use crate::widgets::button::paint_button_feedback_wash;
 use crate::widgets::git_panel::{contains, truncate, GitPanel, GitPanelHit, PAD};
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect};
+use jian_widgets::components::menu::MenuHit;
 use op_editor_core::{GitBranchPickerMode, GitOverflowView};
 
 /// Dropdown row height (TS menu item ≈ 28 px).
@@ -267,7 +269,7 @@ impl GitPanel<'_> {
             self.paint_menu_input(
                 cx,
                 input,
-                &self.state.branch_create_draft,
+                &self.state.branch_create_input,
                 self.t("git.branch.createPlaceholder"),
                 self.state.branch_create_focused,
             );
@@ -284,7 +286,7 @@ impl GitPanel<'_> {
                 cx,
                 submit,
                 self.t("git.branch.createSubmit"),
-                !self.state.branch_create_draft.trim().is_empty(),
+                !self.state.branch_create_input.text().trim().is_empty(),
                 true,
                 Some(GitPanelHit::BranchCreateSubmit),
             );
@@ -298,6 +300,16 @@ impl GitPanel<'_> {
         for (i, row) in rows.iter().enumerate() {
             let bi = if merging { candidates[i] } else { i };
             let is_current = self.state.branches.get(bi) == self.state.branch.as_ref();
+            let hovered = self.state.branch_picker_menu.hover == Some(i);
+            let row_hit = if merging {
+                GitPanelHit::MergeBranch(bi)
+            } else {
+                GitPanelHit::SwitchBranch(bi)
+            };
+            let pressed = self.is_pressed(row_hit);
+            if (hovered || pressed) && !is_current {
+                paint_button_feedback_wash(cx.backend, &self.theme, *row, 6.0, hovered, pressed);
+            }
             let name = truncate(
                 self.state
                     .branches
@@ -477,6 +489,22 @@ impl GitPanel<'_> {
         }
     }
 
+    pub fn branch_picker_menu_hit(&self, panel_rect: Rect, point: Point2D) -> MenuHit {
+        let panel = self.branch_picker_panel(panel_rect);
+        if !contains(panel, point) {
+            return MenuHit::Outside;
+        }
+        if self.state.branch_picker_mode == GitBranchPickerMode::Create {
+            return MenuHit::Inside;
+        }
+        for (i, row) in self.branch_picker_row_rects(panel_rect).iter().enumerate() {
+            if contains(*row, point) {
+                return MenuHit::Row(i);
+            }
+        }
+        MenuHit::Inside
+    }
+
     // ── Overflow menu ────────────────────────────────────────────────
 
     /// The overflow `…` menu rect, anchored below the overflow button
@@ -520,8 +548,12 @@ impl GitPanel<'_> {
         cx.backend.fill_round_rect(panel, 8.0, t.popover);
         cx.backend.stroke_round_rect(panel, 8.0, t.border, 1.0);
         let rows = self.overflow_row_rects(panel_rect);
-        for (item, row) in self.overflow_items().iter().zip(rows.iter()) {
-            self.wash_if_hovered(cx, *row, 6.0, item.hit);
+        for (i, (item, row)) in self.overflow_items().iter().zip(rows.iter()).enumerate() {
+            let hovered = self.state.overflow_menu.hover == Some(i);
+            let pressed = self.is_pressed(item.hit);
+            if hovered || pressed {
+                paint_button_feedback_wash(cx.backend, &self.theme, *row, 6.0, hovered, pressed);
+            }
             // Leaf icon (TS size=13 strokeWidth=1.75, muted).
             draw_icon(
                 cx.backend,
@@ -569,20 +601,24 @@ impl GitPanel<'_> {
     /// Hit-test the overflow menu. `None` when the point is outside the
     /// popover (the caller then closes it + falls through).
     pub(super) fn overflow_hit(&self, panel_rect: Rect, point: Point2D) -> Option<GitPanelHit> {
+        match self.overflow_menu_hit(panel_rect, point) {
+            MenuHit::Row(idx) => self.overflow_items().get(idx).map(|item| item.hit),
+            MenuHit::Inside => Some(GitPanelHit::Inside),
+            MenuHit::Outside => None,
+        }
+    }
+
+    pub fn overflow_menu_hit(&self, panel_rect: Rect, point: Point2D) -> MenuHit {
         let panel = self.overflow_panel(panel_rect);
         if !contains(panel, point) {
-            return None;
+            return MenuHit::Outside;
         }
-        for (item, row) in self
-            .overflow_items()
-            .iter()
-            .zip(self.overflow_row_rects(panel_rect).iter())
-        {
+        for (i, row) in self.overflow_row_rects(panel_rect).iter().enumerate() {
             if contains(*row, point) {
-                return Some(item.hit);
+                return MenuHit::Row(i);
             }
         }
-        Some(GitPanelHit::Inside)
+        MenuHit::Inside
     }
 
     /// Paint whichever overflow view is active — the menu or a subview.
@@ -737,7 +773,7 @@ impl GitPanel<'_> {
         self.paint_menu_input(
             cx,
             url_input,
-            &self.state.remote_draft,
+            &self.state.remote_input,
             self.t("git.remote.urlPlaceholder"),
             self.state.remote_focused,
         );
@@ -745,7 +781,7 @@ impl GitPanel<'_> {
             cx,
             set,
             self.t("git.remote.saveButton"),
-            !self.state.remote_draft.trim().is_empty(),
+            !self.state.remote_input.text().trim().is_empty(),
             true,
             Some(GitPanelHit::SetRemote),
         );
@@ -844,7 +880,7 @@ impl GitPanel<'_> {
         &self,
         cx: &mut PaintCx<'_>,
         rect: Rect,
-        value: &str,
+        input: &jian_core::text_input::TextInputState,
         placeholder: &str,
         focused: bool,
     ) {
@@ -856,41 +892,7 @@ impl GitPanel<'_> {
             alpha(t.border, 0.70)
         };
         cx.backend.stroke_round_rect(rect, 6.0, border, 1.0);
-        let baseline = rect.origin.y + rect.size.y / 2.0 + 4.0;
-        if value.is_empty() && !focused {
-            self.text(
-                cx,
-                placeholder,
-                rect.origin.x + 8.0,
-                baseline,
-                11.0,
-                alpha(t.muted_foreground, 0.70),
-            );
-        } else {
-            let shown = truncate(value, 30);
-            // Blink the caret on the shared commit-caret cadence (the host
-            // wakes the loop for this input's focus), instead of a static `|`.
-            let text_x = rect.origin.x + 8.0;
-            if focused && self.state.input_select_all && !shown.is_empty() {
-                crate::widgets::text_selection::paint_single_line_selection(
-                    cx,
-                    &t,
-                    &shown,
-                    text_x,
-                    baseline,
-                    11.0,
-                    rect.origin.x + rect.size.x - 8.0,
-                );
-            }
-            let blink =
-                jian_core::anim::blink_visible(self.now_ms, self.state.commit_caret_anchor_ms, 500);
-            let shown = if focused && blink && !self.state.input_select_all {
-                format!("{shown}|")
-            } else {
-                shown
-            };
-            self.text(cx, &shown, text_x, baseline, 11.0, t.foreground);
-        }
+        self.paint_text_input_view(cx, rect, input, placeholder, focused, 11.0, 8.0);
     }
 }
 

@@ -10,9 +10,11 @@
 pub mod agent_indicators;
 pub mod agent_settings;
 pub mod agent_settings_builtin_presets;
+pub mod agent_settings_button_state;
 pub mod agent_settings_connection;
 pub mod align;
 pub mod align_guides;
+pub mod button_press_state;
 pub mod chat;
 pub mod chat_button_state;
 mod chat_design_apply;
@@ -42,7 +44,6 @@ pub mod git_button_state;
 pub mod grouping;
 pub mod history;
 pub mod host_support;
-pub mod icon_picker_button_state;
 pub mod icon_picker_state;
 pub mod image_node_props;
 pub mod image_panel_state;
@@ -69,6 +70,7 @@ pub mod svg_import;
 pub mod svg_path_bounds;
 mod svg_path_data;
 pub mod text_edit;
+pub mod text_input_focus;
 pub mod theme_presets;
 pub mod tool;
 pub mod toolbar_state;
@@ -139,7 +141,9 @@ pub use agent_settings_builtin_presets::{
     builtin_agent_preset, infer_builtin_agent_preset, normalize_builtin_agent_preset,
     BuiltinAgentPreset, BuiltinAgentPresetKey, BUILTIN_AGENT_PRESETS,
 };
+pub use agent_settings_button_state::AgentSettingsButton;
 pub use align::AlignAction;
+pub use button_press_state::ButtonPressTarget;
 pub use chat::{
     AgentProvider, ChatAnchor, ChatImage, ChatMessage, ChatRole, ChatState, ChatToolCall,
     ModelEntry,
@@ -156,12 +160,12 @@ pub use design_md::{extract_design_md_from_document, generate_design_md, parse_d
 pub use design_md_button_state::DesignMdButton;
 pub use editor_ui_state::{
     BooleanOp, CloneField, CloneFormState, CommitDiffPatch, CommitDiffSummary, CommitDiffView,
-    DesignMdRequest, EditorUiState, ExportFormat, FileAction, FileMenuChoice, FillType, FlexLayout,
+    DesignMdRequest, EditorUiState, ExportFormat, FileAction, FillType, FlexLayout,
     GitBranchPickerMode, GitCandidateFile, GitCommitSummary, GitDiffTarget, GitDiffView,
     GitFileEntry, GitOverflowView, GitPanelAction, GitPanelState, ImageAdjustmentField,
     ImageFillMode, LayerContextMenuState, Locale, MergeConflictRow, MergeResolveFile,
-    MergeResolveState, PaddingEditMode, PageRenameState, PropertyTab, RecentFile, ShapeChoice,
-    ThemeMode, UpdateStatus, VariableRowFocus,
+    MergeResolveState, PaddingEditMode, PageRenameState, PropertyTab, RecentFile, ThemeMode,
+    UpdateStatus, VariableRowFocus,
 };
 pub use export_dialog_state::ExportDialogButton;
 pub use figma_import_state::FigmaImportButton;
@@ -172,7 +176,6 @@ pub use fills::{
 pub use geometry::{aggregate_bounds, own_bounds, union_aggregate_bounds, DocRect};
 pub use git_button_state::GitButton;
 pub use history::{EditorSnapshot, History, HISTORY_CAP};
-pub use icon_picker_button_state::IconPickerButton;
 pub use icon_picker_state::{IconPickerRemoteIcon, IconPickerRemoteState, IconifyLoadMoreRequest};
 pub use image_node_props::image_node_summary;
 pub use instance_override::{

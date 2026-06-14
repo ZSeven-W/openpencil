@@ -8,7 +8,7 @@ use crate::theme::Theme;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::property_panel::{EffectSummary, PropertyPanelAction};
 use crate::widgets::property_panel_inputs::{
-    paint_dropdown, paint_section_label, to_jian_color, INPUT_HEIGHT, INPUT_RADIUS, PAD_X,
+    paint_dropdown, paint_section_label, INPUT_HEIGHT, INPUT_RADIUS, PAD_X,
 };
 use crate::widgets::property_panel_layout::{
     action_button_rects_with_fill_picker, VisibleSections,
@@ -78,7 +78,7 @@ pub fn paint_export_section(
         labels.export,
         "system-ui",
         13.0,
-        to_jian_color(theme.primary_foreground),
+        (theme.primary_foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
@@ -194,7 +194,7 @@ fn paint_select_popup(
             label,
             "system-ui",
             12.0,
-            to_jian_color(text_color),
+            (text_color).to_jian(),
             Point2D::new(0.0, 0.0),
         );
         cx.backend

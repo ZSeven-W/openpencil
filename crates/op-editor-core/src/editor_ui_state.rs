@@ -16,11 +16,10 @@
 //! ### Move STATE, not RENDER code
 //!
 //! Many of these types are *declared* under shell-core's `widgets/`
-//! module — `ExportFormat` in `widgets/export_dialog.rs`,
-//! `FileMenuChoice` in `widgets/file_menu.rs`, `ShapeChoice` in
-//! `widgets/shape_picker.rs`. They are data/state enums, not rendering
-//! code, so their type definitions belong in the state layer. The
-//! widget *painting / hit-test* code stays in shell-core untouched.
+//! module — for example `ExportFormat` in `widgets/export_dialog.rs`.
+//! They are data/state enums, not rendering code, so their type
+//! definitions belong in the state layer. The widget *painting /
+//! hit-test* code stays in shell-core untouched.
 //!
 //! All types here are plain data (enums + structs of primitives /
 //! strings / ids), so `op-editor-core` stays wasm32-clean.
@@ -53,19 +52,6 @@ pub use crate::property_panel_state::{
     BooleanOp, ExportFormat, FillType, FlexLayout, ImageAdjustmentField, ImageFillMode,
     PaddingEditMode, PropertyTab,
 };
-
-/// File-menu choices. State enum ported from shell-core's
-/// `widgets/file_menu::FileMenuChoice`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum FileMenuChoice {
-    NewFile,
-    OpenFile,
-    Save,
-    SaveAs,
-    ExportImage,
-    OpenRecent(usize),
-    ClearRecent,
-}
 
 /// File-menu actions the host runner has to handle (rfd dialogs +
 /// serde live host-side, not here). `ExportImage` opens the picker;
@@ -369,11 +355,11 @@ pub enum GitPanelAction {
     /// Push the current branch to its upstream.
     Push,
     /// Stage + commit the tracked document with the panel's
-    /// `commit_message`.
+    /// `commit_input`.
     Commit,
     /// Ready-view "Save milestone": save the current design to the
     /// tracked `.op`, stage it, and commit with the panel's
-    /// `commit_message` — the TS `commitMilestone` flow. Unlike
+    /// `commit_input` — the TS `commitMilestone` flow. Unlike
     /// [`GitPanelAction::Commit`] (which commits a pre-assembled staged
     /// index) this snapshots the live editor state in one click.
     CommitMilestone,
@@ -457,12 +443,12 @@ pub enum CloneField {
 /// `GitPanelCloneForm`). Reached from the empty-state Clone card. Plain
 /// data so the widget layer stays wasm-clean; the desktop host owns the
 /// folder picker + the `git clone` job.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct CloneFormState {
     /// Remote URL draft.
-    pub url: String,
+    pub url_input: jian_core::text_input::TextInputState,
     /// Local destination-folder draft.
-    pub dest: String,
+    pub dest_input: jian_core::text_input::TextInputState,
     /// Which field has keyboard focus (`None` = no caret).
     pub focus: Option<CloneField>,
     /// `true` while the `git clone` worker runs — disables the form.
@@ -470,19 +456,13 @@ pub struct CloneFormState {
     /// Last clone error (validation or a failed `git clone`), shown
     /// under the fields.
     pub error: Option<String>,
-    /// Caret-blink anchor for the focused field — same cadence as the
-    /// commit input.
-    pub caret_anchor_ms: u64,
-    /// True after Cmd/Ctrl+A in the focused clone input. The next edit
-    /// replaces the whole focused field.
-    pub input_select_all: bool,
 }
 
 /// Git panel state — a plain-data snapshot the desktop host fills
 /// from its `GitSession`. The widget layer reads it to paint the
 /// floating Git panel; it carries no git handles, so it stays
 /// wasm-clean. Refreshed whenever the panel is opened.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct GitPanelState {
     /// Whether the floating Git panel is currently shown.
     pub open: bool,
@@ -510,6 +490,8 @@ pub struct GitPanelState {
     /// (switch-tracked / clear-author / remote-settings › / SSH-keys › /
     /// close-repo). Mirrors the TS header's local `overflowOpen`.
     pub overflow_open: bool,
+    /// Shared interaction state for the top-level overflow menu rows.
+    pub overflow_menu: jian_widgets::components::menu::MenuState,
     /// Which view the overflow popover is showing — the top-level menu
     /// or one of its subviews (remote settings). Resets to `Menu` each
     /// time the popover closes. Mirrors the TS header's `overflowView`.
@@ -517,6 +499,8 @@ pub struct GitPanelState {
     /// Ready-state header: whether the branch-picker dropdown (opened
     /// from the `⎇ <branch> ▾` button) is open.
     pub branch_picker_open: bool,
+    /// Shared interaction state for branch-picker dropdown rows.
+    pub branch_picker_menu: jian_widgets::components::menu::MenuState,
     /// Current branch name of that repository.
     pub branch: Option<String>,
     /// All local branch names, sorted — the panel lists them for
@@ -525,12 +509,9 @@ pub struct GitPanelState {
     /// Which branch-picker sub-mode is showing (list / create / merge).
     pub branch_picker_mode: GitBranchPickerMode,
     /// Draft branch name typed into the inline `新建分支` form.
-    pub branch_create_draft: String,
+    pub branch_create_input: jian_core::text_input::TextInputState,
     /// Whether the `新建分支` name input holds keyboard focus.
     pub branch_create_focused: bool,
-    /// True after Cmd/Ctrl+A in whichever Git-panel text field is
-    /// focused. The next edit replaces that whole field.
-    pub input_select_all: bool,
     /// Number of changed (dirty) files in the working tree.
     pub dirty_count: usize,
     /// Commits the current branch is ahead of its upstream — gates the
@@ -556,11 +537,11 @@ pub struct GitPanelState {
     /// Configured remotes as display strings — `name → url`.
     pub remotes: Vec<String>,
     /// Draft URL typed into the Remotes section's input box.
-    pub remote_draft: String,
+    pub remote_input: jian_core::text_input::TextInputState,
     /// Whether the remote-URL input holds keyboard focus.
     pub remote_focused: bool,
     /// Draft `username:token` typed into the HTTPS-credential input.
-    pub https_draft: String,
+    pub https_input: jian_core::text_input::TextInputState,
     /// Whether the HTTPS-credential input holds keyboard focus.
     pub https_focused: bool,
     /// Most-recent commits, newest first.
@@ -580,10 +561,12 @@ pub struct GitPanelState {
     pub candidate_files: Vec<GitCandidateFile>,
     /// The picker's currently-selected candidate index, if any.
     pub tracked_picker_selected: Option<usize>,
+    /// Shared select state for the tracked-file picker row list.
+    pub tracked_picker: jian_widgets::components::select::SelectState,
     /// SSH key names for the SSH-keys subview (host-filled on open).
     pub ssh_keys: Vec<String>,
     /// Commit-message draft typed into the panel's input box.
-    pub commit_message: String,
+    pub commit_input: jian_core::text_input::TextInputState,
     /// Whether the commit-message input holds keyboard focus.
     pub commit_focused: bool,
     /// Set when a milestone "save" was skipped because the saved design
@@ -593,18 +576,14 @@ pub struct GitPanelState {
     /// Whether the commit-signature form (`提交署名`) is showing in place of
     /// the commit box — raised when a commit is attempted with no committer
     /// identity (TS `authorPromptVisible`). The pending message stays in
-    /// `commit_message` and the commit re-fires after a successful save.
+    /// `commit_input` and the commit re-fires after a successful save.
     pub author_prompt: bool,
     /// Name / email drafts typed into the commit-signature form.
-    pub author_name_draft: String,
-    pub author_email_draft: String,
+    pub author_name_input: jian_core::text_input::TextInputState,
+    pub author_email_input: jian_core::text_input::TextInputState,
     /// Which signature-form field holds keyboard focus.
     pub author_name_focused: bool,
     pub author_email_focused: bool,
-    /// Caret-blink anchor (ms) for the commit input — reset on focus +
-    /// each keystroke so the caret stays solid while typing, then
-    /// blinks (same cadence as the chat / property inputs).
-    pub commit_caret_anchor_ms: u64,
     /// Interactive action requested by a panel click / Enter —
     /// drained and executed by the desktop host.
     pub pending_action: Option<GitPanelAction>,
@@ -645,6 +624,14 @@ impl GitPanelState {
         self.in_repo && !self.merging
     }
 
+    pub fn defocus_commit_input(&mut self, now_ms: u64) -> bool {
+        let was_focused = self.commit_focused;
+        self.commit_focused = false;
+        let commit_caret = self.commit_input.caret();
+        self.commit_input.set_caret(commit_caret, now_ms);
+        was_focused
+    }
+
     /// Drop keyboard focus from every git-panel text input — commit
     /// message, remote URL, HTTPS credential, branch-create name, the
     /// author signature pair, and the clone form's URL / destination.
@@ -656,25 +643,62 @@ impl GitPanelState {
             .clone_form
             .as_mut()
             .map(|form| {
-                form.input_select_all = false;
+                let url_caret = form.url_input.caret();
+                form.url_input.set_caret(url_caret, 0);
+                let dest_caret = form.dest_input.caret();
+                form.dest_input.set_caret(dest_caret, 0);
                 form.focus.take().is_some()
             })
             .unwrap_or(false);
+        let commit_focused = self.defocus_commit_input(0);
         let was_focused = clone_focused
-            || self.commit_focused
+            || commit_focused
             || self.remote_focused
             || self.https_focused
             || self.branch_create_focused
             || self.author_name_focused
             || self.author_email_focused;
-        self.commit_focused = false;
         self.remote_focused = false;
         self.https_focused = false;
         self.branch_create_focused = false;
         self.author_name_focused = false;
         self.author_email_focused = false;
-        self.input_select_all = false;
+        let remote_caret = self.remote_input.caret();
+        self.remote_input.set_caret(remote_caret, 0);
+        let https_caret = self.https_input.caret();
+        self.https_input.set_caret(https_caret, 0);
+        let branch_caret = self.branch_create_input.caret();
+        self.branch_create_input.set_caret(branch_caret, 0);
+        let author_name_caret = self.author_name_input.caret();
+        self.author_name_input.set_caret(author_name_caret, 0);
+        let author_email_caret = self.author_email_input.caret();
+        self.author_email_input.set_caret(author_email_caret, 0);
         was_focused
+    }
+
+    /// Open the tracked-file picker row list and reset transient select
+    /// interaction state for a fresh candidate set.
+    pub fn open_tracked_picker(&mut self) {
+        self.tracked_picker.open = true;
+        self.tracked_picker.hover = None;
+        self.tracked_picker.pressed = None;
+        self.tracked_picker.scroll.offset = 0.0;
+        self.tracked_picker_selected = None;
+    }
+
+    /// Close the tracked-file picker and clear its transient selection.
+    pub fn close_tracked_picker(&mut self) -> bool {
+        let changed = self.tracked_picker.open
+            || self.tracked_picker.hover.is_some()
+            || self.tracked_picker.pressed.is_some()
+            || self.tracked_picker.scroll.offset != 0.0
+            || self.tracked_picker_selected.is_some();
+        self.tracked_picker.open = false;
+        self.tracked_picker.hover = None;
+        self.tracked_picker.pressed = None;
+        self.tracked_picker.scroll.offset = 0.0;
+        self.tracked_picker_selected = None;
+        changed
     }
 }
 
@@ -684,18 +708,6 @@ pub struct RecentFile {
     pub path: String,
     /// Unix seconds when last touched.
     pub modified_at: u64,
-}
-
-/// Toolbar shape-slot dropdown choice. State enum ported from
-/// shell-core's `widgets/shape_picker::ShapeChoice`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ShapeChoice {
-    /// Pick a shape tool (Rect / Ellipse / Polygon / Line / Pen).
-    Tool(Tool),
-    /// Open the icon picker (host concern; this only reports intent).
-    OpenIconPicker,
-    /// Open a file dialog to import an image / SVG.
-    ImportImageOrSvg,
 }
 
 // What the LayerPanel right-click context menu is acting on — the
@@ -711,7 +723,7 @@ pub struct LayerContextMenuState {
     pub anchor_x: f32,
     pub anchor_y: f32,
     /// Hovered row index for the menu paint; `None` = no row hovered.
-    pub hovered_row: Option<u8>,
+    pub menu: jian_widgets::components::menu::MenuState,
 }
 
 /// Inline-rename state for a page row (double-click → rename).
@@ -775,16 +787,15 @@ pub struct EditorUiState {
     pub theme_mode: ThemeMode,
     /// UI locale — TopBar Globe cycles.
     pub locale: Locale,
-    /// TopBar Globe dropdown open.
-    pub locale_picker_open: bool,
-    /// Locale row currently hovered while the locale picker is open.
-    pub locale_picker_hover: Option<Locale>,
+    /// TopBar Globe dropdown state.
+    pub locale_picker: jian_widgets::components::select::SelectState,
 
     // --- File menu --------------------------------------------------
     /// File-menu dropdown open (anchored under folder + chevron).
     pub file_menu_open: bool,
-    /// File-menu row currently hovered — drives the per-row tint.
-    pub file_menu_hover: Option<FileMenuChoice>,
+    /// Shared file-menu interaction state; `hover = None` means no
+    /// actionable row hovered.
+    pub file_menu: jian_widgets::components::menu::MenuState,
     /// Pending file-menu action for the host runner to handle.
     pub pending_file_action: Option<FileAction>,
     /// Recent files (head = newest, cap 10).
@@ -824,20 +835,20 @@ pub struct EditorUiState {
     /// (≥ 0). A wheel / trackpad pan over the inspector advances it;
     /// paint + hit-test shift the section content up by this amount
     /// so a tall inspector (many effects, etc.) stays reachable.
-    pub property_panel_scroll: f32,
+    pub property_panel_scroll: jian_core::scroll::ScrollState,
     /// Vertical scroll offset (px, ≥ 0) of the LayerPanel's 页面
     /// (Pages) section — that section has a bounded height, so a
     /// long page list scrolls within it.
-    pub layer_pages_scroll: f32,
+    pub layer_pages_scroll: jian_core::scroll::ScrollState,
     /// Vertical scroll offset (px, ≥ 0) of the LayerPanel's 图层
     /// (Layers) section row viewport.
-    pub layer_layers_scroll: f32,
+    pub layer_layers_scroll: jian_core::scroll::ScrollState,
     /// Horizontal scroll offset (px, ≥ 0) of the LayerPanel's 页面
     /// row content. The row chrome stays fixed; only tree content shifts.
-    pub layer_pages_h_scroll: f32,
+    pub layer_pages_h_scroll: jian_core::scroll::ScrollState,
     /// Horizontal scroll offset (px, ≥ 0) of the LayerPanel's 图层
     /// tree content. Needed for deeply nested layer trees.
-    pub layer_layers_h_scroll: f32,
+    pub layer_layers_h_scroll: jian_core::scroll::ScrollState,
     /// "Import from Figma" modal.
     pub figma_import_open: bool,
     /// Which Figma-import target the cursor is over (close / drop-zone)
@@ -863,31 +874,21 @@ pub struct EditorUiState {
     pub agent_settings_open: bool,
     pub agent_settings: crate::agent_settings::AgentSettings,
     pub agent_settings_drag: Option<crate::agent_settings::AgentSettingsDrag>,
-    /// Draft for the focused settings-modal input (e.g. MCP port).
-    pub settings_input_draft: String,
-    /// Byte caret for the focused settings-modal input.
-    pub settings_input_caret: Option<usize>,
-    /// Focus identity that owns [`Self::settings_input_caret`].
-    pub settings_input_caret_focus: Option<crate::agent_settings::SettingsFocus>,
-    /// True after Cmd/Ctrl+A in the focused settings input. The next
-    /// edit replaces the whole draft.
-    pub settings_input_select_all: bool,
-    /// Last focus / edit timestamp for focused settings-modal inputs.
-    pub settings_input_caret_anchor_ms: u64,
+    /// Draft, caret, selection, and blink state for the focused
+    /// settings-modal input.
+    pub settings_input: jian_core::text_input::TextInputState,
 
     // --- Toolbar shape slot ----------------------------------------
-    /// Whether the Toolbar shape-tool dropdown is open.
-    pub shape_picker_open: bool,
-    /// Shape-picker row currently hovered.
-    pub shape_picker_hover: Option<ShapeChoice>,
+    /// Toolbar shape-tool dropdown state.
+    pub shape_picker: jian_widgets::components::select::SelectState,
     /// Toolbar button currently hovered — drives the per-button
     /// `theme.button_hover` wash on the vertical tool column.
     pub toolbar_hover: Option<crate::toolbar_state::ToolbarHover>,
     /// Last-selected shape tool — drives the toolbar shape slot's
     /// icon. Always one of Rect / Ellipse / Polygon / Line / Pen.
     pub shape_tool: Tool,
-    /// Whether the Toolbar's Icon action picker is open.
-    pub icon_picker_open: bool,
+    /// Toolbar/property icon picker interaction state.
+    pub icon_picker: jian_widgets::components::select::SelectState,
     /// True when the icon picker should replace the selected icon
     /// instead of inserting a new icon at the canvas centre.
     pub icon_picker_replace_selection: bool,
@@ -899,35 +900,17 @@ pub struct EditorUiState {
     /// True after Cmd/Ctrl+A in the icon search box. The next edit
     /// replaces the whole search query.
     pub icon_picker_select_all: bool,
-    /// Which icon-picker target the cursor is over (close / row /
-    /// load-more) — drives the `theme.button_hover` wash.
-    pub icon_picker_hover: Option<crate::icon_picker_button_state::IconPickerButton>,
     /// Remote Iconify search results appended by the desktop host.
     pub icon_picker_remote: crate::icon_picker_state::IconPickerRemoteState,
     /// Queued "load more" request drained asynchronously by desktop.
     pub icon_picker_load_more_request: Option<crate::icon_picker_state::IconifyLoadMoreRequest>,
 
     // --- AI chat model picker --------------------------------------
-    /// AI chat model-picker dropdown open.
-    pub chat_model_picker_open: bool,
-    /// Vertical scroll offset of the model-picker dropdown, in px.
-    /// Non-zero only when the connected catalog is taller than the
-    /// picker's capped height; the host clamps it on wheel input.
-    pub chat_model_picker_scroll: f32,
-    /// Live text filter for the chat model picker. While the picker
-    /// is open it owns typed characters, matching the TS search box.
-    pub chat_model_picker_search: String,
-    /// Byte caret for the chat model-picker search box.
-    pub chat_model_picker_caret: Option<usize>,
-    /// True after Cmd/Ctrl+A in the model-picker search box. The next
-    /// edit replaces the whole search query.
-    pub chat_model_picker_select_all: bool,
-    /// Last focus / edit timestamp for the chat model-picker search
-    /// caret blink cycle.
-    pub chat_model_picker_caret_anchor_ms: u64,
-    /// Index into `chat.available_models` of the model row the cursor
-    /// is over, or `None`. Drives the picker's hover-row tint.
-    pub chat_model_picker_hover: Option<usize>,
+    /// AI chat model-picker dropdown interaction state.
+    pub chat_model_picker: jian_widgets::components::select::SelectState,
+    /// Text filter, caret, selection, and blink state for the chat
+    /// model-picker search box.
+    pub chat_model_picker_input: jian_core::text_input::TextInputState,
     /// Hovered chat design JSON card `(message_index, block_index)`;
     /// drives the TS-style hover reveal of the card's copy affordance.
     pub chat_design_block_hover: Option<(usize, usize)>,
@@ -940,6 +923,11 @@ pub struct EditorUiState {
     pub chat_footer_hover: Option<crate::chat_button_state::ChatFooterButton>,
     /// Index into `AgentProvider::ALL` of the agent driving the chat.
     pub chat_selected_agent: usize,
+
+    /// Primary-pointer pressed button target. Button feedback is exclusive
+    /// across chrome families, so one field covers toolbar / topbar /
+    /// statusbar / chat buttons without duplicating every hover field.
+    pub pressed_button: Option<crate::button_press_state::ButtonPressTarget>,
 
     /// True after Cmd/Ctrl+A in the component-browser search box. The
     /// next edit replaces the whole search query.
@@ -995,24 +983,18 @@ pub struct EditorUiState {
     pub size_hug_width: bool,
     pub size_hug_height: bool,
     pub size_clip_content: bool,
-    /// Whether the fill-type dropdown is open.
-    pub fill_type_picker_open: bool,
+    /// Fill-type dropdown state in the PropertyPanel.
+    pub fill_type_picker: jian_widgets::components::select::SelectState,
     /// Fill/stroke colour-variable dropdown currently open in the
     /// PropertyPanel; `None` means closed.
     pub property_color_variable_picker_open: Option<crate::ui_draft::ColorTarget>,
     /// Whether the image-fill editor popover is open.
     pub image_fill_popover_open: bool,
-    /// Whether the text font-family picker is open.
-    pub font_family_picker_open: bool,
+    /// Text font-family picker select state.
+    pub font_picker: jian_widgets::components::select::SelectState,
     /// Live type-ahead filter for the font-family picker (TS
     /// FontPicker search input).
     pub font_picker_search: String,
-    /// Scroll offset (px, ≥ 0) of the font-family picker's list
-    /// viewport (TS `max-h-72 overflow-y-auto`).
-    pub font_picker_scroll: f32,
-    /// Index (into the picker's visible entries) of the row under
-    /// the cursor — drives the hover wash.
-    pub font_picker_hover: Option<usize>,
     /// Host-enumerated system font families (sorted, deduped against
     /// the bundled set). Empty until a host enumerates; the picker
     /// then falls back to the TS `FALLBACK_SYSTEM_FONTS` list.
@@ -1034,9 +1016,9 @@ pub struct EditorUiState {
     pub variables_preset_menu_open: bool,
     pub variables_add_menu_open: bool,
     /// Whether the preset dropdown's save-as-name input is showing
-    /// (TS `showPresetNameInput`). The draft lives in
-    /// `UiDraftState::property_input_draft` like the other variables
-    /// inputs; only meaningful while `variables_preset_menu_open`.
+    /// (TS `showPresetNameInput`). This legacy preset-name draft still
+    /// lives in `UiDraftState::property_input_draft`; variables panel
+    /// row/header edits use the text-input states below.
     pub variables_preset_name_focus: bool,
     /// Pending `.optheme` import / export the desktop host must run.
     pub pending_theme_preset_io: Option<ThemePresetIo>,
@@ -1052,11 +1034,15 @@ pub struct EditorUiState {
     pub variables_theme_rename_axis: Option<String>,
     /// Variant column value currently being edited in the VariablesPanel.
     pub variables_variant_rename_value: Option<String>,
+    /// Shared text state for VariablesPanel theme-axis / variant header renames.
+    pub variables_header_input: jian_core::text_input::TextInputState,
     /// Which variables-panel target the cursor is over (row / axis chip
     /// / dropdown item) — drives the `theme.button_hover` wash.
     pub variables_panel_hover: Option<crate::variables_panel_state::VariablesPanelButton>,
     /// Editor focus for a non-color variable row (Number / String).
     pub variable_row_focus: Option<VariableRowFocus>,
+    /// Text state for focused VariablesPanel row/value cells.
+    pub variable_row_input: jian_core::text_input::TextInputState,
     /// Live search filter for the variables panel rows (TS
     /// `variables-panel.tsx` search box). Case-insensitive substring
     /// match on the variable name; transient, never serialized.
@@ -1064,7 +1050,7 @@ pub struct EditorUiState {
     /// Whether the variables-panel search box owns the keyboard.
     pub variables_search_focus: bool,
     /// Vertical scroll offset (px) of the variables row list.
-    pub variables_scroll: f32,
+    pub variables_scroll: jian_core::scroll::ScrollState,
     /// Variable row whose `⋯` overflow menu (Rename / Delete) is open.
     /// Indexes the UNFILTERED `doc.variables` order.
     pub variables_row_menu: Option<usize>,
@@ -1072,8 +1058,7 @@ pub struct EditorUiState {
     /// TS's transient React state (resets each session, not persisted).
     pub variables_panel_size: Option<(f32, f32)>,
     /// Editor focus on an effect-parameter value (Effects section).
-    /// Shares `UiDraftState.property_input_draft` + caret like the
-    /// variable-row focus does.
+    /// Shares `UiDraftState.property_input` with property-panel fields.
     pub effect_param_focus: Option<EffectParamFocus>,
 
     /// Legacy in-flight IME composition cache. The native host clears
@@ -1097,8 +1082,6 @@ pub struct EditorUiState {
     /// rebuilt on load, never serialized, and toggling it never pushes
     /// a history entry.
     pub collapsed_layers: HashSet<NodeId>,
-    /// Caret-blink anchor (ms) for an inline layer / page rename.
-    pub rename_caret_anchor_ms: u64,
     /// Last LayerPanel click target + ms; 400 ms re-press → rename.
     pub last_layer_click: Option<(LayerContextTarget, u64)>,
     /// Last canvas left-click target + ms; 400 ms same-node re-press
@@ -1205,10 +1188,9 @@ impl Default for EditorUiState {
             property_panel_width: 256.0,
             theme_mode: ThemeMode::Dark,
             locale: Locale::ZhCn,
-            locale_picker_open: false,
-            locale_picker_hover: None,
+            locale_picker: jian_widgets::components::select::SelectState::default(),
             file_menu_open: false,
-            file_menu_hover: None,
+            file_menu: Default::default(),
             pending_file_action: None,
             recent_files: Vec::new(),
             file_name_display: None,
@@ -1221,11 +1203,11 @@ impl Default for EditorUiState {
             export_picker_hover: None,
             property_action_hover: None,
             property_tab_hover: None,
-            property_panel_scroll: 0.0,
-            layer_pages_scroll: 0.0,
-            layer_layers_scroll: 0.0,
-            layer_pages_h_scroll: 0.0,
-            layer_layers_h_scroll: 0.0,
+            property_panel_scroll: Default::default(),
+            layer_pages_scroll: Default::default(),
+            layer_layers_scroll: Default::default(),
+            layer_pages_h_scroll: Default::default(),
+            layer_layers_h_scroll: Default::default(),
             figma_import_open: false,
             figma_import_hover: None,
             figma_import_in_progress: false,
@@ -1234,35 +1216,25 @@ impl Default for EditorUiState {
             agent_settings_open: false,
             agent_settings: crate::agent_settings::AgentSettings::default(),
             agent_settings_drag: None,
-            settings_input_draft: String::new(),
-            settings_input_caret: None,
-            settings_input_caret_focus: None,
-            settings_input_select_all: false,
-            settings_input_caret_anchor_ms: 0,
-            shape_picker_open: false,
-            shape_picker_hover: None,
+            settings_input: jian_core::text_input::TextInputState::default(),
+            shape_picker: jian_widgets::components::select::SelectState::default(),
             toolbar_hover: None,
             shape_tool: Tool::Rect,
-            icon_picker_open: false,
+            icon_picker: jian_widgets::components::select::SelectState::default(),
             icon_picker_replace_selection: false,
             icon_picker_panel_pos: None,
             icon_picker_search: String::new(),
             icon_picker_select_all: false,
-            icon_picker_hover: None,
             icon_picker_remote: crate::icon_picker_state::IconPickerRemoteState::default(),
             icon_picker_load_more_request: None,
-            chat_model_picker_open: false,
-            chat_model_picker_scroll: 0.0,
-            chat_model_picker_search: String::new(),
-            chat_model_picker_caret: None,
-            chat_model_picker_select_all: false,
-            chat_model_picker_caret_anchor_ms: 0,
-            chat_model_picker_hover: None,
+            chat_model_picker: jian_widgets::components::select::SelectState::default(),
+            chat_model_picker_input: jian_core::text_input::TextInputState::default(),
             chat_design_block_hover: None,
             chat_example_hover: None,
             chat_header_hover: None,
             chat_footer_hover: None,
             chat_selected_agent: 0,
+            pressed_button: None,
             component_browser_select_all: false,
             topbar_traffic_hover: false,
             topbar_button_hover: None,
@@ -1281,13 +1253,11 @@ impl Default for EditorUiState {
             size_hug_width: false,
             size_hug_height: false,
             size_clip_content: false,
-            fill_type_picker_open: false,
+            fill_type_picker: jian_widgets::components::select::SelectState::default(),
             property_color_variable_picker_open: None,
             image_fill_popover_open: false,
-            font_family_picker_open: false,
+            font_picker: jian_widgets::components::select::SelectState::default(),
             font_picker_search: String::new(),
-            font_picker_scroll: 0.0,
-            font_picker_hover: None,
             system_font_families: std::sync::Arc::new(Vec::new()),
             system_fonts_loaded: false,
             image_panel: crate::image_panel_state::ImagePanelState::default(),
@@ -1304,11 +1274,13 @@ impl Default for EditorUiState {
             variables_variant_menu_value: None,
             variables_theme_rename_axis: None,
             variables_variant_rename_value: None,
+            variables_header_input: jian_core::text_input::TextInputState::default(),
             variables_panel_hover: None,
             variable_row_focus: None,
+            variable_row_input: jian_core::text_input::TextInputState::default(),
             variables_search: String::new(),
             variables_search_focus: false,
-            variables_scroll: 0.0,
+            variables_scroll: Default::default(),
             variables_row_menu: None,
             variables_panel_size: None,
             effect_param_focus: None,
@@ -1317,7 +1289,6 @@ impl Default for EditorUiState {
             hovered_page_index: None,
             layer_context_menu: None,
             collapsed_layers: HashSet::new(),
-            rename_caret_anchor_ms: 0,
             last_layer_click: None,
             last_canvas_click: None,
             last_variable_name_click: None,
@@ -1352,12 +1323,182 @@ impl EditorUiState {
         Self::default()
     }
 
+    pub fn clear_button_press_target(&mut self) {
+        self.pressed_button = None;
+    }
+
+    pub fn button_pressed(&self, target: crate::button_press_state::ButtonPressTarget) -> bool {
+        self.pressed_button == Some(target)
+    }
+
+    pub fn toggle_fill_type_picker(&mut self) {
+        let opening = !self.fill_type_picker.open;
+        self.fill_type_picker.open = opening;
+        self.fill_type_picker.hover = None;
+        self.fill_type_picker.pressed = None;
+        if opening {
+            self.fill_type_picker.scroll.offset = 0.0;
+        }
+    }
+
+    pub fn close_fill_type_picker(&mut self) -> bool {
+        let changed = self.fill_type_picker.open
+            || self.fill_type_picker.hover.is_some()
+            || self.fill_type_picker.pressed.is_some()
+            || self.fill_type_picker.scroll.offset != 0.0;
+        self.fill_type_picker.open = false;
+        self.fill_type_picker.hover = None;
+        self.fill_type_picker.pressed = None;
+        self.fill_type_picker.scroll.offset = 0.0;
+        changed
+    }
+
+    pub fn open_icon_picker(&mut self, replace_selection: bool) {
+        self.close_icon_picker();
+        self.icon_picker.open = true;
+        self.icon_picker_replace_selection = replace_selection;
+    }
+
+    pub fn close_icon_picker(&mut self) -> bool {
+        let changed = self.icon_picker.open
+            || self.icon_picker.hover.is_some()
+            || self.icon_picker.pressed.is_some()
+            || self.icon_picker.scroll.offset != 0.0
+            || self.icon_picker_replace_selection
+            || !self.icon_picker_search.is_empty()
+            || self.icon_picker_select_all;
+        self.icon_picker.open = false;
+        self.icon_picker.hover = None;
+        self.icon_picker.pressed = None;
+        self.icon_picker.scroll.offset = 0.0;
+        self.icon_picker_replace_selection = false;
+        self.icon_picker_search.clear();
+        self.icon_picker_select_all = false;
+        changed
+    }
+
+    pub fn toggle_font_picker(&mut self) {
+        let opening = !self.font_picker.open;
+        self.close_font_picker();
+        if opening {
+            self.font_picker.open = true;
+        }
+    }
+
+    pub fn close_font_picker(&mut self) -> bool {
+        let changed = self.font_picker.open
+            || self.font_picker.hover.is_some()
+            || self.font_picker.pressed.is_some()
+            || self.font_picker.scroll.offset != 0.0
+            || !self.font_picker_search.is_empty();
+        self.font_picker.open = false;
+        self.font_picker.hover = None;
+        self.font_picker.pressed = None;
+        self.font_picker.scroll.offset = 0.0;
+        self.font_picker_search.clear();
+        changed
+    }
+
+    pub fn toggle_chat_model_picker(&mut self) -> bool {
+        let opening = !self.chat_model_picker.open;
+        self.close_chat_model_picker();
+        if opening {
+            self.chat_model_picker.open = true;
+        }
+        opening
+    }
+
+    pub fn close_chat_model_picker(&mut self) -> bool {
+        let changed = self.chat_model_picker.open
+            || self.chat_model_picker.hover.is_some()
+            || self.chat_model_picker.pressed.is_some()
+            || self.chat_model_picker.scroll.offset != 0.0
+            || !self.chat_model_picker_input.text().is_empty();
+        self.chat_model_picker.open = false;
+        self.chat_model_picker.hover = None;
+        self.chat_model_picker.pressed = None;
+        self.chat_model_picker.scroll.offset = 0.0;
+        self.chat_model_picker_input.set_text("");
+        changed
+    }
+
     /// Whether the preset dropdown's save-as-name input owns the
     /// keyboard. Gated on the menu being open so a stale focus flag
     /// (e.g. the menu closed by a panel-side `close_variable_menus`)
     /// can never eat keystrokes.
     pub fn preset_name_input_active(&self) -> bool {
         self.variables_preset_menu_open && self.variables_preset_name_focus
+    }
+
+    pub fn builtin_agent_draft_ready(&self) -> bool {
+        use crate::agent_settings::BuiltinAgentField;
+
+        let Some(name) = self.builtin_agent_draft_field_text(BuiltinAgentField::DisplayName) else {
+            return false;
+        };
+        let Some(api_key) = self.builtin_agent_draft_field_text(BuiltinAgentField::ApiKey) else {
+            return false;
+        };
+        let Some(model) = self.builtin_agent_draft_field_text(BuiltinAgentField::Model) else {
+            return false;
+        };
+        !name.trim().is_empty() && !api_key.trim().is_empty() && !model.trim().is_empty()
+    }
+
+    pub fn acp_agent_draft_ready(&self) -> bool {
+        use crate::agent_settings::{AcpAgentField, AcpConnectionType};
+
+        let Some(draft) = self.agent_settings.acp_agent_draft.as_ref() else {
+            return false;
+        };
+        let Some(name) = self.acp_agent_draft_field_text(AcpAgentField::DisplayName) else {
+            return false;
+        };
+        let endpoint_field = match draft.connection_type {
+            AcpConnectionType::Local => AcpAgentField::Command,
+            AcpConnectionType::Remote => AcpAgentField::Url,
+        };
+        let Some(endpoint) = self.acp_agent_draft_field_text(endpoint_field) else {
+            return false;
+        };
+        !name.trim().is_empty() && !endpoint.trim().is_empty()
+    }
+
+    pub fn builtin_agent_draft_field_text(
+        &self,
+        field: crate::agent_settings::BuiltinAgentField,
+    ) -> Option<&str> {
+        use crate::agent_settings::{BuiltinAgentField, SettingsFocus};
+
+        let draft = self.agent_settings.builtin_agent_draft.as_ref()?;
+        if self.agent_settings.focus == Some(SettingsFocus::BuiltinAgentDraft(field)) {
+            return Some(self.settings_input.text());
+        }
+        Some(match field {
+            BuiltinAgentField::DisplayName => draft.display_name.as_str(),
+            BuiltinAgentField::ApiKey => draft.api_key.as_str(),
+            BuiltinAgentField::Model => draft.model.as_str(),
+            BuiltinAgentField::BaseUrl => draft.base_url.as_str(),
+        })
+    }
+
+    pub fn acp_agent_draft_field_text(
+        &self,
+        field: crate::agent_settings::AcpAgentField,
+    ) -> Option<std::borrow::Cow<'_, str>> {
+        use crate::agent_settings::{AcpAgentField, SettingsFocus};
+
+        let draft = self.agent_settings.acp_agent_draft.as_ref()?;
+        if self.agent_settings.focus == Some(SettingsFocus::AcpAgentDraft(field)) {
+            return Some(std::borrow::Cow::Borrowed(self.settings_input.text()));
+        }
+        Some(match field {
+            AcpAgentField::DisplayName => std::borrow::Cow::Borrowed(draft.display_name.as_str()),
+            AcpAgentField::Command => std::borrow::Cow::Borrowed(draft.command.as_str()),
+            AcpAgentField::Args => std::borrow::Cow::Owned(draft.args_text()),
+            AcpAgentField::Env => std::borrow::Cow::Owned(draft.env_text()),
+            AcpAgentField::Url => std::borrow::Cow::Borrowed(draft.url.as_deref().unwrap_or("")),
+        })
     }
 
     /// Clear transient UI state that references specific document nodes/pages
@@ -1371,10 +1512,10 @@ impl EditorUiState {
         self.hovered_layer_id = None;
         self.hovered_page_index = None;
         self.layer_context_menu = None;
-        self.layer_pages_scroll = 0.0;
-        self.layer_layers_scroll = 0.0;
-        self.layer_pages_h_scroll = 0.0;
-        self.layer_layers_h_scroll = 0.0;
+        self.layer_pages_scroll.offset = 0.0;
+        self.layer_layers_scroll.offset = 0.0;
+        self.layer_pages_h_scroll.offset = 0.0;
+        self.layer_layers_h_scroll.offset = 0.0;
         self.collapsed_layers.clear();
         self.last_layer_click = None;
         self.last_canvas_click = None;
@@ -1385,14 +1526,18 @@ impl EditorUiState {
         self.padding_mode_popover_open = false;
         self.property_color_variable_picker_open = None;
         self.axis_dropdown_open = None;
+        self.variables_theme_rename_axis = None;
+        self.variables_variant_rename_value = None;
+        self.variables_header_input.set_text("");
         self.variable_row_focus = None;
+        self.variable_row_input.set_text("");
         // Document-derived variables-panel transients: the search
         // filter, scroll offset and open row menu all reference the
         // replaced document's variable list. The panel SIZE is a panel
         // metric and is preserved.
         self.variables_search.clear();
         self.variables_search_focus = false;
-        self.variables_scroll = 0.0;
+        self.variables_scroll.offset = 0.0;
         self.variables_row_menu = None;
         self.effect_param_focus = None;
         // Document-derived: set true only by a Figma import to keep that
@@ -1425,6 +1570,45 @@ mod tests {
     }
 
     #[test]
+    fn editor_pixel_scroll_fields_use_scroll_state() {
+        let mut s = EditorUiState::default();
+
+        s.property_panel_scroll.offset = 12.0;
+        s.layer_pages_scroll.offset = 24.0;
+        s.layer_layers_scroll.offset = 36.0;
+        s.layer_pages_h_scroll.offset = 48.0;
+        s.layer_layers_h_scroll.offset = 60.0;
+        s.variables_scroll.offset = 72.0;
+
+        assert_eq!(s.property_panel_scroll.offset, 12.0);
+        assert_eq!(s.layer_pages_scroll.offset, 24.0);
+        assert_eq!(s.layer_layers_scroll.offset, 36.0);
+        assert_eq!(s.layer_pages_h_scroll.offset, 48.0);
+        assert_eq!(s.layer_layers_h_scroll.offset, 60.0);
+        assert_eq!(s.variables_scroll.offset, 72.0);
+    }
+
+    #[test]
+    fn button_press_target_clears_chrome_button_families() {
+        let mut ui = EditorUiState {
+            pressed_button: Some(crate::button_press_state::ButtonPressTarget::FigmaImport(
+                crate::FigmaImportButton::DropZone,
+            )),
+            ..Default::default()
+        };
+
+        assert!(
+            ui.button_pressed(crate::button_press_state::ButtonPressTarget::FigmaImport(
+                crate::FigmaImportButton::DropZone,
+            ))
+        );
+
+        ui.clear_button_press_target();
+
+        assert_eq!(ui.pressed_button, None);
+    }
+
+    #[test]
     fn theme_mode_flips() {
         assert_eq!(ThemeMode::Dark.flipped(), ThemeMode::Light);
         assert_eq!(ThemeMode::Light.flipped(), ThemeMode::Dark);
@@ -1435,6 +1619,34 @@ mod tests {
         assert_eq!(ExportFormat::ALL.len(), 5);
         assert_eq!(ExportFormat::Png.extension(), "png");
         assert_eq!(ExportFormat::Jpeg.extension(), "jpg");
+    }
+
+    #[test]
+    fn builtin_agent_draft_ready_reads_focused_settings_input() {
+        use crate::agent_settings::{BuiltinAgentField, SettingsFocus};
+
+        let mut ui = EditorUiState::new();
+        ui.agent_settings.begin_builtin_agent_draft();
+        assert!(!ui.builtin_agent_draft_ready());
+
+        ui.agent_settings.focus = Some(SettingsFocus::BuiltinAgentDraft(BuiltinAgentField::ApiKey));
+        ui.settings_input.set_text("sk-test");
+
+        assert!(ui.builtin_agent_draft_ready());
+    }
+
+    #[test]
+    fn acp_agent_draft_ready_reads_focused_settings_input() {
+        use crate::agent_settings::{AcpAgentField, SettingsFocus};
+
+        let mut ui = EditorUiState::new();
+        ui.agent_settings.begin_acp_agent_draft();
+        assert!(!ui.acp_agent_draft_ready());
+
+        ui.agent_settings.focus = Some(SettingsFocus::AcpAgentDraft(AcpAgentField::Command));
+        ui.settings_input.set_text("op-agent");
+
+        assert!(ui.acp_agent_draft_ready());
     }
 
     #[test]
@@ -1473,5 +1685,117 @@ mod tests {
         s.in_repo = true;
         s.merging = true;
         assert!(!s.header_popovers_allowed(), "merge in progress");
+    }
+
+    #[test]
+    fn tracked_picker_helpers_reset_select_interaction_state() {
+        let mut s = GitPanelState::default();
+        s.tracked_picker_selected = Some(2);
+        s.tracked_picker.hover = Some(1);
+        s.tracked_picker.pressed = Some(1);
+        s.tracked_picker.scroll.offset = 44.0;
+
+        s.open_tracked_picker();
+        assert!(s.tracked_picker.open);
+        assert_eq!(s.tracked_picker_selected, None);
+        assert_eq!(s.tracked_picker.hover, None);
+        assert_eq!(s.tracked_picker.pressed, None);
+        assert_eq!(s.tracked_picker.scroll.offset, 0.0);
+
+        s.tracked_picker_selected = Some(0);
+        s.tracked_picker.hover = Some(0);
+        s.tracked_picker.pressed = Some(0);
+        s.tracked_picker.scroll.offset = 44.0;
+        assert!(s.close_tracked_picker());
+        assert!(!s.tracked_picker.open);
+        assert_eq!(s.tracked_picker_selected, None);
+        assert_eq!(s.tracked_picker.hover, None);
+        assert_eq!(s.tracked_picker.pressed, None);
+        assert_eq!(s.tracked_picker.scroll.offset, 0.0);
+    }
+
+    #[test]
+    fn font_picker_helpers_reset_select_interaction_state_and_search() {
+        let mut ui = EditorUiState::new();
+        ui.font_picker_search = "inter".to_string();
+        ui.font_picker.hover = Some(1);
+        ui.font_picker.pressed = Some(1);
+        ui.font_picker.scroll.offset = 24.0;
+
+        ui.toggle_font_picker();
+        assert!(ui.font_picker.open);
+        assert!(ui.font_picker_search.is_empty());
+        assert_eq!(ui.font_picker.hover, None);
+        assert_eq!(ui.font_picker.pressed, None);
+        assert_eq!(ui.font_picker.scroll.offset, 0.0);
+
+        ui.font_picker_search = "roboto".to_string();
+        ui.font_picker.hover = Some(0);
+        ui.font_picker.pressed = Some(0);
+        ui.font_picker.scroll.offset = 24.0;
+        assert!(ui.close_font_picker());
+        assert!(!ui.font_picker.open);
+        assert!(ui.font_picker_search.is_empty());
+        assert_eq!(ui.font_picker.hover, None);
+        assert_eq!(ui.font_picker.pressed, None);
+        assert_eq!(ui.font_picker.scroll.offset, 0.0);
+    }
+
+    #[test]
+    fn chat_model_picker_helpers_reset_select_interaction_state_and_search() {
+        let mut ui = EditorUiState::new();
+        ui.chat_model_picker_input.set_text("gpt");
+        ui.chat_model_picker.hover = Some(1);
+        ui.chat_model_picker.pressed = Some(1);
+        ui.chat_model_picker.scroll.offset = 28.0;
+
+        assert!(ui.toggle_chat_model_picker());
+        assert!(ui.chat_model_picker.open);
+        assert!(ui.chat_model_picker_input.text().is_empty());
+        assert_eq!(ui.chat_model_picker.hover, None);
+        assert_eq!(ui.chat_model_picker.pressed, None);
+        assert_eq!(ui.chat_model_picker.scroll.offset, 0.0);
+
+        ui.chat_model_picker_input.set_text("claude");
+        ui.chat_model_picker.hover = Some(0);
+        ui.chat_model_picker.pressed = Some(0);
+        ui.chat_model_picker.scroll.offset = 28.0;
+        assert!(!ui.toggle_chat_model_picker());
+        assert!(!ui.chat_model_picker.open);
+        assert!(ui.chat_model_picker_input.text().is_empty());
+        assert_eq!(ui.chat_model_picker.hover, None);
+        assert_eq!(ui.chat_model_picker.pressed, None);
+        assert_eq!(ui.chat_model_picker.scroll.offset, 0.0);
+    }
+
+    #[test]
+    fn icon_picker_helpers_reset_select_interaction_state_and_search() {
+        let mut ui = EditorUiState::new();
+        ui.icon_picker_replace_selection = true;
+        ui.icon_picker_search = "home".to_string();
+        ui.icon_picker_select_all = true;
+        ui.icon_picker.hover = Some(1);
+        ui.icon_picker.pressed = Some(1);
+
+        ui.open_icon_picker(false);
+        assert!(ui.icon_picker.open);
+        assert!(!ui.icon_picker_replace_selection);
+        assert!(ui.icon_picker_search.is_empty());
+        assert!(!ui.icon_picker_select_all);
+        assert_eq!(ui.icon_picker.hover, None);
+        assert_eq!(ui.icon_picker.pressed, None);
+
+        ui.icon_picker_replace_selection = true;
+        ui.icon_picker_search = "settings".to_string();
+        ui.icon_picker_select_all = true;
+        ui.icon_picker.hover = Some(0);
+        ui.icon_picker.pressed = Some(0);
+        assert!(ui.close_icon_picker());
+        assert!(!ui.icon_picker.open);
+        assert!(!ui.icon_picker_replace_selection);
+        assert!(ui.icon_picker_search.is_empty());
+        assert!(!ui.icon_picker_select_all);
+        assert_eq!(ui.icon_picker.hover, None);
+        assert_eq!(ui.icon_picker.pressed, None);
     }
 }

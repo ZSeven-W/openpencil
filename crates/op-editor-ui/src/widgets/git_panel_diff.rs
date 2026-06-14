@@ -153,11 +153,41 @@ impl GitPanel<'_> {
         );
         let [bl, br, up, down, close] = Self::diff_header_buttons(rect);
         let h = self.state.button_hover;
-        self.paint_glyph_button(cx, bl, "◀", h == Some(GitButton::DiffScrollLeft));
-        self.paint_glyph_button(cx, br, "▶", h == Some(GitButton::DiffScrollRight));
-        self.paint_glyph_button(cx, up, "▲", h == Some(GitButton::DiffScrollUp));
-        self.paint_glyph_button(cx, down, "▼", h == Some(GitButton::DiffScrollDown));
-        self.paint_glyph_button(cx, close, "✕", h == Some(GitButton::CloseDiff));
+        self.paint_glyph_button(
+            cx,
+            bl,
+            "◀",
+            h == Some(GitButton::DiffScrollLeft),
+            self.pressed == Some(GitButton::DiffScrollLeft),
+        );
+        self.paint_glyph_button(
+            cx,
+            br,
+            "▶",
+            h == Some(GitButton::DiffScrollRight),
+            self.pressed == Some(GitButton::DiffScrollRight),
+        );
+        self.paint_glyph_button(
+            cx,
+            up,
+            "▲",
+            h == Some(GitButton::DiffScrollUp),
+            self.pressed == Some(GitButton::DiffScrollUp),
+        );
+        self.paint_glyph_button(
+            cx,
+            down,
+            "▼",
+            h == Some(GitButton::DiffScrollDown),
+            self.pressed == Some(GitButton::DiffScrollDown),
+        );
+        self.paint_glyph_button(
+            cx,
+            close,
+            "✕",
+            h == Some(GitButton::CloseDiff),
+            self.pressed == Some(GitButton::CloseDiff),
+        );
         self.divider(cx, left, top + 42.0, rect.size.x);
 
         // Body — a visible window of diff lines, per-line coloured,
@@ -367,12 +397,16 @@ impl GitPanel<'_> {
         rect: Rect,
         glyph: &str,
         hovered: bool,
+        pressed: bool,
     ) {
         cx.backend.fill_round_rect(rect, 5.0, self.theme.muted);
-        if hovered {
-            cx.backend
-                .fill_round_rect(rect, 5.0, self.theme.button_hover);
-        }
+        crate::widgets::button::paint_ghost_button_feedback(
+            cx.backend,
+            &self.theme,
+            rect,
+            hovered,
+            pressed,
+        );
         cx.backend
             .stroke_round_rect(rect, 5.0, self.theme.border, 1.0);
         let baseline = rect.origin.y + rect.size.y / 2.0 + 4.0;

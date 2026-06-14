@@ -35,9 +35,8 @@ Document
 ├── viewport: Viewport        (pan_x / pan_y / zoom + zoom_at + pan)
 ├── chat: ChatState           (messages, input, focused, anchor, collapsed)
 └── ui: UiState               (sidebar_open, layer_panel_width, property_panel_width,
-                               property_focus, property_input_draft, property_caret_anchor_ms,
-                               property_draft_select_all,
-                               settings_input_draft,
+                               property_focus, property_input: TextInputState,
+                               settings_input: TextInputState,
                                agent_settings_open, agent_settings (focus, tab, connected[5],
                                mcp_server, mcp_cli_enabled[6], images_*, hover_provider),
                                color_picker, pen_in_progress, pen_cursor_doc,
@@ -128,13 +127,13 @@ Click anywhere outside the panel closes it silently. Locale lookups for the row 
 
 ## PropertyPanel input editing
 
-`Document.ui` carries the focused property field, a draft buffer, and a caret-blink anchor:
+`Document.ui` carries the focused property field and a shared text input state:
 
 - `property_focus: Option<PropertyFocus>` — `PositionX / PositionY / Rotation / PositionR / SizeW / SizeH / Opacity / FillHex / StrokeHex / StrokeWidth`. **All 10 variants are wired end-to-end:** numeric focuses go through `Document::commit_property_edit` (`PositionR` writes `node.corner_radius`), hex focuses through `set_selected_color(is_fill, color)`.
-- `property_input_draft: String` — live keystrokes accumulate here. `apply_text` is focus-aware:
+- `property_input: TextInputState` — live keystrokes, caret, select-all, blink, and composition state accumulate here. `apply_text` is focus-aware:
   - Numeric focuses (Position / Size / Rotation / Opacity / StrokeWidth) gate `[0-9]`, leading `-`, and a single `.`.
   - Hex focuses (FillHex / StrokeHex) preserve a sticky `#` prefix, accept `[0-9a-fA-F]` only, and cap the draft at 7 chars (`#RRGGBB`). No select-all-on-focus — backspace removes one char at a time, typing appends one.
-- `property_caret_anchor_ms: u64` — drives caret blink off the same `jian_core::anim::blink_visible` cadence as the chat input.
+- `property_input_draft` / caret fields are legacy mirrors while older preset-name and compatibility paint paths are retired.
 
 Hex parsing is forgiving: `parse_hex_color` zero-pads 1-5 char inputs to 6 and expands CSS shorthand `#RGB` → `#RRGGBB`, so mid-edit commits don't visibly "reset" the colour.
 
@@ -279,7 +278,7 @@ Every input path that reasons about the canvas region MUST derive its rects from
 
 ### Settings input editing
 
-`SettingsFocus { McpPort }` is to settings inputs what `PropertyFocus` is to property-panel inputs. Click on the port field → `AgentSettingsHit::FocusMcpPort` → `agent_settings.focus = Some(McpPort)` + `UiState.settings_input_draft` seeded from current port. `apply_text` / `apply_backspace` / `apply_send` / `apply_escape` all route to the draft FIRST (swallowing every keystroke so non-digit chars don't leak into chat / rename / text-edit). Commit parses u16 and clamps ≥1024. Close / Outside / SelectTab / re-Focus all commit any pending draft first so a typed value isn't silently lost.
+`SettingsFocus { McpPort }` is to settings inputs what `PropertyFocus` is to property-panel inputs. Click on the port field → `AgentSettingsHit::FocusMcpPort` → `agent_settings.focus = Some(McpPort)` + `EditorUiState.settings_input: TextInputState` seeded from current port. `apply_text` / `apply_backspace` / caret movement / select-all route through the shared text-input state FIRST (swallowing every keystroke so non-digit chars don't leak into chat / rename / text-edit). `apply_send` commits, parsing u16 and clamping ≥1024. `apply_escape` clears focus and the shared input. Close / Outside / SelectTab / re-Focus all commit any pending draft first so a typed value isn't silently lost.
 
 Mirrored on native (`widget_host/property_dispatch.rs::commit_settings_focus_if_any`) and web (`widget_host/keyboard.rs::commit_settings_focus`).
 

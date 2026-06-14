@@ -123,7 +123,6 @@ impl WidgetHostNative {
                 }
             }
             layer_panel.now_ms = self.now_ms;
-            layer_panel.caret_anchor_ms = self.editor_state.editor_ui.rename_caret_anchor_ms;
             let mut cx = PaintCx {
                 backend: &mut *frame,
             };
@@ -338,7 +337,7 @@ impl WidgetHostNative {
 
         // 9. ShapePicker — anchored to the right of the toolbar
         //    shape slot; same z-priority as the locale picker.
-        if ui.shape_picker_open {
+        if ui.shape_picker.open {
             let picker_rect = self.shape_picker_rect(viewport_width, viewport_height);
             let picker = ShapePicker::for_editor_ui(&self.editor_state.editor_ui);
             let mut cx = PaintCx {
@@ -349,7 +348,7 @@ impl WidgetHostNative {
 
         // 10. LocalePicker — top-most overlay so it covers chat /
         //     toolbar / status when open.
-        if ui.locale_picker_open {
+        if ui.locale_picker.open {
             let picker_rect = self.locale_picker_rect(viewport_width);
             let picker = LocalePicker::for_editor_ui(&self.editor_state.editor_ui);
             let mut cx = PaintCx {

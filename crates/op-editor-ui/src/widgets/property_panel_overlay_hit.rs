@@ -6,8 +6,29 @@
 use crate::widgets::property_panel::PropertyPanel;
 use crate::widgets::{property_panel_image_assets, property_panel_typography};
 use crate::{Point2D, Rect};
+use jian_widgets::components::select::SelectHit;
 
 impl PropertyPanel {
+    pub fn fill_type_picker_hit(&self, panel_rect: Rect, point: Point2D) -> SelectHit {
+        if !self.fill_type_picker.open {
+            return SelectHit::Outside;
+        }
+        crate::widgets::property_panel_fill::fill_type_picker_hit(
+            &self.fill_type_picker,
+            self.scrolled_rect(panel_rect),
+            self.visible_sections(),
+            point,
+            &self.theme,
+        )
+    }
+
+    pub fn fill_type_picker_row_at(&self, panel_rect: Rect, point: Point2D) -> Option<usize> {
+        match self.fill_type_picker_hit(panel_rect, point) {
+            SelectHit::Row(idx) => Some(idx),
+            SelectHit::Inside | SelectHit::Outside => None,
+        }
+    }
+
     /// Visible font-picker entries for the current search + host
     /// enumeration — paint, hit-test, and the host dispatch resolve
     /// `SetFontFamilyIndex` against this same list.
@@ -21,22 +42,22 @@ impl PropertyPanel {
     /// Whether `point` falls inside the open font-family picker —
     /// the host swallows such presses without closing the popup.
     pub fn font_picker_contains(&self, panel_rect: Rect, point: Point2D) -> bool {
-        if self.is_multi || !self.font_family_picker_open {
+        if self.is_multi || !self.font_picker.open {
             return false;
         }
         let entries = self.font_picker_entries();
         property_panel_typography::font_picker_contains(
+            &self.font_picker,
             self.scrolled_rect(panel_rect),
             self.visible_sections(),
             &entries,
-            self.font_picker_scroll,
             point,
         )
     }
 
     /// Font-picker entry index under `point` (hover tracking).
     pub fn font_picker_entry_index_at(&self, panel_rect: Rect, point: Point2D) -> Option<usize> {
-        if self.is_multi || !self.font_family_picker_open {
+        if self.is_multi || !self.font_picker.open {
             return None;
         }
         let entries = self.font_picker_entries();
@@ -44,7 +65,7 @@ impl PropertyPanel {
             self.scrolled_rect(panel_rect),
             self.visible_sections(),
             &entries,
-            self.font_picker_scroll,
+            &self.font_picker,
             point,
         )
     }

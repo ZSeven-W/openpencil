@@ -25,11 +25,21 @@ impl WidgetHostNative {
         else {
             return false;
         };
-        let hit = ComponentBrowserPanel::for_editor(&self.editor_state)
-            .and_then(|p| p.hit_test(panel_rect, Point2D::new(x, y)));
-        let Some(hit) = hit else {
+        let point = Point2D::new(x, y);
+        let Some((hit, pressed_button)) = ComponentBrowserPanel::for_editor(&self.editor_state)
+            .and_then(|p| {
+                Some((
+                    p.hit_test(panel_rect, point)?,
+                    p.hover_at(panel_rect, point),
+                ))
+            })
+        else {
             return false;
         };
+        if let Some(button) = pressed_button {
+            self.editor_state.editor_ui.pressed_button =
+                Some(op_editor_core::ButtonPressTarget::ComponentBrowser(button));
+        }
         match hit {
             ComponentBrowserHit::Close => {
                 let ui = &mut self.editor_state.editor_ui;

@@ -2,8 +2,7 @@
 
 use crate::theme::Theme;
 use crate::widgets::property_panel_inputs::{
-    paint_section_divider, paint_section_label, to_jian_color, INPUT_HEIGHT, INPUT_RADIUS, PAD_X,
-    SECTION_GAP,
+    paint_section_divider, paint_section_label, INPUT_HEIGHT, INPUT_RADIUS, PAD_X, SECTION_GAP,
 };
 use crate::widgets::property_panel_sections::{EditContext, PropertyLabels};
 use crate::widgets::property_panel_snapshot::{EllipseArcSummary, NodeSnapshot};
@@ -146,43 +145,59 @@ fn paint_labeled_input(
         prefix,
         "system-ui",
         12.0,
-        to_jian_color(theme.muted_foreground),
+        (theme.muted_foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend
         .draw_text(&prefix_layout, Point2D::new(prefix_x, baseline_y));
     let prefix_w = cx.backend.measure_text(prefix, 12.0);
     let value_x = prefix_x + prefix_w + 8.0;
-    edit.paint_selection_at(
+    if !edit.paint_input_view_at(
         cx,
         theme,
         focus,
-        value,
-        value_x,
+        Rect {
+            origin: Point2D::new(value_x, rect.origin.y),
+            size: Point2D::new(
+                (rect.origin.x + rect.size.x - 18.0 - value_x).max(0.0),
+                rect.size.y,
+            ),
+        },
+        12.0,
+        0.0,
         baseline_y,
-        12.0,
-        rect.origin.x + rect.size.x - 8.0,
-    );
-    let value_layout = TextLayout::single_run(
-        value,
-        "system-ui",
-        12.0,
-        to_jian_color(theme.foreground),
-        Point2D::new(0.0, 0.0),
-    );
-    cx.backend
-        .draw_text(&value_layout, Point2D::new(value_x, baseline_y));
-    if let Some(pos) = edit.caret_at(focus) {
-        let w = cx
-            .backend
-            .measure_text(&value[..pos.min(value.len())], 12.0);
-        cx.backend.fill_rect(
-            Rect {
-                origin: Point2D::new(value_x + w, rect.origin.y + 6.0),
-                size: Point2D::new(1.5, INPUT_HEIGHT - 12.0),
-            },
-            theme.foreground,
+    ) {
+        edit.paint_selection_at(
+            cx,
+            theme,
+            focus,
+            value,
+            value_x,
+            baseline_y,
+            12.0,
+            rect.origin.x + rect.size.x - 8.0,
         );
+        let value_layout = TextLayout::single_run(
+            value,
+            "system-ui",
+            12.0,
+            (theme.foreground).to_jian(),
+            Point2D::new(0.0, 0.0),
+        );
+        cx.backend
+            .draw_text(&value_layout, Point2D::new(value_x, baseline_y));
+        if let Some(pos) = edit.caret_at(focus) {
+            let w = cx
+                .backend
+                .measure_text(&value[..pos.min(value.len())], 12.0);
+            cx.backend.fill_rect(
+                Rect {
+                    origin: Point2D::new(value_x + w, rect.origin.y + 6.0),
+                    size: Point2D::new(1.5, INPUT_HEIGHT - 12.0),
+                },
+                theme.foreground,
+            );
+        }
     }
     if let Some(unit) = suffix {
         let value_w = cx.backend.measure_text(value, 12.0);
@@ -190,7 +205,7 @@ fn paint_labeled_input(
             unit,
             "system-ui",
             12.0,
-            to_jian_color(theme.muted_foreground),
+            (theme.muted_foreground).to_jian(),
             Point2D::new(0.0, 0.0),
         );
         cx.backend.draw_text(

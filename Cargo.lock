@@ -2151,6 +2151,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "jian-widgets"
+version = "0.0.1"
+dependencies = [
+ "glam",
+ "jian-core",
+]
+
+[[package]]
 name = "jni"
 version = "0.22.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2956,6 +2964,7 @@ version = "0.8.0"
 dependencies = [
  "futures-util",
  "op-ai",
+ "op-rpc-transport",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
@@ -2987,7 +2996,10 @@ dependencies = [
 name = "op-cli"
 version = "0.8.0"
 dependencies = [
+ "op-config-store",
  "op-figma",
+ "op-process-io",
+ "op-rpc-transport",
  "serde_json",
 ]
 
@@ -3002,6 +3014,14 @@ dependencies = [
  "serde",
  "serde_json",
  "zip",
+]
+
+[[package]]
+name = "op-config-store"
+version = "0.8.0"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -3020,8 +3040,22 @@ dependencies = [
  "glam",
  "jian-core",
  "jian-ops-schema",
+ "jian-widgets",
  "op-ai",
  "op-i18n",
+ "serde_json",
+]
+
+[[package]]
+name = "op-editor-host-core"
+version = "0.8.0"
+dependencies = [
+ "jian-ops-schema",
+ "op-ai",
+ "op-ai-skills",
+ "op-codegen",
+ "op-editor-core",
+ "op-orchestrator",
  "serde_json",
 ]
 
@@ -3035,6 +3069,7 @@ dependencies = [
  "glam",
  "jian-core",
  "jian-ops-schema",
+ "jian-widgets",
  "op-editor-core",
  "op-i18n",
  "serde",
@@ -3057,8 +3092,8 @@ dependencies = [
 name = "op-git"
 version = "0.8.0"
 dependencies = [
- "dirs 5.0.1",
  "git2",
+ "op-config-store",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
@@ -3089,8 +3124,10 @@ dependencies = [
  "op-ai",
  "op-ai-skills",
  "op-codegen",
+ "op-config-store",
  "op-design-lint",
  "op-editor-core",
+ "op-editor-host-core",
  "op-editor-ui",
  "op-figma",
  "op-git",
@@ -3100,6 +3137,7 @@ dependencies = [
  "op-opmerge",
  "op-orchestrator",
  "op-pen-loader",
+ "op-process-io",
  "reqwest 0.12.28",
  "rfd",
  "serde",
@@ -3146,6 +3184,7 @@ dependencies = [
  "op-ai",
  "op-codegen",
  "op-editor-core",
+ "op-editor-host-core",
  "op-editor-ui",
  "op-figma",
  "op-pen-loader",
@@ -3210,6 +3249,21 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_stacker",
+]
+
+[[package]]
+name = "op-process-io"
+version = "0.8.0"
+dependencies = [
+ "tokio",
+]
+
+[[package]]
+name = "op-rpc-transport"
+version = "0.8.0"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

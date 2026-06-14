@@ -6,10 +6,14 @@
 
 use crate::theme::Theme;
 use crate::widgets::brand_icons::{paint_brand_logo, paint_opencode_logo, BrandLogo};
+use crate::widgets::button::paint_button_feedback_wash;
 use crate::widgets::icons::{draw_icon, Icon};
-use crate::widgets::property_panel_inputs::to_jian_color;
+use crate::widgets::property_panel_text_input::paint_text_input_view_value;
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
+use jian_core::text_input::TextInputState;
+pub use jian_widgets::components::select::SelectHit;
+use jian_widgets::components::select::SelectState;
 use op_editor_core::chat::{AgentProvider, ModelEntry};
 
 /// Height of a provider group-header row.
@@ -183,37 +187,65 @@ pub fn model_at(
     scroll: f32,
     search: &str,
 ) -> Option<usize> {
+    let mut state = SelectState::default();
+    state.open = true;
+    state.scroll.offset = scroll;
+    match model_picker_hit(&state, rect, point, models, search) {
+        SelectHit::Row(index) => Some(index),
+        SelectHit::Inside | SelectHit::Outside => None,
+    }
+}
+
+/// Shared select-style hit protocol for the searchable model picker.
+/// Search/header/empty/padding chrome returns `Inside`; model rows
+/// return `Row(index)` where `index` addresses `available_models`.
+pub fn model_picker_hit(
+    state: &SelectState,
+    rect: Rect,
+    point: Point2D,
+    models: &[ModelEntry],
+    search: &str,
+) -> SelectHit {
+    if !state.open {
+        return SelectHit::Outside;
+    }
     if point.x < rect.origin.x
         || point.x > rect.origin.x + rect.size.x
         || point.y < rect.origin.y
         || point.y > rect.origin.y + rect.size.y
     {
-        return None;
+        return SelectHit::Outside;
     }
     let list_rect = model_list_rect(rect);
     if point.y < list_rect.origin.y {
-        return None;
+        return SelectHit::Inside;
     }
-    let mut hit = None;
+    let mut hit = SelectHit::Inside;
     // Walk from a scroll-shifted origin — the same offset paint
     // applies via `translate` — then keep only hits whose row band
     // actually falls inside the (unscrolled) card rect.
-    walk_rows(models, search, list_rect.origin.y - scroll, |row, y, h| {
-        if let Row::Model { idx, .. } = row {
+    walk_rows(
+        models,
+        search,
+        list_rect.origin.y - state.scroll.offset,
+        |row, y, h| {
             if point.y >= y
                 && point.y < y + h
                 && point.y >= list_rect.origin.y
                 && point.y <= rect.origin.y + rect.size.y
             {
-                hit = Some(*idx);
+                hit = match row {
+                    Row::Model { idx, .. } => SelectHit::Row(*idx),
+                    Row::Header { .. } => SelectHit::Inside,
+                };
             }
-        }
-    });
+        },
+    );
     hit
 }
 
 pub fn search_clear_hit(rect: Rect, point: Point2D, search: &str) -> bool {
-    !search.is_empty() && rect_contains(search_clear_rect(rect), point)
+    !search.is_empty() && (search_clear_rect(rect)).contains(point)
 }
 
 fn model_list_rect(rect: Rect) -> Rect {
@@ -230,13 +262,6 @@ fn search_clear_rect(rect: Rect) -> Rect {
     }
 }
 
-fn rect_contains(rect: Rect, point: Point2D) -> bool {
-    point.x >= rect.origin.x
-        && point.x <= rect.origin.x + rect.size.x
-        && point.y >= rect.origin.y
-        && point.y <= rect.origin.y + rect.size.y
-}
-
 /// Paint the dropdown card + grouped rows. `selected` is the index
 /// of the active model (gets a check mark), `hover` the index of the
 /// row under the cursor (gets a hover wash). `rect` is the painted
@@ -249,31 +274,21 @@ pub fn paint_model_picker(
     rect: Rect,
     models: &[ModelEntry],
     selected: usize,
-    scroll: f32,
-    hover: Option<usize>,
-    search: &str,
-    caret: Option<usize>,
-    select_all: bool,
+    state: &SelectState,
+    input: &TextInputState,
     now_ms: u64,
-    caret_anchor_ms: u64,
     locale: op_editor_core::Locale,
 ) {
+    let search = input.text();
+    let scroll = state.scroll.offset;
+    let hover = state.hover;
+    let pressed = state.pressed;
     // Card background + border — painted unscrolled so the frame
     // stays put while the rows scroll inside it.
     cx.backend.fill_round_rect(rect, 10.0, theme.card);
     cx.backend.stroke_round_rect(rect, 10.0, theme.border, 1.0);
     let row_left = rect.origin.x + 12.0;
-    paint_search_row(
-        cx,
-        theme,
-        rect,
-        search,
-        caret,
-        select_all,
-        now_ms,
-        caret_anchor_ms,
-        locale,
-    );
+    paint_search_row(cx, theme, rect, input, now_ms, locale);
     let list_rect = model_list_rect(rect);
     if visible_model_indices(models, search).is_empty() {
         let empty = op_i18n::translate(locale, "ai.noModelsFound");
@@ -281,7 +296,7 @@ pub fn paint_model_picker(
             empty,
             "system-ui",
             12.0,
-            to_jian_color(theme.muted_foreground),
+            (theme.muted_foreground).to_jian(),
             Point2D::new(0.0, 0.0),
         );
         let w = cx.backend.measure_text(empty, 12.0);
@@ -334,7 +349,7 @@ pub fn paint_model_picker(
                 label,
                 "system-ui",
                 10.0,
-                to_jian_color(theme.muted_foreground),
+                (theme.muted_foreground).to_jian(),
                 Point2D::new(0.0, 0.0),
             );
             cx.backend
@@ -346,16 +361,20 @@ pub fn paint_model_picker(
         } => {
             let is_selected = *idx == selected;
             let is_hovered = hover == Some(*idx);
-            // Hover wash on any non-selected row the cursor is over;
+            let is_pressed = pressed == Some(*idx);
+            // Feedback wash on any non-selected row the cursor is over/pressing;
             // the selected row keeps its own `muted` fill below.
-            if is_hovered && !is_selected {
-                cx.backend.fill_round_rect(
+            if (is_hovered || is_pressed) && !is_selected {
+                paint_button_feedback_wash(
+                    cx.backend,
+                    theme,
                     Rect {
                         origin: Point2D::new(rect.origin.x + 4.0, y + 1.0),
                         size: Point2D::new(rect.size.x - 8.0, h - 2.0),
                     },
                     6.0,
-                    theme.button_hover,
+                    is_hovered,
+                    is_pressed,
                 );
             }
             if is_selected {
@@ -389,7 +408,7 @@ pub fn paint_model_picker(
                 name,
                 "system-ui",
                 12.0,
-                to_jian_color(color),
+                (color).to_jian(),
                 Point2D::new(0.0, 0.0),
             );
             cx.backend
@@ -421,19 +440,14 @@ pub fn paint_model_picker(
     // unscrolled card space. Shown only when the content overflows.
     let content_h = picker_list_height(models, search);
     let view_h = list_rect.size.y;
-    if content_h > view_h + 0.5 {
-        let track_h = view_h - 8.0;
-        let thumb_h = (track_h * view_h / content_h).max(24.0);
-        let max_scroll = (content_h - view_h).max(0.0);
-        let t = if max_scroll > 0.0 {
-            (scroll / max_scroll).clamp(0.0, 1.0)
-        } else {
-            0.0
-        };
-        let thumb_y = list_rect.origin.y + 4.0 + t * (track_h - thumb_h);
+    let track_h = (view_h - 8.0).max(0.0);
+    if let Some(thumb_geom) =
+        (jian_core::scroll::ScrollState { offset: scroll }).thumb(track_h, content_h, view_h, 24.0)
+    {
+        let thumb_y = list_rect.origin.y + 4.0 + thumb_geom.offset;
         let thumb = Rect {
             origin: Point2D::new(rect.origin.x + rect.size.x - 6.0, thumb_y),
-            size: Point2D::new(3.0, thumb_h),
+            size: Point2D::new(3.0, thumb_geom.len),
         };
         cx.backend
             .fill_round_rect(thumb, 1.5, theme.muted_foreground);
@@ -445,13 +459,11 @@ fn paint_search_row(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
     rect: Rect,
-    search: &str,
-    caret: Option<usize>,
-    select_all: bool,
+    input: &TextInputState,
     now_ms: u64,
-    caret_anchor_ms: u64,
     locale: op_editor_core::Locale,
 ) {
+    let raw = input.text();
     let divider_y = rect.origin.y + MODEL_SEARCH_H - 0.5;
     cx.backend.fill_rect(
         Rect {
@@ -465,7 +477,7 @@ fn paint_search_row(
         size: Point2D::new(rect.size.x - 16.0, 24.0),
     };
     cx.backend
-        .fill_round_rect(search_rect, 6.0, with_alpha(theme.muted, 0.5));
+        .fill_round_rect(search_rect, 6.0, (theme.muted).with_alpha(0.5));
     draw_icon(
         cx.backend,
         Icon::Search,
@@ -474,52 +486,33 @@ fn paint_search_row(
         theme.muted_foreground,
         1.4,
     );
-    let raw = search;
-    let (label, color) = if raw.is_empty() {
-        (
-            op_i18n::translate(locale, "ai.searchModels"),
-            theme.muted_foreground,
-        )
-    } else {
-        (raw, theme.foreground)
-    };
-    let layout = TextLayout::single_run(
-        label,
-        "system-ui",
-        12.0,
-        to_jian_color(color),
-        Point2D::new(0.0, 0.0),
-    );
     let text_x = search_rect.origin.x + 28.0;
-    if select_all && !raw.is_empty() {
-        crate::widgets::text_selection::paint_single_line_selection(
-            cx,
-            theme,
-            raw,
-            text_x,
-            search_rect.origin.y + 17.0,
+    let input_rect = Rect {
+        origin: Point2D::new(text_x, search_rect.origin.y),
+        size: Point2D::new((search_rect.size.x - 52.0).max(0.0), search_rect.size.y),
+    };
+    if raw.is_empty() {
+        let placeholder = op_i18n::translate(locale, "ai.searchModels");
+        let layout = TextLayout::single_run(
+            placeholder,
+            "system-ui",
             12.0,
-            search_rect.origin.x + search_rect.size.x - 24.0,
+            (theme.muted_foreground).to_jian(),
+            Point2D::new(0.0, 0.0),
         );
+        cx.backend
+            .draw_text(&layout, Point2D::new(text_x, search_rect.origin.y + 17.0));
     }
-    cx.backend
-        .draw_text(&layout, Point2D::new(text_x, search_rect.origin.y + 17.0));
-    if jian_core::anim::blink_visible(now_ms, caret_anchor_ms, 500) {
-        let caret_x = if raw.is_empty() {
-            text_x - 4.0
-        } else {
-            let caret = clamp_caret(raw, caret.unwrap_or(raw.len()));
-            text_x + cx.backend.measure_text(&raw[..caret], 12.0) + 1.0
-        };
-        let caret_x = caret_x.min(search_rect.origin.x + search_rect.size.x - 24.0);
-        cx.backend.fill_rect(
-            Rect {
-                origin: Point2D::new(caret_x, search_rect.origin.y + 4.5),
-                size: Point2D::new(1.5, 15.0),
-            },
-            theme.foreground,
-        );
-    }
+    paint_text_input_view_value(
+        cx,
+        theme,
+        input,
+        input_rect,
+        12.0,
+        0.0,
+        search_rect.origin.y + 17.0,
+        now_ms,
+    );
     if !raw.is_empty() {
         draw_icon(
             cx.backend,
@@ -535,14 +528,6 @@ fn paint_search_row(
     }
 }
 
-fn clamp_caret(value: &str, pos: usize) -> usize {
-    let mut pos = pos.min(value.len());
-    while pos > 0 && !value.is_char_boundary(pos) {
-        pos -= 1;
-    }
-    pos
-}
-
 fn paint_badge(cx: &mut PaintCx<'_>, theme: &Theme, text: &str, right_x: f32, y: f32) {
     let w = cx.backend.measure_text(text, 9.0) + 8.0;
     let rect = Rect {
@@ -554,17 +539,13 @@ fn paint_badge(cx: &mut PaintCx<'_>, theme: &Theme, text: &str, right_x: f32, y:
         text,
         "system-ui",
         9.0,
-        to_jian_color(theme.muted_foreground),
+        (theme.muted_foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
         &layout,
         Point2D::new(rect.origin.x + 4.0, rect.origin.y + 11.0),
     );
-}
-
-fn with_alpha(color: Color, a: f32) -> Color {
-    Color { a, ..color }
 }
 
 pub(crate) fn paint_key_glyph(cx: &mut PaintCx<'_>, top_left: Point2D, size: f32, color: Color) {

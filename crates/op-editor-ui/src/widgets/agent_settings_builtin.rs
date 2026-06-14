@@ -1,16 +1,13 @@
 //! Built-in provider section for the Agent settings panel.
 
 use crate::theme::Theme;
-use crate::widgets::agent_settings_builtin_draft;
 use crate::widgets::agent_settings_builtin_layout::{
     add_provider_rect, card_height, card_rect, compact_edit_rect, compact_remove_rect,
     compact_switch_rect, draft_card_height, expanded_card_height, field_input_rect, is_editing,
-    rect_contains, CARD_GAP, EMPTY_HEIGHT, HEADER_HEIGHT, SUBTITLE_HEIGHT,
+    CARD_GAP, EMPTY_HEIGHT, HEADER_HEIGHT, SUBTITLE_HEIGHT,
 };
 use crate::widgets::agent_settings_builtin_parts;
-use crate::widgets::agent_settings_caret::{
-    caret_x_for_text, paint_caret, paint_settings_selection, settings_caret_for_focus,
-};
+use crate::widgets::agent_settings_caret::{paint_settings_input_view, settings_input_text};
 use crate::widgets::agent_settings_form_actions::{
     cancel_button_rect, paint_form_actions, save_button_rect,
 };
@@ -20,6 +17,7 @@ use crate::widgets::agent_settings_header_action::{
 use crate::widgets::agent_settings_i18n::t as t_settings;
 use crate::widgets::agent_settings_switch::paint_settings_switch;
 use crate::widgets::brand_icons::{paint_brand_logo, BrandLogo};
+use crate::widgets::button::paint_ghost_button_feedback;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
@@ -28,7 +26,7 @@ use op_editor_core::agent_settings::{
     BuiltinAgentPresetMenuTarget, SettingsFocus,
 };
 use op_editor_core::editor_ui_state::EditorUiState;
-use op_editor_core::BuiltinAgentPresetKey;
+use op_editor_core::{AgentSettingsButton, BuiltinAgentPresetKey, ButtonPressTarget};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BuiltinHit {
@@ -76,7 +74,7 @@ pub fn content_height(settings: &AgentSettings) -> f32 {
 
 pub fn hit_test(content: Rect, settings: &AgentSettings, point: Point2D) -> BuiltinHit {
     let y = content.origin.y + 12.0;
-    if rect_contains(add_provider_rect(content, y), point) {
+    if (add_provider_rect(content, y)).contains(point) {
         return BuiltinHit::AddProvider;
     }
     let mut card_y = y + HEADER_HEIGHT + SUBTITLE_HEIGHT;
@@ -88,10 +86,7 @@ pub fn hit_test(content: Rect, settings: &AgentSettings, point: Point2D) -> Buil
             card_height(settings, index),
         );
         if is_editing(settings, index) {
-            if rect_contains(
-                agent_settings_builtin_parts::provider_select_rect(card),
-                point,
-            ) {
+            if (agent_settings_builtin_parts::provider_select_rect(card)).contains(point) {
                 return BuiltinHit::TogglePresetMenu(Some(index));
             }
             if settings.builtin_preset_menu_open == Some(BuiltinAgentPresetMenuTarget::Agent(index))
@@ -99,7 +94,7 @@ pub fn hit_test(content: Rect, settings: &AgentSettings, point: Point2D) -> Buil
                 if let Some(preset) = agent_settings_builtin_parts::preset_at(
                     card,
                     point,
-                    settings.builtin_preset_menu_scroll,
+                    settings.builtin_preset_menu_scroll.offset,
                 ) {
                     return BuiltinHit::SelectPreset {
                         index: Some(index),
@@ -122,18 +117,17 @@ pub fn hit_test(content: Rect, settings: &AgentSettings, point: Point2D) -> Buil
                 if field == BuiltinAgentField::BaseUrl && !agent.base_url_editable() {
                     continue;
                 }
-                if rect_contains(field_input_rect(settings, card, Some(index), row), point) {
+                if (field_input_rect(settings, card, Some(index), row)).contains(point) {
                     return BuiltinHit::Focus { index, field };
                 }
             }
-        } else if rect_contains(compact_switch_rect(card), point) {
+        } else if (compact_switch_rect(card)).contains(point) {
             return BuiltinHit::ToggleEnabled(index);
-        } else if settings.hover_builtin_agent == index
-            && rect_contains(compact_edit_rect(card), point)
+        } else if settings.hover_builtin_agent == index && (compact_edit_rect(card)).contains(point)
         {
             return BuiltinHit::Edit(index);
         } else if settings.hover_builtin_agent == index
-            && rect_contains(compact_remove_rect(card), point)
+            && (compact_remove_rect(card)).contains(point)
         {
             return BuiltinHit::Remove(index);
         }
@@ -146,17 +140,14 @@ pub fn hit_test(content: Rect, settings: &AgentSettings, point: Point2D) -> Buil
             content.size.x,
             draft_card_height(settings),
         );
-        if rect_contains(
-            agent_settings_builtin_parts::provider_select_rect(card),
-            point,
-        ) {
+        if (agent_settings_builtin_parts::provider_select_rect(card)).contains(point) {
             return BuiltinHit::TogglePresetMenu(None);
         }
         if settings.builtin_preset_menu_open == Some(BuiltinAgentPresetMenuTarget::Draft) {
             if let Some(preset) = agent_settings_builtin_parts::preset_at(
                 card,
                 point,
-                settings.builtin_preset_menu_scroll,
+                settings.builtin_preset_menu_scroll.offset,
             ) {
                 return BuiltinHit::SelectPreset {
                     index: None,
@@ -179,15 +170,15 @@ pub fn hit_test(content: Rect, settings: &AgentSettings, point: Point2D) -> Buil
             if field == BuiltinAgentField::BaseUrl && !agent.base_url_editable() {
                 continue;
             }
-            if rect_contains(field_input_rect(settings, card, None, row), point) {
+            if (field_input_rect(settings, card, None, row)).contains(point) {
                 return BuiltinHit::FocusDraft(field);
             }
         }
         let form_h = expanded_card_height(settings, None);
-        if rect_contains(save_button_rect(card, form_h), point) {
+        if (save_button_rect(card, form_h)).contains(point) {
             return BuiltinHit::SaveDraft;
         }
-        if rect_contains(cancel_button_rect(card, form_h), point) {
+        if (cancel_button_rect(card, form_h)).contains(point) {
             return BuiltinHit::CancelDraft;
         }
     }
@@ -203,7 +194,7 @@ pub fn card_at(content: Rect, settings: &AgentSettings, point: Point2D) -> Optio
             content.size.x,
             card_height(settings, index),
         );
-        if rect_contains(card, point) {
+        if (card).contains(point) {
             return Some(index);
         }
         card_y += card.size.y + CARD_GAP;
@@ -217,7 +208,11 @@ pub fn preset_hover_at(
     point: Point2D,
 ) -> Option<BuiltinAgentPresetKey> {
     let card = open_preset_menu_card(content, settings, point)?;
-    agent_settings_builtin_parts::preset_hover_at(card, point, settings.builtin_preset_menu_scroll)
+    agent_settings_builtin_parts::preset_hover_at(
+        card,
+        point,
+        settings.builtin_preset_menu_scroll.offset,
+    )
 }
 
 pub fn preset_scroll_max_at(
@@ -281,6 +276,9 @@ pub fn paint_builtin_section(
             w: content.size.x,
         },
         settings.hover_add_provider,
+        ui.button_pressed(ButtonPressTarget::AgentSettings(
+            AgentSettingsButton::AddProvider,
+        )),
     );
     y = paint_subtitle(
         cx,
@@ -324,7 +322,13 @@ pub fn paint_builtin_section(
             ui,
             card,
             form_h,
-            agent_settings_builtin_draft::ready(settings, ui),
+            ui.builtin_agent_draft_ready(),
+            ui.button_pressed(ButtonPressTarget::AgentSettings(
+                AgentSettingsButton::BuiltinCancelDraft,
+            )),
+            ui.button_pressed(ButtonPressTarget::AgentSettings(
+                AgentSettingsButton::BuiltinSaveDraft,
+            )),
         );
         y += card.size.y + CARD_GAP;
     }
@@ -345,12 +349,13 @@ fn paint_header(
     action: &str,
     frame: HeaderFrame,
     action_hover: bool,
+    action_pressed: bool,
 ) -> f32 {
     let layout = TextLayout::single_run(
         title,
         "system-ui",
         15.0,
-        to_jian(theme.foreground),
+        (theme.foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend
@@ -364,15 +369,12 @@ fn paint_header(
         frame.y,
         action_w,
     );
-    if action_hover {
-        cx.backend
-            .fill_round_rect(action_rect, 6.0, theme.button_hover);
-    }
+    paint_ghost_button_feedback(cx.backend, theme, action_rect, action_hover, action_pressed);
     let act = TextLayout::single_run(
         action,
         "system-ui",
         12.0,
-        to_jian(theme.primary),
+        (theme.primary).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
@@ -390,7 +392,7 @@ fn paint_subtitle(cx: &mut PaintCx<'_>, theme: &Theme, text: &str, x: f32, y: f3
         text,
         "system-ui",
         12.0,
-        to_jian(theme.muted_foreground),
+        (theme.muted_foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(&layout, Point2D::new(x, y + 16.0));
@@ -403,7 +405,7 @@ fn paint_empty(cx: &mut PaintCx<'_>, theme: &Theme, text: &str, x: f32, y: f32, 
         text,
         "system-ui",
         13.0,
-        to_jian(theme.muted_foreground),
+        (theme.muted_foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend
@@ -610,6 +612,9 @@ fn paint_compact_builtin_agent_card(
             compact_edit_rect(card),
             Icon::Pencil,
             theme.muted_foreground,
+            ui.button_pressed(ButtonPressTarget::AgentSettings(
+                AgentSettingsButton::BuiltinEdit(index),
+            )),
         );
         paint_action(
             cx,
@@ -617,6 +622,9 @@ fn paint_compact_builtin_agent_card(
             compact_remove_rect(card),
             Icon::Trash,
             theme.muted_foreground,
+            ui.button_pressed(ButtonPressTarget::AgentSettings(
+                AgentSettingsButton::BuiltinRemove(index),
+            )),
         );
     }
 }
@@ -639,17 +647,14 @@ fn paint_field(
         None => SettingsFocus::BuiltinAgentDraft(field),
     };
     let focused = settings.focus == Some(focus);
-    let value = if focused {
-        ui.settings_input_draft.as_str()
-    } else {
-        match field {
-            BuiltinAgentField::DisplayName => agent.display_name.as_str(),
-            BuiltinAgentField::ApiKey if !agent.api_key.is_empty() => "********",
-            BuiltinAgentField::ApiKey => "",
-            BuiltinAgentField::Model => agent.model.as_str(),
-            BuiltinAgentField::BaseUrl => agent.base_url.as_str(),
-        }
+    let fallback = match field {
+        BuiltinAgentField::DisplayName => agent.display_name.as_str(),
+        BuiltinAgentField::ApiKey if !agent.api_key.is_empty() => "********",
+        BuiltinAgentField::ApiKey => "",
+        BuiltinAgentField::Model => agent.model.as_str(),
+        BuiltinAgentField::BaseUrl => agent.base_url.as_str(),
     };
+    let value = settings_input_text(settings, ui, focus, fallback);
     let label = match field {
         BuiltinAgentField::DisplayName => "Name",
         BuiltinAgentField::ApiKey => "API Key",
@@ -682,48 +687,32 @@ fn paint_field(
         if focused { theme.primary } else { theme.border },
         1.0,
     );
-    let clipped = ellipsize(cx, value, input.size.x - 12.0, 11.0);
     let text_x = input.origin.x + 6.0;
-    if focused && ui.settings_input_select_all && !value.is_empty() {
-        paint_settings_selection(
+    if focused {
+        paint_settings_input_view(
             cx,
             theme,
-            value,
+            ui,
+            input,
+            11.0,
+            text_x - input.origin.x,
+            input.origin.y + 16.0,
+            now_ms,
+            "",
+        );
+    } else {
+        let clipped = ellipsize(cx, value, input.size.x - 12.0, 11.0);
+        draw_text(
+            cx,
+            &clipped,
+            11.0,
+            if editable {
+                theme.foreground
+            } else {
+                theme.muted_foreground
+            },
             text_x,
             input.origin.y + 16.0,
-            11.0,
-            input.origin.x + input.size.x - 8.0,
-        );
-    }
-    draw_text(
-        cx,
-        &clipped,
-        11.0,
-        if editable {
-            theme.foreground
-        } else {
-            theme.muted_foreground
-        },
-        text_x,
-        input.origin.y + 16.0,
-    );
-    if focused {
-        let caret = settings_caret_for_focus(ui, focus);
-        let caret_x = caret_x_for_text(
-            cx,
-            value,
-            caret,
-            text_x,
-            input.origin.x + input.size.x - 8.0,
-            11.0,
-        );
-        paint_caret(
-            cx,
-            theme,
-            now_ms,
-            ui.settings_input_caret_anchor_ms,
-            caret_x,
-            input.origin.y + 4.5,
         );
     }
 }
@@ -733,14 +722,21 @@ fn draw_text(cx: &mut PaintCx<'_>, text: &str, size: f32, color: Color, x: f32, 
         text,
         "system-ui",
         size,
-        to_jian(color),
+        (color).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(&layout, Point2D::new(x, y));
 }
 
-fn paint_action(cx: &mut PaintCx<'_>, theme: &Theme, rect: Rect, icon: Icon, color: Color) {
-    cx.backend.fill_round_rect(rect, 6.0, theme.button_hover);
+fn paint_action(
+    cx: &mut PaintCx<'_>,
+    theme: &Theme,
+    rect: Rect,
+    icon: Icon,
+    color: Color,
+    pressed: bool,
+) {
+    paint_ghost_button_feedback(cx.backend, theme, rect, true, pressed);
     draw_icon(
         cx.backend,
         icon,
@@ -768,11 +764,4 @@ fn mask_key(api_key: &str) -> String {
     } else {
         "***".to_string()
     }
-}
-
-fn to_jian(c: Color) -> jian_core::scene::Color {
-    fn ch(v: f32) -> u8 {
-        (v.clamp(0.0, 1.0) * 255.0).round() as u8
-    }
-    jian_core::scene::Color::rgba(ch(c.r), ch(c.g), ch(c.b), ch(c.a))
 }

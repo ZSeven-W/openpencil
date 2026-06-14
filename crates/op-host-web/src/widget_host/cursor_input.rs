@@ -8,7 +8,7 @@
 use op_editor_ui::widgets::TOP_BAR_HEIGHT;
 use op_editor_ui::{Point2D, Rect};
 
-use super::{rect_contains, WidgetHost};
+use super::WidgetHost;
 
 impl WidgetHost {
     /// Sync every agent-settings hover flag from the cursor.
@@ -310,13 +310,11 @@ impl WidgetHost {
         if let Some(state) = self.editor_state.editor_ui.layer_context_menu.clone() {
             use op_editor_ui::widgets::layer_context_menu::LayerContextMenu;
             let menu = LayerContextMenu::for_state(&self.editor_state, state.clone());
-            let new_hover = menu.hovered_row_at(Point2D::new(x, y)).map(|i| i as u8);
-            if new_hover != state.hovered_row {
-                self.editor_state.editor_ui.layer_context_menu =
-                    Some(op_editor_core::editor_ui_state::LayerContextMenuState {
-                        hovered_row: new_hover,
-                        ..state
-                    });
+            let new_hover = menu.hovered_row_at(Point2D::new(x, y));
+            if new_hover != state.menu.hover {
+                let mut next = state;
+                next.menu.hover = new_hover;
+                self.editor_state.editor_ui.layer_context_menu = Some(next);
                 self.mark_dirty();
                 return true;
             }
@@ -439,7 +437,7 @@ impl WidgetHost {
             if let Some(vars_rect) =
                 self.variables_panel_rect(self.last_viewport_w, self.last_viewport_h)
             {
-                if rect_contains(vars_rect, point) {
+                if (vars_rect).contains(point) {
                     let new_hover = VariablesPanel::for_editor_at(&self.editor_state, self.now_ms)
                         .hover_at(vars_rect, point);
                     let changed = new_hover != self.editor_state.editor_ui.variables_panel_hover;
@@ -575,20 +573,21 @@ impl WidgetHost {
                     self.editor_state.editor_ui.property_tab_hover = new_tab_hover;
                     property_hover_changed = true;
                 }
+                let new_fill_type_hover = panel.fill_type_picker_row_at(property_rect, point);
+                if new_fill_type_hover != self.editor_state.editor_ui.fill_type_picker.hover {
+                    self.editor_state.editor_ui.fill_type_picker.hover = new_fill_type_hover;
+                    property_hover_changed = true;
+                }
                 let new_action_hover = panel.action_hover_index(property_rect, point);
                 if new_action_hover != self.editor_state.editor_ui.property_action_hover {
                     self.editor_state.editor_ui.property_action_hover = new_action_hover;
                     property_hover_changed = true;
                 }
             }
-        } else if self
-            .editor_state
-            .editor_ui
-            .property_tab_hover
-            .take()
-            .is_some()
-        {
-            property_hover_changed = true;
+        } else {
+            let ui = &mut self.editor_state.editor_ui;
+            property_hover_changed |= ui.property_tab_hover.take().is_some();
+            property_hover_changed |= ui.fill_type_picker.hover.take().is_some();
         }
         // Code-panel hover wash. Reuses the panel's click geometry for
         // framework chips, scroll chevrons, and body actions.

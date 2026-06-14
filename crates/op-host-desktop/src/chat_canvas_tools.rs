@@ -16,11 +16,11 @@
 //! event loop drains requests each frame (`chat_session::pump`) and
 //! executes via [`execute_chat_tool`] against the canonical state.
 
-use std::sync::mpsc::{Receiver, Sender, SyncSender};
-use std::sync::Mutex;
-
-use op_ai::chat_provider::{ChatToolDef, ChatToolExecutor, ChatToolResult};
+use op_ai::chat_provider::{ChatToolDef, ChatToolResult};
 use op_editor_core::EditorState;
+pub(crate) use op_editor_host_core::chat::{
+    chat_tool_channel, ChatToolRequest, UiChatToolExecutor,
+};
 use op_mcp::{ToolRegistry, ToolResponse};
 
 /// TS `maxTurns` for the chat agent loop (`ai-chat-handlers.ts:254`).
@@ -97,78 +97,6 @@ pub(crate) fn chat_tool_defs() -> Vec<ChatToolDef> {
             r#"{"type":"object","properties":{"nodeId":{"type":"string","description":"Node ID to delete"}},"required":["nodeId"]}"#,
         ),
     ]
-}
-
-/// One tool call forwarded from the agent-loop worker to the UI
-/// thread. The worker blocks on `ack` until the host executed the
-/// call against the live `EditorState`.
-pub(crate) struct ChatToolRequest {
-    pub name: String,
-    pub args_json: String,
-    pub ack: SyncSender<ChatToolResult>,
-}
-
-/// Worker-side [`ChatToolExecutor`] — forwards each call over the
-/// session's tool channel and blocks until the UI thread acks. The
-/// sender rides a `Mutex` because `std::sync::mpsc::Sender` is `Send`
-/// but not `Sync`, while `ChatToolExecutor` objects are shared behind
-/// an `Arc` (`Send + Sync` bound).
-pub(crate) struct UiChatToolExecutor {
-    tx: Mutex<Sender<ChatToolRequest>>,
-}
-
-impl UiChatToolExecutor {
-    pub(crate) fn new(tx: Sender<ChatToolRequest>) -> Self {
-        Self { tx: Mutex::new(tx) }
-    }
-}
-
-impl ChatToolExecutor for UiChatToolExecutor {
-    fn execute(&self, name: &str, args_json: &str) -> ChatToolResult {
-        let (ack_tx, ack_rx) = std::sync::mpsc::sync_channel::<ChatToolResult>(1);
-        let req = ChatToolRequest {
-            name: name.to_string(),
-            args_json: args_json.to_string(),
-            ack: ack_tx,
-        };
-        let sent = match self.tx.lock() {
-            Ok(tx) => tx.send(req).is_ok(),
-            Err(_) => false,
-        };
-        if !sent {
-            return aborted_result();
-        }
-        // The ack sender lives inside the request; if the UI drops the
-        // session (turn aborted), the sender drops and recv errors.
-        // The timeout is a backstop for the pump stalling while the
-        // session still owns the receiver (app shutdown / frozen UI):
-        // the worker must never block a tool turn forever.
-        match ack_rx.recv_timeout(std::time::Duration::from_secs(60)) {
-            Ok(result) => result,
-            Err(_) => timeout_result(),
-        }
-    }
-}
-
-fn timeout_result() -> ChatToolResult {
-    ChatToolResult {
-        content: r#"{"success":false,"error":"tool execution timed out waiting for the editor"}"#
-            .into(),
-        is_error: true,
-    }
-}
-
-fn aborted_result() -> ChatToolResult {
-    ChatToolResult {
-        content: r#"{"success":false,"error":"chat turn aborted before the tool ran"}"#.into(),
-        is_error: true,
-    }
-}
-
-/// Create the worker↔UI tool channel for one chat turn.
-pub(crate) fn chat_tool_channel() -> (UiChatToolExecutor, Receiver<ChatToolRequest>) {
-    let (tx, rx) = std::sync::mpsc::channel::<ChatToolRequest>();
-    (UiChatToolExecutor::new(tx), rx)
 }
 
 /// Execute one chat tool call against the live editor state. Returns
@@ -341,6 +269,7 @@ fn chat_tool_registry(state: &EditorState, requested: &str) -> ToolRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use op_ai::chat_provider::ChatToolExecutor;
 
     #[test]
     fn chat_tool_defs_match_ts_crud_subset_and_auth_levels() {

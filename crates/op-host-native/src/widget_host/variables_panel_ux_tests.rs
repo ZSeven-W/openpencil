@@ -125,7 +125,10 @@ fn color_hex_cell_press_starts_inline_edit_and_commits_to_variant() {
         Some(VariableRowFocus::ColorCell { row: 0, variant: 1 })
     );
     // Draft seeds with the column's 6-char hex (TS toHex7).
-    assert_eq!(host.editor_state().ui.property_input_draft, "#112233");
+    assert_eq!(
+        host.editor_state().editor_ui.variable_row_input.text(),
+        "#112233"
+    );
 
     // Replace with a new full hex and commit on Enter.
     for _ in 0..7 {
@@ -217,9 +220,16 @@ fn row_menu_rename_seeds_select_all_name_focus() {
         host.editor_state().editor_ui.variable_row_focus,
         Some(VariableRowFocus::Name(0))
     );
-    assert_eq!(host.editor_state().ui.property_input_draft, "color-1");
+    assert_eq!(
+        host.editor_state().editor_ui.variable_row_input.text(),
+        "color-1"
+    );
     // TS focuses AND `.select()`s the rename input.
-    assert!(host.editor_state().ui.property_draft_select_all);
+    assert!(host
+        .editor_state()
+        .editor_ui
+        .variable_row_input
+        .is_select_all());
     assert_eq!(host.editor_state().editor_ui.variables_row_menu, None);
 }
 
@@ -322,22 +332,22 @@ fn wheel_over_panel_scrolls_rows_and_clamps() {
 
     // Wheel scroll-down advances the list.
     assert!(host.apply_wheel(cx, cy, -60.0, VIEWPORT_W, VIEWPORT_H));
-    assert!(host.editor_state().editor_ui.variables_scroll > 0.0);
+    assert!(host.editor_state().editor_ui.variables_scroll.offset > 0.0);
 
     // Huge scroll clamps to max.
     assert!(host.apply_wheel(cx, cy, -1.0e6, VIEWPORT_W, VIEWPORT_H));
     let panel = VariablesPanel::for_editor(host.editor_state());
     let max = panel.max_scroll(rect);
     assert!(max > 0.0);
-    assert_eq!(host.editor_state().editor_ui.variables_scroll, max);
+    assert_eq!(host.editor_state().editor_ui.variables_scroll.offset, max);
 
     // Scroll back past the top clamps to 0.
     assert!(host.apply_wheel(cx, cy, 1.0e6, VIEWPORT_W, VIEWPORT_H));
-    assert_eq!(host.editor_state().editor_ui.variables_scroll, 0.0);
+    assert_eq!(host.editor_state().editor_ui.variables_scroll.offset, 0.0);
 
     // A scrolled list maps hits through the offset: with max scroll,
     // the LAST row sits just above the footer.
-    host.editor_state_mut().editor_ui.variables_scroll = max;
+    host.editor_state_mut().editor_ui.variables_scroll.offset = max;
     let panel = VariablesPanel::for_editor(host.editor_state());
     let footer_top = rect.origin.y + rect.size.y - 40.0;
     let hit = panel.hit_test(rect, Point2D::new(rect.origin.x + 60.0, footer_top - 20.0));

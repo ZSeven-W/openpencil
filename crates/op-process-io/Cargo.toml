@@ -1,0 +1,23 @@
+[package]
+name = "op-process-io"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Shared OpenPencil process spawning, line-stream, and shutdown primitives"
+
+[dependencies]
+tokio = { version = "1", default-features = false, features = [
+  "io-util",
+  "process",
+  "time",
+] }
+
+[dev-dependencies]
+tokio = { version = "1", default-features = false, features = [
+  "io-util",
+  "macros",
+  "process",
+  "rt",
+  "time",
+] }

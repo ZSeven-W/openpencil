@@ -3,8 +3,8 @@
 //! `rename_backspace` / `rename_commit` / `rename_cancel`). The
 //! sibling inline canvas text-edit session lives in `text_edit.rs`.
 //!
-//! An inline rename collects keystrokes into
-//! `ui.layer_rename.draft`. `rename_commit` writes the draft into
+//! An inline rename collects keystrokes into the
+//! `ui.layer_rename.input` text state. `rename_commit` writes the draft into
 //! the node's `name` (or the page's `name`) and pushes a single
 //! history entry — but only when the name actually changed, so a
 //! no-op commit doesn't pollute the undo stack.
@@ -14,6 +14,7 @@ use crate::pen_node_ext::PenNodeExt;
 use crate::state::EditorState;
 use crate::ui_draft::{LayerContextTarget, LayerRenameState};
 use crate::walkers::find_node_mut;
+use jian_core::text_input::TextInputState;
 
 impl EditorState {
     // --- Inline rename ----------------------------------------------
@@ -25,12 +26,9 @@ impl EditorState {
             return false;
         };
         let draft = node.base().name.clone().unwrap_or_default();
-        let caret = draft.chars().count();
         self.ui.layer_rename = Some(LayerRenameState {
             target: LayerContextTarget::Layer(id),
-            draft,
-            caret,
-            select_all: false,
+            input: TextInputState::with_text(draft),
         });
         true
     }
@@ -46,12 +44,9 @@ impl EditorState {
             return false;
         };
         let draft = page.name.clone();
-        let caret = draft.chars().count();
         self.ui.layer_rename = Some(LayerRenameState {
             target: LayerContextTarget::Page(idx),
-            draft,
-            caret,
-            select_all: false,
+            input: TextInputState::with_text(draft),
         });
         true
     }
@@ -61,14 +56,7 @@ impl EditorState {
     pub fn rename_append(&mut self, text: &str) -> bool {
         match self.ui.layer_rename.as_mut() {
             Some(state) => {
-                if state.select_all {
-                    state.draft.clear();
-                    state.caret = 0;
-                    state.select_all = false;
-                }
-                let byte = char_to_byte(&state.draft, state.caret);
-                state.draft.insert_str(byte, text);
-                state.caret += text.chars().count();
+                state.input.insert_str(text, 0);
                 true
             }
             None => false,
@@ -80,18 +68,7 @@ impl EditorState {
     pub fn rename_backspace(&mut self) -> bool {
         match self.ui.layer_rename.as_mut() {
             Some(state) => {
-                if state.select_all {
-                    state.draft.clear();
-                    state.caret = 0;
-                    state.select_all = false;
-                    return true;
-                }
-                if state.caret > 0 {
-                    let start = char_to_byte(&state.draft, state.caret - 1);
-                    let end = char_to_byte(&state.draft, state.caret);
-                    state.draft.replace_range(start..end, "");
-                    state.caret -= 1;
-                }
+                state.input.backspace(0);
                 true
             }
             None => false,
@@ -104,8 +81,7 @@ impl EditorState {
     pub fn rename_caret_left(&mut self) -> bool {
         match self.ui.layer_rename.as_mut() {
             Some(state) => {
-                state.select_all = false;
-                state.caret = state.caret.saturating_sub(1);
+                state.input.move_left(false, 0);
                 true
             }
             None => false,
@@ -117,9 +93,7 @@ impl EditorState {
     pub fn rename_caret_right(&mut self) -> bool {
         match self.ui.layer_rename.as_mut() {
             Some(state) => {
-                state.select_all = false;
-                let len = state.draft.chars().count();
-                state.caret = (state.caret + 1).min(len);
+                state.input.move_right(false, 0);
                 true
             }
             None => false,
@@ -134,7 +108,8 @@ impl EditorState {
         let Some(state) = self.ui.layer_rename.take() else {
             return false;
         };
-        if state.draft.trim().is_empty() {
+        let draft = state.input.text().to_owned();
+        if draft.trim().is_empty() {
             return true;
         }
         let snap = self.snapshot_for_history();
@@ -143,8 +118,8 @@ impl EditorState {
             LayerContextTarget::Page(idx) => {
                 if let Some(pages) = self.doc.pages.as_mut() {
                     if let Some(page) = pages.get_mut(idx) {
-                        if page.name != state.draft {
-                            page.name = state.draft;
+                        if page.name != draft {
+                            page.name = draft;
                             changed = true;
                         }
                     }
@@ -153,8 +128,8 @@ impl EditorState {
             LayerContextTarget::Layer(id) => {
                 if let Some(node) = find_node_mut(self.active_children_mut(), &id) {
                     let base = node.base_mut();
-                    if base.name.as_deref() != Some(state.draft.as_str()) {
-                        base.name = Some(state.draft);
+                    if base.name.as_deref() != Some(draft.as_str()) {
+                        base.name = Some(draft);
                         changed = true;
                     }
                 }
@@ -170,19 +145,6 @@ impl EditorState {
     pub fn rename_cancel(&mut self) -> bool {
         self.ui.layer_rename.take().is_some()
     }
-}
-
-// --- Free helpers ----------------------------------------------------
-
-/// Byte offset of the `char_idx`-th character in `s`, or `s.len()`
-/// when `char_idx` is at/after the end. Used to translate the
-/// char-based rename caret into a byte index for `insert_str` /
-/// `replace_range`.
-fn char_to_byte(s: &str, char_idx: usize) -> usize {
-    s.char_indices()
-        .nth(char_idx)
-        .map(|(b, _)| b)
-        .unwrap_or(s.len())
 }
 
 #[cfg(test)]
@@ -203,7 +165,10 @@ mod tests {
     fn rename_layer_round_trip() {
         let mut s = doc();
         assert!(s.start_rename_layer(NodeId::new("n1")));
-        assert_eq!(s.ui.layer_rename.as_ref().unwrap().draft, "Rectangle");
+        assert_eq!(
+            s.ui.layer_rename.as_ref().unwrap().input.text(),
+            "Rectangle"
+        );
         assert!(s.rename_backspace());
         assert!(s.rename_append("X"));
         assert!(s.rename_commit());
@@ -217,30 +182,36 @@ mod tests {
     fn rename_caret_moves_and_edits_mid_string() {
         let mut s = doc();
         assert!(s.start_rename_layer(NodeId::new("n1"))); // "Rectangle", caret 9
-        assert_eq!(s.ui.layer_rename.as_ref().unwrap().caret, 9);
+        assert_eq!(s.ui.layer_rename.as_ref().unwrap().input.caret(), 9);
         // Three lefts → caret 6 ("Rectan|gle").
         assert!(s.rename_caret_left());
         assert!(s.rename_caret_left());
         assert!(s.rename_caret_left());
-        assert_eq!(s.ui.layer_rename.as_ref().unwrap().caret, 6);
+        assert_eq!(s.ui.layer_rename.as_ref().unwrap().input.caret(), 6);
         // Insert mid-string.
         assert!(s.rename_append("X"));
-        assert_eq!(s.ui.layer_rename.as_ref().unwrap().draft, "RectanXgle");
-        assert_eq!(s.ui.layer_rename.as_ref().unwrap().caret, 7);
+        assert_eq!(
+            s.ui.layer_rename.as_ref().unwrap().input.text(),
+            "RectanXgle"
+        );
+        assert_eq!(s.ui.layer_rename.as_ref().unwrap().input.caret(), 7);
         // Backspace removes the just-inserted 'X' (before caret).
         assert!(s.rename_backspace());
-        assert_eq!(s.ui.layer_rename.as_ref().unwrap().draft, "Rectangle");
-        assert_eq!(s.ui.layer_rename.as_ref().unwrap().caret, 6);
+        assert_eq!(
+            s.ui.layer_rename.as_ref().unwrap().input.text(),
+            "Rectangle"
+        );
+        assert_eq!(s.ui.layer_rename.as_ref().unwrap().input.caret(), 6);
         // Right past the end clamps to the char count.
         for _ in 0..20 {
             s.rename_caret_right();
         }
-        assert_eq!(s.ui.layer_rename.as_ref().unwrap().caret, 9);
+        assert_eq!(s.ui.layer_rename.as_ref().unwrap().input.caret(), 9);
         // Left past the start clamps to 0.
         for _ in 0..20 {
             s.rename_caret_left();
         }
-        assert_eq!(s.ui.layer_rename.as_ref().unwrap().caret, 0);
+        assert_eq!(s.ui.layer_rename.as_ref().unwrap().input.caret(), 0);
     }
 
     #[test]
@@ -248,16 +219,17 @@ mod tests {
         let mut s = doc();
         s.ui.layer_rename = Some(crate::ui_draft::LayerRenameState {
             target: crate::ui_draft::LayerContextTarget::Layer(NodeId::new("n1")),
-            draft: "首页".to_string(),
-            caret: 2,
-            select_all: false,
+            input: jian_core::text_input::TextInputState::with_text("首页"),
         });
-        // One left → between the two CJK chars (char index 1, byte 3).
+        // One left → between the two CJK chars (byte offset 3).
         assert!(s.rename_caret_left());
-        assert_eq!(s.ui.layer_rename.as_ref().unwrap().caret, 1);
+        assert_eq!(
+            s.ui.layer_rename.as_ref().unwrap().input.caret(),
+            "首".len()
+        );
         // Insert lands on the char boundary, not mid-codepoint.
         assert!(s.rename_append("X"));
-        assert_eq!(s.ui.layer_rename.as_ref().unwrap().draft, "首X页");
+        assert_eq!(s.ui.layer_rename.as_ref().unwrap().input.text(), "首X页");
     }
 
     #[test]

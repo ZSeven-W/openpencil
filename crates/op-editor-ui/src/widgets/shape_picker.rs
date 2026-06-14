@@ -3,7 +3,7 @@
 //! `apps/web/src/components/editor/shape-tool-dropdown.tsx`).
 //!
 //! Anchored to the right of the Toolbar shape slot when
-//! `Document.ui.shape_picker_open == true`. Picking a row sets
+//! `Document.ui.shape_picker.open == true`. Picking a row sets
 //! `ui.shape_tool` (drives the toolbar slot's icon), sets
 //! `doc.tool` (active tool), and closes the panel. Two of the
 //! seven rows are one-shot actions rather than tool changes:
@@ -12,17 +12,22 @@
 //! verbatim by the host so it can dispatch to the right place.
 
 use crate::theme::Theme;
-use crate::widgets::editor_state_ext::{doc_shape_choice, theme_for, translate};
+use crate::widgets::button::paint_button_feedback_wash;
+use crate::widgets::editor_state_ext::{theme_for, translate};
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
-use crate::{Color, Point2D, Rect, TextLayout};
+use crate::{Point2D, Rect, TextLayout};
+pub use jian_widgets::components::select::SelectHit;
+use jian_widgets::components::select::{Select, SelectState};
+use jian_widgets::{Density, Tokens};
 use op_editor_core::editor_ui_state::EditorUiState;
 use op_editor_core::Tool;
 
 pub const SHAPE_PICKER_WIDTH: f32 = 220.0;
-const ROW_HEIGHT: f32 = 32.0;
+const ROW_HEIGHT: f32 = 30.0;
 const ROW_PAD_X: f32 = 12.0;
 const ICON_SIZE: f32 = 16.0;
+const ROW_COUNT: usize = 7;
 
 /// What the user picked from the dropdown.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -79,9 +84,7 @@ pub struct ShapePicker {
     pub id: WidgetId,
     pub theme: Theme,
     pub current_shape: Tool,
-    /// Choice currently under the cursor — mirrors
-    /// `Document.ui.shape_picker_hover` so paint can tint the row.
-    pub hovered: Option<ShapeChoice>,
+    pub state: SelectState,
     rows: Vec<PickerRow>,
 }
 
@@ -129,36 +132,40 @@ impl ShapePicker {
             id: WidgetId::new(5200),
             theme: theme_for(ui),
             current_shape: ui.shape_tool,
-            hovered: ui.shape_picker_hover.map(doc_shape_choice),
+            state: ui.shape_picker.clone(),
             rows,
         }
     }
 
-    /// Total panel height for all 7 rows + 6 px top/bottom pad.
+    /// Total panel height from the shared Select row metric.
     pub fn panel_height() -> f32 {
-        ROW_HEIGHT * 7.0 + 12.0
+        ROW_HEIGHT * ROW_COUNT as f32
+    }
+
+    pub fn hit_popup(&self, panel_rect: Rect, point: Point2D) -> SelectHit {
+        let anchor = popup_anchor(panel_rect);
+        Select::hit(
+            &self.state,
+            anchor,
+            panel_rect,
+            self.rows.len(),
+            point,
+            &tokens_from_theme(&self.theme),
+        )
+    }
+
+    pub fn choice_at(&self, idx: usize) -> Option<ShapeChoice> {
+        self.rows.get(idx).map(|r| r.choice)
     }
 
     /// Hit-test the panel — returns the choice on the row under
     /// `point`, or `None` if the cursor is in the chrome / outside.
     pub fn hit_test(&self, panel_rect: Rect, point: Point2D) -> Option<ShapeChoice> {
-        if !rect_contains(panel_rect, point) {
-            return None;
+        match self.hit_popup(panel_rect, point) {
+            SelectHit::Row(idx) => self.choice_at(idx),
+            SelectHit::Inside | SelectHit::Outside => None,
         }
-        let inner_y = point.y - panel_rect.origin.y - 6.0;
-        if inner_y < 0.0 {
-            return None;
-        }
-        let idx = (inner_y / ROW_HEIGHT) as usize;
-        self.rows.get(idx).map(|r| r.choice)
     }
-}
-
-fn rect_contains(r: Rect, p: Point2D) -> bool {
-    p.x >= r.origin.x
-        && p.x <= r.origin.x + r.size.x
-        && p.y >= r.origin.y
-        && p.y <= r.origin.y + r.size.y
 }
 
 impl Widget for ShapePicker {
@@ -181,18 +188,26 @@ impl Widget for ShapePicker {
             .stroke_round_rect(rect, 8.0, self.theme.border, 1.0);
 
         for (idx, row) in self.rows.iter().enumerate() {
-            let row_y = rect.origin.y + 6.0 + idx as f32 * ROW_HEIGHT;
+            let row_y = rect.origin.y + idx as f32 * ROW_HEIGHT;
             let row_rect = Rect {
                 origin: Point2D::new(rect.origin.x + 4.0, row_y),
                 size: Point2D::new(rect.size.x - 8.0, ROW_HEIGHT),
             };
             let active = matches!(row.choice, ShapeChoice::Tool(t) if t == self.current_shape);
-            let hovered = !active && self.hovered == Some(row.choice);
+            let hovered = !active && self.state.hover == Some(idx);
+            let pressed = !active && self.state.pressed == Some(idx);
             if active {
                 cx.backend
                     .fill_round_rect(row_rect, 6.0, self.theme.row_selected_primary);
-            } else if hovered {
-                cx.backend.fill_round_rect(row_rect, 6.0, self.theme.muted);
+            } else if hovered || pressed {
+                paint_button_feedback_wash(
+                    cx.backend,
+                    &self.theme,
+                    row_rect,
+                    6.0,
+                    hovered,
+                    pressed,
+                );
             }
             let icon_color = if active {
                 self.theme.primary
@@ -214,11 +229,12 @@ impl Widget for ShapePicker {
                 &row.label,
                 "system-ui",
                 13.0,
-                to_jian_color(if active {
+                (if active {
                     self.theme.primary
                 } else {
                     self.theme.foreground
-                }),
+                })
+                .to_jian(),
                 Point2D::new(0.0, 0.0),
             );
             cx.backend.draw_text(
@@ -238,25 +254,104 @@ impl Widget for ShapePicker {
     }
 }
 
-fn to_jian_color(c: Color) -> jian_core::scene::Color {
-    fn ch(v: f32) -> u8 {
-        (v.clamp(0.0, 1.0) * 255.0).round() as u8
+fn popup_anchor(popup: Rect) -> Rect {
+    Rect {
+        origin: popup.origin,
+        size: Point2D::new(popup.size.x, 0.0),
     }
-    jian_core::scene::Color::rgba(ch(c.r), ch(c.g), ch(c.b), ch(c.a))
+}
+
+fn tokens_from_theme(theme: &Theme) -> Tokens {
+    Tokens {
+        background: theme.background,
+        foreground: theme.foreground,
+        card: theme.card,
+        card_foreground: theme.card_foreground,
+        popover: theme.popover,
+        popover_foreground: theme.popover_foreground,
+        primary: theme.primary,
+        primary_foreground: theme.primary_foreground,
+        muted: theme.muted,
+        muted_foreground: theme.muted_foreground,
+        border: theme.border,
+        accent: theme.accent,
+        accent_foreground: theme.accent_foreground,
+        destructive: theme.destructive,
+        button_hover: theme.button_hover,
+        row_selected: theme.row_selected,
+        row_selected_primary: theme.row_selected_primary,
+        density: Density::Desktop,
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{Color, RenderBackend};
+
+    #[derive(Default)]
+    struct RoundFillBackend {
+        fills: Vec<(Rect, f32, Color)>,
+    }
+
+    impl RenderBackend for RoundFillBackend {
+        fn begin_frame(&mut self) {}
+        fn end_frame(&mut self) {}
+        fn fill_rect(&mut self, _: Rect, _: Color) {}
+        fn stroke_rect(&mut self, _: Rect, _: Color, _: f32) {}
+        fn draw_text(&mut self, _: &TextLayout, _: Point2D) {}
+        fn clip_rect(&mut self, _: Rect) {}
+        fn stroke_line(&mut self, _: Point2D, _: Point2D, _: Color, _: f32) {}
+        fn fill_round_rect(&mut self, rect: Rect, radius: f32, color: Color) {
+            self.fills.push((rect, radius, color));
+        }
+        fn stroke_round_rect(&mut self, _: Rect, _: f32, _: Color, _: f32) {}
+        fn stroke_svg_path(&mut self, _: &str, _: Point2D, _: f32, _: Color, _: f32) {}
+        fn save(&mut self) {}
+        fn restore(&mut self) {}
+        fn translate(&mut self, _: Point2D) {}
+        fn resize(&mut self, _: u32, _: u32) {}
+        fn dpi_scale(&self) -> f32 {
+            1.0
+        }
+    }
+
+    fn color_close(a: Color, b: Color) -> bool {
+        (a.r - b.r).abs() < 1e-6
+            && (a.g - b.g).abs() < 1e-6
+            && (a.b - b.b).abs() < 1e-6
+            && (a.a - b.a).abs() < 1e-6
+    }
 
     #[test]
     fn panel_height_covers_seven_rows() {
-        assert!(ShapePicker::panel_height() > ROW_HEIGHT * 7.0);
+        assert_eq!(ShapePicker::panel_height(), ROW_HEIGHT * ROW_COUNT as f32);
+    }
+
+    #[test]
+    fn hit_select_uses_shared_outside_protocol() {
+        let mut ui = op_editor_core::editor_ui_state::EditorUiState::new();
+        ui.shape_picker.open = true;
+        let picker = ShapePicker::for_editor_ui(&ui);
+        let panel_rect = Rect {
+            origin: Point2D::new(100.0, 50.0),
+            size: Point2D::new(SHAPE_PICKER_WIDTH, ShapePicker::panel_height()),
+        };
+
+        assert_eq!(
+            picker.hit_popup(panel_rect, Point2D::new(150.0, 50.0 + 10.0)),
+            SelectHit::Row(0)
+        );
+        assert_eq!(
+            picker.hit_popup(panel_rect, Point2D::new(99.0, 50.0)),
+            SelectHit::Outside
+        );
     }
 
     #[test]
     fn first_row_resolves_to_rectangle() {
-        let ui = op_editor_core::editor_ui_state::EditorUiState::new();
+        let mut ui = op_editor_core::editor_ui_state::EditorUiState::new();
+        ui.shape_picker.open = true;
         let picker = ShapePicker::for_editor_ui(&ui);
         let panel_rect = Rect {
             origin: Point2D::new(100.0, 50.0),
@@ -268,14 +363,50 @@ mod tests {
 
     #[test]
     fn last_row_resolves_to_pen() {
-        let ui = op_editor_core::editor_ui_state::EditorUiState::new();
+        let mut ui = op_editor_core::editor_ui_state::EditorUiState::new();
+        ui.shape_picker.open = true;
         let picker = ShapePicker::for_editor_ui(&ui);
         let panel_rect = Rect {
             origin: Point2D::new(0.0, 0.0),
             size: Point2D::new(SHAPE_PICKER_WIDTH, ShapePicker::panel_height()),
         };
-        let last_y = 6.0 + (7.0 - 0.5) * ROW_HEIGHT;
+        let last_y = (ROW_COUNT as f32 - 0.5) * ROW_HEIGHT;
         let hit = picker.hit_test(panel_rect, Point2D::new(50.0, last_y));
         assert_eq!(hit, Some(ShapeChoice::Tool(Tool::Pen)));
+    }
+
+    #[test]
+    fn pressed_row_uses_shared_select_feedback() {
+        let mut ui = op_editor_core::editor_ui_state::EditorUiState::new();
+        ui.shape_picker.open = true;
+        ui.shape_picker.pressed = Some(1);
+        let picker = ShapePicker::for_editor_ui(&ui);
+        let panel_rect = Rect {
+            origin: Point2D::new(100.0, 50.0),
+            size: Point2D::new(SHAPE_PICKER_WIDTH, ShapePicker::panel_height()),
+        };
+        let pressed_row = Rect {
+            origin: Point2D::new(panel_rect.origin.x + 4.0, panel_rect.origin.y + ROW_HEIGHT),
+            size: Point2D::new(panel_rect.size.x - 8.0, ROW_HEIGHT),
+        };
+        let expected = picker
+            .theme
+            .button_hover
+            .with_alpha(picker.theme.button_hover.a * 1.8);
+        let mut backend = RoundFillBackend::default();
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+
+        picker.paint(&mut cx, panel_rect);
+
+        assert!(
+            backend.fills.iter().any(|(fill, radius, color)| {
+                *fill == pressed_row
+                    && (*radius - 6.0).abs() < 0.01
+                    && color_close(*color, expected)
+            }),
+            "pressed shape picker row should paint the shared pressed feedback token"
+        );
     }
 }

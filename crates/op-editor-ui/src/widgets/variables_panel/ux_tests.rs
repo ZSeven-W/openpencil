@@ -64,7 +64,7 @@ fn filtered_rows_keep_unfiltered_source_indices() {
 #[test]
 fn scroll_clamps_and_offsets_row_hits() {
     let mut state = state_with_n_colors(20);
-    state.editor_ui.variables_scroll = 1.0e9; // stale offset self-corrects
+    state.editor_ui.variables_scroll.offset = 1.0e9; // stale offset self-corrects
     let panel = VariablesPanel::for_editor(&state);
     let rect = panel_rect(&panel);
     let max = panel.max_scroll(rect);

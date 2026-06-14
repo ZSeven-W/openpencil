@@ -13,9 +13,8 @@ pub enum AIChatHit {
     /// Click landed on the stop affordance shown during a streaming
     /// turn.
     Stop,
-    /// Click landed on an example card; payload is the example's
-    /// title (host fills the input with this).
-    Example(String),
+    /// Click landed on an example card; `prompt` fills the input.
+    Example { index: usize, prompt: String },
     /// Click landed on the header / margin — host should start a
     /// drag so the user can move the panel between canvas corners.
     DragHandle,
@@ -29,7 +28,7 @@ pub enum AIChatHit {
     /// Click on the plus affordance in the header.
     NewChat,
     /// Click on the model chip (bottom-left of the input toolbar) —
-    /// host toggles `ui.chat_model_picker_open` to open / close the
+    /// host toggles `ui.chat_model_picker.open` to open / close the
     /// model dropdown.
     ToggleModelPicker,
     /// Click on a model row in the open picker dropdown — payload

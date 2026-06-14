@@ -41,7 +41,9 @@ fn cursor_move_tracks_chat_footer_buttons() {
             "gpt-5",
             "GPT-5",
         ));
-    host.editor_state_mut().chat.input = "design a login page".into();
+    host.editor_state_mut()
+        .chat
+        .set_input_text("design a login page");
     let viewport_w = 1440.0;
     let viewport_h = 900.0;
     host.last_viewport_w = viewport_w;

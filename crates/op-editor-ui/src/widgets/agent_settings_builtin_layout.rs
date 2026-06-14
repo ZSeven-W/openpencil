@@ -94,10 +94,3 @@ pub(super) fn field_input_rect(
         size: Point2D::new(card.size.x - 24.0 - FIELD_LABEL_W, FIELD_H),
     }
 }
-
-pub(super) fn rect_contains(r: Rect, p: Point2D) -> bool {
-    p.x >= r.origin.x
-        && p.y >= r.origin.y
-        && p.x <= r.origin.x + r.size.x
-        && p.y <= r.origin.y + r.size.y
-}

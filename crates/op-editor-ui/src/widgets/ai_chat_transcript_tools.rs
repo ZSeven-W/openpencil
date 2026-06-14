@@ -1,7 +1,6 @@
 use op_editor_core::chat::ChatToolCall;
 use serde_json::Value;
 
-use super::ai_chat_panel::to_jian_color;
 use super::ai_chat_transcript::wrap_units;
 use crate::theme::Theme;
 use crate::widgets::icons::{draw_icon, Icon};
@@ -540,7 +539,7 @@ fn draw_line(
         text,
         "system-ui",
         size,
-        to_jian_color(color),
+        (color).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(&layout, Point2D::new(x, baseline_y));

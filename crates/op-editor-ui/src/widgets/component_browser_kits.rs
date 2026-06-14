@@ -9,6 +9,7 @@
 //! - one management row per imported kit — name, "N components",
 //!   Trash → inline Delete / Cancel confirm.
 
+use crate::widgets::button::paint_button_feedback_wash;
 use crate::widgets::component_browser_panel::{
     contains, truncate, ComponentBrowserHit, ComponentBrowserPanel, CHAR_W, HEADER_H,
     IMPORTED_ROW_H, KIT_ROW_H, PAD,
@@ -233,10 +234,14 @@ impl ComponentBrowserPanel<'_> {
         );
         // Dropdown control: current filter label + chevron.
         let dropdown = self.kit_dropdown_rect(panel);
-        if self.hover == Some(Btn::KitFilter) {
-            cx.backend
-                .fill_round_rect(dropdown, 4.0, self.theme.button_hover);
-        }
+        paint_button_feedback_wash(
+            cx.backend,
+            &self.theme,
+            dropdown,
+            4.0,
+            self.hover == Some(Btn::KitFilter),
+            self.is_pressed(Btn::KitFilter),
+        );
         cx.backend
             .stroke_round_rect(dropdown, 4.0, self.theme.border, 1.0);
         let current = self.kit_filter_label();
@@ -289,10 +294,14 @@ impl ComponentBrowserPanel<'_> {
                 let delete_hovered = self.hover == Some(Btn::KitConfirmDelete(i));
                 cx.backend
                     .fill_round_rect(delete, 4.0, self.theme.destructive);
-                if delete_hovered {
-                    cx.backend
-                        .fill_round_rect(delete, 4.0, self.theme.button_hover);
-                }
+                paint_button_feedback_wash(
+                    cx.backend,
+                    &self.theme,
+                    delete,
+                    4.0,
+                    delete_hovered,
+                    self.is_pressed(Btn::KitConfirmDelete(i)),
+                );
                 self.text(
                     cx,
                     self.t("common.delete"),
@@ -302,10 +311,14 @@ impl ComponentBrowserPanel<'_> {
                     self.theme.primary_foreground,
                 );
                 cx.backend.fill_round_rect(cancel, 4.0, self.theme.muted);
-                if self.hover == Some(Btn::KitCancelDelete(i)) {
-                    cx.backend
-                        .fill_round_rect(cancel, 4.0, self.theme.button_hover);
-                }
+                paint_button_feedback_wash(
+                    cx.backend,
+                    &self.theme,
+                    cancel,
+                    4.0,
+                    self.hover == Some(Btn::KitCancelDelete(i)),
+                    self.is_pressed(Btn::KitCancelDelete(i)),
+                );
                 self.text(
                     cx,
                     self.t("common.cancel"),
@@ -331,10 +344,14 @@ impl ComponentBrowserPanel<'_> {
                     10.0,
                     self.theme.muted_foreground,
                 );
-                if self.hover == Some(Btn::KitDelete(i)) {
-                    cx.backend
-                        .fill_round_rect(trash, 4.0, self.theme.button_hover);
-                }
+                paint_button_feedback_wash(
+                    cx.backend,
+                    &self.theme,
+                    trash,
+                    4.0,
+                    self.hover == Some(Btn::KitDelete(i)),
+                    self.is_pressed(Btn::KitDelete(i)),
+                );
                 draw_icon(
                     cx.backend,
                     Icon::Trash,
@@ -362,10 +379,14 @@ impl ComponentBrowserPanel<'_> {
             .stroke_round_rect(popover, 6.0, self.theme.border, 1.0);
         let active = self.state.editor_ui.component_browser_kit_id.as_deref();
         for (i, (rect, id)) in self.kit_option_rects(panel).into_iter().enumerate() {
-            if self.hover == Some(Btn::KitOption(i)) {
-                cx.backend
-                    .fill_round_rect(rect, 4.0, self.theme.button_hover);
-            }
+            paint_button_feedback_wash(
+                cx.backend,
+                &self.theme,
+                rect,
+                4.0,
+                self.hover == Some(Btn::KitOption(i)),
+                self.is_pressed(Btn::KitOption(i)),
+            );
             let label = match id.as_deref() {
                 None => self.t("componentBrowser.all").to_string(),
                 Some(kit_id) => self.option_label(kit_id),
@@ -410,7 +431,9 @@ impl ComponentBrowserPanel<'_> {
 mod tests {
     use super::*;
     use crate::widgets::{COMPONENT_BROWSER_PANEL_H, COMPONENT_BROWSER_PANEL_W};
+    use crate::{Color, RenderBackend, TextLayout};
     use op_editor_core::uikit::{KitComponent, UIKit};
+    use op_editor_core::ButtonPressTarget;
     use op_editor_core::EditorState;
 
     fn imported_kit(id: &str) -> UIKit {
@@ -454,6 +477,55 @@ mod tests {
 
     fn centre(r: Rect) -> Point2D {
         Point2D::new(r.origin.x + r.size.x / 2.0, r.origin.y + r.size.y / 2.0)
+    }
+
+    #[derive(Default)]
+    struct CaptureBackend {
+        round_fills: Vec<(Rect, f32, Color)>,
+    }
+
+    impl RenderBackend for CaptureBackend {
+        fn begin_frame(&mut self) {}
+
+        fn end_frame(&mut self) {}
+
+        fn fill_rect(&mut self, _rect: Rect, _color: Color) {}
+
+        fn stroke_rect(&mut self, _rect: Rect, _color: Color, _width: f32) {}
+
+        fn draw_text(&mut self, _layout: &TextLayout, _origin: Point2D) {}
+
+        fn clip_rect(&mut self, _rect: Rect) {}
+
+        fn stroke_line(&mut self, _from: Point2D, _to: Point2D, _color: Color, _width: f32) {}
+
+        fn fill_round_rect(&mut self, rect: Rect, radius: f32, color: Color) {
+            self.round_fills.push((rect, radius, color));
+        }
+
+        fn stroke_round_rect(&mut self, _rect: Rect, _radius: f32, _color: Color, _width: f32) {}
+
+        fn stroke_svg_path(
+            &mut self,
+            _d: &str,
+            _top_left: Point2D,
+            _size: f32,
+            _color: Color,
+            _width: f32,
+        ) {
+        }
+
+        fn save(&mut self) {}
+
+        fn restore(&mut self) {}
+
+        fn translate(&mut self, _offset: Point2D) {}
+
+        fn resize(&mut self, _width: u32, _height: u32) {}
+
+        fn dpi_scale(&self) -> f32 {
+            1.0
+        }
     }
 
     #[test]
@@ -585,6 +657,105 @@ mod tests {
         assert_eq!(
             panel.hover_at(rect, centre(options[1].0)),
             Some(Btn::KitOption(1))
+        );
+    }
+
+    #[test]
+    fn for_editor_picks_up_pressed_component_browser_button() {
+        let mut state = open_state_with_import();
+        state.editor_ui.pressed_button = Some(ButtonPressTarget::ComponentBrowser(Btn::ImportKit));
+
+        let panel = ComponentBrowserPanel::for_editor(&state).expect("open");
+
+        assert_eq!(panel.pressed, Some(Btn::ImportKit));
+    }
+
+    #[test]
+    fn pressed_header_button_paints_pressed_feedback() {
+        let mut state = open_state_with_import();
+        state.editor_ui.pressed_button = Some(ButtonPressTarget::ComponentBrowser(Btn::ImportKit));
+        let panel = ComponentBrowserPanel::for_editor(&state).expect("open");
+        let rect = panel_rect();
+        let import = ComponentBrowserPanel::import_rect(rect);
+        let expected = panel
+            .theme
+            .button_hover
+            .with_alpha(panel.theme.button_hover.a * 1.8);
+        let mut backend = CaptureBackend::default();
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+
+        panel.paint(&mut cx, rect);
+
+        assert!(
+            backend
+                .round_fills
+                .iter()
+                .any(|(fill, radius, color)| *fill == import
+                    && *radius == 6.0
+                    && *color == expected),
+            "pressed import button should paint shared pressed feedback"
+        );
+    }
+
+    #[test]
+    fn pressed_kit_dropdown_paints_pressed_feedback() {
+        let mut state = open_state_with_import();
+        state.editor_ui.pressed_button = Some(ButtonPressTarget::ComponentBrowser(Btn::KitFilter));
+        let panel = ComponentBrowserPanel::for_editor(&state).expect("open");
+        let rect = panel_rect();
+        let dropdown = panel.kit_dropdown_rect(rect);
+        let expected = panel
+            .theme
+            .button_hover
+            .with_alpha(panel.theme.button_hover.a * 1.8);
+        let mut backend = CaptureBackend::default();
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+
+        panel.paint(&mut cx, rect);
+
+        assert!(
+            backend
+                .round_fills
+                .iter()
+                .any(|(fill, radius, color)| *fill == dropdown
+                    && *radius == 4.0
+                    && *color == expected),
+            "pressed kit dropdown should paint shared pressed feedback"
+        );
+    }
+
+    #[test]
+    fn pressed_imported_kit_delete_button_paints_pressed_feedback() {
+        let mut state = open_state_with_import();
+        state.editor_ui.pressed_button =
+            Some(ButtonPressTarget::ComponentBrowser(Btn::KitDelete(0)));
+        let panel = ComponentBrowserPanel::for_editor(&state).expect("open");
+        let rect = panel_rect();
+        let row = panel.imported_row_rects(rect)[0];
+        let trash = ComponentBrowserPanel::trash_rect(rect, row);
+        let expected = panel
+            .theme
+            .button_hover
+            .with_alpha(panel.theme.button_hover.a * 1.8);
+        let mut backend = CaptureBackend::default();
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+
+        panel.paint(&mut cx, rect);
+
+        assert!(
+            backend
+                .round_fills
+                .iter()
+                .any(|(fill, radius, color)| *fill == trash
+                    && *radius == 4.0
+                    && *color == expected),
+            "pressed imported-kit delete should paint shared pressed feedback"
         );
     }
 }

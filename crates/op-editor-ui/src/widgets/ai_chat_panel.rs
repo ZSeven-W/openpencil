@@ -10,6 +10,8 @@ use crate::widgets::editor_state_ext::{theme_for, translate};
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
 use crate::{Color, Point2D, Rect, TextLayout};
+use jian_core::text_input::TextInputState;
+use jian_widgets::components::select::SelectState;
 use op_editor_core::chat::ChatState;
 use op_editor_core::EditorState;
 
@@ -85,28 +87,21 @@ pub struct AIChatPlaceholder<'a> {
     /// Number of currently selected canvas nodes, shown in the
     /// bottom toolbar like the TS panel.
     pub(crate) selected_count: usize,
-    /// Whether the model-picker dropdown is open.
-    pub model_picker_open: bool,
-    /// Vertical scroll offset of the open model-picker dropdown.
-    pub model_picker_scroll: f32,
-    /// Index into `state.available_models` of the picker row under the cursor.
-    pub model_picker_hover: Option<usize>,
-    /// Live model-picker search query.
-    pub model_picker_search: String,
-    /// Byte caret for the model-picker search query.
-    pub model_picker_caret: Option<usize>,
-    /// Whether Ctrl/Cmd+A selected the full model-picker query.
-    pub model_picker_select_all: bool,
-    /// Last focus / edit timestamp for the model-picker search caret.
-    pub model_picker_caret_anchor_ms: u64,
+    /// Model-picker dropdown interaction state.
+    pub model_picker: &'a SelectState,
+    /// Text state for the model-picker search query.
+    pub model_picker_input: &'a TextInputState,
     pub design_hover: Option<(usize, usize)>,
     /// Empty-state quick action card under the cursor.
     pub example_hover: Option<usize>,
+    pub example_pressed: Option<usize>,
     /// Which bare header button the cursor is over (chevron / maximize
     /// / new chat) — drives their `theme.button_hover` wash.
     pub header_hover: Option<op_editor_core::ChatHeaderButton>,
     /// Which bottom-toolbar chat control the cursor is over.
     pub footer_hover: Option<op_editor_core::ChatFooterButton>,
+    pub header_pressed: Option<op_editor_core::ChatHeaderButton>,
+    pub footer_pressed: Option<op_editor_core::ChatFooterButton>,
     /// Localised empty-state example cards.
     pub(crate) examples: [ExampleCard; 4],
     /// Active UI locale.
@@ -133,17 +128,24 @@ impl<'a> AIChatPlaceholder<'a> {
             label_tip_select_elements: translate(ui, "ai.tipSelectElements").to_string(),
             label_no_models: translate(ui, "ai.noModelsConnected").to_string(),
             selected_count: state.selection_count(),
-            model_picker_open: ui.chat_model_picker_open,
-            model_picker_scroll: ui.chat_model_picker_scroll,
-            model_picker_hover: ui.chat_model_picker_hover,
-            model_picker_search: ui.chat_model_picker_search.clone(),
-            model_picker_caret: ui.chat_model_picker_caret,
-            model_picker_select_all: ui.chat_model_picker_select_all,
-            model_picker_caret_anchor_ms: ui.chat_model_picker_caret_anchor_ms,
+            model_picker: &ui.chat_model_picker,
+            model_picker_input: &ui.chat_model_picker_input,
             design_hover: ui.chat_design_block_hover,
             example_hover: ui.chat_example_hover,
+            example_pressed: match ui.pressed_button {
+                Some(op_editor_core::ButtonPressTarget::ChatExample(index)) => Some(index),
+                _ => None,
+            },
             header_hover: ui.chat_header_hover,
             footer_hover: ui.chat_footer_hover,
+            header_pressed: match ui.pressed_button {
+                Some(op_editor_core::ButtonPressTarget::ChatHeader(button)) => Some(button),
+                _ => None,
+            },
+            footer_pressed: match ui.pressed_button {
+                Some(op_editor_core::ButtonPressTarget::ChatFooter(button)) => Some(button),
+                _ => None,
+            },
             examples: example_cards(ui.locale),
             locale: ui.locale,
         }
@@ -167,7 +169,7 @@ impl<'a> AIChatPlaceholder<'a> {
 
     pub(crate) fn input_area_height_for_input_width(&self, input_w: f32) -> f32 {
         let lines = crate::widgets::ai_chat_input_text::visible_input_line_count(
-            &self.state.input,
+            self.state.input.text(),
             input_w,
         );
         INPUT_AREA_HEIGHT
@@ -215,7 +217,7 @@ impl<'a> AIChatPlaceholder<'a> {
     pub(crate) fn model_picker_rect(&self, rect: Rect, input_rect: Rect) -> Rect {
         let height = crate::widgets::ai_chat_model_picker::picker_view_height(
             &self.state.available_models,
-            &self.model_picker_search,
+            self.model_picker_input.text(),
         );
         let toolbar_top =
             input_rect.origin.y + self.input_area_height_for_rect(rect) + self.attachment_row_h();
@@ -239,7 +241,7 @@ impl<'a> AIChatPlaceholder<'a> {
     }
 
     pub fn model_picker_bounds(&self, rect: Rect) -> Option<Rect> {
-        if !self.model_picker_open {
+        if !self.model_picker.open {
             return None;
         }
         let input_rect = self.input_rect(rect);
@@ -329,11 +331,17 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
         if self.state.collapsed {
             cx.backend
                 .fill_round_rect(rect, COLLAPSED_RADIUS, self.theme.card);
-            if self.header_hover == Some(op_editor_core::ChatHeaderButton::ToggleCollapse) {
+            if self.header_hover == Some(op_editor_core::ChatHeaderButton::ToggleCollapse)
+                || self.header_pressed == Some(op_editor_core::ChatHeaderButton::ToggleCollapse)
+            {
                 cx.backend.fill_round_rect(
                     rect,
                     COLLAPSED_RADIUS,
-                    chat_neutral_hover_color(&self.theme),
+                    chat_neutral_feedback_color(
+                        &self.theme,
+                        self.header_pressed
+                            == Some(op_editor_core::ChatHeaderButton::ToggleCollapse),
+                    ),
                 );
             }
             cx.backend
@@ -356,7 +364,7 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
                 &self.label_new_chat,
                 "system-ui",
                 12.0,
-                to_jian_color(self.theme.muted_foreground),
+                (self.theme.muted_foreground).to_jian(),
                 Point2D::new(0.0, 0.0),
             );
             cx.backend.draw_text(
@@ -392,14 +400,15 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
         let header_y = rect.origin.y + 8.0;
         let chevron_x = rect.origin.x + PAD;
         let title_hovered = self.header_hover == Some(ChatHeaderButton::ToggleCollapse);
-        if title_hovered {
+        let title_pressed = self.header_pressed == Some(ChatHeaderButton::ToggleCollapse);
+        if title_hovered || title_pressed {
             cx.backend.fill_round_rect(
                 self.expanded_header_title_rect(rect),
                 8.0,
-                chat_neutral_hover_color(&self.theme),
+                chat_neutral_feedback_color(&self.theme, title_pressed),
             );
         }
-        let chevron_color = if title_hovered {
+        let chevron_color = if title_hovered || title_pressed {
             self.theme.foreground
         } else {
             self.theme.muted_foreground
@@ -416,7 +425,7 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
             &self.label_new_chat,
             "system-ui",
             14.0,
-            to_jian_color(self.theme.foreground),
+            (self.theme.foreground).to_jian(),
             Point2D::new(0.0, 0.0),
         );
         cx.backend.draw_text(
@@ -430,6 +439,7 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
             maximize_x,
             header_y,
             self.header_hover == Some(ChatHeaderButton::ToggleMaximize),
+            self.header_pressed == Some(ChatHeaderButton::ToggleMaximize),
         );
         draw_icon(
             cx.backend,
@@ -446,6 +456,7 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
             new_chat_x,
             header_y,
             self.header_hover == Some(ChatHeaderButton::NewChat),
+            self.header_pressed == Some(ChatHeaderButton::NewChat),
         );
         draw_icon(
             cx.backend,
@@ -469,6 +480,7 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
                 &self.examples,
                 !can_use_model || self.is_streaming(),
                 self.example_hover,
+                self.example_pressed,
             );
         } else {
             crate::widgets::ai_chat_transcript::paint_transcript_with_selection(
@@ -489,7 +501,7 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
                 fixed_checklist_rect(rect, input_h, checklist_h),
                 &self.state.messages,
                 self.state.checklist_collapsed,
-                self.state.checklist_scroll,
+                self.state.checklist_scroll.offset,
             );
         }
         let input_rect = Rect {
@@ -530,9 +542,17 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
         // Model chip — brand logo of the selected model's provider
         // + its display name + a chevron. Click toggles the picker.
         let mut model_x = rect.origin.x + PAD;
-        if self.footer_hover == Some(ChatFooterButton::ModelPicker) {
-            cx.backend
-                .fill_round_rect(footer.model, 6.0, chat_neutral_hover_color(&self.theme));
+        if self.footer_hover == Some(ChatFooterButton::ModelPicker)
+            || self.footer_pressed == Some(ChatFooterButton::ModelPicker)
+        {
+            cx.backend.fill_round_rect(
+                footer.model,
+                6.0,
+                chat_neutral_feedback_color(
+                    &self.theme,
+                    self.footer_pressed == Some(ChatFooterButton::ModelPicker),
+                ),
+            );
         }
         let selected = self.state.selected_model_entry();
         let chip_color = self.theme.muted_foreground;
@@ -572,7 +592,7 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
             model_name,
             "system-ui",
             12.0,
-            to_jian_color(chip_color),
+            (chip_color).to_jian(),
             Point2D::new(0.0, 0.0),
         );
         cx.backend
@@ -608,9 +628,13 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
         if team_active {
             cx.backend.fill_round_rect(chip, 6.0, primary_wash);
         }
-        if self.footer_hover == Some(ChatFooterButton::AgentTeam) {
+        if self.footer_hover == Some(ChatFooterButton::AgentTeam)
+            || self.footer_pressed == Some(ChatFooterButton::AgentTeam)
+        {
             let wash = if team_active {
                 primary_wash
+            } else if self.footer_pressed == Some(ChatFooterButton::AgentTeam) {
+                chat_neutral_feedback_color(&self.theme, true)
             } else {
                 chat_neutral_hover_color(&self.theme)
             };
@@ -649,9 +673,17 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
         // Right cluster — attach + send (TS ghost buttons: bare icons
         // that only get a wash while hovered).
         let attach_rect = footer.attach;
-        if self.footer_hover == Some(ChatFooterButton::AddAttachment) {
-            cx.backend
-                .fill_round_rect(attach_rect, 6.0, chat_neutral_hover_color(&self.theme));
+        if self.footer_hover == Some(ChatFooterButton::AddAttachment)
+            || self.footer_pressed == Some(ChatFooterButton::AddAttachment)
+        {
+            cx.backend.fill_round_rect(
+                attach_rect,
+                6.0,
+                chat_neutral_feedback_color(
+                    &self.theme,
+                    self.footer_pressed == Some(ChatFooterButton::AddAttachment),
+                ),
+            );
         }
         draw_icon(
             cx.backend,
@@ -665,7 +697,8 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
         // A turn is sendable with text, with staged attachments, or
         // both (TS parity: an attachment-only message is valid).
         let send_active = can_use_model
-            && (!self.state.input.trim().is_empty() || !self.state.pending_attachments.is_empty());
+            && (!self.state.input.text().trim().is_empty()
+                || !self.state.pending_attachments.is_empty());
         let streaming = self.is_streaming();
         // TS: streaming → red stop; sendable → primary; otherwise a faded
         // muted-foreground/30 icon so the send button reads as disabled.
@@ -684,9 +717,18 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
         };
         if self.footer_hover == Some(ChatFooterButton::Send)
             || self.footer_hover == Some(ChatFooterButton::Stop)
+            || self.footer_pressed == Some(ChatFooterButton::Send)
+            || self.footer_pressed == Some(ChatFooterButton::Stop)
         {
-            cx.backend
-                .fill_round_rect(send_rect, 6.0, chat_neutral_hover_color(&self.theme));
+            cx.backend.fill_round_rect(
+                send_rect,
+                6.0,
+                chat_neutral_feedback_color(
+                    &self.theme,
+                    self.footer_pressed == Some(ChatFooterButton::Send)
+                        || self.footer_pressed == Some(ChatFooterButton::Stop),
+                ),
+            );
         }
         draw_icon(
             cx.backend,
@@ -699,7 +741,7 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
 
         // Model-picker dropdown paints last so it sits above the
         // message list / examples / input.
-        if self.model_picker_open {
+        if self.model_picker.open {
             let picker = self.model_picker_rect(rect, input_rect);
             crate::widgets::ai_chat_model_picker::paint_model_picker(
                 cx,
@@ -707,13 +749,9 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
                 picker,
                 &self.state.available_models,
                 self.state.selected_model,
-                self.model_picker_scroll,
-                self.model_picker_hover,
-                &self.model_picker_search,
-                self.model_picker_caret,
-                self.model_picker_select_all,
+                self.model_picker,
+                self.model_picker_input,
                 self.now_ms,
-                self.model_picker_caret_anchor_ms,
                 self.locale,
             );
         }
@@ -731,18 +769,22 @@ fn draw_label(cx: &mut PaintCx<'_>, text: &str, size: f32, color: Color, x: f32,
         text,
         "system-ui",
         size,
-        to_jian_color(color),
+        (color).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(&label, Point2D::new(x, y));
 }
 
 fn chat_neutral_hover_color(theme: &Theme) -> Color {
+    chat_neutral_feedback_color(theme, false)
+}
+
+fn chat_neutral_feedback_color(theme: &Theme, pressed: bool) -> Color {
     Color {
         r: theme.foreground.r,
         g: theme.foreground.g,
         b: theme.foreground.b,
-        a: 0.12,
+        a: if pressed { 0.18 } else { 0.12 },
     }
 }
 
@@ -756,25 +798,14 @@ fn paint_header_btn_bg(
     icon_x: f32,
     header_y: f32,
     hovered: bool,
+    pressed: bool,
 ) -> Color {
-    if hovered {
-        let center = Point2D::new(icon_x + 9.0, header_y + 9.0);
-        let r = Rect {
-            origin: Point2D::new(center.x - 12.0, center.y - 12.0),
-            size: Point2D::new(24.0, 24.0),
-        };
-        cx.backend.fill_round_rect(r, 6.0, theme.button_hover);
-        theme.foreground
-    } else {
-        theme.muted_foreground
-    }
-}
-
-pub(crate) fn to_jian_color(c: Color) -> jian_core::scene::Color {
-    fn ch(v: f32) -> u8 {
-        (v.clamp(0.0, 1.0) * 255.0).round() as u8
-    }
-    jian_core::scene::Color::rgba(ch(c.r), ch(c.g), ch(c.b), ch(c.a))
+    let center = Point2D::new(icon_x + 9.0, header_y + 9.0);
+    let r = Rect {
+        origin: Point2D::new(center.x - 12.0, center.y - 12.0),
+        size: Point2D::new(24.0, 24.0),
+    };
+    crate::widgets::button::paint_ghost_button_feedback(cx.backend, theme, r, hovered, pressed)
 }
 
 #[cfg(test)]

@@ -2,12 +2,46 @@
 //! `git_panel.rs` under the 800-line cap.
 
 use crate::widgets::git_panel::*;
-use crate::{Point2D, Rect};
+use crate::{Color, Point2D, Rect, RenderBackend, TextLayout};
 use op_editor_core::{
-    CloneField, CloneFormState, EditorState, GitBranchPickerMode, GitCandidateFile,
-    GitCommitSummary, GitDiffView, GitFileEntry, GitOverflowView, GitPanelState, MergeConflictRow,
-    MergeResolveFile, MergeResolveState,
+    ButtonPressTarget, CloneField, CloneFormState, EditorState, GitBranchPickerMode,
+    GitCandidateFile, GitCommitSummary, GitDiffView, GitFileEntry, GitOverflowView, GitPanelState,
+    MergeConflictRow, MergeResolveFile, MergeResolveState,
 };
+
+#[derive(Default)]
+struct RoundFillBackend {
+    fills: Vec<(Rect, f32, Color)>,
+}
+
+impl RenderBackend for RoundFillBackend {
+    fn begin_frame(&mut self) {}
+    fn end_frame(&mut self) {}
+    fn fill_rect(&mut self, _: Rect, _: Color) {}
+    fn stroke_rect(&mut self, _: Rect, _: Color, _: f32) {}
+    fn draw_text(&mut self, _: &TextLayout, _: Point2D) {}
+    fn clip_rect(&mut self, _: Rect) {}
+    fn stroke_line(&mut self, _: Point2D, _: Point2D, _: Color, _: f32) {}
+    fn fill_round_rect(&mut self, rect: Rect, radius: f32, color: Color) {
+        self.fills.push((rect, radius, color));
+    }
+    fn stroke_round_rect(&mut self, _: Rect, _: f32, _: Color, _: f32) {}
+    fn stroke_svg_path(&mut self, _: &str, _: Point2D, _: f32, _: Color, _: f32) {}
+    fn save(&mut self) {}
+    fn restore(&mut self) {}
+    fn translate(&mut self, _: Point2D) {}
+    fn resize(&mut self, _: u32, _: u32) {}
+    fn dpi_scale(&self) -> f32 {
+        1.0
+    }
+}
+
+fn color_close(a: Color, b: Color) -> bool {
+    (a.r - b.r).abs() < 1e-6
+        && (a.g - b.g).abs() < 1e-6
+        && (a.b - b.b).abs() < 1e-6
+        && (a.a - b.a).abs() < 1e-6
+}
 
 fn state_with(panel: GitPanelState) -> EditorState {
     let mut s = EditorState::new();
@@ -255,14 +289,15 @@ fn ready_view_maps_each_header_and_commit_region() {
     // A clean bound repo → the TS ready layout. Its header exposes
     // the branch picker + pull/push + overflow; the commit box is a
     // focus target and its button commits a non-empty message.
+    let mut state = open_repo();
+    state.commit_input.set_text("ship it");
     let s = state_with(GitPanelState {
         branch: Some("main".to_string()),
-        commit_message: "ship it".to_string(),
         // A remote + commits-ahead so pull/push are enabled (they now
         // disable when there's no remote / nothing to push, TS parity).
         remotes: vec!["origin → https://example.com/r.git".to_string()],
         ahead: 1,
-        ..open_repo()
+        ..state
     });
     let panel = GitPanel::for_editor(&s).unwrap();
     let rect = panel_rect(&panel);
@@ -289,6 +324,126 @@ fn ready_view_maps_each_header_and_commit_region() {
     assert_eq!(
         panel.hit_test(rect, top_left),
         Some(GitPanelHit::CommitInput)
+    );
+}
+
+#[test]
+fn ready_header_pressed_overflow_uses_shared_button_feedback() {
+    let mut s = state_with(GitPanelState {
+        branch: Some("main".to_string()),
+        ..open_repo()
+    });
+    s.editor_ui.pressed_button = Some(ButtonPressTarget::Git(op_editor_core::GitButton::Overflow));
+    let panel = GitPanel::for_editor(&s).unwrap();
+    let rect = panel_rect(&panel);
+    let (_, _, overflow) = panel.ready_header_buttons(rect);
+    let theme = crate::widgets::editor_state_ext::theme_for(&s.editor_ui);
+    let expected = theme.button_hover.with_alpha(theme.button_hover.a * 1.8);
+    let mut backend = RoundFillBackend::default();
+    let mut cx = crate::widgets::PaintCx {
+        backend: &mut backend,
+    };
+
+    panel.paint(&mut cx, rect);
+
+    assert!(
+        backend.fills.iter().any(|(fill, radius, color)| {
+            *fill == overflow && (*radius - 6.0).abs() < 0.01 && color_close(*color, expected)
+        }),
+        "pressed overflow button should paint the shared pressed feedback token"
+    );
+}
+
+#[test]
+fn pressed_branch_switch_row_uses_shared_button_feedback() {
+    let mut s = state_with(GitPanelState {
+        branch: Some("main".to_string()),
+        branches: vec!["main".to_string(), "feature".to_string()],
+        merging: true,
+        ..open_repo()
+    });
+    s.editor_ui.pressed_button = Some(ButtonPressTarget::Git(
+        op_editor_core::GitButton::SwitchBranch(1),
+    ));
+    let panel = GitPanel::for_editor(&s).unwrap();
+    let rect = panel_rect(&panel);
+    let (_, branch_rects) = panel.branch_layout(rect);
+    let feature_row = branch_rects[1];
+    let theme = crate::widgets::editor_state_ext::theme_for(&s.editor_ui);
+    let expected = theme.button_hover.with_alpha(theme.button_hover.a * 1.8);
+    let mut backend = RoundFillBackend::default();
+    let mut cx = crate::widgets::PaintCx {
+        backend: &mut backend,
+    };
+
+    panel.paint(&mut cx, rect);
+
+    assert!(
+        backend.fills.iter().any(|(fill, radius, color)| {
+            *fill == feature_row && (*radius - 4.0).abs() < 0.01 && color_close(*color, expected)
+        }),
+        "pressed branch switch row should paint the shared pressed feedback token"
+    );
+}
+
+#[test]
+fn ready_branch_picker_pressed_row_uses_shared_button_feedback() {
+    let mut s = state_with(GitPanelState {
+        branch: Some("main".to_string()),
+        branches: vec!["main".to_string(), "feature".to_string()],
+        branch_picker_open: true,
+        ..open_repo()
+    });
+    s.editor_ui.pressed_button = Some(ButtonPressTarget::Git(
+        op_editor_core::GitButton::SwitchBranch(1),
+    ));
+    let panel = GitPanel::for_editor(&s).unwrap();
+    let rect = panel_rect(&panel);
+    let rows = panel.branch_picker_row_rects(rect);
+    let theme = crate::widgets::editor_state_ext::theme_for(&s.editor_ui);
+    let expected = theme.button_hover.with_alpha(theme.button_hover.a * 1.8);
+    let mut backend = RoundFillBackend::default();
+    let mut cx = crate::widgets::PaintCx {
+        backend: &mut backend,
+    };
+
+    panel.paint(&mut cx, rect);
+
+    assert!(
+        backend.fills.iter().any(|(fill, radius, color)| {
+            *fill == rows[1] && (*radius - 6.0).abs() < 0.01 && color_close(*color, expected)
+        }),
+        "pressed ready branch-picker row should paint the shared pressed feedback token"
+    );
+}
+
+#[test]
+fn overflow_menu_pressed_row_uses_shared_button_feedback() {
+    let mut s = state_with(GitPanelState {
+        branch: Some("main".to_string()),
+        overflow_open: true,
+        ..open_repo()
+    });
+    s.editor_ui.pressed_button = Some(ButtonPressTarget::Git(
+        op_editor_core::GitButton::OverflowRemoteSettings,
+    ));
+    let panel = GitPanel::for_editor(&s).unwrap();
+    let rect = panel_rect(&panel);
+    let rows = panel.overflow_row_rects(rect);
+    let theme = crate::widgets::editor_state_ext::theme_for(&s.editor_ui);
+    let expected = theme.button_hover.with_alpha(theme.button_hover.a * 1.8);
+    let mut backend = RoundFillBackend::default();
+    let mut cx = crate::widgets::PaintCx {
+        backend: &mut backend,
+    };
+
+    panel.paint(&mut cx, rect);
+
+    assert!(
+        backend.fills.iter().any(|(fill, radius, color)| {
+            *fill == rows[2] && (*radius - 6.0).abs() < 0.01 && color_close(*color, expected)
+        }),
+        "pressed overflow-menu row should paint the shared pressed feedback token"
     );
 }
 
@@ -344,12 +499,14 @@ fn branch_picker_dropdown_switches_and_dismisses() {
 
 #[test]
 fn branch_picker_submodes_map_create_input_and_cancel() {
+    let mut create_state = open_repo();
+    create_state.branch_create_input.set_text("feature/new");
     let s = state_with(GitPanelState {
         branch: Some("main".to_string()),
         branches: vec!["feature".to_string(), "main".to_string()],
         branch_picker_open: true,
         branch_picker_mode: GitBranchPickerMode::Create,
-        ..open_repo()
+        ..create_state
     });
     let panel = GitPanel::for_editor(&s).unwrap();
     let rect = panel_rect(&panel);
@@ -358,6 +515,17 @@ fn branch_picker_submodes_map_create_input_and_cancel() {
     assert_eq!(
         panel.hit_test(rect, input_point),
         Some(GitPanelHit::BranchCreateInput)
+    );
+    let submit = Rect {
+        origin: Point2D::new(
+            picker.origin.x + picker.size.x - 18.0 - 64.0,
+            picker.origin.y + 54.0,
+        ),
+        size: Point2D::new(64.0, 24.0),
+    };
+    assert_eq!(
+        panel.hit_test(rect, centre(submit)),
+        Some(GitPanelHit::BranchCreateSubmit)
     );
 
     let s = state_with(GitPanelState {
@@ -436,6 +604,50 @@ fn overflow_menu_maps_its_entries() {
     assert_eq!(
         panel.hit_test(rect, centre(rows[4])),
         Some(GitPanelHit::OverflowCloseRepo)
+    );
+}
+
+#[test]
+fn git_menus_use_shared_menu_state_protocol() {
+    use jian_widgets::components::menu::{MenuHit, MenuState};
+
+    let s = state_with(GitPanelState {
+        branch: Some("main".to_string()),
+        overflow_open: true,
+        overflow_menu: MenuState { hover: Some(2) },
+        ..open_repo()
+    });
+    let panel = GitPanel::for_editor(&s).unwrap();
+    let rect = panel_rect(&panel);
+    let rows = panel.overflow_row_rects(rect);
+    assert_eq!(panel.state.overflow_menu.hover, Some(2));
+    assert_eq!(
+        panel.overflow_menu_hit(rect, centre(rows[2])),
+        MenuHit::Row(2)
+    );
+    assert_eq!(
+        panel.overflow_menu_hit(rect, Point2D::new(rows[2].origin.x, rows[2].origin.y - 4.0)),
+        MenuHit::Inside
+    );
+
+    let s = state_with(GitPanelState {
+        branch: Some("main".to_string()),
+        branches: vec!["main".to_string(), "feature".to_string()],
+        branch_picker_open: true,
+        branch_picker_menu: MenuState { hover: Some(1) },
+        ..open_repo()
+    });
+    let panel = GitPanel::for_editor(&s).unwrap();
+    let rect = panel_rect(&panel);
+    let rows = panel.branch_picker_row_rects(rect);
+    assert_eq!(panel.state.branch_picker_menu.hover, Some(1));
+    assert_eq!(
+        panel.branch_picker_menu_hit(rect, centre(rows[1])),
+        MenuHit::Row(1)
+    );
+    assert_eq!(
+        panel.branch_picker_menu_hit(rect, Point2D::new(rows[0].origin.x, rows[0].origin.y - 4.0)),
+        MenuHit::Inside
     );
 }
 
@@ -771,8 +983,10 @@ fn clone_form_takes_over_and_maps_each_target() {
         open: true,
         in_repo: false,
         clone_form: Some(CloneFormState {
-            url: "https://github.com/owner/repo.git".into(),
-            dest: "/tmp/repo".into(),
+            url_input: jian_core::text_input::TextInputState::with_text(
+                "https://github.com/owner/repo.git",
+            ),
+            dest_input: jian_core::text_input::TextInputState::with_text("/tmp/repo"),
             focus: Some(CloneField::Url),
             ..Default::default()
         }),
@@ -819,8 +1033,10 @@ fn clone_view_locks_to_cancel_only_while_cloning() {
         open: true,
         in_repo: false,
         clone_form: Some(CloneFormState {
-            url: "https://github.com/owner/repo.git".into(),
-            dest: "/tmp/repo".into(),
+            url_input: jian_core::text_input::TextInputState::with_text(
+                "https://github.com/owner/repo.git",
+            ),
+            dest_input: jian_core::text_input::TextInputState::with_text("/tmp/repo"),
             cloning: true,
             ..Default::default()
         }),

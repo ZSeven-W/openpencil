@@ -28,6 +28,7 @@ tokio = { version = "1", features = [
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
+op-rpc-transport = { path = "../op-rpc-transport" }
 # Chat-delta vocabulary the ACP event adapter maps onto.
 op-ai = { path = "../op-ai" }
 

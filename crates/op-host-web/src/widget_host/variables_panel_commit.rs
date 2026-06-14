@@ -36,7 +36,12 @@ impl WidgetHost {
             return;
         };
         self.editor_state.ui.property_draft_select_all = false;
-        let draft = self.editor_state.ui.property_input_draft.clone();
+        let draft = self
+            .editor_state
+            .editor_ui
+            .variables_header_input
+            .text()
+            .to_owned();
         let snap = self.editor_state.snapshot_for_history();
         let committed = match focus {
             VariableHeaderFocus::Theme(old_axis) => {
@@ -55,15 +60,24 @@ impl WidgetHost {
     fn rename_variable_theme_axis(&mut self, old_axis: &str, new_axis: &str) -> bool {
         let new_axis = new_axis.trim();
         if new_axis.is_empty() || old_axis == new_axis {
-            self.editor_state.ui.property_input_draft = old_axis.to_string();
+            self.editor_state
+                .editor_ui
+                .variables_header_input
+                .set_text(old_axis);
             return false;
         }
         let Some(themes) = self.editor_state.doc.themes.as_mut() else {
-            self.editor_state.ui.property_input_draft = old_axis.to_string();
+            self.editor_state
+                .editor_ui
+                .variables_header_input
+                .set_text(old_axis);
             return false;
         };
         if themes.contains_key(new_axis) {
-            self.editor_state.ui.property_input_draft = old_axis.to_string();
+            self.editor_state
+                .editor_ui
+                .variables_header_input
+                .set_text(old_axis);
             return false;
         }
         let mut updated = BTreeMap::new();
@@ -78,7 +92,10 @@ impl WidgetHost {
         }
         *themes = updated;
         if !found {
-            self.editor_state.ui.property_input_draft = old_axis.to_string();
+            self.editor_state
+                .editor_ui
+                .variables_header_input
+                .set_text(old_axis);
             return false;
         }
         if let Some(value) = self.editor_state.ui.variables.active_theme.remove(old_axis) {
@@ -97,14 +114,20 @@ impl WidgetHost {
         {
             self.editor_state.editor_ui.variables_current_axis = Some(new_axis.to_string());
         }
-        self.editor_state.ui.property_input_draft = new_axis.to_string();
+        self.editor_state
+            .editor_ui
+            .variables_header_input
+            .set_text(new_axis);
         true
     }
 
     fn rename_variable_variant_value(&mut self, old_value: &str, new_value: &str) -> bool {
         let new_value = new_value.trim();
         if new_value.is_empty() || old_value == new_value {
-            self.editor_state.ui.property_input_draft = old_value.to_string();
+            self.editor_state
+                .editor_ui
+                .variables_header_input
+                .set_text(old_value);
             return false;
         }
         let axis = self.ensure_variable_axis();
@@ -115,11 +138,17 @@ impl WidgetHost {
             .as_mut()
             .and_then(|themes| themes.get_mut(&axis))
         else {
-            self.editor_state.ui.property_input_draft = old_value.to_string();
+            self.editor_state
+                .editor_ui
+                .variables_header_input
+                .set_text(old_value);
             return false;
         };
         if values.iter().any(|v| v == new_value) {
-            self.editor_state.ui.property_input_draft = old_value.to_string();
+            self.editor_state
+                .editor_ui
+                .variables_header_input
+                .set_text(old_value);
             return false;
         }
         let mut found = false;
@@ -144,11 +173,17 @@ impl WidgetHost {
                 .active_theme
                 .insert(axis, new_value.to_string());
         }
-        self.editor_state.ui.property_input_draft = if found {
-            new_value.to_string()
+        if found {
+            self.editor_state
+                .editor_ui
+                .variables_header_input
+                .set_text(new_value);
         } else {
-            old_value.to_string()
-        };
+            self.editor_state
+                .editor_ui
+                .variables_header_input
+                .set_text(old_value);
+        }
         found
     }
 
@@ -198,7 +233,12 @@ impl WidgetHost {
             return;
         };
         self.editor_state.ui.property_draft_select_all = false;
-        let draft = self.editor_state.ui.property_input_draft.clone();
+        let draft = self
+            .editor_state
+            .editor_ui
+            .variable_row_input
+            .text()
+            .to_owned();
         let name_at = |state: &op_editor_core::EditorState, idx: usize| -> Option<String> {
             state.doc.variables.as_ref()?.keys().nth(idx).cloned()
         };
@@ -211,14 +251,23 @@ impl WidgetHost {
                     };
                     let next = draft.trim();
                     if next.is_empty() || next == name {
-                        self.editor_state.ui.property_input_draft = name;
+                        self.editor_state
+                            .editor_ui
+                            .variable_row_input
+                            .set_text(name);
                         return false;
                     }
                     if self.editor_state.rename_variable(&name, next) {
-                        self.editor_state.ui.property_input_draft = next.to_string();
+                        self.editor_state
+                            .editor_ui
+                            .variable_row_input
+                            .set_text(next);
                         true
                     } else {
-                        self.editor_state.ui.property_input_draft = name;
+                        self.editor_state
+                            .editor_ui
+                            .variable_row_input
+                            .set_text(name);
                         false
                     }
                 }

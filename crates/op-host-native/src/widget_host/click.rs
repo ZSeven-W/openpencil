@@ -134,6 +134,9 @@ impl WidgetHostNative {
         if let Some(chat_rect) = self.ai_chat_rect(viewport_width, viewport_height) {
             let panel = AIChatPlaceholder::from_editor(&self.editor_state);
             if let Some(hit) = panel.hit_test(chat_rect, Point2D::new(x, y)) {
+                if let Some(target) = chat_button_press_target(&hit) {
+                    self.editor_state.editor_ui.pressed_button = Some(target);
+                }
                 match hit {
                     AIChatHit::Inside => {
                         // Panel chrome that hit no control — blank
@@ -144,19 +147,15 @@ impl WidgetHostNative {
                         return true;
                     }
                     AIChatHit::FocusInput => {
-                        self.editor_state.chat.focused = true;
-                        self.editor_state.chat.input_select_all = false;
-                        self.editor_state.chat.input_selection = None;
+                        self.editor_state.chat.focus_input_at_end(self.now_ms);
                         self.editor_state.chat.transcript_selection = None;
-                        self.editor_state.chat.caret_anchor_ms = self.now_ms;
                         self.mark_dirty();
                         return true;
                     }
                     AIChatHit::SelectInputText(offset) => {
                         self.editor_state.chat.focused = true;
-                        self.editor_state.chat.set_input_caret(offset);
+                        self.editor_state.chat.set_input_caret(offset, self.now_ms);
                         self.editor_state.chat.transcript_selection = None;
-                        self.editor_state.chat.caret_anchor_ms = self.now_ms;
                         self.mark_dirty();
                         return true;
                     }
@@ -170,13 +169,10 @@ impl WidgetHostNative {
                         self.mark_dirty();
                         return true;
                     }
-                    AIChatHit::Example(text) => {
-                        self.editor_state.chat.input = text;
-                        self.editor_state.chat.focused = true;
-                        self.editor_state.chat.input_select_all = false;
-                        self.editor_state.chat.input_selection = None;
+                    AIChatHit::Example { prompt, .. } => {
+                        self.editor_state.chat.set_input_text(prompt);
+                        self.editor_state.chat.focus_input_at_end(self.now_ms);
                         self.editor_state.chat.transcript_selection = None;
-                        self.editor_state.chat.caret_anchor_ms = self.now_ms;
                         self.mark_dirty();
                         return true;
                     }
@@ -197,60 +193,53 @@ impl WidgetHostNative {
                     AIChatHit::ToggleMaximize => {
                         self.editor_state.chat.maximized = !self.editor_state.chat.maximized;
                         self.editor_state.chat.collapsed = false;
-                        self.editor_state.editor_ui.chat_model_picker_open = false;
-                        self.editor_state.editor_ui.chat_model_picker_search.clear();
-                        self.editor_state.editor_ui.chat_model_picker_caret = None;
+                        self.editor_state.editor_ui.close_chat_model_picker();
                         self.mark_dirty();
                         return true;
                     }
                     AIChatHit::NewChat => {
                         self.editor_state.chat.new_chat();
-                        self.editor_state.editor_ui.chat_model_picker_open = false;
-                        self.editor_state.editor_ui.chat_model_picker_scroll = 0.0;
-                        self.editor_state.editor_ui.chat_model_picker_search.clear();
-                        self.editor_state.editor_ui.chat_model_picker_caret = None;
-                        self.editor_state.editor_ui.chat_model_picker_hover = None;
+                        self.editor_state.editor_ui.close_chat_model_picker();
                         self.mark_dirty();
                         return true;
                     }
                     AIChatHit::ToggleModelPicker => {
-                        let opening = !self.editor_state.editor_ui.chat_model_picker_open;
-                        self.editor_state.editor_ui.chat_model_picker_open = opening;
-                        // Reopen the picker un-scrolled / un-hovered so
-                        // a stale offset from a prior open never hides
-                        // the top of the catalog.
-                        self.editor_state.editor_ui.chat_model_picker_scroll = 0.0;
-                        self.editor_state.editor_ui.chat_model_picker_search.clear();
-                        self.editor_state.editor_ui.chat_model_picker_caret = Some(0);
+                        let opening = self.editor_state.editor_ui.toggle_chat_model_picker();
                         if opening {
                             self.editor_state
                                 .editor_ui
-                                .chat_model_picker_caret_anchor_ms = self.now_ms;
+                                .chat_model_picker_input
+                                .touch(self.now_ms);
                         }
-                        self.editor_state.editor_ui.chat_model_picker_hover = None;
                         self.mark_dirty();
                         return true;
                     }
                     AIChatHit::FocusModelSearch => {
                         self.editor_state
                             .editor_ui
-                            .chat_model_picker_caret_anchor_ms = self.now_ms;
+                            .chat_model_picker_input
+                            .touch(self.now_ms);
                         self.mark_dirty();
                         return true;
                     }
                     AIChatHit::ClearModelSearch => {
-                        self.editor_state.editor_ui.chat_model_picker_search.clear();
-                        self.editor_state.editor_ui.chat_model_picker_caret = Some(0);
-                        self.editor_state.editor_ui.chat_model_picker_scroll = 0.0;
-                        self.editor_state.editor_ui.chat_model_picker_hover = None;
                         self.editor_state
                             .editor_ui
-                            .chat_model_picker_caret_anchor_ms = self.now_ms;
+                            .chat_model_picker_input
+                            .set_text("");
+                        self.editor_state.editor_ui.chat_model_picker.scroll.offset = 0.0;
+                        self.editor_state.editor_ui.chat_model_picker.hover = None;
+                        self.editor_state.editor_ui.chat_model_picker.pressed = None;
+                        self.editor_state
+                            .editor_ui
+                            .chat_model_picker_input
+                            .touch(self.now_ms);
                         self.mark_dirty();
                         return true;
                     }
                     AIChatHit::SelectModel(idx) => {
-                        self.editor_state.select_chat_model(idx);
+                        self.editor_state.editor_ui.chat_model_picker.pressed = Some(idx);
+                        self.editor_state.editor_ui.chat_model_picker.hover = Some(idx);
                         self.mark_dirty();
                         return true;
                     }
@@ -354,6 +343,10 @@ impl WidgetHostNative {
             size: Point2D::new(TOOLBAR_WIDTH, toolbar_h),
         };
         if let Some(hit) = toolbar.hit_test(toolbar_rect, Point2D::new(x, y)) {
+            self.editor_state.editor_ui.pressed_button =
+                Some(op_editor_core::ButtonPressTarget::Toolbar(
+                    op_editor_ui::widgets::editor_state_ext::toolbar_hover(hit),
+                ));
             match hit {
                 op_editor_ui::widgets::ToolbarHit::Tool(tool) => {
                     self.editor_state.tool = tool;
@@ -364,8 +357,13 @@ impl WidgetHostNative {
                     return self.dispatch_toolbar_action(action);
                 }
                 op_editor_ui::widgets::ToolbarHit::ToggleShapePicker => {
-                    self.editor_state.editor_ui.shape_picker_open =
-                        !self.editor_state.editor_ui.shape_picker_open;
+                    let picker = &mut self.editor_state.editor_ui.shape_picker;
+                    picker.open = !picker.open;
+                    picker.hover = None;
+                    picker.pressed = None;
+                    if picker.open {
+                        picker.scroll.offset = 0.0;
+                    }
                     self.mark_dirty();
                     return true;
                 }
@@ -406,7 +404,9 @@ impl WidgetHostNative {
                             }
                         };
                         if started {
-                            self.editor_state.editor_ui.rename_caret_anchor_ms = self.now_ms;
+                            if let Some(rename) = self.editor_state.ui.layer_rename.as_mut() {
+                                rename.input.touch(self.now_ms);
+                            }
                         }
                         self.editor_state.editor_ui.last_layer_click = None;
                         self.mark_dirty();
@@ -471,4 +471,22 @@ impl WidgetHostNative {
         // Click hit no chrome — repaint if focus changed.
         was_focused
     }
+}
+
+fn chat_button_press_target(hit: &AIChatHit) -> Option<op_editor_core::ButtonPressTarget> {
+    if let Some(header) = op_editor_ui::widgets::editor_state_ext::chat_header_hover(hit) {
+        return Some(op_editor_core::ButtonPressTarget::ChatHeader(header));
+    }
+    if let AIChatHit::Example { index, .. } = hit {
+        return Some(op_editor_core::ButtonPressTarget::ChatExample(*index));
+    }
+    let footer = match hit {
+        AIChatHit::ToggleModelPicker => op_editor_core::ChatFooterButton::ModelPicker,
+        AIChatHit::CycleAgentTeam => op_editor_core::ChatFooterButton::AgentTeam,
+        AIChatHit::AddAttachment => op_editor_core::ChatFooterButton::AddAttachment,
+        AIChatHit::Send => op_editor_core::ChatFooterButton::Send,
+        AIChatHit::Stop => op_editor_core::ChatFooterButton::Stop,
+        _ => return None,
+    };
+    Some(op_editor_core::ButtonPressTarget::ChatFooter(footer))
 }

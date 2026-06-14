@@ -6,22 +6,23 @@ use super::*;
 
 #[test]
 fn color_roundtrip_clamps_and_packs() {
-    let red = to_jian_color(Color::RED);
+    let red = (Color::RED).to_jian();
     assert_eq!(red.r(), 255);
     assert_eq!(red.g(), 0);
     assert_eq!(red.b(), 0);
     assert_eq!(red.a(), 255);
 
-    let transparent = to_jian_color(Color::TRANSPARENT);
+    let transparent = (Color::TRANSPARENT).to_jian();
     assert_eq!(transparent.a(), 0);
 
     // Out-of-range channels are clamped, not wrapped.
-    let weird = to_jian_color(Color {
+    let weird = (Color {
         r: -0.5,
         g: 2.0,
         b: 0.5,
         a: 1.0,
-    });
+    })
+    .to_jian();
     assert_eq!(weird.r(), 0);
     assert_eq!(weird.g(), 255);
     assert_eq!(weird.b(), 128);

@@ -3,10 +3,16 @@
 //! the floating Git panel's open diff into the diff view, and
 //! otherwise zoom / pan the canvas.
 
-use super::helpers::rect_contains;
 use super::WidgetHostNative;
+use jian_core::scroll::ScrollState;
 use op_editor_ui::widgets::GitPanel;
 use op_editor_ui::Point2D;
+
+fn scroll_by_max(scroll: &mut ScrollState, delta: f32, max: f32) -> bool {
+    let before = scroll.offset;
+    scroll.scroll_by(delta, max, 0.0);
+    scroll.offset != before
+}
 
 impl WidgetHostNative {
     fn try_scroll_chat_checklist(
@@ -29,12 +35,10 @@ impl WidgetHostNative {
             };
             (checklist, panel.fixed_checklist_scroll_max())
         };
-        if !rect_contains(checklist, point) {
+        if !(checklist).contains(point) {
             return false;
         }
-        let next = (self.editor_state.chat.checklist_scroll - delta).clamp(0.0, max);
-        if next != self.editor_state.chat.checklist_scroll {
-            self.editor_state.chat.checklist_scroll = next;
+        if scroll_by_max(&mut self.editor_state.chat.checklist_scroll, -delta, max) {
             self.mark_dirty();
         }
         true
@@ -57,9 +61,7 @@ impl WidgetHostNative {
             return false;
         };
         let settings = &mut self.editor_state.editor_ui.agent_settings;
-        let next = (settings.builtin_preset_menu_scroll - delta).clamp(0.0, max);
-        if next != settings.builtin_preset_menu_scroll {
-            settings.builtin_preset_menu_scroll = next;
+        if scroll_by_max(&mut settings.builtin_preset_menu_scroll, -delta, max) {
             self.mark_dirty();
         }
         true
@@ -83,15 +85,42 @@ impl WidgetHostNative {
         let Some(panel_rect) = self.variables_panel_rect(viewport_width, viewport_height) else {
             return false;
         };
-        if !rect_contains(panel_rect, Point2D::new(x, y)) {
+        if !(panel_rect).contains(Point2D::new(x, y)) {
             return false;
         }
         use op_editor_ui::widgets::variables_panel::VariablesPanel;
         let panel = VariablesPanel::for_editor(&self.editor_state);
         let max = panel.max_scroll(panel_rect);
-        let next = (self.editor_state.editor_ui.variables_scroll - delta_y).clamp(0.0, max);
-        if next != self.editor_state.editor_ui.variables_scroll {
-            self.editor_state.editor_ui.variables_scroll = next;
+        if scroll_by_max(
+            &mut self.editor_state.editor_ui.variables_scroll,
+            -delta_y,
+            max,
+        ) {
+            self.mark_dirty();
+        }
+        true
+    }
+
+    fn try_scroll_locale_picker(
+        &mut self,
+        x: f32,
+        y: f32,
+        delta_y: f32,
+        viewport_width: f32,
+    ) -> bool {
+        if !self.editor_state.editor_ui.locale_picker.open {
+            return false;
+        }
+        if !(self.locale_picker_rect(viewport_width)).contains(Point2D::new(x, y)) {
+            return false;
+        }
+        let ui = &mut self.editor_state.editor_ui.locale_picker;
+        let next = (ui.scroll.offset - delta_y)
+            .clamp(0.0, op_editor_ui::widgets::LocalePicker::max_scroll());
+        let changed = next != ui.scroll.offset || ui.hover.is_some();
+        ui.scroll.offset = next;
+        ui.hover = None;
+        if changed {
             self.mark_dirty();
         }
         true
@@ -124,7 +153,7 @@ impl WidgetHostNative {
             origin: Point2D::new(viewport_width - pw, TOP_BAR_HEIGHT),
             size: Point2D::new(pw, (viewport_height - TOP_BAR_HEIGHT).max(0.0)),
         };
-        if !rect_contains(property_rect, Point2D::new(x, y)) {
+        if !(property_rect).contains(Point2D::new(x, y)) {
             return false;
         }
         // Code tab: a wheel over the framework strip scrolls it horizontally
@@ -141,9 +170,7 @@ impl WidgetHostNative {
             if y >= band_top && y <= band_bottom {
                 let max = op_editor_ui::widgets::property_panel_code::framework_row_overflow(pw);
                 let cg = &mut self.editor_state.codegen;
-                let next = (cg.framework_scroll - delta).clamp(0.0, max);
-                if next != cg.framework_scroll {
-                    cg.framework_scroll = next;
+                if scroll_by_max(&mut cg.framework_scroll, -delta, max) {
                     self.mark_dirty();
                 }
                 return true;
@@ -152,7 +179,7 @@ impl WidgetHostNative {
                 property_rect,
                 &self.editor_state.codegen,
             )
-            .is_some_and(|rect| rect_contains(rect, point))
+            .is_some_and(|rect| (rect).contains(point))
             {
                 let max = op_editor_ui::widgets::property_panel_code::code_preview_max_scroll(
                     property_rect,
@@ -160,18 +187,18 @@ impl WidgetHostNative {
                 )
                 .unwrap_or(0.0);
                 let cg = &mut self.editor_state.codegen;
-                let next = (cg.code_scroll - delta).clamp(0.0, max);
-                if next != cg.code_scroll {
-                    cg.code_scroll = next;
+                if scroll_by_max(&mut cg.code_scroll, -delta, max) {
                     self.mark_dirty();
                 }
                 return true;
             }
         }
         let max = (panel.content_height(property_rect) - property_rect.size.y).max(0.0);
-        let next = (self.editor_state.editor_ui.property_panel_scroll - delta).clamp(0.0, max);
-        if next != self.editor_state.editor_ui.property_panel_scroll {
-            self.editor_state.editor_ui.property_panel_scroll = next;
+        if scroll_by_max(
+            &mut self.editor_state.editor_ui.property_panel_scroll,
+            -delta,
+            max,
+        ) {
             self.mark_dirty();
         }
         true
@@ -199,42 +226,46 @@ impl WidgetHostNative {
             origin: Point2D::new(0.0, TOP_BAR_HEIGHT),
             size: Point2D::new(pw, (viewport_height - TOP_BAR_HEIGHT).max(0.0)),
         };
-        if !rect_contains(rect, Point2D::new(x, y)) {
+        if !(rect).contains(Point2D::new(x, y)) {
             return false;
         }
         let r = LayerPanel::from_editor(&self.editor_state).regions(rect);
         let mut changed = false;
         if y >= r.layers_rows_top {
             if delta_y != 0.0 {
-                let next = (self.editor_state.editor_ui.layer_layers_scroll - delta_y)
-                    .clamp(0.0, r.layers_max_scroll);
-                if next != self.editor_state.editor_ui.layer_layers_scroll {
-                    self.editor_state.editor_ui.layer_layers_scroll = next;
+                if scroll_by_max(
+                    &mut self.editor_state.editor_ui.layer_layers_scroll,
+                    -delta_y,
+                    r.layers_max_scroll,
+                ) {
                     changed = true;
                 }
             }
             if delta_x != 0.0 {
-                let next = (self.editor_state.editor_ui.layer_layers_h_scroll - delta_x)
-                    .clamp(0.0, r.layers_max_h_scroll);
-                if next != self.editor_state.editor_ui.layer_layers_h_scroll {
-                    self.editor_state.editor_ui.layer_layers_h_scroll = next;
+                if scroll_by_max(
+                    &mut self.editor_state.editor_ui.layer_layers_h_scroll,
+                    -delta_x,
+                    r.layers_max_h_scroll,
+                ) {
                     changed = true;
                 }
             }
         } else {
             if delta_y != 0.0 {
-                let next = (self.editor_state.editor_ui.layer_pages_scroll - delta_y)
-                    .clamp(0.0, r.pages_max_scroll);
-                if next != self.editor_state.editor_ui.layer_pages_scroll {
-                    self.editor_state.editor_ui.layer_pages_scroll = next;
+                if scroll_by_max(
+                    &mut self.editor_state.editor_ui.layer_pages_scroll,
+                    -delta_y,
+                    r.pages_max_scroll,
+                ) {
                     changed = true;
                 }
             }
             if delta_x != 0.0 {
-                let next = (self.editor_state.editor_ui.layer_pages_h_scroll - delta_x)
-                    .clamp(0.0, r.pages_max_h_scroll);
-                if next != self.editor_state.editor_ui.layer_pages_h_scroll {
-                    self.editor_state.editor_ui.layer_pages_h_scroll = next;
+                if scroll_by_max(
+                    &mut self.editor_state.editor_ui.layer_pages_h_scroll,
+                    -delta_x,
+                    r.pages_max_h_scroll,
+                ) {
                     changed = true;
                 }
             }
@@ -263,6 +294,9 @@ impl WidgetHostNative {
         if self.try_scroll_variables_panel(x, y, delta_y, viewport_width, viewport_height) {
             return true;
         }
+        if self.try_scroll_locale_picker(x, y, delta_y, viewport_width) {
+            return true;
+        }
         // Any top-most floating panel (Design-MD / Component-Browser)
         // owns the wheel before lower layers — a scroll over them
         // never reaches the modal / Git panel / canvas.
@@ -271,7 +305,7 @@ impl WidgetHostNative {
         }
         // Open chat model-picker — a wheel over its dropdown scrolls
         // the model list instead of zooming the canvas.
-        if self.editor_state.editor_ui.chat_model_picker_open {
+        if self.editor_state.editor_ui.chat_model_picker.open {
             use op_editor_ui::widgets::ai_chat_model_picker::max_picker_scroll;
             use op_editor_ui::widgets::AIChatPlaceholder;
             let picker = self
@@ -281,14 +315,15 @@ impl WidgetHostNative {
                         .model_picker_bounds(chat_rect)
                 });
             if let Some(picker) = picker {
-                if rect_contains(picker, Point2D::new(x, y)) {
+                if (picker).contains(Point2D::new(x, y)) {
                     let max = max_picker_scroll(
                         &self.editor_state.chat.available_models,
-                        &self.editor_state.editor_ui.chat_model_picker_search,
+                        self.editor_state.editor_ui.chat_model_picker_input.text(),
                     );
-                    let next = (self.editor_state.editor_ui.chat_model_picker_scroll - delta_y)
+                    let next = (self.editor_state.editor_ui.chat_model_picker.scroll.offset
+                        - delta_y)
                         .clamp(0.0, max);
-                    self.editor_state.editor_ui.chat_model_picker_scroll = next;
+                    self.editor_state.editor_ui.chat_model_picker.scroll.offset = next;
                     self.mark_dirty();
                     return true;
                 }
@@ -316,9 +351,11 @@ impl WidgetHostNative {
                 let total = panel.content_total_height();
                 let viewport_h_inner = panel_rect.size.y - 48.0;
                 let max_scroll = (total - viewport_h_inner).max(0.0);
-                let next = (self.editor_state.editor_ui.agent_settings.scroll_y - delta_y)
-                    .clamp(0.0, max_scroll);
-                self.editor_state.editor_ui.agent_settings.scroll_y = next;
+                self.editor_state
+                    .editor_ui
+                    .agent_settings
+                    .scroll_y
+                    .scroll_by(-delta_y, max_scroll, 0.0);
                 self.mark_dirty();
                 return true;
             }
@@ -327,7 +364,7 @@ impl WidgetHostNative {
         // scrolls the diff (vertically; horizontally with Shift held)
         // instead of zooming the canvas.
         if let Some(panel_rect) = self.git_panel_outer_rect(viewport_width, viewport_height) {
-            if rect_contains(panel_rect, Point2D::new(x, y))
+            if (panel_rect).contains(Point2D::new(x, y))
                 && self.editor_state.editor_ui.git_panel.diff.is_some()
             {
                 let panel = GitPanel::for_editor(&self.editor_state);
@@ -399,13 +436,22 @@ impl WidgetHostNative {
         viewport_width: f32,
         viewport_height: f32,
     ) -> bool {
+        // Floating VariablesPanel owns trackpad pans over its rect.
+        // See `apply_wheel` for why this must precede the topmost
+        // overlay guard.
+        if self.try_scroll_variables_panel(x, y, dy, viewport_width, viewport_height) {
+            return true;
+        }
+        if self.try_scroll_locale_picker(x, y, dy, viewport_width) {
+            return true;
+        }
         // Any top-most floating panel owns trackpad scroll first.
         if self.over_topmost_panel(x, y, viewport_width, viewport_height) {
             return true;
         }
         // Open chat model-picker owns trackpad scroll over its
         // dropdown, same as the wheel path.
-        if self.editor_state.editor_ui.chat_model_picker_open {
+        if self.editor_state.editor_ui.chat_model_picker.open {
             use op_editor_ui::widgets::ai_chat_model_picker::max_picker_scroll;
             use op_editor_ui::widgets::AIChatPlaceholder;
             let picker = self
@@ -415,24 +461,20 @@ impl WidgetHostNative {
                         .model_picker_bounds(chat_rect)
                 });
             if let Some(picker) = picker {
-                if rect_contains(picker, Point2D::new(x, y)) {
+                if (picker).contains(Point2D::new(x, y)) {
                     let max = max_picker_scroll(
                         &self.editor_state.chat.available_models,
-                        &self.editor_state.editor_ui.chat_model_picker_search,
+                        self.editor_state.editor_ui.chat_model_picker_input.text(),
                     );
-                    let next =
-                        (self.editor_state.editor_ui.chat_model_picker_scroll - dy).clamp(0.0, max);
-                    self.editor_state.editor_ui.chat_model_picker_scroll = next;
+                    let next = (self.editor_state.editor_ui.chat_model_picker.scroll.offset - dy)
+                        .clamp(0.0, max);
+                    self.editor_state.editor_ui.chat_model_picker.scroll.offset = next;
                     self.mark_dirty();
                     return true;
                 }
             }
         }
         if self.try_scroll_chat_checklist(x, y, dy, viewport_width, viewport_height) {
-            return true;
-        }
-        // Floating VariablesPanel owns trackpad pans over its rect.
-        if self.try_scroll_variables_panel(x, y, dy, viewport_width, viewport_height) {
             return true;
         }
         // Agent-settings modal owns trackpad scroll same as wheel.
@@ -453,9 +495,11 @@ impl WidgetHostNative {
                 let total = panel.content_total_height();
                 let viewport_h_inner = panel_rect.size.y - 48.0;
                 let max_scroll = (total - viewport_h_inner).max(0.0);
-                let next = (self.editor_state.editor_ui.agent_settings.scroll_y - dy)
-                    .clamp(0.0, max_scroll);
-                self.editor_state.editor_ui.agent_settings.scroll_y = next;
+                self.editor_state
+                    .editor_ui
+                    .agent_settings
+                    .scroll_y
+                    .scroll_by(-dy, max_scroll, 0.0);
                 self.mark_dirty();
                 return true;
             }
@@ -463,7 +507,7 @@ impl WidgetHostNative {
         // Floating Git panel — a trackpad scroll over its open diff
         // pans the diff (dy vertically, dx sideways) like the wheel.
         if let Some(panel_rect) = self.git_panel_outer_rect(viewport_width, viewport_height) {
-            if rect_contains(panel_rect, Point2D::new(x, y))
+            if (panel_rect).contains(Point2D::new(x, y))
                 && self.editor_state.editor_ui.git_panel.diff.is_some()
             {
                 let panel = GitPanel::for_editor(&self.editor_state);

@@ -9,8 +9,8 @@ use crate::theme::Theme;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::property_panel_action::{CodegenAction, PropertyPanelAction};
 use crate::widgets::property_panel_inputs::{
-    paint_section_label, to_jian_color, INPUT_HEIGHT, INPUT_RADIUS, PAD_X, SECTION_GAP,
-    SECTION_HEADER_HEIGHT, TAB_HEIGHT,
+    paint_section_label, INPUT_HEIGHT, INPUT_RADIUS, PAD_X, SECTION_GAP, SECTION_HEADER_HEIGHT,
+    TAB_HEIGHT,
 };
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
@@ -82,7 +82,7 @@ pub fn code_hover_at_with_locale(
         .map(|(a, _)| a);
     match hit {
         Some(CodegenAction::SelectFramework(fw)) => (Some(fw), None),
-        Some(action) => (None, hover_for_action(action)),
+        Some(action) => (None, codegen_hover_for_action(action)),
         None => (None, None),
     }
 }
@@ -177,7 +177,7 @@ struct CodePanelLayout {
     panel_bottom: Option<f32>,
 }
 
-fn hover_for_action(action: CodegenAction) -> Option<CodegenHover> {
+pub fn codegen_hover_for_action(action: CodegenAction) -> Option<CodegenHover> {
     match action {
         CodegenAction::SelectFramework(_) => None,
         CodegenAction::Generate => Some(CodegenHover::Generate),
@@ -219,7 +219,7 @@ fn code_neutral_hover_color(theme: &Theme) -> Color {
 
 /// Draw a 13px system-ui line of text at the `(px, py)` baseline.
 fn draw_line(cx: &mut PaintCx<'_>, text: &str, color: Color, px: f32, py: f32) {
-    let layout = TextLayout::single_run(text, "system-ui", 13.0, to_jian_color(color), origin());
+    let layout = TextLayout::single_run(text, "system-ui", 13.0, (color).to_jian(), origin());
     cx.backend.draw_text(&layout, Point2D::new(px, py));
 }
 
@@ -479,7 +479,7 @@ fn paint_framework_chips(
     // Clip the strip so scrolled-off chips don't bleed past the panel edges.
     cx.backend.save();
     cx.backend.clip_rect(band);
-    for (fw, chip) in framework_chip_rects(x, y, w, state.framework_scroll) {
+    for (fw, chip) in framework_chip_rects(x, y, w, state.framework_scroll.offset) {
         // Skip chips fully outside the visible band (cheap cull).
         if chip.origin.x + chip.size.x < band.origin.x
             || chip.origin.x > band.origin.x + band.size.x
@@ -508,7 +508,7 @@ fn paint_framework_chips(
             label,
             "system-ui",
             CHIP_FONT_SIZE,
-            to_jian_color(text_color),
+            (text_color).to_jian(),
             origin(),
         );
         cx.backend.draw_text(&layout, Point2D::new(tx, ty));
@@ -523,7 +523,7 @@ fn paint_framework_chips(
             theme,
             Icon::ChevronLeft,
             left,
-            state.framework_scroll > 0.0,
+            state.framework_scroll.offset > 0.0,
             action_hovered(state, CodegenHover::ScrollFrameworksLeft),
         );
         paint_chevron(
@@ -531,7 +531,7 @@ fn paint_framework_chips(
             theme,
             Icon::ChevronRight,
             right,
-            state.framework_scroll < max,
+            state.framework_scroll.offset < max,
             action_hovered(state, CodegenHover::ScrollFrameworksRight),
         );
     }
@@ -781,6 +781,7 @@ pub fn paint_code_panel_at_with_locale(
             panel_bottom: None,
         },
         now_ms,
+        None,
     )
 }
 
@@ -804,6 +805,20 @@ pub fn paint_code_panel_in_panel_with_locale(
     panel_rect: Rect,
     now_ms: u64,
 ) -> f32 {
+    paint_code_panel_in_panel_with_locale_and_pressed(
+        cx, theme, state, locale, panel_rect, now_ms, None,
+    )
+}
+
+pub fn paint_code_panel_in_panel_with_locale_and_pressed(
+    cx: &mut PaintCx<'_>,
+    theme: &Theme,
+    state: &CodegenState,
+    locale: Locale,
+    panel_rect: Rect,
+    now_ms: u64,
+    pressed: Option<CodegenHover>,
+) -> f32 {
     paint_code_panel_with_bottom(
         cx,
         theme,
@@ -816,6 +831,7 @@ pub fn paint_code_panel_in_panel_with_locale(
             panel_bottom: Some(panel_bottom(panel_rect)),
         },
         now_ms,
+        pressed,
     )
 }
 
@@ -826,6 +842,7 @@ fn paint_code_panel_with_bottom(
     strings: CodePanelStrings,
     layout: CodePanelLayout,
     now_ms: u64,
+    pressed: Option<CodegenHover>,
 ) -> f32 {
     // A faint section label keeps the panel head consistent with Design.
     let x = layout.x;
@@ -849,6 +866,7 @@ fn paint_code_panel_with_bottom(
                 progress_row_h: PROGRESS_ROW_H,
                 panel_bottom: layout.panel_bottom,
             },
+            pressed,
         ),
         CodegenPhase::Error => paint_error_body(cx, theme, state, strings, x, y, w),
     }
@@ -908,7 +926,7 @@ fn code_action_rects_with_bottom(
     }
     let inset = if zones.is_some() { CHEVRON_ZONE_W } else { 0.0 };
     let (band_l, band_r) = (x + PAD_X + inset, x + w - PAD_X - inset);
-    for (fw, rect) in framework_chip_rects(x, chips_y, w, state.framework_scroll) {
+    for (fw, rect) in framework_chip_rects(x, chips_y, w, state.framework_scroll.offset) {
         // Clamp the clickable rect to the visible (chevron-inset) band so a
         // chip's scrolled-off / clipped portion is NOT clickable (matches the
         // painter's clip and the hover hit-test in `framework_at`).

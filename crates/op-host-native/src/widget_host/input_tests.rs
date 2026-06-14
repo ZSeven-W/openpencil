@@ -281,7 +281,7 @@ fn ai_chat_new_chat_click_clears_transcript_and_queues_abort() {
         .chat
         .messages
         .push(op_editor_core::ChatMessage::assistant("old"));
-    host.editor_state_mut().chat.input = "draft".into();
+    host.editor_state_mut().chat.set_input_text("draft");
     let rect = host
         .ai_chat_rect(1200.0, 800.0)
         .expect("chat panel visible");
@@ -291,7 +291,7 @@ fn ai_chat_new_chat_click_clears_transcript_and_queues_abort() {
     assert!(host.apply_click(x, y, 1200.0, 800.0));
 
     assert!(host.editor_state().chat.messages.is_empty());
-    assert!(host.editor_state().chat.input.is_empty());
+    assert!(host.editor_state().chat.input.text().is_empty());
     assert!(host.editor_state().chat.pending_new_chat);
 }
 
@@ -352,7 +352,7 @@ fn user_transcript_text_uses_text_cursor() {
 #[test]
 fn chat_input_text_uses_text_cursor() {
     let mut host = WidgetHostNative::new();
-    host.editor_state_mut().chat.input = "abcdef".into();
+    host.editor_state_mut().chat.set_input_text("abcdef");
     let viewport_w = 1200.0;
     let viewport_h = 800.0;
     let rect = host
@@ -626,9 +626,11 @@ fn chat_input_click_clears_select_all_without_erasing_text() {
     let viewport_w = 1200.0;
     let viewport_h = 800.0;
     let rect = host.ai_chat_rect(viewport_w, viewport_h).unwrap();
-    host.editor_state_mut().chat.input = "设计一个现代的移动端登录页面".into();
+    host.editor_state_mut()
+        .chat
+        .set_input_text("设计一个现代的移动端登录页面");
     host.editor_state_mut().chat.focused = true;
-    host.editor_state_mut().chat.input_select_all = true;
+    host.editor_state_mut().chat.select_all_input(0);
 
     assert!(host.apply_press(
         rect.origin.x + 80.0,
@@ -638,11 +640,11 @@ fn chat_input_click_clears_select_all_without_erasing_text() {
     ));
 
     assert_eq!(
-        host.editor_state().chat.input,
+        host.editor_state().chat.input.text(),
         "设计一个现代的移动端登录页面"
     );
     assert!(host.editor_state().chat.focused);
-    assert!(!host.editor_state().chat.input_select_all);
+    assert!(host.editor_state().chat.input.highlight_range().is_none());
 }
 
 #[test]
@@ -651,31 +653,31 @@ fn chat_input_drag_selects_partial_text_and_replaces_it() {
     let viewport_w = 1200.0;
     let viewport_h = 800.0;
     let rect = host.ai_chat_rect(viewport_w, viewport_h).unwrap();
-    host.editor_state_mut().chat.input = "abcdef".into();
+    host.editor_state_mut().chat.set_input_text("abcdef");
     host.editor_state_mut().chat.focused = true;
     let text_x = rect.origin.x + 24.0;
     let text_y = rect.origin.y + textarea_center_y_for_test();
 
     assert!(host.apply_press(text_x + 6.6, text_y, viewport_w, viewport_h));
     assert_eq!(
-        host.editor_state().chat.input_selection,
-        Some(op_editor_core::chat::ChatInputSelection {
+        host.editor_state().chat.input.selection(),
+        jian_core::text_input::Selection {
             anchor: 1,
             focus: 1
-        })
+        }
     );
     assert!(host.apply_cursor_move(text_x + 19.8, text_y));
     assert_eq!(
-        host.editor_state().chat.input_selection,
-        Some(op_editor_core::chat::ChatInputSelection {
+        host.editor_state().chat.input.selection(),
+        jian_core::text_input::Selection {
             anchor: 1,
             focus: 3
-        })
+        }
     );
     assert!(host.apply_release());
     assert!(host.apply_text('X'));
 
-    assert_eq!(host.editor_state().chat.input, "aXdef");
+    assert_eq!(host.editor_state().chat.input.text(), "aXdef");
 }
 
 #[test]
@@ -686,13 +688,10 @@ fn escape_closes_one_overlay_per_press_in_priority_order() {
     // fill-type → chat → selection.
     let mut host = WidgetHostNative::new();
     host.editor_state_mut().ui.property_focus = Some(PropertyFocus::PositionX);
-    host.editor_state_mut().ui.property_input_draft = "12".to_string();
-    // Focusing an input seeds the caret at the draft's end (the
-    // press path does this); mirror it so the state is faithful.
-    host.editor_state_mut().ui.property_caret_pos = 2;
-    host.editor_state_mut().editor_ui.locale_picker_open = true;
-    host.editor_state_mut().editor_ui.shape_picker_open = true;
-    host.editor_state_mut().editor_ui.fill_type_picker_open = true;
+    host.editor_state_mut().ui.property_input.set_text("12");
+    host.editor_state_mut().editor_ui.locale_picker.open = true;
+    host.editor_state_mut().editor_ui.shape_picker.open = true;
+    host.editor_state_mut().editor_ui.fill_type_picker.open = true;
     host.editor_state_mut().chat.focused = true;
     host.editor_state_mut()
         .set_single_selection(NodeId::new("n10"));
@@ -700,22 +699,22 @@ fn escape_closes_one_overlay_per_press_in_priority_order() {
     // 1. Property focus clears first.
     assert!(host.apply_escape());
     assert!(host.editor_state().ui.property_focus.is_none());
-    assert!(host.editor_state().ui.property_input_draft.is_empty());
-    assert!(host.editor_state().editor_ui.locale_picker_open);
+    assert!(host.editor_state().ui.property_input.text().is_empty());
+    assert!(host.editor_state().editor_ui.locale_picker.open);
 
     // 2. Locale picker next.
     assert!(host.apply_escape());
-    assert!(!host.editor_state().editor_ui.locale_picker_open);
-    assert!(host.editor_state().editor_ui.shape_picker_open);
+    assert!(!host.editor_state().editor_ui.locale_picker.open);
+    assert!(host.editor_state().editor_ui.shape_picker.open);
 
     // 3. Shape picker.
     assert!(host.apply_escape());
-    assert!(!host.editor_state().editor_ui.shape_picker_open);
-    assert!(host.editor_state().editor_ui.fill_type_picker_open);
+    assert!(!host.editor_state().editor_ui.shape_picker.open);
+    assert!(host.editor_state().editor_ui.fill_type_picker.open);
 
     // 4. Fill-type picker.
     assert!(host.apply_escape());
-    assert!(!host.editor_state().editor_ui.fill_type_picker_open);
+    assert!(!host.editor_state().editor_ui.fill_type_picker.open);
     assert!(host.editor_state().chat.focused);
 
     // 5. Chat focus.
@@ -750,18 +749,36 @@ fn rename_caret_arrows_move_caret_then_fall_through() {
         .start_rename_layer(NodeId::new("ab")));
     // Draft "ab" seeds caret at the end (2).
     assert_eq!(
-        host.editor_state().ui.layer_rename.as_ref().unwrap().caret,
+        host.editor_state()
+            .ui
+            .layer_rename
+            .as_ref()
+            .unwrap()
+            .input
+            .caret(),
         2
     );
     // Left arrow during rename is consumed and moves the caret.
     assert!(host.apply_rename_caret(false));
     assert_eq!(
-        host.editor_state().ui.layer_rename.as_ref().unwrap().caret,
+        host.editor_state()
+            .ui
+            .layer_rename
+            .as_ref()
+            .unwrap()
+            .input
+            .caret(),
         1
     );
     assert!(host.apply_rename_caret(true));
     assert_eq!(
-        host.editor_state().ui.layer_rename.as_ref().unwrap().caret,
+        host.editor_state()
+            .ui
+            .layer_rename
+            .as_ref()
+            .unwrap()
+            .input
+            .caret(),
         2
     );
     // With no rename active the arrow falls through (not consumed).
@@ -801,6 +818,103 @@ fn status_bar_search_click_frames_content_in_viewport() {
     assert!((v.zoom - 1.0).abs() < 1e-3, "zoom {}", v.zoom);
     assert!((v.pan_x - 230.0).abs() < 1e-2, "pan_x {}", v.pan_x);
     assert!((v.pan_y - 180.0).abs() < 1e-2, "pan_y {}", v.pan_y);
+}
+
+#[test]
+fn status_bar_press_sets_and_release_clears_pressed_button() {
+    let mut host = WidgetHostNative::new();
+    let (vw, vh) = (1200.0, 800.0);
+    let r = host
+        .status_bar_rect(vw, vh)
+        .expect("status bar visible at this size");
+    let x = r.origin.x + 5.0;
+    let y = r.origin.y + r.size.y / 2.0;
+
+    assert!(host.apply_press(x, y, vw, vh));
+    assert_eq!(
+        host.editor_state().editor_ui.pressed_button,
+        Some(op_editor_core::ButtonPressTarget::StatusBar(
+            op_editor_core::StatusBarButton::Search
+        ))
+    );
+
+    assert!(host.apply_release_with_viewport(vw, vh));
+    assert_eq!(host.editor_state().editor_ui.pressed_button, None);
+}
+
+#[test]
+fn export_dialog_press_sets_and_release_clears_pressed_button() {
+    let mut host = WidgetHostNative::new();
+    let (vw, vh) = (1200.0, 800.0);
+    host.editor_state_mut().editor_ui.export_dialog_open = true;
+    let dlg = op_editor_ui::widgets::ExportDialog::centered(vw, vh);
+    let mut point = None;
+    let r = dlg.rect();
+    let mut y = r.origin.y;
+    while y <= r.origin.y + r.size.y && point.is_none() {
+        let mut x = r.origin.x;
+        while x <= r.origin.x + r.size.x {
+            let p = op_editor_ui::Point2D::new(x, y);
+            if dlg.hit_test(p)
+                == Some(op_editor_ui::widgets::export_dialog::ExportDialogHit::Scale(1))
+            {
+                point = Some(p);
+                break;
+            }
+            x += 4.0;
+        }
+        y += 4.0;
+    }
+    let point = point.expect("scale 1 pill is hittable");
+
+    assert!(host.apply_press(point.x, point.y, vw, vh));
+    assert_eq!(
+        host.editor_state().editor_ui.pressed_button,
+        Some(op_editor_core::ButtonPressTarget::ExportDialog(
+            op_editor_core::ExportDialogButton::Scale(1)
+        ))
+    );
+
+    assert!(host.apply_release_with_viewport(vw, vh));
+    assert_eq!(host.editor_state().editor_ui.pressed_button, None);
+}
+
+#[test]
+fn figma_import_press_sets_and_release_clears_pressed_button() {
+    let mut host = WidgetHostNative::new();
+    let (vw, vh) = (1200.0, 800.0);
+    host.editor_state_mut().editor_ui.figma_import_open = true;
+    let modal =
+        op_editor_ui::widgets::figma_import::FigmaImportModal::for_editor(host.editor_state());
+    let panel = modal.rect(vw, vh);
+    let mut point = None;
+    let mut y = panel.origin.y;
+    while y <= panel.origin.y + panel.size.y && point.is_none() {
+        let mut x = panel.origin.x;
+        while x <= panel.origin.x + panel.size.x {
+            let p = op_editor_ui::Point2D::new(x, y);
+            if modal.hit_test(panel, p)
+                == op_editor_ui::widgets::figma_import::FigmaImportHit::DropZone
+            {
+                point = Some(p);
+                break;
+            }
+            x += 4.0;
+        }
+        y += 4.0;
+    }
+    let point = point.expect("drop zone is hittable");
+
+    assert!(host.apply_press(point.x, point.y, vw, vh));
+    assert_eq!(
+        host.editor_state().editor_ui.pressed_button,
+        Some(op_editor_core::ButtonPressTarget::FigmaImport(
+            op_editor_core::FigmaImportButton::DropZone
+        ))
+    );
+
+    assert!(host.apply_release_with_viewport(vw, vh));
+    assert_eq!(host.editor_state().editor_ui.pressed_button, None);
 }
 
 #[test]
@@ -923,7 +1037,7 @@ fn corner_radius_property_focus_updates_selected_rectangle() {
     host.editor_state_mut()
         .set_single_selection(NodeId::new("n62"));
     host.editor_state_mut().ui.property_focus = Some(PropertyFocus::PositionR);
-    host.editor_state_mut().ui.property_input_draft = "24".to_string();
+    host.editor_state_mut().ui.property_input.set_text("24");
 
     host.commit_property_focus_if_any();
 
@@ -949,6 +1063,205 @@ fn corner_radius_property_focus_updates_selected_rectangle() {
 }
 
 #[test]
+fn property_focus_commit_reads_text_input_state() {
+    let mut host = WidgetHostNative::new();
+    seed(
+        &mut host,
+        r##"{ "version": "0.8.0", "children": [
+              {"type":"rectangle","id":"n62","name":"Wide",
+               "x":40,"y":40,"width":180,"height":120,
+               "fill":[{"type":"solid","color":"#BDC7D9"}]}
+        ]}"##,
+    );
+    host.editor_state_mut()
+        .set_single_selection(NodeId::new("n62"));
+    host.editor_state_mut().ui.property_focus = Some(PropertyFocus::SizeW);
+    host.editor_state_mut().ui.property_input.set_text("321");
+
+    host.commit_property_focus_if_any();
+
+    let bounds = own_bounds(host.editor_state().selected_node().unwrap());
+    assert_eq!(bounds.w, 321.0);
+    assert!(host.editor_state().ui.property_input.text().is_empty());
+}
+
+#[test]
+fn property_focus_commit_is_undoable() {
+    let mut host = WidgetHostNative::new();
+    seed(
+        &mut host,
+        r##"{ "version": "0.8.0", "children": [
+              {"type":"rectangle","id":"n62","name":"Wide",
+               "x":40,"y":40,"width":180,"height":120,
+               "fill":[{"type":"solid","color":"#BDC7D9"}]}
+        ]}"##,
+    );
+    host.editor_state_mut()
+        .set_single_selection(NodeId::new("n62"));
+    host.editor_state_mut().ui.property_focus = Some(PropertyFocus::SizeW);
+    host.editor_state_mut().ui.property_input.set_text("321");
+
+    host.commit_property_focus_if_any();
+
+    let bounds = own_bounds(host.editor_state().selected_node().unwrap());
+    assert_eq!(bounds.w, 321.0);
+    assert!(host.editor_state().history.can_undo());
+
+    assert!(host.editor_state_mut().undo());
+    let bounds = own_bounds(host.editor_state().selected_node().unwrap());
+    assert_eq!(bounds.w, 180.0);
+}
+
+#[test]
+fn property_press_seeds_text_input_state() {
+    let mut host = WidgetHostNative::new();
+    seed(
+        &mut host,
+        r##"{ "version": "0.8.0", "children": [
+              {"type":"rectangle","id":"n62","name":"Wide",
+               "x":40,"y":40,"width":180,"height":120,
+               "fill":[{"type":"solid","color":"#BDC7D9"}]}
+        ]}"##,
+    );
+    host.editor_state_mut()
+        .set_single_selection(NodeId::new("n62"));
+
+    let viewport_w = 1200.0;
+    let viewport_h = 800.0;
+    let property_rect = host.property_rect(viewport_w, viewport_h);
+    let panel = op_editor_ui::widgets::PropertyPanel::for_selection(host.editor_state())
+        .expect("selection should show the property panel");
+    let mut point = None;
+    'outer: for y in 0..property_rect.size.y as i32 {
+        for x in 0..property_rect.size.x as i32 {
+            let candidate = op_editor_ui::Point2D::new(
+                property_rect.origin.x + x as f32 + 0.5,
+                property_rect.origin.y + y as f32 + 0.5,
+            );
+            if panel.hit_test(property_rect, candidate) == Some(PropertyFocus::SizeW) {
+                point = Some(candidate);
+                break 'outer;
+            }
+        }
+    }
+    let point = point.expect("width input should be hit-testable");
+
+    assert!(host.apply_press(point.x, point.y, viewport_w, viewport_h));
+
+    assert_eq!(
+        host.editor_state().ui.property_focus,
+        Some(PropertyFocus::SizeW)
+    );
+    assert_eq!(host.editor_state().ui.property_input.text(), "180");
+    assert_eq!(host.editor_state().ui.property_input.caret(), 3);
+}
+
+#[test]
+fn effect_param_focus_seeds_text_input_state() {
+    let mut host = WidgetHostNative::new();
+
+    host.apply_property_action(
+        op_editor_ui::widgets::PropertyPanelAction::FocusEffectParam {
+            effect: 0,
+            field: op_editor_core::EffectField::OffsetX,
+            value: 12.5,
+        },
+    );
+
+    assert_eq!(
+        host.editor_state().editor_ui.effect_param_focus,
+        Some(op_editor_core::editor_ui_state::EffectParamFocus {
+            effect: 0,
+            field: op_editor_core::EffectField::OffsetX,
+        })
+    );
+    assert_eq!(host.editor_state().ui.property_input.text(), "12.5");
+    assert_eq!(host.editor_state().ui.property_input.caret(), 4);
+}
+
+#[test]
+fn effect_param_input_uses_text_input_state_for_editing() {
+    let mut host = WidgetHostNative::new();
+    {
+        let editor = host.editor_state_mut();
+        editor.editor_ui.effect_param_focus =
+            Some(op_editor_core::editor_ui_state::EffectParamFocus {
+                effect: 0,
+                field: op_editor_core::EffectField::OffsetX,
+            });
+        editor.ui.property_input.set_text("1234");
+    }
+
+    assert!(host.apply_property_caret(false));
+    assert!(host.apply_property_caret(false));
+    assert_eq!(host.editor_state().ui.property_input.caret(), 2);
+
+    assert!(host.apply_text('9'));
+    assert_eq!(host.editor_state().ui.property_input.text(), "12934");
+    assert_eq!(host.editor_state().ui.property_input.caret(), 3);
+}
+
+#[test]
+fn property_delete_uses_text_input_state() {
+    let mut host = WidgetHostNative::new();
+    host.editor_state_mut()
+        .set_single_selection(NodeId::new("n10"));
+    {
+        let ui = &mut host.editor_state_mut().ui;
+        ui.property_focus = Some(PropertyFocus::PositionX);
+        ui.property_input.set_text("123");
+    }
+    assert!(host.apply_property_caret(false));
+
+    assert!(host.apply_delete());
+
+    assert_eq!(host.editor_state().ui.property_input.text(), "12");
+    assert_eq!(host.editor_state().selection.anchor, NodeId::new("n10"));
+}
+
+#[test]
+fn property_step_reads_and_updates_text_input_state() {
+    let mut host = WidgetHostNative::new();
+    seed(
+        &mut host,
+        r##"{ "version": "0.8.0", "children": [
+              {"type":"rectangle","id":"n62","name":"Wide",
+               "x":40,"y":40,"width":180,"height":120,
+               "fill":[{"type":"solid","color":"#BDC7D9"}]}
+        ]}"##,
+    );
+    host.editor_state_mut()
+        .set_single_selection(NodeId::new("n62"));
+    {
+        let ui = &mut host.editor_state_mut().ui;
+        ui.property_focus = Some(PropertyFocus::SizeW);
+        ui.property_input.set_text("180");
+    }
+
+    assert!(host.apply_property_step(5.0));
+
+    let bounds = own_bounds(host.editor_state().selected_node().unwrap());
+    assert_eq!(bounds.w, 185.0);
+    assert_eq!(host.editor_state().ui.property_input.text(), "185");
+    assert_eq!(host.editor_state().ui.property_input.caret(), 3);
+}
+
+#[test]
+fn property_escape_clears_text_input_state() {
+    let mut host = WidgetHostNative::new();
+    {
+        let ui = &mut host.editor_state_mut().ui;
+        ui.property_focus = Some(PropertyFocus::PositionX);
+        ui.property_input.set_text("123");
+    }
+
+    assert!(host.apply_escape());
+
+    assert!(host.editor_state().ui.property_focus.is_none());
+    assert!(host.editor_state().ui.property_input.text().is_empty());
+}
+
+#[test]
 fn polygon_sides_property_focus_updates_selected_polygon() {
     let mut host = WidgetHostNative::new();
     seed(
@@ -962,7 +1275,7 @@ fn polygon_sides_property_focus_updates_selected_polygon() {
     host.editor_state_mut()
         .set_single_selection(NodeId::new("poly"));
     host.editor_state_mut().ui.property_focus = Some(PropertyFocus::PolygonSides);
-    host.editor_state_mut().ui.property_input_draft = "7".to_string();
+    host.editor_state_mut().ui.property_input.set_text("7");
 
     host.commit_property_focus_if_any();
 
@@ -996,15 +1309,15 @@ fn ellipse_arc_property_focus_updates_selected_ellipse() {
         .set_single_selection(NodeId::new("ell"));
 
     host.editor_state_mut().ui.property_focus = Some(PropertyFocus::EllipseStart);
-    host.editor_state_mut().ui.property_input_draft = "45".to_string();
+    host.editor_state_mut().ui.property_input.set_text("45");
     host.commit_property_focus_if_any();
 
     host.editor_state_mut().ui.property_focus = Some(PropertyFocus::EllipseSweep);
-    host.editor_state_mut().ui.property_input_draft = "180".to_string();
+    host.editor_state_mut().ui.property_input.set_text("180");
     host.commit_property_focus_if_any();
 
     host.editor_state_mut().ui.property_focus = Some(PropertyFocus::EllipseInnerRadius);
-    host.editor_state_mut().ui.property_input_draft = "25".to_string();
+    host.editor_state_mut().ui.property_input.set_text("25");
     host.commit_property_focus_if_any();
 
     let node = host.editor_state().selected_node().unwrap();
@@ -1028,21 +1341,20 @@ fn ellipse_arc_property_focus_updates_selected_ellipse() {
 }
 
 #[test]
-fn backspace_with_property_draft_does_not_delete_selected() {
-    // With a non-empty property draft buffer, Backspace must pop a
-    // char from the draft, not delete the selected node.
+fn backspace_with_property_input_does_not_delete_selected() {
+    // With a non-empty property input, Backspace must pop a char
+    // from the input, not delete the selected node.
     let mut host = WidgetHostNative::new();
     host.editor_state_mut()
         .set_single_selection(NodeId::new("n10"));
     host.editor_state_mut().ui.property_focus = Some(PropertyFocus::PositionX);
-    host.editor_state_mut().ui.property_input_draft = "123".to_string();
-    // Caret at the draft's end, as a real focus seeds it — Backspace
+    host.editor_state_mut().ui.property_input.set_text("123");
+    // Caret at the input's end, as a real focus seeds it — Backspace
     // deletes the char *before* the caret.
-    host.editor_state_mut().ui.property_caret_pos = 3;
 
     assert!(host.apply_backspace());
-    assert_eq!(host.editor_state().ui.property_input_draft, "12");
-    assert_eq!(host.editor_state().ui.property_caret_pos, 2);
+    assert_eq!(host.editor_state().ui.property_input.text(), "12");
+    assert_eq!(host.editor_state().ui.property_input.caret(), 2);
     // Selection must be untouched.
     assert_eq!(host.editor_state().selection.anchor, NodeId::new("n10"));
 }
@@ -1067,7 +1379,7 @@ fn delete_with_model_picker_open_does_not_delete_selected() {
     let mut host = WidgetHostNative::new();
     host.editor_state_mut()
         .set_single_selection(NodeId::new("n10"));
-    host.editor_state_mut().editor_ui.chat_model_picker_open = true;
+    host.editor_state_mut().editor_ui.chat_model_picker.open = true;
 
     assert!(!host.apply_delete());
     assert_eq!(host.editor_state().selection.anchor, NodeId::new("n10"));
@@ -1080,11 +1392,17 @@ fn backspace_with_model_picker_open_edits_search_not_selection() {
     let mut host = WidgetHostNative::new();
     host.editor_state_mut()
         .set_single_selection(NodeId::new("n10"));
-    host.editor_state_mut().editor_ui.chat_model_picker_open = true;
-    host.editor_state_mut().editor_ui.chat_model_picker_search = "gp".to_string();
+    host.editor_state_mut().editor_ui.chat_model_picker.open = true;
+    host.editor_state_mut()
+        .editor_ui
+        .chat_model_picker_input
+        .set_text("gp");
 
     assert!(host.apply_backspace());
-    assert_eq!(host.editor_state().editor_ui.chat_model_picker_search, "g");
+    assert_eq!(
+        host.editor_state().editor_ui.chat_model_picker_input.text(),
+        "g"
+    );
     assert_eq!(host.editor_state().selection.anchor, NodeId::new("n10"));
 }
 
@@ -1095,7 +1413,7 @@ fn shortcuts_gated_while_model_picker_open() {
     let mut host = WidgetHostNative::new();
     host.editor_state_mut()
         .set_single_selection(NodeId::new("n10"));
-    host.editor_state_mut().editor_ui.chat_model_picker_open = true;
+    host.editor_state_mut().editor_ui.chat_model_picker.open = true;
 
     assert!(!host.apply_nudge(1.0, 0.0));
     assert!(!host.apply_duplicate());
@@ -1334,7 +1652,7 @@ fn layer_context_create_component_click_promotes_frame() {
         target: LayerContextTarget::Layer(NodeId::new("n10")),
         anchor_x: 100.0,
         anchor_y: 100.0,
-        hovered_row: None,
+        menu: Default::default(),
     });
 
     let create_row_y = 100.0 + 6.0 + 32.0 * 2.0 + 16.0;
@@ -1461,32 +1779,61 @@ fn component_browser_header_buttons_queue_kit_io_requests() {
 }
 
 #[test]
+fn component_browser_header_press_sets_and_release_clears_pressed_button() {
+    let mut host = WidgetHostNative::new();
+    host.editor_state_mut().editor_ui.component_browser_open = true;
+    let (vw, vh) = (1440.0, 900.0);
+    let rect = host
+        .component_browser_panel_rect(vw, vh)
+        .expect("open panel rect");
+    let x = rect.origin.x + rect.size.x - 54.0;
+    let y = rect.origin.y + 20.0;
+
+    assert!(host.apply_press(x, y, vw, vh));
+    assert_eq!(
+        host.editor_state().editor_ui.pressed_button,
+        Some(op_editor_core::ButtonPressTarget::ComponentBrowser(
+            op_editor_core::ComponentBrowserButton::ImportKit
+        ))
+    );
+
+    assert!(host.apply_release_with_viewport(vw, vh));
+    assert_eq!(host.editor_state().editor_ui.pressed_button, None);
+}
+
+#[test]
 fn chat_model_picker_open_owns_keyboard_search() {
     let mut host = WidgetHostNative::new();
-    host.editor_state_mut().editor_ui.chat_model_picker_open = true;
+    host.editor_state_mut().editor_ui.chat_model_picker.open = true;
     host.editor_state_mut().chat.focused = true;
 
     assert!(host.input_active_pub());
     assert!(host.apply_text('g'));
     assert!(host.apply_text('p'));
-    assert_eq!(host.editor_state().editor_ui.chat_model_picker_search, "gp");
-    assert!(host.editor_state().chat.input.is_empty());
+    assert_eq!(
+        host.editor_state().editor_ui.chat_model_picker_input.text(),
+        "gp"
+    );
+    assert!(host.editor_state().chat.input.text().is_empty());
     assert!(host.apply_backspace());
-    assert_eq!(host.editor_state().editor_ui.chat_model_picker_search, "g");
+    assert_eq!(
+        host.editor_state().editor_ui.chat_model_picker_input.text(),
+        "g"
+    );
     assert!(host.apply_escape());
-    assert!(!host.editor_state().editor_ui.chat_model_picker_open);
+    assert!(!host.editor_state().editor_ui.chat_model_picker.open);
 }
 
 #[test]
 fn select_all_in_chat_input_replaces_next_typed_text() {
     let mut host = WidgetHostNative::new();
     host.editor_state_mut().chat.focused = true;
-    host.editor_state_mut().chat.input = "abcdef".into();
+    host.editor_state_mut().chat.set_input_text("abcdef");
 
     assert!(host.apply_select_all());
-    assert_eq!(host.editor_state().chat.input, "abcdef");
+    assert_eq!(host.editor_state().chat.input.text(), "abcdef");
     assert!(host.apply_text('X'));
-    assert_eq!(host.editor_state().chat.input, "X");
+    assert_eq!(host.editor_state().chat.input.text(), "X");
 }
 
 #[test]
@@ -1499,26 +1846,52 @@ fn select_all_in_settings_input_replaces_next_typed_text() {
                 op_editor_core::agent_settings::BuiltinAgentField::BaseUrl,
             ),
         );
-        ui.settings_input_draft = "https://example.invalid".into();
+        ui.settings_input.set_text("https://example.invalid");
     }
 
     assert!(host.apply_select_all());
     assert!(host.apply_text('x'));
-    assert_eq!(host.editor_state().editor_ui.settings_input_draft, "x");
-    assert_eq!(host.editor_state().editor_ui.settings_input_caret, Some(1));
+    assert_eq!(host.editor_state().editor_ui.settings_input.text(), "x");
+    assert_eq!(host.editor_state().editor_ui.settings_input.caret(), 1);
 }
 
 #[test]
 fn select_all_in_property_input_replaces_next_typed_text() {
     let mut host = WidgetHostNative::new();
     host.editor_state_mut().ui.property_focus = Some(PropertyFocus::PositionX);
-    host.editor_state_mut().ui.property_input_draft = "123".into();
-    host.editor_state_mut().ui.property_caret_pos = 3;
+    host.editor_state_mut().ui.property_input.set_text("123");
 
     assert!(host.apply_select_all());
     assert!(host.apply_text('4'));
-    assert_eq!(host.editor_state().ui.property_input_draft, "4");
-    assert_eq!(host.editor_state().ui.property_caret_pos, 1);
+    assert_eq!(host.editor_state().ui.property_input.text(), "4");
+    assert_eq!(host.editor_state().ui.property_input.caret(), 1);
+}
+
+#[test]
+fn property_input_uses_text_input_state_for_editing() {
+    let mut host = WidgetHostNative::new();
+    {
+        let ui = &mut host.editor_state_mut().ui;
+        ui.property_focus = Some(PropertyFocus::PositionX);
+        ui.property_input.set_text("1234");
+    }
+
+    assert!(host.apply_property_caret(false));
+    assert!(host.apply_property_caret(false));
+    assert_eq!(host.editor_state().ui.property_input.caret(), 2);
+
+    assert!(host.apply_text('9'));
+    assert_eq!(host.editor_state().ui.property_input.text(), "12934");
+    assert_eq!(host.editor_state().ui.property_input.caret(), 3);
+
+    assert!(host.apply_backspace());
+    assert_eq!(host.editor_state().ui.property_input.text(), "1234");
+    assert_eq!(host.editor_state().ui.property_input.caret(), 2);
+
+    assert!(host.apply_select_all());
+    assert!(host.apply_text('5'));
+    assert_eq!(host.editor_state().ui.property_input.text(), "5");
+    assert_eq!(host.editor_state().ui.property_input.caret(), 1);
 }
 
 #[test]
@@ -1526,17 +1899,22 @@ fn select_all_in_chat_model_picker_replaces_next_typed_text() {
     let mut host = WidgetHostNative::new();
     {
         let ui = &mut host.editor_state_mut().editor_ui;
-        ui.chat_model_picker_open = true;
-        ui.chat_model_picker_search = "gpt".into();
-        ui.chat_model_picker_caret = Some(3);
+        ui.chat_model_picker.open = true;
+        ui.chat_model_picker_input.set_text("gpt");
     }
 
     assert!(host.apply_select_all());
     assert!(host.apply_text('x'));
-    assert_eq!(host.editor_state().editor_ui.chat_model_picker_search, "x");
     assert_eq!(
-        host.editor_state().editor_ui.chat_model_picker_caret,
-        Some(1)
+        host.editor_state().editor_ui.chat_model_picker_input.text(),
+        "x"
+    );
+    assert_eq!(
+        host.editor_state()
+            .editor_ui
+            .chat_model_picker_input
+            .caret(),
+        1
     );
 }
 
@@ -1545,20 +1923,34 @@ fn shape_picker_icon_row_opens_icon_picker() {
     let mut host = WidgetHostNative::new();
     let viewport_w = 1440.0;
     let viewport_h = 900.0;
-    host.editor_state_mut().editor_ui.shape_picker_open = true;
+    host.editor_state_mut().editor_ui.shape_picker.open = true;
 
     let panel = host.shape_picker_rect(viewport_w, viewport_h);
-    let icon_row_y = panel.origin.y + 6.0 + 32.0 * 4.0 + 16.0;
-    assert!(host.apply_press(panel.origin.x + 24.0, icon_row_y, viewport_w, viewport_h));
+    let picker = op_editor_ui::widgets::ShapePicker::for_editor_ui(&host.editor_state().editor_ui);
+    let x = panel.origin.x + 24.0;
+    let mut probe = panel.origin.y + 2.0;
+    let mut icon_row_y = None;
+    while probe < panel.origin.y + panel.size.y {
+        if matches!(
+            picker.hit_test(panel, op_editor_ui::Point2D::new(x, probe)),
+            Some(op_editor_ui::widgets::ShapeChoice::OpenIconPicker)
+        ) {
+            icon_row_y = Some(probe);
+            break;
+        }
+        probe += 2.0;
+    }
+    let icon_row_y = icon_row_y.expect("icon row present in the shape picker");
+    assert!(host.apply_press(x, icon_row_y, viewport_w, viewport_h));
 
-    assert!(!host.editor_state().editor_ui.shape_picker_open);
-    assert!(host.editor_state().editor_ui.icon_picker_open);
+    assert!(!host.editor_state().editor_ui.shape_picker.open);
+    assert!(host.editor_state().editor_ui.icon_picker.open);
 }
 
 #[test]
 fn icon_picker_open_owns_keyboard_search() {
     let mut host = WidgetHostNative::new();
-    host.editor_state_mut().editor_ui.icon_picker_open = true;
+    host.editor_state_mut().editor_ui.icon_picker.open = true;
 
     assert!(host.input_active_pub());
     assert!(host.apply_text('h'));
@@ -1567,7 +1959,7 @@ fn icon_picker_open_owns_keyboard_search() {
     assert!(host.apply_backspace());
     assert_eq!(host.editor_state().editor_ui.icon_picker_search, "h");
     assert!(host.apply_escape());
-    assert!(!host.editor_state().editor_ui.icon_picker_open);
+    assert!(!host.editor_state().editor_ui.icon_picker.open);
 }
 
 #[test]
@@ -1575,7 +1967,7 @@ fn icon_picker_click_inserts_icon_font_node() {
     let mut host = WidgetHostNative::new();
     let viewport_w = 1440.0;
     let viewport_h = 900.0;
-    host.editor_state_mut().editor_ui.icon_picker_open = true;
+    host.editor_state_mut().editor_ui.icon_picker.open = true;
     host.editor_state_mut().editor_ui.icon_picker_search = "home".to_string();
 
     let panel = host
@@ -1584,7 +1976,7 @@ fn icon_picker_click_inserts_icon_font_node() {
     let row_y = panel.origin.y + 40.0 + 42.0 + 20.0;
     assert!(host.apply_press(panel.origin.x + 40.0, row_y, viewport_w, viewport_h));
 
-    assert!(!host.editor_state().editor_ui.icon_picker_open);
+    assert!(!host.editor_state().editor_ui.icon_picker.open);
     let icon = host
         .editor_state()
         .doc
@@ -1605,7 +1997,7 @@ fn icon_picker_header_drag_moves_the_panel() {
     let mut host = WidgetHostNative::new();
     let viewport_w = 1440.0;
     let viewport_h = 900.0;
-    host.editor_state_mut().editor_ui.icon_picker_open = true;
+    host.editor_state_mut().editor_ui.icon_picker.open = true;
 
     let start = host
         .icon_picker_panel_rect(viewport_w, viewport_h)
@@ -1816,8 +2208,11 @@ fn codegen_preview_wheel_scrolls_code_not_property_panel() {
         viewport_h
     ));
 
-    assert!(host.editor_state().codegen.code_scroll > 0.0);
-    assert_eq!(host.editor_state().editor_ui.property_panel_scroll, 0.0);
+    assert!(host.editor_state().codegen.code_scroll.offset > 0.0);
+    assert_eq!(
+        host.editor_state().editor_ui.property_panel_scroll.offset,
+        0.0
+    );
 }
 
 #[test]

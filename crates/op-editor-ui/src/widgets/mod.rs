@@ -4,8 +4,8 @@
 //!
 //! Two layers in one module:
 //!
-//! - **Primitives** (Phase B1+B2): the four reusable building blocks
-//!   `TreeWidget` / `PropertyRow` / `Dropdown` / `TextInput`.
+//! - **Primitives** (Phase B1+B2): the remaining OP-local building blocks
+//!   `TreeWidget` / `PropertyRow` / `TextInput`.
 //! - **Compositions** (Step 2): `LayerPanel` / `PropertyPanel` /
 //!   `Toolbar` — view models built from an `op_editor_core::EditorState`
 //!   that compose the primitives into the actual editor UI surface.
@@ -27,7 +27,7 @@ use crate::{Point2D, Rect, RenderBackend};
 pub const MIN_RAIL_WIDTH: f32 = 80.0;
 
 // Phase B primitives.
-pub mod dropdown;
+pub(crate) mod button;
 pub mod prop_row;
 pub mod text_input;
 pub mod tree;
@@ -47,6 +47,10 @@ pub mod property_panel_code;
 pub mod property_panel_effects;
 pub mod property_panel_export;
 pub mod property_panel_fill;
+mod property_panel_fill_image_body;
+mod property_panel_fill_picker;
+#[cfg(test)]
+mod property_panel_fill_tests;
 pub mod property_panel_flex;
 pub mod property_panel_icon;
 #[cfg(test)]
@@ -69,6 +73,8 @@ pub mod property_panel_layout;
 #[cfg(test)]
 mod property_panel_multi_select_tests;
 mod property_panel_overlay_hit;
+#[cfg(test)]
+mod property_panel_press_tests;
 pub mod property_panel_sections;
 pub mod property_panel_snapshot;
 #[cfg(test)]
@@ -76,6 +82,9 @@ mod property_panel_test_support;
 #[cfg(test)]
 mod property_panel_tests;
 pub mod property_panel_text;
+pub(crate) mod property_panel_text_input;
+#[cfg(test)]
+mod property_panel_text_tests;
 pub mod property_panel_typography;
 pub mod property_panel_visibility;
 mod text_selection;
@@ -115,16 +124,18 @@ pub mod brand_icons;
 
 // Step 4 — extra editor-chrome widgets (TS app parity).
 pub mod agent_settings_acp;
-mod agent_settings_acp_draft;
 pub mod agent_settings_builtin;
-mod agent_settings_builtin_draft;
 mod agent_settings_builtin_layout;
 mod agent_settings_builtin_parts;
 #[cfg(test)]
 mod agent_settings_builtin_tests;
 mod agent_settings_caret;
 #[cfg(test)]
+mod agent_settings_compact_action_tests;
+#[cfg(test)]
 mod agent_settings_connect_tests;
+#[cfg(test)]
+mod agent_settings_form_action_tests;
 mod agent_settings_form_actions;
 mod agent_settings_header_action;
 pub mod agent_settings_i18n;
@@ -169,6 +180,8 @@ mod component_browser_kits;
 pub mod component_browser_panel;
 pub mod design_md_markdown;
 pub mod design_md_panel;
+#[cfg(test)]
+mod design_md_panel_tests;
 pub mod export_dialog;
 pub mod figma_import;
 pub mod figma_import_progress;
@@ -189,6 +202,8 @@ mod git_panel_status;
 mod git_panel_tests;
 mod git_panel_text;
 mod git_panel_tracked_picker;
+#[cfg(test)]
+mod git_panel_tracked_picker_tests;
 pub mod icon_picker_panel;
 pub mod ime_preedit_overlay;
 pub mod locale_picker;
@@ -200,7 +215,6 @@ mod top_bar_paint;
 pub mod variables_panel;
 mod variables_preset_menu;
 
-pub use dropdown::{Dropdown, DropdownState};
 pub use prop_row::PropertyRow;
 pub use text_input::{TextInput, TextInputState};
 pub use tree::{TreeItem, TreeWidget};

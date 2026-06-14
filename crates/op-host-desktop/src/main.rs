@@ -409,8 +409,8 @@ impl DesktopApp {
             // document switch, including between two files in the
             // same repository.
             let panel = &mut self.host.editor_state_mut().editor_ui.git_panel;
-            panel.commit_message.clear();
-            panel.commit_focused = false;
+            panel.commit_input.set_text("");
+            panel.defocus_commit_input(0);
         }
         if prev_repo != new_repo {
             // The bound repository changed — any in-flight git job is

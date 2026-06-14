@@ -5,10 +5,11 @@
 //! "Recent files" header + entries, finally Clear history.
 
 use crate::theme::Theme;
-use crate::widgets::editor_state_ext::{doc_file_menu_choice, theme_for};
+use crate::widgets::editor_state_ext::theme_for;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
 use crate::{Color, Point2D, Rect, TextLayout};
+pub use jian_widgets::components::menu::MenuHit;
 use op_editor_core::editor_ui_state::EditorUiState;
 
 /// Resolve a file-menu row label via `op-i18n`. The Rust file menu
@@ -54,11 +55,9 @@ pub struct FileMenu<'a> {
     pub theme: Theme,
     ui: &'a EditorUiState,
     pub recent: Vec<RecentEntry>,
-    /// Mirrors `Document.ui.file_menu_hover` — populated by the
-    /// host on cursor-move so paint can tint the row under the
-    /// cursor. `None` = no hover (cursor outside the menu, or no
-    /// movement since the menu opened).
-    pub hovered: Option<FileMenuChoice>,
+    /// Shared interaction state populated by the host on cursor-move.
+    /// `hover` stores an actionable row index.
+    pub menu: jian_widgets::components::menu::MenuState,
 }
 
 #[derive(Debug, Clone)]
@@ -74,7 +73,7 @@ impl<'a> FileMenu<'a> {
             theme: theme_for(ui),
             ui,
             recent,
-            hovered: ui.file_menu_hover.map(doc_file_menu_choice),
+            menu: ui.file_menu.clone(),
         }
     }
 
@@ -123,51 +122,81 @@ impl<'a> FileMenu<'a> {
 
     /// Convenience alias: `hit_test` is reused for hover dispatch
     /// (same row geometry, no separate code path needed).
-    pub fn hovered_at(&self, panel: Rect, point: Point2D) -> Option<FileMenuChoice> {
-        self.hit_test(panel, point)
+    pub fn hovered_at(&self, panel: Rect, point: Point2D) -> Option<usize> {
+        match self.hit(panel, point) {
+            MenuHit::Row(idx) => Some(idx),
+            MenuHit::Inside | MenuHit::Outside => None,
+        }
     }
 
-    /// `point` is in screen space; return the activated row, or None
-    /// for clicks on dividers / headers / outside the menu.
-    pub fn hit_test(&self, panel: Rect, point: Point2D) -> Option<FileMenuChoice> {
-        if !rect_contains(panel, point) {
-            return None;
+    pub fn choice_for_row(&self, row: usize) -> Option<FileMenuChoice> {
+        match row {
+            0 => Some(FileMenuChoice::NewFile),
+            1 => Some(FileMenuChoice::OpenFile),
+            2 => Some(FileMenuChoice::Save),
+            3 => Some(FileMenuChoice::SaveAs),
+            4 => Some(FileMenuChoice::ExportImage),
+            row if row < 5 + self.recent.len() => Some(FileMenuChoice::OpenRecent(row - 5)),
+            row if !self.recent.is_empty() && row == 5 + self.recent.len() => {
+                Some(FileMenuChoice::ClearRecent)
+            }
+            _ => None,
         }
+    }
+
+    pub fn hit(&self, panel: Rect, point: Point2D) -> MenuHit {
+        if !(panel).contains(point) {
+            return MenuHit::Outside;
+        }
+        let mut row = 0usize;
         let mut y = panel.origin.y + PAD_Y;
-        for choice in [FileMenuChoice::NewFile, FileMenuChoice::OpenFile] {
+        for _ in 0..2 {
             if row_hit(panel.origin.x, y, point) {
-                return Some(choice);
+                return MenuHit::Row(row);
             }
             y += ROW_HEIGHT;
+            row += 1;
         }
         y += DIVIDER_GAP * 2.0 + 1.0;
-        for choice in [FileMenuChoice::Save, FileMenuChoice::SaveAs] {
+        for _ in 0..2 {
             if row_hit(panel.origin.x, y, point) {
-                return Some(choice);
+                return MenuHit::Row(row);
             }
             y += ROW_HEIGHT;
+            row += 1;
         }
         y += DIVIDER_GAP * 2.0 + 1.0;
         if row_hit(panel.origin.x, y, point) {
-            return Some(FileMenuChoice::ExportImage);
+            return MenuHit::Row(row);
         }
         y += ROW_HEIGHT;
+        row += 1;
         y += DIVIDER_GAP * 2.0 + 1.0;
         y += HEADER_HEIGHT;
-        for (i, _) in self.recent.iter().enumerate() {
+        for _ in self.recent.iter() {
             if row_hit(panel.origin.x, y, point) {
-                return Some(FileMenuChoice::OpenRecent(i));
+                return MenuHit::Row(row);
             }
             y += ROW_HEIGHT;
+            row += 1;
         }
         if self.recent.is_empty() {
             y += ROW_HEIGHT;
         }
         y += DIVIDER_GAP * 2.0 + 1.0;
         if !self.recent.is_empty() && row_hit(panel.origin.x, y, point) {
-            return Some(FileMenuChoice::ClearRecent);
+            return MenuHit::Row(row);
         }
-        None
+        MenuHit::Inside
+    }
+
+    /// `point` is in screen space; return the activated row, or None
+    /// for clicks on dividers / headers / outside the menu.
+    pub fn hit_test(&self, panel: Rect, point: Point2D) -> Option<FileMenuChoice> {
+        match self.hit(panel, point) {
+            MenuHit::Row(idx) => self.choice_for_row(idx),
+            MenuHit::Inside | MenuHit::Outside => None,
+        }
     }
 }
 
@@ -187,20 +216,11 @@ fn paint_row_tint(cx: &mut PaintCx<'_>, theme: &Theme, x: f32, y: f32) {
 }
 
 fn row_hit(x: f32, y: f32, point: Point2D) -> bool {
-    rect_contains(
-        Rect {
-            origin: Point2D::new(x, y),
-            size: Point2D::new(MENU_WIDTH, ROW_HEIGHT),
-        },
-        point,
-    )
-}
-
-fn rect_contains(r: Rect, p: Point2D) -> bool {
-    p.x >= r.origin.x
-        && p.x <= r.origin.x + r.size.x
-        && p.y >= r.origin.y
-        && p.y <= r.origin.y + r.size.y
+    (Rect {
+        origin: Point2D::new(x, y),
+        size: Point2D::new(MENU_WIDTH, ROW_HEIGHT),
+    })
+    .contains(point)
 }
 
 impl<'a> Widget for FileMenu<'a> {
@@ -221,7 +241,7 @@ impl<'a> Widget for FileMenu<'a> {
         cx.backend.fill_round_rect(rect, 10.0, self.theme.card);
         cx.backend
             .stroke_round_rect(rect, 10.0, self.theme.border, 1.0);
-        let h = |c: FileMenuChoice| self.hovered == Some(c);
+        let h = |row: usize| self.menu.hover == Some(row);
         let mut y = rect.origin.y + PAD_Y;
         paint_row(
             cx,
@@ -231,7 +251,7 @@ impl<'a> Widget for FileMenu<'a> {
             Icon::Plus,
             t(self.ui, "new"),
             "⌘N",
-            h(FileMenuChoice::NewFile),
+            h(0),
         );
         y += ROW_HEIGHT;
         paint_row(
@@ -242,7 +262,7 @@ impl<'a> Widget for FileMenu<'a> {
             Icon::FolderOpen,
             t(self.ui, "open"),
             "⌘O",
-            h(FileMenuChoice::OpenFile),
+            h(1),
         );
         y += ROW_HEIGHT;
         y = paint_divider(cx, &self.theme, rect, y);
@@ -254,7 +274,7 @@ impl<'a> Widget for FileMenu<'a> {
             Icon::Save,
             t(self.ui, "save"),
             "⌘S",
-            h(FileMenuChoice::Save),
+            h(2),
         );
         y += ROW_HEIGHT;
         paint_row(
@@ -265,7 +285,7 @@ impl<'a> Widget for FileMenu<'a> {
             Icon::Save,
             t(self.ui, "saveAs"),
             "⌘⇧S",
-            h(FileMenuChoice::SaveAs),
+            h(3),
         );
         y += ROW_HEIGHT;
         y = paint_divider(cx, &self.theme, rect, y);
@@ -277,7 +297,7 @@ impl<'a> Widget for FileMenu<'a> {
             Icon::Download,
             t(self.ui, "exportImage"),
             "⌘⇧P",
-            h(FileMenuChoice::ExportImage),
+            h(4),
         );
         y += ROW_HEIGHT;
         y = paint_divider(cx, &self.theme, rect, y);
@@ -294,14 +314,7 @@ impl<'a> Widget for FileMenu<'a> {
             y += ROW_HEIGHT;
         } else {
             for (i, entry) in self.recent.iter().enumerate() {
-                paint_recent_row(
-                    cx,
-                    &self.theme,
-                    rect.origin.x,
-                    y,
-                    entry,
-                    h(FileMenuChoice::OpenRecent(i)),
-                );
+                paint_recent_row(cx, &self.theme, rect.origin.x, y, entry, h(5 + i));
                 y += ROW_HEIGHT;
             }
         }
@@ -325,7 +338,7 @@ impl<'a> Widget for FileMenu<'a> {
                 Icon::Trash,
                 t(self.ui, "clearHistory"),
                 "",
-                h(FileMenuChoice::ClearRecent),
+                h(5 + self.recent.len()),
             );
         }
     }
@@ -364,7 +377,7 @@ fn paint_row(
         label,
         "system-ui",
         13.0,
-        to_jian(theme.foreground),
+        (theme.foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
@@ -377,7 +390,7 @@ fn paint_row(
             shortcut,
             "system-ui",
             SHORTCUT_FONT,
-            to_jian(theme.muted_foreground),
+            (theme.muted_foreground).to_jian(),
             Point2D::new(0.0, 0.0),
         );
         cx.backend.draw_text(
@@ -418,7 +431,7 @@ fn paint_row_disabled(
         label,
         "system-ui",
         13.0,
-        to_jian(dim),
+        (dim).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
@@ -431,7 +444,7 @@ fn paint_row_disabled(
             shortcut,
             "system-ui",
             SHORTCUT_FONT,
-            to_jian(dim),
+            (dim).to_jian(),
             Point2D::new(0.0, 0.0),
         );
         cx.backend.draw_text(
@@ -472,7 +485,7 @@ fn paint_recent_row(
         &display_name,
         "system-ui",
         13.0,
-        to_jian(theme.foreground),
+        (theme.foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
@@ -483,7 +496,7 @@ fn paint_recent_row(
         &entry.age,
         "system-ui",
         SHORTCUT_FONT,
-        to_jian(theme.muted_foreground),
+        (theme.muted_foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
@@ -528,7 +541,7 @@ fn paint_empty(cx: &mut PaintCx<'_>, theme: &Theme, x: f32, y: f32, label: &str)
         label,
         "system-ui",
         12.0,
-        to_jian(theme.muted_foreground),
+        (theme.muted_foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
@@ -542,7 +555,7 @@ fn paint_header(cx: &mut PaintCx<'_>, theme: &Theme, x: f32, y: f32, label: &str
         label,
         "system-ui",
         11.0,
-        to_jian(theme.muted_foreground),
+        (theme.muted_foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
@@ -586,9 +599,63 @@ fn format_age(ui: &EditorUiState, elapsed_secs: u64) -> String {
     }
 }
 
-fn to_jian(c: Color) -> jian_core::scene::Color {
-    fn ch(v: f32) -> u8 {
-        (v.clamp(0.0, 1.0) * 255.0).round() as u8
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use jian_widgets::components::menu::MenuHit;
+
+    fn menu_panel(menu: &FileMenu<'_>) -> Rect {
+        Rect {
+            origin: Point2D::new(100.0, 50.0),
+            size: Point2D::new(MENU_WIDTH, menu.height()),
+        }
     }
-    jian_core::scene::Color::rgba(ch(c.r), ch(c.g), ch(c.b), ch(c.a))
+
+    #[test]
+    fn hit_uses_shared_menu_state_protocol() {
+        let mut ui = EditorUiState::default();
+        ui.file_menu.hover = Some(5);
+        let menu = FileMenu::for_editor_ui(
+            &ui,
+            vec![
+                RecentEntry {
+                    name: "one.op".to_string(),
+                    age: "now".to_string(),
+                },
+                RecentEntry {
+                    name: "two.op".to_string(),
+                    age: "now".to_string(),
+                },
+            ],
+        );
+        assert_eq!(menu.menu.hover, Some(5));
+
+        let panel = menu_panel(&menu);
+        let divider = DIVIDER_GAP * 2.0 + 1.0;
+        let recent_y = panel.origin.y
+            + PAD_Y
+            + ROW_HEIGHT * 2.0
+            + divider
+            + ROW_HEIGHT * 2.0
+            + divider
+            + ROW_HEIGHT
+            + divider
+            + HEADER_HEIGHT
+            + ROW_HEIGHT * 0.5;
+        assert_eq!(
+            menu.hit(panel, Point2D::new(panel.origin.x + 20.0, recent_y)),
+            MenuHit::Row(5)
+        );
+        assert_eq!(menu.choice_for_row(5), Some(FileMenuChoice::OpenRecent(0)));
+
+        let header_y = recent_y - ROW_HEIGHT * 0.5 - HEADER_HEIGHT * 0.5;
+        assert_eq!(
+            menu.hit(panel, Point2D::new(panel.origin.x + 20.0, header_y)),
+            MenuHit::Inside
+        );
+        assert_eq!(
+            menu.hit(panel, Point2D::new(panel.origin.x - 1.0, header_y)),
+            MenuHit::Outside
+        );
+    }
 }

@@ -5,6 +5,7 @@
 use super::WidgetHost;
 use jian_ops_schema::variable::{VariableKind, VariableScalar, VariableValue};
 use op_editor_core::editor_ui_state::VariableRowFocus;
+use op_editor_core::{own_bounds, ButtonPressTarget, NodeId, PropertyFocus, VariablesPanelButton};
 use op_editor_ui::widgets::variables_panel::{
     VariablesPanel, VariablesPanelHit, VariablesResizeEdge,
 };
@@ -16,6 +17,46 @@ const H: f32 = 900.0;
 fn two_variant_color_host() -> WidgetHost {
     let mut host = WidgetHost::new();
     let state = &mut host.editor_state;
+    state.editor_ui.variables_panel_open = true;
+    state
+        .doc
+        .themes
+        .get_or_insert_with(Default::default)
+        .insert("Theme-1".into(), vec!["Default".into(), "Variant-1".into()]);
+    state.editor_ui.variables_current_axis = Some("Theme-1".into());
+    state
+        .ui
+        .variables
+        .active_theme
+        .insert("Theme-1".into(), "Default".into());
+    assert!(state.create_variable(
+        "color-1",
+        VariableKind::Color,
+        VariableScalar::Str("#112233".into()),
+    ));
+    host
+}
+
+fn seed(host: &mut WidgetHost, json: &str) {
+    let doc = jian_ops_schema::load_str(json)
+        .expect("fixture JSON parses")
+        .value;
+    host.editor_state = op_editor_core::EditorState::from_document(doc);
+    host.editor_state_dirty = true;
+}
+
+fn selected_two_variant_color_host() -> WidgetHost {
+    let mut host = WidgetHost::new();
+    seed(
+        &mut host,
+        r##"{ "version": "0.8.0", "children": [
+              {"type":"rectangle","id":"n62","name":"Wide",
+               "x":40,"y":40,"width":180,"height":120,
+               "fill":[{"type":"solid","color":"#BDC7D9"}]}
+        ]}"##,
+    );
+    let state = &mut host.editor_state;
+    state.set_single_selection(NodeId::new("n62"));
     state.editor_ui.variables_panel_open = true;
     state
         .doc
@@ -75,6 +116,29 @@ fn themed_value_for<'a>(
                 .is_some_and(|v| v == variant)
         })
         .map(|e| &e.value)
+}
+
+#[test]
+fn variables_panel_press_sets_and_release_clears_pressed_button() {
+    let mut host = WidgetHost::new();
+    host.editor_state.editor_ui.variables_panel_open = true;
+    assert!(host.editor_state.create_variable(
+        "spacing",
+        VariableKind::Number,
+        VariableScalar::Num(8.0),
+    ));
+
+    let (x, y) = point_for_hit(&host, &VariablesPanelHit::AddTheme);
+    assert!(host.apply_press(x, y, W, H));
+    assert_eq!(
+        host.editor_state.editor_ui.pressed_button,
+        Some(ButtonPressTarget::VariablesPanel(
+            VariablesPanelButton::AddTheme
+        ))
+    );
+
+    assert!(host.apply_release_with_viewport(W, H));
+    assert_eq!(host.editor_state.editor_ui.pressed_button, None);
 }
 
 #[test]
@@ -138,7 +202,10 @@ fn color_hex_cell_inline_edit_commits_to_variant() {
         host.editor_state.editor_ui.variable_row_focus,
         Some(VariableRowFocus::ColorCell { row: 0, variant: 1 })
     );
-    assert_eq!(host.editor_state.ui.property_input_draft, "#112233");
+    assert_eq!(
+        host.editor_state.editor_ui.variable_row_input.text(),
+        "#112233"
+    );
     for _ in 0..7 {
         assert!(host.apply_backspace());
     }
@@ -166,7 +233,11 @@ fn row_menu_delete_and_rename_work_on_web() {
         host.editor_state.editor_ui.variable_row_focus,
         Some(VariableRowFocus::Name(0))
     );
-    assert!(host.editor_state.ui.property_draft_select_all);
+    assert!(host
+        .editor_state
+        .editor_ui
+        .variable_row_input
+        .is_select_all());
     // Cancel the rename focus, then delete through the menu.
     host.commit_variable_row_focus_if_any();
     let (bx, by) = point_for_hit(&host, &VariablesPanelHit::RowMenuToggle(0));
@@ -187,6 +258,98 @@ fn row_menu_delete_and_rename_work_on_web() {
         .variables
         .as_ref()
         .is_some_and(|vars| vars.contains_key("color-1")));
+}
+
+#[test]
+fn variable_row_edit_commits_prior_property_focus_on_web() {
+    let mut host = WidgetHost::new();
+    seed(
+        &mut host,
+        r##"{ "version": "0.8.0", "children": [
+              {"type":"rectangle","id":"n62","name":"Wide",
+               "x":40,"y":40,"width":180,"height":120,
+               "fill":[{"type":"solid","color":"#BDC7D9"}]}
+        ]}"##,
+    );
+    host.editor_state.set_single_selection(NodeId::new("n62"));
+    assert!(host.editor_state.create_variable(
+        "spacing",
+        VariableKind::Number,
+        VariableScalar::Num(8.0)
+    ));
+    host.editor_state.ui.property_focus = Some(PropertyFocus::SizeW);
+    host.editor_state.ui.property_input.set_text("321");
+
+    assert!(host.press_variable_row(0, 0.0, 0.0));
+
+    let bounds = own_bounds(host.editor_state.selected_node().unwrap());
+    assert_eq!(bounds.w, 321.0);
+    assert!(host.editor_state.ui.property_focus.is_none());
+    assert_eq!(
+        host.editor_state.editor_ui.variable_row_focus,
+        Some(VariableRowFocus::Number(0))
+    );
+    assert_eq!(host.editor_state.editor_ui.variable_row_input.text(), "8");
+}
+
+#[test]
+fn theme_rename_commits_prior_property_focus_on_web() {
+    let mut host = selected_two_variant_color_host();
+    host.editor_state.ui.property_focus = Some(PropertyFocus::SizeW);
+    host.editor_state.ui.property_input.set_text("321");
+    let (tx, ty) = point_for_hit(&host, &VariablesPanelHit::ToggleThemeMenu("Theme-1".into()));
+    assert!(host.apply_press(tx, ty, W, H));
+    let (rx, ry) = point_for_hit(&host, &VariablesPanelHit::ThemeMenuRename("Theme-1".into()));
+
+    assert!(host.apply_press(rx, ry, W, H));
+
+    let bounds = own_bounds(host.editor_state.selected_node().unwrap());
+    assert_eq!(bounds.w, 321.0);
+    assert!(host.editor_state.ui.property_focus.is_none());
+    assert_eq!(
+        host.editor_state
+            .editor_ui
+            .variables_theme_rename_axis
+            .as_deref(),
+        Some("Theme-1")
+    );
+    assert_eq!(
+        host.editor_state.editor_ui.variables_header_input.text(),
+        "Theme-1"
+    );
+}
+
+#[test]
+fn variant_rename_commits_prior_property_focus_on_web() {
+    let mut host = selected_two_variant_color_host();
+    host.editor_state.ui.property_focus = Some(PropertyFocus::SizeW);
+    host.editor_state.ui.property_input.set_text("321");
+    let (tx, ty) = point_for_hit(
+        &host,
+        &VariablesPanelHit::ToggleVariantMenu("Default".into()),
+    );
+    assert!(host.apply_press(tx, ty, W, H));
+    let (rx, ry) = point_for_hit(
+        &host,
+        &VariablesPanelHit::VariantMenuRename("Default".into()),
+    );
+
+    assert!(host.apply_press(rx, ry, W, H));
+
+    let bounds = own_bounds(host.editor_state.selected_node().unwrap());
+    assert_eq!(bounds.w, 321.0);
+    assert!(host.editor_state.ui.property_focus.is_none());
+    assert_eq!(
+        host.editor_state
+            .editor_ui
+            .variables_variant_rename_value
+            .as_deref(),
+        Some("Default")
+    );
+    assert_eq!(
+        host.editor_state.editor_ui.variables_header_input.text(),
+        "Default"
+    );
 }
 
 #[test]
@@ -237,16 +400,16 @@ fn wheel_scrolls_rows_and_resize_drag_resizes() {
     let cx = rect.origin.x + rect.size.x / 2.0;
     let cy = rect.origin.y + rect.size.y / 2.0;
     assert!(host.apply_wheel(cx, cy, -60.0, W, H));
-    assert!(host.editor_state.editor_ui.variables_scroll > 0.0);
+    assert!(host.editor_state.editor_ui.variables_scroll.offset > 0.0);
     // Huge values clamp.
     assert!(host.apply_wheel(cx, cy, -1.0e6, W, H));
     let panel = VariablesPanel::for_editor(&host.editor_state);
     assert_eq!(
-        host.editor_state.editor_ui.variables_scroll,
+        host.editor_state.editor_ui.variables_scroll.offset,
         panel.max_scroll(rect)
     );
     assert!(host.apply_wheel(cx, cy, 1.0e6, W, H));
-    assert_eq!(host.editor_state.editor_ui.variables_scroll, 0.0);
+    assert_eq!(host.editor_state.editor_ui.variables_scroll.offset, 0.0);
 
     // Right-edge press arms a resize; drag narrows; release ends.
     let edge_x = rect.origin.x + rect.size.x - 2.0;

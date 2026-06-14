@@ -8,7 +8,7 @@
 //! cursor hint never bleed a canvas action (Move / Crosshair) through a
 //! floating overlay onto a node underneath.
 
-use super::helpers::{rect_contains, GIT_PANEL_CARET_GAP, TOOLBAR_INSET_X, TOOLBAR_INSET_Y};
+use super::helpers::{GIT_PANEL_CARET_GAP, TOOLBAR_INSET_X, TOOLBAR_INSET_Y};
 use super::WidgetHostNative;
 use op_editor_ui::widgets::{
     AlignToolbar, GitPanel, GitPanelHit, LayoutCx, LocalePicker, ShapePicker, Toolbar, TopBar,
@@ -98,12 +98,48 @@ impl WidgetHostNative {
     /// over that button in the ready view). Returns `true` when the hover
     /// state flipped (a repaint is due).
     pub(in crate::widget_host) fn update_git_panel_ready_hover(&mut self, x: f32, y: f32) -> bool {
-        let hit = self
-            .git_panel_rect(self.last_viewport_w, self.last_viewport_h)
-            .and_then(|body| {
-                GitPanel::for_editor(&self.editor_state)
-                    .and_then(|p| p.hit_test(body, Point2D::new(x, y)))
-            });
+        let point = Point2D::new(x, y);
+        let panel_body = self.git_panel_rect(self.last_viewport_w, self.last_viewport_h);
+        let hit = panel_body.and_then(|body| {
+            GitPanel::for_editor(&self.editor_state).and_then(|p| p.hit_test(body, point))
+        });
+        let tracked_picker_hover = panel_body.and_then(|body| {
+            GitPanel::for_editor(&self.editor_state).and_then(|p| {
+                match p.tracked_picker_select_hit(body, point) {
+                    op_editor_ui::widgets::git_panel::SelectHit::Row(idx) => Some(idx),
+                    op_editor_ui::widgets::git_panel::SelectHit::Inside
+                    | op_editor_ui::widgets::git_panel::SelectHit::Outside => None,
+                }
+            })
+        });
+        let branch_picker_open = self.editor_state.editor_ui.git_panel.branch_picker_open;
+        let branch_picker_hover = panel_body.and_then(|body| {
+            GitPanel::for_editor(&self.editor_state).and_then(|p| {
+                if !branch_picker_open {
+                    return None;
+                }
+                match p.branch_picker_menu_hit(body, point) {
+                    op_editor_ui::widgets::git_panel::MenuHit::Row(idx) => Some(idx),
+                    op_editor_ui::widgets::git_panel::MenuHit::Inside
+                    | op_editor_ui::widgets::git_panel::MenuHit::Outside => None,
+                }
+            })
+        });
+        let overflow_menu_open = self.editor_state.editor_ui.git_panel.overflow_open
+            && self.editor_state.editor_ui.git_panel.overflow_view
+                == op_editor_core::GitOverflowView::Menu;
+        let overflow_menu_hover = panel_body.and_then(|body| {
+            GitPanel::for_editor(&self.editor_state).and_then(|p| {
+                if !overflow_menu_open {
+                    return None;
+                }
+                match p.overflow_menu_hit(body, point) {
+                    op_editor_ui::widgets::git_panel::MenuHit::Row(idx) => Some(idx),
+                    op_editor_ui::widgets::git_panel::MenuHit::Inside
+                    | op_editor_ui::widgets::git_panel::MenuHit::Outside => None,
+                }
+            })
+        });
         // The `⎇ <branch> ▾` trigger keeps its own bool wash; the plain
         // action buttons (pull / push / overflow / commit / milestone /
         // refresh) light up via `button_hover`.
@@ -116,6 +152,29 @@ impl WidgetHostNative {
         }
         if button_hover != self.editor_state.editor_ui.git_panel.button_hover {
             self.editor_state.editor_ui.git_panel.button_hover = button_hover;
+            changed = true;
+        }
+        if tracked_picker_hover != self.editor_state.editor_ui.git_panel.tracked_picker.hover {
+            self.editor_state.editor_ui.git_panel.tracked_picker.hover = tracked_picker_hover;
+            changed = true;
+        }
+        if branch_picker_hover
+            != self
+                .editor_state
+                .editor_ui
+                .git_panel
+                .branch_picker_menu
+                .hover
+        {
+            self.editor_state
+                .editor_ui
+                .git_panel
+                .branch_picker_menu
+                .hover = branch_picker_hover;
+            changed = true;
+        }
+        if overflow_menu_hover != self.editor_state.editor_ui.git_panel.overflow_menu.hover {
+            self.editor_state.editor_ui.git_panel.overflow_menu.hover = overflow_menu_hover;
             changed = true;
         }
         if changed {
@@ -141,7 +200,7 @@ impl WidgetHostNative {
             .and_then(|body| {
                 GitPanel::for_editor(&self.editor_state).and_then(|p| p.empty_init_card_rect(body))
             })
-            .is_some_and(|card| rect_contains(card, Point2D::new(x, y)))
+            .is_some_and(|card| (card).contains(Point2D::new(x, y)))
     }
 
     /// Floating Component-Browser panel rect — `None` when closed.
@@ -178,7 +237,7 @@ impl WidgetHostNative {
         viewport_w: f32,
         viewport_h: f32,
     ) -> Option<Rect> {
-        if !self.editor_state.editor_ui.icon_picker_open {
+        if !self.editor_state.editor_ui.icon_picker.open {
             return None;
         }
         let ui = &self.editor_state.editor_ui;
@@ -209,16 +268,16 @@ impl WidgetHostNative {
     ) -> bool {
         let p = Point2D::new(x, y);
         self.design_md_panel_rect(viewport_w, viewport_h)
-            .is_some_and(|r| rect_contains(r, p))
+            .is_some_and(|r| (r).contains(p))
             || self
                 .variables_panel_rect(viewport_w, viewport_h)
-                .is_some_and(|r| rect_contains(r, p))
+                .is_some_and(|r| (r).contains(p))
             || self
                 .icon_picker_panel_rect(viewport_w, viewport_h)
-                .is_some_and(|r| rect_contains(r, p))
+                .is_some_and(|r| (r).contains(p))
             || self
                 .component_browser_panel_rect(viewport_w, viewport_h)
-                .is_some_and(|r| rect_contains(r, p))
+                .is_some_and(|r| (r).contains(p))
     }
 
     /// The open File-menu dropdown rect, or `None` when closed. The
@@ -261,29 +320,29 @@ impl WidgetHostNative {
         // toolbar (shown over the canvas for a multi-selection).
         if self
             .git_panel_outer_rect(viewport_w, viewport_h)
-            .is_some_and(|r| rect_contains(r, p))
+            .is_some_and(|r| (r).contains(p))
             || self
                 .status_bar_rect(viewport_w, viewport_h)
-                .is_some_and(|r| rect_contains(r, p))
+                .is_some_and(|r| (r).contains(p))
             || self
                 .ai_chat_rect(viewport_w, viewport_h)
-                .is_some_and(|r| rect_contains(r, p))
-            || rect_contains(self.toolbar_rect(viewport_w, viewport_h), p)
+                .is_some_and(|r| (r).contains(p))
+            || (self.toolbar_rect(viewport_w, viewport_h)).contains(p)
             || self
                 .align_toolbar_rect(viewport_w, viewport_h)
-                .is_some_and(|r| rect_contains(r, p))
+                .is_some_and(|r| (r).contains(p))
         {
             return true;
         }
         // Open dropdowns + the right-click context menu.
-        (ui.shape_picker_open && rect_contains(self.shape_picker_rect(viewport_w, viewport_h), p))
-            || (ui.locale_picker_open && rect_contains(self.locale_picker_rect(viewport_w), p))
+        (ui.shape_picker.open && (self.shape_picker_rect(viewport_w, viewport_h)).contains(p))
+            || (ui.locale_picker.open && (self.locale_picker_rect(viewport_w)).contains(p))
             || self
                 .file_menu_rect(viewport_w)
-                .is_some_and(|r| rect_contains(r, p))
+                .is_some_and(|r| (r).contains(p))
             || self
                 .layer_context_menu_rect()
-                .is_some_and(|r| rect_contains(r, p))
+                .is_some_and(|r| (r).contains(p))
     }
 
     /// Floating Design-MD panel rect — `None` when the panel is

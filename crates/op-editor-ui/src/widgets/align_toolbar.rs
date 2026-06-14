@@ -169,17 +169,17 @@ impl AlignToolbar {
     /// boolean operation. None when the point lands outside the
     /// toolbar or in a gutter.
     pub fn hit_test_action(&self, point: Point2D) -> Option<AlignToolbarHit> {
-        if !rect_contains(self.rect, point) {
+        if !(self.rect).contains(point) {
             return None;
         }
         for (i, (action, _)) in ITEMS.iter().enumerate() {
-            if rect_contains(self.button_rect(i), point) {
+            if (self.button_rect(i)).contains(point) {
                 return Some(AlignToolbarHit::Align(*action));
             }
         }
         if self.boolean_ops {
             for (i, op) in BOOLEAN_ITEMS.iter().enumerate() {
-                if rect_contains(self.button_rect(ITEMS.len() + i), point) {
+                if (self.button_rect(ITEMS.len() + i)).contains(point) {
                     return Some(AlignToolbarHit::Boolean(*op));
                 }
             }
@@ -349,13 +349,6 @@ fn boolean_supported_node(node: &PenNode) -> bool {
             | PenNode::Path(_)
             | PenNode::Line(_)
     )
-}
-
-fn rect_contains(r: Rect, p: Point2D) -> bool {
-    p.x >= r.origin.x
-        && p.x < r.origin.x + r.size.x
-        && p.y >= r.origin.y
-        && p.y < r.origin.y + r.size.y
 }
 
 #[cfg(test)]

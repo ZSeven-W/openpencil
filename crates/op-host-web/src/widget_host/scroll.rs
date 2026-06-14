@@ -2,9 +2,17 @@
 //! `widget_host.rs` so the spine stays under the 800-line cap.
 //! Mirrors the native host's `widget_host/scroll.rs`.
 
-use super::{rect_contains, WidgetHost};
+use jian_core::scroll::ScrollState;
 use op_editor_ui::widgets::{LayerPanel, PropertyPanel, TOP_BAR_HEIGHT};
 use op_editor_ui::{Point2D, Rect};
+
+use super::WidgetHost;
+
+fn scroll_by_max(scroll: &mut ScrollState, delta: f32, max: f32) -> bool {
+    let before = scroll.offset;
+    scroll.scroll_by(delta, max, 0.0);
+    scroll.offset != before
+}
 
 impl WidgetHost {
     /// Scroll the floating VariablesPanel row list when the wheel
@@ -25,15 +33,42 @@ impl WidgetHost {
         let Some(panel_rect) = self.variables_panel_rect(viewport_width, viewport_height) else {
             return false;
         };
-        if !rect_contains(panel_rect, Point2D::new(x, y)) {
+        if !(panel_rect).contains(Point2D::new(x, y)) {
             return false;
         }
         use op_editor_ui::widgets::variables_panel::VariablesPanel;
         let panel = VariablesPanel::for_editor(&self.editor_state);
         let max = panel.max_scroll(panel_rect);
-        let next = (self.editor_state.editor_ui.variables_scroll - delta_y).clamp(0.0, max);
-        if next != self.editor_state.editor_ui.variables_scroll {
-            self.editor_state.editor_ui.variables_scroll = next;
+        if scroll_by_max(
+            &mut self.editor_state.editor_ui.variables_scroll,
+            -delta_y,
+            max,
+        ) {
+            self.mark_dirty();
+        }
+        true
+    }
+
+    pub(in crate::widget_host) fn try_scroll_locale_picker(
+        &mut self,
+        x: f32,
+        y: f32,
+        delta_y: f32,
+        viewport_width: f32,
+    ) -> bool {
+        if !self.editor_state.editor_ui.locale_picker.open {
+            return false;
+        }
+        if !(self.locale_picker_rect(viewport_width)).contains(Point2D::new(x, y)) {
+            return false;
+        }
+        let ui = &mut self.editor_state.editor_ui.locale_picker;
+        let next = (ui.scroll.offset - delta_y)
+            .clamp(0.0, op_editor_ui::widgets::LocalePicker::max_scroll());
+        let changed = next != ui.scroll.offset || ui.hover.is_some();
+        ui.scroll.offset = next;
+        ui.hover = None;
+        if changed {
             self.mark_dirty();
         }
         true
@@ -59,19 +94,20 @@ impl WidgetHost {
         };
         // A wheel over the open font-family picker scrolls ITS list,
         // not the panel behind it (mirrors the native host).
-        if self.editor_state.editor_ui.font_family_picker_open
+        if self.editor_state.editor_ui.font_picker.open
             && panel.font_picker_contains(property_rect, Point2D::new(x, y))
         {
             let max = panel.font_picker_max_scroll(property_rect);
             let ui = &mut self.editor_state.editor_ui;
-            let next = (ui.font_picker_scroll + delta_y).clamp(0.0, max);
-            if next != ui.font_picker_scroll {
-                ui.font_picker_scroll = next;
+            let next = (ui.font_picker.scroll.offset + delta_y).clamp(0.0, max);
+            if next != ui.font_picker.scroll.offset {
+                ui.font_picker.scroll.offset = next;
+                ui.font_picker.hover = None;
                 self.mark_dirty();
             }
             return true;
         }
-        if !rect_contains(property_rect, Point2D::new(x, y)) {
+        if !(property_rect).contains(Point2D::new(x, y)) {
             return false;
         }
         if matches!(
@@ -86,9 +122,7 @@ impl WidgetHost {
             if y >= band_top && y <= band_bottom {
                 let max = op_editor_ui::widgets::property_panel_code::framework_row_overflow(pw);
                 let cg = &mut self.editor_state.codegen;
-                let next = (cg.framework_scroll - delta_y).clamp(0.0, max);
-                if next != cg.framework_scroll {
-                    cg.framework_scroll = next;
+                if scroll_by_max(&mut cg.framework_scroll, -delta_y, max) {
                     self.mark_dirty();
                 }
                 return true;
@@ -97,7 +131,7 @@ impl WidgetHost {
                 property_rect,
                 &self.editor_state.codegen,
             )
-            .is_some_and(|rect| rect_contains(rect, point))
+            .is_some_and(|rect| (rect).contains(point))
             {
                 let max = op_editor_ui::widgets::property_panel_code::code_preview_max_scroll(
                     property_rect,
@@ -105,18 +139,18 @@ impl WidgetHost {
                 )
                 .unwrap_or(0.0);
                 let cg = &mut self.editor_state.codegen;
-                let next = (cg.code_scroll - delta_y).clamp(0.0, max);
-                if next != cg.code_scroll {
-                    cg.code_scroll = next;
+                if scroll_by_max(&mut cg.code_scroll, -delta_y, max) {
                     self.mark_dirty();
                 }
                 return true;
             }
         }
         let max = (panel.content_height(property_rect) - property_rect.size.y).max(0.0);
-        let next = (self.editor_state.editor_ui.property_panel_scroll - delta_y).clamp(0.0, max);
-        if next != self.editor_state.editor_ui.property_panel_scroll {
-            self.editor_state.editor_ui.property_panel_scroll = next;
+        if scroll_by_max(
+            &mut self.editor_state.editor_ui.property_panel_scroll,
+            -delta_y,
+            max,
+        ) {
             self.mark_dirty();
         }
         true
@@ -140,22 +174,24 @@ impl WidgetHost {
             origin: Point2D::new(0.0, TOP_BAR_HEIGHT),
             size: Point2D::new(pw, (viewport_height - TOP_BAR_HEIGHT).max(0.0)),
         };
-        if !rect_contains(rect, Point2D::new(x, y)) {
+        if !(rect).contains(Point2D::new(x, y)) {
             return false;
         }
         let r = LayerPanel::from_editor(&self.editor_state).regions(rect);
         if y >= r.layers_rows_top {
-            let next = (self.editor_state.editor_ui.layer_layers_scroll - delta_y)
-                .clamp(0.0, r.layers_max_scroll);
-            if next != self.editor_state.editor_ui.layer_layers_scroll {
-                self.editor_state.editor_ui.layer_layers_scroll = next;
+            if scroll_by_max(
+                &mut self.editor_state.editor_ui.layer_layers_scroll,
+                -delta_y,
+                r.layers_max_scroll,
+            ) {
                 self.mark_dirty();
             }
         } else {
-            let next = (self.editor_state.editor_ui.layer_pages_scroll - delta_y)
-                .clamp(0.0, r.pages_max_scroll);
-            if next != self.editor_state.editor_ui.layer_pages_scroll {
-                self.editor_state.editor_ui.layer_pages_scroll = next;
+            if scroll_by_max(
+                &mut self.editor_state.editor_ui.layer_pages_scroll,
+                -delta_y,
+                r.pages_max_scroll,
+            ) {
                 self.mark_dirty();
             }
         }

@@ -129,6 +129,7 @@ impl WebBackend {
     /// per-node cropping are desktop-only for now). A `mime` the
     /// browser doesn't support silently falls back to `image/png`
     /// per the HTML spec.
+    #[cfg_attr(not(feature = "codegen"), allow(dead_code))]
     pub fn canvas_data_url(&self, mime: &str) -> Result<String, JsValue> {
         self.canvas_element.to_data_url_with_type(mime)
     }

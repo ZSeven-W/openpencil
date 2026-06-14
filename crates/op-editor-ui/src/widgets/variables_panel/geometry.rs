@@ -86,10 +86,3 @@ pub(super) fn label_width(text: &str, size: f32) -> f32 {
         .map(|c| if c.is_ascii() { size * 0.55 } else { size })
         .sum()
 }
-
-pub(super) fn rect_contains(r: Rect, p: Point2D) -> bool {
-    p.x >= r.origin.x
-        && p.x < r.origin.x + r.size.x
-        && p.y >= r.origin.y
-        && p.y < r.origin.y + r.size.y
-}

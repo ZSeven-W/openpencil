@@ -12,7 +12,7 @@
 use crate::theme::Theme;
 use crate::widgets::editor_state_ext::theme_for;
 use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
-use crate::{Color, Point2D, Rect, TextLayout};
+use crate::{Point2D, Rect, TextLayout};
 use op_editor_core::editor_ui_state::Locale;
 use op_editor_core::EditorState;
 
@@ -106,7 +106,7 @@ impl Widget for FigmaImportProgressOverlay {
             headline,
             "system-ui",
             14.0,
-            to_jian(self.theme.foreground),
+            (self.theme.foreground).to_jian(),
             Point2D::new(0.0, 0.0),
         );
         cx.backend.draw_text(
@@ -150,7 +150,7 @@ impl Widget for FigmaImportProgressOverlay {
             sub,
             "system-ui",
             11.0,
-            to_jian(self.theme.muted_foreground),
+            (self.theme.muted_foreground).to_jian(),
             Point2D::new(0.0, 0.0),
         );
         cx.backend.draw_text(
@@ -165,11 +165,4 @@ impl Widget for FigmaImportProgressOverlay {
         node.set_busy();
         node
     }
-}
-
-fn to_jian(c: Color) -> jian_core::scene::Color {
-    fn ch(v: f32) -> u8 {
-        (v.clamp(0.0, 1.0) * 255.0).round() as u8
-    }
-    jian_core::scene::Color::rgba(ch(c.r), ch(c.g), ch(c.b), ch(c.a))
 }

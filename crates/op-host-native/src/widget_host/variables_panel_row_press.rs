@@ -28,8 +28,17 @@ impl WidgetHostNative {
         };
         self.commit_property_focus_if_any();
         self.commit_variable_row_focus_if_any();
+        self.editor_state
+            .editor_ui
+            .variable_row_input
+            .set_text(name.clone());
+        self.editor_state
+            .editor_ui
+            .variable_row_input
+            .touch(self.now_ms);
         self.editor_state.ui.property_input_draft = name;
-        self.editor_state.ui.property_caret_pos = self.editor_state.ui.property_input_draft.len();
+        self.editor_state.ui.property_caret_pos =
+            self.editor_state.editor_ui.variable_row_input.caret();
         self.editor_state.ui.property_draft_select_all = false;
         self.editor_state.editor_ui.variable_row_focus = Some(VariableRowFocus::Name(idx));
         self.editor_state.editor_ui.last_variable_name_click = None;
@@ -80,11 +89,22 @@ impl WidgetHostNative {
                 self.commit_property_focus_if_any();
                 self.commit_variable_row_focus_if_any();
                 let resolved = self.editor_state.resolve_variable(&name).cloned();
-                self.editor_state.ui.property_input_draft = match (&kind, &resolved) {
+                let draft = match (&kind, &resolved) {
                     (UiVariableKind::Number, Some(VariableScalar::Num(n))) => format!("{n}"),
                     (UiVariableKind::String, Some(VariableScalar::Str(s))) => s.clone(),
                     _ => String::new(),
                 };
+                self.editor_state
+                    .editor_ui
+                    .variable_row_input
+                    .set_text(draft.clone());
+                self.editor_state
+                    .editor_ui
+                    .variable_row_input
+                    .touch(self.now_ms);
+                self.editor_state.ui.property_input_draft = draft;
+                self.editor_state.ui.property_caret_pos =
+                    self.editor_state.editor_ui.variable_row_input.caret();
                 self.editor_state.editor_ui.variable_row_focus = Some(match kind {
                     UiVariableKind::Number => VariableRowFocus::Number(idx),
                     UiVariableKind::String => VariableRowFocus::String(idx),
@@ -156,7 +176,17 @@ impl WidgetHostNative {
         self.commit_property_focus_if_any();
         self.commit_variables_panel_header_focus_if_any();
         self.commit_variable_row_focus_if_any();
-        self.editor_state.ui.property_caret_pos = name.len();
+        self.editor_state
+            .editor_ui
+            .variable_row_input
+            .set_text(name.clone());
+        self.editor_state.editor_ui.variable_row_input.select_all();
+        self.editor_state
+            .editor_ui
+            .variable_row_input
+            .touch(self.now_ms);
+        self.editor_state.ui.property_caret_pos =
+            self.editor_state.editor_ui.variable_row_input.caret();
         self.editor_state.ui.property_input_draft = name;
         self.editor_state.ui.property_draft_select_all = true;
         self.editor_state.ui.property_caret_anchor_ms = self.now_ms;
@@ -225,7 +255,16 @@ impl WidgetHostNative {
                     Some(VariableScalar::Str(hex)) => hex_7(&hex),
                     _ => "#000000".to_string(),
                 };
-                self.editor_state.ui.property_caret_pos = hex.len();
+                self.editor_state
+                    .editor_ui
+                    .variable_row_input
+                    .set_text(hex.clone());
+                self.editor_state
+                    .editor_ui
+                    .variable_row_input
+                    .touch(self.now_ms);
+                self.editor_state.ui.property_caret_pos =
+                    self.editor_state.editor_ui.variable_row_input.caret();
                 self.editor_state.ui.property_input_draft = hex;
                 self.editor_state.ui.property_draft_select_all = false;
                 self.editor_state.editor_ui.variable_row_focus =
@@ -273,13 +312,22 @@ impl WidgetHostNative {
                                 .and_then(|def| scalar_for_axis_value(&def.value, &axis, &value))
                         });
                 let scalar = scalar.or_else(|| self.editor_state.resolve_variable(&name).cloned());
-                self.editor_state.ui.property_input_draft = match (&kind, &scalar) {
+                let draft = match (&kind, &scalar) {
                     (UiVariableKind::Number, Some(VariableScalar::Num(n))) => format!("{n}"),
                     (UiVariableKind::String, Some(VariableScalar::Str(s))) => s.clone(),
                     _ => String::new(),
                 };
+                self.editor_state
+                    .editor_ui
+                    .variable_row_input
+                    .set_text(draft.clone());
+                self.editor_state
+                    .editor_ui
+                    .variable_row_input
+                    .touch(self.now_ms);
+                self.editor_state.ui.property_input_draft = draft;
                 self.editor_state.ui.property_caret_pos =
-                    self.editor_state.ui.property_input_draft.len();
+                    self.editor_state.editor_ui.variable_row_input.caret();
                 self.editor_state.ui.property_draft_select_all = false;
                 self.editor_state.editor_ui.variable_row_focus = Some(match kind {
                     UiVariableKind::Number => VariableRowFocus::NumberCell { row: idx, variant },

@@ -101,15 +101,15 @@ impl WidgetHostNative {
             }
             A::ToggleFillTypePicker => {
                 let ui = &mut self.editor_state.editor_ui;
-                ui.fill_type_picker_open = !ui.fill_type_picker_open;
+                ui.toggle_fill_type_picker();
                 ui.image_fill_popover_open = false;
-                ui.font_family_picker_open = false;
+                ui.close_font_picker();
                 ui.font_weight_picker_open = false;
                 ui.property_color_variable_picker_open = None;
             }
             A::SetFillType(t) => {
                 self.editor_state.set_selected_fill_type(t);
-                self.editor_state.editor_ui.fill_type_picker_open = false;
+                self.editor_state.editor_ui.close_fill_type_picker();
                 self.editor_state.editor_ui.image_fill_popover_open = false;
                 self.editor_state
                     .editor_ui
@@ -122,7 +122,7 @@ impl WidgetHostNative {
             }
             A::RemoveFill => {
                 let _ = self.editor_state.clear_selected_fills();
-                self.editor_state.editor_ui.fill_type_picker_open = false;
+                self.editor_state.editor_ui.close_fill_type_picker();
                 self.editor_state.editor_ui.image_fill_popover_open = false;
                 self.editor_state
                     .editor_ui
@@ -137,8 +137,8 @@ impl WidgetHostNative {
             A::ToggleImageFillPopover => {
                 let ui = &mut self.editor_state.editor_ui;
                 ui.image_fill_popover_open = !ui.image_fill_popover_open;
-                ui.fill_type_picker_open = false;
-                ui.font_family_picker_open = false;
+                ui.close_fill_type_picker();
+                ui.close_font_picker();
                 ui.font_weight_picker_open = false;
                 ui.export_scale_picker_open = false;
                 ui.export_format_picker_open = false;
@@ -162,12 +162,10 @@ impl WidgetHostNative {
             }
             A::OpenSelectedIconPicker => {
                 let ui = &mut self.editor_state.editor_ui;
-                ui.icon_picker_open = true;
-                ui.icon_picker_replace_selection = true;
-                ui.icon_picker_search.clear();
-                ui.fill_type_picker_open = false;
+                ui.open_icon_picker(true);
+                ui.close_fill_type_picker();
                 ui.image_fill_popover_open = false;
-                ui.font_family_picker_open = false;
+                ui.close_font_picker();
                 ui.font_weight_picker_open = false;
                 ui.export_scale_picker_open = false;
                 ui.export_format_picker_open = false;
@@ -183,7 +181,7 @@ impl WidgetHostNative {
                 self.set_selected_text_growth(value);
             }
             A::ToggleFontFamilyPicker => {
-                let opening = !self.editor_state.editor_ui.font_family_picker_open;
+                let opening = !self.editor_state.editor_ui.font_picker.open;
                 if opening {
                     // Enumerate installed families on first open (TS
                     // requests Local Font Access inside the click
@@ -191,12 +189,9 @@ impl WidgetHostNative {
                     self.ensure_system_fonts_loaded();
                 }
                 let ui = &mut self.editor_state.editor_ui;
-                ui.font_family_picker_open = opening;
-                ui.font_picker_search.clear();
-                ui.font_picker_scroll = 0.0;
-                ui.font_picker_hover = None;
+                ui.toggle_font_picker();
                 ui.font_weight_picker_open = false;
-                ui.fill_type_picker_open = false;
+                ui.close_fill_type_picker();
                 ui.image_fill_popover_open = false;
                 ui.export_scale_picker_open = false;
                 ui.export_format_picker_open = false;
@@ -240,8 +235,8 @@ impl WidgetHostNative {
                 let ui = &mut self.editor_state.editor_ui;
                 ui.font_weight_picker_open = !ui.font_weight_picker_open;
                 ui.font_weight_picker_hover = None;
-                ui.font_family_picker_open = false;
-                ui.fill_type_picker_open = false;
+                ui.close_font_picker();
+                ui.close_fill_type_picker();
                 ui.image_fill_popover_open = false;
                 ui.export_scale_picker_open = false;
                 ui.export_format_picker_open = false;
@@ -257,8 +252,8 @@ impl WidgetHostNative {
                 ui.padding_mode_popover_open = !ui.padding_mode_popover_open;
                 ui.padding_mode_popover_hover = None;
                 ui.font_weight_picker_open = false;
-                ui.font_family_picker_open = false;
-                ui.fill_type_picker_open = false;
+                ui.close_font_picker();
+                ui.close_fill_type_picker();
                 ui.image_fill_popover_open = false;
                 ui.export_scale_picker_open = false;
                 ui.export_format_picker_open = false;
@@ -293,9 +288,9 @@ impl WidgetHostNative {
                     } else {
                         Some(target)
                     };
-                ui.fill_type_picker_open = false;
+                ui.close_fill_type_picker();
                 ui.image_fill_popover_open = false;
-                ui.font_family_picker_open = false;
+                ui.close_font_picker();
                 ui.font_weight_picker_open = false;
                 ui.export_scale_picker_open = false;
                 ui.export_format_picker_open = false;
@@ -324,7 +319,7 @@ impl WidgetHostNative {
                 let ui = &mut self.editor_state.editor_ui;
                 ui.export_scale_picker_open = !ui.export_scale_picker_open;
                 ui.export_format_picker_open = false;
-                ui.font_family_picker_open = false;
+                ui.close_font_picker();
                 ui.font_weight_picker_open = false;
                 ui.export_picker_hover = None;
                 ui.property_color_variable_picker_open = None;
@@ -333,7 +328,7 @@ impl WidgetHostNative {
                 let ui = &mut self.editor_state.editor_ui;
                 ui.export_format_picker_open = !ui.export_format_picker_open;
                 ui.export_scale_picker_open = false;
-                ui.font_family_picker_open = false;
+                ui.close_font_picker();
                 ui.font_weight_picker_open = false;
                 ui.export_picker_hover = None;
                 ui.property_color_variable_picker_open = None;
@@ -396,11 +391,14 @@ impl WidgetHostNative {
                 // `commit_property_focus_if_any`; seed this param's
                 // draft from its current value, caret at the end.
                 let ui = &mut self.editor_state.ui;
-                ui.property_input_draft = if value.fract() == 0.0 {
+                let initial = if value.fract() == 0.0 {
                     format!("{}", value as i64)
                 } else {
                     format!("{value}")
                 };
+                ui.property_input.set_text(initial.clone());
+                ui.property_input.touch(self.now_ms);
+                ui.property_input_draft = initial;
                 ui.property_caret_pos = ui.property_input_draft.len();
                 ui.property_caret_anchor_ms = self.now_ms;
                 ui.property_draft_select_all = false;
@@ -439,14 +437,14 @@ impl WidgetHostNative {
                         cg.pending_generate = true;
                         cg.phase = CodegenPhase::Generating;
                         cg.error = None;
-                        cg.code_scroll = 0.0;
+                        cg.code_scroll.offset = 0.0;
                         cg.code_selection = None;
                     }
                     CodegenAction::Regenerate => {
                         cg.pending_regenerate = true;
                         cg.phase = CodegenPhase::Generating;
                         cg.error = None;
-                        cg.code_scroll = 0.0;
+                        cg.code_scroll.offset = 0.0;
                         cg.code_selection = None;
                     }
                     CodegenAction::Cancel => {
@@ -483,12 +481,13 @@ impl WidgetHostNative {
                             op_editor_ui::widgets::property_panel_code::framework_row_overflow(pw);
                         let step = 100.0;
                         let cg = &mut self.editor_state.codegen;
-                        cg.framework_scroll =
-                            if matches!(codegen_action, CodegenAction::ScrollFrameworksLeft) {
-                                (cg.framework_scroll - step).clamp(0.0, max)
-                            } else {
-                                (cg.framework_scroll + step).clamp(0.0, max)
-                            };
+                        let delta = if matches!(codegen_action, CodegenAction::ScrollFrameworksLeft)
+                        {
+                            -step
+                        } else {
+                            step
+                        };
+                        cg.framework_scroll.scroll_by(delta, max, 0.0);
                     }
                 }
             }
@@ -513,7 +512,11 @@ impl WidgetHostNative {
         };
         let dlg = ExportDialog::centered(viewport_w, viewport_h);
         let point = op_editor_ui::Point2D::new(x, y);
-        match dlg.hit_test(point) {
+        let hit = dlg.hit_test(point);
+        self.editor_state.editor_ui.pressed_button = hit
+            .map(op_editor_ui::widgets::editor_state_ext::export_dialog_button)
+            .map(op_editor_core::ButtonPressTarget::ExportDialog);
+        match hit {
             Some(ExportDialogHit::Format(f)) => {
                 self.editor_state.editor_ui.export_format =
                     op_editor_ui::widgets::editor_state_ext::export_format(f);
@@ -557,7 +560,11 @@ impl WidgetHostNative {
         use op_editor_ui::widgets::figma_import::{FigmaImportHit, FigmaImportModal};
         let modal = FigmaImportModal::for_editor(&self.editor_state);
         let panel_rect = modal.rect(viewport_w, viewport_h);
-        match modal.hit_test(panel_rect, op_editor_ui::Point2D::new(x, y)) {
+        let hit = modal.hit_test(panel_rect, op_editor_ui::Point2D::new(x, y));
+        self.editor_state.editor_ui.pressed_button =
+            op_editor_ui::widgets::editor_state_ext::figma_import_button(hit)
+                .map(op_editor_core::ButtonPressTarget::FigmaImport);
+        match hit {
             FigmaImportHit::Close => {
                 self.editor_state.editor_ui.figma_import_open = false;
                 self.editor_state.editor_ui.figma_import_hover = None;
@@ -589,7 +596,7 @@ impl WidgetHostNative {
         viewport_width: f32,
     ) {
         use op_editor_core::editor_ui_state::FileAction;
-        use op_editor_ui::widgets::file_menu::{FileMenu, FileMenuChoice};
+        use op_editor_ui::widgets::file_menu::{FileMenu, FileMenuChoice, MenuHit};
         use op_editor_ui::widgets::top_bar::TopBar;
         self.refresh_layout_scene();
         let top_bar_rect = op_editor_ui::Rect {
@@ -604,23 +611,34 @@ impl WidgetHostNative {
             .unwrap_or(0);
         let menu = FileMenu::from_editor_ui(&self.editor_state.editor_ui, now_secs);
         let menu_rect = menu.rect_at(anchor);
-        if let Some(choice) = menu.hit_test(menu_rect, op_editor_ui::Point2D::new(x, y)) {
-            self.editor_state.editor_ui.pending_file_action = Some(match choice {
-                FileMenuChoice::NewFile => FileAction::New,
-                FileMenuChoice::OpenFile => FileAction::Open,
-                FileMenuChoice::Save => FileAction::Save,
-                FileMenuChoice::SaveAs => FileAction::SaveAs,
-                FileMenuChoice::ExportImage => FileAction::ExportImage,
-                FileMenuChoice::OpenRecent(i) => FileAction::OpenRecent(i),
-                FileMenuChoice::ClearRecent => FileAction::ClearRecent,
-            });
-        } else {
-            // Miss — the dismissing click is a blank press.
-            self.blur_text_inputs_on_blank_press();
+        let point = op_editor_ui::Point2D::new(x, y);
+        match menu.hit(menu_rect, point) {
+            MenuHit::Row(row) => {
+                let Some(choice) = menu.choice_for_row(row) else {
+                    return;
+                };
+                self.editor_state.editor_ui.pending_file_action = Some(match choice {
+                    FileMenuChoice::NewFile => FileAction::New,
+                    FileMenuChoice::OpenFile => FileAction::Open,
+                    FileMenuChoice::Save => FileAction::Save,
+                    FileMenuChoice::SaveAs => FileAction::SaveAs,
+                    FileMenuChoice::ExportImage => FileAction::ExportImage,
+                    FileMenuChoice::OpenRecent(i) => FileAction::OpenRecent(i),
+                    FileMenuChoice::ClearRecent => FileAction::ClearRecent,
+                });
+                self.editor_state.editor_ui.file_menu_open = false;
+                self.editor_state.editor_ui.file_menu.hover = None;
+                self.mark_dirty();
+            }
+            MenuHit::Inside => {}
+            MenuHit::Outside => {
+                // Miss — the dismissing click is a blank press.
+                self.blur_text_inputs_on_blank_press();
+                self.editor_state.editor_ui.file_menu_open = false;
+                self.editor_state.editor_ui.file_menu.hover = None;
+                self.mark_dirty();
+            }
         }
-        self.editor_state.editor_ui.file_menu_open = false;
-        self.editor_state.editor_ui.file_menu_hover = None;
-        self.mark_dirty();
     }
 
     /// Commit a pending effect-parameter edit (Effects section's
@@ -631,7 +649,10 @@ impl WidgetHostNative {
             return;
         };
         self.editor_state.ui.property_draft_select_all = false;
-        let draft = std::mem::take(&mut self.editor_state.ui.property_input_draft);
+        let draft = self.editor_state.ui.property_input.text().to_owned();
+        self.editor_state.ui.property_input.set_text("");
+        self.editor_state.ui.property_input_draft.clear();
+        self.editor_state.ui.property_caret_pos = 0;
         if let Ok(value) = draft.trim().parse::<f32>() {
             if value.is_finite() {
                 let id = self.editor_state.selection.anchor.clone();
@@ -666,9 +687,13 @@ impl WidgetHostNative {
             return;
         };
         self.editor_state.ui.property_draft_select_all = false;
-        let draft = std::mem::take(&mut self.editor_state.ui.property_input_draft);
+        let draft = self.editor_state.ui.property_input.text().to_owned();
+        self.editor_state.ui.property_input.set_text("");
+        self.editor_state.ui.property_input_draft.clear();
+        self.editor_state.ui.property_caret_pos = 0;
         // Instance-write redirect (GAP #10) — see `apply_property_action`
         // for the choke-point note.
+        let before = self.editor_state.snapshot_for_history();
         let instance_scope = self.editor_state.begin_instance_write_for_anchor();
         match focus {
             PropertyFocus::FillHex => {
@@ -725,6 +750,9 @@ impl WidgetHostNative {
         }
         if let Some(scope) = instance_scope {
             self.editor_state.finish_instance_write(scope);
+        }
+        if self.editor_state.snapshot_for_history() != before {
+            self.editor_state.history_push_past(before);
         }
         self.mark_dirty();
     }

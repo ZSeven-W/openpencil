@@ -4,7 +4,7 @@ use crate::theme::Theme;
 use crate::widgets::agent_settings_i18n::t as t_settings;
 use crate::widgets::agent_settings_images_parts::{
     ellipsize, paint_profile_field, paint_profile_test_button, paint_provider_field,
-    paint_provider_menu, paint_search_input_row, rect_contains,
+    paint_provider_menu, paint_search_input_row,
 };
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::PaintCx;
@@ -14,6 +14,7 @@ use op_editor_core::agent_settings::{
     ImageTestStatus, SettingsFocus,
 };
 use op_editor_core::editor_ui_state::EditorUiState;
+use op_editor_core::{AgentSettingsButton, ButtonPressTarget};
 
 const TITLE_H: f32 = 36.0;
 const ADVANCED_ROW_H: f32 = 24.0;
@@ -238,30 +239,28 @@ fn profile_field_index(field: ImageGenField) -> usize {
 }
 
 pub fn hit_test(content: Rect, settings: &AgentSettings, scrolled: Point2D) -> ImagesHit {
-    if rect_contains(advanced_toggle_rect(content), scrolled) {
+    if (advanced_toggle_rect(content)).contains(scrolled) {
         return ImagesHit::ToggleAdvanced;
     }
     if settings.images_advanced_open {
-        if rect_contains(search_field_rect(content, 0), scrolled) {
+        if (search_field_rect(content, 0)).contains(scrolled) {
             return ImagesHit::FocusSearchField(ImageSearchField::ClientId);
         }
-        if rect_contains(search_field_rect(content, 1), scrolled) {
+        if (search_field_rect(content, 1)).contains(scrolled) {
             return ImagesHit::FocusSearchField(ImageSearchField::ClientSecret);
         }
-        if search_test_enabled(settings)
-            && rect_contains(test_btn_rect(content, settings), scrolled)
-        {
+        if search_test_enabled(settings) && (test_btn_rect(content, settings)).contains(scrolled) {
             return ImagesHit::TestSearch;
         }
     }
-    if rect_contains(add_btn_rect(content, settings), scrolled) {
+    if (add_btn_rect(content, settings)).contains(scrolled) {
         return ImagesHit::AddGenConfig;
     }
     for (index, profile) in settings.image_gen_profiles.iter().enumerate() {
         let row = profile_row_rect(content, settings, index);
         if settings.image_gen_provider_menu_open == Some(index) {
             for (option_index, provider) in ImageGenProvider::ALL.iter().enumerate() {
-                if rect_contains(profile_provider_option_rect(row, option_index), scrolled) {
+                if (profile_provider_option_rect(row, option_index)).contains(scrolled) {
                     return ImagesHit::SelectGenProvider {
                         index,
                         provider: *provider,
@@ -269,32 +268,32 @@ pub fn hit_test(content: Rect, settings: &AgentSettings, scrolled: Point2D) -> I
                 }
             }
         }
-        if rect_contains(profile_active_rect(row), scrolled) {
+        if (profile_active_rect(row)).contains(scrolled) {
             return ImagesHit::SetActiveGenConfig(index);
         }
-        if rect_contains(profile_remove_rect(row), scrolled) {
+        if (profile_remove_rect(row)).contains(scrolled) {
             return ImagesHit::RemoveGenConfig(index);
         }
-        if rect_contains(profile_header_rect(row), scrolled) {
+        if (profile_header_rect(row)).contains(scrolled) {
             return ImagesHit::ToggleGenConfigEditor(index);
         }
         if is_editing_profile(settings, index) {
-            if rect_contains(profile_test_btn_rect(row), scrolled) {
+            if (profile_test_btn_rect(row)).contains(scrolled) {
                 if profile_test_enabled(profile) {
                     return ImagesHit::TestGenConfig(index);
                 }
                 return ImagesHit::None;
             }
-            if rect_contains(profile_provider_rect(row), scrolled) {
+            if (profile_provider_rect(row)).contains(scrolled) {
                 return ImagesHit::ToggleGenProviderMenu(index);
             }
             for field in image_gen_fields() {
-                if rect_contains(profile_input_rect(row, field), scrolled) {
+                if (profile_input_rect(row, field)).contains(scrolled) {
                     return ImagesHit::FocusGenConfig { index, field };
                 }
             }
         }
-        if rect_contains(row, scrolled) {
+        if (row).contains(scrolled) {
             return ImagesHit::FocusGenConfig {
                 index,
                 field: ImageGenField::Name,
@@ -309,11 +308,11 @@ pub fn search_test_button_hover_at(
     settings: &AgentSettings,
     scrolled: Point2D,
 ) -> bool {
-    settings.images_advanced_open && rect_contains(test_btn_rect(content, settings), scrolled)
+    settings.images_advanced_open && (test_btn_rect(content, settings)).contains(scrolled)
 }
 
 pub fn add_gen_button_hover_at(content: Rect, settings: &AgentSettings, scrolled: Point2D) -> bool {
-    rect_contains(add_btn_rect(content, settings), scrolled)
+    (add_btn_rect(content, settings)).contains(scrolled)
 }
 
 pub fn profile_test_button_hover_at(
@@ -323,7 +322,7 @@ pub fn profile_test_button_hover_at(
 ) -> Option<usize> {
     (0..settings.image_gen_profiles.len()).find(|&index| {
         let row = profile_row_rect(content, settings, index);
-        is_editing_profile(settings, index) && rect_contains(profile_test_btn_rect(row), scrolled)
+        is_editing_profile(settings, index) && (profile_test_btn_rect(row)).contains(scrolled)
     })
 }
 
@@ -340,7 +339,7 @@ pub(super) fn paint_images_tab(
         title_str,
         "system-ui",
         15.0,
-        to_jian(theme.foreground),
+        (theme.foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
@@ -376,7 +375,7 @@ pub(super) fn paint_images_tab(
         status_text,
         "system-ui",
         12.0,
-        to_jian(theme.muted_foreground),
+        (theme.muted_foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
@@ -406,7 +405,7 @@ pub(super) fn paint_images_tab(
         t_settings(ui, "settings.images.advanced"),
         "system-ui",
         13.0,
-        to_jian(theme.foreground),
+        (theme.foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
@@ -420,7 +419,7 @@ pub(super) fn paint_images_tab(
             t_settings(ui, "settings.images.oauthLabel"),
             "system-ui",
             12.0,
-            to_jian(theme.muted_foreground),
+            (theme.muted_foreground).to_jian(),
             Point2D::new(0.0, 0.0),
         );
         cx.backend
@@ -459,7 +458,7 @@ pub(super) fn paint_images_tab(
             link_text,
             "system-ui",
             12.0,
-            to_jian(theme.primary),
+            (theme.primary).to_jian(),
             Point2D::new(0.0, 0.0),
         );
         cx.backend
@@ -476,10 +475,15 @@ pub(super) fn paint_images_tab(
         let test_btn = test_btn_rect(content, settings);
         paint_search_test_status(cx, theme, settings, test_btn);
         cx.backend.fill_round_rect(test_btn, 6.0, theme.muted);
-        if settings.hover_image_search_test_button {
-            cx.backend
-                .fill_round_rect(test_btn, 6.0, image_button_hover_color(theme));
-        }
+        crate::widgets::button::paint_ghost_button_feedback(
+            cx.backend,
+            theme,
+            test_btn,
+            settings.hover_image_search_test_button,
+            ui.button_pressed(ButtonPressTarget::AgentSettings(
+                AgentSettingsButton::ImageSearchTest,
+            )),
+        );
         cx.backend
             .stroke_round_rect(test_btn, 6.0, theme.border, 1.0);
         let test_label = t_settings(ui, "settings.images.test");
@@ -488,11 +492,12 @@ pub(super) fn paint_images_tab(
             test_label,
             "system-ui",
             13.0,
-            to_jian(if search_test_enabled(settings) {
+            (if search_test_enabled(settings) {
                 theme.foreground
             } else {
                 theme.muted_foreground
-            }),
+            })
+            .to_jian(),
             Point2D::new(0.0, 0.0),
         );
         cx.backend.draw_text(
@@ -510,17 +515,22 @@ pub(super) fn paint_images_tab(
         t_settings(ui, "settings.images.generation"),
         "system-ui",
         15.0,
-        to_jian(theme.foreground),
+        (theme.foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend
         .draw_text(&gen_title, Point2D::new(content.origin.x, gen_top + 20.0));
     let add_btn = add_btn_rect(content, settings);
     cx.backend.fill_round_rect(add_btn, 6.0, theme.muted);
-    if settings.hover_image_gen_add_button {
-        cx.backend
-            .fill_round_rect(add_btn, 6.0, image_button_hover_color(theme));
-    }
+    crate::widgets::button::paint_ghost_button_feedback(
+        cx.backend,
+        theme,
+        add_btn,
+        settings.hover_image_gen_add_button,
+        ui.button_pressed(ButtonPressTarget::AgentSettings(
+            AgentSettingsButton::ImageGenAdd,
+        )),
+    );
     cx.backend
         .stroke_round_rect(add_btn, 6.0, theme.border, 1.0);
     let add_label = t_settings(ui, "settings.images.add");
@@ -529,7 +539,7 @@ pub(super) fn paint_images_tab(
         add_label,
         "system-ui",
         13.0,
-        to_jian(theme.foreground),
+        (theme.foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
@@ -547,7 +557,7 @@ pub(super) fn paint_images_tab(
             hint,
             "system-ui",
             13.0,
-            to_jian(theme.muted_foreground),
+            (theme.muted_foreground).to_jian(),
             Point2D::new(0.0, 0.0),
         );
         cx.backend.draw_text(
@@ -562,15 +572,6 @@ pub(super) fn paint_images_tab(
             let row = profile_row_rect(content, settings, index);
             paint_profile_row(cx, theme, settings, ui, profile, index, row, now_ms);
         }
-    }
-}
-
-fn image_button_hover_color(theme: &Theme) -> Color {
-    Color {
-        r: theme.foreground.r,
-        g: theme.foreground.g,
-        b: theme.foreground.b,
-        a: 0.12,
     }
 }
 
@@ -603,7 +604,7 @@ fn paint_search_test_status(
                 "Invalid",
                 "system-ui",
                 10.0,
-                to_jian(theme.destructive),
+                (theme.destructive).to_jian(),
                 Point2D::new(0.0, 0.0),
             );
             cx.backend.draw_text(
@@ -638,10 +639,15 @@ fn paint_profile_row(
     } else {
         cx.backend.stroke_round_rect(row, 6.0, theme.border, 1.0);
     }
-    if settings.hover_image_gen_profile_header == Some(index) {
-        cx.backend
-            .fill_round_rect(profile_header_rect(row), 6.0, theme.button_hover);
-    }
+    crate::widgets::button::paint_ghost_button_feedback(
+        cx.backend,
+        theme,
+        profile_header_rect(row),
+        settings.hover_image_gen_profile_header == Some(index),
+        ui.button_pressed(ButtonPressTarget::AgentSettings(
+            AgentSettingsButton::ImageProfileHeader(index),
+        )),
+    );
     let dot = profile_active_rect(row);
     if active {
         cx.backend.fill_oval(dot, theme.primary);
@@ -667,7 +673,7 @@ fn paint_profile_row(
         &name,
         "system-ui",
         12.0,
-        to_jian(theme.foreground),
+        (theme.foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
@@ -681,7 +687,7 @@ fn paint_profile_row(
         provider,
         "system-ui",
         10.0,
-        to_jian(theme.muted_foreground),
+        (theme.muted_foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(
@@ -707,10 +713,15 @@ fn paint_profile_row(
     );
 
     let remove_hover = profile_remove_hover_rect(row);
-    if settings.hover_image_gen_profile_remove == Some(index) {
-        cx.backend
-            .fill_round_rect(remove_hover, 6.0, theme.button_hover);
-    }
+    crate::widgets::button::paint_ghost_button_feedback(
+        cx.backend,
+        theme,
+        remove_hover,
+        settings.hover_image_gen_profile_remove == Some(index),
+        ui.button_pressed(ButtonPressTarget::AgentSettings(
+            AgentSettingsButton::ImageProfileRemove(index),
+        )),
+    );
     draw_icon(
         cx.backend,
         Icon::Trash,
@@ -745,6 +756,9 @@ fn paint_profile_row(
             profile,
             profile_test_btn_rect(row),
             settings.hover_image_gen_profile_test == Some(index),
+            ui.button_pressed(ButtonPressTarget::AgentSettings(
+                AgentSettingsButton::ImageProfileTest(index),
+            )),
         );
         let provider_rect = profile_provider_rect(row);
         paint_provider_field(
@@ -754,12 +768,24 @@ fn paint_profile_row(
             provider_rect,
             row.origin.x + 12.0,
             settings.hover_image_gen_profile_provider == Some(index),
+            ui.button_pressed(ButtonPressTarget::AgentSettings(
+                AgentSettingsButton::ImageProfileProvider(index),
+            )),
         );
         if settings.image_gen_provider_menu_open == Some(index) {
             let hovered = settings
                 .hover_image_gen_provider_option
                 .and_then(|(hover_index, provider)| (hover_index == index).then_some(provider));
-            paint_provider_menu(cx, theme, provider_rect, profile.provider, hovered);
+            let pressed = match ui.pressed_button {
+                Some(ButtonPressTarget::AgentSettings(
+                    AgentSettingsButton::ImageProviderOption {
+                        index: pressed_index,
+                        provider,
+                    },
+                )) if pressed_index == index => Some(provider),
+                _ => None,
+            };
+            paint_provider_menu(cx, theme, provider_rect, profile.provider, hovered, pressed);
         }
     }
 }
@@ -774,11 +800,4 @@ fn is_editing_profile(settings: &AgentSettings, index: usize) -> bool {
         settings.focus,
         Some(SettingsFocus::ImageGenProfile { index: i, .. }) if i == index
     )
-}
-
-fn to_jian(c: Color) -> jian_core::scene::Color {
-    fn ch(v: f32) -> u8 {
-        (v.clamp(0.0, 1.0) * 255.0).round() as u8
-    }
-    jian_core::scene::Color::rgba(ch(c.r), ch(c.g), ch(c.b), ch(c.a))
 }
