@@ -40,11 +40,11 @@ fn reveal_schedule_streams_large_subtrees_without_long_tail() {
     let section = *snapshot.reveals.get("section").expect("section reveal");
     let last_label = *snapshot.reveals.get("label-19").expect("last label reveal");
     assert!(
-        last_label - section >= 420,
+        last_label - section >= 300,
         "large nested subtrees should stay visibly streamed instead of arriving in one burst"
     );
     assert!(
-        last_label - section <= 650,
+        last_label - section <= 430,
         "large nested subtrees should avoid a slow reveal queue"
     );
     assert!(

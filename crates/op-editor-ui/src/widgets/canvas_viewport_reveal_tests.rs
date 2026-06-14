@@ -119,19 +119,32 @@ fn active_reveal_wraps_node_paint_in_transform() {
 }
 
 #[test]
-fn active_parent_reveal_prevents_nested_child_transform() {
+fn opening_parent_reveal_prevents_nested_child_transform() {
     let frame = frame_with_child();
     let reveals = HashMap::from([("f".to_string(), 1_000), ("c".to_string(), 1_040)]);
 
-    let backend = paint_with_reveals(&frame, &reveals, 1_120);
+    let backend = paint_with_reveals(&frame, &reveals, 1_040);
 
     assert_eq!(
         backend.scales, 1,
-        "child reveal should not stack another transform while its parent is easing"
+        "child reveal should not stack another transform during the parent's opening beat"
     );
     assert!(
         backend.ops.contains(&"fill(10,10)".to_string()),
         "started child should still paint inside the parent reveal"
+    );
+}
+
+#[test]
+fn child_reveal_gets_own_transform_after_parent_opening_beat() {
+    let frame = frame_with_child();
+    let reveals = HashMap::from([("f".to_string(), 1_000), ("c".to_string(), 1_080)]);
+
+    let backend = paint_with_reveals(&frame, &reveals, 1_120);
+
+    assert_eq!(
+        backend.scales, 2,
+        "parent reveal should not swallow the child's own streamed entrance after the opening beat"
     );
 }
 
