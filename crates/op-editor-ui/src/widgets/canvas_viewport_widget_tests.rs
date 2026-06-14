@@ -3,9 +3,12 @@
 //! design surface (track + knob, box + check, bar, chevron, …).
 
 use crate::layout_scene::{NodeKind, SceneNode, SceneWidget, SceneWidgetOption};
-use crate::widgets::canvas_viewport_widget::{option_label, paint_widget_visual};
+use crate::widgets::canvas_viewport_widget::{
+    option_label, paint_widget_visual, text_field_display_text,
+};
 use crate::widgets::PaintCx;
 use crate::{Color, ImageDrawMode, Point2D, Rect, RenderBackend, TextLayout};
+use std::borrow::Cow;
 
 /// Recording backend — captures round-rects (rect + fill colour),
 /// stroke lines (endpoints + colour), and text runs (content + origin).
@@ -332,6 +335,36 @@ fn select_option_label_borrows_matching_option_text() {
         label.as_ptr(),
         widget.options[1].label.as_ptr()
     ));
+}
+
+#[test]
+fn text_field_display_text_borrows_value_and_placeholder() {
+    let with_value = SceneWidget {
+        value_str: Some("hello".into()),
+        placeholder: Some("Type here".into()),
+        ..Default::default()
+    };
+    let (value, _) = text_field_display_text(&with_value).expect("value text");
+    match value {
+        Cow::Borrowed(text) => assert!(std::ptr::eq(
+            text.as_ptr(),
+            with_value.value_str.as_deref().unwrap().as_ptr()
+        )),
+        Cow::Owned(_) => panic!("value_str should be borrowed during paint"),
+    }
+
+    let with_placeholder = SceneWidget {
+        placeholder: Some("Type here".into()),
+        ..Default::default()
+    };
+    let (placeholder, _) = text_field_display_text(&with_placeholder).expect("placeholder text");
+    match placeholder {
+        Cow::Borrowed(text) => assert!(std::ptr::eq(
+            text.as_ptr(),
+            with_placeholder.placeholder.as_deref().unwrap().as_ptr()
+        )),
+        Cow::Owned(_) => panic!("placeholder should be borrowed during paint"),
+    }
 }
 
 #[test]
