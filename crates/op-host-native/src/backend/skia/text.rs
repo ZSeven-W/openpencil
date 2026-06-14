@@ -43,6 +43,10 @@ fn primary_font_family(stack: &str) -> Option<&str> {
 /// real italic variant — mirrors the synthetic-bold stroke trick.
 const SYNTH_ITALIC_SKEW: f32 = -0.25;
 
+pub(super) fn draw_text_runs(layout: &TextLayout) -> &[jian_core::render::TextRun] {
+    layout.runs()
+}
+
 impl NativeBackend {
     /// Resolve a typeface that covers `c`. Cached per codepoint —
     /// `FontMgr::match_family_style_character` is fast on first call
@@ -277,8 +281,7 @@ impl NativeBackend {
     #[tracing::instrument(skip(self, canvas, layout))]
     pub fn draw_text(&mut self, canvas: &skia_safe::Canvas, layout: &TextLayout, origin: Point2D) {
         let italic = layout.italic();
-        let runs: Vec<_> = layout.runs().to_vec();
-        for run in runs {
+        for run in draw_text_runs(layout) {
             let segments = self.segment_text_styled(
                 run.content.as_str(),
                 &run.font_family,

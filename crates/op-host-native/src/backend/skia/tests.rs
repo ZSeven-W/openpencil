@@ -3,6 +3,7 @@
 //! Split into a sibling file to keep `skia.rs` under the 800-line cap.
 
 use super::*;
+use op_editor_ui::TextLayout;
 
 #[test]
 fn color_roundtrip_clamps_and_packs() {
@@ -418,4 +419,23 @@ fn korean_hangul_resolves_to_a_covering_typeface() {
         let tf = be.typeface_for_char(c, 400).expect("typeface");
         assert_ne!(tf.unichar_to_glyph(c as i32), 0, "missing glyph for {c}");
     }
+}
+
+#[test]
+fn draw_text_runs_borrows_layout_storage() {
+    let layout = TextLayout::single_run(
+        "Hello",
+        "system-ui",
+        13.0,
+        Color::BLACK.to_jian(),
+        Point2D::ZERO,
+    );
+
+    let runs = super::text::draw_text_runs(&layout);
+
+    assert_eq!(
+        runs.as_ptr(),
+        layout.runs().as_ptr(),
+        "native text drawing should not clone TextLayout runs per paint"
+    );
 }
