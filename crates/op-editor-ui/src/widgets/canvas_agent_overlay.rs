@@ -23,6 +23,8 @@ const REVEAL_ACCENT: Color = Color {
 
 #[cfg(test)]
 static REVEAL_WALK_VISITS: AtomicUsize = AtomicUsize::new(0);
+#[cfg(test)]
+static FRAME_LOOKUP_VISITS: AtomicUsize = AtomicUsize::new(0);
 
 #[cfg(test)]
 fn reset_reveal_walk_visits() {
@@ -37,6 +39,21 @@ fn reveal_walk_visits() -> usize {
 #[cfg(test)]
 fn record_reveal_walk_visit() {
     REVEAL_WALK_VISITS.fetch_add(1, Ordering::Relaxed);
+}
+
+#[cfg(test)]
+fn reset_frame_lookup_visits() {
+    FRAME_LOOKUP_VISITS.store(0, Ordering::Relaxed);
+}
+
+#[cfg(test)]
+fn frame_lookup_visits() -> usize {
+    FRAME_LOOKUP_VISITS.load(Ordering::Relaxed)
+}
+
+#[cfg(test)]
+fn record_frame_lookup_visit() {
+    FRAME_LOOKUP_VISITS.fetch_add(1, Ordering::Relaxed);
 }
 
 /// Paint a breathing border around every active-page root frame that an
@@ -85,8 +102,11 @@ pub(crate) fn paint_agent_frame_indicators_with_snapshot(
     // Bell curve 0 → 1 → 0 across the period (matches the TS glow breath).
     let phase = (now_ms % GLOW_PERIOD_MS) as f32 / GLOW_PERIOD_MS as f32;
     let breath = (phase * std::f32::consts::PI).sin();
-    for (frame_id, tag) in &indicators.frames {
-        let Some(node) = roots.iter().find(|n| n.id == *frame_id) else {
+    for node in roots {
+        #[cfg(test)]
+        record_frame_lookup_visit();
+
+        let Some(tag) = indicators.frames.get(&node.id) else {
             continue;
         };
         let Some(color) = parse_hex(&tag.color) else {
@@ -414,6 +434,16 @@ mod tests {
         vec![root]
     }
 
+    fn many_root_frames(count: usize) -> Vec<SceneNode> {
+        (0..count)
+            .map(|i| {
+                let mut root = SceneNode::leaf(format!("frame-{i}"), NodeKind::Frame);
+                root.bounds = Rect::xywh(i as f32, 0.0, 100.0, 100.0);
+                root
+            })
+            .collect()
+    }
+
     #[test]
     fn empty_reveal_snapshot_skips_reveal_tree_walk() {
         let roots = reveal_tree_with_many_nodes(128);
@@ -469,6 +499,41 @@ mod tests {
             1,
             "the target reveal should still paint"
         );
+    }
+
+    #[test]
+    fn frame_indicators_match_root_frames_linearly() {
+        let roots = many_root_frames(32);
+        let mut indicators = AgentIndicators::default();
+        for i in 0..32 {
+            indicators.frames.insert(
+                format!("frame-{i}"),
+                op_editor_core::agent_indicators::AgentTag {
+                    color: "#4ECDC4".to_string(),
+                    name: format!("Agent {i}"),
+                },
+            );
+        }
+        let mut backend = RevealCaptureBackend::default();
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+
+        reset_frame_lookup_visits();
+        paint_agent_frame_indicators_with_snapshot(
+            &mut cx,
+            &roots,
+            Point2D::ZERO,
+            1.0,
+            1_000,
+            &indicators,
+        );
+
+        assert!(
+            frame_lookup_visits() <= 32,
+            "frame indicators should match roots in one linear pass, not one root scan per agent frame"
+        );
+        assert_eq!(backend.round_strokes.len(), 64);
     }
 
     #[test]
