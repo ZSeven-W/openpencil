@@ -28,6 +28,7 @@ op-editor-ui = { path = "../op-editor-ui" }
 # (`pen_document_to_document` runs `SkiaMeasure` for text layout);
 # keeping it optional preserves the wasm32-clean stub baseline.
 op-editor-core = { path = "../op-editor-core", optional = true }
+op-editor-host-core = { path = "../op-editor-host-core", optional = true }
 op-pen-loader = { path = "../op-pen-loader", optional = true }
 # P4b web AI-streaming foundation: the codegen/AI pipeline. Optional + behind
 # the `codegen` feature (which also pulls `skia`) so the wasm32-clean stub
@@ -168,6 +169,7 @@ codegen = [
   "live-sync",
   "dep:op-codegen",
   "dep:op-ai",
+  "dep:op-editor-host-core",
   "dep:jian-ops-schema",
   "dep:serde_json",
   "dep:op-figma",

@@ -3047,6 +3047,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "op-editor-host-core"
+version = "0.8.0"
+dependencies = [
+ "jian-ops-schema",
+ "op-ai",
+ "op-codegen",
+ "op-editor-core",
+ "serde_json",
+]
+
+[[package]]
 name = "op-editor-ui"
 version = "0.8.0"
 dependencies = [
@@ -3113,6 +3124,7 @@ dependencies = [
  "op-codegen",
  "op-design-lint",
  "op-editor-core",
+ "op-editor-host-core",
  "op-editor-ui",
  "op-figma",
  "op-git",
@@ -3169,6 +3181,7 @@ dependencies = [
  "op-ai",
  "op-codegen",
  "op-editor-core",
+ "op-editor-host-core",
  "op-editor-ui",
  "op-figma",
  "op-pen-loader",
