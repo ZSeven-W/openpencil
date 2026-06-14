@@ -443,6 +443,60 @@ fn single_selected_canvas_paint_reuses_scene_lookup() {
 }
 
 #[test]
+fn frame_label_paint_uses_top_level_scene_nodes() {
+    let _guard = crate::agent_indicator_test_support::lock();
+    op_editor_core::agent_indicators::clear();
+
+    let mut roots = Vec::new();
+    let mut labels = Vec::new();
+    for i in 0..18 {
+        let mut child = SceneNode::leaf(format!("child-{i}"), NodeKind::Rect);
+        child.bounds = Rect::xywh(8.0, 8.0, 12.0, 12.0);
+        let mut frame = SceneNode::leaf(format!("frame-{i}"), NodeKind::Frame);
+        frame.bounds = Rect::xywh(i as f32 * 140.0, 0.0, 120.0, 80.0);
+        frame.children = vec![child];
+        labels.push((
+            format!("frame-{i}"),
+            format!("Frame {i}"),
+            Color {
+                r: 0.6,
+                g: 0.6,
+                b: 0.6,
+                a: 1.0,
+            },
+        ));
+        roots.push(frame);
+    }
+    let scene = LayoutScene {
+        pages: vec![ScenePage {
+            id: "p".into(),
+            name: "p".into(),
+            children: roots,
+        }],
+        active_page_index: 0,
+    };
+    let mut state = EditorState::new();
+    state.viewport.zoom = 1.0;
+    let mut viewport = CanvasViewport::from_editor(&state, &scene);
+    viewport.frame_labels = labels;
+
+    crate::layout_scene::reset_find_visit_count();
+    let mut backend = RecordingBackend::default();
+    {
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+        viewport.paint(&mut cx, Rect::xywh(0.0, 0.0, 2_800.0, 300.0));
+    }
+
+    assert_eq!(
+        crate::layout_scene::find_visit_count(),
+        0,
+        "frame labels belong to top-level roots and should not deep-search the scene"
+    );
+}
+
+#[test]
 fn flipped_node_applies_scale_transform() {
     let state = sample_state();
     let mut node = leaf(
