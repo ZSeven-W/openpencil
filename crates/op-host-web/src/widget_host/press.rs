@@ -555,15 +555,15 @@ impl WidgetHost {
                             | A::SetPaddingMode(_)
                             | A::TogglePaddingModePopover
                     ) {
-                        self.editor_state.editor_ui.pressed_button = match action {
-                            A::SetFontWeight(choice) => {
+                        if let A::SetFontWeight(choice) = action {
+                            self.editor_state.editor_ui.pressed_button =
                                 op_editor_ui::widgets::FontWeightChoice::ALL
                                     .iter()
                                     .position(|c| *c == choice)
-                                    .map(op_editor_core::ButtonPressTarget::FontWeightPicker)
-                            }
-                            _ => None,
-                        };
+                                    .map(op_editor_core::ButtonPressTarget::FontWeightPicker);
+                            self.mark_dirty();
+                            return true;
+                        }
                         self.apply_property_action(action);
                         return true;
                     }

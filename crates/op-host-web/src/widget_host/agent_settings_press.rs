@@ -222,18 +222,8 @@ impl WidgetHost {
                 }
                 self.focus_image_gen_profile(index, ImageGenField::Name);
             }
-            AgentSettingsHit::SelectGenProvider { index, provider } => {
+            AgentSettingsHit::SelectGenProvider { index, provider: _ } => {
                 self.commit_settings_focus();
-                {
-                    let settings = &mut self.editor_state.editor_ui.agent_settings;
-                    if let Some(profile) = settings.image_gen_profiles.get_mut(index) {
-                        if profile.provider != provider {
-                            profile.provider = provider;
-                            profile.model.clear();
-                        }
-                    }
-                    settings.image_gen_provider_menu_open = None;
-                }
                 self.focus_image_gen_profile(index, ImageGenField::Name);
             }
             AgentSettingsHit::FocusGenConfig { index, field } => {
@@ -694,7 +684,11 @@ impl WidgetHost {
 }
 
 impl WidgetHost {
-    fn focus_image_gen_profile(&mut self, index: usize, field: ImageGenField) {
+    pub(in crate::widget_host) fn focus_image_gen_profile(
+        &mut self,
+        index: usize,
+        field: ImageGenField,
+    ) {
         if let Some(profile) = self
             .editor_state
             .editor_ui

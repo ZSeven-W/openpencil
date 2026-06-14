@@ -782,9 +782,27 @@ fn image_generation_provider_click_opens_menu_without_changing_profile() {
     ));
     let settings = &host.editor_state().editor_ui.agent_settings;
     let profile = &settings.image_gen_profiles[0];
+    assert_eq!(profile.provider, ImageGenProvider::OpenAi);
+    assert_eq!(profile.model, "dall-e-3");
+    assert_eq!(settings.image_gen_provider_menu_open, Some(0));
+    assert_eq!(
+        host.editor_state().editor_ui.pressed_button,
+        Some(ButtonPressTarget::AgentSettings(
+            AgentSettingsButton::ImageProviderOption {
+                index: 0,
+                provider: ImageGenProvider::Gemini,
+            },
+        ))
+    );
+
+    assert!(host.apply_release_with_viewport(1200.0, 800.0));
+
+    let settings = &host.editor_state().editor_ui.agent_settings;
+    let profile = &settings.image_gen_profiles[0];
     assert_eq!(profile.provider, ImageGenProvider::Gemini);
     assert!(profile.model.is_empty());
     assert!(settings.image_gen_provider_menu_open.is_none());
+    assert_eq!(host.editor_state().editor_ui.pressed_button, None);
     assert_eq!(
         settings.focus,
         Some(SettingsFocus::ImageGenProfile {

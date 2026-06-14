@@ -259,9 +259,8 @@ impl WidgetHostNative {
                 panel.close_tracked_picker();
             }
             Some(GitPanelHit::TrackedPickerRow(index)) => {
-                // Pure UI — single-select a candidate.
                 if index < panel.candidate_files.len() {
-                    panel.tracked_picker_selected = Some(index);
+                    panel.tracked_picker.pressed = Some(index);
                     panel.tracked_picker.hover = Some(index);
                 }
             }
