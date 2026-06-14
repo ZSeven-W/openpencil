@@ -99,6 +99,7 @@ mod canvas_agent_overlay;
 mod canvas_path_overlay;
 pub mod canvas_text_edit;
 pub mod canvas_viewport;
+mod canvas_viewport_grid;
 // `pub` for the remote-image miss-queue API (`take_remote_image_requests`
 // / `store_remote_image_bytes` / …) the desktop host drains per frame;
 // the paint entry point itself stays `pub(super)`.
@@ -106,6 +107,7 @@ pub mod canvas_viewport_image;
 pub mod canvas_viewport_overlay;
 pub mod canvas_viewport_paint;
 mod canvas_viewport_text;
+mod canvas_viewport_widget;
 
 // Phase 6 — shell-core-side `theme()` / `t()` derivations over
 // `op_editor_core::EditorUiState` for widgets ported off `Document`.

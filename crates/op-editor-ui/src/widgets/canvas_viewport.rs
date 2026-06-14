@@ -331,10 +331,6 @@ pub struct CanvasViewport<'a> {
     pub(super) frame_labels: Vec<(String, String, Color)>,
 }
 
-/// Spacing (document px) between major grid dots at 100% zoom.
-/// Infinite canvas — adapted from `apps/web` canvas grid.
-const GRID_SPACING: f32 = 32.0;
-
 impl<'a> CanvasViewport<'a> {
     /// Build the canvas widget for a paint pass.
     ///
@@ -462,8 +458,8 @@ impl<'a> Widget for CanvasViewport<'a> {
 
         // 2. Dotted grid — canvas-local, scales with pan/zoom.
         let viewport = &self.viewport;
-        paint_grid(cx, rect, viewport, &self.theme);
-        let reveal_schedule = op_editor_core::agent_indicators::snapshot_at(self.now_ms).reveals;
+        super::canvas_viewport_grid::paint_grid(cx, rect, viewport, &self.theme);
+        let indicators = op_editor_core::agent_indicators::snapshot_at(self.now_ms);
 
         // 3. Walk the active page; clip enforces widget bounds.
         if let Some(page) = self.scene.active_page() {
@@ -494,17 +490,18 @@ impl<'a> Widget for CanvasViewport<'a> {
                     edit_caret.clone(),
                     cull,
                     super::canvas_viewport_paint::RevealSchedule {
-                        starts: &reveal_schedule,
+                        starts: &indicators.reveals,
                         now_ms: self.now_ms,
                     },
                 );
             }
-            super::canvas_agent_overlay::paint_agent_frame_indicators(
+            super::canvas_agent_overlay::paint_agent_frame_indicators_with_snapshot(
                 cx,
                 &page.children,
                 viewport_origin,
                 viewport.zoom,
                 self.now_ms,
+                &indicators,
             );
             if let Some(hovered) = self.hovered.as_ref() {
                 if let Some(node) = page.find(hovered) {
@@ -589,7 +586,8 @@ impl<'a> Widget for CanvasViewport<'a> {
                     continue;
                 };
                 if node.hidden
-                    || reveal_schedule
+                    || indicators
+                        .reveals
                         .get(&node.id)
                         .is_some_and(|started_at| self.now_ms < *started_at)
                 {
@@ -712,11 +710,6 @@ impl<'a> Widget for CanvasViewport<'a> {
     }
 }
 
-/// Paint a dotted grid across the canvas widget rect. The grid is
-/// drawn in canvas-local coordinates and offset by `viewport.pan`
-/// so it scrolls with the document content. Dots get sparser as
-/// zoom decreases (skipping every other dot at low zoom) so they
-/// stay visually airy.
 /// Stroke a dashed rectangle as 4 dashed edges (4 px on / 4 px off,
 /// screen-space) — the `RenderBackend` trait has no path-effect
 /// surface, so the dash is segmented by hand; backend-agnostic.
@@ -751,46 +744,6 @@ pub(super) fn paint_dashed_rect(cx: &mut PaintCx<'_>, rect: Rect, color: Color, 
     dash_line(tr, br);
     dash_line(br, bl);
     dash_line(bl, tl);
-}
-
-fn paint_grid(cx: &mut PaintCx<'_>, rect: Rect, viewport: &DocViewport, theme: &Theme) {
-    let zoom = viewport.zoom.max(0.0001);
-    let mut step = GRID_SPACING * zoom;
-    // Skip rendering when dots would be packed tighter than 8 px
-    // (visual noise at deep zoom-out), and double the step so the
-    // dot density stays roughly constant.
-    while step < 8.0 {
-        step *= 2.0;
-    }
-
-    let dot_color = Color {
-        r: theme.muted_foreground.r,
-        g: theme.muted_foreground.g,
-        b: theme.muted_foreground.b,
-        a: 0.18,
-    };
-    let dot_size = (1.5 * zoom.sqrt()).clamp(1.0, 2.5);
-
-    // Align grid origin to (0, 0) in document space, shifted by
-    // pan, then shifted into widget space.
-    let origin_x = rect.origin.x + (viewport.pan_x.rem_euclid(step));
-    let origin_y = rect.origin.y + (viewport.pan_y.rem_euclid(step));
-
-    // Collect every dot centre, then hand the whole batch to
-    // `fill_dots` — one draw call. Emitting a `fill_round_rect` per
-    // dot here was ~1000+ skia ops every frame, the dominant cost of
-    // an empty-canvas pan / drag.
-    let mut centers: Vec<Point2D> = Vec::new();
-    let mut y = origin_y - step;
-    while y < rect.origin.y + rect.size.y + step {
-        let mut x = origin_x - step;
-        while x < rect.origin.x + rect.size.x + step {
-            centers.push(Point2D::new(x, y));
-            x += step;
-        }
-        y += step;
-    }
-    cx.backend.fill_dots(&centers, dot_size / 2.0, dot_color);
 }
 
 #[cfg(test)]

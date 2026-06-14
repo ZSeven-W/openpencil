@@ -233,14 +233,15 @@ pub(crate) fn register_new_node_reveals(
     let Some(epoch) = indicator_epoch else {
         return;
     };
-    let mut reveal_index = 0;
+    let mut stream_index = 0;
     for node in state.active_children() {
         register_node_reveals(
             node,
             ids_before,
             epoch,
             reveal_started_ms,
-            &mut reveal_index,
+            0,
+            &mut stream_index,
         );
     }
 }
@@ -250,18 +251,27 @@ fn register_node_reveals(
     ids_before: &HashSet<String>,
     epoch: u64,
     reveal_started_ms: u64,
-    reveal_index: &mut u64,
+    depth: u64,
+    stream_index: &mut u64,
 ) {
     let id = node.id_str();
     if !ids_before.contains(id) {
-        let started_at =
-            reveal_started_ms + *reveal_index * op_editor_core::agent_indicators::REVEAL_STAGGER_MS;
+        let own_stream_index = *stream_index;
+        *stream_index += 1;
+        let started_at = reveal_started_ms
+            + op_editor_core::agent_indicators::reveal_offset_ms(depth, own_stream_index);
         op_editor_core::agent_indicators::add_reveal(epoch, id, started_at);
-        *reveal_index += 1;
     }
     if let Some(children) = node.children() {
         for child in children {
-            register_node_reveals(child, ids_before, epoch, reveal_started_ms, reveal_index);
+            register_node_reveals(
+                child,
+                ids_before,
+                epoch,
+                reveal_started_ms,
+                depth + 1,
+                stream_index,
+            );
         }
     }
 }
@@ -314,6 +324,10 @@ fn normalize_section_roots_for_parent_layout(nodes: &mut [PenNode]) {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "subagent_reveal_tests.rs"]
+mod subagent_reveal_tests;
 
 #[cfg(test)]
 mod tests {

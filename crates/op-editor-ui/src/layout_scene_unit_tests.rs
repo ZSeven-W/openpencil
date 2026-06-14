@@ -58,6 +58,21 @@ fn aggregate_bounds_unions_children_for_unbounded_container() {
 }
 
 #[test]
+fn aggregate_bounds_uses_precomputed_unbounded_container_bounds() {
+    let mut child = SceneNode::leaf("child", NodeKind::Rect);
+    child.bounds = Rect::xywh(10.0, 10.0, 20.0, 20.0);
+    let mut group = SceneNode::leaf("g", NodeKind::Group);
+    group.children = vec![child];
+    group.aggregate_bounds_cache = Rect::xywh(1.0, 2.0, 300.0, 400.0);
+
+    assert_eq!(
+        group.aggregate_bounds(),
+        Rect::xywh(1.0, 2.0, 300.0, 400.0),
+        "layout-built scenes should answer aggregate bounds from the cached subtree rect"
+    );
+}
+
+#[test]
 fn aggregate_bounds_keeps_own_bounds_when_bounded() {
     let mut frame = SceneNode::leaf("f", NodeKind::Frame);
     frame.bounds = Rect::xywh(0.0, 0.0, 100.0, 200.0);

@@ -46,6 +46,33 @@ fn flex_layout_resolves_child_bounds_not_authored_coords() {
 }
 
 #[test]
+fn layout_scene_precomputes_unbounded_group_bounds() {
+    let src = r##"{
+      "version":"1.0.0",
+      "pages":[{
+        "id":"p1","name":"Page 1",
+        "children":[{
+          "type":"group","id":"g",
+          "children":[
+            {"type":"rectangle","id":"a","x":10,"y":20,"width":30,"height":40},
+            {"type":"rectangle","id":"b","x":80,"y":5,"width":20,"height":25}
+          ]
+        }]
+      }],
+      "children":[]
+    }"##;
+    let scene = editor_state_to_layout_scene(&state_from(src));
+    let group = &scene.pages[0].children[0];
+
+    assert_eq!(group.bounds, op_editor_ui::Rect::ZERO);
+    assert_eq!(
+        group.aggregate_bounds_cache,
+        op_editor_ui::Rect::xywh(10.0, 5.0, 90.0, 55.0),
+        "loader should cache unbounded aggregate bounds once during scene build"
+    );
+}
+
+#[test]
 fn multi_root_designs_keep_authored_canvas_offset() {
     // Two side-by-side designs at distinct canvas coords — each
     // root's resolved bounds must reflect its authored `(x, y)`,

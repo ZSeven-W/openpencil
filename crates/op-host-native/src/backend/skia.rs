@@ -131,6 +131,7 @@ pub struct NativeBackend {
     svg_path_cache_order: std::collections::VecDeque<u64>,
     svg_raster_cache: std::collections::HashMap<path::SvgRasterKey, path::SvgRasterCacheEntry>,
     svg_raster_cache_order: std::collections::VecDeque<path::SvgRasterKey>,
+    dot_point_buffer: Vec<skia_safe::Point>,
 }
 
 /// Maximum number of decoded chat images held at once. Decoded RGBA
@@ -196,6 +197,7 @@ impl NativeBackend {
             svg_path_cache_order: std::collections::VecDeque::new(),
             svg_raster_cache: std::collections::HashMap::new(),
             svg_raster_cache_order: std::collections::VecDeque::new(),
+            dot_point_buffer: Vec::new(),
         };
         // Pre-warm the per-codepoint typeface cache with every CJK
         // glyph that appears in the chrome (top bar, layer panel,
@@ -431,7 +433,7 @@ impl NativeBackend {
     /// grid (~1000+ dots on a full viewport) costs a single batched
     /// skia op per frame instead of one `draw_round_rect` per dot.
     pub fn fill_dots(
-        &self,
+        &mut self,
         canvas: &skia_safe::Canvas,
         centers: &[Point2D],
         radius: f32,
@@ -445,11 +447,16 @@ impl NativeBackend {
         paint.set_stroke(true);
         paint.set_stroke_cap(skia_safe::PaintCap::Round);
         paint.set_stroke_width(radius * 2.0);
-        let pts: Vec<skia_safe::Point> = centers
-            .iter()
-            .map(|c| skia_safe::Point::new(c.x, c.y))
-            .collect();
-        canvas.draw_points(skia_safe::canvas::PointMode::Points, &pts, &paint);
+        let pts = self.prepare_dot_points(centers);
+        canvas.draw_points(skia_safe::canvas::PointMode::Points, pts, &paint);
+    }
+
+    fn prepare_dot_points(&mut self, centers: &[Point2D]) -> &[skia_safe::Point] {
+        self.dot_point_buffer.clear();
+        self.dot_point_buffer.reserve(centers.len());
+        self.dot_point_buffer
+            .extend(centers.iter().map(|c| skia_safe::Point::new(c.x, c.y)));
+        &self.dot_point_buffer
     }
 
     /// Save the current canvas state. Returns the save count so

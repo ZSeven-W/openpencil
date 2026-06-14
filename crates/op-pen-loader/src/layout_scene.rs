@@ -25,7 +25,7 @@ use op_editor_ui::layout_scene::NodeKind;
 use op_editor_ui::layout_scene::{
     stable_image_source_id, DropShadow, Effect, LayoutScene, SceneFillType, SceneGradient,
     SceneGradientStop, SceneImageFit, SceneNode, ScenePage, SceneStroke, SceneTextAlign,
-    SceneTextRun, SceneTextVerticalAlign,
+    SceneTextRun, SceneTextVerticalAlign, SceneWidget, SceneWidgetOption,
 };
 use op_editor_ui::scene_vars::VariableTable;
 use op_editor_ui::Color;
@@ -130,13 +130,21 @@ fn node_payload_to_scene(
     // alpha matches a group-opacity layer except when a node's own
     // sub-shapes overlap — which the current scene model never emits.
     let cum_opacity = (parent_opacity * node.opacity).clamp(0.0, 1.0);
+    let bounds = Rect {
+        origin: Point2D::new(node.x, node.y),
+        size: Point2D::new(node.w, node.h),
+    };
+    let children: Vec<SceneNode> = node
+        .children
+        .iter()
+        .map(|c| node_payload_to_scene(c, var_table, cum_opacity))
+        .collect();
+    let aggregate_bounds_cache = SceneNode::compute_aggregate_bounds(bounds, &children);
     SceneNode {
         id: node.id.clone(),
         kind: str_to_kind(&node.kind),
-        bounds: Rect {
-            origin: Point2D::new(node.x, node.y),
-            size: Point2D::new(node.w, node.h),
-        },
+        bounds,
+        aggregate_bounds_cache,
         // Carried so the image painter can dim rasters (which have no
         // colour to bake opacity into); fill/stroke/gradient/shadow
         // already have `cum_opacity` folded into their alpha above.
@@ -202,10 +210,35 @@ fn node_payload_to_scene(
             .collect(),
         hidden: node.hidden,
         locked: node.locked,
-        children: node
-            .children
+        // Composite-widget props pass through untouched (no `$ref`
+        // resolution needed — they're already concrete after the
+        // adapter harvested them from the schema). Drives the
+        // design-surface static visual painter.
+        widget: node.widget.as_ref().map(widget_payload_to_scene),
+        children,
+    }
+}
+
+/// Convert a payload [`WidgetPayload`] into the paint-only
+/// [`SceneWidget`]. Plain field copy — option rows map 1:1.
+fn widget_payload_to_scene(w: &crate::payload::WidgetPayload) -> SceneWidget {
+    SceneWidget {
+        kind: w.kind.clone(),
+        checked: w.checked,
+        value_num: w.value_num,
+        value_str: w.value_str.clone(),
+        placeholder: w.placeholder.clone(),
+        label: w.label.clone(),
+        min: w.min,
+        max: w.max,
+        step: w.step,
+        options: w
+            .options
             .iter()
-            .map(|c| node_payload_to_scene(c, var_table, cum_opacity))
+            .map(|o| SceneWidgetOption {
+                value: o.value.clone(),
+                label: o.label.clone(),
+            })
             .collect(),
     }
 }
