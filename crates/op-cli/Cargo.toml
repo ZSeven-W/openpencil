@@ -14,4 +14,5 @@ path = "src/main.rs"
 [dependencies]
 op-config-store = { path = "../op-config-store" }
 op-figma = { path = "../op-figma" }
+op-rpc-transport = { path = "../op-rpc-transport" }
 serde_json = { workspace = true }
