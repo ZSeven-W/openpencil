@@ -294,8 +294,8 @@ impl<'a> GitPanel<'a> {
             .is_some_and(|b| self.pressed == Some(b))
     }
 
-    /// Paint a `theme.button_hover` wash over `rect` (corner radius `r`)
-    /// when the cursor is over the button `hit` represents.
+    /// Paint shared button feedback over `rect` when the cursor is over
+    /// the button `hit` represents.
     pub(super) fn wash_if_hovered(
         &self,
         cx: &mut PaintCx<'_>,
@@ -313,15 +313,15 @@ impl<'a> GitPanel<'a> {
                 hovered,
                 pressed,
             );
-        } else if hovered || pressed {
-            let color = if pressed {
-                self.theme
-                    .button_hover
-                    .with_alpha(self.theme.button_hover.a * 1.8)
-            } else {
-                self.theme.button_hover
-            };
-            cx.backend.fill_round_rect(rect, r, color);
+        } else {
+            crate::widgets::button::paint_button_feedback_wash(
+                cx.backend,
+                &self.theme,
+                rect,
+                r,
+                hovered,
+                pressed,
+            );
         }
     }
 
