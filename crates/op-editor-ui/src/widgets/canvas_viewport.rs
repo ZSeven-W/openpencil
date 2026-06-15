@@ -484,26 +484,20 @@ impl<'a> Widget for CanvasViewport<'a> {
             let reveal_schedule = indicators
                 .as_ref()
                 .and_then(|indicators| reveal_schedule_for_paint(&indicators.reveals, self.now_ms));
+            let mut hover_rect = None;
             for child in page.children.iter().rev() {
-                if let Some(reveals) = reveal_schedule {
-                    super::canvas_viewport_paint::paint_node_with_reveals(
-                        cx,
-                        child,
-                        viewport_origin,
-                        viewport.zoom,
-                        edit_caret.clone(),
-                        cull,
-                        reveals,
-                    );
-                } else {
-                    super::canvas_viewport_paint::paint_node(
-                        cx,
-                        child,
-                        viewport_origin,
-                        viewport.zoom,
-                        edit_caret.clone(),
-                        cull,
-                    );
+                let child_hover = super::canvas_viewport_paint::paint_node_with_options(
+                    cx,
+                    child,
+                    viewport_origin,
+                    viewport.zoom,
+                    edit_caret.clone(),
+                    cull,
+                    reveal_schedule,
+                    self.hovered.as_deref(),
+                );
+                if hover_rect.is_none() {
+                    hover_rect = child_hover;
                 }
             }
             if let Some(indicators) = indicators.as_ref() {
@@ -516,24 +510,14 @@ impl<'a> Widget for CanvasViewport<'a> {
                     indicators,
                 );
             }
-            if let Some(hovered) = self.hovered.as_ref() {
-                if let Some(node) = page.find(hovered) {
-                    const HOVER: Color = Color {
-                        r: 0.231,
-                        g: 0.51,
-                        b: 0.965,
-                        a: 1.0,
-                    };
-                    let b = node.aggregate_bounds();
-                    let screen = Rect {
-                        origin: Point2D::new(
-                            viewport_origin.x + b.origin.x * viewport.zoom,
-                            viewport_origin.y + b.origin.y * viewport.zoom,
-                        ),
-                        size: Point2D::new(b.size.x * viewport.zoom, b.size.y * viewport.zoom),
-                    };
-                    paint_dashed_rect(cx, screen, HOVER, 1.5);
-                }
+            if let Some(screen) = hover_rect {
+                const HOVER: Color = Color {
+                    r: 0.231,
+                    g: 0.51,
+                    b: 0.965,
+                    a: 1.0,
+                };
+                paint_dashed_rect(cx, screen, HOVER, 1.5);
             }
             super::canvas_frame_labels::paint_frame_labels(
                 cx,

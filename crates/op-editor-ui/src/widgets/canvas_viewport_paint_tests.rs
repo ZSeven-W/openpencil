@@ -35,7 +35,7 @@ mod arc_tests {
 
 mod text_tests {
     use crate::layout_scene::{NodeKind, SceneNode, SceneTextAlign, SceneTextVerticalAlign};
-    use crate::widgets::canvas_viewport_paint::{paint_node, paint_svg_path_node};
+    use crate::widgets::canvas_viewport_paint::{paint_node_with_options, paint_svg_path_node};
     use crate::widgets::canvas_viewport_text::paint_text_node;
     use crate::widgets::PaintCx;
     use crate::{Color, ImageDrawMode, Point2D, Rect, RenderBackend, TextLayout};
@@ -97,6 +97,16 @@ mod text_tests {
         }
     }
 
+    fn paint_node(
+        cx: &mut PaintCx<'_>,
+        node: &SceneNode,
+        viewport_origin: Point2D,
+        zoom: f32,
+        cull: Rect,
+    ) {
+        let _ = paint_node_with_options(cx, node, viewport_origin, zoom, None, cull, None, None);
+    }
+
     #[test]
     fn text_node_paint_honors_horizontal_alignment_and_ts_top_baseline() {
         let mut node = SceneNode::leaf("t", NodeKind::Text);
@@ -143,7 +153,6 @@ mod text_tests {
             &node,
             Point2D::ZERO,
             1.0,
-            None,
             Rect::xywh(0.0, 0.0, 800.0, 600.0),
         );
 
@@ -156,7 +165,6 @@ mod text_tests {
             &node,
             Point2D::ZERO,
             2.0,
-            None,
             Rect::xywh(0.0, 0.0, 800.0, 600.0),
         );
 
@@ -184,7 +192,6 @@ mod text_tests {
             &node,
             viewport_origin,
             2.0,
-            None,
             Rect::xywh(0.0, 0.0, 800.0, 600.0),
         );
 
@@ -572,7 +579,7 @@ mod path_tests {
 
 mod clip_tests {
     use crate::layout_scene::{NodeKind, SceneNode};
-    use crate::widgets::canvas_viewport_paint::paint_node;
+    use crate::widgets::canvas_viewport_paint::paint_node_with_options;
     use crate::widgets::PaintCx;
     use crate::{Color, Point2D, Rect, RenderBackend, TextLayout};
 
@@ -621,6 +628,10 @@ mod clip_tests {
         }
     }
 
+    fn paint_node(cx: &mut PaintCx<'_>, node: &SceneNode, cull: Rect) {
+        let _ = paint_node_with_options(cx, node, Point2D::ZERO, 1.0, None, cull, None, None);
+    }
+
     fn frame_with_child(clip: bool, corner_radius: f32) -> SceneNode {
         let mut child = SceneNode::leaf("c", NodeKind::Rect);
         child.bounds = Rect::xywh(10.0, 10.0, 500.0, 20.0);
@@ -639,14 +650,7 @@ mod clip_tests {
         let mut cx = PaintCx {
             backend: &mut backend,
         };
-        paint_node(
-            &mut cx,
-            node,
-            Point2D::ZERO,
-            1.0,
-            None,
-            Rect::xywh(0.0, 0.0, 4000.0, 4000.0),
-        );
+        paint_node(&mut cx, node, Rect::xywh(0.0, 0.0, 4000.0, 4000.0));
         backend.ops
     }
 

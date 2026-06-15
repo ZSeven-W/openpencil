@@ -587,6 +587,52 @@ fn multi_selection_overlay_finds_nodes_linearly() {
 }
 
 #[test]
+fn hover_outline_does_not_deep_search_after_scene_paint() {
+    let _guard = crate::agent_indicator_test_support::lock();
+    op_editor_core::agent_indicators::clear();
+
+    let mut node = SceneNode::leaf("hovered-leaf", NodeKind::Rect);
+    node.bounds = Rect::xywh(24.0, 24.0, 40.0, 40.0);
+    let depth = 8;
+    for i in (0..depth).rev() {
+        let mut frame = SceneNode::leaf(format!("wrap-{i}"), NodeKind::Frame);
+        frame.bounds = Rect::xywh(0.0, 0.0, 120.0, 120.0);
+        frame.children = vec![node];
+        node = frame;
+    }
+    let scene = LayoutScene {
+        pages: vec![ScenePage {
+            id: "p".into(),
+            name: "p".into(),
+            children: vec![node],
+        }],
+        active_page_index: 0,
+    };
+    let state = EditorState::new();
+    let mut viewport = CanvasViewport::from_editor(&state, &scene);
+    viewport.hovered = Some("hovered-leaf".into());
+
+    crate::layout_scene::reset_find_visit_count();
+    let mut backend = RecordingBackend::default();
+    {
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+        viewport.paint(&mut cx, Rect::xywh(0.0, 0.0, 300.0, 300.0));
+    }
+
+    assert_eq!(
+        crate::layout_scene::find_visit_count(),
+        0,
+        "hover outline should paint during the existing scene walk instead of deep-searching after paint"
+    );
+    assert!(
+        backend.strokes > 0,
+        "hover outline should still paint dashed strokes"
+    );
+}
+
+#[test]
 fn flipped_node_applies_scale_transform() {
     let state = sample_state();
     let mut node = leaf(
