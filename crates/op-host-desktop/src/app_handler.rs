@@ -488,6 +488,9 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
                 ) {
                     self.redraw_dirty = true;
                 }
+                if self.poll_design_md_generation() {
+                    self.redraw_dirty = true;
+                }
                 // Drain a pending Download / Export-Bundle from the Code
                 // panel — pops a native save dialog + writes the file(s).
                 if crate::codegen_export::drain_codegen_file_actions(
@@ -651,6 +654,7 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
                 if self.current_chat.is_some()
                     || self.current_design.is_some()
                     || self.current_codegen.is_some()
+                    || self.current_design_md.is_some()
                 {
                     event_loop.set_control_flow(ControlFlow::WaitUntil(
                         Instant::now() + Duration::from_millis(33),
@@ -1137,7 +1141,9 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
         // (Commit / Refresh / Pull) — run it after the event.
         self.drain_git_action();
         // A Design-MD panel click may have queued an import / export.
-        self.drain_design_md_action();
+        if self.drain_design_md_action() {
+            self.request_redraw(true);
+        }
         // A Component-Browser card click may have queued an insert —
         // run it against the current viewport centre. Schedule a
         // repaint on success so the new node lands visibly.
@@ -1210,6 +1216,7 @@ impl DesktopApp {
         self.current_chat.is_some()
             || self.current_design.is_some()
             || self.current_codegen.is_some()
+            || self.current_design_md.is_some()
             || self.current_figma_import.is_some()
             || self.pending_figma_paste.is_some()
             || self.host.next_animation_deadline_ms().is_some()

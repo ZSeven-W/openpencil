@@ -189,6 +189,26 @@ impl WidgetKind {
     pub fn has_range(self) -> bool {
         matches!(self, WidgetKind::Slider | WidgetKind::NumberInput)
     }
+
+    /// Whether the kind exposes `leadingIcon` / `trailingIcon` name
+    /// fields (icon-bearing input widgets, Phase 1).
+    pub fn has_icons(self) -> bool {
+        matches!(
+            self,
+            WidgetKind::TextInput | WidgetKind::TextArea | WidgetKind::NumberInput
+        )
+    }
+
+    /// Whether the kind exposes the `bind:value` state-key field. The
+    /// schema carries `bindings` on every form widget; Phase 1 surfaces
+    /// the editor only on the text-bearing input kinds (parity with
+    /// where the value/placeholder rows show).
+    pub fn has_bind_value(self) -> bool {
+        matches!(
+            self,
+            WidgetKind::TextInput | WidgetKind::TextArea | WidgetKind::NumberInput
+        )
+    }
 }
 
 /// Snapshot of a form-widget node's editable props, formatted for
@@ -217,6 +237,14 @@ pub struct WidgetSummary {
     pub option_count: usize,
     /// Count of authored `tabs` (Tabs) — read-only affordance.
     pub tab_count: usize,
+    /// `leadingIcon` / `trailingIcon` lucide glyph names (input
+    /// widgets) — empty when unset. The Widget section edits these.
+    pub leading_icon: String,
+    pub trailing_icon: String,
+    /// The `bind:value` state key, with the `$state.` prefix stripped
+    /// for display (e.g. `email` for `bindings."bind:value" =
+    /// "$state.email"`). Empty when no value binding is authored.
+    pub bind_key: String,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -836,6 +864,17 @@ fn checked_literal(v: Option<&BoolOrExpression>) -> bool {
     matches!(v, Some(BoolOrExpression::Bool(true)))
 }
 
+/// Display key for the `bind:value` two-way binding — the raw
+/// expression with the `$state.` prefix stripped so the panel input
+/// shows `email` for `$state.email`. Empty when no value binding is
+/// authored. A non-`$state` expression is shown verbatim.
+fn bind_value_key(bindings: Option<&jian_ops_schema::events::Bindings>) -> String {
+    bindings
+        .and_then(|b| b.get("bind:value"))
+        .map(|e| e.0.trim().trim_start_matches("$state.").to_string())
+        .unwrap_or_default()
+}
+
 /// Build the Widget-section summary for a form-widget `PenNode`.
 /// `None` for every non-widget kind so the section stays hidden.
 fn widget_summary_of(node: &PenNode) -> Option<WidgetSummary> {
@@ -850,16 +889,25 @@ fn widget_summary_of(node: &PenNode) -> Option<WidgetSummary> {
         step: String::new(),
         option_count: 0,
         tab_count: 0,
+        leading_icon: String::new(),
+        trailing_icon: String::new(),
+        bind_key: String::new(),
     };
     match node {
         PenNode::TextInput(n) => Some(WidgetSummary {
             placeholder: n.placeholder.clone().unwrap_or_default(),
             value: n.value.clone().unwrap_or_default(),
+            leading_icon: n.leading_icon.clone().unwrap_or_default(),
+            trailing_icon: n.trailing_icon.clone().unwrap_or_default(),
+            bind_key: bind_value_key(n.bindings.as_ref()),
             ..base(WidgetKind::TextInput)
         }),
         PenNode::TextArea(n) => Some(WidgetSummary {
             placeholder: n.placeholder.clone().unwrap_or_default(),
             value: n.value.clone().unwrap_or_default(),
+            leading_icon: n.leading_icon.clone().unwrap_or_default(),
+            trailing_icon: n.trailing_icon.clone().unwrap_or_default(),
+            bind_key: bind_value_key(n.bindings.as_ref()),
             ..base(WidgetKind::TextArea)
         }),
         PenNode::NumberInput(n) => Some(WidgetSummary {
@@ -868,6 +916,9 @@ fn widget_summary_of(node: &PenNode) -> Option<WidgetSummary> {
             min: fmt_widget_num(n.min),
             max: fmt_widget_num(n.max),
             step: fmt_widget_num(n.step),
+            leading_icon: n.leading_icon.clone().unwrap_or_default(),
+            trailing_icon: n.trailing_icon.clone().unwrap_or_default(),
+            bind_key: bind_value_key(n.bindings.as_ref()),
             ..base(WidgetKind::NumberInput)
         }),
         PenNode::Select(n) => Some(WidgetSummary {

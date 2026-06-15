@@ -287,7 +287,14 @@ fn layout_measure_backend() -> Rc<dyn MeasureBackend> {
 /// `(base.x, base.y)` for any `PenNode`, defaulting to `(0, 0)`
 /// when the schema didn't author them. Used by `compute_layout`
 /// to offset taffy's root-relative rects onto the infinite canvas.
-fn root_authored_origin(n: &PenNode) -> (f32, f32) {
+///
+/// Public (paired with [`root_available_size`]) so the Canvas Preview
+/// (Play) path in `op-host-native` can translate a scene-space tap back
+/// into the jian runtime's root-relative hit-test space: the design
+/// scene offsets every root by this origin, but the runtime lays each
+/// root at its own (0, 0), so a tap must subtract the containing root's
+/// authored origin before it reaches `Runtime::dispatch_pointer`.
+pub fn root_authored_origin(n: &PenNode) -> (f32, f32) {
     let base = match n {
         PenNode::Frame(f) => &f.base,
         PenNode::Group(g) => &g.base,
@@ -318,7 +325,15 @@ fn root_authored_origin(n: &PenNode) -> (f32, f32) {
 /// solves the root against. Numeric roots use their authored size;
 /// flex-token roots fall back to a generous default that doesn't
 /// drive taffy into trying to wrap a 1×1 canvas.
-fn root_available_size(root: &PenNode) -> (f32, f32) {
+///
+/// Public so the Canvas Preview (Play) path in `op-host-native` lays
+/// the document out against the SAME available size as this static
+/// design-canvas path — see `op_host_native::preview`. Laying a
+/// `fill_container` root against the whole editor canvas region (as
+/// the preview previously did via `runtime.build_layout(canvas_size)`)
+/// expands the root and scatters its flex children; mirroring the
+/// design canvas keeps both surfaces bit-identical.
+pub fn root_available_size(root: &PenNode) -> (f32, f32) {
     let (w_sizing, h_sizing) = root_sizing(root);
     let w = match w_sizing {
         Some(SizingBehavior::Number(n)) => n as f32,

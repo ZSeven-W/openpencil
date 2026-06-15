@@ -204,6 +204,11 @@ pub struct WidgetPayload {
     /// Placeholder text for inputs / select.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub placeholder: Option<String>,
+    /// Leading / trailing lucide glyph for input widgets (Phase 1).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub leading_icon: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub trailing_icon: Option<String>,
     /// Adjacent label (checkbox).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub label: Option<String>,

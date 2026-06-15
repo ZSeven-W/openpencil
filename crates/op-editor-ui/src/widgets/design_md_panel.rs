@@ -74,6 +74,7 @@ pub struct DesignMdPanel<'a> {
     /// Bitmask of expanded sections (bit 0 = theme … 5 = notes).
     expanded: u8,
     scroll: f32,
+    generating: bool,
     /// Which target the cursor is over — drives the hover wash.
     hover: Option<DesignMdButton>,
     /// Which Design-MD target is actively pressed.
@@ -133,6 +134,7 @@ impl<'a> DesignMdPanel<'a> {
             locale: state.editor_ui.locale,
             expanded: state.editor_ui.design_md_expanded,
             scroll: state.editor_ui.design_md_scroll.offset,
+            generating: state.editor_ui.design_md_generating,
             hover: state.editor_ui.design_md_hover,
             pressed: match state.editor_ui.pressed_button {
                 Some(ButtonPressTarget::DesignMd(button)) => Some(button),
@@ -437,7 +439,11 @@ impl<'a> DesignMdPanel<'a> {
         self.icon_button(
             cx,
             auto,
-            Icon::Wand2,
+            if self.generating {
+                Icon::Loader
+            } else {
+                Icon::Wand2
+            },
             self.hover == Some(B::AutoGenerate),
             self.is_pressed(B::AutoGenerate),
         );
@@ -499,7 +505,10 @@ impl<'a> DesignMdPanel<'a> {
             11.0,
             self.theme.muted_foreground,
         );
-        for (_, button, icon, button_rect) in Self::empty_action_buttons(rect) {
+        for (_, button, mut icon, button_rect) in Self::empty_action_buttons(rect) {
+            if button == DesignMdButton::AutoGenerate && self.generating {
+                icon = Icon::Loader;
+            }
             self.action_button(
                 cx,
                 button_rect,

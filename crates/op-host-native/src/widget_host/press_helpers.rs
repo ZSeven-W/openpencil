@@ -747,6 +747,24 @@ pub(in crate::widget_host) fn property_focus_initial(
             .as_ref()
             .map(|w| w.label.clone())
             .unwrap_or_default(),
+        F::WidgetLeadingIcon => panel
+            .snapshot
+            .widget
+            .as_ref()
+            .map(|w| w.leading_icon.clone())
+            .unwrap_or_default(),
+        F::WidgetTrailingIcon => panel
+            .snapshot
+            .widget
+            .as_ref()
+            .map(|w| w.trailing_icon.clone())
+            .unwrap_or_default(),
+        F::WidgetBindKey => panel
+            .snapshot
+            .widget
+            .as_ref()
+            .map(|w| w.bind_key.clone())
+            .unwrap_or_default(),
         F::WidgetMin => panel
             .snapshot
             .widget

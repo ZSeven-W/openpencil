@@ -18,6 +18,7 @@ pub mod button_press_state;
 pub mod chat;
 pub mod chat_button_state;
 mod chat_design_apply;
+mod chat_title;
 pub mod clipboard;
 pub mod codegen;
 pub mod color_picker;

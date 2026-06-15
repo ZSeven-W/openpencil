@@ -80,7 +80,6 @@ pub struct AIChatPlaceholder<'a> {
     pub theme: Theme,
     pub state: &'a ChatState,
     pub now_ms: u64,
-    pub label_new_chat: String,
     pub label_start_with_ai: String,
     pub label_input_placeholder: String,
     pub label_tip_select_elements: String,
@@ -121,9 +120,6 @@ impl<'a> AIChatPlaceholder<'a> {
             theme: theme_for(ui),
             state: &state.chat,
             now_ms,
-            // TS stores the chat title as UI state and defaults it to
-            // this English title even under a Chinese locale.
-            label_new_chat: "New Chat".to_string(),
             label_start_with_ai: translate(ui, "ai.startDesigning").to_string(),
             label_input_placeholder: translate(ui, "ai.designWithAgent").to_string(),
             label_tip_select_elements: translate(ui, "ai.tipSelectElements").to_string(),
@@ -232,7 +228,7 @@ impl<'a> AIChatPlaceholder<'a> {
     pub(crate) fn expanded_header_title_rect(&self, rect: Rect) -> Rect {
         let x = rect.origin.x + PAD - 8.0;
         let right_limit = rect.origin.x + rect.size.x - PAD - 58.0;
-        let w = (28.0 + footer_label_width(&self.label_new_chat, 14.0) + 22.0)
+        let w = (28.0 + footer_label_width(&self.state.title, 14.0) + 22.0)
             .max(112.0)
             .min((right_limit - x).max(36.0));
         Rect {
@@ -324,7 +320,7 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
             );
             // "New Chat" label.
             let title = TextLayout::single_run(
-                &self.label_new_chat,
+                &self.state.title,
                 "system-ui",
                 12.0,
                 (self.theme.muted_foreground).to_jian(),
@@ -385,7 +381,7 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
             1.4,
         );
         let title = TextLayout::single_run(
-            &self.label_new_chat,
+            &self.state.title,
             "system-ui",
             14.0,
             (self.theme.foreground).to_jian(),

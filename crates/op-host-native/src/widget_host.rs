@@ -630,15 +630,23 @@ impl WidgetHostNative {
 
     /// Enter Preview (Play) mode: flip the editor flag + build a live
     /// jian runtime from the current document (which is NOT mutated).
-    /// `canvas_size` is the logical canvas region the runtime lays out
-    /// into. On a build failure the editor stays in design mode and the
-    /// error is recorded in `preview_warnings`. Returns `true` on
-    /// success.
+    /// Layout is solved per-root from each root frame's own authored
+    /// size (mirroring the design canvas), so `canvas_size` no longer
+    /// drives the flex solve — it is retained only for API
+    /// compatibility; the visible viewport affects paint transform
+    /// (pan / zoom / clip), not layout. On a build failure the editor
+    /// stays in design mode and the error is recorded in
+    /// `preview_warnings`. Returns `true` on success.
     pub fn enter_preview(&mut self, canvas_size: (f32, f32)) -> bool {
         if self.preview.is_some() {
             return true;
         }
-        match crate::preview::PreviewSession::enter(&self.editor_state.doc, canvas_size) {
+        match crate::preview::PreviewSession::enter(
+            &self.editor_state.doc,
+            canvas_size,
+            &self.editor_state.ui.variables.active_theme,
+            self.editor_state.ui.active_page_index,
+        ) {
             Ok(mut session) => {
                 session.set_now_ms(self.now_ms);
                 self.editor_state.editor_ui.enter_preview();
@@ -677,9 +685,11 @@ impl WidgetHostNative {
         }
     }
 
-    /// Re-lay-out the live preview runtime against the canvas region
-    /// derived from the given viewport size. No-op when not in preview.
-    /// The desktop runner calls this from its `Resized` handler.
+    /// Resize hook called from the desktop runner's `Resized` handler.
+    /// Preview layout is now derived per-root from the document (not the
+    /// canvas region), so resizing only changes the paint transform, not
+    /// the flex solve — `PreviewSession::resize` is itself a no-op.
+    /// Returns early when not in preview.
     pub fn preview_resize(&mut self, viewport_w: f32, viewport_h: f32) {
         if self.preview.is_none() {
             return;
@@ -731,6 +741,24 @@ impl WidgetHostNative {
             .is_some_and(|p| p.dispatch_tap(doc.x, doc.y));
         self.mark_dirty();
         handled
+    }
+
+    /// Advance focus to the next (`shift=false`) / previous
+    /// (`shift=true`) focusable widget in the live preview runtime —
+    /// Tab / Shift+Tab. Lets the user reach a text input without
+    /// clicking (the desktop runner otherwise drops Tab as a control
+    /// char). Returns `true` while in preview so the caret repaints.
+    pub fn preview_focus(&mut self, shift: bool) -> bool {
+        let Some(preview) = self.preview.as_mut() else {
+            return false;
+        };
+        if shift {
+            preview.focus_previous();
+        } else {
+            preview.focus_next();
+        }
+        self.mark_dirty();
+        true
     }
 
     /// Route a named key into the live preview runtime. `shift` drives

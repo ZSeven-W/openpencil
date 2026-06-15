@@ -103,8 +103,9 @@ fn reveal_schedule_keeps_nested_stream_order_across_sibling_groups() {
     assert!(
         [label_0 - row_0, row_1 - label_0, label_1 - row_1]
             .into_iter()
-            .all(|gap| gap >= 40
-                && gap <= op_editor_core::agent_indicators::REVEAL_CHILD_RUNWAY_MS),
+            .all(|gap| {
+                (40..=op_editor_core::agent_indicators::REVEAL_CHILD_RUNWAY_MS).contains(&gap)
+            }),
         "nested stream items should keep readable cadence while giving new containers a runway"
     );
     op_editor_core::agent_indicators::end_if_epoch(epoch);

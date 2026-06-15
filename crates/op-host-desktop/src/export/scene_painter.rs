@@ -66,7 +66,18 @@ pub(crate) fn paint_nodes(canvas: &Canvas, nodes: &[SceneNode]) {
             backend: &mut frame,
         };
         for node in nodes.iter().rev() {
-            canvas_viewport_paint::paint_node(&mut cx, node, Point2D::ZERO, 1.0, None, no_cull());
+            let _ = canvas_viewport_paint::paint_node_with_options(
+                &mut cx,
+                node,
+                Point2D::ZERO,
+                1.0,
+                None,
+                no_cull(),
+                None,
+                None,
+                None,
+                None,
+            );
         }
     });
 }

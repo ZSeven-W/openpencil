@@ -14,7 +14,7 @@ CRITICAL — OUTPUT-MODE PRIORITY: If a separate `OUTPUT FORMAT — EMIT AS TOOL
 The TYPES / RULES / DESIGN SYSTEM TOKENS sections below describe the underlying PenNode schema and apply to EITHER mode — they tell you the shape of node arguments inside an `<op_tool>` call, and the shape of nodes in raw JSONL.
 
 TYPES:
-frame (width,height,layout,gap,padding,justifyContent,alignItems,cornerRadius,fill), rectangle (width,height,cornerRadius,fill), text (content,fontFamily,fontSize,fontWeight,fill,width,textAlign), icon_font (iconFontName,width,height,fill)
+frame (width,height,layout,gap,padding,justifyContent,alignItems,cornerRadius,fill), rectangle (width,height,cornerRadius,fill), text (content,fontFamily,fontSize,fontWeight,fill,width,textAlign), icon_font (iconFontName,width,height,fill), text_input (placeholder,value,leadingIcon,trailingIcon,width,height,fill,cornerRadius) — use for form fields, NOT a role=input frame
 SHARED: id, type, name, \_parent
 
 RULES:

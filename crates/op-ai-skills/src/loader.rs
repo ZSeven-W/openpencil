@@ -112,6 +112,20 @@ mod tests {
     }
 
     #[test]
+    fn generation_format_emits_text_input_widgets() {
+        // Phase 1: form fields must be generated as real `text_input`
+        // nodes (interactive in preview), not `role=input` mockup frames.
+        // The jsonl-format skill's node-type list must mention text_input.
+        let mentions = get_skills_by_phase(Phase::Generation)
+            .iter()
+            .any(|s| s.content.contains("text_input"));
+        assert!(
+            mentions,
+            "the generation format must list text_input as an emittable node"
+        );
+    }
+
+    #[test]
     fn block_list_and_next_line_array_triggers_load_non_empty() {
         // role-definitions / copywriting open the keyword array on the
         // line after `keywords:`; cjk-typography uses a `- ` block

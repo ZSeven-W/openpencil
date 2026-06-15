@@ -711,3 +711,44 @@ fn scene_text_runs_map_segments_onto_byte_ranges() {
     assert!((fill.g - 1.0).abs() < 1e-6);
     assert!((fill.a - 0.5).abs() < 1e-6, "alpha carries cum_opacity");
 }
+
+#[test]
+fn text_input_icons_reach_scene_widget() {
+    let state = state_from(
+        r##"{"version":"1.1","formatVersion":"1.1","id":"x",
+        "app":{"name":"x","version":"1","id":"x"},
+        "children":[{"type":"frame","id":"s","width":300,"height":300,"children":[
+            {"type":"text_input","id":"f","width":280,"height":48,
+             "leadingIcon":"mail","trailingIcon":"eye","placeholder":"you@example.com"}]}]}"##,
+    );
+    let scene = editor_state_to_layout_scene(&state);
+    let field = scene
+        .active_page()
+        .unwrap()
+        .find("f")
+        .expect("text_input node in scene");
+    let w = field
+        .widget
+        .as_ref()
+        .expect("text_input carries a SceneWidget");
+    assert_eq!(w.kind, "text_input");
+    assert_eq!(w.leading_icon.as_deref(), Some("mail"));
+    assert_eq!(w.trailing_icon.as_deref(), Some("eye"));
+    assert_eq!(w.placeholder.as_deref(), Some("you@example.com"));
+}
+
+#[test]
+fn pen_document_to_layout_scene_matches_editor_state_path() {
+    let src = r##"{"version":"1.1","formatVersion":"1.1","id":"x",
+        "app":{"name":"x","version":"1","id":"x"},
+        "children":[{"type":"frame","id":"s","width":200,"height":200,
+          "fill":[{"type":"solid","color":"#ffffff"}]}]}"##;
+    let state = state_from(src);
+    let via_state = editor_state_to_layout_scene(&state);
+    let via_doc =
+        crate::pen_document_to_layout_scene(&state.doc, &std::collections::BTreeMap::new(), 0);
+    assert_eq!(
+        via_state, via_doc,
+        "bare-doc scene must equal the editor-state scene for a cache-free doc"
+    );
+}

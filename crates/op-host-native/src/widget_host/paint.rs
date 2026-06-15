@@ -141,11 +141,14 @@ impl WidgetHostNative {
         if canvas_w > 0.0 && canvas_h > 0.0 {
             if let Some(preview) = self.preview.as_ref() {
                 // PREVIEW path — paint the canvas background, then the
-                // live jian runtime scene transformed by the editor
-                // viewport. The editor's selection / handles / grid do
-                // NOT paint in preview (the runtime owns the surface).
+                // live document rendered through the SAME design-canvas
+                // scene painter (`paint_scene`), with widget runtime
+                // state overlaid + a focus caret. Passing `layout_scene`
+                // (the untouched design scene) makes preview
+                // pixel-identical to design plus live. The editor's
+                // selection / handles / grid do NOT paint in preview.
                 frame.fill_rect(canvas_rect, self.theme.canvas_surface);
-                preview.paint(
+                preview.paint_scene(
                     &mut *frame,
                     canvas_rect,
                     (

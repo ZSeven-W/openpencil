@@ -58,6 +58,35 @@ fn paint_collapsed_bar_matches_ts_minimized_bar_style() {
 }
 
 #[test]
+fn paint_header_uses_auto_generated_chat_title() {
+    let mut s = EditorState::new();
+    s.chat.title = "现代移动端登录页面".into();
+    let panel = AIChatPlaceholder::from_editor(&s);
+    let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
+    let mut backend = PanelPaintBackend::default();
+    let mut cx = PaintCx {
+        backend: &mut backend,
+    };
+
+    panel.paint(&mut cx, rect);
+
+    assert!(
+        backend
+            .texts
+            .iter()
+            .any(|(text, size, _, _)| text == "现代移动端登录页面" && (*size - 14.0).abs() < 1e-4),
+        "expanded header should render the current chat title"
+    );
+    assert!(
+        !backend
+            .texts
+            .iter()
+            .any(|(text, _, _, _)| text == "New Chat"),
+        "auto-titled chats should not keep painting the default title"
+    );
+}
+
+#[test]
 fn paint_collapsed_bar_hover_adds_visible_feedback_across_pill() {
     let mut s = EditorState::new();
     s.chat.collapsed = true;

@@ -32,6 +32,24 @@ const TEXT_VALUE: Color = Color::rgb_u8(0x11, 0x11, 0x11);
 /// Placeholder text (muted grey).
 const TEXT_MUTED: Color = Color::rgb_u8(0x66, 0x66, 0x66);
 
+/// Base horizontal text padding inside an input (doc px, pre-zoom).
+pub(crate) const INPUT_PAD_X: f32 = 8.0;
+/// Leading/trailing icon glyph box inside an input (doc px, pre-zoom).
+pub(crate) const INPUT_ICON_BOX: f32 = 20.0;
+
+/// Left inset for an input's text/caret (doc px, pre-zoom). Single
+/// source of truth shared by the design canvas (`paint_text_field`) and
+/// the preview caret (`op_host_native::preview::paint_focus_caret`), so
+/// the caret always lands where the painted text starts. Mirrors jian's
+/// `scene::input_left_inset`. A leading icon reserves `PAD + ICON + PAD`.
+pub fn widget_text_inset_left(w: &SceneWidget) -> f32 {
+    if w.leading_icon.is_some() {
+        INPUT_PAD_X + INPUT_ICON_BOX + INPUT_PAD_X
+    } else {
+        INPUT_PAD_X
+    }
+}
+
 /// Paint the static visual for a widget scene node, in world coords.
 ///
 /// `world_rect` is the node's already-zoom-scaled screen rect; `zoom`
@@ -230,7 +248,7 @@ fn paint_radio_group(cx: &mut PaintCx<'_>, w: &SceneWidget, r: Rect, zoom: f32) 
 /// Text input / textarea / number input: outlined box + the value
 /// (near-black) or, when empty, the placeholder (muted).
 fn paint_text_field(cx: &mut PaintCx<'_>, node: &SceneNode, w: &SceneWidget, r: Rect, zoom: f32) {
-    let (x, y, _ww, h) = rect_parts(r);
+    let (x, y, ww, h) = rect_parts(r);
     let radius = (node.corner_radius * zoom).max(6.0 * zoom);
     if let Some(fill) = node.fill {
         cx.backend.fill_round_rect(r, radius, fill);
@@ -240,6 +258,35 @@ fn paint_text_field(cx: &mut PaintCx<'_>, node: &SceneNode, w: &SceneWidget, r: 
     let stroke_w = node.stroke.map(|s| s.width).unwrap_or(1.0) * zoom;
     cx.backend.stroke_round_rect(r, radius, TRACK_OFF, stroke_w);
 
+    // Leading / trailing lucide glyphs at the content edges, vertically
+    // centred. The text inset (`widget_text_inset_left`) reserves room
+    // for the leading icon so the value/placeholder never overlaps it.
+    let icon = INPUT_ICON_BOX * zoom;
+    let iy = y + (h - icon) / 2.0;
+    if let Some(name) = w.leading_icon.as_deref() {
+        crate::widgets::icons::paint_icon_font_node(
+            cx.backend,
+            "",
+            name,
+            Rect::xywh(x + INPUT_PAD_X * zoom, iy, icon, icon),
+            Some(TEXT_MUTED),
+        );
+    }
+    if let Some(name) = w.trailing_icon.as_deref() {
+        crate::widgets::icons::paint_icon_font_node(
+            cx.backend,
+            "",
+            name,
+            Rect::xywh(
+                x + ww - (INPUT_PAD_X + INPUT_ICON_BOX) * zoom,
+                iy,
+                icon,
+                icon,
+            ),
+            Some(TEXT_MUTED),
+        );
+    }
+
     if let Some((text, color)) = text_field_display_text(w) {
         let fs = 14.0 * zoom;
         // text_area top-aligns; single-line inputs vertically centre.
@@ -248,7 +295,14 @@ fn paint_text_field(cx: &mut PaintCx<'_>, node: &SceneNode, w: &SceneWidget, r: 
         } else {
             y + (h - fs) / 2.0
         };
-        draw_label(cx, text.as_ref(), color, x + 8.0 * zoom, ty, fs);
+        draw_label(
+            cx,
+            text.as_ref(),
+            color,
+            x + widget_text_inset_left(w) * zoom,
+            ty,
+            fs,
+        );
     }
 }
 

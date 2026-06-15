@@ -284,8 +284,13 @@ fn launch_cli_standard_turn(
     let (executor, tool_rx) = chat_tool_channel();
     let (delta_tx, delta_rx) = mpsc::channel();
     let (cmd_tx, cmd_rx) = mpsc::channel();
+    let indicator_epoch = op_editor_core::agent_indicators::begin();
     *current_chat = Some(ChatSession::from_channels(chat_rx, Some(tool_rx)));
-    *current_design = Some(DesignSession::from_channels(delta_rx, cmd_rx));
+    *current_design = Some(DesignSession::from_channels_with_epoch(
+        delta_rx,
+        cmd_rx,
+        indicator_epoch,
+    ));
 
     let plan = crate::chat_intent::CliTurnPlan {
         user_text: user_text.to_string(),
@@ -297,6 +302,7 @@ fn launch_cli_standard_turn(
         modify_request,
         design_request,
         initial_state,
+        indicator_epoch,
         model,
     };
     thread::Builder::new()

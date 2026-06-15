@@ -174,6 +174,10 @@ fn run_mobile_scaffold_reveals_status_bar() {
         .expect("mobile scaffold should insert a status bar");
     let snapshot = op_editor_core::agent_indicators::snapshot();
     assert!(
+        snapshot.frames.contains_key(root.id_str()),
+        "sequential scaffold root should get an agent frame badge"
+    );
+    assert!(
         snapshot.reveals.contains_key(&status_id),
         "status bar should get a reveal animation, got {:?}",
         snapshot.reveals.keys().collect::<Vec<_>>()

@@ -31,7 +31,8 @@ const ROW_ADVANCE: f32 = INPUT_HEIGHT + 6.0;
 
 /// The ordered list of text-input rows a widget kind exposes, each
 /// paired with its `PropertyFocus`. Drives paint + the input-rect
-/// walker so they can never drift. (placeholder → value → label).
+/// walker so they can never drift. (placeholder → value → label →
+/// leading icon → trailing icon → bind-key).
 fn text_rows(kind: WidgetKind) -> Vec<(PropertyFocus, &'static str)> {
     let mut rows = Vec::new();
     if kind.has_placeholder() {
@@ -42,6 +43,13 @@ fn text_rows(kind: WidgetKind) -> Vec<(PropertyFocus, &'static str)> {
     }
     if kind.has_label() {
         rows.push((PropertyFocus::WidgetLabel, "Label"));
+    }
+    if kind.has_icons() {
+        rows.push((PropertyFocus::WidgetLeadingIcon, "Leading icon"));
+        rows.push((PropertyFocus::WidgetTrailingIcon, "Trailing icon"));
+    }
+    if kind.has_bind_value() {
+        rows.push((PropertyFocus::WidgetBindKey, "Bind value"));
     }
     rows
 }
@@ -186,6 +194,9 @@ pub fn paint_widget_section(
             PropertyFocus::WidgetPlaceholder => summary.placeholder.as_str(),
             PropertyFocus::WidgetValue => summary.value.as_str(),
             PropertyFocus::WidgetLabel => summary.label.as_str(),
+            PropertyFocus::WidgetLeadingIcon => summary.leading_icon.as_str(),
+            PropertyFocus::WidgetTrailingIcon => summary.trailing_icon.as_str(),
+            PropertyFocus::WidgetBindKey => summary.bind_key.as_str(),
             _ => "",
         };
         let value = edit.value_for(focus, fallback);

@@ -18,12 +18,10 @@ use crate::chat_canvas_tools::execute_chat_tool;
 // re-exports keep every external `chat_session::` path stable.
 #[path = "chat_session_launch.rs"]
 mod launch;
-pub(crate) use launch::provider_for_selected_model;
 #[cfg(test)]
-pub(crate) use launch::{
-    builtin_provider_with_tools, clear_fresh_starter_frame_for_design, selected_cli_model_id,
-};
+pub(crate) use launch::{builtin_provider_with_tools, clear_fresh_starter_frame_for_design};
 pub use launch::{drain_new_chat_request, drain_stop_request, launch_if_pending};
+pub(crate) use launch::{provider_for_selected_model, selected_cli_model_id};
 
 /// Pump the in-flight turn's deltas into the trailing assistant message, then
 /// execute any pending canvas tool calls against the live editor state.

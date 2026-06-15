@@ -8,7 +8,6 @@ use std::collections::HashMap;
 struct RevealCaptureBackend {
     ops: Vec<String>,
     scales: usize,
-    scale_values: Vec<Point2D>,
     translations: Vec<Point2D>,
 }
 
@@ -32,8 +31,8 @@ impl RenderBackend for RevealCaptureBackend {
         self.translations.push(delta);
     }
     fn scale(&mut self, factor: Point2D, _: Point2D) {
+        let _ = factor;
         self.scales += 1;
-        self.scale_values.push(factor);
         self.ops.push("scale".into());
     }
     fn stroke_line(&mut self, _: Point2D, _: Point2D, _: Color, _: f32) {}
@@ -95,18 +94,12 @@ fn future_reveal_child_waits_before_painting() {
     );
     assert_eq!(
         paint_with_reveals(&frame, &reveals, 1_200).ops,
-        vec![
-            "fill(0,0)".to_string(),
-            "save".to_string(),
-            "scale".to_string(),
-            "fill(10,10)".to_string(),
-            "restore".to_string(),
-        ]
+        vec!["fill(0,0)".to_string(), "fill(10,10)".to_string()]
     );
 }
 
 #[test]
-fn active_reveal_wraps_node_paint_in_transform() {
+fn active_reveal_paints_content_without_transform() {
     let mut node = SceneNode::leaf("c", NodeKind::Rect);
     node.bounds = Rect::xywh(10.0, 10.0, 50.0, 30.0);
     node.fill = Some(Color::RED);
@@ -114,20 +107,16 @@ fn active_reveal_wraps_node_paint_in_transform() {
 
     let backend = paint_with_reveals(&node, &reveals, 1_120);
 
-    assert_eq!(backend.scales, 1, "node content should ease in via scale");
-    assert_eq!(
-        backend.ops,
-        vec![
-            "save".to_string(),
-            "scale".to_string(),
-            "fill(10,10)".to_string(),
-            "restore".to_string(),
-        ]
+    assert_eq!(backend.scales, 0, "TS Skia reveal does not scale content");
+    assert!(
+        backend.translations.is_empty(),
+        "TS Skia reveal does not lift content"
     );
+    assert_eq!(backend.ops, vec!["fill(10,10)".to_string()]);
 }
 
 #[test]
-fn active_reveal_starts_with_readable_lift_and_scale() {
+fn active_reveal_starts_at_authored_position() {
     let mut node = SceneNode::leaf("c", NodeKind::Rect);
     node.bounds = Rect::xywh(10.0, 10.0, 50.0, 30.0);
     node.fill = Some(Color::RED);
@@ -135,20 +124,9 @@ fn active_reveal_starts_with_readable_lift_and_scale() {
 
     let backend = paint_with_reveals(&node, &reveals, 1_000);
 
-    assert!(
-        backend
-            .scale_values
-            .first()
-            .is_some_and(|scale| scale.x <= 0.972 && scale.y <= 0.972),
-        "reveal should start with enough scale delta to read as an entrance"
-    );
-    assert!(
-        backend
-            .translations
-            .first()
-            .is_some_and(|delta| delta.y >= 8.0),
-        "reveal should start with enough lift to avoid an instant pop"
-    );
+    assert_eq!(backend.scales, 0);
+    assert!(backend.translations.is_empty());
+    assert_eq!(backend.ops, vec!["fill(10,10)".to_string()]);
 }
 
 #[test]
@@ -158,10 +136,7 @@ fn opening_parent_reveal_prevents_nested_child_transform() {
 
     let backend = paint_with_reveals(&frame, &reveals, 1_040);
 
-    assert_eq!(
-        backend.scales, 1,
-        "child reveal should not stack another transform during the parent's opening beat"
-    );
+    assert_eq!(backend.scales, 0, "reveal should not transform content");
     assert!(
         backend.ops.contains(&"fill(10,10)".to_string()),
         "started child should still paint inside the parent reveal"
@@ -175,34 +150,27 @@ fn parent_reveal_suppresses_child_transform_through_opening_beat() {
 
     let backend = paint_with_reveals(&frame, &reveals, 1_056);
 
-    assert_eq!(
-        backend.scales, 1,
-        "the first beat should read as one coherent streamed group, not stacked child pops"
-    );
+    assert_eq!(backend.scales, 0, "reveal should not transform content");
 }
 
 #[test]
-fn child_reveal_gets_own_transform_after_parent_opening_beat() {
+fn child_reveal_paints_after_parent_opening_beat_without_transform() {
     let frame = frame_with_child();
     let reveals = HashMap::from([("f".to_string(), 1_000), ("c".to_string(), 1_080)]);
 
     let backend = paint_with_reveals(&frame, &reveals, 1_180);
 
-    assert_eq!(
-        backend.scales, 2,
-        "parent reveal should not swallow the child's own streamed entrance after the opening beat"
-    );
+    assert_eq!(backend.scales, 0, "reveal should not transform content");
+    assert!(backend.ops.contains(&"fill(10,10)".to_string()));
 }
 
 #[test]
-fn delayed_child_reveal_keeps_its_own_transform_after_parent_settles() {
+fn delayed_child_reveal_paints_after_parent_settles_without_transform() {
     let frame = frame_with_child();
     let reveals = HashMap::from([("f".to_string(), 1_000), ("c".to_string(), 1_420)]);
 
     let backend = paint_with_reveals(&frame, &reveals, 1_520);
 
-    assert_eq!(
-        backend.scales, 2,
-        "a delayed child should keep its own entrance transform once the parent reveal has settled"
-    );
+    assert_eq!(backend.scales, 0, "reveal should not transform content");
+    assert!(backend.ops.contains(&"fill(10,10)".to_string()));
 }

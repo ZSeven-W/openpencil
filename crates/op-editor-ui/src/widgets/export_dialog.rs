@@ -14,17 +14,18 @@ use crate::widgets::editor_state_ext::doc_export_format;
 use crate::{Color, Point2D, Rect, RenderBackend, TextLayout};
 use op_editor_core::editor_ui_state::EditorUiState;
 
-pub const DIALOG_WIDTH: f32 = 420.0;
-pub const DIALOG_HEIGHT: f32 = 220.0;
-const PAD: f32 = 16.0;
-const ROW_GAP: f32 = 14.0;
-const PILL_HEIGHT: f32 = 28.0;
-const PILL_GAP: f32 = 6.0;
-const PILL_RADIUS: f32 = 6.0;
-const BUTTON_HEIGHT: f32 = 30.0;
-const BUTTON_WIDTH: f32 = 80.0;
-const HEADER_HEIGHT: f32 = 40.0;
-const CORNER: f32 = 10.0;
+pub const DIALOG_WIDTH: f32 = 392.0;
+pub const DIALOG_HEIGHT: f32 = 236.0;
+const PAD: f32 = 20.0;
+const ROW_GAP: f32 = 20.0;
+const PILL_HEIGHT: f32 = 32.0;
+const PILL_GAP: f32 = 8.0;
+const PILL_RADIUS: f32 = 8.0;
+const SCALE_PILL_WIDTH: f32 = 64.0;
+const BUTTON_HEIGHT: f32 = 34.0;
+const BUTTON_WIDTH: f32 = 88.0;
+const HEADER_HEIGHT: f32 = 52.0;
+const CORNER: f32 = 12.0;
 const FONT_FAMILY: &str = "system-ui";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -110,7 +111,7 @@ impl ExportDialog {
         );
         backend.draw_text(
             &header,
-            Point2D::new(self.rect.origin.x + PAD, self.rect.origin.y + 14.0),
+            Point2D::new(self.rect.origin.x + PAD, self.rect.origin.y + 28.0),
         );
 
         let body_y = self.rect.origin.y + HEADER_HEIGHT;
@@ -227,7 +228,14 @@ impl ExportDialog {
     ) {
         let bg = if selected { theme.primary } else { theme.muted };
         backend.fill_round_rect(rect, PILL_RADIUS, bg);
-        crate::widgets::button::paint_ghost_button_feedback(backend, theme, rect, hovered, pressed);
+        crate::widgets::button::paint_button_feedback_wash(
+            backend,
+            theme,
+            rect,
+            PILL_RADIUS,
+            hovered,
+            pressed,
+        );
         backend.stroke_round_rect(rect, PILL_RADIUS, theme.border, 1.0);
         let color = if selected {
             theme.primary_foreground
@@ -290,9 +298,8 @@ impl ExportDialog {
     fn scale_pill_rect(&self, i: usize) -> Rect {
         let body_y = self.rect.origin.y + HEADER_HEIGHT;
         let scale_pills_y = body_y + 16.0 + PILL_HEIGHT + ROW_GAP + 16.0;
-        let pill_w = 56.0;
-        let x = self.rect.origin.x + PAD + (pill_w + PILL_GAP) * i as f32;
-        Rect::xywh(x, scale_pills_y, pill_w, PILL_HEIGHT)
+        let x = self.rect.origin.x + PAD + (SCALE_PILL_WIDTH + PILL_GAP) * i as f32;
+        Rect::xywh(x, scale_pills_y, SCALE_PILL_WIDTH, PILL_HEIGHT)
     }
 
     fn button_rects(&self) -> (Rect, Rect) {
@@ -360,6 +367,7 @@ mod tests {
     #[derive(Default)]
     struct CaptureBackend {
         round_fills: Vec<(Rect, f32, Color)>,
+        texts: Vec<(String, Point2D)>,
     }
 
     impl RenderBackend for CaptureBackend {
@@ -367,7 +375,14 @@ mod tests {
         fn end_frame(&mut self) {}
         fn fill_rect(&mut self, _: Rect, _: Color) {}
         fn stroke_rect(&mut self, _: Rect, _: Color, _: f32) {}
-        fn draw_text(&mut self, _: &TextLayout, _: Point2D) {}
+        fn draw_text(&mut self, layout: &TextLayout, point: Point2D) {
+            if let Some(run) = layout.runs().first() {
+                self.texts.push((
+                    run.content.clone(),
+                    Point2D::new(point.x + run.origin.x, point.y + run.origin.y),
+                ));
+            }
+        }
         fn clip_rect(&mut self, _: Rect) {}
         fn stroke_line(&mut self, _: Point2D, _: Point2D, _: Color, _: f32) {}
         fn fill_round_rect(&mut self, rect: Rect, radius: f32, color: Color) {
@@ -389,6 +404,39 @@ mod tests {
             && (a.g - b.g).abs() < 1e-6
             && (a.b - b.b).abs() < 1e-6
             && (a.a - b.a).abs() < 1e-6
+    }
+
+    #[test]
+    fn export_dialog_layout_keeps_header_and_footer_tight() {
+        let dlg = ExportDialog::centered(1000.0, 800.0);
+        let rect = dlg.rect();
+        let scale = dlg.scale_pill_rect(0);
+        let (cancel, export) = dlg.button_rects();
+        let footer_gap = cancel.origin.y - (scale.origin.y + scale.size.y);
+        let mut backend = CaptureBackend::default();
+
+        dlg.paint(&mut backend, &Theme::dark(), &EditorUiState::default());
+
+        let title = backend
+            .texts
+            .iter()
+            .find(|(text, point)| text == "Export" && point.x < export.origin.x)
+            .expect("dialog should paint a title");
+
+        assert!(rect.size.x <= 400.0, "dialog should not feel oversized");
+        assert!(
+            (232.0..=244.0).contains(&rect.size.y),
+            "dialog should have enough vertical padding without becoming tall"
+        );
+        assert!(
+            title.1.y - rect.origin.y >= 24.0,
+            "title should have clear top padding"
+        );
+        assert!(
+            (10.0..=20.0).contains(&footer_gap),
+            "scale controls and footer buttons should read as one compact dialog"
+        );
+        assert_eq!(cancel.size.y, export.size.y);
     }
 
     #[test]

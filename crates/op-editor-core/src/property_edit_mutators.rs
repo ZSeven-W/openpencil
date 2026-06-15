@@ -219,7 +219,10 @@ impl EditorState {
             | PropertyFocus::StrokeHex
             | PropertyFocus::WidgetPlaceholder
             | PropertyFocus::WidgetValue
-            | PropertyFocus::WidgetLabel => {}
+            | PropertyFocus::WidgetLabel
+            | PropertyFocus::WidgetLeadingIcon
+            | PropertyFocus::WidgetTrailingIcon
+            | PropertyFocus::WidgetBindKey => {}
             PropertyFocus::FillOpacity => {
                 let _ = self.set_selected_fill_opacity((value / 100.0).clamp(0.0, 1.0));
             }
@@ -243,6 +246,17 @@ impl EditorState {
             return false;
         }
         self.cmd_set_node_widget_text(&sel, field, text)
+    }
+
+    /// Write the `bind:value` two-way state binding (`$state.<key>`)
+    /// on the anchor widget node. An empty key clears it. True on a
+    /// real, editable selection whose variant carries `bindings`.
+    pub fn set_selected_widget_bind_value(&mut self, key: &str) -> bool {
+        let sel = self.selection.anchor.clone();
+        if !sel.is_real() || !self.is_editable(&sel) {
+            return false;
+        }
+        self.cmd_set_node_widget_bind_value(&sel, key)
     }
 
     /// Set the `checked` flag on the selected Switch / Checkbox node.

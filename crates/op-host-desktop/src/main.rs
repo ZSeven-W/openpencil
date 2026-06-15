@@ -142,10 +142,17 @@ struct DesktopApp {
     /// `CodegenSession` here and `pump` streams pipeline progress into
     /// `editor_state.codegen` each frame.
     current_codegen: Option<codegen_session::CodegenSession>,
+    /// In-flight Design-MD auto-generation turn, if any. The floating
+    /// design-system panel raises `design_md_request`; the host
+    /// resolves the selected model and lands the generated markdown
+    /// back into `doc.design_md` when the worker completes.
+    current_design_md: Option<design_md_host::DesignMdSession>,
     /// The last completed generation result kept host-side (asset bytes
     /// plus bundle JSON) for Download / Export Bundle — not carried in
     /// the wasm-clean `editor_state`.
     codegen_last_result: Option<codegen_session::CodegenResult>,
+    #[cfg(test)]
+    design_md_test_provider: Option<Box<dyn op_ai::chat_provider::ChatProvider>>,
     /// In-flight `.fig` import — worker thread that parses on a
     /// background thread so the editor UI keeps repainting. The pump
     /// in `RedrawRequested` swaps in the parsed document when the
@@ -314,7 +321,10 @@ impl DesktopApp {
             current_chat: None,
             current_design: None,
             current_codegen: None,
+            current_design_md: None,
             codegen_last_result: None,
+            #[cfg(test)]
+            design_md_test_provider: None,
             current_figma_import: None,
             pending_figma_paste: None,
             model_probe,

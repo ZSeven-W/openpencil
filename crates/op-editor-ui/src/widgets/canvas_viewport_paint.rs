@@ -180,6 +180,9 @@ impl<'a> PathPoints<'a> {
 
 const STACK_WORLD_PATH_POINTS: usize = 64;
 
+// The large stack variant is intentional: hot path-overlay painting
+// avoids heap allocation for the common small-polyline case.
+#[allow(clippy::large_enum_variant)]
 pub(crate) enum WorldPathPoints {
     Stack {
         points: [Point2D; STACK_WORLD_PATH_POINTS],
@@ -262,6 +265,7 @@ pub(crate) fn flatten_path_points(node: &SceneNode) -> PathPoints<'_> {
 /// segments whose endpoints carry handles are tessellated; a
 /// handle-free path falls back to the straight `points` polyline.
 /// A closed path appends the last-anchor → first-anchor segment.
+#[cfg(test)]
 pub(crate) fn flatten_path(node: &SceneNode) -> Vec<Point2D> {
     match flatten_path_points(node) {
         PathPoints::Borrowed(points) => points.to_vec(),
@@ -299,7 +303,7 @@ fn push_clip_content(cx: &mut PaintCx<'_>, node: &SceneNode, world_rect: Rect, z
 
 /// Reveal timing for nodes that are being streamed onto the canvas.
 #[derive(Clone, Copy)]
-pub(crate) struct RevealSchedule<'a> {
+pub struct RevealSchedule<'a> {
     pub(crate) starts: &'a HashMap<String, u64>,
     pub(crate) now_ms: u64,
 }
@@ -316,7 +320,7 @@ struct PaintNodeOptions<'a> {
 }
 
 #[derive(Default)]
-pub(crate) struct PaintNodeHits<'a> {
+pub struct PaintNodeHits<'a> {
     pub(crate) hover_rect: Option<Rect>,
     pub(crate) selected_node: Option<&'a SceneNode>,
     pub(crate) pen_node: Option<&'a SceneNode>,
@@ -345,19 +349,14 @@ impl<'a> PaintNodeHits<'a> {
 }
 
 #[derive(Clone, Copy)]
-struct RevealPhase {
-    t: f32,
-    ease: f32,
-}
-
-#[derive(Clone, Copy)]
 enum RevealPaintState {
     Idle,
     Pending,
-    Active(RevealPhase),
+    Active,
 }
 
-pub(crate) fn paint_node_with_options<'a>(
+#[allow(clippy::too_many_arguments)]
+pub fn paint_node_with_options<'a>(
     cx: &mut PaintCx<'_>,
     node: &'a SceneNode,
     viewport_origin: Point2D,
@@ -379,14 +378,52 @@ pub(crate) fn paint_node_with_options<'a>(
         selected,
         pen,
     };
-    paint_node_inner(cx, node, &options, false)
+    paint_node_inner(cx, node, &options)
+}
+
+/// Paint a resolved scene page's node tree with the editor viewport
+/// transform applied, WITHOUT any editor chrome (no selection outline /
+/// handles / hover / grid / reveal animation / text-edit caret).
+///
+/// The Canvas Preview (Play) path uses this to render the live document
+/// through the SAME mature painter the design canvas uses — so preview
+/// is pixel-identical to the design surface (root offsets, images,
+/// gradients, shadows, real text metrics) instead of jian's separate
+/// MVP scene walker. The host (`op-host-native::preview`) overlays live
+/// widget runtime state into the scene before calling this, and paints
+/// its own focus caret on top.
+///
+/// `viewport_origin` is `canvas_rect.origin + (pan_x, pan_y)`; `cull`
+/// is the canvas rect grown by the standard margin. Children paint
+/// back-to-front (`.rev()`), matching [`super::canvas_viewport::CanvasViewport`]'s
+/// own walk so z-order is identical.
+pub fn paint_scene_page(
+    cx: &mut PaintCx<'_>,
+    page: &crate::layout_scene::ScenePage,
+    viewport_origin: Point2D,
+    zoom: f32,
+    cull: Rect,
+) {
+    for child in page.children.iter().rev() {
+        paint_node_with_options(
+            cx,
+            child,
+            viewport_origin,
+            zoom,
+            None,
+            cull,
+            None,
+            None,
+            None,
+            None,
+        );
+    }
 }
 
 fn paint_node_inner<'a>(
     cx: &mut PaintCx<'_>,
     node: &'a SceneNode,
     options: &PaintNodeOptions<'_>,
-    ancestor_revealing: bool,
 ) -> PaintNodeHits<'a> {
     let viewport_origin = options.viewport_origin;
     let zoom = options.zoom;
@@ -401,17 +438,6 @@ fn paint_node_inner<'a>(
     if node.hidden || matches!(reveal_state, RevealPaintState::Pending) {
         return PaintNodeHits::default();
     }
-    let own_reveal_phase = match reveal_state {
-        RevealPaintState::Active(phase) if !ancestor_revealing => Some(phase),
-        _ => None,
-    };
-    let suppress_descendant_reveals = match reveal_state {
-        RevealPaintState::Active(phase) => {
-            phase.t < op_editor_core::agent_indicators::REVEAL_CHILD_SUPPRESS_FRACTION
-        }
-        _ => false,
-    };
-    let descendant_has_revealing_ancestor = ancestor_revealing || suppress_descendant_reveals;
     let world_rect = Rect {
         origin: Point2D::new(
             viewport_origin.x + node.bounds.origin.x * zoom,
@@ -431,10 +457,6 @@ fn paint_node_inner<'a>(
         }
     }
     let mut hits = PaintNodeHits::for_node(node, options);
-
-    let reveal_wrapped = own_reveal_phase
-        .map(|phase| push_reveal_transform(cx, world_rect, phase))
-        .unwrap_or(false);
 
     // Wrap the paint in save/transform/restore when the node carries
     // a mirror or non-zero rotation. Both pivot around the node's
@@ -496,8 +518,7 @@ fn paint_node_inner<'a>(
             paint_widget_visual(cx, node, world_rect, zoom);
             let clipped = push_clip_content(cx, node, world_rect, zoom);
             for child in node.children.iter().rev() {
-                let child_hover =
-                    paint_node_inner(cx, child, options, descendant_has_revealing_ancestor);
+                let child_hover = paint_node_inner(cx, child, options);
                 hits.merge_missing(child_hover);
             }
             if clipped {
@@ -517,8 +538,7 @@ fn paint_node_inner<'a>(
             // every recursing container branch, not just Frame.
             let clipped = push_clip_content(cx, node, world_rect, zoom);
             for child in node.children.iter().rev() {
-                let child_hover =
-                    paint_node_inner(cx, child, options, descendant_has_revealing_ancestor);
+                let child_hover = paint_node_inner(cx, child, options);
                 hits.merge_missing(child_hover);
             }
             if clipped {
@@ -597,9 +617,6 @@ fn paint_node_inner<'a>(
                 if transformed {
                     cx.backend.restore();
                 }
-                if reveal_wrapped {
-                    cx.backend.restore();
-                }
                 return hits;
             }
             // Bezier-aware: when the path carries anchors with control
@@ -659,9 +676,6 @@ fn paint_node_inner<'a>(
     if transformed {
         cx.backend.restore();
     }
-    if reveal_wrapped {
-        cx.backend.restore();
-    }
     hits
 }
 
@@ -693,33 +707,7 @@ fn reveal_paint_state(schedule: RevealSchedule<'_>, node_id: &str) -> RevealPain
     if elapsed > op_editor_core::agent_indicators::REVEAL_DURATION_MS {
         return RevealPaintState::Idle;
     }
-    let t = (elapsed as f32 / op_editor_core::agent_indicators::REVEAL_DURATION_MS as f32)
-        .clamp(0.0, 1.0);
-    RevealPaintState::Active(RevealPhase {
-        t,
-        ease: ease_in_out_sine(t),
-    })
-}
-
-fn push_reveal_transform(cx: &mut PaintCx<'_>, rect: Rect, phase: RevealPhase) -> bool {
-    if rect.size.x <= 0.0 || rect.size.y <= 0.0 {
-        return false;
-    }
-    let settle = 1.0 - phase.ease;
-    let lift = 11.0 * settle * (1.0 - phase.t * 0.10);
-    let scale = 0.960 + 0.040 * phase.ease;
-    let pivot = Point2D::new(
-        rect.origin.x + rect.size.x / 2.0,
-        rect.origin.y + rect.size.y / 2.0,
-    );
-    cx.backend.save();
-    cx.backend.translate(Point2D::new(0.0, lift));
-    cx.backend.scale(Point2D::new(scale, scale), pivot);
-    true
-}
-
-fn ease_in_out_sine(t: f32) -> f32 {
-    -(std::f32::consts::PI * t).cos() / 2.0 + 0.5
+    RevealPaintState::Active
 }
 
 pub(crate) fn paint_svg_path_node(

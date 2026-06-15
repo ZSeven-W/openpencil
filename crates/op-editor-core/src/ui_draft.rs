@@ -80,6 +80,16 @@ pub enum PropertyFocus {
     WidgetPlaceholder,
     WidgetValue,
     WidgetLabel,
+    /// Widget-section `leadingIcon` / `trailingIcon` lucide-name text
+    /// fields (TextInput / TextArea / NumberInput). The host commit
+    /// path writes the raw draft onto the matching icon prop; an empty
+    /// draft clears it.
+    WidgetLeadingIcon,
+    WidgetTrailingIcon,
+    /// Widget-section `bind:value` state-key text field. The host
+    /// commit path writes `bindings."bind:value" = "$state.<key>"`; an
+    /// empty draft removes the binding.
+    WidgetBindKey,
     /// Widget-section numeric fields — Slider / NumberInput `min` /
     /// `max` / `step`. Committed through `commit_property_edit` like
     /// the other numeric focuses.
@@ -96,6 +106,23 @@ impl PropertyFocus {
         matches!(
             self,
             PropertyFocus::FillHex | PropertyFocus::StrokeHex | PropertyFocus::GradientStopHex(_)
+        )
+    }
+
+    /// True when the focused row accepts arbitrary (non-control) text
+    /// rather than digit/hex-gated input — the Widget section's
+    /// `placeholder` / `value` / `label` / leading & trailing icon /
+    /// bind-key rows. The host keyboard inserts the raw character for
+    /// these instead of the numeric validator.
+    pub fn is_free_text(self) -> bool {
+        matches!(
+            self,
+            PropertyFocus::WidgetPlaceholder
+                | PropertyFocus::WidgetValue
+                | PropertyFocus::WidgetLabel
+                | PropertyFocus::WidgetLeadingIcon
+                | PropertyFocus::WidgetTrailingIcon
+                | PropertyFocus::WidgetBindKey
         )
     }
 

@@ -50,6 +50,35 @@ impl DesktopApp {
             Key::Named(NamedKey::Escape) if !self.zoom_modifier => {
                 consumed = self.host.apply_escape();
             }
+            // Preview (Play) mode owns Tab + arrows: Tab advances the
+            // widget focus chain (the runner otherwise drops Tab as a
+            // control char, so the user could never focus an input
+            // without clicking), and arrows move the caret / selection
+            // in the focused field. These must precede the editor arrow
+            // arms below so preview wins while active.
+            Key::Named(NamedKey::Tab) if self.host.preview_active() => {
+                consumed = self.host.preview_focus(self.shift_modifier);
+            }
+            Key::Named(NamedKey::ArrowLeft) if self.host.preview_active() => {
+                consumed = self
+                    .host
+                    .preview_dispatch_key("ArrowLeft", self.shift_modifier);
+            }
+            Key::Named(NamedKey::ArrowRight) if self.host.preview_active() => {
+                consumed = self
+                    .host
+                    .preview_dispatch_key("ArrowRight", self.shift_modifier);
+            }
+            Key::Named(NamedKey::ArrowUp) if self.host.preview_active() => {
+                consumed = self
+                    .host
+                    .preview_dispatch_key("ArrowUp", self.shift_modifier);
+            }
+            Key::Named(NamedKey::ArrowDown) if self.host.preview_active() => {
+                consumed = self
+                    .host
+                    .preview_dispatch_key("ArrowDown", self.shift_modifier);
+            }
             Key::Named(NamedKey::ArrowUp) if !self.zoom_modifier && !settings_focused => {
                 // The inline canvas text editor moves its caret by
                 // visual line first; then a focused numeric property

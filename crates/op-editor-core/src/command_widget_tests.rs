@@ -194,6 +194,109 @@ fn set_selected_widget_text_clears_prop_on_empty_string() {
 }
 
 #[test]
+fn set_selected_widget_text_writes_leading_icon_on_text_input() {
+    let (mut s, _) = state_with_selected_widget("text_input", 240, 40);
+    assert!(s.set_selected_widget_text(crate::WidgetTextField::LeadingIcon, "mail"));
+    let PenNode::TextInput(ti) = &s.active_children()[0] else {
+        panic!("expected a TextInput node");
+    };
+    assert_eq!(ti.leading_icon.as_deref(), Some("mail"));
+}
+
+#[test]
+fn set_selected_widget_text_writes_trailing_icon_on_text_input() {
+    let (mut s, _) = state_with_selected_widget("text_input", 240, 40);
+    assert!(s.set_selected_widget_text(crate::WidgetTextField::TrailingIcon, "eye"));
+    let PenNode::TextInput(ti) = &s.active_children()[0] else {
+        panic!("expected a TextInput node");
+    };
+    assert_eq!(ti.trailing_icon.as_deref(), Some("eye"));
+}
+
+#[test]
+fn set_selected_widget_text_clears_leading_icon_on_empty_string() {
+    let (mut s, _) = state_with_selected_widget("text_input", 240, 40);
+    assert!(s.set_selected_widget_text(crate::WidgetTextField::LeadingIcon, "mail"));
+    assert!(s.set_selected_widget_text(crate::WidgetTextField::LeadingIcon, ""));
+    let PenNode::TextInput(ti) = &s.active_children()[0] else {
+        panic!("expected a TextInput node");
+    };
+    assert_eq!(ti.leading_icon, None);
+}
+
+#[test]
+fn set_selected_widget_icons_write_on_text_area_and_number_input() {
+    let (mut s, _) = state_with_selected_widget("text_area", 240, 80);
+    assert!(s.set_selected_widget_text(crate::WidgetTextField::LeadingIcon, "search"));
+    let PenNode::TextArea(ta) = &s.active_children()[0] else {
+        panic!("expected a TextArea node");
+    };
+    assert_eq!(ta.leading_icon.as_deref(), Some("search"));
+
+    let (mut s, _) = state_with_selected_widget("number_input", 240, 40);
+    assert!(s.set_selected_widget_text(crate::WidgetTextField::TrailingIcon, "hash"));
+    let PenNode::NumberInput(ni) = &s.active_children()[0] else {
+        panic!("expected a NumberInput node");
+    };
+    assert_eq!(ni.trailing_icon.as_deref(), Some("hash"));
+}
+
+#[test]
+fn set_selected_widget_icon_rejects_non_icon_kind() {
+    // A Switch carries no leading/trailing icon — the write must reject.
+    let (mut s, _) = state_with_selected_widget("switch", 44, 24);
+    assert!(!s.set_selected_widget_text(crate::WidgetTextField::LeadingIcon, "mail"));
+}
+
+#[test]
+fn set_selected_widget_bind_value_writes_state_binding() {
+    use jian_ops_schema::expression::Expression;
+    let (mut s, _) = state_with_selected_widget("text_input", 240, 40);
+    assert!(s.set_selected_widget_bind_value("email"));
+    let PenNode::TextInput(ti) = &s.active_children()[0] else {
+        panic!("expected a TextInput node");
+    };
+    let bindings = ti.bindings.as_ref().expect("bindings written");
+    assert_eq!(
+        bindings.get("bind:value"),
+        Some(&Expression("$state.email".to_string()))
+    );
+}
+
+#[test]
+fn set_selected_widget_bind_value_empty_clears_binding() {
+    let (mut s, _) = state_with_selected_widget("text_input", 240, 40);
+    assert!(s.set_selected_widget_bind_value("email"));
+    assert!(s.set_selected_widget_bind_value(""));
+    let PenNode::TextInput(ti) = &s.active_children()[0] else {
+        panic!("expected a TextInput node");
+    };
+    // An empty key removes `bind:value`; with no other bindings the
+    // whole map clears so the serialized `.op` carries no noise.
+    let cleared = ti
+        .bindings
+        .as_ref()
+        .map(|b| !b.contains_key("bind:value"))
+        .unwrap_or(true);
+    assert!(cleared, "empty bind key must drop bind:value");
+}
+
+#[test]
+fn set_selected_widget_bind_value_strips_existing_state_prefix() {
+    use jian_ops_schema::expression::Expression;
+    // A user pasting `$state.email` must not double the prefix.
+    let (mut s, _) = state_with_selected_widget("text_input", 240, 40);
+    assert!(s.set_selected_widget_bind_value("$state.email"));
+    let PenNode::TextInput(ti) = &s.active_children()[0] else {
+        panic!("expected a TextInput node");
+    };
+    assert_eq!(
+        ti.bindings.as_ref().unwrap().get("bind:value"),
+        Some(&Expression("$state.email".to_string()))
+    );
+}
+
+#[test]
 fn set_selected_widget_text_writes_value_on_select() {
     let (mut s, _) = state_with_selected_widget("select", 240, 40);
     assert!(s.set_selected_widget_text(crate::WidgetTextField::Value, "opt-a"));

@@ -506,6 +506,10 @@ pub struct SceneWidget {
     pub value_str: Option<String>,
     /// Placeholder text for inputs / select.
     pub placeholder: Option<String>,
+    /// Leading / trailing lucide glyph for input widgets (Phase 1). The
+    /// painter draws the icon and insets the text/caret past it.
+    pub leading_icon: Option<String>,
+    pub trailing_icon: Option<String>,
     /// Adjacent label (checkbox).
     pub label: Option<String>,
     /// Range minimum (slider / number_input). `None` = 0.
