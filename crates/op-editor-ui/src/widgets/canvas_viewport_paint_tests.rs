@@ -104,7 +104,18 @@ mod text_tests {
         zoom: f32,
         cull: Rect,
     ) {
-        let _ = paint_node_with_options(cx, node, viewport_origin, zoom, None, cull, None, None);
+        let _ = paint_node_with_options(
+            cx,
+            node,
+            viewport_origin,
+            zoom,
+            None,
+            cull,
+            None,
+            None,
+            None,
+            None,
+        );
     }
 
     #[test]
@@ -629,7 +640,18 @@ mod clip_tests {
     }
 
     fn paint_node(cx: &mut PaintCx<'_>, node: &SceneNode, cull: Rect) {
-        let _ = paint_node_with_options(cx, node, Point2D::ZERO, 1.0, None, cull, None, None);
+        let _ = paint_node_with_options(
+            cx,
+            node,
+            Point2D::ZERO,
+            1.0,
+            None,
+            cull,
+            None,
+            None,
+            None,
+            None,
+        );
     }
 
     fn frame_with_child(clip: bool, corner_radius: f32) -> SceneNode {

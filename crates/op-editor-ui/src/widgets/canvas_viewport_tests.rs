@@ -1,10 +1,7 @@
-//! Tests for `CanvasViewport` paint + the selection-overlay
-//! hit-tests (`selection_handle_at_point` / `rotation_corner_at_point`).
-//! Split into a sibling file (`#[path]`-included from
-//! `canvas_viewport.rs`) to keep that file under the 800-line ceiling.
-
 use super::*;
-use crate::layout_scene::{LayoutScene, SceneFillType, SceneNode, ScenePage, SceneStroke};
+use crate::layout_scene::{
+    LayoutScene, SceneAnchor, SceneFillType, SceneNode, ScenePage, ScenePointType, SceneStroke,
+};
 use crate::{Color, Point2D, Rect, TextLayout};
 use std::collections::HashMap;
 
@@ -395,7 +392,7 @@ fn selection_overlay_waits_for_future_reveal_nodes() {
 }
 
 #[test]
-fn single_selected_canvas_paint_reuses_scene_lookup() {
+fn single_selected_canvas_paint_reuses_paint_traversal_lookup() {
     let _guard = crate::agent_indicator_test_support::lock();
     op_editor_core::agent_indicators::clear();
 
@@ -436,10 +433,63 @@ fn single_selected_canvas_paint_reuses_scene_lookup() {
         viewport.paint(&mut cx, Rect::xywh(0.0, 0.0, 300.0, 300.0));
     }
 
-    assert!(
-        crate::layout_scene::find_visit_count() <= depth + 1,
-        "single-selected paint should resolve the selected scene node once per frame"
+    assert_eq!(
+        crate::layout_scene::find_visit_count(),
+        0,
+        "single-selected paint should use the scene node already seen during paint traversal"
     );
+}
+
+#[test]
+fn pen_preview_canvas_paint_reuses_paint_traversal_lookup() {
+    let _guard = crate::agent_indicator_test_support::lock();
+    op_editor_core::agent_indicators::clear();
+
+    let anchor = |x, y| SceneAnchor {
+        pos: Point2D::new(x, y),
+        handle_in: None,
+        handle_out: None,
+        point_type: ScenePointType::Corner,
+    };
+    let mut path = SceneNode::leaf("editing-path", NodeKind::Path);
+    path.bounds = Rect::xywh(24.0, 24.0, 80.0, 40.0);
+    path.points = vec![Point2D::new(24.0, 24.0), Point2D::new(104.0, 64.0)];
+    path.path_anchors = vec![anchor(24.0, 24.0), anchor(104.0, 64.0)];
+    let mut node = path;
+    for i in (0..7).rev() {
+        let mut frame = SceneNode::leaf(format!("wrap-{i}"), NodeKind::Frame);
+        frame.bounds = Rect::xywh(0.0, 0.0, 140.0, 100.0);
+        frame.children = vec![node];
+        node = frame;
+    }
+    let scene = LayoutScene {
+        pages: vec![ScenePage {
+            id: "p".into(),
+            name: "p".into(),
+            children: vec![node],
+        }],
+        active_page_index: 0,
+    };
+    let state = EditorState::new();
+    let mut viewport = CanvasViewport::from_editor(&state, &scene);
+    viewport.pen_in_progress = Some("editing-path".into());
+    viewport.pen_cursor_doc = Some(Point2D::new(120.0, 80.0));
+
+    crate::layout_scene::reset_find_visit_count();
+    let mut backend = RecordingBackend::default();
+    {
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+        viewport.paint(&mut cx, Rect::xywh(0.0, 0.0, 300.0, 300.0));
+    }
+
+    assert_eq!(
+        crate::layout_scene::find_visit_count(),
+        0,
+        "pen preview paint should use the scene node already seen during paint traversal"
+    );
+    assert!(backend.strokes > 0, "pen preview should still paint");
 }
 
 #[test]

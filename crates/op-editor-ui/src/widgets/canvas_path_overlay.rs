@@ -14,7 +14,7 @@
 //! deliberate superset of TS, which can only mint handles during
 //! placement or via the anchor context menu).
 
-use crate::layout_scene::{LayoutScene, SceneAnchor, SceneNode};
+use crate::layout_scene::{SceneAnchor, SceneNode};
 use crate::theme::Theme;
 use crate::widgets::canvas_viewport::path_handle_positions;
 use crate::widgets::canvas_viewport_paint::cubic_point;
@@ -62,23 +62,19 @@ const RUBBER_BAND_DASH: f32 = 4.0;
 #[allow(clippy::too_many_arguments)]
 pub(super) fn paint_path_overlays(
     cx: &mut PaintCx<'_>,
-    scene: &LayoutScene,
     theme: &Theme,
     tool: op_editor_core::Tool,
-    pen_in_progress: Option<&str>,
+    pen_active: bool,
+    pen_node: Option<&SceneNode>,
     pen_cursor_doc: Option<Point2D>,
     pen_dragging_handle: bool,
-    selected: &str,
     selected_count: usize,
     selected_node: Option<&SceneNode>,
     canvas_rect: Rect,
     viewport: &Viewport,
 ) {
-    let Some(page) = scene.active_page() else {
-        return;
-    };
-    if let Some(pen_id) = pen_in_progress {
-        if let Some(node) = page.find(pen_id) {
+    if pen_active {
+        if let Some(node) = pen_node {
             paint_pen_preview(
                 cx,
                 node,
@@ -93,7 +89,7 @@ pub(super) fn paint_path_overlays(
     if selected_count != 1 {
         return;
     }
-    let Some(node) = selected_node.or_else(|| page.find(selected)) else {
+    let Some(node) = selected_node else {
         return;
     };
     if !matches!(node.kind, crate::layout_scene::NodeKind::Path) || node.hidden {
