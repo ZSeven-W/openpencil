@@ -37,7 +37,7 @@ const REVEAL_MID_STAGGER_SIBLINGS: u64 = 72;
 const REVEAL_COMPRESSED_STAGGER_MS: u64 = 32;
 const REVEAL_TAIL_STAGGER_MS: u64 = 24;
 const REVEAL_MAX_NEW_STARTS_PER_SNAPSHOT: usize = 1;
-const REVEAL_BURST_RECOVERY_STAGGER_MS: u64 = 32;
+const REVEAL_BURST_RECOVERY_STAGGER_MS: u64 = REVEAL_STAGGER_MS;
 const CLOCK_REBASE_THRESHOLD_MS: u64 = 60_000;
 const REVEAL_FRAME_MS: u64 = 16;
 
@@ -313,10 +313,8 @@ fn rebase_external_clock_reveals(r: &mut AgentIndicators, now_ms: u64) {
 }
 
 fn smooth_overdue_reveal_burst(r: &mut AgentIndicators, now_ms: u64) {
-    let Some(prev_ms) = r.last_reveal_snapshot_ms.replace(now_ms) else {
-        return;
-    };
-    if now_ms <= prev_ms {
+    let prev_ms = r.last_reveal_snapshot_ms.replace(now_ms);
+    if prev_ms.is_some_and(|prev| now_ms <= prev) {
         return;
     }
     let mut ordered: Vec<(String, u64)> = r
@@ -327,7 +325,7 @@ fn smooth_overdue_reveal_burst(r: &mut AgentIndicators, now_ms: u64) {
     ordered.sort_by(|a, b| a.1.cmp(&b.1).then_with(|| a.0.cmp(&b.0)));
     let newly_due = ordered
         .iter()
-        .filter(|(_, started)| *started > prev_ms && *started <= now_ms)
+        .filter(|(_, started)| reveal_became_due(prev_ms, *started, now_ms))
         .count();
     if newly_due <= REVEAL_MAX_NEW_STARTS_PER_SNAPSHOT {
         return;
@@ -336,7 +334,7 @@ fn smooth_overdue_reveal_burst(r: &mut AgentIndicators, now_ms: u64) {
     let mut reschedule_tail = false;
     let mut next_slot = now_ms;
     for (id, original_start) in ordered {
-        if original_start > prev_ms && original_start <= now_ms {
+        if reveal_became_due(prev_ms, original_start, now_ms) {
             newly_due_seen += 1;
             if newly_due_seen <= REVEAL_MAX_NEW_STARTS_PER_SNAPSHOT {
                 if let Some(started_at) = r.reveals.get_mut(&id) {
@@ -357,6 +355,13 @@ fn smooth_overdue_reveal_burst(r: &mut AgentIndicators, now_ms: u64) {
             *started_at = scheduled_start;
         }
         next_slot = scheduled_start.saturating_add(REVEAL_BURST_RECOVERY_STAGGER_MS);
+    }
+}
+
+fn reveal_became_due(prev_ms: Option<u64>, started_at: u64, now_ms: u64) -> bool {
+    match prev_ms {
+        Some(prev) => started_at > prev && started_at <= now_ms,
+        None => started_at <= now_ms,
     }
 }
 
@@ -606,6 +611,43 @@ mod tests {
     }
 
     #[test]
+    fn first_snapshot_requeues_overdue_reveals_instead_of_showing_burst() {
+        let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let epoch = begin();
+        for i in 0..8 {
+            add_reveal(
+                epoch,
+                &format!("n{i}"),
+                1_000 + i as u64 * REVEAL_STAGGER_MS,
+            );
+        }
+
+        let snap = snapshot_at(1_360);
+        let visible_count = snap
+            .reveals
+            .values()
+            .filter(|started_at| **started_at <= 1_360)
+            .count();
+
+        assert_eq!(
+            visible_count, 1,
+            "the first paint after a busy apply should not materialize every overdue node at once"
+        );
+        assert_eq!(
+            snap.reveals.get("n0"),
+            Some(&1_360),
+            "the first overdue node should replay from the current frame"
+        );
+        assert!(
+            snap.reveals
+                .get("n1")
+                .is_some_and(|started_at| *started_at >= 1_360 + REVEAL_STAGGER_MS),
+            "remaining overdue nodes should requeue at normal stream cadence"
+        );
+        end_if_epoch(epoch);
+    }
+
+    #[test]
     fn snapshot_recovery_preserves_stream_order_after_frame_gap() {
         let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let epoch = begin();
@@ -632,8 +674,8 @@ mod tests {
             starts
                 .windows(2)
                 .skip(1)
-                .all(|pair| pair[1] - pair[0] >= REVEAL_FRAME_MS),
-            "recovered starts should stay frame-paced instead of clustering inside one frame"
+                .all(|pair| pair[1] - pair[0] >= REVEAL_STAGGER_MS),
+            "recovered starts should stay at the normal stream cadence instead of clustering"
         );
         end_if_epoch(epoch);
     }
