@@ -311,6 +311,37 @@ struct PaintNodeOptions<'a> {
     cull: Rect,
     reveals: Option<RevealSchedule<'a>>,
     hovered: Option<&'a str>,
+    selected: Option<&'a str>,
+    pen: Option<&'a str>,
+}
+
+#[derive(Default)]
+pub(crate) struct PaintNodeHits<'a> {
+    pub(crate) hover_rect: Option<Rect>,
+    pub(crate) selected_node: Option<&'a SceneNode>,
+    pub(crate) pen_node: Option<&'a SceneNode>,
+}
+
+impl<'a> PaintNodeHits<'a> {
+    fn for_node(node: &'a SceneNode, options: &PaintNodeOptions<'_>) -> Self {
+        Self {
+            hover_rect: hovered_outline_rect(node, options),
+            selected_node: (options.selected == Some(node.id.as_str())).then_some(node),
+            pen_node: (options.pen == Some(node.id.as_str())).then_some(node),
+        }
+    }
+
+    pub(crate) fn merge_missing(&mut self, child: Self) {
+        if self.hover_rect.is_none() {
+            self.hover_rect = child.hover_rect;
+        }
+        if self.selected_node.is_none() {
+            self.selected_node = child.selected_node;
+        }
+        if self.pen_node.is_none() {
+            self.pen_node = child.pen_node;
+        }
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -326,38 +357,18 @@ enum RevealPaintState {
     Active(RevealPhase),
 }
 
-#[cfg(test)]
-pub(crate) fn paint_node_with_reveals(
-    cx: &mut PaintCx<'_>,
-    node: &SceneNode,
-    viewport_origin: Point2D,
-    zoom: f32,
-    edit_caret: Option<EditCaret>,
-    cull: Rect,
-    reveals: RevealSchedule<'_>,
-) -> Option<Rect> {
-    paint_node_with_options(
-        cx,
-        node,
-        viewport_origin,
-        zoom,
-        edit_caret,
-        cull,
-        Some(reveals),
-        None,
-    )
-}
-
 pub(crate) fn paint_node_with_options<'a>(
     cx: &mut PaintCx<'_>,
-    node: &SceneNode,
+    node: &'a SceneNode,
     viewport_origin: Point2D,
     zoom: f32,
     edit_caret: Option<EditCaret>,
     cull: Rect,
     reveals: Option<RevealSchedule<'a>>,
     hovered: Option<&'a str>,
-) -> Option<Rect> {
+    selected: Option<&'a str>,
+    pen: Option<&'a str>,
+) -> PaintNodeHits<'a> {
     let options = PaintNodeOptions {
         viewport_origin,
         zoom,
@@ -365,16 +376,18 @@ pub(crate) fn paint_node_with_options<'a>(
         cull,
         reveals,
         hovered,
+        selected,
+        pen,
     };
     paint_node_inner(cx, node, &options, false)
 }
 
-fn paint_node_inner(
+fn paint_node_inner<'a>(
     cx: &mut PaintCx<'_>,
-    node: &SceneNode,
+    node: &'a SceneNode,
     options: &PaintNodeOptions<'_>,
     ancestor_revealing: bool,
-) -> Option<Rect> {
+) -> PaintNodeHits<'a> {
     let viewport_origin = options.viewport_origin;
     let zoom = options.zoom;
     let edit_caret = &options.edit_caret;
@@ -386,7 +399,7 @@ fn paint_node_inner(
         .map(|schedule| reveal_paint_state(schedule, &node.id))
         .unwrap_or(RevealPaintState::Idle);
     if node.hidden || matches!(reveal_state, RevealPaintState::Pending) {
-        return None;
+        return PaintNodeHits::default();
     }
     let own_reveal_phase = match reveal_state {
         RevealPaintState::Active(phase) if !ancestor_revealing => Some(phase),
@@ -414,10 +427,10 @@ fn paint_node_inner(
             || world_rect.origin.y + world_rect.size.y < cull.origin.y
             || world_rect.origin.y > cull.origin.y + cull.size.y;
         if off {
-            return None;
+            return PaintNodeHits::default();
         }
     }
-    let mut hover_rect = None;
+    let mut hits = PaintNodeHits::for_node(node, options);
 
     let reveal_wrapped = own_reveal_phase
         .map(|phase| push_reveal_transform(cx, world_rect, phase))
@@ -485,9 +498,7 @@ fn paint_node_inner(
             for child in node.children.iter().rev() {
                 let child_hover =
                     paint_node_inner(cx, child, options, descendant_has_revealing_ancestor);
-                if hover_rect.is_none() {
-                    hover_rect = child_hover;
-                }
+                hits.merge_missing(child_hover);
             }
             if clipped {
                 cx.backend.restore();
@@ -508,9 +519,7 @@ fn paint_node_inner(
             for child in node.children.iter().rev() {
                 let child_hover =
                     paint_node_inner(cx, child, options, descendant_has_revealing_ancestor);
-                if hover_rect.is_none() {
-                    hover_rect = child_hover;
-                }
+                hits.merge_missing(child_hover);
             }
             if clipped {
                 cx.backend.restore();
@@ -591,7 +600,7 @@ fn paint_node_inner(
                 if reveal_wrapped {
                     cx.backend.restore();
                 }
-                return hovered_outline_rect(node, options);
+                return hits;
             }
             // Bezier-aware: when the path carries anchors with control
             // handles, flatten each cubic segment; otherwise fall back
@@ -653,7 +662,7 @@ fn paint_node_inner(
     if reveal_wrapped {
         cx.backend.restore();
     }
-    hover_rect.or_else(|| hovered_outline_rect(node, options))
+    hits
 }
 
 fn hovered_outline_rect(node: &SceneNode, options: &PaintNodeOptions<'_>) -> Option<Rect> {

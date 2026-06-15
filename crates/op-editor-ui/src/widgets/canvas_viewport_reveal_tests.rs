@@ -1,4 +1,4 @@
-use super::{paint_node_with_reveals, RevealSchedule};
+use super::{paint_node_with_options, RevealSchedule};
 use crate::layout_scene::{NodeKind, SceneNode};
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, RenderBackend, TextLayout};
@@ -66,17 +66,20 @@ fn paint_with_reveals(
     let mut cx = PaintCx {
         backend: &mut backend,
     };
-    paint_node_with_reveals(
+    let _ = paint_node_with_options(
         &mut cx,
         node,
         Point2D::ZERO,
         1.0,
         None,
         Rect::xywh(0.0, 0.0, 4000.0, 4000.0),
-        RevealSchedule {
+        Some(RevealSchedule {
             starts: reveals,
             now_ms,
-        },
+        }),
+        None,
+        None,
+        None,
     );
     backend
 }

@@ -460,6 +460,14 @@ impl<'a> Widget for CanvasViewport<'a> {
         let viewport = &self.viewport;
         super::canvas_viewport_grid::paint_grid(cx, rect, viewport, &self.theme);
         let indicators = op_editor_core::agent_indicators::snapshot_at_if_active(self.now_ms);
+        let show_handles = self.selected_set.len() == 1;
+        let single_selected_id = self.selected_set.first().map(String::as_str);
+        let selected_lookup = if show_handles {
+            single_selected_id
+        } else {
+            None
+        };
+        let mut paint_hits = super::canvas_viewport_paint::PaintNodeHits::default();
 
         // 3. Walk the active page; clip enforces widget bounds.
         if let Some(page) = self.scene.active_page() {
@@ -484,9 +492,8 @@ impl<'a> Widget for CanvasViewport<'a> {
             let reveal_schedule = indicators
                 .as_ref()
                 .and_then(|indicators| reveal_schedule_for_paint(&indicators.reveals, self.now_ms));
-            let mut hover_rect = None;
             for child in page.children.iter().rev() {
-                let child_hover = super::canvas_viewport_paint::paint_node_with_options(
+                let child_hits = super::canvas_viewport_paint::paint_node_with_options(
                     cx,
                     child,
                     viewport_origin,
@@ -495,10 +502,10 @@ impl<'a> Widget for CanvasViewport<'a> {
                     cull,
                     reveal_schedule,
                     self.hovered.as_deref(),
+                    selected_lookup,
+                    self.pen_in_progress.as_deref(),
                 );
-                if hover_rect.is_none() {
-                    hover_rect = child_hover;
-                }
+                paint_hits.merge_missing(child_hits);
             }
             if let Some(indicators) = indicators.as_ref() {
                 super::canvas_agent_overlay::paint_agent_frame_indicators_with_snapshot(
@@ -510,7 +517,7 @@ impl<'a> Widget for CanvasViewport<'a> {
                     indicators,
                 );
             }
-            if let Some(screen) = hover_rect {
+            if let Some(screen) = paint_hits.hover_rect {
                 const HOVER: Color = Color {
                     r: 0.231,
                     g: 0.51,
@@ -555,11 +562,9 @@ impl<'a> Widget for CanvasViewport<'a> {
         }
 
         // 4. Selection overlay — outlines + handles (single-select only).
-        let show_handles = self.selected_set.len() == 1;
         let active_page = self.scene.active_page();
-        let single_selected_id = self.selected_set.first().map(String::as_str);
         let single_selected_node = if show_handles {
-            active_page.and_then(|page| single_selected_id.and_then(|id| page.find(id)))
+            paint_hits.selected_node
         } else {
             None
         };
@@ -602,13 +607,12 @@ impl<'a> Widget for CanvasViewport<'a> {
         //       any other tool (Select-tool bezier editing, #5).
         super::canvas_path_overlay::paint_path_overlays(
             cx,
-            self.scene,
             &self.theme,
             self.tool,
-            self.pen_in_progress.as_deref(),
+            self.pen_in_progress.is_some(),
+            paint_hits.pen_node,
             self.pen_cursor_doc,
             self.pen_dragging_handle,
-            &self.selected,
             self.selected_set.len(),
             anchor_selected_node,
             rect,
