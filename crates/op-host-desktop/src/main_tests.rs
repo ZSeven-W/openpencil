@@ -84,10 +84,11 @@ fn fresh_app_refits_blank_frame_to_actual_window_size_once() {
 }
 
 #[test]
-fn design_md_auto_generate_extracts_from_document_and_is_undoable() {
+fn design_md_auto_generate_does_not_fall_back_to_local_extraction() {
     use jian_ops_schema::variable::{
         VariableDefinition, VariableKind, VariableScalar, VariableValue,
     };
+    use op_ai::chat_provider::{ChatDelta, EchoProvider, StopReason};
     use std::collections::BTreeMap;
 
     let mut app = DesktopApp::new(None);
@@ -108,8 +109,24 @@ fn design_md_auto_generate_extracts_from_document_and_is_undoable() {
         ));
         state.editor_ui.design_md_request = Some(op_editor_core::DesignMdRequest::AutoGenerate);
     }
+    app.set_design_md_test_provider(Box::new(EchoProvider {
+        script: vec![
+            ChatDelta::TextDelta(
+                "# Design System: LLM Brief\n\n\
+                 ## 1. Visual Theme & Atmosphere\n\
+                 Model-authored brief.\n\n\
+                 ## 2. Color Palette & Roles\n\
+                 **AI Orange** (#F97316) — Primary accent"
+                    .into(),
+            ),
+            ChatDelta::Done {
+                stop_reason: StopReason::EndTurn,
+            },
+        ],
+    }));
 
-    app.drain_design_md_action();
+    assert!(app.drain_design_md_action());
+    assert!(app.host.editor_state().editor_ui.design_md_generating);
 
     let spec = app
         .host
@@ -117,13 +134,34 @@ fn design_md_auto_generate_extracts_from_document_and_is_undoable() {
         .doc
         .design_md
         .as_ref()
-        .expect("auto-generated design.md");
-    assert_eq!(spec.project_name.as_deref(), Some("Generated Brief"));
+        .expect("existing design.md should remain until an LLM result lands");
+    assert_eq!(spec.project_name.as_deref(), Some("Existing"));
     assert!(
-        spec.raw.contains("#2563EB"),
-        "auto-generated design.md should include extracted color variable: {}",
+        !spec.raw.contains("#2563EB"),
+        "auto-generate must not masquerade as AI by using local extraction: {}",
         spec.raw
     );
+
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+    while !app.poll_design_md_generation() {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "design.md generation worker did not finish"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+
+    let spec = app
+        .host
+        .editor_state()
+        .doc
+        .design_md
+        .as_ref()
+        .expect("LLM-generated design.md");
+    assert_eq!(spec.project_name.as_deref(), Some("LLM Brief"));
+    assert!(spec.raw.contains("#F97316"));
+    assert!(!spec.raw.contains("#2563EB"));
+    assert!(!app.host.editor_state().editor_ui.design_md_generating);
 
     assert!(app.host.editor_state_mut().undo());
     let restored = app

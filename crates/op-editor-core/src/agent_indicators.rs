@@ -16,8 +16,8 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::{LazyLock, Mutex};
 
-/// Duration of the short generated-node entrance animation.
-pub const REVEAL_DURATION_MS: u64 = 1_920;
+/// Duration of the TS-style generated-node border fade (0 → 1 → 0).
+pub const REVEAL_DURATION_MS: u64 = 1_000;
 /// Delay between the first generated nodes in one applied batch.
 pub const REVEAL_STAGGER_MS: u64 = 40;
 /// Minimum delay before descendants of a newly revealed container begin
@@ -28,9 +28,9 @@ pub const REVEAL_CHILD_RUNWAY_MS: u64 = 72;
 /// already places children after parents; keeping this at zero avoids
 /// depth changes compressing adjacent stream slots into the same frame.
 pub const REVEAL_DEPTH_STAGGER_MS: u64 = 0;
-/// Parent reveals suppress child transforms only during their opening
-/// beat. Once the parent has begun settling, delayed children animate
-/// independently so streamed content does not pop in abruptly.
+/// Parent reveals suppress nested child borders only during their first
+/// frame beat, avoiding stacked outlines when a generated container and
+/// its first children become ready together.
 pub const REVEAL_CHILD_SUPPRESS_FRACTION: f32 = 0.04;
 const REVEAL_FULL_STAGGER_SIBLINGS: u64 = 24;
 const REVEAL_MID_STAGGER_SIBLINGS: u64 = 72;
@@ -460,11 +460,11 @@ mod tests {
         assert!(is_active(), "reveal should keep the paint loop active");
         assert_eq!(snapshot_at(1_250).reveals.get("n7"), Some(&1_000));
         assert!(
-            snapshot_at(2_400).reveals.get("n7").is_some(),
-            "reveal should stay active long enough to read as a smooth entrance"
+            snapshot_at(2_000).reveals.contains_key("n7"),
+            "reveal should stay active through the TS fade window"
         );
         assert!(
-            snapshot_at(3_000).reveals.is_empty(),
+            snapshot_at(2_001).reveals.is_empty(),
             "expired reveal should be pruned"
         );
         assert!(!is_active(), "expired reveal should not keep animating");

@@ -49,6 +49,13 @@ fn rect_close(actual: Rect, expected: Rect) -> bool {
         && (actual.size.y - expected.size.y).abs() < 0.01
 }
 
+fn color_close(a: crate::Color, b: crate::Color) -> bool {
+    (a.r - b.r).abs() < 1e-6
+        && (a.g - b.g).abs() < 1e-6
+        && (a.b - b.b).abs() < 1e-6
+        && (a.a - b.a).abs() < 1e-6
+}
+
 #[test]
 fn build_transcript_empty_messages_is_empty() {
     assert!(build_transcript(&[], body(), op_editor_core::Locale::EnUs).is_empty());
@@ -236,7 +243,9 @@ struct TranscriptPaintBackend {
     round_rect_colors: Vec<crate::Color>,
     ovals: usize,
     texts: Vec<String>,
+    text_colors: Vec<(String, jian_core::scene::Color)>,
     svg_strokes: Vec<(Point2D, f32)>,
+    svg_stroke_colors: Vec<(Point2D, f32, crate::Color)>,
 }
 
 impl crate::RenderBackend for TranscriptPaintBackend {
@@ -247,6 +256,7 @@ impl crate::RenderBackend for TranscriptPaintBackend {
     fn draw_text(&mut self, layout: &crate::TextLayout, _: Point2D) {
         if let Some(run) = layout.runs().first() {
             self.texts.push(run.content.clone());
+            self.text_colors.push((run.content.clone(), run.color));
         }
     }
     fn clip_rect(&mut self, _: Rect) {}
@@ -259,8 +269,9 @@ impl crate::RenderBackend for TranscriptPaintBackend {
         self.round_rect_colors.push(color);
     }
     fn stroke_round_rect(&mut self, _: Rect, _: f32, _: crate::Color, _: f32) {}
-    fn stroke_svg_path(&mut self, _: &str, point: Point2D, size: f32, _: crate::Color, _: f32) {
+    fn stroke_svg_path(&mut self, _: &str, point: Point2D, size: f32, color: crate::Color, _: f32) {
         self.svg_strokes.push((point, size));
+        self.svg_stroke_colors.push((point, size, color));
     }
     fn fill_oval(&mut self, _: Rect, _: crate::Color) {
         self.ovals += 1;
@@ -721,6 +732,87 @@ fn streaming_unclosed_design_json_code_fence_renders_generating_block() {
     assert_eq!(items[0].design_blocks.len(), 1);
     assert_eq!(items[0].design_blocks[0].label, "Generating design...");
     assert!(items[0].bubble.is_none());
+}
+
+#[test]
+fn paint_streaming_design_block_matches_ts_generating_row_style() {
+    let mut message = ChatMessage::assistant_streaming();
+    message.content = r#"```json
+[{"id":"frame-1","type":"Frame"}]"#
+        .into();
+    let body = body();
+    let theme = crate::Theme::dark();
+    let items = build_transcript(
+        std::slice::from_ref(&message),
+        body,
+        op_editor_core::Locale::EnUs,
+    );
+    let block = items[0].design_blocks[0].clone();
+    assert!(block.expanded);
+    let mut backend = TranscriptPaintBackend::default();
+    let mut cx = PaintCx {
+        backend: &mut backend,
+    };
+
+    paint_transcript(
+        &mut cx,
+        &theme,
+        body,
+        &[message],
+        0,
+        op_editor_core::Locale::EnUs,
+    );
+
+    assert!(
+        backend
+            .round_rects
+            .iter()
+            .zip(backend.round_rect_colors.iter())
+            .any(|((rect, radius), color)| {
+                rect_close(*rect, block.rect)
+                    && (*radius - 6.0).abs() < 1e-4
+                    && color_close(*color, theme.muted.with_alpha(0.4))
+            }),
+        "streaming design block should paint the expanded TS bg-secondary/40 rounded row"
+    );
+
+    let icon_bg = Rect::xywh(
+        block.rect.origin.x + 12.0,
+        block.rect.origin.y + 8.0,
+        16.0,
+        16.0,
+    );
+    assert!(
+        backend
+            .round_rects
+            .iter()
+            .zip(backend.round_rect_colors.iter())
+            .any(|((rect, radius), color)| {
+                rect_close(*rect, icon_bg)
+                    && (*radius - 8.0).abs() < 1e-4
+                    && color_close(*color, theme.primary.with_alpha(0.10))
+            }),
+        "streaming design block should paint the TS bg-primary/10 wand circle"
+    );
+
+    assert!(
+        backend.text_colors.iter().any(|(text, color)| {
+            text == "Generating design..." && *color == theme.muted_foreground.to_jian()
+        }),
+        "streaming design label should use text-muted-foreground without extra opacity"
+    );
+
+    assert!(
+        backend
+            .svg_stroke_colors
+            .iter()
+            .any(|(point, size, color)| {
+                (*size - 12.0).abs() < 1e-4
+                    && point.x >= body.origin.x + body.size.x - 26.0
+                    && color_close(*color, theme.muted_foreground.with_alpha(0.30))
+            }),
+        "streaming design block should paint the TS text-muted-foreground/30 chevron"
+    );
 }
 
 #[test]

@@ -762,6 +762,23 @@ impl WidgetHostNative {
                     .editor_state
                     .set_selected_widget_text(op_editor_core::WidgetTextField::Label, draft.trim());
             }
+            PropertyFocus::WidgetLeadingIcon => {
+                let _ = self.editor_state.set_selected_widget_text(
+                    op_editor_core::WidgetTextField::LeadingIcon,
+                    draft.trim(),
+                );
+            }
+            PropertyFocus::WidgetTrailingIcon => {
+                let _ = self.editor_state.set_selected_widget_text(
+                    op_editor_core::WidgetTextField::TrailingIcon,
+                    draft.trim(),
+                );
+            }
+            PropertyFocus::WidgetBindKey => {
+                let _ = self
+                    .editor_state
+                    .set_selected_widget_bind_value(draft.trim());
+            }
             _ => {
                 if let Ok(value) = draft.trim().parse::<f32>() {
                     let _ = self.editor_state.commit_property_edit(focus, value);

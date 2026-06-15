@@ -471,9 +471,10 @@ impl WidgetHostNative {
                     return true;
                 }
                 TopBarHit::TogglePreview => {
-                    // Enter / exit canvas Preview (Play) mode. On enter,
-                    // build the runtime against the current canvas region
-                    // size so layout matches the visible viewport.
+                    // Enter / exit canvas Preview (Play) mode. Layout is
+                    // solved per-root from the document; the canvas region
+                    // is passed only for API compatibility (paint transform
+                    // uses the viewport, layout does not).
                     let (_cx0, _cy0, cw, ch) = self.canvas_region(viewport_width, viewport_height);
                     self.toggle_preview((cw, ch));
                     return true;

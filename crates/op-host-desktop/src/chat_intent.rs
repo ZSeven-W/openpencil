@@ -558,6 +558,11 @@ pub(crate) struct CliTurnPlan {
     pub design_request: DesignRequest,
     /// State snapshot for the design route's `RemoteDocSink` mirror.
     pub initial_state: EditorState,
+    /// Host-owned indicator epoch shared with the parked `DesignSession`.
+    /// The worker registers frame/node indicators under this value and
+    /// `DesignSession::drop` clears that same run when Done / Stop /
+    /// New Chat retires the session.
+    pub indicator_epoch: u64,
     pub model: Option<String>,
 }
 
@@ -632,17 +637,13 @@ pub(crate) fn run_cli_turn(
             drop(executor);
             let llm =
                 ChatProviderLlmClient::new(Arc::from(plan.design_provider)).with_model(plan.model);
-            // Chat-initiated design turns own their indicator epoch the
-            // same way DesignSession::start does — begin() clears prior
-            // borders and scopes this run's frames.
-            let indicator_epoch = op_editor_core::agent_indicators::begin();
             run_design_worker(
                 llm,
                 plan.design_request,
                 plan.initial_state,
                 delta_tx,
                 cmd_tx,
-                indicator_epoch,
+                plan.indicator_epoch,
             );
         }
     }

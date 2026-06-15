@@ -13,6 +13,7 @@
 /// pending image / file the user staged for the next turn.
 pub use op_ai::chat_provider::{ChatAttachment, EffortLevel, ThinkingMode};
 
+use crate::chat_title::{suggest_chat_title, DEFAULT_CHAT_TITLE};
 use jian_core::text_input::{prev_char_boundary, Selection, TextInputState};
 
 /// Maximum number of files that can be staged for one chat turn
@@ -203,7 +204,9 @@ pub struct ChatMessage {
     /// entries fall back to the UI's auth-level default.
     pub tool_call_expanded_overrides: Vec<Option<bool>>,
     /// Per-design-JSON-block expanded-state overrides. Missing /
-    /// `None` entries fall back to collapsed, matching the TS card.
+    /// `None` entries fall back to the transcript default: streaming
+    /// design blocks open so the incoming .op preview is visible,
+    /// completed blocks stay collapsed.
     pub design_block_expanded_overrides: Vec<Option<bool>>,
     /// True while this (assistant) message's turn streams in.
     pub streaming: bool,
@@ -317,6 +320,8 @@ impl ChatTranscriptSelection {
 #[derive(Debug, Clone)]
 pub struct ChatState {
     pub messages: Vec<ChatMessage>,
+    /// Short label shown in the floating chat panel header.
+    pub title: String,
     /// Text input state for the chat textarea draft.
     pub input: TextInputState,
     pub focused: bool,
@@ -408,6 +413,7 @@ impl Default for ChatState {
     fn default() -> Self {
         Self {
             messages: Vec::new(),
+            title: DEFAULT_CHAT_TITLE.to_string(),
             input: TextInputState::default(),
             focused: false,
             transcript_selection: None,
@@ -482,11 +488,12 @@ impl ChatState {
     /// assistant echo, then clear the buffer. Offline fallback used by
     /// hosts with no real `ChatProvider` wired.
     pub fn send(&mut self) {
-        let trimmed = self.input.text().trim();
+        let trimmed = self.input.text().trim().to_string();
         if trimmed.is_empty() {
             return;
         }
         let echo = format!("(stub) Got it — \"{}\"", trimmed);
+        self.auto_title_from_prompt(&trimmed);
         self.messages.push(ChatMessage::user(trimmed));
         self.messages.push(ChatMessage::assistant(echo));
         self.input.set_text("");
@@ -503,6 +510,7 @@ impl ChatState {
         if trimmed.is_empty() && self.pending_attachments.is_empty() {
             return false;
         }
+        self.auto_title_from_prompt(&trimmed);
         self.collapsed = false;
         // A turn still in flight is interrupted by this new send — its
         // assistant bubble will never reach `Done`. Clear every
@@ -573,6 +581,7 @@ impl ChatState {
     /// in-flight worker tied to the previous conversation.
     pub fn new_chat(&mut self) {
         self.messages.clear();
+        self.title = DEFAULT_CHAT_TITLE.to_string();
         self.input.set_text("");
         self.pending_send = None;
         self.pending_stop_chat = false;
@@ -586,6 +595,14 @@ impl ChatState {
 
     pub fn queue_copy_text(&mut self, text: impl Into<String>) {
         self.pending_copy_text = Some(text.into());
+    }
+
+    fn auto_title_from_prompt(&mut self, prompt: &str) {
+        if self.title.trim().is_empty() || self.title == DEFAULT_CHAT_TITLE {
+            if let Some(title) = suggest_chat_title(prompt) {
+                self.title = title;
+            }
+        }
     }
 
     pub fn selected_transcript_text(&self) -> Option<&str> {
@@ -811,6 +828,28 @@ mod tests {
         assert!(chat.messages[1].content.is_empty());
         assert!(chat.input.text().is_empty());
         assert_eq!(chat.pending_send.as_deref(), Some("design a login page"));
+    }
+
+    #[test]
+    fn begin_send_auto_titles_new_chat_from_first_prompt() {
+        let mut chat = ChatState::default();
+        assert_eq!(chat.title, "New Chat");
+
+        chat.set_input_text(
+            "设计一个现代的移动端登录页面，包含邮箱输入框、密码输入框、登录按钮和社交登录选项",
+        );
+        assert!(chat.begin_send());
+        assert_eq!(chat.title, "现代移动端登录页面");
+
+        chat.set_input_text("设计一个新的设置页面");
+        assert!(chat.begin_send());
+        assert_eq!(
+            chat.title, "现代移动端登录页面",
+            "a later turn must not overwrite the existing conversation title"
+        );
+
+        chat.new_chat();
+        assert_eq!(chat.title, "New Chat");
     }
 
     #[test]

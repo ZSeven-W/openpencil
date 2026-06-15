@@ -312,7 +312,11 @@ impl WidgetHostNative {
             } else {
                 input.caret().min(draft.len())
             };
-            let allowed = if is_hex_focus {
+            let allowed = if focus.is_free_text() {
+                // Widget text rows (placeholder / value / label / icon
+                // names / bind key) take any non-control character.
+                !c.is_control()
+            } else if is_hex_focus {
                 // Cap at 7 chars (`#RRGGBB`) — per-stop alpha is
                 // preserved at commit time so the user never types
                 // raw alpha digits.

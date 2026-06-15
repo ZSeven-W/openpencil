@@ -41,6 +41,59 @@ fn text_input_selection_exposes_widget_text_rows() {
 }
 
 #[test]
+fn property_panel_text_input_fields_expose_icon_and_bind_rows() {
+    let mut state = state_from(
+        r##"{ "version": "0.8.0", "children": [
+              {"type":"text_input","id":"email","name":"Email",
+               "x":24,"y":32,"width":220,"height":40,
+               "leadingIcon":"mail","trailingIcon":"eye",
+               "placeholder":"Email address",
+               "bindings":{"bind:value":"$state.email"}}
+        ]}"##,
+    );
+    state.set_single_selection(NodeId::new("email"));
+    let panel = PropertyPanel::for_selection(&state).expect("text input panel");
+    let widget = panel.snapshot.widget.as_ref().expect("widget summary");
+
+    // The snapshot surfaces the current icon names + bind key (prefix
+    // stripped) so the rows paint the live values.
+    assert_eq!(widget.leading_icon, "mail");
+    assert_eq!(widget.trailing_icon, "eye");
+    assert_eq!(widget.bind_key, "email");
+
+    let visible = visible_for(&panel);
+    assert_eq!(visible.widget, Some(WidgetKind::TextInput));
+    let focuses: Vec<_> = sections::editable_input_rects(panel_rect(), visible)
+        .into_iter()
+        .map(|(focus, _)| focus)
+        .collect();
+    assert!(focuses.contains(&PropertyFocus::WidgetLeadingIcon));
+    assert!(focuses.contains(&PropertyFocus::WidgetTrailingIcon));
+    assert!(focuses.contains(&PropertyFocus::WidgetBindKey));
+}
+
+#[test]
+fn checkbox_selection_hides_icon_and_bind_rows() {
+    // Icon + bind editing is Phase-1 scoped to the input kinds; a
+    // Checkbox widget shows neither.
+    let mut state = state_from(
+        r##"{ "version": "0.8.0", "children": [
+              {"type":"checkbox","id":"cb","name":"Agree","x":0,"y":0,"width":18,"height":18,
+               "label":"Accept","checked":false}
+        ]}"##,
+    );
+    state.set_single_selection(NodeId::new("cb"));
+    let panel = PropertyPanel::for_selection(&state).expect("checkbox panel");
+    let visible = visible_for(&panel);
+    let focuses: Vec<_> = sections::editable_input_rects(panel_rect(), visible)
+        .into_iter()
+        .map(|(focus, _)| focus)
+        .collect();
+    assert!(!focuses.contains(&PropertyFocus::WidgetLeadingIcon));
+    assert!(!focuses.contains(&PropertyFocus::WidgetBindKey));
+}
+
+#[test]
 fn slider_selection_exposes_widget_range_rows() {
     let mut state = state_from(
         r##"{ "version": "0.8.0", "children": [

@@ -4,7 +4,7 @@
 
 use crate::layout_scene::{NodeKind, SceneNode, SceneWidget, SceneWidgetOption};
 use crate::widgets::canvas_viewport_widget::{
-    option_label, paint_widget_visual, text_field_display_text,
+    option_label, paint_widget_visual, text_field_display_text, widget_text_inset_left,
 };
 use crate::widgets::PaintCx;
 use crate::{Color, ImageDrawMode, Point2D, Rect, RenderBackend, TextLayout};
@@ -435,6 +435,43 @@ fn text_input_paints_value_then_placeholder() {
     assert!(
         b2.texts.iter().any(|(t, _)| t == "Type…"),
         "placeholder shown when empty"
+    );
+}
+
+#[test]
+fn widget_text_inset_accounts_for_leading_icon() {
+    let mut w = SceneWidget {
+        kind: "text_input".into(),
+        ..Default::default()
+    };
+    assert_eq!(widget_text_inset_left(&w), 8.0);
+    w.leading_icon = Some("mail".into());
+    assert_eq!(widget_text_inset_left(&w), 36.0); // 8 + 20 + 8
+}
+
+#[test]
+fn text_input_with_leading_icon_insets_text() {
+    let rect = Rect::xywh(0.0, 0.0, 280.0, 48.0);
+    let node = widget_node(
+        NodeKind::Text,
+        SceneWidget {
+            kind: "text_input".into(),
+            placeholder: Some("you@example.com".into()),
+            leading_icon: Some("mail".into()),
+            ..Default::default()
+        },
+        rect,
+    );
+    let b = paint(&node, rect);
+    let (_, origin) = b
+        .texts
+        .iter()
+        .find(|(t, _)| t == "you@example.com")
+        .expect("placeholder painted");
+    assert!(
+        (origin.x - 36.0).abs() < 0.001,
+        "text should be inset past the leading icon (8+20+8), got x={}",
+        origin.x
     );
 }
 

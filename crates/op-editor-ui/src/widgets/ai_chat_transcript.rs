@@ -22,6 +22,7 @@ use super::ai_chat_transcript_completion::{
 };
 use super::ai_chat_transcript_design::{
     extract_design_json_blocks, paint_design_block, place_design_blocks, DesignBlock,
+    PendingDesignBlock,
 };
 pub(crate) use super::ai_chat_transcript_hit::{transcript_hit, TranscriptHit};
 use super::ai_chat_transcript_paint_parts::{paint_action_step, paint_collapsible};
@@ -227,6 +228,20 @@ fn build_item(
         for block in &mut pending_design_blocks {
             block.applied = true;
         }
+    }
+    if !is_user
+        && msg.streaming
+        && visible_content.trim().is_empty()
+        && !progress_steps.is_empty()
+        && pending_design_blocks.is_empty()
+    {
+        pending_design_blocks.push(PendingDesignBlock {
+            element_count: 0,
+            label: "Generating design...".into(),
+            streaming: true,
+            applied: false,
+            code: String::new(),
+        });
     }
     let mut user_bubble_lines = if is_user && !visible_content.is_empty() {
         let max_w = body.size.x * USER_BUBBLE_MAX_FRAC;
@@ -726,3 +741,7 @@ mod tests;
 #[cfg(test)]
 #[path = "ai_chat_transcript_copy_tests.rs"]
 mod copy_tests;
+
+#[cfg(test)]
+#[path = "ai_chat_transcript_progress_tests.rs"]
+mod progress_tests;

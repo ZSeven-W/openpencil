@@ -35,6 +35,8 @@ pub(crate) fn text_input_to_payload(n: &TextInputNode) -> NodePayload {
         kind: "text_input".into(),
         value_str: n.value.clone(),
         placeholder: n.placeholder.clone(),
+        leading_icon: n.leading_icon.clone(),
+        trailing_icon: n.trailing_icon.clone(),
         ..Default::default()
     });
     p
@@ -53,6 +55,8 @@ pub(crate) fn text_area_to_payload(n: &TextAreaNode) -> NodePayload {
         kind: "text_area".into(),
         value_str: n.value.clone(),
         placeholder: n.placeholder.clone(),
+        leading_icon: n.leading_icon.clone(),
+        trailing_icon: n.trailing_icon.clone(),
         ..Default::default()
     });
     p
@@ -158,6 +162,8 @@ pub(crate) fn number_input_to_payload(n: &NumberInputNode) -> NodePayload {
         kind: "number_input".into(),
         value_num: n.value.as_ref().map(number_or_expr),
         placeholder: n.placeholder.clone(),
+        leading_icon: n.leading_icon.clone(),
+        trailing_icon: n.trailing_icon.clone(),
         min: n.min.map(|v| v as f32),
         max: n.max.map(|v| v as f32),
         step: n.step.map(|v| v as f32),

@@ -43,6 +43,7 @@ struct SliceStyle {
 /// ranges. Returns `(slice_start, slice_end, run_index)` triples in
 /// flat-text byte coords; `None` run index = node-level style (gaps,
 /// or the whole line when the node has no runs). Pure — unit-tested.
+#[cfg(test)]
 pub(crate) fn slice_ranges(
     runs: &[SceneTextRun],
     line_start: usize,

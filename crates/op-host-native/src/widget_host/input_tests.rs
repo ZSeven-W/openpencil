@@ -439,7 +439,7 @@ fn ai_chat_agent_team_click_cycles_team_size() {
     let viewport_w = 1200.0;
     let viewport_h = 800.0;
     let rect = host.ai_chat_rect(viewport_w, viewport_h).unwrap();
-    let x = rect.origin.x + 105.0;
+    let x = rect.origin.x + 132.0;
     let y = rect.origin.y + toolbar_center_y_for_test();
 
     assert!(host.apply_click(x, y, viewport_w, viewport_h));
@@ -1083,6 +1083,62 @@ fn property_focus_commit_reads_text_input_state() {
     let bounds = own_bounds(host.editor_state().selected_node().unwrap());
     assert_eq!(bounds.w, 321.0);
     assert!(host.editor_state().ui.property_input.text().is_empty());
+}
+
+#[test]
+fn widget_leading_icon_focus_commits_onto_text_input() {
+    let mut host = WidgetHostNative::new();
+    seed(
+        &mut host,
+        r##"{ "version": "0.8.0", "children": [
+              {"type":"text_input","id":"email","name":"Email",
+               "x":24,"y":32,"width":220,"height":40,"placeholder":"Email"}
+        ]}"##,
+    );
+    host.editor_state_mut()
+        .set_single_selection(NodeId::new("email"));
+    host.editor_state_mut().ui.property_focus = Some(PropertyFocus::WidgetLeadingIcon);
+    // Type the glyph name char-by-char to exercise the free-text gate
+    // (letters must NOT be rejected as non-numeric).
+    for c in "mail".chars() {
+        assert!(host.apply_text(c), "letter '{c}' must be accepted");
+    }
+    host.commit_property_focus_if_any();
+
+    match host.editor_state().selected_node().unwrap() {
+        jian_ops_schema::node::PenNode::TextInput(t) => {
+            assert_eq!(t.leading_icon.as_deref(), Some("mail"));
+        }
+        other => panic!("expected text_input, got {other:?}"),
+    }
+}
+
+#[test]
+fn widget_bind_key_focus_writes_state_binding() {
+    let mut host = WidgetHostNative::new();
+    seed(
+        &mut host,
+        r##"{ "version": "0.8.0", "children": [
+              {"type":"text_input","id":"email","name":"Email",
+               "x":24,"y":32,"width":220,"height":40,"placeholder":"Email"}
+        ]}"##,
+    );
+    host.editor_state_mut()
+        .set_single_selection(NodeId::new("email"));
+    host.editor_state_mut().ui.property_focus = Some(PropertyFocus::WidgetBindKey);
+    host.editor_state_mut().ui.property_input.set_text("email");
+    host.commit_property_focus_if_any();
+
+    match host.editor_state().selected_node().unwrap() {
+        jian_ops_schema::node::PenNode::TextInput(t) => {
+            let bindings = t.bindings.as_ref().expect("bindings written");
+            assert_eq!(
+                bindings.get("bind:value").map(|e| e.0.as_str()),
+                Some("$state.email"),
+            );
+        }
+        other => panic!("expected text_input, got {other:?}"),
+    }
 }
 
 #[test]

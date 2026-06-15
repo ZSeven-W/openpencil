@@ -33,6 +33,12 @@ pub enum WidgetTextField {
     Value,
     /// `label` (Checkbox).
     Label,
+    /// `leadingIcon` lucide glyph name (TextInput / TextArea /
+    /// NumberInput). Empty draft clears it.
+    LeadingIcon,
+    /// `trailingIcon` lucide glyph name (TextInput / TextArea /
+    /// NumberInput). Empty draft clears it.
+    TrailingIcon,
 }
 
 /// Which numeric widget prop a `SetNodeWidgetNumber` edit targets.
@@ -62,9 +68,33 @@ fn write_widget_text(node: &mut PenNode, field: WidgetTextField, next: Option<St
         (PenNode::Select(n), F::Value) => n.value = next,
         (PenNode::RadioGroup(n), F::Value) => n.value = next,
         (PenNode::Checkbox(n), F::Label) => n.label = next,
+        (PenNode::TextInput(n), F::LeadingIcon) => n.leading_icon = next,
+        (PenNode::TextInput(n), F::TrailingIcon) => n.trailing_icon = next,
+        (PenNode::TextArea(n), F::LeadingIcon) => n.leading_icon = next,
+        (PenNode::TextArea(n), F::TrailingIcon) => n.trailing_icon = next,
+        (PenNode::NumberInput(n), F::LeadingIcon) => n.leading_icon = next,
+        (PenNode::NumberInput(n), F::TrailingIcon) => n.trailing_icon = next,
         _ => return false,
     }
     true
+}
+
+/// Mutably borrow whatever variant's `bindings` map. `None` for kinds
+/// that don't carry one (Frame / Group / Rectangle / Text / Ellipse).
+fn node_bindings_slot(
+    node: &mut PenNode,
+) -> Option<&mut Option<jian_ops_schema::events::Bindings>> {
+    match node {
+        PenNode::TextInput(n) => Some(&mut n.bindings),
+        PenNode::TextArea(n) => Some(&mut n.bindings),
+        PenNode::NumberInput(n) => Some(&mut n.bindings),
+        PenNode::Select(n) => Some(&mut n.bindings),
+        PenNode::RadioGroup(n) => Some(&mut n.bindings),
+        PenNode::Switch(n) => Some(&mut n.bindings),
+        PenNode::Checkbox(n) => Some(&mut n.bindings),
+        PenNode::Tabs(n) => Some(&mut n.bindings),
+        _ => None,
+    }
 }
 
 /// Write a numeric widget prop. `min` / `max` / `step` are plain
@@ -602,6 +632,38 @@ impl EditorState {
             Some(text.to_string())
         };
         write_widget_text(node, field, next)
+    }
+
+    /// Write the `bind:value` two-way binding on a widget node as
+    /// `$state.<key>`. An empty `key` removes the `bind:value` entry
+    /// (dropping the whole `bindings` map when it becomes empty) so the
+    /// serialized `.op` carries no orphan binding. A `$state.` prefix
+    /// the user already typed is stripped so the key isn't doubled.
+    /// Returns true only when the node variant carries `bindings`.
+    pub(crate) fn cmd_set_node_widget_bind_value(&mut self, node_id: &NodeId, key: &str) -> bool {
+        if !node_id.is_real() {
+            return false;
+        }
+        let Some(node) = find_node_mut(self.active_children_mut(), node_id) else {
+            return false;
+        };
+        let Some(slot) = node_bindings_slot(node) else {
+            return false;
+        };
+        let key = key.trim().trim_start_matches("$state.").trim();
+        if key.is_empty() {
+            if let Some(map) = slot.as_mut() {
+                map.remove("bind:value");
+                if map.is_empty() {
+                    *slot = None;
+                }
+            }
+            return true;
+        }
+        let expr = jian_ops_schema::expression::Expression(format!("$state.{key}"));
+        slot.get_or_insert_with(Default::default)
+            .insert("bind:value".to_string(), expr);
+        true
     }
 
     /// `SetNodeWidgetNumber` — write a numeric widget prop (`min` /

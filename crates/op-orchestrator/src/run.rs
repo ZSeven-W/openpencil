@@ -165,6 +165,14 @@ impl Orchestrator {
 
         // ── Non-dashboard sequential path ──────────────────────────────────
         //
+        let sequential_identity = if append_result.skip_root_insertion {
+            None
+        } else {
+            crate::agent_identity::assign_agent_identities(1)
+                .into_iter()
+                .next()
+        };
+
         // -- S3b-4 Task B2 call site 4: append fast-path (TS :942-949) --
         // In append mode we reuse the caller-provided content-root instead of
         // creating a new root + status bar + dashboard columns.
@@ -231,6 +239,16 @@ impl Orchestrator {
             };
             for subtask in &mut plan.subtasks {
                 subtask.parent_frame_id = Some(rid.clone());
+            }
+            if let (Some(epoch), Some(identity)) =
+                (self.agent_indicator_epoch, sequential_identity.as_ref())
+            {
+                op_editor_core::agent_indicators::add_frame(
+                    epoch,
+                    &rid,
+                    &identity.color,
+                    &identity.name,
+                );
             }
             let baseline = descendant_count(sink.state(), &rid);
             on_progress(Progress::ScaffoldDone);

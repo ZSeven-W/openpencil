@@ -450,6 +450,39 @@ impl WidgetHost {
                     }
                 }
             }
+            PropertyFocus::WidgetPlaceholder => {
+                let _ = self.editor_state.set_selected_widget_text(
+                    op_editor_core::WidgetTextField::Placeholder,
+                    draft.trim(),
+                );
+            }
+            PropertyFocus::WidgetValue => {
+                let _ = self
+                    .editor_state
+                    .set_selected_widget_text(op_editor_core::WidgetTextField::Value, draft.trim());
+            }
+            PropertyFocus::WidgetLabel => {
+                let _ = self
+                    .editor_state
+                    .set_selected_widget_text(op_editor_core::WidgetTextField::Label, draft.trim());
+            }
+            PropertyFocus::WidgetLeadingIcon => {
+                let _ = self.editor_state.set_selected_widget_text(
+                    op_editor_core::WidgetTextField::LeadingIcon,
+                    draft.trim(),
+                );
+            }
+            PropertyFocus::WidgetTrailingIcon => {
+                let _ = self.editor_state.set_selected_widget_text(
+                    op_editor_core::WidgetTextField::TrailingIcon,
+                    draft.trim(),
+                );
+            }
+            PropertyFocus::WidgetBindKey => {
+                let _ = self
+                    .editor_state
+                    .set_selected_widget_bind_value(draft.trim());
+            }
             _ => {
                 if let Ok(value) = draft.trim().parse::<f32>() {
                     let _ = self.editor_state.commit_property_edit(focus, value);
@@ -685,6 +718,63 @@ pub(in crate::widget_host) fn property_focus_initial(
             .get(i)
             .map(|s| ((s.offset * 100.0).round() as i32).to_string())
             .unwrap_or_else(|| "0".to_string()),
+        // Widget-section fields — seed the input draft from the selected
+        // widget's current value so editing starts from it (mirrors the
+        // native `property_focus_initial`).
+        PropertyFocus::WidgetPlaceholder => panel
+            .snapshot
+            .widget
+            .as_ref()
+            .map(|w| w.placeholder.clone())
+            .unwrap_or_default(),
+        PropertyFocus::WidgetValue => panel
+            .snapshot
+            .widget
+            .as_ref()
+            .map(|w| w.value.clone())
+            .unwrap_or_default(),
+        PropertyFocus::WidgetLabel => panel
+            .snapshot
+            .widget
+            .as_ref()
+            .map(|w| w.label.clone())
+            .unwrap_or_default(),
+        PropertyFocus::WidgetLeadingIcon => panel
+            .snapshot
+            .widget
+            .as_ref()
+            .map(|w| w.leading_icon.clone())
+            .unwrap_or_default(),
+        PropertyFocus::WidgetTrailingIcon => panel
+            .snapshot
+            .widget
+            .as_ref()
+            .map(|w| w.trailing_icon.clone())
+            .unwrap_or_default(),
+        PropertyFocus::WidgetBindKey => panel
+            .snapshot
+            .widget
+            .as_ref()
+            .map(|w| w.bind_key.clone())
+            .unwrap_or_default(),
+        PropertyFocus::WidgetMin => panel
+            .snapshot
+            .widget
+            .as_ref()
+            .map(|w| w.min.clone())
+            .unwrap_or_default(),
+        PropertyFocus::WidgetMax => panel
+            .snapshot
+            .widget
+            .as_ref()
+            .map(|w| w.max.clone())
+            .unwrap_or_default(),
+        PropertyFocus::WidgetStep => panel
+            .snapshot
+            .widget
+            .as_ref()
+            .map(|w| w.step.clone())
+            .unwrap_or_default(),
     }
 }
 

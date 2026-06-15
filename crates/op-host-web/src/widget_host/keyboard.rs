@@ -129,7 +129,11 @@ impl WidgetHost {
                 input.caret().min(draft.len())
             };
             let allowed = if let Some(focus) = self.editor_state.ui.property_focus {
-                if focus.is_hex() {
+                if focus.is_free_text() {
+                    // Widget text rows (placeholder / value / label /
+                    // icon names / bind key) take any non-control char.
+                    !c.is_control()
+                } else if focus.is_hex() {
                     (replacing_all || draft.len() < 7)
                         && (c.is_ascii_hexdigit()
                             || (c == '#' && pos == 0 && !draft.starts_with('#')))

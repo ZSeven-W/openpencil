@@ -338,7 +338,7 @@ pub(crate) fn place_design_blocks(
             .get(index)
             .copied()
             .flatten()
-            .unwrap_or(false);
+            .unwrap_or(pending.streaming);
         let mut code_lines = Vec::new();
         if expanded {
             code_lines.extend(
@@ -397,15 +397,18 @@ pub(crate) fn place_design_blocks(
 }
 
 pub(crate) fn paint_design_block(cx: &mut PaintCx<'_>, theme: &Theme, block: &DesignBlock) {
-    let mut fill = theme.background;
-    fill.a *= 0.4;
-    let mut border = theme.border;
-    border.a *= 0.35;
+    let fill = if block.expanded {
+        theme.muted.with_alpha(0.40)
+    } else {
+        theme.background.with_alpha(0.40)
+    };
+    let border = theme
+        .border
+        .with_alpha(if block.expanded { 0.60 } else { 0.30 });
     cx.backend.fill_round_rect(block.rect, 6.0, fill);
     cx.backend.stroke_round_rect(block.rect, 6.0, border, 1.0);
 
-    let mut icon_bg = theme.primary;
-    icon_bg.a *= 0.12;
+    let icon_bg = theme.primary.with_alpha(0.10);
     let icon_bg_rect = Rect::xywh(
         block.rect.origin.x + DESIGN_ICON_LEFT,
         block.rect.origin.y + (DESIGN_BLOCK_H - DESIGN_ICON_BG) / 2.0,
@@ -424,14 +427,11 @@ pub(crate) fn paint_design_block(cx: &mut PaintCx<'_>, theme: &Theme, block: &De
         theme.primary,
         1.5,
     );
-    let mut color = if block.streaming {
+    let color = if block.streaming {
         theme.muted_foreground
     } else {
-        theme.foreground
+        theme.foreground.with_alpha(0.90)
     };
-    if block.streaming {
-        color.a *= 0.85;
-    }
     let label_x = icon_bg_rect.origin.x + DESIGN_ICON_BG + DESIGN_ICON_GAP;
     cx.backend.save();
     cx.backend.clip_rect(Rect::xywh(
@@ -452,8 +452,7 @@ pub(crate) fn paint_design_block(cx: &mut PaintCx<'_>, theme: &Theme, block: &De
     cx.backend.restore();
 
     if block.copy_visible {
-        let mut copy_color = theme.muted_foreground;
-        copy_color.a *= 0.5;
+        let copy_color = theme.muted_foreground.with_alpha(0.30);
         draw_icon(
             cx.backend,
             Icon::Copy,
@@ -464,8 +463,7 @@ pub(crate) fn paint_design_block(cx: &mut PaintCx<'_>, theme: &Theme, block: &De
         );
     }
 
-    let mut chevron_color = theme.muted_foreground;
-    chevron_color.a *= 0.45;
+    let chevron_color = theme.muted_foreground.with_alpha(0.30);
     draw_icon(
         cx.backend,
         if block.expanded {

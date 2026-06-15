@@ -1,14 +1,17 @@
 //! Tests for the CLI standard-mode intent router (GAP #33).
 
-use std::sync::mpsc;
-use std::time::Duration;
+use std::collections::VecDeque;
+use std::sync::{mpsc, Mutex};
+use std::time::{Duration, Instant};
 
 use op_ai::chat_provider::{ChatDelta, ChatProvider, ChatRequest, StopReason};
 use op_editor_core::EditorState;
+use op_host_native::WidgetHostNative;
 use op_orchestrator::DesignRequest;
 
 use super::*;
 use crate::chat_canvas_tools::{apply_design_modification, chat_tool_channel};
+use crate::design_session::{pump_commands, pump_progress, DesignSession};
 
 // ---------------------------------------------------------------------------
 // Keyword + tag classification
@@ -127,6 +130,42 @@ impl ChatProvider for Scripted {
         Box::new(deltas.into_iter().inspect(move |_| {
             std::thread::sleep(delay);
         }))
+    }
+}
+
+struct ScriptedCalls {
+    calls: Mutex<VecDeque<String>>,
+}
+
+impl ScriptedCalls {
+    fn new(calls: Vec<String>) -> Self {
+        Self {
+            calls: Mutex::new(calls.into()),
+        }
+    }
+}
+
+impl ChatProvider for ScriptedCalls {
+    fn provider_label(&self) -> &str {
+        "scripted-calls"
+    }
+
+    fn send(&self, _request: ChatRequest) -> Box<dyn Iterator<Item = ChatDelta> + Send> {
+        let text = self
+            .calls
+            .lock()
+            .unwrap()
+            .pop_front()
+            .expect("scripted call exhausted");
+        Box::new(
+            vec![
+                ChatDelta::TextDelta(text),
+                ChatDelta::Done {
+                    stop_reason: StopReason::EndTurn,
+                },
+            ]
+            .into_iter(),
+        )
     }
 }
 
@@ -483,6 +522,19 @@ fn test_design_request() -> DesignRequest {
     }
 }
 
+const ONE_SUBTASK_PLAN_JSON: &str = r##"{
+  "rootFrame": { "id": "root", "name": "Login", "width": 390, "height": 844,
+                 "layout": "vertical", "gap": 0,
+                 "fill": [{ "type": "solid", "color": "#FFFFFF" }] },
+  "subtasks": [
+    { "id": "form", "label": "Form", "region": { "width": 390, "height": 300 } }
+  ]
+}"##;
+
+fn one_node_json() -> String {
+    r#"[{"type":"frame","id":"form-1","name":"Form","width":390,"height":120,"children":[{"type":"text","id":"form-title","content":"Welcome","fontSize":24}]}]"#.into()
+}
+
 fn drain_chat(rx: &mpsc::Receiver<ChatDelta>) -> Vec<ChatDelta> {
     let mut out = Vec::new();
     while let Ok(delta) = rx.recv_timeout(Duration::from_secs(10)) {
@@ -493,6 +545,61 @@ fn drain_chat(rx: &mpsc::Receiver<ChatDelta>) -> Vec<ChatDelta> {
         }
     }
     out
+}
+
+#[test]
+fn cli_new_design_clears_agent_frame_indicators_after_done() {
+    op_editor_core::agent_indicators::clear();
+    let indicator_epoch = op_editor_core::agent_indicators::begin();
+    let plan = CliTurnPlan {
+        user_text: "design a login page".into(),
+        page_children_empty: true,
+        classify_provider: Box::new(Scripted::text("DESIGN_NEW")),
+        chat_provider: Box::new(Scripted::text("unused")),
+        design_provider: Box::new(ScriptedCalls::new(vec![
+            ONE_SUBTASK_PLAN_JSON.into(),
+            one_node_json(),
+        ])),
+        chat_request: ChatRequest::default(),
+        modify_request: None,
+        design_request: test_design_request(),
+        initial_state: EditorState::new(),
+        indicator_epoch,
+        model: None,
+    };
+    let (chat_tx, _chat_rx) = mpsc::channel();
+    let (executor, _tool_rx) = chat_tool_channel();
+    let (delta_tx, delta_rx) = mpsc::channel();
+    let (cmd_tx, cmd_rx) = mpsc::channel();
+    let mut current = Some(DesignSession::from_channels_with_epoch(
+        delta_rx,
+        cmd_rx,
+        indicator_epoch,
+    ));
+    let mut host = WidgetHostNative::new();
+    host.editor_state_mut()
+        .chat
+        .messages
+        .push(op_editor_core::ChatMessage::assistant_streaming());
+
+    let worker =
+        std::thread::spawn(move || run_cli_turn(plan, chat_tx, executor, delta_tx, cmd_tx));
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while current.is_some() && Instant::now() < deadline {
+        let _ = pump_commands(&mut host, &mut current, 1440.0, 900.0);
+        let _ = pump_progress(&mut host, &mut current);
+        std::thread::sleep(Duration::from_millis(2));
+    }
+    worker.join().expect("worker exits");
+
+    assert!(current.is_none(), "design session should finish");
+    let snapshot = op_editor_core::agent_indicators::snapshot();
+    assert!(
+        snapshot.frames.is_empty(),
+        "agent frame badges/borders must clear after Done, got {:?}",
+        snapshot.frames
+    );
+    op_editor_core::agent_indicators::clear();
 }
 
 #[test]
@@ -507,6 +614,7 @@ fn cli_turn_chat_route_streams_provider_deltas() {
         modify_request: Some(ChatRequest::default()),
         design_request: test_design_request(),
         initial_state: EditorState::new(),
+        indicator_epoch: 0,
         model: None,
     };
     let (chat_tx, chat_rx) = mpsc::channel();
@@ -544,6 +652,7 @@ fn cli_turn_modify_route_applies_nodes_and_marks_applied() {
         modify_request: Some(ChatRequest::default()),
         design_request: test_design_request(),
         initial_state: EditorState::new(),
+        indicator_epoch: 0,
         model: None,
     };
     let (chat_tx, chat_rx) = mpsc::channel();
@@ -609,6 +718,7 @@ fn cli_turn_modify_parse_failure_surfaces_ts_error() {
         modify_request: Some(ChatRequest::default()),
         design_request: test_design_request(),
         initial_state: EditorState::new(),
+        indicator_epoch: 0,
         model: None,
     };
     let (chat_tx, chat_rx) = mpsc::channel();

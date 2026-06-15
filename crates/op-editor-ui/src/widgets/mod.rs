@@ -235,6 +235,8 @@ pub use canvas_viewport::{
     arc_handle_positions, path_handle_positions, rotate_point, rotation_corner_at_point,
     selection_handle_at_point, ArcHandle, CanvasViewport, SelectionHandle,
 };
+pub use canvas_viewport_paint::paint_scene_page;
+pub use canvas_viewport_widget::widget_text_inset_left;
 
 pub use icons::{draw_icon, draw_icon_catalog_entry, draw_icon_data, Icon, IconPathData};
 

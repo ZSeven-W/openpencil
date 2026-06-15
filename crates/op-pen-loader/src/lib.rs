@@ -39,13 +39,13 @@ pub mod variables;
 /// against the editor's variables + active theme. Builds the scene
 /// directly from the layout-resolved `DocPayload` — no intermediate
 /// shell-core `Document`.
-pub use layout_scene::editor_state_to_layout_scene;
+pub use layout_scene::{editor_state_to_layout_scene, pen_document_to_layout_scene};
 
 // Re-exports so `openpencil-desktop`'s existing call sites change
 // minimally.
 pub use adapter::{
     build_var_table, pen_document_to_payload, pen_document_to_payload_preserving_geometry,
-    LoadedDoc,
+    root_authored_origin, root_available_size, LoadedDoc,
 };
 pub use effects::{
     effects_from_payload, effects_from_payload_ref, effects_to_payload, shadows_from_canonical,

@@ -109,6 +109,56 @@ pub fn editor_state_to_layout_scene(state: &op_editor_core::EditorState) -> Layo
     }
 }
 
+/// Build a [`LayoutScene`] from a bare [`PenDocument`] + active theme +
+/// active page index — the document-only path (no [`EditorState`]).
+///
+/// Runs the SAME render-time ref + token resolution and flex layout as
+/// [`editor_state_to_layout_scene`]; Canvas Preview uses this to render
+/// its prepared + promoted runtime document. Tokens resolve against
+/// `active_theme`; with no transient editor fill/stroke-ref caches the
+/// var table comes straight from the document's `variables` / `themes`
+/// — sufficient because the resolved doc already carries concrete
+/// colours, so `node_payload_to_scene`'s `$ref` lookups all miss and
+/// fall back to the node's own (now literal) fill.
+///
+/// [`EditorState`]: op_editor_core::EditorState
+pub fn pen_document_to_layout_scene(
+    doc: &jian_ops_schema::PenDocument,
+    active_theme: &std::collections::BTreeMap<String, String>,
+    active_page_index: usize,
+) -> LayoutScene {
+    let mut prepared = std::borrow::Cow::Borrowed(doc);
+    if op_editor_core::ref_resolve::document_has_refs(&prepared) {
+        prepared = std::borrow::Cow::Owned(op_editor_core::ref_resolve::resolve_refs_for_canvas(
+            &prepared,
+        ));
+    }
+    if op_editor_core::variables_resolve::document_has_tokens(&prepared) {
+        prepared = std::borrow::Cow::Owned(
+            op_editor_core::variables_resolve::resolve_document_for_canvas(&prepared, active_theme),
+        );
+    }
+    let payload: DocPayload = crate::adapter::pen_document_to_payload(&prepared).payload;
+    let mut var_table = crate::adapter::build_var_table(&prepared);
+    var_table.active_theme = active_theme.clone();
+    LayoutScene {
+        pages: payload
+            .pages
+            .iter()
+            .map(|page| ScenePage {
+                id: page.id.clone(),
+                name: page.name.clone(),
+                children: page
+                    .children
+                    .iter()
+                    .map(|n| node_payload_to_scene(n, &var_table, 1.0))
+                    .collect(),
+            })
+            .collect(),
+        active_page_index: active_page_index.min(payload.pages.len().saturating_sub(1)),
+    }
+}
+
 /// Convert one resolved [`NodePayload`] into a [`SceneNode`].
 ///
 /// Geometry is copied straight through — `pen_document_to_payload`
@@ -228,6 +278,8 @@ fn widget_payload_to_scene(w: &crate::payload::WidgetPayload) -> SceneWidget {
         value_num: w.value_num,
         value_str: w.value_str.clone(),
         placeholder: w.placeholder.clone(),
+        leading_icon: w.leading_icon.clone(),
+        trailing_icon: w.trailing_icon.clone(),
         label: w.label.clone(),
         min: w.min,
         max: w.max,
