@@ -310,6 +310,7 @@ struct PaintNodeOptions<'a> {
     edit_caret: Option<EditCaret>,
     cull: Rect,
     reveals: Option<RevealSchedule<'a>>,
+    hovered: Option<&'a str>,
 }
 
 #[derive(Clone, Copy)]
@@ -325,30 +326,7 @@ enum RevealPaintState {
     Active(RevealPhase),
 }
 
-/// Recursively paint one resolved [`SceneNode`] and its subtree.
-///
-/// `viewport_origin` is the canvas-rect origin shifted by the
-/// viewport pan; `zoom` is the viewport zoom. The scene already
-/// carries layout-resolved absolute doc-space bounds, so paint is a
-/// straight `doc → world` transform.
-pub fn paint_node(
-    cx: &mut PaintCx<'_>,
-    node: &SceneNode,
-    viewport_origin: Point2D,
-    zoom: f32,
-    edit_caret: Option<EditCaret>,
-    cull: Rect,
-) {
-    let options = PaintNodeOptions {
-        viewport_origin,
-        zoom,
-        edit_caret,
-        cull,
-        reveals: None,
-    };
-    paint_node_inner(cx, node, &options, false);
-}
-
+#[cfg(test)]
 pub(crate) fn paint_node_with_reveals(
     cx: &mut PaintCx<'_>,
     node: &SceneNode,
@@ -357,15 +335,38 @@ pub(crate) fn paint_node_with_reveals(
     edit_caret: Option<EditCaret>,
     cull: Rect,
     reveals: RevealSchedule<'_>,
-) {
+) -> Option<Rect> {
+    paint_node_with_options(
+        cx,
+        node,
+        viewport_origin,
+        zoom,
+        edit_caret,
+        cull,
+        Some(reveals),
+        None,
+    )
+}
+
+pub(crate) fn paint_node_with_options<'a>(
+    cx: &mut PaintCx<'_>,
+    node: &SceneNode,
+    viewport_origin: Point2D,
+    zoom: f32,
+    edit_caret: Option<EditCaret>,
+    cull: Rect,
+    reveals: Option<RevealSchedule<'a>>,
+    hovered: Option<&'a str>,
+) -> Option<Rect> {
     let options = PaintNodeOptions {
         viewport_origin,
         zoom,
         edit_caret,
         cull,
-        reveals: Some(reveals),
+        reveals,
+        hovered,
     };
-    paint_node_inner(cx, node, &options, false);
+    paint_node_inner(cx, node, &options, false)
 }
 
 fn paint_node_inner(
@@ -373,7 +374,7 @@ fn paint_node_inner(
     node: &SceneNode,
     options: &PaintNodeOptions<'_>,
     ancestor_revealing: bool,
-) {
+) -> Option<Rect> {
     let viewport_origin = options.viewport_origin;
     let zoom = options.zoom;
     let edit_caret = &options.edit_caret;
@@ -385,7 +386,7 @@ fn paint_node_inner(
         .map(|schedule| reveal_paint_state(schedule, &node.id))
         .unwrap_or(RevealPaintState::Idle);
     if node.hidden || matches!(reveal_state, RevealPaintState::Pending) {
-        return;
+        return None;
     }
     let own_reveal_phase = match reveal_state {
         RevealPaintState::Active(phase) if !ancestor_revealing => Some(phase),
@@ -413,9 +414,10 @@ fn paint_node_inner(
             || world_rect.origin.y + world_rect.size.y < cull.origin.y
             || world_rect.origin.y > cull.origin.y + cull.size.y;
         if off {
-            return;
+            return None;
         }
     }
+    let mut hover_rect = None;
 
     let reveal_wrapped = own_reveal_phase
         .map(|phase| push_reveal_transform(cx, world_rect, phase))
@@ -481,7 +483,11 @@ fn paint_node_inner(
             paint_widget_visual(cx, node, world_rect, zoom);
             let clipped = push_clip_content(cx, node, world_rect, zoom);
             for child in node.children.iter().rev() {
-                paint_node_inner(cx, child, options, descendant_has_revealing_ancestor);
+                let child_hover =
+                    paint_node_inner(cx, child, options, descendant_has_revealing_ancestor);
+                if hover_rect.is_none() {
+                    hover_rect = child_hover;
+                }
             }
             if clipped {
                 cx.backend.restore();
@@ -500,7 +506,11 @@ fn paint_node_inner(
             // every recursing container branch, not just Frame.
             let clipped = push_clip_content(cx, node, world_rect, zoom);
             for child in node.children.iter().rev() {
-                paint_node_inner(cx, child, options, descendant_has_revealing_ancestor);
+                let child_hover =
+                    paint_node_inner(cx, child, options, descendant_has_revealing_ancestor);
+                if hover_rect.is_none() {
+                    hover_rect = child_hover;
+                }
             }
             if clipped {
                 cx.backend.restore();
@@ -581,7 +591,7 @@ fn paint_node_inner(
                 if reveal_wrapped {
                     cx.backend.restore();
                 }
-                return;
+                return hovered_outline_rect(node, options);
             }
             // Bezier-aware: when the path carries anchors with control
             // handles, flatten each cubic segment; otherwise fall back
@@ -643,6 +653,24 @@ fn paint_node_inner(
     if reveal_wrapped {
         cx.backend.restore();
     }
+    hover_rect.or_else(|| hovered_outline_rect(node, options))
+}
+
+fn hovered_outline_rect(node: &SceneNode, options: &PaintNodeOptions<'_>) -> Option<Rect> {
+    if options.hovered != Some(node.id.as_str()) {
+        return None;
+    }
+    let bounds = node.aggregate_bounds();
+    if bounds.size.x <= 0.0 || bounds.size.y <= 0.0 {
+        return None;
+    }
+    Some(Rect {
+        origin: Point2D::new(
+            options.viewport_origin.x + bounds.origin.x * options.zoom,
+            options.viewport_origin.y + bounds.origin.y * options.zoom,
+        ),
+        size: Point2D::new(bounds.size.x * options.zoom, bounds.size.y * options.zoom),
+    })
 }
 
 fn reveal_paint_state(schedule: RevealSchedule<'_>, node_id: &str) -> RevealPaintState {
