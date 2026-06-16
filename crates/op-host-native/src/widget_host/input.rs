@@ -643,7 +643,9 @@ impl WidgetHostNative {
                 origin: Point2D::new(0.0, 0.0),
                 size: Point2D::new(self.last_viewport_w, TOP_BAR_HEIGHT),
             };
-            let new_hover = TopBar::for_editor_ui(&self.editor_state.editor_ui)
+            let mut top_bar = TopBar::for_editor_ui(&self.editor_state.editor_ui);
+            top_bar.chip_text_w = Some(self.topbar_chip_text_w(&top_bar));
+            let new_hover = top_bar
                 .hit_test(tb_rect, Point2D::new(x, y))
                 .map(op_editor_ui::widgets::editor_state_ext::topbar_button_hover);
             if new_hover != self.editor_state.editor_ui.topbar_button_hover {

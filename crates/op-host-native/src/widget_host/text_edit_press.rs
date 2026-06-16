@@ -67,6 +67,27 @@ fn inverse_rotate_doc(p: Point2D, node: &SceneNode) -> Point2D {
 }
 
 impl WidgetHostNative {
+    /// Width (px) of the agent chip's text at the paint font size (11),
+    /// measured with the shared measure-only backend so `TopBar`'s
+    /// agent-chip hit area matches the painted chip exactly instead of a
+    /// char-count estimate that overran into the file-name gap.
+    pub(in crate::widget_host) fn topbar_chip_text_w(
+        &mut self,
+        top_bar: &op_editor_ui::widgets::TopBar,
+    ) -> f32 {
+        let chip_text = top_bar.chip_text();
+        let mut measure = self
+            .text_measure
+            .take()
+            .unwrap_or_else(|| crate::NativeBackend::with_dpi(1.0));
+        let w = MeasureOnly {
+            inner: &mut measure,
+        }
+        .measure_text(&chip_text, 11.0);
+        self.text_measure = Some(measure);
+        w
+    }
+
     /// The edited Text node's resolved scene node, cloned out of the
     /// layout scene so no scene borrow survives into the mutators.
     fn text_edit_scene_node(&mut self) -> Option<SceneNode> {

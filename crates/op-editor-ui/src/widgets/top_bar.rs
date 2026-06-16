@@ -138,6 +138,12 @@ pub struct TopBar {
     pub hover: Option<op_editor_core::TopBarButton>,
     /// Which chrome button is held by the primary pointer.
     pub pressed: Option<op_editor_core::TopBarButton>,
+    /// Host-measured width (px) of the chip's status text at the paint
+    /// font size (11). The desktop host fills this via its `text_measure`
+    /// backend so the agent-chip hit area matches the painted chip
+    /// exactly. `None` (the wasm build, or before a measure pass) →
+    /// `hit_test` falls back to a char-count estimate.
+    pub chip_text_w: Option<f32>,
 }
 
 impl TopBar {
@@ -159,6 +165,7 @@ impl TopBar {
             preview_active: false,
             hover: None,
             pressed: None,
+            chip_text_w: None,
         }
     }
 
@@ -202,6 +209,7 @@ impl TopBar {
                 Some(op_editor_core::ButtonPressTarget::TopBar(button)) => Some(button),
                 _ => None,
             },
+            chip_text_w: None,
         }
     }
 
@@ -275,6 +283,15 @@ impl TopBar {
             parts.push(format!("{} MCP", self.mcp_count));
         }
         Some(parts.join(" · "))
+    }
+
+    /// The exact text the chip paints — the status string when set up,
+    /// else the empty-state `Agents & MCP` label. The desktop host
+    /// measures this with its text backend and feeds the width back via
+    /// [`Self::chip_text_w`] so the hit area can't drift from the paint.
+    pub fn chip_text(&self) -> String {
+        self.chip_status_text()
+            .unwrap_or_else(|| self.label_agents_and_mcp.to_string())
     }
 
     /// Returns the on-screen rect of the Globe-plus-chevron locale
@@ -492,17 +509,26 @@ impl TopBar {
         // each side keeps the click target slightly looser than
         // the visible chip so the first press always lands.
         let status_text = self.chip_status_text();
-        let chip_chars = match &status_text {
-            Some(t) => t.chars().count(),
-            None => self.label_agents_and_mcp.chars().count(),
-        };
         let dot_w = if status_text.is_some() {
             8.0 + 6.0
         } else {
             0.0
         };
-        let approx_text_w = chip_chars as f32 * 12.0;
-        let chip_w = 8.0 + self.agent_icons_width() + 6.0 + dot_w + approx_text_w + 12.0 + 16.0;
+        // Prefer the host-measured text width so the hit area matches the
+        // painted chip exactly (paint uses skia `measure_text` @ 11 px).
+        // Without a measure backend (wasm) fall back to a ~7 px/char
+        // estimate — close to the 11 px-font advance, never the old
+        // 12 px/char + 16 px slop that ballooned the target into the gap.
+        let text_w = self.chip_text_w.unwrap_or_else(|| {
+            let chip_chars = match &status_text {
+                Some(t) => t.chars().count(),
+                None => self.label_agents_and_mcp.chars().count(),
+            };
+            chip_chars as f32 * 7.0
+        });
+        // Same geometry as `paint_chrome`'s chip: 8 (lead pad) + icons + 6
+        // (gap) + dot + text + 12 (trail pad). No extra slop.
+        let chip_w = 8.0 + self.agent_icons_width() + 6.0 + dot_w + text_w + 12.0;
         let chip_rect = Rect {
             origin: Point2D::new(
                 globe.origin.x - chip_w - (DIVIDER_GAP * 2.0 + DIVIDER_W),
@@ -699,6 +725,41 @@ mod tests {
         let bar = TopBar::for_editor_ui(&ui);
         assert!(bar.is_pressed(op_editor_core::TopBarButton::ToggleTheme));
         assert!(!bar.is_pressed(op_editor_core::TopBarButton::ToggleSidebar));
+    }
+
+    #[test]
+    fn agent_chip_hit_area_tracks_measured_text_width() {
+        // Regression: the chip hit area used a 12 px/char estimate (+16 px
+        // slop) that ballooned the target left across the file-name gap.
+        // With a host-measured text width it tracks the painted chip —
+        // narrower text → narrower hit area, anchored to the globe on the
+        // right. A probe well left of a narrow chip's right edge stays
+        // inside a wide chip but falls outside the narrow one.
+        let rect = Rect {
+            origin: Point2D::new(0.0, 0.0),
+            size: Point2D::new(1200.0, TOP_BAR_HEIGHT),
+        };
+        let chip = |text_w: f32| {
+            let mut bar = TopBar::new("food.op");
+            bar.agent_count = 4;
+            bar.mcp_count = 2;
+            bar.chip_text_w = Some(text_w);
+            bar
+        };
+        let globe = TopBar::globe_rect(rect);
+        let gap = DIVIDER_GAP * 2.0 + DIVIDER_W;
+        // 150 px left of the chip's right edge (anchored at globe − gap).
+        let probe = Point2D::new(globe.origin.x - gap - 150.0, TOP_BAR_HEIGHT / 2.0);
+        assert_eq!(
+            chip(250.0).hit_test(rect, probe),
+            Some(TopBarHit::OpenAgentSettings),
+            "a wide chip still covers the probe",
+        );
+        assert_ne!(
+            chip(10.0).hit_test(rect, probe),
+            Some(TopBarHit::OpenAgentSettings),
+            "a narrow measured chip must NOT reach 150px left into the gap",
+        );
     }
 
     #[test]
