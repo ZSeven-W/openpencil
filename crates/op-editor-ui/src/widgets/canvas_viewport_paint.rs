@@ -355,8 +355,36 @@ enum RevealPaintState {
     Active,
 }
 
+/// Off-canvas public entry for painters outside this crate (raster/PDF
+/// export, `debug_screenshot` in `op-host-desktop`). Paints the base
+/// scene only — no editor overlays (reveal animation, hover outline,
+/// selection highlight, pen preview) and no caret — forwarding to
+/// [`paint_node_with_options`]. Keeps the cross-crate surface to types
+/// that are already `pub` (`PaintCx` / `SceneNode` / `Point2D` / `Rect`)
+/// so the overlay-only helper types stay crate-private.
+pub fn paint_node(
+    cx: &mut PaintCx<'_>,
+    node: &SceneNode,
+    viewport_origin: Point2D,
+    zoom: f32,
+    cull: Rect,
+) {
+    let _ = paint_node_with_options(
+        cx,
+        node,
+        viewport_origin,
+        zoom,
+        None,
+        cull,
+        None,
+        None,
+        None,
+        None,
+    );
+}
+
 #[allow(clippy::too_many_arguments)]
-pub fn paint_node_with_options<'a>(
+pub(crate) fn paint_node_with_options<'a>(
     cx: &mut PaintCx<'_>,
     node: &'a SceneNode,
     viewport_origin: Point2D,

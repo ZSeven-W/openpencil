@@ -66,18 +66,9 @@ pub(crate) fn paint_nodes(canvas: &Canvas, nodes: &[SceneNode]) {
             backend: &mut frame,
         };
         for node in nodes.iter().rev() {
-            let _ = canvas_viewport_paint::paint_node_with_options(
-                &mut cx,
-                node,
-                Point2D::ZERO,
-                1.0,
-                None,
-                no_cull(),
-                None,
-                None,
-                None,
-                None,
-            );
+            // `paint_node` is the off-canvas public entry: base scene only,
+            // no editor overlays (reveal/hover/selection/pen).
+            canvas_viewport_paint::paint_node(&mut cx, node, Point2D::ZERO, 1.0, no_cull());
         }
     });
 }
