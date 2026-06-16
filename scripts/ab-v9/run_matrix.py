@@ -8,11 +8,12 @@ roles present in the saved .op tree) + M5 (semantic element selection,
 version-suffix-stripped) like the TS harness's score-run.ts.
 
 Keys come from env ONLY (never hardcoded — Codex review of the 06-04
-benchmark scripts): MM_KEY / ARK_KEY / DS_KEY. Rows append to scores.jsonl
-as each cell finishes (crash recovery — lesson from ab-corpus 2cd7a6b2).
+benchmark scripts): MM_KEY / ARK_KEY / DS_KEY / GLM_KEY. Rows append to
+scores.jsonl as each cell finishes (crash recovery — lesson from ab-corpus
+2cd7a6b2).
 
 Usage:
-  MM_KEY=... ARK_KEY=... DS_KEY=... python3 scripts/ab-v9/run_matrix.py \
+  MM_KEY=... ARK_KEY=... DS_KEY=... GLM_KEY=... python3 scripts/ab-v9/run_matrix.py \
       [--out /tmp/ab-v9] [--workers 6] [--models minimax,ark,deepseek] \
       [--only prompt-id,...]
   python3 scripts/ab-v9/run_matrix.py --score-only --out /tmp/ab-v9
@@ -34,6 +35,10 @@ CORPUS = os.path.join(REPO, "packages/pen-ai-skills/corpus/ab-v3")
 SMOKE = os.path.join(REPO, "target/debug/op-smoke")
 
 ARK_BASE = "https://ark.cn-beijing.volces.com/api/coding/v3"
+# GLM 原生 Coding Plan(open.bigmodel.cn/api/coding/paas/v4,CN)。key 是
+# 智谱 `id.secret` 对(`xxx.yyy`),整串当 Bearer 下发,GLM 自己拆。区别于
+# 方舟 CP 的 ark-glm-5.1:这条直连智谱官方 CP。
+GLM_BASE = "https://open.bigmodel.cn/api/coding/paas/v4"
 PROVIDERS = {
     # 用户指定:MiniMax 用最新 M3(关思考由 DirectClient 的 is_minimax_model
     # 自动下发);DS 官方端点没有 v4.1,v4-pro 即最新 pro;方舟挑主流最新
@@ -74,6 +79,12 @@ PROVIDERS = {
         "base": ARK_BASE,
         "model": "glm-5.1",
         "key_env": "ARK_KEY",
+    },
+    # 智谱官方 Coding Plan,GLM-5.2(用户 2026-06-15 提供的 id.secret key)。
+    "glm-5.2": {
+        "base": GLM_BASE,
+        "model": "glm-5.2",
+        "key_env": "GLM_KEY",
     },
 }
 

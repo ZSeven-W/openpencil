@@ -168,7 +168,7 @@ pub const BUILTIN_AGENT_PRESETS: [BuiltinAgentPreset; 19] = [
         key: BuiltinAgentPresetKey::GlmCoding,
         display_name: "GLM Coding Plan",
         kind: BuiltinAgentKind::OpenAiCompat,
-        model: "glm-4.7",
+        model: "glm-5.2",
         base_url: "https://open.bigmodel.cn/api/coding/paas/v4",
         alt_kind: Some(BuiltinAgentKind::Anthropic),
         alt_base_url: Some("https://open.bigmodel.cn/api/anthropic"),
