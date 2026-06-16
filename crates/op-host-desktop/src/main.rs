@@ -765,11 +765,23 @@ impl DesktopApp {
             let hover_changed =
                 self.host
                     .update_layer_hover(cx, cy, self.viewport_width, self.viewport_height);
-            let cursor_changed = if over_layer_panel && !self.host.layer_drag_in_progress() {
-                false
-            } else {
-                self.host.apply_cursor_move(cx, cy)
+            // A top-most dropdown (file menu / locale / shape picker) paints
+            // OVER the layer panel, so when one is open the cursor must still
+            // reach `apply_cursor_move` (which updates the dropdown's hover)
+            // even inside the panel's x-range. Otherwise the dropdown's left
+            // half — overlapping the sidebar — is short-circuited here and its
+            // rows never highlight (only the right half, clear of the sidebar,
+            // did).
+            let overlay_open = {
+                let eui = &self.host.editor_state().editor_ui;
+                eui.file_menu_open || eui.locale_picker.open || eui.shape_picker.open
             };
+            let cursor_changed =
+                if over_layer_panel && !self.host.layer_drag_in_progress() && !overlay_open {
+                    false
+                } else {
+                    self.host.apply_cursor_move(cx, cy)
+                };
             hover_changed || cursor_changed
         } else {
             false

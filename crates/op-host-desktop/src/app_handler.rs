@@ -904,6 +904,25 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
                         self.host.mark_editor_state_dirty();
                         self.request_redraw(true);
                     } else {
+                        // The file menu just closed (file_menu_open=false set
+                        // in dispatch_file_menu_press), but `run_action` opens
+                        // a BLOCKING native rfd dialog. `request_redraw` only
+                        // defers a repaint to the next frame, which never
+                        // arrives before the modal — so paint one synchronous
+                        // frame here to actually dismiss the menu before the
+                        // dialog covers it.
+                        if let (Some(ctx), Some(backend)) =
+                            (self.ctx.as_mut(), self.backend.as_mut())
+                        {
+                            frame::paint(
+                                ctx,
+                                backend,
+                                &mut self.host,
+                                self.viewport_width,
+                                self.viewport_height,
+                                self.dpi,
+                            );
+                        }
                         match persistence::run_action(
                             action,
                             &mut self.host,
