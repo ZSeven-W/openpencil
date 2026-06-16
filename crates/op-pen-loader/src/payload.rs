@@ -363,6 +363,16 @@ pub fn load_canonical(
     jian_ops_schema::LoadResult<jian_ops_schema::PenDocument>,
     jian_ops_schema::OpsSchemaError,
 > {
+    // Two TS-vs-Rust leniency gaps repaired on load: (1) LLM-authored image
+    // nodes carry `imageSearchQuery` / `imagePrompt` but no `src`, yet jian's
+    // `ImageNode.src` is a required `String`; (2) older TS files write a
+    // node's `fill` as a bare color string (`"#1A1D2E"`) where jian expects
+    // `Vec<PenFill>`. TS's runtime `JSON.parse` enforced neither, so these
+    // files opened in the web app — repair both so the strict canonical
+    // loader accepts them. A document past serde's default recursion limit
+    // fails the `Value` parse and falls through unchanged to the deep loader.
+    let normalized = normalize_legacy_doc(src);
+    let src = normalized.as_deref().unwrap_or(src);
     match load_str_or_deep(src) {
         Ok(loaded) => Ok(loaded),
         Err(jian_ops_schema::OpsSchemaError::UnsupportedFormatVersion { found, .. }) => {
@@ -383,6 +393,62 @@ pub fn load_canonical(
             load_str_or_deep(&patched)
         }
         Err(other) => Err(other),
+    }
+}
+
+/// Repair the two known TS-vs-Rust leniency gaps (image node missing `src`,
+/// PenNode `fill` written as a bare color string) by walking the parsed
+/// JSON. Returns the patched JSON only when something changed, so untouched
+/// files skip re-serialization; a parse failure (e.g. a document past
+/// serde's default recursion limit) returns `None` so the caller loads the
+/// original through the deep path.
+fn normalize_legacy_doc(src: &str) -> Option<String> {
+    let mut value: serde_json::Value = serde_json::from_str(src).ok()?;
+    let mut changed = false;
+    normalize_node_value(&mut value, &mut changed);
+    if changed {
+        serde_json::to_string(&value).ok()
+    } else {
+        None
+    }
+}
+
+/// Iterative (explicit stack, not recursion — deep trees must not blow the
+/// stack) walk. Objects carrying a `type` key are PenNodes: jian requires
+/// their `fill` to be `Vec<PenFill>` and (for images) a `src`. Type-less
+/// objects (e.g. `StyledTextSegment`, whose `fill` is a `String`) are left
+/// untouched.
+fn normalize_node_value(root: &mut serde_json::Value, changed: &mut bool) {
+    use serde_json::Value;
+    let mut stack = vec![root];
+    while let Some(node) = stack.pop() {
+        match node {
+            Value::Object(map) => {
+                if map.contains_key("type") {
+                    if map.get("type").and_then(Value::as_str) == Some("image")
+                        && !map.contains_key("src")
+                    {
+                        map.insert("src".to_string(), Value::String(String::new()));
+                        *changed = true;
+                    }
+                    // A PenNode `fill` written as a bare color string → wrap
+                    // into the canonical solid-fill array jian expects.
+                    if let Some(color) = map.get("fill").and_then(|f| match f {
+                        Value::String(s) => Some(s.clone()),
+                        _ => None,
+                    }) {
+                        map.insert(
+                            "fill".to_string(),
+                            serde_json::json!([{ "type": "solid", "color": color }]),
+                        );
+                        *changed = true;
+                    }
+                }
+                stack.extend(map.values_mut());
+            }
+            Value::Array(items) => stack.extend(items.iter_mut()),
+            _ => {}
+        }
     }
 }
 
@@ -568,5 +634,25 @@ mod tests {
             .expect("spawn deep-loader-test")
             .join()
             .expect("deep-loader-test completed");
+    }
+
+    #[test]
+    fn image_node_without_src_loads_via_injected_empty_src() {
+        // LLM-authored image node: `imageSearchQuery` / `imagePrompt` but no
+        // `src`. jian's `ImageNode.src` is required, so this must be repaired
+        // on load rather than rejected (the web app opened these files fine).
+        let doc = r#"{"version":"0.8.0","children":[{"id":"hero","type":"image","name":"Hero","width":120,"height":80,"imageSearchQuery":"pizza","imagePrompt":"a hot pizza"}]}"#;
+        let loaded = load_canonical(doc).expect("image node without src must load");
+        assert_eq!(loaded.value.children.len(), 1, "the image node should load");
+    }
+
+    #[test]
+    fn node_fill_as_color_string_is_wrapped_into_solid_fill() {
+        // Older TS files write a PenNode `fill` as a bare color string where
+        // jian expects `Vec<PenFill>`. Must be wrapped, not rejected. The
+        // type-less `StyledTextSegment.fill` (also a string) stays a string.
+        let doc = r##"{"version":"0.8.0","children":[{"id":"bg","type":"frame","name":"BG","x":0,"y":0,"width":100,"height":100,"fill":"#1A1D2E","children":[]}]}"##;
+        let loaded = load_canonical(doc).expect("string fill must load");
+        assert_eq!(loaded.value.children.len(), 1, "the frame should load");
     }
 }
