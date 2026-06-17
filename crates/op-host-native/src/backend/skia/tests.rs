@@ -422,6 +422,67 @@ fn korean_hangul_resolves_to_a_covering_typeface() {
 }
 
 #[test]
+fn emoji_resolves_to_a_covering_emoji_typeface() {
+    let mut be = NativeBackend::with_dpi(1.0);
+    let tf = be.typeface_for_char('🍕', 400).expect("a typeface for 🍕");
+    assert_ne!(
+        tf.unichar_to_glyph('🍕' as i32),
+        0,
+        "the resolved emoji face must have a glyph for 🍕"
+    );
+    let family = tf.family_name().to_lowercase();
+    assert!(
+        family.contains("emoji"),
+        "emoji should resolve to an emoji-capable font, got {family}"
+    );
+}
+
+#[test]
+fn emoji_text_paints_colored_pixels() {
+    let mut be = NativeBackend::with_dpi(1.0);
+    let mut surface = skia_safe::surfaces::raster_n32_premul((96, 96)).unwrap();
+    surface.canvas().clear(skia_safe::Color::WHITE);
+    let layout = TextLayout::single_run(
+        "🍕",
+        "system-ui",
+        48.0,
+        Color::BLACK.to_jian(),
+        Point2D::ZERO,
+    );
+
+    be.draw_text(surface.canvas(), &layout, Point2D::new(16.0, 64.0));
+
+    let img = surface.image_snapshot();
+    let pm = img.peek_pixels().expect("peek raster pixels");
+    let mut non_white = 0usize;
+    let mut saturated = 0usize;
+    for y in 0..96 {
+        for x in 0..96 {
+            let c = pm.get_color((x, y));
+            let r = c.r();
+            let g = c.g();
+            let b = c.b();
+            if r < 245 || g < 245 || b < 245 {
+                non_white += 1;
+                let max = r.max(g).max(b);
+                let min = r.min(g).min(b);
+                if max.saturating_sub(min) > 40 {
+                    saturated += 1;
+                }
+            }
+        }
+    }
+    assert!(
+        non_white > 20,
+        "emoji should paint visible pixels, got {non_white}"
+    );
+    assert!(
+        saturated > 20,
+        "emoji should paint colorful pixels, got saturated={saturated} non_white={non_white}"
+    );
+}
+
+#[test]
 fn draw_text_runs_borrows_layout_storage() {
     let layout = TextLayout::single_run(
         "Hello",
