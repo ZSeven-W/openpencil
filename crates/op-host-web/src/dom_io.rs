@@ -22,12 +22,15 @@ use std::rc::Rc;
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::{JsCast, JsValue};
 
+use op_editor_core::chat::{ChatAttachment, MAX_ATTACHMENT_BYTES};
 use op_editor_core::editor_ui_state::FileAction;
+use op_editor_core::KitIoRequest;
 
 use crate::file_actions::{self, DropKind};
 use crate::listener::{add_listener, Listener};
+use crate::repaint_ctx::RepaintContext;
 
-type InnerRc = Rc<RefCell<crate::Inner>>;
+type InnerRc<C> = Rc<RefCell<C>>;
 
 /// One-shot closure slot — the closure drops itself out of the slot
 /// after firing (raf_pump idiom), freeing its wasm-bindgen slot.
@@ -50,10 +53,10 @@ fn console_warn(msg: &str) {
 /// from the mousedown listener right after `codegen_web::drain_codegen_flags`,
 /// once the press-time `inner` borrow is released. The flag is taken
 /// FIRST so a failed handler can't re-fire on every later press.
-pub(crate) fn drain_pending_file_action(inner: &InnerRc) {
+pub(crate) fn drain_pending_file_action<C: RepaintContext + 'static>(inner: &InnerRc<C>) {
     let action = inner
         .borrow_mut()
-        .host
+        .host_mut()
         .editor_state_mut()
         .editor_ui
         .pending_file_action
@@ -71,8 +74,8 @@ pub(crate) fn drain_pending_file_action(inner: &InnerRc) {
             // format/scale picker dialog; Export raises
             // `ExportImageConfirm` which lands below.
             let mut b = inner.borrow_mut();
-            b.host.editor_state_mut().editor_ui.export_dialog_open = true;
-            b.host.mark_editor_state_dirty();
+            b.host_mut().editor_state_mut().editor_ui.export_dialog_open = true;
+            b.host_mut().mark_editor_state_dirty();
             let _ = b.repaint();
         }
         FileAction::ExportImageConfirm => export_image(inner),
@@ -86,36 +89,112 @@ pub(crate) fn drain_pending_file_action(inner: &InnerRc) {
     }
 }
 
+/// Consume a chat attachment-pick request raised by the chat footer.
+/// Browser parity for desktop `chat_attachment::drain_attachment_pick`:
+/// open an image picker, read the file bytes, then stage a
+/// `ChatAttachment` on the current chat draft.
+pub(crate) fn drain_pending_attachment_pick<C: RepaintContext + 'static>(inner: &InnerRc<C>) {
+    let pending = std::mem::take(
+        &mut inner
+            .borrow_mut()
+            .host_mut()
+            .editor_state_mut()
+            .chat
+            .pending_attachment_pick,
+    );
+    if !pending {
+        return;
+    }
+    let inner = inner.clone();
+    open_file_picker(
+        ".png,.jpg,.jpeg,.gif,.webp,.svg",
+        Box::new(move |file| {
+            let raw_name = file.name();
+            if file.size() > MAX_ATTACHMENT_BYTES as f64 {
+                console_warn(&format!(
+                    "[chat-attachment] {raw_name}: file exceeds 5 MiB limit"
+                ));
+                return;
+            }
+            let name = file_actions::attachment_file_name(&raw_name);
+            let media_type = file_actions::attachment_media_type_for_name(&name);
+            let inner2 = inner.clone();
+            read_file(
+                file,
+                ReadMode::Bytes,
+                Box::new(move |value| {
+                    let Some(data) = js_bytes(&value) else {
+                        console_error("[chat-attachment] file read produced no bytes");
+                        return;
+                    };
+                    let mut b = inner2.borrow_mut();
+                    let added =
+                        b.host_mut()
+                            .editor_state_mut()
+                            .chat
+                            .add_attachment(ChatAttachment {
+                                name,
+                                media_type,
+                                data,
+                            });
+                    if added {
+                        b.host_mut().mark_editor_state_dirty();
+                        let _ = b.repaint();
+                    } else {
+                        console_warn("[chat-attachment] attachment rejected by chat state");
+                    }
+                }),
+            );
+        }),
+    );
+}
+
+/// Consume a Component-Browser kit import/export request raised by
+/// the floating panel header. Browser counterpart of desktop
+/// `DesktopApp::drain_kit_io`: native dialogs become hidden file
+/// inputs / Blob downloads.
+pub(crate) fn drain_pending_kit_io<C: RepaintContext + 'static>(inner: &InnerRc<C>) {
+    let request = inner
+        .borrow_mut()
+        .host_mut()
+        .editor_state_mut()
+        .editor_ui
+        .component_browser_kit_request
+        .take();
+    match request {
+        Some(KitIoRequest::Import) => import_kit_file(inner),
+        Some(KitIoRequest::Export) => export_kit_file(inner),
+        None => {}
+    }
+}
+
 /// File → New: fresh starter document, app preferences carried over,
 /// viewport fit to the blank starter frame (desktop `FileAction::New`).
-fn new_document(inner: &InnerRc) {
+fn new_document<C: RepaintContext + 'static>(inner: &InnerRc<C>) {
     let mut b = inner.borrow_mut();
     let mut state = op_editor_core::EditorState::starter();
-    file_actions::preserve_app_preferences(b.host.editor_state(), &mut state);
+    file_actions::preserve_app_preferences(b.host().editor_state(), &mut state);
     state.editor_ui.file_name_display = None;
-    *b.host.editor_state_mut() = state;
-    b.host.mark_editor_state_dirty();
-    let (w, h) = (
-        b.backend.canvas_width() as f32,
-        b.backend.canvas_height() as f32,
-    );
-    b.host.fit_content_to_viewport(w, h);
+    *b.host_mut().editor_state_mut() = state;
+    b.host_mut().mark_editor_state_dirty();
+    let (w, h) = b.viewport_size();
+    b.host_mut().fit_content_to_viewport(w, h);
     let _ = b.repaint();
 }
 
 /// File → Save / Save As: serialize the canonical document JSON and
 /// hand it to the browser as a download (web's stand-in for a write
 /// dialog — there is no re-writable file handle).
-fn save_document(inner: &InnerRc) {
+fn save_document<C: RepaintContext + 'static>(inner: &InnerRc<C>) {
     let mut b = inner.borrow_mut();
-    let json = match file_actions::serialize_document(b.host.editor_state()) {
+    let json = match file_actions::serialize_document(b.host().editor_state()) {
         Ok(json) => json,
         Err(e) => {
             console_error(&format!("[save] {e}"));
             return;
         }
     };
-    let name = file_actions::save_file_name(b.host.editor_state());
+    let name = file_actions::save_file_name(b.host().editor_state());
     if let Err(e) = crate::web_clipboard::download_bytes(&name, "application/json", json.as_bytes())
     {
         web_sys::console::error_1(&e);
@@ -123,9 +202,14 @@ fn save_document(inner: &InnerRc) {
     }
     // First save of an untitled document names it — matches the
     // desktop updating the display name after Save As.
-    if b.host.editor_state().editor_ui.file_name_display.is_none() {
-        b.host.editor_state_mut().editor_ui.file_name_display = Some(name);
-        b.host.mark_editor_state_dirty();
+    if b.host()
+        .editor_state()
+        .editor_ui
+        .file_name_display
+        .is_none()
+    {
+        b.host_mut().editor_state_mut().editor_ui.file_name_display = Some(name);
+        b.host_mut().mark_editor_state_dirty();
         let _ = b.repaint();
     }
 }
@@ -135,9 +219,9 @@ fn save_document(inner: &InnerRc) {
 /// `WebBackend::canvas_data_url` for the documented trade-off (the
 /// raster is the full editor frame at 1× — no per-node crop /
 /// `export_scale`, and SVG / PDF degrade to PNG).
-fn export_image(inner: &InnerRc) {
+fn export_image<C: RepaintContext + 'static>(inner: &InnerRc<C>) {
     let b = inner.borrow();
-    let fmt = b.host.editor_state().editor_ui.export_format;
+    let fmt = b.host().editor_state().editor_ui.export_format;
     let (mime, ext, supported) = file_actions::export_target(fmt);
     if !supported {
         console_warn(
@@ -145,7 +229,7 @@ fn export_image(inner: &InnerRc) {
              downloading a PNG raster of the canvas instead",
         );
     }
-    match b.backend.canvas_data_url(mime) {
+    match b.canvas_data_url(mime) {
         Ok(url) => {
             let name = format!("openpencil-export.{ext}");
             if let Err(e) = crate::web_clipboard::download_data_url(&name, &url) {
@@ -158,7 +242,7 @@ fn export_image(inner: &InnerRc) {
 
 /// File → Open: hidden `.op` / `.pen` picker → canonical ingest →
 /// state swap → viewport fit.
-fn open_document(inner: &InnerRc) {
+fn open_document<C: RepaintContext + 'static>(inner: &InnerRc<C>) {
     let inner = inner.clone();
     open_file_picker(
         ".op,.pen",
@@ -177,23 +261,83 @@ fn open_document(inner: &InnerRc) {
     );
 }
 
+/// Component Browser → Import kit: hidden `.op` / `.pen` / `.json`
+/// picker → extract reusable components → append session kit.
+fn import_kit_file<C: RepaintContext + 'static>(inner: &InnerRc<C>) {
+    let inner = inner.clone();
+    open_file_picker(
+        ".op,.pen,.json",
+        Box::new(move |file| {
+            let name = file.name();
+            let inner2 = inner.clone();
+            read_file(
+                file,
+                ReadMode::Text,
+                Box::new(move |value| match value.as_string() {
+                    Some(src) => apply_imported_kit(&inner2, &src, &name),
+                    None => console_error("[kit-import] file read produced no text"),
+                }),
+            );
+        }),
+    );
+}
+
+fn apply_imported_kit<C: RepaintContext + 'static>(inner: &InnerRc<C>, src: &str, file_name: &str) {
+    match file_actions::import_kit_source(src, mint_web_kit_id()) {
+        Ok(Some(kit)) => {
+            let mut b = inner.borrow_mut();
+            b.host_mut().editor_state_mut().import_kit(kit);
+            b.host_mut().mark_editor_state_dirty();
+            let _ = b.repaint();
+        }
+        Ok(None) => {}
+        Err(e) => console_error(&format!("[kit-import] {file_name}: {e}")),
+    }
+}
+
+/// Component Browser → Export kit: collect reusable components into
+/// the shared kit file format and download it as `.op`.
+fn export_kit_file<C: RepaintContext + 'static>(inner: &InnerRc<C>) {
+    let b = inner.borrow();
+    match file_actions::export_kit_document(b.host().editor_state()) {
+        Ok(Some(export)) => {
+            if let Err(e) = crate::web_clipboard::download_bytes(
+                &export.file_name,
+                "application/json",
+                export.json.as_bytes(),
+            ) {
+                web_sys::console::error_1(&e);
+            }
+        }
+        Ok(None) => {}
+        Err(e) => console_error(&format!("[kit-export] {e}")),
+    }
+}
+
+fn mint_web_kit_id() -> String {
+    let millis = js_sys::Date::now() as u64;
+    let nonce = (js_sys::Math::random() * 1_000_000_000.0) as u64;
+    format!("kit-web-{millis:013x}-{nonce:08x}")
+}
+
 /// Shared `.op` / `.pen` ingestion for the Open picker and drag-drop.
-fn apply_opened_document(inner: &InnerRc, src: &str, file_name: &str) {
+fn apply_opened_document<C: RepaintContext + 'static>(
+    inner: &InnerRc<C>,
+    src: &str,
+    file_name: &str,
+) {
     let mut b = inner.borrow_mut();
-    match file_actions::ingest_op_source(src, b.host.editor_state()) {
+    match file_actions::ingest_op_source(src, b.host().editor_state()) {
         Ok(ingested) => {
             for w in &ingested.warnings {
                 console_warn(&format!("[open] schema warning: {w}"));
             }
             let mut state = ingested.state;
             state.editor_ui.file_name_display = Some(file_name.to_string());
-            *b.host.editor_state_mut() = state;
-            b.host.mark_editor_state_dirty();
-            let (w, h) = (
-                b.backend.canvas_width() as f32,
-                b.backend.canvas_height() as f32,
-            );
-            b.host.fit_content_to_viewport(w, h);
+            *b.host_mut().editor_state_mut() = state;
+            b.host_mut().mark_editor_state_dirty();
+            let (w, h) = b.viewport_size();
+            b.host_mut().fit_content_to_viewport(w, h);
             let _ = b.repaint();
         }
         Err(e) => console_error(&format!("[open] {file_name}: {e}")),
@@ -203,7 +347,7 @@ fn apply_opened_document(inner: &InnerRc, src: &str, file_name: &str) {
 /// Figma modal drop-zone → hidden `.fig` picker → binary parse →
 /// state install (the parse runs on the main thread after the async
 /// read; the in-progress overlay covers the stall).
-fn import_figma(inner: &InnerRc) {
+fn import_figma<C: RepaintContext + 'static>(inner: &InnerRc<C>) {
     let inner = inner.clone();
     open_file_picker(
         ".fig",
@@ -214,14 +358,17 @@ fn import_figma(inner: &InnerRc) {
 }
 
 /// Shared `.fig` ingestion for the import picker and drag-drop.
-fn ingest_figma_file(inner: &InnerRc, file: web_sys::File) {
+fn ingest_figma_file<C: RepaintContext + 'static>(inner: &InnerRc<C>, file: web_sys::File) {
     let name = file.name();
     {
         // Raise the parsing overlay before the async read so the next
         // frame shows feedback (mirrors `figma_import_session::spawn`).
         let mut b = inner.borrow_mut();
-        b.host.editor_state_mut().editor_ui.figma_import_in_progress = true;
-        b.host.mark_editor_state_dirty();
+        b.host_mut()
+            .editor_state_mut()
+            .editor_ui
+            .figma_import_in_progress = true;
+        b.host_mut().mark_editor_state_dirty();
         let _ = b.repaint();
     }
     let inner2 = inner.clone();
@@ -244,12 +391,9 @@ fn ingest_figma_file(inner: &InnerRc, file: web_sys::File) {
                         console_warn(&format!("[import-figma] warning: {w}"));
                     }
                     let mut b = inner2.borrow_mut();
-                    b.host.install_ingested_state(ingested.state);
-                    let (w, h) = (
-                        b.backend.canvas_width() as f32,
-                        b.backend.canvas_height() as f32,
-                    );
-                    b.host.fit_content_to_viewport(w, h);
+                    b.host_mut().install_ingested_state(ingested.state);
+                    let (w, h) = b.viewport_size();
+                    b.host_mut().fit_content_to_viewport(w, h);
                     let _ = b.repaint();
                 }
                 Err(e) => {
@@ -261,17 +405,20 @@ fn ingest_figma_file(inner: &InnerRc, file: web_sys::File) {
     );
 }
 
-fn clear_figma_in_progress(inner: &InnerRc) {
+fn clear_figma_in_progress<C: RepaintContext + 'static>(inner: &InnerRc<C>) {
     let mut b = inner.borrow_mut();
-    b.host.editor_state_mut().editor_ui.figma_import_in_progress = false;
-    b.host.mark_editor_state_dirty();
+    b.host_mut()
+        .editor_state_mut()
+        .editor_ui
+        .figma_import_in_progress = false;
+    b.host_mut().mark_editor_state_dirty();
     let _ = b.repaint();
 }
 
 /// Shape picker → Import image or SVG: SVG parses into editable
 /// nodes; rasters insert an Image node carrying the file as a data
 /// URL (the browser's `readAsDataURL` builds it — no base64 dep).
-fn import_image_or_svg(inner: &InnerRc) {
+fn import_image_or_svg<C: RepaintContext + 'static>(inner: &InnerRc<C>) {
     let inner = inner.clone();
     open_file_picker(
         ".png,.jpg,.jpeg,.gif,.webp,.svg",
@@ -304,7 +451,7 @@ fn import_image_or_svg(inner: &InnerRc) {
 
 /// Fill section 图片 row → picker → write the data URL into the
 /// selected node's primary fill (desktop `handle_pick_fill_image`).
-fn pick_fill_image(inner: &InnerRc) {
+fn pick_fill_image<C: RepaintContext + 'static>(inner: &InnerRc<C>) {
     let inner = inner.clone();
     open_file_picker(
         ".png,.jpg,.jpeg,.gif,.webp,.svg",
@@ -319,8 +466,11 @@ fn pick_fill_image(inner: &InnerRc) {
                         return;
                     };
                     let mut b = inner2.borrow_mut();
-                    let _ = b.host.editor_state_mut().set_selected_fill_image_url(&url);
-                    b.host.mark_editor_state_dirty();
+                    let _ = b
+                        .host_mut()
+                        .editor_state_mut()
+                        .set_selected_fill_image_url(&url);
+                    b.host_mut().mark_editor_state_dirty();
                     let _ = b.repaint();
                 }),
             );
@@ -334,7 +484,7 @@ fn pick_fill_image(inner: &InnerRc) {
 /// FILE PATH; the browser has no file paths, so the picked file becomes a
 /// data URL — the same divergence-by-platform as `PickFillImage`. The
 /// stale-asset check is dropped so the warning row clears on re-probe.
-fn relink_image(inner: &InnerRc) {
+fn relink_image<C: RepaintContext + 'static>(inner: &InnerRc<C>) {
     let inner = inner.clone();
     open_file_picker(
         ".png,.jpg,.jpeg,.gif,.webp,.svg",
@@ -349,7 +499,7 @@ fn relink_image(inner: &InnerRc) {
                         return;
                     };
                     let mut b = inner2.borrow_mut();
-                    let state = b.host.editor_state_mut();
+                    let state = b.host_mut().editor_state_mut();
                     let id = state.selection.anchor.clone();
                     if !id.is_real() {
                         return;
@@ -361,7 +511,7 @@ fn relink_image(inner: &InnerRc) {
                         image.src = url;
                     }
                     state.editor_ui.image_panel.asset_check = None;
-                    b.host.mark_editor_state_dirty();
+                    b.host_mut().mark_editor_state_dirty();
                     let _ = b.repaint();
                 }),
             );
@@ -371,16 +521,16 @@ fn relink_image(inner: &InnerRc) {
 
 /// Parse SVG source into editable nodes centred near the viewport —
 /// mirrors `persistence_image::handle_import_image_or_svg`'s SVG arm.
-fn insert_svg(inner: &InnerRc, svg: &str, file_name: &str) {
+fn insert_svg<C: RepaintContext + 'static>(inner: &InnerRc<C>, svg: &str, file_name: &str) {
     let mut b = inner.borrow_mut();
-    let pan_x = b.host.editor_state().viewport.pan_x as f64;
-    let pan_y = b.host.editor_state().viewport.pan_y as f64;
-    let zoom = (b.host.editor_state().viewport.zoom as f64).max(0.001);
+    let pan_x = b.host().editor_state().viewport.pan_x as f64;
+    let pan_y = b.host().editor_state().viewport.pan_y as f64;
+    let zoom = (b.host().editor_state().viewport.zoom as f64).max(0.001);
     let centre_x = -pan_x / zoom;
     let centre_y = -pan_y / zoom;
     let mut next_id = 0u64;
     let stem = file_actions::file_stem(file_name);
-    let count = b.host.editor_state_mut().import_svg_named(
+    let count = b.host_mut().editor_state_mut().import_svg_named(
         &mut next_id,
         svg,
         (centre_x - 200.0, centre_y - 150.0),
@@ -389,20 +539,20 @@ fn insert_svg(inner: &InnerRc, svg: &str, file_name: &str) {
     if count == 0 {
         console_warn(&format!("[import-svg] {file_name} yielded no nodes"));
     }
-    b.host.mark_editor_state_dirty();
+    b.host_mut().mark_editor_state_dirty();
     let _ = b.repaint();
 }
 
 /// Insert a raster image (as a data URL) as an Image node centred on
 /// the viewport — mirrors the desktop's raster import arm.
-fn insert_image(inner: &InnerRc, url: &str, file_name: &str) {
+fn insert_image<C: RepaintContext + 'static>(inner: &InnerRc<C>, url: &str, file_name: &str) {
     let mut b = inner.borrow_mut();
     let stem = file_actions::file_stem(file_name).to_string();
     let _ = b
-        .host
+        .host_mut()
         .editor_state_mut()
         .insert_image_node_at_viewport(&stem, url);
-    b.host.mark_editor_state_dirty();
+    b.host_mut().mark_editor_state_dirty();
     let _ = b.repaint();
 }
 
@@ -413,8 +563,8 @@ fn insert_image(inner: &InnerRc, url: &str, file_name: &str) {
 /// Register the paste / dragover / dragleave / drop listeners.
 /// Called from `mount()`'s registration closure; the closures are
 /// stored on the `WebShell` like every other listener.
-pub(crate) fn register_io_listeners(
-    inner: &InnerRc,
+pub(crate) fn register_io_listeners<C: RepaintContext + 'static>(
+    inner: &InnerRc<C>,
     canvas: &web_sys::HtmlCanvasElement,
     win_target: &web_sys::EventTarget,
     listeners: &mut Vec<Listener>,
@@ -477,11 +627,11 @@ pub(crate) fn register_io_listeners(
 
 /// Flip the painted file-drop overlay (`paint.rs` already renders it
 /// when `file_drop_active` is set); repaints only on change.
-fn set_file_drop_active(inner: &InnerRc, active: bool) {
+fn set_file_drop_active<C: RepaintContext + 'static>(inner: &InnerRc<C>, active: bool) {
     let mut b = inner.borrow_mut();
-    if b.host.editor_state().editor_ui.file_drop_active != active {
-        b.host.editor_state_mut().editor_ui.file_drop_active = active;
-        b.host.mark_editor_state_dirty();
+    if b.host().editor_state().editor_ui.file_drop_active != active {
+        b.host_mut().editor_state_mut().editor_ui.file_drop_active = active;
+        b.host_mut().mark_editor_state_dirty();
         let _ = b.repaint();
     }
 }
@@ -489,7 +639,10 @@ fn set_file_drop_active(inner: &InnerRc, active: bool) {
 /// DOM paste routing — native Cmd+V priority order
 /// (`keyboard_input.rs`): Figma clipboard HTML first, then the
 /// focused text input, then the internal node clipboard.
-fn handle_paste_event(inner: &InnerRc, evt: &web_sys::ClipboardEvent) {
+fn handle_paste_event<C: RepaintContext + 'static>(
+    inner: &InnerRc<C>,
+    evt: &web_sys::ClipboardEvent,
+) {
     let Some(dt) = evt.clipboard_data() else {
         return;
     };
@@ -500,11 +653,8 @@ fn handle_paste_event(inner: &InnerRc, evt: &web_sys::ClipboardEvent) {
             let result = op_figma::figma_clipboard_to_nodes(&data.buffer, Some(&html));
             if !result.nodes.is_empty() {
                 let mut b = inner.borrow_mut();
-                let (w, h) = (
-                    b.backend.canvas_width() as f32,
-                    b.backend.canvas_height() as f32,
-                );
-                if b.host.paste_figma_nodes(result.nodes, w, h) {
+                let (w, h) = b.viewport_size();
+                if b.host_mut().paste_figma_nodes(result.nodes, w, h) {
                     let _ = b.repaint();
                 }
                 return;
@@ -514,10 +664,27 @@ fn handle_paste_event(inner: &InnerRc, evt: &web_sys::ClipboardEvent) {
         // the paste rather than dumping raw HTML text (native parity).
         return;
     }
+    // System image/file paste: `clipboardData.files` carries pasted images
+    // (PNG/JPEG from another app — Chrome names them `image.png`, so the
+    // name-based `drop_kind` routes them to `insert_image`). Route through the
+    // same ingestion as drag-drop BEFORE the text / internal-clipboard
+    // fallbacks, so an image paste never falls through to the stale internal
+    // node clipboard.
+    if let Some(files) = dt.files() {
+        if files.length() > 0 {
+            evt.prevent_default();
+            for i in 0..files.length() {
+                if let Some(file) = files.get(i) {
+                    route_dropped_file(inner, file);
+                }
+            }
+            return;
+        }
+    }
     let text = dt.get_data("text/plain").unwrap_or_default();
     if !text.is_empty() {
         let mut b = inner.borrow_mut();
-        if b.host.apply_paste_text(&text) {
+        if b.host_mut().apply_paste_text(&text) {
             evt.prevent_default();
             let _ = b.repaint();
             return;
@@ -526,14 +693,14 @@ fn handle_paste_event(inner: &InnerRc, evt: &web_sys::ClipboardEvent) {
     // Nothing textual consumed it — fall back to the internal node
     // clipboard (Cmd+C/V of canvas nodes; lowest priority).
     let mut b = inner.borrow_mut();
-    if b.host.apply_paste() {
+    if b.host_mut().apply_paste() {
         let _ = b.repaint();
     }
 }
 
 /// Route every dropped file through the same ingestion the file menu
 /// / shape picker use.
-fn handle_drop_event(inner: &InnerRc, evt: &web_sys::DragEvent) {
+fn handle_drop_event<C: RepaintContext + 'static>(inner: &InnerRc<C>, evt: &web_sys::DragEvent) {
     let Some(dt) = evt.data_transfer() else {
         return;
     };
@@ -548,7 +715,7 @@ fn handle_drop_event(inner: &InnerRc, evt: &web_sys::DragEvent) {
     }
 }
 
-fn route_dropped_file(inner: &InnerRc, file: web_sys::File) {
+fn route_dropped_file<C: RepaintContext + 'static>(inner: &InnerRc<C>, file: web_sys::File) {
     let name = file.name();
     match file_actions::drop_kind(&name) {
         DropKind::Document => {

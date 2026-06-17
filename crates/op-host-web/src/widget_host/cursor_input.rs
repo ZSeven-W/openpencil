@@ -11,6 +11,36 @@ use op_editor_ui::{Point2D, Rect};
 use super::WidgetHost;
 
 impl WidgetHost {
+    // Cursor-move coalescing hint — tested + ready to wire; the CanvasKit mount
+    // repaints every mousemove rather than scheduling deferred frames.
+    #[allow(dead_code)]
+    pub(crate) fn cursor_move_requires_immediate_frame(&self) -> bool {
+        let color_picker_drag = self
+            .editor_state
+            .ui
+            .color_picker
+            .as_ref()
+            .and_then(|state| state.drag)
+            .is_some();
+        self.variables_resize.is_some()
+            || color_picker_drag
+            || self.design_md_drag.is_some()
+            || self.component_browser_drag.is_some()
+            || self.icon_picker_drag.is_some()
+            || self.code_selection_drag.is_some()
+            || self.chat_input_selection_drag.is_some()
+            || self.chat_text_selection_drag.is_some()
+            || self.create_drag.is_some()
+            || self.path_anchor_drag.is_some()
+            || self.handle_drag.is_some()
+            || self.node_drag.is_some()
+            || self.marquee_drag.is_some()
+            || self.layer_drag.is_some()
+            || self.chat_drag.is_some()
+            || self.image_adjustment_drag.is_some()
+            || self.drag.is_some()
+    }
+
     /// Sync every agent-settings hover flag from the cursor.
     /// Returns `true` when any hover state changed.
     pub(in crate::widget_host) fn update_agent_settings_hover(&mut self, x: f32, y: f32) -> bool {
@@ -297,6 +327,9 @@ impl WidgetHost {
         // below (layer context menu, layer drag, align toolbar) reads
         // current geometry, never a stale snapshot.
         self.refresh_layout_scene();
+        if self.apply_path_anchor_drag_move(x, y) {
+            return true;
+        }
         // In-flight VariablesPanel edge resize — owns the cursor.
         if self.variables_resize.is_some()
             && self.apply_variables_panel_resize(x, y, self.last_viewport_w, self.last_viewport_h)
@@ -305,6 +338,9 @@ impl WidgetHost {
         }
         if self.editor_state.editor_ui.agent_settings_open && self.update_agent_settings_hover(x, y)
         {
+            return true;
+        }
+        if self.update_path_anchor_menu_hover(x, y) {
             return true;
         }
         if let Some(state) = self.editor_state.editor_ui.layer_context_menu.clone() {
@@ -357,6 +393,15 @@ impl WidgetHost {
             return true;
         }
         if self.apply_code_selection_drag_cursor_move(x, y) {
+            return true;
+        }
+        if let Some(consumed) = self.apply_node_drag_cursor_move(x, y) {
+            return consumed;
+        }
+        if self.apply_selection_handle_drag_move(x, y) {
+            return true;
+        }
+        if self.update_create_drag(x, y) {
             return true;
         }
         if let Some(m) = self.marquee_drag.as_mut() {
@@ -419,7 +464,12 @@ impl WidgetHost {
             drag.last_x = x;
             drag.last_y = y;
             self.editor_state.viewport.pan(dx, dy);
-            self.mark_dirty();
+            // Canvas pan only translates the viewport; the layout-resolved
+            // scene is document-space (camera applied at paint time), so keep
+            // the layout cache intact — `mark_dirty()` here forced a full
+            // serde reconversion of the document every move (matches native
+            // `op-host-native/.../input.rs`). The listener still repaints off
+            // this `true` return.
             return true;
         }
         // Toolbar per-button hover wash — AFTER drag detection so a
@@ -473,12 +523,9 @@ impl WidgetHost {
         // compiled out on wasm32; every other button lights up the same
         // as native. Reuses the click hit-test so paint can't drift.
         {
-            use op_editor_ui::widgets::{TopBar, TOP_BAR_HEIGHT};
-            let tb_rect = Rect {
-                origin: Point2D::new(0.0, 0.0),
-                size: Point2D::new(self.last_viewport_w, TOP_BAR_HEIGHT),
-            };
-            let new_hover = TopBar::for_editor_ui(&self.editor_state.editor_ui)
+            let tb_rect = self.top_bar_rect(self.last_viewport_w);
+            let new_hover = self
+                .top_bar()
                 .hit_test(tb_rect, Point2D::new(x, y))
                 .map(op_editor_ui::widgets::editor_state_ext::topbar_button_hover);
             if new_hover != self.editor_state.editor_ui.topbar_button_hover {
@@ -500,6 +547,11 @@ impl WidgetHost {
                 self.mark_dirty();
                 return true;
             }
+        }
+        let over_topmost =
+            self.over_topmost_panel(x, y, self.last_viewport_w, self.last_viewport_h);
+        if self.update_chat_model_picker_hover(x, y, over_topmost) {
+            return true;
         }
         // AI chat header buttons (chevron / maximize / new chat) hover.
         if let Some(chat_rect) = self.ai_chat_rect(self.last_viewport_w, self.last_viewport_h) {
@@ -550,6 +602,9 @@ impl WidgetHost {
             .is_some()
         {
             self.mark_dirty();
+            return true;
+        }
+        if self.update_chat_design_hover(x, y, over_topmost) {
             return true;
         }
         // PropertyPanel tab/action hover wash. Shown with a selection.

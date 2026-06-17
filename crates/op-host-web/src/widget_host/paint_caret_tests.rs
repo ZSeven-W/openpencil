@@ -67,3 +67,16 @@ fn caret_animation_active_tracks_focused_text_input() {
     host.editor_state.chat.focused = false;
     assert!(!host.caret_animation_active());
 }
+
+#[test]
+fn next_animation_deadline_tracks_text_input_blink_boundary() {
+    let mut host = WidgetHost::new();
+    host.editor_state.chat.focused = true;
+    host.editor_state.chat.input.touch(1_000);
+
+    host.set_now_ms(1_120);
+    assert_eq!(host.next_animation_deadline_ms(), Some(1_500));
+
+    host.set_now_ms(1_500);
+    assert_eq!(host.next_animation_deadline_ms(), Some(2_000));
+}

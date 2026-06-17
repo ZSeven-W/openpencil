@@ -15,7 +15,7 @@
 //! `EditorState::from_document`.
 
 use op_editor_core::editor_ui_state::ExportFormat;
-use op_editor_core::EditorState;
+use op_editor_core::{uikit_io, EditorState, UIKit};
 
 /// An ingested document plus the loader's best-effort schema
 /// warnings (the desktop logs these to stderr; the web glue routes
@@ -53,6 +53,32 @@ pub fn export_target(format: ExportFormat) -> (&'static str, &'static str, bool)
         ExportFormat::Webp => ("image/webp", "webp", true),
         ExportFormat::Svg | ExportFormat::Pdf => ("image/png", "png", false),
     }
+}
+
+pub struct KitExport {
+    pub file_name: String,
+    pub json: String,
+}
+
+pub fn export_kit_document(state: &EditorState) -> Result<Option<KitExport>, String> {
+    let kit_name = state
+        .doc
+        .name
+        .clone()
+        .unwrap_or_else(|| "My Kit".to_string());
+    let Some(kit_doc) = uikit_io::build_kit_document(&state.doc, &[], &kit_name) else {
+        return Ok(None);
+    };
+    let json = serde_json::to_string_pretty(&kit_doc).map_err(|e| e.to_string())?;
+    Ok(Some(KitExport {
+        file_name: uikit_io::kit_export_file_name(&kit_name),
+        json,
+    }))
+}
+
+pub fn import_kit_source(src: &str, kit_id: String) -> Result<Option<UIKit>, String> {
+    let loaded = op_pen_loader::load_canonical(src).map_err(|e| e.to_string())?;
+    Ok(uikit_io::import_kit_from_document(&loaded.value, kit_id))
 }
 
 /// Parse canonical `.op` / `.pen` source into a fresh `EditorState`,
@@ -153,5 +179,95 @@ pub fn file_stem(name: &str) -> &str {
     match name.rfind('.') {
         Some(idx) if idx > 0 => &name[..idx],
         _ => name,
+    }
+}
+
+/// Best-effort MIME type for a chat attachment picked in the browser.
+/// Mirrors the desktop attachment helper's extension table.
+pub fn attachment_media_type_for_name(name: &str) -> String {
+    let lower = name.to_ascii_lowercase();
+    match lower.rsplit('.').next() {
+        Some("png") => "image/png",
+        Some("jpg") | Some("jpeg") => "image/jpeg",
+        Some("gif") => "image/gif",
+        Some("webp") => "image/webp",
+        Some("svg") => "image/svg+xml",
+        _ => "application/octet-stream",
+    }
+    .to_string()
+}
+
+/// Browser `File.name` is already pathless in normal cases, but keep
+/// the same separator hardening as desktop temp-file staging.
+pub fn attachment_file_name(name: &str) -> String {
+    let cleaned: String = name
+        .chars()
+        .map(|c| if c == '/' || c == '\\' { '_' } else { c })
+        .collect();
+    if cleaned.trim().is_empty() {
+        "attachment".to_string()
+    } else {
+        cleaned
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use op_editor_core::PenNodeExt;
+
+    #[test]
+    fn attachment_media_type_matches_desktop_image_extensions() {
+        assert_eq!(attachment_media_type_for_name("a.png"), "image/png");
+        assert_eq!(attachment_media_type_for_name("a.JPG"), "image/jpeg");
+        assert_eq!(attachment_media_type_for_name("a.jpeg"), "image/jpeg");
+        assert_eq!(attachment_media_type_for_name("a.gif"), "image/gif");
+        assert_eq!(attachment_media_type_for_name("a.webp"), "image/webp");
+        assert_eq!(attachment_media_type_for_name("a.svg"), "image/svg+xml");
+        assert_eq!(
+            attachment_media_type_for_name("notes.txt"),
+            "application/octet-stream"
+        );
+    }
+
+    #[test]
+    fn attachment_file_name_strips_path_separators() {
+        assert_eq!(attachment_file_name("../a.png"), ".._a.png");
+        assert_eq!(attachment_file_name("folder\\a.png"), "folder_a.png");
+        assert_eq!(attachment_file_name(""), "attachment");
+    }
+
+    #[test]
+    fn export_kit_document_builds_download_name_and_json() {
+        let src = r#"{"version":"0.8.0","name":"My Kit!","children":[{"type":"frame","id":"button","name":"Primary Button","reusable":true,"x":0,"y":0,"width":120,"height":40,"children":[]}]}"#;
+        let doc = op_pen_loader::load_canonical(src)
+            .expect("canonical doc")
+            .value;
+        let state = EditorState::from_document(doc);
+
+        let export = export_kit_document(&state)
+            .expect("export encodes")
+            .expect("document has reusable components");
+
+        assert_eq!(export.file_name, "My Kit.op");
+        let parsed: jian_ops_schema::PenDocument =
+            serde_json::from_str(&export.json).expect("kit json");
+        assert_eq!(parsed.name.as_deref(), Some("My Kit!"));
+        assert_eq!(parsed.children.len(), 1);
+        assert_eq!(parsed.children[0].base().id, "button");
+    }
+
+    #[test]
+    fn import_kit_source_extracts_components_with_supplied_id() {
+        let src = r#"{"version":"0.8.0","name":"Imported System","children":[{"type":"frame","id":"card","name":"Profile Card","reusable":true,"x":0,"y":0,"width":240,"height":120,"children":[]}]}"#;
+
+        let kit = import_kit_source(src, "web-kit-1".to_string())
+            .expect("import parses")
+            .expect("source has reusable components");
+
+        assert_eq!(kit.id, "web-kit-1");
+        assert_eq!(kit.name, "Imported System");
+        assert_eq!(kit.components.len(), 1);
+        assert_eq!(kit.components[0].id, "card");
     }
 }

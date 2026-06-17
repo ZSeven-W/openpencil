@@ -29,7 +29,9 @@ op-editor-ui = { path = "../op-editor-ui" }
 # keeping it optional preserves the wasm32-clean stub baseline.
 op-editor-core = { path = "../op-editor-core", optional = true }
 op-editor-host-core = { path = "../op-editor-host-core", optional = true, default-features = false }
-op-pen-loader = { path = "../op-pen-loader", optional = true }
+# default-features = false drops `skia-measure`; the `skia` feature re-enables
+# it so only the CanvasKit build stays skia-free (estimate text measurement).
+op-pen-loader = { path = "../op-pen-loader", optional = true, default-features = false }
 # P4b web AI-streaming foundation: the codegen/AI pipeline. Optional + behind
 # the `codegen` feature (which also pulls `skia`) so the wasm32-clean stub
 # baseline (`--no-default-features --features web`) never compiles it. NOTE:
@@ -54,6 +56,8 @@ op-figma = { path = "../op-figma", optional = true }
 accesskit = "0.24"
 console_error_panic_hook = "0.1"
 js-sys = "0.3"
+# CanvasKit FFI: await the async CanvasKitInit() promise from Rust.
+wasm-bindgen-futures = { version = "0.4", optional = true }
 # Phase C1 DOM event mappers build `jian_core::gesture::WheelEvent` etc
 # whose position/delta fields use `jian_core::geometry::Point`. The
 # `geometry` module is not re-exported by shell-core (which only
@@ -64,33 +68,6 @@ jian-core = { path = "../../vendor/jian/crates/jian-core", version = "0.0.1" }
 # workspace's Rust 1.85 toolchain. Newer 0.2.120+ requires rustc 1.86.
 # When the workspace bumps Rust, raise this bound.
 wasm-bindgen = "=0.2.117"
-
-# Step 1b §2.2 (post C-hard.2 lock-in 2026-05-09): wasm32-unknown-unknown
-# via the vendor/skia-safe-op fork + crates/wasm-libc-shim. Optional dep
-# behind the `skia` feature so `cargo check --target wasm32-unknown-
-# unknown --no-default-features --features web` (the kickoff §1.2
-# wasm32-clean CI baseline) still compile-checks without pulling skia
-# — that path uses the stub mount entry. Phase A and onward opt in via
-# `--features skia` to get the real WebBackend + raster paint loop.
-[dependencies.skia-safe]
-version = "0.97.0"
-default-features = false
-# Step 3 codex stop-hook fix: text rendering uses
-# `Canvas::draw_str` + raw Font + Typeface (NOT skia paragraph
-# builder), so the `textlayout` feature is unnecessary on web.
-# Dropping it removes ICU + Harfbuzz from the bundle (~400 KB
-# gzip) and avoids the env.* import explosion that came with
-# textlayout's filesystem font lookups.
-features = ["binary-cache"]
-optional = true
-
-# C-hard.2 libc/libcxx/libm shim — only linked when targeting
-# wasm32-unknown-unknown with the `skia` feature on. The crate's lib.rs
-# guards every symbol with `cfg(all(target_arch = "wasm32", target_os
-# = "unknown"))` so native builds (where this would conflict with the
-# host C runtime) link an empty crate.
-[target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies]
-wasm-libc-shim = { path = "../wasm-libc-shim", optional = true }
 
 [dependencies.web-sys]
 version = "0.3"
@@ -130,6 +107,7 @@ features = [
   "Performance",
   "PointerEvent",
   "ProgressEvent",
+  "TextMetrics",
   "Url",
   "WheelEvent",
   "Window",
@@ -138,50 +116,39 @@ features = [
   "XmlHttpRequestEventTarget",
 ]
 
+[dev-dependencies]
+op-i18n = { path = "../op-i18n" }
+ttf-parser = "0.25"
+
 [features]
 # `web` keeps the kickoff §1.2 wasm32-unknown-unknown CI baseline green —
 # the crate compile-checks as a wasm32-clean stub without pulling skia.
 default = ["web"]
 web = []
-# `skia` opts into the Phase A WebBackend (skia-safe + raster surface).
-# When the cargo target is wasm32-unknown-unknown the build also links
-# the libc/libcxx/libm shim crate so the bundle is runtime-loadable.
-# Native targets resolve the target-conditional shim dep to nothing.
-# `jian-ops-schema` rides along for the a11y DOM mirror (`a11y.rs`
-# names `PenNode` for selection announcements) — zero extra weight,
-# it is already a transitive dep of op-editor-core.
-skia = [
-  "dep:skia-safe",
+# `canvaskit` renders the Rust web shell through the official CanvasKit skia
+# WASM artifact (no embedded skia-safe, no libc/GL shim). The backend calls
+# CanvasKit via the `op_ck_bridge.js` FFI; all widget/draw logic stays in Rust.
+canvaskit = [
+  "dep:wasm-bindgen-futures",
   "dep:op-editor-core",
   "dep:op-pen-loader",
   "dep:jian-ops-schema",
-  "wasm-libc-shim",
-]
-# Internal feature toggled on by `skia` to flip the cfg-target dep.
-wasm-libc-shim = ["dep:wasm-libc-shim"]
-# P4b web AI-streaming foundation: enables the codegen/AI web modules
-# (web_ai_transport / raf_pump / web_clipboard). Pulls `skia` (the real
-# WebBackend) + the `op-codegen` AI pipeline. OFF by default so it never
-# touches the `web` stub or a plain `skia` build. NOTE: UNVERIFIED — the new
-# modules need an EMSDK wasm32 build + a browser; run tools/check-wasm-bundle.sh.
-codegen = [
-  "skia",
-  "live-sync",
+  # Web integration modules absorbed from the codegen/skia path: AI chat
+  # streaming (web_chat/web_ai_transport), live-sync, codegen, Figma/file IO.
+  # All are pure web_sys/serde logic — no skia-safe.
+  "dep:serde_json",
+  "dep:op-figma",
+  # Codegen pipeline (codegen_web/codegen_bundle) — pure AI/code-generation
+  # logic crates, no skia.
   "dep:op-codegen",
   "dep:op-ai",
   "dep:op-editor-host-core",
   "op-editor-host-core/codegen",
-  "dep:jian-ops-schema",
-  "dep:serde_json",
-  "dep:op-figma",
 ]
-# Live-canvas sync glue: bidirectional document + selection sync with the
-# web-canvas daemon (pull/apply on version bumps, local-edit push, selection
-# push — see `live_sync_glue.rs`). Requires `skia` (drives the real
-# WebBackend) + serde_json (document serialization for the push baseline).
-# Included in the production bundle via `codegen` (the bundle gate builds
-# `--features codegen`), matching the TS web app where `use-mcp-sync.ts` is
-# always mounted. Browser round-trip last verified 2026-06-05 (pull
-# direction, headless-Chrome CDP harness); push direction is host-unit-tested
-# (`op_editor_core::web_sync`) + wasm-compile-checked.
-live-sync = ["skia", "dep:serde_json"]
+# (Retired 2026-06-17: the skia raster WebBackend (`skia`) + its codegen/AI
+# (`codegen`) and live-sync (`live-sync`) supersets, plus the from-scratch
+# WebGL2 Ganesh backend (`webgl`) + gl-webgl-shim. CanvasKit is the only web
+# renderer now; all their functionality was absorbed into `canvaskit` and the
+# skia-only raster modules were deleted. `skia-safe` reverted to upstream
+# crates.io — it has no wasm32-unknown-unknown target, so a wasm skia build is
+# no longer possible regardless.)

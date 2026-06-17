@@ -14,9 +14,11 @@ jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema" }
 # flex solver for `.op` files.
 jian-core = { path = "../../vendor/jian/crates/jian-core" }
 # jian-skia ships `SkiaMeasure` — a real skia paragraph-shaper
-# `MeasureBackend` plugged into the layout engine. Desktop-side, so
-# depending on skia is fine; this crate does NOT need to be wasm-clean.
-jian-skia = { path = "../../vendor/jian/crates/jian-skia", features = ["textlayout"] }
+# `MeasureBackend` plugged into the layout engine. Optional: the native +
+# web-skia builds enable it (`skia-measure`, default); the CanvasKit web build
+# turns it off so no skia-safe / jian-skia is linked (falls back to
+# jian-core's estimate backend — see adapter.rs::make_measure_backend).
+jian-skia = { path = "../../vendor/jian/crates/jian-skia", features = ["textlayout"], optional = true }
 # Phase 7.3 reorg: openpencil-shell-core dissolved. The layout scene /
 # scene-var / render-backend facade this crate converts INTO now
 # resolves through the op-editor-ui crate.
@@ -30,3 +32,9 @@ op-editor-core = { path = "../op-editor-core" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_stacker = { workspace = true }
+
+[features]
+# Real skia text measurement (native + web-skia). Off → jian-core estimate
+# backend, so the CanvasKit web build links no skia-safe.
+default = ["skia-measure"]
+skia-measure = ["dep:jian-skia"]

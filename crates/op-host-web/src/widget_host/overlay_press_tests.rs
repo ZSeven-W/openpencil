@@ -6,8 +6,10 @@
 //! composition pass (`paint_editor`) against a recording backend.
 
 use super::WidgetHost;
-use op_editor_core::{EditorState, Tool};
-use op_editor_ui::widgets::{PropertyPanel, ShapeChoice, ShapePicker, TOP_BAR_HEIGHT};
+use op_editor_core::{EditorState, NodeId, Tool};
+use op_editor_ui::widgets::{
+    LayerPanel, LayerPanelHit, PropertyPanel, ShapeChoice, ShapePicker, TOP_BAR_HEIGHT,
+};
 use op_editor_ui::{Color, Point2D, Rect, RenderBackend, TextLayout};
 
 const W: f32 = 1200.0;
@@ -60,6 +62,61 @@ fn painted_inside(backend: &CaptureBackend, target: Rect) -> bool {
                 && r.origin.y + r.size.y <= target.origin.y + target.size.y + 1.0
                 && r.size.x * r.size.y >= 0.5 * target.size.x * target.size.y
         })
+}
+
+fn seed_layer_doc(host: &mut WidgetHost) {
+    let doc = jian_ops_schema::load_str(
+        r#"{"version":"0.8.0","children":[
+            {"type":"rectangle","id":"n1","name":"Header","x":0,"y":0,"width":100,"height":50}
+        ]}"#,
+    )
+    .expect("fixture JSON parses")
+    .value;
+    host.editor_state = EditorState::from_document(doc);
+    host.editor_state_dirty = true;
+}
+
+fn point_for_layer_row(host: &WidgetHost, id: &str) -> Point2D {
+    let panel = LayerPanel::from_editor(&host.editor_state);
+    let rect = host.layer_panel_rect(H);
+    let regions = panel.regions(rect);
+    let mut y = regions.layers_rows_top + 2.0;
+    while y < regions.layers_rows_top + regions.layers_view_h {
+        let point = Point2D::new(rect.origin.x + 48.0, y);
+        if matches!(
+            panel.hit_test(rect, point),
+            Some(LayerPanelHit::Layer(node_id)) if node_id == NodeId::new(id)
+        ) {
+            return point;
+        }
+        y += 2.0;
+    }
+    panic!("no layer row point found for {id}");
+}
+
+#[test]
+fn topmost_design_panel_right_press_does_not_open_layer_context_menu() {
+    let mut host = WidgetHost::new();
+    seed_layer_doc(&mut host);
+    host.editor_state.editor_ui.design_md_panel_open = true;
+    host.editor_state.editor_ui.design_md_panel_pos = Some((0.0, TOP_BAR_HEIGHT));
+    let point = point_for_layer_row(&host, "n1");
+
+    assert!(host.apply_right_press(point.x, point.y, W, H));
+
+    assert!(host.editor_state.editor_ui.layer_context_menu.is_none());
+}
+
+#[test]
+fn variables_panel_right_press_is_swallowed_like_native() {
+    let mut host = WidgetHost::new();
+    host.editor_state.editor_ui.variables_panel_open = true;
+    let rect = host
+        .variables_panel_rect(W, H)
+        .expect("variables panel fits in the test viewport");
+    let point = Point2D::new(rect.origin.x + 24.0, rect.origin.y + 24.0);
+
+    assert!(host.apply_right_press(point.x, point.y, W, H));
 }
 
 #[test]

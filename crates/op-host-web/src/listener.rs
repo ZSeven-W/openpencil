@@ -5,40 +5,15 @@
 
 use wasm_bindgen::prelude::*;
 
-use op_editor_ui::Modifiers;
-
+/// Anchors a registered DOM listener's `Closure` for the page lifetime. The
+/// CanvasKit mount `std::mem::forget`s the `Vec<Listener>` (no teardown path),
+/// so `closure` is never read — it exists only to keep the browser callback
+/// alive. Type-erased as `Closure<dyn FnMut(JsValue)>` with runtime-checked
+/// `dyn_into::<SpecificEvent>()` inside each handler so one concrete generic
+/// arg spans the whole vec (codex C2.2 R1 CONCERN-3).
 pub(crate) struct Listener {
-    pub(crate) target: web_sys::EventTarget,
-    pub(crate) name: &'static str,
-    /// Type-erased Closure storage. We use
-    /// `Closure<dyn FnMut(JsValue)>` uniformly across event types and
-    /// runtime-checked `dyn_into::<SpecificEvent>()` inside each
-    /// handler body so `Listener` carries one concrete generic
-    /// argument across the entire vec; mismatched synthetic events
-    /// from same-page JS skip the handler instead of producing a
-    /// wrong-type reference (codex C2.2 R1 CONCERN-3).
+    #[allow(dead_code)]
     pub(crate) closure: Closure<dyn FnMut(JsValue)>,
-}
-
-/// Build a Jian `Modifiers` bitset from a W3C `KeyboardEvent`. Mirrors
-/// the four standard modifier keys; per spec §2.4 we treat
-/// `metaKey` (browser) → `Modifiers::CMD` (Jian) — both name the
-/// "Cmd on macOS / Win key on Windows / Super on Linux" modifier.
-pub(crate) fn modifiers_from_keyboard(event: &web_sys::KeyboardEvent) -> Modifiers {
-    let mut m = Modifiers::empty();
-    if event.shift_key() {
-        m |= Modifiers::SHIFT;
-    }
-    if event.ctrl_key() {
-        m |= Modifiers::CTRL;
-    }
-    if event.alt_key() {
-        m |= Modifiers::ALT;
-    }
-    if event.meta_key() {
-        m |= Modifiers::CMD;
-    }
-    m
 }
 
 /// Register a JS event listener on `target` and store the Closure in
@@ -77,11 +52,7 @@ where
         handler(event);
     });
     target_owned.add_event_listener_with_callback(name, closure.as_ref().unchecked_ref())?;
-    listeners.push(Listener {
-        target: target_owned,
-        name,
-        closure,
-    });
+    listeners.push(Listener { closure });
     Ok(())
 }
 

@@ -280,6 +280,7 @@ mod tests {
     #[derive(Default)]
     struct CaptureBackend {
         clips: usize,
+        text_runs: Vec<String>,
     }
 
     impl RenderBackend for CaptureBackend {
@@ -287,7 +288,10 @@ mod tests {
         fn end_frame(&mut self) {}
         fn fill_rect(&mut self, _: Rect, _: Color) {}
         fn stroke_rect(&mut self, _: Rect, _: Color, _: f32) {}
-        fn draw_text(&mut self, _: &TextLayout, _: Point2D) {}
+        fn draw_text(&mut self, layout: &TextLayout, _: Point2D) {
+            self.text_runs
+                .extend(layout.runs().iter().map(|run| run.content.clone()));
+        }
         fn clip_rect(&mut self, _: Rect) {
             self.clips += 1;
         }
@@ -353,6 +357,13 @@ mod tests {
         assert_eq!(
             backend.clips, 4,
             "each quick-action card should clip its own text to avoid bleeding into neighboring cards"
+        );
+        assert!(
+            backend
+                .text_runs
+                .iter()
+                .any(|run| ["🎨", "⬇️", "📱", "🍕"].contains(&run.as_str())),
+            "quick-action emoji must stay as text so the web backend can render actual emoji glyphs"
         );
     }
 }

@@ -54,6 +54,45 @@ fn toolbar_gap_press_blurs_chat() {
 }
 
 #[test]
+fn blank_right_press_blurs_chat_like_native() {
+    let mut host = WidgetHost::new();
+    host.editor_state.chat.focused = true;
+    host.editor_state.editor_ui.chat_model_picker.open = true;
+    host.editor_state
+        .editor_ui
+        .chat_model_picker_input
+        .set_text("gpt");
+
+    assert!(host.apply_right_press(500.0, 120.0, VW, VH));
+
+    assert!(
+        !host.editor_state.chat.focused,
+        "blank right press must blur the chat input"
+    );
+    assert!(!host.editor_state.editor_ui.chat_model_picker.open);
+    assert!(host
+        .editor_state
+        .editor_ui
+        .chat_model_picker_input
+        .text()
+        .is_empty());
+}
+
+#[test]
+fn blank_right_press_with_sidebar_closed_blurs_chat_like_native() {
+    let mut host = WidgetHost::new();
+    host.editor_state.editor_ui.sidebar_open = false;
+    host.editor_state.chat.focused = true;
+
+    assert!(host.apply_right_press(500.0, 120.0, VW, VH));
+
+    assert!(
+        !host.editor_state.chat.focused,
+        "sidebar-closed blank right press must still blur the chat input"
+    );
+}
+
+#[test]
 fn settings_modal_blank_press_commits_mcp_port_draft() {
     let mut host = WidgetHost::new();
     {

@@ -6,8 +6,8 @@
 #   1. EMSDK is set so the build can resolve emsdk's libcxx headers
 #      + wasm-aware clang (build-time only; emscripten runtime is NOT
 #      linked into the bundle — see spec §2.2).
-#   2. cargo build → wasm-bindgen → wasm-opt -Oz pipeline produces
-#      crates/op-host-web/pkg/op_host_web_bg.wasm.
+#   2. cargo build → wasm-bindgen → wasm-opt -Oz pipeline produces the
+#      served crates/op-host-web/pkg/op_host_web_bg.wasm.
 #   3. Post-bindgen bundle has 0 env.* imports
 #      (i.e. all imports come from `./op_host_web_bg.js`,
 #      the wasm-bindgen JS shim). Any env.* import = LinkError at
@@ -37,9 +37,12 @@ WASM_RAW="${PKG_DIR}/op_host_web_bg.wasm"
 WASM_OPT="${PKG_DIR}/op_host_web_bg.opt.wasm"
 TARGET_WASM="target/wasm32-unknown-unknown/release/op_host_web.wasm"
 
-# Spec §6 row "Per-component ceiling — shell-web wasm (cdylib) gzip"
-# = 1 MiB. Override via env for experiments only.
-LIMIT="${STEP1B_SHELL_WASM_GZIP_LIMIT_BYTES:-1048576}"
+# Ceiling for the CanvasKit production bundle's gzipped wasm. It is far above
+# the retired skia raster path's 1 MiB (spec §6) because this bundle now carries
+# the FULL app logic absorbed from the skia path (codegen AI pipeline, Figma
+# parser, AI/live-sync). ~4.5 MiB today. TODO(perf): code-split / lazy-load the
+# codegen + Figma paths to shrink the initial download. Override via env.
+LIMIT="${STEP1B_SHELL_WASM_GZIP_LIMIT_BYTES:-6291456}"
 
 step() { printf '\n[step %d/%d] %s\n' "$1" "$2" "$3"; }
 fail() { printf 'FAIL: %s\n' "$1" >&2; exit 1; }
@@ -51,16 +54,17 @@ need wasm-bindgen
 need wasm-opt
 need node
 need gzip
-[ -n "${EMSDK:-}" ] || { printf 'EMSDK env var unset (needed for emsdk libcxx headers + wasm-aware clang)\n' >&2; exit 2; }
+# CanvasKit needs NO EMSDK / skia-safe / libc shim — the editor renders through
+# the official CanvasKit skia WASM (loaded separately from /canvaskit/) and the
+# Rust bundle is pure logic. (The retired skia raster path needed EMSDK.)
 
-# `codegen` (which pulls `skia`) is the production browser feature set:
-# it compiles the daemon-backed AI chat (`web_chat`), browser file IO,
-# clipboard/Figma paste, and the codegen pipeline. A skia-only bundle
-# would ship a canvas whose chat can only error ("transport not
-# compiled in") even when `op start --web`'s daemon is serving it.
-step 2 5 "Build shell-web wasm32-unknown-unknown with --features codegen"
+# `canvaskit` is the production browser feature set: the editor renders through
+# CanvasKit on the GPU and bundles the full app logic absorbed from the retired
+# skia raster path — daemon-backed AI chat (`web_chat`), live-sync, browser file
+# IO, clipboard/Figma paste, icon search, system fonts, and the codegen pipeline.
+step 2 5 "Build shell-web wasm32-unknown-unknown with --features canvaskit"
 cargo build -p op-host-web \
-  --target wasm32-unknown-unknown --features codegen --release >/dev/null
+  --target wasm32-unknown-unknown --no-default-features --features canvaskit --release >/dev/null
 
 step 3 5 "wasm-bindgen --target web → ${PKG_DIR}/"
 wasm-bindgen --target web --out-dir "${PKG_DIR}" "${TARGET_WASM}" >/dev/null
@@ -76,12 +80,13 @@ WebAssembly.compile(buf).then(mod => {
 }).catch(e => { console.error("compile failed:", e); process.exit(1); });
 ' "${WASM_RAW}")"
 if [ "${env_count}" != "0" ]; then
-  fail "env.* import count = ${env_count} (spec §7.1 requires 0); a new symbol leaked — add it to crates/wasm-libc-shim/src/imp.rs"
+  fail "env.* import count = ${env_count} (must be 0); the CanvasKit bundle has no libc shim, so an env.* import means a dep pulled non-wasm-clean code — find and gate it out"
 fi
 printf '  ✓ 0 env.* imports\n'
 
 step 5 5 "Verify gzip size ≤ ${LIMIT} bytes (spec §6 ceiling)"
 wasm-opt -Oz "${WASM_RAW}" -o "${WASM_OPT}" >/dev/null
+cp "${WASM_OPT}" "${WASM_RAW}"
 gz_bytes="$(gzip -c "${WASM_OPT}" | wc -c | tr -d ' ')"
 if [ "${gz_bytes}" -gt "${LIMIT}" ]; then
   fail "shell-web wasm gzip size ${gz_bytes} bytes > ceiling ${LIMIT} bytes"

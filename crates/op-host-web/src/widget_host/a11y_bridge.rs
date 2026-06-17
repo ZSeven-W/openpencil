@@ -1,15 +1,13 @@
-//! Host-side bridge for the hidden accessibility DOM layer
-//! (`crate::a11y`).
+//! Host-side bridge for the hidden accessibility DOM layer.
 //!
-//! `WidgetHost::editor_state` and the dirty flag are scoped
-//! `pub(in crate::widget_host)`, so the a11y module reaches editor
-//! state exclusively through these accessors. The mutators mirror the
-//! corresponding painted-control press arms verbatim so activating a
-//! hidden a11y control behaves exactly like clicking the canvas
-//! chrome.
+//! The skia-era `crate::a11y` layer was retired with the skia mount
+//! (2026-06-17); these accessors / mutators are kept (tested) so the CanvasKit
+//! mount can re-wire an accessibility layer without re-deriving them. Hence the
+//! `#[allow(dead_code)]` — currently exercised only by the tests below.
 
 use super::WidgetHost;
 
+#[allow(dead_code)]
 impl WidgetHost {
     /// Read-only editor state for the a11y mirror's diff/sync pass.
     /// Unlike [`WidgetHost::editor_state`] (gated behind the

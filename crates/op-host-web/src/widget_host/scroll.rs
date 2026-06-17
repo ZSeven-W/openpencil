@@ -163,6 +163,7 @@ impl WidgetHost {
         &mut self,
         x: f32,
         y: f32,
+        delta_x: f32,
         delta_y: f32,
         viewport_height: f32,
     ) -> bool {
@@ -178,22 +179,48 @@ impl WidgetHost {
             return false;
         }
         let r = LayerPanel::from_editor(&self.editor_state).regions(rect);
+        let mut changed = false;
         if y >= r.layers_rows_top {
-            if scroll_by_max(
-                &mut self.editor_state.editor_ui.layer_layers_scroll,
-                -delta_y,
-                r.layers_max_scroll,
-            ) {
-                self.mark_dirty();
+            if delta_y != 0.0
+                && scroll_by_max(
+                    &mut self.editor_state.editor_ui.layer_layers_scroll,
+                    -delta_y,
+                    r.layers_max_scroll,
+                )
+            {
+                changed = true;
+            }
+            if delta_x != 0.0
+                && scroll_by_max(
+                    &mut self.editor_state.editor_ui.layer_layers_h_scroll,
+                    -delta_x,
+                    r.layers_max_h_scroll,
+                )
+            {
+                changed = true;
             }
         } else {
-            if scroll_by_max(
-                &mut self.editor_state.editor_ui.layer_pages_scroll,
-                -delta_y,
-                r.pages_max_scroll,
-            ) {
-                self.mark_dirty();
+            if delta_y != 0.0
+                && scroll_by_max(
+                    &mut self.editor_state.editor_ui.layer_pages_scroll,
+                    -delta_y,
+                    r.pages_max_scroll,
+                )
+            {
+                changed = true;
             }
+            if delta_x != 0.0
+                && scroll_by_max(
+                    &mut self.editor_state.editor_ui.layer_pages_h_scroll,
+                    -delta_x,
+                    r.pages_max_h_scroll,
+                )
+            {
+                changed = true;
+            }
+        }
+        if changed {
+            self.mark_dirty();
         }
         true
     }

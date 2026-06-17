@@ -106,26 +106,20 @@ impl WidgetHost {
         self.update_dropdown_hover(x, y)
     }
 
-    /// Update the file-menu / shape-picker dropdown hover highlights
+    /// Update the file-menu / locale / shape-picker dropdown hover highlights
     /// from the cursor. At most one is open at a time; a top-most
     /// floating panel covering the point suppresses updates. Returns
     /// `true` on change. Port of the native
-    /// `geometry.rs::update_dropdown_hover` (minus the locale picker,
-    /// whose hover state web doesn't track yet).
+    /// `geometry.rs::update_dropdown_hover`.
     fn update_dropdown_hover(&mut self, x: f32, y: f32) -> bool {
         if self.over_topmost_panel(x, y, self.last_viewport_w, self.last_viewport_h) {
             return false;
         }
         if self.editor_state.editor_ui.file_menu_open {
             use op_editor_ui::widgets::file_menu::FileMenu;
-            use op_editor_ui::widgets::top_bar::TopBar;
             self.refresh_layout_scene();
-            let top_bar_rect = op_editor_ui::Rect {
-                origin: Point2D::new(0.0, 0.0),
-                size: Point2D::new(self.last_viewport_w, op_editor_ui::widgets::TOP_BAR_HEIGHT),
-            };
-            let anchor =
-                TopBar::file_menu_rect(top_bar_rect, self.editor_state.editor_ui.window_fullscreen);
+            let top_bar_rect = self.top_bar_rect(self.last_viewport_w);
+            let anchor = self.top_bar().file_menu_rect_for(top_bar_rect);
             // `0` clock — no wall-clock on wasm32 and no recent files
             // to age (see `dispatch_file_menu_press`).
             let menu = FileMenu::from_editor_ui(&self.editor_state.editor_ui, 0);
@@ -133,6 +127,22 @@ impl WidgetHost {
             let new_hover = menu.hovered_at(panel, Point2D::new(x, y));
             if new_hover != self.editor_state.editor_ui.file_menu.hover {
                 self.editor_state.editor_ui.file_menu.hover = new_hover;
+                self.mark_dirty();
+                return true;
+            }
+        }
+        if self.editor_state.editor_ui.locale_picker.open {
+            use op_editor_ui::widgets::locale_picker::LocalePicker;
+            self.refresh_layout_scene();
+            let panel = self.locale_picker_rect(self.last_viewport_w);
+            let picker = LocalePicker::for_editor_ui(&self.editor_state.editor_ui);
+            let new_hover = match picker.hit_popup(panel, Point2D::new(x, y)) {
+                op_editor_ui::widgets::locale_picker::SelectHit::Row(idx) => Some(idx),
+                op_editor_ui::widgets::locale_picker::SelectHit::Inside
+                | op_editor_ui::widgets::locale_picker::SelectHit::Outside => None,
+            };
+            if new_hover != self.editor_state.editor_ui.locale_picker.hover {
+                self.editor_state.editor_ui.locale_picker.hover = new_hover;
                 self.mark_dirty();
                 return true;
             }

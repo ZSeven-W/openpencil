@@ -51,17 +51,63 @@
         errorPane.textContent = msg;
         errorPane.style.display = 'block';
       };
+      const canvas = document.getElementById('op');
+      const BOOT_CANVAS_PIXEL_BUDGET = 1600000;
+      const STEADY_CANVAS_PIXEL_BUDGET = 4000000;
+      const sizeCanvasForDisplay = (pixelBudget = STEADY_CANVAS_PIXEL_BUDGET) => {
+        const cssWidth = Math.max(1, Math.round(window.innerWidth));
+        const cssHeight = Math.max(1, Math.round(window.innerHeight));
+        const nativeDpr = Math.max(1, window.devicePixelRatio || 1);
+        const oneXDots = Math.max(1, cssWidth * cssHeight);
+        const cappedDpr = Math.sqrt(Math.max(1, pixelBudget) / oneXDots);
+        const dpr = Math.max(1, Math.min(nativeDpr, cappedDpr));
+        const width = Math.max(1, Math.round(cssWidth * dpr));
+        const height = Math.max(1, Math.round(cssHeight * dpr));
+        const changed =
+          canvas.width !== width ||
+          canvas.height !== height ||
+          canvas.style.width !== `${cssWidth}px` ||
+          canvas.style.height !== `${cssHeight}px`;
+        if (canvas.style.width !== `${cssWidth}px`) canvas.style.width = `${cssWidth}px`;
+        if (canvas.style.height !== `${cssHeight}px`) canvas.style.height = `${cssHeight}px`;
+        if (canvas.width !== width) canvas.width = width;
+        if (canvas.height !== height) canvas.height = height;
+        window.__opCanvasScale = dpr;
+        return changed;
+      };
       // Size the canvas to the window BEFORE mount — the shell reads the
       // canvas width/height attributes when it builds its raster surface.
-      const canvas = document.getElementById('op');
-      canvas.width = Math.max(1, window.innerWidth);
-      canvas.height = Math.max(1, window.innerHeight);
+      sizeCanvasForDisplay(BOOT_CANVAS_PIXEL_BUDGET);
       try {
         const mod = await import('/pkg/op_host_web.js');
         await mod.default();
-        // Keep the returned WebShell alive for the page lifetime: it owns
-        // the DOM listeners + closures into the wasm module.
-        window.__opShell = mod.mount('op');
+        // The CanvasKit bundle (renders skia on WebGL2 via /canvaskit/) exposes
+        // `mount_ck` and owns its own resize via DOM listeners; the legacy
+        // embedded-skia bundle exposes `mount` + a `WebShell.resize()` handle.
+        if (typeof mod.mount_ck === 'function') {
+          sizeCanvasForDisplay(STEADY_CANVAS_PIXEL_BUDGET);
+          await mod.mount_ck('op');
+        } else {
+          // Keep the returned WebShell alive for the page lifetime: it owns
+          // the DOM listeners + closures into the wasm module.
+          window.__opShell = mod.mount('op');
+          const idle = window.requestIdleCallback || ((cb) => window.setTimeout(cb, 250));
+          idle(() => {
+            if (sizeCanvasForDisplay(STEADY_CANVAS_PIXEL_BUDGET)) {
+              window.__opShell.resize();
+            }
+          });
+          let resizeRaf = 0;
+          window.addEventListener('resize', () => {
+            if (resizeRaf) return;
+            resizeRaf = window.requestAnimationFrame(() => {
+              resizeRaf = 0;
+              if (sizeCanvasForDisplay(STEADY_CANVAS_PIXEL_BUDGET)) {
+                window.__opShell.resize();
+              }
+            });
+          });
+        }
       } catch (e) {
         showError(
           [

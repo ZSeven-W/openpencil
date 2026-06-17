@@ -174,7 +174,13 @@ impl EditorState {
             }
             _ => {}
         }
-        self.active_children_mut().push(node);
+        // Insert at the FRONT (index 0), not the back. The canvas paints
+        // `children.iter().rev()` (so `children[0]` is the top-most / front
+        // layer) and the layer panel lists `children[0]` at the top — so a
+        // newly drawn shape must land at index 0 to float above existing
+        // siblings (e.g. a Rectangle drawn over a Frame), matching standard
+        // design-tool behavior. `push` (append) buried new shapes at the back.
+        self.active_children_mut().insert(0, node);
         Some(id)
     }
 

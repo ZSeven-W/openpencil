@@ -49,15 +49,13 @@ impl WidgetHost {
                 ui.component_browser_kit_picker_open = false;
                 ui.component_browser_confirm_delete_kit = None;
             }
-            ComponentBrowserHit::ExportKit | ComponentBrowserHit::ImportKit => {
-                // Documented divergence: kit import / export is
-                // desktop-only for now — the web host has no
-                // `uikits.json` persistence and no kit file-dialog
-                // consumer wired (TS web uses FS-Access / download;
-                // a dom_io consumer can adopt the same
-                // `component_browser_kit_request` contract later).
-                // The press is swallowed so it cannot fall through
-                // to the canvas.
+            ComponentBrowserHit::ExportKit => {
+                self.editor_state.editor_ui.component_browser_kit_request =
+                    Some(op_editor_core::KitIoRequest::Export);
+            }
+            ComponentBrowserHit::ImportKit => {
+                self.editor_state.editor_ui.component_browser_kit_request =
+                    Some(op_editor_core::KitIoRequest::Import);
             }
             ComponentBrowserHit::ToggleKitPicker => {
                 let ui = &mut self.editor_state.editor_ui;

@@ -9,6 +9,7 @@ use op_editor_core::{own_bounds, ButtonPressTarget, NodeId, PropertyFocus, Varia
 use op_editor_ui::widgets::variables_panel::{
     VariablesPanel, VariablesPanelHit, VariablesResizeEdge,
 };
+use op_editor_ui::widgets::{LayerPanel, LayerPanelHit};
 use op_editor_ui::Point2D;
 
 const W: f32 = 1280.0;
@@ -96,6 +97,24 @@ fn point_for_hit(host: &WidgetHost, want: &VariablesPanelHit) -> (f32, f32) {
         y += 2.0;
     }
     panic!("no panel point maps to {want:?}");
+}
+
+fn point_for_layer_row(host: &WidgetHost, id: &str) -> Point2D {
+    let panel = LayerPanel::from_editor(&host.editor_state);
+    let rect = host.layer_panel_rect(H);
+    let regions = panel.regions(rect);
+    let mut y = regions.layers_rows_top + 2.0;
+    while y < regions.layers_rows_top + regions.layers_view_h {
+        let point = Point2D::new(rect.origin.x + 48.0, y);
+        if matches!(
+            panel.hit_test(rect, point),
+            Some(LayerPanelHit::Layer(node_id)) if node_id == NodeId::new(id)
+        ) {
+            return point;
+        }
+        y += 2.0;
+    }
+    panic!("no layer row point found for {id}");
 }
 
 fn themed_value_for<'a>(
@@ -290,6 +309,27 @@ fn variable_row_edit_commits_prior_property_focus_on_web() {
         Some(VariableRowFocus::Number(0))
     );
     assert_eq!(host.editor_state.editor_ui.variable_row_input.text(), "8");
+}
+
+#[test]
+fn layer_right_press_commits_variable_row_focus_on_web_like_native() {
+    let mut host = selected_two_variant_color_host();
+    host.editor_state.editor_ui.variable_row_focus = Some(VariableRowFocus::Name(0));
+    host.editor_state
+        .editor_ui
+        .variable_row_input
+        .set_text("brand-color");
+
+    let point = point_for_layer_row(&host, "n62");
+    assert!(host.apply_right_press(point.x, point.y, W, H));
+
+    assert!(host.editor_state.editor_ui.variable_row_focus.is_none());
+    let vars = host.editor_state.doc.variables.as_ref().unwrap();
+    assert!(
+        vars.contains_key("brand-color"),
+        "right press should commit the pending variable row rename"
+    );
+    assert!(!vars.contains_key("color-1"));
 }
 
 #[test]

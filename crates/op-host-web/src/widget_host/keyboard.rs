@@ -369,11 +369,10 @@ impl WidgetHost {
             return ok;
         }
         if self.editor_state.ui.text_editing.is_some() {
-            let ok = self.editor_state.text_edit_commit();
-            if ok {
+            if self.editor_state.text_edit_insert("\n", self.now_ms) {
                 self.mark_dirty();
             }
-            return ok;
+            return true;
         }
         // Enter in the variables search box just blurs it (the
         // filter is already live).
@@ -755,6 +754,9 @@ impl WidgetHost {
     /// Routing therefore covers every `apply_text` focus branch: chat,
     /// rename, canvas text edit, property / settings drafts, and the
     /// picker search boxes. Returns true when any character landed.
+    // IME composition entry — tested + ready to wire; the CanvasKit keydown
+    // handler does per-key dispatch and hasn't wired IME composition yet.
+    #[allow(dead_code)]
     pub fn apply_ime(&mut self, event: &op_editor_ui::ImeEvent) -> bool {
         if !matches!(event.kind, op_editor_ui::ImeKind::CompositionEnd) {
             return false;
@@ -777,7 +779,10 @@ impl WidgetHost {
         consumed
     }
 
-    /// Phase C2 keyboard forwarding stub.
-    pub fn apply_key(&mut self, _event: &op_editor_ui::KeyEvent) { // glue:
+    /// Phase C2 keyboard forwarding stub. (No-op; the CanvasKit keydown handler
+    /// dispatches per-key directly. Kept tested + ready.)
+    #[allow(dead_code)]
+    pub fn apply_key(&mut self, _event: &op_editor_ui::KeyEvent) -> bool {
+        false
     }
 }

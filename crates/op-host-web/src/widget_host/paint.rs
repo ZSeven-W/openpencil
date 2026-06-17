@@ -9,24 +9,25 @@
 //! canvas reads the render scene.
 
 use super::WidgetHost;
-use crate::backend::WebBackend;
 use op_editor_ui::widgets::variables_panel::VariablesPanel;
 use op_editor_ui::widgets::{
     AIChatPlaceholder, CanvasViewport, ComponentBrowserPanel, DesignMdPanel, IconPickerPanel,
     LayerPanel, LayoutCx, LocalePicker, PaintCx, PropertyPanel, ShapePicker, StatusBar, Toolbar,
-    TopBar, Widget, STATUS_BAR_HEIGHT, STATUS_BAR_WIDTH, TOOLBAR_WIDTH, TOP_BAR_HEIGHT,
+    Widget, STATUS_BAR_HEIGHT, STATUS_BAR_WIDTH, TOOLBAR_WIDTH, TOP_BAR_HEIGHT,
 };
 use op_editor_ui::{Point2D, Rect, RenderBackend};
 
 use super::{STATUS_INSET, TOOLBAR_INSET_X, TOOLBAR_INSET_Y};
 
 impl WidgetHost {
-    /// Paint the full editor-UI composition onto the live web
-    /// backend. Thin shim over [`WidgetHost::paint_editor`] — kept so
-    /// the browser runner's call site stays unchanged while tests can
-    /// drive the same pass through any `RenderBackend`.
-    // glue:
-    pub fn paint(&mut self, backend: &mut WebBackend, viewport_width: f32, viewport_height: f32) {
+    /// Backend-generic public paint entry (used by the CanvasKit host).
+    /// Delegates to the same composition pass.
+    pub fn paint_dyn(
+        &mut self,
+        backend: &mut dyn RenderBackend,
+        viewport_width: f32,
+        viewport_height: f32,
+    ) {
         self.paint_editor(backend, viewport_width, viewport_height);
     }
 
@@ -96,11 +97,8 @@ impl WidgetHost {
         self.refresh_layout_scene();
         let ui = &self.editor_state.editor_ui;
 
-        let top_bar = TopBar::for_editor_ui(&self.editor_state.editor_ui);
-        let top_bar_rect = Rect {
-            origin: Point2D::new(0.0, 0.0),
-            size: Point2D::new(viewport_width, TOP_BAR_HEIGHT),
-        };
+        let top_bar = self.top_bar();
+        let top_bar_rect = self.top_bar_rect(viewport_width);
         {
             let mut cx = PaintCx {
                 backend: &mut *backend,
@@ -422,6 +420,17 @@ impl WidgetHost {
                 backend: &mut *backend,
             };
             menu.paint(&mut cx, menu_rect);
+        }
+
+        // Path-anchor context menu — Select-tool right-click on a
+        // path anchor / handle (native §11a).
+        if let Some(state) = self.editor_state.ui.path_anchor_menu.clone() {
+            use op_editor_ui::widgets::path_anchor_context_menu::PathAnchorContextMenu;
+            let menu = PathAnchorContextMenu::for_state(&self.editor_state, state);
+            let mut cx = PaintCx {
+                backend: &mut *backend,
+            };
+            menu.paint(&mut cx);
         }
 
         // Floating Component-Browser panel — painted just below the

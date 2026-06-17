@@ -76,6 +76,44 @@ pub(crate) fn resolve_bundle_dir() -> Option<PathBuf> {
         .find(|dir| dir.join(BUNDLE_ENTRY_JS).is_file())
 }
 
+/// Candidate directories holding the vendored CanvasKit artifact
+/// (`canvaskit.{js,wasm}` + LICENSE), served at `/canvaskit/`. The Rust web
+/// shell's `canvaskit` rendering path loads `/canvaskit/canvaskit.js` at
+/// runtime, so the daemon must expose this directory.
+pub(crate) fn canvaskit_dir_candidates() -> Vec<PathBuf> {
+    let mut candidates = Vec::new();
+    if let Some(dir) = std::env::var_os("OPENPENCIL_CANVASKIT_DIR") {
+        candidates.push(PathBuf::from(dir));
+    }
+    if let Some(exe_dir) = std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(Path::to_path_buf))
+    {
+        // Deploy layout: shipped next to the executable / inside the bundle.
+        candidates.push(exe_dir.join("web-bundle").join("canvaskit"));
+        candidates.push(exe_dir.join("canvaskit"));
+        // Dev layout: the vendored crate assets two levels under the repo root.
+        candidates.push(
+            exe_dir
+                .join("..")
+                .join("..")
+                .join("crates")
+                .join("op-host-web")
+                .join("assets")
+                .join("canvaskit"),
+        );
+    }
+    candidates
+}
+
+/// First candidate directory that actually contains `canvaskit.js`, or `None`
+/// when the artifact is not deployed anywhere.
+pub(crate) fn resolve_canvaskit_dir() -> Option<PathBuf> {
+    canvaskit_dir_candidates()
+        .into_iter()
+        .find(|dir| dir.join("canvaskit.js").is_file())
+}
+
 /// MIME type for a bundle file, keyed on its extension. `.wasm` MUST be
 /// `application/wasm` for `WebAssembly.instantiateStreaming` to accept it.
 fn content_type_for(name: &str) -> &'static str {
@@ -88,6 +126,44 @@ fn content_type_for(name: &str) -> &'static str {
         "ts" => "text/plain; charset=utf-8",
         _ => "application/octet-stream",
     }
+}
+
+/// Validate a request sub-path and return a traversal-safe relative path, or
+/// `None` if it escapes. Permits nested directories (wasm-bindgen snippets)
+/// while rejecting empty input, backslashes, and any `.` / `..` / dot-prefixed
+/// component.
+fn safe_relative_path(file: &str) -> Option<PathBuf> {
+    // Reject backslash anywhere — it is a path separator on Windows, so it
+    // could smuggle traversal past the `/`-split below.
+    if file.is_empty() || file.contains('\\') {
+        return None;
+    }
+    let mut rel = PathBuf::new();
+    for comp in file.split('/') {
+        // Reject empty, current/parent dir, dot-prefixed (dotfiles), and any
+        // component containing `:` — on Windows that is a drive letter or an
+        // NTFS alternate-data-stream, both of which can escape the base.
+        if comp.is_empty()
+            || comp == "."
+            || comp == ".."
+            || comp.starts_with('.')
+            || comp.contains(':')
+        {
+            return None;
+        }
+        rel.push(comp);
+    }
+    // Final defense, platform-aware: after assembly every component must be a
+    // plain `Normal` segment. This catches any Windows drive / root / prefix /
+    // parent that slipped through the string checks, so `dir.join(rel)` can
+    // never resolve outside `dir`.
+    if !rel
+        .components()
+        .all(|c| matches!(c, std::path::Component::Normal(_)))
+    {
+        return None;
+    }
+    Some(rel)
 }
 
 /// Handle a static `GET`. Returns `None` for paths this layer does not own
@@ -106,21 +182,35 @@ pub(crate) fn handle_static_request(path: &str, bundle_dir: Option<&Path>) -> Op
         });
     }
     if let Some(file) = path.strip_prefix("/pkg/") {
-        // Only flat, plain file names — the wasm-bindgen output is flat, so
-        // any separator or dot-prefixed name is a traversal attempt, not a
-        // bundle file.
-        if file.is_empty()
-            || file.contains('/')
-            || file.contains('\\')
-            || file.contains("..")
-            || file.starts_with('.')
-        {
+        // Serve flat bundle files AND nested ones: wasm-bindgen with a JS
+        // `module = "..."` snippet emits `snippets/<hash>/src/<file>.js`, which
+        // `op_host_web.js` imports relative to `/pkg/`. `safe_relative_path`
+        // permits the subdirectories while still rejecting traversal.
+        let Some(rel) = safe_relative_path(file) else {
             return Some(not_found_reply());
-        }
+        };
         let Some(dir) = bundle_dir else {
             return Some(missing_bundle_reply());
         };
-        return Some(match std::fs::read(dir.join(file)) {
+        return Some(match std::fs::read(dir.join(&rel)) {
+            Ok(body) => StaticReply {
+                status: "200 OK",
+                content_type: content_type_for(file),
+                body,
+            },
+            Err(_) => not_found_reply(),
+        });
+    }
+    // Vendored CanvasKit artifact (the `canvaskit` web rendering path loads
+    // `/canvaskit/canvaskit.js` then the wasm).
+    if let Some(file) = path.strip_prefix("/canvaskit/") {
+        let Some(rel) = safe_relative_path(file) else {
+            return Some(not_found_reply());
+        };
+        let Some(dir) = resolve_canvaskit_dir() else {
+            return Some(not_found_reply());
+        };
+        return Some(match std::fs::read(dir.join(&rel)) {
             Ok(body) => StaticReply {
                 status: "200 OK",
                 content_type: content_type_for(file),
@@ -203,6 +293,88 @@ mod tests {
     }
 
     #[test]
+    fn pkg_serves_nested_wasm_bindgen_snippet_and_blocks_traversal() {
+        let dir = stub_bundle("snippet");
+        let snip = dir.join("snippets").join("op-host-web-abc").join("src");
+        std::fs::create_dir_all(&snip).expect("snippet dir");
+        std::fs::write(snip.join("op_ck_bridge.js"), b"export function x(){}").expect("snippet js");
+        // Nested snippet path resolves (this is what wasm-bindgen `module=` emits).
+        let reply = handle_static_request(
+            "/pkg/snippets/op-host-web-abc/src/op_ck_bridge.js",
+            Some(&dir),
+        )
+        .expect("pkg route");
+        assert_eq!(reply.status, "200 OK", "nested snippet must serve");
+        assert_eq!(reply.content_type, "text/javascript");
+        // Traversal is blocked on every platform: posix `..`, Windows
+        // backslash separators, drive letters, and NTFS alternate-data-streams.
+        for bad in [
+            "/pkg/../web_static.rs",
+            "/pkg/snippets/../../etc",
+            "/pkg/.hidden",
+            "/pkg/..\\..\\windows\\system32",
+            "/pkg/C:/Windows/win.ini",
+            "/pkg/op_host_web_bg.wasm:$DATA",
+        ] {
+            let r = handle_static_request(bad, Some(&dir)).expect("owned");
+            assert_eq!(r.status, "404 Not Found", "{bad}");
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn safe_relative_path_rejects_traversal_and_windows_escapes() {
+        // Valid nested file.
+        assert!(safe_relative_path("snippets/op-host-web-x/src/op_ck_bridge.js").is_some());
+        assert!(safe_relative_path("op_host_web.js").is_some());
+        // Escapes / invalid — all must reject.
+        for bad in [
+            "",
+            "..",
+            "a/../b",
+            "../etc/passwd",
+            ".hidden",
+            "a\\b",
+            "..\\..\\x",
+            "C:/x",
+            "C:x",
+            "file.js:stream",
+            "/abs",
+        ] {
+            assert!(safe_relative_path(bad).is_none(), "must reject {bad:?}");
+        }
+    }
+
+    #[test]
+    fn canvaskit_route_serves_vendored_assets_and_guards_traversal() {
+        // Owned route: traversal / nested / dot-prefixed names are rejected
+        // without touching the filesystem.
+        for bad in [
+            "/canvaskit/",
+            "/canvaskit/a/b",
+            "/canvaskit/../x",
+            "/canvaskit/.hidden",
+        ] {
+            let reply = handle_static_request(bad, None).expect("canvaskit route is owned");
+            assert_eq!(reply.status, "404 Not Found", "{bad}");
+        }
+        // Positive serve from a resolved dir (via the env override candidate).
+        let dir = std::env::temp_dir().join(format!("op-ck-assets-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("ck dir");
+        std::fs::write(dir.join("canvaskit.js"), b"/* ck */").expect("ck.js");
+        std::fs::write(dir.join("canvaskit.wasm"), [0u8, 0x61, 0x73, 0x6d]).expect("ck.wasm");
+        std::env::set_var("OPENPENCIL_CANVASKIT_DIR", &dir);
+        let js = handle_static_request("/canvaskit/canvaskit.js", None).expect("route");
+        assert_eq!(js.status, "200 OK");
+        assert_eq!(js.content_type, "text/javascript");
+        let wasm = handle_static_request("/canvaskit/canvaskit.wasm", None).expect("route");
+        assert_eq!(wasm.status, "200 OK");
+        assert_eq!(wasm.content_type, "application/wasm");
+        std::env::remove_var("OPENPENCIL_CANVASKIT_DIR");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn index_serves_embedded_host_page_when_bundle_present() {
         let dir = stub_bundle("index");
         let reply = handle_static_request("/", Some(&dir)).expect("static route");
@@ -212,6 +384,36 @@ mod tests {
         // The host page loads the glue and mounts on the canvas.
         assert!(body.contains("/pkg/op_host_web.js"), "{body}");
         assert!(body.contains("mount('op')"), "{body}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn index_caps_boot_canvas_pixels_and_upgrades_after_mount() {
+        let dir = stub_bundle("dpr");
+        let reply = handle_static_request("/", Some(&dir)).expect("static route");
+        let body = String::from_utf8(reply.body).expect("utf8");
+        assert!(body.contains("window.devicePixelRatio"), "{body}");
+        assert!(body.contains("BOOT_CANVAS_PIXEL_BUDGET"), "{body}");
+        assert!(body.contains("STEADY_CANVAS_PIXEL_BUDGET"), "{body}");
+        assert!(
+            body.contains("Math.sqrt(Math.max(1, pixelBudget) / oneXDots)"),
+            "{body}"
+        );
+        assert!(
+            body.contains("sizeCanvasForDisplay(BOOT_CANVAS_PIXEL_BUDGET)"),
+            "{body}"
+        );
+        assert!(
+            body.contains("canvas.style.width = `${cssWidth}px`"),
+            "{body}"
+        );
+        assert!(body.contains("requestIdleCallback"), "{body}");
+        assert!(
+            body.contains("sizeCanvasForDisplay(STEADY_CANVAS_PIXEL_BUDGET)"),
+            "{body}"
+        );
+        assert!(body.contains("window.requestAnimationFrame"), "{body}");
+        assert!(body.contains("window.__opShell.resize()"), "{body}");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
