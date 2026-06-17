@@ -530,9 +530,13 @@ impl VariablesPanel {
 
     fn preset_rect(&self, rect: Rect) -> Rect {
         let add = self.add_theme_rect(rect);
+        // Snug to the `book + label + chevron` content (paint draws the chevron
+        // at origin + 29 + label_w + 7, width 11), with a small right pad — so
+        // the wash/hit isn't a fixed over-wide pill.
+        let width = label_width(self.labels().preset, 13.0) + 55.0;
         Rect {
             origin: Point2D::new(add.origin.x + add.size.x + 8.0, rect.origin.y + 6.0),
-            size: Point2D::new(122.0, 32.0),
+            size: Point2D::new(width, 32.0),
         }
     }
 
@@ -557,9 +561,11 @@ impl VariablesPanel {
         for (i, label) in self.theme_tab_labels().iter().enumerate() {
             let width = self.theme_tab_hit_width(label);
             if i == idx {
+                // Tighter wash than before (was x-6 / width+12) so the active
+                // tab's hover doesn't extend well past `label v`.
                 return Rect {
-                    origin: Point2D::new(x - 6.0, rect.origin.y + 6.0),
-                    size: Point2D::new(width + 12.0, 32.0),
+                    origin: Point2D::new(x - 4.0, rect.origin.y + 6.0),
+                    size: Point2D::new(width + 8.0, 32.0),
                 };
             }
             x += self.theme_tab_advance_width(label);
@@ -578,7 +584,7 @@ impl VariablesPanel {
         if self.renaming_theme.as_deref() == Some(label) {
             self.theme_rename_input_width()
         } else {
-            label_width(label, 13.0) + 20.0
+            label_width(label, 13.0) + 14.0
         }
     }
 
