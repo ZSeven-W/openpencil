@@ -74,6 +74,8 @@ jobs:
       # smoke (memory_loop) self-uses the raster fallback instead of
       # hard-failing on EGL init. Real-GPU coverage runs on dev machines.
       - run: cargo test --workspace
+      - name: Run CanvasKit web host tests
+        run: cargo test -p op-host-web --features canvaskit
       - run: cargo clippy --workspace --all-targets -- -D warnings
       # Step 1a Phase C Task 4: spec v19 §11 + §12.3 boundary invariants.
       # Linux runner has the full mobile target stdlib (`rustup target add`
