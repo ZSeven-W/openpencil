@@ -72,6 +72,10 @@ jobs:
   build:
     name: ${{ matrix.label }}
     runs-on: ${{ matrix.runner }}
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+    env:
+      HAS_APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE_P12 != '' && 'true' || 'false' }}
+      HAS_WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERT_BASE64 != '' && 'true' || 'false' }}
     strategy:
       fail-fast: false
       matrix:
@@ -214,13 +218,13 @@ jobs:
       #   WINDOWS_CERT_BASE64         base64 of the code-signing .pfx
       #   WINDOWS_CERT_PASSWORD       password for that .pfx
       - name: Import codesign certificate (macos)
-        if: ${{ runner.os == 'macOS' && secrets.APPLE_CERTIFICATE_P12 != '' }}
+        if: runner.os == 'macOS' && env.HAS_APPLE_CERTIFICATE == 'true'
         uses: apple-actions/import-codesign-certs@v3
         with:
           p12-file-base64: ${{ secrets.APPLE_CERTIFICATE_P12 }}
           p12-password: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
       - name: Codesign + notarize DMG (macos)
-        if: ${{ runner.os == 'macOS' && secrets.APPLE_CERTIFICATE_P12 != '' }}
+        if: runner.os == 'macOS' && env.HAS_APPLE_CERTIFICATE == 'true'
         shell: bash
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
@@ -258,7 +262,7 @@ jobs:
       # exists — see the secrets comment block in the macOS section above).
       # Until then the NSIS installer ships unsigned (current behavior).
       - name: Sign NSIS installer (windows)
-        if: ${{ runner.os == 'Windows' && secrets.WINDOWS_CERT_BASE64 != '' }}
+        if: runner.os == 'Windows' && env.HAS_WINDOWS_CERTIFICATE == 'true'
         shell: pwsh
         env:
           WINDOWS_CERT_BASE64: ${{ secrets.WINDOWS_CERT_BASE64 }}
