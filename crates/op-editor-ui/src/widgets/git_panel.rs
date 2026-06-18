@@ -918,14 +918,6 @@ impl<'a> GitPanel<'a> {
     }
 }
 
-/// Whether `point` is inside `rect`.
-pub(super) fn contains(rect: Rect, point: Point2D) -> bool {
-    point.x >= rect.origin.x
-        && point.x <= rect.origin.x + rect.size.x
-        && point.y >= rect.origin.y
-        && point.y <= rect.origin.y + rect.size.y
-}
-
 /// Char truncation with an ellipsis.
 pub(super) fn truncate(s: &str, max: usize) -> String {
     if s.chars().count() <= max {

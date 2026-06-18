@@ -6,7 +6,7 @@
 //! "导入现有密钥" + "生成新密钥". Rendered as an overflow popover subview
 //! (`GitOverflowView::SshKeys`), anchored + hit-tested like remote-settings.
 
-use crate::widgets::git_panel::{contains, truncate, GitPanel, GitPanelHit, PAD};
+use crate::widgets::git_panel::{truncate, GitPanel, GitPanelHit, PAD};
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect};
@@ -150,7 +150,7 @@ impl GitPanel<'_> {
     /// Hit-test the SSH-keys subview.
     pub(super) fn ssh_keys_hit(&self, panel_rect: Rect, point: Point2D) -> Option<GitPanelHit> {
         let p = self.ssh_keys_panel(panel_rect);
-        if !contains(p, point) {
+        if !p.contains(point) {
             return None;
         }
         // ‹ Back row.
@@ -158,14 +158,14 @@ impl GitPanel<'_> {
             origin: Point2D::new(p.origin.x + SSH_PAD, p.origin.y + SSH_PAD),
             size: Point2D::new(p.size.x - SSH_PAD * 2.0, SSH_BACK_H),
         };
-        if contains(back, point) {
+        if back.contains(point) {
             return Some(GitPanelHit::OverflowBack);
         }
         let (import, generate) = self.ssh_keys_footer_rects(panel_rect);
-        if contains(import, point) {
+        if import.contains(point) {
             return Some(GitPanelHit::SshImportKey);
         }
-        if contains(generate, point) {
+        if generate.contains(point) {
             return Some(GitPanelHit::SshGenerateKey);
         }
         Some(GitPanelHit::Inside)

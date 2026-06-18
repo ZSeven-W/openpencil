@@ -177,10 +177,10 @@ impl ThemePresetMenu {
     /// closes it — TS closes on outside mousedown unless the press
     /// is on the anchor button, which toggles instead).
     pub fn hit_test(&self, menu: Rect, point: Point2D) -> Option<PresetMenuHit> {
-        if !contains(menu, point) {
+        if !menu.contains(point) {
             return None;
         }
-        if contains(self.save_row_rect(menu), point) {
+        if self.save_row_rect(menu).contains(point) {
             return Some(if self.name_input_active {
                 PresetMenuHit::NameInput
             } else {
@@ -189,18 +189,18 @@ impl ThemePresetMenu {
         }
         for idx in 0..self.preset_names.len() {
             let row_rect = self.preset_row_rect(menu, idx);
-            if contains(row_rect, point) {
-                return Some(if contains(self.delete_rect(row_rect), point) {
+            if row_rect.contains(point) {
+                return Some(if self.delete_rect(row_rect).contains(point) {
                     PresetMenuHit::Delete(idx)
                 } else {
                     PresetMenuHit::Load(idx)
                 });
             }
         }
-        if contains(self.import_row_rect(menu), point) {
+        if self.import_row_rect(menu).contains(point) {
             return Some(PresetMenuHit::Import);
         }
-        if contains(self.export_row_rect(menu), point) {
+        if self.export_row_rect(menu).contains(point) {
             return Some(PresetMenuHit::Export);
         }
         Some(PresetMenuHit::Blank)
@@ -383,13 +383,6 @@ fn boundary_at_or_before(value: &str, pos: usize) -> usize {
         clipped -= 1;
     }
     clipped
-}
-
-fn contains(r: Rect, p: Point2D) -> bool {
-    p.x >= r.origin.x
-        && p.x <= r.origin.x + r.size.x
-        && p.y >= r.origin.y
-        && p.y <= r.origin.y + r.size.y
 }
 
 #[cfg(test)]

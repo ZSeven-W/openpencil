@@ -275,15 +275,9 @@ impl ExportDialog {
     }
 
     /// True iff the point lands inside the dialog rect (inclusive
-    /// of the right + bottom edges, unlike `rect_contains` which
-    /// uses half-open bounds — codex NIT: edge-pixel clicks must
-    /// be treated as in-dialog dead space, not outside-click).
+    /// of the right + bottom edges).
     pub fn contains(&self, point: Point2D) -> bool {
-        let r = self.rect;
-        point.x >= r.origin.x
-            && point.x <= r.origin.x + r.size.x
-            && point.y >= r.origin.y
-            && point.y <= r.origin.y + r.size.y
+        self.rect.contains(point)
     }
 
     fn format_pill_rect(&self, i: usize) -> Rect {

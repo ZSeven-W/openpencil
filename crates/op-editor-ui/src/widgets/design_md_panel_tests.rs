@@ -116,13 +116,6 @@ fn approx_label_width(label: &str) -> f32 {
         .sum()
 }
 
-fn contains_point(rect: Rect, point: Point2D) -> bool {
-    point.x >= rect.origin.x
-        && point.x <= rect.origin.x + rect.size.x
-        && point.y >= rect.origin.y
-        && point.y <= rect.origin.y + rect.size.y
-}
-
 fn painted_text_y(state: &EditorState, label: &str) -> f32 {
     let panel = DesignMdPanel::for_editor(state).expect("open");
     let rect = Rect::xywh(0.0, 0.0, 480.0, 560.0);
@@ -219,13 +212,13 @@ fn empty_state_action_button_contents_are_centered() {
             .find(|button| {
                 (button.size.x - 138.0).abs() < 0.01
                     && (button.size.y - 32.0).abs() < 0.01
-                    && contains_point(*button, *text_origin)
+                    && button.contains(*text_origin)
             })
             .expect("empty action button background should contain its label");
         let (icon_origin, _) = backend
             .icons
             .iter()
-            .find(|(origin, size)| (*size - 14.0).abs() < 0.01 && contains_point(button, *origin))
+            .find(|(origin, size)| (*size - 14.0).abs() < 0.01 && button.contains(*origin))
             .expect("empty action button should paint an icon");
         let content_left = icon_origin.x;
         let content_right = text_origin.x + approx_label_width(text);

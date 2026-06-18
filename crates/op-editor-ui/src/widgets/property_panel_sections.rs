@@ -279,15 +279,9 @@ pub fn tab_strip_hit(
 ) -> Option<op_editor_core::PropertyTab> {
     use op_editor_core::PropertyTab;
     let (design_rect, code_rect) = tab_strip_rects(labels, x, y);
-    let inside = |r: Rect| {
-        point.x >= r.origin.x
-            && point.x <= r.origin.x + r.size.x
-            && point.y >= r.origin.y
-            && point.y <= r.origin.y + r.size.y
-    };
-    if inside(design_rect) {
+    if design_rect.contains(point) {
         Some(PropertyTab::Design)
-    } else if inside(code_rect) {
+    } else if code_rect.contains(point) {
         Some(PropertyTab::Code)
     } else {
         None

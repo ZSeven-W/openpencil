@@ -11,8 +11,8 @@
 
 use crate::widgets::button::paint_button_feedback_wash;
 use crate::widgets::component_browser_panel::{
-    contains, truncate, ComponentBrowserHit, ComponentBrowserPanel, CHAR_W, HEADER_H,
-    IMPORTED_ROW_H, KIT_ROW_H, PAD,
+    truncate, ComponentBrowserHit, ComponentBrowserPanel, CHAR_W, HEADER_H, IMPORTED_ROW_H,
+    KIT_ROW_H, PAD,
 };
 use crate::widgets::{draw_icon, Icon, PaintCx};
 use crate::{Point2D, Rect};
@@ -136,7 +136,7 @@ impl ComponentBrowserPanel<'_> {
         point: Point2D,
     ) -> ComponentBrowserHit {
         for (rect, id) in self.kit_option_rects(panel) {
-            if contains(rect, point) {
+            if rect.contains(point) {
                 return ComponentBrowserHit::SelectKitFilter(id);
             }
         }
@@ -146,7 +146,7 @@ impl ComponentBrowserPanel<'_> {
     pub(in crate::widgets) fn hover_kit_picker(&self, panel: Rect, point: Point2D) -> Option<Btn> {
         self.kit_option_rects(panel)
             .iter()
-            .position(|(rect, _)| contains(*rect, point))
+            .position(|(rect, _)| rect.contains(point))
             .map(Btn::KitOption)
     }
 
@@ -157,7 +157,7 @@ impl ComponentBrowserPanel<'_> {
         panel: Rect,
         point: Point2D,
     ) -> Option<ComponentBrowserHit> {
-        if contains(self.kit_dropdown_rect(panel), point) {
+        if self.kit_dropdown_rect(panel).contains(point) {
             return Some(ComponentBrowserHit::ToggleKitPicker);
         }
         let confirm_id = self
@@ -167,19 +167,19 @@ impl ComponentBrowserPanel<'_> {
             .as_deref();
         let imported = self.imported_kits();
         for (i, row) in self.imported_row_rects(panel).into_iter().enumerate() {
-            if !contains(row, point) {
+            if !row.contains(point) {
                 continue;
             }
             let kit = imported[i];
             if confirm_id == Some(kit.id.as_str()) {
                 let (delete, cancel) = self.confirm_rects(panel, row);
-                if contains(delete, point) {
+                if delete.contains(point) {
                     return Some(ComponentBrowserHit::ConfirmDeleteKit(kit.id.clone()));
                 }
-                if contains(cancel, point) {
+                if cancel.contains(point) {
                     return Some(ComponentBrowserHit::CancelDeleteKit);
                 }
-            } else if contains(Self::trash_rect(panel, row), point) {
+            } else if Self::trash_rect(panel, row).contains(point) {
                 return Some(ComponentBrowserHit::RequestDeleteKit(kit.id.clone()));
             }
             return Some(ComponentBrowserHit::Inside);
@@ -188,7 +188,7 @@ impl ComponentBrowserPanel<'_> {
     }
 
     pub(in crate::widgets) fn hover_kit_strip(&self, panel: Rect, point: Point2D) -> Option<Btn> {
-        if contains(self.kit_dropdown_rect(panel), point) {
+        if self.kit_dropdown_rect(panel).contains(point) {
             return Some(Btn::KitFilter);
         }
         let confirm_id = self
@@ -198,18 +198,18 @@ impl ComponentBrowserPanel<'_> {
             .as_deref();
         let imported = self.imported_kits();
         for (i, row) in self.imported_row_rects(panel).into_iter().enumerate() {
-            if !contains(row, point) {
+            if !row.contains(point) {
                 continue;
             }
             if confirm_id == Some(imported[i].id.as_str()) {
                 let (delete, cancel) = self.confirm_rects(panel, row);
-                if contains(delete, point) {
+                if delete.contains(point) {
                     return Some(Btn::KitConfirmDelete(i));
                 }
-                if contains(cancel, point) {
+                if cancel.contains(point) {
                     return Some(Btn::KitCancelDelete(i));
                 }
-            } else if contains(Self::trash_rect(panel, row), point) {
+            } else if Self::trash_rect(panel, row).contains(point) {
                 return Some(Btn::KitDelete(i));
             }
             return None;

@@ -8,7 +8,7 @@
 //! 800-line cap. Geometry is shared by paint + hit-test through
 //! [`GitPanel::clone_layout`] so they can't drift.
 
-use crate::widgets::git_panel::{contains, GitPanel, GitPanelHit, BUTTON_H, PAD};
+use crate::widgets::git_panel::{GitPanel, GitPanelHit, BUTTON_H, PAD};
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect};
 use op_editor_core::CloneField;
@@ -212,7 +212,7 @@ impl GitPanel<'_> {
     pub(super) fn clone_hit(&self, rect: Rect, point: Point2D) -> Option<GitPanelHit> {
         let layout = self.clone_layout(rect);
         // Cancel is always live — it abandons an in-flight clone.
-        if contains(layout.cancel, point) {
+        if layout.cancel.contains(point) {
             return Some(GitPanelHit::CloneCancel);
         }
         // While a clone runs the rest of the form is locked (paint greys
@@ -220,7 +220,7 @@ impl GitPanel<'_> {
         if self.state.clone_form.as_ref().is_some_and(|f| f.cloning) {
             return Some(GitPanelHit::Inside);
         }
-        if contains(layout.submit, point) {
+        if layout.submit.contains(point) {
             // The Clone button paints disabled until both fields are
             // filled — swallow clicks then so its hit behaviour matches.
             return Some(if self.clone_can_submit() {
@@ -229,13 +229,13 @@ impl GitPanel<'_> {
                 GitPanelHit::Inside
             });
         }
-        if contains(layout.dest_pick, point) {
+        if layout.dest_pick.contains(point) {
             return Some(GitPanelHit::CloneDestPick);
         }
-        if contains(layout.url_input, point) {
+        if layout.url_input.contains(point) {
             return Some(GitPanelHit::CloneUrlInput);
         }
-        if contains(layout.dest_input, point) {
+        if layout.dest_input.contains(point) {
             return Some(GitPanelHit::CloneDestInput);
         }
         // Inside the panel but not on a target — swallow.

@@ -153,11 +153,7 @@ impl ShapePicker {
     /// because the shared Select has no padding concept and uses the density
     /// row height, which would desync from this picker's `ROW_HEIGHT`.
     pub fn hit_popup(&self, panel_rect: Rect, point: Point2D) -> SelectHit {
-        let inside_x =
-            point.x >= panel_rect.origin.x && point.x <= panel_rect.origin.x + panel_rect.size.x;
-        let inside_y =
-            point.y >= panel_rect.origin.y && point.y <= panel_rect.origin.y + panel_rect.size.y;
-        if !inside_x || !inside_y {
+        if !panel_rect.contains(point) {
             return SelectHit::Outside;
         }
         let local_y = point.y - panel_rect.origin.y - PANEL_PAD_Y;

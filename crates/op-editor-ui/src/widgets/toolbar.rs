@@ -266,7 +266,7 @@ impl Toolbar {
                         origin: Point2D::new(button_x, y),
                         size: Point2D::new(BUTTON_SIZE, BUTTON_SIZE),
                     };
-                    if hit(button_rect, point) {
+                    if button_rect.contains(point) {
                         return Some(ToolbarHit::Tool(*tool));
                     }
                     y += BUTTON_SIZE;
@@ -280,7 +280,7 @@ impl Toolbar {
                         origin: Point2D::new(button_x, y),
                         size: Point2D::new(BUTTON_SIZE, BUTTON_SIZE),
                     };
-                    if hit(button_rect, point) {
+                    if button_rect.contains(point) {
                         return Some(ToolbarHit::Action(*action));
                     }
                     y += BUTTON_SIZE;
@@ -297,7 +297,7 @@ impl Toolbar {
                         origin: Point2D::new(button_x, y),
                         size: Point2D::new(BUTTON_SIZE, BUTTON_SIZE + SHAPE_SLOT_BOTTOM_EXTRA),
                     };
-                    if hit(button_rect, point) {
+                    if button_rect.contains(point) {
                         return Some(ToolbarHit::ToggleShapePicker);
                     }
                     y += BUTTON_SIZE + SHAPE_SLOT_BOTTOM_EXTRA;
@@ -320,13 +320,6 @@ pub fn icon_for_shape(tool: Tool) -> Icon {
         Tool::Pen => Icon::PenTool,
         _ => Icon::Square,
     }
-}
-
-fn hit(r: Rect, p: Point2D) -> bool {
-    p.x >= r.origin.x
-        && p.x <= r.origin.x + r.size.x
-        && p.y >= r.origin.y
-        && p.y <= r.origin.y + r.size.y
 }
 
 impl Widget for Toolbar {

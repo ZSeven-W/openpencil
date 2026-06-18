@@ -11,7 +11,7 @@
 //! pure-geometry hit-test agrees with paint.
 
 use crate::widgets::button::paint_button_feedback_wash;
-use crate::widgets::git_panel::{contains, truncate, GitPanel, GitPanelHit, PAD};
+use crate::widgets::git_panel::{truncate, GitPanel, GitPanelHit, PAD};
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect};
@@ -435,19 +435,19 @@ impl GitPanel<'_> {
         point: Point2D,
     ) -> Option<GitPanelHit> {
         let panel = self.branch_picker_panel(panel_rect);
-        if !contains(panel, point) {
+        if !panel.contains(point) {
             return None;
         }
         match self.state.branch_picker_mode {
             GitBranchPickerMode::Create => {
                 let (input, submit, cancel) = self.branch_create_rects(panel);
-                if contains(input, point) {
+                if input.contains(point) {
                     return Some(GitPanelHit::BranchCreateInput);
                 }
-                if contains(submit, point) {
+                if submit.contains(point) {
                     return Some(GitPanelHit::BranchCreateSubmit);
                 }
-                if contains(cancel, point) {
+                if cancel.contains(point) {
                     return Some(GitPanelHit::BranchPickerCancel);
                 }
                 Some(GitPanelHit::Inside)
@@ -455,7 +455,7 @@ impl GitPanel<'_> {
             GitBranchPickerMode::Merge => {
                 let candidates = self.merge_candidate_indices();
                 for (i, row) in self.branch_picker_row_rects(panel_rect).iter().enumerate() {
-                    if contains(*row, point) {
+                    if row.contains(point) {
                         return Some(GitPanelHit::MergeBranch(candidates[i]));
                     }
                 }
@@ -465,23 +465,23 @@ impl GitPanel<'_> {
             }
             GitBranchPickerMode::List => {
                 for (i, row) in self.branch_picker_row_rects(panel_rect).iter().enumerate() {
-                    if !contains(*row, point) {
+                    if !row.contains(point) {
                         continue;
                     }
                     let is_current = self.state.branches.get(i) == self.state.branch.as_ref();
                     if is_current {
                         return Some(GitPanelHit::Inside);
                     }
-                    if contains(GitPanel::branch_merge_button(*row), point) {
+                    if GitPanel::branch_merge_button(*row).contains(point) {
                         return Some(GitPanelHit::MergeBranch(i));
                     }
                     return Some(GitPanelHit::SwitchBranch(i));
                 }
                 let (create_r, merge_r) = self.branch_footer_rects(panel);
-                if contains(create_r, point) {
+                if create_r.contains(point) {
                     return Some(GitPanelHit::BranchCreateMode);
                 }
-                if contains(merge_r, point) {
+                if merge_r.contains(point) {
                     return Some(GitPanelHit::BranchMergeMode);
                 }
                 Some(GitPanelHit::Inside)
@@ -491,14 +491,14 @@ impl GitPanel<'_> {
 
     pub fn branch_picker_menu_hit(&self, panel_rect: Rect, point: Point2D) -> MenuHit {
         let panel = self.branch_picker_panel(panel_rect);
-        if !contains(panel, point) {
+        if !panel.contains(point) {
             return MenuHit::Outside;
         }
         if self.state.branch_picker_mode == GitBranchPickerMode::Create {
             return MenuHit::Inside;
         }
         for (i, row) in self.branch_picker_row_rects(panel_rect).iter().enumerate() {
-            if contains(*row, point) {
+            if row.contains(point) {
                 return MenuHit::Row(i);
             }
         }
@@ -610,11 +610,11 @@ impl GitPanel<'_> {
 
     pub fn overflow_menu_hit(&self, panel_rect: Rect, point: Point2D) -> MenuHit {
         let panel = self.overflow_panel(panel_rect);
-        if !contains(panel, point) {
+        if !panel.contains(point) {
             return MenuHit::Outside;
         }
         for (i, row) in self.overflow_row_rects(panel_rect).iter().enumerate() {
-            if contains(*row, point) {
+            if row.contains(point) {
                 return MenuHit::Row(i);
             }
         }
@@ -853,21 +853,21 @@ impl GitPanel<'_> {
         point: Point2D,
     ) -> Option<GitPanelHit> {
         let p = self.remote_settings_panel(panel_rect);
-        if !contains(p, point) {
+        if !p.contains(point) {
             return None;
         }
         let (back, url_input, set) = self.remote_settings_rects(panel_rect);
-        if contains(back, point) {
+        if back.contains(point) {
             return Some(GitPanelHit::OverflowBack);
         }
-        if contains(url_input, point) {
+        if url_input.contains(point) {
             return Some(GitPanelHit::RemoteInput);
         }
-        if contains(set, point) {
+        if set.contains(point) {
             return Some(GitPanelHit::SetRemote);
         }
         if !self.state.remotes.is_empty()
-            && contains(self.remote_settings_fetch_rect(panel_rect), point)
+            && self.remote_settings_fetch_rect(panel_rect).contains(point)
         {
             return Some(GitPanelHit::FetchRemote);
         }

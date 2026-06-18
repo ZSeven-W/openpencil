@@ -158,20 +158,20 @@ impl<'a> ComponentBrowserPanel<'a> {
     /// area; cards are index-addressable so no string ids are needed.
     pub fn hover_at(&self, panel: Rect, point: Point2D) -> Option<ComponentBrowserButton> {
         use ComponentBrowserButton as B;
-        if !contains(panel, point) {
+        if !panel.contains(point) {
             return None;
         }
         // The open kit-picker popover sits over everything else.
         if self.state.editor_ui.component_browser_kit_picker_open {
             return self.hover_kit_picker(panel, point);
         }
-        if contains(Self::close_rect(panel), point) {
+        if Self::close_rect(panel).contains(point) {
             return Some(B::Close);
         }
-        if contains(Self::import_rect(panel), point) {
+        if Self::import_rect(panel).contains(point) {
             return Some(B::ImportKit);
         }
-        if contains(Self::export_rect(panel), point) {
+        if Self::export_rect(panel).contains(point) {
             return Some(B::ExportKit);
         }
         if point.y <= panel.origin.y + HEADER_H {
@@ -181,13 +181,13 @@ impl<'a> ComponentBrowserPanel<'a> {
             return Some(hover);
         }
         for (rect, cat) in self.pill_rects(panel) {
-            if contains(rect, point) {
+            if rect.contains(point) {
                 return Some(B::Category(cat));
             }
         }
         self.card_rects(panel)
             .into_iter()
-            .position(|r| contains(r, point))
+            .position(|r| r.contains(point))
             .map(B::Card)
     }
 
@@ -363,7 +363,7 @@ impl<'a> ComponentBrowserPanel<'a> {
 
     /// Map a click at `point` onto a [`ComponentBrowserHit`].
     pub fn hit_test(&self, panel: Rect, point: Point2D) -> Option<ComponentBrowserHit> {
-        if !contains(panel, point) {
+        if !panel.contains(point) {
             return None;
         }
         // While the kit-filter popover is open it behaves like a
@@ -372,13 +372,13 @@ impl<'a> ComponentBrowserPanel<'a> {
         if self.state.editor_ui.component_browser_kit_picker_open {
             return Some(self.hit_test_kit_picker(panel, point));
         }
-        if contains(Self::close_rect(panel), point) {
+        if Self::close_rect(panel).contains(point) {
             return Some(ComponentBrowserHit::Close);
         }
-        if contains(Self::import_rect(panel), point) {
+        if Self::import_rect(panel).contains(point) {
             return Some(ComponentBrowserHit::ImportKit);
         }
-        if contains(Self::export_rect(panel), point) {
+        if Self::export_rect(panel).contains(point) {
             return Some(ComponentBrowserHit::ExportKit);
         }
         // The header bar (above the kit strip) starts a drag.
@@ -389,13 +389,13 @@ impl<'a> ComponentBrowserPanel<'a> {
             return Some(hit);
         }
         for (rect, cat) in self.pill_rects(panel) {
-            if contains(rect, point) {
+            if rect.contains(point) {
                 return Some(ComponentBrowserHit::SelectCategory(cat));
             }
         }
         let filtered = self.filtered();
         for (i, rect) in self.card_rects(panel).into_iter().enumerate() {
-            if contains(rect, point) {
+            if rect.contains(point) {
                 let (kit_id, comp) = &filtered[i];
                 return Some(ComponentBrowserHit::InsertComponent(
                     kit_id.to_string(),
@@ -674,13 +674,6 @@ impl<'a> ComponentBrowserPanel<'a> {
         );
         cx.backend.draw_text(&layout, Point2D::new(x, baseline));
     }
-}
-
-pub(in crate::widgets) fn contains(rect: Rect, point: Point2D) -> bool {
-    point.x >= rect.origin.x
-        && point.x <= rect.origin.x + rect.size.x
-        && point.y >= rect.origin.y
-        && point.y <= rect.origin.y + rect.size.y
 }
 
 pub(in crate::widgets) fn truncate(s: &str, max: usize) -> String {

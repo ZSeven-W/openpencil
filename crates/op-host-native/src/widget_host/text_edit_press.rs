@@ -176,12 +176,7 @@ impl WidgetHostNative {
         }
         let node = self.text_edit_scene_node()?;
         let p = self.text_edit_doc_point(x, y, &node);
-        let b = node.bounds;
-        let inside = p.x >= b.origin.x
-            && p.x <= b.origin.x + b.size.x
-            && p.y >= b.origin.y
-            && p.y <= b.origin.y + b.size.y;
-        if !inside {
+        if !node.bounds.contains(p) {
             return None;
         }
         Some(

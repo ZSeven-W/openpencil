@@ -157,13 +157,6 @@ fn paint_code_panel_does_not_panic_each_phase() {
     assert!(paint(&error) > 0.0);
 }
 
-fn contains(r: Rect, p: Point2D) -> bool {
-    p.x >= r.origin.x
-        && p.x <= r.origin.x + r.size.x
-        && p.y >= r.origin.y
-        && p.y <= r.origin.y + r.size.y
-}
-
 fn center(r: Rect) -> Point2D {
     Point2D::new(r.origin.x + r.size.x / 2.0, r.origin.y + r.size.y / 2.0)
 }
@@ -677,7 +670,7 @@ fn code_action_rects_generate_center_round_trips() {
     // Exactly one action contains the Generate button's centre.
     let hits: Vec<_> = rects
         .iter()
-        .filter(|(_, r)| contains(*r, p))
+        .filter(|(_, r)| r.contains(p))
         .map(|(a, _)| *a)
         .collect();
     assert_eq!(hits, vec![CodegenAction::Generate]);

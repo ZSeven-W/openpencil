@@ -42,15 +42,9 @@ pub fn code_action_hit_with_locale(
     point: Point2D,
     locale: Locale,
 ) -> Option<PropertyPanelAction> {
-    let inside = |r: Rect| {
-        point.x >= r.origin.x
-            && point.x <= r.origin.x + r.size.x
-            && point.y >= r.origin.y
-            && point.y <= r.origin.y + r.size.y
-    };
     code_action_rects_in_panel_with_locale(panel_rect, state, locale)
         .into_iter()
-        .find(|(_, r)| inside(*r))
+        .find(|(_, r)| r.contains(point))
         .map(|(a, _)| PropertyPanelAction::Codegen(a))
 }
 
@@ -70,15 +64,9 @@ pub fn code_hover_at_with_locale(
     point: Point2D,
     locale: Locale,
 ) -> (Option<Framework>, Option<CodegenHover>) {
-    let inside = |r: Rect| {
-        point.x >= r.origin.x
-            && point.x <= r.origin.x + r.size.x
-            && point.y >= r.origin.y
-            && point.y <= r.origin.y + r.size.y
-    };
     let hit = code_action_rects_in_panel_with_locale(panel_rect, state, locale)
         .into_iter()
-        .find(|(_, r)| inside(*r))
+        .find(|(_, r)| r.contains(point))
         .map(|(a, _)| a);
     match hit {
         Some(CodegenAction::SelectFramework(fw)) => (Some(fw), None),
