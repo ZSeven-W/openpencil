@@ -75,7 +75,7 @@ impl GitRepo {
 
         let mut files = Vec::new();
         for entry in entries.iter() {
-            let Some(path) = entry.path() else { continue };
+            let Ok(path) = entry.path() else { continue };
             files.push(FileStatus {
                 path: path.to_string(),
                 state: classify(entry.status()),
@@ -311,7 +311,7 @@ fn ahead_behind(repo: &git2::Repository) -> (u32, u32) {
     let resolve = || -> Option<(usize, usize)> {
         let head = repo.head().ok()?;
         let local = head.target()?;
-        let branch_name = head.shorthand()?;
+        let branch_name = head.shorthand().ok()?;
         let upstream = repo
             .find_branch(branch_name, git2::BranchType::Local)
             .ok()?

@@ -16,7 +16,7 @@ description = "Git-backed version control for OpenPencil documents"
 # libgit2 from source (cmake + cc), so the shipped binary carries its
 # own git engine. `vendored-openssl` keeps cross-arch macOS checks from
 # depending on a runner-local OpenSSL installation for the target arch.
-git2 = { version = "=0.20.4", features = ["vendored-libgit2", "vendored-openssl"] }
+git2 = { version = "=0.21.0", features = ["https", "ssh", "vendored-libgit2", "vendored-openssl"] }
 op-config-store = { path = "../op-config-store" }
 thiserror = { workspace = true }
 # Credential store (`auth.rs`) persistence — the host-keyed token /

@@ -11,13 +11,50 @@ fn fresh_state() -> WebCanvasState {
 const SYNC_BODY: &str = r##"{"document":{"version":"1.0.0","children":[{"id":"n9","type":"rectangle","name":"Synced Rect","x":1,"y":2,"width":80,"height":40,"fill":[{"type":"solid","color":"#123456"}]}]},"sourceClientId":"web"}"##;
 
 fn write_temp_op(name: &str, body: &str) -> PathBuf {
-    let path = std::env::temp_dir().join(format!(
-        "openpencil-web-canvas-{name}-{}-{}.op",
-        std::process::id(),
-        std::thread::current().name().unwrap_or("test")
+    let path = std::env::temp_dir().join(temp_op_file_name(
+        name,
+        std::thread::current().name().unwrap_or("test"),
     ));
     std::fs::write(&path, body).expect("write temp op");
     path
+}
+
+fn temp_op_file_name(name: &str, thread_name: &str) -> String {
+    format!(
+        "openpencil-web-canvas-{}-{}-{}.op",
+        sanitize_temp_file_component(name),
+        std::process::id(),
+        sanitize_temp_file_component(thread_name)
+    )
+}
+
+fn sanitize_temp_file_component(value: &str) -> String {
+    let sanitized: String = value
+        .chars()
+        .map(|ch| match ch {
+            'a'..='z' | 'A'..='Z' | '0'..='9' | '-' | '_' | '.' => ch,
+            _ => '-',
+        })
+        .collect();
+    let trimmed = sanitized.trim_matches(['-', '.']);
+    if trimmed.is_empty() {
+        "test".to_string()
+    } else {
+        trimmed.to_string()
+    }
+}
+
+#[test]
+fn temp_op_file_name_sanitizes_windows_reserved_path_chars() {
+    let file_name = temp_op_file_name(r#"recent:ok"#, r#"web_canvas_server::tests\case?*"#);
+
+    for reserved in ['<', '>', ':', '"', '/', '\\', '|', '?', '*'] {
+        assert!(
+            !file_name.contains(reserved),
+            "{file_name} contains reserved path character {reserved:?}"
+        );
+    }
+    assert!(file_name.ends_with(".op"));
 }
 
 #[test]

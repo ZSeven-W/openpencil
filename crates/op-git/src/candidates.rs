@@ -60,7 +60,7 @@ impl GitRepo {
                         continue;
                     };
                     let secs = commit.author().when().seconds();
-                    let summary = commit.summary().map(str::to_string);
+                    let summary = commit.summary().ok().flatten().map(str::to_string);
                     for delta in diff.deltas() {
                         let Some(path) = delta.new_file().path().and_then(Path::to_str) else {
                             continue;
