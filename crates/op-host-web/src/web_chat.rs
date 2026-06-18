@@ -19,18 +19,19 @@
 //!   transport's [`AiStreamHandle`]; a generation counter on the active-turn
 //!   slot makes the old pump (and any late events) die silently.
 //!
-//! Wire notes: the `/api/ai/stream` body carries `model` + a single `user`
-//! message (`ai_proxy::parse_ai_stream_body`) — no history and no attachment
-//! fields exist on the wire yet, so multi-turn context and staged attachments
-//! are NOT forwarded (the daemon proxies single-turn requests; parity item
-//! deferred until the wire grows those fields).
+//! Wire notes: sends go through `/api/ai/standard` with the selected model,
+//! current user message, trimmed prior text history, and the current document /
+//! selection snapshot. Staged image attachments are still transcript-only on
+//! web; the daemon wire has no attachment payload yet.
 
 use std::cell::{Cell, RefCell};
 use std::collections::VecDeque;
 use std::rc::Rc;
 
+use op_ai::chat_history::{trim_chat_history, DEFAULT_MAX_CHARS, DEFAULT_MAX_MESSAGES};
 use op_editor_core::chat::{AgentProvider, ChatState, ModelEntry};
 use op_editor_core::EditorState;
+use op_editor_host_core::chat::chat_history_from_transcript;
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
 
@@ -205,6 +206,20 @@ pub(crate) fn prepare_turn(state: &mut EditorState) -> Option<PreparedTurn> {
     let thinking = state.chat.thinking_mode.as_str();
     let effort = state.chat.effort_level.as_str();
     let agent_team_size = state.chat.agent_team_size;
+    let history = trim_chat_history(
+        &chat_history_from_transcript(&state.chat.messages),
+        DEFAULT_MAX_MESSAGES,
+        DEFAULT_MAX_CHARS,
+    );
+    let history_json: Vec<serde_json::Value> = history
+        .iter()
+        .map(|(role, content)| {
+            serde_json::json!({
+                "role": role.as_str(),
+                "content": content,
+            })
+        })
+        .collect();
     state.chat.pending_attachments.clear();
     let selected_ids: Vec<&str> = state.selection.set.iter().map(|id| id.as_str()).collect();
     let active_page_id = state
@@ -223,6 +238,7 @@ pub(crate) fn prepare_turn(state: &mut EditorState) -> Option<PreparedTurn> {
         "thinking": thinking,
         "effort": effort,
         "agent_team_size": agent_team_size,
+        "history": history_json,
         "document": state.doc,
         "selectedIds": selected_ids,
         "activePageId": active_page_id,
@@ -395,6 +411,38 @@ mod tests {
         assert!(body["skills"].as_array().is_some_and(Vec::is_empty));
         // The drain consumed the flag — a second drain is idle.
         assert!(prepare_turn(&mut state).is_none());
+    }
+
+    #[test]
+    fn prepare_turn_carries_prior_history_without_current_turn() {
+        let mut state = EditorState::new();
+        state
+            .chat
+            .messages
+            .push(op_editor_core::ChatMessage::user("previous request"));
+        state
+            .chat
+            .messages
+            .push(op_editor_core::ChatMessage::assistant("previous answer"));
+        state.chat.set_input_text("current request");
+        assert!(state.chat.begin_send());
+
+        let prepared = prepare_turn(&mut state).expect("send was pending");
+        let body: serde_json::Value =
+            serde_json::from_str(&prepared.body_json).expect("body is JSON");
+        let history = body["history"].as_array().expect("history array");
+
+        assert_eq!(history.len(), 2, "{history:?}");
+        assert_eq!(history[0]["role"], "user");
+        assert_eq!(history[0]["content"], "previous request");
+        assert_eq!(history[1]["role"], "assistant");
+        assert_eq!(history[1]["content"], "previous answer");
+        assert!(
+            !history
+                .iter()
+                .any(|item| item["content"] == "current request"),
+            "current user message rides `user`, not history: {history:?}"
+        );
     }
 
     #[test]

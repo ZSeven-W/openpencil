@@ -140,6 +140,7 @@ canvaskit = [
   "dep:op-codegen",
   "dep:op-ai",
   "dep:op-editor-host-core",
+  "op-editor-host-core/chat",
   "op-editor-host-core/codegen",
 ]
 # (Retired 2026-06-17: the skia raster WebBackend (`skia`) + its codegen/AI
