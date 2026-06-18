@@ -1005,6 +1005,26 @@ fn serve_one<S: Read + Write>(
         )?;
         return Ok(true);
     }
+    // `debug_screenshot` for `--serve-web`: the browser shell mirrors this
+    // daemon's document, so the daemon can satisfy the live screenshot tool from
+    // the same raster export path desktop live MCP uses. Keep this ahead of the
+    // generic dispatch, whose headless debug tool can only report no live
+    // canvas.
+    #[cfg(feature = "mcp-debug-tools")]
+    if let Some(response) = {
+        let guard = state.lock().unwrap_or_else(|p| p.into_inner());
+        crate::mcp_live::screenshot::maybe_serve(
+            &req.body,
+            op_mcp::debug_tools_enabled(),
+            |shot_req| {
+                let spec = crate::mcp_live::screenshot::capture_spec(&shot_req);
+                crate::export::screenshot::capture(&guard.editor, &spec)
+            },
+        )
+    } {
+        return crate::mcp_serve::write_mcp_http_response(stream, "200 OK", &response)
+            .map(|()| false);
+    }
     // JSON-RPC `/mcp` dispatch against the in-memory document. A mutating apply
     // bumps the sync version, broadcast to SSE subscribers so the browser shell
     // sees JSON-RPC-driven changes too.

@@ -29,9 +29,9 @@
 //! host page calls `/api/mcp/sync-reset` before mounting so a browser refresh
 //! starts from the starter document instead of replaying the previous transient
 //! web `.op` state; bootstrap pushes remain disabled so stale page state cannot
-//! overwrite a deliberately opened daemon document. The TS browser-rendered
-//! `screenshot:request` RPC is not implemented on the Rust web shell yet (the
-//! daemon reports screenshots honestly unavailable headless).
+//! overwrite a deliberately opened daemon document. Live screenshot requests are
+//! served by the `--serve-web` daemon's MCP route from this same synced document
+//! authority, rather than by browser-side capture.
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;

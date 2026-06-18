@@ -494,6 +494,31 @@ struct MockStream {
     output: Vec<u8>,
 }
 
+#[cfg(feature = "mcp-debug-tools")]
+struct EnvVarGuard {
+    key: &'static str,
+    previous: Option<std::ffi::OsString>,
+}
+
+#[cfg(feature = "mcp-debug-tools")]
+impl EnvVarGuard {
+    fn set(key: &'static str, value: &str) -> Self {
+        let previous = std::env::var_os(key);
+        std::env::set_var(key, value);
+        Self { key, previous }
+    }
+}
+
+#[cfg(feature = "mcp-debug-tools")]
+impl Drop for EnvVarGuard {
+    fn drop(&mut self) {
+        match &self.previous {
+            Some(value) => std::env::set_var(self.key, value),
+            None => std::env::remove_var(self.key),
+        }
+    }
+}
+
 impl std::io::Read for MockStream {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         self.input.read(buf)
@@ -624,6 +649,35 @@ fn serve_one_post_mcp_dispatches_jsonrpc() {
         r#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#,
     );
     assert!(r.contains("200 OK"), "{r}");
+}
+
+#[cfg(feature = "mcp-debug-tools")]
+#[test]
+fn serve_one_post_mcp_debug_screenshot_uses_web_canvas_renderer() {
+    let _debug_gate = EnvVarGuard::set("OPENPENCIL_DEBUG_TOOLS", "1");
+    let state = Mutex::new(fresh_state());
+    let hub = SseHub::default();
+    {
+        let mut guard = state.lock().expect("state lock");
+        let seeded = handle_web_canvas_request("POST", "/api/mcp/document", SYNC_BODY, &mut guard);
+        assert!(seeded.status.starts_with("200"), "{}", seeded.body);
+    }
+
+    let body = r#"{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"debug_screenshot","arguments":{"target":"root","dpr":1}}}"#;
+    let request = format!(
+        "POST /mcp HTTP/1.1\r\nHost: x\r\nContent-Length: {}\r\n\r\n{body}",
+        body.len()
+    );
+    let mut stream = mock_stream(&request);
+    serve_one(&mut stream, &state, &hub).expect("serve_one");
+    let out = String::from_utf8_lossy(&stream.output);
+    assert!(out.contains("200 OK"), "{out}");
+    assert!(out.contains(r#""type":"image""#), "{out}");
+    assert!(out.contains(r#""mimeType":"image/png""#), "{out}");
+    assert!(
+        !out.contains("No live canvas available"),
+        "web daemon must serve screenshots from its live document, got {out}"
+    );
 }
 
 #[test]
