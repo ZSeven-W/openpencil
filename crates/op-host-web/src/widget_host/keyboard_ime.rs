@@ -8,7 +8,9 @@ impl WidgetHost {
     /// host, which routes winit `Ime::Commit` through `apply_text`
     /// char-by-char in `app_handler.rs` and ignores `Ime::Preedit`).
     /// Routing therefore covers every `apply_text` focus branch.
-    #[allow(dead_code)]
+    /// Wired in `canvaskit.rs` to the hidden IME input's `compositionend`
+    /// (the `canvaskit` build); unused under the `web` compile stub.
+    #[cfg_attr(not(feature = "canvaskit"), allow(dead_code))]
     pub fn apply_ime(&mut self, event: &op_editor_ui::ImeEvent) -> bool {
         if !matches!(event.kind, op_editor_ui::ImeKind::CompositionEnd) {
             return false;
