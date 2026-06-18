@@ -34,6 +34,7 @@ pub mod accessibility;
 pub mod layout_scene;
 pub mod layout_scene_hit;
 pub mod scene_vars;
+pub mod svg_export;
 pub mod theme;
 pub mod widgets;
 

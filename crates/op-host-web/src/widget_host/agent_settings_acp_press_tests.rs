@@ -36,7 +36,15 @@ fn acp_agent_connect_press_sets_and_release_clears_agent_settings_button() {
             AgentSettingsButton::AcpConnection(0)
         ))
     );
-    assert!(host.editor_state.editor_ui.agent_settings.acp_agents[0].connected);
+    assert!(!host.editor_state.editor_ui.agent_settings.acp_agents[0].connected);
+    assert_eq!(
+        host.editor_state
+            .editor_ui
+            .agent_settings
+            .pending_acp_agent_connect
+            .as_deref(),
+        Some("acp-1")
+    );
 
     assert!(host.apply_release_with_viewport(1200.0, 800.0));
     assert_eq!(host.editor_state.editor_ui.pressed_button, None);

@@ -91,12 +91,16 @@ mod image_panel_dispatch;
 mod ime;
 mod input;
 #[cfg(test)]
+mod input_clipboard_tests;
+#[cfg(test)]
 mod input_drag_tests;
 #[cfg(test)]
 mod input_tests;
 #[cfg(test)]
 mod instance_panel_tests;
 mod keyboard;
+#[cfg(test)]
+mod overlay_cursor_tests;
 mod overlay_rects;
 mod paint;
 #[cfg(test)]

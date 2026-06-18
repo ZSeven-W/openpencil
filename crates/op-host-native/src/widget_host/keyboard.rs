@@ -454,6 +454,38 @@ impl WidgetHostNative {
         Some(taken)
     }
 
+    /// Highlighted slice of whichever `TextInputState`-backed input
+    /// currently owns the keyboard — settings / git (commit, remote,
+    /// HTTPS, branch, author, clone) / rename / property / variables /
+    /// model-picker / canvas text editor. `None` when no such input is
+    /// focused or it has no selection. The desktop host writes the
+    /// returned slice to the OS clipboard on Cmd+C; chat-input copy is
+    /// handled separately (its own whole-buffer path). Routes through
+    /// the shared `EditorState::active_text_input` resolver so every
+    /// focused field is covered with one priority order.
+    pub fn input_copy_text(&self) -> Option<String> {
+        let state = self.editor_state.active_text_input()?;
+        let (start, end) = state.highlight_range()?;
+        Some(state.text().get(start..end)?.to_string())
+    }
+
+    /// Cut the highlighted slice of the focused `TextInputState` input:
+    /// returns the slice and deletes it. `None` when no such input is
+    /// focused or it has no selection. The delete reuses
+    /// [`Self::apply_backspace`] so it follows each input's own backspace
+    /// routing (per-input dirty / hint bookkeeping included); with a live
+    /// selection `backspace` removes the whole highlighted range
+    /// (`TextInputState::consume_pending`). Backs Cmd+X for every editor
+    /// text field except the chat input (`chat_input_cut`).
+    pub fn input_cut_text(&mut self) -> Option<String> {
+        let text = self.input_copy_text()?;
+        if text.is_empty() {
+            return None;
+        }
+        self.apply_backspace();
+        Some(text)
+    }
+
     pub fn apply_backspace(&mut self) -> bool {
         // Preview mode: Backspace edits the focused runtime widget, not
         // the editor selection.
@@ -487,6 +519,9 @@ impl WidgetHostNative {
         if self.git_commit_focus_active() {
             let panel = &mut self.editor_state.editor_ui.git_panel;
             panel.commit_input.backspace(self.now_ms);
+            // Editing the message (delete or cut, not just typing) clears
+            // the stale "no changes to commit" hint, matching `apply_text`.
+            panel.commit_no_changes = false;
             self.mark_dirty();
             return true;
         }

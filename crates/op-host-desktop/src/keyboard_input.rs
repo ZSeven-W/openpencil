@@ -13,14 +13,20 @@ impl DesktopApp {
         use op_editor_core::ReorderDirection;
         let mut consumed = false;
         let nudge = if self.shift_modifier { 10.0 } else { 1.0 };
-        // While a settings-modal input, the Git commit-message input, OR
-        // the inline clone wizard owns the keyboard, the ONLY allowed
-        // paths are text / backspace / send / escape. Editor shortcuts
-        // (Cmd+D, Cmd+G, Cmd+Z, arrow nudges, Delete, [ / ], single-letter
-        // tool switches, …) would otherwise silently mutate the document
+        // While a settings-modal input OR any Git-panel text input (commit
+        // message, remote URL, HTTPS credential, author name / email,
+        // branch-create, or the inline clone wizard) owns the keyboard, the
+        // ONLY allowed paths are text / backspace / send / escape and the
+        // C/X/V/A clipboard chords. Editor shortcuts (Cmd+D, Cmd+G, Cmd+Z,
+        // Cmd+J, arrow nudges, Delete, [ / ], single-letter tool switches,
+        // …) would otherwise silently mutate the document or shift focus
         // while the user thinks they are typing into the input.
         let settings_focused = self.host.settings_focus_active()
             || self.host.git_commit_focus_active()
+            || self.host.git_remote_focus_active()
+            || self.host.git_https_focus_active()
+            || self.host.git_author_focus_active()
+            || self.host.git_branch_create_focus_active()
             || self.host.git_clone_input_active();
         match logical_key {
             // Named-key shortcuts fire only when no Cmd/Ctrl is held.
@@ -186,63 +192,19 @@ impl DesktopApp {
                             self.mark_document_saved();
                         }
                     }
-                    // Cmd+V pastes OS clipboard text into a focused text
-                    // input (clone-wizard URL / destination, commit
-                    // message, settings field) — placed before the
-                    // `settings_focused` swallow below, which would
-                    // otherwise eat the paste and route nothing.
-                    "v" if settings_focused => {
-                        if let Some(text) = crate::clipboard::get_text() {
-                            self.host.apply_input_paste(&text);
-                        }
-                        consumed = true;
-                    }
-                    "a" if settings_focused => consumed = self.host.apply_select_all(),
+                    // Cmd+C / X / V / A operate on whichever text input
+                    // owns the keyboard (chat / settings / git / property
+                    // / rename / variables / model-picker / canvas text
+                    // editor), falling back to the document node clipboard
+                    // / canvas select-all when nothing is focused. Handled
+                    // BEFORE the `settings_focused` swallow so they keep
+                    // working inside the settings / Git / clone inputs.
+                    "c" => consumed = self.handle_cmd_copy(),
+                    "x" => consumed = self.handle_cmd_cut(),
+                    "v" => consumed = self.handle_cmd_paste(),
+                    "a" => consumed = self.host.apply_select_all(),
                     _ if settings_focused => {}
                     "d" => consumed = self.host.apply_duplicate(),
-                    "a" => consumed = self.host.apply_select_all(),
-                    // Cmd+C / X / V route to the OS *text* clipboard
-                    // when the AI chat input owns the keyboard, and
-                    // to the document *node* clipboard otherwise.
-                    "c" => {
-                        consumed = if self.host.editor_state().chat.focused {
-                            let text = self.host.editor_state().chat.input.text();
-                            if !text.is_empty() {
-                                crate::clipboard::set_text(text);
-                            }
-                            true
-                        } else {
-                            self.host.apply_copy()
-                        };
-                    }
-                    "x" => {
-                        consumed = if self.host.editor_state().chat.focused {
-                            if let Some(text) = self.host.chat_input_cut() {
-                                crate::clipboard::set_text(&text);
-                            }
-                            true
-                        } else {
-                            self.host.apply_cut()
-                        };
-                    }
-                    "v" => {
-                        consumed = if self.host.editor_state().chat.focused {
-                            // TS ai-chat-input.tsx:85-94 — clipboard
-                            // image data takes priority over text when
-                            // pasting into the chat input (the paste
-                            // is consumed either way).
-                            if !self.try_paste_image_into_chat() {
-                                if let Some(text) = crate::clipboard::get_text() {
-                                    self.host.chat_input_paste(&text);
-                                }
-                            }
-                            true
-                        } else if let Some(result) = self.try_figma_clipboard_paste() {
-                            result
-                        } else {
-                            self.host.apply_paste()
-                        };
-                    }
                     "z" => consumed = self.host.apply_undo(),
                     "y" => consumed = self.host.apply_redo(),
                     "g" => consumed = self.host.apply_group(),
@@ -359,6 +321,82 @@ impl DesktopApp {
             self.request_redraw(true);
         }
     }
+    /// Cmd+C dispatch. The chat input copies its whole buffer (its own
+    /// selection model); any other focused text field copies its
+    /// highlighted slice; with no input focused, the document node
+    /// clipboard (or a selected code / transcript slice) is copied via
+    /// [`WidgetHostNative::apply_copy`]. The text-input branches always
+    /// consume the chord so Cmd+C never falls through to node copy
+    /// while a field owns the keyboard.
+    ///
+    /// `pub(crate)` so the native Edit-menu dispatch
+    /// (`menu_action.rs`) routes through the same input-aware path —
+    /// on macOS / Windows the menu accelerator owns Cmd+C and the
+    /// winit keydown never reaches `handle_key_pressed`.
+    pub(crate) fn handle_cmd_copy(&mut self) -> bool {
+        if self.host.editor_state().chat.focused {
+            let text = self.host.editor_state().chat.input.text();
+            if !text.is_empty() {
+                crate::clipboard::set_text(text);
+            }
+            return true;
+        }
+        if self.host.input_active_pub() {
+            if let Some(text) = self.host.input_copy_text() {
+                crate::clipboard::set_text(&text);
+            }
+            return true;
+        }
+        self.host.apply_copy()
+    }
+
+    /// Cmd+X dispatch. Cuts the focused text input's selection to the OS
+    /// clipboard (chat input via its own cut path), else cuts the
+    /// document node selection. `pub(crate)` for the Edit-menu path.
+    pub(crate) fn handle_cmd_cut(&mut self) -> bool {
+        if self.host.editor_state().chat.focused {
+            if let Some(text) = self.host.chat_input_cut() {
+                crate::clipboard::set_text(&text);
+            }
+            return true;
+        }
+        if self.host.input_active_pub() {
+            if let Some(text) = self.host.input_cut_text() {
+                crate::clipboard::set_text(&text);
+            }
+            return true;
+        }
+        self.host.apply_cut()
+    }
+
+    /// Cmd+V dispatch. Pastes OS clipboard text into whichever text
+    /// input owns the keyboard (the chat input also accepts a pasted
+    /// image, per `ai-chat-input.tsx:85-94`); with no input focused,
+    /// pastes Figma clipboard HTML or the document node clipboard onto
+    /// the canvas. `pub(crate)` for the Edit-menu path.
+    pub(crate) fn handle_cmd_paste(&mut self) -> bool {
+        if self.host.editor_state().chat.focused {
+            // Clipboard image data wins over text when pasting into the
+            // chat input; the paste is consumed either way.
+            if !self.try_paste_image_into_chat() {
+                if let Some(text) = crate::clipboard::get_text() {
+                    self.host.chat_input_paste(&text);
+                }
+            }
+            return true;
+        }
+        if self.host.input_active_pub() {
+            if let Some(text) = crate::clipboard::get_text() {
+                self.host.apply_input_paste(&text);
+            }
+            return true;
+        }
+        if let Some(result) = self.try_figma_clipboard_paste() {
+            return result;
+        }
+        self.host.apply_paste()
+    }
+
     /// Stage a clipboard image as a chat attachment (Cmd+V while the
     /// chat input is focused). Mirrors the TS chat input's paste
     /// handler (`ai-chat-input.tsx:85-94`): image data wins over text

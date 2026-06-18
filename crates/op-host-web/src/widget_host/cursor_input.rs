@@ -340,6 +340,14 @@ impl WidgetHost {
         {
             return true;
         }
+        // Floating-overlay drags + hovers (colour picker, Design-MD /
+        // Icon-picker / Component-Browser panels, open dropdowns) own
+        // the cursor before lower context menus. This matches native:
+        // a topmost panel covering a path-anchor / layer menu must
+        // block that lower menu's hover wash.
+        if self.apply_overlay_cursor_move(x, y) {
+            return true;
+        }
         if self.update_path_anchor_menu_hover(x, y) {
             return true;
         }
@@ -354,12 +362,6 @@ impl WidgetHost {
                 self.mark_dirty();
                 return true;
             }
-        }
-        // Floating-overlay drags + hovers (colour picker, Design-MD /
-        // Icon-picker / Component-Browser panels, open dropdowns) —
-        // see `widget_host/overlay_cursor.rs`.
-        if self.apply_overlay_cursor_move(x, y) {
-            return true;
         }
         // Export-section select-popup row hover highlight.
         if self.editor_state.editor_ui.export_scale_picker_open
@@ -609,6 +611,7 @@ impl WidgetHost {
         }
         // PropertyPanel tab/action hover wash. Shown with a selection.
         let mut property_hover_changed = false;
+        let mut inside_property_panel = false;
         if self.editor_state.property_panel_visible() {
             use op_editor_ui::widgets::{PropertyPanel, TOP_BAR_HEIGHT};
             if let Some(panel) = PropertyPanel::for_selection(&self.editor_state) {
@@ -623,6 +626,7 @@ impl WidgetHost {
                     ),
                 };
                 let point = Point2D::new(x, y);
+                inside_property_panel = property_rect.contains(point);
                 let new_tab_hover = panel.tab_hover_at(property_rect, point);
                 if new_tab_hover != self.editor_state.editor_ui.property_tab_hover {
                     self.editor_state.editor_ui.property_tab_hover = new_tab_hover;
@@ -678,6 +682,13 @@ impl WidgetHost {
             self.mark_dirty();
             return true;
         }
+        if inside_property_panel {
+            let lower_hover_changed = self.clear_hover_below_property_panel();
+            if property_hover_changed && !lower_hover_changed {
+                self.mark_dirty();
+            }
+            return true;
+        }
         if property_hover_changed {
             self.mark_dirty();
             return true;
@@ -704,5 +715,31 @@ impl WidgetHost {
             return true;
         }
         false
+    }
+
+    fn clear_hover_below_property_panel(&mut self) -> bool {
+        let mut changed = false;
+        {
+            let ui = &mut self.editor_state.editor_ui;
+            changed |= ui.canvas_hover_node.take().is_some();
+            changed |= ui.hovered_layer_id.take().is_some();
+            changed |= ui.hovered_page_index.take().is_some();
+            changed |= ui.toolbar_hover.take().is_some();
+            changed |= ui.align_toolbar_hover.take().is_some();
+            changed |= ui.statusbar_hover.take().is_some();
+            changed |= ui.chat_design_block_hover.take().is_some();
+            changed |= ui.chat_footer_hover.take().is_some();
+            changed |= ui.chat_example_hover.take().is_some();
+            if let Some(menu) = ui.layer_context_menu.as_mut() {
+                changed |= menu.menu.hover.take().is_some();
+            }
+        }
+        if let Some(menu) = self.editor_state.ui.path_anchor_menu.as_mut() {
+            changed |= menu.menu.hover.take().is_some();
+        }
+        if changed {
+            self.mark_dirty();
+        }
+        changed
     }
 }

@@ -52,11 +52,19 @@ impl WidgetHost {
             if let Some(panel_rect) =
                 self.design_md_panel_rect(self.last_viewport_w, self.last_viewport_h)
             {
+                let point = Point2D::new(x, y);
                 let new_hover = DesignMdPanel::for_editor(&self.editor_state)
-                    .and_then(|p| p.hover_at(panel_rect, Point2D::new(x, y)));
-                if new_hover != self.editor_state.editor_ui.design_md_hover {
+                    .and_then(|p| p.hover_at(panel_rect, point));
+                let changed = new_hover != self.editor_state.editor_ui.design_md_hover;
+                if changed {
                     self.editor_state.editor_ui.design_md_hover = new_hover;
                     self.mark_dirty();
+                }
+                if panel_rect.contains(point) {
+                    self.clear_lower_overlay_hover();
+                    return true;
+                }
+                if changed {
                     return true;
                 }
             }
@@ -73,11 +81,19 @@ impl WidgetHost {
             if let Some(panel_rect) =
                 self.component_browser_panel_rect(self.last_viewport_w, self.last_viewport_h)
             {
+                let point = Point2D::new(x, y);
                 let new_hover = ComponentBrowserPanel::for_editor(&self.editor_state)
-                    .and_then(|p| p.hover_at(panel_rect, Point2D::new(x, y)));
-                if new_hover != self.editor_state.editor_ui.component_browser_hover {
+                    .and_then(|p| p.hover_at(panel_rect, point));
+                let changed = new_hover != self.editor_state.editor_ui.component_browser_hover;
+                if changed {
                     self.editor_state.editor_ui.component_browser_hover = new_hover;
                     self.mark_dirty();
+                }
+                if panel_rect.contains(point) {
+                    self.clear_lower_overlay_hover();
+                    return true;
+                }
+                if changed {
                     return true;
                 }
             }
@@ -94,16 +110,49 @@ impl WidgetHost {
             if let Some(panel_rect) =
                 self.icon_picker_panel_rect(self.last_viewport_w, self.last_viewport_h)
             {
+                let point = Point2D::new(x, y);
                 let new_hover = IconPickerPanel::for_editor(&self.editor_state)
-                    .and_then(|p| p.hover_at(panel_rect, Point2D::new(x, y)));
-                if new_hover != self.editor_state.editor_ui.icon_picker.hover {
+                    .and_then(|p| p.hover_at(panel_rect, point));
+                let changed = new_hover != self.editor_state.editor_ui.icon_picker.hover;
+                if changed {
                     self.editor_state.editor_ui.icon_picker.hover = new_hover;
                     self.mark_dirty();
+                }
+                if panel_rect.contains(point) {
+                    self.clear_lower_overlay_hover();
+                    return true;
+                }
+                if changed {
                     return true;
                 }
             }
         }
-        self.update_dropdown_hover(x, y)
+        let over_dropdown =
+            self.over_dropdown_overlay(x, y, self.last_viewport_w, self.last_viewport_h);
+        let dropdown_changed = self.update_dropdown_hover(x, y);
+        let layer_cleared = over_dropdown && self.clear_layer_panel_hover();
+        if dropdown_changed || layer_cleared || over_dropdown {
+            return true;
+        }
+        if self.editor_state.editor_ui.variables_panel_open {
+            use op_editor_ui::widgets::variables_panel::VariablesPanel;
+            if let Some(panel_rect) =
+                self.variables_panel_rect(self.last_viewport_w, self.last_viewport_h)
+            {
+                let point = Point2D::new(x, y);
+                if panel_rect.contains(point) {
+                    let new_hover = VariablesPanel::for_editor_at(&self.editor_state, self.now_ms)
+                        .hover_at(panel_rect, point);
+                    if new_hover != self.editor_state.editor_ui.variables_panel_hover {
+                        self.editor_state.editor_ui.variables_panel_hover = new_hover;
+                        self.mark_dirty();
+                    }
+                    self.clear_lower_overlay_hover();
+                    return true;
+                }
+            }
+        }
+        false
     }
 
     /// Update the file-menu / locale / shape-picker dropdown hover highlights
@@ -112,7 +161,9 @@ impl WidgetHost {
     /// `true` on change. Port of the native
     /// `geometry.rs::update_dropdown_hover`.
     fn update_dropdown_hover(&mut self, x: f32, y: f32) -> bool {
-        if self.over_topmost_panel(x, y, self.last_viewport_w, self.last_viewport_h) {
+        if self.over_topmost_panel(x, y, self.last_viewport_w, self.last_viewport_h)
+            && !self.over_dropdown_overlay(x, y, self.last_viewport_w, self.last_viewport_h)
+        {
             return false;
         }
         if self.editor_state.editor_ui.file_menu_open {
@@ -120,9 +171,7 @@ impl WidgetHost {
             self.refresh_layout_scene();
             let top_bar_rect = self.top_bar_rect(self.last_viewport_w);
             let anchor = self.top_bar().file_menu_rect_for(top_bar_rect);
-            // `0` clock — no wall-clock on wasm32 and no recent files
-            // to age (see `dispatch_file_menu_press`).
-            let menu = FileMenu::from_editor_ui(&self.editor_state.editor_ui, 0);
+            let menu = FileMenu::from_editor_ui(&self.editor_state.editor_ui, self.wall_now_secs);
             let panel = menu.rect_at(anchor);
             let new_hover = menu.hovered_at(panel, Point2D::new(x, y));
             if new_hover != self.editor_state.editor_ui.file_menu.hover {

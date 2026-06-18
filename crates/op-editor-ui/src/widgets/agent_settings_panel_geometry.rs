@@ -88,7 +88,7 @@ pub(super) fn agent_card_rect_in(panel: Rect, index: usize, settings: &AgentSett
     let mut y = content.origin.y + 12.0 + builtin_block + acp_block + 32.0;
     for i in 0..index {
         y += CARD_HEIGHT + CARD_GAP;
-        if i == 0 && settings.connected[0] {
+        if i == 0 && settings.provider_verified_connected_at(0) {
             y += 28.0;
         }
     }

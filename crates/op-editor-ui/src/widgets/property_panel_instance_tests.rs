@@ -57,6 +57,29 @@ fn reusable_component_snapshot_flags_is_reusable() {
 }
 
 #[test]
+fn registered_group_component_snapshot_flags_is_reusable() {
+    let mut state = state_from(
+        r##"{
+          "version":"0.8.0",
+          "children":[
+            {"type":"group","id":"text_group","name":"Text Group",
+             "children":[{"type":"text","id":"label","name":"Label","content":"Hello"}]}
+          ]
+        }"##,
+    );
+    state.set_single_selection(NodeId::new("text_group"));
+    assert!(state.create_component_from_node_name(&NodeId::new("text_group")));
+
+    let panel = PropertyPanel::for_selection(&state).expect("group panel builds");
+    assert!(panel.snapshot.is_reusable);
+    assert!(!panel.snapshot.is_instance);
+    assert_eq!(
+        panel.visible_sections().component_button,
+        ComponentButtonState::DetachComponent
+    );
+}
+
+#[test]
 fn instance_panel_emits_go_to_component_and_detach_rows() {
     let panel = panel_for("inst1");
     let rect = Rect {

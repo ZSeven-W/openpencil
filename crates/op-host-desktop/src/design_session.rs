@@ -186,7 +186,7 @@ const DESIGN_FIT_PADDING: f32 = 48.0;
 
 /// Keep the generated design centered and fully visible while the
 /// orchestrator progressively applies scaffold/subtask nodes.
-fn fit_design_viewport_to_content(
+pub(crate) fn fit_design_viewport_to_content(
     state: &mut EditorState,
     viewport_width: f32,
     viewport_height: f32,

@@ -15,7 +15,7 @@ fn transcript_hit_resolves_design_json_copy_button_like_ts() {
     let y = block.header.origin.y + block.header.size.y / 2.0;
 
     assert_eq!(
-        transcript_hit(messages, body(), x, y, op_editor_core::Locale::EnUs),
+        transcript_hit(messages, body(), x, y, op_editor_core::Locale::EnUs, 0.0),
         Some(TranscriptHit::CopyDesignBlock(code.to_string()))
     );
 }

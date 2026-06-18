@@ -81,7 +81,7 @@ impl WidgetHostNative {
                     .position(|x| *x == p)
                     .unwrap_or(0);
                 let settings = &mut self.editor_state.editor_ui.agent_settings;
-                if settings.connected[idx] {
+                if settings.provider_verified_connected_at(idx) {
                     // Disconnect mirrors the TS `disconnectProvider`
                     // store action — reset the card, no probe.
                     settings.disconnect_provider(p);
@@ -543,18 +543,18 @@ impl WidgetHostNative {
             }
             AgentSettingsHit::ToggleAcpConnected(index) => {
                 self.commit_settings_focus_if_any();
-                if let Some(agent) = self
-                    .editor_state
-                    .editor_ui
-                    .agent_settings
-                    .acp_agents
-                    .get_mut(index)
-                {
-                    if agent.connected {
-                        agent.connected = false;
-                    } else if agent.ready() {
-                        agent.connected = true;
-                    } else {
+                let settings = &self.editor_state.editor_ui.agent_settings;
+                let needs_config_focus = settings.acp_agents.get(index).is_some_and(|agent| {
+                    !settings.acp_agent_verified_connected(&agent.id) && !agent.ready()
+                });
+                if needs_config_focus {
+                    if let Some(agent) = self
+                        .editor_state
+                        .editor_ui
+                        .agent_settings
+                        .acp_agents
+                        .get(index)
+                    {
                         use op_editor_core::agent_settings::{AcpAgentField, AcpConnectionType};
                         let field = match agent.connection_type {
                             AcpConnectionType::Local => AcpAgentField::Command,
@@ -574,7 +574,27 @@ impl WidgetHostNative {
                             });
                         self.set_settings_input_text(text);
                     }
+                } else if self
+                    .editor_state
+                    .editor_ui
+                    .agent_settings
+                    .acp_agent_verified_connected_at(index)
+                {
+                    self.editor_state
+                        .editor_ui
+                        .agent_settings
+                        .disconnect_acp_agent(index);
                     self.editor_state.rebuild_chat_models();
+                } else {
+                    let started = self
+                        .editor_state
+                        .editor_ui
+                        .agent_settings
+                        .begin_acp_agent_connect(index)
+                        .is_some();
+                    if started {
+                        self.editor_state.rebuild_chat_models();
+                    }
                 }
             }
             AgentSettingsHit::AddAcpAgent => {

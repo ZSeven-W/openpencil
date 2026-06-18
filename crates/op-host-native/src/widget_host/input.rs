@@ -441,11 +441,19 @@ impl WidgetHostNative {
             if let Some(panel_rect) =
                 self.design_md_panel_rect(self.last_viewport_w, self.last_viewport_h)
             {
+                let point = Point2D::new(x, y);
                 let new_hover = DesignMdPanel::for_editor(&self.editor_state)
-                    .and_then(|p| p.hover_at(panel_rect, Point2D::new(x, y)));
-                if new_hover != self.editor_state.editor_ui.design_md_hover {
+                    .and_then(|p| p.hover_at(panel_rect, point));
+                let changed = new_hover != self.editor_state.editor_ui.design_md_hover;
+                if changed {
                     self.editor_state.editor_ui.design_md_hover = new_hover;
                     self.mark_dirty();
+                }
+                if panel_rect.contains(point) {
+                    self.clear_lower_overlay_hover();
+                    return true;
+                }
+                if changed {
                     return true;
                 }
             }
@@ -462,11 +470,19 @@ impl WidgetHostNative {
             if let Some(panel_rect) =
                 self.component_browser_panel_rect(self.last_viewport_w, self.last_viewport_h)
             {
+                let point = Point2D::new(x, y);
                 let new_hover = ComponentBrowserPanel::for_editor(&self.editor_state)
-                    .and_then(|p| p.hover_at(panel_rect, Point2D::new(x, y)));
-                if new_hover != self.editor_state.editor_ui.component_browser_hover {
+                    .and_then(|p| p.hover_at(panel_rect, point));
+                let changed = new_hover != self.editor_state.editor_ui.component_browser_hover;
+                if changed {
                     self.editor_state.editor_ui.component_browser_hover = new_hover;
                     self.mark_dirty();
+                }
+                if panel_rect.contains(point) {
+                    self.clear_lower_overlay_hover();
+                    return true;
+                }
+                if changed {
                     return true;
                 }
             }
@@ -483,14 +499,36 @@ impl WidgetHostNative {
             if let Some(panel_rect) =
                 self.icon_picker_panel_rect(self.last_viewport_w, self.last_viewport_h)
             {
+                let point = Point2D::new(x, y);
                 let new_hover = IconPickerPanel::for_editor(&self.editor_state)
-                    .and_then(|p| p.hover_at(panel_rect, Point2D::new(x, y)));
-                if new_hover != self.editor_state.editor_ui.icon_picker.hover {
+                    .and_then(|p| p.hover_at(panel_rect, point));
+                let changed = new_hover != self.editor_state.editor_ui.icon_picker.hover;
+                if changed {
                     self.editor_state.editor_ui.icon_picker.hover = new_hover;
                     self.mark_dirty();
+                }
+                if panel_rect.contains(point) {
+                    self.clear_lower_overlay_hover();
+                    return true;
+                }
+                if changed {
                     return true;
                 }
             }
+        }
+        if self.over_dropdown_overlay(x, y, self.last_viewport_w, self.last_viewport_h) {
+            self.update_dropdown_hover(x, y, false);
+            self.clear_layer_panel_hover();
+            if self
+                .editor_state
+                .editor_ui
+                .variables_panel_hover
+                .take()
+                .is_some()
+            {
+                self.mark_dirty();
+            }
+            return true;
         }
         if self.editor_state.editor_ui.variables_panel_open {
             let point = Point2D::new(x, y);
@@ -506,7 +544,8 @@ impl WidgetHostNative {
                         self.editor_state.editor_ui.variables_panel_hover = new_hover;
                         self.mark_dirty();
                     }
-                    return changed;
+                    self.clear_lower_overlay_hover();
+                    return true;
                 }
             }
             if self

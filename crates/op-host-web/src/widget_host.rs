@@ -83,10 +83,13 @@ pub(crate) mod icon_ingest;
 // — needs the codegen-gated document-pipeline deps (jian-ops-schema).
 #[cfg(feature = "canvaskit")]
 mod file_ingest;
+#[cfg(test)]
+mod file_menu_paint_tests;
 mod geometry;
 mod group_ops;
 mod history_guard;
 mod icon_picker_press;
+mod image_panel_dispatch;
 #[cfg(all(test, feature = "canvaskit"))]
 mod io_tests;
 mod keyboard;
@@ -122,6 +125,7 @@ mod property_focus_press;
 mod property_hover_tests;
 #[cfg(test)]
 mod property_input_tests;
+mod property_layout_dispatch;
 #[cfg(test)]
 mod property_panel_press_tests;
 mod release_input;
@@ -242,6 +246,10 @@ pub struct WidgetHost {
     /// Host clock in ms — set by `lib.rs` on each event from
     /// `performance.now()`. Used for double-click detection.
     pub(in crate::widget_host) now_ms: u64,
+    /// Unix wall-clock seconds. Kept separate from `now_ms` because
+    /// browser `performance.now()` is navigation-relative, while
+    /// recent-file timestamps are Unix seconds.
+    pub(in crate::widget_host) wall_now_secs: u64,
     /// Most recent viewport size seen via `apply_press` etc. — cached
     /// so `apply_cursor_move(x, y)` can rebuild the canvas region
     /// when its signature can't carry viewport dims (mirrors native).
@@ -250,8 +258,19 @@ pub struct WidgetHost {
 }
 
 impl WidgetHost {
+    #[allow(dead_code)]
     pub fn set_now_ms(&mut self, now_ms: u64) {
         self.now_ms = now_ms;
+    }
+
+    #[allow(dead_code)]
+    pub fn set_wall_now_secs(&mut self, secs: u64) {
+        self.wall_now_secs = secs;
+    }
+
+    pub fn set_clocks(&mut self, now_ms: u64, wall_now_secs: u64) {
+        self.now_ms = now_ms;
+        self.wall_now_secs = wall_now_secs;
     }
 
     // Caret-blink / animation scheduling — tested + ready to wire, but the
@@ -433,6 +452,7 @@ impl WidgetHost {
             next_node_id: 100,
             shift_held: false,
             now_ms: 0,
+            wall_now_secs: 0,
             last_viewport_w: 0.0,
             last_viewport_h: 0.0,
         }
@@ -624,6 +644,64 @@ impl WidgetHost {
         true
     }
 
+    /// Scroll the chat transcript message list when a wheel / trackpad
+    /// pan lands over the panel body — pinned-to-bottom auto-follow
+    /// resumes once the user scrolls back to the bottom. Mirrors the
+    /// native host's `try_scroll_chat_transcript`.
+    fn try_scroll_chat_transcript(
+        &mut self,
+        x: f32,
+        y: f32,
+        delta: f32,
+        viewport_width: f32,
+        viewport_height: f32,
+    ) -> bool {
+        if self.editor_state.chat.messages.is_empty() {
+            return false;
+        }
+        let point = Point2D::new(x, y);
+        let Some(chat_rect) = self.ai_chat_rect(viewport_width, viewport_height) else {
+            return false;
+        };
+        let (body, max) = {
+            let panel = op_editor_ui::widgets::AIChatPlaceholder::from_editor_at(
+                &self.editor_state,
+                self.now_ms,
+            );
+            (
+                panel.body_rect(chat_rect),
+                panel.transcript_scroll_max(chat_rect),
+            )
+        };
+        if !(body).contains(point) {
+            return false;
+        }
+        let chat = &mut self.editor_state.chat;
+        if max <= 0.0 {
+            if !chat.transcript_pinned || chat.transcript_scroll.offset != 0.0 {
+                chat.transcript_pinned = true;
+                chat.transcript_scroll.offset = 0.0;
+                self.mark_dirty();
+            }
+            return true;
+        }
+        let cur = if chat.transcript_pinned {
+            max
+        } else {
+            chat.transcript_scroll.offset.clamp(0.0, max)
+        };
+        let next = (cur - delta).clamp(0.0, max);
+        let pinned = next >= max - 0.5;
+        if (next - chat.transcript_scroll.offset).abs() > f32::EPSILON
+            || chat.transcript_pinned != pinned
+        {
+            chat.transcript_scroll.offset = next;
+            chat.transcript_pinned = pinned;
+            self.mark_dirty();
+        }
+        true
+    }
+
     /// Wheel zoom centered on the cursor when over the canvas.
     pub fn apply_wheel(
         &mut self,
@@ -667,11 +745,17 @@ impl WidgetHost {
         if self.try_scroll_chat_checklist(x, y, delta_y, viewport_width, viewport_height) {
             return true;
         }
+        if self.try_scroll_chat_transcript(x, y, delta_y, viewport_width, viewport_height) {
+            return true;
+        }
         // Floating VariablesPanel owns the wheel over its rect.
         if self.try_scroll_variables_panel(x, y, delta_y, viewport_width, viewport_height) {
             return true;
         }
         if self.try_scroll_locale_picker(x, y, delta_y, viewport_width) {
+            return true;
+        }
+        if self.try_scroll_design_md_panel(x, y, delta_y, viewport_width, viewport_height) {
             return true;
         }
         // Side rails scroll their panels instead of zooming the
@@ -719,7 +803,13 @@ impl WidgetHost {
         if self.try_scroll_locale_picker(x, y, dy, viewport_width) {
             return true;
         }
+        if self.try_scroll_design_md_panel(x, y, dy, viewport_width, viewport_height) {
+            return true;
+        }
         if self.try_scroll_chat_checklist(x, y, dy, viewport_width, viewport_height) {
+            return true;
+        }
+        if self.try_scroll_chat_transcript(x, y, dy, viewport_width, viewport_height) {
             return true;
         }
         if self.try_scroll_property_panel(x, y, dy, viewport_width, viewport_height) {
@@ -768,27 +858,33 @@ impl WidgetHost {
         use op_editor_ui::widgets::{LayerPanel, LayerPanelHit, TOP_BAR_HEIGHT};
         let sidebar_open = self.editor_state.editor_ui.sidebar_open;
         let panel_w = self.editor_state.editor_ui.layer_panel_width;
-        let (new_layer, new_page) =
-            if sidebar_open && y >= TOP_BAR_HEIGHT && x >= 0.0 && x <= panel_w {
-                self.refresh_layout_scene();
-                let layer_rect = Rect {
-                    origin: Point2D::new(0.0, TOP_BAR_HEIGHT),
-                    size: Point2D::new(panel_w, (viewport_h - TOP_BAR_HEIGHT).max(0.0)),
-                };
-                let panel = LayerPanel::from_editor(&self.editor_state);
-                match panel.hit_test(layer_rect, Point2D::new(x, y)) {
-                    Some(LayerPanelHit::Layer(id))
-                    | Some(LayerPanelHit::ToggleHidden(id))
-                    | Some(LayerPanelHit::ToggleLocked(id))
-                    | Some(LayerPanelHit::ToggleCollapsed(id)) => (Some(id), None),
-                    Some(LayerPanelHit::Page(idx)) | Some(LayerPanelHit::DeletePage(idx)) => {
-                        (None, Some(idx))
-                    }
-                    _ => (None, None),
-                }
-            } else {
-                (None, None)
+        let blocked_by_overlay = self.over_topmost_panel(x, y, self.last_viewport_w, viewport_h)
+            || self.over_dropdown_overlay(x, y, self.last_viewport_w, viewport_h);
+        let (new_layer, new_page) = if sidebar_open
+            && !blocked_by_overlay
+            && y >= TOP_BAR_HEIGHT
+            && x >= 0.0
+            && x <= panel_w
+        {
+            self.refresh_layout_scene();
+            let layer_rect = Rect {
+                origin: Point2D::new(0.0, TOP_BAR_HEIGHT),
+                size: Point2D::new(panel_w, (viewport_h - TOP_BAR_HEIGHT).max(0.0)),
             };
+            let panel = LayerPanel::from_editor(&self.editor_state);
+            match panel.hit_test(layer_rect, Point2D::new(x, y)) {
+                Some(LayerPanelHit::Layer(id))
+                | Some(LayerPanelHit::ToggleHidden(id))
+                | Some(LayerPanelHit::ToggleLocked(id))
+                | Some(LayerPanelHit::ToggleCollapsed(id)) => (Some(id), None),
+                Some(LayerPanelHit::Page(idx)) | Some(LayerPanelHit::DeletePage(idx)) => {
+                    (None, Some(idx))
+                }
+                _ => (None, None),
+            }
+        } else {
+            (None, None)
+        };
         // shell-core hit-test returns shell-core `NodeId`s; translate
         // to op-editor-core ids for storage on `editor_ui`.
         let new_layer_ec = new_layer.clone();
@@ -797,6 +893,54 @@ impl WidgetHost {
         if changed {
             self.editor_state.editor_ui.hovered_layer_id = new_layer_ec;
             self.editor_state.editor_ui.hovered_page_index = new_page;
+            self.mark_dirty();
+        }
+        changed
+    }
+
+    pub(in crate::widget_host) fn clear_layer_panel_hover(&mut self) -> bool {
+        let ui = &mut self.editor_state.editor_ui;
+        let cleared_layer = ui.hovered_layer_id.take().is_some();
+        let cleared_page = ui.hovered_page_index.take().is_some();
+        let changed = cleared_layer || cleared_page;
+        if changed {
+            self.mark_dirty();
+        }
+        changed
+    }
+
+    pub(in crate::widget_host) fn clear_lower_overlay_hover(&mut self) -> bool {
+        let mut changed = false;
+        {
+            let ui = &mut self.editor_state.editor_ui;
+            changed |= ui.canvas_hover_node.take().is_some();
+            changed |= ui.hovered_layer_id.take().is_some();
+            changed |= ui.hovered_page_index.take().is_some();
+            changed |= ui.file_menu.hover.take().is_some();
+            changed |= ui.locale_picker.hover.take().is_some();
+            changed |= ui.shape_picker.hover.take().is_some();
+            changed |= ui.fill_type_picker.hover.take().is_some();
+            changed |= ui.toolbar_hover.take().is_some();
+            changed |= ui.align_toolbar_hover.take().is_some();
+            changed |= ui.statusbar_hover.take().is_some();
+            changed |= ui.topbar_button_hover.take().is_some();
+            changed |= ui.chat_model_picker.hover.take().is_some();
+            changed |= ui.chat_design_block_hover.take().is_some();
+            changed |= ui.chat_footer_hover.take().is_some();
+            changed |= ui.chat_example_hover.take().is_some();
+            changed |= ui.export_picker_hover.take().is_some();
+            changed |= ui.property_action_hover.take().is_some();
+            changed |= ui.property_tab_hover.take().is_some();
+            if let Some(menu) = ui.layer_context_menu.as_mut() {
+                changed |= menu.menu.hover.take().is_some();
+            }
+        }
+        if let Some(menu) = self.editor_state.ui.path_anchor_menu.as_mut() {
+            changed |= menu.menu.hover.take().is_some();
+        }
+        changed |= self.editor_state.codegen.framework_hover.take().is_some();
+        changed |= self.editor_state.codegen.action_hover.take().is_some();
+        if changed {
             self.mark_dirty();
         }
         changed

@@ -350,6 +350,17 @@ pub struct ChatState {
     pub checklist_collapsed: bool,
     /// Vertical scroll offset inside the fixed design checklist rows.
     pub checklist_scroll: jian_core::scroll::ScrollState,
+    /// Vertical scroll offset (px from the conversation top) of the
+    /// transcript message list. Clamped to `[0, content_height - body]`
+    /// by the host on wheel; ignored while [`transcript_pinned`] holds.
+    ///
+    /// [`transcript_pinned`]: ChatState::transcript_pinned
+    pub transcript_scroll: jian_core::scroll::ScrollState,
+    /// Whether the transcript auto-follows the latest content (pinned to
+    /// the bottom). True until the user scrolls up; re-pins when they
+    /// scroll back to the bottom, and is forced true on send / new chat
+    /// so a fresh turn always reveals the latest reply.
+    pub transcript_pinned: bool,
     /// Set by `begin_send` to the just-sent user text; the desktop
     /// event loop drains this each frame. `None` = idle.
     pub pending_send: Option<String>,
@@ -425,6 +436,8 @@ impl Default for ChatState {
             maximized: false,
             checklist_collapsed: false,
             checklist_scroll: Default::default(),
+            transcript_scroll: Default::default(),
+            transcript_pinned: true,
             pending_send: None,
             pending_new_chat: false,
             pending_stop_chat: false,
@@ -541,6 +554,10 @@ impl ChatState {
         self.messages.push(ChatMessage::assistant_streaming());
         self.input.set_text("");
         self.checklist_scroll.offset = 0.0;
+        // Jump to the bottom so the new turn's reply is visible as it
+        // streams, even if the user had scrolled up in the prior turn.
+        self.transcript_pinned = true;
+        self.transcript_scroll.offset = 0.0;
         self.pending_send = Some(trimmed);
         true
     }
@@ -588,6 +605,8 @@ impl ChatState {
         self.pending_copy_text = None;
         self.transcript_selection = None;
         self.checklist_scroll.offset = 0.0;
+        self.transcript_pinned = true;
+        self.transcript_scroll.offset = 0.0;
         self.pending_attachments.clear();
         self.pending_attachment_pick = false;
         self.pending_new_chat = true;

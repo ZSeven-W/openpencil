@@ -198,7 +198,7 @@ impl<'a> AIChatPlaceholder<'a> {
         self.state.messages.iter().any(|message| message.streaming)
     }
 
-    pub(crate) fn body_rect(&self, rect: Rect) -> Rect {
+    pub fn body_rect(&self, rect: Rect) -> Rect {
         let body_top = rect.origin.y + HEADER_HEIGHT + 14.0; // gap before first bubble
         let body_bottom = rect.origin.y + rect.size.y
             - self.input_height_for_rect(rect)
@@ -209,6 +209,20 @@ impl<'a> AIChatPlaceholder<'a> {
             origin: Point2D::new(rect.origin.x + PAD, body_top),
             size: Point2D::new(rect.size.x - PAD * 2.0, (body_bottom - body_top).max(0.0)),
         }
+    }
+
+    /// Maximum transcript scroll offset (px) for the panel laid out at
+    /// `rect`: `content_height - body_height`, clamped at 0. The host's
+    /// wheel handler clamps the stored offset to this and re-pins to the
+    /// bottom once it is reached.
+    pub fn transcript_scroll_max(&self, rect: Rect) -> f32 {
+        let body = self.body_rect(rect);
+        (crate::widgets::ai_chat_transcript::transcript_content_height(
+            &self.state.messages,
+            body,
+            self.locale,
+        ) - body.size.y)
+            .max(0.0)
     }
 
     pub(crate) fn model_picker_rect(&self, rect: Rect, input_rect: Rect) -> Rect {
@@ -442,15 +456,24 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
                 self.example_pressed,
             );
         } else {
+            let body = self.body_rect(rect);
+            let scroll_offset = crate::widgets::ai_chat_transcript::transcript_effective_offset(
+                &self.state.messages,
+                body,
+                self.locale,
+                self.state.transcript_scroll.offset,
+                self.state.transcript_pinned,
+            );
             crate::widgets::ai_chat_transcript::paint_transcript_with_selection(
                 cx,
                 &self.theme,
-                self.body_rect(rect),
+                body,
                 &self.state.messages,
                 self.now_ms,
                 self.locale,
                 self.design_hover,
                 self.state.transcript_selection,
+                scroll_offset,
             );
         }
         if checklist_h > 0.0 {

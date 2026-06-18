@@ -10,6 +10,16 @@ fn fresh_state() -> WebCanvasState {
 // A minimal canonical document body in the TS `setSyncDocument` shape.
 const SYNC_BODY: &str = r##"{"document":{"version":"1.0.0","children":[{"id":"n9","type":"rectangle","name":"Synced Rect","x":1,"y":2,"width":80,"height":40,"fill":[{"type":"solid","color":"#123456"}]}]},"sourceClientId":"web"}"##;
 
+fn write_temp_op(name: &str, body: &str) -> PathBuf {
+    let path = std::env::temp_dir().join(format!(
+        "openpencil-web-canvas-{name}-{}-{}.op",
+        std::process::id(),
+        std::thread::current().name().unwrap_or("test")
+    ));
+    std::fs::write(&path, body).expect("write temp op");
+    path
+}
+
 #[test]
 fn server_health_matches_ts_running_port_shape() {
     let r = handle_web_canvas_request("GET", "/api/mcp/server", "", &mut fresh_state());
@@ -84,6 +94,251 @@ fn get_ai_models_returns_json_array() {
         "models body must be a JSON array: {}",
         r.body
     );
+}
+
+#[test]
+fn provider_connect_probe_response_updates_agent_settings_and_models() {
+    use op_ai::agent_settings_state::AgentProvider as ProbeProvider;
+    use op_ai::chat_models::ModelEntry as ProbeModelEntry;
+    use op_editor_core::agent_settings::ProviderConnectPhase;
+    use op_editor_core::AgentProvider;
+
+    let mut s = fresh_state();
+    let body = serde_json::json!({ "provider": "codex" }).to_string();
+    let r = handle_provider_connect_request_with_probe(&body, &mut s, |_| {
+        crate::provider_probe::ProbeOutcome {
+            connected: true,
+            models: vec![ProbeModelEntry::new(
+                ProbeProvider::CodexCli,
+                "gpt-5.5",
+                "GPT-5.5",
+            )],
+            connection_info: Some("Connected via Codex CLI".to_string()),
+            version: Some("codex 1.2.3".to_string()),
+            ..Default::default()
+        }
+    });
+
+    assert!(r.status.starts_with("200"), "{}", r.body);
+    let parsed: serde_json::Value = serde_json::from_str(&r.body).expect("json body");
+    assert_eq!(parsed["ok"], true);
+    assert_eq!(parsed["connected"], true);
+    assert_eq!(parsed["models"][0]["value"], "gpt-5.5");
+
+    let idx =
+        op_editor_core::agent_settings::AgentSettings::provider_index(AgentProvider::CodexCli);
+    let settings = &s.editor.editor_ui.agent_settings;
+    assert!(settings.provider_verified_connected(AgentProvider::CodexCli));
+    assert_eq!(
+        settings.provider_connection[idx].phase,
+        ProviderConnectPhase::Connected
+    );
+    assert!(s
+        .editor
+        .chat
+        .discovered_models
+        .iter()
+        .any(|m| m.provider == AgentProvider::CodexCli && m.value == "gpt-5.5"));
+    assert!(s
+        .editor
+        .chat
+        .available_models
+        .iter()
+        .any(|m| m.provider == AgentProvider::CodexCli && m.value == "gpt-5.5"));
+}
+
+#[test]
+fn provider_connect_probe_response_without_models_is_failure() {
+    use op_editor_core::agent_settings::ProviderConnectPhase;
+    use op_editor_core::AgentProvider;
+
+    let mut s = fresh_state();
+    s.editor
+        .chat
+        .discovered_models
+        .push(op_editor_core::ModelEntry::new(
+            AgentProvider::CodexCli,
+            "stale-gpt",
+            "Stale GPT",
+        ));
+    let body = serde_json::json!({ "provider": "codex" }).to_string();
+    let r = handle_provider_connect_request_with_probe(&body, &mut s, |_| {
+        crate::provider_probe::ProbeOutcome {
+            connected: true,
+            connection_info: Some("Connected via Codex CLI".to_string()),
+            version: Some("codex 1.2.3".to_string()),
+            ..Default::default()
+        }
+    });
+
+    assert!(r.status.starts_with("200"), "{}", r.body);
+    let parsed: serde_json::Value = serde_json::from_str(&r.body).expect("json body");
+    assert_eq!(parsed["connected"], false);
+    assert!(
+        parsed["error"]
+            .as_str()
+            .is_some_and(|error| error.contains("No models found")),
+        "{}",
+        r.body
+    );
+
+    let settings = &s.editor.editor_ui.agent_settings;
+    assert!(!settings.provider_verified_connected(AgentProvider::CodexCli));
+    let idx =
+        op_editor_core::agent_settings::AgentSettings::provider_index(AgentProvider::CodexCli);
+    assert_eq!(
+        settings.provider_connection[idx].phase,
+        ProviderConnectPhase::Error
+    );
+    assert!(
+        !s.editor
+            .chat
+            .available_models
+            .iter()
+            .any(|m| m.provider == AgentProvider::CodexCli),
+        "stale Codex models must not become selectable after a failed connect"
+    );
+}
+
+#[test]
+fn acp_connect_probe_response_updates_agent_settings() {
+    use op_editor_core::agent_settings::{AcpAgentConnectPhase, AcpConnectionType};
+    use std::collections::BTreeMap;
+
+    let mut s = fresh_state();
+    s.editor.editor_ui.agent_settings.add_acp_agent_config(
+        "Claude Code",
+        AcpConnectionType::Local,
+        "claude",
+        Vec::new(),
+        BTreeMap::new(),
+        None,
+        true,
+    );
+    let body = serde_json::json!({ "id": "acp-1" }).to_string();
+    let r = handle_acp_agent_connect_request_with_probe(&body, &mut s, |_| {
+        crate::acp_agent_probe_host::AcpAgentProbeOutcome {
+            connected: true,
+            info: Some("Claude Code 1.0".into()),
+            error: None,
+        }
+    });
+
+    assert!(r.status.starts_with("200"), "{}", r.body);
+    let parsed: serde_json::Value = serde_json::from_str(&r.body).expect("json body");
+    assert_eq!(parsed["connected"], true);
+    assert_eq!(parsed["connectionInfo"], "Claude Code 1.0");
+
+    let settings = &s.editor.editor_ui.agent_settings;
+    assert!(settings.acp_agents[0].connected);
+    let conn = settings.acp_agent_connection_for("acp-1");
+    assert_eq!(conn.phase, AcpAgentConnectPhase::Connected);
+    assert_eq!(conn.info.as_deref(), Some("Claude Code 1.0"));
+}
+
+#[test]
+fn acp_connect_failure_keeps_agent_disconnected() {
+    use op_editor_core::agent_settings::{AcpAgentConnectPhase, AcpConnectionType};
+    use std::collections::BTreeMap;
+
+    let mut s = fresh_state();
+    s.editor.editor_ui.agent_settings.add_acp_agent_config(
+        "Claude Code",
+        AcpConnectionType::Local,
+        "claude",
+        Vec::new(),
+        BTreeMap::new(),
+        None,
+        true,
+    );
+    let body = serde_json::json!({ "id": "acp-1" }).to_string();
+    let r = handle_acp_agent_connect_request_with_probe(&body, &mut s, |_| {
+        crate::acp_agent_probe_host::AcpAgentProbeOutcome {
+            connected: false,
+            info: None,
+            error: Some("failed to spawn ACP agent".into()),
+        }
+    });
+
+    assert!(r.status.starts_with("200"), "{}", r.body);
+    let settings = &s.editor.editor_ui.agent_settings;
+    assert!(!settings.acp_agents[0].connected);
+    let conn = settings.acp_agent_connection_for("acp-1");
+    assert_eq!(conn.phase, AcpAgentConnectPhase::Error);
+    assert_eq!(conn.error.as_deref(), Some("failed to spawn ACP agent"));
+}
+
+#[test]
+fn post_open_recent_loads_recent_path_and_bumps_version() {
+    use op_editor_core::editor_ui_state::RecentFile;
+    use op_editor_core::PenNodeExt;
+
+    let path = write_temp_op(
+        "recent-ok",
+        r##"{"version":"1.0.0","children":[{"id":"recent-node","type":"rectangle","name":"Opened Recent","x":3,"y":4,"width":20,"height":10}]}"##,
+    );
+    let mut s = fresh_state();
+    s.editor.editor_ui.recent_files = vec![RecentFile {
+        path: path.to_string_lossy().into_owned(),
+        modified_at: 1,
+    }];
+
+    let body = serde_json::json!({ "path": path.to_string_lossy() }).to_string();
+    let r = handle_web_canvas_request("POST", "/api/file/open-recent", &body, &mut s);
+
+    assert!(r.status.starts_with("200"), "{}", r.body);
+    assert!(r.body.contains(r#""ok":true"#), "{}", r.body);
+    assert_eq!(s.version, 1);
+    assert!(s
+        .editor
+        .active_children()
+        .iter()
+        .any(|n| n.base().name.as_deref() == Some("Opened Recent")));
+    assert_eq!(
+        s.editor.editor_ui.recent_files[0].path,
+        path.to_string_lossy()
+    );
+    assert_eq!(
+        s.editor.editor_ui.file_name_display.as_deref(),
+        Some(path.file_name().unwrap().to_str().unwrap())
+    );
+}
+
+#[test]
+fn post_open_recent_prunes_stale_recent_path_without_replacing_doc() {
+    use op_editor_core::editor_ui_state::RecentFile;
+    use op_editor_core::PenNodeExt;
+
+    let missing = std::env::temp_dir().join(format!(
+        "openpencil-web-canvas-missing-{}.op",
+        std::process::id()
+    ));
+    let mut s = fresh_state();
+    s.editor.editor_ui.recent_files = vec![RecentFile {
+        path: missing.to_string_lossy().into_owned(),
+        modified_at: 1,
+    }];
+    let before_names: Vec<_> = s
+        .editor
+        .active_children()
+        .iter()
+        .filter_map(|n| n.base().name.clone())
+        .collect();
+
+    let body = serde_json::json!({ "path": missing.to_string_lossy() }).to_string();
+    let r = handle_web_canvas_request("POST", "/api/file/open-recent", &body, &mut s);
+
+    assert!(r.status.starts_with("400"), "{}", r.body);
+    assert!(r.body.contains(r#""pruned":true"#), "{}", r.body);
+    assert_eq!(s.version, 0);
+    assert!(s.editor.editor_ui.recent_files.is_empty());
+    let after_names: Vec<_> = s
+        .editor
+        .active_children()
+        .iter()
+        .filter_map(|n| n.base().name.clone())
+        .collect();
+    assert_eq!(after_names, before_names);
 }
 
 #[test]
@@ -308,6 +563,14 @@ fn serve_one_routes_rest_health_and_document() {
     let post = serve("POST", "/api/mcp/document", SYNC_BODY);
     assert!(post.contains("200 OK"), "{post}");
     assert!(post.contains(r#""ok":true"#));
+}
+
+#[test]
+fn serve_one_standard_ai_route_is_sse_not_404() {
+    let r = serve("POST", "/api/ai/standard", "not json");
+    assert!(r.contains("text/event-stream"), "{r}");
+    assert!(r.contains("invalid request body"), "{r}");
+    assert!(!r.contains("404 Not Found"), "{r}");
 }
 
 #[test]

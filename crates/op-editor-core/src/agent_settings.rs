@@ -81,6 +81,9 @@ impl McpCli {
 // `McpServer` + the provider connect-lifecycle types live in
 // `agent_settings_connection.rs` (800-line cap); re-exported here so
 // call sites keep the `agent_settings::McpServer` path.
+pub use crate::agent_settings_acp_connection::{
+    AcpAgentConnectOutcome, AcpAgentConnectPhase, AcpAgentConnection,
+};
 pub use crate::agent_settings_connection::{
     McpServer, ProviderConnectOutcome, ProviderConnectPhase, ProviderConnection,
 };
@@ -416,7 +419,8 @@ pub struct AgentSettings {
     pub acp_agents: Vec<AcpAgentConfig>,
     pub acp_agent_draft: Option<AcpAgentConfig>,
     pub next_acp_agent_id: u64,
-    /// Vertical scroll offset of the right content pane in px.
+    pub pending_acp_agent_connect: Option<String>,
+    pub acp_agent_connection: BTreeMap<String, AcpAgentConnection>,
     pub scroll_y: jian_core::scroll::ScrollState,
     pub mcp_server: McpServer,
     pub mcp_cli_enabled: [bool; 6],
@@ -440,8 +444,7 @@ pub struct AgentSettings {
     pub hover_image_gen_profile_provider: Option<usize>,
     pub hover_image_gen_profile_test: Option<usize>,
     pub next_image_gen_profile_id: u64,
-    /// Whether the desktop host should check GitHub releases on
-    /// startup. Manual "Check for Updates" stays available.
+    /// Auto-check GitHub releases on startup.
     pub auto_update_enabled: bool,
     /// Currently-focused editable input on the modal.
     pub focus: Option<SettingsFocus>,
@@ -474,6 +477,8 @@ impl Default for AgentSettings {
             acp_agents: Vec::new(),
             acp_agent_draft: None,
             next_acp_agent_id: 1,
+            pending_acp_agent_connect: None,
+            acp_agent_connection: BTreeMap::new(),
             scroll_y: Default::default(),
             mcp_server: McpServer::default(),
             mcp_cli_enabled: [false; 6],

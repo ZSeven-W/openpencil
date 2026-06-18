@@ -123,3 +123,17 @@ fn text_edit_enter_inserts_newline_instead_of_committing() {
         Some("hello\nworld\n!")
     );
 }
+
+#[test]
+fn text_edit_delete_removes_character_after_caret() {
+    let mut host = WidgetHost::new();
+    seed_text_edit(&mut host, "abcd");
+    assert!(host.editor_state.text_edit_set_caret(1, false, 0));
+    host.editor_state_dirty = false;
+
+    assert!(host.apply_delete());
+
+    assert_eq!(host.editor_state.text_edit_content(), Some("acd"));
+    assert_eq!(host.editor_state.ui.text_edit_input.caret(), 1);
+    assert!(host.editor_state_dirty);
+}

@@ -175,6 +175,13 @@ impl WebSyncClient {
         self.initialized && self.baseline_hash != Some(fnv1a64(doc_json.as_bytes()))
     }
 
+    /// Bootstrap pushes are intentionally disabled. A refreshed web page must
+    /// always pull the daemon's authoritative document first; otherwise a
+    /// browser-local stale document can overwrite the file-backed `.op` state.
+    pub fn should_bootstrap_push(&self, _doc_json: &str, _starter_doc_json: &str) -> bool {
+        false
+    }
+
     /// Commit a successful push: the daemon accepted `doc_json` and assigned
     /// it `version`. Records the content baseline AND marks the version
     /// applied, so neither the version probe nor the document fetch ever
@@ -369,6 +376,19 @@ mod tests {
         // A real local edit changes the serialization → push.
         let edited = r#"{"version":"1.0","children":[{"id":"n1"}]}"#;
         assert!(c.should_push(edited));
+    }
+
+    #[test]
+    fn bootstrap_push_is_disabled_before_the_first_daemon_apply() {
+        let mut c = WebSyncClient::new();
+        let starter = r#"{"version":"1.0","children":[]}"#;
+        let edited = r#"{"version":"1.0","children":[{"id":"n1"}]}"#;
+
+        assert!(!c.should_bootstrap_push(starter, starter));
+        assert!(!c.should_bootstrap_push(edited, starter));
+
+        c.mark_pushed(edited, 1);
+        assert!(!c.should_bootstrap_push(edited, starter));
     }
 
     #[test]

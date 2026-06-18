@@ -644,6 +644,8 @@ fn rebuild_chat_models_syncs_agent_to_selected_model_provider() {
         "GPT-5.5",
     )];
     s.editor_ui.agent_settings.connected = [false, true, false, false, false];
+    s.editor_ui.agent_settings.provider_connection[1].phase =
+        crate::agent_settings::ProviderConnectPhase::Connected;
     s.editor_ui.chat_selected_agent = 0;
 
     s.rebuild_chat_models();
@@ -653,18 +655,17 @@ fn rebuild_chat_models_syncs_agent_to_selected_model_provider() {
 }
 
 #[test]
-fn rebuild_chat_models_keeps_connected_provider_selectable_without_discovery() {
+fn rebuild_chat_models_does_not_invent_cli_models_without_discovery() {
     let mut s = sample();
     s.chat.discovered_models.clear();
     s.editor_ui.agent_settings.connected = [false, true, false, false, false];
 
     s.rebuild_chat_models();
 
-    assert!(s
-        .chat
-        .available_models
-        .iter()
-        .any(|m| m.provider == crate::AgentProvider::CodexCli));
+    assert!(
+        s.chat.available_models.is_empty(),
+        "CLI providers must only become selectable after a probe returns real models"
+    );
 }
 
 #[test]
@@ -724,7 +725,14 @@ fn rebuild_chat_models_includes_connected_acp_agents() {
         None,
         true,
     );
-    s.editor_ui.agent_settings.acp_agents[0].connected = true;
+    s.editor_ui.agent_settings.apply_acp_agent_connect_outcome(
+        &id,
+        crate::AcpAgentConnectOutcome {
+            connected: true,
+            info: Some("Local ACP".into()),
+            error: None,
+        },
+    );
 
     s.rebuild_chat_models();
 
@@ -735,6 +743,31 @@ fn rebuild_chat_models_includes_connected_acp_agents() {
         .find(|m| m.value == format!("acp:{id}"))
         .expect("connected ACP agent should appear in model picker");
     assert_eq!(entry.display_name, "Local ACP");
+}
+
+#[test]
+fn rebuild_chat_models_excludes_stale_acp_connected_flag_without_probe() {
+    let mut s = sample();
+    let id = s.editor_ui.agent_settings.add_acp_agent_config(
+        "Local ACP",
+        crate::AcpConnectionType::Local,
+        "op-agent",
+        Vec::new(),
+        std::collections::BTreeMap::new(),
+        None,
+        true,
+    );
+    s.editor_ui.agent_settings.acp_agents[0].connected = true;
+
+    s.rebuild_chat_models();
+
+    assert!(
+        s.chat
+            .available_models
+            .iter()
+            .all(|m| m.value != format!("acp:{id}")),
+        "ACP agent without a successful probe must not appear as a selectable model"
+    );
 }
 
 #[test]

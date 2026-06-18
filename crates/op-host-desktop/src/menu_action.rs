@@ -78,9 +78,18 @@ impl DesktopApp {
             }
             A::Undo => self.host.apply_undo(),
             A::Redo => self.host.apply_redo(),
-            A::Cut => self.host.apply_cut(),
-            A::Copy => self.host.apply_copy(),
-            A::Paste => self.host.apply_paste(),
+            // Route through the input-aware dispatch (not the raw
+            // `host.apply_*`) so Cmd+X / C / V cut, copy, and paste work
+            // inside focused text fields. On macOS / Windows the Edit-menu
+            // accelerator owns these chords (AppKit / Win32 consume the key
+            // event, so the winit keydown in `handle_key_pressed` never
+            // fires) — the same single-path-per-platform contract the
+            // existing Undo / Duplicate menu items rely on, which would
+            // otherwise double-fire on every press. Linux has no native
+            // menu, so there `handle_key_pressed` is the only path.
+            A::Cut => self.handle_cmd_cut(),
+            A::Copy => self.handle_cmd_copy(),
+            A::Paste => self.handle_cmd_paste(),
             A::SelectAll => self.host.apply_select_all(),
             A::Duplicate => self.host.apply_duplicate(),
             A::Group => self.host.apply_group(),

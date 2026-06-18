@@ -254,16 +254,19 @@ impl EditorState {
     /// place. Returns the surviving node's id.
     pub fn detach_component(&mut self, node_id: &NodeId) -> Option<NodeId> {
         let node = walkers::find_node(self.active_children(), node_id)?.clone();
-        match &node {
-            PenNode::Frame(frame) if frame.reusable == Some(true) => {
-                let snap = self.snapshot_for_history();
-                if let Some(live) = walkers::find_node_mut(self.active_children_mut(), node_id) {
-                    set_reusable(live, false);
-                }
-                self.components.remove(node_id);
-                self.history_push_past(snap);
-                Some(node_id.clone())
+        let registered_component = self.components.find_by_id(node_id).is_some();
+        let reusable_frame = matches!(&node, PenNode::Frame(frame) if frame.reusable == Some(true));
+        if is_component_root(&node) && (registered_component || reusable_frame) {
+            let snap = self.snapshot_for_history();
+            if let Some(live) = walkers::find_node_mut(self.active_children_mut(), node_id) {
+                set_reusable(live, false);
             }
+            self.components.remove(node_id);
+            self.history_push_past(snap);
+            return Some(node_id.clone());
+        }
+
+        match &node {
             PenNode::Ref(reference) => {
                 let component =
                     crate::ref_resolve::find_component_node(&self.doc, &reference.target)?;

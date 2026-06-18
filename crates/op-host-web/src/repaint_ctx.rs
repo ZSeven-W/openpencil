@@ -26,9 +26,8 @@ pub(crate) trait RepaintContext {
     fn canvas_data_url(&self, mime: &str) -> Result<String, JsValue>;
     /// Register an OS font face (from Local Font Access bytes) with the
     /// backend so canvas text can shape against it. Returns `true` when the
-    /// face was registered. The CanvasKit backend does not yet wire dynamic
-    /// system-font registration (text falls back to the bundled
-    /// Roboto/CJK/emoji faces), so its impl returns `false`.
+    /// face was registered. Backends that cannot accept runtime font bytes may
+    /// return `false`.
     fn register_system_font(&mut self, family: &str, bytes: &[u8]) -> bool;
     /// Re-paint through the owning backend. Returns the present error if the
     /// backend's present step failed (the CanvasKit path is infallible and

@@ -220,7 +220,7 @@ impl<'a> AgentSettingsPanel<'a> {
                     if !(card).contains(scrolled) {
                         continue;
                     }
-                    if self.settings.connected[i] {
+                    if self.settings.provider_verified_connected_at(i) {
                         // Connected card — only the disconnect button
                         // (visible on hover) toggles disconnection.
                         let disc = disconnect_btn_rect_at(card);
@@ -590,7 +590,9 @@ fn paint_agents_tab(
         let card = agent_card_rect_at(content.origin.x, y, content.size.x);
         paint_agent_card(cx, theme, settings, ui, *provider, card, i);
         y += CARD_HEIGHT + CARD_GAP;
-        if matches!(provider, AgentProvider::ClaudeCode) && settings.connected[i] {
+        if matches!(provider, AgentProvider::ClaudeCode)
+            && settings.provider_verified_connected_at(i)
+        {
             let hint = TextLayout::single_run(
                 t_settings(ui, "settings.agents.claudeHint"),
                 "system-ui",

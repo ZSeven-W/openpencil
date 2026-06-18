@@ -275,6 +275,14 @@ impl PropertyPanel {
                 .map(str::to_string);
             let mut snapshot = NodeSnapshot::from_node(node);
             snapshot.is_instance = is_instance;
+            if !is_instance
+                && state
+                    .components
+                    .find_by_id(&state.selection.anchor)
+                    .is_some()
+            {
+                snapshot.is_reusable = true;
+            }
             apply_resolved_variable_colors(
                 state,
                 node,

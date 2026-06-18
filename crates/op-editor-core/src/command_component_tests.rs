@@ -4,7 +4,7 @@ use crate::command::EditorCommand;
 use crate::components::ComponentLibrary;
 use crate::node_id::NodeId;
 use crate::pen_node_ext::PenNodeExt;
-use crate::test_support::{frame, sample, state_with};
+use crate::test_support::{frame, group, rect, sample, state_with};
 use crate::walkers::find_node;
 use jian_ops_schema::node::PenNode;
 use jian_ops_schema::page::PenPage;
@@ -28,6 +28,28 @@ fn create_component_marks_frame_reusable_and_registers_it() {
         _ => panic!("expected frame"),
     }
     assert!(s.history.can_undo());
+}
+
+#[test]
+fn create_and_detach_group_component_updates_registry() {
+    let mut s = state_with(vec![group(
+        "g1",
+        "Text Group",
+        vec![rect("r1", "Background", 0.0, 0.0, 100.0, 48.0)],
+    )]);
+
+    assert!(s.apply(EditorCommand::CreateComponent {
+        node_id: id("g1"),
+        name: "Text Group".into(),
+    }));
+    assert!(s.components.find_by_id(&id("g1")).is_some());
+
+    let survived = s.detach_component(&id("g1")).expect("group detaches");
+    assert_eq!(survived, id("g1"));
+    assert!(
+        s.components.find_by_id(&id("g1")).is_none(),
+        "detaching a registered group component removes it from the component registry",
+    );
 }
 
 #[test]

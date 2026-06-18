@@ -507,7 +507,9 @@ impl EditorState {
         self.reorder_relative(source, anchor, false)
     }
 
-    /// Move `source` so it becomes the LAST child of `parent`.
+    /// Move `source` so it becomes the FIRST child of `parent` (TS parity:
+    /// a layer-panel drop into a container inserts at index 0, the top of
+    /// the child list — `layer-dnd-utils.ts`).
     pub fn reorder_into(&mut self, source: NodeId, parent: NodeId) -> bool {
         if source == parent || !source.is_real() || !parent.is_real() {
             return false;
@@ -597,18 +599,8 @@ impl EditorState {
             .available_models
             .get(self.chat.selected_model)
             .cloned();
-        let connected = self.editor_ui.agent_settings.connected;
+        let connected = self.editor_ui.agent_settings.verified_connected_mask();
         self.chat.rebuild_available_models(&connected);
-        for (idx, provider) in crate::AgentProvider::ALL.iter().enumerate() {
-            if !connected[idx]
-                || connected_provider_has_model(&self.chat.available_models, *provider)
-            {
-                continue;
-            }
-            self.chat
-                .available_models
-                .extend(default_models_for_connected_provider(*provider));
-        }
         self.chat.available_models.extend(
             self.editor_ui
                 .agent_settings
@@ -625,12 +617,14 @@ impl EditorState {
                     )
                 }),
         );
+        let agent_settings = &self.editor_ui.agent_settings;
         self.chat.available_models.extend(
-            self.editor_ui
-                .agent_settings
+            agent_settings
                 .acp_agents
                 .iter()
-                .filter(|agent| agent.ready() && agent.connected)
+                .filter(|agent| {
+                    agent.ready() && agent_settings.acp_agent_verified_connected(&agent.id)
+                })
                 .map(|agent| crate::ModelEntry::acp(agent.id.clone(), agent.display_name.clone())),
         );
         if let Some(prev) = prev {
@@ -669,42 +663,6 @@ impl EditorState {
         }
         Ok(())
     }
-}
-
-fn connected_provider_has_model(
-    models: &[crate::ModelEntry],
-    provider: crate::AgentProvider,
-) -> bool {
-    models.iter().any(|entry| {
-        entry.provider == provider
-            && entry.builtin_provider_id.is_none()
-            && entry.acp_agent_id().is_none()
-    })
-}
-
-fn default_models_for_connected_provider(provider: crate::AgentProvider) -> Vec<crate::ModelEntry> {
-    let models: &[(&str, &str)] = match provider {
-        crate::AgentProvider::ClaudeCode => &[
-            ("default", "Default"),
-            ("sonnet", "Sonnet"),
-            ("opus", "Opus"),
-            ("haiku", "Haiku"),
-        ],
-        crate::AgentProvider::CodexCli => &[("gpt-5.5", "GPT-5.5")],
-        crate::AgentProvider::GeminiCli => &[
-            ("gemini-2.5-pro", "Gemini 2.5 Pro"),
-            ("gemini-2.5-flash", "Gemini 2.5 Flash"),
-        ],
-        crate::AgentProvider::GithubCopilot => &[
-            ("gpt-5", "GPT-5"),
-            ("claude-sonnet-4.5", "Claude Sonnet 4.5"),
-        ],
-        crate::AgentProvider::OpenCode => &[],
-    };
-    models
-        .iter()
-        .map(|(value, display_name)| crate::ModelEntry::new(provider, *value, *display_name))
-        .collect()
 }
 
 // --- Free helpers ----------------------------------------------------

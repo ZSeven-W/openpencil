@@ -174,6 +174,9 @@ impl WidgetHost {
             self.mark_dirty();
             return true;
         }
+        if self.apply_image_panel_text(c) {
+            return true;
+        }
         // Icon-picker / component-browser search boxes own typing
         // while their panels are open (mirrors native routing order:
         // icon picker → chat model picker → component browser; see
@@ -328,6 +331,9 @@ impl WidgetHost {
             }
             return true;
         }
+        if self.apply_image_panel_backspace() {
+            return true;
+        }
         if let Some(changed) = self.icon_picker_backspace() {
             return changed;
         }
@@ -407,6 +413,9 @@ impl WidgetHost {
             self.commit_property_focus_if_any();
             return true;
         }
+        if self.apply_image_panel_send() {
+            return true;
+        }
         if self.editor_state.chat.available_models.is_empty() {
             return false;
         }
@@ -435,7 +444,7 @@ impl WidgetHost {
             return ok;
         }
         if self.editor_state.ui.text_editing.is_some() {
-            let ok = self.editor_state.text_edit_backspace(self.now_ms);
+            let ok = self.editor_state.text_edit_delete_forward(self.now_ms);
             if ok {
                 self.mark_dirty();
             }

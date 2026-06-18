@@ -1,5 +1,5 @@
 use super::ai_chat_transcript::{
-    build_transcript, TextBubble, BODY_FONT, BUBBLE_PAD, CHAR_UNIT_PX, LINE_H,
+    build_transcript_with_design_hover, TextBubble, BODY_FONT, BUBBLE_PAD, CHAR_UNIT_PX, LINE_H,
 };
 use super::ai_chat_transcript_text::char_display_units;
 use crate::theme::Theme;
@@ -19,11 +19,13 @@ pub(crate) fn transcript_text_offset_at(
     body_rect: Rect,
     point: Point2D,
     locale: op_editor_core::Locale,
+    scroll_offset: f32,
 ) -> Option<TranscriptTextHit> {
     if !(body_rect).contains(point) {
         return None;
     }
-    for item in build_transcript(messages, body_rect, locale) {
+    for item in build_transcript_with_design_hover(messages, body_rect, locale, None, scroll_offset)
+    {
         if item.role != ChatRole::User {
             continue;
         }

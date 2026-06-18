@@ -27,9 +27,11 @@
 //! caches), while the Rust daemon IS the authority — so this glue never
 //! pushes before the first daemon document has been applied, and the TS
 //! `sync-reset` / `active-ping` cache-management routes have no Rust
-//! equivalent. The TS browser-rendered `screenshot:request` RPC is not
-//! implemented on the Rust web shell yet (the daemon reports screenshots
-//! honestly unavailable headless).
+//! equivalent. On refresh the web shell always pulls the daemon document
+//! first; browser-local bootstrap pushes are disabled so stale page state
+//! cannot revive an old `.op` file. The TS browser-rendered
+//! `screenshot:request` RPC is not implemented on the Rust web shell yet (the
+//! daemon reports screenshots honestly unavailable headless).
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -109,7 +111,11 @@ fn poll_version<C: RepaintContext + 'static>(
         let Some(version) = WebSyncClient::parse_version_probe(&body) else {
             return; // daemon down / non-JSON error body — retry next tick
         };
-        if !sync.borrow().wants_version(version) {
+        let wants_version = sync
+            .try_borrow()
+            .map(|sync| sync.wants_version(version))
+            .unwrap_or(false);
+        if !wants_version {
             return;
         }
         // Fetch the full document; the latch is released when the response
@@ -120,8 +126,8 @@ fn poll_version<C: RepaintContext + 'static>(
         let fetch_busy_done = fetch_busy.clone();
         let last_selection_key = last_selection_key.clone();
         let on_doc: Rc<dyn Fn(String)> = Rc::new(move |doc_body: String| {
-            fetch_busy_done.set(false);
             apply_document_response(&inner, &doc_body, &sync, &last_selection_key);
+            fetch_busy_done.set(false);
         });
         if !live_sync::get(&format!("{base_owned}/api/mcp/document"), on_doc) {
             fetch_busy.set(false);
@@ -144,13 +150,19 @@ fn apply_document_response<C: RepaintContext + 'static>(
     sync: &Rc<RefCell<WebSyncClient>>,
     last_selection_key: &Rc<RefCell<Option<String>>>,
 ) {
-    let mut inner_mut = inner.borrow_mut();
+    let Ok(mut inner_mut) = inner.try_borrow_mut() else {
+        return;
+    };
     let inner_ref = &mut *inner_mut;
     let applied = sync
-        .borrow_mut()
-        .sync(body, |doc, _version| {
-            inner_ref.host_mut().replace_document(doc);
-            inner_ref.repaint().is_ok()
+        .try_borrow_mut()
+        .ok()
+        .and_then(|mut sync| {
+            sync.sync(body, |doc, _version| {
+                inner_ref.host_mut().replace_document(doc);
+                inner_ref.repaint().is_ok()
+            })
+            .ok()
         })
         .unwrap_or(false);
     if applied {
@@ -158,9 +170,13 @@ fn apply_document_response<C: RepaintContext + 'static>(
         // push tick compares apples to apples (serde normalization differs
         // from the daemon's wire bytes).
         if let Ok(json) = serde_json::to_string(&inner_ref.host().editor_state().doc) {
-            sync.borrow_mut().note_applied_snapshot(&json);
+            if let Ok(mut sync) = sync.try_borrow_mut() {
+                sync.note_applied_snapshot(&json);
+            }
         }
-        *last_selection_key.borrow_mut() = None;
+        if let Ok(mut last_selection_key) = last_selection_key.try_borrow_mut() {
+            *last_selection_key = None;
+        }
     }
 }
 
@@ -177,11 +193,14 @@ fn push_document_if_changed<C: RepaintContext + 'static>(
     if push_busy.get() {
         return;
     }
+    let initialized = sync
+        .try_borrow()
+        .map(|sync| sync.initialized())
+        .unwrap_or(false);
     let doc_json = {
-        let mut b = inner.borrow_mut();
-        if !sync.borrow().initialized() {
+        let Ok(mut b) = inner.try_borrow_mut() else {
             return;
-        }
+        };
         // Cheap gate: only serialize when the host flagged a possible change
         // since the last tick (a conservative superset of document edits; the
         // hash check below absorbs the false positives).
@@ -193,7 +212,11 @@ fn push_document_if_changed<C: RepaintContext + 'static>(
         };
         json
     };
-    if !sync.borrow().should_push(&doc_json) {
+    let should_push = sync
+        .try_borrow()
+        .map(|sync| initialized && sync.should_push(&doc_json))
+        .unwrap_or(false);
+    if !should_push {
         return;
     }
     if doc_json.len() > SYNC_MAX_BODY_BYTES {
@@ -220,7 +243,9 @@ fn push_document_if_changed<C: RepaintContext + 'static>(
         push_busy_done.set(false);
         if let Some(version) = WebSyncClient::parse_push_response(&resp) {
             // Commit baseline + version so our own push is never echoed back.
-            sync.borrow_mut().mark_pushed(&doc_json, version);
+            if let Ok(mut sync) = sync.try_borrow_mut() {
+                sync.mark_pushed(&doc_json, version);
+            }
         }
         // A rejected/failed push is dropped best-effort (TS parity) — the
         // next local edit re-flags the host and retries.
@@ -243,16 +268,25 @@ fn push_selection_if_changed<C: RepaintContext + 'static>(
     last_selection_key: &Rc<RefCell<Option<String>>>,
 ) {
     let (key, body) = {
-        let b = inner.borrow();
+        let Ok(b) = inner.try_borrow() else {
+            return;
+        };
         let state = b.host().editor_state();
         (
             web_sync::selection_sync_key(state),
             web_sync::selection_push_body(state),
         )
     };
-    if last_selection_key.borrow().as_deref() == Some(key.as_str()) {
+    if last_selection_key
+        .try_borrow()
+        .map(|last| last.as_deref() == Some(key.as_str()))
+        .unwrap_or(true)
+    {
         return;
     }
-    *last_selection_key.borrow_mut() = Some(key);
+    let Ok(mut last_selection_key) = last_selection_key.try_borrow_mut() else {
+        return;
+    };
+    *last_selection_key = Some(key);
     let _ = live_sync::post_json(&format!("{base}/api/mcp/selection"), &body, None);
 }

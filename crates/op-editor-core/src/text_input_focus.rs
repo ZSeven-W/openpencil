@@ -16,7 +16,10 @@ impl EditorState {
         if let Some(rename) = &self.ui.layer_rename {
             return Some(&rename.input);
         }
-        if self.ui.property_focus.is_some() {
+        // Property-panel fields and effect-parameter fields share
+        // `property_input`, so both focuses resolve to it (mirrors
+        // `focused_input_selected_text` on the web host).
+        if self.ui.property_focus.is_some() || self.editor_ui.effect_param_focus.is_some() {
             return Some(&self.ui.property_input);
         }
         if self.editor_ui.variables_theme_rename_axis.is_some()
@@ -73,7 +76,7 @@ impl EditorState {
         if let Some(rename) = &mut self.ui.layer_rename {
             return Some(&mut rename.input);
         }
-        if self.ui.property_focus.is_some() {
+        if self.ui.property_focus.is_some() || self.editor_ui.effect_param_focus.is_some() {
             return Some(&mut self.ui.property_input);
         }
 

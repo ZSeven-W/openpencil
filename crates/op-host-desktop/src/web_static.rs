@@ -264,6 +264,8 @@ pub(crate) fn write_static_response<S: std::io::Write>(
     let head = format!(
         "HTTP/1.1 {}\r\n\
          Access-Control-Allow-Origin: *\r\n\
+         Cache-Control: no-store, no-cache, must-revalidate\r\n\
+         Pragma: no-cache\r\n\
          Content-Type: {}\r\n\
          Content-Length: {}\r\nConnection: close\r\n\r\n",
         reply.status,
@@ -490,6 +492,11 @@ mod tests {
         write_static_response(&mut out, &reply).expect("write");
         let text = String::from_utf8_lossy(&out);
         assert!(text.starts_with("HTTP/1.1 200 OK\r\n"), "{text}");
+        assert!(
+            text.contains("Cache-Control: no-store, no-cache, must-revalidate\r\n"),
+            "{text}"
+        );
+        assert!(text.contains("Pragma: no-cache\r\n"), "{text}");
         assert!(text.contains("Content-Type: application/wasm"), "{text}");
         assert!(text.contains("Content-Length: 3"), "{text}");
         assert!(out.ends_with(&[1, 2, 3]), "{text}");

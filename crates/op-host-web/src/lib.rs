@@ -48,6 +48,10 @@ mod file_actions;
 #[cfg(feature = "canvaskit")]
 mod raf_pump;
 #[cfg(feature = "canvaskit")]
+mod web_acp_connect;
+#[cfg(feature = "canvaskit")]
+mod web_agent_connect;
+#[cfg(feature = "canvaskit")]
 mod web_ai_transport;
 // Web Iconify bridge — drains the icon picker's remote-search request directly
 // against api.iconify.design (CORS-open, same as TS).

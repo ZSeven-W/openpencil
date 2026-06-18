@@ -9,6 +9,7 @@ use super::{CursorHint, WidgetHostNative};
 use op_editor_core::ui_draft::PropertyFocus;
 use op_editor_core::PenNodeExt;
 use op_editor_core::{own_bounds, NodeId};
+use op_editor_ui::widgets::{PropertyPanel, TopBar, TopBarHit, TOP_BAR_HEIGHT};
 
 /// Seed a host's `editor_state` from a canonical `.op` JSON snippet.
 fn seed(host: &mut WidgetHostNative, json: &str) {
@@ -17,6 +18,28 @@ fn seed(host: &mut WidgetHostNative, json: &str) {
         .value;
     *host.editor_state_mut() = op_editor_core::EditorState::from_document(doc);
     host.mark_paint_dirty_for_test();
+}
+
+fn point_inside_property_panel_without_target(host: &WidgetHostNative) -> op_editor_ui::Point2D {
+    let panel = PropertyPanel::for_selection(host.editor_state()).expect("property panel");
+    let rect = host.property_rect(host.last_viewport_w, host.last_viewport_h);
+    let mut y = rect.origin.y + rect.size.y - 12.0;
+    while y > rect.origin.y {
+        let mut x = rect.origin.x + 12.0;
+        while x < rect.origin.x + rect.size.x - 12.0 {
+            let point = op_editor_ui::Point2D::new(x, y);
+            let no_action = panel.hit_test_action(rect, point).is_none();
+            let no_input = panel.hit_test(rect, point).is_none();
+            let no_tab = panel.tab_hover_at(rect, point).is_none();
+            let no_fill_type = panel.fill_type_picker_row_at(rect, point).is_none();
+            if no_action && no_input && no_tab && no_fill_type {
+                return point;
+            }
+            x += 8.0;
+        }
+        y -= 8.0;
+    }
+    panic!("no empty property-panel point found");
 }
 
 #[test]
@@ -46,6 +69,116 @@ fn layer_hover_does_not_refresh_stale_canvas_layout_scene() {
         host.editor_state_dirty,
         "layer hover should not rebuild or clear the stale canvas layout scene"
     );
+}
+
+#[test]
+fn file_menu_cursor_move_clears_stale_layer_hover() {
+    let mut host = WidgetHostNative::new();
+    seed(
+        &mut host,
+        r#"{"version":"0.8.0","children":[{"type":"rectangle","id":"n1","name":"n1","x":0,"y":0,"width":100,"height":50}]}"#,
+    );
+    host.last_viewport_w = 1200.0;
+    host.last_viewport_h = 800.0;
+    host.editor_state_mut().editor_ui.file_menu_open = true;
+    host.editor_state_mut().editor_ui.hovered_layer_id = Some(NodeId::new("n1"));
+    let menu_rect = host
+        .file_menu_rect(host.last_viewport_w)
+        .expect("file menu rect");
+    let menu = op_editor_ui::widgets::file_menu::FileMenu::from_editor_ui(
+        &host.editor_state().editor_ui,
+        0,
+    );
+    let x = menu_rect.origin.x + 80.0;
+    let mut y = menu_rect.origin.y + 2.0;
+    let mut point = None;
+    while y < menu_rect.origin.y + menu_rect.size.y {
+        let p = op_editor_ui::Point2D::new(x, y);
+        if menu.hovered_at(menu_rect, p).is_some() {
+            point = Some(p);
+            break;
+        }
+        y += 2.0;
+    }
+    let point = point.expect("file menu row point");
+    assert!(host.over_dropdown_overlay(
+        point.x,
+        point.y,
+        host.last_viewport_w,
+        host.last_viewport_h
+    ));
+
+    assert!(host.apply_cursor_move(point.x, point.y));
+
+    assert_eq!(host.editor_state().editor_ui.hovered_layer_id, None);
+    assert_eq!(host.editor_state().editor_ui.hovered_page_index, None);
+    assert!(
+        host.editor_state().editor_ui.file_menu.hover.is_some(),
+        "file-menu hover itself should still be active"
+    );
+}
+
+#[test]
+fn property_panel_blank_hover_consumes_and_clears_lower_hover() {
+    let mut host = WidgetHostNative::new();
+    seed(
+        &mut host,
+        r##"{ "version": "0.8.0", "children": [
+              {"type":"group","id":"text_group","name":"Text Group",
+               "children":[
+                 {"type":"text","id":"label","name":"Label","content":"Hello"}
+               ]}
+        ]}"##,
+    );
+    host.last_viewport_w = 1200.0;
+    host.last_viewport_h = 800.0;
+    host.editor_state_mut()
+        .set_single_selection(NodeId::new("text_group"));
+    host.editor_state_mut().editor_ui.canvas_hover_node = Some(NodeId::new("label"));
+
+    let point = point_inside_property_panel_without_target(&host);
+
+    assert!(
+        host.apply_cursor_move(point.x, point.y),
+        "right inspector should own cursor movement inside its bounds"
+    );
+    assert_eq!(host.editor_state().editor_ui.canvas_hover_node, None);
+}
+
+#[test]
+fn opening_file_menu_clears_stale_layer_hover() {
+    let mut host = WidgetHostNative::new();
+    seed(
+        &mut host,
+        r#"{"version":"0.8.0","children":[{"type":"rectangle","id":"n1","name":"n1","x":0,"y":0,"width":100,"height":50}]}"#,
+    );
+    host.last_viewport_w = 1200.0;
+    host.last_viewport_h = 800.0;
+    host.editor_state_mut().editor_ui.hovered_layer_id = Some(NodeId::new("n1"));
+    host.editor_state_mut().editor_ui.hovered_page_index = Some(0);
+
+    let top_bar_rect = op_editor_ui::Rect {
+        origin: op_editor_ui::Point2D::new(0.0, 0.0),
+        size: op_editor_ui::Point2D::new(host.last_viewport_w, TOP_BAR_HEIGHT),
+    };
+    let top_bar = TopBar::for_editor_ui(&host.editor_state().editor_ui);
+    let mut file_button = None;
+    let mut x = top_bar_rect.origin.x;
+    while x < top_bar_rect.origin.x + top_bar_rect.size.x {
+        let p = op_editor_ui::Point2D::new(x, TOP_BAR_HEIGHT / 2.0);
+        if top_bar.hit_test(top_bar_rect, p) == Some(TopBarHit::ToggleFileMenu) {
+            file_button = Some(p);
+            break;
+        }
+        x += 1.0;
+    }
+    let point = file_button.expect("top-bar file button point");
+
+    assert!(host.apply_press(point.x, point.y, host.last_viewport_w, host.last_viewport_h));
+
+    assert!(host.editor_state().editor_ui.file_menu_open);
+    assert_eq!(host.editor_state().editor_ui.hovered_layer_id, None);
+    assert_eq!(host.editor_state().editor_ui.hovered_page_index, None);
 }
 
 #[test]

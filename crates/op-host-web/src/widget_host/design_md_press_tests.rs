@@ -1,9 +1,29 @@
 use super::WidgetHost;
 
+const VIEWPORT_W: f32 = 1200.0;
+const VIEWPORT_H: f32 = 800.0;
+
+fn long_design_md() -> String {
+    let mut markdown = String::from("# Design System: Long\n\n## Color Palette\n");
+    for index in 0..40 {
+        markdown.push_str(&format!(
+            "- **color-{index:02}** (#{index:02X}{index:02X}{index:02X}) - role {index}\n"
+        ));
+    }
+    markdown
+}
+
+fn open_long_design_md(host: &mut WidgetHost) -> op_editor_ui::Rect {
+    host.editor_state.editor_ui.design_md_panel_open = true;
+    host.editor_state.doc.design_md = Some(op_editor_core::parse_design_md(&long_design_md()));
+    host.design_md_panel_rect(VIEWPORT_W, VIEWPORT_H)
+        .expect("design md panel rect")
+}
+
 #[test]
 fn design_md_import_press_sets_and_release_clears_pressed_button() {
     let mut host = WidgetHost::new();
-    let (viewport_w, viewport_h) = (1200.0, 800.0);
+    let (viewport_w, viewport_h) = (VIEWPORT_W, VIEWPORT_H);
     host.editor_state.editor_ui.design_md_panel_open = true;
 
     let panel_rect = host
@@ -40,4 +60,49 @@ fn design_md_import_press_sets_and_release_clears_pressed_button() {
 
     assert!(host.apply_release_with_viewport(viewport_w, viewport_h));
     assert_eq!(host.editor_state.editor_ui.pressed_button, None);
+}
+
+#[test]
+fn design_md_panel_wheel_scrolls_content_without_zooming_canvas() {
+    let mut host = WidgetHost::new();
+    let panel_rect = open_long_design_md(&mut host);
+    let panel = op_editor_ui::widgets::DesignMdPanel::for_editor(&host.editor_state)
+        .expect("open design md panel");
+    assert!(panel.max_scroll(panel_rect) > 0.0);
+    let zoom = host.editor_state.viewport.zoom;
+
+    assert!(host.apply_wheel(
+        panel_rect.origin.x + panel_rect.size.x / 2.0,
+        panel_rect.origin.y + panel_rect.size.y / 2.0,
+        -120.0,
+        VIEWPORT_W,
+        VIEWPORT_H
+    ));
+
+    assert!(host.editor_state.editor_ui.design_md_scroll.offset > 0.0);
+    assert_eq!(host.editor_state.viewport.zoom, zoom);
+}
+
+#[test]
+fn design_md_panel_trackpad_pan_scrolls_content_without_panning_canvas() {
+    let mut host = WidgetHost::new();
+    let panel_rect = open_long_design_md(&mut host);
+    let panel = op_editor_ui::widgets::DesignMdPanel::for_editor(&host.editor_state)
+        .expect("open design md panel");
+    assert!(panel.max_scroll(panel_rect) > 0.0);
+    let pan_x = host.editor_state.viewport.pan_x;
+    let pan_y = host.editor_state.viewport.pan_y;
+
+    assert!(host.apply_pan_gesture(
+        panel_rect.origin.x + panel_rect.size.x / 2.0,
+        panel_rect.origin.y + panel_rect.size.y / 2.0,
+        0.0,
+        -120.0,
+        VIEWPORT_W,
+        VIEWPORT_H
+    ));
+
+    assert!(host.editor_state.editor_ui.design_md_scroll.offset > 0.0);
+    assert_eq!(host.editor_state.viewport.pan_x, pan_x);
+    assert_eq!(host.editor_state.viewport.pan_y, pan_y);
 }

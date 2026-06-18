@@ -3,6 +3,7 @@
 //! the 800-line cap (mirrors the native host's `property_dispatch.rs`).
 
 use super::WidgetHost;
+use jian_ops_schema::sizing::SizingKeyword;
 use jian_ops_schema::variable::VariableKind;
 use op_editor_core::{EffectField, PropertyFocus};
 use op_editor_ui::{widgets::PropertyPanel, Color};
@@ -48,31 +49,67 @@ impl WidgetHost {
     ) {
         use op_editor_ui::widgets::PropertyPanelAction as A;
         match action {
+            A::GoToComponent => {
+                if let Some(jian_ops_schema::node::PenNode::Ref(reference)) =
+                    self.editor_state.selected_node()
+                {
+                    let master = op_editor_core::NodeId::new(reference.target.clone());
+                    if let Some(pages) = self.editor_state.doc.pages.as_ref() {
+                        if let Some(page_index) = pages.iter().position(|page| {
+                            op_editor_core::walkers::find_node(&page.children, &master).is_some()
+                        }) {
+                            if page_index != self.editor_state.ui.active_page_index {
+                                let _ = self.editor_state.set_active_page(page_index);
+                            }
+                        }
+                    }
+                    self.editor_state.set_single_selection(master);
+                }
+                self.mark_dirty();
+                return;
+            }
+            A::DetachComponent | A::DetachInstance => {
+                let id = self.editor_state.selection.anchor.clone();
+                if id.is_real() {
+                    let _ = self.editor_state.detach_component(&id);
+                }
+                self.mark_dirty();
+                return;
+            }
+            _ => {}
+        }
+        let instance_scope = self.editor_state.begin_instance_write_for_anchor();
+        match action {
             A::SetPropertyTab(tab) => {
                 self.editor_state.editor_ui.property_tab = tab;
             }
             A::SetFlexLayout(mode) => {
-                self.editor_state.editor_ui.flex_layout = mode;
+                self.set_selected_layout_mode(mode);
             }
             A::ToggleSizeFillWidth => {
-                let v = &mut self.editor_state.editor_ui.size_fill_width;
-                *v = !*v;
+                self.toggle_selected_sizing(true, SizingKeyword::FillContainer);
             }
             A::ToggleSizeFillHeight => {
-                let v = &mut self.editor_state.editor_ui.size_fill_height;
-                *v = !*v;
+                self.toggle_selected_sizing(false, SizingKeyword::FillContainer);
             }
             A::ToggleSizeHugWidth => {
-                let v = &mut self.editor_state.editor_ui.size_hug_width;
-                *v = !*v;
+                self.toggle_selected_sizing(true, SizingKeyword::FitContent);
             }
             A::ToggleSizeHugHeight => {
-                let v = &mut self.editor_state.editor_ui.size_hug_height;
-                *v = !*v;
+                self.toggle_selected_sizing(false, SizingKeyword::FitContent);
             }
             A::ToggleSizeClipContent => {
-                let v = &mut self.editor_state.editor_ui.size_clip_content;
-                *v = !*v;
+                self.toggle_selected_clip_content();
+            }
+            A::SetLayoutAlign(value) => {
+                self.set_selected_layout_align(value);
+            }
+            A::SetLayoutJustify(value) => {
+                self.set_selected_layout_justify(value);
+            }
+            A::SetLayoutAlignment { justify, align } => {
+                self.set_selected_layout_justify(justify);
+                self.set_selected_layout_align(align);
             }
             A::CreateComponent => {
                 let id = self.editor_state.selection.anchor.clone();
@@ -93,6 +130,25 @@ impl WidgetHost {
                 self.editor_state
                     .editor_ui
                     .property_color_variable_picker_open = None;
+            }
+            A::AddFill => {
+                let _ = self
+                    .editor_state
+                    .set_selected_fill_type(op_editor_core::FillType::Solid);
+            }
+            A::RemoveFill => {
+                let _ = self.editor_state.clear_selected_fills();
+                self.editor_state.editor_ui.close_fill_type_picker();
+                self.editor_state.editor_ui.image_fill_popover_open = false;
+                self.editor_state
+                    .editor_ui
+                    .property_color_variable_picker_open = None;
+            }
+            A::AddGradientStop => {
+                let _ = self.editor_state.add_selected_gradient_stop();
+            }
+            A::RemoveGradientStop(index) => {
+                let _ = self.editor_state.remove_selected_gradient_stop(index);
             }
             A::ToggleImageFillPopover => {
                 let ui = &mut self.editor_state.editor_ui;
@@ -130,6 +186,43 @@ impl WidgetHost {
                 ui.export_scale_picker_open = false;
                 ui.export_format_picker_open = false;
                 ui.property_color_variable_picker_open = None;
+            }
+            A::SetTextAlign(value) => {
+                self.set_selected_text_align(value);
+            }
+            A::SetTextVerticalAlign(value) => {
+                self.set_selected_text_vertical_align(value);
+            }
+            A::SetTextGrowth(value) => {
+                self.set_selected_text_growth(value);
+            }
+            A::ToggleImageSearchPopover => {
+                self.toggle_image_search_popover();
+            }
+            A::ToggleImageGeneratePopover => {
+                self.toggle_image_generate_popover();
+            }
+            A::RunImageSearch => {
+                self.run_image_search();
+            }
+            A::SelectImageSearchResult(index) => {
+                self.select_image_search_result(index);
+            }
+            A::RunImageGenerate => {
+                self.run_image_generate();
+            }
+            A::ApplyGeneratedImage => {
+                self.apply_generated_image();
+            }
+            A::RetryImageGenerate => {
+                self.retry_image_generate();
+            }
+            A::OpenImageGenSettings => {
+                self.open_image_gen_settings();
+            }
+            A::RelinkImage => {
+                self.editor_state.editor_ui.pending_file_action =
+                    Some(op_editor_core::editor_ui_state::FileAction::RelinkImage);
             }
             A::ToggleExportScalePicker => {
                 let ui = &mut self.editor_state.editor_ui;
@@ -261,6 +354,10 @@ impl WidgetHost {
                     0.0,
                 );
             }
+            A::ToggleWidgetChecked(new_value) => {
+                self.editor_state.commit_history();
+                let _ = self.editor_state.set_selected_widget_checked(new_value);
+            }
             A::PickFillImage => {
                 // Queue the browser file picker — `dom_io` drains
                 // this flag after the event handler releases the host
@@ -358,6 +455,9 @@ impl WidgetHost {
                 self.apply_codegen_action(codegen_action);
             }
             _ => {}
+        }
+        if let Some(scope) = instance_scope {
+            self.editor_state.finish_instance_write(scope);
         }
         self.mark_dirty();
     }

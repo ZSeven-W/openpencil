@@ -4,7 +4,43 @@ use op_editor_core::{EditorState, PropertyTab};
 use op_editor_ui::widgets::property_panel_action::CodegenAction;
 use op_editor_ui::widgets::property_panel_code;
 use op_editor_ui::widgets::property_panel_inputs::TAB_HEIGHT;
-use op_editor_ui::widgets::TOP_BAR_HEIGHT;
+use op_editor_ui::widgets::{PropertyPanel, TOP_BAR_HEIGHT};
+use op_editor_ui::{Point2D, Rect};
+
+fn property_rect(host: &WidgetHost) -> Rect {
+    Rect {
+        origin: Point2D::new(
+            host.last_viewport_w - host.editor_state.editor_ui.property_panel_width,
+            TOP_BAR_HEIGHT,
+        ),
+        size: Point2D::new(
+            host.editor_state.editor_ui.property_panel_width,
+            (host.last_viewport_h - TOP_BAR_HEIGHT).max(0.0),
+        ),
+    }
+}
+
+fn point_inside_property_panel_without_target(host: &WidgetHost) -> Point2D {
+    let panel = PropertyPanel::for_selection(&host.editor_state).expect("property panel");
+    let rect = property_rect(host);
+    let mut y = rect.origin.y + rect.size.y - 12.0;
+    while y > rect.origin.y {
+        let mut x = rect.origin.x + 12.0;
+        while x < rect.origin.x + rect.size.x - 12.0 {
+            let point = Point2D::new(x, y);
+            let no_action = panel.hit_test_action(rect, point).is_none();
+            let no_input = panel.hit_test(rect, point).is_none();
+            let no_tab = panel.tab_hover_at(rect, point).is_none();
+            let no_fill_type = panel.fill_type_picker_row_at(rect, point).is_none();
+            if no_action && no_input && no_tab && no_fill_type {
+                return point;
+            }
+            x += 8.0;
+        }
+        y -= 8.0;
+    }
+    panic!("no empty property-panel point found");
+}
 
 #[test]
 fn property_tab_hover_tracks_inactive_design_tab() {
@@ -24,6 +60,24 @@ fn property_tab_hover_tracks_inactive_design_tab() {
 
     assert!(host.apply_cursor_move(panel_x - 12.0, TOP_BAR_HEIGHT + 18.0));
     assert_eq!(host.editor_state.editor_ui.property_tab_hover, None);
+}
+
+#[test]
+fn property_panel_blank_hover_consumes_and_clears_lower_hover() {
+    let mut host = WidgetHost::new();
+    host.editor_state = EditorState::sample();
+    host.mark_dirty();
+    host.last_viewport_w = 1200.0;
+    host.last_viewport_h = 800.0;
+    host.editor_state.editor_ui.canvas_hover_node = Some(op_editor_core::NodeId::new("Title"));
+
+    let point = point_inside_property_panel_without_target(&host);
+
+    assert!(
+        host.apply_cursor_move(point.x, point.y),
+        "right inspector should own cursor movement inside its bounds"
+    );
+    assert_eq!(host.editor_state.editor_ui.canvas_hover_node, None);
 }
 
 #[test]

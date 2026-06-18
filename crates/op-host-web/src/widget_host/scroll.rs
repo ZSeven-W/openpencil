@@ -74,6 +74,35 @@ impl WidgetHost {
         true
     }
 
+    pub(in crate::widget_host) fn try_scroll_design_md_panel(
+        &mut self,
+        x: f32,
+        y: f32,
+        delta_y: f32,
+        viewport_width: f32,
+        viewport_height: f32,
+    ) -> bool {
+        let Some(panel_rect) = self.design_md_panel_rect(viewport_width, viewport_height) else {
+            return false;
+        };
+        if !(panel_rect).contains(Point2D::new(x, y)) {
+            return false;
+        }
+        let Some(panel) = op_editor_ui::widgets::DesignMdPanel::for_editor(&self.editor_state)
+        else {
+            return false;
+        };
+        let max = panel.max_scroll(panel_rect);
+        if scroll_by_max(
+            &mut self.editor_state.editor_ui.design_md_scroll,
+            -delta_y,
+            max,
+        ) {
+            self.mark_dirty();
+        }
+        true
+    }
+
     /// Scroll the right-rail PropertyPanel when a wheel lands over
     /// it. Returns `true` when the cursor was over the inspector.
     pub(in crate::widget_host) fn try_scroll_property_panel(

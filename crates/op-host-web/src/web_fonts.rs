@@ -3,9 +3,9 @@
 //!
 //! The wasm Skia backend cannot see operating-system fonts by itself. The
 //! browser can expose installed font faces through `window.queryLocalFonts()`,
-//! but only after the user grants permission. We keep that boundary explicit:
-//! opening the font picker triggers family enumeration, then only the families
-//! used by the active document are read as font bytes and registered with Skia.
+//! but only after the user grants permission. We query once from the web host,
+//! then load only the families used by the active document plus platform text
+//! fallbacks needed by the shell UI.
 
 use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
@@ -28,6 +28,74 @@ fn is_emoji_font_family(family: &str) -> bool {
     normalized.contains("emoji") || normalized.contains("color symbol")
 }
 
+fn is_cjk_fallback_font_family(family: &str) -> bool {
+    let normalized = family.to_lowercase();
+    [
+        "pingfang",
+        "hiragino sans",
+        "hiragino kaku gothic",
+        "heiti",
+        "stheiti",
+        "songti",
+        "noto sans cjk",
+        "noto sans sc",
+        "noto sans tc",
+        "noto sans jp",
+        "noto sans kr",
+        "source han sans",
+        "microsoft yahei",
+        "microsoft jhenghei",
+        "simhei",
+        "simsun",
+        "yu gothic",
+        "yu mincho",
+        "meiryo",
+        "malgun gothic",
+        "applegothic",
+        "nanum gothic",
+        "apple sd gothic neo",
+        "arial unicode ms",
+    ]
+    .into_iter()
+    .any(|needle| normalized.contains(needle))
+}
+
+fn is_text_fallback_font_family(family: &str) -> bool {
+    if is_emoji_font_family(family) || is_cjk_fallback_font_family(family) {
+        return true;
+    }
+    let normalized = family.to_lowercase();
+    [
+        "arial",
+        "arial unicode ms",
+        "helvetica neue",
+        "sf pro",
+        ".sf ns",
+        "segoe ui",
+        "segoe ui historic",
+        "segoe ui symbol",
+        "apple symbols",
+        "noto sans",
+        "kohinoor devanagari",
+        "devanagari sangam mn",
+        "itfdevanagari",
+        "muktamahee",
+        "mukta mahee",
+        "noto sans devanagari",
+        "nirmala ui",
+        "mangal",
+        "sfgeorgian",
+        "sfhebrew",
+        "sf hebrew",
+        "thonburi",
+        "sukhumvit",
+        "noto sans thai",
+        "leelawadee ui",
+    ]
+    .into_iter()
+    .any(|needle| normalized.contains(needle))
+}
+
 thread_local! {
     static QUERY_IN_FLIGHT: Cell<bool> = const { Cell::new(false) };
     static FONT_DATA_BY_FAMILY: RefCell<HashMap<String, JsValue>> = RefCell::new(HashMap::new());
@@ -43,9 +111,15 @@ pub(crate) fn drain_font_requests<C: RepaintContext + 'static>(inner: &InnerRc<C
 }
 
 fn should_query_system_fonts<C: RepaintContext + 'static>(inner: &InnerRc<C>) -> bool {
-    let b = inner.borrow();
+    let Ok(b) = inner.try_borrow() else {
+        return false;
+    };
     let ui = &b.host().editor_state().editor_ui;
-    ui.font_picker.open && !ui.system_fonts_loaded
+    should_query_system_fonts_state(ui.font_picker.open, ui.system_fonts_loaded)
+}
+
+fn should_query_system_fonts_state(_font_picker_open: bool, system_fonts_loaded: bool) -> bool {
+    !system_fonts_loaded
 }
 
 fn start_system_font_query<C: RepaintContext + 'static>(inner: &InnerRc<C>) {
@@ -79,11 +153,17 @@ fn start_system_font_query<C: RepaintContext + 'static>(inner: &InnerRc<C>) {
     let inner_err = inner.clone();
     let on_err = Closure::<dyn FnMut(JsValue)>::once(move |_err: JsValue| {
         QUERY_IN_FLIGHT.with(|flag| flag.set(false));
-        apply_system_font_families(&inner_err, Vec::new());
+        if should_mark_system_fonts_loaded_after_query_rejection() {
+            apply_system_font_families(&inner_err, Vec::new());
+        }
     });
     let _ = promise.then2(&on_ok, &on_err);
     on_ok.forget();
     on_err.forget();
+}
+
+fn should_mark_system_fonts_loaded_after_query_rejection() -> bool {
+    false
 }
 
 fn query_local_fonts_function() -> Option<(web_sys::Window, Function)> {
@@ -99,31 +179,35 @@ fn apply_system_font_families<C: RepaintContext + 'static>(
     inner: &InnerRc<C>,
     families: Vec<String>,
 ) {
-    let mut b = inner.borrow_mut();
+    let Ok(mut b) = inner.try_borrow_mut() else {
+        return;
+    };
     b.host_mut().apply_browser_system_font_families(families);
     let _ = b.repaint();
 }
 
 fn load_used_system_fonts<C: RepaintContext + 'static>(inner: &InnerRc<C>) {
     let mut families = used_font_families(inner);
-    families.extend(available_emoji_font_families());
+    families.extend(available_text_fallback_font_families());
     for family in families {
         request_font_bytes(inner, family);
     }
 }
 
-fn available_emoji_font_families() -> Vec<String> {
+fn available_text_fallback_font_families() -> Vec<String> {
     FONT_DATA_BY_FAMILY.with(|slot| {
         slot.borrow()
             .keys()
-            .filter(|family| is_emoji_font_family(family))
+            .filter(|family| is_text_fallback_font_family(family))
             .cloned()
             .collect()
     })
 }
 
 fn used_font_families<C: RepaintContext + 'static>(inner: &InnerRc<C>) -> Vec<String> {
-    let b = inner.borrow();
+    let Ok(b) = inner.try_borrow() else {
+        return Vec::new();
+    };
     let mut families = Vec::new();
     collect_text_font_families(b.host().editor_state().active_children(), &mut families);
     if let Some(PenNode::Text(text)) = b.host().editor_state().selected_node() {
@@ -196,7 +280,10 @@ fn request_font_bytes<C: RepaintContext + 'static>(inner: &InnerRc<C>, family: S
         let family_bytes = family_blob.clone();
         let on_bytes = Closure::<dyn FnMut(JsValue)>::once(move |buffer: JsValue| {
             let bytes = Uint8Array::new(&buffer).to_vec();
-            let mut b = inner_bytes.borrow_mut();
+            let Ok(mut b) = inner_bytes.try_borrow_mut() else {
+                mark_font_load_finished(&key_bytes, false);
+                return;
+            };
             let ok = b.register_system_font(&family_bytes, &bytes);
             mark_font_load_finished(&key_bytes, ok);
             if ok {
@@ -308,5 +395,82 @@ mod tests {
         assert!(is_emoji_font_family("Noto Color Emoji"));
         assert!(is_emoji_font_family("Segoe UI Emoji"));
         assert!(!is_emoji_font_family("PingFang SC"));
+    }
+
+    #[test]
+    fn detects_platform_cjk_fallback_font_families() {
+        for family in [
+            "PingFang SC",
+            "PingFang TC",
+            "Hiragino Sans",
+            "Hiragino Sans GB",
+            "Hiragino Kaku Gothic ProN",
+            "Apple SD Gothic Neo",
+            "Heiti SC",
+            "STHeiti",
+            "Yu Gothic",
+            "Meiryo",
+            "Noto Sans CJK SC",
+            "Noto Sans JP",
+            "Noto Sans KR",
+            "Noto Sans TC",
+            "Source Han Sans SC",
+            "Microsoft YaHei",
+            "Microsoft JhengHei",
+            "Malgun Gothic",
+            "AppleGothic",
+            "Nanum Gothic",
+            "SimHei",
+        ] {
+            assert!(
+                is_cjk_fallback_font_family(family),
+                "{family} should be treated as a browser system CJK fallback"
+            );
+        }
+        assert!(!is_cjk_fallback_font_family("Roboto"));
+    }
+
+    #[test]
+    fn detects_platform_multilingual_text_fallback_font_families() {
+        for family in [
+            "Kohinoor Devanagari",
+            "Devanagari Sangam MN",
+            "ITFDevanagari",
+            "MuktaMahee",
+            "Noto Sans Devanagari",
+            "Nirmala UI",
+            "Apple SD Gothic Neo",
+            "Nanum Gothic",
+            "Noto Sans KR",
+            "Noto Sans Cyrillic",
+            "Arial Cyr",
+            "SFGeorgian",
+            "SFHebrew",
+            "Thonburi",
+            "Sukhumvit Set",
+            "Noto Sans Thai",
+            "Arial Unicode MS",
+            "Apple Color Emoji",
+            "Segoe UI Emoji",
+            "Noto Sans",
+        ] {
+            assert!(
+                is_text_fallback_font_family(family),
+                "{family} should be treated as a browser system text fallback"
+            );
+        }
+        assert!(!is_text_fallback_font_family("Roboto"));
+    }
+
+    #[test]
+    fn system_font_query_runs_without_opening_font_picker() {
+        assert!(should_query_system_fonts_state(false, false));
+        assert!(!should_query_system_fonts_state(false, true));
+        assert!(should_query_system_fonts_state(true, false));
+    }
+
+    #[test]
+    fn system_font_query_rejection_stays_retryable() {
+        assert!(!should_mark_system_fonts_loaded_after_query_rejection());
     }
 }

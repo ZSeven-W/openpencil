@@ -469,63 +469,83 @@ fn action_step_height(expanded: bool, detail_count: usize) -> f32 {
     }
 }
 
-/// Lay out the tail of `messages` that fits inside `body_rect`,
-/// top-aligned. Each item carries absolute rects ready for paint and
-/// hit-test.
+/// Lay out the full transcript from the body top (no scroll offset).
+/// Each item carries absolute rects ready for paint and hit-test.
+/// Callers that scroll pass a non-zero offset via
+/// [`build_transcript_with_design_hover`].
+#[cfg(test)]
 pub(crate) fn build_transcript(
     messages: &[ChatMessage],
     body_rect: Rect,
     locale: op_editor_core::Locale,
 ) -> Vec<TranscriptItem> {
-    build_transcript_with_design_hover(messages, body_rect, locale, None)
+    build_transcript_with_design_hover(messages, body_rect, locale, None, 0.0)
 }
 
+/// Lay out every message top-to-bottom, shifted up by `scroll_offset`
+/// (px). Offset `0` puts the first message at the body top; the host
+/// clamps the offset to `[0, content_height - body]` and pins it to the
+/// bottom while [`ChatState::transcript_pinned`] holds. The paint pass
+/// clips to `body_rect`, so items scrolled past the top/bottom edge are
+/// simply not visible.
+///
+/// [`ChatState::transcript_pinned`]: op_editor_core::chat::ChatState::transcript_pinned
 pub(crate) fn build_transcript_with_design_hover(
     messages: &[ChatMessage],
     body_rect: Rect,
     locale: op_editor_core::Locale,
     design_hover: Option<(usize, usize)>,
+    scroll_offset: f32,
 ) -> Vec<TranscriptItem> {
     if messages.is_empty() {
         return Vec::new();
     }
-    // Pass 1 — walk backward summing heights to find the first
-    // message that still fits.
-    let mut start = messages.len();
-    let mut used = 0.0f32;
-    for i in (0..messages.len()).rev() {
-        let (_, bottom) = build_item(&messages[i], i, 0.0, body_rect, locale, None);
-        let h = bottom
-            + if start == messages.len() {
-                0.0
-            } else {
-                MSG_GAP
-            };
-        if used + h > body_rect.size.y && start != messages.len() {
-            break;
-        }
-        used += h;
-        start = i;
-    }
-    // Keep the latest turn's prompt attached to its assistant result.
-    // The fixed design checklist can squeeze the transcript enough
-    // that the generic tail-fit pass would otherwise show only the
-    // terminal "Done" card, making the prior prompt look erased.
-    if start > 0
-        && messages[start].role == ChatRole::Assistant
-        && messages[start - 1].role == ChatRole::User
-    {
-        start -= 1;
-    }
-    // Pass 2 — place the visible tail from the body top.
     let mut items = Vec::new();
-    let mut top = body_rect.origin.y;
-    for (i, msg) in messages.iter().enumerate().skip(start) {
+    let mut top = body_rect.origin.y - scroll_offset;
+    for (i, msg) in messages.iter().enumerate() {
         let (item, bottom) = build_item(msg, i, top, body_rect, locale, design_hover);
         items.push(item);
         top = bottom + MSG_GAP;
     }
     items
+}
+
+/// Total height (px) of the full transcript laid out from the body top.
+/// Drives the host's max-scroll clamp and the pinned-to-bottom offset.
+pub(crate) fn transcript_content_height(
+    messages: &[ChatMessage],
+    body_rect: Rect,
+    locale: op_editor_core::Locale,
+) -> f32 {
+    if messages.is_empty() {
+        return 0.0;
+    }
+    let mut top = body_rect.origin.y;
+    for (i, msg) in messages.iter().enumerate() {
+        let (_, bottom) = build_item(msg, i, top, body_rect, locale, None);
+        top = bottom + MSG_GAP;
+    }
+    // `top` overshot by one MSG_GAP after the last message.
+    (top - MSG_GAP - body_rect.origin.y).max(0.0)
+}
+
+/// Effective scroll offset to render at: the pinned-to-bottom maximum
+/// while `pinned`, otherwise the stored `offset` clamped to the
+/// scrollable range. Shared by paint + every transcript hit-test so
+/// they agree on item positions.
+pub(crate) fn transcript_effective_offset(
+    messages: &[ChatMessage],
+    body_rect: Rect,
+    locale: op_editor_core::Locale,
+    offset: f32,
+    pinned: bool,
+) -> f32 {
+    let max = (transcript_content_height(messages, body_rect, locale) - body_rect.size.y).max(0.0);
+    if pinned {
+        max
+    } else {
+        offset.clamp(0.0, max)
+    }
 }
 
 /// Draw one wrapped text line. Small shared helper so the bubble,
@@ -608,6 +628,7 @@ pub(crate) fn paint_transcript_with_design_hover(
         locale,
         design_hover,
         None,
+        0.0,
     );
 }
 
@@ -621,10 +642,13 @@ pub(crate) fn paint_transcript_with_selection(
     locale: op_editor_core::Locale,
     design_hover: Option<(usize, usize)>,
     selection: Option<ChatTranscriptSelection>,
+    scroll_offset: f32,
 ) {
     cx.backend.save();
     cx.backend.clip_rect(body_rect);
-    for item in build_transcript_with_design_hover(messages, body_rect, locale, design_hover) {
+    for item in
+        build_transcript_with_design_hover(messages, body_rect, locale, design_hover, scroll_offset)
+    {
         for step in &item.steps {
             paint_action_step(cx, theme, step);
         }

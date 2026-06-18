@@ -116,10 +116,14 @@ impl WidgetHost {
                 A::BooleanUnion | A::BooleanSubtract | A::BooleanIntersect | A::BooleanExclude,
                 T::Layer(_),
             ) => {
-                // Boolean path ops are not supported on the CanvasKit build yet
-                // — they needed the retired skia host path math
-                // (`crate::boolean_ops`). No-op until ported to a wasm-clean
-                // path solver.
+                use op_editor_core::BooleanOp;
+                let op = match action {
+                    A::BooleanSubtract => BooleanOp::Subtract,
+                    A::BooleanIntersect => BooleanOp::Intersect,
+                    A::BooleanExclude => BooleanOp::Exclude,
+                    _ => BooleanOp::Union,
+                };
+                let _ = self.apply_boolean_op(op);
             }
             (A::ToggleLock, T::Layer(id)) => {
                 self.with_doc_history(|s| s.toggle_node_locked(&id));
@@ -295,17 +299,16 @@ impl WidgetHost {
             return true;
         }
 
-        // 0aa. Floating VariablesPanel — full interactive grid
+        // 0aa. Shape picker overlay (native press order: before the
+        //      file-menu / export / figma modal blocks).
+        if self.dispatch_shape_picker_press(x, y, viewport_width, viewport_height) {
+            return true;
+        }
+        // 0ab. Floating VariablesPanel — full interactive grid
         //      mirroring the native host (#21). A press inside the
         //      panel rect dispatches; outside presses fall through to
         //      the normal layers (the panel floats, it isn't modal).
         if self.dispatch_variables_panel_press(x, y, viewport_width, viewport_height) {
-            return true;
-        }
-
-        // 0ab. Shape picker overlay (native press order: before the
-        //      file-menu / export / figma modal blocks).
-        if self.dispatch_shape_picker_press(x, y, viewport_width, viewport_height) {
             return true;
         }
         if self.editor_state.editor_ui.file_menu_open {
@@ -354,6 +357,7 @@ impl WidgetHost {
                 TopBarHit::ToggleFileMenu => {
                     self.editor_state.editor_ui.file_menu_open ^= true;
                     self.editor_state.editor_ui.file_menu.hover = None;
+                    self.clear_layer_panel_hover();
                 }
                 TopBarHit::OpenFigmaImport => {
                     self.editor_state.editor_ui.figma_import_open = true;
@@ -375,14 +379,7 @@ impl WidgetHost {
                     }
                 }
                 TopBarHit::TogglePreview => {
-                    // Web Preview mode is not wired yet: the jian `Runtime`
-                    // is `!Send`/`Rc`-bound and the web host has no runtime
-                    // owner, so the canvas cannot render a live preview.
-                    // Deliberately a NO-OP — do NOT flip `preview_mode`,
-                    // which would leave the Play/Stop icon claiming the
-                    // canvas is previewing when it is still the static
-                    // design surface (a lying toggle). The button lands
-                    // for real when the web runtime owner is built.
+                    self.editor_state.editor_ui.toggle_preview();
                 }
             }
             self.mark_dirty();
@@ -526,6 +523,12 @@ impl WidgetHost {
             self.editor_state.editor_ui.export_scale_picker_open = false;
             self.editor_state.editor_ui.export_format_picker_open = false;
             self.mark_dirty();
+            return true;
+        }
+
+        // 0c0b1. Image-node Search / Generate popovers — overlay
+        // controls win; outside clicks dismiss.
+        if self.dismiss_image_popovers_on_press(x, y, viewport_width, viewport_height) {
             return true;
         }
 
@@ -681,6 +684,10 @@ impl WidgetHost {
             if let Some(focus) = panel.hit_test(property_rect, point) {
                 return self.focus_property_input_from_press(focus, property_rect, point);
             }
+            if (property_rect).contains(point) {
+                self.blur_text_inputs_on_blank_press();
+                return true;
+            }
         }
         let property_focus_committed = self.commit_property_family_focus_if_any();
 
@@ -815,9 +822,7 @@ impl WidgetHost {
                         self.mark_dirty();
                     }
                     AlignToolbarHit::Boolean(op) => {
-                        // Boolean path ops are not supported on the CanvasKit
-                        // build yet (retired skia host path math). No-op.
-                        let _ = op;
+                        let _ = self.apply_boolean_op(op);
                     }
                 }
                 return true;

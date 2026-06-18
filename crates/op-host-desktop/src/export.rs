@@ -27,7 +27,7 @@
 
 use op_editor_ui::layout_scene::NodeKind;
 use op_editor_ui::layout_scene::{LayoutScene, SceneNode, ScenePage};
-use op_editor_ui::{Color, Point2D, Rect};
+use op_editor_ui::{Point2D, Rect};
 use skia_safe::{Canvas, EncodedImageFormat};
 use std::path::Path as StdPath;
 
@@ -50,18 +50,6 @@ const MARGIN: f32 = 16.0;
 /// "Renderer reported failure: …" envelope.
 pub(crate) const MAX_RASTER_SIDE_PX: i64 = 16_384;
 pub(crate) const MAX_RASTER_TOTAL_PX: i64 = 64_000_000;
-
-/// Text defaults shared with the SVG serializer (`export_svg.rs`):
-/// 13 px default font size and a near-black ink colour, mirroring the
-/// editor canvas defaults. The raster path no longer uses these — it
-/// paints through the shared scene painter (`scene_painter.rs`).
-const TEXT_DEFAULT_FONT_SIZE: f32 = 13.0;
-const TEXT_DEFAULT_FILL: Color = Color {
-    r: 0.08,
-    g: 0.08,
-    b: 0.08,
-    a: 1.0,
-};
 
 /// Raster export format. Matches TS ExportDialog's PNG / JPEG / WEBP
 /// options; SVG has its own entry point (`export_svg`).

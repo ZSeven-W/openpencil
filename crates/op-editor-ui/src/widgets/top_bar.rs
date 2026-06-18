@@ -187,7 +187,8 @@ impl TopBar {
         // brand icon per connected provider, plus the enabled-MCP
         // count. All-zero paints the "Agents & MCP" set-up
         // affordance instead.
-        let agent_count = ui.agent_settings.connected.iter().filter(|&&c| c).count() as u32;
+        let connected = ui.agent_settings.verified_connected_mask();
+        let agent_count = connected.iter().filter(|&&c| c).count() as u32;
         let mcp_count = ui
             .agent_settings
             .mcp_cli_enabled
@@ -198,7 +199,7 @@ impl TopBar {
             id: WidgetId::new(5000),
             file_name,
             agent_count,
-            connected: ui.agent_settings.connected,
+            connected,
             mcp_count,
             theme: theme_for(ui),
             label_agents_and_mcp: translate(ui, "topbar.agentsAndMcp"),
@@ -516,11 +517,7 @@ impl TopBar {
             return Some(TopBarHit::ToggleFullscreen);
         }
         // Play / Stop (second from right) → toggle Preview mode.
-        // Preview runs the jian runtime, which the wasm/web build can't
-        // host yet, so the button is painted disabled (dimmed) there and
-        // is NOT hittable — a web click is a clear no-action, never a
-        // toggle that silently does nothing.
-        if !cfg!(target_arch = "wasm32") && Self::preview_button_rect(rect).contains(point) {
+        if Self::preview_button_rect(rect).contains(point) {
             return Some(TopBarHit::TogglePreview);
         }
         let sun_rect = Rect {

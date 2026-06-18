@@ -87,7 +87,10 @@ impl EditorState {
                     value as f64,
                 );
             }
-            PropertyFocus::FontSize => return self.cmd_set_node_font_size(&sel, value.max(1.0)),
+            // TS parity (text-section.tsx:134): font-size input is min=1 max=999.
+            PropertyFocus::FontSize => {
+                return self.cmd_set_node_font_size(&sel, value.clamp(1.0, 999.0))
+            }
             PropertyFocus::FontWeight => {
                 if !value.is_finite() {
                     return false;
@@ -99,10 +102,12 @@ impl EditorState {
                 if !value.is_finite() {
                     return false;
                 }
+                // TS parity (text-section.tsx:150): line-height input is
+                // min=50 max=400 (percent); stored as a ratio.
                 return self.cmd_set_node_layout_prop(
                     &sel,
                     "lineHeight",
-                    &crate::LayoutPropValue::Number((value / 100.0) as f64),
+                    &crate::LayoutPropValue::Number((value.clamp(50.0, 400.0) / 100.0) as f64),
                 );
             }
             PropertyFocus::LetterSpacing => {

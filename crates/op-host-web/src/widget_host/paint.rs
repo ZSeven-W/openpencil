@@ -318,9 +318,7 @@ impl WidgetHost {
         // button (native §10b).
         if let Some(menu_rect) = self.file_menu_rect(viewport_width) {
             use op_editor_ui::widgets::file_menu::FileMenu;
-            // `0` clock — wasm32 has no wall clock and web has no
-            // recent-file list to show ages for.
-            let menu = FileMenu::from_editor_ui(&self.editor_state.editor_ui, 0);
+            let menu = FileMenu::from_editor_ui(&self.editor_state.editor_ui, self.wall_now_secs);
             let mut cx = PaintCx {
                 backend: &mut *backend,
             };

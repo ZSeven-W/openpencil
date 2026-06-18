@@ -292,10 +292,41 @@ impl WidgetHost {
         false
     }
 
-    /// Cmd/Ctrl+X — copy then delete the selection.
+    /// Cmd/Ctrl+X — cut the focused text input's selection to the
+    /// system clipboard (mirrors `apply_copy`'s input priority), else
+    /// copy then delete the selected canvas nodes.
     pub fn apply_cut(&mut self) -> bool {
+        // Chat input cut — its own selection model.
+        if self.editor_state.chat.focused {
+            if let Some(text) = self
+                .editor_state
+                .chat
+                .selected_input_text()
+                .map(str::to_string)
+            {
+                #[cfg(feature = "canvaskit")]
+                crate::web_clipboard::copy_text(&text);
+                #[cfg(not(feature = "canvaskit"))]
+                self.editor_state.chat.queue_copy_text(text);
+                self.editor_state.chat.delete_input_selection(self.now_ms);
+                self.mark_dirty();
+            }
+            // Swallow either way so Cmd+X never falls through to node cut
+            // while the chat input owns the keyboard.
+            return true;
+        }
+        // Any other focused text input: cut its highlighted slice. With a
+        // live selection `apply_backspace` removes the whole range; with
+        // none, nothing is cut (the chord never deletes a single char).
         if self.input_active() {
-            return false;
+            if let Some(text) = self.focused_input_selected_text() {
+                #[cfg(feature = "canvaskit")]
+                crate::web_clipboard::copy_text(&text);
+                #[cfg(not(feature = "canvaskit"))]
+                let _ = &text;
+                self.apply_backspace();
+            }
+            return true;
         }
         if self.editor_state.selection.is_empty() {
             return false;

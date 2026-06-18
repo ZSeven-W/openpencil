@@ -184,6 +184,48 @@ fn outside_press_falls_through_instead_of_closing() {
 }
 
 #[test]
+fn shape_picker_hover_wins_when_variables_panel_overlaps() {
+    let mut host = WidgetHost::new();
+    host.last_viewport_w = W;
+    host.last_viewport_h = H;
+    host.editor_state.editor_ui.variables_panel_open = true;
+    host.editor_state.editor_ui.shape_picker.open = true;
+
+    let picker_rect = host.shape_picker_rect(W, H);
+    let vars_rect = host
+        .variables_panel_rect(W, H)
+        .expect("variables panel rect");
+    let picker = op_editor_ui::widgets::shape_picker::ShapePicker::for_editor_ui(
+        &host.editor_state.editor_ui,
+    );
+    let x = picker_rect.origin.x + picker_rect.size.x / 2.0;
+    let mut y = picker_rect.origin.y + 2.0;
+    let mut hover = None;
+    while y < picker_rect.origin.y + picker_rect.size.y {
+        if let op_editor_ui::widgets::shape_picker::SelectHit::Row(idx) =
+            picker.hit_popup(picker_rect, Point2D::new(x, y))
+        {
+            hover = Some((idx, y));
+            break;
+        }
+        y += 2.0;
+    }
+    let (expected_hover, y) = hover.expect("shape picker row point");
+    let point = Point2D::new(x, y);
+    assert!(
+        vars_rect.contains(point),
+        "fixture should overlap the floating variables panel"
+    );
+
+    assert!(host.apply_cursor_move(x, y));
+    assert_eq!(
+        host.editor_state.editor_ui.shape_picker.hover,
+        Some(expected_hover)
+    );
+    assert_eq!(host.editor_state.editor_ui.variables_panel_hover, None);
+}
+
+#[test]
 fn color_swatch_press_targets_clicked_variant() {
     let mut host = two_variant_color_host();
     let (x, y) = point_for_hit(

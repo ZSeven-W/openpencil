@@ -14,6 +14,7 @@
 //! wrapper, then re-seeds `EditorState` through
 //! `EditorState::from_document`.
 
+use base64::Engine as _;
 use op_editor_core::editor_ui_state::ExportFormat;
 use op_editor_core::{uikit_io, EditorState, UIKit};
 
@@ -40,19 +41,209 @@ pub fn save_file_name(state: &EditorState) -> String {
     }
 }
 
-/// Map an export-dialog format onto the browser encoder target:
-/// `(mime, extension, natively_supported)`. The browser's
-/// `HtmlCanvasElement::to_data_url` encodes PNG / JPEG / WEBP only;
-/// SVG / PDF have no web encoder yet, so they degrade to a PNG
-/// raster (`natively_supported == false` lets the caller log the
-/// degradation).
+/// Map an export-dialog format onto the browser download target:
+/// `(mime, extension, natively_supported)`. The browser canvas
+/// encoder handles PNG / JPEG / WEBP, and SVG is emitted by the
+/// shared vector serializer. PDF wraps a JPEG snapshot of the canvas
+/// in a single-page PDF Blob.
 pub fn export_target(format: ExportFormat) -> (&'static str, &'static str, bool) {
     match format {
         ExportFormat::Png => ("image/png", "png", true),
         ExportFormat::Jpeg => ("image/jpeg", "jpg", true),
         ExportFormat::Webp => ("image/webp", "webp", true),
-        ExportFormat::Svg | ExportFormat::Pdf => ("image/png", "png", false),
+        ExportFormat::Svg => ("image/svg+xml", "svg", true),
+        ExportFormat::Pdf => ("application/pdf", "pdf", true),
     }
+}
+
+pub fn export_svg_document(state: &EditorState) -> Result<String, String> {
+    let scene = op_pen_loader::editor_state_to_layout_scene(state);
+    op_editor_ui::svg_export::serialize_active_page_svg(&scene)
+}
+
+pub fn export_pdf_from_canvas_data_url(data_url: &str) -> Result<Vec<u8>, String> {
+    let (header, payload) = data_url
+        .split_once(',')
+        .ok_or_else(|| "canvas data URL missing payload".to_string())?;
+    if !header.starts_with("data:")
+        || !header.contains("image/jpeg")
+        || !header.ends_with(";base64")
+    {
+        return Err("PDF export expects a base64 JPEG canvas data URL".into());
+    }
+    let jpeg = base64::engine::general_purpose::STANDARD
+        .decode(payload)
+        .map_err(|e| format!("decode JPEG data URL failed: {e}"))?;
+    let (width, height) = jpeg_dimensions(&jpeg)?;
+    Ok(single_page_jpeg_pdf(&jpeg, width, height))
+}
+
+fn single_page_jpeg_pdf(jpeg: &[u8], width: u32, height: u32) -> Vec<u8> {
+    let mut out = Vec::with_capacity(jpeg.len() + 1024);
+    out.extend_from_slice(b"%PDF-1.4\n");
+    let mut offsets = Vec::new();
+
+    push_object(
+        &mut out,
+        &mut offsets,
+        1,
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+    );
+    push_object(
+        &mut out,
+        &mut offsets,
+        2,
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    );
+    let page = format!(
+        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {width} {height}] \
+         /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>"
+    );
+    push_object(&mut out, &mut offsets, 3, page.as_bytes());
+
+    let image_header = format!(
+        "<< /Type /XObject /Subtype /Image /Width {width} /Height {height} \
+         /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length {} >>",
+        jpeg.len()
+    );
+    push_stream_object(&mut out, &mut offsets, 4, image_header.as_bytes(), jpeg);
+
+    let content = format!("q\n{width} 0 0 {height} 0 0 cm\n/Im0 Do\nQ\n");
+    let content_header = format!("<< /Length {} >>", content.len());
+    push_stream_object(
+        &mut out,
+        &mut offsets,
+        5,
+        content_header.as_bytes(),
+        content.as_bytes(),
+    );
+
+    let xref_offset = out.len();
+    out.extend_from_slice(format!("xref\n0 {}\n", offsets.len() + 1).as_bytes());
+    out.extend_from_slice(b"0000000000 65535 f \n");
+    for offset in &offsets {
+        out.extend_from_slice(format!("{offset:010} 00000 n \n").as_bytes());
+    }
+    out.extend_from_slice(
+        format!(
+            "trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref_offset}\n%%EOF\n",
+            offsets.len() + 1
+        )
+        .as_bytes(),
+    );
+    out
+}
+
+fn push_object(out: &mut Vec<u8>, offsets: &mut Vec<usize>, num: usize, body: &[u8]) {
+    offsets.push(out.len());
+    out.extend_from_slice(format!("{num} 0 obj\n").as_bytes());
+    out.extend_from_slice(body);
+    out.extend_from_slice(b"\nendobj\n");
+}
+
+fn push_stream_object(
+    out: &mut Vec<u8>,
+    offsets: &mut Vec<usize>,
+    num: usize,
+    dict: &[u8],
+    stream: &[u8],
+) {
+    offsets.push(out.len());
+    out.extend_from_slice(format!("{num} 0 obj\n").as_bytes());
+    out.extend_from_slice(dict);
+    out.extend_from_slice(b"\nstream\n");
+    out.extend_from_slice(stream);
+    out.extend_from_slice(b"\nendstream\nendobj\n");
+}
+
+fn jpeg_dimensions(bytes: &[u8]) -> Result<(u32, u32), String> {
+    if bytes.len() < 4 || bytes[0] != 0xff || bytes[1] != 0xd8 {
+        return Err("JPEG data is missing SOI marker".into());
+    }
+    let mut i = 2;
+    while i + 3 < bytes.len() {
+        while i < bytes.len() && bytes[i] == 0xff {
+            i += 1;
+        }
+        if i >= bytes.len() {
+            break;
+        }
+        let marker = bytes[i];
+        i += 1;
+        if marker == 0xd9 || marker == 0xda {
+            break;
+        }
+        if marker == 0x01 || (0xd0..=0xd7).contains(&marker) {
+            continue;
+        }
+        if i + 2 > bytes.len() {
+            return Err("truncated JPEG segment length".into());
+        }
+        let len = u16::from_be_bytes([bytes[i], bytes[i + 1]]) as usize;
+        if len < 2 || i + len > bytes.len() {
+            return Err("invalid JPEG segment length".into());
+        }
+        if matches!(
+            marker,
+            0xc0 | 0xc1
+                | 0xc2
+                | 0xc3
+                | 0xc5
+                | 0xc6
+                | 0xc7
+                | 0xc9
+                | 0xca
+                | 0xcb
+                | 0xcd
+                | 0xce
+                | 0xcf
+        ) {
+            if len < 7 {
+                return Err("truncated JPEG SOF segment".into());
+            }
+            let height = u16::from_be_bytes([bytes[i + 3], bytes[i + 4]]) as u32;
+            let width = u16::from_be_bytes([bytes[i + 5], bytes[i + 6]]) as u32;
+            if width == 0 || height == 0 {
+                return Err("JPEG dimensions must be non-zero".into());
+            }
+            return Ok((width, height));
+        }
+        i += len;
+    }
+    Err("JPEG dimensions not found".into())
+}
+
+pub fn apply_open_recent_response(
+    state: &mut EditorState,
+    path: &str,
+    response: &str,
+    now_secs: u64,
+) -> bool {
+    let parsed: Option<serde_json::Value> = serde_json::from_str(response).ok();
+    let ok = parsed
+        .as_ref()
+        .and_then(|v| v.get("ok"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    if ok {
+        state.editor_ui.file_name_display = Some(path_file_name(path).to_string());
+        state
+            .editor_ui
+            .touch_recent_file(path.to_string(), now_secs);
+        return true;
+    }
+    let pruned = parsed
+        .as_ref()
+        .and_then(|v| v.get("pruned"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    pruned && state.editor_ui.remove_recent_file(path)
+}
+
+fn path_file_name(path: &str) -> &str {
+    path.rsplit(['/', '\\'])
+        .find(|part| !part.is_empty())
+        .unwrap_or(path)
 }
 
 pub struct KitExport {
@@ -255,6 +446,30 @@ mod tests {
         assert_eq!(parsed.name.as_deref(), Some("My Kit!"));
         assert_eq!(parsed.children.len(), 1);
         assert_eq!(parsed.children[0].base().id, "button");
+    }
+
+    #[test]
+    fn pdf_export_wraps_canvas_jpeg_data_url() {
+        let jpeg_data_url = "data:image/jpeg;base64,/9j/wAARCAACAAUDASIAAhIAAxIA/9k=";
+
+        let pdf = export_pdf_from_canvas_data_url(jpeg_data_url).expect("pdf bytes");
+
+        assert!(pdf.starts_with(b"%PDF-1.4\n"), "missing PDF header");
+        assert!(
+            pdf.windows(b"/Subtype /Image".len())
+                .any(|w| w == b"/Subtype /Image"),
+            "missing image xobject"
+        );
+        assert!(
+            pdf.windows(b"/Filter /DCTDecode".len())
+                .any(|w| w == b"/Filter /DCTDecode"),
+            "missing JPEG filter"
+        );
+        assert!(
+            pdf.ends_with(b"%%EOF\n"),
+            "missing EOF trailer: {:?}",
+            &pdf[pdf.len().saturating_sub(16)..]
+        );
     }
 
     #[test]

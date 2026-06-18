@@ -1,5 +1,5 @@
 // UNVERIFIED: needs EMSDK wasm32 build + browser; run tools/check-wasm-bundle.sh
-//! XHR-based SSE transport to the desktop daemon's `/api/ai/stream` proxy.
+//! XHR-based SSE transport to the desktop daemon's AI SSE endpoints.
 //!
 //! Mirrors `live_sync.rs` (no `wasm-bindgen-futures`): an `XmlHttpRequest`
 //! with an `onprogress` closure that parses newly-arrived `data: {...}`
@@ -40,7 +40,7 @@ impl AiEvent {
     }
 }
 
-/// Handle to an in-flight `/api/ai/stream` request. `abort()` cancels the
+/// Handle to an in-flight AI SSE request. `abort()` cancels the
 /// underlying XHR — the chat Stop button and a replacing send both use it so
 /// a cancelled turn stops consuming the socket (and its late events are
 /// dropped by the caller's generation check).
@@ -75,8 +75,19 @@ pub fn post_ai_stream(
     body_json: String,
     on_event: Rc<dyn Fn(AiEvent)>,
 ) -> Result<AiStreamHandle, wasm_bindgen::JsValue> {
+    post_ai_stream_to(base, "/api/ai/stream", body_json, on_event)
+}
+
+/// POST `body_json` to an AI SSE endpoint under `base`. `endpoint` must be an
+/// absolute daemon path such as `/api/ai/stream` or `/api/ai/standard`.
+pub fn post_ai_stream_to(
+    base: &str,
+    endpoint: &str,
+    body_json: String,
+    on_event: Rc<dyn Fn(AiEvent)>,
+) -> Result<AiStreamHandle, wasm_bindgen::JsValue> {
     let xhr = web_sys::XmlHttpRequest::new()?;
-    xhr.open_with_async("POST", &format!("{base}/api/ai/stream"), true)?;
+    xhr.open_with_async("POST", &format!("{base}{endpoint}"), true)?;
     xhr.set_request_header("Content-Type", "application/json")?;
 
     // `cursor` is the byte offset in `responseText` up to which we've already

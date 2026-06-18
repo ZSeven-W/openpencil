@@ -3,8 +3,8 @@
 use super::agent_settings_mcp_server::{mcp_server_request, request_mcp_server_update};
 use super::WidgetHost;
 use op_editor_core::agent_settings::{
-    AcpAgentField, AcpConnectionType, AgentProvider, BuiltinAgentField, ImageGenField,
-    ImageSearchField, ImageTestStatus, McpCli, SettingsFocus,
+    AcpAgentField, AcpConnectionType, BuiltinAgentField, ImageGenField, ImageSearchField,
+    ImageTestStatus, McpCli, SettingsFocus,
 };
 use op_editor_ui::widgets::agent_settings_panel::{AgentSettingsHit, AgentSettingsPanel};
 use op_editor_ui::Point2D;
@@ -40,11 +40,12 @@ impl WidgetHost {
                 self.editor_state.editor_ui.agent_settings.scroll_y.offset = 0.0;
             }
             AgentSettingsHit::Connect(provider) => {
-                let idx = AgentProvider::ALL
-                    .iter()
-                    .position(|candidate| *candidate == provider)
-                    .unwrap_or(0);
-                self.editor_state.editor_ui.agent_settings.connected[idx] ^= true;
+                let settings = &mut self.editor_state.editor_ui.agent_settings;
+                if settings.provider_verified_connected(provider) {
+                    settings.disconnect_provider(provider);
+                } else if !settings.provider_probe_in_flight(provider) {
+                    settings.begin_provider_connect(provider);
+                }
                 self.editor_state.rebuild_chat_models();
             }
             AgentSettingsHit::ToggleMcpServer => {
@@ -578,18 +579,18 @@ impl WidgetHost {
             }
             AgentSettingsHit::ToggleAcpConnected(index) => {
                 self.commit_settings_focus();
-                if let Some(agent) = self
-                    .editor_state
-                    .editor_ui
-                    .agent_settings
-                    .acp_agents
-                    .get_mut(index)
-                {
-                    if agent.connected {
-                        agent.connected = false;
-                    } else if agent.ready() {
-                        agent.connected = true;
-                    } else {
+                let settings = &self.editor_state.editor_ui.agent_settings;
+                let needs_config_focus = settings.acp_agents.get(index).is_some_and(|agent| {
+                    !settings.acp_agent_verified_connected(&agent.id) && !agent.ready()
+                });
+                if needs_config_focus {
+                    if let Some(agent) = self
+                        .editor_state
+                        .editor_ui
+                        .agent_settings
+                        .acp_agents
+                        .get(index)
+                    {
                         let field = match agent.connection_type {
                             AcpConnectionType::Local => AcpAgentField::Command,
                             AcpConnectionType::Remote => AcpAgentField::Url,
@@ -605,7 +606,27 @@ impl WidgetHost {
                             Some(SettingsFocus::AcpAgent { index, field });
                         self.set_settings_input_text(text);
                     }
+                } else if self
+                    .editor_state
+                    .editor_ui
+                    .agent_settings
+                    .acp_agent_verified_connected_at(index)
+                {
+                    self.editor_state
+                        .editor_ui
+                        .agent_settings
+                        .disconnect_acp_agent(index);
                     self.editor_state.rebuild_chat_models();
+                } else {
+                    let started = self
+                        .editor_state
+                        .editor_ui
+                        .agent_settings
+                        .begin_acp_agent_connect(index)
+                        .is_some();
+                    if started {
+                        self.editor_state.rebuild_chat_models();
+                    }
                 }
             }
             AgentSettingsHit::AddAcpAgent => {

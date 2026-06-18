@@ -21,10 +21,7 @@ impl WidgetHost {
         self.refresh_layout_scene();
         let top_bar_rect = self.top_bar_rect(viewport_width);
         let anchor = self.top_bar().file_menu_rect_for(top_bar_rect);
-        // No wall-clock on wasm32 (`SystemTime::now` panics there) and
-        // the web host has no recent-file list to age against — a `0`
-        // clock paints the same menu rows.
-        let menu = FileMenu::from_editor_ui(&self.editor_state.editor_ui, 0);
+        let menu = FileMenu::from_editor_ui(&self.editor_state.editor_ui, self.wall_now_secs);
         let menu_rect = menu.rect_at(anchor);
         let point = op_editor_ui::Point2D::new(x, y);
         match menu.hit(menu_rect, point) {

@@ -298,6 +298,26 @@ impl WidgetHostNative {
         Some(menu.rect_at(anchor))
     }
 
+    /// Whether `point` is inside an open chrome dropdown that paints
+    /// above floating panels. These dropdowns are visually topmost, so
+    /// their hover/click handling must win over the Variables panel
+    /// when their rects overlap.
+    pub(in crate::widget_host) fn over_dropdown_overlay(
+        &self,
+        x: f32,
+        y: f32,
+        viewport_w: f32,
+        viewport_h: f32,
+    ) -> bool {
+        let p = Point2D::new(x, y);
+        let ui = &self.editor_state.editor_ui;
+        (ui.shape_picker.open && (self.shape_picker_rect(viewport_w, viewport_h)).contains(p))
+            || (ui.locale_picker.open && (self.locale_picker_rect(viewport_w)).contains(p))
+            || self
+                .file_menu_rect(viewport_w)
+                .is_some_and(|r| (r).contains(p))
+    }
+
     /// Whether `(x, y)` is over ANY floating overlay that paints on top
     /// of the canvas region — the centred modal-ish panels, the Git
     /// panel popover, the always-on Toolbar / StatusBar / chat, and the
@@ -315,7 +335,6 @@ impl WidgetHostNative {
             return true;
         }
         let p = Point2D::new(x, y);
-        let ui = &self.editor_state.editor_ui;
         // The Git panel + always-on floating widgets + the alignment
         // toolbar (shown over the canvas for a multi-selection).
         if self
@@ -335,11 +354,7 @@ impl WidgetHostNative {
             return true;
         }
         // Open dropdowns + the right-click context menu.
-        (ui.shape_picker.open && (self.shape_picker_rect(viewport_w, viewport_h)).contains(p))
-            || (ui.locale_picker.open && (self.locale_picker_rect(viewport_w)).contains(p))
-            || self
-                .file_menu_rect(viewport_w)
-                .is_some_and(|r| (r).contains(p))
+        self.over_dropdown_overlay(x, y, viewport_w, viewport_h)
             || self
                 .layer_context_menu_rect()
                 .is_some_and(|r| (r).contains(p))

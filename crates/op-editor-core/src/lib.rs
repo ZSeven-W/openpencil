@@ -9,6 +9,7 @@
 
 pub mod agent_indicators;
 pub mod agent_settings;
+pub mod agent_settings_acp_connection;
 pub mod agent_settings_builtin_presets;
 pub mod agent_settings_button_state;
 pub mod agent_settings_connection;
@@ -138,10 +139,11 @@ mod tests_mutators;
 mod tests_pages;
 
 pub use agent_settings::{
-    AcpAgentConfig, AcpAgentField, AcpConnectionType, AgentSettings, AgentSettingsDrag,
-    AgentSettingsTab, BuiltinAgentConfig, BuiltinAgentField, BuiltinAgentKind, ImageGenField,
-    ImageGenProfile, ImageGenProvider, ImageSearchField, ImageTestStatus, McpCli, McpServer,
-    ProviderConnectOutcome, ProviderConnectPhase, ProviderConnection, SettingsFocus,
+    AcpAgentConfig, AcpAgentConnectOutcome, AcpAgentConnectPhase, AcpAgentConnection,
+    AcpAgentField, AcpConnectionType, AgentSettings, AgentSettingsDrag, AgentSettingsTab,
+    BuiltinAgentConfig, BuiltinAgentField, BuiltinAgentKind, ImageGenField, ImageGenProfile,
+    ImageGenProvider, ImageSearchField, ImageTestStatus, McpCli, McpServer, ProviderConnectOutcome,
+    ProviderConnectPhase, ProviderConnection, SettingsFocus,
 };
 pub use agent_settings_builtin_presets::{
     builtin_agent_preset, infer_builtin_agent_preset, normalize_builtin_agent_preset,
