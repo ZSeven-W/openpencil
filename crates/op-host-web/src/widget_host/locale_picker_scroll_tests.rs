@@ -24,3 +24,28 @@ fn locale_picker_wheel_scrolls_select_state_without_zooming_canvas() {
     assert_eq!(state.hover, None);
     assert_eq!(host.editor_state.viewport.zoom, zoom);
 }
+
+#[test]
+fn locale_picker_hover_tracks_cursor_rows() {
+    let mut host = WidgetHost::new();
+    let viewport_w = 1200.0;
+    let viewport_h = 800.0;
+    host.last_viewport_w = viewport_w;
+    host.last_viewport_h = viewport_h;
+    host.editor_state.editor_ui.locale_picker.open = true;
+    let picker = host.locale_picker_rect(viewport_w);
+
+    assert!(host.apply_cursor_move(
+        picker.origin.x + picker.size.x / 2.0,
+        picker.origin.y + op_editor_ui::widgets::LocalePicker::row_height() * 1.5,
+    ));
+
+    assert_eq!(host.editor_state.editor_ui.locale_picker.hover, Some(1));
+
+    assert!(host.apply_cursor_move(
+        picker.origin.x + picker.size.x + 20.0,
+        picker.origin.y + op_editor_ui::widgets::LocalePicker::row_height() * 1.5,
+    ));
+
+    assert_eq!(host.editor_state.editor_ui.locale_picker.hover, None);
+}

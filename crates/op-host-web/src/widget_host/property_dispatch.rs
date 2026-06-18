@@ -36,7 +36,7 @@ impl WidgetHost {
     /// succeed — and `WebSyncClient::sync` would then commit the version against
     /// a stale paint. Used by the opt-in `live-sync` glue. Lives here (not
     /// `widget_host.rs`) to keep that spine under the 800-line cap.
-    #[cfg(feature = "live-sync")]
+    #[cfg(feature = "canvaskit")]
     pub(crate) fn replace_document(&mut self, doc: op_editor_core::PenDocument) {
         self.editor_state.replace_document(doc);
         self.mark_dirty();
@@ -262,17 +262,18 @@ impl WidgetHost {
                 );
             }
             A::PickFillImage => {
-                // Web file-picker path lands later; the wasm shell
-                // has no rfd / native dialog so this is a no-op for
-                // now. A future implementation would surface a
-                // `<input type="file">` via the JS bridge.
+                // Queue the browser file picker — `dom_io` drains
+                // this flag after the event handler releases the host
+                // borrow and writes the chosen image into the selected
+                // node's primary fill.
+                self.editor_state.editor_ui.pending_file_action =
+                    Some(op_editor_core::editor_ui_state::FileAction::PickFillImage);
             }
             A::ToggleFontFamilyPicker => {
-                // The wasm host has no system-font enumeration (the
-                // bundle ships embedded fonts only), so the picker
-                // paints the bundled group + the TS
-                // FALLBACK_SYSTEM_FONTS list — the same set the TS
-                // app shows when `queryLocalFonts` is unavailable.
+                // The web entry drains Local Font Access after this
+                // press; until the browser resolves / rejects that
+                // permission flow the picker paints the bundled group
+                // plus the TS fallback system list.
                 let ui = &mut self.editor_state.editor_ui;
                 ui.toggle_font_picker();
                 ui.font_weight_picker_open = false;
@@ -550,13 +551,13 @@ impl WidgetHost {
             }
             CodegenAction::Copy => {
                 cg.copied_at = Some(self.now_ms);
-                #[cfg(feature = "codegen")]
+                #[cfg(feature = "canvaskit")]
                 {
                     crate::web_clipboard::copy_text(&cg.code);
                 }
             }
             CodegenAction::Download => {
-                #[cfg(feature = "codegen")]
+                #[cfg(feature = "canvaskit")]
                 {
                     crate::codegen_web::download_generated(&self.editor_state);
                 }
@@ -567,7 +568,7 @@ impl WidgetHost {
                 // built FRESH from the selection (or active page) at click
                 // time — no completed generation required. Nothing to bundle
                 // returns silently, like the TS handler.
-                #[cfg(feature = "codegen")]
+                #[cfg(feature = "canvaskit")]
                 {
                     if let Some(bytes) =
                         crate::codegen_bundle::build_live_bundle_zip(&self.editor_state)

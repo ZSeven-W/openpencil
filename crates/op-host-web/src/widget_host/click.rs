@@ -145,9 +145,12 @@ impl WidgetHost {
                         return true;
                     }
                     AIChatHit::AddAttachment => {
-                        // The web shell has no native file picker wired
-                        // yet — staging an attachment is a desktop-only
-                        // path for now. No-op so the click is consumed.
+                        // The DOM event loop drains this flag once the
+                        // event handler releases its host borrow, opens
+                        // a hidden browser file picker, and stages the
+                        // chosen file via `ChatState::add_attachment`.
+                        self.editor_state.chat.pending_attachment_pick = true;
+                        self.mark_dirty();
                         return true;
                     }
                     AIChatHit::RemoveAttachment(idx) => {
@@ -249,6 +252,36 @@ impl WidgetHost {
         let layer_rect = self.layer_panel_rect(viewport_h);
         let panel = LayerPanel::from_editor(&self.editor_state);
         if let Some(hit) = panel.hit_test(layer_rect, Point2D::new(x, y)) {
+            use op_editor_core::ui_draft::LayerContextTarget;
+            let target_for_double_click = match &hit {
+                LayerPanelHit::Layer(id) => Some(LayerContextTarget::Layer(id.clone())),
+                LayerPanelHit::Page(idx) => Some(LayerContextTarget::Page(*idx)),
+                _ => None,
+            };
+            if let Some(target) = target_for_double_click {
+                if let Some((prev, prev_ms)) = self.editor_state.editor_ui.last_layer_click.clone()
+                {
+                    if prev == target && self.now_ms.saturating_sub(prev_ms) < 400 {
+                        let started = match &target {
+                            LayerContextTarget::Layer(id) => {
+                                self.editor_state.start_rename_layer(id.clone())
+                            }
+                            LayerContextTarget::Page(idx) => {
+                                self.editor_state.start_rename_page(*idx)
+                            }
+                        };
+                        if started {
+                            if let Some(rename) = self.editor_state.ui.layer_rename.as_mut() {
+                                rename.input.touch(self.now_ms);
+                            }
+                        }
+                        self.editor_state.editor_ui.last_layer_click = None;
+                        self.mark_dirty();
+                        return true;
+                    }
+                }
+                self.editor_state.editor_ui.last_layer_click = Some((target, self.now_ms));
+            }
             match hit {
                 LayerPanelHit::Page(idx) => {
                     let _ = self.editor_state.set_active_page(idx);
@@ -311,11 +344,14 @@ impl WidgetHost {
     /// the TS web app never shipped an offline echo — chat errored when
     /// `/api/ai/stream` was unreachable.
     pub(in crate::widget_host) fn begin_chat_send(&mut self) -> bool {
-        #[cfg(feature = "codegen")]
+        // Both the codegen (skia) and canvaskit builds compile a real daemon
+        // transport (`web_chat`), so queue the send for the DOM drain. Only a
+        // transport-less stub build falls back to the honest per-send error.
+        #[cfg(feature = "canvaskit")]
         {
             self.editor_state.chat.begin_send()
         }
-        #[cfg(not(feature = "codegen"))]
+        #[cfg(not(feature = "canvaskit"))]
         {
             apply_offline_chat_error(&mut self.editor_state.chat)
         }
@@ -326,7 +362,7 @@ impl WidgetHost {
 /// no transport exists, so no fake reply may pretend one does.
 // In `codegen` builds this pair is exercised by tests only — the real
 // send path streams through `web_chat` instead.
-#[cfg_attr(feature = "codegen", allow(dead_code))]
+#[cfg_attr(feature = "canvaskit", allow(dead_code))]
 pub(crate) const CHAT_OFFLINE_ERROR: &str =
     "error: AI chat is not available in this build — the daemon streaming \
      transport is not compiled in. Rebuild the web bundle with the `codegen` \
@@ -338,7 +374,7 @@ pub(crate) const CHAT_OFFLINE_ERROR: &str =
 /// raised `pending_send` is consumed inline and the bubble must not be
 /// left streaming forever). Compiled in every build so the codegen test
 /// gate covers it; returns true when a send was actually queued.
-#[cfg_attr(feature = "codegen", allow(dead_code))]
+#[cfg_attr(feature = "canvaskit", allow(dead_code))]
 pub(crate) fn apply_offline_chat_error(chat: &mut op_editor_core::ChatState) -> bool {
     if !chat.begin_send() {
         return false;

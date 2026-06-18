@@ -31,7 +31,7 @@ impl TopBar {
         // dots paint only on Windows / Linux — whose
         // `decorations(false)` window ships none. The desktop
         // runner wires custom-dot clicks via `window_control_at`.
-        if !cfg!(target_os = "macos") {
+        if self.show_traffic_controls && !cfg!(target_os = "macos") {
             let traffic = [
                 Color {
                     r: 1.0,

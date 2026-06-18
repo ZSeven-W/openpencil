@@ -6,7 +6,7 @@
 //! host's layout) so this file stays under the 800-line cap.
 use op_editor_ui::widgets::{
     AIChatHit, AIChatPlaceholder, LayerPanel, LayerPanelHit, LocalePicker, PropertyPanel, Toolbar,
-    TopBar, TopBarHit, TOP_BAR_HEIGHT,
+    TopBarHit, TOP_BAR_HEIGHT,
 };
 use op_editor_ui::{Point2D, Rect};
 
@@ -19,9 +19,16 @@ use op_editor_core::codegen::CodeSelection;
 impl WidgetHost {
     /// Right-click handler — opens the LayerPanel context menu on
     /// a layer or page row.
-    pub fn apply_right_press(&mut self, x: f32, y: f32, _viewport_w: f32, viewport_h: f32) -> bool {
+    pub fn apply_right_press(&mut self, x: f32, y: f32, viewport_w: f32, viewport_h: f32) -> bool {
+        self.commit_variable_row_focus_if_any();
+        if self.over_topmost_panel(x, y, viewport_w, viewport_h) {
+            return true;
+        }
+        if self.try_open_path_anchor_menu(x, y, viewport_w, viewport_h) {
+            return true;
+        }
         if !self.editor_state.editor_ui.sidebar_open {
-            return false;
+            return self.blur_text_inputs_on_blank_press();
         }
         use op_editor_core::editor_ui_state::LayerContextMenuState;
         use op_editor_core::ui_draft::LayerContextTarget;
@@ -71,7 +78,7 @@ impl WidgetHost {
             self.mark_dirty();
             return true;
         }
-        false
+        self.blur_text_inputs_on_blank_press()
     }
 
     fn dispatch_layer_context_action(
@@ -102,24 +109,41 @@ impl WidgetHost {
                 self.editor_state.commit_history();
                 let _ = self.editor_state.delete_selected();
             }
+            (A::GroupSelection, T::Layer(_)) => {
+                let _ = self.apply_group();
+            }
+            (
+                A::BooleanUnion | A::BooleanSubtract | A::BooleanIntersect | A::BooleanExclude,
+                T::Layer(_),
+            ) => {
+                // Boolean path ops are not supported on the CanvasKit build yet
+                // — they needed the retired skia host path math
+                // (`crate::boolean_ops`). No-op until ported to a wasm-clean
+                // path solver.
+            }
             (A::ToggleLock, T::Layer(id)) => {
-                self.editor_state.toggle_node_locked(&id);
+                self.with_doc_history(|s| s.toggle_node_locked(&id));
             }
             (A::ToggleVisibility, T::Layer(id)) => {
-                self.editor_state.toggle_node_hidden(&id);
+                self.with_doc_history(|s| s.toggle_node_hidden(&id));
             }
-            (A::CreateComponent, T::Layer(_)) => {}
+            (A::CreateComponent, T::Layer(id)) => {
+                let _ = self.editor_state.create_component_from_node_name(&id);
+            }
+            (A::DetachComponent | A::DetachInstance, T::Layer(id)) => {
+                let _ = self.editor_state.detach_component(&id);
+            }
             (A::DuplicatePage, T::Page(idx)) => {
-                let _ = self.editor_state.duplicate_page(idx);
+                self.with_doc_history(|s| s.duplicate_page(idx).is_some());
             }
             (A::MovePageUp, T::Page(idx)) => {
-                let _ = self.editor_state.move_page_up(idx);
+                self.with_doc_history(|s| s.move_page_up(idx));
             }
             (A::MovePageDown, T::Page(idx)) => {
-                let _ = self.editor_state.move_page_down(idx);
+                self.with_doc_history(|s| s.move_page_down(idx));
             }
             (A::DeletePage, T::Page(idx)) => {
-                let _ = self.editor_state.remove_page(idx);
+                self.with_doc_history(|s| s.remove_page(idx));
             }
             (A::RenamePage, T::Page(idx)) => {
                 if self.editor_state.start_rename_page(idx) {
@@ -215,6 +239,9 @@ impl WidgetHost {
                 return true;
             }
         }
+        if self.dispatch_path_anchor_menu_press(x, y) {
+            return true;
+        }
         // 0. Layer context menu — top-most overlay when open.
         if let Some(state) = self.editor_state.editor_ui.layer_context_menu.clone() {
             use op_editor_ui::widgets::layer_context_menu::{LayerContextMenu, MenuHit};
@@ -296,11 +323,8 @@ impl WidgetHost {
 
         // 0b. TopBar — sidebar toggle + chrome buttons. Mirrors the
         //     native host so web + native behave identically.
-        let top_bar_rect = Rect {
-            origin: Point2D::new(0.0, 0.0),
-            size: Point2D::new(viewport_width, TOP_BAR_HEIGHT),
-        };
-        let top_bar = TopBar::for_editor_ui(&self.editor_state.editor_ui);
+        let top_bar_rect = self.top_bar_rect(viewport_width);
+        let top_bar = self.top_bar();
         if let Some(hit) = top_bar.hit_test(top_bar_rect, Point2D::new(x, y)) {
             self.commit_property_family_focus_if_any();
             let pressed = op_editor_ui::widgets::editor_state_ext::topbar_button_hover(hit);
@@ -791,7 +815,9 @@ impl WidgetHost {
                         self.mark_dirty();
                     }
                     AlignToolbarHit::Boolean(op) => {
-                        let _ = self.apply_boolean_op(op);
+                        // Boolean path ops are not supported on the CanvasKit
+                        // build yet (retired skia host path math). No-op.
+                        let _ = op;
                     }
                 }
                 return true;
@@ -807,7 +833,7 @@ impl WidgetHost {
         //    - Select + node hit: set/toggle selection.
         //    - Select + empty: marquee.
         if self.over_canvas(x, y, viewport_width, viewport_height) {
-            if matches!(self.editor_state.tool, op_editor_core::Tool::Hand) {
+            if matches!(self.editor_state.tool, op_editor_core::Tool::Hand) || self.space_pan {
                 self.drag = Some(DragState {
                     last_x: x,
                     last_y: y,
@@ -815,6 +841,12 @@ impl WidgetHost {
                 return rename_committed || text_edit_committed || property_focus_committed;
             }
             if matches!(self.editor_state.tool, op_editor_core::Tool::Select) {
+                if self.try_path_anchor_press(x, y, viewport_width, viewport_height) {
+                    return true;
+                }
+                if self.try_selection_handle_press(x, y, viewport_width, viewport_height) {
+                    return true;
+                }
                 // Convert screen → doc to ask which node (if any)
                 // is under the cursor — `node_at_doc_point` queries
                 // the layout-resolved render scene.
@@ -843,13 +875,19 @@ impl WidgetHost {
                         self.mark_dirty();
                         return true;
                     }
+                    let mut should_start_drag = true;
                     if self.shift_held {
+                        let was_in_set = self.editor_state.is_selected(&node_id);
                         self.editor_state.toggle_selection(node_id);
+                        should_start_drag = !was_in_set;
                     } else {
                         let already_in_set = self.editor_state.is_selected(&node_id);
                         if !already_in_set || self.editor_state.selection_count() == 1 {
                             self.editor_state.set_single_selection(node_id);
                         }
+                    }
+                    if should_start_drag {
+                        self.start_node_drag(x, y);
                     }
                     self.mark_dirty();
                     return true;
@@ -877,8 +915,14 @@ impl WidgetHost {
                     || text_edit_committed
                     || property_focus_committed;
             }
-            // Any other tool on empty canvas — fall back to pan
-            // (web doesn't ship shape-creation drag yet).
+            let (cx0, cy0, _cw, _ch) = self.canvas_region(viewport_width, viewport_height);
+            let canvas_local = Point2D::new(x - cx0, y - cy0);
+            let doc_point = self.editor_state.viewport.to_document(canvas_local);
+            if self.start_create_drag_at(doc_point) {
+                return true;
+            }
+
+            // Tool didn't accept this point — fall back to pan.
             self.drag = Some(DragState {
                 last_x: x,
                 last_y: y,

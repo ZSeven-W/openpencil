@@ -119,6 +119,10 @@ pub struct TopBar {
     /// Cursor is over the window-control cluster — the 3 dots paint
     /// their close / minimise / maximise glyphs.
     pub traffic_hover: bool,
+    /// Whether this host shows window controls in the top bar. Desktop
+    /// hosts keep the reservation / custom dots; the web host has no
+    /// window controls and starts app chrome at the left padding.
+    pub show_traffic_controls: bool,
     /// Window is fullscreen — drops the left-edge window-control
     /// reservation on macOS (native traffic lights hide then).
     pub fullscreen: bool,
@@ -159,6 +163,7 @@ impl TopBar {
             label_agent_singular: "agent",
             label_agent_plural: "agents",
             traffic_hover: false,
+            show_traffic_controls: true,
             fullscreen: false,
             theme_mode: op_editor_core::ThemeMode::Dark,
             git_branch: None,
@@ -200,6 +205,7 @@ impl TopBar {
             label_agent_singular: translate(ui, "topbar.agentSingular"),
             label_agent_plural: translate(ui, "topbar.agentPlural"),
             traffic_hover: ui.topbar_traffic_hover,
+            show_traffic_controls: true,
             fullscreen: ui.window_fullscreen,
             theme_mode: ui.theme_mode,
             git_branch: ui.git_panel.branch.clone(),
@@ -211,6 +217,14 @@ impl TopBar {
             },
             chip_text_w: None,
         }
+    }
+
+    pub fn with_traffic_controls(mut self, show: bool) -> Self {
+        self.show_traffic_controls = show;
+        if !show {
+            self.traffic_hover = false;
+        }
+        self
     }
 
     /// True when the cursor is resting on `button` — drives the
@@ -236,7 +250,11 @@ impl TopBar {
     }
 
     pub(super) fn left_inset(&self) -> f32 {
-        Self::left_inset_for(self.fullscreen)
+        if self.show_traffic_controls {
+            Self::left_inset_for(self.fullscreen)
+        } else {
+            0.0
+        }
     }
 
     /// Bounds of the 3-dot window-control cluster — the host's
@@ -313,6 +331,16 @@ impl TopBar {
             + Self::left_inset_for(fullscreen)
             + ICON_BUTTON
             + divider_span;
+        Rect {
+            origin: Point2D::new(file_menu_x, top_bar_rect.origin.y + 8.0),
+            size: Point2D::new(FILE_MENU_BUTTON_WIDTH, ICON_BUTTON),
+        }
+    }
+
+    pub fn file_menu_rect_for(&self, top_bar_rect: Rect) -> Rect {
+        let divider_span = DIVIDER_GAP + DIVIDER_W + DIVIDER_GAP;
+        let file_menu_x =
+            top_bar_rect.origin.x + PAD + self.left_inset() + ICON_BUTTON + divider_span;
         Rect {
             origin: Point2D::new(file_menu_x, top_bar_rect.origin.y + 8.0),
             size: Point2D::new(FILE_MENU_BUTTON_WIDTH, ICON_BUTTON),
@@ -401,7 +429,7 @@ impl TopBar {
         // Returning `None` here also avoids a false positive in
         // macOS fullscreen, where the left inset collapses and the
         // app's own icons would otherwise sit in the dot region.
-        if cfg!(target_os = "macos") {
+        if !self.show_traffic_controls || cfg!(target_os = "macos") {
             return None;
         }
         if !(rect).contains(point) {
@@ -447,8 +475,13 @@ impl TopBar {
         }
         // Reuse the canonical anchor so the hit area, paint, and
         // dropdown anchor can never drift (Codex caught a divider-span
-        // drift here once).
-        let file_menu_rect = Self::file_menu_rect(rect, self.fullscreen);
+        // drift here once). Use the INSTANCE method (`self.left_inset()`),
+        // not the static `file_menu_rect` (which always reserves
+        // `TRAFFIC_CLUSTER_W` via `left_inset_for`): on the web the traffic
+        // controls are hidden (`show_traffic_controls = false` → inset 0), so
+        // the static rect would shift the hover/hit area right of the painted
+        // folder button by the traffic-cluster width.
+        let file_menu_rect = self.file_menu_rect_for(rect);
         let file_menu_x = file_menu_rect.origin.x;
         let divider_span = DIVIDER_GAP + DIVIDER_W + DIVIDER_GAP;
         if (file_menu_rect).contains(point) {

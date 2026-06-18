@@ -21,6 +21,61 @@
 use op_editor_ui::{Modifiers, ScrollMode, WheelEvent};
 use std::time::Instant;
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum WheelIntent {
+    Zoom { delta_y: f32 },
+    Pan { dx: f32, dy: f32 },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum MousePressAction {
+    PrimaryPress,
+    MiddlePan,
+    ContextPress,
+    Ignore,
+}
+
+pub fn classify_mouse_press_button(button: i16) -> MousePressAction {
+    match button {
+        0 => MousePressAction::PrimaryPress,
+        1 => MousePressAction::MiddlePan,
+        2 => MousePressAction::ContextPress,
+        _ => MousePressAction::Ignore,
+    }
+}
+
+/// Classify a browser wheel into the editor action the web shell should run.
+///
+/// Vertical mouse-wheel scroll keeps the existing zoom behavior. Horizontal
+/// trackpad deltas and Shift+wheel are pan gestures, matching desktop's
+/// `apply_pan_gesture` path. Cmd/Ctrl/Alt modified wheels are reserved for
+/// zoom so browser pinch/Cmd-wheel never turns into a pan.
+pub fn classify_wheel_intent(
+    delta_x: f32,
+    delta_y: f32,
+    shift: bool,
+    ctrl: bool,
+    meta: bool,
+    alt: bool,
+) -> WheelIntent {
+    let modified_zoom = ctrl || meta || alt;
+    if !modified_zoom && (delta_x != 0.0 || shift) {
+        if delta_x != 0.0 {
+            WheelIntent::Pan {
+                dx: -delta_x,
+                dy: -delta_y,
+            }
+        } else {
+            WheelIntent::Pan {
+                dx: -delta_y,
+                dy: 0.0,
+            }
+        }
+    } else {
+        WheelIntent::Zoom { delta_y: -delta_y }
+    }
+}
+
 /// Build a Jian `WheelEvent` from the W3C primitives.
 ///
 /// `position` is the cursor's canvas-local position (already

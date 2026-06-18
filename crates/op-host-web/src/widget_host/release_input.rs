@@ -81,6 +81,22 @@ impl WidgetHost {
         if self.variables_resize.take().is_some() {
             return true;
         }
+        if self.release_selection_handle_drag() {
+            return true;
+        }
+        if self.release_create_drag() {
+            return true;
+        }
+        if self.release_node_drag() {
+            return true;
+        }
+        if let Some(drag) = self.path_anchor_drag.take() {
+            if drag.moved {
+                self.editor_state.history_push_past(drag.pre_drag_snapshot);
+                return true;
+            }
+            return false;
+        }
         if let Some(m) = self.marquee_drag.take() {
             self.commit_marquee_selection(m, viewport_w, viewport_h);
             return true;
@@ -129,10 +145,25 @@ impl WidgetHost {
         if self.variables_resize.take().is_some() {
             return true;
         }
+        if self.release_selection_handle_drag() {
+            return true;
+        }
+        if self.release_create_drag() {
+            return true;
+        }
+        if self.release_node_drag() {
+            return true;
+        }
         if self.marquee_drag.take().is_some() {
             // Can't compute the doc-space marquee rect without a
             // viewport; drop without committing. The viewport-
             // aware variant is the one runners should call.
+            return true;
+        }
+        if let Some(drag) = self.path_anchor_drag.take() {
+            if drag.moved {
+                self.editor_state.history_push_past(drag.pre_drag_snapshot);
+            }
             return true;
         }
         if self.code_selection_drag.take().is_some() {

@@ -10,11 +10,12 @@
 use op_editor_ui::{
     ImeKind, KeyCode, KeyLocation, KeyState, KeyValue, Modifiers, NamedKey, ScrollMode,
 };
+use op_host_web::event::pointer::{classify_mouse_press_button, MousePressAction};
 use op_host_web::event::{
     focus::map_focus,
     ime::{composition_end, composition_start, composition_update, utf16_selection_to_utf8},
     keyboard::map_keyboard_parts,
-    pointer::map_wheel,
+    pointer::{classify_wheel_intent, map_wheel, WheelIntent},
 };
 use std::time::Instant;
 
@@ -32,6 +33,20 @@ fn keyboard_mapping_preserves_key_code_location_and_repeat() {
     assert!(event.repeat);
     assert!(!event.is_composing);
     assert!(event.modifiers.contains(Modifiers::SHIFT));
+}
+
+#[test]
+fn mouse_button_classification_keeps_middle_pan_out_of_primary_press_path() {
+    assert_eq!(
+        classify_mouse_press_button(0),
+        MousePressAction::PrimaryPress
+    );
+    assert_eq!(classify_mouse_press_button(1), MousePressAction::MiddlePan);
+    assert_eq!(
+        classify_mouse_press_button(2),
+        MousePressAction::ContextPress
+    );
+    assert_eq!(classify_mouse_press_button(3), MousePressAction::Ignore);
 }
 
 #[test]
@@ -330,6 +345,37 @@ fn wheel_delta_z_passthrough() {
     let pos = jian_core::geometry::Point::new(0.0, 0.0);
     let event = map_wheel(pos, 0.0, 0.0, 1.5, 0, Modifiers::empty(), Instant::now());
     assert_eq!(event.delta_z, 1.5);
+}
+
+#[test]
+fn horizontal_trackpad_wheel_maps_to_pan_intent() {
+    assert_eq!(
+        classify_wheel_intent(120.0, 0.0, false, false, false, false),
+        WheelIntent::Pan {
+            dx: -120.0,
+            dy: -0.0
+        }
+    );
+}
+
+#[test]
+fn shifted_wheel_maps_vertical_delta_to_horizontal_pan() {
+    assert_eq!(
+        classify_wheel_intent(0.0, 80.0, true, false, false, false),
+        WheelIntent::Pan { dx: -80.0, dy: 0.0 }
+    );
+}
+
+#[test]
+fn regular_or_modified_vertical_wheel_stays_zoom_intent() {
+    assert_eq!(
+        classify_wheel_intent(0.0, 90.0, false, false, false, false),
+        WheelIntent::Zoom { delta_y: -90.0 }
+    );
+    assert_eq!(
+        classify_wheel_intent(20.0, 90.0, false, true, false, false),
+        WheelIntent::Zoom { delta_y: -90.0 }
+    );
 }
 
 // ---------------------------------------------------------------------

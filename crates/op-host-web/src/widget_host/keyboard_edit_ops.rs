@@ -246,21 +246,30 @@ impl WidgetHost {
                 .selected_input_text()
                 .map(str::to_string)
             {
-                #[cfg(feature = "codegen")]
+                #[cfg(feature = "canvaskit")]
                 crate::web_clipboard::copy_text(&text);
-                #[cfg(not(feature = "codegen"))]
+                #[cfg(not(feature = "canvaskit"))]
                 self.editor_state.chat.queue_copy_text(text);
                 return true;
             }
             return false;
         }
+        // Any other focused text input owns the keyboard: copy its highlighted
+        // slice to the system clipboard and swallow the chord so Ctrl/Cmd+C
+        // never falls through to canvas-node copy.
         if self.input_active() {
-            return false;
+            if let Some(text) = self.focused_input_selected_text() {
+                #[cfg(feature = "canvaskit")]
+                crate::web_clipboard::copy_text(&text);
+                #[cfg(not(feature = "canvaskit"))]
+                let _ = text;
+            }
+            return true;
         }
         if let Some(text) = self.editor_state.codegen.selected_code_text() {
-            #[cfg(feature = "codegen")]
+            #[cfg(feature = "canvaskit")]
             crate::web_clipboard::copy_text(text);
-            #[cfg(not(feature = "codegen"))]
+            #[cfg(not(feature = "canvaskit"))]
             let _ = text;
             return true;
         }
@@ -270,9 +279,9 @@ impl WidgetHost {
             .selected_transcript_text()
             .map(str::to_string)
         {
-            #[cfg(feature = "codegen")]
+            #[cfg(feature = "canvaskit")]
             crate::web_clipboard::copy_text(&text);
-            #[cfg(not(feature = "codegen"))]
+            #[cfg(not(feature = "canvaskit"))]
             self.editor_state.chat.queue_copy_text(text);
             return true;
         }
@@ -346,7 +355,9 @@ impl WidgetHost {
     /// Mirrors the native host's `apply_toggle_component_browser`
     /// (TS `editor-layout.tsx` Cmd+Shift+K → `toggleBrowser`); the
     /// open-position default is the viewport centre via
-    /// `component_browser_panel_rect`'s `None`-pos fallback.
+    /// `component_browser_panel_rect`'s `None`-pos fallback. (Tested + ready to
+    /// wire; the CanvasKit keydown handler doesn't bind Cmd+Shift+K yet.)
+    #[allow(dead_code)]
     pub fn apply_toggle_component_browser(&mut self) -> bool {
         let ui = &mut self.editor_state.editor_ui;
         ui.component_browser_open = !ui.component_browser_open;

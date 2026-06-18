@@ -46,6 +46,7 @@ use op_editor_host_core::codegen::{
     build_codegen_input_value as build_codegen_input, framework_ext,
 };
 
+use crate::repaint_ctx::RepaintContext;
 use crate::web_ai_transport::{post_ai_stream, AiEvent, AiStreamHandle};
 
 /// A delta drained by the rAF pump into `editor_state.codegen`. Mirrors the
@@ -148,10 +149,10 @@ pub(crate) fn cancel_active_run() {
 /// the DOM mousedown listener AFTER its `inner` borrow is released, because
 /// `start_codegen` re-borrows `inner` (and the rAF pump it starts borrows it
 /// again on later frames).
-pub(crate) fn drain_codegen_flags(inner: &Rc<RefCell<crate::Inner>>) {
+pub(crate) fn drain_codegen_flags<C: RepaintContext + 'static>(inner: &Rc<RefCell<C>>) {
     let (cancel, generate) = {
         let mut bm = inner.borrow_mut();
-        let cg = &mut bm.host.editor_state_mut().codegen;
+        let cg = &mut bm.host_mut().editor_state_mut().codegen;
         let cancel = std::mem::take(&mut cg.pending_cancel);
         let generate = cg.pending_generate || cg.pending_regenerate;
         // Clear the launch flags before launching so a failed launch (e.g.
@@ -181,22 +182,22 @@ pub(crate) fn drain_codegen_flags(inner: &Rc<RefCell<crate::Inner>>) {
 /// `base` is the daemon origin (e.g. `http://127.0.0.1:3100`) — the same
 /// origin `live_sync` polls. Returns immediately; the model turns stream in
 /// later via the request callbacks.
-pub fn start_codegen(inner: Rc<RefCell<crate::Inner>>, base: String) {
+pub fn start_codegen<C: RepaintContext + 'static>(inner: Rc<RefCell<C>>, base: String) {
     // 1. Build input from the live editor state. Nothing to generate from
     //    (empty page + no selection) surfaces an inline error (desktop
     //    `launch_codegen_if_pending` parity).
     let (input, model, framework) = {
         let b = inner.borrow();
-        let state = b.host.editor_state();
+        let state = b.host().editor_state();
         let Some(input) = build_codegen_input(state) else {
             drop(b);
             let mut bm = inner.borrow_mut();
-            let cg = &mut bm.host.editor_state_mut().codegen;
+            let cg = &mut bm.host_mut().editor_state_mut().codegen;
             cg.error = Some("Select nodes to generate code".into());
             cg.phase = CodegenPhase::Error;
             cg.pending_generate = false;
             cg.pending_regenerate = false;
-            bm.host.mark_editor_state_dirty();
+            bm.host_mut().mark_editor_state_dirty();
             let _ = bm.repaint();
             return;
         };
@@ -216,19 +217,19 @@ pub fn start_codegen(inner: Rc<RefCell<crate::Inner>>, base: String) {
     {
         let mut bm = inner.borrow_mut();
         let selection_snapshot: Vec<String> = bm
-            .host
+            .host()
             .editor_state()
             .selection
             .set
             .iter()
             .map(|id| id.as_str().to_string())
             .collect();
-        let cg = &mut bm.host.editor_state_mut().codegen;
+        let cg = &mut bm.host_mut().editor_state_mut().codegen;
         cg.progress = Default::default();
         cg.error = None;
         cg.phase = CodegenPhase::Generating;
         cg.selection_snapshot = selection_snapshot;
-        bm.host.mark_editor_state_dirty();
+        bm.host_mut().mark_editor_state_dirty();
         let _ = bm.repaint();
     }
 
@@ -260,7 +261,7 @@ pub fn start_codegen(inner: Rc<RefCell<crate::Inner>>, base: String) {
 
 /// Step the pipeline (when no batch is pending) and dispatch the next request,
 /// or queue a terminal delta. Re-entered from each request's terminal event.
-fn drive(inner: Rc<RefCell<crate::Inner>>, base: String, shared: Shared) {
+fn drive<C: RepaintContext + 'static>(inner: Rc<RefCell<C>>, base: String, shared: Shared) {
     // If a batch is still draining, fire its front request instead of stepping.
     let next_req = {
         let mut s = shared.borrow_mut();
@@ -333,8 +334,8 @@ fn drive(inner: Rc<RefCell<crate::Inner>>, base: String, shared: Shared) {
 /// accumulates deltas into `run.buf` and, on the terminal event, feeds the
 /// pipeline + re-drives. Borrows are taken tightly inside each callback and
 /// dropped before the next async hop is scheduled.
-fn fire_request(
-    inner: Rc<RefCell<crate::Inner>>,
+fn fire_request<C: RepaintContext + 'static>(
+    inner: Rc<RefCell<C>>,
     base: String,
     shared: Shared,
     req: PendingRequest,
@@ -439,7 +440,7 @@ fn build_body_json(req: &PendingRequest, model: &str) -> String {
 /// and repaints. Stops once a terminal delta (Done / Failed) has been applied,
 /// or immediately when the run was canceled (every queued/late delta is
 /// dropped so the canceled UI state survives — desktop pump parity).
-fn start_pump(inner: Rc<RefCell<crate::Inner>>, shared: Shared) {
+fn start_pump<C: RepaintContext + 'static>(inner: Rc<RefCell<C>>, shared: Shared) {
     let tick: Rc<dyn Fn() -> bool> = Rc::new(move || {
         // Canceled: drop everything and stop. The Cancel action already
         // flipped the painted phase; nothing here may overwrite it.
@@ -461,7 +462,7 @@ fn start_pump(inner: Rc<RefCell<crate::Inner>>, shared: Shared) {
             let Some(delta) = delta else { break };
 
             let mut bm = inner.borrow_mut();
-            let cg = &mut bm.host.editor_state_mut().codegen;
+            let cg = &mut bm.host_mut().editor_state_mut().codegen;
             match delta {
                 WebCodegenDelta::Progress(p) => {
                     cg.progress = p;
@@ -490,7 +491,7 @@ fn start_pump(inner: Rc<RefCell<crate::Inner>>, shared: Shared) {
                     applied_terminal = true;
                 }
             }
-            bm.host.mark_editor_state_dirty();
+            bm.host_mut().mark_editor_state_dirty();
             changed = true;
         }
 

@@ -102,3 +102,20 @@ fn codegen_action_press_sets_and_release_clears_pressed_button() {
     assert!(host.apply_release_with_viewport(VIEWPORT_W, VIEWPORT_H));
     assert_eq!(host.editor_state.editor_ui.pressed_button, None);
 }
+
+#[test]
+fn pick_fill_image_queues_web_file_picker_like_native() {
+    let mut host = WidgetHost::new();
+    host.editor_state.editor_ui.image_fill_popover_open = true;
+
+    host.apply_property_action(PropertyPanelAction::PickFillImage);
+
+    assert_eq!(
+        host.editor_state.editor_ui.pending_file_action,
+        Some(op_editor_core::editor_ui_state::FileAction::PickFillImage),
+    );
+    assert!(
+        host.editor_state.editor_ui.image_fill_popover_open,
+        "the image popover must stay open so Fill/Fit/Crop/Tile remain selectable",
+    );
+}

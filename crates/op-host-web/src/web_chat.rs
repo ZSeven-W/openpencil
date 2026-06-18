@@ -34,9 +34,9 @@ use op_editor_core::EditorState;
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
 
+use crate::repaint_ctx::RepaintContext;
 use crate::web_ai_transport::{post_ai_stream, AiEvent, AiStreamHandle};
 
-type InnerRc = Rc<RefCell<crate::Inner>>;
 type EventQueue = Rc<RefCell<VecDeque<AiEvent>>>;
 
 /// The in-flight chat turn: the XHR abort handle plus its generation. wasm is
@@ -66,10 +66,10 @@ fn abort_active_turn() {
 /// released. Order mirrors the desktop event loop: New Chat / Stop first
 /// (abort the worker so stale deltas can't repopulate the transcript), then
 /// launch a pending send.
-pub(crate) fn drain_chat_flags(inner: &InnerRc) {
+pub(crate) fn drain_chat_flags<C: RepaintContext + 'static>(inner: &Rc<RefCell<C>>) {
     let (new_chat, stop) = {
         let mut b = inner.borrow_mut();
-        let chat = &mut b.host.editor_state_mut().chat;
+        let chat = &mut b.host_mut().editor_state_mut().chat;
         (
             std::mem::take(&mut chat.pending_new_chat),
             std::mem::take(&mut chat.pending_stop_chat),
@@ -80,7 +80,7 @@ pub(crate) fn drain_chat_flags(inner: &InnerRc) {
     }
     let prepared = {
         let mut b = inner.borrow_mut();
-        prepare_turn(&mut b.host.editor_state_mut().chat)
+        prepare_turn(&mut b.host_mut().editor_state_mut().chat)
     };
     if let Some(prepared) = prepared {
         launch_turn(inner, prepared);
@@ -90,7 +90,7 @@ pub(crate) fn drain_chat_flags(inner: &InnerRc) {
 /// Launch one streaming turn: abort any in-flight one (a send fired mid-turn
 /// replaces it — desktop parity), POST the prepared body, and start the rAF
 /// pump that folds streamed events into the transcript.
-fn launch_turn(inner: &InnerRc, prepared: PreparedTurn) {
+fn launch_turn<C: RepaintContext + 'static>(inner: &Rc<RefCell<C>>, prepared: PreparedTurn) {
     abort_active_turn();
     let generation = NEXT_GENERATION.with(|g| {
         let v = g.get();
@@ -117,10 +117,10 @@ fn launch_turn(inner: &InnerRc, prepared: PreparedTurn) {
             // surface that in the streaming bubble instead of hanging it.
             let mut b = inner.borrow_mut();
             let _ = apply_event_to_chat(
-                &mut b.host.editor_state_mut().chat,
+                &mut b.host_mut().editor_state_mut().chat,
                 &AiEvent::Error("AI stream request failed to start".into()),
             );
-            b.host.mark_editor_state_dirty();
+            b.host_mut().mark_editor_state_dirty();
             let _ = b.repaint();
         }
     }
@@ -130,7 +130,11 @@ fn launch_turn(inner: &InnerRc, prepared: PreparedTurn) {
 /// the transcript and repaints; stops when the turn ends (terminal event
 /// applied) or when this generation is no longer the active turn (Stop / New
 /// Chat / replacing send).
-fn start_pump(inner: InnerRc, queue: EventQueue, generation: u64) {
+fn start_pump<C: RepaintContext + 'static>(
+    inner: Rc<RefCell<C>>,
+    queue: EventQueue,
+    generation: u64,
+) {
     let tick: Rc<dyn Fn() -> bool> = Rc::new(move || {
         let still_active = ACTIVE_TURN.with(|slot| {
             slot.borrow()
@@ -148,8 +152,8 @@ fn start_pump(inner: InnerRc, queue: EventQueue, generation: u64) {
             let evt = queue.borrow_mut().pop_front();
             let Some(evt) = evt else { break };
             let mut b = inner.borrow_mut();
-            terminal |= apply_event_to_chat(&mut b.host.editor_state_mut().chat, &evt);
-            b.host.mark_editor_state_dirty();
+            terminal |= apply_event_to_chat(&mut b.host_mut().editor_state_mut().chat, &evt);
+            b.host_mut().mark_editor_state_dirty();
             changed = true;
         }
         if changed {
@@ -232,7 +236,7 @@ pub(crate) fn apply_event_to_chat(chat: &mut ChatState, evt: &AiEvent) -> bool {
 /// Fetch the daemon's model catalog once (called from `mount()`) and populate
 /// the chat model picker. Best-effort: a missing daemon / bad payload leaves
 /// the catalog empty and sends fall back to the `"default"` model.
-pub(crate) fn fetch_models(inner: &InnerRc) {
+pub(crate) fn fetch_models<C: RepaintContext + 'static>(inner: &Rc<RefCell<C>>) {
     let base = crate::daemon_base::daemon_base();
     let url = format!("{base}/api/ai/models");
     let Ok(xhr) = web_sys::XmlHttpRequest::new() else {
@@ -253,8 +257,8 @@ pub(crate) fn fetch_models(inner: &InnerRc) {
             return;
         }
         let mut b = inner_cb.borrow_mut();
-        apply_models(b.host.editor_state_mut(), &ids);
-        b.host.mark_editor_state_dirty();
+        apply_models(b.host_mut().editor_state_mut(), &ids);
+        b.host_mut().mark_editor_state_dirty();
         let _ = b.repaint();
     });
     xhr.set_onloadend(Some(onloadend.unchecked_ref()));

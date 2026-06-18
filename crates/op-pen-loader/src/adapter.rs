@@ -46,8 +46,22 @@ const ROOT_FALLBACK_W: f32 = 1440.0;
 const ROOT_FALLBACK_H: f32 = 900.0;
 
 thread_local! {
-    static LAYOUT_MEASURE_BACKEND: Rc<dyn MeasureBackend> =
-        Rc::new(jian_skia::SkiaMeasure::new());
+    static LAYOUT_MEASURE_BACKEND: Rc<dyn MeasureBackend> = make_measure_backend();
+}
+
+/// Real skia paragraph shaper — native + web-skia builds (`skia-measure`, default).
+#[cfg(feature = "skia-measure")]
+fn make_measure_backend() -> Rc<dyn MeasureBackend> {
+    Rc::new(jian_skia::SkiaMeasure::new())
+}
+
+/// Skia-free estimate backend — the CanvasKit web build links no jian-skia /
+/// skia-safe. It is a character-count heuristic (~10% width error); the
+/// CanvasKit backend re-measures glyphs exactly at paint time, so layout drift
+/// is bounded to flex sizing of unconstrained text.
+#[cfg(not(feature = "skia-measure"))]
+fn make_measure_backend() -> Rc<dyn MeasureBackend> {
+    jian_core::layout::measure::default_backend()
 }
 
 pub struct LoadedDoc {

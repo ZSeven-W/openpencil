@@ -30,6 +30,12 @@ fn get_document_returns_doc_and_version() {
 }
 
 #[test]
+fn no_path_startup_uses_the_same_starter_document_as_the_web_shell() {
+    let editor = startup_editor_for_web_canvas(None).expect("startup editor");
+    assert_eq!(editor.doc, EditorState::starter().doc);
+}
+
+#[test]
 fn post_document_replaces_doc_and_bumps_version() {
     use op_editor_core::PenNodeExt;
     let mut s = fresh_state();

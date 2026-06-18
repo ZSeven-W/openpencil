@@ -8,7 +8,7 @@
 
 use super::{WidgetHost, STATUS_INSET, TOOLBAR_INSET_X, TOOLBAR_INSET_Y};
 use op_editor_ui::widgets::{
-    LayoutCx, ShapePicker, Toolbar, TopBar, Widget, ICON_PICKER_PANEL_H, ICON_PICKER_PANEL_W,
+    LayoutCx, ShapePicker, Toolbar, Widget, ICON_PICKER_PANEL_H, ICON_PICKER_PANEL_W,
     SHAPE_PICKER_WIDTH, STATUS_BAR_HEIGHT, STATUS_BAR_WIDTH, TOOLBAR_WIDTH, TOP_BAR_HEIGHT,
 };
 use op_editor_ui::{Point2D, Rect};
@@ -114,12 +114,8 @@ impl WidgetHost {
         if !self.editor_state.editor_ui.file_menu_open {
             return None;
         }
-        let top_bar_rect = Rect {
-            origin: Point2D::new(0.0, 0.0),
-            size: Point2D::new(viewport_w, TOP_BAR_HEIGHT),
-        };
-        let anchor =
-            TopBar::file_menu_rect(top_bar_rect, self.editor_state.editor_ui.window_fullscreen);
+        let top_bar_rect = self.top_bar_rect(viewport_w);
+        let anchor = self.top_bar().file_menu_rect_for(top_bar_rect);
         let menu = FileMenu::from_editor_ui(&self.editor_state.editor_ui, 0);
         Some(menu.rect_at(anchor))
     }
@@ -205,8 +201,8 @@ impl WidgetHost {
     }
 
     /// Whether `point` is inside ANY top-most floating panel
-    /// (Design-MD / Icon picker / Component browser). Used to suppress
-    /// dropdown hover updates under an overlapping floating panel.
+    /// (Design-MD / Variables / Icon picker / Component browser). Used
+    /// to suppress lower-layer input updates under overlapping panels.
     pub(in crate::widget_host) fn over_topmost_panel(
         &self,
         x: f32,
@@ -217,6 +213,9 @@ impl WidgetHost {
         let p = Point2D::new(x, y);
         self.design_md_panel_rect(viewport_w, viewport_h)
             .is_some_and(|r| (r).contains(p))
+            || self
+                .variables_panel_rect(viewport_w, viewport_h)
+                .is_some_and(|r| (r).contains(p))
             || self
                 .icon_picker_panel_rect(viewport_w, viewport_h)
                 .is_some_and(|r| (r).contains(p))

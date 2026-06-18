@@ -18,14 +18,9 @@ impl WidgetHost {
     ) {
         use op_editor_core::editor_ui_state::FileAction;
         use op_editor_ui::widgets::file_menu::{FileMenu, FileMenuChoice, MenuHit};
-        use op_editor_ui::widgets::top_bar::TopBar;
         self.refresh_layout_scene();
-        let top_bar_rect = op_editor_ui::Rect {
-            origin: op_editor_ui::Point2D::new(0.0, 0.0),
-            size: op_editor_ui::Point2D::new(viewport_width, op_editor_ui::widgets::TOP_BAR_HEIGHT),
-        };
-        let anchor =
-            TopBar::file_menu_rect(top_bar_rect, self.editor_state.editor_ui.window_fullscreen);
+        let top_bar_rect = self.top_bar_rect(viewport_width);
+        let anchor = self.top_bar().file_menu_rect_for(top_bar_rect);
         // No wall-clock on wasm32 (`SystemTime::now` panics there) and
         // the web host has no recent-file list to age against — a `0`
         // clock paints the same menu rows.

@@ -25,7 +25,8 @@ use op_editor_core::{IconPickerRemoteIcon, IconifyLoadMoreRequest};
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
 
-type InnerRc = Rc<RefCell<crate::Inner>>;
+use crate::repaint_ctx::RepaintContext;
+
 type DoneFn = Box<dyn FnOnce(Result<String, String>)>;
 
 const ICONIFY_API: &str = "https://api.iconify.design";
@@ -48,10 +49,10 @@ struct PendingPage {
 /// Drain a queued remote-search request (raised by the picker's
 /// Load-more press). Called from the mousedown listener after the
 /// `inner` borrow is released, like the other web drains.
-pub(crate) fn drain_iconify_request(inner: &InnerRc) {
+pub(crate) fn drain_iconify_request<C: RepaintContext + 'static>(inner: &Rc<RefCell<C>>) {
     let request = {
         let mut b = inner.borrow_mut();
-        b.host
+        b.host_mut()
             .editor_state_mut()
             .editor_ui
             .icon_picker_load_more_request
@@ -80,7 +81,10 @@ pub(crate) fn drain_iconify_request(inner: &InnerRc) {
 
 /// Pop the next collection off the page and fetch its icon bodies;
 /// when none remain, apply the assembled page.
-fn fetch_next_collection(inner: InnerRc, mut page: PendingPage) {
+fn fetch_next_collection<C: RepaintContext + 'static>(
+    inner: Rc<RefCell<C>>,
+    mut page: PendingPage,
+) {
     let Some((collection, names)) = page.remaining.pop() else {
         apply_page(&inner, page);
         return;
@@ -114,9 +118,9 @@ fn fetch_next_collection(inner: InnerRc, mut page: PendingPage) {
 // Apply — mirrors `iconify_host.rs::poll_iconify_job`.
 // ---------------------------------------------------------------------
 
-fn apply_page(inner: &InnerRc, mut page: PendingPage) {
+fn apply_page<C: RepaintContext + 'static>(inner: &Rc<RefCell<C>>, mut page: PendingPage) {
     let mut b = inner.borrow_mut();
-    let ui = &mut b.host.editor_state_mut().editor_ui;
+    let ui = &mut b.host_mut().editor_state_mut().editor_ui;
     // Stale-query guard: a newer search reset the remote state.
     if ui.icon_picker_remote.query != page.request.query {
         return;
@@ -140,19 +144,23 @@ fn apply_page(inner: &InnerRc, mut page: PendingPage) {
     ui.icon_picker_remote.total = page.total;
     ui.icon_picker_remote.next_start = page.start + page.request.limit;
     ui.icon_picker_remote.error = None;
-    b.host.mark_editor_state_dirty();
+    b.host_mut().mark_editor_state_dirty();
     let _ = b.repaint();
 }
 
-fn apply_error(inner: &InnerRc, request: &IconifyLoadMoreRequest, err: String) {
+fn apply_error<C: RepaintContext + 'static>(
+    inner: &Rc<RefCell<C>>,
+    request: &IconifyLoadMoreRequest,
+    err: String,
+) {
     let mut b = inner.borrow_mut();
-    let ui = &mut b.host.editor_state_mut().editor_ui;
+    let ui = &mut b.host_mut().editor_state_mut().editor_ui;
     if ui.icon_picker_remote.query != request.query {
         return;
     }
     ui.icon_picker_remote.loading = false;
     ui.icon_picker_remote.error = Some(err);
-    b.host.mark_editor_state_dirty();
+    b.host_mut().mark_editor_state_dirty();
     let _ = b.repaint();
 }
 

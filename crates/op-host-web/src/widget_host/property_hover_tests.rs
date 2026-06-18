@@ -218,6 +218,33 @@ fn component_browser_press_sets_and_release_clears_pressed_button() {
 }
 
 #[test]
+fn component_browser_header_buttons_queue_kit_io_requests_like_native() {
+    let mut host = WidgetHost::new();
+    let (viewport_w, viewport_h) = (1440.0, 900.0);
+    host.last_viewport_w = viewport_w;
+    host.last_viewport_h = viewport_h;
+    host.editor_state.editor_ui.component_browser_open = true;
+    let rect = host
+        .component_browser_panel_rect(viewport_w, viewport_h)
+        .expect("component browser panel visible");
+    let right = rect.origin.x + rect.size.x;
+    let y = rect.origin.y + 20.0;
+
+    assert!(host.apply_press(right - 54.0, y, viewport_w, viewport_h));
+    assert_eq!(
+        host.editor_state.editor_ui.component_browser_kit_request,
+        Some(op_editor_core::KitIoRequest::Import)
+    );
+
+    host.editor_state.editor_ui.component_browser_kit_request = None;
+    assert!(host.apply_press(right - 82.0, y, viewport_w, viewport_h));
+    assert_eq!(
+        host.editor_state.editor_ui.component_browser_kit_request,
+        Some(op_editor_core::KitIoRequest::Export)
+    );
+}
+
+#[test]
 fn codegen_preview_wheel_scrolls_code_not_property_panel() {
     let mut host = WidgetHost::new();
     host.editor_state = EditorState::sample();

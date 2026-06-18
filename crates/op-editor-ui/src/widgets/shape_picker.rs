@@ -28,6 +28,11 @@ const ROW_HEIGHT: f32 = 30.0;
 const ROW_PAD_X: f32 = 12.0;
 const ICON_SIZE: f32 = 16.0;
 const ROW_COUNT: usize = 7;
+/// Vertical inset of the selected / hover highlight within its row slot, so
+/// the wash doesn't touch the panel's top / bottom edges (the row slots
+/// themselves stay flush — only the highlight rect is inset, leaving the
+/// `Select::hit` row geometry, icon, and label positions unchanged).
+const ROW_HL_INSET_Y: f32 = 3.0;
 
 /// What the user picked from the dropdown.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -189,9 +194,12 @@ impl Widget for ShapePicker {
 
         for (idx, row) in self.rows.iter().enumerate() {
             let row_y = rect.origin.y + idx as f32 * ROW_HEIGHT;
+            // Highlight rect only — inset vertically for top/bottom breathing
+            // room. Icon + label below use `row_y` (the slot top), so they stay
+            // centered in the full ROW_HEIGHT slot.
             let row_rect = Rect {
-                origin: Point2D::new(rect.origin.x + 4.0, row_y),
-                size: Point2D::new(rect.size.x - 8.0, ROW_HEIGHT),
+                origin: Point2D::new(rect.origin.x + 4.0, row_y + ROW_HL_INSET_Y),
+                size: Point2D::new(rect.size.x - 8.0, ROW_HEIGHT - 2.0 * ROW_HL_INSET_Y),
             };
             let active = matches!(row.choice, ShapeChoice::Tool(t) if t == self.current_shape);
             let hovered = !active && self.state.hover == Some(idx);

@@ -36,7 +36,8 @@ use std::rc::Rc;
 
 use op_editor_core::web_sync::{self, WebSyncClient};
 
-use crate::{live_sync, Inner};
+use crate::live_sync;
+use crate::repaint_ctx::RepaintContext;
 
 /// Pull cadence (version probe). TS gets SSE pushes; one tick of latency.
 const POLL_INTERVAL_MS: i32 = 400;
@@ -48,7 +49,7 @@ const SYNC_MAX_BODY_BYTES: usize = 2 * 1024 * 1024;
 
 /// Wire the bidirectional sync loops onto the mounted shell. Called once from
 /// `mount()`; both intervals run for the page lifetime.
-pub(crate) fn start(inner: &Rc<RefCell<Inner>>) {
+pub(crate) fn start<C: RepaintContext + 'static>(inner: &Rc<RefCell<C>>) {
     let base = crate::daemon_base::daemon_base();
     let sync = Rc::new(RefCell::new(WebSyncClient::new()));
     // One document fetch / one push at a time; ticks observing an in-flight
@@ -61,7 +62,7 @@ pub(crate) fn start(inner: &Rc<RefCell<Inner>>) {
     // so mount does not push an initial no-op selection (TS pushes selection
     // only on change).
     let last_selection_key = Rc::new(RefCell::new(Some(web_sync::selection_sync_key(
-        inner.borrow().host.editor_state(),
+        inner.borrow().host().editor_state(),
     ))));
 
     // ---- pull + selection tick ----
@@ -89,8 +90,8 @@ pub(crate) fn start(inner: &Rc<RefCell<Inner>>) {
 }
 
 /// Probe the daemon version; on a newer version fetch + apply the document.
-fn poll_version(
-    inner: &Rc<RefCell<Inner>>,
+fn poll_version<C: RepaintContext + 'static>(
+    inner: &Rc<RefCell<C>>,
     base: &str,
     sync: &Rc<RefCell<WebSyncClient>>,
     fetch_busy: &Rc<Cell<bool>>,
@@ -137,8 +138,8 @@ fn poll_version(
 /// serialization becomes the push baseline (echo suppression) and the
 /// selection key is invalidated (the doc swap reset daemon + local selection,
 /// so the daemon must be told the browser's current one again).
-fn apply_document_response(
-    inner: &Rc<RefCell<Inner>>,
+fn apply_document_response<C: RepaintContext + 'static>(
+    inner: &Rc<RefCell<C>>,
     body: &str,
     sync: &Rc<RefCell<WebSyncClient>>,
     last_selection_key: &Rc<RefCell<Option<String>>>,
@@ -148,7 +149,7 @@ fn apply_document_response(
     let applied = sync
         .borrow_mut()
         .sync(body, |doc, _version| {
-            inner_ref.host.replace_document(doc);
+            inner_ref.host_mut().replace_document(doc);
             inner_ref.repaint().is_ok()
         })
         .unwrap_or(false);
@@ -156,7 +157,7 @@ fn apply_document_response(
         // Baseline = OUR serialization of the just-applied document, so the
         // push tick compares apples to apples (serde normalization differs
         // from the daemon's wire bytes).
-        if let Ok(json) = serde_json::to_string(&inner_ref.host.editor_state().doc) {
+        if let Ok(json) = serde_json::to_string(&inner_ref.host().editor_state().doc) {
             sync.borrow_mut().note_applied_snapshot(&json);
         }
         *last_selection_key.borrow_mut() = None;
@@ -166,8 +167,8 @@ fn apply_document_response(
 /// Serialize + push the local document when it changed since the last
 /// applied/pushed baseline. Never pushes before the first daemon apply
 /// (daemon authority — see the module docs).
-fn push_document_if_changed(
-    inner: &Rc<RefCell<Inner>>,
+fn push_document_if_changed<C: RepaintContext + 'static>(
+    inner: &Rc<RefCell<C>>,
     base: &str,
     sync: &Rc<RefCell<WebSyncClient>>,
     push_busy: &Rc<Cell<bool>>,
@@ -184,10 +185,10 @@ fn push_document_if_changed(
         // Cheap gate: only serialize when the host flagged a possible change
         // since the last tick (a conservative superset of document edits; the
         // hash check below absorbs the false positives).
-        if !b.host.take_doc_sync_dirty() {
+        if !b.host_mut().take_doc_sync_dirty() {
             return;
         }
-        let Ok(json) = serde_json::to_string(&b.host.editor_state().doc) else {
+        let Ok(json) = serde_json::to_string(&b.host().editor_state().doc) else {
             return;
         };
         json
@@ -236,14 +237,14 @@ fn push_document_if_changed(
 /// POST the selection to the daemon when it changed since the last sample
 /// (TS pushes `{selectedIds, activePageId}` debounced 300 ms; this samples on
 /// the 400 ms tick). Fire-and-forget like the TS fetch().catch(() => {}).
-fn push_selection_if_changed(
-    inner: &Rc<RefCell<Inner>>,
+fn push_selection_if_changed<C: RepaintContext + 'static>(
+    inner: &Rc<RefCell<C>>,
     base: &str,
     last_selection_key: &Rc<RefCell<Option<String>>>,
 ) {
     let (key, body) = {
         let b = inner.borrow();
-        let state = b.host.editor_state();
+        let state = b.host().editor_state();
         (
             web_sync::selection_sync_key(state),
             web_sync::selection_push_body(state),

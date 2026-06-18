@@ -35,10 +35,7 @@
 //! Functions that pull in `op_editor_ui::widgets::*` MUST live
 //! in this file (per spec §1.4). Phase B4 boundary check enforces.
 
-use op_editor_ui::widgets::{
-    LayoutCx, LocalePicker, Toolbar, TopBar, Widget, LOCALE_PICKER_WIDTH, TOOLBAR_WIDTH,
-    TOP_BAR_HEIGHT,
-};
+use op_editor_ui::widgets::TOP_BAR_HEIGHT;
 use op_editor_ui::{Point2D, Rect, Theme};
 
 mod a11y_bridge;
@@ -58,12 +55,12 @@ mod ai_chat_geometry_tests;
 mod blur_inputs;
 #[cfg(test)]
 mod blur_inputs_tests;
-mod boolean_ops;
 #[cfg(test)]
 mod boolean_toolbar_tests;
 mod chat_design_apply;
 #[cfg(test)]
 mod chat_design_apply_tests;
+mod chat_design_hover;
 #[cfg(test)]
 mod chat_design_hover_tests;
 mod chat_model_picker_caret;
@@ -84,17 +81,27 @@ mod design_md_press_tests;
 pub(crate) mod icon_ingest;
 // Browser file-IO ingestion (Open / Figma import / clipboard paste)
 // — needs the codegen-gated document-pipeline deps (jian-ops-schema).
-#[cfg(feature = "codegen")]
+#[cfg(feature = "canvaskit")]
 mod file_ingest;
+mod geometry;
+mod group_ops;
+mod history_guard;
 mod icon_picker_press;
-#[cfg(all(test, feature = "codegen"))]
+#[cfg(all(test, feature = "canvaskit"))]
 mod io_tests;
 mod keyboard;
 mod keyboard_edit_ops;
 mod keyboard_settings_commit;
+#[cfg(test)]
+mod keyboard_tests;
 mod keyboard_text_inputs;
 #[cfg(test)]
+mod layer_context_history_tests;
+#[cfg(test)]
+mod layer_panel_rename_tests;
+#[cfg(test)]
 mod locale_picker_scroll_tests;
+mod node_drag;
 mod overlay_cursor;
 mod overlay_keys;
 #[cfg(test)]
@@ -103,6 +110,11 @@ mod overlay_rects;
 mod paint;
 #[cfg(test)]
 mod paint_caret_tests;
+#[cfg(test)]
+mod pan_tests;
+mod pen_press;
+#[cfg(test)]
+mod pen_press_tests;
 mod press;
 mod property_dispatch;
 mod property_focus_press;
@@ -113,20 +125,30 @@ mod property_input_tests;
 #[cfg(test)]
 mod property_panel_press_tests;
 mod release_input;
+mod resize_drag;
+#[cfg(test)]
+mod resize_drag_tests;
 mod scroll;
 mod settings_caret;
 #[cfg(test)]
 mod settings_caret_tests;
+mod shape_create;
+#[cfg(test)]
+mod shape_create_tests;
 mod shape_picker_press;
+mod text_edit_caret;
 #[cfg(test)]
 mod theme_tests;
 mod toolbar_actions;
+#[cfg(test)]
+mod topbar_hover_tests;
 mod variables_panel_commit;
 mod variables_panel_geometry;
 mod variables_panel_press;
 mod variables_panel_rows;
 #[cfg(test)]
 mod variables_panel_tests;
+mod web_fonts;
 
 pub(in crate::widget_host) const TOOLBAR_INSET_X: f32 = 12.0;
 pub(in crate::widget_host) const TOOLBAR_INSET_Y: f32 = 12.0;
@@ -152,10 +174,14 @@ pub struct WidgetHost {
     /// consumed by the 2 s document-push tick instead of the paint pass
     /// (a conservative superset of document edits — the push path's
     /// content-hash check absorbs UI-only false positives).
-    #[cfg(feature = "live-sync")]
+    #[cfg(feature = "canvaskit")]
     doc_sync_dirty: bool,
     pub(in crate::widget_host) theme: Theme,
     drag: Option<DragState>,
+    /// True while Space is held and no text input owns the keyboard.
+    /// Mirrors native/TS transient pan mode: canvas presses pan even
+    /// when the active tool is Select or a creation tool.
+    space_pan: bool,
     chat_drag: Option<ChatDragState>,
     /// Active image-fill adjustment slider drag in the floating
     /// property popover.
@@ -166,6 +192,13 @@ pub struct WidgetHost {
     chat_input_selection_drag: Option<ChatInputSelectionDragState>,
     /// Active chat transcript text selection drag.
     chat_text_selection_drag: Option<ChatTextSelectionDragState>,
+    /// Active shape-create drag — set when pressing empty canvas
+    /// with a shape / frame / text tool selected.
+    pub(in crate::widget_host) create_drag: Option<shape_create::CreateDragState>,
+    /// Active path-anchor / bezier-handle drag. Mirrors the native
+    /// host so Select-tool path editing keeps the same no-snap and
+    /// history-on-release behavior.
+    pub(in crate::widget_host) path_anchor_drag: Option<PathAnchorDragState>,
     /// Active marquee rect-select drag. Mirrors the native host —
     /// drag a rect on empty canvas with the Select tool, every
     /// intersecting top-level node joins (or extends) the
@@ -187,6 +220,15 @@ pub struct WidgetHost {
     /// written into `editor_ui.variables_panel_size`.
     pub(in crate::widget_host) variables_resize:
         Option<op_editor_ui::widgets::variables_panel::VariablesResizeEdge>,
+    /// Active selection-handle resize drag. Mirrors native
+    /// `handle_drag`: pressing one of the 8 selection grips captures
+    /// the starting bounds and move writes `set_selected_bounds`.
+    pub(in crate::widget_host) handle_drag: Option<resize_drag::HandleDragState>,
+    /// Active Select-tool node move drag. Mirrors native
+    /// `node_drag`: press a selected canvas node, translate the
+    /// selection live on cursor move, then end the transient state on
+    /// release.
+    pub(in crate::widget_host) node_drag: Option<node_drag::NodeDragState>,
     /// Counter for minting fresh `NodeId`s when the user duplicates
     /// a node. Bumped past the highest sample id so new + sample
     /// nodes never collide on the same key. Matches the native
@@ -212,22 +254,35 @@ impl WidgetHost {
         self.now_ms = now_ms;
     }
 
+    // Caret-blink / animation scheduling — tested + ready to wire, but the
+    // CanvasKit mount repaints on events rather than a blink-deadline pump.
+    #[allow(dead_code)]
     pub fn caret_animation_active(&self) -> bool {
         self.editor_state.active_text_input().is_some()
+    }
+
+    #[allow(dead_code)]
+    pub fn next_animation_deadline_ms(&self) -> Option<u64> {
+        let mut next = op_editor_core::agent_indicators::next_reveal_deadline_ms(self.now_ms);
+        if let Some(input) = self.editor_state.active_text_input() {
+            let deadline = input.next_blink_flip_ms(self.now_ms);
+            next = Some(next.map_or(deadline, |current| current.min(deadline)));
+        }
+        next
     }
 
     /// Borrow the canonical-model editor state — the host's single source of
     /// truth. Mirrors the native host's accessor; used by the web codegen
     /// session (`codegen_web`) to read the selection + codegen state, and by
     /// the live-sync glue to serialize the document + selection for pushes.
-    #[cfg(any(feature = "codegen", feature = "live-sync"))]
+    #[cfg(feature = "canvaskit")]
     pub fn editor_state(&self) -> &op_editor_core::EditorState {
         &self.editor_state
     }
 
     /// Take the live-sync push gate (see the field docs) — `true` when any
     /// mutation may have touched the document since the last take.
-    #[cfg(feature = "live-sync")]
+    #[cfg(feature = "canvaskit")]
     pub fn take_doc_sync_dirty(&mut self) -> bool {
         std::mem::take(&mut self.doc_sync_dirty)
     }
@@ -238,7 +293,7 @@ impl WidgetHost {
     /// progress into `editor_state.codegen`.
     ///
     /// [`mark_editor_state_dirty`]: WidgetHost::mark_editor_state_dirty
-    #[cfg(feature = "codegen")]
+    #[cfg(feature = "canvaskit")]
     pub fn editor_state_mut(&mut self) -> &mut op_editor_core::EditorState {
         &mut self.editor_state
     }
@@ -246,10 +301,10 @@ impl WidgetHost {
     /// Public dirty-flag — mirrors the native host. Web codegen mutates
     /// `editor_state` through `editor_state_mut()` and calls this so the next
     /// paint re-derives the layout scene.
-    #[cfg(feature = "codegen")]
+    #[cfg(feature = "canvaskit")]
     pub fn mark_editor_state_dirty(&mut self) {
         self.editor_state_dirty = true;
-        #[cfg(feature = "live-sync")]
+        #[cfg(feature = "canvaskit")]
         {
             self.doc_sync_dirty = true;
         }
@@ -324,6 +379,25 @@ pub(in crate::widget_host) struct LayerDragState {
     pub(in crate::widget_host) active: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(in crate::widget_host) enum AnchorDragTarget {
+    Anchor,
+    Handle(op_editor_core::pen::PathHandleSide),
+}
+
+#[derive(Debug, Clone)]
+pub(in crate::widget_host) struct PathAnchorDragState {
+    pub(in crate::widget_host) node_id: op_editor_core::NodeId,
+    pub(in crate::widget_host) anchor_index: usize,
+    pub(in crate::widget_host) target: AnchorDragTarget,
+    pub(in crate::widget_host) anchor_doc: op_editor_ui::Point2D,
+    pub(in crate::widget_host) start_doc: op_editor_ui::Point2D,
+    pub(in crate::widget_host) grab_offset: Option<op_editor_ui::Point2D>,
+    pub(in crate::widget_host) shift: bool,
+    pub(in crate::widget_host) moved: bool,
+    pub(in crate::widget_host) pre_drag_snapshot: op_editor_core::EditorSnapshot,
+}
+
 impl WidgetHost {
     pub fn new() -> Self {
         // A fresh launch opens with a single empty starter Frame —
@@ -336,21 +410,26 @@ impl WidgetHost {
             editor_state,
             layout_scene,
             editor_state_dirty: false,
-            #[cfg(feature = "live-sync")]
+            #[cfg(feature = "canvaskit")]
             doc_sync_dirty: false,
             theme: Theme::dark(),
             drag: None,
+            space_pan: false,
             chat_drag: None,
             image_adjustment_drag: None,
             code_selection_drag: None,
             chat_input_selection_drag: None,
             chat_text_selection_drag: None,
+            create_drag: None,
+            path_anchor_drag: None,
             marquee_drag: None,
             layer_drag: None,
             design_md_drag: None,
             component_browser_drag: None,
             icon_picker_drag: None,
             variables_resize: None,
+            handle_drag: None,
+            node_drag: None,
             next_node_id: 100,
             shift_held: false,
             now_ms: 0,
@@ -365,6 +444,10 @@ impl WidgetHost {
     /// and calls this just before dispatch.
     pub fn set_modifier_shift(&mut self, held: bool) {
         self.shift_held = held;
+    }
+
+    pub fn set_space_pan(&mut self, held: bool) {
+        self.space_pan = held;
     }
 
     /// Refresh host-level theme tokens from the canonical editor UI
@@ -391,36 +474,10 @@ impl WidgetHost {
     /// `self.editor_state`.
     pub(in crate::widget_host) fn mark_dirty(&mut self) {
         self.editor_state_dirty = true;
-        #[cfg(feature = "live-sync")]
+        #[cfg(feature = "canvaskit")]
         {
             self.doc_sync_dirty = true;
         }
-    }
-
-    pub(in crate::widget_host) fn canvas_region(
-        &self,
-        viewport_w: f32,
-        viewport_h: f32,
-    ) -> (f32, f32, f32, f32) {
-        let canvas_left = if self.editor_state.editor_ui.sidebar_open {
-            self.editor_state.editor_ui.layer_panel_width
-        } else {
-            0.0
-        };
-        let rail_occupied = self.editor_state.right_rail_visible();
-        let canvas_right = if rail_occupied {
-            viewport_w - self.editor_state.editor_ui.property_panel_width
-        } else {
-            viewport_w
-        };
-        let canvas_w = (canvas_right - canvas_left).max(0.0);
-        let canvas_h = (viewport_h - TOP_BAR_HEIGHT).max(0.0);
-        (canvas_left, TOP_BAR_HEIGHT, canvas_w, canvas_h)
-    }
-
-    fn over_canvas(&self, x: f32, y: f32, viewport_w: f32, viewport_h: f32) -> bool {
-        let (cx0, cy0, cw, ch) = self.canvas_region(viewport_w, viewport_h);
-        x >= cx0 && x <= cx0 + cw && y >= cy0 && y <= cy0 + ch
     }
 
     pub(in crate::widget_host) fn code_text_offset_at_screen(
@@ -622,7 +679,7 @@ impl WidgetHost {
         if self.try_scroll_property_panel(x, y, delta_y, viewport_width, viewport_height) {
             return true;
         }
-        if self.try_scroll_layer_panel(x, y, delta_y, viewport_height) {
+        if self.try_scroll_layer_panel(x, y, 0.0, delta_y, viewport_height) {
             return true;
         }
         if !self.over_canvas(x, y, viewport_width, viewport_height) {
@@ -633,7 +690,10 @@ impl WidgetHost {
         let (cx0, cy0, _cw, _ch) = self.canvas_region(viewport_width, viewport_height);
         let cursor = Point2D::new(x - cx0, y - cy0);
         self.editor_state.viewport.zoom_at(cursor, delta_y);
-        self.mark_dirty();
+        // A wheel zoom only changes the viewport (camera); the document-space
+        // layout scene is unchanged, so keep the layout cache intact — no
+        // `mark_dirty()` (matches native `scroll.rs`). The wheel listener
+        // repaints off this `true` return.
         true
     }
 
@@ -653,7 +713,19 @@ impl WidgetHost {
     ) -> bool {
         self.last_viewport_w = viewport_width;
         self.last_viewport_h = viewport_height;
+        if self.try_scroll_variables_panel(x, y, dy, viewport_width, viewport_height) {
+            return true;
+        }
+        if self.try_scroll_locale_picker(x, y, dy, viewport_width) {
+            return true;
+        }
         if self.try_scroll_chat_checklist(x, y, dy, viewport_width, viewport_height) {
+            return true;
+        }
+        if self.try_scroll_property_panel(x, y, dy, viewport_width, viewport_height) {
+            return true;
+        }
+        if self.try_scroll_layer_panel(x, y, dx, dy, viewport_height) {
             return true;
         }
         if !self.over_canvas(x, y, viewport_width, viewport_height) {
@@ -663,13 +735,35 @@ impl WidgetHost {
             return false;
         }
         self.editor_state.viewport.pan(dx, dy);
-        self.mark_dirty();
+        // Trackpad pan only translates the viewport; keep the layout cache
+        // intact — no `mark_dirty()` (matches the canvas pan-drag + native).
+        true
+    }
+
+    pub fn apply_pan_press(
+        &mut self,
+        x: f32,
+        y: f32,
+        viewport_width: f32,
+        viewport_height: f32,
+    ) -> bool {
+        self.last_viewport_w = viewport_width;
+        self.last_viewport_h = viewport_height;
+        if !self.over_canvas(x, y, viewport_width, viewport_height) {
+            return false;
+        }
+        self.drag = Some(DragState {
+            last_x: x,
+            last_y: y,
+        });
         true
     }
 
     /// Update `editor_ui.hovered_layer_id` from the cursor.
     /// Returns true if hover state changed (caller should
-    /// repaint). Mirrors the native host.
+    /// repaint). Mirrors the native host. (Tested + ready to wire; the
+    /// CanvasKit mousemove doesn't drive layer-row hover yet.)
+    #[allow(dead_code)]
     pub fn update_layer_hover(&mut self, x: f32, y: f32, viewport_h: f32) -> bool {
         use op_editor_ui::widgets::{LayerPanel, LayerPanelHit, TOP_BAR_HEIGHT};
         let sidebar_open = self.editor_state.editor_ui.sidebar_open;
@@ -722,71 +816,6 @@ impl WidgetHost {
     // `apply_escape` / `apply_ime` / `apply_key`) live in
     // `widget_host/keyboard.rs` — split out to keep this spine
     // file under the 800-line ceiling.
-
-    pub(in crate::widget_host) fn locale_picker_rect(&self, viewport_w: f32) -> Rect {
-        let top_bar_rect = Rect {
-            origin: Point2D::new(0.0, 0.0),
-            size: Point2D::new(viewport_w, TOP_BAR_HEIGHT),
-        };
-        let globe = TopBar::globe_rect(top_bar_rect);
-        let panel_h = LocalePicker::panel_height();
-        let x = (globe.origin.x + globe.size.x / 2.0 - LOCALE_PICKER_WIDTH / 2.0)
-            .max(8.0)
-            .min(viewport_w - LOCALE_PICKER_WIDTH - 8.0);
-        let y = globe.origin.y + globe.size.y + 6.0;
-        Rect {
-            origin: Point2D::new(x, y),
-            size: Point2D::new(LOCALE_PICKER_WIDTH, panel_h),
-        }
-    }
-
-    pub(in crate::widget_host) fn layer_panel_rect(&self, viewport_h: f32) -> Rect {
-        Rect {
-            origin: Point2D::new(0.0, TOP_BAR_HEIGHT),
-            size: Point2D::new(
-                self.editor_state.editor_ui.layer_panel_width,
-                (viewport_h - TOP_BAR_HEIGHT).max(0.0),
-            ),
-        }
-    }
-
-    fn toolbar_rect(&mut self, viewport_w: f32) -> Rect {
-        // Anchor follows canvas_region (sidebar-collapse aware) so
-        // hit-test matches paint regardless of sidebar state.
-        let (cx0, _cy0, _cw, _ch) = self.canvas_region(viewport_w, f32::INFINITY);
-        self.refresh_layout_scene();
-        let toolbar = Toolbar::for_editor(&self.editor_state);
-        let h = toolbar
-            .layout(&LayoutCx {
-                available_width: TOOLBAR_WIDTH,
-                dpi: 1.0,
-            })
-            .rect
-            .size
-            .y;
-        Rect {
-            origin: Point2D::new(cx0 + TOOLBAR_INSET_X, TOP_BAR_HEIGHT + TOOLBAR_INSET_Y),
-            size: Point2D::new(TOOLBAR_WIDTH, h),
-        }
-    }
-
-    /// Per-button hover wash on the floating toolbar. Mirrors
-    /// `op_host_native::widget_host::geometry::update_toolbar_hover`.
-    /// Returns `true` if the hover state changed.
-    fn update_toolbar_hover(&mut self, x: f32, y: f32) -> bool {
-        let rect = self.toolbar_rect(self.last_viewport_w);
-        let toolbar = Toolbar::for_editor(&self.editor_state);
-        let new_hover = toolbar
-            .hit_test(rect, Point2D::new(x, y))
-            .map(op_editor_ui::widgets::editor_state_ext::toolbar_hover);
-        if new_hover != self.editor_state.editor_ui.toolbar_hover {
-            self.editor_state.editor_ui.toolbar_hover = new_hover;
-            self.mark_dirty();
-            true
-        } else {
-            false
-        }
-    }
 
     // `paint` lives in `widget_host/paint.rs` — split out to keep
     // this file under the 800-line ceiling.

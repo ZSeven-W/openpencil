@@ -320,7 +320,7 @@ pub(crate) fn parse_serve_web_args<I: Iterator<Item = String>>(
             host = value.to_string();
         } else if path.is_none() {
             // The document path is optional — without it the daemon starts
-            // on an empty document (the web shell can then sync one in).
+            // from the same starter document the web shell paints locally.
             path = Some(PathBuf::from(arg));
         } else {
             return Err(format!("unexpected arg {arg:?}"));
@@ -332,16 +332,20 @@ pub(crate) fn parse_serve_web_args<I: Iterator<Item = String>>(
     Ok((port, path, host))
 }
 
+pub(crate) fn startup_editor_for_web_canvas(path: Option<PathBuf>) -> Result<EditorState, String> {
+    match path {
+        Some(p) => crate::mcp_serve::load_editor_state(&p),
+        None => Ok(EditorState::starter()),
+    }
+}
+
 /// Run the web-canvas daemon on `host:port` (default `127.0.0.1`), backed by
-/// the document at `path` (or an empty document when `None`). Serves the
+/// the document at `path` (or the starter document when `None`). Serves the
 /// static host page + bundle, the whole-document REST sync + health routes,
 /// and falls through to the JSON-RPC `/mcp` tool dispatch (applied against
 /// the in-memory document). Blocks until a token-authed shutdown request.
 pub fn run_web_canvas(path: Option<PathBuf>, port: u16, host: &str) -> Result<(), String> {
-    let editor = match path {
-        Some(p) => crate::mcp_serve::load_editor_state(&p)?,
-        None => EditorState::new(),
-    };
+    let editor = startup_editor_for_web_canvas(path)?;
     let listener =
         TcpListener::bind((host, port)).map_err(|e| format!("bind {host}:{port}: {e}"))?;
     let bound = listener.local_addr().map(|a| a.port()).unwrap_or(port);
