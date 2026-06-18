@@ -178,6 +178,34 @@ fn canvaskit_browser_text_fallback_does_not_require_canvas_paint() {
 }
 
 #[test]
+fn canvaskit_paint_style_is_guarded_before_set_style() {
+    let source = std::fs::read_to_string(format!(
+        "{}/src/op_ck_bridge.js",
+        env!("CARGO_MANIFEST_DIR")
+    ))
+    .expect("CanvasKit bridge source is readable");
+
+    for marker in [
+        "const setPaintStyle = (paint, style) =>",
+        "setPaintStyle(p, CK.PaintStyle.Fill)",
+        "setPaintStyle(p, CK.PaintStyle.Stroke)",
+        "setPaintStyle(p, CK.PaintStyle.StrokeAndFill)",
+    ] {
+        assert!(
+            source.contains(marker),
+            "CanvasKit bridge must preserve `{marker}` so optional PaintStyle enums cannot throw during repaint"
+        );
+    }
+
+    assert!(
+        !source.contains("p.setStyle(CK.PaintStyle.Fill)")
+            && !source.contains("p.setStyle(CK.PaintStyle.Stroke);")
+            && !source.contains("p.setStyle(CK.PaintStyle.StrokeAndFill)"),
+        "CanvasKit bridge must guard PaintStyle before setStyle to avoid leaving the web host stuck in a borrowed repaint"
+    );
+}
+
+#[test]
 fn canvaskit_bridge_registers_browser_system_fonts() {
     let source = std::fs::read_to_string(format!(
         "{}/src/op_ck_bridge.js",
