@@ -126,6 +126,7 @@ export async function opCkInit(canvasId) {
   const strokePaint = (r, g, b, a, w) => { const p = new CK.Paint(); p.setColor(col(r, g, b, a)); p.setAntiAlias(true); p.setStyle(CK.PaintStyle.Stroke); p.setStrokeWidth(w); p.setStrokeCap(CK.StrokeCap.Round); p.setStrokeJoin(CK.StrokeJoin.Round); return p; };
   const browserTextFont = (sz, weight, italic) => `${italic ? 'italic ' : ''}${Math.max(100, Math.min(900, Math.round(weight || 400)))} ${Math.max(1, sz)}px ${browserTextFontStack}`;
   const shouldUseBrowserTextFallback = (_t, _emojiRun) => Boolean(browserTextCtx);
+  const allSegmentsUseBrowserTextFallback = (segs) => segs.length > 0 && segs.every((seg) => shouldUseBrowserTextFallback(seg.text, seg.emoji));
   const browserTextMeasure = (t, sz, weight = 400, italic = false) => {
     if (!browserTextCtx) return 0;
     browserTextCtx.font = browserTextFont(sz, weight, italic);
@@ -354,13 +355,22 @@ export async function opCkInit(canvasId) {
     },
 
     drawText(t, x, y, sz, weight, italic, r, g, b, a) {
+      const segs = segments(t);
+      if (segs.length === 0) return;
+      if (allSegmentsUseBrowserTextFallback(segs)) {
+        let cx = x;
+        for (const seg of segs) {
+          cx += drawBrowserText(seg.text, cx, y, sz, weight, italic, r, g, b, a);
+        }
+        return;
+      }
       const p = fillPaint(r, g, b, a);
       if (weight >= 600 && isPaintStyle(CK.PaintStyle.StrokeAndFill)) {
         p.setStyle(CK.PaintStyle.StrokeAndFill);
         p.setStrokeWidth(sz * 0.06);
       }
       let cx = x;
-      for (const seg of segments(t)) {
+      for (const seg of segs) {
         if (shouldUseBrowserTextFallback(seg.text, seg.emoji)) {
           cx += drawBrowserText(seg.text, cx, y, sz, weight, italic, r, g, b, a);
           continue;
