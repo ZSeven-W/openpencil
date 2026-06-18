@@ -8,7 +8,11 @@
 use std::io::Write;
 use std::sync::{Arc, Mutex};
 
-use op_ai::chat_provider::{ChatDelta, ChatHistoryRole, ChatProvider, ChatRequest, StopReason};
+use base64::Engine as _;
+use op_ai::chat_provider::{
+    ChatAttachment, ChatDelta, ChatHistoryRole, ChatProvider, ChatRequest, StopReason,
+};
+use op_editor_core::chat::MAX_ATTACHMENT_BYTES;
 use op_editor_core::{EditorCommand, EditorState, NodeId};
 use op_orchestrator::{
     AbortFlag, DesignRequest, DocSink, Orchestrator, Progress, SkippedScreenshotProvider,
@@ -31,6 +35,7 @@ pub(crate) struct WebStandardTurnRequest {
     active_page_id: Option<String>,
     agent_team_size: Option<u32>,
     history: Vec<(ChatHistoryRole, String)>,
+    attachments: Vec<ChatAttachment>,
 }
 
 pub(crate) fn parse_standard_turn_body(body: &str) -> Option<WebStandardTurnRequest> {
@@ -59,6 +64,7 @@ pub(crate) fn parse_standard_turn_body(body: &str) -> Option<WebStandardTurnRequ
         .and_then(Value::as_u64)
         .map(|n| (n as u32).clamp(1, 6));
     let history = parse_chat_history(obj.get("history"));
+    let attachments = parse_chat_attachments(obj.get("attachments"));
     Some(WebStandardTurnRequest {
         ai,
         document_json,
@@ -66,6 +72,7 @@ pub(crate) fn parse_standard_turn_body(body: &str) -> Option<WebStandardTurnRequ
         active_page_id,
         agent_team_size,
         history,
+        attachments,
     })
 }
 
@@ -86,6 +93,43 @@ fn parse_chat_history(value: Option<&Value>) -> Vec<(ChatHistoryRole, String)> {
                 return None;
             }
             Some((role, content))
+        })
+        .collect()
+}
+
+fn parse_chat_attachments(value: Option<&Value>) -> Vec<ChatAttachment> {
+    value
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|entry| {
+            let obj = entry.as_object()?;
+            let name = obj
+                .get("name")
+                .and_then(Value::as_str)
+                .filter(|s| !s.trim().is_empty())?
+                .to_string();
+            let media_type = obj
+                .get("media_type")
+                .or_else(|| obj.get("mediaType"))
+                .and_then(Value::as_str)
+                .filter(|s| !s.trim().is_empty())?
+                .to_string();
+            let encoded = obj
+                .get("data_base64")
+                .or_else(|| obj.get("dataBase64"))
+                .and_then(Value::as_str)?;
+            let data = base64::engine::general_purpose::STANDARD
+                .decode(encoded)
+                .ok()?;
+            if data.len() > MAX_ATTACHMENT_BYTES {
+                return None;
+            }
+            Some(ChatAttachment {
+                name,
+                media_type,
+                data,
+            })
         })
         .collect()
 }
@@ -260,7 +304,7 @@ fn stream_chat_route<W: Write>(
         max_output_tokens: req.ai.max_output_tokens,
         thinking: req.ai.thinking,
         effort: req.ai.effort,
-        attachments: vec![],
+        attachments: req.attachments.clone(),
         model,
     };
     for delta in provider.send(chat_req) {
@@ -581,6 +625,18 @@ mod tests {
                 { "role": "assistant", "content": "previous answer" },
                 { "role": "system", "content": "ignored" },
                 { "role": "user", "content": "" }
+            ],
+            "attachments": [
+                {
+                    "name": "a.png",
+                    "media_type": "image/png",
+                    "data_base64": "AQID"
+                },
+                {
+                    "name": "bad.txt",
+                    "media_type": "text/plain",
+                    "data_base64": "not base64"
+                }
             ]
         })
         .to_string();
@@ -606,14 +662,23 @@ mod tests {
                 ),
             ]
         );
+        assert_eq!(req.attachments.len(), 1);
+        assert_eq!(req.attachments[0].name, "a.png");
+        assert_eq!(req.attachments[0].media_type, "image/png");
+        assert_eq!(req.attachments[0].data, vec![1, 2, 3]);
     }
 
     #[test]
-    fn stream_chat_route_passes_history_to_provider() {
+    fn stream_chat_route_passes_history_and_attachments_to_provider() {
         let history = vec![
             (ChatHistoryRole::User, "previous request".to_string()),
             (ChatHistoryRole::Assistant, "previous answer".to_string()),
         ];
+        let attachments = vec![op_ai::chat_provider::ChatAttachment {
+            name: "a.png".to_string(),
+            media_type: "image/png".to_string(),
+            data: vec![1, 2, 3],
+        }];
         let req = WebStandardTurnRequest {
             ai: AiStreamRequest {
                 model: "claude-sonnet".into(),
@@ -628,6 +693,7 @@ mod tests {
             active_page_id: None,
             agent_team_size: None,
             history: history.clone(),
+            attachments: attachments.clone(),
         };
         let seen = Arc::new(Mutex::new(None));
         let provider = CaptureProvider { seen: seen.clone() };
@@ -643,6 +709,7 @@ mod tests {
             .expect("provider saw request");
         assert_eq!(captured.user_message, "current request");
         assert_eq!(captured.history, history);
+        assert_eq!(captured.attachments, attachments);
     }
 
     #[test]

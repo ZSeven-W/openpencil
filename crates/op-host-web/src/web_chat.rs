@@ -20,14 +20,14 @@
 //!   slot makes the old pump (and any late events) die silently.
 //!
 //! Wire notes: sends go through `/api/ai/standard` with the selected model,
-//! current user message, trimmed prior text history, and the current document /
-//! selection snapshot. Staged image attachments are still transcript-only on
-//! web; the daemon wire has no attachment payload yet.
+//! current user message, trimmed prior text history, current-turn attachments,
+//! and the current document / selection snapshot.
 
 use std::cell::{Cell, RefCell};
 use std::collections::VecDeque;
 use std::rc::Rc;
 
+use base64::Engine as _;
 use op_ai::chat_history::{trim_chat_history, DEFAULT_MAX_CHARS, DEFAULT_MAX_MESSAGES};
 use op_editor_core::chat::{AgentProvider, ChatState, ModelEntry};
 use op_editor_core::EditorState;
@@ -194,8 +194,9 @@ pub(crate) struct PreparedTurn {
 /// selected model wire id (or `"default"` — the daemon then picks its
 /// configured provider), the user message, per-turn knobs, plus a fresh
 /// document/selection snapshot so daemon-side planning sees the same canvas
-/// the browser is showing. Clears staged attachments (begin_send already
-/// copied images into the user message; the wire has no attachment field yet).
+/// the browser is showing. Clears staged attachments after copying them into
+/// the request; `begin_send` already copied image previews into the user
+/// transcript bubble.
 pub(crate) fn prepare_turn(state: &mut EditorState) -> Option<PreparedTurn> {
     let user_text = state.chat.pending_send.take()?;
     let model = state
@@ -220,6 +221,18 @@ pub(crate) fn prepare_turn(state: &mut EditorState) -> Option<PreparedTurn> {
             })
         })
         .collect();
+    let attachments_json: Vec<serde_json::Value> = state
+        .chat
+        .pending_attachments
+        .iter()
+        .map(|att| {
+            serde_json::json!({
+                "name": att.name.as_str(),
+                "media_type": att.media_type.as_str(),
+                "data_base64": base64::engine::general_purpose::STANDARD.encode(&att.data),
+            })
+        })
+        .collect();
     state.chat.pending_attachments.clear();
     let selected_ids: Vec<&str> = state.selection.set.iter().map(|id| id.as_str()).collect();
     let active_page_id = state
@@ -239,6 +252,7 @@ pub(crate) fn prepare_turn(state: &mut EditorState) -> Option<PreparedTurn> {
         "effort": effort,
         "agent_team_size": agent_team_size,
         "history": history_json,
+        "attachments": attachments_json,
         "document": state.doc,
         "selectedIds": selected_ids,
         "activePageId": active_page_id,
@@ -472,6 +486,32 @@ mod tests {
             });
         assert!(state.chat.begin_send());
         let _ = prepare_turn(&mut state).expect("send was pending");
+        assert!(state.chat.pending_attachments.is_empty());
+    }
+
+    #[test]
+    fn prepare_turn_carries_staged_attachments_on_the_wire() {
+        let mut state = EditorState::new();
+        state.chat.set_input_text("look at this");
+        state
+            .chat
+            .pending_attachments
+            .push(op_editor_core::chat::ChatAttachment {
+                name: "a.png".into(),
+                media_type: "image/png".into(),
+                data: vec![1, 2, 3],
+            });
+        assert!(state.chat.begin_send());
+
+        let prepared = prepare_turn(&mut state).expect("send was pending");
+        let body: serde_json::Value =
+            serde_json::from_str(&prepared.body_json).expect("body is JSON");
+        let attachments = body["attachments"].as_array().expect("attachments array");
+
+        assert_eq!(attachments.len(), 1, "{attachments:?}");
+        assert_eq!(attachments[0]["name"], "a.png");
+        assert_eq!(attachments[0]["media_type"], "image/png");
+        assert_eq!(attachments[0]["data_base64"], "AQID");
         assert!(state.chat.pending_attachments.is_empty());
     }
 
