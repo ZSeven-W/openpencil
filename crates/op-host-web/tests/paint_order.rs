@@ -118,7 +118,7 @@ fn canvaskit_frame_resets_save_stack_before_flush() {
 }
 
 #[test]
-fn canvaskit_text_uses_cjk_and_emoji_typeface_fallbacks() {
+fn canvaskit_text_defaults_to_browser_system_font_fallback() {
     let source = std::fs::read_to_string(format!(
         "{}/src/op_ck_bridge.js",
         env!("CARGO_MANIFEST_DIR")
@@ -126,17 +126,17 @@ fn canvaskit_text_uses_cjk_and_emoji_typeface_fallbacks() {
     .expect("CanvasKit bridge source is readable");
 
     for marker in [
-        "const tfCjk",
-        "const tfEmoji",
         "const hasCjk",
         "const isEmojiCp",
         "const segments = (t)",
-        "tfFor(seg.text, seg.emoji)",
-        "new CK.Font(tfFor(seg.text, seg.emoji), sz)",
+        "const shouldUseBrowserTextFallback = (_t, _emojiRun) => Boolean(browserTextCtx);",
+        "drawBrowserText(seg.text, cx, y, sz, weight, italic, r, g, b, a)",
+        "browserTextMeasure(seg.text, sz)",
+        "CK.Typeface.GetDefault()",
     ] {
         assert!(
             source.contains(marker),
-            "CanvasKit text must preserve `{marker}` for CJK/emoji fallback rendering"
+            "CanvasKit text must preserve `{marker}` for browser/system font rendering"
         );
     }
 }
@@ -216,8 +216,8 @@ fn canvaskit_browser_text_fallback_covers_locale_scripts_and_emoji() {
         .find(|line| line.contains("const shouldUseBrowserTextFallback"))
         .expect("browser text fallback predicate exists");
     assert!(
-        fallback_line.contains("hasSystemFallbackText(t) && browserTextCtx"),
-        "browser text fallback should route non-ASCII text through browser system fonts"
+        fallback_line.contains("Boolean(browserTextCtx)"),
+        "browser text fallback should route text through browser system fonts by default"
     );
     assert!(
         !fallback_line.contains("!hasCjk(t)"),

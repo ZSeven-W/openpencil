@@ -21,9 +21,11 @@ function copyBytes(u8) {
   return u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength);
 }
 
-// Initialise CanvasKit on `canvasId`. `roboto` is the Latin UI font; `cjk` the
-// CJK fallback (may be empty). Returns a bridge object the Rust backend drives.
-export async function opCkInit(canvasId, roboto, cjk, emoji) {
+// Initialise CanvasKit on `canvasId`. Returns a bridge object the Rust backend
+// drives. Text is rasterized with browser/system fonts by default; the Rust
+// side can additionally register Local Font Access faces through
+// registerSystemFont().
+export async function opCkInit(canvasId) {
   await loadScript('/canvaskit/canvaskit.js');
   const CK = await CanvasKitInit({ locateFile: (f) => '/canvaskit/' + f });
   let surface = CK.MakeWebGLCanvasSurface(canvasId);
@@ -31,9 +33,6 @@ export async function opCkInit(canvasId, roboto, cjk, emoji) {
   let canvas = surface.getCanvas();
   const el = document.getElementById(canvasId);
 
-  const tfLatin = CK.Typeface.MakeFreeTypeFaceFromData(copyBytes(roboto));
-  const tfCjk = cjk && cjk.byteLength > 0 ? CK.Typeface.MakeFreeTypeFaceFromData(copyBytes(cjk)) : null;
-  const tfEmoji = emoji && emoji.byteLength > 0 ? CK.Typeface.MakeFreeTypeFaceFromData(copyBytes(emoji)) : null;
   const systemTypefaces = [];
   const systemTypefaceKeys = new Set();
   const coverageCache = new Map();
@@ -126,7 +125,7 @@ export async function opCkInit(canvasId, roboto, cjk, emoji) {
   const fillPaint = (r, g, b, a) => { const p = new CK.Paint(); p.setColor(col(r, g, b, a)); p.setAntiAlias(true); p.setStyle(CK.PaintStyle.Fill); return p; };
   const strokePaint = (r, g, b, a, w) => { const p = new CK.Paint(); p.setColor(col(r, g, b, a)); p.setAntiAlias(true); p.setStyle(CK.PaintStyle.Stroke); p.setStrokeWidth(w); p.setStrokeCap(CK.StrokeCap.Round); p.setStrokeJoin(CK.StrokeJoin.Round); return p; };
   const browserTextFont = (sz, weight, italic) => `${italic ? 'italic ' : ''}${Math.max(100, Math.min(900, Math.round(weight || 400)))} ${Math.max(1, sz)}px ${browserTextFontStack}`;
-  const shouldUseBrowserTextFallback = (t, _emojiRun) => hasSystemFallbackText(t) && browserTextCtx;
+  const shouldUseBrowserTextFallback = (_t, _emojiRun) => Boolean(browserTextCtx);
   const browserTextMeasure = (t, sz, weight = 400, italic = false) => {
     if (!browserTextCtx) return 0;
     browserTextCtx.font = browserTextFont(sz, weight, italic);
@@ -217,8 +216,7 @@ export async function opCkInit(canvasId, roboto, cjk, emoji) {
     }
     return null;
   };
-  const tfFor = (t, emojiRun) => systemTypefaceFor(t, emojiRun) || ((emojiRun && tfEmoji) ? tfEmoji : (tfCjk && hasCjk(t) ? tfCjk : tfLatin));
-  const fontFor = (t, sz) => new CK.Font(tfCjk && hasCjk(t) ? tfCjk : tfLatin, sz);
+  const tfFor = (t, emojiRun) => systemTypefaceFor(t, emojiRun) || CK.Typeface.GetDefault();
   const runWidth = (f, s) => { const ids = f.getGlyphIDs(s); return f.getGlyphWidths(ids).reduce((a, v) => a + v, 0); };
   const pathIsFinite = (bounds) => bounds && bounds.length >= 4 && bounds.every((v) => Number.isFinite(v));
   const fitPathToRect = (path, x, y, w, h) => {
