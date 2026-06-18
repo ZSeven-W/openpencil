@@ -155,9 +155,7 @@ pub fn stream_ai_response<W: Write>(
         thinking: req.thinking,
         effort: req.effort,
         attachments: vec![],
-        // The web proxy has no model-picker channel yet; the CLI /
-        // provider default applies.
-        model: None,
+        model: request_model_id(&req.model),
     };
     for delta in provider.send(chat_req) {
         out.write_all(delta_to_sse(&delta).as_bytes())?;
@@ -167,6 +165,15 @@ pub fn stream_ai_response<W: Write>(
         }
     }
     Ok(())
+}
+
+fn request_model_id(model: &str) -> Option<String> {
+    let model = model.trim();
+    if model.is_empty() || model == "default" {
+        None
+    } else {
+        Some(model.to_string())
+    }
 }
 
 /// Write the SSE header block — same shape as
@@ -333,6 +340,27 @@ fn provider_for_cli(provider: AgentProvider, chat_session: bool) -> Option<Box<d
 mod tests {
     use super::*;
     use op_ai::chat_provider::{EchoProvider, StopReason};
+    use std::sync::{Arc, Mutex};
+
+    struct CaptureModelProvider {
+        seen_model: Arc<Mutex<Option<Option<String>>>>,
+    }
+
+    impl ChatProvider for CaptureModelProvider {
+        fn provider_label(&self) -> &str {
+            "capture"
+        }
+
+        fn send(&self, request: ChatRequest) -> Box<dyn Iterator<Item = ChatDelta> + Send> {
+            *self.seen_model.lock().expect("seen model lock") = Some(request.model);
+            Box::new(
+                vec![ChatDelta::Done {
+                    stop_reason: StopReason::EndTurn,
+                }]
+                .into_iter(),
+            )
+        }
+    }
 
     #[test]
     fn parse_ai_stream_body_maps_full_body() {
@@ -445,6 +473,30 @@ mod tests {
         assert!(text.contains("Content-Type: text/event-stream"), "{text}");
         assert!(text.contains(r#"data: {"delta":"Hello"}"#), "{text}");
         assert!(text.contains(r#"data: {"done":true}"#), "{text}");
+    }
+
+    #[test]
+    fn stream_ai_response_forwards_requested_model_to_provider() {
+        let req = AiStreamRequest {
+            model: "claude-sonnet-4-6".into(),
+            skills: vec![],
+            user: "hi".into(),
+            max_output_tokens: 128,
+            thinking: ThinkingMode::Adaptive,
+            effort: EffortLevel::Low,
+        };
+        let seen_model = Arc::new(Mutex::new(None));
+        let provider = CaptureModelProvider {
+            seen_model: seen_model.clone(),
+        };
+        let mut out = Vec::<u8>::new();
+
+        stream_ai_response(&mut out, req, &provider).expect("stream");
+
+        assert_eq!(
+            seen_model.lock().expect("seen model lock").as_ref(),
+            Some(&Some("claude-sonnet-4-6".to_string()))
+        );
     }
 
     #[test]
