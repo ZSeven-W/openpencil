@@ -3,7 +3,7 @@ use op_editor_core::editor_ui_state::LayerContextMenuState;
 use op_editor_core::ui_draft::LayerContextTarget;
 use op_editor_core::{NodeId, PenNodeExt};
 use op_editor_ui::widgets::layer_context_menu::{LayerContextAction, LayerContextMenu};
-use op_editor_ui::widgets::{LayerPanel, LayerPanelHit};
+use op_editor_ui::widgets::{DropPosition, LayerPanel, LayerPanelHit};
 use op_editor_ui::Point2D;
 
 const VIEWPORT_W: f32 = 1200.0;
@@ -135,6 +135,18 @@ fn page_names(host: &WidgetHost) -> Vec<String> {
         .unwrap_or_default()
 }
 
+fn history_len(host: &WidgetHost) -> usize {
+    host.editor_state.history.past.len()
+}
+
+fn active_order(host: &WidgetHost) -> Vec<String> {
+    host.editor_state
+        .active_children()
+        .iter()
+        .map(|node| node.id_str().to_string())
+        .collect()
+}
+
 fn click_layer_context_action_for(host: &mut WidgetHost, id: &str, action: LayerContextAction) {
     let row = point_for_layer_row(host, id);
     assert!(host.apply_right_press(row.x, row.y, VIEWPORT_W, VIEWPORT_H));
@@ -169,6 +181,68 @@ fn click_page_context_action(host: &mut WidgetHost, page_index: usize, action: L
     assert!(host.apply_press(action_point.x, action_point.y, VIEWPORT_W, VIEWPORT_H,));
 }
 
+fn point_for_layer_toggle(host: &WidgetHost, id: &str, hidden: bool) -> Point2D {
+    let panel = LayerPanel::from_editor(&host.editor_state);
+    let rect = host.layer_panel_rect(VIEWPORT_H);
+    let mut y = rect.origin.y;
+    while y < rect.origin.y + rect.size.y {
+        let mut x = rect.origin.x;
+        while x < rect.origin.x + rect.size.x {
+            let point = Point2D::new(x, y);
+            match panel.hit_test(rect, point) {
+                Some(LayerPanelHit::ToggleHidden(node_id))
+                    if hidden && node_id == NodeId::new(id) =>
+                {
+                    return point;
+                }
+                Some(LayerPanelHit::ToggleLocked(node_id))
+                    if !hidden && node_id == NodeId::new(id) =>
+                {
+                    return point;
+                }
+                _ => {}
+            }
+            x += 2.0;
+        }
+        y += 2.0;
+    }
+    panic!("no layer toggle point found for {id}");
+}
+
+fn point_for_add_page(host: &WidgetHost) -> Point2D {
+    let panel = LayerPanel::from_editor(&host.editor_state);
+    let rect = host.layer_panel_rect(VIEWPORT_H);
+    let mut y = rect.origin.y;
+    while y < rect.origin.y + rect.size.y {
+        let mut x = rect.origin.x;
+        while x < rect.origin.x + rect.size.x {
+            let point = Point2D::new(x, y);
+            if matches!(panel.hit_test(rect, point), Some(LayerPanelHit::AddPage)) {
+                return point;
+            }
+            x += 2.0;
+        }
+        y += 2.0;
+    }
+    panic!("no add-page point found");
+}
+
+fn point_for_layer_drop_after(host: &WidgetHost, source: &str, anchor: &str) -> Point2D {
+    let panel = LayerPanel::from_editor_with_drag_source(&host.editor_state, &NodeId::new(source));
+    let rect = host.layer_panel_rect(VIEWPORT_H);
+    let mut y = rect.origin.y;
+    while y < rect.origin.y + rect.size.y {
+        let point = Point2D::new(rect.origin.x + 40.0, y);
+        if let Some(drop) = panel.drop_target_at(rect, point) {
+            if drop.anchor == NodeId::new(anchor) && matches!(drop.position, DropPosition::After) {
+                return point;
+            }
+        }
+        y += 1.0;
+    }
+    panic!("no after-drop target found for {source} after {anchor}");
+}
+
 #[test]
 fn layer_context_toggle_visibility_is_undoable_like_native() {
     let mut host = WidgetHost::new();
@@ -185,6 +259,72 @@ fn layer_context_toggle_visibility_is_undoable_like_native() {
         node_flag(&host, "n1").0,
         Some(false),
         "undo restores visible"
+    );
+}
+
+#[test]
+fn layer_panel_eye_and_lock_clicks_are_undoable_like_native() {
+    let mut host = WidgetHost::new();
+    seed(&mut host);
+    host.editor_state.editor_ui.hovered_layer_id = Some(NodeId::new("n1"));
+
+    let eye = point_for_layer_toggle(&host, "n1", true);
+    let before = history_len(&host);
+    assert!(host.apply_click(eye.x, eye.y, VIEWPORT_W, VIEWPORT_H));
+    assert_eq!(node_flag(&host, "n1").0, Some(false), "hidden via eye");
+    assert_eq!(history_len(&host), before + 1, "eye pushes history");
+    assert!(host.editor_state.undo());
+    assert_ne!(node_flag(&host, "n1").0, Some(false));
+
+    let lock = point_for_layer_toggle(&host, "n1", false);
+    let before = history_len(&host);
+    assert!(host.apply_click(lock.x, lock.y, VIEWPORT_W, VIEWPORT_H));
+    assert_eq!(node_flag(&host, "n1").1, Some(true), "locked");
+    assert_eq!(history_len(&host), before + 1, "lock pushes history");
+    assert!(host.editor_state.undo());
+    assert_ne!(node_flag(&host, "n1").1, Some(true));
+}
+
+#[test]
+fn layer_panel_add_page_click_is_undoable_like_native() {
+    let mut host = WidgetHost::new();
+    seed_pages(&mut host);
+
+    let add = point_for_add_page(&host);
+    let before = history_len(&host);
+    assert!(host.apply_click(add.x, add.y, VIEWPORT_W, VIEWPORT_H));
+    assert_eq!(page_names(&host).len(), 4, "page added");
+    assert_eq!(history_len(&host), before + 1, "add-page pushes history");
+    assert!(host.editor_state.undo());
+    assert_eq!(page_names(&host).len(), 3, "undo removes the page");
+}
+
+#[test]
+fn layer_panel_drag_reorder_is_undoable_like_native() {
+    let mut host = WidgetHost::new();
+    seed(&mut host);
+
+    let drop = point_for_layer_drop_after(&host, "n1", "n2");
+    let drag = crate::widget_host::LayerDragState {
+        source: NodeId::new("n1"),
+        start_y: drop.y - 60.0,
+        current_x: drop.x,
+        current_y: drop.y,
+        active: true,
+    };
+    let before = history_len(&host);
+    assert!(host.commit_layer_drag(drag, VIEWPORT_H));
+    assert_eq!(
+        active_order(&host),
+        vec!["n2".to_string(), "n1".to_string()],
+        "reordered"
+    );
+    assert_eq!(history_len(&host), before + 1, "drag pushes history");
+    assert!(host.editor_state.undo());
+    assert_eq!(
+        active_order(&host),
+        vec!["n1".to_string(), "n2".to_string()],
+        "undo restores order"
     );
 }
 
