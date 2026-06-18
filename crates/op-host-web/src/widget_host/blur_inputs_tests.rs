@@ -4,6 +4,7 @@
 
 use super::WidgetHost;
 use op_editor_core::agent_settings::SettingsFocus;
+use op_editor_core::{CloneField, CloneFormState};
 
 const VW: f32 = 1200.0;
 const VH: f32 = 800.0;
@@ -117,4 +118,54 @@ fn settings_modal_blank_press_commits_mcp_port_draft() {
         eui.agent_settings_open,
         "blank press inside the modal must not close it"
     );
+}
+
+#[test]
+fn blank_press_blur_reports_and_defocuses_git_inputs_like_native() {
+    let mut host = WidgetHost::new();
+    {
+        let git = &mut host.editor_state_mut().editor_ui.git_panel;
+        git.open = true;
+        git.author_prompt = true;
+        git.commit_focused = true;
+        git.remote_focused = true;
+        git.https_focused = true;
+        git.branch_create_focused = true;
+        git.author_name_focused = true;
+        git.author_email_focused = true;
+        git.clone_form = Some(CloneFormState {
+            focus: Some(CloneField::Url),
+            ..Default::default()
+        });
+    }
+
+    assert!(
+        host.blur_text_inputs_on_blank_press(),
+        "git inputs must count as focused chrome for blank-press blur"
+    );
+
+    let git = &host.editor_state().editor_ui.git_panel;
+    assert!(!git.commit_focused);
+    assert!(!git.remote_focused);
+    assert!(!git.https_focused);
+    assert!(!git.branch_create_focused);
+    assert!(!git.author_name_focused);
+    assert!(!git.author_email_focused);
+    assert_eq!(git.clone_form.as_ref().and_then(|form| form.focus), None);
+}
+
+#[test]
+fn blank_press_blur_reports_and_defocuses_preset_name_like_native() {
+    let mut host = WidgetHost::new();
+    {
+        let eui = &mut host.editor_state_mut().editor_ui;
+        eui.variables_preset_menu_open = true;
+        eui.variables_preset_name_focus = true;
+    }
+
+    assert!(
+        host.blur_text_inputs_on_blank_press(),
+        "preset name input must count as focused chrome for blank-press blur"
+    );
+    assert!(!host.editor_state().editor_ui.variables_preset_name_focus);
 }
