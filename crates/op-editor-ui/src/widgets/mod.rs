@@ -5,7 +5,7 @@
 //! Two layers in one module:
 //!
 //! - **Primitives** (Phase B1+B2): the remaining OP-local building blocks
-//!   `TreeWidget` / `PropertyRow` / `TextInput`.
+//!   `TreeWidget` / `PropertyRow`.
 //! - **Compositions** (Step 2): `LayerPanel` / `PropertyPanel` /
 //!   `Toolbar` — view models built from an `op_editor_core::EditorState`
 //!   that compose the primitives into the actual editor UI surface.
@@ -29,7 +29,6 @@ pub const MIN_RAIL_WIDTH: f32 = 80.0;
 // Phase B primitives.
 pub(crate) mod button;
 pub mod prop_row;
-pub mod text_input;
 pub mod tree;
 
 // Step 2 compositions (built on top of the primitives, driven by
@@ -224,7 +223,6 @@ pub mod variables_panel;
 mod variables_preset_menu;
 
 pub use prop_row::PropertyRow;
-pub use text_input::{TextInput, TextInputState};
 pub use tree::{TreeItem, TreeWidget};
 
 pub use layer_panel::{LayerItem, LayerPanel};

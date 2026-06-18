@@ -120,12 +120,29 @@ impl AgentSettings {
             .unwrap_or(0)
     }
 
+    pub fn provider_verified_connected_at(&self, index: usize) -> bool {
+        self.connected.get(index).copied().unwrap_or(false)
+            && self
+                .provider_connection
+                .get(index)
+                .is_some_and(|conn| conn.phase == ProviderConnectPhase::Connected)
+    }
+
+    pub fn provider_verified_connected(&self, provider: AgentProvider) -> bool {
+        self.provider_verified_connected_at(Self::provider_index(provider))
+    }
+
+    pub fn verified_connected_mask(&self) -> [bool; 5] {
+        std::array::from_fn(|i| self.provider_verified_connected_at(i))
+    }
+
     /// Connect pressed on a disconnected card — flip the card to the
     /// in-flight state and raise the request seam the desktop host
     /// drains into the async probe. Mirrors the TS `handleConnect`
     /// prologue (clear error/warning/notInstalled, show spinner).
     pub fn begin_provider_connect(&mut self, provider: AgentProvider) {
         let idx = Self::provider_index(provider);
+        self.connected[idx] = false;
         self.provider_connection[idx] = ProviderConnection {
             phase: ProviderConnectPhase::Probing,
             ..ProviderConnection::default()
@@ -199,7 +216,8 @@ mod tests {
         assert_eq!(s.provider_connection[1].error, None);
         assert_eq!(s.pending_provider_connect, Some(AgentProvider::CodexCli));
         assert!(s.provider_probe_in_flight(AgentProvider::CodexCli));
-        // The persisted flag is untouched until the probe lands.
+        // A fresh probe withdraws any stale persisted connection
+        // until the probe lands successfully.
         assert!(!s.connected[1]);
     }
 
@@ -273,5 +291,18 @@ mod tests {
         assert!(!s.connected[2]);
         assert_eq!(s.provider_connection[2], ProviderConnection::default());
         assert_eq!(s.pending_provider_connect, None);
+    }
+
+    #[test]
+    fn verified_connected_requires_connected_phase() {
+        let mut s = AgentSettings::default();
+        s.connected[0] = true;
+        assert!(!s.provider_verified_connected(AgentProvider::ClaudeCode));
+        s.provider_connection[0].phase = ProviderConnectPhase::Connected;
+        assert!(s.provider_verified_connected(AgentProvider::ClaudeCode));
+        assert_eq!(
+            s.verified_connected_mask(),
+            [true, false, false, false, false]
+        );
     }
 }

@@ -10,7 +10,9 @@
 use op_editor_ui::{
     ImeKind, KeyCode, KeyLocation, KeyState, KeyValue, Modifiers, NamedKey, ScrollMode,
 };
-use op_host_web::event::pointer::{classify_mouse_press_button, MousePressAction};
+use op_host_web::event::pointer::{
+    classify_mouse_press_button, map_offset_to_logical, MousePressAction,
+};
 use op_host_web::event::{
     focus::map_focus,
     ime::{composition_end, composition_start, composition_update, utf16_selection_to_utf8},
@@ -47,6 +49,22 @@ fn mouse_button_classification_keeps_middle_pan_out_of_primary_press_path() {
         MousePressAction::ContextPress
     );
     assert_eq!(classify_mouse_press_button(3), MousePressAction::Ignore);
+}
+
+#[test]
+fn pointer_offset_mapping_scales_to_logical_viewport() {
+    assert_eq!(
+        map_offset_to_logical(150.0, 80.0, 300.0, 200.0, 600.0, 400.0),
+        (300.0, 160.0)
+    );
+}
+
+#[test]
+fn pointer_offset_mapping_falls_back_when_css_size_is_empty() {
+    assert_eq!(
+        map_offset_to_logical(150.0, 80.0, 0.0, -1.0, 600.0, 400.0),
+        (150.0, 80.0)
+    );
 }
 
 #[test]

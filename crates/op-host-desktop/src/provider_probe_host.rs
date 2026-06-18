@@ -84,6 +84,38 @@ fn provider_to_sc(p: op_editor_core::AgentProvider) -> op_ai::agent_settings_sta
     }
 }
 
+pub(crate) fn normalize_provider_probe_outcome(
+    provider: op_editor_core::AgentProvider,
+    mut outcome: ProbeOutcome,
+) -> ProbeOutcome {
+    if outcome.connected && outcome.models.is_empty() {
+        outcome.connected = false;
+        outcome.connection_info = None;
+        outcome.error = Some(missing_models_connect_error(provider));
+    }
+    outcome
+}
+
+pub(crate) fn missing_models_connect_error(provider: op_editor_core::AgentProvider) -> String {
+    match provider {
+        op_editor_core::AgentProvider::ClaudeCode => {
+            "No models found. Claude Code did not return a model list.".to_string()
+        }
+        op_editor_core::AgentProvider::CodexCli => {
+            "No models found. Codex CLI did not return a model list.".to_string()
+        }
+        op_editor_core::AgentProvider::OpenCode => {
+            "No models found. OpenCode did not return a model list.".to_string()
+        }
+        op_editor_core::AgentProvider::GithubCopilot => {
+            "No models found. GitHub Copilot did not return a model list.".to_string()
+        }
+        op_editor_core::AgentProvider::GeminiCli => {
+            "No models found. Gemini CLI did not return a model list.".to_string()
+        }
+    }
+}
+
 impl DesktopApp {
     /// Pump: poll a finished probe into editor state, then start the
     /// next requested probe. Returns true when state changed.
@@ -131,6 +163,7 @@ impl DesktopApp {
         {
             return false;
         }
+        let outcome = normalize_provider_probe_outcome(provider, outcome);
         let ProbeOutcome {
             connected,
             models,
@@ -335,6 +368,59 @@ mod tests {
             .as_deref()
             .unwrap()
             .contains("copilot login"));
+    }
+
+    #[test]
+    fn landed_connected_outcome_without_models_is_failure() {
+        let mut app = DesktopApp::new(None);
+        reset_settings(&mut app);
+        app.host
+            .editor_state_mut()
+            .chat
+            .discovered_models
+            .push(op_editor_core::ModelEntry::new(
+                AgentProvider::CodexCli,
+                "stale-gpt",
+                "Stale GPT",
+            ));
+        app.host
+            .editor_state_mut()
+            .editor_ui
+            .agent_settings
+            .begin_provider_connect(AgentProvider::CodexCli);
+        app.host
+            .editor_state_mut()
+            .editor_ui
+            .agent_settings
+            .pending_provider_connect = None;
+        let (job, tx) = ProviderConnectJob::pending_for_test(AgentProvider::CodexCli);
+        app.provider_connect_job = Some(job);
+        tx.send(ProbeOutcome {
+            connected: true,
+            connection_info: Some("Connected via Codex CLI".into()),
+            ..ProbeOutcome::default()
+        })
+        .unwrap();
+
+        assert!(app.drain_provider_connect());
+        let es = app.host.editor_state();
+        let settings = &es.editor_ui.agent_settings;
+        assert!(!settings.provider_verified_connected(AgentProvider::CodexCli));
+        assert_eq!(
+            settings.provider_connection[1].phase,
+            ProviderConnectPhase::Error
+        );
+        assert!(settings.provider_connection[1]
+            .error
+            .as_deref()
+            .is_some_and(|error| error.contains("No models found")));
+        assert!(
+            !es.chat
+                .available_models
+                .iter()
+                .any(|m| m.provider == AgentProvider::CodexCli),
+            "stale Codex models must not become selectable after a failed connect"
+        );
     }
 
     #[test]

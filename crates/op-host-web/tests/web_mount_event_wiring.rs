@@ -27,3 +27,22 @@ fn canvaskit_mount_listens_for_window_resize() {
         "resize listener must resize the CanvasKit backend, not only the DOM canvas"
     );
 }
+
+#[test]
+fn canvaskit_mount_does_not_panic_if_a11y_mirror_borrow_is_busy() {
+    let source = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/src/canvaskit.rs"))
+        .expect("canvaskit source is readable");
+    let start = source
+        .find("let mirror_target =")
+        .expect("a11y mirror listener setup exists");
+    let setup = &source[start..source[start..].find("// mousedown").unwrap() + start];
+
+    assert!(
+        setup.contains("try_borrow()"),
+        "CanvasKit a11y mirror listener setup must use try_borrow so a transient borrow cannot panic the web host"
+    );
+    assert!(
+        !setup.contains(".borrow()"),
+        "CanvasKit a11y mirror listener setup must not force-borrow the shared host"
+    );
+}

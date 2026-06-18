@@ -57,6 +57,45 @@ fn color_close(a: crate::Color, b: crate::Color) -> bool {
 }
 
 #[test]
+fn long_transcript_scrolls_and_pins_to_bottom() {
+    // Enough messages to overflow the 300px body.
+    let msgs: Vec<_> = (0..40)
+        .map(|i| ChatMessage::user(format!("message {i}")))
+        .collect();
+    let b = body();
+    let loc = op_editor_core::Locale::EnUs;
+    let content = transcript_content_height(&msgs, b, loc);
+    assert!(content > b.size.y, "content {content} should overflow body");
+    let max = content - b.size.y;
+
+    // Pinned → render at the bottom regardless of the stored offset.
+    let pinned = transcript_effective_offset(&msgs, b, loc, 0.0, true);
+    assert!((pinned - max).abs() < 0.5);
+    // Unpinned → the stored offset, clamped into `[0, max]`.
+    assert!((transcript_effective_offset(&msgs, b, loc, 50.0, false) - 50.0).abs() < 0.01);
+    assert!((transcript_effective_offset(&msgs, b, loc, 1.0e6, false) - max).abs() < 0.5);
+
+    // At the pinned offset the final message sits within the body.
+    let items = build_transcript_with_design_hover(&msgs, b, loc, None, pinned);
+    let last = items.last().unwrap().bubble.as_ref().unwrap().rect;
+    assert!(
+        last.origin.y + last.size.y <= b.origin.y + b.size.y + 0.5,
+        "last bubble bottom should rest within the body"
+    );
+}
+
+#[test]
+fn short_transcript_has_no_scroll_range() {
+    let msgs = [ChatMessage::user("hi")];
+    let b = body();
+    let loc = op_editor_core::Locale::EnUs;
+    assert!(transcript_content_height(&msgs, b, loc) <= b.size.y);
+    // Nothing to scroll → effective offset is 0 whether pinned or not.
+    assert_eq!(transcript_effective_offset(&msgs, b, loc, 0.0, true), 0.0);
+    assert_eq!(transcript_effective_offset(&msgs, b, loc, 99.0, false), 0.0);
+}
+
+#[test]
 fn build_transcript_empty_messages_is_empty() {
     assert!(build_transcript(&[], body(), op_editor_core::Locale::EnUs).is_empty());
 }
@@ -161,24 +200,46 @@ fn user_bubbles_remain_compact_and_right_aligned() {
 }
 
 #[test]
-fn transcript_keeps_latest_user_prompt_when_completion_tail_is_tight() {
+fn tight_final_turn_pins_completion_and_scrolls_to_reveal_prompt() {
+    // A short final turn (prompt + Done card) squeezed into a 64px body by
+    // the fixed checklist overflows, so it can no longer show both at once.
+    // The pinned (default) view keeps the latest content — the completion
+    // card — anchored to the bottom; the prompt is one scroll-up away. This
+    // replaces the old no-scroll "keep the prompt attached" tail-fit hack,
+    // whose only way to keep both visible was to never scroll at all.
     let messages = [
         ChatMessage::user("生成一个设计精良的美食应用移动端首页"),
         ChatMessage::assistant("Done — 4 subtask(s) succeeded, 0 failed, 4 node(s) total."),
     ];
     let tight_body = Rect::xywh(0.0, 0.0, 340.0, 64.0);
+    let loc = op_editor_core::Locale::EnUs;
 
-    let items = build_transcript(&messages, tight_body, op_editor_core::Locale::EnUs);
+    let max = (transcript_content_height(&messages, tight_body, loc) - tight_body.size.y).max(0.0);
+    assert!(
+        max > 0.0,
+        "tight body should overflow → a scroll range exists"
+    );
 
-    assert_eq!(items.len(), 2, "latest user prompt should stay visible");
-    assert_eq!(items[0].role, ChatRole::User);
-    assert_eq!(items[1].role, ChatRole::Assistant);
-    let user = items[0].bubble.as_ref().expect("user prompt bubble");
+    // Pinned: the completion card rests against the body bottom.
+    let pinned = transcript_effective_offset(&messages, tight_body, loc, 0.0, true);
+    assert!((pinned - max).abs() < 0.5);
+    let items = build_transcript_with_design_hover(&messages, tight_body, loc, None, pinned);
     let completion = items[1].bubble.as_ref().expect("completion card");
     assert!(completion.completion.is_some());
     assert!(
-        completion.rect.origin.y >= user.rect.origin.y + user.rect.size.y + MSG_GAP,
-        "completion card needs breathing room after the prompt"
+        completion.rect.origin.y + completion.rect.size.y
+            <= tight_body.origin.y + tight_body.size.y + 0.5,
+        "completion card pins to the bottom of the body"
+    );
+
+    // Scrolling to the top (un-pinned, offset 0) brings the prompt fully
+    // into view — content the old layout could never reach.
+    let top = build_transcript_with_design_hover(&messages, tight_body, loc, None, 0.0);
+    assert_eq!(top[0].role, ChatRole::User);
+    let user = top[0].bubble.as_ref().expect("user prompt bubble");
+    assert!(
+        user.rect.origin.y >= tight_body.origin.y - 0.5,
+        "prompt sits at the top when scrolled up"
     );
 }
 
@@ -194,7 +255,7 @@ fn transcript_text_offset_at_resolves_user_message_text() {
         bubble.rect.origin.y + BUBBLE_PAD + 8.0,
     );
 
-    let hit = transcript_text_offset_at(&messages, body, point, op_editor_core::Locale::EnUs)
+    let hit = transcript_text_offset_at(&messages, body, point, op_editor_core::Locale::EnUs, 0.0)
         .expect("user message text should be selectable");
 
     assert_eq!(hit.message_index, 0);
@@ -226,6 +287,7 @@ fn paint_transcript_highlights_selected_user_text() {
         op_editor_core::Locale::EnUs,
         None,
         Some(selection),
+        0.0,
     );
 
     assert!(
@@ -1067,7 +1129,7 @@ fn transcript_hit_resolves_a_click_on_the_thinking_header() {
     let cx = header.origin.x + header.size.x / 2.0;
     let cy = header.origin.y + header.size.y / 2.0;
     assert_eq!(
-        transcript_hit(msgs, body(), cx, cy, op_editor_core::Locale::EnUs),
+        transcript_hit(msgs, body(), cx, cy, op_editor_core::Locale::EnUs, 0.0),
         Some(TranscriptHit::ToggleThinking(0))
     );
 }
@@ -1088,7 +1150,7 @@ fn transcript_hit_resolves_a_click_on_the_tool_header() {
     let cx = header.origin.x + header.size.x / 2.0;
     let cy = header.origin.y + header.size.y / 2.0;
     assert_eq!(
-        transcript_hit(msgs, body(), cx, cy, op_editor_core::Locale::EnUs),
+        transcript_hit(msgs, body(), cx, cy, op_editor_core::Locale::EnUs, 0.0),
         Some(TranscriptHit::ToggleToolCalls(0))
     );
 }
@@ -1111,7 +1173,7 @@ fn transcript_hit_resolves_a_click_on_an_individual_tool_card_header() {
     let cx = card_header.origin.x + card_header.size.x / 2.0;
     let cy = card_header.origin.y + card_header.size.y / 2.0;
     assert_eq!(
-        transcript_hit(msgs, body(), cx, cy, op_editor_core::Locale::EnUs),
+        transcript_hit(msgs, body(), cx, cy, op_editor_core::Locale::EnUs, 0.0),
         Some(TranscriptHit::SetToolCallCardExpanded(0, 0, true))
     );
 }
@@ -1129,7 +1191,7 @@ fn transcript_hit_resolves_a_click_on_a_design_block_header() {
     let cx = header.origin.x + header.size.x / 2.0;
     let cy = header.origin.y + header.size.y / 2.0;
     assert_eq!(
-        transcript_hit(msgs, body(), cx, cy, op_editor_core::Locale::EnUs),
+        transcript_hit(msgs, body(), cx, cy, op_editor_core::Locale::EnUs, 0.0),
         Some(TranscriptHit::SetDesignBlockExpanded(0, 0, true))
     );
 }
@@ -1140,7 +1202,7 @@ fn transcript_hit_misses_when_the_click_is_not_on_a_header() {
     let msgs = std::slice::from_ref(&m);
     // Click far below the single short message.
     assert_eq!(
-        transcript_hit(msgs, body(), 20.0, 280.0, op_editor_core::Locale::EnUs),
+        transcript_hit(msgs, body(), 20.0, 280.0, op_editor_core::Locale::EnUs, 0.0),
         None
     );
 }

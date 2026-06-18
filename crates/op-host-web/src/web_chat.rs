@@ -35,7 +35,7 @@ use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
 
 use crate::repaint_ctx::RepaintContext;
-use crate::web_ai_transport::{post_ai_stream, AiEvent, AiStreamHandle};
+use crate::web_ai_transport::{post_ai_stream_to, AiEvent, AiStreamHandle};
 
 type EventQueue = Rc<RefCell<VecDeque<AiEvent>>>;
 
@@ -68,7 +68,9 @@ fn abort_active_turn() {
 /// launch a pending send.
 pub(crate) fn drain_chat_flags<C: RepaintContext + 'static>(inner: &Rc<RefCell<C>>) {
     let (new_chat, stop) = {
-        let mut b = inner.borrow_mut();
+        let Ok(mut b) = inner.try_borrow_mut() else {
+            return;
+        };
         let chat = &mut b.host_mut().editor_state_mut().chat;
         (
             std::mem::take(&mut chat.pending_new_chat),
@@ -79,8 +81,10 @@ pub(crate) fn drain_chat_flags<C: RepaintContext + 'static>(inner: &Rc<RefCell<C
         abort_active_turn();
     }
     let prepared = {
-        let mut b = inner.borrow_mut();
-        prepare_turn(&mut b.host_mut().editor_state_mut().chat)
+        let Ok(mut b) = inner.try_borrow_mut() else {
+            return;
+        };
+        prepare_turn(b.host_mut().editor_state_mut())
     };
     if let Some(prepared) = prepared {
         launch_turn(inner, prepared);
@@ -105,7 +109,7 @@ fn launch_turn<C: RepaintContext + 'static>(inner: &Rc<RefCell<C>>, prepared: Pr
         queue_cb.borrow_mut().push_back(evt);
     });
     let base = crate::daemon_base::daemon_base();
-    match post_ai_stream(&base, prepared.body_json, on_event) {
+    match post_ai_stream_to(&base, prepared.endpoint, prepared.body_json, on_event) {
         Ok(handle) => {
             ACTIVE_TURN.with(|slot| {
                 *slot.borrow_mut() = Some(ActiveTurn { handle, generation });
@@ -115,7 +119,9 @@ fn launch_turn<C: RepaintContext + 'static>(inner: &Rc<RefCell<C>>, prepared: Pr
         Err(_e) => {
             // Transport refused to even start (XHR open/send failed) —
             // surface that in the streaming bubble instead of hanging it.
-            let mut b = inner.borrow_mut();
+            let Ok(mut b) = inner.try_borrow_mut() else {
+                return;
+            };
             let _ = apply_event_to_chat(
                 &mut b.host_mut().editor_state_mut().chat,
                 &AiEvent::Error("AI stream request failed to start".into()),
@@ -146,20 +152,23 @@ fn start_pump<C: RepaintContext + 'static>(
         }
         let mut terminal = false;
         let mut changed = false;
+        let Ok(mut b) = inner.try_borrow_mut() else {
+            return true;
+        };
         loop {
             // Pop under a tight borrow so the apply below never holds the
             // queue borrow across editor-state mutation.
             let evt = queue.borrow_mut().pop_front();
             let Some(evt) = evt else { break };
-            let mut b = inner.borrow_mut();
             terminal |= apply_event_to_chat(&mut b.host_mut().editor_state_mut().chat, &evt);
-            b.host_mut().mark_editor_state_dirty();
             changed = true;
         }
         if changed {
             // Repaint once per frame even when several events were queued.
-            let _ = inner.borrow_mut().repaint();
+            b.host_mut().mark_editor_state_dirty();
+            let _ = b.repaint();
         }
+        drop(b);
         if terminal {
             ACTIVE_TURN.with(|slot| {
                 let mut s = slot.borrow_mut();
@@ -174,34 +183,52 @@ fn start_pump<C: RepaintContext + 'static>(
     crate::raf_pump::start(tick);
 }
 
-/// A prepared `/api/ai/stream` request body.
+/// A prepared AI SSE request.
 pub(crate) struct PreparedTurn {
+    pub(crate) endpoint: &'static str,
     pub(crate) body_json: String,
 }
 
-/// Take `chat.pending_send` and build the request body: selected model wire
-/// id (or `"default"` — the daemon then picks its configured provider) plus
-/// the user message and the per-turn knobs. Pure, so the drain→body mapping
-/// is unit-testable. Clears the staged attachments (begin_send already copied
-/// the images into the user message; the wire has no attachment field yet).
-pub(crate) fn prepare_turn(chat: &mut ChatState) -> Option<PreparedTurn> {
-    let user_text = chat.pending_send.take()?;
-    let model = chat
+/// Take `chat.pending_send` and build the standard-turn request body:
+/// selected model wire id (or `"default"` — the daemon then picks its
+/// configured provider), the user message, per-turn knobs, plus a fresh
+/// document/selection snapshot so daemon-side planning sees the same canvas
+/// the browser is showing. Clears staged attachments (begin_send already
+/// copied images into the user message; the wire has no attachment field yet).
+pub(crate) fn prepare_turn(state: &mut EditorState) -> Option<PreparedTurn> {
+    let user_text = state.chat.pending_send.take()?;
+    let model = state
+        .chat
         .selected_model_entry()
         .map(|e| e.value.clone())
         .unwrap_or_else(|| "default".to_string());
-    chat.pending_attachments.clear();
+    let thinking = state.chat.thinking_mode.as_str();
+    let effort = state.chat.effort_level.as_str();
+    let agent_team_size = state.chat.agent_team_size;
+    state.chat.pending_attachments.clear();
+    let selected_ids: Vec<&str> = state.selection.set.iter().map(|id| id.as_str()).collect();
+    let active_page_id = state
+        .doc
+        .pages
+        .as_ref()
+        .and_then(|pages| pages.get(state.ui.active_page_index))
+        .map(|page| page.id.as_str());
     let body = serde_json::json!({
         "model": model,
-        // Chat turns carry no skill corpus (skills are the codegen
-        // pipeline's per-phase prompts).
+        // Standard turns route through the daemon classifier + design
+        // orchestrator; skills are resolved daemon-side per route.
         "skills": [],
         "user": user_text,
         "max_output_tokens": 4096u32,
-        "thinking": chat.thinking_mode.as_str(),
-        "effort": chat.effort_level.as_str(),
+        "thinking": thinking,
+        "effort": effort,
+        "agent_team_size": agent_team_size,
+        "document": state.doc,
+        "selectedIds": selected_ids,
+        "activePageId": active_page_id,
     });
     Some(PreparedTurn {
+        endpoint: "/api/ai/standard",
         body_json: serde_json::to_string(&body).unwrap_or_else(|_| "{}".to_string()),
     })
 }
@@ -256,7 +283,9 @@ pub(crate) fn fetch_models<C: RepaintContext + 'static>(inner: &Rc<RefCell<C>>) 
         if ids.is_empty() {
             return;
         }
-        let mut b = inner_cb.borrow_mut();
+        let Ok(mut b) = inner_cb.try_borrow_mut() else {
+            return;
+        };
         apply_models(b.host_mut().editor_state_mut(), &ids);
         b.host_mut().mark_editor_state_dirty();
         let _ = b.repaint();
@@ -333,57 +362,69 @@ pub(crate) fn apply_models(state: &mut EditorState, ids: &[String]) {
 mod tests {
     use super::*;
 
+    fn state_with_queued_send(text: &str) -> EditorState {
+        let mut state = EditorState::new();
+        state.chat.set_input_text(text);
+        assert!(state.chat.begin_send());
+        state
+    }
+
     fn chat_with_queued_send(text: &str) -> ChatState {
-        let mut chat = ChatState::default();
-        chat.set_input_text(text);
-        assert!(chat.begin_send());
-        chat
+        state_with_queued_send(text).chat
     }
 
     #[test]
     fn prepare_turn_carries_model_and_message() {
-        let mut chat = chat_with_queued_send("design a login page");
-        chat.available_models = vec![ModelEntry::new(
+        let mut state = state_with_queued_send("design a login page");
+        state.chat.available_models = vec![ModelEntry::new(
             AgentProvider::ClaudeCode,
             "claude-sonnet-4-5",
             "Claude Sonnet 4.5",
         )];
-        chat.selected_model = 0;
-        let prepared = prepare_turn(&mut chat).expect("send was pending");
+        state.chat.selected_model = 0;
+        state.chat.agent_team_size = 3;
+        let prepared = prepare_turn(&mut state).expect("send was pending");
+        assert_eq!(prepared.endpoint, "/api/ai/standard");
         let body: serde_json::Value =
             serde_json::from_str(&prepared.body_json).expect("body is JSON");
         assert_eq!(body["model"], "claude-sonnet-4-5");
         assert_eq!(body["user"], "design a login page");
         assert_eq!(body["max_output_tokens"], 4096);
+        assert_eq!(body["agent_team_size"], 3);
+        assert!(body["document"].is_object());
         assert!(body["skills"].as_array().is_some_and(Vec::is_empty));
         // The drain consumed the flag — a second drain is idle.
-        assert!(prepare_turn(&mut chat).is_none());
+        assert!(prepare_turn(&mut state).is_none());
     }
 
     #[test]
     fn prepare_turn_defaults_model_when_catalog_empty() {
-        let mut chat = chat_with_queued_send("hi");
-        let prepared = prepare_turn(&mut chat).expect("send was pending");
+        let mut state = state_with_queued_send("hi");
+        let thinking = state.chat.thinking_mode;
+        let effort = state.chat.effort_level;
+        let prepared = prepare_turn(&mut state).expect("send was pending");
         let body: serde_json::Value =
             serde_json::from_str(&prepared.body_json).expect("body is JSON");
         assert_eq!(body["model"], "default");
-        assert_eq!(body["thinking"], chat.thinking_mode.as_str());
-        assert_eq!(body["effort"], chat.effort_level.as_str());
+        assert_eq!(body["thinking"], thinking.as_str());
+        assert_eq!(body["effort"], effort.as_str());
     }
 
     #[test]
     fn prepare_turn_clears_staged_attachments() {
-        let mut chat = ChatState::default();
-        chat.set_input_text("look at this");
-        chat.pending_attachments
+        let mut state = EditorState::new();
+        state.chat.set_input_text("look at this");
+        state
+            .chat
+            .pending_attachments
             .push(op_editor_core::chat::ChatAttachment {
                 name: "a.png".into(),
                 media_type: "image/png".into(),
                 data: vec![1, 2, 3],
             });
-        assert!(chat.begin_send());
-        let _ = prepare_turn(&mut chat).expect("send was pending");
-        assert!(chat.pending_attachments.is_empty());
+        assert!(state.chat.begin_send());
+        let _ = prepare_turn(&mut state).expect("send was pending");
+        assert!(state.chat.pending_attachments.is_empty());
     }
 
     #[test]

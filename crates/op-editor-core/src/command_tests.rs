@@ -11,7 +11,7 @@
 use crate::command::{BatchInsertItem, EditorCommand, NodeFlag, VariableScalarPayload};
 use crate::node_id::NodeId;
 use crate::pen_node_ext::PenNodeExt;
-use crate::test_support::{flex_frame, flow_rect, rect, sample, state_with};
+use crate::test_support::{flex_frame, flow_rect, rect, sample, state_with, text};
 use crate::walkers::find_node;
 use jian_ops_schema::node::PenNode;
 use jian_ops_schema::variable::{VariableDefinition, VariableKind, VariableScalar, VariableValue};
@@ -375,6 +375,23 @@ fn commit_property_edit_writes_stroke_width() {
     assert!(s.commit_property_edit(crate::ui_draft::PropertyFocus::StrokeWidth, 5.0));
     let w = crate::fills::node_stroke_width(find_node(s.active_children(), &id("n1")).unwrap());
     assert_eq!(w, Some(5.0));
+}
+
+#[test]
+fn commit_property_edit_clamps_font_size() {
+    // TS parity (text-section.tsx:134): font-size input is min=1 max=999.
+    let mut s = state_with(vec![text("t1", "Title", 0.0, 0.0, 100.0, 30.0, "Hi")]);
+    s.set_single_selection(id("t1"));
+    assert!(s.commit_property_edit(crate::ui_draft::PropertyFocus::FontSize, 5000.0));
+    let PenNode::Text(t) = find_node(s.active_children(), &id("t1")).unwrap() else {
+        panic!("text node");
+    };
+    assert_eq!(t.font_size, Some(999.0), "over-max clamps to 999");
+    assert!(s.commit_property_edit(crate::ui_draft::PropertyFocus::FontSize, 0.4));
+    let PenNode::Text(t) = find_node(s.active_children(), &id("t1")).unwrap() else {
+        panic!("text node");
+    };
+    assert_eq!(t.font_size, Some(1.0), "under-min clamps to 1");
 }
 
 #[test]

@@ -243,22 +243,15 @@ impl TopBar {
         } else {
             Icon::Play
         };
-        if cfg!(target_arch = "wasm32") {
-            // Preview runs the jian runtime, which the web build can't
-            // host yet — paint the Play button disabled (and it's not
-            // hit-tested) so it reads as unavailable, not a dead toggle.
-            paint_icon_button_disabled(cx, &self.theme, rx, center_y, preview_icon);
-        } else {
-            paint_icon_button(
-                cx,
-                &self.theme,
-                rx,
-                center_y,
-                preview_icon,
-                self.is_hovered(TopBarButton::TogglePreview),
-                self.is_pressed(TopBarButton::TogglePreview),
-            );
-        }
+        paint_icon_button(
+            cx,
+            &self.theme,
+            rx,
+            center_y,
+            preview_icon,
+            self.is_hovered(TopBarButton::TogglePreview),
+            self.is_pressed(TopBarButton::TogglePreview),
+        );
         rx -= ICON_BUTTON;
 
         // Theme toggle — Sun in dark mode (click → light); Moon in
@@ -458,28 +451,4 @@ pub(super) fn paint_icon_button(
         center_y - ICON_SIZE / 2.0,
     );
     draw_icon(cx.backend, icon, icon_origin, ICON_SIZE, color, 1.4);
-}
-
-/// Icon button painted in a disabled (dimmed, no hover background)
-/// state — for an action the current build can't perform, so it reads
-/// as unavailable rather than an active control that silently no-ops.
-pub(super) fn paint_icon_button_disabled(
-    cx: &mut PaintCx<'_>,
-    theme: &Theme,
-    x: f32,
-    center_y: f32,
-    icon: Icon,
-) {
-    let icon_origin = Point2D::new(
-        x + (ICON_BUTTON - ICON_SIZE) / 2.0,
-        center_y - ICON_SIZE / 2.0,
-    );
-    draw_icon(
-        cx.backend,
-        icon,
-        icon_origin,
-        ICON_SIZE,
-        theme.muted_foreground,
-        1.4,
-    );
 }

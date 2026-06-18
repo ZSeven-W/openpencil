@@ -6,7 +6,7 @@ use crate::widgets::agent_settings_panel::{AgentSettingsHit, AgentSettingsPanel}
 use crate::widgets::agent_settings_panel_geometry::{agent_card_rect_in, connect_btn_rect_at};
 use crate::widgets::{PaintCx, Widget};
 use crate::{Color, Point2D, Rect, RenderBackend, TextLayout};
-use op_editor_core::agent_settings::ProviderConnectPhase;
+use op_editor_core::agent_settings::{AcpAgentConnectOutcome, ProviderConnectPhase};
 use op_editor_core::{AgentProvider, EditorState};
 
 /// Capture backend recording every text run's content + color so
@@ -93,6 +93,59 @@ fn connected_card_paints_probe_connection_info_in_green() {
     })
     .to_jian();
     assert_eq!(*color, green, "connected info renders in the TS green");
+}
+
+#[test]
+fn persisted_connected_flag_without_probe_does_not_paint_connected_state() {
+    let mut state = EditorState::default();
+    let settings = &mut state.editor_ui.agent_settings;
+    settings.connected[0] = true;
+    settings.provider_connection[0].phase = ProviderConnectPhase::Idle;
+
+    let capture = paint_panel(&mut state);
+
+    assert!(
+        find_text(&capture, "✓").is_none(),
+        "a stale persisted connected flag without a verified probe must not paint as connected"
+    );
+    assert!(
+        find_text(&capture, "Connect").is_some(),
+        "unverified providers should still show the Connect action"
+    );
+}
+
+#[test]
+fn acp_stale_connected_flag_without_probe_does_not_paint_disconnect_state() {
+    let mut state = EditorState::default();
+    let settings = &mut state.editor_ui.agent_settings;
+    settings.add_acp_agent();
+    settings.acp_agents[0].display_name = "Claude Code".into();
+    settings.acp_agents[0].command = "claude".into();
+    settings.acp_agents[0].connected = true;
+
+    let capture = paint_panel(&mut state);
+
+    assert!(
+        find_text(&capture, "Disconnect").is_none(),
+        "a stale ACP connected flag must not paint a verified connected action"
+    );
+
+    state
+        .editor_ui
+        .agent_settings
+        .apply_acp_agent_connect_outcome(
+            "acp-1",
+            AcpAgentConnectOutcome {
+                connected: true,
+                info: Some("Claude Code".into()),
+                error: None,
+            },
+        );
+    let capture = paint_panel(&mut state);
+    assert!(
+        find_text(&capture, "Disconnect").is_some(),
+        "a successful ACP probe should paint the disconnect action"
+    );
 }
 
 #[test]

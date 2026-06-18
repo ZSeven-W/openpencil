@@ -496,12 +496,10 @@ fn provider_for_builtin(state: &EditorState, id: &str) -> Option<Box<dyn ChatPro
 }
 
 fn provider_for_acp(state: &EditorState, id: &str) -> Option<Box<dyn ChatProvider>> {
-    let config = state
-        .editor_ui
-        .agent_settings
-        .acp_agents
-        .iter()
-        .find(|agent| agent.id == id && agent.ready() && agent.connected)?;
+    let settings = &state.editor_ui.agent_settings;
+    let config = settings.acp_agents.iter().find(|agent| {
+        agent.id == id && agent.ready() && settings.acp_agent_verified_connected(&agent.id)
+    })?;
     // Canvas tool surface for the agent (TS parity, agent.ts:503-521):
     // the live MCP server's HTTP endpoint when it is running. `None`
     // makes the provider refuse the turn with the TS error message.

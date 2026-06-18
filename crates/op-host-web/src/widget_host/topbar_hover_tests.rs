@@ -1,5 +1,5 @@
 use super::WidgetHost;
-use op_editor_ui::widgets::{TopBar, TOP_BAR_HEIGHT};
+use op_editor_ui::widgets::{TopBar, TopBarHit, TOP_BAR_HEIGHT};
 use op_editor_ui::{Color, Point2D, Rect, RenderBackend, TextLayout};
 
 #[test]
@@ -32,6 +32,36 @@ fn web_topbar_sidebar_button_has_no_traffic_gap() {
     assert!(host.apply_press(26.0, TOP_BAR_HEIGHT / 2.0, 1440.0, 900.0));
 
     assert!(!host.editor_state.editor_ui.sidebar_open);
+}
+
+#[test]
+fn web_topbar_preview_button_toggles_preview_mode_like_native() {
+    let mut host = WidgetHost::new();
+    host.last_viewport_w = 1440.0;
+    host.last_viewport_h = 900.0;
+    assert!(!host.editor_state.editor_ui.preview_mode);
+
+    let topbar_rect = host.top_bar_rect(host.last_viewport_w);
+    let topbar = host.top_bar();
+    let mut point = None;
+    let mut x = topbar_rect.origin.x;
+    while x < topbar_rect.origin.x + topbar_rect.size.x {
+        let p = Point2D::new(x, TOP_BAR_HEIGHT / 2.0);
+        if topbar.hit_test(topbar_rect, p) == Some(TopBarHit::TogglePreview) {
+            point = Some(p);
+            break;
+        }
+        x += 1.0;
+    }
+    let point = point.expect("preview button point");
+
+    assert!(host.apply_press(point.x, point.y, 1440.0, 900.0));
+
+    assert!(host.editor_state.editor_ui.preview_mode);
+
+    assert!(host.apply_press(point.x, point.y, 1440.0, 900.0));
+
+    assert!(!host.editor_state.editor_ui.preview_mode);
 }
 
 #[derive(Default)]

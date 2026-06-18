@@ -461,6 +461,7 @@ impl WidgetHostNative {
                 TopBarHit::ToggleFileMenu => {
                     self.editor_state.editor_ui.file_menu_open ^= true;
                     self.editor_state.editor_ui.file_menu.hover = None;
+                    self.clear_layer_panel_hover();
                     self.mark_dirty();
                     return true;
                 }
@@ -746,6 +747,10 @@ impl WidgetHostNative {
                 self.editor_state.ui.property_draft_select_all = false;
                 self.editor_state.chat.focused = false;
                 self.mark_dirty();
+                return true;
+            }
+            if (property_rect).contains(point) {
+                self.blur_text_inputs_on_blank_press();
                 return true;
             }
         }

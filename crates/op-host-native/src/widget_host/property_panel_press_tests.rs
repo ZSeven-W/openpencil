@@ -42,6 +42,26 @@ fn point_for_action(
     panic!("no property-panel action point maps to requested action");
 }
 
+fn point_inside_property_panel_without_target(host: &WidgetHostNative) -> Point2D {
+    let panel = PropertyPanel::for_selection(host.editor_state()).expect("property panel");
+    let rect = host.property_rect(VIEWPORT_W, VIEWPORT_H);
+    let mut y = rect.origin.y + rect.size.y - 12.0;
+    while y > rect.origin.y {
+        let mut x = rect.origin.x + 12.0;
+        while x < rect.origin.x + rect.size.x - 12.0 {
+            let point = Point2D::new(x, y);
+            let no_action = panel.hit_test_action(rect, point).is_none();
+            let no_input = panel.hit_test(rect, point).is_none();
+            if no_action && no_input {
+                return point;
+            }
+            x += 8.0;
+        }
+        y -= 8.0;
+    }
+    panic!("no empty property-panel point found");
+}
+
 #[test]
 fn property_panel_action_press_sets_and_release_clears_pressed_button() {
     let mut host = WidgetHostNative::new();
@@ -73,6 +93,72 @@ fn property_panel_action_press_sets_and_release_clears_pressed_button() {
 
     assert!(host.apply_release_with_viewport(VIEWPORT_W, VIEWPORT_H));
     assert_eq!(host.editor_state().editor_ui.pressed_button, None);
+}
+
+#[test]
+fn property_panel_background_consumes_clicks() {
+    let mut host = WidgetHostNative::new();
+    seed(
+        &mut host,
+        r##"{ "version": "0.8.0", "children": [
+              {"type":"group","id":"text_group","name":"Text Group",
+               "children":[
+                 {"type":"text","id":"label","name":"Label","content":"Hello"}
+               ]}
+        ]}"##,
+    );
+    host.editor_state_mut()
+        .set_single_selection(NodeId::new("text_group"));
+
+    let point = point_inside_property_panel_without_target(&host);
+    assert!(
+        host.apply_press(point.x, point.y, VIEWPORT_W, VIEWPORT_H),
+        "right inspector should own clicks inside its bounds even when no control is hit"
+    );
+    assert_eq!(
+        host.editor_state().selection.anchor,
+        NodeId::new("text_group")
+    );
+}
+
+#[test]
+fn native_property_panel_group_component_button_switches_to_detach() {
+    let mut host = WidgetHostNative::new();
+    seed(
+        &mut host,
+        r##"{ "version": "0.8.0", "children": [
+              {"type":"frame","id":"screen","name":"Screen",
+               "x":40,"y":40,"width":360,"height":640,
+               "children":[
+                 {"type":"group","id":"text_group","name":"Text Group",
+                  "children":[
+                    {"type":"text","id":"headline","name":"Headline","content":"Welcome"}
+                  ]}
+               ]}
+        ]}"##,
+    );
+    host.editor_state_mut()
+        .set_single_selection(NodeId::new("text_group"));
+
+    let create = point_for_action(&host, |action| {
+        matches!(action, PropertyPanelAction::CreateComponent)
+    });
+    assert!(host.apply_press(create.x, create.y, VIEWPORT_W, VIEWPORT_H));
+    assert!(host
+        .editor_state()
+        .components
+        .find_by_id(&NodeId::new("text_group"))
+        .is_some());
+
+    let detach = point_for_action(&host, |action| {
+        matches!(action, PropertyPanelAction::DetachComponent)
+    });
+    assert!(host.apply_press(detach.x, detach.y, VIEWPORT_W, VIEWPORT_H));
+    assert!(host
+        .editor_state()
+        .components
+        .find_by_id(&NodeId::new("text_group"))
+        .is_none());
 }
 
 #[test]

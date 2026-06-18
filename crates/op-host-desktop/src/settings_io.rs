@@ -6,15 +6,13 @@
 
 use std::path::PathBuf;
 
-use op_editor_core::editor_ui_state::RecentFile;
+use op_editor_core::editor_ui_state::{RecentFile, RECENT_FILE_CAP};
 use op_editor_core::{
     AcpAgentConfig, AcpConnectionType, BuiltinAgentConfig, BuiltinAgentKind, BuiltinAgentPresetKey,
     EditorState, ImageGenProfile, ImageGenProvider, Locale, ThemeMode,
 };
 use op_host_native::WidgetHostNative;
 use serde::{Deserialize, Serialize};
-
-const RECENT_CAP: usize = 10;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 struct RecentFilePayload {
@@ -297,7 +295,7 @@ fn apply_payload(state: &mut EditorState, payload: SettingsPayload) {
     if let Some(list) = payload.recent_files {
         eui.recent_files = list
             .into_iter()
-            .take(RECENT_CAP)
+            .take(RECENT_FILE_CAP)
             .map(|r| RecentFile {
                 path: r.path,
                 modified_at: r.modified_at,
@@ -502,16 +500,9 @@ pub fn touch_recent(host: &mut WidgetHostNative, path: &std::path::Path) {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs())
         .unwrap_or(0);
-    let recents = &mut host.editor_state_mut().editor_ui.recent_files;
-    recents.retain(|r| r.path != path_s);
-    recents.insert(
-        0,
-        RecentFile {
-            path: path_s,
-            modified_at: now,
-        },
-    );
-    recents.truncate(RECENT_CAP);
+    host.editor_state_mut()
+        .editor_ui
+        .touch_recent_file(path_s, now);
     host.mark_editor_state_dirty();
 }
 

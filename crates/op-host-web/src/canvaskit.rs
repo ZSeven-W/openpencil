@@ -814,12 +814,12 @@ pub async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
     // hidden mirror container map a focused/activated mirror node back to a
     // host action (focus chat input, blur it on canvas/panel focus, …) then
     // repaint so the canvas reflects the screen-reader-driven change.
-    if let Some(mirror_target) = inner
-        .borrow()
-        .a11y
-        .as_ref()
-        .map(|m| -> web_sys::EventTarget { m.container().clone().into() })
-    {
+    let mirror_target = inner.try_borrow().ok().and_then(|b| {
+        b.a11y
+            .as_ref()
+            .map(|m| -> web_sys::EventTarget { m.container().clone().into() })
+    });
+    if let Some(mirror_target) = mirror_target {
         // `focusin` bubbles (unlike `focus`), so a single delegated listener
         // on the container catches focus landing on any descendant node.
         {

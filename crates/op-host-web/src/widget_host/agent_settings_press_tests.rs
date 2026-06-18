@@ -1,10 +1,11 @@
 use super::WidgetHost;
 use op_editor_core::agent_settings::{
     AcpAgentField, AgentSettingsTab, BuiltinAgentField, ImageGenField, ImageGenProvider,
-    ImageTestStatus, SettingsFocus,
+    ImageTestStatus, ProviderConnectPhase, SettingsFocus,
 };
-use op_editor_core::{AgentSettingsButton, ButtonPressTarget};
-use op_editor_ui::widgets::agent_settings_panel::AgentSettingsPanel;
+use op_editor_core::{AgentProvider, AgentSettingsButton, ButtonPressTarget};
+use op_editor_ui::widgets::agent_settings_panel::{AgentSettingsHit, AgentSettingsPanel};
+use op_editor_ui::Point2D;
 
 #[test]
 fn close_press_sets_and_release_clears_agent_settings_button() {
@@ -22,6 +23,135 @@ fn close_press_sets_and_release_clears_agent_settings_button() {
 
     assert!(host.apply_release_with_viewport(1200.0, 800.0));
     assert_eq!(host.editor_state.editor_ui.pressed_button, None);
+}
+
+#[test]
+fn web_provider_connect_starts_real_daemon_probe_request() {
+    let mut host = WidgetHost::new();
+    let panel = AgentSettingsPanel::for_editor(&host.editor_state);
+    let rect = panel.rect(1200.0, 800.0);
+    let mut connect_point = None;
+    let mut y = rect.origin.y;
+    while y < rect.origin.y + rect.size.y {
+        let mut x = rect.origin.x;
+        while x < rect.origin.x + rect.size.x {
+            let p = Point2D::new(x, y);
+            if panel.hit_test(rect, p) == AgentSettingsHit::Connect(AgentProvider::CodexCli) {
+                connect_point = Some(p);
+                break;
+            }
+            x += 4.0;
+        }
+        if connect_point.is_some() {
+            break;
+        }
+        y += 4.0;
+    }
+    let point = connect_point.expect("Codex connect button point");
+
+    assert!(host.dispatch_agent_settings_press(point.x, point.y, 1200.0, 800.0));
+
+    let settings = &host.editor_state.editor_ui.agent_settings;
+    let idx =
+        op_editor_core::agent_settings::AgentSettings::provider_index(AgentProvider::CodexCli);
+    assert!(!settings.connected[idx]);
+    assert_eq!(
+        settings.provider_connection[idx].phase,
+        ProviderConnectPhase::Probing
+    );
+    assert_eq!(
+        settings.pending_provider_connect,
+        Some(AgentProvider::CodexCli)
+    );
+}
+
+#[test]
+fn web_provider_connect_response_applies_real_models() {
+    let mut host = WidgetHost::new();
+    host.editor_state
+        .editor_ui
+        .agent_settings
+        .begin_provider_connect(AgentProvider::CodexCli);
+    let response = serde_json::json!({
+        "ok": true,
+        "provider": "codex",
+        "connected": true,
+        "models": [
+            { "value": "gpt-5.5", "displayName": "GPT-5.5" }
+        ],
+        "connectionInfo": "Connected via Codex CLI",
+        "version": "codex 1.2.3"
+    })
+    .to_string();
+
+    assert!(crate::web_agent_connect::apply_provider_connect_response(
+        &mut host.editor_state,
+        AgentProvider::CodexCli,
+        &response
+    ));
+
+    let settings = &host.editor_state.editor_ui.agent_settings;
+    assert!(settings.provider_verified_connected(AgentProvider::CodexCli));
+    assert!(host
+        .editor_state
+        .chat
+        .available_models
+        .iter()
+        .any(|m| m.provider == AgentProvider::CodexCli && m.value == "gpt-5.5"));
+}
+
+#[test]
+fn web_provider_connect_response_without_models_is_failure() {
+    let mut host = WidgetHost::new();
+    host.editor_state
+        .chat
+        .discovered_models
+        .push(op_editor_core::ModelEntry::new(
+            AgentProvider::CodexCli,
+            "stale-gpt",
+            "Stale GPT",
+        ));
+    host.editor_state
+        .editor_ui
+        .agent_settings
+        .begin_provider_connect(AgentProvider::CodexCli);
+    let response = serde_json::json!({
+        "ok": true,
+        "provider": "codex",
+        "connected": true,
+        "models": [],
+        "connectionInfo": "Connected via Codex CLI",
+        "version": "codex 1.2.3"
+    })
+    .to_string();
+
+    assert!(crate::web_agent_connect::apply_provider_connect_response(
+        &mut host.editor_state,
+        AgentProvider::CodexCli,
+        &response
+    ));
+
+    let settings = &host.editor_state.editor_ui.agent_settings;
+    assert!(!settings.provider_verified_connected(AgentProvider::CodexCli));
+    let idx =
+        op_editor_core::agent_settings::AgentSettings::provider_index(AgentProvider::CodexCli);
+    assert_eq!(
+        settings.provider_connection[idx].phase,
+        ProviderConnectPhase::Error
+    );
+    assert!(settings.provider_connection[idx]
+        .error
+        .as_deref()
+        .is_some_and(|error| error.contains("No models found")));
+    assert!(
+        !host
+            .editor_state
+            .chat
+            .available_models
+            .iter()
+            .any(|m| m.provider == AgentProvider::CodexCli),
+        "stale Codex models must not become selectable after a failed connect"
+    );
 }
 
 #[test]

@@ -27,8 +27,8 @@ use crate::model_discovery::{
     parse_copilot_model_list, resolve_cli, write_lsp_frame,
 };
 use crate::provider_probe_models::{
-    claude_initialize_query, codex_home, codex_models_from_latest_md, fallback_claude_models,
-    fallback_gemini_models, gemini_models_from_api, ClaudeAccount, ClaudeInitResult,
+    claude_initialize_query, codex_home, codex_models_from_latest_md, gemini_models_from_api,
+    ClaudeAccount, ClaudeInitResult,
 };
 
 /// Probe result — the TS `ConnectResult` shape plus the install
@@ -61,6 +61,48 @@ impl ProbeOutcome {
             error: Some(error),
             ..Self::default()
         }
+    }
+}
+
+fn no_models_error(provider: AgentProvider) -> String {
+    match provider {
+        AgentProvider::ClaudeCode => {
+            "No models found. Claude Code did not return a model list. Run \"claude login\" to authenticate, or set ANTHROPIC_API_KEY in ~/.claude/settings.json.".to_string()
+        }
+        AgentProvider::CodexCli => {
+            "No models found. Run \"codex login\" or set OPENAI_API_KEY, then run codex once to populate the model cache.".to_string()
+        }
+        AgentProvider::OpenCode => {
+            "No models configured in OpenCode. Run \"opencode\" to set up providers.".to_string()
+        }
+        AgentProvider::GithubCopilot => {
+            "No models found. Run \"copilot login\" to authenticate first.".to_string()
+        }
+        AgentProvider::GeminiCli => {
+            "No models found. Run \"gemini\" once to authenticate, or set GEMINI_API_KEY.".to_string()
+        }
+    }
+}
+
+fn connected_probe_outcome(
+    provider: AgentProvider,
+    models: Vec<ModelEntry>,
+    connection_info: Option<String>,
+    warning: Option<String>,
+    hint_path: Option<String>,
+    version: Option<String>,
+) -> ProbeOutcome {
+    if models.is_empty() {
+        return ProbeOutcome::failed(no_models_error(provider));
+    }
+    ProbeOutcome {
+        connected: true,
+        models,
+        connection_info,
+        warning,
+        hint_path,
+        version,
+        ..ProbeOutcome::default()
     }
 }
 
@@ -192,36 +234,20 @@ fn connect_claude_code() -> ProbeOutcome {
     match claude_initialize_query() {
         ClaudeInitResult::Answered(models, account) => {
             let (info, hint) = build_claude_connection_info(account.as_ref());
-            let models = if models.is_empty() {
-                fallback_claude_models()
-            } else {
-                models
-            };
-            ProbeOutcome {
-                connected: true,
+            connected_probe_outcome(
+                AgentProvider::ClaudeCode,
                 models,
-                connection_info: Some(info),
-                hint_path: Some(hint),
-                ..ProbeOutcome::default()
-            }
+                Some(info),
+                None,
+                Some(hint),
+                None,
+            )
         }
         ClaudeInitResult::ExitedWithError(code) => ProbeOutcome::failed(friendly_claude_error(
             &format!("process exited with code {code}"),
         )),
-        // The CLI is installed but didn't answer the listing call —
-        // the TS "query closed before response" bucket (third-party
-        // base-URL proxies): connect anyway with the fallback list.
-        // The TS debug-log warning scan (connect-agent.ts:225-251)
-        // is not ported (no --debug-file is passed).
         ClaudeInitResult::NoAnswer => {
-            let (info, hint) = build_claude_connection_info(None);
-            ProbeOutcome {
-                connected: true,
-                models: fallback_claude_models(),
-                connection_info: Some(info),
-                hint_path: Some(hint),
-                ..ProbeOutcome::default()
-            }
+            ProbeOutcome::failed(no_models_error(AgentProvider::ClaudeCode))
         }
     }
 }
@@ -340,19 +366,20 @@ fn connect_codex_cli() -> ProbeOutcome {
             models = codex_models_from_latest_md(&home);
         }
     }
-    let warning = models.is_empty().then(|| {
-        "No models found. Try running codex once to populate the model cache.".to_string()
-    });
-    let (info, hint) = build_codex_connection_info();
-    ProbeOutcome {
-        connected: true,
-        models,
-        warning,
-        connection_info: Some(info),
-        hint_path: Some(hint),
-        version: Some(version),
-        ..ProbeOutcome::default()
+    if !codex_has_auth() {
+        return ProbeOutcome::failed(
+            "Not authenticated. Run \"codex login\" or set OPENAI_API_KEY first.".to_string(),
+        );
     }
+    let (info, hint) = build_codex_connection_info();
+    connected_probe_outcome(
+        AgentProvider::CodexCli,
+        models,
+        Some(info),
+        None,
+        Some(hint),
+        Some(version),
+    )
 }
 
 /// TS `buildCodexConnectionInfo` (connect-agent.ts:312-354) —
@@ -400,6 +427,34 @@ fn codex_connection_info_from_auth(auth_raw: Option<&str>) -> String {
         return format!("Connected via {mode}");
     }
     fallback
+}
+
+fn codex_has_auth() -> bool {
+    if std::env::var("OPENAI_API_KEY")
+        .ok()
+        .is_some_and(|key| !key.trim().is_empty())
+    {
+        return true;
+    }
+    let auth_raw = codex_home()
+        .map(|home| home.join("auth.json"))
+        .and_then(|path| std::fs::read_to_string(path).ok());
+    codex_auth_present(auth_raw.as_deref())
+}
+
+fn codex_auth_present(auth_raw: Option<&str>) -> bool {
+    let Some(raw) = auth_raw else { return false };
+    let Ok(auth) = serde_json::from_str::<serde_json::Value>(raw) else {
+        return false;
+    };
+    auth.get("tokens")
+        .and_then(|t| t.get("id_token"))
+        .and_then(|v| v.as_str())
+        .is_some_and(|token| !token.trim().is_empty())
+        || auth
+            .get("auth_mode")
+            .and_then(|v| v.as_str())
+            .is_some_and(|mode| !mode.trim().is_empty())
 }
 
 // ---------------------------------------------------------------
@@ -636,26 +691,24 @@ fn connect_gemini_cli() -> ProbeOutcome {
     let Some(version) = cli_version(&exe, Duration::from_secs(10)) else {
         return ProbeOutcome::failed("Gemini CLI not responding".to_string());
     };
-    // TS: fetch failure (throw) → fallback silently; an answered-
-    // but-empty listing → warning + fallback.
-    let (models, warning) = match gemini_models_from_api() {
-        Some(models) if !models.is_empty() => (models, None),
-        Some(_) => (
-            fallback_gemini_models(),
-            Some("No models found. Try running \"gemini\" once to authenticate.".to_string()),
-        ),
-        None => (fallback_gemini_models(), None),
+    let models = match gemini_models_from_api() {
+        Some(models) if !models.is_empty() => models,
+        Some(_) => return ProbeOutcome::failed(no_models_error(AgentProvider::GeminiCli)),
+        None => {
+            return ProbeOutcome::failed(
+                "Unable to fetch Gemini models. Run \"gemini\" once to authenticate, or set GEMINI_API_KEY.".to_string(),
+            )
+        }
     };
     let (info, hint) = build_gemini_connection_info();
-    ProbeOutcome {
-        connected: true,
+    connected_probe_outcome(
+        AgentProvider::GeminiCli,
         models,
-        warning,
-        connection_info: Some(info),
-        hint_path: Some(hint),
-        version: Some(version),
-        ..ProbeOutcome::default()
-    }
+        Some(info),
+        None,
+        Some(hint),
+        Some(version),
+    )
 }
 
 /// TS `buildGeminiConnectionInfo` (connect-agent.ts:1027-1063).

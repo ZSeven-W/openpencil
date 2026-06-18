@@ -5,7 +5,7 @@
 use super::test_support::{filled_rect, scene_with};
 use super::*;
 use op_editor_ui::layout_scene::{NodeKind, SceneNode, SceneStroke};
-use op_editor_ui::Rect;
+use op_editor_ui::{Color, Rect};
 
 #[test]
 fn raster_format_extension_lookup() {

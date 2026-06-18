@@ -44,6 +44,66 @@ impl WidgetHostNative {
         true
     }
 
+    /// Scroll the chat transcript message list when a wheel / trackpad
+    /// pan lands over the panel body. The body swallows the event so a
+    /// wheel over a long reply never zooms the canvas beneath. Mirrors
+    /// the model-picker's clamp: the offset rides `[0, max]`, and
+    /// reaching the bottom re-pins the transcript to auto-follow new
+    /// streamed content.
+    fn try_scroll_chat_transcript(
+        &mut self,
+        x: f32,
+        y: f32,
+        delta: f32,
+        viewport_width: f32,
+        viewport_height: f32,
+    ) -> bool {
+        use op_editor_ui::widgets::AIChatPlaceholder;
+        if self.editor_state.chat.messages.is_empty() {
+            return false;
+        }
+        let point = Point2D::new(x, y);
+        let Some(chat_rect) = self.ai_chat_rect(viewport_width, viewport_height) else {
+            return false;
+        };
+        let (body, max) = {
+            let panel = AIChatPlaceholder::from_editor_at(&self.editor_state, self.now_ms);
+            (
+                panel.body_rect(chat_rect),
+                panel.transcript_scroll_max(chat_rect),
+            )
+        };
+        if !(body).contains(point) {
+            return false;
+        }
+        let chat = &mut self.editor_state.chat;
+        // Nothing overflows — swallow so the canvas doesn't zoom under the
+        // panel, and keep the view pinned to the bottom.
+        if max <= 0.0 {
+            if !chat.transcript_pinned || chat.transcript_scroll.offset != 0.0 {
+                chat.transcript_pinned = true;
+                chat.transcript_scroll.offset = 0.0;
+                self.mark_dirty();
+            }
+            return true;
+        }
+        let cur = if chat.transcript_pinned {
+            max
+        } else {
+            chat.transcript_scroll.offset.clamp(0.0, max)
+        };
+        let next = (cur - delta).clamp(0.0, max);
+        let pinned = next >= max - 0.5;
+        if (next - chat.transcript_scroll.offset).abs() > f32::EPSILON
+            || chat.transcript_pinned != pinned
+        {
+            chat.transcript_scroll.offset = next;
+            chat.transcript_pinned = pinned;
+            self.mark_dirty();
+        }
+        true
+    }
+
     fn try_scroll_agent_preset_menu(
         &mut self,
         x: f32,
@@ -364,6 +424,12 @@ impl WidgetHostNative {
         if self.try_scroll_chat_checklist(x, y, delta_y, viewport_width, viewport_height) {
             return true;
         }
+        // Chat transcript message list — a wheel over the body scrolls
+        // the conversation; the pinned-to-bottom auto-follow resumes once
+        // the user scrolls back to the bottom.
+        if self.try_scroll_chat_transcript(x, y, delta_y, viewport_width, viewport_height) {
+            return true;
+        }
         // Agent-settings modal owns wheel.
         if self.editor_state.editor_ui.agent_settings_open {
             use op_editor_ui::widgets::agent_settings_panel::AgentSettingsPanel;
@@ -510,6 +576,9 @@ impl WidgetHostNative {
             }
         }
         if self.try_scroll_chat_checklist(x, y, dy, viewport_width, viewport_height) {
+            return true;
+        }
+        if self.try_scroll_chat_transcript(x, y, dy, viewport_width, viewport_height) {
             return true;
         }
         // Agent-settings modal owns trackpad scroll same as wheel.

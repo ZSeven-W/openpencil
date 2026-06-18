@@ -24,6 +24,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
+use op_editor_core::agent_settings::{AcpAgentConnectOutcome, ProviderConnectOutcome};
 use op_editor_core::EditorState;
 
 /// Slow/stalled-peer bound — bodies can be large (whole documents with embedded
@@ -136,6 +137,8 @@ pub(crate) struct WebReply {
 ///   browser shell polls this and fetches the full document only on a bump.
 /// - `GET  /api/mcp/selection` → `{selectedIds,activePageId}` (like `selection.get.ts`)
 /// - `POST /api/mcp/selection` → renderer selection push (like `selection.post.ts`)
+/// - `POST /api/file/open-recent` → local-daemon recent-file open, used by the
+///   browser shell because only the daemon can read local paths.
 /// - anything else → 404 (the JSON-RPC `/mcp` path + SSE are handled by the
 ///   caller's connection loop, not here).
 pub(crate) fn handle_web_canvas_request(
@@ -227,6 +230,17 @@ pub(crate) fn handle_web_canvas_request(
             }
         }
         ("POST", "/api/mcp/selection") => apply_selection_sync(body, state),
+        ("POST", "/api/file/open-recent") => open_recent_file(body, state),
+        ("POST", "/api/agents/connect") => {
+            handle_provider_connect_request_with_probe(body, state, crate::provider_probe::connect_provider)
+        }
+        ("POST", "/api/acp/connect") => {
+            handle_acp_agent_connect_request_with_probe(
+                body,
+                state,
+                crate::acp_agent_probe_host::probe_acp_agent_config,
+            )
+        }
         ("GET", "/api/ai/models") => WebReply {
             // JSON array of model ids the AI proxy can serve (the
             // configured built-in agents). The web bundle queries this
@@ -242,6 +256,333 @@ pub(crate) fn handle_web_canvas_request(
                 .to_string(),
         },
     }
+}
+
+pub(crate) fn handle_acp_agent_connect_request_with_probe<F>(
+    body: &str,
+    state: &mut WebCanvasState,
+    probe: F,
+) -> WebReply
+where
+    F: FnOnce(op_acp::AcpAgentConfig) -> crate::acp_agent_probe_host::AcpAgentProbeOutcome,
+{
+    let Some(id) = parse_acp_agent_connect_request(body) else {
+        return WebReply {
+            status: "400 Bad Request",
+            body: crate::mcp_serve::rest_error_body("Missing ACP agent id"),
+        };
+    };
+    let Some(index) = state
+        .editor
+        .editor_ui
+        .agent_settings
+        .acp_agents
+        .iter()
+        .position(|agent| agent.id == id && agent.ready())
+    else {
+        return WebReply {
+            status: "400 Bad Request",
+            body: crate::mcp_serve::rest_error_body("ACP agent is not configured"),
+        };
+    };
+    let agent = state.editor.editor_ui.agent_settings.acp_agents[index].clone();
+    state
+        .editor
+        .editor_ui
+        .agent_settings
+        .begin_acp_agent_connect(index);
+    let outcome = probe(crate::acp_agent_probe_host::acp_config_for_probe(&agent));
+    apply_acp_agent_probe_outcome(&id, outcome, state)
+}
+
+fn parse_acp_agent_connect_request(body: &str) -> Option<String> {
+    let parsed: serde_json::Value = serde_json::from_str(body).ok()?;
+    parsed
+        .get("id")
+        .or_else(|| parsed.get("agentId"))
+        .and_then(|v| v.as_str())
+        .filter(|id| !id.trim().is_empty())
+        .map(str::to_string)
+}
+
+fn apply_acp_agent_probe_outcome(
+    id: &str,
+    outcome: crate::acp_agent_probe_host::AcpAgentProbeOutcome,
+    state: &mut WebCanvasState,
+) -> WebReply {
+    state
+        .editor
+        .editor_ui
+        .agent_settings
+        .apply_acp_agent_connect_outcome(
+            id,
+            AcpAgentConnectOutcome {
+                connected: outcome.connected,
+                info: outcome.info.clone(),
+                error: outcome.error.clone(),
+            },
+        );
+    state.editor.rebuild_chat_models();
+    WebReply {
+        status: "200 OK",
+        body: serde_json::json!({
+            "ok": true,
+            "id": id,
+            "connected": outcome.connected,
+            "connectionInfo": outcome.info,
+            "error": outcome.error,
+        })
+        .to_string(),
+    }
+}
+
+pub(crate) fn handle_provider_connect_request_with_probe<F>(
+    body: &str,
+    state: &mut WebCanvasState,
+    probe: F,
+) -> WebReply
+where
+    F: FnOnce(op_ai::agent_settings_state::AgentProvider) -> crate::provider_probe::ProbeOutcome,
+{
+    let Some(provider) = parse_provider_connect_request(body) else {
+        return WebReply {
+            status: "400 Bad Request",
+            body: crate::mcp_serve::rest_error_body("Missing provider"),
+        };
+    };
+    state
+        .editor
+        .editor_ui
+        .agent_settings
+        .begin_provider_connect(provider);
+    let outcome = probe(provider_to_probe(provider));
+    apply_provider_probe_outcome(provider, outcome, state)
+}
+
+fn parse_provider_connect_request(body: &str) -> Option<op_editor_core::AgentProvider> {
+    let parsed: serde_json::Value = serde_json::from_str(body).ok()?;
+    parsed
+        .get("provider")
+        .and_then(|v| v.as_str())
+        .and_then(parse_agent_provider)
+}
+
+fn parse_agent_provider(raw: &str) -> Option<op_editor_core::AgentProvider> {
+    use op_editor_core::AgentProvider;
+    let normalized = raw
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric())
+        .flat_map(|c| c.to_lowercase())
+        .collect::<String>();
+    match normalized.as_str() {
+        "claude" | "claudecode" => Some(AgentProvider::ClaudeCode),
+        "codex" | "codexcli" => Some(AgentProvider::CodexCli),
+        "opencode" => Some(AgentProvider::OpenCode),
+        "githubcopilot" | "copilot" => Some(AgentProvider::GithubCopilot),
+        "gemini" | "geminicli" => Some(AgentProvider::GeminiCli),
+        _ => None,
+    }
+}
+
+fn provider_to_probe(
+    provider: op_editor_core::AgentProvider,
+) -> op_ai::agent_settings_state::AgentProvider {
+    use op_ai::agent_settings_state::AgentProvider as ProbeProvider;
+    use op_editor_core::AgentProvider;
+    match provider {
+        AgentProvider::ClaudeCode => ProbeProvider::ClaudeCode,
+        AgentProvider::CodexCli => ProbeProvider::CodexCli,
+        AgentProvider::OpenCode => ProbeProvider::OpenCode,
+        AgentProvider::GithubCopilot => ProbeProvider::GithubCopilot,
+        AgentProvider::GeminiCli => ProbeProvider::GeminiCli,
+    }
+}
+
+fn apply_provider_probe_outcome(
+    provider: op_editor_core::AgentProvider,
+    outcome: crate::provider_probe::ProbeOutcome,
+    state: &mut WebCanvasState,
+) -> WebReply {
+    let outcome = crate::provider_probe_host::normalize_provider_probe_outcome(provider, outcome);
+    let crate::provider_probe::ProbeOutcome {
+        connected,
+        models,
+        error,
+        warning,
+        not_installed,
+        install_command,
+        connection_info,
+        hint_path,
+        version,
+    } = outcome;
+    let response_models: Vec<serde_json::Value> = models
+        .iter()
+        .map(|m| {
+            serde_json::json!({
+                "provider": provider_key(provider),
+                "value": m.value,
+                "displayName": m.display_name,
+            })
+        })
+        .collect();
+    state
+        .editor
+        .editor_ui
+        .agent_settings
+        .apply_provider_connect_outcome(
+            provider,
+            ProviderConnectOutcome {
+                connected,
+                info: connection_info.clone(),
+                warning: warning.clone(),
+                error: error.clone(),
+                not_installed,
+                install_command: install_command.clone(),
+                hint_path: hint_path.clone(),
+                version: version.clone(),
+            },
+        );
+    state
+        .editor
+        .editor_ui
+        .agent_settings
+        .pending_provider_connect = None;
+    if connected && !models.is_empty() {
+        state
+            .editor
+            .chat
+            .discovered_models
+            .retain(|m| m.provider != provider);
+        state.editor.chat.discovered_models.extend(
+            models
+                .into_iter()
+                .map(crate::model_discovery::model_entry_to_ec),
+        );
+        sort_discovered_models(&mut state.editor);
+    }
+    state.editor.rebuild_chat_models();
+    WebReply {
+        status: "200 OK",
+        body: serde_json::json!({
+            "ok": true,
+            "provider": provider_key(provider),
+            "connected": connected,
+            "models": response_models,
+            "error": error,
+            "warning": warning,
+            "notInstalled": not_installed,
+            "installCommand": install_command,
+            "connectionInfo": connection_info,
+            "hintPath": hint_path,
+            "version": version,
+        })
+        .to_string(),
+    }
+}
+
+fn sort_discovered_models(editor: &mut EditorState) {
+    editor.chat.discovered_models.sort_by_key(|m| {
+        op_editor_core::AgentProvider::ALL
+            .iter()
+            .position(|p| *p == m.provider)
+            .unwrap_or(usize::MAX)
+    });
+}
+
+fn provider_key(provider: op_editor_core::AgentProvider) -> &'static str {
+    use op_editor_core::AgentProvider;
+    match provider {
+        AgentProvider::ClaudeCode => "claude",
+        AgentProvider::CodexCli => "codex",
+        AgentProvider::OpenCode => "opencode",
+        AgentProvider::GithubCopilot => "github-copilot",
+        AgentProvider::GeminiCli => "gemini",
+    }
+}
+
+fn open_recent_file(body: &str, state: &mut WebCanvasState) -> WebReply {
+    let parsed: Option<serde_json::Value> = serde_json::from_str(body).ok();
+    let Some(path_s) = parsed
+        .as_ref()
+        .and_then(|v| v.get("path"))
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.trim().is_empty())
+        .map(str::to_string)
+    else {
+        return WebReply {
+            status: "400 Bad Request",
+            body: crate::mcp_serve::rest_error_body("Missing path string"),
+        };
+    };
+    if !state
+        .editor
+        .editor_ui
+        .recent_files
+        .iter()
+        .any(|recent| recent.path == path_s)
+    {
+        return WebReply {
+            status: "404 Not Found",
+            body: crate::mcp_serve::rest_error_body("Path is not in recent files"),
+        };
+    }
+    let path = PathBuf::from(&path_s);
+    match crate::mcp_serve::load_editor_state(&path) {
+        Ok(mut next) => {
+            preserve_web_canvas_preferences(&state.editor, &mut next);
+            set_file_name_display(&mut next, &path);
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0);
+            next.editor_ui.touch_recent_file(path_s, now);
+            state.editor = next;
+            state.version += 1;
+            WebReply {
+                status: "200 OK",
+                body: crate::mcp_serve::document_sync_ok(state.version),
+            }
+        }
+        Err(e) => {
+            let pruned = state.editor.editor_ui.remove_recent_file(&path_s);
+            WebReply {
+                status: "400 Bad Request",
+                body: serde_json::json!({
+                    "ok": false,
+                    "pruned": pruned,
+                    "error": e,
+                })
+                .to_string(),
+            }
+        }
+    }
+}
+
+fn preserve_web_canvas_preferences(previous: &EditorState, next: &mut EditorState) {
+    let previous_selected_model = previous.chat.selected_model_entry().cloned();
+    next.editor_ui.theme_mode = previous.editor_ui.theme_mode;
+    next.editor_ui.locale = previous.editor_ui.locale;
+    next.editor_ui.recent_files = previous.editor_ui.recent_files.clone();
+    next.ui_kits = previous.ui_kits.clone();
+    next.theme_presets = previous.theme_presets.clone();
+    next.theme_presets_dirty = previous.theme_presets_dirty;
+    next.editor_ui.agent_settings = previous.editor_ui.agent_settings.clone();
+    next.editor_ui.chat_selected_agent = previous.editor_ui.chat_selected_agent;
+    next.chat.discovered_models = previous.chat.discovered_models.clone();
+    next.rebuild_chat_models();
+    if let Some(prev) = previous_selected_model {
+        if let Some(idx) = next.chat.available_models.iter().position(|m| {
+            m.provider == prev.provider
+                && m.value == prev.value
+                && m.builtin_provider_id == prev.builtin_provider_id
+        }) {
+            next.select_chat_model(idx);
+        }
+    }
+}
+
+fn set_file_name_display(state: &mut EditorState, path: &std::path::Path) {
+    state.editor_ui.file_name_display = path.file_name().map(|n| n.to_string_lossy().into_owned());
 }
 
 /// Apply a renderer selection push (`POST /api/mcp/selection`) to the live
@@ -332,11 +673,32 @@ pub(crate) fn parse_serve_web_args<I: Iterator<Item = String>>(
     Ok((port, path, host))
 }
 
-pub(crate) fn startup_editor_for_web_canvas(path: Option<PathBuf>) -> Result<EditorState, String> {
+fn startup_editor_from_base_for_web_canvas(
+    base: EditorState,
+    path: Option<PathBuf>,
+) -> Result<EditorState, String> {
     match path {
-        Some(p) => crate::mcp_serve::load_editor_state(&p),
-        None => Ok(EditorState::starter()),
+        Some(p) => {
+            let mut next = crate::mcp_serve::load_editor_state(&p)?;
+            preserve_web_canvas_preferences(&base, &mut next);
+            set_file_name_display(&mut next, &p);
+            next.editor_ui.touch_recent_file(
+                p.to_string_lossy().into_owned(),
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_secs())
+                    .unwrap_or(0),
+            );
+            Ok(next)
+        }
+        None => Ok(base),
     }
+}
+
+pub(crate) fn startup_editor_for_web_canvas(path: Option<PathBuf>) -> Result<EditorState, String> {
+    let mut base = EditorState::starter();
+    crate::settings_io::load(&mut base);
+    startup_editor_from_base_for_web_canvas(base, path)
 }
 
 /// Run the web-canvas daemon on `host:port` (default `127.0.0.1`), backed by
@@ -486,6 +848,90 @@ fn serve_one<S: Read + Write>(
         };
         return crate::ai_proxy::stream_ai_response(stream, ai_req, provider.as_ref())
             .map_err(|e| format!("ai stream: {e}"))
+            .map(|()| false);
+    }
+    // Standard web chat/design turn: same external-CLI routing shape as
+    // desktop standard mode (classify → chat / modify / new design), but
+    // applied against this web-canvas daemon's document authority.
+    if req.method == "POST" && req.path == "/api/ai/standard" {
+        let Some(standard_req) = crate::web_chat_standard::parse_standard_turn_body(&req.body)
+        else {
+            return crate::ai_proxy::write_sse_error(stream, "invalid request body")
+                .map_err(|e| format!("ai standard error: {e}"))
+                .map(|()| false);
+        };
+        return crate::web_chat_standard::stream_standard_turn(stream, standard_req, state, hub)
+            .map_err(|e| format!("ai standard: {e}"))
+            .map(|()| false);
+    }
+    if req.method == "POST" && req.path == "/api/agents/connect" {
+        let Some(provider) = parse_provider_connect_request(&req.body) else {
+            return crate::mcp_serve::write_mcp_http_response(
+                stream,
+                "400 Bad Request",
+                &crate::mcp_serve::rest_error_body("Missing provider"),
+            )
+            .map(|()| false);
+        };
+        let outcome = crate::provider_probe::connect_provider(provider_to_probe(provider));
+        let reply = {
+            let mut guard = state.lock().unwrap_or_else(|p| p.into_inner());
+            guard
+                .editor
+                .editor_ui
+                .agent_settings
+                .begin_provider_connect(provider);
+            let reply = apply_provider_probe_outcome(provider, outcome, &mut guard);
+            crate::settings_io::save(&guard.editor);
+            reply
+        };
+        return crate::mcp_serve::write_mcp_http_response(stream, reply.status, &reply.body)
+            .map(|()| false);
+    }
+    if req.method == "POST" && req.path == "/api/acp/connect" {
+        let Some(id) = parse_acp_agent_connect_request(&req.body) else {
+            return crate::mcp_serve::write_mcp_http_response(
+                stream,
+                "400 Bad Request",
+                &crate::mcp_serve::rest_error_body("Missing ACP agent id"),
+            )
+            .map(|()| false);
+        };
+        let agent = {
+            let mut guard = state.lock().unwrap_or_else(|p| p.into_inner());
+            let Some(index) = guard
+                .editor
+                .editor_ui
+                .agent_settings
+                .acp_agents
+                .iter()
+                .position(|agent| agent.id == id && agent.ready())
+            else {
+                return crate::mcp_serve::write_mcp_http_response(
+                    stream,
+                    "400 Bad Request",
+                    &crate::mcp_serve::rest_error_body("ACP agent is not configured"),
+                )
+                .map(|()| false);
+            };
+            let agent = guard.editor.editor_ui.agent_settings.acp_agents[index].clone();
+            guard
+                .editor
+                .editor_ui
+                .agent_settings
+                .begin_acp_agent_connect(index);
+            agent
+        };
+        let outcome = crate::acp_agent_probe_host::probe_acp_agent_config(
+            crate::acp_agent_probe_host::acp_config_for_probe(&agent),
+        );
+        let reply = {
+            let mut guard = state.lock().unwrap_or_else(|p| p.into_inner());
+            let reply = apply_acp_agent_probe_outcome(&id, outcome, &mut guard);
+            crate::settings_io::save(&guard.editor);
+            reply
+        };
+        return crate::mcp_serve::write_mcp_http_response(stream, reply.status, &reply.body)
             .map(|()| false);
     }
     // All `/api/mcp/*` REST paths go to the REST handler — including ones this

@@ -710,6 +710,9 @@ pub struct RecentFile {
     pub modified_at: u64,
 }
 
+/// Maximum number of recent files shown in the File menu.
+pub const RECENT_FILE_CAP: usize = 10;
+
 // What the LayerPanel right-click context menu is acting on — the
 // canonical definition is `ui_draft::LayerContextTarget` (it backs
 // the inline-rename draft too). Re-exported so UI code that
@@ -1351,6 +1354,19 @@ impl EditorUiState {
 
     pub fn clear_button_press_target(&mut self) {
         self.pressed_button = None;
+    }
+
+    pub fn touch_recent_file(&mut self, path: String, modified_at: u64) {
+        self.recent_files.retain(|recent| recent.path != path);
+        self.recent_files
+            .insert(0, RecentFile { path, modified_at });
+        self.recent_files.truncate(RECENT_FILE_CAP);
+    }
+
+    pub fn remove_recent_file(&mut self, path: &str) -> bool {
+        let before = self.recent_files.len();
+        self.recent_files.retain(|recent| recent.path != path);
+        self.recent_files.len() != before
     }
 
     /// Enter canvas Preview (Play) mode. The host follows up by

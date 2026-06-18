@@ -106,9 +106,7 @@ impl WidgetHost {
         }
     }
 
-    /// The open File-menu dropdown rect, or `None` when closed. The
-    /// rect depends only on the menu's row count (recent-file list),
-    /// not on time, so a `0` clock is fine here.
+    /// The open File-menu dropdown rect, or `None` when closed.
     pub(in crate::widget_host) fn file_menu_rect(&self, viewport_w: f32) -> Option<Rect> {
         use op_editor_ui::widgets::file_menu::FileMenu;
         if !self.editor_state.editor_ui.file_menu_open {
@@ -116,8 +114,28 @@ impl WidgetHost {
         }
         let top_bar_rect = self.top_bar_rect(viewport_w);
         let anchor = self.top_bar().file_menu_rect_for(top_bar_rect);
-        let menu = FileMenu::from_editor_ui(&self.editor_state.editor_ui, 0);
+        let menu = FileMenu::from_editor_ui(&self.editor_state.editor_ui, self.wall_now_secs);
         Some(menu.rect_at(anchor))
+    }
+
+    /// Whether `point` is inside an open chrome dropdown that paints
+    /// above floating panels. These dropdowns are visually topmost, so
+    /// their hover/click handling must win over the Variables panel
+    /// when their rects overlap.
+    pub(in crate::widget_host) fn over_dropdown_overlay(
+        &self,
+        x: f32,
+        y: f32,
+        viewport_w: f32,
+        viewport_h: f32,
+    ) -> bool {
+        let p = Point2D::new(x, y);
+        let ui = &self.editor_state.editor_ui;
+        (ui.shape_picker.open && (self.shape_picker_rect(viewport_w, viewport_h)).contains(p))
+            || (ui.locale_picker.open && (self.locale_picker_rect(viewport_w)).contains(p))
+            || self
+                .file_menu_rect(viewport_w)
+                .is_some_and(|r| (r).contains(p))
     }
 
     /// Floating Design-MD panel rect — `None` when the panel is

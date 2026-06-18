@@ -3,14 +3,12 @@
 //! B1 piece: proves the `Widget` trait + `PaintCx` / `LayoutCx` shape
 //! compiles + that a recording backend plugs in via `&mut dyn
 //! RenderBackend`. B2 piece: proves the remaining OP inspector widgets (Tree /
-//! PropertyRow / TextInput) paint and emit accesskit nodes
-//! with the expected semantic roles.
+//! PropertyRow) paint and emit accesskit nodes with the expected semantic roles.
 
 use op_editor_ui::widgets::{
-    rect, LayoutBox, LayoutCx, PaintCx, PropertyRow, TextInput, TextInputState, TreeWidget, Widget,
-    WidgetId, ROOT_WIDGET_ID,
+    rect, LayoutBox, LayoutCx, PaintCx, PropertyRow, TreeWidget, Widget, WidgetId, ROOT_WIDGET_ID,
 };
-use op_editor_ui::{Color, ImeEvent, ImeKind, Point2D, Rect, RenderBackend, TextLayout};
+use op_editor_ui::{Color, Point2D, Rect, RenderBackend, TextLayout};
 
 #[derive(Default)]
 struct RecordingBackend {
@@ -172,7 +170,6 @@ fn inspector_widgets_paint_static_content() {
     let widgets: Vec<Box<dyn Widget>> = vec![
         Box::new(TreeWidget::sample()),
         Box::new(PropertyRow::new(200, "Width", "960")),
-        Box::new(TextInput::sample()),
     ];
     let mut backend = RecordingBackend::default();
     for widget in widgets {
@@ -183,23 +180,22 @@ fn inspector_widgets_paint_static_content() {
         widget.paint(&mut cx, box_.rect);
     }
 
-    // Each widget paints at least its background fill (3); Tree adds one
-    // more for the selected row -> >= 4. Stroked rects: PropertyRow and
-    // TextInput each stroke their border (2). Text runs: PropertyRow has
-    // 2 (label+value); Tree has 3 items; TextInput has 1 -> >= 6 total.
+    // Each widget paints at least its background fill (2); Tree adds one
+    // more for the selected row. Stroked rects: PropertyRow strokes its
+    // border. Text runs: PropertyRow has 2 (label+value); Tree has 3 items.
     assert!(
-        backend.rects >= 4,
-        "fill_rect dispatch >= 4 (got {})",
+        backend.rects >= 3,
+        "fill_rect dispatch >= 3 (got {})",
         backend.rects
     );
     assert!(
-        backend.strokes >= 2,
-        "stroke_rect dispatch >= 2 (got {})",
+        backend.strokes >= 1,
+        "stroke_rect dispatch >= 1 (got {})",
         backend.strokes
     );
     assert!(
-        backend.text >= 6,
-        "draw_text dispatch >= 6 (got {})",
+        backend.text >= 5,
+        "draw_text dispatch >= 5 (got {})",
         backend.text
     );
 }
@@ -224,122 +220,4 @@ fn property_row_advertises_label_and_value() {
     // filtering — see codex B2 R1 CONCERN + the fix in prop_row.rs.
     assert_eq!(node.role(), accesskit::Role::Group);
     assert_eq!(node.label(), Some("Width 960"));
-}
-
-#[test]
-fn text_input_advertises_text_input_role_and_value() {
-    let input = TextInput::sample();
-    let node = input.access_node();
-    assert_eq!(node.role(), accesskit::Role::TextInput);
-    assert_eq!(node.label(), Some("Name"));
-    assert_eq!(node.value(), Some("Frame 1"));
-}
-
-#[test]
-fn text_input_paints_preedit_underline_when_composing() {
-    // The preedit-underline painting branch only fires when
-    // `state.preedit` is non-empty; verify it via the recording backend.
-    let mut input = TextInput::sample();
-    input.state.preedit = "你好".to_string();
-    let layout_cx = LayoutCx {
-        available_width: 240.0,
-        dpi: 1.0,
-    };
-    let layout = input.layout(&layout_cx);
-    let mut backend = RecordingBackend::default();
-    {
-        let mut cx = PaintCx {
-            backend: &mut backend,
-        };
-        input.paint(&mut cx, layout.rect);
-    }
-    // 1 fill (background) + 2 strokes (border + preedit underline) +
-    // 1 text run (preedit content).
-    assert_eq!(backend.rects, 1);
-    assert_eq!(backend.strokes, 2);
-    assert_eq!(backend.text, 1);
-}
-
-#[test]
-fn text_input_state_default_is_empty() {
-    let s = TextInputState::default();
-    assert_eq!(s.value, "");
-    assert_eq!(s.preedit, "");
-}
-
-// ---------------------------------------------------------------------
-// C2 widget event handlers (apply_ime)
-// ---------------------------------------------------------------------
-
-#[test]
-fn text_input_apply_ime_start_clears_preedit() {
-    let mut state = TextInputState {
-        value: "Frame 1".into(),
-        preedit: "stale".into(),
-    };
-    state.apply_ime(&ImeEvent {
-        kind: ImeKind::CompositionStart,
-        text: String::new(),
-    });
-    assert_eq!(state.preedit, "");
-    // CompositionStart must NOT touch the committed value.
-    assert_eq!(state.value, "Frame 1");
-}
-
-#[test]
-fn text_input_apply_ime_update_replaces_preedit() {
-    let mut state = TextInputState {
-        value: "Frame ".into(),
-        preedit: String::new(),
-    };
-    state.apply_ime(&ImeEvent {
-        kind: ImeKind::CompositionUpdate { selection: None },
-        text: "你".into(),
-    });
-    assert_eq!(state.preedit, "你");
-    state.apply_ime(&ImeEvent {
-        kind: ImeKind::CompositionUpdate { selection: None },
-        text: "你好".into(),
-    });
-    assert_eq!(state.preedit, "你好");
-    // Update path NEVER mutates value.
-    assert_eq!(state.value, "Frame ");
-}
-
-#[test]
-fn text_input_apply_ime_end_appends_to_value_and_clears_preedit() {
-    let mut state = TextInputState {
-        value: "Frame ".into(),
-        preedit: "你好".into(),
-    };
-    state.apply_ime(&ImeEvent {
-        kind: ImeKind::CompositionEnd,
-        text: "你好".into(),
-    });
-    assert_eq!(state.value, "Frame 你好");
-    assert_eq!(state.preedit, "");
-}
-
-#[test]
-fn text_input_apply_ime_double_start_clears_preedit_each_time() {
-    // Pathological host state machine: a CompositionStart followed by
-    // another CompositionStart without an intervening End. Each Start
-    // unconditionally resets preedit; the committed value never moves.
-    // (Codex C2.1 R1 CONCERN-1.)
-    let mut state = TextInputState {
-        value: "Frame ".into(),
-        preedit: "old".into(),
-    };
-    state.apply_ime(&ImeEvent {
-        kind: ImeKind::CompositionStart,
-        text: String::new(),
-    });
-    assert_eq!(state.preedit, "");
-    state.preedit = "leftover".into();
-    state.apply_ime(&ImeEvent {
-        kind: ImeKind::CompositionStart,
-        text: String::new(),
-    });
-    assert_eq!(state.preedit, "");
-    assert_eq!(state.value, "Frame ");
 }

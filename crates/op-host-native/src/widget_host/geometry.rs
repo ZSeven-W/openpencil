@@ -89,6 +89,8 @@ impl WidgetHostNative {
         {
             let ui = &mut self.editor_state.editor_ui;
             changed |= ui.canvas_hover_node.take().is_some();
+            changed |= ui.hovered_layer_id.take().is_some();
+            changed |= ui.hovered_page_index.take().is_some();
             changed |= ui.file_menu.hover.take().is_some();
             changed |= ui.locale_picker.hover.take().is_some();
             changed |= ui.shape_picker.hover.take().is_some();
@@ -103,13 +105,26 @@ impl WidgetHostNative {
             // under a floating panel covering the rail.
             changed |= ui.property_action_hover.take().is_some();
             changed |= ui.property_tab_hover.take().is_some();
-            changed |= ui.variables_panel_hover.take().is_some();
             if let Some(menu) = ui.layer_context_menu.as_mut() {
                 changed |= menu.menu.hover.take().is_some();
             }
         }
+        if let Some(menu) = self.editor_state.ui.path_anchor_menu.as_mut() {
+            changed |= menu.menu.hover.take().is_some();
+        }
         changed |= self.editor_state.codegen.framework_hover.take().is_some();
         changed |= self.editor_state.codegen.action_hover.take().is_some();
+        if changed {
+            self.mark_dirty();
+        }
+        changed
+    }
+
+    pub(in crate::widget_host) fn clear_layer_panel_hover(&mut self) -> bool {
+        let ui = &mut self.editor_state.editor_ui;
+        let cleared_layer = ui.hovered_layer_id.take().is_some();
+        let cleared_page = ui.hovered_page_index.take().is_some();
+        let changed = cleared_layer || cleared_page;
         if changed {
             self.mark_dirty();
         }
@@ -127,7 +142,9 @@ impl WidgetHostNative {
         over_topmost: bool,
     ) -> bool {
         use op_editor_ui::{Point2D, Rect};
-        if over_topmost {
+        if over_topmost
+            && !self.over_dropdown_overlay(x, y, self.last_viewport_w, self.last_viewport_h)
+        {
             return false;
         }
         if self.editor_state.editor_ui.file_menu_open {
@@ -237,27 +254,32 @@ impl WidgetHostNative {
         let panel_w = self.editor_state.editor_ui.layer_panel_width;
         // A top-most floating panel covers the layer rail when dragged
         // over it — no row highlights underneath it.
-        let over_topmost = self.over_topmost_panel(x, y, viewport_w, viewport_h);
-        let (new_layer, new_page) =
-            if sidebar_open && !over_topmost && y >= TOP_BAR_HEIGHT && x >= 0.0 && x <= panel_w {
-                let layer_rect = Rect {
-                    origin: Point2D::new(0.0, TOP_BAR_HEIGHT),
-                    size: Point2D::new(panel_w, (viewport_h - TOP_BAR_HEIGHT).max(0.0)),
-                };
-                let panel = LayerPanel::from_editor(&self.editor_state);
-                match panel.hit_test(layer_rect, Point2D::new(x, y)) {
-                    Some(LayerPanelHit::Layer(id))
-                    | Some(LayerPanelHit::ToggleHidden(id))
-                    | Some(LayerPanelHit::ToggleLocked(id))
-                    | Some(LayerPanelHit::ToggleCollapsed(id)) => (Some(id), None),
-                    Some(LayerPanelHit::Page(idx)) | Some(LayerPanelHit::DeletePage(idx)) => {
-                        (None, Some(idx))
-                    }
-                    _ => (None, None),
-                }
-            } else {
-                (None, None)
+        let blocked_by_overlay = self.over_topmost_panel(x, y, viewport_w, viewport_h)
+            || self.over_dropdown_overlay(x, y, viewport_w, viewport_h);
+        let (new_layer, new_page) = if sidebar_open
+            && !blocked_by_overlay
+            && y >= TOP_BAR_HEIGHT
+            && x >= 0.0
+            && x <= panel_w
+        {
+            let layer_rect = Rect {
+                origin: Point2D::new(0.0, TOP_BAR_HEIGHT),
+                size: Point2D::new(panel_w, (viewport_h - TOP_BAR_HEIGHT).max(0.0)),
             };
+            let panel = LayerPanel::from_editor(&self.editor_state);
+            match panel.hit_test(layer_rect, Point2D::new(x, y)) {
+                Some(LayerPanelHit::Layer(id))
+                | Some(LayerPanelHit::ToggleHidden(id))
+                | Some(LayerPanelHit::ToggleLocked(id))
+                | Some(LayerPanelHit::ToggleCollapsed(id)) => (Some(id), None),
+                Some(LayerPanelHit::Page(idx)) | Some(LayerPanelHit::DeletePage(idx)) => {
+                    (None, Some(idx))
+                }
+                _ => (None, None),
+            }
+        } else {
+            (None, None)
+        };
         // shell-core hit-test returns shell-core `NodeId`s; translate
         // to op-editor-core ids for storage on `editor_ui`.
         let new_layer_ec = new_layer.clone();
@@ -279,6 +301,7 @@ impl WidgetHostNative {
     ) -> bool {
         self.editor_state.editor_ui.sidebar_open
             && !self.over_topmost_panel(x, y, viewport_w, viewport_h)
+            && !self.over_dropdown_overlay(x, y, viewport_w, viewport_h)
             && y >= TOP_BAR_HEIGHT
             && x >= 0.0
             && x <= self.editor_state.editor_ui.layer_panel_width

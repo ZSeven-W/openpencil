@@ -5,6 +5,52 @@
 //! no DOM.
 
 use super::WidgetHost;
+use crate::repaint_ctx::RepaintContext;
+use op_editor_core::editor_ui_state::{FileAction, RecentFile};
+use std::cell::RefCell;
+use std::rc::Rc;
+use wasm_bindgen::JsValue;
+
+struct TestRepaintContext {
+    host: WidgetHost,
+    repaint_count: usize,
+}
+
+impl TestRepaintContext {
+    fn new(host: WidgetHost) -> Self {
+        Self {
+            host,
+            repaint_count: 0,
+        }
+    }
+}
+
+impl RepaintContext for TestRepaintContext {
+    fn host(&self) -> &WidgetHost {
+        &self.host
+    }
+
+    fn host_mut(&mut self) -> &mut WidgetHost {
+        &mut self.host
+    }
+
+    fn viewport_size(&self) -> (f32, f32) {
+        (1200.0, 800.0)
+    }
+
+    fn canvas_data_url(&self, _mime: &str) -> Result<String, JsValue> {
+        Err(JsValue::from_str("test context has no canvas"))
+    }
+
+    fn register_system_font(&mut self, _family: &str, _bytes: &[u8]) -> bool {
+        false
+    }
+
+    fn repaint(&mut self) -> Result<(), JsValue> {
+        self.repaint_count += 1;
+        Ok(())
+    }
+}
 
 #[test]
 fn ime_commit_lands_in_focused_chat_input() {
@@ -98,6 +144,90 @@ fn save_serializes_the_canonical_document_json() {
         ingested.state.doc.children.len(),
         host.editor_state().doc.children.len()
     );
+}
+
+#[test]
+fn drain_file_action_clear_recent_matches_desktop_state_change() {
+    let mut host = WidgetHost::new();
+    host.editor_state.editor_ui.recent_files = vec![
+        RecentFile {
+            path: "/tmp/a.op".to_string(),
+            modified_at: 1,
+        },
+        RecentFile {
+            path: "/tmp/b.op".to_string(),
+            modified_at: 2,
+        },
+    ];
+    host.editor_state.editor_ui.pending_file_action = Some(FileAction::ClearRecent);
+    host.editor_state_dirty = false;
+    let inner = Rc::new(RefCell::new(TestRepaintContext::new(host)));
+
+    crate::dom_io::drain_pending_file_action(&inner);
+
+    let borrowed = inner.borrow();
+    assert!(borrowed.host.editor_state.editor_ui.recent_files.is_empty());
+    assert!(borrowed
+        .host
+        .editor_state
+        .editor_ui
+        .pending_file_action
+        .is_none());
+    assert!(borrowed.host.editor_state_dirty);
+    assert_eq!(borrowed.repaint_count, 1);
+}
+
+#[test]
+fn open_recent_success_response_touches_local_recent_entry() {
+    let mut host = WidgetHost::new();
+    host.editor_state.editor_ui.recent_files = vec![
+        RecentFile {
+            path: "/tmp/a.op".to_string(),
+            modified_at: 1,
+        },
+        RecentFile {
+            path: "/tmp/b.op".to_string(),
+            modified_at: 2,
+        },
+    ];
+
+    let changed = crate::file_actions::apply_open_recent_response(
+        host.editor_state_mut(),
+        "/tmp/b.op",
+        r#"{"ok":true,"version":3}"#,
+        99,
+    );
+
+    assert!(changed);
+    assert_eq!(
+        host.editor_state.editor_ui.recent_files[0].path,
+        "/tmp/b.op"
+    );
+    assert_eq!(host.editor_state.editor_ui.recent_files[0].modified_at, 99);
+    assert_eq!(host.editor_state.editor_ui.recent_files.len(), 2);
+    assert_eq!(
+        host.editor_state.editor_ui.file_name_display.as_deref(),
+        Some("b.op")
+    );
+}
+
+#[test]
+fn open_recent_stale_response_prunes_local_recent_entry() {
+    let mut host = WidgetHost::new();
+    host.editor_state.editor_ui.recent_files = vec![RecentFile {
+        path: "/tmp/missing.op".to_string(),
+        modified_at: 1,
+    }];
+
+    let changed = crate::file_actions::apply_open_recent_response(
+        host.editor_state_mut(),
+        "/tmp/missing.op",
+        r#"{"ok":false,"pruned":true,"error":"missing"}"#,
+        99,
+    );
+
+    assert!(changed);
+    assert!(host.editor_state.editor_ui.recent_files.is_empty());
 }
 
 #[test]
@@ -199,13 +329,28 @@ fn export_target_maps_formats_onto_browser_encoders() {
         export_target(ExportFormat::Webp),
         ("image/webp", "webp", true)
     );
-    // SVG / PDF degrade to a PNG raster on web (no encoder yet).
+    // SVG is emitted as vector markup on web; PDF is a raster PDF
+    // wrapper around the browser canvas snapshot.
     assert_eq!(
         export_target(ExportFormat::Svg),
-        ("image/png", "png", false)
+        ("image/svg+xml", "svg", true)
     );
     assert_eq!(
         export_target(ExportFormat::Pdf),
-        ("image/png", "png", false)
+        ("application/pdf", "pdf", true)
     );
+}
+
+#[test]
+fn export_svg_document_returns_vector_markup() {
+    let host = WidgetHost::new();
+    let svg = crate::file_actions::export_svg_document(&host.editor_state)
+        .expect("starter document exports svg");
+
+    assert!(svg.starts_with("<svg "), "missing SVG root: {svg}");
+    assert!(
+        svg.contains("<rect ") || svg.contains("<text "),
+        "starter export should contain vector elements: {svg}"
+    );
+    assert!(svg.ends_with("</svg>"), "missing SVG close: {svg}");
 }

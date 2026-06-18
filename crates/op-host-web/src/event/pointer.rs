@@ -44,6 +44,36 @@ pub fn classify_mouse_press_button(button: i16) -> MousePressAction {
     }
 }
 
+/// Convert a browser event's canvas-local offset into the logical
+/// coordinate space the Rust widget host uses.
+///
+/// `MouseEvent.offset{X,Y}` is reported in the element's displayed CSS
+/// pixels, while the editor host lays out chrome against CanvasKit's
+/// logical viewport. Those values are usually equal, but they can drift
+/// when the canvas backing store is DPR-capped or the browser has a
+/// stale/layout-rounded CSS size. Scaling here keeps button hit-testing
+/// aligned with what is painted.
+pub fn map_offset_to_logical(
+    offset_x: f32,
+    offset_y: f32,
+    css_w: f32,
+    css_h: f32,
+    logical_w: f32,
+    logical_h: f32,
+) -> (f32, f32) {
+    let scale_x = if css_w.is_finite() && css_w > 0.0 && logical_w.is_finite() {
+        logical_w / css_w
+    } else {
+        1.0
+    };
+    let scale_y = if css_h.is_finite() && css_h > 0.0 && logical_h.is_finite() {
+        logical_h / css_h
+    } else {
+        1.0
+    };
+    (offset_x * scale_x, offset_y * scale_y)
+}
+
 /// Classify a browser wheel into the editor action the web shell should run.
 ///
 /// Vertical mouse-wheel scroll keeps the existing zoom behavior. Horizontal

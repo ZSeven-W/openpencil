@@ -11,11 +11,17 @@
 
 use std::io::Write;
 
-use op_ai::chat_provider::{ChatDelta, ChatProvider, ChatRequest, EffortLevel, ThinkingMode};
-use op_editor_core::EditorState;
+use op_ai::chat_provider::{
+    ChatDelta, ChatProvider, ChatRequest, CliName, EffortLevel, ThinkingMode,
+};
+use op_editor_core::{AgentProvider, EditorState, ModelEntry};
 use serde_json::{json, Value};
 
 use crate::chat_builtin_http::ConfiguredBuiltinProvider;
+use crate::chat_claude::ClaudeCodeProvider;
+use crate::chat_copilot::CopilotProvider;
+use crate::chat_http_server::OpenCodeProvider;
+use crate::chat_subprocess::SubprocessProvider;
 
 /// Parsed `POST /api/ai/stream` body. The web bundle sends skill NAMES
 /// (not the corpus) plus the per-turn knobs; the proxy expands the
@@ -199,13 +205,34 @@ pub fn write_sse_error<W: Write>(out: &mut W, message: &str) -> std::io::Result<
 // (API-key) agents, which is the only kind a headless backend can
 // drive without a UI host owning the CLI lifecycle.
 pub fn proxy_provider(editor: &EditorState, model: &str) -> Option<Box<dyn ChatProvider>> {
+    proxy_provider_with_chat_session(editor, model, true)
+}
+
+/// Build a proxy provider while choosing whether CLI-backed providers should
+/// join their resumable chat sessions. Plain `/api/ai/stream` uses chat
+/// sessions; standard-mode classification/design calls pass `false` so those
+/// internal LLM calls do not pollute the user's chat conversation.
+pub fn proxy_provider_with_chat_session(
+    editor: &EditorState,
+    model: &str,
+    chat_session: bool,
+) -> Option<Box<dyn ChatProvider>> {
     let agents = &editor.editor_ui.agent_settings.builtin_agents;
     // Prefer an exact model match so a request for a specific model
     // reaches the agent configured for it.
-    let chosen = agents
+    if let Some(chosen) = agents
         .iter()
         .find(|a| a.ready() && a.model.trim() == model.trim())
-        .or_else(|| agents.iter().find(|a| a.ready()))?;
+    {
+        let provider = ConfiguredBuiltinProvider::from_builtin_agent(chosen)?;
+        return Some(Box::new(provider));
+    }
+
+    if let Some(provider) = cli_provider_for_model(editor, model, chat_session) {
+        return Some(provider);
+    }
+
+    let chosen = agents.iter().find(|a| a.ready())?;
     let provider = ConfiguredBuiltinProvider::from_builtin_agent(chosen)?;
     Some(Box::new(provider))
 }
@@ -215,7 +242,7 @@ pub fn proxy_provider(editor: &EditorState, model: &str) -> Option<Box<dyn ChatP
 /// built-in agents (the only kind the headless proxy drives); empty
 /// array when nothing is configured.
 pub fn models_json(editor: &EditorState) -> String {
-    let models: Vec<&str> = editor
+    let mut models: Vec<String> = editor
         .editor_ui
         .agent_settings
         .builtin_agents
@@ -223,8 +250,83 @@ pub fn models_json(editor: &EditorState) -> String {
         .filter(|a| a.ready())
         .map(|a| a.model.trim())
         .filter(|m| !m.is_empty())
+        .map(str::to_string)
         .collect();
+    models.extend(
+        editor
+            .chat
+            .discovered_models
+            .iter()
+            .filter(|m| cli_model_is_available(editor, m))
+            .map(|m| m.value.trim())
+            .filter(|m| !m.is_empty())
+            .map(str::to_string),
+    );
     serde_json::to_string(&models).unwrap_or_else(|_| "[]".to_string())
+}
+
+fn cli_model_is_available(editor: &EditorState, model: &ModelEntry) -> bool {
+    model.builtin_provider_id.is_none()
+        && editor
+            .editor_ui
+            .agent_settings
+            .provider_verified_connected(model.provider)
+}
+
+fn cli_provider_for_model(
+    editor: &EditorState,
+    model: &str,
+    chat_session: bool,
+) -> Option<Box<dyn ChatProvider>> {
+    let requested = model.trim();
+    let entry = if requested.is_empty() || requested == "default" {
+        editor
+            .chat
+            .available_models
+            .iter()
+            .find(|m| cli_model_is_available(editor, m))
+            .or_else(|| {
+                editor
+                    .chat
+                    .discovered_models
+                    .iter()
+                    .find(|m| cli_model_is_available(editor, m))
+            })
+    } else {
+        editor
+            .chat
+            .available_models
+            .iter()
+            .find(|m| m.value.trim() == requested && cli_model_is_available(editor, m))
+            .or_else(|| {
+                editor
+                    .chat
+                    .discovered_models
+                    .iter()
+                    .find(|m| m.value.trim() == requested && cli_model_is_available(editor, m))
+            })
+    }?;
+    provider_for_cli(entry.provider, chat_session)
+}
+
+fn provider_for_cli(provider: AgentProvider, chat_session: bool) -> Option<Box<dyn ChatProvider>> {
+    match provider {
+        AgentProvider::ClaudeCode => Some(Box::new(if chat_session {
+            ClaudeCodeProvider::for_chat()
+        } else {
+            ClaudeCodeProvider::new()
+        })),
+        AgentProvider::CodexCli => SubprocessProvider::for_cli(CliName::Codex)
+            .map(|p| Box::new(p) as Box<dyn ChatProvider>),
+        AgentProvider::OpenCode => Some(Box::new(OpenCodeProvider::new())),
+        AgentProvider::GithubCopilot => Some(Box::new(if chat_session {
+            CopilotProvider::for_chat()
+        } else {
+            CopilotProvider::new()
+        })),
+        AgentProvider::GeminiCli => SubprocessProvider::for_cli(CliName::Gemini)
+            .map(|p| Box::new(p) as Box<dyn ChatProvider>),
+    }
 }
 
 #[cfg(test)]
@@ -424,5 +526,97 @@ mod tests {
         let parsed: Value = serde_json::from_str(&json).expect("valid json array");
         let arr = parsed.as_array().expect("array");
         assert!(arr.iter().any(|m| m == "claude-sonnet-4-5"), "{json}");
+    }
+
+    #[test]
+    fn models_json_lists_verified_cli_models() {
+        let mut editor = EditorState::new();
+        editor.chat.discovered_models = vec![op_editor_core::ModelEntry::new(
+            op_editor_core::AgentProvider::ClaudeCode,
+            "claude-sonnet-4-6",
+            "Claude Sonnet 4.6",
+        )];
+        editor
+            .editor_ui
+            .agent_settings
+            .apply_provider_connect_outcome(
+                op_editor_core::AgentProvider::ClaudeCode,
+                op_editor_core::ProviderConnectOutcome {
+                    connected: true,
+                    info: Some("Connected via Claude Code".into()),
+                    ..Default::default()
+                },
+            );
+        editor.rebuild_chat_models();
+
+        let json = models_json(&editor);
+        let parsed: Value = serde_json::from_str(&json).expect("valid json array");
+        let arr = parsed.as_array().expect("array");
+        assert!(arr.iter().any(|m| m == "claude-sonnet-4-6"), "{json}");
+    }
+
+    #[test]
+    fn models_json_excludes_unverified_cli_models() {
+        let mut editor = EditorState::new();
+        editor.chat.discovered_models = vec![op_editor_core::ModelEntry::new(
+            op_editor_core::AgentProvider::ClaudeCode,
+            "claude-sonnet-4-6",
+            "Claude Sonnet 4.6",
+        )];
+        editor.editor_ui.agent_settings.connected[0] = true;
+        editor.rebuild_chat_models();
+
+        assert_eq!(models_json(&editor), "[]");
+        assert!(proxy_provider(&editor, "claude-sonnet-4-6").is_none());
+    }
+
+    #[test]
+    fn proxy_provider_builds_from_verified_cli_model() {
+        let mut editor = EditorState::new();
+        editor.chat.discovered_models = vec![op_editor_core::ModelEntry::new(
+            op_editor_core::AgentProvider::ClaudeCode,
+            "claude-sonnet-4-6",
+            "Claude Sonnet 4.6",
+        )];
+        editor
+            .editor_ui
+            .agent_settings
+            .apply_provider_connect_outcome(
+                op_editor_core::AgentProvider::ClaudeCode,
+                op_editor_core::ProviderConnectOutcome {
+                    connected: true,
+                    info: Some("Connected via Claude Code".into()),
+                    ..Default::default()
+                },
+            );
+        editor.rebuild_chat_models();
+
+        let provider = proxy_provider(&editor, "claude-sonnet-4-6").expect("CLI provider builds");
+        assert_eq!(provider.provider_label(), "Claude Code");
+    }
+
+    #[test]
+    fn proxy_provider_default_uses_first_verified_cli_model() {
+        let mut editor = EditorState::new();
+        editor.chat.discovered_models = vec![op_editor_core::ModelEntry::new(
+            op_editor_core::AgentProvider::ClaudeCode,
+            "claude-sonnet-4-6",
+            "Claude Sonnet 4.6",
+        )];
+        editor
+            .editor_ui
+            .agent_settings
+            .apply_provider_connect_outcome(
+                op_editor_core::AgentProvider::ClaudeCode,
+                op_editor_core::ProviderConnectOutcome {
+                    connected: true,
+                    info: Some("Connected via Claude Code".into()),
+                    ..Default::default()
+                },
+            );
+        editor.rebuild_chat_models();
+
+        let provider = proxy_provider(&editor, "default").expect("CLI provider builds");
+        assert_eq!(provider.provider_label(), "Claude Code");
     }
 }

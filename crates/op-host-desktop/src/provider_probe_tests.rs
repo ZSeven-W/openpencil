@@ -85,6 +85,28 @@ fn opencode_summary_lists_first_three_providers() {
 }
 
 #[test]
+fn connected_probe_outcome_rejects_empty_model_list() {
+    let outcome = connected_probe_outcome(
+        AgentProvider::CodexCli,
+        Vec::new(),
+        Some("Connected via Codex CLI".to_string()),
+        None,
+        None,
+        None,
+    );
+
+    assert!(!outcome.connected);
+    assert!(outcome.models.is_empty());
+    assert!(
+        outcome
+            .error
+            .as_deref()
+            .is_some_and(|e| e.contains("No models found")),
+        "empty model probes must surface a failure, got {outcome:?}"
+    );
+}
+
+#[test]
 fn copilot_auth_status_parser_picks_id3() {
     assert!(
         parse_copilot_auth_status(r#"{"jsonrpc":"2.0","id":2,"result":{"models":[]}}"#).is_none()

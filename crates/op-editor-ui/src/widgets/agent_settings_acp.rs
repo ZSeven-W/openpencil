@@ -15,7 +15,8 @@ use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
 use jian_widgets::components::button::{Button, ButtonVariant};
 use op_editor_core::agent_settings::{
-    AcpAgentConfig, AcpAgentField, AcpConnectionType, AgentSettings, SettingsFocus,
+    AcpAgentConfig, AcpAgentConnectPhase, AcpAgentField, AcpConnectionType, AgentSettings,
+    SettingsFocus,
 };
 use op_editor_core::editor_ui_state::EditorUiState;
 use op_editor_core::{AgentSettingsButton, ButtonPressTarget};
@@ -298,14 +299,11 @@ fn paint_compact_acp_card(
     index: usize,
     card: Rect,
 ) {
+    let connected = settings.acp_agent_verified_connected(&agent.id);
     cx.backend.fill_round_rect(
         card,
         8.0,
-        if agent.connected {
-            theme.accent
-        } else {
-            theme.muted
-        },
+        if connected { theme.accent } else { theme.muted },
     );
     cx.backend.stroke_round_rect(card, 8.0, theme.border, 1.0);
     paint_avatar(cx, theme, ui, agent, card);
@@ -329,12 +327,27 @@ fn paint_compact_acp_card(
         text_x + name_w + 8.0,
         card.origin.y + 22.0,
     );
-    let detail = ellipsize(cx, &acp_detail(agent), 245.0, 11.0);
+    let detail = ellipsize(cx, &acp_detail(settings, agent), 245.0, 11.0);
+    let detail_color = match settings.acp_agent_connection_for(&agent.id).phase {
+        AcpAgentConnectPhase::Connected => Color {
+            r: 0.24,
+            g: 0.70,
+            b: 0.37,
+            a: 1.0,
+        },
+        AcpAgentConnectPhase::Error => Color {
+            r: 0.93,
+            g: 0.30,
+            b: 0.30,
+            a: 1.0,
+        },
+        _ => theme.muted_foreground,
+    };
     draw_text(
         cx,
         &detail,
         11.0,
-        theme.muted_foreground,
+        detail_color,
         text_x,
         card.origin.y + 39.0,
     );
@@ -361,7 +374,7 @@ fn paint_compact_acp_card(
             )),
         );
     }
-    paint_connection_button(cx, theme, ui, agent, index, card);
+    paint_connection_button(cx, theme, settings, ui, agent, index, card);
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -421,14 +434,18 @@ fn paint_avatar(
 fn paint_connection_button(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
+    settings: &AgentSettings,
     ui: &EditorUiState,
     agent: &AcpAgentConfig,
     index: usize,
     card: Rect,
 ) {
     let btn = connection_button_rect(card);
-    let enabled = agent.ready() || agent.connected;
-    if agent.connected {
+    let phase = settings.acp_agent_connection_for(&agent.id).phase;
+    let probing = phase == AcpAgentConnectPhase::Probing;
+    let connected = settings.acp_agent_verified_connected(&agent.id);
+    let enabled = !probing && (agent.ready() || connected);
+    if connected {
         cx.backend.fill_round_rect(btn, 6.0, theme.muted);
         cx.backend.stroke_round_rect(btn, 6.0, theme.border, 1.0);
     } else {
@@ -452,20 +469,22 @@ fn paint_connection_button(
     )) {
         paint_ghost_button_feedback(cx.backend, theme, btn, false, true);
     }
-    let fg = if agent.connected {
+    let fg = if connected {
         Color {
             r: 0.93,
             g: 0.30,
             b: 0.30,
             a: 1.0,
         }
-    } else if enabled {
+    } else if enabled || probing {
         theme.primary_foreground
     } else {
         theme.muted_foreground
     };
-    let label = if agent.connected {
+    let label = if connected {
         t_settings(ui, "settings.agents.disconnect")
+    } else if probing {
+        "Connecting..."
     } else if agent.ready() {
         t_settings(ui, "settings.agents.connect")
     } else {
@@ -644,7 +663,22 @@ fn paint_action(
     );
 }
 
-fn acp_detail(agent: &AcpAgentConfig) -> String {
+fn acp_detail(settings: &AgentSettings, agent: &AcpAgentConfig) -> String {
+    let conn = settings.acp_agent_connection_for(&agent.id);
+    match conn.phase {
+        AcpAgentConnectPhase::Probing => return "Connecting to ACP agent...".into(),
+        AcpAgentConnectPhase::Connected => {
+            if let Some(info) = conn.info {
+                return info;
+            }
+        }
+        AcpAgentConnectPhase::Error => {
+            if let Some(error) = conn.error {
+                return error;
+            }
+        }
+        AcpAgentConnectPhase::Idle => {}
+    }
     match agent.connection_type {
         AcpConnectionType::Local if agent.command.trim().is_empty() => "Command required".into(),
         AcpConnectionType::Local if agent.args.is_empty() => agent.command.clone(),

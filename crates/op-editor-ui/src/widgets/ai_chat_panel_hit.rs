@@ -193,11 +193,20 @@ impl<'a> AIChatPlaceholder<'a> {
         // tool-call collapsible header toggles it. Checked before the
         // drag-handle fallback so the headers are interactive.
         if !self.state.messages.is_empty() {
+            let body = self.body_rect(rect);
+            let scroll_offset = crate::widgets::ai_chat_transcript::transcript_effective_offset(
+                &self.state.messages,
+                body,
+                self.locale,
+                self.state.transcript_scroll.offset,
+                self.state.transcript_pinned,
+            );
             if let Some(hit) = crate::widgets::ai_chat_transcript::transcript_text_offset_at(
                 &self.state.messages,
-                self.body_rect(rect),
+                body,
                 point,
                 self.locale,
+                scroll_offset,
             ) {
                 return Some(AIChatHit::SelectTranscriptText(
                     hit.message_index,
@@ -206,10 +215,11 @@ impl<'a> AIChatPlaceholder<'a> {
             }
             if let Some(hit) = crate::widgets::ai_chat_transcript::transcript_hit(
                 &self.state.messages,
-                self.body_rect(rect),
+                body,
                 point.x,
                 point.y,
                 self.locale,
+                scroll_offset,
             ) {
                 return Some(hit.into());
             }
@@ -291,12 +301,21 @@ impl<'a> AIChatPlaceholder<'a> {
         if self.state.messages.is_empty() {
             return None;
         }
+        let body = self.body_rect(rect);
+        let scroll_offset = crate::widgets::ai_chat_transcript::transcript_effective_offset(
+            &self.state.messages,
+            body,
+            self.locale,
+            self.state.transcript_scroll.offset,
+            self.state.transcript_pinned,
+        );
         crate::widgets::ai_chat_transcript_hit::design_block_at(
             &self.state.messages,
-            self.body_rect(rect),
+            body,
             point.x,
             point.y,
             self.locale,
+            scroll_offset,
         )
     }
 

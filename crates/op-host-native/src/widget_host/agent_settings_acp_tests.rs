@@ -125,7 +125,7 @@ fn acp_agent_remove_press_deletes_agent_and_clears_focus() {
 }
 
 #[test]
-fn acp_agent_connect_press_toggles_connected_state() {
+fn acp_agent_connect_press_starts_real_probe_request() {
     let mut host = WidgetHostNative::new();
     host.editor_state_mut()
         .editor_ui
@@ -144,23 +144,33 @@ fn acp_agent_connect_press_toggles_connected_state() {
         ))
     );
     assert!(
-        host.editor_state().editor_ui.agent_settings.acp_agents[0].connected,
-        "configured local ACP agent should become connected after pressing Connect"
+        !host.editor_state().editor_ui.agent_settings.acp_agents[0].connected,
+        "configured local ACP agent must wait for a real probe before becoming connected"
+    );
+    assert_eq!(
+        host.editor_state()
+            .editor_ui
+            .agent_settings
+            .pending_acp_agent_connect
+            .as_deref(),
+        Some("acp-1")
     );
     assert!(host.apply_release_with_viewport(1200.0, 800.0));
     assert_eq!(host.editor_state().editor_ui.pressed_button, None);
 
+    host.editor_state_mut()
+        .editor_ui
+        .agent_settings
+        .apply_acp_agent_connect_outcome(
+            "acp-1",
+            op_editor_core::AcpAgentConnectOutcome {
+                connected: true,
+                info: Some("Test Agent".into()),
+                ..op_editor_core::AcpAgentConnectOutcome::default()
+            },
+        );
     assert!(host.dispatch_agent_settings_press(button_x, card_y + 30.0, 1200.0, 800.0));
-    assert_eq!(
-        host.editor_state().editor_ui.pressed_button,
-        Some(ButtonPressTarget::AgentSettings(
-            AgentSettingsButton::AcpConnection(0)
-        ))
-    );
-    assert!(
-        !host.editor_state().editor_ui.agent_settings.acp_agents[0].connected,
-        "connected ACP agent should become disconnected after pressing Disconnect"
-    );
+    assert!(!host.editor_state().editor_ui.agent_settings.acp_agents[0].connected);
     assert!(host.apply_release_with_viewport(1200.0, 800.0));
     assert_eq!(host.editor_state().editor_ui.pressed_button, None);
 }

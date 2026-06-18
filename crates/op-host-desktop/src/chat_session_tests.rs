@@ -255,7 +255,17 @@ fn selected_acp_model_routes_to_acp_provider() {
             None,
             true,
         );
-    host.editor_state_mut().editor_ui.agent_settings.acp_agents[0].connected = true;
+    host.editor_state_mut()
+        .editor_ui
+        .agent_settings
+        .apply_acp_agent_connect_outcome(
+            &id,
+            op_editor_core::AcpAgentConnectOutcome {
+                connected: true,
+                info: Some("Local ACP".into()),
+                error: None,
+            },
+        );
     host.editor_state_mut().rebuild_chat_models();
     let idx = host
         .editor_state()

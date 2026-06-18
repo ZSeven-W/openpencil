@@ -23,11 +23,11 @@ use wasm_bindgen::closure::Closure;
 use wasm_bindgen::{JsCast, JsValue};
 
 use op_editor_core::chat::{ChatAttachment, MAX_ATTACHMENT_BYTES};
-use op_editor_core::editor_ui_state::FileAction;
+use op_editor_core::editor_ui_state::{ExportFormat, FileAction};
 use op_editor_core::KitIoRequest;
 
 use crate::file_actions::{self, DropKind};
-use crate::listener::{add_listener, Listener};
+use crate::listener::{add_listener, now_unix_secs, Listener};
 use crate::repaint_ctx::RepaintContext;
 
 type InnerRc<C> = Rc<RefCell<C>>;
@@ -83,9 +83,55 @@ pub(crate) fn drain_pending_file_action<C: RepaintContext + 'static>(inner: &Inn
         FileAction::ImportImageOrSvg => import_image_or_svg(inner),
         FileAction::PickFillImage => pick_fill_image(inner),
         FileAction::RelinkImage => relink_image(inner),
-        // Recents have no storage on the web build (no file paths to
-        // reopen) — consume as a no-op so the flag can't go stale.
-        FileAction::OpenRecent(_) | FileAction::ClearRecent => {}
+        FileAction::OpenRecent(i) => open_recent_document(inner, i),
+        FileAction::ClearRecent => {
+            let mut b = inner.borrow_mut();
+            b.host_mut()
+                .editor_state_mut()
+                .editor_ui
+                .recent_files
+                .clear();
+            b.host_mut().mark_editor_state_dirty();
+            let _ = b.repaint();
+        }
+    }
+}
+
+fn open_recent_document<C: RepaintContext + 'static>(inner: &InnerRc<C>, index: usize) {
+    let Some(path) = inner
+        .borrow()
+        .host()
+        .editor_state()
+        .editor_ui
+        .recent_files
+        .get(index)
+        .map(|recent| recent.path.clone())
+    else {
+        return;
+    };
+    let body = serde_json::json!({ "path": path.clone() }).to_string();
+    let base = crate::daemon_base::daemon_base();
+    let inner_for_response = inner.clone();
+    let path_for_response = path.clone();
+    let on_response: Rc<dyn Fn(String)> = Rc::new(move |response: String| {
+        let mut b = inner_for_response.borrow_mut();
+        if !file_actions::apply_open_recent_response(
+            b.host_mut().editor_state_mut(),
+            &path_for_response,
+            &response,
+            now_unix_secs(),
+        ) {
+            return;
+        }
+        b.host_mut().mark_editor_state_dirty();
+        let _ = b.repaint();
+    });
+    if !crate::live_sync::post_json(
+        &format!("{base}/api/file/open-recent"),
+        &body,
+        Some(on_response),
+    ) {
+        console_warn("open recent request could not start");
     }
 }
 
@@ -214,18 +260,51 @@ fn save_document<C: RepaintContext + 'static>(inner: &InnerRc<C>) {
     }
 }
 
-/// Export dialog → Export: encode the live canvas raster via
-/// `HtmlCanvasElement::to_data_url` and download it. See
-/// `WebBackend::canvas_data_url` for the documented trade-off (the
-/// raster is the full editor frame at 1× — no per-node crop /
-/// `export_scale`, and SVG / PDF degrade to PNG).
+/// Export dialog → Export: SVG downloads vector markup from the
+/// shared serializer; PDF wraps a JPEG snapshot of the live canvas in
+/// a single-page PDF; raster formats encode the live canvas via
+/// `HtmlCanvasElement::to_data_url`.
 fn export_image<C: RepaintContext + 'static>(inner: &InnerRc<C>) {
     let b = inner.borrow();
     let fmt = b.host().editor_state().editor_ui.export_format;
+    if fmt == ExportFormat::Svg {
+        match file_actions::export_svg_document(b.host().editor_state()) {
+            Ok(svg) => {
+                if let Err(e) = crate::web_clipboard::download_bytes(
+                    "openpencil-export.svg",
+                    "image/svg+xml",
+                    svg.as_bytes(),
+                ) {
+                    web_sys::console::error_1(&e);
+                }
+            }
+            Err(e) => console_error(&format!("[export-svg] {e}")),
+        }
+        return;
+    }
+    if fmt == ExportFormat::Pdf {
+        match b
+            .canvas_data_url("image/jpeg")
+            .map_err(|e| format!("{e:?}"))
+            .and_then(|url| file_actions::export_pdf_from_canvas_data_url(&url))
+        {
+            Ok(pdf) => {
+                if let Err(e) = crate::web_clipboard::download_bytes(
+                    "openpencil-export.pdf",
+                    "application/pdf",
+                    &pdf,
+                ) {
+                    web_sys::console::error_1(&e);
+                }
+            }
+            Err(e) => console_error(&format!("[export-pdf] {e}")),
+        }
+        return;
+    }
     let (mime, ext, supported) = file_actions::export_target(fmt);
     if !supported {
         console_warn(
-            "[export-image] SVG / PDF export is not supported in the browser build yet; \
+            "[export-image] requested format is not supported in the browser build yet; \
              downloading a PNG raster of the canvas instead",
         );
     }

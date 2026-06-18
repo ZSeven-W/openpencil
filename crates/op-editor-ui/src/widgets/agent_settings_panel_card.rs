@@ -92,7 +92,7 @@ pub(super) fn paint_agent_card(
     );
     cx.backend
         .draw_text(&name, Point2D::new(text_x, card.origin.y + 22.0));
-    let connected = settings.connected[index];
+    let connected = settings.provider_verified_connected_at(index);
     let conn = &settings.provider_connection[index];
     let sub_localized = t_settings(ui, provider.subtitle_key());
     let green = Color {
