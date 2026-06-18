@@ -16,6 +16,9 @@ impl WidgetHost {
         if self.editor_state.editor_ui.agent_settings.focus.is_some() {
             return self.apply_settings_text(c);
         }
+        if let Some(consumed) = self.apply_git_text(c) {
+            return consumed;
+        }
         if self.editor_state.ui.layer_rename.is_some() && !c.is_control() {
             let mut s = [0u8; 4];
             if self.editor_state.rename_append(c.encode_utf8(&mut s)) {
@@ -208,6 +211,9 @@ impl WidgetHost {
         if self.editor_state.editor_ui.agent_settings.focus.is_some() {
             return self.apply_settings_backspace();
         }
+        if let Some(consumed) = self.apply_git_backspace() {
+            return consumed;
+        }
         if self.editor_state.ui.layer_rename.is_some() {
             let ok = self.editor_state.rename_backspace();
             if ok {
@@ -366,6 +372,9 @@ impl WidgetHost {
         if self.editor_state.editor_ui.agent_settings.focus.is_some() {
             self.commit_settings_focus();
             return true;
+        }
+        if let Some(consumed) = self.apply_git_send() {
+            return consumed;
         }
         if self.editor_state.ui.layer_rename.is_some() {
             let ok = self.editor_state.rename_commit();
@@ -766,38 +775,6 @@ impl WidgetHost {
             return true;
         }
         false
-    }
-
-    /// IME composition forwarding. Only the final COMMIT lands in the
-    /// focused input — preedit text is not painted (matches the native
-    /// host, which routes winit `Ime::Commit` through `apply_text`
-    /// char-by-char in `app_handler.rs` and ignores `Ime::Preedit`).
-    /// Routing therefore covers every `apply_text` focus branch: chat,
-    /// rename, canvas text edit, property / settings drafts, and the
-    /// picker search boxes. Returns true when any character landed.
-    // IME composition entry — tested + ready to wire; the CanvasKit keydown
-    // handler does per-key dispatch and hasn't wired IME composition yet.
-    #[allow(dead_code)]
-    pub fn apply_ime(&mut self, event: &op_editor_ui::ImeEvent) -> bool {
-        if !matches!(event.kind, op_editor_ui::ImeKind::CompositionEnd) {
-            return false;
-        }
-        self.apply_paste_text(&event.text)
-    }
-
-    /// Route a multi-character text payload (IME commit, clipboard
-    /// paste) into whichever input owns the keyboard, char-by-char
-    /// through `apply_text` so every focus branch + per-field filter
-    /// (numeric / hex drafts) applies unchanged. Returns true when at
-    /// least one character landed.
-    pub fn apply_paste_text(&mut self, text: &str) -> bool {
-        let mut consumed = false;
-        for c in text.chars() {
-            if !c.is_control() && self.apply_text(c) {
-                consumed = true;
-            }
-        }
-        consumed
     }
 
     /// Phase C2 keyboard forwarding stub. (No-op; the CanvasKit keydown handler

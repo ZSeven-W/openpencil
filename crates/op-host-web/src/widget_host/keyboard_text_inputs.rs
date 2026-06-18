@@ -29,6 +29,60 @@ impl WidgetHost {
             || self.editor_state.editor_ui.chat_model_picker.open
             || self.editor_state.editor_ui.component_browser_open
             || self.editor_state.chat.focused
+            || self.git_commit_focus_active()
+            || self.git_remote_focus_active()
+            || self.git_https_focus_active()
+            || self.git_branch_create_focus_active()
+            || self.git_author_focus_active()
+            || self.git_clone_input_active()
+    }
+
+    pub(in crate::widget_host) fn git_commit_focus_active(&self) -> bool {
+        let panel = &self.editor_state.editor_ui.git_panel;
+        panel.open
+            && panel.commit_focused
+            && !panel.loading
+            && !panel.branch_picker_open
+            && !panel.author_prompt
+    }
+
+    pub(in crate::widget_host) fn git_remote_focus_active(&self) -> bool {
+        let panel = &self.editor_state.editor_ui.git_panel;
+        panel.open && panel.remote_focused && !panel.loading && !panel.branch_picker_open
+    }
+
+    pub(in crate::widget_host) fn git_https_focus_active(&self) -> bool {
+        let panel = &self.editor_state.editor_ui.git_panel;
+        panel.open && panel.https_focused && !panel.loading && !panel.branch_picker_open
+    }
+
+    pub(in crate::widget_host) fn git_branch_create_focus_active(&self) -> bool {
+        let panel = &self.editor_state.editor_ui.git_panel;
+        panel.open && panel.branch_create_focused && !panel.loading
+    }
+
+    pub(in crate::widget_host) fn git_author_focus_active(&self) -> bool {
+        let panel = &self.editor_state.editor_ui.git_panel;
+        panel.open
+            && panel.author_prompt
+            && (panel.author_name_focused || panel.author_email_focused)
+            && !panel.loading
+    }
+
+    pub(in crate::widget_host) fn git_ready_popover_open(&self) -> bool {
+        let panel = &self.editor_state.editor_ui.git_panel;
+        panel.open
+            && panel.in_repo
+            && !panel.loading
+            && !panel.merging
+            && panel.diff.is_none()
+            && panel.merge_resolve.is_none()
+            && (panel.branch_picker_open || panel.overflow_open)
+    }
+
+    pub(in crate::widget_host) fn git_clone_input_active(&self) -> bool {
+        let panel = &self.editor_state.editor_ui.git_panel;
+        panel.open && panel.clone_form.is_some()
     }
 
     /// Highlighted text of whichever non-chat input currently owns the
@@ -48,6 +102,34 @@ impl WidgetHost {
         let eui = &self.editor_state.editor_ui;
         if eui.agent_settings.focus.is_some() {
             return slice(&eui.settings_input);
+        }
+        if self.git_clone_input_active() {
+            if let Some(form) = eui.git_panel.clone_form.as_ref() {
+                return match form.focus {
+                    Some(op_editor_core::CloneField::Url) => slice(&form.url_input),
+                    Some(op_editor_core::CloneField::Dest) => slice(&form.dest_input),
+                    None => None,
+                };
+            }
+        }
+        if self.git_commit_focus_active() {
+            return slice(&eui.git_panel.commit_input);
+        }
+        if self.git_remote_focus_active() {
+            return slice(&eui.git_panel.remote_input);
+        }
+        if self.git_https_focus_active() {
+            return slice(&eui.git_panel.https_input);
+        }
+        if self.git_branch_create_focus_active() {
+            return slice(&eui.git_panel.branch_create_input);
+        }
+        if self.git_author_focus_active() {
+            return if eui.git_panel.author_email_focused {
+                slice(&eui.git_panel.author_email_input)
+            } else {
+                slice(&eui.git_panel.author_name_input)
+            };
         }
         if let Some(rename) = ui.layer_rename.as_ref() {
             return slice(&rename.input);

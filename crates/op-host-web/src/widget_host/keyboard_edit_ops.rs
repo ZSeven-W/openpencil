@@ -83,6 +83,9 @@ impl WidgetHost {
             self.mark_dirty();
             return true;
         }
+        if let Some(consumed) = self.apply_git_input_select_all() {
+            return consumed;
+        }
         if let Some(rename) = self.editor_state.ui.layer_rename.as_mut() {
             rename.input.select_all();
             rename.input.touch(self.now_ms);
