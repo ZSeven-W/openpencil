@@ -265,9 +265,14 @@ fn canvaskit_browser_text_fallback_covers_locale_scripts_and_emoji() {
         "Segoe UI Emoji",
         "PingFang SC",
         "Apple SD Gothic Neo",
+        "Hiragino Kaku Gothic ProN",
+        "Yu Gothic",
         "Kohinoor Devanagari",
         "Devanagari Sangam MN",
+        "Nirmala UI",
+        "Mangal",
         "Thonburi",
+        "Leelawadee UI",
     ] {
         assert!(
             source.contains(marker),
