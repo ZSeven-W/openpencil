@@ -221,3 +221,26 @@ fn property_row_advertises_label_and_value() {
     assert_eq!(node.role(), accesskit::Role::Group);
     assert_eq!(node.label(), Some("Width 960"));
 }
+
+#[test]
+fn layer_panel_scroll_view_model_keeps_offsets_in_scroll_state() {
+    let layer_panel = include_str!("../src/widgets/layer_panel.rs");
+    let walkers = include_str!("../src/widgets/layer_panel_walkers.rs");
+    for source in [layer_panel, walkers] {
+        for needle in [
+            "pages_scroll: f32",
+            "layers_scroll: f32",
+            "pages_h_scroll: f32",
+            "layers_h_scroll: f32",
+            "pages_max_scroll: f32",
+            "layers_max_scroll: f32",
+            "pages_max_h_scroll: f32",
+            "layers_max_h_scroll: f32",
+        ] {
+            assert!(
+                !source.contains(needle),
+                "LayerPanel scroll state should not expose naked `{needle}` fields"
+            );
+        }
+    }
+}

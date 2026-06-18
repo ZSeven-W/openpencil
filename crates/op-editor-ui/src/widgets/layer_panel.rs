@@ -13,7 +13,7 @@ use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::layer_panel_walkers::{
     apply_layer_rename, icon_for_node, kind_label, layer_regions, layers_content_width,
     pages_content_width, pages_from_state, row_index_at, visible_row_range, walk, walk_excluding,
-    LayerRegionInput, LayerRegions, RenameView, WalkCx,
+    LayerRegionInput, LayerRegions, LayerScrollSnapshot, RenameView, WalkCx,
 };
 use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
 use crate::{Color, Point2D, Rect, TextLayout};
@@ -88,13 +88,9 @@ pub struct LayerPanel {
     pub drag_ghost: Option<(LayerItem, f32)>,
     pub now_ms: u64,
     pub rename_input: Option<TextInputState>,
-    /// Scroll offsets (px) for the bounded Pages / Layers regions.
-    pub pages_scroll: f32,
-    pub layers_scroll: f32,
-    pub pages_h_scroll: f32,
-    pub layers_h_scroll: f32,
-    pub pages_content_w: f32,
-    pub layers_content_w: f32,
+    /// Scroll state for the bounded Pages / Layers regions.
+    pub pages_scroll: LayerScrollSnapshot,
+    pub layers_scroll: LayerScrollSnapshot,
 }
 
 impl LayerPanel {
@@ -109,8 +105,8 @@ impl LayerPanel {
             walk(child, &cx, 0, &mut items);
         }
         apply_layer_rename(&mut items, &rename);
-        let pages_content_w = pages_content_width(&pages, LAYER_PANEL_WIDTH);
-        let layers_content_w = layers_content_width(&items, LAYER_PANEL_WIDTH);
+        let pages_content_width = pages_content_width(&pages, LAYER_PANEL_WIDTH);
+        let layers_content_width = layers_content_width(&items, LAYER_PANEL_WIDTH);
         Self {
             id: WidgetId::new(1000),
             pages,
@@ -122,12 +118,16 @@ impl LayerPanel {
             drag_ghost: None,
             now_ms: 0,
             rename_input: state.ui.layer_rename.as_ref().map(|r| r.input.clone()),
-            pages_scroll: state.editor_ui.layer_pages_scroll.offset,
-            layers_scroll: state.editor_ui.layer_layers_scroll.offset,
-            pages_h_scroll: state.editor_ui.layer_pages_h_scroll.offset,
-            layers_h_scroll: state.editor_ui.layer_layers_h_scroll.offset,
-            pages_content_w,
-            layers_content_w,
+            pages_scroll: LayerScrollSnapshot::new(
+                state.editor_ui.layer_pages_scroll,
+                state.editor_ui.layer_pages_h_scroll,
+                pages_content_width,
+            ),
+            layers_scroll: LayerScrollSnapshot::new(
+                state.editor_ui.layer_layers_scroll,
+                state.editor_ui.layer_layers_h_scroll,
+                layers_content_width,
+            ),
         }
     }
 
@@ -174,8 +174,8 @@ impl LayerPanel {
             walk_excluding(child, &cx, drag_source, 0, &mut items);
         }
         apply_layer_rename(&mut items, &rename);
-        let pages_content_w = pages_content_width(&pages, LAYER_PANEL_WIDTH);
-        let layers_content_w = layers_content_width(&items, LAYER_PANEL_WIDTH);
+        let pages_content_width = pages_content_width(&pages, LAYER_PANEL_WIDTH);
+        let layers_content_width = layers_content_width(&items, LAYER_PANEL_WIDTH);
         Self {
             id: WidgetId::new(1000),
             pages,
@@ -187,12 +187,16 @@ impl LayerPanel {
             drag_ghost: None,
             now_ms: 0,
             rename_input: state.ui.layer_rename.as_ref().map(|r| r.input.clone()),
-            pages_scroll: state.editor_ui.layer_pages_scroll.offset,
-            layers_scroll: state.editor_ui.layer_layers_scroll.offset,
-            pages_h_scroll: state.editor_ui.layer_pages_h_scroll.offset,
-            layers_h_scroll: state.editor_ui.layer_layers_h_scroll.offset,
-            pages_content_w,
-            layers_content_w,
+            pages_scroll: LayerScrollSnapshot::new(
+                state.editor_ui.layer_pages_scroll,
+                state.editor_ui.layer_pages_h_scroll,
+                pages_content_width,
+            ),
+            layers_scroll: LayerScrollSnapshot::new(
+                state.editor_ui.layer_layers_scroll,
+                state.editor_ui.layer_layers_h_scroll,
+                layers_content_width,
+            ),
         }
     }
 
@@ -208,12 +212,8 @@ impl LayerPanel {
             drag_ghost: None,
             now_ms: 0,
             rename_input: None,
-            pages_scroll: 0.0,
-            layers_scroll: 0.0,
-            pages_h_scroll: 0.0,
-            layers_h_scroll: 0.0,
-            pages_content_w: 0.0,
-            layers_content_w: 0.0,
+            pages_scroll: LayerScrollSnapshot::default(),
+            layers_scroll: LayerScrollSnapshot::default(),
         }
     }
 
@@ -232,12 +232,8 @@ impl LayerPanel {
             rect,
             pages_len: self.pages.len(),
             items_len: self.items.len(),
-            pages_scroll: self.pages_scroll,
-            layers_scroll: self.layers_scroll,
-            pages_h_scroll: self.pages_h_scroll,
-            layers_h_scroll: self.layers_h_scroll,
-            pages_content_w: self.pages_content_w,
-            layers_content_w: self.layers_content_w,
+            pages: self.pages_scroll,
+            layers: self.layers_scroll,
         })
     }
 
@@ -258,11 +254,11 @@ impl LayerPanel {
         if point.y < r.layers_rows_top || point.y > r.layers_rows_top + r.layers_view_h {
             return None;
         }
-        let layers_top = r.layers_rows_top - r.layers_scroll;
+        let layers_top = r.layers_rows_top - r.layers.offset;
         if let Some((index, row_top)) = row_index_at(
             self.items.len(),
             r.layers_rows_top,
-            r.layers_scroll,
+            r.layers.offset,
             r.layers_view_h,
             point.y,
         ) {
@@ -338,7 +334,7 @@ impl LayerPanel {
         if let Some((index, y)) = row_index_at(
             self.pages.len(),
             r.pages_rows_top,
-            r.pages_scroll,
+            r.pages.offset,
             r.pages_view_h,
             point.y,
         ) {
@@ -368,7 +364,7 @@ impl LayerPanel {
         if let Some((index, y)) = row_index_at(
             self.items.len(),
             r.layers_rows_top,
-            r.layers_scroll,
+            r.layers.offset,
             r.layers_view_h,
             point.y,
         ) {
@@ -409,7 +405,7 @@ impl LayerPanel {
             }
             if item.has_children {
                 let indent = ROW_PAD_X + item.depth as f32 * 12.0;
-                let chev_x = inner.origin.x + indent - r.layers_h_scroll;
+                let chev_x = inner.origin.x + indent - r.layers.horizontal_offset;
                 if point.x >= chev_x - slop
                     && point.x <= chev_x + 14.0 + slop
                     && point.y >= icon_y - slop
@@ -506,9 +502,9 @@ impl Widget for LayerPanel {
             origin: Point2D::new(rect.origin.x, r.pages_rows_top),
             size: Point2D::new(rect.size.x, r.pages_view_h),
         });
-        for index in visible_row_range(self.pages.len(), r.pages_scroll, r.pages_view_h) {
+        for index in visible_row_range(self.pages.len(), r.pages.offset, r.pages_view_h) {
             let page = &self.pages[index];
-            y = r.pages_rows_top - r.pages_scroll + index as f32 * PAGE_ROW_HEIGHT;
+            y = r.pages_rows_top - r.pages.offset + index as f32 * PAGE_ROW_HEIGHT;
             let row = Rect {
                 origin: Point2D::new(rect.origin.x + 6.0, y + 2.0),
                 size: Point2D::new(rect.size.x - 12.0, PAGE_ROW_HEIGHT - 4.0),
@@ -593,9 +589,9 @@ impl Widget for LayerPanel {
             origin: Point2D::new(rect.origin.x, r.layers_rows_top),
             size: Point2D::new(rect.size.x, r.layers_view_h),
         });
-        for index in visible_row_range(self.items.len(), r.layers_scroll, r.layers_view_h) {
+        for index in visible_row_range(self.items.len(), r.layers.offset, r.layers_view_h) {
             let item = &self.items[index];
-            y = r.layers_rows_top - r.layers_scroll + index as f32 * LAYER_ROW_HEIGHT;
+            y = r.layers_rows_top - r.layers.offset + index as f32 * LAYER_ROW_HEIGHT;
             let row = Rect {
                 origin: Point2D::new(rect.origin.x + 6.0, y + 2.0),
                 size: Point2D::new(rect.size.x - 12.0, LAYER_ROW_HEIGHT - 4.0),
@@ -638,7 +634,8 @@ impl Widget for LayerPanel {
             };
             cx.backend.save();
             cx.backend.clip_rect(row);
-            cx.backend.translate(Point2D::new(-r.layers_h_scroll, 0.0));
+            cx.backend
+                .translate(Point2D::new(-r.layers.horizontal_offset, 0.0));
             if item.has_children {
                 let chev_icon = if item.collapsed {
                     Icon::ChevronRight
@@ -671,7 +668,7 @@ impl Widget for LayerPanel {
                 dim(self.theme.card_foreground, dim_factor)
             };
             let label_x = icon_x + 20.0;
-            let label_max_x = row.origin.x + r.layers_content_w - 16.0;
+            let label_max_x = row.origin.x + r.layers.content_width - 16.0;
             let available_w = (label_max_x - label_x).max(0.0);
             if item.renaming {
                 paint_rename_input(

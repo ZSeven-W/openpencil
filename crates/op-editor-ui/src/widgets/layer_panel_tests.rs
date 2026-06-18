@@ -495,11 +495,11 @@ fn deep_layer_tree_exposes_horizontal_scroll_range() {
         let regions = panel.regions(rect);
 
         assert!(
-            regions.layers_content_w > rect.size.x,
+            regions.layers.content_width > rect.size.x,
             "deep layer content should be wider than the fixed panel viewport"
         );
         assert!(
-            regions.layers_max_h_scroll > 0.0,
+            regions.layers.max_horizontal_offset > 0.0,
             "deep layer rows need a horizontal scroll range"
         );
     });
@@ -518,7 +518,10 @@ fn layer_horizontal_scroll_offset_is_clamped() {
 
         let regions = panel.regions(rect);
 
-        assert_eq!(regions.layers_h_scroll, regions.layers_max_h_scroll);
+        assert_eq!(
+            regions.layers.horizontal_offset,
+            regions.layers.max_horizontal_offset
+        );
     });
 }
 
@@ -532,9 +535,15 @@ fn layer_panel_caches_content_widths_on_build() {
             size: Point2D::new(LAYER_PANEL_WIDTH, 700.0),
         };
 
-        assert!(panel.layers_content_w > rect.size.x);
-        assert_eq!(panel.regions(rect).layers_content_w, panel.layers_content_w);
-        assert_eq!(panel.regions(rect).pages_content_w, panel.pages_content_w);
+        assert!(panel.layers_scroll.content_width > rect.size.x);
+        assert_eq!(
+            panel.regions(rect).layers.content_width,
+            panel.layers_scroll.content_width
+        );
+        assert_eq!(
+            panel.regions(rect).pages.content_width,
+            panel.pages_scroll.content_width
+        );
     });
 }
 

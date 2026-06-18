@@ -49,7 +49,7 @@ fn layer_panel_trackpad_pan_scrolls_horizontally() {
             ),
         };
         let regions = panel.regions(rect);
-        assert!(regions.layers_max_h_scroll > 0.0);
+        assert!(regions.layers.max_horizontal_offset > 0.0);
 
         assert!(host.apply_pan_gesture(
             80.0,
