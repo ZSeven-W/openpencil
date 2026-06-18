@@ -122,8 +122,9 @@ export async function opCkInit(canvasId) {
 
   const col = (r, g, b, a) => CK.Color4f(r, g, b, a);
   const isPaintStyle = (style) => Boolean(style && typeof style.value !== 'undefined');
-  const fillPaint = (r, g, b, a) => { const p = new CK.Paint(); p.setColor(col(r, g, b, a)); p.setAntiAlias(true); p.setStyle(CK.PaintStyle.Fill); return p; };
-  const strokePaint = (r, g, b, a, w) => { const p = new CK.Paint(); p.setColor(col(r, g, b, a)); p.setAntiAlias(true); p.setStyle(CK.PaintStyle.Stroke); p.setStrokeWidth(w); p.setStrokeCap(CK.StrokeCap.Round); p.setStrokeJoin(CK.StrokeJoin.Round); return p; };
+  const setPaintStyle = (paint, style) => { if (isPaintStyle(style)) paint.setStyle(style); };
+  const fillPaint = (r, g, b, a) => { const p = new CK.Paint(); p.setColor(col(r, g, b, a)); p.setAntiAlias(true); setPaintStyle(p, CK.PaintStyle.Fill); return p; };
+  const strokePaint = (r, g, b, a, w) => { const p = new CK.Paint(); p.setColor(col(r, g, b, a)); p.setAntiAlias(true); setPaintStyle(p, CK.PaintStyle.Stroke); p.setStrokeWidth(w); p.setStrokeCap(CK.StrokeCap.Round); p.setStrokeJoin(CK.StrokeJoin.Round); return p; };
   const browserTextFont = (sz, weight, italic) => `${italic ? 'italic ' : ''}${Math.max(100, Math.min(900, Math.round(weight || 400)))} ${Math.max(1, sz)}px ${browserTextFontStack}`;
   const shouldUseBrowserTextFallback = (_t, _emojiRun) => Boolean(browserTextCtx);
   const allSegmentsUseBrowserTextFallback = (segs) => segs.length > 0 && segs.every((seg) => shouldUseBrowserTextFallback(seg.text, seg.emoji));
@@ -169,7 +170,7 @@ export async function opCkInit(canvasId) {
     canvas.drawImage(entry.image, x - 2, y - entry.baseline);
     return entry.width;
   };
-  const shaderPaint = (shader) => { const p = new CK.Paint(); p.setAntiAlias(true); p.setStyle(CK.PaintStyle.Fill); p.setShader(shader); return p; };
+  const shaderPaint = (shader) => { const p = new CK.Paint(); p.setAntiAlias(true); setPaintStyle(p, CK.PaintStyle.Fill); p.setShader(shader); return p; };
   const firstStopColor = (stops, opacity) => stops.length >= 5 ? col(stops[1], stops[2], stops[3], stops[4] * opacity) : col(0, 0, 0, 0);
   const gradientStops = (stops, opacity) => {
     const colors = [];
@@ -366,7 +367,7 @@ export async function opCkInit(canvasId) {
       }
       const p = fillPaint(r, g, b, a);
       if (weight >= 600 && isPaintStyle(CK.PaintStyle.StrokeAndFill)) {
-        p.setStyle(CK.PaintStyle.StrokeAndFill);
+        setPaintStyle(p, CK.PaintStyle.StrokeAndFill);
         p.setStrokeWidth(sz * 0.06);
       }
       let cx = x;
