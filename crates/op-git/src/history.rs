@@ -133,7 +133,7 @@ fn commit_to_record(commit: &git2::Commit<'_>) -> Commit {
         .as_object()
         .short_id()
         .ok()
-        .and_then(|buf| buf.as_str().map(str::to_string))
+        .and_then(|buf| buf.as_str().ok().map(str::to_string))
         .unwrap_or_else(|| hash.chars().take(7).collect());
     Commit {
         hash,
@@ -141,7 +141,7 @@ fn commit_to_record(commit: &git2::Commit<'_>) -> Commit {
         author: author.name().unwrap_or("").to_string(),
         email: author.email().unwrap_or("").to_string(),
         timestamp: commit.time().seconds(),
-        summary: commit.summary().unwrap_or("").to_string(),
+        summary: commit.summary().ok().flatten().unwrap_or("").to_string(),
         is_initial: commit.parent_count() == 0,
     }
 }

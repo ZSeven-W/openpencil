@@ -36,7 +36,7 @@ impl GitRepo {
         if !head.is_branch() {
             return Ok(None);
         }
-        Ok(head.shorthand().map(str::to_string))
+        Ok(head.shorthand().ok().map(str::to_string))
     }
 
     /// Every local branch, each flagged with whether it is current.
@@ -117,6 +117,6 @@ impl GitRepo {
 fn unborn_head_branch(repo: &git2::Repository) -> Option<String> {
     repo.find_reference("HEAD")
         .ok()
-        .and_then(|r| r.symbolic_target().map(str::to_string))
+        .and_then(|r| r.symbolic_target().ok().flatten().map(str::to_string))
         .and_then(|t| t.strip_prefix("refs/heads/").map(str::to_string))
 }

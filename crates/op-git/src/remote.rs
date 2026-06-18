@@ -101,7 +101,7 @@ impl GitRepo {
                     let branch = origin
                         .default_branch()
                         .ok()
-                        .and_then(|b| b.as_str().map(str::to_string));
+                        .and_then(|b| b.as_str().ok().map(str::to_string));
                     let _ = origin.disconnect();
                     branch
                 })
@@ -121,7 +121,7 @@ impl GitRepo {
         // `origin`; replicate that so a multi-remote repo behaves the
         // same as the subprocess backend.
         let remote_names = repo.remotes()?;
-        for name in remote_names.iter().flatten() {
+        for name in remote_names.iter().filter_map(Result::ok).flatten() {
             let mut remote = repo.find_remote(name)?;
             // A fresh callback set per remote — the carrier is shared by
             // reference into each, so credentials are presented to every
@@ -205,9 +205,9 @@ impl GitRepo {
                 stderr: "cannot push a detached HEAD — switch to a branch first".to_string(),
             });
         }
-        let head_ref = head.name().ok_or_else(|| GitError::Command {
+        let head_ref = head.name().map_err(|e| GitError::Command {
             operation: "push".to_string(),
-            stderr: "HEAD has no symbolic name".to_string(),
+            stderr: e.message().to_string(),
         })?;
         let branch_short = head.shorthand().unwrap_or("HEAD").to_string();
 
@@ -221,7 +221,7 @@ impl GitRepo {
             Some(buf) => buf
                 .as_str()
                 .map(|s| s.to_string())
-                .unwrap_or_else(|| "origin".to_string()),
+                .unwrap_or_else(|_| "origin".to_string()),
             None => {
                 let remotes = self.remotes()?;
                 remotes
@@ -271,14 +271,14 @@ impl GitRepo {
         let repo = self.open()?;
         let names = repo.remotes()?;
         let mut remotes = Vec::new();
-        for name in names.iter().flatten() {
+        for name in names.iter().filter_map(Result::ok).flatten() {
             let Ok(remote) = repo.find_remote(name) else {
                 continue;
             };
             // A remote with no fetch URL is degenerate; skip it rather
             // than emit an empty URL (`git remote -v` would not list a
             // `(fetch)` line for it either).
-            let Some(url) = remote.url() else {
+            let Ok(url) = remote.url() else {
                 continue;
             };
             remotes.push(Remote {
@@ -297,7 +297,11 @@ impl GitRepo {
         // otherwise the temporary would outlive `repo`'s drop.
         let found = repo.find_remote(name);
         match found {
-            Ok(remote) => Ok(remote.url().map(str::to_string)),
+            Ok(remote) => remote
+                .url()
+                .map(str::to_string)
+                .map(Some)
+                .map_err(Into::into),
             // An unknown remote is "no such remote", not a hard error —
             // the same tolerance the subprocess backend gave a non-zero
             // `git remote get-url`.
@@ -400,9 +404,9 @@ impl GitRepo {
             operation: "rev-parse".to_string(),
             stderr: e.message().to_string(),
         })?;
-        let head_ref = head.name().ok_or_else(|| GitError::Command {
+        let head_ref = head.name().map_err(|e| GitError::Command {
             operation: "rev-parse".to_string(),
-            stderr: "HEAD has no symbolic name".to_string(),
+            stderr: e.message().to_string(),
         })?;
         // `branch_upstream_name` yields the remote-tracking ref name
         // (`refs/remotes/origin/main`) for the branch's `@{u}`.
@@ -412,9 +416,9 @@ impl GitRepo {
                 operation: "rev-parse".to_string(),
                 stderr: e.message().to_string(),
             })?;
-        let upstream_ref = upstream_buf.as_str().ok_or_else(|| GitError::Command {
+        let upstream_ref = upstream_buf.as_str().map_err(|e| GitError::Command {
             operation: "rev-parse".to_string(),
-            stderr: "upstream ref name is not valid UTF-8".to_string(),
+            stderr: e.message().to_string(),
         })?;
         let reference = repo
             .find_reference(upstream_ref)
