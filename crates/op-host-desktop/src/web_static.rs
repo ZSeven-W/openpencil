@@ -385,6 +385,7 @@ mod tests {
         let body = String::from_utf8(reply.body).expect("utf8");
         // The host page loads the glue and mounts on the canvas.
         assert!(body.contains("/pkg/op_host_web.js"), "{body}");
+        assert!(body.contains("fetch('/api/mcp/sync-reset'"), "{body}");
         assert!(body.contains("mount('op')"), "{body}");
         let _ = std::fs::remove_dir_all(&dir);
     }

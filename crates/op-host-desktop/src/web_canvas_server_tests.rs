@@ -602,13 +602,41 @@ fn serve_one_unknown_path_is_404() {
 }
 
 #[test]
+fn sync_reset_clears_web_document_and_bumps_version() {
+    use op_editor_core::PenNodeExt;
+
+    let mut s = fresh_state();
+    let posted = handle_web_canvas_request("POST", "/api/mcp/document", SYNC_BODY, &mut s);
+    assert!(posted.status.starts_with("200"), "{}", posted.body);
+    assert_eq!(s.version, 1);
+    assert!(
+        s.editor
+            .active_children()
+            .iter()
+            .any(|node| node.base().name.as_deref() == Some("Synced Rect")),
+        "fixture document should be present before reset"
+    );
+
+    let reset = handle_web_canvas_request("POST", "/api/mcp/sync-reset", "", &mut s);
+    assert!(reset.status.starts_with("200"), "{}", reset.body);
+    assert!(reset.body.contains(r#""ok":true"#), "{}", reset.body);
+    assert!(reset.body.contains(r#""version":2"#), "{}", reset.body);
+    assert_eq!(s.version, 2);
+    assert_eq!(s.editor.doc, EditorState::starter().doc);
+    assert!(
+        !s.editor
+            .active_children()
+            .iter()
+            .any(|node| node.base().name.as_deref() == Some("Synced Rect")),
+        "sync reset should remove the previous web document"
+    );
+}
+
+#[test]
 fn serve_one_unimplemented_api_route_is_404_not_jsonrpc() {
     // An `/api/mcp/*` route this daemon doesn't implement must 404, not
-    // fall through to JSON-RPC dispatch. (`sync-reset` is intentionally
-    // unimplemented: the TS route clears a server-side document CACHE so a
-    // page refresh doesn't echo a stale doc back; this daemon IS the
-    // document authority, so there is no cache to reset.)
-    let r = serve("POST", "/api/mcp/sync-reset", "");
+    // fall through to JSON-RPC dispatch.
+    let r = serve("POST", "/api/mcp/not-a-route", "");
     assert!(r.contains("404 Not Found"), "{r}");
 }
 

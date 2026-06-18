@@ -117,6 +117,14 @@ impl WebCanvasState {
         self.version += 1;
         self.version
     }
+
+    /// Clear the transient web-sync document back to the same starter document a
+    /// fresh browser shell paints before the daemon applies updates.
+    pub(crate) fn reset_document(&mut self) -> u64 {
+        self.editor.replace_document(EditorState::starter().doc);
+        self.version += 1;
+        self.version
+    }
 }
 
 /// A handled reply: HTTP status line + JSON body, ready for
@@ -201,6 +209,13 @@ pub(crate) fn handle_web_canvas_request(
             status: "200 OK",
             body: format!(r#"{{"version":{}}}"#, state.version),
         },
+        ("POST", "/api/mcp/sync-reset") => {
+            let version = state.reset_document();
+            WebReply {
+                status: "200 OK",
+                body: crate::mcp_serve::document_sync_ok(version),
+            }
+        }
         ("GET", "/api/mcp/selection") => {
             // TS `selection.get.ts` → `getSyncSelection()` shape:
             // `{selectedIds, activePageId}`. Read straight off the live
@@ -252,7 +267,7 @@ pub(crate) fn handle_web_canvas_request(
         },
         _ => WebReply {
             status: "404 Not Found",
-            body: r#"{"ok":false,"error":"Not found. Use /api/mcp/document, /api/mcp/server, or /mcp."}"#
+            body: r#"{"ok":false,"error":"Not found. Use /api/mcp/document, /api/mcp/sync-reset, /api/mcp/server, or /mcp."}"#
                 .to_string(),
         },
     }
@@ -963,7 +978,7 @@ fn serve_one<S: Read + Write>(
         return crate::mcp_serve::write_mcp_http_response(
             stream,
             "404 Not Found",
-            r#"{"ok":false,"error":"Not found. Use /, /pkg/*, /api/mcp/document, /api/mcp/server, /api/mcp/events, or /mcp."}"#,
+            r#"{"ok":false,"error":"Not found. Use /, /pkg/*, /api/mcp/document, /api/mcp/sync-reset, /api/mcp/server, /api/mcp/events, or /mcp."}"#,
         )
         .map(|()| false);
     }

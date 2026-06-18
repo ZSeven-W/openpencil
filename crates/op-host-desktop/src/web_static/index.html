@@ -75,10 +75,20 @@
         window.__opCanvasScale = dpr;
         return changed;
       };
+      const resetSyncDocument = async () => {
+        const response = await fetch('/api/mcp/sync-reset', {
+          method: 'POST',
+          cache: 'no-store',
+        });
+        if (!response.ok) {
+          throw new Error(`sync reset failed: ${response.status}`);
+        }
+      };
       // Size the canvas to the window BEFORE mount — the shell reads the
       // canvas width/height attributes when it builds its raster surface.
       sizeCanvasForDisplay(BOOT_CANVAS_PIXEL_BUDGET);
       try {
+        await resetSyncDocument();
         const mod = await import('/pkg/op_host_web.js');
         await mod.default();
         // The CanvasKit bundle (renders skia on WebGL2 via /canvaskit/) exposes
