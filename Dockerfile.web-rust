@@ -1,0 +1,137 @@
+# syntax=docker/dockerfile:1
+#
+# Dockerfile.web-rust — container for the RUST web host (C1).
+#
+# Serves the Rust CanvasKit web editor: the `openpencil-desktop` daemon running
+# in `--serve-web` mode, hosting the wasm-bindgen bundle + the vendored
+# CanvasKit artifact out of a `web-bundle/` directory placed next to the binary.
+# This is the Rust analog of the root `Dockerfile` (which ships the retired
+# TS/Nitro web app via `bun run ./out/web/server/index.mjs`).
+#
+# Build (self-contained, builds the wasm bundle in-image — the default):
+#   docker build -f Dockerfile.web-rust -t openpencil-web-rust .
+#
+# Build reusing a prebuilt bundle (the `op-web-bundle` artifact from the
+# `wasm-bundle-build.yml` CI job — skips the in-image wasm rebuild):
+#   # download + unzip the CI artifact into ./web-bundle first, then:
+#   docker build -f Dockerfile.web-rust --build-arg WEB_BUNDLE_SOURCE=copy \
+#     -t openpencil-web-rust .
+#
+# Run:
+#   docker run -p 3100:3100 openpencil-web-rust
+#   # then open http://localhost:3100/
+#
+# Why wasm-in-Docker is the default (vs. always COPY-artifact): the production
+# `canvaskit` feature is pure Rust + web_sys + serde — it needs NO emscripten /
+# EMSDK / skia-safe / libc shim (the from-scratch skia path that needed those
+# was retired 2026-06-17; the editor renders through the official CanvasKit
+# skia WASM loaded separately). So the only extra toolchain over a normal cargo
+# build is the wasm32 target + wasm-bindgen-cli + binaryen (wasm-opt) + node,
+# all apt/cargo-installable in the builder stage. That keeps the image
+# self-contained and reproducible. The `WEB_BUNDLE_SOURCE=copy` build arg is the
+# fast path: it skips the wasm rebuild and copies a `./web-bundle` provided as
+# build context (e.g. the Task-1 CI artifact).
+
+# ── Stage 1: builder ──────────────────────────────────────────────────────────
+# rust:1.94 ships cargo + a Debian (bookworm) base where binaryen + node +
+# gzip are apt-installable, matching the prerequisites the local gate script
+# (`tools/check-wasm-bundle.sh`) asserts.
+FROM rust:1.94-bookworm AS builder
+
+# WEB_BUNDLE_SOURCE = build  -> build the wasm bundle in this stage (default).
+#                   = copy   -> skip the build; the runtime stage COPYs a
+#                              prebuilt ./web-bundle from the build context.
+ARG WEB_BUNDLE_SOURCE=build
+
+# Port baked into the image's CMD; overridable at build + run time.
+ARG SERVE_PORT=3100
+
+# binaryen -> wasm-opt -Oz ; nodejs -> the 0-env-import assert in the gate
+# script ; the rest are op-host-desktop's Linux link-time deps (winit/skia GL
+# stack) so the daemon binary links. fonts-noto-cjk gives the daemon real CJK
+# glyphs at runtime (matches the rust-check.yml Linux prereqs).
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      binaryen \
+      nodejs \
+      gzip \
+      ca-certificates \
+      pkg-config \
+      libxkbcommon-dev libxkbcommon-x11-dev \
+      libwayland-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
+      libegl1-mesa-dev libgles2-mesa-dev libgbm-dev \
+      libfreetype-dev libfontconfig1-dev fonts-noto-cjk \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /src
+
+# Copy the whole repo (the `.dockerignore` trims node_modules / out / dist etc.)
+# Submodules (vendor/jian) must already be checked out in the build context —
+# the CI checkout uses `submodules: recursive`.
+COPY . .
+
+# Build the desktop daemon binary (the `--serve-web` host). Always built; this
+# is the runtime binary regardless of how the web bundle is produced.
+RUN cargo build -p op-host-desktop --release
+
+# Build the canvaskit wasm bundle in-image, UNLESS WEB_BUNDLE_SOURCE=copy.
+# Mirrors `tools/check-wasm-bundle.sh` exactly (cargo build --features canvaskit
+# -> wasm-bindgen --target web -> 0-env-import assert -> wasm-opt -Oz -> gzip
+# size gate). The script reads the locked wasm-bindgen-cli version requirement
+# from Cargo.lock so the CLI matches the linked runtime.
+RUN if [ "$WEB_BUNDLE_SOURCE" = "build" ]; then \
+      rustup target add wasm32-unknown-unknown && \
+      version="$(awk '/^name = \"wasm-bindgen\"$/{found=1; next} found && /^version = /{gsub(/[\" ]/,\"\",$3); print $3; exit}' Cargo.lock)" && \
+      cargo install wasm-bindgen-cli --version "$version" --locked && \
+      bash tools/check-wasm-bundle.sh ; \
+    else \
+      echo "WEB_BUNDLE_SOURCE=$WEB_BUNDLE_SOURCE — skipping in-image wasm build; runtime stage will COPY ./web-bundle from the build context" ; \
+    fi
+
+# Assemble the deployable web-bundle/ layout the daemon's `web_static.rs`
+# resolves: the wasm-bindgen `pkg/` output PLUS the vendored CanvasKit artifact
+# under a `canvaskit/` subdir. For the `copy` path the bundle already exists in
+# the build context (./web-bundle); just normalize it into /out/web-bundle so
+# the runtime stage has one stable source path either way.
+RUN mkdir -p /out/web-bundle && \
+    if [ "$WEB_BUNDLE_SOURCE" = "build" ]; then \
+      cp -R crates/op-host-web/pkg/. /out/web-bundle/ && \
+      cp -R crates/op-host-web/assets/canvaskit /out/web-bundle/canvaskit ; \
+    else \
+      cp -R web-bundle/. /out/web-bundle/ ; \
+    fi && \
+    echo "assembled web-bundle:" && find /out/web-bundle -maxdepth 2 -type f | sort
+
+# ── Stage 2: runtime (slim) ───────────────────────────────────────────────────
+# Only the runtime shared libs the daemon dlopens at run time (GL / fontconfig /
+# freetype + CJK fonts). No Rust toolchain, no node, no build deps.
+FROM debian:bookworm-slim AS runtime
+
+ARG SERVE_PORT=3100
+ENV OPENPENCIL_SERVE_PORT=${SERVE_PORT}
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      ca-certificates \
+      libegl1 libgles2 libgbm1 \
+      libxkbcommon0 libxkbcommon-x11-0 \
+      libwayland-client0 libwayland-egl1 \
+      libxcb-render0 libxcb-shape0 libxcb-xfixes0 \
+      libfreetype6 libfontconfig1 fonts-noto-cjk \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Lay out the bundle the way `web_static.rs` expects: the daemon resolves the
+# bundle as `<exe_dir>/web-bundle` (and CanvasKit as `<exe_dir>/web-bundle/
+# canvaskit`). Keep the binary + the bundle dir as siblings under /app so that
+# `<exe_dir> == /app`.
+COPY --from=builder /src/target/release/openpencil-desktop /app/openpencil-desktop
+COPY --from=builder /out/web-bundle /app/web-bundle
+
+EXPOSE ${SERVE_PORT}
+
+# Bind 0.0.0.0 so the daemon is reachable from outside the container (the LAN /
+# Docker opt-in documented in `parse_serve_web_args`). No TLS — front with a
+# reverse proxy for anything beyond a trusted network. The port is taken from
+# the build-time SERVE_PORT (baked into OPENPENCIL_SERVE_PORT); `sh -c` lets the
+# env var expand at container start.
+CMD ["sh", "-c", "exec /app/openpencil-desktop --serve-web \"${OPENPENCIL_SERVE_PORT}\" --host 0.0.0.0"]

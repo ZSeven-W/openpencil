@@ -1,0 +1,133 @@
+name: WASM bundle build (#56 — real canvaskit deployable)
+
+# Builds the REAL production web bundle (the `canvaskit` cargo feature, not the
+# `web` compile stub), size-gates it, and uploads it as a reproducible
+# deployable artifact. This is the CI counterpart of the local
+# `tools/check-wasm-bundle.sh` developer gate.
+#
+# Why a NEW file instead of un-deferring the block in `rust-release.yml`
+# / `rust-multiplatform.yml`: those deferred blocks describe the RETIRED
+# from-scratch skia pipeline (`--features skia`, `vendor/skia-safe-op`,
+# `crates/wasm-libc-shim`, brew-emscripten + EMSDK + the `.wasm.a` → `.a`
+# symlink hack). That whole path was retired 2026-06-17 (see the workspace
+# `Cargo.toml` note + `tools/check-wasm-bundle.sh` lines 57-59): the editor now
+# renders through the official CanvasKit skia WASM, so the Rust bundle is pure
+# logic and needs NO EMSDK / skia-safe / libc shim. Un-deferring the stale
+# blocks would mean rewriting them top to bottom; a clean new job that mirrors
+# the CURRENT local script is the honest option.
+#
+# Authoritative recipe mirrored from `tools/check-wasm-bundle.sh`:
+#   prerequisites: cargo, wasm-bindgen, wasm-opt, node, gzip (NO EMSDK)
+#   1. cargo build -p op-host-web --target wasm32-unknown-unknown \
+#        --no-default-features --features canvaskit --release
+#   2. wasm-bindgen --target web --out-dir crates/op-host-web/pkg <target.wasm>
+#   3. assert 0 env.* imports (LinkError guard)
+#   4. wasm-opt -Oz, then gzip size <= ceiling (default 6291456 bytes = 6 MiB,
+#      overridable via STEP1B_SHELL_WASM_GZIP_LIMIT_BYTES)
+# The job calls the script directly rather than duplicating that logic — the
+# script already runs non-interactively (`set -euo pipefail`, exit 0/1/2) and
+# is the single source of truth for the gate.
+
+on:
+  pull_request:
+    paths:
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'crates/**'
+      - 'deny.toml'
+      - 'tools/check-wasm-bundle.sh'
+      - '.github/workflows/wasm-bundle-build.yml'
+  push:
+    branches: ['**']
+    paths:
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'crates/**'
+      - 'tools/check-wasm-bundle.sh'
+      - '.github/workflows/wasm-bundle-build.yml'
+  # Allow on-demand runs so a release can produce the artifact without a code
+  # change (e.g. to re-bundle against an updated toolchain).
+  workflow_dispatch:
+
+jobs:
+  build-canvaskit-bundle:
+    name: build + size-gate canvaskit web bundle
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.94'
+          targets: wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: wasm-bundle-build
+
+      # The CanvasKit bundle is pure Rust + web_sys + serde — no skia-safe, no
+      # emscripten, no system GL libs. So the toolchain footprint is just the
+      # wasm-bindgen CLI + wasm-opt (binaryen) + node, exactly the prerequisites
+      # `tools/check-wasm-bundle.sh` asserts via its `need` checks.
+      - name: Install wasm-bindgen-cli (pinned to the locked version)
+        run: |
+          # Pin the CLI to the same version as the `wasm-bindgen` crate in
+          # Cargo.lock so the generated JS glue matches the linked runtime —
+          # a version skew between the two is the classic `wasm-bindgen`
+          # "schema version mismatch" panic at mount time. Read the locked
+          # version straight out of Cargo.lock (the `[[package]]` block whose
+          # name is exactly `wasm-bindgen`).
+          version="$(cargo metadata --format-version 1 --locked --no-deps >/dev/null 2>&1; \
+            awk '/^name = "wasm-bindgen"$/{found=1; next} found && /^version = /{gsub(/[" ]/,"",$3); print $3; exit}' Cargo.lock)"
+          if [ -z "$version" ]; then
+            echo "::error::could not resolve wasm-bindgen version from Cargo.lock"
+            exit 1
+          fi
+          echo "Installing wasm-bindgen-cli $version"
+          cargo install wasm-bindgen-cli --version "$version" --locked
+
+      - name: Install binaryen (wasm-opt)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y binaryen
+          wasm-opt --version
+
+      - name: Verify node + gzip are present (script prerequisites)
+        run: |
+          node --version
+          gzip --version | head -n1
+
+      # Single source of truth: run the local gate script verbatim. It performs
+      # cargo build (canvaskit) -> wasm-bindgen --target web -> 0-env-import
+      # assert -> wasm-opt -Oz -> gzip size <= ceiling, and exits non-zero on any
+      # breach, which fails the job. The ceiling default (6 MiB gzip) lives in
+      # the script; override here only if a release intentionally re-baselines.
+      - name: Build + size-gate the canvaskit bundle
+        run: bash tools/check-wasm-bundle.sh
+
+      # Assemble the deployable layout the daemon's `web_static.rs` expects: the
+      # wasm-bindgen `pkg/` output PLUS the vendored CanvasKit artifact under a
+      # `canvaskit/` subdir, all inside a single `web-bundle/` directory. This
+      # mirrors the `<exe_dir>/web-bundle` + `web-bundle/canvaskit` resolution
+      # order in `crates/op-host-desktop/src/web_static.rs`.
+      - name: Assemble deployable web-bundle/
+        run: |
+          set -euo pipefail
+          rm -rf web-bundle
+          mkdir -p web-bundle
+          cp -R crates/op-host-web/pkg/. web-bundle/
+          cp -R crates/op-host-web/assets/canvaskit web-bundle/canvaskit
+          echo "web-bundle contents:"
+          find web-bundle -maxdepth 2 -type f | sort
+
+      - name: Upload deployable web-bundle artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: op-web-bundle
+          path: web-bundle
+          if-no-files-found: error
+          # The bundle is deterministic from the inputs; keep it briefly so a
+          # release / Docker build can pull it without rebuilding.
+          retention-days: 14
