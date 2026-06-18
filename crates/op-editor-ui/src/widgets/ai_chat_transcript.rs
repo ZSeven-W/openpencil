@@ -84,6 +84,10 @@ const USER_BUBBLE_MAX_FRAC: f32 = 0.78;
 /// Minimum user bubble width so very short prompts still read as a chip.
 const USER_BUBBLE_MIN_W: f32 = 56.0;
 
+fn streaming_caret_visible(now_ms: u64) -> bool {
+    jian_core::anim::blink_visible(now_ms, 0, jian_core::text_input::CARET_BLINK_PERIOD_MS)
+}
+
 /// A collapsible block (thinking text or tool-call list) — a
 /// clickable `header` row plus an optional `body` box. When
 /// `collapsed`, `body` has zero height and `lines` is empty.
@@ -723,7 +727,7 @@ pub(crate) fn paint_transcript_with_selection(
                 }
                 // Streaming caret — a blinking bar after the last
                 // line's (estimated) end. Same unit metric as wrap.
-                if item.streaming && jian_core::anim::blink_visible(now_ms, 0, 500) {
+                if item.streaming && streaming_caret_visible(now_ms) {
                     let last = bubble.lines.last().map(String::as_str).unwrap_or("");
                     let units: u32 = last.chars().map(char_display_units).sum();
                     let caret_x = text_x + units as f32 * CHAR_UNIT_PX;

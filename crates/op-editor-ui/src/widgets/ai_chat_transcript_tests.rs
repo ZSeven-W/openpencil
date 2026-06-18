@@ -38,6 +38,17 @@ fn wrap_units_empty_text_yields_one_empty_line() {
     assert_eq!(wrap_units("", 40), vec![String::new()]);
 }
 
+#[test]
+fn streaming_caret_uses_shared_text_input_blink_period() {
+    let period = jian_core::text_input::CARET_BLINK_PERIOD_MS;
+
+    assert!(streaming_caret_visible(0));
+    assert!(streaming_caret_visible(period - 1));
+    assert!(!streaming_caret_visible(period));
+    assert!(!streaming_caret_visible(period * 2 - 1));
+    assert!(streaming_caret_visible(period * 2));
+}
+
 fn body() -> Rect {
     Rect::xywh(0.0, 0.0, 340.0, 300.0)
 }
