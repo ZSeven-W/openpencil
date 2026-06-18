@@ -65,6 +65,8 @@ mod iconify_web;
 // real AI turns through the daemon's `/api/ai/stream` proxy.
 #[cfg(feature = "canvaskit")]
 mod web_chat;
+#[cfg(feature = "canvaskit")]
+mod web_design_md;
 // Pure web_sys clipboard/download — Ctrl+C/X in inputs + Figma/file paste.
 #[cfg(feature = "canvaskit")]
 mod web_clipboard;
