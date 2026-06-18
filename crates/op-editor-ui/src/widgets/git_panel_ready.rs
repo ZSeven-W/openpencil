@@ -11,7 +11,7 @@
 //! helpers, and the branch button uses a char-width heuristic (not text
 //! measurement) so the pure-geometry hit-test agrees with paint.
 
-use crate::widgets::git_panel::{contains, truncate, GitPanel, GitPanelHit, PAD};
+use crate::widgets::git_panel::{truncate, GitPanel, GitPanelHit, PAD};
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect};
@@ -906,38 +906,38 @@ impl GitPanel<'_> {
         // its fields/buttons own the clicks in that region (header still works).
         if self.state.author_prompt {
             let (name, email, save, cancel) = self.author_form_rects(rect);
-            if contains(name, point) {
+            if name.contains(point) {
                 return Some(GitPanelHit::AuthorNameInput);
             }
-            if contains(email, point) {
+            if email.contains(point) {
                 return Some(GitPanelHit::AuthorEmailInput);
             }
-            if contains(save, point) {
+            if save.contains(point) {
                 return Some(GitPanelHit::AuthorSave);
             }
-            if contains(cancel, point) {
+            if cancel.contains(point) {
                 return Some(GitPanelHit::AuthorCancel);
             }
-        } else if self.ready_can_commit() && contains(self.ready_commit_btn(rect), point) {
+        } else if self.ready_can_commit() && self.ready_commit_btn(rect).contains(point) {
             // Save-milestone button (it sits inside the commit box).
             return Some(GitPanelHit::CommitMilestone);
         }
         // Overflow is the right-anchored fixed element — test it before
         // pull/push so the always-present `…` menu wins any residual
         // pixel overlap (defense-in-depth on top of the branch clamp).
-        if contains(overflow, point) {
+        if overflow.contains(point) {
             return Some(GitPanelHit::Overflow);
         }
-        if contains(self.ready_branch_rect(rect), point) {
+        if self.ready_branch_rect(rect).contains(point) {
             return Some(GitPanelHit::BranchPicker);
         }
-        if self.pull_enabled() && contains(pull, point) {
+        if self.pull_enabled() && pull.contains(point) {
             return Some(GitPanelHit::Pull);
         }
-        if self.push_enabled() && contains(push, point) {
+        if self.push_enabled() && push.contains(point) {
             return Some(GitPanelHit::Push);
         }
-        if !self.state.author_prompt && contains(self.ready_commit_box(rect), point) {
+        if !self.state.author_prompt && self.ready_commit_box(rect).contains(point) {
             return Some(GitPanelHit::CommitInput);
         }
         // Expanded detail-card buttons win over the rows they sit between.
@@ -945,19 +945,19 @@ impl GitPanel<'_> {
             self.ready_commit_card_buttons(rect),
             self.state.expanded_commit,
         ) {
-            if contains(restore, point) {
+            if restore.contains(point) {
                 return Some(GitPanelHit::RestoreCommit(e));
             }
-            if contains(copy, point) {
+            if copy.contains(point) {
                 return Some(GitPanelHit::CopyCommitHash(e));
             }
         }
         for (i, row) in self.ready_commit_row_rects(rect).iter().enumerate() {
-            if contains(*row, point) {
+            if row.contains(point) {
                 return Some(GitPanelHit::ShowCommitDiff(i));
             }
         }
-        contains(rect, point).then_some(GitPanelHit::Inside)
+        rect.contains(point).then_some(GitPanelHit::Inside)
     }
 }
 

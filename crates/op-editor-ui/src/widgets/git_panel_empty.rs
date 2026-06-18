@@ -7,7 +7,7 @@
 //! `git-panel-empty-state`). The Init card is disabled until the
 //! document has a saved path; a hover hint explains why.
 
-use crate::widgets::git_panel::{contains, GitPanel, EMPTY_STATE_WIDTH};
+use crate::widgets::git_panel::{GitPanel, EMPTY_STATE_WIDTH};
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect};
@@ -72,7 +72,7 @@ impl GitPanel<'_> {
         }
         self.empty_state_rects(rect)
             .iter()
-            .position(|r| contains(*r, point))
+            .position(|r| r.contains(point))
             .map(|i| i as u8)
     }
 

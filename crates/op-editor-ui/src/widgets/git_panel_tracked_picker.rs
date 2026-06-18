@@ -10,7 +10,7 @@
 //! between paint + hit-test through the `*_rects` helpers.
 
 use crate::widgets::button::paint_button_feedback_wash;
-use crate::widgets::git_panel::{contains, truncate, GitPanel, GitPanelHit, PAD};
+use crate::widgets::git_panel::{truncate, GitPanel, GitPanelHit, PAD};
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect};
@@ -346,24 +346,24 @@ impl GitPanel<'_> {
         point: Point2D,
     ) -> Option<GitPanelHit> {
         let p = self.tracked_picker_panel(panel_rect);
-        if !contains(p, point) {
+        if !p.contains(point) {
             return None;
         }
         if self.state.candidate_files.is_empty() {
-            if contains(self.tracked_picker_empty_close(panel_rect), point) {
+            if self.tracked_picker_empty_close(panel_rect).contains(point) {
                 return Some(GitPanelHit::TrackedPickerBack);
             }
             return Some(GitPanelHit::Inside);
         }
         let (back, bind, open) = self.tracked_picker_footer_rects(panel_rect);
-        if contains(back, point) {
+        if back.contains(point) {
             return Some(GitPanelHit::TrackedPickerBack);
         }
         if self.state.tracked_picker_selected.is_some() {
-            if contains(bind, point) {
+            if bind.contains(point) {
                 return Some(GitPanelHit::TrackedPickerBind);
             }
-            if contains(open, point) {
+            if open.contains(point) {
                 return Some(GitPanelHit::TrackedPickerBindOpen);
             }
         }

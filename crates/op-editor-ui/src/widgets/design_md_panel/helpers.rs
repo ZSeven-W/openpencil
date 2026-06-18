@@ -1,12 +1,5 @@
 use super::CHAR_W;
-use crate::{Color, Point2D, Rect};
-
-pub(super) fn contains(rect: Rect, point: Point2D) -> bool {
-    point.x >= rect.origin.x
-        && point.x <= rect.origin.x + rect.size.x
-        && point.y >= rect.origin.y
-        && point.y <= rect.origin.y + rect.size.y
-}
+use crate::Color;
 
 pub(super) fn label_char_w(ch: char) -> f32 {
     if ch.is_ascii() {

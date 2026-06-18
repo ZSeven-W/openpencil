@@ -5,7 +5,7 @@
 //! full-takeover modes (merge-resolution, diff) first, then the
 //! normal status / action / list / branches / remotes regions.
 
-use crate::widgets::git_panel::{contains, GitPanel, GitPanelHit, ListMode};
+use crate::widgets::git_panel::{GitPanel, GitPanelHit, ListMode};
 use crate::{Point2D, Rect};
 
 impl GitPanel<'_> {
@@ -32,7 +32,7 @@ impl GitPanel<'_> {
                 );
             }
         }
-        if !contains(panel_rect, point) {
+        if !panel_rect.contains(point) {
             return None;
         }
         // Inline clone wizard — URL / destination fields, the folder
@@ -44,16 +44,16 @@ impl GitPanel<'_> {
         if self.state.merge_resolve.is_some() {
             let layout = self.resolve_layout(panel_rect);
             for (i, (ours, theirs)) in layout.rows.iter().enumerate() {
-                if contains(*ours, point) {
+                if ours.contains(point) {
                     return Some(GitPanelHit::MergeChoiceOurs(i));
                 }
-                if contains(*theirs, point) {
+                if theirs.contains(point) {
                     return Some(GitPanelHit::MergeChoiceTheirs(i));
                 }
             }
-            return Some(if contains(layout.apply, point) {
+            return Some(if layout.apply.contains(point) {
                 GitPanelHit::ApplyMergeResolution
-            } else if contains(layout.cancel, point) {
+            } else if layout.cancel.contains(point) {
                 GitPanelHit::CancelMergeResolution
             } else {
                 GitPanelHit::Inside
@@ -63,20 +63,20 @@ impl GitPanel<'_> {
         // "Stage" buttons; the diff body itself swallows clicks.
         if self.state.diff.is_some() {
             for (hunk, button) in self.diff_hunk_buttons(panel_rect) {
-                if contains(button, point) {
+                if button.contains(point) {
                     return Some(GitPanelHit::StageHunk(hunk));
                 }
             }
             let [left, right, up, down, close] = Self::diff_header_buttons(panel_rect);
-            return Some(if contains(left, point) {
+            return Some(if left.contains(point) {
                 GitPanelHit::DiffScrollLeft
-            } else if contains(right, point) {
+            } else if right.contains(point) {
                 GitPanelHit::DiffScrollRight
-            } else if contains(up, point) {
+            } else if up.contains(point) {
                 GitPanelHit::DiffScrollUp
-            } else if contains(down, point) {
+            } else if down.contains(point) {
                 GitPanelHit::DiffScrollDown
-            } else if contains(close, point) {
+            } else if close.contains(point) {
                 GitPanelHit::CloseDiff
             } else {
                 GitPanelHit::Inside
@@ -86,17 +86,17 @@ impl GitPanel<'_> {
         // only targets (Init is gated on a saved doc).
         if self.is_empty_state() {
             let cards = self.empty_state_rects(panel_rect);
-            if contains(cards[0], point) {
+            if cards[0].contains(point) {
                 return Some(if self.state.has_saved_file {
                     GitPanelHit::EmptyInit
                 } else {
                     GitPanelHit::Inside
                 });
             }
-            if contains(cards[1], point) {
+            if cards[1].contains(point) {
                 return Some(GitPanelHit::EmptyOpen);
             }
-            if contains(cards[2], point) {
+            if cards[2].contains(point) {
                 return Some(GitPanelHit::EmptyClone);
             }
             return Some(GitPanelHit::Inside);
@@ -119,7 +119,7 @@ impl GitPanel<'_> {
         // is inert.
         let merging = self.state.merging;
         let rects = Self::action_rects(panel_rect, merging);
-        if contains(rects.input, point) {
+        if rects.input.contains(point) {
             return Some(if merging {
                 GitPanelHit::Inside
             } else {
@@ -127,7 +127,7 @@ impl GitPanel<'_> {
             });
         }
         for (i, button) in rects.buttons.iter().enumerate() {
-            if !contains(*button, point) {
+            if !button.contains(point) {
                 continue;
             }
             return Some(match (merging, i) {
@@ -151,7 +151,7 @@ impl GitPanel<'_> {
         }
         // The status line opens the whole-tree diff — but only when
         // the working tree actually has something to diff.
-        if contains(self.status_rect(panel_rect), point)
+        if self.status_rect(panel_rect).contains(point)
             && (self.state.dirty_count > 0 || self.state.conflicted_count > 0)
         {
             return Some(GitPanelHit::ShowWorkingDiff);
@@ -160,7 +160,7 @@ impl GitPanel<'_> {
         // staging, the row body opens the file's diff. Merge mode: a
         // conflicted file's diff. History: a commit's patch.
         for (i, row) in self.list_row_rects(panel_rect).iter().enumerate() {
-            if contains(*row, point) {
+            if row.contains(point) {
                 return Some(match self.list_mode() {
                     ListMode::Merge => GitPanelHit::ShowFileDiff(i),
                     ListMode::Changes => {
@@ -168,7 +168,7 @@ impl GitPanel<'_> {
                             origin: row.origin,
                             size: Point2D::new(24.0, row.size.y),
                         };
-                        if contains(checkbox, point) {
+                        if checkbox.contains(point) {
                             GitPanelHit::ToggleStageFile(i)
                         } else {
                             GitPanelHit::ShowChangedFileDiff(i)
@@ -183,12 +183,12 @@ impl GitPanel<'_> {
         // current one. The current branch's own row is a no-op.
         let (_, branch_rects) = self.branch_layout(panel_rect);
         for (index, row) in branch_rects.iter().enumerate() {
-            if contains(*row, point) {
+            if row.contains(point) {
                 let is_current = self.state.branches.get(index) == self.state.branch.as_ref();
                 if is_current {
                     return Some(GitPanelHit::Inside);
                 }
-                if contains(Self::branch_merge_button(*row), point) {
+                if Self::branch_merge_button(*row).contains(point) {
                     return Some(GitPanelHit::MergeBranch(index));
                 }
                 return Some(GitPanelHit::SwitchBranch(index));
@@ -196,19 +196,19 @@ impl GitPanel<'_> {
         }
         // Remotes section — the URL input + "Set origin" button.
         let remotes = self.remotes_layout(panel_rect);
-        if contains(remotes.input, point) {
+        if remotes.input.contains(point) {
             return Some(GitPanelHit::RemoteInput);
         }
-        if contains(remotes.set_button, point) {
+        if remotes.set_button.contains(point) {
             return Some(GitPanelHit::SetRemote);
         }
-        if contains(remotes.ssh_button, point) {
+        if remotes.ssh_button.contains(point) {
             return Some(GitPanelHit::SetupSshAuth);
         }
-        if contains(remotes.https_input, point) {
+        if remotes.https_input.contains(point) {
             return Some(GitPanelHit::HttpsInput);
         }
-        if contains(remotes.login_button, point) {
+        if remotes.login_button.contains(point) {
             return Some(GitPanelHit::SetHttpsAuth);
         }
         Some(GitPanelHit::Inside)

@@ -20,7 +20,7 @@ use crate::{Color, Point2D, Rect, TextLayout};
 use op_editor_core::{ButtonPressTarget, DesignMdButton, DesignMdSpec, EditorState, Locale};
 
 mod helpers;
-use helpers::{contains, hex_to_color, label_char_w, truncate};
+use helpers::{hex_to_color, label_char_w, truncate};
 
 /// Panel width in logical px.
 pub const DESIGN_MD_PANEL_W: f32 = 480.0;
@@ -372,20 +372,20 @@ impl<'a> DesignMdPanel<'a> {
     /// Map a click at `point` onto a [`DesignMdHit`]. `None` when the
     /// click is outside the panel rect.
     pub fn hit_test(&self, panel: Rect, point: Point2D) -> Option<DesignMdHit> {
-        if !contains(panel, point) {
+        if !panel.contains(point) {
             return None;
         }
         let [import, auto, export, close] = Self::header_buttons(panel);
-        if contains(close, point) {
+        if close.contains(point) {
             return Some(DesignMdHit::Close);
         }
-        if contains(import, point) {
+        if import.contains(point) {
             return Some(DesignMdHit::Import);
         }
-        if contains(auto, point) {
+        if auto.contains(point) {
             return Some(DesignMdHit::AutoGenerate);
         }
-        if contains(export, point) {
+        if export.contains(point) {
             return Some(DesignMdHit::Export);
         }
         // Anywhere else in the header bar starts a drag.
@@ -395,16 +395,16 @@ impl<'a> DesignMdPanel<'a> {
         if self.has_content() {
             let content_point = Point2D::new(point.x, point.y + self.effective_scroll(panel));
             for sec in self.layout(panel) {
-                if contains(sec.header, content_point) {
+                if sec.header.contains(content_point) {
                     return Some(DesignMdHit::ToggleSection(sec.index));
                 }
             }
-            if contains(self.remove_rect(panel), content_point) {
+            if self.remove_rect(panel).contains(content_point) {
                 return Some(DesignMdHit::Remove);
             }
         } else {
             for (hit, _, _, button) in Self::empty_action_buttons(panel) {
-                if contains(button, point) {
+                if button.contains(point) {
                     return Some(hit);
                 }
             }
