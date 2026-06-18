@@ -89,6 +89,7 @@ pub mod property_panel_visibility;
 pub mod property_panel_widget;
 #[cfg(test)]
 mod property_panel_widget_tests;
+pub mod text_input;
 mod text_selection;
 pub mod toolbar;
 
@@ -223,6 +224,7 @@ pub mod variables_panel;
 mod variables_preset_menu;
 
 pub use prop_row::PropertyRow;
+pub use text_input::TextInputWidget;
 pub use tree::{TreeItem, TreeWidget};
 
 pub use layer_panel::{LayerItem, LayerPanel};

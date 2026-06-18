@@ -4,9 +4,8 @@
 //! (`op_editor_ui::widgets::property_panel_typography`).
 
 use super::WidgetHostNative;
-use op_editor_ui::widgets::property_panel_typography::{
-    font_picker_entries, BUNDLED_FONT_FAMILIES,
-};
+use op_editor_ui::font_catalog::BUNDLED_FONT_FAMILIES;
+use op_editor_ui::widgets::property_panel_typography::font_picker_entries;
 use op_editor_ui::widgets::{PropertyPanel, TOP_BAR_HEIGHT};
 use op_editor_ui::{Point2D, Rect};
 

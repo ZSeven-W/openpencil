@@ -28,36 +28,7 @@ use crate::widgets::PaintCx;
 use crate::{Point2D, Rect, TextLayout};
 use jian_widgets::components::select::{SelectHit, SelectState};
 
-/// TS `BUNDLED_FAMILIES` (use-system-fonts.ts:9-21).
-pub const BUNDLED_FONT_FAMILIES: [&str; 11] = [
-    "Inter",
-    "Poppins",
-    "Roboto",
-    "Montserrat",
-    "Open Sans",
-    "Lato",
-    "Raleway",
-    "DM Sans",
-    "Playfair Display",
-    "Nunito",
-    "Source Sans 3",
-];
-
-/// TS `FALLBACK_SYSTEM_FONTS` (use-system-fonts.ts:24-36) — shown
-/// when no host enumeration is available (wasm host).
-pub const FALLBACK_SYSTEM_FONTS: [&str; 11] = [
-    "Arial",
-    "Helvetica",
-    "Helvetica Neue",
-    "Georgia",
-    "Times New Roman",
-    "Courier New",
-    "Verdana",
-    "Trebuchet MS",
-    "Tahoma",
-    "Impact",
-    "Comic Sans MS",
-];
+pub use crate::font_catalog::{BUNDLED_FONT_FAMILIES, FALLBACK_SYSTEM_FONTS};
 
 /// One selectable row (TS `FontInfo`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
