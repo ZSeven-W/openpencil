@@ -1,0 +1,32 @@
+# Per-Dockerfile ignore (BuildKit picks up `<Dockerfile>.dockerignore` in
+# preference to the root `.dockerignore` for THIS Dockerfile only — so adding
+# the heavy Rust `target/` here does not affect the TS `Dockerfile` build).
+#
+# Keep the build context small: the builder stage runs a clean `cargo build`
+# inside the image, so none of the host's build outputs are needed — and
+# `target/` alone is tens of GB.
+
+.git
+.github
+.vscode
+
+# Rust + JS build outputs — rebuilt inside the image, never copied in.
+target
+node_modules
+out
+dist
+dist-electron
+electron-dist
+build
+
+# Local scratch / screenshots / editor temp.
+screenshot
+.openpencil-tmp
+
+# Docs add nothing to the build.
+*.md
+
+# IMPORTANT: do NOT ignore `web-bundle/` — the `WEB_BUNDLE_SOURCE=copy` build
+# path expects a prebuilt `./web-bundle` (the Task-1 CI artifact) in the
+# context. It is listed here only as a comment so a future edit doesn't add it.
+# !web-bundle
