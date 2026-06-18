@@ -24,12 +24,12 @@
 //!
 //! Architectural divergence (documented): TS's BROWSER is the document
 //! authority (it pushes its document on `client:id` and the Nitro server only
-//! caches), while the Rust daemon IS the authority — so this glue never
-//! pushes before the first daemon document has been applied, and the TS
-//! `sync-reset` / `active-ping` cache-management routes have no Rust
-//! equivalent. On refresh the web shell always pulls the daemon document
-//! first; browser-local bootstrap pushes are disabled so stale page state
-//! cannot revive an old `.op` file. The TS browser-rendered
+//! caches), while the Rust daemon is the authority after mount — so this glue
+//! never pushes before the first daemon document has been applied. The static
+//! host page calls `/api/mcp/sync-reset` before mounting so a browser refresh
+//! starts from the starter document instead of replaying the previous transient
+//! web `.op` state; bootstrap pushes remain disabled so stale page state cannot
+//! overwrite a deliberately opened daemon document. The TS browser-rendered
 //! `screenshot:request` RPC is not implemented on the Rust web shell yet (the
 //! daemon reports screenshots honestly unavailable headless).
 

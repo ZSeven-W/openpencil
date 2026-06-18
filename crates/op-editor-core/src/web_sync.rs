@@ -140,8 +140,9 @@ impl WebSyncClient {
     }
 
     /// True once the first daemon document has been applied. The push path is
-    /// gated on this: the daemon is the document authority at startup, so the
-    /// browser must never push its boot-time starter document over it.
+    /// gated on this: the host page may reset the daemon document on refresh,
+    /// but the browser must still pull that authoritative post-reset state
+    /// before it can push local edits.
     pub fn initialized(&self) -> bool {
         self.initialized
     }
@@ -175,9 +176,10 @@ impl WebSyncClient {
         self.initialized && self.baseline_hash != Some(fnv1a64(doc_json.as_bytes()))
     }
 
-    /// Bootstrap pushes are intentionally disabled. A refreshed web page must
-    /// always pull the daemon's authoritative document first; otherwise a
-    /// browser-local stale document can overwrite the file-backed `.op` state.
+    /// Bootstrap pushes are intentionally disabled. A refreshed web page first
+    /// asks the daemon to reset its transient sync document, then pulls the
+    /// daemon's authoritative starter document; local edits may push only after
+    /// that first pull has succeeded.
     pub fn should_bootstrap_push(&self, _doc_json: &str, _starter_doc_json: &str) -> bool {
         false
     }
@@ -365,7 +367,7 @@ mod tests {
         let mut c = WebSyncClient::new();
         let starter = r#"{"version":"1.0","children":[]}"#;
         // Before the first daemon apply the browser must NOT push its
-        // boot-time starter document over the daemon's (daemon authority).
+        // boot-time starter document over the daemon's post-reset authority.
         assert!(!c.initialized());
         assert!(!c.should_push(starter));
         // Apply the daemon doc, note its local serialization as baseline.
