@@ -844,7 +844,7 @@ fn route_dropped_file<C: RepaintContext + 'static>(inner: &InnerRc<C>, file: web
 /// Pop a hidden `<input type=file accept=…>` and invoke `on_file`
 /// with the chosen file. One-shot; see the module docs for the
 /// cancel-leak trade-off.
-fn open_file_picker(accept: &str, on_file: Box<dyn FnOnce(web_sys::File)>) {
+pub(crate) fn open_file_picker(accept: &str, on_file: Box<dyn FnOnce(web_sys::File)>) {
     let result = (|| -> Result<(), JsValue> {
         let window = web_sys::window()
             .ok_or_else(|| JsValue::from_str("file picker: window unavailable"))?;
@@ -893,7 +893,7 @@ fn open_file_picker(accept: &str, on_file: Box<dyn FnOnce(web_sys::File)>) {
 
 /// How to read a `File` — maps onto the three `FileReader` modes the
 /// ingestion paths need.
-enum ReadMode {
+pub(crate) enum ReadMode {
     /// `readAsText` → `.op` / `.pen` / `.svg` sources.
     Text,
     /// `readAsArrayBuffer` → binary `.fig` payloads.
@@ -906,7 +906,7 @@ enum ReadMode {
 /// Read `file` asynchronously and invoke `on_done` with the raw
 /// `FileReader.result` JsValue (string for Text / DataUrl, an
 /// ArrayBuffer for Bytes; `JsValue::NULL` on a failed read).
-fn read_file(file: web_sys::File, mode: ReadMode, on_done: Box<dyn FnOnce(JsValue)>) {
+pub(crate) fn read_file(file: web_sys::File, mode: ReadMode, on_done: Box<dyn FnOnce(JsValue)>) {
     let result = (|| -> Result<(), JsValue> {
         let reader = web_sys::FileReader::new()?;
         let slot: OnceSlot = Rc::new(RefCell::new(None));

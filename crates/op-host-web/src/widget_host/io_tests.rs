@@ -6,7 +6,7 @@
 
 use super::WidgetHost;
 use crate::repaint_ctx::RepaintContext;
-use op_editor_core::editor_ui_state::{FileAction, RecentFile};
+use op_editor_core::editor_ui_state::{DesignMdRequest, FileAction, RecentFile};
 use std::cell::RefCell;
 use std::rc::Rc;
 use wasm_bindgen::JsValue;
@@ -175,6 +175,27 @@ fn drain_file_action_clear_recent_matches_desktop_state_change() {
         .is_none());
     assert!(borrowed.host.editor_state_dirty);
     assert_eq!(borrowed.repaint_count, 1);
+}
+
+#[test]
+fn drain_design_md_auto_generate_consumes_empty_document_request() {
+    let mut host = WidgetHost::new();
+    host.editor_state.doc.children.clear();
+    host.editor_state.editor_ui.design_md_request = Some(DesignMdRequest::AutoGenerate);
+    host.editor_state.editor_ui.design_md_generating = false;
+    let inner = Rc::new(RefCell::new(TestRepaintContext::new(host)));
+
+    crate::web_design_md::drain_design_md_action(&inner);
+
+    let borrowed = inner.borrow();
+    assert!(borrowed
+        .host
+        .editor_state
+        .editor_ui
+        .design_md_request
+        .is_none());
+    assert!(!borrowed.host.editor_state.editor_ui.design_md_generating);
+    assert_eq!(borrowed.repaint_count, 0);
 }
 
 #[test]

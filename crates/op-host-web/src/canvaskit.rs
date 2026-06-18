@@ -900,6 +900,7 @@ pub async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
                 crate::web_chat::drain_chat_flags(&inner);
                 crate::iconify_web::drain_iconify_request(&inner);
                 crate::codegen_web::drain_codegen_flags(&inner);
+                crate::web_design_md::drain_design_md_action(&inner);
                 crate::dom_io::drain_pending_file_action(&inner);
                 crate::dom_io::drain_pending_attachment_pick(&inner);
                 crate::dom_io::drain_pending_kit_io(&inner);
