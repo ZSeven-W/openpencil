@@ -117,10 +117,6 @@ features = [
   "XmlHttpRequestEventTarget",
 ]
 
-[dev-dependencies]
-op-i18n = { path = "../op-i18n" }
-ttf-parser = "0.25"
-
 [features]
 # `web` keeps the kickoff §1.2 wasm32-unknown-unknown CI baseline green —
 # the crate compile-checks as a wasm32-clean stub without pulling skia.

@@ -13,14 +13,9 @@ use wasm_bindgen::prelude::*;
 #[wasm_bindgen(module = "/src/op_ck_bridge.js")]
 extern "C" {
     /// Async init: load CanvasKit, make a WebGL surface on `canvas_id`, build
-    /// Latin + CJK typefaces. Resolves to an `OpCk` bridge object.
+    /// the bridge object. Text uses browser/system fonts via the JS bridge.
     #[wasm_bindgen(js_name = opCkInit, catch)]
-    fn op_ck_init(
-        canvas_id: &str,
-        roboto: &[u8],
-        cjk: &[u8],
-        emoji: &[u8],
-    ) -> Result<js_sys::Promise, JsValue>;
+    fn op_ck_init(canvas_id: &str) -> Result<js_sys::Promise, JsValue>;
 
     /// The bridge object: flat scalar-arg ops over a CanvasKit canvas.
     pub type OpCk;
@@ -237,11 +232,6 @@ extern "C" {
     fn resize(this: &OpCk, w: u32, h: u32);
 }
 
-/// Embedded UI fonts (same assets the skia path used).
-const ROBOTO_TTF: &[u8] = include_bytes!("../assets/Roboto-Regular.ttf");
-const NOTO_CJK_SUBSET: &[u8] = include_bytes!("../assets/NotoSansSC-OpenPencilSubset.otf");
-// Color-emoji fallback (NotoColorEmoji subset to the chrome's emoji glyphs).
-const NOTO_EMOJI_SUBSET: &[u8] = include_bytes!("../assets/NotoColorEmoji-OpenPencilSubset.ttf");
 const STEADY_CANVAS_PIXEL_BUDGET: f32 = 4_000_000.0;
 
 fn flatten_gradient_stops(stops: &[(f32, Color)]) -> Vec<f32> {
@@ -607,7 +597,7 @@ pub(crate) async fn init_backend(
     logical_w: u32,
     logical_h: u32,
 ) -> Result<CanvasKitBackend, JsValue> {
-    let promise = op_ck_init(canvas_id, ROBOTO_TTF, NOTO_CJK_SUBSET, NOTO_EMOJI_SUBSET)?;
+    let promise = op_ck_init(canvas_id)?;
     let ck_val = wasm_bindgen_futures::JsFuture::from(promise).await?;
     let ck: OpCk = ck_val.unchecked_into();
     Ok(CanvasKitBackend::new(ck, dpr, logical_w, logical_h))

@@ -138,7 +138,7 @@ pub struct NativeBackend {
 /// is far larger than the encoded source, so the cap is modest.
 const IMAGE_CACHE_CAP: usize = 48;
 
-const ROBOTO_TTF: &[u8] = include_bytes!("../../../op-host-web/assets/Roboto-Regular.ttf");
+const ROBOTO_TTF: &[u8] = include_bytes!("../../assets/Roboto-Regular.ttf");
 
 /// Union of every CJK codepoint that appears in the editor chrome
 /// and the settings modal. Pre-warmed at `NativeBackend::new` so the
