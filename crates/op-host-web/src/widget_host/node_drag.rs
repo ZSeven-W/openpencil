@@ -1,6 +1,18 @@
 use super::WidgetHost;
+use op_editor_core::drag_mutators::{
+    auto_layout_direction, parent_of, should_auto_reparent_outside_parent, FlexDirection,
+};
+use op_editor_core::{NodeId, PenNodeExt};
 
 const NODE_DRAG_THRESHOLD_PX: f32 = 2.0;
+
+struct DragCommitPlan {
+    parent_id: NodeId,
+    flex: Option<FlexDirection>,
+    bounds: (f32, f32, f32, f32),
+    reparent_to_root: bool,
+    sibling_mids: Vec<f32>,
+}
 
 #[derive(Debug, Clone, Copy)]
 pub(in crate::widget_host) struct NodeDragState {
@@ -69,11 +81,106 @@ impl WidgetHost {
     }
 
     pub(in crate::widget_host) fn release_node_drag(&mut self) -> bool {
-        let Some(_drag) = self.node_drag.take() else {
+        let Some(drag) = self.node_drag.take() else {
             return false;
         };
         self.editor_state.editor_ui.active_guides.clear();
+        let _ = self.commit_node_drag(&drag);
         self.mark_dirty();
         true
+    }
+
+    fn commit_node_drag(&mut self, drag: &NodeDragState) -> bool {
+        if !drag.moved {
+            return false;
+        }
+        self.refresh_layout_scene();
+        let ids = self.editor_state.selection.set.clone();
+        let mut mutated = false;
+        for id in &ids {
+            let Some(plan) = self.plan_drag_commit(id, drag) else {
+                continue;
+            };
+            mutated |= self.apply_drag_commit(id, plan);
+        }
+        if mutated {
+            self.mark_dirty();
+        }
+        mutated
+    }
+
+    fn plan_drag_commit(&self, id: &NodeId, drag: &NodeDragState) -> Option<DragCommitPlan> {
+        let children = self.editor_state.active_children();
+        let parent_id = parent_of(children, id)?;
+        let parent = op_editor_core::walkers::find_node(children, &parent_id)?;
+        let flex = auto_layout_direction(parent);
+        let page = self.layout_scene.active_page()?;
+        let node_scene = page.find(id.as_str())?;
+        let mut nb = node_scene.aggregate_bounds();
+        if flex.is_some() {
+            nb.origin.x += drag.total_dx as f32;
+            nb.origin.y += drag.total_dy as f32;
+        }
+        let pb = page.find(parent_id.as_str())?.aggregate_bounds();
+        let outside = nb.origin.x + nb.size.x <= pb.origin.x
+            || nb.origin.x >= pb.origin.x + pb.size.x
+            || nb.origin.y + nb.size.y <= pb.origin.y
+            || nb.origin.y >= pb.origin.y + pb.size.y;
+        let node_ref = op_editor_core::walkers::find_node(children, id)?;
+        let reparent_to_root = outside && should_auto_reparent_outside_parent(node_ref);
+        let vertical = matches!(flex, Some(FlexDirection::Vertical));
+        let sibling_mids = parent
+            .children()
+            .map(|siblings| {
+                siblings
+                    .iter()
+                    .filter(|sib| sib.id_str() != id.as_str())
+                    .map(|sib| {
+                        page.find(sib.id_str())
+                            .map(|sn| {
+                                let b = sn.aggregate_bounds();
+                                if vertical {
+                                    b.origin.y + b.size.y / 2.0
+                                } else {
+                                    b.origin.x + b.size.x / 2.0
+                                }
+                            })
+                            .unwrap_or(0.0)
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        Some(DragCommitPlan {
+            parent_id,
+            flex,
+            bounds: (nb.origin.x, nb.origin.y, nb.size.x, nb.size.y),
+            reparent_to_root,
+            sibling_mids,
+        })
+    }
+
+    fn apply_drag_commit(&mut self, id: &NodeId, plan: DragCommitPlan) -> bool {
+        let (bx, by, bw, bh) = plan.bounds;
+        if plan.reparent_to_root {
+            return self
+                .editor_state
+                .reparent_to_page_root(id, bx as f64, by as f64);
+        }
+        let Some(dir) = plan.flex else {
+            return false;
+        };
+        let drag_mid = match dir {
+            FlexDirection::Vertical => by + bh / 2.0,
+            FlexDirection::Horizontal => bx + bw / 2.0,
+        };
+        let mut new_index = plan.sibling_mids.len();
+        for (i, sib_mid) in plan.sibling_mids.iter().enumerate() {
+            if drag_mid < *sib_mid {
+                new_index = i;
+                break;
+            }
+        }
+        self.editor_state
+            .reorder_child_to_index(&plan.parent_id, id, new_index)
     }
 }
