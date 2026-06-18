@@ -74,6 +74,7 @@ impl WidgetHost {
                 // first so a stray remove is undoable.
                 let snap = self.editor_state.snapshot_for_history();
                 self.editor_state.doc.design_md = None;
+                self.editor_state.editor_ui.design_md_scroll.offset = 0.0;
                 self.editor_state.history_push_past(snap);
             }
             DesignMdHit::Inside => {
