@@ -612,6 +612,10 @@ struct CkInner {
     /// screen reader can read the opaque CanvasKit surface. `None` only if
     /// the DOM container couldn't be created (non-browser host).
     a11y: Option<crate::a11y_dom::A11yDomMirror>,
+    /// Hidden IME-capture input (#54) — focused while a text field is active
+    /// so the browser IME can compose CJK into it; its `compositionend` is
+    /// routed to `apply_ime`. `None` only if the DOM is unreachable.
+    ime: Option<crate::ime_input::ImeInput>,
 }
 
 impl CkInner {
@@ -621,6 +625,12 @@ impl CkInner {
         self.host.paint_dyn(&mut self.backend, w, h);
         self.backend.end_frame();
         self.sync_a11y();
+        // #54: focus the hidden IME input only while a text field owns the
+        // keyboard, so CJK composition works when editing and no soft keyboard
+        // appears otherwise. Cheap — toggles only on a focus transition.
+        if let Some(ime) = self.ime.as_mut() {
+            ime.sync_focus(self.host.input_active());
+        }
     }
 
     /// Rebuild the hidden ARIA DOM mirror from a freshly assembled tree.
@@ -780,11 +790,15 @@ pub async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
     // Hidden ARIA DOM mirror (#57) — created next to the canvas, refreshed
     // after every paint so screen readers can read the opaque GPU surface.
     let a11y = crate::a11y_dom::A11yDomMirror::create(&canvas);
+    // Hidden IME-capture input (#54) — composition is wired to `apply_ime`
+    // below; focus is driven from `input_active()` in `repaint`.
+    let ime = crate::ime_input::ImeInput::create(&canvas);
     let inner = Rc::new(RefCell::new(CkInner {
         backend,
         host,
         canvas: canvas.clone(),
         a11y,
+        ime,
     }));
     {
         let mut b = inner.borrow_mut();
@@ -978,6 +992,55 @@ pub async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
                 b.repaint();
             }
         })?;
+    }
+    // compositionstart/end → IME (#54). The hidden `ime` input captures the
+    // composition (a `<canvas>` can't); on commit, `apply_ime` routes the
+    // string through `apply_text` into whichever field owns the keyboard.
+    // `compositionstart` clears the throwaway buffer so it never accumulates;
+    // the commit is read from the event's `data`, never the input value.
+    if let Some(ime_target) = inner.try_borrow().ok().and_then(|b| {
+        b.ime
+            .as_ref()
+            .map(|i| -> web_sys::EventTarget { i.input().clone().into() })
+    }) {
+        {
+            let inner = inner.clone();
+            add_listener::<web_sys::CompositionEvent, _, _>(
+                &ime_target,
+                "compositionstart",
+                &mut listeners,
+                move |_evt| {
+                    if let Ok(b) = inner.try_borrow() {
+                        if let Some(ime) = b.ime.as_ref() {
+                            ime.clear();
+                        }
+                    }
+                },
+            )?;
+        }
+        {
+            let inner = inner.clone();
+            add_listener::<web_sys::CompositionEvent, _, _>(
+                &ime_target,
+                "compositionend",
+                &mut listeners,
+                move |evt| {
+                    let Ok(mut b) = inner.try_borrow_mut() else {
+                        return;
+                    };
+                    b.host.set_clocks(now_ms_perf(), now_unix_secs());
+                    let committed = evt.data().unwrap_or_default();
+                    let ime_evt = crate::event::ime::composition_end(committed);
+                    let consumed = b.host.apply_ime(&ime_evt);
+                    if let Some(ime) = b.ime.as_ref() {
+                        ime.clear();
+                    }
+                    if consumed {
+                        b.repaint();
+                    }
+                },
+            )?;
+        }
     }
     // keydown → text input + editor shortcuts. `apply_key` is a stub on this
     // host; real input is dispatched per-key to apply_text / apply_backspace /
