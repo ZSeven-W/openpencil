@@ -130,8 +130,8 @@ impl WidgetHost {
         let over_dropdown =
             self.over_dropdown_overlay(x, y, self.last_viewport_w, self.last_viewport_h);
         let dropdown_changed = self.update_dropdown_hover(x, y);
-        let layer_cleared = over_dropdown && self.clear_layer_panel_hover();
-        if dropdown_changed || layer_cleared || over_dropdown {
+        let underlay_cleared = over_dropdown && self.clear_hover_under_dropdown_overlay();
+        if dropdown_changed || underlay_cleared || over_dropdown {
             return true;
         }
         if self.editor_state.editor_ui.variables_panel_open {
@@ -153,6 +153,40 @@ impl WidgetHost {
             }
         }
         false
+    }
+
+    fn clear_hover_under_dropdown_overlay(&mut self) -> bool {
+        let mut changed = false;
+        {
+            let ui = &mut self.editor_state.editor_ui;
+            changed |= ui.canvas_hover_node.take().is_some();
+            changed |= ui.hovered_layer_id.take().is_some();
+            changed |= ui.hovered_page_index.take().is_some();
+            changed |= ui.fill_type_picker.hover.take().is_some();
+            changed |= ui.toolbar_hover.take().is_some();
+            changed |= ui.align_toolbar_hover.take().is_some();
+            changed |= ui.statusbar_hover.take().is_some();
+            changed |= ui.topbar_button_hover.take().is_some();
+            changed |= ui.chat_model_picker.hover.take().is_some();
+            changed |= ui.chat_design_block_hover.take().is_some();
+            changed |= ui.chat_footer_hover.take().is_some();
+            changed |= ui.chat_example_hover.take().is_some();
+            changed |= ui.export_picker_hover.take().is_some();
+            changed |= ui.property_action_hover.take().is_some();
+            changed |= ui.property_tab_hover.take().is_some();
+            if let Some(menu) = ui.layer_context_menu.as_mut() {
+                changed |= menu.menu.hover.take().is_some();
+            }
+        }
+        if let Some(menu) = self.editor_state.ui.path_anchor_menu.as_mut() {
+            changed |= menu.menu.hover.take().is_some();
+        }
+        changed |= self.editor_state.codegen.framework_hover.take().is_some();
+        changed |= self.editor_state.codegen.action_hover.take().is_some();
+        if changed {
+            self.mark_dirty();
+        }
+        changed
     }
 
     /// Update the file-menu / locale / shape-picker dropdown hover highlights
