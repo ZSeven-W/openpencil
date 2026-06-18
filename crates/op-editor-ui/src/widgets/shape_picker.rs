@@ -317,7 +317,10 @@ mod tests {
 
     #[test]
     fn panel_height_covers_seven_rows() {
-        assert_eq!(ShapePicker::panel_height(), ROW_HEIGHT * ROW_COUNT as f32);
+        assert_eq!(
+            ShapePicker::panel_height(),
+            PANEL_PAD_Y * 2.0 + ROW_HEIGHT * ROW_COUNT as f32
+        );
     }
 
     #[test]
@@ -377,9 +380,12 @@ mod tests {
             origin: Point2D::new(100.0, 50.0),
             size: Point2D::new(SHAPE_PICKER_WIDTH, ShapePicker::panel_height()),
         };
+        // Row index 1's highlight wash mirrors paint(): slot top at
+        // PANEL_PAD_Y + idx*ROW_HEIGHT, then inset vertically by ROW_HL_INSET_Y.
+        let row_y = panel_rect.origin.y + PANEL_PAD_Y + ROW_HEIGHT;
         let pressed_row = Rect {
-            origin: Point2D::new(panel_rect.origin.x + 4.0, panel_rect.origin.y + ROW_HEIGHT),
-            size: Point2D::new(panel_rect.size.x - 8.0, ROW_HEIGHT),
+            origin: Point2D::new(panel_rect.origin.x + 4.0, row_y + ROW_HL_INSET_Y),
+            size: Point2D::new(panel_rect.size.x - 8.0, ROW_HEIGHT - 2.0 * ROW_HL_INSET_Y),
         };
         let expected = picker
             .theme
