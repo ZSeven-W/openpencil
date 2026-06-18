@@ -31,6 +31,7 @@ pub use op_i18n as i18n;
 pub use op_editor_core::render_backend;
 
 pub mod accessibility;
+pub mod font_catalog;
 pub mod layout_scene;
 pub mod layout_scene_hit;
 pub mod scene_vars;

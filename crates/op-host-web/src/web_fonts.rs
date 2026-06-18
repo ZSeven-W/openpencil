@@ -15,7 +15,7 @@ use crate::repaint_ctx::RepaintContext;
 use jian_ops_schema::node::{PenNode, TextContent};
 use js_sys::{Array, Function, Promise, Reflect, Uint8Array};
 use op_editor_core::pen_node_ext::PenNodeExt;
-use op_editor_ui::widgets::property_panel_typography::BUNDLED_FONT_FAMILIES;
+use op_editor_ui::font_catalog::BUNDLED_FONT_FAMILIES;
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::{JsCast, JsValue};
 

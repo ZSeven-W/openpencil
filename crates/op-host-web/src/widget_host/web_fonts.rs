@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use op_editor_ui::widgets::property_panel_typography::BUNDLED_FONT_FAMILIES;
+use op_editor_ui::font_catalog::BUNDLED_FONT_FAMILIES;
 
 use super::WidgetHost;
 
