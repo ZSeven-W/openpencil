@@ -298,4 +298,82 @@ impl WidgetHost {
         }
         None
     }
+
+    pub(in crate::widget_host) fn apply_git_escape(&mut self) -> Option<bool> {
+        if self.git_clone_input_active() {
+            let defocused = {
+                let form = self
+                    .editor_state
+                    .editor_ui
+                    .git_panel
+                    .clone_form
+                    .as_mut()
+                    .unwrap();
+                let url_caret = form.url_input.caret();
+                form.url_input.set_caret(url_caret, self.now_ms);
+                let dest_caret = form.dest_input.caret();
+                form.dest_input.set_caret(dest_caret, self.now_ms);
+                form.focus.take().is_some()
+            };
+            if !defocused {
+                self.editor_state.editor_ui.git_panel.clone_form = None;
+            }
+            self.mark_dirty();
+            return Some(true);
+        }
+
+        if self.editor_state.editor_ui.git_panel.branch_picker_open
+            && self.editor_state.editor_ui.git_panel.branch_picker_mode != GitBranchPickerMode::List
+        {
+            let panel = &mut self.editor_state.editor_ui.git_panel;
+            panel.branch_picker_mode = GitBranchPickerMode::List;
+            panel.branch_picker_menu.hover = None;
+            panel.branch_create_input.set_text("");
+            panel.branch_create_focused = false;
+            self.mark_dirty();
+            return Some(true);
+        }
+
+        if self.editor_state.editor_ui.git_panel.author_prompt {
+            let panel = &mut self.editor_state.editor_ui.git_panel;
+            panel.author_prompt = false;
+            panel.author_name_focused = false;
+            panel.author_email_focused = false;
+            let caret = panel.author_name_input.caret();
+            panel.author_name_input.set_caret(caret, self.now_ms);
+            let caret = panel.author_email_input.caret();
+            panel.author_email_input.set_caret(caret, self.now_ms);
+            self.mark_dirty();
+            return Some(true);
+        }
+
+        if self.git_commit_focus_active() {
+            self.editor_state
+                .editor_ui
+                .git_panel
+                .defocus_commit_input(self.now_ms);
+            self.mark_dirty();
+            return Some(true);
+        }
+
+        if self.git_remote_focus_active() {
+            let panel = &mut self.editor_state.editor_ui.git_panel;
+            panel.remote_focused = false;
+            let caret = panel.remote_input.caret();
+            panel.remote_input.set_caret(caret, self.now_ms);
+            self.mark_dirty();
+            return Some(true);
+        }
+
+        if self.git_https_focus_active() {
+            let panel = &mut self.editor_state.editor_ui.git_panel;
+            panel.https_focused = false;
+            let caret = panel.https_input.caret();
+            panel.https_input.set_caret(caret, self.now_ms);
+            self.mark_dirty();
+            return Some(true);
+        }
+
+        None
+    }
 }

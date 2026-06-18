@@ -682,6 +682,9 @@ impl WidgetHost {
             self.mark_dirty();
             return true;
         }
+        if let Some(consumed) = self.apply_git_escape() {
+            return consumed;
+        }
         // Escape COMMITS variables header renames + row drafts
         // (mirrors the native host's escape behavior).
         if self

@@ -307,3 +307,112 @@ fn clone_wizard_owns_keyboard_and_enter() {
     assert!(host.apply_send());
     assert_eq!(host.editor_state().editor_ui.git_panel.pending_action, None);
 }
+
+#[test]
+fn git_escape_defocuses_then_closes_clone_wizard() {
+    let mut host = host_with_git_panel_open();
+    host.editor_state_mut().editor_ui.git_panel.clone_form = Some(CloneFormState {
+        focus: Some(CloneField::Dest),
+        ..Default::default()
+    });
+
+    assert!(host.apply_escape());
+    {
+        let form = host
+            .editor_state()
+            .editor_ui
+            .git_panel
+            .clone_form
+            .as_ref()
+            .unwrap();
+        assert_eq!(form.focus, None);
+    }
+
+    assert!(host.apply_escape());
+    assert!(host.editor_state().editor_ui.git_panel.clone_form.is_none());
+}
+
+#[test]
+fn git_escape_resets_branch_picker_submode() {
+    let mut host = host_with_git_panel_open();
+    {
+        let panel = &mut host.editor_state_mut().editor_ui.git_panel;
+        panel.in_repo = true;
+        panel.branch_picker_open = true;
+        panel.branch_picker_mode = GitBranchPickerMode::Create;
+        panel.branch_picker_menu.hover = Some(1);
+        panel.branch_create_focused = true;
+        panel.branch_create_input.set_text("feature/temp");
+    }
+
+    assert!(host.apply_escape());
+    let panel = &host.editor_state().editor_ui.git_panel;
+    assert_eq!(panel.branch_picker_mode, GitBranchPickerMode::List);
+    assert!(panel.branch_picker_open);
+    assert_eq!(panel.branch_picker_menu.hover, None);
+    assert!(panel.branch_create_input.text().is_empty());
+    assert!(!panel.branch_create_focused);
+}
+
+#[test]
+fn git_escape_dismisses_author_prompt() {
+    let mut host = host_with_git_panel_open();
+    {
+        let panel = &mut host.editor_state_mut().editor_ui.git_panel;
+        panel.in_repo = true;
+        panel.author_prompt = true;
+        panel.author_name_focused = true;
+        panel.author_email_focused = true;
+        panel.author_name_input.set_text("Ada");
+        panel.author_email_input.set_text("ada@example.com");
+    }
+
+    assert!(host.apply_escape());
+    let panel = &host.editor_state().editor_ui.git_panel;
+    assert!(!panel.author_prompt);
+    assert!(!panel.author_name_focused);
+    assert!(!panel.author_email_focused);
+    assert_eq!(panel.author_name_input.text(), "Ada");
+    assert_eq!(panel.author_email_input.text(), "ada@example.com");
+}
+
+#[test]
+fn git_escape_defocuses_ready_inputs() {
+    let mut host = host_with_git_panel_open();
+    {
+        let panel = &mut host.editor_state_mut().editor_ui.git_panel;
+        panel.in_repo = true;
+        panel.commit_focused = true;
+        panel.commit_input.set_text("message");
+    }
+    assert!(host.apply_escape());
+    assert!(!host.editor_state().editor_ui.git_panel.commit_focused);
+    assert_eq!(
+        host.editor_state().editor_ui.git_panel.commit_input.text(),
+        "message"
+    );
+
+    {
+        let panel = &mut host.editor_state_mut().editor_ui.git_panel;
+        panel.remote_focused = true;
+        panel.remote_input.set_text("https://example.com/repo.git");
+    }
+    assert!(host.apply_escape());
+    assert!(!host.editor_state().editor_ui.git_panel.remote_focused);
+    assert_eq!(
+        host.editor_state().editor_ui.git_panel.remote_input.text(),
+        "https://example.com/repo.git"
+    );
+
+    {
+        let panel = &mut host.editor_state_mut().editor_ui.git_panel;
+        panel.https_focused = true;
+        panel.https_input.set_text("user:token");
+    }
+    assert!(host.apply_escape());
+    assert!(!host.editor_state().editor_ui.git_panel.https_focused);
+    assert_eq!(
+        host.editor_state().editor_ui.git_panel.https_input.text(),
+        "user:token"
+    );
+}
