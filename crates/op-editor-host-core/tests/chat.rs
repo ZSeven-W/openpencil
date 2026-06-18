@@ -1,8 +1,11 @@
 use op_ai::chat_provider::{
-    ChatDelta, ChatRequest, ChatToolExecutor, ChatToolResult, EchoProvider, StopReason,
+    ChatDelta, ChatHistoryRole, ChatRequest, ChatToolExecutor, ChatToolResult, EchoProvider,
+    StopReason,
 };
 use op_editor_core::{ChatMessage, ChatToolCall};
-use op_editor_host_core::chat::{apply_poll_to_message, chat_tool_channel, ChatPoll, ChatSession};
+use op_editor_host_core::chat::{
+    apply_poll_to_message, chat_history_from_transcript, chat_tool_channel, ChatPoll, ChatSession,
+};
 
 fn drain_session(session: &mut ChatSession) -> (String, String, Vec<ChatToolCall>, Option<String>) {
     let mut text = String::new();
@@ -171,6 +174,45 @@ fn apply_poll_error_replaces_content_and_ends_stream() {
     );
     assert_eq!(msg.content, "error: rate limited");
     assert!(!msg.streaming);
+}
+
+#[test]
+fn chat_history_from_transcript_excludes_current_streaming_turn() {
+    let messages = vec![
+        ChatMessage::user("previous request"),
+        ChatMessage::assistant("previous answer"),
+        ChatMessage::user("current request"),
+        ChatMessage::assistant_streaming(),
+    ];
+
+    let history = chat_history_from_transcript(&messages);
+
+    assert_eq!(
+        history,
+        vec![
+            (ChatHistoryRole::User, "previous request".into()),
+            (ChatHistoryRole::Assistant, "previous answer".into()),
+        ]
+    );
+}
+
+#[test]
+fn chat_history_from_transcript_skips_blank_messages() {
+    let messages = vec![
+        ChatMessage::user("first"),
+        ChatMessage::assistant("   "),
+        ChatMessage::assistant("answer"),
+    ];
+
+    let history = chat_history_from_transcript(&messages);
+
+    assert_eq!(
+        history,
+        vec![
+            (ChatHistoryRole::User, "first".into()),
+            (ChatHistoryRole::Assistant, "answer".into()),
+        ]
+    );
 }
 
 #[test]

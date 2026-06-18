@@ -14,7 +14,7 @@
 
 use op_ai::chat_provider::ChatHistoryRole;
 use op_editor_core::pen_node_ext::PenNodeExt;
-use op_editor_core::{ChatMessage, ChatRole, EditorState};
+use op_editor_core::{ChatMessage, EditorState};
 use op_orchestrator::build_design_md_style_policy;
 
 /// TS `CHAT_CORE_PROMPT` — verbatim port (BLOCK = ``` expanded).
@@ -224,24 +224,7 @@ fn variable_kind_label(kind: &jian_ops_schema::variable::VariableKind) -> &'stat
 /// `ai-chat-handlers.ts:684` maps prior messages, then pushes the
 /// current user message separately.
 pub fn chat_history_from_transcript(messages: &[ChatMessage]) -> Vec<(ChatHistoryRole, String)> {
-    let mut end = messages.len();
-    if end > 0 && messages[end - 1].role == ChatRole::Assistant && messages[end - 1].streaming {
-        end -= 1;
-    }
-    if end > 0 && messages[end - 1].role == ChatRole::User {
-        end -= 1;
-    }
-    messages[..end]
-        .iter()
-        .filter(|m| !m.content.trim().is_empty())
-        .map(|m| {
-            let role = match m.role {
-                ChatRole::User => ChatHistoryRole::User,
-                ChatRole::Assistant => ChatHistoryRole::Assistant,
-            };
-            (role, m.content.clone())
-        })
-        .collect()
+    op_editor_host_core::chat::chat_history_from_transcript(messages)
 }
 
 #[cfg(test)]

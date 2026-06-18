@@ -8,7 +8,7 @@
 use std::io::Write;
 use std::sync::{Arc, Mutex};
 
-use op_ai::chat_provider::{ChatDelta, ChatProvider, ChatRequest, StopReason};
+use op_ai::chat_provider::{ChatDelta, ChatHistoryRole, ChatProvider, ChatRequest, StopReason};
 use op_editor_core::{EditorCommand, EditorState, NodeId};
 use op_orchestrator::{
     AbortFlag, DesignRequest, DocSink, Orchestrator, Progress, SkippedScreenshotProvider,
@@ -30,6 +30,7 @@ pub(crate) struct WebStandardTurnRequest {
     selected_ids: Vec<String>,
     active_page_id: Option<String>,
     agent_team_size: Option<u32>,
+    history: Vec<(ChatHistoryRole, String)>,
 }
 
 pub(crate) fn parse_standard_turn_body(body: &str) -> Option<WebStandardTurnRequest> {
@@ -57,13 +58,36 @@ pub(crate) fn parse_standard_turn_body(body: &str) -> Option<WebStandardTurnRequ
         .get("agent_team_size")
         .and_then(Value::as_u64)
         .map(|n| (n as u32).clamp(1, 6));
+    let history = parse_chat_history(obj.get("history"));
     Some(WebStandardTurnRequest {
         ai,
         document_json,
         selected_ids,
         active_page_id,
         agent_team_size,
+        history,
     })
+}
+
+fn parse_chat_history(value: Option<&Value>) -> Vec<(ChatHistoryRole, String)> {
+    value
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|entry| {
+            let obj = entry.as_object()?;
+            let role = match obj.get("role").and_then(Value::as_str) {
+                Some("user") => ChatHistoryRole::User,
+                Some("assistant") => ChatHistoryRole::Assistant,
+                _ => return None,
+            };
+            let content = obj.get("content").and_then(Value::as_str)?.to_string();
+            if content.trim().is_empty() {
+                return None;
+            }
+            Some((role, content))
+        })
+        .collect()
 }
 
 pub(crate) fn stream_standard_turn<W: Write>(
@@ -232,7 +256,7 @@ fn stream_chat_route<W: Write>(
     let chat_req = ChatRequest {
         system_prompt: crate::chat_system_prompt::build_chat_system_prompt(state, &req.ai.user),
         user_message: req.ai.user.clone(),
-        history: Vec::new(),
+        history: req.history.clone(),
         max_output_tokens: req.ai.max_output_tokens,
         thinking: req.ai.thinking,
         effort: req.ai.effort,
@@ -524,6 +548,24 @@ fn progress_label(p: &Progress) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use op_ai::chat_provider::{EffortLevel, ThinkingMode};
+
+    struct CaptureProvider {
+        seen: Arc<Mutex<Option<ChatRequest>>>,
+    }
+
+    impl ChatProvider for CaptureProvider {
+        fn provider_label(&self) -> &str {
+            "capture"
+        }
+
+        fn send(&self, request: ChatRequest) -> Box<dyn Iterator<Item = ChatDelta> + Send> {
+            *self.seen.lock().expect("seen lock") = Some(request);
+            Box::new(std::iter::once(ChatDelta::Done {
+                stop_reason: StopReason::EndTurn,
+            }))
+        }
+    }
 
     #[test]
     fn parse_standard_turn_body_reads_canvas_snapshot_fields() {
@@ -533,7 +575,13 @@ mod tests {
             "document": { "version": "1.0.0", "children": [] },
             "selectedIds": ["n1", "", "n2"],
             "activePageId": "page-1",
-            "agent_team_size": 9
+            "agent_team_size": 9,
+            "history": [
+                { "role": "user", "content": "previous request" },
+                { "role": "assistant", "content": "previous answer" },
+                { "role": "system", "content": "ignored" },
+                { "role": "user", "content": "" }
+            ]
         })
         .to_string();
 
@@ -545,6 +593,56 @@ mod tests {
         assert_eq!(req.selected_ids, vec!["n1".to_string(), "n2".to_string()]);
         assert_eq!(req.active_page_id.as_deref(), Some("page-1"));
         assert_eq!(req.agent_team_size, Some(6));
+        assert_eq!(
+            req.history,
+            vec![
+                (
+                    op_ai::chat_provider::ChatHistoryRole::User,
+                    "previous request".into()
+                ),
+                (
+                    op_ai::chat_provider::ChatHistoryRole::Assistant,
+                    "previous answer".into()
+                ),
+            ]
+        );
+    }
+
+    #[test]
+    fn stream_chat_route_passes_history_to_provider() {
+        let history = vec![
+            (ChatHistoryRole::User, "previous request".to_string()),
+            (ChatHistoryRole::Assistant, "previous answer".to_string()),
+        ];
+        let req = WebStandardTurnRequest {
+            ai: AiStreamRequest {
+                model: "claude-sonnet".into(),
+                skills: Vec::new(),
+                user: "current request".into(),
+                max_output_tokens: 2048,
+                thinking: ThinkingMode::Adaptive,
+                effort: EffortLevel::Low,
+            },
+            document_json: None,
+            selected_ids: Vec::new(),
+            active_page_id: None,
+            agent_team_size: None,
+            history: history.clone(),
+        };
+        let seen = Arc::new(Mutex::new(None));
+        let provider = CaptureProvider { seen: seen.clone() };
+        let mut out = Vec::new();
+
+        stream_chat_route(&mut out, &req, &EditorState::new(), &provider, None)
+            .expect("stream chat");
+
+        let captured = seen
+            .lock()
+            .expect("seen lock")
+            .clone()
+            .expect("provider saw request");
+        assert_eq!(captured.user_message, "current request");
+        assert_eq!(captured.history, history);
     }
 
     #[test]

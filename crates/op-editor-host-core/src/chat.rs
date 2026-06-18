@@ -5,9 +5,9 @@ use std::sync::Mutex;
 use std::thread;
 
 use op_ai::chat_provider::{
-    ChatDelta, ChatProvider, ChatRequest, ChatToolExecutor, ChatToolResult,
+    ChatDelta, ChatHistoryRole, ChatProvider, ChatRequest, ChatToolExecutor, ChatToolResult,
 };
-use op_editor_core::{ChatMessage, ChatToolCall};
+use op_editor_core::{ChatMessage, ChatRole, ChatToolCall};
 
 /// One tool call forwarded from an agent-loop worker to a host UI thread.
 pub struct ChatToolRequest {
@@ -113,6 +113,29 @@ pub fn apply_poll_to_message(message: &mut ChatMessage, poll: &ChatPoll) {
     if poll.finished {
         message.streaming = false;
     }
+}
+
+/// Map the chat transcript into `(role, text)` history pairs for the in-flight
+/// turn, excluding the current user message and trailing streaming assistant.
+pub fn chat_history_from_transcript(messages: &[ChatMessage]) -> Vec<(ChatHistoryRole, String)> {
+    let mut end = messages.len();
+    if end > 0 && messages[end - 1].role == ChatRole::Assistant && messages[end - 1].streaming {
+        end -= 1;
+    }
+    if end > 0 && messages[end - 1].role == ChatRole::User {
+        end -= 1;
+    }
+    messages[..end]
+        .iter()
+        .filter(|m| !m.content.trim().is_empty())
+        .map(|m| {
+            let role = match m.role {
+                ChatRole::User => ChatHistoryRole::User,
+                ChatRole::Assistant => ChatHistoryRole::Assistant,
+            };
+            (role, m.content.clone())
+        })
+        .collect()
 }
 
 fn tool_call_defaults_open(call: &ChatToolCall) -> bool {
