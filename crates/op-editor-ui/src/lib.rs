@@ -30,6 +30,7 @@ pub use op_i18n as i18n;
 // op-editor-core; re-exported as `render_backend` and at the crate root.
 pub use op_editor_core::render_backend;
 
+pub mod accessibility;
 pub mod layout_scene;
 pub mod layout_scene_hit;
 pub mod scene_vars;

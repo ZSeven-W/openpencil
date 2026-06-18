@@ -185,6 +185,38 @@ pub fn append_into(
     Err(carry)
 }
 
+/// Insert `node` as the FIRST child of `parent`. `Ok(())` / `Err(node)`.
+/// Mirrors `append_into` but lands the payload at index 0 so a
+/// layer-panel "drop into container" matches TS (`layer-dnd-utils.ts`
+/// inserts at index 0 — the top of the child list). Fails (bounces the
+/// payload) when `parent` is not a container.
+#[allow(clippy::result_large_err)]
+pub fn prepend_into(
+    children: &mut [PenNode],
+    parent: &NodeId,
+    node: PenNode,
+) -> Result<(), PenNode> {
+    if let Some(idx) = children.iter().position(|n| n.id_str() == parent.as_str()) {
+        match children[idx].children_mut() {
+            Some(grand) => {
+                grand.insert(0, node);
+                return Ok(());
+            }
+            None => return Err(node),
+        }
+    }
+    let mut carry = node;
+    for child in children.iter_mut() {
+        if let Some(grand) = child.children_mut() {
+            match prepend_into(grand, parent, carry) {
+                Ok(()) => return Ok(()),
+                Err(returned) => carry = returned,
+            }
+        }
+    }
+    Err(carry)
+}
+
 /// Swap the node matching `target` with its next / prev sibling.
 pub fn reorder_in_children(
     children: &mut [PenNode],

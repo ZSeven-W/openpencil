@@ -213,7 +213,7 @@ docker build --target full -t openpencil-full .
 Global olarak yükleyin ve tasarım aracını terminalinizden kontrol edin:
 
 ```bash
-npm install -g @zseven-w/openpencil
+brew install zseven-w/openpencil/op
 ```
 
 ```bash

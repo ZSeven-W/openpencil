@@ -194,6 +194,52 @@ jobs:
             -srcfolder "$STAGE" \
             -fs HFS+ -format UDZO -ov \
             "OpenPencil-$OP_VERSION-${{ matrix.arch }}-mac.dmg"
+      # ─── Code-signing scaffolding (NO-OP until secrets exist) ───────────
+      # Until the secrets below are configured in the repo/org settings,
+      # EVERY signing step is skipped and releases ship ad-hoc-signed
+      # (macOS, via scripts/bundle-macos.sh) / unsigned (Windows) — the
+      # current behavior, unchanged. Each step is gated on its first
+      # required secret being non-empty, so adding the secrets is the only
+      # action needed to turn signing on.
+      #
+      # Required macOS secrets (Developer ID + notarization):
+      #   APPLE_CERTIFICATE_P12       base64 of the Developer ID Application
+      #                               .p12 export
+      #   APPLE_CERTIFICATE_PASSWORD  password for that .p12
+      #   APPLE_TEAM_ID               10-char Apple Developer Team ID
+      #   APPLE_ID                    Apple ID email used for notarization
+      #   APPLE_APP_PASSWORD          app-specific password for notarytool
+      #
+      # Required Windows secrets (Authenticode):
+      #   WINDOWS_CERT_BASE64         base64 of the code-signing .pfx
+      #   WINDOWS_CERT_PASSWORD       password for that .pfx
+      - name: Import codesign certificate (macos)
+        if: ${{ runner.os == 'macOS' && secrets.APPLE_CERTIFICATE_P12 != '' }}
+        uses: apple-actions/import-codesign-certs@v3
+        with:
+          p12-file-base64: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+          p12-password: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+      - name: Codesign + notarize DMG (macos)
+        if: ${{ runner.os == 'macOS' && secrets.APPLE_CERTIFICATE_P12 != '' }}
+        shell: bash
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          DMG="OpenPencil-$OP_VERSION-${{ matrix.arch }}-mac.dmg"
+          # The .app inside the DMG was ad-hoc signed by bundle-macos.sh;
+          # re-sign the DMG container with the real Developer ID identity,
+          # then notarize + staple so Gatekeeper accepts the download.
+          IDENTITY="Developer ID Application ($APPLE_TEAM_ID)"
+          codesign --force --timestamp --options runtime \
+            --sign "$IDENTITY" "$DMG"
+          xcrun notarytool submit "$DMG" \
+            --apple-id "$APPLE_ID" \
+            --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_PASSWORD" \
+            --wait
+          xcrun stapler staple "$DMG"
       - name: Package NSIS installer (windows)
         if: runner.os == 'Windows'
         shell: pwsh
@@ -208,6 +254,33 @@ jobs:
             "/DICON_FILE=$env:GITHUB_WORKSPACE\apps\desktop\build\icon.ico" `
             "/DOUT_FILE=$env:GITHUB_WORKSPACE\OpenPencil-$env:OP_VERSION-${{ matrix.arch }}-win-setup.exe" `
             scripts\package-windows.nsi
+      # Authenticode signing scaffolding (NO-OP until WINDOWS_CERT_BASE64
+      # exists — see the secrets comment block in the macOS section above).
+      # Until then the NSIS installer ships unsigned (current behavior).
+      - name: Sign NSIS installer (windows)
+        if: ${{ runner.os == 'Windows' && secrets.WINDOWS_CERT_BASE64 != '' }}
+        shell: pwsh
+        env:
+          WINDOWS_CERT_BASE64: ${{ secrets.WINDOWS_CERT_BASE64 }}
+          WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        run: |
+          # Materialize the .pfx from the base64 secret into a temp file.
+          $pfx = Join-Path $env:RUNNER_TEMP "codesign.pfx"
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_CERT_BASE64))
+          $exe = "OpenPencil-$env:OP_VERSION-${{ matrix.arch }}-win-setup.exe"
+          # signtool ships with the Windows SDK preinstalled on
+          # windows-latest. RFC-3161 timestamp so signatures outlive the
+          # cert's validity window.
+          $signtool = (Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe" |
+            Sort-Object FullName -Descending | Select-Object -First 1).FullName
+          & $signtool sign `
+            /f $pfx `
+            /p $env:WINDOWS_CERT_PASSWORD `
+            /fd SHA256 `
+            /tr http://timestamp.digicert.com `
+            /td SHA256 `
+            $exe
+          Remove-Item $pfx -Force
       - name: Package .deb (linux)
         if: runner.os == 'Linux'
         shell: bash

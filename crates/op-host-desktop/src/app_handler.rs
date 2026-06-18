@@ -2,7 +2,7 @@
 //! `main.rs` to keep that file under the 800-line cap.
 
 use crate::{
-    chat_attachment, chat_session, codegen_session, cursor_icon, design_session,
+    a11y, chat_attachment, chat_session, codegen_session, cursor_icon, design_session,
     figma_import_session, frame, git_jobs, menu, persistence, settings_io, window_state,
     DesktopApp, DesktopEvent, INITIAL_VIEWPORT_H, INITIAL_VIEWPORT_W,
 };
@@ -107,6 +107,15 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
         if let Some(saved) = saved_geometry.as_ref() {
             attrs = saved.apply_to(attrs);
         }
+        // Windows only: create the window hidden so the accessibility
+        // subclassing adapter (#67) can attach BEFORE the HWND is shown —
+        // `accesskit_windows::SubclassingAdapter::new` panics on an already
+        // visible window. `set_visible(true)` runs once the adapter is in.
+        // macOS / Linux create visible as before (their adapters don't care).
+        #[cfg(target_os = "windows")]
+        {
+            attrs = attrs.with_visible(false);
+        }
         let window = match event_loop.create_window(attrs) {
             Ok(w) => w,
             Err(err) => {
@@ -147,6 +156,26 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
         // Windows to this window; Linux is a no-op.
         if let Some(window) = self.window.as_ref() {
             self.app_menu = Some(menu::AppMenu::install(window));
+        }
+
+        // Build the OS accessibility bridge (#67) from the window's raw
+        // handle and publish the initial tree so a screen reader sees the
+        // editor's regions immediately (subsequent frames push fresh
+        // trees from `RedrawRequested`).
+        if let Some(window) = self.window.as_ref() {
+            let mut a11y = a11y::DesktopA11y::new(window);
+            let update = self
+                .host
+                .accessibility_tree_update(self.viewport_width, self.viewport_height);
+            a11y.push(update);
+            self.a11y = Some(a11y);
+        }
+
+        // Windows: now that the a11y adapter is attached to the hidden HWND,
+        // reveal the window (see the `with_visible(false)` note above).
+        #[cfg(target_os = "windows")]
+        if let Some(window) = self.window.as_ref() {
+            window.set_visible(true);
         }
 
         // Seed the window-geometry tracking. A restored maximized
@@ -290,6 +319,14 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
                 if self.mcp_shutdown_requested() {
                     event_loop.exit();
                 }
+            }
+            DesktopEvent::ForwardedFileReady => {
+                if self.drain_forwarded_files() {
+                    self.request_redraw(true);
+                }
+                // Raise the window even for a bare ping (no path) so a second
+                // launch surfaces the running editor.
+                self.raise_window();
             }
         }
     }
@@ -444,6 +481,17 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
                     self.redraw_dirty = true;
                     return;
                 }
+                // Route any accessibility action requests (#67) from the
+                // screen reader back into host state before painting, so a
+                // Focus / activation reflects in this frame.
+                if let Some(a11y) = self.a11y.as_mut() {
+                    let actions = a11y.drain_actions();
+                    for action in actions {
+                        if self.host.apply_a11y_action(action.target, action.is_focus) {
+                            self.redraw_dirty = true;
+                        }
+                    }
+                }
                 if chat_session::drain_new_chat_request(
                     &mut self.host,
                     &mut self.current_chat,
@@ -571,6 +619,9 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
                 if self.drain_provider_connect() {
                     self.redraw_dirty = true;
                 }
+                if self.drain_acp_agent_connect() {
+                    self.redraw_dirty = true;
+                }
                 // Drain the background auto-update probe.
                 if self.poll_update_probe() {
                     self.redraw_dirty = true;
@@ -645,6 +696,18 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
                             self.dpi,
                         );
                     }
+                    // Republish the accessibility tree alongside the
+                    // painted frame so the screen reader's view tracks
+                    // the visible editor state (#67). `update_if_active`
+                    // is cheap when no assistive tech is attached.
+                    if self.a11y.is_some() {
+                        let update = self
+                            .host
+                            .accessibility_tree_update(self.viewport_width, self.viewport_height);
+                        if let Some(a11y) = self.a11y.as_mut() {
+                            a11y.push(update);
+                        }
+                    }
                 }
                 // Chat / design / Figma-import worker active → wake
                 // ~10 fps to pump results and animate the loading
@@ -681,6 +744,7 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
                         .as_ref()
                         .is_some_and(crate::iconify_host::IconifyJob::is_pending)
                     || self.provider_connect_pending()
+                    || self.acp_agent_connect_pending()
                     || self
                         .git_pull_job
                         .as_ref()
@@ -1248,6 +1312,7 @@ impl DesktopApp {
                 .as_ref()
                 .is_some_and(crate::iconify_host::IconifyJob::is_pending)
             || self.provider_connect_pending()
+            || self.acp_agent_connect_pending()
             || self
                 .git_pull_job
                 .as_ref()

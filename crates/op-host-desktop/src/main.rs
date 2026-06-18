@@ -3,6 +3,8 @@
 
 #![cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
 
+mod a11y;
+mod acp_agent_probe_host;
 mod ai_proxy;
 mod app_handler;
 mod chat_acp;
@@ -64,10 +66,12 @@ mod provider_probe_models;
 mod remote_image_host;
 mod render_cli;
 mod settings_io;
+mod single_instance;
 mod tcc_selftest;
 mod theme_preset_host;
 mod update_check;
 mod web_canvas_server;
+mod web_chat_standard;
 mod web_static;
 mod window_state;
 
@@ -83,10 +87,18 @@ const INITIAL_VIEWPORT_H: f32 = 900.0;
 #[derive(Clone, Copy, Debug)]
 enum DesktopEvent {
     McpWake,
+    /// A second launch forwarded a document to this instance (see
+    /// `single_instance`). Wakes the loop to drain the forward queue + raise
+    /// the window.
+    ForwardedFileReady,
 }
 
 struct DesktopApp {
     window: Option<Window>,
+    /// OS accessibility bridge (#67) — publishes the assembled
+    /// `accesskit::TreeUpdate` to VoiceOver / Narrator / Orca and queues
+    /// incoming action requests. `None` until the window is created.
+    a11y: Option<a11y::DesktopA11y>,
     ctx: Option<SharedSkiaContext>,
     backend: Option<NativeBackend>,
     host: WidgetHostNative,
@@ -177,6 +189,9 @@ struct DesktopApp {
     remote_images: remote_image_host::RemoteImageSession,
     /// Cross-thread wake handle used by live MCP connection threads.
     mcp_wake_proxy: Option<EventLoopProxy<DesktopEvent>>,
+    /// Paths forwarded by second-launch processes (`single_instance`),
+    /// drained on the UI thread by `drain_forwarded_files`.
+    forwarded_files: single_instance::ForwardQueue,
     iconify_job: Option<iconify_host::IconifyJob>,
     /// The `component_browser_open` value last written to
     /// `uikits.json` — `drain_kit_io` rewrites the store when the live
@@ -186,6 +201,9 @@ struct DesktopApp {
     /// Connect) — spawned from the `pending_provider_connect`
     /// request seam, drained by `drain_provider_connect`.
     provider_connect_job: Option<provider_probe_host::ProviderConnectJob>,
+    /// In-flight ACP-agent connect probe (Settings → Agents → ACP
+    /// Connect), drained by `drain_acp_agent_connect`.
+    acp_agent_connect_job: Option<acp_agent_probe_host::AcpAgentConnectJob>,
     /// Document to open once the window is ready — set from argv by
     /// the file-association launch path (`openpencil-desktop X.op`).
     initial_file: Option<PathBuf>,
@@ -299,6 +317,7 @@ impl DesktopApp {
         };
         Self {
             window: None,
+            a11y: None,
             ctx: None,
             backend: None,
             host,
@@ -332,9 +351,11 @@ impl DesktopApp {
             image_panel: image_panel_host::ImagePanelJobs::new(),
             remote_images: remote_image_host::RemoteImageSession::new(),
             mcp_wake_proxy: None,
+            forwarded_files: single_instance::ForwardQueue::default(),
             iconify_job: None,
             kit_browser_open_persisted,
             provider_connect_job: None,
+            acp_agent_connect_job: None,
             initial_file,
             app_menu: None,
             update_probe,
@@ -539,6 +560,55 @@ impl DesktopApp {
         #[cfg(not(target_os = "macos"))]
         {
             false
+        }
+    }
+
+    /// Drain documents forwarded by second-launch processes
+    /// (`single_instance`) and open them in this window. Cross-platform
+    /// analogue of `drain_opened_files` (which only covers the macOS
+    /// Apple-event path). Returns true when a document was opened.
+    fn drain_forwarded_files(&mut self) -> bool {
+        let paths: Vec<PathBuf> = match self.forwarded_files.lock() {
+            Ok(mut queue) => queue.drain(..).collect(),
+            Err(_) => return false,
+        };
+        let mut opened = false;
+        for path in paths {
+            let is_op = persistence::is_supported_document(&path);
+            let is_fig = persistence::is_supported_figma_import(&path);
+            if (!is_op && !is_fig) || !path.is_file() {
+                continue;
+            }
+            // Single-window editor: the first forwarded document wins, the
+            // rest are ignored (mirrors `drain_opened_files`).
+            if opened {
+                continue;
+            }
+            if is_fig {
+                figma_import_session::cancel(&mut self.host, &mut self.current_figma_import);
+                self.current_figma_import = Some(figma_import_session::spawn(&mut self.host, path));
+                self.request_redraw(true);
+                opened = true;
+            } else if persistence::open_path(
+                &mut self.host,
+                path,
+                &mut self.current_path,
+                self.window.as_ref(),
+            ) {
+                self.mark_document_saved();
+                opened = true;
+            }
+        }
+        opened
+    }
+
+    /// Bring the editor window to the foreground — used when a second launch
+    /// forwards (or just pings) this instance so the user sees the document
+    /// surface in the running window.
+    fn raise_window(&self) {
+        if let Some(window) = self.window.as_ref() {
+            window.set_minimized(false);
+            window.focus_window();
         }
     }
 
@@ -889,6 +959,13 @@ fn main() {
         return;
     }
     let initial_file = initial_file_from_argv();
+    // Single-instance gate: when an editor is already running, a second launch
+    // (e.g. a `.op` double-click on Windows / Linux) forwards its document to
+    // the running window and exits instead of opening a second editor.
+    let primary = match single_instance::acquire(initial_file.as_deref()) {
+        single_instance::Acquire::Forwarded => return,
+        single_instance::Acquire::Primary(primary) => primary,
+    };
     let mut event_loop_builder = EventLoop::<DesktopEvent>::with_user_event();
     #[cfg(target_os = "macos")]
     {
@@ -908,6 +985,11 @@ fn main() {
     macos_app::apply();
     let mut app = DesktopApp::new(initial_file);
     app.mcp_wake_proxy = Some(mcp_wake_proxy);
+    // Start accepting forwarded opens from second launches, sharing the queue
+    // the UI thread drains in `drain_forwarded_files`.
+    let forwarded_files = single_instance::ForwardQueue::default();
+    primary.spawn_listener(event_loop.create_proxy(), forwarded_files.clone());
+    app.forwarded_files = forwarded_files;
     app.force_live_mcp_port = live_mcp_port_from_argv();
     if let Err(err) = event_loop.run_app(&mut app) {
         eprintln!("openpencil-desktop: run_app exited with error: {err}");

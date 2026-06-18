@@ -519,16 +519,19 @@ impl EditorState {
         let Some(source_ref) = find_node(children, &source) else {
             return false;
         };
-        if walkers::descendant_contains(source_ref, &parent)
-            || find_node(children, &parent).is_none()
-        {
+        // The target must be a container that accepts children, verified
+        // BEFORE extracting the source. Otherwise a non-container target would
+        // make `prepend_into` bounce the payload (`Err`) AFTER the node was
+        // already removed, silently dropping it from the document.
+        let parent_accepts = find_node(children, &parent).is_some_and(PenNodeExt::is_container);
+        if walkers::descendant_contains(source_ref, &parent) || !parent_accepts {
             return false;
         }
         let children = self.active_children_mut();
         let Some(node) = walkers::extract_node(children, &source) else {
             return false;
         };
-        walkers::append_into(children, &parent, node).is_ok()
+        walkers::prepend_into(children, &parent, node).is_ok()
     }
 
     fn reorder_relative(&mut self, source: NodeId, anchor: NodeId, before: bool) -> bool {

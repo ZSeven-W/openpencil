@@ -138,7 +138,12 @@ fn item_for(node: &PenNode, cx: &WalkCx<'_>, depth: usize) -> LayerItem {
         locked: base.locked.unwrap_or(false),
         collapsed: cx.ui.collapsed_layers.contains(&canon),
         hovered: cx.hovered.map(|h| h.as_str() == base.id).unwrap_or(false),
-        is_container: matches!(node, PenNode::Frame(_) | PenNode::Group(_)),
+        // Reparent-into drop targets match TS CONTAINER_TYPES
+        // (layer-panel.tsx:14 — frame/group/rectangle/ref).
+        is_container: matches!(
+            node,
+            PenNode::Frame(_) | PenNode::Group(_) | PenNode::Rectangle(_) | PenNode::Ref(_)
+        ),
         renaming: false,
         is_reusable: matches!(node, PenNode::Frame(f) if f.reusable == Some(true)),
         is_instance: matches!(node, PenNode::Ref(_)),

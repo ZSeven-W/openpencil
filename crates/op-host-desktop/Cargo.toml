@@ -63,6 +63,13 @@ role = "Editor"
 # render-backend / layout scene paths resolve through op-editor-ui.
 op-editor-ui = { path = "../op-editor-ui" }
 op-host-native = { path = "../op-host-native", version = "0.8.0" }
+# Accessibility (#67) — the platform-free `accesskit` core types
+# (`TreeUpdate` / `ActionRequest` / `ActivationHandler` …) used by the
+# desktop a11y adapter (`src/a11y.rs`). The OS-specific subclassing
+# adapters live in the per-target blocks below. Pinned to 0.24 to match
+# op-editor-ui / op-host-native + the adapter crates' transitive
+# accesskit (0.24.x), so only one accesskit lives in the tree.
+accesskit = "0.24"
 # Phase 5 strangler reorg: the stdio MCP server (`mcp_serve.rs`) drives an
 # `op_editor_core::EditorState` (canonical `.op` document) instead of the
 # old shell-core `Document`.
@@ -261,3 +268,24 @@ objc2-foundation = { version = "0.2", default-features = false, features = [
   "NSString",
   "NSProcessInfo",
 ] }
+# Accessibility (#67) — macOS AT-SPI bridge. `SubclassingAdapter`
+# subclasses the window's NSView (raw pointer from
+# `Window::window_handle()`) so VoiceOver reads the assembled
+# `accesskit::TreeUpdate`. This is the raw-window-handle adapter, NOT
+# `accesskit_winit` — the latter hard-depends on upstream `winit`, which
+# would pull a second, incompatible winit alongside `casement` (the same
+# reason `glutin-winit` is rejected). 0.26.x's transitive accesskit is
+# 0.24.x, matching the workspace pin — no second accesskit.
+accesskit_macos = "0.26"
+
+# Accessibility (#67) — Windows UI Automation bridge. `SubclassingAdapter`
+# subclasses the HWND (from `Window::window_handle()` → `RawWindowHandle::Win32`).
+# Scaffolded + compiled here; on-device Narrator verification is pending.
+[target.'cfg(target_os = "windows")'.dependencies]
+accesskit_windows = "0.33"
+
+# Accessibility (#67) — Linux AT-SPI (D-Bus) bridge. The Unix adapter is
+# windowless (`Adapter::new` takes only the handler trio, no window
+# handle). Scaffolded + compiled here; on-device Orca verification is pending.
+[target.'cfg(target_os = "linux")'.dependencies]
+accesskit_unix = "0.22"

@@ -213,7 +213,7 @@ docker build --target full -t openpencil-full .
 Instal secara global dan kontrol alat desain dari terminal Anda:
 
 ```bash
-npm install -g @zseven-w/openpencil
+brew install zseven-w/openpencil/op
 ```
 
 ```bash

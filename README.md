@@ -150,7 +150,13 @@ scoop install openpencil
 **CLI (`op`):**
 
 ```bash
-npm install -g @zseven-w/openpencil
+brew install zseven-w/openpencil/op
+```
+
+Or use the install script (macOS / Linux):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ZSeven-W/openpencil/main/scripts/install-op.sh | bash
 ```
 
 ## Cloning（含 Rust 子系统）
@@ -275,10 +281,10 @@ docker build --target full -t openpencil-full .
 
 ## CLI — `op`
 
-Install globally and control the design tool from your terminal:
+Install via Homebrew and control the design tool from your terminal:
 
 ```bash
-npm install -g @zseven-w/openpencil
+brew install zseven-w/openpencil/op
 ```
 
 ```bash

@@ -13,6 +13,11 @@
 //! CanvasKit is the only web renderer now, and `skia-safe` reverted to upstream
 //! crates.io, which has no wasm32-unknown-unknown target.)
 
+// Hidden ARIA DOM mirror (#57). Pure accesskit + web_sys — no skia, no
+// `op-editor-core` — so it compile-checks under BOTH the production
+// `canvaskit` build (where the mount wires it) and the wasm32-clean `web`
+// stub baseline (compile coverage only).
+mod a11y_dom;
 #[cfg(feature = "canvaskit")]
 mod canvaskit;
 pub mod event;
