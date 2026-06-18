@@ -283,17 +283,14 @@ impl WidgetHost {
         }
         let source = d.source.clone();
         let anchor = drop.anchor.clone();
-        match drop.position {
-            DropPosition::Before => {
-                self.editor_state.reorder_before(source, anchor);
-            }
-            DropPosition::After => {
-                self.editor_state.reorder_after(source, anchor);
-            }
-            DropPosition::Into => {
-                self.editor_state.reorder_into(source, anchor);
-            }
-        }
+        // #13 web-undo parity: wrap the reorder/reparent in history like the
+        // native host (op-host-native/click.rs::commit_layer_drag) so Cmd+Z
+        // reverses a layer-panel drag.
+        self.with_doc_history(|s| match drop.position {
+            DropPosition::Before => s.reorder_before(source, anchor),
+            DropPosition::After => s.reorder_after(source, anchor),
+            DropPosition::Into => s.reorder_into(source, anchor),
+        });
         self.mark_dirty();
         true
     }

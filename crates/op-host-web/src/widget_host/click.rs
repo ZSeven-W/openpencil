@@ -300,27 +300,31 @@ impl WidgetHost {
                     return true;
                 }
                 LayerPanelHit::ToggleHidden(node_id) => {
-                    self.editor_state.toggle_node_hidden(&node_id.clone());
+                    // #13 web-undo parity: wrap in history like the native host
+                    // (op-host-native/click.rs) so Cmd+Z reverses the toggle.
+                    self.with_doc_history(|s| s.toggle_node_hidden(&node_id.clone()));
                     self.mark_dirty();
                     return true;
                 }
                 LayerPanelHit::ToggleLocked(node_id) => {
-                    self.editor_state.toggle_node_locked(&node_id.clone());
+                    self.with_doc_history(|s| s.toggle_node_locked(&node_id.clone()));
                     self.mark_dirty();
                     return true;
                 }
                 LayerPanelHit::ToggleCollapsed(node_id) => {
+                    // Collapse is a tree-view-only concern (not document state),
+                    // so it stays OUT of history — matches the native host.
                     self.editor_state.toggle_node_collapsed(&node_id.clone());
                     self.mark_dirty();
                     return true;
                 }
                 LayerPanelHit::AddPage => {
-                    let _ = self.editor_state.add_page();
+                    self.with_doc_history(|s| s.add_page().is_some());
                     self.mark_dirty();
                     return true;
                 }
                 LayerPanelHit::DeletePage(idx) => {
-                    let _ = self.editor_state.remove_page(idx);
+                    self.with_doc_history(|s| s.remove_page(idx));
                     self.mark_dirty();
                     return true;
                 }
