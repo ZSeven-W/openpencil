@@ -142,6 +142,42 @@ fn canvaskit_text_defaults_to_browser_system_font_fallback() {
 }
 
 #[test]
+fn canvaskit_browser_text_fallback_does_not_require_canvas_paint() {
+    let source = std::fs::read_to_string(format!(
+        "{}/src/op_ck_bridge.js",
+        env!("CARGO_MANIFEST_DIR")
+    ))
+    .expect("CanvasKit bridge source is readable");
+
+    for marker in [
+        "const allSegmentsUseBrowserTextFallback = (segs) =>",
+        "const segs = segments(t);",
+        "if (allSegmentsUseBrowserTextFallback(segs))",
+    ] {
+        assert!(
+            source.contains(marker),
+            "CanvasKit drawText must preserve `{marker}` so browser/system text fallback cannot throw from optional PaintStyle setup"
+        );
+    }
+
+    let draw_text = source
+        .find("drawText(t, x, y, sz, weight, italic, r, g, b, a)")
+        .expect("drawText bridge exists");
+    let fallback_fast_path = source[draw_text..]
+        .find("if (allSegmentsUseBrowserTextFallback(segs))")
+        .expect("browser text fast path exists")
+        + draw_text;
+    let fill_paint = source[draw_text..]
+        .find("const p = fillPaint(r, g, b, a);")
+        .expect("CanvasKit paint fallback exists")
+        + draw_text;
+    assert!(
+        fallback_fast_path < fill_paint,
+        "drawText must take the browser/system font path before allocating CanvasKit Paint"
+    );
+}
+
+#[test]
 fn canvaskit_bridge_registers_browser_system_fonts() {
     let source = std::fs::read_to_string(format!(
         "{}/src/op_ck_bridge.js",
