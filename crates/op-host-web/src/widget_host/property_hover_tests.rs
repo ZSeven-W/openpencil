@@ -81,6 +81,33 @@ fn property_panel_blank_hover_consumes_and_clears_lower_hover() {
 }
 
 #[test]
+fn locale_dropdown_hover_clears_property_panel_hover_underlay() {
+    let mut host = WidgetHost::new();
+    host.editor_state = EditorState::sample();
+    host.mark_dirty();
+    host.last_viewport_w = 1200.0;
+    host.last_viewport_h = 800.0;
+    host.editor_state.editor_ui.property_action_hover = Some(0);
+    host.editor_state.editor_ui.locale_picker.open = true;
+
+    let picker = host.locale_picker_rect(host.last_viewport_w);
+    let point = Point2D::new(
+        picker.origin.x + picker.size.x / 2.0,
+        picker.origin.y + op_editor_ui::widgets::LocalePicker::row_height() * 1.5,
+    );
+
+    assert!(host.apply_cursor_move(point.x, point.y));
+    assert_eq!(
+        host.editor_state.editor_ui.property_action_hover, None,
+        "top-bar dropdowns are visually above the inspector and must clear stale inspector hover"
+    );
+    assert!(
+        host.editor_state.editor_ui.locale_picker.hover.is_some(),
+        "the dropdown row hover itself should still update"
+    );
+}
+
+#[test]
 fn codegen_hover_tracks_idle_generate_button() {
     let mut host = WidgetHost::new();
     host.editor_state = EditorState::sample();
