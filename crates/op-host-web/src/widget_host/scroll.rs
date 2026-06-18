@@ -214,7 +214,7 @@ impl WidgetHost {
                 && scroll_by_max(
                     &mut self.editor_state.editor_ui.layer_layers_scroll,
                     -delta_y,
-                    r.layers_max_scroll,
+                    r.layers.max_offset,
                 )
             {
                 changed = true;
@@ -223,7 +223,7 @@ impl WidgetHost {
                 && scroll_by_max(
                     &mut self.editor_state.editor_ui.layer_layers_h_scroll,
                     -delta_x,
-                    r.layers_max_h_scroll,
+                    r.layers.max_horizontal_offset,
                 )
             {
                 changed = true;
@@ -233,7 +233,7 @@ impl WidgetHost {
                 && scroll_by_max(
                     &mut self.editor_state.editor_ui.layer_pages_scroll,
                     -delta_y,
-                    r.pages_max_scroll,
+                    r.pages.max_offset,
                 )
             {
                 changed = true;
@@ -242,7 +242,7 @@ impl WidgetHost {
                 && scroll_by_max(
                     &mut self.editor_state.editor_ui.layer_pages_h_scroll,
                     -delta_x,
-                    r.pages_max_h_scroll,
+                    r.pages.max_horizontal_offset,
                 )
             {
                 changed = true;

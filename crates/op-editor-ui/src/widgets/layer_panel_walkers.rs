@@ -15,6 +15,7 @@ use crate::widgets::layer_panel::{
 };
 use crate::widgets::layer_panel_paint::{approx_text_width, ROW_FONT};
 use crate::Rect;
+use jian_core::scroll::{self, ScrollState};
 use op_editor_core::NodeId;
 
 use jian_ops_schema::node::PenNode;
@@ -277,6 +278,34 @@ pub(super) fn icon_for_node(node: &PenNode) -> Icon {
 /// roughly six rows; a longer page list scrolls within it.
 pub const LAYER_PAGES_VIEW_MAX: f32 = PAGE_ROW_HEIGHT * 6.0;
 
+/// Stored scroll state for one bounded LayerPanel region.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct LayerScrollSnapshot {
+    pub vertical: ScrollState,
+    pub horizontal: ScrollState,
+    pub content_width: f32,
+}
+
+impl LayerScrollSnapshot {
+    pub fn new(vertical: ScrollState, horizontal: ScrollState, content_width: f32) -> Self {
+        Self {
+            vertical,
+            horizontal,
+            content_width,
+        }
+    }
+}
+
+/// Clamped scroll metrics for one bounded LayerPanel region.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct LayerResolvedScroll {
+    pub offset: f32,
+    pub max_offset: f32,
+    pub horizontal_offset: f32,
+    pub max_horizontal_offset: f32,
+    pub content_width: f32,
+}
+
 /// Resolved geometry of the LayerPanel's two bounded scroll regions
 /// (Pages + Layers). Paint, hit-test and the drop-target walk all
 /// derive from this single source so they stay aligned.
@@ -288,26 +317,16 @@ pub struct LayerRegions {
     pub pages_rows_top: f32,
     /// Height of the page-row viewport.
     pub pages_view_h: f32,
-    /// Pages scroll offset, clamped to the scrollable range.
-    pub pages_scroll: f32,
-    /// Largest valid Pages scroll offset (`content - viewport`).
-    pub pages_max_scroll: f32,
-    pub pages_h_scroll: f32,
-    pub pages_max_h_scroll: f32,
-    pub pages_content_w: f32,
+    /// Pages-region scroll metrics, clamped to the scrollable range.
+    pub pages: LayerResolvedScroll,
     /// y of the Layers section header.
     pub layers_header_y: f32,
     /// Top y of the clipped layer-row viewport.
     pub layers_rows_top: f32,
     /// Height of the layer-row viewport (fills the rail's tail).
     pub layers_view_h: f32,
-    /// Layers scroll offset, clamped to the scrollable range.
-    pub layers_scroll: f32,
-    /// Largest valid Layers scroll offset (`content - viewport`).
-    pub layers_max_scroll: f32,
-    pub layers_h_scroll: f32,
-    pub layers_max_h_scroll: f32,
-    pub layers_content_w: f32,
+    /// Layers-region scroll metrics, clamped to the scrollable range.
+    pub layers: LayerResolvedScroll,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -315,68 +334,62 @@ pub struct LayerRegionInput {
     pub rect: Rect,
     pub pages_len: usize,
     pub items_len: usize,
-    pub pages_scroll: f32,
-    pub layers_scroll: f32,
-    pub pages_h_scroll: f32,
-    pub layers_h_scroll: f32,
-    pub pages_content_w: f32,
-    pub layers_content_w: f32,
+    pub pages: LayerScrollSnapshot,
+    pub layers: LayerScrollSnapshot,
 }
 
 /// Compute the bounded Pages / Layers scroll-region geometry for a
-/// LayerPanel painted into `rect`. `pages_scroll` / `layers_scroll`
-/// are the raw stored offsets; the returned values are clamped to
+/// LayerPanel painted into `rect`. Stored offsets are kept as
+/// [`ScrollState`] snapshots; the returned metrics are clamped to
 /// each region's scrollable range.
 pub fn layer_regions(input: LayerRegionInput) -> LayerRegions {
     let LayerRegionInput {
         rect,
         pages_len,
         items_len,
-        pages_scroll,
-        layers_scroll,
-        pages_h_scroll,
-        layers_h_scroll,
-        pages_content_w,
-        layers_content_w,
+        pages,
+        layers,
     } = input;
 
     let pages_header_y = rect.origin.y + 8.0;
     let pages_rows_top = pages_header_y + SECTION_HEADER_HEIGHT;
     let pages_content = pages_len as f32 * PAGE_ROW_HEIGHT;
     let pages_view_h = pages_content.min(LAYER_PAGES_VIEW_MAX);
-    let pages_max_scroll = (pages_content - pages_view_h).max(0.0);
-    let pages_scroll = pages_scroll.clamp(0.0, pages_max_scroll);
-    let pages_content_w = pages_content_w.max(rect.size.x);
-    let pages_max_h_scroll = (pages_content_w - rect.size.x).max(0.0);
-    let pages_h_scroll = pages_h_scroll.clamp(0.0, pages_max_h_scroll);
+    let pages = resolve_layer_scroll(pages, pages_content, pages_view_h, rect.size.x);
 
     let layers_header_y = pages_rows_top + pages_view_h + SECTION_GAP;
     let layers_rows_top = layers_header_y + SECTION_HEADER_HEIGHT;
     let layers_view_h = (rect.origin.y + rect.size.y - 8.0 - layers_rows_top).max(0.0);
     let layers_content = items_len.max(1) as f32 * LAYER_ROW_HEIGHT;
-    let layers_max_scroll = (layers_content - layers_view_h).max(0.0);
-    let layers_scroll = layers_scroll.clamp(0.0, layers_max_scroll);
-    let layers_content_w = layers_content_w.max(rect.size.x);
-    let layers_max_h_scroll = (layers_content_w - rect.size.x).max(0.0);
-    let layers_h_scroll = layers_h_scroll.clamp(0.0, layers_max_h_scroll);
+    let layers = resolve_layer_scroll(layers, layers_content, layers_view_h, rect.size.x);
 
     LayerRegions {
         pages_header_y,
         pages_rows_top,
         pages_view_h,
-        pages_scroll,
-        pages_max_scroll,
-        pages_h_scroll,
-        pages_max_h_scroll,
-        pages_content_w,
+        pages,
         layers_header_y,
         layers_rows_top,
         layers_view_h,
-        layers_scroll,
-        layers_max_scroll,
-        layers_h_scroll,
-        layers_max_h_scroll,
-        layers_content_w,
+        layers,
+    }
+}
+
+fn resolve_layer_scroll(
+    stored: LayerScrollSnapshot,
+    content_height: f32,
+    view_height: f32,
+    viewport_width: f32,
+) -> LayerResolvedScroll {
+    let max_offset = scroll::max_offset(content_height, view_height);
+    let content_width = stored.content_width.max(viewport_width);
+    let max_horizontal_offset = scroll::max_offset(content_width, viewport_width);
+    LayerResolvedScroll {
+        offset: stored.vertical.offset.clamp(0.0, max_offset),
+        max_offset,
+        horizontal_offset: stored.horizontal.offset.clamp(0.0, max_horizontal_offset),
+        max_horizontal_offset,
+        content_width,
     }
 }
 
