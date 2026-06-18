@@ -18,21 +18,22 @@ use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
 use crate::{Point2D, Rect, TextLayout};
 pub use jian_widgets::components::select::SelectHit;
-use jian_widgets::components::select::{Select, SelectState};
-use jian_widgets::{Density, Tokens};
+use jian_widgets::components::select::SelectState;
 use op_editor_core::editor_ui_state::EditorUiState;
 use op_editor_core::Tool;
 
 pub const SHAPE_PICKER_WIDTH: f32 = 220.0;
-const ROW_HEIGHT: f32 = 30.0;
+const ROW_HEIGHT: f32 = 36.0;
 const ROW_PAD_X: f32 = 12.0;
 const ICON_SIZE: f32 = 16.0;
 const ROW_COUNT: usize = 7;
-/// Vertical inset of the selected / hover highlight within its row slot, so
-/// the wash doesn't touch the panel's top / bottom edges (the row slots
-/// themselves stay flush — only the highlight rect is inset, leaving the
-/// `Select::hit` row geometry, icon, and label positions unchanged).
-const ROW_HL_INSET_Y: f32 = 3.0;
+/// Top + bottom padding inside the panel, so the first / last rows don't sit
+/// flush against the rounded panel edge. Hit-testing accounts for it (see
+/// `hit_popup`), so paint + hit stay aligned.
+const PANEL_PAD_Y: f32 = 6.0;
+/// Vertical inset of the selected / hover highlight within its row slot, so the
+/// wash has a little breathing room top + bottom within each (taller) row.
+const ROW_HL_INSET_Y: f32 = 4.0;
 
 /// What the user picked from the dropdown.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -142,21 +143,33 @@ impl ShapePicker {
         }
     }
 
-    /// Total panel height from the shared Select row metric.
+    /// Total panel height: top + bottom padding plus the row slots.
     pub fn panel_height() -> f32 {
-        ROW_HEIGHT * ROW_COUNT as f32
+        PANEL_PAD_Y * 2.0 + ROW_HEIGHT * ROW_COUNT as f32
     }
 
+    /// Map a point to a row, accounting for the panel's top/bottom padding so
+    /// hit-testing stays aligned with `paint`. Own math (not `Select::hit`)
+    /// because the shared Select has no padding concept and uses the density
+    /// row height, which would desync from this picker's `ROW_HEIGHT`.
     pub fn hit_popup(&self, panel_rect: Rect, point: Point2D) -> SelectHit {
-        let anchor = popup_anchor(panel_rect);
-        Select::hit(
-            &self.state,
-            anchor,
-            panel_rect,
-            self.rows.len(),
-            point,
-            &tokens_from_theme(&self.theme),
-        )
+        let inside_x =
+            point.x >= panel_rect.origin.x && point.x <= panel_rect.origin.x + panel_rect.size.x;
+        let inside_y =
+            point.y >= panel_rect.origin.y && point.y <= panel_rect.origin.y + panel_rect.size.y;
+        if !inside_x || !inside_y {
+            return SelectHit::Outside;
+        }
+        let local_y = point.y - panel_rect.origin.y - PANEL_PAD_Y;
+        if local_y < 0.0 {
+            return SelectHit::Inside; // top padding
+        }
+        let idx = (local_y / ROW_HEIGHT) as usize;
+        if idx < self.rows.len() {
+            SelectHit::Row(idx)
+        } else {
+            SelectHit::Inside // bottom padding
+        }
     }
 
     pub fn choice_at(&self, idx: usize) -> Option<ShapeChoice> {
@@ -193,7 +206,7 @@ impl Widget for ShapePicker {
             .stroke_round_rect(rect, 8.0, self.theme.border, 1.0);
 
         for (idx, row) in self.rows.iter().enumerate() {
-            let row_y = rect.origin.y + idx as f32 * ROW_HEIGHT;
+            let row_y = rect.origin.y + PANEL_PAD_Y + idx as f32 * ROW_HEIGHT;
             // Highlight rect only — inset vertically for top/bottom breathing
             // room. Icon + label below use `row_y` (the slot top), so they stay
             // centered in the full ROW_HEIGHT slot.
@@ -249,7 +262,8 @@ impl Widget for ShapePicker {
                 &label,
                 Point2D::new(
                     row_rect.origin.x + ROW_PAD_X + ICON_SIZE + 12.0,
-                    row_y + 21.0,
+                    // Baseline centered in the row slot (13px label).
+                    row_y + ROW_HEIGHT / 2.0 + 4.5,
                 ),
             );
         }
@@ -259,36 +273,6 @@ impl Widget for ShapePicker {
         let mut node = accesskit::Node::new(accesskit::Role::Menu);
         node.set_label("Shape tools");
         node
-    }
-}
-
-fn popup_anchor(popup: Rect) -> Rect {
-    Rect {
-        origin: popup.origin,
-        size: Point2D::new(popup.size.x, 0.0),
-    }
-}
-
-fn tokens_from_theme(theme: &Theme) -> Tokens {
-    Tokens {
-        background: theme.background,
-        foreground: theme.foreground,
-        card: theme.card,
-        card_foreground: theme.card_foreground,
-        popover: theme.popover,
-        popover_foreground: theme.popover_foreground,
-        primary: theme.primary,
-        primary_foreground: theme.primary_foreground,
-        muted: theme.muted,
-        muted_foreground: theme.muted_foreground,
-        border: theme.border,
-        accent: theme.accent,
-        accent_foreground: theme.accent_foreground,
-        destructive: theme.destructive,
-        button_hover: theme.button_hover,
-        row_selected: theme.row_selected,
-        row_selected_primary: theme.row_selected_primary,
-        density: Density::Desktop,
     }
 }
 

@@ -308,7 +308,9 @@ fn paint_variant_header(
         cx.backend,
         Icon::Plus,
         Point2D::new(
-            rect.origin.x + rect.size.x - PAD_X - 16.0,
+            // Center the 16px icon in the 28px hover rect (rect is right-aligned
+            // at `right - PAD_X`; inset 6px so the glyph isn't flush-right).
+            rect.origin.x + rect.size.x - PAD_X - 22.0,
             header_bottom + 10.0,
         ),
         16.0,
@@ -599,20 +601,25 @@ fn paint_footer(
 ) {
     let theme = panel.theme;
     let button = add_variable_rect(rect);
-    paint_feedback(panel, cx, VariablesPanelButton::AddVariable, button, 8.0);
     let center_y = button.origin.y + button.size.y / 2.0;
     let icon_size = 16.0;
     let label_size = 14.0;
-    let label_x = button.origin.x + icon_size + 12.0;
-    let label_baseline_y = center_y + 5.0;
     let chevron_size = 12.0;
-    let chevron_x = label_x
-        + cx.backend.measure_text(labels.add_variable, label_size)
-        + FOOTER_CHEVRON_LABEL_GAP;
+    let label_w = cx.backend.measure_text(labels.add_variable, label_size);
+    // Wash uses the FULL button rect so it matches the hit target (geometry's
+    // `add_variable_rect`); the `+ <label> v` content is centered within it so
+    // it isn't flush-left against the wash edge.
+    paint_feedback(panel, cx, VariablesPanelButton::AddVariable, button, 8.0);
+    let content_w = icon_size + 12.0 + label_w + FOOTER_CHEVRON_LABEL_GAP + chevron_size;
+    let left_pad = ((button.size.x - content_w) / 2.0).max(8.0);
+    let icon_x = button.origin.x + left_pad;
+    let label_x = icon_x + icon_size + 12.0;
+    let label_baseline_y = center_y + 5.0;
+    let chevron_x = label_x + label_w + FOOTER_CHEVRON_LABEL_GAP;
     draw_icon(
         cx.backend,
         Icon::Plus,
-        Point2D::new(button.origin.x, center_y - icon_size / 2.0),
+        Point2D::new(icon_x, center_y - icon_size / 2.0),
         icon_size,
         theme.muted_foreground,
         1.8,
