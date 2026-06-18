@@ -29,6 +29,25 @@ fn canvaskit_mount_listens_for_window_resize() {
 }
 
 #[test]
+fn canvaskit_mount_syncs_window_size_before_first_repaint() {
+    let source = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/src/canvaskit.rs"))
+        .expect("canvaskit source is readable");
+    let start = source
+        .find("let inner = Rc::new(RefCell::new(CkInner")
+        .expect("mount creates CkInner");
+    let first_repaint = source[start..]
+        .find("repaint();")
+        .map(|idx| start + idx)
+        .expect("mount performs an initial repaint");
+    let initial_mount = &source[start..first_repaint];
+
+    assert!(
+        initial_mount.contains("resize_to_window(&window)"),
+        "CanvasKit mount must sync the backend to the current browser viewport before the first repaint"
+    );
+}
+
+#[test]
 fn canvaskit_mount_does_not_panic_if_a11y_mirror_borrow_is_busy() {
     let source = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/src/canvaskit.rs"))
         .expect("canvaskit source is readable");

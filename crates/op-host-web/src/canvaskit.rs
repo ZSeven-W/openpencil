@@ -796,7 +796,11 @@ pub async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
         canvas: canvas.clone(),
         a11y,
     }));
-    inner.borrow_mut().repaint();
+    {
+        let mut b = inner.borrow_mut();
+        let _ = b.resize_to_window(&window)?;
+        b.repaint();
+    }
     crate::web_fonts::drain_font_requests(&inner);
 
     // Populate the chat model picker from the daemon's `/api/ai/models`
