@@ -34,6 +34,7 @@
 use op_editor_ui::widgets::SelectionHandle;
 use op_editor_ui::{Rect, Theme};
 
+mod a11y;
 #[cfg(test)]
 mod agent_settings_acp_tests;
 #[cfg(test)]

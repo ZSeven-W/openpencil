@@ -6,7 +6,7 @@
 
 use crate::node_id::NodeId;
 use crate::pen_node_ext::PenNodeExt;
-use crate::test_support::{frame, group, rect, sample, state_with};
+use crate::test_support::{ellipse, frame, group, rect, sample, state_with};
 use crate::walkers::{find_node, ReorderDirection};
 use jian_ops_schema::style::PenFill;
 use jian_ops_schema::variable::{VariableKind, VariableScalar};
@@ -334,6 +334,44 @@ fn reorder_into_reparents_under_container() {
     assert_eq!(root_ids(&s), vec!["n1"]);
     let parent = find_node(s.active_children(), &NodeId::new("n1")).unwrap();
     assert_eq!(parent.children().unwrap().len(), 1);
+}
+
+#[test]
+fn reorder_into_inserts_at_front() {
+    let mut s = state_with(vec![
+        frame(
+            "n1",
+            "Frame",
+            0.0,
+            0.0,
+            100.0,
+            100.0,
+            vec![rect("c0", "Existing", 0.0, 0.0, 10.0, 10.0)],
+        ),
+        rect("n2", "Loose", 0.0, 0.0, 10.0, 10.0),
+    ]);
+    assert!(s.reorder_into(NodeId::new("n2"), NodeId::new("n1")));
+    let parent = find_node(s.active_children(), &NodeId::new("n1")).unwrap();
+    let ids: Vec<&str> = parent
+        .children()
+        .unwrap()
+        .iter()
+        .map(|n| n.id_str())
+        .collect();
+    // TS parity (layer-dnd-utils.ts): dropped node lands at index 0.
+    assert_eq!(ids, vec!["n2", "c0"]);
+}
+
+#[test]
+fn reorder_into_rejects_non_container_target() {
+    let mut s = state_with(vec![
+        ellipse("e1", "Circle", 0.0, 0.0, 50.0, 50.0),
+        rect("n2", "Loose", 0.0, 0.0, 10.0, 10.0),
+    ]);
+    // An ellipse is not a container — the move must be refused and the source
+    // must survive at the root (no extract-before-verify silent drop).
+    assert!(!s.reorder_into(NodeId::new("n2"), NodeId::new("e1")));
+    assert_eq!(root_ids(&s), vec!["e1", "n2"]);
 }
 
 #[test]

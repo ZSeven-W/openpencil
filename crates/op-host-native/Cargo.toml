@@ -16,6 +16,12 @@ path = "src/lib.rs"
 # all resolve through the op-editor-ui crate.
 op-editor-ui = { path = "../op-editor-ui" }
 
+# Accessibility (#67): the host assembles every widget's `access_node()`
+# into an `accesskit::TreeUpdate` (see `widget_host/a11y.rs`) for the
+# desktop platform adapter to publish. Pinned to 0.24 to match
+# op-editor-ui + the platform adapter crates' transitive accesskit.
+accesskit = "0.24"
+
 # Canvas Preview (Play) mode serializes the document to JSON before
 # building the jian runtime, so the saved doc is never mutated.
 serde_json = { workspace = true }

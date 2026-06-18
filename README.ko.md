@@ -213,7 +213,7 @@ docker build --target full -t openpencil-full .
 전역 설치 후 터미널에서 디자인 도구를 제어하세요:
 
 ```bash
-npm install -g @zseven-w/openpencil
+brew install zseven-w/openpencil/op
 ```
 
 ```bash

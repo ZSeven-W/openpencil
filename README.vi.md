@@ -213,7 +213,7 @@ docker build --target full -t openpencil-full .
 Cài đặt toàn cục và điều khiển công cụ thiết kế từ terminal của bạn:
 
 ```bash
-npm install -g @zseven-w/openpencil
+brew install zseven-w/openpencil/op
 ```
 
 ```bash

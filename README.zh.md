@@ -213,7 +213,7 @@ docker build --target full -t openpencil-full .
 全局安装后即可从终端控制设计工具：
 
 ```bash
-npm install -g @zseven-w/openpencil
+brew install zseven-w/openpencil/op
 ```
 
 ```bash

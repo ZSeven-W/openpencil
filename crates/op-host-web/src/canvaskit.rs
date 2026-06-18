@@ -128,6 +128,79 @@ extern "C" {
         b: f32,
         a: f32,
     );
+    #[wasm_bindgen(method, js_name = fillSvgPathInRect)]
+    fn fill_svg_path_in_rect(
+        this: &OpCk,
+        d: &str,
+        x: f32,
+        y: f32,
+        w: f32,
+        h: f32,
+        even_odd: bool,
+        r: f32,
+        g: f32,
+        b: f32,
+        a: f32,
+    );
+    #[wasm_bindgen(method, js_name = strokeSvgPathInRect)]
+    fn stroke_svg_path_in_rect(
+        this: &OpCk,
+        d: &str,
+        x: f32,
+        y: f32,
+        w: f32,
+        h: f32,
+        r: f32,
+        g: f32,
+        b: f32,
+        a: f32,
+        sw: f32,
+    );
+    #[wasm_bindgen(method, js_name = fillSvgPathInRectLinearGradient)]
+    fn fill_svg_path_in_rect_linear_gradient(
+        this: &OpCk,
+        d: &str,
+        x: f32,
+        y: f32,
+        w: f32,
+        h: f32,
+        even_odd: bool,
+        stops: &[f32],
+        angle_deg: f32,
+        opacity: f32,
+    );
+    #[wasm_bindgen(method, js_name = fillSvgPathInRectRadialGradient)]
+    fn fill_svg_path_in_rect_radial_gradient(
+        this: &OpCk,
+        d: &str,
+        x: f32,
+        y: f32,
+        w: f32,
+        h: f32,
+        even_odd: bool,
+        stops: &[f32],
+        cx_frac: f32,
+        cy_frac: f32,
+        radius_frac: f32,
+        opacity: f32,
+    );
+    #[wasm_bindgen(method, js_name = fillInnerShadowSvgPath)]
+    fn fill_inner_shadow_svg_path(
+        this: &OpCk,
+        d: &str,
+        x: f32,
+        y: f32,
+        w: f32,
+        h: f32,
+        even_odd: bool,
+        offset_x: f32,
+        offset_y: f32,
+        blur: f32,
+        r: f32,
+        g: f32,
+        b: f32,
+        a: f32,
+    );
     #[wasm_bindgen(method, js_name = drawText)]
     fn draw_text(
         this: &OpCk,
@@ -144,6 +217,8 @@ extern "C" {
     );
     #[wasm_bindgen(method, js_name = measureText)]
     fn measure_text(this: &OpCk, t: &str, sz: f32) -> f32;
+    #[wasm_bindgen(method, js_name = registerSystemFont)]
+    fn register_system_font(this: &OpCk, family: &str, bytes: &[u8]) -> bool;
     #[wasm_bindgen(method, js_name = clipRect)]
     fn clip_rect(this: &OpCk, x: f32, y: f32, w: f32, h: f32);
     #[wasm_bindgen(method, js_name = clipRoundRect)]
@@ -168,6 +243,18 @@ const NOTO_CJK_SUBSET: &[u8] = include_bytes!("../assets/NotoSansSC-OpenPencilSu
 // Color-emoji fallback (NotoColorEmoji subset to the chrome's emoji glyphs).
 const NOTO_EMOJI_SUBSET: &[u8] = include_bytes!("../assets/NotoColorEmoji-OpenPencilSubset.ttf");
 const STEADY_CANVAS_PIXEL_BUDGET: f32 = 4_000_000.0;
+
+fn flatten_gradient_stops(stops: &[(f32, Color)]) -> Vec<f32> {
+    let mut flat = Vec::with_capacity(stops.len() * 5);
+    for (offset, color) in stops {
+        flat.extend([*offset, color.r, color.g, color.b, color.a]);
+    }
+    flat
+}
+
+fn svg_path_even_odd(d: &str) -> bool {
+    d.matches(['Z', 'z']).count() > 1
+}
 
 /// `RenderBackend` over CanvasKit. Paints in logical (CSS) pixels; `begin_frame`
 /// applies the device-pixel-ratio so output matches the native backend.
@@ -321,13 +408,119 @@ impl RenderBackend for CanvasKitBackend {
         );
     }
     fn fill_svg_path(&mut self, d: &str, top_left: Point2D, size: f32, viewbox: f32, color: Color) {
-        let even_odd = d.matches(['Z', 'z']).count() > 1;
+        let even_odd = svg_path_even_odd(d);
         self.ck.fill_svg_path(
             d,
             top_left.x,
             top_left.y,
             size / viewbox.max(1.0),
             even_odd,
+            color.r,
+            color.g,
+            color.b,
+            color.a,
+        );
+    }
+    fn fill_svg_path_in_rect(&mut self, d: &str, rect: Rect, color: Color) {
+        let even_odd = svg_path_even_odd(d);
+        self.ck.fill_svg_path_in_rect(
+            d,
+            rect.origin.x,
+            rect.origin.y,
+            rect.size.x,
+            rect.size.y,
+            even_odd,
+            color.r,
+            color.g,
+            color.b,
+            color.a,
+        );
+    }
+    fn stroke_svg_path_in_rect(&mut self, d: &str, rect: Rect, color: Color, width: f32) {
+        self.ck.stroke_svg_path_in_rect(
+            d,
+            rect.origin.x,
+            rect.origin.y,
+            rect.size.x,
+            rect.size.y,
+            color.r,
+            color.g,
+            color.b,
+            color.a,
+            width,
+        );
+    }
+    fn fill_svg_path_in_rect_linear_gradient(
+        &mut self,
+        d: &str,
+        rect: Rect,
+        stops: &[(f32, Color)],
+        angle_deg: f32,
+        opacity: f32,
+    ) {
+        if stops.is_empty() {
+            return;
+        }
+        let flat = flatten_gradient_stops(stops);
+        self.ck.fill_svg_path_in_rect_linear_gradient(
+            d,
+            rect.origin.x,
+            rect.origin.y,
+            rect.size.x,
+            rect.size.y,
+            svg_path_even_odd(d),
+            &flat,
+            angle_deg,
+            opacity,
+        );
+    }
+    fn fill_svg_path_in_rect_radial_gradient(
+        &mut self,
+        d: &str,
+        rect: Rect,
+        stops: &[(f32, Color)],
+        cx_frac: f32,
+        cy_frac: f32,
+        radius_frac: f32,
+        opacity: f32,
+    ) {
+        if stops.is_empty() {
+            return;
+        }
+        let flat = flatten_gradient_stops(stops);
+        self.ck.fill_svg_path_in_rect_radial_gradient(
+            d,
+            rect.origin.x,
+            rect.origin.y,
+            rect.size.x,
+            rect.size.y,
+            svg_path_even_odd(d),
+            &flat,
+            cx_frac,
+            cy_frac,
+            radius_frac,
+            opacity,
+        );
+    }
+    fn fill_inner_shadow_svg_path(
+        &mut self,
+        d: &str,
+        rect: Rect,
+        offset_x: f32,
+        offset_y: f32,
+        blur: f32,
+        color: Color,
+    ) {
+        self.ck.fill_inner_shadow_svg_path(
+            d,
+            rect.origin.x,
+            rect.origin.y,
+            rect.size.x,
+            rect.size.y,
+            svg_path_even_odd(d),
+            offset_x,
+            offset_y,
+            blur,
             color.r,
             color.g,
             color.b,
@@ -425,6 +618,10 @@ struct CkInner {
     backend: CanvasKitBackend,
     host: crate::widget_host::WidgetHost,
     canvas: web_sys::HtmlCanvasElement,
+    /// Hidden ARIA DOM mirror (#57) — kept in sync after every paint so a
+    /// screen reader can read the opaque CanvasKit surface. `None` only if
+    /// the DOM container couldn't be created (non-browser host).
+    a11y: Option<crate::a11y_dom::A11yDomMirror>,
 }
 
 impl CkInner {
@@ -433,6 +630,19 @@ impl CkInner {
         self.backend.begin_frame();
         self.host.paint_dyn(&mut self.backend, w, h);
         self.backend.end_frame();
+        self.sync_a11y();
+    }
+
+    /// Rebuild the hidden ARIA DOM mirror from a freshly assembled tree.
+    /// Called after each paint so the mirror tracks the painted frame
+    /// (cheap: ~8 always-present region nodes). A diff-or-rebuild refinement
+    /// can replace the full rebuild later; v1 rebuilds.
+    fn sync_a11y(&mut self) {
+        if let Some(mirror) = self.a11y.as_mut() {
+            let (w, h) = self.backend.logical_size();
+            let tree = self.host.accessibility_tree_update(w, h);
+            mirror.update(&tree);
+        }
     }
 
     fn resize_to_window(&mut self, window: &web_sys::Window) -> Result<bool, JsValue> {
@@ -478,6 +688,18 @@ impl CkInner {
         }
         Ok(false)
     }
+
+    fn event_offset_to_logical(&self, offset_x: f32, offset_y: f32) -> (f32, f32) {
+        let (logical_w, logical_h) = self.backend.logical_size();
+        crate::event::pointer::map_offset_to_logical(
+            offset_x,
+            offset_y,
+            self.canvas.client_width().max(1) as f32,
+            self.canvas.client_height().max(1) as f32,
+            logical_w,
+            logical_h,
+        )
+    }
 }
 
 impl crate::repaint_ctx::RepaintContext for CkInner {
@@ -493,17 +715,41 @@ impl crate::repaint_ctx::RepaintContext for CkInner {
     fn canvas_data_url(&self, mime: &str) -> Result<String, JsValue> {
         self.canvas.to_data_url_with_type(mime)
     }
-    fn register_system_font(&mut self, _family: &str, _bytes: &[u8]) -> bool {
-        // CanvasKit dynamic OS-font registration is not wired yet — canvas text
-        // shapes against the bundled Roboto/CJK/emoji faces. The font-query flow
-        // still runs (the picker lists OS families); only byte registration is a
-        // no-op, so used families simply fall back to the bundled faces.
-        false
+    fn register_system_font(&mut self, family: &str, bytes: &[u8]) -> bool {
+        self.backend.ck.register_system_font(family, bytes)
     }
     fn repaint(&mut self) -> Result<(), JsValue> {
         // CanvasKit present is infallible (GPU flush, no pixel round-trip).
         CkInner::repaint(self);
         Ok(())
+    }
+}
+
+/// Resolve an accessibility DOM event's target to its `accesskit::NodeId`
+/// and route it into the host (#57). `is_focus` distinguishes `focusin`
+/// from `click`. Repaints on a state change so the canvas + the mirror
+/// re-sync with the screen-reader-driven focus / activation.
+fn dispatch_a11y_dom_event(
+    inner: &std::rc::Rc<std::cell::RefCell<CkInner>>,
+    target: Option<web_sys::EventTarget>,
+    is_focus: bool,
+) {
+    use wasm_bindgen::JsCast;
+    let Some(element) = target.and_then(|t| t.dyn_into::<web_sys::Element>().ok()) else {
+        return;
+    };
+    let Some(node_id) = crate::a11y_dom::A11yDomMirror::node_id_for_target(&element) else {
+        return;
+    };
+    let Ok(mut b) = inner.try_borrow_mut() else {
+        return;
+    };
+    b.host.set_clocks(
+        crate::listener::now_ms_perf(),
+        crate::listener::now_unix_secs(),
+    );
+    if b.host.apply_a11y_action(node_id.0, is_focus) {
+        b.repaint();
     }
 }
 
@@ -513,7 +759,7 @@ impl crate::repaint_ctx::RepaintContext for CkInner {
 /// `CanvasKitBackend`, behind the same `RenderBackend` the desktop host uses.
 #[wasm_bindgen]
 pub async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
-    use crate::listener::{add_listener, now_ms_perf, Listener};
+    use crate::listener::{add_listener, now_ms_perf, now_unix_secs, Listener};
     use std::cell::RefCell;
     use std::rc::Rc;
     use wasm_bindgen::JsCast;
@@ -541,12 +787,17 @@ pub async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
 
     let backend = init_backend(&canvas_id, dpr, logical_w, logical_h).await?;
     let host = crate::widget_host::WidgetHost::new();
+    // Hidden ARIA DOM mirror (#57) — created next to the canvas, refreshed
+    // after every paint so screen readers can read the opaque GPU surface.
+    let a11y = crate::a11y_dom::A11yDomMirror::create(&canvas);
     let inner = Rc::new(RefCell::new(CkInner {
         backend,
         host,
         canvas: canvas.clone(),
+        a11y,
     }));
     inner.borrow_mut().repaint();
+    crate::web_fonts::drain_font_requests(&inner);
 
     // Populate the chat model picker from the daemon's `/api/ai/models`
     // catalog (best-effort; async, repaints when the response lands).
@@ -558,6 +809,42 @@ pub async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
     let mut listeners: Vec<Listener> = Vec::new();
     let canvas_target: web_sys::EventTarget = canvas.clone().into();
     let win_target: web_sys::EventTarget = window.clone().into();
+
+    // Accessibility DOM mirror (#57): delegated `focus` / `click` on the
+    // hidden mirror container map a focused/activated mirror node back to a
+    // host action (focus chat input, blur it on canvas/panel focus, …) then
+    // repaint so the canvas reflects the screen-reader-driven change.
+    if let Some(mirror_target) = inner
+        .borrow()
+        .a11y
+        .as_ref()
+        .map(|m| -> web_sys::EventTarget { m.container().clone().into() })
+    {
+        // `focusin` bubbles (unlike `focus`), so a single delegated listener
+        // on the container catches focus landing on any descendant node.
+        {
+            let inner = inner.clone();
+            add_listener::<web_sys::FocusEvent, _, _>(
+                &mirror_target,
+                "focusin",
+                &mut listeners,
+                move |evt| {
+                    dispatch_a11y_dom_event(&inner, evt.target(), true);
+                },
+            )?;
+        }
+        {
+            let inner = inner.clone();
+            add_listener::<MouseEvent, _, _>(
+                &mirror_target,
+                "click",
+                &mut listeners,
+                move |evt| {
+                    dispatch_a11y_dom_event(&inner, evt.target(), false);
+                },
+            )?;
+        }
+    }
 
     // mousedown → press / right-press
     {
@@ -576,11 +863,14 @@ pub async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
                 if matches!(action, MousePressAction::MiddlePan) {
                     evt.prevent_default();
                 }
-                let mut b = inner.borrow_mut();
+                let Ok(mut b) = inner.try_borrow_mut() else {
+                    return;
+                };
                 b.host.set_modifier_shift(evt.shift_key());
-                b.host.set_now_ms(now_ms_perf());
+                b.host.set_clocks(now_ms_perf(), now_unix_secs());
                 let (w, h) = b.backend.logical_size();
-                let (x, y) = (evt.offset_x() as f32, evt.offset_y() as f32);
+                let (x, y) =
+                    b.event_offset_to_logical(evt.offset_x() as f32, evt.offset_y() as f32);
                 let consumed = match action {
                     MousePressAction::PrimaryPress => b.host.apply_press(x, y, w, h),
                     MousePressAction::MiddlePan => {
@@ -605,6 +895,8 @@ pub async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
                 crate::dom_io::drain_pending_file_action(&inner);
                 crate::dom_io::drain_pending_attachment_pick(&inner);
                 crate::dom_io::drain_pending_kit_io(&inner);
+                crate::web_agent_connect::drain_pending_provider_connect(&inner);
+                crate::web_acp_connect::drain_pending_acp_agent_connect(&inner);
                 crate::web_fonts::drain_font_requests(&inner);
             },
         )?;
@@ -629,11 +921,13 @@ pub async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
             "mousemove",
             &mut listeners,
             move |evt| {
-                let mut b = inner.borrow_mut();
-                b.host.set_now_ms(now_ms_perf());
-                if b.host
-                    .apply_cursor_move(evt.offset_x() as f32, evt.offset_y() as f32)
-                {
+                let Ok(mut b) = inner.try_borrow_mut() else {
+                    return;
+                };
+                b.host.set_clocks(now_ms_perf(), now_unix_secs());
+                let (x, y) =
+                    b.event_offset_to_logical(evt.offset_x() as f32, evt.offset_y() as f32);
+                if b.host.apply_cursor_move(x, y) {
                     b.repaint();
                 }
             },
@@ -649,8 +943,10 @@ pub async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
             if evt.button() == 1 {
                 evt.prevent_default();
             }
-            let mut b = inner.borrow_mut();
-            b.host.set_now_ms(now_ms_perf());
+            let Ok(mut b) = inner.try_borrow_mut() else {
+                return;
+            };
+            b.host.set_clocks(now_ms_perf(), now_unix_secs());
             let (w, h) = b.backend.logical_size();
             let was_middle = evt.button() == 1;
             if b.host.apply_release_with_viewport(w, h) {
@@ -668,8 +964,11 @@ pub async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
             use crate::event::pointer::{classify_wheel_intent, WheelIntent};
 
             evt.prevent_default();
-            let mut b = inner.borrow_mut();
+            let Ok(mut b) = inner.try_borrow_mut() else {
+                return;
+            };
             let (w, h) = b.backend.logical_size();
+            let (x, y) = b.event_offset_to_logical(evt.offset_x() as f32, evt.offset_y() as f32);
             let consumed = match classify_wheel_intent(
                 evt.delta_x() as f32,
                 evt.delta_y() as f32,
@@ -678,18 +977,8 @@ pub async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
                 evt.meta_key(),
                 evt.alt_key(),
             ) {
-                WheelIntent::Zoom { delta_y } => {
-                    b.host
-                        .apply_wheel(evt.offset_x() as f32, evt.offset_y() as f32, delta_y, w, h)
-                }
-                WheelIntent::Pan { dx, dy } => b.host.apply_pan_gesture(
-                    evt.offset_x() as f32,
-                    evt.offset_y() as f32,
-                    dx,
-                    dy,
-                    w,
-                    h,
-                ),
+                WheelIntent::Zoom { delta_y } => b.host.apply_wheel(x, y, delta_y, w, h),
+                WheelIntent::Pan { dx, dy } => b.host.apply_pan_gesture(x, y, dx, dy, w, h),
             };
             if consumed {
                 b.repaint();
@@ -708,8 +997,10 @@ pub async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
             if evt.is_composing() {
                 return;
             }
-            let mut b = inner.borrow_mut();
-            b.host.set_now_ms(now_ms_perf());
+            let Ok(mut b) = inner.try_borrow_mut() else {
+                return;
+            };
+            b.host.set_clocks(now_ms_perf(), now_unix_secs());
             let key = evt.key();
             let starts_space_pan = evt.code() == "Space"
                 && !evt.repeat()
@@ -803,7 +1094,9 @@ pub async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
             if evt.code() != "Space" {
                 return;
             }
-            let mut b = inner.borrow_mut();
+            let Ok(mut b) = inner.try_borrow_mut() else {
+                return;
+            };
             b.host.set_space_pan(false);
             evt.prevent_default();
         })?;
@@ -813,7 +1106,9 @@ pub async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
         let inner = inner.clone();
         let window_for_resize = window.clone();
         add_listener::<web_sys::Event, _, _>(&win_target, "resize", &mut listeners, move |_evt| {
-            let mut b = inner.borrow_mut();
+            let Ok(mut b) = inner.try_borrow_mut() else {
+                return;
+            };
             match b.resize_to_window(&window_for_resize) {
                 Ok(true) => b.repaint(),
                 Ok(false) => {}

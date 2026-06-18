@@ -1479,6 +1479,18 @@ impl WidgetHostNative {
             self.mark_dirty();
             return true;
         }
+        // Escape closes an open layer/page right-click context menu
+        // (layer-context-menu.tsx:101 — keydown Escape → onClose).
+        if self
+            .editor_state
+            .editor_ui
+            .layer_context_menu
+            .take()
+            .is_some()
+        {
+            self.mark_dirty();
+            return true;
+        }
         if self.editor_state.rename_cancel() {
             self.mark_dirty();
             return true;

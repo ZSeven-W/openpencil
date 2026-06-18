@@ -213,7 +213,7 @@ docker build --target full -t openpencil-full .
 वैश्विक रूप से इंस्टॉल करें और अपने टर्मिनल से डिज़ाइन टूल को नियंत्रित करें:
 
 ```bash
-npm install -g @zseven-w/openpencil
+brew install zseven-w/openpencil/op
 ```
 
 ```bash
