@@ -407,17 +407,37 @@ impl WidgetHostNative {
         if !anchor.is_real() || !self.editor_state.is_editable(&anchor) {
             return false;
         }
-        // The loader bakes the paint body's own opacity into the resolved
-        // scene fill / stroke alpha (`apply_alpha` in style_payload), and
-        // `set_node_*` bakes node cumulative opacity on top. The picker
-        // writes an opaque hex but preserves the body opacity, so fold it
-        // in here — otherwise a fill / stroke authored below 100 % paints
-        // too opaque on every drag frame until release reconciles.
-        let body_opacity = match self.editor_state.selected_node() {
-            Some(node) if is_fill => op_editor_core::fills::first_solid_fill_opacity(node),
-            Some(node) => op_editor_core::fills::first_solid_stroke_opacity(node),
-            None => return false,
+        let Some(node) = self.editor_state.selected_node() else {
+            return false;
         };
+        // The picker write only lands when the anchor carries a writable
+        // solid paint slot. A Ref / instance anchor has none, so
+        // `set_selected_color` is a no-op there — patching the scene would
+        // then show a colour the document never received (and snap back on
+        // release). Require the freshly-written hex to be present, which
+        // also screens out gradient-only / slotless nodes. (Belt to the
+        // `is_instance` guard above for any Ref the redirect missed.)
+        //
+        // The loader also bakes the paint body's own opacity into the
+        // resolved scene fill / stroke alpha (`apply_alpha` in
+        // style_payload), and `set_node_*` bakes node cumulative opacity on
+        // top. The picker writes an opaque hex but preserves the body
+        // opacity, so fold it in here — otherwise a fill / stroke authored
+        // below 100 % paints too opaque on every drag frame.
+        let (wrote_paint, body_opacity) = if is_fill {
+            (
+                op_editor_core::fills::first_solid_fill_hex(node).is_some(),
+                op_editor_core::fills::first_solid_fill_opacity(node),
+            )
+        } else {
+            (
+                op_editor_core::fills::first_solid_stroke_hex(node).is_some(),
+                op_editor_core::fills::first_solid_stroke_opacity(node),
+            )
+        };
+        if !wrote_paint {
+            return false;
+        }
         let mut color = hsv_to_rgb(hue, sat, val);
         color.a *= body_opacity.clamp(0.0, 1.0);
         let ids = [anchor.as_str().to_string()];
