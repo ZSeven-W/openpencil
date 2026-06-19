@@ -180,6 +180,23 @@ if [ -n "${core_ref_hits}" ]; then
 fi
 
 # ---------------------------------------------------------------------
+# SDK-F4: only viewer_host.rs may import `op_editor_ui::widgets` in
+# any form inside `crates/op-web-sdk/src/`. Mirrors the op-host-web
+# F4 rule with the allowed module changed to `viewer_host`.
+# ---------------------------------------------------------------------
+SDK_SRC="crates/op-web-sdk/src"
+sdk_ref_hits="$(grep -RIn 'op_editor_ui' "${SDK_SRC}" 2>/dev/null || true)"
+if [ -n "${sdk_ref_hits}" ]; then
+  sdk_illegal_imports="$(printf '%s\n' "${sdk_ref_hits}" \
+    | grep 'widgets' \
+    | grep -vE '^crates/op-web-sdk/src/viewer_host(\.rs|/[^/]+\.rs):' \
+    || true)"
+  if [ -n "${sdk_illegal_imports}" ]; then
+    fail_lines+=("SDK-F4: op_editor_ui::widgets reference outside viewer_host.rs in op-web-sdk:" "${sdk_illegal_imports}")
+  fi
+fi
+
+# ---------------------------------------------------------------------
 # Reverse R1: each expected widget impl file exists AND
 # carries a real `impl Widget for X` line that is NOT a Rust
 # line-comment.
