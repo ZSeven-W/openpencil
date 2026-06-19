@@ -1,6 +1,7 @@
 //! Layer-section paint for the right property panel.
 
 use crate::theme::Theme;
+use crate::util::format_panel_number as format_number;
 use crate::widgets::property_panel_inputs::{
     paint_section_divider, paint_section_label, INPUT_HEIGHT, INPUT_RADIUS, PAD_X, SECTION_GAP,
 };
@@ -214,12 +215,4 @@ fn paint_labeled_input(
         );
     }
     cx.backend.restore();
-}
-
-fn format_number(value: f32) -> String {
-    if value.fract().abs() < f32::EPSILON {
-        format!("{}", value.round() as i32)
-    } else {
-        format!("{value:.2}")
-    }
 }

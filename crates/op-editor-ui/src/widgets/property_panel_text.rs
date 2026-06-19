@@ -1,6 +1,7 @@
 //! Text-specific property section for the native right panel.
 
 use crate::theme::Theme;
+use crate::util::format_panel_number;
 use crate::widgets::button::paint_button_feedback_wash;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::property_panel::{
@@ -729,11 +730,3 @@ const V_ALIGN_SPECS: [AlignButtonSpec<TextVerticalAlignValue>; 3] = [
         icon: Icon::AlignBottom,
     },
 ];
-
-fn format_panel_number(value: f32) -> String {
-    if value.fract().abs() < f32::EPSILON {
-        format!("{}", value.round() as i32)
-    } else {
-        format!("{value:.2}")
-    }
-}

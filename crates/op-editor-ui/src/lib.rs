@@ -37,6 +37,7 @@ pub mod layout_scene_hit;
 pub mod scene_vars;
 pub mod svg_export;
 pub mod theme;
+pub mod util;
 pub mod widgets;
 
 // Re-export the primary API for the hosts / widgets / tests.
