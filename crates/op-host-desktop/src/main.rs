@@ -27,8 +27,6 @@ mod commit_diff_semantic;
 mod cursor_icon;
 mod design_md_host;
 mod design_session;
-mod export;
-mod export_pdf;
 mod figma_import_session;
 mod frame;
 mod git_host;

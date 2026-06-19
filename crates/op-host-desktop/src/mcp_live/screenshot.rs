@@ -12,7 +12,7 @@
 use op_mcp::{RequestId, ScreenshotRequest, ScreenshotTarget, ToolErrorCode, ToolResponse};
 use serde_json::{json, Value};
 
-use crate::export::screenshot::{CaptureSpec, ScreenshotPng};
+use op_web_daemon::export::screenshot::{CaptureSpec, ScreenshotPng};
 
 /// If `body` is a `tools/call` for `debug_screenshot` AND the debug
 /// gate is open, produce the full JSON-RPC response via `fulfill`.

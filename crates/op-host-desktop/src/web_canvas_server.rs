@@ -341,8 +341,8 @@ fn build_raster_download(body: &str, fallback: &EditorState) -> Result<RasterDow
     let scene = op_pen_loader::editor_state_to_layout_scene(&editor);
     let tmp = tmp_export_path(ext);
     let result = match selected_node_id {
-        Some(id) => crate::export::export_node_raster(&scene, &id, &tmp, format, scale),
-        None => crate::export::export_raster(&scene, &tmp, format, scale),
+        Some(id) => op_web_daemon::export::export_node_raster(&scene, &id, &tmp, format, scale),
+        None => op_web_daemon::export::export_raster(&scene, &tmp, format, scale),
     };
     if let Err(e) = result {
         let _ = std::fs::remove_file(&tmp);
@@ -361,7 +361,7 @@ fn raster_format_from_export_body(
     body: Option<&serde_json::Value>,
 ) -> Result<
     (
-        crate::export::RasterFormat,
+        op_web_daemon::export::RasterFormat,
         &'static str,
         &'static str,
         &'static str,
@@ -374,19 +374,19 @@ fn raster_format_from_export_body(
         .unwrap_or("png");
     match format {
         "png" => Ok((
-            crate::export::RasterFormat::Png,
+            op_web_daemon::export::RasterFormat::Png,
             "openpencil-export.png",
             "image/png",
             "png",
         )),
         "jpeg" | "jpg" => Ok((
-            crate::export::RasterFormat::Jpeg,
+            op_web_daemon::export::RasterFormat::Jpeg,
             "openpencil-export.jpg",
             "image/jpeg",
             "jpg",
         )),
         "webp" => Ok((
-            crate::export::RasterFormat::Webp,
+            op_web_daemon::export::RasterFormat::Webp,
             "openpencil-export.webp",
             "image/webp",
             "webp",
@@ -435,7 +435,7 @@ fn build_pdf_download(body: &str, fallback: &EditorState) -> Result<Vec<u8>, Str
     let editor = export_editor_from_body(body, fallback)?;
     let scene = op_pen_loader::editor_state_to_layout_scene(&editor);
     let tmp = tmp_export_path("pdf");
-    crate::export_pdf::export_pdf(&scene, &tmp)?;
+    op_web_daemon::export_pdf::export_pdf(&scene, &tmp)?;
     let bytes = std::fs::read(&tmp).map_err(|e| e.to_string())?;
     let _ = std::fs::remove_file(&tmp);
     Ok(bytes)
@@ -1377,7 +1377,7 @@ fn serve_one<S: Read + Write>(
             op_mcp::debug_tools_enabled(),
             |shot_req| {
                 let spec = crate::mcp_live::screenshot::capture_spec(&shot_req);
-                crate::export::screenshot::capture(&guard.editor, &spec)
+                op_web_daemon::export::screenshot::capture(&guard.editor, &spec)
             },
         )
     } {

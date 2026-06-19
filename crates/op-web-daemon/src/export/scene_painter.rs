@@ -51,14 +51,14 @@ fn no_cull() -> Rect {
 /// Paint one resolved scene node + subtree onto `canvas` through the
 /// shared canvas painter (images, `clip_content`, styled text runs,
 /// gradients, effects — full live-canvas semantics).
-pub(crate) fn paint_node(canvas: &Canvas, node: &SceneNode) {
+pub fn paint_node(canvas: &Canvas, node: &SceneNode) {
     paint_nodes(canvas, std::slice::from_ref(node));
 }
 
 /// Paint top-level page nodes in live-canvas z-order. Scene children
 /// are ordered topmost-first (layer-panel order), so the painter walks
 /// them in reverse — same as `canvas_viewport.rs`'s paint loop.
-pub(crate) fn paint_nodes(canvas: &Canvas, nodes: &[SceneNode]) {
+pub fn paint_nodes(canvas: &Canvas, nodes: &[SceneNode]) {
     EXPORT_BACKEND.with(|cell| {
         let mut backend = cell.borrow_mut();
         let mut frame = NativeFrameBackend::new(&mut backend, canvas);

@@ -523,18 +523,18 @@ pub fn run_action(
                         None
                     }
                 };
-                let raster = |rf: crate::export::RasterFormat| -> Result<(), String> {
+                let raster = |rf: op_web_daemon::export::RasterFormat| -> Result<(), String> {
                     match &single_node {
-                        Some(id) => crate::export::export_node_raster(scene, id, &path, rf, scale),
-                        None => crate::export::export_raster(scene, &path, rf, scale),
+                        Some(id) => op_web_daemon::export::export_node_raster(scene, id, &path, rf, scale),
+                        None => op_web_daemon::export::export_raster(scene, &path, rf, scale),
                     }
                 };
                 let result: Result<(), String> = match fmt {
-                    Fmt::Png => raster(crate::export::RasterFormat::Png),
-                    Fmt::Jpeg => raster(crate::export::RasterFormat::Jpeg),
-                    Fmt::Webp => raster(crate::export::RasterFormat::Webp),
-                    Fmt::Svg => crate::export::export_svg(scene, &path),
-                    Fmt::Pdf => crate::export_pdf::export_pdf(scene, &path),
+                    Fmt::Png => raster(op_web_daemon::export::RasterFormat::Png),
+                    Fmt::Jpeg => raster(op_web_daemon::export::RasterFormat::Jpeg),
+                    Fmt::Webp => raster(op_web_daemon::export::RasterFormat::Webp),
+                    Fmt::Svg => op_web_daemon::export::export_svg(scene, &path),
+                    Fmt::Pdf => op_web_daemon::export_pdf::export_pdf(scene, &path),
                 };
                 if let Err(e) = result {
                     eprintln!("[export-image] {e}");
