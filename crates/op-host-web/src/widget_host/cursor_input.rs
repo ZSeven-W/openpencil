@@ -474,6 +474,11 @@ impl WidgetHost {
             // this `true` return.
             return true;
         }
+        // Left layer rail hover wash. CanvasKit mousemove now feeds the
+        // same layer-row hover state the press / paint path already uses.
+        if self.update_layer_hover(x, y, self.last_viewport_h) {
+            return true;
+        }
         // Toolbar per-button hover wash — AFTER drag detection so a
         // path-anchor / node / pan drag whose cursor crosses the
         // toolbar isn't intercepted by the hover update (mirrors
