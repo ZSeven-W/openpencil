@@ -64,10 +64,10 @@ fn layout_scene_precomputes_unbounded_group_bounds() {
     let scene = editor_state_to_layout_scene(&state_from(src));
     let group = &scene.pages[0].children[0];
 
-    assert_eq!(group.bounds, op_editor_ui::Rect::ZERO);
+    assert_eq!(group.bounds, op_editor_core::render_backend::Rect::ZERO);
     assert_eq!(
         group.aggregate_bounds_cache,
-        op_editor_ui::Rect::xywh(10.0, 5.0, 90.0, 55.0),
+        op_editor_core::render_backend::Rect::xywh(10.0, 5.0, 90.0, 55.0),
         "loader should cache unbounded aggregate bounds once during scene build"
     );
 }
@@ -178,10 +178,10 @@ fn text_typography_fields_flow_through_to_scene() {
     assert_eq!(n.font_weight, 700);
     assert_eq!(n.line_height, 1.6);
     assert_eq!(n.letter_spacing, 3.0);
-    assert_eq!(n.text_align, op_editor_ui::SceneTextAlign::Center);
+    assert_eq!(n.text_align, jian_scene::layout_scene::SceneTextAlign::Center);
     assert_eq!(
         n.text_vertical_align,
-        op_editor_ui::SceneTextVerticalAlign::Middle
+        jian_scene::layout_scene::SceneTextVerticalAlign::Middle
     );
     assert!(n.text_wrap);
 }
@@ -349,7 +349,7 @@ fn linear_gradient_payload_threads_into_scene_node() {
     let n = &scene.pages[0].children[0];
     let g = n.gradient.as_ref().expect("scene gradient must populate");
     match g {
-        op_editor_ui::layout_scene::SceneGradient::Linear { stops, .. } => {
+        jian_scene::layout_scene::SceneGradient::Linear { stops, .. } => {
             assert_eq!(stops.len(), 2);
             assert!(stops[0].color.r > 0.99 && stops[0].color.b < 0.01);
         }
@@ -368,7 +368,7 @@ fn image_fill_mode_threads_into_scene_node() {
     let scene = editor_state_to_layout_scene(&state_from(src));
     let n = &scene.pages[0].children[0];
     assert_eq!(n.image_src.as_deref(), Some("data:image/png;base64,AA=="));
-    assert_eq!(n.image_fit, op_editor_ui::layout_scene::SceneImageFit::Fit);
+    assert_eq!(n.image_fit, jian_scene::layout_scene::SceneImageFit::Fit);
 }
 
 #[test]

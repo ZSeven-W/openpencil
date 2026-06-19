@@ -4,7 +4,7 @@
 
 use jian_ops_schema::node::PenNode;
 use jian_ops_schema::style::PenEffect;
-use op_editor_ui::layout_scene::{DropShadow, Effect};
+use jian_scene::layout_scene::{DropShadow, Effect};
 use serde::{Deserialize, Serialize};
 
 /// Serializable mirror of `document::DropShadow`.
@@ -56,7 +56,7 @@ fn shadow_payload_to_effect(s: &ShadowPayload) -> Effect {
         offset_x: s.offset_x,
         offset_y: s.offset_y,
         blur: s.blur,
-        color: op_editor_ui::Color {
+        color: op_editor_core::render_backend::Color {
             r: s.color[0],
             g: s.color[1],
             b: s.color[2],
@@ -192,7 +192,7 @@ fn parse_hex(s: &str) -> Option<[f32; 4]> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use op_editor_ui::Color;
+    use op_editor_core::render_backend::Color;
 
     #[test]
     fn parse_css_color_handles_rgba_and_hex() {
