@@ -33,6 +33,43 @@ const ICONIFY_API: &str = "https://api.iconify.design";
 /// Same budget as the desktop worker's reqwest client.
 const FETCH_TIMEOUT_MS: u32 = 15_000;
 
+/// Daemon route serving the brand-logo catalog (simple-icons). MUST match
+/// `op-host-desktop`'s `web_static::ICONIFY_BRANDS_PATH` — the daemon embeds the
+/// asset the wasm bundle omits, like `/api/ai/models` for model discovery.
+const BRAND_CATALOG_PATH: &str = "/assets/iconify-catalog-brands.json";
+
+/// Fetch the brand-logo catalog from the daemon once at mount and register it
+/// with the shared icon catalog. The wasm bundle omits these ~3700 simple-icons
+/// (~4.8 MB) to keep the first-load small; this pulls them in the background so
+/// the icon picker and figma icon substitution can resolve brand logos shortly
+/// after load. Best-effort: a missing daemon / failed fetch just leaves brand
+/// logos unavailable (lookups fall back to the unknown-glyph dot).
+pub(crate) fn fetch_brand_catalog<C: RepaintContext + 'static>(inner: &Rc<RefCell<C>>) {
+    // Crate-root re-exports (not the `widgets` facade) so this stays within the
+    // op-host-web widget-boundary rule (`tools/check-widget-boundary.sh` F4).
+    if op_editor_ui::brand_catalog_loaded() {
+        return;
+    }
+    let base = crate::daemon_base::daemon_base();
+    let url = format!("{base}{BRAND_CATALOG_PATH}");
+    let inner_cb = inner.clone();
+    fetch_text(
+        &url,
+        Box::new(move |result| {
+            let Ok(body) = result else {
+                return;
+            };
+            if op_editor_ui::set_brand_catalog(&body) {
+                // Repaint so an open icon picker / brand iconFont nodes pick up
+                // the now-available logos.
+                if let Ok(mut b) = inner_cb.try_borrow_mut() {
+                    let _ = b.repaint();
+                }
+            }
+        }),
+    );
+}
+
 /// One in-flight result page being assembled across the search +
 /// per-collection fetches.
 struct PendingPage {

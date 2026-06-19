@@ -166,8 +166,9 @@ fn first_party_icon_font_names_all_resolve() {
 }
 
 #[test]
-fn bundled_iconify_catalog_contains_requested_collections() {
+fn bundled_iconify_catalog_contains_core_collections() {
     use crate::widgets::icon_catalog::{lookup_icon, IconRenderStyle};
+    // lucide + feather are embedded in the wasm/binary (the core set).
     assert_eq!(
         lookup_icon("lucide", "airplay").map(|i| i.style),
         Some(IconRenderStyle::Stroke)
@@ -176,6 +177,16 @@ fn bundled_iconify_catalog_contains_requested_collections() {
         lookup_icon("feather", "airplay").map(|i| i.style),
         Some(IconRenderStyle::Stroke)
     );
+}
+
+#[test]
+fn brand_logos_resolve_after_runtime_registration() {
+    use crate::widgets::icon_catalog::{lookup_icon, set_brand_catalog, IconRenderStyle};
+    // simple-icons brand logos are NOT embedded — they load at runtime
+    // (desktop: include_str at startup; web: fetched from the daemon). This test
+    // owns registering the real brands asset; the catalog is a set-once global,
+    // so other tests observe the same brand data regardless of ordering.
+    set_brand_catalog(include_str!("../../assets/iconify-catalog-brands.json"));
     assert_eq!(
         lookup_icon("simple-icons", "github").map(|i| i.style),
         Some(IconRenderStyle::Fill)
@@ -184,6 +195,11 @@ fn bundled_iconify_catalog_contains_requested_collections() {
 
 #[test]
 fn icon_font_node_paints_simple_icon_as_fill_path() {
+    // simple-icons are not embedded; register the brands catalog first
+    // (idempotent set-once — independent of test ordering).
+    crate::widgets::icon_catalog::set_brand_catalog(include_str!(
+        "../../assets/iconify-catalog-brands.json"
+    ));
     let mut b = CountingBackend::default();
     paint_icon_font_node(
         &mut b,
