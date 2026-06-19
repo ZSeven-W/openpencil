@@ -2,6 +2,7 @@
 //! `main.rs` to keep that file under the 800-line cap.
 
 use super::*;
+use op_web_daemon::mcp_serve::tool_text;
 
 #[test]
 fn cursor_only_redraw_without_visible_state_change_skips_present() {

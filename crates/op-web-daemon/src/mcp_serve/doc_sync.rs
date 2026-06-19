@@ -7,7 +7,7 @@
 /// True for the TS live-canvas whole-document sync route
 /// (`POST /api/mcp/document`). Any other method/path falls through to the
 /// JSON-RPC `/mcp` handling.
-pub(crate) fn is_document_sync_route(method: &str, path: &str) -> bool {
+pub fn is_document_sync_route(method: &str, path: &str) -> bool {
     method == "POST" && path == "/api/mcp/document"
 }
 
@@ -16,7 +16,7 @@ pub(crate) fn is_document_sync_route(method: &str, path: &str) -> bool {
 /// present (else "Missing document in request body"), carry a non-empty
 /// `version`, and have an array `children` OR `pages` (else "Invalid document
 /// format").
-pub(crate) fn parse_document_sync_body(body: &str) -> Result<String, String> {
+pub fn parse_document_sync_body(body: &str) -> Result<String, String> {
     let value: serde_json::Value =
         serde_json::from_str(body).map_err(|_| "Invalid document format".to_string())?;
     let document = value
@@ -39,17 +39,17 @@ pub(crate) fn parse_document_sync_body(body: &str) -> Result<String, String> {
 
 /// Success body for a whole-document sync — matches `document.post.ts`'s
 /// `{ ok: true, version }`.
-pub(crate) fn document_sync_ok(version: u64) -> String {
+pub fn document_sync_ok(version: u64) -> String {
     format!(r#"{{"ok":true,"version":{version}}}"#)
 }
 
 /// Error body for a rejected whole-document sync (HTTP 400).
-pub(crate) fn rest_error_body(message: &str) -> String {
+pub fn rest_error_body(message: &str) -> String {
     format!(r#"{{"ok":false,"error":"{}"}}"#, json_escape(message))
 }
 
 /// Minimal JSON string escaping for embedding a message in a JSON reply body.
-pub(crate) fn json_escape(s: &str) -> String {
+pub fn json_escape(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     for c in s.chars() {
         match c {

@@ -257,7 +257,7 @@ fn server_loop(
                 if conn_count.load(Ordering::Acquire) >= MAX_LIVE_CONNS {
                     // Shed load rather than spawn unbounded threads.
                     let _ = stream.set_write_timeout(Some(ACCEPT_IDLE_SLEEP));
-                    let _ = crate::mcp_serve::write_mcp_http_response(
+                    let _ = op_web_daemon::mcp_serve::write_mcp_http_response(
                         &mut stream,
                         "503 Service Unavailable",
                         r#"{"jsonrpc":"2.0","error":{"code":-32000,"message":"server busy"},"id":null}"#,
@@ -290,7 +290,7 @@ fn server_loop(
                             serve_connection(&mut stream, &req_tx, &token, &lock, &quit, &wake)
                         {
                             eprintln!("openpencil-desktop mcp: {e}");
-                            let _ = crate::mcp_serve::write_mcp_http_response(
+                            let _ = op_web_daemon::mcp_serve::write_mcp_http_response(
                                 &mut stream,
                                 "500 Internal Server Error",
                                 &error_json(&e),
@@ -322,26 +322,26 @@ fn serve_connection<S: std::io::Read + std::io::Write>(
     quit_flag: &AtomicBool,
     wake_ui: &UiWake,
 ) -> Result<(), String> {
-    let req = crate::mcp_serve::read_http_request(stream)?;
+    let req = op_web_daemon::mcp_serve::read_http_request(stream)?;
     if req.method == "OPTIONS" {
-        return crate::mcp_serve::write_mcp_http_response(stream, "204 No Content", "");
+        return op_web_daemon::mcp_serve::write_mcp_http_response(stream, "204 No Content", "");
     }
     // TS live-canvas whole-document sync (REST `POST /api/mcp/document`),
     // distinct from the JSON-RPC `/mcp` path below. Lets a TS whole-doc-sync
     // client (`setSyncDocument` → POST `{document}`) drive THIS editor's
     // on-screen canvas, mirroring `apps/web/server/api/mcp/document.post.ts`.
-    if crate::mcp_serve::is_document_sync_route(&req.method, &req.path) {
+    if op_web_daemon::mcp_serve::is_document_sync_route(&req.method, &req.path) {
         return serve_document_sync(stream, req_tx, wake_ui, stateful_lock, &req.body);
     }
     if req.path != "/mcp" && req.path != "/" {
-        return crate::mcp_serve::write_mcp_http_response(
+        return op_web_daemon::mcp_serve::write_mcp_http_response(
             stream,
             "404 Not Found",
             r#"{"error":"Not found"}"#,
         );
     }
     if req.method != "POST" {
-        return crate::mcp_serve::write_mcp_http_response(
+        return op_web_daemon::mcp_serve::write_mcp_http_response(
             stream,
             "400 Bad Request",
             r#"{"jsonrpc":"2.0","error":{"code":-32000,"message":"Invalid or missing session ID"},"id":null}"#,
@@ -349,8 +349,8 @@ fn serve_connection<S: std::io::Read + std::io::Write>(
     }
     // Token-authed graceful shutdown: ack, then flag the UI thread to exit
     // the event loop. No pid-kill ⇒ no signal-the-wrong-process race.
-    if let Some(id) = crate::mcp_serve::shutdown_request_id(&req.body, token) {
-        write_json_rpc_response(stream, &crate::mcp_serve::shutdown_ok_response(&id))?;
+    if let Some(id) = op_web_daemon::mcp_serve::shutdown_request_id(&req.body, token) {
+        write_json_rpc_response(stream, &op_web_daemon::mcp_serve::shutdown_ok_response(&id))?;
         quit_flag.store(true, Ordering::Release);
         wake_ui();
         return Ok(());
@@ -359,17 +359,17 @@ fn serve_connection<S: std::io::Read + std::io::Write>(
     // take the stateful lock, so `op`'s `ping` probe stays fast and never
     // false-negatives a busy editor. The live `ping` reply carries our
     // identity token so the CLI can confirm THIS server published the file.
-    match crate::mcp_serve::classify_stateless(&req.body) {
-        crate::mcp_serve::Stateless::Respond(resp) => {
+    match op_web_daemon::mcp_serve::classify_stateless(&req.body) {
+        op_web_daemon::mcp_serve::Stateless::Respond(resp) => {
             return write_json_rpc_response(stream, &resp);
         }
-        crate::mcp_serve::Stateless::Swallow => {
+        op_web_daemon::mcp_serve::Stateless::Swallow => {
             return write_json_rpc_response(stream, "");
         }
-        crate::mcp_serve::Stateless::Ping(id) => {
+        op_web_daemon::mcp_serve::Stateless::Ping(id) => {
             return write_json_rpc_response(stream, &live_ping_response(&id, token));
         }
-        crate::mcp_serve::Stateless::NeedsState => {}
+        op_web_daemon::mcp_serve::Stateless::NeedsState => {}
     }
     // Everything below mutates shared state — the live `EditorState` OR a
     // `--file` document on disk (a read-modify-write). Serialize ALL of it
@@ -382,7 +382,7 @@ fn serve_connection<S: std::io::Read + std::io::Write>(
     // File-backed path (`--file` arg): handle the whole read-modify-write
     // while holding the lock.
     if let Some(response) =
-        crate::mcp_serve::file_path::process_message_for_file_path_arg(None, &req.body)?
+        op_web_daemon::mcp_serve::file_path::process_message_for_file_path_arg(None, &req.body)?
     {
         return write_json_rpc_response(stream, &response);
     }
@@ -401,7 +401,7 @@ fn serve_connection<S: std::io::Read + std::io::Write>(
         return write_json_rpc_response(stream, &response);
     }
     let mut state = request_snapshot(req_tx, wake_ui)?;
-    let response = crate::mcp_serve::process_message_with_applier(
+    let response = op_web_daemon::mcp_serve::process_message_with_applier(
         &mut state,
         &req.body,
         |local_state, cmd| match request_apply(req_tx, wake_ui, cmd.clone()) {
@@ -437,13 +437,13 @@ fn serve_document_sync<S: std::io::Read + std::io::Write>(
     stateful_lock: &Mutex<()>,
     body: &str,
 ) -> Result<(), String> {
-    let document_json = match crate::mcp_serve::parse_document_sync_body(body) {
+    let document_json = match op_web_daemon::mcp_serve::parse_document_sync_body(body) {
         Ok(json) => json,
         Err(message) => {
-            return crate::mcp_serve::write_mcp_http_response(
+            return op_web_daemon::mcp_serve::write_mcp_http_response(
                 stream,
                 "400 Bad Request",
-                &crate::mcp_serve::rest_error_body(&message),
+                &op_web_daemon::mcp_serve::rest_error_body(&message),
             );
         }
     };
@@ -454,10 +454,10 @@ fn serve_document_sync<S: std::io::Read + std::io::Write>(
     let loaded = match op_pen_loader::load_canonical(&document_json) {
         Ok(loaded) => loaded,
         Err(e) => {
-            return crate::mcp_serve::write_mcp_http_response(
+            return op_web_daemon::mcp_serve::write_mcp_http_response(
                 stream,
                 "400 Bad Request",
-                &crate::mcp_serve::rest_error_body(&e.to_string()),
+                &op_web_daemon::mcp_serve::rest_error_body(&e.to_string()),
             );
         }
     };
@@ -474,18 +474,18 @@ fn serve_document_sync<S: std::io::Read + std::io::Write>(
     match request_replace(req_tx, wake_ui, loaded.value) {
         Ok(()) => {
             let version = LIVE_SYNC_VERSION.fetch_add(1, Ordering::Relaxed) + 1;
-            crate::mcp_serve::write_mcp_http_response(
+            op_web_daemon::mcp_serve::write_mcp_http_response(
                 stream,
                 "200 OK",
-                &crate::mcp_serve::document_sync_ok(version),
+                &op_web_daemon::mcp_serve::document_sync_ok(version),
             )
         }
         // The UI thread is gone or didn't ack in time — a server fault, mapped
         // to 500 (TS throws → 500 for server-side failures).
-        Err(transport_err) => crate::mcp_serve::write_mcp_http_response(
+        Err(transport_err) => op_web_daemon::mcp_serve::write_mcp_http_response(
             stream,
             "500 Internal Server Error",
-            &crate::mcp_serve::rest_error_body(&transport_err),
+            &op_web_daemon::mcp_serve::rest_error_body(&transport_err),
         ),
     }
 }
@@ -495,9 +495,9 @@ fn write_json_rpc_response<S: std::io::Write>(
     response: &str,
 ) -> Result<(), String> {
     if response.is_empty() {
-        crate::mcp_serve::write_mcp_http_response(stream, "202 Accepted", "")
+        op_web_daemon::mcp_serve::write_mcp_http_response(stream, "202 Accepted", "")
     } else {
-        crate::mcp_serve::write_mcp_http_response(stream, "200 OK", response)
+        op_web_daemon::mcp_serve::write_mcp_http_response(stream, "200 OK", response)
     }
 }
 
@@ -591,15 +591,15 @@ fn make_live_token() -> String {
 fn live_ping_response(id_raw: &str, token: &str) -> String {
     format!(
         r#"{{"jsonrpc":"2.0","id":{id_raw},"result":{{"server":"{}","mode":"live","token":"{}"}}}}"#,
-        crate::mcp_serve::MCP_SERVER_NAME,
-        crate::mcp_serve::json_escape(token)
+        op_web_daemon::mcp_serve::MCP_SERVER_NAME,
+        op_web_daemon::mcp_serve::json_escape(token)
     )
 }
 
 fn error_json(message: &str) -> String {
     format!(
         r#"{{"error":"{}"}}"#,
-        crate::mcp_serve::json_escape(message)
+        op_web_daemon::mcp_serve::json_escape(message)
     )
 }
 

@@ -749,7 +749,7 @@ fn selection_push_is_visible_to_the_mcp_get_selection_tool() {
     // Dispatch get_selection through the same applier path serve_one uses.
     let msg = r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"get_selection","arguments":{}}}"#;
     let response =
-        crate::mcp_serve::process_message_with_applier(&mut s.editor, msg, |editor, cmd| {
+        op_web_daemon::mcp_serve::process_message_with_applier(&mut s.editor, msg, |editor, cmd| {
             editor.apply(cmd.clone())
         })
         .expect("dispatch")

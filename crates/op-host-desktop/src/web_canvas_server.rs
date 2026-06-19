@@ -135,7 +135,7 @@ impl WebCanvasState {
     /// fresh browser shell paints before the daemon applies updates.
     pub(crate) fn reset_document(&mut self) -> Result<u64, String> {
         if let Some(path) = self.current_path.clone() {
-            let mut next = crate::mcp_serve::load_editor_state(&path)?;
+            let mut next = op_web_daemon::mcp_serve::load_editor_state(&path)?;
             preserve_web_canvas_preferences(&self.editor, &mut next);
             set_file_name_display(&mut next, &path);
             self.editor = next;
@@ -196,16 +196,16 @@ pub(crate) fn handle_web_canvas_request(
             },
             Err(e) => WebReply {
                 status: "500 Internal Server Error",
-                body: crate::mcp_serve::rest_error_body(&e.to_string()),
+                body: op_web_daemon::mcp_serve::rest_error_body(&e.to_string()),
             },
         },
         ("POST", "/api/mcp/document") => {
-            let document_json = match crate::mcp_serve::parse_document_sync_body(body) {
+            let document_json = match op_web_daemon::mcp_serve::parse_document_sync_body(body) {
                 Ok(json) => json,
                 Err(message) => {
                     return WebReply {
                         status: "400 Bad Request",
-                        body: crate::mcp_serve::rest_error_body(&message),
+                        body: op_web_daemon::mcp_serve::rest_error_body(&message),
                     };
                 }
             };
@@ -219,12 +219,12 @@ pub(crate) fn handle_web_canvas_request(
                     let version = state.replace_document(loaded.value);
                     WebReply {
                         status: "200 OK",
-                        body: crate::mcp_serve::document_sync_ok(version),
+                        body: op_web_daemon::mcp_serve::document_sync_ok(version),
                     }
                 }
                 Err(e) => WebReply {
                     status: "400 Bad Request",
-                    body: crate::mcp_serve::rest_error_body(&e.to_string()),
+                    body: op_web_daemon::mcp_serve::rest_error_body(&e.to_string()),
                 },
             }
         }
@@ -235,11 +235,11 @@ pub(crate) fn handle_web_canvas_request(
         ("POST", "/api/mcp/sync-reset") => match state.reset_document() {
             Ok(version) => WebReply {
                 status: "200 OK",
-                body: crate::mcp_serve::document_sync_ok(version),
+                body: op_web_daemon::mcp_serve::document_sync_ok(version),
             },
             Err(e) => WebReply {
                 status: "400 Bad Request",
-                body: crate::mcp_serve::rest_error_body(&format!("sync reset failed: {e}")),
+                body: op_web_daemon::mcp_serve::rest_error_body(&format!("sync reset failed: {e}")),
             },
         },
         ("GET", "/api/mcp/selection") => {
@@ -322,7 +322,7 @@ fn export_raster_download(body: &str, state: &WebCanvasState) -> WebReply {
         },
         Err(e) => WebReply {
             status: "400 Bad Request",
-            body: crate::mcp_serve::rest_error_body(&format!("export raster failed: {e}")),
+            body: op_web_daemon::mcp_serve::rest_error_body(&format!("export raster failed: {e}")),
         },
     }
 }
@@ -426,7 +426,7 @@ fn export_pdf_download(body: &str, state: &WebCanvasState) -> WebReply {
         },
         Err(e) => WebReply {
             status: "400 Bad Request",
-            body: crate::mcp_serve::rest_error_body(&format!("export PDF failed: {e}")),
+            body: op_web_daemon::mcp_serve::rest_error_body(&format!("export PDF failed: {e}")),
         },
     }
 }
@@ -497,7 +497,7 @@ fn save_current_file(body: &str, state: &mut WebCanvasState) -> WebReply {
     let Some(path) = state.current_path.clone() else {
         return WebReply {
             status: "400 Bad Request",
-            body: crate::mcp_serve::rest_error_body("No file path is bound to this web session"),
+            body: op_web_daemon::mcp_serve::rest_error_body("No file path is bound to this web session"),
         };
     };
     match save_editor_from_body(body, &state.editor, &path) {
@@ -520,7 +520,7 @@ fn save_current_file(body: &str, state: &mut WebCanvasState) -> WebReply {
         }
         Err(e) => WebReply {
             status: "400 Bad Request",
-            body: crate::mcp_serve::rest_error_body(&format!("save failed: {e}")),
+            body: op_web_daemon::mcp_serve::rest_error_body(&format!("save failed: {e}")),
         },
     }
 }
@@ -576,7 +576,7 @@ fn update_mcp_server_settings(body: &str, state: &mut WebCanvasState) -> WebRepl
         Err(_) => {
             return WebReply {
                 status: "400 Bad Request",
-                body: crate::mcp_serve::rest_error_body("Invalid MCP server request body"),
+                body: op_web_daemon::mcp_serve::rest_error_body("Invalid MCP server request body"),
             };
         }
     };
@@ -589,7 +589,7 @@ fn update_mcp_server_settings(body: &str, state: &mut WebCanvasState) -> WebRepl
         Some(_) => {
             return WebReply {
                 status: "400 Bad Request",
-                body: crate::mcp_serve::rest_error_body("Invalid MCP server port"),
+                body: op_web_daemon::mcp_serve::rest_error_body("Invalid MCP server port"),
             };
         }
         None => None,
@@ -611,7 +611,7 @@ fn update_mcp_server_settings(body: &str, state: &mut WebCanvasState) -> WebRepl
         _ => {
             return WebReply {
                 status: "400 Bad Request",
-                body: crate::mcp_serve::rest_error_body("Invalid MCP server action"),
+                body: op_web_daemon::mcp_serve::rest_error_body("Invalid MCP server action"),
             };
         }
     }
@@ -637,7 +637,7 @@ where
     let Some(id) = parse_acp_agent_connect_request(body) else {
         return WebReply {
             status: "400 Bad Request",
-            body: crate::mcp_serve::rest_error_body("Missing ACP agent id"),
+            body: op_web_daemon::mcp_serve::rest_error_body("Missing ACP agent id"),
         };
     };
     let Some(index) = state
@@ -650,7 +650,7 @@ where
     else {
         return WebReply {
             status: "400 Bad Request",
-            body: crate::mcp_serve::rest_error_body("ACP agent is not configured"),
+            body: op_web_daemon::mcp_serve::rest_error_body("ACP agent is not configured"),
         };
     };
     let agent = state.editor.editor_ui.agent_settings.acp_agents[index].clone();
@@ -715,7 +715,7 @@ where
     let Some(provider) = parse_provider_connect_request(body) else {
         return WebReply {
             status: "400 Bad Request",
-            body: crate::mcp_serve::rest_error_body("Missing provider"),
+            body: op_web_daemon::mcp_serve::rest_error_body("Missing provider"),
         };
     };
     state
@@ -879,7 +879,7 @@ fn open_recent_file(body: &str, state: &mut WebCanvasState) -> WebReply {
     else {
         return WebReply {
             status: "400 Bad Request",
-            body: crate::mcp_serve::rest_error_body("Missing path string"),
+            body: op_web_daemon::mcp_serve::rest_error_body("Missing path string"),
         };
     };
     if !state
@@ -891,11 +891,11 @@ fn open_recent_file(body: &str, state: &mut WebCanvasState) -> WebReply {
     {
         return WebReply {
             status: "404 Not Found",
-            body: crate::mcp_serve::rest_error_body("Path is not in recent files"),
+            body: op_web_daemon::mcp_serve::rest_error_body("Path is not in recent files"),
         };
     }
     let path = PathBuf::from(&path_s);
-    match crate::mcp_serve::load_editor_state(&path) {
+    match op_web_daemon::mcp_serve::load_editor_state(&path) {
         Ok(mut next) => {
             preserve_web_canvas_preferences(&state.editor, &mut next);
             set_file_name_display(&mut next, &path);
@@ -909,7 +909,7 @@ fn open_recent_file(body: &str, state: &mut WebCanvasState) -> WebReply {
             state.version += 1;
             WebReply {
                 status: "200 OK",
-                body: crate::mcp_serve::document_sync_ok(state.version),
+                body: op_web_daemon::mcp_serve::document_sync_ok(state.version),
             }
         }
         Err(e) => {
@@ -972,7 +972,7 @@ fn apply_selection_sync(body: &str, state: &mut WebCanvasState) -> WebReply {
     else {
         return WebReply {
             status: "400 Bad Request",
-            body: crate::mcp_serve::rest_error_body("Missing selectedIds array"),
+            body: op_web_daemon::mcp_serve::rest_error_body("Missing selectedIds array"),
         };
     };
     let node_ids: Vec<op_editor_core::NodeId> = ids
@@ -1048,7 +1048,7 @@ fn startup_editor_from_base_for_web_canvas(
 ) -> Result<EditorState, String> {
     match path {
         Some(p) => {
-            let mut next = crate::mcp_serve::load_editor_state(&p)?;
+            let mut next = op_web_daemon::mcp_serve::load_editor_state(&p)?;
             preserve_web_canvas_preferences(&base, &mut next);
             set_file_name_display(&mut next, &p);
             next.editor_ui.touch_recent_file(
@@ -1120,7 +1120,7 @@ pub fn run_web_canvas(path: Option<PathBuf>, port: u16, host: &str) -> Result<()
         };
         if conn_count.load(Ordering::Acquire) >= MAX_CONNS {
             let _ = s.set_write_timeout(Some(IO_TIMEOUT));
-            let _ = crate::mcp_serve::write_mcp_http_response(
+            let _ = op_web_daemon::mcp_serve::write_mcp_http_response(
                 &mut s,
                 "503 Service Unavailable",
                 r#"{"ok":false,"error":"server busy"}"#,
@@ -1174,9 +1174,9 @@ fn serve_one<S: Read + Write>(
     state: &Mutex<WebCanvasState>,
     hub: &SseHub,
 ) -> Result<bool, String> {
-    let req = crate::mcp_serve::read_http_request(stream)?;
+    let req = op_web_daemon::mcp_serve::read_http_request(stream)?;
     if req.method == "OPTIONS" {
-        return crate::mcp_serve::write_mcp_http_response(stream, "204 No Content", "")
+        return op_web_daemon::mcp_serve::write_mcp_http_response(stream, "204 No Content", "")
             .map(|()| false);
     }
     // Static serving: the host page (`/`) and the wasm-bindgen bundle
@@ -1240,10 +1240,10 @@ fn serve_one<S: Read + Write>(
     }
     if req.method == "POST" && req.path == "/api/agents/connect" {
         let Some(provider) = parse_provider_connect_request(&req.body) else {
-            return crate::mcp_serve::write_mcp_http_response(
+            return op_web_daemon::mcp_serve::write_mcp_http_response(
                 stream,
                 "400 Bad Request",
-                &crate::mcp_serve::rest_error_body("Missing provider"),
+                &op_web_daemon::mcp_serve::rest_error_body("Missing provider"),
             )
             .map(|()| false);
         };
@@ -1259,15 +1259,15 @@ fn serve_one<S: Read + Write>(
             op_web_daemon::settings_io::save(&guard.editor);
             reply
         };
-        return crate::mcp_serve::write_mcp_http_response(stream, reply.status, &reply.body)
+        return op_web_daemon::mcp_serve::write_mcp_http_response(stream, reply.status, &reply.body)
             .map(|()| false);
     }
     if req.method == "POST" && req.path == "/api/acp/connect" {
         let Some(id) = parse_acp_agent_connect_request(&req.body) else {
-            return crate::mcp_serve::write_mcp_http_response(
+            return op_web_daemon::mcp_serve::write_mcp_http_response(
                 stream,
                 "400 Bad Request",
-                &crate::mcp_serve::rest_error_body("Missing ACP agent id"),
+                &op_web_daemon::mcp_serve::rest_error_body("Missing ACP agent id"),
             )
             .map(|()| false);
         };
@@ -1281,10 +1281,10 @@ fn serve_one<S: Read + Write>(
                 .iter()
                 .position(|agent| agent.id == id && agent.ready())
             else {
-                return crate::mcp_serve::write_mcp_http_response(
+                return op_web_daemon::mcp_serve::write_mcp_http_response(
                     stream,
                     "400 Bad Request",
-                    &crate::mcp_serve::rest_error_body("ACP agent is not configured"),
+                    &op_web_daemon::mcp_serve::rest_error_body("ACP agent is not configured"),
                 )
                 .map(|()| false);
             };
@@ -1305,7 +1305,7 @@ fn serve_one<S: Read + Write>(
             op_web_daemon::settings_io::save(&guard.editor);
             reply
         };
-        return crate::mcp_serve::write_mcp_http_response(stream, reply.status, &reply.body)
+        return op_web_daemon::mcp_serve::write_mcp_http_response(stream, reply.status, &reply.body)
             .map(|()| false);
     }
     // All `/api/mcp/*` REST paths go to the REST handler — including ones this
@@ -1326,7 +1326,7 @@ fn serve_one<S: Read + Write>(
             }
             reply
         };
-        return crate::mcp_serve::write_mcp_http_response(stream, reply.status, &reply.body)
+        return op_web_daemon::mcp_serve::write_mcp_http_response(stream, reply.status, &reply.body)
             .map(|()| false);
     }
     // JSON-RPC tool dispatch is served ONLY as a POST to `/` or `/mcp`. An
@@ -1334,7 +1334,7 @@ fn serve_one<S: Read + Write>(
     // is 405 — never silently dispatched as a tool call.
     let is_jsonrpc_path = req.path == "/" || req.path == "/mcp";
     if !is_jsonrpc_path {
-        return crate::mcp_serve::write_mcp_http_response(
+        return op_web_daemon::mcp_serve::write_mcp_http_response(
             stream,
             "404 Not Found",
             r#"{"ok":false,"error":"Not found. Use /, /pkg/*, /api/mcp/document, /api/mcp/sync-reset, /api/mcp/server, /api/mcp/events, /api/file/save, /api/export/raster, /api/export/pdf, or /mcp."}"#,
@@ -1342,7 +1342,7 @@ fn serve_one<S: Read + Write>(
         .map(|()| false);
     }
     if req.method != "POST" {
-        return crate::mcp_serve::write_mcp_http_response(
+        return op_web_daemon::mcp_serve::write_mcp_http_response(
             stream,
             "405 Method Not Allowed",
             r#"{"ok":false,"error":"Method not allowed. POST a JSON-RPC message to /mcp."}"#,
@@ -1353,14 +1353,14 @@ fn serve_one<S: Read + Write>(
     // `--mcp-http` server — only the exact per-instance token passed by the
     // spawning CLI (via OPENPENCIL_MCP_TOKEN) authenticates; a stale file, a
     // recycled pid, or a random client cannot shut the daemon down.
-    if let Some(id) = crate::mcp_serve::shutdown_request_id(
+    if let Some(id) = op_web_daemon::mcp_serve::shutdown_request_id(
         &req.body,
-        &crate::mcp_serve::headless_token_from_env().unwrap_or_default(),
+        &op_web_daemon::mcp_serve::headless_token_from_env().unwrap_or_default(),
     ) {
-        crate::mcp_serve::write_mcp_http_response(
+        op_web_daemon::mcp_serve::write_mcp_http_response(
             stream,
             "200 OK",
-            &crate::mcp_serve::shutdown_ok_response(&id),
+            &op_web_daemon::mcp_serve::shutdown_ok_response(&id),
         )?;
         return Ok(true);
     }
@@ -1381,7 +1381,7 @@ fn serve_one<S: Read + Write>(
             },
         )
     } {
-        return crate::mcp_serve::write_mcp_http_response(stream, "200 OK", &response)
+        return op_web_daemon::mcp_serve::write_mcp_http_response(stream, "200 OK", &response)
             .map(|()| false);
     }
     // JSON-RPC `/mcp` dispatch against the in-memory document. A mutating apply
@@ -1391,7 +1391,7 @@ fn serve_one<S: Read + Write>(
         let mut guard = state.lock().unwrap_or_else(|p| p.into_inner());
         let before = guard.version;
         let mut applied_any = false;
-        let response = crate::mcp_serve::process_message_with_applier(
+        let response = op_web_daemon::mcp_serve::process_message_with_applier(
             &mut guard.editor,
             &req.body,
             |editor, cmd| {
@@ -1416,7 +1416,7 @@ fn serve_one<S: Read + Write>(
     } else {
         "200 OK"
     };
-    crate::mcp_serve::write_mcp_http_response(stream, status, &response).map(|()| false)
+    op_web_daemon::mcp_serve::write_mcp_http_response(stream, status, &response).map(|()| false)
 }
 
 /// Stream Server-Sent Events to a subscribed client: write the SSE headers,

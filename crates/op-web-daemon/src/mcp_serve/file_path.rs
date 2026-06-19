@@ -14,7 +14,7 @@ struct TargetFileCall {
     path: PathBuf,
 }
 
-pub(crate) fn process_message_for_file_path_arg(
+pub fn process_message_for_file_path_arg(
     current_path: Option<&Path>,
     line: &str,
 ) -> Result<Option<String>, String> {

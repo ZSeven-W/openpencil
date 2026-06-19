@@ -1,7 +1,7 @@
 //! Static MCP `tools/list` inputSchema JSON for the desktop server.
 //! Split out of `mcp_serve.rs` to keep that file under the 800-line cap.
 
-pub(crate) const TOOL_SCHEMAS: &[&str] = &[
+pub const TOOL_SCHEMAS: &[&str] = &[
     // --- read tools ---
     r#"{"name":"open_document","description":"Open the current Rust MCP document, or the TS-compatible filePath target for this call, and return metadata, context summary, and design prompt.","inputSchema":{"type":"object","properties":{"filePath":{"type":"string","description":"Optional target .op file path; omit to use the server document"}}}}"#,
     r#"{"name":"save_document","description":"Save the current Rust MCP document snapshot to a .op file. Used by the Rust HTTP CLI to match TS `op save`; pass sourceFilePath to copy a specific source .op file to the target filePath.","inputSchema":{"type":"object","properties":{"filePath":{"type":"string","description":"Target .op file path"},"sourceFilePath":{"type":"string","description":"Optional source .op file path for TS-compatible `op save <target> --file <source>`"}},"required":["filePath"]}}"#,
@@ -113,7 +113,7 @@ pub(crate) const TOOL_SCHEMAS: &[&str] = &[
 ];
 
 #[cfg(feature = "mcp-debug-tools")]
-pub(crate) const DEBUG_TOOL_SCHEMAS: &[&str] = &[
+pub const DEBUG_TOOL_SCHEMAS: &[&str] = &[
     r#"{"name":"debug_validation_report","description":"Run the op-design-lint detectors over the active page and return the design-issue list. Read-only, no parameters. Result: count + categories (`;`-separated `category|count`) + issues (JSON-serialized Issue array). Gated behind the OPENPENCIL_DEBUG_TOOLS=1 env flag.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}"#,
     r#"{"name":"debug_logs_tail","description":"Read the tail of ~/.openpencil/logs/server-YYYY-MM-DD.log with API keys and Authorization headers redacted. Gated behind OPENPENCIL_DEBUG_TOOLS=1.","inputSchema":{"type":"object","properties":{"tailLines":{"type":"number","description":"Maximum lines to return (default 100, max 500)."},"sinceMs":{"type":"number","description":"Unix ms timestamp; only return lines newer than this."},"grep":{"type":"string","description":"Regex to filter lines by content after redaction."}}}}"#,
     r#"{"name":"debug_screenshot","description":"Capture a PNG screenshot of the live canvas via the renderer. File-backed Rust MCP reports the same no-live-canvas error as TS standalone mode. Gated behind OPENPENCIL_DEBUG_TOOLS=1.","inputSchema":{"type":"object","properties":{"target":{"type":"string","enum":["node","root"]},"nodeId":{"type":"string","description":"Required when target=node."},"padding":{"type":"number"},"dpr":{"type":"number"},"timeoutMs":{"type":"number","description":"Default 15000, max 60000."}},"required":["target"]}}"#,
