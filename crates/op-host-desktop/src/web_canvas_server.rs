@@ -282,7 +282,7 @@ pub(crate) fn handle_web_canvas_request(
             handle_acp_agent_connect_request_with_probe(
                 body,
                 state,
-                crate::acp_agent_probe_host::probe_acp_agent_config,
+                op_web_daemon::acp_agent_probe_host::probe_acp_agent_config,
             )
         }
         ("GET", "/api/ai/models") => WebReply {
@@ -632,7 +632,7 @@ pub(crate) fn handle_acp_agent_connect_request_with_probe<F>(
     probe: F,
 ) -> WebReply
 where
-    F: FnOnce(op_acp::AcpAgentConfig) -> crate::acp_agent_probe_host::AcpAgentProbeOutcome,
+    F: FnOnce(op_acp::AcpAgentConfig) -> op_web_daemon::acp_agent_probe_host::AcpAgentProbeOutcome,
 {
     let Some(id) = parse_acp_agent_connect_request(body) else {
         return WebReply {
@@ -659,7 +659,7 @@ where
         .editor_ui
         .agent_settings
         .begin_acp_agent_connect(index);
-    let outcome = probe(crate::acp_agent_probe_host::acp_config_for_probe(&agent));
+    let outcome = probe(op_web_daemon::acp_agent_probe_host::acp_config_for_probe(&agent));
     apply_acp_agent_probe_outcome(&id, outcome, state)
 }
 
@@ -675,7 +675,7 @@ fn parse_acp_agent_connect_request(body: &str) -> Option<String> {
 
 fn apply_acp_agent_probe_outcome(
     id: &str,
-    outcome: crate::acp_agent_probe_host::AcpAgentProbeOutcome,
+    outcome: op_web_daemon::acp_agent_probe_host::AcpAgentProbeOutcome,
     state: &mut WebCanvasState,
 ) -> WebReply {
     state
@@ -771,7 +771,7 @@ fn apply_provider_probe_outcome(
     outcome: op_web_daemon::provider_probe::ProbeOutcome,
     state: &mut WebCanvasState,
 ) -> WebReply {
-    let outcome = crate::provider_probe_host::normalize_provider_probe_outcome(provider, outcome);
+    let outcome = op_web_daemon::provider_probe_host::normalize_provider_probe_outcome(provider, outcome);
     let op_web_daemon::provider_probe::ProbeOutcome {
         connected,
         models,
@@ -1296,8 +1296,8 @@ fn serve_one<S: Read + Write>(
                 .begin_acp_agent_connect(index);
             agent
         };
-        let outcome = crate::acp_agent_probe_host::probe_acp_agent_config(
-            crate::acp_agent_probe_host::acp_config_for_probe(&agent),
+        let outcome = op_web_daemon::acp_agent_probe_host::probe_acp_agent_config(
+            op_web_daemon::acp_agent_probe_host::acp_config_for_probe(&agent),
         );
         let reply = {
             let mut guard = state.lock().unwrap_or_else(|p| p.into_inner());

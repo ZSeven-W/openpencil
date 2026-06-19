@@ -7,114 +7,21 @@
 //! running [`op_web_daemon::provider_probe::connect_provider`], and a later
 //! frame polls the outcome into `agent_settings` +
 //! `chat.discovered_models`.
-
-use std::sync::mpsc::{self, Receiver, TryRecvError};
+//!
+//! The job struct + outcome normalization live in
+//! [`op_web_daemon::provider_probe_host`] (codex Issue 5 — the job is a
+//! `DesktopApp` field); this residual keeps only the `impl DesktopApp`
+//! pump, which drives the job through its public API.
 
 use op_editor_core::agent_settings::ProviderConnectOutcome;
 
-use op_web_daemon::model_discovery::model_entry_to_ec;
-use op_web_daemon::provider_probe::{connect_provider, ProbeOutcome};
 use crate::DesktopApp;
-
-/// One in-flight connect probe. A single slot suffices — the modal
-/// shows one Connect press at a time and the press handler ignores
-/// re-presses while a card is `Probing`.
-pub struct ProviderConnectJob {
-    provider: op_editor_core::AgentProvider,
-    rx: Option<Receiver<ProbeOutcome>>,
-}
-
-impl ProviderConnectJob {
-    pub fn spawn(provider: op_editor_core::AgentProvider) -> Self {
-        let (tx, rx) = mpsc::channel();
-        let sc_provider = provider_to_sc(provider);
-        std::thread::spawn(move || {
-            let _ = tx.send(connect_provider(sc_provider));
-        });
-        Self {
-            provider,
-            rx: Some(rx),
-        }
-    }
-
-    pub fn is_pending(&self) -> bool {
-        self.rx.is_some()
-    }
-
-    #[cfg(test)]
-    pub(crate) fn pending_for_test(
-        provider: op_editor_core::AgentProvider,
-    ) -> (Self, mpsc::Sender<ProbeOutcome>) {
-        let (tx, rx) = mpsc::channel();
-        (
-            Self {
-                provider,
-                rx: Some(rx),
-            },
-            tx,
-        )
-    }
-
-    fn poll(&mut self) -> Option<ProbeOutcome> {
-        let rx = self.rx.as_ref()?;
-        match rx.try_recv() {
-            Ok(outcome) => {
-                self.rx = None;
-                Some(outcome)
-            }
-            Err(TryRecvError::Empty) => None,
-            Err(TryRecvError::Disconnected) => {
-                self.rx = None;
-                None
-            }
-        }
-    }
-}
-
-/// op-editor-core's `AgentProvider` → the shell-core twin the probe
-/// layer speaks (same five variants, same order).
-fn provider_to_sc(p: op_editor_core::AgentProvider) -> op_ai::agent_settings_state::AgentProvider {
-    use op_ai::agent_settings_state::AgentProvider as Sc;
-    match p {
-        op_editor_core::AgentProvider::ClaudeCode => Sc::ClaudeCode,
-        op_editor_core::AgentProvider::CodexCli => Sc::CodexCli,
-        op_editor_core::AgentProvider::OpenCode => Sc::OpenCode,
-        op_editor_core::AgentProvider::GithubCopilot => Sc::GithubCopilot,
-        op_editor_core::AgentProvider::GeminiCli => Sc::GeminiCli,
-    }
-}
-
-pub(crate) fn normalize_provider_probe_outcome(
-    provider: op_editor_core::AgentProvider,
-    mut outcome: ProbeOutcome,
-) -> ProbeOutcome {
-    if outcome.connected && outcome.models.is_empty() {
-        outcome.connected = false;
-        outcome.connection_info = None;
-        outcome.error = Some(missing_models_connect_error(provider));
-    }
-    outcome
-}
-
-pub(crate) fn missing_models_connect_error(provider: op_editor_core::AgentProvider) -> String {
-    match provider {
-        op_editor_core::AgentProvider::ClaudeCode => {
-            "No models found. Claude Code did not return a model list.".to_string()
-        }
-        op_editor_core::AgentProvider::CodexCli => {
-            "No models found. Codex CLI did not return a model list.".to_string()
-        }
-        op_editor_core::AgentProvider::OpenCode => {
-            "No models found. OpenCode did not return a model list.".to_string()
-        }
-        op_editor_core::AgentProvider::GithubCopilot => {
-            "No models found. GitHub Copilot did not return a model list.".to_string()
-        }
-        op_editor_core::AgentProvider::GeminiCli => {
-            "No models found. Gemini CLI did not return a model list.".to_string()
-        }
-    }
-}
+use op_web_daemon::model_discovery::model_entry_to_ec;
+use op_web_daemon::provider_probe::ProbeOutcome;
+use op_web_daemon::provider_probe_host::normalize_provider_probe_outcome;
+// Re-export so `crate::provider_probe_host::ProviderConnectJob` (the
+// `DesktopApp` field type in `main.rs`) still resolves with zero churn.
+pub use op_web_daemon::provider_probe_host::ProviderConnectJob;
 
 impl DesktopApp {
     /// Pump: poll a finished probe into editor state, then start the
@@ -146,7 +53,7 @@ impl DesktopApp {
         let Some(job) = self.provider_connect_job.as_mut() else {
             return false;
         };
-        let provider = job.provider;
+        let provider = job.provider();
         let Some(outcome) = job.poll() else {
             return false;
         };

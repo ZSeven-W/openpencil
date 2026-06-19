@@ -524,7 +524,7 @@ fn acp_connect_probe_response_updates_agent_settings() {
     );
     let body = serde_json::json!({ "id": "acp-1" }).to_string();
     let r = handle_acp_agent_connect_request_with_probe(&body, &mut s, |_| {
-        crate::acp_agent_probe_host::AcpAgentProbeOutcome {
+        op_web_daemon::acp_agent_probe_host::AcpAgentProbeOutcome {
             connected: true,
             info: Some("Claude Code 1.0".into()),
             error: None,
@@ -560,7 +560,7 @@ fn acp_connect_failure_keeps_agent_disconnected() {
     );
     let body = serde_json::json!({ "id": "acp-1" }).to_string();
     let r = handle_acp_agent_connect_request_with_probe(&body, &mut s, |_| {
-        crate::acp_agent_probe_host::AcpAgentProbeOutcome {
+        op_web_daemon::acp_agent_probe_host::AcpAgentProbeOutcome {
             connected: false,
             info: None,
             error: Some("failed to spawn ACP agent".into()),

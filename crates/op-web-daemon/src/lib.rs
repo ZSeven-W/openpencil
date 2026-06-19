@@ -14,6 +14,7 @@
 //! `op-host-web-server` binary depend on this crate.
 
 // Migrated headless modules (Phases 2-5), kept alphabetical.
+pub mod acp_agent_probe_host;
 pub mod ai_proxy;
 pub mod chat_agent_loop;
 pub mod chat_attachment;
@@ -34,5 +35,6 @@ pub mod export_pdf;
 pub mod model_discovery;
 pub mod pre_validator;
 pub mod provider_probe;
+pub mod provider_probe_host;
 pub mod provider_probe_models;
 pub mod web_static;
