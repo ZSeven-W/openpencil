@@ -383,26 +383,43 @@ impl WidgetHostNative {
         if is_instance || self.editor_state_dirty {
             return false;
         }
-        let Some(state) = self.editor_state.ui.color_picker.as_ref() else {
-            return false;
+        // Snapshot the picker inputs, then drop the borrow before touching
+        // the doc / scene below.
+        let (hue, sat, val, is_fill) = {
+            let Some(state) = self.editor_state.ui.color_picker.as_ref() else {
+                return false;
+            };
+            // Variable-mode writes fan out to every node referencing the
+            // variable — far beyond the anchor — so let the rebuild repaint.
+            if state.variable.is_some() {
+                return false;
+            }
+            let is_fill = match state.target {
+                ColorTarget::Fill => true,
+                ColorTarget::Stroke => false,
+                // GradientStop / EffectColor touch gradient bodies / effects
+                // the scene patch does not model — rebuild instead.
+                _ => return false,
+            };
+            (state.hue, state.sat, state.val, is_fill)
         };
-        // Variable-mode writes fan out to every node referencing the
-        // variable — far beyond the anchor — so let the rebuild repaint.
-        if state.variable.is_some() {
-            return false;
-        }
-        let is_fill = match state.target {
-            ColorTarget::Fill => true,
-            ColorTarget::Stroke => false,
-            // GradientStop / EffectColor touch gradient bodies / effects
-            // the scene patch does not model — rebuild instead.
-            _ => return false,
-        };
-        let color = hsv_to_rgb(state.hue, state.sat, state.val);
         let anchor = self.editor_state.selection.anchor.clone();
         if !anchor.is_real() || !self.editor_state.is_editable(&anchor) {
             return false;
         }
+        // The loader bakes the paint body's own opacity into the resolved
+        // scene fill / stroke alpha (`apply_alpha` in style_payload), and
+        // `set_node_*` bakes node cumulative opacity on top. The picker
+        // writes an opaque hex but preserves the body opacity, so fold it
+        // in here — otherwise a fill / stroke authored below 100 % paints
+        // too opaque on every drag frame until release reconciles.
+        let body_opacity = match self.editor_state.selected_node() {
+            Some(node) if is_fill => op_editor_core::fills::first_solid_fill_opacity(node),
+            Some(node) => op_editor_core::fills::first_solid_stroke_opacity(node),
+            None => return false,
+        };
+        let mut color = hsv_to_rgb(hue, sat, val);
+        color.a *= body_opacity.clamp(0.0, 1.0);
         let ids = [anchor.as_str().to_string()];
         let patched = if is_fill {
             self.layout_scene.set_node_fill(&ids, color)
