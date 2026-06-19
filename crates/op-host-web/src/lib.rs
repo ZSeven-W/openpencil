@@ -52,6 +52,8 @@ mod file_actions;
 #[cfg(feature = "canvaskit")]
 mod raf_pump;
 #[cfg(feature = "canvaskit")]
+mod theme_preset_io;
+#[cfg(feature = "canvaskit")]
 mod web_acp_connect;
 #[cfg(feature = "canvaskit")]
 mod web_agent_connect;
