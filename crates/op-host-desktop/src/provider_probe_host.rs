@@ -4,7 +4,7 @@
 //! pattern: the press handler raises
 //! `agent_settings.pending_provider_connect` (the request seam in
 //! op-editor-core), the redraw pump drains it onto a worker thread
-//! running [`crate::provider_probe::connect_provider`], and a later
+//! running [`op_web_daemon::provider_probe::connect_provider`], and a later
 //! frame polls the outcome into `agent_settings` +
 //! `chat.discovered_models`.
 
@@ -12,8 +12,8 @@ use std::sync::mpsc::{self, Receiver, TryRecvError};
 
 use op_editor_core::agent_settings::ProviderConnectOutcome;
 
-use crate::model_discovery::model_entry_to_ec;
-use crate::provider_probe::{connect_provider, ProbeOutcome};
+use op_web_daemon::model_discovery::model_entry_to_ec;
+use op_web_daemon::provider_probe::{connect_provider, ProbeOutcome};
 use crate::DesktopApp;
 
 /// One in-flight connect probe. A single slot suffices — the modal

@@ -41,12 +41,9 @@ mod mcp_runtime;
 mod mcp_serve;
 mod menu;
 mod menu_action;
-mod model_discovery;
 mod persistence;
 mod persistence_image;
-mod provider_probe;
 mod provider_probe_host;
-mod provider_probe_models;
 mod remote_image_host;
 mod render_cli;
 mod settings_io;
@@ -159,7 +156,7 @@ struct DesktopApp {
     /// Background AI-model discovery — probes the installed CLIs
     /// on a worker thread; its result is drained into
     /// `chat.available_models` on a later frame.
-    model_probe: model_discovery::ModelProbe,
+    model_probe: op_web_daemon::model_discovery::ModelProbe,
     /// Background auto-search jobs that replace generated empty image
     /// nodes with freely licensed remote images.
     image_search: image_search_session::ImageSearchSession,
@@ -296,9 +293,9 @@ impl DesktopApp {
             )
         };
         let model_probe = if cfg!(test) {
-            model_discovery::ModelProbe::idle()
+            op_web_daemon::model_discovery::ModelProbe::idle()
         } else {
-            model_discovery::ModelProbe::spawn()
+            op_web_daemon::model_discovery::ModelProbe::spawn()
         };
         Self {
             window: None,

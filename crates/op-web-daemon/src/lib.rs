@@ -31,5 +31,8 @@ pub mod chat_system_prompt;
 pub mod doc_io;
 pub mod export;
 pub mod export_pdf;
+pub mod model_discovery;
 pub mod pre_validator;
+pub mod provider_probe;
+pub mod provider_probe_models;
 pub mod web_static;

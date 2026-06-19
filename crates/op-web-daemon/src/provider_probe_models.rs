@@ -43,13 +43,13 @@ const CLAUDE_INIT_TIMEOUT: Duration = Duration::from_secs(15);
 /// the TS Agent SDK's `accountInfo()` shape used by
 /// `buildClaudeConnectionInfo` (connect-agent.ts:183-197, 270-295).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub(crate) struct ClaudeAccount {
+pub struct ClaudeAccount {
     pub email: Option<String>,
     pub subscription_type: Option<String>,
 }
 
 /// Result of the live Claude initialize query.
-pub(crate) enum ClaudeInitResult {
+pub enum ClaudeInitResult {
     /// The CLI answered — model list (may be empty) + account info.
     Answered(Vec<ModelEntry>, Option<ClaudeAccount>),
     /// The CLI exited with a failure code before answering.
@@ -63,7 +63,7 @@ pub(crate) enum ClaudeInitResult {
 /// Query the Claude CLI for its supported models + account info via
 /// the stream-json `initialize` control request — the same wire
 /// call the TS Agent SDK's `supportedModels()` awaits.
-pub(crate) fn claude_initialize_query() -> ClaudeInitResult {
+pub fn claude_initialize_query() -> ClaudeInitResult {
     let Some(exe) = resolve_cli("claude") else {
         return ClaudeInitResult::NoAnswer;
     };
@@ -163,7 +163,7 @@ pub(crate) fn claude_initialize_query() -> ClaudeInitResult {
 
 /// Parse one stream-json line from the Claude CLI; yields models +
 /// account only for the successful `initialize` control response.
-pub(crate) fn parse_claude_init_line(
+pub fn parse_claude_init_line(
     line: &str,
 ) -> Option<(Vec<ModelEntry>, Option<ClaudeAccount>)> {
     let json: serde_json::Value = serde_json::from_str(extract_json_object(line)?).ok()?;
@@ -201,7 +201,7 @@ pub(crate) fn parse_claude_init_line(
 /// TS `FALLBACK_CLAUDE_MODELS` (connect-agent.ts:102-145) — used
 /// when `supportedModels()` doesn't answer (e.g. third-party API
 /// proxies that don't support the listing endpoint).
-pub(crate) fn fallback_claude_models() -> Vec<ModelEntry> {
+pub fn fallback_claude_models() -> Vec<ModelEntry> {
     [
         ("claude-sonnet-4-6", "Claude Sonnet 4.6"),
         ("claude-opus-4-6", "Claude Opus 4.6"),
@@ -217,7 +217,7 @@ pub(crate) fn fallback_claude_models() -> Vec<ModelEntry> {
 }
 
 /// TS `FALLBACK_GEMINI_MODELS` (connect-agent.ts:870-901).
-pub(crate) fn fallback_gemini_models() -> Vec<ModelEntry> {
+pub fn fallback_gemini_models() -> Vec<ModelEntry> {
     [
         ("gemini-3-pro-preview", "Gemini 3 Pro"),
         ("gemini-3-flash-preview", "Gemini 3 Flash"),
@@ -236,7 +236,7 @@ pub(crate) fn fallback_gemini_models() -> Vec<ModelEntry> {
 /// the request failed (callers fall back silently, like the TS
 /// `catch`); `Some(vec![])` = the API answered with nothing usable
 /// (TS surfaces a warning).
-pub(crate) fn gemini_models_from_api() -> Option<Vec<ModelEntry>> {
+pub fn gemini_models_from_api() -> Option<Vec<ModelEntry>> {
     const BASE: &str = "https://generativelanguage.googleapis.com/v1beta/models";
     let env_key = std::env::var("GEMINI_API_KEY")
         .ok()
@@ -298,7 +298,7 @@ fn http_get_json(url: &str, bearer: Option<&str>) -> Option<String> {
 /// Parse + filter + sort the generativelanguage models listing —
 /// `generateContent` models only, embedding/AQA/legacy ids skipped,
 /// gemini-3 sorted first (connect-agent.ts:933-972).
-pub(crate) fn parse_gemini_models_json(body: &str) -> Vec<ModelEntry> {
+pub fn parse_gemini_models_json(body: &str) -> Vec<ModelEntry> {
     let Ok(json) = serde_json::from_str::<serde_json::Value>(body) else {
         return Vec::new();
     };
@@ -368,7 +368,7 @@ fn gemini_tier(value: &str) -> u8 {
 
 /// `CODEX_HOME` env override or `~/.codex` — the same resolution
 /// the TS route applies (connect-agent.ts:526).
-pub(crate) fn codex_home() -> Option<PathBuf> {
+pub fn codex_home() -> Option<PathBuf> {
     if let Some(home) = std::env::var_os("CODEX_HOME") {
         if !home.is_empty() {
             return Some(PathBuf::from(home));
@@ -380,7 +380,7 @@ pub(crate) fn codex_home() -> Option<PathBuf> {
 /// Parse model ids out of Codex's bundled `latest-model.md`
 /// reference — the TS fallback when `models_cache.json` is missing
 /// (connect-agent.ts:373-413). Text/reasoning models only.
-pub(crate) fn codex_models_from_latest_md(codex_home: &Path) -> Vec<ModelEntry> {
+pub fn codex_models_from_latest_md(codex_home: &Path) -> Vec<ModelEntry> {
     let md_path = codex_home
         .join("skills")
         .join(".system")
@@ -396,7 +396,7 @@ pub(crate) fn codex_models_from_latest_md(codex_home: &Path) -> Vec<ModelEntry> 
 /// Markdown-table row parser for `latest-model.md` — matches the TS
 /// row regex ``^\|\s*`([^`]+)`\s*\|\s*(.+?)\s*\|`` and skip regex
 /// `/image|audio|tts|transcribe|realtime|sora|video|embedding|moderation/i`.
-pub(crate) fn parse_codex_latest_model_md(content: &str) -> Vec<ModelEntry> {
+pub fn parse_codex_latest_model_md(content: &str) -> Vec<ModelEntry> {
     let mut models = Vec::new();
     let mut seen = std::collections::HashSet::new();
     for line in content.lines() {
