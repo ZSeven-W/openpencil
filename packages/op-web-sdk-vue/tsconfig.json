@@ -1,0 +1,12 @@
+{
+  "compilerOptions": {
+    "target": "ES2022", "module": "ESNext", "moduleResolution": "Bundler",
+    "strict": true, "skipLibCheck": true, "noEmit": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"], "types": ["vitest/globals"],
+    "paths": {
+      "@zseven-w/op-web-sdk": ["../op-web-sdk/src/index.ts"],
+      "virtual:op_web_sdk_wasm": ["../op-web-sdk/test/wasm-stub.ts"]
+    }
+  },
+  "include": ["src", "test"]
+}

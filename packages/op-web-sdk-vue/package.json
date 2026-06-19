@@ -1,0 +1,16 @@
+{
+  "name": "@zseven-w/op-web-sdk-vue",
+  "version": "0.8.0",
+  "description": "Vue 3 adapter for the OpenPencil read-only web viewer SDK",
+  "license": "MIT",
+  "type": "module",
+  "files": ["dist"],
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js", "require": "./dist/index.cjs" } },
+  "scripts": { "build": "tsup", "typecheck": "tsc --noEmit", "test": "vitest run" },
+  "dependencies": { "@zseven-w/op-web-sdk": "workspace:*" },
+  "peerDependencies": { "vue": "^3.4.0" },
+  "devDependencies": { "vue": "^3.4.0", "@vue/test-utils": "^2.4.0", "@vitejs/plugin-vue": "^5.0.0", "tsup": "^8.0.0", "typescript": "^5.7.2", "vitest": "^3.0.0", "jsdom": "^25.0.0" }
+}
