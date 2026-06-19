@@ -157,9 +157,29 @@ pub fn resize_bounds(start: Rect, handle: SelectionHandle, dx: f32, dy: f32) -> 
     Rect::xywh(x, y, w, h)
 }
 
+/// Truncate `s` to at most `max` characters, appending a `…` ellipsis when it
+/// is shortened (the ellipsis counts toward `max`). Character-aware, so
+/// multibyte glyphs are never split.
+pub fn truncate_ellipsis(s: &str, max: usize) -> String {
+    if s.chars().count() <= max {
+        return s.to_string();
+    }
+    let kept: String = s.chars().take(max.saturating_sub(1)).collect();
+    format!("{kept}…")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn truncate_ellipsis_appends_only_when_shortened() {
+        assert_eq!(truncate_ellipsis("hello", 10), "hello");
+        assert_eq!(truncate_ellipsis("hello", 5), "hello");
+        assert_eq!(truncate_ellipsis("hello", 3), "he…");
+        // Saturating: max == 0 must not panic.
+        assert_eq!(truncate_ellipsis("hello", 0), "…");
+    }
 
     #[test]
     fn parse_hex_expands_shorthand_and_zero_pads() {
