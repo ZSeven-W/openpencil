@@ -131,7 +131,7 @@ fn canvaskit_text_defaults_to_browser_system_font_fallback() {
         "const segments = (t)",
         "const shouldUseBrowserTextFallback = (_t, _emojiRun) => Boolean(browserTextCtx);",
         "drawBrowserText(seg.text, cx, y, sz, weight, italic, r, g, b, a)",
-        "browserTextMeasure(seg.text, sz)",
+        "browserTextMeasure(seg.text, sz, weight, italic)",
         "CK.Typeface.GetDefault()",
     ] {
         assert!(
@@ -175,6 +175,40 @@ fn canvaskit_browser_text_fallback_does_not_require_canvas_paint() {
         fallback_fast_path < fill_paint,
         "drawText must take the browser/system font path before allocating CanvasKit Paint"
     );
+}
+
+#[test]
+fn canvaskit_text_measurement_uses_draw_text_style() {
+    let bridge = std::fs::read_to_string(format!(
+        "{}/src/op_ck_bridge.js",
+        env!("CARGO_MANIFEST_DIR")
+    ))
+    .expect("CanvasKit bridge source is readable");
+    let backend =
+        std::fs::read_to_string(format!("{}/src/canvaskit.rs", env!("CARGO_MANIFEST_DIR")))
+            .expect("CanvasKit backend source is readable");
+
+    for marker in [
+        "measureTextStyled(t, sz, weight, italic)",
+        "browserTextMeasure(seg.text, sz, weight, italic)",
+    ] {
+        assert!(
+            bridge.contains(marker),
+            "CanvasKit bridge must preserve `{marker}` so measured text matches drawn text"
+        );
+    }
+
+    for marker in [
+        "fn measure_text_styled(",
+        "weight: u16,",
+        "italic: bool,",
+        ".measure_text_styled(text, font_size, weight as i32, italic)",
+    ] {
+        assert!(
+            backend.contains(marker),
+            "CanvasKit backend must preserve `{marker}` so web layout measures with draw-time text style"
+        );
+    }
 }
 
 #[test]
@@ -243,7 +277,7 @@ fn canvaskit_bridge_uses_browser_text_fallback_when_local_font_api_is_unavailabl
         "const shouldUseBrowserTextFallback",
         "const drawBrowserText",
         "CK.MakeImageFromCanvasImageSource",
-        "browserTextMeasure(seg.text, sz)",
+        "browserTextMeasure(seg.text, sz, weight, italic)",
     ] {
         assert!(
             source.contains(marker),
