@@ -42,3 +42,25 @@ tracing = "0.1"
 # resolve to upstream crates.io 0.97.0 — used only by the native desktop host
 # (`op-host-desktop`) + `jian-skia`, where the fork was byte-identical anyway.
 # No `[patch.crates-io]` needed.
+
+# Release profile. Previously unset → Rust defaults (no LTO, codegen-units=16,
+# symbols kept), which shipped a ~70 MB desktop binary. This governs every
+# release build in the graph, including the excluded vendor/* path deps (their
+# own [profile.release] blocks are inert — only the build-root profile applies).
+[profile.release]
+# `strip` removes the symbol table — measured ~7.5 MB off the native binary, and
+# trims the wasm too (the production web bundle never needs symbol names).
+strip = true
+# Cross-crate inlining + dedup of monomorphized generics (e.g. PenNode::clone is
+# duplicated ~20× without it). "thin" gets most of the win at a fraction of the
+# fat-LTO link time.
+lto = "thin"
+# Lets the backend dedup within each crate; compounds with LTO. Costs release
+# build time (single-threaded codegen of the big crates) — acceptable for the
+# infrequent shippable/CI builds this profile targets.
+codegen-units = 1
+# opt-level is intentionally LEFT AT 3 (the default), NOT "s"/"z": both the
+# native and the wasm builds run the hot paint/layout/hit-test loop, and
+# size-opt levels measurably slow it. panic = "abort" is also intentionally NOT
+# set yet — it needs a thread-isolation audit of the chat/codegen workers, some
+# of which rely on unwinding to contain a panicking task.
