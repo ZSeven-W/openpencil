@@ -331,6 +331,25 @@ pub fn first_solid_fill_opacity(node: &PenNode) -> f32 {
         .unwrap_or(1.0)
 }
 
+/// Opacity of the node's **stroke** paint — the stroke's first fill
+/// body's opacity. `1.0` when the node has no stroke, no stroke fill, or
+/// the body's opacity is `None`. The stroke channel of
+/// [`first_solid_fill_opacity`]: the loader bakes this into the resolved
+/// scene stroke alpha (`stroke_to_payload` → `first_solid_color` →
+/// `apply_alpha`), so a live paint patch must reproduce it.
+pub fn first_solid_stroke_opacity(node: &PenNode) -> f32 {
+    node_stroke(node)
+        .and_then(|s| s.fill.as_ref())
+        .and_then(|fills| fills.first())
+        .map(|fill| match fill {
+            PenFill::Solid(b) => b.opacity.unwrap_or(1.0),
+            PenFill::LinearGradient(b) => b.opacity.unwrap_or(1.0),
+            PenFill::RadialGradient(b) => b.opacity.unwrap_or(1.0),
+            PenFill::Image(b) => b.opacity.unwrap_or(1.0),
+        })
+        .unwrap_or(1.0)
+}
+
 /// Summary of the node's primary image fill. `None` when the first
 /// fill isn't `Image`.
 pub fn first_image_fill_summary(node: &PenNode) -> Option<ImageFillSummary> {
@@ -820,6 +839,24 @@ mod tests {
             opacity: Some(0.75),
             blend_mode: None,
         }));
+    }
+
+    #[test]
+    fn first_solid_stroke_opacity_reads_body_opacity_or_defaults() {
+        let mut node = rect_node();
+        // No stroke at all → opaque default.
+        assert_eq!(first_solid_stroke_opacity(&node), 1.0);
+        // A stroke whose body opacity is unset → still 1.0.
+        assert!(set_primary_stroke_hex(&mut node, "#112233"));
+        assert_eq!(first_solid_stroke_opacity(&node), 1.0);
+        // Author a sub-100% stroke body opacity → reported verbatim, so a
+        // live paint patch can reproduce the loader's baked stroke alpha.
+        if let Some(Some(stroke)) = node_stroke_mut(&mut node) {
+            if let Some(PenFill::Solid(b)) = stroke.fill.as_mut().and_then(|f| f.first_mut()) {
+                b.opacity = Some(0.4);
+            }
+        }
+        assert_eq!(first_solid_stroke_opacity(&node), 0.4);
     }
 
     #[test]
