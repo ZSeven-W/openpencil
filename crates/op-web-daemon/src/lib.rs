@@ -33,6 +33,7 @@ pub mod design_session;
 pub mod doc_io;
 pub mod export;
 pub mod export_pdf;
+pub mod mcp_live;
 pub mod mcp_serve;
 pub mod model_discovery;
 pub mod pre_validator;

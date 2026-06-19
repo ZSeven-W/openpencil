@@ -12,13 +12,13 @@
 use op_mcp::{RequestId, ScreenshotRequest, ScreenshotTarget, ToolErrorCode, ToolResponse};
 use serde_json::{json, Value};
 
-use op_web_daemon::export::screenshot::{CaptureSpec, ScreenshotPng};
+use crate::export::screenshot::{CaptureSpec, ScreenshotPng};
 
 /// If `body` is a `tools/call` for `debug_screenshot` AND the debug
 /// gate is open, produce the full JSON-RPC response via `fulfill`.
 /// `None` ⇒ not a screenshot call (or gate closed) — the caller falls
 /// through to the generic dispatch.
-pub(crate) fn maybe_serve<F>(body: &str, debug_enabled: bool, fulfill: F) -> Option<String>
+pub fn maybe_serve<F>(body: &str, debug_enabled: bool, fulfill: F) -> Option<String>
 where
     F: FnOnce(ScreenshotRequest) -> Result<ScreenshotPng, String>,
 {
@@ -44,7 +44,7 @@ where
 }
 
 /// Convert validated wire args into the renderer-side capture spec.
-pub(crate) fn capture_spec(req: &ScreenshotRequest) -> CaptureSpec {
+pub fn capture_spec(req: &ScreenshotRequest) -> CaptureSpec {
     CaptureSpec {
         node_id: match &req.target {
             ScreenshotTarget::Root => None,

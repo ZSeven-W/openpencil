@@ -1372,11 +1372,11 @@ fn serve_one<S: Read + Write>(
     #[cfg(feature = "mcp-debug-tools")]
     if let Some(response) = {
         let guard = state.lock().unwrap_or_else(|p| p.into_inner());
-        crate::mcp_live::screenshot::maybe_serve(
+        op_web_daemon::mcp_live::screenshot::maybe_serve(
             &req.body,
             op_mcp::debug_tools_enabled(),
             |shot_req| {
-                let spec = crate::mcp_live::screenshot::capture_spec(&shot_req);
+                let spec = op_web_daemon::mcp_live::screenshot::capture_spec(&shot_req);
                 op_web_daemon::export::screenshot::capture(&guard.editor, &spec)
             },
         )
