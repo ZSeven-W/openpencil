@@ -22,6 +22,8 @@ accesskit = "0.24"
 jian-core = { path = "../../vendor/jian/crates/jian-core", version = "0.0.1" }
 jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema" }
 jian-widgets = { path = "../../vendor/jian/crates/jian-widgets", version = "0.0.1" }
+# Canonical render scene (LayoutScene / hit-test / path geometry).
+jian-scene = { path = "../../vendor/jian/crates/jian-scene", version = "0.0.1" }
 
 # i18n string tables + the canonical editor state model.
 op-i18n = { path = "../op-i18n" }
@@ -34,3 +36,8 @@ op-editor-core = { path = "../op-editor-core" }
 base64 = "0.22"
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
+
+[dev-dependencies]
+# Enable jian-scene's find-visit instrumentation so the canvas-viewport
+# paint tests can assert scene-traversal visit counts.
+jian-scene = { path = "../../vendor/jian/crates/jian-scene", features = ["test-support"] }

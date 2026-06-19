@@ -17,7 +17,7 @@
 use crate::layout_scene::{SceneAnchor, SceneNode};
 use crate::theme::Theme;
 use crate::widgets::canvas_viewport::path_handle_positions;
-use crate::widgets::canvas_viewport_paint::cubic_point;
+use jian_scene::path_geometry::cubic_point;
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect};
 use op_editor_core::Viewport;
