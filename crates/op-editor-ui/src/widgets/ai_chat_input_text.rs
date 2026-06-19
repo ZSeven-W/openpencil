@@ -1,6 +1,7 @@
 //! Chat input text hit-testing and selection paint helpers.
 
 use crate::theme::Theme;
+use crate::widgets::text_input_backend::BaselineAdjustingBackend;
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, RenderBackend, TextLayout};
 use jian_core::text_input::TextInputState;
@@ -100,7 +101,7 @@ pub(crate) fn paint_input_text_area(
         pad_x: INPUT_TEXT_X_PAD,
         max_visible_lines: INPUT_MAX_LINES,
     };
-    let mut backend = TextAreaBaselineBackend {
+    let mut backend = BaselineAdjustingBackend {
         inner: cx.backend,
         baseline_delta_y: INPUT_BASELINE_ASCENT,
     };
@@ -152,93 +153,6 @@ impl RenderBackend for MeasureOnlyBackend {
     fn resize(&mut self, _: u32, _: u32) {}
     fn dpi_scale(&self) -> f32 {
         1.0
-    }
-}
-
-struct TextAreaBaselineBackend<'a> {
-    inner: &'a mut dyn RenderBackend,
-    baseline_delta_y: f32,
-}
-
-impl RenderBackend for TextAreaBaselineBackend<'_> {
-    fn begin_frame(&mut self) {
-        self.inner.begin_frame();
-    }
-
-    fn end_frame(&mut self) {
-        self.inner.end_frame();
-    }
-
-    fn fill_rect(&mut self, rect: Rect, color: Color) {
-        self.inner.fill_rect(rect, color);
-    }
-
-    fn stroke_rect(&mut self, rect: Rect, color: Color, width: f32) {
-        self.inner.stroke_rect(rect, color, width);
-    }
-
-    fn draw_text(&mut self, layout: &TextLayout, origin: Point2D) {
-        let draw_origin = Point2D::new(origin.x, origin.y + self.baseline_delta_y);
-        self.inner.draw_text(layout, draw_origin);
-    }
-
-    fn clip_rect(&mut self, rect: Rect) {
-        self.inner.clip_rect(rect);
-    }
-
-    fn stroke_line(&mut self, from: Point2D, to: Point2D, color: Color, width: f32) {
-        self.inner.stroke_line(from, to, color, width);
-    }
-
-    fn fill_round_rect(&mut self, rect: Rect, radius: f32, color: Color) {
-        self.inner.fill_round_rect(rect, radius, color);
-    }
-
-    fn stroke_round_rect(&mut self, rect: Rect, radius: f32, color: Color, width: f32) {
-        self.inner.stroke_round_rect(rect, radius, color, width);
-    }
-
-    fn stroke_svg_path(&mut self, d: &str, top_left: Point2D, size: f32, color: Color, width: f32) {
-        self.inner.stroke_svg_path(d, top_left, size, color, width);
-    }
-
-    fn save(&mut self) {
-        self.inner.save();
-    }
-
-    fn restore(&mut self) {
-        self.inner.restore();
-    }
-
-    fn translate(&mut self, offset: Point2D) {
-        self.inner.translate(offset);
-    }
-
-    fn resize(&mut self, width: u32, height: u32) {
-        self.inner.resize(width, height);
-    }
-
-    fn dpi_scale(&self) -> f32 {
-        self.inner.dpi_scale()
-    }
-
-    fn measure_text(&mut self, text: &str, font_size: f32) -> f32 {
-        self.inner.measure_text(text, font_size)
-    }
-
-    fn measure_text_weighted(&mut self, text: &str, font_size: f32, weight: u16) -> f32 {
-        self.inner.measure_text_weighted(text, font_size, weight)
-    }
-
-    fn measure_text_styled(
-        &mut self,
-        text: &str,
-        font_size: f32,
-        weight: u16,
-        italic: bool,
-    ) -> f32 {
-        self.inner
-            .measure_text_styled(text, font_size, weight, italic)
     }
 }
 
