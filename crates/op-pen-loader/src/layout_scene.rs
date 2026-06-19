@@ -21,14 +21,14 @@
 //! transforms on them are lossless format conversions (colour array →
 //! struct, kind / fill-type string → enum).
 
-use op_editor_ui::layout_scene::NodeKind;
-use op_editor_ui::layout_scene::{
+use jian_scene::layout_scene::NodeKind;
+use jian_scene::layout_scene::{
     stable_image_source_id, DropShadow, Effect, LayoutScene, SceneFillType, SceneGradient,
     SceneGradientStop, SceneImageFit, SceneNode, ScenePage, SceneStroke, SceneTextAlign,
     SceneTextRun, SceneTextVerticalAlign, SceneWidget, SceneWidgetOption,
 };
-use op_editor_ui::scene_vars::VariableTable;
-use op_editor_ui::Color;
+use op_editor_core::scene_vars::VariableTable;
+use op_editor_core::render_backend::Color;
 
 use crate::editor_state_var_table;
 use crate::payload::{
@@ -171,7 +171,7 @@ fn node_payload_to_scene(
     var_table: &VariableTable,
     parent_opacity: f32,
 ) -> SceneNode {
-    use op_editor_ui::{Point2D, Rect};
+    use op_editor_core::render_backend::{Point2D, Rect};
     let node_id = op_editor_core::NodeId::new(node.id.clone());
     // Node-level opacity composites multiplicatively down the tree
     // (a 0.5 frame dims its 0.5 child to 0.25). We bake it into the
@@ -409,11 +409,11 @@ fn image_fit_to_scene(value: Option<&str>) -> SceneImageFit {
 
 fn image_adjustments_to_scene(
     value: Option<crate::payload::ImageAdjustmentPayload>,
-) -> op_editor_ui::ImageAdjustments {
+) -> op_editor_core::render_backend::ImageAdjustments {
     let Some(value) = value else {
-        return op_editor_ui::ImageAdjustments::default();
+        return op_editor_core::render_backend::ImageAdjustments::default();
     };
-    op_editor_ui::ImageAdjustments {
+    op_editor_core::render_backend::ImageAdjustments {
         exposure: value.exposure,
         contrast: value.contrast,
         saturation: value.saturation,
@@ -425,9 +425,9 @@ fn image_adjustments_to_scene(
 }
 
 /// Convert a payload path anchor into a scene anchor.
-fn anchor_to_scene(a: &crate::payload::AnchorPayload) -> op_editor_ui::layout_scene::SceneAnchor {
-    use op_editor_ui::layout_scene::{SceneAnchor, ScenePointType};
-    use op_editor_ui::Point2D;
+fn anchor_to_scene(a: &crate::payload::AnchorPayload) -> jian_scene::layout_scene::SceneAnchor {
+    use jian_scene::layout_scene::{SceneAnchor, ScenePointType};
+    use op_editor_core::render_backend::Point2D;
     SceneAnchor {
         pos: Point2D::new(a.x, a.y),
         handle_in: a.handle_in.map(|h| Point2D::new(h[0], h[1])),

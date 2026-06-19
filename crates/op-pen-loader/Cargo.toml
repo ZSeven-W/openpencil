@@ -19,10 +19,10 @@ jian-core = { path = "../../vendor/jian/crates/jian-core" }
 # turns it off so no skia-safe / jian-skia is linked (falls back to
 # jian-core's estimate backend — see adapter.rs::make_measure_backend).
 jian-skia = { path = "../../vendor/jian/crates/jian-skia", features = ["textlayout"], optional = true }
-# Phase 7.3 reorg: openpencil-shell-core dissolved. The layout scene /
-# scene-var / render-backend facade this crate converts INTO now
-# resolves through the op-editor-ui crate.
-op-editor-ui = { path = "../op-editor-ui" }
+# The canonical render scene this crate builds INTO (`LayoutScene` +
+# scene types) lives in jian-scene; scene_vars + the render-backend facade
+# (Color/Point2D/Rect/ImageAdjustments) come from op-editor-core.
+jian-scene = { path = "../../vendor/jian/crates/jian-scene" }
 # `EditorState` — the canonical editor-state superset this crate
 # derives a paint-only `Document` (incl. its `var_table`) FROM. Lives
 # in op-pen-loader, NOT op-editor-core, so op-editor-core stays free of

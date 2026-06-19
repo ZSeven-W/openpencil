@@ -18,8 +18,8 @@
 //! every mutating call site remembering to bump a flag.
 
 use jian_ops_schema::PenDocument;
-use op_editor_ui::layout_scene::LayoutScene;
-use op_editor_ui::scene_vars::VariableTable;
+use jian_scene::layout_scene::LayoutScene;
+use op_editor_core::scene_vars::VariableTable;
 
 /// The inputs of the last layout-scene build, retained so an unchanged refresh
 /// can skip the (taffy + reshape) rebuild.

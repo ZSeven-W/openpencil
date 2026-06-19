@@ -12,7 +12,7 @@
 use std::collections::BTreeMap;
 
 use op_editor_core::NodeId;
-use op_editor_ui::scene_vars::{
+use op_editor_core::scene_vars::{
     ThemeAxis, ThemedValue, Variable, VariableKind, VariableScalar, VariableTable, VariableValue,
 };
 use serde::{Deserialize, Serialize};
@@ -217,7 +217,7 @@ pub fn var_table_from_payload(p: &VarTablePayload) -> VariableTable {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use op_editor_ui::scene_vars::VariableValue;
+    use op_editor_core::scene_vars::VariableValue;
 
     fn sample_table() -> VariableTable {
         let mut t = VariableTable::default();
