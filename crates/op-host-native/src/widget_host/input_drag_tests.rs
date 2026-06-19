@@ -319,6 +319,52 @@ fn node_drag_keeps_flex_child_in_layout_flow() {
 }
 
 #[test]
+fn dragging_a_selection_with_a_locked_node_does_not_drift_it_in_the_scene() {
+    // Parity with the web host: the incremental scene patch must move exactly
+    // what `translate_selected` moved — editable nodes only. A selected locked
+    // node must not drift in the scene (it would otherwise jump during the drag
+    // and snap back on the release-time reconversion).
+    let mut host = WidgetHostNative::new();
+    seed(
+        &mut host,
+        r#"{"version":"0.8.0","children":[
+          {"type":"rectangle","id":"free","name":"free","x":100,"y":100,"width":80,"height":60},
+          {"type":"rectangle","id":"locked","name":"locked","x":600,"y":100,"width":80,"height":60,"locked":true}
+        ]}"#,
+    );
+    host.editor_state_mut().selection.set = vec![NodeId::new("free"), NodeId::new("locked")];
+    host.mark_paint_dirty_for_test();
+    let _ = host.layout_scene();
+    assert!(!host.editor_state_dirty);
+
+    let free_before = scene_node_xy(&host, "free");
+    let locked_before = scene_node_xy(&host, "locked");
+
+    host.node_drag = Some(NodeDragState {
+        last_screen_x: 500.0,
+        last_screen_y: 500.0,
+        press_screen_x: 500.0,
+        press_screen_y: 500.0,
+        moved: true,
+        total_dx: 0.0,
+        total_dy: 0.0,
+    });
+    assert!(host.apply_cursor_move(540.0, 500.0));
+
+    let free_after = scene_node_xy(&host, "free");
+    let locked_after = scene_node_xy(&host, "locked");
+
+    assert!(
+        (free_after.0 - free_before.0).abs() > 1.0,
+        "editable node should move in the scene during the drag"
+    );
+    assert_eq!(
+        locked_after, locked_before,
+        "locked node must not drift in the scene"
+    );
+}
+
+#[test]
 fn host_carries_editor_state_as_source_of_truth() {
     // A fresh host opens with the demo sample seeded onto
     // `EditorState` — the host's single source of truth.
