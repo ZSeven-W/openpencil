@@ -48,7 +48,7 @@ const GEMINI_ENV_ALLOWLIST: &[&str] = CODEX_ENV_ALLOWLIST;
 /// automatically, while still letting user-defined Codex providers
 /// opt in through config.toml as the single source of truth (TS
 /// `extractCodexConfigEnvKeys`, regex `^\s*env_key\s*=\s*"([^"]+)"\s*$`).
-pub(crate) fn extract_codex_config_env_keys(config_toml: &str) -> Vec<String> {
+pub fn extract_codex_config_env_keys(config_toml: &str) -> Vec<String> {
     let mut keys: Vec<String> = Vec::new();
     for line in config_toml.lines() {
         let trimmed = line.trim();
@@ -95,7 +95,7 @@ fn load_codex_config_env_keys() -> Vec<String> {
 
 /// Codex child env: allowlisted system vars + `OPENAI_*` / `CODEX_*`
 /// prefixes + config.toml `env_key` opt-ins (TS `filterCodexEnv`).
-pub(crate) fn codex_child_env() -> Vec<(String, String)> {
+pub fn codex_child_env() -> Vec<(String, String)> {
     let extra = load_codex_config_env_keys();
     std::env::vars()
         .filter(|(k, _)| {
@@ -109,7 +109,7 @@ pub(crate) fn codex_child_env() -> Vec<(String, String)> {
 
 /// Gemini child env: allowlisted system vars + `GOOGLE_*` /
 /// `GEMINI_*` / `GCLOUD_*` prefixes (TS `filterGeminiEnv`).
-pub(crate) fn gemini_child_env() -> Vec<(String, String)> {
+pub fn gemini_child_env() -> Vec<(String, String)> {
     std::env::vars()
         .filter(|(k, _)| {
             GEMINI_ENV_ALLOWLIST.contains(&k.as_str())
@@ -123,7 +123,7 @@ pub(crate) fn gemini_child_env() -> Vec<(String, String)> {
 /// TS `codex-client.ts::buildPrompt` / `gemini-client.ts::buildPrompt`
 /// framing: an empty system prompt passes the task through; otherwise
 /// the system prompt rides a GUIDELINES block ahead of the TASK block.
-pub(crate) fn guidelines_task_prompt(system_prompt: &str, task: &str) -> String {
+pub fn guidelines_task_prompt(system_prompt: &str, task: &str) -> String {
     let task = task.trim();
     let system = system_prompt.trim();
     if system.is_empty() {
@@ -149,7 +149,7 @@ pub(crate) fn guidelines_task_prompt(system_prompt: &str, task: &str) -> String 
 /// turn and reads the final text from `--output-last-message`; Rust
 /// streams `item.completed` agent messages live instead, so the same
 /// final text arrives incrementally without the temp file.
-pub(crate) fn parse_codex_line(line: &str) -> Option<ChatDelta> {
+pub fn parse_codex_line(line: &str) -> Option<ChatDelta> {
     let trimmed = line.trim();
     if !trimmed.starts_with('{') {
         return None; // non-JSON (warnings, banners) — TS skips
@@ -198,7 +198,7 @@ pub(crate) fn parse_codex_line(line: &str) -> Option<ChatDelta> {
 
 /// Extract a human-readable error from Codex stderr (TS
 /// `extractCodexCliError`). `None` when stderr is blank.
-pub(crate) fn extract_codex_cli_error(stderr: &str) -> Option<String> {
+pub fn extract_codex_cli_error(stderr: &str) -> Option<String> {
     let trimmed = stderr.trim();
     if trimmed.is_empty() {
         return None;
@@ -310,7 +310,7 @@ fn is_codex_auth_error(msg: &str) -> bool {
 /// Parse one `gemini -o stream-json` stdout line (TS
 /// `parseStreamJsonLine`). `None` = skip silently — non-JSON noise
 /// like "Loaded cached credentials." never reaches the transcript.
-pub(crate) fn parse_gemini_stream_line(line: &str) -> Option<ChatDelta> {
+pub fn parse_gemini_stream_line(line: &str) -> Option<ChatDelta> {
     let trimmed = line.trim();
     if !trimmed.starts_with('{') {
         return None;
@@ -354,7 +354,7 @@ pub(crate) fn parse_gemini_stream_line(line: &str) -> Option<ChatDelta> {
 
 /// Map raw Gemini API errors to user-friendly messages (TS
 /// `friendlyGeminiApiError`).
-pub(crate) fn friendly_gemini_api_error(raw: &str) -> String {
+pub fn friendly_gemini_api_error(raw: &str) -> String {
     let lower = raw.to_ascii_lowercase();
     if lower.contains("quota")
         || lower.contains("exhausted")

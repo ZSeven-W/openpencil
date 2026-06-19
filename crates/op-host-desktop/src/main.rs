@@ -20,7 +20,6 @@ mod chat_provider_llm;
 mod chat_runtime;
 mod chat_session;
 mod chat_subprocess;
-mod chat_subprocess_quirks;
 mod chat_system_prompt;
 mod clipboard;
 mod codegen_export;
