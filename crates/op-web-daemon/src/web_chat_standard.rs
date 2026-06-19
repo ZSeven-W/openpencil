@@ -20,15 +20,15 @@ use op_orchestrator::{
 };
 use serde_json::Value;
 
-use op_web_daemon::ai_proxy::AiStreamRequest;
-use op_web_daemon::chat_provider_llm::ChatProviderLlmClient;
-use op_web_daemon::pre_validator::LintPreValidator;
+use crate::ai_proxy::AiStreamRequest;
+use crate::chat_provider_llm::ChatProviderLlmClient;
+use crate::pre_validator::LintPreValidator;
 use crate::web_canvas_server::{SseHub, WebCanvasState};
 
 const STANDARD_MODIFY_STEP: &str =
     r#"<step title="Checking guidelines">Analyzing modification request...</step>"#;
 
-pub(crate) struct WebStandardTurnRequest {
+pub struct WebStandardTurnRequest {
     pub ai: AiStreamRequest,
     document_json: Option<String>,
     selected_ids: Vec<String>,
@@ -38,8 +38,8 @@ pub(crate) struct WebStandardTurnRequest {
     attachments: Vec<ChatAttachment>,
 }
 
-pub(crate) fn parse_standard_turn_body(body: &str) -> Option<WebStandardTurnRequest> {
-    let ai = op_web_daemon::ai_proxy::parse_ai_stream_body(body)?;
+pub fn parse_standard_turn_body(body: &str) -> Option<WebStandardTurnRequest> {
+    let ai = crate::ai_proxy::parse_ai_stream_body(body)?;
     let value: Value = serde_json::from_str(body).ok()?;
     let obj = value.as_object()?;
     let document_json = obj.get("document").map(Value::to_string);
@@ -134,13 +134,13 @@ fn parse_chat_attachments(value: Option<&Value>) -> Vec<ChatAttachment> {
         .collect()
 }
 
-pub(crate) fn stream_standard_turn<W: Write>(
+pub fn stream_standard_turn<W: Write>(
     out: &mut W,
     req: WebStandardTurnRequest,
     state: &Mutex<WebCanvasState>,
     hub: &SseHub,
 ) -> std::io::Result<()> {
-    op_web_daemon::ai_proxy::write_sse_headers(out)?;
+    crate::ai_proxy::write_sse_headers(out)?;
 
     let mut snapshot = match apply_request_snapshot(&req, state, hub) {
         Ok(snapshot) => snapshot,
@@ -173,39 +173,39 @@ pub(crate) fn stream_standard_turn<W: Write>(
     }
 
     let Some(classify_provider) =
-        op_web_daemon::ai_proxy::proxy_provider_with_chat_session(&snapshot, &req.ai.model, false)
+        crate::ai_proxy::proxy_provider_with_chat_session(&snapshot, &req.ai.model, false)
     else {
         return write_error_event(out, "no model configured");
     };
     let Some(chat_provider) =
-        op_web_daemon::ai_proxy::proxy_provider_with_chat_session(&snapshot, &req.ai.model, true)
+        crate::ai_proxy::proxy_provider_with_chat_session(&snapshot, &req.ai.model, true)
     else {
         return write_error_event(out, "no model configured");
     };
     let Some(design_provider) =
-        op_web_daemon::ai_proxy::proxy_provider_with_chat_session(&snapshot, &req.ai.model, false)
+        crate::ai_proxy::proxy_provider_with_chat_session(&snapshot, &req.ai.model, false)
     else {
         return write_error_event(out, "no model configured");
     };
 
-    let classified = op_web_daemon::chat_intent::classify_intent_llm(
+    let classified = crate::chat_intent::classify_intent_llm(
         classify_provider.as_ref(),
         &req.ai.user,
         model.clone(),
     );
-    let modify_plan = op_web_daemon::chat_intent::build_modify_plan(&snapshot, &req.ai.user);
+    let modify_plan = crate::chat_intent::build_modify_plan(&snapshot, &req.ai.user);
     let page_children_empty = snapshot.active_children().is_empty();
     let intent = resolve_standard_route(classified, page_children_empty, modify_plan.is_some());
 
     match intent {
-        op_web_daemon::chat_intent::DesignIntent::Chat => {
+        crate::chat_intent::DesignIntent::Chat => {
             stream_chat_route(out, &req, &snapshot, chat_provider.as_ref(), model)
         }
-        op_web_daemon::chat_intent::DesignIntent::Modify => {
+        crate::chat_intent::DesignIntent::Modify => {
             let plan = modify_plan.expect("route checked has_modify_plan");
             stream_modify_route(out, plan, design_provider.as_ref(), state, hub)
         }
-        op_web_daemon::chat_intent::DesignIntent::New => {
+        crate::chat_intent::DesignIntent::New => {
             stream_new_design_route(out, req, snapshot, design_provider, state, hub, model)
         }
     }
@@ -275,16 +275,16 @@ fn clear_fresh_starter_frame_for_design(state: &mut EditorState) -> bool {
 }
 
 fn resolve_standard_route(
-    classified: op_web_daemon::chat_intent::DesignIntent,
+    classified: crate::chat_intent::DesignIntent,
     page_children_empty: bool,
     has_modify_plan: bool,
-) -> op_web_daemon::chat_intent::DesignIntent {
+) -> crate::chat_intent::DesignIntent {
     match classified {
-        op_web_daemon::chat_intent::DesignIntent::Modify if page_children_empty => {
-            op_web_daemon::chat_intent::DesignIntent::New
+        crate::chat_intent::DesignIntent::Modify if page_children_empty => {
+            crate::chat_intent::DesignIntent::New
         }
-        op_web_daemon::chat_intent::DesignIntent::Modify if !has_modify_plan => {
-            op_web_daemon::chat_intent::DesignIntent::New
+        crate::chat_intent::DesignIntent::Modify if !has_modify_plan => {
+            crate::chat_intent::DesignIntent::New
         }
         other => other,
     }
@@ -298,7 +298,7 @@ fn stream_chat_route<W: Write>(
     model: Option<String>,
 ) -> std::io::Result<()> {
     let chat_req = ChatRequest {
-        system_prompt: op_web_daemon::chat_system_prompt::build_chat_system_prompt(state, &req.ai.user),
+        system_prompt: crate::chat_system_prompt::build_chat_system_prompt(state, &req.ai.user),
         user_message: req.ai.user.clone(),
         history: req.history.clone(),
         max_output_tokens: req.ai.max_output_tokens,
@@ -308,7 +308,7 @@ fn stream_chat_route<W: Write>(
         model,
     };
     for delta in provider.send(chat_req) {
-        out.write_all(op_web_daemon::ai_proxy::delta_to_sse(&delta).as_bytes())?;
+        out.write_all(crate::ai_proxy::delta_to_sse(&delta).as_bytes())?;
         out.flush()?;
         if matches!(delta, ChatDelta::Done { .. } | ChatDelta::Error(_)) {
             break;
@@ -319,7 +319,7 @@ fn stream_chat_route<W: Write>(
 
 fn stream_modify_route<W: Write>(
     out: &mut W,
-    plan: op_web_daemon::chat_intent::ModifyPlan,
+    plan: crate::chat_intent::ModifyPlan,
     provider: &dyn ChatProvider,
     state: &Mutex<WebCanvasState>,
     hub: &SseHub,
@@ -354,7 +354,7 @@ fn stream_modify_route<W: Write>(
             .collect::<Vec<_>>();
         let (applied, version) = {
             let mut guard = state.lock().unwrap_or_else(|p| p.into_inner());
-            let (count, mutated) = op_web_daemon::chat_canvas_tools::apply_design_modification(
+            let (count, mutated) = crate::chat_canvas_tools::apply_design_modification(
                 &mut guard.editor,
                 &node_values,
             );
@@ -404,7 +404,7 @@ fn stream_new_design_route<W: Write>(
     hub: &SseHub,
     model: Option<String>,
 ) -> std::io::Result<()> {
-    let append_context = op_web_daemon::chat_intent::detect_append_intent(&snapshot, &req.ai.user);
+    let append_context = crate::chat_intent::detect_append_intent(&snapshot, &req.ai.user);
     let request = DesignRequest {
         prompt: req.ai.user,
         model: model.clone(),
@@ -436,7 +436,7 @@ fn stream_new_design_route<W: Write>(
         let mut on_progress = move |p: Progress| {
             let _ = write_thinking_event(out_ref, &format!("\n{}", progress_label(&p)));
         };
-        op_web_daemon::chat_runtime::shared_runtime().block_on(
+        crate::chat_runtime::shared_runtime().block_on(
             Orchestrator::new().with_indicator_epoch(epoch).run(
                 request,
                 &mut sink,
@@ -491,7 +491,7 @@ impl DocSink for WebDesignDocSink<'_> {
             let mut guard = self.state.lock().unwrap_or_else(|p| p.into_inner());
             let applied = guard.editor.apply(cmd);
             let version = if applied {
-                op_web_daemon::design_session::fit_design_viewport_to_content(
+                crate::design_session::fit_design_viewport_to_content(
                     &mut guard.editor,
                     1440.0,
                     900.0,
@@ -517,21 +517,21 @@ impl DocSink for WebDesignDocSink<'_> {
 
 fn write_delta_event<W: Write>(out: &mut W, text: &str) -> std::io::Result<()> {
     out.write_all(
-        op_web_daemon::ai_proxy::delta_to_sse(&ChatDelta::TextDelta(text.to_string())).as_bytes(),
+        crate::ai_proxy::delta_to_sse(&ChatDelta::TextDelta(text.to_string())).as_bytes(),
     )?;
     out.flush()
 }
 
 fn write_thinking_event<W: Write>(out: &mut W, text: &str) -> std::io::Result<()> {
     out.write_all(
-        op_web_daemon::ai_proxy::delta_to_sse(&ChatDelta::Thinking(text.to_string())).as_bytes(),
+        crate::ai_proxy::delta_to_sse(&ChatDelta::Thinking(text.to_string())).as_bytes(),
     )?;
     out.flush()
 }
 
 fn write_done_event<W: Write>(out: &mut W) -> std::io::Result<()> {
     out.write_all(
-        op_web_daemon::ai_proxy::delta_to_sse(&ChatDelta::Done {
+        crate::ai_proxy::delta_to_sse(&ChatDelta::Done {
             stop_reason: StopReason::EndTurn,
         })
         .as_bytes(),
@@ -541,7 +541,7 @@ fn write_done_event<W: Write>(out: &mut W) -> std::io::Result<()> {
 
 fn write_error_event<W: Write>(out: &mut W, message: &str) -> std::io::Result<()> {
     out.write_all(
-        op_web_daemon::ai_proxy::delta_to_sse(&ChatDelta::Error(message.to_string())).as_bytes(),
+        crate::ai_proxy::delta_to_sse(&ChatDelta::Error(message.to_string())).as_bytes(),
     )?;
     out.flush()
 }
