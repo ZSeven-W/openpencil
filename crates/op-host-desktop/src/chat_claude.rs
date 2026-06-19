@@ -145,7 +145,7 @@ impl ChatProvider for ClaudeCodeProvider {
         let mut request = request;
         if !request.attachments.is_empty() {
             request.system_prompt =
-                crate::chat_attachment::strip_no_tools_restriction(&request.system_prompt);
+                op_web_daemon::chat_attachment::strip_no_tools_restriction(&request.system_prompt);
         }
         let options = Some(effective_options(self.options.as_ref(), &request, resume));
         let track_session = self.track_chat_session;
@@ -156,12 +156,12 @@ impl ChatProvider for ClaudeCodeProvider {
         // the temp files alive for the turn and removes them when the
         // worker task ends. A staging failure aborts the turn with an
         // error rather than silently dropping the attachments.
-        let (prompt, guard) = match crate::chat_attachment::claude_image_prompt(
+        let (prompt, guard) = match op_web_daemon::chat_attachment::claude_image_prompt(
             &request.user_message,
             &request.attachments,
         ) {
             Ok(pair) => pair,
-            Err(e) => return crate::chat_attachment::attachment_error_turn(e),
+            Err(e) => return op_web_daemon::chat_attachment::attachment_error_turn(e),
         };
         let (tx, rx) = mpsc::channel::<ChatDelta>(64);
         shared_runtime().spawn(async move {

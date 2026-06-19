@@ -14,6 +14,7 @@
 //! `op-host-web-server` binary depend on this crate.
 
 // Phase 2 — host-free leaf modules.
+pub mod chat_attachment;
 pub mod chat_canvas_tools;
 pub mod chat_provider_llm;
 pub mod chat_spawn;
