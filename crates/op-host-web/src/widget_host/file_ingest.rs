@@ -30,6 +30,10 @@ impl WidgetHost {
         preserved.preserve_authored_geometry = state.editor_ui.preserve_authored_geometry;
         state.editor_ui = preserved;
         self.editor_state = state;
+        // An import always wants a fresh scene; invalidate the build cache so the
+        // next `refresh_layout_scene` rebuilds even if the imported document
+        // happens to match the last build's inputs (mirrors the native host).
+        self.scene_cache.invalidate();
         self.editor_state_dirty = true;
     }
 

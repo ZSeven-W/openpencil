@@ -940,6 +940,11 @@ impl WidgetHostNative {
             })
             .expect("spawn op-import-drop worker");
 
+        // The scene was just taken (left empty) and is rebuilt lazily on the next
+        // `refresh_layout_scene`. Invalidate the build cache so that rebuild is
+        // NOT skipped even if the imported document happens to match the last
+        // build's inputs — otherwise the canvas would stay blank.
+        self.scene_cache.invalidate();
         self.editor_state_dirty = true;
     }
 
