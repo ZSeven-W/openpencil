@@ -32,9 +32,12 @@ pub use op_editor_core::render_backend;
 
 pub mod accessibility;
 pub mod font_catalog;
-pub mod layout_scene;
-pub mod layout_scene_hit;
-pub mod scene_vars;
+// The render scene now lives in the `jian-scene` crate and `scene_vars` in
+// op-editor-core. Re-exported here so existing consumer paths keep resolving
+// (`op_editor_ui::layout_scene::*` / `::layout_scene_hit::*` / `::scene_vars::*`),
+// including the dirty host crates that must not be edited.
+pub use jian_scene::{layout_scene, layout_scene_hit};
+pub use op_editor_core::scene_vars;
 pub mod svg_export;
 pub mod theme;
 pub mod util;
