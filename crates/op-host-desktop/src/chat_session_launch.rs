@@ -24,7 +24,7 @@ use op_web_daemon::chat_subprocess::SubprocessProvider;
 use op_web_daemon::chat_system_prompt::{
     build_agent_system_prompt, build_chat_system_prompt, chat_history_from_transcript,
 };
-use crate::design_session::DesignSession;
+use op_editor_host_core::design::DesignSession;
 
 use super::ChatSession;
 
@@ -94,7 +94,7 @@ pub fn launch_if_pending(
                 crate::chat_intent::detect_append_intent(host.editor_state(), &user_text);
             let initial_state = host.editor_state().clone();
             let request = build_design_request(user_text, &initial_state, append_context);
-            *current_design = Some(crate::design_session::start(llm, request, initial_state));
+            *current_design = Some(op_web_daemon::design_session::start(llm, request, initial_state));
             return true;
         }
         // Design intent but the selected agent has no ChatProvider

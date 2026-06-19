@@ -51,7 +51,7 @@ use op_orchestrator::{AppendContext, DesignRequest};
 
 use op_web_daemon::chat_canvas_tools::UiChatToolExecutor;
 use op_web_daemon::chat_provider_llm::ChatProviderLlmClient;
-use crate::design_session::{run_design_worker, DesignCmdReq, DesignDelta};
+use op_web_daemon::design_session::{run_design_worker, DesignCmdReq, DesignDelta};
 
 /// Internal host-op name the modify worker sends over the chat tool
 /// channel; intercepted by `chat_session::drain_tool_requests` (never

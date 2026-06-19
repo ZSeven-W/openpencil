@@ -491,7 +491,7 @@ impl DocSink for WebDesignDocSink<'_> {
             let mut guard = self.state.lock().unwrap_or_else(|p| p.into_inner());
             let applied = guard.editor.apply(cmd);
             let version = if applied {
-                crate::design_session::fit_design_viewport_to_content(
+                op_web_daemon::design_session::fit_design_viewport_to_content(
                     &mut guard.editor,
                     1440.0,
                     900.0,
