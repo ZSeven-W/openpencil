@@ -280,6 +280,8 @@ struct DesktopApp {
 
 impl DesktopApp {
     fn new(initial_file: Option<PathBuf>) -> Self {
+        // (The brand-logo catalog is registered once in `main` before any render
+        // path — GUI / `--render-shots` / MCP — so it is already loaded here.)
         let mut host = WidgetHostNative::new();
         let fit_blank_frame = initial_file.is_none();
         // Best-effort prefs restore onto the host's `EditorState`.
@@ -942,6 +944,12 @@ fn prompt_update_available(locale: op_editor_core::Locale, version: &str) {
 }
 
 fn main() {
+    // Register the brand-logo catalog (omitted from the wasm bundle, embedded in
+    // this binary) BEFORE any path that can render natively — the GUI app, the
+    // headless `--render-shots` rasterizer below, MCP — so they resolve
+    // simple-icons instead of the unknown-glyph fallback dot. Set-once /
+    // idempotent.
+    op_editor_ui::set_brand_catalog(web_static::ICONIFY_BRANDS_JSON);
     // `--mcp` / `--mcp-http` swap the GUI for an MCP server mode;
     // when one of those ran, exit instead of opening a window.
     if mcp_serve::run_cli_if_requested() {

@@ -30,6 +30,16 @@ const INDEX_HTML: &str = include_str!("web_static/index.html");
 /// 404 help page served when the wasm bundle cannot be found.
 const MISSING_BUNDLE_HTML: &str = include_str!("web_static/missing_bundle.html");
 
+/// The simple-icons brand-logo catalog (~4.8 MB). Embedded here so it can be
+/// both (a) registered with the shared icon catalog at native GUI startup and
+/// (b) served to the web client, which deliberately omits it from the wasm
+/// bundle to keep the first-load small (see `op_editor_ui::widgets::icon_catalog`).
+pub(crate) const ICONIFY_BRANDS_JSON: &str =
+    include_str!("../../op-editor-ui/assets/iconify-catalog-brands.json");
+
+/// Route the web client fetches to load the brand-logo catalog at runtime.
+pub(crate) const ICONIFY_BRANDS_PATH: &str = "/assets/iconify-catalog-brands.json";
+
 /// The wasm-bindgen JS entry the host page imports; its presence marks a
 /// directory as a usable bundle.
 const BUNDLE_ENTRY_JS: &str = "op_host_web.js";
@@ -219,6 +229,16 @@ pub(crate) fn handle_static_request(path: &str, bundle_dir: Option<&Path>) -> Op
             Err(_) => not_found_reply(),
         });
     }
+    // Brand-logo catalog. The web bundle omits the ~4.8 MB simple-icons set to
+    // keep the wasm first-load small; the client fetches it from here once and
+    // registers it via `icon_catalog::set_brand_catalog`.
+    if path == ICONIFY_BRANDS_PATH {
+        return Some(StaticReply {
+            status: "200 OK",
+            content_type: "application/json",
+            body: ICONIFY_BRANDS_JSON.as_bytes().to_vec(),
+        });
+    }
     None
 }
 
@@ -374,6 +394,19 @@ mod tests {
         assert_eq!(wasm.content_type, "application/wasm");
         std::env::remove_var("OPENPENCIL_CANVASKIT_DIR");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn iconify_brand_catalog_route_serves_embedded_json() {
+        let reply = handle_static_request(ICONIFY_BRANDS_PATH, None).expect("brands route");
+
+        assert_eq!(reply.status, "200 OK");
+        assert_eq!(reply.content_type, "application/json");
+        let body: serde_json::Value = serde_json::from_slice(&reply.body).expect("brands json");
+        let icons = body["icons"].as_array().expect("icons array");
+        assert!(icons
+            .iter()
+            .any(|icon| { icon["collection"] == "simple-icons" && icon["name"] == "github" }));
     }
 
     #[test]

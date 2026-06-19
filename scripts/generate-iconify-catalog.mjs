@@ -5,7 +5,14 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 
 const SETS = ['lucide', 'feather', 'simple-icons'];
-const OUT = path.resolve('crates/op-editor-ui/assets/iconify-catalog.json');
+// The catalog is split: the general-purpose UI sets (lucide + feather) are
+// embedded in the wasm/binary; the ~3700 simple-icons brand logos are loaded at
+// runtime (desktop: include_str at startup; web: fetched from the daemon) so
+// they never bloat the wasm first-load.
+const CORE_SETS = new Set(['lucide', 'feather']);
+const OUT_DIR = path.resolve('crates/op-editor-ui/assets');
+const OUT_CORE = path.join(OUT_DIR, 'iconify-catalog-core.json');
+const OUT_BRANDS = path.join(OUT_DIR, 'iconify-catalog-brands.json');
 
 function attr(tag, name) {
   const match = tag.match(new RegExp(`\\b${name}="([^"]*)"`));
@@ -147,6 +154,11 @@ icons.sort((a, b) => {
   return setDelta || a.name.localeCompare(b.name);
 });
 
-fs.mkdirSync(path.dirname(OUT), { recursive: true });
-fs.writeFileSync(OUT, `${JSON.stringify({ icons })}\n`);
-console.log(`wrote ${icons.length} icons to ${OUT}`);
+const coreIcons = icons.filter((icon) => CORE_SETS.has(icon.collection));
+const brandIcons = icons.filter((icon) => !CORE_SETS.has(icon.collection));
+
+fs.mkdirSync(OUT_DIR, { recursive: true });
+fs.writeFileSync(OUT_CORE, JSON.stringify({ icons: coreIcons }));
+fs.writeFileSync(OUT_BRANDS, JSON.stringify({ icons: brandIcons }));
+console.log(`wrote ${coreIcons.length} core icons to ${OUT_CORE}`);
+console.log(`wrote ${brandIcons.length} brand icons to ${OUT_BRANDS}`);

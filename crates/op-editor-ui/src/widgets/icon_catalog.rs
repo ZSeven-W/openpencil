@@ -35,22 +35,70 @@ pub struct ParsedIconBody {
     pub d: String,
 }
 
-const CATALOG_JSON: &str = include_str!("../../assets/iconify-catalog.json");
+// Only the general-purpose UI sets (lucide + feather, ~0.46 MB) are embedded.
+// The ~3700 simple-icons brand logos (~4.83 MB) are loaded at runtime via
+// `set_brand_catalog` — embedded at startup on desktop, fetched from the daemon
+// on web — so they never bloat the wasm first-load. Both stores yield `'static`
+// references (each backed by a `OnceLock`).
+const CORE_CATALOG_JSON: &str = include_str!("../../assets/iconify-catalog-core.json");
+
+/// Brand-logo catalog (simple-icons): set once at runtime. `None` until loaded;
+/// lookups / searches simply skip it while it is absent.
+static BRAND_CATALOG: OnceLock<BrandCatalog> = OnceLock::new();
+
+struct BrandCatalog {
+    icons: Vec<IconCatalogEntry>,
+    index: HashMap<String, usize>,
+}
+
+/// Install the brand-logo catalog from JSON (same shape as the core asset).
+/// Returns `true` when newly installed, `false` if the JSON is invalid or the
+/// catalog was already set (set-once; later calls are ignored).
+pub fn set_brand_catalog(json: &str) -> bool {
+    if BRAND_CATALOG.get().is_some() {
+        return false;
+    }
+    let Ok(catalog) = serde_json::from_str::<Catalog>(json) else {
+        return false;
+    };
+    let index = catalog
+        .icons
+        .iter()
+        .enumerate()
+        .map(|(idx, icon)| (format!("{}:{}", icon.collection, icon.name), idx))
+        .collect();
+    BRAND_CATALOG
+        .set(BrandCatalog {
+            icons: catalog.icons,
+            index,
+        })
+        .is_ok()
+}
+
+/// Whether the brand-logo catalog has been loaded yet.
+pub fn brand_catalog_loaded() -> bool {
+    BRAND_CATALOG.get().is_some()
+}
 
 pub fn lookup_icon(collection: &str, name: &str) -> Option<&'static IconCatalogEntry> {
     let key = format!("{}:{}", collection.trim(), name.trim());
-    catalog_index()
+    if let Some(idx) = core_index().get(&key) {
+        return core_catalog().get(*idx);
+    }
+    let brands = BRAND_CATALOG.get()?;
+    brands
+        .index
         .get(&key)
-        .and_then(|idx| catalog().get(*idx))
+        .and_then(|idx| brands.icons.get(*idx))
 }
 
 pub fn search_icons(query: &str, limit: usize) -> Vec<&'static IconCatalogEntry> {
     let query = query.trim().to_lowercase();
     if query.is_empty() {
-        return catalog().iter().take(limit).collect();
+        return all_icons().take(limit).collect();
     }
     let mut out = Vec::new();
-    for icon in catalog() {
+    for icon in all_icons() {
         if icon.name == query || format!("{}:{}", icon.collection, icon.name) == query {
             out.push(icon);
             if out.len() >= limit {
@@ -58,7 +106,7 @@ pub fn search_icons(query: &str, limit: usize) -> Vec<&'static IconCatalogEntry>
             }
         }
     }
-    for icon in catalog() {
+    for icon in all_icons() {
         if (icon.name != query && matches_query(icon, &query))
             || format!("{}:{}", icon.collection, icon.name) == query
         {
@@ -69,6 +117,17 @@ pub fn search_icons(query: &str, limit: usize) -> Vec<&'static IconCatalogEntry>
         }
     }
     out
+}
+
+/// Core (embedded) icons first, then brand logos if loaded. Both halves are
+/// `'static`, so the chained iterator yields `&'static IconCatalogEntry`.
+fn all_icons() -> impl Iterator<Item = &'static IconCatalogEntry> {
+    core_catalog().iter().chain(
+        BRAND_CATALOG
+            .get()
+            .into_iter()
+            .flat_map(|brands| brands.icons.iter()),
+    )
 }
 
 pub fn parse_iconify_body(body: &str, width: f32, height: f32) -> Option<ParsedIconBody> {
@@ -89,17 +148,19 @@ pub fn parse_iconify_body(body: &str, width: f32, height: f32) -> Option<ParsedI
     })
 }
 
-fn catalog() -> &'static [IconCatalogEntry] {
+fn core_catalog() -> &'static [IconCatalogEntry] {
     static CATALOG: OnceLock<Catalog> = OnceLock::new();
     &CATALOG
-        .get_or_init(|| serde_json::from_str(CATALOG_JSON).expect("bundled icon catalog is valid"))
+        .get_or_init(|| {
+            serde_json::from_str(CORE_CATALOG_JSON).expect("bundled core icon catalog is valid")
+        })
         .icons
 }
 
-fn catalog_index() -> &'static HashMap<String, usize> {
+fn core_index() -> &'static HashMap<String, usize> {
     static INDEX: OnceLock<HashMap<String, usize>> = OnceLock::new();
     INDEX.get_or_init(|| {
-        catalog()
+        core_catalog()
             .iter()
             .enumerate()
             .map(|(idx, icon)| (format!("{}:{}", icon.collection, icon.name), idx))

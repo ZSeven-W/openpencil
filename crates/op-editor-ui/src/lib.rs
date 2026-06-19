@@ -46,6 +46,10 @@ pub use op_editor_core::render_backend::{
     Color, ImageAdjustments, ImageDrawMode, Point2D, Rect, RenderBackend, TextLayout,
 };
 pub use theme::Theme;
+// Brand-logo catalog registration, surfaced at the crate root so non-widget
+// host code (the web brand-catalog fetcher) can install the runtime-loaded
+// catalog without importing the boundary-restricted `widgets` facade.
+pub use widgets::icon_catalog::{brand_catalog_loaded, set_brand_catalog};
 
 /// Re-exports of Jian gesture / event types so widget code can use the
 /// canonical Jian types directly via the short `crate::` form.
