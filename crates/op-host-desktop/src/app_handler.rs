@@ -255,7 +255,7 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
         // background Figma import worker so the launch doesn't freeze
         // on a multi-second parse.
         if let Some(path) = self.initial_file.take() {
-            if persistence::is_supported_figma_import(&path) {
+            if op_web_daemon::doc_io::is_supported_figma_import(&path) {
                 figma_import_session::cancel(&mut self.host, &mut self.current_figma_import);
                 self.current_figma_import = Some(figma_import_session::spawn(&mut self.host, path));
                 self.request_redraw(true);
@@ -438,12 +438,12 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
                 // dashboards, so doing it inline would freeze the
                 // window). Anything else is ignored silently so a
                 // stray drop can't disrupt the current document.
-                if persistence::is_supported_figma_import(&path) {
+                if op_web_daemon::doc_io::is_supported_figma_import(&path) {
                     figma_import_session::cancel(&mut self.host, &mut self.current_figma_import);
                     self.current_figma_import =
                         Some(figma_import_session::spawn(&mut self.host, path));
                     self.request_redraw(true);
-                } else if persistence::is_supported_document(&path) {
+                } else if op_web_daemon::doc_io::is_supported_document(&path) {
                     if persistence::open_path(
                         &mut self.host,
                         path,
@@ -997,13 +997,13 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
                             // in-flight Figma import internally, so a
                             // stale worker can't overwrite the fresh
                             // document when its result lands.
-                            persistence::ActionOutcome::Saved => self.mark_document_saved(),
+                            op_web_daemon::doc_io::ActionOutcome::Saved => self.mark_document_saved(),
                             // User picked a `.fig`; spin up the worker
                             // session and let `pump` apply the document
                             // once parsing finishes. Cancel any prior
                             // in-flight session first so two imports
                             // in quick succession don't race.
-                            persistence::ActionOutcome::FigmaImportStarted(path) => {
+                            op_web_daemon::doc_io::ActionOutcome::FigmaImportStarted(path) => {
                                 figma_import_session::cancel(
                                     &mut self.host,
                                     &mut self.current_figma_import,
@@ -1012,7 +1012,7 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
                                     Some(figma_import_session::spawn(&mut self.host, path));
                                 self.request_redraw(true);
                             }
-                            persistence::ActionOutcome::Noop => {}
+                            op_web_daemon::doc_io::ActionOutcome::Noop => {}
                         }
                     }
                 }

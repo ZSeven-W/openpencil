@@ -19,6 +19,7 @@ pub mod chat_provider_llm;
 pub mod chat_spawn;
 pub mod chat_subprocess_quirks;
 pub mod chat_system_prompt;
+pub mod doc_io;
 pub mod export;
 pub mod export_pdf;
 pub mod pre_validator;
