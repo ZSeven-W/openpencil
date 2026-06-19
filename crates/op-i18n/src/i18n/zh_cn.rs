@@ -391,6 +391,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "settings.images" => "图片",
         "settings.system" => "系统",
         "settings.autoUpdateDesc" => "启动时自动检查新版本",
+        "settings.experimental" => "实验性功能",
+        "settings.experimentalDesc" => "启用预览模式与组件(Widget)配置",
         "settings.systemDesktopOnly" => "系统设置仅在桌面应用中可用。",
         "settings.envHint" => "你可以在 {{path}} 中设置额外的环境变量。",
         "builtin.title" => "内置服务商",

@@ -387,6 +387,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "settings.images" => "Images",
         "settings.system" => "System",
         "settings.autoUpdateDesc" => "Automatically check for new versions on startup",
+        "settings.experimental" => "Experimental features",
+        "settings.experimentalDesc" => "Enable preview mode and Widget configuration",
         "settings.systemDesktopOnly" => "System settings are available in the desktop app.",
         "settings.envHint" => "You can set additional environment variables in {{path}}.",
         "builtin.title" => "Built-in Providers",

@@ -1,8 +1,7 @@
 //! System tab of the settings modal.
 //!
-//! Renders the auto-update preference row. The TS desktop settings
-//! page keeps this tab compact and leaves release probe status out of
-//! the modal chrome.
+//! Renders the auto-update preference row plus the experimental-features
+//! opt-in (gates canvas Preview mode + the property-panel Widget section).
 
 use crate::theme::Theme;
 use crate::widgets::agent_settings_i18n::t as t_settings;
@@ -16,15 +15,17 @@ use op_editor_core::editor_ui_state::EditorUiState;
 
 const TITLE_H: f32 = 36.0;
 const CARD_H: f32 = 58.0;
+const CARD_GAP: f32 = 12.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SystemHit {
     ToggleAutoUpdate,
+    ToggleExperimental,
     None,
 }
 
 pub(super) fn content_height() -> f32 {
-    12.0 + TITLE_H + CARD_H + 24.0
+    12.0 + TITLE_H + CARD_H + CARD_GAP + CARD_H + 24.0
 }
 
 fn auto_update_card_rect(content: Rect) -> Rect {
@@ -34,8 +35,19 @@ fn auto_update_card_rect(content: Rect) -> Rect {
     }
 }
 
-fn auto_update_switch_rect(content: Rect) -> Rect {
-    let card = auto_update_card_rect(content);
+fn experimental_card_rect(content: Rect) -> Rect {
+    Rect {
+        origin: Point2D::new(
+            content.origin.x,
+            content.origin.y + 12.0 + TITLE_H + CARD_H + CARD_GAP,
+        ),
+        size: Point2D::new(content.size.x, CARD_H),
+    }
+}
+
+/// The switch hit/paint rect for a given card — right-aligned, vertically
+/// centred. Shared by paint + hit-test so the two can't drift.
+fn switch_rect_for(card: Rect) -> Rect {
     Rect {
         origin: Point2D::new(
             card.origin.x + card.size.x - 16.0 - SETTINGS_SWITCH_W,
@@ -46,8 +58,11 @@ fn auto_update_switch_rect(content: Rect) -> Rect {
 }
 
 pub fn hit_test(content: Rect, scrolled: Point2D) -> SystemHit {
-    if (auto_update_switch_rect(content)).contains(scrolled) {
+    if switch_rect_for(auto_update_card_rect(content)).contains(scrolled) {
         return SystemHit::ToggleAutoUpdate;
+    }
+    if switch_rect_for(experimental_card_rect(content)).contains(scrolled) {
+        return SystemHit::ToggleExperimental;
     }
     SystemHit::None
 }
@@ -71,12 +86,42 @@ pub(super) fn paint_system_tab(
         Point2D::new(content.origin.x, content.origin.y + 20.0),
     );
 
-    let card = auto_update_card_rect(content);
+    paint_toggle_card(
+        cx,
+        theme,
+        ui,
+        auto_update_card_rect(content),
+        "agents.autoUpdate",
+        "settings.autoUpdateDesc",
+        settings.auto_update_enabled,
+    );
+    paint_toggle_card(
+        cx,
+        theme,
+        ui,
+        experimental_card_rect(content),
+        "settings.experimental",
+        "settings.experimentalDesc",
+        settings.experimental_features_enabled,
+    );
+}
+
+/// Paint one labelled toggle card: rounded background, title row, muted
+/// description row, and a right-aligned switch reflecting `enabled`.
+fn paint_toggle_card(
+    cx: &mut PaintCx<'_>,
+    theme: &Theme,
+    ui: &EditorUiState,
+    card: Rect,
+    label_key: &'static str,
+    desc_key: &'static str,
+    enabled: bool,
+) {
     cx.backend.fill_round_rect(card, 10.0, theme.muted);
     cx.backend.stroke_round_rect(card, 10.0, theme.border, 1.0);
 
     let label_layout = TextLayout::single_run(
-        t_settings(ui, "agents.autoUpdate"),
+        t_settings(ui, label_key),
         "system-ui",
         13.0,
         (theme.foreground).to_jian(),
@@ -88,7 +133,7 @@ pub(super) fn paint_system_tab(
     );
 
     let desc_layout = TextLayout::single_run(
-        t_settings(ui, "settings.autoUpdateDesc"),
+        t_settings(ui, desc_key),
         "system-ui",
         11.0,
         (theme.muted_foreground).to_jian(),
@@ -99,10 +144,5 @@ pub(super) fn paint_system_tab(
         Point2D::new(card.origin.x + 16.0, card.origin.y + 46.0),
     );
 
-    paint_settings_switch(
-        cx,
-        theme,
-        auto_update_switch_rect(content),
-        settings.auto_update_enabled,
-    );
+    paint_settings_switch(cx, theme, switch_rect_for(card), enabled);
 }

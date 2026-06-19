@@ -280,6 +280,29 @@ impl WidgetHostNative {
                     .auto_update_enabled;
                 *v = !*v;
             }
+            AgentSettingsHit::ToggleExperimental => {
+                let enabled = {
+                    let v = &mut self
+                        .editor_state
+                        .editor_ui
+                        .agent_settings
+                        .experimental_features_enabled;
+                    *v = !*v;
+                    *v
+                };
+                if !enabled {
+                    // The gate just turned off. Preview is host-owned
+                    // (a live `PreviewSession` beyond the core flag), so
+                    // exit through the host path. Also drop any stale
+                    // Widget property focus: hiding the section is
+                    // render-only, and a lingering `PropertyFocus::Widget*`
+                    // could otherwise still commit through dispatch.
+                    if self.preview_active() {
+                        self.exit_preview();
+                    }
+                    self.editor_state.ui.property_focus = None;
+                }
+            }
             AgentSettingsHit::FocusMcpPort => {
                 self.commit_settings_focus_if_any();
                 self.editor_state.editor_ui.agent_settings.focus =

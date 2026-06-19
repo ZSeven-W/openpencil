@@ -274,6 +274,13 @@ impl PropertyPanel {
                 .selected_color_variable_name(op_editor_core::ColorTarget::Stroke)
                 .map(str::to_string);
             let mut snapshot = NodeSnapshot::from_node(node);
+            if !state.editor_ui.agent_settings.experimental_features_enabled {
+                // The Widget section is an experimental surface. Hide it
+                // unless opted in — the section's paint AND height both key
+                // off `snapshot.widget`, so clearing it here removes the
+                // section everywhere with no layout drift.
+                snapshot.widget = None;
+            }
             snapshot.is_instance = is_instance;
             if !is_instance
                 && state

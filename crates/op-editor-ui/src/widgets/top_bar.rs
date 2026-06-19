@@ -141,6 +141,9 @@ pub struct TopBar {
     /// Whether the canvas is in Preview (Play) mode — drives the
     /// Play/Stop toggle glyph (Square when active, Play when idle).
     pub preview_active: bool,
+    /// Opt-in gate: the Preview (Play) button only paints / hit-tests
+    /// when experimental features are enabled in Settings → System.
+    pub experimental_enabled: bool,
     /// Which chrome button the cursor is over — drives the per-button
     /// `theme.button_hover` wash. `None` = no hover.
     pub hover: Option<op_editor_core::TopBarButton>,
@@ -172,6 +175,7 @@ impl TopBar {
             theme_mode: op_editor_core::ThemeMode::Dark,
             git_branch: None,
             preview_active: false,
+            experimental_enabled: false,
             hover: None,
             pressed: None,
             chip_text_w: None,
@@ -215,6 +219,7 @@ impl TopBar {
             theme_mode: ui.theme_mode,
             git_branch: ui.git_panel.branch.clone(),
             preview_active: ui.preview_mode,
+            experimental_enabled: ui.agent_settings.experimental_features_enabled,
             hover: ui.topbar_button_hover,
             pressed: match ui.pressed_button {
                 Some(op_editor_core::ButtonPressTarget::TopBar(button)) => Some(button),
@@ -352,12 +357,26 @@ impl TopBar {
         }
     }
 
-    pub fn globe_rect(top_bar_rect: Rect) -> Rect {
+    /// Whether the Preview (Play) button paints / hit-tests. Gated by
+    /// the host capability (`PREVIEW_BUTTON_AVAILABLE`, desktop-only) AND
+    /// the experimental-features opt-in. The right-cluster layout
+    /// collapses when this is false, so paint, hit-test, and the
+    /// globe-anchored locale picker all key off this one predicate.
+    pub fn preview_button_visible(&self) -> bool {
+        PREVIEW_BUTTON_AVAILABLE && self.experimental_enabled
+    }
+
+    pub fn globe_rect(&self, top_bar_rect: Rect) -> Rect {
         let right = top_bar_rect.origin.x + top_bar_rect.size.x;
         // Right-cluster layout (right → left): Maximize | Play (native
         // only) | Sun | Globe. Icon buttons are normal ICON_BUTTON wide;
         // Globe is the wider GLOBE_BUTTON_WIDTH so the chevron fits.
-        let icon_count = 2.0 + if PREVIEW_BUTTON_AVAILABLE { 1.0 } else { 0.0 };
+        let icon_count = 2.0
+            + if self.preview_button_visible() {
+                1.0
+            } else {
+                0.0
+            };
         let globe_x = right - PAD - ICON_BUTTON * icon_count - GLOBE_BUTTON_WIDTH;
         Rect {
             origin: Point2D::new(globe_x, top_bar_rect.origin.y + 8.0),
@@ -378,9 +397,14 @@ impl TopBar {
 
     /// Theme toggle button. Its x-position shifts right in the web/wasm build
     /// where the Preview button is hidden.
-    pub(super) fn theme_button_rect(top_bar_rect: Rect) -> Rect {
+    pub(super) fn theme_button_rect(&self, top_bar_rect: Rect) -> Rect {
         let right = top_bar_rect.origin.x + top_bar_rect.size.x;
-        let right_icons = 1.0 + if PREVIEW_BUTTON_AVAILABLE { 1.0 } else { 0.0 };
+        let right_icons = 1.0
+            + if self.preview_button_visible() {
+                1.0
+            } else {
+                0.0
+            };
         Rect {
             origin: Point2D::new(
                 right - PAD - ICON_BUTTON * (right_icons + 1.0),
@@ -535,14 +559,14 @@ impl TopBar {
             return Some(TopBarHit::ToggleFullscreen);
         }
         // Play / Stop (second from right) → toggle Preview mode.
-        if PREVIEW_BUTTON_AVAILABLE && Self::preview_button_rect(rect).contains(point) {
+        if self.preview_button_visible() && Self::preview_button_rect(rect).contains(point) {
             return Some(TopBarHit::TogglePreview);
         }
-        let sun_rect = Self::theme_button_rect(rect);
+        let sun_rect = self.theme_button_rect(rect);
         if (sun_rect).contains(point) {
             return Some(TopBarHit::ToggleTheme);
         }
-        let globe = Self::globe_rect(rect);
+        let globe = self.globe_rect(rect);
         if (globe).contains(point) {
             return Some(TopBarHit::ToggleLocale);
         }
@@ -791,7 +815,7 @@ mod tests {
             bar.chip_text_w = Some(text_w);
             bar
         };
-        let globe = TopBar::globe_rect(rect);
+        let globe = TopBar::new("food.op").globe_rect(rect);
         let gap = DIVIDER_GAP * 2.0 + DIVIDER_W;
         // 150 px left of the chip's right edge (anchored at globe − gap).
         let probe = Point2D::new(globe.origin.x - gap - 150.0, TOP_BAR_HEIGHT / 2.0);
@@ -809,7 +833,10 @@ mod tests {
 
     #[test]
     fn maximize_button_hit_tests_to_toggle_fullscreen() {
-        let bar = TopBar::untitled();
+        // The Play button only appears with experimental features on; this
+        // test asserts the full Maximize | Play | Sun cluster layout.
+        let mut bar = TopBar::untitled();
+        bar.experimental_enabled = true;
         let rect = Rect {
             origin: Point2D::new(0.0, 0.0),
             size: Point2D::new(1000.0, TOP_BAR_HEIGHT),
@@ -837,12 +864,37 @@ mod tests {
     }
 
     #[test]
+    fn preview_button_hidden_unless_experimental_enabled() {
+        let rect = Rect {
+            origin: Point2D::new(0.0, 0.0),
+            size: Point2D::new(1000.0, TOP_BAR_HEIGHT),
+        };
+        let cy = 8.0 + ICON_BUTTON / 2.0;
+        // The slot 2nd-from-right (where Play sits when shown).
+        let play_cx = 1000.0 - PAD - ICON_BUTTON - ICON_BUTTON / 2.0;
+        let probe = Point2D::new(play_cx, cy);
+
+        // Default (gate off): no Play button — the cluster collapses so
+        // that slot is the theme toggle, and the hit never resolves to
+        // TogglePreview.
+        let off = TopBar::untitled();
+        assert!(!off.preview_button_visible());
+        assert_eq!(off.hit_test(rect, probe), Some(TopBarHit::ToggleTheme));
+
+        // Gate on: the Play button occupies the slot.
+        let mut on = TopBar::untitled();
+        on.experimental_enabled = true;
+        assert!(on.preview_button_visible());
+        assert_eq!(on.hit_test(rect, probe), Some(TopBarHit::TogglePreview));
+    }
+
+    #[test]
     fn locale_button_glyph_group_is_centered_in_hover_rect() {
         let rect = Rect {
             origin: Point2D::new(0.0, 0.0),
             size: Point2D::new(1000.0, TOP_BAR_HEIGHT),
         };
-        let globe_rect = TopBar::globe_rect(rect);
+        let globe_rect = TopBar::new("food.op").globe_rect(rect);
         let glyph_group_left = TopBar::locale_glyph_left(globe_rect);
         let glyph_group_right = glyph_group_left + ICON_SIZE + COMPOUND_GLYPH_GAP + CHEVRON_SIZE;
         let glyph_group_center = (glyph_group_left + glyph_group_right) / 2.0;

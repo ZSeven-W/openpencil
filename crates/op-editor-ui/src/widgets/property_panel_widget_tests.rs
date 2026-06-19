@@ -13,9 +13,43 @@ fn panel_rect() -> Rect {
     }
 }
 
+/// The Widget section is an experimental surface, hidden unless opted in.
+/// These tests exercise that section, so build state with the gate ON.
+fn widget_state(src: &str) -> op_editor_core::EditorState {
+    let mut state = state_from(src);
+    state.editor_ui.agent_settings.experimental_features_enabled = true;
+    state
+}
+
+#[test]
+fn widget_section_hidden_unless_experimental_enabled() {
+    let src = r##"{ "version": "0.8.0", "children": [
+              {"type":"text_input","id":"email","name":"Email",
+               "x":24,"y":32,"width":220,"height":40,"placeholder":"Email"}
+        ]}"##;
+
+    // Default (gate off): the Widget section is suppressed.
+    let mut off = state_from(src);
+    off.set_single_selection(NodeId::new("email"));
+    let panel = PropertyPanel::for_selection(&off).expect("panel");
+    assert!(
+        panel.snapshot.widget.is_none(),
+        "Widget section must be hidden when experimental features are off"
+    );
+
+    // Gate on: the Widget summary is populated.
+    let mut on = widget_state(src);
+    on.set_single_selection(NodeId::new("email"));
+    let panel = PropertyPanel::for_selection(&on).expect("panel");
+    assert!(
+        panel.snapshot.widget.is_some(),
+        "Widget section must appear when experimental features are on"
+    );
+}
+
 #[test]
 fn text_input_selection_exposes_widget_text_rows() {
-    let mut state = state_from(
+    let mut state = widget_state(
         r##"{ "version": "0.8.0", "children": [
               {"type":"text_input","id":"email","name":"Email",
                "x":24,"y":32,"width":220,"height":40,
@@ -42,7 +76,7 @@ fn text_input_selection_exposes_widget_text_rows() {
 
 #[test]
 fn property_panel_text_input_fields_expose_icon_and_bind_rows() {
-    let mut state = state_from(
+    let mut state = widget_state(
         r##"{ "version": "0.8.0", "children": [
               {"type":"text_input","id":"email","name":"Email",
                "x":24,"y":32,"width":220,"height":40,
@@ -76,7 +110,7 @@ fn property_panel_text_input_fields_expose_icon_and_bind_rows() {
 fn checkbox_selection_hides_icon_and_bind_rows() {
     // Icon + bind editing is Phase-1 scoped to the input kinds; a
     // Checkbox widget shows neither.
-    let mut state = state_from(
+    let mut state = widget_state(
         r##"{ "version": "0.8.0", "children": [
               {"type":"checkbox","id":"cb","name":"Agree","x":0,"y":0,"width":18,"height":18,
                "label":"Accept","checked":false}
@@ -95,7 +129,7 @@ fn checkbox_selection_hides_icon_and_bind_rows() {
 
 #[test]
 fn slider_selection_exposes_widget_range_rows() {
-    let mut state = state_from(
+    let mut state = widget_state(
         r##"{ "version": "0.8.0", "children": [
               {"type":"slider","id":"volume","name":"Volume",
                "x":24,"y":32,"width":220,"height":24,
@@ -126,7 +160,7 @@ fn slider_selection_exposes_widget_range_rows() {
 
 #[test]
 fn frame_selection_hides_widget_section() {
-    let mut state = state_from(
+    let mut state = widget_state(
         r##"{ "version": "0.8.0", "children": [
               {"type":"frame","id":"f1","name":"Frame","x":0,"y":0,"width":200,"height":100}
         ]}"##,
@@ -148,7 +182,7 @@ fn frame_selection_hides_widget_section() {
 #[test]
 fn checkbox_selection_emits_toggle_checked_action() {
     use super::property_panel::PropertyPanelAction;
-    let mut state = state_from(
+    let mut state = widget_state(
         r##"{ "version": "0.8.0", "children": [
               {"type":"checkbox","id":"cb","name":"Agree","x":0,"y":0,"width":18,"height":18,
                "label":"Accept","checked":false}
@@ -170,7 +204,7 @@ fn checkbox_selection_emits_toggle_checked_action() {
 #[test]
 fn committing_placeholder_updates_text_input_node() {
     use jian_ops_schema::node::PenNode;
-    let mut state = state_from(
+    let mut state = widget_state(
         r##"{ "version": "0.8.0", "children": [
               {"type":"text_input","id":"email","name":"Email",
                "x":0,"y":0,"width":220,"height":40,"placeholder":"Email"}
@@ -191,7 +225,7 @@ fn committing_placeholder_updates_text_input_node() {
 #[test]
 fn committing_slider_max_updates_node() {
     use jian_ops_schema::node::PenNode;
-    let mut state = state_from(
+    let mut state = widget_state(
         r##"{ "version": "0.8.0", "children": [
               {"type":"slider","id":"sl","name":"Vol","x":0,"y":0,"width":220,"height":24,
                "min":0,"max":100,"step":1,"value":50}
