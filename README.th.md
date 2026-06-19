@@ -298,6 +298,32 @@ cat design.dsl | op design - # Pipe จาก stdin
 | **Runtime**    | Bun · Vite 7                                                                     |
 | **รูปแบบไฟล์** | `.op` — ใช้ JSON, อ่านได้โดยมนุษย์, Git-friendly                                 |
 
+## ทำไมต้อง Rust
+
+OpenPencil กำลังถูกเขียนใหม่ตั้งแต่ต้นด้วย **Rust** ([#129](https://github.com/ZSeven-W/openpencil/issues/129)) บิลด์ TypeScript + Electron คือสิ่งที่จัดจำหน่ายในปัจจุบัน ส่วนการเขียนใหม่ด้วย Rust คือก้าวต่อไป — core แบบ native เดียวที่เล็กและเร็วกว่าอย่างเห็นได้ชัด และรองรับได้บนหลายแพลตฟอร์มจาก codebase เดียว
+
+|                        | TypeScript + Electron (ปัจจุบัน)              | Rust (การเขียนใหม่)                                                  |
+| ---------------------- | --------------------------------------------- | -------------------------------------------------------------------- |
+| **Desktop runtime**    | Electron — รวม Chromium + Node.js             | หน้าต่างแบบ native (`winit` + GPU Skia) ไม่มี browser engine         |
+| **ขนาดบน Desktop**     | Chromium runtime เต็มรูปแบบต่อการติดตั้ง     | ไฟล์ binary เดียวที่พร้อมใช้งาน — **55.5 MB**                        |
+| **ขนาด payload บนเว็บ** | JS + WASM bundle                              | **8.2 MB** wasm / **2.18 MB** gzip บนเครือข่าย                       |
+| **การ Render**          | CanvasKit/Skia บนเว็บ                         | Skia backend เดียวที่เร่งด้วย GPU บน **ทุก** เป้าหมาย               |
+| **หน่วยความจำ**         | JavaScript GC หยุดชั่วคราว                   | ไม่มี GC — Rust ownership latency คาดเดาได้                          |
+| **Codebase**            | Web stack + Electron + Zig NAPI agent         | Rust workspace เดียว: editor · CLI · MCP · AI · codegen · Figma · Git |
+| **เป้าหมาย**           | Web + desktop สอง stack แยกกัน               | Desktop (macOS/Win/Linux) · mobile (iOS/Android) · browser — one core |
+
+**ผลการวัดที่ได้จริง**
+
+- **ขนาดเล็กมาก** — แอปเดสก์ท็อปทั้งหมดเป็น binary แบบ native เดียวขนาด **55.5 MB** แทนที่จะเป็น browser engine รวมกับ Node runtime เว็บบิลด์มีขนาด **8.2 MB** raw / **2.18 MB** gzip หลังจากแยก icon catalog (−48% บนเครือข่าย)
+- **รองรับเอกสารขนาดใหญ่** — canvas ที่มี **10,000-node** (nested auto-layout สี่ระดับ) เขียน อ่าน และ snapshot layout **โดยไม่มี panic และ ~0% idle CPU**; การ snapshot layout ทั้งหมด 10k node คืนค่าใน **~0.68 s**
+- **การโต้ตอบที่รวดเร็ว** — pan/zoom ไม่ต้อง re-serialize เอกสารทุก frame อีกต่อไป (การแก้ไข hot-path เพียงครั้งเดียวลด CPU ของ wheel-zoom จาก **~69% เหลือ ~0%**); การลากแก้ไข scene แบบ incremental การวัดตัวอักษรถูก cache และการวาดซ้ำรวมเป็นหนึ่งต่อ frame
+- **Core เดียว ทุกหน้าจอ** — editor state และ render backend เดียวกันคอมไพล์ไปยัง native desktop, mobile และ browser ผ่าน WASM — ไม่ต้องคงการ implement แบบคู่ขนานให้ตรงกัน
+- **GPU Skia ทุกที่** — native render ผ่าน `skia-safe` บน GL context; browser render ผ่าน CanvasKit บน WebGL2 — โค้ดการวาดเดียวกัน ผลลัพธ์เดียวกัน
+- **Accessibility แบบ native** — AccessKit บน macOS, Windows และ Linux พร้อม DOM mirror บนเว็บ แทนที่จะพึ่งพา a11y tree ของ browser
+- **Workspace ที่ตรวจสอบ type เดียว** — MCP host, CLI, AI providers, code generation, Figma import และ Git integration ทั้งหมดอยู่ใน Rust workspace เดียว พร้อม `cargo-deny` ตรวจสอบ supply-chain ใน CI
+
+> **สถานะ:** Rust shell อยู่ระหว่างการพัฒนาอย่างต่อเนื่อง (ดู Roadmap ด้านล่าง) จนกว่าจะถึง feature parity สำหรับ `v0.8.0` ไฟล์ที่ดาวน์โหลดได้ข้างต้นคือบิลด์ TypeScript + Electron
+
 ## โครงสร้างโปรเจกต์
 
 ```text

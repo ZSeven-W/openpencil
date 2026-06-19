@@ -298,6 +298,32 @@ cat design.dsl | op design - # 从 stdin 管道输入
 | **运行时**   | Bun · Vite 7                                                                     |
 | **文件格式** | `.op` — 基于 JSON，人类可读，对 Git 友好                                         |
 
+## 为什么选择 Rust
+
+OpenPencil 正在从头用 **Rust** 重写（[#129](https://github.com/ZSeven-W/openpencil/issues/129)）。现阶段发布的安装包是 TypeScript + Electron 版本；Rust 重写版本是下一步目标 — 一个体积更小、速度更快的原生核心，从单一代码库支持更多平台。
+
+|                   | TypeScript + Electron（当前）              | Rust（重写版）                                                           |
+| ----------------- | ------------------------------------------ | ----------------------------------------------------------------------- |
+| **桌面运行时**    | Electron — 内置 Chromium + Node.js         | 原生窗口（`winit` + GPU Skia），无浏览器引擎                             |
+| **桌面体积**      | 每次安装均含完整 Chromium 运行时           | 单一自包含二进制文件 — **55.5 MB**                                       |
+| **Web 包体积**    | JS + WASM 包                               | **8.2 MB** wasm / 传输 **2.18 MB** gzip                                 |
+| **渲染**          | Web 端 CanvasKit/Skia                      | **所有**目标平台统一使用 GPU 加速 Skia 后端                              |
+| **内存**          | JavaScript GC 暂停                         | 无 GC — Rust 所有权，延迟可预期                                          |
+| **代码库**        | Web 技术栈 + Electron + Zig NAPI agent     | 单一 Rust workspace：editor · CLI · MCP · AI · codegen · Figma · Git    |
+| **目标平台**      | Web + 桌面，两套独立技术栈                 | 桌面（macOS/Win/Linux）· 移动端（iOS/Android）· 浏览器 — 共用同一核心   |
+
+**可量化的性能提升**
+
+- **极小体积** — 整个桌面应用是一个 **55.5 MB** 的原生二进制文件，而非捆绑浏览器引擎和 Node.js 运行时。拆分图标目录后，Web 构建产物为 **8.2 MB** 原始 / **2.18 MB** gzip（传输体积 −48%）。
+- **大文档扩展性** — **10,000-node** 实时画布（嵌套四层自动布局）在写入、读取和快照布局时**不崩溃、空闲 CPU 约为 ~0%**；对全部 10k 节点执行完整布局快照仅需 **~0.68 s**。
+- **流畅交互** — 平移/缩放不再在每一帧都重新序列化文档（单个热路径修复将滚轮缩放 CPU 占用从 **~69% 降至 ~0%**）；拖拽增量更新场景图，文本测量结果已缓存，重绘合并为每帧一次。
+- **一套核心，全端覆盖** — 相同的编辑器状态和渲染后端，可编译为原生桌面、移动端，以及通过 WASM 运行的浏览器端 — 无需维护多套并行实现。
+- **GPU Skia 全覆盖** — 原生端通过 `skia-safe` 在 GL 上下文上渲染；浏览器端通过 CanvasKit 在 WebGL2 上渲染 — 同一套绘图代码，同一套输出结果。
+- **原生无障碍** — macOS、Windows 和 Linux 上通过 AccessKit 实现，Web 端通过 DOM 镜像实现，而非依赖浏览器自身的无障碍树。
+- **单一类型检查工作区** — MCP 宿主、CLI、AI 提供商、代码生成、Figma 导入和 Git 集成全部位于同一个 Rust workspace，并在 CI 中通过 `cargo-deny` 进行供应链管控。
+
+> **状态：** Rust shell 正在积极开发中（参见下方路线图）。在其达到 `v0.8.0` 功能对等之前，上方提供的可安装下载包为 TypeScript + Electron 版本。
+
 ## 项目结构
 
 ```text

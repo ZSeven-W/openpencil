@@ -298,6 +298,32 @@ Suporta três métodos de entrada: string inline, `@filepath` (ler de arquivo) o
 | **Runtime**            | Bun · Vite 7                                                                     |
 | **Formato de arquivo** | `.op` — baseado em JSON, legível por humanos, compatível com Git                 |
 
+## Por que Rust
+
+O OpenPencil está sendo reescrito do zero em **Rust** ([#129](https://github.com/ZSeven-W/openpencil/issues/129)). A versão TypeScript + Electron é o que está disponível hoje; a reescrita em Rust é o próximo passo — um núcleo nativo drasticamente menor e mais rápido, que roda em mais plataformas a partir de uma única base de código.
+
+|                          | TypeScript + Electron (hoje)                      | Rust (a reescrita)                                                       |
+| ------------------------ | ------------------------------------------------- | ------------------------------------------------------------------------ |
+| **Runtime desktop**      | Electron — empacota Chromium + Node.js            | Janela nativa (`winit` + GPU Skia), sem motor de navegador               |
+| **Pegada desktop**       | Runtime completo do Chromium por instalação       | Binário único autocontido — **55.5 MB**                                  |
+| **Payload web**          | Bundle JS + WASM                                  | **8.2 MB** wasm / **2.18 MB** gzip transferido pela rede                 |
+| **Renderização**         | CanvasKit/Skia na web                             | Um único backend Skia com aceleração GPU em **todos** os alvos           |
+| **Memória**              | Pausas do JavaScript GC                           | Sem GC — ownership Rust, latência previsível                             |
+| **Base de código**       | Web stack + Electron + Zig NAPI agent             | Um workspace Rust: editor · CLI · MCP · AI · codegen · Figma · Git       |
+| **Plataformas**          | Web + desktop, duas stacks separadas              | Desktop (macOS/Win/Linux) · mobile (iOS/Android) · navegador — um núcleo |
+
+**Melhorias mensuradas**
+
+- **Pegada mínima** — o aplicativo desktop completo é um único binário nativo de **55.5 MB** em vez de um motor de navegador empacotado mais um runtime Node. A versão web tem **8.2 MB** bruto / **2.18 MB** gzip após a divisão do catálogo de ícones (−48% transferido pela rede).
+- **Escala para documentos grandes** — um canvas ativo com **10,000 nós** (auto-layout aninhado, quatro níveis de profundidade) grava, lê e captura o layout **sem pânicos e com ~0% de CPU ociosa**; um snapshot completo do layout de todos os 10k nós retorna em **~0.68 s**.
+- **Interação rápida** — pan/zoom não mais reserializa o documento a cada frame (uma única correção no hot-path reduziu o uso de CPU no zoom com scroll de **~69% para ~0%**); arrastar atualiza a cena de forma incremental, a medição de texto é armazenada em cache e os redesenhos são consolidados em um por frame.
+- **Um núcleo, cada tela** — o mesmo estado do editor e o mesmo backend de renderização compilam para desktop nativo, mobile e o navegador via WASM — sem reimplementações paralelas para manter sincronizadas.
+- **GPU Skia em todo lugar** — o nativo renderiza via `skia-safe` em um contexto GL; o navegador renderiza via CanvasKit no WebGL2 — o mesmo código de desenho, a mesma saída.
+- **Acessibilidade nativa** — AccessKit no macOS, Windows e Linux, mais um espelho DOM na web, em vez de depender da árvore de acessibilidade de um navegador.
+- **Um workspace com verificação de tipos** — o host MCP, CLI, provedores de AI, geração de código, importação do Figma e integração com Git vivem em um único workspace Rust, com o `cargo-deny` fazendo controle da cadeia de suprimentos na CI.
+
+> **Status:** o shell Rust está em desenvolvimento ativo (consulte o Roadmap abaixo). Até atingir paridade de recursos para o `v0.8.0`, os downloads instaláveis acima são a versão TypeScript + Electron.
+
 ## Estrutura do Projeto
 
 ```text

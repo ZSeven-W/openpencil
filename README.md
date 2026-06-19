@@ -371,6 +371,32 @@ Supports three input methods: inline string, `@filepath` (read from file), or `-
 | **Lint**        | oxlint · oxfmt                                                                          |
 | **File format** | `.op` — JSON-based, human-readable, Git-friendly                                        |
 
+## Why Rust
+
+OpenPencil is being rewritten from the ground up in **Rust** ([#129](https://github.com/ZSeven-W/openpencil/issues/129)). The TypeScript + Electron build is what ships today; the Rust rewrite is what's next — one native core that is dramatically smaller and faster, and runs on more platforms from a single codebase.
+
+|                       | TypeScript + Electron (today)                  | Rust (the rewrite)                                                  |
+| --------------------- | ---------------------------------------------- | ------------------------------------------------------------------- |
+| **Desktop runtime**   | Electron — bundles Chromium + Node.js          | Native window (`winit` + GPU Skia), no browser engine               |
+| **Desktop footprint** | Full Chromium runtime per install              | Single self-contained binary — **55.5 MB**                          |
+| **Web payload**       | JS + WASM bundle                               | **8.2 MB** wasm / **2.18 MB** gzip over the wire                    |
+| **Rendering**         | CanvasKit/Skia on web                          | One GPU-accelerated Skia backend on **every** target                |
+| **Memory**            | JavaScript GC pauses                           | No GC — Rust ownership, predictable latency                         |
+| **Codebase**          | Web stack + Electron + Zig NAPI agent          | One Rust workspace: editor · CLI · MCP · AI · codegen · Figma · Git  |
+| **Targets**           | Web + desktop, two separate stacks             | Desktop (macOS/Win/Linux) · mobile (iOS/Android) · browser — one core |
+
+**Measured improvements**
+
+- **Tiny footprint** — the whole desktop app is one **55.5 MB** native binary instead of a bundled browser engine plus a Node runtime. The web build is **8.2 MB** raw / **2.18 MB** gzip after splitting the icon catalog (−48% over the wire).
+- **Scales to large documents** — a **10,000-node** live canvas (nested auto-layout, four levels deep) writes, reads, and snapshots layout with **no panics and ~0% idle CPU**; a full layout snapshot of all 10k nodes returns in **~0.68 s**.
+- **Fast interaction** — pan/zoom no longer re-serializes the document every frame (a single hot-path fix cut wheel-zoom CPU from **~69% to ~0%**); drags patch the scene incrementally, text measurement is cached, and repaints coalesce to one per frame.
+- **One core, every screen** — the same editor state and the same render backend compile to native desktop, mobile, and the browser via WASM — no parallel reimplementations to keep in sync.
+- **GPU Skia everywhere** — native renders through `skia-safe` on a GL context; the browser renders through CanvasKit on WebGL2 — the same drawing code, the same output.
+- **Native accessibility** — AccessKit on macOS, Windows, and Linux, plus a DOM mirror on web, instead of leaning on a browser's a11y tree.
+- **One type-checked workspace** — the MCP host, CLI, AI providers, code generation, Figma import, and Git integration all live in a single Rust workspace, with `cargo-deny` supply-chain gating in CI.
+
+> **Status:** the Rust shell is under active development (see the Roadmap below). Until it reaches feature parity for `v0.8.0`, the installable downloads above are the TypeScript + Electron build.
+
 ## Project Structure
 
 ```text

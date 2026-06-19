@@ -298,6 +298,32 @@ cat design.dsl | op design - # stdin'den pipe ile besle
 | **Çalışma Ortamı** | Bun · Vite 7                                                                     |
 | **Dosya Formatı**  | `.op` — JSON tabanlı, insan tarafından okunabilir, Git dostu                     |
 
+## Neden Rust
+
+OpenPencil, sıfırdan **Rust** ile yeniden yazılıyor ([#129](https://github.com/ZSeven-W/openpencil/issues/129)). TypeScript + Electron derlemesi bugün dağıtılan sürümdür; Rust yeniden yazımı ise bir sonraki adımdır — tek bir doğal çekirdek: çok daha küçük, çok daha hızlı ve tek bir kod tabanından daha fazla platformda çalışır.
+
+|                          | TypeScript + Electron (bugün)                     | Rust (yeniden yazım)                                                     |
+| ------------------------ | ------------------------------------------------- | ------------------------------------------------------------------------ |
+| **Masaüstü çalışma ortamı** | Electron — Chromium + Node.js içerir           | Yerel pencere (`winit` + GPU Skia), tarayıcı motoru yok                  |
+| **Masaüstü boyutu**      | Kurulum başına tam Chromium çalışma ortamı        | Tek, bağımsız ikili — **55.5 MB**                                        |
+| **Web yükü**             | JS + WASM paketi                                  | **8.2 MB** wasm / **2.18 MB** gzip ile transfer                          |
+| **Görüntü işleme**       | Web'de CanvasKit/Skia                             | **Her** hedefte tek GPU hızlandırmalı Skia arka ucu                      |
+| **Bellek**               | JavaScript GC duraklamaları                       | GC yok — Rust sahiplik modeli, öngörülebilir gecikme                     |
+| **Kod tabanı**           | Web yığını + Electron + Zig NAPI ajan             | Tek Rust çalışma alanı: editör · CLI · MCP · AI · codegen · Figma · Git  |
+| **Hedefler**             | Web + masaüstü, iki ayrı yığın                   | Masaüstü (macOS/Win/Linux) · mobil (iOS/Android) · tarayıcı — tek çekirdek |
+
+**Ölçülen iyileştirmeler**
+
+- **Küçük boyut** — tüm masaüstü uygulaması, paketlenmiş bir tarayıcı motoru ve Node çalışma ortamı yerine tek bir **55.5 MB** yerel ikili dosyasıdır. Web derlemesi, simge kataloğu bölümlendirmesinin ardından ham **8.2 MB** / **2.18 MB** gzip boyutuna ulaşır (transfer üzerinde −48%).
+- **Büyük belgelere ölçeklenir** — dört seviye derinliğinde iç içe otomatik düzen içeren **10,000 düğümlü** canlı bir kanvas; **panik olmadan ve ~0% boşta CPU** kullanımıyla yazar, okur ve düzeni anlık görüntüler; tüm 10k düğümün tam düzen anlık görüntüsü **~0.68 saniyede** döner.
+- **Hızlı etkileşim** — kaydırma/yakınlaştırma artık her karede belgeyi yeniden serileştirmiyor (tek bir sıcak yol düzeltmesiyle tekerlek yakınlaştırma CPU kullanımı **~69%'dan ~0%'a** düştü); sürükleme işlemleri sahneyi artımlı olarak günceller, metin ölçümü önbelleğe alınır ve yeniden boyamalar kare başına birleştirilir.
+- **Tek çekirdek, her ekran** — aynı editör durumu ve aynı görüntü işleme arka ucu; yerel masaüstüne, mobil cihazlara ve WASM aracılığıyla tarayıcıya derlenir — senkronda tutulacak paralel yeniden uygulama yoktur.
+- **Her yerde GPU Skia** — yerel, bir GL bağlamında `skia-safe` üzerinden; tarayıcı ise WebGL2 üzerinde CanvasKit aracılığıyla görüntü işler — aynı çizim kodu, aynı çıktı.
+- **Yerel erişilebilirlik** — tarayıcının a11y ağacına güvenmek yerine macOS, Windows ve Linux'ta AccessKit; web'de ise bir DOM aynası.
+- **Tek tip denetimli çalışma alanı** — MCP sunucusu, CLI, AI sağlayıcıları, kod üretimi, Figma içe aktarma ve Git entegrasyonu; CI'da `cargo-deny` tedarik zinciri denetimi ile tek bir Rust çalışma alanında bulunur.
+
+> **Durum:** Rust kabuğu etkin geliştirme aşamasındadır (aşağıdaki Yol Haritası'na bakın). `v0.8.0` için özellik eşitliğine ulaşana kadar yukarıdaki indirilebilir dosyalar TypeScript + Electron derlemesidir.
+
 ## Proje Yapısı
 
 ```text
