@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<!--
+  OpenPencil Web SDK — browser demo.
+
+  Prerequisites (run from packages/op-web-sdk/):
+    1. bun install
+    2. bun run build          (produces dist/index.js)
+    3. bun run sync-wasm      (populates wasm/ and src/ops-types.ts; requires Rust wasm toolchain)
+
+  Then serve this directory with any static server, e.g.:
+    npx serve packages/op-web-sdk
+    # or
+    python3 -m http.server --directory packages/op-web-sdk 8080
+
+  Open http://localhost:8080/demo/index.html.
+
+  This demo is USER-RUN (deferred verification) — jsdom cannot execute wasm.
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OpenPencil Web SDK Demo</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, sans-serif;
+      background: #0f0f0f;
+      color: #e4e4e7;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem 1rem;
+      min-height: 100dvh;
+      gap: 1.5rem;
+    }
+    h1 { font-size: 1.25rem; font-weight: 600; color: #a1a1aa; }
+    #canvas {
+      border: 1px solid #3f3f46;
+      border-radius: 8px;
+      background: #18181b;
+      width: min(900px, 100%);
+      height: 540px;
+      display: block;
+    }
+    .controls {
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    button {
+      background: #27272a;
+      border: 1px solid #3f3f46;
+      color: #e4e4e7;
+      border-radius: 6px;
+      padding: 0.5rem 1rem;
+      cursor: pointer;
+      font-size: 0.875rem;
+      transition: background 150ms;
+    }
+    button:hover { background: #3f3f46; }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+    #log {
+      width: min(900px, 100%);
+      background: #18181b;
+      border: 1px solid #3f3f46;
+      border-radius: 8px;
+      padding: 1rem;
+      font-family: monospace;
+      font-size: 0.8125rem;
+      max-height: 160px;
+      overflow-y: auto;
+      color: #a1a1aa;
+    }
+    .log-entry { line-height: 1.6; }
+    .log-entry.error { color: #f87171; }
+  </style>
+</head>
+<body>
+  <h1>OpenPencil Web SDK — read-only viewer demo</h1>
+
+  <canvas id="canvas" width="900" height="540"></canvas>
+
+  <div class="controls">
+    <button id="btn-load">Load fixture (.op)</button>
+    <button id="btn-zoom-in">Zoom in</button>
+    <button id="btn-zoom-out">Zoom out</button>
+    <button id="btn-zoom-fit">Zoom to fit</button>
+    <button id="btn-export">Export SVG</button>
+    <button id="btn-doc-info">Log document info</button>
+  </div>
+
+  <div id="log"><div class="log-entry">Ready — click "Load fixture" to begin.</div></div>
+
+  <!--
+    Import createViewer from the built ESM bundle.
+    Run `bun run build` from packages/op-web-sdk first.
+  -->
+  <script type="module">
+    import { createViewer } from '../dist/index.js';
+
+    const canvas = document.getElementById('canvas');
+    const log = document.getElementById('log');
+
+    function addLog(msg, isError = false) {
+      const el = document.createElement('div');
+      el.className = 'log-entry' + (isError ? ' error' : '');
+      el.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+      log.appendChild(el);
+      log.scrollTop = log.scrollHeight;
+    }
+
+    // Minimal fixture document — a single page with one rectangle.
+    const FIXTURE_DOC = JSON.stringify({
+      version: '1',
+      name: 'SDK Demo',
+      children: [
+        {
+          type: 'rectangle',
+          id: '1',
+          name: 'Demo rect',
+          x: 100,
+          y: 80,
+          width: 320,
+          height: 200,
+          fill: [{ type: 'solid', color: '#6366f1', opacity: 1, explain: null, blendMode: null }],
+          stroke: null,
+          effects: null,
+        },
+      ],
+    });
+
+    let viewer = null;
+
+    async function initViewer() {
+      if (viewer) return viewer;
+      addLog('Initialising wasm viewer…');
+      viewer = await createViewer({ canvas });
+      viewer.on('load', () => addLog('Event: load fired'));
+      viewer.on('viewportchange', () => {
+        const { panX, panY, zoom } = viewer.viewport;
+        addLog(`Event: viewportchange  panX=${panX.toFixed(1)} panY=${panY.toFixed(1)} zoom=${zoom.toFixed(3)}`);
+      });
+      addLog('Viewer ready.');
+      return viewer;
+    }
+
+    document.getElementById('btn-load').addEventListener('click', async () => {
+      try {
+        const v = await initViewer();
+        v.load(FIXTURE_DOC);
+        addLog(`Loaded document "${v.document.name ?? '(unnamed)'"} — ${v.pageCount} page(s).`);
+      } catch (err) {
+        addLog(String(err), true);
+      }
+    });
+
+    document.getElementById('btn-zoom-in').addEventListener('click', async () => {
+      try {
+        const v = await initViewer();
+        v.setZoom(v.viewport.zoom * 1.25);
+      } catch (err) { addLog(String(err), true); }
+    });
+
+    document.getElementById('btn-zoom-out').addEventListener('click', async () => {
+      try {
+        const v = await initViewer();
+        v.setZoom(v.viewport.zoom * 0.8);
+      } catch (err) { addLog(String(err), true); }
+    });
+
+    document.getElementById('btn-zoom-fit').addEventListener('click', async () => {
+      try {
+        const v = await initViewer();
+        v.zoomToFit(canvas.width, canvas.height);
+        addLog('zoomToFit called.');
+      } catch (err) { addLog(String(err), true); }
+    });
+
+    document.getElementById('btn-export').addEventListener('click', async () => {
+      try {
+        const v = await initViewer();
+        const bytes = v.export({ format: 'svg' });
+        const blob = new Blob([bytes], { type: 'image/svg+xml' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'export.svg';
+        a.click();
+        URL.revokeObjectURL(url);
+        addLog(`Exported SVG (${bytes.byteLength} bytes).`);
+      } catch (err) { addLog(String(err), true); }
+    });
+
+    document.getElementById('btn-doc-info').addEventListener('click', async () => {
+      try {
+        const v = await initViewer();
+        const doc = v.document;
+        const pages = v.pages;
+        addLog(`document.name="${doc.name}" version="${doc.version}" pageCount=${v.pageCount} activePage=${v.activePage}`);
+        pages.forEach((p, i) => addLog(`  page[${i}]: id="${p.id}" name="${p.name}" children=${p.children.length}`));
+      } catch (err) { addLog(String(err), true); }
+    });
+  </script>
+</body>
+</html>
