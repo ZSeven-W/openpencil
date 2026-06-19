@@ -252,6 +252,29 @@ export async function opCkInit(canvasId) {
     return path;
   };
 
+  // Parsed-SVG-path cache. `CK.Path.MakeFromSVGString` is the dominant per-icon
+  // cost, and every chrome icon / lucide glyph / brand logo / vector node
+  // re-parsed its `d` string on EVERY frame (mirrors what the native backend
+  // avoids via `svg_path_cache`). Cache the parsed, untransformed path keyed on
+  // `d`; callers draw a `.copy()` they transform + delete, leaving the cached
+  // original pristine. Bounded — on overflow drop all (a full refill is one
+  // frame) and delete the wasm-heap paths so they don't leak.
+  const SVG_PATH_CACHE_CAP = 1024;
+  const svgPathCache = new Map();
+  const cachedSvgPath = (d) => {
+    let base = svgPathCache.get(d);
+    if (!base) {
+      base = CK.Path.MakeFromSVGString(d);
+      if (!base) return null;
+      if (svgPathCache.size >= SVG_PATH_CACHE_CAP) {
+        for (const v of svgPathCache.values()) v.delete();
+        svgPathCache.clear();
+      }
+      svgPathCache.set(d, base);
+    }
+    return base.copy();
+  };
+
   return {
     beginFrame() {
       // Discard any leaked save / clip / matrix state from a prior (possibly
@@ -285,31 +308,31 @@ export async function opCkInit(canvasId) {
     },
     // SVG path d-string scaled by `size/viewbox` and translated to (tx,ty).
     strokeSvgPath(d, tx, ty, scale, r, g, b, a, sw) {
-      const path = CK.Path.MakeFromSVGString(d); if (!path) return;
+      const path = cachedSvgPath(d); if (!path) return;
       const m = CK.Matrix.multiply(CK.Matrix.translated(tx, ty), CK.Matrix.scaled(scale, scale));
       path.transform(m);
       const p = strokePaint(r, g, b, a, sw); canvas.drawPath(path, p); p.delete(); path.delete();
     },
     fillSvgPath(d, tx, ty, scale, evenOdd, r, g, b, a) {
-      const path = CK.Path.MakeFromSVGString(d); if (!path) return;
+      const path = cachedSvgPath(d); if (!path) return;
       if (evenOdd) path.setFillType(CK.FillType.EvenOdd);
       const m = CK.Matrix.multiply(CK.Matrix.translated(tx, ty), CK.Matrix.scaled(scale, scale));
       path.transform(m);
       const p = fillPaint(r, g, b, a); canvas.drawPath(path, p); p.delete(); path.delete();
     },
     fillSvgPathInRect(d, x, y, w, h, evenOdd, r, g, b, a) {
-      const path = CK.Path.MakeFromSVGString(d); if (!path) return;
+      const path = cachedSvgPath(d); if (!path) return;
       if (evenOdd) path.setFillType(CK.FillType.EvenOdd);
       fitPathToRect(path, x, y, w, h);
       const p = fillPaint(r, g, b, a); canvas.drawPath(path, p); p.delete(); path.delete();
     },
     strokeSvgPathInRect(d, x, y, w, h, r, g, b, a, sw) {
-      const path = CK.Path.MakeFromSVGString(d); if (!path) return;
+      const path = cachedSvgPath(d); if (!path) return;
       fitPathToRect(path, x, y, w, h);
       const p = strokePaint(r, g, b, a, sw); canvas.drawPath(path, p); p.delete(); path.delete();
     },
     fillSvgPathInRectLinearGradient(d, x, y, w, h, evenOdd, stops, angleDeg, opacity) {
-      const path = CK.Path.MakeFromSVGString(d); if (!path) return;
+      const path = cachedSvgPath(d); if (!path) return;
       if (evenOdd) path.setFillType(CK.FillType.EvenOdd);
       fitPathToRect(path, x, y, w, h);
       const gs = gradientStops(stops, opacity);
@@ -321,7 +344,7 @@ export async function opCkInit(canvasId) {
       p.delete(); if (shader && shader.delete) shader.delete(); path.delete();
     },
     fillSvgPathInRectRadialGradient(d, x, y, w, h, evenOdd, stops, cxFrac, cyFrac, radiusFrac, opacity) {
-      const path = CK.Path.MakeFromSVGString(d); if (!path) return;
+      const path = cachedSvgPath(d); if (!path) return;
       if (evenOdd) path.setFillType(CK.FillType.EvenOdd);
       fitPathToRect(path, x, y, w, h);
       const gs = gradientStops(stops, opacity);
@@ -334,10 +357,10 @@ export async function opCkInit(canvasId) {
       p.delete(); if (shader && shader.delete) shader.delete(); path.delete();
     },
     fillInnerShadowSvgPath(d, x, y, w, h, evenOdd, offsetX, offsetY, blur, r, g, b, a) {
-      const path = CK.Path.MakeFromSVGString(d); if (!path) return;
+      const path = cachedSvgPath(d); if (!path) return;
       if (evenOdd) path.setFillType(CK.FillType.EvenOdd);
       fitPathToRect(path, x, y, w, h);
-      const offsetPath = CK.Path.MakeFromSVGString(d);
+      const offsetPath = cachedSvgPath(d);
       if (!offsetPath) { path.delete(); return; }
       if (evenOdd) offsetPath.setFillType(CK.FillType.EvenOdd);
       fitPathToRect(offsetPath, x, y, w, h);
