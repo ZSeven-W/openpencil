@@ -18,9 +18,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use jian_core::layout::measure::{
-    FontStyleKind, MeasureBackend, MeasureRequest, MeasureResult,
-};
+use jian_core::layout::measure::{FontStyleKind, MeasureBackend, MeasureRequest, MeasureResult};
 
 /// Cap on distinct cached measurements. A large multi-page design has at most a
 /// few thousand distinct text leaves; past this, drop the whole cache rather
@@ -159,9 +157,16 @@ mod tests {
         let first = backend.measure(&req);
         let second = backend.measure(&req);
 
-        assert_eq!(counter.calls.get(), 1, "second identical measure must hit the cache");
+        assert_eq!(
+            counter.calls.get(),
+            1,
+            "second identical measure must hit the cache"
+        );
         assert_eq!(first.width, second.width);
-        assert_eq!(first.width, 5.0, "result must pass through from the inner backend");
+        assert_eq!(
+            first.width, 5.0,
+            "result must pass through from the inner backend"
+        );
     }
 
     #[test]
@@ -174,11 +179,11 @@ mod tests {
         // Each axis that feeds shaping must produce a distinct cache key.
         let cases: &[(&str, f32, u16, f32, Option<f32>)] = &[
             ("hello", 16.0, 400, 0.0, None),
-            ("world", 16.0, 400, 0.0, None),    // text differs
-            ("hello", 18.0, 400, 0.0, None),    // size differs
-            ("hello", 16.0, 700, 0.0, None),    // weight differs
+            ("world", 16.0, 400, 0.0, None),       // text differs
+            ("hello", 18.0, 400, 0.0, None),       // size differs
+            ("hello", 16.0, 700, 0.0, None),       // weight differs
             ("hello", 16.0, 400, 0.0, Some(80.0)), // max_width differs
-            ("hello", 16.0, 400, 2.0, None),    // line_height differs
+            ("hello", 16.0, 400, 2.0, None),       // line_height differs
         ];
         for (text, size, weight, line_height, max_width) in cases {
             let runs = [run(text, *size, *weight)];
