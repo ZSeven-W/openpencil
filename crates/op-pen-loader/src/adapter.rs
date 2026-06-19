@@ -50,9 +50,15 @@ thread_local! {
 }
 
 /// Real skia paragraph shaper — native + web-skia builds (`skia-measure`, default).
+/// Wrapped in a memoizing cache: paragraph shaping is the dominant layout cost,
+/// and repeat reconversions (drag / resize / colour edits) re-measure identical
+/// text, so the cache turns those into hash lookups. (The estimate backend below
+/// is already cheap, so it is left unwrapped.)
 #[cfg(feature = "skia-measure")]
 fn make_measure_backend() -> Rc<dyn MeasureBackend> {
-    Rc::new(jian_skia::SkiaMeasure::new())
+    Rc::new(crate::measure_cache::CachingMeasureBackend::new(Rc::new(
+        jian_skia::SkiaMeasure::new(),
+    )))
 }
 
 /// Skia-free estimate backend — the CanvasKit web build links no jian-skia /
