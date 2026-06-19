@@ -7,7 +7,7 @@ use crate::widgets::PaintCx;
 use crate::{Color, Point2D, TextLayout};
 use jian_core::text_input::TextInputState;
 use jian_widgets::components::text_input::TextInputView;
-use jian_widgets::{Density, Tokens};
+use jian_widgets::Tokens;
 
 impl GitPanel<'_> {
     /// Paint the menu hint at the panel foot.
@@ -43,26 +43,7 @@ impl GitPanel<'_> {
     }
 
     pub(super) fn widget_tokens(&self) -> Tokens {
-        Tokens {
-            background: self.theme.background,
-            foreground: self.theme.foreground,
-            card: self.theme.card,
-            card_foreground: self.theme.card_foreground,
-            popover: self.theme.popover,
-            popover_foreground: self.theme.popover_foreground,
-            primary: self.theme.primary,
-            primary_foreground: self.theme.primary_foreground,
-            muted: self.theme.muted,
-            muted_foreground: self.theme.muted_foreground,
-            border: self.theme.border,
-            accent: self.theme.accent,
-            accent_foreground: self.theme.accent_foreground,
-            destructive: self.theme.destructive,
-            button_hover: self.theme.button_hover,
-            row_selected: self.theme.row_selected,
-            row_selected_primary: self.theme.row_selected_primary,
-            density: Density::Desktop,
-        }
+        crate::widgets::button::tokens_from_theme(&self.theme)
     }
 
     #[allow(clippy::too_many_arguments)]

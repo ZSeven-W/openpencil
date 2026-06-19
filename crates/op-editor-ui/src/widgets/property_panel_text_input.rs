@@ -4,7 +4,7 @@ use crate::widgets::PaintCx;
 use crate::Rect;
 use jian_core::text_input::TextInputState;
 use jian_widgets::components::text_input::TextInputView;
-use jian_widgets::{Density, Tokens};
+use jian_widgets::Tokens;
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn paint_text_input_view_value(
@@ -35,24 +35,5 @@ pub(crate) fn paint_text_input_view_value(
 }
 
 fn tokens_from_theme(theme: &Theme) -> Tokens {
-    Tokens {
-        background: theme.background,
-        foreground: theme.foreground,
-        card: theme.card,
-        card_foreground: theme.card_foreground,
-        popover: theme.popover,
-        popover_foreground: theme.popover_foreground,
-        primary: theme.primary,
-        primary_foreground: theme.primary_foreground,
-        muted: theme.muted,
-        muted_foreground: theme.muted_foreground,
-        border: theme.border,
-        accent: theme.accent,
-        accent_foreground: theme.accent_foreground,
-        destructive: theme.destructive,
-        button_hover: theme.button_hover,
-        row_selected: theme.row_selected,
-        row_selected_primary: theme.row_selected_primary,
-        density: Density::Desktop,
-    }
+    crate::widgets::button::tokens_from_theme(theme)
 }
