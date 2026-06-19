@@ -14,4 +14,5 @@
 //! `op-host-web-server` binary depend on this crate.
 
 // Phase 2 — host-free leaf modules.
+pub mod chat_spawn;
 pub mod web_static;

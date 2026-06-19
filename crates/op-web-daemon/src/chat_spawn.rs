@@ -18,7 +18,7 @@ use tokio::process::Command;
 ///
 /// Cross-platform: each branch only probes paths that exist on that
 /// OS so we don't pay for filesystem-stat misses on the wrong OS.
-pub(crate) fn find_binary(name: &str) -> String {
+pub fn find_binary(name: &str) -> String {
     // PATH-relative entries first (cross-platform).
     if let Ok(path_env) = std::env::var("PATH") {
         let sep = if cfg!(windows) { ';' } else { ':' };
@@ -122,7 +122,7 @@ fn well_known_install_paths(name: &str) -> Vec<PathBuf> {
 /// Unix so Ctrl-C in the OP terminal doesn't kill the CLI; on Windows
 /// `creation_flags(CREATE_NO_WINDOW)` so spawning the CLI doesn't
 /// pop a console window for users running the GUI build).
-pub(crate) fn build_command(binary: &str, args: &[String]) -> Command {
+pub fn build_command(binary: &str, args: &[String]) -> Command {
     #[cfg(windows)]
     {
         // CREATE_NO_WINDOW from winbase.h — keeps the console hidden
@@ -173,7 +173,7 @@ pub(crate) fn build_command(binary: &str, args: &[String]) -> Command {
 /// Stringify an `ExitStatus` for chat error reporting. Cross-platform:
 /// on Unix `.code()` is `None` when killed by signal — show the signal
 /// number instead; on Windows `.code()` is always populated.
-pub(crate) fn exit_status_label(status: &std::process::ExitStatus) -> String {
+pub fn exit_status_label(status: &std::process::ExitStatus) -> String {
     if let Some(code) = status.code() {
         return code.to_string();
     }
