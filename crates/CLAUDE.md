@@ -4,23 +4,41 @@ Native + web editor chrome implemented in Rust against jian-skia. Goal: TS-equiv
 
 ## Crate layout
 
+> **Phase 7.3 reorg — read before trusting paths below.** The old
+> `openpencil-shell-*` crates were dissolved/renamed; deeper sections in this doc
+> may still cite pre-reorg paths. Map them: `openpencil-shell-native` →
+> **`op-host-native`**, `openpencil-shell-web` → **`op-host-web`**,
+> `openpencil-desktop` → **`op-host-desktop`**. `openpencil-shell-core` was
+> **split**, not just renamed: widgets / Document / `RenderBackend` →
+> **`op-editor-ui`**, the MCP wire layer → **`op-mcp`** (flat `op-mcp/src/*.rs`,
+> no `mcp/` subdir). The `wasm-libc-shim` + `vendor/skia-safe-op` wasm-skia fork
+> are **retired** — the browser renders through the official CanvasKit skia WASM
+> (loaded separately), so the Rust wasm bundle is pure logic; the **"Web runner"
+> section below is stale** (it describes the old wasm32 skia-raster + EMSDK path).
+
 ```
 crates/
-├── openpencil-shell-core/      Platform-free widgets + Document model + RenderBackend trait
-├── openpencil-shell-native/    Native lib: WidgetHostNative + NativeBackend + SharedSkiaContext
-├── openpencil-shell-web/       Browser runner: wasm32-unknown-unknown + skia-safe-op fork
-├── openpencil-desktop/         Desktop binary: winit event loop + skia-safe GL surface
-└── wasm-libc-shim/             ~95 env.* shims (libc / libm / libcxx) for the wasm32 build
+├── op-editor-ui/         Platform-free widgets + Document model + RenderBackend trait (wasm32-clean)
+├── op-editor-core/       Canonical `.op` (PenDocument) editor state + EditorCommand
+├── op-editor-host-core/  Transport-free host state machines shared by all hosts
+├── op-host-native/       Native host lib: WidgetHostNative + skia-safe GL backend (desktop + mobile)
+├── op-host-web/          Browser bundle entry: wasm32-unknown-unknown cdylib, CanvasKit renderer
+├── op-host-desktop/      Desktop binary `openpencil-desktop` (winit + skia-safe GL); also the `--serve-web` daemon
+├── op-app/               Thin composition root re-exporting the per-platform host (target-gated)
+├── op-cli/               `op` command-line tool
+└── …                     op-mcp / op-ai / op-ai-skills / op-codegen / op-orchestrator / op-figma /
+                          op-git / op-opmerge / op-pen-loader / op-design-lint / op-config-store /
+                          op-process-io / op-acp / op-i18n / op-rpc-transport / op-smoke
 ```
 
-`vendor/skia-safe-op/` is a fork of rust-skia that compiles for `wasm32-unknown-unknown` (no emscripten runtime); `vendor/jian/` is a submodule providing the rendering primitive layer (`jian-skia` Skia adapter, `jian-host-desktop` GL plumbing, `jian-core` event types). Both are referenced by path in workspace Cargo.toml.
+`vendor/jian/` is a submodule providing the rendering primitive layer (`jian-skia` Skia adapter, `jian-host-desktop` GL plumbing, `jian-core` event types + taffy layout); `vendor/casement` is the winit fork; `vendor/agent` is the cross-product Rust agent runtime. All are referenced by path in the workspace Cargo.toml.
 
 ## Key invariants
 
-- **shell-core stays wasm32-clean** (spec v19 §1.2). No skia-safe / winit / accesskit_winit. The `RenderBackend` trait is the only seam between widget code and platform.
-- **Widget code lives in shell-core only.** Hosts (shell-native `widget_host.rs`, shell-web `widget_host.rs`) are the ONLY files allowed to call `openpencil_shell_core::widgets::*`. Boundary script: `tools/check-widget-boundary.sh`.
+- **op-editor-ui (widgets) stays wasm32-clean** (spec v19 §1.2). No skia-safe / winit / accesskit_winit. The `RenderBackend` trait is the only seam between widget code and platform.
+- **Widget code lives in op-editor-ui only.** Hosts (op-host-native `widget_host.rs`, op-host-web `widget_host.rs`) are the ONLY files allowed to call `op_editor_ui::widgets::*`. Boundary script: `tools/check-widget-boundary.sh`.
 - **Max 800 lines per file** — same rule as the TS workspace. `property_panel.rs` is split into 5 files (see PropertyPanel row in the widget table). `widget_host.rs` (shell-native) is split into a slim spine + 8 sibling submodules under `widget_host/` (see "Native widget_host layout" below). `document.rs` is split into a spine + sibling submodules under `document/` — types in `document.rs`, `impl Document` in `mutators.rs`, free walkers + `ReorderDirection` in `walkers.rs`, chat types in `chat.rs`, pen-tool ops in `pen.rs`, color-picker state in `color_picker.rs`, group/ungroup ops in `grouping.rs`, page CRUD in `page_mutators.rs`, tests split into `tests_mutators.rs` + `tests_geometry.rs`.
-- **Web bundle ceiling: 1 MiB gzip + 0 env.\* imports.** Enforced by `tools/check-wasm-bundle.sh`. Ceiling currently at ~916 KB after embedding Roboto + NotoSansCJK subset.
+- **Web bundle ceiling: 6 MiB gzip + 0 env.\* imports.** Enforced by `tools/check-wasm-bundle.sh`. The CanvasKit bundle carries the full app logic (codegen AI pipeline, Figma parser, AI/live-sync), so the ceiling sits well above the retired skia raster path's 1 MiB (~4.5 MiB today). The 0 env.\* guard still holds — CanvasKit needs no libc shim.
 
 ## Document model (`shell-core/src/document/`)
 
@@ -193,7 +211,7 @@ resize / dpi_scale
 
 ## Native widget_host layout
 
-`crates/openpencil-shell-native/src/widget_host.rs` is a slim spine (~265 lines) holding the public surface — `WidgetHostNative` struct, drag-state structs, `CursorHint` enum, `PanelResizeKind` enum, the constructor and tiny accessors (`set_now_ms` / `chat_focused` / `next_animation_deadline_ms`) — plus `mod` declarations for the sibling submodules under `widget_host/`:
+`crates/op-host-native/src/widget_host.rs` is a slim spine (~265 lines) holding the public surface — `WidgetHostNative` struct, drag-state structs, `CursorHint` enum, `PanelResizeKind` enum, the constructor and tiny accessors (`set_now_ms` / `chat_focused` / `next_animation_deadline_ms`) — plus `mod` declarations for the sibling submodules under `widget_host/`:
 
 | File                           | Purpose                                                                                                                                                                                                                |
 | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -322,7 +340,7 @@ Layer-panel drag now supports **cross-parent reparenting**: a drag whose drop-ta
 - **Viewport culling** (`widgets/canvas_viewport.rs`) — `paint_node` takes a `cull: Rect` (canvas region + 64 px stroke/handle margin). Leaf nodes outside the cull skip paint entirely; containers always recurse so off-screen-parent / on-screen-child still renders.
 - **Redraw scheduler** (`openpencil-desktop/src/main.rs`) — `request_redraw(dirty: bool)` + a `prepare_redraw` step that skips paint when only a tracked redraw fired and no visible state changed (kills the first-click chip flicker because macOS GL swap chain didn't perfectly hide `canvas.clear(BLACK)` between same-output frames).
 - **Cursor-move coalescing** — `apply_cursor_move` cached as `pending_cursor_move`, drained on `RedrawRequested` AND right before `apply_press` / `apply_release` / `apply_right_press` (so the final drag-end frame isn't dropped). Without the press-time drain a fast drag-release could fire press before the queued cursor-move and the release saw stale hover state.
-- **Font cache prewarm** (`openpencil-shell-native/src/backend/skia.rs`) — `NativeBackend::new` walks `PREWARM_CJK_CODEPOINTS` (~50 chars covering every CJK glyph used in the chrome + settings modal) through `FontMgr::match_family_style_character` at startup. Without this the first cross-tab paint stutters because each unseen CJK char triggers a synchronous system font scan.
+- **Font cache prewarm** (`op-host-native/src/backend/skia.rs`) — `NativeBackend::new` walks `PREWARM_CJK_CODEPOINTS` (~50 chars covering every CJK glyph used in the chrome + settings modal) through `FontMgr::match_family_style_character` at startup. Without this the first cross-tab paint stutters because each unseen CJK char triggers a synchronous system font scan.
 
 ## Native widget_host layout (expanded)
 

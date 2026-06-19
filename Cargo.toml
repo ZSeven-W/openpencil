@@ -13,6 +13,15 @@ exclude = [
   "vendor/jian",
   "node_modules",
 ]
+# A bare `cargo build` / `cargo test` (no `-p`, no `--workspace`) operates on
+# this set only — the native shippable artifacts (the desktop app + the `op`
+# CLI), exactly what `rust-release.yml` builds via `-p op-host-desktop -p op-cli`.
+# This stops a plain `cargo build` from also compiling the wasm host
+# (`op-host-web`) on the native target — a wasted compile, since its real build
+# is always `cargo build -p op-host-web --target wasm32-unknown-unknown`. CI and
+# the `package.json` cargo:* scripts are unaffected: they all pass `--workspace`
+# explicitly, which overrides `default-members`.
+default-members = ["crates/op-host-desktop", "crates/op-cli"]
 
 [workspace.package]
 version = "0.8.0"
