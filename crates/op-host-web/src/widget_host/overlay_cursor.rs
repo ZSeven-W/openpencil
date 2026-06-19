@@ -10,6 +10,64 @@ use op_editor_ui::Point2D;
 use super::WidgetHost;
 
 impl WidgetHost {
+    /// Patch the live scene's resolved fill / stroke for the active
+    /// colour-picker drag without a layout rebuild — the web twin of the
+    /// native `try_patch_color_drag`. Returns `true` when the patch
+    /// applied (caller flags the live-sync push but skips `mark_dirty`'s
+    /// scene rebuild); `false` when the edit is not in the patchable set
+    /// (variable-mode, gradient-stop / effect target, or a node not
+    /// solid-patchable) and the caller must rebuild.
+    ///
+    /// Unlike the native host this path performs no instance-write
+    /// redirect, so the doc write lands on the anchor directly and the
+    /// anchor is exactly what is patched.
+    fn try_patch_color_drag(&mut self) -> bool {
+        use op_editor_core::ui_draft::ColorTarget;
+        use op_editor_ui::widgets::color_picker::hsv_to_rgb;
+        if self.editor_state_dirty {
+            return false;
+        }
+        let (hue, sat, val, is_fill) = {
+            let Some(state) = self.editor_state.ui.color_picker.as_ref() else {
+                return false;
+            };
+            if state.variable.is_some() {
+                return false;
+            }
+            let is_fill = match state.target {
+                ColorTarget::Fill => true,
+                ColorTarget::Stroke => false,
+                _ => return false,
+            };
+            (state.hue, state.sat, state.val, is_fill)
+        };
+        let anchor = self.editor_state.selection.anchor.clone();
+        if !anchor.is_real() || !self.editor_state.is_editable(&anchor) {
+            return false;
+        }
+        // The loader bakes the paint body's own opacity into the resolved
+        // scene alpha; `set_node_*` bakes node opacity on top. Fold the
+        // body opacity in so a fill / stroke authored below 100 % does not
+        // paint too opaque on every drag frame.
+        let body_opacity = match self.editor_state.selected_node() {
+            Some(node) if is_fill => op_editor_core::fills::first_solid_fill_opacity(node),
+            Some(node) => op_editor_core::fills::first_solid_stroke_opacity(node),
+            None => return false,
+        };
+        let mut color = hsv_to_rgb(hue, sat, val);
+        color.a *= body_opacity.clamp(0.0, 1.0);
+        let ids = [anchor.as_str().to_string()];
+        let patched = if is_fill {
+            self.layout_scene.set_node_fill(&ids, color)
+        } else {
+            self.layout_scene.set_node_stroke_color(&ids, color)
+        };
+        if patched {
+            self.scene_cache.invalidate();
+        }
+        patched
+    }
+
     /// Overlay-owned cursor movement: live colour-picker drags, the
     /// floating panels' header drags + hover washes, and the open
     /// dropdowns' row hovers. Returns `true` when the move was
@@ -35,7 +93,19 @@ impl WidgetHost {
                             .color_picker_set_hsv(h, state.sat, state.val);
                     }
                 }
-                self.mark_dirty();
+                // A solid Fill/Stroke change touches no layout — patch the
+                // resolved scene paint in place instead of rebuilding per
+                // drag frame. The doc fill still changed, so flag the
+                // live-canvas push, but skip the scene rebuild (this is
+                // `mark_dirty` minus `editor_state_dirty`).
+                if self.try_patch_color_drag() {
+                    #[cfg(feature = "canvaskit")]
+                    {
+                        self.doc_sync_dirty = true;
+                    }
+                } else {
+                    self.mark_dirty();
+                }
                 return true;
             }
         }
