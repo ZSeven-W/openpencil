@@ -29,6 +29,7 @@ pub mod chat_spawn;
 pub mod chat_subprocess;
 pub mod chat_subprocess_quirks;
 pub mod chat_system_prompt;
+pub mod design_session;
 pub mod doc_io;
 pub mod export;
 pub mod export_pdf;
