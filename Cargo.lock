@@ -3089,15 +3089,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "op-app"
-version = "0.8.0"
-dependencies = [
- "op-editor-ui",
- "op-host-native",
- "op-host-web",
-]
-
-[[package]]
 name = "op-cli"
 version = "0.8.0"
 dependencies = [
@@ -3305,6 +3296,13 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
+]
+
+[[package]]
+name = "op-host-web-server"
+version = "0.8.0"
+dependencies = [
+ "op-web-daemon",
 ]
 
 [[package]]

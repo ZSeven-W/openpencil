@@ -21,7 +21,7 @@ exclude = [
 # is always `cargo build -p op-host-web --target wasm32-unknown-unknown`. CI and
 # the `package.json` cargo:* scripts are unaffected: they all pass `--workspace`
 # explicitly, which overrides `default-members`.
-default-members = ["crates/op-host-desktop", "crates/op-cli"]
+default-members = ["crates/op-host-desktop", "crates/op-cli", "crates/op-host-web-server"]
 
 [workspace.package]
 version = "0.8.0"
