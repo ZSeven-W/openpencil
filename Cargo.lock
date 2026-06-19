@@ -2244,6 +2244,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "jian-scene"
+version = "0.0.1"
+dependencies = [
+ "jian-widgets",
+]
+
+[[package]]
 name = "jian-skia"
 version = "0.0.1"
 dependencies = [
@@ -3165,6 +3172,7 @@ dependencies = [
  "glam",
  "jian-core",
  "jian-ops-schema",
+ "jian-scene",
  "jian-widgets",
  "op-editor-core",
  "op-i18n",
@@ -3326,6 +3334,7 @@ dependencies = [
  "op-editor-ui",
  "op-figma",
  "op-pen-loader",
+ "serde",
  "serde_json",
  "wasm-bindgen",
  "wasm-bindgen-futures",
@@ -3348,10 +3357,10 @@ name = "op-mcp"
 version = "0.8.0"
 dependencies = [
  "jian-ops-schema",
+ "jian-scene",
  "op-ai-skills",
  "op-design-lint",
  "op-editor-core",
- "op-editor-ui",
  "op-pen-loader",
  "regex",
  "serde_json",
@@ -3387,9 +3396,9 @@ version = "0.8.0"
 dependencies = [
  "jian-core",
  "jian-ops-schema",
+ "jian-scene",
  "jian-skia",
  "op-editor-core",
- "op-editor-ui",
  "serde",
  "serde_json",
  "serde_stacker",
