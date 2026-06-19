@@ -19,4 +19,5 @@ pub mod chat_provider_llm;
 pub mod chat_spawn;
 pub mod chat_subprocess_quirks;
 pub mod chat_system_prompt;
+pub mod pre_validator;
 pub mod web_static;
