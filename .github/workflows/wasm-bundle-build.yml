@@ -113,7 +113,7 @@ jobs:
       # wasm-bindgen `pkg/` output PLUS the vendored CanvasKit artifact under a
       # `canvaskit/` subdir, all inside a single `web-bundle/` directory. This
       # mirrors the `<exe_dir>/web-bundle` + `web-bundle/canvaskit` resolution
-      # order in `crates/op-host-desktop/src/web_static.rs`.
+      # order in `crates/op-web-daemon/src/web_static.rs`.
       - name: Assemble deployable web-bundle/
         run: |
           set -euo pipefail
