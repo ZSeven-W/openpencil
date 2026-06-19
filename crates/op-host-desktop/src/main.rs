@@ -54,7 +54,6 @@ mod menu_action;
 mod model_discovery;
 mod persistence;
 mod persistence_image;
-mod pre_validator;
 mod provider_probe;
 mod provider_probe_host;
 mod provider_probe_models;

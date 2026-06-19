@@ -58,7 +58,7 @@ use op_orchestrator::{
 };
 
 use crate::chat_runtime::shared_runtime;
-use crate::pre_validator::LintPreValidator;
+use op_web_daemon::pre_validator::LintPreValidator;
 
 /// Spawn a worker that runs `Orchestrator::run` against a `RemoteDocSink`.
 pub fn start<L: LlmClient + Send + 'static>(

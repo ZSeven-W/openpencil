@@ -22,7 +22,7 @@ use serde_json::Value;
 
 use crate::ai_proxy::AiStreamRequest;
 use op_web_daemon::chat_provider_llm::ChatProviderLlmClient;
-use crate::pre_validator::LintPreValidator;
+use op_web_daemon::pre_validator::LintPreValidator;
 use crate::web_canvas_server::{SseHub, WebCanvasState};
 
 const STANDARD_MODIFY_STEP: &str =
