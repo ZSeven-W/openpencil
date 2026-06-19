@@ -13,7 +13,8 @@
 //! Both `op-host-desktop` (for its `--serve-web` mode) and a thin
 //! `op-host-web-server` binary depend on this crate.
 
-// Phase 2 — host-free leaf modules.
+// Migrated headless modules (Phases 2-5), kept alphabetical.
+pub mod ai_proxy;
 pub mod chat_agent_loop;
 pub mod chat_attachment;
 pub mod chat_builtin_http;

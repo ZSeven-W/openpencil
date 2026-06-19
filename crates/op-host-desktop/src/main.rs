@@ -5,7 +5,6 @@
 
 mod a11y;
 mod acp_agent_probe_host;
-mod ai_proxy;
 mod app_handler;
 mod chat_acp;
 mod chat_attachment;
