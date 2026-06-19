@@ -3,6 +3,7 @@
 //! agent-settings modal press dispatcher.
 
 use super::WidgetHostNative;
+use op_editor_ui::util::format_panel_number;
 use op_editor_ui::Point2D;
 
 fn create_initial_size_for_tool(tool: op_editor_core::Tool) -> (f64, f64) {
@@ -840,14 +841,6 @@ pub(in crate::widget_host) fn property_focus_initial(
             .get(i)
             .map(|s| ((s.offset * 100.0).round() as i32).to_string())
             .unwrap_or_else(|| "0".to_string()),
-    }
-}
-
-fn format_panel_number(value: f32) -> String {
-    if value.fract().abs() < f32::EPSILON {
-        format!("{}", value.round() as i32)
-    } else {
-        format!("{value:.2}")
     }
 }
 
