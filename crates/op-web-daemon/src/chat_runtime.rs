@@ -36,7 +36,7 @@ use tokio::sync::mpsc;
 /// provider so abort controllers + reqwest connection pools stay
 /// shared. Initialized lazily on first chat send so cold startup
 /// (open file menu, draw chrome) doesn't pay the spawn cost.
-pub(crate) fn shared_runtime() -> &'static Runtime {
+pub fn shared_runtime() -> &'static Runtime {
     static RUNTIME: OnceLock<Runtime> = OnceLock::new();
     RUNTIME.get_or_init(|| {
         Builder::new_multi_thread()
@@ -107,15 +107,15 @@ impl ChatProvider for BuiltInProvider {
         // can't reconfigure it — convey them in-band as a leading
         // directive. Attachments append their temp-file paths; the
         // guard removes the files once the worker task ends.
-        let (mut prompt, guard) = match op_web_daemon::chat_attachment::prompt_with_attachments(
+        let (mut prompt, guard) = match crate::chat_attachment::prompt_with_attachments(
             &request.user_message,
             &request.attachments,
         ) {
             Ok(pair) => pair,
-            Err(e) => return op_web_daemon::chat_attachment::attachment_error_turn(e),
+            Err(e) => return crate::chat_attachment::attachment_error_turn(e),
         };
         let mut directive = String::new();
-        if let Some(d) = op_web_daemon::chat_attachment::thinking_directive(request.thinking) {
+        if let Some(d) = crate::chat_attachment::thinking_directive(request.thinking) {
             directive.push_str(d);
         }
         if request.effort != EffortLevel::Low {
@@ -238,12 +238,12 @@ impl ChatProvider for BuiltInProvider {
 /// iterator return needs. Sharing this helper across both BuiltIn +
 /// Subprocess (and the future HttpServer / Acp) keeps the async ↔
 /// sync bridge in one place.
-pub(crate) struct BlockingRecvIter<T> {
+pub struct BlockingRecvIter<T> {
     rx: mpsc::Receiver<T>,
 }
 
 impl<T> BlockingRecvIter<T> {
-    pub(crate) fn new(rx: mpsc::Receiver<T>) -> Self {
+    pub fn new(rx: mpsc::Receiver<T>) -> Self {
         Self { rx }
     }
 }

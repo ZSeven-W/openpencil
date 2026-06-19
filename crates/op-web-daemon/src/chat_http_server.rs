@@ -41,7 +41,7 @@ use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::sync::mpsc;
 
 use crate::chat_runtime::{shared_runtime, BlockingRecvIter};
-use op_web_daemon::chat_spawn::{build_command, find_binary};
+use crate::chat_spawn::{build_command, find_binary};
 
 /// TS `opencode-client.ts` reuses an existing server on the default
 /// port before spawning its own.
@@ -119,7 +119,7 @@ impl ChatProvider for OpenCodeProvider {
         // (TS parity), so it is NOT folded into the prompt string.
         let mut prompt = request.user_message.clone();
         let mut directive = String::new();
-        if let Some(d) = op_web_daemon::chat_attachment::thinking_directive(request.thinking) {
+        if let Some(d) = crate::chat_attachment::thinking_directive(request.thinking) {
             directive.push_str(d);
         }
         if request.effort != EffortLevel::Low {
@@ -154,7 +154,7 @@ impl ChatProvider for OpenCodeProvider {
                     "url": format!(
                         "data:{};base64,{}",
                         a.media_type,
-                        op_web_daemon::chat_attachment::attachment_to_base64(a)
+                        crate::chat_attachment::attachment_to_base64(a)
                     ),
                 })
             })
@@ -568,7 +568,7 @@ async fn spawn_opencode_server(binary: &str) -> Result<(String, tokio::process::
 /// Parse the `opencode server listening on <url>` stdout line
 /// (TS server.ts:55-62: `startsWith('opencode server listening')` +
 /// `/on\s+(https?:\/\/[^\s]+)/`).
-pub(crate) fn parse_server_url(line: &str) -> Option<String> {
+pub fn parse_server_url(line: &str) -> Option<String> {
     if !line.starts_with("opencode server listening") {
         return None;
     }
@@ -579,13 +579,13 @@ pub(crate) fn parse_server_url(line: &str) -> Option<String> {
 
 /// Parse an OpenCode model slug "providerID/modelID" into its parts
 /// (TS chat.ts:509-513 — split on the FIRST slash only).
-pub(crate) fn parse_opencode_model(model: &str) -> Option<(String, String)> {
+pub fn parse_opencode_model(model: &str) -> Option<(String, String)> {
     let idx = model.find('/')?;
     Some((model[..idx].to_string(), model[idx + 1..].to_string()))
 }
 
 /// Extract the JSON payload from one SSE line (`data: {...}`).
-pub(crate) fn parse_sse_data_line(line: &str) -> Option<serde_json::Value> {
+pub fn parse_sse_data_line(line: &str) -> Option<serde_json::Value> {
     let rest = line.strip_prefix("data:")?.trim_start();
     if rest.is_empty() {
         return None;
@@ -662,7 +662,7 @@ fn opencode_error_label(name: &str) -> &str {
 /// structured `{ name, data: { message } }` errors get a label plus
 /// nested-JSON message extraction; plain `{ message }` passes
 /// through; everything else falls back to truncated JSON.
-pub(crate) fn format_opencode_error(error: Option<&serde_json::Value>) -> String {
+pub fn format_opencode_error(error: Option<&serde_json::Value>) -> String {
     let Some(error) = error else {
         return "Unknown error".into();
     };

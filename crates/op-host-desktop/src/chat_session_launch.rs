@@ -14,13 +14,13 @@ use op_host_native::WidgetHostNative;
 use op_orchestrator::{classify_intent, Intent};
 
 use crate::chat_acp::AcpProvider;
-use crate::chat_builtin_http::ConfiguredBuiltinProvider;
+use op_web_daemon::chat_builtin_http::ConfiguredBuiltinProvider;
 use op_web_daemon::chat_canvas_tools::{chat_tool_channel, chat_tool_defs, ChatToolRequest};
-use crate::chat_claude::ClaudeCodeProvider;
-use crate::chat_copilot::CopilotProvider;
-use crate::chat_http_server::OpenCodeProvider;
+use op_web_daemon::chat_claude::ClaudeCodeProvider;
+use op_web_daemon::chat_copilot::CopilotProvider;
+use op_web_daemon::chat_http_server::OpenCodeProvider;
 use op_web_daemon::chat_provider_llm::ChatProviderLlmClient;
-use crate::chat_subprocess::SubprocessProvider;
+use op_web_daemon::chat_subprocess::SubprocessProvider;
 use op_web_daemon::chat_system_prompt::{
     build_agent_system_prompt, build_chat_system_prompt, chat_history_from_transcript,
 };
@@ -330,8 +330,8 @@ pub fn drain_new_chat_request(
     // A fresh transcript must start a fresh provider conversation —
     // forget any resumable Claude Code / Copilot session so stale
     // context can't leak into the new chat.
-    crate::chat_claude::reset_claude_chat_session();
-    crate::chat_copilot::reset_copilot_chat_session();
+    op_web_daemon::chat_claude::reset_claude_chat_session();
+    op_web_daemon::chat_copilot::reset_copilot_chat_session();
     host.mark_editor_state_dirty();
     true
 }
