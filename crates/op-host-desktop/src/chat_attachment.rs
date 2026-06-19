@@ -2,14 +2,14 @@
 //!
 //! The headless attachment helpers (base64, temp-file spill, prompt
 //! building, the Claude image-Read flow) live in
-//! [`op_web_daemon::chat_attachment`]; this module keeps only the
+//! [`op_host_services::chat_attachment`]; this module keeps only the
 //! native file picker that stages a chosen image on the chat state.
 
 use std::fs;
 
 use op_editor_core::chat::{ChatAttachment, MAX_ATTACHMENT_BYTES};
 use op_host_native::WidgetHostNative;
-use op_web_daemon::chat_attachment::media_type_for_path;
+use op_host_services::chat_attachment::media_type_for_path;
 
 /// Drain `chat.pending_attachment_pick` (raised by the attach
 /// button): open a native image picker and stage the chosen file on

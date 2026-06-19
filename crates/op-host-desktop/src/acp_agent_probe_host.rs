@@ -1,7 +1,7 @@
 //! Host pump for connect-time ACP agent probes.
 //!
 //! The job struct + probe fns live in
-//! [`op_web_daemon::acp_agent_probe_host`] (codex Issue 5 — the job is
+//! [`op_host_services::acp_agent_probe_host`] (codex Issue 5 — the job is
 //! a `DesktopApp` field); this residual keeps only the `impl DesktopApp`
 //! pump, which drives the job through its public API.
 
@@ -10,7 +10,7 @@ use op_editor_core::agent_settings::AcpAgentConnectOutcome;
 use crate::DesktopApp;
 // Re-export so `crate::acp_agent_probe_host::AcpAgentConnectJob` (the
 // `DesktopApp` field type in `main.rs`) still resolves with zero churn.
-pub use op_web_daemon::acp_agent_probe_host::AcpAgentConnectJob;
+pub use op_host_services::acp_agent_probe_host::AcpAgentConnectJob;
 
 impl DesktopApp {
     pub(crate) fn drain_acp_agent_connect(&mut self) -> bool {
@@ -92,7 +92,7 @@ impl DesktopApp {
 mod tests {
     use super::*;
     use op_editor_core::agent_settings::{AcpAgentConnectPhase, AcpConnectionType};
-    use op_web_daemon::acp_agent_probe_host::AcpAgentProbeOutcome;
+    use op_host_services::acp_agent_probe_host::AcpAgentProbeOutcome;
     use std::collections::BTreeMap;
 
     #[test]

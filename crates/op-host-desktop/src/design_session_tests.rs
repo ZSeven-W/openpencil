@@ -1,5 +1,5 @@
 use super::*;
-use op_web_daemon::design_session::{
+use op_host_services::design_session::{
     active_content_bounds, design_canvas_size, fit_design_viewport_to_content,
 };
 use op_editor_core::{EditorCommand, EditorState};

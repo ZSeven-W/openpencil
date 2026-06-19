@@ -4,13 +4,13 @@
 //! loads a canonical `.op`, runs the SAME jian layout pass the editor
 //! canvas uses (`op_pen_loader::editor_state_to_layout_scene`), and
 //! writes one cropped PNG per top-level node on the active page via
-//! [`op_web_daemon::export::export_node_raster`] — node-only screenshots (no
+//! [`op_host_services::export::export_node_raster`] — node-only screenshots (no
 //! editor chrome) for the model-design benchmark. No GUI / GL window,
 //! so it runs headless in CI / scripts.
 
 use std::path::PathBuf;
 
-use op_web_daemon::export::{export_node_raster, RasterFormat};
+use op_host_services::export::{export_node_raster, RasterFormat};
 
 /// When `--render-shots` is present on argv, render node PNGs and return
 /// `true` so `main` exits 0; otherwise return `false` and let the normal

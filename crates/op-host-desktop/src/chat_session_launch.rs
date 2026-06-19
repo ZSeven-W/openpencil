@@ -14,14 +14,14 @@ use op_host_native::WidgetHostNative;
 use op_orchestrator::{classify_intent, Intent};
 
 use crate::chat_acp::AcpProvider;
-use op_web_daemon::chat_builtin_http::ConfiguredBuiltinProvider;
-use op_web_daemon::chat_canvas_tools::{chat_tool_channel, chat_tool_defs, ChatToolRequest};
-use op_web_daemon::chat_claude::ClaudeCodeProvider;
-use op_web_daemon::chat_copilot::CopilotProvider;
-use op_web_daemon::chat_http_server::OpenCodeProvider;
-use op_web_daemon::chat_provider_llm::ChatProviderLlmClient;
-use op_web_daemon::chat_subprocess::SubprocessProvider;
-use op_web_daemon::chat_system_prompt::{
+use op_host_services::chat_builtin_http::ConfiguredBuiltinProvider;
+use op_host_services::chat_canvas_tools::{chat_tool_channel, chat_tool_defs, ChatToolRequest};
+use op_host_services::chat_claude::ClaudeCodeProvider;
+use op_host_services::chat_copilot::CopilotProvider;
+use op_host_services::chat_http_server::OpenCodeProvider;
+use op_host_services::chat_provider_llm::ChatProviderLlmClient;
+use op_host_services::chat_subprocess::SubprocessProvider;
+use op_host_services::chat_system_prompt::{
     build_agent_system_prompt, build_chat_system_prompt, chat_history_from_transcript,
 };
 use op_editor_host_core::design::DesignSession;
@@ -91,10 +91,10 @@ pub fn launch_if_pending(
                 host.mark_editor_state_dirty();
             }
             let append_context =
-                op_web_daemon::chat_intent::detect_append_intent(host.editor_state(), &user_text);
+                op_host_services::chat_intent::detect_append_intent(host.editor_state(), &user_text);
             let initial_state = host.editor_state().clone();
             let request = build_design_request(user_text, &initial_state, append_context);
-            *current_design = Some(op_web_daemon::design_session::start(llm, request, initial_state));
+            *current_design = Some(op_host_services::design_session::start(llm, request, initial_state));
             return true;
         }
         // Design intent but the selected agent has no ChatProvider
@@ -248,8 +248,8 @@ fn launch_cli_standard_turn(
         DEFAULT_MAX_CHARS,
     );
     let system_prompt = build_chat_system_prompt(state, user_text);
-    let modify_plan = op_web_daemon::chat_intent::build_modify_plan(state, user_text);
-    let append_context = op_web_daemon::chat_intent::detect_append_intent(state, user_text);
+    let modify_plan = op_host_services::chat_intent::build_modify_plan(state, user_text);
+    let append_context = op_host_services::chat_intent::detect_append_intent(state, user_text);
     let initial_state = state.clone();
     let design_request =
         build_design_request(user_text.to_string(), &initial_state, append_context);
@@ -292,7 +292,7 @@ fn launch_cli_standard_turn(
         indicator_epoch,
     ));
 
-    let plan = op_web_daemon::chat_intent::CliTurnPlan {
+    let plan = op_host_services::chat_intent::CliTurnPlan {
         user_text: user_text.to_string(),
         page_children_empty,
         classify_provider,
@@ -308,7 +308,7 @@ fn launch_cli_standard_turn(
     thread::Builder::new()
         .name("op-chat-intent".into())
         .spawn(move || {
-            op_web_daemon::chat_intent::run_cli_turn(plan, chat_tx, executor, delta_tx, cmd_tx);
+            op_host_services::chat_intent::run_cli_turn(plan, chat_tx, executor, delta_tx, cmd_tx);
         })
         .expect("spawn op-chat-intent thread");
     true
@@ -330,8 +330,8 @@ pub fn drain_new_chat_request(
     // A fresh transcript must start a fresh provider conversation —
     // forget any resumable Claude Code / Copilot session so stale
     // context can't leak into the new chat.
-    op_web_daemon::chat_claude::reset_claude_chat_session();
-    op_web_daemon::chat_copilot::reset_copilot_chat_session();
+    op_host_services::chat_claude::reset_claude_chat_session();
+    op_host_services::chat_copilot::reset_copilot_chat_session();
     host.mark_editor_state_dirty();
     true
 }

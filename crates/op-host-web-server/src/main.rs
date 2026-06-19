@@ -1,6 +1,6 @@
 //! Headless OpenPencil web / MCP server binary.
 //!
-//! Links only `op-web-daemon` (the extracted headless daemon) — no
+//! Links only `op-host-services` (the extracted headless daemon) — no
 //! winit / glutin / muda / accesskit adapters / skia-GL — so the
 //! container / server image stays GUI-free. It mirrors the `--serve-web`
 //! / `--mcp` / `--mcp-http` argv arms the desktop binary's
@@ -27,12 +27,12 @@ fn main() {
             // `--serve-web <port> [doc] [--host <addr>]`: doc optional
             // (empty document otherwise); `--host` opts in to a
             // non-loopback bind.
-            let (port, path, host) = op_web_daemon::web_canvas_server::parse_serve_web_args(args)
+            let (port, path, host) = op_host_services::web_canvas_server::parse_serve_web_args(args)
                 .unwrap_or_else(|e| {
                     eprintln!("op-host-web-server --serve-web: {e}");
                     exit(2);
                 });
-            if let Err(e) = op_web_daemon::web_canvas_server::run_web_canvas(path, port, &host) {
+            if let Err(e) = op_host_services::web_canvas_server::run_web_canvas(path, port, &host) {
                 eprintln!("op-host-web-server --serve-web: {e}");
                 exit(1);
             }
@@ -42,7 +42,7 @@ fn main() {
                 eprintln!("op-host-web-server --mcp: missing <path> arg");
                 exit(2);
             };
-            if let Err(e) = op_web_daemon::mcp_serve::run(PathBuf::from(path)) {
+            if let Err(e) = op_host_services::mcp_serve::run(PathBuf::from(path)) {
                 eprintln!("op-host-web-server --mcp: {e}");
                 exit(1);
             }
@@ -62,7 +62,7 @@ fn main() {
                 eprintln!("op-host-web-server --mcp-http: missing <path> arg");
                 exit(2);
             };
-            if let Err(e) = op_web_daemon::mcp_serve::run_http(PathBuf::from(path), port) {
+            if let Err(e) = op_host_services::mcp_serve::run_http(PathBuf::from(path), port) {
                 eprintln!("op-host-web-server --mcp-http: {e}");
                 exit(1);
             }

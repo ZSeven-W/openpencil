@@ -1,12 +1,12 @@
 //! Host-coupled test for the CLI standard-mode design route (GAP #33).
 //!
 //! The bulk of `chat_intent`'s tests are headless and live beside the
-//! module in `op_web_daemon::chat_intent` (accessing its `#[cfg(test)]`
+//! module in `op_host_services::chat_intent` (accessing its `#[cfg(test)]`
 //! internals via `super`). This one test is the exception: it drives the
 //! desktop GUI design-session pumps (`design_session::{pump_commands,
 //! pump_progress}`, which take `&mut WidgetHostNative` — orphan rule) to
 //! prove the new-design route clears the agent frame indicators after the
-//! turn finishes. `op-web-daemon` links `op-host-native` with
+//! turn finishes. `op-host-services` links `op-host-native` with
 //! default-features off, so `WidgetHostNative` (gl-host gated) is absent
 //! there; the test therefore lives host-side.
 
@@ -20,14 +20,14 @@ use op_orchestrator::DesignRequest;
 
 use op_editor_host_core::design::DesignSession;
 use op_host_native::WidgetHostNative;
-use op_web_daemon::chat_canvas_tools::chat_tool_channel;
-use op_web_daemon::chat_intent::{run_cli_turn, CliTurnPlan};
+use op_host_services::chat_canvas_tools::chat_tool_channel;
+use op_host_services::chat_intent::{run_cli_turn, CliTurnPlan};
 
 use crate::design_session::{pump_commands, pump_progress};
 
 // ---------------------------------------------------------------------------
 // Scripted providers (copied from the headless chat_intent test sibling —
-// `op-web-daemon` keeps its own copies for the cross-crate tests there).
+// `op-host-services` keeps its own copies for the cross-crate tests there).
 // ---------------------------------------------------------------------------
 
 struct Scripted {

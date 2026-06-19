@@ -3,7 +3,7 @@
 //! The headless load / save core (the canonical serializer, the
 //! `.opmeta` view-state sidecar, legacy-`DocPayload` detection, and the
 //! `EditorState` preference-carry helpers) lives in
-//! [`op_web_daemon::doc_io`]; this module keeps the rfd / winit dialog
+//! [`op_host_services::doc_io`]; this module keeps the rfd / winit dialog
 //! flow — the Save / Save-As / Open pickers, the file-menu
 //! [`run_action`] router, and the native error dialog — and imports the
 //! headless functions back.
@@ -19,7 +19,7 @@ use std::path::PathBuf;
 
 use op_editor_core::EditorState;
 use op_host_native::WidgetHostNative;
-use op_web_daemon::doc_io::{
+use op_host_services::doc_io::{
     ActionOutcome, ErrorKind, active_page_bbox, load_editor_state, preserve_app_preferences,
     save_to_path, set_file_name_display,
 };
@@ -251,20 +251,20 @@ pub fn run_action(
                         None
                     }
                 };
-                let raster = |rf: op_web_daemon::export::RasterFormat| -> Result<(), String> {
+                let raster = |rf: op_host_services::export::RasterFormat| -> Result<(), String> {
                     match &single_node {
                         Some(id) => {
-                            op_web_daemon::export::export_node_raster(scene, id, &path, rf, scale)
+                            op_host_services::export::export_node_raster(scene, id, &path, rf, scale)
                         }
-                        None => op_web_daemon::export::export_raster(scene, &path, rf, scale),
+                        None => op_host_services::export::export_raster(scene, &path, rf, scale),
                     }
                 };
                 let result: Result<(), String> = match fmt {
-                    Fmt::Png => raster(op_web_daemon::export::RasterFormat::Png),
-                    Fmt::Jpeg => raster(op_web_daemon::export::RasterFormat::Jpeg),
-                    Fmt::Webp => raster(op_web_daemon::export::RasterFormat::Webp),
-                    Fmt::Svg => op_web_daemon::export::export_svg(scene, &path),
-                    Fmt::Pdf => op_web_daemon::export_pdf::export_pdf(scene, &path),
+                    Fmt::Png => raster(op_host_services::export::RasterFormat::Png),
+                    Fmt::Jpeg => raster(op_host_services::export::RasterFormat::Jpeg),
+                    Fmt::Webp => raster(op_host_services::export::RasterFormat::Webp),
+                    Fmt::Svg => op_host_services::export::export_svg(scene, &path),
+                    Fmt::Pdf => op_host_services::export_pdf::export_pdf(scene, &path),
                 };
                 if let Err(e) = result {
                     eprintln!("[export-image] {e}");
@@ -398,7 +398,7 @@ mod tests {
     use super::*;
     // `save_to_path` arrives via `super::*`; `sidecar_path` is only
     // needed for test cleanup, so import it directly.
-    use op_web_daemon::doc_io::sidecar_path;
+    use op_host_services::doc_io::sidecar_path;
 
     /// A unique temp path under the OS temp dir for a round-trip test.
     fn temp_op_path(tag: &str) -> PathBuf {

@@ -1,5 +1,5 @@
 use super::*;
-use op_web_daemon::chat_system_prompt::{build_chat_system_prompt, chat_history_from_transcript};
+use op_host_services::chat_system_prompt::{build_chat_system_prompt, chat_history_from_transcript};
 use op_ai::chat_history::{trim_chat_history, DEFAULT_MAX_CHARS, DEFAULT_MAX_MESSAGES};
 use op_ai::chat_provider::{ChatDelta, ChatRequest, EchoProvider, StopReason};
 use op_editor_core::{ChatMessage, ChatToolCall};
@@ -491,7 +491,7 @@ impl Iterator for ToolLoopIter {
         match self.step {
             1 => Some(ChatDelta::ToolUse {
                 name: self.tool.into(),
-                args: op_web_daemon::chat_agent_loop::tool_card_envelope("create", self.args),
+                args: op_host_services::chat_agent_loop::tool_card_envelope("create", self.args),
             }),
             2 => {
                 // Blocks until the UI thread (the test's pump loop)
@@ -536,7 +536,7 @@ fn pump_executes_scripted_tool_call_against_live_state() {
         .push(ChatMessage::assistant_streaming());
     let before = host.editor_state().active_children().len();
 
-    let (executor, tool_rx) = op_web_daemon::chat_canvas_tools::chat_tool_channel();
+    let (executor, tool_rx) = op_host_services::chat_canvas_tools::chat_tool_channel();
     let provider = Box::new(ToolLoopProvider {
         executor: std::sync::Arc::new(executor),
         tool: "insert_node",

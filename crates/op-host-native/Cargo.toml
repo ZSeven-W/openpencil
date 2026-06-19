@@ -14,7 +14,7 @@ path = "src/lib.rs"
 # `gl-host` (NON-default) enables the desktop winit/glutin interactive runner
 # tier + skia-safe's `gl` feature + accesskit. Consumers that need the GUI host
 # (`op-host-desktop`, `op-app`) opt in via `features = ["gl-host"]`. Left OFF —
-# the default, used by `op-web-daemon` (via `default-features = false`) and by
+# the default, used by `op-host-services` (via `default-features = false`) and by
 # the mobile `cargo check` (default features) — it yields a raster-only library:
 # no winit / glutin / jian-host-desktop / accesskit, and skia-safe WITHOUT `gl`
 # (so it emits no native GL link directives). The raster `NativeBackend` +
