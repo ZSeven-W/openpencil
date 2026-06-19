@@ -72,6 +72,22 @@ impl WidgetHost {
             self.mark_dirty();
             return true;
         }
+        // #20: the variables preset dropdown's save-as-name input. Types into
+        // the shared `property_input_draft` the ThemePresetMenu widget paints
+        // (native parity, `keyboard.rs::apply_text`). Web keeps the caret at the
+        // end of the draft (no mid-string editing wired for this field).
+        if self.editor_state.editor_ui.preset_name_input_active() && !c.is_control() {
+            let ui = &mut self.editor_state.ui;
+            if ui.property_draft_select_all {
+                ui.property_input_draft.clear();
+                ui.property_draft_select_all = false;
+            }
+            ui.property_input_draft.push(c);
+            ui.property_caret_pos = ui.property_input_draft.len();
+            ui.property_caret_anchor_ms = self.now_ms;
+            self.mark_dirty();
+            return true;
+        }
         // Variables-panel row/cell drafts — per-kind char gates
         // mirror the native host (numeric / free text / hex).
         if let Some(focus) = self.editor_state.editor_ui.variable_row_focus {
@@ -241,6 +257,26 @@ impl WidgetHost {
             }
             return false;
         }
+        // #20: preset save-as-name input — pop the last char (or clear a
+        // select-all draft), native parity.
+        if self.editor_state.editor_ui.preset_name_input_active() {
+            let ui = &mut self.editor_state.ui;
+            if ui.property_draft_select_all {
+                ui.property_input_draft.clear();
+                ui.property_caret_pos = 0;
+                ui.property_draft_select_all = false;
+                ui.property_caret_anchor_ms = self.now_ms;
+                self.mark_dirty();
+                return true;
+            }
+            if ui.property_input_draft.pop().is_some() {
+                ui.property_caret_pos = ui.property_input_draft.len();
+                ui.property_caret_anchor_ms = self.now_ms;
+                self.mark_dirty();
+                return true;
+            }
+            return false;
+        }
         if self
             .editor_state
             .editor_ui
@@ -387,6 +423,11 @@ impl WidgetHost {
             if self.editor_state.text_edit_insert("\n", self.now_ms) {
                 self.mark_dirty();
             }
+            return true;
+        }
+        // #20: Enter in the preset save-as-name input saves the preset
+        // (native parity, `variable-theme-manager.tsx:298`).
+        if self.commit_variables_preset_name_if_any() {
             return true;
         }
         // Enter in the variables search box just blurs it (the
@@ -602,6 +643,11 @@ impl WidgetHost {
         {
             self.clear_settings_caret();
             self.mark_dirty();
+            return true;
+        }
+        // #20: Escape closes just the preset save-as-name input; the preset
+        // dropdown stays open (native parity, `variable-theme-manager.tsx:299`).
+        if self.escape_variables_preset_name() {
             return true;
         }
         // Modal overlays close one per press (mirrors native order:
