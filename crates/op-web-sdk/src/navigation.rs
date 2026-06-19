@@ -7,13 +7,29 @@
 
 use op_editor_core::Viewport as DocViewport;
 use op_editor_ui::{Point2D, Rect};
+use wasm_bindgen::prelude::wasm_bindgen;
 
 use crate::Viewer;
 
 // ---------------------------------------------------------------------------
-// Core viewport accessors (feature-independent).
+// Internal viewport accessor (tuple return — not wasm-exportable; JS reads the
+// viewport via the exported `viewport_json()`).
 // ---------------------------------------------------------------------------
 
+impl Viewer {
+    /// Return the current viewport as `(pan_x, pan_y, zoom)`.
+    /// Rust/test-facing; JS callers use `viewport_json()`.
+    pub fn viewport(&self) -> (f32, f32, f32) {
+        (self.viewport.pan_x, self.viewport.pan_y, self.viewport.zoom)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// JS-facing navigation (feature-independent: set_viewport / zoom_to_fit work
+// without the render path, falling back to the no-op push_viewport stub).
+// ---------------------------------------------------------------------------
+
+#[wasm_bindgen]
 impl Viewer {
     /// Set the pan/zoom state and push the update into the live render state.
     pub fn set_viewport(&mut self, pan_x: f32, pan_y: f32, zoom: f32) {
@@ -23,11 +39,6 @@ impl Viewer {
         // but kept as a belt-and-suspenders no-op for the non-canvaskit path.
         self.push_viewport();
         self.mark_dirty();
-    }
-
-    /// Return the current viewport as `(pan_x, pan_y, zoom)`.
-    pub fn viewport(&self) -> (f32, f32, f32) {
-        (self.viewport.pan_x, self.viewport.pan_y, self.viewport.zoom)
     }
 
     /// Fit the active page's content into a `w × h` canvas (in CSS px).
@@ -80,6 +91,7 @@ impl Viewer {
 // ---------------------------------------------------------------------------
 
 #[cfg(feature = "canvaskit")]
+#[wasm_bindgen]
 impl Viewer {
     /// Process a DOM `wheel` event from JS.
     ///
@@ -99,7 +111,12 @@ impl Viewer {
         }
         self.push_viewport();
     }
+}
 
+// push_viewport stays out of the `#[wasm_bindgen]` impl (it is `pub(crate)`
+// internal plumbing, not part of the JS surface).
+#[cfg(feature = "canvaskit")]
+impl Viewer {
     /// Push the current `self.viewport` into the live `RenderInner` so the
     /// RAF pump reads the updated value on the next frame.
     pub(crate) fn push_viewport(&self) {
