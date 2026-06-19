@@ -354,7 +354,7 @@ fn stream_modify_route<W: Write>(
             .collect::<Vec<_>>();
         let (applied, version) = {
             let mut guard = state.lock().unwrap_or_else(|p| p.into_inner());
-            let (count, mutated) = crate::chat_canvas_tools::apply_design_modification(
+            let (count, mutated) = op_web_daemon::chat_canvas_tools::apply_design_modification(
                 &mut guard.editor,
                 &node_values,
             );

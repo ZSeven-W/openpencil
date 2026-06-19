@@ -18,7 +18,7 @@ use serde_json::{json, Value};
 use tokio::sync::mpsc;
 
 use crate::chat_agent_loop::{run_anthropic_agent_loop, run_openai_agent_loop, AgentLoopConfig};
-use crate::chat_canvas_tools::MAX_TOOL_TURNS;
+use op_web_daemon::chat_canvas_tools::MAX_TOOL_TURNS;
 use crate::chat_runtime::{resolved_skill_preamble, shared_runtime, BlockingRecvIter};
 
 #[derive(Clone)]

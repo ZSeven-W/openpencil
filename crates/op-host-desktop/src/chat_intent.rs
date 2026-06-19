@@ -49,7 +49,7 @@ use op_editor_core::pen_node_ext::PenNodeExt;
 use op_editor_core::EditorState;
 use op_orchestrator::{AppendContext, DesignRequest};
 
-use crate::chat_canvas_tools::UiChatToolExecutor;
+use op_web_daemon::chat_canvas_tools::UiChatToolExecutor;
 use crate::chat_provider_llm::ChatProviderLlmClient;
 use crate::design_session::{run_design_worker, DesignCmdReq, DesignDelta};
 

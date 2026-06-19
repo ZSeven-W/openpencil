@@ -10,7 +10,7 @@ use op_host_native::WidgetHostNative;
 use op_orchestrator::DesignRequest;
 
 use super::*;
-use crate::chat_canvas_tools::{apply_design_modification, chat_tool_channel};
+use op_web_daemon::chat_canvas_tools::{apply_design_modification, chat_tool_channel};
 use crate::design_session::{pump_commands, pump_progress, DesignSession};
 
 // ---------------------------------------------------------------------------
