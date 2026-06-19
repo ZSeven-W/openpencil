@@ -18,9 +18,15 @@ pub(crate) fn tokens_from_theme(theme: &Theme) -> Tokens {
         accent: theme.accent,
         accent_foreground: theme.accent_foreground,
         destructive: theme.destructive,
+        destructive_foreground: theme.destructive_foreground,
+        secondary: theme.secondary,
+        secondary_foreground: theme.secondary_foreground,
+        input: theme.input,
+        ring: theme.ring,
         button_hover: theme.button_hover,
         row_selected: theme.row_selected,
         row_selected_primary: theme.row_selected_primary,
+        radius: 6.0,
         density: Density::Desktop,
     }
 }

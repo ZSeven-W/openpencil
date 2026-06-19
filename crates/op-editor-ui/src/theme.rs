@@ -58,6 +58,15 @@ pub struct Theme {
     pub accent: Color,
     pub accent_foreground: Color,
     pub destructive: Color,
+    /// Text on a `destructive` surface (shadcn `--destructive-foreground`).
+    pub destructive_foreground: Color,
+    /// Secondary neutral surface + its foreground (shadcn `--secondary`).
+    pub secondary: Color,
+    pub secondary_foreground: Color,
+    /// Form-field border (shadcn `--input`) — input box + switch off-track.
+    pub input: Color,
+    /// Focus-visible ring color (shadcn `--ring`).
+    pub ring: Color,
     /// Solid background of an icon-only toolbar button on hover.
     pub button_hover: Color,
     /// Slightly lighter than `card` — used for the active page
@@ -93,6 +102,11 @@ impl Theme {
             accent: rgb(0x26, 0x26, 0x26),
             accent_foreground: rgb(0xfa, 0xfa, 0xfa),
             destructive: rgb(0xef, 0x44, 0x44),
+            destructive_foreground: rgb(0xfa, 0xfa, 0xfa),
+            secondary: rgb(0x26, 0x26, 0x26),
+            secondary_foreground: rgb(0xfa, 0xfa, 0xfa),
+            input: rgb(0x2a, 0x2a, 0x2a),
+            ring: rgb(0x3b, 0x82, 0xf6),
             button_hover: rgba(0xff, 0xff, 0xff, 0.06),
             row_selected: rgb(0x26, 0x26, 0x26),
             row_selected_primary: rgba(0x3b, 0x82, 0xf6, 0.18),
@@ -120,6 +134,11 @@ impl Theme {
             accent: rgb(0xf5, 0xf5, 0xf5),
             accent_foreground: rgb(0x0a, 0x0a, 0x0a),
             destructive: rgb(0xef, 0x44, 0x44),
+            destructive_foreground: rgb(0xfa, 0xfa, 0xfa),
+            secondary: rgb(0xf5, 0xf5, 0xf5),
+            secondary_foreground: rgb(0x0a, 0x0a, 0x0a),
+            input: rgb(0xe5, 0xe5, 0xe5),
+            ring: rgb(0x3b, 0x82, 0xf6),
             button_hover: rgba(0x00, 0x00, 0x00, 0.06),
             row_selected: rgb(0xe5, 0xe5, 0xe5),
             row_selected_primary: rgba(0x3b, 0x82, 0xf6, 0.15),
