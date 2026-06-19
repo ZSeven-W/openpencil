@@ -2,7 +2,7 @@
 //!
 //! The headless settings persistence (load / save / fingerprint /
 //! save_if_changed + the on-disk payload DTOs + id allocators + locale
-//! detection) lives in [`op_web_daemon::settings_io`]; this residual
+//! detection) lives in [`op_host_services::settings_io`]; this residual
 //! keeps only `touch_recent`, which writes through the live
 //! `WidgetHostNative` (orphan rule — it takes the host type).
 

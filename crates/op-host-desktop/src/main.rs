@@ -152,7 +152,7 @@ struct DesktopApp {
     /// Background AI-model discovery — probes the installed CLIs
     /// on a worker thread; its result is drained into
     /// `chat.available_models` on a later frame.
-    model_probe: op_web_daemon::model_discovery::ModelProbe,
+    model_probe: op_host_services::model_discovery::ModelProbe,
     /// Background auto-search jobs that replace generated empty image
     /// nodes with freely licensed remote images.
     image_search: image_search_session::ImageSearchSession,
@@ -237,7 +237,7 @@ struct DesktopApp {
     /// external repository changes.
     last_git_refresh: Instant,
     /// Live in-process MCP HTTP server, started from Settings -> MCP.
-    mcp_server: Option<op_web_daemon::mcp_live::McpLiveServer>,
+    mcp_server: Option<op_host_services::mcp_live::McpLiveServer>,
     /// When set (via the `--live-mcp[=port]` launch flag used by
     /// `op start`), the editor force-enables the live MCP server on
     /// this port during `resumed()`, regardless of the persisted
@@ -261,7 +261,7 @@ impl DesktopApp {
         let mut host = WidgetHostNative::new();
         let fit_blank_frame = initial_file.is_none();
         // Best-effort prefs restore onto the host's `EditorState`.
-        op_web_daemon::settings_io::load(host.editor_state_mut());
+        op_host_services::settings_io::load(host.editor_state_mut());
         // Imported UIKits + browser-open flag (`uikits.json`). Skipped
         // under test like the update / model probes — unit tests must
         // not see a developer machine's kit store.
@@ -277,7 +277,7 @@ impl DesktopApp {
         host.mark_editor_state_dirty();
         // Baseline for the unsaved-changes prompt — the fresh,
         // empty document is by definition "saved" (nothing to lose).
-        let saved_doc_fingerprint = op_web_daemon::doc_io::document_fingerprint(host.editor_state());
+        let saved_doc_fingerprint = op_host_services::doc_io::document_fingerprint(host.editor_state());
         let update_probe = if cfg!(test) {
             update_check::UpdateProbe::idle()
         } else {
@@ -289,9 +289,9 @@ impl DesktopApp {
             )
         };
         let model_probe = if cfg!(test) {
-            op_web_daemon::model_discovery::ModelProbe::idle()
+            op_host_services::model_discovery::ModelProbe::idle()
         } else {
-            op_web_daemon::model_discovery::ModelProbe::spawn()
+            op_host_services::model_discovery::ModelProbe::spawn()
         };
         Self {
             window: None,
@@ -386,7 +386,7 @@ impl DesktopApp {
         // silent no-op when it finishes.
         figma_import_session::cancel(&mut self.host, &mut self.current_figma_import);
         self.image_search.reset();
-        self.saved_doc_fingerprint = op_web_daemon::doc_io::document_fingerprint(self.host.editor_state());
+        self.saved_doc_fingerprint = op_host_services::doc_io::document_fingerprint(self.host.editor_state());
         self.rebind_git_session_for_current_path();
     }
 
@@ -475,7 +475,7 @@ impl DesktopApp {
     /// Whether the document carries edits since the last save / open
     /// / new.
     fn document_is_dirty(&self) -> bool {
-        op_web_daemon::doc_io::document_fingerprint(self.host.editor_state()) != self.saved_doc_fingerprint
+        op_host_services::doc_io::document_fingerprint(self.host.editor_state()) != self.saved_doc_fingerprint
     }
 
     /// Open documents macOS delivered through the open-documents
@@ -490,8 +490,8 @@ impl DesktopApp {
         {
             let mut opened = false;
             for path in winit::platform::macos::drain_opened_file_urls() {
-                let is_op = op_web_daemon::doc_io::is_supported_document(&path);
-                let is_fig = op_web_daemon::doc_io::is_supported_figma_import(&path);
+                let is_op = op_host_services::doc_io::is_supported_document(&path);
+                let is_fig = op_host_services::doc_io::is_supported_figma_import(&path);
                 if !is_op && !is_fig {
                     continue;
                 }
@@ -552,8 +552,8 @@ impl DesktopApp {
         };
         let mut opened = false;
         for path in paths {
-            let is_op = op_web_daemon::doc_io::is_supported_document(&path);
-            let is_fig = op_web_daemon::doc_io::is_supported_figma_import(&path);
+            let is_op = op_host_services::doc_io::is_supported_document(&path);
+            let is_fig = op_host_services::doc_io::is_supported_figma_import(&path);
             if (!is_op && !is_fig) || !path.is_file() {
                 continue;
             }
@@ -727,7 +727,7 @@ impl DesktopApp {
                     // them. An unchanged document reloads silently.
                     let edited_during_pull = baseline
                         .map(|base| {
-                            op_web_daemon::doc_io::document_fingerprint(self.host.editor_state()) != base
+                            op_host_services::doc_io::document_fingerprint(self.host.editor_state()) != base
                         })
                         .unwrap_or(false);
                     if !edited_during_pull || self.confirm_document_reload() {
@@ -857,7 +857,7 @@ impl DesktopApp {
 /// window is up (see `DesktopApp::apply_initial_file`).
 fn initial_file_from_argv() -> Option<PathBuf> {
     std::env::args_os().skip(1).map(PathBuf::from).find(|p| {
-        (op_web_daemon::doc_io::is_supported_document(p) || op_web_daemon::doc_io::is_supported_figma_import(p))
+        (op_host_services::doc_io::is_supported_document(p) || op_host_services::doc_io::is_supported_figma_import(p))
             && p.is_file()
     })
 }
@@ -925,7 +925,7 @@ fn main() {
     // headless `--render-shots` rasterizer below, MCP — so they resolve
     // simple-icons instead of the unknown-glyph fallback dot. Set-once /
     // idempotent.
-    op_editor_ui::set_brand_catalog(op_web_daemon::web_static::ICONIFY_BRANDS_JSON);
+    op_editor_ui::set_brand_catalog(op_host_services::web_static::ICONIFY_BRANDS_JSON);
     // `--mcp` / `--mcp-http` swap the GUI for an MCP server mode;
     // when one of those ran, exit instead of opening a window.
     if mcp_serve::run_cli_if_requested() {
@@ -985,10 +985,10 @@ fn main() {
     }
 }
 
-// chat_intent moved to op_web_daemon::chat_intent (its headless tests
+// chat_intent moved to op_host_services::chat_intent (its headless tests
 // moved alongside it as a `#[path]` sibling). Only the one host-coupled
 // test stayed here — it drives the GUI design-session pumps, which need
-// `WidgetHostNative` (absent from op-web-daemon's default-features-off
+// `WidgetHostNative` (absent from op-host-services's default-features-off
 // op-host-native dependency).
 #[cfg(test)]
 #[path = "chat_intent_host_tests.rs"]

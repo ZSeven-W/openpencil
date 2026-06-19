@@ -255,7 +255,7 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
         // background Figma import worker so the launch doesn't freeze
         // on a multi-second parse.
         if let Some(path) = self.initial_file.take() {
-            if op_web_daemon::doc_io::is_supported_figma_import(&path) {
+            if op_host_services::doc_io::is_supported_figma_import(&path) {
                 figma_import_session::cancel(&mut self.host, &mut self.current_figma_import);
                 self.current_figma_import = Some(figma_import_session::spawn(&mut self.host, path));
                 self.request_redraw(true);
@@ -281,7 +281,7 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
         // one-off `op start` never rewrites the user's saved settings.
         let bootstrap_changed = self.bootstrap_mcp_runtime_from_settings();
         if bootstrap_changed && self.force_live_mcp_port.is_none() {
-            op_web_daemon::settings_io::save(self.host.editor_state());
+            op_host_services::settings_io::save(self.host.editor_state());
         }
         // Publish (or clean up) the live MCP discovery file now that the
         // launch-time server state is settled, so `op` can find this canvas.
@@ -347,7 +347,7 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
         // on the trackpad hot path.
         let settings_before = match &event {
             WindowEvent::CursorMoved { .. } => None,
-            _ => Some(op_web_daemon::settings_io::fingerprint(self.host.editor_state())),
+            _ => Some(op_host_services::settings_io::fingerprint(self.host.editor_state())),
         };
         let mcp_cli_before = match &event {
             WindowEvent::CursorMoved { .. } => None,
@@ -361,7 +361,7 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
                 // The unsaved-changes prompt can abort the close.
                 if self.confirm_close() {
                     self.host.flush_settings_input();
-                    op_web_daemon::settings_io::save(self.host.editor_state());
+                    op_host_services::settings_io::save(self.host.editor_state());
                     event_loop.exit();
                 }
             }
@@ -438,12 +438,12 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
                 // dashboards, so doing it inline would freeze the
                 // window). Anything else is ignored silently so a
                 // stray drop can't disrupt the current document.
-                if op_web_daemon::doc_io::is_supported_figma_import(&path) {
+                if op_host_services::doc_io::is_supported_figma_import(&path) {
                     figma_import_session::cancel(&mut self.host, &mut self.current_figma_import);
                     self.current_figma_import =
                         Some(figma_import_session::spawn(&mut self.host, path));
                     self.request_redraw(true);
-                } else if op_web_daemon::doc_io::is_supported_document(&path) {
+                } else if op_host_services::doc_io::is_supported_document(&path) {
                     if persistence::open_path(
                         &mut self.host,
                         path,
@@ -872,7 +872,7 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
                                 // — a bare `exit()` would drop work.
                                 if self.confirm_close() {
                                     self.host.flush_settings_input();
-                                    op_web_daemon::settings_io::save(self.host.editor_state());
+                                    op_host_services::settings_io::save(self.host.editor_state());
                                     event_loop.exit();
                                 }
                             }
@@ -998,13 +998,13 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
                             // in-flight Figma import internally, so a
                             // stale worker can't overwrite the fresh
                             // document when its result lands.
-                            op_web_daemon::doc_io::ActionOutcome::Saved => self.mark_document_saved(),
+                            op_host_services::doc_io::ActionOutcome::Saved => self.mark_document_saved(),
                             // User picked a `.fig`; spin up the worker
                             // session and let `pump` apply the document
                             // once parsing finishes. Cancel any prior
                             // in-flight session first so two imports
                             // in quick succession don't race.
-                            op_web_daemon::doc_io::ActionOutcome::FigmaImportStarted(path) => {
+                            op_host_services::doc_io::ActionOutcome::FigmaImportStarted(path) => {
                                 figma_import_session::cancel(
                                     &mut self.host,
                                     &mut self.current_figma_import,
@@ -1013,7 +1013,7 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
                                     Some(figma_import_session::spawn(&mut self.host, path));
                                 self.request_redraw(true);
                             }
-                            op_web_daemon::doc_io::ActionOutcome::Noop => {}
+                            op_host_services::doc_io::ActionOutcome::Noop => {}
                         }
                     }
                 }
@@ -1219,7 +1219,7 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
             self.request_redraw(true);
         }
         if let Some(before) = settings_before {
-            op_web_daemon::settings_io::save_if_changed(self.host.editor_state(), before);
+            op_host_services::settings_io::save_if_changed(self.host.editor_state(), before);
         }
         // A Git-panel click or Enter may have queued an action
         // (Commit / Refresh / Pull) — run it after the event.
@@ -1246,7 +1246,7 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
         // `CloseRequested`; flush MCP port draft before snapshotting so
         // a focused-but-uncommitted edit isn't silently dropped.
         self.host.flush_settings_input();
-        op_web_daemon::settings_io::save(self.host.editor_state());
+        op_host_services::settings_io::save(self.host.editor_state());
         if let Some(mut server) = self.mcp_server.take() {
             server.stop();
             crate::mcp_port_file::remove();

@@ -2,7 +2,7 @@
 # Headless-boundary guard for the web / MCP server binary.
 #
 # The whole point of `op-host-web-server` (Approach Y) is that it links the
-# extracted `op-web-daemon` and NOTHING from the desktop GUI stack: no winit /
+# extracted `op-host-services` and NOTHING from the desktop GUI stack: no winit /
 # glutin / casement (windowing), no muda (native menus), no accesskit platform
 # ADAPTERS (a11y bridges), and skia-safe WITHOUT the `gl` feature (raster only).
 # This guard fails the build if any of those leak into the isolated dep graph,

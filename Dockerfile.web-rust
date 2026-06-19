@@ -47,7 +47,7 @@ ARG WEB_BUNDLE_SOURCE=build
 ARG SERVE_PORT=3100
 
 # binaryen -> wasm-opt -Oz ; nodejs -> the 0-env-import assert in the gate
-# script. op-host-web-server is the headless raster daemon (links op-web-daemon
+# script. op-host-web-server is the headless raster daemon (links op-host-services
 # only — no winit/glutin/skia-GL under Approach Y), so NONE of the GL/X11
 # link-time libs the desktop binary needed are required here; only
 # freetype/fontconfig (+ CJK fonts) for skia's raster text shaping at export.
@@ -68,7 +68,7 @@ WORKDIR /src
 COPY . .
 
 # Build the headless web/MCP server binary (the `--serve-web` host) — links
-# op-web-daemon only, no winit/skia-GL. Always built; this is the runtime
+# op-host-services only, no winit/skia-GL. Always built; this is the runtime
 # binary regardless of how the web bundle is produced.
 RUN cargo build -p op-host-web-server --release
 

@@ -1,13 +1,13 @@
 [package]
-name = "op-web-daemon"
+name = "op-host-services"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-description = "OpenPencil headless web-canvas daemon — serves the wasm shell + REST/MCP, no winit/skia-GL"
+description = "OpenPencil headless host services — the GUI-free backend (serve-web daemon, MCP, AI chat/orchestration, export, persistence) shared by op-host-desktop + op-host-web-server; no winit/skia-GL"
 
 [lib]
-name = "op_web_daemon"
+name = "op_host_services"
 path = "src/lib.rs"
 
 [features]
@@ -64,7 +64,7 @@ zip = "2"
 glam = { version = "0.29", default-features = false, features = ["std"] }
 dirs = "5"
 # Raster + pdf skia for the export endpoint — NO `gl` (the headless server links
-# no GL). Cargo keeps this gl-free in the isolated `-p op-web-daemon` build.
+# no GL). Cargo keeps this gl-free in the isolated `-p op-host-services` build.
 skia-safe = { version = "0.97.0", default-features = false, features = [
   "binary-cache",
   "textlayout",

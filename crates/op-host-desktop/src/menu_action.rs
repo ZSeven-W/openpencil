@@ -25,7 +25,7 @@ impl DesktopApp {
                     &mut self.host,
                     &mut self.current_path,
                     self.window.as_ref(),
-                ) == op_web_daemon::doc_io::ActionOutcome::Saved
+                ) == op_host_services::doc_io::ActionOutcome::Saved
                 {
                     self.mark_document_saved();
                 }

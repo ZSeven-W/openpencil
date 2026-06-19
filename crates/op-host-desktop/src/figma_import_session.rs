@@ -25,7 +25,7 @@ use std::sync::mpsc::{self, Receiver, TryRecvError};
 use std::thread;
 
 use crate::persistence::show_error_dialog_public;
-use op_web_daemon::doc_io::ErrorKind;
+use op_host_services::doc_io::ErrorKind;
 
 /// Successful worker output. Keep this Skia-free: building
 /// `LayoutScene` runs text measurement, which can contend with the

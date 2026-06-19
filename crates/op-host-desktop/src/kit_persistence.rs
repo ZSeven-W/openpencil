@@ -146,7 +146,7 @@ fn kit_to_persisted(kit: &UIKit) -> PersistedKit {
 // ---------------------------------------------------------------------------
 
 /// Hydrate imported kits + the browser-open flag onto a fresh
-/// `EditorState` (call once at startup, after `op_web_daemon::settings_io::load`).
+/// `EditorState` (call once at startup, after `op_host_services::settings_io::load`).
 /// Best-effort: a missing / unreadable / malformed file leaves the
 /// built-in kits alone.
 pub fn load(state: &mut EditorState) {

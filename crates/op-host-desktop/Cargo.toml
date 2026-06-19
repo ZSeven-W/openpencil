@@ -65,8 +65,8 @@ op-editor-ui = { path = "../op-editor-ui" }
 op-host-native = { path = "../op-host-native", version = "0.8.0", features = ["gl-host"] }
 # Phase 2: the headless daemon crate. The `--serve-web` closure migrates here
 # over Phases 2-5; op-host-desktop's serve-web dispatch + GUI residuals call into
-# it via `op_web_daemon::*`.
-op-web-daemon = { path = "../op-web-daemon" }
+# it via `op_host_services::*`.
+op-host-services = { path = "../op-host-services" }
 # Accessibility (#67) — the platform-free `accesskit` core types
 # (`TreeUpdate` / `ActionRequest` / `ActivationHandler` …) used by the
 # desktop a11y adapter (`src/a11y.rs`). The OS-specific subclassing

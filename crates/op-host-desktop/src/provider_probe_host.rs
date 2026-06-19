@@ -4,24 +4,24 @@
 //! pattern: the press handler raises
 //! `agent_settings.pending_provider_connect` (the request seam in
 //! op-editor-core), the redraw pump drains it onto a worker thread
-//! running [`op_web_daemon::provider_probe::connect_provider`], and a later
+//! running [`op_host_services::provider_probe::connect_provider`], and a later
 //! frame polls the outcome into `agent_settings` +
 //! `chat.discovered_models`.
 //!
 //! The job struct + outcome normalization live in
-//! [`op_web_daemon::provider_probe_host`] (codex Issue 5 — the job is a
+//! [`op_host_services::provider_probe_host`] (codex Issue 5 — the job is a
 //! `DesktopApp` field); this residual keeps only the `impl DesktopApp`
 //! pump, which drives the job through its public API.
 
 use op_editor_core::agent_settings::ProviderConnectOutcome;
 
 use crate::DesktopApp;
-use op_web_daemon::model_discovery::model_entry_to_ec;
-use op_web_daemon::provider_probe::ProbeOutcome;
-use op_web_daemon::provider_probe_host::normalize_provider_probe_outcome;
+use op_host_services::model_discovery::model_entry_to_ec;
+use op_host_services::provider_probe::ProbeOutcome;
+use op_host_services::provider_probe_host::normalize_provider_probe_outcome;
 // Re-export so `crate::provider_probe_host::ProviderConnectJob` (the
 // `DesktopApp` field type in `main.rs`) still resolves with zero churn.
-pub use op_web_daemon::provider_probe_host::ProviderConnectJob;
+pub use op_host_services::provider_probe_host::ProviderConnectJob;
 
 impl DesktopApp {
     /// Pump: poll a finished probe into editor state, then start the

@@ -2,7 +2,7 @@
 //! half of the design session.
 //!
 //! The worker spawn + viewport-fit math live in
-//! [`op_web_daemon::design_session`]; this residual keeps the two UI-loop
+//! [`op_host_services::design_session`]; this residual keeps the two UI-loop
 //! pumps (`pump_commands` / `pump_progress`, which take `&mut
 //! WidgetHostNative` — orphan rule) plus the progress-line renderer they
 //! fold into the chat transcript.
@@ -19,7 +19,7 @@ pub use op_editor_host_core::design::DesignSession;
 use op_host_native::WidgetHostNative;
 use op_orchestrator::Progress;
 
-use op_web_daemon::design_session::fit_design_viewport_to_content;
+use op_host_services::design_session::fit_design_viewport_to_content;
 
 /// Drain every pending apply request from the in-flight design
 /// session and execute it against the real `EditorState`. Each

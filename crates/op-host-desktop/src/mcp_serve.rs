@@ -1,14 +1,14 @@
 //! Argv dispatcher for the headless CLI server modes.
 //!
 //! The MCP stdio / HTTP server runners live in
-//! [`op_web_daemon::mcp_serve`] and the headless web-canvas daemon in
+//! [`op_host_services::mcp_serve`] and the headless web-canvas daemon in
 //! `crate::web_canvas_server`; this residual just inspects `argv` and
 //! routes `--mcp` / `--mcp-http` / `--serve-web` to them. `main` calls
 //! it before opening the GUI window.
 
 use std::path::PathBuf;
 
-use op_web_daemon::mcp_serve::{run, run_http};
+use op_host_services::mcp_serve::{run, run_http};
 
 /// If argv requests a headless server mode, run it and return `true` —
 /// the caller (`main`) should then exit. Returns `false` for normal
@@ -59,12 +59,12 @@ pub fn run_cli_if_requested() -> bool {
     if first == "--serve-web" {
         // `--serve-web <port> [doc] [--host <addr>]`: doc optional (empty
         // document otherwise); `--host` opts in to a non-loopback bind.
-        let (port, path, host) = op_web_daemon::web_canvas_server::parse_serve_web_args(args)
+        let (port, path, host) = op_host_services::web_canvas_server::parse_serve_web_args(args)
             .unwrap_or_else(|e| {
                 eprintln!("openpencil-desktop --serve-web: {e}");
                 std::process::exit(2);
             });
-        if let Err(e) = op_web_daemon::web_canvas_server::run_web_canvas(path, port, &host) {
+        if let Err(e) = op_host_services::web_canvas_server::run_web_canvas(path, port, &host) {
             eprintln!("openpencil-desktop --serve-web: {e}");
             std::process::exit(1);
         }

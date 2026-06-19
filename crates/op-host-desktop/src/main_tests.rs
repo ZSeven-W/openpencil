@@ -2,7 +2,7 @@
 //! `main.rs` to keep that file under the 800-line cap.
 
 use super::*;
-use op_web_daemon::mcp_serve::tool_text;
+use op_host_services::mcp_serve::tool_text;
 
 #[test]
 fn cursor_only_redraw_without_visible_state_change_skips_present() {
@@ -184,7 +184,7 @@ fn live_mcp_http_server_applies_write_requests_to_editor_state() {
 
     use op_editor_core::PenNodeExt;
 
-    fn start_live_server() -> (op_web_daemon::mcp_live::McpLiveServer, u16) {
+    fn start_live_server() -> (op_host_services::mcp_live::McpLiveServer, u16) {
         // `bind(0)` to grab an ephemeral port, then re-`start` on that port,
         // has a TOCTOU window where the OS can reassign the port between the
         // probe-listener drop and the server bind — so a single attempt
@@ -195,7 +195,7 @@ fn live_mcp_http_server_applies_write_requests_to_editor_state() {
                 let listener = TcpListener::bind(("127.0.0.1", 0)).expect("bind ephemeral port");
                 listener.local_addr().expect("local addr").port()
             };
-            if let Ok(server) = op_web_daemon::mcp_live::McpLiveServer::start(port) {
+            if let Ok(server) = op_host_services::mcp_live::McpLiveServer::start(port) {
                 return (server, port);
             }
         }
@@ -257,13 +257,13 @@ fn live_mcp_http_server_waits_for_split_http_request() {
     use std::sync::mpsc;
     use std::time::{Duration, Instant};
 
-    fn start_live_server() -> (op_web_daemon::mcp_live::McpLiveServer, u16) {
+    fn start_live_server() -> (op_host_services::mcp_live::McpLiveServer, u16) {
         for _ in 0..20 {
             let port = {
                 let listener = TcpListener::bind(("127.0.0.1", 0)).expect("bind ephemeral port");
                 listener.local_addr().expect("local addr").port()
             };
-            if let Ok(server) = op_web_daemon::mcp_live::McpLiveServer::start(port) {
+            if let Ok(server) = op_host_services::mcp_live::McpLiveServer::start(port) {
                 return (server, port);
             }
         }
@@ -320,7 +320,7 @@ fn live_mcp_http_server_routes_file_path_requests_to_target_file() {
     use std::sync::mpsc;
     use std::time::{Duration, Instant};
 
-    fn start_live_server() -> (op_web_daemon::mcp_live::McpLiveServer, u16) {
+    fn start_live_server() -> (op_host_services::mcp_live::McpLiveServer, u16) {
         // `bind(0)` to grab an ephemeral port, then re-`start` on that port,
         // has a TOCTOU window where the OS can reassign the port between the
         // probe-listener drop and the server bind — so a single attempt
@@ -331,7 +331,7 @@ fn live_mcp_http_server_routes_file_path_requests_to_target_file() {
                 let listener = TcpListener::bind(("127.0.0.1", 0)).expect("bind ephemeral port");
                 listener.local_addr().expect("local addr").port()
             };
-            if let Ok(server) = op_web_daemon::mcp_live::McpLiveServer::start(port) {
+            if let Ok(server) = op_host_services::mcp_live::McpLiveServer::start(port) {
                 return (server, port);
             }
         }
@@ -420,13 +420,13 @@ fn live_mcp_http_server_replaces_document_via_rest_document_sync() {
     use std::sync::mpsc;
     use std::time::{Duration, Instant};
 
-    fn start_live_server() -> (op_web_daemon::mcp_live::McpLiveServer, u16) {
+    fn start_live_server() -> (op_host_services::mcp_live::McpLiveServer, u16) {
         for _ in 0..20 {
             let port = {
                 let listener = TcpListener::bind(("127.0.0.1", 0)).expect("bind ephemeral port");
                 listener.local_addr().expect("local addr").port()
             };
-            if let Ok(server) = op_web_daemon::mcp_live::McpLiveServer::start(port) {
+            if let Ok(server) = op_host_services::mcp_live::McpLiveServer::start(port) {
                 return (server, port);
             }
         }
