@@ -446,3 +446,41 @@ fn git_escape_defocuses_ready_inputs() {
         "user:token"
     );
 }
+
+#[test]
+fn single_key_tool_shortcut_switches_tool_when_no_input_focused() {
+    use op_editor_core::Tool;
+    let mut host = WidgetHost::new();
+
+    // Bare letters switch the active tool (native-host parity); shape variants
+    // also sync the toolbar shape slot.
+    assert!(host.apply_tool_shortcut("r"));
+    assert_eq!(host.editor_state.tool, Tool::Rect);
+    assert_eq!(host.editor_state.editor_ui.shape_tool, Tool::Rect);
+
+    assert!(host.apply_tool_shortcut("t"));
+    assert_eq!(host.editor_state.tool, Tool::Text);
+    // Non-shape tool leaves the shape slot on its last shape (Rect).
+    assert_eq!(host.editor_state.editor_ui.shape_tool, Tool::Rect);
+
+    assert!(host.apply_tool_shortcut("v"));
+    assert_eq!(host.editor_state.tool, Tool::Select);
+
+    // Unmapped letters are not consumed, so they fall through to apply_text.
+    assert!(!host.apply_tool_shortcut("q"));
+    assert_eq!(host.editor_state.tool, Tool::Select);
+}
+
+#[test]
+fn tool_shortcut_is_suppressed_while_an_input_owns_the_keyboard() {
+    use op_editor_core::Tool;
+    let mut host = WidgetHost::new();
+
+    // While a text node is being edited, a bare "r" must type into the field,
+    // not switch tools — apply_tool_shortcut declines so apply_text wins.
+    seed_text_edit(&mut host, "hello");
+    host.editor_state.tool = Tool::Select;
+    assert!(host.input_active());
+    assert!(!host.apply_tool_shortcut("r"));
+    assert_eq!(host.editor_state.tool, Tool::Select);
+}
