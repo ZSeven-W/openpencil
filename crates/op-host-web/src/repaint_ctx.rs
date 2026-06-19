@@ -21,9 +21,6 @@ pub(crate) trait RepaintContext {
     /// Logical viewport size in CSS pixels. File-open/import flows fit the
     /// loaded content to this size after replacing the document.
     fn viewport_size(&self) -> (f32, f32);
-    /// Encode the current canvas. Backends that cannot encode return a
-    /// `JsValue` error and the caller surfaces it to the browser console.
-    fn canvas_data_url(&self, mime: &str) -> Result<String, JsValue>;
     /// Register an OS font face (from Local Font Access bytes) with the
     /// backend so canvas text can shape against it. Returns `true` when the
     /// face was registered. Backends that cannot accept runtime font bytes may

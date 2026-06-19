@@ -1,4 +1,4 @@
-// UNVERIFIED: needs EMSDK wasm32 build + browser; run tools/check-wasm-bundle.sh
+// UNVERIFIED in-browser: run tools/check-wasm-bundle.sh and a browser smoke test.
 //! Browser Local Font Access bridge for the web host.
 //!
 //! The wasm Skia backend cannot see operating-system fonts by itself. The

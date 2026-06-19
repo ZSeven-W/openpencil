@@ -1,4 +1,4 @@
-// UNVERIFIED: needs EMSDK wasm32 build + browser; run tools/check-wasm-bundle.sh
+// UNVERIFIED in-browser: run tools/check-wasm-bundle.sh and a browser smoke test.
 //! XHR-based SSE transport to the desktop daemon's AI SSE endpoints.
 //!
 //! Mirrors `live_sync.rs` (no `wasm-bindgen-futures`): an `XmlHttpRequest`

@@ -1,4 +1,4 @@
-// UNVERIFIED: needs EMSDK wasm32 build + browser; run tools/check-wasm-bundle.sh
+// UNVERIFIED in-browser: run tools/check-wasm-bundle.sh and a browser smoke test.
 //! Browser clipboard write + file download (Blob + anchor).
 //!
 //! The two browser-side actions the codegen panel needs: copy generated source
@@ -63,25 +63,5 @@ pub fn download_bytes(
 
     // The browser has captured the Blob for the download; revoke to free it.
     web_sys::Url::revoke_object_url(&url)?;
-    Ok(())
-}
-
-/// Trigger a browser download of an already-encoded `data:` URL as
-/// `filename`. Same synthetic `<a download>` idiom as
-/// [`download_bytes`], minus the Blob/object-URL round-trip — used by
-/// the Export-image flow, whose payload comes straight from
-/// `HtmlCanvasElement::to_data_url`.
-pub fn download_data_url(filename: &str, url: &str) -> Result<(), wasm_bindgen::JsValue> {
-    let window = web_sys::window()
-        .ok_or_else(|| wasm_bindgen::JsValue::from_str("download: window unavailable"))?;
-    let document = window
-        .document()
-        .ok_or_else(|| wasm_bindgen::JsValue::from_str("download: document unavailable"))?;
-    let anchor = document
-        .create_element("a")?
-        .dyn_into::<web_sys::HtmlAnchorElement>()?;
-    anchor.set_href(url);
-    anchor.set_download(filename);
-    anchor.click();
     Ok(())
 }

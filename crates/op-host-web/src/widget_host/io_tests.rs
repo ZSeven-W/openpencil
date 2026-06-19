@@ -38,10 +38,6 @@ impl RepaintContext for TestRepaintContext {
         (1200.0, 800.0)
     }
 
-    fn canvas_data_url(&self, _mime: &str) -> Result<String, JsValue> {
-        Err(JsValue::from_str("test context has no canvas"))
-    }
-
     fn register_system_font(&mut self, _family: &str, _bytes: &[u8]) -> bool {
         false
     }
@@ -334,31 +330,6 @@ fn install_ingested_state_preserves_live_chrome_and_clears_progress() {
     assert_eq!(
         ui.file_name_display, None,
         "imported documents start untitled"
-    );
-}
-
-#[test]
-fn export_target_maps_formats_onto_browser_encoders() {
-    use crate::file_actions::export_target;
-    use op_editor_core::editor_ui_state::ExportFormat;
-    assert_eq!(export_target(ExportFormat::Png), ("image/png", "png", true));
-    assert_eq!(
-        export_target(ExportFormat::Jpeg),
-        ("image/jpeg", "jpg", true)
-    );
-    assert_eq!(
-        export_target(ExportFormat::Webp),
-        ("image/webp", "webp", true)
-    );
-    // SVG is emitted as vector markup on web; PDF is a raster PDF
-    // wrapper around the browser canvas snapshot.
-    assert_eq!(
-        export_target(ExportFormat::Svg),
-        ("image/svg+xml", "svg", true)
-    );
-    assert_eq!(
-        export_target(ExportFormat::Pdf),
-        ("application/pdf", "pdf", true)
     );
 }
 

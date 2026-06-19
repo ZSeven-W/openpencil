@@ -22,8 +22,9 @@ name: WASM bundle build (#56 — real canvaskit deployable)
 #        --no-default-features --features canvaskit --release
 #   2. wasm-bindgen --target web --out-dir crates/op-host-web/pkg <target.wasm>
 #   3. assert 0 env.* imports (LinkError guard)
-#   4. wasm-opt -Oz, then gzip size <= ceiling (default 6291456 bytes = 6 MiB,
-#      overridable via STEP1B_SHELL_WASM_GZIP_LIMIT_BYTES)
+#   4. wasm-opt -Oz with the rustc-emitted WebAssembly feature flags, then
+#      gzip size <= ceiling (default 6291456 bytes = 6 MiB, overridable via
+#      STEP1B_SHELL_WASM_GZIP_LIMIT_BYTES)
 # The job calls the script directly rather than duplicating that logic — the
 # script already runs non-interactively (`set -euo pipefail`, exit 0/1/2) and
 # is the single source of truth for the gate.
@@ -101,9 +102,10 @@ jobs:
 
       # Single source of truth: run the local gate script verbatim. It performs
       # cargo build (canvaskit) -> wasm-bindgen --target web -> 0-env-import
-      # assert -> wasm-opt -Oz -> gzip size <= ceiling, and exits non-zero on any
-      # breach, which fails the job. The ceiling default (6 MiB gzip) lives in
-      # the script; override here only if a release intentionally re-baselines.
+      # assert -> wasm-opt -Oz with rustc's WebAssembly feature flags -> gzip
+      # size <= ceiling, and exits non-zero on any breach, which fails the job.
+      # The ceiling default (6 MiB gzip) lives in the script; override here only
+      # if a release intentionally re-baselines.
       - name: Build + size-gate the canvaskit bundle
         run: bash tools/check-wasm-bundle.sh
 

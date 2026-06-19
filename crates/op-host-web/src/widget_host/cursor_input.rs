@@ -526,8 +526,8 @@ impl WidgetHost {
             return true;
         }
         // TopBar chrome-button hover wash (sidebar / file-menu / figma /
-        // theme / locale / fullscreen / agent chip). The git button is
-        // compiled out on wasm32; every other button lights up the same
+        // theme / locale / fullscreen / agent chip). Git and Preview are
+        // compiled out on wasm32; every visible button lights up the same
         // as native. Reuses the click hit-test so paint can't drift.
         {
             let tb_rect = self.top_bar_rect(self.last_viewport_w);

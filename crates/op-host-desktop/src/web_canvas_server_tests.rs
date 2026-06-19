@@ -69,6 +69,51 @@ fn server_health_matches_ts_running_port_shape() {
 }
 
 #[test]
+fn post_mcp_server_start_stop_updates_daemon_agent_settings() {
+    let mut s = fresh_state();
+    assert!(!s.editor.editor_ui.agent_settings.mcp_server.running);
+
+    let start = handle_web_canvas_request(
+        "POST",
+        "/api/mcp/server",
+        r#"{"action":"start","port":3201}"#,
+        &mut s,
+    );
+
+    assert!(start.status.starts_with("200"), "{}", start.body);
+    assert!(start.body.contains(r#""ok":true"#), "{}", start.body);
+    assert!(s.editor.editor_ui.agent_settings.mcp_server.running);
+    assert_eq!(s.editor.editor_ui.agent_settings.mcp_server.port, 3201);
+    assert_eq!(s.version, 0, "MCP settings are not document mutations");
+
+    let stop = handle_web_canvas_request(
+        "POST",
+        "/api/mcp/server",
+        r#"{"action":"stop","port":3201}"#,
+        &mut s,
+    );
+
+    assert!(stop.status.starts_with("200"), "{}", stop.body);
+    assert!(!s.editor.editor_ui.agent_settings.mcp_server.running);
+    assert_eq!(s.editor.editor_ui.agent_settings.mcp_server.port, 3201);
+    assert_eq!(s.version, 0, "MCP settings are not document mutations");
+}
+
+#[test]
+fn post_mcp_server_rejects_invalid_body_without_changing_settings() {
+    let mut s = fresh_state();
+    s.editor.editor_ui.agent_settings.mcp_server.running = true;
+    s.editor.editor_ui.agent_settings.mcp_server.port = 4321;
+
+    let r = handle_web_canvas_request("POST", "/api/mcp/server", r#"{"action":"restart"}"#, &mut s);
+
+    assert!(r.status.starts_with("400"), "{}", r.body);
+    assert!(r.body.contains("Invalid MCP server action"), "{}", r.body);
+    assert!(s.editor.editor_ui.agent_settings.mcp_server.running);
+    assert_eq!(s.editor.editor_ui.agent_settings.mcp_server.port, 4321);
+}
+
+#[test]
 fn get_document_returns_doc_and_version() {
     let r = handle_web_canvas_request("GET", "/api/mcp/document", "", &mut fresh_state());
     assert!(r.status.starts_with("200"));
@@ -102,6 +147,74 @@ fn post_document_replaces_doc_and_bumps_version() {
 }
 
 #[test]
+fn post_file_save_requires_a_known_daemon_path() {
+    let mut s = fresh_state();
+
+    let r = handle_web_canvas_request("POST", "/api/file/save", SYNC_BODY, &mut s);
+
+    assert!(r.status.starts_with("400"), "{}", r.body);
+    assert!(r.body.contains("No file path"), "{}", r.body);
+    assert_eq!(s.version, 0);
+}
+
+#[test]
+fn post_file_save_writes_current_path_and_active_page_sidecar() {
+    use op_editor_core::PenNodeExt;
+
+    let path = write_temp_op("save-target", r#"{"version":"1.0.0","children":[]}"#);
+    let mut s = WebCanvasState::new_with_path(EditorState::new(), 3100, Some(path.clone()));
+    let body = r##"{"document":{"version":"1.0.0","children":[],"pages":[{"id":"p1","name":"One","children":[]},{"id":"p2","name":"Two","children":[{"id":"saved-node","type":"rectangle","name":"Saved Rect","x":1,"y":2,"width":80,"height":40,"fill":[{"type":"solid","color":"#123456"}]}]}]},"activePageIndex":1}"##;
+
+    let r = handle_web_canvas_request("POST", "/api/file/save", body, &mut s);
+
+    assert!(r.status.starts_with("200"), "{}", r.body);
+    assert!(r.body.contains(r#""ok":true"#), "{}", r.body);
+    assert_eq!(s.version, 1);
+    assert_eq!(s.editor.ui.active_page_index, 1);
+    assert_eq!(s.editor.active_children()[0].base().id, "saved-node");
+    let saved = std::fs::read_to_string(&path).expect("saved file");
+    assert!(saved.contains("saved-node"), "{saved}");
+    let mut sidecar = path.clone();
+    sidecar.set_extension("op.opmeta");
+    let meta: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&sidecar).expect("sidecar"))
+            .expect("sidecar json");
+    assert_eq!(meta["active_page_index"], 1);
+    let _ = std::fs::remove_file(path);
+    let _ = std::fs::remove_file(sidecar);
+}
+
+#[test]
+fn sync_reset_reloads_current_path_when_daemon_has_backing_file() {
+    use op_editor_core::PenNodeExt;
+
+    let path = write_temp_op(
+        "reset-backed",
+        r#"{"version":"1.0.0","children":[{"id":"from-disk","type":"rectangle","name":"Disk Rect","x":1,"y":2,"width":80,"height":40}]}"#,
+    );
+    let mut s = WebCanvasState::new_with_path(EditorState::starter(), 3100, Some(path.clone()));
+    let _ = s.replace_document(
+        op_pen_loader::load_canonical(
+            r#"{"version":"1.0.0","children":[{"id":"transient","type":"rectangle","name":"Transient","x":1,"y":2,"width":80,"height":40}]}"#,
+        )
+        .expect("transient doc")
+        .value,
+    );
+
+    let r = handle_web_canvas_request("POST", "/api/mcp/sync-reset", "", &mut s);
+
+    assert!(r.status.starts_with("200"), "{}", r.body);
+    assert_eq!(s.version, 2);
+    assert_eq!(s.editor.active_children()[0].base().id, "from-disk");
+    assert_eq!(
+        s.editor.editor_ui.file_name_display.as_deref(),
+        Some(path.file_name().unwrap().to_str().unwrap())
+    );
+    assert_eq!(s.current_path.as_deref(), Some(path.as_path()));
+    let _ = std::fs::remove_file(path);
+}
+
+#[test]
 fn post_document_rejects_invalid_body_with_400() {
     let mut s = fresh_state();
     let r = handle_web_canvas_request("POST", "/api/mcp/document", r#"{"nope":1}"#, &mut s);
@@ -131,6 +244,163 @@ fn get_ai_models_returns_json_array() {
         "models body must be a JSON array: {}",
         r.body
     );
+}
+
+#[test]
+fn post_export_pdf_returns_base64_pdf_without_replacing_daemon_document() {
+    use base64::Engine as _;
+    use op_editor_core::PenNodeExt;
+
+    let mut s = fresh_state();
+    let before_names: Vec<_> = s
+        .editor
+        .active_children()
+        .iter()
+        .filter_map(|n| n.base().name.clone())
+        .collect();
+    let export_body = r##"{"document":{"version":"1.0.0","children":[{"id":"pdf-node","type":"rectangle","name":"PDF Rect","x":1,"y":2,"width":80,"height":40,"fill":[{"type":"solid","color":"#123456"}]}]}}"##;
+
+    let r = handle_web_canvas_request("POST", "/api/export/pdf", export_body, &mut s);
+
+    assert!(r.status.starts_with("200"), "{}", r.body);
+    let parsed: serde_json::Value = serde_json::from_str(&r.body).expect("json body");
+    assert_eq!(parsed["ok"], true);
+    assert_eq!(parsed["mime"], "application/pdf");
+    assert_eq!(parsed["fileName"], "openpencil-export.pdf");
+    let data = parsed["dataBase64"].as_str().expect("dataBase64 string");
+    let pdf = base64::engine::general_purpose::STANDARD
+        .decode(data)
+        .expect("base64 pdf");
+    assert!(pdf.starts_with(b"%PDF-"), "missing PDF header");
+    assert!(
+        pdf.windows(b"%%EOF".len()).any(|w| w == b"%%EOF"),
+        "missing PDF EOF"
+    );
+
+    assert_eq!(s.version, 0, "export must not mutate sync version");
+    let after_names: Vec<_> = s
+        .editor
+        .active_children()
+        .iter()
+        .filter_map(|n| n.base().name.clone())
+        .collect();
+    assert_eq!(after_names, before_names);
+}
+
+#[test]
+fn post_export_pdf_rejects_invalid_document_without_mutating_state() {
+    let mut s = fresh_state();
+
+    let r = handle_web_canvas_request("POST", "/api/export/pdf", r#"{"document":1}"#, &mut s);
+
+    assert!(r.status.starts_with("400"), "{}", r.body);
+    assert!(r.body.contains("export PDF"), "{}", r.body);
+    assert_eq!(s.version, 0);
+}
+
+#[test]
+fn post_export_pdf_uses_request_active_page_index() {
+    use base64::Engine as _;
+
+    let mut s = fresh_state();
+    let export_body = r##"{"activePageIndex":1,"document":{"version":"1.0.0","children":[],"pages":[{"id":"p1","name":"Empty","children":[]},{"id":"p2","name":"Exported","children":[{"id":"pdf-page-two","type":"rectangle","name":"PDF Page Two","x":1,"y":2,"width":80,"height":40,"fill":[{"type":"solid","color":"#123456"}]}]}]}}"##;
+
+    let r = handle_web_canvas_request("POST", "/api/export/pdf", export_body, &mut s);
+
+    assert!(r.status.starts_with("200"), "{}", r.body);
+    let parsed: serde_json::Value = serde_json::from_str(&r.body).expect("json body");
+    let data = parsed["dataBase64"].as_str().expect("dataBase64 string");
+    let pdf = base64::engine::general_purpose::STANDARD
+        .decode(data)
+        .expect("base64 pdf");
+    assert!(pdf.starts_with(b"%PDF-"), "missing PDF header");
+    assert_eq!(s.version, 0, "export must not mutate sync version");
+}
+
+#[test]
+fn post_export_raster_returns_base64_png_without_replacing_daemon_document() {
+    use base64::Engine as _;
+    use op_editor_core::PenNodeExt;
+
+    let mut s = fresh_state();
+    let before_names: Vec<_> = s
+        .editor
+        .active_children()
+        .iter()
+        .filter_map(|n| n.base().name.clone())
+        .collect();
+    let export_body = r##"{"format":"png","scale":1,"document":{"version":"1.0.0","children":[{"id":"png-node","type":"rectangle","name":"PNG Rect","x":1,"y":2,"width":80,"height":40,"fill":[{"type":"solid","color":"#123456"}]}]}}"##;
+
+    let r = handle_web_canvas_request("POST", "/api/export/raster", export_body, &mut s);
+
+    assert!(r.status.starts_with("200"), "{}", r.body);
+    let parsed: serde_json::Value = serde_json::from_str(&r.body).expect("json body");
+    assert_eq!(parsed["ok"], true);
+    assert_eq!(parsed["mime"], "image/png");
+    assert_eq!(parsed["fileName"], "openpencil-export.png");
+    let data = parsed["dataBase64"].as_str().expect("dataBase64 string");
+    let png = base64::engine::general_purpose::STANDARD
+        .decode(data)
+        .expect("base64 png");
+    assert!(png.starts_with(b"\x89PNG\r\n\x1a\n"), "missing PNG header");
+
+    assert_eq!(s.version, 0, "export must not mutate sync version");
+    let after_names: Vec<_> = s
+        .editor
+        .active_children()
+        .iter()
+        .filter_map(|n| n.base().name.clone())
+        .collect();
+    assert_eq!(after_names, before_names);
+}
+
+#[test]
+fn post_export_raster_crops_to_selected_node() {
+    use base64::Engine as _;
+
+    let mut s = fresh_state();
+    let export_body = r##"{"format":"png","scale":1,"selectedNodeId":"small","document":{"version":"1.0.0","children":[{"id":"small","type":"rectangle","name":"Small","x":0,"y":0,"width":10,"height":10,"fill":[{"type":"solid","color":"#123456"}]},{"id":"far","type":"rectangle","name":"Far","x":300,"y":0,"width":50,"height":50,"fill":[{"type":"solid","color":"#654321"}]}]}}"##;
+
+    let r = handle_web_canvas_request("POST", "/api/export/raster", export_body, &mut s);
+
+    assert!(r.status.starts_with("200"), "{}", r.body);
+    let parsed: serde_json::Value = serde_json::from_str(&r.body).expect("json body");
+    let data = parsed["dataBase64"].as_str().expect("dataBase64 string");
+    let png = base64::engine::general_purpose::STANDARD
+        .decode(data)
+        .expect("base64 png");
+
+    assert_eq!(png_dimensions(&png), (42, 42));
+    assert_eq!(s.version, 0, "export must not mutate sync version");
+}
+
+#[test]
+fn post_export_raster_uses_request_active_page_index() {
+    use base64::Engine as _;
+
+    let mut s = fresh_state();
+    let export_body = r##"{"format":"png","scale":1,"activePageIndex":1,"selectedNodeId":"page-two","document":{"version":"1.0.0","children":[],"pages":[{"id":"p1","name":"Empty","children":[]},{"id":"p2","name":"Exported","children":[{"id":"page-two","type":"rectangle","name":"Page Two","x":0,"y":0,"width":10,"height":10,"fill":[{"type":"solid","color":"#123456"}]}]}]}}"##;
+
+    let r = handle_web_canvas_request("POST", "/api/export/raster", export_body, &mut s);
+
+    assert!(r.status.starts_with("200"), "{}", r.body);
+    let parsed: serde_json::Value = serde_json::from_str(&r.body).expect("json body");
+    let data = parsed["dataBase64"].as_str().expect("dataBase64 string");
+    let png = base64::engine::general_purpose::STANDARD
+        .decode(data)
+        .expect("base64 png");
+    assert_eq!(png_dimensions(&png), (42, 42));
+    assert_eq!(s.version, 0, "export must not mutate sync version");
+}
+
+fn png_dimensions(bytes: &[u8]) -> (u32, u32) {
+    assert!(
+        bytes.starts_with(b"\x89PNG\r\n\x1a\n"),
+        "missing PNG header"
+    );
+    let width = u32::from_be_bytes(bytes[16..20].try_into().expect("png width"));
+    let height = u32::from_be_bytes(bytes[20..24].try_into().expect("png height"));
+    (width, height)
 }
 
 #[test]

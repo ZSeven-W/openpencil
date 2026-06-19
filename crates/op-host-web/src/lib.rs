@@ -52,6 +52,8 @@ mod file_actions;
 #[cfg(feature = "canvaskit")]
 mod raf_pump;
 #[cfg(feature = "canvaskit")]
+mod repaint_coalescer;
+#[cfg(feature = "canvaskit")]
 mod theme_preset_io;
 #[cfg(feature = "canvaskit")]
 mod web_acp_connect;
@@ -64,7 +66,7 @@ mod web_ai_transport;
 #[cfg(feature = "canvaskit")]
 mod iconify_web;
 // Web chat session — drains `chat.pending_send` / Stop / New Chat and streams
-// real AI turns through the daemon's `/api/ai/stream` proxy.
+// real standard-mode turns through the daemon's `/api/ai/standard` route.
 #[cfg(feature = "canvaskit")]
 mod web_chat;
 #[cfg(feature = "canvaskit")]

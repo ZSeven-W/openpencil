@@ -1,4 +1,4 @@
-// UNVERIFIED: needs EMSDK wasm32 build + browser; run tools/check-wasm-bundle.sh
+// UNVERIFIED in-browser: run tools/check-wasm-bundle.sh and a browser smoke test.
 //! A `requestAnimationFrame` loop that ticks while work is in flight.
 //!
 //! Used to drain streamed AI deltas into the transcript ~once per frame (the
