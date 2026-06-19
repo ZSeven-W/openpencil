@@ -385,6 +385,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "settings.images" => "이미지",
         "settings.system" => "시스템",
         "settings.autoUpdateDesc" => "시작 시 자동으로 새 버전 확인",
+        "settings.experimental" => "실험적 기능",
+        "settings.experimentalDesc" => "미리보기 모드와 위젯 구성을 활성화합니다",
         "settings.systemDesktopOnly" => "시스템 설정은 데스크톱 앱에서 사용할 수 있습니다.",
         "settings.envHint" => "{{path}}에서 추가 환경 변수를 설정할 수 있습니다.",
         "builtin.title" => "내장 제공자",

@@ -446,6 +446,9 @@ pub struct AgentSettings {
     pub next_image_gen_profile_id: u64,
     /// Auto-check GitHub releases on startup.
     pub auto_update_enabled: bool,
+    /// Opt-in gate for experimental surfaces (canvas Preview mode +
+    /// the property-panel Widget section). Off by default.
+    pub experimental_features_enabled: bool,
     /// Currently-focused editable input on the modal.
     pub focus: Option<SettingsFocus>,
     /// Index into `AgentProvider::ALL` of the hovered card;
@@ -503,6 +506,7 @@ impl Default for AgentSettings {
             hover_image_gen_profile_test: None,
             next_image_gen_profile_id: 1,
             auto_update_enabled: true,
+            experimental_features_enabled: false,
             focus: None,
             hover_provider: usize::MAX,
             hover_builtin_agent: usize::MAX,

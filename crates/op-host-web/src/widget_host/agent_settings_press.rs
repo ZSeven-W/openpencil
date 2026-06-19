@@ -241,6 +241,27 @@ impl WidgetHost {
                     .agent_settings
                     .auto_update_enabled ^= true;
             }
+            AgentSettingsHit::ToggleExperimental => {
+                self.editor_state
+                    .editor_ui
+                    .agent_settings
+                    .experimental_features_enabled ^= true;
+                if !self
+                    .editor_state
+                    .editor_ui
+                    .agent_settings
+                    .experimental_features_enabled
+                {
+                    // Gate off: web preview is just the core flag (no
+                    // host-owned runtime), so exit through it. Also drop
+                    // stale Widget property focus so a hidden field can't
+                    // commit through dispatch.
+                    if self.editor_state.editor_ui.preview_mode {
+                        self.editor_state.editor_ui.exit_preview();
+                    }
+                    self.editor_state.ui.property_focus = None;
+                }
+            }
             AgentSettingsHit::FocusMcpPort => {
                 self.commit_settings_focus();
                 self.editor_state.editor_ui.agent_settings.focus = Some(SettingsFocus::McpPort);

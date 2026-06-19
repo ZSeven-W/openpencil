@@ -385,6 +385,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "settings.images" => "इमेज",
         "settings.system" => "सिस्टम",
         "settings.autoUpdateDesc" => "स्टार्टअप पर स्वचालित रूप से नए संस्करणों की जाँच करें",
+        "settings.experimental" => "प्रायोगिक सुविधाएँ",
+        "settings.experimentalDesc" => "पूर्वावलोकन मोड और विजेट कॉन्फ़िगरेशन सक्षम करें",
         "settings.systemDesktopOnly" => "सिस्टम सेटिंग्स डेस्कटॉप ऐप में उपलब्ध हैं।",
         "settings.envHint" => "आप {{path}} में अतिरिक्त पर्यावरण चर सेट कर सकते हैं।",
         "builtin.title" => "अंतर्निहित प्रदाता",

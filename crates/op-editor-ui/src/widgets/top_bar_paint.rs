@@ -236,7 +236,7 @@ impl TopBar {
         );
         rx -= ICON_BUTTON;
 
-        if PREVIEW_BUTTON_AVAILABLE {
+        if self.preview_button_visible() {
             // Preview (Play) toggle — Square glyph while active (click →
             // stop), Play glyph while idle (click → enter preview).
             let preview_icon = if self.preview_active {

@@ -99,6 +99,7 @@ pub enum AgentSettingsHit {
         field: ImageGenField,
     },
     ToggleAutoUpdate,
+    ToggleExperimental,
     FocusMcpPort,
     Outside,
     Inside,
@@ -277,6 +278,7 @@ impl<'a> AgentSettingsPanel<'a> {
             AgentSettingsTab::System => {
                 match agent_settings_system::hit_test(content_rect(panel), scrolled) {
                     SystemHit::ToggleAutoUpdate => return AgentSettingsHit::ToggleAutoUpdate,
+                    SystemHit::ToggleExperimental => return AgentSettingsHit::ToggleExperimental,
                     SystemHit::None => {}
                 }
             }

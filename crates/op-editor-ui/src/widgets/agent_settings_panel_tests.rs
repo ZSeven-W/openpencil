@@ -769,8 +769,8 @@ fn system_tab_uses_ts_compact_auto_update_card_height() {
 
     assert_eq!(
         panel.content_total_height(),
-        130.0,
-        "System tab should match the TS desktop branch: title plus one compact auto-update row"
+        200.0,
+        "System tab = title + auto-update card + experimental-features card"
     );
 }
 

@@ -385,6 +385,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "settings.images" => "Imagens",
         "settings.system" => "Sistema",
         "settings.autoUpdateDesc" => "Verificar automaticamente novas versões ao iniciar",
+        "settings.experimental" => "Recursos experimentais",
+        "settings.experimentalDesc" => "Ativar o modo de visualização e a configuração de widgets",
         "settings.systemDesktopOnly" => "As configurações do sistema estão disponíveis no aplicativo de desktop.",
         "settings.envHint" => "Você pode definir variáveis de ambiente adicionais em {{path}}.",
         "builtin.title" => "Provedores integrados",

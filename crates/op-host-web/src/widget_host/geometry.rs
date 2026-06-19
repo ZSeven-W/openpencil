@@ -56,7 +56,7 @@ impl WidgetHost {
             origin: Point2D::new(0.0, 0.0),
             size: Point2D::new(viewport_w, TOP_BAR_HEIGHT),
         };
-        let globe = TopBar::globe_rect(top_bar_rect);
+        let globe = TopBar::for_editor_ui(&self.editor_state.editor_ui).globe_rect(top_bar_rect);
         let panel_h = LocalePicker::panel_height();
         let x = (globe.origin.x + globe.size.x / 2.0 - LOCALE_PICKER_WIDTH / 2.0)
             .max(8.0)

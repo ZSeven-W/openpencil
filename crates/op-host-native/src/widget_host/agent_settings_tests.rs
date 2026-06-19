@@ -565,6 +565,111 @@ fn system_auto_update_switch_toggles_preference() {
     );
 }
 
+/// Y of the experimental-features switch row in the System tab:
+/// title + auto-update card (58) + gap (12).
+fn experimental_switch_y(content_y: f32) -> f32 {
+    content_y + 12.0 + 36.0 + 58.0 + 12.0 + 28.0
+}
+
+#[test]
+fn system_experimental_switch_toggles_preference() {
+    let mut host = WidgetHostNative::new();
+    host.editor_state_mut().editor_ui.agent_settings.tab = AgentSettingsTab::System;
+    assert!(
+        !host
+            .editor_state()
+            .editor_ui
+            .agent_settings
+            .experimental_features_enabled
+    );
+
+    let (cx, cy, cw) = agent_settings_content_metrics(&host);
+    assert!(host.dispatch_agent_settings_press(
+        cx + cw - 28.0,
+        experimental_switch_y(cy),
+        1200.0,
+        800.0
+    ));
+
+    assert!(
+        host.editor_state()
+            .editor_ui
+            .agent_settings
+            .experimental_features_enabled
+    );
+}
+
+#[test]
+fn disabling_experimental_exits_active_preview() {
+    let mut host = WidgetHostNative::new();
+    let doc = jian_ops_schema::load_str(
+        r#"{"version":"0.8.0","children":[
+            {"type":"frame","id":"root","name":"Root","x":0,"y":0,"width":200,"height":200,
+             "children":[
+               {"type":"rectangle","id":"r","name":"R","x":10,"y":10,"width":50,"height":50}
+             ]}
+        ]}"#,
+    )
+    .expect("fixture parses")
+    .value;
+    *host.editor_state_mut() = op_editor_core::EditorState::from_document(doc);
+    host.editor_state_mut()
+        .editor_ui
+        .agent_settings
+        .experimental_features_enabled = true;
+    host.editor_state_mut().editor_ui.agent_settings.tab = AgentSettingsTab::System;
+
+    assert!(host.enter_preview((800.0, 600.0)), "preview should enter");
+    assert!(host.preview_active());
+
+    let (cx, cy, cw) = agent_settings_content_metrics(&host);
+    assert!(host.dispatch_agent_settings_press(
+        cx + cw - 28.0,
+        experimental_switch_y(cy),
+        1200.0,
+        800.0
+    ));
+
+    assert!(
+        !host
+            .editor_state()
+            .editor_ui
+            .agent_settings
+            .experimental_features_enabled
+    );
+    assert!(
+        !host.preview_active(),
+        "disabling experimental must exit the live preview session"
+    );
+    assert!(!host.editor_state().editor_ui.preview_mode);
+}
+
+#[test]
+fn disabling_experimental_clears_widget_property_focus() {
+    let mut host = WidgetHostNative::new();
+    host.editor_state_mut()
+        .editor_ui
+        .agent_settings
+        .experimental_features_enabled = true;
+    host.editor_state_mut().editor_ui.agent_settings.tab = AgentSettingsTab::System;
+    // A widget field still holds focus when the gate flips off.
+    host.editor_state_mut().ui.property_focus =
+        Some(op_editor_core::PropertyFocus::WidgetPlaceholder);
+
+    let (cx, cy, cw) = agent_settings_content_metrics(&host);
+    assert!(host.dispatch_agent_settings_press(
+        cx + cw - 28.0,
+        experimental_switch_y(cy),
+        1200.0,
+        800.0
+    ));
+
+    assert!(
+        host.editor_state().ui.property_focus.is_none(),
+        "stale Widget property focus must be cleared so it can't commit"
+    );
+}
+
 #[test]
 fn image_generation_profile_buttons_add_activate_and_remove() {
     let mut host = WidgetHostNative::new();

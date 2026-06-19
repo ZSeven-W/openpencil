@@ -79,6 +79,7 @@ pub struct Fingerprint {
     openverse_client_id: String,
     openverse_client_secret: String,
     auto_update_enabled: bool,
+    experimental_features_enabled: bool,
     connected: [bool; 5],
     builtin_agents: Vec<BuiltinAgentConfig>,
     acp_agents: Vec<AcpAgentConfig>,
@@ -97,6 +98,7 @@ pub fn fingerprint(state: &EditorState) -> Fingerprint {
         openverse_client_id: eui.agent_settings.openverse_client_id.clone(),
         openverse_client_secret: eui.agent_settings.openverse_client_secret.clone(),
         auto_update_enabled: eui.agent_settings.auto_update_enabled,
+        experimental_features_enabled: eui.agent_settings.experimental_features_enabled,
         connected: eui.agent_settings.connected,
         builtin_agents: eui.agent_settings.builtin_agents.clone(),
         acp_agents: eui.agent_settings.acp_agents.clone(),
@@ -132,6 +134,8 @@ struct SettingsPayload {
     openverse_oauth: Option<OpenverseOAuthPayload>,
     #[serde(default)]
     auto_update_enabled: Option<bool>,
+    #[serde(default)]
+    experimental_features_enabled: Option<bool>,
     /// Per-provider connect state, indexed by `AgentProvider::ALL`
     /// (Claude / Codex / OpenCode / Copilot / Gemini). Restored on
     /// launch so the chat model picker survives a restart.
@@ -169,6 +173,7 @@ fn to_payload(state: &EditorState) -> SettingsPayload {
         images_advanced_open: Some(eui.agent_settings.images_advanced_open),
         openverse_oauth: openverse_oauth_to_payload(&eui.agent_settings),
         auto_update_enabled: Some(eui.agent_settings.auto_update_enabled),
+        experimental_features_enabled: Some(eui.agent_settings.experimental_features_enabled),
         connected: Some(eui.agent_settings.connected),
         builtin_agents: Some(
             eui.agent_settings
@@ -241,6 +246,9 @@ fn apply_payload(state: &mut EditorState, payload: SettingsPayload) {
     }
     if let Some(b) = payload.auto_update_enabled {
         eui.agent_settings.auto_update_enabled = b;
+    }
+    if let Some(b) = payload.experimental_features_enabled {
+        eui.agent_settings.experimental_features_enabled = b;
     }
     if let Some(c) = payload.connected {
         eui.agent_settings.connected = c;
