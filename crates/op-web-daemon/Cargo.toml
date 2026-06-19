@@ -1,0 +1,71 @@
+[package]
+name = "op-web-daemon"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "OpenPencil headless web-canvas daemon — serves the wasm shell + REST/MCP, no winit/skia-GL"
+
+[lib]
+name = "op_web_daemon"
+path = "src/lib.rs"
+
+[features]
+default = []
+# Mirrors op-host-desktop's debug-tools toggle for the MCP server.
+mcp-debug-tools = ["op-mcp/debug-tools"]
+
+[dependencies]
+# --- workspace path deps (the headless daemon's closure; modules land in
+#     Phases 2-5). Conditional deps (op-codegen / op-figma / op-config-store)
+#     are added when a moved module proves it needs them, per the plan. ---
+op-editor-core = { path = "../op-editor-core" }
+op-editor-ui = { path = "../op-editor-ui" }
+op-editor-host-core = { path = "../op-editor-host-core" }
+op-mcp = { path = "../op-mcp" }
+op-ai = { path = "../op-ai" }
+op-ai-skills = { path = "../op-ai-skills" }
+op-orchestrator = { path = "../op-orchestrator" }
+op-design-lint = { path = "../op-design-lint" }
+op-pen-loader = { path = "../op-pen-loader" }
+op-process-io = { path = "../op-process-io" }
+op-acp = { path = "../op-acp" }
+jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema" }
+agent = { path = "../../vendor/agent/crates/agent", default-features = false }
+anthropic-agent-sdk = { path = "../../vendor/anthropic-agent-sdk" }
+# Raster-only op-host-native (Phase 0 approach Y: gl-host is non-default, so
+# default-features=false drops winit/glutin/GL). Pulled solely for the export
+# endpoint's NativeBackend + NativeFrameBackend.
+op-host-native = { path = "../op-host-native", default-features = false }
+
+# --- external (crates.io / forks) ---
+github-copilot-sdk = "0.1"
+reqwest = { version = "0.12", default-features = false, features = [
+  "rustls-tls",
+  "json",
+  "stream",
+] }
+tokio = { version = "1", default-features = false, features = [
+  "rt-multi-thread",
+  "macros",
+  "sync",
+  "io-util",
+  "process",
+  "net",
+  "time",
+] }
+futures = { version = "0.3", default-features = false, features = ["std"] }
+async-trait = "0.1"
+serde = { workspace = true }
+serde_json = { workspace = true }
+base64 = "0.22"
+zip = "2"
+glam = { version = "0.29", default-features = false, features = ["std"] }
+dirs = "5"
+# Raster + pdf skia for the export endpoint — NO `gl` (the headless server links
+# no GL). Cargo keeps this gl-free in the isolated `-p op-web-daemon` build.
+skia-safe = { version = "0.97.0", default-features = false, features = [
+  "binary-cache",
+  "textlayout",
+  "pdf",
+] }
