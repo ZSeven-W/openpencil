@@ -82,6 +82,29 @@ pub fn color_to_hex_with_alpha(c: Color) -> String {
     }
 }
 
+/// A colour at `factor` of its current alpha — the Rust analogue of a Tailwind
+/// `/NN` opacity modifier (e.g. `bg-muted/60`). RELATIVE: it MULTIPLIES the
+/// existing alpha. For an absolute set, use `Color::with_alpha` instead.
+pub fn alpha(c: Color, factor: f32) -> Color {
+    Color {
+        a: c.a * factor,
+        ..c
+    }
+}
+
+/// `top` (a translucent colour) composited over the opaque `base`, yielding an
+/// opaque colour — so a `bg-accent/30`-over-`bg-card` hover fill paints in a
+/// single pass.
+pub fn over(base: Color, top: Color) -> Color {
+    let a = top.a;
+    Color {
+        r: base.r * (1.0 - a) + top.r * a,
+        g: base.g * (1.0 - a) + top.g * a,
+        b: base.b * (1.0 - a) + top.b * a,
+        a: base.a,
+    }
+}
+
 /// Format a numeric property value for a panel input: drop a trailing `.0`
 /// for whole numbers, otherwise show two decimals.
 pub fn format_panel_number(value: f32) -> String {

@@ -963,10 +963,7 @@ impl GitPanel<'_> {
 
 /// A colour at `factor` of its current alpha (Tailwind `/NN`).
 fn alpha(c: Color, factor: f32) -> Color {
-    Color {
-        a: c.a * factor,
-        ..c
-    }
+    crate::util::alpha(c, factor)
 }
 
 /// The first whitespace-delimited token of an author name — TS
