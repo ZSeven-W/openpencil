@@ -37,4 +37,5 @@ pub mod pre_validator;
 pub mod provider_probe;
 pub mod provider_probe_host;
 pub mod provider_probe_models;
+pub mod settings_io;
 pub mod web_static;

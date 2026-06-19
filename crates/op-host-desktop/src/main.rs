@@ -265,7 +265,7 @@ impl DesktopApp {
         let mut host = WidgetHostNative::new();
         let fit_blank_frame = initial_file.is_none();
         // Best-effort prefs restore onto the host's `EditorState`.
-        settings_io::load(host.editor_state_mut());
+        op_web_daemon::settings_io::load(host.editor_state_mut());
         // Imported UIKits + browser-open flag (`uikits.json`). Skipped
         // under test like the update / model probes — unit tests must
         // not see a developer machine's kit store.

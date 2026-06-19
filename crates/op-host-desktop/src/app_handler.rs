@@ -3,7 +3,7 @@
 
 use crate::{
     a11y, chat_attachment, chat_session, codegen_session, cursor_icon, design_session,
-    figma_import_session, frame, git_jobs, menu, persistence, settings_io, window_state,
+    figma_import_session, frame, git_jobs, menu, persistence, window_state,
     DesktopApp, DesktopEvent, INITIAL_VIEWPORT_H, INITIAL_VIEWPORT_W,
 };
 use op_host_native::{NativeBackend, ProviderError, SharedSkiaContext, SharedSkiaError};
@@ -281,7 +281,7 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
         // one-off `op start` never rewrites the user's saved settings.
         let bootstrap_changed = self.bootstrap_mcp_runtime_from_settings();
         if bootstrap_changed && self.force_live_mcp_port.is_none() {
-            settings_io::save(self.host.editor_state());
+            op_web_daemon::settings_io::save(self.host.editor_state());
         }
         // Publish (or clean up) the live MCP discovery file now that the
         // launch-time server state is settled, so `op` can find this canvas.
@@ -347,7 +347,7 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
         // on the trackpad hot path.
         let settings_before = match &event {
             WindowEvent::CursorMoved { .. } => None,
-            _ => Some(settings_io::fingerprint(self.host.editor_state())),
+            _ => Some(op_web_daemon::settings_io::fingerprint(self.host.editor_state())),
         };
         let mcp_cli_before = match &event {
             WindowEvent::CursorMoved { .. } => None,
@@ -361,7 +361,7 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
                 // The unsaved-changes prompt can abort the close.
                 if self.confirm_close() {
                     self.host.flush_settings_input();
-                    settings_io::save(self.host.editor_state());
+                    op_web_daemon::settings_io::save(self.host.editor_state());
                     event_loop.exit();
                 }
             }
@@ -872,7 +872,7 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
                                 // — a bare `exit()` would drop work.
                                 if self.confirm_close() {
                                     self.host.flush_settings_input();
-                                    settings_io::save(self.host.editor_state());
+                                    op_web_daemon::settings_io::save(self.host.editor_state());
                                     event_loop.exit();
                                 }
                             }
@@ -1219,7 +1219,7 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
             self.request_redraw(true);
         }
         if let Some(before) = settings_before {
-            settings_io::save_if_changed(self.host.editor_state(), before);
+            op_web_daemon::settings_io::save_if_changed(self.host.editor_state(), before);
         }
         // A Git-panel click or Enter may have queued an action
         // (Commit / Refresh / Pull) — run it after the event.
@@ -1246,7 +1246,7 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
         // `CloseRequested`; flush MCP port draft before snapshotting so
         // a focused-but-uncommitted edit isn't silently dropped.
         self.host.flush_settings_input();
-        settings_io::save(self.host.editor_state());
+        op_web_daemon::settings_io::save(self.host.editor_state());
         if let Some(mut server) = self.mcp_server.take() {
             server.stop();
             crate::mcp_port_file::remove();
