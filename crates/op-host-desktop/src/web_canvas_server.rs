@@ -544,7 +544,7 @@ fn save_editor_from_body(
         next.ui.active_page_index = index.min(page_count - 1);
     }
     set_file_name_display(&mut next, path);
-    crate::persistence::save_to_path(&next, path)?;
+    op_web_daemon::doc_io::save_to_path(&next, path)?;
     Ok(next)
 }
 

@@ -3412,6 +3412,7 @@ dependencies = [
  "op-editor-host-core",
  "op-editor-ui",
  "op-host-native",
+ "op-i18n",
  "op-mcp",
  "op-orchestrator",
  "op-pen-loader",

@@ -292,7 +292,7 @@ impl DesktopApp {
         host.mark_editor_state_dirty();
         // Baseline for the unsaved-changes prompt — the fresh,
         // empty document is by definition "saved" (nothing to lose).
-        let saved_doc_fingerprint = persistence::document_fingerprint(host.editor_state());
+        let saved_doc_fingerprint = op_web_daemon::doc_io::document_fingerprint(host.editor_state());
         let update_probe = if cfg!(test) {
             update_check::UpdateProbe::idle()
         } else {
@@ -401,7 +401,7 @@ impl DesktopApp {
         // silent no-op when it finishes.
         figma_import_session::cancel(&mut self.host, &mut self.current_figma_import);
         self.image_search.reset();
-        self.saved_doc_fingerprint = persistence::document_fingerprint(self.host.editor_state());
+        self.saved_doc_fingerprint = op_web_daemon::doc_io::document_fingerprint(self.host.editor_state());
         self.rebind_git_session_for_current_path();
     }
 
@@ -490,7 +490,7 @@ impl DesktopApp {
     /// Whether the document carries edits since the last save / open
     /// / new.
     fn document_is_dirty(&self) -> bool {
-        persistence::document_fingerprint(self.host.editor_state()) != self.saved_doc_fingerprint
+        op_web_daemon::doc_io::document_fingerprint(self.host.editor_state()) != self.saved_doc_fingerprint
     }
 
     /// Open documents macOS delivered through the open-documents
@@ -505,8 +505,8 @@ impl DesktopApp {
         {
             let mut opened = false;
             for path in winit::platform::macos::drain_opened_file_urls() {
-                let is_op = persistence::is_supported_document(&path);
-                let is_fig = persistence::is_supported_figma_import(&path);
+                let is_op = op_web_daemon::doc_io::is_supported_document(&path);
+                let is_fig = op_web_daemon::doc_io::is_supported_figma_import(&path);
                 if !is_op && !is_fig {
                     continue;
                 }
@@ -567,8 +567,8 @@ impl DesktopApp {
         };
         let mut opened = false;
         for path in paths {
-            let is_op = persistence::is_supported_document(&path);
-            let is_fig = persistence::is_supported_figma_import(&path);
+            let is_op = op_web_daemon::doc_io::is_supported_document(&path);
+            let is_fig = op_web_daemon::doc_io::is_supported_figma_import(&path);
             if (!is_op && !is_fig) || !path.is_file() {
                 continue;
             }
@@ -742,7 +742,7 @@ impl DesktopApp {
                     // them. An unchanged document reloads silently.
                     let edited_during_pull = baseline
                         .map(|base| {
-                            persistence::document_fingerprint(self.host.editor_state()) != base
+                            op_web_daemon::doc_io::document_fingerprint(self.host.editor_state()) != base
                         })
                         .unwrap_or(false);
                     if !edited_during_pull || self.confirm_document_reload() {
@@ -872,7 +872,7 @@ impl DesktopApp {
 /// window is up (see `DesktopApp::apply_initial_file`).
 fn initial_file_from_argv() -> Option<PathBuf> {
     std::env::args_os().skip(1).map(PathBuf::from).find(|p| {
-        (persistence::is_supported_document(p) || persistence::is_supported_figma_import(p))
+        (op_web_daemon::doc_io::is_supported_document(p) || op_web_daemon::doc_io::is_supported_figma_import(p))
             && p.is_file()
     })
 }

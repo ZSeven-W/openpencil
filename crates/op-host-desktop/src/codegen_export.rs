@@ -116,7 +116,7 @@ fn build_live_structure_bundle(
 fn show_save_error(host: &WidgetHostNative, path: Option<&std::path::Path>, detail: &str) {
     crate::persistence::show_error_dialog_public(
         host,
-        crate::persistence::ErrorKind::Save,
+        op_web_daemon::doc_io::ErrorKind::Save,
         path,
         detail,
     );

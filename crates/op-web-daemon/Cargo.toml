@@ -30,6 +30,7 @@ op-design-lint = { path = "../op-design-lint" }
 op-pen-loader = { path = "../op-pen-loader" }
 op-process-io = { path = "../op-process-io" }
 op-acp = { path = "../op-acp" }
+op-i18n = { path = "../op-i18n" }
 jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema" }
 agent = { path = "../../vendor/agent/crates/agent", default-features = false }
 anthropic-agent-sdk = { path = "../../vendor/anthropic-agent-sdk" }
