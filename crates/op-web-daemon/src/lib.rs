@@ -12,3 +12,6 @@
 //! `openpencil-docs/superpowers/plans/2026-06-19-op-web-daemon-extraction.md`).
 //! Both `op-host-desktop` (for its `--serve-web` mode) and a thin
 //! `op-host-web-server` binary depend on this crate.
+
+// Phase 2 — host-free leaf modules.
+pub mod web_static;
