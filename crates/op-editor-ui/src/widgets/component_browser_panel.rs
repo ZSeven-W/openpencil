@@ -676,10 +676,4 @@ impl<'a> ComponentBrowserPanel<'a> {
     }
 }
 
-pub(in crate::widgets) fn truncate(s: &str, max: usize) -> String {
-    if s.chars().count() <= max {
-        return s.to_string();
-    }
-    let kept: String = s.chars().take(max.saturating_sub(1)).collect();
-    format!("{kept}…")
-}
+pub(in crate::widgets) use crate::util::truncate_ellipsis as truncate;

@@ -919,10 +919,4 @@ impl<'a> GitPanel<'a> {
 }
 
 /// Char truncation with an ellipsis.
-pub(super) fn truncate(s: &str, max: usize) -> String {
-    if s.chars().count() <= max {
-        return s.to_string();
-    }
-    let kept: String = s.chars().take(max.saturating_sub(1)).collect();
-    format!("{kept}…")
-}
+pub(super) use crate::util::truncate_ellipsis as truncate;

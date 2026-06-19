@@ -749,11 +749,4 @@ fn scalar_to_label(s: &VariableScalar) -> String {
     }
 }
 
-fn truncate(s: &str, max: usize) -> String {
-    if s.chars().count() <= max {
-        return s.to_string();
-    }
-    let mut out: String = s.chars().take(max - 1).collect();
-    out.push('…');
-    out
-}
+use crate::util::truncate_ellipsis as truncate;
