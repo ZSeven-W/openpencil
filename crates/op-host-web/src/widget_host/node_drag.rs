@@ -73,7 +73,36 @@ impl WidgetHost {
             drag.last_screen_y = y;
         }
         if self.editor_state.translate_selected(dx as f64, dy as f64) {
-            self.mark_dirty();
+            // Incremental scene patch instead of a full serde reconversion per
+            // moved pixel (mirrors the native host). A plain node drag only
+            // moves absolute-positioned nodes, so translate just those scene
+            // nodes in place and defer the full rebuild to release. Flex-flow
+            // children are positioned by their parent, not absolute coords, so
+            // they still need the full pass. Skip the fast path when a
+            // reconversion is already pending (`editor_state_dirty`).
+            if !self.editor_state_dirty {
+                let children = self.editor_state.active_children();
+                let ids: Vec<String> = self
+                    .editor_state
+                    .selection
+                    .set
+                    .iter()
+                    .filter(|id| {
+                        // Move exactly what `translate_selected` moved in the
+                        // document: editable nodes only (locked / hidden are
+                        // skipped there) and not flex-flow children (positioned
+                        // by their parent). Otherwise the scene would drift nodes
+                        // the doc never moved, then snap back on the release-time
+                        // reconversion.
+                        self.editor_state.is_editable(id)
+                            && !op_editor_core::walkers::is_flow_child_of_flex(children, id)
+                    })
+                    .map(|id| id.as_str().to_string())
+                    .collect();
+                let _ = self.layout_scene.translate_nodes(&ids, dx, dy);
+            } else {
+                self.mark_dirty();
+            }
         } else {
             self.editor_state.editor_ui.active_guides.clear();
         }
