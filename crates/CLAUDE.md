@@ -18,8 +18,8 @@ Native + web editor chrome implemented in Rust against jian-skia. Goal: TS-equiv
 
 ```
 crates/
-├── op-editor-ui/         Platform-free widgets + Document model + RenderBackend trait (wasm32-clean)
-├── op-editor-core/       Canonical `.op` (PenDocument) editor state + EditorCommand
+├── op-editor-ui/         Platform-free widgets + RenderBackend facade (wasm32-clean); re-exports the render scene from jian-scene + scene_vars from op-editor-core
+├── op-editor-core/       Canonical `.op` (PenDocument) editor state + EditorCommand + scene_vars (design-variable resolution)
 ├── op-editor-host-core/  Transport-free host state machines shared by all hosts
 ├── op-host-native/       Native host lib: WidgetHostNative + skia-safe GL backend (desktop + mobile)
 ├── op-host-web/          Browser bundle entry: wasm32-unknown-unknown cdylib, CanvasKit renderer
@@ -30,7 +30,7 @@ crates/
                           op-process-io / op-acp / op-i18n / op-rpc-transport / op-smoke
 ```
 
-`vendor/jian/` is a submodule providing the rendering primitive layer (`jian-skia` Skia adapter, `jian-host-desktop` GL plumbing, `jian-core` event types + taffy layout); `vendor/casement` is the winit fork; `vendor/agent` is the cross-product Rust agent runtime. All are referenced by path in the workspace Cargo.toml.
+`vendor/jian/` is a submodule providing the rendering primitive layer (`jian-skia` Skia adapter, `jian-host-desktop` GL plumbing, `jian-core` event types + taffy layout, `jian-scene` canonical render scene — `LayoutScene` + hit-test + path geometry, consumed by OP and any jian app); `vendor/casement` is the winit fork; `vendor/agent` is the cross-product Rust agent runtime. All are referenced by path in the workspace Cargo.toml.
 
 ## Key invariants
 
