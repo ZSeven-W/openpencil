@@ -284,6 +284,42 @@ fn file_menu_cursor_move_clears_stale_layer_hover() {
 }
 
 #[test]
+fn cursor_move_over_layer_row_sets_hover_like_native() {
+    let mut host = WidgetHost::new();
+    seed_layer_doc(&mut host);
+    host.last_viewport_w = W;
+    host.last_viewport_h = H;
+
+    let layer_rect = host.layer_panel_rect(H);
+    let panel = LayerPanel::from_editor(&host.editor_state);
+    let mut point = None;
+    let mut y = layer_rect.origin.y;
+    while y < layer_rect.origin.y + layer_rect.size.y {
+        let mut x = layer_rect.origin.x;
+        while x < layer_rect.origin.x + layer_rect.size.x {
+            let p = Point2D::new(x, y);
+            if matches!(panel.hit_test(layer_rect, p), Some(LayerPanelHit::Layer(_))) {
+                point = Some(p);
+                break;
+            }
+            x += 4.0;
+        }
+        if point.is_some() {
+            break;
+        }
+        y += 4.0;
+    }
+    let point = point.expect("layer row point");
+
+    assert!(host.apply_cursor_move(point.x, point.y));
+    assert_eq!(
+        host.editor_state.editor_ui.hovered_layer_id,
+        Some(NodeId::new("n1"))
+    );
+    assert_eq!(host.editor_state.editor_ui.hovered_page_index, None);
+}
+
+#[test]
 fn opening_file_menu_clears_stale_layer_hover() {
     let mut host = WidgetHost::new();
     seed_layer_doc(&mut host);

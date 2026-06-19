@@ -855,9 +855,7 @@ impl WidgetHost {
 
     /// Update `editor_ui.hovered_layer_id` from the cursor.
     /// Returns true if hover state changed (caller should
-    /// repaint). Mirrors the native host. (Tested + ready to wire; the
-    /// CanvasKit mousemove doesn't drive layer-row hover yet.)
-    #[allow(dead_code)]
+    /// repaint). Mirrors the native host.
     pub fn update_layer_hover(&mut self, x: f32, y: f32, viewport_h: f32) -> bool {
         use op_editor_ui::widgets::{LayerPanel, LayerPanelHit, TOP_BAR_HEIGHT};
         let sidebar_open = self.editor_state.editor_ui.sidebar_open;
