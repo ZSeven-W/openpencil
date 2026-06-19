@@ -371,6 +371,54 @@ impl WidgetHostNative {
         true
     }
 
+    /// Patch the live scene's resolved fill / stroke for the active
+    /// colour-picker drag without a layout rebuild. Returns `true` when the
+    /// patch applied (caller skips `mark_dirty`); `false` when the edit is
+    /// not in the patchable set — variable-mode, an instance redirect, a
+    /// gradient-stop / effect target, or a node not solid-patchable — and
+    /// the caller must rebuild for correctness.
+    fn try_patch_color_drag(&mut self, is_instance: bool) -> bool {
+        use op_editor_core::ui_draft::ColorTarget;
+        use op_editor_ui::widgets::color_picker::hsv_to_rgb;
+        if is_instance || self.editor_state_dirty {
+            return false;
+        }
+        let Some(state) = self.editor_state.ui.color_picker.as_ref() else {
+            return false;
+        };
+        // Variable-mode writes fan out to every node referencing the
+        // variable — far beyond the anchor — so let the rebuild repaint.
+        if state.variable.is_some() {
+            return false;
+        }
+        let is_fill = match state.target {
+            ColorTarget::Fill => true,
+            ColorTarget::Stroke => false,
+            // GradientStop / EffectColor touch gradient bodies / effects
+            // the scene patch does not model — rebuild instead.
+            _ => return false,
+        };
+        let color = hsv_to_rgb(state.hue, state.sat, state.val);
+        let anchor = self.editor_state.selection.anchor.clone();
+        if !anchor.is_real() || !self.editor_state.is_editable(&anchor) {
+            return false;
+        }
+        let ids = [anchor.as_str().to_string()];
+        let patched = if is_fill {
+            self.layout_scene.set_node_fill(&ids, color)
+        } else {
+            self.layout_scene.set_node_stroke_color(&ids, color)
+        };
+        if patched {
+            // The scene now drifts from the cached build inputs; invalidate
+            // so a later refresh always rebuilds from the canonical doc
+            // (mirrors the node-drag patch path — otherwise an undo back to
+            // the cached colour would skip the rebuild and leave the patch).
+            self.scene_cache.invalidate();
+        }
+        patched
+    }
+
     pub fn apply_cursor_move(&mut self, x: f32, y: f32) -> bool {
         // In-flight VariablesPanel edge resize — owns the cursor.
         if self.variables_resize.is_some()
@@ -425,6 +473,7 @@ impl WidgetHostNative {
                 // Instance-write redirect (GAP #10) — picker drags on
                 // a Ref anchor route the live colour into descendants.
                 let instance_scope = self.editor_state.begin_instance_write_for_anchor();
+                let is_instance = instance_scope.is_some();
                 match kind {
                     ColorPickerDrag::SvBox => {
                         let (s, v) = picker.sv_at(panel, point);
@@ -440,7 +489,15 @@ impl WidgetHostNative {
                 if let Some(scope) = instance_scope {
                     self.editor_state.finish_instance_write(scope);
                 }
-                self.mark_dirty();
+                // A solid Fill/Stroke change on a concrete anchor touches
+                // no layout, so patch the resolved scene paint in place
+                // rather than re-running taffy + reshape on every drag
+                // frame (mirrors the node-drag `translate_nodes` fast
+                // path). Variable-mode, instance redirects, gradient-stop /
+                // effect targets, and new strokes fall back to a rebuild.
+                if !self.try_patch_color_drag(is_instance) {
+                    self.mark_dirty();
+                }
                 return true;
             }
         }
