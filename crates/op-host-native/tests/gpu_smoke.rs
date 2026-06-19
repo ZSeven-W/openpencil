@@ -1,3 +1,4 @@
+#![cfg(feature = "gl-host")]
 //! Spec v19 §9.2 / acceptance #3 / plan v7 Task 2 Step 16f.
 //!
 //! Per-OS dispatch:

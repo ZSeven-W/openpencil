@@ -1,3 +1,4 @@
+#![cfg(feature = "gl-host")]
 //! Spec v19 acceptance #2 (chrome region) / plan v7 Task 2 Step 16d.
 //!
 //! Round 5 BLOCK-R5-2 fix: this test covers **chrome only** on a raster

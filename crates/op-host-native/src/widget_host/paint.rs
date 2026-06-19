@@ -2,11 +2,11 @@
 //! Pulled out of `widget_host.rs` to keep the spine file under
 //! the 800-line ceiling.
 
-use super::frame_backend::NativeFrameBackend;
 use super::helpers::{
     GIT_PANEL_CARET_H, GIT_PANEL_CARET_HALF, STATUS_INSET, TOOLBAR_INSET_X, TOOLBAR_INSET_Y,
 };
 use super::WidgetHostNative;
+use crate::backend::NativeFrameBackend;
 use op_editor_ui::widgets::editor_state_ext::theme_for;
 use op_editor_ui::widgets::{
     variables_panel::VariablesPanel, AIChatPlaceholder, AlignToolbar, CanvasViewport,

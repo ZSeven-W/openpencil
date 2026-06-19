@@ -1,3 +1,4 @@
+#![cfg(feature = "gl-host")]
 //! Pixel-level proof that Canvas Preview (Play) renders through the
 //! design-canvas scene painter — the "orange renders grey / layout
 //! scattered" bug, verified end-to-end on a real raster surface.

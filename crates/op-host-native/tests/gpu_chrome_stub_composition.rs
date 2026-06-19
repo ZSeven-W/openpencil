@@ -1,3 +1,4 @@
+#![cfg(feature = "gl-host")]
 //! Spec v19 acceptance #2 (chrome + canvas-stub on the same GPU surface)
 //! / plan v7 Task 2 Step 16d / round 6 BLOCK-R6-2.
 //!
