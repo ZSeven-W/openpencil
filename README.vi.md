@@ -298,6 +298,32 @@ Hỗ trợ ba phương thức nhập liệu: chuỗi inline, `@filepath` (đọc
 | **Runtime**       | Bun · Vite 7                                                                     |
 | **Định dạng tệp** | `.op` — dựa trên JSON, dễ đọc, thân thiện với Git                                |
 
+## Tại sao chọn Rust
+
+OpenPencil đang được viết lại từ đầu bằng **Rust** ([#129](https://github.com/ZSeven-W/openpencil/issues/129)). Bản dựng TypeScript + Electron là phiên bản đang phát hành hiện tại; bản viết lại bằng Rust là bước tiếp theo — một nhân gốc duy nhất nhỏ hơn và nhanh hơn đáng kể, chạy trên nhiều nền tảng hơn từ một codebase duy nhất.
+
+|                              | TypeScript + Electron (hiện tại)               | Rust (bản viết lại)                                                  |
+| ---------------------------- | ---------------------------------------------- | -------------------------------------------------------------------- |
+| **Runtime desktop**          | Electron — đi kèm Chromium + Node.js           | Cửa sổ gốc (`winit` + GPU Skia), không có browser engine             |
+| **Dung lượng desktop**       | Toàn bộ runtime Chromium mỗi lần cài đặt       | Tệp nhị phân độc lập duy nhất — **55.5 MB**                          |
+| **Tải trọng web**            | Bundle JS + WASM                               | **8.2 MB** wasm / **2.18 MB** gzip qua mạng                         |
+| **Dựng hình**                | CanvasKit/Skia trên web                        | Một backend Skia tăng tốc GPU trên **mọi** nền tảng                  |
+| **Bộ nhớ**                   | Dừng do JavaScript GC                         | Không có GC — sở hữu Rust, độ trễ có thể dự đoán                    |
+| **Codebase**                 | Web stack + Electron + Zig NAPI agent          | Một Rust workspace: editor · CLI · MCP · AI · codegen · Figma · Git  |
+| **Nền tảng**                 | Web + desktop, hai stack riêng biệt            | Desktop (macOS/Win/Linux) · mobile (iOS/Android) · browser — một nhân |
+
+**Cải thiện đã đo lường**
+
+- **Dung lượng nhỏ** — toàn bộ ứng dụng desktop là một tệp nhị phân gốc **55.5 MB** thay vì một browser engine đóng gói cùng với Node runtime. Bản dựng web là **8.2 MB** thô / **2.18 MB** gzip sau khi tách catalog icon (−48% qua mạng).
+- **Mở rộng tốt với tài liệu lớn** — canvas trực tiếp với **10,000 node** (auto-layout lồng nhau, bốn cấp độ) ghi, đọc và snapshot layout **không có panic và ~0% CPU khi rỗi**; snapshot layout đầy đủ của toàn bộ 10k node trả về trong **~0.68 s**.
+- **Tương tác nhanh** — pan/zoom không còn tuần tự hóa lại tài liệu mỗi frame (một bản sửa hot-path duy nhất giảm CPU zoom bằng bánh xe từ **~69% xuống ~0%**); kéo cập nhật cảnh gia tăng, đo lường văn bản được cache, và các lần vẽ lại gộp thành một lần mỗi frame.
+- **Một nhân, mọi màn hình** — cùng trạng thái editor và cùng render backend biên dịch sang desktop gốc, mobile và browser qua WASM — không có các cài đặt lại song song cần đồng bộ.
+- **GPU Skia ở khắp nơi** — gốc dựng hình qua `skia-safe` trên GL context; browser dựng hình qua CanvasKit trên WebGL2 — cùng mã vẽ, cùng đầu ra.
+- **Trợ năng gốc** — AccessKit trên macOS, Windows và Linux, cộng với DOM mirror trên web, thay vì dựa vào cây a11y của browser.
+- **Một workspace có kiểm tra kiểu** — MCP host, CLI, nhà cung cấp AI, tạo mã, nhập Figma và tích hợp Git đều nằm trong một Rust workspace duy nhất, với `cargo-deny` kiểm soát chuỗi cung ứng trong CI.
+
+> **Trạng thái:** shell Rust đang được phát triển tích cực (xem Lộ trình bên dưới). Cho đến khi đạt tính năng tương đương cho `v0.8.0`, các bản tải xuống có thể cài đặt ở trên là bản dựng TypeScript + Electron.
+
 ## Cấu trúc dự án
 
 ```text

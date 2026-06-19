@@ -298,6 +298,32 @@ Mendukung tiga metode input: string inline, `@filepath` (baca dari file), atau `
 | **Runtime**     | Bun · Vite 7                                                                     |
 | **Format file** | `.op` — berbasis JSON, mudah dibaca manusia, ramah Git                           |
 
+## Mengapa Rust
+
+OpenPencil sedang ditulis ulang dari awal dalam **Rust** ([#129](https://github.com/ZSeven-W/openpencil/issues/129)). Build TypeScript + Electron adalah yang tersedia saat ini; penulisan ulang dalam Rust adalah langkah berikutnya — satu inti native yang jauh lebih kecil dan lebih cepat, serta berjalan di lebih banyak platform dari satu basis kode.
+
+|                           | TypeScript + Electron (saat ini)                   | Rust (penulisan ulang)                                                        |
+| ------------------------- | -------------------------------------------------- | ----------------------------------------------------------------------------- |
+| **Runtime desktop**       | Electron — menyertakan Chromium + Node.js          | Jendela native (`winit` + GPU Skia), tanpa engine browser                     |
+| **Jejak desktop**         | Runtime Chromium penuh per instalasi               | Satu binary mandiri — **55.5 MB**                                             |
+| **Payload web**           | Bundle JS + WASM                                   | **8.2 MB** wasm / **2.18 MB** gzip melalui jaringan                          |
+| **Rendering**             | CanvasKit/Skia di web                              | Satu backend Skia berakselerasi GPU di **setiap** target                      |
+| **Memori**                | Jeda JavaScript GC                                 | Tanpa GC — kepemilikan Rust, latensi yang dapat diprediksi                   |
+| **Basis kode**            | Web stack + Electron + Zig NAPI agent              | Satu workspace Rust: editor · CLI · MCP · AI · codegen · Figma · Git          |
+| **Target**                | Web + desktop, dua stack terpisah                  | Desktop (macOS/Win/Linux) · mobile (iOS/Android) · browser — satu inti        |
+
+**Peningkatan terukur**
+
+- **Jejak kecil** — seluruh aplikasi desktop adalah satu binary native **55.5 MB** alih-alih engine browser terbundel ditambah runtime Node. Build web berukuran **8.2 MB** mentah / **2.18 MB** gzip setelah pemisahan katalog ikon (−48% melalui jaringan).
+- **Skalabel untuk dokumen besar** — kanvas live dengan **10,000 node** (auto-layout bertingkat, empat level dalam) menulis, membaca, dan mengambil snapshot layout **tanpa panik dan ~0% CPU idle**; snapshot layout penuh dari semua 10k node dikembalikan dalam **~0.68 dtk**.
+- **Interaksi cepat** — pan/zoom tidak lagi menyerial ulang dokumen setiap frame (satu perbaikan hot-path memotong CPU wheel-zoom dari **~69% menjadi ~0%**); seret menambal scene secara inkremental, pengukuran teks di-cache, dan repaint digabungkan menjadi satu per frame.
+- **Satu inti, setiap layar** — state editor yang sama dan backend render yang sama dikompilasi ke desktop native, mobile, dan browser melalui WASM — tanpa reimplementasi paralel yang perlu disinkronkan.
+- **GPU Skia di mana saja** — native merender melalui `skia-safe` pada konteks GL; browser merender melalui CanvasKit pada WebGL2 — kode gambar yang sama, keluaran yang sama.
+- **Aksesibilitas native** — AccessKit di macOS, Windows, dan Linux, ditambah mirror DOM di web, alih-alih mengandalkan pohon a11y browser.
+- **Satu workspace bertipe** — host MCP, CLI, penyedia AI, pembuatan kode, impor Figma, dan integrasi Git semuanya berada dalam satu workspace Rust, dengan penjagaan rantai pasokan `cargo-deny` di CI.
+
+> **Status:** shell Rust sedang dalam pengembangan aktif (lihat Peta Jalan di bawah). Hingga mencapai paritas fitur untuk `v0.8.0`, unduhan yang dapat diinstal di atas adalah build TypeScript + Electron.
+
 ## Struktur Proyek
 
 ```text

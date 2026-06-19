@@ -298,6 +298,32 @@ Supporte trois méthodes d'entrée : chaîne en ligne, `@filepath` (lecture depu
 | **Runtime**           | Bun · Vite 7                                                                     |
 | **Format de fichier** | `.op` — basé sur JSON, lisible par l'humain, compatible Git                      |
 
+## Pourquoi Rust
+
+OpenPencil est en cours de réécriture complète en **Rust** ([#129](https://github.com/ZSeven-W/openpencil/issues/129)). La version TypeScript + Electron est celle qui est distribuée aujourd'hui ; la réécriture en Rust est la prochaine étape — un cœur natif unique, nettement plus léger et plus rapide, fonctionnant sur davantage de plateformes à partir d'une seule base de code.
+
+|                            | TypeScript + Electron (aujourd'hui)                   | Rust (la réécriture)                                                       |
+| -------------------------- | ----------------------------------------------------- | -------------------------------------------------------------------------- |
+| **Exécution bureau**       | Electron — embarque Chromium + Node.js                | Fenêtre native (`winit` + GPU Skia), sans moteur de navigateur              |
+| **Empreinte bureau**       | Runtime Chromium complet par installation             | Binaire unique autonome — **55.5 MB**                                      |
+| **Charge web**             | Bundle JS + WASM                                      | **8.2 MB** wasm / **2.18 MB** gzip sur le réseau                           |
+| **Rendu**                  | CanvasKit/Skia sur le web                             | Un seul backend Skia accéléré GPU sur **chaque** cible                     |
+| **Mémoire**                | Pauses du GC JavaScript                               | Sans GC — ownership Rust, latence prévisible                               |
+| **Base de code**           | Stack web + Electron + agent Zig NAPI                 | Un workspace Rust : éditeur · CLI · MCP · AI · codegen · Figma · Git       |
+| **Cibles**                 | Web + bureau, deux stacks séparées                    | Bureau (macOS/Win/Linux) · mobile (iOS/Android) · navigateur — un seul cœur |
+
+**Améliorations mesurées**
+
+- **Empreinte minimale** — l'intégralité de l'application bureau tient en un seul binaire natif de **55.5 MB**, au lieu d'un moteur de navigateur embarqué et d'un runtime Node. La version web pèse **8.2 MB** brut / **2.18 MB** gzip après découpage du catalogue d'icônes (−48% sur le réseau).
+- **Passage à l'échelle sur les grands documents** — un canevas en direct de **10,000 nœuds** (auto-layout imbriqué, quatre niveaux de profondeur) écrit, lit et capture l'état de mise en page **sans panique et avec ~0% de CPU en veille** ; un snapshot complet de la mise en page des 10k nœuds est retourné en **~0.68 s**.
+- **Interactions fluides** — le panoramique/zoom ne re-sérialise plus le document à chaque frame (un correctif sur un point chaud critique a ramené le CPU lors du zoom molette de **~69% à ~0%**) ; les glissés appliquent les modifications de scène de façon incrémentielle, la mesure du texte est mise en cache, et les repeints sont fusionnés en un seul par frame.
+- **Un cœur, chaque écran** — le même état de l'éditeur et le même backend de rendu compilent vers le bureau natif, le mobile et le navigateur via WASM — sans réimplémentations parallèles à synchroniser.
+- **GPU Skia partout** — le natif effectue le rendu via `skia-safe` sur un contexte GL ; le navigateur effectue le rendu via CanvasKit sur WebGL2 — le même code de dessin, le même résultat.
+- **Accessibilité native** — AccessKit sur macOS, Windows et Linux, plus un miroir DOM sur le web, plutôt que de s'appuyer sur l'arbre a11y d'un navigateur.
+- **Un workspace avec vérification de types** — l'hôte MCP, le CLI, les fournisseurs AI, la génération de code, l'import Figma et l'intégration Git résident tous dans un seul workspace Rust, avec filtrage de la chaîne d'approvisionnement par `cargo-deny` en CI.
+
+> **Statut :** le shell Rust est en développement actif (voir la Feuille de route ci-dessous). Jusqu'à ce qu'il atteigne la parité de fonctionnalités pour `v0.8.0`, les téléchargements installables ci-dessus correspondent à la version TypeScript + Electron.
+
 ## Structure du projet
 
 ```text
