@@ -49,8 +49,6 @@ mod single_instance;
 mod tcc_selftest;
 mod theme_preset_host;
 mod update_check;
-mod web_canvas_server;
-mod web_chat_standard;
 mod window_state;
 
 use op_host_native::{NativeBackend, SharedSkiaContext, SharedSkiaError, WidgetHostNative};

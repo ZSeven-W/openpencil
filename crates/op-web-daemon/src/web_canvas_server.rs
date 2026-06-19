@@ -44,7 +44,7 @@ const SSE_HEARTBEAT: Duration = Duration::from_secs(15);
 /// of them, and each SSE connection thread writes it to its socket. Senders to
 /// disconnected clients are pruned on the next broadcast.
 #[derive(Default)]
-pub(crate) struct SseHub {
+pub struct SseHub {
     subscribers: Mutex<Vec<mpsc::Sender<u64>>>,
 }
 
@@ -92,7 +92,7 @@ impl Drop for ConnGuard {
 /// the TS `mcp-sync-state` (document + monotonic version). The browser shell
 /// mirrors this (over the SSE endpoint, layered on later); external MCP clients
 /// read/replace it over `/api/mcp/document`.
-pub(crate) struct WebCanvasState {
+pub struct WebCanvasState {
     pub(crate) editor: EditorState,
     /// Local file backing this daemon document, when `--serve-web` was launched
     /// with a path or the user opened a recent local file through the daemon.
@@ -106,6 +106,7 @@ pub(crate) struct WebCanvasState {
 }
 
 impl WebCanvasState {
+    #[cfg(test)]
     pub(crate) fn new(editor: EditorState, port: u16) -> Self {
         Self::new_with_path(editor, port, None)
     }
@@ -135,7 +136,7 @@ impl WebCanvasState {
     /// fresh browser shell paints before the daemon applies updates.
     pub(crate) fn reset_document(&mut self) -> Result<u64, String> {
         if let Some(path) = self.current_path.clone() {
-            let mut next = op_web_daemon::mcp_serve::load_editor_state(&path)?;
+            let mut next = crate::mcp_serve::load_editor_state(&path)?;
             preserve_web_canvas_preferences(&self.editor, &mut next);
             set_file_name_display(&mut next, &path);
             self.editor = next;
@@ -149,7 +150,7 @@ impl WebCanvasState {
 
 /// A handled reply: HTTP status line + JSON body, ready for
 /// `write_mcp_http_response`.
-pub(crate) struct WebReply {
+pub struct WebReply {
     pub(crate) status: &'static str,
     pub(crate) body: String,
 }
@@ -171,7 +172,7 @@ pub(crate) struct WebReply {
 ///   browser shell because only the daemon can read local paths.
 /// - anything else → 404 (the JSON-RPC `/mcp` path + SSE are handled by the
 ///   caller's connection loop, not here).
-pub(crate) fn handle_web_canvas_request(
+pub fn handle_web_canvas_request(
     method: &str,
     path: &str,
     body: &str,
@@ -196,16 +197,16 @@ pub(crate) fn handle_web_canvas_request(
             },
             Err(e) => WebReply {
                 status: "500 Internal Server Error",
-                body: op_web_daemon::mcp_serve::rest_error_body(&e.to_string()),
+                body: crate::mcp_serve::rest_error_body(&e.to_string()),
             },
         },
         ("POST", "/api/mcp/document") => {
-            let document_json = match op_web_daemon::mcp_serve::parse_document_sync_body(body) {
+            let document_json = match crate::mcp_serve::parse_document_sync_body(body) {
                 Ok(json) => json,
                 Err(message) => {
                     return WebReply {
                         status: "400 Bad Request",
-                        body: op_web_daemon::mcp_serve::rest_error_body(&message),
+                        body: crate::mcp_serve::rest_error_body(&message),
                     };
                 }
             };
@@ -219,12 +220,12 @@ pub(crate) fn handle_web_canvas_request(
                     let version = state.replace_document(loaded.value);
                     WebReply {
                         status: "200 OK",
-                        body: op_web_daemon::mcp_serve::document_sync_ok(version),
+                        body: crate::mcp_serve::document_sync_ok(version),
                     }
                 }
                 Err(e) => WebReply {
                     status: "400 Bad Request",
-                    body: op_web_daemon::mcp_serve::rest_error_body(&e.to_string()),
+                    body: crate::mcp_serve::rest_error_body(&e.to_string()),
                 },
             }
         }
@@ -235,11 +236,11 @@ pub(crate) fn handle_web_canvas_request(
         ("POST", "/api/mcp/sync-reset") => match state.reset_document() {
             Ok(version) => WebReply {
                 status: "200 OK",
-                body: op_web_daemon::mcp_serve::document_sync_ok(version),
+                body: crate::mcp_serve::document_sync_ok(version),
             },
             Err(e) => WebReply {
                 status: "400 Bad Request",
-                body: op_web_daemon::mcp_serve::rest_error_body(&format!("sync reset failed: {e}")),
+                body: crate::mcp_serve::rest_error_body(&format!("sync reset failed: {e}")),
             },
         },
         ("GET", "/api/mcp/selection") => {
@@ -276,13 +277,13 @@ pub(crate) fn handle_web_canvas_request(
         ("POST", "/api/export/pdf") => export_pdf_download(body, state),
         ("POST", "/api/export/raster") => export_raster_download(body, state),
         ("POST", "/api/agents/connect") => {
-            handle_provider_connect_request_with_probe(body, state, op_web_daemon::provider_probe::connect_provider)
+            handle_provider_connect_request_with_probe(body, state, crate::provider_probe::connect_provider)
         }
         ("POST", "/api/acp/connect") => {
             handle_acp_agent_connect_request_with_probe(
                 body,
                 state,
-                op_web_daemon::acp_agent_probe_host::probe_acp_agent_config,
+                crate::acp_agent_probe_host::probe_acp_agent_config,
             )
         }
         ("GET", "/api/ai/models") => WebReply {
@@ -292,7 +293,7 @@ pub(crate) fn handle_web_canvas_request(
             // list or holding API keys. `POST /api/ai/stream` is a
             // streaming route handled in the connection loop, not here.
             status: "200 OK",
-            body: op_web_daemon::ai_proxy::models_json(&state.editor),
+            body: crate::ai_proxy::models_json(&state.editor),
         },
         _ => WebReply {
             status: "404 Not Found",
@@ -322,7 +323,7 @@ fn export_raster_download(body: &str, state: &WebCanvasState) -> WebReply {
         },
         Err(e) => WebReply {
             status: "400 Bad Request",
-            body: op_web_daemon::mcp_serve::rest_error_body(&format!("export raster failed: {e}")),
+            body: crate::mcp_serve::rest_error_body(&format!("export raster failed: {e}")),
         },
     }
 }
@@ -341,8 +342,8 @@ fn build_raster_download(body: &str, fallback: &EditorState) -> Result<RasterDow
     let scene = op_pen_loader::editor_state_to_layout_scene(&editor);
     let tmp = tmp_export_path(ext);
     let result = match selected_node_id {
-        Some(id) => op_web_daemon::export::export_node_raster(&scene, &id, &tmp, format, scale),
-        None => op_web_daemon::export::export_raster(&scene, &tmp, format, scale),
+        Some(id) => crate::export::export_node_raster(&scene, &id, &tmp, format, scale),
+        None => crate::export::export_raster(&scene, &tmp, format, scale),
     };
     if let Err(e) = result {
         let _ = std::fs::remove_file(&tmp);
@@ -361,7 +362,7 @@ fn raster_format_from_export_body(
     body: Option<&serde_json::Value>,
 ) -> Result<
     (
-        op_web_daemon::export::RasterFormat,
+        crate::export::RasterFormat,
         &'static str,
         &'static str,
         &'static str,
@@ -374,19 +375,19 @@ fn raster_format_from_export_body(
         .unwrap_or("png");
     match format {
         "png" => Ok((
-            op_web_daemon::export::RasterFormat::Png,
+            crate::export::RasterFormat::Png,
             "openpencil-export.png",
             "image/png",
             "png",
         )),
         "jpeg" | "jpg" => Ok((
-            op_web_daemon::export::RasterFormat::Jpeg,
+            crate::export::RasterFormat::Jpeg,
             "openpencil-export.jpg",
             "image/jpeg",
             "jpg",
         )),
         "webp" => Ok((
-            op_web_daemon::export::RasterFormat::Webp,
+            crate::export::RasterFormat::Webp,
             "openpencil-export.webp",
             "image/webp",
             "webp",
@@ -426,7 +427,7 @@ fn export_pdf_download(body: &str, state: &WebCanvasState) -> WebReply {
         },
         Err(e) => WebReply {
             status: "400 Bad Request",
-            body: op_web_daemon::mcp_serve::rest_error_body(&format!("export PDF failed: {e}")),
+            body: crate::mcp_serve::rest_error_body(&format!("export PDF failed: {e}")),
         },
     }
 }
@@ -435,7 +436,7 @@ fn build_pdf_download(body: &str, fallback: &EditorState) -> Result<Vec<u8>, Str
     let editor = export_editor_from_body(body, fallback)?;
     let scene = op_pen_loader::editor_state_to_layout_scene(&editor);
     let tmp = tmp_export_path("pdf");
-    op_web_daemon::export_pdf::export_pdf(&scene, &tmp)?;
+    crate::export_pdf::export_pdf(&scene, &tmp)?;
     let bytes = std::fs::read(&tmp).map_err(|e| e.to_string())?;
     let _ = std::fs::remove_file(&tmp);
     Ok(bytes)
@@ -497,7 +498,7 @@ fn save_current_file(body: &str, state: &mut WebCanvasState) -> WebReply {
     let Some(path) = state.current_path.clone() else {
         return WebReply {
             status: "400 Bad Request",
-            body: op_web_daemon::mcp_serve::rest_error_body("No file path is bound to this web session"),
+            body: crate::mcp_serve::rest_error_body("No file path is bound to this web session"),
         };
     };
     match save_editor_from_body(body, &state.editor, &path) {
@@ -520,7 +521,7 @@ fn save_current_file(body: &str, state: &mut WebCanvasState) -> WebReply {
         }
         Err(e) => WebReply {
             status: "400 Bad Request",
-            body: op_web_daemon::mcp_serve::rest_error_body(&format!("save failed: {e}")),
+            body: crate::mcp_serve::rest_error_body(&format!("save failed: {e}")),
         },
     }
 }
@@ -544,7 +545,7 @@ fn save_editor_from_body(
         next.ui.active_page_index = index.min(page_count - 1);
     }
     set_file_name_display(&mut next, path);
-    op_web_daemon::doc_io::save_to_path(&next, path)?;
+    crate::doc_io::save_to_path(&next, path)?;
     Ok(next)
 }
 
@@ -576,7 +577,7 @@ fn update_mcp_server_settings(body: &str, state: &mut WebCanvasState) -> WebRepl
         Err(_) => {
             return WebReply {
                 status: "400 Bad Request",
-                body: op_web_daemon::mcp_serve::rest_error_body("Invalid MCP server request body"),
+                body: crate::mcp_serve::rest_error_body("Invalid MCP server request body"),
             };
         }
     };
@@ -589,7 +590,7 @@ fn update_mcp_server_settings(body: &str, state: &mut WebCanvasState) -> WebRepl
         Some(_) => {
             return WebReply {
                 status: "400 Bad Request",
-                body: op_web_daemon::mcp_serve::rest_error_body("Invalid MCP server port"),
+                body: crate::mcp_serve::rest_error_body("Invalid MCP server port"),
             };
         }
         None => None,
@@ -611,7 +612,7 @@ fn update_mcp_server_settings(body: &str, state: &mut WebCanvasState) -> WebRepl
         _ => {
             return WebReply {
                 status: "400 Bad Request",
-                body: op_web_daemon::mcp_serve::rest_error_body("Invalid MCP server action"),
+                body: crate::mcp_serve::rest_error_body("Invalid MCP server action"),
             };
         }
     }
@@ -626,18 +627,18 @@ fn update_mcp_server_settings(body: &str, state: &mut WebCanvasState) -> WebRepl
     }
 }
 
-pub(crate) fn handle_acp_agent_connect_request_with_probe<F>(
+pub fn handle_acp_agent_connect_request_with_probe<F>(
     body: &str,
     state: &mut WebCanvasState,
     probe: F,
 ) -> WebReply
 where
-    F: FnOnce(op_acp::AcpAgentConfig) -> op_web_daemon::acp_agent_probe_host::AcpAgentProbeOutcome,
+    F: FnOnce(op_acp::AcpAgentConfig) -> crate::acp_agent_probe_host::AcpAgentProbeOutcome,
 {
     let Some(id) = parse_acp_agent_connect_request(body) else {
         return WebReply {
             status: "400 Bad Request",
-            body: op_web_daemon::mcp_serve::rest_error_body("Missing ACP agent id"),
+            body: crate::mcp_serve::rest_error_body("Missing ACP agent id"),
         };
     };
     let Some(index) = state
@@ -650,7 +651,7 @@ where
     else {
         return WebReply {
             status: "400 Bad Request",
-            body: op_web_daemon::mcp_serve::rest_error_body("ACP agent is not configured"),
+            body: crate::mcp_serve::rest_error_body("ACP agent is not configured"),
         };
     };
     let agent = state.editor.editor_ui.agent_settings.acp_agents[index].clone();
@@ -659,7 +660,7 @@ where
         .editor_ui
         .agent_settings
         .begin_acp_agent_connect(index);
-    let outcome = probe(op_web_daemon::acp_agent_probe_host::acp_config_for_probe(&agent));
+    let outcome = probe(crate::acp_agent_probe_host::acp_config_for_probe(&agent));
     apply_acp_agent_probe_outcome(&id, outcome, state)
 }
 
@@ -675,7 +676,7 @@ fn parse_acp_agent_connect_request(body: &str) -> Option<String> {
 
 fn apply_acp_agent_probe_outcome(
     id: &str,
-    outcome: op_web_daemon::acp_agent_probe_host::AcpAgentProbeOutcome,
+    outcome: crate::acp_agent_probe_host::AcpAgentProbeOutcome,
     state: &mut WebCanvasState,
 ) -> WebReply {
     state
@@ -704,18 +705,18 @@ fn apply_acp_agent_probe_outcome(
     }
 }
 
-pub(crate) fn handle_provider_connect_request_with_probe<F>(
+pub fn handle_provider_connect_request_with_probe<F>(
     body: &str,
     state: &mut WebCanvasState,
     probe: F,
 ) -> WebReply
 where
-    F: FnOnce(op_ai::agent_settings_state::AgentProvider) -> op_web_daemon::provider_probe::ProbeOutcome,
+    F: FnOnce(op_ai::agent_settings_state::AgentProvider) -> crate::provider_probe::ProbeOutcome,
 {
     let Some(provider) = parse_provider_connect_request(body) else {
         return WebReply {
             status: "400 Bad Request",
-            body: op_web_daemon::mcp_serve::rest_error_body("Missing provider"),
+            body: crate::mcp_serve::rest_error_body("Missing provider"),
         };
     };
     state
@@ -768,11 +769,11 @@ fn provider_to_probe(
 
 fn apply_provider_probe_outcome(
     provider: op_editor_core::AgentProvider,
-    outcome: op_web_daemon::provider_probe::ProbeOutcome,
+    outcome: crate::provider_probe::ProbeOutcome,
     state: &mut WebCanvasState,
 ) -> WebReply {
-    let outcome = op_web_daemon::provider_probe_host::normalize_provider_probe_outcome(provider, outcome);
-    let op_web_daemon::provider_probe::ProbeOutcome {
+    let outcome = crate::provider_probe_host::normalize_provider_probe_outcome(provider, outcome);
+    let crate::provider_probe::ProbeOutcome {
         connected,
         models,
         error,
@@ -824,7 +825,7 @@ fn apply_provider_probe_outcome(
         state.editor.chat.discovered_models.extend(
             models
                 .into_iter()
-                .map(op_web_daemon::model_discovery::model_entry_to_ec),
+                .map(crate::model_discovery::model_entry_to_ec),
         );
         sort_discovered_models(&mut state.editor);
     }
@@ -879,7 +880,7 @@ fn open_recent_file(body: &str, state: &mut WebCanvasState) -> WebReply {
     else {
         return WebReply {
             status: "400 Bad Request",
-            body: op_web_daemon::mcp_serve::rest_error_body("Missing path string"),
+            body: crate::mcp_serve::rest_error_body("Missing path string"),
         };
     };
     if !state
@@ -891,11 +892,11 @@ fn open_recent_file(body: &str, state: &mut WebCanvasState) -> WebReply {
     {
         return WebReply {
             status: "404 Not Found",
-            body: op_web_daemon::mcp_serve::rest_error_body("Path is not in recent files"),
+            body: crate::mcp_serve::rest_error_body("Path is not in recent files"),
         };
     }
     let path = PathBuf::from(&path_s);
-    match op_web_daemon::mcp_serve::load_editor_state(&path) {
+    match crate::mcp_serve::load_editor_state(&path) {
         Ok(mut next) => {
             preserve_web_canvas_preferences(&state.editor, &mut next);
             set_file_name_display(&mut next, &path);
@@ -909,7 +910,7 @@ fn open_recent_file(body: &str, state: &mut WebCanvasState) -> WebReply {
             state.version += 1;
             WebReply {
                 status: "200 OK",
-                body: op_web_daemon::mcp_serve::document_sync_ok(state.version),
+                body: crate::mcp_serve::document_sync_ok(state.version),
             }
         }
         Err(e) => {
@@ -972,7 +973,7 @@ fn apply_selection_sync(body: &str, state: &mut WebCanvasState) -> WebReply {
     else {
         return WebReply {
             status: "400 Bad Request",
-            body: op_web_daemon::mcp_serve::rest_error_body("Missing selectedIds array"),
+            body: crate::mcp_serve::rest_error_body("Missing selectedIds array"),
         };
     };
     let node_ids: Vec<op_editor_core::NodeId> = ids
@@ -1012,7 +1013,7 @@ fn apply_selection_sync(body: &str, state: &mut WebCanvasState) -> WebReply {
 /// without spawning the binary. The host defaults to loopback; `--host
 /// 0.0.0.0` is the LAN/Docker opt-in (no TLS — deploy behind a proxy for
 /// anything beyond a trusted network).
-pub(crate) fn parse_serve_web_args<I: Iterator<Item = String>>(
+pub fn parse_serve_web_args<I: Iterator<Item = String>>(
     mut args: I,
 ) -> Result<(u16, Option<PathBuf>, String), String> {
     let Some(port_arg) = args.next() else {
@@ -1048,7 +1049,7 @@ fn startup_editor_from_base_for_web_canvas(
 ) -> Result<EditorState, String> {
     match path {
         Some(p) => {
-            let mut next = op_web_daemon::mcp_serve::load_editor_state(&p)?;
+            let mut next = crate::mcp_serve::load_editor_state(&p)?;
             preserve_web_canvas_preferences(&base, &mut next);
             set_file_name_display(&mut next, &p);
             next.editor_ui.touch_recent_file(
@@ -1064,9 +1065,9 @@ fn startup_editor_from_base_for_web_canvas(
     }
 }
 
-pub(crate) fn startup_editor_for_web_canvas(path: Option<PathBuf>) -> Result<EditorState, String> {
+pub fn startup_editor_for_web_canvas(path: Option<PathBuf>) -> Result<EditorState, String> {
     let mut base = EditorState::starter();
-    op_web_daemon::settings_io::load(&mut base);
+    crate::settings_io::load(&mut base);
     startup_editor_from_base_for_web_canvas(base, path)
 }
 
@@ -1082,7 +1083,7 @@ pub fn run_web_canvas(path: Option<PathBuf>, port: u16, host: &str) -> Result<()
         TcpListener::bind((host, port)).map_err(|e| format!("bind {host}:{port}: {e}"))?;
     let bound = listener.local_addr().map(|a| a.port()).unwrap_or(port);
     eprintln!("openpencil-desktop --serve-web: listening on {host}:{bound}");
-    match op_web_daemon::web_static::resolve_bundle_dir() {
+    match crate::web_static::resolve_bundle_dir() {
         Some(dir) => eprintln!(
             "openpencil-desktop --serve-web: serving web bundle from {}",
             dir.display()
@@ -1120,7 +1121,7 @@ pub fn run_web_canvas(path: Option<PathBuf>, port: u16, host: &str) -> Result<()
         };
         if conn_count.load(Ordering::Acquire) >= MAX_CONNS {
             let _ = s.set_write_timeout(Some(IO_TIMEOUT));
-            let _ = op_web_daemon::mcp_serve::write_mcp_http_response(
+            let _ = crate::mcp_serve::write_mcp_http_response(
                 &mut s,
                 "503 Service Unavailable",
                 r#"{"ok":false,"error":"server busy"}"#,
@@ -1174,19 +1175,19 @@ fn serve_one<S: Read + Write>(
     state: &Mutex<WebCanvasState>,
     hub: &SseHub,
 ) -> Result<bool, String> {
-    let req = op_web_daemon::mcp_serve::read_http_request(stream)?;
+    let req = crate::mcp_serve::read_http_request(stream)?;
     if req.method == "OPTIONS" {
-        return op_web_daemon::mcp_serve::write_mcp_http_response(stream, "204 No Content", "")
+        return crate::mcp_serve::write_mcp_http_response(stream, "204 No Content", "")
             .map(|()| false);
     }
     // Static serving: the host page (`/`) and the wasm-bindgen bundle
     // (`/pkg/*`). Owns only those paths — everything else falls through.
     if req.method == "GET" {
-        let bundle_dir = op_web_daemon::web_static::resolve_bundle_dir();
+        let bundle_dir = crate::web_static::resolve_bundle_dir();
         if let Some(reply) =
-            op_web_daemon::web_static::handle_static_request(&req.path, bundle_dir.as_deref())
+            crate::web_static::handle_static_request(&req.path, bundle_dir.as_deref())
         {
-            return op_web_daemon::web_static::write_static_response(stream, &reply).map(|()| false);
+            return crate::web_static::write_static_response(stream, &reply).map(|()| false);
         }
     }
     // SSE live-update stream: the browser shell subscribes and re-syncs whenever
@@ -1206,21 +1207,21 @@ fn serve_one<S: Read + Write>(
     // — `proxy_provider` returns an owned `Box<dyn ChatProvider>`, so
     // nothing borrows the editor across the stream.
     if req.method == "POST" && req.path == "/api/ai/stream" {
-        let Some(ai_req) = op_web_daemon::ai_proxy::parse_ai_stream_body(&req.body) else {
-            return op_web_daemon::ai_proxy::write_sse_error(stream, "invalid request body")
+        let Some(ai_req) = crate::ai_proxy::parse_ai_stream_body(&req.body) else {
+            return crate::ai_proxy::write_sse_error(stream, "invalid request body")
                 .map_err(|e| format!("ai stream error: {e}"))
                 .map(|()| false);
         };
         let provider = {
             let guard = state.lock().unwrap_or_else(|p| p.into_inner());
-            op_web_daemon::ai_proxy::proxy_provider(&guard.editor, &ai_req.model)
+            crate::ai_proxy::proxy_provider(&guard.editor, &ai_req.model)
         };
         let Some(provider) = provider else {
-            return op_web_daemon::ai_proxy::write_sse_error(stream, "no model configured")
+            return crate::ai_proxy::write_sse_error(stream, "no model configured")
                 .map_err(|e| format!("ai stream error: {e}"))
                 .map(|()| false);
         };
-        return op_web_daemon::ai_proxy::stream_ai_response(stream, ai_req, provider.as_ref())
+        return crate::ai_proxy::stream_ai_response(stream, ai_req, provider.as_ref())
             .map_err(|e| format!("ai stream: {e}"))
             .map(|()| false);
     }
@@ -1230,7 +1231,7 @@ fn serve_one<S: Read + Write>(
     if req.method == "POST" && req.path == "/api/ai/standard" {
         let Some(standard_req) = crate::web_chat_standard::parse_standard_turn_body(&req.body)
         else {
-            return op_web_daemon::ai_proxy::write_sse_error(stream, "invalid request body")
+            return crate::ai_proxy::write_sse_error(stream, "invalid request body")
                 .map_err(|e| format!("ai standard error: {e}"))
                 .map(|()| false);
         };
@@ -1240,14 +1241,14 @@ fn serve_one<S: Read + Write>(
     }
     if req.method == "POST" && req.path == "/api/agents/connect" {
         let Some(provider) = parse_provider_connect_request(&req.body) else {
-            return op_web_daemon::mcp_serve::write_mcp_http_response(
+            return crate::mcp_serve::write_mcp_http_response(
                 stream,
                 "400 Bad Request",
-                &op_web_daemon::mcp_serve::rest_error_body("Missing provider"),
+                &crate::mcp_serve::rest_error_body("Missing provider"),
             )
             .map(|()| false);
         };
-        let outcome = op_web_daemon::provider_probe::connect_provider(provider_to_probe(provider));
+        let outcome = crate::provider_probe::connect_provider(provider_to_probe(provider));
         let reply = {
             let mut guard = state.lock().unwrap_or_else(|p| p.into_inner());
             guard
@@ -1256,18 +1257,18 @@ fn serve_one<S: Read + Write>(
                 .agent_settings
                 .begin_provider_connect(provider);
             let reply = apply_provider_probe_outcome(provider, outcome, &mut guard);
-            op_web_daemon::settings_io::save(&guard.editor);
+            crate::settings_io::save(&guard.editor);
             reply
         };
-        return op_web_daemon::mcp_serve::write_mcp_http_response(stream, reply.status, &reply.body)
+        return crate::mcp_serve::write_mcp_http_response(stream, reply.status, &reply.body)
             .map(|()| false);
     }
     if req.method == "POST" && req.path == "/api/acp/connect" {
         let Some(id) = parse_acp_agent_connect_request(&req.body) else {
-            return op_web_daemon::mcp_serve::write_mcp_http_response(
+            return crate::mcp_serve::write_mcp_http_response(
                 stream,
                 "400 Bad Request",
-                &op_web_daemon::mcp_serve::rest_error_body("Missing ACP agent id"),
+                &crate::mcp_serve::rest_error_body("Missing ACP agent id"),
             )
             .map(|()| false);
         };
@@ -1281,10 +1282,10 @@ fn serve_one<S: Read + Write>(
                 .iter()
                 .position(|agent| agent.id == id && agent.ready())
             else {
-                return op_web_daemon::mcp_serve::write_mcp_http_response(
+                return crate::mcp_serve::write_mcp_http_response(
                     stream,
                     "400 Bad Request",
-                    &op_web_daemon::mcp_serve::rest_error_body("ACP agent is not configured"),
+                    &crate::mcp_serve::rest_error_body("ACP agent is not configured"),
                 )
                 .map(|()| false);
             };
@@ -1296,16 +1297,16 @@ fn serve_one<S: Read + Write>(
                 .begin_acp_agent_connect(index);
             agent
         };
-        let outcome = op_web_daemon::acp_agent_probe_host::probe_acp_agent_config(
-            op_web_daemon::acp_agent_probe_host::acp_config_for_probe(&agent),
+        let outcome = crate::acp_agent_probe_host::probe_acp_agent_config(
+            crate::acp_agent_probe_host::acp_config_for_probe(&agent),
         );
         let reply = {
             let mut guard = state.lock().unwrap_or_else(|p| p.into_inner());
             let reply = apply_acp_agent_probe_outcome(&id, outcome, &mut guard);
-            op_web_daemon::settings_io::save(&guard.editor);
+            crate::settings_io::save(&guard.editor);
             reply
         };
-        return op_web_daemon::mcp_serve::write_mcp_http_response(stream, reply.status, &reply.body)
+        return crate::mcp_serve::write_mcp_http_response(stream, reply.status, &reply.body)
             .map(|()| false);
     }
     // All `/api/mcp/*` REST paths go to the REST handler — including ones this
@@ -1326,7 +1327,7 @@ fn serve_one<S: Read + Write>(
             }
             reply
         };
-        return op_web_daemon::mcp_serve::write_mcp_http_response(stream, reply.status, &reply.body)
+        return crate::mcp_serve::write_mcp_http_response(stream, reply.status, &reply.body)
             .map(|()| false);
     }
     // JSON-RPC tool dispatch is served ONLY as a POST to `/` or `/mcp`. An
@@ -1334,7 +1335,7 @@ fn serve_one<S: Read + Write>(
     // is 405 — never silently dispatched as a tool call.
     let is_jsonrpc_path = req.path == "/" || req.path == "/mcp";
     if !is_jsonrpc_path {
-        return op_web_daemon::mcp_serve::write_mcp_http_response(
+        return crate::mcp_serve::write_mcp_http_response(
             stream,
             "404 Not Found",
             r#"{"ok":false,"error":"Not found. Use /, /pkg/*, /api/mcp/document, /api/mcp/sync-reset, /api/mcp/server, /api/mcp/events, /api/file/save, /api/export/raster, /api/export/pdf, or /mcp."}"#,
@@ -1342,7 +1343,7 @@ fn serve_one<S: Read + Write>(
         .map(|()| false);
     }
     if req.method != "POST" {
-        return op_web_daemon::mcp_serve::write_mcp_http_response(
+        return crate::mcp_serve::write_mcp_http_response(
             stream,
             "405 Method Not Allowed",
             r#"{"ok":false,"error":"Method not allowed. POST a JSON-RPC message to /mcp."}"#,
@@ -1353,14 +1354,14 @@ fn serve_one<S: Read + Write>(
     // `--mcp-http` server — only the exact per-instance token passed by the
     // spawning CLI (via OPENPENCIL_MCP_TOKEN) authenticates; a stale file, a
     // recycled pid, or a random client cannot shut the daemon down.
-    if let Some(id) = op_web_daemon::mcp_serve::shutdown_request_id(
+    if let Some(id) = crate::mcp_serve::shutdown_request_id(
         &req.body,
-        &op_web_daemon::mcp_serve::headless_token_from_env().unwrap_or_default(),
+        &crate::mcp_serve::headless_token_from_env().unwrap_or_default(),
     ) {
-        op_web_daemon::mcp_serve::write_mcp_http_response(
+        crate::mcp_serve::write_mcp_http_response(
             stream,
             "200 OK",
-            &op_web_daemon::mcp_serve::shutdown_ok_response(&id),
+            &crate::mcp_serve::shutdown_ok_response(&id),
         )?;
         return Ok(true);
     }
@@ -1372,16 +1373,16 @@ fn serve_one<S: Read + Write>(
     #[cfg(feature = "mcp-debug-tools")]
     if let Some(response) = {
         let guard = state.lock().unwrap_or_else(|p| p.into_inner());
-        op_web_daemon::mcp_live::screenshot::maybe_serve(
+        crate::mcp_live::screenshot::maybe_serve(
             &req.body,
             op_mcp::debug_tools_enabled(),
             |shot_req| {
-                let spec = op_web_daemon::mcp_live::screenshot::capture_spec(&shot_req);
-                op_web_daemon::export::screenshot::capture(&guard.editor, &spec)
+                let spec = crate::mcp_live::screenshot::capture_spec(&shot_req);
+                crate::export::screenshot::capture(&guard.editor, &spec)
             },
         )
     } {
-        return op_web_daemon::mcp_serve::write_mcp_http_response(stream, "200 OK", &response)
+        return crate::mcp_serve::write_mcp_http_response(stream, "200 OK", &response)
             .map(|()| false);
     }
     // JSON-RPC `/mcp` dispatch against the in-memory document. A mutating apply
@@ -1391,7 +1392,7 @@ fn serve_one<S: Read + Write>(
         let mut guard = state.lock().unwrap_or_else(|p| p.into_inner());
         let before = guard.version;
         let mut applied_any = false;
-        let response = op_web_daemon::mcp_serve::process_message_with_applier(
+        let response = crate::mcp_serve::process_message_with_applier(
             &mut guard.editor,
             &req.body,
             |editor, cmd| {
@@ -1416,7 +1417,7 @@ fn serve_one<S: Read + Write>(
     } else {
         "200 OK"
     };
-    op_web_daemon::mcp_serve::write_mcp_http_response(stream, status, &response).map(|()| false)
+    crate::mcp_serve::write_mcp_http_response(stream, status, &response).map(|()| false)
 }
 
 /// Stream Server-Sent Events to a subscribed client: write the SSE headers,

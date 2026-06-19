@@ -413,7 +413,7 @@ fn provider_connect_probe_response_updates_agent_settings_and_models() {
     let mut s = fresh_state();
     let body = serde_json::json!({ "provider": "codex" }).to_string();
     let r = handle_provider_connect_request_with_probe(&body, &mut s, |_| {
-        op_web_daemon::provider_probe::ProbeOutcome {
+        crate::provider_probe::ProbeOutcome {
             connected: true,
             models: vec![ProbeModelEntry::new(
                 ProbeProvider::CodexCli,
@@ -470,7 +470,7 @@ fn provider_connect_probe_response_without_models_is_failure() {
         ));
     let body = serde_json::json!({ "provider": "codex" }).to_string();
     let r = handle_provider_connect_request_with_probe(&body, &mut s, |_| {
-        op_web_daemon::provider_probe::ProbeOutcome {
+        crate::provider_probe::ProbeOutcome {
             connected: true,
             connection_info: Some("Connected via Codex CLI".to_string()),
             version: Some("codex 1.2.3".to_string()),
@@ -524,7 +524,7 @@ fn acp_connect_probe_response_updates_agent_settings() {
     );
     let body = serde_json::json!({ "id": "acp-1" }).to_string();
     let r = handle_acp_agent_connect_request_with_probe(&body, &mut s, |_| {
-        op_web_daemon::acp_agent_probe_host::AcpAgentProbeOutcome {
+        crate::acp_agent_probe_host::AcpAgentProbeOutcome {
             connected: true,
             info: Some("Claude Code 1.0".into()),
             error: None,
@@ -560,7 +560,7 @@ fn acp_connect_failure_keeps_agent_disconnected() {
     );
     let body = serde_json::json!({ "id": "acp-1" }).to_string();
     let r = handle_acp_agent_connect_request_with_probe(&body, &mut s, |_| {
-        op_web_daemon::acp_agent_probe_host::AcpAgentProbeOutcome {
+        crate::acp_agent_probe_host::AcpAgentProbeOutcome {
             connected: false,
             info: None,
             error: Some("failed to spawn ACP agent".into()),
@@ -749,7 +749,7 @@ fn selection_push_is_visible_to_the_mcp_get_selection_tool() {
     // Dispatch get_selection through the same applier path serve_one uses.
     let msg = r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"get_selection","arguments":{}}}"#;
     let response =
-        op_web_daemon::mcp_serve::process_message_with_applier(&mut s.editor, msg, |editor, cmd| {
+        crate::mcp_serve::process_message_with_applier(&mut s.editor, msg, |editor, cmd| {
             editor.apply(cmd.clone())
         })
         .expect("dispatch")
