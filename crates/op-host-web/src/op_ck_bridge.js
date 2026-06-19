@@ -396,13 +396,17 @@ export async function opCkInit(canvasId) {
       p.delete();
     },
     measureText(t, sz) {
+      return this.measureTextStyled(t, sz, 400, false);
+    },
+    measureTextStyled(t, sz, weight, italic) {
       let w = 0;
       for (const seg of segments(t)) {
         if (shouldUseBrowserTextFallback(seg.text, seg.emoji)) {
-          w += browserTextMeasure(seg.text, sz);
+          w += browserTextMeasure(seg.text, sz, weight, italic);
           continue;
         }
         const f = new CK.Font(tfFor(seg.text, seg.emoji), sz);
+        if (italic && !seg.emoji) f.setSkewX(-0.25);
         w += runWidth(f, seg.text);
         f.delete();
       }

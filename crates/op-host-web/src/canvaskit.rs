@@ -212,6 +212,8 @@ extern "C" {
     );
     #[wasm_bindgen(method, js_name = measureText)]
     fn measure_text(this: &OpCk, t: &str, sz: f32) -> f32;
+    #[wasm_bindgen(method, js_name = measureTextStyled)]
+    fn measure_text_styled(this: &OpCk, t: &str, sz: f32, weight: i32, italic: bool) -> f32;
     #[wasm_bindgen(method, js_name = registerSystemFont)]
     fn register_system_font(this: &OpCk, family: &str, bytes: &[u8]) -> bool;
     #[wasm_bindgen(method, js_name = clipRect)]
@@ -541,10 +543,21 @@ impl RenderBackend for CanvasKitBackend {
         }
     }
     fn measure_text(&mut self, text: &str, font_size: f32) -> f32 {
-        self.ck.measure_text(text, font_size)
+        self.ck.measure_text_styled(text, font_size, 400, false)
     }
-    fn measure_text_weighted(&mut self, text: &str, font_size: f32, _weight: u16) -> f32 {
-        self.ck.measure_text(text, font_size)
+    fn measure_text_weighted(&mut self, text: &str, font_size: f32, weight: u16) -> f32 {
+        self.ck
+            .measure_text_styled(text, font_size, i32::from(weight), false)
+    }
+    fn measure_text_styled(
+        &mut self,
+        text: &str,
+        font_size: f32,
+        weight: u16,
+        italic: bool,
+    ) -> f32 {
+        self.ck
+            .measure_text_styled(text, font_size, weight as i32, italic)
     }
 
     fn clip_rect(&mut self, rect: Rect) {
