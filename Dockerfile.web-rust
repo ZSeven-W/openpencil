@@ -47,18 +47,16 @@ ARG WEB_BUNDLE_SOURCE=build
 ARG SERVE_PORT=3100
 
 # binaryen -> wasm-opt -Oz ; nodejs -> the 0-env-import assert in the gate
-# script ; the rest are op-host-desktop's Linux link-time deps (winit/skia GL
-# stack) so the daemon binary links. fonts-noto-cjk gives the daemon real CJK
-# glyphs at runtime (matches the rust-check.yml Linux prereqs).
+# script. op-host-web-server is the headless raster daemon (links op-web-daemon
+# only — no winit/glutin/skia-GL under Approach Y), so NONE of the GL/X11
+# link-time libs the desktop binary needed are required here; only
+# freetype/fontconfig (+ CJK fonts) for skia's raster text shaping at export.
 RUN apt-get update && apt-get install -y --no-install-recommends \
       binaryen \
       nodejs \
       gzip \
       ca-certificates \
       pkg-config \
-      libxkbcommon-dev libxkbcommon-x11-dev \
-      libwayland-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
-      libegl1-mesa-dev libgles2-mesa-dev libgbm-dev \
       libfreetype-dev libfontconfig1-dev fonts-noto-cjk \
     && rm -rf /var/lib/apt/lists/*
 
@@ -69,9 +67,10 @@ WORKDIR /src
 # the CI checkout uses `submodules: recursive`.
 COPY . .
 
-# Build the desktop daemon binary (the `--serve-web` host). Always built; this
-# is the runtime binary regardless of how the web bundle is produced.
-RUN cargo build -p op-host-desktop --release
+# Build the headless web/MCP server binary (the `--serve-web` host) — links
+# op-web-daemon only, no winit/skia-GL. Always built; this is the runtime
+# binary regardless of how the web bundle is produced.
+RUN cargo build -p op-host-web-server --release
 
 # Build the canvaskit wasm bundle in-image, UNLESS WEB_BUNDLE_SOURCE=copy.
 # Mirrors `tools/check-wasm-bundle.sh` exactly (cargo build --features canvaskit
@@ -111,10 +110,6 @@ ENV OPENPENCIL_SERVE_PORT=${SERVE_PORT}
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates \
-      libegl1 libgles2 libgbm1 \
-      libxkbcommon0 libxkbcommon-x11-0 \
-      libwayland-client0 libwayland-egl1 \
-      libxcb-render0 libxcb-shape0 libxcb-xfixes0 \
       libfreetype6 libfontconfig1 fonts-noto-cjk \
     && rm -rf /var/lib/apt/lists/*
 
@@ -124,7 +119,7 @@ WORKDIR /app
 # bundle as `<exe_dir>/web-bundle` (and CanvasKit as `<exe_dir>/web-bundle/
 # canvaskit`). Keep the binary + the bundle dir as siblings under /app so that
 # `<exe_dir> == /app`.
-COPY --from=builder /src/target/release/openpencil-desktop /app/openpencil-desktop
+COPY --from=builder /src/target/release/op-host-web-server /app/op-host-web-server
 COPY --from=builder /out/web-bundle /app/web-bundle
 
 EXPOSE ${SERVE_PORT}
@@ -134,4 +129,4 @@ EXPOSE ${SERVE_PORT}
 # reverse proxy for anything beyond a trusted network. The port is taken from
 # the build-time SERVE_PORT (baked into OPENPENCIL_SERVE_PORT); `sh -c` lets the
 # env var expand at container start.
-CMD ["sh", "-c", "exec /app/openpencil-desktop --serve-web \"${OPENPENCIL_SERVE_PORT}\" --host 0.0.0.0"]
+CMD ["sh", "-c", "exec /app/op-host-web-server --serve-web \"${OPENPENCIL_SERVE_PORT}\" --host 0.0.0.0"]

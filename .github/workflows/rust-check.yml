@@ -10,6 +10,7 @@ on:
       - 'rustfmt.toml'
       - 'deny.toml'
       - 'tools/check-jian-boundaries.sh'
+      - 'tools/check-web-server-headless.sh'
       - 'tools/check-widget-boundary.sh'
       - 'tools/dump-diagnostics-golden.ts'
       - 'packages/pen-ai-skills/**'
@@ -27,6 +28,7 @@ on:
       - 'rust-toolchain.toml'
       - 'rustfmt.toml'
       - 'tools/check-jian-boundaries.sh'
+      - 'tools/check-web-server-headless.sh'
       - 'tools/check-widget-boundary.sh'
       - 'tools/dump-diagnostics-golden.ts'
       - 'packages/pen-ai-skills/**'
@@ -91,6 +93,10 @@ jobs:
       - name: Verify Step 1b widget boundary (spec §1.4)
         if: runner.os == 'Linux'
         run: bash tools/check-widget-boundary.sh
+
+      - name: Verify op-host-web-server headless boundary (no winit/glutin/GL)
+        if: runner.os == 'Linux'
+        run: bash tools/check-web-server-headless.sh
 
       - name: Install Bun (retry on transient infra flake)
         if: runner.os == 'Linux'
