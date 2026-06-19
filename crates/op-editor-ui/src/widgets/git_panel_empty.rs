@@ -347,21 +347,12 @@ impl GitPanel<'_> {
 /// A colour at `factor` of its current alpha — the Rust analogue of a
 /// Tailwind `/NN` opacity modifier (e.g. `bg-muted/60`).
 fn alpha(c: Color, factor: f32) -> Color {
-    Color {
-        a: c.a * factor,
-        ..c
-    }
+    crate::util::alpha(c, factor)
 }
 
 /// `top` (a translucent colour) composited over the opaque `base`,
 /// yielding an opaque colour — so a `bg-accent/30`-over-`bg-card` hover
 /// fill paints in a single pass.
 fn over(base: Color, top: Color) -> Color {
-    let a = top.a;
-    Color {
-        r: base.r * (1.0 - a) + top.r * a,
-        g: base.g * (1.0 - a) + top.g * a,
-        b: base.b * (1.0 - a) + top.b * a,
-        a: base.a,
-    }
+    crate::util::over(base, top)
 }
