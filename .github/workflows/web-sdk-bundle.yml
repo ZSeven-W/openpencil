@@ -1,0 +1,108 @@
+name: op-web-sdk bundle build + size gate
+
+# Builds the op-web-sdk WASM package (canvaskit feature), asserts 0 env.*
+# imports and gzip size <= 6 MiB, then uploads pkg/ as the `op-web-sdk-bundle`
+# artifact.  This is the CI counterpart of the local
+# `crates/op-web-sdk/tools/build-wasm.sh` developer gate.
+#
+# Mirrors `wasm-bundle-build.yml` (op-host-web gate) verbatim except for the
+# crate path, artifact name, and env-var ceiling override name.  In particular,
+# this job does NOT use wasm-pack: wasm-pack 0.13.1 is broken on stable Rust
+# (schema mismatch) and introduces a floating binary install risk.  Instead we
+# use the same cargo + wasm-bindgen-cli (version-pinned from Cargo.lock) +
+# wasm-opt pipeline that `wasm-bundle-build.yml` uses.
+#
+# Authoritative recipe mirrored from `crates/op-web-sdk/tools/build-wasm.sh`:
+#   prerequisites: cargo, wasm-bindgen, wasm-opt, node, gzip (NO wasm-pack, NO EMSDK)
+#   1. cargo build -p op-web-sdk --target wasm32-unknown-unknown
+#        --features canvaskit --release
+#   2. wasm-bindgen --target web --out-dir crates/op-web-sdk/pkg <target.wasm>
+#   3. assert 0 env.* imports (LinkError guard)
+#   4. wasm-opt -Oz with rustc-emitted WebAssembly feature flags, then
+#      gzip size <= ceiling (default 6291456 bytes = 6 MiB, overridable via
+#      OP_WEB_SDK_WASM_GZIP_LIMIT_BYTES)
+# The job calls the script directly — it is the single source of truth for the
+# gate logic.
+
+on:
+  pull_request:
+    paths:
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'crates/op-web-sdk/**'
+      - 'deny.toml'
+      - '.github/workflows/web-sdk-bundle.yml'
+  push:
+    branches: ['**']
+    paths:
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'crates/op-web-sdk/**'
+      - '.github/workflows/web-sdk-bundle.yml'
+  # Allow on-demand runs so a release can produce the artifact without a code
+  # change (e.g. to re-bundle against an updated toolchain).
+  workflow_dispatch:
+
+jobs:
+  build-web-sdk-bundle:
+    name: build + size-gate op-web-sdk wasm bundle
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.94'
+          targets: wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: web-sdk-bundle
+
+      - name: Install wasm-bindgen-cli (pinned to the locked version)
+        run: |
+          # Pin the CLI to the same version as the `wasm-bindgen` crate in
+          # Cargo.lock so the generated JS glue matches the linked runtime —
+          # a version skew between the two causes a "schema version mismatch"
+          # panic at mount time.  Read the locked version straight out of
+          # Cargo.lock (the [[package]] block whose name is exactly `wasm-bindgen`).
+          # This mirrors wasm-bundle-build.yml exactly (same awk extractor).
+          version="$(awk '/^name = "wasm-bindgen"$/{found=1; next} found && /^version = /{gsub(/[" ]/,"",$3); print $3; exit}' Cargo.lock)"
+          if [ -z "$version" ]; then
+            echo "::error::could not resolve wasm-bindgen version from Cargo.lock"
+            exit 1
+          fi
+          echo "Installing wasm-bindgen-cli $version"
+          cargo install wasm-bindgen-cli --version "$version" --locked
+
+      - name: Install binaryen (wasm-opt)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y binaryen
+          wasm-opt --version
+
+      - name: Verify node + gzip are present (script prerequisites)
+        run: |
+          node --version
+          gzip --version | head -n1
+          wasm-bindgen --version
+
+      # Single source of truth: run the crate-local gate script verbatim.  It
+      # runs cargo build (canvaskit) -> wasm-bindgen --target web ->
+      # 0-env-import assert -> wasm-opt -Oz -> gzip size <= ceiling, and exits
+      # non-zero on any breach.
+      - name: Build + size-gate the op-web-sdk bundle
+        run: bash crates/op-web-sdk/tools/build-wasm.sh
+
+      - name: Upload op-web-sdk-bundle artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: op-web-sdk-bundle
+          # Upload the full wasm-pack output directory: wasm + JS glue + .d.ts.
+          path: crates/op-web-sdk/pkg
+          if-no-files-found: error
+          # Keep briefly so a downstream release / Docker build can pull it
+          # without rebuilding.
+          retention-days: 14

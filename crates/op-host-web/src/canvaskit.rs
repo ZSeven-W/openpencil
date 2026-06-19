@@ -604,7 +604,7 @@ impl RenderBackend for CanvasKitBackend {
 }
 
 /// Initialise CanvasKit on `canvas_id` and return a ready `CanvasKitBackend`.
-pub(crate) async fn init_backend(
+pub async fn init_backend(
     canvas_id: &str,
     dpr: f32,
     logical_w: u32,

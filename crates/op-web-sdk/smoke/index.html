@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>op-web-sdk smoke test</title>
+  <style>
+    body { margin: 0; background: #111; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; }
+    h1 { color: #ddd; font-family: sans-serif; margin-bottom: 12px; }
+    canvas { border: 1px solid #333; display: block; }
+    #status { color: #aaa; font-family: monospace; margin-top: 10px; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <h1>OpenPencil Web SDK — smoke</h1>
+  <!--
+    Canvas element: 800×600 logical pixels.
+    wasm-pack build command:
+      wasm-pack build crates/op-web-sdk --target web --features canvaskit --out-dir smoke/pkg
+    Then serve: python3 -m http.server 8080 from crates/op-web-sdk/
+    Open: http://localhost:8080/smoke/index.html
+  -->
+  <canvas id="c" width="800" height="600" style="width:800px;height:600px;"></canvas>
+  <div id="status">Loading WASM…</div>
+
+  <!-- Minimal fixture: a single-page .op document with one red rectangle. -->
+  <script id="fixture" type="application/json">
+  {
+    "version": "1.0",
+    "pages": [
+      {
+        "id": "page-1",
+        "name": "Page 1",
+        "children": [
+          {
+            "id": "rect-1",
+            "kind": "rectangle",
+            "name": "Red Box",
+            "x": 100,
+            "y": 100,
+            "width": 200,
+            "height": 120,
+            "fillColor": "#e84040",
+            "strokeColor": null,
+            "strokeWidth": 0
+          }
+        ]
+      }
+    ]
+  }
+  </script>
+
+  <script type="module">
+    import init, { Viewer } from './pkg/op_web_sdk.js';
+
+    const status = document.getElementById('status');
+
+    try {
+      // 1. Initialise the wasm module.
+      await init();
+      status.textContent = 'WASM initialised — loading document…';
+
+      // 2. Construct the viewer and load the fixture document.
+      const viewer = new Viewer();
+      const fixture = document.getElementById('fixture').textContent;
+      viewer.load_str(fixture);
+      status.textContent = `Document loaded — pages: ${viewer.page_count()} — attaching canvas…`;
+
+      // 3. Attach the canvas and start the rAF render loop.
+      await viewer.attach_canvas('c');
+      status.textContent = `Rendering page 1 of ${viewer.page_count()} via CanvasKit ✓`;
+    } catch (err) {
+      status.textContent = `ERROR: ${err}`;
+      console.error(err);
+    }
+  </script>
+</body>
+</html>

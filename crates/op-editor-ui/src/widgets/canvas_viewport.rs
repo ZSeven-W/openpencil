@@ -387,6 +387,37 @@ impl<'a> CanvasViewport<'a> {
             frame_labels: collect_frame_labels(state),
         }
     }
+
+    /// Read-only construction for the embedding SDK: paints `scene` at
+    /// `viewport` with no selection / tool / editing affordances. Frame
+    /// labels are derived from the scene's top-level node names rather
+    /// than an `EditorState`, so no editor is required to render.
+    ///
+    /// All editor-specific fields (selection, pen draft, text-edit,
+    /// hover, guides) are left empty/default so the widget paints a
+    /// clean viewer layer — no overlays, no interactive affordances.
+    pub fn from_scene(scene: &'a LayoutScene, viewport: DocViewport, theme: Theme) -> Self {
+        let canvas_background = theme.canvas_surface;
+        Self {
+            id: WidgetId::new(4000),
+            viewport,
+            scene,
+            selected: String::new(),
+            selected_set: Vec::new(),
+            tool: op_editor_core::Tool::Select,
+            pen_in_progress: None,
+            pen_cursor_doc: None,
+            pen_dragging_handle: false,
+            active_guides: Vec::new(),
+            text_editing: None,
+            text_edit_input: Default::default(),
+            canvas_background,
+            theme,
+            now_ms: 0,
+            hovered: None,
+            frame_labels: Vec::new(),
+        }
+    }
 }
 
 /// Root-frame name labels (TS `drawFrameLabelColored` over
@@ -720,3 +751,7 @@ pub(super) fn paint_dashed_rect(cx: &mut PaintCx<'_>, rect: Rect, color: Color, 
 #[cfg(test)]
 #[path = "canvas_viewport_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "canvas_viewport_from_scene_tests.rs"]
+mod from_scene_tests;

@@ -1,0 +1,48 @@
+[package]
+name = "op-web-sdk"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "OpenPencil read-only web embedding SDK — wasm Viewer (parse + render + navigate + export)"
+
+[lib]
+name = "op_web_sdk"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+op-editor-ui = { path = "../op-editor-ui" }
+op-editor-core = { path = "../op-editor-core" }
+op-pen-loader = { path = "../op-pen-loader", default-features = false }
+jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema" }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1" }
+# Pin matches op-host-web — last wasm-bindgen-cli release compatible with
+# the workspace's Rust 1.85 toolchain.
+wasm-bindgen = "=0.2.117"
+console_error_panic_hook = "0.1"
+
+# CanvasKit render backend — reuse op-host-web's CanvasKitBackend + init_backend
+# so op-web-sdk never re-declares the op_ck_bridge.js JS module binding.
+op-host-web = { path = "../op-host-web", optional = true, default-features = false, features = ["canvaskit"] }
+# Async rAF helpers for the RAF loop
+wasm-bindgen-futures = { version = "0.4", optional = true }
+
+[dependencies.web-sys]
+version = "0.3"
+optional = true
+features = [
+  "Document",
+  "Element",
+  "HtmlCanvasElement",
+  "Window",
+]
+
+[features]
+default = []
+# `canvaskit` enables the CanvasKit GPU render path via op-host-web.
+canvaskit = [
+  "dep:op-host-web",
+  "dep:wasm-bindgen-futures",
+  "dep:web-sys",
+]
