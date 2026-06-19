@@ -39,6 +39,10 @@ pub(super) const DIVIDER_GAP: f32 = 4.0;
 /// has none, so the button is compiled out there — otherwise it would
 /// toggle an invisible panel (Codex stop-time review).
 pub(super) const GIT_BUTTON_AVAILABLE: bool = !cfg!(target_arch = "wasm32");
+/// Preview needs the host-side jian runtime owner. The current web/wasm host
+/// has no equivalent runtime/measurement bridge, so hide the button there
+/// rather than exposing a non-interactive preview flag.
+pub(super) const PREVIEW_BUTTON_AVAILABLE: bool = !cfg!(target_arch = "wasm32");
 /// Stacked agent-icon metrics — mirror TS `top-bar.tsx`
 /// (`w-5 h-5 rounded-md bg-foreground/10 ring-1 ring-card` chips
 /// overlapped by `-space-x-1.5`).
@@ -350,10 +354,11 @@ impl TopBar {
 
     pub fn globe_rect(top_bar_rect: Rect) -> Rect {
         let right = top_bar_rect.origin.x + top_bar_rect.size.x;
-        // Right-cluster layout (right → left): Maximize | Play | Sun |
-        // Globe. Maximize + Play + Sun are normal ICON_BUTTON wide;
+        // Right-cluster layout (right → left): Maximize | Play (native
+        // only) | Sun | Globe. Icon buttons are normal ICON_BUTTON wide;
         // Globe is the wider GLOBE_BUTTON_WIDTH so the chevron fits.
-        let globe_x = right - PAD - ICON_BUTTON * 3.0 - GLOBE_BUTTON_WIDTH;
+        let icon_count = 2.0 + if PREVIEW_BUTTON_AVAILABLE { 1.0 } else { 0.0 };
+        let globe_x = right - PAD - ICON_BUTTON * icon_count - GLOBE_BUTTON_WIDTH;
         Rect {
             origin: Point2D::new(globe_x, top_bar_rect.origin.y + 8.0),
             size: Point2D::new(GLOBE_BUTTON_WIDTH, ICON_BUTTON),
@@ -367,6 +372,20 @@ impl TopBar {
         let icon_y = top_bar_rect.origin.y + 8.0;
         Rect {
             origin: Point2D::new(right - PAD - ICON_BUTTON * 2.0, icon_y),
+            size: Point2D::new(ICON_BUTTON, ICON_BUTTON),
+        }
+    }
+
+    /// Theme toggle button. Its x-position shifts right in the web/wasm build
+    /// where the Preview button is hidden.
+    pub(super) fn theme_button_rect(top_bar_rect: Rect) -> Rect {
+        let right = top_bar_rect.origin.x + top_bar_rect.size.x;
+        let right_icons = 1.0 + if PREVIEW_BUTTON_AVAILABLE { 1.0 } else { 0.0 };
+        Rect {
+            origin: Point2D::new(
+                right - PAD - ICON_BUTTON * (right_icons + 1.0),
+                top_bar_rect.origin.y + 8.0,
+            ),
             size: Point2D::new(ICON_BUTTON, ICON_BUTTON),
         }
     }
@@ -505,7 +524,6 @@ impl TopBar {
         // (right→left). Maximize + Play + Sun are normal ICON_BUTTON
         // wide; Globe is GLOBE_BUTTON_WIDTH wide (it carries a chevron).
         let right = rect.origin.x + rect.size.x;
-        let sun_x = right - PAD - ICON_BUTTON * 3.0;
         let icon_y = rect.origin.y + 8.0;
         // Maximize (rightmost icon, painted at `right - PAD - ICON_BUTTON`)
         // → toggle fullscreen.
@@ -517,13 +535,10 @@ impl TopBar {
             return Some(TopBarHit::ToggleFullscreen);
         }
         // Play / Stop (second from right) → toggle Preview mode.
-        if Self::preview_button_rect(rect).contains(point) {
+        if PREVIEW_BUTTON_AVAILABLE && Self::preview_button_rect(rect).contains(point) {
             return Some(TopBarHit::TogglePreview);
         }
-        let sun_rect = Rect {
-            origin: Point2D::new(sun_x, icon_y),
-            size: Point2D::new(ICON_BUTTON, ICON_BUTTON),
-        };
+        let sun_rect = Self::theme_button_rect(rect);
         if (sun_rect).contains(point) {
             return Some(TopBarHit::ToggleTheme);
         }

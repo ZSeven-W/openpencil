@@ -1,4 +1,4 @@
-// UNVERIFIED on wasm32: needs EMSDK build + browser; run tools/check-wasm-bundle.sh
+// UNVERIFIED in-browser: run tools/check-wasm-bundle.sh and a browser smoke test.
 //! Browser file-IO glue — the web consumer of
 //! `editor_ui.pending_file_action` plus the DOM paste / drag-drop
 //! listeners. The pure serialize / ingest logic lives in
@@ -67,8 +67,8 @@ pub(crate) fn drain_pending_file_action<C: RepaintContext + 'static>(inner: &Inn
     match action {
         FileAction::New => new_document(inner),
         FileAction::Open => open_document(inner),
-        // No file paths on web — Save and Save As are both a download.
-        FileAction::Save | FileAction::SaveAs => save_document(inner),
+        FileAction::Save => save_document(inner, true),
+        FileAction::SaveAs => save_document(inner, false),
         FileAction::ExportImage => {
             // Same fallback as the desktop run_action: open the
             // format/scale picker dialog; Export raises
@@ -228,42 +228,91 @@ fn new_document<C: RepaintContext + 'static>(inner: &InnerRc<C>) {
     let _ = b.repaint();
 }
 
-/// File → Save / Save As: serialize the canonical document JSON and
-/// hand it to the browser as a download (web's stand-in for a write
-/// dialog — there is no re-writable file handle).
-fn save_document<C: RepaintContext + 'static>(inner: &InnerRc<C>) {
-    let mut b = inner.borrow_mut();
-    let json = match file_actions::serialize_document(b.host().editor_state()) {
-        Ok(json) => json,
+/// File → Save / Save As: first ask the local daemon to write the current
+/// document to its backing file path (when this web session has one). If the
+/// daemon has no path or the request cannot start, fall back to the original
+/// browser Blob download.
+fn save_document<C: RepaintContext + 'static>(inner: &InnerRc<C>, daemon_first: bool) {
+    let (json, name, body) = {
+        let b = inner.borrow();
+        let state = b.host().editor_state();
+        let json = match file_actions::serialize_document(state) {
+            Ok(json) => json,
+            Err(e) => {
+                console_error(&format!("[save] {e}"));
+                return;
+            }
+        };
+        let name = file_actions::save_file_name(state);
+        let body = file_actions::save_request_body(state);
+        (json, name, body)
+    };
+    let body = match body {
+        Ok(body) => body,
         Err(e) => {
             console_error(&format!("[save] {e}"));
+            download_saved_document(inner, &name, &json);
             return;
         }
     };
-    let name = file_actions::save_file_name(b.host().editor_state());
-    if let Err(e) = crate::web_clipboard::download_bytes(&name, "application/json", json.as_bytes())
+
+    if !daemon_first {
+        download_saved_document(inner, &name, &json);
+        return;
+    }
+
+    let base = crate::daemon_base::daemon_base();
+    let inner_for_response = inner.clone();
+    let fallback_json = json.clone();
+    let fallback_name = name.clone();
+    let on_response: Rc<dyn Fn(String)> =
+        Rc::new(
+            move |response| match file_actions::parse_save_response(&response) {
+                Ok(saved) => {
+                    let mut b = inner_for_response.borrow_mut();
+                    b.host_mut().editor_state_mut().editor_ui.file_name_display =
+                        Some(saved.file_name);
+                    b.host_mut().mark_editor_state_dirty();
+                    let _ = b.repaint();
+                }
+                Err(e) => {
+                    console_warn(&format!("[save] daemon save unavailable: {e}"));
+                    download_saved_document(&inner_for_response, &fallback_name, &fallback_json);
+                }
+            },
+        );
+    if !crate::live_sync::post_json(&format!("{base}/api/file/save"), &body, Some(on_response)) {
+        download_saved_document(inner, &name, &json);
+    }
+}
+
+fn download_saved_document<C: RepaintContext + 'static>(
+    inner: &InnerRc<C>,
+    name: &str,
+    json: &str,
+) {
+    if let Err(e) = crate::web_clipboard::download_bytes(name, "application/json", json.as_bytes())
     {
         web_sys::console::error_1(&e);
         return;
     }
-    // First save of an untitled document names it — matches the
-    // desktop updating the display name after Save As.
+    let mut b = inner.borrow_mut();
     if b.host()
         .editor_state()
         .editor_ui
         .file_name_display
         .is_none()
     {
-        b.host_mut().editor_state_mut().editor_ui.file_name_display = Some(name);
+        b.host_mut().editor_state_mut().editor_ui.file_name_display = Some(name.to_string());
         b.host_mut().mark_editor_state_dirty();
         let _ = b.repaint();
     }
 }
 
 /// Export dialog → Export: SVG downloads vector markup from the
-/// shared serializer; PDF wraps a JPEG snapshot of the live canvas in
-/// a single-page PDF; raster formats encode the live canvas via
-/// `HtmlCanvasElement::to_data_url`.
+/// shared serializer; PDF asks the local web-canvas daemon to emit
+/// the same Skia vector PDF as desktop; raster formats ask that same
+/// daemon to run desktop's Skia offscreen exporter.
 fn export_image<C: RepaintContext + 'static>(inner: &InnerRc<C>) {
     let b = inner.borrow();
     let fmt = b.host().editor_state().editor_ui.export_format;
@@ -283,39 +332,60 @@ fn export_image<C: RepaintContext + 'static>(inner: &InnerRc<C>) {
         return;
     }
     if fmt == ExportFormat::Pdf {
-        match b
-            .canvas_data_url("image/jpeg")
-            .map_err(|e| format!("{e:?}"))
-            .and_then(|url| file_actions::export_pdf_from_canvas_data_url(&url))
+        let body = match file_actions::export_pdf_request_body(b.host().editor_state()) {
+            Ok(body) => body,
+            Err(e) => {
+                console_error(&format!("[export-pdf] {e}"));
+                return;
+            }
+        };
+        let base = crate::daemon_base::daemon_base();
+        let on_response: std::rc::Rc<dyn Fn(String)> = std::rc::Rc::new(move |response| {
+            match file_actions::parse_pdf_download_response(&response) {
+                Ok(pdf) => {
+                    if let Err(e) =
+                        crate::web_clipboard::download_bytes(&pdf.file_name, &pdf.mime, &pdf.bytes)
+                    {
+                        web_sys::console::error_1(&e);
+                    }
+                }
+                Err(e) => console_error(&format!("[export-pdf] {e}")),
+            }
+        });
+        if !crate::live_sync::post_json(&format!("{base}/api/export/pdf"), &body, Some(on_response))
         {
-            Ok(pdf) => {
+            console_error("[export-pdf] request could not start");
+        }
+        return;
+    }
+    let body = match file_actions::export_raster_request_body(b.host().editor_state()) {
+        Ok(body) => body,
+        Err(e) => {
+            console_error(&format!("[export-raster] {e}"));
+            return;
+        }
+    };
+    let base = crate::daemon_base::daemon_base();
+    let on_response: std::rc::Rc<dyn Fn(String)> = std::rc::Rc::new(move |response| {
+        match file_actions::parse_raster_download_response(&response) {
+            Ok(raster) => {
                 if let Err(e) = crate::web_clipboard::download_bytes(
-                    "openpencil-export.pdf",
-                    "application/pdf",
-                    &pdf,
+                    &raster.file_name,
+                    &raster.mime,
+                    &raster.bytes,
                 ) {
                     web_sys::console::error_1(&e);
                 }
             }
-            Err(e) => console_error(&format!("[export-pdf] {e}")),
+            Err(e) => console_error(&format!("[export-raster] {e}")),
         }
-        return;
-    }
-    let (mime, ext, supported) = file_actions::export_target(fmt);
-    if !supported {
-        console_warn(
-            "[export-image] requested format is not supported in the browser build yet; \
-             downloading a PNG raster of the canvas instead",
-        );
-    }
-    match b.canvas_data_url(mime) {
-        Ok(url) => {
-            let name = format!("openpencil-export.{ext}");
-            if let Err(e) = crate::web_clipboard::download_data_url(&name, &url) {
-                web_sys::console::error_1(&e);
-            }
-        }
-        Err(e) => web_sys::console::error_1(&e),
+    });
+    if !crate::live_sync::post_json(
+        &format!("{base}/api/export/raster"),
+        &body,
+        Some(on_response),
+    ) {
+        console_error("[export-raster] request could not start");
     }
 }
 

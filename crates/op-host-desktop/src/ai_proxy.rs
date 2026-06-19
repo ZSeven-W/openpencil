@@ -207,10 +207,9 @@ pub fn write_sse_error<W: Write>(out: &mut W, message: &str) -> std::io::Result<
 /// going through `chat_session::provider_for_selected_model` (which
 /// takes the live `WidgetHostNative`).
 ///
-// TODO: full provider parity with chat_session — wire ACP / subprocess
-// CLI agents here too. Today the proxy only resolves built-in
-// (API-key) agents, which is the only kind a headless backend can
-// drive without a UI host owning the CLI lifecycle.
+// TODO: full provider parity with chat_session — ACP agents still need the
+// live MCP lifecycle. Built-in API-key agents and verified CLI providers are
+// supported here because they can be driven from the headless web daemon.
 pub fn proxy_provider(editor: &EditorState, model: &str) -> Option<Box<dyn ChatProvider>> {
     proxy_provider_with_chat_session(editor, model, true)
 }

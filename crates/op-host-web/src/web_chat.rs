@@ -1,6 +1,6 @@
-// UNVERIFIED: needs EMSDK wasm32 build + browser; run tools/check-wasm-bundle.sh
+// UNVERIFIED in-browser: run tools/check-wasm-bundle.sh and a browser smoke test.
 //! Web chat session — drives a real AI turn through the desktop daemon's
-//! `/api/ai/stream` proxy instead of the offline echo stub.
+//! `/api/ai/standard` route instead of the offline echo stub.
 //!
 //! Mirrors the desktop's `chat_session.rs` host-drain pattern with browser
 //! plumbing borrowed from `codegen_web.rs`:

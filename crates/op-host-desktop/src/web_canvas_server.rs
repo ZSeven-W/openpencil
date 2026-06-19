@@ -24,6 +24,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
+use base64::Engine as _;
 use op_editor_core::agent_settings::{AcpAgentConnectOutcome, ProviderConnectOutcome};
 use op_editor_core::EditorState;
 
@@ -93,6 +94,9 @@ impl Drop for ConnGuard {
 /// read/replace it over `/api/mcp/document`.
 pub(crate) struct WebCanvasState {
     pub(crate) editor: EditorState,
+    /// Local file backing this daemon document, when `--serve-web` was launched
+    /// with a path or the user opened a recent local file through the daemon.
+    pub(crate) current_path: Option<PathBuf>,
     /// Monotonic sync version, bumped on every document mutation — the key the
     /// browser shell uses to detect that the live document changed.
     pub(crate) version: u64,
@@ -103,8 +107,17 @@ pub(crate) struct WebCanvasState {
 
 impl WebCanvasState {
     pub(crate) fn new(editor: EditorState, port: u16) -> Self {
+        Self::new_with_path(editor, port, None)
+    }
+
+    pub(crate) fn new_with_path(
+        editor: EditorState,
+        port: u16,
+        current_path: Option<PathBuf>,
+    ) -> Self {
         Self {
             editor,
+            current_path,
             version: 0,
             port,
         }
@@ -120,10 +133,17 @@ impl WebCanvasState {
 
     /// Clear the transient web-sync document back to the same starter document a
     /// fresh browser shell paints before the daemon applies updates.
-    pub(crate) fn reset_document(&mut self) -> u64 {
-        self.editor.replace_document(EditorState::starter().doc);
+    pub(crate) fn reset_document(&mut self) -> Result<u64, String> {
+        if let Some(path) = self.current_path.clone() {
+            let mut next = crate::mcp_serve::load_editor_state(&path)?;
+            preserve_web_canvas_preferences(&self.editor, &mut next);
+            set_file_name_display(&mut next, &path);
+            self.editor = next;
+        } else {
+            self.editor.replace_document(EditorState::starter().doc);
+        }
         self.version += 1;
-        self.version
+        Ok(self.version)
     }
 }
 
@@ -145,6 +165,8 @@ pub(crate) struct WebReply {
 ///   browser shell polls this and fetches the full document only on a bump.
 /// - `GET  /api/mcp/selection` → `{selectedIds,activePageId}` (like `selection.get.ts`)
 /// - `POST /api/mcp/selection` → renderer selection push (like `selection.post.ts`)
+/// - `POST /api/file/save` → write the browser document to this daemon's
+///   backing local path, including the desktop `.opmeta` active-page sidecar
 /// - `POST /api/file/open-recent` → local-daemon recent-file open, used by the
 ///   browser shell because only the daemon can read local paths.
 /// - anything else → 404 (the JSON-RPC `/mcp` path + SSE are handled by the
@@ -166,6 +188,7 @@ pub(crate) fn handle_web_canvas_request(
                 state.port
             ),
         },
+        ("POST", "/api/mcp/server") => update_mcp_server_settings(body, state),
         ("GET", "/api/mcp/document") => match serde_json::to_string(&state.editor.doc) {
             Ok(doc_json) => WebReply {
                 status: "200 OK",
@@ -209,13 +232,16 @@ pub(crate) fn handle_web_canvas_request(
             status: "200 OK",
             body: format!(r#"{{"version":{}}}"#, state.version),
         },
-        ("POST", "/api/mcp/sync-reset") => {
-            let version = state.reset_document();
-            WebReply {
+        ("POST", "/api/mcp/sync-reset") => match state.reset_document() {
+            Ok(version) => WebReply {
                 status: "200 OK",
                 body: crate::mcp_serve::document_sync_ok(version),
-            }
-        }
+            },
+            Err(e) => WebReply {
+                status: "400 Bad Request",
+                body: crate::mcp_serve::rest_error_body(&format!("sync reset failed: {e}")),
+            },
+        },
         ("GET", "/api/mcp/selection") => {
             // TS `selection.get.ts` → `getSyncSelection()` shape:
             // `{selectedIds, activePageId}`. Read straight off the live
@@ -245,7 +271,10 @@ pub(crate) fn handle_web_canvas_request(
             }
         }
         ("POST", "/api/mcp/selection") => apply_selection_sync(body, state),
+        ("POST", "/api/file/save") => save_current_file(body, state),
         ("POST", "/api/file/open-recent") => open_recent_file(body, state),
+        ("POST", "/api/export/pdf") => export_pdf_download(body, state),
+        ("POST", "/api/export/raster") => export_raster_download(body, state),
         ("POST", "/api/agents/connect") => {
             handle_provider_connect_request_with_probe(body, state, crate::provider_probe::connect_provider)
         }
@@ -267,9 +296,333 @@ pub(crate) fn handle_web_canvas_request(
         },
         _ => WebReply {
             status: "404 Not Found",
-            body: r#"{"ok":false,"error":"Not found. Use /api/mcp/document, /api/mcp/sync-reset, /api/mcp/server, or /mcp."}"#
+            body: r#"{"ok":false,"error":"Not found. Use /api/mcp/document, /api/mcp/sync-reset, /api/mcp/server, /api/file/save, /api/export/raster, /api/export/pdf, or /mcp."}"#
                 .to_string(),
         },
+    }
+}
+
+struct RasterDownload {
+    file_name: &'static str,
+    mime: &'static str,
+    bytes: Vec<u8>,
+}
+
+fn export_raster_download(body: &str, state: &WebCanvasState) -> WebReply {
+    match build_raster_download(body, &state.editor) {
+        Ok(download) => WebReply {
+            status: "200 OK",
+            body: serde_json::json!({
+                "ok": true,
+                "fileName": download.file_name,
+                "mime": download.mime,
+                "dataBase64": base64::engine::general_purpose::STANDARD.encode(download.bytes),
+            })
+            .to_string(),
+        },
+        Err(e) => WebReply {
+            status: "400 Bad Request",
+            body: crate::mcp_serve::rest_error_body(&format!("export raster failed: {e}")),
+        },
+    }
+}
+
+fn build_raster_download(body: &str, fallback: &EditorState) -> Result<RasterDownload, String> {
+    let parsed = parse_export_body(body)?;
+    let editor = export_editor_from_value(parsed.as_ref(), fallback)?;
+    let (format, file_name, mime, ext) = raster_format_from_export_body(parsed.as_ref())?;
+    let scale = parsed
+        .as_ref()
+        .and_then(|body| body.get("scale"))
+        .and_then(|scale| scale.as_f64())
+        .map(|scale| scale as f32)
+        .unwrap_or(editor.editor_ui.export_scale);
+    let selected_node_id = selected_node_id_from_export_body(parsed.as_ref(), &editor);
+    let scene = op_pen_loader::editor_state_to_layout_scene(&editor);
+    let tmp = tmp_export_path(ext);
+    let result = match selected_node_id {
+        Some(id) => crate::export::export_node_raster(&scene, &id, &tmp, format, scale),
+        None => crate::export::export_raster(&scene, &tmp, format, scale),
+    };
+    if let Err(e) = result {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(e);
+    }
+    let bytes = std::fs::read(&tmp).map_err(|e| e.to_string())?;
+    let _ = std::fs::remove_file(&tmp);
+    Ok(RasterDownload {
+        file_name,
+        mime,
+        bytes,
+    })
+}
+
+fn raster_format_from_export_body(
+    body: Option<&serde_json::Value>,
+) -> Result<
+    (
+        crate::export::RasterFormat,
+        &'static str,
+        &'static str,
+        &'static str,
+    ),
+    String,
+> {
+    let format = body
+        .and_then(|body| body.get("format"))
+        .and_then(|format| format.as_str())
+        .unwrap_or("png");
+    match format {
+        "png" => Ok((
+            crate::export::RasterFormat::Png,
+            "openpencil-export.png",
+            "image/png",
+            "png",
+        )),
+        "jpeg" | "jpg" => Ok((
+            crate::export::RasterFormat::Jpeg,
+            "openpencil-export.jpg",
+            "image/jpeg",
+            "jpg",
+        )),
+        "webp" => Ok((
+            crate::export::RasterFormat::Webp,
+            "openpencil-export.webp",
+            "image/webp",
+            "webp",
+        )),
+        other => Err(format!("unsupported raster format: {other}")),
+    }
+}
+
+fn selected_node_id_from_export_body(
+    body: Option<&serde_json::Value>,
+    editor: &EditorState,
+) -> Option<String> {
+    body.and_then(|body| body.get("selectedNodeId"))
+        .and_then(|node_id| node_id.as_str())
+        .filter(|node_id| !node_id.trim().is_empty())
+        .map(|node_id| node_id.to_string())
+        .or_else(|| {
+            if editor.selection_count() == 1 && editor.selection.anchor.is_real() {
+                Some(editor.selection.anchor.as_str().to_string())
+            } else {
+                None
+            }
+        })
+}
+
+fn export_pdf_download(body: &str, state: &WebCanvasState) -> WebReply {
+    match build_pdf_download(body, &state.editor) {
+        Ok(bytes) => WebReply {
+            status: "200 OK",
+            body: serde_json::json!({
+                "ok": true,
+                "fileName": "openpencil-export.pdf",
+                "mime": "application/pdf",
+                "dataBase64": base64::engine::general_purpose::STANDARD.encode(bytes),
+            })
+            .to_string(),
+        },
+        Err(e) => WebReply {
+            status: "400 Bad Request",
+            body: crate::mcp_serve::rest_error_body(&format!("export PDF failed: {e}")),
+        },
+    }
+}
+
+fn build_pdf_download(body: &str, fallback: &EditorState) -> Result<Vec<u8>, String> {
+    let editor = export_editor_from_body(body, fallback)?;
+    let scene = op_pen_loader::editor_state_to_layout_scene(&editor);
+    let tmp = tmp_export_path("pdf");
+    crate::export_pdf::export_pdf(&scene, &tmp)?;
+    let bytes = std::fs::read(&tmp).map_err(|e| e.to_string())?;
+    let _ = std::fs::remove_file(&tmp);
+    Ok(bytes)
+}
+
+fn export_editor_from_body(body: &str, fallback: &EditorState) -> Result<EditorState, String> {
+    let parsed = parse_export_body(body)?;
+    export_editor_from_value(parsed.as_ref(), fallback)
+}
+
+fn export_editor_from_value(
+    body: Option<&serde_json::Value>,
+    fallback: &EditorState,
+) -> Result<EditorState, String> {
+    let Some(doc) = body.and_then(|body| body.get("document")) else {
+        return Ok(fallback.clone());
+    };
+    if !doc.is_object() {
+        return Err("document must be an object".into());
+    }
+    let src = serde_json::to_string(doc).map_err(|e| e.to_string())?;
+    let loaded = op_pen_loader::load_canonical(&src).map_err(|e| e.to_string())?;
+    let mut editor = EditorState::from_document(loaded.value);
+    if let Some(index) = body
+        .and_then(|body| body.get("activePageIndex"))
+        .and_then(|index| index.as_u64())
+        .map(|index| index as usize)
+    {
+        let page_count = editor
+            .doc
+            .pages
+            .as_ref()
+            .map(|pages| pages.len())
+            .unwrap_or(1)
+            .max(1);
+        editor.ui.active_page_index = index.min(page_count - 1);
+    }
+    Ok(editor)
+}
+
+fn parse_export_body(body: &str) -> Result<Option<serde_json::Value>, String> {
+    if body.trim().is_empty() {
+        return Ok(None);
+    }
+    serde_json::from_str(body)
+        .map(Some)
+        .map_err(|e| format!("parse request body: {e}"))
+}
+
+fn tmp_export_path(ext: &str) -> PathBuf {
+    std::env::temp_dir().join(format!(
+        "openpencil-web-export-{}-{:?}.{ext}",
+        std::process::id(),
+        std::thread::current().id()
+    ))
+}
+
+fn save_current_file(body: &str, state: &mut WebCanvasState) -> WebReply {
+    let Some(path) = state.current_path.clone() else {
+        return WebReply {
+            status: "400 Bad Request",
+            body: crate::mcp_serve::rest_error_body("No file path is bound to this web session"),
+        };
+    };
+    match save_editor_from_body(body, &state.editor, &path) {
+        Ok(next) => {
+            state.editor = next;
+            state.version += 1;
+            let file_name = path
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_else(|| "untitled.op".to_string());
+            WebReply {
+                status: "200 OK",
+                body: serde_json::json!({
+                    "ok": true,
+                    "version": state.version,
+                    "fileName": file_name,
+                })
+                .to_string(),
+            }
+        }
+        Err(e) => WebReply {
+            status: "400 Bad Request",
+            body: crate::mcp_serve::rest_error_body(&format!("save failed: {e}")),
+        },
+    }
+}
+
+fn save_editor_from_body(
+    body: &str,
+    previous: &EditorState,
+    path: &std::path::Path,
+) -> Result<EditorState, String> {
+    let (doc, active_page_index) = document_and_active_page_from_body(body)?;
+    let mut next = previous.clone();
+    next.replace_document(doc);
+    if let Some(index) = active_page_index {
+        let page_count = next
+            .doc
+            .pages
+            .as_ref()
+            .map(|pages| pages.len())
+            .unwrap_or(1)
+            .max(1);
+        next.ui.active_page_index = index.min(page_count - 1);
+    }
+    set_file_name_display(&mut next, path);
+    crate::persistence::save_to_path(&next, path)?;
+    Ok(next)
+}
+
+fn document_and_active_page_from_body(
+    body: &str,
+) -> Result<(jian_ops_schema::PenDocument, Option<usize>), String> {
+    let parsed: serde_json::Value = serde_json::from_str(body).map_err(|e| e.to_string())?;
+    let Some(doc) = parsed.get("document") else {
+        return Err("missing document".into());
+    };
+    if !doc.is_object() {
+        return Err("document must be an object".into());
+    }
+    let doc_json = serde_json::to_string(doc).map_err(|e| e.to_string())?;
+    let loaded = op_pen_loader::load_canonical(&doc_json).map_err(|e| e.to_string())?;
+    for w in &loaded.warnings {
+        eprintln!("openpencil-desktop --serve-web: schema warning: {w:?}");
+    }
+    let active_page_index = parsed
+        .get("activePageIndex")
+        .and_then(|v| v.as_u64())
+        .map(|v| v as usize);
+    Ok((loaded.value, active_page_index))
+}
+
+fn update_mcp_server_settings(body: &str, state: &mut WebCanvasState) -> WebReply {
+    let parsed: serde_json::Value = match serde_json::from_str(body) {
+        Ok(value) => value,
+        Err(_) => {
+            return WebReply {
+                status: "400 Bad Request",
+                body: crate::mcp_serve::rest_error_body("Invalid MCP server request body"),
+            };
+        }
+    };
+    let action = parsed
+        .get("action")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default();
+    let port = match parsed.get("port").and_then(|v| v.as_u64()) {
+        Some(raw) if raw <= u16::MAX as u64 => Some((raw as u16).max(1024)),
+        Some(_) => {
+            return WebReply {
+                status: "400 Bad Request",
+                body: crate::mcp_serve::rest_error_body("Invalid MCP server port"),
+            };
+        }
+        None => None,
+    };
+    let server = &mut state.editor.editor_ui.agent_settings.mcp_server;
+    match action {
+        "start" => {
+            if let Some(port) = port {
+                server.port = port;
+            }
+            server.running = true;
+        }
+        "stop" => {
+            if let Some(port) = port {
+                server.port = port;
+            }
+            server.running = false;
+        }
+        _ => {
+            return WebReply {
+                status: "400 Bad Request",
+                body: crate::mcp_serve::rest_error_body("Invalid MCP server action"),
+            };
+        }
+    }
+    WebReply {
+        status: "200 OK",
+        body: serde_json::json!({
+            "ok": true,
+            "running": server.running,
+            "port": server.port,
+        })
+        .to_string(),
     }
 }
 
@@ -552,6 +905,7 @@ fn open_recent_file(body: &str, state: &mut WebCanvasState) -> WebReply {
                 .unwrap_or(0);
             next.editor_ui.touch_recent_file(path_s, now);
             state.editor = next;
+            state.current_path = Some(path);
             state.version += 1;
             WebReply {
                 status: "200 OK",
@@ -722,6 +1076,7 @@ pub(crate) fn startup_editor_for_web_canvas(path: Option<PathBuf>) -> Result<Edi
 /// and falls through to the JSON-RPC `/mcp` tool dispatch (applied against
 /// the in-memory document). Blocks until a token-authed shutdown request.
 pub fn run_web_canvas(path: Option<PathBuf>, port: u16, host: &str) -> Result<(), String> {
+    let current_path = path.clone();
     let editor = startup_editor_for_web_canvas(path)?;
     let listener =
         TcpListener::bind((host, port)).map_err(|e| format!("bind {host}:{port}: {e}"))?;
@@ -740,7 +1095,11 @@ pub fn run_web_canvas(path: Option<PathBuf>, port: u16, host: &str) -> Result<()
     // Shared across connection threads: the document authority (one writer at a
     // time via the Mutex) + the SSE broadcast hub. Thread-per-connection so a
     // long-lived SSE stream (or a slow client) never blocks other clients.
-    let state = Arc::new(Mutex::new(WebCanvasState::new(editor, bound)));
+    let state = Arc::new(Mutex::new(WebCanvasState::new_with_path(
+        editor,
+        bound,
+        current_path,
+    )));
     let hub = Arc::new(SseHub::default());
     let conn_count = Arc::new(AtomicUsize::new(0));
     // Raised by a connection thread that accepted a token-authed
@@ -978,7 +1337,7 @@ fn serve_one<S: Read + Write>(
         return crate::mcp_serve::write_mcp_http_response(
             stream,
             "404 Not Found",
-            r#"{"ok":false,"error":"Not found. Use /, /pkg/*, /api/mcp/document, /api/mcp/sync-reset, /api/mcp/server, /api/mcp/events, or /mcp."}"#,
+            r#"{"ok":false,"error":"Not found. Use /, /pkg/*, /api/mcp/document, /api/mcp/sync-reset, /api/mcp/server, /api/mcp/events, /api/file/save, /api/export/raster, /api/export/pdf, or /mcp."}"#,
         )
         .map(|()| false);
     }

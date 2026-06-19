@@ -1,33 +1,27 @@
 #!/usr/bin/env bash
 # tools/check-wasm-bundle.sh — Step 1b §6 + §7.1 local bundle gate.
 #
-# What this script enforces (matches spec §6 ceilings and the §7.1
-# env.* import count guard):
-#   1. EMSDK is set so the build can resolve emsdk's libcxx headers
-#      + wasm-aware clang (build-time only; emscripten runtime is NOT
-#      linked into the bundle — see spec §2.2).
+# What this script enforces (matches the CanvasKit production bundle gate
+# and the env.* import count guard):
+#   1. Required local tools are available: cargo, wasm-bindgen, wasm-opt,
+#      node, and gzip. CanvasKit needs no EMSDK / skia-safe / libc shim.
 #   2. cargo build → wasm-bindgen → wasm-opt -Oz pipeline produces the
-#      served crates/op-host-web/pkg/op_host_web_bg.wasm.
+#      served crates/op-host-web/pkg/op_host_web_bg.wasm. `wasm-opt` is invoked
+#      with the core WebAssembly features emitted by current rustc.
 #   3. Post-bindgen bundle has 0 env.* imports
 #      (i.e. all imports come from `./op_host_web_bg.js`,
 #      the wasm-bindgen JS shim). Any env.* import = LinkError at
 #      load time → regression → fail.
 #   4. Post wasm-opt -Oz gzip size ≤ STEP1B_SHELL_WASM_GZIP_LIMIT_BYTES
-#      (default 1 048 576 bytes = 1 MiB; spec §6 ceiling for the
-#      shell-web wasm sub-component).
+#      (default 6 291 456 bytes = 6 MiB for the full CanvasKit app logic).
 #
-# Why this is a local script and not (yet) a CI workflow: the C-hard
-# pipeline needs brew-emscripten + EMSDK + a .wasm.a → .a symlink hack
-# in the skia-bindings out/ dir before the render bundle can be built
-# in CI. That automation is tracked as DEFERRED in
-# `.github/workflows/rust-release.yml`. Until it lands, this script
-# is the source-of-truth gate for developers running the build
-# locally before merging Phase A-E changes.
+# This script is the local counterpart to
+# `.github/workflows/wasm-bundle-build.yml`; keep the two recipes aligned.
 #
 # Exit semantics:
 #   0   all four checks PASS.
 #   1   any check FAILED — message names which one.
-#   2   prerequisite missing (EMSDK / wasm-bindgen / wasm-opt / node).
+#   2   prerequisite missing (cargo / wasm-bindgen / wasm-opt / node / gzip).
 
 set -euo pipefail
 
@@ -36,6 +30,11 @@ PKG_DIR="${CRATE_DIR}/pkg"
 WASM_RAW="${PKG_DIR}/op_host_web_bg.wasm"
 WASM_OPT="${PKG_DIR}/op_host_web_bg.opt.wasm"
 TARGET_WASM="target/wasm32-unknown-unknown/release/op_host_web.wasm"
+WASM_OPT_FEATURES=(
+  --enable-bulk-memory
+  --enable-bulk-memory-opt
+  --enable-nontrapping-float-to-int
+)
 
 # Ceiling for the CanvasKit production bundle's gzipped wasm. It is far above
 # the retired skia raster path's 1 MiB (spec §6) because this bundle now carries
@@ -85,7 +84,7 @@ fi
 printf '  ✓ 0 env.* imports\n'
 
 step 5 5 "Verify gzip size ≤ ${LIMIT} bytes (spec §6 ceiling)"
-wasm-opt -Oz "${WASM_RAW}" -o "${WASM_OPT}" >/dev/null
+wasm-opt "${WASM_OPT_FEATURES[@]}" -Oz "${WASM_RAW}" -o "${WASM_OPT}" >/dev/null
 cp "${WASM_OPT}" "${WASM_RAW}"
 gz_bytes="$(gzip -c "${WASM_OPT}" | wc -c | tr -d ' ')"
 if [ "${gz_bytes}" -gt "${LIMIT}" ]; then

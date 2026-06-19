@@ -36,13 +36,13 @@ op-pen-loader = { path = "../op-pen-loader", optional = true, default-features =
 # the `codegen` feature (which also pulls `skia`) so the wasm32-clean stub
 # baseline (`--no-default-features --features web`) never compiles it. NOTE:
 # the new web modules it backs (web_ai_transport / raf_pump / web_clipboard)
-# are UNVERIFIED — they could not be compile-checked on wasm32 without EMSDK.
+# are UNVERIFIED in-browser — run tools/check-wasm-bundle.sh and a browser smoke test.
 op-codegen = { path = "../op-codegen", features = ["ai"], optional = true }
 # P5 web codegen session: `build_codegen_input` resolves the selection into
 # `PenNode` subtrees (jian-ops-schema), serializes them (serde_json), and
 # constructs the pipeline `CodegenInput` whose param enums come from op-ai.
 # All optional + behind `codegen` so the wasm32-clean stub baseline never
-# pulls them. NOTE: UNVERIFIED on wasm32 (needs EMSDK).
+# pulls them. NOTE: UNVERIFIED in-browser; use tools/check-wasm-bundle.sh.
 op-ai = { path = "../op-ai", optional = true }
 jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema", optional = true }
 serde_json = { workspace = true, optional = true }

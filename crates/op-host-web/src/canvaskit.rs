@@ -725,9 +725,6 @@ impl crate::repaint_ctx::RepaintContext for CkInner {
     fn viewport_size(&self) -> (f32, f32) {
         self.backend.logical_size()
     }
-    fn canvas_data_url(&self, mime: &str) -> Result<String, JsValue> {
-        self.canvas.to_data_url_with_type(mime)
-    }
     fn register_system_font(&mut self, family: &str, bytes: &[u8]) -> bool {
         self.backend.ck.register_system_font(family, bytes)
     }
@@ -762,7 +759,7 @@ fn dispatch_a11y_dom_event(
         crate::listener::now_unix_secs(),
     );
     if b.host.apply_a11y_action(node_id.0, is_focus) {
-        b.repaint();
+        crate::repaint_coalescer::request();
     }
 }
 
@@ -816,7 +813,25 @@ pub async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
     {
         let mut b = inner.borrow_mut();
         let _ = b.resize_to_window(&window)?;
+        // First frame paints synchronously so the shell is visible immediately
+        // (no one-frame blank). Subsequent input-driven repaints coalesce
+        // through the rAF installed below.
         b.repaint();
+    }
+    // Route every input-driven repaint through one rAF (see `repaint_coalescer`):
+    // the paint closure borrows the shell and re-arms if it is momentarily
+    // borrowed when the frame fires. Installed AFTER the synchronous first frame
+    // (so it stays the first paint) and before the DOM listeners below, which
+    // are the only callers of `request()`.
+    {
+        let inner_for_paint = inner.clone();
+        crate::repaint_coalescer::install(Rc::new(move || {
+            if let Ok(mut b) = inner_for_paint.try_borrow_mut() {
+                b.repaint();
+            } else {
+                crate::repaint_coalescer::request();
+            }
+        }));
     }
     crate::web_fonts::drain_font_requests(&inner);
 
@@ -903,7 +918,7 @@ pub async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
                     MousePressAction::Ignore => false,
                 };
                 if consumed {
-                    b.repaint();
+                    crate::repaint_coalescer::request();
                 }
                 // Release the borrow before draining: a Send / Stop / New Chat
                 // button press raised a chat flag; an icon-picker Load-more
@@ -951,7 +966,7 @@ pub async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
                 let (x, y) =
                     b.event_offset_to_logical(evt.offset_x() as f32, evt.offset_y() as f32);
                 if b.host.apply_cursor_move(x, y) {
-                    b.repaint();
+                    crate::repaint_coalescer::request();
                 }
             },
         )?;
@@ -973,7 +988,7 @@ pub async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
             let (w, h) = b.backend.logical_size();
             let was_middle = evt.button() == 1;
             if b.host.apply_release_with_viewport(w, h) {
-                b.repaint();
+                crate::repaint_coalescer::request();
             }
             if was_middle {
                 b.host.set_space_pan(false);
@@ -1004,7 +1019,7 @@ pub async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
                 WheelIntent::Pan { dx, dy } => b.host.apply_pan_gesture(x, y, dx, dy, w, h),
             };
             if consumed {
-                b.repaint();
+                crate::repaint_coalescer::request();
             }
         })?;
     }
@@ -1051,7 +1066,7 @@ pub async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
                         ime.clear();
                     }
                     if consumed {
-                        b.repaint();
+                        crate::repaint_coalescer::request();
                     }
                 },
             )?;
@@ -1167,7 +1182,7 @@ pub async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
             }
             if consumed {
                 evt.prevent_default();
-                b.repaint();
+                crate::repaint_coalescer::request();
             }
             // Release the borrow before draining: Enter may have queued a chat
             // send (apply_send → pending_send); the drain launches the turn.
@@ -1198,7 +1213,7 @@ pub async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
                 return;
             };
             match b.resize_to_window(&window_for_resize) {
-                Ok(true) => b.repaint(),
+                Ok(true) => crate::repaint_coalescer::request(),
                 Ok(false) => {}
                 Err(err) => web_sys::console::error_1(&err),
             }

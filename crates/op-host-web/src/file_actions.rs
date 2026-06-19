@@ -1,4 +1,4 @@
-// UNVERIFIED on wasm32: needs EMSDK build + browser; run tools/check-wasm-bundle.sh
+// UNVERIFIED in-browser: run tools/check-wasm-bundle.sh and a browser smoke test.
 //! Pure (DOM-free) document IO helpers behind the browser file-IO
 //! glue (`dom_io`). Everything here is plain Rust over
 //! `op_editor_core` / `op_pen_loader` / `op_figma`, so the unit tests
@@ -6,13 +6,12 @@
 //! without a DOM.
 //!
 //! Mirrors the desktop's `persistence.rs` split: Save serializes
-//! `editor_state.doc` straight to the canonical `.op` JSON
-//! (`serde_json::to_string_pretty`, byte-identical to the desktop
-//! writer minus the `.opmeta` sidecar — the web has no sidecar
-//! because there is no path to re-read it from), and Open parses the
-//! canonical schema via the same `op_pen_loader::load_canonical`
-//! wrapper, then re-seeds `EditorState` through
-//! `EditorState::from_document`.
+//! `editor_state.doc` straight to canonical `.op` JSON. When the
+//! web-canvas daemon has a bound local path it performs the real
+//! desktop write, including the `.opmeta` active-page sidecar; the
+//! browser fallback downloads the same JSON as a Blob. Open parses
+//! the canonical schema via `op_pen_loader::load_canonical`, then
+//! re-seeds `EditorState` through `EditorState::from_document`.
 
 use base64::Engine as _;
 use op_editor_core::editor_ui_state::ExportFormat;
@@ -41,19 +40,35 @@ pub fn save_file_name(state: &EditorState) -> String {
     }
 }
 
-/// Map an export-dialog format onto the browser download target:
-/// `(mime, extension, natively_supported)`. The browser canvas
-/// encoder handles PNG / JPEG / WEBP, and SVG is emitted by the
-/// shared vector serializer. PDF wraps a JPEG snapshot of the canvas
-/// in a single-page PDF Blob.
-pub fn export_target(format: ExportFormat) -> (&'static str, &'static str, bool) {
-    match format {
-        ExportFormat::Png => ("image/png", "png", true),
-        ExportFormat::Jpeg => ("image/jpeg", "jpg", true),
-        ExportFormat::Webp => ("image/webp", "webp", true),
-        ExportFormat::Svg => ("image/svg+xml", "svg", true),
-        ExportFormat::Pdf => ("application/pdf", "pdf", true),
+pub fn save_request_body(state: &EditorState) -> Result<String, String> {
+    serde_json::to_string(&serde_json::json!({
+        "document": state.doc,
+        "activePageIndex": state.ui.active_page_index,
+    }))
+    .map_err(|e| e.to_string())
+}
+
+#[derive(Debug)]
+pub struct SaveResponse {
+    pub file_name: String,
+}
+
+pub fn parse_save_response(response: &str) -> Result<SaveResponse, String> {
+    let parsed: serde_json::Value = serde_json::from_str(response).map_err(|e| e.to_string())?;
+    if !parsed.get("ok").and_then(|v| v.as_bool()).unwrap_or(false) {
+        let message = parsed
+            .get("error")
+            .and_then(|v| v.as_str())
+            .unwrap_or("Save failed");
+        return Err(message.to_string());
     }
+    let file_name = parsed
+        .get("fileName")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or("untitled.op")
+        .to_string();
+    Ok(SaveResponse { file_name })
 }
 
 pub fn export_svg_document(state: &EditorState) -> Result<String, String> {
@@ -61,156 +76,118 @@ pub fn export_svg_document(state: &EditorState) -> Result<String, String> {
     op_editor_ui::svg_export::serialize_active_page_svg(&scene)
 }
 
-pub fn export_pdf_from_canvas_data_url(data_url: &str) -> Result<Vec<u8>, String> {
-    let (header, payload) = data_url
-        .split_once(',')
-        .ok_or_else(|| "canvas data URL missing payload".to_string())?;
-    if !header.starts_with("data:")
-        || !header.contains("image/jpeg")
-        || !header.ends_with(";base64")
-    {
-        return Err("PDF export expects a base64 JPEG canvas data URL".into());
-    }
-    let jpeg = base64::engine::general_purpose::STANDARD
-        .decode(payload)
-        .map_err(|e| format!("decode JPEG data URL failed: {e}"))?;
-    let (width, height) = jpeg_dimensions(&jpeg)?;
-    Ok(single_page_jpeg_pdf(&jpeg, width, height))
+#[derive(Debug)]
+pub struct PdfDownload {
+    pub file_name: String,
+    pub mime: String,
+    pub bytes: Vec<u8>,
 }
 
-fn single_page_jpeg_pdf(jpeg: &[u8], width: u32, height: u32) -> Vec<u8> {
-    let mut out = Vec::with_capacity(jpeg.len() + 1024);
-    out.extend_from_slice(b"%PDF-1.4\n");
-    let mut offsets = Vec::new();
-
-    push_object(
-        &mut out,
-        &mut offsets,
-        1,
-        b"<< /Type /Catalog /Pages 2 0 R >>",
-    );
-    push_object(
-        &mut out,
-        &mut offsets,
-        2,
-        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-    );
-    let page = format!(
-        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {width} {height}] \
-         /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>"
-    );
-    push_object(&mut out, &mut offsets, 3, page.as_bytes());
-
-    let image_header = format!(
-        "<< /Type /XObject /Subtype /Image /Width {width} /Height {height} \
-         /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length {} >>",
-        jpeg.len()
-    );
-    push_stream_object(&mut out, &mut offsets, 4, image_header.as_bytes(), jpeg);
-
-    let content = format!("q\n{width} 0 0 {height} 0 0 cm\n/Im0 Do\nQ\n");
-    let content_header = format!("<< /Length {} >>", content.len());
-    push_stream_object(
-        &mut out,
-        &mut offsets,
-        5,
-        content_header.as_bytes(),
-        content.as_bytes(),
-    );
-
-    let xref_offset = out.len();
-    out.extend_from_slice(format!("xref\n0 {}\n", offsets.len() + 1).as_bytes());
-    out.extend_from_slice(b"0000000000 65535 f \n");
-    for offset in &offsets {
-        out.extend_from_slice(format!("{offset:010} 00000 n \n").as_bytes());
-    }
-    out.extend_from_slice(
-        format!(
-            "trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref_offset}\n%%EOF\n",
-            offsets.len() + 1
-        )
-        .as_bytes(),
-    );
-    out
+#[derive(Debug)]
+pub struct RasterDownload {
+    pub file_name: String,
+    pub mime: String,
+    pub bytes: Vec<u8>,
 }
 
-fn push_object(out: &mut Vec<u8>, offsets: &mut Vec<usize>, num: usize, body: &[u8]) {
-    offsets.push(out.len());
-    out.extend_from_slice(format!("{num} 0 obj\n").as_bytes());
-    out.extend_from_slice(body);
-    out.extend_from_slice(b"\nendobj\n");
+pub fn export_pdf_request_body(state: &EditorState) -> Result<String, String> {
+    serde_json::to_string(&serde_json::json!({
+        "document": state.doc,
+        "activePageIndex": state.ui.active_page_index,
+    }))
+    .map_err(|e| e.to_string())
 }
 
-fn push_stream_object(
-    out: &mut Vec<u8>,
-    offsets: &mut Vec<usize>,
-    num: usize,
-    dict: &[u8],
-    stream: &[u8],
-) {
-    offsets.push(out.len());
-    out.extend_from_slice(format!("{num} 0 obj\n").as_bytes());
-    out.extend_from_slice(dict);
-    out.extend_from_slice(b"\nstream\n");
-    out.extend_from_slice(stream);
-    out.extend_from_slice(b"\nendstream\nendobj\n");
+pub fn parse_pdf_download_response(response: &str) -> Result<PdfDownload, String> {
+    let parsed: serde_json::Value = serde_json::from_str(response).map_err(|e| e.to_string())?;
+    if !parsed.get("ok").and_then(|v| v.as_bool()).unwrap_or(false) {
+        let message = parsed
+            .get("error")
+            .and_then(|v| v.as_str())
+            .unwrap_or("PDF export failed");
+        return Err(message.to_string());
+    }
+    let file_name = parsed
+        .get("fileName")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or("openpencil-export.pdf")
+        .to_string();
+    let mime = parsed
+        .get("mime")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or("application/pdf")
+        .to_string();
+    let data = parsed
+        .get("dataBase64")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| "PDF export response missing dataBase64".to_string())?;
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(data)
+        .map_err(|e| format!("decode PDF response failed: {e}"))?;
+    Ok(PdfDownload {
+        file_name,
+        mime,
+        bytes,
+    })
 }
 
-fn jpeg_dimensions(bytes: &[u8]) -> Result<(u32, u32), String> {
-    if bytes.len() < 4 || bytes[0] != 0xff || bytes[1] != 0xd8 {
-        return Err("JPEG data is missing SOI marker".into());
+pub fn export_raster_request_body(state: &EditorState) -> Result<String, String> {
+    let format = match state.editor_ui.export_format {
+        ExportFormat::Png => "png",
+        ExportFormat::Jpeg => "jpeg",
+        ExportFormat::Webp => "webp",
+        ExportFormat::Svg | ExportFormat::Pdf => {
+            return Err("raster export requires PNG, JPEG, or WEBP".to_string());
+        }
+    };
+    let mut body = serde_json::json!({
+        "document": state.doc,
+        "activePageIndex": state.ui.active_page_index,
+        "format": format,
+        "scale": state.editor_ui.export_scale,
+    });
+    if state.selection_count() == 1 && state.selection.anchor.is_real() {
+        body["selectedNodeId"] =
+            serde_json::Value::String(state.selection.anchor.as_str().to_string());
     }
-    let mut i = 2;
-    while i + 3 < bytes.len() {
-        while i < bytes.len() && bytes[i] == 0xff {
-            i += 1;
-        }
-        if i >= bytes.len() {
-            break;
-        }
-        let marker = bytes[i];
-        i += 1;
-        if marker == 0xd9 || marker == 0xda {
-            break;
-        }
-        if marker == 0x01 || (0xd0..=0xd7).contains(&marker) {
-            continue;
-        }
-        if i + 2 > bytes.len() {
-            return Err("truncated JPEG segment length".into());
-        }
-        let len = u16::from_be_bytes([bytes[i], bytes[i + 1]]) as usize;
-        if len < 2 || i + len > bytes.len() {
-            return Err("invalid JPEG segment length".into());
-        }
-        if matches!(
-            marker,
-            0xc0 | 0xc1
-                | 0xc2
-                | 0xc3
-                | 0xc5
-                | 0xc6
-                | 0xc7
-                | 0xc9
-                | 0xca
-                | 0xcb
-                | 0xcd
-                | 0xce
-                | 0xcf
-        ) {
-            if len < 7 {
-                return Err("truncated JPEG SOF segment".into());
-            }
-            let height = u16::from_be_bytes([bytes[i + 3], bytes[i + 4]]) as u32;
-            let width = u16::from_be_bytes([bytes[i + 5], bytes[i + 6]]) as u32;
-            if width == 0 || height == 0 {
-                return Err("JPEG dimensions must be non-zero".into());
-            }
-            return Ok((width, height));
-        }
-        i += len;
+    serde_json::to_string(&body).map_err(|e| e.to_string())
+}
+
+pub fn parse_raster_download_response(response: &str) -> Result<RasterDownload, String> {
+    let parsed: serde_json::Value = serde_json::from_str(response).map_err(|e| e.to_string())?;
+    if !parsed.get("ok").and_then(|v| v.as_bool()).unwrap_or(false) {
+        let message = parsed
+            .get("error")
+            .and_then(|v| v.as_str())
+            .unwrap_or("Raster export failed");
+        return Err(message.to_string());
     }
-    Err("JPEG dimensions not found".into())
+    let file_name = parsed
+        .get("fileName")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or("openpencil-export.png")
+        .to_string();
+    let mime = parsed
+        .get("mime")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or("image/png")
+        .to_string();
+    let data = parsed
+        .get("dataBase64")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| "Raster export response missing dataBase64".to_string())?;
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(data)
+        .map_err(|e| format!("decode raster response failed: {e}"))?;
+    Ok(RasterDownload {
+        file_name,
+        mime,
+        bytes,
+    })
 }
 
 pub fn apply_open_recent_response(
@@ -449,27 +426,132 @@ mod tests {
     }
 
     #[test]
-    fn pdf_export_wraps_canvas_jpeg_data_url() {
-        let jpeg_data_url = "data:image/jpeg;base64,/9j/wAARCAACAAUDASIAAhIAAxIA/9k=";
+    fn save_request_body_embeds_document_and_active_page_index() {
+        let src = r#"{"version":"0.8.0","children":[],"pages":[{"id":"p1","name":"One","children":[]},{"id":"p2","name":"Two","children":[{"type":"rectangle","id":"save-node","name":"Save Node","x":0,"y":0,"width":80,"height":40}]}]}"#;
+        let doc = op_pen_loader::load_canonical(src)
+            .expect("canonical doc")
+            .value;
+        let mut state = EditorState::from_document(doc);
+        assert!(state.set_active_page(1));
 
-        let pdf = export_pdf_from_canvas_data_url(jpeg_data_url).expect("pdf bytes");
+        let body = save_request_body(&state).expect("request body");
+        let parsed: serde_json::Value = serde_json::from_str(&body).expect("json body");
 
-        assert!(pdf.starts_with(b"%PDF-1.4\n"), "missing PDF header");
-        assert!(
-            pdf.windows(b"/Subtype /Image".len())
-                .any(|w| w == b"/Subtype /Image"),
-            "missing image xobject"
+        assert_eq!(
+            parsed["document"]["pages"][1]["children"][0]["id"],
+            "save-node"
         );
-        assert!(
-            pdf.windows(b"/Filter /DCTDecode".len())
-                .any(|w| w == b"/Filter /DCTDecode"),
-            "missing JPEG filter"
+        assert_eq!(parsed["activePageIndex"], 1);
+    }
+
+    #[test]
+    fn parse_save_response_accepts_daemon_success() {
+        let saved = parse_save_response(r#"{"ok":true,"version":3,"fileName":"design.op"}"#)
+            .expect("save response");
+
+        assert_eq!(saved.file_name, "design.op");
+    }
+
+    #[test]
+    fn parse_save_response_surfaces_daemon_error() {
+        let err = parse_save_response(r#"{"ok":false,"error":"No file path"}"#)
+            .expect_err("daemon error should fail");
+
+        assert_eq!(err, "No file path");
+    }
+
+    #[test]
+    fn export_pdf_request_body_embeds_current_document() {
+        let src = r#"{"version":"0.8.0","children":[],"pages":[{"id":"p1","name":"One","children":[]},{"id":"p2","name":"Two","children":[{"type":"rectangle","id":"pdf-node","name":"PDF Node","x":0,"y":0,"width":80,"height":40}]}]}"#;
+        let doc = op_pen_loader::load_canonical(src)
+            .expect("canonical doc")
+            .value;
+        let mut state = EditorState::from_document(doc);
+        assert!(state.set_active_page(1));
+
+        let body = export_pdf_request_body(&state).expect("request body");
+        let parsed: serde_json::Value = serde_json::from_str(&body).expect("json body");
+
+        assert_eq!(
+            parsed["document"]["pages"][1]["children"][0]["id"],
+            "pdf-node"
         );
-        assert!(
-            pdf.ends_with(b"%%EOF\n"),
-            "missing EOF trailer: {:?}",
-            &pdf[pdf.len().saturating_sub(16)..]
+        assert_eq!(
+            parsed["document"]["pages"][1]["children"][0]["name"],
+            "PDF Node"
         );
+        assert_eq!(parsed["activePageIndex"], 1);
+    }
+
+    #[test]
+    fn parse_pdf_download_response_decodes_daemon_payload() {
+        let response = serde_json::json!({
+            "ok": true,
+            "fileName": "openpencil-export.pdf",
+            "mime": "application/pdf",
+            "dataBase64": base64::engine::general_purpose::STANDARD.encode(b"%PDF-test%%EOF"),
+        })
+        .to_string();
+
+        let download = parse_pdf_download_response(&response).expect("pdf response");
+
+        assert_eq!(download.file_name, "openpencil-export.pdf");
+        assert_eq!(download.mime, "application/pdf");
+        assert_eq!(download.bytes, b"%PDF-test%%EOF");
+    }
+
+    #[test]
+    fn parse_pdf_download_response_surfaces_daemon_error() {
+        let err = parse_pdf_download_response(r#"{"ok":false,"error":"nothing to export"}"#)
+            .expect_err("daemon error should fail");
+
+        assert_eq!(err, "nothing to export");
+    }
+
+    #[test]
+    fn export_raster_request_body_embeds_format_scale_document_and_single_selection() {
+        let src = r#"{"version":"0.8.0","children":[{"type":"rectangle","id":"raster-node","name":"Raster Node","x":0,"y":0,"width":80,"height":40}]}"#;
+        let doc = op_pen_loader::load_canonical(src)
+            .expect("canonical doc")
+            .value;
+        let mut state = EditorState::from_document(doc);
+        state.editor_ui.export_format = ExportFormat::Webp;
+        state.editor_ui.export_scale = 3.0;
+        state.set_single_selection(op_editor_core::NodeId::new("raster-node"));
+
+        let body = export_raster_request_body(&state).expect("request body");
+        let parsed: serde_json::Value = serde_json::from_str(&body).expect("json body");
+
+        assert_eq!(parsed["format"], "webp");
+        assert_eq!(parsed["scale"], 3.0);
+        assert_eq!(parsed["selectedNodeId"], "raster-node");
+        assert_eq!(parsed["activePageIndex"], 0);
+        assert_eq!(parsed["document"]["children"][0]["id"], "raster-node");
+    }
+
+    #[test]
+    fn parse_raster_download_response_decodes_daemon_payload() {
+        let response = serde_json::json!({
+            "ok": true,
+            "fileName": "openpencil-export.png",
+            "mime": "image/png",
+            "dataBase64": base64::engine::general_purpose::STANDARD.encode(b"\x89PNG\r\n\x1a\n"),
+        })
+        .to_string();
+
+        let download = parse_raster_download_response(&response).expect("raster response");
+
+        assert_eq!(download.file_name, "openpencil-export.png");
+        assert_eq!(download.mime, "image/png");
+        assert_eq!(download.bytes, b"\x89PNG\r\n\x1a\n");
+    }
+
+    #[test]
+    fn parse_raster_download_response_surfaces_daemon_error() {
+        let err = parse_raster_download_response(r#"{"ok":false,"error":"nothing to export"}"#)
+            .expect_err("daemon error should fail");
+
+        assert_eq!(err, "nothing to export");
     }
 
     #[test]
