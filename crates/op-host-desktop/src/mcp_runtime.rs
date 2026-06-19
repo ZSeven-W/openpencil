@@ -1,6 +1,6 @@
 //! Desktop-app glue for the live MCP server and terminal integrations.
 
-use super::{mcp_integrations, mcp_live, DesktopApp};
+use super::{mcp_integrations, DesktopApp};
 
 impl DesktopApp {
     pub(crate) fn bootstrap_mcp_runtime_from_settings(&mut self) -> bool {
@@ -78,7 +78,7 @@ impl DesktopApp {
         if let Some(mut server) = self.mcp_server.take() {
             server.stop();
         }
-        match mcp_live::McpLiveServer::start_with_wake(port, self.mcp_wake_callback()) {
+        match op_web_daemon::mcp_live::McpLiveServer::start_with_wake(port, self.mcp_wake_callback()) {
             Ok(server) => {
                 let bound_port = server.port();
                 self.mcp_server = Some(server);
@@ -88,7 +88,7 @@ impl DesktopApp {
             Err(err) => {
                 eprintln!("openpencil-desktop mcp: failed to start on {port}: {err}");
                 if port != 0 {
-                    match mcp_live::McpLiveServer::start_with_wake(0, self.mcp_wake_callback()) {
+                    match op_web_daemon::mcp_live::McpLiveServer::start_with_wake(0, self.mcp_wake_callback()) {
                         Ok(server) => {
                             let bound_port = server.port();
                             eprintln!(

@@ -35,7 +35,6 @@ mod kit_io;
 mod kit_persistence;
 mod macos_app;
 mod mcp_integrations;
-mod mcp_live;
 mod mcp_port_file;
 mod mcp_runtime;
 mod mcp_serve;
@@ -241,7 +240,7 @@ struct DesktopApp {
     /// external repository changes.
     last_git_refresh: Instant,
     /// Live in-process MCP HTTP server, started from Settings -> MCP.
-    mcp_server: Option<mcp_live::McpLiveServer>,
+    mcp_server: Option<op_web_daemon::mcp_live::McpLiveServer>,
     /// When set (via the `--live-mcp[=port]` launch flag used by
     /// `op start`), the editor force-enables the live MCP server on
     /// this port during `resumed()`, regardless of the persisted

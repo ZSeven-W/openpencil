@@ -15,7 +15,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use op_editor_core::{EditorCommand, EditorState};
 
 #[cfg(feature = "mcp-debug-tools")]
-pub(crate) mod screenshot;
+pub mod screenshot;
 
 /// Per-request budget for a UI-thread snapshot/apply ack. Sized to cover a
 /// large single editor operation without the connection giving up; the CLI
@@ -35,7 +35,7 @@ const LIVE_CONN_STACK_SIZE: usize = 16 * 1024 * 1024;
 const _: () = assert!(LIVE_CONN_STACK_SIZE <= 16 * 1024 * 1024);
 type UiWake = Arc<dyn Fn() + Send + Sync + 'static>;
 
-pub(crate) struct McpLiveServer {
+pub struct McpLiveServer {
     port: u16,
     /// Per-instance identity token, reported in the live `ping` reply and
     /// written into `~/.openpencil/.op-mcp-port`. Lets the `op` CLI confirm
@@ -55,9 +55,9 @@ struct ApplyAck {
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct McpPumpOutcome {
-    pub(crate) repaint: bool,
-    pub(crate) layout_dirty: bool,
+pub struct McpPumpOutcome {
+    pub repaint: bool,
+    pub layout_dirty: bool,
 }
 
 enum UiRequest {
@@ -84,18 +84,18 @@ enum UiRequest {
     /// bounded-wait discipline as the chat canvas tools.
     #[cfg(feature = "mcp-debug-tools")]
     Screenshot {
-        spec: op_web_daemon::export::screenshot::CaptureSpec,
-        ack: SyncSender<Result<op_web_daemon::export::screenshot::ScreenshotPng, String>>,
+        spec: crate::export::screenshot::CaptureSpec,
+        ack: SyncSender<Result<crate::export::screenshot::ScreenshotPng, String>>,
     },
 }
 
 impl McpLiveServer {
-    #[cfg(test)]
-    pub(crate) fn start(port: u16) -> Result<Self, String> {
+    #[doc(hidden)]
+    pub fn start(port: u16) -> Result<Self, String> {
         Self::start_with_wake(port, || {})
     }
 
-    pub(crate) fn start_with_wake<F>(port: u16, wake_ui: F) -> Result<Self, String>
+    pub fn start_with_wake<F>(port: u16, wake_ui: F) -> Result<Self, String>
     where
         F: Fn() + Send + Sync + 'static,
     {
@@ -138,22 +138,22 @@ impl McpLiveServer {
         })
     }
 
-    pub(crate) fn port(&self) -> u16 {
+    pub fn port(&self) -> u16 {
         self.port
     }
 
     /// Identity token to publish in the discovery file.
-    pub(crate) fn token(&self) -> &str {
+    pub fn token(&self) -> &str {
         &self.token
     }
 
     /// Whether a token-authed `openpencil/shutdown` was received — the UI
     /// thread should exit the event loop.
-    pub(crate) fn shutdown_requested(&self) -> bool {
+    pub fn shutdown_requested(&self) -> bool {
         self.quit_flag.load(Ordering::Acquire)
     }
 
-    pub(crate) fn pump(&mut self, state: &mut EditorState) -> McpPumpOutcome {
+    pub fn pump(&mut self, state: &mut EditorState) -> McpPumpOutcome {
         let mut outcome = McpPumpOutcome::default();
         for _ in 0..UI_PUMP_REQUEST_BUDGET {
             match self.req_rx.try_recv() {
@@ -182,7 +182,7 @@ impl McpLiveServer {
                 #[cfg(feature = "mcp-debug-tools")]
                 Ok(UiRequest::Screenshot { spec, ack }) => {
                     // Read-only render of the live state — no repaint needed.
-                    let _ = ack.send(op_web_daemon::export::screenshot::capture(state, &spec));
+                    let _ = ack.send(crate::export::screenshot::capture(state, &spec));
                 }
                 Err(TryRecvError::Empty) => break,
                 Err(TryRecvError::Disconnected) => break,
@@ -191,7 +191,7 @@ impl McpLiveServer {
         outcome
     }
 
-    pub(crate) fn stop(&mut self) {
+    pub fn stop(&mut self) {
         let _ = self.stop_tx.send(());
     }
 }
@@ -257,7 +257,7 @@ fn server_loop(
                 if conn_count.load(Ordering::Acquire) >= MAX_LIVE_CONNS {
                     // Shed load rather than spawn unbounded threads.
                     let _ = stream.set_write_timeout(Some(ACCEPT_IDLE_SLEEP));
-                    let _ = op_web_daemon::mcp_serve::write_mcp_http_response(
+                    let _ = crate::mcp_serve::write_mcp_http_response(
                         &mut stream,
                         "503 Service Unavailable",
                         r#"{"jsonrpc":"2.0","error":{"code":-32000,"message":"server busy"},"id":null}"#,
@@ -290,7 +290,7 @@ fn server_loop(
                             serve_connection(&mut stream, &req_tx, &token, &lock, &quit, &wake)
                         {
                             eprintln!("openpencil-desktop mcp: {e}");
-                            let _ = op_web_daemon::mcp_serve::write_mcp_http_response(
+                            let _ = crate::mcp_serve::write_mcp_http_response(
                                 &mut stream,
                                 "500 Internal Server Error",
                                 &error_json(&e),
@@ -322,26 +322,26 @@ fn serve_connection<S: std::io::Read + std::io::Write>(
     quit_flag: &AtomicBool,
     wake_ui: &UiWake,
 ) -> Result<(), String> {
-    let req = op_web_daemon::mcp_serve::read_http_request(stream)?;
+    let req = crate::mcp_serve::read_http_request(stream)?;
     if req.method == "OPTIONS" {
-        return op_web_daemon::mcp_serve::write_mcp_http_response(stream, "204 No Content", "");
+        return crate::mcp_serve::write_mcp_http_response(stream, "204 No Content", "");
     }
     // TS live-canvas whole-document sync (REST `POST /api/mcp/document`),
     // distinct from the JSON-RPC `/mcp` path below. Lets a TS whole-doc-sync
     // client (`setSyncDocument` → POST `{document}`) drive THIS editor's
     // on-screen canvas, mirroring `apps/web/server/api/mcp/document.post.ts`.
-    if op_web_daemon::mcp_serve::is_document_sync_route(&req.method, &req.path) {
+    if crate::mcp_serve::is_document_sync_route(&req.method, &req.path) {
         return serve_document_sync(stream, req_tx, wake_ui, stateful_lock, &req.body);
     }
     if req.path != "/mcp" && req.path != "/" {
-        return op_web_daemon::mcp_serve::write_mcp_http_response(
+        return crate::mcp_serve::write_mcp_http_response(
             stream,
             "404 Not Found",
             r#"{"error":"Not found"}"#,
         );
     }
     if req.method != "POST" {
-        return op_web_daemon::mcp_serve::write_mcp_http_response(
+        return crate::mcp_serve::write_mcp_http_response(
             stream,
             "400 Bad Request",
             r#"{"jsonrpc":"2.0","error":{"code":-32000,"message":"Invalid or missing session ID"},"id":null}"#,
@@ -349,8 +349,8 @@ fn serve_connection<S: std::io::Read + std::io::Write>(
     }
     // Token-authed graceful shutdown: ack, then flag the UI thread to exit
     // the event loop. No pid-kill ⇒ no signal-the-wrong-process race.
-    if let Some(id) = op_web_daemon::mcp_serve::shutdown_request_id(&req.body, token) {
-        write_json_rpc_response(stream, &op_web_daemon::mcp_serve::shutdown_ok_response(&id))?;
+    if let Some(id) = crate::mcp_serve::shutdown_request_id(&req.body, token) {
+        write_json_rpc_response(stream, &crate::mcp_serve::shutdown_ok_response(&id))?;
         quit_flag.store(true, Ordering::Release);
         wake_ui();
         return Ok(());
@@ -359,17 +359,17 @@ fn serve_connection<S: std::io::Read + std::io::Write>(
     // take the stateful lock, so `op`'s `ping` probe stays fast and never
     // false-negatives a busy editor. The live `ping` reply carries our
     // identity token so the CLI can confirm THIS server published the file.
-    match op_web_daemon::mcp_serve::classify_stateless(&req.body) {
-        op_web_daemon::mcp_serve::Stateless::Respond(resp) => {
+    match crate::mcp_serve::classify_stateless(&req.body) {
+        crate::mcp_serve::Stateless::Respond(resp) => {
             return write_json_rpc_response(stream, &resp);
         }
-        op_web_daemon::mcp_serve::Stateless::Swallow => {
+        crate::mcp_serve::Stateless::Swallow => {
             return write_json_rpc_response(stream, "");
         }
-        op_web_daemon::mcp_serve::Stateless::Ping(id) => {
+        crate::mcp_serve::Stateless::Ping(id) => {
             return write_json_rpc_response(stream, &live_ping_response(&id, token));
         }
-        op_web_daemon::mcp_serve::Stateless::NeedsState => {}
+        crate::mcp_serve::Stateless::NeedsState => {}
     }
     // Everything below mutates shared state — the live `EditorState` OR a
     // `--file` document on disk (a read-modify-write). Serialize ALL of it
@@ -382,7 +382,7 @@ fn serve_connection<S: std::io::Read + std::io::Write>(
     // File-backed path (`--file` arg): handle the whole read-modify-write
     // while holding the lock.
     if let Some(response) =
-        op_web_daemon::mcp_serve::file_path::process_message_for_file_path_arg(None, &req.body)?
+        crate::mcp_serve::file_path::process_message_for_file_path_arg(None, &req.body)?
     {
         return write_json_rpc_response(stream, &response);
     }
@@ -401,7 +401,7 @@ fn serve_connection<S: std::io::Read + std::io::Write>(
         return write_json_rpc_response(stream, &response);
     }
     let mut state = request_snapshot(req_tx, wake_ui)?;
-    let response = op_web_daemon::mcp_serve::process_message_with_applier(
+    let response = crate::mcp_serve::process_message_with_applier(
         &mut state,
         &req.body,
         |local_state, cmd| match request_apply(req_tx, wake_ui, cmd.clone()) {
@@ -437,13 +437,13 @@ fn serve_document_sync<S: std::io::Read + std::io::Write>(
     stateful_lock: &Mutex<()>,
     body: &str,
 ) -> Result<(), String> {
-    let document_json = match op_web_daemon::mcp_serve::parse_document_sync_body(body) {
+    let document_json = match crate::mcp_serve::parse_document_sync_body(body) {
         Ok(json) => json,
         Err(message) => {
-            return op_web_daemon::mcp_serve::write_mcp_http_response(
+            return crate::mcp_serve::write_mcp_http_response(
                 stream,
                 "400 Bad Request",
-                &op_web_daemon::mcp_serve::rest_error_body(&message),
+                &crate::mcp_serve::rest_error_body(&message),
             );
         }
     };
@@ -454,10 +454,10 @@ fn serve_document_sync<S: std::io::Read + std::io::Write>(
     let loaded = match op_pen_loader::load_canonical(&document_json) {
         Ok(loaded) => loaded,
         Err(e) => {
-            return op_web_daemon::mcp_serve::write_mcp_http_response(
+            return crate::mcp_serve::write_mcp_http_response(
                 stream,
                 "400 Bad Request",
-                &op_web_daemon::mcp_serve::rest_error_body(&e.to_string()),
+                &crate::mcp_serve::rest_error_body(&e.to_string()),
             );
         }
     };
@@ -474,18 +474,18 @@ fn serve_document_sync<S: std::io::Read + std::io::Write>(
     match request_replace(req_tx, wake_ui, loaded.value) {
         Ok(()) => {
             let version = LIVE_SYNC_VERSION.fetch_add(1, Ordering::Relaxed) + 1;
-            op_web_daemon::mcp_serve::write_mcp_http_response(
+            crate::mcp_serve::write_mcp_http_response(
                 stream,
                 "200 OK",
-                &op_web_daemon::mcp_serve::document_sync_ok(version),
+                &crate::mcp_serve::document_sync_ok(version),
             )
         }
         // The UI thread is gone or didn't ack in time — a server fault, mapped
         // to 500 (TS throws → 500 for server-side failures).
-        Err(transport_err) => op_web_daemon::mcp_serve::write_mcp_http_response(
+        Err(transport_err) => crate::mcp_serve::write_mcp_http_response(
             stream,
             "500 Internal Server Error",
-            &op_web_daemon::mcp_serve::rest_error_body(&transport_err),
+            &crate::mcp_serve::rest_error_body(&transport_err),
         ),
     }
 }
@@ -495,9 +495,9 @@ fn write_json_rpc_response<S: std::io::Write>(
     response: &str,
 ) -> Result<(), String> {
     if response.is_empty() {
-        op_web_daemon::mcp_serve::write_mcp_http_response(stream, "202 Accepted", "")
+        crate::mcp_serve::write_mcp_http_response(stream, "202 Accepted", "")
     } else {
-        op_web_daemon::mcp_serve::write_mcp_http_response(stream, "200 OK", response)
+        crate::mcp_serve::write_mcp_http_response(stream, "200 OK", response)
     }
 }
 
@@ -532,7 +532,7 @@ fn request_screenshot(
     req_tx: &Sender<UiRequest>,
     wake_ui: &UiWake,
     req: op_mcp::ScreenshotRequest,
-) -> Result<op_web_daemon::export::screenshot::ScreenshotPng, String> {
+) -> Result<crate::export::screenshot::ScreenshotPng, String> {
     let timeout = Duration::from_millis(req.timeout_ms.max(1));
     let spec = screenshot::capture_spec(&req);
     let (ack_tx, ack_rx) = mpsc::sync_channel(1);
@@ -591,15 +591,15 @@ fn make_live_token() -> String {
 fn live_ping_response(id_raw: &str, token: &str) -> String {
     format!(
         r#"{{"jsonrpc":"2.0","id":{id_raw},"result":{{"server":"{}","mode":"live","token":"{}"}}}}"#,
-        op_web_daemon::mcp_serve::MCP_SERVER_NAME,
-        op_web_daemon::mcp_serve::json_escape(token)
+        crate::mcp_serve::MCP_SERVER_NAME,
+        crate::mcp_serve::json_escape(token)
     )
 }
 
 fn error_json(message: &str) -> String {
     format!(
         r#"{{"error":"{}"}}"#,
-        op_web_daemon::mcp_serve::json_escape(message)
+        crate::mcp_serve::json_escape(message)
     )
 }
 
@@ -724,7 +724,7 @@ mod tests {
         let (ack_tx, ack_rx) = mpsc::sync_channel(1);
         req_tx
             .send(UiRequest::Screenshot {
-                spec: op_web_daemon::export::screenshot::CaptureSpec {
+                spec: crate::export::screenshot::CaptureSpec {
                     node_id: None,
                     padding: 0.0,
                     scale: 1.0,
