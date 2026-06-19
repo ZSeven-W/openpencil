@@ -8,7 +8,6 @@ mod acp_agent_probe_host;
 mod app_handler;
 mod chat_acp;
 mod chat_attachment;
-mod chat_intent;
 mod chat_session;
 mod clipboard;
 mod codegen_export;
@@ -987,6 +986,15 @@ fn main() {
         std::process::exit(1);
     }
 }
+
+// chat_intent moved to op_web_daemon::chat_intent (its headless tests
+// moved alongside it as a `#[path]` sibling). Only the one host-coupled
+// test stayed here — it drives the GUI design-session pumps, which need
+// `WidgetHostNative` (absent from op-web-daemon's default-features-off
+// op-host-native dependency).
+#[cfg(test)]
+#[path = "chat_intent_host_tests.rs"]
+mod chat_intent_host_tests;
 
 #[cfg(test)]
 mod main_tests;

@@ -499,7 +499,6 @@ bun run cargo:deny        # cargo-deny (native + wasm32 bans; CI uses cargo-deny
 | op-host-native  | Native host lib — WidgetHostNative + skia-safe GL backend (desktop + mobile)      | ❌ (native only) |
 | op-host-desktop | Desktop binary `openpencil-desktop` (winit + skia-safe GL) — also the `--serve-web` daemon that hosts the web bundle | ❌ (native only) |
 | op-cli          | `op` command-line tool                                                           | ❌ (native only) |
-| op-app          | Thin composition root — re-exports the per-platform host (target-gated)           | ✅ / ❌ per target |
 
 **Shared library crates:** `op-editor-core` (canonical `.op` state), `op-editor-ui` (platform-free widgets + `RenderBackend`), `op-editor-host-core` (transport-free host state machines), `op-mcp`, `op-ai`, `op-ai-skills`, `op-codegen`, `op-orchestrator`, `op-figma`, `op-git`, `op-opmerge`, `op-pen-loader`, `op-design-lint`, `op-config-store`, `op-process-io`, `op-acp`, `op-i18n`, `op-rpc-transport` — plus `op-smoke` (headless design-turn test runner). The browser bundle renders through the official CanvasKit skia WASM (loaded separately), so the retired `skia-safe-op` wasm fork + `wasm-libc-shim` no longer exist.
 

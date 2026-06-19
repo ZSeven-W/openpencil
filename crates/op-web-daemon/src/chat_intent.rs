@@ -49,21 +49,21 @@ use op_editor_core::pen_node_ext::PenNodeExt;
 use op_editor_core::EditorState;
 use op_orchestrator::{AppendContext, DesignRequest};
 
-use op_web_daemon::chat_canvas_tools::UiChatToolExecutor;
-use op_web_daemon::chat_provider_llm::ChatProviderLlmClient;
-use op_web_daemon::design_session::{run_design_worker, DesignCmdReq, DesignDelta};
+use crate::chat_canvas_tools::UiChatToolExecutor;
+use crate::chat_provider_llm::ChatProviderLlmClient;
+use crate::design_session::{run_design_worker, DesignCmdReq, DesignDelta};
 
 /// Internal host-op name the modify worker sends over the chat tool
 /// channel; intercepted by `chat_session::drain_tool_requests` (never
 /// advertised to any model).
-pub(crate) const APPLY_MODIFICATION_OP: &str = "__apply_design_modification";
+pub const APPLY_MODIFICATION_OP: &str = "__apply_design_modification";
 
 /// TS `classifyIntent` abort budget (`ai-chat-intent-classifier.ts:26`).
 const CLASSIFY_TIMEOUT: Duration = Duration::from_secs(8);
 
 /// TS `DesignIntent = 'new' | 'modify' | 'chat'`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum DesignIntent {
+pub enum DesignIntent {
     New,
     Modify,
     Chat,
@@ -125,7 +125,7 @@ fn matches_any_word_phrase(text_lower: &str, phrases: &[&str]) -> bool {
 
 /// TS `classifyByKeywords` — verbatim rule order.
 #[cfg(test)]
-pub(crate) fn classify_by_keywords(text: &str) -> DesignIntent {
+pub fn classify_by_keywords(text: &str) -> DesignIntent {
     let lower = text.to_lowercase();
     let chat = matches_any_word_phrase(&lower, CHAT_KEYWORDS);
     let modify = matches_any_word_phrase(&lower, MODIFY_KEYWORDS);
@@ -139,7 +139,7 @@ pub(crate) fn classify_by_keywords(text: &str) -> DesignIntent {
 }
 
 /// TS classification-tag parsing (`ai-chat-intent-classifier.ts:46-51`).
-pub(crate) fn parse_classified(text: &str) -> DesignIntent {
+pub fn parse_classified(text: &str) -> DesignIntent {
     let upper = text.trim().to_uppercase();
     if upper.contains("DESIGN_MODIFY") {
         return DesignIntent::Modify;
@@ -156,7 +156,7 @@ pub(crate) fn parse_classified(text: &str) -> DesignIntent {
 /// TS `classifyIntent` — one lightweight LLM call through the (chat-
 /// session-untracked) provider, with the TS 8s abort and the TS
 /// fallback to `new` on any failure / timeout.
-pub(crate) fn classify_intent_llm(
+pub fn classify_intent_llm(
     provider: &dyn ChatProvider,
     text: &str,
     model: Option<String>,
@@ -360,7 +360,7 @@ fn pick_content_root(page: &PenNode) -> (&PenNode, Vec<String>) {
 /// (TS `pickActivePageFrame` fallback branch — the Rust shell's
 /// active page is always a real page entry, never a frame-as-page
 /// alias).
-pub(crate) fn detect_append_intent(state: &EditorState, prompt: &str) -> Option<AppendContext> {
+pub fn detect_append_intent(state: &EditorState, prompt: &str) -> Option<AppendContext> {
     if prompt.trim().is_empty() {
         return None;
     }
@@ -403,7 +403,7 @@ pub(crate) fn detect_append_intent(state: &EditorState, prompt: &str) -> Option<
 /// TS `buildVariableContext` (design-generator.ts:43-72). `None` when
 /// the document has no variables. BTreeMap iteration is sorted where
 /// TS uses insertion order — content is identical, ordering may not be.
-pub(crate) fn build_variable_context(state: &EditorState) -> Option<String> {
+pub fn build_variable_context(state: &EditorState) -> Option<String> {
     let vars = state.doc.variables.as_ref().filter(|v| !v.is_empty())?;
     let mut lines: Vec<String> = vec![
         "DOCUMENT VARIABLES (use \"$name\" to reference, e.g. fill color \"$color-1\"):".into(),
@@ -461,7 +461,7 @@ fn scalar_display(value: &jian_ops_schema::variable::VariableScalar) -> String {
 }
 
 /// Pre-built `generateDesignModification` request inputs.
-pub(crate) struct ModifyPlan {
+pub struct ModifyPlan {
     /// `CONTEXT NODES + INSTRUCTION (+ variable context)` user message.
     pub user_message: String,
     /// Maintenance skills (+ design-md style policy) system prompt.
@@ -473,7 +473,7 @@ pub(crate) struct ModifyPlan {
 /// the page, else last page child), then the
 /// `generateDesignModification` message/prompt assembly. `None` when
 /// the page has no usable target (the caller degrades to `new`).
-pub(crate) fn build_modify_plan(state: &EditorState, instruction: &str) -> Option<ModifyPlan> {
+pub fn build_modify_plan(state: &EditorState, instruction: &str) -> Option<ModifyPlan> {
     let children = state.active_children();
     let mut targets: Vec<&PenNode> = Vec::new();
     if !state.selection.set.is_empty() {
@@ -537,7 +537,7 @@ pub(crate) fn build_modify_plan(state: &EditorState, instruction: &str) -> Optio
 // ---------------------------------------------------------------------------
 
 /// Everything the router worker needs, pre-computed on the UI thread.
-pub(crate) struct CliTurnPlan {
+pub struct CliTurnPlan {
     pub user_text: String,
     /// TS `pageChildren.length === 0` (modify degrades to new).
     pub page_children_empty: bool,
@@ -593,7 +593,7 @@ fn resolve_route(
 /// `executor`, and a `DesignSession` on `delta_tx` / `cmd_tx`; the
 /// routes not taken drop their senders so the matching pump retires
 /// its session.
-pub(crate) fn run_cli_turn(
+pub fn run_cli_turn(
     plan: CliTurnPlan,
     chat_tx: Sender<ChatDelta>,
     executor: UiChatToolExecutor,
@@ -740,3 +740,4 @@ fn run_modify_turn(
 #[cfg(test)]
 #[path = "chat_intent_tests.rs"]
 mod tests;
+

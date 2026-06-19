@@ -58,7 +58,7 @@ fn drain_tool_requests(state: &mut EditorState, session: &mut ChatSession) -> bo
     }
     let mut changed = false;
     for req in requests {
-        if req.name == crate::chat_intent::APPLY_MODIFICATION_OP {
+        if req.name == op_web_daemon::chat_intent::APPLY_MODIFICATION_OP {
             let nodes = serde_json::from_str::<serde_json::Value>(&req.args_json)
                 .ok()
                 .and_then(|v| v.get("nodes").and_then(|n| n.as_array().cloned()))
