@@ -100,6 +100,12 @@ impl WidgetHost {
                     .map(|id| id.as_str().to_string())
                     .collect();
                 let _ = self.layout_scene.translate_nodes(&ids, dx, dy);
+                // The scene is now patched away from the last cached build while
+                // `scene_cache.last` still holds the pre-drag inputs. Invalidate
+                // so a later refresh always rebuilds — otherwise a doc returning
+                // to the cached value (undo, or dirty flipping mid-drag) would
+                // skip the rebuild and leave this stale patch on screen.
+                self.scene_cache.invalidate();
             } else {
                 self.mark_dirty();
             }

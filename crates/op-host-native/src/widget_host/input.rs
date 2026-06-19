@@ -242,6 +242,14 @@ impl WidgetHostNative {
                 let _ = self
                     .layout_scene
                     .translate_nodes(&ids, scene_dx as f32, scene_dy as f32);
+                // The scene is now patched away from the last cached build, but
+                // `scene_cache.last` still reflects the pre-drag inputs. Invalidate
+                // it so a later refresh always rebuilds — otherwise, if the doc
+                // returns to the cached value (e.g. undo, or dirty flipping
+                // mid-drag), the cache would skip and leave this stale patch on
+                // screen. Cheap: it only clears a field; no rebuild happens until
+                // the next dirty refresh (release).
+                self.scene_cache.invalidate();
             } else if translated {
                 self.mark_dirty();
             }
