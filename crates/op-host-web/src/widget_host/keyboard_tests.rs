@@ -484,3 +484,20 @@ fn tool_shortcut_is_suppressed_while_an_input_owns_the_keyboard() {
     assert!(!host.apply_tool_shortcut("r"));
     assert_eq!(host.editor_state.tool, Tool::Select);
 }
+
+#[test]
+fn tool_shortcut_does_not_steal_keys_from_preset_name_input() {
+    use op_editor_core::Tool;
+    let mut host = WidgetHost::new();
+    host.editor_state.tool = Tool::Select;
+
+    // The variables preset dropdown's save-as-name input owns the keyboard.
+    host.editor_state.editor_ui.variables_preset_menu_open = true;
+    host.editor_state.editor_ui.variables_preset_name_focus = true;
+    assert!(host.editor_state.editor_ui.preset_name_input_active());
+    assert!(host.input_active());
+
+    // A bare "r" must type into the preset name, not switch to the Rect tool.
+    assert!(!host.apply_tool_shortcut("r"));
+    assert_eq!(host.editor_state.tool, Tool::Select);
+}

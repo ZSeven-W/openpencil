@@ -23,6 +23,10 @@ impl WidgetHost {
                 .editor_ui
                 .variables_variant_rename_value
                 .is_some()
+            // #20: the preset dropdown's save-as-name input owns the keyboard
+            // (native parity — without this a bare letter would switch tools
+            // instead of typing into the preset name).
+            || self.editor_state.editor_ui.preset_name_input_active()
             || self.variables_search_active()
             || self.editor_state.editor_ui.agent_settings.focus.is_some()
             || self.editor_state.editor_ui.icon_picker.open
