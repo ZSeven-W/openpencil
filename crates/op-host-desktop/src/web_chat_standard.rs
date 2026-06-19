@@ -298,7 +298,7 @@ fn stream_chat_route<W: Write>(
     model: Option<String>,
 ) -> std::io::Result<()> {
     let chat_req = ChatRequest {
-        system_prompt: crate::chat_system_prompt::build_chat_system_prompt(state, &req.ai.user),
+        system_prompt: op_web_daemon::chat_system_prompt::build_chat_system_prompt(state, &req.ai.user),
         user_message: req.ai.user.clone(),
         history: req.history.clone(),
         max_output_tokens: req.ai.max_output_tokens,

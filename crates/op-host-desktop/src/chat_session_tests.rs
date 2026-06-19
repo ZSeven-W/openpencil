@@ -1,5 +1,5 @@
 use super::*;
-use crate::chat_system_prompt::{build_chat_system_prompt, chat_history_from_transcript};
+use op_web_daemon::chat_system_prompt::{build_chat_system_prompt, chat_history_from_transcript};
 use op_ai::chat_history::{trim_chat_history, DEFAULT_MAX_CHARS, DEFAULT_MAX_MESSAGES};
 use op_ai::chat_provider::{ChatDelta, ChatRequest, EchoProvider, StopReason};
 use op_editor_core::{ChatMessage, ChatToolCall};

@@ -18,4 +18,5 @@ pub mod chat_canvas_tools;
 pub mod chat_provider_llm;
 pub mod chat_spawn;
 pub mod chat_subprocess_quirks;
+pub mod chat_system_prompt;
 pub mod web_static;
