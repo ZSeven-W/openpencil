@@ -41,7 +41,7 @@ use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::sync::mpsc;
 
 use crate::chat_runtime::{shared_runtime, BlockingRecvIter};
-use crate::chat_spawn::{build_command, find_binary};
+use op_web_daemon::chat_spawn::{build_command, find_binary};
 
 /// TS `opencode-client.ts` reuses an existing server on the default
 /// port before spawning its own.
