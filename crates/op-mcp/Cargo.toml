@@ -16,10 +16,10 @@ debug-tools = ["dep:op-design-lint"]
 
 [dependencies]
 jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema" }
+jian-scene = { path = "../../vendor/jian/crates/jian-scene" }
 op-ai-skills = { path = "../op-ai-skills" }
 op-design-lint = { path = "../op-design-lint", optional = true }
 op-editor-core = { path = "../op-editor-core" }
-op-editor-ui = { path = "../op-editor-ui" }
 op-pen-loader = { path = "../op-pen-loader" }
 regex = "1"
 serde_json = { workspace = true }
