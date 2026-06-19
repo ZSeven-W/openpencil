@@ -64,7 +64,7 @@ use tokio::sync::mpsc;
 
 use crate::chat_runtime::{prompt_with_system_prompt, shared_runtime, BlockingRecvIter};
 use op_web_daemon::chat_spawn::{build_command, exit_status_label, find_binary};
-use crate::chat_subprocess_quirks as quirks;
+use op_web_daemon::chat_subprocess_quirks as quirks;
 
 /// How the user's prompt reaches the CLI. Claude Code's `--print`
 /// mode requires the prompt as a positional argv after `--` and
