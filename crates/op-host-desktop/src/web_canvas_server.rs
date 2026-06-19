@@ -1066,7 +1066,7 @@ fn startup_editor_from_base_for_web_canvas(
 
 pub(crate) fn startup_editor_for_web_canvas(path: Option<PathBuf>) -> Result<EditorState, String> {
     let mut base = EditorState::starter();
-    crate::settings_io::load(&mut base);
+    op_web_daemon::settings_io::load(&mut base);
     startup_editor_from_base_for_web_canvas(base, path)
 }
 
@@ -1256,7 +1256,7 @@ fn serve_one<S: Read + Write>(
                 .agent_settings
                 .begin_provider_connect(provider);
             let reply = apply_provider_probe_outcome(provider, outcome, &mut guard);
-            crate::settings_io::save(&guard.editor);
+            op_web_daemon::settings_io::save(&guard.editor);
             reply
         };
         return crate::mcp_serve::write_mcp_http_response(stream, reply.status, &reply.body)
@@ -1302,7 +1302,7 @@ fn serve_one<S: Read + Write>(
         let reply = {
             let mut guard = state.lock().unwrap_or_else(|p| p.into_inner());
             let reply = apply_acp_agent_probe_outcome(&id, outcome, &mut guard);
-            crate::settings_io::save(&guard.editor);
+            op_web_daemon::settings_io::save(&guard.editor);
             reply
         };
         return crate::mcp_serve::write_mcp_http_response(stream, reply.status, &reply.body)
