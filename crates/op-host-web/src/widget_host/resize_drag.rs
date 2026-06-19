@@ -1,3 +1,4 @@
+use op_editor_ui::util::resize_bounds;
 use op_editor_ui::widgets::{selection_handle_at_point, SelectionHandle};
 use op_editor_ui::{Point2D, Rect};
 
@@ -75,68 +76,6 @@ impl WidgetHost {
     pub(in crate::widget_host) fn release_selection_handle_drag(&mut self) -> bool {
         self.handle_drag.take().is_some()
     }
-}
-
-fn resize_bounds(start: Rect, handle: SelectionHandle, dx: f32, dy: f32) -> Rect {
-    let mut x = start.origin.x;
-    let mut y = start.origin.y;
-    let mut w = start.size.x;
-    let mut h = start.size.y;
-    match handle {
-        SelectionHandle::TopLeft => {
-            x += dx;
-            y += dy;
-            w -= dx;
-            h -= dy;
-        }
-        SelectionHandle::Top => {
-            y += dy;
-            h -= dy;
-        }
-        SelectionHandle::TopRight => {
-            y += dy;
-            w += dx;
-            h -= dy;
-        }
-        SelectionHandle::Right => {
-            w += dx;
-        }
-        SelectionHandle::BottomRight => {
-            w += dx;
-            h += dy;
-        }
-        SelectionHandle::Bottom => {
-            h += dy;
-        }
-        SelectionHandle::BottomLeft => {
-            x += dx;
-            w -= dx;
-            h += dy;
-        }
-        SelectionHandle::Left => {
-            x += dx;
-            w -= dx;
-        }
-    }
-    if w < 1.0 {
-        if matches!(
-            handle,
-            SelectionHandle::Left | SelectionHandle::TopLeft | SelectionHandle::BottomLeft
-        ) {
-            x = start.origin.x + start.size.x - 1.0;
-        }
-        w = 1.0;
-    }
-    if h < 1.0 {
-        if matches!(
-            handle,
-            SelectionHandle::Top | SelectionHandle::TopLeft | SelectionHandle::TopRight
-        ) {
-            y = start.origin.y + start.size.y - 1.0;
-        }
-        h = 1.0;
-    }
-    Rect::xywh(x, y, w, h)
 }
 
 fn rect_to_doc_rect(r: Rect) -> op_editor_core::DocRect {

@@ -6,6 +6,9 @@ use super::WidgetHost;
 use jian_ops_schema::sizing::SizingKeyword;
 use jian_ops_schema::variable::VariableKind;
 use op_editor_core::{EffectField, PropertyFocus};
+use op_editor_ui::util::{
+    color_to_hex, color_to_hex_with_alpha, format_panel_number, parse_hex_color,
+};
 use op_editor_ui::{widgets::PropertyPanel, Color};
 
 fn effect_param_snapshot_value(
@@ -876,70 +879,6 @@ pub(in crate::widget_host) fn property_focus_initial(
             .as_ref()
             .map(|w| w.step.clone())
             .unwrap_or_default(),
-    }
-}
-
-fn format_panel_number(value: f32) -> String {
-    if value.fract().abs() < f32::EPSILON {
-        format!("{}", value.round() as i32)
-    } else {
-        format!("{value:.2}")
-    }
-}
-
-fn parse_hex_color(s: &str) -> Option<Color> {
-    let trimmed = s.trim().trim_start_matches('#');
-    if trimmed.is_empty() || trimmed.len() > 8 {
-        return None;
-    }
-    if !trimmed.chars().all(|c| c.is_ascii_hexdigit()) {
-        return None;
-    }
-    let canonical = match trimmed.len() {
-        3 => {
-            let mut out = String::with_capacity(6);
-            for c in trimmed.chars() {
-                out.push(c);
-                out.push(c);
-            }
-            out
-        }
-        8 => trimmed.to_string(),
-        7 => format!("{:0>8}", trimmed),
-        _ => format!("{:0>6}", trimmed),
-    };
-    let r = u8::from_str_radix(&canonical[0..2], 16).ok()?;
-    let g = u8::from_str_radix(&canonical[2..4], 16).ok()?;
-    let b = u8::from_str_radix(&canonical[4..6], 16).ok()?;
-    let a = if canonical.len() == 8 {
-        u8::from_str_radix(&canonical[6..8], 16).ok()? as f32 / 255.0
-    } else {
-        1.0
-    };
-    Some(Color {
-        r: r as f32 / 255.0,
-        g: g as f32 / 255.0,
-        b: b as f32 / 255.0,
-        a,
-    })
-}
-
-fn color_to_hex(c: Color) -> String {
-    let r = (c.r.clamp(0.0, 1.0) * 255.0).round() as u8;
-    let g = (c.g.clamp(0.0, 1.0) * 255.0).round() as u8;
-    let b = (c.b.clamp(0.0, 1.0) * 255.0).round() as u8;
-    format!("#{:02X}{:02X}{:02X}", r, g, b)
-}
-
-fn color_to_hex_with_alpha(c: Color) -> String {
-    let r = (c.r.clamp(0.0, 1.0) * 255.0).round() as u8;
-    let g = (c.g.clamp(0.0, 1.0) * 255.0).round() as u8;
-    let b = (c.b.clamp(0.0, 1.0) * 255.0).round() as u8;
-    let a = (c.a.clamp(0.0, 1.0) * 255.0).round() as u8;
-    if a == 255 {
-        format!("#{:02X}{:02X}{:02X}", r, g, b)
-    } else {
-        format!("#{:02X}{:02X}{:02X}{:02X}", r, g, b, a)
     }
 }
 

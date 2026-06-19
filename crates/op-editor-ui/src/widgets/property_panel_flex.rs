@@ -1,6 +1,7 @@
 //! Flex-layout section paint and geometry helpers.
 
 use crate::theme::Theme;
+use crate::util::format_panel_number;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::property_panel::{
     LayoutAlignValue, LayoutJustifyValue, NodeSnapshot, PropertyPanelAction,
@@ -747,13 +748,5 @@ fn position_to_align(index: usize) -> LayoutAlignValue {
         0 => LayoutAlignValue::Start,
         1 => LayoutAlignValue::Center,
         _ => LayoutAlignValue::End,
-    }
-}
-
-fn format_panel_number(value: f32) -> String {
-    if value.fract().abs() < f32::EPSILON {
-        format!("{}", value.round() as i32)
-    } else {
-        format!("{value:.2}")
     }
 }

@@ -503,9 +503,6 @@ pub fn paint_dropdown(cx: &mut PaintCx<'_>, theme: &Theme, rect: Rect, value: &s
     );
 }
 
-pub fn format_color_hex(c: Color) -> String {
-    let r = (c.r.clamp(0.0, 1.0) * 255.0).round() as u8;
-    let g = (c.g.clamp(0.0, 1.0) * 255.0).round() as u8;
-    let b = (c.b.clamp(0.0, 1.0) * 255.0).round() as u8;
-    format!("#{:02X}{:02X}{:02X}", r, g, b)
-}
+/// Re-export of the shared `#RRGGBB` formatter under the historical
+/// property-panel name so existing call sites stay unchanged.
+pub use crate::util::color_to_hex as format_color_hex;
