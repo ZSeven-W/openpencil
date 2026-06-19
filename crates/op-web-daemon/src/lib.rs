@@ -15,6 +15,7 @@
 
 // Phase 2 — host-free leaf modules.
 pub mod chat_canvas_tools;
+pub mod chat_provider_llm;
 pub mod chat_spawn;
 pub mod chat_subprocess_quirks;
 pub mod web_static;

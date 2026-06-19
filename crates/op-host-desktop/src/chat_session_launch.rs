@@ -19,7 +19,7 @@ use op_web_daemon::chat_canvas_tools::{chat_tool_channel, chat_tool_defs, ChatTo
 use crate::chat_claude::ClaudeCodeProvider;
 use crate::chat_copilot::CopilotProvider;
 use crate::chat_http_server::OpenCodeProvider;
-use crate::chat_provider_llm::ChatProviderLlmClient;
+use op_web_daemon::chat_provider_llm::ChatProviderLlmClient;
 use crate::chat_subprocess::SubprocessProvider;
 use crate::chat_system_prompt::{
     build_agent_system_prompt, build_chat_system_prompt, chat_history_from_transcript,

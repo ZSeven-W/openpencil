@@ -21,7 +21,7 @@ use op_orchestrator::{
 use serde_json::Value;
 
 use crate::ai_proxy::AiStreamRequest;
-use crate::chat_provider_llm::ChatProviderLlmClient;
+use op_web_daemon::chat_provider_llm::ChatProviderLlmClient;
 use crate::pre_validator::LintPreValidator;
 use crate::web_canvas_server::{SseHub, WebCanvasState};
 
