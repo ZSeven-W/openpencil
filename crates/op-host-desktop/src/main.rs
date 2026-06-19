@@ -11,7 +11,6 @@ mod chat_acp;
 mod chat_agent_loop;
 mod chat_attachment;
 mod chat_builtin_http;
-mod chat_canvas_tools;
 mod chat_claude;
 mod chat_copilot;
 mod chat_http_server;

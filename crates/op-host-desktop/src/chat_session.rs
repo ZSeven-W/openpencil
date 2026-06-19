@@ -11,7 +11,7 @@ pub use op_editor_host_core::chat::ChatPoll;
 pub use op_editor_host_core::chat::{apply_poll_to_message, ChatSession};
 use op_host_native::WidgetHostNative;
 
-use crate::chat_canvas_tools::execute_chat_tool;
+use op_web_daemon::chat_canvas_tools::execute_chat_tool;
 
 // Turn launch + provider routing (split out at the 800-line cap).
 // `launch_if_pending` and friends live in the sibling file; the
@@ -64,7 +64,7 @@ fn drain_tool_requests(state: &mut EditorState, session: &mut ChatSession) -> bo
                 .and_then(|v| v.get("nodes").and_then(|n| n.as_array().cloned()))
                 .unwrap_or_default();
             let (count, mutated) =
-                crate::chat_canvas_tools::apply_design_modification(state, &nodes);
+                op_web_daemon::chat_canvas_tools::apply_design_modification(state, &nodes);
             if mutated {
                 changed = true;
             }

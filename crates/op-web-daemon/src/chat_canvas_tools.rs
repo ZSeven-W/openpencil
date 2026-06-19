@@ -18,13 +18,13 @@
 
 use op_ai::chat_provider::{ChatToolDef, ChatToolResult};
 use op_editor_core::EditorState;
-pub(crate) use op_editor_host_core::chat::{
+pub use op_editor_host_core::chat::{
     chat_tool_channel, ChatToolRequest, UiChatToolExecutor,
 };
 use op_mcp::{ToolRegistry, ToolResponse};
 
 /// TS `maxTurns` for the chat agent loop (`ai-chat-handlers.ts:254`).
-pub(crate) const MAX_TOOL_TURNS: usize = 20;
+pub const MAX_TOOL_TURNS: usize = 20;
 
 /// The chat tool subset — the TS CRUD set (`getCrudToolDefs`) with the
 /// TS `TOOL_AUTH_MAP` auth levels. Design-pipeline tools
@@ -42,7 +42,7 @@ const CHAT_TOOLS: &[(&str, &str)] = &[
 ];
 
 /// Auth level for a chat tool name (`None` = not in the chat set).
-pub(crate) fn chat_tool_level(name: &str) -> Option<&'static str> {
+pub fn chat_tool_level(name: &str) -> Option<&'static str> {
     CHAT_TOOLS
         .iter()
         .find(|(tool, _)| *tool == name)
@@ -53,7 +53,7 @@ pub(crate) fn chat_tool_level(name: &str) -> Option<&'static str> {
 /// Descriptions follow the TS `getCrudToolDefs` text; schemas match
 /// the Rust `op_mcp` tools' argument surface (the executor dispatches
 /// into those tools verbatim).
-pub(crate) fn chat_tool_defs() -> Vec<ChatToolDef> {
+pub fn chat_tool_defs() -> Vec<ChatToolDef> {
     let def = |name: &str, description: &str, schema: &str| ChatToolDef {
         name: name.to_string(),
         description: description.to_string(),
@@ -108,7 +108,7 @@ pub(crate) fn chat_tool_defs() -> Vec<ChatToolDef> {
 /// dispatch through the wire parser's argument discipline, then apply
 /// any returned `EditorCommand` via `EditorState::apply` — the same
 /// pre-validate-then-mutate path the MCP server uses.
-pub(crate) fn execute_chat_tool(
+pub fn execute_chat_tool(
     state: &mut EditorState,
     name: &str,
     args_json: &str,
@@ -197,7 +197,7 @@ fn error_result(message: String) -> ChatToolResult {
 /// here every node is its own undo step — the same granularity the
 /// Rust design pipeline has until host batch mode lands
 /// (design_session.rs `BeginUndoBatch` TODO).
-pub(crate) fn apply_design_modification(
+pub fn apply_design_modification(
     state: &mut EditorState,
     nodes: &[serde_json::Value],
 ) -> (usize, bool) {

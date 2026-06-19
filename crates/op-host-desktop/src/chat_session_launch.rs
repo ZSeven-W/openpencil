@@ -15,7 +15,7 @@ use op_orchestrator::{classify_intent, Intent};
 
 use crate::chat_acp::AcpProvider;
 use crate::chat_builtin_http::ConfiguredBuiltinProvider;
-use crate::chat_canvas_tools::{chat_tool_channel, chat_tool_defs, ChatToolRequest};
+use op_web_daemon::chat_canvas_tools::{chat_tool_channel, chat_tool_defs, ChatToolRequest};
 use crate::chat_claude::ClaudeCodeProvider;
 use crate::chat_copilot::CopilotProvider;
 use crate::chat_http_server::OpenCodeProvider;
