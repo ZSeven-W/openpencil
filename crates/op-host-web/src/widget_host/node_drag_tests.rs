@@ -41,6 +41,15 @@ fn box_bounds(host: &WidgetHost) -> op_editor_core::DocRect {
     }
 }
 
+fn scene_origin(host: &WidgetHost, id: &str) -> Point2D {
+    host.layout_scene
+        .active_page()
+        .and_then(|page| page.find(id))
+        .expect("node present in scene")
+        .bounds
+        .origin
+}
+
 #[test]
 fn select_tool_dragging_selected_node_moves_it_without_resizing() {
     let mut host = WidgetHost::new();
@@ -98,4 +107,52 @@ fn select_tool_dragging_flex_child_reorders_on_release_like_native() {
     assert!(host.apply_release_with_viewport(VW, VH));
 
     assert_eq!(child_order(&host, "stack"), vec!["b", "a", "c"]);
+}
+
+#[test]
+fn dragging_a_selection_with_a_locked_node_does_not_drift_it_in_the_scene() {
+    let mut host = WidgetHost::new();
+    let doc = jian_ops_schema::load_str(
+        r##"{"version":"0.8.0","children":[
+          {"type":"rectangle","id":"free","name":"Free","x":100,"y":100,"width":80,"height":60},
+          {"type":"rectangle","id":"locked","name":"Locked","x":300,"y":100,"width":80,"height":60,"locked":true}
+        ]}"##,
+    )
+    .expect("fixture JSON parses")
+    .value;
+    host.editor_state = op_editor_core::EditorState::from_document(doc);
+    host.editor_state.tool = Tool::Select;
+
+    // Press the free node to start a drag, then widen the selection to include
+    // the locked node — the incremental fast path reads the live selection at
+    // move time.
+    let press = screen(&host, 140.0, 130.0);
+    assert!(host.apply_press(press.x, press.y, VW, VH));
+    host.editor_state.selection.set = vec![NodeId::new("free"), NodeId::new("locked")];
+
+    // Force-resolve the scene, then clear dirty so the move takes the
+    // incremental path (a real frame would have painted + cleared the flag).
+    host.editor_state_dirty = true;
+    host.refresh_layout_scene();
+    host.editor_state_dirty = false;
+
+    let free_before = scene_origin(&host, "free");
+    let locked_before = scene_origin(&host, "locked");
+
+    let move_to = screen(&host, 200.0, 130.0); // +60 doc px in x
+    assert!(host.apply_cursor_move(move_to.x, move_to.y));
+
+    let free_after = scene_origin(&host, "free");
+    let locked_after = scene_origin(&host, "locked");
+
+    // The editable node tracks the drag in the scene...
+    assert!(
+        (free_after.x - free_before.x).abs() > 1.0,
+        "editable node should move in the scene during the drag"
+    );
+    // ...the locked node, which `translate_selected` leaves untouched, must not
+    // drift — otherwise it would jump and then snap back on the release-time
+    // reconversion.
+    assert_eq!(locked_after.x, locked_before.x, "locked node must not drift in x");
+    assert_eq!(locked_after.y, locked_before.y, "locked node must not drift in y");
 }
