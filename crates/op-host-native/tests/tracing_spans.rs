@@ -1,3 +1,4 @@
+#![cfg(feature = "gl-host")]
 //! Spec v19 acceptance #8 / plan v7 Task 2 Step 16c:
 //! `tracing` spans must fire at `begin_frame / present / resize /
 //! teardown` (and the rest of the frame surface). `tracing-test`

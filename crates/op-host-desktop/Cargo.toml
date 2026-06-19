@@ -62,7 +62,7 @@ role = "Editor"
 # Phase 7.3 reorg: openpencil-shell-core dissolved — widget facade /
 # render-backend / layout scene paths resolve through op-editor-ui.
 op-editor-ui = { path = "../op-editor-ui" }
-op-host-native = { path = "../op-host-native", version = "0.8.0" }
+op-host-native = { path = "../op-host-native", version = "0.8.0", features = ["gl-host"] }
 # Accessibility (#67) — the platform-free `accesskit` core types
 # (`TreeUpdate` / `ActionRequest` / `ActivationHandler` …) used by the
 # desktop a11y adapter (`src/a11y.rs`). The OS-specific subclassing

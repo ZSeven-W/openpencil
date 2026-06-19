@@ -1,3 +1,4 @@
+#![cfg(feature = "gl-host")]
 //! Spec v19 §9.3 acceptance #6 / plan v7 Task 2 Step 16b:
 //! 100 iterations of `{ create + frame + present + teardown × 3 }` must
 //! not grow RSS by more than 5 % over baseline.

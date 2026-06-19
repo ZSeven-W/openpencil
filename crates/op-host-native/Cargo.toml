@@ -10,6 +10,40 @@ description = "OpenPencil native host — winit + skia-safe + accesskit backend,
 name = "op_host_native"
 path = "src/lib.rs"
 
+[features]
+# `gl-host` (NON-default) enables the desktop winit/glutin interactive runner
+# tier + skia-safe's `gl` feature + accesskit. Consumers that need the GUI host
+# (`op-host-desktop`, `op-app`) opt in via `features = ["gl-host"]`. Left OFF —
+# the default, used by `op-web-daemon` (via `default-features = false`) and by
+# the mobile `cargo check` (default features) — it yields a raster-only library:
+# no winit / glutin / jian-host-desktop / accesskit, and skia-safe WITHOUT `gl`
+# (so it emits no native GL link directives). The raster `NativeBackend` +
+# `NativeFrameBackend` + offscreen raster + text measurement remain. Mobile is
+# safe by construction: default features = no `gl-host`; the gated deps also live
+# only in the desktop-only target block.
+#
+# Why non-default (Approach Y): cargo can't alias skia-safe twice ("multiple
+# times with different names") and can't make it optional-in-one-target-block +
+# required-in-another; and a `skia-safe/gl` edge in a *default* feature would
+# flip gl on for mobile. Making `gl-host` non-default + opt-in is the only
+# cargo-valid, mobile-safe way to keep skia's `gl` out of the raster build.
+default = []
+gl-host = [
+  "skia-safe/gl",
+  "dep:glutin",
+  "dep:winit",
+  "dep:scopeguard",
+  "dep:jian-host-desktop",
+  "dep:accesskit",
+]
+
+# The basic_window demo needs the GL host stack (SharedSkiaContext + winit);
+# `required-features` makes `cargo build --examples` skip it under
+# `--no-default-features` instead of failing on a missing `main`.
+[[example]]
+name = "basic_window"
+required-features = ["gl-host"]
+
 [dependencies]
 # Phase 7.3 reorg: openpencil-shell-core dissolved — widget facade /
 # theme / layout scene / scene vars / render-backend / gesture types
@@ -20,7 +54,9 @@ op-editor-ui = { path = "../op-editor-ui" }
 # into an `accesskit::TreeUpdate` (see `widget_host/a11y.rs`) for the
 # desktop platform adapter to publish. Pinned to 0.24 to match
 # op-editor-ui + the platform adapter crates' transitive accesskit.
-accesskit = "0.24"
+# Optional + behind `gl-host` (its only user, `widget_host/a11y.rs`, is
+# gl-host-gated) so the raster-only build pulls no accesskit at all.
+accesskit = { version = "0.24", optional = true }
 
 # Canvas Preview (Play) mode serializes the document to JSON before
 # building the jian runtime, so the saved doc is never mutated.
@@ -113,12 +149,11 @@ jian-skia = { path = "../../vendor/jian/crates/jian-skia", version = "0.0.1", fe
 # `compile_error!`. macOS / Windows backends auto-enable via
 # cfg(target_os) and need no feature flag.
 [target.'cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))'.dependencies]
-skia-safe = { version = "0.97.0", default-features = false, features = [
-  "binary-cache",
-  "textlayout",
-  "gl",
-] }
-glutin = "0.32.3"
+# skia-safe's `gl` feature is added via the `gl-host` feature (`skia-safe/gl`),
+# NOT here — so with `gl-host` off the raster/mobile build links the 5-OS
+# skia-safe above WITHOUT `gl` and emits no native GL link directives. The 5-OS
+# entry is the single skia-safe edge; no desktop-only skia-safe entry is needed.
+glutin = { version = "0.32.3", optional = true }
 # `casement` — ZSeven-W's winit fork (vendored as a submodule under
 # `vendor/casement` so CI checks out the same source the desktop binary
 # links). The `package` key keeps the `winit` import name. `glutin-winit`
@@ -127,14 +162,14 @@ glutin = "0.32.3"
 # tree. Its only use here — `GlWindow::build_surface_attributes` — is
 # replaced by a direct `glutin::surface::SurfaceAttributesBuilder`
 # call in `context/provider.rs`.
-winit = { package = "casement", path = "../../vendor/casement", default-features = false, features = [
+winit = { package = "casement", path = "../../vendor/casement", default-features = false, optional = true, features = [
   "x11",
   "wayland",
   "wayland-csd-adwaita",
   "rwh_06",
 ] }
-scopeguard = "1.2"
-jian-host-desktop = { path = "../../vendor/jian/crates/jian-host-desktop", version = "0.0.1", default-features = false, features = [
+scopeguard = { version = "1.2", optional = true }
+jian-host-desktop = { path = "../../vendor/jian/crates/jian-host-desktop", version = "0.0.1", default-features = false, optional = true, features = [
   "textlayout",
 ] }
 

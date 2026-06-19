@@ -22,7 +22,7 @@
 //!
 //! This file is the public spine. Implementation methods are split
 //! across sibling submodules (per the 800-line-per-file ceiling):
-//! - [`frame_backend`] — `NativeFrameBackend` (`RenderBackend` impl)
+//! - `NativeFrameBackend` (`RenderBackend` impl) — moved to `crate::backend`
 //! - [`helpers`] — hex parsing + resize-bounds math + constants
 //! - [`geometry`] — canvas region / cursor hint / picker rect helpers
 //! - [`input`] — cursor-move / release / panel-resize input handlers
@@ -76,7 +76,6 @@ mod design_md_press_tests;
 #[cfg(test)]
 mod figma_import_tests;
 mod font_picker_dispatch;
-mod frame_backend;
 mod geometry;
 mod geometry_settings_hover;
 #[cfg(test)]
@@ -146,8 +145,6 @@ mod variables_panel_tests;
 mod variables_panel_ux_tests;
 mod variables_preset_press;
 mod viewport_fit;
-
-pub use frame_backend::NativeFrameBackend;
 
 /// Cursor affordance the host suggests for a given screen point.
 /// The runner maps each variant to its native cursor (`CursorIcon`

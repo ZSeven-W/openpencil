@@ -10,6 +10,7 @@
 //! exist as compile-time placeholders so the public API surface is frozen
 //! before Step 1f real implementations land.
 
+#[cfg(feature = "gl-host")]
 #[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
 use std::error::Error;
 use std::sync::Arc;
@@ -34,6 +35,7 @@ impl ProviderError {
     /// desktop `GlutinProvider` to convert glutin / glutin-winit errors;
     /// `cfg(any(...))`-gated to silence `dead_code` on iOS / Android where
     /// no in-tree caller exists yet (Step 1f mobile providers will use it).
+    #[cfg(feature = "gl-host")]
     #[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
     pub(crate) fn from_error<E: Error>(err: E) -> Self {
         Self::Failure(err.to_string())
@@ -118,6 +120,7 @@ pub trait GlContextProvider {
 /// All non-`Send` glutin handles live in [`Option`]s so `release` can
 /// drop them in a defined order (surface → context → display) without
 /// requiring `&mut self` to consume `self`.
+#[cfg(feature = "gl-host")]
 #[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
 pub struct GlutinProvider {
     /// Currently-current context. `None` after `release`.
@@ -130,6 +133,7 @@ pub struct GlutinProvider {
     glow: Arc<glow::Context>,
 }
 
+#[cfg(feature = "gl-host")]
 #[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
 impl GlutinProvider {
     /// Construct from an existing winit window. Builds a glutin display
@@ -236,6 +240,7 @@ impl GlutinProvider {
     }
 }
 
+#[cfg(feature = "gl-host")]
 #[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
 fn window_surface_size(
     inner: winit::dpi::PhysicalSize<u32>,
@@ -251,6 +256,7 @@ fn window_surface_size(
     Ok((width, height))
 }
 
+#[cfg(feature = "gl-host")]
 #[cfg(target_os = "macos")]
 fn pick_display_api(
     _raw: raw_window_handle::RawWindowHandle,
@@ -258,6 +264,7 @@ fn pick_display_api(
     glutin::display::DisplayApiPreference::Cgl
 }
 
+#[cfg(feature = "gl-host")]
 #[cfg(target_os = "windows")]
 fn pick_display_api(
     raw: raw_window_handle::RawWindowHandle,
@@ -265,6 +272,7 @@ fn pick_display_api(
     glutin::display::DisplayApiPreference::WglThenEgl(Some(raw))
 }
 
+#[cfg(feature = "gl-host")]
 #[cfg(target_os = "linux")]
 fn pick_display_api(
     _raw: raw_window_handle::RawWindowHandle,
@@ -274,6 +282,7 @@ fn pick_display_api(
     glutin::display::DisplayApiPreference::Egl
 }
 
+#[cfg(feature = "gl-host")]
 #[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
 impl GlContextProvider for GlutinProvider {
     #[tracing::instrument(skip(self))]
@@ -411,7 +420,7 @@ impl GlContextProvider for AndroidEglProvider {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "gl-host"))]
 mod tests {
     use super::*;
 

@@ -1,3 +1,4 @@
+#![cfg(feature = "gl-host")]
 //! Spec v19 §3.3 / plan v7 Task 2 Step 16a:
 //! `teardown` + lifecycle hooks must be idempotent.
 //!

@@ -19,6 +19,7 @@ pub use provider::{GlContextProvider, ProviderError, ProviderResult};
 pub use provider::AndroidEglProvider;
 #[cfg(target_os = "ios")]
 pub use provider::EaglProvider;
+#[cfg(feature = "gl-host")]
 #[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
 pub use provider::GlutinProvider;
 
@@ -26,7 +27,9 @@ pub use provider::GlutinProvider;
 // (cfg-gated dependencies). Step 1f mobile wiring will introduce a mobile
 // twin (or generalize this one) once iOS / Android providers go from
 // `unimplemented!()` placeholders to real GL contexts.
+#[cfg(feature = "gl-host")]
 #[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
 mod shared;
+#[cfg(feature = "gl-host")]
 #[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
 pub use shared::{SharedSkiaContext, SharedSkiaError, SharedSkiaResult, SurfaceConfig};

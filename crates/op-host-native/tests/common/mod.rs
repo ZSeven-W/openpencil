@@ -1,3 +1,4 @@
+#![cfg(feature = "gl-host")]
 //! Shared test helpers for `op-host-native`.
 //!
 //! Spec v19 §9 / plan v7 Task 2 Step 16a-16f: this module supplies

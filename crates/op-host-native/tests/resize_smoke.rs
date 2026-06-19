@@ -1,3 +1,4 @@
+#![cfg(feature = "gl-host")]
 //! Spec v19 acceptance #5 (resize / DPI no-flicker) / Phase A Gate
 //! round 2 CONCERN 2.
 //!

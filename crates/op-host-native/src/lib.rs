@@ -57,6 +57,7 @@ pub mod context;
     target_os = "android"
 ))]
 pub mod backend;
+#[cfg(feature = "gl-host")]
 #[cfg(any(
     target_os = "macos",
     target_os = "linux",
@@ -65,8 +66,10 @@ pub mod backend;
     target_os = "android"
 ))]
 pub mod boolean_ops;
+#[cfg(feature = "gl-host")]
 #[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
 pub mod canvas_view_stub;
+#[cfg(feature = "gl-host")]
 #[cfg(any(
     target_os = "macos",
     target_os = "linux",
@@ -77,6 +80,7 @@ pub mod canvas_view_stub;
 pub mod widget_host;
 // Canvas Preview (Play) mode runtime owner — depends on the OP
 // `RenderBackend` trait (same gate as `widget_host`).
+#[cfg(feature = "gl-host")]
 #[cfg(any(
     target_os = "macos",
     target_os = "linux",
@@ -93,7 +97,8 @@ pub mod preview;
     target_os = "ios",
     target_os = "android"
 ))]
-pub use backend::{to_jian_rect, NativeBackend};
+pub use backend::{to_jian_rect, NativeBackend, NativeFrameBackend};
+#[cfg(feature = "gl-host")]
 #[cfg(any(
     target_os = "macos",
     target_os = "linux",
@@ -102,6 +107,7 @@ pub use backend::{to_jian_rect, NativeBackend};
     target_os = "android"
 ))]
 pub use preview::PreviewSession;
+#[cfg(feature = "gl-host")]
 #[cfg(any(
     target_os = "macos",
     target_os = "linux",
@@ -109,8 +115,9 @@ pub use preview::PreviewSession;
     target_os = "ios",
     target_os = "android"
 ))]
-pub use widget_host::{CursorHint, NativeFrameBackend, WidgetHostNative};
+pub use widget_host::{CursorHint, WidgetHostNative};
 // canvas_view_stub stays desktop-only (uses glow GL-isolation probe).
+#[cfg(feature = "gl-host")]
 #[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
 pub use canvas_view_stub::CanvasViewportStub;
 
@@ -118,6 +125,7 @@ pub use canvas_view_stub::CanvasViewportStub;
 pub use context::{GlContextProvider, ProviderError, ProviderResult};
 
 // Desktop-only re-exports.
+#[cfg(feature = "gl-host")]
 #[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
 pub use context::{
     GlutinProvider, SharedSkiaContext, SharedSkiaError, SharedSkiaResult, SurfaceConfig,
