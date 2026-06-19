@@ -49,7 +49,7 @@ use op_acp::{
 use op_ai::chat_provider::{ChatDelta, ChatProvider, ChatRequest, EffortLevel, StopReason};
 use tokio::sync::mpsc;
 
-use crate::chat_attachment::TempGuard;
+use op_web_daemon::chat_attachment::TempGuard;
 use crate::chat_runtime::{shared_runtime, BlockingRecvIter};
 
 /// TS error surfaced when ACP is used with the MCP server stopped —
@@ -178,12 +178,12 @@ impl ChatProvider for AcpProvider {
         // paths. The thinking / effort knobs ride in-band either way
         // (ACP exposes no dedicated reasoning channel).
         let (mut prompt, guard) = if config.connection_type == ConnectionType::Local {
-            match crate::chat_attachment::prompt_with_attachments(
+            match op_web_daemon::chat_attachment::prompt_with_attachments(
                 &request.user_message,
                 &request.attachments,
             ) {
                 Ok(pair) => pair,
-                Err(e) => return crate::chat_attachment::attachment_error_turn(e),
+                Err(e) => return op_web_daemon::chat_attachment::attachment_error_turn(e),
             }
         } else {
             let mut prompt = request.user_message.clone();
@@ -197,7 +197,7 @@ impl ChatProvider for AcpProvider {
             (prompt, None)
         };
         let mut directive = String::new();
-        if let Some(d) = crate::chat_attachment::thinking_directive(request.thinking) {
+        if let Some(d) = op_web_daemon::chat_attachment::thinking_directive(request.thinking) {
             directive.push_str(d);
         }
         if request.effort != EffortLevel::Low {

@@ -107,15 +107,15 @@ impl ChatProvider for BuiltInProvider {
         // can't reconfigure it — convey them in-band as a leading
         // directive. Attachments append their temp-file paths; the
         // guard removes the files once the worker task ends.
-        let (mut prompt, guard) = match crate::chat_attachment::prompt_with_attachments(
+        let (mut prompt, guard) = match op_web_daemon::chat_attachment::prompt_with_attachments(
             &request.user_message,
             &request.attachments,
         ) {
             Ok(pair) => pair,
-            Err(e) => return crate::chat_attachment::attachment_error_turn(e),
+            Err(e) => return op_web_daemon::chat_attachment::attachment_error_turn(e),
         };
         let mut directive = String::new();
-        if let Some(d) = crate::chat_attachment::thinking_directive(request.thinking) {
+        if let Some(d) = op_web_daemon::chat_attachment::thinking_directive(request.thinking) {
             directive.push_str(d);
         }
         if request.effort != EffortLevel::Low {

@@ -311,12 +311,12 @@ impl ChatProvider for SubprocessProvider {
         // are appended as `[attached …: <path>]` lines the CLI can
         // read by path. The guard removes the temp files when the
         // worker task ends.
-        let (mut prompt, guard) = match crate::chat_attachment::prompt_with_attachments(
+        let (mut prompt, guard) = match op_web_daemon::chat_attachment::prompt_with_attachments(
             &request.user_message,
             &request.attachments,
         ) {
             Ok(pair) => pair,
-            Err(e) => return crate::chat_attachment::attachment_error_turn(e),
+            Err(e) => return op_web_daemon::chat_attachment::attachment_error_turn(e),
         };
         // CLIs with the native reasoning knob (Codex) get the knobs
         // as `--config model_reasoning_effort=…` via `turn_args`
@@ -324,7 +324,7 @@ impl ChatProvider for SubprocessProvider {
         // double-signal (TS `codex-client.ts` only uses the flag).
         if !self.native_effort_config {
             let mut directive = String::new();
-            if let Some(d) = crate::chat_attachment::thinking_directive(request.thinking) {
+            if let Some(d) = op_web_daemon::chat_attachment::thinking_directive(request.thinking) {
                 directive.push_str(d);
             }
             if request.effort != EffortLevel::Low {

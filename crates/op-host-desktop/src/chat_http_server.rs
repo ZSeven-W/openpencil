@@ -119,7 +119,7 @@ impl ChatProvider for OpenCodeProvider {
         // (TS parity), so it is NOT folded into the prompt string.
         let mut prompt = request.user_message.clone();
         let mut directive = String::new();
-        if let Some(d) = crate::chat_attachment::thinking_directive(request.thinking) {
+        if let Some(d) = op_web_daemon::chat_attachment::thinking_directive(request.thinking) {
             directive.push_str(d);
         }
         if request.effort != EffortLevel::Low {
@@ -154,7 +154,7 @@ impl ChatProvider for OpenCodeProvider {
                     "url": format!(
                         "data:{};base64,{}",
                         a.media_type,
-                        crate::chat_attachment::attachment_to_base64(a)
+                        op_web_daemon::chat_attachment::attachment_to_base64(a)
                     ),
                 })
             })
