@@ -20,7 +20,7 @@ use op_orchestrator::{
 };
 use serde_json::Value;
 
-use crate::ai_proxy::AiStreamRequest;
+use op_web_daemon::ai_proxy::AiStreamRequest;
 use op_web_daemon::chat_provider_llm::ChatProviderLlmClient;
 use op_web_daemon::pre_validator::LintPreValidator;
 use crate::web_canvas_server::{SseHub, WebCanvasState};
@@ -39,7 +39,7 @@ pub(crate) struct WebStandardTurnRequest {
 }
 
 pub(crate) fn parse_standard_turn_body(body: &str) -> Option<WebStandardTurnRequest> {
-    let ai = crate::ai_proxy::parse_ai_stream_body(body)?;
+    let ai = op_web_daemon::ai_proxy::parse_ai_stream_body(body)?;
     let value: Value = serde_json::from_str(body).ok()?;
     let obj = value.as_object()?;
     let document_json = obj.get("document").map(Value::to_string);
@@ -140,7 +140,7 @@ pub(crate) fn stream_standard_turn<W: Write>(
     state: &Mutex<WebCanvasState>,
     hub: &SseHub,
 ) -> std::io::Result<()> {
-    crate::ai_proxy::write_sse_headers(out)?;
+    op_web_daemon::ai_proxy::write_sse_headers(out)?;
 
     let mut snapshot = match apply_request_snapshot(&req, state, hub) {
         Ok(snapshot) => snapshot,
@@ -173,17 +173,17 @@ pub(crate) fn stream_standard_turn<W: Write>(
     }
 
     let Some(classify_provider) =
-        crate::ai_proxy::proxy_provider_with_chat_session(&snapshot, &req.ai.model, false)
+        op_web_daemon::ai_proxy::proxy_provider_with_chat_session(&snapshot, &req.ai.model, false)
     else {
         return write_error_event(out, "no model configured");
     };
     let Some(chat_provider) =
-        crate::ai_proxy::proxy_provider_with_chat_session(&snapshot, &req.ai.model, true)
+        op_web_daemon::ai_proxy::proxy_provider_with_chat_session(&snapshot, &req.ai.model, true)
     else {
         return write_error_event(out, "no model configured");
     };
     let Some(design_provider) =
-        crate::ai_proxy::proxy_provider_with_chat_session(&snapshot, &req.ai.model, false)
+        op_web_daemon::ai_proxy::proxy_provider_with_chat_session(&snapshot, &req.ai.model, false)
     else {
         return write_error_event(out, "no model configured");
     };
@@ -308,7 +308,7 @@ fn stream_chat_route<W: Write>(
         model,
     };
     for delta in provider.send(chat_req) {
-        out.write_all(crate::ai_proxy::delta_to_sse(&delta).as_bytes())?;
+        out.write_all(op_web_daemon::ai_proxy::delta_to_sse(&delta).as_bytes())?;
         out.flush()?;
         if matches!(delta, ChatDelta::Done { .. } | ChatDelta::Error(_)) {
             break;
@@ -517,21 +517,21 @@ impl DocSink for WebDesignDocSink<'_> {
 
 fn write_delta_event<W: Write>(out: &mut W, text: &str) -> std::io::Result<()> {
     out.write_all(
-        crate::ai_proxy::delta_to_sse(&ChatDelta::TextDelta(text.to_string())).as_bytes(),
+        op_web_daemon::ai_proxy::delta_to_sse(&ChatDelta::TextDelta(text.to_string())).as_bytes(),
     )?;
     out.flush()
 }
 
 fn write_thinking_event<W: Write>(out: &mut W, text: &str) -> std::io::Result<()> {
     out.write_all(
-        crate::ai_proxy::delta_to_sse(&ChatDelta::Thinking(text.to_string())).as_bytes(),
+        op_web_daemon::ai_proxy::delta_to_sse(&ChatDelta::Thinking(text.to_string())).as_bytes(),
     )?;
     out.flush()
 }
 
 fn write_done_event<W: Write>(out: &mut W) -> std::io::Result<()> {
     out.write_all(
-        crate::ai_proxy::delta_to_sse(&ChatDelta::Done {
+        op_web_daemon::ai_proxy::delta_to_sse(&ChatDelta::Done {
             stop_reason: StopReason::EndTurn,
         })
         .as_bytes(),
@@ -541,7 +541,7 @@ fn write_done_event<W: Write>(out: &mut W) -> std::io::Result<()> {
 
 fn write_error_event<W: Write>(out: &mut W, message: &str) -> std::io::Result<()> {
     out.write_all(
-        crate::ai_proxy::delta_to_sse(&ChatDelta::Error(message.to_string())).as_bytes(),
+        op_web_daemon::ai_proxy::delta_to_sse(&ChatDelta::Error(message.to_string())).as_bytes(),
     )?;
     out.flush()
 }

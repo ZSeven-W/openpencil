@@ -17,11 +17,11 @@ use op_ai::chat_provider::{
 use op_editor_core::{AgentProvider, EditorState, ModelEntry};
 use serde_json::{json, Value};
 
-use op_web_daemon::chat_builtin_http::ConfiguredBuiltinProvider;
-use op_web_daemon::chat_claude::ClaudeCodeProvider;
-use op_web_daemon::chat_copilot::CopilotProvider;
-use op_web_daemon::chat_http_server::OpenCodeProvider;
-use op_web_daemon::chat_subprocess::SubprocessProvider;
+use crate::chat_builtin_http::ConfiguredBuiltinProvider;
+use crate::chat_claude::ClaudeCodeProvider;
+use crate::chat_copilot::CopilotProvider;
+use crate::chat_http_server::OpenCodeProvider;
+use crate::chat_subprocess::SubprocessProvider;
 
 /// Parsed `POST /api/ai/stream` body. The web bundle sends skill NAMES
 /// (not the corpus) plus the per-turn knobs; the proxy expands the

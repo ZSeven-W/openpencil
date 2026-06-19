@@ -292,7 +292,7 @@ pub(crate) fn handle_web_canvas_request(
             // list or holding API keys. `POST /api/ai/stream` is a
             // streaming route handled in the connection loop, not here.
             status: "200 OK",
-            body: crate::ai_proxy::models_json(&state.editor),
+            body: op_web_daemon::ai_proxy::models_json(&state.editor),
         },
         _ => WebReply {
             status: "404 Not Found",
@@ -1206,21 +1206,21 @@ fn serve_one<S: Read + Write>(
     // — `proxy_provider` returns an owned `Box<dyn ChatProvider>`, so
     // nothing borrows the editor across the stream.
     if req.method == "POST" && req.path == "/api/ai/stream" {
-        let Some(ai_req) = crate::ai_proxy::parse_ai_stream_body(&req.body) else {
-            return crate::ai_proxy::write_sse_error(stream, "invalid request body")
+        let Some(ai_req) = op_web_daemon::ai_proxy::parse_ai_stream_body(&req.body) else {
+            return op_web_daemon::ai_proxy::write_sse_error(stream, "invalid request body")
                 .map_err(|e| format!("ai stream error: {e}"))
                 .map(|()| false);
         };
         let provider = {
             let guard = state.lock().unwrap_or_else(|p| p.into_inner());
-            crate::ai_proxy::proxy_provider(&guard.editor, &ai_req.model)
+            op_web_daemon::ai_proxy::proxy_provider(&guard.editor, &ai_req.model)
         };
         let Some(provider) = provider else {
-            return crate::ai_proxy::write_sse_error(stream, "no model configured")
+            return op_web_daemon::ai_proxy::write_sse_error(stream, "no model configured")
                 .map_err(|e| format!("ai stream error: {e}"))
                 .map(|()| false);
         };
-        return crate::ai_proxy::stream_ai_response(stream, ai_req, provider.as_ref())
+        return op_web_daemon::ai_proxy::stream_ai_response(stream, ai_req, provider.as_ref())
             .map_err(|e| format!("ai stream: {e}"))
             .map(|()| false);
     }
@@ -1230,7 +1230,7 @@ fn serve_one<S: Read + Write>(
     if req.method == "POST" && req.path == "/api/ai/standard" {
         let Some(standard_req) = crate::web_chat_standard::parse_standard_turn_body(&req.body)
         else {
-            return crate::ai_proxy::write_sse_error(stream, "invalid request body")
+            return op_web_daemon::ai_proxy::write_sse_error(stream, "invalid request body")
                 .map_err(|e| format!("ai standard error: {e}"))
                 .map(|()| false);
         };
