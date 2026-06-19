@@ -90,6 +90,7 @@ pub mod property_panel_widget;
 #[cfg(test)]
 mod property_panel_widget_tests;
 pub mod text_input;
+pub(crate) mod text_input_backend;
 mod text_selection;
 pub mod toolbar;
 
