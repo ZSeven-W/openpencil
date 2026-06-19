@@ -94,6 +94,7 @@ mod image_panel_dispatch;
 mod io_tests;
 mod keyboard;
 mod keyboard_edit_ops;
+mod keyboard_escape;
 mod keyboard_git;
 mod keyboard_ime;
 mod keyboard_settings_commit;
