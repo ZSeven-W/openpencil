@@ -72,7 +72,6 @@ mod theme_preset_host;
 mod update_check;
 mod web_canvas_server;
 mod web_chat_standard;
-mod web_static;
 mod window_state;
 
 use op_host_native::{NativeBackend, SharedSkiaContext, SharedSkiaError, WidgetHostNative};
@@ -949,7 +948,7 @@ fn main() {
     // headless `--render-shots` rasterizer below, MCP — so they resolve
     // simple-icons instead of the unknown-glyph fallback dot. Set-once /
     // idempotent.
-    op_editor_ui::set_brand_catalog(web_static::ICONIFY_BRANDS_JSON);
+    op_editor_ui::set_brand_catalog(op_web_daemon::web_static::ICONIFY_BRANDS_JSON);
     // `--mcp` / `--mcp-http` swap the GUI for an MCP server mode;
     // when one of those ran, exit instead of opening a window.
     if mcp_serve::run_cli_if_requested() {

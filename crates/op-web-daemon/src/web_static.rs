@@ -34,7 +34,7 @@ const MISSING_BUNDLE_HTML: &str = include_str!("web_static/missing_bundle.html")
 /// both (a) registered with the shared icon catalog at native GUI startup and
 /// (b) served to the web client, which deliberately omits it from the wasm
 /// bundle to keep the first-load small (see `op_editor_ui::widgets::icon_catalog`).
-pub(crate) const ICONIFY_BRANDS_JSON: &str =
+pub const ICONIFY_BRANDS_JSON: &str =
     include_str!("../../op-editor-ui/assets/iconify-catalog-brands.json");
 
 /// Route the web client fetches to load the brand-logo catalog at runtime.
@@ -45,7 +45,7 @@ pub(crate) const ICONIFY_BRANDS_PATH: &str = "/assets/iconify-catalog-brands.jso
 const BUNDLE_ENTRY_JS: &str = "op_host_web.js";
 
 /// A fully-formed static HTTP reply (status + MIME + body bytes).
-pub(crate) struct StaticReply {
+pub struct StaticReply {
     pub(crate) status: &'static str,
     pub(crate) content_type: &'static str,
     pub(crate) body: Vec<u8>,
@@ -80,7 +80,7 @@ pub(crate) fn bundle_dir_candidates() -> Vec<PathBuf> {
 
 /// First candidate directory that actually contains the wasm-bindgen JS
 /// entry (`op_host_web.js`), or `None` when no bundle is built anywhere.
-pub(crate) fn resolve_bundle_dir() -> Option<PathBuf> {
+pub fn resolve_bundle_dir() -> Option<PathBuf> {
     bundle_dir_candidates()
         .into_iter()
         .find(|dir| dir.join(BUNDLE_ENTRY_JS).is_file())
@@ -180,7 +180,7 @@ fn safe_relative_path(file: &str) -> Option<PathBuf> {
 /// (the caller falls through to REST / SSE / JSON-RPC routing). The bundle
 /// directory is a parameter (already resolved) so the routing is testable
 /// without mutating process-global env.
-pub(crate) fn handle_static_request(path: &str, bundle_dir: Option<&Path>) -> Option<StaticReply> {
+pub fn handle_static_request(path: &str, bundle_dir: Option<&Path>) -> Option<StaticReply> {
     if path == "/" || path == "/index.html" {
         return Some(match bundle_dir {
             Some(_) => StaticReply {
@@ -277,7 +277,7 @@ fn html_escape(s: &str) -> String {
 
 /// Write a static reply with its own Content-Type (binary-safe body) — the
 /// JSON-only `write_mcp_http_response` cannot carry `application/wasm`.
-pub(crate) fn write_static_response<S: std::io::Write>(
+pub fn write_static_response<S: std::io::Write>(
     stream: &mut S,
     reply: &StaticReply,
 ) -> Result<(), String> {

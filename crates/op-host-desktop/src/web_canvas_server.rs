@@ -1082,7 +1082,7 @@ pub fn run_web_canvas(path: Option<PathBuf>, port: u16, host: &str) -> Result<()
         TcpListener::bind((host, port)).map_err(|e| format!("bind {host}:{port}: {e}"))?;
     let bound = listener.local_addr().map(|a| a.port()).unwrap_or(port);
     eprintln!("openpencil-desktop --serve-web: listening on {host}:{bound}");
-    match crate::web_static::resolve_bundle_dir() {
+    match op_web_daemon::web_static::resolve_bundle_dir() {
         Some(dir) => eprintln!(
             "openpencil-desktop --serve-web: serving web bundle from {}",
             dir.display()
@@ -1182,11 +1182,11 @@ fn serve_one<S: Read + Write>(
     // Static serving: the host page (`/`) and the wasm-bindgen bundle
     // (`/pkg/*`). Owns only those paths — everything else falls through.
     if req.method == "GET" {
-        let bundle_dir = crate::web_static::resolve_bundle_dir();
+        let bundle_dir = op_web_daemon::web_static::resolve_bundle_dir();
         if let Some(reply) =
-            crate::web_static::handle_static_request(&req.path, bundle_dir.as_deref())
+            op_web_daemon::web_static::handle_static_request(&req.path, bundle_dir.as_deref())
         {
-            return crate::web_static::write_static_response(stream, &reply).map(|()| false);
+            return op_web_daemon::web_static::write_static_response(stream, &reply).map(|()| false);
         }
     }
     // SSE live-update stream: the browser shell subscribes and re-syncs whenever
