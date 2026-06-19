@@ -22,11 +22,20 @@ path = "src/lib.rs"
 [dependencies]
 op-editor-ui = { path = "../op-editor-ui" }
 
-# Native host (winit + skia-safe + accesskit) — desktop + mobile, NOT
-# wasm. Mirrors op-host-native's own target gate so op-app stays
-# wasm32-clean and mobile-checkable.
+# Native host — every non-wasm target incl. iOS / Android. Base edge WITHOUT
+# `gl-host`, so the mobile cargo-check stays raster (no winit/glutin/skia-gl),
+# matching op-host-native's own non-default gl-host (Phase 0 approach Y).
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 op-host-native = { path = "../op-host-native", version = "0.8.0" }
+
+# Desktop adds the interactive GL host: `gl-host` brings winit + skia-safe `gl`
+# + `WidgetHostNative`, so `host_native::WidgetHostNative` (the documented native
+# host API) is available on macOS / Linux / Windows. Cargo unifies this with the
+# base edge above into one op-host-native with gl-host on desktop; mobile keeps
+# the raster base. (The shipped desktop binary is op-host-desktop, which depends
+# on op-host-native with gl-host directly.)
+[target.'cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))'.dependencies]
+op-host-native = { path = "../op-host-native", version = "0.8.0", features = ["gl-host"] }
 
 # Web host (wasm32-unknown-unknown bundle entry). Only resolved on
 # the wasm32 target where op-host-web's cdylib / wasm-bindgen setup
