@@ -22,7 +22,7 @@ use super::{collect_bounds, page_bounds, paint_node, paint_nodes, BoundsAcc, Ras
 /// this module compiles (and tests) without the `mcp-debug-tools`
 /// feature; the feature-gated live glue converts between the two.
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) struct CaptureSpec {
+pub struct CaptureSpec {
     /// `None` captures the whole active-page content (TS target=root);
     /// `Some(id)` captures one node + subtree (TS target=node).
     pub node_id: Option<String>,
@@ -39,7 +39,7 @@ pub(crate) struct CaptureSpec {
 /// whole-page captures, mirroring TS (`actualBounds` is undefined for
 /// `bounds === 'root'`).
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) struct ScreenshotPng {
+pub struct ScreenshotPng {
     pub png_base64: String,
     pub actual_bounds: Option<(f32, f32, f32, f32)>,
 }
@@ -50,14 +50,14 @@ pub(crate) struct ScreenshotPng {
 /// feature-gated `mcp_live` UI pump, so gate it identically to keep
 /// the default build warning-free.
 #[cfg(feature = "mcp-debug-tools")]
-pub(crate) fn capture(state: &EditorState, spec: &CaptureSpec) -> Result<ScreenshotPng, String> {
+pub fn capture(state: &EditorState, spec: &CaptureSpec) -> Result<ScreenshotPng, String> {
     let scene = op_pen_loader::editor_state_to_layout_scene(state);
     capture_scene(&scene, spec)
 }
 
 /// Scene-level capture — split out so tests can drive a hand-built
 /// scene without an `EditorState`.
-pub(crate) fn capture_scene(
+pub fn capture_scene(
     scene: &LayoutScene,
     spec: &CaptureSpec,
 ) -> Result<ScreenshotPng, String> {

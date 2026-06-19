@@ -84,8 +84,8 @@ enum UiRequest {
     /// bounded-wait discipline as the chat canvas tools.
     #[cfg(feature = "mcp-debug-tools")]
     Screenshot {
-        spec: crate::export::screenshot::CaptureSpec,
-        ack: SyncSender<Result<crate::export::screenshot::ScreenshotPng, String>>,
+        spec: op_web_daemon::export::screenshot::CaptureSpec,
+        ack: SyncSender<Result<op_web_daemon::export::screenshot::ScreenshotPng, String>>,
     },
 }
 
@@ -182,7 +182,7 @@ impl McpLiveServer {
                 #[cfg(feature = "mcp-debug-tools")]
                 Ok(UiRequest::Screenshot { spec, ack }) => {
                     // Read-only render of the live state — no repaint needed.
-                    let _ = ack.send(crate::export::screenshot::capture(state, &spec));
+                    let _ = ack.send(op_web_daemon::export::screenshot::capture(state, &spec));
                 }
                 Err(TryRecvError::Empty) => break,
                 Err(TryRecvError::Disconnected) => break,
@@ -532,7 +532,7 @@ fn request_screenshot(
     req_tx: &Sender<UiRequest>,
     wake_ui: &UiWake,
     req: op_mcp::ScreenshotRequest,
-) -> Result<crate::export::screenshot::ScreenshotPng, String> {
+) -> Result<op_web_daemon::export::screenshot::ScreenshotPng, String> {
     let timeout = Duration::from_millis(req.timeout_ms.max(1));
     let spec = screenshot::capture_spec(&req);
     let (ack_tx, ack_rx) = mpsc::sync_channel(1);
@@ -724,7 +724,7 @@ mod tests {
         let (ack_tx, ack_rx) = mpsc::sync_channel(1);
         req_tx
             .send(UiRequest::Screenshot {
-                spec: crate::export::screenshot::CaptureSpec {
+                spec: op_web_daemon::export::screenshot::CaptureSpec {
                     node_id: None,
                     padding: 0.0,
                     scale: 1.0,

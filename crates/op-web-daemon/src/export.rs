@@ -34,10 +34,10 @@ use std::path::Path as StdPath;
 mod export_svg;
 mod scene_painter;
 #[cfg(any(feature = "mcp-debug-tools", test))]
-pub(crate) mod screenshot;
+pub mod screenshot;
 
 pub use export_svg::export_svg;
-pub(crate) use scene_painter::{paint_node, paint_nodes};
+pub use scene_painter::{paint_node, paint_nodes};
 
 const MARGIN: f32 = 16.0;
 
@@ -48,8 +48,8 @@ const MARGIN: f32 = 16.0;
 /// N32 pixels) bounds the worst case. Exceeding either returns a
 /// structured error; the MCP screenshot glue wraps it in the TS-parity
 /// "Renderer reported failure: …" envelope.
-pub(crate) const MAX_RASTER_SIDE_PX: i64 = 16_384;
-pub(crate) const MAX_RASTER_TOTAL_PX: i64 = 64_000_000;
+pub const MAX_RASTER_SIDE_PX: i64 = 16_384;
+pub const MAX_RASTER_TOTAL_PX: i64 = 64_000_000;
 
 /// Raster export format. Matches TS ExportDialog's PNG / JPEG / WEBP
 /// options; SVG has its own entry point (`export_svg`).
@@ -181,7 +181,7 @@ fn render_raster(
 /// raster bytes instead of writing a file. `margin` is the doc-px
 /// border around `bounds` (file exports use the fixed [`MARGIN`]; the
 /// MCP `debug_screenshot` path passes the caller's `padding`).
-pub(crate) fn render_raster_bytes(
+pub fn render_raster_bytes(
     bounds: Rect,
     format: RasterFormat,
     scale: f32,
@@ -235,7 +235,7 @@ pub(crate) fn render_raster_bytes(
 /// doc-space AABB — but rotation, strokes and `node.points` can push
 /// painted pixels outside `bounds`, so traversal mirrors `paint_node`
 /// exactly and threads the cumulative transform.
-pub(crate) fn page_bounds(page: &ScenePage) -> Option<Rect> {
+pub fn page_bounds(page: &ScenePage) -> Option<Rect> {
     let mut acc = BoundsAcc::new();
     for n in &page.children {
         collect_bounds(n, glam::Affine2::IDENTITY, &mut acc);
@@ -466,7 +466,7 @@ fn normalize_rect(r: Rect) -> Rect {
 }
 
 #[cfg(test)]
-pub(crate) mod test_support {
+pub mod test_support {
     //! Shared helpers for the export test modules — build a
     //! `LayoutScene` directly without going through `op-pen-loader`.
 
