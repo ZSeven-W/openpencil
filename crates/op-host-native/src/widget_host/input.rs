@@ -228,7 +228,15 @@ impl WidgetHostNative {
                     .selection
                     .set
                     .iter()
-                    .filter(|id| !op_editor_core::walkers::is_flow_child_of_flex(children, id))
+                    .filter(|id| {
+                        // Move exactly what `translate_selected` moved in the
+                        // document: editable nodes only (locked / hidden are
+                        // skipped there) and not flex-flow children. Otherwise
+                        // the scene drifts nodes the doc never moved, then snaps
+                        // back on the release-time reconversion.
+                        self.editor_state.is_editable(id)
+                            && !op_editor_core::walkers::is_flow_child_of_flex(children, id)
+                    })
                     .map(|id| id.as_str().to_string())
                     .collect();
                 let _ = self
