@@ -176,6 +176,11 @@ pub struct WidgetHost {
     /// the host's canvas hit-test queries. Rebuilt lazily by
     /// `refresh_layout_scene()` whenever `editor_state_dirty` is set.
     pub(in crate::widget_host) layout_scene: op_editor_ui::layout_scene::LayoutScene,
+    /// Skips the `layout_scene` rebuild when the document / active theme /
+    /// active page are unchanged. `editor_state_dirty` fires on nearly every
+    /// interaction (hover, scroll, selection, caret drafts, and per-frame chat /
+    /// codegen streaming), but most leave the scene inputs identical.
+    pub(in crate::widget_host) scene_cache: op_pen_loader::SceneBuildCache,
     /// Set whenever `editor_state` is mutated. Drives the lazy rebuild
     /// of `layout_scene` — `refresh_layout_scene()` rebuilds + clears
     /// the flag, so a sequence of mutations re-derives once.
@@ -434,6 +439,7 @@ impl WidgetHost {
         Self {
             editor_state,
             layout_scene,
+            scene_cache: op_pen_loader::SceneBuildCache::new(),
             editor_state_dirty: false,
             #[cfg(feature = "canvaskit")]
             doc_sync_dirty: false,
@@ -490,7 +496,13 @@ impl WidgetHost {
     /// paint pass both call this before reading `layout_scene`.
     pub(in crate::widget_host) fn refresh_layout_scene(&mut self) {
         if self.editor_state_dirty {
-            self.layout_scene = op_pen_loader::editor_state_to_layout_scene(&self.editor_state);
+            // Only re-derive when the scene inputs (doc / theme / active page)
+            // actually changed — most `editor_state_dirty` marks (hover, scroll,
+            // selection, caret drafts, per-frame chat / codegen streaming) leave
+            // them identical, and the scene carries no editor state.
+            if let Some(scene) = self.scene_cache.maybe_rebuild(&self.editor_state) {
+                self.layout_scene = scene;
+            }
             self.editor_state_dirty = false;
         }
     }

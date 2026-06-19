@@ -30,6 +30,7 @@ mod layout_scene;
 #[cfg(feature = "skia-measure")]
 mod measure_cache;
 mod path_bounds;
+mod scene_cache;
 mod style_payload;
 mod text_style;
 mod widget_payload;
@@ -45,6 +46,9 @@ pub mod variables;
 /// directly from the layout-resolved `DocPayload` — no intermediate
 /// shell-core `Document`.
 pub use layout_scene::{editor_state_to_layout_scene, pen_document_to_layout_scene};
+/// Skips the layout-scene rebuild when the document / active theme / active page
+/// are unchanged — the hosts hold one and drive `refresh_layout_scene` through it.
+pub use scene_cache::SceneBuildCache;
 
 // Re-exports so `openpencil-desktop`'s existing call sites change
 // minimally.
