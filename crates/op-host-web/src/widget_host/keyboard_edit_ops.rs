@@ -5,6 +5,56 @@
 use super::WidgetHost;
 
 impl WidgetHost {
+    /// Single-key tool switch (V / R / O / L / T / F / P / Y / H). Mirrors the
+    /// native host's `shortcuts.rs::apply_set_tool`: drops any in-flight pen
+    /// path (TS `onToolChange`, `skia-pen-tool.ts:38-50`), clears the canvas
+    /// hover outline, and syncs the toolbar shape slot for shape variants.
+    pub(crate) fn apply_set_tool(&mut self, tool: op_editor_core::Tool) {
+        self.editor_state.editor_ui.canvas_hover_node = None;
+        self.commit_variable_row_focus_if_any();
+        if !matches!(tool, op_editor_core::Tool::Pen) {
+            let _ = self.editor_state.cancel_pen_path();
+        }
+        self.editor_state.tool = tool;
+        if matches!(
+            tool,
+            op_editor_core::Tool::Rect
+                | op_editor_core::Tool::Ellipse
+                | op_editor_core::Tool::Polygon
+                | op_editor_core::Tool::Line
+                | op_editor_core::Tool::Pen
+        ) {
+            self.editor_state.editor_ui.shape_tool = tool;
+        }
+        self.mark_dirty();
+    }
+
+    /// Map a bare (no Cmd/Ctrl) letter to a tool switch when no text input owns
+    /// the keyboard. Returns true when a tool was set so the keydown router
+    /// falls back to `apply_text` for every other letter (and while typing).
+    /// Web parity fix: the native host had this single-key router but the web
+    /// keydown handler only ever fell through to `apply_text`, so R / T / P /
+    /// etc. silently did nothing on the canvas.
+    pub(crate) fn apply_tool_shortcut(&mut self, key: &str) -> bool {
+        if self.input_active() {
+            return false;
+        }
+        let tool = match key.to_ascii_lowercase().as_str() {
+            "v" => op_editor_core::Tool::Select,
+            "r" => op_editor_core::Tool::Rect,
+            "o" => op_editor_core::Tool::Ellipse,
+            "l" => op_editor_core::Tool::Line,
+            "t" => op_editor_core::Tool::Text,
+            "f" => op_editor_core::Tool::Frame,
+            "p" => op_editor_core::Tool::Pen,
+            "y" => op_editor_core::Tool::Polygon,
+            "h" => op_editor_core::Tool::Hand,
+            _ => return false,
+        };
+        self.apply_set_tool(tool);
+        true
+    }
+
     /// Cmd/Ctrl+D — duplicate the selected node as a sibling
     /// offset by ~10 doc px. Selection follows the clone.
     pub fn apply_duplicate(&mut self) -> bool {

@@ -1141,13 +1141,20 @@ pub async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
                 "Z" if is_mod && shift => consumed = b.host.apply_redo(),
                 "y" if is_mod && !shift => consumed = b.host.apply_redo(),
                 _ => {
-                    // Printable char → text input (only when no Cmd/Ctrl held,
-                    // so unbound chords don't type into a focused field).
+                    // No Cmd/Ctrl held: a bare letter is first offered to the
+                    // single-key tool router (V/R/O/L/T/F/P/Y/H), which self-
+                    // gates on no input owning the keyboard; every other letter
+                    // (and any keystroke while a field is focused) types via
+                    // apply_text.
                     if !is_mod {
-                        let mut chars = key.chars();
-                        if let (Some(c), None) = (chars.next(), chars.next()) {
-                            if !c.is_control() && b.host.apply_text(c) {
-                                consumed = true;
+                        if b.host.apply_tool_shortcut(key.as_str()) {
+                            consumed = true;
+                        } else {
+                            let mut chars = key.chars();
+                            if let (Some(c), None) = (chars.next(), chars.next()) {
+                                if !c.is_control() && b.host.apply_text(c) {
+                                    consumed = true;
+                                }
                             }
                         }
                     }
