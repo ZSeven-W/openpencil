@@ -11,7 +11,7 @@ use op_editor_core::geometry::aggregate_bounds;
 use op_editor_core::pen_node_ext::PenNodeExt;
 use op_editor_core::walkers::find_node;
 use op_editor_core::{EditorState, NodeId};
-use op_editor_ui::layout_scene::{NodeKind, SceneNode};
+use jian_scene::layout_scene::{NodeKind, SceneNode};
 use serde_json::{json, Map, Value};
 
 use super::tools::kind_label;
