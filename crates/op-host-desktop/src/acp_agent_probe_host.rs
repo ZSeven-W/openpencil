@@ -8,7 +8,6 @@
 use op_editor_core::agent_settings::AcpAgentConnectOutcome;
 
 use crate::DesktopApp;
-use op_web_daemon::acp_agent_probe_host::AcpAgentProbeOutcome;
 // Re-export so `crate::acp_agent_probe_host::AcpAgentConnectJob` (the
 // `DesktopApp` field type in `main.rs`) still resolves with zero churn.
 pub use op_web_daemon::acp_agent_probe_host::AcpAgentConnectJob;
@@ -93,6 +92,7 @@ impl DesktopApp {
 mod tests {
     use super::*;
     use op_editor_core::agent_settings::{AcpAgentConnectPhase, AcpConnectionType};
+    use op_web_daemon::acp_agent_probe_host::AcpAgentProbeOutcome;
     use std::collections::BTreeMap;
 
     #[test]
