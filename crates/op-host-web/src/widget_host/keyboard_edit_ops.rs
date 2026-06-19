@@ -55,6 +55,40 @@ impl WidgetHost {
         true
     }
 
+    /// Enter in the preset save-as-name input — saves the current theme as a
+    /// named preset, clears the draft, and defocuses (the dropdown stays open).
+    /// Native parity (`variables_preset_press.rs::commit_variables_preset_name_if_any`).
+    /// Blank names keep the input open. Returns whether the input was active.
+    pub(in crate::widget_host) fn commit_variables_preset_name_if_any(&mut self) -> bool {
+        if !self.editor_state.editor_ui.preset_name_input_active() {
+            return false;
+        }
+        let name = self.editor_state.ui.property_input_draft.clone();
+        if name.trim().is_empty() {
+            return true;
+        }
+        let now_ms = self.now_ms;
+        let _ = self.editor_state.save_theme_preset(&name, now_ms);
+        self.editor_state.editor_ui.variables_preset_name_focus = false;
+        self.editor_state.ui.property_input_draft.clear();
+        self.editor_state.ui.property_caret_pos = 0;
+        self.mark_dirty();
+        true
+    }
+
+    /// Escape in the preset save-as-name input — closes just the input, leaving
+    /// the preset dropdown open. Native parity.
+    pub(in crate::widget_host) fn escape_variables_preset_name(&mut self) -> bool {
+        if !self.editor_state.editor_ui.preset_name_input_active() {
+            return false;
+        }
+        self.editor_state.editor_ui.variables_preset_name_focus = false;
+        self.editor_state.ui.property_input_draft.clear();
+        self.editor_state.ui.property_caret_pos = 0;
+        self.mark_dirty();
+        true
+    }
+
     /// Cmd/Ctrl+D — duplicate the selected node as a sibling
     /// offset by ~10 doc px. Selection follows the clone.
     pub fn apply_duplicate(&mut self) -> bool {

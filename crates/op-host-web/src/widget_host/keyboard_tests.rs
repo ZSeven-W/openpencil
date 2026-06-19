@@ -501,3 +501,41 @@ fn tool_shortcut_does_not_steal_keys_from_preset_name_input() {
     assert!(!host.apply_tool_shortcut("r"));
     assert_eq!(host.editor_state.tool, Tool::Select);
 }
+
+#[test]
+fn preset_name_input_receives_typed_keys_backspace_and_commit() {
+    let mut host = WidgetHost::new();
+    host.editor_state.editor_ui.variables_preset_menu_open = true;
+    host.editor_state.editor_ui.variables_preset_name_focus = true;
+    host.editor_state.ui.property_input_draft.clear();
+    assert!(host.editor_state.editor_ui.preset_name_input_active());
+
+    // Typed keys land in the shared draft the preset menu widget paints.
+    assert!(host.apply_text('M'));
+    assert!(host.apply_text('i'));
+    assert!(host.apply_text('d'));
+    assert_eq!(host.editor_state.ui.property_input_draft, "Mid");
+
+    // Backspace pops the last char.
+    assert!(host.apply_backspace());
+    assert_eq!(host.editor_state.ui.property_input_draft, "Mi");
+
+    // Enter commits the preset and defocuses the name input.
+    assert!(host.apply_send());
+    assert!(!host.editor_state.editor_ui.variables_preset_name_focus);
+    assert!(host.editor_state.ui.property_input_draft.is_empty());
+}
+
+#[test]
+fn preset_name_input_escape_cancels_without_saving() {
+    let mut host = WidgetHost::new();
+    host.editor_state.editor_ui.variables_preset_menu_open = true;
+    host.editor_state.editor_ui.variables_preset_name_focus = true;
+    host.editor_state.ui.property_input_draft = "Draft".to_string();
+
+    // Escape closes just the name input; the dropdown stays open.
+    assert!(host.apply_escape());
+    assert!(!host.editor_state.editor_ui.variables_preset_name_focus);
+    assert!(host.editor_state.editor_ui.variables_preset_menu_open);
+    assert!(host.editor_state.ui.property_input_draft.is_empty());
+}
