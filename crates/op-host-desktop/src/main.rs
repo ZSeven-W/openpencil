@@ -18,7 +18,6 @@ mod chat_intent;
 mod chat_runtime;
 mod chat_session;
 mod chat_subprocess;
-mod chat_system_prompt;
 mod clipboard;
 mod codegen_export;
 mod codegen_input;

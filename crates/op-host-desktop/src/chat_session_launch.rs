@@ -21,7 +21,7 @@ use crate::chat_copilot::CopilotProvider;
 use crate::chat_http_server::OpenCodeProvider;
 use op_web_daemon::chat_provider_llm::ChatProviderLlmClient;
 use crate::chat_subprocess::SubprocessProvider;
-use crate::chat_system_prompt::{
+use op_web_daemon::chat_system_prompt::{
     build_agent_system_prompt, build_chat_system_prompt, chat_history_from_transcript,
 };
 use crate::design_session::DesignSession;
