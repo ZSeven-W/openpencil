@@ -4,15 +4,9 @@
 //! otherwise zoom / pan the canvas.
 
 use super::WidgetHostNative;
-use jian_core::scroll::ScrollState;
+use op_editor_ui::util::scroll_by_max;
 use op_editor_ui::widgets::GitPanel;
 use op_editor_ui::Point2D;
-
-fn scroll_by_max(scroll: &mut ScrollState, delta: f32, max: f32) -> bool {
-    let before = scroll.offset;
-    scroll.scroll_by(delta, max, 0.0);
-    scroll.offset != before
-}
 
 impl WidgetHostNative {
     fn try_scroll_chat_checklist(

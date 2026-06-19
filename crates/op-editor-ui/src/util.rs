@@ -11,6 +11,7 @@
 
 use crate::widgets::SelectionHandle;
 use crate::{Color, Rect};
+use jian_core::scroll::ScrollState;
 
 /// Parse a `#RRGGBB` / `#RRGGBBAA` / `#RGB` / bare-hex string into a `Color`.
 ///
@@ -155,6 +156,16 @@ pub fn resize_bounds(start: Rect, handle: SelectionHandle, dx: f32, dy: f32) -> 
         h = 1.0;
     }
     Rect::xywh(x, y, w, h)
+}
+
+/// Scroll `scroll` by `delta` clamped to `[0, max]`, returning whether the
+/// offset actually moved (false at a clamp edge). Both hosts route every
+/// wheel/scroll handler through this so a no-op scroll doesn't request a
+/// redraw.
+pub fn scroll_by_max(scroll: &mut ScrollState, delta: f32, max: f32) -> bool {
+    let before = scroll.offset;
+    scroll.scroll_by(delta, max, 0.0);
+    scroll.offset != before
 }
 
 /// Truncate `s` to at most `max` characters, appending a `…` ellipsis when it
