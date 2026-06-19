@@ -3,7 +3,7 @@ use crate::widgets::text_input_backend::BaselineAdjustingBackend;
 use crate::widgets::PaintCx;
 use crate::Rect;
 use jian_widgets::components::text_input::TextInputView;
-use jian_widgets::{Density, Tokens};
+use jian_widgets::Tokens;
 use op_editor_core::agent_settings::{AgentSettings, SettingsFocus};
 use op_editor_core::editor_ui_state::EditorUiState;
 
@@ -49,24 +49,5 @@ pub(super) fn paint_settings_input_view(
 }
 
 fn tokens_from_theme(theme: &Theme) -> Tokens {
-    Tokens {
-        background: theme.background,
-        foreground: theme.foreground,
-        card: theme.card,
-        card_foreground: theme.card_foreground,
-        popover: theme.popover,
-        popover_foreground: theme.popover_foreground,
-        primary: theme.primary,
-        primary_foreground: theme.primary_foreground,
-        muted: theme.muted,
-        muted_foreground: theme.muted_foreground,
-        border: theme.border,
-        accent: theme.accent,
-        accent_foreground: theme.accent_foreground,
-        destructive: theme.destructive,
-        button_hover: theme.button_hover,
-        row_selected: theme.row_selected,
-        row_selected_primary: theme.row_selected_primary,
-        density: Density::Desktop,
-    }
+    crate::widgets::button::tokens_from_theme(theme)
 }

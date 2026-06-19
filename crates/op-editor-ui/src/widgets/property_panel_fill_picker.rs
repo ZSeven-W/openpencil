@@ -6,7 +6,7 @@ use crate::widgets::property_panel_inputs::{
 use crate::widgets::property_panel_layout::VisibleSections;
 use crate::{Point2D, Rect};
 use jian_widgets::components::select::{Select, SelectHit, SelectState};
-use jian_widgets::{Density, Tokens};
+use jian_widgets::Tokens;
 use op_editor_core::FillType;
 
 pub const FILL_TYPE_ROW_HEIGHT: f32 = 30.0;
@@ -70,26 +70,7 @@ pub(crate) fn popup_anchor(popup: Rect) -> Rect {
 }
 
 pub(crate) fn tokens_from_theme(theme: &Theme) -> Tokens {
-    Tokens {
-        background: theme.background,
-        foreground: theme.foreground,
-        card: theme.card,
-        card_foreground: theme.card_foreground,
-        popover: theme.popover,
-        popover_foreground: theme.popover_foreground,
-        primary: theme.primary,
-        primary_foreground: theme.primary_foreground,
-        muted: theme.muted,
-        muted_foreground: theme.muted_foreground,
-        border: theme.border,
-        accent: theme.accent,
-        accent_foreground: theme.accent_foreground,
-        destructive: theme.destructive,
-        button_hover: theme.button_hover,
-        row_selected: theme.row_selected,
-        row_selected_primary: theme.row_selected_primary,
-        density: Density::Desktop,
-    }
+    crate::widgets::button::tokens_from_theme(theme)
 }
 
 fn fill_type_dropdown_y(panel_rect: Rect, visible: VisibleSections) -> f32 {

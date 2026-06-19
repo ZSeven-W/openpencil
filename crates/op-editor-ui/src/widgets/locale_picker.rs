@@ -12,7 +12,7 @@ use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
 use crate::{Point2D, Rect};
 pub use jian_widgets::components::select::SelectHit;
 use jian_widgets::components::select::{Select, SelectItem, SelectState, MAX_VISIBLE_ROWS};
-use jian_widgets::{Density, Tokens};
+use jian_widgets::Tokens;
 use op_editor_core::editor_ui_state::EditorUiState;
 use op_i18n::Locale;
 
@@ -150,26 +150,7 @@ fn popup_anchor(popup: Rect) -> Rect {
 }
 
 fn tokens_from_theme(theme: &Theme) -> Tokens {
-    Tokens {
-        background: theme.background,
-        foreground: theme.foreground,
-        card: theme.card,
-        card_foreground: theme.card_foreground,
-        popover: theme.popover,
-        popover_foreground: theme.popover_foreground,
-        primary: theme.primary,
-        primary_foreground: theme.primary_foreground,
-        muted: theme.muted,
-        muted_foreground: theme.muted_foreground,
-        border: theme.border,
-        accent: theme.accent,
-        accent_foreground: theme.accent_foreground,
-        destructive: theme.destructive,
-        button_hover: theme.button_hover,
-        row_selected: theme.row_selected,
-        row_selected_primary: theme.row_selected_primary,
-        density: Density::Desktop,
-    }
+    crate::widgets::button::tokens_from_theme(theme)
 }
 
 #[cfg(test)]
