@@ -18,8 +18,8 @@
 //!
 //! Known cosmetic divergence: TS flips the hover cursor to `pointer`
 //! over a path control (`skia-interaction.ts:1004-1009`); the native
-//! `CursorHint` enum has no pointer variant, so hovering an anchor
-//! keeps the Move/Default cursor. Press routing is unaffected.
+//! anchor-hover path does not yet emit `CursorHint::Pointer`, so hovering
+//! an anchor keeps the Move/Default cursor. Press routing is unaffected.
 //!
 //! Scope note: neither stack supports adding / removing anchors on a
 //! COMMITTED path — TS's only anchor-count edits are Backspace during

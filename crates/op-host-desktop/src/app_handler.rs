@@ -3,8 +3,8 @@
 
 use crate::{
     a11y, chat_attachment, chat_session, codegen_session, cursor_icon, design_session,
-    figma_import_session, frame, git_jobs, menu, persistence, window_state,
-    DesktopApp, DesktopEvent, INITIAL_VIEWPORT_H, INITIAL_VIEWPORT_W,
+    figma_import_session, frame, git_jobs, menu, persistence, window_state, DesktopApp,
+    DesktopEvent, INITIAL_VIEWPORT_H, INITIAL_VIEWPORT_W,
 };
 use op_host_native::{NativeBackend, ProviderError, SharedSkiaContext, SharedSkiaError};
 use std::time::{Duration, Instant};
@@ -347,7 +347,9 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
         // on the trackpad hot path.
         let settings_before = match &event {
             WindowEvent::CursorMoved { .. } => None,
-            _ => Some(op_host_services::settings_io::fingerprint(self.host.editor_state())),
+            _ => Some(op_host_services::settings_io::fingerprint(
+                self.host.editor_state(),
+            )),
         };
         let mcp_cli_before = match &event {
             WindowEvent::CursorMoved { .. } => None,
@@ -818,6 +820,7 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
                         } else {
                             let icon = match hint {
                                 CursorHint::Default => winit::window::CursorIcon::Default,
+                                CursorHint::Pointer => winit::window::CursorIcon::Pointer,
                                 CursorHint::NotAllowed => winit::window::CursorIcon::NotAllowed,
                                 CursorHint::Move => winit::window::CursorIcon::Move,
                                 CursorHint::Grab => winit::window::CursorIcon::Grab,
@@ -998,7 +1001,9 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
                             // in-flight Figma import internally, so a
                             // stale worker can't overwrite the fresh
                             // document when its result lands.
-                            op_host_services::doc_io::ActionOutcome::Saved => self.mark_document_saved(),
+                            op_host_services::doc_io::ActionOutcome::Saved => {
+                                self.mark_document_saved()
+                            }
                             // User picked a `.fig`; spin up the worker
                             // session and let `pump` apply the document
                             // once parsing finishes. Cancel any prior

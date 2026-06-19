@@ -8,7 +8,7 @@
 //! hit-testing input event (see `widget_host.rs`).
 
 use super::helpers::{PANEL_RESIZE_GUTTER, STATUS_INSET};
-use super::{CursorHint, PanelResizeKind, WidgetHostNative};
+use super::{cursor_for_handle, CursorHint, PanelResizeKind, WidgetHostNative};
 use op_editor_ui::widgets::{
     rotation_corner_at_point, selection_handle_at_point, AIChatHit, AIChatPlaceholder,
     ChatResizeEdge, STATUS_BAR_HEIGHT, STATUS_BAR_WIDTH, TOP_BAR_HEIGHT,
@@ -404,7 +404,7 @@ impl WidgetHostNative {
             return CursorHint::Rotate;
         }
         if let Some(handle) = self.handle_drag.map(|d| d.handle) {
-            return CursorHint::for_handle(handle);
+            return cursor_for_handle(handle);
         }
         if !self.over_canvas(x, y, viewport_w, viewport_h) {
             return CursorHint::Default;
@@ -443,7 +443,7 @@ impl WidgetHostNative {
                     &self.editor_state,
                     point,
                 ) {
-                    return CursorHint::for_handle(handle);
+                    return cursor_for_handle(handle);
                 }
                 if rotation_corner_at_point(
                     canvas_rect,

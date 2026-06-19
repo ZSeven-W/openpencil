@@ -146,40 +146,22 @@ mod variables_panel_ux_tests;
 mod variables_preset_press;
 mod viewport_fit;
 
-/// Cursor affordance the host suggests for a given screen point.
-/// The runner maps each variant to its native cursor (`CursorIcon`
-/// on desktop, CSS `cursor:` string on web).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CursorHint {
-    Default,
-    Move,
-    Grabbing,
-    /// Open hand — Hand tool over canvas, ready to grab + pan.
-    Grab,
-    /// Crosshair — shape / frame / text tool ready to draw on
-    /// canvas. Distinct from Default so the user has a clear
-    /// signal the click will spawn a new node.
-    Crosshair,
-    /// Text cursor — only shown by the Text tool over canvas.
-    Text,
-    /// Not-allowed — over a disabled affordance (e.g. the empty-state
-    /// Init card with no saved file). TS `cursor-not-allowed`.
-    NotAllowed,
-    ResizeEw,
-    ResizeNs,
-    ResizeNwse,
-    ResizeNesw,
-    Rotate,
-}
+/// Cursor affordance the host suggests for a given screen point — re-exported
+/// from `jian-core` so widgets (via `cursor_at`) and hosts share one vocabulary.
+/// The runner maps each variant to its native cursor (`CursorIcon` on desktop,
+/// CSS `cursor:` string on web). Domain/canvas cursor decisions (active tool,
+/// selection handles, resize gutters) stay host-side — see `cursor_for_handle`
+/// and `geometry::cursor_hint`.
+pub use jian_core::CursorHint;
 
-impl CursorHint {
-    pub(in crate::widget_host) fn for_handle(h: SelectionHandle) -> Self {
-        match h {
-            SelectionHandle::Left | SelectionHandle::Right => CursorHint::ResizeEw,
-            SelectionHandle::Top | SelectionHandle::Bottom => CursorHint::ResizeNs,
-            SelectionHandle::TopLeft | SelectionHandle::BottomRight => CursorHint::ResizeNwse,
-            SelectionHandle::TopRight | SelectionHandle::BottomLeft => CursorHint::ResizeNesw,
-        }
+/// Map a selection handle to its resize cursor. Stays host-side because it
+/// depends on the OP `SelectionHandle` type, which is not a jian-atomic concern.
+pub(in crate::widget_host) fn cursor_for_handle(h: SelectionHandle) -> CursorHint {
+    match h {
+        SelectionHandle::Left | SelectionHandle::Right => CursorHint::ResizeEw,
+        SelectionHandle::Top | SelectionHandle::Bottom => CursorHint::ResizeNs,
+        SelectionHandle::TopLeft | SelectionHandle::BottomRight => CursorHint::ResizeNwse,
+        SelectionHandle::TopRight | SelectionHandle::BottomLeft => CursorHint::ResizeNesw,
     }
 }
 
