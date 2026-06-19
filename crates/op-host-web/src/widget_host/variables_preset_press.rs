@@ -1,0 +1,243 @@
+//! Theme-preset dropdown dispatch on the web host — the #20 seam, ported from
+//! the native `widget_host/variables_preset_press.rs`.
+//!
+//! The dropdown itself is the shared `ThemePresetMenu` widget (op-editor-ui
+//! `widgets/variables_preset_menu.rs`). This module anchors it under the
+//! variables panel's preset button and routes presses into the `EditorState`
+//! preset store + the pending `.optheme` IO drained host-side.
+//!
+//! TS flows mirrored: `variable-theme-manager.tsx:131-164` (save / load /
+//! delete / import / export) + the outside-mousedown close at `:53-76`.
+
+use super::WidgetHost;
+use op_editor_core::editor_ui_state::ThemePresetIo;
+use op_editor_ui::widgets::{PresetMenuHit, ThemePresetMenu};
+use op_editor_ui::{Point2D, Rect};
+
+impl WidgetHost {
+    /// Anchor rect of the variables panel's preset button. Replicates the
+    /// panel's private tab-layout geometry (op-editor-ui `variables_panel.rs`),
+    /// matching the native host so paint + press use the same rect.
+    fn variables_preset_anchor(&self, panel_rect: Rect) -> Rect {
+        let renaming = self
+            .editor_state
+            .editor_ui
+            .variables_theme_rename_axis
+            .as_deref();
+        let draft = &self.editor_state.ui.property_input_draft;
+        let mut x = panel_rect.origin.x + 16.0; // panel PAD_X
+        for label in self.panel_theme_tab_labels() {
+            x += if renaming == Some(label.as_str()) {
+                (panel_label_width(draft, 13.0) + 28.0).max(96.0) + 4.0
+            } else {
+                panel_label_width(&label, 13.0) + 24.0
+            };
+        }
+        let add_theme_x = x + 6.0; // add-theme button, 28px wide
+        Rect {
+            origin: Point2D::new(add_theme_x + 28.0 + 8.0, panel_rect.origin.y + 6.0),
+            size: Point2D::new(122.0, 32.0),
+        }
+    }
+
+    /// Theme-axis tab labels as the panel paints them — doc axes plus the
+    /// implicit "Theme-1" tab when the doc has variables but no declared axes.
+    fn panel_theme_tab_labels(&self) -> Vec<String> {
+        let doc = &self.editor_state.doc;
+        let mut axes: Vec<String> = doc
+            .themes
+            .as_ref()
+            .map(|themes| themes.keys().cloned().collect())
+            .unwrap_or_default();
+        let has_rows = doc.variables.as_ref().is_some_and(|vars| !vars.is_empty());
+        if axes.is_empty() && has_rows {
+            axes.push("Theme-1".to_string());
+        }
+        axes
+    }
+
+    /// The open preset dropdown + its rect, or `None` while closed / when the
+    /// variables panel itself is hidden. Used by BOTH paint and press so they
+    /// can't drift.
+    pub(in crate::widget_host) fn variables_preset_menu_with_rect(
+        &self,
+        viewport_w: f32,
+        viewport_h: f32,
+    ) -> Option<(ThemePresetMenu, Rect)> {
+        if !self.editor_state.editor_ui.variables_preset_menu_open {
+            return None;
+        }
+        let panel_rect = self.variables_panel_rect(viewport_w, viewport_h)?;
+        let menu = ThemePresetMenu::for_editor(&self.editor_state);
+        let rect = menu.menu_rect(self.variables_preset_anchor(panel_rect));
+        Some((menu, rect))
+    }
+
+    /// Press routing for the open preset dropdown. Runs BEFORE
+    /// `dispatch_variables_panel_press` so the functional rows win over the
+    /// panel's stub `TogglePresetMenu` mapping. Returns `false` when the press
+    /// should continue to lower layers (an outside press closes the menu first,
+    /// EXCEPT on the anchor button whose panel-side toggle owns the close).
+    pub(in crate::widget_host) fn dispatch_variables_preset_press(
+        &mut self,
+        x: f32,
+        y: f32,
+        viewport_w: f32,
+        viewport_h: f32,
+    ) -> bool {
+        let Some((menu, rect)) = self.variables_preset_menu_with_rect(viewport_w, viewport_h)
+        else {
+            return false;
+        };
+        let point = Point2D::new(x, y);
+        let Some(hit) = menu.hit_test(rect, point) else {
+            let panel_rect = self.variables_panel_rect(viewport_w, viewport_h);
+            let on_anchor = panel_rect
+                .is_some_and(|panel| (self.variables_preset_anchor(panel)).contains(point));
+            if !on_anchor {
+                self.close_preset_menu();
+                self.mark_dirty();
+            }
+            return false;
+        };
+        match hit {
+            PresetMenuHit::SaveCurrent => {
+                // Swap the row to the name input (variable-theme-manager.tsx:306-317).
+                self.commit_property_focus_if_any();
+                self.commit_variables_panel_header_focus_if_any();
+                self.commit_variable_row_focus_if_any();
+                self.editor_state.editor_ui.variables_preset_name_focus = true;
+                self.editor_state.ui.property_input_draft.clear();
+                self.editor_state.ui.property_caret_pos = 0;
+                self.editor_state.ui.property_draft_select_all = false;
+                self.editor_state.ui.property_caret_anchor_ms = self.now_ms;
+            }
+            PresetMenuHit::NameInput | PresetMenuHit::Blank => {
+                // Clicks inside the popover never close it (TS popover swallows them).
+            }
+            PresetMenuHit::Load(idx) => {
+                // handleLoadPreset — merge + close. One history snapshot per gesture.
+                self.commit_property_focus_if_any();
+                let snap = self.editor_state.snapshot_for_history();
+                if self.editor_state.load_theme_preset(idx) {
+                    self.editor_state.history_push_past(snap);
+                }
+                self.close_preset_menu();
+            }
+            PresetMenuHit::Delete(idx) => {
+                // deletePreset — app-level list, NOT an undoable document edit.
+                // The menu stays open (TS stopPropagation).
+                if let Some(id) = self
+                    .editor_state
+                    .theme_presets
+                    .get(idx)
+                    .map(|p| p.id.clone())
+                {
+                    let _ = self.editor_state.delete_theme_preset(&id);
+                }
+            }
+            PresetMenuHit::Import => {
+                // handleImportFromFile closes the menu; the host runs the file dialog.
+                self.close_preset_menu();
+                self.editor_state.editor_ui.pending_theme_preset_io = Some(ThemePresetIo::Import);
+            }
+            PresetMenuHit::Export => {
+                self.close_preset_menu();
+                self.editor_state.editor_ui.pending_theme_preset_io = Some(ThemePresetIo::Export);
+            }
+        }
+        self.mark_dirty();
+        true
+    }
+
+    fn close_preset_menu(&mut self) {
+        let had_name_focus = self.editor_state.editor_ui.preset_name_input_active();
+        let ui = &mut self.editor_state.editor_ui;
+        ui.variables_preset_menu_open = false;
+        ui.variables_preset_name_focus = false;
+        if had_name_focus {
+            // The shared draft belonged to the name input — discard
+            // (TS outside-mousedown closes without saving).
+            self.editor_state.ui.property_input_draft.clear();
+            self.editor_state.ui.property_caret_pos = 0;
+            self.editor_state.ui.property_draft_select_all = false;
+        }
+    }
+}
+
+/// `variables_panel.rs:732-736` — ASCII chars advance 0.55em, CJK 1em.
+fn panel_label_width(text: &str, size: f32) -> f32 {
+    text.chars()
+        .map(|c| if c.is_ascii() { size * 0.55 } else { size })
+        .sum()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use jian_ops_schema::variable::{VariableKind, VariableScalar};
+
+    const VIEWPORT_W: f32 = 1280.0;
+    const VIEWPORT_H: f32 = 900.0;
+
+    fn host_with_open_preset_menu() -> WidgetHost {
+        let mut host = WidgetHost::new();
+        assert!(host.editor_state.create_variable(
+            "brand",
+            VariableKind::Color,
+            VariableScalar::Str("#ff0000".into()),
+        ));
+        host.editor_state.editor_ui.variables_panel_open = true;
+        host.editor_state.editor_ui.variables_preset_menu_open = true;
+        host
+    }
+
+    #[test]
+    fn menu_rect_is_some_only_while_the_panel_and_menu_are_open() {
+        let mut host = host_with_open_preset_menu();
+        assert!(host
+            .variables_preset_menu_with_rect(VIEWPORT_W, VIEWPORT_H)
+            .is_some());
+        host.editor_state.editor_ui.variables_preset_menu_open = false;
+        assert!(host
+            .variables_preset_menu_with_rect(VIEWPORT_W, VIEWPORT_H)
+            .is_none());
+    }
+
+    #[test]
+    fn save_row_press_activates_name_input_and_enter_saves() {
+        let mut host = host_with_open_preset_menu();
+        let (menu, rect) = host
+            .variables_preset_menu_with_rect(VIEWPORT_W, VIEWPORT_H)
+            .expect("menu open");
+        // Save row = first row inside the popover (mirrors native test).
+        let sx = rect.origin.x + 20.0;
+        let sy = rect.origin.y + 4.0 + 18.0;
+        assert_eq!(
+            menu.hit_test(rect, Point2D::new(sx, sy)),
+            Some(PresetMenuHit::SaveCurrent)
+        );
+        assert!(host.apply_press(sx, sy, VIEWPORT_W, VIEWPORT_H));
+        assert!(host.editor_state.editor_ui.variables_preset_name_focus);
+
+        for c in "Brand kit".chars() {
+            assert!(host.apply_text(c));
+        }
+        assert_eq!(host.editor_state.ui.property_input_draft, "Brand kit");
+        assert!(host.apply_send());
+        assert_eq!(host.editor_state.theme_presets.len(), 1);
+        assert_eq!(host.editor_state.theme_presets[0].name, "Brand kit");
+        assert!(!host.editor_state.editor_ui.variables_preset_name_focus);
+        // The popover stays open after a save (TS parity).
+        assert!(host.editor_state.editor_ui.variables_preset_menu_open);
+    }
+
+    #[test]
+    fn outside_press_closes_the_menu() {
+        let mut host = host_with_open_preset_menu();
+        // A press far outside the popover (top-left canvas corner) closes it
+        // and falls through (returns false).
+        assert!(!host.dispatch_variables_preset_press(2.0, 2.0, VIEWPORT_W, VIEWPORT_H));
+        assert!(!host.editor_state.editor_ui.variables_preset_menu_open);
+    }
+}

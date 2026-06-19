@@ -304,6 +304,12 @@ impl WidgetHost {
         if self.dispatch_shape_picker_press(x, y, viewport_width, viewport_height) {
             return true;
         }
+        // 0aa. Theme-preset dropdown (#20) — runs BEFORE the panel dispatch so
+        //      the functional menu rows win over the panel's stub
+        //      TogglePresetMenu mapping (native parity).
+        if self.dispatch_variables_preset_press(x, y, viewport_width, viewport_height) {
+            return true;
+        }
         // 0ab. Floating VariablesPanel — full interactive grid
         //      mirroring the native host (#21). A press inside the
         //      panel rect dispatches; outside presses fall through to

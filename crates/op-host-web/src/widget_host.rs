@@ -157,6 +157,7 @@ mod variables_panel_press;
 mod variables_panel_rows;
 #[cfg(test)]
 mod variables_panel_tests;
+mod variables_preset_press;
 mod web_fonts;
 
 pub(in crate::widget_host) const TOOLBAR_INSET_X: f32 = 12.0;
