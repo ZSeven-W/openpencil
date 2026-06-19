@@ -388,10 +388,8 @@ impl WidgetHost {
     /// Cmd+Shift+K — toggle the component (UIKit) browser panel.
     /// Mirrors the native host's `apply_toggle_component_browser`
     /// (TS `editor-layout.tsx` Cmd+Shift+K → `toggleBrowser`); the
-    /// open-position default is the viewport centre via
-    /// `component_browser_panel_rect`'s `None`-pos fallback. (Tested + ready to
-    /// wire; the CanvasKit keydown handler doesn't bind Cmd+Shift+K yet.)
-    #[allow(dead_code)]
+    /// open-position default is the viewport centre via the
+    /// `component_browser_panel_rect` `None`-position fallback.
     pub fn apply_toggle_component_browser(&mut self) -> bool {
         let ui = &mut self.editor_state.editor_ui;
         ui.component_browser_open = !ui.component_browser_open;
@@ -402,6 +400,21 @@ impl WidgetHost {
         }
         self.mark_dirty();
         true
+    }
+
+    /// CanvasKit keydown chord routing for editor shortcuts that are not
+    /// printable text. `is_mod` is Cmd on macOS or Ctrl elsewhere.
+    pub(crate) fn apply_keydown_shortcut(
+        &mut self,
+        key: &str,
+        is_mod: bool,
+        shift: bool,
+        alt: bool,
+    ) -> bool {
+        if is_mod && shift && !alt && key.eq_ignore_ascii_case("k") {
+            return self.apply_toggle_component_browser();
+        }
+        false
     }
 
     /// `[` / `]` — bump the selected node down / up by one

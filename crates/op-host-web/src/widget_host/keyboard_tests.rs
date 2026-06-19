@@ -39,6 +39,36 @@ fn apply_key_unhandled_event_reports_no_change() {
 }
 
 #[test]
+fn keydown_shortcut_cmd_shift_k_toggles_component_browser() {
+    let mut host = WidgetHost::new();
+    host.editor_state_dirty = false;
+
+    assert!(host.apply_keydown_shortcut("K", true, true, false));
+    assert!(host.editor_state.editor_ui.component_browser_open);
+    assert!(host.editor_state_dirty);
+
+    host.editor_state_dirty = false;
+    host.editor_state
+        .editor_ui
+        .component_browser_kit_picker_open = true;
+
+    assert!(host.apply_keydown_shortcut("k", true, true, false));
+    assert!(!host.editor_state.editor_ui.component_browser_open);
+    assert!(
+        !host
+            .editor_state
+            .editor_ui
+            .component_browser_kit_picker_open
+    );
+    assert!(host.editor_state_dirty);
+
+    host.editor_state_dirty = false;
+    assert!(!host.apply_keydown_shortcut("K", true, true, true));
+    assert!(!host.editor_state.editor_ui.component_browser_open);
+    assert!(!host.editor_state_dirty);
+}
+
+#[test]
 fn text_edit_horizontal_arrows_move_caret_and_consume_event() {
     let mut host = WidgetHost::new();
     seed_text_edit(&mut host, "hi");

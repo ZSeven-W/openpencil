@@ -1119,6 +1119,11 @@ pub async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
                 }
                 "[" if !is_mod => consumed = b.host.apply_reorder(ReorderDirection::Down),
                 "]" if !is_mod => consumed = b.host.apply_reorder(ReorderDirection::Up),
+                "K" | "k" if is_mod && shift && !evt.alt_key() => {
+                    consumed =
+                        b.host
+                            .apply_keydown_shortcut(key.as_str(), is_mod, shift, evt.alt_key())
+                }
                 "d" if is_mod && !shift => consumed = b.host.apply_duplicate(),
                 "a" if is_mod && !shift => consumed = b.host.apply_select_all(),
                 "c" if is_mod && !shift => consumed = b.host.apply_copy(),
