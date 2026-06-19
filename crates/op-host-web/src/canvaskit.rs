@@ -1147,7 +1147,11 @@ pub async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
                     // (and any keystroke while a field is focused) types via
                     // apply_text.
                     if !is_mod {
-                        if b.host.apply_tool_shortcut(key.as_str()) {
+                        // Alt-modified keys never switch tools — Alt is a chord
+                        // modifier (and on macOS yields special glyphs like ®/π),
+                        // so an Alt+letter must not trip the bare-letter router.
+                        // A resulting printable char still types via apply_text.
+                        if !evt.alt_key() && b.host.apply_tool_shortcut(key.as_str()) {
                             consumed = true;
                         } else {
                             let mut chars = key.chars();
