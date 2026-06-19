@@ -190,6 +190,18 @@ impl WidgetHost {
             vars.paint(&mut cx, vars_rect);
         }
 
+        // 5b-1. Theme-preset dropdown (#20) — painted after the panel so the
+        //       functional menu covers the panel's static stub rows
+        //       (variables_preset_press.rs owns the geometry).
+        if let Some((preset_menu, preset_menu_rect)) =
+            self.variables_preset_menu_with_rect(viewport_width, viewport_height)
+        {
+            let mut cx = PaintCx {
+                backend: &mut *backend,
+            };
+            preset_menu.paint(&mut cx, preset_menu_rect);
+        }
+
         let toolbar = Toolbar::for_editor(&self.editor_state);
         let toolbar_h = toolbar
             .layout(&LayoutCx {
