@@ -3247,6 +3247,7 @@ dependencies = [
  "op-orchestrator",
  "op-pen-loader",
  "op-process-io",
+ "op-web-daemon",
  "reqwest 0.12.28",
  "rfd",
  "serde",
