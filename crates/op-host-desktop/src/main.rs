@@ -989,23 +989,5 @@ fn main() {
     }
 }
 
-/// Unwrap an MCP `tools/call` reply to the inner tool-result JSON text, so
-/// tests assert on the flat result fields directly. Strips an HTTP envelope
-/// first (live-server tests pass the raw HTTP response). Mirrors the CLI's
-/// `unwrap_mcp_reply`.
-#[cfg(test)]
-pub(crate) fn tool_text(response: &str) -> String {
-    let body = response
-        .split_once("\r\n\r\n")
-        .map(|(_, body)| body)
-        .unwrap_or(response)
-        .trim();
-    let value: serde_json::Value = serde_json::from_str(body).expect("json-rpc reply");
-    value["result"]["content"][0]["text"]
-        .as_str()
-        .expect("tools/call content text")
-        .to_string()
-}
-
 #[cfg(test)]
 mod main_tests;

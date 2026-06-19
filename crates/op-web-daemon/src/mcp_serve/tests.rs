@@ -340,7 +340,7 @@ fn find_empty_space_returns_padded_position_from_active_page_bounds() {
         .expect("dispatch")
         .expect("response");
     assert!(response.contains(r#""id":9"#), "{response}");
-    let result = crate::tool_text(&response);
+    let result = crate::mcp_serve::tool_text(&response);
     assert!(result.contains(r#""x":"240""#), "{result}");
     assert!(result.contains(r#""y":"20""#), "{result}");
 }
@@ -367,7 +367,7 @@ fn read_nodes_accepts_structured_ids_over_mcp() {
         .expect("dispatch")
         .expect("response");
     assert!(response.contains(r#""id":11"#), "{response}");
-    let result = crate::tool_text(&response);
+    let result = crate::mcp_serve::tool_text(&response);
     // TS read-nodes: { nodes, variables?, themes? } — native, no `count`.
     assert!(
         result.contains(r#""nodes""#) && !result.contains(r#""count""#),
@@ -408,7 +408,7 @@ fn load_theme_preset_merges_live_doc_over_mcp() {
             .expect("response");
     assert!(response.contains(r#""id":12"#), "{response}");
     assert!(
-        crate::tool_text(&response).contains(r#""wrote":"true""#),
+        crate::mcp_serve::tool_text(&response).contains(r#""wrote":"true""#),
         "{response}"
     );
     assert_eq!(
@@ -444,7 +444,7 @@ fn set_design_md_mutates_live_doc_over_mcp() {
             .expect("response");
     assert!(response.contains(r#""id":13"#), "{response}");
     assert!(
-        crate::tool_text(&response).contains(r#""wrote":"true""#),
+        crate::mcp_serve::tool_text(&response).contains(r#""wrote":"true""#),
         "{response}"
     );
     assert_eq!(
@@ -467,7 +467,7 @@ fn set_themes_accepts_structured_mcp_arguments_and_mutates_state() {
             .expect("response");
     assert!(response.contains(r#""id":10"#), "{response}");
     assert!(
-        crate::tool_text(&response).contains(r#""wrote":"true""#),
+        crate::mcp_serve::tool_text(&response).contains(r#""wrote":"true""#),
         "{response}"
     );
     assert_eq!(
@@ -517,7 +517,7 @@ fn write_named_doc(path: &std::path::Path, node_id: &str, name: &str) {
 }
 
 fn assert_response_file_path_matches(response: &str, expected: &std::path::Path) {
-    let tool_text = crate::tool_text(response);
+    let tool_text = crate::mcp_serve::tool_text(response);
     let result: serde_json::Value = serde_json::from_str(&tool_text).expect("tool result JSON");
     let actual = result["filePath"]
         .as_str()
@@ -617,7 +617,7 @@ fn process_message_writes_document_to_ts_file_path_arg() {
         .expect("response");
 
     assert!(
-        crate::tool_text(&response).contains(r#""wrote":"true""#),
+        crate::mcp_serve::tool_text(&response).contains(r#""wrote":"true""#),
         "{response}"
     );
     let primary_text = std::fs::read_to_string(&primary_path).expect("primary doc");
@@ -645,7 +645,7 @@ fn process_message_save_document_can_copy_ts_file_path_source_to_target() {
         .expect("response");
 
     assert!(
-        crate::tool_text(&response).contains(r#""ok":"true""#),
+        crate::mcp_serve::tool_text(&response).contains(r#""ok":"true""#),
         "{response}"
     );
     let target_text = std::fs::read_to_string(&target_path).expect("target doc");

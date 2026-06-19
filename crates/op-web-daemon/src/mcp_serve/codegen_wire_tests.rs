@@ -80,7 +80,7 @@ fn codegen_workflow_round_trips_over_the_tools_call_wire() {
     let plan_line = r#"{"jsonrpc":"2.0","id":61,"method":"tools/call","params":{"name":"codegen_plan","arguments":{"plan":{"chunks":[{"id":"b","name":"Button","nodeIds":["n2"],"dependencies":["a"]},{"id":"a","name":"Title","nodeIds":["n1"],"dependencies":[]}],"sharedStyles":[],"rootLayout":{"direction":"column","gap":8,"responsive":true}}}}}"#;
     let response = dispatch(&mut state, plan_line);
     assert!(response.contains(r#""id":61"#), "{response}");
-    let text = crate::tool_text(&response);
+    let text = crate::mcp_serve::tool_text(&response);
     // TS tool layer pretty-prints with JSON.stringify(result, null, 2).
     assert!(text.contains("\n  \"planId\""), "pretty-printed: {text}");
     let plan_out: serde_json::Value = serde_json::from_str(&text).expect("plan json");
@@ -100,7 +100,7 @@ fn codegen_workflow_round_trips_over_the_tools_call_wire() {
         chunk_result_args("a", "TitleChunk")
     );
     let submit_out: serde_json::Value =
-        serde_json::from_str(&crate::tool_text(&dispatch(&mut state, &submit_line)))
+        serde_json::from_str(&crate::mcp_serve::tool_text(&dispatch(&mut state, &submit_line)))
             .expect("submit json");
     assert_eq!(
         submit_out["validation"],
@@ -128,7 +128,7 @@ fn codegen_workflow_round_trips_over_the_tools_call_wire() {
         r#"{{"jsonrpc":"2.0","id":64,"method":"tools/call","params":{{"name":"codegen_assemble","arguments":{{"planId":"{plan_id}","framework":"react"}}}}}}"#
     );
     let assemble_out: serde_json::Value =
-        serde_json::from_str(&crate::tool_text(&dispatch(&mut state, &assemble_line)))
+        serde_json::from_str(&crate::mcp_serve::tool_text(&dispatch(&mut state, &assemble_line)))
             .expect("assemble json");
     assert_eq!(assemble_out["chunks"][0]["chunkId"], "a");
     assert_eq!(assemble_out["chunks"][1]["chunkId"], "b");
@@ -143,7 +143,7 @@ fn codegen_workflow_round_trips_over_the_tools_call_wire() {
     let response = dispatch(&mut state, &assemble_line);
     assert!(response.contains(r#""isError":true"#), "{response}");
     assert_eq!(
-        crate::tool_text(&response),
+        crate::mcp_serve::tool_text(&response),
         format!("Error: codegen_assemble failed: Plan {plan_id} not found")
     );
 
@@ -152,7 +152,7 @@ fn codegen_workflow_round_trips_over_the_tools_call_wire() {
         r#"{{"jsonrpc":"2.0","id":65,"method":"tools/call","params":{{"name":"codegen_clean","arguments":{{"planId":"{plan_id}"}}}}}}"#
     );
     let clean_out: serde_json::Value =
-        serde_json::from_str(&crate::tool_text(&dispatch(&mut state, &clean_line)))
+        serde_json::from_str(&crate::mcp_serve::tool_text(&dispatch(&mut state, &clean_line)))
             .expect("clean json");
     assert_eq!(
         clean_out,
@@ -169,7 +169,7 @@ fn codegen_plan_validation_failure_uses_ts_error_envelope() {
     let response = dispatch(&mut state, line);
     assert!(response.contains(r#""isError":true"#), "{response}");
     assert_eq!(
-        crate::tool_text(&response),
+        crate::mcp_serve::tool_text(&response),
         "Error: codegen_plan failed: Chunk a: node ghost not found in document"
     );
 }
