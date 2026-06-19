@@ -63,11 +63,11 @@ impl ModelProbe {
         (Self { rx: Some(rx) }, tx)
     }
 
-    /// If discovery has finished, move its models into the host's
-    /// `EditorState.chat` and return `true`. Idempotent — the
-    /// receiver is dropped after the first drain so later calls are
-    /// cheap no-ops.
-    pub fn poll_into(&mut self, host: &mut op_host_native::WidgetHostNative) -> bool {
+    /// If discovery has finished, move its models into the caller's
+    /// `EditorState.chat` and return `true` (the GUI caller then marks
+    /// the state dirty). Idempotent — the receiver is dropped after the
+    /// first drain so later calls are cheap no-ops.
+    pub fn poll_into(&mut self, state: &mut op_editor_core::EditorState) -> bool {
         let Some(rx) = self.rx.as_ref() else {
             return false;
         };
@@ -79,10 +79,9 @@ impl ModelProbe {
                 // list is the *full* catalog (every installed CLI);
                 // `rebuild_chat_models` then narrows it to the
                 // providers the user has connected in Settings.
-                let es = host.editor_state_mut();
+                let es = state;
                 es.chat.discovered_models = models.into_iter().map(model_entry_to_ec).collect();
                 es.rebuild_chat_models();
-                host.mark_editor_state_dirty();
                 self.rx = None;
                 true
             }
@@ -96,7 +95,7 @@ impl ModelProbe {
 }
 
 /// Translate a shell-core `ModelEntry` into op-editor-core's.
-pub(crate) fn model_entry_to_ec(m: ModelEntry) -> op_editor_core::ModelEntry {
+pub fn model_entry_to_ec(m: ModelEntry) -> op_editor_core::ModelEntry {
     use op_ai::agent_settings_state::AgentProvider as ScP;
     let provider = match m.provider {
         ScP::ClaudeCode => op_editor_core::AgentProvider::ClaudeCode,
@@ -142,7 +141,7 @@ fn discovery_provider_order() -> [AgentProvider; 5] {
 /// (`probeViaLoginShell`) is intentionally NOT ported: spawning the
 /// user's interactive shell from the GUI process is slow and
 /// side-effectful.
-pub(crate) fn resolve_cli(name: &str) -> Option<PathBuf> {
+pub fn resolve_cli(name: &str) -> Option<PathBuf> {
     let exts: &[&str] = if cfg!(windows) {
         &["", ".exe", ".cmd", ".bat"]
     } else {
@@ -277,7 +276,7 @@ fn discover_codex() -> Vec<ModelEntry> {
 /// `initialize` → `initialized` → `model/list`. Returns `None` on
 /// any failure (CLI missing, spawn error, timeout) so the caller
 /// falls back to the on-disk cache.
-pub(crate) fn codex_models_from_app_server() -> Option<Vec<ModelEntry>> {
+pub fn codex_models_from_app_server() -> Option<Vec<ModelEntry>> {
     let exe = resolve_cli("codex")?;
     let mut child = Command::new(exe)
         .arg("app-server")
@@ -354,7 +353,7 @@ fn parse_codex_model_list(line: &str) -> Option<Vec<ModelEntry>> {
     )
 }
 
-pub(crate) fn codex_models_from_cache() -> Option<Vec<ModelEntry>> {
+pub fn codex_models_from_cache() -> Option<Vec<ModelEntry>> {
     let path = crate::provider_probe_models::codex_home()?.join("models_cache.json");
     let raw = std::fs::read_to_string(path).ok()?;
     parse_codex_models_cache(&raw)
@@ -364,7 +363,7 @@ pub(crate) fn codex_models_from_cache() -> Option<Vec<ModelEntry>> {
 /// (`visibility === "list"`), sorted by ascending `priority` with
 /// missing priorities sinking to 999. The TS cache mapping
 /// (connect-agent.ts:528-549).
-pub(crate) fn parse_codex_models_cache(raw: &str) -> Option<Vec<ModelEntry>> {
+pub fn parse_codex_models_cache(raw: &str) -> Option<Vec<ModelEntry>> {
     let json: serde_json::Value = serde_json::from_str(raw).ok()?;
     let arr = json.get("models")?.as_array()?;
     let mut keyed: Vec<(i64, ModelEntry)> = arr
@@ -494,7 +493,7 @@ fn copilot_models_from_stdio() -> Option<Vec<ModelEntry>> {
 /// (`Content-Length: <byte len>\r\n\r\n<body>`, no trailing
 /// newline). `body` is ASCII JSON, so `str::len` is the byte
 /// count the header must report.
-pub(crate) fn write_lsp_frame(w: &mut impl Write, body: &str) -> std::io::Result<()> {
+pub fn write_lsp_frame(w: &mut impl Write, body: &str) -> std::io::Result<()> {
     write!(w, "Content-Length: {}\r\n\r\n{}", body.len(), body)
 }
 
@@ -505,7 +504,7 @@ pub(crate) fn write_lsp_frame(w: &mut impl Write, body: &str) -> std::io::Result
 /// next-frame header suffix on the same line, so discovery is
 /// robust whether the CLI replies newline-delimited or
 /// Content-Length-framed.
-pub(crate) fn extract_json_object(s: &str) -> Option<&str> {
+pub fn extract_json_object(s: &str) -> Option<&str> {
     let start = s.find('{')?;
     let bytes = s.as_bytes();
     let mut depth = 0i32;
@@ -542,7 +541,7 @@ pub(crate) fn extract_json_object(s: &str) -> Option<&str> {
 /// Policy-disabled models are dropped — the TS route's
 /// `!m.policy || m.policy.state === 'enabled'` filter
 /// (connect-agent.ts:779-786).
-pub(crate) fn parse_copilot_model_list(line: &str) -> Option<Vec<ModelEntry>> {
+pub fn parse_copilot_model_list(line: &str) -> Option<Vec<ModelEntry>> {
     let json: serde_json::Value = serde_json::from_str(extract_json_object(line)?).ok()?;
     if json.get("id")?.as_i64()? != 2 {
         return None;
@@ -571,7 +570,7 @@ pub(crate) fn parse_copilot_model_list(line: &str) -> Option<Vec<ModelEntry>> {
 /// OpenCode — `opencode models` prints one `provider/model` slug
 /// per line. A real query: parse stdout. Empty when the CLI is
 /// missing or the command fails.
-pub(crate) fn discover_opencode() -> Vec<ModelEntry> {
+pub fn discover_opencode() -> Vec<ModelEntry> {
     let Some(exe) = resolve_cli("opencode") else {
         return Vec::new();
     };

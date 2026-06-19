@@ -276,7 +276,7 @@ pub(crate) fn handle_web_canvas_request(
         ("POST", "/api/export/pdf") => export_pdf_download(body, state),
         ("POST", "/api/export/raster") => export_raster_download(body, state),
         ("POST", "/api/agents/connect") => {
-            handle_provider_connect_request_with_probe(body, state, crate::provider_probe::connect_provider)
+            handle_provider_connect_request_with_probe(body, state, op_web_daemon::provider_probe::connect_provider)
         }
         ("POST", "/api/acp/connect") => {
             handle_acp_agent_connect_request_with_probe(
@@ -710,7 +710,7 @@ pub(crate) fn handle_provider_connect_request_with_probe<F>(
     probe: F,
 ) -> WebReply
 where
-    F: FnOnce(op_ai::agent_settings_state::AgentProvider) -> crate::provider_probe::ProbeOutcome,
+    F: FnOnce(op_ai::agent_settings_state::AgentProvider) -> op_web_daemon::provider_probe::ProbeOutcome,
 {
     let Some(provider) = parse_provider_connect_request(body) else {
         return WebReply {
@@ -768,11 +768,11 @@ fn provider_to_probe(
 
 fn apply_provider_probe_outcome(
     provider: op_editor_core::AgentProvider,
-    outcome: crate::provider_probe::ProbeOutcome,
+    outcome: op_web_daemon::provider_probe::ProbeOutcome,
     state: &mut WebCanvasState,
 ) -> WebReply {
     let outcome = crate::provider_probe_host::normalize_provider_probe_outcome(provider, outcome);
-    let crate::provider_probe::ProbeOutcome {
+    let op_web_daemon::provider_probe::ProbeOutcome {
         connected,
         models,
         error,
@@ -824,7 +824,7 @@ fn apply_provider_probe_outcome(
         state.editor.chat.discovered_models.extend(
             models
                 .into_iter()
-                .map(crate::model_discovery::model_entry_to_ec),
+                .map(op_web_daemon::model_discovery::model_entry_to_ec),
         );
         sort_discovered_models(&mut state.editor);
     }
@@ -1247,7 +1247,7 @@ fn serve_one<S: Read + Write>(
             )
             .map(|()| false);
         };
-        let outcome = crate::provider_probe::connect_provider(provider_to_probe(provider));
+        let outcome = op_web_daemon::provider_probe::connect_provider(provider_to_probe(provider));
         let reply = {
             let mut guard = state.lock().unwrap_or_else(|p| p.into_inner());
             guard

@@ -413,7 +413,7 @@ fn provider_connect_probe_response_updates_agent_settings_and_models() {
     let mut s = fresh_state();
     let body = serde_json::json!({ "provider": "codex" }).to_string();
     let r = handle_provider_connect_request_with_probe(&body, &mut s, |_| {
-        crate::provider_probe::ProbeOutcome {
+        op_web_daemon::provider_probe::ProbeOutcome {
             connected: true,
             models: vec![ProbeModelEntry::new(
                 ProbeProvider::CodexCli,
@@ -470,7 +470,7 @@ fn provider_connect_probe_response_without_models_is_failure() {
         ));
     let body = serde_json::json!({ "provider": "codex" }).to_string();
     let r = handle_provider_connect_request_with_probe(&body, &mut s, |_| {
-        crate::provider_probe::ProbeOutcome {
+        op_web_daemon::provider_probe::ProbeOutcome {
             connected: true,
             connection_info: Some("Connected via Codex CLI".to_string()),
             version: Some("codex 1.2.3".to_string()),

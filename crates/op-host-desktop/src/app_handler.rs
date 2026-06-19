@@ -603,7 +603,8 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
                     self.redraw_dirty = true;
                 }
                 // Drain background model discovery once it lands.
-                if self.model_probe.poll_into(&mut self.host) {
+                if self.model_probe.poll_into(self.host.editor_state_mut()) {
+                    self.host.mark_editor_state_dirty();
                     self.redraw_dirty = true;
                 }
                 // #20 theme presets — persist the app-level preset
