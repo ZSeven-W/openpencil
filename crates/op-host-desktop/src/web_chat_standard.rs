@@ -188,24 +188,24 @@ pub(crate) fn stream_standard_turn<W: Write>(
         return write_error_event(out, "no model configured");
     };
 
-    let classified = crate::chat_intent::classify_intent_llm(
+    let classified = op_web_daemon::chat_intent::classify_intent_llm(
         classify_provider.as_ref(),
         &req.ai.user,
         model.clone(),
     );
-    let modify_plan = crate::chat_intent::build_modify_plan(&snapshot, &req.ai.user);
+    let modify_plan = op_web_daemon::chat_intent::build_modify_plan(&snapshot, &req.ai.user);
     let page_children_empty = snapshot.active_children().is_empty();
     let intent = resolve_standard_route(classified, page_children_empty, modify_plan.is_some());
 
     match intent {
-        crate::chat_intent::DesignIntent::Chat => {
+        op_web_daemon::chat_intent::DesignIntent::Chat => {
             stream_chat_route(out, &req, &snapshot, chat_provider.as_ref(), model)
         }
-        crate::chat_intent::DesignIntent::Modify => {
+        op_web_daemon::chat_intent::DesignIntent::Modify => {
             let plan = modify_plan.expect("route checked has_modify_plan");
             stream_modify_route(out, plan, design_provider.as_ref(), state, hub)
         }
-        crate::chat_intent::DesignIntent::New => {
+        op_web_daemon::chat_intent::DesignIntent::New => {
             stream_new_design_route(out, req, snapshot, design_provider, state, hub, model)
         }
     }
@@ -275,16 +275,16 @@ fn clear_fresh_starter_frame_for_design(state: &mut EditorState) -> bool {
 }
 
 fn resolve_standard_route(
-    classified: crate::chat_intent::DesignIntent,
+    classified: op_web_daemon::chat_intent::DesignIntent,
     page_children_empty: bool,
     has_modify_plan: bool,
-) -> crate::chat_intent::DesignIntent {
+) -> op_web_daemon::chat_intent::DesignIntent {
     match classified {
-        crate::chat_intent::DesignIntent::Modify if page_children_empty => {
-            crate::chat_intent::DesignIntent::New
+        op_web_daemon::chat_intent::DesignIntent::Modify if page_children_empty => {
+            op_web_daemon::chat_intent::DesignIntent::New
         }
-        crate::chat_intent::DesignIntent::Modify if !has_modify_plan => {
-            crate::chat_intent::DesignIntent::New
+        op_web_daemon::chat_intent::DesignIntent::Modify if !has_modify_plan => {
+            op_web_daemon::chat_intent::DesignIntent::New
         }
         other => other,
     }
@@ -319,7 +319,7 @@ fn stream_chat_route<W: Write>(
 
 fn stream_modify_route<W: Write>(
     out: &mut W,
-    plan: crate::chat_intent::ModifyPlan,
+    plan: op_web_daemon::chat_intent::ModifyPlan,
     provider: &dyn ChatProvider,
     state: &Mutex<WebCanvasState>,
     hub: &SseHub,
@@ -404,7 +404,7 @@ fn stream_new_design_route<W: Write>(
     hub: &SseHub,
     model: Option<String>,
 ) -> std::io::Result<()> {
-    let append_context = crate::chat_intent::detect_append_intent(&snapshot, &req.ai.user);
+    let append_context = op_web_daemon::chat_intent::detect_append_intent(&snapshot, &req.ai.user);
     let request = DesignRequest {
         prompt: req.ai.user,
         model: model.clone(),

@@ -6,9 +6,10 @@
 #
 # (The former Invariant 1 — "the app crate must not depend directly on
 #  any jian-* crate" — was dropped in Phase 1 Task 1.2 along with the
-#  old placeholder crate. The Phase 7.3 reorg reintroduced a real
-#  composition-root crate, `op-app`; reinstate an equivalent facade
-#  check against it if/when op-app grows beyond a thin re-export.)
+#  old placeholder crate. The Phase 7.3 reorg's `op-app` composition-root
+#  crate was removed 2026-06-19 as an orphan — nothing depended on it and
+#  the editor-UI composition already lives in op-editor-ui. Reinstate an
+#  equivalent facade check if a real app crate is reintroduced.)
 #
 # Invariant 2 (§11.1, §12.3 — REVISED 2026-05-10): mobile targets
 #   (`aarch64-linux-android`, `aarch64-apple-ios`) must NOT pull

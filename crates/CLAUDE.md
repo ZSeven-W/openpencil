@@ -24,7 +24,6 @@ crates/
 ├── op-host-native/       Native host lib: WidgetHostNative + skia-safe GL backend (desktop + mobile)
 ├── op-host-web/          Browser bundle entry: wasm32-unknown-unknown cdylib, CanvasKit renderer
 ├── op-host-desktop/      Desktop binary `openpencil-desktop` (winit + skia-safe GL); also the `--serve-web` daemon
-├── op-app/               Thin composition root re-exporting the per-platform host (target-gated)
 ├── op-cli/               `op` command-line tool
 └── …                     op-mcp / op-ai / op-ai-skills / op-codegen / op-orchestrator / op-figma /
                           op-git / op-opmerge / op-pen-loader / op-design-lint / op-config-store /

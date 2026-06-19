@@ -23,6 +23,7 @@ pub mod chat_canvas_tools;
 pub mod chat_claude;
 pub mod chat_copilot;
 pub mod chat_http_server;
+pub mod chat_intent;
 pub mod chat_provider_llm;
 pub mod chat_runtime;
 pub mod chat_spawn;
