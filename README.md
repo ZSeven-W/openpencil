@@ -491,15 +491,17 @@ bun run cargo:wasm-check  # kickoff §1.2 wasm32 invariant
 bun run cargo:deny        # cargo-deny (native + wasm32 bans; CI uses cargo-deny-action@v2)
 ```
 
-**Crate list (`crates/`):**
+**Entry crates (`crates/` — build targets):**
 
-| Crate                   | Category                                         | wasm32                   |
-| ----------------------- | ------------------------------------------------ | ------------------------ |
-| openpencil-shell-core   | Platform-free widgets + Document model           | ✅                       |
-| openpencil-shell-web    | Browser runner (wasm32 + skia-safe-op fork)      | ✅                       |
-| openpencil-shell-native | Native lib (WidgetHostNative + NativeBackend)    | ❌ (compile_error guard) |
-| openpencil-desktop      | Desktop binary (winit + skia-safe GL surface)    | ❌ (native only)         |
-| wasm-libc-shim          | libc / libm / libcxx shim for wasm32 skia bundle | ✅                       |
+| Crate           | Category                                                                          | wasm32           |
+| --------------- | -------------------------------------------------------------------------------- | ---------------- |
+| op-host-web     | Browser bundle entry — wasm32 cdylib, renders via CanvasKit                       | ✅               |
+| op-host-native  | Native host lib — WidgetHostNative + skia-safe GL backend (desktop + mobile)      | ❌ (native only) |
+| op-host-desktop | Desktop binary `openpencil-desktop` (winit + skia-safe GL) — also the `--serve-web` daemon that hosts the web bundle | ❌ (native only) |
+| op-cli          | `op` command-line tool                                                           | ❌ (native only) |
+| op-app          | Thin composition root — re-exports the per-platform host (target-gated)           | ✅ / ❌ per target |
+
+**Shared library crates:** `op-editor-core` (canonical `.op` state), `op-editor-ui` (platform-free widgets + `RenderBackend`), `op-editor-host-core` (transport-free host state machines), `op-mcp`, `op-ai`, `op-ai-skills`, `op-codegen`, `op-orchestrator`, `op-figma`, `op-git`, `op-opmerge`, `op-pen-loader`, `op-design-lint`, `op-config-store`, `op-process-io`, `op-acp`, `op-i18n`, `op-rpc-transport` — plus `op-smoke` (headless design-turn test runner). The browser bundle renders through the official CanvasKit skia WASM (loaded separately), so the retired `skia-safe-op` wasm fork + `wasm-libc-shim` no longer exist.
 
 **Submodule:** `vendor/agent` → `github.com/ZSeven-W/agent-rs` (cross-product Rust agent runtime).
 

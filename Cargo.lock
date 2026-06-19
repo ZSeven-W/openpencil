@@ -3391,6 +3391,39 @@ dependencies = [
 ]
 
 [[package]]
+name = "op-web-daemon"
+version = "0.8.0"
+dependencies = [
+ "agent",
+ "anthropic-agent-sdk",
+ "async-trait",
+ "base64",
+ "dirs 5.0.1",
+ "futures",
+ "github-copilot-sdk",
+ "glam",
+ "jian-ops-schema",
+ "op-acp",
+ "op-ai",
+ "op-ai-skills",
+ "op-design-lint",
+ "op-editor-core",
+ "op-editor-host-core",
+ "op-editor-ui",
+ "op-host-native",
+ "op-mcp",
+ "op-orchestrator",
+ "op-pen-loader",
+ "op-process-io",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "skia-safe",
+ "tokio",
+ "zip",
+]
+
+[[package]]
 name = "op-web-sdk"
 version = "0.8.0"
 dependencies = [
