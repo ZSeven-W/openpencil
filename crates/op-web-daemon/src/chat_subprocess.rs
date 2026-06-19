@@ -63,8 +63,8 @@ use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::sync::mpsc;
 
 use crate::chat_runtime::{prompt_with_system_prompt, shared_runtime, BlockingRecvIter};
-use op_web_daemon::chat_spawn::{build_command, exit_status_label, find_binary};
-use op_web_daemon::chat_subprocess_quirks as quirks;
+use crate::chat_spawn::{build_command, exit_status_label, find_binary};
+use crate::chat_subprocess_quirks as quirks;
 
 /// How the user's prompt reaches the CLI. Claude Code's `--print`
 /// mode requires the prompt as a positional argv after `--` and
@@ -311,12 +311,12 @@ impl ChatProvider for SubprocessProvider {
         // are appended as `[attached …: <path>]` lines the CLI can
         // read by path. The guard removes the temp files when the
         // worker task ends.
-        let (mut prompt, guard) = match op_web_daemon::chat_attachment::prompt_with_attachments(
+        let (mut prompt, guard) = match crate::chat_attachment::prompt_with_attachments(
             &request.user_message,
             &request.attachments,
         ) {
             Ok(pair) => pair,
-            Err(e) => return op_web_daemon::chat_attachment::attachment_error_turn(e),
+            Err(e) => return crate::chat_attachment::attachment_error_turn(e),
         };
         // CLIs with the native reasoning knob (Codex) get the knobs
         // as `--config model_reasoning_effort=…` via `turn_args`
@@ -324,7 +324,7 @@ impl ChatProvider for SubprocessProvider {
         // double-signal (TS `codex-client.ts` only uses the flag).
         if !self.native_effort_config {
             let mut directive = String::new();
-            if let Some(d) = op_web_daemon::chat_attachment::thinking_directive(request.thinking) {
+            if let Some(d) = crate::chat_attachment::thinking_directive(request.thinking) {
                 directive.push_str(d);
             }
             if request.effort != EffortLevel::Low {
@@ -650,7 +650,7 @@ impl ChatProvider for SubprocessProvider {
 /// degrades to a raw text delta carrying the line + a trailing
 /// newline. Codex / Gemini use their own TS-parity parsers in
 /// `chat_subprocess_quirks` (which skip instead of degrade).
-pub(crate) fn parse_line(line: &str) -> ChatDelta {
+pub fn parse_line(line: &str) -> ChatDelta {
     let trimmed = line.trim_start();
     if !trimmed.starts_with('{') {
         // Not JSON — surface as raw text so CLIs that just stream

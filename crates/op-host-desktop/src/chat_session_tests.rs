@@ -491,7 +491,7 @@ impl Iterator for ToolLoopIter {
         match self.step {
             1 => Some(ChatDelta::ToolUse {
                 name: self.tool.into(),
-                args: crate::chat_agent_loop::tool_card_envelope("create", self.args),
+                args: op_web_daemon::chat_agent_loop::tool_card_envelope("create", self.args),
             }),
             2 => {
                 // Blocks until the UI thread (the test's pump loop)

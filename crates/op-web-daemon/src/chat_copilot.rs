@@ -64,7 +64,7 @@ fn copilot_resume_slot() -> &'static Mutex<Option<String>> {
 
 /// Forget the resumable Copilot chat session. Called when the user
 /// starts a New Chat so stale context can't leak into it.
-pub(crate) fn reset_copilot_chat_session() {
+pub fn reset_copilot_chat_session() {
     if let Ok(mut slot) = copilot_resume_slot().lock() {
         *slot = None;
     }
@@ -121,9 +121,9 @@ impl ChatProvider for CopilotProvider {
         let guard = if request.attachments.is_empty() {
             None
         } else {
-            match op_web_daemon::chat_attachment::write_temp_attachments(&request.attachments) {
+            match crate::chat_attachment::write_temp_attachments(&request.attachments) {
                 Ok(g) => Some(g),
-                Err(e) => return op_web_daemon::chat_attachment::attachment_error_turn(e),
+                Err(e) => return crate::chat_attachment::attachment_error_turn(e),
             }
         };
         // Chat-tracked turns resume the previous turn's CLI session so
@@ -227,7 +227,7 @@ fn resume_config(session_id: &str) -> ResumeSessionConfig {
 /// is its single reasoning dial.)
 async fn run_turn(
     request: ChatRequest,
-    guard: Option<op_web_daemon::chat_attachment::TempGuard>,
+    guard: Option<crate::chat_attachment::TempGuard>,
     tx: mpsc::Sender<ChatDelta>,
     resume: Option<String>,
     track_session: bool,

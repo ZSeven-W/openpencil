@@ -50,7 +50,7 @@ use op_ai::chat_provider::{ChatDelta, ChatProvider, ChatRequest, EffortLevel, St
 use tokio::sync::mpsc;
 
 use op_web_daemon::chat_attachment::TempGuard;
-use crate::chat_runtime::{shared_runtime, BlockingRecvIter};
+use op_web_daemon::chat_runtime::{shared_runtime, BlockingRecvIter};
 
 /// TS error surfaced when ACP is used with the MCP server stopped —
 /// ported verbatim from `apps/web/server/api/ai/agent.ts:506-511`.

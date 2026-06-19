@@ -33,7 +33,7 @@ use crate::chat_builtin_http::{ensure_success, map_anthropic_stop_reason, map_op
 
 /// Everything one agent-loop run needs. `max_turns` is the TS
 /// `maxTurns` cap (20 in production; tests shrink it).
-pub(crate) struct AgentLoopConfig {
+pub struct AgentLoopConfig {
     pub url: String,
     pub api_key: String,
     pub model: String,
@@ -68,7 +68,7 @@ struct PendingToolCall {
 /// The chat panel's tool card (`ai_chat_transcript_tools.rs`) parses
 /// this envelope: `level` picks the expand default, `args` renders,
 /// `status: "running"` animates until the host attaches the result.
-pub(crate) fn tool_card_envelope(level: &str, args_json: &str) -> String {
+pub fn tool_card_envelope(level: &str, args_json: &str) -> String {
     let args = serde_json::from_str::<Value>(args_json)
         .unwrap_or_else(|_| Value::String(args_json.to_string()));
     json!({ "level": level, "args": args, "status": "running" }).to_string()
@@ -344,7 +344,7 @@ impl SseCollector for AnthropicCollector {
 /// Run the Anthropic agent loop to completion. Returns `Ok(true)` when
 /// a terminal `Done` was emitted; `Err` for transport / in-stream
 /// errors (caller surfaces them as `Error + Done{Aborted}`).
-pub(crate) async fn run_anthropic_agent_loop(
+pub async fn run_anthropic_agent_loop(
     cfg: AgentLoopConfig,
     tx: &mpsc::Sender<ChatDelta>,
 ) -> Result<bool, String> {
@@ -552,7 +552,7 @@ impl OpenAiCollector {
 
 /// Run the OpenAI-compatible agent loop to completion. Same contract
 /// as [`run_anthropic_agent_loop`].
-pub(crate) async fn run_openai_agent_loop(
+pub async fn run_openai_agent_loop(
     cfg: AgentLoopConfig,
     tx: &mpsc::Sender<ChatDelta>,
 ) -> Result<bool, String> {

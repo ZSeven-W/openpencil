@@ -57,7 +57,7 @@ use op_orchestrator::{
     SkippedVisionLlmClient, ValidationProviders,
 };
 
-use crate::chat_runtime::shared_runtime;
+use op_web_daemon::chat_runtime::shared_runtime;
 use op_web_daemon::pre_validator::LintPreValidator;
 
 /// Spawn a worker that runs `Orchestrator::run` against a `RemoteDocSink`.

@@ -18,7 +18,7 @@ use serde_json::{json, Value};
 use tokio::sync::mpsc;
 
 use crate::chat_agent_loop::{run_anthropic_agent_loop, run_openai_agent_loop, AgentLoopConfig};
-use op_web_daemon::chat_canvas_tools::MAX_TOOL_TURNS;
+use crate::chat_canvas_tools::MAX_TOOL_TURNS;
 use crate::chat_runtime::{resolved_skill_preamble, shared_runtime, BlockingRecvIter};
 
 #[derive(Clone)]
@@ -96,15 +96,15 @@ impl ChatProvider for ConfiguredBuiltinProvider {
     }
 
     fn send(&self, request: ChatRequest) -> Box<dyn Iterator<Item = ChatDelta> + Send> {
-        let (mut prompt, guard) = match op_web_daemon::chat_attachment::prompt_with_attachments(
+        let (mut prompt, guard) = match crate::chat_attachment::prompt_with_attachments(
             &request.user_message,
             &request.attachments,
         ) {
             Ok(pair) => pair,
-            Err(e) => return op_web_daemon::chat_attachment::attachment_error_turn(e),
+            Err(e) => return crate::chat_attachment::attachment_error_turn(e),
         };
         let mut directive = String::new();
-        if let Some(d) = op_web_daemon::chat_attachment::thinking_directive(request.thinking) {
+        if let Some(d) = crate::chat_attachment::thinking_directive(request.thinking) {
             directive.push_str(d);
         }
         if request.effort != EffortLevel::Low {
@@ -318,7 +318,7 @@ async fn run_anthropic_chat(
     pump_sse_response(resp, tx, parse_anthropic_sse_data).await
 }
 
-pub(crate) async fn ensure_success(
+pub async fn ensure_success(
     resp: reqwest::Response,
     provider_label: &str,
 ) -> Result<reqwest::Response, String> {
@@ -503,7 +503,7 @@ fn parse_anthropic_sse_data(data: &str) -> Option<ChatDelta> {
     }
 }
 
-pub(crate) fn map_anthropic_stop_reason(reason: &str) -> StopReason {
+pub fn map_anthropic_stop_reason(reason: &str) -> StopReason {
     match reason {
         "max_tokens" => StopReason::MaxTokens,
         "tool_use" => StopReason::ToolUse,
@@ -512,7 +512,7 @@ pub(crate) fn map_anthropic_stop_reason(reason: &str) -> StopReason {
     }
 }
 
-pub(crate) fn map_openai_stop_reason(reason: &str) -> StopReason {
+pub fn map_openai_stop_reason(reason: &str) -> StopReason {
     match reason {
         "length" => StopReason::MaxTokens,
         "tool_calls" | "function_call" => StopReason::ToolUse,

@@ -87,7 +87,7 @@ impl AcpAgentConnectJob {
 }
 
 pub(crate) fn probe_acp_agent_config(config: op_acp::AcpAgentConfig) -> AcpAgentProbeOutcome {
-    crate::chat_runtime::shared_runtime().block_on(async move {
+    op_web_daemon::chat_runtime::shared_runtime().block_on(async move {
         match op_acp::connect_acp_agent(&config).await {
             Ok(conn) => {
                 let info = format_acp_agent_info(conn.agent_info(), &config.display_name);

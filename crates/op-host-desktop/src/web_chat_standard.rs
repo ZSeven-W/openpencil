@@ -436,7 +436,7 @@ fn stream_new_design_route<W: Write>(
         let mut on_progress = move |p: Progress| {
             let _ = write_thinking_event(out_ref, &format!("\n{}", progress_label(&p)));
         };
-        crate::chat_runtime::shared_runtime().block_on(
+        op_web_daemon::chat_runtime::shared_runtime().block_on(
             Orchestrator::new().with_indicator_epoch(epoch).run(
                 request,
                 &mut sink,
