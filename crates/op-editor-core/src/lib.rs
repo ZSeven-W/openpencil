@@ -65,6 +65,7 @@ pub mod property_panel_state;
 pub mod ref_resolve;
 pub mod rename;
 pub mod render_backend;
+pub mod scene_vars;
 pub mod selection;
 pub mod selection_resolve;
 pub mod state;
