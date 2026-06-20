@@ -153,8 +153,10 @@ pub fn paint_preset_menu(
         let item = preset_item_rect(card, i);
         let active = agent.preset == preset.key;
         let hovered = settings.builtin_preset_menu_hover == Some(preset.key);
-        if active || hovered {
+        if active {
             cx.backend.fill_round_rect(item, 5.0, theme.muted);
+        } else if hovered {
+            cx.backend.fill_round_rect(item, 5.0, theme.button_hover);
         }
         if active {
             draw_icon(

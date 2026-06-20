@@ -513,7 +513,8 @@ impl Widget for LayerPanel {
                 cx.backend
                     .fill_round_rect(row, 6.0, self.theme.row_selected);
             } else if page.hovered {
-                cx.backend.fill_round_rect(row, 6.0, self.theme.muted);
+                cx.backend
+                    .fill_round_rect(row, 6.0, self.theme.button_hover);
             }
             let label_x = row.origin.x + 12.0;
             let label_max_x = rect.origin.x + rect.size.x - ROW_PAD_X - 18.0;
@@ -602,7 +603,8 @@ impl Widget for LayerPanel {
                 cx.backend
                     .fill_round_rect(row, 6.0, self.theme.row_selected_primary);
             } else if item.hovered {
-                cx.backend.fill_round_rect(row, 6.0, self.theme.muted);
+                cx.backend
+                    .fill_round_rect(row, 6.0, self.theme.button_hover);
             }
 
             let indent = ROW_PAD_X + item.depth as f32 * 12.0;

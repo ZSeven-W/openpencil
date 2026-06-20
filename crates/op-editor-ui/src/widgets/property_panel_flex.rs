@@ -570,9 +570,8 @@ pub fn paint_padding_mode_popover(
     for (i, rect) in rows.iter().enumerate() {
         let mode = PaddingEditMode::ALL[i];
         if hover == Some(i) {
-            // Muted row wash matching the other dropdown hovers
-            // (file menu / locale / shape picker).
-            cx.backend.fill_round_rect(*rect, 6.0, theme.muted);
+            // jian-standard button_hover row wash, matching the other dropdowns.
+            cx.backend.fill_round_rect(*rect, 6.0, theme.button_hover);
         }
         paint_radio_circle(
             cx,
