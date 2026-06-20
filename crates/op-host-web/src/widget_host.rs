@@ -191,8 +191,6 @@ pub struct WidgetHost {
     /// content-hash check absorbs UI-only false positives).
     #[cfg(feature = "canvaskit")]
     doc_sync_dirty: bool,
-    /// Last app-preferences snapshot written to browser storage.
-    settings_fingerprint: crate::web_settings::Fingerprint,
     pub(in crate::widget_host) theme: Theme,
     drag: Option<DragState>,
     /// True while Space is held and no text input owns the keyboard.
@@ -434,12 +432,10 @@ impl WidgetHost {
     pub fn new() -> Self {
         // A fresh launch opens with a single empty starter Frame —
         // see `EditorState::starter`.
-        let mut editor_state = op_editor_core::EditorState::starter();
-        crate::web_settings::load_into(&mut editor_state);
+        let editor_state = op_editor_core::EditorState::starter();
         // Seed the render scene once up front; subsequent frames
         // re-derive only when `editor_state_dirty` is set.
         let layout_scene = op_pen_loader::editor_state_to_layout_scene(&editor_state);
-        let settings_fingerprint = crate::web_settings::fingerprint(&editor_state);
         Self {
             editor_state,
             layout_scene,
@@ -447,7 +443,6 @@ impl WidgetHost {
             editor_state_dirty: false,
             #[cfg(feature = "canvaskit")]
             doc_sync_dirty: false,
-            settings_fingerprint,
             theme: Theme::dark(),
             drag: None,
             space_pan: false,
@@ -517,7 +512,6 @@ impl WidgetHost {
     /// `self.editor_state`.
     pub(in crate::widget_host) fn mark_dirty(&mut self) {
         self.editor_state_dirty = true;
-        crate::web_settings::save_if_changed(&self.editor_state, &mut self.settings_fingerprint);
         #[cfg(feature = "canvaskit")]
         {
             self.doc_sync_dirty = true;
