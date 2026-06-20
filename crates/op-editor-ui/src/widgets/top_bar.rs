@@ -667,6 +667,7 @@ pub(super) fn paint_file_menu_button(
         pressed,
         enabled: true,
         font_size: ICON_SIZE,
+        bordered: false,
     }
     .paint(
         cx.backend,

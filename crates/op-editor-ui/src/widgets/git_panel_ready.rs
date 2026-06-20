@@ -468,16 +468,25 @@ impl GitPanel<'_> {
             } else {
                 self.t("git.commit.placeholder")
             };
-            TextArea {
-                state: &self.state.commit_input,
-                placeholder,
-                focused: self.state.commit_focused,
-                font_size: 12.0,
-                now_ms: self.now_ms,
-                pad_x: 12.0,
-                max_visible_lines: 2,
+            {
+                // jian TextArea paints glyphs top-relative; wrap the backend so
+                // the run sits on its baseline (matches the chat commit input).
+                let tokens = self.widget_tokens();
+                let mut baselined = crate::widgets::text_input_backend::BaselineAdjustingBackend {
+                    inner: cx.backend,
+                    baseline_delta_y: 12.0,
+                };
+                TextArea {
+                    state: &self.state.commit_input,
+                    placeholder,
+                    focused: self.state.commit_focused,
+                    font_size: 12.0,
+                    now_ms: self.now_ms,
+                    pad_x: 12.0,
+                    max_visible_lines: 2,
+                }
+                .paint(&mut baselined, text_r, &tokens);
             }
-            .paint(cx.backend, text_r, &self.widget_tokens());
             let btn = self.ready_commit_btn(rect);
             self.paint_milestone_button(
                 cx,

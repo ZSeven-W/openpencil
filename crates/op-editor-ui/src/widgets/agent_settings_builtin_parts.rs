@@ -116,6 +116,7 @@ pub fn paint_provider_select(
         pressed: false,
         enabled: true,
         font_size: 11.0,
+        bordered: true,
     }
     .paint(
         cx.backend,

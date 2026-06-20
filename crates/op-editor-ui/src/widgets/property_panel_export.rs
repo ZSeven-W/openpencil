@@ -53,6 +53,7 @@ pub fn paint_export_section(
         pressed: false,
         enabled: true,
         font_size: 12.0,
+        bordered: true,
     }
     .paint(
         cx.backend,
@@ -70,6 +71,7 @@ pub fn paint_export_section(
         pressed: false,
         enabled: true,
         font_size: 12.0,
+        bordered: true,
     }
     .paint(
         cx.backend,
