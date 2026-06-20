@@ -33,8 +33,8 @@ mod widget_host;
 // drive the CanvasKit `CkInner` through one trait.
 #[cfg(feature = "canvaskit")]
 mod repaint_ctx;
-// Pure web_sys IO (no skia) — compiled always so the `web` stub still
-// compile-checks on wasm32 without EMSDK.
+// Pure web_sys IO (no native Skia/C toolchain) — compiled always so the `web`
+// stub still compile-checks on wasm32.
 mod live_sync;
 #[cfg(feature = "canvaskit")]
 mod live_sync_glue;

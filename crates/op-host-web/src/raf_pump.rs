@@ -1,4 +1,5 @@
-// UNVERIFIED in-browser: run tools/check-wasm-bundle.sh and a browser smoke test.
+// Browser boundary: requestAnimationFrame scheduling needs browser smoke; the
+// CanvasKit bundle gate covers wasm linkability.
 //! A `requestAnimationFrame` loop that ticks while work is in flight.
 //!
 //! Used to drain streamed AI deltas into the transcript ~once per frame (the

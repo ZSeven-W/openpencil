@@ -58,10 +58,10 @@ name: Rust release artifacts
 # The `build` job builds the real `op-host-desktop` crate (winit + skia-safe
 # runner that drives the Rust editor); its shipped executable keeps the
 # stable `openpencil-desktop` name. The `op` CLI (crates/op-cli, binary name
-# `op`) is built in the same cargo invocation. The wasm web bundle is
-# currently DEFERRED (see comment block below); when the CI-side C-hard
-# pipeline (emscripten install + EMSDK + symlink hack + wasm-bindgen +
-# wasm-opt) lands it will re-enter the matrix.
+# `op`) is built in the same cargo invocation. The Rust web bundle is built by
+# `.github/workflows/wasm-bundle-build.yml` as a separate deployable CanvasKit
+# artifact; this workflow currently keeps the native desktop release matrix
+# independent from that web artifact.
 
 on:
   push:
@@ -340,30 +340,20 @@ jobs:
             OpenPencil-*-linux.deb
           if-no-files-found: ignore
 
-  # Phase 1b release wasm artifact: explicitly DEFERRED (not silently
-  # dropped). The local C-hard pipeline (vendor/skia-safe-op fork +
-  # crates/wasm-libc-shim) does produce a runtime-loadable
-  # wasm32-unknown-unknown bundle today (verified 2026-05-09: 0 env.*
-  # imports, 597 KiB gzip). Re-introducing the release job requires
-  # CI-side automation that we have NOT yet built:
-  #   1. install brew emscripten 5.0.7 + EMSDK shim on ubuntu-latest
-  #   2. set EMSDK env var for the cargo build
-  #   3. run `cargo build … --features skia --release`
-  #   4. apply the `.wasm.a` → `.a` symlink hack in the
-  #      skia-bindings out/ dir (manual today; tracked as a follow-up
-  #      automation item — fold into `vendor/skia-safe-op` build.rs)
-  #   5. run `wasm-bindgen --target web` + `wasm-opt -Oz`
-  #   6. browser-side manual smoke (Phase E in spec) before publishing
-  #
-  # Until that pipeline lands, tagged releases ship desktop artifacts
-  # only. This is a CONSCIOUS choice — see plan §Cheat-sheet for the
-  # tracking item.
+  # Web bundle release note:
+  # The deployable Rust web bundle is produced by
+  # `.github/workflows/wasm-bundle-build.yml`, which builds the current
+  # CanvasKit feature set, runs `tools/check-wasm-bundle.sh`, size-gates the
+  # wasm output, and uploads the `op-web-bundle` artifact. This desktop release
+  # workflow still ships only native desktop + CLI artifacts; attach or merge the
+  # `op-web-bundle` artifact here only when tagged releases are meant to publish
+  # the standalone web bundle from the same draft.
 
   release-draft:
     name: Create / update GitHub Release draft
-    # `wasm` job deferred (see comment block above); when the
-    # CI-side C-hard pipeline lands, re-add the job and append its
-    # name to this `needs:` list.
+    # Native release artifacts only. The deployable Rust web bundle is built by
+    # wasm-bundle-build.yml and can be attached separately when release policy
+    # calls for publishing the web bundle from this draft.
     needs: [build]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')

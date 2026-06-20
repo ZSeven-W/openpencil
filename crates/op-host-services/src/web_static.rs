@@ -4,8 +4,9 @@
 //! - `GET /` (and `/index.html`) — the embedded host page
 //!   (`web_static/index.html`, baked in via `include_str!` so serving works
 //!   from any cwd). The page loads the wasm-bindgen JS glue from `/pkg/`
-//!   and calls `mount('op')`; the hidden IME textarea is created by
-//!   `mount()` itself, so the page only carries the `<canvas>`.
+//!   and calls `mount_ck('op')`; the hidden IME textarea is created by the
+//!   CanvasKit mount itself, so the page only carries the `<canvas>`.
+//! - `GET /smoke/step-1b.html` — the CanvasKit-only browser smoke harness.
 //! - `GET /pkg/<file>` — the wasm-bindgen output files from the resolved
 //!   bundle directory, with correct MIME types (`application/wasm`,
 //!   `text/javascript`).
@@ -29,6 +30,10 @@ const INDEX_HTML: &str = include_str!("web_static/index.html");
 
 /// 404 help page served when the wasm bundle cannot be found.
 const MISSING_BUNDLE_HTML: &str = include_str!("web_static/missing_bundle.html");
+
+/// CanvasKit-only browser smoke harness. Kept in the web crate next to the
+/// bundle it exercises; embedded here so the daemon can serve it from any cwd.
+const SMOKE_HTML: &str = include_str!("../../op-host-web/smoke/step-1b.html");
 
 /// The simple-icons brand-logo catalog (~4.8 MB). Embedded here so it can be
 /// both (a) registered with the shared icon catalog at native GUI startup and
@@ -189,6 +194,13 @@ pub fn handle_static_request(path: &str, bundle_dir: Option<&Path>) -> Option<St
                 body: INDEX_HTML.as_bytes().to_vec(),
             },
             None => missing_bundle_reply(),
+        });
+    }
+    if path == "/smoke/step-1b.html" {
+        return Some(StaticReply {
+            status: "200 OK",
+            content_type: "text/html; charset=utf-8",
+            body: SMOKE_HTML.as_bytes().to_vec(),
         });
     }
     if let Some(file) = path.strip_prefix("/pkg/") {
@@ -416,10 +428,14 @@ mod tests {
         assert_eq!(reply.status, "200 OK");
         assert_eq!(reply.content_type, "text/html; charset=utf-8");
         let body = String::from_utf8(reply.body).expect("utf8");
-        // The host page loads the glue and mounts on the canvas.
+        // The host page loads the glue, resets through the daemon, and mounts
+        // the production CanvasKit shell on the canvas.
         assert!(body.contains("/pkg/op_host_web.js"), "{body}");
         assert!(body.contains("fetch('/api/mcp/sync-reset'"), "{body}");
-        assert!(body.contains("mount('op')"), "{body}");
+        assert!(body.contains("await mod.mount_ck('op')"), "{body}");
+        assert!(body.contains("data-op-smoke"), "{body}");
+        assert!(!body.contains("mod.mount('op')"), "{body}");
+        assert!(!body.contains("EMSDK"), "{body}");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -443,13 +459,27 @@ mod tests {
             body.contains("canvas.style.width = `${cssWidth}px`"),
             "{body}"
         );
-        assert!(body.contains("requestIdleCallback"), "{body}");
         assert!(
             body.contains("sizeCanvasForDisplay(STEADY_CANVAS_PIXEL_BUDGET)"),
             "{body}"
         );
-        assert!(body.contains("window.requestAnimationFrame"), "{body}");
-        assert!(body.contains("window.__opShell.resize()"), "{body}");
+        assert!(body.contains("await mod.mount_ck('op')"), "{body}");
+        assert!(!body.contains("window.__opShell.resize()"), "{body}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn smoke_page_serves_canvaskit_mount_harness() {
+        let dir = stub_bundle("smoke");
+        let reply = handle_static_request("/smoke/step-1b.html", Some(&dir)).expect("static route");
+        assert_eq!(reply.status, "200 OK");
+        assert_eq!(reply.content_type, "text/html; charset=utf-8");
+        let body = String::from_utf8(reply.body).expect("utf8");
+        assert!(body.contains("mod.mount_ck('op')"), "{body}");
+        assert!(body.contains("data-op-smoke"), "{body}");
+        assert!(body.contains("--features canvaskit"), "{body}");
+        assert!(!body.contains("mod.mount('op')"), "{body}");
+        assert!(!body.contains("EMSDK"), "{body}");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

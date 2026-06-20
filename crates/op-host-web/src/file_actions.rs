@@ -1,4 +1,5 @@
-// UNVERIFIED in-browser: run tools/check-wasm-bundle.sh and a browser smoke test.
+// Browser boundary: these pure helpers are unit-tested; DOM picker/download
+// behavior lives in dom_io and still needs browser smoke.
 //! Pure (DOM-free) document IO helpers behind the browser file-IO
 //! glue (`dom_io`). Everything here is plain Rust over
 //! `op_editor_core` / `op_pen_loader` / `op_figma`, so the unit tests

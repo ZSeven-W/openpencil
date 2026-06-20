@@ -1,4 +1,5 @@
-// UNVERIFIED: needs EMSDK wasm32 build + browser; run tools/check-wasm-bundle.sh
+// Browser/daemon boundary: Iconify XHR uses the public CORS API while the brand
+// catalog comes from the daemon-served asset; parsing/apply logic is unit-tested.
 //! Web Iconify bridge — the browser consumer of the icon picker's
 //! `icon_picker_load_more_request` flag.
 //!

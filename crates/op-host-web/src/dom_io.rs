@@ -1,4 +1,5 @@
-// UNVERIFIED in-browser: run tools/check-wasm-bundle.sh and a browser smoke test.
+// Browser boundary: FileReader, Blob downloads, paste, and drag/drop require
+// browser smoke; pure ingest/export behavior is covered in file_actions tests.
 //! Browser file-IO glue — the web consumer of
 //! `editor_ui.pending_file_action` plus the DOM paste / drag-drop
 //! listeners. The pure serialize / ingest logic lives in
