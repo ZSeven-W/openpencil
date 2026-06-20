@@ -33,12 +33,11 @@ use crate::state::EditorState;
 use crate::ui_draft::{ColorPickerDrag, ColorPickerState, ColorTarget};
 use crate::walkers::find_node_mut;
 
-// Pure colour math lives in `color_convert`; re-export it through this
-// module so existing `crate::color_picker::{hsv_to_rgb, parse_hex_rgb, …}`
-// callers (and the `lib.rs` crate-root re-export) keep resolving.
-pub use crate::color_convert::{
-    hsv_to_rgb, parse_hex_alpha, parse_hex_rgb, rgb_to_hex, rgb_to_hsv,
-};
+// The colour maths is canonical in `jian_core::color` (one copy, shared with
+// jian-widgets' painting). Re-export it through this module so existing
+// `crate::color_picker::{hsv_to_rgb, parse_hex_rgb, …}` callers (and the
+// `lib.rs` crate-root re-export) keep resolving.
+pub use jian_core::color::{hsv_to_rgb, parse_hex_alpha, parse_hex_rgb, rgb_to_hex, rgb_to_hsv};
 
 impl EditorState {
     // --- Fill / stroke colour ---------------------------------------

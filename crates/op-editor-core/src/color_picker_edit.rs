@@ -5,8 +5,8 @@
 //! each live-applies through the shared `color_picker_set_hsv` commit so
 //! fill / stroke / variable targets all update.
 
-use crate::color_convert::{hsv_to_rgb, parse_hex_rgb, rgb_to_hex, rgb_to_hsv};
 use crate::state::EditorState;
+use jian_core::color::{hsv_to_rgb, parse_hex_rgb, rgb_to_hex, rgb_to_hsv};
 
 impl EditorState {
     /// Whether the picker's hex field currently has keyboard focus.
