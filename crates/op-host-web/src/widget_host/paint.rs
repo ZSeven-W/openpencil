@@ -447,7 +447,7 @@ impl WidgetHost {
         // Design-MD panel so when both are open Design-MD sits
         // absolute-top (native §11.5).
         if let (Some(panel), Some(panel_rect)) = (
-            ComponentBrowserPanel::for_editor(&self.editor_state),
+            ComponentBrowserPanel::for_editor_at(&self.editor_state, self.now_ms),
             self.component_browser_panel_rect(viewport_width, viewport_height),
         ) {
             let mut cx = PaintCx {
@@ -460,7 +460,7 @@ impl WidgetHost {
         // Above the component browser, below Design-MD, matching the
         // press routing order (native §11.7).
         if let (Some(panel), Some(panel_rect)) = (
-            IconPickerPanel::for_editor(&self.editor_state),
+            IconPickerPanel::for_editor_at(&self.editor_state, self.now_ms),
             self.icon_picker_panel_rect(viewport_width, viewport_height),
         ) {
             let mut cx = PaintCx {

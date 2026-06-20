@@ -10,6 +10,7 @@
 use crate::theme::Theme;
 use crate::widgets::button::paint_button_feedback_wash;
 use crate::widgets::editor_state_ext::theme_for;
+use crate::widgets::property_panel_text_input::paint_text_input_view;
 use crate::widgets::{draw_icon, Icon, PaintCx};
 use crate::{Color, Point2D, Rect, TextLayout};
 use op_editor_core::{
@@ -131,11 +132,19 @@ pub struct ComponentBrowserPanel<'a> {
     pub(in crate::widgets) hover: Option<ComponentBrowserButton>,
     /// Which Component-Browser button is actively pressed.
     pub(in crate::widgets) pressed: Option<ComponentBrowserButton>,
+    /// Frame clock for the search field's caret blink.
+    pub(in crate::widgets) now_ms: u64,
 }
 
 impl<'a> ComponentBrowserPanel<'a> {
-    /// Build the panel for the editor, or `None` when it is closed.
+    /// Build the panel for the editor, or `None` when it is closed. Non-paint
+    /// callers (hit-test) don't need the caret clock and pass `0`.
     pub fn for_editor(state: &'a EditorState) -> Option<ComponentBrowserPanel<'a>> {
+        Self::for_editor_at(state, 0)
+    }
+
+    /// Build the panel with a frame clock so the search caret blinks.
+    pub fn for_editor_at(state: &'a EditorState, now_ms: u64) -> Option<ComponentBrowserPanel<'a>> {
         if !state.editor_ui.component_browser_open {
             return None;
         }
@@ -149,6 +158,7 @@ impl<'a> ComponentBrowserPanel<'a> {
                 Some(ButtonPressTarget::ComponentBrowser(button)) => Some(button),
                 _ => None,
             },
+            now_ms,
         })
     }
 
@@ -502,34 +512,28 @@ impl<'a> ComponentBrowserPanel<'a> {
             self.theme.muted_foreground,
             1.4,
         );
-        let query = self.state.editor_ui.component_browser_search.trim();
-        let (search_text, search_color) = if query.is_empty() {
-            (
-                self.t("componentBrowser.searchComponents"),
-                self.theme.muted_foreground,
-            )
-        } else {
-            (query, self.theme.foreground)
-        };
-        // Ctrl/Cmd+A highlights the whole query (painted behind the text).
-        if self.state.editor_ui.component_browser_select_all && !query.is_empty() {
-            crate::widgets::text_selection::paint_single_line_selection(
-                cx,
-                &self.theme,
-                query,
-                search_rect.origin.x + 30.0,
-                search_rect.origin.y + 19.0,
-                12.0,
-                search_rect.origin.x + search_rect.size.x - 8.0,
-            );
+        // Value + placeholder + caret + select-all highlight render through the
+        // unified jian TextInputView (one caret implementation, family-aware so
+        // it doesn't drift). The buffer is rebuilt from the filter String each
+        // frame; the panel owns the keyboard while open, so it reads as focused.
+        let placeholder = self.t("componentBrowser.searchComponents");
+        let mut search_input = jian_core::text_input::TextInputState::with_text(
+            self.state.editor_ui.component_browser_search.clone(),
+        );
+        if self.state.editor_ui.component_browser_select_all && !search_input.text().is_empty() {
+            search_input.select_all();
         }
-        self.text(
+        paint_text_input_view(
             cx,
-            search_text,
-            search_rect.origin.x + 30.0,
-            search_rect.origin.y + 19.0,
+            &self.theme,
+            &search_input,
+            search_rect,
             12.0,
-            search_color,
+            30.0,
+            search_rect.origin.y + 19.0,
+            self.now_ms,
+            placeholder,
+            true,
         );
 
         // Category pills.

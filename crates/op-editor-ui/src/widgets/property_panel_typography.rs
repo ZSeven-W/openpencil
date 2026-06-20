@@ -317,6 +317,7 @@ pub fn paint_font_picker(
     search: &str,
     state: &SelectState,
     active_family: &str,
+    now_ms: u64,
 ) {
     if !state.open {
         return;
@@ -341,41 +342,22 @@ pub fn paint_font_picker(
     );
     let text_x = s.origin.x + 26.0;
     let baseline = s.origin.y + s.size.y / 2.0 + 4.0;
-    if search.is_empty() {
-        let placeholder = TextLayout::single_run(
-            op_i18n::translate(locale, "text.font.search"),
-            "system-ui",
-            11.0,
-            (theme.muted_foreground).to_jian(),
-            Point2D::new(0.0, 0.0),
-        );
-        cx.backend
-            .draw_text(&placeholder, Point2D::new(text_x, baseline));
-        cx.backend.fill_rect(
-            Rect {
-                origin: Point2D::new(text_x, s.origin.y + 7.0),
-                size: Point2D::new(1.0, s.size.y - 14.0),
-            },
-            theme.foreground,
-        );
-    } else {
-        let draft = TextLayout::single_run(
-            search,
-            "system-ui",
-            11.0,
-            (theme.foreground).to_jian(),
-            Point2D::new(0.0, 0.0),
-        );
-        cx.backend.draw_text(&draft, Point2D::new(text_x, baseline));
-        let w = cx.backend.measure_text(search, 11.0);
-        cx.backend.fill_rect(
-            Rect {
-                origin: Point2D::new(text_x + w + 1.0, s.origin.y + 7.0),
-                size: Point2D::new(1.0, s.size.y - 14.0),
-            },
-            theme.foreground,
-        );
-    }
+    // Draft + placeholder + caret render through the unified jian TextInputView
+    // (family-aware caret, no hand-rolled drift). The buffer is rebuilt from the
+    // search String each frame; the open picker reads as focused.
+    let search_input = jian_core::text_input::TextInputState::with_text(search.to_string());
+    crate::widgets::property_panel_text_input::paint_text_input_view(
+        cx,
+        theme,
+        &search_input,
+        s,
+        11.0,
+        text_x - s.origin.x,
+        baseline,
+        now_ms,
+        op_i18n::translate(locale, "text.font.search"),
+        true,
+    );
     cx.backend.fill_rect(
         Rect {
             origin: Point2D::new(s.origin.x, s.origin.y + s.size.y - 1.0),
@@ -761,6 +743,7 @@ mod tests {
             "",
             &state,
             "Not A Listed Font",
+            0,
         );
 
         assert!(
