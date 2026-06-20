@@ -18,9 +18,11 @@ use crate::widgets::agent_settings_i18n::t as t_settings;
 use crate::widgets::agent_settings_switch::paint_settings_switch;
 use crate::widgets::brand_icons::{paint_brand_logo, BrandLogo};
 use crate::widgets::button::paint_ghost_button_feedback;
+use crate::widgets::button::tokens_from_theme;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
+use jian_widgets::components::card::Card;
 use op_editor_core::agent_settings::{
     AgentSettings, BuiltinAgentConfig, BuiltinAgentField, BuiltinAgentKind,
     BuiltinAgentPresetMenuTarget, SettingsFocus,
@@ -442,8 +444,12 @@ fn paint_builtin_agent_form(
     card: Rect,
     now_ms: u64,
 ) {
-    cx.backend.fill_round_rect(card, 10.0, theme.muted);
-    cx.backend.stroke_round_rect(card, 10.0, theme.border, 1.0);
+    Card {
+        fill: Some(theme.muted),
+        border: Some(theme.border),
+        radius: 10.0,
+    }
+    .paint(cx.backend, card, &tokens_from_theme(theme));
     let avatar = Rect {
         origin: Point2D::new(card.origin.x + 12.0, card.origin.y + 10.0),
         size: Point2D::new(28.0, 28.0),
@@ -544,8 +550,12 @@ fn paint_compact_builtin_agent_card(
     card: Rect,
 ) {
     if agent.enabled {
-        cx.backend.fill_round_rect(card, 8.0, theme.muted);
-        cx.backend.stroke_round_rect(card, 8.0, theme.border, 1.0);
+        Card {
+            fill: Some(theme.muted),
+            border: Some(theme.border),
+            radius: 8.0,
+        }
+        .paint(cx.backend, card, &tokens_from_theme(theme));
     }
     let avatar = Rect {
         origin: Point2D::new(card.origin.x + 12.0, card.origin.y + 12.0),

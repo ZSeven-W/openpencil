@@ -234,8 +234,12 @@ fn paint_server_card(
     now_ms: u64,
 ) {
     let card = server_card_rect(content);
-    cx.backend.fill_round_rect(card, 10.0, theme.muted);
-    cx.backend.stroke_round_rect(card, 10.0, theme.border, 1.0);
+    Card {
+        fill: Some(theme.muted),
+        border: Some(theme.border),
+        radius: 10.0,
+    }
+    .paint(cx.backend, card, &tokens_from_theme(theme));
     let running = settings.mcp_server.running;
     let mid_y = card.origin.y + SERVER_CARD_H / 2.0;
     let dot = Rect {
