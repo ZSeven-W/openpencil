@@ -169,7 +169,7 @@ pub(super) fn paint_agent_card(
         if hovered {
             Button {
                 label: t_settings(ui, "settings.agents.disconnect"),
-                icon_d: None,
+                icon_paths: None,
                 variant: ButtonVariant::DestructiveOutline,
                 enabled: true,
                 hovered: false,
@@ -189,7 +189,7 @@ pub(super) fn paint_agent_card(
         };
         Button {
             label,
-            icon_d: None,
+            icon_paths: None,
             variant: ButtonVariant::Primary,
             enabled: !probing,
             hovered: false,

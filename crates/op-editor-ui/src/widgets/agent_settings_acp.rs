@@ -457,7 +457,7 @@ fn paint_connection_button(
     } else {
         Button {
             label: "",
-            icon_d: None,
+            icon_paths: None,
             variant: if enabled {
                 ButtonVariant::Primary
             } else {

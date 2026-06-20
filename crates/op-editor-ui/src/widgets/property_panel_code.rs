@@ -9,8 +9,7 @@ use crate::theme::Theme;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::property_panel_action::{CodegenAction, PropertyPanelAction};
 use crate::widgets::property_panel_inputs::{
-    paint_section_label, INPUT_HEIGHT, INPUT_RADIUS, PAD_X, SECTION_GAP, SECTION_HEADER_HEIGHT,
-    TAB_HEIGHT,
+    paint_section_label, INPUT_HEIGHT, PAD_X, SECTION_GAP, SECTION_HEADER_HEIGHT, TAB_HEIGHT,
 };
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
@@ -183,19 +182,6 @@ fn action_hovered(state: &CodegenState, hover: CodegenHover) -> bool {
     state.action_hover == Some(hover)
 }
 
-fn paint_primary_hover_overlay(cx: &mut PaintCx<'_>, rect: Rect, radius: f32) {
-    cx.backend.fill_round_rect(
-        rect,
-        radius,
-        Color {
-            r: 1.0,
-            g: 1.0,
-            b: 1.0,
-            a: 0.14,
-        },
-    );
-}
-
 fn code_neutral_hover_color(theme: &Theme) -> Color {
     Color {
         r: theme.foreground.r,
@@ -251,7 +237,7 @@ fn paint_full_button(
     };
     jian_widgets::components::button::Button {
         label,
-        icon_d: None,
+        icon_paths: None,
         variant,
         enabled: true,
         hovered: style.hovered,
@@ -570,35 +556,28 @@ fn paint_centered_icon_label(
     filled: bool,
     hovered: bool,
 ) {
-    let content_color = if filled {
-        cx.backend
-            .fill_round_rect(rect, INPUT_RADIUS, theme.primary);
-        if hovered {
-            paint_primary_hover_overlay(cx, rect, INPUT_RADIUS);
-        }
-        theme.primary_foreground
+    // Filled → primary CTA; else a borderless (ghost) text button. jian Button
+    // centers the icon+label group and owns the fill / hover feedback; the
+    // multi-subpath icon (sparkles / braces) renders in full via `icon_paths`.
+    let variant = if filled {
+        jian_widgets::components::button::ButtonVariant::Primary
     } else {
-        if hovered {
-            cx.backend
-                .fill_round_rect(rect, INPUT_RADIUS, code_neutral_hover_color(theme));
-        }
-        theme.foreground
+        jian_widgets::components::button::ButtonVariant::Ghost
     };
-    let icon_sz = 16.0;
-    let gap = 6.0;
-    let label_w = cx.backend.measure_text(label, 13.0);
-    let total = icon_sz + gap + label_w;
-    let start_x = rect.origin.x + (rect.size.x - total) / 2.0;
-    let cy = rect.origin.y + rect.size.y / 2.0;
-    draw_icon(
+    jian_widgets::components::button::Button {
+        label,
+        icon_paths: Some(icon.paths()),
+        variant,
+        enabled: true,
+        hovered,
+        pressed: false,
+        font_size: 13.0,
+    }
+    .paint(
         cx.backend,
-        icon,
-        Point2D::new(start_x, cy - icon_sz / 2.0),
-        icon_sz,
-        content_color,
-        1.6,
+        rect,
+        &crate::widgets::button::tokens_from_theme(theme),
     );
-    draw_line(cx, label, content_color, start_x + icon_sz + gap, cy + 5.0);
 }
 
 /// Idle body (centered empty state, TS parity): a sparkle badge, title,

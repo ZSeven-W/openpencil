@@ -89,7 +89,7 @@ pub fn paint_export_section(
     };
     jian_widgets::components::button::Button {
         label: labels.export,
-        icon_d: None,
+        icon_paths: None,
         variant: jian_widgets::components::button::ButtonVariant::Primary,
         enabled: true,
         hovered: false,

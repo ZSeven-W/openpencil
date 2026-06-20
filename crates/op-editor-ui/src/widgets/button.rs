@@ -40,7 +40,7 @@ pub(crate) fn paint_ghost_button_feedback(
 ) -> Color {
     Button {
         label: "",
-        icon_d: None,
+        icon_paths: None,
         variant: ButtonVariant::Ghost,
         enabled: true,
         hovered,

@@ -764,15 +764,9 @@ impl<'a> DesignMdPanel<'a> {
         hovered: bool,
         pressed: bool,
     ) {
-        let paths = icon.paths();
-        let icon_d = if paths.len() == 1 {
-            Some(paths[0])
-        } else {
-            None
-        };
         jian_widgets::components::button::Button {
             label,
-            icon_d,
+            icon_paths: Some(icon.paths()),
             // Secondary (muted fill) preserves the empty-state CTA's button
             // affordance — Ghost would render it transparent until hover.
             variant: jian_widgets::components::button::ButtonVariant::Secondary,
