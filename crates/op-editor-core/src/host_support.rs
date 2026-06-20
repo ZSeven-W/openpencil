@@ -184,10 +184,35 @@ impl EditorState {
         Some(id)
     }
 
-    /// Append an Image node centred on the current viewport with a
-    /// default 300×200 box. `src` is typically a `data:` URL the host
-    /// already produced from a picked file. Returns the new node id on
-    /// success; `None` when the id allocator is exhausted.
+    /// Insert `node` directly above the current selection — one row up in the
+    /// LayerPanel, which is one step toward the front in z-order (the canvas
+    /// paints children back-to-front via `children.iter().rev()`, so a lower
+    /// index renders in front). Inserts as a sibling in the selection's parent;
+    /// falls back to appending at the page root (back) when nothing is selected.
+    /// Callers select the new node afterwards.
+    fn insert_node_above_selection(&mut self, node: PenNode) {
+        let sel = self.selection.anchor.clone();
+        if sel.is_real() {
+            if let Some((parent, idx)) =
+                crate::walkers::find_parent_and_index(self.active_children(), &sel)
+            {
+                crate::walkers::insert_into_parent(
+                    self.active_children_mut(),
+                    parent.as_ref(),
+                    Some(idx),
+                    node,
+                );
+                return;
+            }
+        }
+        self.active_children_mut().push(node);
+    }
+
+    /// Insert an Image node centred on the current viewport with a
+    /// default 300×200 box, directly above the current selection. `src` is
+    /// typically a `data:` URL the host already produced from a picked file.
+    /// Returns the new node id on success; `None` when the id allocator is
+    /// exhausted.
     pub fn insert_image_node_at_viewport(&mut self, name: &str, src: &str) -> Option<NodeId> {
         use jian_ops_schema::node::image::ImageNode;
         use jian_ops_schema::node::PenNode;
@@ -235,7 +260,7 @@ impl EditorState {
             gestures: None,
             route: None,
         });
-        self.active_children_mut().push(node);
+        self.insert_node_above_selection(node);
         self.set_single_selection(id.clone());
         Some(id)
     }
@@ -288,7 +313,7 @@ impl EditorState {
             gestures: None,
             route: None,
         });
-        self.active_children_mut().push(node);
+        self.insert_node_above_selection(node);
         self.set_single_selection(id.clone());
         Some(id)
     }
@@ -353,7 +378,7 @@ impl EditorState {
             gestures: None,
             route: None,
         });
-        self.active_children_mut().push(node);
+        self.insert_node_above_selection(node);
         self.set_single_selection(id.clone());
         Some(id)
     }
