@@ -25,7 +25,6 @@ use op_editor_core::Tool;
 /// Outer column width (matches the TS app's `w-12` toolbar).
 pub const TOOLBAR_WIDTH: f32 = 44.0;
 const BUTTON_SIZE: f32 = 32.0;
-const BUTTON_RADIUS: f32 = 8.0;
 const ICON_SIZE: f32 = 18.0;
 const STROKE_W: f32 = 1.6;
 const BUTTON_GAP: f32 = 4.0;
@@ -454,29 +453,15 @@ fn paint_button(
         origin: Point2D::new(x, y),
         size: Point2D::new(BUTTON_SIZE, BUTTON_SIZE),
     };
-    let icon_color = if active {
-        cx.backend
-            .fill_round_rect(button_rect, BUTTON_RADIUS, theme.primary);
-        theme.primary_foreground
-    } else {
-        crate::widgets::button::paint_ghost_button_feedback(
-            cx.backend,
-            theme,
-            button_rect,
-            hovered,
-            pressed,
-        )
-    };
-    let icon_origin = Point2D::new(
-        x + (BUTTON_SIZE - ICON_SIZE) / 2.0,
-        y + (BUTTON_SIZE - ICON_SIZE) / 2.0,
-    );
-    draw_icon(
+    crate::widgets::button::paint_icon_button(
         cx.backend,
+        theme,
+        button_rect,
         icon,
-        icon_origin,
+        hovered,
+        pressed,
+        active,
         ICON_SIZE,
-        icon_color,
         STROKE_W,
     );
 }
