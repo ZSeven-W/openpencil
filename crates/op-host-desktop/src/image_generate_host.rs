@@ -47,7 +47,9 @@ async fn run_generate(
         }
     };
     if url.starts_with("data:") {
-        return Ok(url);
+        // Inline base64 (Gemini / OpenAI b64_json) → shrink an oversized
+        // render before it enters the document, same as the file-pick path.
+        return Ok(crate::image_downscale::maybe_downscale_data_url(&url).unwrap_or(url));
     }
     // Remote URL → embed as a data URL so the preview paints and the
     // applied src stays renderable offline (matches the search path).
