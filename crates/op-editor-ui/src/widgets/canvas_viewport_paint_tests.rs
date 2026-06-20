@@ -510,8 +510,8 @@ mod text_tests {
 mod path_tests {
     use crate::layout_scene::{NodeKind, SceneAnchor, SceneNode, ScenePointType};
     use crate::widgets::canvas_viewport_paint::{flatten_path, world_path_points, WorldPathPoints};
-    use jian_scene::path_geometry::{flatten_path_points, PathPoints};
     use crate::{Point2D, Rect};
+    use jian_scene::path_geometry::{flatten_path_points, PathPoints};
 
     fn anchor(x: f32, y: f32, hout: Option<Point2D>) -> SceneAnchor {
         SceneAnchor {

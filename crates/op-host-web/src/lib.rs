@@ -71,6 +71,8 @@ mod iconify_web;
 mod web_chat;
 #[cfg(feature = "canvaskit")]
 mod web_design_md;
+#[cfg(feature = "canvaskit")]
+mod web_settings;
 // Pure web_sys clipboard/download — Ctrl+C/X in inputs + Figma/file paste.
 #[cfg(feature = "canvaskit")]
 mod web_clipboard;

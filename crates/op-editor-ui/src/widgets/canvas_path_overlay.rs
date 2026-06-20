@@ -17,9 +17,9 @@
 use crate::layout_scene::{SceneAnchor, SceneNode};
 use crate::theme::Theme;
 use crate::widgets::canvas_viewport::path_handle_positions;
-use jian_scene::path_geometry::cubic_point;
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect};
+use jian_scene::path_geometry::cubic_point;
 use op_editor_core::Viewport;
 
 /// TS `SELECTION_BLUE` (`pen-core/constants.ts:11` — `#0d99ff`).

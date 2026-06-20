@@ -32,9 +32,7 @@ impl CaptureBackend {
     }
 
     fn paint_cx(&mut self) -> PaintCx<'_> {
-        PaintCx {
-            backend: self,
-        }
+        PaintCx { backend: self }
     }
 }
 

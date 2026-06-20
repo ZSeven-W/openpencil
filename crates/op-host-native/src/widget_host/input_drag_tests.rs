@@ -377,7 +377,8 @@ fn incremental_drag_then_doc_restored_to_cached_value_rebuilds_the_scene() {
           {"type":"rectangle","id":"free","name":"free","x":100,"y":100,"width":80,"height":60}
         ]}"#,
     );
-    host.editor_state_mut().set_single_selection(NodeId::new("free"));
+    host.editor_state_mut()
+        .set_single_selection(NodeId::new("free"));
     host.mark_paint_dirty_for_test();
     let _ = host.layout_scene(); // caches the build for the @100 doc
     let before = scene_node_xy(&host, "free");

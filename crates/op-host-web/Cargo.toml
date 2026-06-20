@@ -41,6 +41,7 @@ op-codegen = { path = "../op-codegen", features = ["ai"], optional = true }
 # pulls them.
 op-ai = { path = "../op-ai", optional = true }
 jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema", optional = true }
+serde = { workspace = true, features = ["derive"], optional = true }
 serde_json = { workspace = true, optional = true }
 # Browser file-IO P0: Figma `.fig` parsing + clipboard-HTML decoding for the
 # web shell. Pure-Rust (flate2/miniz_oxide + ruzstd + base64 — wasm32-clean,
@@ -104,6 +105,7 @@ features = [
   "Performance",
   "PointerEvent",
   "ProgressEvent",
+  "Storage",
   "TextMetrics",
   "Url",
   "WheelEvent",
@@ -126,6 +128,7 @@ canvaskit = [
   "dep:op-editor-core",
   "dep:op-pen-loader",
   "dep:jian-ops-schema",
+  "dep:serde",
   # Web integration modules absorbed from the codegen/skia path: AI chat
   # streaming (web_chat/web_ai_transport), live-sync, codegen, Figma/file IO.
   # All are pure web_sys/serde logic — no skia-safe.

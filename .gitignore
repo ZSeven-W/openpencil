@@ -41,3 +41,4 @@ Cargo.lock.merge-conflict
 /vendor/agent/target
 
 tools/__pycache__/
+openpencil-docs
