@@ -48,6 +48,15 @@ impl WidgetHostNative {
             let mut s = [0u8; 4];
             return self.preview_dispatch_text(c.encode_utf8(&mut s));
         }
+        // Color-picker hex field owns the keyboard while focused.
+        if self.editor_state.color_picker_hex_focused() {
+            if c.is_control() {
+                return false;
+            }
+            self.editor_state.color_picker_hex_char(c);
+            self.mark_dirty();
+            return true;
+        }
         // Settings input owns the keyboard while focused.
         if self.editor_state.editor_ui.agent_settings.focus.is_some() {
             return self.apply_settings_text(c);
@@ -491,6 +500,11 @@ impl WidgetHostNative {
         // the editor selection.
         if self.preview.is_some() {
             return self.preview_dispatch_key("Backspace", false);
+        }
+        if self.editor_state.color_picker_hex_focused() {
+            self.editor_state.color_picker_hex_backspace();
+            self.mark_dirty();
+            return true;
         }
         if self.editor_state.editor_ui.agent_settings.focus.is_some() {
             return self.apply_settings_backspace();
@@ -1195,6 +1209,11 @@ impl WidgetHostNative {
         if self.preview.is_some() {
             return self.preview_dispatch_key("Enter", false);
         }
+        if self.editor_state.color_picker_hex_focused() {
+            self.editor_state.color_picker_blur_hex();
+            self.mark_dirty();
+            return true;
+        }
         if self.editor_state.editor_ui.agent_settings.focus.is_some() {
             self.commit_settings_focus_if_any();
             return true;
@@ -1374,6 +1393,11 @@ impl WidgetHostNative {
         // and returns to the design surface.
         if self.preview.is_some() {
             self.exit_preview();
+            return true;
+        }
+        if self.editor_state.color_picker_hex_focused() {
+            self.editor_state.color_picker_blur_hex();
+            self.mark_dirty();
             return true;
         }
         if self

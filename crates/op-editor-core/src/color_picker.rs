@@ -132,6 +132,8 @@ impl EditorState {
             variable: None,
             variable_theme: None,
             alpha,
+            hex_focused: false,
+            hex_draft: String::new(),
         });
         true
     }
@@ -231,6 +233,8 @@ impl EditorState {
             variable: Some(name),
             variable_theme,
             alpha: 1.0,
+            hex_focused: false,
+            hex_draft: String::new(),
         });
         true
     }
@@ -308,6 +312,80 @@ impl EditorState {
     pub fn color_picker_set_drag(&mut self, drag: Option<ColorPickerDrag>) {
         if let Some(state) = self.ui.color_picker.as_mut() {
             state.drag = drag;
+        }
+    }
+
+    /// Whether the picker's hex field currently has keyboard focus.
+    pub fn color_picker_hex_focused(&self) -> bool {
+        self.ui
+            .color_picker
+            .as_ref()
+            .is_some_and(|s| s.hex_focused)
+    }
+
+    /// Focus the hex field, seeding its draft from the current colour so the
+    /// user edits the live `#RRGGBB`.
+    pub fn color_picker_focus_hex(&mut self) {
+        if let Some(state) = self.ui.color_picker.as_mut() {
+            let (r, g, b) = hsv_to_rgb(state.hue, state.sat, state.val);
+            state.hex_draft = rgb_to_hex(r, g, b);
+            state.hex_focused = true;
+        }
+    }
+
+    /// Append one hex character (or `#`) to the focused hex draft, capped at
+    /// `#RRGGBB`, then live-apply when the draft is a complete colour.
+    pub fn color_picker_hex_char(&mut self, ch: char) {
+        let valid = ch == '#' || ch.is_ascii_hexdigit();
+        let Some(state) = self.ui.color_picker.as_mut() else {
+            return;
+        };
+        if !state.hex_focused || !valid {
+            return;
+        }
+        if !state.hex_draft.starts_with('#') {
+            state.hex_draft.insert(0, '#');
+        }
+        if ch != '#' && state.hex_draft.len() < 7 {
+            state.hex_draft.push(ch.to_ascii_lowercase());
+        }
+        self.color_picker_apply_hex_draft();
+    }
+
+    /// Delete the last hex character.
+    pub fn color_picker_hex_backspace(&mut self) {
+        if let Some(state) = self.ui.color_picker.as_mut() {
+            if state.hex_focused && state.hex_draft.len() > 1 {
+                state.hex_draft.pop();
+                self.color_picker_apply_hex_draft();
+            }
+        }
+    }
+
+    /// Commit + blur the hex field. No-op when the hex field isn't focused (so
+    /// callers can blur unconditionally without re-applying a stale draft).
+    pub fn color_picker_blur_hex(&mut self) {
+        if !self.color_picker_hex_focused() {
+            return;
+        }
+        self.color_picker_apply_hex_draft();
+        if let Some(state) = self.ui.color_picker.as_mut() {
+            state.hex_focused = false;
+        }
+    }
+
+    /// Parse the hex draft and, when it is a valid colour, route it through the
+    /// normal HSV commit so fill / stroke / variable targets all update.
+    fn color_picker_apply_hex_draft(&mut self) {
+        let draft = self
+            .ui
+            .color_picker
+            .as_ref()
+            .map(|s| s.hex_draft.clone())
+            .unwrap_or_default();
+        if let Some((r, g, b)) = parse_hex_rgb(&draft) {
+            let (h, s, v) = rgb_to_hsv((r, g, b));
+            self.color_picker_set_hsv(h, s, v);
         }
     }
 
