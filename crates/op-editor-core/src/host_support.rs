@@ -184,24 +184,27 @@ impl EditorState {
         Some(id)
     }
 
-    /// Insert `node` directly above the current selection — one row up in the
-    /// LayerPanel, which is one step toward the front in z-order (the canvas
-    /// paints children back-to-front via `children.iter().rev()`, so a lower
-    /// index renders in front). Inserts as a sibling in the selection's parent;
-    /// falls back to appending at the page root (back) when nothing is selected.
-    /// Callers select the new node afterwards.
+    /// Insert `node` at the page root, directly above the selection's top-level
+    /// ancestor — one row up in the LayerPanel, which is one step toward the
+    /// front in z-order (the canvas paints children back-to-front via
+    /// `children.iter().rev()`, so a lower index renders in front).
+    ///
+    /// The new node is free-positioned (explicit `x`/`y` at the viewport
+    /// centre), so it is kept at the page root rather than nested into the
+    /// selection's parent: nesting it into a flex/auto-layout frame would
+    /// reflow it away from the cursor (and could detach the selected flow
+    /// child), and nesting into a clipped frame could hide it. Falls back to
+    /// appending at the page root (back) when nothing is selected. Callers
+    /// select the new node afterwards.
     fn insert_node_above_selection(&mut self, node: PenNode) {
         let sel = self.selection.anchor.clone();
         if sel.is_real() {
-            if let Some((parent, idx)) =
-                crate::walkers::find_parent_and_index(self.active_children(), &sel)
+            if let Some(idx) = self
+                .active_children()
+                .iter()
+                .position(|n| crate::walkers::descendant_contains(n, &sel))
             {
-                crate::walkers::insert_into_parent(
-                    self.active_children_mut(),
-                    parent.as_ref(),
-                    Some(idx),
-                    node,
-                );
+                self.active_children_mut().insert(idx, node);
                 return;
             }
         }
