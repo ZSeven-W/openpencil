@@ -266,9 +266,10 @@ pub struct ColorPickerState {
     pub alpha: f32,
     /// Whether the hex field is focused for keyboard editing.
     pub hex_focused: bool,
-    /// The live `#RRGGBB` draft while the hex field is focused (caret is always
-    /// at the end — type to append, backspace to delete).
-    pub hex_draft: String,
+    /// The live `#RRGGBB` edit buffer while the hex field is focused. Renders
+    /// through jian `TextInputView` (same unified input + caret as every other
+    /// chrome field), so the host owns caret / selection / blink here.
+    pub hex_input: jian_core::text_input::TextInputState,
 }
 
 /// Transient variable/theme editor state (spec §5.2).

@@ -25,15 +25,22 @@ pub struct ColorPicker {
     pub theme: Theme,
     /// Right-rail width — drives the picker's horizontal anchor.
     property_panel_width: f32,
+    /// Clock for the hex field's caret blink.
+    now_ms: u64,
 }
 
 impl ColorPicker {
     pub fn for_state(state: &EditorState, picker: ColorPickerState) -> Self {
+        Self::for_state_at(state, picker, 0)
+    }
+
+    pub fn for_state_at(state: &EditorState, picker: ColorPickerState, now_ms: u64) -> Self {
         Self {
             id: WidgetId::new(5100),
             state: picker,
             theme: theme_for(&state.editor_ui),
             property_panel_width: state.editor_ui.property_panel_width,
+            now_ms,
         }
     }
 
@@ -115,8 +122,8 @@ impl Widget for ColorPicker {
             title: target_label(self.state.target),
             eyedropper_icon: Icon::Pencil.paths(),
             close_icon: Icon::Close.paths(),
-            hex_focused: self.state.hex_focused,
-            hex_draft: &self.state.hex_draft,
+            hex_input: self.state.hex_focused.then_some(&self.state.hex_input),
+            now_ms: self.now_ms,
         }
         .paint(
             cx.backend,

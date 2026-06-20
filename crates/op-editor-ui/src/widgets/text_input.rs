@@ -62,6 +62,7 @@ impl Widget for TextInputWidget {
             font_size: self.font_size,
             now_ms: self.now_ms,
             pad_x: self.pad_x,
+            baseline_delta_y: 0.0,
         };
         view.paint(cx.backend, rect, &self.tokens);
     }
