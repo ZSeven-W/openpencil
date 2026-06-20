@@ -134,6 +134,11 @@ pub fn text_action_rects(x0: f32, y: f32, usable_w: f32) -> Vec<(PropertyPanelAc
         + FAMILY_ROW_GAP
         + INPUT_HEIGHT
         + 6.0
+        // The 行高/字间距 caption row sits between the weight/size row and the
+        // LH/LS inputs — paint_text_section + push_text_input_rects both
+        // include it, so the align-row hit anchor must too (else the align
+        // ToggleGroup hit rects drift 14px above where they paint).
+        + LH_LS_LABEL_H
         + INPUT_HEIGHT
         + 8.0
         + ALIGN_LABEL_H;

@@ -707,7 +707,7 @@ mod tests {
                 .round_fills
                 .iter()
                 .any(|(fill, radius, color)| *fill == dropdown
-                    && *radius == 4.0
+                    && *radius == 6.0
                     && *color == expected),
             "pressed kit dropdown should paint shared pressed feedback"
         );
