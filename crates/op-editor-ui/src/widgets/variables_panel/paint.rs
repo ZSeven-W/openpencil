@@ -139,11 +139,18 @@ fn paint_theme_header(panel: &VariablesPanel, cx: &mut PaintCx<'_>, rect: Rect) 
         .iter()
         .map(|l| panel.theme_tab_hit_width(l) + 8.0)
         .collect();
+    // Advance with the SAME per-label fn the hit walker (theme_tab_rect) uses,
+    // so paint + hit can't drift — even for the inline-rename tab, whose advance
+    // differs from width+gap.
+    let advances: Vec<f32> = labels
+        .iter()
+        .map(|l| panel.theme_tab_advance_width(l))
+        .collect();
     let tab_rects = jian_widgets::components::tabs::Tabs::content_rects(
         Point2D::new(rect.origin.x + PAD_X - 4.0, rect.origin.y + 6.0),
         &widths,
+        &advances,
         32.0,
-        2.0,
         0.0,
     );
     let active_idx = labels.iter().position(|l| *l == active_axis).unwrap_or(0);
