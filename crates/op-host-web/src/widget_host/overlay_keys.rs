@@ -26,6 +26,8 @@ impl WidgetHost {
         self.editor_state.editor_ui.icon_picker_search.push(c);
         self.editor_state.editor_ui.icon_picker.hover = None;
         self.editor_state.editor_ui.icon_picker.pressed = None;
+        // New filter → scroll the list back to the top.
+        self.editor_state.editor_ui.icon_picker.scroll.offset = 0.0;
         self.mark_dirty();
         Some(true)
     }
@@ -41,6 +43,8 @@ impl WidgetHost {
             self.editor_state.editor_ui.icon_picker_select_all = false;
             self.editor_state.editor_ui.icon_picker.hover = None;
             self.editor_state.editor_ui.icon_picker.pressed = None;
+            // Filter changed → scroll the list back to the top.
+            self.editor_state.editor_ui.icon_picker.scroll.offset = 0.0;
             self.mark_dirty();
             return Some(true);
         }
@@ -53,6 +57,8 @@ impl WidgetHost {
         {
             self.editor_state.editor_ui.icon_picker.hover = None;
             self.editor_state.editor_ui.icon_picker.pressed = None;
+            // Filter changed → scroll the list back to the top.
+            self.editor_state.editor_ui.icon_picker.scroll.offset = 0.0;
             self.mark_dirty();
             return Some(true);
         }

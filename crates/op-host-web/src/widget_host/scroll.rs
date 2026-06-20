@@ -97,6 +97,39 @@ impl WidgetHost {
         true
     }
 
+    /// Scroll the open icon picker's list when the pointer is over its panel.
+    /// The picker loads up to 120 local + remote icons — far more than fit — so
+    /// the list must scroll. Mirrors the native host.
+    pub(in crate::widget_host) fn try_scroll_icon_picker(
+        &mut self,
+        x: f32,
+        y: f32,
+        delta_y: f32,
+        viewport_width: f32,
+        viewport_height: f32,
+    ) -> bool {
+        if !self.editor_state.editor_ui.icon_picker.open {
+            return false;
+        }
+        use op_editor_ui::widgets::icon_picker_panel::IconPickerPanel;
+        let Some(rect) = self.icon_picker_panel_rect(viewport_width, viewport_height) else {
+            return false;
+        };
+        if !(rect).contains(Point2D::new(x, y)) {
+            return false;
+        }
+        if let Some(panel) = IconPickerPanel::for_editor(&self.editor_state) {
+            let max = panel.icon_picker_max_scroll(rect);
+            let scroll = &mut self.editor_state.editor_ui.icon_picker.scroll;
+            let next = (scroll.offset - delta_y).clamp(0.0, max);
+            if next != scroll.offset {
+                scroll.offset = next;
+                self.mark_dirty();
+            }
+        }
+        true
+    }
+
     /// Scroll the right-rail PropertyPanel when a wheel lands over
     /// it. Returns `true` when the cursor was over the inspector.
     pub(in crate::widget_host) fn try_scroll_property_panel(
