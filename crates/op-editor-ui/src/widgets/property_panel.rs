@@ -813,6 +813,66 @@ fn live_codegen_target_ids(state: &EditorState) -> Vec<String> {
         .collect()
 }
 
+/// L/R padding around a fit-content action-button hover wash (④) so the
+/// highlight isn't flush against the checkbox/icon it hugs.
+const ACTION_WASH_PAD_X: f32 = 6.0;
+
+/// Shrink the hover/press wash for the Size checkboxes and the alignment
+/// segmented buttons to hug their visible content (checkbox + label, or the
+/// centred icon) plus a little L/R padding — instead of washing the full
+/// half-width / full cell the walker rect spans. Every other action keeps its
+/// walker rect. Only the painted highlight shrinks; the hit target (the walker
+/// rect the host hovers + clicks) is unchanged.
+pub(super) fn action_wash_rect(
+    action: &PropertyPanelAction,
+    r: Rect,
+    labels: &sections::PropertyLabels,
+    backend: &mut dyn crate::RenderBackend,
+) -> Rect {
+    let size_label = match action {
+        PropertyPanelAction::ToggleSizeFillWidth => Some(labels.fill_width),
+        PropertyPanelAction::ToggleSizeFillHeight => Some(labels.fill_height),
+        PropertyPanelAction::ToggleSizeHugWidth => Some(labels.hug_width),
+        PropertyPanelAction::ToggleSizeHugHeight => Some(labels.hug_height),
+        PropertyPanelAction::ToggleSizeClipContent => Some(labels.clip_content),
+        _ => None,
+    };
+    if let Some(label) = size_label {
+        // `paint_check_row` paints a 16px box at `r.origin.x` then the label
+        // 22px further right at font-size 12 — so the content runs from the
+        // box's left edge to the label's right edge. The left padding spills
+        // into the gutter / inter-column gap (both empty), but the right edge
+        // is clamped to the cell so a long localized label can't wash over the
+        // adjacent column.
+        let cell_right = r.origin.x + r.size.x;
+        let content_right = r.origin.x + 22.0 + backend.measure_text(label, 12.0);
+        let left = r.origin.x - ACTION_WASH_PAD_X;
+        let right = (content_right + ACTION_WASH_PAD_X).min(cell_right);
+        return Rect {
+            origin: Point2D::new(left, r.origin.y),
+            size: Point2D::new((right - left).max(0.0), r.size.y),
+        };
+    }
+    if matches!(
+        action,
+        PropertyPanelAction::SetTextAlign(_) | PropertyPanelAction::SetTextVerticalAlign(_)
+    ) {
+        // Icon-only segmented cell — the jian ToggleGroup centres a ~16px glyph
+        // in the cell, so hug that glyph rather than the whole cell. Align cells
+        // are adjacent (no gap), so clamp the pill within the cell so it can't
+        // bleed into the neighbouring button.
+        const ICON_W: f32 = 16.0;
+        let center_x = r.origin.x + r.size.x / 2.0;
+        let left = (center_x - ICON_W / 2.0 - ACTION_WASH_PAD_X).max(r.origin.x);
+        let right = (center_x + ICON_W / 2.0 + ACTION_WASH_PAD_X).min(r.origin.x + r.size.x);
+        return Rect {
+            origin: Point2D::new(left, r.origin.y),
+            size: Point2D::new((right - left).max(0.0), r.size.y),
+        };
+    }
+    r
+}
+
 impl Widget for PropertyPanel {
     fn id(&self) -> WidgetId {
         self.id
@@ -1180,11 +1240,12 @@ impl Widget for PropertyPanel {
                 self.padding_mode_popover_open,
             );
             if let Some(i) = self.action_hover {
-                if let Some((_, r)) = rects.get(i) {
+                if let Some((action, r)) = rects.get(i) {
+                    let wash = action_wash_rect(action, *r, &self.labels, cx.backend);
                     paint_button_feedback_wash(
                         cx.backend,
                         &self.theme,
-                        *r,
+                        wash,
                         6.0,
                         true,
                         self.action_pressed == Some(i),
@@ -1193,8 +1254,9 @@ impl Widget for PropertyPanel {
             }
             if let Some(i) = self.action_pressed {
                 if self.action_hover != Some(i) {
-                    if let Some((_, r)) = rects.get(i) {
-                        paint_button_feedback_wash(cx.backend, &self.theme, *r, 6.0, false, true);
+                    if let Some((action, r)) = rects.get(i) {
+                        let wash = action_wash_rect(action, *r, &self.labels, cx.backend);
+                        paint_button_feedback_wash(cx.backend, &self.theme, wash, 6.0, false, true);
                     }
                 }
             }

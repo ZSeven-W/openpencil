@@ -812,3 +812,86 @@ fn axis_chip_table_mirrors_active_theme_btree_order() {
     assert_eq!(p.chips[0].axis, "a-axis");
     assert_eq!(p.chips[1].axis, "z-axis");
 }
+
+// ── fit-content hover wash (#26 variant header + #3 add-variable footer) ─────
+//
+// Both the variant-header value (`Default v`) and the footer `+ <label> v`
+// button sit inside a much wider hit target, but their hover highlight should
+// hug just the visible content (+ small L/R padding) rather than washing the
+// whole cell / footer width.
+
+#[test]
+fn variant_header_hover_wash_hugs_value_not_full_column() {
+    let mut s = EditorState::new();
+    s.editor_ui.variables_panel_hover = Some(VariablesPanelButton::VariantHeader(0));
+    let p = VariablesPanel::for_editor(&s);
+    let rect = Rect {
+        origin: Point2D::new(0.0, 0.0),
+        size: Point2D::new(VARIABLES_PANEL_WIDTH, 480.0),
+    };
+    let mut backend = TextCaptureBackend::default();
+    let mut cx = PaintCx {
+        backend: &mut backend,
+    };
+
+    p.paint(&mut cx, rect);
+
+    let theme = p.theme;
+    let wash = backend
+        .round_fills
+        .iter()
+        .find(|(_, _, color)| color_eq(*color, theme.button_hover))
+        .map(|(r, _, _)| *r)
+        .expect("hovered variant header should paint a button_hover wash");
+    // "Default" ≈ 7 ASCII chars @13px ≈ 50px → wash hugs value + chevron +
+    // padding (~80px), far under the >=156px value-column cell.
+    assert!(
+        wash.size.x < 110.0,
+        "variant-header wash should hug `value v`, got {}",
+        wash.size.x
+    );
+}
+
+#[test]
+fn footer_add_variable_hover_wash_left_aligned_and_hugs_content() {
+    let mut s = EditorState::new();
+    // Short CJK label → fit-content pill is clearly narrower than the button.
+    s.editor_ui.locale = Locale::ZhCn;
+    s.editor_ui.variables_panel_hover = Some(VariablesPanelButton::AddVariable);
+    let p = VariablesPanel::for_editor(&s);
+    let rect = Rect {
+        origin: Point2D::new(0.0, 0.0),
+        size: Point2D::new(VARIABLES_PANEL_WIDTH, 480.0),
+    };
+    let mut backend = TextCaptureBackend::default();
+    let mut cx = PaintCx {
+        backend: &mut backend,
+    };
+
+    p.paint(&mut cx, rect);
+
+    let theme = p.theme;
+    let button = add_variable_rect(rect);
+    let wash = backend
+        .round_fills
+        .iter()
+        .find(|(_, _, color)| color_eq(*color, theme.button_hover))
+        .map(|(r, _, _)| *r)
+        .expect("hovered add-variable footer should paint a button_hover wash");
+    // Pill is flush with the footer's (and rows') left edge — no centering gap.
+    assert!(
+        (wash.origin.x - button.origin.x).abs() < 0.01,
+        "footer wash should be left-aligned with the button, got {} vs {}",
+        wash.origin.x,
+        button.origin.x
+    );
+    // …hugs the `+ label v` content, well under the full 164px button…
+    assert!(
+        wash.size.x < button.size.x - 20.0,
+        "footer wash should hug content, got {} vs button {}",
+        wash.size.x,
+        button.size.x
+    );
+    // …and stays inside the footer button bounds.
+    assert!(wash.origin.x + wash.size.x <= button.origin.x + button.size.x + 0.01);
+}

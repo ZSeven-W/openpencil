@@ -7,7 +7,7 @@
 
 use crate::theme::Theme;
 use crate::widgets::editor_state_ext::{theme_for, translate};
-use crate::widgets::icons::Icon;
+use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
 use crate::{Color, Point2D, Rect};
 use op_editor_core::editor_ui_state::EditorUiState;
@@ -644,9 +644,52 @@ pub(super) fn paint_hover_bg(
     crate::widgets::button::paint_ghost_button_feedback(cx.backend, theme, rect, hovered, pressed)
 }
 
+/// Folder / globe compound icon button — a leading glyph + a trailing
+/// chevron-down inside one hit-target. Coloured like the sibling icon buttons
+/// (`muted_foreground` at rest, `foreground` on hover/press) via the shared
+/// ghost feedback, instead of jian `SelectTrigger`'s always-`foreground` icon.
+/// Geometry mirrors `SelectTrigger` (PAD_X = 8, 14px chevron) so the glyphs
+/// don't shift.
+pub(super) fn paint_compound_icon_button(
+    cx: &mut PaintCx<'_>,
+    theme: &Theme,
+    button_rect: Rect,
+    icon: Icon,
+    hovered: bool,
+    pressed: bool,
+) {
+    const PAD_X: f32 = 8.0;
+    const CHEVRON: f32 = 14.0;
+    let color = paint_hover_bg(cx, theme, button_rect, hovered, pressed);
+    // Leading glyph (SelectTrigger sized its icon `font_size + 1`), centred.
+    let glyph = ICON_SIZE + 1.0;
+    draw_icon(
+        cx.backend,
+        icon,
+        Point2D::new(
+            button_rect.origin.x + PAD_X,
+            button_rect.origin.y + (button_rect.size.y - glyph) / 2.0,
+        ),
+        glyph,
+        color,
+        1.5,
+    );
+    // Trailing chevron-down, right-aligned.
+    draw_icon(
+        cx.backend,
+        Icon::ChevronDown,
+        Point2D::new(
+            button_rect.origin.x + button_rect.size.x - PAD_X - CHEVRON,
+            button_rect.origin.y + (button_rect.size.y - CHEVRON) / 2.0,
+        ),
+        CHEVRON,
+        color,
+        1.5,
+    );
+}
+
 /// File-menu compound: folder glyph + tighter chevron, both inside
-/// a single 46×28 hit-target. The chevron gap is ~4 px instead of
-/// ICON_BUTTON-wide as it used to render.
+/// a single 46×28 hit-target.
 pub(super) fn paint_file_menu_button(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
@@ -659,21 +702,7 @@ pub(super) fn paint_file_menu_button(
         origin: Point2D::new(x, center_y - ICON_BUTTON / 2.0),
         size: Point2D::new(FILE_MENU_BUTTON_WIDTH, ICON_BUTTON),
     };
-    jian_widgets::components::select_trigger::SelectTrigger {
-        icon_paths: Some(Icon::FolderOpen.paths()),
-        label: "",
-        placeholder: "",
-        hovered,
-        pressed,
-        enabled: true,
-        font_size: ICON_SIZE,
-        bordered: false,
-    }
-    .paint(
-        cx.backend,
-        button_rect,
-        &crate::widgets::button::tokens_from_theme(theme),
-    );
+    paint_compound_icon_button(cx, theme, button_rect, Icon::FolderOpen, hovered, pressed);
 }
 
 pub(super) fn paint_figma_button(
@@ -900,6 +929,84 @@ mod tests {
         assert!(
             nearly_eq(icon_center, hover_center),
             "icon-only git button should center the branch glyph in its hover rect"
+        );
+    }
+
+    // Captures the colour every glyph (folder/globe + chevron) is stroked with,
+    // so the compound icon button's rest/hover colours can be asserted.
+    #[derive(Default)]
+    struct SvgColorCapture {
+        svgs: Vec<Color>,
+    }
+
+    impl crate::RenderBackend for SvgColorCapture {
+        fn begin_frame(&mut self) {}
+        fn end_frame(&mut self) {}
+        fn fill_rect(&mut self, _: Rect, _: Color) {}
+        fn stroke_rect(&mut self, _: Rect, _: Color, _: f32) {}
+        fn draw_text(&mut self, _: &crate::TextLayout, _: Point2D) {}
+        fn clip_rect(&mut self, _: Rect) {}
+        fn stroke_line(&mut self, _: Point2D, _: Point2D, _: Color, _: f32) {}
+        fn fill_round_rect(&mut self, _: Rect, _: f32, _: Color) {}
+        fn stroke_round_rect(&mut self, _: Rect, _: f32, _: Color, _: f32) {}
+        fn stroke_svg_path(&mut self, _: &str, _: Point2D, _: f32, color: Color, _: f32) {
+            self.svgs.push(color);
+        }
+        fn save(&mut self) {}
+        fn restore(&mut self) {}
+        fn translate(&mut self, _: Point2D) {}
+        fn resize(&mut self, _: u32, _: u32) {}
+        fn dpi_scale(&self) -> f32 {
+            1.0
+        }
+    }
+
+    fn color_eq(a: Color, b: Color) -> bool {
+        (a.r - b.r).abs() < 0.001
+            && (a.g - b.g).abs() < 0.001
+            && (a.b - b.b).abs() < 0.001
+            && (a.a - b.a).abs() < 0.001
+    }
+
+    #[test]
+    fn compound_icon_button_grays_at_rest_and_darkens_on_hover() {
+        let theme = Theme::dark();
+        let rect = Rect {
+            origin: Point2D::new(0.0, 0.0),
+            size: Point2D::new(FILE_MENU_BUTTON_WIDTH, ICON_BUTTON),
+        };
+
+        // Rest → muted_foreground (same as the sibling icon buttons).
+        let mut rest = SvgColorCapture::default();
+        paint_compound_icon_button(
+            &mut PaintCx { backend: &mut rest },
+            &theme,
+            rect,
+            Icon::FolderOpen,
+            false,
+            false,
+        );
+        assert!(!rest.svgs.is_empty(), "compound button should stroke glyphs");
+        assert!(
+            rest.svgs.iter().all(|c| color_eq(*c, theme.muted_foreground)),
+            "folder + chevron should be muted (grayed) at rest"
+        );
+
+        // Hover → foreground (darkens, like the other top-bar icons).
+        let mut hover = SvgColorCapture::default();
+        paint_compound_icon_button(
+            &mut PaintCx {
+                backend: &mut hover,
+            },
+            &theme,
+            rect,
+            Icon::FolderOpen,
+            true,
+            false,
+        );
+        assert!(
+            hover.svgs.iter().all(|c| color_eq(*c, theme.foreground)),
+            "folder + chevron should darken to foreground on hover"
         );
     }
 }

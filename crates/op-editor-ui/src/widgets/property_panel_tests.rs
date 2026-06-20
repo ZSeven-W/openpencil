@@ -749,3 +749,6 @@ fn no_stroke_swatch_defaults_to_slate_not_black() {
     assert_eq!(hex, "#374151");
     assert_ne!(hex, "#000000");
 }
+
+// ④ fit-content hover-wash tests (`action_wash_rect`) live in the sibling
+// `property_panel_wash_tests.rs` to keep this file under the 800-line cap.

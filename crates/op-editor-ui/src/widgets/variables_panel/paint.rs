@@ -13,6 +13,12 @@ const INPUT_PADDING_X: f32 = 8.0;
 const VALUE_INPUT_MIN_WIDTH: f32 = 96.0;
 const VALUE_INPUT_MAX_WIDTH: f32 = 160.0;
 const FOOTER_CHEVRON_LABEL_GAP: f32 = 12.0;
+/// L/R padding added around a fit-content hover wash (variant-header value) so
+/// the highlight hugs `label v` without sitting flush against the glyphs.
+const HOVER_WASH_PAD_X: f32 = 6.0;
+/// Left-aligned inset of the footer `+ <label> v` content (and the symmetric
+/// padding of its hover pill) from the add-variable button's left edge.
+const FOOTER_CONTENT_INSET: f32 = 8.0;
 
 fn paint_feedback(
     panel: &VariablesPanel,
@@ -253,13 +259,6 @@ fn paint_variant_header(
     let col_w = variant_column_width(rect, variants.len());
     for (idx, variant) in variants.iter().enumerate() {
         let x = value_x + col_w * idx as f32;
-        paint_feedback(
-            panel,
-            cx,
-            VariablesPanelButton::VariantHeader(idx),
-            panel.variant_header_rect(rect, idx),
-            8.0,
-        );
         if panel.renaming_variant.as_deref() == Some(*variant) {
             let input_state = panel.rename_text_input(RenameTarget::Variant(variant));
             let value = input_state.map(|input| input.text()).unwrap_or(variant);
@@ -277,6 +276,18 @@ fn paint_variant_header(
                 panel.now_ms,
             );
         } else {
+            let variant_width = cx.backend.measure_text(variant, 13.0);
+            // Hover/press wash hugs `value v` (+ small L/R padding) instead of
+            // washing the whole value-column cell. The hit target stays the
+            // wider `variant_header_rect` so the trigger is still easy to click.
+            let wash = Rect {
+                origin: Point2D::new(x - HOVER_WASH_PAD_X, header_bottom + 4.0),
+                size: Point2D::new(
+                    variant_width + 6.0 + 11.0 + HOVER_WASH_PAD_X * 2.0,
+                    30.0,
+                ),
+            };
+            paint_feedback(panel, cx, VariablesPanelButton::VariantHeader(idx), wash, 8.0);
             paint_text(
                 cx,
                 variant,
@@ -285,7 +296,6 @@ fn paint_variant_header(
                 x,
                 header_bottom + 23.0,
             );
-            let variant_width = cx.backend.measure_text(variant, 13.0);
             draw_icon(
                 cx.backend,
                 Icon::ChevronDown,
@@ -605,13 +615,22 @@ fn paint_footer(
     let label_size = 14.0;
     let chevron_size = 12.0;
     let label_w = cx.backend.measure_text(labels.add_variable, label_size);
-    // Wash uses the FULL button rect so it matches the hit target (geometry's
-    // `add_variable_rect`); the `+ <label> v` content is centered within it so
-    // it isn't flush-left against the wash edge.
-    paint_feedback(panel, cx, VariablesPanelButton::AddVariable, button, 8.0);
     let content_w = icon_size + 12.0 + label_w + FOOTER_CHEVRON_LABEL_GAP + chevron_size;
-    let left_pad = ((button.size.x - content_w) / 2.0).max(8.0);
-    let icon_x = button.origin.x + left_pad;
+    // Left-align the `+ <label> v` content to the footer's left edge — it used
+    // to be centered, which floated the button (and its hover pill) ~20px in
+    // from the panel's left. The hover wash hugs the content with a small
+    // symmetric inset and starts flush with the rows above.
+    let icon_x = button.origin.x + FOOTER_CONTENT_INSET;
+    let wash = Rect {
+        origin: button.origin,
+        // Clamp to the button so a long localized label can't wash past the
+        // (fixed-width) hit target.
+        size: Point2D::new(
+            (content_w + FOOTER_CONTENT_INSET * 2.0).min(button.size.x),
+            button.size.y,
+        ),
+    };
+    paint_feedback(panel, cx, VariablesPanelButton::AddVariable, wash, 8.0);
     let label_x = icon_x + icon_size + 12.0;
     let label_baseline_y = center_y + 5.0;
     let chevron_x = label_x + label_w + FOOTER_CHEVRON_LABEL_GAP;

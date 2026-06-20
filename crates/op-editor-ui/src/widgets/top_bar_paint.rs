@@ -278,20 +278,13 @@ impl TopBar {
             origin: Point2D::new(rx, center_y - ICON_BUTTON / 2.0),
             size: Point2D::new(GLOBE_BUTTON_WIDTH, ICON_BUTTON),
         };
-        jian_widgets::components::select_trigger::SelectTrigger {
-            icon_paths: Some(Icon::Globe.paths()),
-            label: "",
-            placeholder: "",
-            hovered: self.is_hovered(TopBarButton::ToggleLocale),
-            pressed: self.is_pressed(TopBarButton::ToggleLocale),
-            enabled: true,
-            font_size: ICON_SIZE,
-            bordered: false,
-        }
-        .paint(
-            cx.backend,
+        paint_compound_icon_button(
+            cx,
+            &self.theme,
             globe_button,
-            &crate::widgets::button::tokens_from_theme(&self.theme),
+            Icon::Globe,
+            self.is_hovered(TopBarButton::ToggleLocale),
+            self.is_pressed(TopBarButton::ToggleLocale),
         );
         // `rx` now points at the LEFT edge of the globe button —
         // the chip anchors immediately to its left (small gap).
