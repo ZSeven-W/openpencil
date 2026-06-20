@@ -558,8 +558,16 @@ fn paint_fill_gradient_body(
             origin: Point2D::new(hex_rect.origin.x + 6.0, hex_rect.origin.y + 5.0),
             size: Point2D::new(16.0, 16.0),
         };
-        paint_alpha_checker(cx, swatch, 3.0);
-        cx.backend.fill_round_rect(swatch, 3.0, stop.color);
+        jian_widgets::components::swatch::Swatch {
+            color: stop.color,
+            radius: 3.0,
+            border: false,
+        }
+        .paint(
+            cx.backend,
+            swatch,
+            &crate::widgets::button::tokens_from_theme(theme),
+        );
         // Display only `#RRGGBB` — the swatch on the left already
         // conveys per-stop transparency. Alpha is preserved at
         // commit time, so the user never types raw alpha digits.
@@ -733,50 +741,4 @@ pub fn stop_hex_rgb_only(hex: &str) -> String {
         stripped
     };
     format!("#{}", body.to_uppercase())
-}
-
-/// Public re-export so sibling widget modules (e.g. the effects
-/// section's colour row) can reuse the same alpha-aware swatch
-/// background without duplicating the geometry.
-pub fn paint_alpha_checker_public(cx: &mut PaintCx<'_>, rect: Rect, radius: f32) {
-    paint_alpha_checker(cx, rect, radius);
-}
-
-/// Paint a 2×2 light/dark checker behind a colour swatch so a
-/// partially or fully transparent fill reads as "transparent"
-/// instead of looking like the input pill's background. The
-/// caller paints the (possibly translucent) stop colour on top.
-fn paint_alpha_checker(cx: &mut PaintCx<'_>, rect: Rect, radius: f32) {
-    let light = Color {
-        r: 0.95,
-        g: 0.95,
-        b: 0.95,
-        a: 1.0,
-    };
-    let dark = Color {
-        r: 0.78,
-        g: 0.78,
-        b: 0.78,
-        a: 1.0,
-    };
-    cx.backend.fill_round_rect(rect, radius, light);
-    let hx = rect.size.x / 2.0;
-    let hy = rect.size.y / 2.0;
-    // Skia has no clipped round-rect for sub-rect fills, so paint
-    // the two darker quadrants as plain rects — the surrounding
-    // light fill already supplies the rounded silhouette.
-    cx.backend.fill_rect(
-        Rect {
-            origin: Point2D::new(rect.origin.x + hx, rect.origin.y),
-            size: Point2D::new(hx, hy),
-        },
-        dark,
-    );
-    cx.backend.fill_rect(
-        Rect {
-            origin: Point2D::new(rect.origin.x, rect.origin.y + hy),
-            size: Point2D::new(hx, hy),
-        },
-        dark,
-    );
 }

@@ -240,8 +240,16 @@ fn paint_effect_color_row(cx: &mut PaintCx<'_>, theme: &Theme, color: Color, rec
         origin: Point2D::new(rect.origin.x + 38.0, rect.origin.y + 7.0),
         size: Point2D::new(16.0, 16.0),
     };
-    super::property_panel_fill::paint_alpha_checker_public(cx, swatch, 3.0);
-    cx.backend.fill_round_rect(swatch, 3.0, color);
+    jian_widgets::components::swatch::Swatch {
+        color,
+        radius: 3.0,
+        border: false,
+    }
+    .paint(
+        cx.backend,
+        swatch,
+        &crate::widgets::button::tokens_from_theme(theme),
+    );
     // `rgba(r,g,b,a)` text after the swatch — matches the spec.
     let text = format!(
         "rgba({},{},{},{:.2})",
