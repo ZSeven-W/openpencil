@@ -264,6 +264,11 @@ pub struct ColorPickerState {
     /// stroke / variable targets always seed `1.0` because their
     /// alpha lives in a separate opacity field.
     pub alpha: f32,
+    /// Whether the hex field is focused for keyboard editing.
+    pub hex_focused: bool,
+    /// The live `#RRGGBB` draft while the hex field is focused (caret is always
+    /// at the end — type to append, backspace to delete).
+    pub hex_draft: String,
 }
 
 /// Transient variable/theme editor state (spec §5.2).

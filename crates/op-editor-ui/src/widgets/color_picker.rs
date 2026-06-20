@@ -115,6 +115,8 @@ impl Widget for ColorPicker {
             title: target_label(self.state.target),
             eyedropper_icon: Icon::Pencil.paths(),
             close_icon: Icon::Close.paths(),
+            hex_focused: self.state.hex_focused,
+            hex_draft: &self.state.hex_draft,
         }
         .paint(
             cx.backend,
