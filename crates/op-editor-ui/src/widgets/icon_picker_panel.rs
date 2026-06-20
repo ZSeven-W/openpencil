@@ -197,24 +197,57 @@ impl<'a> IconPickerPanel<'a> {
             return Some(IconPickerHit::DragHeader);
         }
         let list_top = Self::list_top(panel);
-        if point.y >= list_top {
-            let row = ((point.y - list_top) / ROW_H) as usize;
-            let capacity = Self::visible_row_capacity(panel);
-            let has_more = self.has_load_more();
-            let item_cap = capacity.saturating_sub(usize::from(has_more));
-            let items = self.rows(item_cap);
-            if row < items.len() {
-                let item = &items[row];
-                return Some(IconPickerHit::SelectIcon {
-                    collection: item.collection().to_string(),
-                    name: item.name().to_string(),
-                });
-            }
-            if has_more && row == items.len() && !self.state.editor_ui.icon_picker_remote.loading {
-                return Some(IconPickerHit::LoadMore);
+        if Self::list_viewport(panel).contains(point) {
+            // Row index accounts for the wheel scroll offset (paint applies the
+            // same shift), so a click lands on the row under the cursor.
+            let scroll = self
+                .state
+                .editor_ui
+                .icon_picker
+                .scroll
+                .offset
+                .clamp(0.0, self.icon_picker_max_scroll(panel));
+            let rel = point.y - list_top + scroll;
+            if rel >= 0.0 {
+                let row = (rel / ROW_H) as usize;
+                let all = self.rows(LOCAL_LIMIT);
+                let has_more = self.has_load_more();
+                if row < all.len() {
+                    let item = &all[row];
+                    return Some(IconPickerHit::SelectIcon {
+                        collection: item.collection().to_string(),
+                        name: item.name().to_string(),
+                    });
+                }
+                if has_more
+                    && row == all.len()
+                    && !self.state.editor_ui.icon_picker_remote.loading
+                {
+                    return Some(IconPickerHit::LoadMore);
+                }
             }
         }
         Some(IconPickerHit::Inside)
+    }
+
+    /// The scrollable list area below the search box.
+    fn list_viewport(panel: Rect) -> Rect {
+        let top = Self::list_top(panel);
+        Rect {
+            origin: Point2D::new(panel.origin.x, top),
+            size: Point2D::new(
+                panel.size.x,
+                (panel.origin.y + panel.size.y - PAD - top).max(0.0),
+            ),
+        }
+    }
+
+    /// Max wheel-scroll offset — how far the loaded rows (+ load-more) overflow
+    /// the list viewport. `0` when everything fits.
+    pub fn icon_picker_max_scroll(&self, panel: Rect) -> f32 {
+        let count = self.rows(LOCAL_LIMIT).len() + usize::from(self.has_load_more());
+        let content = count as f32 * ROW_H;
+        (content - Self::list_viewport(panel).size.y).max(0.0)
     }
 
     pub fn paint(&self, cx: &mut PaintCx<'_>, panel: Rect) {
@@ -224,20 +257,43 @@ impl<'a> IconPickerPanel<'a> {
         self.paint_header(cx, panel);
         self.paint_search(cx, panel);
 
-        let rows = Self::visible_row_capacity(panel);
+        let all = self.rows(LOCAL_LIMIT);
         let has_more = self.has_load_more();
-        let item_cap = rows.saturating_sub(usize::from(has_more));
-        let filtered = self.rows(item_cap);
-        if filtered.is_empty() && !has_more {
+        if all.is_empty() && !has_more {
             self.paint_empty(cx, panel);
             return;
         }
-        for (idx, item) in filtered.iter().enumerate() {
-            self.paint_row(cx, panel, idx, item);
+        // Scrollable list: paint every loaded row shifted by the wheel offset,
+        // clipped to the viewport, culling rows outside it (load-more last).
+        let viewport = Self::list_viewport(panel);
+        let list_top = Self::list_top(panel);
+        let scroll = self
+            .state
+            .editor_ui
+            .icon_picker
+            .scroll
+            .offset
+            .clamp(0.0, self.icon_picker_max_scroll(panel));
+        let viewport_bottom = viewport.origin.y + viewport.size.y;
+        cx.backend.save();
+        cx.backend.clip_rect(viewport);
+        for (idx, item) in all.iter().enumerate() {
+            let y = list_top - scroll + idx as f32 * ROW_H;
+            if y + ROW_H <= viewport.origin.y {
+                continue;
+            }
+            if y >= viewport_bottom {
+                break;
+            }
+            self.paint_row(cx, panel, y, idx, item);
         }
-        if has_more && rows > 0 {
-            self.paint_load_more(cx, panel, filtered.len());
+        if has_more {
+            let y = list_top - scroll + all.len() as f32 * ROW_H;
+            if y + ROW_H > viewport.origin.y && y < viewport_bottom {
+                self.paint_load_more(cx, panel, y);
+            }
         }
+        cx.backend.restore();
     }
 
     fn paint_header(&self, cx: &mut PaintCx<'_>, panel: Rect) {
@@ -321,8 +377,7 @@ impl<'a> IconPickerPanel<'a> {
         );
     }
 
-    fn paint_row(&self, cx: &mut PaintCx<'_>, panel: Rect, idx: usize, item: &IconRow<'_>) {
-        let y = Self::list_top(panel) + idx as f32 * ROW_H;
+    fn paint_row(&self, cx: &mut PaintCx<'_>, panel: Rect, y: f32, idx: usize, item: &IconRow<'_>) {
         let row = Rect {
             origin: Point2D::new(panel.origin.x + 6.0, y),
             size: Point2D::new(panel.size.x - 12.0, ROW_H),
@@ -374,8 +429,7 @@ impl<'a> IconPickerPanel<'a> {
             .draw_text(&text, Point2D::new(row.origin.x + 38.0, y + 21.0));
     }
 
-    fn paint_load_more(&self, cx: &mut PaintCx<'_>, panel: Rect, idx: usize) {
-        let y = Self::list_top(panel) + idx as f32 * ROW_H;
+    fn paint_load_more(&self, cx: &mut PaintCx<'_>, panel: Rect, y: f32) {
         let row = Rect {
             origin: Point2D::new(panel.origin.x + 6.0, y + 2.0),
             size: Point2D::new(panel.size.x - 12.0, ROW_H - 4.0),
