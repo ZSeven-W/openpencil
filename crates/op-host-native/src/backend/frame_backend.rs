@@ -284,4 +284,8 @@ impl<'a> RenderBackend for NativeFrameBackend<'a> {
         self.inner
             .measure_text_styled(text, font_size, weight, italic)
     }
+
+    fn measure_text_family(&mut self, text: &str, font_size: f32, family: &str) -> f32 {
+        self.inner.measure_text_family(text, font_size, family)
+    }
 }
