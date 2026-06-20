@@ -29,16 +29,12 @@ pub(super) fn paint_agent_card(
     card: Rect,
     index: usize,
 ) {
-    let outlined = matches!(provider, AgentProvider::ClaudeCode);
     let card_hovered = settings.hover_provider == index;
-    // Chrome via jian Card; the fill choice stays caller-side so the look is
-    // preserved exactly: outlined ClaudeCode -> muted, hover -> accent wash,
-    // else transparent. The whole-card hover wash keeps the row reading as
-    // "pointing at this card" rather than only the trailing button.
-    let fill = if outlined {
-        Some(theme.muted)
-    } else if card_hovered {
-        Some(theme.accent)
+    // Every provider card looks the same: transparent by default + a single
+    // jian-standard `button_hover` wash on hover (no per-provider special fill),
+    // so hovering any card reads identically.
+    let fill = if card_hovered {
+        Some(theme.button_hover)
     } else {
         None
     };
