@@ -7,9 +7,7 @@
 use crate::theme::Theme;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::property_panel::{EffectSummary, PropertyPanelAction};
-use crate::widgets::property_panel_inputs::{
-    paint_section_label, INPUT_HEIGHT, INPUT_RADIUS, PAD_X,
-};
+use crate::widgets::property_panel_inputs::{paint_section_label, INPUT_HEIGHT, PAD_X};
 use crate::widgets::property_panel_layout::{
     action_button_rects_with_fill_picker, VisibleSections,
 };
@@ -89,19 +87,16 @@ pub fn paint_export_section(
         origin: Point2D::new(x + PAD_X, y),
         size: Point2D::new(usable_w, INPUT_HEIGHT),
     };
-    cx.backend.fill_round_rect(btn, INPUT_RADIUS, theme.primary);
-    let tw = cx.backend.measure_text(labels.export, 13.0);
-    let lbl = TextLayout::single_run(
-        labels.export,
-        "system-ui",
-        13.0,
-        (theme.primary_foreground).to_jian(),
-        Point2D::new(0.0, 0.0),
-    );
-    cx.backend.draw_text(
-        &lbl,
-        Point2D::new(btn.origin.x + (btn.size.x - tw) / 2.0, btn.origin.y + 19.0),
-    );
+    jian_widgets::components::button::Button {
+        label: labels.export,
+        icon_d: None,
+        variant: jian_widgets::components::button::ButtonVariant::Primary,
+        enabled: true,
+        hovered: false,
+        pressed: false,
+        font_size: 13.0,
+    }
+    .paint(cx.backend, btn, tokens);
     y += INPUT_HEIGHT + 12.0;
     y
 }
