@@ -180,6 +180,7 @@ pub fn paint_fill_section(
         pressed: false,
         enabled: true,
         font_size: 12.0,
+        bordered: true,
     }
     .paint(
         cx.backend,

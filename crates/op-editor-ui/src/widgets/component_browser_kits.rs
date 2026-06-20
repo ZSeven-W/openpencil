@@ -243,6 +243,7 @@ impl ComponentBrowserPanel<'_> {
             pressed: self.is_pressed(Btn::KitFilter),
             enabled: true,
             font_size: 11.0,
+        bordered: true,
         }
         .paint(
             cx.backend,

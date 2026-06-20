@@ -321,6 +321,7 @@ pub(super) fn paint_provider_field(
         pressed,
         enabled: true,
         font_size: 11.0,
+        bordered: true,
     }
     .paint(
         cx.backend,

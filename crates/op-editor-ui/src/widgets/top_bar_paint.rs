@@ -286,6 +286,7 @@ impl TopBar {
             pressed: self.is_pressed(TopBarButton::ToggleLocale),
             enabled: true,
             font_size: ICON_SIZE,
+            bordered: false,
         }
         .paint(
             cx.backend,
