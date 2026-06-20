@@ -101,39 +101,26 @@ pub fn paint_search_popover(
     };
     paint_popup_chrome(cx, theme, layout.popup);
 
-    // Search input — bordered box, draft or muted placeholder + caret.
+    // Search input — bordered box; value + placeholder + caret render through
+    // the unified jian TextInputView (family-aware caret, no hand-rolled drift).
+    // The buffer is rebuilt from the query String each frame; the open popover
+    // owns the keyboard, so it reads as focused.
     cx.backend.fill_round_rect(layout.input, 5.0, theme.card);
     cx.backend
         .stroke_round_rect(layout.input, 5.0, theme.border, 1.0);
-    let text_x = layout.input.origin.x + 8.0;
     let baseline = layout.input.origin.y + layout.input.size.y / 2.0 + 4.0;
-    if state.search_query.is_empty() {
-        let placeholder = TextLayout::single_run(
-            "Search images...",
-            "system-ui",
-            11.0,
-            (theme.muted_foreground).to_jian(),
-            Point2D::new(0.0, 0.0),
-        );
-        cx.backend
-            .draw_text(&placeholder, Point2D::new(text_x, baseline));
-    } else {
-        let draft = TextLayout::single_run(
-            &state.search_query,
-            "system-ui",
-            11.0,
-            (theme.foreground).to_jian(),
-            Point2D::new(0.0, 0.0),
-        );
-        cx.backend.draw_text(&draft, Point2D::new(text_x, baseline));
-    }
-    let caret_x = text_x + cx.backend.measure_text(&state.search_query, 11.0) + 1.0;
-    cx.backend.fill_rect(
-        Rect {
-            origin: Point2D::new(caret_x, layout.input.origin.y + 7.0),
-            size: Point2D::new(1.0, layout.input.size.y - 14.0),
-        },
-        theme.foreground,
+    let search_input = jian_core::text_input::TextInputState::with_text(state.search_query.clone());
+    crate::widgets::property_panel_text_input::paint_text_input_view(
+        cx,
+        theme,
+        &search_input,
+        layout.input,
+        11.0,
+        8.0,
+        baseline,
+        now_ms,
+        "Search images...",
+        true,
     );
 
     // Submit icon-button (disabled wash while loading / empty query).
@@ -328,37 +315,25 @@ pub fn paint_generate_popover(
             if let Some(ta) = layout.textarea {
                 cx.backend.fill_round_rect(ta, 6.0, theme.card);
                 cx.backend.stroke_round_rect(ta, 6.0, theme.border, 1.0);
-                let text_x = ta.origin.x + 10.0;
-                if state.generate_prompt.is_empty() {
-                    let placeholder = TextLayout::single_run(
-                        "Describe the image...",
-                        "system-ui",
-                        11.0,
-                        (theme.muted_foreground).to_jian(),
-                        Point2D::new(0.0, 0.0),
-                    );
-                    cx.backend
-                        .draw_text(&placeholder, Point2D::new(text_x, ta.origin.y + 18.0));
-                } else {
-                    // Single-line tail view of the prompt (textarea
-                    // wrapping is a follow-up; the host caps drafts).
-                    let prompt = TextLayout::single_run(
-                        &state.generate_prompt,
-                        "system-ui",
-                        11.0,
-                        (theme.foreground).to_jian(),
-                        Point2D::new(0.0, 0.0),
-                    );
-                    cx.backend
-                        .draw_text(&prompt, Point2D::new(text_x, ta.origin.y + 18.0));
-                }
-                let caret_x = text_x + cx.backend.measure_text(&state.generate_prompt, 11.0) + 1.0;
-                cx.backend.fill_rect(
-                    Rect {
-                        origin: Point2D::new(caret_x, ta.origin.y + 8.0),
-                        size: Point2D::new(1.0, 14.0),
-                    },
-                    theme.foreground,
+                // Prompt + placeholder + caret render through the unified jian
+                // TextInputView, top-aligned in the textarea box (family-aware
+                // caret; multi-line wrapping remains a follow-up). The buffer is
+                // rebuilt from the prompt String each frame; the open popover
+                // owns the keyboard, so it reads as focused.
+                let line = Rect::xywh(ta.origin.x, ta.origin.y, ta.size.x, 26.0);
+                let generate_input =
+                    jian_core::text_input::TextInputState::with_text(state.generate_prompt.clone());
+                crate::widgets::property_panel_text_input::paint_text_input_view(
+                    cx,
+                    theme,
+                    &generate_input,
+                    line,
+                    11.0,
+                    10.0,
+                    ta.origin.y + 18.0,
+                    now_ms,
+                    "Describe the image...",
+                    true,
                 );
             }
             if state.generate_phase == ImageGeneratePhase::Error {
