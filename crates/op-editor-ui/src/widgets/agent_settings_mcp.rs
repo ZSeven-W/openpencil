@@ -6,9 +6,11 @@ use crate::widgets::agent_settings_i18n::t as t_settings;
 use crate::widgets::agent_settings_switch::{
     paint_settings_switch, SETTINGS_SWITCH_H, SETTINGS_SWITCH_W,
 };
+use crate::widgets::button::tokens_from_theme;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
+use jian_widgets::components::card::Card;
 use op_editor_core::agent_settings::{AgentSettings, McpCli, SettingsFocus};
 use op_editor_core::editor_ui_state::EditorUiState;
 use op_editor_core::{AgentSettingsButton, ButtonPressTarget};
@@ -381,8 +383,12 @@ fn paint_client_config(
         return;
     }
     let rect = client_config_rect(content);
-    cx.backend.fill_round_rect(rect, 8.0, theme.card);
-    cx.backend.stroke_round_rect(rect, 8.0, theme.border, 1.0);
+    Card {
+        fill: Some(theme.card),
+        border: Some(theme.border),
+        radius: 8.0,
+    }
+    .paint(cx.backend, rect, &tokens_from_theme(theme));
     let title = TextLayout::single_run(
         t_settings(ui, "agents.mcpClientConfig"),
         "system-ui",
