@@ -8,7 +8,7 @@
 //! click to a [`ComponentBrowserHit`], and owns the drag + insert.
 
 use crate::theme::Theme;
-use crate::widgets::button::{paint_button_feedback_wash, paint_ghost_button_feedback};
+use crate::widgets::button::paint_button_feedback_wash;
 use crate::widgets::editor_state_ext::theme_for;
 use crate::widgets::{draw_icon, Icon, PaintCx};
 use crate::{Color, Point2D, Rect, TextLayout};
@@ -425,20 +425,19 @@ impl<'a> ComponentBrowserPanel<'a> {
         cx.backend.fill_round_rect(close, 6.0, self.theme.muted);
         let close_hovered = self.hover == Some(ComponentBrowserButton::Close);
         let close_pressed = self.is_pressed(ComponentBrowserButton::Close);
-        let close_color = paint_ghost_button_feedback(
+        jian_widgets::components::icon_button::IconButton {
+            icon_paths: Icon::Close.paths(),
+            hovered: close_hovered,
+            pressed: close_pressed,
+            active: false,
+            enabled: true,
+            icon_size: CLOSE_BTN - 10.0,
+            stroke_width: 1.5,
+        }
+        .paint(
             cx.backend,
-            &self.theme,
             close,
-            close_hovered,
-            close_pressed,
-        );
-        draw_icon(
-            cx.backend,
-            Icon::Close,
-            Point2D::new(close.origin.x + 5.0, close.origin.y + 5.0),
-            CLOSE_BTN - 10.0,
-            close_color,
-            1.5,
+            &crate::widgets::button::tokens_from_theme(&self.theme),
         );
         // Header kit actions — Download (export) + Upload (import),
         // TS `component-browser-panel.tsx` header buttons.
@@ -456,15 +455,19 @@ impl<'a> ComponentBrowserPanel<'a> {
         ] {
             let hovered = self.hover == Some(hover_target);
             let pressed = self.is_pressed(hover_target);
-            let icon_color =
-                paint_ghost_button_feedback(cx.backend, &self.theme, btn, hovered, pressed);
-            draw_icon(
+            jian_widgets::components::icon_button::IconButton {
+                icon_paths: icon.paths(),
+                hovered,
+                pressed,
+                active: false,
+                enabled: true,
+                icon_size: CLOSE_BTN - 10.0,
+                stroke_width: 1.5,
+            }
+            .paint(
                 cx.backend,
-                icon,
-                Point2D::new(btn.origin.x + 5.0, btn.origin.y + 5.0),
-                CLOSE_BTN - 10.0,
-                icon_color,
-                1.5,
+                btn,
+                &crate::widgets::button::tokens_from_theme(&self.theme),
             );
         }
         cx.backend.fill_rect(

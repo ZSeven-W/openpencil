@@ -405,39 +405,42 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
             &title,
             Point2D::new(rect.origin.x + PAD + 28.0, header_y + 14.0),
         );
+        let tokens = crate::widgets::button::tokens_from_theme(&self.theme);
         let maximize_x = rect.origin.x + rect.size.x - PAD - 50.0;
-        let maximize_color = paint_header_btn_bg(
-            cx,
-            &self.theme,
-            maximize_x,
-            header_y,
-            self.header_hover == Some(ChatHeaderButton::ToggleMaximize),
-            self.header_pressed == Some(ChatHeaderButton::ToggleMaximize),
-        );
-        draw_icon(
+        jian_widgets::components::icon_button::IconButton {
+            icon_paths: self.maximize_icon().paths(),
+            hovered: self.header_hover == Some(ChatHeaderButton::ToggleMaximize),
+            pressed: self.header_pressed == Some(ChatHeaderButton::ToggleMaximize),
+            active: false,
+            enabled: true,
+            icon_size: 18.0,
+            stroke_width: 1.4,
+        }
+        .paint(
             cx.backend,
-            self.maximize_icon(),
-            Point2D::new(maximize_x, header_y),
-            18.0,
-            maximize_color,
-            1.4,
+            Rect {
+                origin: Point2D::new(maximize_x, header_y),
+                size: Point2D::new(22.0, 22.0),
+            },
+            &tokens,
         );
         let new_chat_x = rect.origin.x + rect.size.x - PAD - 22.0;
-        let new_chat_color = paint_header_btn_bg(
-            cx,
-            &self.theme,
-            new_chat_x,
-            header_y,
-            self.header_hover == Some(ChatHeaderButton::NewChat),
-            self.header_pressed == Some(ChatHeaderButton::NewChat),
-        );
-        draw_icon(
+        jian_widgets::components::icon_button::IconButton {
+            icon_paths: Icon::Plus.paths(),
+            hovered: self.header_hover == Some(ChatHeaderButton::NewChat),
+            pressed: self.header_pressed == Some(ChatHeaderButton::NewChat),
+            active: false,
+            enabled: true,
+            icon_size: 18.0,
+            stroke_width: 1.4,
+        }
+        .paint(
             cx.backend,
-            Icon::Plus,
-            Point2D::new(new_chat_x, header_y),
-            18.0,
-            new_chat_color,
-            1.4,
+            Rect {
+                origin: Point2D::new(new_chat_x, header_y),
+                size: Point2D::new(22.0, 22.0),
+            },
+            &tokens,
         );
 
         // Body — either messages or examples.
@@ -784,26 +787,6 @@ fn chat_neutral_feedback_color(theme: &Theme, pressed: bool) -> Color {
         b: theme.foreground.b,
         a: if pressed { 0.18 } else { 0.12 },
     }
-}
-
-/// Paint the `theme.button_hover` wash behind a bare header glyph
-/// (18 px, drawn at `(icon_x, header_y)`) when the cursor rests on it,
-/// returning the glyph color: foreground while hovered, muted
-/// otherwise. The wash is a 24 px square centred on the glyph.
-fn paint_header_btn_bg(
-    cx: &mut PaintCx<'_>,
-    theme: &Theme,
-    icon_x: f32,
-    header_y: f32,
-    hovered: bool,
-    pressed: bool,
-) -> Color {
-    let center = Point2D::new(icon_x + 9.0, header_y + 9.0);
-    let r = Rect {
-        origin: Point2D::new(center.x - 12.0, center.y - 12.0),
-        size: Point2D::new(24.0, 24.0),
-    };
-    crate::widgets::button::paint_ghost_button_feedback(cx.backend, theme, r, hovered, pressed)
 }
 
 #[cfg(test)]
