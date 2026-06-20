@@ -249,7 +249,24 @@ impl NativeBackend {
         weight: u16,
         italic: bool,
     ) -> f32 {
-        let segments = self.segment_text_styled(text, "", weight, italic);
+        self.measure_text_family_styled(text, font_size, "", weight, italic)
+    }
+
+    /// Like [`Self::measure_text_styled`] but resolves the per-codepoint
+    /// typeface against `family` — exactly as `draw_text` does for a run
+    /// carrying that family. The family-blind `measure_text*` pass `""`
+    /// (bundled Roboto); chrome inputs that DRAW in a named family (e.g.
+    /// "Inter") must measure with that same family so their caret /
+    /// selection geometry lines up with the painted glyphs.
+    pub fn measure_text_family_styled(
+        &mut self,
+        text: &str,
+        font_size: f32,
+        family: &str,
+        weight: u16,
+        italic: bool,
+    ) -> f32 {
+        let segments = self.segment_text_styled(text, family, weight, italic);
         if segments.is_empty() {
             return 0.0;
         }
@@ -260,6 +277,12 @@ impl NativeBackend {
             advance += a;
         }
         advance
+    }
+
+    /// Family-aware width at the default weight/upright — the measurement
+    /// backing `Painter::measure_text_family` for caret positioning.
+    pub fn measure_text_family(&mut self, text: &str, font_size: f32, family: &str) -> f32 {
+        self.measure_text_family_styled(text, font_size, family, 400, false)
     }
 
     /// Render every shaped run in the layout via cached typefaces +
