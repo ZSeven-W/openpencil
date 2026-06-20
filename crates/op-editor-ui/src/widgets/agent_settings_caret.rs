@@ -40,6 +40,7 @@ pub(super) fn paint_settings_input_view(
         now_ms,
         pad_x,
         baseline_delta_y: 0.0,
+        mask: None,
     };
     let text_top_y = rect.origin.y + (rect.size.y - font_size) / 2.0;
     let mut backend = BaselineAdjustingBackend {

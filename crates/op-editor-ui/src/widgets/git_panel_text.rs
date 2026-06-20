@@ -57,6 +57,33 @@ impl GitPanel<'_> {
         font_size: f32,
         pad_x: f32,
     ) {
+        self.paint_text_input_view_masked(
+            cx,
+            rect,
+            input,
+            placeholder,
+            focused,
+            font_size,
+            pad_x,
+            None,
+        );
+    }
+
+    /// Like [`Self::paint_text_input_view`] but renders glyphs through a `mask`
+    /// transform (e.g. the HTTPS credential's `user:••••`); the caret /
+    /// selection still track the source buffer via the unified `TextInputView`.
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn paint_text_input_view_masked(
+        &self,
+        cx: &mut PaintCx<'_>,
+        rect: crate::Rect,
+        input: &TextInputState,
+        placeholder: &str,
+        focused: bool,
+        font_size: f32,
+        pad_x: f32,
+        mask: Option<&dyn Fn(&str) -> String>,
+    ) {
         let placeholder = if focused { "" } else { placeholder };
         TextInputView {
             state: input,
@@ -66,6 +93,7 @@ impl GitPanel<'_> {
             now_ms: self.now_ms,
             pad_x,
             baseline_delta_y: 0.0,
+            mask,
         }
         .paint(cx.backend, rect, &self.widget_tokens());
     }

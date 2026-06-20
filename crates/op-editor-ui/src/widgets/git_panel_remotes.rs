@@ -8,7 +8,7 @@
 use crate::widgets::git_panel::{truncate, GitPanel, GitPanelHit, INPUT_H, PAD, SECTION_GAP};
 use crate::widgets::PaintCx;
 use crate::{Point2D, Rect};
-use jian_core::text_input::{prev_char_boundary, TextInputState};
+use jian_core::text_input::TextInputState;
 
 /// Label baseline offset within the Remotes block.
 const LABEL_OFF: f32 = 8.0;
@@ -183,6 +183,10 @@ impl GitPanel<'_> {
         self.paint_text_input_view(cx, rect, input, placeholder, focused, 11.0, 8.0);
     }
 
+    /// Same chrome as [`Self::paint_section_input`], but the glyphs render
+    /// through `mask_credential` so the token shows as bullets. The caret /
+    /// selection geometry is handled by the unified `TextInputView` (which
+    /// remaps source↔masked by char index), so there is no bespoke caret math.
     fn paint_masked_section_input(
         &self,
         cx: &mut PaintCx<'_>,
@@ -198,76 +202,27 @@ impl GitPanel<'_> {
             self.theme.border
         };
         cx.backend.stroke_round_rect(rect, 6.0, border, 1.0);
-
-        let draft = input.text();
-        if draft.is_empty() && !focused {
-            self.text(
-                cx,
-                placeholder,
-                rect.origin.x + 8.0,
-                rect.origin.y + rect.size.y / 2.0 + 4.0,
-                11.0,
-                self.theme.muted_foreground,
-            );
-            return;
-        }
-
-        let shown = mask_credential(draft);
-        let text_x = rect.origin.x + 8.0;
-        let baseline = rect.origin.y + rect.size.y / 2.0 + 4.0;
-        cx.backend.save();
-        cx.backend.clip_rect(rect);
-        if let Some((start, end)) = input.highlight_range() {
-            let x0 = cx.backend.measure_text(
-                &shown[..masked_byte_for_source_byte(draft, &shown, start)],
-                11.0,
-            );
-            let x1 = cx.backend.measure_text(
-                &shown[..masked_byte_for_source_byte(draft, &shown, end)],
-                11.0,
-            );
-            cx.backend.fill_round_rect(
-                Rect {
-                    origin: Point2D::new(text_x + x0, rect.origin.y + 6.0),
-                    size: Point2D::new((x1 - x0).max(1.0), 16.0),
-                },
-                3.0,
-                self.theme.primary.with_alpha(0.35),
-            );
-        }
-        self.text(cx, &shown, text_x, baseline, 11.0, self.theme.foreground);
-        if focused && input.highlight_range().is_none() && input.caret_visible(self.now_ms) {
-            let caret_byte = masked_byte_for_source_byte(draft, &shown, input.caret());
-            let caret_x = text_x + cx.backend.measure_text(&shown[..caret_byte], 11.0) + 1.0;
-            cx.backend.fill_rect(
-                Rect {
-                    origin: Point2D::new(caret_x, rect.origin.y + 7.0),
-                    size: Point2D::new(1.5, 15.0),
-                },
-                self.theme.foreground,
-            );
-        }
-        cx.backend.restore();
+        self.paint_text_input_view_masked(
+            cx,
+            rect,
+            input,
+            placeholder,
+            focused,
+            11.0,
+            8.0,
+            Some(&mask_credential),
+        );
     }
 }
 
 /// Mask the token half of a `username:token` draft — the username
 /// stays visible, the token renders as bullets so a shoulder-surfer
 /// cannot read it. A draft with no `:` yet (still typing the name)
-/// is shown verbatim.
+/// is shown verbatim. Char-count-preserving so `TextInputView` can remap
+/// the caret by char index.
 fn mask_credential(draft: &str) -> String {
     match draft.split_once(':') {
         Some((user, token)) => format!("{user}:{}", "•".repeat(token.chars().count())),
         None => draft.to_string(),
     }
-}
-
-fn masked_byte_for_source_byte(source: &str, masked: &str, byte: usize) -> usize {
-    let source_byte = prev_char_boundary(source, byte);
-    let chars = source[..source_byte].chars().count();
-    masked
-        .char_indices()
-        .nth(chars)
-        .map(|(i, _)| i)
-        .unwrap_or(masked.len())
 }
