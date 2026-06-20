@@ -1,4 +1,5 @@
-use crate::{Color, Rect, RenderBackend, Theme};
+use crate::widgets::icons::{draw_icon, Icon};
+use crate::{Color, Point2D, Rect, RenderBackend, Theme};
 use jian_widgets::components::button::{Button, ButtonVariant};
 use jian_widgets::{Density, Tokens};
 
@@ -75,6 +76,59 @@ pub(crate) fn paint_button_feedback_wash(
     } else {
         theme.muted_foreground
     }
+}
+
+/// Icon-button background + feedback, centralised on jian Button. `active` paints
+/// the solid primary highlight (e.g. the selected toolbar tool); inactive uses the
+/// ghost hover/press wash. Returns the icon color to stroke on top — every icon
+/// button funnels its hover/active rendering through here instead of hand-rolling it.
+pub(crate) fn paint_icon_button_feedback(
+    backend: &mut dyn RenderBackend,
+    theme: &Theme,
+    rect: Rect,
+    hovered: bool,
+    pressed: bool,
+    active: bool,
+) -> Color {
+    if active {
+        Button {
+            label: "",
+            icon_d: None,
+            variant: ButtonVariant::Primary,
+            enabled: true,
+            hovered,
+            pressed,
+            font_size: 0.0,
+        }
+        .paint(backend, rect, &tokens_from_theme(theme));
+        theme.primary_foreground
+    } else {
+        paint_ghost_button_feedback(backend, theme, rect, hovered, pressed)
+    }
+}
+
+/// A complete icon button: hover / pressed / active feedback (centralised on
+/// jian Button) PLUS the centred icon glyph — so every toolbar and chrome icon
+/// button is a single call instead of hand-rolling `feedback + draw_icon`
+/// separately in each widget. `active` paints the solid primary highlight.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn paint_icon_button(
+    backend: &mut dyn RenderBackend,
+    theme: &Theme,
+    rect: Rect,
+    icon: Icon,
+    hovered: bool,
+    pressed: bool,
+    active: bool,
+    icon_size: f32,
+    stroke_w: f32,
+) {
+    let color = paint_icon_button_feedback(backend, theme, rect, hovered, pressed, active);
+    let origin = Point2D::new(
+        rect.origin.x + (rect.size.x - icon_size) / 2.0,
+        rect.origin.y + (rect.size.y - icon_size) / 2.0,
+    );
+    draw_icon(backend, icon, origin, icon_size, color, stroke_w);
 }
 
 #[cfg(test)]
