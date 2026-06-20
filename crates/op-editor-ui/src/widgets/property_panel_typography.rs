@@ -345,7 +345,10 @@ pub fn paint_font_picker(
     // Draft + placeholder + caret render through the unified jian TextInputView
     // (family-aware caret, no hand-rolled drift). The buffer is rebuilt from the
     // search String each frame; the open picker reads as focused.
-    let search_input = jian_core::text_input::TextInputState::with_text(search.to_string());
+    let mut search_input = jian_core::text_input::TextInputState::with_text(search.to_string());
+    // Anchor the blink to this frame so the caret stays visible while the
+    // picker is open (the buffer is rebuilt each frame).
+    search_input.touch(now_ms);
     crate::widgets::property_panel_text_input::paint_text_input_view(
         cx,
         theme,
