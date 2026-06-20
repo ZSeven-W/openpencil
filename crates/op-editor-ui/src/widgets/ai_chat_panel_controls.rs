@@ -15,7 +15,7 @@ use super::ai_chat_hit::AIChatHit;
 use crate::theme::Theme;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::PaintCx;
-use crate::{Point2D, Rect, TextLayout};
+use crate::{Color, Point2D, Rect, TextLayout};
 use op_editor_core::chat::{ChatState, EffortLevel, ThinkingMode};
 
 /// Height of the per-turn controls strip.
@@ -243,6 +243,40 @@ pub fn paint_attachment_row(
             theme.muted_foreground,
             1.4,
         );
+    }
+}
+
+/// Draw a single text label — shared by the AI-chat panel paint paths.
+pub(crate) fn draw_label(
+    cx: &mut PaintCx<'_>,
+    text: &str,
+    size: f32,
+    color: Color,
+    x: f32,
+    y: f32,
+) {
+    let label = TextLayout::single_run(
+        text,
+        "system-ui",
+        size,
+        (color).to_jian(),
+        Point2D::new(0.0, 0.0),
+    );
+    cx.backend.draw_text(&label, Point2D::new(x, y));
+}
+
+/// Neutral hover wash color for the chat panel's borderless controls.
+pub(crate) fn chat_neutral_hover_color(theme: &Theme) -> Color {
+    chat_neutral_feedback_color(theme, false)
+}
+
+/// Neutral hover/press wash color (a faint foreground tint).
+pub(crate) fn chat_neutral_feedback_color(theme: &Theme, pressed: bool) -> Color {
+    Color {
+        r: theme.foreground.r,
+        g: theme.foreground.g,
+        b: theme.foreground.b,
+        a: if pressed { 0.18 } else { 0.12 },
     }
 }
 

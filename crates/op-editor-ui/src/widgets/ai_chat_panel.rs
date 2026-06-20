@@ -2,6 +2,9 @@ use crate::theme::Theme;
 use crate::widgets::ai_chat_checklist::{
     fixed_checklist_height, fixed_checklist_rect, paint_fixed_checklist,
 };
+pub(crate) use crate::widgets::ai_chat_panel_controls::{
+    chat_neutral_feedback_color, chat_neutral_hover_color, draw_label,
+};
 use crate::widgets::ai_chat_panel_controls::{paint_attachment_row, ATTACHMENT_ROW_HEIGHT};
 use crate::widgets::ai_chat_panel_footer::{fit_footer_label, footer_label_baseline};
 use crate::widgets::ai_chat_panel_paint::{
@@ -762,30 +765,6 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
         let mut node = accesskit::Node::new(accesskit::Role::Group);
         node.set_label(op_i18n::translate(self.locale, "a11y.aiChat"));
         node
-    }
-}
-
-fn draw_label(cx: &mut PaintCx<'_>, text: &str, size: f32, color: Color, x: f32, y: f32) {
-    let label = TextLayout::single_run(
-        text,
-        "system-ui",
-        size,
-        (color).to_jian(),
-        Point2D::new(0.0, 0.0),
-    );
-    cx.backend.draw_text(&label, Point2D::new(x, y));
-}
-
-fn chat_neutral_hover_color(theme: &Theme) -> Color {
-    chat_neutral_feedback_color(theme, false)
-}
-
-fn chat_neutral_feedback_color(theme: &Theme, pressed: bool) -> Color {
-    Color {
-        r: theme.foreground.r,
-        g: theme.foreground.g,
-        b: theme.foreground.b,
-        a: if pressed { 0.18 } else { 0.12 },
     }
 }
 
