@@ -12,8 +12,10 @@ use crate::widgets::agent_settings_panel::{
 };
 use crate::widgets::agent_settings_panel_geometry::{connect_btn_rect_at, disconnect_btn_rect_at};
 use crate::widgets::brand_icons::{paint_brand_logo, paint_opencode_logo, BrandLogo};
+use crate::widgets::button::tokens_from_theme;
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
+use jian_widgets::components::card::Card;
 use op_editor_core::agent_settings::{AgentProvider, AgentSettings};
 use op_editor_core::editor_ui_state::EditorUiState;
 
@@ -28,15 +30,23 @@ pub(super) fn paint_agent_card(
 ) {
     let outlined = matches!(provider, AgentProvider::ClaudeCode);
     let card_hovered = settings.hover_provider == index;
-    if outlined {
-        cx.backend.fill_round_rect(card, 10.0, theme.muted);
+    // Chrome via jian Card; the fill choice stays caller-side so the look is
+    // preserved exactly: outlined ClaudeCode -> muted, hover -> accent wash,
+    // else transparent. The whole-card hover wash keeps the row reading as
+    // "pointing at this card" rather than only the trailing button.
+    let fill = if outlined {
+        Some(theme.muted)
     } else if card_hovered {
-        // Subtle wash on hover so the whole row reads as "I'm
-        // pointing at this card" rather than leaving the hover
-        // signal entirely on the trailing button.
-        cx.backend.fill_round_rect(card, 10.0, theme.accent);
+        Some(theme.accent)
+    } else {
+        None
+    };
+    Card {
+        fill,
+        border: Some(theme.border),
+        radius: 10.0,
     }
-    cx.backend.stroke_round_rect(card, 10.0, theme.border, 1.0);
+    .paint(cx.backend, card, &tokens_from_theme(theme));
     let avatar = Rect {
         origin: Point2D::new(
             card.origin.x + 12.0,
