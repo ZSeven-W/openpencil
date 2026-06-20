@@ -15,7 +15,6 @@
 //! out of scope (JSON-only).
 
 use crate::theme::Theme;
-use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::property_panel::{NodeSnapshot, PropertyPanelAction, WidgetKind};
 use crate::widgets::property_panel_inputs::{
     paint_input_with_prefix_focused_state, paint_section_divider, paint_section_label,
@@ -287,20 +286,15 @@ fn paint_check_row(
         origin: Point2D::new(x, y + 7.0),
         size: Point2D::new(16.0, 16.0),
     };
-    if checked {
-        cx.backend.fill_round_rect(box_rect, 4.0, theme.primary);
-        draw_icon(
-            cx.backend,
-            Icon::Check,
-            Point2D::new(box_rect.origin.x + 1.0, box_rect.origin.y + 1.0),
-            14.0,
-            theme.primary_foreground,
-            1.8,
-        );
-    } else {
-        cx.backend
-            .stroke_round_rect(box_rect, 4.0, theme.border, 1.0);
+    jian_widgets::components::checkbox::Checkbox {
+        checked,
+        enabled: true,
     }
+    .paint(
+        cx.backend,
+        box_rect,
+        &crate::widgets::button::tokens_from_theme(theme),
+    );
     let lbl = TextLayout::single_run(
         label,
         "system-ui",

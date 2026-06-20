@@ -42,7 +42,6 @@ const GAP_ROW_H: f32 = 20.0;
 const GAP_ROW_GAP: f32 = 2.0;
 /// RadioCircle geometry (compact ring + dot).
 const RADIO_SIZE: f32 = 13.0;
-const RADIO_DOT: f32 = 7.0;
 /// x-offset from a radio row's left to its content (TS `gap-1.5` = 6px
 /// + the 14px circle).
 const RADIO_GUTTER: f32 = 6.0 + RADIO_SIZE;
@@ -681,22 +680,15 @@ fn paint_radio_circle(cx: &mut PaintCx<'_>, theme: &Theme, x: f32, y: f32, selec
         origin: Point2D::new(x, y),
         size: Point2D::new(RADIO_SIZE, RADIO_SIZE),
     };
-    let border = if selected {
-        theme.primary
-    } else {
-        theme.muted_foreground
-    };
-    cx.backend
-        .stroke_round_rect(ring, RADIO_SIZE / 2.0, border, 1.5);
-    if selected {
-        let off = (RADIO_SIZE - RADIO_DOT) / 2.0;
-        let dot = Rect {
-            origin: Point2D::new(x + off, y + off),
-            size: Point2D::new(RADIO_DOT, RADIO_DOT),
-        };
-        cx.backend
-            .fill_round_rect(dot, RADIO_DOT / 2.0, theme.primary);
+    jian_widgets::components::radio::Radio {
+        selected,
+        enabled: true,
     }
+    .paint(
+        cx.backend,
+        ring,
+        &crate::widgets::button::tokens_from_theme(theme),
+    );
 }
 
 /// 10px muted label vertically centred in a `GAP_ROW_H` radio row.
