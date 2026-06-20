@@ -118,24 +118,19 @@ pub fn paint_provider_select(
         label_y,
     );
     let input = provider_select_rect(card);
-    cx.backend.fill_round_rect(input, 6.0, theme.card);
-    cx.backend.stroke_round_rect(input, 6.0, theme.border, 1.0);
-    let clipped = ellipsize(cx, preset_label(agent.preset), input.size.x - 30.0, 11.0);
-    draw_text(
-        cx,
-        &clipped,
-        11.0,
-        theme.foreground,
-        input.origin.x + 6.0,
-        input.origin.y + 16.0,
-    );
-    draw_icon(
+    jian_widgets::components::select_trigger::SelectTrigger {
+        icon_paths: None,
+        label: preset_label(agent.preset),
+        placeholder: "",
+        hovered: false,
+        pressed: false,
+        enabled: true,
+        font_size: 11.0,
+    }
+    .paint(
         cx.backend,
-        Icon::ChevronDown,
-        Point2D::new(input.origin.x + input.size.x - 18.0, input.origin.y + 6.0),
-        12.0,
-        theme.muted_foreground,
-        1.5,
+        input,
+        &crate::widgets::button::tokens_from_theme(theme),
     );
 }
 
@@ -374,17 +369,6 @@ fn draw_text(cx: &mut PaintCx<'_>, text: &str, size: f32, color: Color, x: f32, 
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(&layout, Point2D::new(x, y));
-}
-
-fn ellipsize(cx: &mut PaintCx<'_>, value: &str, max_w: f32, size: f32) -> String {
-    if cx.backend.measure_text(value, size) <= max_w {
-        return value.to_string();
-    }
-    let mut out = value.to_string();
-    while !out.is_empty() && cx.backend.measure_text(&format!("{out}..."), size) > max_w {
-        out.pop();
-    }
-    format!("{out}...")
 }
 
 #[cfg(test)]

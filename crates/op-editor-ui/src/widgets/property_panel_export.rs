@@ -8,7 +8,7 @@ use crate::theme::Theme;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::property_panel::{EffectSummary, PropertyPanelAction};
 use crate::widgets::property_panel_inputs::{
-    paint_dropdown, paint_section_label, INPUT_HEIGHT, INPUT_RADIUS, PAD_X,
+    paint_section_label, INPUT_HEIGHT, INPUT_RADIUS, PAD_X,
 };
 use crate::widgets::property_panel_layout::{
     action_button_rects_with_fill_picker, VisibleSections,
@@ -46,23 +46,40 @@ pub fn paint_export_section(
     // Left dropdown: scale. Right dropdown: format. Clicking either
     // opens its inline select popup (`paint_export_picker`); the
     // full Export modal is reached only via File ▸ Export Image.
-    paint_dropdown(
-        cx,
-        theme,
+    let tokens = &crate::widgets::button::tokens_from_theme(theme);
+    jian_widgets::components::select_trigger::SelectTrigger {
+        icon_paths: None,
+        label: export_scale_label(scale),
+        placeholder: "",
+        hovered: false,
+        pressed: false,
+        enabled: true,
+        font_size: 12.0,
+    }
+    .paint(
+        cx.backend,
         Rect {
             origin: Point2D::new(x + PAD_X, y),
             size: Point2D::new(half_w, INPUT_HEIGHT),
         },
-        export_scale_label(scale),
+        tokens,
     );
-    paint_dropdown(
-        cx,
-        theme,
+    jian_widgets::components::select_trigger::SelectTrigger {
+        icon_paths: None,
+        label: format.label(),
+        placeholder: "",
+        hovered: false,
+        pressed: false,
+        enabled: true,
+        font_size: 12.0,
+    }
+    .paint(
+        cx.backend,
         Rect {
             origin: Point2D::new(x + PAD_X + half_w + 8.0, y),
             size: Point2D::new(half_w, INPUT_HEIGHT),
         },
-        format.label(),
+        tokens,
     );
     y += INPUT_HEIGHT + 12.0;
     // Export action button — full-width primary button. Triggers a

@@ -399,24 +399,16 @@ impl GitPanel<'_> {
         hovered: bool,
         pressed: bool,
     ) {
-        cx.backend.fill_round_rect(rect, 5.0, self.theme.muted);
-        crate::widgets::button::paint_ghost_button_feedback(
-            cx.backend,
-            &self.theme,
-            rect,
+        let tokens = &crate::widgets::button::tokens_from_theme(&self.theme);
+        jian_widgets::components::button::Button {
+            label: glyph,
+            icon_d: None,
+            variant: jian_widgets::components::button::ButtonVariant::Outline,
+            enabled: true,
             hovered,
             pressed,
-        );
-        cx.backend
-            .stroke_round_rect(rect, 5.0, self.theme.border, 1.0);
-        let baseline = rect.origin.y + rect.size.y / 2.0 + 4.0;
-        self.text(
-            cx,
-            glyph,
-            rect.origin.x + rect.size.x / 2.0 - 4.0,
-            baseline,
-            11.0,
-            self.theme.foreground,
-        );
+            font_size: 11.0,
+        }
+        .paint(cx.backend, rect, tokens);
     }
 }

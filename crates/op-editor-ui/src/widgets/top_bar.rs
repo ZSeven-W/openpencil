@@ -7,7 +7,7 @@
 
 use crate::theme::Theme;
 use crate::widgets::editor_state_ext::{theme_for, translate};
-use crate::widgets::icons::{draw_icon, Icon};
+use crate::widgets::icons::Icon;
 use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
 use crate::{Color, Point2D, Rect};
 use op_editor_core::editor_ui_state::EditorUiState;
@@ -25,8 +25,6 @@ pub(super) const GLOBE_BUTTON_WIDTH: f32 = 44.0;
 /// inside a single round-rect background. Tighter gap than two
 /// separate icon buttons (4 px between glyphs vs ICON_BUTTON + 4).
 pub(super) const FILE_MENU_BUTTON_WIDTH: f32 = 46.0;
-pub(super) const CHEVRON_SIZE: f32 = 10.0;
-pub(super) const COMPOUND_GLYPH_GAP: f32 = 4.0;
 pub(super) const GIT_BUTTON_PAD_X: f32 = (ICON_BUTTON - ICON_SIZE) / 2.0;
 pub(super) const PAD: f32 = 12.0;
 /// Top-bar vertical divider geometry (TS `w-px h-3.5 bg-border/60
@@ -414,11 +412,6 @@ impl TopBar {
         }
     }
 
-    pub(super) fn locale_glyph_left(globe_button: Rect) -> f32 {
-        let group_w = ICON_SIZE + COMPOUND_GLYPH_GAP + CHEVRON_SIZE;
-        globe_button.origin.x + (globe_button.size.x - group_w) / 2.0
-    }
-
     /// Git-panel toggle button — sits just right of the centred file
     /// name. Width holds the branch glyph plus an optional branch
     /// label. Shared by paint + hit-test so they can't drift.
@@ -666,22 +659,19 @@ pub(super) fn paint_file_menu_button(
         origin: Point2D::new(x, center_y - ICON_BUTTON / 2.0),
         size: Point2D::new(FILE_MENU_BUTTON_WIDTH, ICON_BUTTON),
     };
-    let color = paint_hover_bg(cx, theme, button_rect, hovered, pressed);
-    draw_icon(
+    jian_widgets::components::select_trigger::SelectTrigger {
+        icon_paths: Some(Icon::FolderOpen.paths()),
+        label: "",
+        placeholder: "",
+        hovered,
+        pressed,
+        enabled: true,
+        font_size: ICON_SIZE,
+    }
+    .paint(
         cx.backend,
-        Icon::FolderOpen,
-        Point2D::new(x + 6.0, center_y - ICON_SIZE / 2.0),
-        ICON_SIZE,
-        color,
-        1.4,
-    );
-    draw_icon(
-        cx.backend,
-        Icon::ChevronDown,
-        Point2D::new(x + 6.0 + ICON_SIZE + 4.0, center_y - CHEVRON_SIZE / 2.0),
-        CHEVRON_SIZE,
-        color,
-        1.4,
+        button_rect,
+        &crate::widgets::button::tokens_from_theme(theme),
     );
 }
 
@@ -886,24 +876,6 @@ mod tests {
         on.experimental_enabled = true;
         assert!(on.preview_button_visible());
         assert_eq!(on.hit_test(rect, probe), Some(TopBarHit::TogglePreview));
-    }
-
-    #[test]
-    fn locale_button_glyph_group_is_centered_in_hover_rect() {
-        let rect = Rect {
-            origin: Point2D::new(0.0, 0.0),
-            size: Point2D::new(1000.0, TOP_BAR_HEIGHT),
-        };
-        let globe_rect = TopBar::new("food.op").globe_rect(rect);
-        let glyph_group_left = TopBar::locale_glyph_left(globe_rect);
-        let glyph_group_right = glyph_group_left + ICON_SIZE + COMPOUND_GLYPH_GAP + CHEVRON_SIZE;
-        let glyph_group_center = (glyph_group_left + glyph_group_right) / 2.0;
-        let hover_center = globe_rect.origin.x + globe_rect.size.x / 2.0;
-
-        assert!(
-            nearly_eq(glyph_group_center, hover_center),
-            "locale glyph group should be centered in its hover rect"
-        );
     }
 
     #[test]
