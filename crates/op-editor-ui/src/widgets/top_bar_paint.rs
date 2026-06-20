@@ -447,10 +447,18 @@ pub(super) fn paint_icon_button(
         origin: Point2D::new(x, center_y - ICON_BUTTON / 2.0),
         size: Point2D::new(ICON_BUTTON, ICON_BUTTON),
     };
-    let color = paint_hover_bg(cx, theme, button_rect, hovered, pressed);
-    let icon_origin = Point2D::new(
-        x + (ICON_BUTTON - ICON_SIZE) / 2.0,
-        center_y - ICON_SIZE / 2.0,
+    jian_widgets::components::icon_button::IconButton {
+        icon_paths: icon.paths(),
+        hovered,
+        pressed,
+        active: false,
+        enabled: true,
+        icon_size: ICON_SIZE,
+        stroke_width: 1.4,
+    }
+    .paint(
+        cx.backend,
+        button_rect,
+        &crate::widgets::button::tokens_from_theme(theme),
     );
-    draw_icon(cx.backend, icon, icon_origin, ICON_SIZE, color, 1.4);
 }
