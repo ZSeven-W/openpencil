@@ -1,6 +1,6 @@
 use super::*;
 use crate::widgets::button::paint_button_feedback_wash;
-use crate::widgets::property_panel_text_input::paint_text_input_view_value;
+use crate::widgets::property_panel_text_input::{paint_text_input_view, paint_text_input_view_value};
 use crate::widgets::{draw_icon, Icon, PaintCx};
 use crate::{Color, Point2D, Rect};
 
@@ -83,40 +83,22 @@ fn paint_search_row(
     );
     let text_x = input.origin.x + 8.0 + icon_size + 7.0;
     let baseline_y = input.origin.y + input.size.y / 2.0 + 4.0;
-    if panel.search.is_empty() {
-        paint_text(
-            cx,
-            labels.search_placeholder,
-            12.0,
-            theme.muted_foreground,
-            text_x,
-            baseline_y,
-        );
-    } else {
-        paint_text(
-            cx,
-            &panel.search,
-            12.0,
-            theme.foreground,
-            text_x,
-            baseline_y,
-        );
-    }
-    if panel.search_focus && panel.search_input.caret_visible(panel.now_ms) {
-        let caret_x = text_x
-            + if panel.search.is_empty() {
-                0.0
-            } else {
-                cx.backend.measure_text(&panel.search, 12.0)
-            };
-        cx.backend.fill_rect(
-            Rect {
-                origin: Point2D::new(caret_x + 1.0, input.origin.y + 5.0),
-                size: Point2D::new(1.5, 18.0),
-            },
-            theme.foreground,
-        );
-    }
+    // Value + placeholder + caret render through the unified jian TextInputView
+    // (family-aware caret, no hand-rolled drift). `search_input` is rebuilt from
+    // `panel.search` each frame (variables_panel::for_editor_at), so the caret
+    // sits at end-of-text and blinks off the keystroke timestamp.
+    paint_text_input_view(
+        cx,
+        &theme,
+        &panel.search_input,
+        input,
+        12.0,
+        text_x - input.origin.x,
+        baseline_y,
+        panel.now_ms,
+        labels.search_placeholder,
+        panel.search_focus,
+    );
     paint_hairline(
         cx,
         rect.origin.x,
