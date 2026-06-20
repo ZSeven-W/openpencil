@@ -878,6 +878,11 @@ fn image_bytes_to_data_url(mime: &str, bytes: &[u8]) -> Option<String> {
     let mime = normalize_image_mime_header(mime)?;
     use base64::engine::general_purpose::STANDARD as B64;
     use base64::Engine as _;
+    // Shrink an oversized fetched image before it enters the document —
+    // same rationale as the file-pick path (see `image_downscale`).
+    if let Some((scaled_mime, scaled)) = crate::image_downscale::maybe_downscale(bytes) {
+        return Some(format!("data:{scaled_mime};base64,{}", B64.encode(&scaled)));
+    }
     Some(format!("data:{mime};base64,{}", B64.encode(bytes)))
 }
 

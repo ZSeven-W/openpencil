@@ -40,6 +40,12 @@ fn pick_image_path(host: &WidgetHostNative) -> Option<std::path::PathBuf> {
 /// so an unknown extension still round-trips.
 fn read_as_data_url(path: &Path) -> std::io::Result<String> {
     let bytes = std::fs::read(path)?;
+    // Shrink an oversized raster source before it lands in the document
+    // (a multi-MB `src` lags every later scene rebuild + canvas decode).
+    // SVG / undecodable / already-small sources fall through unchanged.
+    if let Some((mime, scaled)) = crate::image_downscale::maybe_downscale(&bytes) {
+        return Ok(format!("data:{};base64,{}", mime, B64.encode(&scaled)));
+    }
     let mime = mime_for(path);
     let encoded = B64.encode(&bytes);
     Ok(format!("data:{};base64,{}", mime, encoded))

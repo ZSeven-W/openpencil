@@ -26,6 +26,7 @@ mod git_overflow_host;
 mod git_session;
 mod git_ssh_host;
 mod iconify_host;
+mod image_downscale;
 mod image_generate_host;
 mod image_panel_host;
 mod image_search_session;
