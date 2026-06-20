@@ -32,18 +32,27 @@ impl WidgetHostNative {
                 true
             }
             Some(ColorPickerHit::HexInput) => {
+                self.editor_state.color_picker_blur_rgb();
                 self.editor_state.color_picker_focus_hex();
                 self.mark_dirty();
                 true
             }
-            Some(ColorPickerHit::Eyedropper) | Some(ColorPickerHit::Inside) => {
-                // A press elsewhere in the panel commits + blurs the hex field.
+            Some(ColorPickerHit::RgbInput(channel)) => {
                 self.editor_state.color_picker_blur_hex();
+                self.editor_state.color_picker_focus_rgb(channel);
+                self.mark_dirty();
+                true
+            }
+            Some(ColorPickerHit::Eyedropper) | Some(ColorPickerHit::Inside) => {
+                // A press elsewhere in the panel commits + blurs any focused field.
+                self.editor_state.color_picker_blur_hex();
+                self.editor_state.color_picker_blur_rgb();
                 self.mark_dirty();
                 true
             }
             Some(hit @ (ColorPickerHit::SvBox | ColorPickerHit::HueSlider)) => {
                 self.editor_state.color_picker_blur_hex();
+                self.editor_state.color_picker_blur_rgb();
                 if let Some(kind) = drag_for_hit(hit) {
                     // Live-apply once for the press point. Instance
                     // anchors route through the override redirect

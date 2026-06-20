@@ -270,6 +270,11 @@ pub struct ColorPickerState {
     /// through jian `TextInputView` (same unified input + caret as every other
     /// chrome field), so the host owns caret / selection / blink here.
     pub hex_input: jian_core::text_input::TextInputState,
+    /// Which R/G/B channel (0=R, 1=G, 2=B) is focused for keyboard editing.
+    pub rgb_focus: Option<u8>,
+    /// The unified edit buffer for the focused R/G/B channel (0..255), shared
+    /// across channels since only one is edited at a time.
+    pub rgb_input: jian_core::text_input::TextInputState,
 }
 
 /// Transient variable/theme editor state (spec §5.2).

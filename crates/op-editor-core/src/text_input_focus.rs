@@ -20,6 +20,9 @@ impl EditorState {
             if picker.hex_focused {
                 return Some(&picker.hex_input);
             }
+            if picker.rgb_focus.is_some() {
+                return Some(&picker.rgb_input);
+            }
         }
         if let Some(rename) = &self.ui.layer_rename {
             return Some(&rename.input);

@@ -57,6 +57,15 @@ impl WidgetHostNative {
             self.mark_dirty();
             return true;
         }
+        // Color-picker R/G/B numeric field owns the keyboard while focused.
+        if self.editor_state.color_picker_rgb_focused() {
+            if c.is_control() {
+                return false;
+            }
+            self.editor_state.color_picker_rgb_char(c, self.now_ms);
+            self.mark_dirty();
+            return true;
+        }
         // Settings input owns the keyboard while focused.
         if self.editor_state.editor_ui.agent_settings.focus.is_some() {
             return self.apply_settings_text(c);
@@ -503,6 +512,11 @@ impl WidgetHostNative {
         }
         if self.editor_state.color_picker_hex_focused() {
             self.editor_state.color_picker_hex_backspace(self.now_ms);
+            self.mark_dirty();
+            return true;
+        }
+        if self.editor_state.color_picker_rgb_focused() {
+            self.editor_state.color_picker_rgb_backspace(self.now_ms);
             self.mark_dirty();
             return true;
         }
@@ -1214,6 +1228,11 @@ impl WidgetHostNative {
             self.mark_dirty();
             return true;
         }
+        if self.editor_state.color_picker_rgb_focused() {
+            self.editor_state.color_picker_blur_rgb();
+            self.mark_dirty();
+            return true;
+        }
         if self.editor_state.editor_ui.agent_settings.focus.is_some() {
             self.commit_settings_focus_if_any();
             return true;
@@ -1397,6 +1416,11 @@ impl WidgetHostNative {
         }
         if self.editor_state.color_picker_hex_focused() {
             self.editor_state.color_picker_blur_hex();
+            self.mark_dirty();
+            return true;
+        }
+        if self.editor_state.color_picker_rgb_focused() {
+            self.editor_state.color_picker_blur_rgb();
             self.mark_dirty();
             return true;
         }

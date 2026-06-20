@@ -31,6 +31,9 @@ impl WidgetHost {
                 self.mark_dirty();
                 true
             }
+            // Hex / RGB boxes: keyboard editing isn't wired on the web host yet,
+            // so a press just swallows (keeps the picker open).
+            Some(ColorPickerHit::HexInput) | Some(ColorPickerHit::RgbInput(_)) => true,
             Some(ColorPickerHit::Eyedropper) | Some(ColorPickerHit::Inside) => true,
             Some(hit @ (ColorPickerHit::SvBox | ColorPickerHit::HueSlider)) => {
                 if let Some(kind) = drag_for_hit(hit) {
