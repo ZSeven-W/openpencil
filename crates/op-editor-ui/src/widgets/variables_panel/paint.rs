@@ -128,29 +128,53 @@ fn paint_search_row(
 
 fn paint_theme_header(panel: &VariablesPanel, cx: &mut PaintCx<'_>, rect: Rect) {
     let theme = panel.theme;
-    let mut x = rect.origin.x + PAD_X;
     let active_axis = panel.active_axis_label();
-    for (idx, axis) in panel.theme_tab_labels().iter().enumerate() {
-        let is_active = *axis == active_axis;
-        paint_feedback(
-            panel,
-            cx,
-            VariablesPanelButton::ThemeTab(idx),
-            panel.theme_tab_rect(rect, idx),
-            8.0,
-        );
-        let color = if is_active {
-            theme.foreground
-        } else {
-            theme.muted_foreground
-        };
-        if panel.renaming_theme.as_deref() == Some(axis) {
+    // The theme-axis tab strip renders through jian Tabs (content-width, Text
+    // active style; the active axis gets a trailing chevron because it doubles
+    // as the axis-value dropdown trigger). The host keeps the inline-rename
+    // overlay, the +Add / Preset / Close buttons, and the hit walker
+    // (theme_tab_rect), whose geometry matches content_rects for normal tabs.
+    let labels = panel.theme_tab_labels();
+    let widths: Vec<f32> = labels
+        .iter()
+        .map(|l| panel.theme_tab_hit_width(l) + 8.0)
+        .collect();
+    let tab_rects = jian_widgets::components::tabs::Tabs::content_rects(
+        Point2D::new(rect.origin.x + PAD_X - 4.0, rect.origin.y + 6.0),
+        &widths,
+        32.0,
+        2.0,
+        0.0,
+    );
+    let active_idx = labels.iter().position(|l| *l == active_axis).unwrap_or(0);
+    let hover = (0..labels.len()).find(|&i| {
+        panel.hover == Some(VariablesPanelButton::ThemeTab(i))
+            || panel.pressed == Some(VariablesPanelButton::ThemeTab(i))
+    });
+    jian_widgets::components::tabs::Tabs {
+        labels: &labels,
+        active: active_idx,
+        hover,
+    }
+    .paint_content(
+        cx.backend,
+        &tab_rects,
+        jian_widgets::components::tabs::ActiveStyle::Text,
+        true,
+        4.0,
+        13.0,
+        &crate::widgets::button::tokens_from_theme(&theme),
+    );
+    // Inline-rename overlay — an opaque input that covers the renaming tab's
+    // label + chevron that jian painted underneath.
+    if let Some(renaming) = panel.renaming_theme.as_deref() {
+        if let Some(idx) = labels.iter().position(|l| *l == renaming) {
             let input = Rect {
-                origin: Point2D::new(x - 2.0, rect.origin.y + 8.0),
+                origin: Point2D::new(tab_rects[idx].origin.x + 2.0, rect.origin.y + 8.0),
                 size: Point2D::new(panel.theme_rename_input_width(), 28.0),
             };
-            let input_state = panel.rename_text_input(RenameTarget::Theme(axis));
-            let value = input_state.map(|input| input.text()).unwrap_or(axis);
+            let input_state = panel.rename_text_input(RenameTarget::Theme(renaming));
+            let value = input_state.map(|input| input.text()).unwrap_or(renaming);
             paint_text_input(
                 cx,
                 theme,
@@ -160,21 +184,7 @@ fn paint_theme_header(panel: &VariablesPanel, cx: &mut PaintCx<'_>, rect: Rect) 
                 INPUT_PADDING_X,
                 panel.now_ms,
             );
-        } else {
-            paint_text(cx, axis, 13.0, color, x, header::text_baseline(rect, 13.0));
         }
-        if is_active && panel.renaming_theme.as_deref() != Some(axis) {
-            let chevron_x = x + cx.backend.measure_text(axis, 13.0) + 5.0;
-            draw_icon(
-                cx.backend,
-                Icon::ChevronDown,
-                header::icon_origin(rect, chevron_x - rect.origin.x, 11.0),
-                11.0,
-                theme.muted_foreground,
-                1.5,
-            );
-        }
-        x += panel.theme_tab_advance_width(axis);
     }
 
     let add_theme = panel.add_theme_rect(rect);
