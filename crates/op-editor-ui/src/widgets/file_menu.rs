@@ -572,7 +572,12 @@ fn paint_header(cx: &mut PaintCx<'_>, theme: &Theme, x: f32, y: f32, label: &str
 
 fn paint_divider(cx: &mut PaintCx<'_>, theme: &Theme, rect: Rect, y: f32) -> f32 {
     let line_y = y + DIVIDER_GAP;
-    cx.backend.fill_rect(
+    jian_widgets::components::separator::Separator {
+        orientation: jian_widgets::components::separator::Orientation::Horizontal,
+        thickness: 1.0,
+    }
+    .paint(
+        cx.backend,
         Rect {
             origin: Point2D::new(rect.origin.x + PAD_X, line_y),
             size: Point2D::new(MENU_WIDTH - PAD_X * 2.0, 1.0),
