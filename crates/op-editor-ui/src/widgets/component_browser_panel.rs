@@ -520,6 +520,10 @@ impl<'a> ComponentBrowserPanel<'a> {
         let mut search_input = jian_core::text_input::TextInputState::with_text(
             self.state.editor_ui.component_browser_search.clone(),
         );
+        // Anchor the blink to this frame so the caret stays visible while the
+        // box is focused (the buffer is rebuilt each frame, so there is no
+        // per-keystroke anchor to thread).
+        search_input.touch(self.now_ms);
         if self.state.editor_ui.component_browser_select_all && !search_input.text().is_empty() {
             search_input.select_all();
         }

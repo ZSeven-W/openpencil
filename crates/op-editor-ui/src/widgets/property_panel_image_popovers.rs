@@ -109,7 +109,9 @@ pub fn paint_search_popover(
     cx.backend
         .stroke_round_rect(layout.input, 5.0, theme.border, 1.0);
     let baseline = layout.input.origin.y + layout.input.size.y / 2.0 + 4.0;
-    let search_input = jian_core::text_input::TextInputState::with_text(state.search_query.clone());
+    let mut search_input =
+        jian_core::text_input::TextInputState::with_text(state.search_query.clone());
+    search_input.touch(now_ms); // keep the caret visible while the popover is open
     crate::widgets::property_panel_text_input::paint_text_input_view(
         cx,
         theme,
@@ -321,8 +323,9 @@ pub fn paint_generate_popover(
                 // rebuilt from the prompt String each frame; the open popover
                 // owns the keyboard, so it reads as focused.
                 let line = Rect::xywh(ta.origin.x, ta.origin.y, ta.size.x, 26.0);
-                let generate_input =
+                let mut generate_input =
                     jian_core::text_input::TextInputState::with_text(state.generate_prompt.clone());
+                generate_input.touch(now_ms); // keep the caret visible while open
                 crate::widgets::property_panel_text_input::paint_text_input_view(
                     cx,
                     theme,
