@@ -146,12 +146,12 @@ pub fn text_action_rects(x0: f32, y: f32, usable_w: f32) -> Vec<(PropertyPanelAc
             3,
         ),
     ];
-    let h_w = (usable_w - 3.0 * 6.0) / 4.0;
+    let h_w = usable_w / 4.0;
     for (action, i) in h_buttons {
         out.push((
             action,
             Rect {
-                origin: Point2D::new(x0 + PAD_X + i as f32 * (h_w + 6.0), y),
+                origin: Point2D::new(x0 + PAD_X + i as f32 * h_w, y),
                 size: Point2D::new(h_w, BUTTON_H),
             },
         ));
@@ -171,12 +171,12 @@ pub fn text_action_rects(x0: f32, y: f32, usable_w: f32) -> Vec<(PropertyPanelAc
             2,
         ),
     ];
-    let v_w = (usable_w - 2.0 * 6.0) / 3.0;
+    let v_w = usable_w / 3.0;
     for (action, i) in v_buttons {
         out.push((
             action,
             Rect {
-                origin: Point2D::new(x0 + PAD_X + i as f32 * (v_w + 6.0), y),
+                origin: Point2D::new(x0 + PAD_X + i as f32 * v_w, y),
                 size: Point2D::new(v_w, BUTTON_H),
             },
         ));
@@ -646,34 +646,27 @@ fn paint_align_row<T: Copy + PartialEq>(
     cx.backend
         .draw_text(&label, Point2D::new(x + PAD_X, y + 13.0));
     let y = y + ALIGN_LABEL_H;
-    let gap = 6.0;
     let usable_w = width - PAD_X * 2.0;
-    let button_w = (usable_w - gap * (specs.len().saturating_sub(1) as f32)) / specs.len() as f32;
-    for (i, spec) in specs.iter().enumerate() {
-        let rect = Rect {
-            origin: Point2D::new(x + PAD_X + i as f32 * (button_w + gap), y),
-            size: Point2D::new(button_w, BUTTON_H),
-        };
-        let is_active = spec.value == active;
-        if is_active {
-            cx.backend.fill_round_rect(rect, 6.0, theme.primary);
-        } else {
-            cx.backend.fill_round_rect(rect, 6.0, theme.muted);
-            cx.backend.stroke_round_rect(rect, 6.0, theme.border, 1.0);
-        }
-        draw_icon(
-            cx.backend,
-            spec.icon,
-            Point2D::new(rect.origin.x + (button_w - 16.0) / 2.0, rect.origin.y + 6.0),
-            16.0,
-            if is_active {
-                theme.primary_foreground
-            } else {
-                theme.muted_foreground
-            },
-            1.4,
-        );
+    // Icon-only segmented control via jian ToggleGroup; font_size 12 yields a
+    // 16px icon (font + 4), matching the previous hand-rolled cells.
+    let empty_labels: Vec<&str> = specs.iter().map(|_| "").collect();
+    let icon_paths: Vec<&[&str]> = specs.iter().map(|s| s.icon.paths()).collect();
+    let active_idx = specs.iter().position(|s| s.value == active).unwrap_or(0);
+    jian_widgets::components::toggle_group::ToggleGroup {
+        options: &empty_labels,
+        icons: Some(&icon_paths),
+        active: active_idx,
+        hover: None,
+        font_size: 12.0,
     }
+    .paint(
+        cx.backend,
+        Rect {
+            origin: Point2D::new(x + PAD_X, y),
+            size: Point2D::new(usable_w, BUTTON_H),
+        },
+        &crate::widgets::button::tokens_from_theme(theme),
+    );
     y + BUTTON_H
 }
 
