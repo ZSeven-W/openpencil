@@ -13,6 +13,14 @@ impl EditorState {
         if self.ui.text_editing.is_some() {
             return Some(&self.ui.text_edit_input);
         }
+        // Colour-picker hex bar — renders through the unified `TextInputView`,
+        // so its caret blink must drive the same redraw wake-up as every other
+        // focused field.
+        if let Some(picker) = &self.ui.color_picker {
+            if picker.hex_focused {
+                return Some(&picker.hex_input);
+            }
+        }
         if let Some(rename) = &self.ui.layer_rename {
             return Some(&rename.input);
         }

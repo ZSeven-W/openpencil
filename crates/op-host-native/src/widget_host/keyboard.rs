@@ -53,7 +53,7 @@ impl WidgetHostNative {
             if c.is_control() {
                 return false;
             }
-            self.editor_state.color_picker_hex_char(c);
+            self.editor_state.color_picker_hex_char(c, self.now_ms);
             self.mark_dirty();
             return true;
         }
@@ -502,7 +502,7 @@ impl WidgetHostNative {
             return self.preview_dispatch_key("Backspace", false);
         }
         if self.editor_state.color_picker_hex_focused() {
-            self.editor_state.color_picker_hex_backspace();
+            self.editor_state.color_picker_hex_backspace(self.now_ms);
             self.mark_dirty();
             return true;
         }

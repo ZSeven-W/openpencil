@@ -144,7 +144,7 @@ impl EditorState {
             variable_theme: None,
             alpha,
             hex_focused: false,
-            hex_draft: String::new(),
+            hex_input: jian_core::text_input::TextInputState::default(),
         });
         true
     }
@@ -245,7 +245,7 @@ impl EditorState {
             variable_theme,
             alpha: 1.0,
             hex_focused: false,
-            hex_draft: String::new(),
+            hex_input: jian_core::text_input::TextInputState::default(),
         });
         true
     }
@@ -331,43 +331,55 @@ impl EditorState {
         self.ui.color_picker.as_ref().is_some_and(|s| s.hex_focused)
     }
 
-    /// Focus the hex field, seeding its draft from the current colour so the
-    /// user edits the live `#RRGGBB`.
+    /// Focus the hex field, seeding the unified `hex_input` from the current
+    /// colour (caret at end) so the user edits the live `#RRGGBB`.
     pub fn color_picker_focus_hex(&mut self) {
         if let Some(state) = self.ui.color_picker.as_mut() {
             let (r, g, b) = hsv_to_rgb(state.hue, state.sat, state.val);
-            state.hex_draft = rgb_to_hex(r, g, b);
+            state.hex_input = jian_core::text_input::TextInputState::with_text(rgb_to_hex(r, g, b));
             state.hex_focused = true;
         }
     }
 
-    /// Append one hex character (or `#`) to the focused hex draft, capped at
-    /// `#RRGGBB`, then live-apply when the draft is a complete colour.
-    pub fn color_picker_hex_char(&mut self, ch: char) {
-        let valid = ch == '#' || ch.is_ascii_hexdigit();
+    /// Insert one hex character (or a leading `#`) at the caret, capped at
+    /// `#RRGGBB`, then live-apply when the draft is a complete colour. Mirrors
+    /// the property-panel hex input's gating (`keyboard.rs` `is_hex_focus`).
+    pub fn color_picker_hex_char(&mut self, ch: char, now_ms: u64) {
         let Some(state) = self.ui.color_picker.as_mut() else {
             return;
         };
-        if !state.hex_focused || !valid {
+        if !state.hex_focused {
             return;
         }
-        if !state.hex_draft.starts_with('#') {
-            state.hex_draft.insert(0, '#');
+        let input = &state.hex_input;
+        let replacing_all = input.is_select_all();
+        let draft = input.text();
+        let pos = if replacing_all {
+            0
+        } else {
+            input.caret().min(draft.len())
+        };
+        let allowed = (replacing_all || draft.len() < 7)
+            && (ch.is_ascii_hexdigit() || (ch == '#' && pos == 0 && !draft.starts_with('#')));
+        if !allowed {
+            return;
         }
-        if ch != '#' && state.hex_draft.len() < 7 {
-            state.hex_draft.push(ch.to_ascii_lowercase());
-        }
+        let mut buf = [0u8; 4];
+        let lower = ch.to_ascii_lowercase();
+        state.hex_input.insert_str(lower.encode_utf8(&mut buf), now_ms);
         self.color_picker_apply_hex_draft();
     }
 
-    /// Delete the last hex character.
-    pub fn color_picker_hex_backspace(&mut self) {
-        if let Some(state) = self.ui.color_picker.as_mut() {
-            if state.hex_focused && state.hex_draft.len() > 1 {
-                state.hex_draft.pop();
-                self.color_picker_apply_hex_draft();
-            }
+    /// Delete the character before the caret.
+    pub fn color_picker_hex_backspace(&mut self, now_ms: u64) {
+        let Some(state) = self.ui.color_picker.as_mut() else {
+            return;
+        };
+        if !state.hex_focused {
+            return;
         }
+        state.hex_input.backspace(now_ms);
+        self.color_picker_apply_hex_draft();
     }
 
     /// Commit + blur the hex field. No-op when the hex field isn't focused (so
@@ -389,7 +401,7 @@ impl EditorState {
             .ui
             .color_picker
             .as_ref()
-            .map(|s| s.hex_draft.clone())
+            .map(|s| s.hex_input.text().to_owned())
             .unwrap_or_default();
         if let Some((r, g, b)) = parse_hex_rgb(&draft) {
             let (h, s, v) = rgb_to_hsv((r, g, b));

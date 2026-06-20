@@ -65,6 +65,7 @@ impl GitPanel<'_> {
             font_size,
             now_ms: self.now_ms,
             pad_x,
+            baseline_delta_y: 0.0,
         }
         .paint(cx.backend, rect, &self.widget_tokens());
     }

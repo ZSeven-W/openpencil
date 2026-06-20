@@ -476,7 +476,7 @@ impl WidgetHostNative {
         // 10b. Color picker — floating overlay near the right rail.
         if let Some(state) = self.editor_state.ui.color_picker.clone() {
             use op_editor_ui::widgets::color_picker::ColorPicker;
-            let picker = ColorPicker::for_state(&self.editor_state, state);
+            let picker = ColorPicker::for_state_at(&self.editor_state, state, self.now_ms);
             let picker_rect = picker.rect(viewport_width, viewport_height);
             let mut cx = PaintCx {
                 backend: &mut *frame,
