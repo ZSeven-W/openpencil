@@ -302,7 +302,7 @@ pub fn paint_generate_popover(
             if let Some(btn) = layout.primary {
                 jian_widgets::components::button::Button {
                     label: "Apply",
-                    icon_d: None,
+                    icon_paths: None,
                     variant: jian_widgets::components::button::ButtonVariant::Primary,
                     enabled: true,
                     hovered: false,
@@ -314,7 +314,7 @@ pub fn paint_generate_popover(
             if let Some(btn) = layout.secondary {
                 jian_widgets::components::button::Button {
                     label: "Retry",
-                    icon_d: None,
+                    icon_paths: None,
                     variant: jian_widgets::components::button::ButtonVariant::Outline,
                     enabled: true,
                     hovered: false,

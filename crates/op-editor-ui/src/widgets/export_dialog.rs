@@ -186,7 +186,7 @@ impl ExportDialog {
         use op_editor_core::ExportDialogButton;
         Button {
             label: "Cancel",
-            icon_d: None,
+            icon_paths: None,
             variant: ButtonVariant::Outline,
             enabled: true,
             hovered: ui.export_dialog_hover == Some(ExportDialogButton::Cancel),
@@ -196,7 +196,7 @@ impl ExportDialog {
         .paint(backend, cancel, &tokens);
         Button {
             label: "Export",
-            icon_d: None,
+            icon_paths: None,
             variant: ButtonVariant::Primary,
             enabled: true,
             hovered: ui.export_dialog_hover == Some(ExportDialogButton::Export),

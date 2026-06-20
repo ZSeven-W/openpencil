@@ -402,7 +402,7 @@ impl GitPanel<'_> {
         let tokens = &crate::widgets::button::tokens_from_theme(&self.theme);
         jian_widgets::components::button::Button {
             label: glyph,
-            icon_d: None,
+            icon_paths: None,
             variant: jian_widgets::components::button::ButtonVariant::Outline,
             enabled: true,
             hovered,

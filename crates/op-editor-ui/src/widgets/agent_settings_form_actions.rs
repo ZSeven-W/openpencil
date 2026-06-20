@@ -74,7 +74,7 @@ fn paint_text_button(
     let is_primary = matches!(variant, ButtonVariant::Primary);
     Button {
         label: "",
-        icon_d: None,
+        icon_paths: None,
         variant,
         enabled,
         hovered: !is_primary,
