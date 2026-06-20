@@ -453,16 +453,19 @@ fn paint_button(
         origin: Point2D::new(x, y),
         size: Point2D::new(BUTTON_SIZE, BUTTON_SIZE),
     };
-    crate::widgets::button::paint_icon_button(
-        cx.backend,
-        theme,
-        button_rect,
-        icon,
+    jian_widgets::components::icon_button::IconButton {
+        icon_paths: icon.paths(),
         hovered,
         pressed,
         active,
-        ICON_SIZE,
-        STROKE_W,
+        enabled: true,
+        icon_size: ICON_SIZE,
+        stroke_width: STROKE_W,
+    }
+    .paint(
+        cx.backend,
+        button_rect,
+        &crate::widgets::button::tokens_from_theme(theme),
     );
 }
 
