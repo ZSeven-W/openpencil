@@ -20,6 +20,7 @@ use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
 use op_editor_core::editor_ui_state::Locale;
+use op_editor_core::variables_panel_state::PresetMenuButton;
 use op_editor_core::EditorState;
 
 /// TS `w-56` = 14rem = 224 px.
@@ -73,6 +74,7 @@ pub struct ThemePresetMenu {
     name_input_active: bool,
     name_draft: String,
     caret_pos: usize,
+    hover: Option<PresetMenuButton>,
 }
 
 impl ThemePresetMenu {
@@ -89,6 +91,22 @@ impl ThemePresetMenu {
                 String::new()
             },
             caret_pos: state.ui.property_caret_pos,
+            hover: state.editor_ui.variables_preset_menu_hover,
+        }
+    }
+
+    /// The full-width rect of the currently-hovered row (for the hover wash), or
+    /// `None` when nothing is hovered / the name input is active.
+    fn hover_row_rect(&self, menu: Rect) -> Option<Rect> {
+        match self.hover? {
+            PresetMenuButton::SaveCurrent => Some(self.save_row_rect(menu)),
+            PresetMenuButton::Load(i) | PresetMenuButton::Delete(i) => {
+                (i < self.preset_names.len()).then(|| self.preset_row_rect(menu, i))
+            }
+            PresetMenuButton::Import => Some(self.import_row_rect(menu)),
+            PresetMenuButton::Export => Some(self.export_row_rect(menu)),
+            // The name-input row owns its own focus chrome — no row wash.
+            PresetMenuButton::NameInput => None,
         }
     }
 
@@ -211,6 +229,16 @@ impl ThemePresetMenu {
         cx.backend.fill_round_rect(menu, RADIUS, theme.popover);
         cx.backend
             .stroke_round_rect(menu, RADIUS, theme.border, 1.0);
+
+        // Hovered-row wash (inset a few px so it reads as a padded highlight,
+        // not edge-to-edge) — drawn under the row content, jian-consistent.
+        if let Some(hr) = self.hover_row_rect(menu) {
+            let wash = Rect {
+                origin: Point2D::new(hr.origin.x + 4.0, hr.origin.y + 1.0),
+                size: Point2D::new(hr.size.x - 8.0, hr.size.y - 2.0),
+            };
+            cx.backend.fill_round_rect(wash, 6.0, theme.button_hover);
+        }
 
         // Save row — button or inline name input.
         let save = self.save_row_rect(menu);

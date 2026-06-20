@@ -12,8 +12,23 @@
 
 use super::WidgetHostNative;
 use op_editor_core::editor_ui_state::ThemePresetIo;
+use op_editor_core::variables_panel_state::PresetMenuButton;
 use op_editor_ui::widgets::{PresetMenuHit, ThemePresetMenu};
 use op_editor_ui::{Point2D, Rect};
+
+/// Map a press hit inside the preset dropdown to the persistent hover-row enum
+/// (the `Blank` swallow target has no row, so it clears the hover).
+fn preset_hit_to_button(hit: PresetMenuHit) -> Option<PresetMenuButton> {
+    match hit {
+        PresetMenuHit::SaveCurrent => Some(PresetMenuButton::SaveCurrent),
+        PresetMenuHit::NameInput => Some(PresetMenuButton::NameInput),
+        PresetMenuHit::Load(i) => Some(PresetMenuButton::Load(i)),
+        PresetMenuHit::Delete(i) => Some(PresetMenuButton::Delete(i)),
+        PresetMenuHit::Import => Some(PresetMenuButton::Import),
+        PresetMenuHit::Export => Some(PresetMenuButton::Export),
+        PresetMenuHit::Blank => None,
+    }
+}
 
 impl WidgetHostNative {
     /// Anchor rect of the variables panel's preset button.
@@ -79,6 +94,31 @@ impl WidgetHostNative {
         let menu = ThemePresetMenu::for_editor(&self.editor_state);
         let rect = menu.menu_rect(self.variables_preset_anchor(panel_rect));
         Some((menu, rect))
+    }
+
+    /// Update the per-row hover for the open preset dropdown on a cursor move.
+    /// Returns `true` when the cursor is over the menu (the move is swallowed,
+    /// like any top-most overlay).
+    pub(in crate::widget_host) fn update_variables_preset_menu_hover(
+        &mut self,
+        x: f32,
+        viewport_w: f32,
+        viewport_h: f32,
+        y: f32,
+    ) -> bool {
+        let Some((menu, menu_rect)) = self.variables_preset_menu_with_rect(viewport_w, viewport_h)
+        else {
+            return false;
+        };
+        let point = Point2D::new(x, y);
+        let new_hover = menu
+            .hit_test(menu_rect, point)
+            .and_then(preset_hit_to_button);
+        if new_hover != self.editor_state.editor_ui.variables_preset_menu_hover {
+            self.editor_state.editor_ui.variables_preset_menu_hover = new_hover;
+            self.mark_dirty();
+        }
+        menu_rect.contains(point)
     }
 
     /// Press routing for the open preset dropdown. Runs BEFORE
