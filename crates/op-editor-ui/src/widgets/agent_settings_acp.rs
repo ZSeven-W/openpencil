@@ -63,10 +63,9 @@ pub fn content_height(settings: &AgentSettings) -> f32 {
             .map(|(index, _)| card_height(settings, index) + CARD_GAP)
             .sum();
         saved_h
-            + if has_draft {
-                DRAFT_CARD_H + CARD_GAP
-            } else {
-                0.0
+            + match settings.acp_agent_draft.as_ref() {
+                Some(draft) => form_card_h(draft.connection_type) + CARD_GAP,
+                None => 0.0,
             }
     };
     HEADER_H + SUBTITLE_H + list_h
@@ -106,7 +105,13 @@ pub fn hit_test(content: Rect, settings: &AgentSettings, point: Point2D, y: f32)
         card_y += card.size.y + CARD_GAP;
     }
     if let Some(agent) = settings.acp_agent_draft.as_ref() {
-        let card = card_rect(content.origin.x, card_y, content.size.x, DRAFT_CARD_H);
+        let actions_y = form_actions_y(agent.connection_type);
+        let card = card_rect(
+            content.origin.x,
+            card_y,
+            content.size.x,
+            form_card_h(agent.connection_type),
+        );
         if (type_toggle_rect(card)).contains(point) {
             return AcpHit::ToggleDraftConnectionType;
         }
@@ -115,10 +120,10 @@ pub fn hit_test(content: Rect, settings: &AgentSettings, point: Point2D, y: f32)
                 return AcpHit::FocusDraft(*field);
             }
         }
-        if (save_button_rect(card, EXPANDED_CARD_H)).contains(point) {
+        if (save_button_rect(card, actions_y)).contains(point) {
             return AcpHit::SaveDraft;
         }
-        if (cancel_button_rect(card, EXPANDED_CARD_H)).contains(point) {
+        if (cancel_button_rect(card, actions_y)).contains(point) {
             return AcpHit::CancelDraft;
         }
     }
@@ -195,14 +200,19 @@ pub fn paint_acp_section(
         y += card.size.y + CARD_GAP;
     }
     if let Some(draft) = settings.acp_agent_draft.as_ref() {
-        let card = card_rect(content.origin.x, y, content.size.x, DRAFT_CARD_H);
+        let card = card_rect(
+            content.origin.x,
+            y,
+            content.size.x,
+            form_card_h(draft.connection_type),
+        );
         paint_acp_form(cx, theme, settings, ui, draft, None, card, now_ms);
         paint_form_actions(
             cx,
             theme,
             ui,
             card,
-            EXPANDED_CARD_H,
+            form_actions_y(draft.connection_type),
             ui.acp_agent_draft_ready(),
             ui.button_pressed(ButtonPressTarget::AgentSettings(
                 AgentSettingsButton::AcpCancelDraft,
@@ -721,9 +731,29 @@ fn is_editing(settings: &AgentSettings, index: usize) -> bool {
     )
 }
 
+/// Y (relative to the card top) of the Save/Cancel row — just below the last
+/// field, which depends on the connection type's field set. Remote (Display
+/// name + URL) ends far above Local (Display name + Command + Args + Env), so
+/// the remote form is much shorter.
+fn form_actions_y(kind: AcpConnectionType) -> f32 {
+    match kind {
+        // URL field input bottom (154 + FIELD_H) + a small gap.
+        AcpConnectionType::Remote => 154.0 + FIELD_H + 6.0,
+        // Env field input bottom (262 + ENV_FIELD_H) + a small gap = EXPANDED_CARD_H.
+        AcpConnectionType::Local => EXPANDED_CARD_H,
+    }
+}
+
+/// Full editing/draft card height for a given connection type — the action row
+/// sits below the last field and the card wraps it with the same trailing pad
+/// the Local layout uses.
+fn form_card_h(kind: AcpConnectionType) -> f32 {
+    form_actions_y(kind) + (DRAFT_CARD_H - EXPANDED_CARD_H)
+}
+
 fn card_height(settings: &AgentSettings, index: usize) -> f32 {
     if is_editing(settings, index) {
-        EXPANDED_CARD_H
+        form_card_h(settings.acp_agents[index].connection_type)
     } else {
         COMPACT_CARD_H
     }
