@@ -22,7 +22,6 @@ mod chat_design_apply;
 mod chat_title;
 pub mod clipboard;
 pub mod codegen;
-pub mod color_convert;
 pub mod color_picker;
 pub mod color_picker_edit;
 mod color_picker_snapshot;
