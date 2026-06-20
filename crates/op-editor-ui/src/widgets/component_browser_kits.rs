@@ -236,6 +236,7 @@ impl ComponentBrowserPanel<'_> {
         let dropdown = self.kit_dropdown_rect(panel);
         let current = self.kit_filter_label();
         jian_widgets::components::select_trigger::SelectTrigger {
+            icon_paths: None,
             label: &current,
             placeholder: "",
             hovered: self.hover == Some(Btn::KitFilter),
