@@ -172,30 +172,19 @@ pub fn paint_fill_section(
         origin: Point2D::new(swatch_rect.origin.x + swatch_rect.size.x + 6.0, y),
         size: Point2D::new(usable_w - 22.0 - 6.0 - 50.0 - 22.0 - 12.0, INPUT_HEIGHT),
     };
-    cx.backend
-        .fill_round_rect(dropdown_rect, INPUT_RADIUS, theme.muted);
-    let type_label = fill_type_label(locale, fill_type);
-    let label = TextLayout::single_run(
-        type_label,
-        "system-ui",
-        12.0,
-        (theme.foreground).to_jian(),
-        Point2D::new(0.0, 0.0),
-    );
-    cx.backend.draw_text(
-        &label,
-        Point2D::new(dropdown_rect.origin.x + 10.0, dropdown_rect.origin.y + 19.0),
-    );
-    draw_icon(
+    jian_widgets::components::select_trigger::SelectTrigger {
+        icon_paths: None,
+        label: fill_type_label(locale, fill_type),
+        placeholder: "",
+        hovered: false,
+        pressed: false,
+        enabled: true,
+        font_size: 12.0,
+    }
+    .paint(
         cx.backend,
-        Icon::ChevronDown,
-        Point2D::new(
-            dropdown_rect.origin.x + dropdown_rect.size.x - 22.0,
-            dropdown_rect.origin.y + 5.0,
-        ),
-        16.0,
-        theme.muted_foreground,
-        1.4,
+        dropdown_rect,
+        &crate::widgets::button::tokens_from_theme(theme),
     );
     let pct_rect = Rect {
         origin: Point2D::new(dropdown_rect.origin.x + dropdown_rect.size.x + 6.0, y),

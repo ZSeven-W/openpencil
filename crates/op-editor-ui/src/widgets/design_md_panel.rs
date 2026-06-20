@@ -15,12 +15,12 @@ use crate::theme::Theme;
 use crate::widgets::button::{paint_button_feedback_wash, paint_ghost_button_feedback};
 use crate::widgets::design_md_markdown::{parse_blocks, parse_inline, wrap_runs, MdBlock, MdRun};
 use crate::widgets::editor_state_ext::theme_for;
-use crate::widgets::{draw_icon, Icon, PaintCx};
+use crate::widgets::{Icon, PaintCx};
 use crate::{Color, Point2D, Rect, TextLayout};
 use op_editor_core::{ButtonPressTarget, DesignMdButton, DesignMdSpec, EditorState, Locale};
 
 mod helpers;
-use helpers::{hex_to_color, label_char_w, truncate};
+use helpers::{hex_to_color, truncate};
 
 /// Panel width in logical px.
 pub const DESIGN_MD_PANEL_W: f32 = 480.0;
@@ -764,21 +764,27 @@ impl<'a> DesignMdPanel<'a> {
         hovered: bool,
         pressed: bool,
     ) {
-        cx.backend.fill_round_rect(rect, 8.0, self.theme.muted);
-        let color = paint_ghost_button_feedback(cx.backend, &self.theme, rect, hovered, pressed);
-        let icon_size = 14.0;
-        let gap = 8.0;
-        let text_w: f32 = label.chars().map(label_char_w).sum();
-        let left = rect.origin.x + (rect.size.x - icon_size - gap - text_w) / 2.0;
-        let icon_top = Point2D::new(left, rect.origin.y + (rect.size.y - icon_size) / 2.0);
-        draw_icon(cx.backend, icon, icon_top, icon_size, color, 1.5);
-        self.text(
-            cx,
+        let paths = icon.paths();
+        let icon_d = if paths.len() == 1 {
+            Some(paths[0])
+        } else {
+            None
+        };
+        jian_widgets::components::button::Button {
             label,
-            left + icon_size + gap,
-            rect.origin.y + rect.size.y / 2.0 + 4.0,
-            11.0,
-            color,
+            icon_d,
+            // Secondary (muted fill) preserves the empty-state CTA's button
+            // affordance — Ghost would render it transparent until hover.
+            variant: jian_widgets::components::button::ButtonVariant::Secondary,
+            enabled: true,
+            hovered,
+            pressed,
+            font_size: 11.0,
+        }
+        .paint(
+            cx.backend,
+            rect,
+            &crate::widgets::button::tokens_from_theme(&self.theme),
         );
     }
 

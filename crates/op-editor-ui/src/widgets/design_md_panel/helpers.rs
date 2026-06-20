@@ -1,13 +1,4 @@
-use super::CHAR_W;
 use crate::Color;
-
-pub(super) fn label_char_w(ch: char) -> f32 {
-    if ch.is_ascii() {
-        CHAR_W
-    } else {
-        11.0
-    }
-}
 
 pub(super) use crate::util::truncate_ellipsis as truncate;
 
