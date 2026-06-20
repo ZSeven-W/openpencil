@@ -721,7 +721,12 @@ pub(super) fn paint_divider(cx: &mut PaintCx<'_>, theme: &Theme, x: f32, center_
         a: theme.border.a * 0.6,
         ..theme.border
     };
-    cx.backend.fill_rect(
+    jian_widgets::components::separator::Separator {
+        orientation: jian_widgets::components::separator::Orientation::Vertical,
+        thickness: DIVIDER_W,
+    }
+    .paint(
+        cx.backend,
         Rect {
             origin: Point2D::new(x, center_y - DIVIDER_H / 2.0),
             size: Point2D::new(DIVIDER_W, DIVIDER_H),

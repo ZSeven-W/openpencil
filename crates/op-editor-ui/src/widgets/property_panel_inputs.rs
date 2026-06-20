@@ -108,7 +108,12 @@ pub fn paint_section_label_with_add(
 }
 
 pub fn paint_section_divider(cx: &mut PaintCx<'_>, theme: &Theme, x: f32, y: f32, width: f32) {
-    cx.backend.fill_rect(
+    jian_widgets::components::separator::Separator {
+        orientation: jian_widgets::components::separator::Orientation::Horizontal,
+        thickness: 1.0,
+    }
+    .paint(
+        cx.backend,
         Rect {
             origin: Point2D::new(x, y),
             size: Point2D::new(width, 1.0),

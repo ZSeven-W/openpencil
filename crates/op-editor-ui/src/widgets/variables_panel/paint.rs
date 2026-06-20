@@ -643,7 +643,12 @@ fn paint_footer(
 }
 
 pub(super) fn paint_hairline(cx: &mut PaintCx<'_>, x: f32, y: f32, w: f32, color: Color) {
-    cx.backend.fill_rect(
+    jian_widgets::components::separator::Separator {
+        orientation: jian_widgets::components::separator::Orientation::Horizontal,
+        thickness: 1.0,
+    }
+    .paint(
+        cx.backend,
         Rect {
             origin: Point2D::new(x, y),
             size: Point2D::new(w, 1.0),
