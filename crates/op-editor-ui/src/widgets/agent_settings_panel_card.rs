@@ -15,6 +15,7 @@ use crate::widgets::brand_icons::{paint_brand_logo, paint_opencode_logo, BrandLo
 use crate::widgets::button::tokens_from_theme;
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
+use jian_widgets::components::button::{Button, ButtonVariant};
 use jian_widgets::components::card::Card;
 use op_editor_core::agent_settings::{AgentProvider, AgentSettings};
 use op_editor_core::editor_ui_state::EditorUiState;
@@ -160,54 +161,42 @@ pub(super) fn paint_agent_card(
     cx.backend
         .draw_text(&sub, Point2D::new(text_x, card.origin.y + 38.0));
     let hovered = settings.hover_provider == index;
+    let tokens = tokens_from_theme(theme);
     if connected {
+        // Disconnect only surfaces on card hover — a non-primary destructive
+        // action, so jian's DestructiveOutline (red border + red label) owns
+        // the look + feedback instead of a hand-rolled fill+stroke+text.
         if hovered {
-            let btn = disconnect_btn_rect_at(card);
-            let red = Color {
-                r: 0.93,
-                g: 0.30,
-                b: 0.30,
-                a: 1.0,
-            };
-            cx.backend.fill_round_rect(btn, 6.0, theme.muted);
-            cx.backend.stroke_round_rect(btn, 6.0, red, 1.0);
-            let label = t_settings(ui, "settings.agents.disconnect");
-            let lw = cx.backend.measure_text(label, 12.0);
-            let layout = TextLayout::single_run(
-                label,
-                "system-ui",
-                12.0,
-                (red).to_jian(),
-                Point2D::new(0.0, 0.0),
-            );
-            cx.backend.draw_text(
-                &layout,
-                Point2D::new(btn.origin.x + (btn.size.x - lw) / 2.0, btn.origin.y + 18.0),
-            );
+            Button {
+                label: t_settings(ui, "settings.agents.disconnect"),
+                icon_d: None,
+                variant: ButtonVariant::DestructiveOutline,
+                enabled: true,
+                hovered: false,
+                pressed: false,
+                font_size: 12.0,
+            }
+            .paint(cx.backend, disconnect_btn_rect_at(card), &tokens);
         }
     } else {
-        let btn = connect_btn_rect_at(card);
-        cx.backend.fill_round_rect(btn, 5.0, theme.primary);
-        // While the probe runs the button reads "…" — the TS card
-        // swaps the label for a spinner and disables the button
-        // (the press handler ignores Connect while Probing).
+        // While the probe runs the button reads "…" and is disabled — the TS
+        // card swaps the label for a spinner (the press handler ignores
+        // Connect while Probing). jian Button Primary owns the centered label.
         let label = if probing {
             "…"
         } else {
             t_settings(ui, "settings.agents.connect")
         };
-        let lw = cx.backend.measure_text(label, 12.0);
-        let layout = TextLayout::single_run(
+        Button {
             label,
-            "system-ui",
-            12.0,
-            (theme.primary_foreground).to_jian(),
-            Point2D::new(0.0, 0.0),
-        );
-        cx.backend.draw_text(
-            &layout,
-            Point2D::new(btn.origin.x + (btn.size.x - lw) / 2.0, btn.origin.y + 18.0),
-        );
+            icon_d: None,
+            variant: ButtonVariant::Primary,
+            enabled: !probing,
+            hovered: false,
+            pressed: false,
+            font_size: 12.0,
+        }
+        .paint(cx.backend, connect_btn_rect_at(card), &tokens);
     }
 }
 
