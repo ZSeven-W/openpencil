@@ -83,7 +83,8 @@ pub fn push_text_input_rects(
 
 pub fn text_action_rects(x0: f32, y: f32, usable_w: f32) -> Vec<(PropertyPanelAction, Rect)> {
     let mut out = Vec::new();
-    let growth_w = (usable_w - 2.0 * 6.0) / 3.0;
+    // Continuous even cells — matches the jian ToggleGroup paint (no gaps).
+    let growth_w = usable_w / 3.0;
     let growth_y = y + SECTION_HEADER_HEIGHT;
     let growth_actions = [
         (
@@ -103,7 +104,7 @@ pub fn text_action_rects(x0: f32, y: f32, usable_w: f32) -> Vec<(PropertyPanelAc
         out.push((
             action,
             Rect {
-                origin: Point2D::new(x0 + PAD_X + i as f32 * (growth_w + 6.0), growth_y),
+                origin: Point2D::new(x0 + PAD_X + i as f32 * growth_w, growth_y),
                 size: Point2D::new(growth_w, BUTTON_H),
             },
         ));
@@ -551,46 +552,31 @@ fn paint_text_growth_row(
     active: TextGrowthValue,
 ) -> f32 {
     let usable_w = width - PAD_X * 2.0;
-    let gap = 6.0;
-    let button_w = (usable_w - gap * 2.0) / 3.0;
     let specs = [
         (TextGrowthValue::Auto, "textLayout.autoWidth"),
         (TextGrowthValue::FixedWidth, "textLayout.autoHeight"),
         (TextGrowthValue::FixedWidthHeight, "textLayout.fixed"),
     ];
-    for (i, (value, key)) in specs.iter().enumerate() {
-        let rect = Rect {
-            origin: Point2D::new(x + PAD_X + i as f32 * (button_w + gap), y),
-            size: Point2D::new(button_w, BUTTON_H),
-        };
-        let is_active = *value == active;
-        if is_active {
-            cx.backend.fill_round_rect(rect, 6.0, theme.primary);
-        } else {
-            cx.backend.fill_round_rect(rect, 6.0, theme.muted);
-        }
-        let color = if is_active {
-            theme.primary_foreground
-        } else {
-            theme.muted_foreground
-        };
-        let label = op_i18n::translate(locale, key);
-        let layout = TextLayout::single_run(
-            label,
-            "system-ui",
-            10.0,
-            (color).to_jian(),
-            Point2D::new(0.0, 0.0),
-        );
-        let label_w = cx.backend.measure_text(label, 10.0);
-        cx.backend.draw_text(
-            &layout,
-            Point2D::new(
-                rect.origin.x + (rect.size.x - label_w) / 2.0,
-                rect.origin.y + 18.0,
-            ),
-        );
+    let labels: Vec<&str> = specs
+        .iter()
+        .map(|(_, key)| op_i18n::translate(locale, key))
+        .collect();
+    let active_idx = specs.iter().position(|(v, _)| *v == active).unwrap_or(0);
+    jian_widgets::components::toggle_group::ToggleGroup {
+        options: &labels,
+        icons: None,
+        active: active_idx,
+        hover: None,
+        font_size: 10.0,
     }
+    .paint(
+        cx.backend,
+        Rect {
+            origin: Point2D::new(x + PAD_X, y),
+            size: Point2D::new(usable_w, BUTTON_H),
+        },
+        &crate::widgets::button::tokens_from_theme(theme),
+    );
     y + BUTTON_H
 }
 
