@@ -512,7 +512,7 @@ impl WidgetHostNative {
         //       below the Design-MD panel so when both are open the
         //       Design-MD panel sits absolute-top.
         if let (Some(panel), Some(panel_rect)) = (
-            ComponentBrowserPanel::for_editor(&self.editor_state),
+            ComponentBrowserPanel::for_editor_at(&self.editor_state, self.now_ms),
             self.component_browser_panel_rect(viewport_width, viewport_height),
         ) {
             let mut cx = PaintCx {
@@ -525,7 +525,7 @@ impl WidgetHostNative {
         //       dropdown. It sits above the component browser and
         //       below Design-MD, matching the press routing order.
         if let (Some(panel), Some(panel_rect)) = (
-            IconPickerPanel::for_editor(&self.editor_state),
+            IconPickerPanel::for_editor_at(&self.editor_state, self.now_ms),
             self.icon_picker_panel_rect(viewport_width, viewport_height),
         ) {
             let mut cx = PaintCx {

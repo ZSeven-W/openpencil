@@ -1093,6 +1093,7 @@ impl Widget for PropertyPanel {
                     &self.font_picker_search,
                     &self.font_picker,
                     &text.font_family,
+                    self.now_ms,
                 );
             }
         }

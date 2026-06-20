@@ -63,10 +63,16 @@ pub struct IconPickerPanel<'a> {
     hover: Option<usize>,
     /// Which target is actively pressed — touch-compatible feedback.
     pressed: Option<usize>,
+    /// Frame clock for the search field's caret blink.
+    now_ms: u64,
 }
 
 impl<'a> IconPickerPanel<'a> {
     pub fn for_editor(state: &'a EditorState) -> Option<IconPickerPanel<'a>> {
+        Self::for_editor_at(state, 0)
+    }
+
+    pub fn for_editor_at(state: &'a EditorState, now_ms: u64) -> Option<IconPickerPanel<'a>> {
         if !state.editor_ui.icon_picker.open {
             return None;
         }
@@ -76,6 +82,7 @@ impl<'a> IconPickerPanel<'a> {
             locale: state.editor_ui.locale,
             hover: state.editor_ui.icon_picker.hover,
             pressed: state.editor_ui.icon_picker.pressed,
+            now_ms,
         })
     }
 
@@ -275,39 +282,28 @@ impl<'a> IconPickerPanel<'a> {
             self.theme.muted_foreground,
             1.4,
         );
-        let raw_query = self.state.editor_ui.icon_picker_search.trim();
-        let search_text = if raw_query.is_empty() {
-            self.t("icon.searchIcons")
-        } else {
-            raw_query
-        };
-        let color = if raw_query.is_empty() {
-            self.theme.muted_foreground
-        } else {
-            self.theme.foreground
-        };
-        // Ctrl/Cmd+A highlights the whole query (painted behind the text).
-        if self.state.editor_ui.icon_picker_select_all && !raw_query.is_empty() {
-            crate::widgets::text_selection::paint_single_line_selection(
-                cx,
-                &self.theme,
-                raw_query,
-                search.origin.x + 30.0,
-                search.origin.y + 18.0,
-                12.0,
-                search.origin.x + search.size.x - 8.0,
-            );
-        }
-        let layout = TextLayout::single_run(
-            search_text,
-            "system-ui",
-            12.0,
-            (color).to_jian(),
-            Point2D::new(0.0, 0.0),
+        // Value + placeholder + caret + select-all highlight render through the
+        // unified jian TextInputView (family-aware caret, no hand-rolled drift).
+        // The buffer is rebuilt from the filter String each frame; the picker
+        // owns the keyboard while open, so it reads as focused.
+        let placeholder = self.t("icon.searchIcons");
+        let mut search_input = jian_core::text_input::TextInputState::with_text(
+            self.state.editor_ui.icon_picker_search.clone(),
         );
-        cx.backend.draw_text(
-            &layout,
-            Point2D::new(search.origin.x + 30.0, search.origin.y + 18.0),
+        if self.state.editor_ui.icon_picker_select_all && !search_input.text().is_empty() {
+            search_input.select_all();
+        }
+        crate::widgets::property_panel_text_input::paint_text_input_view(
+            cx,
+            &self.theme,
+            &search_input,
+            search,
+            12.0,
+            30.0,
+            search.origin.y + 18.0,
+            self.now_ms,
+            placeholder,
+            true,
         );
     }
 
