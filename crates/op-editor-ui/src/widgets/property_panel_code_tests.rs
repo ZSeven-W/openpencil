@@ -239,8 +239,8 @@ fn idle_bundle_hover_paints_neutral_feedback() {
             .iter()
             .any(|(r, c)| rect_eq(*r, bundle_rect)
                 && !color_eq(*c, theme.muted)
-                && c.a > theme.button_hover.a + 0.01),
-        "hovered borderless Export AI Bundle should paint a visible wash over the transparent button"
+                && color_eq(*c, theme.button_hover)),
+        "hovered borderless Export AI Bundle should paint jian Ghost's button_hover wash over the transparent button"
     );
 }
 
