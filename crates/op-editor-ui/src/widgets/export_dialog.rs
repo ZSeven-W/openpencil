@@ -178,27 +178,32 @@ impl ExportDialog {
             );
         }
 
-        // Footer buttons.
+        // Footer buttons — Cancel as an outline (border + hover wash), Export
+        // as the primary CTA. jian Button owns the fill / border / feedback.
         let (cancel, export) = self.button_rects();
-        backend.fill_round_rect(cancel, 6.0, theme.muted);
-        crate::widgets::button::paint_ghost_button_feedback(
-            backend,
-            theme,
-            cancel,
-            ui.export_dialog_hover == Some(op_editor_core::ExportDialogButton::Cancel),
-            export_dialog_pressed(ui, op_editor_core::ExportDialogButton::Cancel),
-        );
-        backend.stroke_round_rect(cancel, 6.0, theme.border, 1.0);
-        paint_centered_label(backend, "Cancel", 13.0, theme.foreground, cancel);
-        backend.fill_round_rect(export, 6.0, theme.primary);
-        crate::widgets::button::paint_ghost_button_feedback(
-            backend,
-            theme,
-            export,
-            ui.export_dialog_hover == Some(op_editor_core::ExportDialogButton::Export),
-            export_dialog_pressed(ui, op_editor_core::ExportDialogButton::Export),
-        );
-        paint_centered_label(backend, "Export", 13.0, theme.primary_foreground, export);
+        let tokens = crate::widgets::button::tokens_from_theme(theme);
+        use jian_widgets::components::button::{Button, ButtonVariant};
+        use op_editor_core::ExportDialogButton;
+        Button {
+            label: "Cancel",
+            icon_d: None,
+            variant: ButtonVariant::Outline,
+            enabled: true,
+            hovered: ui.export_dialog_hover == Some(ExportDialogButton::Cancel),
+            pressed: export_dialog_pressed(ui, ExportDialogButton::Cancel),
+            font_size: 13.0,
+        }
+        .paint(backend, cancel, &tokens);
+        Button {
+            label: "Export",
+            icon_d: None,
+            variant: ButtonVariant::Primary,
+            enabled: true,
+            hovered: ui.export_dialog_hover == Some(ExportDialogButton::Export),
+            pressed: export_dialog_pressed(ui, ExportDialogButton::Export),
+            font_size: 13.0,
+        }
+        .paint(backend, export, &tokens);
     }
 
     fn paint_disabled_pill(

@@ -298,28 +298,30 @@ pub fn paint_generate_popover(
                 cx.backend.stroke_round_rect(rect, 6.0, theme.border, 1.0);
                 paint_data_url_image(cx, rect, url, 6.0);
             }
+            let tokens = crate::widgets::button::tokens_from_theme(theme);
             if let Some(btn) = layout.primary {
-                cx.backend.fill_round_rect(btn, 6.0, theme.primary);
-                paint_centered_label(
-                    cx,
-                    theme.primary_foreground,
-                    "Apply",
-                    11.0,
-                    btn.origin.x + btn.size.x / 2.0,
-                    btn.origin.y + btn.size.y / 2.0 + 4.0,
-                );
+                jian_widgets::components::button::Button {
+                    label: "Apply",
+                    icon_d: None,
+                    variant: jian_widgets::components::button::ButtonVariant::Primary,
+                    enabled: true,
+                    hovered: false,
+                    pressed: false,
+                    font_size: 11.0,
+                }
+                .paint(cx.backend, btn, &tokens);
             }
             if let Some(btn) = layout.secondary {
-                cx.backend.fill_round_rect(btn, 6.0, theme.card);
-                cx.backend.stroke_round_rect(btn, 6.0, theme.border, 1.0);
-                paint_centered_label(
-                    cx,
-                    theme.foreground,
-                    "Retry",
-                    11.0,
-                    btn.origin.x + btn.size.x / 2.0,
-                    btn.origin.y + btn.size.y / 2.0 + 4.0,
-                );
+                jian_widgets::components::button::Button {
+                    label: "Retry",
+                    icon_d: None,
+                    variant: jian_widgets::components::button::ButtonVariant::Outline,
+                    enabled: true,
+                    hovered: false,
+                    pressed: false,
+                    font_size: 11.0,
+                }
+                .paint(cx.backend, btn, &tokens);
             }
         }
         GeneratePopoverView::Idle => {

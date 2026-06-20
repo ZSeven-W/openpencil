@@ -242,28 +242,27 @@ fn paint_full_button(
     style: FullButtonStyle,
 ) -> f32 {
     let btn = full_button_rect(x, y, w);
-    if style.filled {
-        cx.backend.fill_round_rect(btn, INPUT_RADIUS, theme.primary);
-        if style.hovered {
-            paint_primary_hover_overlay(cx, btn, INPUT_RADIUS);
-        }
+    // Filled → primary CTA; else an outline (border + hover wash). jian Button
+    // owns the fill / border / hover feedback + centered label.
+    let variant = if style.filled {
+        jian_widgets::components::button::ButtonVariant::Primary
     } else {
-        cx.backend.fill_round_rect(btn, INPUT_RADIUS, theme.muted);
-        if style.hovered {
-            cx.backend
-                .fill_round_rect(btn, INPUT_RADIUS, code_neutral_hover_color(theme));
-        }
-        cx.backend
-            .stroke_round_rect(btn, INPUT_RADIUS, theme.border, 1.0);
-    }
-    let text_color = if style.filled {
-        theme.primary_foreground
-    } else {
-        theme.foreground
+        jian_widgets::components::button::ButtonVariant::Outline
     };
-    let tw = cx.backend.measure_text(label, 13.0);
-    let tx = btn.origin.x + (btn.size.x - tw) / 2.0;
-    draw_line(cx, label, text_color, tx, btn.origin.y + 19.0);
+    jian_widgets::components::button::Button {
+        label,
+        icon_d: None,
+        variant,
+        enabled: true,
+        hovered: style.hovered,
+        pressed: false,
+        font_size: 13.0,
+    }
+    .paint(
+        cx.backend,
+        btn,
+        &crate::widgets::button::tokens_from_theme(theme),
+    );
     y + INPUT_HEIGHT + 12.0
 }
 
