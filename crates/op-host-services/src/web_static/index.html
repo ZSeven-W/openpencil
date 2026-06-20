@@ -40,14 +40,17 @@
       bundle (JS glue + .wasm) is served from `/pkg/*` by the same daemon.
 
       The hidden IME composition <textarea> the web shell needs is created
-      by `mount()` itself (op-host-web `lib.rs`), so this page only has to
-      provide the <canvas>.
+      by `mount_ck()` itself, so this page only has to provide the <canvas>.
     -->
     <canvas id="op"></canvas>
     <pre id="op-error"></pre>
     <script type="module">
       const errorPane = document.getElementById('op-error');
+      const markSmoke = (state) => {
+        document.documentElement.setAttribute('data-op-smoke', state);
+      };
       const showError = (msg) => {
+        markSmoke('error');
         errorPane.textContent = msg;
         errorPane.style.display = 'block';
       };
@@ -86,45 +89,22 @@
       };
       // Size the canvas to the window BEFORE mount — the shell reads the
       // canvas width/height attributes when it builds its raster surface.
+      markSmoke('booting');
       sizeCanvasForDisplay(BOOT_CANVAS_PIXEL_BUDGET);
       try {
         await resetSyncDocument();
         const mod = await import('/pkg/op_host_web.js');
         await mod.default();
-        // The CanvasKit bundle (renders skia on WebGL2 via /canvaskit/) exposes
-        // `mount_ck` and owns its own resize via DOM listeners; the legacy
-        // embedded-skia bundle exposes `mount` + a `WebShell.resize()` handle.
-        if (typeof mod.mount_ck === 'function') {
-          sizeCanvasForDisplay(STEADY_CANVAS_PIXEL_BUDGET);
-          await mod.mount_ck('op');
-        } else {
-          // Keep the returned WebShell alive for the page lifetime: it owns
-          // the DOM listeners + closures into the wasm module.
-          window.__opShell = mod.mount('op');
-          const idle = window.requestIdleCallback || ((cb) => window.setTimeout(cb, 250));
-          idle(() => {
-            if (sizeCanvasForDisplay(STEADY_CANVAS_PIXEL_BUDGET)) {
-              window.__opShell.resize();
-            }
-          });
-          let resizeRaf = 0;
-          window.addEventListener('resize', () => {
-            if (resizeRaf) return;
-            resizeRaf = window.requestAnimationFrame(() => {
-              resizeRaf = 0;
-              if (sizeCanvasForDisplay(STEADY_CANVAS_PIXEL_BUDGET)) {
-                window.__opShell.resize();
-              }
-            });
-          });
-        }
+        sizeCanvasForDisplay(STEADY_CANVAS_PIXEL_BUDGET);
+        await mod.mount_ck('op');
+        markSmoke('ok');
       } catch (e) {
         showError(
           [
             'OpenPencil web shell failed to load.',
             '',
             'Expected the wasm-bindgen bundle at /pkg/op_host_web.js.',
-            'Rebuild it with tools/check-wasm-bundle.sh (needs EMSDK), or',
+            'Rebuild it with tools/check-wasm-bundle.sh, or',
             'point the daemon at an existing bundle directory via the',
             'OPENPENCIL_WEB_BUNDLE_DIR environment variable.',
             '',

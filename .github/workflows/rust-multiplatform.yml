@@ -130,19 +130,16 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: wasm32
-      # Step 1b §1.2 wasm32-clean compile guard — without `skia` feature this
-      # is a stub mount (validates host canvas, does not paint). The real
-      # render artifact uses the SAME wasm32-unknown-unknown target plus
-      # `--features skia` (post C-hard.2 lock-in 2026-05-09) and ships
-      # via a separate Phase A job once the CI-side C-hard pipeline
-      # (brew emscripten install + EMSDK + .wasm.a symlink hack +
-      # wasm-bindgen + wasm-opt) lands. Until then this job only proves
-      # the public surface compiles wasm32-clean.
+      # Step 1b wasm32-clean compile guard. The default `web` feature is a
+      # stub mount that validates the canvas and does not paint; it stays here
+      # to prove the public surface remains wasm32-clean without the production
+      # bundle deps. The real deployable renderer is built in
+      # wasm-bundle-build.yml with the `canvaskit` feature and the
+      # tools/check-wasm-bundle.sh gate.
       - run: cargo build -p op-host-web --target wasm32-unknown-unknown --release --no-default-features --features web
       # Artifact upload deliberately removed: the stub `.wasm` from this
       # path would mislead downstream consumers into thinking the shell can
-      # render. Restore the upload step once the skia-enabled build runs on
-      # this CI target.
+      # render. The deployable artifact is uploaded by wasm-bundle-build.yml.
 
   mobile-check:
     name: ${{ matrix.label }} (cargo check only)

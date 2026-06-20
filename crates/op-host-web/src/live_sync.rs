@@ -3,8 +3,8 @@
 //! talk to the web-canvas daemon (`op-host-desktop`'s `web_canvas_server`,
 //! run via `--serve-web` / `op start --web`).
 //!
-//! This module is PURE `web_sys` IO (no skia, no `op_editor_core`), so it
-//! compile-checks on the wasm32 web stub WITHOUT an EMSDK toolchain — i.e. the
+//! This module is PURE `web_sys` IO (no native Skia/C toolchain and no
+//! `op_editor_core`), so it compile-checks on the wasm32 web stub. The
 //! highest-risk part of the live-sync glue (the `web_sys` XHR/interval calls)
 //! is verified by `cargo check -p op-host-web --target wasm32-unknown-unknown`.
 //! The protocol decisions (version gating, push baselines, apply + repaint)

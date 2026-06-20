@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>Step 1b WebShell Smoke</title>
+    <title>CanvasKit WebShell Smoke</title>
     <style>
       html,
       body {
@@ -36,51 +36,52 @@
     <div id="status"></div>
     <canvas id="op" width="960" height="640"></canvas>
     <script type="module">
-      // Phase A smoke harness for the WebShell red-rect demo.
+      // Smoke harness for the production CanvasKit WebShell.
       //
-      // CURRENT STATE (post C-hard.2, 2026-05-09):
-      //   - Skia C++ + skia-bindings + skia-safe + shell-web build to
-      //     wasm32-unknown-unknown via the vendor/skia-safe-op fork
-      //     (build_support/platform/wasm_unknown.rs).
-      //   - The libc / libcxx / libm shim crate (crates/wasm-libc-shim)
-      //     resolves the previously-missing env.* imports. Verified via
-      //     `WebAssembly.Module.imports()`: 22 imports, all from
-      //     `./op_host_web_bg.js`; 0 env.* imports.
-      //   - The bundle is structurally LinkError-free; a LinkError here
-      //     is now a REGRESSION signal, not the expected state.
+      // CURRENT STATE:
+      //   - `tools/check-wasm-bundle.sh` builds `op-host-web` with the
+      //     `canvaskit` feature, runs wasm-bindgen, asserts 0 env.* imports,
+      //     runs wasm-opt, and size-gates the wasm bundle.
+      //   - CanvasKit itself is served separately from `/canvaskit/`.
+      //   - A LinkError here is a regression in the current CanvasKit bundle.
       //
       // What this harness verifies:
-      //   - module loads (LinkError ⇒ regression in libc shim or fork)
-      //   - mount() returns a live WebShell
-      //   - paint_phase_a draws a red rect via skia raster + put_image_data
+      //   - module loads
+      //   - mount_ck() resolves and paints the Rust editor shell through CanvasKit
       //
-      // What this harness does NOT verify (Phase E manual smoke):
-      //   - the red rect is actually visible to a human in a browser tab
-      //   - latency is within the 16ms / 60fps budget
-      //   - DPI scale + canvas resize behave correctly
+      // What this harness does NOT verify:
+      //   - all daemon-backed routes are available
+      //   - AI / file / export endpoints work end to end
+      //   - performance is within frame budget under a large document
       //
-      // Round 2 C-R2-1 fix: assign the returned WebShell to
-      // `window.__opShell` so the GC keeps it alive for the page
-      // lifetime; the shell may hold closures into the wasm module.
+      // Keep the returned promise reachable for the page lifetime; the shell
+      // holds browser event closures into the wasm module.
       const status = document.getElementById('status');
+      const markSmoke = (state) => {
+        document.documentElement.setAttribute('data-op-smoke', state);
+      };
       const log = (cls, msg) => {
         const block = document.createElement('pre');
         block.className = cls;
         block.textContent = msg;
         status.appendChild(block);
       };
+      markSmoke('booting');
       try {
         const mod = await import('../pkg/op_host_web.js');
         await mod.default();
-        window.__opShell = mod.mount('op');
-        log('ok', 'WebShell mounted; canvas should show centered red rect.');
+        window.__opShell = mod.mount_ck('op');
+        await window.__opShell;
+        markSmoke('ok');
+        log('ok', 'CanvasKit WebShell mounted; the editor canvas should be visible.');
       } catch (e) {
+        markSmoke('error');
         const isLinkError =
           e instanceof WebAssembly.LinkError ||
           (e && e.constructor && e.constructor.name === 'LinkError') ||
           (e && e.message && e.message.startsWith('WebAssembly.instantiate()'));
         const header = isLinkError
-          ? 'WebShell wasm bundle failed to link — REGRESSION (post C-hard.2 the bundle is supposed to be LinkError-free).'
+          ? 'CanvasKit WebShell wasm bundle failed to link — REGRESSION.'
           : 'WebShell loader could not be imported.';
         log(
           'error',
@@ -90,20 +91,17 @@
             'Expected file: ../pkg/op_host_web.js',
             '',
             'How to rebuild the bundle (when the file is missing or stale):',
-            '  1. brew install emscripten   # 5.0.7 + EMSDK shim',
-            '  2. mkdir -p ~/.emsdk/upstream && \\',
-            '       ln -sfn /opt/homebrew/opt/emscripten/libexec ~/.emsdk/upstream/emscripten',
-            '  3. EMSDK="$HOME/.emsdk" cargo build -p op-host-web \\',
-            '       --target wasm32-unknown-unknown --features skia --release',
-            '  4. (one-time) ln -sf libfoo.wasm.a libfoo.a in target/.../skia-bindings-*/out/skia/',
-            '  5. wasm-bindgen --target web \\',
-            '       --out-dir crates/op-host-web/pkg \\',
-            '       target/wasm32-unknown-unknown/release/op_host_web.wasm',
+            '  1. bash tools/check-wasm-bundle.sh',
+            '     # equivalent cargo step uses --features canvaskit',
+            '  2. serve crates/op-host-web/pkg at /pkg/',
+            '  3. serve crates/op-host-web/assets/canvaskit at /canvaskit/',
+            '',
+            'For the normal local path, run:',
+            '  op start --web',
             '',
             'A LinkError after a clean rebuild means a new env.* import',
-            'snuck back in (skia upgrade, new shim gap, etc). Inspect via',
-            '  wasm-objdump --details --section=Import ../pkg/op_host_web_bg.wasm',
-            'and add the missing symbol to crates/wasm-libc-shim/src/imp.rs.',
+            'snuck back in. Run tools/check-wasm-bundle.sh and inspect',
+            'the import guard failure.',
             '',
             'Underlying error: ' + (e && e.message ? e.message : String(e)),
           ].join('\n'),

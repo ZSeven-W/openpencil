@@ -2,13 +2,11 @@
 //! live-sync, codegen, file IO, icon search, fonts) and whichever rendering
 //! host owns the shell.
 //!
-//! Both mount paths wrap their state in `Rc<RefCell<_>>` and expose the same
-//! two things the integration modules need: the shared `WidgetHost` (where all
-//! `EditorState` lives) and a `repaint()` that re-paints through that path's
-//! backend. The skia raster mount (`Inner`, `lib.rs`) and the CanvasKit GPU
-//! mount (`CkInner`, `canvaskit.rs`) each implement this trait, so the modules
-//! can be written once against `Rc<RefCell<impl RepaintContext>>` instead of a
-//! concrete `Inner`.
+//! The production CanvasKit mount wraps its state in `Rc<RefCell<_>>` and
+//! exposes the two things the integration modules need: the shared `WidgetHost`
+//! (where all `EditorState` lives) and a `repaint()` that re-paints through the
+//! CanvasKit backend. Keeping the trait lets those modules stay independent of
+//! the concrete `CkInner` type.
 
 use crate::widget_host::WidgetHost;
 use wasm_bindgen::JsValue;

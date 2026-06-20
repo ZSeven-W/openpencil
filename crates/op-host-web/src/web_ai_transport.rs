@@ -1,4 +1,5 @@
-// UNVERIFIED in-browser: run tools/check-wasm-bundle.sh and a browser smoke test.
+// Browser/daemon boundary: XHR SSE needs a running desktop daemon; pure SSE
+// parsing is unit-tested and the CanvasKit bundle gate covers wasm linkability.
 //! XHR-based SSE transport to the desktop daemon's AI SSE endpoints.
 //!
 //! Mirrors `live_sync.rs` (no `wasm-bindgen-futures`): an `XmlHttpRequest`

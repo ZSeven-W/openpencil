@@ -1,4 +1,5 @@
-// UNVERIFIED in-browser: run tools/check-wasm-bundle.sh and a browser smoke test.
+// Browser boundary: Local Font Access permission and CanvasKit font-byte loading
+// need browser smoke; pure classifiers and fallback routing are unit-tested.
 //! Browser Local Font Access bridge for the web host.
 //!
 //! The wasm Skia backend cannot see operating-system fonts by itself. The

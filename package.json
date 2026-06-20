@@ -53,7 +53,8 @@
     "cargo:clippy": "cargo clippy --workspace --all-targets -- -D warnings",
     "cargo:wasm-check": "cargo check --target wasm32-unknown-unknown -p op-host-web --no-default-features --features web",
     "cargo:deny": "cargo deny check && cargo deny --target wasm32-unknown-unknown check bans",
-    "shell:wasm:dev": "echo 'Build the browser bundle: bash tools/check-wasm-bundle.sh (op-host-web --features canvaskit -> wasm-bindgen -> wasm-opt). Serve it: op start --web (raw form: openpencil-desktop --serve-web <port>)'"
+    "shell:wasm:dev": "echo 'Build the browser bundle: bash tools/check-wasm-bundle.sh (op-host-web --features canvaskit -> wasm-bindgen -> wasm-opt). Serve it: op start --web (raw form: openpencil-desktop --serve-web <port>)'",
+    "shell:web:serve": "bash scripts/start-web-rust.sh"
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "^0.18.2",

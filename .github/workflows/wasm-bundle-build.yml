@@ -89,16 +89,22 @@ jobs:
           echo "Installing wasm-bindgen-cli $version"
           cargo install wasm-bindgen-cli --version "$version" --locked
 
-      - name: Install binaryen (wasm-opt)
+      - name: Install binaryen + headless server runtime deps
         run: |
           sudo apt-get update
-          sudo apt-get install -y binaryen
+          sudo apt-get install -y \
+            binaryen \
+            pkg-config \
+            libfreetype-dev \
+            libfontconfig1-dev \
+            fonts-noto-cjk
           wasm-opt --version
 
-      - name: Verify node + gzip are present (script prerequisites)
+      - name: Verify node + gzip + Chrome are present (script prerequisites)
         run: |
           node --version
           gzip --version | head -n1
+          google-chrome --version || chromium --version || chromium-browser --version
 
       # Single source of truth: run the local gate script verbatim. It performs
       # cargo build (canvaskit) -> wasm-bindgen --target web -> 0-env-import
@@ -108,6 +114,9 @@ jobs:
       # if a release intentionally re-baselines.
       - name: Build + size-gate the canvaskit bundle
         run: bash tools/check-wasm-bundle.sh
+
+      - name: Browser smoke the canvaskit bundle + daemon
+        run: OPENPENCIL_SKIP_WASM_BUILD=1 bash tools/check-web-browser-smoke.sh
 
       # Assemble the deployable layout the daemon's `web_static.rs` expects: the
       # wasm-bindgen `pkg/` output PLUS the vendored CanvasKit artifact under a

@@ -1,4 +1,5 @@
-// UNVERIFIED in-browser: run tools/check-wasm-bundle.sh and a browser smoke test.
+// Browser boundary: clipboard writes and download clicks require real browser
+// gestures; the CanvasKit bundle gate covers wasm linkability.
 //! Browser clipboard write + file download (Blob + anchor).
 //!
 //! The two browser-side actions the codegen panel needs: copy generated source

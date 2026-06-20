@@ -1,4 +1,5 @@
-// UNVERIFIED in-browser: run tools/check-wasm-bundle.sh and a browser smoke test.
+// Browser/daemon boundary: chat streams through /api/ai/standard on the desktop
+// daemon; this module keeps that web architecture instead of bypassing it.
 //! Web chat session — drives a real AI turn through the desktop daemon's
 //! `/api/ai/standard` route instead of the offline echo stub.
 //!

@@ -20,36 +20,32 @@ op-editor-ui = { path = "../op-editor-ui" }
 # single source of truth; `op-pen-loader` bridges it into the
 # read-only paint `Document` the shared widgets consume.
 #
-# Both are `optional` + behind the `skia` feature for the SAME reason
-# `skia-safe` is: the host (`widget_host`) is `#[cfg(feature="skia")]`-
-# gated, so the skia-free CI stub baseline
-# (`--no-default-features --features web`) never needs them. This
-# matters because `op-pen-loader` pulls `jian-skia` transitively
-# (`pen_document_to_document` runs `SkiaMeasure` for text layout);
-# keeping it optional preserves the wasm32-clean stub baseline.
+# These stay optional and are pulled only by `canvaskit`, so the wasm32-clean
+# stub baseline (`--no-default-features --features web`) never compiles the
+# full editor pipeline. `op-pen-loader` disables `skia-measure` below; the web
+# shell uses CanvasKit/browser text measurement instead of the native Skia
+# measurement path.
 op-editor-core = { path = "../op-editor-core", optional = true }
 op-editor-host-core = { path = "../op-editor-host-core", optional = true, default-features = false }
-# default-features = false drops `skia-measure`; the `skia` feature re-enables
-# it so only the CanvasKit build stays skia-free (estimate text measurement).
+# default-features = false drops `skia-measure` for the browser bundle.
 op-pen-loader = { path = "../op-pen-loader", optional = true, default-features = false }
-# P4b web AI-streaming foundation: the codegen/AI pipeline. Optional + behind
-# the `codegen` feature (which also pulls `skia`) so the wasm32-clean stub
-# baseline (`--no-default-features --features web`) never compiles it. NOTE:
-# the new web modules it backs (web_ai_transport / raf_pump / web_clipboard)
-# are UNVERIFIED in-browser — run tools/check-wasm-bundle.sh and a browser smoke test.
+# Web AI/codegen foundation. Optional + behind `canvaskit`, so the wasm32-clean
+# stub baseline never compiles it. End-to-end browser AI still depends on the
+# desktop daemon routes; unit tests cover the pure SSE parsing and bundle checks
+# cover wasm linkability.
 op-codegen = { path = "../op-codegen", features = ["ai"], optional = true }
 # P5 web codegen session: `build_codegen_input` resolves the selection into
 # `PenNode` subtrees (jian-ops-schema), serializes them (serde_json), and
 # constructs the pipeline `CodegenInput` whose param enums come from op-ai.
-# All optional + behind `codegen` so the wasm32-clean stub baseline never
-# pulls them. NOTE: UNVERIFIED in-browser; use tools/check-wasm-bundle.sh.
+# All optional + behind `canvaskit` so the wasm32-clean stub baseline never
+# pulls them.
 op-ai = { path = "../op-ai", optional = true }
 jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema", optional = true }
 serde_json = { workspace = true, optional = true }
 # Browser file-IO P0: Figma `.fig` parsing + clipboard-HTML decoding for the
 # web shell. Pure-Rust (flate2/miniz_oxide + ruzstd + base64 — wasm32-clean,
 # no C toolchain), so the same crate the desktop host uses compiles for the
-# browser bundle. Optional + behind `codegen` with the rest of the document
+# browser bundle. Optional + behind `canvaskit` with the rest of the document
 # pipeline deps so the wasm32-clean stub baseline never pulls it.
 op-figma = { path = "../op-figma", optional = true }
 # Step 1b §3.6: handwritten DOM mirror consumes accesskit::TreeUpdate (0.24).
@@ -79,7 +75,7 @@ features = [
   "Clipboard",
   # Browser file-IO P0 (paste / drag-drop / hidden file input): the
   # ClipboardEvent / DataTransfer / DragEvent / File* / HtmlInputElement
-  # bindings below are only *called* from the `codegen`-gated dom_io glue,
+  # bindings below are only *called* from the `canvaskit`-gated dom_io glue,
   # but web-sys feature flags are compile-time binding toggles — they keep
   # the `web` stub baseline compiling unchanged.
   "ClipboardEvent",
