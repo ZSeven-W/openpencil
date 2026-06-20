@@ -86,6 +86,8 @@ pub(crate) mod property_panel_text_input;
 mod property_panel_text_tests;
 pub mod property_panel_typography;
 pub mod property_panel_visibility;
+#[cfg(test)]
+mod property_panel_wash_tests;
 pub mod property_panel_widget;
 #[cfg(test)]
 mod property_panel_widget_tests;
