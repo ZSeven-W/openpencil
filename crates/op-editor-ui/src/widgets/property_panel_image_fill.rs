@@ -271,29 +271,28 @@ fn paint_mode_control(
         origin: Point2D::new(pop.origin.x + PANEL_PAD, mode_y),
         size: Point2D::new(pop.size.x - PANEL_PAD * 2.0, MODE_H),
     };
-    cx.backend.fill_round_rect(rect, 6.0, theme.muted);
-    let chip_w = rect.size.x / op_editor_core::ImageFillMode::ALL.len() as f32;
-    for (i, mode) in op_editor_core::ImageFillMode::ALL.iter().enumerate() {
-        let chip = Rect {
-            origin: Point2D::new(rect.origin.x + i as f32 * chip_w + 2.0, rect.origin.y + 2.0),
-            size: Point2D::new(chip_w - 4.0, rect.size.y - 4.0),
-        };
-        let is_active = *mode == active;
-        if is_active {
-            cx.backend.fill_round_rect(chip, 5.0, theme.primary);
-        }
-        paint_centered_label(
-            cx,
-            theme,
-            op_i18n::translate(locale, mode.label_key()),
-            chip,
-            if is_active {
-                theme.primary_foreground
-            } else {
-                theme.muted_foreground
-            },
-        );
+    // Mode segmented control via jian ToggleGroup (even cells aligned with the
+    // full-cell hit walker above); active cell fills primary.
+    let labels: Vec<&str> = op_editor_core::ImageFillMode::ALL
+        .iter()
+        .map(|m| op_i18n::translate(locale, m.label_key()))
+        .collect();
+    let active_idx = op_editor_core::ImageFillMode::ALL
+        .iter()
+        .position(|m| *m == active)
+        .unwrap_or(0);
+    jian_widgets::components::toggle_group::ToggleGroup {
+        options: &labels,
+        icons: None,
+        active: active_idx,
+        hover: None,
+        font_size: 11.0,
     }
+    .paint(
+        cx.backend,
+        rect,
+        &crate::widgets::button::tokens_from_theme(theme),
+    );
 }
 
 fn paint_upload(
