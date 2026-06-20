@@ -739,15 +739,19 @@ impl<'a> DesignMdPanel<'a> {
         pressed: bool,
     ) {
         cx.backend.fill_round_rect(rect, 6.0, self.theme.muted);
-        let icon_color =
-            paint_ghost_button_feedback(cx.backend, &self.theme, rect, hovered, pressed);
-        draw_icon(
+        jian_widgets::components::icon_button::IconButton {
+            icon_paths: icon.paths(),
+            hovered,
+            pressed,
+            active: false,
+            enabled: true,
+            icon_size: BTN - 10.0,
+            stroke_width: 1.5,
+        }
+        .paint(
             cx.backend,
-            icon,
-            Point2D::new(rect.origin.x + 5.0, rect.origin.y + 5.0),
-            BTN - 10.0,
-            icon_color,
-            1.5,
+            rect,
+            &crate::widgets::button::tokens_from_theme(&self.theme),
         );
     }
 

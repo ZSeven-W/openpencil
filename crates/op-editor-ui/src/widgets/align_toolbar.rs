@@ -12,7 +12,7 @@
 //! below the canvas top edge.
 
 use crate::theme::Theme;
-use crate::widgets::icons::{draw_icon, Icon};
+use crate::widgets::icons::Icon;
 use crate::{Color, Point2D, Rect, RenderBackend};
 use jian_ops_schema::node::PenNode;
 use op_editor_core::walkers::find_node;
@@ -125,19 +125,19 @@ impl AlignToolbar {
         backend.fill_round_rect(self.rect, CORNER_RADIUS, theme.popover);
         backend.stroke_round_rect(self.rect, CORNER_RADIUS, theme.border, 1.0);
         for (i, (action, icon)) in ITEMS.iter().enumerate() {
-            let r = self.button_rect(i);
-            if hovered == Some(*action) {
-                backend.fill_round_rect(r, 5.0, theme.muted);
+            jian_widgets::components::icon_button::IconButton {
+                icon_paths: icon.paths(),
+                hovered: hovered == Some(*action),
+                pressed: false,
+                active: false,
+                enabled: true,
+                icon_size: ICON_SIZE,
+                stroke_width: 1.5,
             }
-            let icon_x = r.origin.x + (r.size.x - ICON_SIZE) / 2.0;
-            let icon_y = r.origin.y + (r.size.y - ICON_SIZE) / 2.0;
-            draw_icon(
+            .paint(
                 backend,
-                *icon,
-                Point2D::new(icon_x, icon_y),
-                ICON_SIZE,
-                theme.foreground,
-                1.5,
+                self.button_rect(i),
+                &crate::widgets::button::tokens_from_theme(theme),
             );
         }
         if self.boolean_ops {
