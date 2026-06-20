@@ -33,7 +33,10 @@ fn install_imported_state_rebuilds_even_when_the_import_matches_the_cache() {
     // Prime the scene-build cache from the current document.
     host.editor_state_dirty = true;
     let _ = host.layout_scene();
-    assert!(!host.layout_scene.pages.is_empty(), "precondition: a scene is built");
+    assert!(
+        !host.layout_scene.pages.is_empty(),
+        "precondition: a scene is built"
+    );
 
     // Import a state whose scene inputs are identical to the cached build (same
     // document + same authored-geometry latch). `install_imported_state` takes
@@ -43,7 +46,10 @@ fn install_imported_state_rebuilds_even_when_the_import_matches_the_cache() {
     imported.editor_ui.preserve_authored_geometry =
         host.editor_state.editor_ui.preserve_authored_geometry;
     host.install_imported_state(imported);
-    assert!(host.layout_scene.pages.is_empty(), "import defers (empties) the scene");
+    assert!(
+        host.layout_scene.pages.is_empty(),
+        "import defers (empties) the scene"
+    );
 
     let _ = host.layout_scene();
     assert!(

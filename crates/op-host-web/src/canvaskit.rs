@@ -234,7 +234,19 @@ extern "C" {
     fn resize(this: &OpCk, w: u32, h: u32);
 }
 
-const STEADY_CANVAS_PIXEL_BUDGET: f32 = 4_000_000.0;
+const STEADY_CANVAS_PIXEL_BUDGET: f32 = 16_000_000.0;
+
+fn display_dpr_for(css_w: u32, css_h: u32, native_dpr: f32) -> f32 {
+    let native_dpr = if native_dpr.is_finite() {
+        native_dpr
+    } else {
+        1.0
+    }
+    .max(1.0);
+    let one_x_dots = ((css_w.max(1) as f32) * (css_h.max(1) as f32)).max(1.0);
+    let capped_dpr = (STEADY_CANVAS_PIXEL_BUDGET / one_x_dots).sqrt().max(1.0);
+    native_dpr.min(capped_dpr).max(1.0)
+}
 
 fn flatten_gradient_stops(stops: &[(f32, Color)]) -> Vec<f32> {
     let mut flat = Vec::with_capacity(stops.len() * 5);
@@ -671,10 +683,7 @@ impl CkInner {
             .unwrap_or_else(|| self.canvas.client_height().max(1) as f64)
             .round()
             .max(1.0) as u32;
-        let native_dpr = (window.device_pixel_ratio() as f32).max(1.0);
-        let one_x_dots = ((css_w as f32) * (css_h as f32)).max(1.0);
-        let capped_dpr = (STEADY_CANVAS_PIXEL_BUDGET / one_x_dots).sqrt().max(1.0);
-        let dpr = native_dpr.min(capped_dpr).max(1.0);
+        let dpr = display_dpr_for(css_w, css_h, window.device_pixel_ratio() as f32);
         let dev_w = ((css_w as f32) * dpr).round().max(1.0) as u32;
         let dev_h = ((css_h as f32) * dpr).round().max(1.0) as u32;
 
@@ -1231,6 +1240,27 @@ pub async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
     std::mem::forget(inner);
     std::mem::forget(listeners);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn common_retina_editor_viewport_keeps_native_dpr() {
+        let dpr = display_dpr_for(1536, 836, 2.0);
+
+        assert_eq!(dpr, 2.0);
+    }
+
+    #[test]
+    fn extreme_retina_viewports_still_cap_surface_pixels() {
+        let dpr = display_dpr_for(5000, 3000, 2.0);
+        let pixels = 5000.0 * 3000.0 * dpr * dpr;
+
+        assert!(dpr < 2.0);
+        assert!(pixels <= STEADY_CANVAS_PIXEL_BUDGET + 1.0);
+    }
 }
 
 /// Smoke entry retained for FFI validation (renders AA text + a fill).
