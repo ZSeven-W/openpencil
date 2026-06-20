@@ -14,6 +14,7 @@ use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
 use jian_widgets::components::button::{Button, ButtonVariant};
+use jian_widgets::components::card::Card;
 use op_editor_core::agent_settings::{
     AcpAgentConfig, AcpAgentConnectPhase, AcpAgentField, AcpConnectionType, AgentSettings,
     SettingsFocus,
@@ -388,8 +389,12 @@ fn paint_acp_form(
     card: Rect,
     now_ms: u64,
 ) {
-    cx.backend.fill_round_rect(card, 10.0, theme.muted);
-    cx.backend.stroke_round_rect(card, 10.0, theme.border, 1.0);
+    Card {
+        fill: Some(theme.muted),
+        border: Some(theme.border),
+        radius: 10.0,
+    }
+    .paint(cx.backend, card, &tokens_from_theme(theme));
     draw_text(
         cx,
         t_settings(ui, "acp.connectionType"),
