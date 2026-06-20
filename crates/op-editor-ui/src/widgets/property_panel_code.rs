@@ -331,20 +331,20 @@ fn framework_chip_rects(x: f32, y: f32, w: f32, scroll: f32) -> Vec<(Framework, 
     } else {
         0.0
     };
-    let mut chip_x = x + PAD_X + inset - scroll;
-    let mut out = Vec::with_capacity(Framework::ALL.len());
-    for fw in Framework::ALL {
-        let chip_w = chip_label_width(framework_tab_label(fw)) + CHIP_PAD_X * 2.0;
-        out.push((
-            fw,
-            Rect {
-                origin: Point2D::new(chip_x, y),
-                size: Point2D::new(chip_w, CHIP_HEIGHT),
-            },
-        ));
-        chip_x += chip_w + CHIP_GAP;
-    }
-    out
+    // Content-width layout via jian Tabs (the host owns the deterministic width
+    // fn `chip_label_width`); these rects drive BOTH paint and hit.
+    let widths: Vec<f32> = Framework::ALL
+        .iter()
+        .map(|fw| chip_label_width(framework_tab_label(*fw)) + CHIP_PAD_X * 2.0)
+        .collect();
+    let rects = jian_widgets::components::tabs::Tabs::content_rects(
+        Point2D::new(x + PAD_X + inset, y),
+        &widths,
+        CHIP_HEIGHT,
+        CHIP_GAP,
+        scroll,
+    );
+    Framework::ALL.iter().copied().zip(rects).collect()
 }
 
 /// The y after the single-row chip strip + divider + trailing gap — the
@@ -452,40 +452,38 @@ fn paint_framework_chips(
     // Clip the strip so scrolled-off chips don't bleed past the panel edges.
     cx.backend.save();
     cx.backend.clip_rect(band);
-    for (fw, chip) in framework_chip_rects(x, y, w, state.framework_scroll.offset) {
-        // Skip chips fully outside the visible band (cheap cull).
-        if chip.origin.x + chip.size.x < band.origin.x
-            || chip.origin.x > band.origin.x + band.size.x
-        {
-            continue;
-        }
-        let active = state.framework == fw;
-        // Active = blue filled pill; inactive = plain text, with a subtle
-        // muted wash when hovered.
-        let text_color = if active {
-            cx.backend.fill_round_rect(chip, 6.0, theme.primary);
-            theme.primary_foreground
-        } else {
-            if state.framework_hover == Some(fw) {
-                cx.backend.fill_round_rect(chip, 6.0, theme.muted);
-            }
-            theme.muted_foreground
-        };
-        // Centre the label horizontally + vertically in the chip using the
-        // real measured advance (11px baseline ≈ vertical centre + ~0.35em).
-        let label = framework_tab_label(fw);
-        let tw = cx.backend.measure_text(label, CHIP_FONT_SIZE);
-        let tx = chip.origin.x + (chip.size.x - tw) / 2.0;
-        let ty = chip.origin.y + chip.size.y / 2.0 + 4.0;
-        let layout = TextLayout::single_run(
-            label,
-            "system-ui",
-            CHIP_FONT_SIZE,
-            (text_color).to_jian(),
-            origin(),
-        );
-        cx.backend.draw_text(&layout, Point2D::new(tx, ty));
+    // jian Tabs renders the content-width chip strip (active = primary pill,
+    // inactive-hover = wash); the clip band above culls scrolled-off chips and
+    // the scroll chevrons are painted below.
+    let labels: Vec<&str> = Framework::ALL
+        .iter()
+        .map(|fw| framework_tab_label(*fw))
+        .collect();
+    let rects: Vec<Rect> = framework_chip_rects(x, y, w, state.framework_scroll.offset)
+        .into_iter()
+        .map(|(_, chip)| chip)
+        .collect();
+    let active = Framework::ALL
+        .iter()
+        .position(|fw| *fw == state.framework)
+        .unwrap_or(0);
+    let hover = state
+        .framework_hover
+        .and_then(|h| Framework::ALL.iter().position(|fw| *fw == h));
+    jian_widgets::components::tabs::Tabs {
+        labels: &labels,
+        active,
+        hover,
     }
+    .paint_content(
+        cx.backend,
+        &rects,
+        jian_widgets::components::tabs::ActiveStyle::PrimaryPill,
+        false,
+        CHIP_PAD_X,
+        CHIP_FONT_SIZE,
+        &crate::widgets::button::tokens_from_theme(theme),
+    );
     cx.backend.restore();
     // Scroll chevrons (only when the strip overflows). Each sits over a
     // subtle muted background; dim the one that can't scroll further.
