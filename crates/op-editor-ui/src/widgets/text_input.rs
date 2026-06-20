@@ -63,6 +63,7 @@ impl Widget for TextInputWidget {
             now_ms: self.now_ms,
             pad_x: self.pad_x,
             baseline_delta_y: 0.0,
+            mask: None,
         };
         view.paint(cx.backend, rect, &self.tokens);
     }
