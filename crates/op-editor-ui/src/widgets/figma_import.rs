@@ -7,7 +7,7 @@
 
 use crate::theme::Theme;
 use crate::widgets::editor_state_ext::theme_for;
-use crate::widgets::icons::{draw_icon, Icon};
+use crate::widgets::icons::Icon;
 use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
 use crate::{Point2D, Rect, TextLayout};
 use op_editor_core::editor_ui_state::Locale;
@@ -145,24 +145,19 @@ impl Widget for FigmaImportModal {
             origin: Point2D::new(close.origin.x - pad, close.origin.y - pad),
             size: Point2D::new(close.size.x + pad * 2.0, close.size.y + pad * 2.0),
         };
-        crate::widgets::button::paint_ghost_button_feedback(
+        jian_widgets::components::icon_button::IconButton {
+            icon_paths: Icon::Close.paths(),
+            hovered: close_hovered,
+            pressed: close_pressed,
+            active: false,
+            enabled: true,
+            icon_size: close.size.x,
+            stroke_width: 1.6,
+        }
+        .paint(
             cx.backend,
-            &self.theme,
             bg,
-            close_hovered,
-            close_pressed,
-        );
-        draw_icon(
-            cx.backend,
-            Icon::Close,
-            close.origin,
-            close.size.x,
-            if close_hovered || close_pressed {
-                self.theme.foreground
-            } else {
-                self.theme.muted_foreground
-            },
-            1.6,
+            &crate::widgets::button::tokens_from_theme(&self.theme),
         );
 
         // Compact info panel with a small Figma glyph for character.

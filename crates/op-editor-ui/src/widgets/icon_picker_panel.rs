@@ -1,7 +1,7 @@
 //! Native Iconify picker used by the toolbar and icon property row.
 
 use crate::theme::Theme;
-use crate::widgets::button::{paint_button_feedback_wash, paint_ghost_button_feedback};
+use crate::widgets::button::paint_button_feedback_wash;
 use crate::widgets::editor_state_ext::theme_for;
 use crate::widgets::icon_catalog::{search_icons, IconCatalogEntry, IconRenderStyle};
 use crate::widgets::{
@@ -248,20 +248,19 @@ impl<'a> IconPickerPanel<'a> {
         let close = Self::close_rect(panel);
         let close_hovered = self.hover == Some(ICON_PICKER_CLOSE_HOVER);
         let close_pressed = self.pressed == Some(ICON_PICKER_CLOSE_HOVER);
-        let icon_color = paint_ghost_button_feedback(
+        jian_widgets::components::icon_button::IconButton {
+            icon_paths: Icon::Close.paths(),
+            hovered: close_hovered,
+            pressed: close_pressed,
+            active: false,
+            enabled: true,
+            icon_size: 14.0,
+            stroke_width: 1.4,
+        }
+        .paint(
             cx.backend,
-            &self.theme,
             close,
-            close_hovered,
-            close_pressed,
-        );
-        draw_icon(
-            cx.backend,
-            Icon::Close,
-            Point2D::new(close.origin.x + 5.0, close.origin.y + 5.0),
-            14.0,
-            icon_color,
-            1.4,
+            &crate::widgets::button::tokens_from_theme(&self.theme),
         );
     }
 
