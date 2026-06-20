@@ -123,6 +123,7 @@ impl Widget for ColorPicker {
             eyedropper_icon: Icon::Pencil.paths(),
             close_icon: Icon::Close.paths(),
             hex_input: self.state.hex_focused.then_some(&self.state.hex_input),
+            rgb_input: self.state.rgb_focus.map(|ch| (ch, &self.state.rgb_input)),
             now_ms: self.now_ms,
         }
         .paint(
