@@ -617,63 +617,6 @@ pub fn paint_position_section(
     y + SECTION_GAP
 }
 
-// ── Flex layout section ──────────────────────────────────────────
-
-pub fn paint_flex_section(
-    cx: &mut PaintCx<'_>,
-    theme: &Theme,
-    labels: &PropertyLabels,
-    active: op_editor_core::FlexLayout,
-    x: f32,
-    y: f32,
-    width: f32,
-) -> f32 {
-    let mut y = paint_section_label(cx, theme, labels.flex_layout, x, y, width);
-    // TS layout-section.tsx uses Columns3 / Rows3 / LayoutGrid for
-    // the three flex modes; LayoutGrid is the default-active mode
-    // (Free layout).
-    let btn_w = 56.0;
-    let gap = 8.0;
-    let row_x = x + PAD_X;
-    use op_editor_core::FlexLayout;
-    let modes = [
-        (FlexLayout::Free, Icon::LayoutGrid),
-        (FlexLayout::Vertical, Icon::Rows3),
-        (FlexLayout::Horizontal, Icon::Columns3),
-    ];
-    for (i, (mode, icon)) in modes.iter().enumerate() {
-        let bx = row_x + i as f32 * (btn_w + gap);
-        let rect = Rect {
-            origin: Point2D::new(bx, y),
-            size: Point2D::new(btn_w, 32.0),
-        };
-        let is_active = *mode == active;
-        if is_active {
-            cx.backend.fill_round_rect(rect, 6.0, theme.primary);
-        } else {
-            cx.backend.fill_round_rect(rect, 6.0, theme.muted);
-            cx.backend.stroke_round_rect(rect, 6.0, theme.border, 1.0);
-        }
-        let icon_color = if is_active {
-            theme.primary_foreground
-        } else {
-            theme.muted_foreground
-        };
-        draw_icon(
-            cx.backend,
-            *icon,
-            Point2D::new(rect.origin.x + (btn_w - 18.0) / 2.0, rect.origin.y + 7.0),
-            18.0,
-            icon_color,
-            1.4,
-        );
-        let _ = mode; // intentionally unused beyond the active-check
-    }
-    y += 32.0 + 12.0;
-    paint_section_divider(cx, theme, x, y, width);
-    y + SECTION_GAP
-}
-
 // ── Size section ──────────────────────────────────────────────────
 
 // Paint-context + geometry args threaded through; a struct adds no gain.
