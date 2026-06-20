@@ -1,7 +1,9 @@
 //! ACP Agent section for the Agent settings panel.
 
 use crate::theme::Theme;
-use crate::widgets::agent_settings_acp_helpers::{draw_text, ellipsize};
+use crate::widgets::agent_settings_acp_helpers::{
+    draw_text, ellipsize, field_input_rect, form_actions_y, form_card_h, type_toggle_rect,
+};
 use crate::widgets::agent_settings_caret::{paint_settings_input_view, settings_input_text};
 use crate::widgets::agent_settings_form_actions::{
     cancel_button_rect, paint_form_actions, save_button_rect,
@@ -27,11 +29,7 @@ const HEADER_H: f32 = 28.0;
 const SUBTITLE_H: f32 = 28.0;
 const EMPTY_H: f32 = 64.0;
 const COMPACT_CARD_H: f32 = 60.0;
-const EXPANDED_CARD_H: f32 = 332.0;
-const DRAFT_CARD_H: f32 = 370.0;
 const CARD_GAP: f32 = 8.0;
-const FIELD_H: f32 = 28.0;
-const ENV_FIELD_H: f32 = 64.0;
 const ACTION_W: f32 = 24.0;
 const CONNECT_BTN_W: f32 = 96.0;
 const CONNECT_BTN_H: f32 = 28.0;
@@ -731,29 +729,11 @@ fn is_editing(settings: &AgentSettings, index: usize) -> bool {
     )
 }
 
-/// Y (relative to the card top) of the Save/Cancel row — just below the last
-/// field, which depends on the connection type's field set. Remote (Display
-/// name + URL) ends far above Local (Display name + Command + Args + Env), so
-/// the remote form is much shorter.
-fn form_actions_y(kind: AcpConnectionType) -> f32 {
-    match kind {
-        // URL field input bottom (154 + FIELD_H) + a small gap.
-        AcpConnectionType::Remote => 154.0 + FIELD_H + 6.0,
-        // Env field input bottom (262 + ENV_FIELD_H) + a small gap = EXPANDED_CARD_H.
-        AcpConnectionType::Local => EXPANDED_CARD_H,
-    }
-}
-
-/// Full editing/draft card height for a given connection type — the action row
-/// sits below the last field and the card wraps it with the same trailing pad
-/// the Local layout uses.
-fn form_card_h(kind: AcpConnectionType) -> f32 {
-    form_actions_y(kind) + (DRAFT_CARD_H - EXPANDED_CARD_H)
-}
-
 fn card_height(settings: &AgentSettings, index: usize) -> f32 {
     if is_editing(settings, index) {
-        form_card_h(settings.acp_agents[index].connection_type)
+        // A saved card being edited shows the fields but NO Save/Cancel row, so
+        // it wraps the fields only (form_actions_y), not the draft's action tail.
+        form_actions_y(settings.acp_agents[index].connection_type)
     } else {
         COMPACT_CARD_H
     }
@@ -797,31 +777,6 @@ fn connection_button_rect(card: Rect) -> Rect {
             card.origin.y + (card.size.y - CONNECT_BTN_H) / 2.0,
         ),
         size: Point2D::new(CONNECT_BTN_W, CONNECT_BTN_H),
-    }
-}
-
-fn type_toggle_rect(card: Rect) -> Rect {
-    Rect {
-        origin: Point2D::new(card.origin.x + 12.0, card.origin.y + 100.0),
-        size: Point2D::new(card.size.x - 24.0, 28.0),
-    }
-}
-
-fn field_input_rect(card: Rect, field: AcpAgentField) -> Rect {
-    let y = match field {
-        AcpAgentField::DisplayName => card.origin.y + 34.0,
-        AcpAgentField::Command | AcpAgentField::Url => card.origin.y + 154.0,
-        AcpAgentField::Args => card.origin.y + 208.0,
-        AcpAgentField::Env => card.origin.y + 262.0,
-    };
-    let h = if field == AcpAgentField::Env {
-        ENV_FIELD_H
-    } else {
-        FIELD_H
-    };
-    Rect {
-        origin: Point2D::new(card.origin.x + 12.0, y),
-        size: Point2D::new(card.size.x - 24.0, h),
     }
 }
 
