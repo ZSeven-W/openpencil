@@ -776,3 +776,5 @@ impl Widget for VariablesPanel {
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod wash_tests;
