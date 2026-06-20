@@ -8,8 +8,10 @@ use crate::widgets::agent_settings_i18n::t as t_settings;
 use crate::widgets::agent_settings_switch::{
     paint_settings_switch, SETTINGS_SWITCH_H, SETTINGS_SWITCH_W,
 };
+use crate::widgets::button::tokens_from_theme;
 use crate::widgets::PaintCx;
 use crate::{Point2D, Rect, TextLayout};
+use jian_widgets::components::card::Card;
 use op_editor_core::agent_settings::AgentSettings;
 use op_editor_core::editor_ui_state::EditorUiState;
 
@@ -117,8 +119,12 @@ fn paint_toggle_card(
     desc_key: &'static str,
     enabled: bool,
 ) {
-    cx.backend.fill_round_rect(card, 10.0, theme.muted);
-    cx.backend.stroke_round_rect(card, 10.0, theme.border, 1.0);
+    Card {
+        fill: Some(theme.muted),
+        border: Some(theme.border),
+        radius: 10.0,
+    }
+    .paint(cx.backend, card, &tokens_from_theme(theme));
 
     let label_layout = TextLayout::single_run(
         t_settings(ui, label_key),
