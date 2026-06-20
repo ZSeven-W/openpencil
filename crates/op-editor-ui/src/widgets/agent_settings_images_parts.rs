@@ -313,28 +313,19 @@ pub(super) fn paint_provider_field(
     );
     cx.backend
         .draw_text(&label_lay, Point2D::new(label_x, input.origin.y + 16.0));
-    cx.backend.fill_round_rect(input, 6.0, theme.card);
-    crate::widgets::button::paint_ghost_button_feedback(cx.backend, theme, input, hovered, pressed);
-    cx.backend.stroke_round_rect(input, 6.0, theme.border, 1.0);
-    let value = ellipsize(cx, profile.provider.label(), input.size.x - 28.0, 11.0);
-    let value_lay = TextLayout::single_run(
-        &value,
-        "system-ui",
-        11.0,
-        (theme.foreground).to_jian(),
-        Point2D::new(0.0, 0.0),
-    );
-    cx.backend.draw_text(
-        &value_lay,
-        Point2D::new(input.origin.x + 6.0, input.origin.y + 16.0),
-    );
-    draw_icon(
+    jian_widgets::components::select_trigger::SelectTrigger {
+        icon_paths: None,
+        label: profile.provider.label(),
+        placeholder: "",
+        hovered,
+        pressed,
+        enabled: true,
+        font_size: 11.0,
+    }
+    .paint(
         cx.backend,
-        Icon::ChevronDown,
-        Point2D::new(input.origin.x + input.size.x - 18.0, input.origin.y + 5.0),
-        14.0,
-        theme.muted_foreground,
-        1.5,
+        input,
+        &crate::widgets::button::tokens_from_theme(theme),
     );
 }
 

@@ -278,34 +278,19 @@ impl TopBar {
             origin: Point2D::new(rx, center_y - ICON_BUTTON / 2.0),
             size: Point2D::new(GLOBE_BUTTON_WIDTH, ICON_BUTTON),
         };
-        let globe_color = paint_hover_bg(
-            cx,
-            &self.theme,
+        jian_widgets::components::select_trigger::SelectTrigger {
+            icon_paths: Some(Icon::Globe.paths()),
+            label: "",
+            placeholder: "",
+            hovered: self.is_hovered(TopBarButton::ToggleLocale),
+            pressed: self.is_pressed(TopBarButton::ToggleLocale),
+            enabled: true,
+            font_size: ICON_SIZE,
+        }
+        .paint(
+            cx.backend,
             globe_button,
-            self.is_hovered(TopBarButton::ToggleLocale),
-            self.is_pressed(TopBarButton::ToggleLocale),
-        );
-        let locale_glyph_x = Self::locale_glyph_left(globe_button);
-        // Globe glyph at the left half.
-        draw_icon(
-            cx.backend,
-            Icon::Globe,
-            Point2D::new(locale_glyph_x, center_y - ICON_SIZE / 2.0),
-            ICON_SIZE,
-            globe_color,
-            1.4,
-        );
-        // Chevron-down at the right side, smaller.
-        draw_icon(
-            cx.backend,
-            Icon::ChevronDown,
-            Point2D::new(
-                locale_glyph_x + ICON_SIZE + COMPOUND_GLYPH_GAP,
-                center_y - CHEVRON_SIZE / 2.0,
-            ),
-            CHEVRON_SIZE,
-            globe_color,
-            1.4,
+            &crate::widgets::button::tokens_from_theme(&self.theme),
         );
         // `rx` now points at the LEFT edge of the globe button —
         // the chip anchors immediately to its left (small gap).
