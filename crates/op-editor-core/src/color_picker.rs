@@ -21,6 +21,10 @@
 //! a plain value type. `close_color_picker` pushes that snapshot onto
 //! undo only when the colour actually changed.
 
+use crate::color_picker_snapshot::{
+    effect_color_hex, gradient_stop_hex, scalar_as_hex, snapshot_active_children,
+    snapshot_variable_hex, splice_alpha, variant_scalar,
+};
 use crate::fills::{
     first_solid_fill_hex, first_solid_stroke_hex, push_drop_shadow, set_primary_fill_hex,
     set_primary_stroke_hex,
@@ -28,6 +32,13 @@ use crate::fills::{
 use crate::state::EditorState;
 use crate::ui_draft::{ColorPickerDrag, ColorPickerState, ColorTarget};
 use crate::walkers::find_node_mut;
+
+// Pure colour math lives in `color_convert`; re-export it through this
+// module so existing `crate::color_picker::{hsv_to_rgb, parse_hex_rgb, …}`
+// callers (and the `lib.rs` crate-root re-export) keep resolving.
+pub use crate::color_convert::{
+    hsv_to_rgb, parse_hex_alpha, parse_hex_rgb, rgb_to_hex, rgb_to_hsv,
+};
 
 impl EditorState {
     // --- Fill / stroke colour ---------------------------------------
@@ -317,10 +328,7 @@ impl EditorState {
 
     /// Whether the picker's hex field currently has keyboard focus.
     pub fn color_picker_hex_focused(&self) -> bool {
-        self.ui
-            .color_picker
-            .as_ref()
-            .is_some_and(|s| s.hex_focused)
+        self.ui.color_picker.as_ref().is_some_and(|s| s.hex_focused)
     }
 
     /// Focus the hex field, seeding its draft from the current colour so the
@@ -446,225 +454,6 @@ impl EditorState {
         }
         true
     }
-}
-
-/// Reduce a resolved variable scalar to a `#rrggbb` hex string, if it
-/// is a `Str` scalar. Used by the variable-mode `close_color_picker`
-/// change check.
-fn scalar_as_hex(s: &jian_ops_schema::variable::VariableScalar) -> Option<String> {
-    match s {
-        jian_ops_schema::variable::VariableScalar::Str(hex) => Some(hex.clone()),
-        _ => None,
-    }
-}
-
-/// Scalar shown in one variant column: exact `(axis, value)` match →
-/// untagged (`theme: None`) entry → first entry. Same fallback chain
-/// as the panel grid (TS `variable-row.tsx getValueForTheme`).
-fn variant_scalar<'a>(
-    value: &'a jian_ops_schema::variable::VariableValue,
-    axis: &str,
-    theme_value: &str,
-) -> Option<&'a jian_ops_schema::variable::VariableScalar> {
-    use jian_ops_schema::variable::VariableValue;
-    match value {
-        VariableValue::Scalar(s) => Some(s),
-        VariableValue::Themed(entries) => entries
-            .iter()
-            .find(|entry| {
-                entry
-                    .theme
-                    .as_ref()
-                    .and_then(|theme| theme.get(axis))
-                    .is_some_and(|v| v == theme_value)
-            })
-            .or_else(|| entries.iter().find(|entry| entry.theme.is_none()))
-            .or_else(|| entries.first())
-            .map(|entry| &entry.value),
-    }
-}
-
-/// Re-attach an alpha (0..=1) to a `#RRGGBB` hex. When the alpha
-/// would round to fully opaque the 6-char form is preserved so the
-/// canonical schema stays compact.
-fn splice_alpha(hex: &str, alpha: f32) -> String {
-    let a = (alpha.clamp(0.0, 1.0) * 255.0).round() as u8;
-    if a == 255 {
-        hex.to_string()
-    } else {
-        format!("{}{:02X}", hex, a)
-    }
-}
-
-/// Read the colour hex of the Shadow effect at `index` on `node`.
-/// `None` when the node has no effects, the index is out of range,
-/// or the effect isn't a Shadow.
-fn effect_color_hex(node: &jian_ops_schema::node::PenNode, index: usize) -> Option<String> {
-    use jian_ops_schema::style::PenEffect;
-    let effects = crate::fills::node_effects(node);
-    match effects.get(index)? {
-        PenEffect::Shadow(s) => Some(s.color.clone()),
-        _ => None,
-    }
-}
-
-/// Read one stop's hex from the node's primary gradient body.
-/// `None` when the first fill isn't a gradient or `index` is out of
-/// range — the same gating `set_primary_gradient_stop_hex` applies
-/// on the write path.
-fn gradient_stop_hex(node: &jian_ops_schema::node::PenNode, index: usize) -> Option<String> {
-    use jian_ops_schema::style::PenFill;
-    let fills = crate::fills::node_fills(node)?;
-    let first = fills.first()?;
-    let stops = match first {
-        PenFill::LinearGradient(b) => &b.stops,
-        PenFill::RadialGradient(b) => &b.stops,
-        _ => return None,
-    };
-    stops.get(index).map(|s| s.color.clone())
-}
-
-/// Resolve a Color variable's hex scalar from a history snapshot's
-/// `doc` under the supplied active-theme selection. The snapshot's
-/// `EditorSnapshot` carries the full `PenDocument` (variables
-/// included) but not the transient `ui.variables.active_theme`, so the
-/// caller threads the live active theme in — it is stable across the
-/// short-lived picker session.
-fn snapshot_variable_hex(
-    snap: &crate::history::EditorSnapshot,
-    name: &str,
-    active_theme: &std::collections::BTreeMap<String, String>,
-) -> Option<String> {
-    let def = snap.doc.variables.as_ref()?.get(name)?;
-    if !matches!(def.kind, jian_ops_schema::variable::VariableKind::Color) {
-        return None;
-    }
-    let scalar = resolve_snapshot_value(&def.value, active_theme)?;
-    scalar_as_hex(scalar)
-}
-
-/// Resolve a `VariableValue` under `active_theme` — picks a `Scalar`
-/// directly, or a `Themed` list's subset-matching entry, falling back
-/// to the `theme: None` default. Mirrors `variables.rs::resolve_value`.
-fn resolve_snapshot_value<'a>(
-    value: &'a jian_ops_schema::variable::VariableValue,
-    active_theme: &std::collections::BTreeMap<String, String>,
-) -> Option<&'a jian_ops_schema::variable::VariableScalar> {
-    use jian_ops_schema::variable::VariableValue;
-    match value {
-        VariableValue::Scalar(s) => Some(s),
-        VariableValue::Themed(entries) => {
-            for e in entries {
-                if let Some(t) = &e.theme {
-                    if t.iter().all(|(k, v)| active_theme.get(k) == Some(v)) {
-                        return Some(&e.value);
-                    }
-                }
-            }
-            entries.iter().find(|e| e.theme.is_none()).map(|e| &e.value)
-        }
-    }
-}
-
-/// The active page's children inside a history snapshot — mirrors
-/// [`EditorState::active_children`] but reads from a snapshot.
-fn snapshot_active_children(
-    snap: &crate::history::EditorSnapshot,
-) -> &[jian_ops_schema::node::PenNode] {
-    match snap.doc.pages.as_ref() {
-        Some(pages) => match pages.get(snap.active_page_index) {
-            Some(page) => &page.children,
-            None => &[],
-        },
-        None => &snap.doc.children,
-    }
-}
-
-// --- HSV / hex helpers -----------------------------------------------
-
-/// HSV → RGB, h 0..360, s/v 0..1. Each channel 0..1.
-/// Ported verbatim from shell-core's `hsv_to_rgb`.
-pub fn hsv_to_rgb(h: f32, s: f32, v: f32) -> (f32, f32, f32) {
-    let h = h.rem_euclid(360.0);
-    let c = v * s;
-    let hh = h / 60.0;
-    let x = c * (1.0 - (hh.rem_euclid(2.0) - 1.0).abs());
-    let (r1, g1, b1) = match hh as u32 {
-        0 => (c, x, 0.0),
-        1 => (x, c, 0.0),
-        2 => (0.0, c, x),
-        3 => (0.0, x, c),
-        4 => (x, 0.0, c),
-        _ => (c, 0.0, x),
-    };
-    let m = v - c;
-    (r1 + m, g1 + m, b1 + m)
-}
-
-/// RGB (0..1) → HSV (h 0..360, s 0..1, v 0..1).
-/// Ported verbatim from shell-core's `rgb_to_hsv`.
-pub fn rgb_to_hsv(rgb: (f32, f32, f32)) -> (f32, f32, f32) {
-    let (r, g, b) = rgb;
-    let max = r.max(g).max(b);
-    let min = r.min(g).min(b);
-    let v = max;
-    let delta = max - min;
-    let s = if max <= 0.0 { 0.0 } else { delta / max };
-    let h = if delta == 0.0 {
-        0.0
-    } else if max == r {
-        60.0 * (((g - b) / delta) % 6.0)
-    } else if max == g {
-        60.0 * (((b - r) / delta) + 2.0)
-    } else {
-        60.0 * (((r - g) / delta) + 4.0)
-    };
-    let h = if h < 0.0 { h + 360.0 } else { h };
-    (h, s, v)
-}
-
-/// Parse `#rgb` / `#rrggbb` / `#rrggbbaa` into RGB floats (0..1).
-/// Lenient on case; requires the leading `#`.
-pub fn parse_hex_rgb(s: &str) -> Option<(f32, f32, f32)> {
-    let s = s.trim().strip_prefix('#')?;
-    let (r, g, b) = match s.len() {
-        3 => (
-            u8::from_str_radix(&s[0..1].repeat(2), 16).ok()?,
-            u8::from_str_radix(&s[1..2].repeat(2), 16).ok()?,
-            u8::from_str_radix(&s[2..3].repeat(2), 16).ok()?,
-        ),
-        6 | 8 => (
-            u8::from_str_radix(&s[0..2], 16).ok()?,
-            u8::from_str_radix(&s[2..4], 16).ok()?,
-            u8::from_str_radix(&s[4..6], 16).ok()?,
-        ),
-        _ => return None,
-    };
-    Some((r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0))
-}
-
-/// Parse the alpha channel out of `#rrggbbaa` — defaults to `1.0`
-/// when the hex is 6-char (no alpha authored) or unparseable. Used
-/// by the gradient-stop colour picker so dragging SV / hue doesn't
-/// drop the stop's authored transparency.
-pub fn parse_hex_alpha(s: &str) -> f32 {
-    let Some(stripped) = s.trim().strip_prefix('#') else {
-        return 1.0;
-    };
-    if stripped.len() != 8 {
-        return 1.0;
-    }
-    u8::from_str_radix(&stripped[6..8], 16)
-        .map(|a| a as f32 / 255.0)
-        .unwrap_or(1.0)
-}
-
-/// Format RGB floats (0..1) as a `#rrggbb` hex string.
-pub fn rgb_to_hex(r: f32, g: f32, b: f32) -> String {
-    fn ch(v: f32) -> u8 {
-        (v.clamp(0.0, 1.0) * 255.0).round() as u8
-    }
-    format!("#{:02x}{:02x}{:02x}", ch(r), ch(g), ch(b))
 }
 
 #[cfg(test)]
