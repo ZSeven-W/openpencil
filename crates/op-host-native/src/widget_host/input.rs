@@ -652,6 +652,19 @@ impl WidgetHostNative {
             }
             return true;
         }
+        // Preset dropdown is a top-most overlay over the variables panel — track
+        // its per-row hover and swallow moves over it first.
+        if self.editor_state.editor_ui.variables_preset_menu_open
+            && self.update_variables_preset_menu_hover(
+                x,
+                self.last_viewport_w,
+                self.last_viewport_h,
+                y,
+            )
+        {
+            self.clear_lower_overlay_hover();
+            return true;
+        }
         if self.editor_state.editor_ui.variables_panel_open {
             let point = Point2D::new(x, y);
             if let Some(panel_rect) =

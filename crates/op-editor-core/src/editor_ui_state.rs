@@ -1031,6 +1031,9 @@ pub struct EditorUiState {
     /// Whether the Variables right-rail panel is explicitly open.
     pub variables_panel_open: bool,
     pub variables_preset_menu_open: bool,
+    /// Which row inside the open theme-preset dropdown the cursor is over —
+    /// drives the per-row hover wash.
+    pub variables_preset_menu_hover: Option<crate::variables_panel_state::PresetMenuButton>,
     pub variables_add_menu_open: bool,
     /// Whether the preset dropdown's save-as-name input is showing
     /// (TS `showPresetNameInput`). This legacy preset-name draft still
@@ -1293,6 +1296,7 @@ impl Default for EditorUiState {
             axis_dropdown_open: None,
             variables_panel_open: false,
             variables_preset_menu_open: false,
+            variables_preset_menu_hover: None,
             variables_add_menu_open: false,
             variables_preset_name_focus: false,
             pending_theme_preset_io: None,
