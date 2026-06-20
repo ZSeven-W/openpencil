@@ -234,35 +234,19 @@ impl ComponentBrowserPanel<'_> {
         );
         // Dropdown control: current filter label + chevron.
         let dropdown = self.kit_dropdown_rect(panel);
-        paint_button_feedback_wash(
-            cx.backend,
-            &self.theme,
-            dropdown,
-            4.0,
-            self.hover == Some(Btn::KitFilter),
-            self.is_pressed(Btn::KitFilter),
-        );
-        cx.backend
-            .stroke_round_rect(dropdown, 4.0, self.theme.border, 1.0);
         let current = self.kit_filter_label();
-        self.text(
-            cx,
-            &truncate(&current, ((dropdown.size.x - 28.0) / CHAR_W) as usize),
-            dropdown.origin.x + 6.0,
-            dropdown.origin.y + KIT_DROPDOWN_H / 2.0 + 4.0,
-            11.0,
-            self.theme.foreground,
-        );
-        draw_icon(
+        jian_widgets::components::select_trigger::SelectTrigger {
+            label: &current,
+            placeholder: "",
+            hovered: self.hover == Some(Btn::KitFilter),
+            pressed: self.is_pressed(Btn::KitFilter),
+            enabled: true,
+            font_size: 11.0,
+        }
+        .paint(
             cx.backend,
-            Icon::ChevronDown,
-            Point2D::new(
-                dropdown.origin.x + dropdown.size.x - 16.0,
-                dropdown.origin.y + (KIT_DROPDOWN_H - 12.0) / 2.0,
-            ),
-            12.0,
-            self.theme.muted_foreground,
-            1.4,
+            dropdown,
+            &crate::widgets::button::tokens_from_theme(&self.theme),
         );
         cx.backend.fill_rect(
             Rect {
