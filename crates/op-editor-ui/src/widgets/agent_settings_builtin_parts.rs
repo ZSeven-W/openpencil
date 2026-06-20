@@ -17,29 +17,24 @@ const PRESET_MENU_MAX_VISIBLE_ITEMS: usize = 8;
 struct KindOption {
     label: &'static str,
     kind: BuiltinAgentKind,
-    slot: usize,
 }
 
 const ANTHROPIC_KIND_OPTION: [KindOption; 1] = [KindOption {
     label: "Anthropic",
     kind: BuiltinAgentKind::Anthropic,
-    slot: 0,
 }];
 const OPENAI_KIND_OPTION: [KindOption; 1] = [KindOption {
     label: "OpenAI",
     kind: BuiltinAgentKind::OpenAiCompat,
-    slot: 1,
 }];
 const BOTH_KIND_OPTIONS: [KindOption; 2] = [
     KindOption {
         label: "Anthropic",
         kind: BuiltinAgentKind::Anthropic,
-        slot: 0,
     },
     KindOption {
         label: "OpenAI",
         kind: BuiltinAgentKind::OpenAiCompat,
-        slot: 1,
     },
 ];
 
@@ -49,30 +44,24 @@ pub fn paint_kind_toggle(
     agent: &BuiltinAgentConfig,
     card: Rect,
 ) {
-    let r = kind_rect(card);
-    cx.backend.stroke_round_rect(r, 6.0, theme.border, 1.0);
     let options = kind_options(agent);
-    for option in options {
-        let item = kind_option_rect(card, option.slot);
-        let active = agent.kind == option.kind;
-        if active {
-            cx.backend.fill_round_rect(item, 5.0, theme.primary);
-        }
-        let color = if active {
-            theme.primary_foreground
-        } else {
-            theme.muted_foreground
-        };
-        let tw = cx.backend.measure_text(option.label, 10.0);
-        draw_text(
-            cx,
-            option.label,
-            10.0,
-            color,
-            item.origin.x + (item.size.x - tw) / 2.0,
-            item.origin.y + 16.0,
-        );
+    let labels: Vec<&str> = options.iter().map(|o| o.label).collect();
+    let active = options
+        .iter()
+        .position(|o| o.kind == agent.kind)
+        .unwrap_or(0);
+    jian_widgets::components::toggle_group::ToggleGroup {
+        options: &labels,
+        icons: None,
+        active,
+        hover: None,
+        font_size: 10.0,
     }
+    .paint(
+        cx.backend,
+        kind_rect(card),
+        &crate::widgets::button::tokens_from_theme(theme),
+    );
 }
 
 pub fn kind_toggle_target(
@@ -80,13 +69,14 @@ pub fn kind_toggle_target(
     card: Rect,
     point: Point2D,
 ) -> Option<BuiltinAgentKind> {
-    if !(kind_rect(card)).contains(point) {
-        return None;
-    }
     let options = kind_options(agent);
+    let idx = jian_widgets::components::toggle_group::ToggleGroup::segment_at(
+        kind_rect(card),
+        options.len(),
+        point,
+    )?;
     options
-        .iter()
-        .find(|option| (kind_option_rect(card, option.slot)).contains(point))
+        .get(idx)
         .map(|option| option.kind)
         .filter(|kind| *kind != agent.kind)
 }
@@ -232,15 +222,6 @@ pub fn kind_rect(card: Rect) -> Rect {
     Rect {
         origin: Point2D::new(card.origin.x + card.size.x - 172.0, card.origin.y + 10.0),
         size: Point2D::new(156.0, 24.0),
-    }
-}
-
-fn kind_option_rect(card: Rect, slot: usize) -> Rect {
-    let r = kind_rect(card);
-    let w = r.size.x / 2.0;
-    Rect {
-        origin: Point2D::new(r.origin.x + slot.min(1) as f32 * w, r.origin.y),
-        size: Point2D::new(w, r.size.y),
     }
 }
 
