@@ -229,12 +229,14 @@ pub fn push_flex_action_rects(
         FlexLayout::Vertical,
         FlexLayout::Horizontal,
     ];
+    // Continuous even cells over the same footprint the ToggleGroup paints.
+    let cell_w = (DIR_BUTTON_W * 3.0 + DIR_GAP * 2.0) / 3.0;
     for (i, mode) in modes.iter().enumerate() {
         out.push((
             PropertyPanelAction::SetFlexLayout(*mode),
             Rect {
-                origin: Point2D::new(row_x + i as f32 * (DIR_BUTTON_W + DIR_GAP), y),
-                size: Point2D::new(DIR_BUTTON_W, DIR_BUTTON_H),
+                origin: Point2D::new(row_x + i as f32 * cell_w, y),
+                size: Point2D::new(cell_w, DIR_BUTTON_H),
             },
         ));
     }
@@ -328,35 +330,28 @@ fn paint_direction_buttons(
         (FlexLayout::Vertical, Icon::Rows3),
         (FlexLayout::Horizontal, Icon::Columns3),
     ];
-    for (i, (mode, icon)) in modes.iter().enumerate() {
-        let rect = Rect {
-            origin: Point2D::new(x + PAD_X + i as f32 * (DIR_BUTTON_W + DIR_GAP), y),
-            size: Point2D::new(DIR_BUTTON_W, DIR_BUTTON_H),
-        };
-        let is_active = *mode == active;
-        if is_active {
-            cx.backend.fill_round_rect(rect, 6.0, theme.primary);
-        } else {
-            cx.backend.fill_round_rect(rect, 6.0, theme.muted);
-            cx.backend.stroke_round_rect(rect, 6.0, theme.border, 1.0);
-        }
-        let icon_color = if is_active {
-            theme.primary_foreground
-        } else {
-            theme.muted_foreground
-        };
-        draw_icon(
-            cx.backend,
-            *icon,
-            Point2D::new(
-                rect.origin.x + (DIR_BUTTON_W - 18.0) / 2.0,
-                rect.origin.y + 7.0,
-            ),
-            18.0,
-            icon_color,
-            1.4,
-        );
+    // Fixed-width icon segmented control via jian ToggleGroup; font_size 14
+    // yields an 18px icon (font + 4), matching the previous cells. The outer
+    // rect spans the same footprint (3 buttons + 2 gaps) the hit walker covers.
+    let labels: Vec<&str> = modes.iter().map(|_| "").collect();
+    let icon_paths: Vec<&[&str]> = modes.iter().map(|(_, icon)| icon.paths()).collect();
+    let active_idx = modes.iter().position(|(m, _)| *m == active).unwrap_or(0);
+    let total_w = DIR_BUTTON_W * 3.0 + DIR_GAP * 2.0;
+    jian_widgets::components::toggle_group::ToggleGroup {
+        options: &labels,
+        icons: Some(&icon_paths),
+        active: active_idx,
+        hover: None,
+        font_size: 14.0,
     }
+    .paint(
+        cx.backend,
+        Rect {
+            origin: Point2D::new(x + PAD_X, y),
+            size: Point2D::new(total_w, DIR_BUTTON_H),
+        },
+        &crate::widgets::button::tokens_from_theme(theme),
+    );
 }
 
 #[allow(clippy::too_many_arguments)]
