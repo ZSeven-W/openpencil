@@ -279,13 +279,16 @@ fn paint_variant_header(
             let variant_width = cx.backend.measure_text(variant, 13.0);
             // Hover/press wash hugs `value v` (+ small L/R padding) instead of
             // washing the whole value-column cell. The hit target stays the
-            // wider `variant_header_rect` so the trigger is still easy to click.
+            // wider `variant_header_rect` so the trigger is still easy to click,
+            // and the wash is clamped to that hit column so a long variant name
+            // can't bleed into the neighbouring variant column.
+            let wash_left = x - HOVER_WASH_PAD_X;
+            let cell_right = wash_left + col_w.min(176.0);
+            let wash_right =
+                (wash_left + variant_width + 6.0 + 11.0 + HOVER_WASH_PAD_X * 2.0).min(cell_right);
             let wash = Rect {
-                origin: Point2D::new(x - HOVER_WASH_PAD_X, header_bottom + 4.0),
-                size: Point2D::new(
-                    variant_width + 6.0 + 11.0 + HOVER_WASH_PAD_X * 2.0,
-                    30.0,
-                ),
+                origin: Point2D::new(wash_left, header_bottom + 4.0),
+                size: Point2D::new((wash_right - wash_left).max(0.0), 30.0),
             };
             paint_feedback(panel, cx, VariablesPanelButton::VariantHeader(idx), wash, 8.0);
             paint_text(
