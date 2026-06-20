@@ -1,6 +1,7 @@
 //! ACP Agent section for the Agent settings panel.
 
 use crate::theme::Theme;
+use crate::widgets::agent_settings_acp_helpers::{draw_text, ellipsize};
 use crate::widgets::agent_settings_caret::{paint_settings_input_view, settings_input_text};
 use crate::widgets::agent_settings_form_actions::{
     cancel_button_rect, paint_form_actions, save_button_rect,
@@ -12,7 +13,7 @@ use crate::widgets::agent_settings_i18n::t as t_settings;
 use crate::widgets::button::{paint_ghost_button_feedback, tokens_from_theme};
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::PaintCx;
-use crate::{Color, Point2D, Rect, TextLayout};
+use crate::{Color, Point2D, Rect};
 use jian_widgets::components::button::{Button, ButtonVariant};
 use jian_widgets::components::card::Card;
 use op_editor_core::agent_settings::{
@@ -794,24 +795,4 @@ fn field_input_rect(card: Rect, field: AcpAgentField) -> Rect {
     }
 }
 
-fn draw_text(cx: &mut PaintCx<'_>, text: &str, size: f32, color: Color, x: f32, y: f32) {
-    let layout = TextLayout::single_run(
-        text,
-        "system-ui",
-        size,
-        (color).to_jian(),
-        Point2D::new(0.0, 0.0),
-    );
-    cx.backend.draw_text(&layout, Point2D::new(x, y));
-}
-
-fn ellipsize(cx: &mut PaintCx<'_>, value: &str, max_w: f32, size: f32) -> String {
-    if cx.backend.measure_text(value, size) <= max_w {
-        return value.to_string();
-    }
-    let mut out = value.to_string();
-    while !out.is_empty() && cx.backend.measure_text(&format!("{out}..."), size) > max_w {
-        out.pop();
-    }
-    format!("{out}...")
-}
+// `draw_text` + `ellipsize` moved to `agent_settings_acp_helpers` (800-line cap).
