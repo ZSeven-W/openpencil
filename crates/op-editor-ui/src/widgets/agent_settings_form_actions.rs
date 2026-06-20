@@ -72,10 +72,17 @@ fn paint_text_button(
     pressed: bool,
 ) {
     let is_primary = matches!(variant, ButtonVariant::Primary);
+    // A disabled primary CTA renders as a neutral Outline (border + no fill →
+    // white in light mode) rather than a washed-out pale-primary fill.
+    let effective_variant = if is_primary && !enabled {
+        ButtonVariant::Outline
+    } else {
+        variant
+    };
     Button {
         label: "",
         icon_paths: None,
-        variant,
+        variant: effective_variant,
         enabled,
         hovered: !is_primary,
         pressed,
