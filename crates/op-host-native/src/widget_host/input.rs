@@ -537,6 +537,18 @@ impl WidgetHostNative {
                 }
                 return true;
             }
+            // Picker open but not dragging — it is a top-most overlay, so a move
+            // over its panel must be swallowed (canvas hover must not bleed
+            // through underneath it). Matches the design-md / modal behaviour.
+            let picker = op_editor_ui::widgets::color_picker::ColorPicker::for_state(
+                &self.editor_state,
+                state.clone(),
+            );
+            let panel = picker.rect(self.last_viewport_w, self.last_viewport_h);
+            if panel.contains(Point2D::new(x, y)) {
+                self.clear_lower_overlay_hover();
+                return true;
+            }
         }
         // Top-most floating panel drags own cursor movement.
         if let Some(d) = self.design_md_drag {
