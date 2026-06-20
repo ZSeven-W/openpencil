@@ -337,11 +337,12 @@ fn framework_chip_rects(x: f32, y: f32, w: f32, scroll: f32) -> Vec<(Framework, 
         .iter()
         .map(|fw| chip_label_width(framework_tab_label(*fw)) + CHIP_PAD_X * 2.0)
         .collect();
+    let advances: Vec<f32> = widths.iter().map(|w| w + CHIP_GAP).collect();
     let rects = jian_widgets::components::tabs::Tabs::content_rects(
         Point2D::new(x + PAD_X + inset, y),
         &widths,
+        &advances,
         CHIP_HEIGHT,
-        CHIP_GAP,
         scroll,
     );
     Framework::ALL.iter().copied().zip(rects).collect()
