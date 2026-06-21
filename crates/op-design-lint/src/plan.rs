@@ -340,6 +340,40 @@ mod tests {
         );
     }
 
+    /// End-to-end of what the desktop's `LintPreValidator` runs: `detect_and_plan`
+    /// on a nav AFTER `apply_tree_heuristics` rounded the active Home tab to a 999
+    /// pill. The mixed-sibling-corner-radius detector must NOT plan flattening it
+    /// back to its square (cr=0) siblings — the active-nav-tab-reset-to-square bug
+    /// that left op-smoke (no validation) rounded but the desktop (validation)
+    /// square.
+    #[test]
+    fn detect_and_plan_does_not_flatten_active_nav_pill() {
+        let raw = r##"{
+            "version":"1.0",
+            "children":[{
+                "type":"frame","id":"bar","role":"bottom-tab-bar","layout":"vertical",
+                "children":[{
+                    "type":"frame","id":"pill","cornerRadius":100,"layout":"horizontal",
+                    "children":[
+                        {"type":"frame","id":"home","cornerRadius":999,"fill":[{"type":"solid","color":"#F97316"}]},
+                        {"type":"frame","id":"search","role":"search-bar","cornerRadius":26},
+                        {"type":"frame","id":"orders","cornerRadius":0},
+                        {"type":"frame","id":"profile","cornerRadius":0}
+                    ]
+                }]
+            }]
+        }"##;
+        let doc: PenDocument = serde_json::from_str(raw).expect("parse nav doc");
+        let plan = detect_and_plan(&doc);
+        let home_corner_fix = plan
+            .iter()
+            .any(|f| f.node_id == "home" && matches!(f.action, PlannedAction::SetCornerRadius(_)));
+        assert!(
+            !home_corner_fix,
+            "active nav pill (home cr=999) must NOT be planned for a cornerRadius flatten, plan={plan:?}"
+        );
+    }
+
     /// Load the `invisible-container-with-var` fixture (doc declares
     /// `color-border` variable) and assert equivalence — exercises the
     /// `$color-border` design-token reference path.
