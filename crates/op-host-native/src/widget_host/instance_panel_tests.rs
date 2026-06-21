@@ -254,3 +254,124 @@ fn remote_icon_insert_bakes_svg_d_as_path_node() {
     );
     assert_eq!(p.icon_id.as_deref(), Some("mdi:zwxq-home"));
 }
+
+const STROKE_RECT_DOC: &str = r##"{
+  "version":"0.8.0",
+  "children":[
+    {"type":"rectangle","id":"r1","name":"Box","x":0,"y":0,"width":100,"height":50}
+  ]
+}"##;
+
+fn seeded_rect_host() -> WidgetHostNative {
+    let mut host = WidgetHostNative::new();
+    let doc = jian_ops_schema::load_str(STROKE_RECT_DOC)
+        .expect("fixture JSON parses")
+        .value;
+    *host.editor_state_mut() = op_editor_core::EditorState::from_document(doc);
+    host.editor_state_mut()
+        .set_single_selection(NodeId::new("r1"));
+    host
+}
+
+/// Repro for the "stroke width reverts to 0 on blur" bug: a shape
+/// with NO stroke, focus on the inline `StrokeWidth` field, a typed
+/// draft of "1", committed through the host's blur path. The width
+/// must persist (cmd_set_node_stroke_width attaches a fresh stroke).
+#[test]
+fn host_commit_creates_stroke_on_a_bare_shape() {
+    let mut host = seeded_rect_host();
+    host.editor_state_mut().ui.property_focus = Some(op_editor_core::PropertyFocus::StrokeWidth);
+    host.editor_state_mut().ui.property_input.set_text("1");
+    host.commit_property_focus_if_any();
+    let node = op_editor_core::walkers::find_node(
+        host.editor_state().active_children(),
+        &NodeId::new("r1"),
+    )
+    .expect("rect present after commit");
+    assert_eq!(
+        op_editor_core::fills::node_stroke_width(node),
+        Some(1.0),
+        "stroke width must persist after the host blur commit"
+    );
+}
+
+/// End-to-end repro of the user-reported bug: a bare shape, the user
+/// clicks the inline stroke-width input, types a value, then blurs —
+/// the width must persist. Scans the live panel for the hit-testable
+/// StrokeWidth rect so it catches a paint/hit-test divergence.
+#[test]
+fn host_click_type_blur_persists_stroke_width() {
+    let mut host = seeded_rect_host();
+    let (vw, vh) = (1200.0_f32, 800.0_f32);
+    let rect = host.property_rect(vw, vh);
+    let panel = op_editor_ui::widgets::PropertyPanel::for_selection(host.editor_state())
+        .expect("property panel for the selected rect");
+    // Find the point that hit-tests to the inline StrokeWidth input.
+    let mut hit: Option<op_editor_ui::Point2D> = None;
+    let mut y = rect.origin.y + 2.0;
+    'scan: while y < rect.origin.y + rect.size.y {
+        let mut x = rect.origin.x + 2.0;
+        while x < rect.origin.x + rect.size.x {
+            let p = op_editor_ui::Point2D::new(x, y);
+            if panel.hit_test(rect, p) == Some(op_editor_core::PropertyFocus::StrokeWidth) {
+                hit = Some(p);
+                break 'scan;
+            }
+            x += 3.0;
+        }
+        y += 3.0;
+    }
+    let p = hit.expect("inline StrokeWidth input must be hit-testable in Single mode");
+
+    assert!(host.apply_press(p.x, p.y, vw, vh));
+    assert_eq!(
+        host.editor_state().ui.property_focus,
+        Some(op_editor_core::PropertyFocus::StrokeWidth),
+        "clicking the inline width must focus StrokeWidth"
+    );
+    let seeded = host.editor_state().ui.property_input.text().to_owned();
+    host.apply_text('5');
+    let typed = host.editor_state().ui.property_input.text().to_owned();
+    host.commit_property_focus_if_any();
+    let node = op_editor_core::walkers::find_node(
+        host.editor_state().active_children(),
+        &NodeId::new("r1"),
+    )
+    .expect("rect present");
+    let w = op_editor_core::fills::node_stroke_width(node);
+    assert!(
+        w.is_some() && w.unwrap() > 0.0,
+        "stroke width must persist after click→type→blur; seed={seeded:?} typed={typed:?} got={w:?}"
+    );
+}
+
+/// The actual user-visible bug: `cmd_set_node_stroke_width` attaches a
+/// stroke with `fill: None` (width, no color). The panel snapshot used
+/// to gate `stroke` on a parseable solid color, so a colorless stroke's
+/// width vanished from the panel and the input read back "0" on blur —
+/// even though the model kept the width. The snapshot must surface the
+/// width regardless of whether a solid color is set.
+#[test]
+fn colorless_stroke_width_survives_in_the_panel_snapshot() {
+    let mut host = seeded_rect_host();
+    host.editor_state_mut().ui.property_focus = Some(op_editor_core::PropertyFocus::StrokeWidth);
+    host.editor_state_mut().ui.property_input.set_text("3");
+    host.commit_property_focus_if_any();
+
+    // The model kept the width (no color attached).
+    let node = op_editor_core::walkers::find_node(
+        host.editor_state().active_children(),
+        &NodeId::new("r1"),
+    )
+    .expect("rect present");
+    assert_eq!(op_editor_core::fills::node_stroke_width(node), Some(3.0));
+
+    // ...and the panel snapshot must reflect it (the display bug).
+    let panel = op_editor_ui::widgets::PropertyPanel::for_selection(host.editor_state())
+        .expect("panel");
+    assert_eq!(
+        panel.snapshot.stroke_side_widths(),
+        [3.0, 3.0, 3.0, 3.0],
+        "a colorless stroke's width must still show in the panel"
+    );
+}

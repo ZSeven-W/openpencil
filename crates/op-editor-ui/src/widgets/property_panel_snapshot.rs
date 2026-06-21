@@ -623,13 +623,29 @@ impl NodeSnapshot {
         // a `PerCorner` radius reports its top-left corner.
         let corner_radius = container_corner_radius(node);
         let fill = op_editor_core::first_solid_fill_hex(node).and_then(color_from_hex);
-        let stroke = op_editor_core::first_solid_stroke_hex(node)
-            .and_then(color_from_hex)
-            .map(|color| SceneStroke {
+        // A node can carry a stroke WIDTH with no solid color — e.g. set
+        // via the width input before a color is chosen, where
+        // `cmd_set_node_stroke_width` attaches a fresh stroke with
+        // `fill: None`. Surface the stroke whenever it has any width so the
+        // width input + side controls reflect it; fall back to the slate
+        // placeholder color (matching `stroke_swatch_color`) when no solid
+        // color is parseable. Gating `stroke` on a parseable color used to
+        // drop a colorless stroke's width, so the width read back "0".
+        let stroke_color = op_editor_core::first_solid_stroke_hex(node).and_then(color_from_hex);
+        let stroke_width = op_editor_core::fills::node_stroke_width(node);
+        let stroke = match (stroke_color, stroke_width) {
+            (Some(color), _) => Some(SceneStroke {
                 color,
-                width: op_editor_core::fills::node_stroke_width(node).unwrap_or(1.0) as f32,
+                width: stroke_width.unwrap_or(1.0) as f32,
                 sides: stroke_sides_for_scene(node),
-            });
+            }),
+            (None, Some(width)) if width > 0.0 => Some(SceneStroke {
+                color: Self::DEFAULT_STROKE_SWATCH,
+                width: width as f32,
+                sides: stroke_sides_for_scene(node),
+            }),
+            _ => None,
+        };
         Self {
             kind: kind.label().to_string(),
             name: base.name.clone().unwrap_or_default(),
