@@ -374,9 +374,19 @@ fn paint_chevron(cx: &mut PaintCx<'_>, cx_px: f32, cy_px: f32, zoom: f32) {
 /// coords. `font_size` is already zoom-scaled; the run's origin is the
 /// text top edge (TS canvas paint parity — see `paint_text_node`).
 fn draw_label(cx: &mut PaintCx<'_>, text: &str, color: Color, x: f32, top_y: f32, font_size: f32) {
-    let layout =
-        TextLayout::single_run(text, "", font_size, color.to_jian(), Point2D::new(x, top_y));
-    cx.backend.draw_text(&layout, Point2D::new(x, top_y));
+    // Position belongs ONLY in the `draw_text` origin, never also baked into the
+    // run. `NativeBackend::draw_text` sums `origin + run.origin`, so passing the
+    // position to both double-counted it — every widget label drew at
+    // (2x, 2·top_y). Mirror `canvas_viewport_text::draw_slice`: zero run origin,
+    // position via the draw_text origin.
+    let layout = TextLayout::single_run(text, "", font_size, color.to_jian(), Point2D::ZERO);
+    // `top_y` is the text's TOP edge (callers pass `y + (h - fs)/2` to vertically
+    // centre in a field), but the backend draws `draw_str` at the BASELINE — so
+    // convert top → baseline by adding the ascent (~0.8·fs). Without this the
+    // glyphs sit a full ascent too high (the search placeholder hugged the top of
+    // its box instead of centring).
+    cx.backend
+        .draw_text(&layout, Point2D::new(x, top_y + font_size * 0.8));
 }
 
 /// `(x, y, w, h)` of a rect.
