@@ -12,18 +12,16 @@
 //! reverse path, so the desktop's old private `DocPayload` format is no
 //! longer written — every save is canonical.
 //!
-//! ## Editor view-state sidecar (`.opmeta`)
+//! ## Embedded editor view-state (`editorMeta`)
 //!
 //! The canonical `PenDocument` schema has no field for editor
 //! view-state — most of it (selection / viewport / tool) is
 //! deliberately transient, but `active_page_index` is a small piece of
 //! view-state the user expects to survive a save / load round-trip.
-//! `jian_ops_schema` is a shared crate and must not grow editor-only
-//! fields, so Save writes a tiny JSON companion file next to the `.op`
-//! (`<path>.opmeta`) carrying `active_page_index`; Open reads it
-//! best-effort (a missing / unreadable sidecar falls back to page 0).
-//! The `.op` file itself stays strictly canonical so TS editor / Jian
-//! apps load it unchanged.
+//! Save embeds that tiny editor-only blob in the `.op` file under a
+//! top-level `editorMeta` extension. Older files that still have the
+//! former `<path>.opmeta` sidecar continue to load best-effort; new
+//! saves remove stale sidecars.
 //!
 //! ## Legacy `DocPayload` files
 //!
@@ -35,24 +33,25 @@
 //! error, [`load_editor_state`] detects the legacy shape and surfaces
 //! an explicit "saved by an older version, must be re-saved" message.
 
-use std::path::PathBuf;
+use std::{borrow::Cow, path::PathBuf};
 
 use op_editor_core::EditorState;
 
-/// Editor view-state persisted alongside the canonical `.op` file.
+/// Editor view-state embedded in the canonical `.op` file.
 /// Kept intentionally minimal — `active_page_index` is the only piece
 /// of view-state the user expects to survive a round-trip. Selection /
 /// viewport / tool stay transient and are NOT persisted.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct EditorMeta {
     /// 0-based active page index at save time.
-    #[serde(default)]
+    #[serde(default, alias = "active_page_index")]
     active_page_index: usize,
 }
 
-/// Sidecar path for a given `.op` / `.pen` file — `<path>.opmeta`.
-/// Public so the desktop residual's tests can clean it up after a
-/// round-trip.
+/// Legacy sidecar path for a given `.op` / `.pen` file —
+/// `<path>.opmeta`. Public so compatibility tests and stale-sidecar
+/// cleanup use the same path convention older builds wrote.
 pub fn sidecar_path(path: &std::path::Path) -> PathBuf {
     let mut p = path.to_path_buf();
     let ext = match path.extension().and_then(|s| s.to_str()) {
@@ -65,10 +64,21 @@ pub fn sidecar_path(path: &std::path::Path) -> PathBuf {
 
 /// Serialize an `EditorState`'s canonical document to `path` without
 /// prompting. Used by Cmd+S once the document already has a path.
-/// Also writes the `.opmeta` view-state sidecar so `active_page_index`
-/// survives the round-trip.
+/// Editor view-state is embedded under the top-level `editorMeta`
+/// extension so `active_page_index` survives the round-trip without a
+/// separate sidecar.
 pub fn save_to_path(state: &EditorState, path: &std::path::Path) -> Result<(), String> {
-    let json = serde_json::to_string_pretty(&state.doc).map_err(|e| e.to_string())?;
+    let mut value = serde_json::to_value(&state.doc).map_err(|e| e.to_string())?;
+    if let Some(obj) = value.as_object_mut() {
+        obj.insert(
+            "editorMeta".into(),
+            serde_json::to_value(EditorMeta {
+                active_page_index: state.ui.active_page_index,
+            })
+            .map_err(|e| e.to_string())?,
+        );
+    }
+    let json = serde_json::to_string_pretty(&value).map_err(|e| e.to_string())?;
     // Write through a sibling temp file so a crash mid-write doesn't
     // leave a half-written file on disk.
     let mut tmp = path.to_path_buf();
@@ -78,14 +88,13 @@ pub fn save_to_path(state: &EditorState, path: &std::path::Path) -> Result<(), S
     });
     std::fs::write(&tmp, json).map_err(|e| e.to_string())?;
     std::fs::rename(&tmp, path).map_err(|e| e.to_string())?;
-    // View-state sidecar — best-effort. A failed sidecar write must
-    // not fail the (already-committed) document save, so it only logs.
-    let meta = EditorMeta {
-        active_page_index: state.ui.active_page_index,
-    };
-    if let Ok(meta_json) = serde_json::to_string(&meta) {
-        if let Err(e) = std::fs::write(sidecar_path(path), meta_json) {
-            eprintln!("[save] view-state sidecar write failed: {e}");
+    // Old builds wrote `<path>.opmeta`. New saves are single-file, so
+    // remove any stale sidecar after the document write has committed.
+    match std::fs::remove_file(sidecar_path(path)) {
+        Ok(()) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => {
+            eprintln!("[save] stale view-state sidecar cleanup failed: {e}");
         }
     }
     Ok(())
@@ -114,8 +123,8 @@ fn looks_like_legacy_doc_payload(src: &str) -> bool {
 /// Load a canonical `.pen` / `.op` file at `path` into a fresh
 /// `EditorState`. Files from the TS editor, Jian apps, or anything
 /// else emitting the canonical schema all load through the shared
-/// parser. The `.opmeta` view-state sidecar (if present) restores
-/// `active_page_index`.
+/// parser. Embedded `editorMeta` restores `active_page_index`; legacy
+/// `.opmeta` sidecars remain a fallback for older files.
 ///
 /// A file in the legacy private `DocPayload` format is detected and
 /// rejected with an explicit message: there is no
@@ -135,13 +144,14 @@ pub fn load_editor_state(
                 .replace("{{detail}}", &e.to_string()));
         }
     };
-    let loaded = match op_pen_loader::load_canonical(src) {
+    let (embedded_meta, canonical_src) = split_editor_meta(src);
+    let loaded = match op_pen_loader::load_canonical(canonical_src.as_ref()) {
         Ok(loaded) => loaded,
         Err(e) => {
             // Distinguish "old format" from a genuinely corrupt file so
             // the user gets actionable guidance instead of a raw parse
             // error.
-            if looks_like_legacy_doc_payload(src) {
+            if looks_like_legacy_doc_payload(canonical_src.as_ref()) {
                 return Err(op_i18n::translate(locale, "dialog.loadErrorOldVersion").to_string());
             }
             return Err(e.to_string());
@@ -151,25 +161,41 @@ pub fn load_editor_state(
         eprintln!("[open] schema warning: {:?}", w);
     }
     let mut state = EditorState::from_document(loaded.value);
-    // Restore editor view-state from the `.opmeta` sidecar — best
-    // effort: a missing / unreadable / out-of-range sidecar leaves the
-    // freshly loaded state on page 0.
-    if let Ok(meta_src) = std::fs::read_to_string(sidecar_path(path)) {
-        if let Ok(meta) = serde_json::from_str::<EditorMeta>(&meta_src) {
-            // `pages == None` is the single-page fallback — one logical
-            // page, so the only valid index is 0. Otherwise clamp the
-            // saved index against the real page count.
-            let page_count = state
-                .doc
-                .pages
-                .as_ref()
-                .map(|p| p.len())
-                .unwrap_or(1)
-                .max(1);
-            state.ui.active_page_index = meta.active_page_index.min(page_count - 1);
-        }
+    // Restore editor view-state from embedded metadata first, then from
+    // the legacy `.opmeta` sidecar. Missing / unreadable /
+    // out-of-range metadata leaves the freshly loaded state on page 0.
+    if let Some(meta) = embedded_meta.or_else(|| legacy_sidecar_meta(path)) {
+        let page_count = state
+            .doc
+            .pages
+            .as_ref()
+            .map(|p| p.len())
+            .unwrap_or(1)
+            .max(1);
+        state.ui.active_page_index = meta.active_page_index.min(page_count - 1);
     }
     Ok(state)
+}
+
+fn split_editor_meta(src: &str) -> (Option<EditorMeta>, Cow<'_, str>) {
+    let Ok(mut value) = serde_json::from_str::<serde_json::Value>(src) else {
+        return (None, Cow::Borrowed(src));
+    };
+    let Some(obj) = value.as_object_mut() else {
+        return (None, Cow::Borrowed(src));
+    };
+    let meta = obj
+        .remove("editorMeta")
+        .and_then(|value| serde_json::from_value::<EditorMeta>(value).ok());
+    let Ok(canonical_src) = serde_json::to_string(&value) else {
+        return (meta, Cow::Borrowed(src));
+    };
+    (meta, Cow::Owned(canonical_src))
+}
+
+fn legacy_sidecar_meta(path: &std::path::Path) -> Option<EditorMeta> {
+    let meta_src = std::fs::read_to_string(sidecar_path(path)).ok()?;
+    serde_json::from_str::<EditorMeta>(&meta_src).ok()
 }
 
 /// A cheap content fingerprint of the document — the hash of its
@@ -343,9 +369,9 @@ mod tests {
 
     #[test]
     fn active_page_index_survives_a_save_load_round_trip() {
-        // Fix 5: editor view-state (`active_page_index`) is persisted in
-        // the `.opmeta` sidecar so a save / load round-trip restores it
-        // instead of reinitializing to page 0.
+        // Editor view-state (`active_page_index`) is persisted inside
+        // the `.op` file so a save / load round-trip restores it
+        // without a separate `.opmeta` sidecar.
         let mut state = EditorState::new();
         // Two extra pages → three total; page index 2 is valid.
         state.add_page();
@@ -358,6 +384,14 @@ mod tests {
         let reloaded =
             load_editor_state(&path, op_editor_core::Locale::EnUs).expect("load succeeds");
         assert_eq!(reloaded.ui.active_page_index, 2);
+        let saved: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&path).expect("saved document"))
+                .expect("saved document json");
+        assert_eq!(saved["editorMeta"]["activePageIndex"], 2);
+        assert!(
+            !sidecar_path(&path).exists(),
+            "new saves should not create .opmeta sidecars"
+        );
 
         // Cleanup.
         let _ = std::fs::remove_file(&path);
@@ -365,13 +399,13 @@ mod tests {
     }
 
     #[test]
-    fn active_page_index_is_clamped_against_the_real_page_count() {
-        // A sidecar that names a page that no longer exists must not
-        // leave the editor on an out-of-range index.
+    fn legacy_sidecar_active_page_index_is_still_loaded_and_clamped() {
+        // A legacy sidecar that names a page that no longer exists must
+        // not leave the editor on an out-of-range index.
         let state = EditorState::new();
         let path = temp_op_path("page-clamp");
         save_to_path(&state, &path).expect("save succeeds");
-        // Overwrite the sidecar with an absurd index.
+        // Legacy sidecar from older versions.
         std::fs::write(sidecar_path(&path), r#"{"active_page_index":99}"#)
             .expect("sidecar overwrite");
 
@@ -379,6 +413,25 @@ mod tests {
             load_editor_state(&path, op_editor_core::Locale::EnUs).expect("load succeeds");
         // Single-page document → only index 0 is valid.
         assert_eq!(reloaded.ui.active_page_index, 0);
+
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(sidecar_path(&path));
+    }
+
+    #[test]
+    fn embedded_editor_meta_takes_precedence_over_legacy_sidecar() {
+        let path = temp_op_path("embedded-meta");
+        std::fs::write(
+            &path,
+            r#"{"version":"1.0.0","editorMeta":{"activePageIndex":1},"children":[],"pages":[{"id":"p1","name":"One","children":[]},{"id":"p2","name":"Two","children":[]}]}"#,
+        )
+        .expect("write merged document");
+        std::fs::write(sidecar_path(&path), r#"{"active_page_index":0}"#)
+            .expect("write stale sidecar");
+
+        let reloaded =
+            load_editor_state(&path, op_editor_core::Locale::EnUs).expect("load succeeds");
+        assert_eq!(reloaded.ui.active_page_index, 1);
 
         let _ = std::fs::remove_file(&path);
         let _ = std::fs::remove_file(sidecar_path(&path));

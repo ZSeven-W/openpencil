@@ -197,6 +197,29 @@ fn design_skeleton_root_sections_emit_authored_subtree_with_section_ids() {
 }
 
 #[test]
+fn design_skeleton_mobile_root_defaults_to_breathing_room() {
+    let tool = design_skeleton_snapshot();
+    let mut args = BTreeMap::new();
+    args.insert(
+        "rootFrame".into(),
+        r#"{"name":"Food App Home","width":375,"height":812}"#.into(),
+    );
+    args.insert(
+        "sections".into(),
+        r#"[{"name":"Header"},{"name":"Search"},{"name":"Popular Restaurants"}]"#.into(),
+    );
+    args.insert("canvasWidth".into(), "375".into());
+
+    match tool.call(&args) {
+        ToolOutcome::OkWithCommand(_, EditorCommand::InsertAuthoredSubtree { nodes, .. }) => {
+            let root = serde_json::to_value(&nodes[0]).expect("root json");
+            assert_eq!(root.get("gap").and_then(|v| v.as_f64()), Some(20.0));
+        }
+        other => panic!("expected design_skeleton authored subtree, got {other:?}"),
+    }
+}
+
+#[test]
 fn design_refine_root_id_returns_ts_result_and_refine_command() {
     let mut state = EditorState::new();
     assert!(state.apply(EditorCommand::InsertNode {

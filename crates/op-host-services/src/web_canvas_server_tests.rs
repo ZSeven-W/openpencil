@@ -158,7 +158,7 @@ fn post_file_save_requires_a_known_daemon_path() {
 }
 
 #[test]
-fn post_file_save_writes_current_path_and_active_page_sidecar() {
+fn post_file_save_writes_current_path_and_embedded_active_page_meta() {
     use op_editor_core::PenNodeExt;
 
     let path = write_temp_op("save-target", r#"{"version":"1.0.0","children":[]}"#);
@@ -174,12 +174,14 @@ fn post_file_save_writes_current_path_and_active_page_sidecar() {
     assert_eq!(s.editor.active_children()[0].base().id, "saved-node");
     let saved = std::fs::read_to_string(&path).expect("saved file");
     assert!(saved.contains("saved-node"), "{saved}");
+    let saved_json: serde_json::Value = serde_json::from_str(&saved).expect("saved json");
+    assert_eq!(saved_json["editorMeta"]["activePageIndex"], 1);
     let mut sidecar = path.clone();
     sidecar.set_extension("op.opmeta");
-    let meta: serde_json::Value =
-        serde_json::from_str(&std::fs::read_to_string(&sidecar).expect("sidecar"))
-            .expect("sidecar json");
-    assert_eq!(meta["active_page_index"], 1);
+    assert!(
+        !sidecar.exists(),
+        "new saves should keep active page metadata inside the .op file"
+    );
     let _ = std::fs::remove_file(path);
     let _ = std::fs::remove_file(sidecar);
 }

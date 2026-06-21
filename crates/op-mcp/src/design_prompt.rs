@@ -16,6 +16,8 @@ const PROMPT_SECTIONS: &[&str] = &[
     "icons",
     "examples",
     "guidelines",
+    "quality",
+    "mobile",
     "planning",
     "elements",
     "elements-cookbook",
@@ -54,6 +56,15 @@ const PLANNING_GUIDE: &str = r#"DESIGN PLANNING:
 - Create a skeleton first, fill each section with content, then refine.
 - Keep forms together with their primary action. Split only when one section would be too large.
 - Default to light neutral styling unless the request explicitly asks for dark, cyber, neon, terminal, noir, night, or similar themes."#;
+
+const AESTHETIC_QUALITY_GUIDE: &str = r#"AESTHETIC QUALITY BAR:
+- Avoid crowded output. Prefer fewer, stronger modules with visible negative space over filling every pixel.
+- Mobile screens should use one App Content wrapper for the main body. The wrapper owns horizontal padding (16-20px) and vertical gap (20-24px); inner sections should not each add competing gutters.
+- Keep one primary job per screen. Above the fold, show the title/context, the primary action or search, and at most 2-3 supporting modules.
+- Use a clear type rhythm: one display/title size, one section heading size, one body/caption size. Avoid many near-identical bold text sizes.
+- Reuse one card radius, one card padding, and one shadow treatment within a screen.
+- Use at most two saturated colors. Let hierarchy come from spacing, contrast, and content scale, not decoration.
+- Mobile tab bars are part of the page flow; do not add fake bottom spacers or overlays."#;
 
 const RUST_ELEMENT_TOOL_GUIDE: &str = r##"RUST MCP ELEMENT TOOL COMPATIBILITY:
 - This Rust MCP server does not expose the TS `add_*_v1` element-tool family unless those exact tools appear in tools/list. Do not call `add_*` tools just because older prompt text or examples mention them.
@@ -147,6 +158,8 @@ fn section_content(section: &str) -> Option<String> {
             skill_content("design-principles"),
             skill_content("product-principles")
         )),
+        "quality" => Some(AESTHETIC_QUALITY_GUIDE.into()),
+        "mobile" => Some(skill_content("mobile-app")),
         "planning" => Some(PLANNING_GUIDE.into()),
         "elements" => Some(RUST_ELEMENT_TOOL_GUIDE.into()),
         "elements-cookbook" => Some(RUST_ELEMENT_TOOL_GUIDE.into()),
@@ -177,6 +190,8 @@ fn build_full_prompt() -> String {
         &skill_content("style-defaults"),
         &skill_content("examples"),
         PLANNING_GUIDE,
+        AESTHETIC_QUALITY_GUIDE,
+        &skill_content("mobile-app"),
         &skill_content("role-definitions"),
         &skill_content("layout"),
         &skill_content("text-rules"),

@@ -360,12 +360,65 @@ pub fn drain_stop_request(
 }
 
 pub(crate) fn clear_fresh_starter_frame_for_design(state: &mut EditorState) -> bool {
-    if state.doc != EditorState::starter().doc {
+    if !active_page_is_blank_starter_frame(state) {
         return false;
     }
     state.active_children_mut().clear();
     state.clear_selection();
     true
+}
+
+fn active_page_is_blank_starter_frame(state: &EditorState) -> bool {
+    let children = state.active_children();
+    let [only] = children else {
+        return false;
+    };
+    is_blank_starter_frame(only)
+}
+
+fn is_blank_starter_frame(node: &jian_ops_schema::node::PenNode) -> bool {
+    let jian_ops_schema::node::PenNode::Frame(frame) = node else {
+        return false;
+    };
+    if frame.base.id != "n10" || frame.base.name.as_deref() != Some("Frame") {
+        return false;
+    }
+    if frame
+        .children
+        .as_ref()
+        .map(|c| !c.is_empty())
+        .unwrap_or(false)
+    {
+        return false;
+    }
+    if !near(frame.base.x.unwrap_or(0.0), 0.0) || !near(frame.base.y.unwrap_or(0.0), 0.0) {
+        return false;
+    }
+    if !matches_number(&frame.container.width, 1200.0)
+        || !matches_number(&frame.container.height, 800.0)
+    {
+        return false;
+    }
+    if frame.container.stroke.is_some() {
+        return false;
+    }
+    match frame.container.fill.as_deref() {
+        Some([jian_ops_schema::style::PenFill::Solid(fill)]) => {
+            fill.color.eq_ignore_ascii_case("#ffffff")
+        }
+        _ => false,
+    }
+}
+
+fn matches_number(value: &Option<jian_ops_schema::sizing::SizingBehavior>, expected: f64) -> bool {
+    matches!(
+        value,
+        Some(jian_ops_schema::sizing::SizingBehavior::Number(n)) if near(*n, expected)
+    )
+}
+
+fn near(a: f64, b: f64) -> bool {
+    (a - b).abs() < 0.01
 }
 
 /// Build the `ChatProvider` for an agent index (into

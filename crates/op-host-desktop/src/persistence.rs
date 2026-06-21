@@ -1,8 +1,9 @@
 //! `.pen` / `.op` file Save / Open — desktop-side dialog flow.
 //!
-//! The headless load / save core (the canonical serializer, the
-//! `.opmeta` view-state sidecar, legacy-`DocPayload` detection, and the
-//! `EditorState` preference-carry helpers) lives in
+//! The headless load / save core (the canonical serializer, embedded
+//! editor view-state plus legacy `.opmeta` fallback,
+//! legacy-`DocPayload` detection, and the `EditorState`
+//! preference-carry helpers) lives in
 //! [`op_host_services::doc_io`]; this module keeps the rfd / winit dialog
 //! flow — the Save / Save-As / Open pickers, the file-menu
 //! [`run_action`] router, and the native error dialog — and imports the
@@ -13,7 +14,7 @@
 //! `jian_ops_schema::PenDocument`): Save serializes `editor_state.doc`
 //! straight to canonical `.op` JSON and Open re-seeds `EditorState`
 //! via the shared parser the TS editor / Jian apps use. See `doc_io`
-//! for the on-disk format, the sidecar, and the legacy-file handling.
+//! for the on-disk format, editor metadata, and legacy-file handling.
 
 use std::path::PathBuf;
 
@@ -397,7 +398,7 @@ pub fn show_error_dialog_public(
 mod tests {
     use super::*;
     // `save_to_path` arrives via `super::*`; `sidecar_path` is only
-    // needed for test cleanup, so import it directly.
+    // needed for legacy-sidecar cleanup in tests, so import it directly.
     use op_host_services::doc_io::sidecar_path;
 
     /// A unique temp path under the OS temp dir for a round-trip test.

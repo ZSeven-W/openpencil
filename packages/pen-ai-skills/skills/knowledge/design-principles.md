@@ -15,7 +15,9 @@ DESIGN CRAFT:
 - Palette: 1 primary action color, 1 accent, neutral scale. Max 2 saturated colors. Page bg slightly tinted (#F8FAFC not #FFFFFF).
 - Contrast law: WCAG AA (4.5:1 body, 3:1 large text). Text: primary #0F172A for headings, muted #475569 for body.
 - 8px grid spacing: related items 8-16px, groups 24-32px, sections 48-80px. Section padding 80-120px vertical.
+- Avoid crowded output: fewer, stronger modules with visible negative space beat dense screens full of equal-weight blocks.
 - Hero: ONE headline, ONE subtitle, ONE CTA, optional visual. Every extra element dilutes focus.
 - Cards: consistent cornerRadius/padding/shadow. Content: image - title - description - action.
 - Nav: logo + 3-5 links + CTA. space_between distribution. Keep minimal.
 - Alternate section backgrounds (white/#F8FAFC) for natural separation.
+- Mobile: one App Content wrapper owns horizontal padding and vertical gaps; inner sections should not each add competing gutters.
