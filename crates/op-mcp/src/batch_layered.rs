@@ -380,6 +380,28 @@ chars. Content width: {}px.",
         );
     }
 
+    if name.contains("search") || name.contains("搜索") {
+        return (
+            format!(
+                "Create a single compact search row, not a hero panel: one search-bar/form-input \
+with search icon and placeholder plus an optional filter icon-button. Mobile height 48-56px, \
+gap=10-12, no oversized tinted shell, no nested rounded background inside another large rounded \
+background. Mobile top rhythm: place this primary module within 20-32px of the header/title group. \
+Content width: {}px.",
+                content_width
+            ),
+            vec![
+                "row",
+                "search-bar",
+                "form-input",
+                "input",
+                "icon-button",
+                "icon",
+                "caption",
+            ],
+        );
+    }
+
     if name.contains("feature") || name.contains("功能") {
         return (
             format!(
@@ -620,7 +642,7 @@ fn default_root_gap(canvas_width: i32) -> i32 {
 
 fn quality_guidelines(canvas_width: i32) -> &'static str {
     if canvas_width <= 500 {
-        "Avoid crowded output: keep one primary mobile task, use an App Content wrapper with 16-20px horizontal padding and 20-24px vertical gaps, and limit above-the-fold modules."
+        "Avoid crowded output: keep one primary mobile task, use an App Content wrapper with 16-20px horizontal padding and 20-24px vertical gaps, and limit above-the-fold modules. Mobile top rhythm: keep the first primary module within 20-32px of the header/title group. Prefer a single compact search row with no oversized tinted shell. Add one signature moment and vary the composition instead of repeating a fixed template."
     } else {
         "Avoid crowded output: use generous section padding, clear type hierarchy, consistent card rhythm, and fewer stronger modules."
     }

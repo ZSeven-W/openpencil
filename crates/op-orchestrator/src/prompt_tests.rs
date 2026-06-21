@@ -51,6 +51,16 @@ fn rich_prompt_has_style_guides_and_suffix() {
 }
 
 #[test]
+fn provider_planning_prompt_carries_quality_guardrails() {
+    let pp = build_orchestrator_prompt(&req(), PlanningMode::Rich, AbortFlag::new());
+    let prompt = &pp.call_request.system_prompt;
+    assert!(prompt.contains("PLANNING QUALITY GUARDRAILS"));
+    assert!(prompt.contains("Do not plan the same predictable mobile stack"));
+    assert!(prompt.contains("Mobile top rhythm"));
+    assert!(prompt.contains("signature moment"));
+}
+
+#[test]
 fn minimal_prompt_has_short_suffix_no_snippets() {
     let pp = build_orchestrator_prompt(&req(), PlanningMode::Minimal, AbortFlag::new());
     assert!(pp
@@ -143,7 +153,7 @@ fn subagent_prompt_carries_ts_layout_contract() {
         false,
     );
 
-    let required = "Page sections:|Food Categories [category chips]|Root frame: id=\"categories-root\"|width=\"fill_container\"|height=\"fit_content\"|Generate enough elements|MOBILE STATUS BAR|time, signal, wifi, battery|NO PHONE MOCKUP WRAPPER|MOBILE WIDTH SAFETY|MOBILE SINGLE CONTENT RAIL|MOBILE SEARCH BAR|MOBILE SECTION CHROME|MOBILE VERTICAL RHYTHM|MOBILE GRID ALIGNMENT|MOBILE CARD OVERLAYS|MOBILE IMAGE QUALITY|NO BLANK PLACEHOLDERS|MOBILE NAV SURFACE|MOBILE NAV SHADOW|TYPOGRAPHY HIERARCHY|DENSITY|VISUAL HIERARCHY|SPACING CONSISTENCY|CRAFT POLISH|MEDIA CONSISTENCY|ICON SCALE|SIGNATURE MOMENT|WOW FACTOR|COMPOSITIONAL CONTRAST|PREMIUM DETAIL|NO DECORATION SPAM";
+    let required = "Page sections:|Food Categories [category chips]|Root frame: id=\"categories-root\"|width=\"fill_container\"|height=\"fit_content\"|Generate enough elements|MOBILE STATUS BAR|time, signal, wifi, battery|NO PHONE MOCKUP WRAPPER|MOBILE WIDTH SAFETY|MOBILE SINGLE CONTENT RAIL|MOBILE SEARCH BAR|MOBILE SECTION CHROME|MOBILE VERTICAL RHYTHM|MOBILE TOP RHYTHM|MOBILE GRID ALIGNMENT|MOBILE CARD OVERLAYS|MOBILE IMAGE QUALITY|NO BLANK PLACEHOLDERS|MOBILE NAV SURFACE|MOBILE NAV SHADOW|NO FIXED FOOD TEMPLATE|Do not default to the same search + categories + orange promo + two product cards composition|TYPOGRAPHY HIERARCHY|DENSITY|VISUAL HIERARCHY|SPACING CONSISTENCY|CRAFT POLISH|MEDIA CONSISTENCY|ICON SCALE|SIGNATURE MOMENT|WOW FACTOR|COMPOSITIONAL CONTRAST|PREMIUM DETAIL|NO DECORATION SPAM";
     for required in required.split('|') {
         assert!(cr.user_prompt.contains(required), "missing {required}");
     }

@@ -133,6 +133,8 @@ pub fn build_compact_planning_prompt(
             .to_string(),
         "Plan one WOW FACTOR that is specific to the requested product/domain; avoid generic tinted wrappers, heavy shadows, or repeated rounded boxes as the main visual idea."
             .to_string(),
+        "Do not plan the same predictable mobile stack of search + categories + orange promo + two cards. Keep mobile top rhythm tight: no huge empty band between header/title and first useful module."
+            .to_string(),
         style_rule,
     ];
     for r in &mobile_rules {
@@ -179,6 +181,8 @@ mod tests {
         assert!(cp.system.contains("Create 2-4 cohesive subtasks"));
         assert!(cp.system.contains("SIGNATURE MOMENT"));
         assert!(cp.system.contains("WOW FACTOR"));
+        assert!(cp.system.contains("predictable mobile stack"));
+        assert!(cp.system.contains("mobile top rhythm tight"));
         assert_eq!(cp.user_prompt, "a mobile login screen");
     }
 

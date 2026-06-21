@@ -211,9 +211,14 @@ fn design_skeleton_mobile_root_defaults_to_breathing_room() {
     args.insert("canvasWidth".into(), "375".into());
 
     match tool.call(&args) {
-        ToolOutcome::OkWithCommand(_, EditorCommand::InsertAuthoredSubtree { nodes, .. }) => {
+        ToolOutcome::OkWithCommand(out, EditorCommand::InsertAuthoredSubtree { nodes, .. }) => {
             let root = serde_json::to_value(&nodes[0]).expect("root json");
             assert_eq!(root.get("gap").and_then(|v| v.as_f64()), Some(20.0));
+            let sections = out.get("sections").expect("sections json");
+            assert!(sections.contains("Mobile top rhythm"));
+            assert!(sections.contains("primary module within 20-32px"));
+            assert!(sections.contains("single compact search row"));
+            assert!(sections.contains("no oversized tinted shell"));
         }
         other => panic!("expected design_skeleton authored subtree, got {other:?}"),
     }

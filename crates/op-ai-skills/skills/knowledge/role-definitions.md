@@ -79,7 +79,7 @@ Media roles:
 
 Layout-escape roles:
 
-- overlay: the ONLY way to place a child at absolute x/y inside a parent that uses `layout: vertical|horizontal`. Use for notification dots on an icon, corner ribbons on a card, floating status indicators. The child keeps its explicit `x`/`y` while siblings flow normally. Do NOT use `role: 'overlay'` for inline components — `badge`, `pill`, `tag` are inline (they flow in layout like any other child, NOT floating). Do NOT use `role: 'overlay'` as a substitute for `layout: 'none'` on the parent.
+- overlay: the ONLY way to place a child at absolute x/y inside a parent that uses `layout: vertical|horizontal`. Use only for bounded in-parent overlays such as notification dots on an icon, card badges, or status indicators that must stay fully inside their parent. The child keeps its explicit `x`/`y` while siblings flow normally, but it must not use negative x/y, protrude outside rounded corners, or overlap unrelated section chrome. A product-card favorite/heart must stay fully inside its card or image with an 8-12px inset, usually as an `icon-button`; never straddle the card edge. Do NOT use `role: 'overlay'` for inline components — `badge`, `pill`, `tag` are inline (they flow in layout like any other child, NOT floating). Do NOT use `role: 'overlay'` as a substitute for `layout: 'none'` on the parent.
 
 Typography roles:
 

@@ -15,7 +15,7 @@ Key aesthetics:
 - **Invisible type**: Inter at medium weights—so readable it disappears, letting data speak
 - **Minimal radii**: 12-16px corners are clean and functional without unnecessary roundness
 - **Data clarity**: Generous whitespace around metrics, clear hierarchy for at-a-glance reading
-- **Pill tab bar**: 100px radius bottom navigation with green active indicator
+- **Integrated bottom nav**: full-width bottom navigation with green active indicator
 
 ## Color System
 
@@ -27,7 +27,7 @@ Key aesthetics:
 | Card Surface     | #1A1A1A | Standard cards, metric containers      |
 | Elevated Surface | #222222 | Elevated cards, modal sheets           |
 | Subtle Surface   | #161616 | Inset areas, grouped sections          |
-| Tab Bar Surface  | #1A1A1A | Bottom navigation pill fill            |
+| Tab Bar Surface  | #1A1A1A | Integrated bottom navigation surface            |
 
 ### Text Colors
 

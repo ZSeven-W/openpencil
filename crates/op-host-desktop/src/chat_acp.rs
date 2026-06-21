@@ -77,9 +77,15 @@ Always follow this three-phase pipeline (it produces higher quality than ad-hoc 
 1. **Load the design guide (ONCE)**: Call `get_design_prompt` to receive OpenPencil's design principles, node schema details, role system, color/typography tokens, and layout patterns. Read it carefully — it defines the canonical shapes and defaults.
 2. **Build skeleton**: Call `design_skeleton` with a high-level description. This creates the structural frames (sections, layout containers) with correct auto-layout.
 3. **Fill content**: Call `design_content` once per section from step 2, adding the concrete children (buttons, inputs, text, icons).
-4. **Refine** (optional): Call `design_refine` on the root to apply final polish (consistent spacing, role-based styling).
+4. **Refine**: ALWAYS call `design_refine` on the root after all sections are populated. This is mandatory for AI chat output because it applies final polish, consistent spacing, role-based styling, icon cleanup, and layout safety.
 
 Only fall back to `batch_design` or `insert_node` when the user explicitly asks for small/surgical edits rather than a new page.
+
+## AI Chat Design Quality
+- Mobile top rhythm: keep the status/header, title, and primary module close. On 375-430px screens, the gap from the header/title group to the first primary module (search, hero action, chart, or card) should usually be 20-32px, never a large empty band unless the request explicitly asks for a dramatic editorial hero.
+- Product/card favorite/heart controls are functional `icon-button`s, not decorative badges. Place each favorite/heart fully inside its product card or product image with an 8-12px inset. Never use negative x/y, never straddle a card border, and never let the circle protrude into the section heading gap.
+- Every new design needs a distinct visual concept before building: choose one concrete direction (for example editorial food magazine, glassy premium delivery, neo-brutal marketplace, calm bento dashboard, luxury concierge). Do not repeat the same predictable mobile stack of search + categories + orange promo + two cards unless that is genuinely the best fit for the prompt.
+- Include one signature moment that gives the screen character: a crafted hero composition, editorial image treatment, distinctive category rail, playful but controlled card system, or refined data/offer module. Keep it purposeful and avoid decoration spam.
 
 ## Modifying Existing Designs
 - Call `snapshot_layout` first to see the current tree.
@@ -405,8 +411,10 @@ mod tests {
         ));
         assert!(ACP_SYSTEM_PROMPT.contains("- DO use the `mcp__openpencil__*` tools"));
         assert!(ACP_SYSTEM_PROMPT.contains("2. **Build skeleton**: Call `design_skeleton`"));
+        assert!(ACP_SYSTEM_PROMPT.contains("4. **Refine**: ALWAYS call `design_refine`"));
+        assert!(ACP_SYSTEM_PROMPT.contains("Mobile top rhythm"));
+        assert!(ACP_SYSTEM_PROMPT.contains("favorite/heart"));
+        assert!(ACP_SYSTEM_PROMPT.contains("signature moment"));
         assert!(ACP_SYSTEM_PROMPT.ends_with("Every key has a value; every value has a key."));
-        // join('\n') line count: 44 array entries → 44 lines.
-        assert_eq!(ACP_SYSTEM_PROMPT.lines().count(), 44);
     }
 }

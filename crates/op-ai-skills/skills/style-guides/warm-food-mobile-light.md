@@ -15,7 +15,7 @@ Key aesthetics:
 - **Rounded sans-serif**: Plus Jakarta Sans with rounded terminals echoes the soft, friendly radii
 - **Generous radii**: 16-20px corners make cards feel like warm, inviting menu tiles
 - **Food photography friendly**: Clean white card surfaces maximize contrast for food imagery
-- **Pill tab bar**: 100px radius bottom navigation with orange active indicator
+- **Integrated bottom nav**: full-width bottom navigation with orange active indicator
 
 ## Color System
 
@@ -27,7 +27,7 @@ Key aesthetics:
 | Card Surface    | #FFFFFF | Cards, menu items, elevated containers          |
 | Inset Surface   | #FFF1E3 | Input backgrounds, search bars, recessed areas  |
 | Accent Surface  | #FED7AA | Highlighted sections, promo banners, deal cards |
-| Tab Bar Surface | #FFFFFF | Bottom navigation pill fill                     |
+| Tab Bar Surface | #FFFFFF | Integrated bottom navigation surface                     |
 
 ### Text Colors
 

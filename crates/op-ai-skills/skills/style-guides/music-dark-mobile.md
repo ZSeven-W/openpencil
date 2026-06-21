@@ -15,7 +15,7 @@ Key aesthetics:
 - **Concert poster type**: Manrope at 700-800 weights for bold, punchy display headings
 - **Gradient energy**: Lime-to-cyan gradients on featured playlists and now-playing elements
 - **Audio-inspired radii**: 14-20px corners evoke the smooth, organic contours of speaker forms
-- **Pill tab bar**: 100px radius bottom navigation with lime active indicator
+- **Integrated bottom nav**: full-width bottom navigation with lime active indicator
 
 ## Color System
 
@@ -28,7 +28,7 @@ Key aesthetics:
 | Elevated Surface | #1E1E1E | Now playing bar, modal sheets         |
 | Gradient Start   | #151515 | Gradient card dark edge               |
 | Gradient End     | #1A2A1A | Gradient card lime-tinted edge        |
-| Tab Bar Surface  | #151515 | Bottom navigation pill fill           |
+| Tab Bar Surface  | #151515 | Integrated bottom navigation surface           |
 
 ### Text Colors
 

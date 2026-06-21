@@ -15,7 +15,7 @@ Key aesthetics:
 - **Monospace precision**: JetBrains Mono for headings and data reinforces the technical identity
 - **Sharp corners**: 4-8px radii create a compact, engineered feel with minimal decoration
 - **Data density**: Tighter spacing and smaller type for information-heavy screens
-- **Pill tab bar**: 100px radius bottom navigation with amber active indicator
+- **Integrated bottom nav**: full-width bottom navigation with amber active indicator
 
 ## Color System
 
@@ -27,7 +27,7 @@ Key aesthetics:
 | Card Surface     | #27272A | Standard cards, list items         |
 | Elevated Surface | #3F3F46 | Elevated cards, modal sheets       |
 | Code Surface     | #1E1E22 | Code blocks, terminal output areas |
-| Tab Bar Surface  | #27272A | Bottom navigation pill fill        |
+| Tab Bar Surface  | #27272A | Integrated bottom navigation surface        |
 
 ### Text Colors
 

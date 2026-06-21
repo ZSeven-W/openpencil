@@ -15,7 +15,7 @@ Key aesthetics:
 - **Humanist geometry**: Outfit typeface balances geometric clarity with warm, approachable letterforms
 - **Organic radii**: 12-20px corners feel natural and comfortable, like smooth river stones
 - **Earth tones**: Warm grays and muted greens for secondary text and borders
-- **Pill tab bar**: 100px radius bottom navigation with green active indicator
+- **Integrated bottom nav**: full-width bottom navigation with green active indicator
 
 ## Color System
 
@@ -27,7 +27,7 @@ Key aesthetics:
 | Card Surface    | #FFFFFF | Cards, elevated containers                     |
 | Inset Surface   | #F0F9EC | Input backgrounds, search bars, recessed areas |
 | Accent Surface  | #DCFCE7 | Highlighted sections, progress indicators      |
-| Tab Bar Surface | #FFFFFF | Bottom navigation pill fill                    |
+| Tab Bar Surface | #FFFFFF | Integrated bottom navigation surface                    |
 
 ### Text Colors
 
