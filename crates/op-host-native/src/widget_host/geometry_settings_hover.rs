@@ -26,6 +26,7 @@ impl WidgetHostNative {
             new_add_provider_hover,
             new_add_acp_hover,
             new_image_search_test_hover,
+            new_image_search_register_link_hover,
             new_image_add_hover,
             new_image_profile_header_hover,
             new_image_profile_remove_hover,
@@ -88,6 +89,11 @@ impl WidgetHostNative {
                 );
             let image_search_test_hover =
                 is_images && panel.image_search_test_button_hover_at(panel_rect, point);
+            let image_search_register_link_hover = is_images
+                && matches!(
+                    hit,
+                    op_editor_ui::widgets::agent_settings_panel::AgentSettingsHit::OpenImageRegisterLink
+                );
             let image_add_hover =
                 is_images && panel.image_gen_add_button_hover_at(panel_rect, point);
             let image_profile_header_hover = if is_images {
@@ -148,6 +154,7 @@ impl WidgetHostNative {
                 add_provider_hover,
                 add_acp_hover,
                 image_search_test_hover,
+                image_search_register_link_hover,
                 image_add_hover,
                 image_profile_header_hover,
                 image_profile_remove_hover,
@@ -271,6 +278,19 @@ impl WidgetHostNative {
                 .editor_ui
                 .agent_settings
                 .hover_image_search_test_button = new_image_search_test_hover;
+            changed = true;
+        }
+        if new_image_search_register_link_hover
+            != self
+                .editor_state
+                .editor_ui
+                .agent_settings
+                .hover_image_search_register_link
+        {
+            self.editor_state
+                .editor_ui
+                .agent_settings
+                .hover_image_search_register_link = new_image_search_register_link_hover;
             changed = true;
         }
         if new_image_add_hover

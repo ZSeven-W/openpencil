@@ -484,6 +484,11 @@ pub(super) fn paint_images_tab(
         cx.backend
             .draw_text(&link, Point2D::new(content.origin.x, y + 22.0));
         let link_w = cx.backend.measure_text(link_text, 12.0);
+        // Underline the link + arrow on hover (link affordance).
+        if settings.hover_image_search_register_link {
+            let underline = Rect::xywh(content.origin.x, y + 26.0, link_w + 20.0, 1.0);
+            cx.backend.fill_rect(underline, theme.primary);
+        }
         draw_icon(
             cx.backend,
             Icon::ArrowUpRight,

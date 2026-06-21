@@ -54,6 +54,7 @@ impl WidgetHost {
             add_provider_hover,
             add_acp_hover,
             image_search_test_hover,
+            image_search_register_link_hover,
             image_add_hover,
             image_profile_header_hover,
             image_profile_remove_hover,
@@ -86,6 +87,8 @@ impl WidgetHost {
             let add_acp_hover = is_agents && matches!(hit, AgentSettingsHit::AddAcpAgent);
             let image_search_test_hover =
                 is_images && panel.image_search_test_button_hover_at(panel_rect, point);
+            let image_search_register_link_hover =
+                is_images && matches!(hit, AgentSettingsHit::OpenImageRegisterLink);
             let image_add_hover =
                 is_images && panel.image_gen_add_button_hover_at(panel_rect, point);
             let image_profile_header_hover = if is_images {
@@ -135,6 +138,7 @@ impl WidgetHost {
                 add_provider_hover,
                 add_acp_hover,
                 image_search_test_hover,
+                image_search_register_link_hover,
                 image_add_hover,
                 image_profile_header_hover,
                 image_profile_remove_hover,
@@ -234,6 +238,19 @@ impl WidgetHost {
                 .editor_ui
                 .agent_settings
                 .hover_image_search_test_button = image_search_test_hover;
+            changed = true;
+        }
+        if image_search_register_link_hover
+            != self
+                .editor_state
+                .editor_ui
+                .agent_settings
+                .hover_image_search_register_link
+        {
+            self.editor_state
+                .editor_ui
+                .agent_settings
+                .hover_image_search_register_link = image_search_register_link_hover;
             changed = true;
         }
         if image_add_hover
