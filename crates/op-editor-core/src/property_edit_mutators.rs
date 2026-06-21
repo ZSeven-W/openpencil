@@ -353,6 +353,45 @@ impl EditorState {
         crate::fills::clear_primary_fills(node)
     }
 
+    // ── Multi-fill (indexed) selected-node mutators ────────────────
+    // The Fill section stacks one row per `PenFill`; these address a fill
+    // by index so the header "+" appends and each row's "×" / type / colour
+    // / opacity edits its own fill.
+
+    /// Run `f` on the selected, editable node, returning `false` when there
+    /// is no real editable selection.
+    fn with_selected_node<R>(&mut self, f: impl FnOnce(&mut PenNode) -> R) -> Option<R> {
+        let sel = self.selection.anchor.clone();
+        if !sel.is_real() || !self.is_editable(&sel) {
+            return None;
+        }
+        find_node_mut(self.active_children_mut(), &sel).map(f)
+    }
+
+    pub fn add_selected_fill(&mut self) -> bool {
+        self.with_selected_node(crate::fills::add_fill).unwrap_or(false)
+    }
+
+    pub fn remove_selected_fill(&mut self, index: usize) -> bool {
+        self.with_selected_node(|node| crate::fills::remove_fill(node, index))
+            .unwrap_or(false)
+    }
+
+    pub fn set_selected_fill_type_at(&mut self, index: usize, fill_type: crate::FillType) -> bool {
+        self.with_selected_node(|node| crate::fills::set_fill_type_at(node, index, fill_type))
+            .unwrap_or(false)
+    }
+
+    pub fn set_selected_fill_hex_at(&mut self, index: usize, hex: &str) -> bool {
+        self.with_selected_node(|node| crate::fills::set_fill_hex_at(node, index, hex))
+            .unwrap_or(false)
+    }
+
+    pub fn set_selected_fill_opacity_at(&mut self, index: usize, opacity: f32) -> bool {
+        self.with_selected_node(|node| crate::fills::set_fill_opacity_at(node, index, opacity))
+            .unwrap_or(false)
+    }
+
     pub fn set_selected_image_fill_mode(&mut self, mode: crate::ImageFillMode) -> bool {
         let sel = self.selection.anchor.clone();
         if !sel.is_real() || !self.is_editable(&sel) {

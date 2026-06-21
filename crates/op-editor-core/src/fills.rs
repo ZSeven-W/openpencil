@@ -590,13 +590,21 @@ pub fn set_primary_fill_hex(node: &mut PenNode, hex: &str) -> bool {
 /// model has no scalar `fill_type` field — the kind is the variant of
 /// the first `PenFill`. A node with no fills reports `Solid` (the
 /// neutral default the property panel paints).
-pub fn first_fill_type(node: &PenNode) -> FillType {
-    match node_fills(node).and_then(|f| f.first()) {
-        Some(PenFill::Solid(_)) | None => FillType::Solid,
-        Some(PenFill::LinearGradient(_)) => FillType::LinearGradient,
-        Some(PenFill::RadialGradient(_)) => FillType::RadialGradient,
-        Some(PenFill::Image(_)) => FillType::Image,
+/// `FillType` of a single `PenFill` (the kind is the variant).
+pub fn fill_type_of(fill: &PenFill) -> FillType {
+    match fill {
+        PenFill::Solid(_) => FillType::Solid,
+        PenFill::LinearGradient(_) => FillType::LinearGradient,
+        PenFill::RadialGradient(_) => FillType::RadialGradient,
+        PenFill::Image(_) => FillType::Image,
     }
+}
+
+pub fn first_fill_type(node: &PenNode) -> FillType {
+    node_fills(node)
+        .and_then(|f| f.first())
+        .map(fill_type_of)
+        .unwrap_or(FillType::Solid)
 }
 
 /// Build a default `PenFill` of the given `FillType`, seeding it with
@@ -746,6 +754,100 @@ pub fn clear_primary_fills(node: &mut PenNode) -> bool {
     };
     fills.clear();
     true
+}
+
+// ── Multi-fill (indexed) ops ───────────────────────────────────────
+//
+// The property panel's Fill section stacks one editable row per `PenFill`
+// (header "+" appends, each row's "×" removes). These mirror the
+// `set_primary_*` ops but address a fill by index so every row edits its
+// own fill. `false` when the node carries no `fill` field or the index is
+// out of range.
+
+/// Number of fills on the node (0 for variants without a `fill` field).
+pub fn fill_count(node: &PenNode) -> usize {
+    node_fills(node).map(|f| f.len()).unwrap_or(0)
+}
+
+/// `FillType` of the fill at `index`, if present.
+pub fn fill_type_at(node: &PenNode, index: usize) -> Option<FillType> {
+    node_fills(node).and_then(|fills| fills.get(index)).map(fill_type_of)
+}
+
+/// Append a new default solid fill (the TS new-fill default `#d1d5db`).
+pub fn add_fill(node: &mut PenNode) -> bool {
+    let Some(fills) = node_fills_mut(node) else {
+        return false;
+    };
+    fills.push(default_fill_of_type(FillType::Solid, "#d1d5db"));
+    true
+}
+
+/// Remove the fill at `index`.
+pub fn remove_fill(node: &mut PenNode, index: usize) -> bool {
+    let Some(fills) = node_fills_mut(node) else {
+        return false;
+    };
+    if index >= fills.len() {
+        return false;
+    }
+    fills.remove(index);
+    true
+}
+
+/// Convert the fill at `index` to `kind`, preserving as much of the body
+/// as the target variant allows (mirrors [`set_primary_fill_type`]).
+pub fn set_fill_type_at(node: &mut PenNode, index: usize, kind: FillType) -> bool {
+    let Some(fills) = node_fills_mut(node) else {
+        return false;
+    };
+    let Some(existing) = (index < fills.len()).then(|| fills.remove(index)) else {
+        return false;
+    };
+    fills.insert(index, convert_fill(existing, kind));
+    true
+}
+
+/// Write `hex` into the solid fill at `index`. No-op (returns `false`) if
+/// that fill isn't a solid — type changes go through [`set_fill_type_at`].
+pub fn set_fill_hex_at(node: &mut PenNode, index: usize, hex: &str) -> bool {
+    let Some(fills) = node_fills_mut(node) else {
+        return false;
+    };
+    match fills.get_mut(index) {
+        Some(PenFill::Solid(body)) => {
+            body.color = hex.to_string();
+            true
+        }
+        _ => false,
+    }
+}
+
+/// Set the opacity (0.0..=1.0) of the fill at `index`.
+pub fn set_fill_opacity_at(node: &mut PenNode, index: usize, opacity: f32) -> bool {
+    let Some(fills) = node_fills_mut(node) else {
+        return false;
+    };
+    let opacity = opacity.clamp(0.0, 1.0);
+    match fills.get_mut(index) {
+        Some(PenFill::Solid(b)) => {
+            b.opacity = Some(opacity);
+            true
+        }
+        Some(PenFill::LinearGradient(b)) => {
+            b.opacity = Some(opacity);
+            true
+        }
+        Some(PenFill::RadialGradient(b)) => {
+            b.opacity = Some(opacity);
+            true
+        }
+        Some(PenFill::Image(b)) => {
+            b.opacity = Some(opacity);
+            true
+        }
+        _ => false,
+    }
 }
 
 /// Stroke parallel to [`set_primary_fill_hex`]. Creates a default
