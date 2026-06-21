@@ -543,6 +543,7 @@ CRITICAL LAYOUT CONSTRAINTS:\n\
 - ICON SCALE: Icons support content; keep most icons 16-22px inside 36-48px controls. Avoid oversized circular icon bubbles or repeated identical icon treatments unless the design brief calls for them.\n\
 - ACCENT DISCIPLINE: Reserve saturated accent color for one primary CTA or promo plus small highlights. Do not apply it to every icon, label, border, and large surface at once.\n\
 - SIGNATURE MOMENT: Give the first viewport one memorable focal module that feels custom to the brief: distinctive composition, branded surface, expressive hero image/illustration, or an editorial product moment. Supporting modules must stay quieter.\n\
+- WOW FACTOR: Make the design feel bespoke through domain-specific composition, confident cropping, custom icon rhythm, and one precise visual idea. Do not rely on generic tinted wrappers, heavy shadows, emoji, or repeated rounded boxes to look polished.\n\
 - COMPOSITIONAL CONTRAST: Create interest through scale contrast, asymmetric balance, layered depth, and one clear focal path. Do not make every card, chip, icon, and CTA the same visual weight.\n\
 - PREMIUM DETAIL: Use high-quality details such as precise alignment, consistent radii, quiet dividers, tonal badges, subtle image masks, and purposeful shadows. Prefer one polished detail over many loud decorations.\n\
 - NO DECORATION SPAM: Do not add random blobs, repeated icon circles, excessive gradients, oversized badges, or unrelated photos just to make the design look busy. Every visual flourish must support the product story.\n\
@@ -594,6 +595,9 @@ CRITICAL LAYOUT CONSTRAINTS:\n\
             "\nMOBILE SEARCH BAR: If generating search, output exactly one search control surface: 48-52px tall, width=\"fill_container\" inside the content rail, neutral/surface fill, subtle 1px border, cornerRadius 14-18, and a 18-20px search icon. Optional filter/sliders is a separate 44-48px square button beside it. Do not nest an input inside another rounded pill, do not use pink/tinted fills, and do not make the search section itself a huge rounded band.",
         );
         user_prompt.push_str(
+            "\nMOBILE SECTION CHROME: Search, filter, and category section roots are structural wrappers only. Keep those section roots transparent: no fill, no stroke, no cornerRadius, and no shadow/effects. Put visual styling only on the actual search control, filter button, chips, cards, or promo modules.",
+        );
+        user_prompt.push_str(
             "\nNO BLANK PLACEHOLDERS: Do not use empty gray image placeholders in app UI. If no real image asset is available, use a square colored food/icon tile with icon_font instead.",
         );
         user_prompt.push_str(
@@ -610,6 +614,9 @@ CRITICAL LAYOUT CONSTRAINTS:\n\
         );
         user_prompt.push_str(
             "\nMOBILE NAV SURFACE: Bottom navigation and tab bars must sit on the current page palette, full width at the bottom, 62-72px tall. Do not create a separate white footer band, oversized rounded pill, or extra side margins. Never use black or safe-dark fills for nav bars unless the whole root frame background is dark.",
+        );
+        user_prompt.push_str(
+            "\nMOBILE NAV SHADOW: Do not add a drop shadow, glow, or detached shadow band behind the bottom navigation. If separation is needed, use a quiet 1px divider or subtle tonal difference that belongs to the page palette.",
         );
     }
 
