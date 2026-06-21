@@ -292,11 +292,18 @@ pub fn push_flex_action_rects(
         (LayoutJustifyValue::SpaceAround, false),
     ];
     for (i, (justify_value, circle_only)) in rows.into_iter().enumerate() {
-        let row_w = if circle_only { RADIO_GUTTER } else { gap_w };
+        // The numeric/Start row's target is just the radio circle — centre its
+        // hover-wash cell on the RADIO_SIZE glyph (the radio paints at gap_x,
+        // column-aligned with the other rows, so shift the cell left instead).
+        let (row_x, row_w) = if circle_only {
+            (gap_x - (RADIO_GUTTER - RADIO_SIZE) / 2.0, RADIO_GUTTER)
+        } else {
+            (gap_x, gap_w)
+        };
         out.push((
             PropertyPanelAction::SetLayoutJustify(justify_value),
             Rect {
-                origin: Point2D::new(gap_x, gap_row_y(grid_y, i)),
+                origin: Point2D::new(row_x, gap_row_y(grid_y, i)),
                 size: Point2D::new(row_w, GAP_ROW_H),
             },
         ));

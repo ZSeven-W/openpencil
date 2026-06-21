@@ -29,6 +29,10 @@ struct StrokeSideGridRefs<'a, 'b> {
 }
 
 pub(crate) fn stroke_section_body_height(mode: PaddingEditMode) -> f32 {
+    // Single mode shows just the inline main row — no per-side grid below.
+    if mode == PaddingEditMode::Single {
+        return INPUT_HEIGHT + SECTION_TRAILING_GAP;
+    }
     let rows = if mode == PaddingEditMode::Individual {
         2.0
     } else {
@@ -62,13 +66,8 @@ pub(crate) fn stroke_side_input_rects(
         size: Point2D::new(half_w, INPUT_HEIGHT),
     };
     match mode {
-        PaddingEditMode::Single => vec![(
-            PropertyFocus::StrokeTopWidth,
-            Rect {
-                origin: Point2D::new(x + PAD_X, grid_y),
-                size: Point2D::new(usable_w, INPUT_HEIGHT),
-            },
-        )],
+        // Single mode keeps the width inline on the main row — no grid input.
+        PaddingEditMode::Single => vec![],
         PaddingEditMode::Axis => vec![
             (PropertyFocus::StrokeRightWidth, cell(0.0, 0.0)),
             (PropertyFocus::StrokeTopWidth, cell(1.0, 0.0)),
@@ -229,19 +228,24 @@ pub fn paint_stroke_section(
         x,
         y,
         width,
-    );
-    paint_stroke_side_grid(
-        cx,
-        StrokeSideGridRefs {
-            theme,
-            snapshot,
-            edit,
-        },
-        x,
-        y,
-        width,
         mode,
     );
+    // Per-side grid only in Axis / Individual mode; Single keeps the width
+    // inline on the main row above (no duplicate input).
+    if mode != PaddingEditMode::Single {
+        paint_stroke_side_grid(
+            cx,
+            StrokeSideGridRefs {
+                theme,
+                snapshot,
+                edit,
+            },
+            x,
+            y,
+            width,
+            mode,
+        );
+    }
     y += stroke_section_body_height(mode);
     paint_section_divider(cx, theme, x, y, width);
     y + SECTION_GAP
@@ -258,20 +262,25 @@ fn paint_stroke_main_row(
     x: f32,
     y: f32,
     width: f32,
+    mode: PaddingEditMode,
 ) {
     let usable_w = width - PAD_X * 2.0;
     let stroke_color = snapshot.stroke_swatch_color();
+    let stroke_width = snapshot.stroke.map(|s| s.width).unwrap_or(0.0);
+    // Inline width only in Single mode; Axis / Individual put the widths in
+    // the per-side grid below, so the main row is colour-only there and the
+    // hex fills the freed space.
+    let inline_width = mode == PaddingEditMode::Single;
+    let width_w = if inline_width { 60.0 } else { 0.0 };
+    let width_gap = if inline_width { 8.0 } else { 0.0 };
     let variable_w = if show_variable_button {
         COLOR_VARIABLE_BUTTON_W + COLOR_VARIABLE_GAP
     } else {
         0.0
     };
-    // The stroke WIDTH lives in the mode grid below (Single = 1 uniform,
-    // Axis = 2, Individual = 4) — the main row carries only the colour, so
-    // there is no duplicate width input. Let the hex fill the freed space.
     let hex_rect = Rect {
         origin: Point2D::new(x + PAD_X, y),
-        size: Point2D::new(usable_w - variable_w, INPUT_HEIGHT),
+        size: Point2D::new(usable_w - width_w - width_gap - variable_w, INPUT_HEIGHT),
     };
     let hex_focused = edit.focus == Some(PropertyFocus::StrokeHex);
     cx.backend
@@ -298,6 +307,27 @@ fn paint_stroke_main_row(
                 size: Point2D::new(COLOR_VARIABLE_BUTTON_W, INPUT_HEIGHT),
             },
             stroke_variable_ref.is_some(),
+        );
+    }
+    // Inline stroke-width input — Single mode only (Axis/Individual put the
+    // widths in the per-side grid). PropertyFocus::StrokeWidth edit path.
+    if inline_width {
+        let width_rect = Rect {
+            origin: Point2D::new(hex_rect.origin.x + hex_rect.size.x + variable_w + 8.0, y),
+            size: Point2D::new(width_w, INPUT_HEIGHT),
+        };
+        let wval = format_panel_number(stroke_width);
+        paint_input_with_prefix_focused_state(
+            cx,
+            theme,
+            width_rect,
+            "",
+            edit.value_for(PropertyFocus::StrokeWidth, &wval),
+            edit.focus == Some(PropertyFocus::StrokeWidth),
+            edit.caret_at(PropertyFocus::StrokeWidth),
+            edit.select_all_at(PropertyFocus::StrokeWidth),
+            edit.input_at(PropertyFocus::StrokeWidth),
+            edit.now_ms,
         );
     }
 }

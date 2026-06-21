@@ -13,7 +13,7 @@ use crate::command::EditorCommand;
 use crate::command_node::remap_subtree_ids;
 use crate::node_id::NodeId;
 use crate::pen_node_ext::{make_group, make_path, PenNodeExt};
-use crate::test_support::state_with;
+use crate::test_support::{frame, rect, state_with};
 use std::collections::HashSet;
 
 // --- remap_subtree_ids ----------------------------------------------
@@ -65,6 +65,40 @@ fn insert_subtree_nests_children_under_root() {
     // Ids were remapped (no longer the foreign "ext-*") and unique.
     assert_ne!(g.id_str(), "ext-1");
     assert!(s.find_duplicate_id().is_none());
+}
+
+#[test]
+fn insert_subtree_root_frame_replaces_empty_root_frame() {
+    let mut s = state_with(vec![frame(
+        "default",
+        "Frame",
+        30.0,
+        40.0,
+        100.0,
+        100.0,
+        vec![],
+    )]);
+
+    assert!(s.apply(EditorCommand::InsertSubtree {
+        nodes: vec![frame(
+            "ext-root",
+            "Food App Home",
+            0.0,
+            0.0,
+            402.0,
+            874.0,
+            vec![rect("hero", "Hero", 0.0, 0.0, 402.0, 120.0)],
+        )],
+        parent_id: NodeId::NONE,
+        page_id: None,
+    }));
+
+    let children = s.active_children();
+    assert_eq!(children.len(), 1, "empty default frame should be replaced");
+    assert_ne!(children[0].id_str(), "default");
+    assert_eq!(children[0].base().name.as_deref(), Some("Food App Home"));
+    assert_eq!(children[0].base().x, Some(30.0));
+    assert_eq!(children[0].base().y, Some(40.0));
 }
 
 #[test]

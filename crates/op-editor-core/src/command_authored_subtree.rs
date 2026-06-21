@@ -17,6 +17,12 @@ impl EditorState {
         if nodes.is_empty() {
             return false;
         }
+        let mut nodes = nodes;
+        let replacement = crate::command_root_replace::prepare_root_frame_replacement(
+            self.active_children(),
+            &mut nodes,
+            parent_id,
+        );
         if parent_id.is_real() {
             // Accept any container (matches `cmd_insert_subtree`), including an
             // empty one whose `children` is still `None` — the insert below
@@ -29,7 +35,12 @@ impl EditorState {
             }
         }
 
-        let live = self.collect_node_ids();
+        let mut live = self.collect_node_ids();
+        if let Some(replacement) = replacement.as_ref() {
+            live.remove(crate::command_root_replace::replacement_node_id(
+                replacement,
+            ));
+        }
         let mut incoming = HashSet::new();
         if !nodes
             .iter()
@@ -47,7 +58,13 @@ impl EditorState {
             };
             children.extend(nodes);
         } else {
-            self.active_children_mut().extend(nodes);
+            let roots = self.active_children_mut();
+            if let Some(replacement) = replacement.as_ref() {
+                if !crate::command_root_replace::remove_root_frame_replacement(roots, replacement) {
+                    return false;
+                }
+            }
+            roots.extend(nodes);
         }
         true
     }

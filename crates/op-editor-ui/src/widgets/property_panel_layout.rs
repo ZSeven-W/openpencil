@@ -471,10 +471,13 @@ pub fn action_button_rects_with_fill_picker(
         } else {
             0.0
         };
-        // The stroke width moved to the mode grid below, so the hex fills the
-        // whole row (matches property_panel_stroke + the input-rect walker) —
-        // the variable button + picker anchor must use this widened hex_w.
-        let hex_w = usable_w - variable_w;
+        // Inline width only in Single mode (matches paint_stroke_main_row);
+        // in per-side mode the hex fills the row so the variable button +
+        // colour-picker anchor stay aligned.
+        let inline = visible.stroke_edit_mode == op_editor_core::PaddingEditMode::Single;
+        let width_w = if inline { 60.0 } else { 0.0 };
+        let width_gap = if inline { 8.0 } else { 0.0 };
+        let hex_w = usable_w - width_w - width_gap - variable_w;
         if !visible.stroke_variable_bound {
             out.push((
                 PropertyPanelAction::OpenColorPicker(op_editor_core::ColorTarget::Stroke),
