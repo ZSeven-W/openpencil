@@ -491,8 +491,20 @@ impl EditorState {
     }
 
     pub fn remove_selected_fill(&mut self, index: usize) -> bool {
-        self.with_selected_node(|node| crate::fills::remove_fill(node, index))
-            .unwrap_or(false)
+        let sel = self.selection.anchor.clone();
+        let removed = self
+            .with_selected_node(|node| crate::fills::remove_fill(node, index))
+            .unwrap_or(false);
+        // `fill_refs` binds the node's PRIMARY (index 0) fill to a colour
+        // variable. The scene resolver's `fill_for` lets a registered fill ref
+        // WIN over `container.fill`, so a dangling ref keeps painting the
+        // variable colour after the fill row is removed. Drop it when the
+        // bound (primary) fill goes — the "deleted the fill but the colour
+        // stays" bug on token-based (old .op) designs.
+        if removed && index == 0 {
+            self.ui.variables.fill_refs.remove(&sel);
+        }
+        removed
     }
 
     pub fn set_selected_fill_type_at(&mut self, index: usize, fill_type: crate::FillType) -> bool {
