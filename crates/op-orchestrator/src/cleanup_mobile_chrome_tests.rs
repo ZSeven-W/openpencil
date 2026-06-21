@@ -152,3 +152,104 @@ fn cleanup_strips_mobile_search_categories_section_shell() {
         "real promo/card surfaces should keep their visual treatment"
     );
 }
+
+#[test]
+fn cleanup_strips_misrolled_mobile_search_bar_wrapper() {
+    let mut sink = VecDocSink::new();
+    let tree: PenNode = serde_json::from_str(
+        r##"{
+            "type": "frame",
+            "id": "root",
+            "name": "Food App Home",
+            "width": 390,
+            "height": 844,
+            "layout": "vertical",
+            "fill": [{ "type": "solid", "color": "#FFF8F0" }],
+            "children": [
+                {
+                    "type": "frame",
+                    "id": "outer-search",
+                    "name": "Search Bar",
+                    "role": "search-bar",
+                    "width": "fill_container",
+                    "height": 84,
+                    "layout": "horizontal",
+                    "padding": [10, 16],
+                    "cornerRadius": 28,
+                    "fill": [{ "type": "solid", "color": "#D7EBFF" }],
+                    "stroke": {
+                        "thickness": 1,
+                        "fill": [{ "type": "solid", "color": "#D0E2F4" }]
+                    },
+                    "children": [
+                        {
+                            "type": "frame",
+                            "id": "real-input",
+                            "name": "Search Input",
+                            "role": "form-input",
+                            "width": "fill_container",
+                            "height": 48,
+                            "cornerRadius": 14,
+                            "fill": [{ "type": "solid", "color": "#FFFFFF" }],
+                            "stroke": {
+                                "thickness": 1,
+                                "fill": [{ "type": "solid", "color": "#E2E8F0" }]
+                            },
+                            "children": []
+                        },
+                        {
+                            "type": "frame",
+                            "id": "filter-button",
+                            "name": "Filter Button",
+                            "role": "icon-button",
+                            "width": 48,
+                            "height": 48,
+                            "cornerRadius": 14,
+                            "fill": [{ "type": "solid", "color": "#FF6B00" }],
+                            "children": []
+                        }
+                    ]
+                }
+            ]
+        }"##,
+    )
+    .expect("mobile search json");
+    sink.state.apply(EditorCommand::InsertAuthoredSubtree {
+        nodes: vec![tree],
+        parent_id: NodeId::NONE,
+        page_id: None,
+    });
+    sink.applied.clear();
+
+    run_cleanup_passes(&mut sink, &plan(), &["root"]);
+
+    let root = sink
+        .state
+        .active_children()
+        .iter()
+        .find(|node| node.id_str() == "root")
+        .expect("root survives");
+    let outer = find_node(root, "outer-search").expect("outer search survives");
+    let input = find_node(root, "real-input").expect("input survives");
+    let filter = find_node(root, "filter-button").expect("filter survives");
+    match outer {
+        PenNode::Frame(frame) => {
+            assert!(
+                frame.container.fill.is_none(),
+                "outer search fill is removed"
+            );
+            assert!(
+                frame.container.stroke.is_none(),
+                "outer search stroke is removed"
+            );
+            assert_eq!(
+                frame.container.corner_radius,
+                Some(CornerRadius::Uniform(0.0)),
+                "outer search radius is neutralized"
+            );
+        }
+        _ => panic!("outer search should be a frame"),
+    }
+    assert_eq!(first_solid_fill_hex(input), Some("#FFFFFF"));
+    assert_eq!(first_solid_fill_hex(filter), Some("#FF6B00"));
+}
