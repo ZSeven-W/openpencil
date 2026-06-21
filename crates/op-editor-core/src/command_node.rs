@@ -810,6 +810,11 @@ impl EditorState {
         };
         let mut taken: HashSet<NodeId> = self.collect_node_ids();
         let mut nodes = nodes;
+        let replacement = crate::command_root_replace::prepare_root_frame_replacement(
+            self.active_children(),
+            &mut nodes,
+            parent_id,
+        );
         if !remap_subtree_ids(&mut nodes, &mut next_id, &mut taken) {
             return false;
         }
@@ -824,7 +829,13 @@ impl EditorState {
             };
             slot.extend(nodes);
         } else {
-            self.active_children_mut().extend(nodes);
+            let roots = self.active_children_mut();
+            if let Some(replacement) = replacement.as_ref() {
+                if !crate::command_root_replace::remove_root_frame_replacement(roots, replacement) {
+                    return false;
+                }
+            }
+            roots.extend(nodes);
         }
         true
     }

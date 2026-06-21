@@ -294,15 +294,28 @@ pub fn editable_input_rects(
         } else {
             0.0
         };
-        // Stroke width moved to the mode grid below — the hex hit rect now
-        // fills the row (matches the widened paint in property_panel_stroke).
-        let stroke_hex_w = usable_w - variable_w;
+        // Inline width only in Single mode (Axis/Individual use the per-side
+        // grid); must match paint_stroke_main_row so the hit rects don't
+        // linger where the width is no longer painted.
+        let inline = visible.stroke_edit_mode == op_editor_core::PaddingEditMode::Single;
+        let stroke_width_w = if inline { 60.0 } else { 0.0 };
+        let stroke_width_gap = if inline { 8.0 } else { 0.0 };
+        let stroke_hex_w = usable_w - stroke_width_w - stroke_width_gap - variable_w;
         if !visible.stroke_variable_bound {
             rects.push((
                 PropertyFocus::StrokeHex,
                 Rect {
                     origin: Point2D::new(x0 + PAD_X, y),
                     size: Point2D::new(stroke_hex_w, INPUT_HEIGHT),
+                },
+            ));
+        }
+        if inline {
+            rects.push((
+                PropertyFocus::StrokeWidth,
+                Rect {
+                    origin: Point2D::new(x0 + PAD_X + stroke_hex_w + variable_w + 8.0, y),
+                    size: Point2D::new(stroke_width_w, INPUT_HEIGHT),
                 },
             ));
         }

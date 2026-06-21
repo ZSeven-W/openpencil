@@ -49,6 +49,39 @@ fn insert_authored_subtree_preserves_ids_for_layered_workflow() {
 }
 
 #[test]
+fn insert_authored_root_frame_replaces_empty_root_frame() {
+    let mut s = state_with(vec![frame(
+        "default",
+        "Frame",
+        30.0,
+        40.0,
+        100.0,
+        100.0,
+        vec![],
+    )]);
+
+    assert!(s.apply(EditorCommand::InsertAuthoredSubtree {
+        nodes: vec![frame(
+            "food-home",
+            "Food App Home",
+            0.0,
+            0.0,
+            402.0,
+            874.0,
+            vec![rect("hero", "Hero", 0.0, 0.0, 402.0, 120.0)],
+        )],
+        parent_id: NodeId::NONE,
+        page_id: None,
+    }));
+
+    let children = s.active_children();
+    assert_eq!(children.len(), 1, "empty default frame should be replaced");
+    assert_eq!(children[0].id_str(), "food-home");
+    assert_eq!(children[0].base().x, Some(30.0));
+    assert_eq!(children[0].base().y, Some(40.0));
+}
+
+#[test]
 fn insert_authored_subtree_accepts_empty_container_parent() {
     // Regression: a container whose `children` is still `None` (here a `rect`,
     // which is a container) must accept an insert — `cmd_insert_subtree` does,

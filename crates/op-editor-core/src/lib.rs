@@ -34,6 +34,7 @@ pub mod command_node;
 pub mod command_node_attrs;
 pub mod command_promote;
 pub mod command_refine;
+mod command_root_replace;
 pub mod command_style_replace;
 pub mod component_browser_state;
 pub mod components;
