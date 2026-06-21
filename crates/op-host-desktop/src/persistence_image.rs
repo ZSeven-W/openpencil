@@ -165,7 +165,7 @@ pub fn handle_relink_image(host: &mut WidgetHostNative, current_path: Option<&Pa
     if let Some(jian_ops_schema::node::PenNode::Image(image)) =
         op_editor_core::walkers::find_node_mut(state.active_children_mut(), &id)
     {
-        image.src = stored;
+        image.src = stored.into();
     }
     // Drop the stale asset check so the warning row clears on the
     // next pump (it re-probes the new src).
