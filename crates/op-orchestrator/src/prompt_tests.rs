@@ -160,6 +160,12 @@ fn subagent_prompt_carries_ts_layout_contract() {
     assert!(cr.user_prompt.contains("NO BLANK PLACEHOLDERS"));
     assert!(cr.user_prompt.contains("MOBILE NAV SURFACE"));
     assert!(cr.user_prompt.contains("TYPOGRAPHY HIERARCHY"));
+    assert!(cr.user_prompt.contains("DENSITY"));
+    assert!(cr.user_prompt.contains("VISUAL HIERARCHY"));
+    assert!(cr.user_prompt.contains("SPACING CONSISTENCY"));
+    assert!(cr.user_prompt.contains("CRAFT POLISH"));
+    assert!(cr.user_prompt.contains("MEDIA CONSISTENCY"));
+    assert!(cr.user_prompt.contains("ICON SCALE"));
 }
 
 #[test]
