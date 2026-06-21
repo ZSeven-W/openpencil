@@ -253,3 +253,150 @@ fn cleanup_strips_misrolled_mobile_search_bar_wrapper() {
     assert_eq!(first_solid_fill_hex(input), Some("#FFFFFF"));
     assert_eq!(first_solid_fill_hex(filter), Some("#FF6B00"));
 }
+
+#[test]
+fn cleanup_strips_mobile_bottom_nav_pill_chrome() {
+    let mut sink = VecDocSink::new();
+    let tree: PenNode = serde_json::from_str(
+        r##"{
+            "type": "frame",
+            "id": "root",
+            "name": "Food App Home",
+            "width": 390,
+            "height": 844,
+            "layout": "vertical",
+            "fill": [{ "type": "solid", "color": "#FFF8F0" }],
+            "children": [
+                {
+                    "type": "frame",
+                    "id": "content",
+                    "name": "Content",
+                    "width": "fill_container",
+                    "height": 760,
+                    "children": []
+                },
+                {
+                    "type": "frame",
+                    "id": "bottom-nav",
+                    "name": "Bottom Navigation",
+                    "role": "bottom-tab-bar",
+                    "width": 320,
+                    "height": 72,
+                    "layout": "horizontal",
+                    "padding": [8, 24],
+                    "gap": 0,
+                    "cornerRadius": 999,
+                    "fill": [{ "type": "solid", "color": "#FFFFFF" }],
+                    "stroke": {
+                        "thickness": 1,
+                        "fill": [{ "type": "solid", "color": "#E8D4C4" }]
+                    },
+                    "effects": [{
+                        "type": "shadow",
+                        "offsetX": 0,
+                        "offsetY": -8,
+                        "blur": 18,
+                        "spread": 0,
+                        "color": "#0000001F"
+                    }],
+                    "children": [
+                        {
+                            "type": "frame",
+                            "id": "home-tab",
+                            "name": "Home Tab",
+                            "role": "button",
+                            "width": "fill_container",
+                            "height": "fill_container",
+                            "layout": "vertical",
+                            "cornerRadius": 999,
+                            "fill": [{ "type": "solid", "color": "#FFF0B8" }],
+                            "children": []
+                        },
+                        {
+                            "type": "frame",
+                            "id": "search-tab",
+                            "name": "Search Tab",
+                            "role": "button",
+                            "width": "fill_container",
+                            "height": "fill_container",
+                            "layout": "vertical",
+                            "cornerRadius": 999,
+                            "fill": [{ "type": "solid", "color": "#F8FAFC" }],
+                            "stroke": {
+                                "thickness": 1,
+                                "fill": [{ "type": "solid", "color": "#E2E8F0" }]
+                            },
+                            "children": []
+                        },
+                        {
+                            "type": "frame",
+                            "id": "orders-tab",
+                            "name": "Orders Tab",
+                            "role": "button",
+                            "width": "fill_container",
+                            "height": "fill_container",
+                            "layout": "vertical",
+                            "children": []
+                        },
+                        {
+                            "type": "frame",
+                            "id": "profile-tab",
+                            "name": "Profile Tab",
+                            "role": "button",
+                            "width": "fill_container",
+                            "height": "fill_container",
+                            "layout": "vertical",
+                            "children": []
+                        }
+                    ]
+                }
+            ]
+        }"##,
+    )
+    .expect("mobile nav json");
+    sink.state.apply(EditorCommand::InsertAuthoredSubtree {
+        nodes: vec![tree],
+        parent_id: NodeId::NONE,
+        page_id: None,
+    });
+    sink.applied.clear();
+
+    run_cleanup_passes(&mut sink, &plan(), &["root"]);
+
+    let root = sink
+        .state
+        .active_children()
+        .iter()
+        .find(|node| node.id_str() == "root")
+        .expect("root survives");
+    let nav = find_node(root, "bottom-nav").expect("nav survives");
+    let home = find_node(root, "home-tab").expect("home tab survives");
+    let search = find_node(root, "search-tab").expect("search tab survives");
+    assert_eq!(nav.width_px(), Some(390.0));
+    match nav {
+        PenNode::Frame(frame) => {
+            assert!(frame.container.stroke.is_none(), "nav stroke is removed");
+            assert!(frame.container.effects.is_none(), "nav shadow is removed");
+            assert_eq!(
+                frame.container.corner_radius,
+                Some(CornerRadius::Uniform(0.0)),
+                "nav rounded pill is neutralized"
+            );
+        }
+        _ => panic!("bottom nav should be a frame"),
+    }
+    for tab in [home, search] {
+        match tab {
+            PenNode::Frame(frame) => {
+                assert!(frame.container.fill.is_none(), "tab fill is removed");
+                assert!(frame.container.stroke.is_none(), "tab stroke is removed");
+                assert_eq!(
+                    frame.container.corner_radius,
+                    Some(CornerRadius::Uniform(0.0)),
+                    "tab rounded tile is neutralized"
+                );
+            }
+            _ => panic!("tab should be a frame"),
+        }
+    }
+}

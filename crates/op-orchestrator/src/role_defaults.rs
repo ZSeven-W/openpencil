@@ -231,6 +231,21 @@ fn role_defaults(role: &str, node_json: &Value, ctx: &RoleCtx) -> Option<Value> 
             "alignItems": "center", "justifyContent": "space_between",
             "fill": navbar_fill(theme), "stroke": navbar_bottom_border(theme)
         }),
+        "bottom-tab-bar" => json!({
+            "layout": "horizontal", "width": "fill_container",
+            "height": if mobile { 68 } else { 72 },
+            "padding": if mobile { pad2(8.0, 24.0) } else { pad2(8.0, 32.0) },
+            "gap": 0,
+            "alignItems": "center", "justifyContent": "space_between",
+            "fill": navbar_fill(theme)
+        }),
+        "tab-bar" | "tab-row" => json!({
+            "layout": "horizontal", "width": "fill_container",
+            "height": if mobile { 48 } else { 44 },
+            "padding": if mobile { pad2(4.0, 4.0) } else { pad2(4.0, 8.0) },
+            "gap": 4,
+            "alignItems": "center", "justifyContent": "center"
+        }),
         "nav-links" => json!({ "layout": "horizontal", "gap": 24, "alignItems": "center" }),
         "nav-link" => json!({ "textGrowth": "auto", "lineHeight": 1.2 }),
 

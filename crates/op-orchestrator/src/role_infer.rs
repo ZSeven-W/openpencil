@@ -24,6 +24,10 @@ use crate::role_defaults::{apply_role_defaults, node_layout_string, RoleCtx, The
 /// Exact (case-insensitive) name → role. Port of `NAME_EXACT_MAP`.
 fn exact_role(lower: &str) -> Option<&'static str> {
     Some(match lower {
+        "bottom nav" | "bottom navigation" | "bottom tab" | "bottom tab bar" | "bottom-tab-bar" => {
+            "bottom-tab-bar"
+        }
+        "tab bar" | "tabbar" | "tab-bar" => "tab-bar",
         "navbar" | "navigation" | "navigation bar" | "nav bar" | "nav" | "header" | "top bar"
         | "topbar" => "navbar",
         "hero" | "hero section" => "hero",
@@ -78,6 +82,16 @@ const ROLE_PART_WORDS: &[&str] = &[
 /// is `skipContainers`. Port of `NAME_PATTERN_MAP`.
 static NAME_PATTERN_MAP: LazyLock<Vec<(Regex, &'static str, bool)>> = LazyLock::new(|| {
     vec![
+        (
+            Regex::new(r"\bbottom\s*(nav|navigation|tab)|bottom[-\s]*tab").unwrap(),
+            "bottom-tab-bar",
+            false,
+        ),
+        (
+            Regex::new(r"\btab\s*bar\b|\btabbar\b").unwrap(),
+            "tab-bar",
+            false,
+        ),
         (Regex::new(r"\bbtn\b|\bbutton\b").unwrap(), "button", true),
         (Regex::new(r"\bcard\b").unwrap(), "card", true),
         (

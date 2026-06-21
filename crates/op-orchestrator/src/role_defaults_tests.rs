@@ -79,6 +79,24 @@ fn navbar_mobile_height_and_padding() {
 }
 
 #[test]
+fn bottom_tab_bar_defaults_are_mobile_specific() {
+    let mobile = RoleCtx::root(390.0, Theme::Light);
+    let v = applied(
+        "bottom-tab-bar",
+        &mobile,
+        serde_json::json!({"type":"frame","id":"tabs","name":"Bottom Navigation","children":[]}),
+    );
+    assert_eq!(v["layout"], serde_json::json!("horizontal"));
+    assert_eq!(v["width"], serde_json::json!("fill_container"));
+    assert_eq!(v["height"], serde_json::json!(68.0));
+    assert_eq!(v["padding"], serde_json::json!([8.0, 24.0]));
+    assert_eq!(v["gap"], serde_json::json!(0.0));
+    assert_eq!(v["justifyContent"], serde_json::json!("space_between"));
+    assert!(v.get("stroke").map(Value::is_null).unwrap_or(true));
+    assert!(v.get("cornerRadius").map(Value::is_null).unwrap_or(true));
+}
+
+#[test]
 fn ai_explicit_value_is_never_overwritten() {
     // The node already has a fill + height — role defaults must NOT replace them.
     let v = applied(
