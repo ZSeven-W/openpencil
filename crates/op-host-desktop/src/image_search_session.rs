@@ -598,12 +598,12 @@ pub(crate) fn apply_result(state: &mut EditorState, node_id: &NodeId, url: &str)
             if image.src == url {
                 return false;
             }
-            image.src = url.to_string();
+            image.src = url.into();
             true
         }
         PenNode::Frame(frame) if is_unfilled_placeholder_frame => {
             frame.container.fill = Some(vec![PenFill::Image(ImageFillBody {
-                url: url.to_string(),
+                url: url.into(),
                 mode: Some(ImageFillMode::Crop),
                 original_size: None,
                 transform: None,
@@ -622,7 +622,7 @@ pub(crate) fn apply_result(state: &mut EditorState, node_id: &NodeId, url: &str)
         }
         PenNode::Rectangle(rect) if is_unfilled_placeholder_rectangle => {
             rect.container.fill = Some(vec![PenFill::Image(ImageFillBody {
-                url: url.to_string(),
+                url: url.into(),
                 mode: Some(ImageFillMode::Crop),
                 original_size: None,
                 transform: None,

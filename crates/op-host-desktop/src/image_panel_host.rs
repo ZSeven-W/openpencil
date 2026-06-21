@@ -203,7 +203,7 @@ impl ImagePanelJobs {
 
 fn selected_image_src(host: &WidgetHostNative) -> Option<(String, String)> {
     match host.editor_state().selected_node() {
-        Some(PenNode::Image(image)) => Some((image.base.id.clone(), image.src.clone())),
+        Some(PenNode::Image(image)) => Some((image.base.id.clone(), image.src.to_string())),
         _ => None,
     }
 }

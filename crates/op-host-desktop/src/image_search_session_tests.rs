@@ -13,7 +13,7 @@ fn image_node(id: &str, src: &str, query: Option<&str>) -> PenNode {
             name: Some("Menu photo".into()),
             ..Default::default()
         },
-        src: src.to_string(),
+        src: src.into(),
         object_fit: None,
         width: Some(SizingBehavior::Number(240.0)),
         height: Some(SizingBehavior::Number(160.0)),

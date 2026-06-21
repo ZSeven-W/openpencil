@@ -172,7 +172,7 @@ impl WidgetHostNative {
         if let Some(PenNode::Image(image)) =
             op_editor_core::walkers::find_node_mut(self.editor_state.active_children_mut(), &id)
         {
-            image.src = src.to_string();
+            image.src = src.into();
         }
         self.mark_editor_state_dirty();
     }

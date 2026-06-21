@@ -240,7 +240,7 @@ impl EditorState {
                 y: Some(centre_y - H / 2.0),
                 ..Default::default()
             },
-            src: src.to_string(),
+            src: src.into(),
             object_fit: None,
             width: Some(SizingBehavior::Number(W)),
             height: Some(SizingBehavior::Number(H)),
@@ -448,14 +448,14 @@ impl EditorState {
             return false;
         };
         if let PenNode::Image(image) = node {
-            image.src = src.to_string();
+            image.src = src.into();
             return true;
         }
         let Some(fills) = crate::fills::node_fills_mut(node) else {
             return false;
         };
         let body = PenFill::Image(ImageFillBody {
-            url: src.to_string(),
+            url: src.into(),
             mode: None,
             original_size: None,
             transform: None,

@@ -81,7 +81,7 @@ pub fn image_panel_view(state: &EditorState, node: &PenNode) -> Option<ImagePane
     };
     let node_id = image.base.id.as_str().to_string();
     let name = image.base.name.clone().unwrap_or_default();
-    let src = (!image.src.trim().is_empty()).then(|| image.src.clone());
+    let src = (!image.src.trim().is_empty()).then(|| image.src.to_string());
     let warning = src
         .as_deref()
         .filter(|s| is_local_asset_path(s))

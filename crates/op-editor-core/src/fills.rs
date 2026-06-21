@@ -360,7 +360,7 @@ pub fn first_image_fill_summary(node: &PenNode) -> Option<ImageFillSummary> {
     Some(ImageFillSummary {
         mode: ImageFillMode::from_schema(body.mode.as_ref()),
         has_image: !trimmed_url.is_empty(),
-        image_url: (!trimmed_url.is_empty()).then(|| body.url.clone()),
+        image_url: (!trimmed_url.is_empty()).then(|| body.url.to_string()),
         exposure: body.exposure.unwrap_or(0.0),
         contrast: body.contrast.unwrap_or(0.0),
         saturation: body.saturation.unwrap_or(0.0),
@@ -630,7 +630,7 @@ fn default_fill_of_type(kind: FillType, hex: &str) -> PenFill {
             blend_mode: None,
         }),
         FillType::Image => PenFill::Image(ImageFillBody {
-            url: String::new(),
+            url: "".into(),
             mode: None,
             original_size: None,
             transform: None,
