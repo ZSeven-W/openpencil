@@ -202,9 +202,47 @@ pub fn truncate_ellipsis(s: &str, max: usize) -> String {
     format!("{kept}…")
 }
 
+/// Width-aware sibling of [`truncate_ellipsis`]: shorten `s` until it (plus a
+/// trailing `…`) measures within `max_w`, using the caller-supplied `measure`
+/// (typically the render backend's `measure_text`). Character-aware, so
+/// multibyte glyphs are never split. Returns `s` unchanged when it already
+/// fits, or an empty string when not even the ellipsis fits.
+pub fn ellipsize_to_width(s: &str, max_w: f32, mut measure: impl FnMut(&str) -> f32) -> String {
+    if measure(s) <= max_w {
+        return s.to_string();
+    }
+    let mut out = s.to_string();
+    while !out.is_empty() && measure(&format!("{out}…")) > max_w {
+        out.pop();
+    }
+    if out.is_empty() {
+        return String::new();
+    }
+    format!("{out}…")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ellipsize_to_width_fits_within_max() {
+        // 10 px per char (CJK or ASCII alike for this stub).
+        let measure = |s: &str| s.chars().count() as f32 * 10.0;
+        // Already fits → unchanged.
+        assert_eq!(ellipsize_to_width("abc", 100.0, measure), "abc");
+        // Too wide → shortened with a `…`, and the result fits.
+        let out = ellipsize_to_width("abcdefghij", 45.0, measure);
+        assert!(out.ends_with('…'), "got {out:?}");
+        assert!(measure(&out) <= 45.0, "must fit: {out:?}");
+        // Multibyte glyphs are never split.
+        let cjk = ellipsize_to_width("设计精良的美食应用", 35.0, measure);
+        assert!(cjk.ends_with('…'));
+        assert!(measure(&cjk) <= 35.0);
+        assert!(cjk.chars().all(|c| c == '…' || "设计精良的美食应用".contains(c)));
+        // Not even the ellipsis fits → empty.
+        assert_eq!(ellipsize_to_width("abc", 5.0, measure), "");
+    }
 
     #[test]
     fn truncate_ellipsis_appends_only_when_shortened() {
