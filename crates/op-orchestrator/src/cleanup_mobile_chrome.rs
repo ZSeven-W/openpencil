@@ -1,6 +1,6 @@
 use crate::types::DocSink;
 use jian_ops_schema::node::PenNode;
-use op_editor_core::{EditorCommand, NodeId, PenNodeExt};
+use op_editor_core::{first_solid_fill_hex, EditorCommand, NodeId, PenNodeExt};
 
 pub(crate) fn repair_mobile_structural_chrome(sink: &mut dyn DocSink, root_id: &str) {
     let shells: Vec<NodeId> = {
@@ -38,8 +38,14 @@ fn should_strip_structural_shell(node: &PenNode) -> bool {
             .unwrap_or(true)
         || super::is_status_bar(node)
         || super::nav_surface_target(node).is_some()
-        || is_visual_surface_role(node)
     {
+        return false;
+    }
+
+    if has_nested_filled_atomic_component(node) {
+        return true;
+    }
+    if is_visual_surface_role(node) {
         return false;
     }
 
@@ -65,6 +71,7 @@ fn is_visual_surface_role(node: &PenNode) -> bool {
         "badge"
             | "button"
             | "card"
+            | "chip"
             | "feature-card"
             | "form-input"
             | "icon-button"
@@ -75,6 +82,68 @@ fn is_visual_surface_role(node: &PenNode) -> bool {
             | "stat-card"
             | "tag"
     )
+}
+
+fn has_nested_filled_atomic_component(node: &PenNode) -> bool {
+    let Some(parent_role) = normalized_role(node) else {
+        return false;
+    };
+    if !is_atomic_protected_role(&parent_role) {
+        return false;
+    }
+    node.children()
+        .map(|children| {
+            children.iter().any(|child| {
+                let child_role = normalized_role(child);
+                if child_role.as_deref() == Some(parent_role.as_str()) {
+                    return true;
+                }
+                if child_role
+                    .as_deref()
+                    .map(is_primary_atomic_role)
+                    .unwrap_or(false)
+                    && first_solid_fill_hex(child).is_some()
+                {
+                    return true;
+                }
+                child_role.is_none()
+                    && first_solid_fill_hex(child).is_some()
+                    && is_input_like_haystack(&super::node_identity_haystack(child))
+            })
+        })
+        .unwrap_or(false)
+}
+
+fn normalized_role(node: &PenNode) -> Option<String> {
+    node.base()
+        .role
+        .as_deref()
+        .map(str::trim)
+        .filter(|role| !role.is_empty())
+        .map(str::to_lowercase)
+}
+
+fn is_atomic_protected_role(role: &str) -> bool {
+    matches!(
+        role,
+        "badge"
+            | "button"
+            | "chip"
+            | "form-input"
+            | "icon-button"
+            | "input"
+            | "pill"
+            | "search-bar"
+            | "tag"
+    )
+}
+
+fn is_primary_atomic_role(role: &str) -> bool {
+    matches!(role, "form-input" | "input" | "search-bar")
+}
+
+fn is_input_like_haystack(hay: &str) -> bool {
+    super::contains_any(hay, &["form input", "form-input", "input", "search"])
 }
 
 fn has_search_or_category_child(node: &PenNode) -> bool {
