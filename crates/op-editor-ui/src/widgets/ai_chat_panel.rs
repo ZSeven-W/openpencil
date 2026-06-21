@@ -335,21 +335,23 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
                 self.theme.muted_foreground,
                 1.4,
             );
-            // "New Chat" label.
+            // Title label — ellipsized to the space between the bubble icon
+            // and the chevron so a long chat title can't overflow the pill.
+            let title_x = rect.origin.x + COLLAPSED_X_PAD + COLLAPSED_MESSAGE_ICON + COLLAPSED_GAP;
+            let chevron_x = rect.origin.x + rect.size.x - COLLAPSED_X_PAD - COLLAPSED_CHEVRON_ICON;
+            let max_title_w = (chevron_x - COLLAPSED_GAP - title_x).max(0.0);
+            let title_text = crate::util::ellipsize_to_width(&self.state.title, max_title_w, |s| {
+                cx.backend.measure_text(s, 12.0)
+            });
             let title = TextLayout::single_run(
-                &self.state.title,
+                &title_text,
                 "system-ui",
                 12.0,
                 (self.theme.muted_foreground).to_jian(),
                 Point2D::new(0.0, 0.0),
             );
-            cx.backend.draw_text(
-                &title,
-                Point2D::new(
-                    rect.origin.x + COLLAPSED_X_PAD + COLLAPSED_MESSAGE_ICON + COLLAPSED_GAP,
-                    center_y + 4.0,
-                ),
-            );
+            cx.backend
+                .draw_text(&title, Point2D::new(title_x, center_y + 4.0));
             // Chevron-up at the right (click to expand).
             draw_icon(
                 cx.backend,
