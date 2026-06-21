@@ -49,7 +49,8 @@ RULES:
 - STYLE SELECTION: Choose light or dark theme based on user intent. Dark: user mentions dark/cyber/terminal/neon/夜间/暗黑/deep/gaming/noir. Light (default): all other cases — SaaS, marketing, education, e-commerce, productivity, social. Never default to dark unless the content clearly calls for it.
 - Detect the design type FIRST, then choose the appropriate structure and subtask count.
 - Multi-section pages (type 1): include Navigation Bar as the FIRST subtask, followed by Hero, feature sections, CTA, footer, etc. (6-10 subtasks)
-- Single-task screens (type 2): do NOT include Navigation Bar, Hero, CTA, or footer. Only include the actual UI elements needed (1-5 subtasks).
+- Single-task mobile screens (type 2 — login, signup, profile, settings, a single form/detail view): do NOT include Navigation Bar, Hero, CTA, or footer. Only include the actual UI elements needed (1-5 subtasks).
+- Mobile app HOME / feed / main / discover screens (type 2 but MULTI-section — a food/shopping/social/delivery app homepage, a dashboard feed, etc.): plan the content sections (header, search, categories, featured/banner, lists…) AND **ALWAYS include a "Bottom Navigation Bar" as the LAST subtask** — a fixed tab bar with 4-5 items (e.g. Home / Search / Orders / Profile), each an icon + label, active state on the first. A mobile app's main screen WITHOUT a bottom nav is incomplete — never omit it. (Only the single-task screens above are the exception: they have no bottom nav.)
 - FORM INTEGRITY: Keep a form's core elements (inputs + submit button) in the same subtask. Splitting inputs into one subtask and the button into another causes duplicate buttons.
 - Combine related elements: "Hero with title + image + CTA" = ONE subtask, not three.
 - Each subtask generates a meaningful section (~10-30 nodes). Only split if it would exceed 40 nodes.

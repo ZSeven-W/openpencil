@@ -51,10 +51,14 @@ Structure:
 - Inside it, a row frame with `width="fit_content"`, `height="fit_content"`, `layout="horizontal"`, `gap=12`, `padding=[0,20]`.
 - The row frame holds the actual cards.
 
-Every card in the row MUST:
+Every **content / product / workout card** in the row MUST:
 
 - Have a FIXED numeric `width` (typically 120-160 for mobile, 200-260 for desktop). Never `fill_container`, never `fit_content` - fixed pixels.
 - Share identical width with its siblings for visual rhythm.
+
+**EXCEPTION — nav chips / category chips / filter tags** (icon + short label like "All" / "Pizza" / "Videos"): use `width="fit_content"`, NEVER a fixed 120-160. That fixed width is content-card sizing; a 6-chip category row at 132px each becomes ~800px and scrolls off-screen for what should comfortably fit on one screen. With `fit_content`, a handful of short chips sit on one row (no scroll), and only a genuinely long list scrolls. Keep the same clipContent wrapper + fit_content row — just let each chip hug its content (icon + label + small horizontal padding).
+
+**COUNT CAP for a no-scroll chip row (mobile 375px):** even at `fit_content`, only ~4-5 icon+label chips fit one phone width. If the design is meant to fit on screen WITHOUT horizontal scrolling, emit only the chips that fit (the top 4-5 categories) — do NOT pack 6+ chips into the row, the extras render off the right edge of the device. If you genuinely need all categories, you MUST place the row inside the `clipContent` wrapper above so the overflow clips at the screen edge (scroll row) instead of spilling past the phone frame. A bare horizontal frame with 6+ chips and no `clipContent` ancestor is the #1 mobile overflow bug — never emit it.
 
 Example - 6 workout cards inside a 375px-wide mobile page:
 
@@ -112,5 +116,5 @@ Anti-patterns (do NOT emit any of these):
 
 - Putting 5+ cards directly inside a `layout="horizontal"` page-root frame (they overflow the phone width).
 - Using `fill_container` on cards in a horizontal row (they squish down to invisibility).
-- Using `width="fit_content"` on cards - text-driven widths are unpredictable and break rhythm.
+- Using `width="fit_content"` on **content/product cards** - text-driven widths are unpredictable and break rhythm. (Nav / category chips are the EXCEPTION above — those SHOULD use fit_content so a short row fits one screen.)
 - Skipping the `clipContent=true` wrapper and relying on Skia to clip (it doesn't — only `clipContent:true` enables clipping).
