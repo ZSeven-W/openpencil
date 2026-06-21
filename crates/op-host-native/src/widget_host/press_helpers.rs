@@ -861,6 +861,13 @@ pub(in crate::widget_host) fn property_focus_initial(
             .stroke
             .map(|s| format!("{}", s.width.round() as i32))
             .unwrap_or_else(|| "1".to_string()),
+        F::StrokeTopWidth | F::StrokeRightWidth | F::StrokeBottomWidth | F::StrokeLeftWidth => {
+            panel
+                .snapshot
+                .stroke_side_width_for(focus)
+                .map(format_panel_number)
+                .unwrap_or_else(|| "0".to_string())
+        }
         F::GradientAngle => {
             let a = panel.snapshot.gradient_angle.unwrap_or(0.0);
             if a.fract() == 0.0 {

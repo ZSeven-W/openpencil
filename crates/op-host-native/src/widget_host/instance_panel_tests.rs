@@ -232,7 +232,9 @@ fn remote_icon_insert_bakes_svg_d_as_path_node() {
     // longer the last child — locate the baked path by its icon id.
     let path_idx = children
         .iter()
-        .position(|n| matches!(n, PenNode::Path(p) if p.icon_id.as_deref() == Some("mdi:zwxq-home")))
+        .position(
+            |n| matches!(n, PenNode::Path(p) if p.icon_id.as_deref() == Some("mdi:zwxq-home")),
+        )
         .expect("baked remote icon path was inserted");
     let inst1_idx = children
         .iter()

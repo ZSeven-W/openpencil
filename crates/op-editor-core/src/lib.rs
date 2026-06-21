@@ -115,6 +115,8 @@ mod command_reparent_tests;
 #[cfg(test)]
 mod command_replace_tests;
 #[cfg(test)]
+mod command_stroke_tests;
+#[cfg(test)]
 mod command_style_replace_tests;
 #[cfg(test)]
 mod command_subtree_tests;
@@ -124,6 +126,8 @@ mod command_tests;
 mod command_update_tests;
 #[cfg(test)]
 mod command_widget_tests;
+#[cfg(test)]
+mod fills_tests;
 #[cfg(test)]
 mod svg_import_tests;
 #[cfg(test)]
@@ -162,8 +166,8 @@ pub use chat::{
 pub use chat_button_state::{ChatFooterButton, ChatHeaderButton};
 pub use color_picker::{hsv_to_rgb, parse_hex_alpha, parse_hex_rgb, rgb_to_hex, rgb_to_hsv};
 pub use command::{
-    BatchInsertItem, EditorCommand, EffectField, LayoutPropValue, NodeFlag, StylePropValue,
-    StylePropertyReplacement, VariableScalarPayload,
+    BatchInsertItem, EditorCommand, EffectField, LayoutPropValue, NodeFlag, StrokeSide,
+    StylePropValue, StylePropertyReplacement, VariableScalarPayload,
 };
 pub use command_node_attrs::{WidgetNumberField, WidgetTextField};
 pub use command_promote::PromoteResult;

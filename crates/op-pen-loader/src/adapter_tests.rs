@@ -5,6 +5,9 @@ fn load(src: &str) -> LoadedDoc {
     pen_document_to_payload(&r.value)
 }
 
+#[path = "adapter_compat_tests.rs"]
+mod adapter_compat_tests;
+
 #[test]
 fn preserving_geometry_keeps_authored_nested_positions() {
     let src = r##"{

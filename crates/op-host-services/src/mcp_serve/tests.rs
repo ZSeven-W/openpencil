@@ -516,6 +516,35 @@ fn write_named_doc(path: &std::path::Path, node_id: &str, name: &str) {
     .expect("write doc");
 }
 
+#[test]
+fn load_editor_state_accepts_ts_future_version_files() {
+    let (dir, primary_path, _) = temp_doc_paths("future-version-load");
+    std::fs::write(
+        &primary_path,
+        r##"{
+  "version": "2.8",
+  "children": [
+    {
+      "id": "future-node",
+      "type": "rectangle",
+      "name": "Future Version",
+      "x": 0,
+      "y": 0,
+      "width": 100,
+      "height": 60,
+      "fill": [{ "type": "solid", "color": "#FFFFFF" }]
+    }
+  ]
+}"##,
+    )
+    .expect("write future-version doc");
+
+    let state = load_editor_state(&primary_path).expect("future TS .op should load");
+
+    assert_eq!(state.active_children()[0].base().id, "future-node");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
 fn assert_response_file_path_matches(response: &str, expected: &std::path::Path) {
     let tool_text = crate::mcp_serve::tool_text(response);
     let result: serde_json::Value = serde_json::from_str(&tool_text).expect("tool result JSON");

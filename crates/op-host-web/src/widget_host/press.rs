@@ -581,6 +581,7 @@ impl WidgetHost {
         //       swallowed (mirrors the native host's dismiss handlers).
         if self.editor_state.editor_ui.font_weight_picker_open
             || self.editor_state.editor_ui.padding_mode_popover_open
+            || self.editor_state.editor_ui.stroke_mode_popover_open
         {
             use op_editor_ui::widgets::PropertyPanelAction as A;
             if let Some(panel) = PropertyPanel::for_selection(&self.editor_state) {
@@ -601,6 +602,8 @@ impl WidgetHost {
                             | A::ToggleFontWeightPicker
                             | A::SetPaddingMode(_)
                             | A::TogglePaddingModePopover
+                            | A::SetStrokeMode(_)
+                            | A::ToggleStrokeModePopover
                     ) {
                         if let A::SetFontWeight(choice) = action {
                             self.editor_state.editor_ui.pressed_button =
@@ -620,6 +623,8 @@ impl WidgetHost {
             self.editor_state.editor_ui.font_weight_picker_hover = None;
             self.editor_state.editor_ui.padding_mode_popover_open = false;
             self.editor_state.editor_ui.padding_mode_popover_hover = None;
+            self.editor_state.editor_ui.stroke_mode_popover_open = false;
+            self.editor_state.editor_ui.stroke_mode_popover_hover = None;
             self.mark_dirty();
             return true;
         }

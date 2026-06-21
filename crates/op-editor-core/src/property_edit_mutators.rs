@@ -7,6 +7,53 @@ use crate::walkers::find_node_mut;
 use jian_ops_schema::node::container::Padding;
 use jian_ops_schema::node::PenNode;
 
+fn stroke_side_for_focus(focus: PropertyFocus) -> Option<crate::StrokeSide> {
+    match focus {
+        PropertyFocus::StrokeTopWidth => Some(crate::StrokeSide::Top),
+        PropertyFocus::StrokeRightWidth => Some(crate::StrokeSide::Right),
+        PropertyFocus::StrokeBottomWidth => Some(crate::StrokeSide::Bottom),
+        PropertyFocus::StrokeLeftWidth => Some(crate::StrokeSide::Left),
+        _ => None,
+    }
+}
+
+fn stroke_values_for_mode_update(
+    mode: crate::PaddingEditMode,
+    focus: PropertyFocus,
+    value: f32,
+    mut values: [f32; 4],
+) -> [f32; 4] {
+    match mode {
+        crate::PaddingEditMode::Single => [value; 4],
+        crate::PaddingEditMode::Axis => match focus {
+            PropertyFocus::StrokeTopWidth | PropertyFocus::StrokeBottomWidth => {
+                values[0] = value;
+                values[2] = value;
+                values
+            }
+            PropertyFocus::StrokeRightWidth | PropertyFocus::StrokeLeftWidth => {
+                values[1] = value;
+                values[3] = value;
+                values
+            }
+            _ => values,
+        },
+        crate::PaddingEditMode::Individual => {
+            let Some(side) = stroke_side_for_focus(focus) else {
+                return values;
+            };
+            let index = match side {
+                crate::StrokeSide::Top => 0,
+                crate::StrokeSide::Right => 1,
+                crate::StrokeSide::Bottom => 2,
+                crate::StrokeSide::Left => 3,
+            };
+            values[index] = value;
+            values
+        }
+    }
+}
+
 impl EditorState {
     /// Apply a parsed numeric property edit to the anchor node.
     /// True on a real, editable selection.
@@ -18,6 +65,33 @@ impl EditorState {
         match focus {
             PropertyFocus::PositionR => return self.cmd_set_node_corner_radius(&sel, value),
             PropertyFocus::StrokeWidth => return self.cmd_set_node_stroke_width(&sel, value),
+            PropertyFocus::StrokeTopWidth
+            | PropertyFocus::StrokeRightWidth
+            | PropertyFocus::StrokeBottomWidth
+            | PropertyFocus::StrokeLeftWidth => {
+                if !value.is_finite() {
+                    return false;
+                }
+                let values = self
+                    .selected_node()
+                    .and_then(crate::fills::node_stroke_side_widths)
+                    .unwrap_or([0.0; 4]);
+                let mode = self.editor_ui.stroke_edit_mode.unwrap_or_else(|| {
+                    crate::PaddingEditMode::from_values(values[0], values[1], values[2], values[3])
+                });
+                let values = stroke_values_for_mode_update(mode, focus, value.max(0.0), values);
+                for (side, width) in [
+                    (crate::StrokeSide::Top, values[0]),
+                    (crate::StrokeSide::Right, values[1]),
+                    (crate::StrokeSide::Bottom, values[2]),
+                    (crate::StrokeSide::Left, values[3]),
+                ] {
+                    if !self.cmd_set_node_stroke_side_width(&sel, side, width) {
+                        return false;
+                    }
+                }
+                return true;
+            }
             PropertyFocus::PolygonSides => {
                 if !value.is_finite() {
                     return false;
@@ -210,7 +284,11 @@ impl EditorState {
             | PropertyFocus::PaddingTop
             | PropertyFocus::PaddingRight
             | PropertyFocus::PaddingBottom
-            | PropertyFocus::PaddingLeft => {
+            | PropertyFocus::PaddingLeft
+            | PropertyFocus::StrokeTopWidth
+            | PropertyFocus::StrokeRightWidth
+            | PropertyFocus::StrokeBottomWidth
+            | PropertyFocus::StrokeLeftWidth => {
                 unreachable!("shape-specific properties handled before node borrow")
             }
             // StrokeWidth handled in the first match (before the node
@@ -350,6 +428,37 @@ impl EditorState {
         )
     }
 
+    /// Normalise the selected node's stroke side widths to the
+    /// canonical shape for `mode`: Single copies top to all sides,
+    /// Axis mirrors top→bottom and right→left, Individual preserves
+    /// all four current values.
+    pub fn set_selected_stroke_mode_shape(&mut self, mode: crate::PaddingEditMode) -> bool {
+        let sel = self.selection.anchor.clone();
+        if !sel.is_real() || !self.is_editable(&sel) {
+            return false;
+        }
+        let v = self
+            .selected_node()
+            .and_then(crate::fills::node_stroke_side_widths)
+            .unwrap_or([0.0; 4]);
+        let reshaped = match mode {
+            crate::PaddingEditMode::Single => [v[0]; 4],
+            crate::PaddingEditMode::Axis => [v[0], v[1], v[0], v[1]],
+            crate::PaddingEditMode::Individual => v,
+        };
+        for (side, width) in [
+            (crate::StrokeSide::Top, reshaped[0]),
+            (crate::StrokeSide::Right, reshaped[1]),
+            (crate::StrokeSide::Bottom, reshaped[2]),
+            (crate::StrokeSide::Left, reshaped[3]),
+        ] {
+            if !self.cmd_set_node_stroke_side_width(&sel, side, width) {
+                return false;
+            }
+        }
+        true
+    }
+
     pub fn clear_selected_fills(&mut self) -> bool {
         let sel = self.selection.anchor.clone();
         if !sel.is_real() || !self.is_editable(&sel) {
@@ -377,7 +486,8 @@ impl EditorState {
     }
 
     pub fn add_selected_fill(&mut self) -> bool {
-        self.with_selected_node(crate::fills::add_fill).unwrap_or(false)
+        self.with_selected_node(crate::fills::add_fill)
+            .unwrap_or(false)
     }
 
     pub fn remove_selected_fill(&mut self, index: usize) -> bool {

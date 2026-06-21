@@ -101,7 +101,11 @@ fn apply_resolved_variable_colors(
         .and_then(|hex| color_from_hex(&hex))
     {
         let width = op_editor_core::fills::node_stroke_width(node).unwrap_or(1.0) as f32;
-        snapshot.stroke = Some(SceneStroke { color, width });
+        snapshot.stroke = Some(SceneStroke {
+            color,
+            width,
+            sides: crate::widgets::property_panel_snapshot::stroke_sides_for_scene(node),
+        });
     }
 }
 
@@ -170,6 +174,10 @@ pub struct PropertyPanel {
     pub padding_mode_popover_open: bool,
     /// Hovered padding-mode popover row index (gear popover open).
     pub padding_mode_popover_hover: Option<usize>,
+    pub stroke_edit_mode: op_editor_core::PaddingEditMode,
+    pub stroke_mode_popover_open: bool,
+    /// Hovered stroke-mode popover row index (gear popover open).
+    pub stroke_mode_popover_hover: Option<usize>,
     /// True for multi-select aggregate (inputs inert, "N items").
     pub is_multi: bool,
     /// Active header tab — toggled by Cmd+Shift+C.
@@ -362,6 +370,14 @@ impl PropertyPanel {
                 let p = snapshot.layout_padding;
                 op_editor_core::PaddingEditMode::from_values(p.top, p.right, p.bottom, p.left)
             });
+        let stroke_pin_applies = ui.stroke_edit_mode_anchor == state.selection.anchor.as_str();
+        let stroke_edit_mode = ui
+            .stroke_edit_mode
+            .filter(|_| stroke_pin_applies)
+            .unwrap_or_else(|| {
+                let [top, right, bottom, left] = snapshot.stroke_side_widths();
+                op_editor_core::PaddingEditMode::from_values(top, right, bottom, left)
+            });
         // The Code tab's idle "N nodes selected" label reads the panel's
         // codegen snapshot. Overwrite the clone with the LIVE generation
         // targets (selection, else the active page's children — mirrors
@@ -441,6 +457,9 @@ impl PropertyPanel {
             padding_edit_mode,
             padding_mode_popover_open: ui.padding_mode_popover_open,
             padding_mode_popover_hover: ui.padding_mode_popover_hover,
+            stroke_edit_mode,
+            stroke_mode_popover_open: ui.stroke_mode_popover_open,
+            stroke_mode_popover_hover: ui.stroke_mode_popover_hover,
             is_multi,
             tab: ui.property_tab,
             tab_hover: ui.property_tab_hover,
@@ -550,6 +569,8 @@ impl PropertyPanel {
             ellipse_arc: self.snapshot.ellipse_arc.is_some(),
             fill: caps.fill,
             stroke: caps.stroke,
+            stroke_edit_mode: self.stroke_edit_mode,
+            stroke_mode_popover_open: self.stroke_mode_popover_open,
             color_variable_count: self.color_variable_count,
             fill_variable_bound: self.fill_variable_ref.is_some(),
             stroke_variable_bound: self.stroke_variable_ref.is_some(),
@@ -852,8 +873,34 @@ pub(super) fn action_wash_rect(
     action: &PropertyPanelAction,
     r: Rect,
     labels: &sections::PropertyLabels,
+    locale: op_editor_core::Locale,
     backend: &mut dyn crate::RenderBackend,
 ) -> Rect {
+    // Layout-justify rows (space-between / space-around) paint a radio at
+    // `r.origin.x` and a 10px label RADIO_GUTTER further right, but the
+    // action rect spans the whole gap column. Hug the radio + label so the
+    // hover wash reads as a fit-content pill instead of a full-width bar.
+    if let PropertyPanelAction::SetLayoutJustify(v) = action {
+        // RADIO_GUTTER = 6 + RADIO_SIZE(13) — see `property_panel_flex`.
+        const RADIO_GUTTER: f32 = 19.0;
+        let key = match v {
+            LayoutJustifyValue::SpaceBetween => Some("layout.spaceBetween"),
+            LayoutJustifyValue::SpaceAround => Some("layout.spaceAround"),
+            // `Start` is the circle-only numeric row — its rect is already
+            // just the radio gutter, so leave it untouched.
+            _ => None,
+        };
+        if let Some(key) = key {
+            let label = op_i18n::translate(locale, key);
+            let content_right = r.origin.x + RADIO_GUTTER + backend.measure_text(label, 10.0);
+            let left = r.origin.x - ACTION_WASH_PAD_X;
+            let right = (content_right + ACTION_WASH_PAD_X).min(r.origin.x + r.size.x);
+            return Rect {
+                origin: Point2D::new(left, r.origin.y),
+                size: Point2D::new((right - left).max(0.0), r.size.y),
+            };
+        }
+    }
     let size_label = match action {
         PropertyPanelAction::ToggleSizeFillWidth => Some(labels.fill_width),
         PropertyPanelAction::ToggleSizeFillHeight => Some(labels.fill_height),
@@ -1113,8 +1160,9 @@ impl Widget for PropertyPanel {
                 w,
             );
         }
+        let stroke_section_y = y;
         if caps.stroke {
-            y = sections::paint_stroke_section(
+            y = crate::widgets::property_panel_stroke::paint_stroke_section(
                 cx,
                 &self.theme,
                 &self.snapshot,
@@ -1125,6 +1173,7 @@ impl Widget for PropertyPanel {
                 x,
                 y,
                 w,
+                self.stroke_edit_mode,
             );
         }
         if caps.effects {
@@ -1156,27 +1205,28 @@ impl Widget for PropertyPanel {
         // the Fill section so it can extend past the section divider.
         if caps.fill && self.fill_type_picker.open {
             let fi = self.fill_type_picker_index;
-            let active = self
-                .snapshot
-                .fills
-                .get(fi)
-                .map(|f| f.fill_type)
-                .unwrap_or(self.fill_type);
-            let row_offset = crate::widgets::property_panel_fill::fill_row_offset(
-                &self.snapshot.fills,
-                fi,
-                self.snapshot.gradient_stops.len(),
-            );
-            sections::paint_fill_type_picker(
-                cx,
-                &self.theme,
+            if let Some(action_rect) = sections::fill_type_toggle_action_rect(
                 scrolled,
                 self.visible_sections(),
-                &self.fill_type_picker,
-                active,
-                row_offset,
-                self.locale,
-            );
+                &self.snapshot.effects,
+                &self.snapshot.fills,
+                fi,
+            ) {
+                let active = self
+                    .snapshot
+                    .fills
+                    .get(fi)
+                    .map(|f| f.fill_type)
+                    .unwrap_or(self.fill_type);
+                sections::paint_fill_type_picker(
+                    cx,
+                    &self.theme,
+                    action_rect,
+                    &self.fill_type_picker,
+                    active,
+                    self.locale,
+                );
+            }
         }
         if caps.text && self.font_picker.open {
             if let Some(text) = self.snapshot.text.as_ref() {
@@ -1222,6 +1272,18 @@ impl Widget for PropertyPanel {
                 self.padding_mode_popover_hover,
                 x,
                 flex_section_y + crate::widgets::property_panel_inputs::SECTION_HEADER_HEIGHT,
+                w,
+            );
+        }
+        if caps.stroke && self.stroke_mode_popover_open {
+            crate::widgets::property_panel_stroke::paint_stroke_mode_popover(
+                cx,
+                &self.theme,
+                self.locale,
+                self.stroke_edit_mode,
+                self.stroke_mode_popover_hover,
+                x,
+                stroke_section_y,
                 w,
             );
         }
@@ -1284,7 +1346,7 @@ impl Widget for PropertyPanel {
             );
             if let Some(i) = self.action_hover {
                 if let Some((action, r)) = rects.get(i) {
-                    let wash = action_wash_rect(action, *r, &self.labels, cx.backend);
+                    let wash = action_wash_rect(action, *r, &self.labels, self.locale, cx.backend);
                     paint_button_feedback_wash(
                         cx.backend,
                         &self.theme,
@@ -1298,7 +1360,8 @@ impl Widget for PropertyPanel {
             if let Some(i) = self.action_pressed {
                 if self.action_hover != Some(i) {
                     if let Some((action, r)) = rects.get(i) {
-                        let wash = action_wash_rect(action, *r, &self.labels, cx.backend);
+                        let wash =
+                            action_wash_rect(action, *r, &self.labels, self.locale, cx.backend);
                         paint_button_feedback_wash(cx.backend, &self.theme, wash, 6.0, false, true);
                     }
                 }

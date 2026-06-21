@@ -43,7 +43,17 @@ fn image_body_rect(
         return None;
     }
     action_button_rects_with_fill_picker(
-        panel_rect, visible, &[], fills, false, 0, false, false, false, false, false,
+        panel_rect,
+        visible,
+        &[],
+        fills,
+        false,
+        0,
+        false,
+        false,
+        false,
+        false,
+        false,
     )
     .into_iter()
     .find_map(|(action, rect)| {

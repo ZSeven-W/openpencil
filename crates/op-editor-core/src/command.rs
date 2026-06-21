@@ -48,6 +48,15 @@ pub enum EffectField {
     Radius,
 }
 
+/// Which side of a node stroke a side-specific width edit targets.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StrokeSide {
+    Top,
+    Right,
+    Bottom,
+    Left,
+}
+
 /// Wire-friendly value payload for [`EditorCommand::SetVariableScalar`]
 /// — a non-color scalar variable's new value.
 #[derive(Debug, Clone, PartialEq)]
@@ -413,6 +422,12 @@ pub enum EditorCommand {
     SetNodeStrokeHex { node_id: NodeId, hex: String },
     /// Set the stroke width (doc-px) on a node by id.
     SetNodeStrokeWidth { node_id: NodeId, width: f32 },
+    /// Set one side's stroke width (doc-px) on a node by id.
+    SetNodeStrokeSideWidth {
+        node_id: NodeId,
+        side: StrokeSide,
+        width: f32,
+    },
     /// Apply alignment / distribution to the selection.
     AlignSelected { action: String },
     /// Set the fill color on a node by id.

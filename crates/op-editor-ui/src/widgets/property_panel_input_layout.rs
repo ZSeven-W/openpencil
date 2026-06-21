@@ -4,7 +4,7 @@
 //! and input-rect walker stay under the repository file-size cap.
 
 use crate::widgets::property_panel::{FillSummary, PropertyPanelAction};
-use crate::widgets::property_panel_fill::{fill_row_body_height, fill_row_offset};
+use crate::widgets::property_panel_fill::fill_row_body_height;
 use crate::widgets::property_panel_fill_picker::{
     fill_type_at, fill_type_picker_rect, FILL_TYPE_COUNT, FILL_TYPE_ROW_HEIGHT,
 };
@@ -13,6 +13,7 @@ use crate::widgets::property_panel_inputs::{
     SECTION_HEADER_HEIGHT, TAB_HEIGHT,
 };
 use crate::widgets::property_panel_layout::{push_color_variable_picker_rects, VisibleSections};
+use crate::widgets::property_panel_stroke::stroke_side_input_rects;
 use crate::{Point2D, Rect};
 use op_editor_core::{FillType, PropertyFocus};
 
@@ -278,9 +279,7 @@ pub fn editable_input_rects(
                         visible.gradient_stop_count,
                     );
                 }
-                FillType::LinearGradient
-                | FillType::RadialGradient
-                | FillType::Image => {}
+                FillType::LinearGradient | FillType::RadialGradient | FillType::Image => {}
             }
             y += fill_row_body_height(fill_type, is_primary, primary_stop_count);
         }
@@ -289,14 +288,15 @@ pub fn editable_input_rects(
     }
     if visible.stroke {
         y += SECTION_HEADER_HEIGHT;
-        let stroke_width_w = 60.0;
         let show_var = visible.color_variable_count > 0 || visible.stroke_variable_bound;
         let variable_w = if show_var {
             COLOR_VARIABLE_BUTTON_W + COLOR_VARIABLE_GAP
         } else {
             0.0
         };
-        let stroke_hex_w = usable_w - stroke_width_w - 8.0 - variable_w;
+        // Stroke width moved to the mode grid below — the hex hit rect now
+        // fills the row (matches the widened paint in property_panel_stroke).
+        let stroke_hex_w = usable_w - variable_w;
         if !visible.stroke_variable_bound {
             rects.push((
                 PropertyFocus::StrokeHex,
@@ -306,13 +306,7 @@ pub fn editable_input_rects(
                 },
             ));
         }
-        rects.push((
-            PropertyFocus::StrokeWidth,
-            Rect {
-                origin: Point2D::new(x0 + PAD_X + stroke_hex_w + variable_w + 8.0, y),
-                size: Point2D::new(stroke_width_w, INPUT_HEIGHT),
-            },
-        ));
+        rects.extend(stroke_side_input_rects(x0, y, w, visible.stroke_edit_mode));
     }
     rects
 }
@@ -365,8 +359,7 @@ pub(crate) fn push_fill_action_rects(
         ));
         // This fill's open type-picker overlay rows.
         if fill_picker_open && fill_type_picker_index == fi {
-            let row_offset = fill_row_offset(fills, fi, primary_stop_count);
-            let picker_rect = fill_type_picker_rect(panel_rect, visible, row_offset);
+            let picker_rect = fill_type_picker_rect(dropdown_rect);
             for i in 0..FILL_TYPE_COUNT {
                 let Some(t) = fill_type_at(i) else {
                     continue;

@@ -439,7 +439,7 @@ fn web_property_panel_fill_add_and_remove_match_native() {
     ));
 
     let remove = point_for_action(&host, |action| {
-        matches!(action, PropertyPanelAction::RemoveFill)
+        matches!(action, PropertyPanelAction::RemoveFill(0))
     });
     assert!(host.apply_press(remove.x, remove.y, VIEWPORT_W, VIEWPORT_H));
     assert_eq!(selected_fills(&host).len(), 0);
@@ -491,6 +491,10 @@ fn web_property_panel_widget_checked_toggle_matches_native() {
                "label":"Accept","checked":false}
         ]}"##,
     );
+    host.editor_state
+        .editor_ui
+        .agent_settings
+        .experimental_features_enabled = true;
     host.editor_state.set_single_selection(NodeId::new("cb"));
     assert_eq!(
         selected_checkbox(&host).checked,

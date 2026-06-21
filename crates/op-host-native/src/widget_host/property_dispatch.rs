@@ -250,6 +250,8 @@ impl WidgetHostNative {
                 let ui = &mut self.editor_state.editor_ui;
                 ui.padding_mode_popover_open = !ui.padding_mode_popover_open;
                 ui.padding_mode_popover_hover = None;
+                ui.stroke_mode_popover_open = false;
+                ui.stroke_mode_popover_hover = None;
                 ui.font_weight_picker_open = false;
                 ui.close_font_picker();
                 ui.close_fill_type_picker();
@@ -268,6 +270,29 @@ impl WidgetHostNative {
                 self.editor_state.editor_ui.padding_mode_popover_hover = None;
                 self.editor_state.commit_history();
                 let _ = self.editor_state.set_selected_padding_mode_shape(mode);
+            }
+            A::ToggleStrokeModePopover => {
+                let ui = &mut self.editor_state.editor_ui;
+                ui.stroke_mode_popover_open = !ui.stroke_mode_popover_open;
+                ui.stroke_mode_popover_hover = None;
+                ui.padding_mode_popover_open = false;
+                ui.padding_mode_popover_hover = None;
+                ui.font_weight_picker_open = false;
+                ui.close_font_picker();
+                ui.close_fill_type_picker();
+                ui.image_fill_popover_open = false;
+                ui.export_scale_picker_open = false;
+                ui.export_format_picker_open = false;
+                ui.property_color_variable_picker_open = None;
+            }
+            A::SetStrokeMode(mode) => {
+                let anchor = self.editor_state.selection.anchor.as_str().to_string();
+                self.editor_state.editor_ui.stroke_edit_mode = Some(mode);
+                self.editor_state.editor_ui.stroke_edit_mode_anchor = anchor;
+                self.editor_state.editor_ui.stroke_mode_popover_open = false;
+                self.editor_state.editor_ui.stroke_mode_popover_hover = None;
+                self.editor_state.commit_history();
+                let _ = self.editor_state.set_selected_stroke_mode_shape(mode);
             }
             A::OpenColorPicker(target) => {
                 // Fallback anchor when called outside the press path.

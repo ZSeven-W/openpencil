@@ -87,9 +87,11 @@ fn paint_effect_card(
     draw_icon(
         cx.backend,
         Icon::Minus,
+        // Centre the 14px glyph in its RemoveEffect wash cell
+        // (card_x+card_w-EFFECT_CARD_PAD-18, y+4, size 20×(INPUT_HEIGHT-4)).
         Point2D::new(
-            card_x + card_w - EFFECT_CARD_PAD - 16.0,
-            y + (EFFECT_TITLE_ROW_HEIGHT - 14.0) / 2.0,
+            card_x + card_w - EFFECT_CARD_PAD - 18.0 + (20.0 - 14.0) / 2.0,
+            y + 4.0 + (EFFECT_TITLE_ROW_HEIGHT - 4.0 - 14.0) / 2.0,
         ),
         14.0,
         theme.muted_foreground,

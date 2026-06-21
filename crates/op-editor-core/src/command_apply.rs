@@ -453,6 +453,11 @@ impl EditorState {
             EditorCommand::SetNodeStrokeWidth { node_id, width } => {
                 self.cmd_set_node_stroke_width(&node_id, width)
             }
+            EditorCommand::SetNodeStrokeSideWidth {
+                node_id,
+                side,
+                width,
+            } => self.cmd_set_node_stroke_side_width(&node_id, side, width),
             EditorCommand::SetNodeFillHex { node_id, hex } => {
                 self.cmd_set_node_fill_hex(&node_id, &hex)
             }

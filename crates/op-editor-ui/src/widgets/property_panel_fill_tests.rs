@@ -2,13 +2,12 @@ use jian_widgets::components::select::{SelectHit, SelectState};
 
 use crate::theme::Theme;
 use crate::widgets::property_panel::{PropertyPanel, PropertyPanelAction};
-use crate::widgets::property_panel_inputs::format_color_hex;
-use crate::widgets::property_panel_sections as sections;
-use crate::widgets::property_panel_test_support::{state_from, visible_for};
 use crate::widgets::property_panel_fill::{
     fill_type_at, fill_type_picker_hit, fill_type_picker_rect,
 };
-use crate::widgets::property_panel_visibility::VisibleSections;
+use crate::widgets::property_panel_inputs::format_color_hex;
+use crate::widgets::property_panel_sections as sections;
+use crate::widgets::property_panel_test_support::{state_from, visible_for};
 use crate::{Point2D, Rect};
 use op_editor_core::{FillType, NodeId, PropertyFocus};
 
@@ -45,15 +44,16 @@ fn fill_type_picker_hit_uses_shared_outside_protocol() {
         open: true,
         ..Default::default()
     };
-    let visible = VisibleSections::ALL;
-    let picker = fill_type_picker_rect(panel_rect, visible, 0.0);
+    let action_rect = Rect {
+        origin: Point2D::new(panel_rect.origin.x + 32.0, panel_rect.origin.y + 120.0),
+        size: Point2D::new(150.0, 30.0),
+    };
+    let picker = fill_type_picker_rect(action_rect);
 
     assert_eq!(
         fill_type_picker_hit(
             &state,
-            panel_rect,
-            visible,
-            0.0,
+            action_rect,
             Point2D::new(picker.origin.x + 8.0, picker.origin.y + 10.0),
             &Theme::dark(),
         ),
@@ -63,13 +63,68 @@ fn fill_type_picker_hit_uses_shared_outside_protocol() {
     assert_eq!(
         fill_type_picker_hit(
             &state,
-            panel_rect,
-            visible,
-            0.0,
+            action_rect,
             Point2D::new(picker.origin.x - 1.0, picker.origin.y),
             &Theme::dark(),
         ),
         SelectHit::Outside
+    );
+}
+
+#[test]
+fn fill_type_picker_hit_anchors_to_instance_toggle_action_rect() {
+    let mut state = state_from(
+        r##"{
+          "version":"0.8.0",
+          "children":[
+            {"type":"frame","id":"card","name":"Card","reusable":true,
+             "x":0,"y":0,"width":"fill_container","height":"fill_container",
+             "layout":"vertical",
+             "fill":[{"type":"solid","color":"#222222"}],
+             "children":[]},
+            {"type":"ref","id":"inst1","ref":"card","x":300,"y":50,
+             "descendants":{"card":{"fill":[{"type":"solid","color":"#ff8800"}]}}}
+          ]
+        }"##,
+    );
+    state.set_single_selection(NodeId::new("inst1"));
+    let mut panel = panel_for(&state);
+    panel.fill_type_picker.open = true;
+    panel.fill_type_picker_index = 0;
+
+    let rect = panel_rect();
+    let visible = visible_for(&panel);
+    assert!(
+        visible.create_component && visible.size_fill_width && visible.size_fill_height,
+        "fixture must exercise pre-Fill sections that can shift the fill row"
+    );
+    let toggle_rect = sections::action_button_rects(
+        rect,
+        visible,
+        &panel.snapshot.effects,
+        &panel.snapshot.fills,
+    )
+    .into_iter()
+    .find_map(|(action, rect)| {
+        matches!(action, PropertyPanelAction::ToggleFillTypePicker(0)).then_some(rect)
+    })
+    .expect("fill type toggle action rect");
+
+    let expected_popup_y = toggle_rect.origin.y + toggle_rect.size.y + 4.0;
+    let picker_rect = fill_type_picker_rect(toggle_rect);
+    assert!(
+        (picker_rect.origin.y - expected_popup_y).abs() < 0.01,
+        "open fill-type popup y must derive from ToggleFillTypePicker action rect: expected {expected_popup_y}, got {}",
+        picker_rect.origin.y
+    );
+
+    assert_eq!(
+        panel.fill_type_picker_hit(
+            rect,
+            Point2D::new(toggle_rect.origin.x + 8.0, expected_popup_y + 1.0)
+        ),
+        SelectHit::Row(0),
+        "open fill-type popup must hit-test below the emitted ToggleFillTypePicker action rect"
     );
 }
 

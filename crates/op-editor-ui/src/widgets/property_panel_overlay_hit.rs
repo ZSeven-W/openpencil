@@ -13,17 +13,20 @@ impl PropertyPanel {
         if !self.fill_type_picker.open {
             return SelectHit::Outside;
         }
-        // The picker overlay anchors below the targeted fill's dropdown.
-        let row_offset = crate::widgets::property_panel_fill::fill_row_offset(
-            &self.snapshot.fills,
-            self.fill_type_picker_index,
-            self.snapshot.gradient_stops.len(),
-        );
+        let Some(action_rect) =
+            crate::widgets::property_panel_sections::fill_type_toggle_action_rect(
+                self.scrolled_rect(panel_rect),
+                self.visible_sections(),
+                &self.snapshot.effects,
+                &self.snapshot.fills,
+                self.fill_type_picker_index,
+            )
+        else {
+            return SelectHit::Outside;
+        };
         crate::widgets::property_panel_fill::fill_type_picker_hit(
             &self.fill_type_picker,
-            self.scrolled_rect(panel_rect),
-            self.visible_sections(),
-            row_offset,
+            action_rect,
             point,
             &self.theme,
         )

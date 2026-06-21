@@ -68,9 +68,7 @@ impl AcpAgentConnectJob {
     /// fake outcome. Public (not `#[cfg(test)]`) so the desktop residual's
     /// `impl DesktopApp` tests can build one across the crate boundary.
     #[doc(hidden)]
-    pub fn pending_for_test(
-        id: impl Into<String>,
-    ) -> (Self, mpsc::Sender<AcpAgentProbeOutcome>) {
+    pub fn pending_for_test(id: impl Into<String>) -> (Self, mpsc::Sender<AcpAgentProbeOutcome>) {
         let (tx, rx) = mpsc::channel();
         (
             Self {

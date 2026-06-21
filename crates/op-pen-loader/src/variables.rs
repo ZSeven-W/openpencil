@@ -11,10 +11,10 @@
 
 use std::collections::BTreeMap;
 
-use op_editor_core::NodeId;
 use op_editor_core::scene_vars::{
     ThemeAxis, ThemedValue, Variable, VariableKind, VariableScalar, VariableTable, VariableValue,
 };
+use op_editor_core::NodeId;
 use serde::{Deserialize, Serialize};
 
 /// Tagged scalar — mirrors `VariableScalar`.

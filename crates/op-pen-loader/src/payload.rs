@@ -250,6 +250,8 @@ fn is_default_polygon_sides(value: &u32) -> bool {
 pub struct StrokePayload {
     pub color: [f32; 4],
     pub width: f32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sides: Option<[f32; 4]>,
 }
 
 /// One styled text segment, flattened in document order. Sentinels

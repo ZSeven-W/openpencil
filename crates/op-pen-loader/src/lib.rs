@@ -24,6 +24,7 @@ mod authored_geometry;
 mod effects;
 mod layout_repair;
 mod layout_scene;
+mod legacy_payload_repair;
 // Only the real-shaper (`skia-measure`) build benefits from caching; the
 // estimate backend is already cheap, so the module is gated to avoid dead code
 // under the CanvasKit (no-skia-measure) web build.

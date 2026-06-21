@@ -156,7 +156,9 @@ impl WidgetHostNative {
     ) -> bool {
         use op_editor_ui::widgets::{PropertyPanel, PropertyPanelAction as A, TOP_BAR_HEIGHT};
         use op_editor_ui::{Point2D, Rect};
-        if !self.editor_state.editor_ui.padding_mode_popover_open {
+        if !self.editor_state.editor_ui.padding_mode_popover_open
+            && !self.editor_state.editor_ui.stroke_mode_popover_open
+        {
             return false;
         }
         self.refresh_layout_scene();
@@ -172,7 +174,13 @@ impl WidgetHostNative {
                 ),
             };
             if let Some(action) = panel.hit_test_action(property_rect, Point2D::new(x, y)) {
-                if matches!(action, A::SetPaddingMode(_) | A::TogglePaddingModePopover) {
+                if matches!(
+                    action,
+                    A::SetPaddingMode(_)
+                        | A::TogglePaddingModePopover
+                        | A::SetStrokeMode(_)
+                        | A::ToggleStrokeModePopover
+                ) {
                     self.apply_property_action(action);
                     return true;
                 }
@@ -180,6 +188,8 @@ impl WidgetHostNative {
         }
         self.editor_state.editor_ui.padding_mode_popover_open = false;
         self.editor_state.editor_ui.padding_mode_popover_hover = None;
+        self.editor_state.editor_ui.stroke_mode_popover_open = false;
+        self.editor_state.editor_ui.stroke_mode_popover_hover = None;
         self.mark_dirty();
         true
     }
@@ -194,7 +204,9 @@ impl WidgetHostNative {
     ) -> bool {
         use op_editor_ui::widgets::{PropertyPanel, PropertyPanelAction as A, TOP_BAR_HEIGHT};
         use op_editor_ui::{Point2D, Rect};
-        if !self.editor_state.editor_ui.padding_mode_popover_open {
+        if !self.editor_state.editor_ui.padding_mode_popover_open
+            && !self.editor_state.editor_ui.stroke_mode_popover_open
+        {
             return false;
         }
         self.refresh_layout_scene();
@@ -213,15 +225,34 @@ impl WidgetHostNative {
                 Some(A::SetPaddingMode(mode)) => op_editor_core::PaddingEditMode::ALL
                     .iter()
                     .position(|m| *m == mode),
+                Some(A::SetStrokeMode(mode)) => op_editor_core::PaddingEditMode::ALL
+                    .iter()
+                    .position(|m| *m == mode),
                 _ => None,
             }
         });
-        if new_hover != self.editor_state.editor_ui.padding_mode_popover_hover {
+        let padding_changed = if self.editor_state.editor_ui.padding_mode_popover_open
+            && new_hover != self.editor_state.editor_ui.padding_mode_popover_hover
+        {
             self.editor_state.editor_ui.padding_mode_popover_hover = new_hover;
+            true
+        } else {
+            false
+        };
+        let stroke_changed = if self.editor_state.editor_ui.stroke_mode_popover_open
+            && new_hover != self.editor_state.editor_ui.stroke_mode_popover_hover
+        {
+            self.editor_state.editor_ui.stroke_mode_popover_hover = new_hover;
+            true
+        } else {
+            false
+        };
+        if padding_changed || stroke_changed {
             self.mark_dirty();
-            return true;
+            true
+        } else {
+            false
         }
-        false
     }
 
     /// Track the font-weight dropdown row under the cursor so the open

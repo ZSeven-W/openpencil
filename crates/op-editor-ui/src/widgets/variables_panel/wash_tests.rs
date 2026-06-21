@@ -115,7 +115,8 @@ fn footer_add_variable_hover_wash_left_aligned_and_hugs_content() {
         size: Point2D::new(VARIABLES_PANEL_WIDTH, 480.0),
     };
     let button = add_variable_rect(rect);
-    let wash = hover_wash(&s).expect("hovered add-variable footer should paint a button_hover wash");
+    let wash =
+        hover_wash(&s).expect("hovered add-variable footer should paint a button_hover wash");
     // Pill is flush with the footer's (and rows') left edge — no centering gap.
     assert!(
         (wash.origin.x - button.origin.x).abs() < 0.01,

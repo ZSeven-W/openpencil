@@ -154,6 +154,7 @@ fn measure_line_slices(
     base_font_size: f32,
     base_weight: u16,
     ink: Color,
+    family: &str,
     letter_spacing: f32,
 ) -> f32 {
     let mut w = 0.0;
@@ -167,10 +168,16 @@ fn measure_line_slices(
             run.map(|i| &node.text_runs[i]),
         );
         let slice = &text[start..end];
-        w += backend.measure_text_styled(slice, style.font_size, style.weight, style.italic);
+        w += backend.measure_text_family_styled(
+            slice,
+            style.font_size,
+            family,
+            style.weight,
+            style.italic,
+        );
         chars += slice.chars().count();
     });
-    w + chars.saturating_sub(1) as f32 * letter_spacing
+    w + chars.saturating_sub(1) as f32 * letter_spacing.max(0.0)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -185,15 +192,20 @@ fn draw_slice(
     justify_extra: f32,
 ) -> (f32, f32) {
     let jc = (style.color).to_jian();
-    if letter_spacing.abs() < f32::EPSILON && justify_extra <= 0.0 {
+    if letter_spacing <= 0.0 && justify_extra <= 0.0 {
         backend.draw_text(
             &TextLayout::single_run(slice, family, style.font_size, jc, Point2D::ZERO)
                 .with_font_weight(style.weight)
                 .with_italic(style.italic),
             Point2D::new(x, baseline_y),
         );
-        let advance =
-            backend.measure_text_styled(slice, style.font_size, style.weight, style.italic);
+        let advance = backend.measure_text_family_styled(
+            slice,
+            style.font_size,
+            family,
+            style.weight,
+            style.italic,
+        );
         return (x + advance, x + advance);
     }
     // Per-char path — letter spacing after every glyph (legacy painter
@@ -209,7 +221,13 @@ fn draw_slice(
                 .with_italic(style.italic),
             Point2D::new(cursor, baseline_y),
         );
-        let adv = backend.measure_text_styled(s, style.font_size, style.weight, style.italic);
+        let adv = backend.measure_text_family_styled(
+            s,
+            style.font_size,
+            family,
+            style.weight,
+            style.italic,
+        );
         glyph_end = cursor + adv;
         cursor = glyph_end + letter_spacing;
         if ch == ' ' {
@@ -348,6 +366,7 @@ pub(crate) fn paint_text_node(
                 font_size,
                 weight,
                 ink,
+                family,
                 letter_spacing,
             );
             let x0 = match paint_node.text_align {
@@ -675,6 +694,20 @@ mod tests {
         // Last line unjustified, starts at the left edge.
         assert_eq!(backend.origins[5].x, 0.0);
         assert_eq!(backend.contents[5], "cc");
+    }
+
+    #[test]
+    fn negative_letter_spacing_keeps_text_as_one_shaped_run() {
+        let mut node = text_node("Overview");
+        node.letter_spacing = -1.0;
+        let mut backend = CaptureBackend::default();
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+
+        paint_text_node(&mut cx, &node, node.bounds, 1.0, &None);
+
+        assert_eq!(backend.contents, vec!["Overview".to_string()]);
     }
 
     #[test]

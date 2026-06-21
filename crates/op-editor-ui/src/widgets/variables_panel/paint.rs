@@ -1,6 +1,8 @@
 use super::*;
 use crate::widgets::button::paint_button_feedback_wash;
-use crate::widgets::property_panel_text_input::{paint_text_input_view, paint_text_input_view_value};
+use crate::widgets::property_panel_text_input::{
+    paint_text_input_view, paint_text_input_view_value,
+};
 use crate::widgets::{draw_icon, Icon, PaintCx};
 use crate::{Color, Point2D, Rect};
 
@@ -290,7 +292,13 @@ fn paint_variant_header(
                 origin: Point2D::new(wash_left, header_bottom + 4.0),
                 size: Point2D::new((wash_right - wash_left).max(0.0), 30.0),
             };
-            paint_feedback(panel, cx, VariablesPanelButton::VariantHeader(idx), wash, 8.0);
+            paint_feedback(
+                panel,
+                cx,
+                VariablesPanelButton::VariantHeader(idx),
+                wash,
+                8.0,
+            );
             paint_text(
                 cx,
                 variant,

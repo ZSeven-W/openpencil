@@ -153,6 +153,12 @@ fn dragging_a_selection_with_a_locked_node_does_not_drift_it_in_the_scene() {
     // ...the locked node, which `translate_selected` leaves untouched, must not
     // drift — otherwise it would jump and then snap back on the release-time
     // reconversion.
-    assert_eq!(locked_after.x, locked_before.x, "locked node must not drift in x");
-    assert_eq!(locked_after.y, locked_before.y, "locked node must not drift in y");
+    assert_eq!(
+        locked_after.x, locked_before.x,
+        "locked node must not drift in x"
+    );
+    assert_eq!(
+        locked_after.y, locked_before.y,
+        "locked node must not drift in y"
+    );
 }

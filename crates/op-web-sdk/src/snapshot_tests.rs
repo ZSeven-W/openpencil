@@ -39,7 +39,10 @@ fn document_json_returns_empty_on_no_doc() {
     let v = super::Viewer::placeholder();
     // No document loaded — must return exactly "{}" (the documented default).
     let j = v.document_json().unwrap();
-    assert_eq!(j, "{}", "document_json must return \"{{}}\" when no doc is loaded, got: {j}");
+    assert_eq!(
+        j, "{}",
+        "document_json must return \"{{}}\" when no doc is loaded, got: {j}"
+    );
 }
 
 #[test]
@@ -54,12 +57,23 @@ fn pages_json_single_page_fallback_exposes_children() {
     v.load(DOC_SINGLE_PAGE_FALLBACK).unwrap();
     let j = v.pages_json().unwrap();
     // Must be a non-empty JSON array containing our node.
-    assert!(j.starts_with('[') && !j.starts_with("[]"),
-        "expected non-empty array for single-page fallback, got: {j}");
-    assert!(j.contains("rectangle"), "expected node type value in pages_json result: {j}");
+    assert!(
+        j.starts_with('[') && !j.starts_with("[]"),
+        "expected non-empty array for single-page fallback, got: {j}"
+    );
+    assert!(
+        j.contains("rectangle"),
+        "expected node type value in pages_json result: {j}"
+    );
     // Synthetic page must carry the documented sentinel fields.
-    assert!(j.contains("\"id\":\"default\""), "expected synthetic page id in: {j}");
-    assert!(j.contains("\"name\":\"Page 1\""), "expected synthetic page name in: {j}");
+    assert!(
+        j.contains("\"id\":\"default\""),
+        "expected synthetic page id in: {j}"
+    );
+    assert!(
+        j.contains("\"name\":\"Page 1\""),
+        "expected synthetic page name in: {j}"
+    );
 }
 
 #[test]

@@ -207,7 +207,9 @@ impl DesktopApp {
                         // can detect edits made *during* the async
                         // pull — those the confirm above did not cover.
                         self.git_pull_doc_baseline =
-                            Some(op_host_services::doc_io::document_fingerprint(self.host.editor_state()));
+                            Some(op_host_services::doc_io::document_fingerprint(
+                                self.host.editor_state(),
+                            ));
                         self.host.editor_state_mut().editor_ui.git_panel.pulling = true;
                     }
                 }
@@ -290,7 +292,10 @@ impl DesktopApp {
                 } else if !message.is_empty() {
                     match self.git_session.tracked_file().map(|p| p.to_path_buf()) {
                         Some(path) => {
-                            match op_host_services::doc_io::save_to_path(self.host.editor_state(), &path) {
+                            match op_host_services::doc_io::save_to_path(
+                                self.host.editor_state(),
+                                &path,
+                            ) {
                                 Ok(()) => {
                                     self.mark_document_saved();
                                     // Stage, then guard against an empty

@@ -986,9 +986,14 @@ mod tests {
             false,
             false,
         );
-        assert!(!rest.svgs.is_empty(), "compound button should stroke glyphs");
         assert!(
-            rest.svgs.iter().all(|c| color_eq(*c, theme.muted_foreground)),
+            !rest.svgs.is_empty(),
+            "compound button should stroke glyphs"
+        );
+        assert!(
+            rest.svgs
+                .iter()
+                .all(|c| color_eq(*c, theme.muted_foreground)),
             "folder + chevron should be muted (grayed) at rest"
         );
 

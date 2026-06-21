@@ -14,6 +14,7 @@ use op_host_native::WidgetHostNative;
 use op_orchestrator::{classify_intent, Intent};
 
 use crate::chat_acp::AcpProvider;
+use op_editor_host_core::design::DesignSession;
 use op_host_services::chat_builtin_http::ConfiguredBuiltinProvider;
 use op_host_services::chat_canvas_tools::{chat_tool_channel, chat_tool_defs, ChatToolRequest};
 use op_host_services::chat_claude::ClaudeCodeProvider;
@@ -24,7 +25,6 @@ use op_host_services::chat_subprocess::SubprocessProvider;
 use op_host_services::chat_system_prompt::{
     build_agent_system_prompt, build_chat_system_prompt, chat_history_from_transcript,
 };
-use op_editor_host_core::design::DesignSession;
 
 use super::ChatSession;
 
@@ -90,11 +90,17 @@ pub fn launch_if_pending(
             if clear_fresh_starter_frame_for_design(host.editor_state_mut()) {
                 host.mark_editor_state_dirty();
             }
-            let append_context =
-                op_host_services::chat_intent::detect_append_intent(host.editor_state(), &user_text);
+            let append_context = op_host_services::chat_intent::detect_append_intent(
+                host.editor_state(),
+                &user_text,
+            );
             let initial_state = host.editor_state().clone();
             let request = build_design_request(user_text, &initial_state, append_context);
-            *current_design = Some(op_host_services::design_session::start(llm, request, initial_state));
+            *current_design = Some(op_host_services::design_session::start(
+                llm,
+                request,
+                initial_state,
+            ));
             return true;
         }
         // Design intent but the selected agent has no ChatProvider
