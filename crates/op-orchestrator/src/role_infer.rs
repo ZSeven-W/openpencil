@@ -102,6 +102,15 @@ static NAME_PATTERN_MAP: LazyLock<Vec<(Regex, &'static str, bool)>> = LazyLock::
         (Regex::new(r"\bform\b").unwrap(), "form-group", false),
         (Regex::new(r"\bsearch").unwrap(), "search-bar", false),
         (Regex::new(r"\bnav\s*link").unwrap(), "nav-link", false),
+        // Bottom tab bars: "Bottom Navigation Bar", "Bottom Tab Bar", "Tab
+        // Bar". Must precede the generic `nav` exact-map so it wins the
+        // bottom-specific role (drives the upward lift shadow + nav-surface
+        // inject). skip_containers=false: the trailing "Bar" IS the role here.
+        (
+            Regex::new(r"bottom\s*(tab|nav)|\btab\s*bar\b").unwrap(),
+            "bottom-tab-bar",
+            false,
+        ),
         (Regex::new(r"\bstat").unwrap(), "stat-card", true),
         (Regex::new(r"\bpricing").unwrap(), "pricing-card", true),
         (
@@ -240,6 +249,34 @@ fn resolve_node_role(node: &mut PenNode, parent_role: Option<&str>) {
     if CARD_LIKE_ROLES.contains(&role_str.as_str()) && is_absurdly_tiny_for_card_role(node) {
         node.base_mut().role = None;
         return;
+    }
+
+    // Section-wrapper guard (BOTH explicit + inferred roles, like the tiny-card
+    // guard above). A card-like / search-bar / input role on a TOP-LEVEL section
+    // (`parent_role` None) that is actually a multi-block layout WRAPPER is a
+    // false positive from loose name matching: "Categories & Featured Banner"
+    // hits `\bfeature` → feature-card, "Location & Search" hits `\bsearch` →
+    // search-bar — but both are section wrappers, not a single card / search
+    // field. Left in place, `apply_role_defaults` injects a card fill + border +
+    // radius that boxes the whole section (the "mysterious background" the user
+    // flagged). Heuristic: a real card groups LEAF content (icon/title/text); a
+    // real search bar holds an icon + the input, not sub-frames. So ≥2 sub-frames
+    // (card) or ≥1 sub-frame (search/input) means it's a wrapper → drop the role.
+    if parent_role.is_none() {
+        let sub_frames = node
+            .children()
+            .map(|c| {
+                c.iter()
+                    .filter(|n| matches!(n, PenNode::Frame(_) | PenNode::Group(_)))
+                    .count()
+            })
+            .unwrap_or(0);
+        let card_like = CARD_LIKE_ROLES.contains(&role_str.as_str());
+        let input_like = role_str == "search-bar" || role_str == "input";
+        if (card_like && sub_frames >= 2) || (input_like && sub_frames >= 1) {
+            node.base_mut().role = None;
+            return;
+        }
     }
 
     node.base_mut().role = Some(role_str);

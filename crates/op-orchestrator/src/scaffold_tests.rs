@@ -87,6 +87,62 @@ fn build_scaffold_mobile_injects_status_bar() {
     }
 }
 
+// ── Section-stack gap default (breathing room between sections) ─────────────
+
+#[test]
+fn resolve_section_gap_defaults_to_20_when_unset_or_zero() {
+    // The LLM frequently omits the page gap (None) or emits 0 → sections touch.
+    // Both fall back to the canonical 20 px so the page breathes like the TS refs.
+    assert_eq!(resolve_section_gap(None), 20.0);
+    assert_eq!(resolve_section_gap(Some(0.0)), 20.0);
+    // An explicit positive gap is the design's intent — honor it.
+    assert_eq!(resolve_section_gap(Some(12.0)), 12.0);
+    assert_eq!(resolve_section_gap(Some(32.0)), 32.0);
+}
+
+#[test]
+fn build_scaffold_root_gap_breathes_when_plan_gap_is_zero() {
+    // plan() authors gap: Some(0.0); the scaffold root must still carry 20.
+    let cmds = build_scaffold(&plan(), true).expect("scaffold");
+    match &cmds[0] {
+        EditorCommand::InsertSubtree { nodes, .. } => {
+            let json = serde_json::to_value(&nodes[0]).expect("root json");
+            assert_eq!(json["gap"], 20.0, "zero plan gap must breathe at 20px");
+        }
+        other => panic!("expected InsertSubtree, got {other:?}"),
+    }
+}
+
+// ── TS `replaceEmptyFrame` parity: reuse the starter in place ───────────────
+
+#[test]
+fn build_scaffold_reusing_emits_replace_subtree_with_reused_id() {
+    // The fresh-canvas starter has a different id ("n10") than the planned
+    // root ("root"); reuse must stamp the built root with the STARTER's id
+    // (so the slot is preserved in place) and replace its subtree — never
+    // insert a brand-new root beside it.
+    let cmds = build_scaffold_reusing(&plan(), false, "n10").expect("reuse scaffold");
+    assert_eq!(cmds.len(), 1);
+    match &cmds[0] {
+        EditorCommand::ReplaceSubtree {
+            node_id,
+            node,
+            drop_children,
+            ..
+        } => {
+            assert_eq!(node_id.as_str(), "n10");
+            assert!(
+                *drop_children,
+                "must drop the empty starter's (absent) children"
+            );
+            // The built root carries the reused id, not the plan's "root".
+            assert_eq!(node.id_str(), "n10");
+            assert!(node.children().map(|c| c.is_empty()).unwrap_or(true));
+        }
+        other => panic!("expected ReplaceSubtree, got {other:?}"),
+    }
+}
+
 #[test]
 fn build_scaffold_mobile_status_bar_uses_fixed_icon_positions() {
     let cmds = build_scaffold(&plan(), true).expect("scaffold");

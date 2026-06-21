@@ -301,6 +301,67 @@ fn cleanup_injects_missing_bottom_nav_surface_on_light_mobile_root() {
 }
 
 #[test]
+fn cleanup_leaves_top_navbar_transparent_on_light_mobile_root() {
+    // The top header is transparent on mobile (TS references). A previous
+    // version of `is_nav_surface` matched `role:"navbar"`, so this pass re-filled
+    // the header with the root surface hex + a downward shadow — the "mysterious
+    // background + rounded border" the user flagged. The bottom nav still gets a
+    // surface; the top header must be left untouched.
+    let mut sink = VecDocSink::new();
+    let tree: PenNode = serde_json::from_value(json!({
+        "type": "frame",
+        "id": "root",
+        "name": "Brooklyn Food Delivery",
+        "x": 80, "y": 40, "width": 390, "height": 844,
+        "layout": "vertical",
+        "fill": [{ "type": "solid", "color": "#FFF8F0" }],
+        "children": [
+            {
+                "type": "frame", "id": "header", "name": "Header", "role": "navbar",
+                "width": "fill_container", "height": 56, "children": []
+            },
+            {
+                "type": "frame", "id": "content", "name": "Content",
+                "width": "fill_container", "height": 704, "children": []
+            },
+            {
+                "type": "frame", "id": "bottom-nav", "name": "Bottom Navigation",
+                "role": "bottom-tab-bar", "width": "fill_container", "height": 84, "children": []
+            }
+        ]
+    }))
+    .expect("mobile root json");
+    sink.state.apply(EditorCommand::InsertSubtree {
+        nodes: vec![tree],
+        parent_id: NodeId::NONE,
+        page_id: None,
+    });
+    let root_id = sink.state.active_children()[0].id_str().to_string();
+    sink.applied.clear();
+
+    run_cleanup_passes(&mut sink, &plan(), &[&root_id]);
+
+    // The bottom nav is still repaired → a downward (offsetY = -4) shadow exists.
+    assert!(
+        sink.applied.iter().any(|c| matches!(
+            c,
+            EditorCommand::SetEffectParam { field: EffectField::OffsetY, value, .. }
+                if (*value - -4.0).abs() < f32::EPSILON
+        )),
+        "bottom nav should still receive its upward-pointing shadow"
+    );
+    // The top header is NOT repaired → no downward (offsetY = +4) header shadow.
+    assert!(
+        !sink.applied.iter().any(|c| matches!(
+            c,
+            EditorCommand::SetEffectParam { field: EffectField::OffsetY, value, .. }
+                if (*value - 4.0).abs() < f32::EPSILON
+        )),
+        "top navbar must stay transparent — no surface shadow re-boxing it"
+    );
+}
+
+#[test]
 fn cleanup_recolors_white_bottom_nav_to_tinted_mobile_root_surface() {
     let mut sink = VecDocSink::new();
     let tree: PenNode = serde_json::from_value(json!({

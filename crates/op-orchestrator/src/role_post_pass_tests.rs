@@ -121,21 +121,307 @@ fn orphan_skipped_without_corner_radius() {
 }
 
 #[test]
-fn orphan_skips_unroled_layout_carousel_shell() {
-    let mut shell = json!({
-        "type":"frame","name":"Promo Carousel Viewport","cornerRadius":20,
-        "layout":"horizontal","children":[
-            {"type":"frame","role":"banner","children":[{"type":"text","content":"50%"}]}
-        ]
+fn orphan_skipped_for_roleless_container() {
+    // A roleless rounded container is NOT assumed to be a card. Rust role
+    // inference is thinner than TS, so roleless wrappers (header / section /
+    // banner) are common; white-washing them is what produced the spurious
+    // panels behind the header / banner / search row.
+    let mut wrap = json!({
+        "type":"frame","cornerRadius":16,
+        "children":[{"type":"frame","role":"section","children":[{"type":"text"}]}]
     });
-    fix_orphan_container_contrast(&mut shell, Some(&Value::Null));
+    fix_orphan_container_contrast(&mut wrap, Some(&Value::Null));
     assert!(
-        shell.get("fill").is_none(),
-        "a rounded unroled layout/carousel frame must not become a white card shell"
+        wrap.get("fill").is_none(),
+        "roleless container is not white-washed into a card"
+    );
+}
+
+#[test]
+fn orphan_skipped_when_child_container_paints_surface() {
+    // glm wraps an orange promo banner in a bare `feature-card` frame. The child
+    // (Promo Card) carries the full-bleed gradient, so the wrapper must NOT be
+    // whitewashed — doing so leaks the injected drop-shadow out as a gray ghost
+    // box around the orange child (the user's "mysterious bg + rounded border").
+    let mut wrap = json!({
+        "type":"frame","role":"feature-card","cornerRadius":12,
+        "children":[{
+            "type":"frame","role":"card",
+            "fill":[{"type":"linear_gradient","angle":135,"stops":[
+                {"offset":0.0,"color":"#FB923C"},{"offset":1.0,"color":"#F97316"}]}],
+            "children":[{"type":"text","content":"50% Off"}]
+        }]
+    });
+    fix_orphan_container_contrast(&mut wrap, Some(&Value::Null));
+    assert!(
+        wrap.get("fill").is_none(),
+        "wrapper around a filled card stays transparent"
     );
     assert!(
-        shell.get("effects").is_none(),
-        "a structural shell must not get card shadow"
+        wrap.get("effects").is_none(),
+        "no ghost shadow injected onto the bare wrapper"
+    );
+}
+
+// ── orphaned-shadow strip (ghost-box cleanup) ────────────────────────────
+
+#[test]
+fn orphaned_shadow_stripped_from_fill_less_frame() {
+    // A drop-shadow with no surface (no fill, no stroke) is a gray ghost box.
+    let mut node = json!({
+        "type":"frame","cornerRadius":12,
+        "effects":[{"type":"shadow","offsetX":0,"offsetY":1,"blur":3,"spread":0,"color":"#0000001A"}],
+        "children":[{"type":"frame","role":"card","fill":[{"type":"solid","color":"#FB923C"}]}]
+    });
+    fix_surface_color_discipline(&mut node, false);
+    assert!(
+        node.get("effects").is_none(),
+        "shadow on a fill-less, stroke-less frame is stripped"
+    );
+}
+
+#[test]
+fn shadow_kept_when_node_has_visible_fill() {
+    // A real card (visible fill) keeps its elevation shadow.
+    let mut node = json!({
+        "type":"frame","role":"card","cornerRadius":12,
+        "fill":[{"type":"solid","color":"#FFFFFF"}],
+        "effects":[{"type":"shadow","offsetX":0,"offsetY":1,"blur":3,"spread":0,"color":"#0000001A"}],
+    });
+    fix_surface_color_discipline(&mut node, false);
+    assert!(node["effects"].is_array(), "a filled card keeps its shadow");
+}
+
+// ── fixStructuralWrapperTransparency ─────────────────────────────────────
+
+#[test]
+fn structural_wrapper_white_fill_stripped() {
+    // A section wrapper that glm gave an explicit white fill → forced transparent.
+    let mut sect = json!({
+        "type":"frame","role":"section","fill":[{"type":"solid","color":"#FFFFFF"}],
+        "children":[{"type":"text","content":"x"}]
+    });
+    fix_structural_wrapper_transparency(&mut sect);
+    assert_eq!(
+        sect["fill"],
+        json!([]),
+        "white structural wrapper → transparent"
+    );
+}
+
+#[test]
+fn structural_wrapper_keeps_card_fill() {
+    // card is in CARD_LIKE_ALLOWLIST — an intentional surface, fill stays.
+    let mut card = json!({
+        "type":"frame","role":"card","fill":[{"type":"solid","color":"#FFFFFF"}],
+        "children":[{"type":"text","content":"x"}]
+    });
+    fix_structural_wrapper_transparency(&mut card);
+    assert_eq!(
+        card["fill"],
+        json!([{"type":"solid","color":"#FFFFFF"}]),
+        "card keeps its white surface"
+    );
+}
+
+#[test]
+fn redundant_colored_wrapper_strips_light_surface() {
+    // feature-card with a $color-surface fill wrapping a single full-bleed
+    // gradient banner child → its surface is a redundant box, strip it.
+    let mut wrap = json!({
+        "type":"frame","role":"feature-card","cornerRadius":12,
+        "fill":[{"type":"solid","color":"$color-surface"}],
+        "children":[
+            {
+                "type":"frame","role":"card","width":"fill_container",
+                "fill":[{"type":"linear_gradient","angle":135,"stops":[
+                    {"offset":0.0,"color":"$color-chart-6"},{"offset":1.0,"color":"#FB923C"}]}],
+                "children":[{"type":"text","content":"50% Off"}]
+            },
+            {"type":"text","content":"-30%"}
+        ]
+    });
+    fix_structural_wrapper_transparency(&mut wrap);
+    assert_eq!(
+        wrap["fill"],
+        json!([]),
+        "redundant wrapper around a full-bleed colored card → transparent"
+    );
+}
+
+#[test]
+fn card_with_small_colored_child_keeps_fill() {
+    // A real card whose colored child is NOT full-bleed (a small icon tile) is
+    // a genuine surface — must keep its fill.
+    let mut card = json!({
+        "type":"frame","role":"card","fill":[{"type":"solid","color":"#FFFFFF"}],
+        "children":[
+            {
+                "type":"frame","role":"icon-tile","width":48,
+                "fill":[{"type":"solid","color":"#FB923C"}],
+                "children":[]
+            },
+            {"type":"text","content":"Title"}
+        ]
+    });
+    fix_structural_wrapper_transparency(&mut card);
+    assert_eq!(
+        card["fill"],
+        json!([{"type":"solid","color":"#FFFFFF"}]),
+        "card with a small colored tile keeps its surface"
+    );
+}
+
+#[test]
+fn structural_wrapper_keeps_dark_fill() {
+    // A dark section fill (luminance well below 0.85) is a deliberate band → kept.
+    let mut sect = json!({
+        "type":"frame","role":"section","fill":[{"type":"solid","color":"#1A1A1A"}],
+        "children":[{"type":"text","content":"x"}]
+    });
+    fix_structural_wrapper_transparency(&mut sect);
+    assert_eq!(
+        sect["fill"],
+        json!([{"type":"solid","color":"#1A1A1A"}]),
+        "dark structural band is intentional, not stripped"
+    );
+}
+
+#[test]
+fn structural_wrapper_section_substring_and_header_stripped() {
+    // role *containing* "section" (e.g. a custom "feature-section") → stripped.
+    let mut feat = json!({
+        "type":"frame","role":"feature-section","fill":[{"type":"solid","color":"#FAFAFA"}],
+        "children":[{"type":"text"}]
+    });
+    fix_structural_wrapper_transparency(&mut feat);
+    assert_eq!(feat["fill"], json!([]), "*-section role → transparent");
+    // header is structural too.
+    let mut header = json!({
+        "type":"frame","role":"header","fill":[{"type":"solid","color":"#FFFFFF"}],
+        "children":[{"type":"text"}]
+    });
+    fix_structural_wrapper_transparency(&mut header);
+    assert_eq!(header["fill"], json!([]), "header → transparent");
+}
+
+#[test]
+fn structural_wrapper_surface_variable_ref_stripped() {
+    // glm emits UNRESOLVED $color-* refs (variable binding runs after post-pass),
+    // so hex_luminance can't read them — the strip must match neutral surface
+    // tokens by name. This is the actual header-background bug: role navbar +
+    // fill $color-surface-2 was surviving because luminance("$color-surface-2")
+    // returned None.
+    let mut header = json!({
+        "type":"frame","role":"navbar","fill":[{"type":"solid","color":"$color-surface-2"}],
+        "children":[{"type":"text"}]
+    });
+    fix_structural_wrapper_transparency(&mut header);
+    assert_eq!(
+        header["fill"],
+        json!([]),
+        "navbar with $color-surface-2 → transparent"
+    );
+    // A colored token (deliberate accent band) is NOT a neutral surface → kept.
+    let mut band = json!({
+        "type":"frame","role":"section","fill":[{"type":"solid","color":"$color-accent"}],
+        "children":[{"type":"text"}]
+    });
+    fix_structural_wrapper_transparency(&mut band);
+    assert_eq!(
+        band["fill"],
+        json!([{"type":"solid","color":"$color-accent"}]),
+        "deliberate colored band kept"
+    );
+}
+
+#[test]
+fn structural_wrapper_strips_border_with_fill() {
+    // The mobile header (role navbar) carried a $color-surface fill AND a bottom
+    // hairline stroke — the user flagged BOTH the background and the border.
+    // Stripping the surface fill must drop the accompanying border too; a
+    // transparent structural wrapper keeps no card/bar chrome.
+    let mut header = json!({
+        "type":"frame","role":"navbar","fill":[{"type":"solid","color":"$color-surface"}],
+        "stroke":{"thickness":[0,0,1,0],"fill":[{"type":"solid","color":"$color-border"}]},
+        "children":[{"type":"text"}]
+    });
+    fix_structural_wrapper_transparency(&mut header);
+    assert_eq!(header["fill"], json!([]), "surface fill stripped");
+    assert!(
+        header.get("stroke").is_none(),
+        "bottom border stripped alongside the fill"
+    );
+}
+
+#[test]
+fn structural_wrapper_non_structural_role_left_alone() {
+    // A plain content role that isn't structural and isn't card-like → untouched.
+    let mut text = json!({
+        "type":"text","role":"body","fill":[{"type":"solid","color":"#FFFFFF"}]
+    });
+    fix_structural_wrapper_transparency(&mut text);
+    assert_eq!(
+        text["fill"],
+        json!([{"type":"solid","color":"#FFFFFF"}]),
+        "non-structural role is out of scope"
+    );
+}
+
+// ── fixSurfaceColorDiscipline ────────────────────────────────────────────
+
+#[test]
+fn state_bg_token_on_input_recolored_to_neutral() {
+    // The pink-search bug: glm used $color-danger-bg as the input surface.
+    let mut input = json!({
+        "type":"text_input","name":"Search Input",
+        "fill":[{"type":"solid","color":"$color-danger-bg"}]
+    });
+    fix_surface_color_discipline(&mut input, false);
+    assert_eq!(
+        input["fill"],
+        json!([{"type":"solid","color":"$color-surface-2"}]),
+        "danger-bg misused as input surface → neutral surface-2"
+    );
+}
+
+#[test]
+fn state_bg_token_kept_on_status_element() {
+    // A real status element (name says "Error") legitimately uses danger-bg.
+    let mut badge = json!({
+        "type":"frame","role":"badge","name":"Error Badge",
+        "fill":[{"type":"solid","color":"$color-danger-bg"}],
+        "children":[{"type":"text","content":"Failed"}]
+    });
+    fix_surface_color_discipline(&mut badge, false);
+    assert_eq!(
+        badge["fill"],
+        json!([{"type":"solid","color":"$color-danger-bg"}]),
+        "status element keeps its semantic state color"
+    );
+}
+
+#[test]
+fn page_bg_token_stripped_from_inner_node_kept_on_root() {
+    // Inner wrapper repainting the page bg (the cool grey panel behind search).
+    let mut root = json!({
+        "type":"frame","name":"Page","fill":[{"type":"solid","color":"$color-bg-deep"}],
+        "children":[
+            {"type":"frame","name":"Search & Categories",
+             "fill":[{"type":"solid","color":"$color-bg-deep"}],
+             "children":[{"type":"text_input","name":"Search"}]}
+        ]
+    });
+    fix_surface_color_discipline(&mut root, true);
+    assert_eq!(
+        root["fill"],
+        json!([{"type":"solid","color":"$color-bg-deep"}]),
+        "page root keeps the page-bg token"
+    );
+    assert_eq!(
+        root["children"][0]["fill"],
+        json!([]),
+        "inner wrapper using the page-bg token → transparent"
     );
 }
 
@@ -197,101 +483,6 @@ fn input_siblings_unified_to_first() {
         form["children"][1]["fill"],
         json!([{"type":"solid","color":"#F8FAFC"}]),
         "second input adopts the first input's fill"
-    );
-}
-
-#[test]
-fn nested_search_shell_is_flattened_to_neutral_row() {
-    let mut row = json!({
-        "type":"frame","name":"Search Shell","layout":"horizontal","cornerRadius":28,
-        "padding":[12,16],"gap":14,
-        "fill":[{"type":"solid","color":"#DBEAFE"}],
-        "stroke":{"thickness":1,"fill":[{"type":"solid","color":"#BFDBFE"}]},
-        "effects":[{"type":"shadow","offsetY":4,"blur":16,"color":"#00000022"}],
-        "children":[
-            {
-                "type":"frame","role":"form-input","height":48,"cornerRadius":12,
-                "fill":[{"type":"solid","color":"#FADADA"}],
-                "stroke":{"thickness":1,"fill":[{"type":"solid","color":"#E5E7EB"}]},
-                "children":[{"type":"path","name":"SearchIcon","width":20,"height":20}]
-            },
-            {
-                "type":"frame","role":"icon-button","width":52,"height":52,
-                "fill":[{"type":"solid","color":"#FF6B00"}],
-                "children":[{"type":"path","name":"SlidersHorizontalIcon","width":20,"height":20}]
-            }
-        ]
-    });
-    normalize_nested_search_shell(&mut row);
-    assert!(
-        row.get("fill").is_none(),
-        "outer search shell fill is visual noise"
-    );
-    assert!(
-        row.get("stroke").is_none(),
-        "outer search shell stroke is visual noise"
-    );
-    assert!(
-        row.get("effects").is_none(),
-        "outer search shell shadow is visual noise"
-    );
-    assert!(
-        row.get("cornerRadius").is_none(),
-        "outer shell should not read as a second input"
-    );
-    assert_eq!(
-        row["children"][0]["fill"],
-        json!([{"type":"solid","color":"#FFFFFF"}]),
-        "nested search input is neutralized instead of keeping a pink fill"
-    );
-}
-
-#[test]
-fn standalone_search_bar_keeps_its_surface() {
-    let mut search = json!({
-        "type":"frame","role":"search-bar","layout":"horizontal","cornerRadius":22,
-        "fill":[{"type":"solid","color":"#F8FAFC"}],
-        "children":[
-            {"type":"path","name":"SearchIcon","width":20,"height":20},
-            {"type":"text","content":"Search"}
-        ]
-    });
-    normalize_nested_search_shell(&mut search);
-    assert_eq!(search["fill"], json!([{"type":"solid","color":"#F8FAFC"}]));
-    assert_eq!(search["cornerRadius"], json!(22));
-}
-
-#[test]
-fn favorite_icon_button_loses_bubble_chrome() {
-    let mut card = json!({
-        "type":"frame","role":"image-card","width":160,"height":240,"children":[
-            {
-                "type":"frame","role":"icon-button","name":"Favorite Button",
-                "width":36,"height":36,"cornerRadius":999,
-                "fill":[{"type":"solid","color":"#FFFFFF"}],
-                "stroke":{"thickness":1,"fill":[{"type":"solid","color":"#E2E8F0"}]},
-                "effects":[{"type":"shadow","offsetY":2,"blur":6,"color":"#0000001A"}],
-                "children":[{"type":"path","name":"HeartIcon","width":18,"height":18}]
-            }
-        ]
-    });
-    normalize_favorite_icon_buttons(&mut card);
-    let button = &card["children"][0];
-    assert!(
-        button.get("fill").is_none(),
-        "heart should not sit in a white bubble"
-    );
-    assert!(
-        button.get("stroke").is_none(),
-        "heart bubble border is visually noisy"
-    );
-    assert!(
-        button.get("effects").is_none(),
-        "heart bubble shadow is visually noisy"
-    );
-    assert!(
-        button.get("cornerRadius").is_none(),
-        "heart should not force a circular badge"
     );
 }
 
@@ -407,6 +598,31 @@ fn horizontal_overflow_uses_fill_when_needed_width_nears_canvas() {
     });
     fix_horizontal_overflow(&mut row, 375.0);
     assert_eq!(row["width"], json!("fill_container"));
+}
+
+#[test]
+fn horizontal_overflow_beyond_viewport_clips_instead_of_spilling() {
+    // The food-app category bug: 6 chips that physically can't fit a 375px phone.
+    // Widening is futile (children sum > canvas), so the row spans the viewport and
+    // clips at the edge instead of letting chips spill off-canvas into the void.
+    let mut row = json!({
+        "type":"frame","layout":"horizontal","width":327,"gap":12,
+        "children":[
+            {"type":"frame","width":46,"height":34},
+            {"type":"frame","width":84,"height":34},
+            {"type":"frame","width":85,"height":34},
+            {"type":"frame","width":91,"height":34},
+            {"type":"frame","width":89,"height":34},
+            {"type":"frame","width":96,"height":34}
+        ]
+    });
+    fix_horizontal_overflow(&mut row, 375.0);
+    assert_eq!(row["width"], json!("fill_container"));
+    assert_eq!(
+        row["clipContent"],
+        json!(true),
+        "an over-viewport horizontal row clips at the edge (scroll-row floor)"
+    );
 }
 
 #[test]

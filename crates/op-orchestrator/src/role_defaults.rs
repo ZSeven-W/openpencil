@@ -224,13 +224,23 @@ fn role_defaults(role: &str, node_json: &Value, ctx: &RoleCtx) -> Option<Value> 
         }
 
         // ── Navigation ──
-        "navbar" => json!({
-            "layout": "horizontal", "width": "fill_container",
-            "height": if mobile { 56 } else { 72 },
-            "padding": if mobile { pad2(0.0, 16.0) } else { pad2(0.0, 80.0) },
-            "alignItems": "center", "justifyContent": "space_between",
-            "fill": navbar_fill(theme), "stroke": navbar_bottom_border(theme)
-        }),
+        "navbar" => {
+            let mut m = json!({
+                "layout": "horizontal", "width": "fill_container",
+                "height": if mobile { 56 } else { 72 },
+                "padding": if mobile { pad2(0.0, 16.0) } else { pad2(0.0, 80.0) },
+                "alignItems": "center", "justifyContent": "space_between"
+            });
+            // Mobile app top headers sit transparent on the page background (the
+            // TS references — "Hey, Amanda" / "Good Morning, Daniel" — have no
+            // surface fill or hairline). Only a DESKTOP top-nav gets the white
+            // bar + bottom border; on mobile a fill+border boxes the header.
+            if !mobile {
+                m["fill"] = navbar_fill(theme);
+                m["stroke"] = navbar_bottom_border(theme);
+            }
+            m
+        }
         "bottom-tab-bar" => json!({
             "layout": "horizontal", "width": "fill_container",
             "height": if mobile { 68 } else { 72 },

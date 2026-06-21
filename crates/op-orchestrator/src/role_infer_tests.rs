@@ -164,6 +164,74 @@ fn card_role_stripped_on_tiny_node() {
 }
 
 #[test]
+fn section_wrapper_feature_card_role_stripped() {
+    // tt5: "Categories & Featured Banner" hits `\bfeature` → feature-card, but
+    // it's a top-level section WRAPPER holding 2 sub-frames (categories +
+    // banner). Must drop the role so no card fill/border/radius boxes the
+    // section (the "mysterious background" the user flagged).
+    let mut sec = node(serde_json::json!({
+        "type":"frame","id":"sec","name":"Categories & Featured Banner","children":[
+            {"type":"frame","id":"chips","name":"Category Chips","children":[]},
+            {"type":"frame","id":"banner","name":"Promo Banner","children":[]}
+        ]
+    }));
+    resolve_tree_roles(&mut sec, &ctx());
+    assert_eq!(
+        role_of(&sec),
+        None,
+        "multi-block section wrapper must not be a feature-card"
+    );
+}
+
+#[test]
+fn section_wrapper_search_bar_role_stripped() {
+    // tt5: "Location & Search" hits `\bsearch` → search-bar, but it's a header
+    // wrapper (a Location sub-frame + the real search input). Drop the role so
+    // the bg-deep fill + border + radius don't box the whole header.
+    let mut sec = node(serde_json::json!({
+        "type":"frame","id":"sec","name":"Location & Search","children":[
+            {"type":"frame","id":"loc","name":"Location & Actions","children":[]},
+            {"type":"text_input","id":"si","placeholder":"Search for food"}
+        ]
+    }));
+    resolve_tree_roles(&mut sec, &ctx());
+    assert_eq!(
+        role_of(&sec),
+        None,
+        "header wrapper must not be a search-bar"
+    );
+}
+
+#[test]
+fn real_feature_card_with_leaf_content_keeps_role() {
+    // Negative control: a genuine feature-card groups LEAF content (icon/title/
+    // text), not sub-frames — the guard must leave its role + card fill intact.
+    let mut card = node(serde_json::json!({
+        "type":"frame","id":"fc","name":"Feature Highlight","children":[
+            {"type":"icon_font","id":"ic","iconFontName":"zap"},
+            {"type":"text","id":"t","name":"Title","content":"Fast"},
+            {"type":"text","id":"d","name":"Desc","content":"Delivered hot"}
+        ]
+    }));
+    resolve_tree_roles(&mut card, &ctx());
+    assert_eq!(role_of(&card).as_deref(), Some("feature-card"));
+}
+
+#[test]
+fn real_search_bar_with_icon_and_input_keeps_role() {
+    // Negative control: a real search bar holds an icon + input (no sub-frame) —
+    // keep search-bar so it still gets its pill fill.
+    let mut bar = node(serde_json::json!({
+        "type":"frame","id":"sb","name":"Search","children":[
+            {"type":"icon_font","id":"m","iconFontName":"search"},
+            {"type":"text_input","id":"si","placeholder":"Search"}
+        ]
+    }));
+    resolve_tree_roles(&mut bar, &ctx());
+    assert_eq!(role_of(&bar).as_deref(), Some("search-bar"));
+}
+
+#[test]
 fn explicit_tiny_card_role_is_stripped() {
     // An LLM-emitted role:"stat-card" on a 6×6 frame must be STRIPPED (not just
     // inferred ones), so the I2 defaults pass never inflates a dot into a card.

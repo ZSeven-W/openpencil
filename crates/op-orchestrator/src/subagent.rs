@@ -82,12 +82,18 @@ pub(crate) async fn run_subtask_with_reveal_at(
         reduced_complexity,
         minimal_skills,
     );
+    tracing::debug!(subtask = %subtask.id, model = req.model.as_deref().unwrap_or(""), "subagent LLM call");
     let mut stream = llm.call(call_req);
     let mut text = String::new();
+    let mut thinking_len = 0usize;
     while let Some(item) = stream.next().await {
         match item {
             Ok(LlmChunk::Text(t)) => text.push_str(&t),
-            Ok(LlmChunk::Thinking(_)) => {}
+            // Thinking models (glm-5.2 etc.) stream reasoning here. We don't
+            // parse it, but track its size: a large reasoning blob with an
+            // empty `text` is the classic "no JSON found" failure mode — the
+            // model spent its budget thinking and never emitted the answer.
+            Ok(LlmChunk::Thinking(t)) => thinking_len += t.len(),
             Err(e) => {
                 return fail(if e.aborted {
                     "aborted".into()
@@ -97,6 +103,12 @@ pub(crate) async fn run_subtask_with_reveal_at(
             }
         }
     }
+    tracing::debug!(
+        subtask = %subtask.id,
+        text_len = text.len(),
+        thinking_len,
+        "subagent text collected"
+    );
 
     // 解析成 PenNode 树。manifest 模式（按模型路由 + `OPENPENCIL_MANIFEST`
     // override）先按元素清单解析；文本里没有清单行（如重试梯度回落到裸
@@ -116,13 +128,31 @@ pub(crate) async fn run_subtask_with_reveal_at(
                 }
                 None => match parse_nodes(&text) {
                     Ok(n) => n,
-                    Err(e) => return fail(e.to_string()),
+                    Err(e) => {
+                        tracing::warn!(
+                            subtask = %subtask.id,
+                            text_len = text.len(),
+                            thinking_len,
+                            raw = %text,
+                            "subagent parse failed (manifest + JSONL both missed)"
+                        );
+                        return fail(e.to_string());
+                    }
                 },
             }
         } else {
             match parse_nodes(&text) {
                 Ok(n) => n,
-                Err(e) => return fail(e.to_string()),
+                Err(e) => {
+                    tracing::warn!(
+                        subtask = %subtask.id,
+                        text_len = text.len(),
+                        thinking_len,
+                        raw = %text,
+                        "subagent parse failed"
+                    );
+                    return fail(e.to_string());
+                }
             }
         };
     if is_blank_container_forest(&nodes) {
@@ -147,11 +177,48 @@ pub(crate) async fn run_subtask_with_reveal_at(
             .filter(|c| !c.is_empty());
         crate::role_defaults::detect_theme_from_fill(first_solid)
     };
+    // Weak-model deterministic floor (runs BEFORE role resolution so roles land
+    // on the cleaned forest): a subtask is ONE section, but weak models split it
+    // into sibling pieces — an empty wrapper + the content/leaves that belong
+    // inside it. Reparent those back so they don't normalize into separate
+    // full-width page bands (empty banner + floating invisible text, etc.).
+    coalesce_subtask_section(&mut nodes);
     crate::role_infer::resolve_forest_roles(&mut nodes, canvas_width, theme);
     // Cross-node contrast post-pass (I3) runs AFTER role resolution (it keys off
     // the roles I1/I2 set) and before the fallback sizing normalize.
     crate::role_post_pass::post_pass_forest(&mut nodes, canvas_width);
+    // Post-streaming tree heuristics (TS applyPostStreamingTreeHeuristics parity):
+    // nav-surface anchor, redundant section-fill strip, nested-card decoration
+    // strip. Runs BEFORE binding — the section-fill strip matches literal hedge
+    // HEX that binding would convert to refs. Each forest root is a page-root
+    // child (a section).
+    let page_bg = plan.root_frame.first_solid_hex();
+    // Dominant brand accent from the already-assembled page (prior subtasks live
+    // in the sink) — drives the invisible-band fill so it matches the screen's
+    // real accent (often a chart token) instead of a clashing palette default.
+    let prior_accent = {
+        let st = sink.state();
+        let roots = st
+            .doc
+            .pages
+            .as_ref()
+            .and_then(|p| p.get(st.ui.active_page_index))
+            .map(|pg| pg.children.as_slice())
+            .unwrap_or(st.doc.children.as_slice());
+        crate::tree_heuristics::dominant_design_accent(roots)
+    };
+    crate::tree_heuristics::apply_tree_heuristics(
+        &mut nodes,
+        page_bg.as_deref(),
+        theme == crate::role_defaults::Theme::Light,
+        prior_accent.as_deref(),
+    );
     crate::variable_binding::bind_generated_color_variables(&mut nodes, sink.state());
+    // Surface-color discipline runs AFTER binding: glm emits raw hex, and binding
+    // is what turns it into the `$color-danger-bg` / `$color-bg-deep` refs this
+    // pass matches (recolor misused state-bg surfaces → neutral, strip the
+    // page-bg token off inner wrappers). Pre-binding it only saw hex and missed.
+    crate::role_post_pass::enforce_surface_color_discipline(&mut nodes);
     normalize_section_roots_for_parent_layout(&mut nodes);
     let node_count = nodes.len();
 
@@ -369,6 +436,113 @@ fn has_content_node(node: &PenNode) -> bool {
     }
 }
 
+/// The content slot a split-out section piece should be reparented into:
+/// `primary` itself if it is an empty wrapper, else its FIRST empty direct-child
+/// container (the "Dish Row" / "Card List" the model emitted but left empty).
+/// Depth is capped at one on purpose — a deeply-nested incidental empty frame
+/// (an await-input box, a spacer) must not swallow whole sections.
+fn section_content_slot(primary: &mut PenNode) -> Option<&mut Vec<PenNode>> {
+    let primary_empty = primary.children().map(|c| c.is_empty()).unwrap_or(true);
+    if primary_empty {
+        return primary.children_mut();
+    }
+    primary
+        .children_mut()?
+        .iter_mut()
+        .find(|c| {
+            matches!(c, PenNode::Frame(_) | PenNode::Group(_))
+                && c.children().map(|cc| cc.is_empty()).unwrap_or(true)
+        })
+        .and_then(|c| c.children_mut())
+}
+
+/// Weak-model deterministic floor (TS `applyPostStreamingTreeHeuristics`
+/// spirit): a subtask maps to ONE section, but glm-class models routinely split
+/// a section into sibling pieces — an (often empty) wrapper plus the content
+/// roots that belong inside it (e.g. an empty `Promo Banner` next to a
+/// `Promo Content` text block and a `Promo Food Image`; an empty `Dish Row` next
+/// to the dish cards). Each forest root is later normalized into a full-width
+/// page band ([`normalize_section_roots_for_parent_layout`]), so the wrapper
+/// renders as a blank gap while its content floats with no background — invisible
+/// white-on-cream text, the broken Featured/Promo screens the user flagged.
+///
+/// Resolution, keyed off the first section container (Frame/Group) as the
+/// "primary" section:
+/// - **Wrapper slot present** — the primary is empty, or has an empty direct
+///   child container waiting for content: reparent every orphan root into that
+///   slot (forest order preserved). Fixes the empty-banner / empty-row splits.
+/// - **No slot, orphans all leaves or EMPTY containers** — stray decorations a
+///   header / section spilled outside itself (a bell icon, a heading, an empty
+///   notification-badge frame): leaf/heading orphans fold into the primary
+///   (leading prepended, trailing appended) and childless containers are dropped
+///   (they would only normalize into a blank full-width band).
+/// - **No slot, an orphan is a POPULATED container (≥1 child)** — a legitimate
+///   multi-section forest with nowhere to nest: left untouched so real sections
+///   are never collapsed into one another.
+fn coalesce_subtask_section(nodes: &mut Vec<PenNode>) {
+    if nodes.len() < 2 {
+        return;
+    }
+    let Some(primary_idx) = nodes
+        .iter()
+        .position(|n| matches!(n, PenNode::Frame(_) | PenNode::Group(_)))
+    else {
+        return; // no section container to reparent into.
+    };
+    // An orphan is a stray DECORATION to fold (not a real sibling section) when
+    // it's a non-container leaf (icon / badge text), OR an EMPTY container — a
+    // childless `Notification Badge` frame the model hung OUTSIDE the header that
+    // would otherwise normalize into a blank full-width band. A container that
+    // actually holds content (≥1 child) is a genuine section → bail (never
+    // collapse real sibling sections into one another).
+    let kid_count = |n: &PenNode| n.children().map(|c| c.len()).unwrap_or(0);
+    let orphans_all_foldable = nodes
+        .iter()
+        .enumerate()
+        .filter(|(i, _)| *i != primary_idx)
+        .all(|(_, n)| !n.is_container() || kid_count(n) == 0);
+
+    // Split into before / primary / after, preserving forest order. Empty
+    // containers (0 children — junk like a stray empty badge that would
+    // normalize into a blank full-width band) are dropped rather than folded.
+    let taken = std::mem::take(nodes);
+    let mut before: Vec<PenNode> = Vec::new();
+    let mut after: Vec<PenNode> = Vec::new();
+    let mut primary: Option<PenNode> = None;
+    let keep = |n: &PenNode| !n.is_container() || kid_count(n) > 0;
+    for (i, node) in taken.into_iter().enumerate() {
+        match i.cmp(&primary_idx) {
+            std::cmp::Ordering::Less if keep(&node) => before.push(node),
+            std::cmp::Ordering::Equal => primary = Some(node),
+            std::cmp::Ordering::Greater if keep(&node) => after.push(node),
+            _ => {} // dropped empty-container orphan
+        }
+    }
+    let mut primary = primary.expect("primary index was computed from nodes");
+
+    if section_content_slot(&mut primary).is_some() {
+        // Wrapper slot: drop the split-out pieces into it, forest order kept.
+        let slot = section_content_slot(&mut primary).expect("slot present");
+        slot.extend(before);
+        slot.extend(after);
+    } else if orphans_all_foldable {
+        // Stray decorations: heading-before prepends, badge/icon-after appends.
+        if let Some(kids) = primary.children_mut() {
+            let existing = std::mem::take(kids);
+            kids.extend(before);
+            kids.extend(existing);
+            kids.extend(after);
+        }
+    } else {
+        // Legitimate multi-section forest — restore original order, change nothing.
+        nodes.extend(before);
+        nodes.push(primary);
+        nodes.extend(after);
+        return;
+    }
+    nodes.push(primary);
+}
+
 fn normalize_section_roots_for_parent_layout(nodes: &mut [PenNode]) {
     for node in nodes {
         node.base_mut().x = None;
@@ -449,6 +623,155 @@ mod tests {
     }
 
     const NODE_JSON: &str = r#"[{"type":"frame","id":"hero-1","name":"Card","x":0,"y":0,"width":1200,"height":200,"children":[{"type":"text","id":"hero-title","content":"Hero","fontSize":18}]}]"#;
+
+    #[test]
+    fn coalesce_folds_trailing_badge_leaf_into_lone_section() {
+        // glm shape: a populated Top Bar section frame + a stray cart-count
+        // badge "3" emitted as a SIBLING. No empty slot exists, the orphan is a
+        // leaf → it appends into the section, not survive as a floating "3" band.
+        let json = r#"[
+            {"type":"frame","id":"s1","name":"Top Bar","width":"fill_container","height":"fit_content","layout":"horizontal","children":[
+                {"type":"text","id":"loc","content":"Home"}
+            ]},
+            {"type":"text","id":"badge","content":"3"}
+        ]"#;
+        let mut nodes: Vec<PenNode> = serde_json::from_str(json).expect("parse forest");
+        coalesce_subtask_section(&mut nodes);
+        assert_eq!(nodes.len(), 1, "badge must fold into the lone section");
+        let kids = nodes[0].children().expect("section children");
+        assert_eq!(kids.len(), 2);
+        assert_eq!(kids[0].id_str(), "loc");
+        assert_eq!(
+            kids[1].id_str(),
+            "badge",
+            "trailing badge nests as last child"
+        );
+    }
+
+    #[test]
+    fn coalesce_prepends_leading_leaf_as_section_heading() {
+        // A heading text emitted BEFORE a populated content frame folds in as the
+        // FIRST child (preserving the intended heading-above-content order).
+        let json = r#"[
+            {"type":"text","id":"head","content":"Featured"},
+            {"type":"frame","id":"sec","name":"List","children":[{"type":"text","id":"item","content":"x"}]}
+        ]"#;
+        let mut nodes: Vec<PenNode> = serde_json::from_str(json).expect("parse forest");
+        coalesce_subtask_section(&mut nodes);
+        assert_eq!(nodes.len(), 1);
+        let kids = nodes[0].children().expect("section children");
+        assert_eq!(
+            kids[0].id_str(),
+            "head",
+            "leading leaf prepended as heading"
+        );
+        assert_eq!(kids[1].id_str(), "item");
+    }
+
+    #[test]
+    fn coalesce_fills_empty_wrapper_with_split_pieces() {
+        // tt5 Promo shape: an EMPTY `Promo Banner` wrapper emitted first, with
+        // its `Promo Content` (text) + `Promo Food Image` hung as sibling roots.
+        // They must reparent INTO the empty banner (forest order kept) so the
+        // banner stops rendering as a blank gap with floating invisible text.
+        let json = r#"[
+            {"type":"frame","id":"banner","name":"Promo Banner","layout":"vertical","children":[]},
+            {"type":"frame","id":"content","name":"Promo Content","children":[{"type":"text","id":"title","content":"Get 30% off"}]},
+            {"type":"image","id":"img","name":"Promo Food Image","src":""}
+        ]"#;
+        let mut nodes: Vec<PenNode> = serde_json::from_str(json).expect("parse forest");
+        coalesce_subtask_section(&mut nodes);
+        assert_eq!(nodes.len(), 1, "split pieces fold into the empty wrapper");
+        assert_eq!(nodes[0].id_str(), "banner");
+        let kids = nodes[0].children().expect("banner children");
+        assert_eq!(kids.len(), 2);
+        assert_eq!(kids[0].id_str(), "content");
+        assert_eq!(kids[1].id_str(), "img");
+    }
+
+    #[test]
+    fn coalesce_fills_empty_direct_child_row_with_orphan_cards() {
+        // tt5 Popular Dishes shape: section with a Header + an EMPTY `Dish Row`
+        // direct child, and the dish cards hung as sibling roots. The cards must
+        // land inside the empty row, not flatten into separate page bands.
+        let json = r#"[
+            {"type":"frame","id":"sec","name":"Popular Dishes","children":[
+                {"type":"frame","id":"header","name":"Header","children":[{"type":"text","id":"t","content":"Popular Dishes"}]},
+                {"type":"frame","id":"row","name":"Dish Row","children":[]}
+            ]},
+            {"type":"image","id":"pizza","name":"Margherita Pizza","src":""},
+            {"type":"frame","id":"pinfo","name":"Info","children":[{"type":"text","id":"pn","content":"Margherita"}]}
+        ]"#;
+        let mut nodes: Vec<PenNode> = serde_json::from_str(json).expect("parse forest");
+        coalesce_subtask_section(&mut nodes);
+        assert_eq!(
+            nodes.len(),
+            1,
+            "cards fold into the section, not the page root"
+        );
+        let sec_kids = nodes[0].children().expect("section children");
+        assert_eq!(sec_kids.len(), 2, "Header + Dish Row preserved");
+        let row = &sec_kids[1];
+        assert_eq!(row.id_str(), "row");
+        let row_kids = row.children().expect("dish row children");
+        assert_eq!(
+            row_kids.len(),
+            2,
+            "both orphan cards landed in the empty row"
+        );
+        assert_eq!(row_kids[0].id_str(), "pizza");
+        assert_eq!(row_kids[1].id_str(), "pinfo");
+    }
+
+    #[test]
+    fn coalesce_leaves_populated_multi_section_forest_untouched() {
+        // Two POPULATED section containers with no empty slot → a legitimate
+        // multi-section forest; never collapse real sections into one another.
+        let json = r#"[
+            {"type":"frame","id":"a","name":"A","children":[{"type":"text","id":"ta","content":"A"}]},
+            {"type":"frame","id":"b","name":"B","children":[{"type":"text","id":"tb","content":"B"}]}
+        ]"#;
+        let mut nodes: Vec<PenNode> = serde_json::from_str(json).expect("parse forest");
+        coalesce_subtask_section(&mut nodes);
+        assert_eq!(nodes.len(), 2, "two populated sections must be left as-is");
+    }
+
+    #[test]
+    fn coalesce_folds_stray_icon_and_drops_empty_badge() {
+        // tt5 header: the Bell icon (leaf) + an EMPTY Notification Badge frame
+        // were emitted as top-level SIBLINGS of the header (bell floated below
+        // the search; the empty badge would normalize into a blank full-width
+        // band). The icon folds into the header; the empty badge is dropped —
+        // neither survives as a floating page section.
+        let json = r#"[
+            {"type":"frame","id":"hdr","name":"Header & Search","children":[
+                {"type":"frame","id":"loc","name":"Location & Actions","children":[{"type":"text","id":"l","content":"NYC"}]},
+                {"type":"frame","id":"sb","name":"Search Bar","children":[{"type":"text_input","id":"si","placeholder":"Search"}]}
+            ]},
+            {"type":"icon_font","id":"bell","iconFontName":"bell"},
+            {"type":"frame","id":"badge","name":"Notification Badge","children":[]}
+        ]"#;
+        let mut nodes: Vec<PenNode> = serde_json::from_str(json).expect("parse forest");
+        coalesce_subtask_section(&mut nodes);
+        assert_eq!(
+            nodes.len(),
+            1,
+            "only the header section survives at top level"
+        );
+        let kids = nodes[0].children().expect("header children");
+        assert!(
+            kids.iter().any(|k| matches!(k, PenNode::IconFont(_))),
+            "stray bell icon folded into the header"
+        );
+        let names: Vec<&str> = kids
+            .iter()
+            .filter_map(|k| k.base().name.as_deref())
+            .collect();
+        assert!(
+            !names.contains(&"Notification Badge"),
+            "empty badge dropped, not folded as a blank band"
+        );
+    }
 
     #[test]
     fn run_subtask_ok_applies_insert_subtree() {

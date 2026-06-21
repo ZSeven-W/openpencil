@@ -125,6 +125,19 @@ const MODEL_PROFILES: &[Entry] = &[
         timeout_multiplier: 2.0,
         label: "DeepSeek V4 Pro",
     },
+    // GLM-5.2（及以后更高版本）—— ab-v9 manifest arm 实测很强（M3 96%、composite
+    // 5/5），给 Full tier。**只 5.2 起算强**（用户判定：glm-5 / glm-5.1 不够，不命中
+    // 这条 → 落 default Standard）。关思考与 tier 无关：builtin HTTP 路由按
+    // is_glm_model 对**所有** glm（含 5 / 5.1）强制下发 thinking:{type:disabled}，
+    // 因为它们都是推理模型、不关都会烧光 content。GLM 体量大、即便关思考也偏慢，
+    // timeout ×2。未来 glm-5.3 / glm-6 等更高版本同样算强，届时各加一条 matcher。
+    Entry {
+        matcher: Match::Sub("glm-5.2"),
+        tier: ModelTier::Full,
+        thinking_disabled: true,
+        timeout_multiplier: 2.0,
+        label: "GLM-5.2 (Coding Plan)",
+    },
     e(
         Match::Sub("deepseek-v4-flash"),
         ModelTier::Standard,

@@ -456,9 +456,15 @@ fn nav_surface_target(child: &PenNode) -> Option<&PenNode> {
 
 fn is_nav_surface(node: &PenNode) -> bool {
     let role = node.base().role.as_deref().unwrap_or("").to_lowercase();
+    // Matches tree_heuristics::NAV_ROLES exactly. The TOP header roles
+    // (`navbar` / `top-nav-bar` / `top-app-bar`) are deliberately EXCLUDED: on a
+    // light mobile page the header is transparent (TS references), and re-filling
+    // it with the root surface hex + a drop-shadow is exactly what re-boxed the
+    // mobile header the user flagged. Only bottom navs / floating tab bars — which
+    // float over scrolling content — need a surface to read against the page.
     if matches!(
         role.as_str(),
-        "navbar" | "nav" | "tab-bar" | "bottom-tab-bar" | "top-nav-bar" | "top-app-bar" | "tab-row"
+        "nav" | "tab-bar" | "bottom-tab-bar" | "tab-row"
     ) {
         return true;
     }
@@ -474,9 +480,6 @@ fn is_nav_surface(node: &PenNode) -> bool {
         || hay.contains("tab-bar")
         || hay.contains("bottom tab")
         || hay.contains("bottom-tab")
-        || hay.contains("navbar")
-        || hay.contains("nav bar")
-        || hay.contains("navigation bar")
 }
 
 fn nav_surface_repair(nav: &PenNode, root_surface_hex: Option<&str>) -> Option<NavSurfaceRepair> {

@@ -31,7 +31,7 @@ use crate::plan_repair::parse_orchestrator_response;
 use crate::prompt::build_orchestrator_prompt;
 use crate::retry::{attempt_modes, is_non_retryable};
 use crate::run_dashboard::run_dashboard_path;
-use crate::scaffold::{build_scaffold, build_scaffold_concurrent_mobile};
+use crate::scaffold::{build_scaffold, build_scaffold_concurrent_mobile, build_scaffold_reusing};
 use crate::subagent::{apply_command_with_reveal, reveal_now_millis, run_subtask_with_reveal_at};
 use crate::types::{
     AbortFlag, DesignRequest, DocSink, LlmChunk, LlmClient, OrchestratorError, Progress,
@@ -40,7 +40,44 @@ use crate::types::{
 use crate::validation::run_post_generation_validation;
 use crate::variables::{rollback, seed_commands, snapshot_plan_vars};
 use futures::StreamExt;
-use op_editor_core::{EditorCommand, NodeId, PenNodeExt};
+use op_editor_core::{EditorCommand, EditorState, NodeId, PenNodeExt};
+
+/// TS `replaceEmptyFrame` parity: detect a single EMPTY top-level frame (the
+/// fresh-canvas starter) that can be REUSED as the design root instead of
+/// inserting a brand-new root. Returns its id when the active page holds
+/// exactly one empty container; `None` otherwise (multi-node canvas, filled
+/// frame, or non-container) so the normal insert path runs.
+fn detect_reusable_empty_frame(state: &EditorState) -> Option<String> {
+    let kids = state.active_children();
+    if kids.len() != 1 {
+        return None;
+    }
+    let node = &kids[0];
+    if node.is_container() && node.children().map(|c| c.is_empty()).unwrap_or(true) {
+        Some(node.id_str().to_string())
+    } else {
+        None
+    }
+}
+
+/// Remove the fresh-canvas starter frame (a single empty top-level
+/// container) so a path that builds its OWN root(s) doesn't leave it
+/// orphaned beside the design. The sequential path REUSES it instead
+/// (see [`detect_reusable_empty_frame`] + `build_scaffold_reusing`); the
+/// concurrent (N roots) + dashboard (bespoke sidebar+main root) paths
+/// can't reuse a single starter, so they clear it here. This mirrors the
+/// host's former `clear_fresh_starter_frame_for_design` — now owned
+/// orchestrator-side so the host can leave the starter in place for the
+/// reuse path. No-op on a headless / empty canvas (op-smoke), where
+/// there is no starter to detect.
+fn clear_reusable_empty_frame(sink: &mut dyn DocSink) {
+    if let Some(id) = detect_reusable_empty_frame(sink.state()) {
+        sink.apply(EditorCommand::DeleteNode {
+            node_id: NodeId::new(id),
+            page_id: None,
+        });
+    }
+}
 
 /// 设计编排器。
 #[derive(Debug, Default, Clone, Copy)]
@@ -94,6 +131,17 @@ impl Orchestrator {
         let append_result =
             apply_append_context_to_plan(&mut plan, request.append_context.as_ref());
 
+        // Surface the FULL planned task list upfront (TS parity) so the UI can
+        // render the complete checklist immediately, rather than revealing
+        // subtasks one-by-one as each starts.
+        on_progress(Progress::Planned {
+            subtasks: plan
+                .subtasks
+                .iter()
+                .map(|s| (s.id.clone(), s.label.clone()))
+                .collect(),
+        });
+
         // -- S3b-2 Task C2: concurrency branch decision --
         // Port of `orchestrator.ts:780-810`.
         let screen_groups = group_subtasks_by_screen(&plan.subtasks);
@@ -108,6 +156,9 @@ impl Orchestrator {
         };
 
         if effective > 1 {
+            // Concurrent builds N screen roots — can't reuse the single
+            // fresh-canvas starter, so clear it (host no longer does).
+            clear_reusable_empty_frame(sink);
             return run_concurrent_path(
                 request,
                 plan,
@@ -135,6 +186,14 @@ impl Orchestrator {
         // -- 阶段 2:画布搭建 --
         for cmd in seed_commands(&plan, &var_snapshot) {
             sink.apply(cmd);
+        }
+        // The dashboard path builds a bespoke sidebar+main root that can't
+        // reuse the fresh-canvas starter; clear it BEFORE indexing so the
+        // dashboard root lands at index 0 (not orphaned beside the starter).
+        // The sequential path below keeps the starter and REUSES it via
+        // ReplaceSubtree, so it must NOT be cleared here.
+        if !append_result.skip_root_insertion && use_dashboard {
+            clear_reusable_empty_frame(sink);
         }
         let scaffold_root_index = sink.state().active_children().len();
         let scaffold_root_ids_before: Vec<String> = sink
@@ -187,7 +246,17 @@ impl Orchestrator {
             (target_id, baseline)
         } else {
             let effective_is_mobile = norm.is_mobile && !append_result.skip_status_bar;
-            match build_scaffold(&plan, effective_is_mobile) {
+            // TS `replaceEmptyFrame` parity: when the canvas is a single empty
+            // top-level frame (the fresh-canvas starter), REUSE it as the design
+            // root (ReplaceSubtree in place) instead of inserting a brand-new
+            // root — which the host would otherwise clear + re-add, the visible
+            // "delete then re-draw" flash the user flagged.
+            let reuse_id = detect_reusable_empty_frame(sink.state());
+            let scaffold_cmds = match reuse_id.as_deref() {
+                Some(id) => build_scaffold_reusing(&plan, effective_is_mobile, id),
+                None => build_scaffold(&plan, effective_is_mobile),
+            };
+            match scaffold_cmds {
                 Ok(cmds) => {
                     for cmd in cmds {
                         if !apply_command_with_reveal(
@@ -380,13 +449,18 @@ impl Orchestrator {
                 break;
             }
             if zero {
-                // 零节点失败(非 abort,全部 3 次皆失败)—— 停止后续 subtask。
+                // 零节点失败(非 abort,全部 3 次皆失败)。**不 break** —— 一个
+                // section 失败不该放弃后续所有 subtask。各 subtask 独立
+                // InsertSubtree 到 root、互不依赖;break 会把失败点之后的必要
+                // 内容(bottom nav 等)全丢掉(用户报的"管线丢内容")。跳过这个、
+                // 继续后面的;`zero_node_failure` 仍标记"至少一个失败",最终若
+                // **全部**零内容(zero_content)才删 scaffold root。
                 on_progress(Progress::SubtaskFailed {
                     id: subtask.id.clone(),
                     error: err_msg.unwrap_or_default(),
                 });
                 zero_node_failure = true;
-                break;
+                continue;
             }
             on_progress(Progress::SubtaskDone {
                 id: subtask.id.clone(),

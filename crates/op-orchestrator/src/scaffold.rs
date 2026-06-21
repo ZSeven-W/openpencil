@@ -219,6 +219,23 @@ fn mobile_status_bar_json(root_id: &str, fill_hex: &str, width: f64) -> serde_js
 /// 内部辅助函数,被 `build_scaffold`(单屏)和
 /// `build_scaffold_concurrent`(多屏)共用。
 #[allow(clippy::too_many_arguments)]
+/// Canonical inter-section spacing for the page-root vertical stack (Pencil's
+/// reverse-engineered demo uses `gap: 20` between sections). The LLM frequently
+/// omits the page gap, leaving it `0` so every section touches the next — the
+/// cramped, no-breathing-room look that reads nothing like the TS references.
+const SECTION_STACK_GAP: f64 = 20.0;
+
+/// Resolve the page-root section gap: honor an explicit positive plan gap,
+/// otherwise fall back to [`SECTION_STACK_GAP`]. Mirrors the dashboard
+/// main-column gap fallback (`root.gap > 0 ? root.gap : 20`).
+fn resolve_section_gap(plan_gap: Option<f64>) -> f64 {
+    match plan_gap {
+        Some(g) if g > 0.0 => g,
+        _ => SECTION_STACK_GAP,
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
 fn build_root_frame_node(
     id: &str,
     name: &str,
@@ -279,30 +296,60 @@ pub fn build_scaffold(
     plan: &OrchestratorPlan,
     is_mobile: bool,
 ) -> Result<Vec<EditorCommand>, String> {
+    let node = build_scaffold_root_node(plan, is_mobile, &plan.root_frame.id)?;
+    Ok(vec![EditorCommand::InsertSubtree {
+        nodes: vec![node],
+        parent_id: NodeId::NONE,
+        page_id: None,
+    }])
+}
+
+/// Reuse an existing EMPTY top-level frame (the fresh-canvas starter) as the
+/// design root, mirroring TS `replaceEmptyFrame`: instead of clearing the
+/// starter + inserting a brand-new root (the visible "delete + re-add" the
+/// user flagged), REPLACE the starter frame's subtree in place. The scaffold
+/// root takes the reused id, so its slot/identity is preserved and the canvas
+/// fills smoothly rather than flashing empty.
+pub fn build_scaffold_reusing(
+    plan: &OrchestratorPlan,
+    is_mobile: bool,
+    reuse_id: &str,
+) -> Result<Vec<EditorCommand>, String> {
+    let node = build_scaffold_root_node(plan, is_mobile, reuse_id)?;
+    Ok(vec![EditorCommand::ReplaceSubtree {
+        node_id: NodeId::new(reuse_id.to_string()),
+        node: Box::new(node),
+        drop_children: true,
+        page_id: None,
+    }])
+}
+
+/// Build the root-frame node (status-bar child injected when `is_mobile`),
+/// stamping `root_id` as its id so the caller can either insert it fresh or
+/// replace an existing frame's slot with it.
+fn build_scaffold_root_node(
+    plan: &OrchestratorPlan,
+    is_mobile: bool,
+    root_id: &str,
+) -> Result<PenNode, String> {
     let rf = &plan.root_frame;
     let layout = rf.layout.as_deref().unwrap_or("vertical");
     let fill_hex = rf
         .first_solid_hex()
         .unwrap_or_else(|| "#FFFFFF".to_string());
 
-    let node = build_root_frame_node(
-        &rf.id,
+    build_root_frame_node(
+        root_id,
         &rf.name,
         SAFE_CANVAS_X,
         SAFE_CANVAS_Y,
         rf.width,
         rf.height,
         layout,
-        rf.gap.unwrap_or(0.0),
+        resolve_section_gap(rf.gap),
         &fill_hex,
         is_mobile,
-    )?;
-
-    Ok(vec![EditorCommand::InsertSubtree {
-        nodes: vec![node],
-        parent_id: NodeId::NONE,
-        page_id: None,
-    }])
+    )
 }
 
 /// 构建 N-root-frame 并发画布搭建命令(多屏并发路径,S3b-2 Task A2)。
@@ -401,7 +448,7 @@ fn build_scaffold_concurrent_inner(
             rf.width,
             frame_height,
             layout,
-            rf.gap.unwrap_or(0.0),
+            resolve_section_gap(rf.gap),
             &fill_hex,
             is_mobile,
         )?;
