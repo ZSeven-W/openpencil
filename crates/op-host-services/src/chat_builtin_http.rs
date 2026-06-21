@@ -225,6 +225,15 @@ fn is_minimax_model(model: &str) -> bool {
     m.starts_with("minimax") || m.starts_with("abab")
 }
 
+/// GLM-4.5+/GLM-5.x（智谱 / 方舟 coding plan）同为推理模型：reasoning 走
+/// `reasoning_content`，不关思考会烧光输出预算把 `content` 留空（实测 glm-5.2
+/// 一个设计子任务 thinking_len≈3 万、text_len=0，整段 parse 失败）。它接受和
+/// MiniMax 同样的 `thinking:{type:"disabled"}`（curl 对 ark glm-5.2 验证：关思考后
+/// reasoning_tokens=0、content 为干净 JSON）。按名判定，只对 GLM 下发。
+fn is_glm_model(model: &str) -> bool {
+    model.to_ascii_lowercase().contains("glm")
+}
+
 async fn run_openai_chat(
     provider: ConfiguredBuiltinProvider,
     system_prompt: String,
@@ -257,13 +266,13 @@ async fn run_openai_chat(
         "max_tokens": max_output_tokens,
         "messages": messages,
     });
-    // MiniMax M 系是推理模型,默认把 `<think>…</think>` 注进 `content`,既烧光
-    // 输出预算(JSON 被截断)又逼解析层去剥 think。当调用方明确要求关思考时
-    // (`disable_thinking`,如编排器的设计子任务),在线级关掉(实测确认 MiniMax
-    // 接受 `thinking:{type:"disabled"}` 返回干净 content)。普通对话用 `Adaptive`、
-    // 不会进这里,保留 M3 推理。仅对 MiniMax 加此字段,不碰别的 openai-compat
-    // provider(DeepSeek / 方舟 / Qwen)。
-    if disable_thinking && is_minimax_model(&provider.model) {
+    // MiniMax M 系和 GLM-5.x 都是推理模型:不关思考会把 reasoning 烧到占满输出
+    // 预算,JSON content 被截断甚至留空(glm-5.2 实测一个设计子任务 thinking≈3 万
+    // 字符、content 0,整段 parse 失败、重试也撞同一堵墙)。当调用方明确要求关思考
+    // (`disable_thinking`,如编排器的设计子任务),在线级下发 `thinking:{type:"disabled"}`
+    // (实测 MiniMax 与 ark glm-5.2 都接受、返回干净 content)。普通对话走 `Adaptive`
+    // 不进这里,保留推理。只对这两类加此字段,不碰别的 openai-compat(DeepSeek / Qwen)。
+    if disable_thinking && (is_minimax_model(&provider.model) || is_glm_model(&provider.model)) {
         if let Some(obj) = body.as_object_mut() {
             obj.insert("thinking".into(), json!({ "type": "disabled" }));
         }

@@ -19,7 +19,7 @@ use op_host_services::chat_canvas_tools::execute_chat_tool;
 #[path = "chat_session_launch.rs"]
 mod launch;
 #[cfg(test)]
-pub(crate) use launch::{builtin_provider_with_tools, clear_fresh_starter_frame_for_design};
+pub(crate) use launch::builtin_provider_with_tools;
 pub use launch::{drain_new_chat_request, drain_stop_request, launch_if_pending};
 pub(crate) use launch::{provider_for_selected_model, selected_cli_model_id};
 

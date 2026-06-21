@@ -549,6 +549,9 @@ fn write_error_event<W: Write>(out: &mut W, message: &str) -> std::io::Result<()
 fn progress_label(p: &Progress) -> String {
     match p {
         Progress::Planning => "• Planning…".into(),
+        Progress::Planned { subtasks } => {
+            format!("• Plan — {} section(s)", subtasks.len())
+        }
         Progress::ScaffoldDone => "• Scaffold ready".into(),
         Progress::SubtaskStarted { id, label } => format!("• Subtask `{id}` — {label}"),
         Progress::SubtaskDone { id, node_count } => {

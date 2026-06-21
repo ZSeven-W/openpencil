@@ -84,6 +84,10 @@ pub fn handle_save_as(
     match save_as_dialog(host.editor_state()) {
         Ok(Some(path)) => {
             crate::settings_io::touch_recent(host, &path);
+            // Mirror handle_save: refresh the in-chrome file name too, not
+            // just the OS window title — without this, first Save As writes
+            // the file but the TopBar keeps showing "Untitled".
+            set_display_name(host, Some(&path));
             *current_path = Some(path);
             refresh_title(current_path, window);
             true

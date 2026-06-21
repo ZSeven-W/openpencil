@@ -925,6 +925,21 @@ fn prompt_update_available(locale: op_editor_core::Locale, version: &str) {
     }
 }
 
+/// Install a stderr tracing subscriber for debug-mode logging — orchestrator
+/// LLM calls + parse failures (with the model's raw output). Writes to stderr
+/// so it never pollutes the `--mcp` stdout JSON-RPC stream. The default `warn`
+/// filter surfaces parse failures with no env var; `RUST_LOG=op_orchestrator=debug`
+/// (and/or `op_host_desktop=debug` for per-subtask design progress) opens the
+/// full firehose.
+fn init_tracing() {
+    use tracing_subscriber::{fmt, EnvFilter};
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("warn"));
+    let _ = fmt()
+        .with_env_filter(filter)
+        .with_writer(std::io::stderr)
+        .try_init();
+}
+
 fn main() {
     // Register the brand-logo catalog (omitted from the wasm bundle, embedded in
     // this binary) BEFORE any path that can render natively — the GUI app, the
@@ -932,6 +947,7 @@ fn main() {
     // simple-icons instead of the unknown-glyph fallback dot. Set-once /
     // idempotent.
     op_editor_ui::set_brand_catalog(op_host_services::web_static::ICONIFY_BRANDS_JSON);
+    init_tracing();
     // `--mcp` / `--mcp-http` swap the GUI for an MCP server mode;
     // when one of those ran, exit instead of opening a window.
     if mcp_serve::run_cli_if_requested() {

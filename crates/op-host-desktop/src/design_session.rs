@@ -136,6 +136,15 @@ fn render_progress(progress: &[Progress]) -> String {
 fn progress_label(p: &Progress) -> String {
     match p {
         Progress::Planning => "• Planning…".into(),
+        Progress::Planned { subtasks } => {
+            // Full task checklist upfront (TS parity) — one row per planned
+            // section so the user sees the whole plan immediately.
+            let rows: String = subtasks
+                .iter()
+                .map(|(_, label)| format!("\n  ☐ {label}"))
+                .collect();
+            format!("• Plan — {} sections:{}", subtasks.len(), rows)
+        }
         Progress::ScaffoldDone => "• Scaffold ready".into(),
         Progress::SubtaskStarted { id, label } => format!("• Subtask `{id}` — {label}"),
         Progress::SubtaskDone { id, node_count } => {
