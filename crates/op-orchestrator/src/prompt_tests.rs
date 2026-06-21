@@ -143,29 +143,10 @@ fn subagent_prompt_carries_ts_layout_contract() {
         false,
     );
 
-    assert!(cr.user_prompt.contains("Page sections:"));
-    assert!(cr.user_prompt.contains("Food Categories [category chips]"));
-    assert!(cr
-        .user_prompt
-        .contains("Root frame: id=\"categories-root\""));
-    assert!(cr.user_prompt.contains("width=\"fill_container\""));
-    assert!(cr.user_prompt.contains("height=\"fit_content\""));
-    assert!(cr.user_prompt.contains("Generate enough elements"));
-    assert!(cr.user_prompt.contains("MOBILE STATUS BAR"));
-    assert!(cr.user_prompt.contains("time, signal, wifi, battery"));
-    assert!(cr.user_prompt.contains("NO PHONE MOCKUP WRAPPER"));
-    assert!(cr.user_prompt.contains("MOBILE WIDTH SAFETY"));
-    assert!(cr.user_prompt.contains("MOBILE SECTION INSETS"));
-    assert!(cr.user_prompt.contains("MOBILE SEARCH ACTIONS"));
-    assert!(cr.user_prompt.contains("NO BLANK PLACEHOLDERS"));
-    assert!(cr.user_prompt.contains("MOBILE NAV SURFACE"));
-    assert!(cr.user_prompt.contains("TYPOGRAPHY HIERARCHY"));
-    assert!(cr.user_prompt.contains("DENSITY"));
-    assert!(cr.user_prompt.contains("VISUAL HIERARCHY"));
-    assert!(cr.user_prompt.contains("SPACING CONSISTENCY"));
-    assert!(cr.user_prompt.contains("CRAFT POLISH"));
-    assert!(cr.user_prompt.contains("MEDIA CONSISTENCY"));
-    assert!(cr.user_prompt.contains("ICON SCALE"));
+    let required = "Page sections:|Food Categories [category chips]|Root frame: id=\"categories-root\"|width=\"fill_container\"|height=\"fit_content\"|Generate enough elements|MOBILE STATUS BAR|time, signal, wifi, battery|NO PHONE MOCKUP WRAPPER|MOBILE WIDTH SAFETY|MOBILE SINGLE CONTENT RAIL|MOBILE SEARCH BAR|MOBILE VERTICAL RHYTHM|MOBILE GRID ALIGNMENT|MOBILE CARD OVERLAYS|MOBILE IMAGE QUALITY|NO BLANK PLACEHOLDERS|MOBILE NAV SURFACE|TYPOGRAPHY HIERARCHY|DENSITY|VISUAL HIERARCHY|SPACING CONSISTENCY|CRAFT POLISH|MEDIA CONSISTENCY|ICON SCALE";
+    for required in required.split('|') {
+        assert!(cr.user_prompt.contains(required), "missing {required}");
+    }
 }
 
 #[test]

@@ -581,16 +581,28 @@ CRITICAL LAYOUT CONSTRAINTS:\n\
             "\n\nMOBILE WIDTH SAFETY: Every visible child must stay inside the 390px screen width. Do not create horizontal rows, chips, cards, or buttons that overflow outside the root; wrap, shrink, or clip horizontal lists instead.",
         );
         user_prompt.push_str(
-            "\nMOBILE SECTION INSETS: Every non-chrome section root must keep horizontal padding of about 24px. Headings, cards, chips, and lists must not touch the screen edge. Use width=\"fill_container\" inside padded sections instead of fixed 390px widths.",
+            "\nMOBILE SINGLE CONTENT RAIL: All non-chrome sections must align to the same 24px left/right content rail. Section roots should stay transparent with width=\"fill_container\" and height=\"fit_content\"; apply padding once at the section root or first content wrapper. Do not create full-width colored wrapper surfaces just to hold content.",
         );
         user_prompt.push_str(
-            "\nMOBILE SEARCH ACTIONS: Search filter/sliders actions must be visible square controls, not loose white icons. Put them in a 52-56px by 52-56px rounded button using the accent color with a high-contrast icon.",
+            "\nMOBILE VERTICAL RHYTHM: Keep every section root height=\"fit_content\" and do not insert blank spacer frames or empty bands to fill the planned region. Header-to-search spacing should be 12-16px, search-to-next-section 16-24px, major module gaps 24-32px, and internal gaps usually 8/12/16px.",
+        );
+        user_prompt.push_str(
+            "\nMOBILE SEARCH BAR: If generating search, output exactly one search control surface: 48-52px tall, width=\"fill_container\" inside the content rail, neutral/surface fill, subtle 1px border, cornerRadius 14-18, and a 18-20px search icon. Optional filter/sliders is a separate 44-48px square button beside it. Do not nest an input inside another rounded pill, do not use pink/tinted fills, and do not make the search section itself a huge rounded band.",
         );
         user_prompt.push_str(
             "\nNO BLANK PLACEHOLDERS: Do not use empty gray image placeholders in app UI. If no real image asset is available, use a square colored food/icon tile with icon_font instead.",
         );
         user_prompt.push_str(
-            "\nMOBILE ROW STRUCTURE: For category chips, segmented controls, tab bars, and bottom navigation, use either multiple horizontal rows inside a vertical wrapper or equal-width children in a fill_container row. Never create one fit_content horizontal row whose total child width can exceed the screen.",
+            "\nMOBILE HORIZONTAL LISTS: Use a horizontal list only when its wrapper has width=\"fill_container\" and clipContent=true and its inner row uses width=\"fit_content\". Otherwise wrap into rows or a grid. Do not show random half-clipped chips/cards as a design cue.",
+        );
+        user_prompt.push_str(
+            "\nMOBILE GRID ALIGNMENT: For category chips and product cards, visible items in the same row must share equal width/height and aligned top/bottom edges. On 390px screens prefer two-column grids with 16px gaps; never let the right card extend past the content rail.",
+        );
+        user_prompt.push_str(
+            "\nMOBILE CARD OVERLAYS: Heart buttons, badges, and status pills on cards must sit fully inside the card with an 8-12px inset. Do not straddle the card border, use negative x/y, or let floating controls protrude outside rounded corners.",
+        );
+        user_prompt.push_str(
+            "\nMOBILE IMAGE QUALITY: Food/product photos must use consistent aspect ratio, crop, radius, and tone across sibling cards. Avoid random low-quality or mismatched restaurant photos; if cohesive assets are unavailable, use a designed icon/illustration tile instead.",
         );
         user_prompt.push_str(
             "\nMOBILE NAV SURFACE: Bottom navigation and tab bars must sit on the current page palette, full width at the bottom, 62-72px tall. Do not create a separate white footer band, oversized rounded pill, or extra side margins. Never use black or safe-dark fills for nav bars unless the whole root frame background is dark.",
