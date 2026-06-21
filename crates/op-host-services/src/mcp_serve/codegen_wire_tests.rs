@@ -99,9 +99,10 @@ fn codegen_workflow_round_trips_over_the_tools_call_wire() {
         r#"{{"jsonrpc":"2.0","id":62,"method":"tools/call","params":{{"name":"codegen_submit_chunk","arguments":{{"planId":"{plan_id}","result":{}}}}}}}"#,
         chunk_result_args("a", "TitleChunk")
     );
-    let submit_out: serde_json::Value =
-        serde_json::from_str(&crate::mcp_serve::tool_text(&dispatch(&mut state, &submit_line)))
-            .expect("submit json");
+    let submit_out: serde_json::Value = serde_json::from_str(&crate::mcp_serve::tool_text(
+        &dispatch(&mut state, &submit_line),
+    ))
+    .expect("submit json");
     assert_eq!(
         submit_out["validation"],
         serde_json::json!({ "valid": true, "issues": [] })
@@ -127,9 +128,10 @@ fn codegen_workflow_round_trips_over_the_tools_call_wire() {
     let assemble_line = format!(
         r#"{{"jsonrpc":"2.0","id":64,"method":"tools/call","params":{{"name":"codegen_assemble","arguments":{{"planId":"{plan_id}","framework":"react"}}}}}}"#
     );
-    let assemble_out: serde_json::Value =
-        serde_json::from_str(&crate::mcp_serve::tool_text(&dispatch(&mut state, &assemble_line)))
-            .expect("assemble json");
+    let assemble_out: serde_json::Value = serde_json::from_str(&crate::mcp_serve::tool_text(
+        &dispatch(&mut state, &assemble_line),
+    ))
+    .expect("assemble json");
     assert_eq!(assemble_out["chunks"][0]["chunkId"], "a");
     assert_eq!(assemble_out["chunks"][1]["chunkId"], "b");
     assert_eq!(
@@ -151,9 +153,10 @@ fn codegen_workflow_round_trips_over_the_tools_call_wire() {
     let clean_line = format!(
         r#"{{"jsonrpc":"2.0","id":65,"method":"tools/call","params":{{"name":"codegen_clean","arguments":{{"planId":"{plan_id}"}}}}}}"#
     );
-    let clean_out: serde_json::Value =
-        serde_json::from_str(&crate::mcp_serve::tool_text(&dispatch(&mut state, &clean_line)))
-            .expect("clean json");
+    let clean_out: serde_json::Value = serde_json::from_str(&crate::mcp_serve::tool_text(
+        &dispatch(&mut state, &clean_line),
+    ))
+    .expect("clean json");
     assert_eq!(
         clean_out,
         serde_json::json!({ "ok": true, "deleted": false })

@@ -229,6 +229,10 @@ pub struct VisibleSections {
     pub ellipse_arc: bool,
     pub fill: bool,
     pub stroke: bool,
+    /// Resolved stroke-width edit mode (UI pin or derived from values).
+    pub stroke_edit_mode: op_editor_core::PaddingEditMode,
+    /// Whether the stroke-mode gear popover is open.
+    pub stroke_mode_popover_open: bool,
     pub color_variable_count: usize,
     pub fill_variable_bound: bool,
     pub stroke_variable_bound: bool,
@@ -266,6 +270,8 @@ impl VisibleSections {
         ellipse_arc: false,
         fill: true,
         stroke: true,
+        stroke_edit_mode: op_editor_core::PaddingEditMode::Individual,
+        stroke_mode_popover_open: false,
         color_variable_count: 0,
         fill_variable_bound: false,
         stroke_variable_bound: false,

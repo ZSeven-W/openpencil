@@ -27,8 +27,8 @@ use jian_scene::layout_scene::{
     SceneGradientStop, SceneImageFit, SceneNode, ScenePage, SceneStroke, SceneTextAlign,
     SceneTextRun, SceneTextVerticalAlign, SceneWidget, SceneWidgetOption,
 };
-use op_editor_core::scene_vars::VariableTable;
 use op_editor_core::render_backend::Color;
+use op_editor_core::scene_vars::VariableTable;
 
 use crate::editor_state_var_table;
 use crate::payload::{
@@ -452,6 +452,7 @@ fn scene_stroke(
             .stroke_color_for(node_id)
             .unwrap_or_else(|| array_to_color(s.color)),
         width: s.width,
+        sides: s.sides,
     }
 }
 

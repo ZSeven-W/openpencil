@@ -129,13 +129,74 @@ pub fn paint_fill_then_stroke(
         }
     }
     if let Some(stroke) = node.stroke {
-        if use_round {
+        if let Some(sides) = stroke
+            .sides
+            .filter(|sides| !stroke_sides_are_uniform(*sides))
+        {
+            paint_sided_rect_stroke(cx, world_rect, stroke.color, sides, zoom);
+        } else if use_round {
             cx.backend
                 .stroke_round_rect(world_rect, r, stroke.color, stroke.width * zoom);
         } else {
             cx.backend
                 .stroke_rect(world_rect, stroke.color, stroke.width * zoom);
         }
+    }
+}
+
+fn stroke_sides_are_uniform(sides: [f32; 4]) -> bool {
+    sides
+        .iter()
+        .all(|side| (*side - sides[0]).abs() < f32::EPSILON)
+}
+
+fn paint_sided_rect_stroke(
+    cx: &mut PaintCx<'_>,
+    rect: Rect,
+    color: crate::Color,
+    sides: [f32; 4],
+    zoom: f32,
+) {
+    let x0 = rect.origin.x;
+    let y0 = rect.origin.y;
+    let x1 = rect.origin.x + rect.size.x;
+    let y1 = rect.origin.y + rect.size.y;
+    let [top, right, bottom, left] = sides;
+    if top > 0.0 {
+        let width = top * zoom;
+        cx.backend.stroke_line(
+            Point2D::new(x0, y0 + width / 2.0),
+            Point2D::new(x1, y0 + width / 2.0),
+            color,
+            width,
+        );
+    }
+    if right > 0.0 {
+        let width = right * zoom;
+        cx.backend.stroke_line(
+            Point2D::new(x1 - width / 2.0, y0),
+            Point2D::new(x1 - width / 2.0, y1),
+            color,
+            width,
+        );
+    }
+    if bottom > 0.0 {
+        let width = bottom * zoom;
+        cx.backend.stroke_line(
+            Point2D::new(x0, y1 - width / 2.0),
+            Point2D::new(x1, y1 - width / 2.0),
+            color,
+            width,
+        );
+    }
+    if left > 0.0 {
+        let width = left * zoom;
+        cx.backend.stroke_line(
+            Point2D::new(x0 + width / 2.0, y0),
+            Point2D::new(x0 + width / 2.0, y1),
+            color,
+            width,
+        );
     }
 }
 

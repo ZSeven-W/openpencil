@@ -30,6 +30,7 @@ fn action_wash_hugs_size_checkbox_content() {
         &PropertyPanelAction::ToggleSizeFillWidth,
         cell,
         &labels,
+        op_editor_core::Locale::EnUs,
         &mut backend,
     );
     // Hugs checkbox(16) + label, left-padded — never spans the full cell.
@@ -62,6 +63,7 @@ fn action_wash_centers_on_align_icon() {
         &PropertyPanelAction::SetTextAlign(TextAlignValue::Center),
         cell,
         &labels,
+        op_editor_core::Locale::EnUs,
         &mut backend,
     );
     // ~16px icon + 2 × 6px padding = 28px, centred in the 64px cell.
@@ -91,6 +93,7 @@ fn action_wash_passthrough_for_non_fit_actions() {
         &PropertyPanelAction::CreateComponent,
         cell,
         &labels,
+        op_editor_core::Locale::EnUs,
         &mut backend,
     );
     assert_eq!(
@@ -117,6 +120,7 @@ fn action_wash_size_checkbox_clamped_to_cell_for_long_label() {
         &PropertyPanelAction::ToggleSizeFillWidth,
         cell,
         &labels,
+        op_editor_core::Locale::EnUs,
         &mut backend,
     );
     let cell_right = cell.origin.x + cell.size.x;

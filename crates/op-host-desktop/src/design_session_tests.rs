@@ -1,9 +1,9 @@
 use super::*;
+use op_editor_core::{EditorCommand, EditorState};
+use op_editor_host_core::design::{DesignCmdReq, DesignDelta, RemoteDocSink};
 use op_host_services::design_session::{
     active_content_bounds, design_canvas_size, fit_design_viewport_to_content,
 };
-use op_editor_core::{EditorCommand, EditorState};
-use op_editor_host_core::design::{DesignCmdReq, DesignDelta, RemoteDocSink};
 use op_orchestrator::{DocSink, RunSummary, SubtaskOutcome};
 use std::sync::mpsc;
 use std::thread;

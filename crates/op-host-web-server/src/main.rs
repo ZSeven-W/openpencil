@@ -27,11 +27,13 @@ fn main() {
             // `--serve-web <port> [doc] [--host <addr>]`: doc optional
             // (empty document otherwise); `--host` opts in to a
             // non-loopback bind.
-            let (port, path, host) = op_host_services::web_canvas_server::parse_serve_web_args(args)
-                .unwrap_or_else(|e| {
-                    eprintln!("op-host-web-server --serve-web: {e}");
-                    exit(2);
-                });
+            let (port, path, host) = op_host_services::web_canvas_server::parse_serve_web_args(
+                args,
+            )
+            .unwrap_or_else(|e| {
+                eprintln!("op-host-web-server --serve-web: {e}");
+                exit(2);
+            });
             if let Err(e) = op_host_services::web_canvas_server::run_web_canvas(path, port, &host) {
                 eprintln!("op-host-web-server --serve-web: {e}");
                 exit(1);
@@ -53,9 +55,7 @@ fn main() {
                 exit(2);
             };
             let Ok(port) = port_arg.parse::<u16>() else {
-                eprintln!(
-                    "op-host-web-server --mcp-http: <port> must be a u16, got {port_arg:?}"
-                );
+                eprintln!("op-host-web-server --mcp-http: <port> must be a u16, got {port_arg:?}");
                 exit(2);
             };
             let Some(path) = args.next() else {

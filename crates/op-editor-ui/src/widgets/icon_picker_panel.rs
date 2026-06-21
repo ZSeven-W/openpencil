@@ -219,9 +219,7 @@ impl<'a> IconPickerPanel<'a> {
                         name: item.name().to_string(),
                     });
                 }
-                if has_more
-                    && row == all.len()
-                    && !self.state.editor_ui.icon_picker_remote.loading
+                if has_more && row == all.len() && !self.state.editor_ui.icon_picker_remote.loading
                 {
                     return Some(IconPickerHit::LoadMore);
                 }

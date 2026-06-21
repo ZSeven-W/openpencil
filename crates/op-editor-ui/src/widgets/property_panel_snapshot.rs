@@ -53,6 +53,19 @@ pub(crate) fn color_from_hex(hex: &str) -> Option<Color> {
     Some(Color { r, g, b, a })
 }
 
+pub(crate) fn stroke_sides_for_scene(node: &PenNode) -> Option<[f32; 4]> {
+    let sides = op_editor_core::fills::node_stroke_side_widths(node)?;
+    let first = sides[0];
+    if sides
+        .iter()
+        .all(|side| (*side - first).abs() < f32::EPSILON)
+    {
+        None
+    } else {
+        Some(sides)
+    }
+}
+
 /// Snapshot of the selected node's editable fields, formatted for
 /// display. Built once per `for_selection` call so all paint
 /// helpers can read pre-computed strings instead of re-formatting.
@@ -450,6 +463,28 @@ impl NodeSnapshot {
             .unwrap_or(Self::DEFAULT_STROKE_SWATCH)
     }
 
+    /// Stroke widths in `[top, right, bottom, left]` order for the
+    /// side-specific stroke controls. Uniform strokes expand to all
+    /// four sides so each input has a concrete value.
+    pub fn stroke_side_widths(&self) -> [f32; 4] {
+        self.stroke
+            .map(|stroke| stroke.sides.unwrap_or([stroke.width; 4]))
+            .unwrap_or([0.0; 4])
+    }
+
+    /// One side's stroke width for focus seeding.
+    pub fn stroke_side_width_for(&self, focus: op_editor_core::PropertyFocus) -> Option<f32> {
+        use op_editor_core::PropertyFocus as F;
+        let widths = self.stroke_side_widths();
+        match focus {
+            F::StrokeTopWidth => Some(widths[0]),
+            F::StrokeRightWidth => Some(widths[1]),
+            F::StrokeBottomWidth => Some(widths[2]),
+            F::StrokeLeftWidth => Some(widths[3]),
+            _ => None,
+        }
+    }
+
     /// Build an aggregate snapshot for a multi-node selection.
     /// Returns None when nothing on the active page resolves from
     /// `selected_set`. Uses `Document::selection_bounds` (the union
@@ -593,6 +628,7 @@ impl NodeSnapshot {
             .map(|color| SceneStroke {
                 color,
                 width: op_editor_core::fills::node_stroke_width(node).unwrap_or(1.0) as f32,
+                sides: stroke_sides_for_scene(node),
             });
         Self {
             kind: kind.label().to_string(),
@@ -1100,12 +1136,14 @@ fn fills_of(node: &PenNode) -> Vec<FillSummary> {
             let fill_type = op_editor_core::fills::fill_type_of(fill);
             let (hex, opacity) = match fill {
                 PenFill::Solid(b) => (Some(b.color.as_str()), b.opacity.unwrap_or(1.0)),
-                PenFill::LinearGradient(b) => {
-                    (b.stops.first().map(|s| s.color.as_str()), b.opacity.unwrap_or(1.0))
-                }
-                PenFill::RadialGradient(b) => {
-                    (b.stops.first().map(|s| s.color.as_str()), b.opacity.unwrap_or(1.0))
-                }
+                PenFill::LinearGradient(b) => (
+                    b.stops.first().map(|s| s.color.as_str()),
+                    b.opacity.unwrap_or(1.0),
+                ),
+                PenFill::RadialGradient(b) => (
+                    b.stops.first().map(|s| s.color.as_str()),
+                    b.opacity.unwrap_or(1.0),
+                ),
                 PenFill::Image(b) => (None, b.opacity.unwrap_or(1.0)),
             };
             FillSummary {

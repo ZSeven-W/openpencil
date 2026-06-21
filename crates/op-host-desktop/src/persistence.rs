@@ -20,8 +20,8 @@ use std::path::PathBuf;
 use op_editor_core::EditorState;
 use op_host_native::WidgetHostNative;
 use op_host_services::doc_io::{
-    ActionOutcome, ErrorKind, active_page_bbox, load_editor_state, preserve_app_preferences,
-    save_to_path, set_file_name_display,
+    active_page_bbox, load_editor_state, preserve_app_preferences, save_to_path,
+    set_file_name_display, ActionOutcome, ErrorKind,
 };
 
 /// Pop a Save dialog (rfd native) and write the current document to
@@ -253,9 +253,9 @@ pub fn run_action(
                 };
                 let raster = |rf: op_host_services::export::RasterFormat| -> Result<(), String> {
                     match &single_node {
-                        Some(id) => {
-                            op_host_services::export::export_node_raster(scene, id, &path, rf, scale)
-                        }
+                        Some(id) => op_host_services::export::export_node_raster(
+                            scene, id, &path, rf, scale,
+                        ),
                         None => op_host_services::export::export_raster(scene, &path, rf, scale),
                     }
                 };

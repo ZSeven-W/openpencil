@@ -18,9 +18,7 @@
 
 use op_ai::chat_provider::{ChatToolDef, ChatToolResult};
 use op_editor_core::EditorState;
-pub use op_editor_host_core::chat::{
-    chat_tool_channel, ChatToolRequest, UiChatToolExecutor,
-};
+pub use op_editor_host_core::chat::{chat_tool_channel, ChatToolRequest, UiChatToolExecutor};
 use op_mcp::{ToolRegistry, ToolResponse};
 
 /// TS `maxTurns` for the chat agent loop (`ai-chat-handlers.ts:254`).

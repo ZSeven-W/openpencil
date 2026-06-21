@@ -31,7 +31,11 @@ struct ViewportSnapshot {
 
 impl From<DocViewport> for ViewportSnapshot {
     fn from(v: DocViewport) -> Self {
-        ViewportSnapshot { pan_x: v.pan_x, pan_y: v.pan_y, zoom: v.zoom }
+        ViewportSnapshot {
+            pan_x: v.pan_x,
+            pan_y: v.pan_y,
+            zoom: v.zoom,
+        }
     }
 }
 
@@ -66,8 +70,7 @@ impl Viewer {
     /// Throws a JS exception if `serde_json` fails to serialize the document.
     pub fn document_json(&self) -> Result<String, JsValue> {
         match &self.doc {
-            Some(doc) => serde_json::to_string(doc)
-                .map_err(|e| JsValue::from_str(&e.to_string())),
+            Some(doc) => serde_json::to_string(doc).map_err(|e| JsValue::from_str(&e.to_string())),
             None => Ok("{}".to_string()),
         }
     }
@@ -92,8 +95,9 @@ impl Viewer {
         };
 
         match &doc.pages {
-            Some(pages) => serde_json::to_string(pages)
-                .map_err(|e| JsValue::from_str(&e.to_string())),
+            Some(pages) => {
+                serde_json::to_string(pages).map_err(|e| JsValue::from_str(&e.to_string()))
+            }
             None => {
                 if doc.children.is_empty() {
                     Ok("[]".to_string())
@@ -104,8 +108,7 @@ impl Viewer {
                         name: "Page 1",
                         children: &doc.children,
                     }];
-                    serde_json::to_string(&synthetic)
-                        .map_err(|e| JsValue::from_str(&e.to_string()))
+                    serde_json::to_string(&synthetic).map_err(|e| JsValue::from_str(&e.to_string()))
                 }
             }
         }
@@ -119,7 +122,6 @@ impl Viewer {
     /// Throws a JS exception if `serde_json` fails to serialize the viewport.
     pub fn viewport_json(&self) -> Result<String, JsValue> {
         let snap = ViewportSnapshot::from(self.viewport);
-        serde_json::to_string(&snap)
-            .map_err(|e| JsValue::from_str(&e.to_string()))
+        serde_json::to_string(&snap).map_err(|e| JsValue::from_str(&e.to_string()))
     }
 }

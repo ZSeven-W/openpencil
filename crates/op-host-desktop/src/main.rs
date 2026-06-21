@@ -278,7 +278,8 @@ impl DesktopApp {
         host.mark_editor_state_dirty();
         // Baseline for the unsaved-changes prompt — the fresh,
         // empty document is by definition "saved" (nothing to lose).
-        let saved_doc_fingerprint = op_host_services::doc_io::document_fingerprint(host.editor_state());
+        let saved_doc_fingerprint =
+            op_host_services::doc_io::document_fingerprint(host.editor_state());
         let update_probe = if cfg!(test) {
             update_check::UpdateProbe::idle()
         } else {
@@ -387,7 +388,8 @@ impl DesktopApp {
         // silent no-op when it finishes.
         figma_import_session::cancel(&mut self.host, &mut self.current_figma_import);
         self.image_search.reset();
-        self.saved_doc_fingerprint = op_host_services::doc_io::document_fingerprint(self.host.editor_state());
+        self.saved_doc_fingerprint =
+            op_host_services::doc_io::document_fingerprint(self.host.editor_state());
         self.rebind_git_session_for_current_path();
     }
 
@@ -476,7 +478,8 @@ impl DesktopApp {
     /// Whether the document carries edits since the last save / open
     /// / new.
     fn document_is_dirty(&self) -> bool {
-        op_host_services::doc_io::document_fingerprint(self.host.editor_state()) != self.saved_doc_fingerprint
+        op_host_services::doc_io::document_fingerprint(self.host.editor_state())
+            != self.saved_doc_fingerprint
     }
 
     /// Open documents macOS delivered through the open-documents
@@ -728,7 +731,8 @@ impl DesktopApp {
                     // them. An unchanged document reloads silently.
                     let edited_during_pull = baseline
                         .map(|base| {
-                            op_host_services::doc_io::document_fingerprint(self.host.editor_state()) != base
+                            op_host_services::doc_io::document_fingerprint(self.host.editor_state())
+                                != base
                         })
                         .unwrap_or(false);
                     if !edited_during_pull || self.confirm_document_reload() {
@@ -858,7 +862,8 @@ impl DesktopApp {
 /// window is up (see `DesktopApp::apply_initial_file`).
 fn initial_file_from_argv() -> Option<PathBuf> {
     std::env::args_os().skip(1).map(PathBuf::from).find(|p| {
-        (op_host_services::doc_io::is_supported_document(p) || op_host_services::doc_io::is_supported_figma_import(p))
+        (op_host_services::doc_io::is_supported_document(p)
+            || op_host_services::doc_io::is_supported_figma_import(p))
             && p.is_file()
     })
 }

@@ -12,7 +12,7 @@
 //! Each helper keeps the validate-then-mutate discipline: kind / range
 //! / hex checks happen BEFORE the mutable borrow + write.
 
-use crate::command::{EffectField, NodeFlag};
+use crate::command::{EffectField, NodeFlag, StrokeSide};
 use crate::fills::{set_primary_fill_hex, set_primary_stroke_hex};
 use crate::node_id::NodeId;
 use crate::pen_node_ext::PenNodeExt;
@@ -21,7 +21,9 @@ use crate::walkers::find_node_mut;
 use jian_ops_schema::node::{
     BoolOrExpression, CornerRadius, FontWeight, NumberOrExpression, PenNode, TextContent,
 };
-use jian_ops_schema::style::{BlurBody, PenEffect, PenStroke, ShadowBody, StrokeThickness};
+use jian_ops_schema::style::{
+    BlurBody, PenEffect, PenStroke, ShadowBody, SidedThickness, StrokeThickness,
+};
 
 /// Which string-typed widget prop a `SetNodeWidgetText` edit targets.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -210,6 +212,66 @@ fn node_stroke_slot(node: &mut PenNode) -> Option<&mut Option<PenStroke>> {
     }
 }
 
+fn set_stroke_width_preserving_sides(stroke: &mut PenStroke, width: f32) {
+    stroke.thickness = match &stroke.thickness {
+        StrokeThickness::Uniform(_) => StrokeThickness::Uniform(width),
+        StrokeThickness::PerSide(sides) => {
+            StrokeThickness::PerSide(sides.map(|side| if side > 0.0 { width } else { 0.0 }))
+        }
+        StrokeThickness::Sided(sides) => StrokeThickness::Sided(SidedThickness {
+            top: scaled_side_width(sides.top, width),
+            right: scaled_side_width(sides.right, width),
+            bottom: scaled_side_width(sides.bottom, width),
+            left: scaled_side_width(sides.left, width),
+        }),
+    };
+}
+
+fn scaled_side_width(side: Option<f32>, width: f32) -> Option<f32> {
+    side.map(|value| if value > 0.0 { width } else { 0.0 })
+}
+
+fn stroke_side_index(side: StrokeSide) -> usize {
+    match side {
+        StrokeSide::Top => 0,
+        StrokeSide::Right => 1,
+        StrokeSide::Bottom => 2,
+        StrokeSide::Left => 3,
+    }
+}
+
+fn stroke_side_widths(thickness: &StrokeThickness) -> [f32; 4] {
+    match thickness {
+        StrokeThickness::Uniform(width) => [*width; 4],
+        StrokeThickness::PerSide(sides) => *sides,
+        StrokeThickness::Sided(sides) => [
+            sides.top.unwrap_or(0.0),
+            sides.right.unwrap_or(0.0),
+            sides.bottom.unwrap_or(0.0),
+            sides.left.unwrap_or(0.0),
+        ],
+    }
+}
+
+fn stroke_side_value(width: f32) -> Option<f32> {
+    (width > 0.0).then_some(width)
+}
+
+fn sided_stroke_thickness(widths: [f32; 4]) -> StrokeThickness {
+    StrokeThickness::Sided(SidedThickness {
+        top: stroke_side_value(widths[0]),
+        right: stroke_side_value(widths[1]),
+        bottom: stroke_side_value(widths[2]),
+        left: stroke_side_value(widths[3]),
+    })
+}
+
+fn set_stroke_side_width(stroke: &mut PenStroke, side: StrokeSide, width: f32) {
+    let mut widths = stroke_side_widths(&stroke.thickness);
+    widths[stroke_side_index(side)] = width;
+    stroke.thickness = sided_stroke_thickness(widths);
+}
+
 impl EditorState {
     /// `SetNodeRotation` — write rotation (degrees) on a node.
     pub(crate) fn cmd_set_node_rotation(&mut self, node_id: &NodeId, degrees: f32) -> bool {
@@ -347,7 +409,7 @@ impl EditorState {
             *slot = None;
         } else {
             match slot {
-                Some(stroke) => stroke.thickness = StrokeThickness::Uniform(width),
+                Some(stroke) => set_stroke_width_preserving_sides(stroke, width),
                 none @ None => {
                     *none = Some(PenStroke {
                         thickness: StrokeThickness::Uniform(width),
@@ -359,6 +421,50 @@ impl EditorState {
                         fill: None,
                     });
                 }
+            }
+        }
+        true
+    }
+
+    /// `SetNodeStrokeSideWidth` — set one side's stroke width
+    /// (doc-px) on a node. Other sides are preserved; a uniform
+    /// stroke expands to explicit top/right/bottom/left widths.
+    pub(crate) fn cmd_set_node_stroke_side_width(
+        &mut self,
+        node_id: &NodeId,
+        side: StrokeSide,
+        width: f32,
+    ) -> bool {
+        if !node_id.is_real() || !width.is_finite() || width < 0.0 {
+            return false;
+        }
+        let Some(node) = find_node_mut(self.active_children_mut(), node_id) else {
+            return false;
+        };
+        let Some(slot) = node_stroke_slot(node) else {
+            return false;
+        };
+        let mut widths = match slot.as_ref() {
+            Some(stroke) => stroke_side_widths(&stroke.thickness),
+            None => [0.0; 4],
+        };
+        widths[stroke_side_index(side)] = width;
+        if widths.iter().all(|value| *value <= 0.0) {
+            *slot = None;
+            return true;
+        }
+        match slot {
+            Some(stroke) => set_stroke_side_width(stroke, side, width),
+            none @ None => {
+                *none = Some(PenStroke {
+                    thickness: sided_stroke_thickness(widths),
+                    align: None,
+                    join: None,
+                    cap: None,
+                    dash_pattern: None,
+                    dash_offset: None,
+                    fill: None,
+                });
             }
         }
         true

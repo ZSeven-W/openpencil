@@ -291,16 +291,38 @@ pub fn first_solid_stroke_hex(node: &PenNode) -> Option<&str> {
     })
 }
 
-/// Uniform stroke width (doc-px) for the node, when it carries a
-/// stroke. A `PerSide` thickness reads as its first (top) edge — the
-/// editor's property panel exposes a single scalar width. `None`
-/// when the variant carries no stroke or the node has none set.
+/// Display stroke width (doc-px) for the node, when it carries a
+/// stroke. A side-specific thickness reports the widest edge so the
+/// legacy scalar width input still reflects the visible maximum.
+/// `None` when the variant carries no stroke or the node has none set.
 pub fn node_stroke_width(node: &PenNode) -> Option<f64> {
     use jian_ops_schema::style::StrokeThickness;
     match &node_stroke(node)?.thickness {
         StrokeThickness::Uniform(w) => Some(*w as f64),
-        StrokeThickness::PerSide(sides) => Some(sides[0] as f64),
-        StrokeThickness::Sided(s) => Some(s.top.unwrap_or(0.0) as f64),
+        StrokeThickness::PerSide(sides) => {
+            Some(sides.iter().copied().fold(0.0_f32, f32::max) as f64)
+        }
+        StrokeThickness::Sided(s) => Some(
+            [s.top, s.right, s.bottom, s.left]
+                .into_iter()
+                .flatten()
+                .fold(0.0_f32, f32::max) as f64,
+        ),
+    }
+}
+
+/// Per-side stroke widths in `[top, right, bottom, left]` order.
+pub fn node_stroke_side_widths(node: &PenNode) -> Option<[f32; 4]> {
+    use jian_ops_schema::style::StrokeThickness;
+    match &node_stroke(node)?.thickness {
+        StrokeThickness::Uniform(w) => Some([*w; 4]),
+        StrokeThickness::PerSide(sides) => Some(*sides),
+        StrokeThickness::Sided(s) => Some([
+            s.top.unwrap_or(0.0),
+            s.right.unwrap_or(0.0),
+            s.bottom.unwrap_or(0.0),
+            s.left.unwrap_or(0.0),
+        ]),
     }
 }
 
@@ -771,7 +793,9 @@ pub fn fill_count(node: &PenNode) -> usize {
 
 /// `FillType` of the fill at `index`, if present.
 pub fn fill_type_at(node: &PenNode, index: usize) -> Option<FillType> {
-    node_fills(node).and_then(|fills| fills.get(index)).map(fill_type_of)
+    node_fills(node)
+        .and_then(|fills| fills.get(index))
+        .map(fill_type_of)
 }
 
 /// Append a new default solid fill (the TS new-fill default `#d1d5db`).

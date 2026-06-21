@@ -81,8 +81,11 @@ pub fn tool_text(response: &str) -> String {
 /// Load a `.op` file into an `EditorState` via the schema compat layer.
 pub fn load_editor_state(path: &Path) -> Result<EditorState, String> {
     let src = std::fs::read_to_string(path).map_err(|e| format!("read {}: {e}", path.display()))?;
-    let loaded =
-        jian_ops_schema::load_str(&src).map_err(|e| format!("parse {}: {e}", path.display()))?;
+    let loaded = op_pen_loader::load_canonical(&src)
+        .map_err(|e| format!("parse {}: {e}", path.display()))?;
+    for warning in &loaded.warnings {
+        eprintln!("openpencil-desktop mcp: schema warning: {warning:?}");
+    }
     Ok(EditorState::from_document(loaded.value))
 }
 

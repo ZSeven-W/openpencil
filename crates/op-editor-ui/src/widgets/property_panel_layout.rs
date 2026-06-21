@@ -6,14 +6,13 @@
 //! Pulled out of `property_panel_sections.rs` to keep that file
 //! under the 800-line ceiling.
 
-use crate::widgets::property_panel::{
-    EffectKind, EffectSummary, FillSummary, PropertyPanelAction,
-};
+use crate::widgets::property_panel::{EffectKind, EffectSummary, FillSummary, PropertyPanelAction};
 use crate::widgets::property_panel_fill::fill_row_height;
 use crate::widgets::property_panel_inputs::{
     COLOR_VARIABLE_BUTTON_W, COLOR_VARIABLE_GAP, CREATE_COMPONENT_BTN_H, CREATE_COMPONENT_PAD_TOP,
     HEADER_HEIGHT, INPUT_HEIGHT, PAD_X, SECTION_GAP, SECTION_HEADER_HEIGHT, TAB_HEIGHT,
 };
+use crate::widgets::property_panel_stroke::{push_stroke_action_rects, stroke_section_body_height};
 use crate::{Point2D, Rect};
 use op_editor_core::{EffectField, FillType};
 
@@ -212,6 +211,24 @@ pub fn action_button_rects(
     action_button_rects_with_fill_picker(
         panel_rect, visible, effects, fills, false, 0, false, false, false, false, false,
     )
+}
+
+/// The shared action-walker rect for the fill type dropdown at
+/// `index`. Open fill-type overlays must anchor to this rect so
+/// paint, hit-testing, and popup row actions stay in lockstep.
+pub fn fill_type_toggle_action_rect(
+    panel_rect: Rect,
+    visible: VisibleSections,
+    effects: &[EffectSummary],
+    fills: &[FillSummary],
+    index: usize,
+) -> Option<Rect> {
+    action_button_rects(panel_rect, visible, effects, fills)
+        .into_iter()
+        .find_map(|(action, rect)| {
+            matches!(action, PropertyPanelAction::ToggleFillTypePicker(i) if i == index)
+                .then_some(rect)
+        })
 }
 
 /// Height of one row in an Export-section inline select popup.
@@ -443,7 +460,9 @@ pub fn action_button_rects_with_fill_picker(
         y += SECTION_GAP;
     }
     if visible.stroke {
-        // Mirrors paint_stroke_section: header + hex/width row.
+        // Mirrors paint_stroke_section: header + hex/width row + side grid.
+        let section_y = y;
+        push_stroke_action_rects(&mut out, x0, section_y, w, visible.stroke_mode_popover_open);
         y += SECTION_HEADER_HEIGHT;
         // The stroke hex row's leading colour swatch opens the picker.
         let show_var = visible.color_variable_count > 0 || visible.stroke_variable_bound;
@@ -452,8 +471,10 @@ pub fn action_button_rects_with_fill_picker(
         } else {
             0.0
         };
-        let width_w = 60.0;
-        let hex_w = usable_w - width_w - 8.0 - variable_w;
+        // The stroke width moved to the mode grid below, so the hex fills the
+        // whole row (matches property_panel_stroke + the input-rect walker) —
+        // the variable button + picker anchor must use this widened hex_w.
+        let hex_w = usable_w - variable_w;
         if !visible.stroke_variable_bound {
             out.push((
                 PropertyPanelAction::OpenColorPicker(op_editor_core::ColorTarget::Stroke),
@@ -482,7 +503,7 @@ pub fn action_button_rects_with_fill_picker(
                 );
             }
         }
-        y += INPUT_HEIGHT + 12.0;
+        y += stroke_section_body_height(visible.stroke_edit_mode);
         y += SECTION_GAP;
     }
     if visible.effects {

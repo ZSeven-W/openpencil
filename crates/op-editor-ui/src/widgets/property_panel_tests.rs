@@ -174,11 +174,12 @@ fn polygon_selection_exposes_sides_layer_input() {
         origin: Point2D::new(0.0, 0.0),
         size: Point2D::new(280.0, 1200.0),
     };
-    let sides_rect = sections::editable_input_rects(rect, visible_for(&panel), &panel.snapshot.fills)
-        .into_iter()
-        .find(|(focus, _)| *focus == op_editor_core::PropertyFocus::PolygonSides)
-        .map(|(_, r)| r)
-        .expect("polygon side input rect");
+    let sides_rect =
+        sections::editable_input_rects(rect, visible_for(&panel), &panel.snapshot.fills)
+            .into_iter()
+            .find(|(focus, _)| *focus == op_editor_core::PropertyFocus::PolygonSides)
+            .map(|(_, r)| r)
+            .expect("polygon side input rect");
     let center = Point2D::new(
         sides_rect.origin.x + sides_rect.size.x / 2.0,
         sides_rect.origin.y + sides_rect.size.y / 2.0,
@@ -537,7 +538,8 @@ fn both_dimensions_fill_collapses_the_size_input_row() {
         "both-hidden must collapse the input row (~40px up), got {delta}"
     );
     // Neither W nor H emits a focus rect when both are hidden.
-    let both_inputs = sections::editable_input_rects(rect, visible_for(&both), &both.snapshot.fills);
+    let both_inputs =
+        sections::editable_input_rects(rect, visible_for(&both), &both.snapshot.fills);
     assert!(
         !both_inputs
             .iter()

@@ -6,14 +6,12 @@
 use crate::theme::Theme;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::property_panel::NodeSnapshot;
-use crate::widgets::property_panel_color_variables::paint_color_variable_button;
 use crate::widgets::property_panel_inputs::{
-    create_component_block_height, format_color_hex, paint_input_with_icon_focused_state,
+    create_component_block_height, paint_input_with_icon_focused_state,
     paint_input_with_prefix_focused_state, paint_section_divider, paint_section_label,
-    paint_text_input_view_value, COLOR_VARIABLE_BUTTON_W, COLOR_VARIABLE_GAP, COMPONENT_ACCENT,
-    CREATE_COMPONENT_BTN_H, CREATE_COMPONENT_ICON, CREATE_COMPONENT_PAD_TOP,
-    CREATE_COMPONENT_ROW_GAP, HEADER_HEIGHT, INPUT_HEIGHT, INPUT_RADIUS, INSTANCE_ACCENT, PAD_X,
-    SECTION_GAP, TAB_HEIGHT,
+    paint_text_input_view_value, COMPONENT_ACCENT, CREATE_COMPONENT_BTN_H, CREATE_COMPONENT_ICON,
+    CREATE_COMPONENT_PAD_TOP, CREATE_COMPONENT_ROW_GAP, HEADER_HEIGHT, INPUT_HEIGHT,
+    INSTANCE_ACCENT, PAD_X, SECTION_GAP, TAB_HEIGHT,
 };
 use crate::widgets::PaintCx;
 use crate::{Point2D, Rect, TextLayout};
@@ -233,7 +231,8 @@ impl<'a> EditContext<'a> {
 /// `property_panel_layout.rs` now.
 pub use crate::widgets::property_panel_layout::{
     action_button_rects, action_button_rects_with_fill_picker, editable_input_rects,
-    fill_body_height, property_panel_content_height, SizeFlags, VisibleSections,
+    fill_body_height, fill_type_toggle_action_rect, property_panel_content_height, SizeFlags,
+    VisibleSections,
 };
 
 // ── Tab strip ─────────────────────────────────────────────────────
@@ -777,189 +776,6 @@ fn paint_check_row(
         Point2D::new(0.0, 0.0),
     );
     cx.backend.draw_text(&lbl, Point2D::new(x + 22.0, y + 16.0));
-}
-
-// ── Stroke section ────────────────────────────────────────────────
-
-// Paint-context + geometry args threaded through; a struct adds no gain.
-#[allow(clippy::too_many_arguments)]
-pub fn paint_stroke_section(
-    cx: &mut PaintCx<'_>,
-    theme: &Theme,
-    snapshot: &NodeSnapshot,
-    edit: &EditContext<'_>,
-    labels: &PropertyLabels,
-    stroke_variable_ref: Option<&str>,
-    show_variable_button: bool,
-    x: f32,
-    y: f32,
-    width: f32,
-) -> f32 {
-    let mut y = paint_section_label(cx, theme, labels.stroke, x, y, width);
-    let usable_w = width - PAD_X * 2.0;
-    let stroke_color = snapshot.stroke_swatch_color();
-    let stroke_width = snapshot.stroke.map(|s| s.width).unwrap_or(0.0);
-    let width_w = 60.0;
-    let variable_w = if show_variable_button {
-        COLOR_VARIABLE_BUTTON_W + COLOR_VARIABLE_GAP
-    } else {
-        0.0
-    };
-    let hex_rect = Rect {
-        origin: Point2D::new(x + PAD_X, y),
-        size: Point2D::new(usable_w - width_w - 8.0 - variable_w, INPUT_HEIGHT),
-    };
-    let hex_focused = edit.focus == Some(PropertyFocus::StrokeHex);
-    cx.backend
-        .fill_round_rect(hex_rect, INPUT_RADIUS, theme.muted);
-    if hex_focused && stroke_variable_ref.is_none() {
-        cx.backend
-            .stroke_round_rect(hex_rect, INPUT_RADIUS, theme.primary, 1.5);
-    }
-    cx.backend.fill_round_rect(
-        Rect {
-            // Vertically centre the 16-tall swatch in the 30-tall
-            // row: `(30 - 16) / 2 == 7`.
-            origin: Point2D::new(hex_rect.origin.x + 6.0, hex_rect.origin.y + 7.0),
-            size: Point2D::new(16.0, 16.0),
-        },
-        3.0,
-        stroke_color,
-    );
-    let hex_owned = format_color_hex(stroke_color);
-    let variable_text = stroke_variable_ref.map(|name| format!("${name}"));
-    let hex_text = variable_text
-        .as_deref()
-        .unwrap_or_else(|| edit.value_for(PropertyFocus::StrokeHex, &hex_owned));
-    let hex_x = hex_rect.origin.x + 30.0;
-    let painted_hex = stroke_variable_ref.is_none()
-        && edit.paint_input_view_at(
-            cx,
-            theme,
-            PropertyFocus::StrokeHex,
-            Rect {
-                origin: Point2D::new(hex_x, hex_rect.origin.y),
-                size: Point2D::new(
-                    (hex_rect.origin.x + hex_rect.size.x - 8.0 - hex_x).max(0.0),
-                    hex_rect.size.y,
-                ),
-            },
-            12.0,
-            0.0,
-            hex_rect.origin.y + 19.0,
-        );
-    if !painted_hex {
-        let hex_layout = TextLayout::single_run(
-            hex_text,
-            "system-ui",
-            12.0,
-            (theme.foreground).to_jian(),
-            Point2D::new(0.0, 0.0),
-        );
-        if stroke_variable_ref.is_none() {
-            edit.paint_selection_at(
-                cx,
-                theme,
-                PropertyFocus::StrokeHex,
-                hex_text,
-                hex_x,
-                hex_rect.origin.y + 19.0,
-                12.0,
-                hex_rect.origin.x + hex_rect.size.x - 8.0,
-            );
-        }
-        cx.backend
-            .draw_text(&hex_layout, Point2D::new(hex_x, hex_rect.origin.y + 19.0));
-        if stroke_variable_ref.is_none() {
-            if let Some(pos) = edit.caret_at(PropertyFocus::StrokeHex) {
-                let w = cx
-                    .backend
-                    .measure_text(&hex_text[..pos.min(hex_text.len())], 12.0);
-                cx.backend.fill_rect(
-                    Rect {
-                        origin: Point2D::new(hex_x + w, hex_rect.origin.y + 6.0),
-                        size: Point2D::new(1.5, hex_rect.size.y - 12.0),
-                    },
-                    theme.foreground,
-                );
-            }
-        }
-    }
-    if show_variable_button {
-        paint_color_variable_button(
-            cx,
-            theme,
-            Rect {
-                origin: Point2D::new(hex_rect.origin.x + hex_rect.size.x + COLOR_VARIABLE_GAP, y),
-                size: Point2D::new(COLOR_VARIABLE_BUTTON_W, INPUT_HEIGHT),
-            },
-            stroke_variable_ref.is_some(),
-        );
-    }
-    let w_rect = Rect {
-        origin: Point2D::new(hex_rect.origin.x + hex_rect.size.x + variable_w + 8.0, y),
-        size: Point2D::new(width_w, INPUT_HEIGHT),
-    };
-    let w_focused = edit.focus == Some(PropertyFocus::StrokeWidth);
-    cx.backend
-        .fill_round_rect(w_rect, INPUT_RADIUS, theme.muted);
-    if w_focused {
-        cx.backend
-            .stroke_round_rect(w_rect, INPUT_RADIUS, theme.primary, 1.5);
-    }
-    let w_owned = format!("{}", stroke_width.round() as i32);
-    let w_text = edit.value_for(PropertyFocus::StrokeWidth, &w_owned);
-    let w_x = w_rect.origin.x + 12.0;
-    if !edit.paint_input_view_at(
-        cx,
-        theme,
-        PropertyFocus::StrokeWidth,
-        Rect {
-            origin: Point2D::new(w_x, w_rect.origin.y),
-            size: Point2D::new(
-                (w_rect.origin.x + w_rect.size.x - 8.0 - w_x).max(0.0),
-                w_rect.size.y,
-            ),
-        },
-        12.0,
-        0.0,
-        w_rect.origin.y + 19.0,
-    ) {
-        let w_layout = TextLayout::single_run(
-            w_text,
-            "system-ui",
-            12.0,
-            (theme.foreground).to_jian(),
-            Point2D::new(0.0, 0.0),
-        );
-        edit.paint_selection_at(
-            cx,
-            theme,
-            PropertyFocus::StrokeWidth,
-            w_text,
-            w_x,
-            w_rect.origin.y + 19.0,
-            12.0,
-            w_rect.origin.x + w_rect.size.x - 8.0,
-        );
-        cx.backend
-            .draw_text(&w_layout, Point2D::new(w_x, w_rect.origin.y + 19.0));
-        if let Some(pos) = edit.caret_at(PropertyFocus::StrokeWidth) {
-            let w = cx
-                .backend
-                .measure_text(&w_text[..pos.min(w_text.len())], 12.0);
-            cx.backend.fill_rect(
-                Rect {
-                    origin: Point2D::new(w_x + w, w_rect.origin.y + 6.0),
-                    size: Point2D::new(1.5, w_rect.size.y - 12.0),
-                },
-                theme.foreground,
-            );
-        }
-    }
-    y += INPUT_HEIGHT + 12.0;
-    paint_section_divider(cx, theme, x, y, width);
-    y + SECTION_GAP
 }
 
 // ── Effects section ───────────────────────────────────────────────

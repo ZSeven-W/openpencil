@@ -1,6 +1,5 @@
 // Tests for Viewer document parsing and page snapshot accessors.
-const DOC: &str =
-    r#"{"version":"1.0","pages":[{"id":"p1","name":"Page 1","children":[]}]}"#;
+const DOC: &str = r#"{"version":"1.0","pages":[{"id":"p1","name":"Page 1","children":[]}]}"#;
 
 #[test]
 fn load_parses_pages() {

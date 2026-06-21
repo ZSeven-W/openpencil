@@ -995,6 +995,16 @@ pub struct EditorUiState {
     /// Index (into `PaddingEditMode::ALL`) of the popover row under the
     /// cursor while the gear popover is open — drives the hover wash.
     pub padding_mode_popover_hover: Option<usize>,
+    /// Stroke-width edit mode pinned via the stroke-section gear.
+    /// Scoped to [`Self::stroke_edit_mode_anchor`] like padding.
+    pub stroke_edit_mode: Option<PaddingEditMode>,
+    /// Node id (anchor) the stroke edit-mode pin was set for.
+    pub stroke_edit_mode_anchor: String,
+    /// Whether the stroke-mode gear popover is open.
+    pub stroke_mode_popover_open: bool,
+    /// Index (into `PaddingEditMode::ALL`) of the stroke popover row
+    /// under the cursor while the gear popover is open.
+    pub stroke_mode_popover_hover: Option<usize>,
     pub size_fill_width: bool,
     pub size_fill_height: bool,
     pub size_hug_width: bool,
@@ -1284,6 +1294,10 @@ impl Default for EditorUiState {
             padding_edit_mode_anchor: String::new(),
             padding_mode_popover_open: false,
             padding_mode_popover_hover: None,
+            stroke_edit_mode: None,
+            stroke_edit_mode_anchor: String::new(),
+            stroke_mode_popover_open: false,
+            stroke_mode_popover_hover: None,
             size_fill_width: false,
             size_fill_height: false,
             size_hug_width: false,
@@ -1612,6 +1626,10 @@ impl EditorUiState {
         self.padding_edit_mode = None;
         self.padding_edit_mode_anchor = String::new();
         self.padding_mode_popover_open = false;
+        self.stroke_edit_mode = None;
+        self.stroke_edit_mode_anchor = String::new();
+        self.stroke_mode_popover_open = false;
+        self.stroke_mode_popover_hover = None;
         self.property_color_variable_picker_open = None;
         self.axis_dropdown_open = None;
         self.variables_theme_rename_axis = None;

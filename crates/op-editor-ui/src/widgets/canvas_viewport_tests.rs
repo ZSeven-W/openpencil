@@ -102,6 +102,7 @@ fn sample_scene() -> LayoutScene {
     frame.stroke = Some(SceneStroke {
         color: Color::WHITE,
         width: 1.0,
+        sides: None,
     });
     frame.fill_type = SceneFillType::Solid;
     let mut button = leaf(

@@ -421,8 +421,10 @@ pub(crate) fn paint_fill_gradient_body(
             draw_icon(
                 cx.backend,
                 Icon::Close,
+                // Centre the 14px glyph in its 28px RemoveGradientStop wash
+                // cell (x+width-PAD_X-22, size 28 — see the action walker).
                 Point2D::new(
-                    pct_rect.origin.x + pct_rect.size.x + 10.0,
+                    x + width - PAD_X - 22.0 + (28.0 - 14.0) / 2.0,
                     row_y + (INPUT_HEIGHT - 14.0) / 2.0,
                 ),
                 14.0,

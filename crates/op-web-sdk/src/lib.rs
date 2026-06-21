@@ -1,14 +1,14 @@
 //! OpenPencil read-only web embedding SDK. Parses a `.op` document and
 //! renders it to a `<canvas>` via CanvasKit, with pan/zoom navigation,
 //! read-only snapshots, and SVG export. No editing.
-mod viewer_host;
 mod document;
-mod scene;
-mod navigation;
 mod export;
-mod snapshot;
+mod navigation;
 #[cfg(feature = "canvaskit")]
 mod render;
+mod scene;
+mod snapshot;
+mod viewer_host;
 
 use op_editor_core::Viewport as DocViewport;
 use wasm_bindgen::prelude::*;

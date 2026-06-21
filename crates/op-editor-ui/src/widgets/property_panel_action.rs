@@ -330,6 +330,12 @@ pub enum PropertyPanelAction {
     /// User picked a padding edit mode in the gear popover — host pins
     /// `editor_ui.padding_edit_mode` + reshapes the value.
     SetPaddingMode(op_editor_core::PaddingEditMode),
+    /// User clicked the stroke-section gear — host toggles
+    /// `editor_ui.stroke_mode_popover_open`.
+    ToggleStrokeModePopover,
+    /// User picked a stroke edit mode in the gear popover — host pins
+    /// `editor_ui.stroke_edit_mode` + reshapes side widths.
+    SetStrokeMode(op_editor_core::PaddingEditMode),
     /// User clicked the Widget section's `checked` toggle on a Switch
     /// / Checkbox node — host flips the literal `checked` bool to
     /// `new_value`.

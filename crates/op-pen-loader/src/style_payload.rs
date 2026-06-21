@@ -277,16 +277,27 @@ fn first_fill_type(fills: Option<&[PenFill]>) -> String {
 
 pub(crate) fn stroke_to_payload(s: Option<&PenStroke>) -> Option<StrokePayload> {
     let s = s?;
-    let width = match &s.thickness {
-        StrokeThickness::Uniform(n) => *n,
-        StrokeThickness::PerSide(sides) => sides.iter().fold(0.0_f32, |a, b| a.max(*b)),
-        StrokeThickness::Sided(sided) => [sided.top, sided.right, sided.bottom, sided.left]
-            .into_iter()
-            .flatten()
-            .fold(0.0_f32, |a, b| a.max(b)),
+    let (width, sides) = match &s.thickness {
+        StrokeThickness::Uniform(n) => (*n, None),
+        StrokeThickness::PerSide(sides) => {
+            (sides.iter().copied().fold(0.0_f32, f32::max), Some(*sides))
+        }
+        StrokeThickness::Sided(sided) => {
+            let sides = [
+                sided.top.unwrap_or(0.0),
+                sided.right.unwrap_or(0.0),
+                sided.bottom.unwrap_or(0.0),
+                sided.left.unwrap_or(0.0),
+            ];
+            (sides.iter().copied().fold(0.0_f32, f32::max), Some(sides))
+        }
     };
     let color = first_solid_color(s.fill.as_deref()).unwrap_or([0.0, 0.0, 0.0, 1.0]);
-    Some(StrokePayload { color, width })
+    Some(StrokePayload {
+        color,
+        width,
+        sides,
+    })
 }
 
 fn apply_alpha(rgba: [f32; 4], opacity: Option<f32>) -> [f32; 4] {

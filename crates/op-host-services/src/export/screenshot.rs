@@ -57,10 +57,7 @@ pub fn capture(state: &EditorState, spec: &CaptureSpec) -> Result<ScreenshotPng,
 
 /// Scene-level capture — split out so tests can drive a hand-built
 /// scene without an `EditorState`.
-pub fn capture_scene(
-    scene: &LayoutScene,
-    spec: &CaptureSpec,
-) -> Result<ScreenshotPng, String> {
+pub fn capture_scene(scene: &LayoutScene, spec: &CaptureSpec) -> Result<ScreenshotPng, String> {
     let Some(page) = scene.active_page() else {
         return Err("no active page".into());
     };

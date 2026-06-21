@@ -15,7 +15,7 @@ use wasm_bindgen::JsCast;
 use op_editor_core::Viewport as DocViewport;
 use op_editor_ui::theme::Theme;
 use op_editor_ui::RenderBackend;
-use op_host_web::canvaskit::{CanvasKitBackend, init_backend};
+use op_host_web::canvaskit::{init_backend, CanvasKitBackend};
 
 use crate::Viewer;
 
@@ -41,7 +41,6 @@ struct RenderInner {
     /// the live value rather than the snapshot captured at attach time.
     viewport: DocViewport,
 }
-
 
 // ---------------------------------------------------------------------------
 // Thread-local render slot — one Viewer can be mounted at a time.

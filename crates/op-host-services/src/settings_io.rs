@@ -498,7 +498,6 @@ fn next_image_gen_profile_id(profiles: &[ImageGenProfile]) -> u64 {
         .saturating_add(1)
 }
 
-
 /// Best-effort load. Returns silently on missing file / parse error.
 pub fn load(state: &mut EditorState) {
     // Seed the locale from the OS BEFORE the settings file is read.

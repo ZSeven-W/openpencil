@@ -14,9 +14,7 @@
 //! corrupt bytes), already small enough, or that fails to shrink,
 //! passes straight through untouched.
 
-use skia_safe::{
-    surfaces, CubicResampler, Data, EncodedImageFormat, Image, Paint, Rect,
-};
+use skia_safe::{surfaces, CubicResampler, Data, EncodedImageFormat, Image, Paint, Rect};
 
 /// Longest-edge ceiling (px) for an imported raster image. 2048 keeps
 /// crisp detail at typical canvas zoom while collapsing a 6000px photo
@@ -84,10 +82,16 @@ pub fn maybe_downscale(bytes: &[u8]) -> Option<(&'static str, Vec<u8>)> {
     let (mime, encoded) = if src.is_opaque() {
         match scaled.encode(None, EncodedImageFormat::JPEG, JPEG_QUALITY) {
             Some(data) => ("image/jpeg", data),
-            None => ("image/png", scaled.encode(None, EncodedImageFormat::PNG, 100)?),
+            None => (
+                "image/png",
+                scaled.encode(None, EncodedImageFormat::PNG, 100)?,
+            ),
         }
     } else {
-        ("image/png", scaled.encode(None, EncodedImageFormat::PNG, 100)?)
+        (
+            "image/png",
+            scaled.encode(None, EncodedImageFormat::PNG, 100)?,
+        )
     };
 
     let out = encoded.as_bytes().to_vec();

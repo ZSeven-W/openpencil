@@ -163,9 +163,7 @@ pub fn claude_initialize_query() -> ClaudeInitResult {
 
 /// Parse one stream-json line from the Claude CLI; yields models +
 /// account only for the successful `initialize` control response.
-pub fn parse_claude_init_line(
-    line: &str,
-) -> Option<(Vec<ModelEntry>, Option<ClaudeAccount>)> {
+pub fn parse_claude_init_line(line: &str) -> Option<(Vec<ModelEntry>, Option<ClaudeAccount>)> {
     let json: serde_json::Value = serde_json::from_str(extract_json_object(line)?).ok()?;
     if json.get("type")?.as_str()? != "control_response" {
         return None;

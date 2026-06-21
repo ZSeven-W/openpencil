@@ -80,6 +80,10 @@ pub enum PropertyFocus {
     LetterSpacing,
     StrokeHex,
     StrokeWidth,
+    StrokeTopWidth,
+    StrokeRightWidth,
+    StrokeBottomWidth,
+    StrokeLeftWidth,
     /// Widget-section text fields (placeholder / value / label) on a
     /// widget-kind node (TextInput / Select / Checkbox / …). The host
     /// commit path writes the raw draft string onto the matching prop.
@@ -111,7 +115,9 @@ impl PropertyFocus {
     pub fn is_hex(self) -> bool {
         matches!(
             self,
-            PropertyFocus::FillHex(_) | PropertyFocus::StrokeHex | PropertyFocus::GradientStopHex(_)
+            PropertyFocus::FillHex(_)
+                | PropertyFocus::StrokeHex
+                | PropertyFocus::GradientStopHex(_)
         )
     }
 
@@ -149,6 +155,10 @@ impl PropertyFocus {
                 | PropertyFocus::PaddingBottom
                 | PropertyFocus::PaddingLeft
                 | PropertyFocus::StrokeWidth
+                | PropertyFocus::StrokeTopWidth
+                | PropertyFocus::StrokeRightWidth
+                | PropertyFocus::StrokeBottomWidth
+                | PropertyFocus::StrokeLeftWidth
                 | PropertyFocus::GradientAngle
                 | PropertyFocus::GradientStopOffset(_)
                 | PropertyFocus::EllipseStart

@@ -101,7 +101,14 @@ impl Viewer {
     ///
     /// After updating the viewport, the new state is pushed into the live
     /// render state so the RAF pump picks it up on the next animation frame.
-    pub fn forward_wheel(&mut self, dx: f32, dy: f32, ctrl_or_meta: bool, cursor_x: f32, cursor_y: f32) {
+    pub fn forward_wheel(
+        &mut self,
+        dx: f32,
+        dy: f32,
+        ctrl_or_meta: bool,
+        cursor_x: f32,
+        cursor_y: f32,
+    ) {
         if ctrl_or_meta {
             // Zoom about cursor. Negate dy so scroll-up zooms in.
             self.viewport.zoom_at(Point2D::new(cursor_x, cursor_y), -dy);

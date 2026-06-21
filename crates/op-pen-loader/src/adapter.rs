@@ -23,7 +23,7 @@ use jian_core::document::NodeTree;
 use jian_core::layout::{measure::MeasureBackend, LayoutEngine};
 use jian_ops_schema::{
     node::base::PenNodeBase,
-    node::container::CornerRadius,
+    node::container::{AlignItems, ContainerProps, CornerRadius, LayoutMode, Padding},
     node::{
         EllipseNode, FontWeight, FrameNode, GroupNode, IconFontNode, ImageNode, LineNode, PathNode,
         PenNode, PolygonNode, RectangleNode, TextNode,
@@ -44,6 +44,12 @@ use crate::style_payload::{
 /// small enough to avoid pathological taffy work.
 const ROOT_FALLBACK_W: f32 = 1440.0;
 const ROOT_FALLBACK_H: f32 = 900.0;
+
+#[derive(Clone, Copy)]
+struct TextChildCenterContext {
+    x: f32,
+    w: f32,
+}
 
 thread_local! {
     static LAYOUT_MEASURE_BACKEND: Rc<dyn MeasureBackend> = make_measure_backend();
@@ -388,6 +394,14 @@ fn root_sizing(root: &PenNode) -> (Option<SizingBehavior>, Option<SizingBehavior
 }
 
 pub(crate) fn node_to_payload(node: &PenNode, rects: &BTreeMap<String, [f32; 4]>) -> NodePayload {
+    node_to_payload_with_text_context(node, rects, None)
+}
+
+fn node_to_payload_with_text_context(
+    node: &PenNode,
+    rects: &BTreeMap<String, [f32; 4]>,
+    parent_text_center: Option<TextChildCenterContext>,
+) -> NodePayload {
     use crate::widget_payload as wp;
     let mut p = match node {
         PenNode::Frame(n) => frame_to_payload(n, rects),
@@ -422,6 +436,8 @@ pub(crate) fn node_to_payload(node: &PenNode, rects: &BTreeMap<String, [f32; 4]>
             p.y = y;
         }
     }
+    apply_vertical_center_text_child_parity(node, &mut p, parent_text_center);
+    crate::legacy_payload_repair::repair_payload_for_legacy_node(node, &mut p);
     // Canonical `PathNode.anchors` need the same transform the TS
     // renderer applies in `pen-renderer/node-renderer.ts::drawPath`:
     // compute the local geometry bounds (including Bezier handles
@@ -442,6 +458,38 @@ pub(crate) fn node_to_payload(node: &PenNode, rects: &BTreeMap<String, [f32; 4]>
     // `Effect` model is drop-shadow-only today.
     p.effects = crate::effects::shadows_from_canonical(node);
     p
+}
+
+fn apply_vertical_center_text_child_parity(
+    node: &PenNode,
+    payload: &mut NodePayload,
+    context: Option<TextChildCenterContext>,
+) {
+    let Some(context) = context else {
+        return;
+    };
+    if !matches!(node, PenNode::Text(_)) || text_has_explicit_non_left_align(node) {
+        return;
+    }
+    payload.text_align = "center".to_string();
+    if context.w > 0.0 {
+        payload.x = context.x;
+        payload.w = context.w;
+    }
+}
+
+fn text_has_explicit_non_left_align(node: &PenNode) -> bool {
+    matches!(
+        node,
+        PenNode::Text(TextNode {
+            text_align: Some(
+                jian_ops_schema::node::TextAlign::Center
+                    | jian_ops_schema::node::TextAlign::Right
+                    | jian_ops_schema::node::TextAlign::Justify,
+            ),
+            ..
+        })
+    )
 }
 
 /// Translate `p.points` from local-to-`base.x/base.y` into the
@@ -548,12 +596,13 @@ fn frame_to_payload(n: &FrameNode, _rects: &BTreeMap<String, [f32; 4]>) -> NodeP
         n.container.stroke.as_ref(),
         n.container.corner_radius.as_ref(),
     );
+    let child_text_center = text_child_center_context(&n.base, &n.container, _rects);
     p.children = n
         .children
         .as_deref()
         .unwrap_or(&[])
         .iter()
-        .map(|c| node_to_payload(c, _rects))
+        .map(|c| node_to_payload_with_text_context(c, _rects, child_text_center))
         .collect();
     p
 }
@@ -567,12 +616,13 @@ fn group_to_payload(n: &GroupNode, _rects: &BTreeMap<String, [f32; 4]>) -> NodeP
         n.container.stroke.as_ref(),
         n.container.corner_radius.as_ref(),
     );
+    let child_text_center = text_child_center_context(&n.base, &n.container, _rects);
     p.children = n
         .children
         .as_deref()
         .unwrap_or(&[])
         .iter()
-        .map(|c| node_to_payload(c, _rects))
+        .map(|c| node_to_payload_with_text_context(c, _rects, child_text_center))
         .collect();
     p
 }
@@ -586,14 +636,48 @@ fn rect_to_payload(n: &RectangleNode, _rects: &BTreeMap<String, [f32; 4]>) -> No
         n.container.stroke.as_ref(),
         n.container.corner_radius.as_ref(),
     );
+    let child_text_center = text_child_center_context(&n.base, &n.container, _rects);
     p.children = n
         .children
         .as_deref()
         .unwrap_or(&[])
         .iter()
-        .map(|c| node_to_payload(c, _rects))
+        .map(|c| node_to_payload_with_text_context(c, _rects, child_text_center))
         .collect();
     p
+}
+
+fn text_child_center_context(
+    base: &PenNodeBase,
+    container: &ContainerProps,
+    rects: &BTreeMap<String, [f32; 4]>,
+) -> Option<TextChildCenterContext> {
+    if !matches!(container.layout, Some(LayoutMode::Vertical))
+        || !matches!(container.align_items, Some(AlignItems::Center))
+    {
+        return None;
+    }
+    let [x, _, w, _] = rects.get(&base.id).copied()?;
+    let (padding_left, padding_right) = padding_left_right(container.padding.as_ref());
+    Some(TextChildCenterContext {
+        x: x + padding_left,
+        w: (w - padding_left - padding_right).max(0.0),
+    })
+}
+
+fn padding_left_right(padding: Option<&Padding>) -> (f32, f32) {
+    match padding {
+        Some(Padding::Uniform(v)) => {
+            let v = *v as f32;
+            (v, v)
+        }
+        Some(Padding::XY([_, h])) => {
+            let h = *h as f32;
+            (h, h)
+        }
+        Some(Padding::LtrB([_, r, _, l])) => (*l as f32, *r as f32),
+        _ => (0.0, 0.0),
+    }
 }
 
 fn ellipse_to_payload(n: &EllipseNode) -> NodePayload {
@@ -645,6 +729,7 @@ fn line_to_payload(n: &LineNode) -> NodePayload {
         p.stroke = Some(StrokePayload {
             color: [0.0, 0.0, 0.0, 1.0],
             width: 1.0,
+            sides: None,
         });
     }
     p

@@ -476,10 +476,14 @@ fn paint_padding_inputs(
         y,
     );
     // Gear at the right of the label row — opens the mode popover.
+    // Centre the 14px glyph inside its 18×18 hover-wash cell (the
+    // TogglePaddingModePopover action rect at x+width-PAD_X-18, y-2,
+    // where this row's `y` == that rect's sublabel_y), so the gear
+    // sits centred in the gray wash on hover.
     draw_icon(
         cx.backend,
         Icon::Settings,
-        Point2D::new(x + width - PAD_X - 14.0, y + 1.0),
+        Point2D::new(x + width - PAD_X - 16.0, y),
         14.0,
         theme.muted_foreground,
         1.5,

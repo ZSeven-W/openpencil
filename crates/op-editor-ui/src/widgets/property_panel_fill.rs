@@ -12,8 +12,8 @@ use crate::widgets::property_panel::NodeSnapshot;
 // module (split off for the 800-line cap). `stop_hex_rgb_only` is
 // re-exported so existing `property_panel_fill::stop_hex_rgb_only`
 // paths keep resolving.
-use crate::widgets::property_panel_fill_body::{paint_fill_gradient_body, paint_fill_solid_body};
 pub use crate::widgets::property_panel_fill_body::stop_hex_rgb_only;
+use crate::widgets::property_panel_fill_body::{paint_fill_gradient_body, paint_fill_solid_body};
 use crate::widgets::property_panel_fill_image_body::paint_fill_image_body;
 pub use crate::widgets::property_panel_fill_picker::{
     fill_type_at, fill_type_picker_hit, fill_type_picker_rect,
@@ -23,7 +23,7 @@ use crate::widgets::property_panel_inputs::{
     paint_section_divider, paint_section_label_with_add, INPUT_HEIGHT, INPUT_RADIUS, PAD_X,
     SECTION_GAP,
 };
-use crate::widgets::property_panel_layout::{fill_body_height_with_stops, VisibleSections};
+use crate::widgets::property_panel_layout::fill_body_height_with_stops;
 use crate::widgets::property_panel_sections::{EditContext, PropertyLabels};
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
@@ -54,14 +54,12 @@ pub fn fill_type_label(
 pub fn paint_fill_type_picker(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
-    panel_rect: Rect,
-    visible: VisibleSections,
+    action_rect: Rect,
     state: &SelectState,
     active: op_editor_core::FillType,
-    row_offset_y: f32,
     locale: op_editor_core::Locale,
 ) {
-    let picker_rect = fill_type_picker_rect(panel_rect, visible, row_offset_y);
+    let picker_rect = fill_type_picker_rect(action_rect);
     let items: Vec<SelectItem<'static>> = FILL_TYPES
         .iter()
         .map(|t| SelectItem {
@@ -378,8 +376,12 @@ fn paint_one_fill(
     draw_icon(
         cx.backend,
         Icon::Close,
+        // Centre the 14px glyph inside the RemoveFill hover-wash cell
+        // (origin x + width - PAD_X - 22, size 28×30 — see the action
+        // walker), instead of chaining off the opacity input, so the
+        // icon sits centred in the gray wash on hover.
         Point2D::new(
-            pct_rect.origin.x + pct_rect.size.x + 8.0,
+            x + width - PAD_X - 22.0 + (28.0 - 14.0) / 2.0,
             y + (INPUT_HEIGHT - 14.0) / 2.0,
         ),
         14.0,
@@ -420,4 +422,3 @@ fn paint_one_fill(
     y += fill_row_body_height(fill_type, is_primary, primary_stop_count);
     y
 }
-

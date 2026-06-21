@@ -307,6 +307,7 @@ fn export_node_raster_paints_svg_path_d_stroke() {
             a: 1.0,
         },
         width: 3.0,
+        sides: None,
     });
 
     let scene = scene_with(vec![path]);
@@ -325,6 +326,48 @@ fn export_node_raster_paints_svg_path_d_stroke() {
     assert!(
         painted > 20,
         "expected svg path stroke export to contain painted pixels, got {painted}"
+    );
+    let _ = std::fs::remove_file(&tmp);
+}
+
+#[test]
+fn export_raster_paints_only_authored_stroke_sides() {
+    let mut node = SceneNode::leaf("bottom-border", NodeKind::Frame);
+    node.bounds = Rect::xywh(0.0, 0.0, 40.0, 20.0);
+    node.stroke = Some(SceneStroke {
+        color: Color {
+            r: 0.0,
+            g: 0.0,
+            b: 0.0,
+            a: 1.0,
+        },
+        width: 4.0,
+        sides: Some([0.0, 0.0, 4.0, 0.0]),
+    });
+    let scene = scene_with(vec![node]);
+    let tmp = std::env::temp_dir().join(format!("op-export-sided-{}.png", std::process::id()));
+    let res = export_node_raster(&scene, "bottom-border", &tmp, RasterFormat::Png, 1.0);
+    assert!(res.is_ok(), "sided-stroke export failed: {res:?}");
+    let decoded = decode_rgba(&std::fs::read(&tmp).unwrap());
+
+    // Bounds include a 2 px stroke pad, so doc (x,y) maps to
+    // `(MARGIN + 2 + x, MARGIN + 2 + y)`.
+    let top = pixel_at(&decoded, MARGIN as i32 + 22, MARGIN as i32 + 2);
+    assert_eq!(top[3], 0, "top edge must remain transparent, got {top:?}");
+    let left = pixel_at(&decoded, MARGIN as i32 + 2, MARGIN as i32 + 12);
+    assert_eq!(
+        left[3], 0,
+        "left edge must remain transparent, got {left:?}"
+    );
+    let bottom = pixel_at(&decoded, MARGIN as i32 + 22, MARGIN as i32 + 20);
+    assert!(
+        bottom[3] > 200,
+        "bottom edge should paint the authored stroke, got {bottom:?}"
+    );
+    let below = pixel_at(&decoded, MARGIN as i32 + 22, MARGIN as i32 + 23);
+    assert_eq!(
+        below[3], 0,
+        "sided strokes should stay inside the authored bounds, got {below:?}"
     );
     let _ = std::fs::remove_file(&tmp);
 }
