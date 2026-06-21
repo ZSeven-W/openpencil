@@ -6,7 +6,9 @@
 
 use crate::theme::Theme;
 use crate::widgets::icons::{draw_icon, Icon};
-use crate::widgets::property_panel::{ColorVariableOption, EffectSummary, PropertyPanelAction};
+use crate::widgets::property_panel::{
+    ColorVariableOption, EffectSummary, FillSummary, PropertyPanelAction,
+};
 use crate::widgets::property_panel_inputs::{INPUT_RADIUS, PAD_X};
 use crate::widgets::property_panel_layout::{
     action_button_rects_with_fill_picker, COLOR_VARIABLE_MENU_PAD_Y, COLOR_VARIABLE_MENU_ROW_H,
@@ -43,12 +45,14 @@ pub fn paint_color_variable_picker(
     panel_rect: Rect,
     visible: VisibleSections,
     effects: &[EffectSummary],
+    fills: &[FillSummary],
     variables: &[ColorVariableOption],
     fill_ref: Option<&str>,
     stroke_ref: Option<&str>,
     target: op_editor_core::ColorTarget,
     locale: op_editor_core::Locale,
     fill_picker_open: bool,
+    fill_type_picker_index: usize,
     font_picker_open: bool,
     font_weight_picker_open: bool,
     export_scale_picker_open: bool,
@@ -59,8 +63,10 @@ pub fn paint_color_variable_picker(
         panel_rect,
         visible,
         effects,
+        fills,
         target,
         fill_picker_open,
+        fill_type_picker_index,
         font_picker_open,
         font_weight_picker_open,
         export_scale_picker_open,
@@ -116,8 +122,10 @@ fn color_variable_anchor(
     panel_rect: Rect,
     visible: VisibleSections,
     effects: &[EffectSummary],
+    fills: &[FillSummary],
     target: op_editor_core::ColorTarget,
     fill_picker_open: bool,
+    fill_type_picker_index: usize,
     font_picker_open: bool,
     font_weight_picker_open: bool,
     export_scale_picker_open: bool,
@@ -128,7 +136,9 @@ fn color_variable_anchor(
         panel_rect,
         visible,
         effects,
+        fills,
         fill_picker_open,
+        fill_type_picker_index,
         font_picker_open,
         font_weight_picker_open,
         export_scale_picker_open,

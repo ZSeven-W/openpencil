@@ -174,7 +174,7 @@ fn polygon_selection_exposes_sides_layer_input() {
         origin: Point2D::new(0.0, 0.0),
         size: Point2D::new(280.0, 1200.0),
     };
-    let sides_rect = sections::editable_input_rects(rect, visible_for(&panel))
+    let sides_rect = sections::editable_input_rects(rect, visible_for(&panel), &panel.snapshot.fills)
         .into_iter()
         .find(|(focus, _)| *focus == op_editor_core::PropertyFocus::PolygonSides)
         .map(|(_, r)| r)
@@ -210,7 +210,7 @@ fn ellipse_selection_exposes_arc_layer_inputs() {
         origin: Point2D::new(0.0, 0.0),
         size: Point2D::new(280.0, 1200.0),
     };
-    let rects = sections::editable_input_rects(rect, visible_for(&panel));
+    let rects = sections::editable_input_rects(rect, visible_for(&panel), &panel.snapshot.fills);
     for focus in [
         op_editor_core::PropertyFocus::EllipseStart,
         op_editor_core::PropertyFocus::EllipseSweep,
@@ -243,7 +243,9 @@ fn hit_test_action_export_section_returns_picker_toggles() {
         rect,
         visible_for(&panel),
         &panel.snapshot.effects,
+        &panel.snapshot.fills,
         false,
+        0,
         false,
         false,
         false,
@@ -312,7 +314,9 @@ fn color_variables_add_fill_and_stroke_binding_buttons() {
         rect,
         visible_for(&panel),
         &panel.snapshot.effects,
+        &panel.snapshot.fills,
         false,
+        0,
         false,
         false,
         false,
@@ -362,7 +366,9 @@ fn color_variable_picker_emits_bind_and_unbind_rows() {
         rect,
         visible_for(&panel),
         &panel.snapshot.effects,
+        &panel.snapshot.fills,
         false,
+        0,
         false,
         false,
         false,
@@ -386,7 +392,9 @@ fn color_variable_picker_emits_bind_and_unbind_rows() {
         rect,
         visible_for(&panel),
         &panel.snapshot.effects,
+        &panel.snapshot.fills,
         false,
+        0,
         false,
         false,
         false,
@@ -425,7 +433,7 @@ fn fill_width_hides_the_w_input_but_keeps_h_and_row_height() {
         origin: Point2D::new(0.0, 0.0),
         size: Point2D::new(280.0, 1200.0),
     };
-    let fill_rects = sections::editable_input_rects(rect, visible_for(&fill));
+    let fill_rects = sections::editable_input_rects(rect, visible_for(&fill), &fill.snapshot.fills);
     // W is omitted (fill); H remains (numeric).
     assert!(
         !fill_rects.iter().any(|(f, _)| *f == PropertyFocus::SizeW),
@@ -450,7 +458,8 @@ fn fill_width_hides_the_w_input_but_keeps_h_and_row_height() {
         s.set_single_selection(NodeId::new("ff"));
         PropertyPanel::for_selection(&s).expect("fixed-width frame panel")
     };
-    let fixed_rects = sections::editable_input_rects(rect, visible_for(&fixed));
+    let fixed_rects =
+        sections::editable_input_rects(rect, visible_for(&fixed), &fixed.snapshot.fills);
     assert!(
         fixed_rects.iter().any(|(f, _)| *f == PropertyFocus::SizeW),
         "fixed width keeps SizeW"
@@ -503,7 +512,9 @@ fn both_dimensions_fill_collapses_the_size_input_row() {
             rect,
             visible_for(p),
             &p.snapshot.effects,
+            &p.snapshot.fills,
             false,
+            0,
             false,
             false,
             false,
@@ -526,7 +537,7 @@ fn both_dimensions_fill_collapses_the_size_input_row() {
         "both-hidden must collapse the input row (~40px up), got {delta}"
     );
     // Neither W nor H emits a focus rect when both are hidden.
-    let both_inputs = sections::editable_input_rects(rect, visible_for(&both));
+    let both_inputs = sections::editable_input_rects(rect, visible_for(&both), &both.snapshot.fills);
     assert!(
         !both_inputs
             .iter()
@@ -567,7 +578,7 @@ fn padding_mode_derives_from_values_and_drives_input_count() {
         let mut s = state_from(&json);
         s.set_single_selection(NodeId::new("f"));
         let panel = PropertyPanel::for_selection(&s).expect("frame panel");
-        sections::editable_input_rects(rect, visible_for(&panel))
+        sections::editable_input_rects(rect, visible_for(&panel), &panel.snapshot.fills)
             .into_iter()
             .filter(|(f, _)| {
                 matches!(
@@ -611,7 +622,9 @@ fn flex_advanced_rows_do_not_overlap_gap_modes() {
         rect,
         visible,
         &panel.snapshot.effects,
+        &panel.snapshot.fills,
         false,
+        0,
         false,
         false,
         false,
@@ -630,7 +643,7 @@ fn flex_advanced_rows_do_not_overlap_gap_modes() {
         })
         .map(|(_, r)| *r)
         .expect("space-around hit rect");
-    let padding_top = sections::editable_input_rects(rect, visible)
+    let padding_top = sections::editable_input_rects(rect, visible, &panel.snapshot.fills)
         .into_iter()
         .find(|(focus, _)| *focus == op_editor_core::PropertyFocus::PaddingTop)
         .map(|(_, r)| r)
@@ -702,7 +715,9 @@ fn export_scale_picker_open_emits_option_rows() {
         rect,
         visible_for(&panel),
         &panel.snapshot.effects,
+        &panel.snapshot.fills,
         false,
+        0,
         false,
         false,
         true,

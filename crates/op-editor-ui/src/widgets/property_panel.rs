@@ -53,8 +53,8 @@ pub use crate::widgets::property_panel_action::{
 pub(crate) use crate::widgets::property_panel_layout::SectionCapabilities;
 use crate::widgets::property_panel_snapshot::color_from_hex;
 pub use crate::widgets::property_panel_snapshot::{
-    EffectKind, EffectSummary, EllipseArcSummary, GradientStopSummary, NodeSnapshot, WidgetKind,
-    WidgetSummary,
+    EffectKind, EffectSummary, EllipseArcSummary, FillSummary, GradientStopSummary, NodeSnapshot,
+    WidgetKind, WidgetSummary,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -88,6 +88,13 @@ fn apply_resolved_variable_colors(
         .and_then(|hex| color_from_hex(&hex))
     {
         snapshot.fill = Some(color);
+        // The colour-variable subsystem keys off the primary fill, so
+        // mirror the binding onto `fills[0]` for the Fill section's
+        // first row (it paints the `$name` chip + variable button).
+        if let Some(first) = snapshot.fills.first_mut() {
+            first.color = color;
+            first.variable_ref = fill_ref.map(str::to_string);
+        }
     }
     if let Some(color) = stroke_ref
         .and_then(|name| state.resolve_color_variable_hex(name))
@@ -128,6 +135,9 @@ pub struct PropertyPanel {
     /// Active fill type — drives the dropdown label + picker.
     pub fill_type: op_editor_core::FillType,
     pub fill_type_picker: SelectState,
+    /// Which fill row the open fill-type dropdown targets (the Fill
+    /// section stacks one type dropdown per fill).
+    pub fill_type_picker_index: usize,
     pub color_variable_picker_open: Option<op_editor_core::ColorTarget>,
     pub color_variables: Vec<ColorVariableOption>,
     pub fill_variable_ref: Option<String>,
@@ -394,6 +404,7 @@ impl PropertyPanel {
             size_flags,
             fill_type,
             fill_type_picker: ui.fill_type_picker.clone(),
+            fill_type_picker_index: ui.fill_type_picker_index,
             color_variable_picker_open: ui.property_color_variable_picker_open,
             color_variables,
             fill_variable_ref,
@@ -494,6 +505,7 @@ impl PropertyPanel {
             panel_rect,
             self.visible_sections(),
             &self.snapshot.effects,
+            &self.snapshot.fills,
         )
     }
 
@@ -618,7 +630,10 @@ impl PropertyPanel {
                 SelectHit::Row(idx) => {
                     if let Some(fill_type) = crate::widgets::property_panel_fill::fill_type_at(idx)
                     {
-                        return Some(PropertyPanelAction::SetFillType(fill_type));
+                        return Some(PropertyPanelAction::SetFillType {
+                            index: self.fill_type_picker_index,
+                            fill_type,
+                        });
                     }
                 }
                 SelectHit::Inside => return None,
@@ -632,7 +647,9 @@ impl PropertyPanel {
             self.scrolled_rect(panel_rect),
             self.visible_sections(),
             &self.snapshot.effects,
+            &self.snapshot.fills,
             self.fill_type_picker.open,
+            self.fill_type_picker_index,
             self.font_picker.open,
             self.font_weight_picker_open,
             self.export_scale_picker_open,
@@ -667,7 +684,9 @@ impl PropertyPanel {
             self.scrolled_rect(panel_rect),
             self.visible_sections(),
             &self.snapshot.effects,
+            &self.snapshot.fills,
             self.fill_type_picker.open,
+            self.fill_type_picker_index,
             self.font_picker.open,
             self.font_weight_picker_open,
             self.export_scale_picker_open,
@@ -696,6 +715,7 @@ impl PropertyPanel {
         sections::image_fill_popover_adjustment_action_for_drag(
             self.scrolled_rect(panel_rect),
             self.visible_sections(),
+            &self.snapshot.fills,
             field,
             x,
         )
@@ -707,6 +727,7 @@ impl PropertyPanel {
             && sections::image_fill_popover_contains(
                 self.scrolled_rect(panel_rect),
                 self.visible_sections(),
+                &self.snapshot.fills,
                 point,
             )
     }
@@ -733,9 +754,11 @@ impl PropertyPanel {
         if !self.point_in_section_viewport(panel_rect, point) {
             return None;
         }
-        for (focus, rect) in
-            sections::editable_input_rects(self.scrolled_rect(panel_rect), self.visible_sections())
-        {
+        for (focus, rect) in sections::editable_input_rects(
+            self.scrolled_rect(panel_rect),
+            self.visible_sections(),
+            &self.snapshot.fills,
+        ) {
             if (rect).contains(point) {
                 return Some(focus);
             }
@@ -766,7 +789,9 @@ impl PropertyPanel {
             self.scrolled_rect(panel_rect),
             self.visible_sections(),
             &self.snapshot.effects,
+            &self.snapshot.fills,
             self.fill_type_picker.open,
+            self.fill_type_picker_index,
             self.font_picker.open,
             self.font_weight_picker_open,
             self.export_scale_picker_open,
@@ -1130,13 +1155,26 @@ impl Widget for PropertyPanel {
         // Fill-type picker overlay sits on top of everything below
         // the Fill section so it can extend past the section divider.
         if caps.fill && self.fill_type_picker.open {
+            let fi = self.fill_type_picker_index;
+            let active = self
+                .snapshot
+                .fills
+                .get(fi)
+                .map(|f| f.fill_type)
+                .unwrap_or(self.fill_type);
+            let row_offset = crate::widgets::property_panel_fill::fill_row_offset(
+                &self.snapshot.fills,
+                fi,
+                self.snapshot.gradient_stops.len(),
+            );
             sections::paint_fill_type_picker(
                 cx,
                 &self.theme,
                 scrolled,
                 self.visible_sections(),
                 &self.fill_type_picker,
-                self.fill_type,
+                active,
+                row_offset,
                 self.locale,
             );
         }
@@ -1196,6 +1234,7 @@ impl Widget for PropertyPanel {
                 scrolled,
                 self.visible_sections(),
                 &self.snapshot.effects,
+                &self.snapshot.fills,
                 self.export_scale_picker_open,
                 self.export_format_picker_open,
                 self.export_scale,
@@ -1210,12 +1249,14 @@ impl Widget for PropertyPanel {
                 scrolled,
                 self.visible_sections(),
                 &self.snapshot.effects,
+                &self.snapshot.fills,
                 &self.color_variables,
                 self.fill_variable_ref.as_deref(),
                 self.stroke_variable_ref.as_deref(),
                 target,
                 self.locale,
                 self.fill_type_picker.open,
+                self.fill_type_picker_index,
                 self.font_picker.open,
                 self.font_weight_picker_open,
                 self.export_scale_picker_open,
@@ -1232,7 +1273,9 @@ impl Widget for PropertyPanel {
                 self.scrolled_rect(rect),
                 self.visible_sections(),
                 &self.snapshot.effects,
+                &self.snapshot.fills,
                 self.fill_type_picker.open,
+                self.fill_type_picker_index,
                 self.font_picker.open,
                 self.font_weight_picker_open,
                 self.export_scale_picker_open,

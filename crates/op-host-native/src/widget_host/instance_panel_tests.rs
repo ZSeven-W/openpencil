@@ -43,7 +43,7 @@ fn ref_node(host: &WidgetHostNative) -> &jian_ops_schema::node::RefNode {
 #[test]
 fn fill_hex_commit_on_instance_lands_in_descendants() {
     let mut host = seeded_host();
-    host.editor_state_mut().ui.property_focus = Some(op_editor_core::PropertyFocus::FillHex);
+    host.editor_state_mut().ui.property_focus = Some(op_editor_core::PropertyFocus::FillHex(0));
     host.editor_state_mut()
         .ui
         .property_input

@@ -96,6 +96,14 @@ pub struct NodeSnapshot {
     /// Primary solid-fill opacity in `[0.0, 1.0]` — the Fill
     /// section's `100 %` paints `fill_opacity * 100`.
     pub fill_opacity: f32,
+    /// One summary per `PenFill`, in authored order. The Fill section
+    /// stacks one editable row per entry (head row + body). The
+    /// single-fill `fill` / `fill_opacity` / `gradient_*` / `image_fill`
+    /// fields above stay derived from `fills[0]` so the gradient /
+    /// image / colour-variable subsystems (which key off the primary
+    /// fill) keep compiling unchanged. An old single-fill `.op` loads
+    /// as exactly one entry.
+    pub fills: Vec<FillSummary>,
     pub stroke: Option<SceneStroke>,
     /// LinearGradient angle in degrees (canonical `.op` convention,
     /// 0° = bottom→top). `None` when the primary fill isn't a
@@ -294,6 +302,29 @@ impl LayoutPaddingSummary {
     }
 }
 
+/// One fill's head-row summary for the multi-fill Fill section.
+/// The Fill section stacks one row per `PenFill`; each carries its
+/// own type / colour / opacity so the row paints its head + body
+/// independently. Built from `node_fills` in authored order.
+#[derive(Debug, Clone)]
+pub struct FillSummary {
+    /// The fill kind — drives the per-row type dropdown + which body
+    /// (solid hex / gradient stops / image) paints below the head row.
+    pub fill_type: op_editor_core::FillType,
+    /// Representative paint colour for the head-row swatch + (for a
+    /// Solid fill) the hex input. Solid → its colour; gradient → the
+    /// first stop's colour; image → white placeholder.
+    pub color: Color,
+    /// This fill's opacity in `[0.0, 1.0]` — the head row's `%` input
+    /// paints `opacity * 100`.
+    pub opacity: f32,
+    /// Bound colour-variable name, when this fill's colour follows a
+    /// `$ref`. `None` for a literal colour. Only meaningful for the
+    /// primary (index 0) fill today (the variable subsystem keys off
+    /// the primary fill); carried per-fill for forward compatibility.
+    pub variable_ref: Option<String>,
+}
+
 /// One gradient stop summary for the Fill section.
 #[derive(Debug, Clone)]
 pub struct GradientStopSummary {
@@ -464,6 +495,7 @@ impl NodeSnapshot {
             widget: None,
             fill: None,
             fill_opacity: 1.0,
+            fills: Vec::new(),
             stroke: None,
             gradient_angle: None,
             gradient_stops: Vec::new(),
@@ -524,6 +556,9 @@ impl NodeSnapshot {
             widget: None,
             fill: None,
             fill_opacity: 1.0,
+            // Multi-select hides the Fill section (see `for_multi`),
+            // so it carries no per-fill rows.
+            fills: Vec::new(),
             stroke: None,
             gradient_angle: None,
             gradient_stops: Vec::new(),
@@ -591,6 +626,7 @@ impl NodeSnapshot {
             widget: widget_summary_of(node),
             fill,
             fill_opacity: op_editor_core::first_solid_fill_opacity(node),
+            fills: fills_of(node),
             stroke,
             gradient_angle: gradient_angle_of(node),
             gradient_stops: gradient_stops_of(node),
@@ -1043,6 +1079,41 @@ fn gradient_stops_of(node: &PenNode) -> Vec<GradientStopSummary> {
             offset: s.offset.clamp(0.0, 1.0),
             hex: s.color.clone(),
             color: color_from_hex(&s.color).unwrap_or(Color::BLACK),
+        })
+        .collect()
+}
+
+/// Build one [`FillSummary`] per `PenFill` on the node, in authored
+/// order. Each entry's representative colour mirrors `fills::fill_hex`
+/// (Solid → its colour; gradient → first stop; image → white). An old
+/// single-fill node yields exactly one entry; a node with no `fill`
+/// field / no fills yields an empty list so the Fill section paints
+/// just its header + "+".
+fn fills_of(node: &PenNode) -> Vec<FillSummary> {
+    use jian_ops_schema::style::PenFill;
+    let Some(fills) = op_editor_core::fills::node_fills(node) else {
+        return Vec::new();
+    };
+    fills
+        .iter()
+        .map(|fill| {
+            let fill_type = op_editor_core::fills::fill_type_of(fill);
+            let (hex, opacity) = match fill {
+                PenFill::Solid(b) => (Some(b.color.as_str()), b.opacity.unwrap_or(1.0)),
+                PenFill::LinearGradient(b) => {
+                    (b.stops.first().map(|s| s.color.as_str()), b.opacity.unwrap_or(1.0))
+                }
+                PenFill::RadialGradient(b) => {
+                    (b.stops.first().map(|s| s.color.as_str()), b.opacity.unwrap_or(1.0))
+                }
+                PenFill::Image(b) => (None, b.opacity.unwrap_or(1.0)),
+            };
+            FillSummary {
+                fill_type,
+                color: hex.and_then(color_from_hex).unwrap_or(Color::WHITE),
+                opacity,
+                variable_ref: None,
+            }
         })
         .collect()
 }

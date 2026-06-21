@@ -46,6 +46,7 @@ pub mod property_panel_code;
 pub mod property_panel_effects;
 pub mod property_panel_export;
 pub mod property_panel_fill;
+mod property_panel_fill_body;
 mod property_panel_fill_image_body;
 mod property_panel_fill_picker;
 #[cfg(test)]

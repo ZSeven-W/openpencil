@@ -66,7 +66,8 @@ fn text_input_selection_exposes_widget_text_rows() {
 
     let visible = visible_for(&panel);
     assert_eq!(visible.widget, Some(WidgetKind::TextInput));
-    let focuses: Vec<_> = sections::editable_input_rects(panel_rect(), visible)
+    let focuses: Vec<_> =
+        sections::editable_input_rects(panel_rect(), visible, &panel.snapshot.fills)
         .into_iter()
         .map(|(focus, _)| focus)
         .collect();
@@ -97,7 +98,8 @@ fn property_panel_text_input_fields_expose_icon_and_bind_rows() {
 
     let visible = visible_for(&panel);
     assert_eq!(visible.widget, Some(WidgetKind::TextInput));
-    let focuses: Vec<_> = sections::editable_input_rects(panel_rect(), visible)
+    let focuses: Vec<_> =
+        sections::editable_input_rects(panel_rect(), visible, &panel.snapshot.fills)
         .into_iter()
         .map(|(focus, _)| focus)
         .collect();
@@ -119,7 +121,8 @@ fn checkbox_selection_hides_icon_and_bind_rows() {
     state.set_single_selection(NodeId::new("cb"));
     let panel = PropertyPanel::for_selection(&state).expect("checkbox panel");
     let visible = visible_for(&panel);
-    let focuses: Vec<_> = sections::editable_input_rects(panel_rect(), visible)
+    let focuses: Vec<_> =
+        sections::editable_input_rects(panel_rect(), visible, &panel.snapshot.fills)
         .into_iter()
         .map(|(focus, _)| focus)
         .collect();
@@ -147,7 +150,8 @@ fn slider_selection_exposes_widget_range_rows() {
 
     let visible = visible_for(&panel);
     assert_eq!(visible.widget, Some(WidgetKind::Slider));
-    let focuses: Vec<_> = sections::editable_input_rects(panel_rect(), visible)
+    let focuses: Vec<_> =
+        sections::editable_input_rects(panel_rect(), visible, &panel.snapshot.fills)
         .into_iter()
         .map(|(focus, _)| focus)
         .collect();
@@ -171,7 +175,8 @@ fn frame_selection_hides_widget_section() {
     let visible = visible_for(&panel);
     assert!(visible.widget.is_none(), "frame hides the Widget section");
     // No widget focuses leak into the input walker.
-    let focuses: Vec<_> = sections::editable_input_rects(panel_rect(), visible)
+    let focuses: Vec<_> =
+        sections::editable_input_rects(panel_rect(), visible, &panel.snapshot.fills)
         .into_iter()
         .map(|(focus, _)| focus)
         .collect();
@@ -190,11 +195,15 @@ fn checkbox_selection_emits_toggle_checked_action() {
     );
     state.set_single_selection(NodeId::new("cb"));
     let panel = PropertyPanel::for_selection(&state).expect("checkbox panel");
-    let actions: Vec<PropertyPanelAction> =
-        sections::action_button_rects(panel_rect(), visible_for(&panel), &panel.snapshot.effects)
-            .into_iter()
-            .map(|(a, _)| a)
-            .collect();
+    let actions: Vec<PropertyPanelAction> = sections::action_button_rects(
+        panel_rect(),
+        visible_for(&panel),
+        &panel.snapshot.effects,
+        &panel.snapshot.fills,
+    )
+    .into_iter()
+    .map(|(a, _)| a)
+    .collect();
     // Current `checked` is false → the toggle action carries `true`.
     assert!(actions.contains(&PropertyPanelAction::ToggleWidgetChecked(true)));
 }

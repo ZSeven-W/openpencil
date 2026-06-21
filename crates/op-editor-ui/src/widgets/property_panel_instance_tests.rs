@@ -90,6 +90,7 @@ fn instance_panel_emits_go_to_component_and_detach_rows() {
         rect,
         super::property_panel_test_support::visible_for(&panel),
         &panel.snapshot.effects,
+        &panel.snapshot.fills,
     )
     .into_iter()
     .map(|(a, _)| a)
@@ -110,6 +111,7 @@ fn reusable_panel_emits_detach_component_action() {
         rect,
         super::property_panel_test_support::visible_for(&panel),
         &panel.snapshot.effects,
+        &panel.snapshot.fills,
     )
     .into_iter()
     .map(|(a, _)| a)
