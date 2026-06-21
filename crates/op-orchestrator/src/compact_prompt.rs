@@ -131,6 +131,8 @@ pub fn build_compact_planning_prompt(
         subtask_hint.to_string(),
         "Plan one SIGNATURE MOMENT in the first viewport: a memorable focal module with strong composition, brand personality, and restrained supporting sections."
             .to_string(),
+        "Plan one WOW FACTOR that is specific to the requested product/domain; avoid generic tinted wrappers, heavy shadows, or repeated rounded boxes as the main visual idea."
+            .to_string(),
         style_rule,
     ];
     for r in &mobile_rules {
@@ -176,6 +178,7 @@ mod tests {
         assert!(cp.system.contains("width=375 and height=812"));
         assert!(cp.system.contains("Create 2-4 cohesive subtasks"));
         assert!(cp.system.contains("SIGNATURE MOMENT"));
+        assert!(cp.system.contains("WOW FACTOR"));
         assert_eq!(cp.user_prompt, "a mobile login screen");
     }
 

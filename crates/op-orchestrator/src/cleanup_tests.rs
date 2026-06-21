@@ -295,26 +295,8 @@ fn cleanup_injects_missing_bottom_nav_surface_on_light_mobile_root() {
     assert!(
         sink.applied
             .iter()
-            .any(|c| matches!(c, EditorCommand::AddNodeEffect { kind, .. } if kind == "shadow")),
-        "missing-fill bottom navs should receive a separating shadow"
-    );
-    assert!(
-        sink.applied.iter().any(|c| matches!(
-            c,
-            EditorCommand::SetEffectParam {
-                field: EffectField::OffsetY,
-                value,
-                ..
-            } if (*value - -4.0).abs() < f32::EPSILON
-        )),
-        "bottom nav shadow should point upward"
-    );
-    assert!(
-        sink.applied.iter().any(|c| matches!(
-            c,
-            EditorCommand::SetEffectColor { hex, .. } if hex == "#0000000F"
-        )),
-        "bottom nav shadow should use the subtle TS surface shadow color"
+            .all(|c| !matches!(c, EditorCommand::AddNodeEffect { .. })),
+        "bottom nav cleanup should not add a shadow band"
     );
 }
 

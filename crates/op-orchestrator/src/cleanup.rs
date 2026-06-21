@@ -26,12 +26,14 @@ use crate::types::{DocSink, OrchestratorError, SubtaskOutcome};
 use crate::variables::{rollback, VarSnapshot};
 use jian_ops_schema::node::{container::Padding, PenNode};
 use op_editor_core::{
-    first_fill_type, first_solid_fill_hex, node_effects, EditorCommand, EditorState, EffectField,
-    FillType, LayoutPropValue, NodeId, PenNodeExt,
+    first_fill_type, first_solid_fill_hex, EditorCommand, EditorState, FillType, LayoutPropValue,
+    NodeId, PenNodeExt,
 };
 
 #[path = "cleanup_desktop_dashboard.rs"]
 mod cleanup_desktop_dashboard;
+#[path = "cleanup_mobile_chrome.rs"]
+mod cleanup_mobile_chrome;
 #[path = "cleanup_mobile_dense.rs"]
 mod cleanup_mobile_dense;
 
@@ -121,9 +123,6 @@ fn repair_light_mobile_nav_surfaces(sink: &mut dyn DocSink, root_id: &str) {
             node_id: repair.node_id.clone(),
             hex: repair.fill_hex,
         });
-        if repair.add_shadow {
-            add_nav_surface_shadow(sink, repair.node_id, repair.is_bottom_nav);
-        }
     }
 }
 
@@ -131,8 +130,6 @@ fn repair_light_mobile_nav_surfaces(sink: &mut dyn DocSink, root_id: &str) {
 struct NavSurfaceRepair {
     node_id: NodeId,
     fill_hex: String,
-    add_shadow: bool,
-    is_bottom_nav: bool,
 }
 
 const MOBILE_CONTENT_SIDE_PADDING: f64 = 24.0;
@@ -503,8 +500,6 @@ fn nav_surface_repair(nav: &PenNode, root_surface_hex: Option<&str>) -> Option<N
     Some(NavSurfaceRepair {
         node_id: NodeId::new(nav.id_str().to_string()),
         fill_hex: fill_hex.to_string(),
-        add_shadow: !has_paintable_fill && node_effects(nav).is_empty(),
-        is_bottom_nav,
     })
 }
 
@@ -542,42 +537,6 @@ fn is_bottom_nav_surface(node: &PenNode) -> bool {
         || hay.contains("bottom-navigation")
         || hay.contains("bottom tab")
         || hay.contains("bottom-tab")
-}
-
-fn add_nav_surface_shadow(sink: &mut dyn DocSink, node_id: NodeId, is_bottom_nav: bool) {
-    sink.apply(EditorCommand::AddNodeEffect {
-        node_id: node_id.clone(),
-        kind: "shadow".to_string(),
-    });
-    sink.apply(EditorCommand::SetEffectParam {
-        node_id: node_id.clone(),
-        index: 0,
-        field: EffectField::OffsetX,
-        value: 0.0,
-    });
-    sink.apply(EditorCommand::SetEffectParam {
-        node_id: node_id.clone(),
-        index: 0,
-        field: EffectField::OffsetY,
-        value: if is_bottom_nav { -4.0 } else { 4.0 },
-    });
-    sink.apply(EditorCommand::SetEffectParam {
-        node_id: node_id.clone(),
-        index: 0,
-        field: EffectField::Blur,
-        value: 12.0,
-    });
-    sink.apply(EditorCommand::SetEffectParam {
-        node_id: node_id.clone(),
-        index: 0,
-        field: EffectField::Spread,
-        value: 0.0,
-    });
-    sink.apply(EditorCommand::SetEffectColor {
-        node_id,
-        index: 0,
-        hex: "#0000000F".to_string(),
-    });
 }
 
 fn is_safe_dark_hex(hex: &str) -> bool {
@@ -656,6 +615,7 @@ pub fn run_cleanup_passes(sink: &mut dyn DocSink, plan: &OrchestratorPlan, root_
         remove_duplicate_status_bars(sink, root_id);
         repair_light_mobile_nav_surfaces(sink, root_id);
         repair_mobile_content_sections(sink, root_id);
+        cleanup_mobile_chrome::repair_mobile_structural_chrome(sink, root_id);
         cleanup_mobile_dense::repair_dense_mobile_rows(sink, root_id);
         cleanup_desktop_dashboard::repair_sparse_desktop_dashboard_rows(sink, plan, root_id);
         repair_overbold_text_hierarchy(sink, root_id);
@@ -778,6 +738,10 @@ mod tests;
 #[cfg(test)]
 #[path = "cleanup_mobile_dense_tests.rs"]
 mod tests_mobile_dense;
+
+#[cfg(test)]
+#[path = "cleanup_mobile_chrome_tests.rs"]
+mod tests_mobile_chrome;
 
 #[cfg(test)]
 #[path = "cleanup_desktop_dashboard_tests.rs"]
