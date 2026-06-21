@@ -259,7 +259,8 @@ fn build_skeleton_root(
         .or_insert_with(|| Value::String("Page".into()));
     root.entry("layout")
         .or_insert_with(|| Value::String("vertical".into()));
-    root.entry("gap").or_insert_with(|| json!(0));
+    root.entry("gap")
+        .or_insert_with(|| json!(default_root_gap(canvas_width)));
     root.entry("fill")
         .or_insert_with(|| json!([{ "type": "solid", "color": "#F8FAFC" }]));
 
@@ -307,6 +308,7 @@ fn build_skeleton_root(
             "name": name,
             "contentWidth": content_width.max(0),
             "guidelines": guidelines,
+            "qualityGuidelines": quality_guidelines(canvas_width),
             "suggestedRoles": suggested_roles,
         }));
         section_nodes.push(Value::Object(obj));
@@ -605,6 +607,22 @@ fn horizontal_padding(section: &serde_json::Map<String, Value>) -> i32 {
             (items[1].as_i64().unwrap_or(0).max(0) + items[3].as_i64().unwrap_or(0).max(0)) as i32
         }
         _ => 0,
+    }
+}
+
+fn default_root_gap(canvas_width: i32) -> i32 {
+    if canvas_width <= 500 {
+        20
+    } else {
+        0
+    }
+}
+
+fn quality_guidelines(canvas_width: i32) -> &'static str {
+    if canvas_width <= 500 {
+        "Avoid crowded output: keep one primary mobile task, use an App Content wrapper with 16-20px horizontal padding and 20-24px vertical gaps, and limit above-the-fold modules."
+    } else {
+        "Avoid crowded output: use generous section padding, clear type hierarchy, consistent card rhythm, and fewer stronger modules."
     }
 }
 

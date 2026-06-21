@@ -167,7 +167,8 @@ pub struct WebReply {
 /// - `GET  /api/mcp/selection` → `{selectedIds,activePageId}` (like `selection.get.ts`)
 /// - `POST /api/mcp/selection` → renderer selection push (like `selection.post.ts`)
 /// - `POST /api/file/save` → write the browser document to this daemon's
-///   backing local path, including the desktop `.opmeta` active-page sidecar
+///   backing local path, including embedded active-page metadata
+///   (and legacy `.opmeta` fallback compatibility)
 /// - `POST /api/file/open-recent` → local-daemon recent-file open, used by the
 ///   browser shell because only the daemon can read local paths.
 /// - anything else → 404 (the JSON-RPC `/mcp` path + SSE are handled by the

@@ -621,10 +621,38 @@ fn design_turn_clears_fresh_starter_frame() {
 }
 
 #[test]
+fn design_turn_clears_loaded_empty_starter_frame() {
+    let mut state = op_editor_core::EditorState::starter();
+    state.doc.version = "1.0.0".into();
+    state.clear_selection();
+
+    assert!(clear_fresh_starter_frame_for_design(&mut state));
+    assert!(state.active_children().is_empty());
+    assert!(state.selection.is_empty());
+}
+
+#[test]
 fn design_turn_preserves_non_starter_documents() {
     let mut state = op_editor_core::EditorState::starter();
     state.active_children_mut().clear();
 
     assert!(!clear_fresh_starter_frame_for_design(&mut state));
     assert!(state.active_children().is_empty());
+}
+
+#[test]
+fn design_turn_preserves_starter_frame_with_user_content() {
+    let mut state = op_editor_core::EditorState::starter();
+    let mut next_id = 20;
+    state.create_node_for_tool(
+        op_editor_core::Tool::Rect,
+        &mut next_id,
+        24.0,
+        32.0,
+        120.0,
+        80.0,
+    );
+
+    assert!(!clear_fresh_starter_frame_for_design(&mut state));
+    assert_eq!(state.active_children().len(), 2);
 }
