@@ -187,24 +187,20 @@ fn cleanup_concurrent_roots_keeps_root_with_content() {
 #[test]
 fn cleanup_concurrent_n_roots_partial_content_keeps_variables() {
     let mut sink = VecDocSink::new();
-    // Root A: scaffold-only (0 children).
+    // Root A scaffold-only (0 children), Root B has content. Insert BOTH in one
+    // InsertSubtree: a single-node top-level insert now replaces an existing
+    // empty root frame (op_editor_core::command_root_replace), so inserting them
+    // one at a time would collapse root-a into root-b. A multi-node insert skips
+    // that replacement, preserving the two-root concurrent-cleanup scenario.
     let tree_a = frame_json("root-a", json!([]));
-    sink.state.apply(EditorCommand::InsertSubtree {
-        nodes: vec![tree_a],
-        parent_id: NodeId::NONE,
-        page_id: None,
-    });
-    // capture actual remapped ID for root-a (InsertSubtree remaps IDs).
-    let root_a = sink.state.active_children()[0].id_str().to_string();
-
-    // Root B: has content child.
     let tree_b = frame_json("root-b", json!([child_frame_json("content-1")]));
     sink.state.apply(EditorCommand::InsertSubtree {
-        nodes: vec![tree_b],
+        nodes: vec![tree_a, tree_b],
         parent_id: NodeId::NONE,
         page_id: None,
     });
-    // root-b is the second child at index 1.
+    // capture actual remapped IDs (InsertSubtree remaps IDs).
+    let root_a = sink.state.active_children()[0].id_str().to_string();
     let root_b = sink.state.active_children()[1].id_str().to_string();
 
     sink.applied.clear();
@@ -254,13 +250,15 @@ fn cleanup_concurrent_all_scaffold_only_deletes_all_and_rolls_back_vars() {
     // Two empty roots.
     let tree_a = frame_json("root-a", json!([]));
     let tree_b = frame_json("root-b", json!([]));
-    for tree in [tree_a, tree_b] {
-        sink.state.apply(EditorCommand::InsertSubtree {
-            nodes: vec![tree],
-            parent_id: NodeId::NONE,
-            page_id: None,
-        });
-    }
+    // Insert BOTH empty roots in one InsertSubtree: a single-node top-level insert
+    // now replaces an existing empty root frame (command_root_replace), so two
+    // sequential empty-root inserts would collapse to one child. A multi-node
+    // insert skips that replacement.
+    sink.state.apply(EditorCommand::InsertSubtree {
+        nodes: vec![tree_a, tree_b],
+        parent_id: NodeId::NONE,
+        page_id: None,
+    });
     // Capture actual remapped IDs.
     let root_a = sink.state.active_children()[0].id_str().to_string();
     let root_b = sink.state.active_children()[1].id_str().to_string();
