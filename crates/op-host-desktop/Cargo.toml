@@ -98,6 +98,11 @@ op-mcp = { path = "../op-mcp" }
 # S3a design orchestrator — driven by `chat_orchestrator.rs` when a chat
 # message classifies as a design request.
 op-orchestrator = { path = "../op-orchestrator" }
+# Debug-mode logging: a tracing subscriber over the orchestrator's tracing
+# events (LLM calls + parse failures with raw output). Silent unless RUST_LOG
+# is set — see `init_tracing` in main.rs.
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
 # Phase 7 strangler reorg: the transport-free AI chat data shapes
 # (`ChatProvider` trait + model catalog + agent-settings state) were
 # extracted into op-ai; the `src/chat_*.rs` real transports + the
