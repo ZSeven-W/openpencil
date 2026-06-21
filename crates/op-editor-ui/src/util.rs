@@ -206,7 +206,9 @@ pub fn truncate_ellipsis(s: &str, max: usize) -> String {
 /// trailing `…`) measures within `max_w`, using the caller-supplied `measure`
 /// (typically the render backend's `measure_text`). Character-aware, so
 /// multibyte glyphs are never split. Returns `s` unchanged when it already
-/// fits, or an empty string when not even the ellipsis fits.
+/// fits. When the space is too narrow even for one glyph, it keeps a bare `…`
+/// (matching the per-module `ellipsize` helpers) so the truncation stays
+/// visible rather than collapsing to nothing.
 pub fn ellipsize_to_width(s: &str, max_w: f32, mut measure: impl FnMut(&str) -> f32) -> String {
     if measure(s) <= max_w {
         return s.to_string();
@@ -214,9 +216,6 @@ pub fn ellipsize_to_width(s: &str, max_w: f32, mut measure: impl FnMut(&str) -> 
     let mut out = s.to_string();
     while !out.is_empty() && measure(&format!("{out}…")) > max_w {
         out.pop();
-    }
-    if out.is_empty() {
-        return String::new();
     }
     format!("{out}…")
 }
@@ -240,8 +239,9 @@ mod tests {
         assert!(cjk.ends_with('…'));
         assert!(measure(&cjk) <= 35.0);
         assert!(cjk.chars().all(|c| c == '…' || "设计精良的美食应用".contains(c)));
-        // Not even the ellipsis fits → empty.
-        assert_eq!(ellipsize_to_width("abc", 5.0, measure), "");
+        // Too narrow for even one glyph → keep a bare `…` so the
+        // truncation stays visible (matches the per-module helpers).
+        assert_eq!(ellipsize_to_width("abc", 5.0, measure), "…");
     }
 
     #[test]
