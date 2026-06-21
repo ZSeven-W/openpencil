@@ -856,11 +856,12 @@ pub(in crate::widget_host) fn property_focus_initial(
         // when set, else the slate placeholder) so clicking the hex input
         // doesn't flip it to #000000.
         F::StrokeHex => color_to_hex(panel.snapshot.stroke_swatch_color()),
-        F::StrokeWidth => panel
-            .snapshot
-            .stroke
-            .map(|s| format!("{}", s.width.round() as i32))
-            .unwrap_or_else(|| "1".to_string()),
+        // Seed the SAME width the inline input paints (0 when unset, and
+        // un-rounded) so clicking in never changes the displayed value —
+        // mirrors the `stroke_swatch_color` seed-matches-paint invariant.
+        F::StrokeWidth => {
+            format_panel_number(panel.snapshot.stroke.map(|s| s.width).unwrap_or(0.0))
+        }
         F::StrokeTopWidth | F::StrokeRightWidth | F::StrokeBottomWidth | F::StrokeLeftWidth => {
             panel
                 .snapshot

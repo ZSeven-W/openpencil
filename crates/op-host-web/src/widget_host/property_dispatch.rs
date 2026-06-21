@@ -843,11 +843,11 @@ pub(in crate::widget_host) fn property_focus_initial(
             .map(color_to_hex)
             .unwrap_or_else(|| "#FFFFFF".to_string()),
         PropertyFocus::StrokeHex => color_to_hex(panel.snapshot.stroke_swatch_color()),
-        PropertyFocus::StrokeWidth => panel
-            .snapshot
-            .stroke
-            .map(|s| format!("{}", s.width.round() as i32))
-            .unwrap_or_else(|| "1".to_string()),
+        // Seed the SAME width the inline input paints (0 when unset, and
+        // un-rounded) so clicking in never changes the displayed value.
+        PropertyFocus::StrokeWidth => {
+            format_panel_number(panel.snapshot.stroke.map(|s| s.width).unwrap_or(0.0))
+        }
         PropertyFocus::StrokeTopWidth
         | PropertyFocus::StrokeRightWidth
         | PropertyFocus::StrokeBottomWidth

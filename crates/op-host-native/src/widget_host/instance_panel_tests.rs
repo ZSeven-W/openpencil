@@ -375,3 +375,41 @@ fn colorless_stroke_width_survives_in_the_panel_snapshot() {
         "a colorless stroke's width must still show in the panel"
     );
 }
+
+/// Clicking the stroke-width input on a node with NO stroke must seed
+/// "0" (the displayed value), not auto-fill "1" — otherwise the value
+/// silently jumps on focus. Mirrors the seed-matches-paint invariant.
+#[test]
+fn stroke_width_seed_matches_display_for_no_stroke() {
+    let host = seeded_rect_host();
+    let panel = op_editor_ui::widgets::PropertyPanel::for_selection(host.editor_state())
+        .expect("panel for the selected rect");
+    let seed = super::press_helpers::property_focus_initial(
+        op_editor_core::PropertyFocus::StrokeWidth,
+        &panel,
+    );
+    assert_eq!(
+        seed, "0",
+        "clicking the width on a no-stroke node must seed the displayed 0, not 1"
+    );
+}
+
+/// And once a stroke exists, the seed echoes its real (un-rounded)
+/// width — never the old `round() as i32` that snapped 2.5 → "3".
+#[test]
+fn stroke_width_seed_echoes_existing_width() {
+    let mut host = seeded_rect_host();
+    host.editor_state_mut().ui.property_focus = Some(op_editor_core::PropertyFocus::StrokeWidth);
+    host.editor_state_mut().ui.property_input.set_text("2.5");
+    host.commit_property_focus_if_any();
+    let panel = op_editor_ui::widgets::PropertyPanel::for_selection(host.editor_state())
+        .expect("panel after commit");
+    let seed = super::press_helpers::property_focus_initial(
+        op_editor_core::PropertyFocus::StrokeWidth,
+        &panel,
+    );
+    // `format_panel_number` renders fractionals at 2 decimals — the same
+    // string the inline input paints. The old `round() as i32` would have
+    // snapped this to "3".
+    assert_eq!(seed, "2.50", "the width seed must echo the real width un-rounded");
+}
