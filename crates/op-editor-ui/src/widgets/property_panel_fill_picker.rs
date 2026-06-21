@@ -22,19 +22,32 @@ pub fn fill_type_at(idx: usize) -> Option<FillType> {
     FILL_TYPES.get(idx).copied()
 }
 
-pub fn fill_type_dropdown_rect(panel_rect: Rect, visible: VisibleSections) -> Rect {
+/// Type-dropdown rect for the fill at vertical offset `row_offset_y`
+/// (the sum of the head-row + body heights of every fill above it).
+/// Pass `0.0` for the primary (first) fill.
+pub fn fill_type_dropdown_rect(
+    panel_rect: Rect,
+    visible: VisibleSections,
+    row_offset_y: f32,
+) -> Rect {
     let usable_w = panel_rect.size.x - PAD_X * 2.0;
     Rect {
         origin: Point2D::new(
             panel_rect.origin.x + PAD_X + 22.0 + 6.0,
-            fill_type_dropdown_y(panel_rect, visible),
+            fill_type_dropdown_y(panel_rect, visible) + row_offset_y,
         ),
         size: Point2D::new(usable_w - 22.0 - 6.0 - 50.0 - 22.0 - 12.0, INPUT_HEIGHT),
     }
 }
 
-pub fn fill_type_picker_rect(panel_rect: Rect, visible: VisibleSections) -> Rect {
-    let dropdown = fill_type_dropdown_rect(panel_rect, visible);
+/// Picker overlay rect for the fill at vertical offset `row_offset_y`
+/// — anchored just below that fill's type dropdown.
+pub fn fill_type_picker_rect(
+    panel_rect: Rect,
+    visible: VisibleSections,
+    row_offset_y: f32,
+) -> Rect {
+    let dropdown = fill_type_dropdown_rect(panel_rect, visible, row_offset_y);
     Rect {
         origin: Point2D::new(dropdown.origin.x, dropdown.origin.y + dropdown.size.y + 4.0),
         size: Point2D::new(
@@ -48,10 +61,11 @@ pub fn fill_type_picker_hit(
     state: &SelectState,
     panel_rect: Rect,
     visible: VisibleSections,
+    row_offset_y: f32,
     point: Point2D,
     theme: &Theme,
 ) -> SelectHit {
-    let picker = fill_type_picker_rect(panel_rect, visible);
+    let picker = fill_type_picker_rect(panel_rect, visible, row_offset_y);
     Select::hit(
         state,
         popup_anchor(picker),

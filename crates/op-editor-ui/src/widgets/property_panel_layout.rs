@@ -6,10 +6,10 @@
 //! Pulled out of `property_panel_sections.rs` to keep that file
 //! under the 800-line ceiling.
 
-use crate::widgets::property_panel::{EffectKind, EffectSummary, PropertyPanelAction};
-use crate::widgets::property_panel_fill_picker::{
-    fill_type_at, fill_type_picker_rect, FILL_TYPE_COUNT, FILL_TYPE_ROW_HEIGHT,
+use crate::widgets::property_panel::{
+    EffectKind, EffectSummary, FillSummary, PropertyPanelAction,
 };
+use crate::widgets::property_panel_fill::fill_row_height;
 use crate::widgets::property_panel_inputs::{
     COLOR_VARIABLE_BUTTON_W, COLOR_VARIABLE_GAP, CREATE_COMPONENT_BTN_H, CREATE_COMPONENT_PAD_TOP,
     HEADER_HEIGHT, INPUT_HEIGHT, PAD_X, SECTION_GAP, SECTION_HEADER_HEIGHT, TAB_HEIGHT,
@@ -136,6 +136,20 @@ pub fn effects_section_height(effects: &[EffectSummary]) -> f32 {
         }
 }
 
+/// Total vertical space the Fill section consumes: the section header
+/// plus one row per fill (head row + body), plus the 12 px trailing
+/// gap painted before the divider. `primary_stop_count` sizes the
+/// primary fill's gradient body (the gradient-stop editor keys off the
+/// primary fill). Mirrors the y-walk in `paint_fill_section`.
+pub fn fills_section_height(fills: &[FillSummary], primary_stop_count: usize) -> f32 {
+    let rows: f32 = fills
+        .iter()
+        .enumerate()
+        .map(|(i, f)| fill_row_height(f.fill_type, i == 0, primary_stop_count))
+        .sum();
+    SECTION_HEADER_HEIGHT + rows + 12.0
+}
+
 /// State for the 5 Size checkboxes (fill / hug / clip).
 #[derive(Debug, Clone, Copy)]
 pub struct SizeFlags {
@@ -193,9 +207,10 @@ pub fn action_button_rects(
     panel_rect: Rect,
     visible: VisibleSections,
     effects: &[EffectSummary],
+    fills: &[FillSummary],
 ) -> Vec<(PropertyPanelAction, Rect)> {
     action_button_rects_with_fill_picker(
-        panel_rect, visible, effects, false, false, false, false, false, false,
+        panel_rect, visible, effects, fills, false, 0, false, false, false, false, false,
     )
 }
 
@@ -211,11 +226,12 @@ pub fn property_panel_content_height(
     panel_rect: Rect,
     visible: VisibleSections,
     effects: &[EffectSummary],
+    fills: &[FillSummary],
 ) -> f32 {
     let actions = action_button_rects_with_fill_picker(
-        panel_rect, visible, effects, false, false, false, false, false, false,
+        panel_rect, visible, effects, fills, false, 0, false, false, false, false, false,
     );
-    let inputs = editable_input_rects(panel_rect, visible);
+    let inputs = editable_input_rects(panel_rect, visible, fills);
     let bottom = actions
         .iter()
         .map(|(_, r)| r.origin.y + r.size.y)
@@ -236,7 +252,9 @@ pub fn action_button_rects_with_fill_picker(
     panel_rect: Rect,
     visible: VisibleSections,
     effects: &[EffectSummary],
+    fills: &[FillSummary],
     fill_picker_open: bool,
+    fill_type_picker_index: usize,
     font_picker_open: bool,
     font_weight_picker_open: bool,
     export_scale_picker_open: bool,
@@ -413,149 +431,15 @@ pub fn action_button_rects_with_fill_picker(
         y += SECTION_GAP;
     }
     if visible.fill {
-        out.push((
-            PropertyPanelAction::AddFill,
-            Rect {
-                origin: Point2D::new(x0 + w - PAD_X - 22.0, y),
-                size: Point2D::new(28.0, SECTION_HEADER_HEIGHT),
-            },
-        ));
-        y += SECTION_HEADER_HEIGHT;
-        // The head-row swatch is display-only — the colour picker
-        // opens from the hex-row swatch below (added further down),
-        // not from here.
-        let dropdown_rect = Rect {
-            origin: Point2D::new(x0 + PAD_X + 22.0 + 6.0, y),
-            size: Point2D::new(usable_w - 22.0 - 6.0 - 50.0 - 22.0 - 12.0, INPUT_HEIGHT),
-        };
-        out.push((PropertyPanelAction::ToggleFillTypePicker, dropdown_rect));
-        if fill_picker_open {
-            let picker_rect = fill_type_picker_rect(panel_rect, visible);
-            for i in 0..FILL_TYPE_COUNT {
-                let Some(t) = fill_type_at(i) else {
-                    continue;
-                };
-                out.push((
-                    PropertyPanelAction::SetFillType(t),
-                    Rect {
-                        origin: Point2D::new(
-                            picker_rect.origin.x,
-                            picker_rect.origin.y + i as f32 * FILL_TYPE_ROW_HEIGHT,
-                        ),
-                        size: Point2D::new(picker_rect.size.x, FILL_TYPE_ROW_HEIGHT),
-                    },
-                ));
-            }
-        }
-        // Consume the rest of the Fill section so subsequent
-        // sections' y math stays aligned with paint. Mirrors the
-        // y-walk in `paint_fill_section`: head row + body + divider.
-        y += INPUT_HEIGHT + 6.0; // head row (swatch + dropdown + opacity + X)
-                                 // Solid fill's body is the hex row; its leading 16 px colour
-                                 // swatch opens the picker. `hit_test_action` runs before the
-                                 // hex-input focus hit-test, so a swatch click opens the
-                                 // picker instead of focusing the hex field.
-        if visible.fill_type == FillType::Solid {
-            let show_var = visible.color_variable_count > 0 || visible.fill_variable_bound;
-            let variable_w = if show_var {
-                COLOR_VARIABLE_BUTTON_W + COLOR_VARIABLE_GAP
-            } else {
-                0.0
-            };
-            let hex_w = usable_w - variable_w;
-            if !visible.fill_variable_bound {
-                out.push((
-                    PropertyPanelAction::OpenColorPicker(op_editor_core::ColorTarget::Fill),
-                    Rect {
-                        origin: Point2D::new(x0 + PAD_X, y),
-                        size: Point2D::new(28.0, INPUT_HEIGHT),
-                    },
-                ));
-            }
-            if show_var {
-                let var_rect = Rect {
-                    origin: Point2D::new(x0 + PAD_X + hex_w + COLOR_VARIABLE_GAP, y),
-                    size: Point2D::new(COLOR_VARIABLE_BUTTON_W, INPUT_HEIGHT),
-                };
-                out.push((
-                    PropertyPanelAction::ToggleColorVariablePicker(
-                        op_editor_core::ColorTarget::Fill,
-                    ),
-                    var_rect,
-                ));
-                if visible.color_variable_picker_open == Some(op_editor_core::ColorTarget::Fill) {
-                    push_color_variable_picker_rects(
-                        &mut out,
-                        op_editor_core::ColorTarget::Fill,
-                        var_rect,
-                        visible.color_variable_count,
-                        visible.fill_variable_bound,
-                    );
-                }
-            }
-        }
-        out.push((
-            PropertyPanelAction::RemoveFill,
-            Rect {
-                origin: Point2D::new(x0 + w - PAD_X - 22.0, y - INPUT_HEIGHT - 6.0),
-                size: Point2D::new(28.0, INPUT_HEIGHT),
-            },
-        ));
-        if visible.fill_type == FillType::Image {
-            // Whole image-fill row opens the TS-parity image editor
-            // popover. The popover's upload well opens the file picker.
-            let usable_w = w - PAD_X * 2.0;
-            out.push((
-                PropertyPanelAction::ToggleImageFillPopover,
-                Rect {
-                    origin: Point2D::new(x0 + PAD_X, y),
-                    size: Point2D::new(usable_w, INPUT_HEIGHT),
-                },
-            ));
-        }
-        // Gradient stop swatches — each row's 16 px swatch opens the
-        // picker on that specific stop, matching the solid fill
-        // affordance.
-        if matches!(
-            visible.fill_type,
-            FillType::LinearGradient | FillType::RadialGradient
-        ) {
-            let mut stop_y = y;
-            if visible.fill_type == FillType::LinearGradient {
-                stop_y += INPUT_HEIGHT + 6.0; // Angle row sits above the stops header.
-            }
-            out.push((
-                PropertyPanelAction::AddGradientStop,
-                Rect {
-                    origin: Point2D::new(x0 + w - PAD_X - 22.0, stop_y),
-                    size: Point2D::new(28.0, SECTION_HEADER_HEIGHT),
-                },
-            ));
-            stop_y += SECTION_HEADER_HEIGHT; // 色标 header
-            for index in 0..visible.gradient_stop_count {
-                out.push((
-                    PropertyPanelAction::OpenColorPicker(
-                        op_editor_core::ColorTarget::GradientStop(index),
-                    ),
-                    Rect {
-                        origin: Point2D::new(x0 + PAD_X, stop_y),
-                        size: Point2D::new(28.0, INPUT_HEIGHT),
-                    },
-                ));
-                if visible.gradient_stop_count > 2 {
-                    out.push((
-                        PropertyPanelAction::RemoveGradientStop(index),
-                        Rect {
-                            origin: Point2D::new(x0 + w - PAD_X - 22.0, stop_y),
-                            size: Point2D::new(28.0, INPUT_HEIGHT),
-                        },
-                    ));
-                }
-                stop_y += INPUT_HEIGHT + 4.0;
-            }
-        }
-        y += fill_body_height_with_stops(visible.fill_type, visible.gradient_stop_count) - 6.0
-            + 12.0; // body + divider gap
+        y = crate::widgets::property_panel_input_layout::push_fill_action_rects(
+            &mut out,
+            panel_rect,
+            visible,
+            fills,
+            fill_picker_open,
+            fill_type_picker_index,
+            y,
+        );
         y += SECTION_GAP;
     }
     if visible.stroke {
@@ -743,7 +627,7 @@ pub fn action_button_rects_with_fill_picker(
     out
 }
 
-fn push_color_variable_picker_rects(
+pub(crate) fn push_color_variable_picker_rects(
     out: &mut Vec<(PropertyPanelAction, Rect)>,
     target: op_editor_core::ColorTarget,
     anchor: Rect,

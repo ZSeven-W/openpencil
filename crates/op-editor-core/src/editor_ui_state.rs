@@ -1002,6 +1002,12 @@ pub struct EditorUiState {
     pub size_clip_content: bool,
     /// Fill-type dropdown state in the PropertyPanel.
     pub fill_type_picker: jian_widgets::components::select::SelectState,
+    /// Which fill row the open fill-type dropdown targets. The Fill
+    /// section stacks one row per fill, each with its own type
+    /// dropdown, so `fill_type_picker.open` plus this index identify
+    /// the row whose picker is showing. Meaningless when the picker is
+    /// closed; defaults to `0`.
+    pub fill_type_picker_index: usize,
     /// Fill/stroke colour-variable dropdown currently open in the
     /// PropertyPanel; `None` means closed.
     pub property_color_variable_picker_open: Option<crate::ui_draft::ColorTarget>,
@@ -1284,6 +1290,7 @@ impl Default for EditorUiState {
             size_hug_height: false,
             size_clip_content: false,
             fill_type_picker: jian_widgets::components::select::SelectState::default(),
+            fill_type_picker_index: 0,
             property_color_variable_picker_open: None,
             image_fill_popover_open: false,
             font_picker: jian_widgets::components::select::SelectState::default(),
@@ -1405,8 +1412,16 @@ impl EditorUiState {
     }
 
     pub fn toggle_fill_type_picker(&mut self) {
-        let opening = !self.fill_type_picker.open;
+        self.toggle_fill_type_picker_for(0);
+    }
+
+    /// Toggle the fill-type dropdown for fill `index`. Opening on a
+    /// different row than the one currently open re-targets the picker
+    /// (stays open, new index); toggling the same row closes it.
+    pub fn toggle_fill_type_picker_for(&mut self, index: usize) {
+        let opening = !(self.fill_type_picker.open && self.fill_type_picker_index == index);
         self.fill_type_picker.open = opening;
+        self.fill_type_picker_index = index;
         self.fill_type_picker.hover = None;
         self.fill_type_picker.pressed = None;
         if opening {

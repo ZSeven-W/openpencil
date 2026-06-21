@@ -41,9 +41,15 @@ pub enum PropertyFocus {
     PaddingBottom,
     PaddingLeft,
     Opacity,
-    FillHex,
-    /// Fill section's `100 %` opacity input — percentage (0..100).
-    FillOpacity,
+    /// One fill's `#RRGGBB` colour input — indexed into the node's
+    /// `fill` list. The Fill section stacks one row per fill, so this
+    /// carries which fill's hex field is focused. Only a Solid fill
+    /// paints a hex input; an out-of-range / non-solid index is a
+    /// no-op at commit.
+    FillHex(usize),
+    /// One fill's opacity input — percentage (0..100), indexed into
+    /// the node's `fill` list (same per-fill scoping as [`FillHex`]).
+    FillOpacity(usize),
     /// LinearGradient angle input — degrees in the canonical `.op`
     /// convention (0° = bottom→top, 90° = left→right). Only valid
     /// while the selected node's first fill is `LinearGradient`.
@@ -105,7 +111,7 @@ impl PropertyFocus {
     pub fn is_hex(self) -> bool {
         matches!(
             self,
-            PropertyFocus::FillHex | PropertyFocus::StrokeHex | PropertyFocus::GradientStopHex(_)
+            PropertyFocus::FillHex(_) | PropertyFocus::StrokeHex | PropertyFocus::GradientStopHex(_)
         )
     }
 
@@ -136,7 +142,7 @@ impl PropertyFocus {
             PropertyFocus::Rotation
                 | PropertyFocus::PositionR
                 | PropertyFocus::Opacity
-                | PropertyFocus::FillOpacity
+                | PropertyFocus::FillOpacity(_)
                 | PropertyFocus::LayoutGap
                 | PropertyFocus::PaddingTop
                 | PropertyFocus::PaddingRight
@@ -264,6 +270,11 @@ pub struct ColorPickerState {
     /// stroke / variable targets always seed `1.0` because their
     /// alpha lives in a separate opacity field.
     pub alpha: f32,
+    /// When `target` is `Fill`, which fill in the node's `fill` list
+    /// the HSV swatch writes back to (the Fill section stacks one row
+    /// per fill). Ignored for Stroke / GradientStop / EffectColor /
+    /// variable targets. Defaults to `0` (the primary fill).
+    pub fill_index: usize,
     /// Whether the hex field is focused for keyboard editing.
     pub hex_focused: bool,
     /// The live `#RRGGBB` edit buffer while the hex field is focused. Renders

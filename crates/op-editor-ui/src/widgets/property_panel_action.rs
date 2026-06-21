@@ -180,15 +180,20 @@ pub enum PropertyPanelAction {
     /// User clicked "Detach instance" — host materializes the Ref
     /// into an independent subtree (TS `detachComponent` case 2).
     DetachInstance,
-    /// User clicked the Fill section's fill-type dropdown — host
-    /// toggles `Document.ui.fill_type_picker.open`.
-    ToggleFillTypePicker,
-    /// User picked a fill type from the dropdown.
-    SetFillType(op_editor_core::FillType),
-    /// User clicked the Fill section header "+".
+    /// User clicked fill `index`'s fill-type dropdown — host toggles
+    /// the picker open for that fill (`fill_type_picker` + the index
+    /// it targets).
+    ToggleFillTypePicker(usize),
+    /// User picked a fill type from the dropdown for fill `index`.
+    SetFillType {
+        index: usize,
+        fill_type: op_editor_core::FillType,
+    },
+    /// User clicked the Fill section header "+" — appends a new fill.
     AddFill,
-    /// User clicked the Fill section row remove button.
-    RemoveFill,
+    /// User clicked fill `index`'s row remove button — removes that
+    /// fill.
+    RemoveFill(usize),
     /// User clicked the gradient-stops header "+".
     AddGradientStop,
     /// User clicked a gradient stop row remove button.
@@ -196,6 +201,13 @@ pub enum PropertyPanelAction {
     /// User clicked a colour swatch (Fill or Stroke section). Host
     /// opens the floating colour picker tied to that target.
     OpenColorPicker(op_editor_core::ColorTarget),
+    /// User clicked the colour swatch on fill `index`'s Solid body row.
+    /// Host opens the HSV picker bound to that fill via
+    /// `open_color_picker_for_fill`. A separate variant from
+    /// `OpenColorPicker(ColorTarget::Fill)` so the fill index rides
+    /// along without widening the shared `ColorTarget` enum (which
+    /// would ripple across the colour-variable / HSV systems).
+    OpenFillColorPicker(usize),
     /// User clicked the `{}` affordance beside a fill/stroke colour
     /// row. Host toggles the colour-variable picker for that target.
     ToggleColorVariablePicker(op_editor_core::ColorTarget),

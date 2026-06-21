@@ -3,11 +3,16 @@
 //! Split from `property_panel_layout.rs` so the action-rect walker
 //! and input-rect walker stay under the repository file-size cap.
 
+use crate::widgets::property_panel::{FillSummary, PropertyPanelAction};
+use crate::widgets::property_panel_fill::{fill_row_body_height, fill_row_offset};
+use crate::widgets::property_panel_fill_picker::{
+    fill_type_at, fill_type_picker_rect, FILL_TYPE_COUNT, FILL_TYPE_ROW_HEIGHT,
+};
 use crate::widgets::property_panel_inputs::{
     COLOR_VARIABLE_BUTTON_W, COLOR_VARIABLE_GAP, HEADER_HEIGHT, INPUT_HEIGHT, PAD_X, SECTION_GAP,
     SECTION_HEADER_HEIGHT, TAB_HEIGHT,
 };
-use crate::widgets::property_panel_layout::{fill_body_height_with_stops, VisibleSections};
+use crate::widgets::property_panel_layout::{push_color_variable_picker_rects, VisibleSections};
 use crate::{Point2D, Rect};
 use op_editor_core::{FillType, PropertyFocus};
 
@@ -50,6 +55,7 @@ fn push_gradient_stop_rects(
 pub fn editable_input_rects(
     panel_rect: Rect,
     visible: VisibleSections,
+    fills: &[FillSummary],
 ) -> Vec<(PropertyFocus, Rect)> {
     let x0 = panel_rect.origin.x;
     let w = panel_rect.size.x;
@@ -209,62 +215,75 @@ pub fn editable_input_rects(
     }
     if visible.fill {
         y += SECTION_HEADER_HEIGHT;
-        rects.push((
-            PropertyFocus::FillOpacity,
-            Rect {
-                origin: Point2D::new(x0 + w - PAD_X - 78.0, y),
-                size: Point2D::new(50.0, INPUT_HEIGHT),
-            },
-        ));
-        y += INPUT_HEIGHT + 6.0;
-        match visible.fill_type {
-            FillType::Solid => {
-                let show_var = visible.color_variable_count > 0 || visible.fill_variable_bound;
-                let variable_w = if show_var {
-                    COLOR_VARIABLE_BUTTON_W + COLOR_VARIABLE_GAP
-                } else {
-                    0.0
-                };
-                if !visible.fill_variable_bound {
+        let primary_stop_count = visible.gradient_stop_count;
+        for (fi, fill) in fills.iter().enumerate() {
+            let is_primary = fi == 0;
+            let fill_type = fill.fill_type;
+            // Head row: per-fill opacity input (the `%` box).
+            rects.push((
+                PropertyFocus::FillOpacity(fi),
+                Rect {
+                    origin: Point2D::new(x0 + w - PAD_X - 78.0, y),
+                    size: Point2D::new(50.0, INPUT_HEIGHT),
+                },
+            ));
+            y += INPUT_HEIGHT + 6.0;
+            match fill_type {
+                FillType::Solid => {
+                    let show_var = is_primary
+                        && (visible.color_variable_count > 0 || visible.fill_variable_bound);
+                    let variable_w = if show_var {
+                        COLOR_VARIABLE_BUTTON_W + COLOR_VARIABLE_GAP
+                    } else {
+                        0.0
+                    };
+                    // A variable-bound primary fill paints a `$name` chip,
+                    // not an editable hex input.
+                    if !(is_primary && visible.fill_variable_bound) {
+                        rects.push((
+                            PropertyFocus::FillHex(fi),
+                            Rect {
+                                origin: Point2D::new(x0 + PAD_X, y),
+                                size: Point2D::new(usable_w - variable_w, INPUT_HEIGHT),
+                            },
+                        ));
+                    }
+                }
+                // Gradient / image bodies only paint editable inputs for
+                // the primary fill (they key off `fills[0]`).
+                FillType::LinearGradient if is_primary => {
                     rects.push((
-                        PropertyFocus::FillHex,
+                        PropertyFocus::GradientAngle,
                         Rect {
                             origin: Point2D::new(x0 + PAD_X, y),
-                            size: Point2D::new(usable_w - variable_w, INPUT_HEIGHT),
+                            size: Point2D::new(usable_w, INPUT_HEIGHT),
                         },
                     ));
+                    let mut stop_y = y + INPUT_HEIGHT + 6.0 + SECTION_HEADER_HEIGHT;
+                    push_gradient_stop_rects(
+                        &mut rects,
+                        x0,
+                        &mut stop_y,
+                        usable_w,
+                        visible.gradient_stop_count,
+                    );
                 }
+                FillType::RadialGradient if is_primary => {
+                    let mut stop_y = y + SECTION_HEADER_HEIGHT;
+                    push_gradient_stop_rects(
+                        &mut rects,
+                        x0,
+                        &mut stop_y,
+                        usable_w,
+                        visible.gradient_stop_count,
+                    );
+                }
+                FillType::LinearGradient
+                | FillType::RadialGradient
+                | FillType::Image => {}
             }
-            FillType::LinearGradient => {
-                rects.push((
-                    PropertyFocus::GradientAngle,
-                    Rect {
-                        origin: Point2D::new(x0 + PAD_X, y),
-                        size: Point2D::new(usable_w, INPUT_HEIGHT),
-                    },
-                ));
-                let mut stop_y = y + INPUT_HEIGHT + 6.0 + SECTION_HEADER_HEIGHT;
-                push_gradient_stop_rects(
-                    &mut rects,
-                    x0,
-                    &mut stop_y,
-                    usable_w,
-                    visible.gradient_stop_count,
-                );
-            }
-            FillType::RadialGradient => {
-                let mut stop_y = y + SECTION_HEADER_HEIGHT;
-                push_gradient_stop_rects(
-                    &mut rects,
-                    x0,
-                    &mut stop_y,
-                    usable_w,
-                    visible.gradient_stop_count,
-                );
-            }
-            FillType::Image => {}
+            y += fill_row_body_height(fill_type, is_primary, primary_stop_count);
         }
-        y += fill_body_height_with_stops(visible.fill_type, visible.gradient_stop_count) - 6.0;
         y += 12.0;
         y += SECTION_GAP;
     }
@@ -296,4 +315,187 @@ pub fn editable_input_rects(
         ));
     }
     rects
+}
+
+/// Push the Fill section's action rects (header "+", per-fill type
+/// dropdown / × / type-picker rows / colour-swatch + gradient-stop /
+/// image-popover affordances) starting at `*y`'s row, returning the y
+/// just past the section's trailing 12 px gap (the caller adds the
+/// `SECTION_GAP`). Split out of `action_button_rects_with_fill_picker`
+/// for the 800-line cap; the y-walk mirrors `paint_one_fill`.
+pub(crate) fn push_fill_action_rects(
+    out: &mut Vec<(PropertyPanelAction, Rect)>,
+    panel_rect: Rect,
+    visible: VisibleSections,
+    fills: &[FillSummary],
+    fill_picker_open: bool,
+    fill_type_picker_index: usize,
+    mut y: f32,
+) -> f32 {
+    let x0 = panel_rect.origin.x;
+    let w = panel_rect.size.x;
+    let usable_w = w - PAD_X * 2.0;
+    // Header "+" appends a fill (TS-style stacked list).
+    out.push((
+        PropertyPanelAction::AddFill,
+        Rect {
+            origin: Point2D::new(x0 + w - PAD_X - 22.0, y),
+            size: Point2D::new(28.0, SECTION_HEADER_HEIGHT),
+        },
+    ));
+    y += SECTION_HEADER_HEIGHT;
+    let primary_stop_count = visible.gradient_stop_count;
+    // One row per fill — mirror `paint_one_fill`'s y-walk.
+    for (fi, fill) in fills.iter().enumerate() {
+        let is_primary = fi == 0;
+        let fill_type = fill.fill_type;
+        // Head row: type dropdown + opacity input + ×.
+        let dropdown_rect = Rect {
+            origin: Point2D::new(x0 + PAD_X + 22.0 + 6.0, y),
+            size: Point2D::new(usable_w - 22.0 - 6.0 - 50.0 - 22.0 - 12.0, INPUT_HEIGHT),
+        };
+        out.push((PropertyPanelAction::ToggleFillTypePicker(fi), dropdown_rect));
+        // The × sits to the right of the opacity box on the head row.
+        out.push((
+            PropertyPanelAction::RemoveFill(fi),
+            Rect {
+                origin: Point2D::new(x0 + w - PAD_X - 22.0, y),
+                size: Point2D::new(28.0, INPUT_HEIGHT),
+            },
+        ));
+        // This fill's open type-picker overlay rows.
+        if fill_picker_open && fill_type_picker_index == fi {
+            let row_offset = fill_row_offset(fills, fi, primary_stop_count);
+            let picker_rect = fill_type_picker_rect(panel_rect, visible, row_offset);
+            for i in 0..FILL_TYPE_COUNT {
+                let Some(t) = fill_type_at(i) else {
+                    continue;
+                };
+                out.push((
+                    PropertyPanelAction::SetFillType {
+                        index: fi,
+                        fill_type: t,
+                    },
+                    Rect {
+                        origin: Point2D::new(
+                            picker_rect.origin.x,
+                            picker_rect.origin.y + i as f32 * FILL_TYPE_ROW_HEIGHT,
+                        ),
+                        size: Point2D::new(picker_rect.size.x, FILL_TYPE_ROW_HEIGHT),
+                    },
+                ));
+            }
+        }
+        y += INPUT_HEIGHT + 6.0; // head row
+                                 // Body action rects, keyed off this fill's type.
+        match fill_type {
+            FillType::Solid => {
+                // Solid body: leading swatch opens the colour picker
+                // (the hex-input focus hit-test runs after this, so a
+                // swatch click opens the picker instead of focusing).
+                if is_primary {
+                    let show_var = visible.color_variable_count > 0 || visible.fill_variable_bound;
+                    let variable_w = if show_var {
+                        COLOR_VARIABLE_BUTTON_W + COLOR_VARIABLE_GAP
+                    } else {
+                        0.0
+                    };
+                    let hex_w = usable_w - variable_w;
+                    if !visible.fill_variable_bound {
+                        out.push((
+                            PropertyPanelAction::OpenColorPicker(op_editor_core::ColorTarget::Fill),
+                            Rect {
+                                origin: Point2D::new(x0 + PAD_X, y),
+                                size: Point2D::new(28.0, INPUT_HEIGHT),
+                            },
+                        ));
+                    }
+                    if show_var {
+                        let var_rect = Rect {
+                            origin: Point2D::new(x0 + PAD_X + hex_w + COLOR_VARIABLE_GAP, y),
+                            size: Point2D::new(COLOR_VARIABLE_BUTTON_W, INPUT_HEIGHT),
+                        };
+                        out.push((
+                            PropertyPanelAction::ToggleColorVariablePicker(
+                                op_editor_core::ColorTarget::Fill,
+                            ),
+                            var_rect,
+                        ));
+                        if visible.color_variable_picker_open
+                            == Some(op_editor_core::ColorTarget::Fill)
+                        {
+                            push_color_variable_picker_rects(
+                                out,
+                                op_editor_core::ColorTarget::Fill,
+                                var_rect,
+                                visible.color_variable_count,
+                                visible.fill_variable_bound,
+                            );
+                        }
+                    }
+                } else {
+                    // Non-primary solid: swatch opens a picker bound to
+                    // THIS fill (no colour-variable button — the variable
+                    // subsystem keys off the primary fill).
+                    out.push((
+                        PropertyPanelAction::OpenFillColorPicker(fi),
+                        Rect {
+                            origin: Point2D::new(x0 + PAD_X, y),
+                            size: Point2D::new(28.0, INPUT_HEIGHT),
+                        },
+                    ));
+                }
+            }
+            // Gradient / image bodies key off the primary fill, so only
+            // the primary fill emits their action rects (the non-primary
+            // head row's dropdown is enough to retype it).
+            FillType::Image if is_primary => {
+                out.push((
+                    PropertyPanelAction::ToggleImageFillPopover,
+                    Rect {
+                        origin: Point2D::new(x0 + PAD_X, y),
+                        size: Point2D::new(usable_w, INPUT_HEIGHT),
+                    },
+                ));
+            }
+            FillType::LinearGradient | FillType::RadialGradient if is_primary => {
+                let mut stop_y = y;
+                if fill_type == FillType::LinearGradient {
+                    stop_y += INPUT_HEIGHT + 6.0; // Angle row above the stops header.
+                }
+                out.push((
+                    PropertyPanelAction::AddGradientStop,
+                    Rect {
+                        origin: Point2D::new(x0 + w - PAD_X - 22.0, stop_y),
+                        size: Point2D::new(28.0, SECTION_HEADER_HEIGHT),
+                    },
+                ));
+                stop_y += SECTION_HEADER_HEIGHT; // 色标 header
+                for index in 0..visible.gradient_stop_count {
+                    out.push((
+                        PropertyPanelAction::OpenColorPicker(
+                            op_editor_core::ColorTarget::GradientStop(index),
+                        ),
+                        Rect {
+                            origin: Point2D::new(x0 + PAD_X, stop_y),
+                            size: Point2D::new(28.0, INPUT_HEIGHT),
+                        },
+                    ));
+                    if visible.gradient_stop_count > 2 {
+                        out.push((
+                            PropertyPanelAction::RemoveGradientStop(index),
+                            Rect {
+                                origin: Point2D::new(x0 + w - PAD_X - 22.0, stop_y),
+                                size: Point2D::new(28.0, INPUT_HEIGHT),
+                            },
+                        ));
+                    }
+                    stop_y += INPUT_HEIGHT + 4.0;
+                }
+            }
+            FillType::LinearGradient | FillType::RadialGradient | FillType::Image => {}
+        }
+        y += fill_row_body_height(fill_type, is_primary, primary_stop_count);
+    }
+    y + 12.0 // trailing gap before the divider
 }

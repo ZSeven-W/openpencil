@@ -220,7 +220,7 @@ impl EditorState {
             // committed via the host commit path's string arm, not this
             // numeric one.
             PropertyFocus::Opacity
-            | PropertyFocus::FillHex
+            | PropertyFocus::FillHex(_)
             | PropertyFocus::StrokeHex
             | PropertyFocus::WidgetPlaceholder
             | PropertyFocus::WidgetValue
@@ -228,8 +228,16 @@ impl EditorState {
             | PropertyFocus::WidgetLeadingIcon
             | PropertyFocus::WidgetTrailingIcon
             | PropertyFocus::WidgetBindKey => {}
-            PropertyFocus::FillOpacity => {
-                let _ = self.set_selected_fill_opacity((value / 100.0).clamp(0.0, 1.0));
+            PropertyFocus::FillOpacity(index) => {
+                // The primary fill (index 0) keeps `set_selected_fill_opacity`
+                // (writes the first fill's body opacity); a non-primary row
+                // writes its own fill's opacity by index.
+                let opacity = (value / 100.0).clamp(0.0, 1.0);
+                if index == 0 {
+                    let _ = self.set_selected_fill_opacity(opacity);
+                } else {
+                    let _ = self.set_selected_fill_opacity_at(index, opacity);
+                }
             }
             PropertyFocus::GradientAngle => {
                 let _ = crate::fills::set_primary_gradient_angle(node, value);

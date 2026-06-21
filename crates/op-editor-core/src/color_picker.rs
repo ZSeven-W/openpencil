@@ -39,6 +39,21 @@ use crate::walkers::find_node_mut;
 // `lib.rs` crate-root re-export) keep resolving.
 pub use jian_core::color::{hsv_to_rgb, parse_hex_alpha, parse_hex_rgb, rgb_to_hex, rgb_to_hsv};
 
+/// Hex of the solid fill at `index`, when that fill is a solid. Falls
+/// back to the first solid fill for index 0 (so the primary-fill
+/// picker seeds the same way it always did). Used by the colour picker
+/// to seed HSV from / detect changes on a specific fill row.
+fn indexed_solid_fill_hex(node: &jian_ops_schema::node::PenNode, index: usize) -> Option<String> {
+    use jian_ops_schema::style::PenFill;
+    let fills = crate::fills::node_fills(node)?;
+    match fills.get(index) {
+        Some(PenFill::Solid(b)) => Some(b.color.clone()),
+        Some(_) => None,
+        None if index == 0 => first_solid_fill_hex(node).map(str::to_string),
+        None => None,
+    }
+}
+
 impl EditorState {
     // --- Fill / stroke colour ---------------------------------------
 
@@ -92,8 +107,23 @@ impl EditorState {
     /// Open the floating colour picker on the given target. Seeds HSV
     /// from the anchor node's current fill / stroke colour. Captures
     /// a pre-edit history snapshot. Returns false when there is no
-    /// editable selection to edit.
+    /// editable selection to edit. A `Fill` target opens against the
+    /// primary fill (index 0); use [`Self::open_color_picker_for_fill`]
+    /// to target a specific fill row.
     pub fn open_color_picker(&mut self, target: ColorTarget, anchor_y: f32) -> bool {
+        self.open_color_picker_for_fill(target, 0, anchor_y)
+    }
+
+    /// Like [`Self::open_color_picker`] but, for a `Fill` target, binds
+    /// the picker to fill `fill_index` (the Fill section stacks one row
+    /// per fill, so each swatch writes back to its own fill). The index
+    /// is ignored for non-`Fill` targets.
+    pub fn open_color_picker_for_fill(
+        &mut self,
+        target: ColorTarget,
+        fill_index: usize,
+        anchor_y: f32,
+    ) -> bool {
         let sel = self.selection.anchor.clone();
         if !sel.is_real() || !self.is_editable(&sel) {
             return false;
@@ -113,7 +143,7 @@ impl EditorState {
             None => node,
         };
         let current_hex = match target {
-            ColorTarget::Fill => first_solid_fill_hex(node).map(str::to_string),
+            ColorTarget::Fill => indexed_solid_fill_hex(node, fill_index),
             ColorTarget::Stroke => first_solid_stroke_hex(node).map(str::to_string),
             ColorTarget::GradientStop(i) => gradient_stop_hex(node, i),
             ColorTarget::EffectColor(i) => effect_color_hex(node, i),
@@ -142,6 +172,7 @@ impl EditorState {
             variable: None,
             variable_theme: None,
             alpha,
+            fill_index,
             hex_focused: false,
             hex_input: jian_core::text_input::TextInputState::default(),
             rgb_focus: None,
@@ -245,6 +276,7 @@ impl EditorState {
             variable: Some(name),
             variable_theme,
             alpha: 1.0,
+            fill_index: 0,
             hex_focused: false,
             hex_input: jian_core::text_input::TextInputState::default(),
             rgb_focus: None,
@@ -268,6 +300,7 @@ impl EditorState {
         state.sat = sat.clamp(0.0, 1.0);
         state.val = val.clamp(0.0, 1.0);
         let target = state.target;
+        let fill_index = state.fill_index;
         let variable = state.variable.clone();
         let variable_theme = state.variable_theme.clone();
         let (r, g, b) = hsv_to_rgb(state.hue, state.sat, state.val);
@@ -287,7 +320,15 @@ impl EditorState {
         }
         match target {
             ColorTarget::Fill => {
-                self.set_selected_color(true, &hex);
+                // The primary fill (index 0) keeps `set_selected_color`,
+                // which prepends a fresh solid when the node has no solid
+                // fill (and is colour-variable-aware). A non-primary fill
+                // row writes its own solid fill in place.
+                if fill_index == 0 {
+                    self.set_selected_color(true, &hex);
+                } else {
+                    let _ = self.set_selected_fill_hex_at(fill_index, &hex);
+                }
             }
             ColorTarget::Stroke => {
                 self.set_selected_color(false, &hex);
@@ -366,15 +407,16 @@ impl EditorState {
         } else {
             let sel = self.selection.anchor.clone();
             let snap_children = snapshot_active_children(&snap);
+            let fill_index = state.fill_index;
             let before =
                 crate::walkers::find_node(snap_children, &sel).and_then(|n| match state.target {
-                    ColorTarget::Fill => first_solid_fill_hex(n).map(str::to_string),
+                    ColorTarget::Fill => indexed_solid_fill_hex(n, fill_index),
                     ColorTarget::Stroke => first_solid_stroke_hex(n).map(str::to_string),
                     ColorTarget::GradientStop(i) => gradient_stop_hex(n, i),
                     ColorTarget::EffectColor(i) => effect_color_hex(n, i),
                 });
             let after = self.selected_node().and_then(|n| match state.target {
-                ColorTarget::Fill => first_solid_fill_hex(n).map(str::to_string),
+                ColorTarget::Fill => indexed_solid_fill_hex(n, fill_index),
                 ColorTarget::Stroke => first_solid_stroke_hex(n).map(str::to_string),
                 ColorTarget::GradientStop(i) => gradient_stop_hex(n, i),
                 ColorTarget::EffectColor(i) => effect_color_hex(n, i),

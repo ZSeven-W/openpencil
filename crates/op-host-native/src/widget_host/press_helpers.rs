@@ -831,10 +831,21 @@ pub(in crate::widget_host) fn property_focus_initial(
             .as_ref()
             .map(|w| w.step.clone())
             .unwrap_or_default(),
-        F::FillOpacity => ((panel.snapshot.fill_opacity * 100.0).round() as i32).to_string(),
-        F::FillHex => panel
+        F::FillOpacity(index) => {
+            let opacity = panel
+                .snapshot
+                .fills
+                .get(index)
+                .map(|f| f.opacity)
+                .unwrap_or(panel.snapshot.fill_opacity);
+            ((opacity * 100.0).round() as i32).to_string()
+        }
+        F::FillHex(index) => panel
             .snapshot
-            .fill
+            .fills
+            .get(index)
+            .map(|f| f.color)
+            .or(panel.snapshot.fill)
             .map(color_to_hex)
             .unwrap_or_else(|| "#FFFFFF".to_string()),
         // Seed the SAME color the stroke swatch paints (the real stroke

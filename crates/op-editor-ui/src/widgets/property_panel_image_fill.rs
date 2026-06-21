@@ -5,7 +5,7 @@
 
 use crate::theme::Theme;
 use crate::widgets::icons::{draw_icon, Icon};
-use crate::widgets::property_panel::{NodeSnapshot, PropertyPanelAction};
+use crate::widgets::property_panel::{FillSummary, NodeSnapshot, PropertyPanelAction};
 use crate::widgets::property_panel_image_preview::paint_image_preview;
 use crate::widgets::property_panel_layout::{
     action_button_rects_with_fill_picker, VisibleSections,
@@ -34,20 +34,16 @@ fn panel_h() -> f32 {
         + PANEL_PAD
 }
 
-fn image_body_rect(panel_rect: Rect, visible: VisibleSections) -> Option<Rect> {
+fn image_body_rect(
+    panel_rect: Rect,
+    visible: VisibleSections,
+    fills: &[FillSummary],
+) -> Option<Rect> {
     if !visible.image && (!visible.fill || visible.fill_type != op_editor_core::FillType::Image) {
         return None;
     }
     action_button_rects_with_fill_picker(
-        panel_rect,
-        visible,
-        &[],
-        false,
-        false,
-        false,
-        false,
-        false,
-        false,
+        panel_rect, visible, &[], fills, false, 0, false, false, false, false, false,
     )
     .into_iter()
     .find_map(|(action, rect)| {
@@ -55,8 +51,8 @@ fn image_body_rect(panel_rect: Rect, visible: VisibleSections) -> Option<Rect> {
     })
 }
 
-fn popover_rect(panel_rect: Rect, visible: VisibleSections) -> Option<Rect> {
-    let anchor = image_body_rect(panel_rect, visible)?;
+fn popover_rect(panel_rect: Rect, visible: VisibleSections, fills: &[FillSummary]) -> Option<Rect> {
+    let anchor = image_body_rect(panel_rect, visible, fills)?;
     let h = panel_h();
     let min_top = panel_rect.origin.y + 8.0;
     let max_top = (panel_rect.origin.y + panel_rect.size.y - h - 8.0).max(min_top);
@@ -74,7 +70,7 @@ pub fn image_fill_popover_action_rects(
     visible: VisibleSections,
     snapshot: &NodeSnapshot,
 ) -> Vec<(PropertyPanelAction, Rect)> {
-    let Some(pop) = popover_rect(panel_rect, visible) else {
+    let Some(pop) = popover_rect(panel_rect, visible, &snapshot.fills) else {
         return Vec::new();
     };
     let mut out = Vec::new();
@@ -139,7 +135,7 @@ pub fn image_fill_popover_action_at(
             return Some(action);
         }
     }
-    let pop = popover_rect(panel_rect, visible)?;
+    let pop = popover_rect(panel_rect, visible, &snapshot.fills)?;
     for (field, track) in adjustment_track_rects(pop) {
         if (track).contains(point) {
             let pct = ((point.x - track.origin.x) / track.size.x).clamp(0.0, 1.0);
@@ -155,9 +151,10 @@ pub fn image_fill_popover_action_at(
 pub fn image_fill_popover_contains(
     panel_rect: Rect,
     visible: VisibleSections,
+    fills: &[FillSummary],
     point: Point2D,
 ) -> bool {
-    popover_rect(panel_rect, visible)
+    popover_rect(panel_rect, visible, fills)
         .map(|pop| (pop).contains(point))
         .unwrap_or(false)
 }
@@ -165,10 +162,11 @@ pub fn image_fill_popover_contains(
 pub fn image_fill_popover_adjustment_action_for_drag(
     panel_rect: Rect,
     visible: VisibleSections,
+    fills: &[FillSummary],
     field: op_editor_core::ImageAdjustmentField,
     x: f32,
 ) -> Option<PropertyPanelAction> {
-    let pop = popover_rect(panel_rect, visible)?;
+    let pop = popover_rect(panel_rect, visible, fills)?;
     let track = adjustment_track_rects(pop)
         .into_iter()
         .find_map(|(candidate, rect)| (candidate == field).then_some(rect))?;
@@ -187,7 +185,7 @@ pub fn paint_image_fill_popover(
     snapshot: &NodeSnapshot,
     locale: op_editor_core::Locale,
 ) {
-    let Some(pop) = popover_rect(panel_rect, visible) else {
+    let Some(pop) = popover_rect(panel_rect, visible, &snapshot.fills) else {
         return;
     };
     let summary = snapshot

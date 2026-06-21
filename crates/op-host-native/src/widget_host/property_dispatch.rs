@@ -99,16 +99,17 @@ impl WidgetHostNative {
                     let _ = self.editor_state.create_component_from_node_name(&id);
                 }
             }
-            A::ToggleFillTypePicker => {
+            A::ToggleFillTypePicker(index) => {
                 let ui = &mut self.editor_state.editor_ui;
-                ui.toggle_fill_type_picker();
+                ui.toggle_fill_type_picker_for(index);
                 ui.image_fill_popover_open = false;
                 ui.close_font_picker();
                 ui.font_weight_picker_open = false;
                 ui.property_color_variable_picker_open = None;
             }
-            A::SetFillType(t) => {
-                self.editor_state.set_selected_fill_type(t);
+            A::SetFillType { index, fill_type } => {
+                self.editor_state
+                    .set_selected_fill_type_at(index, fill_type);
                 self.editor_state.editor_ui.close_fill_type_picker();
                 self.editor_state.editor_ui.image_fill_popover_open = false;
                 self.editor_state
@@ -116,12 +117,10 @@ impl WidgetHostNative {
                     .property_color_variable_picker_open = None;
             }
             A::AddFill => {
-                let _ = self
-                    .editor_state
-                    .set_selected_fill_type(op_editor_core::FillType::Solid);
+                let _ = self.editor_state.add_selected_fill();
             }
-            A::RemoveFill => {
-                let _ = self.editor_state.clear_selected_fills();
+            A::RemoveFill(index) => {
+                let _ = self.editor_state.remove_selected_fill(index);
                 self.editor_state.editor_ui.close_fill_type_picker();
                 self.editor_state.editor_ui.image_fill_popover_open = false;
                 self.editor_state
@@ -278,6 +277,17 @@ impl WidgetHostNative {
                 let _ = self
                     .editor_state
                     .open_color_picker(color_target(target), 0.0);
+            }
+            A::OpenFillColorPicker(index) => {
+                // Fallback anchor when called outside the press path.
+                self.editor_state
+                    .editor_ui
+                    .property_color_variable_picker_open = None;
+                let _ = self.editor_state.open_color_picker_for_fill(
+                    op_editor_core::ui_draft::ColorTarget::Fill,
+                    index,
+                    0.0,
+                );
             }
             A::ToggleColorVariablePicker(target) => {
                 let target = color_target(target);
@@ -700,13 +710,19 @@ impl WidgetHostNative {
         let before = self.editor_state.snapshot_for_history();
         let instance_scope = self.editor_state.begin_instance_write_for_anchor();
         match focus {
-            PropertyFocus::FillHex => {
+            PropertyFocus::FillHex(index) => {
                 let stripped = draft.trim().trim_start_matches('#');
                 if !stripped.is_empty() {
                     if let Some(color) = parse_hex_color(draft.trim()) {
-                        let _ = self
-                            .editor_state
-                            .set_selected_color(true, &super::helpers::color_to_hex(color));
+                        let hex = super::helpers::color_to_hex(color);
+                        // The primary fill (index 0) keeps `set_selected_color`
+                        // (prepends a solid + colour-variable-aware); a
+                        // non-primary row writes its own solid fill by index.
+                        if index == 0 {
+                            let _ = self.editor_state.set_selected_color(true, &hex);
+                        } else {
+                            let _ = self.editor_state.set_selected_fill_hex_at(index, &hex);
+                        }
                     }
                 }
             }

@@ -441,8 +441,12 @@ impl WidgetHost {
                         if let Some(fill_type) =
                             op_editor_ui::widgets::property_panel_fill::fill_type_at(idx)
                         {
+                            let index = self.editor_state.editor_ui.fill_type_picker_index;
                             self.apply_property_action(
-                                op_editor_ui::widgets::PropertyPanelAction::SetFillType(fill_type),
+                                op_editor_ui::widgets::PropertyPanelAction::SetFillType {
+                                    index,
+                                    fill_type,
+                                },
                             );
                             return true;
                         }
@@ -670,6 +674,21 @@ impl WidgetHost {
                 {
                     let _ = self.editor_state.open_color_picker(
                         super::property_dispatch::color_target_public(target),
+                        y,
+                    );
+                    self.mark_dirty();
+                } else if let op_editor_ui::widgets::PropertyPanelAction::OpenFillColorPicker(
+                    index,
+                ) = action
+                {
+                    // Non-primary fill swatch — bind the picker to this
+                    // fill so HSV writes back to `fills[index]`.
+                    self.editor_state
+                        .editor_ui
+                        .property_color_variable_picker_open = None;
+                    let _ = self.editor_state.open_color_picker_for_fill(
+                        op_editor_core::ui_draft::ColorTarget::Fill,
+                        index,
                         y,
                     );
                     self.mark_dirty();
