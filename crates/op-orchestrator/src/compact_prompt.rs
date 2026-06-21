@@ -126,7 +126,13 @@ pub fn build_compact_planning_prompt(
     };
 
     // 组装 system prompt。
-    let mut lines: Vec<String> = vec![FIXED_HEAD.to_string(), subtask_hint.to_string(), style_rule];
+    let mut lines: Vec<String> = vec![
+        FIXED_HEAD.to_string(),
+        subtask_hint.to_string(),
+        "Plan one SIGNATURE MOMENT in the first viewport: a memorable focal module with strong composition, brand personality, and restrained supporting sections."
+            .to_string(),
+        style_rule,
+    ];
     for r in &mobile_rules {
         lines.push((*r).to_string());
     }
@@ -169,6 +175,7 @@ mod tests {
         assert!(cp.system.starts_with("You are a UI planning assistant."));
         assert!(cp.system.contains("width=375 and height=812"));
         assert!(cp.system.contains("Create 2-4 cohesive subtasks"));
+        assert!(cp.system.contains("SIGNATURE MOMENT"));
         assert_eq!(cp.user_prompt, "a mobile login screen");
     }
 
