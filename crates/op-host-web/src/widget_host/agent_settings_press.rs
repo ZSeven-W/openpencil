@@ -113,8 +113,11 @@ impl WidgetHost {
             AgentSettingsHit::OpenImageRegisterLink => {
                 self.commit_settings_focus();
                 if let Some(w) = web_sys::window() {
+                    // The raw `auth_tokens/register/` endpoint only accepts POST,
+                    // so a browser GET lands on a 405 page. Point at the API
+                    // reference's auth section (documents how to register).
                     let _ = w.open_with_url_and_target(
-                        "https://api.openverse.org/v1/auth_tokens/register/",
+                        "https://api.openverse.org/v1/#tag/auth",
                         "_blank",
                     );
                 }
