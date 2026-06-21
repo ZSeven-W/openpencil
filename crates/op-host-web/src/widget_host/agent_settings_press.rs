@@ -110,6 +110,15 @@ impl WidgetHost {
                     Some(SettingsFocus::ImageSearch(field));
                 self.set_settings_input_text(text);
             }
+            AgentSettingsHit::OpenImageRegisterLink => {
+                self.commit_settings_focus();
+                if let Some(w) = web_sys::window() {
+                    let _ = w.open_with_url_and_target(
+                        "https://api.openverse.org/v1/auth_tokens/register/",
+                        "_blank",
+                    );
+                }
+            }
             AgentSettingsHit::TestImageSearch => {
                 self.commit_settings_focus();
                 let settings = &mut self.editor_state.editor_ui.agent_settings;

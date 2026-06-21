@@ -169,6 +169,10 @@ impl WidgetHostNative {
                 );
                 self.set_settings_input_text(text);
             }
+            AgentSettingsHit::OpenImageRegisterLink => {
+                self.commit_settings_focus_if_any();
+                open_external_url("https://api.openverse.org/v1/auth_tokens/register/");
+            }
             AgentSettingsHit::TestImageSearch => {
                 self.commit_settings_focus_if_any();
                 let settings = &mut self.editor_state.editor_ui.agent_settings;
@@ -882,6 +886,21 @@ pub(in crate::widget_host) fn color_target(
             op_editor_core::ui_draft::ColorTarget::EffectColor(i)
         }
     }
+}
+
+/// Open `url` in the user's default browser. Spawns the platform's
+/// URL launcher detached and ignores any error — opening a help link
+/// must never block or panic the editor. Used by the agent-settings
+/// "Register at Openverse" link.
+fn open_external_url(url: &str) {
+    #[cfg(target_os = "macos")]
+    let _ = std::process::Command::new("open").arg(url).spawn();
+    #[cfg(target_os = "windows")]
+    let _ = std::process::Command::new("cmd")
+        .args(["/C", "start", "", url])
+        .spawn();
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    let _ = std::process::Command::new("xdg-open").arg(url).spawn();
 }
 
 #[cfg(test)]
