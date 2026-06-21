@@ -122,7 +122,7 @@ fn parse_clipboard_html_styles_handles_background_color() {
 fn fix_unresolved_images_swaps_blob_image_for_placeholder_rect() {
     let mut nodes = vec![PenNode::Image(ImageNode {
         base: base(),
-        src: "__blob:5".to_string(),
+        src: "__blob:5".into(),
         object_fit: None,
         width: Some(SizingBehavior::Number(100.0)),
         height: Some(SizingBehavior::Number(80.0)),

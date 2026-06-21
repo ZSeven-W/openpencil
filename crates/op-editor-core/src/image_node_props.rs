@@ -14,7 +14,7 @@ pub fn image_node_summary(node: &PenNode) -> Option<ImageFillSummary> {
     Some(ImageFillSummary {
         mode: ImageFillMode::from_image_node_schema(image.object_fit.as_ref()),
         has_image: !trimmed_url.is_empty(),
-        image_url: (!trimmed_url.is_empty()).then(|| image.src.clone()),
+        image_url: (!trimmed_url.is_empty()).then(|| image.src.to_string()),
         exposure: image.exposure.unwrap_or(0.0) as f32,
         contrast: image.contrast.unwrap_or(0.0) as f32,
         saturation: image.saturation.unwrap_or(0.0) as f32,

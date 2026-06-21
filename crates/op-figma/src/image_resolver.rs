@@ -48,7 +48,7 @@ fn patch_fills(
             if let PenFill::Image(img) = fill {
                 if img.url.starts_with("__blob:") || img.url.starts_with("__hash:") {
                     if let Some(url) = resolve_ref(&img.url, data_urls, hash_urls) {
-                        img.url = url;
+                        img.url = url.into();
                         count += 1;
                     }
                 }

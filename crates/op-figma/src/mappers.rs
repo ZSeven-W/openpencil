@@ -134,7 +134,7 @@ fn map_single_fill(paint: &FigValue) -> Option<PenFill> {
                 })
                 .unwrap_or_default();
             Some(PenFill::Image(ImageFillBody {
-                url,
+                url: url.into(),
                 mode: Some(map_scale_mode(paint.get_str("imageScaleMode"))),
                 original_size: normalize_original_size(
                     paint.get_f64("originalImageWidth"),

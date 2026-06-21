@@ -106,7 +106,7 @@ fn first_image_fill(
         None
     } else {
         Some((
-            body.url.clone(),
+            body.url.to_string(),
             image_fill_mode_to_payload(body.mode.as_ref()),
             image_fill_adjustments(body),
         ))

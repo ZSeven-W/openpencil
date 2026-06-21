@@ -228,15 +228,27 @@ fn remote_icon_insert_bakes_svg_d_as_path_node() {
 
     let children = host.editor_state().active_children();
     assert_eq!(children.len(), before + 1, "insert landed");
-    match children.last().expect("inserted node") {
-        PenNode::Path(p) => {
-            assert_eq!(
-                p.d.as_deref(),
-                Some("M3 9l9-7 9 7v11h-6v-7H9v7H3z"),
-                "the remote icon's d is baked (no fallback dot)"
-            );
-            assert_eq!(p.icon_id.as_deref(), Some("mdi:zwxq-home"));
-        }
-        other => panic!("expected a Path node with baked d, got {}", other.id_str()),
-    }
+    // The icon inserts ABOVE the selected node (`inst1`), so it is no
+    // longer the last child — locate the baked path by its icon id.
+    let path_idx = children
+        .iter()
+        .position(|n| matches!(n, PenNode::Path(p) if p.icon_id.as_deref() == Some("mdi:zwxq-home")))
+        .expect("baked remote icon path was inserted");
+    let inst1_idx = children
+        .iter()
+        .position(|n| n.id_str() == "inst1")
+        .expect("selection still present");
+    assert!(
+        path_idx < inst1_idx,
+        "the inserted icon sits above the selected node"
+    );
+    let PenNode::Path(p) = &children[path_idx] else {
+        unreachable!("path_idx points at the matched Path");
+    };
+    assert_eq!(
+        p.d.as_deref(),
+        Some("M3 9l9-7 9 7v11h-6v-7H9v7H3z"),
+        "the remote icon's d is baked (no fallback dot)"
+    );
+    assert_eq!(p.icon_id.as_deref(), Some("mdi:zwxq-home"));
 }

@@ -658,7 +658,7 @@ fn relink_image<C: RepaintContext + 'static>(inner: &InnerRc<C>) {
                     if let Some(jian_ops_schema::node::PenNode::Image(image)) =
                         op_editor_core::walkers::find_node_mut(state.active_children_mut(), &id)
                     {
-                        image.src = url;
+                        image.src = url.into();
                     }
                     state.editor_ui.image_panel.asset_check = None;
                     b.host_mut().mark_editor_state_dirty();

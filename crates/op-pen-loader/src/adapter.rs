@@ -789,7 +789,7 @@ fn image_to_payload(n: &ImageNode) -> NodePayload {
     // draw the bitmap. `fill` stays at a neutral grey so the
     // placeholder reads correctly when the bytes fail to decode
     // (corrupt url / unsupported codec).
-    p.image_src = Some(n.src.clone());
+    p.image_src = Some(n.src.to_string());
     p.image_fit = n.object_fit.as_ref().map(image_node_fit_to_payload);
     p.image_adjustments = image_node_adjustments(n);
     p.fill = Some([0.85, 0.86, 0.88, 1.0]);
