@@ -613,7 +613,7 @@ CRITICAL LAYOUT CONSTRAINTS:\n\
             "\nMOBILE IMAGE QUALITY: Food/product photos must use consistent aspect ratio, crop, radius, and tone across sibling cards. Avoid random low-quality or mismatched restaurant photos; if cohesive assets are unavailable, use a designed icon/illustration tile instead.",
         );
         user_prompt.push_str(
-            "\nMOBILE NAV SURFACE: Bottom navigation and tab bars must sit on the current page palette, full width at the bottom, 62-72px tall. Do not create a separate white footer band, oversized rounded pill, or extra side margins. Never use black or safe-dark fills for nav bars unless the whole root frame background is dark.",
+            "\nMOBILE NAV SURFACE: Bottom navigation must use role=\"bottom-tab-bar\" (not navbar), sit on the current page palette, full width at the bottom, 62-72px tall. Do not create a separate white footer band, nested rounded nav pill, oversized rounded pill, or extra side margins. Direct tab item frames must be transparent: no fill, no stroke, no large rounded tile. Show active state with accent icon/label color or a tiny 2-3px indicator only. Never use black or safe-dark fills for nav bars unless the whole root frame background is dark.",
         );
         user_prompt.push_str(
             "\nMOBILE NAV SHADOW: Do not add a drop shadow, glow, or detached shadow band behind the bottom navigation. If separation is needed, use a quiet 1px divider or subtle tonal difference that belongs to the page palette.",
