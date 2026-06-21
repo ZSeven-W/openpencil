@@ -80,6 +80,14 @@ PROVIDERS = {
         "model": "glm-5.1",
         "key_env": "ARK_KEY",
     },
+    # 方舟 CP 的 GLM-5.2(2026-06-17 用户报方舟已上线)。走方舟 coding v3 +
+    # ARK_KEY,与下面智谱官方 CP 的 glm-5.2(GLM_BASE/GLM_KEY)区分——这条
+    # 走方舟侧的 glm-5.2 别名。
+    "ark-glm-5.2": {
+        "base": ARK_BASE,
+        "model": "glm-5.2",
+        "key_env": "ARK_KEY",
+    },
     # 智谱官方 Coding Plan,GLM-5.2(用户 2026-06-15 提供的 id.secret key)。
     "glm-5.2": {
         "base": GLM_BASE,
