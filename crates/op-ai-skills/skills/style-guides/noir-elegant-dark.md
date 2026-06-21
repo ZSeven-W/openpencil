@@ -4,6 +4,10 @@ tags: [elegant, dark-mode, serif, luxury, gold-accent, sophisticated, refined]
 platform: webapp
 ---
 
+## Style Scope
+
+This guide is self-contained. Apply its palette, radius scale, spacing, shadows, and component treatments only when this exact guide is selected; do not borrow food, social, dashboard, luxury, terminal, or other guide-specific patterns into another style. Treat unnamed layout frames as structural by default: no fill, stroke, cornerRadius, or shadow unless the node is intentionally a card, input, button, badge, media mask, navigation surface, or other visible component. Avoid decorative wrapper shells around components; hierarchy should come from spacing, typography, and this guide's explicit surfaces.
+
 ## Style Summary
 
 A cinematic dark interface inspired by film noir aesthetics and old-world luxury. Deep charcoal (#121212) surfaces serve as the backdrop for restrained gold (#D4AF37) accents that reference gilded typography, brass fixtures, and vintage cinema titles. Cormorant headlines bring classical serif elegance with dramatic contrast between thick and thin strokes, while Lato body text provides clean, modern readability. Sharp corners (0-4px) reinforce the architectural precision of art deco and golden age design.

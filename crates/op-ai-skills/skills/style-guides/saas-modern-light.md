@@ -4,6 +4,10 @@ tags: [minimal, clean, light-mode, blue-accent, modern, rounded, webapp]
 platform: webapp
 ---
 
+## Style Scope
+
+This guide is self-contained. Apply its palette, radius scale, spacing, shadows, and component treatments only when this exact guide is selected; do not borrow food, social, dashboard, luxury, terminal, or other guide-specific patterns into another style. Treat unnamed layout frames as structural by default: no fill, stroke, cornerRadius, or shadow unless the node is intentionally a card, input, button, badge, media mask, navigation surface, or other visible component. Avoid decorative wrapper shells around components; hierarchy should come from spacing, typography, and this guide's explicit surfaces.
+
 ## Style Summary
 
 A clean, refined SaaS product interface inspired by modern tools like Linear, Vercel, and Raycast. Pure white backgrounds (#FFFFFF) with subtle depth through layered surfaces and soft shadows create a polished, premium feel. The confident blue accent (#2563EB) provides clear interactive affordance without overwhelming the neutral palette. Geist, Vercel's purpose-built typeface, delivers exceptional clarity at all sizes with its balanced geometry and optimized screen rendering, serving as both heading and body font with weight variation for hierarchy.
@@ -159,7 +163,7 @@ Key aesthetics:
 | 8px   | Standard buttons, popovers, tags       | Primary interactive radius          |
 | 12px  | Cards, modals, panels, dialog windows  | Primary container radius            |
 | 16px  | Large feature cards, onboarding panels | Generous for prominent surfaces     |
-| 100px | Pill buttons, toggle switches, avatars | Full capsule/circle shape           |
+| 9999px | Pill buttons, toggle switches, avatars | Full capsule/circle shape           |
 
 Design rationale: The 4-12px primary radius range defines the modern SaaS aesthetic — refined enough to signal quality engineering, controlled enough to maintain professional density. Cards at 12px with soft shadows feel premium without being decorative. Buttons at 8px strike the balance between the too-sharp (4px) of enterprise tools and the too-soft (16px+) of consumer apps. This is the radius language of tools built for daily professional use.
 

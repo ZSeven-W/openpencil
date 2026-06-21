@@ -4,6 +4,10 @@ tags: [terminal, dark-mode, monospace, minimal, cyan-accent, tech, developer, cr
 platform: mobile
 ---
 
+## Style Scope
+
+This guide is self-contained. Apply its palette, radius scale, spacing, shadows, and component treatments only when this exact guide is selected; do not borrow food, social, dashboard, luxury, terminal, or other guide-specific patterns into another style. Treat unnamed layout frames as structural by default: no fill, stroke, cornerRadius, or shadow unless the node is intentionally a card, input, button, badge, media mask, navigation surface, or other visible component. Avoid decorative wrapper shells around components; hierarchy should come from spacing, typography, and this guide's explicit surfaces.
+
 ## Style Summary
 
 A developer-focused dark interface inspired by terminal aesthetics and command-line tooling. The design pairs a deep navy-black background with sharp cyan accents to evoke a modern IDE or system monitor. Every element feels precise and data-driven, with monospace typography lending authenticity and a sense of technical competence.
@@ -124,7 +128,7 @@ Key aesthetics:
 | ---------------- | ---------------------------------------- |
 | [0, 24]          | Screen content wrapper (horizontal only) |
 | [12, 21, 21, 21] | Tab bar section outer padding            |
-| 4px              | Tab bar pill inner padding               |
+| 4px              | Integrated tab bar inner padding               |
 | [8, 12]          | Input fields, small buttons              |
 | [10, 16]         | Standard buttons                         |
 | 16px             | Card padding (compact)                   |
@@ -135,8 +139,17 @@ Key aesthetics:
 
 - Screen width: 402px (mobile)
 - Content wrapper: padding [0, 24], vertical, gap 24-32
-- Tab bar pill: height 62px, cornerRadius 100, padding 4
+- Integrated tab bar: height 62-72px, cornerRadius 0-12, padding 0-4, full-width in page flow
 - Tab items: fill_container, vertical, gap 4, center aligned
+
+### Mobile Composition Guardrails
+
+- Keep top rhythm compact: status bar, header, and first content block should feel connected; avoid empty 80px+ bands unless the design is intentionally image-led.
+- Search should be one clean row: a neutral input plus optional filter button. Do not wrap the input in a second tinted rounded shell; the grouping frame should stay structural and transparent.
+- Horizontal rails and carousel viewport frames stay transparent: no white rounded backing frame, no extra shadow. Only individual cards, images, or intentional promo panels receive fill, radius, or elevation.
+- Favorite, like, bookmark, and heart actions on image cards should be icon-only overlays or very subtle translucent hit areas; do not add circular white bubbles, borders, or shadows around the heart.
+- Bottom navigation is integrated into the screen flow with a quiet divider or active indicator; avoid floating capsule navigation unless a prompt explicitly asks for a floating nav pattern.
+- Use 9999px radius only for true circles or tiny capsules such as avatars, status dots, and short badges; never for page sections, search shells, carousels, card action buttons, or full navigation bars.
 
 ## Corner Radius
 
@@ -147,9 +160,9 @@ Key aesthetics:
 | 6px   | Input fields, small buttons     | Compact technical feel       |
 | 8px   | Standard cards, list items      | Primary container radius     |
 | 12px  | Large cards, modal sheets       | Comfortable but compact      |
-| 100px | Tab bar pill, toggle pills      | Full capsule shape           |
+| 9999px | Avatars, status dots, short badges only | True circles/capsules for semantic micro-elements; never navigation, search, carousels, or card action buttons |
 
-Design rationale: Compact radii (3-12px) maintain a crisp, technical aesthetic. The sharp corners suggest precision engineering, while the slight rounding prevents a harsh brutalist feel. The bottom navigation should stay compact and integrated, with clear affordance from icon/label contrast rather than a detached pill surface.
+Design rationale: Compact radii (3-12px) maintain a crisp, technical aesthetic. The sharp corners suggest precision engineering, while the slight rounding prevents a harsh brutalist feel. The bottom navigation should stay compact and integrated, with clear affordance from icon/label contrast rather than a floating capsule container.
 
 ## Icons
 

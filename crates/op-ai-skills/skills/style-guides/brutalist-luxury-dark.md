@@ -5,6 +5,10 @@ tags:
 platform: webapp
 ---
 
+## Style Scope
+
+This guide is self-contained. Apply its palette, radius scale, spacing, shadows, and component treatments only when this exact guide is selected; do not borrow food, social, dashboard, luxury, terminal, or other guide-specific patterns into another style. Treat unnamed layout frames as structural by default: no fill, stroke, cornerRadius, or shadow unless the node is intentionally a card, input, button, badge, media mask, navigation surface, or other visible component. Avoid decorative wrapper shells around components; hierarchy should come from spacing, typography, and this guide's explicit surfaces.
+
 ## Style Summary
 
 A high-contrast dark interface that merges brutalist architectural principles with luxury editorial design. The complete absence of border radius creates an uncompromising geometric grid, while gold (#C9A962) accents against pitch-black surfaces evoke opulence. Typography mixes a decorative serif logo mark with geometric sans-serif headings and monospace data, creating a layered visual hierarchy that feels both commanding and refined.

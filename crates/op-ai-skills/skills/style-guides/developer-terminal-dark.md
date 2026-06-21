@@ -4,6 +4,10 @@ tags: [developer, terminal, dark-mode, monospace, minimal, tech, code-inspired]
 platform: webapp
 ---
 
+## Style Scope
+
+This guide is self-contained. Apply its palette, radius scale, spacing, shadows, and component treatments only when this exact guide is selected; do not borrow food, social, dashboard, luxury, terminal, or other guide-specific patterns into another style. Treat unnamed layout frames as structural by default: no fill, stroke, cornerRadius, or shadow unless the node is intentionally a card, input, button, badge, media mask, navigation surface, or other visible component. Avoid decorative wrapper shells around components; hierarchy should come from spacing, typography, and this guide's explicit surfaces.
+
 ## Style Summary
 
 A developer-centric dark interface inspired by modern code editors and IDE environments. The #1E1E1E background — the exact shade of VS Code's default dark theme — immediately feels familiar to engineers. Fira Code brings ligature-ready monospace typography for headings and data, while Inter handles body text with clean readability. The blue accent (#569CD6) references VS Code's keyword highlighting, creating an interface that feels like a natural extension of the development environment.

@@ -4,6 +4,10 @@ tags: [industrial, neon, dark-mode, neon-green, monospace, tech, sharp-corners]
 platform: webapp
 ---
 
+## Style Scope
+
+This guide is self-contained. Apply its palette, radius scale, spacing, shadows, and component treatments only when this exact guide is selected; do not borrow food, social, dashboard, luxury, terminal, or other guide-specific patterns into another style. Treat unnamed layout frames as structural by default: no fill, stroke, cornerRadius, or shadow unless the node is intentionally a card, input, button, badge, media mask, navigation surface, or other visible component. Avoid decorative wrapper shells around components; hierarchy should come from spacing, typography, and this guide's explicit surfaces.
+
 ## Style Summary
 
 A high-voltage dark interface inspired by industrial control panels and factory floor HUDs. Near-black backgrounds (#0C0C0C) are punctuated by electric neon green (#39FF14) accents that recall status LEDs and machine readouts. Space Mono headings and data labels give the entire surface a utilitarian, engineered quality, while Inter body text keeps longer passages readable. Every edge is sharp — corners at 0-4px reinforce the fabricated, machined precision of industrial equipment.

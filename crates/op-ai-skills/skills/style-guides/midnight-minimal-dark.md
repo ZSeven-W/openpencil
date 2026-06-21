@@ -4,6 +4,10 @@ tags: [minimal, dark-mode, calm, quiet, blue-accent, clean, austere]
 platform: webapp
 ---
 
+## Style Scope
+
+This guide is self-contained. Apply its palette, radius scale, spacing, shadows, and component treatments only when this exact guide is selected; do not borrow food, social, dashboard, luxury, terminal, or other guide-specific patterns into another style. Treat unnamed layout frames as structural by default: no fill, stroke, cornerRadius, or shadow unless the node is intentionally a card, input, button, badge, media mask, navigation surface, or other visible component. Avoid decorative wrapper shells around components; hierarchy should come from spacing, typography, and this guide's explicit surfaces.
+
 ## Style Summary
 
 An ultra-clean dark interface that embraces restraint and calm. The deep slate background (#0F172A) provides a quiet navy-black canvas where sky blue (#38BDF8) accents appear sparingly — only for active states, links, and key indicators. Inter serves as the sole typeface at varying weights (400-600), creating hierarchy through size and weight alone rather than font switching. The result is a serene, uncluttered workspace that reduces visual noise to an absolute minimum.

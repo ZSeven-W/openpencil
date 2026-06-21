@@ -4,6 +4,10 @@ tags: [tech, dark-mode, gradient, mesh-gradient, vibrant, modern, landing-page]
 platform: webapp
 ---
 
+## Style Scope
+
+This guide is self-contained. Apply its palette, radius scale, spacing, shadows, and component treatments only when this exact guide is selected; do not borrow food, social, dashboard, luxury, terminal, or other guide-specific patterns into another style. Treat unnamed layout frames as structural by default: no fill, stroke, cornerRadius, or shadow unless the node is intentionally a card, input, button, badge, media mask, navigation surface, or other visible component. Avoid decorative wrapper shells around components; hierarchy should come from spacing, typography, and this guide's explicit surfaces.
+
 ## Style Summary
 
 A futuristic AI product marketing page with a near-black (#09090B) foundation and dual-accent gradients blending violet (#A78BFA) and emerald (#34D399). This style captures the cutting-edge ambition of modern AI/ML products — intelligent, precise, and forward-looking. Geist serves as both heading and body font, its geometric clarity channeling the systematic nature of machine learning. Mesh gradient hero backgrounds and subtle glow effects create depth and atmosphere, while the violet-emerald spectrum evokes neural networks and data flows.

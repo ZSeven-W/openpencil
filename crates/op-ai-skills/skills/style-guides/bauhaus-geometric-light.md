@@ -4,6 +4,10 @@ tags: [bauhaus, geometric, light-mode, primary-colors, bold-typography, sharp-co
 platform: webapp
 ---
 
+## Style Scope
+
+This guide is self-contained. Apply its palette, radius scale, spacing, shadows, and component treatments only when this exact guide is selected; do not borrow food, social, dashboard, luxury, terminal, or other guide-specific patterns into another style. Treat unnamed layout frames as structural by default: no fill, stroke, cornerRadius, or shadow unless the node is intentionally a card, input, button, badge, media mask, navigation surface, or other visible component. Avoid decorative wrapper shells around components; hierarchy should come from spacing, typography, and this guide's explicit surfaces.
+
 ## Style Summary
 
 A bold, Bauhaus-inspired interface channeling the geometric rigor and primary-color confidence of the 1920s design movement. The near-white #FAFAFA background acts as a neutral gallery wall against which strong blocks of red (#D32F2F), blue (#1565C0), and yellow (#FBC02D) create decisive visual anchors. Work Sans at weight 700 delivers sturdy, grotesk-style headings with industrial authority, while the same family at 400 provides clean, highly legible body text. Every corner radius is 0px — pure geometric precision with no decorative softening. The result is a system that feels architectural, intentional, and unapologetically modern.

@@ -120,6 +120,25 @@ fn orphan_skipped_without_corner_radius() {
     );
 }
 
+#[test]
+fn orphan_skips_unroled_layout_carousel_shell() {
+    let mut shell = json!({
+        "type":"frame","name":"Promo Carousel Viewport","cornerRadius":20,
+        "layout":"horizontal","children":[
+            {"type":"frame","role":"banner","children":[{"type":"text","content":"50%"}]}
+        ]
+    });
+    fix_orphan_container_contrast(&mut shell, Some(&Value::Null));
+    assert!(
+        shell.get("fill").is_none(),
+        "a rounded unroled layout/carousel frame must not become a white card shell"
+    );
+    assert!(
+        shell.get("effects").is_none(),
+        "a structural shell must not get card shadow"
+    );
+}
+
 // ── fixSectionAlternation ────────────────────────────────────────────────
 
 #[test]
@@ -178,6 +197,101 @@ fn input_siblings_unified_to_first() {
         form["children"][1]["fill"],
         json!([{"type":"solid","color":"#F8FAFC"}]),
         "second input adopts the first input's fill"
+    );
+}
+
+#[test]
+fn nested_search_shell_is_flattened_to_neutral_row() {
+    let mut row = json!({
+        "type":"frame","name":"Search Shell","layout":"horizontal","cornerRadius":28,
+        "padding":[12,16],"gap":14,
+        "fill":[{"type":"solid","color":"#DBEAFE"}],
+        "stroke":{"thickness":1,"fill":[{"type":"solid","color":"#BFDBFE"}]},
+        "effects":[{"type":"shadow","offsetY":4,"blur":16,"color":"#00000022"}],
+        "children":[
+            {
+                "type":"frame","role":"form-input","height":48,"cornerRadius":12,
+                "fill":[{"type":"solid","color":"#FADADA"}],
+                "stroke":{"thickness":1,"fill":[{"type":"solid","color":"#E5E7EB"}]},
+                "children":[{"type":"path","name":"SearchIcon","width":20,"height":20}]
+            },
+            {
+                "type":"frame","role":"icon-button","width":52,"height":52,
+                "fill":[{"type":"solid","color":"#FF6B00"}],
+                "children":[{"type":"path","name":"SlidersHorizontalIcon","width":20,"height":20}]
+            }
+        ]
+    });
+    normalize_nested_search_shell(&mut row);
+    assert!(
+        row.get("fill").is_none(),
+        "outer search shell fill is visual noise"
+    );
+    assert!(
+        row.get("stroke").is_none(),
+        "outer search shell stroke is visual noise"
+    );
+    assert!(
+        row.get("effects").is_none(),
+        "outer search shell shadow is visual noise"
+    );
+    assert!(
+        row.get("cornerRadius").is_none(),
+        "outer shell should not read as a second input"
+    );
+    assert_eq!(
+        row["children"][0]["fill"],
+        json!([{"type":"solid","color":"#FFFFFF"}]),
+        "nested search input is neutralized instead of keeping a pink fill"
+    );
+}
+
+#[test]
+fn standalone_search_bar_keeps_its_surface() {
+    let mut search = json!({
+        "type":"frame","role":"search-bar","layout":"horizontal","cornerRadius":22,
+        "fill":[{"type":"solid","color":"#F8FAFC"}],
+        "children":[
+            {"type":"path","name":"SearchIcon","width":20,"height":20},
+            {"type":"text","content":"Search"}
+        ]
+    });
+    normalize_nested_search_shell(&mut search);
+    assert_eq!(search["fill"], json!([{"type":"solid","color":"#F8FAFC"}]));
+    assert_eq!(search["cornerRadius"], json!(22));
+}
+
+#[test]
+fn favorite_icon_button_loses_bubble_chrome() {
+    let mut card = json!({
+        "type":"frame","role":"image-card","width":160,"height":240,"children":[
+            {
+                "type":"frame","role":"icon-button","name":"Favorite Button",
+                "width":36,"height":36,"cornerRadius":999,
+                "fill":[{"type":"solid","color":"#FFFFFF"}],
+                "stroke":{"thickness":1,"fill":[{"type":"solid","color":"#E2E8F0"}]},
+                "effects":[{"type":"shadow","offsetY":2,"blur":6,"color":"#0000001A"}],
+                "children":[{"type":"path","name":"HeartIcon","width":18,"height":18}]
+            }
+        ]
+    });
+    normalize_favorite_icon_buttons(&mut card);
+    let button = &card["children"][0];
+    assert!(
+        button.get("fill").is_none(),
+        "heart should not sit in a white bubble"
+    );
+    assert!(
+        button.get("stroke").is_none(),
+        "heart bubble border is visually noisy"
+    );
+    assert!(
+        button.get("effects").is_none(),
+        "heart bubble shadow is visually noisy"
+    );
+    assert!(
+        button.get("cornerRadius").is_none(),
+        "heart should not force a circular badge"
     );
 }
 

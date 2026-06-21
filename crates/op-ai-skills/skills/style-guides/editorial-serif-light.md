@@ -4,6 +4,10 @@ tags: [editorial, serif, light-mode, magazine, elegant, typographic, horizontal-
 platform: webapp
 ---
 
+## Style Scope
+
+This guide is self-contained. Apply its palette, radius scale, spacing, shadows, and component treatments only when this exact guide is selected; do not borrow food, social, dashboard, luxury, terminal, or other guide-specific patterns into another style. Treat unnamed layout frames as structural by default: no fill, stroke, cornerRadius, or shadow unless the node is intentionally a card, input, button, badge, media mask, navigation surface, or other visible component. Avoid decorative wrapper shells around components; hierarchy should come from spacing, typography, and this guide's explicit surfaces.
+
 ## Style Summary
 
 A refined editorial interface inspired by premium magazine layouts and literary publishing. The warm ivory background (#FAFAF8) provides a paper-like reading surface, while near-black (#1A1A1A) serves as both the primary text color and the sole accent — letting typography itself create all visual hierarchy. Playfair Display brings classical elegance to headlines with its high contrast strokes, while Source Sans 3 delivers effortless readability for body content. Zero-radius corners and hairline dividers enforce a strict typographic grid that recalls printed broadsheets.

@@ -4,6 +4,10 @@ tags: [wellness, organic, light-mode, sage-green, warm-tones, rounded, friendly]
 platform: webapp
 ---
 
+## Style Scope
+
+This guide is self-contained. Apply its palette, radius scale, spacing, shadows, and component treatments only when this exact guide is selected; do not borrow food, social, dashboard, luxury, terminal, or other guide-specific patterns into another style. Treat unnamed layout frames as structural by default: no fill, stroke, cornerRadius, or shadow unless the node is intentionally a card, input, button, badge, media mask, navigation surface, or other visible component. Avoid decorative wrapper shells around components; hierarchy should come from spacing, typography, and this guide's explicit surfaces.
+
 ## Style Summary
 
 A calming, nature-inspired interface designed for wellness apps, health platforms, and mindfulness products. The soft botanical background (#FAFDF7) carries a gentle green undertone that evokes morning light through leaves, while sage green (#4D7C0F) grounds the entire palette in natural vitality. Nunito's rounded terminals deliver a warm, approachable voice at every text level — from bold section headings to gentle body copy. Generous 16-20px radii create soft, organic shapes that mirror the smooth curves of stones, petals, and natural forms.
@@ -155,7 +159,7 @@ Key aesthetics:
 | 12px  | Buttons, dropdowns, tooltips                   | Soft interactive radius          |
 | 16px  | Standard cards, list containers, modals        | Primary organic container radius |
 | 20px  | Feature cards, wellness modules, hero sections | Maximum organic softness         |
-| 100px | Pill buttons, toggle switches, avatar circles  | Full capsule/circle shape        |
+| 9999px | Pill buttons, toggle switches, avatar circles  | Full capsule/circle shape        |
 
 Design rationale: The 8-20px radius range creates the signature organic feel of wellness design. Radii at 16-20px mirror the smooth, rounded forms found in nature — river stones, seed pods, leaf edges. Unlike the aggressive 24px+ of playful styles, this range maintains sophistication while feeling nurturing and safe. The generous curves invite interaction and create a sense of comfort that aligns with wellness brand values.
 

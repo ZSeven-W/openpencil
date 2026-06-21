@@ -4,6 +4,10 @@ tags: [clean, light-mode, professional, blue-accent, calm, landing-page, rounded
 platform: webapp
 ---
 
+## Style Scope
+
+This guide is self-contained. Apply its palette, radius scale, spacing, shadows, and component treatments only when this exact guide is selected; do not borrow food, social, dashboard, luxury, terminal, or other guide-specific patterns into another style. Treat unnamed layout frames as structural by default: no fill, stroke, cornerRadius, or shadow unless the node is intentionally a card, input, button, badge, media mask, navigation surface, or other visible component. Avoid decorative wrapper shells around components; hierarchy should come from spacing, typography, and this guide's explicit surfaces.
+
 ## Style Summary
 
 A trustworthy, calm healthcare SaaS landing page built on a soft sky-tinted (#F0F9FF) foundation with sky blue (#0284C7) as the singular accent color. This style captures the reliability and professionalism of modern health technology — clean, authoritative, and reassuring. DM Sans serves as both heading and body font, its geometric openness projecting clarity and approachability critical in healthcare communication. The cool blue palette and gentle radii create an environment that feels clinical in its precision but human in its warmth.

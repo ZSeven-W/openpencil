@@ -4,6 +4,10 @@ tags: [editorial, serif, light-mode, bold-typography, magazine, creative, landin
 platform: webapp
 ---
 
+## Style Scope
+
+This guide is self-contained. Apply its palette, radius scale, spacing, shadows, and component treatments only when this exact guide is selected; do not borrow food, social, dashboard, luxury, terminal, or other guide-specific patterns into another style. Treat unnamed layout frames as structural by default: no fill, stroke, cornerRadius, or shadow unless the node is intentionally a card, input, button, badge, media mask, navigation surface, or other visible component. Avoid decorative wrapper shells around components; hierarchy should come from spacing, typography, and this guide's explicit surfaces.
+
 ## Style Summary
 
 A bold, magazine-inspired creative agency landing page with a near-white (#FAFAFA) background and near-black (#1A1A1A) as the primary accent. This style borrows from editorial design and print magazines — oversized serif headlines, dramatic whitespace, and stark contrast create a layout that feels curated and intentional. DM Serif Display provides commanding headlines with high-contrast thick/thin strokes, while DM Sans keeps functional text clean and geometric.

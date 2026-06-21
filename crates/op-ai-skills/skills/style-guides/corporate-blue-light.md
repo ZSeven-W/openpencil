@@ -4,6 +4,10 @@ tags: [corporate, blue-accent, light-mode, clean, professional, sidebar, dual-fo
 platform: webapp
 ---
 
+## Style Scope
+
+This guide is self-contained. Apply its palette, radius scale, spacing, shadows, and component treatments only when this exact guide is selected; do not borrow food, social, dashboard, luxury, terminal, or other guide-specific patterns into another style. Treat unnamed layout frames as structural by default: no fill, stroke, cornerRadius, or shadow unless the node is intentionally a card, input, button, badge, media mask, navigation surface, or other visible component. Avoid decorative wrapper shells around components; hierarchy should come from spacing, typography, and this guide's explicit surfaces.
+
 ## Style Summary
 
 A polished, confidence-inspiring enterprise interface built on crisp cool-gray backgrounds (#F8FAFC) and a strong blue accent (#1D4ED8). The paired Inter weights — 600 for headings and 400 for body — deliver a single-family system that feels unified yet establishes clear hierarchy through weight contrast alone. Cards sit on pure white surfaces with subtle 1px borders, while an 80px sidebar in dark navy (#0F172A) anchors the left edge for persistent navigation. Every element radiates professionalism and reliability.

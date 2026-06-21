@@ -4,6 +4,10 @@ tags: [scandinavian, light-mode, calm, soft, blue-accent, minimal, webapp, neutr
 platform: webapp
 ---
 
+## Style Scope
+
+This guide is self-contained. Apply its palette, radius scale, spacing, shadows, and component treatments only when this exact guide is selected; do not borrow food, social, dashboard, luxury, terminal, or other guide-specific patterns into another style. Treat unnamed layout frames as structural by default: no fill, stroke, cornerRadius, or shadow unless the node is intentionally a card, input, button, badge, media mask, navigation surface, or other visible component. Avoid decorative wrapper shells around components; hierarchy should come from spacing, typography, and this guide's explicit surfaces.
+
 ## Style Summary
 
 A serene, accessibility-first interface inspired by Nordic design principles — clarity over decoration, function over flourish. The cool #F5F7FA background evokes overcast Scandinavian skies, while the muted slate-blue accent (#64748B) provides gentle guidance without demanding attention. Atkinson Hyperlegible, designed by the Braille Institute for maximum readability, serves as both heading and body font — its distinct letterforms ensure legibility at every size, embodying the Nordic commitment to universal design. Generous 8-12px radii create soft, approachable surfaces that feel like smooth river stones.

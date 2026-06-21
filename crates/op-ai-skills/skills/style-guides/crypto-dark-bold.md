@@ -4,6 +4,10 @@ tags: [dark-mode, bold-typography, neon, tech, electric, gradient, landing-page]
 platform: webapp
 ---
 
+## Style Scope
+
+This guide is self-contained. Apply its palette, radius scale, spacing, shadows, and component treatments only when this exact guide is selected; do not borrow food, social, dashboard, luxury, terminal, or other guide-specific patterns into another style. Treat unnamed layout frames as structural by default: no fill, stroke, cornerRadius, or shadow unless the node is intentionally a card, input, button, badge, media mask, navigation surface, or other visible component. Avoid decorative wrapper shells around components; hierarchy should come from spacing, typography, and this guide's explicit surfaces.
+
 ## Style Summary
 
 A bold, electric Web3 product page with a deep midnight (#0C0C14) background and dual neon accents in amber (#F59E0B) and blue (#3B82F6). This style captures the disruptive energy and financial gravitas of crypto and blockchain products — confident, data-rich, and unapologetically futuristic. Space Grotesk headlines at 700 weight deliver punchy, wide statements, while Inter handles body text and Space Mono provides authentic monospaced data display for prices, addresses, and metrics. The amber-blue spectrum evokes trading interfaces and financial dashboards.

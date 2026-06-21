@@ -4,6 +4,10 @@ tags: [clean, blue-accent, light-mode, minimal, mobile, rounded, friendly]
 platform: mobile
 ---
 
+## Style Scope
+
+This guide is self-contained. Apply its palette, radius scale, spacing, shadows, and component treatments only when this exact guide is selected; do not borrow food, social, dashboard, luxury, terminal, or other guide-specific patterns into another style. Treat unnamed layout frames as structural by default: no fill, stroke, cornerRadius, or shadow unless the node is intentionally a card, input, button, badge, media mask, navigation surface, or other visible component. Avoid decorative wrapper shells around components; hierarchy should come from spacing, typography, and this guide's explicit surfaces.
+
 ## Style Summary
 
 A crisp, professional mobile interface inspired by iOS design language. Pure white (#FFFFFF) backgrounds provide maximum clarity, while a confident blue accent (#2563EB) conveys trust and reliability across interactive elements. SF Pro serves as both heading and body typeface, leveraging Apple's system font for native-feeling readability at every size. Comfortable 12-16px corner radii keep containers approachable without being playful, and the overall aesthetic prioritizes content legibility and intuitive navigation.
@@ -126,7 +130,7 @@ Key aesthetics:
 | ---------------- | ---------------------------------------- |
 | [0, 24]          | Screen content wrapper (horizontal only) |
 | [12, 21, 21, 21] | Tab bar section outer padding            |
-| 4px              | Tab bar pill inner padding               |
+| 4px              | Integrated tab bar inner padding               |
 | [8, 16]          | Input fields, search bars                |
 | [10, 20]         | Standard buttons                         |
 | [12, 24]         | Large buttons, CTA buttons               |
@@ -139,9 +143,18 @@ Key aesthetics:
 - Screen width: 402px (mobile)
 - Content wrapper: padding [0, 24], vertical, gap 24
 - Status bar: 62px, standard iOS
-- Tab bar pill: height 62px, cornerRadius 100, padding 4
+- Integrated tab bar: height 62-72px, cornerRadius 0-12, padding 0-4, full-width in page flow
 - Tab items: fill_container, vertical, gap 4, center aligned
 - Grouped sections: inset surface background with 12px radius containers
+
+### Mobile Composition Guardrails
+
+- Keep top rhythm compact: status bar, header, and first content block should feel connected; avoid empty 80px+ bands unless the design is intentionally image-led.
+- Search should be one clean row: a neutral input plus optional filter button. Do not wrap the input in a second tinted rounded shell; the grouping frame should stay structural and transparent.
+- Horizontal rails and carousel viewport frames stay transparent: no white rounded backing frame, no extra shadow. Only individual cards, images, or intentional promo panels receive fill, radius, or elevation.
+- Favorite, like, bookmark, and heart actions on image cards should be icon-only overlays or very subtle translucent hit areas; do not add circular white bubbles, borders, or shadows around the heart.
+- Bottom navigation is integrated into the screen flow with a quiet divider or active indicator; avoid floating capsule navigation unless a prompt explicitly asks for a floating nav pattern.
+- Use 9999px radius only for true circles or tiny capsules such as avatars, status dots, and short badges; never for page sections, search shells, carousels, card action buttons, or full navigation bars.
 
 ## Corner Radius
 
@@ -151,7 +164,7 @@ Key aesthetics:
 | 12px  | Standard cards, list containers, inputs      | Primary container radius          |
 | 14px  | Large cards, search bars, grouped sections   | Comfortable interactive radius    |
 | 16px  | Modal sheets, feature cards, hero containers | Maximum standard radius           |
-| 100px | Tab bar pill, toggle pills, round avatars    | Full capsule shape for navigation |
+| 9999px | Avatars, status dots, short badges only | True circles/capsules for semantic micro-elements; never navigation, search, carousels, or card action buttons |
 
 Design rationale: The 8-16px range mirrors iOS design conventions, where corners are soft enough to feel friendly but restrained enough to maintain professionalism. Every interactive element feels natural on a mobile device, with the progressive scale reinforcing visual hierarchy. The bottom navigation should feel integrated with the page palette, using accent color or a tiny indicator for active state.
 

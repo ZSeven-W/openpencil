@@ -4,6 +4,10 @@ tags: [clean, light-mode, modern, rounded, warm-tones, landing-page, friendly]
 platform: webapp
 ---
 
+## Style Scope
+
+This guide is self-contained. Apply its palette, radius scale, spacing, shadows, and component treatments only when this exact guide is selected; do not borrow food, social, dashboard, luxury, terminal, or other guide-specific patterns into another style. Treat unnamed layout frames as structural by default: no fill, stroke, cornerRadius, or shadow unless the node is intentionally a card, input, button, badge, media mask, navigation surface, or other visible component. Avoid decorative wrapper shells around components; hierarchy should come from spacing, typography, and this guide's explicit surfaces.
+
 ## Style Summary
 
 A warm, inviting e-commerce product page built on a clean white (#FFFFFF) foundation with vibrant orange (#F97316) as the primary accent. This style captures the energy and approachability of modern direct-to-consumer brands — friendly, confident, and conversion-optimized. Plus Jakarta Sans serves as both heading and body font, with its rounded letterforms creating a cohesive warmth that complements the generous 16px card radius. The warm tonal palette and inviting CTAs encourage browsing and purchasing without feeling pushy.

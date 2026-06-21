@@ -4,6 +4,10 @@ tags: [luxury, dark-mode, serif, elegant, gold-accent, mobile, premium]
 platform: mobile
 ---
 
+## Style Scope
+
+This guide is self-contained. Apply its palette, radius scale, spacing, shadows, and component treatments only when this exact guide is selected; do not borrow food, social, dashboard, luxury, terminal, or other guide-specific patterns into another style. Treat unnamed layout frames as structural by default: no fill, stroke, cornerRadius, or shadow unless the node is intentionally a card, input, button, badge, media mask, navigation surface, or other visible component. Avoid decorative wrapper shells around components; hierarchy should come from spacing, typography, and this guide's explicit surfaces.
+
 ## Style Summary
 
 A refined, editorial dark mobile interface designed for luxury fashion, high-end e-commerce, and premium lifestyle applications. The deep black background (#1A1A1A) evokes the interior of a boutique showroom, creating a theatrical backdrop for product imagery and gold accents to command full attention. Cormorant Garamond brings old-world typographic elegance to display headings—its high-contrast serifs and tall ascenders channel the authority of fashion magazine mastheads. Inter provides clean, modern counterpoint for functional text, ensuring prices, sizes, and navigation remain perfectly legible. The restrained 4-8px corner radii project architectural precision and luxury craftsmanship, rejecting the roundness of casual apps in favor of the sharp, deliberate geometry of a jewelry box.
@@ -131,7 +135,7 @@ Key aesthetics:
 | ---------------- | ---------------------------------------- |
 | [0, 24]          | Screen content wrapper (horizontal only) |
 | [12, 21, 21, 21] | Tab bar section outer padding            |
-| 4px              | Tab bar pill inner padding               |
+| 4px              | Integrated tab bar inner padding               |
 | [8, 16]          | Input fields, compact buttons            |
 | [10, 20]         | Standard buttons                         |
 | [14, 28]         | Large buttons, CTA add-to-bag buttons    |
@@ -144,10 +148,19 @@ Key aesthetics:
 - Screen width: 402px (mobile)
 - Content wrapper: padding [0, 24], vertical, gap 24
 - Status bar: 62px, standard iOS
-- Tab bar pill: height 62px, cornerRadius 100, padding 4
+- Integrated tab bar: height 62-72px, cornerRadius 0-12, padding 0-4, full-width in page flow
 - Tab items: fill_container, vertical, gap 4, center aligned
 - Product grid: 2-column grid, 12px gap, tall product imagery (3:4 ratio)
 - Editorial layout: full-bleed imagery with overlaid serif titles
+
+### Mobile Composition Guardrails
+
+- Keep top rhythm compact: status bar, header, and first content block should feel connected; avoid empty 80px+ bands unless the design is intentionally image-led.
+- Search should be one clean row: a neutral input plus optional filter button. Do not wrap the input in a second tinted rounded shell; the grouping frame should stay structural and transparent.
+- Horizontal rails and carousel viewport frames stay transparent: no white rounded backing frame, no extra shadow. Only individual cards, images, or intentional promo panels receive fill, radius, or elevation.
+- Favorite, like, bookmark, and heart actions on image cards should be icon-only overlays or very subtle translucent hit areas; do not add circular white bubbles, borders, or shadows around the heart.
+- Bottom navigation is integrated into the screen flow with a quiet divider or active indicator; avoid floating capsule navigation unless a prompt explicitly asks for a floating nav pattern.
+- Use 9999px radius only for true circles or tiny capsules such as avatars, status dots, and short badges; never for page sections, search shells, carousels, card action buttons, or full navigation bars.
 
 ## Corner Radius
 
@@ -157,7 +170,7 @@ Key aesthetics:
 | 6px   | Input fields, search bars, compact badges   | Subtle refinement                               |
 | 8px   | Standard cards, product tiles, containers   | Primary container radius, jewelry-box precision |
 | 12px  | Large cards, modal sheets, image containers | Maximum standard radius for larger surfaces     |
-| 100px | Tab bar pill, toggle pills, round buttons   | Full capsule shape for navigation               |
+| 9999px | Avatars, status dots, short badges only | True circles/capsules for semantic micro-elements; never navigation, search, carousels, or card action buttons |
 
 Design rationale: Minimal 4-8px radii project the architectural precision and deliberate craftsmanship that luxury brands demand. Sharp corners evoke the geometry of jewelry boxes, perfume bottles, and high-end packaging—forms that communicate quality through restraint. The narrow range (4-12px) rejects the casual roundness of consumer apps, positioning the interface as a curated boutique experience where every angle is intentional.
 

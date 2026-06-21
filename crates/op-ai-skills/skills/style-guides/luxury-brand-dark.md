@@ -4,6 +4,10 @@ tags: [luxury, dark-mode, serif, gold-accent, elegant, premium, landing-page]
 platform: webapp
 ---
 
+## Style Scope
+
+This guide is self-contained. Apply its palette, radius scale, spacing, shadows, and component treatments only when this exact guide is selected; do not borrow food, social, dashboard, luxury, terminal, or other guide-specific patterns into another style. Treat unnamed layout frames as structural by default: no fill, stroke, cornerRadius, or shadow unless the node is intentionally a card, input, button, badge, media mask, navigation surface, or other visible component. Avoid decorative wrapper shells around components; hierarchy should come from spacing, typography, and this guide's explicit surfaces.
+
 ## Style Summary
 
 A refined, high-end brand landing page with absolute black (#0A0A0A) and gold (#C9A962) accents that evoke luxury fashion houses, premium watches, and exclusive products. Cormorant Garamond serif headlines deliver classical elegance with thin, tall letterforms, while Inter body text maintains functional legibility. Zero corner radius creates an architectural, gallery-like presentation where every element feels deliberately placed and precisely constructed.
