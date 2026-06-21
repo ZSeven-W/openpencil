@@ -413,3 +413,140 @@ fn stroke_width_seed_echoes_existing_width() {
     // snapped this to "3".
     assert_eq!(seed, "2.50", "the width seed must echo the real width un-rounded");
 }
+
+fn scene_fill(host: &mut WidgetHostNative, id: &str) -> Option<op_editor_ui::Color> {
+    host.layout_scene()
+        .active_page()
+        .and_then(|p| p.find(id))
+        .and_then(|n| n.fill)
+}
+
+/// RemoveFill on a plain filled frame must clear the rendered fill, not
+/// just the panel row — the canvas paints the cached scene node's fill.
+#[test]
+fn remove_fill_clears_scene_fill_on_plain_frame() {
+    let mut host = WidgetHostNative::new();
+    let doc = jian_ops_schema::load_str(
+        r##"{"version":"0.8.0","children":[
+          {"type":"frame","id":"f1","name":"Box","x":0,"y":0,"width":100,"height":50,
+           "fill":[{"type":"solid","color":"#ff0000"}]}
+        ]}"##,
+    )
+    .expect("fixture parses")
+    .value;
+    *host.editor_state_mut() = op_editor_core::EditorState::from_document(doc);
+    host.editor_state_mut().set_single_selection(NodeId::new("f1"));
+    host.mark_paint_dirty_for_test();
+
+    assert!(scene_fill(&mut host, "f1").is_some(), "scene starts red");
+    host.apply_property_action(op_editor_ui::widgets::PropertyPanelAction::RemoveFill(0));
+
+    let node = op_editor_core::walkers::find_node(
+        host.editor_state().active_children(),
+        &NodeId::new("f1"),
+    )
+    .unwrap();
+    assert!(
+        op_editor_core::fills::node_fills(node)
+            .map(|f| f.is_empty())
+            .unwrap_or(true),
+        "doc fill must be empty after RemoveFill"
+    );
+    assert!(
+        scene_fill(&mut host, "f1").is_none(),
+        "scene fill must clear after RemoveFill (stale-scene bug if Some)"
+    );
+}
+
+/// Same, for a child node nested under a frame (the realistic case in
+/// the bug report — a search bar inside a screen frame).
+#[test]
+fn remove_fill_clears_scene_fill_on_nested_child() {
+    let mut host = WidgetHostNative::new();
+    let doc = jian_ops_schema::load_str(
+        r##"{"version":"0.8.0","children":[
+          {"type":"frame","id":"screen","name":"Screen","x":0,"y":0,"width":200,"height":200,
+           "children":[
+             {"type":"rectangle","id":"bar","name":"Bar","x":10,"y":10,"width":120,"height":40,
+              "fill":[{"type":"solid","color":"#ffcccc"}]}
+           ]}
+        ]}"##,
+    )
+    .expect("fixture parses")
+    .value;
+    *host.editor_state_mut() = op_editor_core::EditorState::from_document(doc);
+    host.editor_state_mut().set_single_selection(NodeId::new("bar"));
+    host.mark_paint_dirty_for_test();
+
+    assert!(scene_fill(&mut host, "bar").is_some(), "child scene starts pink");
+    host.apply_property_action(op_editor_ui::widgets::PropertyPanelAction::RemoveFill(0));
+    assert!(
+        scene_fill(&mut host, "bar").is_none(),
+        "child scene fill must clear after RemoveFill"
+    );
+}
+
+/// Multi-fill: removing every fill row must leave the scene unpainted.
+#[test]
+fn remove_all_multi_fills_clears_scene_fill() {
+    let mut host = WidgetHostNative::new();
+    let doc = jian_ops_schema::load_str(
+        r##"{"version":"0.8.0","children":[
+          {"type":"frame","id":"f1","name":"Box","x":0,"y":0,"width":100,"height":50,
+           "fill":[{"type":"solid","color":"#ff0000"},{"type":"solid","color":"#00ff00"}]}
+        ]}"##,
+    )
+    .expect("fixture parses")
+    .value;
+    *host.editor_state_mut() = op_editor_core::EditorState::from_document(doc);
+    host.editor_state_mut().set_single_selection(NodeId::new("f1"));
+    host.mark_paint_dirty_for_test();
+
+    assert!(scene_fill(&mut host, "f1").is_some());
+    host.apply_property_action(op_editor_ui::widgets::PropertyPanelAction::RemoveFill(0));
+    host.apply_property_action(op_editor_ui::widgets::PropertyPanelAction::RemoveFill(0));
+    assert!(
+        scene_fill(&mut host, "f1").is_none(),
+        "scene fill must clear after removing every fill row"
+    );
+}
+
+/// End-to-end repro of the reported bug: a fill bound to a colour
+/// variable (`$brand`, as token-based old .op designs use). The scene
+/// resolves the colour via `fill_for` (fill ref wins over container.fill),
+/// so removing the fill must ALSO drop the `fill_refs` binding or the
+/// colour keeps painting. Guards the full chain end-to-end.
+#[test]
+fn remove_variable_bound_fill_clears_scene_color() {
+    use jian_ops_schema::variable::{VariableKind, VariableScalar};
+    let mut host = WidgetHostNative::new();
+    let doc = jian_ops_schema::load_str(
+        r##"{"version":"0.8.0","children":[
+          {"type":"rectangle","id":"r1","name":"Box","x":0,"y":0,"width":50,"height":50,
+           "fill":[{"type":"solid","color":"$brand"}]}
+        ]}"##,
+    )
+    .expect("fixture parses")
+    .value;
+    *host.editor_state_mut() = op_editor_core::EditorState::from_document(doc);
+    let st = host.editor_state_mut();
+    st.create_variable("brand", VariableKind::Color, VariableScalar::Str("#ff0000".into()));
+    st.set_single_selection(NodeId::new("r1"));
+    // Mirror the editor's fill→variable binding (what the colour picker
+    // and the load-time scan register).
+    st.ui
+        .variables
+        .fill_refs
+        .insert(NodeId::new("r1"), "brand".to_string());
+    host.mark_paint_dirty_for_test();
+
+    assert!(
+        scene_fill(&mut host, "r1").is_some(),
+        "the variable-bound fill must render before removal"
+    );
+    host.apply_property_action(op_editor_ui::widgets::PropertyPanelAction::RemoveFill(0));
+    assert!(
+        scene_fill(&mut host, "r1").is_none(),
+        "removing the fill must clear the variable colour from the scene"
+    );
+}

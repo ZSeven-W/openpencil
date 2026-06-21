@@ -16,6 +16,38 @@ use crate::walkers::find_node;
 use jian_ops_schema::node::PenNode;
 use jian_ops_schema::variable::{VariableDefinition, VariableKind, VariableScalar, VariableValue};
 
+/// Removing a fill must also drop the node's `fill_refs` variable binding.
+/// Otherwise the scene resolver's `fill_for` (a registered fill ref wins
+/// over `container.fill`) keeps painting the variable colour after the
+/// fill row is gone — the "deleted the fill but the colour stays" bug on
+/// token-based (old .op) designs.
+#[test]
+fn remove_selected_fill_clears_the_variable_ref() {
+    let mut s = state_with(vec![rect("n1", "r", 0.0, 0.0, 10.0, 10.0)]);
+    s.set_single_selection(NodeId::new("n1"));
+    // Mirror a `$ref` fill: bind writes `$name` into fill[0] + fill_refs.
+    let node = crate::walkers::find_node_mut(s.active_children_mut(), &NodeId::new("n1")).unwrap();
+    crate::fills::set_primary_fill_hex(node, "$color-info-bg");
+    s.ui
+        .variables
+        .fill_refs
+        .insert(NodeId::new("n1"), "color-info-bg".to_string());
+
+    assert!(s.remove_selected_fill(0), "remove must report success");
+
+    let node = find_node(s.active_children(), &NodeId::new("n1")).unwrap();
+    assert!(
+        crate::fills::node_fills(node)
+            .map(|f| f.is_empty())
+            .unwrap_or(true),
+        "container.fill must be cleared"
+    );
+    assert!(
+        !s.ui.variables.fill_refs.contains_key(&NodeId::new("n1")),
+        "fill_ref must clear too, else fill_for keeps painting the variable colour"
+    );
+}
+
 fn id(s: &str) -> NodeId {
     NodeId::new(s)
 }
