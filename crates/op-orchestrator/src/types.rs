@@ -227,6 +227,13 @@ pub enum Intent {
 #[derive(Debug, Clone)]
 pub enum Progress {
     Planning,
+    /// Planning produced the FULL subtask list — emitted ONCE right after
+    /// planning so the UI can show the complete task checklist upfront (TS
+    /// parity), instead of revealing tasks one-by-one as each starts. Pairs
+    /// `id` with `label` so the UI can mark each row done on `SubtaskDone`.
+    Planned {
+        subtasks: Vec<(String, String)>,
+    },
     ScaffoldDone,
     SubtaskStarted {
         id: String,

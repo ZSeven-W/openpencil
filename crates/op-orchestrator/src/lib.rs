@@ -18,6 +18,7 @@ pub mod intent;
 pub mod manifest;
 pub mod manifest_hints;
 pub mod model_profile;
+pub mod palette_harmonize;
 pub mod parse;
 pub mod plan;
 pub mod plan_normalize;
@@ -51,6 +52,7 @@ pub mod run_dashboard;
 pub mod scaffold;
 pub mod scaffold_dashboard;
 pub mod subagent;
+pub mod tree_heuristics;
 
 #[cfg(test)]
 mod test_support;

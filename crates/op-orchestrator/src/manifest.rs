@@ -44,7 +44,14 @@ static NEXT_SECTION_ID: AtomicU64 = AtomicU64::new(1);
 /// —— minimax-m3 92% / ark-code 92% / glm-5.1 98% / deepseek 83%。
 /// 强模型（Claude / GPT / Gemini 等）无基准数据不翻：目录是弱模型的
 /// 地板，不做强模型的天花板。kimi 同样无数据，待跑分后再进表。
-const MANIFEST_DEFAULT_FAMILIES: &[&str] = &["minimax", "glm", "deepseek", "ark-code"];
+///
+/// glm 家族精确到 `glm-5.1`（不是泛 `glm`）：glm-5.2（2026-06-18 定为 Full tier
+/// 强模型）的 manifest 输出在**完整页面**上反复崩 —— 深 section 嵌套超 depth-2
+/// 被 clamp、拿 element 当容器被扁平成兄弟 → 全堆顶层重叠（ab-v9 组件级 M3 96%
+/// 不代表整页布局）。强模型本就该走裸 PenNode JSONL（parse_nodes），它擅长嵌套
+/// 树（op-smoke 实测 restaurant 卡片嵌套正确）。`glm-5.2` 子串不命中 → 裸 JSONL；
+/// `glm-5.1` 仍走 manifest 脚手架。
+const MANIFEST_DEFAULT_FAMILIES: &[&str] = &["minimax", "glm-5.1", "deepseek", "ark-code"];
 
 /// M2 起的清单协议开关，M4 升级为按模型路由：`OPENPENCIL_MANIFEST`
 /// 保留为双向 override —— `1/true/on` 强制开（op-smoke 基准的
@@ -233,6 +240,37 @@ fn build_element_entry(
                 parent,
                 raw: false,
             }
+        }
+        // Unknown kind = the model invented a semantic name not in the
+        // catalog. Most often it's a *container* (`card` / `container` /
+        // `box` / `wrapper` / `list` …) the model groups children into via
+        // `in:`. Dropping it loses the whole subtree — children then dangle
+        // and flatten to siblings (the横排 overlap we saw with glm-5.2's
+        // `card`). Coerce to a raw frame instead: layout/style attrs
+        // (cornerRadius / fill / layout / gap / padding) carry over, it
+        // counts as a container (raw Frame, see resolve_in_ref), and
+        // children nest correctly. A *known* kind that fails on args
+        // (BuildFailed) still drops — that's a real builder rejection.
+        Err(op_mcp::element_manifest::ElementBuildError::UnknownKind(_)) => {
+            warnings.push(format!(
+                "W-COERCED-FRAME line {line_no}: unknown element kind {kind:?} → raw frame container"
+            ));
+            object.remove("el");
+            object.insert("type".to_string(), Value::String("frame".to_string()));
+            // Frame needs concrete sizing/layout; the model usually gives a
+            // card cornerRadius/fill but not width/height — fill flex-section
+            // defaults so `from_value::<PenNode>` succeeds and the frame lays
+            // out as a normal vertical container.
+            object
+                .entry("width")
+                .or_insert_with(|| Value::String("fill_container".to_string()));
+            object
+                .entry("height")
+                .or_insert_with(|| Value::String("fit_content".to_string()));
+            object
+                .entry("layout")
+                .or_insert_with(|| Value::String("vertical".to_string()));
+            build_raw_entry(line_no, object, entries, warnings)
         }
         Err(err) => {
             warnings.push(format!("W-DROPPED line {line_no} ({kind}): {err}"));
@@ -600,6 +638,51 @@ Here is the design:
     }
 
     #[test]
+    fn unknown_kind_used_as_container_coerces_to_frame() {
+        // glm-5.2 invents `card` (not in the catalog) as a container and
+        // nests children into it via `in:`. Dropping it would dangle the
+        // children → they flatten to siblings → horizontal overflow/overlap
+        // (the崩 layout reported 2026-06-18). It must coerce to a raw frame
+        // that holds the children, keeping the card's cornerRadius/fill.
+        let text = r##"
+{"el":"section","direction":"vertical","role":"popular"}
+{"el":"card","in":1,"cornerRadius":16,"fill":[{"type":"solid","color":"#FFFFFF"}]}
+{"el":"stat_card","in":2,"label":"MRR","value":"$48k"}
+"##;
+        let outcome = parse_manifest(text).expect("manifest");
+        assert_eq!(outcome.nodes.len(), 1, "one section root");
+        assert!(
+            outcome
+                .warnings
+                .iter()
+                .any(|w| w.contains("W-COERCED-FRAME")),
+            "expected a coerce warning, got {:?}",
+            outcome.warnings
+        );
+        assert!(
+            !outcome.warnings.iter().any(|w| w.contains("W-DROPPED")),
+            "card must NOT be dropped: {:?}",
+            outcome.warnings
+        );
+        // section > card(frame) > stat_card — nested, NOT flattened to siblings.
+        let section_kids = frame_children(&outcome.nodes[0]);
+        assert_eq!(
+            section_kids.len(),
+            1,
+            "section holds the coerced card frame"
+        );
+        assert!(
+            matches!(&section_kids[0], PenNode::Frame(_)),
+            "card coerced to a frame container"
+        );
+        assert_eq!(
+            frame_children(&section_kids[0]).len(),
+            1,
+            "stat_card nested inside the card, not flattened to a sibling"
+        );
+    }
+
+    #[test]
     fn forbidden_id_fields_are_stripped_with_warning() {
         let text = r#"{"el":"badge","label":"New","id":"my-id","parent_id":"root"}"#;
         let outcome = parse_manifest(text).expect("manifest");
@@ -718,29 +801,52 @@ Here is the design:
     }
 
     #[test]
-    fn bad_element_line_is_dropped_without_killing_the_batch() {
+    fn unknown_element_line_coerces_to_frame_without_killing_the_batch() {
+        // An invented kind no longer drops — dropping loses container
+        // subtrees (the glm-5.2 `card` regression). It coerces to a frame;
+        // the rest of the batch is unaffected.
         let text = r#"
 {"el":"nonexistent_widget","label":"x"}
 {"el":"badge","label":"Live"}
 "#;
         let outcome = parse_manifest(text).expect("manifest");
-        assert_eq!(outcome.dropped_lines, 1);
-        assert_eq!(outcome.element_lines, 1);
-        assert_eq!(outcome.nodes.len(), 1);
-        assert!(outcome.warnings.iter().any(|w| w.contains("W-DROPPED")));
+        assert_eq!(
+            outcome.dropped_lines, 0,
+            "unknown coerces now, no longer drops"
+        );
+        assert_eq!(
+            outcome.element_lines, 1,
+            "badge is the only catalog element"
+        );
+        assert_eq!(outcome.nodes.len(), 2, "coerced frame + badge");
+        assert!(outcome
+            .warnings
+            .iter()
+            .any(|w| w.contains("W-COERCED-FRAME")));
     }
 
     #[test]
-    fn line_numbers_count_dropped_lines() {
-        // 行 1 失败被丢，但行号仍占住：行 3 的 `in:2` 指向行 2 的 section。
+    fn line_numbers_survive_a_coerced_line() {
+        // 行 1 是未知 kind（coerce 成 frame、占住行号）；行 3 的 `in:2` 仍
+        // 正确指向行 2 的 section，badge 进 section 而非错位到顶层。
         let text = r#"
 {"el":"nonexistent_widget"}
 {"el":"section","role":"body"}
 {"el":"badge","in":2,"label":"Live"}
 "#;
         let outcome = parse_manifest(text).expect("manifest");
-        assert_eq!(outcome.nodes.len(), 1);
-        assert_eq!(frame_children(&outcome.nodes[0]).len(), 1);
+        assert_eq!(
+            outcome.nodes.len(),
+            2,
+            "coerced frame (line 1) + section (line 2)"
+        );
+        // The section is the 2nd root and still holds the badge — proving
+        // the coerced line 1 占住了行号 so `in:2` resolved to the section.
+        assert_eq!(
+            frame_children(&outcome.nodes[1]).len(),
+            1,
+            "badge nested in the section"
+        );
     }
 
     // ── M4 按模型路由 ──────────────────────────────────────────────────
@@ -777,10 +883,17 @@ Here is the design:
             "gpt-4o",
             "gemini-2.5-pro",
             "kimi-k2.6", // 无基准数据，刻意不进表
+            "glm-5.2",   // Full-tier 强模型：manifest 脚手架限制其嵌套→整页崩，走裸 JSONL
             "",          // chat 路径没有模型信息 → 裸 JSONL
         ] {
             assert!(!manifest_enabled_for_model(id), "{id:?} should route OFF");
         }
+        // glm-5.1 (the benchmarked weak model) still routes ON — the family
+        // is precise (`glm-5.1`), so 5.2 falls through but 5.1 doesn't.
+        assert!(
+            manifest_enabled_for_model("glm-5.1"),
+            "glm-5.1 keeps the scaffold"
+        );
     }
 
     #[test]

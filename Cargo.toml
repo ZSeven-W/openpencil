@@ -38,6 +38,7 @@ serde_stacker = "0.1"
 thiserror = "1"
 anyhow = "1"
 tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 # WASM-boundary related (per kickoff §1.2 blacklist = must not appear here).
 # Intentionally NOT exposing tokio / reqwest / agent / pen-agent-cli /

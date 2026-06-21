@@ -84,7 +84,16 @@ pub(crate) fn fix_horizontal_overflow(node: &mut Value, canvas_width: f64) {
         if needed_w > parent_w && needed_w <= canvas_width {
             node["width"] = json!(needed_w);
         } else if needed_w > canvas_width * 0.8 {
+            // Content exceeds the viewport — widening can't make the children fit
+            // (their sum already overflows the canvas). Span the viewport and clip
+            // the overflow at the row edge so it reads as a scroll row cut at the
+            // screen, instead of chips spilling off-canvas into the void.
+            // overflow.md mandates a `clipContent` wrapper for scroll rows; weak
+            // models (e.g. glm-5.2) routinely emit a bare horizontal frame without
+            // it, so this is the deterministic floor that keeps off-screen children
+            // from rendering outside the device frame.
             node["width"] = json!("fill_container");
+            node["clipContent"] = json!(true);
         }
     }
 }

@@ -376,6 +376,145 @@ fn is_ring_like_decorative(node: &Value) -> bool {
     corner_radius(node) >= w.min(h) * 0.35
 }
 
+/// layout.md:24 — interior section wrappers (Header / Search Section /
+/// Categories Section …) MUST be transparent; an explicit near-white fill
+/// makes an unwanted "white card" on the page bg. The model (esp. glm-5.2)
+/// ignores that rule, and `role_defaults`' AI-explicit-wins won't strip it —
+/// so force it here: a structural wrapper carrying a near-white / page-tone
+/// solid fill gets cleared to transparent. CARD_LIKE roles (card, promo
+/// banner, …) are intentional surfaces and keep their fill; an intentional
+/// dark / saturated section background is also left alone (only near-white
+/// fills — luminance ≥ 0.85 — read as the "white card on cream" smell).
+/// Neutral page/surface design-variable tokens. A structural wrapper carrying
+/// any of these is repainting the page background and must go transparent.
+/// Variable refs are NOT resolved at post-pass time (binding runs afterwards),
+/// so `hex_luminance` can't read them — match the token names directly. Colored
+/// tokens (`$color-accent`, dark bands, etc.) are deliberate → never listed here.
+const LIGHT_SURFACE_REFS: &[&str] = &[
+    "$color-bg-deep",
+    "$color-surface",
+    "$color-surface-2",
+    "$color-surface-3",
+];
+
+/// True when a fill color reads as a light page/surface tone — either a parsed
+/// hex with luminance ≥ 0.85, or one of the neutral surface variable refs that
+/// glm emits before variable binding resolves them.
+fn is_light_surface_fill(color: &str) -> bool {
+    LIGHT_SURFACE_REFS.contains(&color) || hex_luminance(color).map(|l| l >= 0.85).unwrap_or(false)
+}
+
+/// A child paints a colored (non-page-tone) surface: a gradient, or a solid
+/// that is NOT a light page/surface tone. The signal that a child is a real
+/// banner/card surface rather than a neutral panel.
+fn child_has_colored_fill(node: &Value) -> bool {
+    let Some(first) = fill_array(node).and_then(|a| a.first()) else {
+        return false;
+    };
+    match first.get("type").and_then(Value::as_str) {
+        Some("linear_gradient") | Some("radial_gradient") => true,
+        Some("solid") => first
+            .get("color")
+            .and_then(Value::as_str)
+            .map(|c| !is_light_surface_fill(c))
+            .unwrap_or(false),
+        _ => false,
+    }
+}
+
+/// True when the node has EXACTLY ONE container child and that child spans the
+/// width (`fill_container`) painting a colored surface. The node is then a
+/// redundant frame wrapped around a full-bleed banner/card — its own light
+/// surface fill is a box showing around the colored child. (Tiny leaf siblings
+/// like an orphan badge are ignored for the count.)
+fn is_redundant_colored_wrapper(node: &Value) -> bool {
+    let Some(kids) = node.get("children").and_then(Value::as_array) else {
+        return false;
+    };
+    let containers: Vec<&Value> = kids
+        .iter()
+        .filter(|c| {
+            matches!(
+                c.get("type").and_then(Value::as_str),
+                Some("frame") | Some("group")
+            )
+        })
+        .collect();
+    if containers.len() != 1 {
+        return false;
+    }
+    let child = containers[0];
+    child.get("width").and_then(Value::as_str) == Some("fill_container")
+        && child_has_colored_fill(child)
+}
+
+fn fix_structural_wrapper_transparency(node: &mut Value) {
+    let Some(role) = role_of(node).map(str::to_string) else {
+        return;
+    };
+    if CARD_LIKE_ALLOWLIST.contains(&role.as_str()) {
+        // A card-like role normally keeps its fill — EXCEPT when it is a
+        // redundant wrapper around a single full-bleed colored child card (glm
+        // wraps an orange promo banner in a `feature-card` whose own
+        // `$color-surface` fill then shows as a light box around / under the
+        // colored child). The colored child IS the banner surface, so strip the
+        // wrapper's light fill + chrome.
+        if is_redundant_colored_wrapper(node) {
+            if let Some(color) = get_first_solid_color(node) {
+                if is_light_surface_fill(&color) {
+                    if let Some(obj) = node.as_object_mut() {
+                        obj.insert("fill".to_string(), Value::Array(Vec::new()));
+                        obj.remove("stroke");
+                        obj.remove("effects");
+                    }
+                }
+            }
+        }
+        return; // intentional surface — keep its fill
+    }
+    let structural = STRUCTURAL_DENYLIST.contains(&role.as_str())
+        || SECTION_ROLES.contains(&role.as_str())
+        || role == "header"
+        || role == "app-bar"
+        || role.contains("section");
+    if !structural {
+        return;
+    }
+    let Some(color) = get_first_solid_color(node) else {
+        return;
+    };
+    if is_light_surface_fill(&color) {
+        if let Some(obj) = node.as_object_mut() {
+            obj.insert("fill".to_string(), Value::Array(Vec::new()));
+            // Drop the accompanying hairline border too: a structural wrapper
+            // made transparent keeps no "card/bar chrome" (the user flagged the
+            // navbar's bottom border as unreasonable alongside its background).
+            obj.remove("stroke");
+            // …and no elevation shadow — a now-transparent wrapper would cast it
+            // as a gray ghost box around its content.
+            obj.remove("effects");
+        }
+    }
+}
+
+/// True when an immediate child container (frame/group) already paints a
+/// visible surface. Such a node is a redundant wrapper around the real card —
+/// it must NOT be whitewashed into its own surface, or the injected drop-shadow
+/// ghosts out around the colored child as a gray rounded box.
+fn has_filled_container_child(node: &Value) -> bool {
+    node.get("children")
+        .and_then(Value::as_array)
+        .map(|kids| {
+            kids.iter().any(|c| {
+                matches!(
+                    c.get("type").and_then(Value::as_str),
+                    Some("frame") | Some("group")
+                ) && has_visible_fill(c)
+            })
+        })
+        .unwrap_or(false)
+}
+
 fn fix_orphan_container_contrast(node: &mut Value, parent_fill: Option<&Value>) {
     if parent_fill.is_none() {
         return; // root has no parent context
@@ -397,6 +536,18 @@ fn fix_orphan_container_contrast(node: &mut Value, parent_fill: Option<&Value>) 
     {
         return;
     }
+    // A child container already paints the visible surface (e.g. glm wraps an
+    // orange promo banner in a bare `feature-card` frame). Whitewashing this
+    // redundant wrapper into a second card leaks the injected drop-shadow out
+    // around the colored child as a gray "ghost box" — the exact mysterious
+    // background + rounded border the user flagged. Let the child be the card.
+    if has_filled_container_child(node) {
+        return;
+    }
+    // Only rescue containers we POSITIVELY identify as card-like; structural
+    // wrappers (header / section / banner / search bar) and roleless rounded
+    // frames stay transparent — white-washing them is what produced the spurious
+    // white panels behind headers / banners / search rows.
     let Some(role) = role_of(node) else {
         return;
     };
@@ -791,6 +942,10 @@ fn post_pass_value(node: &mut Value, parent_fill: Option<Value>, canvas_width: f
         fix_text_heights(node);
     }
     apply_clip_content_for_image(node);
+    // Strip unwanted white-card fills from structural wrappers (layout.md:24)
+    // before the contrast fixes, so they evaluate the corrected transparent
+    // section against the page bg instead of a bogus white surface.
+    fix_structural_wrapper_transparency(node);
     // I3 contrast fixes (TS order 9-12).
     fix_button_foreground_contrast(node);
     fix_section_alternation(node);
@@ -812,12 +967,117 @@ fn post_pass_value(node: &mut Value, parent_fill: Option<Value>, canvas_width: f
 /// Run the contrast post-pass over a forest of sub-agent section roots. Each
 /// root is round-tripped through JSON; on any (de)serialize failure that root
 /// is left untouched (a fix can never drop a node).
+/// Semantic state-feedback tokens. Legit only on status/alert elements; glm
+/// grabs them as "a light color" for decorative surfaces (a `$color-danger-bg`
+/// search input renders pink and clashes with the theme).
+const STATE_BG_REFS: &[&str] = &[
+    "$color-danger-bg",
+    "$color-info-bg",
+    "$color-success-bg",
+    "$color-warning-bg",
+];
+
+/// The page-background token. Only the page root paints it; an inner node using
+/// it just repaints a redundant — or theme-clashing (cool `#F8FAFC` over a warm
+/// page) — panel.
+const PAGE_BG_REF: &str = "$color-bg-deep";
+
+/// A status / feedback element — the ONLY legitimate user of a state-bg token.
+fn is_status_element(node: &Value) -> bool {
+    if let Some(role) = role_of(node) {
+        if matches!(role, "badge" | "alert" | "toast" | "status") {
+            return true;
+        }
+    }
+    if let Some(name) = node.get("name").and_then(Value::as_str) {
+        let l = name.to_lowercase();
+        return [
+            "error",
+            "success",
+            "warning",
+            "alert",
+            "danger",
+            "status",
+            "toast",
+            "notification",
+        ]
+        .iter()
+        .any(|k| l.contains(k));
+    }
+    false
+}
+
+/// Surface-color discipline — a deterministic floor walking EVERY node type
+/// (incl. `text_input`, which the frame-only `post_pass_value` skips). The TS
+/// pipeline relies on the prompt for this; weak models (glm-5.2) ignore it, so
+/// Rust enforces it after the fact:
+///   1. A state-bg token misused as a decorative surface → neutral
+///      `$color-surface-2`. (the pink search input / chips)
+///   2. `$color-bg-deep` on any inner node → transparent. (the cool grey panel
+///      behind the search row / a nav tab repainting the page bg)
+///
+/// Refs are still UNRESOLVED here (binding runs later), so match token names.
+fn node_has_effects(node: &Value) -> bool {
+    node.get("effects")
+        .and_then(Value::as_array)
+        .map(|a| !a.is_empty())
+        .unwrap_or(false)
+}
+
+fn has_any_stroke(node: &Value) -> bool {
+    node.get("stroke").map(|s| !s.is_null()).unwrap_or(false)
+}
+
+fn fix_surface_color_discipline(node: &mut Value, is_root: bool) {
+    if let Some(color) = get_first_solid_color(node) {
+        if STATE_BG_REFS.contains(&color.as_str()) && !is_status_element(node) {
+            node["fill"] = solid_fill("$color-surface-2");
+        } else if !is_root && color == PAGE_BG_REF {
+            node["fill"] = json!([]);
+        }
+    }
+    // An elevation shadow needs a surface to sit on. A frame with no visible
+    // fill and no stroke that still carries a drop-shadow renders the shadow as
+    // a gray "ghost box" floating around its children — strip it. This runs last
+    // (after binding + every fill-stripping pass), so it sees the FINAL fill
+    // state and catches both our own injected card shadows on wrappers that got
+    // emptied and model-authored shadows on bare wrapper frames.
+    if node_has_effects(node) && !has_visible_fill(node) && !has_any_stroke(node) {
+        if let Some(obj) = node.as_object_mut() {
+            obj.remove("effects");
+        }
+    }
+    if let Some(children) = node.get_mut("children").and_then(Value::as_array_mut) {
+        for child in children.iter_mut() {
+            fix_surface_color_discipline(child, false);
+        }
+    }
+}
+
 pub fn post_pass_forest(nodes: &mut [PenNode], canvas_width: f64) {
     for node in nodes.iter_mut() {
         let Ok(mut v) = serde_json::to_value(&*node) else {
             continue;
         };
         post_pass_value(&mut v, None, canvas_width);
+        if let Ok(new_node) = serde_json::from_value::<PenNode>(v) {
+            *node = new_node;
+        }
+    }
+}
+
+/// Surface-color discipline over the whole forest. MUST run AFTER
+/// `bind_generated_color_variables` — glm emits raw hex (`#FEE2E2`,
+/// `#F8FAFC`), and binding is what normalizes those to the `$color-danger-bg`
+/// / `$color-bg-deep` refs this pass matches. Calling it pre-binding (the old
+/// site inside `post_pass_forest`) only ever saw hex, so it never matched and
+/// the pink search input / cool-grey panels survived.
+pub fn enforce_surface_color_discipline(nodes: &mut [PenNode]) {
+    for node in nodes.iter_mut() {
+        let Ok(mut v) = serde_json::to_value(&*node) else {
+            continue;
+        };
+        fix_surface_color_discipline(&mut v, true);
         if let Ok(new_node) = serde_json::from_value::<PenNode>(v) {
             *node = new_node;
         }

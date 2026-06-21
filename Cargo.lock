@@ -3253,6 +3253,8 @@ dependencies = [
  "serde_json",
  "skia-safe",
  "tokio",
+ "tracing",
+ "tracing-subscriber",
  "zip",
 ]
 

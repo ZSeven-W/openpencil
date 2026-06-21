@@ -52,11 +52,17 @@ pub fn snapshot_plan_vars(sink: &dyn DocSink, _plan: &OrchestratorPlan) -> VarSn
 
 /// 缺失的调色板 token / 轴 → 一条 `MergeThemePreset`。全部已存在时
 /// 返回空(完全播种过的文档零命令)。
-pub fn seed_commands(_plan: &OrchestratorPlan, snap: &VarSnapshot) -> Vec<EditorCommand> {
+pub fn seed_commands(plan: &OrchestratorPlan, snap: &VarSnapshot) -> Vec<EditorCommand> {
     if snap.created.is_empty() && snap.created_axes.is_empty() {
         return Vec::new();
     }
-    let palette = semantic_palette::palette_variables();
+    let mut palette = semantic_palette::palette_variables();
+    // Harmonize the cool-slate neutral ramp to the design's temperature: a warm
+    // page (cream/orange) gets warm grays so the search bar / chips / avatar
+    // circle no longer read as off-palette cool gray. Neutral pages keep slate.
+    if let Some(page_bg) = plan.root_frame.first_solid_hex() {
+        crate::palette_harmonize::harmonize_palette_neutrals(&mut palette, &page_bg);
+    }
     let variables = snap
         .created
         .iter()
