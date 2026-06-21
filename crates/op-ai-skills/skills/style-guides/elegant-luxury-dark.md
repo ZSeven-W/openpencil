@@ -4,6 +4,10 @@ tags: [elegant, luxury, dark-mode, gold-accent, serif, sophisticated, sidebar, r
 platform: webapp
 ---
 
+## Style Scope
+
+This guide is self-contained. Apply its palette, radius scale, spacing, shadows, and component treatments only when this exact guide is selected; do not borrow food, social, dashboard, luxury, terminal, or other guide-specific patterns into another style. Treat unnamed layout frames as structural by default: no fill, stroke, cornerRadius, or shadow unless the node is intentionally a card, input, button, badge, media mask, navigation surface, or other visible component. Avoid decorative wrapper shells around components; hierarchy should come from spacing, typography, and this guide's explicit surfaces.
+
 ## Style Summary
 
 A refined dark interface that draws from classical editorial and luxury brand aesthetics. Cormorant Garamond headlines bring a sense of heritage and sophistication, while Inter body text ensures readability. Gold accents (#C9A962) are used sparingly and deliberately, appearing in status indicators, active states, and decorative strokes. The wide 280px sidebar with icon-led navigation provides a spacious, unhurried feel that communicates premium quality.

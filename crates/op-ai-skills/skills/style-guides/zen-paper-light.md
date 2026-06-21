@@ -4,6 +4,10 @@ tags: [zen, minimal, light-mode, quiet, paper, serif, japanese, webapp]
 platform: webapp
 ---
 
+## Style Scope
+
+This guide is self-contained. Apply its palette, radius scale, spacing, shadows, and component treatments only when this exact guide is selected; do not borrow food, social, dashboard, luxury, terminal, or other guide-specific patterns into another style. Treat unnamed layout frames as structural by default: no fill, stroke, cornerRadius, or shadow unless the node is intentionally a card, input, button, badge, media mask, navigation surface, or other visible component. Avoid decorative wrapper shells around components; hierarchy should come from spacing, typography, and this guide's explicit surfaces.
+
 ## Style Summary
 
 A contemplative, ultra-minimal interface inspired by washi paper, ink brushwork, and the Japanese concept of "ma" (negative space as a compositional element). The warm parchment #F5F1EB background evokes handmade paper with its subtle warmth, while the stone accent (#78716C) provides muted, almost invisible guidance — like faded ink on an aged scroll. Noto Serif brings understated elegance to headings at light weights (400-500), its refined curves suggesting calligraphic discipline without ostentation. Noto Sans handles body text with quiet precision. A universal 4px radius produces barely-there corner softening — just enough to feel considered, never enough to distract.

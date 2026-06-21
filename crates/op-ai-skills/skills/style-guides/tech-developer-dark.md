@@ -4,6 +4,10 @@ tags: [developer, dark-mode, monospace, tech, code-inspired, terminal, landing-p
 platform: webapp
 ---
 
+## Style Scope
+
+This guide is self-contained. Apply its palette, radius scale, spacing, shadows, and component treatments only when this exact guide is selected; do not borrow food, social, dashboard, luxury, terminal, or other guide-specific patterns into another style. Treat unnamed layout frames as structural by default: no fill, stroke, cornerRadius, or shadow unless the node is intentionally a card, input, button, badge, media mask, navigation surface, or other visible component. Avoid decorative wrapper shells around components; hierarchy should come from spacing, typography, and this guide's explicit surfaces.
+
 ## Style Summary
 
 A developer-focused landing page inspired by GitHub's dark UI and modern code editors. The deep ink background (#0D1117) paired with GitHub blue (#58A6FF) creates a familiar, trustworthy environment for technical audiences. JetBrains Mono headlines give the page a code-native identity that signals "built by developers, for developers," while Inter body text maintains comfortable readability for marketing copy. Code blocks, terminal-inspired UI elements, and monospace accents throughout reinforce the technical credibility.

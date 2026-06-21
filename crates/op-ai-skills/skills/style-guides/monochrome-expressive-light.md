@@ -4,6 +4,10 @@ tags: [monochrome, editorial, serif, high-contrast, elegant, magazine, uppercase
 platform: webapp
 ---
 
+## Style Scope
+
+This guide is self-contained. Apply its palette, radius scale, spacing, shadows, and component treatments only when this exact guide is selected; do not borrow food, social, dashboard, luxury, terminal, or other guide-specific patterns into another style. Treat unnamed layout frames as structural by default: no fill, stroke, cornerRadius, or shadow unless the node is intentionally a card, input, button, badge, media mask, navigation surface, or other visible component. Avoid decorative wrapper shells around components; hierarchy should come from spacing, typography, and this guide's explicit surfaces.
+
 ## Style Summary
 
 A bold editorial interface that achieves maximum visual impact using only black, white, and shades of gray. No accent color exists; hierarchy is built entirely through type size, weight, and spatial contrast. DM Serif Display headlines at 92px create dramatic focal points, while Inter body text provides clean readability. Horizontal top navigation with dot separators replaces the common sidebar pattern, giving the layout a magazine masthead quality.

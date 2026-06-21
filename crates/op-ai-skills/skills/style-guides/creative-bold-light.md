@@ -4,6 +4,10 @@ tags: [creative, bold-typography, light-mode, vibrant, playful, gradient, expres
 platform: webapp
 ---
 
+## Style Scope
+
+This guide is self-contained. Apply its palette, radius scale, spacing, shadows, and component treatments only when this exact guide is selected; do not borrow food, social, dashboard, luxury, terminal, or other guide-specific patterns into another style. Treat unnamed layout frames as structural by default: no fill, stroke, cornerRadius, or shadow unless the node is intentionally a card, input, button, badge, media mask, navigation surface, or other visible component. Avoid decorative wrapper shells around components; hierarchy should come from spacing, typography, and this guide's explicit surfaces.
+
 ## Style Summary
 
 A high-energy, expressive interface designed for creative agencies, portfolio platforms, and design tool dashboards. Pure white backgrounds (#FFFFFF) provide maximum contrast for the vibrant violet accent (#7C3AED) and its gradient companions. Clash Display delivers oversized, unapologetic headlines with dramatic weight (700-800) that command attention, while Satoshi handles functional text with geometric clarity. Generous 16-24px radii create pill-shaped buttons and soft card containers, while gradient accents on primary CTAs and feature sections inject creative energy into every interaction.
@@ -167,7 +171,7 @@ Key aesthetics:
 | 16px  | Cards, modals, panels, feature sections          | Primary container radius      |
 | 20px  | Large feature cards, image containers            | Generous creative softness    |
 | 24px  | Primary CTA buttons, pill buttons                | Signature pill-shaped buttons |
-| 100px | Avatar circles, toggle pills, round icon buttons | Full capsule/circle shape     |
+| 9999px | Avatar circles, toggle pills, round icon buttons | Full capsule/circle shape     |
 
 Design rationale: The 8-24px radius range is deliberately bold and expressive. Pill-shaped buttons (24px) are the signature interactive element — they break from conventional rectangles and signal creative confidence. Cards at 16-20px feel friendly and modern without becoming childish. This progressive scale from structured (8px) to expressive (24px) mirrors the creative agency aesthetic of balancing professionalism with visual excitement.
 

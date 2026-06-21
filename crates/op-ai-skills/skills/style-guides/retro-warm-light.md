@@ -4,6 +4,10 @@ tags: [warm-tones, light-mode, earth-tones, organic, cozy, rounded, webapp, frie
 platform: webapp
 ---
 
+## Style Scope
+
+This guide is self-contained. Apply its palette, radius scale, spacing, shadows, and component treatments only when this exact guide is selected; do not borrow food, social, dashboard, luxury, terminal, or other guide-specific patterns into another style. Treat unnamed layout frames as structural by default: no fill, stroke, cornerRadius, or shadow unless the node is intentionally a card, input, button, badge, media mask, navigation surface, or other visible component. Avoid decorative wrapper shells around components; hierarchy should come from spacing, typography, and this guide's explicit surfaces.
+
 ## Style Summary
 
 A warm, handcrafted interface evoking the amber glow of vintage paper, aged leather, and artisan workshops. The parchment-cream #FDF6EC background wraps content in a cozy warmth that feels analog and personal, while the amber-brown accent (#B45309) grounds interactions with earthy confidence. Libre Baskerville brings old-style serif character to headings — its bracketed serifs and generous x-height recall letterpress craftsmanship — while Source Sans 3 delivers crisp, modern readability for body text. Generous 12-16px radii create soft, pillow-like containers that invite touch and exploration.

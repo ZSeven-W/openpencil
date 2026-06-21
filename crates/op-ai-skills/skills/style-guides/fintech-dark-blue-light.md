@@ -4,6 +4,10 @@ tags: [fintech, blue-accent, light-mode, professional, data-focused, clean, side
 platform: webapp
 ---
 
+## Style Scope
+
+This guide is self-contained. Apply its palette, radius scale, spacing, shadows, and component treatments only when this exact guide is selected; do not borrow food, social, dashboard, luxury, terminal, or other guide-specific patterns into another style. Treat unnamed layout frames as structural by default: no fill, stroke, cornerRadius, or shadow unless the node is intentionally a card, input, button, badge, media mask, navigation surface, or other visible component. Avoid decorative wrapper shells around components; hierarchy should come from spacing, typography, and this guide's explicit surfaces.
+
 ## Style Summary
 
 A precise, data-confident interface designed for financial dashboards, portfolio trackers, and analytics platforms. The cool slate background (#F1F5F9) sets a clinical, focused tone, while dark navy (#0F172A) serves as both primary text and accent — conveying authority and trust. DM Sans delivers clean geometric headings and body text, while DM Mono handles numerical data, currency values, and timestamps with monospaced precision. Generous 12px card radii and subtle inset surfaces create a layered depth system that organizes dense financial data without visual clutter.

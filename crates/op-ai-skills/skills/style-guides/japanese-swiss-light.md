@@ -4,6 +4,10 @@ tags: [swiss, minimal, zen, geometric, monospace, icon-sidebar, red-accent, data
 platform: webapp
 ---
 
+## Style Scope
+
+This guide is self-contained. Apply its palette, radius scale, spacing, shadows, and component treatments only when this exact guide is selected; do not borrow food, social, dashboard, luxury, terminal, or other guide-specific patterns into another style. Treat unnamed layout frames as structural by default: no fill, stroke, cornerRadius, or shadow unless the node is intentionally a card, input, button, badge, media mask, navigation surface, or other visible component. Avoid decorative wrapper shells around components; hierarchy should come from spacing, typography, and this guide's explicit surfaces.
+
 ## Style Summary
 
 A precision-focused light interface that fuses Swiss typographic discipline with Japanese spatial sensibility. Warm off-white backgrounds (#FAFAFA) provide a calm, paper-like canvas, while a single bold red accent (#DC2626) commands attention for status indicators and active states. A narrow 64px icon-only sidebar in solid black creates a strong vertical anchor. Typography pairs Sora with extremely tight letter-spacing for a compressed, data-dense feel, alongside IBM Plex Mono for numerical data.

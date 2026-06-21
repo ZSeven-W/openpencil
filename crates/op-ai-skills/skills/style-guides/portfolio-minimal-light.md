@@ -4,6 +4,10 @@ tags: [minimal, light-mode, quiet, monochrome, elegant, landing-page, whitespace
 platform: webapp
 ---
 
+## Style Scope
+
+This guide is self-contained. Apply its palette, radius scale, spacing, shadows, and component treatments only when this exact guide is selected; do not borrow food, social, dashboard, luxury, terminal, or other guide-specific patterns into another style. Treat unnamed layout frames as structural by default: no fill, stroke, cornerRadius, or shadow unless the node is intentionally a card, input, button, badge, media mask, navigation surface, or other visible component. Avoid decorative wrapper shells around components; hierarchy should come from spacing, typography, and this guide's explicit surfaces.
+
 ## Style Summary
 
 A quiet, restrained portfolio page built on a near-white (#FAFAFA) canvas with near-black (#171717) as the singular accent. This style channels the discipline of Swiss design and the serenity of gallery spaces — every element earns its place through necessity, not decoration. Sora headlines at 500-600 weight bring geometric precision with a subtle warmth, while Inter body text provides invisible, efficient readability. The monochrome palette and generous whitespace create a stage where the work itself is the hero.

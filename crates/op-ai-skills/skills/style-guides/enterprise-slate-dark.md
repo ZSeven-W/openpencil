@@ -4,6 +4,10 @@ tags: [enterprise, dark-mode, professional, sidebar, data-focused, neutral, weba
 platform: webapp
 ---
 
+## Style Scope
+
+This guide is self-contained. Apply its palette, radius scale, spacing, shadows, and component treatments only when this exact guide is selected; do not borrow food, social, dashboard, luxury, terminal, or other guide-specific patterns into another style. Treat unnamed layout frames as structural by default: no fill, stroke, cornerRadius, or shadow unless the node is intentionally a card, input, button, badge, media mask, navigation surface, or other visible component. Avoid decorative wrapper shells around components; hierarchy should come from spacing, typography, and this guide's explicit surfaces.
+
 ## Style Summary
 
 A commanding enterprise dark interface built for B2B SaaS platforms, admin dashboards, and professional tooling. The deep slate #1E293B background establishes authority and focus, while the confident blue accent (#3B82F6) provides clear wayfinding across dense information layouts. IBM Plex Sans at two weights (600/400) delivers the same industrial clarity trusted by enterprise systems — legible at small sizes, professional at large ones. Moderate 6-8px radii maintain a businesslike posture without feeling rigid. The result is an interface that communicates reliability, security, and operational readiness.

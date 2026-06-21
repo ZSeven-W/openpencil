@@ -4,6 +4,10 @@ tags: [scandinavian, minimal, organic, sage-green, warm-tones, soft-shadows, rou
 platform: webapp
 ---
 
+## Style Scope
+
+This guide is self-contained. Apply its palette, radius scale, spacing, shadows, and component treatments only when this exact guide is selected; do not borrow food, social, dashboard, luxury, terminal, or other guide-specific patterns into another style. Treat unnamed layout frames as structural by default: no fill, stroke, cornerRadius, or shadow unless the node is intentionally a card, input, button, badge, media mask, navigation surface, or other visible component. Avoid decorative wrapper shells around components; hierarchy should come from spacing, typography, and this guide's explicit surfaces.
+
 ## Style Summary
 
 A warm, inviting interface inspired by Scandinavian design principles of organic simplicity, natural materials, and cozy functionality. The parchment-toned background (#F7F6F3) replaces cold whites with a warm paper feel, while sage green (#7C9070) accents evoke natural foliage. Fraunces, a variable serif with optical sizing, brings warmth and personality to display text, complemented by Plus Jakarta Sans for clean functional text and Space Mono for data precision. Soft organic radii (10-16px) and subtle shadows complete the hygge aesthetic.

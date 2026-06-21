@@ -4,18 +4,22 @@ tags: [warm-tones, light-mode, friendly, orange-accent, rounded, mobile, playful
 platform: mobile
 ---
 
+## Style Scope
+
+This guide is self-contained. Apply its palette, radius scale, spacing, shadows, and component treatments only when this exact guide is selected; do not borrow food, social, dashboard, luxury, terminal, or other guide-specific patterns into another style. Treat unnamed layout frames as structural by default: no fill, stroke, cornerRadius, or shadow unless the node is intentionally a card, input, button, badge, media mask, navigation surface, or other visible component. Avoid decorative wrapper shells around components; hierarchy should come from spacing, typography, and this guide's explicit surfaces.
+
 ## Style Summary
 
-A warm, appetite-inducing mobile interface designed for food delivery, restaurant, and recipe applications. The creamy background (#FFF8F0) wraps every screen in the inviting warmth of a bakery, while the vibrant orange accent (#F97316) channels the energy of fresh citrus and spice. Plus Jakarta Sans, a geometric sans-serif with rounded terminals, provides friendly readability at every level, from bold hero prices to lightweight ingredient lists. Generous 16-20px corner radii create soft, approachable containers that feel as warm and welcoming as the color palette.
+A polished food and restaurant mobile interface with a warm editorial feel rather than a generic delivery-app template. Use an ivory canvas (#FFFCF6), near-black espresso text (#21140F), restrained orange (#FF5A1F) for only decisive actions, and real food photography as the main visual energy. Plus Jakarta Sans keeps the UI friendly and readable, while selective 8-18px radii make cards and controls feel crafted without turning every frame into a rounded bubble. The style should feel appetizing, premium, and composed: photography, spacing, and typographic contrast do the work before colored shells do.
 
 Key aesthetics:
 
-- **Creamy warm canvas**: #FFF8F0 background evokes the warmth of baked goods and natural ingredients
-- **Citrus orange accent**: #F97316 as the primary accent, energetic and appetite-stimulating
+- **Warm ivory canvas**: #FFFCF6 background creates hospitality warmth without a heavy cream tint
+- **Restrained orange accent**: #FF5A1F only for CTAs, prices, selected filters, and tiny indicators
 - **Rounded sans-serif**: Plus Jakarta Sans with rounded terminals echoes the soft, friendly radii
-- **Generous radii**: 16-20px corners make cards feel like warm, inviting menu tiles
-- **Food photography friendly**: Clean white card surfaces maximize contrast for food imagery
-- **Integrated bottom nav**: full-width bottom navigation with orange active indicator
+- **Selective radii**: 8-18px corners distinguish inputs, cards, and hero media without over-softening the page
+- **Photography-led hierarchy**: Food images, crops, price typography, and whitespace create the visual hook
+- **Integrated navigation**: Bottom navigation stays quiet and full-width, with orange used as an active cue
 
 ## Color System
 
@@ -23,37 +27,37 @@ Key aesthetics:
 
 | Token           | Value   | Usage                                           |
 | --------------- | ------- | ----------------------------------------------- |
-| Page Background | #FFF8F0 | Root screen background (warm cream)             |
-| Card Surface    | #FFFFFF | Cards, menu items, elevated containers          |
-| Inset Surface   | #FFF1E3 | Input backgrounds, search bars, recessed areas  |
-| Accent Surface  | #FED7AA | Highlighted sections, promo banners, deal cards |
-| Tab Bar Surface | #FFFFFF | Integrated bottom navigation surface                     |
+| Page Background | #FFFCF6 | Root screen background (warm ivory)                                |
+| Card Surface    | #FFFFFF | Product/menu cards only; not structural wrappers or carousel shells |
+| Inset Surface   | #FFFFFF | Search inputs and form fields with neutral border                   |
+| Accent Surface  | #FFF0E3 | Small badges, selected category chips, subtle price highlights      |
+| Tab Bar Surface | #FFFCF6 | Integrated bottom navigation surface                                |
 
 ### Text Colors
 
 | Token          | Value   | Usage                                  |
 | -------------- | ------- | -------------------------------------- |
-| Primary Text   | #1C1410 | Headings, prices, primary labels       |
-| Secondary Text | #78604A | Body text, descriptions, ingredients   |
-| Tertiary Text  | #B8A08A | Captions, timestamps, placeholders     |
-| Muted Text     | #D4C4B4 | Disabled text, background labels       |
-| Accent Text    | #F97316 | Active tabs, links, highlighted prices |
+| Primary Text   | #21140F | Headings, prices, primary labels       |
+| Secondary Text | #7A5B48 | Body text, descriptions, ingredients   |
+| Tertiary Text  | #A8917F | Captions, timestamps, placeholders     |
+| Muted Text     | #D7C6B8 | Disabled text, background labels       |
+| Accent Text    | #FF5A1F | Active tabs, links, highlighted prices |
 
 ### Border Colors
 
 | Token          | Value   | Usage                            |
 | -------------- | ------- | -------------------------------- |
-| Default Border | #F0DCC8 | Card borders, input outlines     |
-| Subtle Border  | #F8EDE0 | Light separators, section breaks |
-| Active Border  | #F97316 | Focused inputs, active states    |
+| Default Border | #EAD8C8 | Card borders, input outlines     |
+| Subtle Border  | #F3E7DC | Light separators, section breaks |
+| Active Border  | #FF5A1F | Focused inputs, active states    |
 
 ### Accent Colors
 
 | Token          | Value     | Usage                                         |
 | -------------- | --------- | --------------------------------------------- |
-| Primary Accent | #F97316   | Active states, primary buttons, tab indicator |
-| Accent Light   | #F9731620 | Tinted backgrounds, selected items            |
-| Accent Muted   | #FFEDD5   | Badge backgrounds, subtle indicators          |
+| Primary Accent | #FF5A1F   | Active states, primary buttons, tab indicator |
+| Accent Light   | #FF5A1F14 | Tinted backgrounds, selected items            |
+| Accent Muted   | #FFF0E3   | Badge backgrounds, subtle indicators          |
 | Success        | #16A34A   | Order confirmed, available items (green)      |
 | Success Light  | #16A34A20 | Success badge backgrounds                     |
 | Warning        | #EAB308   | Delivery delays, limited stock (warm yellow)  |
@@ -128,9 +132,9 @@ Key aesthetics:
 
 | Value            | Usage                                    |
 | ---------------- | ---------------------------------------- |
-| [0, 24]          | Screen content wrapper (horizontal only) |
-| [12, 21, 21, 21] | Tab bar section outer padding            |
-| 4px              | Tab bar pill inner padding               |
+| [0, 20]          | Screen content wrapper (horizontal only) |
+| [10, 0]          | Integrated bottom nav vertical padding   |
+| 0-4px            | Active nav indicator or tiny badge inset |
 | [8, 16]          | Input fields, search bars                |
 | [10, 20]         | Standard buttons                         |
 | [12, 24]         | Large buttons, order CTA buttons         |
@@ -141,24 +145,38 @@ Key aesthetics:
 ### Layout Pattern
 
 - Screen width: 402px (mobile)
-- Content wrapper: padding [0, 24], vertical, gap 24
+- Content wrapper: padding [0, 20], vertical, gap 20-22
 - Status bar: 62px, standard iOS
-- Tab bar pill: height 62px, cornerRadius 100, padding 4
+- Header: compact vertical rhythm; avoid oversized blank bands above search
+- Search row: transparent structural frame, height 52-56, gap 10, neutral input plus optional orange filter button
+- Integrated tab bar: height 58-66px, cornerRadius 0-8, padding [10, 0], full-width in page flow
 - Tab items: fill_container, vertical, gap 4, center aligned
-- Menu cards: white surface with food image top, details bottom, 16px radius
-- Promo banners: accent surface (#FED7AA) with warm gradient feel
+- Category rail: small chips or icon+label groups; do not mix pastel pink/blue shells with orange
+- Menu cards: white product surfaces with food image top, details bottom, 14-16px radius
+- Promo banners: single bold orange panel or image-led panel inside content width; no extra white rounded carousel backing
+
+### Mobile Composition Guardrails
+
+- Keep top rhythm compact: status bar, header, and first content block should feel connected; avoid empty 80px+ bands unless the design is intentionally image-led.
+- Search should be one clean row: a neutral input plus optional filter button. Do not wrap the input in a second tinted rounded shell; the grouping frame should stay structural and transparent.
+- Horizontal rails and carousel viewport frames stay transparent: no white rounded backing frame, no extra shadow. Only individual cards, images, or intentional promo panels receive fill, radius, or elevation.
+- Favorite, like, bookmark, and heart actions on image cards should be icon-only overlays or very subtle translucent hit areas; do not add circular white bubbles, borders, or shadows around the heart.
+- Bottom navigation is integrated into the screen flow with a quiet divider or active indicator; avoid floating capsule navigation unless a prompt explicitly asks for a floating nav pattern.
+- Use 9999px radius only for true circles or tiny capsules such as avatars, status dots, and short badges; never for page sections, search shells, carousels, card action buttons, or full navigation bars.
+- Food palette rule: avoid pastel pink/blue search shells or category backgrounds in this guide. Use warm neutrals, espresso text, one orange accent, and photography color.
+- Product-card favorite rule: heart/bookmark icons sit directly over the image with no circular border bubble; use icon color or a faint translucent scrim only when contrast requires it.
 
 ## Corner Radius
 
 | Value | Usage                                      | Rationale                         |
 | ----- | ------------------------------------------ | --------------------------------- |
-| 10px  | Small buttons, compact badges, tag chips   | Warm baseline softening           |
-| 16px  | Standard cards, menu items, input fields   | Primary container radius          |
-| 20px  | Large cards, feature sections, search bars | Generous friendly radius          |
-| 24px  | Hero banners, promo cards, modal sheets    | Maximum warm softness             |
-| 100px | Tab bar pill, toggle pills, round avatars  | Full capsule shape for navigation |
+| 8px   | Tiny badges, filter chips, nav indicators  | Crisp detail radius               |
+| 12px  | Buttons, search inputs, compact controls   | Primary interactive radius        |
+| 14px  | Product cards, menu list rows              | App card radius                   |
+| 18px  | Promo cards, large image masks             | Maximum food-app softness         |
+| 9999px | Avatars, status dots, short badges only | True circles/capsules for semantic micro-elements; never navigation, search, carousels, or card action buttons |
 
-Design rationale: Generous 16-20px radii create the warm, inviting feel expected in food and hospitality apps. Every card feels like a warm plate or a rounded bread basket, reinforcing the comfort-food aesthetic. The soft corners also ensure food photography thumbnails sit inside containers with gentle, appetizing framing rather than harsh crops.
+Design rationale: Food UI should feel warm through imagery and rhythm, not through rounding every frame. Keep most structure transparent, use 12-16px for real controls and product cards, and reserve 18px for hero/promotional media. This prevents the common failure mode where search, carousel, category rail, and bottom nav all become competing rounded blobs.
 
 ## Icons
 

@@ -4,6 +4,10 @@ tags: [clean, light-mode, minimal, blue-accent, modern, landing-page, profession
 platform: webapp
 ---
 
+## Style Scope
+
+This guide is self-contained. Apply its palette, radius scale, spacing, shadows, and component treatments only when this exact guide is selected; do not borrow food, social, dashboard, luxury, terminal, or other guide-specific patterns into another style. Treat unnamed layout frames as structural by default: no fill, stroke, cornerRadius, or shadow unless the node is intentionally a card, input, button, badge, media mask, navigation surface, or other visible component. Avoid decorative wrapper shells around components; hierarchy should come from spacing, typography, and this guide's explicit surfaces.
+
 ## Style Summary
 
 A clean, professional SaaS marketing page built on a pure white (#FFFFFF) foundation with indigo (#4F46E5) as the singular accent color. This is the archetypal B2B SaaS landing page — trustworthy, organized, and conversion-focused. Inter serves as both heading and body font, creating typographic unity and eliminating visual noise. The restrained palette and consistent 12px card radius project reliability and competence without decorative excess.

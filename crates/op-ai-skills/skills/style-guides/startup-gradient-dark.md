@@ -4,6 +4,10 @@ tags: [gradient, dark-mode, startup, bold-typography, vibrant, mesh-gradient, la
 platform: webapp
 ---
 
+## Style Scope
+
+This guide is self-contained. Apply its palette, radius scale, spacing, shadows, and component treatments only when this exact guide is selected; do not borrow food, social, dashboard, luxury, terminal, or other guide-specific patterns into another style. Treat unnamed layout frames as structural by default: no fill, stroke, cornerRadius, or shadow unless the node is intentionally a card, input, button, badge, media mask, navigation surface, or other visible component. Avoid decorative wrapper shells around components; hierarchy should come from spacing, typography, and this guide's explicit surfaces.
+
 ## Style Summary
 
 A bold, high-energy startup landing page with a deep space-dark background (#0F0F1A) and vibrant dual-accent gradients blending violet (#7C3AED) and teal (#2DD4BF). This style captures the ambition and momentum of modern tech startups — confident, forward-looking, and unapologetically bold. Clash Display headlines at 700-800 weight deliver punchy, oversized statements, while Inter body text maintains clarity and professionalism. Mesh gradient backgrounds on hero sections and CTA blocks create depth and visual intrigue.

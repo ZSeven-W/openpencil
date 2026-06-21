@@ -4,6 +4,10 @@ tags: [data-focused, dark-mode, dashboard, monospace, cyan-accent, sidebar, tech
 platform: webapp
 ---
 
+## Style Scope
+
+This guide is self-contained. Apply its palette, radius scale, spacing, shadows, and component treatments only when this exact guide is selected; do not borrow food, social, dashboard, luxury, terminal, or other guide-specific patterns into another style. Treat unnamed layout frames as structural by default: no fill, stroke, cornerRadius, or shadow unless the node is intentionally a card, input, button, badge, media mask, navigation surface, or other visible component. Avoid decorative wrapper shells around components; hierarchy should come from spacing, typography, and this guide's explicit surfaces.
+
 ## Style Summary
 
 A data-driven dark interface optimized for analytics dashboards, monitoring panels, and metric-heavy applications. The #111827 background provides a neutral dark canvas where cyan (#06B6D4) accents highlight active data points, chart elements, and interactive controls. IBM Plex Sans delivers clean, professional headings and body text, while IBM Plex Mono handles all numerical data, table values, and chart labels with precision alignment. The three-font system (Sans headings, Sans body, Mono data) creates a clear separation between navigational, descriptive, and quantitative content.

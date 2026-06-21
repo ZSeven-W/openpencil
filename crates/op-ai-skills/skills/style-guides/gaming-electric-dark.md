@@ -4,6 +4,10 @@ tags: [electric, dark-mode, neon, bold-typography, vibrant, gradient, webapp]
 platform: webapp
 ---
 
+## Style Scope
+
+This guide is self-contained. Apply its palette, radius scale, spacing, shadows, and component treatments only when this exact guide is selected; do not borrow food, social, dashboard, luxury, terminal, or other guide-specific patterns into another style. Treat unnamed layout frames as structural by default: no fill, stroke, cornerRadius, or shadow unless the node is intentionally a card, input, button, badge, media mask, navigation surface, or other visible component. Avoid decorative wrapper shells around components; hierarchy should come from spacing, typography, and this guide's explicit surfaces.
+
 ## Style Summary
 
 A high-voltage dark interface channeling the kinetic energy of esports arenas, gaming dashboards, and competitive platforms. The pure-black #0A0A0A background creates a void where electric red (#EF4444) and hot orange (#F97316) accents burn with maximum intensity. Rajdhani delivers sharp, angular headings at weight 700 — its condensed geometric letterforms suggest speed and precision — while Inter handles body text with neutral efficiency, letting the display type and color accents carry the visual charge. The 8-12px radii create sleek, aerodynamic surfaces. Gradient overlays on primary CTAs and featured panels inject motion energy into the interface.
@@ -162,7 +166,7 @@ Key aesthetics:
 | 6px   | Input fields, dropdowns, tooltips           | Tight interactive radius                  |
 | 8px   | Buttons, standard cards, modals             | Primary interactive radius                |
 | 12px  | Featured cards, large panels, hero sections | Sleek container emphasis                  |
-| 100px | Avatar circles, rank badges                 | Full circle for profile and rank elements |
+| 9999px | Avatar circles, rank badges                 | Full circle for profile and rank elements |
 
 Design rationale: The 8-12px range creates sleek, aerodynamic surfaces that suggest speed without becoming soft or friendly. The slightly rounded corners evoke racing car panels and gaming hardware — engineered curves rather than organic shapes. Combined with the pure-black background and electric accent colors, these radii produce an interface that feels like a high-performance cockpit rather than a casual consumer app.
 

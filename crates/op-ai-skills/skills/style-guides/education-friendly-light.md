@@ -4,6 +4,10 @@ tags: [education, friendly, light-mode, rounded, colorful, playful, landing-page
 platform: webapp
 ---
 
+## Style Scope
+
+This guide is self-contained. Apply its palette, radius scale, spacing, shadows, and component treatments only when this exact guide is selected; do not borrow food, social, dashboard, luxury, terminal, or other guide-specific patterns into another style. Treat unnamed layout frames as structural by default: no fill, stroke, cornerRadius, or shadow unless the node is intentionally a card, input, button, badge, media mask, navigation surface, or other visible component. Avoid decorative wrapper shells around components; hierarchy should come from spacing, typography, and this guide's explicit surfaces.
+
 ## Style Summary
 
 A warm, inviting education platform landing page with a creamy off-white (#FFFBF0) background and a dual-accent palette of amber (#F59E0B) and blue (#3B82F6). This style feels approachable, trustworthy, and encouraging — designed to make learning feel accessible rather than intimidating. Nunito rounded sans-serif for both headings and body creates a friendly, cohesive typographic voice, while generous 16-20px corner radii soften every container into welcoming, touchable shapes.

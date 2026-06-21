@@ -131,6 +131,13 @@ fn role_of(node: &Value) -> Option<&str> {
     node.get("role").and_then(Value::as_str)
 }
 
+fn identity_label(node: &Value) -> String {
+    let id = node.get("id").and_then(Value::as_str).unwrap_or("");
+    let name = node.get("name").and_then(Value::as_str).unwrap_or("");
+    let role = node.get("role").and_then(Value::as_str).unwrap_or("");
+    format!("{id} {name} {role}").to_lowercase()
+}
+
 fn corner_radius(node: &Value) -> f64 {
     match node.get("cornerRadius") {
         Some(Value::Number(n)) => n.as_f64().unwrap_or(0.0),
@@ -141,6 +148,19 @@ fn corner_radius(node: &Value) -> f64 {
 
 fn solid_fill(color: &str) -> Value {
     json!([{ "type": "solid", "color": color }])
+}
+
+fn neutral_stroke(color: &str) -> Value {
+    json!({ "thickness": 1, "fill": solid_fill(color) })
+}
+
+fn clear_visual_chrome(node: &mut Value) {
+    if let Some(obj) = node.as_object_mut() {
+        obj.remove("fill");
+        obj.remove("stroke");
+        obj.remove("effects");
+        obj.remove("cornerRadius");
+    }
 }
 
 // ── fixButtonForegroundContrast ──────────────────────────────────────────────
@@ -377,16 +397,121 @@ fn fix_orphan_container_contrast(node: &mut Value, parent_fill: Option<&Value>) 
     {
         return;
     }
-    if let Some(role) = role_of(node) {
-        if STRUCTURAL_DENYLIST.contains(&role) || !CARD_LIKE_ALLOWLIST.contains(&role) {
-            return;
-        }
+    let Some(role) = role_of(node) else {
+        return;
+    };
+    if STRUCTURAL_DENYLIST.contains(&role) || !CARD_LIKE_ALLOWLIST.contains(&role) {
+        return;
     }
     node["fill"] = solid_fill("#FFFFFF");
     node["effects"] = json!([
         { "type": "shadow", "offsetX": 0, "offsetY": 1, "blur": 3, "spread": 0, "color": "#0000001A" },
         { "type": "shadow", "offsetX": 0, "offsetY": 1, "blur": 2, "spread": -1, "color": "#0000000F" }
     ]);
+}
+
+// ── normalizeNestedSearchShell ──────────────────────────────────────────────
+
+fn child_role(child: &Value) -> Option<&str> {
+    child.get("role").and_then(Value::as_str)
+}
+
+fn is_search_input_child(child: &Value) -> bool {
+    matches!(
+        child_role(child),
+        Some("input") | Some("form-input") | Some("search-bar")
+    ) || identity_label(child).contains("search")
+}
+
+fn is_filter_button_child(child: &Value) -> bool {
+    if child_role(child) == Some("icon-button") {
+        let label = identity_label(child);
+        if label.contains("filter")
+            || label.contains("slider")
+            || label.contains("sliders")
+            || label.contains("筛选")
+        {
+            return true;
+        }
+    }
+    child
+        .get("children")
+        .and_then(Value::as_array)
+        .map(|children| {
+            children.iter().any(|grandchild| {
+                let label = identity_label(grandchild);
+                label.contains("filter")
+                    || label.contains("slider")
+                    || label.contains("sliders")
+                    || label.contains("筛选")
+            })
+        })
+        .unwrap_or(false)
+}
+
+fn normalize_nested_search_shell(node: &mut Value) {
+    if node.get("type").and_then(Value::as_str) != Some("frame")
+        || node.get("layout").and_then(Value::as_str) != Some("horizontal")
+    {
+        return;
+    }
+
+    let Some(children) = node.get("children").and_then(Value::as_array) else {
+        return;
+    };
+    let search_child_count = children.iter().filter(|c| is_search_input_child(c)).count();
+    let has_filter = children.iter().any(is_filter_button_child);
+    if search_child_count != 1 || !has_filter {
+        return;
+    }
+
+    clear_visual_chrome(node);
+    node["gap"] = json!(10);
+    node["padding"] = json!([0, 0]);
+    node["alignItems"] = json!("center");
+
+    let Some(children) = node.get_mut("children").and_then(Value::as_array_mut) else {
+        return;
+    };
+    for child in children {
+        if is_search_input_child(child) {
+            child["fill"] = solid_fill("#FFFFFF");
+            child["stroke"] = neutral_stroke("#E5E7EB");
+            child["cornerRadius"] = json!(12);
+        }
+    }
+}
+
+// ── normalizeFavoriteIconButtons ────────────────────────────────────────────
+
+fn subtree_mentions_heart(node: &Value) -> bool {
+    let label = identity_label(node);
+    if label.contains("favorite")
+        || label.contains("favourite")
+        || label.contains("heart")
+        || label.contains("like")
+        || label.contains("收藏")
+        || label.contains("喜欢")
+    {
+        return true;
+    }
+    node.get("children")
+        .and_then(Value::as_array)
+        .map(|children| children.iter().any(subtree_mentions_heart))
+        .unwrap_or(false)
+}
+
+fn normalize_favorite_icon_buttons(node: &mut Value) {
+    let Some(children) = node.get_mut("children").and_then(Value::as_array_mut) else {
+        return;
+    };
+    for child in children {
+        if child_role(child) == Some("icon-button") && subtree_mentions_heart(child) {
+            clear_visual_chrome(child);
+            child["width"] = json!(32);
+            child["height"] = json!(32);
+        }
+    }
 }
 
 // ── fixInputSiblingConsistency ───────────────────────────────────────────────
@@ -655,6 +780,8 @@ fn post_pass_value(node: &mut Value, parent_fill: Option<Value>, canvas_width: f
     fix_horizontal_overflow(node, canvas_width);
     normalize_form_input_widths(node);
     normalize_input_trailing_icon_alignment(node);
+    normalize_nested_search_shell(node);
+    normalize_favorite_icon_buttons(node);
     if node
         .get("layout")
         .and_then(Value::as_str)

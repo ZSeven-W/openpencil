@@ -4,6 +4,10 @@ tags: [gradient, dark-mode, vibrant, electric, bold-typography, mesh-gradient, t
 platform: webapp
 ---
 
+## Style Scope
+
+This guide is self-contained. Apply its palette, radius scale, spacing, shadows, and component treatments only when this exact guide is selected; do not borrow food, social, dashboard, luxury, terminal, or other guide-specific patterns into another style. Treat unnamed layout frames as structural by default: no fill, stroke, cornerRadius, or shadow unless the node is intentionally a card, input, button, badge, media mask, navigation surface, or other visible component. Avoid decorative wrapper shells around components; hierarchy should come from spacing, typography, and this guide's explicit surfaces.
+
 ## Style Summary
 
 A bold, vibrant dark interface that channels cyberpunk energy through electric gradient accents on deep void-black surfaces. The #0A0118 background — a near-black with a hint of purple — sets the stage for violet (#8B5CF6) to cyan (#06B6D4) gradient sweeps across cards, buttons, and status indicators. Outfit headlines at weight 700 bring geometric boldness, while Inter body text keeps content readable against the high-energy palette. Generous 12-16px radii give elements a smooth, futuristic polish.

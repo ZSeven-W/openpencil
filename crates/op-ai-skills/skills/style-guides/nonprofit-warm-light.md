@@ -4,6 +4,10 @@ tags: [warm-tones, light-mode, friendly, organic, rounded, landing-page, earth-t
 platform: webapp
 ---
 
+## Style Scope
+
+This guide is self-contained. Apply its palette, radius scale, spacing, shadows, and component treatments only when this exact guide is selected; do not borrow food, social, dashboard, luxury, terminal, or other guide-specific patterns into another style. Treat unnamed layout frames as structural by default: no fill, stroke, cornerRadius, or shadow unless the node is intentionally a card, input, button, badge, media mask, navigation surface, or other visible component. Avoid decorative wrapper shells around components; hierarchy should come from spacing, typography, and this guide's explicit surfaces.
+
 ## Style Summary
 
 An empathy-driven nonprofit landing page built on a warm parchment (#FFFBF5) foundation with red (#DC2626) and green (#16A34A) as dual accents representing urgency and hope. This style captures the compassion and authenticity of mission-driven organizations — human, trustworthy, and emotionally resonant. Merriweather serif headlines at 700 weight bring gravitas and editorial authority, while Source Sans 3 body text provides clean, highly readable content delivery. The warm earthy palette and organic radii create an inviting atmosphere that encourages connection and action.

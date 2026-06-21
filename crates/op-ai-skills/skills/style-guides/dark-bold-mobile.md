@@ -4,6 +4,10 @@ tags: [dark-mode, bold-typography, neon, electric, geometric, confident, urban, 
 platform: mobile
 ---
 
+## Style Scope
+
+This guide is self-contained. Apply its palette, radius scale, spacing, shadows, and component treatments only when this exact guide is selected; do not borrow food, social, dashboard, luxury, terminal, or other guide-specific patterns into another style. Treat unnamed layout frames as structural by default: no fill, stroke, cornerRadius, or shadow unless the node is intentionally a card, input, button, badge, media mask, navigation surface, or other visible component. Avoid decorative wrapper shells around components; hierarchy should come from spacing, typography, and this guide's explicit surfaces.
+
 ## Style Summary
 
 A high-energy dark mobile interface built for confidence and impact. Electric lime (#C4F82A) on pitch-black (#0A0A0A) creates a striking neon contrast that demands attention. Space Grotesk display typography at bold weights delivers an urban, street-smart personality, while Manrope body text keeps functional content clean and legible. Gradient program cards and subtle glow effects add depth and movement to the interface.
@@ -135,7 +139,7 @@ Key aesthetics:
 | ---------------- | ---------------------------------------- |
 | [0, 24]          | Screen content wrapper (horizontal only) |
 | [12, 21, 21, 21] | Tab bar section outer padding            |
-| 4px              | Tab bar pill inner padding               |
+| 4px              | Integrated tab bar inner padding               |
 | [8, 16]          | Input fields, compact buttons            |
 | [10, 20]         | Standard buttons                         |
 | [12, 24]         | Large buttons, CTA buttons               |
@@ -148,9 +152,18 @@ Key aesthetics:
 - Screen width: 402px (mobile)
 - Content wrapper: padding [0, 24], vertical, gap 24-32
 - Status bar: 62px standard iOS
-- Tab bar pill: height 62px, cornerRadius 100, padding 4
+- Integrated tab bar: height 62-72px, cornerRadius 0-12, padding 0-4, full-width in page flow
 - Tab items: fill_container, vertical, gap 4, center aligned
 - Program cards: horizontal scroll, gradient background fills
+
+### Mobile Composition Guardrails
+
+- Keep top rhythm compact: status bar, header, and first content block should feel connected; avoid empty 80px+ bands unless the design is intentionally image-led.
+- Search should be one clean row: a neutral input plus optional filter button. Do not wrap the input in a second tinted rounded shell; the grouping frame should stay structural and transparent.
+- Horizontal rails and carousel viewport frames stay transparent: no white rounded backing frame, no extra shadow. Only individual cards, images, or intentional promo panels receive fill, radius, or elevation.
+- Favorite, like, bookmark, and heart actions on image cards should be icon-only overlays or very subtle translucent hit areas; do not add circular white bubbles, borders, or shadows around the heart.
+- Bottom navigation is integrated into the screen flow with a quiet divider or active indicator; avoid floating capsule navigation unless a prompt explicitly asks for a floating nav pattern.
+- Use 9999px radius only for true circles or tiny capsules such as avatars, status dots, and short badges; never for page sections, search shells, carousels, card action buttons, or full navigation bars.
 
 ## Corner Radius
 
@@ -161,7 +174,7 @@ Key aesthetics:
 | 16px  | Feature cards, program cards                | Comfortable interactive radius    |
 | 20px  | Large cards, modal bottom sheets            | Generous but controlled           |
 | 24px  | Hero cards, prominent feature sections      | Maximum standard radius           |
-| 100px | Tab bar pill, toggle pills, round buttons   | Full capsule shape for navigation |
+| 9999px | Avatars, status dots, short badges only | True circles/capsules for semantic micro-elements; never navigation, search, carousels, or card action buttons |
 
 Design rationale: Soft industrial radii (8-24px) balance the bold, geometric typography with comfortable touch targets. The range is wider than the terminal style (3-12px) but more restrained than playful (14-26px), reflecting an urban-industrial aesthetic that is confident without being aggressive. The bottom navigation should feel integrated with the page palette, using accent color or a tiny indicator for active state.
 

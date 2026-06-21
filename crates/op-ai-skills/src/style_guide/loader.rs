@@ -170,6 +170,101 @@ mod tests {
     }
 
     #[test]
+    fn every_style_guide_declares_its_scope_boundary() {
+        for guide in style_guide_registry() {
+            assert!(
+                guide.content.contains("## Style Scope"),
+                "{} must declare an explicit style scope",
+                guide.name
+            );
+            assert!(
+                guide.content.contains("This guide is self-contained"),
+                "{} must prevent cross-guide visual leakage",
+                guide.name
+            );
+            assert!(
+                guide
+                    .content
+                    .contains("Treat unnamed layout frames as structural by default"),
+                "{} must avoid turning layout frames into decorated surfaces",
+                guide.name
+            );
+        }
+    }
+
+    #[test]
+    fn mobile_guides_carry_component_discipline() {
+        for guide in style_guide_registry()
+            .iter()
+            .filter(|g| g.platform == Platform::Mobile)
+        {
+            assert!(
+                guide.content.contains("### Mobile Composition Guardrails"),
+                "{} must include mobile composition guardrails",
+                guide.name
+            );
+            assert!(
+                guide.content.contains("Search should be one clean row"),
+                "{} must avoid nested tinted search shells",
+                guide.name
+            );
+            assert!(
+                guide
+                    .content
+                    .contains("carousel viewport frames stay transparent"),
+                "{} must avoid rounded carousel backing shells",
+                guide.name
+            );
+            assert!(
+                guide.content.contains("do not add circular white bubbles"),
+                "{} must avoid favorite/like bubble chrome",
+                guide.name
+            );
+        }
+    }
+
+    #[test]
+    fn style_guides_do_not_revive_forced_pill_nav_templates() {
+        for guide in style_guide_registry() {
+            for forbidden in [
+                "Tab bar pill",
+                "Pill tab bar",
+                "bottom navigation pill",
+                "cornerRadius 100",
+                "100px",
+            ] {
+                assert!(
+                    !guide.content.contains(forbidden),
+                    "{} must not contain forced pill-nav wording: {forbidden}",
+                    guide.name
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn warm_food_guide_rejects_generic_delivery_app_chrome() {
+        let guide = style_guide_registry()
+            .iter()
+            .find(|g| g.name == "warm-food-mobile-light")
+            .expect("warm food guide present");
+
+        for required in [
+            "polished food and restaurant mobile interface",
+            "Card Surface    | #FFFFFF | Product/menu cards only",
+            "Search row: transparent structural frame",
+            "no extra white rounded carousel backing",
+            "avoid pastel pink/blue search shells",
+            "heart/bookmark icons sit directly over the image with no circular border bubble",
+        ] {
+            assert!(
+                guide.content.contains(required),
+                "warm food guide missing quality guardrail: {required}"
+            );
+        }
+    }
+
+    #[test]
     fn parse_reads_frontmatter() {
         let raw = "---\nname: 'ai-product-dark'\ntags: [tech, dark-mode, gradient]\nplatform: webapp\n---\n## Style Summary\nbody";
         let g = parse_style_guide_file(raw).expect("parses");
