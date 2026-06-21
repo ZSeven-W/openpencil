@@ -387,6 +387,55 @@ fn non_append_mode_takes_normal_sequential_path() {
     assert_eq!(summary.subtasks.len(), 2);
 }
 
+#[test]
+fn non_append_mode_resolves_scaffold_root_when_empty_frame_is_replaced() {
+    const PLAN_JSON: &str = r##"{
+      "rootFrame": { "id": "page", "name": "Food App Home", "width": 375, "height": 812,
+                     "layout": "vertical", "gap": 16,
+                     "fill": [{ "type": "solid", "color": "#FFF8F0" }] },
+      "subtasks": [
+        { "id": "hero", "label": "Hero", "region": { "width": 375, "height": 240 } }
+      ]
+    }"##;
+
+    let mut sink = VecDocSink::new();
+    insert_target_frame(&mut sink, "starter-frame");
+    assert_eq!(sink.state().active_children().len(), 1);
+
+    let llm = ScriptedLlm::new(vec![
+        ScriptResponse::Text(PLAN_JSON.into()),
+        ScriptResponse::Text(node_json("hero")),
+    ]);
+    let abort = AbortFlag::new();
+    let req = DesignRequest {
+        prompt: "a mobile food app".into(),
+        model: None,
+        provider: None,
+        design_md: None,
+        concurrency: 1,
+        append_context: None,
+        validation_enabled: false,
+        visual_ref_enabled: false,
+    };
+
+    let summary = futures::executor::block_on(Orchestrator::new().run(
+        req,
+        &mut sink,
+        &llm,
+        &mut |_| {},
+        &abort,
+        &stub_providers(),
+    ))
+    .expect("normal run should replace the empty starter frame");
+
+    assert_eq!(sink.state().active_children().len(), 1);
+    assert_eq!(
+        sink.state().active_children()[0].id_str(),
+        summary.root_frame_id
+    );
+    assert_ne!(summary.root_frame_id, "page");
+}
+
 // ── Dashboard / append mutex (spec §2) ────────────────────────────────────────
 
 /// Append + dashboard request → append fast-path wins (dashboard does NOT fire).

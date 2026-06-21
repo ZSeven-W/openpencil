@@ -137,6 +137,12 @@ impl Orchestrator {
             sink.apply(cmd);
         }
         let scaffold_root_index = sink.state().active_children().len();
+        let scaffold_root_ids_before: Vec<String> = sink
+            .state()
+            .active_children()
+            .iter()
+            .map(|n| n.id_str().to_string())
+            .collect();
 
         // -- S3b-4 Task B2: dashboard / append mutex (spec §2) --
         // Both concurrent and dashboard paths create new root structures that
@@ -163,8 +169,6 @@ impl Orchestrator {
             .await;
         }
 
-        // ── Non-dashboard sequential path ──────────────────────────────────
-        //
         let sequential_identity = if append_result.skip_root_insertion {
             None
         } else {
@@ -173,33 +177,15 @@ impl Orchestrator {
                 .next()
         };
 
-        // -- S3b-4 Task B2 call site 4: append fast-path (TS :942-949) --
-        // In append mode we reuse the caller-provided content-root instead of
-        // creating a new root + status bar + dashboard columns.
-        // `skip_status_bar` is naturally satisfied here: the concurrent mobile
-        // scaffold (which injects a status-bar child) is skipped entirely, and
-        // `plan_normalize::normalize` already ran its mobile strip before
-        // `apply_append_context_to_plan` filtered any remaining status-bar subtasks.
         let (root_id, scaffold_baseline) = if append_result.skip_root_insertion {
-            // Append fast-path: reuse the existing target frame as root.
-            // No scaffold InsertSubtree, no status bar, no agent badge.
             let target_id = plan.root_frame.id.clone();
             for subtask in &mut plan.subtasks {
                 subtask.parent_frame_id = Some(target_id.clone());
             }
-            // Capture the pre-generation descendant count of the target frame.
-            // Used by the cleanup's zero-content check below.
             let baseline = descendant_count(sink.state(), &target_id);
             on_progress(Progress::ScaffoldDone);
             (target_id, baseline)
         } else {
-            // Normal scaffold path (unchanged from S3a/S3b-1b).
-            // S3b-4 Task B2 call site 2 (TS :743): guard the mobile status-bar
-            // injection — if append mode had been active `skip_status_bar` would
-            // be true and the mobile scaffold (which injects a status-bar child)
-            // would be suppressed.  Here we're in the non-append branch so
-            // `skip_status_bar` is always false; consuming it silences the
-            // dead-code lint and keeps the guard semantically aligned with TS.
             let effective_is_mobile = norm.is_mobile && !append_result.skip_status_bar;
             match build_scaffold(&plan, effective_is_mobile) {
                 Ok(cmds) => {
@@ -225,12 +211,10 @@ impl Orchestrator {
                     return Err(OrchestratorError::Internal(e));
                 }
             }
-            let Some(rid) = sink
-                .state()
-                .active_children()
-                .get(scaffold_root_index)
-                .map(|n| n.id_str().to_string())
-            else {
+            let Some(rid) = sink.state().active_children().iter().find_map(|n| {
+                let id = n.id_str();
+                (!scaffold_root_ids_before.iter().any(|old| old == id)).then(|| id.to_string())
+            }) else {
                 rollback(sink, &var_snapshot);
                 sink.end_undo_batch();
                 return Err(OrchestratorError::Internal(format!(
