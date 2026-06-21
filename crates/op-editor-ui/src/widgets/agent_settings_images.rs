@@ -29,6 +29,10 @@ const ADD_BTN_W: f32 = 72.0;
 const BTN_H: f32 = 28.0;
 const BODY_GAP: f32 = 14.0;
 const REGISTER_ROW_H: f32 = 36.0;
+// Fixed hit-rect width for the "Register at Openverse" link. Covers the
+// link text + trailing chevron across all locales without reaching the
+// right-aligned Test button.
+const REGISTER_LINK_W: f32 = 220.0;
 const PROFILE_ROW_H: f32 = 32.0;
 const PROFILE_ROW_GAP: f32 = 6.0;
 const PROFILE_ROW_INSET_X: f32 = 8.0;
@@ -48,6 +52,7 @@ const PROVIDER_OPTION_H: f32 = 24.0;
 pub enum ImagesHit {
     ToggleAdvanced,
     FocusSearchField(ImageSearchField),
+    OpenRegisterLink,
     TestSearch,
     AddGenConfig,
     ToggleGenConfigEditor(usize),
@@ -115,6 +120,18 @@ fn advanced_toggle_rect(content: Rect) -> Rect {
 
 fn register_link_y(content: Rect) -> f32 {
     content.origin.y + TITLE_H + ADVANCED_ROW_H + SUBTITLE_H + ROW_H + ROW_VGAP + ROW_H + BODY_GAP
+}
+
+/// Click target for the "Register at Openverse" link (text + chevron).
+/// A fixed `REGISTER_LINK_W` width covers every locale's link label
+/// without reaching the right-aligned Test button.
+pub(super) fn register_link_rect(content: Rect) -> Rect {
+    Rect::xywh(
+        content.origin.x,
+        register_link_y(content),
+        REGISTER_LINK_W,
+        REGISTER_ROW_H,
+    )
 }
 
 #[rustfmt::skip]
@@ -248,6 +265,9 @@ pub fn hit_test(content: Rect, settings: &AgentSettings, scrolled: Point2D) -> I
         }
         if (search_field_rect(content, 1)).contains(scrolled) {
             return ImagesHit::FocusSearchField(ImageSearchField::ClientSecret);
+        }
+        if (register_link_rect(content)).contains(scrolled) {
+            return ImagesHit::OpenRegisterLink;
         }
         if search_test_enabled(settings) && (test_btn_rect(content, settings)).contains(scrolled) {
             return ImagesHit::TestSearch;

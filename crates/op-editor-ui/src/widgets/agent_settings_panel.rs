@@ -83,6 +83,7 @@ pub enum AgentSettingsHit {
     CopyMcpClientConfig,
     ToggleImagesAdvanced,
     FocusSearchField(ImageSearchField),
+    OpenImageRegisterLink,
     TestImageSearch,
     AddGenConfig,
     ToggleGenConfigEditor(usize),
@@ -248,6 +249,9 @@ impl<'a> AgentSettingsPanel<'a> {
                     ImagesHit::ToggleAdvanced => return AgentSettingsHit::ToggleImagesAdvanced,
                     ImagesHit::FocusSearchField(field) => {
                         return AgentSettingsHit::FocusSearchField(field);
+                    }
+                    ImagesHit::OpenRegisterLink => {
+                        return AgentSettingsHit::OpenImageRegisterLink;
                     }
                     ImagesHit::TestSearch => return AgentSettingsHit::TestImageSearch,
                     ImagesHit::AddGenConfig => return AgentSettingsHit::AddGenConfig,

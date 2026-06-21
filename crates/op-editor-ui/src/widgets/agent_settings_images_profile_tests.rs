@@ -644,3 +644,30 @@ fn expanded_image_gen_profile_card_is_inset_from_content_clip_edges() {
         "profile card should leave horizontal room inside the clipped content area"
     );
 }
+
+#[test]
+fn images_register_link_hit_test_returns_open_register_link() {
+    use crate::widgets::agent_settings_images::{self, register_link_rect, ImagesHit};
+    use crate::widgets::agent_settings_panel_geometry::content_rect;
+
+    let mut state = EditorState::default();
+    state.editor_ui.agent_settings.tab = AgentSettingsTab::Images;
+    state.editor_ui.agent_settings.images_advanced_open = true;
+
+    let panel = AgentSettingsPanel::for_editor(&state);
+    let rect = panel.rect(1200.0, 800.0);
+    let content = content_rect(rect);
+
+    // Aim at the centre of the link's click target.
+    let link = register_link_rect(content);
+    let point = Point2D::new(
+        link.origin.x + link.size.x / 2.0,
+        link.origin.y + link.size.y / 2.0,
+    );
+
+    assert_eq!(
+        agent_settings_images::hit_test(content, &state.editor_ui.agent_settings, point),
+        ImagesHit::OpenRegisterLink,
+        "clicking the Register-at-Openverse link should map to OpenRegisterLink"
+    );
+}
