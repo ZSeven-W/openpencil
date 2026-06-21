@@ -31,6 +31,14 @@ NEVER use "OpenPencil", "Pencil", or the tool name as brand/app name in designs.
 You may include 1-2 brief <step> tags before the JSON (optional, keep them SHORT).
 When a user asks non-design questions (explain, suggest colors, give advice), respond in text."#;
 
+const AI_CHAT_DESIGN_QUALITY: &str = r#"AI CHAT DESIGN QUALITY:
+- Mobile top rhythm: keep the header/title group close to the first useful control or content module. On 375-430px screens, the gap from title/header to search, primary action, chart, or first card should usually be 20-32px.
+- Search bars should be a single compact control row. Avoid a large tinted rounded shell containing another rounded input unless the user explicitly asks for that visual.
+- Product card favorite/heart controls are functional icon-buttons. Keep every favorite/heart fully inside its card or image with an 8-12px inset; do not straddle card borders or float into section headings.
+- Do not repeat the same predictable mobile stack of search + categories + orange promo + two cards. Pick a distinct visual concept for the domain before composing the screen.
+- Give the first viewport one signature moment: a crafted hero/product composition, editorial crop, distinctive category rail, refined data module, or other domain-specific focal idea.
+- Bottom navigation is optional and should be integrated with the page flow, not a detached floating pill or extra footer band."#;
+
 /// TS `AGENT_TOOL_INSTRUCTIONS_CRUD` — verbatim port. The system
 /// prompt for tool-executing chat turns (builtin agent loop).
 const AGENT_TOOL_INSTRUCTIONS_CRUD: &str = r##"You are a design editor. Use tools to inspect, modify, insert, and delete elements on the canvas.
@@ -89,7 +97,7 @@ pub fn build_chat_system_prompt(state: &EditorState, user_message: &str) -> Stri
         .map(|s| s.content.as_str())
         .collect::<Vec<_>>()
         .join("\n\n");
-    format!("{CHAT_CORE_PROMPT}\n\n{knowledge}")
+    format!("{CHAT_CORE_PROMPT}\n\n{AI_CHAT_DESIGN_QUALITY}\n\n{knowledge}")
 }
 
 /// Build the agent-mode system prompt for a tool-executing builtin
@@ -239,6 +247,17 @@ mod tests {
         // Generation-phase skills resolve for a design message, so the
         // prompt must be longer than the bare core prompt.
         assert!(prompt.len() > CHAT_CORE_PROMPT.len() + 100);
+    }
+
+    #[test]
+    fn chat_system_prompt_carries_ai_chat_quality_guardrails() {
+        let state = EditorState::new();
+        let prompt = build_chat_system_prompt(&state, "设计一个精致的美食应用移动端首页");
+        assert!(prompt.contains("AI CHAT DESIGN QUALITY"));
+        assert!(prompt.contains("Mobile top rhythm"));
+        assert!(prompt.contains("favorite/heart"));
+        assert!(prompt.contains("Do not repeat the same predictable mobile stack"));
+        assert!(prompt.contains("signature moment"));
     }
 
     #[test]

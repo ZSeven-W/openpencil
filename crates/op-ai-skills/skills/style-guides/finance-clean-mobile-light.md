@@ -15,7 +15,7 @@ Key aesthetics:
 - **Dual-purpose type**: DM Sans for headers and body, DM Mono for financial data and figures
 - **Professional radii**: 8-12px corners keep containers structured and business-appropriate
 - **Data-first layout**: Generous spacing around numbers, clear visual hierarchy for financial metrics
-- **Pill tab bar**: 100px radius bottom navigation with teal active indicator
+- **Integrated bottom nav**: full-width bottom navigation with teal active indicator
 
 ## Color System
 
@@ -27,7 +27,7 @@ Key aesthetics:
 | Card Surface    | #FFFFFF | Cards, account containers, transaction items     |
 | Inset Surface   | #F1F5F9 | Input backgrounds, search bars, grouped sections |
 | Subtle Surface  | #F0FDFA | Positive balance highlight, growth indicators    |
-| Tab Bar Surface | #FFFFFF | Bottom navigation pill fill                      |
+| Tab Bar Surface | #FFFFFF | Integrated bottom navigation surface                      |
 
 ### Text Colors
 

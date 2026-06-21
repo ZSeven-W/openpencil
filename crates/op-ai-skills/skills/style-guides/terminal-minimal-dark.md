@@ -15,7 +15,7 @@ Key aesthetics:
 - **Compact density**: Tight spacing and small radii (3-12px) keep information dense without clutter
 - **Glow indicators**: Status dots and active states use subtle cyan glow effects (blur 8, 40% opacity)
 - **Minimal chrome**: Borders are thin (#1E293B) and surfaces barely separate from the background
-- **Pill tab bar**: Bottom navigation uses a 100px radius pill shape with icon+label layout
+- **Integrated bottom nav**: bottom navigation uses compact icon+label items inside the page flow
 
 ## Color System
 
@@ -26,7 +26,7 @@ Key aesthetics:
 | Page Background | #0A0F1C | Root screen background            |
 | Card Surface    | #111827 | Cards, input fields, list items   |
 | Inset Surface   | #0F172A | Nested containers, code blocks    |
-| Tab Bar Surface | #111827 | Bottom navigation pill background |
+| Tab Bar Surface | #111827 | Integrated bottom navigation surface |
 
 ### Text Colors
 
@@ -149,7 +149,7 @@ Key aesthetics:
 | 12px  | Large cards, modal sheets       | Comfortable but compact      |
 | 100px | Tab bar pill, toggle pills      | Full capsule shape           |
 
-Design rationale: Compact radii (3-12px) maintain a crisp, technical aesthetic. The sharp corners suggest precision engineering, while the slight rounding prevents a harsh brutalist feel. The 100px pill for the tab bar provides a strong contrast and clear affordance for the primary navigation element.
+Design rationale: Compact radii (3-12px) maintain a crisp, technical aesthetic. The sharp corners suggest precision engineering, while the slight rounding prevents a harsh brutalist feel. The bottom navigation should stay compact and integrated, with clear affordance from icon/label contrast rather than a detached pill surface.
 
 ## Icons
 

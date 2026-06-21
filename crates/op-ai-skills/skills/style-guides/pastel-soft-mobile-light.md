@@ -15,7 +15,7 @@ Key aesthetics:
 - **Rounded typography**: Quicksand at all levels, its rounded letterforms echo the soft corner radii
 - **Pillow corners**: 16-24px radii make every card and container feel soft and touchable
 - **Pastel palette**: Muted pinks, lavenders, and warm grays for a cohesive dreamy feel
-- **Pill tab bar**: 100px radius bottom navigation with pink active indicator
+- **Integrated bottom nav**: full-width bottom navigation with pink active indicator
 
 ## Color System
 
@@ -27,7 +27,7 @@ Key aesthetics:
 | Card Surface    | #FFFFFF | Cards, elevated containers                     |
 | Inset Surface   | #FFF0F3 | Input backgrounds, search bars, recessed areas |
 | Soft Surface    | #FCE7F3 | Highlighted sections, feature callouts         |
-| Tab Bar Surface | #FFFFFF | Bottom navigation pill fill                    |
+| Tab Bar Surface | #FFFFFF | Integrated bottom navigation surface                    |
 
 ### Text Colors
 

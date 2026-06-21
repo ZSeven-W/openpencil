@@ -69,6 +69,15 @@ Violating this format will cause a system error.";
 const MINIMAL_SUFFIX: &str =
     "\n\nOUTPUT ONLY ONE JSON OBJECT. No prose. No markdown. No tool calls.";
 
+const PLANNING_QUALITY_GUARDRAILS: &str = r#"
+
+PLANNING QUALITY GUARDRAILS:
+- Do not plan the same predictable mobile stack of search + categories + orange promo + two cards unless the request explicitly asks for that exact convention.
+- Mobile top rhythm: planned header/title/search/primary-content sections should be compact; avoid allocating a huge empty band between the title and first useful module.
+- Plan one signature moment in the first viewport: a crafted hero/product composition, editorial crop, distinctive category rail, refined data module, or other domain-specific focal idea.
+- Bottom navigation is optional. If planned, it should be integrated with the page flow, not a detached floating pill, nested rounded capsule, or extra footer band.
+- Product-card favorite/heart controls must be inside their card/image; never plan them as protruding decorative badges."#;
+
 fn planning_suffix(mode: PlanningMode) -> &'static str {
     match mode {
         PlanningMode::Rich => RICH_SUFFIX,
@@ -153,6 +162,7 @@ pub fn build_orchestrator_prompt(
                 .map(|s| s.content.as_str())
                 .collect::<Vec<_>>()
                 .join("\n\n");
+            system_prompt.push_str(PLANNING_QUALITY_GUARDRAILS);
             system_prompt.push_str(planning_suffix(mode));
             PlanningPrompt {
                 call_request: CallRequest {
@@ -592,6 +602,9 @@ CRITICAL LAYOUT CONSTRAINTS:\n\
             "\nMOBILE VERTICAL RHYTHM: Keep every section root height=\"fit_content\" and do not insert blank spacer frames or empty bands to fill the planned region. Header-to-search spacing should be 12-16px, search-to-next-section 16-24px, major module gaps 24-32px, and internal gaps usually 8/12/16px.",
         );
         user_prompt.push_str(
+            "\nMOBILE TOP RHYTHM: Keep the title/header group close to the first useful module. Do not leave a large blank band above search, categories, promo, charts, or first cards; if you need breathing room, use 20-32px, not a hero-sized void.",
+        );
+        user_prompt.push_str(
             "\nMOBILE SEARCH BAR: If generating search, output exactly one search control surface: 48-52px tall, width=\"fill_container\" inside the content rail, neutral/surface fill, subtle 1px border, cornerRadius 14-18, and a 18-20px search icon. Optional filter/sliders is a separate 44-48px square button beside it. Do not nest an input inside another rounded pill, do not use pink/tinted fills, and do not make the search section itself a huge rounded band.",
         );
         user_prompt.push_str(
@@ -617,6 +630,9 @@ CRITICAL LAYOUT CONSTRAINTS:\n\
         );
         user_prompt.push_str(
             "\nMOBILE NAV SHADOW: Do not add a drop shadow, glow, or detached shadow band behind the bottom navigation. If separation is needed, use a quiet 1px divider or subtle tonal difference that belongs to the page palette.",
+        );
+        user_prompt.push_str(
+            "\nNO FIXED FOOD TEMPLATE: Do not default to the same search + categories + orange promo + two product cards composition. For food, shopping, travel, fitness, finance, and social apps, choose a domain-specific visual concept and vary the first viewport composition.",
         );
     }
 

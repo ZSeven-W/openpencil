@@ -60,11 +60,15 @@ const PLANNING_GUIDE: &str = r#"DESIGN PLANNING:
 const AESTHETIC_QUALITY_GUIDE: &str = r#"AESTHETIC QUALITY BAR:
 - Avoid crowded output. Prefer fewer, stronger modules with visible negative space over filling every pixel.
 - Mobile screens should use one App Content wrapper for the main body. The wrapper owns horizontal padding (16-20px) and vertical gap (20-24px); inner sections should not each add competing gutters.
+- Mobile top rhythm: keep the header/title group and first primary module close. On 375-430px screens, the gap from a greeting/title/header cluster to search, primary action, chart, or first card should usually be 20-32px. Do not leave a blank hero-sized band above the first useful control unless the request explicitly asks for an editorial hero.
 - Keep one primary job per screen. Above the fold, show the title/context, the primary action or search, and at most 2-3 supporting modules.
 - Use a clear type rhythm: one display/title size, one section heading size, one body/caption size. Avoid many near-identical bold text sizes.
 - Reuse one card radius, one card padding, and one shadow treatment within a screen.
 - Use at most two saturated colors. Let hierarchy come from spacing, contrast, and content scale, not decoration.
-- Mobile tab bars are part of the page flow; do not add fake bottom spacers or overlays."#;
+- Product card favorite/heart controls must stay fully inside its card or image with an 8-12px inset. Treat favorite/heart as a functional icon-button, not a floating badge; never use negative x/y, straddle the card edge, or let it overlap the section heading row.
+- Mobile tab bars are part of the page flow; do not add fake bottom spacers or overlays.
+- Pick a distinct visual concept for each new design and build around one signature moment. Do not repeat the same predictable mobile stack of search + categories + orange promo + two cards unless the prompt specifically calls for that pattern.
+- Use the user's domain to vary composition, imagery, palette, rhythm, and interaction affordances; polish should feel intentional rather than template-derived."#;
 
 const RUST_ELEMENT_TOOL_GUIDE: &str = r##"RUST MCP ELEMENT TOOL COMPATIBILITY:
 - This Rust MCP server does not expose the TS `add_*_v1` element-tool family unless those exact tools appear in tools/list. Do not call `add_*` tools just because older prompt text or examples mention them.

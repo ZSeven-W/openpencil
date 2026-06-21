@@ -43,10 +43,12 @@ Rules:
 
 - One primary intent per screen. Everything else is subordinate.
 - First 1-2 elements must answer "where am I" + "what can I do here"
+- Mobile top rhythm: keep the title/header group close to the first useful control or content module. On 375-430px screens, the gap from header/title to search, primary action, chart, or first card should usually be 20-32px. Do not leave an empty hero-sized band unless the prompt explicitly asks for an editorial hero.
 - Title font size must be uniform across ALL screens in the app
 - Design for one-handed use: primary actions in lower half
 - Single vertical scroll (avoid nested scrolls)
 - Touch targets: minimum 44x44px
+- Do not repeat the same predictable mobile stack of search + categories + orange promo + two cards. Choose a distinct concept for the domain and make one signature moment carry the personality.
 
 DO NOT:
 
@@ -54,35 +56,35 @@ DO NOT:
 - Use spacer elements for bottom space (use padding-bottom)
 - Cram multiple competing sections above the fold
 
-## 3) BOTTOM TAB BAR — PILL STYLE
+## 3) BOTTOM TAB BAR — OPTIONAL, INTEGRATED
+
+Do not force bottom navigation into every mobile screen. Use a bottom tab bar only when the product clearly has persistent top-level destinations (Home, Search, Orders, Profile, etc.). If the screen is a single-task flow, omit bottom navigation.
 
 Tab Bar Container:
 
-- Full screen width
-- Padding: [12, 21, 21, 21] (includes home-indicator safe area)
-- Fill: gradient overlay (transparent at top → solid background at 30%)
+- Full screen width and part of the page flow, not a floating overlay
+- Height: 62-72px including safe-area breathing room
+- Background: same page palette or a subtle tonal surface
+- Separation: quiet 1px divider or tonal contrast only; no detached shadow band
 
-Pill (menu items wrapper):
+Nav Surface:
 
-- Height: 62px, width: fill_container
-- Corner radius: 36px
-- Border: 1px solid (theme border color)
-- Inner padding: 4px
+- Use role="bottom-tab-bar"
+- Not a floating pill, not a nested rounded capsule, and not a separate footer band
+- Direct tab item frames stay transparent: no fill, no stroke, no large rounded tile
 
 Tab Items (3-5 tabs, top-level destinations only):
 
 - Width: fill_container, height: fill_container
-- Corner radius: 26px
 - Layout: vertical, gap: 4, centered on both axes
 - Icon: 18px
-- Label: 10px, weight 500-600, UPPERCASE, letterSpacing: 0.5
+- Label: 10-11px, weight 500-600, letterSpacing: 0
 
-Active state: solid fill (accent color) + contrasting icon/label color
+Active state: accent icon/label color or a tiny 2-3px indicator
 Inactive state: transparent background + muted icon/label color
 
 Rules:
 
-- Labels MUST be uppercase
 - Tab switching preserves each tab's navigation state
 - App content must never be obscured by the Tab Bar
 
@@ -92,7 +94,7 @@ Before generating nodes, mentally verify these three layers are accounted for:
 
 1. Status Bar: standard or edge-to-edge?
 2. App Content: what is the header, primary content, action placement, scroll behavior?
-3. Bottom Bar: None or Pill Tab Bar (which tabs)?
+3. Bottom Bar: None or integrated tab bar (which tabs)?
 
 Do NOT output this blueprint as text. Apply it silently through your node structure.
 Your output must remain valid JSON/JSONL only.

@@ -15,7 +15,7 @@ Key aesthetics:
 - **Geometric display type**: Space Grotesk at bold weights for confident, urban headings
 - **Glow depth**: Purple-tinted shadows and translucent surfaces add layers of visual depth
 - **Gradient cards**: Dark purple gradients on featured content for visual energy
-- **Pill tab bar**: 100px radius bottom navigation with purple active glow
+- **Integrated bottom nav**: full-width bottom navigation with purple active glow
 
 ## Color System
 
@@ -28,7 +28,7 @@ Key aesthetics:
 | Elevated Surface | #221340 | Elevated cards, modal sheets       |
 | Gradient Start   | #1A0D2E | Gradient card dark edge            |
 | Gradient End     | #2D1B4E | Gradient card lighter edge         |
-| Tab Bar Surface  | #1A0D2E | Bottom navigation pill fill        |
+| Tab Bar Surface  | #1A0D2E | Integrated bottom navigation surface        |
 
 ### Text Colors
 

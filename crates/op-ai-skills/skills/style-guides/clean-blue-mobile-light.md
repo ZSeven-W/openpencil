@@ -14,7 +14,7 @@ Key aesthetics:
 - **Trusted blue accent**: #2563EB as the sole accent, conveying professionalism and reliability
 - **iOS-native typography**: SF Pro throughout, matching the platform's system font for seamless integration
 - **Comfortable radii**: 12-16px corners feel natural and inviting without being bubbly
-- **Pill tab bar**: 100px radius bottom navigation with blue active indicator
+- **Integrated bottom nav**: full-width bottom navigation with blue active indicator
 - **Clean separation**: Light borders (#E5E7EB) and subtle surfaces provide structure without visual weight
 
 ## Color System
@@ -27,7 +27,7 @@ Key aesthetics:
 | Card Surface    | #FFFFFF | Cards, list containers                           |
 | Inset Surface   | #F3F4F6 | Search bars, input backgrounds, grouped sections |
 | Subtle Surface  | #F9FAFB | Alternating list rows, secondary areas           |
-| Tab Bar Surface | #FFFFFF | Bottom navigation pill fill                      |
+| Tab Bar Surface | #FFFFFF | Integrated bottom navigation surface                      |
 
 ### Text Colors
 
@@ -153,7 +153,7 @@ Key aesthetics:
 | 16px  | Modal sheets, feature cards, hero containers | Maximum standard radius           |
 | 100px | Tab bar pill, toggle pills, round avatars    | Full capsule shape for navigation |
 
-Design rationale: The 8-16px range mirrors iOS design conventions, where corners are soft enough to feel friendly but restrained enough to maintain professionalism. Every interactive element feels natural on a mobile device, with the progressive scale reinforcing visual hierarchy. The 100px pill for the tab bar provides the signature bottom navigation capsule.
+Design rationale: The 8-16px range mirrors iOS design conventions, where corners are soft enough to feel friendly but restrained enough to maintain professionalism. Every interactive element feels natural on a mobile device, with the progressive scale reinforcing visual hierarchy. The bottom navigation should feel integrated with the page palette, using accent color or a tiny indicator for active state.
 
 ## Icons
 

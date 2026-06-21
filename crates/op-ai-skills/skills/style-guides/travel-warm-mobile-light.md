@@ -15,7 +15,7 @@ Key aesthetics:
 - **Travel-journal type**: Outfit typeface balances geometric clarity with warm, approachable character
 - **Postcard radii**: 16-20px corners create soft, photo-friendly containers for destination imagery
 - **Earth-toned palette**: Warm grays and amber tints reinforce the organic, exploratory mood
-- **Pill tab bar**: 100px radius bottom navigation with orange active indicator
+- **Integrated bottom nav**: full-width bottom navigation with orange active indicator
 
 ## Color System
 
@@ -27,7 +27,7 @@ Key aesthetics:
 | Card Surface    | #FFFFFF | Cards, destination tiles, booking containers   |
 | Inset Surface   | #FFF7ED | Input backgrounds, search bars, recessed areas |
 | Subtle Surface  | #FFFBEB | Featured destinations, promotional banners     |
-| Tab Bar Surface | #FFFFFF | Bottom navigation pill fill                    |
+| Tab Bar Surface | #FFFFFF | Integrated bottom navigation surface                    |
 
 ### Text Colors
 

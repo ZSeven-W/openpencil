@@ -15,7 +15,7 @@ Key aesthetics:
 - **Editorial serif display**: Cormorant Garamond at medium weight for elegant, fashion-magazine headings
 - **Sharp precision**: 4-8px corners reflect the deliberate geometry of luxury packaging
 - **High contrast**: White text on dark backgrounds with gold punctuation for dramatic hierarchy
-- **Pill tab bar**: 100px radius bottom navigation with gold active indicator
+- **Integrated bottom nav**: full-width bottom navigation with gold active indicator
 
 ## Color System
 
@@ -27,7 +27,7 @@ Key aesthetics:
 | Card Surface     | #242424 | Standard cards, product tiles          |
 | Elevated Surface | #2E2E2E | Elevated cards, modal sheets, drawers  |
 | Subtle Surface   | #1F1F1F | Inset areas, grouped sections          |
-| Tab Bar Surface  | #242424 | Bottom navigation pill fill            |
+| Tab Bar Surface  | #242424 | Integrated bottom navigation surface            |
 
 ### Text Colors
 

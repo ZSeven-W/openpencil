@@ -126,6 +126,39 @@ mod tests {
     }
 
     #[test]
+    fn mobile_skill_carries_non_template_nav_and_spacing_rules() {
+        let skill = get_skill_by_name("mobile-app").expect("mobile-app skill present");
+        assert!(skill.content.contains("Mobile top rhythm"));
+        assert!(skill.content.contains("Do not force bottom navigation"));
+        assert!(skill.content.contains("Not a floating pill"));
+        assert!(skill
+            .content
+            .contains("Do not repeat the same predictable mobile stack"));
+        assert!(
+            !skill.content.contains("BOTTOM TAB BAR — PILL STYLE"),
+            "mobile skill must not force the old pill-tab template"
+        );
+    }
+
+    #[test]
+    fn mobile_style_guides_do_not_force_pill_nav_template() {
+        for guide in crate::style_guide::style_guide_registry() {
+            if guide.platform == crate::style_guide::Platform::Mobile {
+                assert!(
+                    !guide.content.contains("Pill tab bar"),
+                    "{} must not force the old pill tab bar template",
+                    guide.name
+                );
+                assert!(
+                    !guide.content.contains("bottom navigation pill"),
+                    "{} must not force a detached pill nav",
+                    guide.name
+                );
+            }
+        }
+    }
+
+    #[test]
     fn block_list_and_next_line_array_triggers_load_non_empty() {
         // role-definitions / copywriting open the keyword array on the
         // line after `keywords:`; cjk-typography uses a `- ` block

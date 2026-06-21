@@ -48,6 +48,11 @@ fn get_design_prompt_full_includes_mobile_quality_guardrails() {
             assert!(prompt.contains("MOBILE APP"));
             assert!(prompt.contains("App Content wrapper"));
             assert!(prompt.contains("Avoid crowded output"));
+            assert!(prompt.contains("Mobile top rhythm"));
+            assert!(prompt.contains("favorite/heart"));
+            assert!(prompt.contains("must stay fully inside its card"));
+            assert!(prompt.contains("signature moment"));
+            assert!(prompt.contains("Do not repeat the same predictable mobile stack"));
         }
         other => panic!("expected prompt ok, got {other:?}"),
     }

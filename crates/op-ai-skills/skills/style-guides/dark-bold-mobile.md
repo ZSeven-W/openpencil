@@ -15,7 +15,7 @@ Key aesthetics:
 - **Gradient cards**: Program and feature cards use dark gradient fills for depth and visual interest
 - **Glow effects**: Lime-tinted shadows and glow indicators reinforce the neon aesthetic
 - **Soft industrial radii**: 8-24px corners balance the geometric sharpness with comfortable touch targets
-- **Pill tab bar**: 100px radius bottom navigation with lime active indicator
+- **Integrated bottom nav**: full-width bottom navigation with lime active indicator
 
 ## Color System
 
@@ -28,7 +28,7 @@ Key aesthetics:
 | Elevated Surface | #1A1A1A | Elevated cards, modal sheets         |
 | Gradient Start   | #141414 | Gradient card dark edge              |
 | Gradient End     | #1E1E1E | Gradient card lighter edge           |
-| Tab Bar Surface  | #141414 | Bottom navigation pill fill          |
+| Tab Bar Surface  | #141414 | Integrated bottom navigation surface          |
 
 ### Text Colors
 
@@ -163,7 +163,7 @@ Key aesthetics:
 | 24px  | Hero cards, prominent feature sections      | Maximum standard radius           |
 | 100px | Tab bar pill, toggle pills, round buttons   | Full capsule shape for navigation |
 
-Design rationale: Soft industrial radii (8-24px) balance the bold, geometric typography with comfortable touch targets. The range is wider than the terminal style (3-12px) but more restrained than playful (14-26px), reflecting an urban-industrial aesthetic that is confident without being aggressive. The 100px pill for the tab bar provides the signature bottom navigation capsule.
+Design rationale: Soft industrial radii (8-24px) balance the bold, geometric typography with comfortable touch targets. The range is wider than the terminal style (3-12px) but more restrained than playful (14-26px), reflecting an urban-industrial aesthetic that is confident without being aggressive. The bottom navigation should feel integrated with the page palette, using accent color or a tiny indicator for active state.
 
 ## Icons
 

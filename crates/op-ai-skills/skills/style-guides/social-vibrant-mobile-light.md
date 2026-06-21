@@ -15,7 +15,7 @@ Key aesthetics:
 - **Friendly geometry**: Poppins typeface has naturally rounded letterforms that feel approachable and modern
 - **Generous radii**: 16-24px corners create soft, pillowy containers that invite touch interaction
 - **Gradient buttons**: Violet-to-pink gradients on primary actions create visual magnetism
-- **Pill tab bar**: 100px radius bottom navigation with violet active indicator
+- **Integrated bottom nav**: full-width bottom navigation with violet active indicator
 
 ## Color System
 
@@ -27,7 +27,7 @@ Key aesthetics:
 | Card Surface    | #FFFFFF | Cards, post containers                          |
 | Inset Surface   | #F5F3FF | Input backgrounds, search bars, recessed areas  |
 | Subtle Surface  | #FDF2F8 | Story highlights, featured sections (pink tint) |
-| Tab Bar Surface | #FFFFFF | Bottom navigation pill fill                     |
+| Tab Bar Surface | #FFFFFF | Integrated bottom navigation surface                     |
 
 ### Text Colors
 
