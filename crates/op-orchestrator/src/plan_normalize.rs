@@ -20,6 +20,7 @@ pub struct NormInfo {
 /// 移动端宽度上限(含)—— ≤ 此值视为移动端单屏。
 const MOBILE_MAX_WIDTH: f64 = 480.0;
 const MOBILE_DEFAULT_HEIGHT: f64 = 812.0;
+const MOBILE_DEFAULT_ROOT_GAP: f64 = 20.0;
 
 /// subtask 的 id / label 命中即视为"状态栏"区块 —— 移动端由
 /// scaffold 注入固定状态栏,plan 里若带状态栏 subtask 则剔除。
@@ -124,7 +125,9 @@ pub fn normalize(plan: &mut OrchestratorPlan, req: &DesignRequest) -> NormInfo {
 
     if is_mobile {
         plan.root_frame.layout = Some("vertical".into());
-        plan.root_frame.gap = Some(0.0);
+        if plan.root_frame.gap.unwrap_or(0.0) <= 0.0 {
+            plan.root_frame.gap = Some(MOBILE_DEFAULT_ROOT_GAP);
+        }
         plan.root_frame.padding = Some(0.0);
         if plan.root_frame.height <= 0.0 {
             plan.root_frame.height = MOBILE_DEFAULT_HEIGHT;
@@ -249,7 +252,7 @@ mod tests {
     }
 
     #[test]
-    fn normalize_mobile_forces_vertical_root_layout() {
+    fn normalize_mobile_forces_vertical_root_layout_and_keeps_positive_gap() {
         let mut p = plan(390.0, vec![subtask("hero", "Hero")]);
         p.root_frame.layout = Some("none".into());
         p.root_frame.gap = Some(12.0);
@@ -258,8 +261,18 @@ mod tests {
         normalize(&mut p, &req());
 
         assert_eq!(p.root_frame.layout.as_deref(), Some("vertical"));
-        assert_eq!(p.root_frame.gap, Some(0.0));
+        assert_eq!(p.root_frame.gap, Some(12.0));
         assert_eq!(p.root_frame.padding, Some(0.0));
+    }
+
+    #[test]
+    fn normalize_mobile_zero_gap_uses_section_spacing() {
+        let mut p = plan(390.0, vec![subtask("hero", "Hero")]);
+        p.root_frame.gap = Some(0.0);
+
+        normalize(&mut p, &req());
+
+        assert_eq!(p.root_frame.gap, Some(20.0));
     }
 
     #[test]

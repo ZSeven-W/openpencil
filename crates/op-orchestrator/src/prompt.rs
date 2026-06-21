@@ -535,6 +535,13 @@ Overall design: {}\n\n\
 CRITICAL LAYOUT CONSTRAINTS:\n\
 - {}\n\
 - Target content amount: ~{:.0}px tall. Generate enough elements to fill this area.\n\
+- DENSITY: Do NOT pack the area edge-to-edge. Prefer fewer, stronger modules with visible negative space; most sections should have 3-5 primary rows/cards at most.\n\
+- VISUAL HIERARCHY: Each section must have one clear focal element, secondary supporting text, and quieter metadata. Avoid equal-weight blocks competing for attention.\n\
+- SPACING CONSISTENCY: Use a single outer content gutter and consistent internal gaps. Do not create nested wrappers with conflicting padding or content touching edges.\n\
+- CRAFT POLISH: Add refinement through restrained 1px low-contrast borders, tonal surfaces, small state badges, and subtle shadows. Avoid template-like thick outlines, giant pills, or flat blocks with no micro-detail.\n\
+- MEDIA CONSISTENCY: Use photographic images sparingly and keep them visually consistent in subject, crop, tone, and radius. For food/category UI, prefer cohesive icon or illustration tiles over random unrelated photos.\n\
+- ICON SCALE: Icons support content; keep most icons 16-22px inside 36-48px controls. Avoid oversized circular icon bubbles or repeated identical icon treatments unless the design brief calls for them.\n\
+- ACCENT DISCIPLINE: Reserve saturated accent color for one primary CTA or promo plus small highlights. Do not apply it to every icon, label, border, and large surface at once.\n\
 - {}\n\
 - NEVER set x or y on children inside layout frames.\n\
 - Use \"fill_container\" for children that stretch, \"fit_content\" for shrink-wrap sizing.\n\
