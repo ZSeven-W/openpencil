@@ -188,6 +188,29 @@ mod mixed_corner_radius_tests {
     }
 
     #[test]
+    fn active_nav_pill_not_flattened_to_square_siblings() {
+        // The desktop's pre-validator runs this lint AFTER apply_tree_heuristics
+        // rounds the active nav tab to a 999 pill. Among its square (cr=0)
+        // inactive siblings the modal is 0, so without a pill guard the lint
+        // would "fix" the 999 back to 0 — exactly the active-nav-tab-reset-to-
+        // square bug. A pill radius (>= 40) is intentional and must be left alone.
+        let root = node(json!({
+            "type": "frame", "id": "row", "layout": "horizontal",
+            "children": [
+                {"type": "frame", "id": "home", "cornerRadius": 999,
+                 "fill": [{"type": "solid", "color": "#F97316"}]},
+                {"type": "frame", "id": "orders", "cornerRadius": 0},
+                {"type": "frame", "id": "profile", "cornerRadius": 0}
+            ]
+        }));
+        let issues = detect_mixed_sibling_corner_radius(&root);
+        assert!(
+            !issues.iter().any(|i| i.node_id == "home"),
+            "active pill nav tab (999) must NOT be flagged to flatten to its square siblings, got {issues:?}"
+        );
+    }
+
+    #[test]
     fn ignores_three_way_split_without_modal() {
         let root = node(json!({
             "type": "frame", "id": "root",

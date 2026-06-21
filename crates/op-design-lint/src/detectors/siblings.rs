@@ -203,8 +203,31 @@ fn check_consistency(
 
     let majority_value = values[majority_idx].1.value.clone();
     let property_fix = fix_property_for(property);
+    // A PILL cornerRadius (>= 40) is an INTENTIONAL design choice — a
+    // fully-rounded active nav tab / toggle highlight — NOT a sibling
+    // inconsistency. Skip cornerRadius normalization when the outlier OR the
+    // majority is a pill, so this lint never flattens a rounded active nav tab
+    // back to its square siblings (the active-nav-tab-reset-to-square bug) nor
+    // rounds square siblings up to a pill. Card-scale radii (8–16) still
+    // normalize. (Mirrors the guard in `detect_mixed_sibling_corner_radius`.)
+    const PILL_RADIUS: f64 = 40.0;
+    let is_corner = property == "cornerRadius";
+    let majority_is_pill = is_corner
+        && majority_value
+            .as_f64()
+            .map(|v| v >= PILL_RADIUS)
+            .unwrap_or(false);
     for (idx, (_, group)) in values.iter().enumerate() {
         if idx == majority_idx {
+            continue;
+        }
+        let group_is_pill = is_corner
+            && group
+                .value
+                .as_f64()
+                .map(|v| v >= PILL_RADIUS)
+                .unwrap_or(false);
+        if is_corner && (group_is_pill || majority_is_pill) {
             continue;
         }
         for node_id_str in &group.nodes {
@@ -278,6 +301,17 @@ fn walk_mixed_corner_radius(node: &PenNode, issues: &mut Vec<Issue>) {
             for sibling in &siblings {
                 let num = corner_radius_numeric(sibling);
                 if num != modal {
+                    // A PILL radius (>= 40) is an INTENTIONAL design choice — a
+                    // fully-rounded active nav tab / toggle highlight — not a
+                    // sibling inconsistency to flatten. Skip when either the
+                    // sibling OR the modal is a pill, so the validator never
+                    // resets a rounded active nav tab back to a square (the
+                    // round-then-lint-flattens bug) nor forces square siblings
+                    // into pills. Card-scale radii (8–16) still normalize.
+                    const PILL_RADIUS: f64 = 40.0;
+                    if num >= PILL_RADIUS || modal >= PILL_RADIUS {
+                        continue;
+                    }
                     issues.push(Issue {
                         node_id: node_id(sibling).to_string(),
                         category: IssueCategory::MixedSiblingCornerRadius,
