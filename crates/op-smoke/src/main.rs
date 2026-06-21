@@ -453,8 +453,19 @@ async fn main() -> std::process::ExitCode {
         }
     };
 
+    // `OPENPENCIL_SMOKE_STARTER=1` seeds the fresh-canvas starter frame so a
+    // smoke run exercises the TS `replaceEmptyFrame` reuse path (the desktop
+    // GUI always carries this single empty starter); default stays the empty
+    // `new()` doc so existing traces are unaffected.
+    let seed_starter = std::env::var("OPENPENCIL_SMOKE_STARTER")
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false);
     let mut sink = InlineDocSink {
-        state: EditorState::new(),
+        state: if seed_starter {
+            EditorState::starter()
+        } else {
+            EditorState::new()
+        },
     };
     let request = DesignRequest {
         prompt,
@@ -462,7 +473,10 @@ async fn main() -> std::process::ExitCode {
         provider: None,
         design_md: sink.state.doc.design_md.clone(),
         append_context: None,
-        concurrency: 1,
+        concurrency: std::env::var("OPENPENCIL_SMOKE_CONCURRENCY")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(1),
         validation_enabled: false,
         visual_ref_enabled: false,
     };
