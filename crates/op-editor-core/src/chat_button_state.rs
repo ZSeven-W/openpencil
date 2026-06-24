@@ -26,10 +26,14 @@ pub enum ChatHeaderButton {
 pub enum ChatFooterButton {
     /// Bottom-left model chip — opens the model picker.
     ModelPicker,
+    /// Speed/effort chip (⚡ + label) — cycles the effort level.
+    SpeedChip,
     /// Compact Agent Team size chip in the bottom toolbar.
     AgentTeam,
     /// Paperclip attachment button.
     AddAttachment,
+    /// Palette button — currently inert (#27 future affordance).
+    Palette,
     /// Send button in its normal idle state.
     Send,
     /// Stop button shown while a response streams.

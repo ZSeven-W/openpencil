@@ -799,6 +799,9 @@ impl EditorState {
                 replacements,
             } => self.cmd_replace_all_matching_properties(&page_id, &parent_ids, &replacements),
             EditorCommand::Batch { commands } => self.cmd_batch(commands),
+            EditorCommand::MergeAppState { plan_idx, state } => {
+                self.merge_app_state(plan_idx, state)
+            }
             // `promote_legacy_widgets` owns its history snapshot — it
             // pushes onto the undo stack only when at least one frame is
             // promoted, so a zero-promotion run is a clean no-op. The
@@ -806,5 +809,59 @@ impl EditorState {
             // dedicated method; here `apply` reports only changed-or-not.
             EditorCommand::PromoteLegacyWidgets => self.promote_legacy_widgets().changed(),
         }
+    }
+
+    /// Apply [`EditorCommand::MergeAppState`]. Backward-compat: never
+    /// overwrites a key that already lived in the document root before
+    /// this run; among generation-added keys the lower `plan_idx` wins.
+    ///
+    /// Order-independence is achieved via `self.app_state_owner`: a
+    /// side map of `key → owning_plan_idx` for every key written during
+    /// this session. On a new key the owner is recorded and the value is
+    /// inserted. On a conflicting key the incoming `plan_idx` is compared
+    /// to the registered owner; if it is strictly lower it replaces both
+    /// the owner record and the document value.
+    fn merge_app_state(
+        &mut self,
+        plan_idx: usize,
+        incoming: std::collections::BTreeMap<String, jian_ops_schema::state::StateEntry>,
+    ) -> bool {
+        if incoming.is_empty() {
+            return false;
+        }
+        let root = self
+            .doc
+            .state
+            .get_or_insert_with(std::collections::BTreeMap::new);
+        let mut changed = false;
+        for (key, entry) in incoming {
+            match self.app_state_owner.entry(key.clone()) {
+                std::collections::btree_map::Entry::Vacant(slot) => {
+                    // Pre-existing doc-root key: owned by the file, skip.
+                    if root.contains_key(&key) {
+                        continue;
+                    }
+                    root.insert(key, entry);
+                    slot.insert(plan_idx);
+                    changed = true;
+                }
+                std::collections::btree_map::Entry::Occupied(mut slot) => {
+                    // Generation-added key: lower plan_idx wins.
+                    if plan_idx < *slot.get() {
+                        tracing::warn!(
+                            target: "op.skills",
+                            key = %key,
+                            winning_plan_idx = plan_idx,
+                            losing_plan_idx = *slot.get(),
+                            "MergeAppState key conflict — lower plan_idx wins"
+                        );
+                        root.insert(key, entry);
+                        slot.insert(plan_idx);
+                        changed = true;
+                    }
+                }
+            }
+        }
+        changed
     }
 }

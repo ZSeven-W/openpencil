@@ -3,7 +3,8 @@
 use crate::types::{CallRequest, DocSink, LlmChunk, LlmClient, LlmError};
 use futures::stream::BoxStream;
 use futures::Stream;
-use op_editor_core::{EditorCommand, EditorState};
+use jian_ops_schema::node::PenNode;
+use op_editor_core::{EditorCommand, EditorState, NodeId};
 use std::collections::VecDeque;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -34,6 +35,22 @@ impl DocSink for VecDocSink {
     fn apply(&mut self, cmd: EditorCommand) -> bool {
         self.applied.push(cmd.clone());
         self.state.apply(cmd)
+    }
+    /// Override: delegate to `EditorState::insert_subtree_returning_root_ids`
+    /// so the immediate-apply path surfaces real post-remap root ids.
+    fn insert_subtree_returning_root_ids(
+        &mut self,
+        nodes: Vec<PenNode>,
+        parent_id: &NodeId,
+    ) -> Option<Vec<String>> {
+        // Record the command in the applied log before the live apply.
+        self.applied.push(EditorCommand::InsertSubtree {
+            nodes: nodes.clone(),
+            parent_id: parent_id.clone(),
+            page_id: None,
+        });
+        self.state
+            .insert_subtree_returning_root_ids(nodes, parent_id)
     }
     fn begin_undo_batch(&mut self) {
         self.batch_depth += 1;

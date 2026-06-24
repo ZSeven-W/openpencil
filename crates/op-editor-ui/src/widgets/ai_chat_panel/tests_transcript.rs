@@ -80,7 +80,7 @@ fn hit_test_resolves_fixed_checklist_header_toggle() {
 
     let panel = AIChatPlaceholder::from_editor(&s);
     let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
-    let checklist_h = fixed_checklist_height(&s.chat.messages, s.chat.checklist_collapsed);
+    let checklist_h = fixed_checklist_height(&s.chat, s.chat.checklist_collapsed);
     let checklist = fixed_checklist_rect(rect, INPUT_BASE_HEIGHT, checklist_h);
     let p = Point2D::new(
         checklist.origin.x + checklist.size.x / 2.0,
@@ -205,8 +205,9 @@ fn paint_model_chip_uses_key_glyph_for_builtin_model() {
 
     panel.paint(&mut cx, rect);
 
+    // In #27 layout the logo sits 8px inside the pill left edge (pill starts at PAD).
     let key_top_left = Point2D::new(
-        rect.origin.x + PAD,
+        rect.origin.x + PAD + 8.0,
         rect.origin.y + toolbar_center_y() - 7.0,
     );
     let key_strokes = backend
@@ -258,4 +259,32 @@ fn paint_draws_header_divider_and_message_body_background() {
             sep_y - (rect.origin.y + HEADER_HEIGHT + 1.0),
         )
     ));
+}
+
+#[test]
+fn hit_test_resolves_checklist_item_chevron() {
+    use crate::widgets::ai_chat_checklist::{
+        checklist_item_chevron_rect, fixed_checklist_list_rect,
+    };
+    use op_editor_core::ChatMessage;
+
+    let mut s = EditorState::new();
+    let mut msg = ChatMessage::assistant_streaming();
+    msg.thinking = "• Subtask `header` — Header\n  ▸ skills: cjk-typography".into();
+    s.chat.messages = vec![msg];
+
+    let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
+    let checklist_h = fixed_checklist_height(&s.chat, s.chat.checklist_collapsed);
+    let checklist = fixed_checklist_rect(rect, INPUT_BASE_HEIGHT, checklist_h);
+    let list = fixed_checklist_list_rect(checklist);
+    let chevron =
+        checklist_item_chevron_rect(list.origin.x + PAD, list.origin.y, list.size.x - PAD * 2.0);
+    let point = Point2D::new(
+        chevron.origin.x + chevron.size.x / 2.0,
+        chevron.origin.y + chevron.size.y / 2.0,
+    );
+
+    let panel = AIChatPlaceholder::from_editor(&s);
+    let hit = panel.hit_test(rect, point);
+    assert_eq!(hit, Some(AIChatHit::ToggleChecklistItem(0)));
 }

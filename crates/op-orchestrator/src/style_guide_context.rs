@@ -68,6 +68,7 @@ pub(crate) fn infer_tags_from_prompt(prompt: &str) -> Vec<String> {
             "外卖",
         ],
     ) {
+        push("food");
         push("warm-tones");
         push("friendly");
     }
@@ -257,6 +258,7 @@ pub(crate) fn infer_tags_from_prompt(prompt: &str) -> Vec<String> {
 /// industry tag —— 命中得 +30(其余 tag +10)。
 const INDUSTRY_TAGS: &[&str] = &[
     "warm-tones",
+    "food",
     "wellness",
     "fintech",
     "developer",
@@ -305,73 +307,23 @@ pub(crate) fn rank_style_guides_for_prompt(
     scored.into_iter().map(|(g, _)| g).collect()
 }
 
-const STYLE_GUIDE_METADATA_TAG_LIMIT: usize = 4;
-const STYLE_GUIDE_SNIPPET_TAG_LIMIT: usize = 6;
-
-/// 一行 guide 元数据 —— port of `formatGuideMetadataLine`。
-/// `- {name} [{platform}]{bg} :: {tags}`。Rich 取 4 tag,Minimal 取 3。
-pub(crate) fn format_guide_metadata_line(guide: &ParsedStyleGuide, mode: PlanningMode) -> String {
-    let values = extract_style_guide_values(&guide.content);
-    let bg = values
-        .colors
-        .background
-        .as_ref()
-        .map(|b| format!(" bg:{b}"))
-        .unwrap_or_default();
-    let tag_limit = match mode {
-        PlanningMode::Rich => STYLE_GUIDE_METADATA_TAG_LIMIT,
-        // Compact mode never reaches this formatter (compact planning prompts
-        // don't use the style-guide catalog); handled for exhaustiveness.
-        PlanningMode::Minimal | PlanningMode::Compact => 3,
-    };
-    let tags = guide
-        .tags
-        .iter()
-        .take(tag_limit)
-        .cloned()
-        .collect::<Vec<_>>()
-        .join(", ");
-    format!(
-        "- {} [{}]{} :: {}",
-        guide.name,
-        guide.platform.as_str(),
-        bg,
-        tags
-    )
+/// 一行 guide 元数据 —— softened (user direction 2026-06-23): names only.
+/// The catalog is a menu of `styleGuideName` choices; the explicit type-tags
+/// and background color are intentionally dropped so the style guide no longer
+/// dictates "what type / what color" — the model picks palette from the prompt.
+pub(crate) fn format_guide_metadata_line(guide: &ParsedStyleGuide, _mode: PlanningMode) -> String {
+    format!("- {} [{}]", guide.name, guide.platform.as_str())
 }
 
-/// 一份 guide 的详细 snippet —— port of `formatGuideSnippet`。
-/// 多行块,无数据的行丢弃。
+/// 一份 guide 的详细 snippet —— softened (user direction 2026-06-23): FONT
+/// direction only. Colors, type-tags, and corner-radius are intentionally
+/// dropped so the catalog suggests typography but leaves palette + shape to the
+/// model (the brand-accent-consistency RULE in the design-system / jsonl skills
+/// still keeps whatever accent it picks coherent). No-data → heading only.
 pub(crate) fn format_guide_snippet(guide: &ParsedStyleGuide) -> String {
     let v = extract_style_guide_values(&guide.content);
     let mut lines: Vec<String> = vec![format!("### {} [{}]", guide.name, guide.platform.as_str())];
 
-    let tags = guide
-        .tags
-        .iter()
-        .take(STYLE_GUIDE_SNIPPET_TAG_LIMIT)
-        .cloned()
-        .collect::<Vec<_>>()
-        .join(", ");
-    if !tags.is_empty() {
-        lines.push(format!("tags: {tags}"));
-    }
-
-    let mut color_parts: Vec<String> = Vec::new();
-    if let Some(b) = &v.colors.background {
-        color_parts.push(format!("bg={b}"));
-    }
-    if let Some(s) = &v.colors.surface {
-        color_parts.push(format!("surface={s}"));
-    }
-    if let Some(a) = &v.colors.accent {
-        color_parts.push(format!("accent={a}"));
-    }
-    if !color_parts.is_empty() {
-        lines.push(format!("colors: {}", color_parts.join(", ")));
-    }
-
-    // TS formatGuideSnippet's fonts line is display+body only — data_font intentionally not emitted.
     let mut font_parts: Vec<String> = Vec::new();
     if let Some(d) = &v.typography.display_font {
         font_parts.push(format!("display={d}"));
@@ -381,17 +333,6 @@ pub(crate) fn format_guide_snippet(guide: &ParsedStyleGuide) -> String {
     }
     if !font_parts.is_empty() {
         lines.push(format!("fonts: {}", font_parts.join(", ")));
-    }
-
-    let mut radius_parts: Vec<String> = Vec::new();
-    if let Some(c) = v.radius.card {
-        radius_parts.push(format!("card={c}"));
-    }
-    if let Some(b) = v.radius.button {
-        radius_parts.push(format!("button={b}"));
-    }
-    if !radius_parts.is_empty() {
-        lines.push(format!("radius: {}", radius_parts.join(", ")));
     }
 
     lines.join("\n")
@@ -599,8 +540,20 @@ mod tests {
     #[test]
     fn industry_food_pushes_two_tags() {
         let t = infer_tags_from_prompt("a food delivery app");
+        assert!(t.contains(&"food".to_string()));
         assert!(t.contains(&"warm-tones".to_string()));
         assert!(t.contains(&"friendly".to_string()));
+    }
+
+    #[test]
+    fn food_delivery_ranks_warm_food_mobile_guide_first() {
+        let tags = infer_tags_from_prompt("a food delivery mobile app");
+        let ranked = rank_style_guides_for_prompt(&tags, Platform::Mobile);
+        assert_eq!(
+            ranked.first().map(|guide| guide.name.as_str()),
+            Some("warm-food-mobile-light"),
+            "food delivery should prefer the food-specific mobile guide"
+        );
     }
 
     #[test]
@@ -656,39 +609,27 @@ mod tests {
     }
 
     #[test]
-    fn metadata_line_shape() {
+    fn metadata_line_is_name_only_no_type_or_color() {
+        // Softened: names only — no `:: tags` (type) and no ` bg:` (color).
         let g = &style_guide_registry()[0];
         let line = format_guide_metadata_line(g, PlanningMode::Rich);
-        // `- {name} [{platform}]...  :: ...`
-        assert!(line.starts_with(&format!("- {} [", g.name)));
-        assert!(line.contains(" :: "));
+        assert_eq!(line, format!("- {} [{}]", g.name, g.platform.as_str()));
+        assert!(!line.contains(" :: "), "type tags must be dropped: {line}");
+        assert!(!line.contains(" bg:"), "bg color must be dropped: {line}");
     }
 
     #[test]
-    fn metadata_line_emits_bg_segment() {
-        // Find a registry guide whose content yields an extractable background;
-        // its metadata line must carry the ` bg:` segment.
-        let with_bg = style_guide_registry()
-            .iter()
-            .find(|g| {
-                extract_style_guide_values(&g.content)
-                    .colors
-                    .background
-                    .is_some()
-            })
-            .expect("at least one style guide should expose a background color");
-        let line = format_guide_metadata_line(with_bg, PlanningMode::Rich);
-        assert!(
-            line.contains(" bg:"),
-            "metadata line missing bg segment: {line}"
-        );
-    }
-
-    #[test]
-    fn snippet_has_heading_and_tags() {
+    fn snippet_drops_color_type_radius_keeps_fonts() {
+        // Softened: the snippet suggests font direction only — no colors,
+        // no type tags, no radius.
         let g = &style_guide_registry()[0];
         let snip = format_guide_snippet(g);
         assert!(snip.starts_with(&format!("### {} [", g.name)));
-        assert!(snip.contains("tags:"));
+        assert!(
+            !snip.contains("tags:"),
+            "type tags must be dropped:\n{snip}"
+        );
+        assert!(!snip.contains("colors:"), "colors must be dropped:\n{snip}");
+        assert!(!snip.contains("radius:"), "radius must be dropped:\n{snip}");
     }
 }

@@ -296,7 +296,19 @@ pub fn build_scaffold(
     plan: &OrchestratorPlan,
     is_mobile: bool,
 ) -> Result<Vec<EditorCommand>, String> {
-    let node = build_scaffold_root_node(plan, is_mobile, &plan.root_frame.id)?;
+    build_scaffold_at(plan, is_mobile, SAFE_CANVAS_X, SAFE_CANVAS_Y)
+}
+
+/// Same as [`build_scaffold`], but places the newly inserted root at an
+/// explicit canvas position. Used for follow-on screens so they land beside the
+/// existing app screen instead of overlapping the starter coordinates.
+pub(crate) fn build_scaffold_at(
+    plan: &OrchestratorPlan,
+    is_mobile: bool,
+    x: f64,
+    y: f64,
+) -> Result<Vec<EditorCommand>, String> {
+    let node = build_scaffold_root_node_at(plan, is_mobile, &plan.root_frame.id, x, y)?;
     Ok(vec![EditorCommand::InsertSubtree {
         nodes: vec![node],
         parent_id: NodeId::NONE,
@@ -315,7 +327,8 @@ pub fn build_scaffold_reusing(
     is_mobile: bool,
     reuse_id: &str,
 ) -> Result<Vec<EditorCommand>, String> {
-    let node = build_scaffold_root_node(plan, is_mobile, reuse_id)?;
+    let node =
+        build_scaffold_root_node_at(plan, is_mobile, reuse_id, SAFE_CANVAS_X, SAFE_CANVAS_Y)?;
     Ok(vec![EditorCommand::ReplaceSubtree {
         node_id: NodeId::new(reuse_id.to_string()),
         node: Box::new(node),
@@ -327,10 +340,12 @@ pub fn build_scaffold_reusing(
 /// Build the root-frame node (status-bar child injected when `is_mobile`),
 /// stamping `root_id` as its id so the caller can either insert it fresh or
 /// replace an existing frame's slot with it.
-fn build_scaffold_root_node(
+fn build_scaffold_root_node_at(
     plan: &OrchestratorPlan,
     is_mobile: bool,
     root_id: &str,
+    x: f64,
+    y: f64,
 ) -> Result<PenNode, String> {
     let rf = &plan.root_frame;
     let layout = rf.layout.as_deref().unwrap_or("vertical");
@@ -341,8 +356,8 @@ fn build_scaffold_root_node(
     build_root_frame_node(
         root_id,
         &rf.name,
-        SAFE_CANVAS_X,
-        SAFE_CANVAS_Y,
+        x,
+        y,
         rf.width,
         rf.height,
         layout,

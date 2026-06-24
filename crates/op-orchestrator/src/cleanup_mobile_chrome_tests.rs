@@ -2,6 +2,7 @@ use super::*;
 use crate::plan::{OrchestratorPlan, RootFrameSpec};
 use crate::test_support::VecDocSink;
 use jian_ops_schema::node::container::CornerRadius;
+use serde_json::json;
 
 fn plan() -> OrchestratorPlan {
     OrchestratorPlan {
@@ -255,6 +256,87 @@ fn cleanup_strips_misrolled_mobile_search_bar_wrapper() {
 }
 
 #[test]
+fn cleanup_anchors_short_mobile_bottom_nav_to_viewport_bottom() {
+    let mut sink = VecDocSink::new();
+    let tree: PenNode = serde_json::from_str(
+        r##"{
+            "type": "frame",
+            "id": "root",
+            "name": "Food App Home",
+            "width": 390,
+            "height": 844,
+            "layout": "vertical",
+            "gap": 20,
+            "fill": [{ "type": "solid", "color": "#FFF8F0" }],
+            "children": [
+                {
+                    "type": "frame",
+                    "id": "status",
+                    "name": "Status Bar",
+                    "role": "status-bar",
+                    "width": "fill_container",
+                    "height": 62
+                },
+                {
+                    "type": "frame",
+                    "id": "content",
+                    "name": "Popular Near You",
+                    "role": "section",
+                    "width": "fill_container",
+                    "height": "fit_content",
+                    "layout": "vertical",
+                    "children": [
+                        {
+                            "type": "frame",
+                            "id": "restaurant-card",
+                            "name": "Restaurant Card",
+                            "width": "fill_container",
+                            "height": 420
+                        }
+                    ]
+                },
+                {
+                    "type": "frame",
+                    "id": "bottom-nav",
+                    "name": "Bottom Navigation",
+                    "role": "bottom-tab-bar",
+                    "width": "fill_container",
+                    "height": 64,
+                    "layout": "horizontal",
+                    "children": [
+                        {"type": "frame", "id": "home-tab", "name": "Home", "role": "tab", "width": "fill_container", "height": "fill_container"},
+                        {"type": "frame", "id": "search-tab", "name": "Search", "role": "tab", "width": "fill_container", "height": "fill_container"},
+                        {"type": "frame", "id": "orders-tab", "name": "Orders", "role": "tab", "width": "fill_container", "height": "fill_container"},
+                        {"type": "frame", "id": "profile-tab", "name": "Profile", "role": "tab", "width": "fill_container", "height": "fill_container"}
+                    ]
+                }
+            ]
+        }"##,
+    )
+    .expect("mobile bottom nav json");
+    sink.state.apply(EditorCommand::InsertAuthoredSubtree {
+        nodes: vec![tree],
+        parent_id: NodeId::NONE,
+        page_id: None,
+    });
+    sink.applied.clear();
+
+    run_cleanup_passes(&mut sink, &plan(), &["root"]);
+
+    assert!(
+        sink.applied.iter().any(|cmd| matches!(
+            cmd,
+            EditorCommand::SetNodeLayoutProp { node_id, property, value }
+                if node_id.as_str() == "content"
+                    && property == "height"
+                    && matches!(value, LayoutPropValue::Keyword(keyword) if keyword == "fill_container")
+        )),
+        "cleanup should make the content before a short mobile bottom nav fill remaining viewport height: {:?}",
+        sink.applied
+    );
+}
+
+#[test]
 fn cleanup_strips_mobile_bottom_nav_pill_chrome() {
     let mut sink = VecDocSink::new();
     let tree: PenNode = serde_json::from_str(
@@ -399,4 +481,390 @@ fn cleanup_strips_mobile_bottom_nav_pill_chrome() {
             _ => panic!("tab should be a frame"),
         }
     }
+}
+
+#[test]
+fn cleanup_normalizes_mobile_bottom_nav_spacing_and_tab_slots() {
+    let mut sink = VecDocSink::new();
+    let tree: PenNode = serde_json::from_str(
+        r##"{
+            "type": "frame",
+            "id": "root",
+            "name": "Food App Home",
+            "width": 390,
+            "height": 844,
+            "layout": "vertical",
+            "fill": [{ "type": "solid", "color": "#FFF8F0" }],
+            "children": [
+                {
+                    "type": "frame",
+                    "id": "content",
+                    "name": "Content",
+                    "width": "fill_container",
+                    "height": 760,
+                    "children": []
+                },
+                {
+                    "type": "frame",
+                    "id": "bottom-nav",
+                    "name": "Bottom Navigation",
+                    "role": "bottom-tab-bar",
+                    "width": 280,
+                    "height": 64,
+                    "layout": "horizontal",
+                    "padding": [0, 0],
+                    "gap": 20,
+                    "children": [
+                        {
+                            "type": "frame",
+                            "id": "home-tab",
+                            "name": "Home Tab",
+                            "role": "tab",
+                            "width": 44,
+                            "height": 56,
+                            "layout": "vertical",
+                            "gap": 10,
+                            "children": []
+                        },
+                        {
+                            "type": "frame",
+                            "id": "search-tab",
+                            "name": "Search Tab",
+                            "role": "tab",
+                            "width": 44,
+                            "height": 56,
+                            "layout": "vertical",
+                            "gap": 10,
+                            "children": []
+                        },
+                        {
+                            "type": "frame",
+                            "id": "orders-tab",
+                            "name": "Orders Tab",
+                            "role": "tab",
+                            "width": 44,
+                            "height": 56,
+                            "layout": "vertical",
+                            "gap": 10,
+                            "children": []
+                        },
+                        {
+                            "type": "frame",
+                            "id": "profile-tab",
+                            "name": "Profile Tab",
+                            "role": "tab",
+                            "width": 44,
+                            "height": 56,
+                            "layout": "vertical",
+                            "gap": 10,
+                            "children": []
+                        }
+                    ]
+                }
+            ]
+        }"##,
+    )
+    .expect("mobile nav json");
+    sink.state.apply(EditorCommand::InsertAuthoredSubtree {
+        nodes: vec![tree],
+        parent_id: NodeId::NONE,
+        page_id: None,
+    });
+    sink.applied.clear();
+
+    run_cleanup_passes(&mut sink, &plan(), &["root"]);
+
+    let root = sink
+        .state
+        .active_children()
+        .iter()
+        .find(|node| node.id_str() == "root")
+        .expect("root survives");
+    let nav = find_node(root, "bottom-nav").expect("nav survives");
+    let nav_json = serde_json::to_value(nav).expect("nav serializes");
+    assert_eq!(nav_json["width"], json!(390.0));
+    assert_eq!(nav_json["height"], json!(72.0));
+    assert_eq!(nav_json["gap"], json!(0.0));
+    assert_eq!(nav_json["padding"], json!([8.0, 16.0, 8.0, 16.0]));
+    assert_eq!(nav_json["justifyContent"], json!("space_between"));
+    assert_eq!(nav_json["alignItems"], json!("center"));
+
+    for id in ["home-tab", "search-tab", "orders-tab", "profile-tab"] {
+        let tab = find_node(root, id).expect("tab survives");
+        let tab_json = serde_json::to_value(tab).expect("tab serializes");
+        assert_eq!(tab_json["width"], json!("fill_container"));
+        assert_eq!(tab_json["height"], json!("fill_container"));
+        assert_eq!(tab_json["gap"], json!(4.0));
+        assert_eq!(tab_json["padding"], json!([4.0, 0.0]));
+        assert_eq!(tab_json["justifyContent"], json!("center"));
+        assert_eq!(tab_json["alignItems"], json!("center"));
+    }
+}
+
+#[test]
+fn cleanup_normalizes_structurally_detected_bottom_nav_without_role_or_name() {
+    // A nav row the model left UNTAGGED — generic name, no role="bottom-tab-bar",
+    // just a horizontal row of Home/Search/Orders/Profile items — must still be
+    // spread to full width (the "拥挤" crammed-nav fix).
+    let mut sink = VecDocSink::new();
+    let tree: PenNode = serde_json::from_str(
+        r##"{
+            "type": "frame", "id": "root", "name": "Food App Home",
+            "width": 390, "height": 844, "layout": "vertical",
+            "fill": [{ "type": "solid", "color": "#FFFFFF" }],
+            "children": [
+                { "type": "frame", "id": "content", "name": "Content", "width": "fill_container", "height": 760, "children": [] },
+                {
+                    "type": "frame", "id": "footer", "name": "Footer",
+                    "width": 240, "height": 64, "layout": "horizontal", "gap": 16,
+                    "children": [
+                        { "type": "frame", "id": "home", "name": "Home", "width": 48, "height": 56, "layout": "vertical", "children": [
+                            { "type": "icon_font", "id": "home-i", "iconFontName": "home", "width": 24, "height": 24 },
+                            { "type": "text", "id": "home-t", "content": "Home" }
+                        ] },
+                        { "type": "frame", "id": "search", "name": "Search", "width": 48, "height": 56, "layout": "vertical", "children": [
+                            { "type": "icon_font", "id": "search-i", "iconFontName": "search", "width": 24, "height": 24 },
+                            { "type": "text", "id": "search-t", "content": "Search" }
+                        ] },
+                        { "type": "frame", "id": "orders", "name": "Orders", "width": 48, "height": 56, "layout": "vertical", "children": [
+                            { "type": "icon_font", "id": "orders-i", "iconFontName": "clipboard", "width": 24, "height": 24 },
+                            { "type": "text", "id": "orders-t", "content": "Orders" }
+                        ] },
+                        { "type": "frame", "id": "profile", "name": "Profile", "width": 48, "height": 56, "layout": "vertical", "children": [
+                            { "type": "icon_font", "id": "profile-i", "iconFontName": "user", "width": 24, "height": 24 },
+                            { "type": "text", "id": "profile-t", "content": "Profile" }
+                        ] }
+                    ]
+                }
+            ]
+        }"##,
+    )
+    .expect("nav json");
+    sink.state.apply(EditorCommand::InsertAuthoredSubtree {
+        nodes: vec![tree],
+        parent_id: NodeId::NONE,
+        page_id: None,
+    });
+    sink.applied.clear();
+
+    run_cleanup_passes(&mut sink, &plan(), &["root"]);
+
+    let root = sink
+        .state
+        .active_children()
+        .iter()
+        .find(|node| node.id_str() == "root")
+        .expect("root survives");
+    let nav = find_node(root, "footer").expect("nav survives");
+    let nav_json = serde_json::to_value(nav).expect("nav serializes");
+    assert_eq!(nav_json["width"], json!(390.0), "nav spread to full width");
+    assert_eq!(nav_json["justifyContent"], json!("space_between"));
+    for id in ["home", "search", "orders", "profile"] {
+        let tab = find_node(root, id).expect("tab survives");
+        let tab_json = serde_json::to_value(tab).expect("tab serializes");
+        assert_eq!(tab_json["width"], json!("fill_container"), "tab {id} fills");
+    }
+}
+
+#[test]
+fn cleanup_does_not_treat_header_action_row_as_bottom_nav() {
+    // Guard against over-broad structural detection: a HEADER row at the TOP —
+    // even one of LABELED icon+text buttons named like nav destinations — must
+    // NOT be mistaken for a bottom nav and stretched to a full-width tab bar.
+    // Only the LAST top-level section is eligible for the structural fallback.
+    let mut sink = VecDocSink::new();
+    let tree: PenNode = serde_json::from_str(
+        r##"{
+            "type": "frame", "id": "root", "name": "Home", "width": 390, "height": 844,
+            "layout": "vertical", "fill": [{ "type": "solid", "color": "#FFFFFF" }],
+            "children": [
+                {
+                    "type": "frame", "id": "header-actions", "name": "Header Actions",
+                    "width": 180, "height": 56, "layout": "horizontal", "gap": 12,
+                    "children": [
+                        { "type": "frame", "id": "search-btn", "name": "Search", "width": 48, "height": 52, "layout": "vertical", "children": [
+                            { "type": "icon_font", "id": "s-i", "iconFontName": "search", "width": 24, "height": 24 },
+                            { "type": "text", "id": "s-t", "content": "Search" }
+                        ] },
+                        { "type": "frame", "id": "cart-btn", "name": "Cart", "width": 48, "height": 52, "layout": "vertical", "children": [
+                            { "type": "icon_font", "id": "c-i", "iconFontName": "shopping-cart", "width": 24, "height": 24 },
+                            { "type": "text", "id": "c-t", "content": "Cart" }
+                        ] },
+                        { "type": "frame", "id": "profile-btn", "name": "Profile", "width": 48, "height": 52, "layout": "vertical", "children": [
+                            { "type": "icon_font", "id": "p-i", "iconFontName": "user", "width": 24, "height": 24 },
+                            { "type": "text", "id": "p-t", "content": "Profile" }
+                        ] }
+                    ]
+                },
+                { "type": "frame", "id": "content", "name": "Content", "width": "fill_container", "height": 700, "children": [] }
+            ]
+        }"##,
+    )
+    .expect("header json");
+    sink.state.apply(EditorCommand::InsertAuthoredSubtree {
+        nodes: vec![tree],
+        parent_id: NodeId::NONE,
+        page_id: None,
+    });
+    sink.applied.clear();
+
+    run_cleanup_passes(&mut sink, &plan(), &["root"]);
+
+    let root = sink
+        .state
+        .active_children()
+        .iter()
+        .find(|node| node.id_str() == "root")
+        .expect("root survives");
+    let header = find_node(root, "header-actions").expect("header survives");
+    let header_json = serde_json::to_value(header).expect("header serializes");
+    // The header keeps its own width — it was NOT stretched to a full-width nav.
+    assert_eq!(
+        header_json["width"],
+        json!(180.0),
+        "a top header action row must not be normalized as a bottom nav: {header_json}"
+    );
+}
+
+#[test]
+fn cleanup_does_not_treat_named_top_navbar_as_bottom_nav() {
+    // A TOP navbar (named "Navigation Bar", first section) with labeled nav
+    // items must NOT be mistaken for a bottom nav. "navbar"/"nav bar"/"tab bar"
+    // are ambiguous names that are no longer matched; only "bottom …" names or
+    // the bottom-gated structural fallback qualify. (Codex: named top navs.)
+    let mut sink = VecDocSink::new();
+    let tree: PenNode = serde_json::from_str(
+        r##"{
+            "type": "frame", "id": "root", "name": "Home", "width": 390, "height": 844,
+            "layout": "vertical", "fill": [{ "type": "solid", "color": "#FFFFFF" }],
+            "children": [
+                {
+                    "type": "frame", "id": "topnav", "name": "Navigation Bar",
+                    "width": 220, "height": 56, "layout": "horizontal", "gap": 12,
+                    "children": [
+                        { "type": "frame", "id": "t-home", "name": "Home", "width": 56, "height": 52, "layout": "vertical", "children": [
+                            { "type": "icon_font", "id": "t1i", "iconFontName": "home", "width": 24, "height": 24 },
+                            { "type": "text", "id": "t1t", "content": "Home" } ] },
+                        { "type": "frame", "id": "t-search", "name": "Search", "width": 56, "height": 52, "layout": "vertical", "children": [
+                            { "type": "icon_font", "id": "t2i", "iconFontName": "search", "width": 24, "height": 24 },
+                            { "type": "text", "id": "t2t", "content": "Search" } ] },
+                        { "type": "frame", "id": "t-profile", "name": "Profile", "width": 56, "height": 52, "layout": "vertical", "children": [
+                            { "type": "icon_font", "id": "t3i", "iconFontName": "user", "width": 24, "height": 24 },
+                            { "type": "text", "id": "t3t", "content": "Profile" } ] }
+                    ]
+                },
+                { "type": "frame", "id": "content", "name": "Content", "width": "fill_container", "height": 700, "children": [] }
+            ]
+        }"##,
+    )
+    .expect("topnav json");
+    sink.state.apply(EditorCommand::InsertAuthoredSubtree {
+        nodes: vec![tree],
+        parent_id: NodeId::NONE,
+        page_id: None,
+    });
+    sink.applied.clear();
+
+    run_cleanup_passes(&mut sink, &plan(), &["root"]);
+
+    let root = sink
+        .state
+        .active_children()
+        .iter()
+        .find(|node| node.id_str() == "root")
+        .expect("root survives");
+    let topnav = find_node(root, "topnav").expect("topnav survives");
+    let topnav_json = serde_json::to_value(topnav).expect("topnav serializes");
+    assert_eq!(
+        topnav_json["width"],
+        json!(220.0),
+        "a top navbar must not be normalized as a bottom nav: {topnav_json}"
+    );
+}
+
+#[test]
+fn cleanup_structural_nav_only_matches_bottom_row_inside_single_wrapper() {
+    // The whole screen is ONE content wrapper (the only top-level child). The
+    // structural fallback must apply ONLY to the wrapper's LAST child (the real
+    // bottom nav) — a labeled nav-named row at the TOP of the wrapper (a header)
+    // must NOT be stretched. (Codex: nested header rows over-matched.)
+    let mut sink = VecDocSink::new();
+    let tree: PenNode = serde_json::from_str(
+        r##"{
+            "type": "frame", "id": "root", "name": "Home", "width": 390, "height": 844,
+            "layout": "vertical", "fill": [{ "type": "solid", "color": "#FFFFFF" }],
+            "children": [
+                {
+                    "type": "frame", "id": "wrapper", "name": "Content Wrapper",
+                    "width": "fill_container", "height": "fit_content", "layout": "vertical",
+                    "children": [
+                        {
+                            "type": "frame", "id": "top-row", "name": "Quick Links",
+                            "width": 190, "height": 56, "layout": "horizontal", "gap": 12,
+                            "children": [
+                                { "type": "frame", "id": "h-home", "name": "Home", "width": 56, "height": 52, "layout": "vertical", "children": [
+                                    { "type": "icon_font", "id": "h1i", "iconFontName": "home", "width": 24, "height": 24 },
+                                    { "type": "text", "id": "h1t", "content": "Home" } ] },
+                                { "type": "frame", "id": "h-search", "name": "Search", "width": 56, "height": 52, "layout": "vertical", "children": [
+                                    { "type": "icon_font", "id": "h2i", "iconFontName": "search", "width": 24, "height": 24 },
+                                    { "type": "text", "id": "h2t", "content": "Search" } ] },
+                                { "type": "frame", "id": "h-profile", "name": "Profile", "width": 56, "height": 52, "layout": "vertical", "children": [
+                                    { "type": "icon_font", "id": "h3i", "iconFontName": "user", "width": 24, "height": 24 },
+                                    { "type": "text", "id": "h3t", "content": "Profile" } ] }
+                            ]
+                        },
+                        { "type": "frame", "id": "body", "name": "Body", "width": "fill_container", "height": 600, "children": [] },
+                        {
+                            "type": "frame", "id": "nav-row", "name": "Nav",
+                            "width": 200, "height": 64, "layout": "horizontal", "gap": 12,
+                            "children": [
+                                { "type": "frame", "id": "n-home", "name": "Home", "width": 56, "height": 56, "layout": "vertical", "children": [
+                                    { "type": "icon_font", "id": "n1i", "iconFontName": "home", "width": 24, "height": 24 },
+                                    { "type": "text", "id": "n1t", "content": "Home" } ] },
+                                { "type": "frame", "id": "n-orders", "name": "Orders", "width": 56, "height": 56, "layout": "vertical", "children": [
+                                    { "type": "icon_font", "id": "n2i", "iconFontName": "clipboard", "width": 24, "height": 24 },
+                                    { "type": "text", "id": "n2t", "content": "Orders" } ] },
+                                { "type": "frame", "id": "n-profile", "name": "Profile", "width": 56, "height": 56, "layout": "vertical", "children": [
+                                    { "type": "icon_font", "id": "n3i", "iconFontName": "user", "width": 24, "height": 24 },
+                                    { "type": "text", "id": "n3t", "content": "Profile" } ] }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }"##,
+    )
+    .expect("wrapper json");
+    sink.state.apply(EditorCommand::InsertAuthoredSubtree {
+        nodes: vec![tree],
+        parent_id: NodeId::NONE,
+        page_id: None,
+    });
+    sink.applied.clear();
+
+    run_cleanup_passes(&mut sink, &plan(), &["root"]);
+
+    let root = sink
+        .state
+        .active_children()
+        .iter()
+        .find(|node| node.id_str() == "root")
+        .expect("root survives");
+    // Top header row keeps its own width (NOT mistaken for a nav).
+    let top = find_node(root, "top-row").expect("top-row survives");
+    let top_json = serde_json::to_value(top).expect("top serializes");
+    assert_eq!(
+        top_json["width"],
+        json!(190.0),
+        "a nested header row at the top must not be normalized as a nav: {top_json}"
+    );
+    // The bottom nav row IS spread to full width.
+    let nav = find_node(root, "nav-row").expect("nav-row survives");
+    let nav_json = serde_json::to_value(nav).expect("nav serializes");
+    assert_eq!(
+        nav_json["width"],
+        json!(390.0),
+        "the bottom nav row should still be spread full-width: {nav_json}"
+    );
+    assert_eq!(nav_json["justifyContent"], json!("space_between"));
 }

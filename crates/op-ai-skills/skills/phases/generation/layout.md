@@ -15,6 +15,7 @@ LAYOUT ENGINE (flexbox-based):
 - CHILD SIZE RULE: child width must be <= parent content area. Use "fill_container" when in doubt.
 - In vertical layout: "fill_container" width stretches horizontally. In horizontal: fills remaining space.
 - CLIP CONTENT: clipContent: true clips overflowing children. ALWAYS use on cards with cornerRadius + image.
+- CARD HEIGHT: cards holding text + a CTA (promo banners, offer/info cards) MUST use height="fit_content" — NEVER a fixed pixel height. A fixed height + clipContent clips the bottom child (the CTA shows half / not at all). Reserve fixed heights for image-only cards with a known aspect ratio.
 - justifyContent: "space_between" (navbars), "center", "start"/"end", "space_around".
 - WIDTH CONSISTENCY: siblings must use same width strategy. Don't mix fixed-px and fill_container.
 - NEVER use "fill_container" on children of "fit_content" parent — circular dependency.
@@ -51,6 +52,20 @@ with two horizontal rows).
 Anti-pattern (the activity-rings overflow bug): emitting three 100px rings
 with 24px gap inside a card with 24px padding on a 375px-wide page. Total
 348px > 279px inner → the third ring is silently clipped on the right edge.
+
+CATEGORY / ICON-CHIP RAILS — SPREAD TO FILL, DON'T CLUSTER LEFT:
+
+A FIXED small set (3-5) of equal category tiles / icon chips on one mobile row
+should span the row's full width, not cluster on the left with a lopsided empty
+band on the right (4×56px chips + 3×12px gap = 260px inside a 335px row → 75px
+dead space, which reads as unbalanced). When the chips DON'T fill the row, set
+the chip row's justifyContent="space_between" so the leftover space becomes
+EVEN, larger gaps between chips (the user's "撑不满就把间距放大一点"). Keep each
+chip its natural fixed size (a vertical icon-tile + label frame); do not stretch
+the tiles. (Two chips are the exception — space_between throws them to opposite
+edges, so for exactly two use a normal start gap instead.) Use a fixed-width
+scroll rail (justifyContent="start") ONLY when there are clearly more tiles than
+fit on one row (6+) — a genuine horizontal scroller.
 
 NO FIXED-POSITION LAYOUT — DO NOT EMIT BOTTOM SPACERS:
 
@@ -96,16 +111,18 @@ AESTHETIC HYGIENE — keep these silent (never emit, the post-pass also strips t
 - ROTATION on UI frames is almost always wrong. Use rotation=0 (or omit) on cards / buttons /
   containers / labels. The only legitimate rotations are exact 90 / 180 / 270 (vertical text /
   rotated grid) and rotation on path / line / polygon / image (decorative geometry).
-- SAME-ROLE SIBLINGS MUST USE THE SAME cornerRadius AND padding. Three cards in a row at
-  cornerRadius 8 / 8 / 12 reads as ragged. Pick one value per group and reuse it. Same for
-  padding — 16 / 16 / 20 across cards is visible noise.
+- Keep same-role siblings visually consistent: cards in one row should share a cornerRadius and
+  padding rather than drifting (8 / 8 / 12 reads as ragged). Pick a value and reuse it per group.
+- EXACT USER TOKENS OVERRIDE EXAMPLES. If the prompt specifies exact radius or spacing values,
+  apply those exact values to ordinary component `cornerRadius`, group `gap`, and repeated card
+  spacing. For example, "圆角 8px / 间距 12px" means same-role controls and cards should use
+  cornerRadius=8 and gap=12 unless a tiny inline icon pair clearly needs a smaller micro-gap.
 - INNER LAYOUT FRAMES (sections, wrappers, header / body containers inside a card) DO NOT need
   fill, stroke, OR shadow. They inherit from the page / card surface. Only opt into a fill /
   border / shadow on the OUTER card, button, badge, chip — NEVER on the wrapper that holds it.
-- PAGE GUTTER GOES ON ONE LAYER, NOT BOTH. Pick: either the root frame carries horizontal padding
-  (e.g. `padding: [0,16]` on root) and direct child sections use horizontal padding 0, OR the root
-  carries 0 horizontal padding and each section sets its own. Stacking both produces a doubled
-  inset (root 16 + section 24 = 40px gutter on a 375px page → only 295px content). Default
-  convention: PUT HORIZONTAL PADDING ON THE ROOT, sections set vertical padding only. Hero /
-  banner / image-bleed sections then sit edge-to-edge by simply NOT adding horizontal padding (the
-  root's gutter shows through them naturally).
+- ONE PAGE GUTTER, ON THE ROOT. The root frame carries the horizontal gutter (e.g.
+  `padding: [0,20]`); EVERY content section uses horizontal padding 0 and only sets vertical
+  padding. This is what keeps every section's left edge aligned — if sections each set their own
+  h-padding (one 20, one 16, one 0) their content no longer lines up. Hero / banner / image-bleed
+  sections sit edge-to-edge by simply NOT adding horizontal padding (the root gutter shows
+  through). Never stack both (root gutter + per-section h-padding = a doubled inset).

@@ -39,7 +39,7 @@
 //! `delete_selected`, undo/redo push, …) are Task 4.5. A minimal
 //! constructor is provided so the type is usable + testable.
 
-use crate::chat::ChatState;
+use crate::chat_sessions::ChatSessions;
 use crate::codegen::CodegenState;
 use crate::components::ComponentLibrary;
 use crate::editor_ui_state::EditorUiState;
@@ -81,7 +81,10 @@ pub struct EditorState {
     pub editor_ui: EditorUiState,
     /// AI chat sub-state — message transcript, input draft, panel
     /// anchor, model catalog. Mirrors shell-core's `Document.chat`.
-    pub chat: ChatState,
+    /// Wrapped in `ChatSessions` to support multiple parallel tabs;
+    /// `Deref`/`DerefMut` forward to the active tab, so all existing
+    /// `state.chat.*` call sites compile unchanged.
+    pub chat: ChatSessions,
     /// Code-generation sub-state — framework selection, phase,
     /// progress, generated code, and pending-action flags. Read by
     /// the Code panel painter; drained by the host codegen session.
@@ -102,6 +105,12 @@ pub struct EditorState {
     /// it into a persist (TS `persist()` runs inline on each store
     /// write).
     pub theme_presets_dirty: bool,
+    /// Tracks which `plan_idx` "owns" each key that was ADDED to
+    /// `doc.state` by `MergeAppState` during this editor session.
+    /// Keys pre-existing in the loaded document are not registered
+    /// here; they are owned by the file and are never overwritten.
+    /// Transient — not serialized, reset on document replace.
+    pub app_state_owner: std::collections::BTreeMap<String, usize>,
 }
 
 impl EditorState {
@@ -121,12 +130,13 @@ impl EditorState {
             clipboard: Vec::new(),
             ui: UiDraftState::new(),
             editor_ui: EditorUiState::new(),
-            chat: ChatState::default(),
+            chat: ChatSessions::default(),
             codegen: CodegenState::default(),
             components,
             ui_kits: crate::uikit::builtin_kits(),
             theme_presets: Vec::new(),
             theme_presets_dirty: false,
+            app_state_owner: std::collections::BTreeMap::new(),
         }
     }
 
@@ -168,6 +178,8 @@ impl EditorState {
         self.history = History::new();
         self.ui = UiDraftState::new();
         self.editor_ui.clear_document_derived();
+        // Generation-run ownership is doc-scoped; clear on whole-doc replace.
+        self.app_state_owner.clear();
         drop_document_after_replace(old_doc);
     }
 }

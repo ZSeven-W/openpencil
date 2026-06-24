@@ -24,6 +24,13 @@ use crate::types::{AbortFlag, CallRequest, DesignRequest, PlanningMode, Planning
 use op_ai_skills::style_guide::{
     extract_style_guide_values, select_style_guide, style_guide_registry, SelectOptions,
 };
+use op_ai_skills::{
+    budget::trim_by_budget,
+    get_skills_by_phase,
+    resolver::{filter_by_intent, inject_dynamic_content},
+    DropReason, DroppedSkill, Phase, ResolveOptions, ResolvedSkill, SkillLoadEntry,
+    SkillLoadReport,
+};
 use std::collections::HashMap;
 
 /// sub-agent 阶段要求模型产出的 JSON 形状说明。
@@ -182,12 +189,165 @@ pub fn build_orchestrator_prompt(
     }
 }
 
-/// 解析 generation 阶段 skill 列表,带 flag/dynamic/budget 选项(供下游过滤)。
+/// Compose the intent string for per-subtask skill matching. Component 1:
+/// keyword triggers must see the ORIGINAL request, not just the short subtask
+/// label, or domain/knowledge skills (mobile-app, cjk-typography, food cues)
+/// never fire. Order: original prompt, then label, then screen/element hints.
+pub(crate) fn subtask_intent(req: &DesignRequest, subtask: &Subtask) -> String {
+    let mut s = String::new();
+    s.push_str(&req.prompt);
+    s.push('\n');
+    s.push_str(&subtask.label);
+    if let Some(screen) = subtask.screen.as_ref() {
+        s.push_str("\nscreen: ");
+        s.push_str(screen);
+    }
+    if let Some(elements) = subtask.elements.as_ref() {
+        s.push('\n');
+        s.push_str(elements);
+    }
+    s
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+struct ExplicitDesignTokens {
+    radius: Option<f64>,
+    spacing: Option<f64>,
+}
+
+fn find_keyword_positions(chars: &[char], keyword: &str) -> Vec<(usize, usize)> {
+    let needle: Vec<char> = keyword.chars().collect();
+    if needle.is_empty() || needle.len() > chars.len() {
+        return Vec::new();
+    }
+    chars
+        .windows(needle.len())
+        .enumerate()
+        .filter_map(|(idx, window)| {
+            if window == needle.as_slice() {
+                Some((idx, idx + needle.len()))
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+fn keyword_distance(start: usize, end: usize, ranges: &[(usize, usize)]) -> Option<usize> {
+    ranges
+        .iter()
+        .map(|&(k_start, k_end)| {
+            if end <= k_start {
+                k_start - end
+            } else {
+                start.saturating_sub(k_end)
+            }
+        })
+        .min()
+}
+
+fn format_design_number(value: f64) -> String {
+    if value.fract() == 0.0 {
+        format!("{}", value as i64)
+    } else {
+        format!("{value:.1}")
+    }
+}
+
+fn extract_explicit_design_tokens(prompt: &str) -> ExplicitDesignTokens {
+    let lower = prompt.to_lowercase();
+    let chars: Vec<char> = lower.chars().collect();
+    let radius_ranges: Vec<(usize, usize)> = [
+        "圆角",
+        "corner radius",
+        "cornerradius",
+        "border radius",
+        "border-radius",
+        "radius",
+        "corner",
+    ]
+    .into_iter()
+    .flat_map(|keyword| find_keyword_positions(&chars, keyword))
+    .collect();
+    let spacing_ranges: Vec<(usize, usize)> = ["间距", "spacing", "gap"]
+        .into_iter()
+        .flat_map(|keyword| find_keyword_positions(&chars, keyword))
+        .collect();
+
+    let mut out = ExplicitDesignTokens::default();
+    let mut i = 0;
+    while i < chars.len() {
+        if !chars[i].is_ascii_digit() {
+            i += 1;
+            continue;
+        }
+        let start = i;
+        i += 1;
+        while i < chars.len() && (chars[i].is_ascii_digit() || chars[i] == '.') {
+            i += 1;
+        }
+        let end = i;
+        let raw_value: String = chars[start..end].iter().collect();
+        let Ok(value) = raw_value.parse::<f64>() else {
+            continue;
+        };
+        if !(0.0..=128.0).contains(&value) {
+            continue;
+        }
+
+        let radius_distance = keyword_distance(start, end, &radius_ranges);
+        let spacing_distance = keyword_distance(start, end, &spacing_ranges);
+        match (radius_distance, spacing_distance) {
+            (Some(r), Some(s)) if r <= 12 || s <= 12 => {
+                if r <= s {
+                    out.radius.get_or_insert(value);
+                } else {
+                    out.spacing.get_or_insert(value);
+                }
+            }
+            (Some(r), _) if r <= 12 => {
+                out.radius.get_or_insert(value);
+            }
+            (_, Some(s)) if s <= 12 => {
+                out.spacing.get_or_insert(value);
+            }
+            _ => {}
+        }
+    }
+    out
+}
+
+fn explicit_design_token_instruction(tokens: ExplicitDesignTokens) -> Option<String> {
+    if tokens.radius.is_none() && tokens.spacing.is_none() {
+        return None;
+    }
+    let mut parts = Vec::new();
+    if let Some(radius) = tokens.radius {
+        parts.push(format!(
+            "cornerRadius must be {}px for ordinary rounded components",
+            format_design_number(radius)
+        ));
+    }
+    if let Some(spacing) = tokens.spacing {
+        parts.push(format!(
+            "layout gap/spacing must be {}px",
+            format_design_number(spacing)
+        ));
+    }
+    Some(format!(
+        "EXPLICIT USER DESIGN TOKENS: {}. These values override style-guide radius/spacing ranges, role defaults, and generic mobile guidance. Do not use larger rounded-card/search ranges or mixed 16/20/24px internal gaps unless geometry strictly requires it.",
+        parts.join("; ")
+    ))
+}
+
+/// Resolve the generation-phase skill set against a message, returning the
+/// full AgentContext (skills + load report). The report is held for B3b's
+/// IntentMiss/BudgetExhausted merge.
 fn resolve_generation_skills(
     message: &str,
     opts: &op_ai_skills::ResolveOptions,
-) -> Vec<op_ai_skills::ResolvedSkill> {
-    op_ai_skills::resolve_skills(op_ai_skills::Phase::Generation, message, opts).skills
+) -> op_ai_skills::AgentContext {
+    op_ai_skills::resolve_skills(op_ai_skills::Phase::Generation, message, opts)
 }
 
 /// 该 plan 是否代表一整屏移动端页面。
@@ -284,6 +444,88 @@ fn build_style_guide_instruction(
     Some(lines.join("\n"))
 }
 
+fn resolve_generation_skills_after_prompt_filter(
+    intent: &str,
+    opts: &ResolveOptions,
+    tier: ModelTier,
+    is_mobile_screen: bool,
+    design_system_covered: bool,
+    minimal_skills: bool,
+    reduced_complexity: bool,
+) -> (
+    Vec<ResolvedSkill>,
+    SkillLoadReport,
+    Vec<(String, DropReason)>,
+) {
+    let total_budget = opts
+        .budget_override
+        .unwrap_or_else(|| Phase::Generation.default_budget());
+    let phase_skills: Vec<op_ai_skills::SkillEntry> = get_skills_by_phase(Phase::Generation)
+        .into_iter()
+        .cloned()
+        .collect();
+    let matched = filter_by_intent(&phase_skills, intent, &opts.flags);
+
+    let mut dropped: Vec<DroppedSkill> = phase_skills
+        .iter()
+        .filter(|candidate| !matched.iter().any(|m| m.meta.name == candidate.meta.name))
+        .map(|candidate| DroppedSkill {
+            name: candidate.meta.name.clone(),
+            reason: DropReason::IntentMiss,
+        })
+        .collect();
+
+    let mut dynamic = opts.dynamic_content.clone();
+    dynamic
+        .entry("recentHistory".to_string())
+        .or_insert_with(|| "No recent history.".to_string());
+    let injected: Vec<op_ai_skills::SkillEntry> = matched
+        .into_iter()
+        .map(|mut skill| {
+            skill.content = inject_dynamic_content(&skill.content, &dynamic);
+            skill
+        })
+        .collect();
+
+    let (filtered_entries, filter_drops) = apply_skill_filter(
+        injected,
+        tier,
+        is_mobile_screen,
+        design_system_covered,
+        minimal_skills,
+        reduced_complexity,
+    );
+    let trimmed = trim_by_budget(&filtered_entries, total_budget, intent);
+
+    for entry in &filtered_entries {
+        if !trimmed.iter().any(|kept| kept.meta.name == entry.meta.name) {
+            dropped.push(DroppedSkill {
+                name: entry.meta.name.clone(),
+                reason: DropReason::BudgetExhausted,
+            });
+        }
+    }
+
+    let included: Vec<SkillLoadEntry> = trimmed
+        .iter()
+        .map(|skill| SkillLoadEntry {
+            name: skill.meta.name.clone(),
+            category: skill.meta.category,
+            token_count: skill.token_count,
+            truncated: skill.truncated,
+        })
+        .collect();
+    let budget_used = included.iter().map(|entry| entry.token_count).sum();
+    let report = SkillLoadReport {
+        included,
+        dropped,
+        budget_used,
+        budget_max: total_budget,
+    };
+
+    (trimmed, report, filter_drops)
+}
+
 /// 单个 sub-agent 的 LLM 调用输入。
 ///
 /// * `reduced_complexity` — When `true` and the model is Basic tier,
@@ -302,7 +544,7 @@ pub fn build_subagent_prompt(
     abort: AbortFlag,
     reduced_complexity: bool,
     minimal_skills: bool,
-) -> CallRequest {
+) -> (CallRequest, SkillLoadReport) {
     // Element-manifest protocol (spec 2026-06-10-element-manifest-v2): only on
     // the full first attempt — the retry ladder (reduced/minimal) falls back
     // to the smaller raw-JSONL prompt, and `parse_manifest` returning `None`
@@ -333,7 +575,7 @@ fn build_subagent_prompt_with_manifest(
     reduced_complexity: bool,
     minimal_skills: bool,
     manifest_on: bool,
-) -> CallRequest {
+) -> (CallRequest, SkillLoadReport) {
     // Resolve the full generation skill set, then apply tier-gated filtering.
     let model_id = req.model.as_deref().unwrap_or("");
     let tier = resolve_model_profile(model_id).tier;
@@ -388,20 +630,6 @@ fn build_subagent_prompt_with_manifest(
         );
     }
 
-    // Tier-scaled budget override (orchestrator-sub-agent.ts:414-415).
-    let budget_override = match tier {
-        ModelTier::Basic => Some(5200),
-        ModelTier::Standard => Some(6500),
-        ModelTier::Full => None,
-    };
-
-    let opts = op_ai_skills::ResolveOptions {
-        flags,
-        dynamic_content,
-        budget_override,
-        ..Default::default()
-    };
-    let resolved = resolve_generation_skills(&subtask.label, &opts);
     let is_mobile_screen = is_mobile_full_screen(plan);
     // Look up the planner-selected style guide by name and build a block that
     // injects its palette/fonts into the sub-agent prompt (port of
@@ -416,14 +644,81 @@ fn build_subagent_prompt_with_manifest(
     // "output ONLY a JSON token object" header redundantly (Codex review).
     let design_system_covered =
         has_design_md || no_style_guide_match || style_guide_instruction.is_some();
-    let mut filtered = apply_skill_filter(
-        resolved,
-        tier,
-        is_mobile_screen,
-        design_system_covered,
-        minimal_skills,
-        reduced_complexity,
-    );
+    let explicit_tokens = extract_explicit_design_tokens(&req.prompt);
+    let explicit_token_instruction = explicit_design_token_instruction(explicit_tokens);
+
+    // Mobile UI guardrails live in the flag-gated `mobile-ui` skill rather than
+    // inline prompt strings (user direction 2026-06-23: control generation via
+    // skills, not hardcoded text in prompt.rs). Set the gate flag — matching the
+    // old inline `plan.root_frame.width <= 480.0` condition exactly — and inject
+    // the few dynamic values those rules reference.
+    let is_mobile_layout = plan.root_frame.width <= 480.0;
+    flags.insert("isMobileScreen".to_string(), is_mobile_layout);
+    if is_mobile_layout {
+        let mobile_spacing = explicit_tokens.spacing.map(format_design_number);
+        let mobile_radius = explicit_tokens.radius.map(format_design_number);
+        let rhythm = if let Some(spacing) = mobile_spacing.as_deref() {
+            format!(
+                "MOBILE VERTICAL RHYTHM: Keep every section root height=\"fit_content\" and do not insert blank spacer frames or empty bands to fill the planned region. Use {spacing}px as the default gap/spacing for header-to-search, search-to-next-section, module, grid, card, and internal component rhythm. Do not mix 16/20/24/32px gaps when the user explicitly requested {spacing}px spacing."
+            )
+        } else {
+            "MOBILE VERTICAL RHYTHM: Keep every section root height=\"fit_content\" and do not insert blank spacer frames or empty bands to fill the planned region. Header-to-search spacing should be 12px, search-to-next-section 12-16px, major module gaps 16-24px, and internal gaps usually 8/12px.".to_string()
+        };
+        dynamic_content.insert("mobileRhythm".to_string(), rhythm);
+        dynamic_content.insert(
+            "mobileSearchRadius".to_string(),
+            mobile_radius.as_deref().unwrap_or("8-12").to_string(),
+        );
+        dynamic_content.insert(
+            "mobileGridGap".to_string(),
+            mobile_spacing.as_deref().unwrap_or("12").to_string(),
+        );
+    }
+
+    // Tier-scaled budget override (orchestrator-sub-agent.ts:414-415).
+    // Basic mobile carries the `mobile-app` + `mobile-ui` domain skills after the
+    // compact filter; the `mobile-ui` rules used to be appended to the user prompt
+    // (uncounted) and now live in a budgeted skill, so the budget grows by ~its
+    // size — the TOTAL prompt is unchanged, the rules just moved user→system.
+    let budget_override = match tier {
+        ModelTier::Basic if is_mobile_layout || is_mobile_screen => Some(9200),
+        ModelTier::Basic => Some(5200),
+        ModelTier::Standard if is_mobile_layout => Some(9500),
+        ModelTier::Standard => Some(6500),
+        ModelTier::Full => None,
+    };
+
+    let opts = ResolveOptions {
+        flags,
+        dynamic_content,
+        budget_override,
+        ..Default::default()
+    };
+    let intent = subtask_intent(req, subtask);
+    let (mut filtered, resolve_report, filter_drops) =
+        if tier == ModelTier::Basic && is_mobile_screen {
+            resolve_generation_skills_after_prompt_filter(
+                &intent,
+                &opts,
+                tier,
+                is_mobile_screen,
+                design_system_covered,
+                minimal_skills,
+                reduced_complexity,
+            )
+        } else {
+            let agent_ctx = resolve_generation_skills(&intent, &opts);
+            let resolved = agent_ctx.skills;
+            let (filtered, filter_drops) = apply_skill_filter(
+                resolved,
+                tier,
+                is_mobile_screen,
+                design_system_covered,
+                minimal_skills,
+                reduced_complexity,
+            );
+            (filtered, agent_ctx.report, filter_drops)
+        };
     // The manifest protocol REPLACES the raw-JSONL output format —
     // carrying both would contradict (and burn Basic-tier budget).
     if manifest_on {
@@ -471,6 +766,12 @@ fn build_subagent_prompt_with_manifest(
         system_prompt.push_str("\n\n");
         system_prompt.push_str(sg);
     }
+    if let Some(instruction) = &explicit_token_instruction {
+        system_prompt.push_str("\n\n");
+        system_prompt.push_str(instruction);
+        system_prompt
+            .push_str("\nThis instruction overrides style-guide examples when they conflict.");
+    }
 
     let section_list = plan
         .subtasks
@@ -495,6 +796,10 @@ fn build_subagent_prompt_with_manifest(
         .map(|items| {
             format!("\nYOUR ELEMENTS: {items}\nDo NOT generate elements listed in other sections.")
         })
+        .unwrap_or_default();
+    let explicit_user_token_block = explicit_token_instruction
+        .as_ref()
+        .map(|instruction| format!("{instruction}\n\n"))
         .unwrap_or_default();
 
     // Deterministic element nomination (ab-v9.1 de-randomization lever):
@@ -542,6 +847,7 @@ fn build_subagent_prompt_with_manifest(
         "Page sections:\n{}\n\n\
 Generate ONLY \"{}\" (~{:.0}px of content).{}\n\
 Overall design: {}\n\n\
+{}\
 CRITICAL LAYOUT CONSTRAINTS:\n\
 - {}\n\
 - Target content amount: ~{:.0}px tall. Generate enough elements to fill this area.\n\
@@ -569,6 +875,7 @@ CRITICAL LAYOUT CONSTRAINTS:\n\
         subtask.region.height,
         my_elements,
         req.prompt,
+        explicit_user_token_block,
         root_rule,
         subtask.region.height,
         nesting_rule,
@@ -585,56 +892,8 @@ CRITICAL LAYOUT CONSTRAINTS:\n\
         ));
     }
 
-    if plan.root_frame.width <= 480.0 {
-        user_prompt.push_str(
-            "\n\nMOBILE STATUS BAR: A status bar (time, signal, wifi, battery) has already been pre-inserted as the first child of the root page frame. Do NOT generate any status bar, system chrome, or OS-level indicators. Start your content directly.",
-        );
-        user_prompt.push_str(
-            "\n\nNO PHONE MOCKUP WRAPPER: The whole design IS a mobile screen. Do NOT wrap your section in a phone-shaped frame. Your section root must use width=\"fill_container\" and contain only this section's content.",
-        );
-        user_prompt.push_str(
-            "\n\nMOBILE WIDTH SAFETY: Every visible child must stay inside the 390px screen width. Do not create horizontal rows, chips, cards, or buttons that overflow outside the root; wrap, shrink, or clip horizontal lists instead.",
-        );
-        user_prompt.push_str(
-            "\nMOBILE SINGLE CONTENT RAIL: All non-chrome sections must align to the same 24px left/right content rail. Section roots should stay transparent with width=\"fill_container\" and height=\"fit_content\"; apply padding once at the section root or first content wrapper. Do not create full-width colored wrapper surfaces just to hold content.",
-        );
-        user_prompt.push_str(
-            "\nMOBILE VERTICAL RHYTHM: Keep every section root height=\"fit_content\" and do not insert blank spacer frames or empty bands to fill the planned region. Header-to-search spacing should be 12-16px, search-to-next-section 16-24px, major module gaps 24-32px, and internal gaps usually 8/12/16px.",
-        );
-        user_prompt.push_str(
-            "\nMOBILE TOP RHYTHM: Keep the title/header group close to the first useful module. Do not leave a large blank band above search, categories, promo, charts, or first cards; if you need breathing room, use 20-32px, not a hero-sized void.",
-        );
-        user_prompt.push_str(
-            "\nMOBILE SEARCH BAR: If generating search, output exactly one search control surface: 48-52px tall, width=\"fill_container\" inside the content rail, neutral/surface fill, subtle 1px border, cornerRadius 14-18, and a 18-20px search icon. Optional filter/sliders is a separate 44-48px square button beside it. Do not nest an input inside another rounded pill, do not use pink/tinted fills, and do not make the search section itself a huge rounded band.",
-        );
-        user_prompt.push_str(
-            "\nMOBILE SECTION CHROME: Search, filter, and category section roots are structural wrappers only. Keep those section roots transparent: no fill, no stroke, no cornerRadius, and no shadow/effects. Put visual styling only on the actual search control, filter button, chips, cards, or promo modules.",
-        );
-        user_prompt.push_str(
-            "\nNO BLANK PLACEHOLDERS: Do not use empty gray image placeholders in app UI. If no real image asset is available, use a square colored food/icon tile with icon_font instead.",
-        );
-        user_prompt.push_str(
-            "\nMOBILE HORIZONTAL LISTS: Use a horizontal list only when its wrapper has width=\"fill_container\" and clipContent=true and its inner row uses width=\"fit_content\". Otherwise wrap into rows or a grid. Do not show random half-clipped chips/cards as a design cue.",
-        );
-        user_prompt.push_str(
-            "\nMOBILE GRID ALIGNMENT: For category chips and product cards, visible items in the same row must share equal width/height and aligned top/bottom edges. On 390px screens prefer two-column grids with 16px gaps; never let the right card extend past the content rail.",
-        );
-        user_prompt.push_str(
-            "\nMOBILE CARD OVERLAYS: Heart buttons, badges, and status pills on cards must sit fully inside the card with an 8-12px inset. Do not straddle the card border, use negative x/y, or let floating controls protrude outside rounded corners.",
-        );
-        user_prompt.push_str(
-            "\nMOBILE IMAGE QUALITY: Food/product photos must use consistent aspect ratio, crop, radius, and tone across sibling cards. Avoid random low-quality or mismatched restaurant photos; if cohesive assets are unavailable, use a designed icon/illustration tile instead.",
-        );
-        user_prompt.push_str(
-            "\nMOBILE NAV SURFACE: Bottom navigation must use role=\"bottom-tab-bar\" (not navbar), sit on the current page palette, full width at the bottom, 62-72px tall. Do not create a separate white footer band, nested rounded nav pill, oversized rounded pill, or extra side margins. Direct tab item frames must be transparent: no fill, no stroke, no large rounded tile. Show active state with accent icon/label color or a tiny 2-3px indicator only. Never use black or safe-dark fills for nav bars unless the whole root frame background is dark.",
-        );
-        user_prompt.push_str(
-            "\nMOBILE NAV SHADOW: Do not add a drop shadow, glow, or detached shadow band behind the bottom navigation. If separation is needed, use a quiet 1px divider or subtle tonal difference that belongs to the page palette.",
-        );
-        user_prompt.push_str(
-            "\nNO FIXED FOOD TEMPLATE: Do not default to the same search + categories + orange promo + two product cards composition. For food, shopping, travel, fitness, finance, and social apps, choose a domain-specific visual concept and vary the first viewport composition.",
-        );
-    }
+    // (Mobile UI guardrails now load from the `mobile-ui` skill — see the
+    // `isMobileScreen` flag + dynamic-content setup above.)
 
     // Port of orchestrator-sub-agent.ts:739-748 — APPEND MODE prompt injection.
     if let Some(labels) = subtask.existing_section_labels.as_ref() {
@@ -665,16 +924,49 @@ CRITICAL LAYOUT CONSTRAINTS:\n\
         profile.timeout_multiplier,
     );
 
-    CallRequest {
-        system_prompt,
-        user_prompt,
-        model: req.model.clone(),
-        provider: req.provider.clone(),
-        timeout: t.hard,
-        abort,
-        no_text_timeout: Some(t.no_text),
-        first_text_timeout: Some(t.first_text),
-    }
+    // Assemble the per-subtask skill-load report from the FINAL skill set
+    // (post tier/dedup/manifest filtering). `budget_max` reflects the tier
+    // budget override (None == Full tier's 8000 default).
+    let budget_max = budget_override.unwrap_or(8000);
+    let included: Vec<SkillLoadEntry> = filtered
+        .iter()
+        .chain(manifest_skill.iter())
+        .map(|s| SkillLoadEntry {
+            name: s.skill_name().to_string(),
+            category: s.meta.category,
+            token_count: s.token_count,
+            truncated: s.truncated,
+        })
+        .collect();
+    let budget_used: u32 = included.iter().map(|e| e.token_count).sum();
+    // Merge resolve-time drops (IntentMiss + BudgetExhausted from B0) with
+    // tier/dedup/mode drops captured by apply_skill_filter (B3b).
+    let mut dropped = resolve_report.dropped;
+    dropped.extend(
+        filter_drops
+            .into_iter()
+            .map(|(name, reason)| op_ai_skills::DroppedSkill { name, reason }),
+    );
+    let report = SkillLoadReport {
+        included,
+        dropped,
+        budget_used,
+        budget_max,
+    };
+
+    (
+        CallRequest {
+            system_prompt,
+            user_prompt,
+            model: req.model.clone(),
+            provider: req.provider.clone(),
+            timeout: t.hard,
+            abort,
+            no_text_timeout: Some(t.no_text),
+            first_text_timeout: Some(t.first_text),
+        },
+        report,
+    )
 }
 
 #[cfg(test)]

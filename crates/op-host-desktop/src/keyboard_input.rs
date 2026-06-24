@@ -39,11 +39,7 @@ impl DesktopApp {
             Key::Named(NamedKey::Enter) if !self.zoom_modifier => {
                 consumed = self.host.apply_send();
                 // apply_send may raise pending_send (chat send).
-                if chat_session::launch_if_pending(
-                    &mut self.host,
-                    &mut self.current_chat,
-                    &mut self.current_design,
-                ) {
+                if self.launch_chat_if_pending() {
                     self.request_redraw(true);
                 }
             }
@@ -209,6 +205,15 @@ impl DesktopApp {
                     "y" => consumed = self.host.apply_redo(),
                     "g" => consumed = self.host.apply_group(),
                     "j" => consumed = self.host.apply_toggle_chat(),
+                    // Cmd/Ctrl+T — open a fresh chat tab (MT.3). Preserves
+                    // existing tabs and leaves any in-flight run bound to its
+                    // own tab. Gated after the `settings_focused` swallow like
+                    // the other chrome chords (Cmd+J), so it doesn't fire while
+                    // a settings / Git input owns the keyboard.
+                    "t" => {
+                        self.new_chat_tab();
+                        consumed = true;
+                    }
                     _ => {}
                 }
             }
@@ -466,5 +471,112 @@ impl DesktopApp {
                 false
             }
         }
+    }
+
+    // ----------------------------------------------------------------------
+    // MT.3 chat-tab run binding — launch / drain wrappers that keep
+    // `chat_running_tab` in sync with the in-flight `current_chat` /
+    // `current_design` sessions.
+    // ----------------------------------------------------------------------
+
+    /// Launch a pending chat send and BIND the run to the tab it started on.
+    ///
+    /// `launch_if_pending` consumes `pending_send` and parks a `ChatSession` /
+    /// `DesignSession` (or, on an honest-error path, neither). When a session
+    /// actually starts, record the active tab as `chat_running_tab` so the
+    /// pumps target it even after the user switches tabs. When nothing started
+    /// (error bubble only), leave the binding untouched.
+    pub(crate) fn launch_chat_if_pending(&mut self) -> bool {
+        let launched = chat_session::launch_if_pending(
+            &mut self.host,
+            &mut self.current_chat,
+            &mut self.current_design,
+        );
+        if launched && (self.current_chat.is_some() || self.current_design.is_some()) {
+            self.chat_running_tab = Some(self.host.editor_state().chat.active_index());
+        }
+        launched
+    }
+
+    /// Drain a New Chat request (the widget handler already opened the fresh
+    /// tab). Aborts any in-flight worker and clears the now-stale tab binding.
+    pub(crate) fn drain_new_chat(&mut self) -> bool {
+        let drained = chat_session::drain_new_chat_request(
+            &mut self.host,
+            &mut self.current_chat,
+            &mut self.current_design,
+        );
+        if drained {
+            self.chat_running_tab = None;
+        }
+        drained
+    }
+
+    /// Drain a Stop request — aborts the in-flight worker and clears the tab
+    /// binding so a later pump can't target a finished run.
+    pub(crate) fn drain_stop_chat(&mut self) -> bool {
+        let drained = chat_session::drain_stop_request(
+            &mut self.host,
+            &mut self.current_chat,
+            &mut self.current_design,
+        );
+        if drained {
+            self.chat_running_tab = None;
+        }
+        drained
+    }
+
+    /// Close chat tab `idx` (MT.3 `AIChatHit::CloseTab`). When the closed tab
+    /// is the one a run is bound to, abort the run FIRST (drop both sessions +
+    /// clear the binding) so the pump never targets a removed / shifted tab.
+    /// Otherwise the binding is shifted to follow the surviving tab.
+    pub(crate) fn close_chat_tab(&mut self, idx: usize) {
+        if idx >= self.host.editor_state().chat.tab_count() {
+            return; // out of range — mirror ChatSessions::close_tab no-op
+        }
+        if self.chat_running_tab == Some(idx) {
+            // The run's tab is going away — abort it before the index shifts.
+            // Drop the chat / design sessions and any sub-agent loops bound to
+            // this tab (ending their canvas-indicator epoch so no badge glow
+            // gets stuck). The top-level design indicator self-heals next frame
+            // (its teardown is gated on `current_chat.is_none()`).
+            self.current_chat = None;
+            self.current_design = None;
+            crate::sub_agent_session::abort_all(
+                &mut self.sub_agents,
+                &mut self.active_sub_agent,
+            );
+            self.chat_running_tab = None;
+        } else if let Some(running) = self.chat_running_tab {
+            self.chat_running_tab = op_editor_core::adjust_running_tab_after_close(running, idx);
+        }
+        self.host.editor_state_mut().chat.close_tab(idx);
+        self.host.mark_editor_state_dirty();
+    }
+
+    /// Drain a pending close-tab request raised by the chat tab-row close-×
+    /// (MT.3 `AIChatHit::CloseTab` → `editor_ui.pending_close_chat_tab`).
+    /// Routes through [`Self::close_chat_tab`] so a run bound to the closed
+    /// tab is aborted before the index shifts.
+    pub(crate) fn drain_close_chat_tab(&mut self) -> bool {
+        let Some(idx) = self
+            .host
+            .editor_state_mut()
+            .editor_ui
+            .pending_close_chat_tab
+            .take()
+        else {
+            return false;
+        };
+        self.close_chat_tab(idx);
+        true
+    }
+
+    /// Open a fresh chat tab (⌘T / Ctrl+T). Preserves all existing tabs and
+    /// does NOT abort an in-flight run — the run keeps streaming into its own
+    /// tab while the user composes in the new one.
+    pub(crate) fn new_chat_tab(&mut self) {
+        self.host.editor_state_mut().chat.new_tab();
+        self.host.mark_editor_state_dirty();
     }
 }

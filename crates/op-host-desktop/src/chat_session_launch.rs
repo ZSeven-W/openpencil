@@ -32,6 +32,12 @@ use super::ChatSession;
 mod chat_design_request;
 use chat_design_request::build_design_request;
 
+// Design-agent-loop helpers (flag gate + provider builder + turn launcher)
+// split out at the 800-line cap; see module docs there.
+#[path = "chat_session_launch_design.rs"]
+pub(super) mod launch_design;
+use launch_design::launch_design_loop_turn;
+
 /// Drain `chat.pending_send` (raised by `ChatState::begin_send`) and
 /// route it.
 ///
@@ -76,13 +82,21 @@ pub fn launch_if_pending(
         }
         // CLI transport construction failed — fall through to the
         // honest-error path below.
+    } else if should_launch_direct_modify(host.editor_state(), &user_text) {
+        if launch_direct_modify_turn(host, &user_text, current_chat, current_design) {
+            return true;
+        }
     } else if matches!(classify_intent(&user_text), Intent::Design) {
-        // Builtin / ACP design-keyword turns keep routing to the
-        // orchestrator pipeline (established shell divergence from
-        // the TS agent loop's generate_design tool; see
-        // chat_canvas_tools.rs module docs). The append context the
-        // TS tool path detects (agent-tool-executor.ts:234) rides the
-        // request here, since this IS that path's shell equivalent.
+        // Phase 2.3: When the design-agent-loop flag is ON and a built-in
+        // provider is configured, run the agentic tool-loop with the 14-tool
+        // design toolset instead of the orchestrator pipeline. Flag OFF falls
+        // through to the orchestrator path below — byte-for-byte unchanged.
+        if launch_design_loop_turn(host, user_text.clone(), current_chat, current_design) {
+            return true;
+        }
+        // Orchestrator path — unchanged when flag is OFF or no built-in
+        // design provider is available. The append context the TS tool path
+        // detects (agent-tool-executor.ts:234) rides the request here.
         if let Some(provider) = provider_for_selected_model(host) {
             *current_chat = None;
             let llm = ChatProviderLlmClient::new(Arc::from(provider))
@@ -207,6 +221,54 @@ pub fn launch_if_pending(
     true
 }
 
+fn should_launch_direct_modify(state: &EditorState, user_text: &str) -> bool {
+    // A whole-screen draw request ("继续画一下 search 页面") must reach the
+    // design pipeline's new-frame route, never get hijacked into editing the
+    // existing frame in place — even when it also trips the modify classifier.
+    !op_host_services::chat_intent::requests_new_whole_screen(user_text)
+        && op_host_services::chat_intent::looks_like_modify_request(user_text)
+        && op_host_services::chat_intent::build_modify_plan(state, user_text).is_some()
+}
+
+fn launch_direct_modify_turn(
+    host: &mut WidgetHostNative,
+    user_text: &str,
+    current_chat: &mut Option<ChatSession>,
+    current_design: &mut Option<DesignSession>,
+) -> bool {
+    let Some(provider) = provider_for_selected_model(host) else {
+        return false;
+    };
+    let Some(plan) =
+        op_host_services::chat_intent::build_modify_plan(host.editor_state(), user_text)
+    else {
+        return false;
+    };
+    let request = ChatRequest {
+        system_prompt: plan.system_prompt,
+        user_message: plan.user_message,
+        max_output_tokens: 8192,
+        model: selected_cli_model_id(host),
+        ..Default::default()
+    };
+    let (chat_tx, chat_rx) = mpsc::channel::<ChatDelta>();
+    let (executor, tool_rx) = chat_tool_channel();
+    *current_design = None;
+    *current_chat = Some(ChatSession::from_channels(chat_rx, Some(tool_rx)));
+    thread::Builder::new()
+        .name("op-chat-modify".into())
+        .spawn(move || {
+            op_host_services::chat_intent::run_modify_turn(
+                provider.as_ref(),
+                request,
+                &chat_tx,
+                &executor,
+            );
+        })
+        .expect("spawn op-chat-modify thread");
+    true
+}
+
 /// Launch a CLI standard-mode turn (GAP #33): pre-build every route's
 /// inputs + channels on the UI thread, park a `ChatSession` and a
 /// `DesignSession` (mirroring `from_channels` docs), and hand the
@@ -320,9 +382,18 @@ fn launch_cli_standard_turn(
     true
 }
 
-/// Drain a New Chat request raised by the widget layer. The transcript
-/// has already been cleared inside `ChatState::new_chat`; this drops
-/// any in-flight workers so stale deltas cannot repopulate it.
+/// Drain a New Chat request raised by the widget layer.
+///
+/// The widget handler ([`crate::widget_host`] `AIChatHit::NewChat`) already
+/// pushed the fresh tab via `ChatSessions::new_tab` — the active tab keeps its
+/// history intact while the new tab starts blank. This drain only does the
+/// host-side worker cleanup the widget layer cannot reach: drop any in-flight
+/// workers (so stale deltas can't repopulate the previous tab's transcript)
+/// and forget any resumable provider session.
+///
+/// Returns the index of the tab a still-running turn was bound to, if any, so
+/// the caller can clear its `chat_running_tab` field (the run we just aborted
+/// must no longer target any tab).
 pub fn drain_new_chat_request(
     host: &mut WidgetHostNative,
     current_chat: &mut Option<ChatSession>,
@@ -331,11 +402,13 @@ pub fn drain_new_chat_request(
     if !std::mem::take(&mut host.editor_state_mut().chat.pending_new_chat) {
         return false;
     }
+    // The fresh tab was already opened by the widget handler — do NOT push a
+    // second one here (one "+" click == one new tab).
     *current_chat = None;
     *current_design = None;
-    // A fresh transcript must start a fresh provider conversation —
-    // forget any resumable Claude Code / Copilot session so stale
-    // context can't leak into the new chat.
+    // A fresh tab must start a fresh provider conversation — forget any
+    // resumable Claude Code / Copilot session so stale context cannot
+    // leak into the new chat.
     op_host_services::chat_claude::reset_claude_chat_session();
     op_host_services::chat_copilot::reset_copilot_chat_session();
     host.mark_editor_state_dirty();
@@ -621,4 +694,47 @@ fn selected_provider_label(host: &WidgetHostNative) -> String {
         .get(agent_idx)
         .map(|a| a.name().to_string())
         .unwrap_or_else(|| "This agent".into())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use op_editor_core::pen_node_ext::PenNodeExt;
+
+    fn frame(
+        id: &str,
+        name: &str,
+        children: Vec<jian_ops_schema::node::PenNode>,
+    ) -> jian_ops_schema::node::PenNode {
+        let mut node: jian_ops_schema::node::PenNode = serde_json::from_value(serde_json::json!({
+            "type": "frame",
+            "id": id,
+            "name": name,
+            "width": 390,
+            "height": 120,
+            "children": []
+        }))
+        .expect("frame fixture");
+        if let Some(kids) = node.children_mut() {
+            *kids = children;
+        }
+        node
+    }
+
+    #[test]
+    fn builtin_design_keyword_with_existing_target_prefers_modify_route() {
+        let mut state = EditorState::new();
+        state.active_children_mut().clear();
+        state.active_children_mut().push(frame(
+            "screen",
+            "Food App Home",
+            vec![frame("popular-card", "Bella Napoli Pizzeria", Vec::new())],
+        ));
+        state.set_single_selection(op_editor_core::NodeId::new("popular-card"));
+
+        assert!(
+            should_launch_direct_modify(&state, "修改成饺子"),
+            "selected existing design + modify wording should update in place, not start a new orchestrator design"
+        );
+    }
 }

@@ -86,6 +86,7 @@ pub const STYLE_GUIDE_TAGS: &[&str] = &[
     "education",
     "enterprise",
     "fintech",
+    "food",
     "luxury",
     "tech",
     "terminal",

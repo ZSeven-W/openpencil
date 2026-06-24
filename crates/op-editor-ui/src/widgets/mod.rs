@@ -177,6 +177,7 @@ mod ai_chat_model_picker_tests;
 pub mod ai_chat_panel;
 pub mod ai_chat_panel_controls;
 mod ai_chat_panel_footer;
+pub(crate) mod ai_chat_panel_header;
 mod ai_chat_panel_hit;
 pub mod ai_chat_panel_paint;
 pub mod ai_chat_transcript;

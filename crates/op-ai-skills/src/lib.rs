@@ -32,9 +32,53 @@ pub use compose::compose_system_prompt;
 pub use loader::{get_skill_by_name, get_skill_registry, get_skills_by_phase, SkillEntry};
 pub use resolve::resolve_skills;
 pub use types::{
-    AgentContext, Phase, ResolveOptions, ResolvedSkill, SkillCategory, SkillMeta, SkillTrigger,
-    DEFAULT_BUDGETS,
+    AgentContext, DropReason, DroppedSkill, Phase, ResolveOptions, ResolvedSkill, SkillCategory,
+    SkillLoadEntry, SkillLoadReport, SkillMeta, SkillTrigger, DEFAULT_BUDGETS,
 };
+
+/// Return the product-design guideline text for `topic`.
+///
+/// Supported topics:
+/// - `"web-app"` — composed from the `product-principles` + `design-principles`
+///   knowledge skills (both always-on, apply to every screen / general web UI).
+/// - `"mobile"` — the `mobile-app` domain skill (three-section architecture +
+///   spacing / navigation / touch-target rules).
+///
+/// Returns `None` for any unrecognised topic so callers can produce a typed
+/// "unknown topic" error without special-casing the string themselves.
+pub fn guideline_for(topic: &str) -> Option<String> {
+    match topic {
+        "web-app" => {
+            let product = get_skill_by_name("product-principles")?;
+            let design = get_skill_by_name("design-principles")?;
+            // Concatenate both skills into one coherent guidelines doc.
+            // A blank line separates them so the boundary is clear but readable.
+            Some(format!("{}\n\n{}", product.content.trim(), design.content.trim()))
+        }
+        "mobile" => {
+            let mobile = get_skill_by_name("mobile-app")?;
+            Some(mobile.content.clone())
+        }
+        _ => None,
+    }
+}
+
+/// Return the system prompt for the design agentic tool-loop.
+///
+/// The prompt is embedded at compile time from
+/// `skills/phases/agent/design-agent.md` and returned verbatim — no
+/// frontmatter stripping, no template substitution. Callers (e.g. the
+/// `BuiltInProvider` `QueryLoop`) pass it directly as the system message
+/// for a design turn.
+///
+/// Panics at startup if the embedded file is missing or not valid UTF-8
+/// (a build-time invariant: the file is checked in alongside this crate).
+pub fn design_agent_system_prompt() -> &'static str {
+    SKILLS
+        .get_file("phases/agent/design-agent.md")
+        .and_then(|f| f.contents_utf8())
+        .expect("skills/phases/agent/design-agent.md must be embedded in the op-ai-skills corpus")
+}
 
 /// The embedded `skills/` corpus — domain / knowledge / phase skill
 /// markdown plus the `style-guides/` subtree. Parsed into the skill
@@ -63,9 +107,79 @@ mod tests {
         // The TS package ships ~95 skill + style-guide markdown files;
         // the full corpus must travel with the crate.
         assert!(
-            count_md(&SKILLS) >= 90,
+            count_md(&SKILLS) >= 91,
             "expected the full skill corpus to embed, found {}",
             count_md(&SKILLS)
         );
+    }
+
+    #[test]
+    fn guideline_for_web_app_returns_product_design_content() {
+        let content = guideline_for("web-app").expect("web-app guideline must be present");
+        // Both source skills must be represented.
+        assert!(
+            content.contains("PURPOSE FIRST"),
+            "web-app guideline must contain product-principles content"
+        );
+        assert!(
+            content.contains("DESIGN CRAFT"),
+            "web-app guideline must contain design-principles content"
+        );
+        assert!(!content.is_empty());
+    }
+
+    #[test]
+    fn guideline_for_mobile_returns_mobile_app_content() {
+        let content = guideline_for("mobile").expect("mobile guideline must be present");
+        // Canonical phrase from mobile-app.md.
+        assert!(
+            content.contains("THREE-SECTION ARCHITECTURE"),
+            "mobile guideline must contain the three-section architecture content"
+        );
+        assert!(!content.is_empty());
+    }
+
+    #[test]
+    fn guideline_for_unknown_topic_returns_none() {
+        assert!(
+            guideline_for("unknown-topic").is_none(),
+            "unknown topics must return None"
+        );
+        assert!(guideline_for("").is_none(), "empty topic must return None");
+        assert!(
+            guideline_for("desktop").is_none(),
+            "unsupported topics must return None"
+        );
+    }
+
+    #[test]
+    fn design_agent_system_prompt_resolves_and_contains_protocol_markers() {
+        let prompt = design_agent_system_prompt();
+        assert!(!prompt.is_empty(), "design_agent_system_prompt must not be empty");
+
+        // Tool-loop protocol markers.
+        assert!(prompt.contains("get_editor_state"), "must reference get_editor_state");
+        assert!(prompt.contains("get_style_guide"), "must reference get_style_guide");
+        assert!(prompt.contains("get_guidelines"), "must reference get_guidelines");
+        assert!(prompt.contains("batch_design"), "must reference batch_design");
+        assert!(prompt.contains("get_screenshot"), "must reference get_screenshot");
+        assert!(prompt.contains("spawn_agents"), "must reference spawn_agents");
+        assert!(prompt.contains("find_empty_space"), "must reference find_empty_space");
+
+        // DSL / node model markers.
+        assert!(prompt.contains("placeholder"), "must describe placeholder scaffolding");
+        assert!(prompt.contains("instanceId"), "must describe instanceId path editing");
+
+        // Batch size limit.
+        assert!(prompt.contains("25"), "must state the 25-operation batch limit");
+
+        // De-templating rules.
+        assert!(
+            prompt.contains("space-between") || prompt.contains("space_between"),
+            "must teach spacing / spread rule (space-between)"
+        );
+        assert!(prompt.contains("right"), "must state new-screen opens to the right");
+        assert!(prompt.contains("icon"), "must describe icon in nav tab rule");
+        assert!(prompt.contains("label"), "must describe label in nav tab rule");
     }
 }

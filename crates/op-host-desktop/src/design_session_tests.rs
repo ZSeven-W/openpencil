@@ -121,6 +121,7 @@ fn end_to_end_pump_round_trips_apply_and_progress_via_actor_channels() {
                 id: "s1".into(),
                 node_count: 3,
                 error: None,
+                inserted_root_ids: Vec::new(),
             }],
             total_nodes: 3,
         })));
@@ -135,7 +136,7 @@ fn end_to_end_pump_round_trips_apply_and_progress_via_actor_channels() {
     let deadline = Instant::now() + Duration::from_secs(5);
     while current.is_some() && Instant::now() < deadline {
         let _ = pump_commands(&mut host, &mut current, 1440.0, 900.0);
-        let _ = pump_progress(&mut host, &mut current);
+        let _ = pump_progress(&mut host, &mut current, None);
         if current.is_none() {
             break;
         }
@@ -284,6 +285,51 @@ fn mobile_root() -> jian_ops_schema::node::PenNode {
         "children": []
     }))
     .expect("mobile root fixture parses")
+}
+
+#[test]
+fn progress_label_formats_subtask_skills_block() {
+    use op_orchestrator::{Progress, SkillBrief};
+    let p = Progress::SubtaskSkills {
+        id: "header".into(),
+        included: vec![
+            SkillBrief {
+                name: "cjk-typography".into(),
+                token_count: 800,
+                truncated: false,
+            },
+            SkillBrief {
+                name: "mobile-app".into(),
+                token_count: 600,
+                truncated: false,
+            },
+        ],
+        dropped: vec![("examples".into(), "budget".into())],
+        budget_used: 5200,
+        budget_max: 8000,
+    };
+    let s = super::progress_label(&p);
+    assert!(s.contains("• Subtask `header`"), "{s}");
+    assert!(s.contains("2 skills · 5200/8000 tok · 1 dropped"), "{s}");
+    assert!(
+        s.contains("\n  ▸ skills: cjk-typography, mobile-app"),
+        "{s}"
+    );
+    assert!(s.contains("\n  ▸ dropped: examples (budget)"), "{s}");
+}
+
+#[test]
+fn progress_label_formats_subtask_retry() {
+    use op_orchestrator::Progress;
+    let p = Progress::SubtaskRetry {
+        id: "header".into(),
+        attempt: 2,
+        reason: "zero nodes generated".into(),
+    };
+    assert_eq!(
+        super::progress_label(&p),
+        "  ▸ retry #2: zero nodes generated"
+    );
 }
 
 fn mobile_fit_content_root() -> jian_ops_schema::node::PenNode {

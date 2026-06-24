@@ -80,6 +80,17 @@ pub struct Theme {
     /// surface (matches the TS app's `oklch(0.145 0 0)` ≈ `#252525`
     /// canvas tone, dialed back a touch for OP's chrome).
     pub canvas_surface: Color,
+    /// Medium-gray fill for user message bubbles in the AI chat
+    /// transcript (#27 style: distinct from the near-black panel bg,
+    /// readable against white text). Dark ≈ #3a3a45, light ≈ #d0d0d8.
+    pub user_bubble: Color,
+    /// Success green for the ✓ ring on completed tool/step cards
+    /// (#27 reference: ~#3FB950, matches GitHub's success green).
+    pub status_success: Color,
+    /// Gold accent for the speed/effort chip in the AI chat bottom
+    /// toolbar (#27: ⚡ icon + "2x" label in this color, no bg).
+    /// ~#FFD93D (warm yellow, readable on dark panels).
+    pub speed_accent: Color,
 }
 
 impl Theme {
@@ -112,6 +123,12 @@ impl Theme {
             row_selected_primary: rgba(0x3b, 0x82, 0xf6, 0.18),
             // Matches TS CANVAS_BACKGROUND_DARK (#1a1a1a).
             canvas_surface: rgb(0x1a, 0x1a, 0x1a),
+            // Medium-gray: visible against white text, lighter than the dark panel.
+            user_bubble: rgb(0x3a, 0x3a, 0x45),
+            // GitHub-style success green ~#3FB950 for completed ✓ rings.
+            status_success: rgb(0x3f, 0xb9, 0x50),
+            // #FFD93D — warm yellow for the ⚡ speed chip icon + label.
+            speed_accent: rgb(0xff, 0xd9, 0x3d),
         }
     }
 
@@ -145,6 +162,12 @@ impl Theme {
             // Matches TS CANVAS_BACKGROUND_LIGHT (#e5e5e5) — a clear grey so the
             // white frame/page reads against the canvas instead of vanishing.
             canvas_surface: rgb(0xe5, 0xe5, 0xe5),
+            // Light mode user bubble: a cool lavender-gray, legible on dark text.
+            user_bubble: rgb(0xd0, 0xd0, 0xd8),
+            // Success green is the same in both themes.
+            status_success: rgb(0x3f, 0xb9, 0x50),
+            // Slightly muted gold for light backgrounds (same hue as dark).
+            speed_accent: rgb(0xd4, 0xa0, 0x10),
         }
     }
 }

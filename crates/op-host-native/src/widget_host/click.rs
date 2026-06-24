@@ -198,7 +198,18 @@ impl WidgetHostNative {
                         return true;
                     }
                     AIChatHit::NewChat => {
-                        self.editor_state.chat.new_chat();
+                        // "+" opens a fresh, PRESERVED tab — the old tab keeps
+                        // its transcript intact (MT.1-review regression fix:
+                        // `new_chat()` reset/wiped the active tab in place,
+                        // and `drain_new_chat_request` then pushed a SECOND
+                        // tab → one "+" click double-created + wiped history).
+                        // `new_tab()` pushes one blank tab and activates it;
+                        // `pending_new_chat` rides to the host so its
+                        // `drain_new_chat_request` aborts in-flight workers and
+                        // forgets any resumable provider session — WITHOUT
+                        // creating another tab.
+                        self.editor_state.chat.new_tab();
+                        self.editor_state.chat.pending_new_chat = true;
                         self.editor_state.editor_ui.close_chat_model_picker();
                         self.mark_dirty();
                         return true;
@@ -206,6 +217,8 @@ impl WidgetHostNative {
                     AIChatHit::ToggleModelPicker => {
                         let opening = self.editor_state.editor_ui.toggle_chat_model_picker();
                         if opening {
+                            // Close the parallel-agents picker when model picker opens.
+                            self.editor_state.editor_ui.close_parallel_agents_picker();
                             self.editor_state
                                 .editor_ui
                                 .chat_model_picker_input
@@ -258,6 +271,23 @@ impl WidgetHostNative {
                         self.mark_dirty();
                         return true;
                     }
+                    AIChatHit::ToggleParallelAgentsPicker => {
+                        // Toggle the Parallel Agents picker open/closed.
+                        // Also closes the model picker when opening this one.
+                        if !self.editor_state.editor_ui.parallel_agents_picker_open {
+                            self.editor_state.editor_ui.close_chat_model_picker();
+                        }
+                        self.editor_state.editor_ui.toggle_parallel_agents_picker();
+                        self.mark_dirty();
+                        return true;
+                    }
+                    AIChatHit::SetParallelAgents(n) => {
+                        // Set the agent_team_size and close the picker.
+                        self.editor_state.chat.agent_team_size = n;
+                        self.editor_state.editor_ui.close_parallel_agents_picker();
+                        self.mark_dirty();
+                        return true;
+                    }
                     AIChatHit::AddAttachment => {
                         // The desktop event loop drains this flag,
                         // opens a native file picker, and stages the
@@ -295,6 +325,13 @@ impl WidgetHostNative {
                         self.mark_dirty();
                         return true;
                     }
+                    AIChatHit::SetActionStepExpanded(msg_idx, step_idx, expanded) => {
+                        self.editor_state
+                            .chat
+                            .set_message_action_step_expanded(msg_idx, step_idx, expanded);
+                        self.mark_dirty();
+                        return true;
+                    }
                     AIChatHit::CopyDesignBlock(text) => {
                         self.editor_state.chat.queue_copy_text(text);
                         self.mark_dirty();
@@ -317,6 +354,30 @@ impl WidgetHostNative {
                     }
                     AIChatHit::ToggleChecklist => {
                         self.editor_state.chat.toggle_checklist_collapsed();
+                        self.mark_dirty();
+                        return true;
+                    }
+                    AIChatHit::ToggleChecklistItem(idx) => {
+                        self.editor_state.chat.set_checklist_item_expanded(idx);
+                        self.mark_dirty();
+                        return true;
+                    }
+                    AIChatHit::SwitchTab(idx) => {
+                        // Pure editor-state change — a switch does NOT touch
+                        // the run binding (a run keeps streaming into its own
+                        // tab; see the host's `chat_running_tab`).
+                        self.editor_state.chat.switch_to(idx);
+                        self.editor_state.editor_ui.close_chat_model_picker();
+                        self.mark_dirty();
+                        return true;
+                    }
+                    AIChatHit::CloseTab(idx) => {
+                        // Closing a tab can need to abort an in-flight run
+                        // bound to it (a session the widget layer can't reach),
+                        // so defer to the host runner: raise the request and
+                        // let `DesktopApp::close_chat_tab` do the close +
+                        // run-binding fix-up next frame.
+                        self.editor_state.editor_ui.pending_close_chat_tab = Some(idx);
                         self.mark_dirty();
                         return true;
                     }
@@ -482,6 +543,8 @@ fn chat_button_press_target(hit: &AIChatHit) -> Option<op_editor_core::ButtonPre
     }
     let footer = match hit {
         AIChatHit::ToggleModelPicker => op_editor_core::ChatFooterButton::ModelPicker,
+        // The ⚡ chip is now the Parallel Agents chip — pressed state uses SpeedChip.
+        AIChatHit::ToggleParallelAgentsPicker => op_editor_core::ChatFooterButton::SpeedChip,
         AIChatHit::CycleAgentTeam => op_editor_core::ChatFooterButton::AgentTeam,
         AIChatHit::AddAttachment => op_editor_core::ChatFooterButton::AddAttachment,
         AIChatHit::Send => op_editor_core::ChatFooterButton::Send,

@@ -494,22 +494,62 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
                         }
                     }
                 }
-                if chat_session::drain_new_chat_request(
+                if self.drain_new_chat() {
+                    self.redraw_dirty = true;
+                }
+                if self.drain_stop_chat() {
+                    self.redraw_dirty = true;
+                }
+                if self.drain_close_chat_tab() {
+                    self.redraw_dirty = true;
+                }
+                // Pump in-flight AI chat deltas into this frame. The deltas
+                // land in the tab the turn was bound to (MT.3 session-per-tab),
+                // not whichever tab is active now.
+                if chat_session::pump(
                     &mut self.host,
                     &mut self.current_chat,
-                    &mut self.current_design,
+                    self.chat_running_tab,
                 ) {
                     self.redraw_dirty = true;
                 }
-                if chat_session::drain_stop_request(
-                    &mut self.host,
-                    &mut self.current_chat,
-                    &mut self.current_design,
-                ) {
-                    self.redraw_dirty = true;
+                // Update design-loop canvas indicators (frame glows + N/M
+                // header) while an OPENPENCIL_DESIGN_AGENT_LOOP turn runs.
+                crate::design_loop_indicator::pump_indicator(
+                    &mut self.design_loop_indicator,
+                    &self.current_chat,
+                    self.host.editor_state_mut(),
+                );
+                // Sub-agent design loops (Task 3.1): launch any specs the
+                // parent loop just stashed via `spawn_agents`, then pump the
+                // active sub SEQUENTIALLY. Runs AFTER `pump_indicator` so the
+                // parent indicator teardown can't clobber the sub N/M count.
+                // Borrow-clean: launch + pump each borrow `host` and
+                // `sub_agents` separately (and `pump_sub_agents` takes the
+                // active session out before pumping).
+                if let Some(specs) = crate::sub_agent_session::take_pending_spawn() {
+                    // Guard against a parent calling `spawn_agents` a SECOND
+                    // time while batch A is still running: overwriting
+                    // `self.sub_agents` would drop batch A's in-flight sessions
+                    // and leak its active indicator epoch (forever-glow). The
+                    // nested guard only covers a sub re-spawning, not the
+                    // parent — so drop the re-spawn while a batch is live (the
+                    // stash is still consumed above, so it can't fire later).
+                    if self.sub_agents.is_empty() {
+                        self.sub_agents =
+                            crate::sub_agent_session::launch_sub_agents(&mut self.host, specs);
+                        self.active_sub_agent = 0;
+                        if !self.sub_agents.is_empty() {
+                            self.redraw_dirty = true;
+                        }
+                    }
                 }
-                // Pump in-flight AI chat deltas into this frame.
-                if chat_session::pump(&mut self.host, &mut self.current_chat) {
+                if crate::sub_agent_session::pump_sub_agents(
+                    &mut self.host,
+                    &mut self.sub_agents,
+                    &mut self.active_sub_agent,
+                    self.chat_running_tab,
+                ) {
                     self.redraw_dirty = true;
                 }
                 // Drain a pending Cancel from the Code panel FIRST so a
@@ -585,8 +625,22 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
                 ) {
                     self.redraw_dirty = true;
                 }
-                if design_session::pump_progress(&mut self.host, &mut self.current_design) {
+                if design_session::pump_progress(
+                    &mut self.host,
+                    &mut self.current_design,
+                    self.chat_running_tab,
+                ) {
                     self.redraw_dirty = true;
+                }
+                // Each pump retires its session when the turn finishes — once
+                // no chat / design / sub-agent run remains in flight, the tab
+                // binding is stale, so clear it (a fresh turn re-captures the
+                // active tab at launch).
+                if self.current_chat.is_none()
+                    && self.current_design.is_none()
+                    && self.sub_agents.is_empty()
+                {
+                    self.chat_running_tab = None;
                 }
                 self.image_search.enqueue_missing(self.host.editor_state());
                 if self.image_search.poll_into(self.host.editor_state_mut()) {
@@ -721,6 +775,7 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
                     || self.current_design.is_some()
                     || self.current_codegen.is_some()
                     || self.current_design_md.is_some()
+                    || !self.sub_agents.is_empty()
                 {
                     event_loop.set_control_flow(ControlFlow::WaitUntil(
                         Instant::now() + Duration::from_millis(33),
@@ -921,25 +976,16 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
                 }
                 // A click on the chat Send button raises
                 // `pending_send` — launch the provider turn.
-                if chat_session::launch_if_pending(
-                    &mut self.host,
-                    &mut self.current_chat,
-                    &mut self.current_design,
-                ) {
+                if self.launch_chat_if_pending() {
                     self.request_redraw(true);
                 }
-                if chat_session::drain_new_chat_request(
-                    &mut self.host,
-                    &mut self.current_chat,
-                    &mut self.current_design,
-                ) {
+                if self.drain_new_chat() {
                     self.request_redraw(true);
                 }
-                if chat_session::drain_stop_request(
-                    &mut self.host,
-                    &mut self.current_chat,
-                    &mut self.current_design,
-                ) {
+                if self.drain_stop_chat() {
+                    self.request_redraw(true);
+                }
+                if self.drain_close_chat_tab() {
                     self.request_redraw(true);
                 }
                 // A click on the attach button raises
@@ -1306,6 +1352,7 @@ impl DesktopApp {
             || self.current_design.is_some()
             || self.current_codegen.is_some()
             || self.current_design_md.is_some()
+            || !self.sub_agents.is_empty()
             || self.current_figma_import.is_some()
             || self.pending_figma_paste.is_some()
             || self.host.next_animation_deadline_ms().is_some()

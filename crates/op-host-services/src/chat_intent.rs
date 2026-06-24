@@ -76,16 +76,30 @@ Reply with EXACTLY one of these tags, nothing else:
 - DESIGN_MODIFY — user wants to modify, adjust, refine, or iterate on an EXISTING design (e.g. change colors, resize, restyle, add/remove elements)
 - CHAT — user is asking a question, seeking help, or having a conversation";
 
-/// TS `MODIFY_KEYWORDS` alternatives (the `\b(...)\b/i` regex).
-#[cfg(test)]
+/// TS `MODIFY_KEYWORDS` alternatives (the `\b(...)\b/i` regex), plus
+/// Rust-shell CJK shorthands used before an LLM route decision.
 const MODIFY_KEYWORDS: &[&str] = &[
     "change", "modify", "update", "adjust", "resize", "move", "restyle", "refine", "fix", "tweak",
     "edit", "replace", "remove", "delete", "add to", "smaller", "larger", "bigger", "wider",
     "taller",
 ];
+const MODIFY_CJK: &[&str] = &[
+    "修改",
+    "改成",
+    "改为",
+    "改一下",
+    "调整",
+    "修复",
+    "替换",
+    "换成",
+    "变成",
+    "删除",
+    "移除",
+    "小一点",
+    "大一点",
+];
 
 /// TS `CHAT_KEYWORDS` alternatives.
-#[cfg(test)]
 const CHAT_KEYWORDS: &[&str] = &[
     "what is", "how do", "explain", "tell me", "help", "why", "can you", "question", "describe",
 ];
@@ -124,11 +138,11 @@ fn matches_any_word_phrase(text_lower: &str, phrases: &[&str]) -> bool {
 }
 
 /// TS `classifyByKeywords` — verbatim rule order.
-#[cfg(test)]
 pub fn classify_by_keywords(text: &str) -> DesignIntent {
     let lower = text.to_lowercase();
     let chat = matches_any_word_phrase(&lower, CHAT_KEYWORDS);
-    let modify = matches_any_word_phrase(&lower, MODIFY_KEYWORDS);
+    let modify = matches_any_word_phrase(&lower, MODIFY_KEYWORDS)
+        || MODIFY_CJK.iter().any(|k| text.contains(k));
     if chat && !modify {
         return DesignIntent::Chat;
     }
@@ -136,6 +150,36 @@ pub fn classify_by_keywords(text: &str) -> DesignIntent {
         return DesignIntent::Modify;
     }
     DesignIntent::New
+}
+
+pub fn looks_like_modify_request(text: &str) -> bool {
+    classify_by_keywords(text) == DesignIntent::Modify
+}
+
+/// Standard-mode routing should not let a lightweight classifier
+/// overrule explicit edit wording. Providers like Codex / Claude Code
+/// can be conservative and answer DESIGN_NEW for terse CJK edit
+/// prompts; keep those on the modify path before asking the model.
+pub fn classify_intent_for_standard_route(
+    provider: &dyn ChatProvider,
+    text: &str,
+    model: Option<String>,
+) -> DesignIntent {
+    // A whole-screen *draw* (creation verb + page noun, e.g. "重新画一个
+    // search 页面") is unambiguously a new screen — it must win over the
+    // modify classifier so it routes to the new-frame path, not edit-in-place.
+    // It already excludes existing-screen context ("把发现页改成深色" has no
+    // creation verb), so genuine edits still fall through to Modify below.
+    if requests_new_whole_screen(text) {
+        return DesignIntent::New;
+    }
+    if looks_like_modify_request(text) {
+        return DesignIntent::Modify;
+    }
+    if is_named_follow_on_screen(text) {
+        return DesignIntent::New;
+    }
+    classify_intent_llm(provider, text, model)
 }
 
 /// TS classification-tag parsing (`ai-chat-intent-classifier.ts:46-51`).
@@ -265,6 +309,62 @@ const NEW_SCREEN_CJK: &[&str] = &[
     "另起",
     "另外一页",
 ];
+const NAMED_SCREEN_EN: &[&str] = &[
+    "discover page",
+    "discover screen",
+    "search page",
+    "search screen",
+    "orders page",
+    "orders screen",
+    "order page",
+    "order screen",
+    "profile page",
+    "profile screen",
+    "account page",
+    "account screen",
+    "favorites page",
+    "favorites screen",
+    "saved page",
+    "saved screen",
+    "detail page",
+    "detail screen",
+    "details page",
+    "details screen",
+    "cart page",
+    "cart screen",
+    "checkout page",
+    "checkout screen",
+    "category page",
+    "category screen",
+    "menu page",
+    "menu screen",
+];
+const NAMED_SCREEN_CJK: &[&str] = &[
+    "发现页",
+    "发现页面",
+    "搜索页",
+    "搜索页面",
+    "订单页",
+    "订单页面",
+    "我的页",
+    "我的页面",
+    "个人页",
+    "个人页面",
+    "账户页",
+    "账户页面",
+    "收藏页",
+    "收藏页面",
+    "详情页",
+    "详情页面",
+    "购物车页",
+    "购物车页面",
+    "结算页",
+    "结算页面",
+    "分类页",
+    "分类页面",
+    "菜单页",
+    "菜单页面",
+];
 
 /// TS `加一个.{0,6}(区块|栏|模块|section|段)` — "加一个" followed by one
 /// of the suffixes within 0-6 characters.
@@ -282,6 +382,128 @@ fn matches_cjk_add_section(text: &str) -> bool {
         search = after;
     }
     false
+}
+
+pub fn is_named_follow_on_screen(prompt: &str) -> bool {
+    let lower = prompt.to_lowercase();
+    matches_any_word_phrase(&lower, NAMED_SCREEN_EN)
+        || NAMED_SCREEN_CJK.iter().any(|k| prompt.contains(k))
+}
+
+/// True when the appended unit is a *section* of the current screen rather
+/// than a whole new screen — "继续加一个区块", "add another section". These
+/// keep appending into the existing frame.
+fn is_section_add_request(prompt: &str) -> bool {
+    let lower = prompt.to_lowercase();
+    matches_cjk_add_section(prompt)
+        || ["区块", "模块", "栏目"].iter().any(|k| prompt.contains(k))
+        || lower.contains("section")
+}
+
+/// CJK verbs that mean "create a whole thing" (vs. editing an existing one).
+/// Used to confirm a page/screen noun is the unit being *made*, not just
+/// referenced — "画一个登录页" makes a page; "给页面加个按钮" edits one.
+/// Deliberately excludes 加 / 整 — they appear inside 主页 / 整个 / 增加 and
+/// would mis-fire on "给主页加个卡片" (add a card to the home page).
+const DRAW_VERB_CJK: &[&str] = &["画", "绘", "做", "搞", "生成", "设计", "来"];
+/// English creation verbs — the page/screen noun must be the thing being
+/// *made*. Deliberately excludes the ambiguous "make" / "add" (which read as
+/// edits in "make the page blue" / "add a button to the page"), so an English
+/// EDIT that merely mentions a page/screen ("change the home page layout",
+/// "resize the screen header") is NOT mistaken for a new-screen request.
+const DRAW_VERB_EN: &[&str] = &[
+    "draw",
+    "create",
+    "design",
+    "generate",
+    "build",
+    "wireframe",
+    "mock up",
+    "mockup",
+    "sketch",
+    "prototype",
+    "lay out",
+];
+/// Markers that the request points at the CURRENT screen, so it is an edit of
+/// the existing frame, not a new one.
+const EXISTING_SCREEN_CTX_CJK: &[&str] = &["这个", "这一", "当前", "现有", "此页", "这页", "这屏"];
+
+/// True when the unit being drawn is a whole *page / screen* — "继续画一下
+/// search 页面", "再来一个登录页", "continue, add a settings screen". The named
+/// list (`is_named_follow_on_screen`) only covers a fixed vocabulary in a
+/// single language, so it misses generic or mixed-language phrasings like
+/// "search 页面" (English noun + Chinese 页面). The user's rule is broader:
+/// drawing a whole page/screen always becomes a NEW top-level frame placed to
+/// the right, never rows appended into the current screen.
+///
+/// Guards against false positives: a section-add ("再加一个区块") keeps
+/// appending, and an edit pointed at the current screen ("给这个页面加个按钮",
+/// "重新画一下这个页面", "change the home page layout") is not a new screen.
+/// CJK requires a creation verb on a page noun; English keys on the determiner
+/// nearest the page noun (see [`english_requests_new_screen`]).
+pub fn requests_new_whole_screen(prompt: &str) -> bool {
+    if is_section_add_request(prompt) {
+        return false;
+    }
+    // An edit pointed at the CURRENT CJK screen ("重新画一下这个页面") — the
+    // creation verb is present but 这个/当前 marks it as the existing one.
+    if EXISTING_SCREEN_CTX_CJK.iter().any(|k| prompt.contains(k)) {
+        return false;
+    }
+    let cjk_page = ["页面", "页", "屏幕", "屏"].iter().any(|k| prompt.contains(k));
+    if cjk_page && DRAW_VERB_CJK.iter().any(|v| prompt.contains(v)) {
+        return true;
+    }
+    english_requests_new_screen(&prompt.to_lowercase())
+}
+
+/// English new-screen detection by the DETERMINER nearest a page/screen noun:
+/// an indefinite article ("a / an / another / new") means a NEW page is being
+/// made ("make a login page", "draw a checkout page"); a definite/demonstrative
+/// ("the / this / that / current / existing") means an EXISTING page is being
+/// referenced — an edit or a location ("change the home page", "create a button
+/// on the login page" — here the page is where the button goes). Keyword
+/// presence alone is too blunt: it both misses "make a login page" (a creation
+/// verb the simple list excludes) and misroutes "create a button on the login
+/// page" (verb + page noun, but the page is a location, not the object).
+fn english_requests_new_screen(lower: &str) -> bool {
+    const NOUNS: &[&str] = &["page", "screen"];
+    const DEFINITE: &[&str] = &[
+        "the", "this", "that", "these", "those", "current", "existing", "same",
+    ];
+    const INDEFINITE: &[&str] = &["a", "an", "another", "new", "fresh"];
+    let tokens: Vec<&str> = lower
+        .split(|c: char| !c.is_ascii_alphanumeric())
+        .filter(|t| !t.is_empty())
+        .collect();
+    let mut saw_noun = false;
+    for (i, tok) in tokens.iter().enumerate() {
+        if !NOUNS.contains(tok) {
+            continue;
+        }
+        saw_noun = true;
+        // The NEAREST determiner within 4 tokens before the noun decides
+        // (adjectives like "login" / "checkout" sit between it and the noun).
+        for j in (i.saturating_sub(4)..i).rev() {
+            if DEFINITE.contains(&tokens[j]) {
+                return false;
+            }
+            if INDEFINITE.contains(&tokens[j]) {
+                return true;
+            }
+        }
+    }
+    // No determiner cue near a page noun: a strong creation verb still signals
+    // a new screen ("draw search page"); otherwise it's not a whole-screen req.
+    saw_noun && matches_any_word_phrase(lower, DRAW_VERB_EN)
+}
+
+fn is_new_screen_veto(prompt: &str) -> bool {
+    let lower = prompt.to_lowercase();
+    matches_any_word_phrase(&lower, NEW_SCREEN_EN)
+        || NEW_SCREEN_CJK.iter().any(|k| prompt.contains(k))
+        || is_named_follow_on_screen(prompt)
+        || requests_new_whole_screen(prompt)
 }
 
 /// TS `STATUS_BAR_RE = /(status[\s_-]*bar|system[\s_-]*chrome|状态栏|系统栏)/i`.
@@ -371,9 +593,7 @@ pub fn detect_append_intent(state: &EditorState, prompt: &str) -> Option<AppendC
     if !has_append {
         return None;
     }
-    if matches_any_word_phrase(&lower, NEW_SCREEN_EN)
-        || NEW_SCREEN_CJK.iter().any(|k| prompt.contains(k))
-    {
+    if is_new_screen_veto(prompt) {
         return None;
     }
 
@@ -394,6 +614,21 @@ pub fn detect_append_intent(state: &EditorState, prompt: &str) -> Option<AppendC
         existing_section_labels: section_labels,
         is_mobile: width <= 480.0,
     })
+}
+
+/// Design generation should ask the selected LLM to extract a design.md from
+/// the current canvas for named follow-on pages (Discover / Orders / Profile,
+/// etc.). A document-bound design.md wins, and append mode keeps its
+/// append-specific context instead of creating a new sibling screen.
+pub fn should_auto_generate_design_md(
+    state: &EditorState,
+    prompt: &str,
+    append_context: Option<&AppendContext>,
+) -> bool {
+    state.doc.design_md.is_none()
+        && append_context.is_none()
+        && !state.active_children().is_empty()
+        && (is_named_follow_on_screen(prompt) || requests_new_whole_screen(prompt))
 }
 
 // ---------------------------------------------------------------------------
@@ -600,7 +835,7 @@ pub fn run_cli_turn(
     delta_tx: Sender<DesignDelta>,
     cmd_tx: Sender<DesignCmdReq>,
 ) {
-    let classified = classify_intent_llm(
+    let classified = classify_intent_for_standard_route(
         plan.classify_provider.as_ref(),
         &plan.user_text,
         plan.model.clone(),
@@ -652,7 +887,7 @@ pub fn run_cli_turn(
 /// The DESIGN_MODIFY route — port of `generateDesignModification` +
 /// `extractAndApplyDesignModification` + the handler glue
 /// (`ai-chat-handlers.ts:708-741`, `design-generator.ts:95-173`).
-fn run_modify_turn(
+pub fn run_modify_turn(
     provider: &dyn ChatProvider,
     request: ChatRequest,
     chat_tx: &Sender<ChatDelta>,

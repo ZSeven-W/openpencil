@@ -89,6 +89,42 @@ fn collapsed_node_hides_its_children() {
 }
 
 #[test]
+fn unnamed_node_row_falls_back_to_kind_label() {
+    // MCP `batch_design` / `insert_node` can create nodes with no
+    // `name`. The layer row must then show the kind label (TS parity:
+    // `node.name ?? node.type`) instead of a blank label.
+    let state = state_from(
+        r##"{ "version": "0.8.0", "children": [
+              {"type":"rectangle","id":"n1","width":10,"height":10},
+              {"type":"frame","id":"n2","width":20,"height":20},
+              {"type":"rectangle","id":"n3","name":"Hero","width":10,"height":10}
+        ]}"##,
+    );
+    let panel = LayerPanel::from_editor(&state);
+    assert_eq!(panel.items.len(), 3);
+    assert_eq!(
+        panel.items[0].label, "Rectangle",
+        "unnamed rect → kind label"
+    );
+    assert_eq!(panel.items[1].label, "Frame", "unnamed frame → kind label");
+    assert_eq!(panel.items[2].label, "Hero", "named node keeps its name");
+}
+
+#[test]
+fn ghost_item_for_unnamed_node_falls_back_to_kind_label() {
+    // The drag-ghost row (host paints it at the cursor) shares the same
+    // name-or-kind fallback so a nameless node isn't a blank ghost.
+    let state = state_from(
+        r##"{ "version": "0.8.0", "children": [
+              {"type":"ellipse","id":"n1","width":10,"height":10}
+        ]}"##,
+    );
+    let ghost = LayerPanel::ghost_item_for(&state, &NodeId::new("n1"))
+        .expect("ghost item for an on-page node");
+    assert_eq!(ghost.label, "Ellipse");
+}
+
+#[test]
 fn hit_test_resolves_first_layer_row() {
     let state = EditorState::sample();
     let panel = LayerPanel::from_editor(&state);

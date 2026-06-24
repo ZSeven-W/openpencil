@@ -128,6 +128,7 @@ fn batchable(cmd: &EditorCommand) -> bool {
         | C::ImportSvg { .. }
         | C::SetNodeLayoutProp { .. }
         | C::ReplaceAllMatchingProperties { .. }
+        | C::MergeAppState { .. }
         | C::PromoteLegacyWidgets => true,
     }
 }

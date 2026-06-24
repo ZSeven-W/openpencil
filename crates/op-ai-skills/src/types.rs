@@ -221,6 +221,50 @@ pub struct HistoryOutput {
     pub creative_variant: Option<String>,
 }
 
+/// Why a candidate skill was excluded from the resolved set.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DropReason {
+    /// Trigger keywords did not match the intent (`filter_by_intent`).
+    IntentMiss,
+    /// No budget remained to include the skill (`trim_by_budget`).
+    BudgetExhausted,
+    /// Removed by the model-tier allow-set (`apply_skill_filter`).
+    TierFiltered,
+    /// Removed because the minimal-mode floor was applied.
+    MinimalMode,
+    /// Removed because complexity was reduced for this request.
+    ReducedComplexity,
+    /// Removed as a duplicate of an already-included skill.
+    Deduped,
+    /// Removed because its content mismatched the request.
+    ContentMismatch,
+}
+
+/// One skill that was excluded, with the reason it was dropped.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DroppedSkill {
+    pub name: String,
+    pub reason: DropReason,
+}
+
+/// One skill that survived into the resolved set.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SkillLoadEntry {
+    pub name: String,
+    pub category: SkillCategory,
+    pub token_count: u32,
+    pub truncated: bool,
+}
+
+/// Diagnostic record of what loaded vs dropped for one resolution.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SkillLoadReport {
+    pub included: Vec<SkillLoadEntry>,
+    pub dropped: Vec<DroppedSkill>,
+    pub budget_used: u32,
+    pub budget_max: u32,
+}
+
 /// The fully-resolved agent context [`crate::resolve::resolve_skills`]
 /// returns — the skill set plus the budget accounting + memory.
 #[derive(Debug, Clone)]
@@ -231,6 +275,7 @@ pub struct AgentContext {
     pub memory: ResolveMemory,
     pub budget_used: u32,
     pub budget_max: u32,
+    pub report: SkillLoadReport,
 }
 
 #[cfg(test)]
@@ -271,5 +316,19 @@ mod tests {
         );
         assert_eq!(SkillCategory::from_str("domain"), SkillCategory::Domain);
         assert_eq!(SkillCategory::from_str("???"), SkillCategory::Domain);
+    }
+
+    #[test]
+    fn skill_load_report_defaults_empty() {
+        let r = SkillLoadReport::default();
+        assert!(r.included.is_empty());
+        assert!(r.dropped.is_empty());
+        assert_eq!(r.budget_used, 0);
+        assert_eq!(r.budget_max, 0);
+        let d = DroppedSkill {
+            name: "examples".into(),
+            reason: DropReason::BudgetExhausted,
+        };
+        assert_eq!(d.reason, DropReason::BudgetExhausted);
     }
 }

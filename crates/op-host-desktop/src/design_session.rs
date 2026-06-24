@@ -77,7 +77,16 @@ pub fn pump_commands(
 /// Drain every pending progress delta and fold it into the trailing
 /// assistant message. Clears `current` once the terminal `Done`
 /// arrives. Returns true when the transcript changed.
-pub fn pump_progress(host: &mut WidgetHostNative, current: &mut Option<DesignSession>) -> bool {
+///
+/// `running_tab` binds the progress lines + summary to the chat tab this
+/// design turn started on (MT.3 session-per-tab), so switching the active tab
+/// mid-run doesn't fold deltas into the wrong tab. `None` / out-of-range falls
+/// back to the active tab.
+pub fn pump_progress(
+    host: &mut WidgetHostNative,
+    current: &mut Option<DesignSession>,
+    running_tab: Option<usize>,
+) -> bool {
     let Some(session) = current.as_mut() else {
         return false;
     };
@@ -85,7 +94,7 @@ pub fn pump_progress(host: &mut WidgetHostNative, current: &mut Option<DesignSes
     let mut changed = false;
     if !poll.progress.is_empty() {
         let appended = render_progress(&poll.progress);
-        let chat = &mut host.editor_state_mut().chat;
+        let chat = host.editor_state_mut().chat.run_tab_mut(running_tab);
         if let Some(msg) = chat.messages.last_mut() {
             msg.thinking.push_str(&appended);
             msg.thinking_collapsed = false;
@@ -93,7 +102,7 @@ pub fn pump_progress(host: &mut WidgetHostNative, current: &mut Option<DesignSes
         }
     }
     if let Some(summary) = &poll.summary {
-        let chat = &mut host.editor_state_mut().chat;
+        let chat = host.editor_state_mut().chat.run_tab_mut(running_tab);
         if let Some(msg) = chat.messages.last_mut() {
             match summary {
                 Ok(s) => {
@@ -151,6 +160,21 @@ fn progress_label(p: &Progress) -> String {
             format!("• Subtask `{id}` done ({node_count} nodes)")
         }
         Progress::SubtaskFailed { id, error } => format!("• Subtask `{id}` failed: {error}"),
+        Progress::SubtaskSkills {
+            id,
+            included,
+            dropped,
+            budget_used,
+            budget_max,
+        } => format_subtask_skills(id, included, dropped, *budget_used, *budget_max),
+        Progress::SubtaskRetry {
+            attempt, reason, ..
+        } => {
+            format!("  ▸ retry #{attempt}: {reason}")
+        }
+        Progress::SubtaskNodes { id, nodes_so_far } => {
+            format!("• Subtask `{id}` — {nodes_so_far} node(s) so far")
+        }
         Progress::CleanupDone => "• Cleanup done".into(),
         Progress::ValidationStarted => "• Validation started".into(),
         Progress::ValidationPreCheckDone { applied, .. } => {
@@ -185,6 +209,41 @@ fn progress_label(p: &Progress) -> String {
         }
         Progress::VisualRefFallback { reason } => format!("• Visual-ref fallback: {reason}"),
     }
+}
+
+/// Format a `SubtaskSkills` payload into the concise summary line plus
+/// indented `▸ skills:` / `▸ dropped:` detail sub-lines (spec Component 5).
+/// The Component-6 UI parser reads `  ▸ ` sub-lines back into checklist details.
+fn format_subtask_skills(
+    id: &str,
+    included: &[op_orchestrator::SkillBrief],
+    dropped: &[(String, String)],
+    budget_used: u32,
+    budget_max: u32,
+) -> String {
+    let mut out = format!(
+        "• Subtask `{id}`  ·  {} skills · {budget_used}/{budget_max} tok · {} dropped",
+        included.len(),
+        dropped.len(),
+    );
+    if !included.is_empty() {
+        let names: Vec<String> = included
+            .iter()
+            .map(|s| {
+                if s.truncated {
+                    format!("{} (truncated)", s.name)
+                } else {
+                    s.name.clone()
+                }
+            })
+            .collect();
+        out.push_str(&format!("\n  ▸ skills: {}", names.join(", ")));
+    }
+    if !dropped.is_empty() {
+        let drops: Vec<String> = dropped.iter().map(|(n, r)| format!("{n} ({r})")).collect();
+        out.push_str(&format!("\n  ▸ dropped: {}", drops.join(", ")));
+    }
+    out
 }
 
 #[cfg(test)]

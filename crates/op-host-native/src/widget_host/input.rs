@@ -876,6 +876,22 @@ impl WidgetHostNative {
                 return true;
             }
         }
+        // AI chat tab row hover — drives the close-× visibility on each tab.
+        // `tab_hover_at` returns None when collapsed or no tabs exist; the
+        // else branch clears any stale index when the panel is not present.
+        if let Some(chat_rect) = self.ai_chat_rect(self.last_viewport_w, self.last_viewport_h) {
+            use op_editor_ui::widgets::AIChatPlaceholder;
+            let new_hover = AIChatPlaceholder::from_editor_at(&self.editor_state, self.now_ms)
+                .tab_hover_at(chat_rect, Point2D::new(x, y));
+            if new_hover != self.editor_state.editor_ui.chat_tab_hover {
+                self.editor_state.editor_ui.chat_tab_hover = new_hover;
+                self.mark_dirty();
+                return true;
+            }
+        } else if self.editor_state.editor_ui.chat_tab_hover.take().is_some() {
+            self.mark_dirty();
+            return true;
+        }
         if let Some(chat_rect) = self.ai_chat_rect(self.last_viewport_w, self.last_viewport_h) {
             use op_editor_ui::widgets::AIChatPlaceholder;
             let new_hover = AIChatPlaceholder::from_editor_at(&self.editor_state, self.now_ms)
@@ -894,6 +910,28 @@ impl WidgetHostNative {
         {
             self.mark_dirty();
             return true;
+        }
+        // Parallel-agents picker row hover — drives the highlight wash inside the overlay.
+        if let Some(chat_rect) = self.ai_chat_rect(self.last_viewport_w, self.last_viewport_h) {
+            use op_editor_ui::widgets::AIChatPlaceholder;
+            let new_hover = AIChatPlaceholder::from_editor_at(&self.editor_state, self.now_ms)
+                .parallel_agents_picker_hover_at(chat_rect, Point2D::new(x, y));
+            if new_hover != self.editor_state.editor_ui.parallel_agents_picker_hover {
+                self.editor_state.editor_ui.parallel_agents_picker_hover = new_hover;
+                self.mark_dirty();
+                return true;
+            }
+        } else {
+            if self
+                .editor_state
+                .editor_ui
+                .parallel_agents_picker_hover
+                .take()
+                .is_some()
+            {
+                self.mark_dirty();
+                return true;
+            }
         }
         if let Some(chat_rect) = self.ai_chat_rect(self.last_viewport_w, self.last_viewport_h) {
             use op_editor_ui::widgets::AIChatPlaceholder;

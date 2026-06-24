@@ -8,17 +8,22 @@ use crate::widgets::PaintCx;
 use crate::{Point2D, Rect, TextLayout};
 
 const GROUP_HEADER_H: f32 = 22.0;
-const CARD_HEADER_H: f32 = 24.0;
+/// #27 restyle: comfortable 48px card header (was 24px).
+const CARD_HEADER_H: f32 = 48.0;
 const CARD_GAP: f32 = 4.0;
 const CARD_PAD_X: f32 = 8.0;
 const CARD_PAD_Y: f32 = 6.0;
 const CARD_LINE_H: f32 = 14.0;
-const STATUS_SUCCESS_GREEN: crate::Color = crate::Color {
-    r: 0x22 as f32 / 255.0,
-    g: 0xc5 as f32 / 255.0,
-    b: 0x5e as f32 / 255.0,
-    a: 1.0,
-};
+/// Radius for the #27 rounded-rect card style (~10px per spec).
+const CARD_RADIUS: f32 = 10.0;
+/// X-offset of the left-aligned card label.
+const CARD_LABEL_X: f32 = 12.0;
+/// X-offset from the card right edge to the status ring center.
+const CARD_STATUS_RIGHT_OFFSET: f32 = 44.0;
+/// X-offset from the card right edge to the chevron top-left.
+const CARD_CHEVRON_RIGHT_OFFSET: f32 = 24.0;
+/// Radius of the ✓-ring that surrounds the check icon on completed cards.
+const CHECK_RING_R: f32 = 9.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ToolLevel {
@@ -55,16 +60,6 @@ impl ToolLevel {
 
     fn default_open(self) -> bool {
         matches!(self, Self::Modify | Self::Delete | Self::Orchestrate)
-    }
-
-    fn icon(self) -> Icon {
-        match self {
-            Self::Read => Icon::Search,
-            Self::Create => Icon::Plus,
-            Self::Modify => Icon::Pencil,
-            Self::Delete => Icon::Trash,
-            Self::Orchestrate => Icon::Wrench,
-        }
     }
 }
 
@@ -399,8 +394,8 @@ pub(crate) fn paint_tool_panel(cx: &mut PaintCx<'_>, theme: &Theme, panel: &Tool
 }
 
 fn paint_tool_card(cx: &mut PaintCx<'_>, theme: &Theme, card: &ToolCallCard) {
+    // #27 restyle: elevated-dark fill with subtle 1px border, ~10px radius.
     let mut bg = theme.card;
-    bg.a *= 0.5;
     let mut border = theme.border;
     if card.level == ToolLevel::Delete {
         border = theme.destructive;
@@ -408,51 +403,45 @@ fn paint_tool_card(cx: &mut PaintCx<'_>, theme: &Theme, card: &ToolCallCard) {
         bg = theme.destructive;
         bg.a *= 0.08;
     }
-    cx.backend.fill_round_rect(card.rect, 6.0, bg);
-    cx.backend.stroke_round_rect(card.rect, 6.0, border, 1.0);
-    draw_icon(
-        cx.backend,
-        if card.expanded {
-            Icon::ChevronDown
-        } else {
-            Icon::ChevronRight
-        },
-        Point2D::new(card.header.origin.x + 7.0, card.header.origin.y + 6.0),
-        12.0,
-        theme.muted_foreground,
-        1.4,
-    );
-    let accent = match card.level {
-        ToolLevel::Delete => theme.destructive,
-        ToolLevel::Orchestrate => theme.primary,
-        ToolLevel::Read => theme.muted_foreground,
-        ToolLevel::Create | ToolLevel::Modify => theme.foreground,
-    };
-    draw_icon(
-        cx.backend,
-        card.level.icon(),
-        Point2D::new(card.header.origin.x + 24.0, card.header.origin.y + 5.0),
-        14.0,
-        accent,
-        1.5,
-    );
+    cx.backend.fill_round_rect(card.rect, CARD_RADIUS, bg);
+    cx.backend.stroke_round_rect(card.rect, CARD_RADIUS, border, 1.0);
+
+    // Label: left-aligned, muted-bright color, vertically centered.
     let text_color = if card.level == ToolLevel::Delete {
         theme.destructive
     } else {
-        theme.foreground
+        theme.muted_foreground
     };
-    draw_line(
-        cx,
-        &card.name,
-        card.header.origin.x + 44.0,
-        card.header.origin.y + 16.0,
-        11.0,
-        text_color,
-    );
+    let label_x = card.header.origin.x + CARD_LABEL_X;
+    let label_baseline = card.header.origin.y + CARD_HEADER_H / 2.0 + 4.0;
+    draw_line(cx, &card.name, label_x, label_baseline, 11.0, text_color);
+
+    // Source badge — sits just left of the status icon when present.
     if let Some(source) = card.source.as_deref() {
         paint_source_badge(cx, theme, card, source);
     }
+
+    // Status ring + icon: positioned before the chevron.
     paint_status_icon(cx, theme, card);
+
+    // Expand/collapse chevron at the far right, vertically centered.
+    let chevron_icon = if card.expanded {
+        Icon::ChevronDown
+    } else {
+        Icon::ChevronRight
+    };
+    draw_icon(
+        cx.backend,
+        chevron_icon,
+        Point2D::new(
+            card.header.origin.x + card.header.size.x - CARD_CHEVRON_RIGHT_OFFSET,
+            card.header.origin.y + (CARD_HEADER_H - 14.0) / 2.0,
+        ),
+        14.0,
+        theme.muted_foreground,
+        1.5,
+    );
+
     if card.body.size.y > 0.0 {
         cx.backend.stroke_line(
             Point2D::new(card.body.origin.x, card.body.origin.y),
@@ -507,24 +496,57 @@ fn paint_source_badge(cx: &mut PaintCx<'_>, theme: &Theme, card: &ToolCallCard, 
     cx.backend.restore();
 }
 
+/// Paint the per-card status indicator.
+///
+/// For completed (done) cards: a thin-ring circle in success-green with
+/// the `check` glyph inside — matching the #27 reference look. For
+/// running/pending: a muted loader spinner. For error: a red ✕ icon.
+/// The icon top-left is placed at `(x + w - CARD_STATUS_RIGHT_OFFSET,
+/// y + (CARD_HEADER_H - 14) / 2)`.
 fn paint_status_icon(cx: &mut PaintCx<'_>, theme: &Theme, card: &ToolCallCard) {
-    let (icon, color) = match card.status.as_str() {
-        "running" | "pending" => (Icon::Loader, theme.muted_foreground),
-        "error" => (Icon::Close, theme.destructive),
-        _ if card.result_failed => (Icon::Close, theme.destructive),
-        _ => (Icon::Check, STATUS_SUCCESS_GREEN),
-    };
-    draw_icon(
-        cx.backend,
-        icon,
-        Point2D::new(
-            card.header.origin.x + card.header.size.x - 20.0,
-            card.header.origin.y + 5.0,
-        ),
-        14.0,
-        color,
-        1.5,
+    let icon_top_left = Point2D::new(
+        card.header.origin.x + card.header.size.x - CARD_STATUS_RIGHT_OFFSET,
+        card.header.origin.y + (CARD_HEADER_H - 14.0) / 2.0,
     );
+
+    let is_error = card.status == "error" || card.result_failed;
+    let is_pending = matches!(card.status.as_str(), "running" | "pending");
+
+    if is_pending {
+        draw_icon(
+            cx.backend,
+            Icon::Loader,
+            icon_top_left,
+            14.0,
+            theme.muted_foreground,
+            1.5,
+        );
+    } else if is_error {
+        draw_icon(
+            cx.backend,
+            Icon::Close,
+            icon_top_left,
+            14.0,
+            theme.destructive,
+            1.5,
+        );
+    } else {
+        // Done: thin success-green ring + check glyph inside (#27 reference).
+        let success_color = theme.status_success;
+        let ring_cx = icon_top_left.x + 7.0;
+        let ring_cy = icon_top_left.y + 7.0;
+        cx.backend.stroke_oval(
+            Rect::xywh(
+                ring_cx - CHECK_RING_R,
+                ring_cy - CHECK_RING_R,
+                CHECK_RING_R * 2.0,
+                CHECK_RING_R * 2.0,
+            ),
+            success_color,
+            1.0,
+        );
+        draw_icon(cx.backend, Icon::Check, icon_top_left, 14.0, success_color, 1.5);
+    }
 }
 
 fn draw_line(
@@ -551,24 +573,21 @@ mod tests {
     use crate::{Color, RenderBackend};
 
     #[test]
-    fn orchestrate_tool_level_uses_ts_wrench_icon() {
-        let wrench = Icon::from_name("wrench").expect("wrench icon should be available");
-
-        assert_eq!(ToolLevel::Orchestrate.icon(), wrench);
-    }
-
-    #[test]
-    fn done_tool_status_uses_ts_plain_check_icon() {
+    fn done_tool_status_uses_check_icon_with_success_green_ring() {
+        // #27 restyle: done status uses the theme's success-green (0x3fb950)
+        // with a ✓ check icon + thin ring. Old constant tailwind-green-500
+        // (0x22c55e) is replaced by Theme::dark().status_success.
+        let theme = Theme::dark();
         let mut backend = StatusIconBackend::default();
         let mut cx = PaintCx {
             backend: &mut backend,
         };
         let card = test_card("done", false);
 
-        paint_tool_card(&mut cx, &Theme::dark(), &card);
+        paint_tool_card(&mut cx, &theme, &card);
 
         assert_eq!(backend.status_paths, Icon::Check.paths());
-        assert_eq!(backend.status_colors, vec![tailwind_green_500()]);
+        assert_eq!(backend.status_colors, vec![theme.status_success]);
     }
 
     #[test]
@@ -659,13 +678,19 @@ mod tests {
         fn fill_round_rect(&mut self, _: Rect, _: f32, _: Color) {}
         fn stroke_round_rect(&mut self, _: Rect, _: f32, _: Color, _: f32) {}
         fn stroke_svg_path(&mut self, d: &str, at: Point2D, _: f32, color: Color, _: f32) {
-            if (at.x - 90.0).abs() < 0.01 && (at.y - 15.0).abs() < 0.01 {
+            // Status icon position after #27 restyle:
+            // X = header.origin.x + header.size.x - CARD_STATUS_RIGHT_OFFSET (44)
+            //   = 10 + 100 - 44 = 66
+            // Y = header.origin.y + (CARD_HEADER_H - 14) / 2
+            //   = 10 + (48 - 14) / 2 = 27
+            if (at.x - 66.0).abs() < 0.01 && (at.y - 27.0).abs() < 0.01 {
                 let path = Icon::Check
                     .paths()
                     .iter()
                     .chain(Icon::Close.paths().iter())
                     .chain(Icon::CheckCircle.paths().iter())
                     .chain(Icon::XCircle.paths().iter())
+                    .chain(Icon::Loader.paths().iter())
                     .copied()
                     .find(|path| *path == d)
                     .expect("status icon path should be static icon data");
@@ -685,12 +710,4 @@ mod tests {
         }
     }
 
-    fn tailwind_green_500() -> Color {
-        Color {
-            r: 0x22 as f32 / 255.0,
-            g: 0xc5 as f32 / 255.0,
-            b: 0x5e as f32 / 255.0,
-            a: 1.0,
-        }
-    }
 }

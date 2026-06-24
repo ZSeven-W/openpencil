@@ -4,7 +4,8 @@
 //! 两个 trait 进出;其余全是数据类型。
 
 use futures::stream::BoxStream;
-use op_editor_core::{EditorCommand, EditorState};
+use jian_ops_schema::node::PenNode;
+use op_editor_core::{EditorCommand, EditorState, NodeId};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -20,6 +21,30 @@ pub trait DocSink: Send {
     fn state(&self) -> &EditorState;
     /// 应用一条编辑命令;返回 `false` 表示命令被拒(文档未变)。
     fn apply(&mut self, cmd: EditorCommand) -> bool;
+    /// Apply an `InsertSubtree` and return the post-remap root ids.
+    /// `None` = rejected (document unchanged).
+    ///
+    /// The default implementation routes through `apply` and returns
+    /// `Some(vec![])` on success — post-remap ids are unavailable on
+    /// buffered / remote sinks where the real `EditorState` is not local.
+    /// Override on immediate-apply sinks (e.g. `VecDocSink`) to surface
+    /// the real remapped ids from `EditorState::insert_subtree_returning_root_ids`.
+    fn insert_subtree_returning_root_ids(
+        &mut self,
+        nodes: Vec<PenNode>,
+        parent_id: &NodeId,
+    ) -> Option<Vec<String>> {
+        let applied = self.apply(EditorCommand::InsertSubtree {
+            nodes,
+            parent_id: parent_id.clone(),
+            page_id: None,
+        });
+        if applied {
+            Some(vec![])
+        } else {
+            None
+        }
+    }
     /// 开启一个 undo 批 —— 批内的所有 apply 合并为一次 undo。
     fn begin_undo_batch(&mut self);
     /// 关闭当前 undo 批。
@@ -247,6 +272,30 @@ pub enum Progress {
         id: String,
         error: String,
     },
+    /// Per-subtask skill-load report — emitted right after the sub-agent
+    /// prompt is built (from the merged `SkillLoadReport`). `dropped` carries
+    /// `(name, reason_display)` pairs; the UI renders the concise summary line
+    /// plus `▸ skills:` / `▸ dropped:` detail sub-lines.
+    SubtaskSkills {
+        id: String,
+        included: Vec<SkillBrief>,
+        dropped: Vec<(String, String)>,
+        budget_used: u32,
+        budget_max: u32,
+    },
+    /// Emitted on each subtask retry with the reason (e.g. "zero nodes
+    /// generated"). `attempt` is the 1-based attempt number being retried into.
+    SubtaskRetry {
+        id: String,
+        attempt: u8,
+        reason: String,
+    },
+    /// Emitted after each sub-agent LLM reply is applied — lets the UI
+    /// show a live node count while the subtask is still running.
+    SubtaskNodes {
+        id: String,
+        nodes_so_far: usize,
+    },
     CleanupDone,
     // ── S3c: Vision-validation progress variants ─────────────────────────────
     /// 视觉校验阶段开始(pre-validation 将在此之后立即运行)。
@@ -306,6 +355,57 @@ pub enum Progress {
     },
 }
 
+/// A one-line summary of an included skill, surfaced to the chat UI via
+/// `Progress::SubtaskSkills`. Mirrors `op_ai_skills::SkillLoadEntry` minus
+/// the `category` field (the UI line doesn't display it).
+#[derive(Debug, Clone)]
+pub struct SkillBrief {
+    pub name: String,
+    pub token_count: u32,
+    pub truncated: bool,
+}
+
+impl SkillBrief {
+    /// Build a brief from an `op-ai-skills` report entry (name + token_count +
+    /// truncated; category is dropped — the UI line doesn't show it).
+    pub fn from_entry(e: &op_ai_skills::SkillLoadEntry) -> SkillBrief {
+        SkillBrief {
+            name: e.name.clone(),
+            token_count: e.token_count,
+            truncated: e.truncated,
+        }
+    }
+}
+
+/// Short, user-facing word for a `DropReason` (used in the `▸ dropped:` line).
+fn drop_reason_display(reason: &op_ai_skills::DropReason) -> &'static str {
+    use op_ai_skills::DropReason::*;
+    match reason {
+        IntentMiss => "intent",
+        BudgetExhausted => "budget",
+        TierFiltered => "tier",
+        MinimalMode => "minimal",
+        ReducedComplexity => "reduced",
+        Deduped => "dedup",
+        ContentMismatch => "mismatch",
+    }
+}
+
+/// Decompose a merged `SkillLoadReport` into the four payload parts of
+/// `Progress::SubtaskSkills` (included briefs, `(name, reason)` drops,
+/// budget_used, budget_max).
+pub fn report_to_progress_parts(
+    report: &op_ai_skills::SkillLoadReport,
+) -> (Vec<SkillBrief>, Vec<(String, String)>, u32, u32) {
+    let included = report.included.iter().map(SkillBrief::from_entry).collect();
+    let dropped = report
+        .dropped
+        .iter()
+        .map(|d| (d.name.clone(), drop_reason_display(&d.reason).to_string()))
+        .collect();
+    (included, dropped, report.budget_used, report.budget_max)
+}
+
 /// 单个 subtask 的执行结果。`error` 带值但 `node_count > 0` 表示
 /// "部分产出"(软错误);`node_count == 0` 表示零节点失败。
 #[derive(Debug, Clone)]
@@ -313,6 +413,10 @@ pub struct SubtaskOutcome {
     pub id: String,
     pub node_count: usize,
     pub error: Option<String>,
+    /// Post-remap ids of the roots this subtask inserted (append-mode
+    /// cleanup scopes to exactly these — Component 11). Empty on failure
+    /// or when the sink is buffered (ids unavailable until replay).
+    pub inserted_root_ids: Vec<String>,
 }
 
 /// `run()` 成功返回的汇总。
@@ -330,9 +434,8 @@ pub enum OrchestratorError {
     Aborted,
     /// 跑完但未产出任何真实内容。
     NoContent,
-    /// 并发路径:所有 screen-group worker 全部失败(零节点)。
+    /// 所有已运行 subtask 全部失败(零节点)。
     /// 内含第一个非空错误字符串,方便调用方记录或展示。
-    /// Port of `orchestrator-sub-agent.ts:321-325` throw path.
     AllFailed(String),
     /// 内部错误(意外情况)。
     Internal(String),
@@ -605,6 +708,52 @@ mod tests {
             .is_none());
     }
 
+    /// `Progress::SubtaskSkills` / `SubtaskRetry` + `SkillBrief` compile and match.
+    #[test]
+    fn progress_skill_variants_compile() {
+        let brief = SkillBrief {
+            name: "cjk-typography".into(),
+            token_count: 800,
+            truncated: false,
+        };
+        assert_eq!(brief.token_count, 800);
+        let skills = Progress::SubtaskSkills {
+            id: "header".into(),
+            included: vec![brief],
+            dropped: vec![("examples".into(), "budget".into())],
+            budget_used: 5200,
+            budget_max: 8000,
+        };
+        let retry = Progress::SubtaskRetry {
+            id: "header".into(),
+            attempt: 2,
+            reason: "zero nodes generated".into(),
+        };
+        for v in [skills, retry] {
+            match v {
+                Progress::SubtaskSkills { .. } => {}
+                Progress::SubtaskRetry { .. } => {}
+                _ => {}
+            }
+        }
+    }
+
+    /// `Progress::SubtaskNodes` compile and match.
+    #[test]
+    fn progress_subtask_nodes_compile() {
+        let nodes = Progress::SubtaskNodes {
+            id: "body".into(),
+            nodes_so_far: 12,
+        };
+        match nodes {
+            Progress::SubtaskNodes { id, nodes_so_far } => {
+                assert_eq!(id, "body");
+                assert_eq!(nodes_so_far, 12);
+            }
+            _ => {}
+        }
+    }
+
     /// `VisualRefProvider` trait is `Send + Sync`.
     #[test]
     fn visual_ref_provider_is_send_sync() {
@@ -624,6 +773,72 @@ mod tests {
     }
 
     // ── Task A2 end ───────────────────────────────────────────────────────────────
+
+    // ── Task B2: SkillBrief::from_entry + report_to_progress_parts ───────────────
+
+    /// `report_to_progress_parts` maps a `SkillLoadReport` into SubtaskSkills
+    /// payload parts: briefs, (name, reason) drops, budget_used, budget_max.
+    #[test]
+    fn report_to_progress_parts_maps_entries_and_drops() {
+        use op_ai_skills::{
+            DropReason, DroppedSkill, SkillCategory, SkillLoadEntry, SkillLoadReport,
+        };
+        let report = SkillLoadReport {
+            included: vec![SkillLoadEntry {
+                name: "cjk-typography".into(),
+                category: SkillCategory::Domain,
+                token_count: 800,
+                truncated: true,
+            }],
+            dropped: vec![DroppedSkill {
+                name: "examples".into(),
+                reason: DropReason::BudgetExhausted,
+            }],
+            budget_used: 5200,
+            budget_max: 8000,
+        };
+        let (briefs, drops, used, max) = report_to_progress_parts(&report);
+        assert_eq!(briefs.len(), 1);
+        assert_eq!(briefs[0].name, "cjk-typography");
+        assert_eq!(briefs[0].token_count, 800);
+        assert!(briefs[0].truncated);
+        assert_eq!(drops, vec![("examples".to_string(), "budget".to_string())]);
+        assert_eq!(used, 5200);
+        assert_eq!(max, 8000);
+    }
+
+    /// All 7 `DropReason` variants map to distinct, non-empty display strings.
+    #[test]
+    fn drop_reason_all_variants_covered() {
+        use op_ai_skills::{DropReason, DroppedSkill, SkillLoadReport};
+        let reasons = [
+            DropReason::IntentMiss,
+            DropReason::BudgetExhausted,
+            DropReason::TierFiltered,
+            DropReason::MinimalMode,
+            DropReason::ReducedComplexity,
+            DropReason::Deduped,
+            DropReason::ContentMismatch,
+        ];
+        let expected = [
+            "intent", "budget", "tier", "minimal", "reduced", "dedup", "mismatch",
+        ];
+        for (reason, exp) in reasons.iter().zip(expected.iter()) {
+            let report = SkillLoadReport {
+                included: vec![],
+                dropped: vec![DroppedSkill {
+                    name: "skill".into(),
+                    reason: *reason,
+                }],
+                budget_used: 0,
+                budget_max: 0,
+            };
+            let (_, drops, _, _) = report_to_progress_parts(&report);
+            assert_eq!(drops[0].1, *exp, "reason {reason:?} should map to {exp}");
+        }
+    }
+
+    // ── Task B2 end ───────────────────────────────────────────────────────────────
 
     /// `DesignRequest.validation_enabled` defaults to `true` when omitted from JSON.
     #[test]

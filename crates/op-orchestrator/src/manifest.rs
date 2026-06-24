@@ -40,39 +40,25 @@ const MAX_SECTION_DEPTH: usize = 2;
 
 static NEXT_SECTION_ID: AtomicU64 = AtomicU64::new(1);
 
-/// M4 路由表：ab-v9.2 全矩阵（2026-06-12）过 70% KPI 门的弱模型家族
-/// —— minimax-m3 92% / ark-code 92% / glm-5.1 98% / deepseek 83%。
-/// 强模型（Claude / GPT / Gemini 等）无基准数据不翻：目录是弱模型的
-/// 地板，不做强模型的天花板。kimi 同样无数据，待跑分后再进表。
+/// Element-manifest protocol switch — **off by default**.
 ///
-/// glm 家族精确到 `glm-5.1`（不是泛 `glm`）：glm-5.2（2026-06-18 定为 Full tier
-/// 强模型）的 manifest 输出在**完整页面**上反复崩 —— 深 section 嵌套超 depth-2
-/// 被 clamp、拿 element 当容器被扁平成兄弟 → 全堆顶层重叠（ab-v9 组件级 M3 96%
-/// 不代表整页布局）。强模型本就该走裸 PenNode JSONL（parse_nodes），它擅长嵌套
-/// 树（op-smoke 实测 restaurant 卡片嵌套正确）。`glm-5.2` 子串不命中 → 裸 JSONL；
-/// `glm-5.1` 仍走 manifest 脚手架。
-const MANIFEST_DEFAULT_FAMILIES: &[&str] = &["minimax", "glm-5.1", "deepseek", "ark-code"];
-
-/// M2 起的清单协议开关，M4 升级为按模型路由：`OPENPENCIL_MANIFEST`
-/// 保留为双向 override —— `1/true/on` 强制开（op-smoke 基准的
-/// per-process 切换习惯）、`0/false/off` 强制关（回滚开关）；未设置时
-/// 按 model id 家族路由。id 归一化与 `resolve_model_profile` 一致：
-/// strip `provider/` 前缀 → 小写 → 子串命中。空 id（chat 路径没有
-/// 模型信息时）不命中任何家族，走裸 JSONL。
-pub fn manifest_enabled_for_model(model_id: &str) -> bool {
-    match std::env::var("OPENPENCIL_MANIFEST").as_deref() {
-        Ok("1") | Ok("true") | Ok("on") => return true,
-        Ok("0") | Ok("false") | Ok("off") => return false,
-        _ => {}
-    }
-    let normalized = match model_id.find('/') {
-        Some(i) => &model_id[i + 1..],
-        None => model_id,
-    };
-    let lower = normalized.to_lowercase();
-    MANIFEST_DEFAULT_FAMILIES
-        .iter()
-        .any(|family| lower.contains(family))
+/// The manifest (a.k.a. "N-tool") element-scaffold path is opt-in: it
+/// runs only when `OPENPENCIL_MANIFEST` is explicitly truthy
+/// (`1` / `true` / `on`). Any other value, or the var being unset,
+/// keeps it off and routes generation through the bare-PenNode JSONL
+/// path (`parse::parse_nodes`).
+///
+/// The earlier M4 per-model-family auto-routing (minimax / glm-5.1 /
+/// deepseek / ark-code routed ON without env) was retired so the Rust
+/// build matches the TS `ENABLE_ELEMENT_TOOLS_IN_ORCHESTRATOR`
+/// flag-off-by-default posture. `model_id` is therefore no longer
+/// consulted; the parameter is kept for call-site stability and a
+/// possible future re-introduction of model-aware routing.
+pub fn manifest_enabled_for_model(_model_id: &str) -> bool {
+    matches!(
+        std::env::var("OPENPENCIL_MANIFEST").as_deref(),
+        Ok("1") | Ok("true") | Ok("on")
+    )
 }
 
 /// 从 LLM 文本解析元素清单。文本里没有任何 `"el"` 行时返回 `None`，
@@ -849,68 +835,68 @@ Here is the design:
         );
     }
 
-    // ── M4 按模型路由 ──────────────────────────────────────────────────
-    // 所有用例都持 MANIFEST_ENV_LOCK：函数读进程全局 env，与 subagent
-    // 的 set/remove 测试并行会互相拆台。
+    // ── Manifest opt-in routing (off by default) ──────────────────────
+    // Every case holds MANIFEST_ENV_LOCK: the gate reads process-global
+    // env, so running in parallel with subagent's set/remove tests would
+    // clobber each other.
 
     #[test]
-    fn manifest_routes_on_for_benchmarked_families_without_env() {
+    fn manifest_off_by_default_without_env() {
         let _guard = crate::test_support::MANIFEST_ENV_LOCK
             .lock()
             .unwrap_or_else(|e| e.into_inner());
         std::env::remove_var("OPENPENCIL_MANIFEST");
+        // Off for EVERY model — the retired M4 family auto-routing
+        // (minimax / glm-5.1 / deepseek / ark-code) no longer opts in.
         for id in [
             "MiniMax-M3",
-            "MiniMax-M2.7",
             "glm-5.1",
             "deepseek-v4-pro",
             "ark-code-latest",
-            "opencode/glm-5.1", // provider 前缀被剥掉
-        ] {
-            assert!(manifest_enabled_for_model(id), "{id} should route ON");
-        }
-    }
-
-    #[test]
-    fn manifest_routes_off_for_unbenchmarked_models_without_env() {
-        let _guard = crate::test_support::MANIFEST_ENV_LOCK
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
-        std::env::remove_var("OPENPENCIL_MANIFEST");
-        for id in [
+            "opencode/glm-5.1",
             "claude-sonnet-4-6",
-            "claude-haiku",
             "gpt-4o",
             "gemini-2.5-pro",
-            "kimi-k2.6", // 无基准数据，刻意不进表
-            "glm-5.2",   // Full-tier 强模型：manifest 脚手架限制其嵌套→整页崩，走裸 JSONL
-            "",          // chat 路径没有模型信息 → 裸 JSONL
+            "",
         ] {
-            assert!(!manifest_enabled_for_model(id), "{id:?} should route OFF");
+            assert!(
+                !manifest_enabled_for_model(id),
+                "{id:?} should be OFF by default"
+            );
         }
-        // glm-5.1 (the benchmarked weak model) still routes ON — the family
-        // is precise (`glm-5.1`), so 5.2 falls through but 5.1 doesn't.
-        assert!(
-            manifest_enabled_for_model("glm-5.1"),
-            "glm-5.1 keeps the scaffold"
-        );
     }
 
     #[test]
-    fn manifest_env_overrides_routing_both_ways() {
+    fn manifest_env_force_on_enables_any_model() {
         let _guard = crate::test_support::MANIFEST_ENV_LOCK
             .lock()
             .unwrap_or_else(|e| e.into_inner());
-        std::env::set_var("OPENPENCIL_MANIFEST", "1");
-        assert!(
-            manifest_enabled_for_model("claude-sonnet-4-6"),
-            "force-on must beat the family table"
-        );
-        std::env::set_var("OPENPENCIL_MANIFEST", "0");
-        assert!(
-            !manifest_enabled_for_model("MiniMax-M3"),
-            "force-off is the rollback switch"
-        );
+        for truthy in ["1", "true", "on"] {
+            std::env::set_var("OPENPENCIL_MANIFEST", truthy);
+            for id in ["claude-sonnet-4-6", "MiniMax-M3", "glm-5.2", ""] {
+                assert!(
+                    manifest_enabled_for_model(id),
+                    "force-on ({truthy:?}) must enable {id:?}"
+                );
+            }
+        }
+        std::env::remove_var("OPENPENCIL_MANIFEST");
+    }
+
+    #[test]
+    fn manifest_env_non_truthy_stays_off() {
+        let _guard = crate::test_support::MANIFEST_ENV_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        // Only 1/true/on opt in; everything else (incl. the legacy
+        // 0/false/off rollback values and unknown strings) stays off.
+        for falsy in ["0", "false", "off", "yes", "garbage"] {
+            std::env::set_var("OPENPENCIL_MANIFEST", falsy);
+            assert!(
+                !manifest_enabled_for_model("MiniMax-M3"),
+                "{falsy:?} must keep manifest OFF"
+            );
+        }
         std::env::remove_var("OPENPENCIL_MANIFEST");
     }
 }

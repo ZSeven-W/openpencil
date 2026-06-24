@@ -556,7 +556,7 @@ fn pump_executes_scripted_tool_call_against_live_state() {
     ));
 
     for _ in 0..2000 {
-        pump(&mut host, &mut current);
+        pump(&mut host, &mut current, None);
         if current.is_none() {
             break;
         }
@@ -581,6 +581,58 @@ fn pump_executes_scripted_tool_call_against_live_state() {
     assert_eq!(v["result"]["success"], true);
     assert!(msg.content.contains("tool said:"));
     assert!(!msg.streaming);
+}
+
+#[test]
+fn pump_writes_to_bound_tab_not_the_active_tab() {
+    // MT.3 session-per-tab: a run launched on tab 0 must keep streaming into
+    // tab 0 even after the user switches the active tab to a new tab 1.
+    let mut host = WidgetHostNative::new();
+    // Tab 0 sends and gets the streaming assistant bubble.
+    host.editor_state_mut()
+        .chat
+        .messages
+        .push(ChatMessage::assistant_streaming());
+
+    let provider = Box::new(EchoProvider {
+        script: vec![
+            ChatDelta::TextDelta("Hel".into()),
+            ChatDelta::TextDelta("lo".into()),
+            ChatDelta::Done {
+                stop_reason: StopReason::EndTurn,
+            },
+        ],
+    });
+    let mut current = Some(ChatSession::start(
+        provider,
+        ChatRequest {
+            user_message: "hi".into(),
+            max_output_tokens: 256,
+            ..Default::default()
+        },
+    ));
+
+    // Run is bound to tab 0; the user then opens + switches to tab 1.
+    host.editor_state_mut().chat.new_tab();
+    assert_eq!(host.editor_state().chat.active_index(), 1);
+
+    for _ in 0..2000 {
+        // running_tab = Some(0) — NOT the active tab (1).
+        pump(&mut host, &mut current, Some(0));
+        if current.is_none() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(1));
+    }
+    assert!(current.is_none(), "turn must finish");
+
+    // The deltas landed in tab 0 (the bound tab), not the active tab 1.
+    let tab1_msgs = host.editor_state().chat.messages.len();
+    assert_eq!(tab1_msgs, 0, "active tab 1 must stay empty");
+    host.editor_state_mut().chat.switch_to(0);
+    let tab0 = host.editor_state().chat.messages.last().unwrap();
+    assert_eq!(tab0.content, "Hello");
+    assert!(!tab0.streaming);
 }
 
 #[test]

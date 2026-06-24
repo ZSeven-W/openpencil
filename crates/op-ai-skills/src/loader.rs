@@ -82,6 +82,7 @@ pub fn get_skill_meta(name: &str) -> Option<&'static SkillMeta> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::types::{SkillCategory, SkillTrigger};
 
     #[test]
     fn registry_loads_the_skill_corpus() {
@@ -181,5 +182,73 @@ mod tests {
         let form = get_skill_by_name("form-ui").expect("form-ui skill present");
         assert_eq!(form.meta.name, "form-ui");
         assert!(get_skill_by_name("definitely-not-a-skill").is_none());
+    }
+
+    #[test]
+    fn interactivity_skill_loads_as_always_domain() {
+        let skill =
+            get_skill_by_name("interactivity").expect("interactivity skill must embed + parse");
+        // Frontmatter contract: Domain category, gated behind interactive intent
+        // (no longer always-on — it only applies to functional/interactive
+        // prototypes, not static mockups; user direction 2026-06-23).
+        assert!(matches!(skill.meta.trigger, SkillTrigger::Keywords(_)));
+        assert!(matches!(skill.meta.category, SkillCategory::Domain));
+        assert_eq!(skill.meta.priority, 25);
+        assert_eq!(skill.meta.budget, 1800);
+        assert!(skill.meta.phase.contains(&Phase::Generation));
+        // Body must teach the exact field/action names the jian schema expects.
+        assert!(
+            skill.content.contains("bind:value"),
+            "must teach bind:value two-way binding"
+        );
+        assert!(
+            skill.content.contains("$app"),
+            "must teach $app cross-section state"
+        );
+        assert!(
+            skill.content.contains("onTap"),
+            "must teach onTap event hook"
+        );
+        assert!(
+            skill.content.contains("onChange"),
+            "must teach onChange event hook"
+        );
+        assert!(
+            skill.content.contains("onSubmit"),
+            "must teach onSubmit event hook"
+        );
+    }
+
+    #[test]
+    fn jian_components_skill_loads_as_always_base_and_teaches_role_vocab() {
+        let skill =
+            get_skill_by_name("jian-components").expect("jian-components skill must be registered");
+        // Frontmatter contract (Component 8a): Base category, always-considered.
+        assert_eq!(skill.meta.category, SkillCategory::Base);
+        assert_eq!(skill.meta.priority, 5);
+        assert!(matches!(skill.meta.trigger, SkillTrigger::Always));
+        assert!(skill.meta.phase.contains(&Phase::Generation));
+        // Must teach every role string promote.rs::role_to_kind honours so the
+        // model emits markers the promotion pass (D2) actually collapses.
+        for role in [
+            "input",
+            "form-input",
+            "textarea",
+            "text-area",
+            "select",
+            "dropdown",
+            "switch",
+            "toggle",
+            "checkbox",
+            "slider",
+        ] {
+            assert!(
+                skill.content.contains(role),
+                "jian-components must teach role marker `{role}`"
+            );
+        }
+        // Must teach the child-structure promote_frame extracts.
+        assert!(skill.content.contains("placeholder"));
+        assert!(skill.content.contains("leading"));
     }
 }
