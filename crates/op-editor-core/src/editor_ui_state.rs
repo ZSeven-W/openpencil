@@ -938,8 +938,17 @@ pub struct EditorUiState {
     pub chat_header_hover: Option<crate::chat_button_state::ChatHeaderButton>,
     /// Which bottom-toolbar chat control the cursor is over.
     pub chat_footer_hover: Option<crate::chat_button_state::ChatFooterButton>,
+    /// Index of the tab-row tab the cursor is over — drives the × close glyph
+    /// and hover wash on inactive tabs. `None` when not hovering any tab.
+    pub chat_tab_hover: Option<usize>,
     /// Index into `AgentProvider::ALL` of the agent driving the chat.
     pub chat_selected_agent: usize,
+    /// Whether the Parallel Agents picker dropdown is open.
+    /// Set by `toggle_parallel_agents_picker`; cleared on outside-click or row select.
+    pub parallel_agents_picker_open: bool,
+    /// Which row (1–6) the cursor is over inside the Parallel Agents picker —
+    /// drives the hover-highlight wash. `None` = no hover / picker closed.
+    pub parallel_agents_picker_hover: Option<u32>,
 
     /// Primary-pointer pressed button target. Button feedback is exclusive
     /// across chrome families, so one field covers toolbar / topbar /
@@ -969,6 +978,13 @@ pub struct EditorUiState {
     /// runner (which owns the window) consumes it next frame to toggle
     /// the actual window fullscreen, then clears it.
     pub pending_fullscreen_toggle: bool,
+    /// Raised when the user clicks a chat tab's close-× (MT.3
+    /// `AIChatHit::CloseTab`). Carries the tab index to remove. The host
+    /// runner drains it next frame: closing a tab can need to abort an
+    /// in-flight run bound to it (a `current_chat` / `current_design`
+    /// session the widget layer cannot reach), so the actual `close_tab` +
+    /// run-binding fix-up runs host-side, then this clears. `None` = idle.
+    pub pending_close_chat_tab: Option<usize>,
 
     // --- Alignment toolbar -----------------------------------------
     /// Align-toolbar button currently hovered.
@@ -1279,7 +1295,10 @@ impl Default for EditorUiState {
             chat_example_hover: None,
             chat_header_hover: None,
             chat_footer_hover: None,
+            chat_tab_hover: None,
             chat_selected_agent: 0,
+            parallel_agents_picker_open: false,
+            parallel_agents_picker_hover: None,
             pressed_button: None,
             component_browser_select_all: false,
             topbar_traffic_hover: false,
@@ -1287,6 +1306,7 @@ impl Default for EditorUiState {
             statusbar_hover: None,
             window_fullscreen: false,
             pending_fullscreen_toggle: false,
+            pending_close_chat_tab: None,
             align_toolbar_hover: None,
             property_tab: PropertyTab::Design,
             flex_layout: FlexLayout::Free,
@@ -1521,6 +1541,27 @@ impl EditorUiState {
         self.chat_model_picker.pressed = None;
         self.chat_model_picker.scroll.offset = 0.0;
         self.chat_model_picker_input.set_text("");
+        changed
+    }
+
+    /// Toggle the Parallel Agents picker open/closed. Returns `true` if it is
+    /// now open (i.e. was previously closed and just opened).
+    pub fn toggle_parallel_agents_picker(&mut self) -> bool {
+        let opening = !self.parallel_agents_picker_open;
+        self.parallel_agents_picker_open = opening;
+        if !opening {
+            self.parallel_agents_picker_hover = None;
+        }
+        opening
+    }
+
+    /// Close the Parallel Agents picker and clear all interaction state.
+    /// Returns `true` when something changed (so the host can skip a repaint
+    /// when the picker was already closed).
+    pub fn close_parallel_agents_picker(&mut self) -> bool {
+        let changed = self.parallel_agents_picker_open || self.parallel_agents_picker_hover.is_some();
+        self.parallel_agents_picker_open = false;
+        self.parallel_agents_picker_hover = None;
         changed
     }
 

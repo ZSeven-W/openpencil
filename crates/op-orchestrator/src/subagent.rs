@@ -50,6 +50,37 @@ pub async fn run_subtask(
         minimal_skills,
         None,
         reveal_now_millis(),
+        None,
+    )
+    .await
+}
+
+/// Like [`run_subtask`] but accepts an optional progress sink that receives
+/// [`crate::types::Progress::SubtaskSkills`] immediately after the prompt is built.
+#[allow(clippy::too_many_arguments)]
+pub async fn run_subtask_with_progress(
+    subtask: &Subtask,
+    plan: &OrchestratorPlan,
+    req: &DesignRequest,
+    llm: &dyn LlmClient,
+    sink: &mut dyn DocSink,
+    abort: &AbortFlag,
+    reduced_complexity: bool,
+    minimal_skills: bool,
+    on_progress: Option<&mut dyn FnMut(crate::types::Progress)>,
+) -> SubtaskOutcome {
+    run_subtask_with_reveal_at(
+        subtask,
+        plan,
+        req,
+        llm,
+        sink,
+        abort,
+        reduced_complexity,
+        minimal_skills,
+        None,
+        reveal_now_millis(),
+        on_progress,
     )
     .await
 }
@@ -66,15 +97,17 @@ pub(crate) async fn run_subtask_with_reveal_at(
     minimal_skills: bool,
     indicator_epoch: Option<u64>,
     reveal_started_ms: u64,
+    on_progress: Option<&mut dyn FnMut(crate::types::Progress)>,
 ) -> SubtaskOutcome {
     let fail = |msg: String| SubtaskOutcome {
         id: subtask.id.clone(),
         node_count: 0,
         error: Some(msg),
+        inserted_root_ids: Vec::new(),
     };
 
     // 收集 LLM 文本输出。
-    let call_req = build_subagent_prompt(
+    let (call_req, skill_report) = build_subagent_prompt(
         subtask,
         plan,
         req,
@@ -82,6 +115,19 @@ pub(crate) async fn run_subtask_with_reveal_at(
         reduced_complexity,
         minimal_skills,
     );
+    // Surface the per-subtask skill-load report to the chat UI immediately
+    // after the prompt is built (spec Component 4).
+    if let Some(cb) = on_progress {
+        let (included, dropped, budget_used, budget_max) =
+            crate::types::report_to_progress_parts(&skill_report);
+        cb(crate::types::Progress::SubtaskSkills {
+            id: subtask.id.clone(),
+            included,
+            dropped,
+            budget_used,
+            budget_max,
+        });
+    }
     tracing::debug!(subtask = %subtask.id, model = req.model.as_deref().unwrap_or(""), "subagent LLM call");
     let mut stream = llm.call(call_req);
     let mut text = String::new();
@@ -110,10 +156,11 @@ pub(crate) async fn run_subtask_with_reveal_at(
         "subagent text collected"
     );
 
-    // 解析成 PenNode 树。manifest 模式（按模型路由 + `OPENPENCIL_MANIFEST`
-    // override）先按元素清单解析；文本里没有清单行（如重试梯度回落到裸
-    // JSONL prompt 后的输出）时回落到既有裸 PenNode 路径，两条路汇入同
-    // 一套后处理。
+    // Parse into a PenNode tree. The manifest ("N-tool") path is OFF by
+    // default and runs only when `OPENPENCIL_MANIFEST` is explicitly
+    // truthy; it parses the element manifest first and falls back to the
+    // bare PenNode JSONL path when the text carries no manifest lines.
+    // Both routes converge on the same post-processing.
     let mut nodes =
         if crate::manifest::manifest_enabled_for_model(req.model.as_deref().unwrap_or("")) {
             match crate::manifest::parse_manifest(&text) {
@@ -187,6 +234,11 @@ pub(crate) async fn run_subtask_with_reveal_at(
     // Cross-node contrast post-pass (I3) runs AFTER role resolution (it keys off
     // the roles I1/I2 set) and before the fallback sizing normalize.
     crate::role_post_pass::post_pass_forest(&mut nodes, canvas_width);
+    // Promote explicitly-marked role frames to first-class widget nodes.
+    // Must run AFTER post_pass_forest (which keys on `role` to set defaults)
+    // and BEFORE variable binding (which resolves hex refs — widgets produced
+    // here carry the same fill/stroke props that binding normalises).
+    jian_ops_schema::promote::promote_forest(&mut nodes);
     // Post-streaming tree heuristics (TS applyPostStreamingTreeHeuristics parity):
     // nav-surface anchor, redundant section-fill strip, nested-card decoration
     // strip. Runs BEFORE binding — the section-fill strip matches literal hedge
@@ -220,31 +272,53 @@ pub(crate) async fn run_subtask_with_reveal_at(
     // page-bg token off inner wrappers). Pre-binding it only saw hex and missed.
     crate::role_post_pass::enforce_surface_color_discipline(&mut nodes);
     normalize_section_roots_for_parent_layout(&mut nodes);
+    let self_check = crate::orchestration_self_check::check_generated_nodes(&nodes, canvas_width);
+    if self_check.has_fatal() {
+        let message = self_check.failure_message();
+        tracing::warn!(
+            subtask = %subtask.id,
+            issues = %message,
+            "subagent self-check rejected generated nodes"
+        );
+        return fail(format!("self-check failed: {message}"));
+    }
     let node_count = nodes.len();
 
-    // 经 DocSink 发 InsertSubtree。
+    // Hoist node-level `state` to one document-root MergeAppState so
+    // `$app.*` references resolve globally (events stay on the nodes).
+    let plan_idx = plan
+        .subtasks
+        .iter()
+        .position(|s| s.id == subtask.id)
+        .unwrap_or(0);
+    let merge_state = crate::hoist_app_state::hoist_app_state(&mut nodes, plan_idx);
+    let has_state =
+        matches!(&merge_state, EditorCommand::MergeAppState { state, .. } if !state.is_empty());
+    if has_state {
+        apply_command_with_reveal(sink, merge_state, indicator_epoch, reveal_started_ms);
+    }
+
+    // Apply InsertSubtree via the root-id-returning path so we capture
+    // the post-remap ids for Component 11 (append-mode cleanup scoping).
     let parent_id = match &subtask.parent_frame_id {
         Some(id) => NodeId::new(id.clone()),
         None => NodeId::NONE,
     };
-    let applied = apply_command_with_reveal(
+    let Some(inserted_root_ids) = apply_insert_subtree_with_reveal(
         sink,
-        EditorCommand::InsertSubtree {
-            nodes,
-            parent_id,
-            page_id: None,
-        },
+        nodes,
+        parent_id,
         indicator_epoch,
         reveal_started_ms,
-    );
-    if !applied {
+    ) else {
         return fail("InsertSubtree rejected by document".into());
-    }
+    };
 
     SubtaskOutcome {
         id: subtask.id.clone(),
         node_count,
         error: None,
+        inserted_root_ids,
     }
 }
 
@@ -272,6 +346,25 @@ pub(crate) fn apply_command_with_reveal(
         }
     }
     applied
+}
+
+/// Apply an `InsertSubtree` and return the **post-remap** root ids
+/// (`None` = rejected). Same reveal bookkeeping as
+/// [`apply_command_with_reveal`], but routes through the typed apply path
+/// so it can surface the remapped ids onto the `SubtaskOutcome` (Component 11).
+pub(crate) fn apply_insert_subtree_with_reveal(
+    sink: &mut dyn DocSink,
+    nodes: Vec<PenNode>,
+    parent_id: NodeId,
+    indicator_epoch: Option<u64>,
+    reveal_started_ms: u64,
+) -> Option<Vec<String>> {
+    let ids_before = indicator_epoch.map(|_| collect_active_node_ids(sink.state()));
+    let root_ids = sink.insert_subtree_returning_root_ids(nodes, &parent_id)?;
+    if let Some(ids_before) = ids_before.as_ref() {
+        register_new_node_reveals(ids_before, sink.state(), indicator_epoch, reveal_started_ms);
+    }
+    Some(root_ids)
 }
 
 fn collect_active_node_ids(state: &op_editor_core::EditorState) -> HashSet<String> {
@@ -774,6 +867,59 @@ mod tests {
     }
 
     #[test]
+    fn run_subtask_hoists_node_state_before_insert_subtree() {
+        // A frame whose LLM output carries a `state` block should emit
+        // a MergeAppState command BEFORE the InsertSubtree, and the inserted
+        // nodes must carry no residual `state`.
+        let llm = ScriptedLlm::new(vec![ScriptResponse::Text(
+            r#"[{"type":"frame","id":"hero-1","name":"Card","x":0,"y":0,"width":1200,"height":200,
+                  "state":{"count":{"type":"int","default":0}},
+                  "children":[{"type":"text","id":"hero-title","content":"Hero","fontSize":18}]}]"#
+                .into(),
+        )]);
+        let mut plan = plan();
+        plan.subtasks = vec![subtask()];
+        let mut sink = VecDocSink::new();
+        let outcome = block_on(run_subtask(
+            &subtask(),
+            &plan,
+            &req(),
+            &llm,
+            &mut sink,
+            &AbortFlag::new(),
+            false,
+            false,
+        ));
+        assert!(
+            outcome.error.is_none(),
+            "subtask must succeed: {:?}",
+            outcome.error
+        );
+        // MergeAppState must precede InsertSubtree.
+        let merge_pos = sink
+            .applied
+            .iter()
+            .position(|c| matches!(c, EditorCommand::MergeAppState { .. }));
+        let insert_pos = sink
+            .applied
+            .iter()
+            .position(|c| matches!(c, EditorCommand::InsertSubtree { .. }));
+        assert!(merge_pos.is_some(), "MergeAppState must be emitted");
+        assert!(
+            merge_pos.unwrap() < insert_pos.unwrap(),
+            "MergeAppState must precede InsertSubtree"
+        );
+        // The inserted nodes must have state drained.
+        let Some(EditorCommand::InsertSubtree { nodes, .. }) = sink.applied.last() else {
+            panic!("last command must be InsertSubtree");
+        };
+        let PenNode::Frame(f) = &nodes[0] else {
+            panic!()
+        };
+        assert!(f.state.is_none(), "inserted node must have state stripped");
+    }
+
+    #[test]
     fn run_subtask_ok_applies_insert_subtree() {
         let llm = ScriptedLlm::new(vec![ScriptResponse::Text(NODE_JSON.into())]);
         let mut sink = VecDocSink::new();
@@ -879,6 +1025,7 @@ mod tests {
             false,
             Some(epoch),
             1_234,
+            None,
         ));
 
         assert!(outcome.error.is_none(), "{:?}", outcome.error);
@@ -1049,6 +1196,61 @@ mod tests {
     }
 
     #[test]
+    fn run_subtask_rejects_self_check_fatal_product_overflow() {
+        let mut mobile_plan = plan();
+        mobile_plan.root_frame.width = 390.0;
+        mobile_plan.root_frame.height = 844.0;
+        let llm = ScriptedLlm::new(vec![ScriptResponse::Text(
+            r#"[
+              {"type":"frame","id":"section-root","name":"Popular Section","width":"fill_container","height":"fit_content","layout":"vertical","children":[
+                {"type":"frame","id":"popular-row","name":"Popular Now Cards","width":"fill_container","height":"fit_content","layout":"horizontal","gap":20,"children":[
+                  {"type":"frame","id":"card-1","role":"card","width":170,"height":220,"children":[
+                    {"type":"image","id":"img-1","width":170,"height":120,"imageSearchQuery":"pasta plate"},
+                    {"type":"text","id":"title-1","content":"Truffle Carbonara"}
+                  ]},
+                  {"type":"frame","id":"card-2","role":"card","width":170,"height":220,"children":[
+                    {"type":"image","id":"img-2","width":170,"height":120,"imageSearchQuery":"burger plate"},
+                    {"type":"text","id":"title-2","content":"Smash Deluxe"}
+                  ]},
+                  {"type":"frame","id":"card-3","role":"card","width":170,"height":220,"children":[
+                    {"type":"image","id":"img-3","width":170,"height":120,"imageSearchQuery":"salmon bowl"},
+                    {"type":"text","id":"title-3","content":"Poke Salmon Bowl"}
+                  ]}
+                ]}
+              ]}
+            ]"#
+            .into(),
+        )]);
+        let mut sink = VecDocSink::new();
+
+        let outcome = block_on(run_subtask(
+            &subtask(),
+            &mobile_plan,
+            &req(),
+            &llm,
+            &mut sink,
+            &AbortFlag::new(),
+            false,
+            false,
+        ));
+
+        assert_eq!(outcome.node_count, 0);
+        assert!(
+            outcome
+                .error
+                .as_deref()
+                .unwrap_or_default()
+                .contains("mobile-product-row-overflow"),
+            "{:?}",
+            outcome.error
+        );
+        assert!(
+            sink.applied.is_empty(),
+            "fatal self-check should reject before InsertSubtree"
+        );
+    }
+
+    #[test]
     fn run_subtask_normalizes_section_root_for_parent_layout() {
         let llm = ScriptedLlm::new(vec![ScriptResponse::Text(
             r#"[{"type":"frame","id":"section-root","name":"Section","x":0,"y":0,"width":390,"height":112,"children":[{"type":"text","id":"title","content":"Pizza","fontSize":18}]}]"#
@@ -1108,5 +1310,90 @@ mod tests {
         ));
         assert_eq!(outcome.node_count, 0);
         assert_eq!(outcome.error.as_deref(), Some("rate limited"));
+    }
+
+    #[test]
+    fn run_subtask_emits_subtask_skills_progress() {
+        let llm = ScriptedLlm::new(vec![ScriptResponse::Text(NODE_JSON.into())]);
+        let mut sink = VecDocSink::new();
+        let mut events: Vec<crate::types::Progress> = Vec::new();
+        let mut on_progress = |p: crate::types::Progress| events.push(p);
+        let outcome = block_on(run_subtask_with_progress(
+            &subtask(),
+            &plan(),
+            &req(),
+            &llm,
+            &mut sink,
+            &AbortFlag::new(),
+            false,
+            false,
+            Some(&mut on_progress),
+        ));
+        assert_eq!(outcome.node_count, 1);
+        assert!(
+            events.iter().any(|p| matches!(
+                p,
+                crate::types::Progress::SubtaskSkills { id, .. } if id == "hero"
+            )),
+            "expected a SubtaskSkills event, got {events:?}"
+        );
+    }
+
+    /// End-to-end: when the LLM emits a frame with role="input", run_subtask
+    /// must insert a text_input node (not a frame) into the document.
+    /// promote_forest runs AFTER post_pass_forest and BEFORE binding, so the
+    /// widget lands in the live document tree.
+    #[test]
+    fn run_subtask_promotes_role_input_frame_to_text_input() {
+        // The LLM output contains a section frame whose only child is a
+        // role="input" field with a muted placeholder and icon children.
+        let llm_json = r##"[
+          {"type":"frame","id":"s1","name":"Login Form","width":1200,"height":400,
+           "layout":"vertical","children":[
+             {"type":"frame","id":"email","role":"input","width":320,"height":48,
+              "fill":[{"type":"solid","color":"#f3f4f6"}],"children":[
+                {"type":"icon_font","id":"mail-ico","iconFontName":"mail","width":20,"height":20},
+                {"type":"text","id":"hint","content":"Email address",
+                 "fill":[{"type":"solid","color":"#9ca3af"}]}
+              ]}
+           ]}
+        ]"##;
+        let llm = ScriptedLlm::new(vec![ScriptResponse::Text(llm_json.into())]);
+        let mut sink = VecDocSink::new();
+        let outcome = block_on(run_subtask(
+            &subtask(),
+            &plan(),
+            &req(),
+            &llm,
+            &mut sink,
+            &AbortFlag::new(),
+            false,
+            false,
+        ));
+
+        assert!(
+            outcome.error.is_none(),
+            "unexpected error: {:?}",
+            outcome.error
+        );
+        assert_eq!(outcome.node_count, 1);
+
+        let Some(EditorCommand::InsertSubtree { nodes, .. }) = sink.applied.last() else {
+            panic!("expected InsertSubtree, got {:?}", sink.applied.last());
+        };
+        // The outer section frame is NOT a widget — it stays a frame.
+        let PenNode::Frame(section) = &nodes[0] else {
+            panic!("outer section must remain a frame");
+        };
+        // The inner role="input" child must have been promoted to text_input.
+        let children = section.children.as_ref().expect("section has children");
+        assert_eq!(children.len(), 1, "exactly one child (the promoted input)");
+        let PenNode::TextInput(ti) = &children[0] else {
+            panic!("role=input child must become TextInput after promotion");
+        };
+        assert_eq!(ti.base.id, "email");
+        assert!(ti.base.role.is_none(), "role cleared after promotion");
+        assert_eq!(ti.leading_icon.as_deref(), Some("mail"));
+        assert_eq!(ti.placeholder.as_deref(), Some("Email address"));
     }
 }

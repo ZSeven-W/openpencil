@@ -10,6 +10,9 @@ pub mod mapping;
 pub mod parser;
 pub mod types;
 
+#[cfg(test)]
+mod audit_tests;
+
 pub use loader::{parse_style_guide_file, select_style_guide, style_guide_registry, SelectOptions};
 pub use mapping::{build_style_mapping, ColorReplacement, PropertyReplacement, RadiusReplacement};
 pub use parser::{extract_style_guide_values, StyleGuideValues};

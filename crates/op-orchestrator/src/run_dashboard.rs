@@ -168,6 +168,7 @@ pub(crate) async fn run_dashboard_path(
             label: subtask.label.clone(),
         });
 
+        // Attempt 1 — full complexity. SubtaskSkills fires via on_progress.
         let outcome1 = run_subtask_with_reveal_at(
             subtask,
             &plan,
@@ -179,6 +180,7 @@ pub(crate) async fn run_dashboard_path(
             false,
             host_epoch,
             reveal_now_millis(),
+            Some(&mut *on_progress),
         )
         .await;
         let non_retryable = outcome1
@@ -190,6 +192,14 @@ pub(crate) async fn run_dashboard_path(
             o.error.is_some() && o.node_count == 0 && !abort.is_set() && !non_retryable
         };
         let outcome2 = if retryable(&outcome1) {
+            on_progress(Progress::SubtaskRetry {
+                id: subtask.id.clone(),
+                attempt: 2,
+                reason: outcome1
+                    .error
+                    .clone()
+                    .unwrap_or_else(|| "zero nodes generated".into()),
+            });
             Some(
                 run_subtask_with_reveal_at(
                     subtask,
@@ -202,6 +212,7 @@ pub(crate) async fn run_dashboard_path(
                     false,
                     host_epoch,
                     reveal_now_millis(),
+                    None,
                 )
                 .await,
             )
@@ -210,6 +221,14 @@ pub(crate) async fn run_dashboard_path(
         };
         let outcome_after2 = outcome2.as_ref().unwrap_or(&outcome1);
         let outcome3 = if retryable(outcome_after2) {
+            on_progress(Progress::SubtaskRetry {
+                id: subtask.id.clone(),
+                attempt: 3,
+                reason: outcome_after2
+                    .error
+                    .clone()
+                    .unwrap_or_else(|| "zero nodes generated".into()),
+            });
             Some(
                 run_subtask_with_reveal_at(
                     subtask,
@@ -222,6 +241,7 @@ pub(crate) async fn run_dashboard_path(
                     true,
                     host_epoch,
                     reveal_now_millis(),
+                    None,
                 )
                 .await,
             )

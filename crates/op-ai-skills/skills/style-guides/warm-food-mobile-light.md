@@ -1,6 +1,6 @@
 ---
 name: 'warm-food-mobile-light'
-tags: [warm-tones, light-mode, friendly, orange-accent, rounded, mobile, playful]
+tags: [food, warm-tones, light-mode, friendly, orange-accent, rounded, mobile, playful]
 platform: mobile
 ---
 
@@ -153,6 +153,7 @@ Key aesthetics:
 - Tab items: fill_container, vertical, gap 4, center aligned
 - Category rail: small chips or icon+label groups; do not mix pastel pink/blue shells with orange
 - Menu cards: white product surfaces with food image top, details bottom, 14-16px radius
+- Featured food cards default to an image-top product-card composition; avoid split layouts that leave a blank half or oversized media band.
 - Promo banners: single bold orange panel or image-led panel inside content width; no extra white rounded carousel backing
 
 ### Mobile Composition Guardrails
@@ -165,6 +166,7 @@ Key aesthetics:
 - Use 9999px radius only for true circles or tiny capsules such as avatars, status dots, and short badges; never for page sections, search shells, carousels, card action buttons, or full navigation bars.
 - Food palette rule: avoid pastel pink/blue search shells or category backgrounds in this guide. Use warm neutrals, espresso text, one orange accent, and photography color.
 - Product-card favorite rule: heart/bookmark icons sit directly over the image with no circular border bubble; use icon color or a faint translucent scrim only when contrast requires it.
+- Featured food cards default to an image-top product-card composition with bounded media height and compact details below.
 
 ## Corner Radius
 

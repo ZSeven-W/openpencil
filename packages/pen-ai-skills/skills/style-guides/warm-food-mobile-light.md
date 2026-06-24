@@ -1,6 +1,6 @@
 ---
 name: 'warm-food-mobile-light'
-tags: [warm-tones, light-mode, friendly, orange-accent, rounded, mobile, playful]
+tags: [food, warm-tones, light-mode, friendly, orange-accent, rounded, mobile, playful]
 platform: mobile
 ---
 
@@ -15,7 +15,7 @@ Key aesthetics:
 - **Rounded sans-serif**: Plus Jakarta Sans with rounded terminals echoes the soft, friendly radii
 - **Generous radii**: 16-20px corners make cards feel like warm, inviting menu tiles
 - **Food photography friendly**: Clean white card surfaces maximize contrast for food imagery
-- **Pill tab bar**: 100px radius bottom navigation with orange active indicator
+- **Integrated tab bar**: Full-width bottom navigation with a quiet divider or tiny orange active indicator
 
 ## Color System
 
@@ -143,9 +143,10 @@ Key aesthetics:
 - Screen width: 402px (mobile)
 - Content wrapper: padding [0, 24], vertical, gap 24
 - Status bar: 62px, standard iOS
-- Tab bar pill: height 62px, cornerRadius 100, padding 4
+- Integrated tab bar: height 58-66px, cornerRadius 0-8, full-width in page flow
 - Tab items: fill_container, vertical, gap 4, center aligned
 - Menu cards: white surface with food image top, details bottom, 16px radius
+- Featured food cards default to an image-top product-card composition; avoid split layouts that leave a blank half or oversized media band.
 - Promo banners: accent surface (#FED7AA) with warm gradient feel
 
 ## Corner Radius
@@ -156,7 +157,7 @@ Key aesthetics:
 | 16px  | Standard cards, menu items, input fields   | Primary container radius          |
 | 20px  | Large cards, feature sections, search bars | Generous friendly radius          |
 | 24px  | Hero banners, promo cards, modal sheets    | Maximum warm softness             |
-| 100px | Tab bar pill, toggle pills, round avatars  | Full capsule shape for navigation |
+| 100px | Round avatars and tiny capsules only       | Full capsule shape for small elements |
 
 Design rationale: Generous 16-20px radii create the warm, inviting feel expected in food and hospitality apps. Every card feels like a warm plate or a rounded bread basket, reinforcing the comfort-food aesthetic. The soft corners also ensure food photography thumbnails sit inside containers with gentle, appetizing framing rather than harsh crops.
 

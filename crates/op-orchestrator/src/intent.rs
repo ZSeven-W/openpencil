@@ -38,6 +38,7 @@ const DESIGN_KEYWORDS: &[&str] = &[
     "创建",
     "画一个",
     "画个",
+    "画出",
     "搞一个",
     "帮我做",
     "来个",
@@ -49,6 +50,13 @@ const DESIGN_KEYWORDS: &[&str] = &[
     "原型",
     "登录页",
     "注册页",
+    "发现页",
+    "订单页",
+    "我的页",
+    "个人页",
+    "搜索页",
+    "详情页",
+    "分类页",
 ];
 
 /// 把用户消息分类为 [`Intent::Design`] 或 [`Intent::Chat`]。
@@ -76,6 +84,8 @@ mod tests {
             "create a pricing card",
             "Generate a dashboard for sales",
             "帮我做个注册页",
+            "继续画出发现页",
+            "继续做订单页",
         ] {
             assert_eq!(classify_intent(p), Intent::Design, "{p}");
         }

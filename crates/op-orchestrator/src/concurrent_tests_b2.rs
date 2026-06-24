@@ -467,6 +467,111 @@ fn concurrent_aborts_before_any_work() {
     assert_eq!(real_sink.commands.len(), 0);
 }
 
+/// E5: `MergeAppState` rides the `BufferDocSink`→replay path and resolves
+/// deterministically.
+///
+/// Two screen groups each own a `BufferDocSink` (exactly as `run_concurrent`
+/// constructs them).  Group A buffers `MergeAppState { plan_idx: 0, count: 10 }`
+/// (lower index, must win) and group B buffers `MergeAppState { plan_idx: 1,
+/// count: 20 }` (higher index, must lose).
+///
+/// The test then replicates the sort-then-drain loop from `concurrent.rs:445-458`:
+/// groups are sorted by their minimum `plan_idx` so the group with the lowest
+/// index drains first, regardless of the physical order the workers finished.
+///
+/// Both physical finish orders (A-then-B and B-then-A) are tested; in both cases
+/// the final `doc.state["count"]` must equal 10.
+///
+/// The test would fail if:
+/// - `BufferDocSink::apply` dropped `MergeAppState` instead of buffering it, OR
+/// - `apply_command_with_reveal` failed to forward `MergeAppState` to the sink, OR
+/// - `EditorState::merge_app_state` ignored `plan_idx` (last-write-wins → 20 for
+///   B-then-A drain order).
+#[test]
+fn merge_app_state_buffers_and_replays_deterministically() {
+    use jian_ops_schema::state::{PrimitiveType, StateEntry, StateType};
+    use std::collections::BTreeMap;
+
+    let snapshot = EditorState::new();
+
+    let entry = |d: i64| StateEntry {
+        kind: StateType::Primitive(PrimitiveType::Int),
+        default: Some(serde_json::json!(d)),
+        description: None,
+        persist: None,
+    };
+
+    // Group A: plan_idx=0, count=10  (lower index, must win the conflict)
+    let make_buffer_a = || {
+        let mut buf = BufferDocSink::new(snapshot.clone());
+        let mut m = BTreeMap::new();
+        m.insert("count".into(), entry(10));
+        buf.apply(EditorCommand::MergeAppState {
+            plan_idx: 0,
+            state: m,
+        });
+        (0usize, buf) // (min_plan_idx, buffer)
+    };
+    // Group B: plan_idx=1, count=20  (higher index, must lose)
+    let make_buffer_b = || {
+        let mut buf = BufferDocSink::new(snapshot.clone());
+        let mut m = BTreeMap::new();
+        m.insert("count".into(), entry(20));
+        buf.apply(EditorCommand::MergeAppState {
+            plan_idx: 1,
+            state: m,
+        });
+        (1usize, buf)
+    };
+
+    // Replicate the sort-then-drain loop from concurrent.rs:445-458.
+    // `groups_with_min_idx` is [(min_plan_idx, BufferDocSink)] in the physical
+    // finish order that came out of join_all; we sort by min_plan_idx then drain.
+    let replay = |mut groups_with_min_idx: Vec<(usize, BufferDocSink)>| -> serde_json::Value {
+        groups_with_min_idx.sort_by_key(|(min_idx, _)| *min_idx);
+        let mut real_sink = VecDocSink::new();
+        for (_min_idx, mut buf) in groups_with_min_idx {
+            for cmd in buf.commands.drain(..) {
+                apply_command_with_reveal(&mut real_sink, cmd, None, 0);
+            }
+        }
+        real_sink
+            .state
+            .doc
+            .state
+            .as_ref()
+            .expect("doc.state must be set after MergeAppState")
+            .get("count")
+            .expect("key 'count' must be present")
+            .default
+            .clone()
+            .expect("default value must be set")
+    };
+
+    // Physical finish order A-then-B: group A (plan_idx=0) appears first in
+    // worker_results — sort keeps this order, A drains first.
+    let result_ab = replay(vec![make_buffer_a(), make_buffer_b()]);
+    // Physical finish order B-then-A: group B (plan_idx=1) appears first —
+    // sort reverses this, A still drains first because its min_plan_idx is lower.
+    let result_ba = replay(vec![make_buffer_b(), make_buffer_a()]);
+
+    let expected = serde_json::json!(10);
+    assert_eq!(
+        result_ab, expected,
+        "A-then-B: lower plan_idx (0) must win, got {result_ab}"
+    );
+    assert_eq!(
+        result_ba, expected,
+        "B-then-A: lower plan_idx (0) must still win, got {result_ba}"
+    );
+    // Substantive check: the losing value (20) must NOT be the final state.
+    assert_ne!(
+        result_ba,
+        serde_json::json!(20),
+        "B-then-A must not produce the losing value 20"
+    );
+}
+
 /// Progress fan-in: all 4 events (2 started + 2 done) arrive after run_concurrent.
 #[test]
 fn concurrent_progress_fanin_all_events_arrive() {

@@ -124,7 +124,11 @@ fn extract_params_body(line: &str) -> Option<String> {
 /// Extract a string field's unquoted body from a JSON object body.
 /// Used to fetch `name` out of an MCP `params` block. Returns the
 /// raw string contents (escapes passed through; no unicode decode).
-fn extract_string_field(body: &str, key: &str) -> Option<String> {
+///
+/// `pub(crate)` so `tool_search` can reuse the same extractor for
+/// pulling `"name"` / `"description"` out of raw descriptor strings
+/// without adding serde.
+pub(crate) fn extract_string_field(body: &str, key: &str) -> Option<String> {
     let needle = format!("\"{key}\"");
     let start = body.find(&needle)? + needle.len();
     let after = &body[start..];

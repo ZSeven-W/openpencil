@@ -188,7 +188,7 @@ pub fn stream_standard_turn<W: Write>(
         return write_error_event(out, "no model configured");
     };
 
-    let classified = crate::chat_intent::classify_intent_llm(
+    let classified = crate::chat_intent::classify_intent_for_standard_route(
         classify_provider.as_ref(),
         &req.ai.user,
         model.clone(),
@@ -558,6 +558,21 @@ fn progress_label(p: &Progress) -> String {
             format!("• Subtask `{id}` done ({node_count} nodes)")
         }
         Progress::SubtaskFailed { id, error } => format!("• Subtask `{id}` failed: {error}"),
+        Progress::SubtaskSkills {
+            id,
+            included,
+            dropped,
+            budget_used,
+            budget_max,
+        } => format_subtask_skills(id, included, dropped, *budget_used, *budget_max),
+        Progress::SubtaskRetry {
+            attempt, reason, ..
+        } => {
+            format!("  ▸ retry #{attempt}: {reason}")
+        }
+        Progress::SubtaskNodes { id, nodes_so_far } => {
+            format!("• Subtask `{id}` — {nodes_so_far} node(s) so far")
+        }
         Progress::CleanupDone => "• Cleanup done".into(),
         Progress::ValidationStarted => "• Validation started".into(),
         Progress::ValidationPreCheckDone { applied, .. } => {
@@ -590,6 +605,40 @@ fn progress_label(p: &Progress) -> String {
         }
         Progress::VisualRefFallback { reason } => format!("• Visual-ref fallback: {reason}"),
     }
+}
+
+/// Format a `SubtaskSkills` payload into the concise summary line plus
+/// indented `▸ skills:` / `▸ dropped:` detail sub-lines (spec Component 5).
+fn format_subtask_skills(
+    id: &str,
+    included: &[op_orchestrator::SkillBrief],
+    dropped: &[(String, String)],
+    budget_used: u32,
+    budget_max: u32,
+) -> String {
+    let mut out = format!(
+        "• Subtask `{id}`  ·  {} skills · {budget_used}/{budget_max} tok · {} dropped",
+        included.len(),
+        dropped.len(),
+    );
+    if !included.is_empty() {
+        let names: Vec<String> = included
+            .iter()
+            .map(|s| {
+                if s.truncated {
+                    format!("{} (truncated)", s.name)
+                } else {
+                    s.name.clone()
+                }
+            })
+            .collect();
+        out.push_str(&format!("\n  ▸ skills: {}", names.join(", ")));
+    }
+    if !dropped.is_empty() {
+        let drops: Vec<String> = dropped.iter().map(|(n, r)| format!("{n} ({r})")).collect();
+        out.push_str(&format!("\n  ▸ dropped: {}", drops.join(", ")));
+    }
+    out
 }
 
 #[cfg(test)]
@@ -749,6 +798,51 @@ mod tests {
                 label: "Brand Header".into(),
             }),
             "• Subtask `brand` — Brand Header"
+        );
+    }
+
+    // Lock the web progress_label output for SubtaskSkills and SubtaskRetry
+    // against the cluster-C contract — byte-identical to the desktop formatter
+    // in op-host-desktop/src/design_session.rs.
+    #[test]
+    fn web_progress_label_matches_desktop_skill_block_format() {
+        use op_orchestrator::SkillBrief;
+
+        let p = Progress::SubtaskSkills {
+            id: "header".into(),
+            included: vec![SkillBrief {
+                name: "cjk-typography".into(),
+                token_count: 800,
+                truncated: true,
+            }],
+            dropped: vec![("examples".into(), "budget".into())],
+            budget_used: 5200,
+            budget_max: 8000,
+        };
+        let s = progress_label(&p);
+        assert!(
+            s.contains("• Subtask `header`  ·  1 skills · 5200/8000 tok · 1 dropped"),
+            "summary line mismatch: {s}"
+        );
+        assert!(
+            s.contains("\n  ▸ skills: cjk-typography (truncated)"),
+            "skills sub-line mismatch: {s}"
+        );
+        assert!(
+            s.contains("\n  ▸ dropped: examples (budget)"),
+            "dropped sub-line mismatch: {s}"
+        );
+    }
+
+    #[test]
+    fn web_progress_label_subtask_retry_format() {
+        assert_eq!(
+            progress_label(&Progress::SubtaskRetry {
+                id: "header".into(),
+                attempt: 2,
+                reason: "zero nodes generated".into(),
+            }),
+            "  ▸ retry #2: zero nodes generated"
         );
     }
 }

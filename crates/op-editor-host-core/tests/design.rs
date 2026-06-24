@@ -84,6 +84,7 @@ fn design_session_drains_progress_and_command_requests() {
                 id: "s1".into(),
                 node_count: 2,
                 error: None,
+                inserted_root_ids: Vec::new(),
             }],
             total_nodes: 2,
         })))

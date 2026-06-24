@@ -281,8 +281,8 @@ fn worker_happy_path_both_succeed() {
     assert_eq!(result.outcomes[1].1.node_count, 1);
     // Buffer collected 2 InsertSubtree commands (one per subtask).
     assert_eq!(result.buffer.commands.len(), 2);
-    // Progress events: started + done for each subtask.
-    assert_eq!(events.len(), 4);
+    // Progress events: started + SubtaskSkills + done for each subtask = 6.
+    assert_eq!(events.len(), 6);
 }
 
 /// Attempt-1 zero-node + retryable → attempt 2 runs with (true, true).
@@ -462,4 +462,44 @@ fn worker_emits_failed_progress_on_zero_nodes() {
         })
         .collect();
     assert_eq!(fail_events, vec!["fail:s0"]);
+}
+
+/// B5: concurrent worker emits `SubtaskSkills` on attempt 1 and
+/// `SubtaskRetry { attempt: 2 }` before the retry when attempt 1 yields zero nodes.
+#[test]
+fn worker_emits_subtask_skills_and_retry() {
+    // Attempt 1 returns an LLM error (zero nodes, retryable).
+    // Attempt 2 returns valid JSON so the subtask succeeds.
+    let plan = make_plan_with_subtasks(&["hero"]);
+    let req = make_req();
+    let llm = ScriptedLlm::new(vec![
+        ScriptResponse::Fail(LlmError {
+            message: "timeout".into(),
+            aborted: false,
+        }),
+        ScriptResponse::Text(NODE_JSON.into()),
+    ]);
+    let group = ScreenGroup {
+        screen: "page".into(),
+        indices: vec![0],
+    };
+    let abort = AbortFlag::new();
+    let buffer = BufferDocSink::new(EditorState::new());
+    let (sem, tx, rx) = make_worker_channel();
+    let _ = block_on(run_screen_group_worker(
+        &group, &plan, &req, &llm, &abort, buffer, sem, tx,
+    ));
+    let events = drain_events(rx);
+    assert!(
+        events
+            .iter()
+            .any(|p| matches!(p, Progress::SubtaskSkills { .. })),
+        "expected SubtaskSkills event, got {events:?}"
+    );
+    assert!(
+        events
+            .iter()
+            .any(|p| matches!(p, Progress::SubtaskRetry { attempt, .. } if *attempt == 2)),
+        "expected SubtaskRetry {{ attempt: 2 }}, got {events:?}"
+    );
 }

@@ -17,6 +17,69 @@ use std::path::Path as StdPath;
 
 const PDF_MARGIN: f32 = 16.0;
 
+/// In-memory PDF variant: render each requested node as one PDF page
+/// (cropped to that node's painted bounds). Returns the raw PDF bytes
+/// (`%PDF-` magic through `%%EOF`) so the caller can base64-encode or
+/// write to a file. Errors when `node_ids` is empty, the active page is
+/// missing, or none of the requested nodes have paintable content.
+/// Unknown node ids are skipped silently (the caller is expected to have
+/// pre-validated them or to surface the per-id errors separately).
+pub fn render_nodes_pdf_bytes(
+    scene: &LayoutScene,
+    node_ids: &[&str],
+    _scale: f32,
+) -> Result<Vec<u8>, String> {
+    let page = scene.active_page().ok_or("no active page")?;
+    if node_ids.is_empty() {
+        return Err("no node ids provided".into());
+    }
+    // Collect (node, bounds) pairs for requested ids — skip unknowns and
+    // nodes that paint nothing (mirrors export_node_raster's approach).
+    let mut pairs = Vec::new();
+    for &id in node_ids {
+        let Some(node) = page.find(id) else { continue };
+        let mut acc = crate::export::BoundsAcc::new();
+        crate::export::collect_bounds(node, glam::Affine2::IDENTITY, &mut acc);
+        let Some(bounds) = acc.into_rect() else {
+            continue;
+        };
+        pairs.push((node, bounds));
+    }
+    if pairs.is_empty() {
+        return Err("no requested nodes have paintable content on the active page".into());
+    }
+    // Find a common page size: the largest single-node bounds + margin on each
+    // side, so every page in the PDF is the same dimensions.
+    let (page_w, page_h) = {
+        let mut max_w = 0.0_f32;
+        let mut max_h = 0.0_f32;
+        for (_, b) in &pairs {
+            max_w = max_w.max(b.size.x);
+            max_h = max_h.max(b.size.y);
+        }
+        (max_w + PDF_MARGIN * 2.0, max_h + PDF_MARGIN * 2.0)
+    };
+    let mut buf: Vec<u8> = Vec::new();
+    {
+        let mut pdf = skia_safe::pdf::new_document(&mut buf, None);
+        for (node, bounds) in &pairs {
+            let mut on_page =
+                pdf.begin_page(skia_safe::Size::new(page_w, page_h), None);
+            let canvas = on_page.canvas();
+            // Position the node's content with PDF_MARGIN inset from the page
+            // edges, the same translation strategy as the multi-page exporter.
+            canvas.translate((
+                PDF_MARGIN - bounds.origin.x,
+                PDF_MARGIN - bounds.origin.y,
+            ));
+            crate::export::paint_node(canvas, node);
+            pdf = on_page.end_page();
+        }
+        pdf.close();
+    }
+    Ok(buf)
+}
+
 /// Emit every page in `scene` as one PDF page each. Every page emits
 /// at the SAME size — the union of all page bounds plus a 16-pt
 /// margin — so PDF viewers don't jump between heterogeneous page

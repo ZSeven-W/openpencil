@@ -89,6 +89,29 @@ fn node_json(prefix: &str) -> String {
     )
 }
 
+fn existing_root_json(
+    id: &str,
+    name: &str,
+    x: f64,
+    y: f64,
+    width: f64,
+) -> jian_ops_schema::node::PenNode {
+    serde_json::from_value(serde_json::json!({
+        "type": "frame",
+        "id": id,
+        "name": name,
+        "x": x,
+        "y": y,
+        "width": width,
+        "height": 844.0,
+        "layout": "vertical",
+        "children": [
+            {"type": "frame", "id": format!("{id}-content"), "name": "Content", "children": []}
+        ]
+    }))
+    .expect("valid existing root")
+}
+
 // ── existing tests (must stay green) ─────────────────────────────────────
 
 #[test]
@@ -186,8 +209,50 @@ fn run_mobile_scaffold_reveals_status_bar() {
 }
 
 #[test]
-fn run_zero_node_subtask_stops_and_errors() {
-    // 规划 OK,但第一个 subtask 吐垃圾(3 次全失败)→ 零节点 → NoContent。
+fn run_follow_on_screen_scaffold_lands_beside_existing_root() {
+    let llm = ScriptedLlm::new(vec![
+        ScriptResponse::Text(MOBILE_PLAN_JSON.into()),
+        ScriptResponse::Text(node_json("discover")),
+    ]);
+    let mut sink = VecDocSink::new();
+    sink.state.active_children_mut().clear();
+    sink.state
+        .active_children_mut()
+        .push(existing_root_json("home", "Home", 80.0, 40.0, 390.0));
+    let mut events: Vec<Progress> = Vec::new();
+    let mut on_progress = |p: Progress| events.push(p);
+    let mut request = req();
+    request.prompt = "继续画出发现页".into();
+    request.validation_enabled = false;
+
+    let summary = futures::executor::block_on(Orchestrator::new().run(
+        request,
+        &mut sink,
+        &llm,
+        &mut on_progress,
+        &AbortFlag::new(),
+        &stub_providers(),
+    ))
+    .expect("follow-on run ok");
+
+    let existing_right = 80.0 + 390.0;
+    let new_root = sink
+        .state
+        .active_children()
+        .iter()
+        .find(|node| node.id_str() == summary.root_frame_id)
+        .expect("new root inserted");
+    assert!(
+        new_root.base().x.unwrap_or(0.0) >= existing_right + 80.0,
+        "new root should be laid out beside the existing screen"
+    );
+    assert_eq!(new_root.base().y, Some(40.0));
+}
+
+#[test]
+fn run_zero_node_subtask_preserves_failure_context() {
+    // 规划 OK,但第一个 subtask 吐垃圾(3 次全失败)→ 零节点 → AllFailed
+    // with the parser failure context, not generic NoContent.
     // C3 引入 3-attempt 梯子:需要 3 条垃圾响应才能穷尽重试。
     let llm = ScriptedLlm::new(vec![
         ScriptResponse::Text(PLAN_JSON.into()),
@@ -205,7 +270,10 @@ fn run_zero_node_subtask_stops_and_errors() {
         &AbortFlag::new(),
         &stub_providers(),
     ));
-    assert!(matches!(result, Err(OrchestratorError::NoContent)));
+    match result {
+        Err(OrchestratorError::AllFailed(message)) => assert!(!message.is_empty()),
+        other => panic!("expected AllFailed with parser context, got {other:?}"),
+    }
     // undo batch 仍配对。
     assert_eq!(sink.batch_depth, 0);
 }
@@ -375,9 +443,10 @@ fn subtask_retries_on_attempt1_zero_succeeds_on_attempt2() {
     assert_eq!(sink.batch_depth, 0);
 }
 
-/// Subtask fails all 3 attempts → `OrchestratorError::NoContent`.
+/// Subtask fails all 3 attempts → `OrchestratorError::AllFailed` with the
+/// final failure context.
 #[test]
-fn subtask_all_three_attempts_fail_returns_no_content() {
+fn subtask_all_three_attempts_fail_returns_failure_context() {
     let llm = ScriptedLlm::new(vec![
         // planning
         ScriptResponse::Text(PLAN_JSON.into()),
@@ -398,14 +467,18 @@ fn subtask_all_three_attempts_fail_returns_no_content() {
         &AbortFlag::new(),
         &stub_providers(),
     ));
-    assert!(matches!(result, Err(OrchestratorError::NoContent)));
+    match result {
+        Err(OrchestratorError::AllFailed(message)) => assert!(!message.is_empty()),
+        other => panic!("expected AllFailed with parser context, got {other:?}"),
+    }
     assert_eq!(sink.batch_depth, 0);
 }
 
 /// Subtask's attempt-1 error is non-retryable (HTTP 401) →
-/// no retry, stops immediately with NoContent.
+/// no retry, and the top-level error preserves the auth failure instead of
+/// collapsing to the generic no-content message.
 #[test]
-fn subtask_non_retryable_error_stops_immediately_no_retry() {
+fn subtask_non_retryable_error_preserves_failure_context() {
     use crate::types::LlmError;
     let llm = ScriptedLlm::new(vec![
         // planning
@@ -415,8 +488,8 @@ fn subtask_non_retryable_error_stops_immediately_no_retry() {
             message: "HTTP 401 Unauthorized".into(),
             aborted: false,
         }),
-        // This response should NOT be consumed — if it were, the test
-        // would assert fewer LLM calls than expected (we just verify NoContent).
+        // This response should NOT be consumed — the first error is
+        // non-retryable.
     ]);
     let mut sink = VecDocSink::new();
     let mut on_progress = |_p: Progress| {};
@@ -428,7 +501,12 @@ fn subtask_non_retryable_error_stops_immediately_no_retry() {
         &AbortFlag::new(),
         &stub_providers(),
     ));
-    assert!(matches!(result, Err(OrchestratorError::NoContent)));
+    match result {
+        Err(OrchestratorError::AllFailed(message)) => {
+            assert!(message.contains("HTTP 401 Unauthorized"), "{message}");
+        }
+        other => panic!("expected auth context in AllFailed, got {other:?}"),
+    }
     assert_eq!(sink.batch_depth, 0);
 }
 

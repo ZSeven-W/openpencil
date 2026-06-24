@@ -1153,6 +1153,8 @@ pub async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
                             .apply_keydown_shortcut(key.as_str(), is_mod, shift, evt.alt_key())
                 }
                 "d" if is_mod && !shift => consumed = b.host.apply_duplicate(),
+                // Cmd/Ctrl+T — open a fresh chat tab (MT.3).
+                "t" if is_mod && !shift => consumed = b.host.apply_new_chat_tab(),
                 "a" if is_mod && !shift => consumed = b.host.apply_select_all(),
                 "c" if is_mod && !shift => consumed = b.host.apply_copy(),
                 "x" if is_mod && !shift => consumed = b.host.apply_cut(),

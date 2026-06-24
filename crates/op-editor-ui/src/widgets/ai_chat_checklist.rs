@@ -12,12 +12,12 @@ use crate::theme::Theme;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
-use op_editor_core::chat::{ChatMessage, ChatRole};
+use op_editor_core::chat::{ChatRole, ChatState};
 
 pub(crate) const PROGRESS_H: f32 = 2.0;
 pub(crate) const HEADER_H: f32 = 32.0;
 const ITEM_H: f32 = 22.0;
-const ITEM_GAP: f32 = 1.0;
+pub(crate) const ITEM_GAP: f32 = 1.0;
 const DETAIL_GAP: f32 = 2.0;
 const DETAIL_LINE_H: f32 = 14.0;
 const BOTTOM_PAD: f32 = 8.0;
@@ -30,6 +30,7 @@ pub(crate) struct ChecklistItem {
     pub active: bool,
     pub failed: bool,
     pub details: Vec<String>,
+    pub expanded: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -49,7 +50,8 @@ struct ChecklistProgress {
     use_progress_position_fallback: bool,
 }
 
-pub(crate) fn fixed_checklist_items(messages: &[ChatMessage]) -> Vec<ChecklistItem> {
+pub(crate) fn fixed_checklist_items(chat: &ChatState) -> Vec<ChecklistItem> {
+    let messages = &chat.messages;
     let Some(message) = messages
         .iter()
         .rev()
@@ -105,6 +107,7 @@ pub(crate) fn fixed_checklist_items(messages: &[ChatMessage]) -> Vec<ChecklistIt
                 active,
                 failed,
                 details: step.details.clone(),
+                expanded: chat.checklist_item_expanded.contains(&index),
             }
         })
         .collect();
@@ -118,8 +121,8 @@ pub(crate) fn fixed_checklist_items(messages: &[ChatMessage]) -> Vec<ChecklistIt
     }
 }
 
-pub(crate) fn fixed_checklist_height(messages: &[ChatMessage], collapsed: bool) -> f32 {
-    let items = fixed_checklist_items(messages);
+pub(crate) fn fixed_checklist_height(chat: &ChatState, collapsed: bool) -> f32 {
+    let items = fixed_checklist_items(chat);
     let count = items.len();
     if count == 0 {
         return 0.0;
@@ -131,16 +134,16 @@ pub(crate) fn fixed_checklist_height(messages: &[ChatMessage], collapsed: bool) 
     PROGRESS_H + HEADER_H + list_h + BOTTOM_PAD
 }
 
-pub(crate) fn fixed_checklist_content_height(messages: &[ChatMessage]) -> f32 {
-    let items = fixed_checklist_items(messages);
+pub(crate) fn fixed_checklist_content_height(chat: &ChatState) -> f32 {
+    let items = fixed_checklist_items(chat);
     item_list_height(&items)
 }
 
-pub(crate) fn fixed_checklist_max_scroll(messages: &[ChatMessage], collapsed: bool) -> f32 {
+pub(crate) fn fixed_checklist_max_scroll(chat: &ChatState, collapsed: bool) -> f32 {
     if collapsed {
         return 0.0;
     }
-    let content_h = fixed_checklist_content_height(messages);
+    let content_h = fixed_checklist_content_height(chat);
     (content_h - content_h.min(MAX_LIST_H)).max(0.0)
 }
 
@@ -164,11 +167,11 @@ pub(crate) fn paint_fixed_checklist(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
     rect: Rect,
-    messages: &[ChatMessage],
+    chat: &ChatState,
     collapsed: bool,
     scroll: f32,
 ) {
-    let items = fixed_checklist_items(messages);
+    let items = fixed_checklist_items(chat);
     if items.is_empty() {
         return;
     }
@@ -244,7 +247,7 @@ pub(crate) fn paint_fixed_checklist(
 
     let list_rect = fixed_checklist_list_rect(rect);
     let list_bottom = list_rect.origin.y + list_rect.size.y;
-    let scroll = scroll.clamp(0.0, fixed_checklist_max_scroll(messages, collapsed));
+    let scroll = scroll.clamp(0.0, fixed_checklist_max_scroll(chat, collapsed));
     cx.backend.save();
     cx.backend.clip_rect(list_rect);
     let mut y = list_rect.origin.y - scroll;
@@ -276,11 +279,22 @@ fn item_list_height(items: &[ChecklistItem]) -> f32 {
 }
 
 fn item_height(item: &ChecklistItem) -> f32 {
-    if item.details.is_empty() {
+    if item.details.is_empty() || !item.expanded {
         ITEM_H
     } else {
         ITEM_H + DETAIL_GAP + item.details.len() as f32 * DETAIL_LINE_H
     }
+}
+
+/// Public alias so the hit-test walker can stay in sync with paint
+/// without duplicating the height formula.
+pub(crate) fn checklist_item_height(item: &ChecklistItem) -> f32 {
+    item_height(item)
+}
+
+pub(crate) fn checklist_item_chevron_rect(item_x: f32, item_y: f32, item_w: f32) -> Rect {
+    // Right-aligned chevron in the summary row (ITEM_H tall band).
+    Rect::xywh(item_x + item_w - 16.0, item_y + 4.0, 14.0, 14.0)
 }
 
 fn item_state(step: &ParsedStep, index: usize, progress: ChecklistProgress) -> (bool, bool, bool) {
@@ -363,8 +377,35 @@ fn paint_item(cx: &mut PaintCx<'_>, theme: &Theme, item: &ChecklistItem, x: f32,
     } else {
         (theme.muted_foreground).with_alpha(0.65)
     };
-    draw_label(cx, &item.label, 12.0, color, x + 24.0, y + 15.0);
+    let label_x = x + 24.0;
+    let chevron_reserve = if item.details.is_empty() { 0.0 } else { 18.0 };
+    let label_w = (w - 24.0 - chevron_reserve - 2.0).max(0.0);
+    let label = summary_label_for_width(&item.label, label_w, |s| cx.backend.measure_text(s, 12.0));
+    // Hard-clip the label to its budget. `measure_text` is a char-width
+    // heuristic that under-counts `·`-separated metadata, so an ellipsized
+    // label can still paint past `label_w` into the right-edge chevron. The
+    // clip is the guarantee; the ellipsis is the nicety.
+    cx.backend.save();
+    cx.backend
+        .clip_rect(Rect::xywh(label_x, y, label_w, ITEM_H));
+    draw_label(cx, &label, 12.0, color, label_x, y + 15.0);
+    cx.backend.restore();
     if !item.details.is_empty() {
+        let chevron = checklist_item_chevron_rect(x, y, w);
+        draw_icon(
+            cx.backend,
+            if item.expanded {
+                Icon::ChevronDown
+            } else {
+                Icon::ChevronRight
+            },
+            Point2D::new(chevron.origin.x, chevron.origin.y),
+            12.0,
+            (theme.muted_foreground).with_alpha(0.7),
+            1.4,
+        );
+    }
+    if !item.details.is_empty() && item.expanded {
         let mut baseline = y + ITEM_H + DETAIL_GAP + 10.0;
         for detail in &item.details {
             let (status, text) = parse_detail_status(detail);
@@ -374,9 +415,12 @@ fn paint_item(cx: &mut PaintCx<'_>, theme: &Theme, item: &ChecklistItem, x: f32,
             } else {
                 x + 24.0
             };
+            let detail_w = (x + w - text_x - 4.0).max(0.0);
+            let detail =
+                summary_label_for_width(text, detail_w, |s| cx.backend.measure_text(s, 10.0));
             draw_label(
                 cx,
-                text,
+                &detail,
                 10.0,
                 (theme.muted_foreground).with_alpha(0.65),
                 text_x,
@@ -385,6 +429,10 @@ fn paint_item(cx: &mut PaintCx<'_>, theme: &Theme, item: &ChecklistItem, x: f32,
             baseline += DETAIL_LINE_H;
         }
     }
+}
+
+fn summary_label_for_width(label: &str, max_w: f32, measure: impl FnMut(&str) -> f32) -> String {
+    crate::util::ellipsize_to_width(label, max_w, measure)
 }
 
 fn parse_detail_status(line: &str) -> (Option<DetailStatus>, &str) {
@@ -449,6 +497,7 @@ fn draw_label(cx: &mut PaintCx<'_>, text: &str, size: f32, color: Color, x: f32,
 #[cfg(test)]
 mod tests {
     use super::*;
+    use op_editor_core::chat::{ChatMessage, ChatState};
 
     #[test]
     fn fixed_checklist_uses_latest_assistant_step_status() {
@@ -457,7 +506,9 @@ mod tests {
 <step title="Draw" status="streaming"></step>"#
             .into();
 
-        let items = fixed_checklist_items(std::slice::from_ref(&message));
+        let mut chat = ChatState::default();
+        chat.messages = vec![message];
+        let items = fixed_checklist_items(&chat);
 
         assert_eq!(items.len(), 2);
         assert!(items[0].done);
@@ -471,7 +522,9 @@ mod tests {
 <step title="Draw"></step>"#
             .into();
 
-        let items = fixed_checklist_items(std::slice::from_ref(&message));
+        let mut chat = ChatState::default();
+        chat.messages = vec![message];
+        let items = fixed_checklist_items(&chat);
 
         assert_eq!(items.len(), 2);
         assert!(
@@ -490,7 +543,9 @@ mod tests {
 <step title="Draw"></step>"#,
         );
 
-        let items = fixed_checklist_items(std::slice::from_ref(&message));
+        let mut chat = ChatState::default();
+        chat.messages = vec![message];
+        let items = fixed_checklist_items(&chat);
 
         assert!(
             items.is_empty(),
@@ -503,12 +558,30 @@ mod tests {
         let mut message = ChatMessage::assistant_streaming();
         message.thinking = "• Planning…\n• Subtask `hero` — Hero section".into();
 
-        let items = fixed_checklist_items(std::slice::from_ref(&message));
+        let mut chat = ChatState::default();
+        chat.messages = vec![message];
+        let items = fixed_checklist_items(&chat);
 
         assert_eq!(items.len(), 2);
         assert!(items[0].done);
         assert!(items[1].active);
         assert_eq!(items[1].label, "Subtask `hero` — Hero section");
+    }
+
+    #[test]
+    fn checklist_summary_label_is_ellipsized_to_available_width() {
+        let label = "Subtask `dumpling-card`  ·  11 skills · 7355/8000 tok · 27 dropped";
+        let measure = |s: &str| s.chars().count() as f32 * 7.0;
+        let out = summary_label_for_width(label, 120.0, measure);
+
+        assert!(
+            out.ends_with('…'),
+            "overflowing label should visibly truncate: {out}"
+        );
+        assert!(
+            measure(&out) <= 120.0,
+            "truncated checklist label must fit the row budget: {out}"
+        );
     }
 
     #[test]
@@ -518,9 +591,10 @@ mod tests {
 <step title="Draw" status="streaming"></step>"#
             .into();
 
-        let messages = [message];
-        let expanded = fixed_checklist_height(&messages, false);
-        let collapsed = fixed_checklist_height(&messages, true);
+        let mut chat = ChatState::default();
+        chat.messages = vec![message];
+        let expanded = fixed_checklist_height(&chat, false);
+        let collapsed = fixed_checklist_height(&chat, true);
 
         assert!(expanded > collapsed);
         assert_eq!(collapsed, PROGRESS_H + HEADER_H);
@@ -535,7 +609,9 @@ mod tests {
 </step>"#
             .into();
 
-        let items = fixed_checklist_items(std::slice::from_ref(&message));
+        let mut chat = ChatState::default();
+        chat.messages = vec![message];
+        let items = fixed_checklist_items(&chat);
 
         assert_eq!(
             items[0].details,
@@ -557,8 +633,18 @@ Choose layout
 </step>"#
             .into();
 
-        let plain_h = fixed_checklist_height(&[plain], false);
-        let detailed_h = fixed_checklist_height(&[detailed], false);
+        let mut chat_plain = ChatState::default();
+        chat_plain.messages = vec![plain];
+        let mut chat_detailed = ChatState::default();
+        chat_detailed.messages = vec![detailed];
+        // Items with details are collapsed by default, so heights match unless expanded.
+        // This test verifies the detail lines exist on the item.
+        let items = fixed_checklist_items(&chat_detailed);
+        assert!(!items[0].details.is_empty());
+        // Expand the item to see the height grow.
+        chat_detailed.set_checklist_item_expanded(0);
+        let plain_h = fixed_checklist_height(&chat_plain, false);
+        let detailed_h = fixed_checklist_height(&chat_detailed, false);
 
         assert!(detailed_h > plain_h);
     }
@@ -571,10 +657,11 @@ Choose layout
             .collect::<Vec<_>>()
             .join("\n");
 
-        let messages = [message];
+        let mut chat = ChatState::default();
+        chat.messages = vec![message];
 
-        assert!(fixed_checklist_max_scroll(&messages, false) > 0.0);
-        assert_eq!(fixed_checklist_max_scroll(&messages, true), 0.0);
+        assert!(fixed_checklist_max_scroll(&chat, false) > 0.0);
+        assert_eq!(fixed_checklist_max_scroll(&chat, true), 0.0);
     }
 
     #[test]
@@ -588,5 +675,35 @@ Choose layout
             (Some(DetailStatus::Pending), "Choose layout")
         );
         assert_eq!(parse_detail_status("Plain detail"), (None, "Plain detail"));
+    }
+
+    #[test]
+    fn collapsed_item_hides_detail_lines_until_expanded() {
+        let mut chat = ChatState::default();
+        let mut message = ChatMessage::assistant_streaming();
+        message.thinking =
+            "• Subtask `header` — Header\n  ▸ skills: cjk-typography, mobile-app".into();
+        chat.messages = vec![message];
+
+        let pre = fixed_checklist_items(&chat);
+        assert!(!pre[0].expanded);
+        chat.set_checklist_item_expanded(0);
+        let post = fixed_checklist_items(&chat);
+        assert!(post[0].expanded);
+
+        let mut chat2 = ChatState::default();
+        let mut message2 = ChatMessage::assistant_streaming();
+        message2.thinking =
+            "• Subtask `header` — Header\n  ▸ skills: cjk-typography, mobile-app".into();
+        chat2.messages = vec![message2];
+
+        let collapsed_h = fixed_checklist_height(&chat2, false);
+        chat2.set_checklist_item_expanded(0);
+        let expanded_h = fixed_checklist_height(&chat2, false);
+
+        assert!(
+            expanded_h > collapsed_h,
+            "expanding a row's details must grow the list"
+        );
     }
 }

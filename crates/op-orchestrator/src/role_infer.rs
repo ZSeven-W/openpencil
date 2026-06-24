@@ -19,7 +19,7 @@ use jian_ops_schema::sizing::SizingBehavior;
 use op_editor_core::PenNodeExt;
 use regex::Regex;
 
-use crate::role_defaults::{apply_role_defaults, node_layout_string, RoleCtx, Theme};
+use crate::role_defaults::{node_layout_string, RoleCtx, Theme};
 
 /// Exact (case-insensitive) name → role. Port of `NAME_EXACT_MAP`.
 fn exact_role(lower: &str) -> Option<&'static str> {
@@ -288,10 +288,15 @@ fn resolve_node_role(node: &mut PenNode, parent_role: Option<&str>) {
 /// the right context. Port of `resolveTreeRoles`.
 pub fn resolve_tree_roles(node: &mut PenNode, ctx: &RoleCtx) {
     resolve_node_role(node, ctx.parent_role.as_deref());
-    if let Some(role) = node.base().role.clone() {
-        apply_role_defaults(node, &role, ctx);
-    }
-    // The defaults pass may have just set this node's layout, so read it AFTER.
+    // Role-default injection is DISABLED (user directive 2026-06-22): strong
+    // models specify their own padding/fill/stroke/layout, and the opinionated
+    // defaults made output uniform ("stiff") + added unwanted input/navbar
+    // strokes. Role inference still runs above (other passes consume the role);
+    // only the defaults injection is skipped. `apply_role_defaults` is retained
+    // (still unit-tested) so this is a one-line re-enable.
+    // Re-enable: re-add `apply_role_defaults` to the import and call
+    // `if let Some(role) = node.base().role.clone() { apply_role_defaults(node, &role, ctx); }` here.
+    // Read child layout from whatever the LLM authored (no defaults pass ran).
     let child_ctx = RoleCtx {
         parent_role: node.base().role.clone(),
         parent_layout: node_layout_string(node),

@@ -25,6 +25,7 @@ use crate::plan::OrchestratorPlan;
 use crate::types::{DocSink, OrchestratorError, SubtaskOutcome};
 use crate::variables::{rollback, VarSnapshot};
 use jian_ops_schema::node::{container::Padding, PenNode};
+use jian_ops_schema::style::PenEffect;
 use op_editor_core::{
     first_fill_type, first_solid_fill_hex, EditorCommand, EditorState, FillType, LayoutPropValue,
     NodeId, PenNodeExt,
@@ -233,13 +234,42 @@ struct MobileSectionRepairs {
 /// 直接子节点的内容高度之和；`fit_content` 容器会按子节点估算。
 /// 对齐 TS `adjustRootFrameHeightToContent`。
 fn adjust_root_height_to_content(sink: &mut dyn DocSink, root_id: &str) {
-    let total: Option<i32> = {
+    let (total, current_height, mobile, has_fill_height_child) = {
         let Some(root) = find_root(sink.state(), root_id) else {
             return;
         };
-        root_content_height(root)
+        (
+            root_content_height(root),
+            root.height_px(),
+            is_mobile_root(root),
+            root_has_fill_height_child(root),
+        )
     };
-    let current_height = find_root(sink.state(), root_id).and_then(|root| root.height_px());
+
+    // A tall, scrolling mobile screen should hug its content. When the content
+    // genuinely exceeds a standard phone viewport, a fixed frame height that
+    // sits ABOVE the content leaves dead space at the bottom ("下面太长").
+    // Switching the root to `fit_content` lets the layout engine size it
+    // exactly (it measures real text/images, so it never clips). Gated on
+    // content > a phone viewport so a SPARSE screen keeps its phone-height
+    // frame instead of collapsing to a tiny estimate. Skip when a direct child
+    // fills height (`fit_content` parent + `fill_container` child is circular).
+    const STANDARD_MOBILE_VIEWPORT: f64 = 812.0;
+    if mobile
+        && !has_fill_height_child
+        && total.is_some_and(|content| f64::from(content) > STANDARD_MOBILE_VIEWPORT)
+    {
+        sink.apply(EditorCommand::SetNodeLayoutProp {
+            node_id: NodeId::new(root_id.to_string()),
+            property: "height".to_string(),
+            value: LayoutPropValue::Keyword("fit_content".to_string()),
+        });
+        return;
+    }
+
+    // Desktop / fill-height roots: only GROW a too-short fixed height to fit
+    // overflowing content. Never shrink here — a desktop dashboard root's
+    // height is `max(region heights)` on purpose.
     if let Some(height) = total.filter(|height| {
         current_height
             .map(|current| f64::from(*height) > current)
@@ -256,6 +286,28 @@ fn adjust_root_height_to_content(sink: &mut dyn DocSink, root_id: &str) {
             page_id: None,
         });
     }
+}
+
+/// True when any DIRECT child of `root` sizes its height as `fill_container` —
+/// making a `fit_content` parent a circular layout dependency.
+fn root_has_fill_height_child(root: &PenNode) -> bool {
+    root.children()
+        .map(|children| children.iter().any(height_is_fill_container))
+        .unwrap_or(false)
+}
+
+fn height_is_fill_container(node: &PenNode) -> bool {
+    use jian_ops_schema::sizing::{SizingBehavior, SizingKeyword};
+    let height = match node {
+        PenNode::Frame(n) => n.container.height.as_ref(),
+        PenNode::Group(n) => n.container.height.as_ref(),
+        PenNode::Rectangle(n) => n.container.height.as_ref(),
+        _ => return false,
+    };
+    matches!(
+        height,
+        Some(SizingBehavior::Keyword(SizingKeyword::FillContainer))
+    )
 }
 
 fn is_light_mobile_root(root: &PenNode) -> bool {
@@ -595,12 +647,13 @@ fn parse_hex_rgb(hex: &str) -> Option<(u8, u8, u8)> {
     }
 }
 
-/// 在活动页根里按 id 找节点。
+/// Find a node by id anywhere in the active-page tree (recursive).
+///
+/// Append-mode generation nests the new root under an existing target
+/// frame rather than placing it at the top level, so a top-level-only
+/// scan would miss it (Component 11c).
 fn find_root<'a>(state: &'a EditorState, root_id: &str) -> Option<&'a PenNode> {
-    state
-        .active_children()
-        .iter()
-        .find(|n| n.id_str() == root_id)
+    op_editor_core::walkers::find_node(state.active_children(), &NodeId::new(root_id.to_string()))
 }
 
 /// 阶段 4 清理 pass —— 在全部 subtask 插入完成后运行。
@@ -622,8 +675,64 @@ pub fn run_cleanup_passes(sink: &mut dyn DocSink, plan: &OrchestratorPlan, root_
         cleanup_mobile_dense::repair_dense_mobile_rows(sink, root_id);
         cleanup_desktop_dashboard::repair_sparse_desktop_dashboard_rows(sink, plan, root_id);
         repair_overbold_text_hierarchy(sink, root_id);
+        strip_decorative_filled_strokes(sink, root_id);
         adjust_root_height_to_content(sink, root_id);
     }
+}
+
+/// Strip the REDUNDANT border off a filled, shadowed container. When a
+/// frame / group / rectangle has a fill AND a drop shadow AND a stroke,
+/// the stroke is a "莫名其妙" hairline — the shadow already separates the
+/// surface, so the border adds nothing on a light page. Clearing it
+/// (`stroke_width = 0` → `stroke = None`) is conservative on purpose:
+/// a filled container WITHOUT a shadow keeps its stroke (there the border
+/// is the intentional boundary), and unfilled outlines (dividers) +
+/// `text_input` borders are never touched.
+fn strip_decorative_filled_strokes(sink: &mut dyn DocSink, root_id: &str) {
+    let targets: Vec<NodeId> = {
+        let Some(root) = find_root(sink.state(), root_id) else {
+            return;
+        };
+        let mut ids = Vec::new();
+        collect_redundant_borders(root, &mut ids);
+        ids
+    };
+    for node_id in targets {
+        sink.apply(EditorCommand::SetNodeStrokeWidth {
+            node_id,
+            width: 0.0,
+        });
+    }
+}
+
+fn collect_redundant_borders(node: &PenNode, out: &mut Vec<NodeId>) {
+    if has_redundant_shadowed_border(node) {
+        out.push(NodeId::new(node.id_str().to_string()));
+    }
+    if let Some(children) = node.children() {
+        for child in children {
+            collect_redundant_borders(child, out);
+        }
+    }
+}
+
+/// True when `node` is a Frame/Group/Rectangle carrying a non-empty fill,
+/// a stroke, AND a drop shadow — the redundant-border case (the shadow,
+/// not the stroke, separates the surface). A filled+stroked container
+/// with NO shadow is left alone: there the border is intentional.
+fn has_redundant_shadowed_border(node: &PenNode) -> bool {
+    let container = match node {
+        PenNode::Frame(n) => &n.container,
+        PenNode::Group(n) => &n.container,
+        PenNode::Rectangle(n) => &n.container,
+        _ => return false,
+    };
+    let has_fill = container.fill.as_ref().is_some_and(|f| !f.is_empty());
+    let has_shadow = container
+        .effects
+        .as_ref()
+        .is_some_and(|fx| fx.iter().any(|e| matches!(e, PenEffect::Shadow(_))));
+    has_fill && container.stroke.is_some() && has_shadow
 }
 
 // ── Task C1: concurrent failure policy + N-root cleanup ──────────────────────
@@ -639,7 +748,7 @@ pub fn run_cleanup_passes(sink: &mut dyn DocSink, plan: &OrchestratorPlan, root_
 ///   `Vec<Option<SubtaskOutcome>>` (i.e. outcomes that actually ran).
 /// - `total_nodes = Σ outcome.node_count` across `collected`.
 /// - If `total_nodes == 0 && !collected.is_empty()` → returns
-///   `Err(OrchestratorError::NoContent)` carrying the FIRST non-empty
+///   `Err(OrchestratorError::AllFailed(_))` carrying the FIRST non-empty
 ///   `error` string.  Fallback message when no outcome has an error:
 ///   `"The model failed to generate any design output."`.
 /// - Partial success (any outcome has `node_count > 0`) → returns `Ok(())`.
@@ -661,9 +770,6 @@ pub fn aggregate_concurrent_verdict(collected: &[SubtaskOutcome]) -> Result<(), 
         //   const firstError = errors[0] ?? 'The model failed to generate any design output.';
         //   throw new Error(firstError);
         //
-        // `OrchestratorError::NoContent` is the canonical error variant here.
-        // The message is preserved in the `Internal` variant for callers that
-        // need a human-readable string (e.g., the progress/error log).
         let first_error = collected
             .iter()
             .find_map(|o| o.error.as_deref().filter(|s| !s.is_empty()))

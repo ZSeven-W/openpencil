@@ -43,7 +43,12 @@ Rules:
 
 - One primary intent per screen. Everything else is subordinate.
 - First 1-2 elements must answer "where am I" + "what can I do here"
-- Mobile top rhythm: keep the title/header group close to the first useful control or content module. On 375-430px screens, the gap from header/title to search, primary action, chart, or first card should usually be 20-32px. Do not leave an empty hero-sized band unless the prompt explicitly asks for an editorial hero.
+- Mobile top rhythm: keep header/title close to the first useful control or content; use 20-32px, not an empty hero-sized band.
+- Section header actions: prefer a 20px `chevron-right` / `arrow-right` icon, not visible "See all", "View all", "查看全部", or "查看更多" text.
+- Category sections: section root and chip row both use height="fit_content". Use a header row, then chip row/grid. Chip row uses gap 12 and justifyContent start even when there are only two categories; never space_between/space_around. Each category item frame contains icon + label. Show four full chips or wrap; no half-clipped item.
+- Product card rows: two equal `fill_container` cards, gap 12, inside the content rail; no fixed-width clipped second card.
+- Header cart/notification controls are neutral icon buttons; counts are tiny circular badges, not square number blocks.
+- Exact user mobile tokens win: "圆角 8px / 间距 12px" means ordinary radius=8 and repeated gaps=12.
 - Title font size must be uniform across ALL screens in the app
 - Design for one-handed use: primary actions in lower half
 - Single vertical scroll (avoid nested scrolls)

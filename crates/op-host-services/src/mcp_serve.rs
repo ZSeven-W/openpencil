@@ -29,7 +29,9 @@ use op_mcp::{
     get_canvas_bounds_snapshot, get_component_snapshot, get_design_md_snapshot,
     get_design_prompt_snapshot, get_history_depth_snapshot, get_node_children_snapshot,
     get_node_parent_snapshot, get_node_snapshot, get_selection_set_snapshot,
-    get_style_guide_snapshot, get_style_guide_tags_snapshot, get_variables_snapshot,
+    get_editor_state_snapshot, get_guidelines_snapshot, spawn_agents_snapshot,
+    get_style_guide_snapshot,
+    get_style_guide_tags_snapshot, get_variables_snapshot, tool_search_snapshot,
     get_viewport_snapshot, group_selected_snapshot, import_svg_snapshot, insert_node_snapshot,
     instantiate_component_snapshot, list_components_snapshot, list_node_kinds_snapshot,
     list_pages_snapshot, list_theme_presets_snapshot, list_variables_snapshot,
@@ -442,6 +444,16 @@ fn rebuild_registry(doc: &EditorState, requested_tool: Option<&str>) -> ToolRegi
     register_tool!("export_design_md", export_design_md_snapshot(doc));
     register_tool!("get_style_guide_tags", get_style_guide_tags_snapshot());
     register_tool!("get_style_guide", get_style_guide_snapshot());
+    register_tool!("get_guidelines", get_guidelines_snapshot());
+    // Phase 0: always register spawn_agents (validates + returns request result).
+    // Actual parallel execution is deferred to Phase 3 (Task 3.1).
+    register_tool!("spawn_agents", spawn_agents_snapshot());
+    register_tool!(
+        "ToolSearch",
+        tool_search_snapshot(schemas::TOOL_SCHEMAS)
+    );
+    register_tool!("get_screenshot", get_screenshot_snapshot(doc));
+    register_tool!("export_nodes", export_nodes_snapshot(doc));
     register_tool!("get_active_theme", get_active_theme_snapshot(doc));
     register_tool!("list_components", list_components_snapshot(doc));
     register_tool!("get_component", get_component_snapshot(doc));
@@ -470,6 +482,7 @@ fn rebuild_registry(doc: &EditorState, requested_tool: Option<&str>) -> ToolRegi
     register_tool!("get_history_depth", get_history_depth_snapshot(doc));
     register_tool!("get_viewport", get_viewport_snapshot(doc));
     register_tool!("get_selection_set", get_selection_set_snapshot(doc));
+    register_tool!("get_editor_state", get_editor_state_snapshot(doc));
     #[cfg(feature = "mcp-debug-tools")]
     if debug_tools_enabled() {
         register_tool!(
@@ -746,11 +759,17 @@ fn tools_list_response(id_raw: &str, state: &EditorState, debug_enabled: bool) -
     )
 }
 
-mod schemas;
+pub(crate) mod schemas;
 #[cfg(not(feature = "mcp-debug-tools"))]
 pub use schemas::TOOL_SCHEMAS;
 #[cfg(feature = "mcp-debug-tools")]
 pub use schemas::{DEBUG_TOOL_SCHEMAS, TOOL_SCHEMAS};
+
+pub(crate) mod screenshot_tool;
+use screenshot_tool::get_screenshot_snapshot;
+
+pub(crate) mod export_tool;
+use export_tool::export_nodes_snapshot;
 
 #[cfg(test)]
 mod codegen_wire_tests;

@@ -19,7 +19,7 @@ Output ONLY a JSON object, no explanation.
 "textSecondary": "#hex (body/secondary text, muted)",
 "primary": "#hex (main action color)",
 "primaryLight": "#hex (lighter tint for hover/subtle backgrounds)",
-"accent": "#hex (secondary accent, complementary to primary)",
+"accent": "#hex (secondary accent — same hue family as primary or a tasteful muted tint; must NOT clash with primary, e.g. never blue when primary is orange)",
 "border": "#hex (subtle dividers)"
 },
 "typography": {
@@ -37,12 +37,10 @@ Output ONLY a JSON object, no explanation.
 
 RULES:
 
-- Match colors to the product personality: tech/SaaS - cool blue/indigo, creative - warm amber/coral, finance - deep navy/emerald, health - sage/teal, education - violet/sky.
+- Pick a palette that fits the product — you choose the hue; there is no fixed type→color mapping. Just keep it coherent (next rule).
+- ACCENT COHESION (critical): `accent` MUST harmonize with `primary` — same hue family or a restrained muted tint, NEVER a clashing contrast. The screen should read as ONE brand color: apply `primary` to every prominent accent (primary buttons, active states, prices, filter/CTA, selected nav). Never let a contrasting `accent` become the color of a prominent control (e.g. an orange brand must NOT have a blue filter button).
 - Ensure WCAG AA contrast (4.5:1) between text and background, primary and surface.
 - Font pairing: heading should be distinctive (Space Grotesk, Outfit, Sora, Plus Jakarta Sans, Clash Display), body should be readable (Inter, DM Sans, Satoshi). Max 2 families.
 - CJK content: if the request is in Chinese/Japanese/Korean, use "Noto Sans SC"/"Noto Sans JP"/"Noto Sans KR" for heading, "Inter" for body. Never use display fonts without CJK glyphs.
-- Dark theme: when request mentions dark/cyber/terminal/neon/暗黑/深色, use dark background (#0F172A or #18181B), light text, brighter accents.
-- Default to light theme unless explicitly asked for dark.
-- Radius: 0-4 for sharp/professional, 8-12 for modern, 16+ for playful/friendly.
+- Default to light theme unless the request mentions dark/cyber/terminal/neon/暗黑/深色 (then dark bg, light text, brighter accents).
 - Scale should have clear size jumps: [14, 16, 20, 28, 40, 56] not [14, 15, 16, 17, 18].
-- Aesthetic description guides the overall feel: "clean minimal blue tech", "warm editorial amber", "bold dark neon gaming".

@@ -151,6 +151,34 @@ pub fn export_node_raster(
     })
 }
 
+/// In-memory variant of [`export_node_raster`] — renders a single node
+/// by id and returns the encoded bytes instead of writing a file. Used
+/// by the `get_screenshot` MCP tool so the render core is shared with
+/// the file-export path. Errors on unknown id, empty-paint node, or
+/// surface-size overrun (see [`MAX_RASTER_SIDE_PX`] / [`MAX_RASTER_TOTAL_PX`]).
+pub fn render_node_raster_bytes(
+    scene: &LayoutScene,
+    node_id: &str,
+    format: RasterFormat,
+    scale: f32,
+) -> Result<Vec<u8>, String> {
+    let scale = clamp_scale(scale);
+    let Some(page) = scene.active_page() else {
+        return Err("no active page".into());
+    };
+    let node = page
+        .find(node_id)
+        .ok_or_else(|| format!("node {node_id} not found on the active page"))?;
+    let mut acc = BoundsAcc::new();
+    collect_bounds(node, glam::Affine2::IDENTITY, &mut acc);
+    let bounds = acc
+        .into_rect()
+        .ok_or_else(|| format!("node {node_id} paints nothing"))?;
+    render_raster_bytes(bounds, format, scale, MARGIN, |canvas| {
+        paint_node(canvas, node);
+    })
+}
+
 /// Clamp a caller-supplied export scale to the @0.5x..@8x range,
 /// defaulting a non-finite value to @2x (TS export-dialog parity).
 fn clamp_scale(scale: f32) -> f32 {
@@ -243,7 +271,7 @@ pub fn page_bounds(page: &ScenePage) -> Option<Rect> {
     acc.into_rect()
 }
 
-struct BoundsAcc {
+pub(crate) struct BoundsAcc {
     min_x: f32,
     min_y: f32,
     max_x: f32,
@@ -251,7 +279,7 @@ struct BoundsAcc {
 }
 
 impl BoundsAcc {
-    fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             min_x: f32::INFINITY,
             min_y: f32::INFINITY,
@@ -259,13 +287,13 @@ impl BoundsAcc {
             max_y: f32::NEG_INFINITY,
         }
     }
-    fn add(&mut self, x0: f32, y0: f32, x1: f32, y1: f32) {
+    pub(crate) fn add(&mut self, x0: f32, y0: f32, x1: f32, y1: f32) {
         self.min_x = self.min_x.min(x0);
         self.min_y = self.min_y.min(y0);
         self.max_x = self.max_x.max(x1);
         self.max_y = self.max_y.max(y1);
     }
-    fn into_rect(self) -> Option<Rect> {
+    pub(crate) fn into_rect(self) -> Option<Rect> {
         if !self.min_x.is_finite() {
             return None;
         }
@@ -283,7 +311,7 @@ impl BoundsAcc {
 /// pivots rotation around the node's `aggregate_bounds()` (own bounds
 /// when bounded, child union otherwise); this mirrors that exactly so
 /// the surface never clips a row a downstream draw would touch.
-fn collect_bounds(n: &SceneNode, parent_xform: glam::Affine2, acc: &mut BoundsAcc) {
+pub(crate) fn collect_bounds(n: &SceneNode, parent_xform: glam::Affine2, acc: &mut BoundsAcc) {
     if n.hidden {
         return;
     }

@@ -238,7 +238,9 @@ mod tests {
         let cjk = ellipsize_to_width("设计精良的美食应用", 35.0, measure);
         assert!(cjk.ends_with('…'));
         assert!(measure(&cjk) <= 35.0);
-        assert!(cjk.chars().all(|c| c == '…' || "设计精良的美食应用".contains(c)));
+        assert!(cjk
+            .chars()
+            .all(|c| c == '…' || "设计精良的美食应用".contains(c)));
         // Too narrow for even one glyph → keep a bare `…` so the
         // truncation stays visible (matches the per-module helpers).
         assert_eq!(ellipsize_to_width("abc", 5.0, measure), "…");

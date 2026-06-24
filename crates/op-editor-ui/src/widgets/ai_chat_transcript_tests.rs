@@ -191,6 +191,8 @@ fn done_summary_renders_as_compact_completion_card() {
 
 #[test]
 fn user_bubbles_remain_compact_and_right_aligned() {
+    // #27 restyle: user bubble width now accounts for USER_BUBBLE_PAD (14px)
+    // instead of BUBBLE_PAD (8px), so the bubble is slightly wider per line.
     let prompt = "user prompt";
     let msg = ChatMessage::user(prompt);
     let body = body();
@@ -201,7 +203,7 @@ fn user_bubbles_remain_compact_and_right_aligned() {
     );
     let bubble = items[0].bubble.as_ref().expect("user bubble");
 
-    let expected_w = (text_unit_width(prompt) + 2.0 * BUBBLE_PAD)
+    let expected_w = (text_unit_width(prompt) + 2.0 * USER_BUBBLE_PAD)
         .max(USER_BUBBLE_MIN_W)
         .min(body.size.x * USER_BUBBLE_MAX_FRAC);
     assert!((bubble.rect.size.x - expected_w).abs() < 1e-4);
@@ -261,9 +263,10 @@ fn transcript_text_offset_at_resolves_user_message_text() {
     let body = body();
     let items = build_transcript(&messages, body, op_editor_core::Locale::EnUs);
     let bubble = items[0].bubble.as_ref().expect("user prompt bubble");
+    // Click within the user bubble text area (past the USER_BUBBLE_PAD inset).
     let point = Point2D::new(
-        bubble.rect.origin.x + BUBBLE_PAD + 30.0,
-        bubble.rect.origin.y + BUBBLE_PAD + 8.0,
+        bubble.rect.origin.x + USER_BUBBLE_PAD + 22.0,
+        bubble.rect.origin.y + USER_BUBBLE_PAD + 2.0,
     );
 
     let hit = transcript_text_offset_at(&messages, body, point, op_editor_core::Locale::EnUs, 0.0)
@@ -377,6 +380,8 @@ fn paint_transcript_leaves_assistant_answer_unframed() {
 
 #[test]
 fn paint_transcript_keeps_user_answer_bubble_background() {
+    // #27 restyle: user bubble uses theme.user_bubble (medium-gray),
+    // replacing the old theme.row_selected_primary (blue-tinted wash).
     let messages = [ChatMessage::user("user prompt")];
     let theme = crate::Theme::dark();
     let mut backend = TranscriptPaintBackend::default();
@@ -394,7 +399,8 @@ fn paint_transcript_keeps_user_answer_bubble_background() {
     );
 
     assert_eq!(backend.round_rects.len(), 1);
-    assert_eq!(backend.round_rect_colors[0], theme.row_selected_primary);
+    // Old: theme.row_selected_primary (blue-tinted). New: theme.user_bubble (medium-gray).
+    assert_eq!(backend.round_rect_colors[0], theme.user_bubble);
     assert_ne!(backend.round_rect_colors[0], theme.primary);
 }
 
@@ -790,7 +796,7 @@ fn paint_expanded_design_json_block_draws_separate_body_box_like_ts() {
 }
 
 #[test]
-fn streaming_unclosed_design_json_code_fence_renders_generating_block() {
+fn streaming_design_json_shows_no_design_card() {
     let mut message = ChatMessage::assistant_streaming();
     message.content = r#"```json
 [{"id":"frame-1","type":"Frame"}]"#
@@ -802,90 +808,10 @@ fn streaming_unclosed_design_json_code_fence_renders_generating_block() {
         op_editor_core::Locale::EnUs,
     );
 
-    assert_eq!(items[0].design_blocks.len(), 1);
-    assert_eq!(items[0].design_blocks[0].label, "Generating design...");
+    // Streaming design cards are suppressed — no "Generating design..." card
+    // while the turn streams (the design JSON is not shown as a bubble either).
+    assert!(items[0].design_blocks.is_empty());
     assert!(items[0].bubble.is_none());
-}
-
-#[test]
-fn paint_streaming_design_block_matches_ts_generating_row_style() {
-    let mut message = ChatMessage::assistant_streaming();
-    message.content = r#"```json
-[{"id":"frame-1","type":"Frame"}]"#
-        .into();
-    let body = body();
-    let theme = crate::Theme::dark();
-    let items = build_transcript(
-        std::slice::from_ref(&message),
-        body,
-        op_editor_core::Locale::EnUs,
-    );
-    let block = items[0].design_blocks[0].clone();
-    assert!(block.expanded);
-    let mut backend = TranscriptPaintBackend::default();
-    let mut cx = PaintCx {
-        backend: &mut backend,
-    };
-
-    paint_transcript(
-        &mut cx,
-        &theme,
-        body,
-        &[message],
-        0,
-        op_editor_core::Locale::EnUs,
-    );
-
-    assert!(
-        backend
-            .round_rects
-            .iter()
-            .zip(backend.round_rect_colors.iter())
-            .any(|((rect, radius), color)| {
-                rect_close(*rect, block.rect)
-                    && (*radius - 6.0).abs() < 1e-4
-                    && color_close(*color, theme.muted.with_alpha(0.4))
-            }),
-        "streaming design block should paint the expanded TS bg-secondary/40 rounded row"
-    );
-
-    let icon_bg = Rect::xywh(
-        block.rect.origin.x + 12.0,
-        block.rect.origin.y + 8.0,
-        16.0,
-        16.0,
-    );
-    assert!(
-        backend
-            .round_rects
-            .iter()
-            .zip(backend.round_rect_colors.iter())
-            .any(|((rect, radius), color)| {
-                rect_close(*rect, icon_bg)
-                    && (*radius - 8.0).abs() < 1e-4
-                    && color_close(*color, theme.primary.with_alpha(0.10))
-            }),
-        "streaming design block should paint the TS bg-primary/10 wand circle"
-    );
-
-    assert!(
-        backend.text_colors.iter().any(|(text, color)| {
-            text == "Generating design..." && *color == theme.muted_foreground.to_jian()
-        }),
-        "streaming design label should use text-muted-foreground without extra opacity"
-    );
-
-    assert!(
-        backend
-            .svg_stroke_colors
-            .iter()
-            .any(|(point, size, color)| {
-                (*size - 12.0).abs() < 1e-4
-                    && point.x >= body.origin.x + body.size.x - 26.0
-                    && color_close(*color, theme.muted_foreground.with_alpha(0.30))
-            }),
-        "streaming design block should paint the TS text-muted-foreground/30 chevron"
-    );
 }
 
 #[test]

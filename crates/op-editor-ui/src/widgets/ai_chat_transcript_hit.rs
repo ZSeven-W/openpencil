@@ -1,4 +1,4 @@
-use super::ai_chat_transcript::build_transcript_with_design_hover;
+use super::ai_chat_transcript::{build_transcript_with_design_hover, ACTION_STEP_H};
 use crate::{Point2D, Rect};
 use op_editor_core::chat::ChatMessage;
 
@@ -8,6 +8,7 @@ pub enum TranscriptHit {
     ToggleToolCalls(usize),
     SetToolCallCardExpanded(usize, usize, bool),
     SetDesignBlockExpanded(usize, usize, bool),
+    SetActionStepExpanded(usize, usize, bool),
     CopyDesignBlock(String),
     ApplyDesignBlock(usize, String),
 }
@@ -42,6 +43,24 @@ pub(crate) fn transcript_hit(
                         !card.expanded,
                     ));
                 }
+            }
+        }
+        for (step_index, step) in item.steps.iter().enumerate() {
+            // Only the header band toggles — clicking a detail line must not
+            // collapse. Every rendered step has details (empty ones are
+            // filtered out at build time), so each is meaningfully collapsible.
+            let header = Rect::xywh(
+                step.rect.origin.x,
+                step.rect.origin.y,
+                step.rect.size.x,
+                ACTION_STEP_H,
+            );
+            if (header).contains(Point2D::new(x, y)) {
+                return Some(TranscriptHit::SetActionStepExpanded(
+                    item.msg_index,
+                    step_index,
+                    !step.expanded,
+                ));
             }
         }
         for (block_index, block) in item.design_blocks.iter().enumerate() {

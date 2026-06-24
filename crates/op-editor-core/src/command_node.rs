@@ -839,6 +839,63 @@ impl EditorState {
         }
         true
     }
+
+    /// Same mutation as [`cmd_insert_subtree`] but returns the
+    /// **post-remap** ids of the forest roots (the incoming top-level
+    /// nodes, in order). `None` = rejected (no mutation), mirroring
+    /// `cmd_insert_subtree`'s `false`. Used by the orchestrator so
+    /// append-mode cleanup can scope to exactly the newly-inserted roots
+    /// (their ids are remapped on apply — the caller's ids are placeholders).
+    pub fn insert_subtree_returning_root_ids(
+        &mut self,
+        nodes: Vec<PenNode>,
+        parent_id: &NodeId,
+    ) -> Option<Vec<String>> {
+        if nodes.is_empty() {
+            return None;
+        }
+        // Validate the parent up front (when not the page root).
+        if parent_id.is_real() {
+            match walkers::find_node(self.active_children(), parent_id) {
+                Some(p) if p.is_container() => {}
+                _ => return None,
+            }
+        }
+        let Some(mut next_id) = self.next_node_id_seed() else {
+            return None;
+        };
+        let mut taken: HashSet<NodeId> = self.collect_node_ids();
+        let mut nodes = nodes;
+        let replacement = crate::command_root_replace::prepare_root_frame_replacement(
+            self.active_children(),
+            &mut nodes,
+            parent_id,
+        );
+        // remap_subtree_ids_mapping mutates every node id IN PLACE (DFS order).
+        // Reading root ids from the mapping by index is incorrect: for a
+        // forest where root0 has children, mapping[0..root_count] would yield
+        // [root0, child0a, ...] instead of [root0, root1, ...]. Instead, read
+        // the root ids directly from the top-level nodes after remap — they
+        // are already updated in place and ordering is exact.
+        remap_subtree_ids_mapping(&mut nodes, &mut next_id, &mut taken)?;
+        let root_ids: Vec<String> = nodes.iter().map(|n| n.id_str().to_string()).collect();
+        // All validation + allocation passed — now mutate.
+        if parent_id.is_real() {
+            let root = self.active_children_mut();
+            let parent = walkers::find_node_mut(root, parent_id)?;
+            let slot = parent.children_mut()?;
+            slot.extend(nodes);
+        } else {
+            let roots = self.active_children_mut();
+            if let Some(replacement) = replacement.as_ref() {
+                if !crate::command_root_replace::remove_root_frame_replacement(roots, replacement) {
+                    return None;
+                }
+            }
+            roots.extend(nodes);
+        }
+        Some(root_ids)
+    }
 }
 
 fn apply_copy_overrides(node: &mut PenNode, overrides_json: Option<&str>) -> bool {

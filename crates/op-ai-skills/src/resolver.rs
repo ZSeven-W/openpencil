@@ -18,6 +18,16 @@ fn is_word_byte(b: u8) -> bool {
 /// message. ASCII keywords match on word boundaries; non-ASCII (CJK)
 /// keywords fall back to substring containment.
 pub fn match_keyword(msg: &str, kw: &str) -> bool {
+    // A `/.../`-delimited keyword is a regex pattern (the TS resolver runs it
+    // as a real regex). The corpus uses exactly one — the CJK/Japanese/Korean
+    // character class for `cjk-typography`. Rather than embed a regex engine,
+    // evaluate it as "the message contains a CJK / JP / KR character" (the
+    // pattern's intent). Without this the literal substring `/[一…]/` is
+    // searched for verbatim and the skill never fires, so CJK designs lost
+    // their CJK-typography guidance.
+    if kw.len() >= 2 && kw.starts_with('/') && kw.ends_with('/') {
+        return msg.chars().any(is_cjk_jp_kr_char);
+    }
     if !kw.is_ascii() {
         // CJK and friends have no whitespace word boundaries.
         return msg.contains(kw);
@@ -38,6 +48,17 @@ pub fn match_keyword(msg: &str, kw: &str) -> bool {
         }
     }
     false
+}
+
+/// True when `c` is a Chinese / Japanese / Korean character — the union of
+/// the ranges in `cjk-typography`'s regex keyword (CJK Unified, Hiragana,
+/// Katakana, Hangul syllables).
+fn is_cjk_jp_kr_char(c: char) -> bool {
+    matches!(c as u32,
+        0x4E00..=0x9FFF   // CJK Unified Ideographs
+        | 0x3040..=0x309F // Hiragana
+        | 0x30A0..=0x30FF // Katakana
+        | 0xAC00..=0xD7AF) // Hangul syllables
 }
 
 /// True when `trigger` fires for the given message + flag set.
@@ -144,6 +165,21 @@ mod tests {
     fn cjk_keyword_uses_substring() {
         assert!(match_keyword("帮我设计一个表单页面", "表单"));
         assert!(!match_keyword("帮我设计一个按钮", "表单"));
+    }
+
+    #[test]
+    fn cjk_regex_keyword_fires_on_cjk_jp_kr_message() {
+        // `cjk-typography`'s `/[…]/` regex keyword must fire when the message
+        // contains any CJK / Japanese / Korean character (it previously never
+        // fired — the regex was searched for as a literal substring).
+        let re = "/[\\u4e00-\\u9fff\\u3040-\\u309f\\u30a0-\\u30ff\\uac00-\\ud7af]/";
+        assert!(match_keyword("生成美食应用首页", re), "chinese fires");
+        assert!(match_keyword("デザイン", re), "japanese fires");
+        assert!(match_keyword("디자인", re), "korean fires");
+        assert!(
+            !match_keyword("design a food app home", re),
+            "pure-ascii message must not fire"
+        );
     }
 
     #[test]

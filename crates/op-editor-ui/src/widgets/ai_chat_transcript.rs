@@ -22,7 +22,6 @@ use super::ai_chat_transcript_completion::{
 };
 use super::ai_chat_transcript_design::{
     extract_design_json_blocks, paint_design_block, place_design_blocks, DesignBlock,
-    PendingDesignBlock,
 };
 pub(crate) use super::ai_chat_transcript_hit::{transcript_hit, TranscriptHit};
 use super::ai_chat_transcript_paint_parts::{paint_action_step, paint_collapsible};
@@ -41,8 +40,12 @@ use super::ai_chat_transcript_tools::{
 pub(crate) const BODY_FONT: f32 = 12.0;
 /// Height of one wrapped text line.
 pub(crate) const LINE_H: f32 = 16.0;
-/// Inner padding inside a bubble / block box.
+/// Inner padding inside a collapsible block box (thinking / tool body).
 pub(crate) const BUBBLE_PAD: f32 = 8.0;
+/// Inner padding for user message bubbles — matches the #27 generous
+/// padding spec (~14px). Larger than BUBBLE_PAD so the user bubble
+/// feels spacious without inflating assistant / block bodies.
+pub(crate) const USER_BUBBLE_PAD: f32 = 14.0;
 /// Text shown in the TS-style empty streaming assistant pill.
 const TYPING_LABEL: &str = "Thinking";
 /// Text shown when a completed assistant action only contained hidden
@@ -64,8 +67,9 @@ pub(crate) const HEADER_H: f32 = 22.0;
 const MSG_GAP: f32 = 12.0;
 /// Vertical gap between sub-blocks within one message.
 const SUB_GAP: f32 = 4.0;
-/// Height of one compact design-progress step row.
-pub(crate) const ACTION_STEP_H: f32 = 28.0;
+/// Height of one design-progress step row (#27 restyle: 48px for comfortable
+/// vertical padding, matching the tool/step card height spec).
+pub(crate) const ACTION_STEP_H: f32 = 48.0;
 /// Height of one detail line under a progress step.
 pub(crate) const ACTION_DETAIL_LINE_H: f32 = 14.0;
 /// Gap between the progress title row and detail lines.
@@ -226,36 +230,33 @@ fn build_item(
         (raw_visible_content, Vec::new())
     } else {
         let extracted = extract_design_json_blocks(&raw_visible_content, msg.streaming);
-        (extracted.visible_text, extracted.blocks)
+        // Suppress the in-chat design card WHILE STREAMING — no transient
+        // "Generating design..." card (the "Pencil it out" checklist + the
+        // live canvas already convey progress). Completed blocks still render.
+        let blocks = if msg.streaming {
+            Vec::new()
+        } else {
+            extracted.blocks
+        };
+        (extracted.visible_text, blocks)
     };
     if design_applied {
         for block in &mut pending_design_blocks {
             block.applied = true;
         }
     }
-    if !is_user
-        && msg.streaming
-        && visible_content.trim().is_empty()
-        && !progress_steps.is_empty()
-        && pending_design_blocks.is_empty()
-    {
-        pending_design_blocks.push(PendingDesignBlock {
-            element_count: 0,
-            label: "Generating design...".into(),
-            streaming: true,
-            applied: false,
-            code: String::new(),
-        });
-    }
+    // No streaming "Generating design..." placeholder card — the fixed
+    // "Pencil it out" checklist already shows live progress, so this
+    // duplicate card was removed (user directive 2026-06-22).
     let mut user_bubble_lines = if is_user && !visible_content.is_empty() {
         let max_w = body.size.x * USER_BUBBLE_MAX_FRAC;
-        let max_budget = unit_budget(max_w - 2.0 * BUBBLE_PAD);
+        let max_budget = unit_budget(max_w - 2.0 * USER_BUBBLE_PAD);
         let lines = wrap_units(&visible_content, max_budget);
         let content_w = lines
             .iter()
             .map(|line| text_unit_width(line))
             .fold(0.0, f32::max);
-        bubble_w = (content_w + 2.0 * BUBBLE_PAD)
+        bubble_w = (content_w + 2.0 * USER_BUBBLE_PAD)
             .max(USER_BUBBLE_MIN_W)
             .min(max_w);
         x = body.origin.x + body.size.x - bubble_w;
@@ -263,7 +264,13 @@ fn build_item(
     } else {
         None
     };
-    let budget = unit_budget(bubble_w - 2.0 * BUBBLE_PAD);
+    // budget for word-wrapping inside the bubble (user uses USER_BUBBLE_PAD,
+    // assistant uses full width with no inset).
+    let budget = if is_user {
+        unit_budget(bubble_w - 2.0 * USER_BUBBLE_PAD)
+    } else {
+        unit_budget(bubble_w - 2.0 * BUBBLE_PAD)
+    };
     let has_progress_steps = !progress_steps.is_empty();
     let completion_summary = (!is_user)
         .then(|| parse_completion_summary(&visible_content))
@@ -312,7 +319,14 @@ fn build_item(
             .iter()
             .flat_map(|line| wrap_units(line, budget.saturating_sub(4)))
             .collect();
-        let expanded = active;
+        // Default: expanded only while this step is the active/streaming
+        // one. A user click records a per-step override (collapse/expand).
+        let expanded = msg
+            .action_step_expanded_overrides
+            .get(i)
+            .copied()
+            .flatten()
+            .unwrap_or(active);
         let step_h = action_step_height(expanded, details.len());
         steps.push(ActionStep {
             rect: Rect::xywh(x, y, bubble_w, step_h),
@@ -413,7 +427,8 @@ fn build_item(
             .take()
             .unwrap_or_else(|| wrap_units(&visible_content, budget));
         let h = if is_user {
-            lines.len() as f32 * LINE_H + 2.0 * BUBBLE_PAD
+            // #27 restyle: generous 14px padding for the user bubble.
+            lines.len() as f32 * LINE_H + 2.0 * USER_BUBBLE_PAD
         } else {
             lines.len() as f32 * LINE_H
         };
@@ -666,8 +681,10 @@ pub(crate) fn paint_transcript_with_selection(
             paint_design_block(cx, theme, block);
         }
         if let Some(bubble) = &item.bubble {
+            // #27 restyle: user bubble = medium-gray (theme.user_bubble),
+            // assistant text = plain (no bubble background).
             let (bg, fg) = match item.role {
-                ChatRole::User => (theme.row_selected_primary, theme.foreground),
+                ChatRole::User => (theme.user_bubble, theme.foreground),
                 ChatRole::Assistant => (theme.muted, theme.foreground),
             };
             if bubble.typing {
@@ -697,7 +714,8 @@ pub(crate) fn paint_transcript_with_selection(
                 cx.backend.save();
                 cx.backend.clip_rect(bubble.rect);
                 if item.role == ChatRole::User {
-                    cx.backend.fill_round_rect(bubble.rect, 8.0, bg);
+                    // #27 restyle: rounded-rect bubble with ~14px radius.
+                    cx.backend.fill_round_rect(bubble.rect, 14.0, bg);
                 }
                 if item.role == ChatRole::User {
                     if let Some(selection) =
@@ -712,13 +730,14 @@ pub(crate) fn paint_transcript_with_selection(
                         );
                     }
                 }
+                // #27 restyle: user bubble text uses generous USER_BUBBLE_PAD inset.
                 let text_x = match item.role {
-                    ChatRole::User => bubble.rect.origin.x + BUBBLE_PAD,
+                    ChatRole::User => bubble.rect.origin.x + USER_BUBBLE_PAD,
                     ChatRole::Assistant => bubble.rect.origin.x,
                 };
                 let mut baseline = bubble.rect.origin.y
                     + match item.role {
-                        ChatRole::User => BUBBLE_PAD + 11.0,
+                        ChatRole::User => USER_BUBBLE_PAD + 11.0,
                         ChatRole::Assistant => 11.0,
                     };
                 for line in &bubble.lines {
