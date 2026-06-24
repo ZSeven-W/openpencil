@@ -192,7 +192,9 @@ pub fn build_fallback_plan(req: &DesignRequest) -> OrchestratorPlan {
                     id_prefix: "top-summary".into(),
                     parent_frame_id: Some("page".into()),
                     elements: Some(
-                        "delivery header, location, profile/action controls; no status bar"
+                        "the screen's header / context for this product (title or greeting, \
+                         and the key top-level action[s] this app needs); no status bar. \
+                         Choose what fits the prompt — not a fixed delivery-app header."
                             .into(),
                     ),
                     screen: None,
@@ -209,7 +211,9 @@ pub fn build_fallback_plan(req: &DesignRequest) -> OrchestratorPlan {
                     id_prefix: "main-content".into(),
                     parent_frame_id: Some("page".into()),
                     elements: Some(
-                        "search, filters, promotional banner, cards, lists, primary content; do not repeat the top summary"
+                        "this screen's primary content for the product — the main job-to-be-done \
+                         and whatever modules genuinely fit it; do not repeat the top summary. \
+                         Vary the composition per prompt, not a fixed search + banner + card stack."
                             .into(),
                     ),
                     screen: None,

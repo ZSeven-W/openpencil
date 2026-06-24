@@ -3147,6 +3147,7 @@ dependencies = [
  "op-ai",
  "op-i18n",
  "serde_json",
+ "tracing",
 ]
 
 [[package]]

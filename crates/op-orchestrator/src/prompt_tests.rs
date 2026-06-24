@@ -104,7 +104,7 @@ fn subagent_prompt_carries_subtask_and_node_format() {
         generated_root_id: None,
         existing_section_labels: None,
     };
-    let cr = build_subagent_prompt(&st, &plan(), &req(), AbortFlag::new(), false, false);
+    let (cr, _) = build_subagent_prompt(&st, &plan(), &req(), AbortFlag::new(), false, false);
     assert!(cr.user_prompt.contains("Hero"));
     assert!(cr.user_prompt.contains("hero-"));
     assert!(cr.system_prompt.contains("PenNode"));
@@ -144,7 +144,7 @@ fn subagent_prompt_carries_ts_layout_contract() {
             existing_section_labels: None,
         },
     ];
-    let cr = build_subagent_prompt(
+    let (cr, _) = build_subagent_prompt(
         &plan.subtasks[1],
         &plan,
         &req(),
@@ -154,8 +154,13 @@ fn subagent_prompt_carries_ts_layout_contract() {
     );
 
     let required = "Page sections:|Food Categories [category chips]|Root frame: id=\"categories-root\"|width=\"fill_container\"|height=\"fit_content\"|Generate enough elements|MOBILE STATUS BAR|time, signal, wifi, battery|NO PHONE MOCKUP WRAPPER|MOBILE WIDTH SAFETY|MOBILE SINGLE CONTENT RAIL|MOBILE SEARCH BAR|MOBILE SECTION CHROME|MOBILE VERTICAL RHYTHM|MOBILE TOP RHYTHM|MOBILE GRID ALIGNMENT|MOBILE CARD OVERLAYS|MOBILE IMAGE QUALITY|NO BLANK PLACEHOLDERS|MOBILE NAV SURFACE|MOBILE NAV SHADOW|NO FIXED FOOD TEMPLATE|Do not default to the same search + categories + orange promo + two product cards composition|TYPOGRAPHY HIERARCHY|DENSITY|VISUAL HIERARCHY|SPACING CONSISTENCY|CRAFT POLISH|MEDIA CONSISTENCY|ICON SCALE|SIGNATURE MOMENT|WOW FACTOR|COMPOSITIONAL CONTRAST|PREMIUM DETAIL|NO DECORATION SPAM";
+    // Mobile UI guardrails now load via the `mobile-ui` skill (system prompt);
+    // section + quality markers stay in the user prompt. Accept either.
     for required in required.split('|') {
-        assert!(cr.user_prompt.contains(required), "missing {required}");
+        assert!(
+            cr.system_prompt.contains(required) || cr.user_prompt.contains(required),
+            "missing {required}"
+        );
     }
 }
 
@@ -177,14 +182,14 @@ fn subagent_prompt_minimal_skills_only_has_schema_and_jsonl() {
     };
     // minimal_skills=true: the system prompt should contain "schema" skill
     // content and "jsonl-format" skill content, but NOT layout/text-rules etc.
-    let cr = build_subagent_prompt(&st, &plan(), &req(), AbortFlag::new(), false, true);
+    let (cr, _) = build_subagent_prompt(&st, &plan(), &req(), AbortFlag::new(), false, true);
     // schema and jsonl-format skills should appear (they always exist)
     assert!(
         cr.system_prompt.contains("PenNode"),
         "NODE_FORMAT suffix should still be appended"
     );
     // The system_prompt should be considerably shorter than a full-skill prompt
-    let full_cr = build_subagent_prompt(&st, &plan(), &req(), AbortFlag::new(), false, false);
+    let (full_cr, _) = build_subagent_prompt(&st, &plan(), &req(), AbortFlag::new(), false, false);
     assert!(
         cr.system_prompt.len() < full_cr.system_prompt.len(),
         "minimal_skills prompt should be shorter than full-skill prompt"
@@ -220,8 +225,10 @@ fn subagent_prompt_reduced_complexity_basic_is_shorter_than_full() {
 
         visual_ref_enabled: false,
     };
-    let full_cr = build_subagent_prompt(&st, &plan(), &basic_req, AbortFlag::new(), false, false);
-    let reduced_cr = build_subagent_prompt(&st, &plan(), &basic_req, AbortFlag::new(), true, false);
+    let (full_cr, _) =
+        build_subagent_prompt(&st, &plan(), &basic_req, AbortFlag::new(), false, false);
+    let (reduced_cr, _) =
+        build_subagent_prompt(&st, &plan(), &basic_req, AbortFlag::new(), true, false);
     assert!(
         reduced_cr.system_prompt.len() <= full_cr.system_prompt.len(),
         "reduced_complexity Basic prompt should be no longer than full-skill prompt"
@@ -245,8 +252,9 @@ fn subagent_prompt_reduced_complexity_full_tier_is_noop() {
         existing_section_labels: None,
     };
     // req() uses "claude" which maps to Full tier → reduced_complexity is no-op
-    let full_cr = build_subagent_prompt(&st, &plan(), &req(), AbortFlag::new(), false, false);
-    let reduced_cr = build_subagent_prompt(&st, &plan(), &req(), AbortFlag::new(), true, false);
+    let (full_cr, _) = build_subagent_prompt(&st, &plan(), &req(), AbortFlag::new(), false, false);
+    let (reduced_cr, _) =
+        build_subagent_prompt(&st, &plan(), &req(), AbortFlag::new(), true, false);
     assert_eq!(
         full_cr.system_prompt, reduced_cr.system_prompt,
         "reduced_complexity on Full tier should be a no-op"
@@ -276,7 +284,7 @@ fn subagent_prompt_basic_tier_swaps_in_simplified_format_skill() {
         validation_enabled: true,
         visual_ref_enabled: false,
     };
-    let basic_cr = build_subagent_prompt(
+    let (basic_cr, _) = build_subagent_prompt(
         &subtask(),
         &plan(),
         &basic_req,
@@ -285,7 +293,7 @@ fn subagent_prompt_basic_tier_swaps_in_simplified_format_skill() {
         false,
     );
     // req() is model "claude" → Full tier.
-    let full_cr =
+    let (full_cr, _) =
         build_subagent_prompt(&subtask(), &plan(), &req(), AbortFlag::new(), false, false);
 
     assert!(
@@ -306,6 +314,252 @@ fn subagent_prompt_basic_tier_swaps_in_simplified_format_skill() {
     );
 }
 
+#[test]
+fn subagent_prompt_basic_mobile_food_keeps_mobile_app_skill() {
+    let mobile_req = DesignRequest {
+        prompt: "Design a 402x874 mobile food delivery home screen with search, categories, promo offer, restaurant cards, and bottom navigation".into(),
+        model: Some("claude-haiku".into()),
+        provider: None,
+        design_md: None,
+        concurrency: 1,
+        append_context: None,
+        validation_enabled: true,
+        visual_ref_enabled: false,
+    };
+    let mut mobile_plan = plan();
+    mobile_plan.root_frame.width = 402.0;
+    mobile_plan.root_frame.height = 874.0;
+    mobile_plan.style_guide_name = Some("warm-food-mobile-light".into());
+    let mobile_subtask = Subtask {
+        id: "main-content".into(),
+        label: "Main Content".into(),
+        region: Region {
+            width: 402.0,
+            height: 640.0,
+        },
+        id_prefix: "main-content".into(),
+        parent_frame_id: Some("page".into()),
+        elements: Some(
+            "search, filters, category chips, promotional banner, restaurant cards".into(),
+        ),
+        screen: None,
+        generated_root_id: None,
+        existing_section_labels: None,
+    };
+
+    let (_, report) = build_subagent_prompt(
+        &mobile_subtask,
+        &mobile_plan,
+        &mobile_req,
+        AbortFlag::new(),
+        false,
+        false,
+    );
+    let mobile_entry = report
+        .included
+        .iter()
+        .find(|entry| entry.name == "mobile-app");
+    assert!(
+        mobile_entry.is_some(),
+        "Basic mobile prompts must keep mobile-app guidance; report={report:?}"
+    );
+    assert!(
+        !mobile_entry.unwrap().truncated,
+        "mobile-app carries bottom-nav and top-rhythm rules and must not be truncated; report={report:?}"
+    );
+}
+
+#[test]
+fn subagent_prompt_honors_explicit_radius_and_spacing_numbers() {
+    let mobile_req = DesignRequest {
+        prompt: "设计一个美食移动端首页，圆角和间距要统一，圆角 8 px，间距 12 px".into(),
+        model: Some("claude-haiku".into()),
+        provider: None,
+        design_md: None,
+        concurrency: 1,
+        append_context: None,
+        validation_enabled: true,
+        visual_ref_enabled: false,
+    };
+    let mut mobile_plan = plan();
+    mobile_plan.root_frame.width = 402.0;
+    mobile_plan.root_frame.height = 874.0;
+    mobile_plan.style_guide_name = Some("warm-food-mobile-light".into());
+    let subtask = Subtask {
+        id: "content".into(),
+        label: "Content".into(),
+        region: Region {
+            width: 402.0,
+            height: 640.0,
+        },
+        id_prefix: "content".into(),
+        parent_frame_id: Some("page".into()),
+        elements: Some("search, categories, promo, restaurant cards".into()),
+        screen: None,
+        generated_root_id: None,
+        existing_section_labels: None,
+    };
+
+    let (cr, _) = build_subagent_prompt(
+        &subtask,
+        &mobile_plan,
+        &mobile_req,
+        AbortFlag::new(),
+        false,
+        false,
+    );
+    assert!(
+        cr.user_prompt
+            .contains("EXPLICIT USER DESIGN TOKENS: cornerRadius must be 8px"),
+        "missing explicit radius override:\n{}",
+        cr.user_prompt
+    );
+    assert!(
+        cr.user_prompt.contains("layout gap/spacing must be 12px"),
+        "missing explicit spacing override:\n{}",
+        cr.user_prompt
+    );
+    assert!(
+        !cr.user_prompt.contains("cornerRadius 14-18"),
+        "mobile search guidance must not contradict explicit 8px radius:\n{}",
+        cr.user_prompt
+    );
+}
+
+#[test]
+fn mobile_food_prompt_avoids_fixed_food_template() {
+    let mobile_req = DesignRequest {
+        prompt: "设计一个美食应用移动端首页，希望好看点".into(),
+        model: Some("claude-haiku".into()),
+        provider: None,
+        design_md: None,
+        concurrency: 1,
+        append_context: None,
+        validation_enabled: true,
+        visual_ref_enabled: false,
+    };
+    let mut mobile_plan = plan();
+    mobile_plan.root_frame.width = 402.0;
+    mobile_plan.root_frame.height = 874.0;
+    // Test the GENERAL mobile path (no specific style guide). A domain style
+    // guide is a separate, opt-in source of layout rules — this test verifies
+    // the general pipeline no longer hardcodes the fixed food template.
+    mobile_plan.style_guide_name = None;
+    let subtask = Subtask {
+        id: "content".into(),
+        label: "Content".into(),
+        region: Region {
+            width: 402.0,
+            height: 640.0,
+        },
+        id_prefix: "content".into(),
+        parent_frame_id: Some("page".into()),
+        elements: Some("header, search, categories, featured dish, popular list".into()),
+        screen: None,
+        generated_root_id: None,
+        existing_section_labels: None,
+    };
+
+    let (cr, _) = build_subagent_prompt(
+        &subtask,
+        &mobile_plan,
+        &mobile_req,
+        AbortFlag::new(),
+        false,
+        false,
+    );
+    // Mobile UI guardrails now load via the `mobile-ui` skill (system prompt),
+    // so check the combined prompt.
+    let combined = format!("{}\n{}", cr.system_prompt, cr.user_prompt);
+    // The hardcoded food-template anatomy is REMOVED — it locked every food app
+    // into the same structure (user direction 2026-06-23). It must appear in
+    // NEITHER prompt.
+    assert!(
+        !combined.contains("MOBILE FOOD POLISH"),
+        "the fixed food-template rule must not be injected:\n{combined}"
+    );
+    assert!(
+        !combined.contains("never use space_between or space_around for category chips"),
+        "category-rail distribution must NOT be hardcoded:\n{combined}"
+    );
+    assert!(
+        !combined.contains("Product card rows use two equal fill_container cards"),
+        "product-card layout must NOT be hardcoded:\n{combined}"
+    );
+    // The variation guidance + general (non-food-specific) alignment rules stay.
+    assert!(
+        combined.contains("NO FIXED FOOD TEMPLATE"),
+        "variation guidance must remain:\n{combined}"
+    );
+    assert!(
+        combined.contains("MOBILE GRID ALIGNMENT"),
+        "general grid-alignment guidance must remain:\n{combined}"
+    );
+    // Every nav tab keeps its label (the cart-tab-loses-label fix).
+    assert!(
+        combined.contains("never emit a tab (e.g. cart) with an icon but no label"),
+        "nav tabs must all keep a label:\n{combined}"
+    );
+    // The filter button is a neutral surface, not an accent-filled dark-icon button.
+    assert!(
+        combined.contains("Do NOT make it an accent-filled"),
+        "filter button must be neutral, not orange-on-dark:\n{combined}"
+    );
+}
+
+#[test]
+fn chinese_mobile_food_prompt_carries_language_consistency_rule() {
+    let mobile_req = DesignRequest {
+        prompt: "设计一个美食应用移动端首页，包含配送地址、搜索、分类和主题推荐".into(),
+        model: Some("claude-haiku".into()),
+        provider: None,
+        design_md: None,
+        concurrency: 1,
+        append_context: None,
+        validation_enabled: true,
+        visual_ref_enabled: false,
+    };
+    let mut mobile_plan = plan();
+    mobile_plan.root_frame.width = 390.0;
+    mobile_plan.root_frame.height = 844.0;
+    let subtask = Subtask {
+        id: "content".into(),
+        label: "首页内容".into(),
+        region: Region {
+            width: 390.0,
+            height: 640.0,
+        },
+        id_prefix: "content".into(),
+        parent_frame_id: Some("page".into()),
+        elements: Some("配送地址、搜索框、美食分类、主题推荐卡片".into()),
+        screen: None,
+        generated_root_id: None,
+        existing_section_labels: None,
+    };
+
+    let (cr, report) = build_subagent_prompt(
+        &subtask,
+        &mobile_plan,
+        &mobile_req,
+        AbortFlag::new(),
+        false,
+        false,
+    );
+
+    assert!(
+        report
+            .included
+            .iter()
+            .any(|entry| entry.name == "cjk-typography"),
+        "Chinese prompts must keep cjk-typography guidance; report={report:?}"
+    );
+    assert!(
+        cr.system_prompt.contains("LANGUAGE CONSISTENCY"),
+        "Chinese prompts must forbid mixed English boilerplate:\n{}",
+        cr.system_prompt
+    );
+}
+
 /// design-system is dropped whenever another styling source covers it:
 /// (a) no style guide → `style-defaults` loads; (b) a guide IS named → the
 /// style-guide instruction block (G2) is injected. In both cases the generic
@@ -318,7 +572,7 @@ fn subagent_prompt_drops_design_system_when_styling_covered() {
 
     // (a) No style guide named, no design.md → noStyleGuideMatch → style-defaults
     // loads and covers styling, so design-system is dropped.
-    let covered =
+    let (covered, _) =
         build_subagent_prompt(&subtask(), &plan(), &req(), AbortFlag::new(), false, false);
     assert!(
         covered.system_prompt.contains(STYLE_DEFAULTS_ONLY),
@@ -334,7 +588,7 @@ fn subagent_prompt_drops_design_system_when_styling_covered() {
     // false).
     let mut sg_plan = plan();
     sg_plan.style_guide_name = Some("saas-clean-light".into());
-    let with_guide =
+    let (with_guide, _) =
         build_subagent_prompt(&subtask(), &sg_plan, &req(), AbortFlag::new(), false, false);
     assert!(
         with_guide.system_prompt.contains("VISUAL STYLE GUIDE"),
@@ -471,7 +725,8 @@ fn subtask() -> crate::plan::Subtask {
 /// Sub-agent prompt has profile-derived timeouts (not None).
 #[test]
 fn subagent_prompt_has_profile_timeouts() {
-    let cr = build_subagent_prompt(&subtask(), &plan(), &req(), AbortFlag::new(), false, false);
+    let (cr, _) =
+        build_subagent_prompt(&subtask(), &plan(), &req(), AbortFlag::new(), false, false);
     assert!(
         cr.no_text_timeout.is_some(),
         "no_text_timeout must be Some for sub-agent"
@@ -513,7 +768,7 @@ fn subagent_prompt_long_prompt_has_larger_timeout() {
 
         visual_ref_enabled: false,
     };
-    let short_cr = build_subagent_prompt(
+    let (short_cr, _) = build_subagent_prompt(
         &subtask(),
         &plan(),
         &short_req,
@@ -521,7 +776,7 @@ fn subagent_prompt_long_prompt_has_larger_timeout() {
         false,
         false,
     );
-    let long_cr = build_subagent_prompt(
+    let (long_cr, _) = build_subagent_prompt(
         &subtask(),
         &plan(),
         &long_req,
@@ -549,7 +804,7 @@ fn subagent_prompt_basic_tier_clamps_soft_timeouts() {
 
         visual_ref_enabled: false,
     };
-    let cr = build_subagent_prompt(
+    let (cr, _) = build_subagent_prompt(
         &subtask(),
         &plan(),
         &basic_req,
@@ -588,7 +843,7 @@ fn subagent_prompt_append_mode_injected_when_labels_present() {
         generated_root_id: None,
         existing_section_labels: Some(vec!["Hero".into(), "Pricing".into()]),
     };
-    let cr = build_subagent_prompt(&st, &plan(), &req(), AbortFlag::new(), false, false);
+    let (cr, _) = build_subagent_prompt(&st, &plan(), &req(), AbortFlag::new(), false, false);
     assert!(
         cr.user_prompt.contains("APPEND MODE"),
         "user_prompt must contain APPEND MODE block"
@@ -621,7 +876,7 @@ fn subagent_prompt_no_append_mode_when_labels_none() {
         generated_root_id: None,
         existing_section_labels: None,
     };
-    let cr = build_subagent_prompt(&st, &plan(), &req(), AbortFlag::new(), false, false);
+    let (cr, _) = build_subagent_prompt(&st, &plan(), &req(), AbortFlag::new(), false, false);
     assert!(
         !cr.user_prompt.contains("APPEND MODE"),
         "user_prompt must NOT contain APPEND MODE block when labels is None"
@@ -646,27 +901,22 @@ fn subagent_prompt_no_append_mode_when_labels_empty() {
         generated_root_id: None,
         existing_section_labels: Some(vec![]),
     };
-    let cr = build_subagent_prompt(&st, &plan(), &req(), AbortFlag::new(), false, false);
+    let (cr, _) = build_subagent_prompt(&st, &plan(), &req(), AbortFlag::new(), false, false);
     assert!(
         !cr.user_prompt.contains("APPEND MODE"),
         "user_prompt must NOT contain APPEND MODE block when labels is empty"
     );
 }
 
-/// Manifest mode (spec 2026-06-10-element-manifest-v2): the element-manifest
-/// skill + generated catalog replace the raw-JSONL output protocol, on both
-/// Full and Basic tiers, while the default path stays untouched.
-#[test]
-fn subagent_prompt_manifest_mode_swaps_output_protocol() {
-    const VERBOSE_ONLY: &str = "imageSearchQuery MUST be UNIQUE";
-    const SIMPLIFIED_ONLY: &str = "rectangle (width,height,cornerRadius,fill)";
-    const NODE_FORMAT_ONLY: &str = "FLAT _parent format";
-    const MANIFEST_FORMAT_ONLY: &str = "OUTPUT PROTOCOL: ELEMENT MANIFEST JSONL";
-    const MANIFEST_SKILL_ONLY: &str = "ELEMENT MANIFEST OUTPUT FORMAT";
+// ── B0: subtask_intent ────────────────────────────────────────────────────
 
-    let basic_req = DesignRequest {
-        prompt: "a page".into(),
-        model: Some("claude-haiku".into()), // Basic tier
+/// subtask_intent must include the original request prompt, the subtask label,
+/// and any screen/elements hints so keyword triggers see the full context.
+#[test]
+fn subtask_intent_includes_prompt_label_and_hints() {
+    let req = DesignRequest {
+        prompt: "design a polished mobile-app food landing page".into(),
+        model: Some("claude".into()),
         provider: None,
         design_md: None,
         concurrency: 1,
@@ -674,115 +924,54 @@ fn subagent_prompt_manifest_mode_swaps_output_protocol() {
         validation_enabled: true,
         visual_ref_enabled: false,
     };
-    for request in [req(), basic_req] {
-        let cr = build_subagent_prompt_with_manifest(
-            &subtask(),
-            &plan(),
-            &request,
-            AbortFlag::new(),
-            false,
-            false,
-            true,
-        );
-        let model = request.model.as_deref().unwrap_or("");
-        assert!(
-            cr.system_prompt.contains(MANIFEST_SKILL_ONLY),
-            "{model}: element-manifest skill must load"
-        );
-        // Recency placement: the skill rides at the END of the prompt
-        // (right above the output contract), not at its priority-0
-        // position — long Full-tier prompts buried a top-of-prompt
-        // catalog (ab-v9 deepseek hand-rolled past it).
-        assert!(
-            cr.system_prompt.find(MANIFEST_SKILL_ONLY).unwrap() > 1000,
-            "{model}: manifest skill must sit near the end, not the top"
-        );
-        assert!(
-            cr.system_prompt.find(MANIFEST_SKILL_ONLY).unwrap()
-                < cr.system_prompt.find(MANIFEST_FORMAT_ONLY).unwrap(),
-            "{model}: output contract directly follows the catalog"
-        );
-        assert!(
-            cr.system_prompt.contains("- stat_card:"),
-            "{model}: generated catalog must be injected"
-        );
-        assert!(
-            cr.system_prompt.contains(MANIFEST_FORMAT_ONLY),
-            "{model}: manifest output contract replaces NODE_FORMAT"
-        );
-        assert!(
-            !cr.system_prompt.contains(NODE_FORMAT_ONLY),
-            "{model}: NODE_FORMAT must not load in manifest mode"
-        );
-        assert!(
-            !cr.system_prompt.contains(VERBOSE_ONLY) && !cr.system_prompt.contains(SIMPLIFIED_ONLY),
-            "{model}: jsonl-format skills are replaced by the manifest protocol"
-        );
-        assert!(
-            cr.user_prompt.contains("Do NOT create a page wrapper"),
-            "{model}: user prompt swaps the root-frame rule"
-        );
-        assert!(
-            !cr.user_prompt.contains("-root\""),
-            "{model}: no self-authored root id in manifest mode"
-        );
-    }
-
-    // Default path (manifest off) is byte-stable: NODE_FORMAT + no manifest.
-    let off = build_subagent_prompt_with_manifest(
-        &subtask(),
-        &plan(),
-        &req(),
-        AbortFlag::new(),
-        false,
-        false,
-        false,
+    let mut sub = crate::plan::Subtask {
+        id: "header".into(),
+        label: "顶部问候栏".into(),
+        region: crate::plan::Region {
+            width: 390.0,
+            height: 96.0,
+        },
+        id_prefix: "header".into(),
+        parent_frame_id: None,
+        elements: None,
+        screen: Some("home".into()),
+        generated_root_id: None,
+        existing_section_labels: None,
+    };
+    let intent = subtask_intent(&req, &sub);
+    assert!(
+        intent.contains("food landing page"),
+        "original prompt keywords"
     );
-    assert!(off.system_prompt.contains(NODE_FORMAT_ONLY));
-    assert!(!off.system_prompt.contains(MANIFEST_FORMAT_ONLY));
-    assert!(!off.system_prompt.contains(MANIFEST_SKILL_ONLY));
+    assert!(intent.contains("顶部问候栏"), "label");
+    assert!(intent.contains("home"), "screen hint");
+
+    // elements hint also included when present
+    sub.elements = Some("avatar, greeting text".into());
+    let intent2 = subtask_intent(&req, &sub);
+    assert!(intent2.contains("avatar, greeting text"), "elements hint");
 }
 
-/// Manifest mode nominates catalog kinds from the subtask's own text and
-/// injects them as an ELEMENT HINTS block; raw mode and hint-less
-/// subtasks stay clean (ab-v9.1 adoption de-randomization).
+// ── B3: SkillLoadReport returned from build_subagent_prompt ──────────────
+
+/// `build_subagent_prompt` returns a SkillLoadReport whose included
+/// entries cover the skills baked into the system prompt, and whose
+/// budget_max is non-zero.
 #[test]
-fn subagent_prompt_manifest_mode_injects_element_hints() {
-    let mut st = subtask();
-    st.label = "Notification Settings Row".into();
-    st.elements = Some("bell icon, text stack, iOS toggle switch".into());
-    let build = |st: &crate::plan::Subtask, manifest_on: bool| {
-        build_subagent_prompt_with_manifest(
-            st,
-            &plan(),
-            &req(),
-            AbortFlag::new(),
-            false,
-            false,
-            manifest_on,
-        )
-    };
-
-    let cr = build(&st, true);
+fn build_subagent_prompt_returns_skill_report() {
+    let (call, report) =
+        build_subagent_prompt(&subtask(), &plan(), &req(), AbortFlag::new(), false, false);
+    assert!(!call.system_prompt.is_empty());
     assert!(
-        cr.user_prompt.contains("ELEMENT HINTS:"),
-        "hint block loads"
+        !report.included.is_empty(),
+        "report must list loaded skills"
     );
+    assert!(report.budget_max > 0, "budget_max must be set");
+    // budget_used is the sum of included token counts and must be positive
+    assert!(report.budget_used > 0, "budget_used must be positive");
+    // verify all included entries have names
     assert!(
-        cr.user_prompt.contains("setting_row"),
-        "composite kind hinted"
-    );
-    assert!(cr.user_prompt.contains("switch"), "part kind hinted");
-
-    let raw = build(&st, false);
-    assert!(
-        !raw.user_prompt.contains("ELEMENT HINTS"),
-        "raw JSONL mode has no catalog to hint from"
-    );
-
-    let none = build(&subtask(), true);
-    assert!(
-        !none.user_prompt.contains("ELEMENT HINTS"),
-        "no matches must omit the block, not emit it empty"
+        report.included.iter().all(|e| !e.name.is_empty()),
+        "all included entries must have a name"
     );
 }

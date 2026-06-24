@@ -129,7 +129,13 @@ fn item_for(node: &PenNode, cx: &WalkCx<'_>, depth: usize) -> LayerItem {
     let has_children = node.children().map(|c| !c.is_empty()).unwrap_or(false);
     LayerItem {
         node_id: to_doc_id(&base.id),
-        label: base.name.clone().unwrap_or_default(),
+        // Fall back to the kind label when a node has no name (TS parity:
+        // `node.name ?? node.type`) — MCP-created nodes often omit `name`,
+        // and a blank row reads as a bug.
+        label: base
+            .name
+            .clone()
+            .unwrap_or_else(|| kind_label(node).to_string()),
         kind_label: kind_label(node).to_string(),
         icon: icon_for_node(node),
         depth,

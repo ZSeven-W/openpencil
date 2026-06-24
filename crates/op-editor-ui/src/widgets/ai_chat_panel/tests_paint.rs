@@ -70,19 +70,18 @@ fn paint_header_uses_auto_generated_chat_title() {
 
     panel.paint(&mut cx, rect);
 
+    // old→new (MT.2 tab row): tab title font is now TAB_FONT_SIZE = 12px
+    // (was 13px in the single active pill from #27 restyle). The tab row
+    // always renders the active tab title — possibly ellipsized when the
+    // title is longer than the tab width. We check that a text run whose
+    // content starts with the title prefix appears at TAB_FONT_SIZE.
+    let tab_font = crate::widgets::ai_chat_panel_header::TAB_FONT_SIZE;
     assert!(
         backend
             .texts
             .iter()
-            .any(|(text, size, _, _)| text == "现代移动端登录页面" && (*size - 14.0).abs() < 1e-4),
-        "expanded header should render the current chat title"
-    );
-    assert!(
-        !backend
-            .texts
-            .iter()
-            .any(|(text, _, _, _)| text == "New Chat"),
-        "auto-titled chats should not keep painting the default title"
+            .any(|(text, size, _, _)| text.starts_with("现代移动端") && (*size - tab_font).abs() < 1e-4),
+        "expanded header tab row should render the current chat title at TAB_FONT_SIZE={tab_font}"
     );
 }
 
@@ -112,6 +111,8 @@ fn paint_collapsed_bar_hover_adds_visible_feedback_across_pill() {
 
 #[test]
 fn paint_quick_action_card_hover_adds_visible_feedback() {
+    // old→new (#33): pills use EXAMPLE_PILL_RADIUS (~20px) not 8px.
+    // old→new (#37): pills now use EXAMPLE_PILL_RADIUS=14px (compact).
     let mut s = EditorState::new();
     seed_available_model(&mut s);
     s.editor_ui.chat_example_hover = Some(0);
@@ -128,15 +129,17 @@ fn paint_quick_action_card_hover_adds_visible_feedback() {
     assert!(
         backend.round_rects.iter().any(|(r, radius, color)| {
             rect_close(*r, cards[0])
-                && *radius == 8.0
+                && *radius >= 12.0
                 && color_close(*color, panel.theme.button_hover)
         }),
-        "hovered quick-action card should paint a visible hover wash"
+        "hovered quick-action pill should paint a visible hover wash with large radius"
     );
 }
 
 #[test]
 fn paint_quick_action_card_pressed_uses_shared_feedback() {
+    // old→new (#33): pills use EXAMPLE_PILL_RADIUS (~20px) not 8px.
+    // old→new (#37): pills now use EXAMPLE_PILL_RADIUS=14px (compact).
     let mut s = EditorState::new();
     seed_available_model(&mut s);
     s.editor_ui.pressed_button = Some(op_editor_core::ButtonPressTarget::ChatExample(0));
@@ -156,9 +159,9 @@ fn paint_quick_action_card_pressed_uses_shared_feedback() {
 
     assert!(
         backend.round_rects.iter().any(|(r, radius, color)| {
-            rect_close(*r, cards[0]) && *radius == 8.0 && color_close(*color, expected)
+            rect_close(*r, cards[0]) && *radius >= 12.0 && color_close(*color, expected)
         }),
-        "pressed quick-action card should paint the shared pressed feedback token"
+        "pressed quick-action pill should paint the shared pressed feedback token with large radius"
     );
 }
 
@@ -177,21 +180,22 @@ fn paint_send_button_hover_adds_visible_feedback() {
 
     panel.paint(&mut cx, rect);
 
-    let send_rect = Rect {
-        origin: Point2D::new(AI_CHAT_WIDTH - PAD - 24.0, toolbar_center_y() - 24.0 / 2.0),
-        size: Point2D::new(24.0, 24.0),
-    };
+    // old→new: send is now a 30px circle (#27 layout); resting fill always
+    // present (primary color), hover changes the alpha.
+    // Use footer_layout to get the exact rect rather than hardcoding.
+    let input = panel.input_rect(rect);
+    let toolbar_top = input.origin.y + INPUT_AREA_HEIGHT;
+    let footer = panel.footer_layout(rect, input, toolbar_top);
     let fills: Vec<_> = backend
         .round_rects
         .iter()
-        .filter(|(r, _, _)| rect_close(*r, send_rect))
+        .filter(|(r, _, _)| rect_close(*r, footer.send))
         .collect();
 
-    // Ghost button: no resting fill, so hover feedback is the only
-    // wash painted over the send rect.
+    // Send circle always paints a fill; verify at least one fill is present.
     assert!(
         !fills.is_empty(),
-        "hovered send button should paint a hover wash"
+        "hovered send button should paint a fill"
     );
 }
 
@@ -221,11 +225,13 @@ fn from_editor_picks_up_chat_button_press_targets() {
 
 #[test]
 fn paint_footer_neutral_hovers_use_visible_feedback() {
+    // #27 restyle: model pill and speed/attach have hover washes; send
+    // is now a filled circle (bg always present); palette is bare icon.
+    // Test the subset that emit a neutral wash rect on hover.
     let cases = [
         op_editor_core::ChatFooterButton::ModelPicker,
-        op_editor_core::ChatFooterButton::AgentTeam,
+        op_editor_core::ChatFooterButton::SpeedChip,
         op_editor_core::ChatFooterButton::AddAttachment,
-        op_editor_core::ChatFooterButton::Send,
     ];
 
     for hover in cases {
@@ -237,10 +243,14 @@ fn paint_footer_neutral_hovers_use_visible_feedback() {
         let input = panel.input_rect(rect);
         let toolbar_top = input.origin.y + INPUT_AREA_HEIGHT;
         let footer = panel.footer_layout(rect, input, toolbar_top);
+        // old→new: AgentTeam removed (zero-width in #27); Send is always
+        // a filled circle so its hover is a bg-alpha change, not a separate wash.
         let target = match hover {
             op_editor_core::ChatFooterButton::ModelPicker => footer.model,
+            op_editor_core::ChatFooterButton::SpeedChip => footer.speed,
             op_editor_core::ChatFooterButton::AgentTeam => footer.agent_team,
             op_editor_core::ChatFooterButton::AddAttachment => footer.attach,
+            op_editor_core::ChatFooterButton::Palette => footer.palette,
             op_editor_core::ChatFooterButton::Send => footer.send,
             op_editor_core::ChatFooterButton::Stop => unreachable!(),
         };
@@ -288,18 +298,27 @@ fn paint_model_picker_hover_stays_inside_model_chip() {
         })
         .expect("model picker hover should paint a visible wash");
 
+    // old→new (#38): ⚡ chip is now RIGHT-aligned; model hover rect must stay
+    // within the model pill bounds (does not extend to the speed chip).
     assert!(
-        hover.0.origin.x + hover.0.size.x <= footer.agent_team.origin.x - 6.0,
-        "model hover should leave visible spacing before the Agent Team chip"
+        hover.0.origin.x + hover.0.size.x <= footer.model.origin.x + footer.model.size.x + 0.01,
+        "model hover rect should stay within the model pill bounds"
+    );
+    // Model right edge stays well before the speed chip (now right-aligned).
+    assert!(
+        footer.model.origin.x + footer.model.size.x < footer.speed.origin.x,
+        "model pill right edge must be left of the speed chip (#38)"
     );
 }
 
 #[test]
-fn footer_selection_count_sits_close_to_agent_team_chip() {
+fn footer_speed_chip_paints_agent_team_size_after_zap_icon() {
+    // old→new (#32): the ⚡ chip now shows "{N}x" (agent_team_size) instead of the
+    // effort level label. old test was footer_speed_chip_paints_effort_label_after_zap_icon.
     let mut s = EditorState::new();
     seed_available_model(&mut s);
-    s.selection.set = vec![op_editor_core::NodeId::new("n1")];
-    s.selection.anchor = op_editor_core::NodeId::new("n1");
+    // Set a non-default value to confirm it's the agent_team_size being painted.
+    s.chat.agent_team_size = 3;
     let panel = AIChatPlaceholder::from_editor(&s);
     let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
     let input = panel.input_rect(rect);
@@ -312,55 +331,46 @@ fn footer_selection_count_sits_close_to_agent_team_chip() {
 
     panel.paint(&mut cx, rect);
 
-    let selected_text =
-        op_i18n::translate(panel.locale, "common.selected").replace("{{count}}", "1");
-    let (_, _, _, origin) = backend
+    // The "{N}x" label should appear right of the ⚡ icon origin (x = speed.origin + 19).
+    let agents_lbl = "3x";
+    let (_, _, _, label_origin) = backend
         .texts
         .iter()
-        .find(|(text, _, _, _)| text == &selected_text)
-        .expect("footer should paint selected-count label");
-    let gap = origin.x - (footer.agent_team.origin.x + footer.agent_team.size.x);
-    assert_close(gap, 8.0);
+        .find(|(text, _, _, _)| text == agents_lbl)
+        .expect("footer should paint agent_team_size label (e.g. '3x') inside speed chip");
+    // Label must be to the right of the speed chip start and within the chip.
+    assert!(
+        label_origin.x > footer.speed.origin.x,
+        "agents label must be right of the chip origin"
+    );
+    assert!(
+        label_origin.x < footer.speed.origin.x + footer.speed.size.x + 4.0,
+        "agents label must stay within the chip bounds (got x={}, chip right={})",
+        label_origin.x,
+        footer.speed.origin.x + footer.speed.size.x
+    );
 }
 
 #[test]
-fn footer_agent_team_chip_uses_comfortable_pill_spacing() {
+fn footer_agent_team_chip_is_zero_width_in_27_layout() {
+    // old test: footer_agent_team_chip_uses_comfortable_pill_spacing
+    // old→new: #27 removes the agent-team chip from the visible toolbar;
+    // the speed chip (⚡ + effort label) takes its visual role.
+    // The agent_team rect is retained in FooterLayout for round-trip
+    // compatibility but has zero width so contains() never fires.
     let mut s = EditorState::new();
     seed_available_model(&mut s);
     s.chat.agent_team_size = 2;
-    s.selection.set = vec![op_editor_core::NodeId::new("n1")];
-    s.selection.anchor = op_editor_core::NodeId::new("n1");
     let panel = AIChatPlaceholder::from_editor(&s);
     let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
     let input = panel.input_rect(rect);
     let toolbar_top = input.origin.y + INPUT_AREA_HEIGHT;
     let footer = panel.footer_layout(rect, input, toolbar_top);
-    let mut backend = PanelPaintBackend::default();
-    let mut cx = PaintCx {
-        backend: &mut backend,
-    };
 
-    panel.paint(&mut cx, rect);
-
-    assert_close(footer.agent_team.size.x, 36.0);
-    assert_close(footer.agent_team.size.y, 22.0);
-    assert!(
-        backend.round_rects.iter().any(|(r, radius, color)| {
-            rect_close(*r, footer.agent_team)
-                && *radius == 7.0
-                && color_close(*color, panel.theme.primary.with_alpha(0.1))
-        }),
-        "active Agent Team chip should rest as a soft primary-tinted pill"
-    );
-    let selected_text =
-        op_i18n::translate(panel.locale, "common.selected").replace("{{count}}", "1");
-    let (_, _, _, origin) = backend
-        .texts
-        .iter()
-        .find(|(text, _, _, _)| text == &selected_text)
-        .expect("footer should paint selected-count label");
-    let gap = origin.x - (footer.agent_team.origin.x + footer.agent_team.size.x);
-    assert_close(gap, 8.0);
+    assert_close(footer.agent_team.size.x, 0.0);
+    // Speed chip is now the effort indicator; it follows the model pill.
+    assert!(footer.speed.size.x > 0.0);
+    assert!(footer.speed.origin.x > footer.model.origin.x + footer.model.size.x);
 }
 
 #[test]
@@ -438,7 +448,11 @@ fn footer_toolbar_labels_align_and_model_label_leaves_chevron_room() {
         "model label should leave room for chevron; label right={model_right}, chevron={chevron_left}"
     );
 
-    for label in [painted_model.as_str(), "1x", "已选择 1 个"] {
+    // old→new (#32): the effort label was replaced by the agent_team_size "{N}x" label.
+    // old→new (#27): "1x" agent_team chip and "已选择 1 个" selected count were removed.
+    // Both the model label and the "{N}x" chip label must be vertically centered.
+    let agents_lbl = format!("{}x", s.chat.agent_team_size);
+    for label in [painted_model.as_str(), agents_lbl.as_str()] {
         let (_, size, _, origin) = backend
             .texts
             .iter()
@@ -453,9 +467,13 @@ fn footer_toolbar_labels_align_and_model_label_leaves_chevron_room() {
 }
 
 #[test]
-fn paint_expanded_header_title_hover_adds_visible_feedback_across_label() {
-    let mut s = EditorState::new();
-    s.editor_ui.chat_header_hover = Some(op_editor_core::ChatHeaderButton::ToggleCollapse);
+fn paint_expanded_header_active_tab_pill_is_painted() {
+    // old→new (MT.2 tab row): ToggleCollapse hover no longer paints a wash across
+    // the whole title area — hovering the chevron only changes the chevron icon
+    // color. Instead the tab row always paints the active tab with a filled pill.
+    // This test verifies: with one tab (default), the active tab pill is painted
+    // inside the tab zone (x >= tab_row_left, y in header range).
+    let s = EditorState::new();
     let panel = AIChatPlaceholder::from_editor(&s);
     let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
     let mut backend = PanelPaintBackend::default();
@@ -465,16 +483,20 @@ fn paint_expanded_header_title_hover_adds_visible_feedback_across_label() {
 
     panel.paint(&mut cx, rect);
 
+    let tab_left = crate::widgets::ai_chat_panel_header::tab_row_left(rect);
+    let tab_h = 26.0; // PILL_H
+    let tab_radius = 8.0; // PILL_RADIUS
+    // Active tab pill: a round-rect with PILL_RADIUS inside the tab zone,
+    // filled with theme.secondary. Verify at least one such rect is painted.
     assert!(
-        backend.round_rects.iter().any(|(r, _, color)| {
-            r.origin.x <= PAD
-                && r.origin.y <= 6.0
-                && r.size.x >= 108.0
-                && r.size.y >= 28.0
-                && r.size.y <= 34.0
-                && color_close(*color, chat_neutral_hover_color(&panel.theme))
+        backend.round_rects.iter().any(|(r, radius, color)| {
+            r.origin.x >= tab_left - 0.01
+                && r.origin.x < tab_left + 200.0     // within the tab zone
+                && (r.size.y - tab_h).abs() < 0.01   // exact pill height
+                && (*radius - tab_radius).abs() < 0.01
+                && color_close(*color, panel.theme.secondary)
         }),
-        "expanded New Chat title hover should cover the label, not only the chevron"
+        "active tab pill must be painted inside the tab zone with PILL_H={tab_h} and theme.secondary fill"
     );
 }
 

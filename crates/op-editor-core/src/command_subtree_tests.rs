@@ -191,3 +191,143 @@ fn insert_subtree_remaps_ids_colliding_with_live_doc() {
         .count();
     assert!(n1_count <= 1);
 }
+
+// --- insert_subtree_returning_root_ids ---------------------------------
+
+/// This test exercises the DFS-ordering correctness of
+/// `insert_subtree_returning_root_ids`. The buggy implementation sliced
+/// `mapping[0..root_count]` from `remap_subtree_ids_mapping`, which allocates
+/// in DFS order (root0, child0a, child0b, root1, ...). For a forest where
+/// root0 has children, the slice [root0, child0a, ...] contains child ids,
+/// not [root0, root1, ...]. The fix reads root ids directly from the
+/// top-level nodes after in-place remap.
+///
+/// Specifically, this test ensures:
+/// - The returned Vec has exactly `root_count` entries (not more).
+/// - Every returned id matches a TOP-LEVEL doc node (not a child).
+/// - No returned id is a child's id.
+/// - All incoming placeholder ids are remapped (forced by collision).
+#[test]
+fn insert_subtree_returning_root_ids_yields_post_remap_roots() {
+    let mut s = state_with(vec![]);
+    // Pre-insert one node so the allocator has an occupied id slot and any
+    // trivial "first id = same" coincidence is ruled out.
+    assert!(s.apply(EditorCommand::InsertSubtree {
+        nodes: vec![make_group("a".into(), "Existing", vec![])],
+        parent_id: NodeId::NONE,
+        page_id: None,
+    }));
+    // Record the id that was assigned so we can use a colliding incoming id.
+    let existing_id = s.active_children()[0].id_str().to_string();
+
+    let before: std::collections::HashSet<String> = s
+        .active_children()
+        .iter()
+        .map(|n| n.id_str().to_string())
+        .collect();
+
+    // Insert a 2-root forest where:
+    //   root0 ("r1") has a CHILD ("child-a") — this is the key DFS trap.
+    //   root1 ("r2") has no children.
+    // root0's incoming id deliberately matches the existing doc id to force
+    // a remap (ensures the returned id != "r1" and != existing_id).
+    let child_placeholder = "child-a".to_string();
+    let roots = s
+        .insert_subtree_returning_root_ids(
+            vec![
+                make_group(
+                    existing_id.clone(), // collide with live doc id → forces remap
+                    "Root0WithChild",
+                    vec![make_path(
+                        child_placeholder.clone(),
+                        "PathChild",
+                        (0.0, 0.0),
+                    )],
+                ),
+                make_group("r2".into(), "Root1NoChild", vec![]),
+            ],
+            &NodeId::NONE,
+        )
+        .expect("accepted");
+
+    // Exactly 2 root ids returned (not 3 = root0 + child + root1).
+    assert_eq!(
+        roots.len(),
+        2,
+        "must return exactly root_count=2 ids, not child ids"
+    );
+
+    // Neither root id is the placeholder.
+    assert!(
+        roots.iter().all(|id| id != &existing_id && id != "r2"),
+        "returned ids must be remapped, got {roots:?}"
+    );
+
+    // Collect what is actually in the top-level doc now.
+    let after_top: Vec<String> = s
+        .active_children()
+        .iter()
+        .map(|n| n.id_str().to_string())
+        .collect();
+
+    // Collect child ids of inserted nodes.
+    let child_ids: Vec<String> = s
+        .active_children()
+        .iter()
+        .flat_map(|n| {
+            n.children()
+                .into_iter()
+                .flatten()
+                .map(|c| c.id_str().to_string())
+        })
+        .collect();
+
+    for id in &roots {
+        // Each returned id must be a top-level node.
+        assert!(
+            after_top.contains(id),
+            "root id {id} missing from doc top-level"
+        );
+        // Each returned id must NOT be a child id (the DFS bug would return child ids).
+        assert!(
+            !child_ids.contains(id),
+            "root id {id} is a child id, not a root — DFS bug!"
+        );
+        // Each returned id must be new (not present before insert).
+        assert!(
+            !before.contains(id),
+            "root id {id} was already in doc before insert"
+        );
+    }
+
+    // child-a's placeholder must not appear in roots (DFS bug symptom).
+    assert!(
+        !roots.contains(&child_placeholder),
+        "child placeholder {child_placeholder} must not appear in returned root ids"
+    );
+
+    // No duplicate ids anywhere.
+    assert!(s.find_duplicate_id().is_none());
+}
+
+#[test]
+fn insert_subtree_returning_root_ids_returns_none_on_reject() {
+    // Rejected insert (empty nodes list) returns None and leaves doc unchanged.
+    let mut s = state_with(vec![make_group("existing".into(), "E", vec![])]);
+    let result = s.insert_subtree_returning_root_ids(vec![], &NodeId::NONE);
+    assert!(result.is_none());
+    // Doc is unmodified.
+    assert_eq!(s.active_children().len(), 1);
+    assert_eq!(s.active_children()[0].id_str(), "existing");
+}
+
+#[test]
+fn insert_subtree_returning_root_ids_rejects_missing_parent() {
+    let mut s = state_with(vec![]);
+    let result = s.insert_subtree_returning_root_ids(
+        vec![make_group("x".into(), "X", vec![])],
+        &NodeId::new("ghost"),
+    );
+    assert!(result.is_none());
+    assert_eq!(s.active_children().len(), 0);
+}

@@ -49,6 +49,16 @@ fn keyword_classifier_matches_ts_rule_order() {
 }
 
 #[test]
+fn keyword_classifier_handles_cjk_modify_requests() {
+    assert_eq!(classify_by_keywords("修改成饺子"), DesignIntent::Modify);
+    assert_eq!(
+        classify_by_keywords("把这个卡片改为饺子"),
+        DesignIntent::Modify
+    );
+    assert_eq!(classify_by_keywords("替换成新的主色"), DesignIntent::Modify);
+}
+
+#[test]
 fn keyword_phrases_respect_word_boundaries() {
     // "moved" must not match \bmove\b; "exchange" must not match change.
     assert_eq!(
@@ -287,6 +297,135 @@ fn append_intent_vetoed_by_new_screen_phrases() {
 }
 
 #[test]
+fn append_intent_vetoed_by_named_follow_on_pages() {
+    let state = state_with_page();
+    assert!(
+        detect_append_intent(&state, "继续画出发现页").is_none(),
+        "a named app page is a new sibling screen, not an appended section"
+    );
+    assert!(
+        detect_append_intent(&state, "继续做订单页").is_none(),
+        "tab/detail pages should not be inserted below the current page"
+    );
+    assert!(
+        detect_append_intent(&state, "continue with a discover page").is_none(),
+        "English named pages also suppress append mode"
+    );
+}
+
+#[test]
+fn append_intent_vetoed_by_whole_screen_draw_requests() {
+    let state = state_with_page();
+    // Mixed-language "search 页面" (English noun + Chinese 页面) is NOT in the
+    // named-screen vocabulary, yet drawing a whole page must become a new
+    // sibling frame to the right, not rows appended below (user report).
+    assert!(
+        detect_append_intent(&state, "继续画一下search 页面").is_none(),
+        "drawing a whole page is a new sibling screen, not an appended section"
+    );
+    // Generic (un-listed) screen names also become new screens.
+    assert!(
+        detect_append_intent(&state, "继续画一个登录页面").is_none(),
+        "any '画...页面' request opens a new frame"
+    );
+    assert!(
+        detect_append_intent(&state, "continue and draw an onboarding screen").is_none(),
+        "English '... screen' draw requests open a new frame too"
+    );
+}
+
+#[test]
+fn append_intent_keeps_section_add_even_with_page_context() {
+    let state = state_with_page();
+    // The page word is mere context; the unit added is a section, so this
+    // still appends into the current screen.
+    assert!(
+        detect_append_intent(&state, "这个页面再加一个区块").is_some(),
+        "adding a section to an existing page must keep appending"
+    );
+}
+
+#[test]
+fn whole_screen_draw_overrides_modify_in_standard_route() {
+    // A draw request that ALSO trips the modify classifier ("修改后重新画一个
+    // search 页面" has 修改 + 画 + 页面) must route to New, not Modify — else
+    // it edits the existing frame instead of opening a new one.
+    let provider = Scripted::text("DESIGN_MODIFY");
+    assert_eq!(
+        classify_intent_for_standard_route(&provider, "修改后重新画一个search 页面", None),
+        DesignIntent::New,
+        "a whole-screen draw must win over the modify classifier"
+    );
+    // But a genuine edit of the current screen still routes to Modify.
+    assert_eq!(
+        classify_intent_for_standard_route(&provider, "把这个页面改成深色", None),
+        DesignIntent::Modify,
+        "editing the current screen stays on the modify route"
+    );
+}
+
+#[test]
+fn english_page_edits_stay_on_modify_route() {
+    // An English EDIT that merely mentions a page/screen must NOT be mistaken
+    // for a new-screen draw — it needs a creation verb (draw/create/design/…),
+    // which "change"/"resize"/"make" are not.
+    let provider = Scripted::text("CHAT");
+    assert_eq!(
+        classify_intent_for_standard_route(&provider, "change the home page layout", None),
+        DesignIntent::Modify,
+        "editing an existing page is a modify, not a new design"
+    );
+    assert_eq!(
+        classify_intent_for_standard_route(&provider, "resize the screen header", None),
+        DesignIntent::Modify,
+    );
+    // A genuine English page DRAW still routes to New.
+    assert_eq!(
+        classify_intent_for_standard_route(&provider, "draw a checkout page", None),
+        DesignIntent::New,
+        "a creation verb + page noun is a new screen"
+    );
+    // And the bare-noun edit must not be flagged as a whole-screen request.
+    assert!(!requests_new_whole_screen("change the home page layout"));
+    assert!(requests_new_whole_screen("draw a checkout page"));
+}
+
+#[test]
+fn english_determiner_decides_new_vs_existing_screen() {
+    // "make a login page" — indefinite article ⇒ a NEW page, even though the
+    // ambiguous verb "make" is not in the creation-verb list.
+    assert!(requests_new_whole_screen("make a login page"));
+    assert!(requests_new_whole_screen("create a settings screen"));
+    assert!(requests_new_whole_screen("add another profile page"));
+    // "create a button on the login page" — the page is the LOCATION (definite
+    // article), the object made is a button ⇒ NOT a new screen.
+    assert!(!requests_new_whole_screen(
+        "create a button on the login page"
+    ));
+    assert!(!requests_new_whole_screen("build out the rest of the page"));
+    assert!(!requests_new_whole_screen("tweak this screen"));
+}
+
+#[test]
+fn whole_screen_draw_requests_llm_design_md_extraction() {
+    let state = state_with_page();
+    assert!(
+        should_auto_generate_design_md(&state, "继续画一下search 页面", None),
+        "a new whole screen should inherit the canvas design system for consistency"
+    );
+}
+
+#[test]
+fn named_follow_on_page_forces_new_route_before_llm_classifier() {
+    let provider = Scripted::text("CHAT");
+    assert_eq!(
+        classify_intent_for_standard_route(&provider, "继续画出发现页", None),
+        DesignIntent::New,
+        "named app pages must not be classified as plain chat or append"
+    );
+}
+
+#[test]
 fn append_intent_needs_existing_content() {
     let mut state = EditorState::new();
     state.active_children_mut().clear();
@@ -319,6 +458,42 @@ fn status_bar_matcher_covers_separator_runs() {
     assert!(is_status_bar_like_text("System  Chrome"));
     assert!(is_status_bar_like_text("状态栏"));
     assert!(!is_status_bar_like_text("Status Mention"));
+}
+
+#[test]
+fn follow_on_screen_requests_llm_design_md_extraction() {
+    let state = state_with_page();
+    assert!(
+        should_auto_generate_design_md(&state, "继续画出发现页", None),
+        "named follow-on pages should extract design.md from the current canvas via LLM"
+    );
+}
+
+#[test]
+fn append_prompt_does_not_request_llm_design_md_extraction() {
+    let state = state_with_page();
+    let ctx = AppendContext {
+        target_parent_id: "page-1".into(),
+        target_width: 375.0,
+        existing_section_labels: vec!["Hero".into()],
+        is_mobile: true,
+    };
+    assert!(
+        !should_auto_generate_design_md(&state, "继续补充内容", Some(&ctx)),
+        "append mode already has append context and should not be treated as a new screen"
+    );
+}
+
+#[test]
+fn existing_design_md_skips_llm_extraction() {
+    let mut state = state_with_page();
+    state.doc.design_md = Some(op_editor_core::parse_design_md(
+        "# Design System: Existing\n\n## 1. Visual Theme & Atmosphere\nReuse me.",
+    ));
+    assert!(
+        !should_auto_generate_design_md(&state, "继续画出发现页", None),
+        "a document-bound design.md should be reused directly"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -595,6 +770,52 @@ fn cli_turn_modify_route_applies_nodes_and_marks_applied() {
     let doc = serde_json::to_string(&state.doc).unwrap().to_lowercase();
     assert!(doc.contains("#ff0000"));
     // Design channels dropped.
+    assert!(delta_rx.recv().is_err());
+    assert!(cmd_rx.recv().is_err());
+}
+
+#[test]
+fn cli_turn_modify_keyword_overrides_new_classifier_reply() {
+    let response = r##"[{"id":"hero","type":"frame","name":"Hero Dumpling"}]"##;
+    let plan = CliTurnPlan {
+        user_text: "修改成饺子".into(),
+        page_children_empty: false,
+        classify_provider: Box::new(Scripted::text("DESIGN_NEW")),
+        chat_provider: Box::new(Scripted::text("unused")),
+        design_provider: Box::new(Scripted::text(response)),
+        chat_request: ChatRequest::default(),
+        modify_request: Some(ChatRequest::default()),
+        design_request: test_design_request(),
+        initial_state: EditorState::new(),
+        indicator_epoch: 0,
+        model: None,
+    };
+    let (chat_tx, chat_rx) = mpsc::channel();
+    let (executor, tool_rx) = chat_tool_channel();
+    let (delta_tx, delta_rx) = mpsc::channel();
+    let (cmd_tx, cmd_rx) = mpsc::channel();
+    let worker =
+        std::thread::spawn(move || run_cli_turn(plan, chat_tx, executor, delta_tx, cmd_tx));
+
+    let req = tool_rx
+        .recv_timeout(Duration::from_secs(2))
+        .expect("keyword modify should use the modify route even if the classifier says new");
+    assert_eq!(req.name, APPLY_MODIFICATION_OP);
+    req.ack
+        .send(op_ai::chat_provider::ChatToolResult {
+            content: serde_json::json!({ "success": true, "count": 1 }).to_string(),
+            is_error: false,
+        })
+        .unwrap();
+
+    let deltas = drain_chat(&chat_rx);
+    worker.join().unwrap();
+    assert!(
+        deltas
+            .iter()
+            .any(|d| matches!(d, ChatDelta::TextDelta(s) if s.contains("<!-- APPLIED -->"))),
+        "modify route must emit the applied marker"
+    );
     assert!(delta_rx.recv().is_err());
     assert!(cmd_rx.recv().is_err());
 }

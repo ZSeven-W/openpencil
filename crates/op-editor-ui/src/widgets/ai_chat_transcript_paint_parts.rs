@@ -8,46 +8,52 @@ use crate::widgets::PaintCx;
 use crate::{Point2D, Rect};
 
 pub(crate) fn paint_action_step(cx: &mut PaintCx<'_>, theme: &Theme, step: &ActionStep) {
-    cx.backend.fill_round_rect(step.rect, 6.0, theme.muted);
+    // #27 restyle: elevated-dark fill, ~10px radius, subtle 1px border.
+    cx.backend.fill_round_rect(step.rect, 10.0, theme.card);
     cx.backend
-        .stroke_round_rect(step.rect, 6.0, theme.border, 1.0);
-    let icon_box = Rect::xywh(
-        step.rect.origin.x + 10.0,
-        step.rect.origin.y + 7.0,
-        14.0,
-        14.0,
+        .stroke_round_rect(step.rect, 10.0, theme.border, 1.0);
+
+    // Status indicator in the left area, vertically centered.
+    let icon_top_left = Point2D::new(
+        step.rect.origin.x + 12.0,
+        step.rect.origin.y + (ACTION_STEP_H - 14.0) / 2.0,
     );
     if step.failed {
         draw_icon(
             cx.backend,
             Icon::XCircle,
-            Point2D::new(icon_box.origin.x, icon_box.origin.y),
+            icon_top_left,
             14.0,
             theme.destructive,
-            1.7,
+            1.5,
         );
     } else if step.done {
-        draw_icon(
-            cx.backend,
-            Icon::Check,
-            Point2D::new(icon_box.origin.x, icon_box.origin.y),
-            14.0,
-            theme.primary,
-            2.1,
+        // #27 restyle: thin success-green ring + check glyph.
+        let success_color = theme.status_success;
+        let ring_cx = icon_top_left.x + 7.0;
+        let ring_cy = icon_top_left.y + 7.0;
+        cx.backend.stroke_oval(
+            Rect::xywh(ring_cx - 9.0, ring_cy - 9.0, 18.0, 18.0),
+            success_color,
+            1.0,
         );
+        draw_icon(cx.backend, Icon::Check, icon_top_left, 14.0, success_color, 1.5);
     } else {
+        // Running / pending: dot spinner.
         let color = if step.active {
             theme.primary
         } else {
             theme.muted_foreground
         };
         let r = if step.active { 4.0 } else { 3.0 };
-        let center = Point2D::new(icon_box.origin.x + 7.0, icon_box.origin.y + 7.0);
+        let center = Point2D::new(icon_top_left.x + 7.0, icon_top_left.y + 7.0);
         cx.backend.fill_oval(
             Rect::xywh(center.x - r, center.y - r, r * 2.0, r * 2.0),
             color,
         );
     }
+
+    // Label: starts right of the status icon, truncated before the chevron.
     let label_color = if step.active {
         theme.foreground
     } else if step.failed {
@@ -55,14 +61,28 @@ pub(crate) fn paint_action_step(cx: &mut PaintCx<'_>, theme: &Theme, step: &Acti
     } else {
         theme.muted_foreground
     };
+    // Reserve space for status icon (12+14=26) + chevron (24) + small gap.
+    let label_x = step.rect.origin.x + 34.0;
+    let label_w = (step.rect.size.x - 62.0).max(1.0);
+    let label_text = super::layer_panel_paint::truncate_to_fit(&step.label, 11.0, label_w);
+    cx.backend.save();
+    cx.backend.clip_rect(Rect::xywh(
+        label_x,
+        step.rect.origin.y,
+        label_w,
+        ACTION_STEP_H,
+    ));
     draw_line(
         cx,
-        &step.label,
-        step.rect.origin.x + 32.0,
-        step.rect.origin.y + 18.0,
+        &label_text,
+        label_x,
+        step.rect.origin.y + ACTION_STEP_H / 2.0 + 4.0,
         11.0,
         label_color,
     );
+    cx.backend.restore();
+
+    // Expand/collapse chevron at the far right, vertically centered.
     draw_icon(
         cx.backend,
         if step.expanded {
@@ -71,13 +91,14 @@ pub(crate) fn paint_action_step(cx: &mut PaintCx<'_>, theme: &Theme, step: &Acti
             Icon::ChevronRight
         },
         Point2D::new(
-            step.rect.origin.x + step.rect.size.x - 20.0,
-            step.rect.origin.y + 7.0,
+            step.rect.origin.x + step.rect.size.x - 24.0,
+            step.rect.origin.y + (ACTION_STEP_H - 14.0) / 2.0,
         ),
         14.0,
         theme.muted_foreground,
         1.5,
     );
+
     if step.expanded && !step.details.is_empty() {
         cx.backend.save();
         cx.backend.clip_rect(step.rect);
@@ -86,7 +107,7 @@ pub(crate) fn paint_action_step(cx: &mut PaintCx<'_>, theme: &Theme, step: &Acti
             draw_line(
                 cx,
                 line,
-                step.rect.origin.x + 32.0,
+                step.rect.origin.x + 34.0,
                 baseline,
                 10.0,
                 theme.muted_foreground,
@@ -104,11 +125,14 @@ pub(crate) fn paint_collapsible(cx: &mut PaintCx<'_>, theme: &Theme, block: &Col
     } else {
         Icon::ChevronDown
     };
+    // Right-aligned chevron — consistent with the subtask step cards, whose
+    // chevron sits at the right edge (their left side holds the status dot).
+    // The label sits at a small left inset.
     draw_icon(
         cx.backend,
         icon,
         Point2D::new(
-            block.header.origin.x + 6.0,
+            block.header.origin.x + block.header.size.x - 20.0,
             block.header.origin.y + (HEADER_H - 14.0) / 2.0,
         ),
         14.0,
@@ -118,7 +142,7 @@ pub(crate) fn paint_collapsible(cx: &mut PaintCx<'_>, theme: &Theme, block: &Col
     draw_line(
         cx,
         &block.label,
-        block.header.origin.x + 26.0,
+        block.header.origin.x + 12.0,
         block.header.origin.y + HEADER_H / 2.0 + 4.0,
         11.0,
         theme.muted_foreground,

@@ -7,7 +7,10 @@ use crate::budget::trim_by_budget;
 use crate::loader::{get_skills_by_phase, SkillEntry};
 use crate::memory::generation_history::get_recent_entries;
 use crate::resolver::{filter_by_intent, inject_dynamic_content};
-use crate::types::{AgentContext, Phase, ResolveMemory, ResolveOptions};
+use crate::types::{
+    AgentContext, DropReason, DroppedSkill, Phase, ResolveMemory, ResolveOptions, SkillLoadEntry,
+    SkillLoadReport,
+};
 
 /// How many history entries each phase loads (TS `historyLimits`).
 fn history_limit(phase: Phase) -> usize {
@@ -54,6 +57,16 @@ pub fn resolve_skills(phase: Phase, user_message: &str, options: &ResolveOptions
     let phase_skills: Vec<SkillEntry> = get_skills_by_phase(phase).into_iter().cloned().collect();
     let matched = filter_by_intent(&phase_skills, user_message, &options.flags);
 
+    // Diagnostics — phase skills that failed the intent/flag match.
+    let mut dropped: Vec<DroppedSkill> = phase_skills
+        .iter()
+        .filter(|p| !matched.iter().any(|m| m.meta.name == p.meta.name))
+        .map(|p| DroppedSkill {
+            name: p.meta.name.clone(),
+            reason: DropReason::IntentMiss,
+        })
+        .collect();
+
     // Per-phase memory loading (done before injection so history is
     // available for the `{{recentHistory}}` placeholder).
     let mut memory = ResolveMemory::default();
@@ -89,8 +102,33 @@ pub fn resolve_skills(phase: Phase, user_message: &str, options: &ResolveOptions
         .collect();
 
     // Step 4 — budget trim (after injection, so counts are accurate).
-    let trimmed = trim_by_budget(&injected, total_budget);
+    let trimmed = trim_by_budget(&injected, total_budget, user_message);
     let budget_used: u32 = trimmed.iter().map(|s| s.token_count).sum();
+
+    // Diagnostics — matched skills the trimmer could not fit.
+    for inj in &injected {
+        if !trimmed.iter().any(|t| t.meta.name == inj.meta.name) {
+            dropped.push(DroppedSkill {
+                name: inj.meta.name.clone(),
+                reason: DropReason::BudgetExhausted,
+            });
+        }
+    }
+    let included: Vec<SkillLoadEntry> = trimmed
+        .iter()
+        .map(|s| SkillLoadEntry {
+            name: s.meta.name.clone(),
+            category: s.meta.category,
+            token_count: s.token_count,
+            truncated: s.truncated,
+        })
+        .collect();
+    let report = SkillLoadReport {
+        included,
+        dropped,
+        budget_used,
+        budget_max: total_budget,
+    };
 
     AgentContext {
         role: "general".to_string(),
@@ -99,6 +137,7 @@ pub fn resolve_skills(phase: Phase, user_message: &str, options: &ResolveOptions
         memory,
         budget_used,
         budget_max: total_budget,
+        report,
     }
 }
 
@@ -197,6 +236,90 @@ mod tests {
         let ctx = resolve_skills(Phase::Planning, "plan a landing page", &opts);
         assert!(ctx.memory.document_context.is_some());
         assert_eq!(ctx.budget_max, 4000);
+    }
+
+    #[test]
+    fn report_records_intent_miss_and_included() {
+        // A login-form prompt loads base skills (Always) and surfaces a
+        // report; at least one phase skill whose keyword didn't match is
+        // recorded as IntentMiss, and survivors appear as included.
+        let ctx = resolve_skills(
+            Phase::Generation,
+            "design a login form",
+            &ResolveOptions::default(),
+        );
+        assert_eq!(ctx.report.budget_max, ctx.budget_max);
+        assert_eq!(ctx.report.budget_used, ctx.budget_used);
+        assert!(
+            !ctx.report.included.is_empty(),
+            "survivors must be recorded"
+        );
+        // Every included entry maps to a resolved skill.
+        for entry in &ctx.report.included {
+            assert!(ctx.skills.iter().any(|s| s.meta.name == entry.name));
+        }
+        // IntentMiss is recorded for phase skills whose triggers didn't fire.
+        assert!(
+            ctx.report
+                .dropped
+                .iter()
+                .any(|d| d.reason == crate::types::DropReason::IntentMiss),
+            "expected at least one IntentMiss drop"
+        );
+    }
+
+    #[test]
+    fn rich_intent_surfaces_more_relevant_skills_than_bare_label() {
+        // A bare subtask label has few keyword hits; the full prompt has
+        // more, so under an identical tight budget the rich intent should
+        // not resolve *fewer* relevant (keyword-triggered) skills.
+        //
+        // "header" alone matches no domain/knowledge keyword triggers.
+        // The rich intent contains "mobile" (mobile-app skill) and
+        // "landing" (landing-page, anti-slop, copywriting, role-definitions),
+        // so it surfaces additional keyword-gated skills the bare label misses.
+        //
+        // Budget of 12000 is chosen so that the always-triggered base skills
+        // (~9800 tokens) fit, leaving ~2200 tokens for keyword-gated skills.
+        // "landing" triggers anti-slop (600 tok) which fits in the remainder;
+        // the bare "header" label triggers none of those domain/knowledge skills.
+        let tight = ResolveOptions {
+            budget_override: Some(12_000),
+            ..Default::default()
+        };
+        let bare = resolve_skills(Phase::Generation, "header", &tight);
+        let rich = resolve_skills(
+            Phase::Generation,
+            "design a polished mobile-app food landing page\nheader\nscreen: home",
+            &tight,
+        );
+        // Same budget ceiling, deterministic.
+        assert_eq!(bare.budget_max, 12_000);
+        assert_eq!(rich.budget_max, 12_000);
+        // The richer intent matches at least as many keyword-triggered
+        // skills, so its included set is never smaller.
+        assert!(
+            rich.report.included.len() >= bare.report.included.len(),
+            "rich intent ({}) should surface >= bare ({})",
+            rich.report.included.len(),
+            bare.report.included.len()
+        );
+        // The rich prompt must surface at least one skill the bare label
+        // misses — this is what makes the test non-vacuous: it fails if
+        // resolve_skills ignores the intent and uses only the short label.
+        assert!(
+            rich.report.included.len() > bare.report.included.len(),
+            "rich intent ({}) must surface more skills than bare label ({}) \
+             — keyword triggers for 'mobile' and 'landing' should fire",
+            rich.report.included.len(),
+            bare.report.included.len()
+        );
+        // Both stay within budget.
+        assert!(rich.budget_used <= rich.budget_max);
+        assert!(bare.budget_used <= bare.budget_max);
+        // Report budget_max mirrors what resolve_skills returns.
+        assert_eq!(rich.report.budget_max, rich.budget_max);
+        assert_eq!(bare.report.budget_max, bare.budget_max);
     }
 
     #[test]

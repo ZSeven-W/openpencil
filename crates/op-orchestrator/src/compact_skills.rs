@@ -7,7 +7,7 @@
 //! - **`minimal_skills`** — keep only `schema` + `jsonl-format` (the
 //!   bare-minimum kernel for models whose safety scanner times out on
 //!   a full-size system prompt).
-//! - **`reduced_complexity` + `ModelTier::Basic`** — keep the 8-skill
+//! - **`reduced_complexity` + `ModelTier::Basic`** — keep the retry
 //!   `retryAllowed` set (drops `elements` and all non-essential skills
 //!   so the retry has the smallest viable prompt).
 //!
@@ -22,6 +22,9 @@ use crate::model_profile::ModelTier;
 /// (orchestrator-sub-agent.ts:428-431) followed by `compactSubAgentSkills`
 /// (orchestrator-sub-agent-compact.ts:4-76), which TS calls unconditionally
 /// on every sub-agent prompt.
+///
+/// Returns `(kept, dropped)` where `dropped` is a list of `(name, reason)`
+/// pairs classifying why each skill was removed.
 ///
 /// # Arguments
 /// * `skills`                 — The full resolved skill list from `resolve_skills`.
@@ -40,7 +43,7 @@ use crate::model_profile::ModelTier;
 ///   (Codex review 2026-06-06).
 /// * `minimal_skills`         — When `true`, keep only `schema` + `jsonl-format`.
 /// * `reduced_complexity`     — When `true` AND `tier == Basic`, narrow to the
-///   `retryAllowed` 8-skill set (excludes `elements`).
+///   `retryAllowed` set (excludes `elements`).
 pub fn apply_skill_filter<T: SkillNamed>(
     skills: Vec<T>,
     tier: ModelTier,
@@ -48,27 +51,59 @@ pub fn apply_skill_filter<T: SkillNamed>(
     has_design_system_substitute: bool,
     minimal_skills: bool,
     reduced_complexity: bool,
-) -> Vec<T> {
-    if minimal_skills {
+) -> (Vec<T>, Vec<(String, op_ai_skills::DropReason)>) {
+    use op_ai_skills::DropReason;
+
+    // Snapshot input names before any filtering.
+    let before: Vec<String> = skills.iter().map(|s| s.skill_name().to_string()).collect();
+
+    let next = if minimal_skills {
         // Last-ditch fallback: only the schema + jsonl-format kernel.
         // Verbatim port of orchestrator-sub-agent.ts:428-431 — exactly
         // two skill names, `jsonl-format-simplified` is NOT kept.
-        return skills
+        skills
             .into_iter()
             .filter(|s| {
                 let n = s.skill_name();
                 n == "schema" || n == "jsonl-format"
             })
-            .collect();
-    }
+            .collect()
+    } else {
+        compact_subagent_skills(
+            skills,
+            tier,
+            is_mobile_screen,
+            has_design_system_substitute,
+            reduced_complexity,
+        )
+    };
 
-    compact_subagent_skills(
-        skills,
-        tier,
-        is_mobile_screen,
-        has_design_system_substitute,
-        reduced_complexity,
-    )
+    // Classify drop reason from the active mode flags.
+    let base_reason = if minimal_skills {
+        DropReason::MinimalMode
+    } else if reduced_complexity {
+        DropReason::ReducedComplexity
+    } else {
+        DropReason::TierFiltered
+    };
+
+    let kept: std::collections::HashSet<&str> = next.iter().map(|s| s.skill_name()).collect();
+    let jsonl_simplified_kept = kept.contains("jsonl-format-simplified");
+    let dropped: Vec<(String, DropReason)> = before
+        .into_iter()
+        .filter(|n| !kept.contains(n.as_str()))
+        .map(|n| {
+            // verbose jsonl-format dropped while simplified survives = dedup, not tier.
+            let reason = if n == "jsonl-format" && jsonl_simplified_kept {
+                DropReason::Deduped
+            } else {
+                base_reason
+            };
+            (n, reason)
+        })
+        .collect();
+
+    (next, dropped)
 }
 
 /// Port of `compactSubAgentSkills` (orchestrator-sub-agent-compact.ts:4-76):
@@ -147,7 +182,9 @@ fn compact_subagent_skills<T: SkillNamed>(
             // the gap case. Remove once buildSubAgentStyleGuideInstruction is
             // ported. (Codex review 2026-06-06.)
             "design-system",
+            "cjk-typography",
             "mobile-app",
+            "mobile-ui",
             "icon-catalog",
             "style-defaults",
             "elements",
@@ -163,6 +200,7 @@ fn compact_subagent_skills<T: SkillNamed>(
                 "layout",
                 "text-rules",
                 "mobile-app",
+                "mobile-ui",
                 "style-defaults",
                 "design-md",
                 "variables",
@@ -175,6 +213,7 @@ fn compact_subagent_skills<T: SkillNamed>(
                 // present, the lower-priority design-system is trimmed first
                 // under the tight retry budget. (Codex review 2026-06-06.)
                 "design-system",
+                "cjk-typography",
             ];
             next.retain(|s| RETRY_ALLOWED.contains(&s.skill_name()));
         }
@@ -191,6 +230,12 @@ pub trait SkillNamed {
 }
 
 impl SkillNamed for op_ai_skills::ResolvedSkill {
+    fn skill_name(&self) -> &str {
+        &self.meta.name
+    }
+}
+
+impl SkillNamed for op_ai_skills::SkillEntry {
     fn skill_name(&self) -> &str {
         &self.meta.name
     }
@@ -225,7 +270,8 @@ mod tests {
         minimal: bool,
         reduced: bool,
     ) -> Vec<FakeSkill> {
-        apply_skill_filter(skills, tier, false, false, minimal, reduced)
+        let (kept, _drops) = apply_skill_filter(skills, tier, false, false, minimal, reduced);
+        kept
     }
 
     // -----------------------------------------------------------------------
@@ -272,7 +318,7 @@ mod tests {
     fn base_filter_drops_mobile_app_on_non_mobile() {
         let input = skills(&["schema", "layout", "mobile-app"]);
         // Full tier, non-mobile → mobile-app dropped, rest kept.
-        let out = apply_skill_filter(input, ModelTier::Full, false, false, false, false);
+        let (out, _drops) = apply_skill_filter(input, ModelTier::Full, false, false, false, false);
         assert_eq!(names(&out), vec!["schema", "layout"]);
     }
 
@@ -287,7 +333,7 @@ mod tests {
         ]);
         // Full tier, mobile → landing-page/copywriting/anti-slop dropped,
         // mobile-app kept (it's a mobile screen).
-        let out = apply_skill_filter(input, ModelTier::Full, true, false, false, false);
+        let (out, _drops) = apply_skill_filter(input, ModelTier::Full, true, false, false, false);
         assert_eq!(names(&out), vec!["schema", "mobile-app"]);
     }
 
@@ -300,7 +346,7 @@ mod tests {
         // this same drop handles BOTH the design.md case and the
         // no-style-guide case (Codex 2026-06-06: don't keep a conflicting
         // design-system alongside style-defaults).
-        let out = apply_skill_filter(input, ModelTier::Full, false, true, false, false);
+        let (out, _drops) = apply_skill_filter(input, ModelTier::Full, false, true, false, false);
         assert_eq!(names(&out), vec!["schema", "layout"]);
     }
 
@@ -312,7 +358,7 @@ mod tests {
         // left and must NOT be suppressed. The caller passes
         // has_design_system_substitute=false only for that case.
         // Full tier:
-        let out = apply_skill_filter(
+        let (out, _drops) = apply_skill_filter(
             skills(&["schema", "design-system", "layout"]),
             ModelTier::Full,
             false,
@@ -325,7 +371,7 @@ mod tests {
             "Full tier must keep design-system when nothing replaces it"
         );
         // Basic tier (allow-set must include design-system as a fallback):
-        let out_basic = apply_skill_filter(
+        let (out_basic, _drops) = apply_skill_filter(
             skills(&["schema", "design-system", "layout"]),
             ModelTier::Basic,
             false,
@@ -339,7 +385,7 @@ mod tests {
         );
         // Basic-tier REDUCED retry must also keep it (Codex 2026-06-06 #2):
         // the retry kernel had dropped design-system unconditionally.
-        let out_reduced = apply_skill_filter(
+        let (out_reduced, _drops) = apply_skill_filter(
             skills(&["schema", "design-system", "layout"]),
             ModelTier::Basic,
             false,
@@ -352,7 +398,7 @@ mod tests {
             "Basic reduced retry must keep design-system when nothing replaces it"
         );
         // …but WITH a replacement (design.md), the reduced retry still drops it.
-        let out_reduced_replaced = apply_skill_filter(
+        let (out_reduced_replaced, _drops) = apply_skill_filter(
             skills(&["schema", "design-system", "layout"]),
             ModelTier::Basic,
             false,
@@ -392,6 +438,7 @@ mod tests {
         let input = skills(&[
             "schema",
             "layout",
+            "cjk-typography",
             "component-composition",
             "examples",
             "jsonl-format-simplified",
@@ -402,6 +449,7 @@ mod tests {
         assert!(!got.contains(&"examples"));
         assert!(got.contains(&"schema"));
         assert!(got.contains(&"layout"));
+        assert!(got.contains(&"cjk-typography"));
         assert!(got.contains(&"jsonl-format-simplified"));
     }
 
@@ -415,7 +463,7 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
-    // reduced_complexity + Basic tier -> retryAllowed 8-set
+    // reduced_complexity + Basic tier -> retryAllowed set
     // -----------------------------------------------------------------------
 
     #[test]
@@ -427,6 +475,7 @@ mod tests {
             "layout",
             "text-rules",
             "mobile-app",
+            "cjk-typography",
             "style-defaults",
             "design-md",
             "variables",
@@ -435,7 +484,7 @@ mod tests {
             "icon-catalog", // MUST be dropped
         ]);
         // is_mobile = true so `mobile-app` survives the base filter.
-        let out = apply_skill_filter(input, ModelTier::Basic, true, false, false, true);
+        let (out, _drops) = apply_skill_filter(input, ModelTier::Basic, true, false, false, true);
         let got = names(&out);
         // elements must NOT be present
         assert!(
@@ -447,13 +496,14 @@ mod tests {
             !got.contains(&"overflow"),
             "overflow should be dropped from retryAllowed set"
         );
-        // All 8 retryAllowed skills that were in input should be present
+        // All retryAllowed skills that were in input should be present.
         for expected in &[
             "schema",
             "jsonl-format-simplified",
             "layout",
             "text-rules",
             "mobile-app",
+            "cjk-typography",
             "style-defaults",
             "design-md",
             "variables",
@@ -463,7 +513,7 @@ mod tests {
                 "'{expected}' should be in retryAllowed output"
             );
         }
-        assert_eq!(got.len(), 8, "exactly 8 skills in retryAllowed output");
+        assert_eq!(got.len(), 9, "exactly 9 skills in retryAllowed output");
     }
 
     #[test]
@@ -509,5 +559,76 @@ mod tests {
         let input = skills(&["schema", "layout", "text-rules", "elements"]);
         let out = filter(input.clone(), ModelTier::Basic, false, false);
         assert_eq!(out, input);
+    }
+
+    // -----------------------------------------------------------------------
+    // apply_skill_filter reports drop reasons
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn apply_skill_filter_reports_tier_drops() {
+        // `examples` / `copywriting` are not in the Basic ALLOWED set.
+        let input = skills(&["schema", "examples", "copywriting"]);
+        let (kept, dropped) =
+            apply_skill_filter(input, ModelTier::Basic, true, false, false, false);
+        assert!(names(&kept).contains(&"schema"));
+        let dn: Vec<&str> = dropped.iter().map(|(n, _)| n.as_str()).collect();
+        assert!(dn.contains(&"examples") && dn.contains(&"copywriting"));
+        assert!(dropped
+            .iter()
+            .all(|(_, r)| matches!(r, op_ai_skills::DropReason::TierFiltered)));
+    }
+
+    #[test]
+    fn apply_skill_filter_reports_minimal_mode_drops() {
+        let input = skills(&["schema", "jsonl-format", "layout", "text-rules"]);
+        let (kept, dropped) = apply_skill_filter(input, ModelTier::Full, false, false, true, false);
+        assert_eq!(names(&kept), vec!["schema", "jsonl-format"]);
+        // layout + text-rules must be reported as MinimalMode drops.
+        let dn: Vec<&str> = dropped.iter().map(|(n, _)| n.as_str()).collect();
+        assert!(dn.contains(&"layout") && dn.contains(&"text-rules"));
+        assert!(dropped
+            .iter()
+            .all(|(_, r)| matches!(r, op_ai_skills::DropReason::MinimalMode)));
+    }
+
+    #[test]
+    fn apply_skill_filter_reports_deduped_jsonl_format() {
+        // When jsonl-format-simplified survives, verbose jsonl-format is Deduped.
+        let input = skills(&[
+            "schema",
+            "jsonl-format",
+            "jsonl-format-simplified",
+            "layout",
+        ]);
+        let (kept, dropped) =
+            apply_skill_filter(input, ModelTier::Full, false, false, false, false);
+        assert!(names(&kept).contains(&"jsonl-format-simplified"));
+        assert!(!names(&kept).contains(&"jsonl-format"));
+        let deduped: Vec<&str> = dropped
+            .iter()
+            .filter(|(_, r)| matches!(r, op_ai_skills::DropReason::Deduped))
+            .map(|(n, _)| n.as_str())
+            .collect();
+        assert!(deduped.contains(&"jsonl-format"));
+    }
+
+    #[test]
+    fn apply_skill_filter_reports_reduced_complexity_drops() {
+        // elements is in ALLOWED but NOT in RETRY_ALLOWED.
+        let input = skills(&["schema", "jsonl-format-simplified", "layout", "elements"]);
+        let (kept, dropped) =
+            apply_skill_filter(input, ModelTier::Basic, false, false, false, true);
+        assert!(!names(&kept).contains(&"elements"));
+        let dn: Vec<&str> = dropped.iter().map(|(n, _)| n.as_str()).collect();
+        assert!(dn.contains(&"elements"));
+        let elements_reason = dropped
+            .iter()
+            .find(|(n, _)| n == "elements")
+            .map(|(_, r)| r);
+        assert!(matches!(
+            elements_reason,
+            Some(op_ai_skills::DropReason::ReducedComplexity)
+        ));
     }
 }

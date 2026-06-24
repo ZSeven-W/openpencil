@@ -1,7 +1,6 @@
 ---
 name: 'brutalist-luxury-dark'
-tags:
-  [brutalist, luxury, dark-mode, gold-accent, monospace, high-contrast, editorial, sharp-corners]
+tags: [brutalist, luxury, dark-mode, gold-accent, monospace, high-contrast, editorial, sharp-corners]
 platform: webapp
 ---
 

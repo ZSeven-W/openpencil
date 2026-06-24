@@ -38,13 +38,15 @@ fn from_editor_tracks_selection_count_for_toolbar() {
 }
 
 #[test]
-fn from_editor_uses_ts_start_designing_hint() {
+fn from_editor_uses_try_example_hint() {
+    // old→new (#33 restyle): empty-state header uses "ai.tryExample" key
+    // ("Try an example to design…") instead of the old "ai.startDesigning".
     let s = EditorState::new();
     let panel = AIChatPlaceholder::from_editor(&s);
 
     assert_eq!(
         panel.label_start_with_ai,
-        op_i18n::translate(s.editor_ui.locale, "ai.startDesigning")
+        op_i18n::translate(s.editor_ui.locale, "ai.tryExample")
     );
 }
 
@@ -84,7 +86,8 @@ fn no_model_disables_send_hit() {
     s.chat.set_input_text("design a login page");
     let panel = AIChatPlaceholder::from_editor(&s);
     let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
-    let send_x = AI_CHAT_WIDTH - PAD - 20.0;
+    // old→new: send circle is now 28px wide (FOOTER_CIRCLE_D) at right_edge-28; center is right_edge-14.
+    let send_x = AI_CHAT_WIDTH - PAD - 15.0;
     let p = Point2D::new(send_x, toolbar_center_y());
 
     assert_eq!(panel.hit_test(rect, p), Some(AIChatHit::FocusInput));
@@ -92,11 +95,15 @@ fn no_model_disables_send_hit() {
 
 #[test]
 fn no_model_disables_quick_action_cards() {
+    // old→new (#33): pills are now full-width stacked; use center of first pill.
     let s = EditorState::new();
     let panel = AIChatPlaceholder::from_editor(&s);
     let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
-    let card_w = (AI_CHAT_WIDTH - PAD * 2.0 - 8.0) / 2.0;
-    let p = Point2D::new(PAD + card_w / 2.0, HEADER_HEIGHT + 32.0 + 35.0);
+    let pills = crate::widgets::ai_chat_panel_paint::example_card_rects(rect);
+    let p = Point2D::new(
+        pills[0].origin.x + pills[0].size.x / 2.0,
+        pills[0].origin.y + pills[0].size.y / 2.0,
+    );
 
     assert_eq!(panel.hit_test(rect, p), Some(AIChatHit::DragHandle));
     assert_eq!(panel.example_hover_at(rect, p), None);
@@ -119,7 +126,8 @@ fn hit_test_resolves_send_at_right() {
     s.chat.set_input_text("design a login page");
     let panel = AIChatPlaceholder::from_editor(&s);
     let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
-    let send_x = AI_CHAT_WIDTH - PAD - 20.0;
+    // old→new: send circle center is at right_edge - 14 (28px diameter = FOOTER_CIRCLE_D).
+    let send_x = AI_CHAT_WIDTH - PAD - 15.0;
     let p = Point2D::new(send_x, toolbar_center_y());
     assert_eq!(panel.hit_test(rect, p), Some(AIChatHit::Send));
 }
@@ -132,8 +140,12 @@ fn hit_test_resolves_stop_at_right_while_streaming() {
         .push(op_editor_core::ChatMessage::assistant_streaming());
     let panel = AIChatPlaceholder::from_editor(&s);
     let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
-    let send_x = AI_CHAT_WIDTH - PAD - 20.0;
-    let p = Point2D::new(send_x, toolbar_center_y());
+    // old→new: stop circle is a separate button at right_edge-30-6-30 = right_edge-66;
+    // center is at right_edge - 66 + 15 = right_edge - 51.
+    // old code put stop at the same position as send and used streaming to disambiguate;
+    // new code has dedicated stop and send buttons.
+    let stop_x = AI_CHAT_WIDTH - PAD - 51.0;
+    let p = Point2D::new(stop_x, toolbar_center_y());
 
     assert_eq!(panel.hit_test(rect, p), Some(AIChatHit::Stop));
 }
@@ -153,58 +165,91 @@ fn streaming_textarea_click_is_consumed_without_focusing_like_ts_disabled_input(
 
 #[test]
 fn streaming_attachment_button_is_consumed_without_opening_picker_like_ts() {
+    // While streaming, clicking the attach button should be consumed (Inside),
+    // NOT open the attachment picker — same behaviour as the TS disabled input.
+    // #38: attach is now right-aligned (left of stop/send); use footer rect for robustness.
     let mut s = EditorState::new();
     s.chat
         .messages
         .push(op_editor_core::ChatMessage::assistant_streaming());
     let panel = AIChatPlaceholder::from_editor(&s);
     let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
-    let p = Point2D::new(AI_CHAT_WIDTH - PAD - 52.0, toolbar_center_y());
+    let input = panel.input_rect(rect);
+    let toolbar_top = input.origin.y + INPUT_AREA_HEIGHT;
+    let footer = panel.footer_layout(rect, input, toolbar_top);
+    let attach_center = Point2D::new(
+        footer.attach.origin.x + footer.attach.size.x / 2.0,
+        footer.attach.origin.y + footer.attach.size.y / 2.0,
+    );
 
-    assert_eq!(panel.hit_test(rect, p), Some(AIChatHit::Inside));
+    assert_eq!(panel.hit_test(rect, attach_center), Some(AIChatHit::Inside));
 }
 
 #[test]
 fn hit_test_resolves_bottom_toolbar_actions() {
+    // #38: ⚡/📎/🎨 cluster is now right-aligned (left of stop/send).
+    // Use footer_layout rects for robustness instead of hardcoded coords.
     let mut s = EditorState::new();
     seed_available_model(&mut s);
     s.chat.set_input_text("design a login page");
     let panel = AIChatPlaceholder::from_editor(&s);
     let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
     let y = toolbar_center_y();
+    let input = panel.input_rect(rect);
+    let toolbar_top = input.origin.y + INPUT_AREA_HEIGHT;
+    let footer = panel.footer_layout(rect, input, toolbar_top);
+
+    // model pill center (x=PAD+8 = 24, in range 16..196)
     assert_eq!(
         panel.hit_test(rect, Point2D::new(PAD + 8.0, y)),
         Some(AIChatHit::ToggleModelPicker)
     );
-    assert_eq!(
-        panel.hit_test(rect, Point2D::new(AI_CHAT_WIDTH - PAD - 52.0, y)),
-        Some(AIChatHit::AddAttachment)
+    // attach: use the footer rect center (now right-aligned, #38)
+    let attach_center = Point2D::new(
+        footer.attach.origin.x + footer.attach.size.x / 2.0,
+        y,
     );
     assert_eq!(
-        panel.hit_test(rect, Point2D::new(AI_CHAT_WIDTH - PAD - 16.0, y)),
+        panel.hit_test(rect, attach_center),
+        Some(AIChatHit::AddAttachment)
+    );
+    // send: right_edge-circle(28) center at right_edge-14.
+    assert_eq!(
+        panel.hit_test(rect, Point2D::new(AI_CHAT_WIDTH - PAD - 14.0, y)),
         Some(AIChatHit::Send)
     );
 }
 
 #[test]
 fn footer_hover_maps_bottom_toolbar_actions() {
+    // #38: ⚡/📎/🎨 cluster is now right-aligned (left of stop/send).
+    // Use footer_layout rects for robustness instead of hardcoded coords.
     let mut s = EditorState::new();
     seed_available_model(&mut s);
     s.chat.set_input_text("design a login page");
     let panel = AIChatPlaceholder::from_editor(&s);
     let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
     let y = toolbar_center_y();
+    let input = panel.input_rect(rect);
+    let toolbar_top = input.origin.y + INPUT_AREA_HEIGHT;
+    let footer = panel.footer_layout(rect, input, toolbar_top);
 
     assert_eq!(
         panel.footer_hover_at(rect, Point2D::new(PAD + 8.0, y)),
         Some(op_editor_core::ChatFooterButton::ModelPicker)
     );
-    assert_eq!(
-        panel.footer_hover_at(rect, Point2D::new(AI_CHAT_WIDTH - PAD - 52.0, y)),
-        Some(op_editor_core::ChatFooterButton::AddAttachment)
+    // attach: use footer rect center (now right-aligned, #38)
+    let attach_center = Point2D::new(
+        footer.attach.origin.x + footer.attach.size.x / 2.0,
+        y,
     );
     assert_eq!(
-        panel.footer_hover_at(rect, Point2D::new(AI_CHAT_WIDTH - PAD - 16.0, y)),
+        panel.footer_hover_at(rect, attach_center),
+        Some(op_editor_core::ChatFooterButton::AddAttachment)
+    );
+    // send center at right_edge - 14 = AI_CHAT_WIDTH - PAD - 14.
+    assert_eq!(
+        panel.footer_hover_at(rect, Point2D::new(AI_CHAT_WIDTH - PAD - 14.0, y)),
         Some(op_editor_core::ChatFooterButton::Send)
     );
 }
@@ -225,7 +270,10 @@ fn example_hover_maps_quick_action_cards() {
 }
 
 #[test]
-fn footer_agent_team_chip_is_clickable_and_hoverable() {
+fn footer_speed_chip_is_clickable_and_opens_parallel_agents_picker() {
+    // old→new (#32): the ⚡ chip is now the Parallel Agents chip — it opens the
+    // "PARALLEL AGENTS" picker on click (ToggleParallelAgentsPicker), not CycleEffort.
+    // Hover state still maps to SpeedChip for the button-wash.
     let mut s = EditorState::new();
     seed_available_model(&mut s);
     let panel = AIChatPlaceholder::from_editor(&s);
@@ -234,14 +282,19 @@ fn footer_agent_team_chip_is_clickable_and_hoverable() {
     let toolbar_top = input.origin.y + INPUT_AREA_HEIGHT;
     let footer = panel.footer_layout(rect, input, toolbar_top);
     let point = Point2D::new(
-        footer.agent_team.origin.x + footer.agent_team.size.x / 2.0,
-        footer.agent_team.origin.y + footer.agent_team.size.y / 2.0,
+        footer.speed.origin.x + footer.speed.size.x / 2.0,
+        footer.speed.origin.y + footer.speed.size.y / 2.0,
     );
 
-    assert_eq!(panel.hit_test(rect, point), Some(AIChatHit::CycleAgentTeam));
+    // old→new: CycleEffort → ToggleParallelAgentsPicker
+    assert_eq!(
+        panel.hit_test(rect, point),
+        Some(AIChatHit::ToggleParallelAgentsPicker)
+    );
+    // Hover state stays SpeedChip (drives button-wash on the chip).
     assert_eq!(
         panel.footer_hover_at(rect, point),
-        Some(op_editor_core::ChatFooterButton::AgentTeam)
+        Some(op_editor_core::ChatFooterButton::SpeedChip)
     );
 }
 
@@ -312,17 +365,19 @@ fn hit_test_resolves_attachment_chip_at_painted_position() {
 
 #[test]
 fn hit_test_resolves_first_example_when_empty() {
-    let mut s = EditorState::new(); // chat empty by default
+    // old→new (#33): first pill is full-width at HEADER_HEIGHT + hint + gap.
+    // Use the pill center computed from example_card_rects.
+    let mut s = EditorState::new();
     seed_available_model(&mut s);
     let panel = AIChatPlaceholder::from_editor(&s);
     let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
-    // First example card: top-left of grid.
-    let card_w = (AI_CHAT_WIDTH - PAD * 2.0 - 8.0) / 2.0;
-    let p = Point2D::new(PAD + card_w / 2.0, HEADER_HEIGHT + 32.0 + 35.0);
+    let pills = crate::widgets::ai_chat_panel_paint::example_card_rects(rect);
+    let p = Point2D::new(
+        pills[0].origin.x + pills[0].size.x / 2.0,
+        pills[0].origin.y + pills[0].size.y / 2.0,
+    );
     match panel.hit_test(rect, p) {
         Some(AIChatHit::Example { index, prompt }) => {
-            // The click payload is the card's full prompt — what the
-            // host inserts into the chat input.
             assert_eq!(index, 0);
             assert_eq!(prompt, panel.examples[0].prompt);
         }
@@ -331,20 +386,26 @@ fn hit_test_resolves_first_example_when_empty() {
 }
 
 #[test]
-fn hit_test_uses_taller_ts_quick_action_card_height() {
+fn hit_test_pill_resolves_anywhere_inside_pill_bounds() {
+    // old→new (#33): was testing the "taller TS card height" (72px 2×2 grid).
+    // old→new (#37): pill is now 40px tall (compact); any click inside resolves the example.
     let mut s = EditorState::new();
     seed_available_model(&mut s);
     let panel = AIChatPlaceholder::from_editor(&s);
     let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
-    let card_w = (AI_CHAT_WIDTH - PAD * 2.0 - 8.0) / 2.0;
-    let p = Point2D::new(PAD + card_w / 2.0, HEADER_HEIGHT + 32.0 + 64.0);
+    let pills = crate::widgets::ai_chat_panel_paint::example_card_rects(rect);
+    // Click near the bottom of the first pill (verifies full height is live).
+    let p = Point2D::new(
+        pills[0].origin.x + pills[0].size.x / 2.0,
+        pills[0].origin.y + pills[0].size.y - 4.0,
+    );
 
     match panel.hit_test(rect, p) {
         Some(AIChatHit::Example { index, prompt }) => {
             assert_eq!(index, 0);
             assert_eq!(prompt, panel.examples[0].prompt);
         }
-        other => panic!("expected first example hit in taller TS-style card, got {other:?}"),
+        other => panic!("expected first example hit anywhere inside pill, got {other:?}"),
     }
 }
 
@@ -353,19 +414,26 @@ fn hit_test_header_returns_drag_handle() {
     let s = EditorState::new();
     let panel = AIChatPlaceholder::from_editor(&s);
     let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
-    // Click in the empty header band (between title and icons).
-    let p = Point2D::new(AI_CHAT_WIDTH / 2.0, 16.0);
+    // old→new: the #27 header restyle fills most of the header with a pill
+    // (chevron + pill covers x=PAD..right_edge-60) and right-side icons.
+    // The only drag-handle area is the narrow gap between the pill's right
+    // edge and the maximize button: approx x=284..292 for AI_CHAT_WIDTH=360.
+    // Pick x=288 (mid-gap between pill right ~284 and maximize left ~292).
+    let p = Point2D::new(288.0, 18.0);
     assert_eq!(panel.hit_test(rect, p), Some(AIChatHit::DragHandle));
 }
 
 #[test]
-fn hit_test_header_title_text_toggles_collapse_for_hover_feedback() {
+fn hit_test_header_tab_body_returns_switch_tab() {
+    // old→new (MT.2 tab row): clicking inside the tab row now returns
+    // SwitchTab(0) for the single default tab, not ToggleCollapse.
+    // ToggleCollapse is now scoped to the chevron icon only.
     let s = EditorState::new();
     let panel = AIChatPlaceholder::from_editor(&s);
     let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
+    // Click at x=PAD+64 (well inside the tab zone, past the chevron).
     let p = Point2D::new(PAD + 64.0, 18.0);
-
-    assert_eq!(panel.hit_test(rect, p), Some(AIChatHit::ToggleCollapse));
+    assert_eq!(panel.hit_test(rect, p), Some(AIChatHit::SwitchTab(0)));
 }
 
 #[test]
@@ -502,4 +570,302 @@ pub(in super::super) fn has_fill_rect(fills: &[(Rect, crate::Color)], expected: 
             && (rect.size.x - expected.size.x).abs() < 1e-4
             && (rect.size.y - expected.size.y).abs() < 1e-4
     })
+}
+
+// ── New bottom-toolbar layout tests (§ Task 5.2 / #27) ──────────────────────
+
+#[test]
+fn bottom_toolbar_layout_send_is_rightmost_circle() {
+    // The send button is the rightmost element; stop is to its left.
+    let s = EditorState::new();
+    let panel = AIChatPlaceholder::from_editor(&s);
+    let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
+    let input = panel.input_rect(rect);
+    let toolbar_top = input.origin.y + INPUT_AREA_HEIGHT;
+    let footer = panel.footer_layout(rect, input, toolbar_top);
+
+    // Send must be circular (equal w/h) and right-most.
+    assert!(
+        (footer.send.size.x - footer.send.size.y).abs() < 0.01,
+        "send button must be circular"
+    );
+    assert!(
+        footer.send.origin.x > footer.stop.origin.x,
+        "send must be to the right of stop"
+    );
+    // Send right edge should match panel right minus PAD.
+    let right_edge = rect.origin.x + rect.size.x - PAD;
+    assert!(
+        (footer.send.origin.x + footer.send.size.x - right_edge).abs() < 0.01,
+        "send right edge must touch right_edge"
+    );
+}
+
+#[test]
+fn bottom_toolbar_layout_model_pill_is_leftmost() {
+    let s = EditorState::new();
+    let panel = AIChatPlaceholder::from_editor(&s);
+    let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
+    let input = panel.input_rect(rect);
+    let toolbar_top = input.origin.y + INPUT_AREA_HEIGHT;
+    let footer = panel.footer_layout(rect, input, toolbar_top);
+
+    // Model pill starts at PAD.
+    assert!(
+        (footer.model.origin.x - PAD).abs() < 0.01,
+        "model pill must start at PAD"
+    );
+    assert!(
+        footer.model.size.x >= 140.0,
+        "model pill should be at least 140px wide"
+    );
+    // #38: ⚡/📎/🎨 cluster is now right-aligned (left of stop/send).
+    // Model pill right edge must still be left of the speed chip.
+    assert!(
+        footer.model.origin.x + footer.model.size.x < footer.speed.origin.x,
+        "model pill right edge must be left of the speed chip"
+    );
+    // There is a flexible gap between model and the right cluster.
+    let model_right = footer.model.origin.x + footer.model.size.x;
+    assert!(
+        footer.speed.origin.x > model_right + 4.0,
+        "speed chip (#38 right cluster) must be well to the right of the model pill"
+    );
+}
+
+#[test]
+fn bottom_toolbar_layout_order_is_model_speed_attach_palette_stop_send() {
+    // #38: ⚡/📎/🎨 moved right — full left-to-right order is:
+    //   model (LEFT) | [gap] | speed | attach | palette | stop | send (RIGHT)
+    let s = EditorState::new();
+    let panel = AIChatPlaceholder::from_editor(&s);
+    let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
+    let input = panel.input_rect(rect);
+    let toolbar_top = input.origin.y + INPUT_AREA_HEIGHT;
+    let footer = panel.footer_layout(rect, input, toolbar_top);
+
+    // Left-to-right order: model < speed < attach < palette < stop < send
+    assert!(footer.model.origin.x < footer.speed.origin.x,
+        "model left of speed");
+    assert!(footer.speed.origin.x < footer.attach.origin.x,
+        "speed left of attach");
+    assert!(footer.attach.origin.x < footer.palette.origin.x,
+        "attach left of palette");
+    assert!(footer.palette.origin.x < footer.stop.origin.x,
+        "palette left of stop");
+    assert!(footer.stop.origin.x < footer.send.origin.x,
+        "stop left of send");
+    // #38 specific: speed/attach/palette must all be RIGHT of the model pill.
+    let model_right = footer.model.origin.x + footer.model.size.x;
+    assert!(footer.speed.origin.x > model_right + 4.0,
+        "speed chip must be right of model pill with a visible gap (#38)");
+}
+
+#[test]
+fn hit_test_stop_circle_only_active_while_streaming() {
+    // While streaming, a click on the stop rect returns Stop.
+    let mut s = EditorState::new();
+    s.chat
+        .messages
+        .push(op_editor_core::ChatMessage::assistant_streaming());
+    let panel = AIChatPlaceholder::from_editor(&s);
+    let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
+    let input = panel.input_rect(rect);
+    let toolbar_top = input.origin.y + INPUT_AREA_HEIGHT;
+    let footer = panel.footer_layout(rect, input, toolbar_top);
+    let stop_center = Point2D::new(
+        footer.stop.origin.x + footer.stop.size.x / 2.0,
+        footer.stop.origin.y + footer.stop.size.y / 2.0,
+    );
+
+    assert_eq!(panel.hit_test(rect, stop_center), Some(AIChatHit::Stop));
+
+    // While idle, the same position should not return Stop.
+    let mut s2 = EditorState::new();
+    seed_available_model(&mut s2);
+    s2.chat.set_input_text("design");
+    let panel2 = AIChatPlaceholder::from_editor(&s2);
+    // When idle, stop rect position hits nothing (gap area), falling through to FocusInput.
+    assert_ne!(
+        panel2.hit_test(rect, stop_center),
+        Some(AIChatHit::Stop),
+        "stop hit must not fire while idle"
+    );
+}
+
+#[test]
+fn hit_test_palette_button_is_inert() {
+    // Palette is a no-op in #27; clicking it returns Inside (consumed).
+    let mut s = EditorState::new();
+    seed_available_model(&mut s);
+    let panel = AIChatPlaceholder::from_editor(&s);
+    let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
+    let input = panel.input_rect(rect);
+    let toolbar_top = input.origin.y + INPUT_AREA_HEIGHT;
+    let footer = panel.footer_layout(rect, input, toolbar_top);
+    let palette_center = Point2D::new(
+        footer.palette.origin.x + footer.palette.size.x / 2.0,
+        footer.palette.origin.y + footer.palette.size.y / 2.0,
+    );
+
+    assert_eq!(
+        panel.hit_test(rect, palette_center),
+        Some(AIChatHit::Inside),
+        "palette button should be consumed (inert) in #27 layout"
+    );
+}
+
+// ── Task 5.6 Parallel Agents picker tests ────────────────────────────────────
+
+#[test]
+fn parallel_agents_chip_label_is_agent_team_size_not_effort() {
+    // #32: chip shows "{N}x" where N = agent_team_size, not effort level.
+    let mut s = EditorState::new();
+    seed_available_model(&mut s);
+    s.chat.agent_team_size = 4;
+    let panel = AIChatPlaceholder::from_editor(&s);
+    // agent_team_size is accessible via panel.state.
+    assert_eq!(panel.state.agent_team_size, 4);
+    // The chip label should format as "4x".
+    let label = format!("{}x", panel.state.agent_team_size);
+    assert_eq!(label, "4x");
+}
+
+#[test]
+fn clicking_speed_chip_opens_parallel_agents_picker() {
+    // #32: clicking the ⚡ chip returns ToggleParallelAgentsPicker (not CycleEffort).
+    let mut s = EditorState::new();
+    seed_available_model(&mut s);
+    let panel = AIChatPlaceholder::from_editor(&s);
+    let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
+    let input = panel.input_rect(rect);
+    let toolbar_top = input.origin.y + INPUT_AREA_HEIGHT;
+    let footer = panel.footer_layout(rect, input, toolbar_top);
+    let chip_center = Point2D::new(
+        footer.speed.origin.x + footer.speed.size.x / 2.0,
+        footer.speed.origin.y + footer.speed.size.y / 2.0,
+    );
+    assert_eq!(
+        panel.hit_test(rect, chip_center),
+        Some(AIChatHit::ToggleParallelAgentsPicker)
+    );
+}
+
+#[test]
+fn parallel_agents_picker_row_hit_returns_set_parallel_agents() {
+    // When the picker is open, clicking a row returns SetParallelAgents(N).
+    let mut s = EditorState::new();
+    seed_available_model(&mut s);
+    s.editor_ui.parallel_agents_picker_open = true;
+    let panel = AIChatPlaceholder::from_editor(&s);
+    let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
+    let input = panel.input_rect(rect);
+    let toolbar_top = input.origin.y + INPUT_AREA_HEIGHT;
+    let footer = panel.footer_layout(rect, input, toolbar_top);
+    let picker = crate::widgets::ai_chat_panel_footer::parallel_agents_picker_rect(&footer);
+    // Row 3 starts at rows_top + 2 * ROW_H; click its center.
+    let rows_top = picker.origin.y + 32.0;
+    let row3_y = rows_top + 2.0 * crate::widgets::ai_chat_panel_footer::PARALLEL_AGENTS_ROW_H_PUB;
+    let row3_center = Point2D::new(
+        picker.origin.x + picker.size.x / 2.0,
+        row3_y + crate::widgets::ai_chat_panel_footer::PARALLEL_AGENTS_ROW_H_PUB / 2.0,
+    );
+    assert_eq!(
+        panel.hit_test(rect, row3_center),
+        Some(AIChatHit::SetParallelAgents(3))
+    );
+}
+
+#[test]
+fn parallel_agents_picker_outside_click_closes_picker() {
+    // Clicking outside the picker while it is open returns ToggleParallelAgentsPicker
+    // (the host handler treats this as a close).
+    let mut s = EditorState::new();
+    seed_available_model(&mut s);
+    s.editor_ui.parallel_agents_picker_open = true;
+    let panel = AIChatPlaceholder::from_editor(&s);
+    let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
+    // Click in the body area (far from the picker) — should close.
+    let body_point = Point2D::new(AI_CHAT_WIDTH / 2.0, AI_CHAT_HEIGHT / 2.0);
+    assert_eq!(
+        panel.hit_test(rect, body_point),
+        Some(AIChatHit::ToggleParallelAgentsPicker)
+    );
+}
+
+#[test]
+fn parallel_agents_picker_hover_at_returns_row_index() {
+    // parallel_agents_picker_hover_at returns the row the cursor is over.
+    let mut s = EditorState::new();
+    seed_available_model(&mut s);
+    s.editor_ui.parallel_agents_picker_open = true;
+    let panel = AIChatPlaceholder::from_editor(&s);
+    let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
+    let input = panel.input_rect(rect);
+    let toolbar_top = input.origin.y + INPUT_AREA_HEIGHT;
+    let footer = panel.footer_layout(rect, input, toolbar_top);
+    let picker = crate::widgets::ai_chat_panel_footer::parallel_agents_picker_rect(&footer);
+    let rows_top = picker.origin.y + 32.0;
+    // Hover over row 5.
+    let row5_y = rows_top + 4.0 * crate::widgets::ai_chat_panel_footer::PARALLEL_AGENTS_ROW_H_PUB;
+    let point = Point2D::new(
+        picker.origin.x + 20.0,
+        row5_y + crate::widgets::ai_chat_panel_footer::PARALLEL_AGENTS_ROW_H_PUB / 2.0,
+    );
+    assert_eq!(panel.parallel_agents_picker_hover_at(rect, point), Some(5));
+    // Outside the picker → None.
+    let outside = Point2D::new(AI_CHAT_WIDTH / 2.0, AI_CHAT_HEIGHT / 2.0);
+    assert_eq!(panel.parallel_agents_picker_hover_at(rect, outside), None);
+}
+
+#[test]
+fn parallel_agents_picker_closed_when_picker_not_open() {
+    // When the picker is closed, the hover method returns None and
+    // the hit-test falls through to normal chip behavior.
+    let mut s = EditorState::new();
+    seed_available_model(&mut s);
+    // picker NOT open
+    let panel = AIChatPlaceholder::from_editor(&s);
+    let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
+    let outside = Point2D::new(AI_CHAT_WIDTH / 2.0, AI_CHAT_HEIGHT / 2.0);
+    assert_eq!(panel.parallel_agents_picker_hover_at(rect, outside), None);
+}
+
+// ── Task 5.3 header restyle tests ────────────────────────────────────────────
+
+#[test]
+fn header_new_chat_circle_at_right_resolves_new_chat() {
+    // The "+" new-chat button is a 28px circle at the far right of the header.
+    // old: was a plain icon-button at right_edge-22; new: circle at right_edge-28.
+    let s = EditorState::new();
+    let panel = AIChatPlaceholder::from_editor(&s);
+    let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
+    // Center of the new-chat circle: right_edge - 14 (half of 28px diameter).
+    let right_edge = AI_CHAT_WIDTH - PAD;
+    let center_x = right_edge - 14.0;
+    let center_y = HEADER_HEIGHT / 2.0;
+    let p = Point2D::new(center_x, center_y);
+
+    assert_eq!(
+        panel.hit_test(rect, p),
+        Some(AIChatHit::NewChat),
+        "center of the 28px new-chat circle must resolve NewChat"
+    );
+}
+
+#[test]
+fn header_collapse_chevron_area_resolves_toggle_collapse() {
+    // Clicking on the chevron icon itself (left edge of pill cluster) must
+    // still return ToggleCollapse.
+    let s = EditorState::new();
+    let panel = AIChatPlaceholder::from_editor(&s);
+    let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
+    // Chevron center: PAD + 9 (half of 18px icon).
+    let p = Point2D::new(PAD + 9.0, HEADER_HEIGHT / 2.0);
+
+    assert_eq!(
+        panel.hit_test(rect, p),
+        Some(AIChatHit::ToggleCollapse),
+        "collapse chevron must resolve ToggleCollapse"
+    );
 }

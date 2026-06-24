@@ -551,3 +551,251 @@ fn append_mode_wins_over_dashboard_branch() {
         "target frame must gain descendants: before={before_count} after={after_count}"
     );
 }
+
+// ── Task F4 tests: append-mode cleanup scopes to inserted roots only ───────────
+
+/// (F4-a) Append cleanup must NOT touch pre-existing children of the target frame.
+///
+/// Seed the target frame with a "bottom nav" child (safe-dark fill #1A1A1A).
+/// `repair_light_mobile_nav_surfaces` would overwrite it if called with
+/// `root_id` = target frame.  After F4, cleanup uses only `inserted_root_ids` —
+/// the pre-existing bottom-nav is never visited, so its fill stays #1A1A1A.
+#[test]
+fn append_cleanup_leaves_preexisting_nav_surface_untouched() {
+    use op_editor_core::{first_solid_fill_hex, walkers::find_node as find_node_deep};
+
+    // Target frame: mobile (390x844), white fill — is_light_mobile_root = true.
+    // Pre-existing child: "Bottom Nav" with safe-dark fill #1A1A1A.
+    let target_node: jian_ops_schema::node::PenNode = serde_json::from_str(
+        r##"{
+            "type": "frame",
+            "id": "hint-mobile-target",
+            "name": "Mobile App",
+            "x": 0, "y": 0,
+            "width": 390,
+            "height": 844,
+            "layout": "vertical",
+            "fill": [{ "type": "solid", "color": "#FFFFFF" }],
+            "children": [
+                {
+                    "type": "frame",
+                    "id": "old-bottom-nav",
+                    "name": "Bottom Nav",
+                    "x": 0, "y": 780,
+                    "width": 390,
+                    "height": 64,
+                    "fill": [{ "type": "solid", "color": "#1A1A1A" }],
+                    "children": []
+                }
+            ]
+        }"##,
+    )
+    .expect("parse target node with pre-existing child");
+
+    let mut sink = VecDocSink::new();
+    let before_count = sink.state().active_children().len();
+    sink.apply(EditorCommand::InsertSubtree {
+        nodes: vec![target_node],
+        parent_id: op_editor_core::NodeId::NONE,
+        page_id: None,
+    });
+    let live_target_id = sink
+        .state()
+        .active_children()
+        .get(before_count)
+        .map(|n| n.id_str().to_string())
+        .expect("target frame inserted");
+
+    // Sanity: confirm bottom-nav has dark fill before the run.
+    let preexisting_fill_before = {
+        let children = sink.state().active_children();
+        // Id may be remapped; fall back to name search inside the target.
+        let nav = find_node_deep(children, &op_editor_core::NodeId::new("old-bottom-nav")).or_else(
+            || {
+                op_editor_core::walkers::find_node(
+                    children,
+                    &op_editor_core::NodeId::new(live_target_id.clone()),
+                )
+                .and_then(|t| t.children())
+                .and_then(|kids| {
+                    kids.iter()
+                        .find(|k| k.base().name.as_deref().unwrap_or("") == "Bottom Nav")
+                })
+            },
+        );
+        nav.and_then(first_solid_fill_hex)
+            .unwrap_or("")
+            .to_lowercase()
+    };
+    assert!(
+        preexisting_fill_before.contains("1a1a1a") || preexisting_fill_before.is_empty(),
+        "pre-existing bottom-nav must start with dark fill; got: {preexisting_fill_before}"
+    );
+
+    // Plan: single section subtask (content, not a nav surface).
+    const PLAN_JSON: &str = r##"{
+      "rootFrame": {
+        "id": "frame-placeholder", "name": "Mobile App",
+        "width": 390, "height": 844,
+        "layout": "vertical", "gap": 0,
+        "fill": [{ "type": "solid", "color": "#FFFFFF" }]
+      },
+      "subtasks": [
+        { "id": "hero", "label": "Hero Section",
+          "region": { "width": 390, "height": 300 } }
+      ]
+    }"##;
+
+    // Sub-agent inserts a simple hero section (no nav surface, no fill issues).
+    let new_section_json = r##"[{
+        "type": "frame",
+        "id": "new-hero-1",
+        "name": "Hero Section",
+        "x": 0, "y": 0,
+        "width": 390, "height": 300,
+        "layout": "vertical",
+        "fill": [{ "type": "solid", "color": "#E8F4FF" }],
+        "children": [{
+            "type": "text",
+            "id": "new-hero-title",
+            "content": "Welcome",
+            "x": 20, "y": 20,
+            "width": 350, "height": 40,
+            "fontSize": 28
+        }]
+    }]"##;
+
+    let llm = ScriptedLlm::new(vec![
+        ScriptResponse::Text(PLAN_JSON.into()),
+        ScriptResponse::Text(new_section_json.into()),
+    ]);
+    let abort = AbortFlag::new();
+
+    let req = DesignRequest {
+        prompt: "add a hero section".into(),
+        model: None,
+        provider: None,
+        design_md: None,
+        concurrency: 1,
+        append_context: Some(AppendContext {
+            target_parent_id: live_target_id.clone(),
+            target_width: 390.0,
+            existing_section_labels: vec![],
+            is_mobile: true,
+        }),
+        validation_enabled: true,
+        visual_ref_enabled: false,
+    };
+
+    futures::executor::block_on(Orchestrator::new().run(
+        req,
+        &mut sink,
+        &llm,
+        &mut |_| {},
+        &abort,
+        &stub_providers(),
+    ))
+    .expect("append run should succeed");
+
+    // After run: pre-existing bottom-nav fill must be unchanged.
+    // If cleanup ran over the target frame root it would have changed #1A1A1A to #FFFFFF.
+    let preexisting_fill_after = {
+        let children = sink.state().active_children();
+        let bottom_nav = op_editor_core::walkers::find_node(
+            children,
+            &op_editor_core::NodeId::new(live_target_id.clone()),
+        )
+        .and_then(|t| t.children())
+        .and_then(|kids| {
+            kids.iter()
+                .find(|k| k.base().name.as_deref().unwrap_or("") == "Bottom Nav")
+        });
+        bottom_nav
+            .and_then(first_solid_fill_hex)
+            .unwrap_or("")
+            .to_lowercase()
+    };
+
+    assert!(
+        preexisting_fill_after.contains("1a1a1a"),
+        "pre-existing bottom-nav fill must remain #1A1A1A after append run; \
+         got: {preexisting_fill_after} (cleanup incorrectly touched the pre-existing node)"
+    );
+}
+
+/// (F4-b) Fresh-doc (non-append) path is unchanged by the F4 fix.
+///
+/// Regression guard: the normal path (`skip_root_insertion = false`) runs
+/// `run_cleanup_passes` with `&[&root_id]` — same as before F4.  Verify that
+/// the run succeeds and the root gains descendants from the sub-agents.
+#[test]
+fn fresh_doc_cleanup_still_runs_over_scaffold_root() {
+    const PLAN_JSON: &str = r##"{
+      "rootFrame": {
+        "id": "root", "name": "Landing Page",
+        "width": 1200, "height": 800,
+        "layout": "vertical", "gap": 0,
+        "fill": [{ "type": "solid", "color": "#FFFFFF" }]
+      },
+      "subtasks": [
+        { "id": "hero", "label": "Hero",
+          "region": { "width": 1200, "height": 400 } },
+        { "id": "features", "label": "Features",
+          "region": { "width": 1200, "height": 400 } }
+      ]
+    }"##;
+
+    let mut sink = VecDocSink::new();
+    let llm = ScriptedLlm::new(vec![
+        ScriptResponse::Text(PLAN_JSON.into()),
+        ScriptResponse::Text(node_json("hero")),
+        ScriptResponse::Text(node_json("features")),
+    ]);
+    let abort = AbortFlag::new();
+
+    let req = DesignRequest {
+        prompt: "a landing page".into(),
+        model: None,
+        provider: None,
+        design_md: None,
+        concurrency: 1,
+        append_context: None, // fresh doc — non-append path
+        validation_enabled: true,
+        visual_ref_enabled: false,
+    };
+
+    let summary = futures::executor::block_on(Orchestrator::new().run(
+        req,
+        &mut sink,
+        &llm,
+        &mut |_| {},
+        &abort,
+        &stub_providers(),
+    ))
+    .expect("fresh-doc run should succeed without regression");
+
+    // The fresh-doc path must still produce a valid root and sub-agent output.
+    // If cleanup were accidentally called with an empty root set (wrong branch),
+    // the run would still succeed but a following validation could fail.
+    assert!(
+        !summary.root_frame_id.is_empty(),
+        "fresh-doc run must return a non-empty root_frame_id"
+    );
+    assert_eq!(
+        summary.subtasks.len(),
+        2,
+        "fresh-doc run must have run both subtasks"
+    );
+    assert!(
+        summary.total_nodes >= 2,
+        "fresh-doc run must have generated content (at least 2 nodes)"
+    );
+
+    // The scaffold root must now contain the sub-agent nodes (cleanup didn't
+    // accidentally delete them or run on an empty set that no-oped harmlessly).
+    let root_descendant_count = descendant_count(sink.state(), &summary.root_frame_id);
+    assert!(
+        root_descendant_count >= 2,
+        "scaffold root must have at least 2 descendants after run; got: {root_descendant_count}"
+    );
+}

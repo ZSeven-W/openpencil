@@ -89,6 +89,15 @@ impl WidgetHost {
         true
     }
 
+    /// Cmd/Ctrl+T — open a fresh chat tab (MT.3). Preserves all existing tabs
+    /// and leaves any in-flight run bound to its own tab (the web run binding
+    /// lives in `web_chat`'s RUNNING_TAB, untouched here).
+    pub fn apply_new_chat_tab(&mut self) -> bool {
+        self.editor_state.chat.new_tab();
+        self.mark_dirty();
+        true
+    }
+
     /// Cmd/Ctrl+D — duplicate the selected node as a sibling
     /// offset by ~10 doc px. Selection follows the clone.
     pub fn apply_duplicate(&mut self) -> bool {

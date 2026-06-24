@@ -71,6 +71,31 @@ fn solid_fill_from_hex(hex: &str) -> Vec<PenFill> {
     })]
 }
 
+// ── Interactivity from JSON spec ────────────────────────────────────────────────
+
+/// Parse the optional `events` / `bindings` / `state` blocks off the raw
+/// vision-LLM spec so the rebuilt node stays functional. Each field
+/// deserializes independently; a malformed block is dropped (`None`)
+/// rather than failing the whole node build.
+fn parse_interactivity(
+    obj: &serde_json::Map<String, Value>,
+) -> (
+    Option<jian_ops_schema::state::StateSchema>,
+    Option<jian_ops_schema::events::Bindings>,
+    Option<jian_ops_schema::events::EventHandlers>,
+) {
+    let state = obj
+        .get("state")
+        .and_then(|v| serde_json::from_value(v.clone()).ok());
+    let bindings = obj
+        .get("bindings")
+        .and_then(|v| serde_json::from_value(v.clone()).ok());
+    let events = obj
+        .get("events")
+        .and_then(|v| serde_json::from_value(v.clone()).ok());
+    (state, bindings, events)
+}
+
 // ── build_node_from_spec ───────────────────────────────────────────────────────
 
 /// Build a single `PenNode` from the raw JSON spec produced by the vision LLM.
@@ -209,6 +234,8 @@ fn build_container_node(
 
     let fill = fill_color.map(|hex| solid_fill_from_hex(&hex));
 
+    let (state, bindings, events) = parse_interactivity(obj);
+
     let container = ContainerProps {
         width,
         height,
@@ -231,9 +258,9 @@ fn build_container_node(
             base,
             container,
             children: None,
-            state: None,
-            bindings: None,
-            events: None,
+            state: state.clone(),
+            bindings: bindings.clone(),
+            events: events.clone(),
             lifecycle: None,
             semantics: None,
             gestures: None,
@@ -246,9 +273,9 @@ fn build_container_node(
                 base,
                 container,
                 children: None,
-                state: None,
-                bindings: None,
-                events: None,
+                state: state.clone(),
+                bindings: bindings.clone(),
+                events: events.clone(),
                 lifecycle: None,
                 semantics: None,
                 gestures: None,
@@ -262,9 +289,9 @@ fn build_container_node(
             image_search_query: None,
             reusable: None,
             slot: None,
-            state: None,
-            bindings: None,
-            events: None,
+            state,
+            bindings,
+            events,
             lifecycle: None,
             semantics: None,
             gestures: None,
@@ -305,6 +332,8 @@ fn build_text_node(
 
     let fill = fill_color.map(|hex| solid_fill_from_hex(&hex));
 
+    let (state, bindings, events) = parse_interactivity(obj);
+
     Some(PenNode::Text(TextNode {
         base,
         width,
@@ -323,9 +352,9 @@ fn build_text_node(
         strikethrough: None,
         fill,
         effects: None,
-        state: None,
-        bindings: None,
-        events: None,
+        state,
+        bindings,
+        events,
         lifecycle: None,
         semantics: None,
         gestures: None,
@@ -387,6 +416,8 @@ fn build_path_node(
         fill: Some(solid_fill_from_hex(&color)),
     });
 
+    let (state, bindings, events) = parse_interactivity(obj);
+
     Some(PenNode::Path(PathNode {
         base,
         icon_id: None, // TODO: icon resolver
@@ -398,9 +429,9 @@ fn build_path_node(
         fill: Some(vec![]), // stroke-style: empty fill
         stroke,
         effects: None,
-        state: None,
-        bindings: None,
-        events: None,
+        state,
+        bindings,
+        events,
         lifecycle: None,
         semantics: None,
         gestures: None,
@@ -468,5 +499,91 @@ pub(crate) fn node_type_str(node: &PenNode) -> &'static str {
         PenNode::Image(_) => "image",
         PenNode::IconFont(_) => "icon_font",
         PenNode::Ref(_) => "ref",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn frame_spec_carries_events_bindings_state() {
+        let spec = json!({
+            "type": "frame", "name": "card",
+            "state": { "count": { "type": "int", "default": 0 } },
+            "bindings": { "content": "`Count: ${$app.count}`" },
+            "events": { "onTap": [ { "set": { "$app.count": "$app.count + 1" } } ] }
+        });
+        let node = build_node_from_spec(&spec, None).expect("frame builds");
+        let PenNode::Frame(f) = node else {
+            panic!("expected frame")
+        };
+        assert!(f.state.is_some(), "state must be carried, not None");
+        assert!(f.bindings.is_some(), "bindings must be carried, not None");
+        assert!(f.events.is_some(), "events must be carried, not None");
+    }
+
+    #[test]
+    fn text_spec_carries_bindings() {
+        let spec = json!({
+            "type": "text", "content": "Count: 0",
+            "bindings": { "content": "`Count: ${$app.count}`" }
+        });
+        let PenNode::Text(t) = build_node_from_spec(&spec, None).unwrap() else {
+            panic!("expected text")
+        };
+        assert!(t.bindings.is_some());
+    }
+
+    #[test]
+    fn node_without_interactivity_yields_none_fields() {
+        // No state/bindings/events keys — all three fields must be None (no spurious empties).
+        let spec = json!({ "type": "rectangle", "name": "box", "width": 100.0, "height": 50.0 });
+        let PenNode::Rectangle(r) = build_node_from_spec(&spec, None).unwrap() else {
+            panic!("expected rectangle")
+        };
+        assert!(r.state.is_none(), "state must be None when absent");
+        assert!(r.bindings.is_none(), "bindings must be None when absent");
+        assert!(r.events.is_none(), "events must be None when absent");
+    }
+
+    #[test]
+    fn malformed_events_json_yields_none_gracefully() {
+        // Malformed events block — node must still build, events field must be None.
+        let spec = json!({
+            "type": "frame", "name": "card",
+            "events": "this is not a valid EventHandlers object"
+        });
+        let node =
+            build_node_from_spec(&spec, None).expect("frame still builds despite bad events");
+        let PenNode::Frame(f) = node else {
+            panic!("expected frame")
+        };
+        assert!(f.events.is_none(), "malformed events must degrade to None");
+    }
+
+    #[test]
+    fn path_spec_carries_events() {
+        let spec = json!({
+            "type": "path", "name": "icon",
+            "events": { "onTap": [ { "set": { "$app.selected": "true" } } ] }
+        });
+        let PenNode::Path(p) = build_node_from_spec(&spec, None).unwrap() else {
+            panic!("expected path")
+        };
+        assert!(p.events.is_some(), "events must be carried on path nodes");
+    }
+
+    #[test]
+    fn group_spec_carries_state() {
+        let spec = json!({
+            "type": "group", "name": "grp",
+            "state": { "open": { "type": "bool", "default": false } }
+        });
+        let PenNode::Group(g) = build_node_from_spec(&spec, None).unwrap() else {
+            panic!("expected group")
+        };
+        assert!(g.state.is_some(), "state must be carried on group nodes");
     }
 }

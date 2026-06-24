@@ -19,7 +19,7 @@ fn tools_list_response_includes_all_registered_tools() {
     // TOOL_SCHEMAS without being added to the list below.
     assert_eq!(
         TOOL_SCHEMAS.len(),
-        106,
+        112,
         "tools/list catalog count must match the registered tools — add the new tool to this test"
     );
     // Production catalog excludes debug tools (we removed the
@@ -92,6 +92,11 @@ fn tools_list_response_includes_all_registered_tools() {
         "export_design_md",
         "get_style_guide_tags",
         "get_style_guide",
+        "get_guidelines",
+        "spawn_agents",
+        "ToolSearch",
+        "get_screenshot",
+        "export_nodes",
         "get_active_theme",
         "list_components",
         "get_component",
@@ -114,6 +119,7 @@ fn tools_list_response_includes_all_registered_tools() {
         "get_history_depth",
         "get_viewport",
         "get_selection_set",
+        "get_editor_state",
         "clear_selection",
         "set_selection",
         "set_viewport",

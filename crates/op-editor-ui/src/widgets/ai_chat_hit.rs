@@ -50,6 +50,13 @@ pub enum AIChatHit {
     /// Click on the footer Agent Team chip — host cycles
     /// `ChatState::agent_team_size`.
     CycleAgentTeam,
+    /// Click on the ⚡ speed chip in its new role as the Parallel Agents chip
+    /// — host toggles `EditorUiState::parallel_agents_picker_open`.
+    ToggleParallelAgentsPicker,
+    /// Click on a row inside the open Parallel Agents picker.
+    /// Payload is the selected multiplier (1–6). Host sets
+    /// `ChatState::agent_team_size` and closes the picker.
+    SetParallelAgents(u32),
     /// Click on the attach button — host opens a file picker and
     /// stages the chosen file via `ChatState::add_attachment`.
     AddAttachment,
@@ -68,6 +75,9 @@ pub enum AIChatHit {
     /// Click on a single design JSON card header — host sets only
     /// that card's expanded override.
     SetDesignBlockExpanded(usize, usize, bool),
+    /// Click on a subtask step-card header — host sets only that
+    /// step's expanded override.
+    SetActionStepExpanded(usize, usize, bool),
     /// Click on a design JSON card's copy affordance.
     CopyDesignBlock(String),
     /// Click on an expanded design JSON card's apply affordance.
@@ -77,6 +87,15 @@ pub enum AIChatHit {
     /// Click on the fixed "Pencil it out" checklist header — host
     /// toggles the checklist body between expanded and collapsed.
     ToggleChecklist,
+    /// Click on a checklist row's detail-expand chevron — host toggles
+    /// `ChatState::set_checklist_item_expanded` for that row index.
+    ToggleChecklistItem(usize),
+    /// Click on tab `i`'s body (but not its × close button) — host
+    /// calls `state.chat.switch_to(i)`. Wired in MT.3.
+    SwitchTab(usize),
+    /// Click on tab `i`'s close × glyph — host calls
+    /// `state.chat.close_tab(i)`. Wired in MT.3.
+    CloseTab(usize),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -108,6 +127,11 @@ impl From<super::ai_chat_transcript::TranscriptHit> for AIChatHit {
                 block_index,
                 expanded,
             ) => Self::SetDesignBlockExpanded(message_index, block_index, expanded),
+            super::ai_chat_transcript::TranscriptHit::SetActionStepExpanded(
+                message_index,
+                step_index,
+                expanded,
+            ) => Self::SetActionStepExpanded(message_index, step_index, expanded),
             super::ai_chat_transcript::TranscriptHit::CopyDesignBlock(text) => {
                 Self::CopyDesignBlock(text)
             }

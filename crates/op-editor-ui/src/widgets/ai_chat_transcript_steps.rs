@@ -50,6 +50,17 @@ pub(crate) fn split_design_progress(thinking: &str) -> (Vec<ParsedStep>, String)
                     details: Vec::new(),
                 });
             }
+        } else if let Some(detail) = trimmed.strip_prefix('▸').map(str::trim) {
+            // Indented `▸` sub-line — Component 5's per-subtask detail
+            // (skills / dropped / retry). Attach it to the most recent
+            // step so the checklist can reveal it on expand.
+            if !detail.is_empty() {
+                if let Some(step) = steps.last_mut() {
+                    step.details.push(detail.to_string());
+                } else {
+                    rest.push(line.trim_end().to_string());
+                }
+            }
         } else if !trimmed.is_empty() {
             rest.push(line.trim_end().to_string());
         }
@@ -312,5 +323,47 @@ mod tests {
         assert!(extracted.visible_text.is_empty());
         assert_eq!(extracted.steps[0].title, "Sketch");
         assert_eq!(extracted.steps[0].status, Some(ParsedStepStatus::Streaming));
+    }
+
+    #[test]
+    fn split_design_progress_attaches_detail_sublines_to_owning_step() {
+        let thinking = "• Subtask `header` — 顶部问候栏  ·  6 skills · 5200/8000 tok\n  ▸ skills: cjk-typography, mobile-app\n  ▸ dropped: examples (budget)";
+
+        let (steps, rest) = split_design_progress(thinking);
+
+        assert_eq!(steps.len(), 1);
+        assert_eq!(
+            steps[0].details,
+            vec![
+                "skills: cjk-typography, mobile-app".to_string(),
+                "dropped: examples (budget)".to_string(),
+            ]
+        );
+        assert!(rest.is_empty(), "detail lines must not leak into rest");
+    }
+
+    #[test]
+    fn split_design_progress_detail_with_no_preceding_step_goes_to_rest() {
+        // A `▸` line with no owning step must not panic; it falls into rest.
+        let thinking = "  ▸ orphan detail\n• Step one";
+
+        let (steps, rest) = split_design_progress(thinking);
+
+        assert_eq!(steps.len(), 1);
+        assert_eq!(steps[0].title, "Step one");
+        assert!(steps[0].details.is_empty());
+        assert!(rest.contains("orphan detail"));
+    }
+
+    #[test]
+    fn split_design_progress_non_detail_lines_still_create_steps() {
+        let thinking = "• Step A\nsome free text\n• Step B";
+
+        let (steps, rest) = split_design_progress(thinking);
+
+        assert_eq!(steps.len(), 2);
+        assert_eq!(steps[0].title, "Step A");
+        assert_eq!(steps[1].title, "Step B");
+        assert!(rest.contains("some free text"));
     }
 }

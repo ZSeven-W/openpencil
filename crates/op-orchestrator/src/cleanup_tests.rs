@@ -4,6 +4,24 @@ use crate::test_support::VecDocSink;
 use op_editor_core::EffectField;
 use serde_json::json;
 
+/// Walk the active-page tree by name and return the first matching node's id.
+fn find_node_id_by_name(state: &EditorState, name: &str) -> String {
+    fn walk(nodes: &[PenNode], name: &str) -> Option<String> {
+        for n in nodes {
+            if n.base().name.as_deref().unwrap_or("") == name {
+                return Some(n.id_str().to_string());
+            }
+            if let Some(c) = n.children() {
+                if let Some(hit) = walk(c, name) {
+                    return Some(hit);
+                }
+            }
+        }
+        None
+    }
+    walk(state.active_children(), name).expect("named node exists")
+}
+
 /// 同 `frame_json` 但返回 `serde_json::Value`(供嵌套构造)。
 fn frame_json_value(id: &str, children: serde_json::Value) -> serde_json::Value {
     json!({
@@ -83,6 +101,68 @@ fn remove_duplicate_status_bars_keeps_one() {
 }
 
 #[test]
+fn strip_decorative_filled_strokes_clears_only_shadowed_card_borders() {
+    let mut sink = VecDocSink::new();
+    let shadow = json!([{"type": "shadow", "offsetX": 0, "offsetY": 2, "blur": 8, "spread": 0, "color": "#0000001A"}]);
+    let tree = serde_json::from_value::<PenNode>(json!({
+        "type": "frame", "id": "root", "name": "root", "width": 375, "height": 600,
+        "fill": [{"type": "solid", "color": "#FFFFFF"}],
+        "children": [
+            // Filled + SHADOWED card with a border → redundant stroke, cleared.
+            {"type": "frame", "id": "card", "name": "Card", "width": 100, "height": 80,
+             "fill": [{"type": "solid", "color": "#FFFFFF"}],
+             "stroke": {"thickness": 1, "fill": [{"type": "solid", "color": "#E2E8F0"}]},
+             "effects": shadow,
+             "children": []},
+            // Filled card WITHOUT a shadow → border is the intentional boundary, KEPT.
+            {"type": "frame", "id": "plain", "name": "PlainCard", "width": 100, "height": 80,
+             "fill": [{"type": "solid", "color": "#FFFFFF"}],
+             "stroke": {"thickness": 1, "fill": [{"type": "solid", "color": "#E2E8F0"}]},
+             "children": []},
+            // Unfilled divider rectangle → an intentional outline, KEPT.
+            {"type": "rectangle", "id": "divider", "name": "Border", "width": 100, "height": 1,
+             "stroke": {"thickness": 1, "fill": [{"type": "solid", "color": "#E2E8F0"}]}},
+            // Input border → legitimate, KEPT (text_input is not a container).
+            {"type": "text_input", "id": "search", "name": "Search", "width": 200, "height": 44,
+             "fill": [{"type": "solid", "color": "#FFFFFF"}],
+             "stroke": {"thickness": 1, "fill": [{"type": "solid", "color": "#E2E8F0"}]}}
+        ]
+    }))
+    .expect("tree json");
+    sink.state.apply(EditorCommand::InsertSubtree {
+        nodes: vec![tree],
+        parent_id: NodeId::NONE,
+        page_id: None,
+    });
+    let root_id = sink.state.active_children()[0].id_str().to_string();
+    sink.applied.clear();
+    strip_decorative_filled_strokes(&mut sink, &root_id);
+
+    // InsertSubtree re-IDs nodes, so resolve the live ids by name.
+    let card_id = find_node_id_by_name(&sink.state, "Card");
+    let plain_id = find_node_id_by_name(&sink.state, "PlainCard");
+    let divider_id = find_node_id_by_name(&sink.state, "Border");
+    let search_id = find_node_id_by_name(&sink.state, "Search");
+    let cleared: Vec<String> = sink
+        .applied
+        .iter()
+        .filter_map(|c| match c {
+            EditorCommand::SetNodeStrokeWidth { node_id, width } if *width == 0.0 => {
+                Some(node_id.as_str().to_string())
+            }
+            _ => None,
+        })
+        .collect();
+    assert!(cleared.contains(&card_id), "shadowed card border cleared");
+    assert!(
+        !cleared.contains(&plain_id),
+        "border-only card KEPT (intentional)"
+    );
+    assert!(!cleared.contains(&divider_id), "unfilled divider kept");
+    assert!(!cleared.contains(&search_id), "text_input border kept");
+}
+
+#[test]
 fn run_cleanup_passes_callable_on_empty_root() {
     let mut sink = VecDocSink::new();
     let tree = frame_json("root", json!([]));
@@ -96,6 +176,68 @@ fn run_cleanup_passes_callable_on_empty_root() {
     // 空 root —— 不 panic,不发命令。
     run_cleanup_passes(&mut sink, &plan(), &[&root_id]);
     assert!(sink.applied.is_empty());
+}
+
+#[test]
+fn cleanup_collapses_dead_space_under_a_tall_scrolling_mobile_root() {
+    // A scrolling screen whose content (well over a phone viewport) sits inside
+    // an even taller fixed frame leaves dead space at the bottom ("下面太长").
+    // Cleanup must switch the root to fit_content so the layout engine sizes it
+    // exactly to the content. Fixed-height children sum to ~1080 here (> 812).
+    let mut sink = VecDocSink::new();
+    let mut children = vec![json!(
+        {"type": "frame", "id": "status", "name": "Status Bar", "width": "fill_container", "height": 62}
+    )];
+    for i in 0..6 {
+        children.push(json!({
+            "type": "frame",
+            "id": format!("section{i}"),
+            "name": format!("Section {i}"),
+            "width": "fill_container",
+            "height": 170
+        }));
+    }
+    let tree: PenNode = serde_json::from_value(json!({
+        "type": "frame",
+        "id": "root",
+        "name": "Mobile Root",
+        "x": 80,
+        "y": 40,
+        "width": 375,
+        "height": 1209,
+        "layout": "vertical",
+        "gap": 16,
+        "children": children
+    }))
+    .expect("mobile root json");
+    sink.state.apply(EditorCommand::InsertSubtree {
+        nodes: vec![tree],
+        parent_id: NodeId::NONE,
+        page_id: None,
+    });
+    let root_id = sink.state.active_children()[0].id_str().to_string();
+    sink.applied.clear();
+
+    run_cleanup_passes(&mut sink, &plan(), &[&root_id]);
+
+    assert!(
+        sink.applied.iter().any(|c| matches!(
+            c,
+            EditorCommand::SetNodeLayoutProp { property, .. } if property == "height"
+        )),
+        "a tall scrolling root with dead space must be set to fit_content"
+    );
+    let root = sink
+        .state
+        .active_children()
+        .iter()
+        .find(|n| n.id_str() == root_id)
+        .expect("root survives cleanup");
+    assert_eq!(
+        root.height_px(),
+        None,
+        "fit_content height has no fixed pixel value"
+    );
 }
 
 #[test]
@@ -799,5 +941,43 @@ fn run_cleanup_passes_repairs_overbold_text_hierarchy() {
             }
         )),
         "cleanup should downgrade non-heading text when the whole screen was emitted as bold"
+    );
+}
+
+#[test]
+fn cleanup_finds_nested_appended_root() {
+    let mut sink = VecDocSink::new();
+    // `target` is a pre-existing container frame.  `appended` is a new section
+    // nested under it — matching how append-mode subagent.rs inserts roots
+    // under an existing target frame rather than at top level.
+    let tree = frame_json(
+        "target",
+        json!([
+            frame_json_value("old-section", json!([])),
+            frame_json_value(
+                "appended",
+                json!([
+                    frame_json_value("status-bar-1", json!([])),
+                    frame_json_value("hero", json!([])),
+                    frame_json_value("status-bar-2", json!([])),
+                ]),
+            ),
+        ]),
+    );
+    sink.state.apply(EditorCommand::InsertSubtree {
+        nodes: vec![tree],
+        parent_id: NodeId::NONE,
+        page_id: None,
+    });
+    // Resolve the real (remapped) id of the nested `appended` frame by name.
+    let appended_id = find_node_id_by_name(&sink.state, "appended");
+    sink.applied.clear();
+    run_cleanup_passes(&mut sink, &plan(), &[&appended_id]);
+    // The dup-status-bar pass ran against the NESTED root → a DeleteNode fired.
+    assert!(
+        sink.applied
+            .iter()
+            .any(|c| matches!(c, EditorCommand::DeleteNode { .. })),
+        "find_root must locate a nested appended root so cleanup passes fire"
     );
 }

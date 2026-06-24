@@ -16,6 +16,7 @@ mod codegen_session;
 mod commit_diff_host;
 mod commit_diff_semantic;
 mod cursor_icon;
+mod design_loop_indicator;
 mod design_md_host;
 mod design_session;
 mod figma_import_session;
@@ -47,6 +48,7 @@ mod remote_image_host;
 mod render_cli;
 mod settings_io;
 mod single_instance;
+mod sub_agent_session;
 mod tcc_selftest;
 mod theme_preset_host;
 mod update_check;
@@ -114,10 +116,29 @@ struct DesktopApp {
     /// Path of the currently-open .pen/.op document; None when unsaved.
     current_path: Option<PathBuf>,
     error: Option<SharedSkiaError>,
+    /// Design-loop canvas indicator — tracks the active agent epoch,
+    /// colour/name identity, and initial frame set. `None` when no
+    /// design-loop turn is running; populated by `pump_indicator` in
+    /// `RedrawRequested` whenever `chat.agents_running.0 > 0`.
+    design_loop_indicator: Option<design_loop_indicator::DesignLoopIndicator>,
+    /// Sub-agent design loops launched by `spawn_agents` (Task 3.1).
+    /// Empty unless the top-level design loop called `spawn_agents`.
+    /// Pumped SEQUENTIALLY — `active_sub_agent` indexes the one running
+    /// — after the parent `chat_session::pump` each frame.
+    sub_agents: Vec<sub_agent_session::SubAgentSession>,
+    /// Index of the active sub-agent in `sub_agents` (sequential pump).
+    active_sub_agent: usize,
     /// In-flight AI chat turn, if any. `chat.begin_send` raises
     /// `chat.pending_send`; the event loop drains that into a
     /// `ChatSession` here and pumps deltas into the transcript.
     current_chat: Option<chat_session::ChatSession>,
+    /// Index of the chat tab a `current_chat` / `current_design` run is bound
+    /// to (multi-tab MT.3). Captured from `chat.active_index()` when a turn
+    /// launches; the pumps target this tab via `ChatSessions::run_tab_mut`
+    /// even after the user switches the active tab. `None` when no run is in
+    /// flight. Cleared when the run finishes (pump retired both sessions), on
+    /// New Chat / Stop, and when the bound tab is closed.
+    chat_running_tab: Option<usize>,
     /// In-flight design-orchestrator turn, if any.
     /// `chat_session::launch_if_pending` classifies the user's message
     /// and routes design intent here, chat intent to `current_chat`.
@@ -317,7 +338,11 @@ impl DesktopApp {
             rotate_cursor: None,
             current_path: None,
             error: None,
+            design_loop_indicator: None,
+            sub_agents: Vec::new(),
+            active_sub_agent: 0,
             current_chat: None,
+            chat_running_tab: None,
             current_design: None,
             current_codegen: None,
             current_design_md: None,

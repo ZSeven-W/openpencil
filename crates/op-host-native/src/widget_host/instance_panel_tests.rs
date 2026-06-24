@@ -367,8 +367,8 @@ fn colorless_stroke_width_survives_in_the_panel_snapshot() {
     assert_eq!(op_editor_core::fills::node_stroke_width(node), Some(3.0));
 
     // ...and the panel snapshot must reflect it (the display bug).
-    let panel = op_editor_ui::widgets::PropertyPanel::for_selection(host.editor_state())
-        .expect("panel");
+    let panel =
+        op_editor_ui::widgets::PropertyPanel::for_selection(host.editor_state()).expect("panel");
     assert_eq!(
         panel.snapshot.stroke_side_widths(),
         [3.0, 3.0, 3.0, 3.0],
@@ -411,7 +411,10 @@ fn stroke_width_seed_echoes_existing_width() {
     // `format_panel_number` renders fractionals at 2 decimals — the same
     // string the inline input paints. The old `round() as i32` would have
     // snapped this to "3".
-    assert_eq!(seed, "2.50", "the width seed must echo the real width un-rounded");
+    assert_eq!(
+        seed, "2.50",
+        "the width seed must echo the real width un-rounded"
+    );
 }
 
 fn scene_fill(host: &mut WidgetHostNative, id: &str) -> Option<op_editor_ui::Color> {
@@ -435,7 +438,8 @@ fn remove_fill_clears_scene_fill_on_plain_frame() {
     .expect("fixture parses")
     .value;
     *host.editor_state_mut() = op_editor_core::EditorState::from_document(doc);
-    host.editor_state_mut().set_single_selection(NodeId::new("f1"));
+    host.editor_state_mut()
+        .set_single_selection(NodeId::new("f1"));
     host.mark_paint_dirty_for_test();
 
     assert!(scene_fill(&mut host, "f1").is_some(), "scene starts red");
@@ -475,10 +479,14 @@ fn remove_fill_clears_scene_fill_on_nested_child() {
     .expect("fixture parses")
     .value;
     *host.editor_state_mut() = op_editor_core::EditorState::from_document(doc);
-    host.editor_state_mut().set_single_selection(NodeId::new("bar"));
+    host.editor_state_mut()
+        .set_single_selection(NodeId::new("bar"));
     host.mark_paint_dirty_for_test();
 
-    assert!(scene_fill(&mut host, "bar").is_some(), "child scene starts pink");
+    assert!(
+        scene_fill(&mut host, "bar").is_some(),
+        "child scene starts pink"
+    );
     host.apply_property_action(op_editor_ui::widgets::PropertyPanelAction::RemoveFill(0));
     assert!(
         scene_fill(&mut host, "bar").is_none(),
@@ -499,7 +507,8 @@ fn remove_all_multi_fills_clears_scene_fill() {
     .expect("fixture parses")
     .value;
     *host.editor_state_mut() = op_editor_core::EditorState::from_document(doc);
-    host.editor_state_mut().set_single_selection(NodeId::new("f1"));
+    host.editor_state_mut()
+        .set_single_selection(NodeId::new("f1"));
     host.mark_paint_dirty_for_test();
 
     assert!(scene_fill(&mut host, "f1").is_some());
@@ -530,7 +539,11 @@ fn remove_variable_bound_fill_clears_scene_color() {
     .value;
     *host.editor_state_mut() = op_editor_core::EditorState::from_document(doc);
     let st = host.editor_state_mut();
-    st.create_variable("brand", VariableKind::Color, VariableScalar::Str("#ff0000".into()));
+    st.create_variable(
+        "brand",
+        VariableKind::Color,
+        VariableScalar::Str("#ff0000".into()),
+    );
     st.set_single_selection(NodeId::new("r1"));
     // Mirror the editor's fill→variable binding (what the colour picker
     // and the load-time scan register).

@@ -52,15 +52,28 @@ struct ActiveTurn {
 thread_local! {
     static ACTIVE_TURN: RefCell<Option<ActiveTurn>> = const { RefCell::new(None) };
     static NEXT_GENERATION: Cell<u64> = const { Cell::new(1) };
+    /// Chat tab index the in-flight turn is bound to (MT.3 session-per-tab).
+    /// The rAF pump writes streamed events into THIS tab even after the user
+    /// switches the active tab, so a switch mid-stream never corrupts the
+    /// now-active (wrong) tab. `None` when no turn is in flight or the binding
+    /// is stale (the bound tab was closed → falls back to the active tab).
+    static RUNNING_TAB: Cell<Option<usize>> = const { Cell::new(None) };
 }
 
 /// Abort and drop the in-flight turn, if any. The rAF pump notices the slot
-/// change (generation mismatch) on its next frame and stops.
+/// change (generation mismatch) on its next frame and stops. Also clears the
+/// run's tab binding — the aborted turn no longer targets any tab.
 fn abort_active_turn() {
     let turn = ACTIVE_TURN.with(|slot| slot.borrow_mut().take());
+    RUNNING_TAB.with(|t| t.set(None));
     if let Some(turn) = turn {
         turn.handle.abort();
     }
+}
+
+/// The tab index the in-flight turn is currently bound to.
+fn running_tab() -> Option<usize> {
+    RUNNING_TAB.with(|t| t.get())
 }
 
 /// Drain the chat host flags raised by the widget layer. Called from the DOM
@@ -82,15 +95,57 @@ pub(crate) fn drain_chat_flags<C: RepaintContext + 'static>(inner: &Rc<RefCell<C
     if new_chat || stop {
         abort_active_turn();
     }
+    // A pending close-tab (MT.3): abort the run if it's bound to the closed
+    // tab, shift the binding otherwise, then remove the tab. Done before the
+    // launch below so a close + send in one drain pass resolves in order.
+    {
+        let Ok(mut b) = inner.try_borrow_mut() else {
+            return;
+        };
+        let pending_close = b
+            .host_mut()
+            .editor_state_mut()
+            .editor_ui
+            .pending_close_chat_tab
+            .take();
+        if let Some(idx) = pending_close {
+            close_chat_tab(b.host_mut().editor_state_mut(), idx);
+            b.host_mut().mark_editor_state_dirty();
+        }
+    }
     let prepared = {
         let Ok(mut b) = inner.try_borrow_mut() else {
             return;
         };
-        prepare_turn(b.host_mut().editor_state_mut())
+        let state = b.host_mut().editor_state_mut();
+        // Bind a run to the tab it starts on BEFORE launching (the active tab
+        // is the sending tab at this point).
+        let active = state.chat.active_index();
+        prepare_turn(state).inspect(|_| RUNNING_TAB.with(|t| t.set(Some(active))))
     };
     if let Some(prepared) = prepared {
         launch_turn(inner, prepared);
     }
+}
+
+/// Close chat tab `idx` (MT.3 `AIChatHit::CloseTab` web path). Aborts the
+/// in-flight turn when it is bound to the closed tab (so the rAF pump can't
+/// target a removed / shifted tab), shifts the binding when an earlier tab is
+/// removed, then removes the tab.
+fn close_chat_tab(state: &mut EditorState, idx: usize) {
+    if idx >= state.chat.tab_count() {
+        return; // out of range — mirror ChatSessions::close_tab no-op
+    }
+    match running_tab() {
+        Some(running) if running == idx => abort_active_turn(),
+        Some(running) => {
+            RUNNING_TAB.with(|t| {
+                t.set(op_editor_core::adjust_running_tab_after_close(running, idx))
+            });
+        }
+        None => {}
+    }
+    state.chat.close_tab(idx);
 }
 
 /// Launch one streaming turn: abort any in-flight one (a send fired mid-turn
@@ -124,8 +179,13 @@ fn launch_turn<C: RepaintContext + 'static>(inner: &Rc<RefCell<C>>, prepared: Pr
             let Ok(mut b) = inner.try_borrow_mut() else {
                 return;
             };
+            let target = b
+                .host_mut()
+                .editor_state_mut()
+                .chat
+                .run_tab_mut(running_tab());
             let _ = apply_event_to_chat(
-                &mut b.host_mut().editor_state_mut().chat,
+                target,
                 &AiEvent::Error("AI stream request failed to start".into()),
             );
             b.host_mut().mark_editor_state_dirty();
@@ -162,7 +222,14 @@ fn start_pump<C: RepaintContext + 'static>(
             // queue borrow across editor-state mutation.
             let evt = queue.borrow_mut().pop_front();
             let Some(evt) = evt else { break };
-            terminal |= apply_event_to_chat(&mut b.host_mut().editor_state_mut().chat, &evt);
+            // Write into the tab this run is bound to (MT.3 session-per-tab),
+            // not whichever tab is active now.
+            let target = b
+                .host_mut()
+                .editor_state_mut()
+                .chat
+                .run_tab_mut(running_tab());
+            terminal |= apply_event_to_chat(target, &evt);
             changed = true;
         }
         if changed {
@@ -172,12 +239,21 @@ fn start_pump<C: RepaintContext + 'static>(
         }
         drop(b);
         if terminal {
-            ACTIVE_TURN.with(|slot| {
+            let was_active = ACTIVE_TURN.with(|slot| {
                 let mut s = slot.borrow_mut();
                 if s.as_ref().is_some_and(|t| t.generation == generation) {
                     *s = None;
+                    true
+                } else {
+                    false
                 }
             });
+            // This run finished — clear its tab binding (a fresh turn rebinds
+            // at launch). Guarded on it still being THIS generation's turn so
+            // a replacing send's binding isn't clobbered.
+            if was_active {
+                RUNNING_TAB.with(|t| t.set(None));
+            }
             return false;
         }
         true

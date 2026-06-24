@@ -75,15 +75,10 @@ impl NativeBackend {
         if c.is_ascii() && weight == 400 && !italic {
             return self.ensure_typeface().cloned();
         }
-        if font_script::is_hangul_codepoint(c) {
-            if let Some(tf) = self.ensure_korean_typeface().cloned() {
-                return Some(tf);
-            }
-        } else if font_script::is_east_asian_codepoint(c) {
-            // CJK families rarely ship a real italic; the cached face
-            // is reused and `draw_text` skews it synthetically.
-            return self.ensure_cjk_typeface().cloned();
-        }
+        // CJK / Hangul fall through to the weight-aware FontMgr lookup below
+        // (`draw_text` no longer synth-strokes CJK, so bold needs a REAL bold
+        // face — not the default-weight cached one). The `or_else` keeps the
+        // cached system faces as a last-resort fallback.
         let cp = c as i32;
         let key = (cp, weight, italic);
         if let Some(cached) = self.char_typeface_cache.get(&key) {
@@ -94,11 +89,14 @@ impl NativeBackend {
             .font_mgr
             .match_family_style_character("", style, &[], cp);
         let resolved = tf.or_else(|| {
-            // CJK fallback path doesn't yet vary by weight — TS app
-            // synthesises bold via paint stroke when the family is
-            // weight-locked. Mirror that downstream of `draw_text`
-            // with `Paint::set_stroke_width` when needed.
-            self.ensure_cjk_typeface().cloned()
+            // Last-resort cached system face (rare — the weight-aware lookup
+            // above usually covers the char). Hangul prefers a Hangul-covering
+            // face over the Han-ideograph one.
+            if font_script::is_hangul_codepoint(c) {
+                self.ensure_korean_typeface().cloned()
+            } else {
+                self.ensure_cjk_typeface().cloned()
+            }
         });
         self.char_typeface_cache.insert(key, resolved.clone());
         resolved
@@ -126,12 +124,28 @@ impl NativeBackend {
         let Some(primary) = primary_font_family(family) else {
             return self.typeface_for_char_styled(c, weight, italic);
         };
-        if font_script::is_hangul_codepoint(c) {
-            if let Some(tf) = self.ensure_korean_typeface().cloned() {
-                return Some(tf);
+        if font_script::is_hangul_codepoint(c) || font_script::is_east_asian_codepoint(c) {
+            // Resolve CJK / Hangul at the REQUESTED weight (preferring the
+            // requested family when it covers the script). Previously this
+            // returned one cached Regular-weight system face and `draw_text`
+            // faked bold with a stroke outline — which muddied dense CJK /
+            // Hangul glyphs ("中文字体不好看"). Resolving from the char itself
+            // at the right weight gets a REAL bold face. Cache per
+            // (family, char, weight, italic), like the Latin path below.
+            let key = (primary.to_string(), c as i32, weight, italic);
+            if let Some(cached) = self.family_typeface_cache.get(&key) {
+                return cached.clone();
             }
-        } else if font_script::is_east_asian_codepoint(c) {
-            return self.ensure_cjk_typeface().cloned();
+            let style = font_style_for(weight, italic);
+            let resolved = self
+                .font_mgr
+                .match_family_style_character(primary, style, &[], c as i32)
+                .or_else(|| {
+                    self.font_mgr
+                        .match_family_style_character("", style, &[], c as i32)
+                });
+            self.family_typeface_cache.insert(key, resolved.clone());
+            return resolved;
         }
         let key = (primary.to_string(), c as i32, weight, italic);
         if let Some(cached) = self.family_typeface_cache.get(&key) {
@@ -330,17 +344,29 @@ impl NativeBackend {
             // ASCII at weight ≥600). Stroke width scales with size
             // so 28pt headline gets the same visual weight relative
             // to its glyph as 13pt body text.
-            let synth_bold = run.font_weight >= 600;
-            if synth_bold {
-                paint.set_style(skia_safe::PaintStyle::StrokeAndFill);
-                paint.set_stroke_width(run.font_size * 0.06);
-            }
+            let want_bold = run.font_weight >= 600;
             let mut x = origin.x + run.origin.x;
             let y = origin.y + run.origin.y;
             for (typeface, segment) in segments {
                 let mut font = skia_safe::Font::new(&typeface, run.font_size);
                 if italic && !typeface.is_italic() {
                     font.set_skew_x(SYNTH_ITALIC_SKEW);
+                }
+                // Synthetic bold only for single-weight faces (the bundled
+                // Roboto for ASCII). CJK / Hangul now resolve to a REAL bold
+                // face, so stroking them would double-bold and muddy the
+                // dense glyphs — paint those fill-only. Check ANY char (not
+                // just the first) so a mixed-script segment can never slip a
+                // stroked CJK glyph through.
+                let seg_has_cjk = segment.chars().any(|c| {
+                    font_script::is_east_asian_codepoint(c) || font_script::is_hangul_codepoint(c)
+                });
+                if want_bold && !seg_has_cjk {
+                    paint.set_style(skia_safe::PaintStyle::StrokeAndFill);
+                    paint.set_stroke_width(run.font_size * 0.06);
+                } else {
+                    paint.set_style(skia_safe::PaintStyle::Fill);
+                    paint.set_stroke_width(0.0);
                 }
                 canvas.draw_str(&segment, (x, y), &font, &paint);
                 let (advance, _) = font.measure_str(&segment, None);

@@ -572,10 +572,19 @@ impl EditorState {
     /// closes). Faithful port of shell-core's
     /// `Document::select_chat_model`.
     pub fn select_chat_model(&mut self, idx: usize) {
-        if let Some(entry) = self.chat.available_models.get(idx) {
-            let provider = entry.provider;
+        // Extract everything we need from the borrowed entry before
+        // releasing it, then apply mutations — required because
+        // `self.chat` is a `ChatSessions` Deref wrapper and the borrow
+        // checker cannot reason about field-level disjointness through
+        // the Deref impl.
+        let update = self
+            .chat
+            .available_models
+            .get(idx)
+            .map(|entry| (entry.provider, entry.builtin_provider_id.is_none() && entry.acp_agent_id().is_none()));
+        if let Some((provider, use_native_agent)) = update {
             self.chat.selected_model = idx;
-            if entry.builtin_provider_id.is_none() && entry.acp_agent_id().is_none() {
+            if use_native_agent {
                 if let Some(pidx) = crate::AgentProvider::ALL
                     .iter()
                     .position(|p| *p == provider)

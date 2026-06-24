@@ -2,25 +2,29 @@
 //! out of `ai_chat_panel.rs` to keep that file under the 800-line cap.
 //! Pure geometry; the painting half stays in `ai_chat_panel.rs`.
 
-use super::ai_chat_panel::{AIChatPlaceholder, PAD, RESIZE_CORNER, RESIZE_GUTTER};
+use super::ai_chat_panel::{AIChatPlaceholder, HEADER_HEIGHT, PAD, RESIZE_CORNER, RESIZE_GUTTER};
 use crate::widgets::ai_chat_checklist::{
-    fixed_checklist_height, fixed_checklist_max_scroll, fixed_checklist_rect, HEADER_H, PROGRESS_H,
+    checklist_item_chevron_rect, checklist_item_height, fixed_checklist_height,
+    fixed_checklist_items, fixed_checklist_list_rect, fixed_checklist_max_scroll,
+    fixed_checklist_rect, HEADER_H, ITEM_GAP, PROGRESS_H,
 };
 use crate::widgets::ai_chat_hit::{AIChatHit, ChatResizeEdge};
 use crate::widgets::ai_chat_panel_controls::attachment_row_hit;
+use crate::widgets::ai_chat_panel_header::{
+    tab_hit_at, tab_row_rects, MAXIMIZE_GAP, MAXIMIZE_W, NEW_CHAT_D,
+};
 use crate::widgets::ai_chat_panel_paint::example_card_rects;
 use crate::{Point2D, Rect};
 
 impl<'a> AIChatPlaceholder<'a> {
     pub fn fixed_checklist_bounds(&self, rect: Rect) -> Option<Rect> {
-        let checklist_h =
-            fixed_checklist_height(&self.state.messages, self.state.checklist_collapsed);
+        let checklist_h = fixed_checklist_height(self.state, self.state.checklist_collapsed);
         (checklist_h > 0.0)
             .then(|| fixed_checklist_rect(rect, self.input_height_for_rect(rect), checklist_h))
     }
 
     pub fn fixed_checklist_scroll_max(&self) -> f32 {
-        fixed_checklist_max_scroll(&self.state.messages, self.state.checklist_collapsed)
+        fixed_checklist_max_scroll(self.state, self.state.checklist_collapsed)
     }
 
     pub fn hit_test(&self, rect: Rect, point: Point2D) -> Option<AIChatHit> {
@@ -43,20 +47,43 @@ impl<'a> AIChatPlaceholder<'a> {
         if (self.expanded_header_title_rect(rect)).contains(point) {
             return Some(AIChatHit::ToggleCollapse);
         }
-        let header_y = rect.origin.y + 8.0;
+        // Hit rects must mirror the paint geometry exactly.
+        // Constants live in `ai_chat_panel_header` (imported above):
+        //   NEW_CHAT_D = 28, MAXIMIZE_GAP = 6, MAXIMIZE_W = 18, HEADER_HEIGHT = 36
+        let right_edge = rect.origin.x + rect.size.x - PAD;
+        let header_icon_y = rect.origin.y + (HEADER_HEIGHT - MAXIMIZE_W) / 2.0;
+        // New-chat circle (far right).
+        let new_chat_rect = Rect {
+            origin: Point2D::new(
+                right_edge - NEW_CHAT_D,
+                rect.origin.y + (HEADER_HEIGHT - NEW_CHAT_D) / 2.0,
+            ),
+            size: Point2D::new(NEW_CHAT_D, NEW_CHAT_D),
+        };
+        if (new_chat_rect).contains(point) {
+            return Some(AIChatHit::NewChat);
+        }
+        // Maximize / minimize icon (just left of new-chat).
         let maximize_rect = Rect {
-            origin: Point2D::new(rect.origin.x + rect.size.x - PAD - 50.0, header_y),
-            size: Point2D::new(22.0, 22.0),
+            origin: Point2D::new(right_edge - NEW_CHAT_D - MAXIMIZE_GAP - MAXIMIZE_W, header_icon_y),
+            size: Point2D::new(MAXIMIZE_W, MAXIMIZE_W),
         };
         if (maximize_rect).contains(point) {
             return Some(AIChatHit::ToggleMaximize);
         }
-        let new_chat_rect = Rect {
-            origin: Point2D::new(rect.origin.x + rect.size.x - PAD - 22.0, header_y),
-            size: Point2D::new(22.0, 22.0),
-        };
-        if (new_chat_rect).contains(point) {
-            return Some(AIChatHit::NewChat);
+        // Tab row — between chevron and maximize button.
+        // Returns SwitchTab(i) for a tab body click; CloseTab(i) for the × glyph.
+        let tab_count = self.tabs_snapshot.len();
+        if tab_count > 0 {
+            if let Some((tab_idx, over_close)) =
+                tab_hit_at(rect, tab_count, point, self.tab_hover)
+            {
+                return Some(if over_close {
+                    AIChatHit::CloseTab(tab_idx)
+                } else {
+                    AIChatHit::SwitchTab(tab_idx)
+                });
+            }
         }
         // Must match `paint` exactly: paint draws the separator at
         // `bottom - input_h` and the input block one pixel below it
@@ -93,6 +120,32 @@ impl<'a> AIChatPlaceholder<'a> {
                 jian_widgets::components::select::SelectHit::Outside => {}
             }
             return Some(AIChatHit::ToggleModelPicker);
+        }
+        // Parallel-agents picker — when open, behaves modally: a row click
+        // sets the multiplier; any other click closes the picker.
+        if self.parallel_agents_picker_open {
+            let footer = self.footer_layout(rect, input_rect, {
+                let attach_h = self.attachment_row_h();
+                input_rect.origin.y + self.input_area_height_for_rect(rect) + attach_h
+            });
+            if let Some(picker) = self.parallel_agents_picker_rect(rect, &footer) {
+                if picker.contains(point) {
+                    // Hit inside picker — check which row.
+                    let rows_top = picker.origin.y + 32.0;
+                    for i in 1..=crate::widgets::ai_chat_panel_footer::PARALLEL_AGENTS_COUNT {
+                        let row_y = rows_top + (i - 1) as f32
+                            * crate::widgets::ai_chat_panel_footer::PARALLEL_AGENTS_ROW_H_PUB;
+                        if point.y >= row_y
+                            && point.y < row_y + crate::widgets::ai_chat_panel_footer::PARALLEL_AGENTS_ROW_H_PUB
+                        {
+                            return Some(AIChatHit::SetParallelAgents(i));
+                        }
+                    }
+                    return Some(AIChatHit::Inside);
+                }
+            }
+            // Click outside the picker — close it.
+            return Some(AIChatHit::ToggleParallelAgentsPicker);
         }
         if (input_rect).contains(point) {
             let attach_top = input_rect.origin.y + input_area_h;
@@ -131,10 +184,11 @@ impl<'a> AIChatPlaceholder<'a> {
                 }
                 return Some(AIChatHit::FocusInput);
             }
-            // Bottom toolbar strip — model picker and Agent Team chip
-            // on the left, with attach + send icon buttons on the right.
+            // Bottom toolbar strip (#27 layout):
+            //   model pill | ⚡ speed chip | 📎 attach | 🎨 palette | [gap] | ◻ stop | ↑ send
             if point.y >= toolbar_top {
                 let footer = self.footer_layout(rect, input_rect, toolbar_top);
+                let streaming = self.is_streaming();
                 if (footer.model).contains(point) {
                     return Some(if can_use_model {
                         AIChatHit::ToggleModelPicker
@@ -142,20 +196,38 @@ impl<'a> AIChatPlaceholder<'a> {
                         AIChatHit::FocusInput
                     });
                 }
+                if (footer.speed).contains(point) {
+                    // The ⚡ chip is now the Parallel Agents chip (#32).
+                    // While streaming the chip is inert (parity with old effort chip).
+                    return Some(if streaming {
+                        AIChatHit::Inside
+                    } else {
+                        AIChatHit::ToggleParallelAgentsPicker
+                    });
+                }
+                // agent_team is zero-width — contains() never fires; kept for
+                // schema compat.
                 if (footer.agent_team).contains(point) {
                     return Some(AIChatHit::CycleAgentTeam);
                 }
                 if (footer.attach).contains(point) {
-                    return Some(if self.is_streaming() {
+                    return Some(if streaming {
                         AIChatHit::Inside
                     } else {
                         AIChatHit::AddAttachment
                     });
                 }
+                // Palette is inert in #27 — consume the click so canvas is not affected.
+                if (footer.palette).contains(point) {
+                    return Some(AIChatHit::Inside);
+                }
+                // Stop circle — only a live target while streaming.
+                if streaming && (footer.stop).contains(point) {
+                    return Some(AIChatHit::Stop);
+                }
                 if (footer.send).contains(point) {
-                    return Some(if self.is_streaming() {
-                        AIChatHit::Stop
-                    } else if can_use_model
+                    return Some(if can_use_model
+                        && !streaming
                         && (!self.state.input.text().trim().is_empty()
                             || !self.state.pending_attachments.is_empty())
                     {
@@ -171,8 +243,7 @@ impl<'a> AIChatPlaceholder<'a> {
                 AIChatHit::FocusInput
             });
         }
-        let checklist_h =
-            fixed_checklist_height(&self.state.messages, self.state.checklist_collapsed);
+        let checklist_h = fixed_checklist_height(self.state, self.state.checklist_collapsed);
         if checklist_h > 0.0 {
             let input_h = self.input_height_for_rect(rect);
             let checklist = fixed_checklist_rect(rect, input_h, checklist_h);
@@ -185,6 +256,28 @@ impl<'a> AIChatPlaceholder<'a> {
                 );
                 if (header).contains(point) {
                     return Some(AIChatHit::ToggleChecklist);
+                }
+                if !self.state.checklist_collapsed {
+                    let list = fixed_checklist_list_rect(checklist);
+                    let items = fixed_checklist_items(self.state);
+                    let scroll = self
+                        .fixed_checklist_scroll_max()
+                        .min(self.state.checklist_scroll.offset.max(0.0));
+                    let mut row_y = list.origin.y - scroll;
+                    for (idx, item) in items.iter().enumerate() {
+                        let h = checklist_item_height(item);
+                        if !item.details.is_empty() {
+                            let chevron = checklist_item_chevron_rect(
+                                list.origin.x + PAD,
+                                row_y,
+                                list.size.x - PAD * 2.0,
+                            );
+                            if (chevron).contains(point) {
+                                return Some(AIChatHit::ToggleChecklistItem(idx));
+                            }
+                        }
+                        row_y += h + ITEM_GAP;
+                    }
                 }
                 return Some(AIChatHit::FocusInput);
             }
@@ -337,18 +430,29 @@ impl<'a> AIChatPlaceholder<'a> {
             return None;
         }
         let footer = self.footer_layout(rect, input_rect, toolbar_top);
+        let streaming = self.is_streaming();
         if !self.state.available_models.is_empty() && (footer.model).contains(point) {
             return Some(op_editor_core::ChatFooterButton::ModelPicker);
         }
+        if (footer.speed).contains(point) {
+            return Some(op_editor_core::ChatFooterButton::SpeedChip);
+        }
+        // agent_team zero-width — contains() never fires, kept for future use.
         if (footer.agent_team).contains(point) {
             return Some(op_editor_core::ChatFooterButton::AgentTeam);
         }
-        if !self.is_streaming() && (footer.attach).contains(point) {
+        if !streaming && (footer.attach).contains(point) {
             return Some(op_editor_core::ChatFooterButton::AddAttachment);
         }
+        if (footer.palette).contains(point) {
+            return Some(op_editor_core::ChatFooterButton::Palette);
+        }
+        if streaming && (footer.stop).contains(point) {
+            return Some(op_editor_core::ChatFooterButton::Stop);
+        }
         if (footer.send).contains(point) {
-            return Some(if self.is_streaming() {
-                op_editor_core::ChatFooterButton::Stop
+            return Some(if streaming {
+                return None; // send is dimmed but hoverable — no wash needed
             } else if !self.state.available_models.is_empty() {
                 op_editor_core::ChatFooterButton::Send
             } else {
@@ -369,5 +473,53 @@ impl<'a> AIChatPlaceholder<'a> {
         example_card_rects(rect)
             .iter()
             .position(|card| (*card).contains(point))
+    }
+
+    /// Return the index of the tab the cursor is over (for the host to
+    /// store in `EditorUiState.chat_tab_hover`). Returns `None` when the
+    /// panel is collapsed or the cursor is not in the tab row zone.
+    pub fn tab_hover_at(&self, rect: Rect, point: Point2D) -> Option<usize> {
+        if self.state.collapsed {
+            return None;
+        }
+        let tab_count = self.tabs_snapshot.len();
+        if tab_count == 0 {
+            return None;
+        }
+        // Iterate tab rects and check containment — same layout as `tab_hit_at`
+        // but ignores the × sub-rect (hover is per-tab-body, not sub-element).
+        let rects = tab_row_rects(rect, tab_count);
+        rects.iter().position(|tr| tr.body.contains(point))
+    }
+
+    /// Return which row (1–6) of the open Parallel Agents picker the cursor
+    /// is over. Returns `None` when the picker is closed or the cursor is
+    /// outside the picker rect. Used by the host to update
+    /// `EditorUiState::parallel_agents_picker_hover`.
+    pub fn parallel_agents_picker_hover_at(&self, rect: Rect, point: Point2D) -> Option<u32> {
+        if !self.parallel_agents_picker_open || self.state.collapsed {
+            return None;
+        }
+        let input_rect = self.input_rect(rect);
+        let attach_h = self.attachment_row_h();
+        let toolbar_top = input_rect.origin.y + self.input_area_height_for_rect(rect) + attach_h;
+        let footer = self.footer_layout(rect, input_rect, toolbar_top);
+        let picker = crate::widgets::ai_chat_panel_footer::parallel_agents_picker_rect(&footer);
+        if !picker.contains(point) {
+            return None;
+        }
+        let rows_top = picker.origin.y + 32.0;
+        for i in 1..=crate::widgets::ai_chat_panel_footer::PARALLEL_AGENTS_COUNT {
+            let row_y = rows_top
+                + (i - 1) as f32
+                    * crate::widgets::ai_chat_panel_footer::PARALLEL_AGENTS_ROW_H_PUB;
+            if point.y >= row_y
+                && point.y
+                    < row_y + crate::widgets::ai_chat_panel_footer::PARALLEL_AGENTS_ROW_H_PUB
+            {
+                return Some(i);
+            }
+        }
+        None
     }
 }

@@ -117,6 +117,22 @@ pub fn execute_chat_tool(
             false,
         );
     };
+    let registry = chat_tool_registry(state, name);
+    execute_with_registry(state, name, args_json, registry)
+}
+
+/// Core dispatch+apply body shared by chat and design tool executors.
+///
+/// Normalises `args_json`, builds the JSON-RPC wire line, dispatches
+/// through `op_mcp::parse_tool_call` + `registry.dispatch`, and applies
+/// any returned `EditorCommand` via `EditorState::apply`. Returns the
+/// TS-shaped result envelope plus a mutation flag.
+pub(crate) fn execute_with_registry(
+    state: &mut EditorState,
+    name: &str,
+    args_json: &str,
+    registry: ToolRegistry,
+) -> (ChatToolResult, bool) {
     // Ride the real wire parser so structured-argument discipline
     // (which keys may carry objects/arrays) matches the MCP server.
     let args = if args_json.trim().is_empty() {
@@ -136,7 +152,6 @@ pub fn execute_chat_tool(
             false,
         );
     };
-    let registry = chat_tool_registry(state, name);
     let response = registry.dispatch(call);
     match response {
         ToolResponse::Ok {

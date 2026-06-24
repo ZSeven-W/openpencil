@@ -208,6 +208,10 @@ pub struct ChatMessage {
     /// design blocks open so the incoming .op preview is visible,
     /// completed blocks stay collapsed.
     pub design_block_expanded_overrides: Vec<Option<bool>>,
+    /// Per-action-step (subtask card) expanded-state overrides. Missing
+    /// / `None` entries fall back to the transcript default (expanded
+    /// only while the step is the active/streaming one).
+    pub action_step_expanded_overrides: Vec<Option<bool>>,
     /// True while this (assistant) message's turn streams in.
     pub streaming: bool,
 }
@@ -225,6 +229,7 @@ impl ChatMessage {
             tools_collapsed: true,
             tool_call_expanded_overrides: Vec::new(),
             design_block_expanded_overrides: Vec::new(),
+            action_step_expanded_overrides: Vec::new(),
             streaming: false,
         }
     }
@@ -242,6 +247,7 @@ impl ChatMessage {
             tools_collapsed: true,
             tool_call_expanded_overrides: Vec::new(),
             design_block_expanded_overrides: Vec::new(),
+            action_step_expanded_overrides: Vec::new(),
             streaming: false,
         }
     }
@@ -348,6 +354,10 @@ pub struct ChatState {
     /// Collapsed state for the fixed "Pencil it out" design checklist
     /// pinned above the input, mirroring the TS checklist header.
     pub checklist_collapsed: bool,
+    /// Indices of fixed-checklist rows whose detail sub-lines are
+    /// expanded. Absent = collapsed (the default). Mirrors the
+    /// per-index override model used by design-block cards.
+    pub checklist_item_expanded: std::collections::BTreeSet<usize>,
     /// Vertical scroll offset inside the fixed design checklist rows.
     pub checklist_scroll: jian_core::scroll::ScrollState,
     /// Vertical scroll offset (px from the conversation top) of the
@@ -398,6 +408,11 @@ pub struct ChatState {
     pub effort_level: EffortLevel,
     /// Number of parallel sub-agents used for the next design turn.
     pub agent_team_size: u32,
+    /// Agents currently running / total agents in the active design-loop
+    /// turn. `(0, 0)` when idle; `(1, 1)` for a single design-loop turn;
+    /// extended to `(N, M)` when parallel sub-agents land in Phase 3.1.
+    /// Set host-side on design-loop launch; cleared on turn end.
+    pub agents_running: (usize, usize),
     /// Files staged for the next turn (images the user pasted / picked).
     /// Drained by the host into `ChatRequest::attachments`, then cleared.
     pub pending_attachments: Vec<ChatAttachment>,
@@ -435,6 +450,7 @@ impl Default for ChatState {
             collapsed: false,
             maximized: false,
             checklist_collapsed: false,
+            checklist_item_expanded: std::collections::BTreeSet::new(),
             checklist_scroll: Default::default(),
             transcript_scroll: Default::default(),
             transcript_pinned: true,
@@ -448,6 +464,7 @@ impl Default for ChatState {
             thinking_mode: ThinkingMode::Adaptive,
             effort_level: EffortLevel::Low,
             agent_team_size: 1,
+            agents_running: (0, 0),
             pending_attachments: Vec::new(),
             pending_attachment_pick: false,
         }
@@ -771,11 +788,37 @@ impl ChatState {
         msg.design_block_expanded_overrides[block_idx] = Some(expanded);
     }
 
+    /// Set one action-step (subtask) card's expanded override. Out-of-range
+    /// message indexes are no-ops.
+    pub fn set_message_action_step_expanded(
+        &mut self,
+        msg_idx: usize,
+        step_idx: usize,
+        expanded: bool,
+    ) {
+        let Some(msg) = self.messages.get_mut(msg_idx) else {
+            return;
+        };
+        if msg.action_step_expanded_overrides.len() <= step_idx {
+            msg.action_step_expanded_overrides
+                .resize(step_idx + 1, None);
+        }
+        msg.action_step_expanded_overrides[step_idx] = Some(expanded);
+    }
+
     /// Flip the fixed design-checklist panel state.
     pub fn toggle_checklist_collapsed(&mut self) {
         self.checklist_collapsed = !self.checklist_collapsed;
         if self.checklist_collapsed {
             self.checklist_scroll.offset = 0.0;
+        }
+    }
+
+    /// Toggle a single fixed-checklist row's detail expansion by index.
+    /// Absent = collapsed (default); present = expanded.
+    pub fn set_checklist_item_expanded(&mut self, item_idx: usize) {
+        if !self.checklist_item_expanded.remove(&item_idx) {
+            self.checklist_item_expanded.insert(item_idx);
         }
     }
 
@@ -1202,6 +1245,25 @@ mod tests {
     }
 
     #[test]
+    fn set_message_action_step_expanded_records_per_card_override() {
+        let mut chat = ChatState::default();
+        chat.messages.push(ChatMessage::assistant("hi"));
+
+        chat.set_message_action_step_expanded(0, 1, true);
+        assert_eq!(
+            chat.messages[0].action_step_expanded_overrides,
+            vec![None, Some(true)]
+        );
+
+        // Out-of-range message index is a no-op.
+        chat.set_message_action_step_expanded(99, 0, false);
+        assert_eq!(
+            chat.messages[0].action_step_expanded_overrides,
+            vec![None, Some(true)]
+        );
+    }
+
+    #[test]
     fn set_message_design_block_expanded_records_per_card_override() {
         let mut chat = ChatState::default();
         chat.messages.push(ChatMessage::assistant("hi"));
@@ -1226,6 +1288,18 @@ mod tests {
         chat.queue_copy_text("json");
 
         assert_eq!(chat.pending_copy_text.as_deref(), Some("json"));
+    }
+
+    #[test]
+    fn set_checklist_item_expanded_toggles_membership() {
+        let mut chat = ChatState::default();
+        assert!(chat.checklist_item_expanded.is_empty());
+
+        chat.set_checklist_item_expanded(2);
+        assert!(chat.checklist_item_expanded.contains(&2));
+
+        chat.set_checklist_item_expanded(2);
+        assert!(!chat.checklist_item_expanded.contains(&2));
     }
 
     #[test]

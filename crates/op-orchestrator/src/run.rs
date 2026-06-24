@@ -31,7 +31,9 @@ use crate::plan_repair::parse_orchestrator_response;
 use crate::prompt::build_orchestrator_prompt;
 use crate::retry::{attempt_modes, is_non_retryable};
 use crate::run_dashboard::run_dashboard_path;
-use crate::scaffold::{build_scaffold, build_scaffold_concurrent_mobile, build_scaffold_reusing};
+use crate::scaffold::{
+    build_scaffold_at, build_scaffold_concurrent_mobile, build_scaffold_reusing,
+};
 use crate::subagent::{apply_command_with_reveal, reveal_now_millis, run_subtask_with_reveal_at};
 use crate::types::{
     AbortFlag, DesignRequest, DocSink, LlmChunk, LlmClient, OrchestratorError, Progress,
@@ -76,6 +78,26 @@ fn clear_reusable_empty_frame(sink: &mut dyn DocSink) {
             node_id: NodeId::new(id),
             page_id: None,
         });
+    }
+}
+
+const FOLLOW_ON_ROOT_GAP: f64 = 80.0;
+const DEFAULT_ROOT_X: f64 = 80.0;
+const DEFAULT_ROOT_Y: f64 = 40.0;
+
+fn next_root_insert_position(state: &EditorState, planned_width: f64) -> (f64, f64) {
+    let mut rightmost: Option<f64> = None;
+    let mut top: Option<f64> = None;
+    for node in state.active_children() {
+        let x = node.base().x.unwrap_or(DEFAULT_ROOT_X);
+        let y = node.base().y.unwrap_or(DEFAULT_ROOT_Y);
+        let width = node.width_px().unwrap_or(planned_width).max(1.0);
+        rightmost = Some(rightmost.map_or(x + width, |current| current.max(x + width)));
+        top = Some(top.map_or(y, |current| current.min(y)));
+    }
+    match rightmost {
+        Some(right) => (right + FOLLOW_ON_ROOT_GAP, top.unwrap_or(DEFAULT_ROOT_Y)),
+        None => (DEFAULT_ROOT_X, DEFAULT_ROOT_Y),
     }
 }
 
@@ -252,9 +274,11 @@ impl Orchestrator {
             // root — which the host would otherwise clear + re-add, the visible
             // "delete then re-draw" flash the user flagged.
             let reuse_id = detect_reusable_empty_frame(sink.state());
+            let (insert_x, insert_y) =
+                next_root_insert_position(sink.state(), plan.root_frame.width);
             let scaffold_cmds = match reuse_id.as_deref() {
                 Some(id) => build_scaffold_reusing(&plan, effective_is_mobile, id),
-                None => build_scaffold(&plan, effective_is_mobile),
+                None => build_scaffold_at(&plan, effective_is_mobile, insert_x, insert_y),
             };
             match scaffold_cmds {
                 Ok(cmds) => {
@@ -338,7 +362,7 @@ impl Orchestrator {
                 label: subtask.label.clone(),
             });
 
-            // Attempt 1 — full complexity.
+            // Attempt 1 — full complexity. SubtaskSkills fires via on_progress.
             let outcome1 = run_subtask_with_reveal_at(
                 subtask,
                 &plan,
@@ -350,6 +374,7 @@ impl Orchestrator {
                 false,
                 self.agent_indicator_epoch,
                 reveal_now_millis(),
+                Some(&mut *on_progress),
             )
             .await;
 
@@ -374,6 +399,14 @@ impl Orchestrator {
                     error = outcome1.error.as_deref().unwrap_or(""),
                     "subtask failed, retrying (attempt 2)"
                 );
+                on_progress(Progress::SubtaskRetry {
+                    id: subtask.id.clone(),
+                    attempt: 2,
+                    reason: outcome1
+                        .error
+                        .clone()
+                        .unwrap_or_else(|| "zero nodes generated".into()),
+                });
                 Some(
                     run_subtask_with_reveal_at(
                         subtask,
@@ -386,6 +419,7 @@ impl Orchestrator {
                         false,
                         self.agent_indicator_epoch,
                         reveal_now_millis(),
+                        None,
                     )
                     .await,
                 )
@@ -403,6 +437,14 @@ impl Orchestrator {
                     error = outcome_after2.error.as_deref().unwrap_or(""),
                     "subtask still empty after retry, falling back to minimal skills (attempt 3)"
                 );
+                on_progress(Progress::SubtaskRetry {
+                    id: subtask.id.clone(),
+                    attempt: 3,
+                    reason: outcome_after2
+                        .error
+                        .clone()
+                        .unwrap_or_else(|| "zero nodes generated".into()),
+                });
                 Some(
                     run_subtask_with_reveal_at(
                         subtask,
@@ -415,6 +457,7 @@ impl Orchestrator {
                         true,
                         self.agent_indicator_epoch,
                         reveal_now_millis(),
+                        None,
                     )
                     .await,
                 )
@@ -469,12 +512,24 @@ impl Orchestrator {
         }
 
         // -- 阶段 4:清理 --
-        // S3b-4 append mode natural no-op: in append mode the fast-path reuses
-        // `plan.root_frame.id` (the existing target frame) as the single cleanup
-        // root.  The cleanup loop iterates that one root; the `descendant_count
-        // <= scaffold_baseline` check below only deletes the frame if NOTHING
-        // new was added, which is the correct desired behaviour.
-        run_cleanup_passes(sink, &plan, &[&root_id]);
+        // Append mode (skip_root_insertion): scope cleanup to ONLY the roots
+        // this run inserted (post-remap ids from each outcome) so pre-existing
+        // nodes under the target frame are never restyled (Component 11b).
+        // If inserted_root_ids is empty (nothing inserted, or buffered sink),
+        // the empty slice is a safe no-op — do NOT fall back to the whole target
+        // root, which would reprocess old nodes.
+        //
+        // Fresh-document mode reuses the single page/target root — every node
+        // under it is new — so the behaviour is unchanged there.
+        if append_result.skip_root_insertion {
+            let new_roots: Vec<&str> = outcomes
+                .iter()
+                .flat_map(|o| o.inserted_root_ids.iter().map(String::as_str))
+                .collect();
+            run_cleanup_passes(sink, &plan, &new_roots);
+        } else {
+            run_cleanup_passes(sink, &plan, &[&root_id]);
+        }
         on_progress(Progress::CleanupDone);
 
         // -- 阶段 4.5:收尾(spec §6.3 三路径)--
@@ -495,6 +550,11 @@ impl Orchestrator {
         if zero_content {
             return Err(if aborted_mid {
                 OrchestratorError::Aborted
+            } else if let Some(first_error) = outcomes
+                .iter()
+                .find_map(|o| o.error.as_deref().filter(|s| !s.is_empty()))
+            {
+                OrchestratorError::AllFailed(first_error.to_string())
             } else {
                 OrchestratorError::NoContent
             });
@@ -866,3 +926,8 @@ mod tests_b4;
 #[cfg(test)]
 #[path = "run_tests_d1.rs"]
 mod tests_d1;
+
+// Task F5 — backward-compat regression: append leaves pre-existing styled node byte-identical.
+#[cfg(test)]
+#[path = "run_tests_f5.rs"]
+mod tests_f5;

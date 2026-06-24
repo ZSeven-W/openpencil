@@ -40,7 +40,9 @@
 //!
 use crate::plan::{OrchestratorPlan, Subtask};
 use crate::retry::is_non_retryable;
-use crate::subagent::{apply_command_with_reveal, reveal_now_millis, run_subtask};
+use crate::subagent::{
+    apply_command_with_reveal, reveal_now_millis, run_subtask, run_subtask_with_progress,
+};
 use crate::types::{AbortFlag, DesignRequest, DocSink, LlmClient, Progress, SubtaskOutcome};
 use futures::future::join_all;
 use op_editor_core::{EditorCommand, EditorState};
@@ -261,8 +263,13 @@ pub(crate) async fn run_screen_group_worker(
             .await
             .expect("semaphore should not be closed");
 
-        // --- Attempt 1: full complexity ---
-        let outcome1 = run_subtask(
+        // --- Attempt 1: full complexity. Forward an on_progress sink so the
+        // per-subtask SkillLoadReport reaches the chat UI (spec Component 4).
+        let ptx_skills = progress_tx.clone();
+        let mut emit_skills = move |p: Progress| {
+            let _ = ptx_skills.send(p);
+        };
+        let outcome1 = run_subtask_with_progress(
             subtask,
             plan,
             request,
@@ -271,6 +278,7 @@ pub(crate) async fn run_screen_group_worker(
             abort,
             false,
             false,
+            Some(&mut emit_skills),
         )
         .await;
 
@@ -295,6 +303,14 @@ pub(crate) async fn run_screen_group_worker(
                 error = outcome1.error.as_deref().unwrap_or(""),
                 "concurrent worker: subtask empty, retrying with minimal skills (attempt 2)"
             );
+            let _ = progress_tx.send(Progress::SubtaskRetry {
+                id: subtask.id.clone(),
+                attempt: 2,
+                reason: outcome1
+                    .error
+                    .clone()
+                    .unwrap_or_else(|| "zero nodes generated".into()),
+            });
             run_subtask(subtask, plan, request, llm, &mut buffer, abort, true, true).await
         } else {
             outcome1

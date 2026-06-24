@@ -18,6 +18,7 @@ fn outcome(node_count: usize, error: Option<&str>) -> SubtaskOutcome {
         id: "s0".into(),
         node_count,
         error: error.map(|s| s.to_string()),
+        inserted_root_ids: Vec::new(),
     }
 }
 

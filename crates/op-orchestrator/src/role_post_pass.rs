@@ -138,6 +138,24 @@ fn identity_label(node: &Value) -> String {
     format!("{id} {name} {role}").to_lowercase()
 }
 
+fn semantic_label(node: &Value) -> String {
+    let icon_font_name = node
+        .get("iconFontName")
+        .and_then(Value::as_str)
+        .unwrap_or("");
+    let placeholder = node
+        .get("placeholder")
+        .and_then(Value::as_str)
+        .unwrap_or("");
+    let value = node.get("value").and_then(Value::as_str).unwrap_or("");
+    let content = node.get("content").and_then(Value::as_str).unwrap_or("");
+    format!(
+        "{} {icon_font_name} {placeholder} {value} {content}",
+        identity_label(node)
+    )
+    .to_lowercase()
+}
+
 fn corner_radius(node: &Value) -> f64 {
     match node.get("cornerRadius") {
         Some(Value::Number(n)) => n.as_f64().unwrap_or(0.0),
@@ -568,36 +586,43 @@ fn child_role(child: &Value) -> Option<&str> {
 }
 
 fn is_search_input_child(child: &Value) -> bool {
+    let label = semantic_label(child);
     matches!(
         child_role(child),
         Some("input") | Some("form-input") | Some("search-bar")
-    ) || identity_label(child).contains("search")
+    ) || (child.get("type").and_then(Value::as_str) == Some("text_input")
+        && (label.contains("search") || label.contains("搜索")))
+        || label.contains("search")
+        || label.contains("搜索")
 }
 
 fn is_filter_button_child(child: &Value) -> bool {
-    if child_role(child) == Some("icon-button") {
-        let label = identity_label(child);
-        if label.contains("filter")
-            || label.contains("slider")
-            || label.contains("sliders")
-            || label.contains("筛选")
-        {
-            return true;
-        }
+    let label = semantic_label(child);
+    if (matches!(child_role(child), Some("icon-button") | Some("button"))
+        || child.get("type").and_then(Value::as_str) == Some("icon_font"))
+        && mentions_filter_affordance(&label)
+    {
+        return true;
     }
     child
         .get("children")
         .and_then(Value::as_array)
         .map(|children| {
             children.iter().any(|grandchild| {
-                let label = identity_label(grandchild);
-                label.contains("filter")
-                    || label.contains("slider")
-                    || label.contains("sliders")
-                    || label.contains("筛选")
+                let label = semantic_label(grandchild);
+                mentions_filter_affordance(&label)
             })
         })
         .unwrap_or(false)
+}
+
+fn mentions_filter_affordance(label: &str) -> bool {
+    label.contains("filter")
+        || label.contains("slider")
+        || label.contains("sliders")
+        || label.contains("筛选")
+        || label.contains("过滤")
+        || label.contains("调节")
 }
 
 fn normalize_nested_search_shell(node: &mut Value) {
@@ -611,13 +636,15 @@ fn normalize_nested_search_shell(node: &mut Value) {
         return;
     };
     let search_child_count = children.iter().filter(|c| is_search_input_child(c)).count();
-    let has_filter = children.iter().any(is_filter_button_child);
+    let has_filter = children
+        .iter()
+        .any(|c| !is_search_input_child(c) && is_filter_button_child(c));
     if search_child_count != 1 || !has_filter {
         return;
     }
 
     clear_visual_chrome(node);
-    node["gap"] = json!(10);
+    node["gap"] = json!(12);
     node["padding"] = json!([0, 0]);
     node["alignItems"] = json!("center");
 
@@ -628,7 +655,33 @@ fn normalize_nested_search_shell(node: &mut Value) {
         if is_search_input_child(child) {
             child["fill"] = solid_fill("#FFFFFF");
             child["stroke"] = neutral_stroke("#E5E7EB");
-            child["cornerRadius"] = json!(12);
+            child["cornerRadius"] = json!(8);
+        } else if is_filter_button_child(child) {
+            child["fill"] = solid_fill("#FFFFFF");
+            child["stroke"] = neutral_stroke("#E5E7EB");
+            child["cornerRadius"] = json!(8);
+            set_subtree_foreground(child, "$color-accent");
+        }
+    }
+}
+
+fn set_subtree_foreground(node: &mut Value, color: &str) {
+    match node.get("type").and_then(Value::as_str) {
+        Some("text") | Some("icon_font") => {
+            node["fill"] = solid_fill(color);
+        }
+        Some("path") => {
+            if node.get("stroke").map(|s| !s.is_null()).unwrap_or(false) {
+                node["stroke"]["fill"] = solid_fill(color);
+            } else {
+                node["fill"] = solid_fill(color);
+            }
+        }
+        _ => {}
+    }
+    if let Some(children) = node.get_mut("children").and_then(Value::as_array_mut) {
+        for child in children {
+            set_subtree_foreground(child, color);
         }
     }
 }
@@ -661,6 +714,630 @@ fn normalize_favorite_icon_buttons(node: &mut Value) {
             clear_visual_chrome(child);
             child["width"] = json!(32);
             child["height"] = json!(32);
+        }
+    }
+}
+
+// ── normalizeSectionHeaderActions ────────────────────────────────────────────
+
+fn text_content(node: &Value) -> Option<&str> {
+    node.get("content").and_then(Value::as_str)
+}
+
+fn numeric_prop(node: &Value, key: &str) -> Option<f64> {
+    node.get(key).and_then(|value| {
+        value
+            .as_f64()
+            .or_else(|| value.as_str().and_then(|s| s.parse::<f64>().ok()))
+    })
+}
+
+fn is_see_all_action_text(node: &Value) -> bool {
+    if node.get("type").and_then(Value::as_str) != Some("text") {
+        return false;
+    }
+    let Some(content) = text_content(node) else {
+        return false;
+    };
+    let compact = content
+        .trim()
+        .trim_matches(|c: char| matches!(c, '>' | '›' | '→' | '»'))
+        .to_lowercase()
+        .replace(char::is_whitespace, "");
+    matches!(
+        compact.as_str(),
+        "查看全部" | "查看更多" | "seeall" | "viewall" | "viewmore"
+    )
+}
+
+fn is_section_heading_text(node: &Value) -> bool {
+    if node.get("type").and_then(Value::as_str) != Some("text") || is_see_all_action_text(node) {
+        return false;
+    }
+    let label = identity_label(node);
+    if matches!(role_of(node), Some("heading") | Some("subheading"))
+        || label.contains("heading")
+        || label.contains("title")
+        || label.contains("header")
+    {
+        return true;
+    }
+    let weight = numeric_prop(node, "fontWeight").unwrap_or(0.0);
+    let size = numeric_prop(node, "fontSize").unwrap_or(0.0);
+    weight >= 600.0 && size >= 16.0
+}
+
+fn rewrite_text_node_as_chevron(child: &mut Value) {
+    let Some(obj) = child.as_object_mut() else {
+        return;
+    };
+    obj.insert("type".to_string(), json!("icon_font"));
+    obj.insert("iconFontName".to_string(), json!("chevron-right"));
+    obj.insert("width".to_string(), json!(20));
+    obj.insert("height".to_string(), json!(20));
+    obj.insert("fill".to_string(), solid_fill("$color-accent"));
+    obj.remove("content");
+    obj.remove("fontFamily");
+    obj.remove("fontSize");
+    obj.remove("fontWeight");
+    obj.remove("fontStyle");
+    obj.remove("textAlign");
+    obj.remove("textGrowth");
+    obj.remove("lineHeight");
+    obj.remove("letterSpacing");
+}
+
+fn normalize_section_header_actions(node: &mut Value) {
+    if node.get("type").and_then(Value::as_str) != Some("frame")
+        || node.get("layout").and_then(Value::as_str) != Some("horizontal")
+    {
+        return;
+    }
+    let Some(children) = node.get("children").and_then(Value::as_array) else {
+        return;
+    };
+    if !children.iter().any(is_see_all_action_text) || !children.iter().any(is_section_heading_text)
+    {
+        return;
+    }
+    let Some(children) = node.get_mut("children").and_then(Value::as_array_mut) else {
+        return;
+    };
+    for child in children {
+        if is_see_all_action_text(child) {
+            rewrite_text_node_as_chevron(child);
+        }
+    }
+}
+
+// ── normalizeMobileCategoryRows ──────────────────────────────────────────────
+
+fn is_category_row_label(label: &str) -> bool {
+    label.contains("category")
+        || label.contains("categories")
+        || label.contains("cuisine")
+        || label.contains("分类")
+        || label.contains("品类")
+}
+
+fn is_chip_like_child(node: &Value) -> bool {
+    if node.get("type").and_then(Value::as_str) != Some("frame") {
+        return false;
+    }
+    matches!(
+        role_of(node),
+        Some("chip") | Some("tag") | Some("pill") | Some("button")
+    ) || {
+        let label = semantic_label(node);
+        label.contains("chip") || label.contains("category") || label.contains("类别")
+    }
+}
+
+fn has_descendant_type(node: &Value, type_name: &str) -> bool {
+    node.get("type").and_then(Value::as_str) == Some(type_name)
+        || node
+            .get("children")
+            .and_then(Value::as_array)
+            .map(|children| {
+                children
+                    .iter()
+                    .any(|child| has_descendant_type(child, type_name))
+            })
+            .unwrap_or(false)
+}
+
+fn has_text_descendant(node: &Value) -> bool {
+    node.get("type").and_then(Value::as_str) == Some("text")
+        && text_content(node)
+            .map(|content| !content.trim().is_empty())
+            .unwrap_or(false)
+        || node
+            .get("children")
+            .and_then(Value::as_array)
+            .map(|children| children.iter().any(has_text_descendant))
+            .unwrap_or(false)
+}
+
+fn is_icon_label_category_item(node: &Value) -> bool {
+    node.get("type").and_then(Value::as_str) == Some("frame")
+        && has_descendant_type(node, "icon_font")
+        && has_text_descendant(node)
+}
+
+fn is_category_item_like_child(node: &Value) -> bool {
+    is_chip_like_child(node) || is_icon_label_category_item(node)
+}
+
+fn has_loose_category_spacing(node: &Value, canvas_width: f64) -> bool {
+    numeric_prop(node, "width")
+        .map(|width| width > canvas_width)
+        .unwrap_or(false)
+        || matches!(
+            node.get("justifyContent").and_then(Value::as_str),
+            Some("space_between") | Some("space_around")
+        )
+        || numeric_prop(node, "gap")
+            .map(|gap| gap > 48.0)
+            .unwrap_or(false)
+}
+
+fn category_item_row_count(node: &Value) -> Option<usize> {
+    if node.get("type").and_then(Value::as_str) != Some("frame")
+        || node.get("layout").and_then(Value::as_str) != Some("horizontal")
+    {
+        return None;
+    }
+    let Some(children) = node.get("children").and_then(Value::as_array) else {
+        return None;
+    };
+    let item_count = children
+        .iter()
+        .filter(|child| is_category_item_like_child(child))
+        .count();
+    if item_count < 2 {
+        return None;
+    }
+    if children
+        .iter()
+        .any(|child| !is_category_item_like_child(child))
+    {
+        return None;
+    }
+    Some(item_count)
+}
+
+fn should_normalize_mobile_category_row(node: &Value, canvas_width: f64) -> bool {
+    let Some(item_count) = category_item_row_count(node) else {
+        return false;
+    };
+    let loose_spacing = has_loose_category_spacing(node, canvas_width);
+    if !is_category_row_label(&semantic_label(node)) && !loose_spacing {
+        return false;
+    }
+    !(item_count < 4 && !loose_spacing)
+}
+
+fn should_normalize_mobile_category_row_in_section(node: &Value) -> bool {
+    category_item_row_count(node).is_some()
+}
+
+fn category_section_has_direct_item_row(node: &Value, canvas_width: f64) -> bool {
+    node.get("children")
+        .and_then(Value::as_array)
+        .map(|children| {
+            children.iter().any(|child| {
+                should_normalize_mobile_category_row(child, canvas_width)
+                    || should_normalize_mobile_category_row_in_section(child)
+            })
+        })
+        .unwrap_or(false)
+}
+
+fn normalize_mobile_category_section(node: &mut Value, canvas_width: f64) {
+    if canvas_width > 480.0
+        || node.get("type").and_then(Value::as_str) != Some("frame")
+        || node.get("layout").and_then(Value::as_str) != Some("vertical")
+        || !is_category_row_label(&semantic_label(node))
+        || !category_section_has_direct_item_row(node, canvas_width)
+    {
+        return;
+    }
+
+    node["height"] = json!("fit_content");
+    node["clipContent"] = json!(false);
+    if node.get("gap").is_none()
+        || numeric_prop(node, "gap")
+            .map(|gap| gap > 12.0)
+            .unwrap_or(false)
+    {
+        node["gap"] = json!(12);
+    }
+
+    if let Some(children) = node.get_mut("children").and_then(Value::as_array_mut) {
+        for child in children {
+            normalize_mobile_category_row_in_section(child);
+        }
+    }
+}
+
+fn normalize_mobile_category_row(node: &mut Value, canvas_width: f64) {
+    if !should_normalize_mobile_category_row(node, canvas_width) {
+        return;
+    }
+
+    normalize_mobile_category_row_unchecked(node);
+}
+
+fn normalize_mobile_category_row_in_section(node: &mut Value) {
+    if !should_normalize_mobile_category_row_in_section(node) {
+        return;
+    }
+
+    normalize_mobile_category_row_unchecked(node);
+}
+
+fn normalize_mobile_category_row_unchecked(node: &mut Value) {
+    node["width"] = json!("fill_container");
+    node["height"] = json!("fit_content");
+    node["gap"] = json!(12);
+    node["clipContent"] = json!(false);
+    node["alignItems"] = json!("center");
+    // Distribute a small fixed set of chips across the row instead of clustering
+    // them on the left with a lopsided empty band on the right. 3+ chips use
+    // space_between so the leftover width becomes even gaps (the user's
+    // "撑不满就把间距放大一点"); 1-2 chips stay start-aligned (space_between would
+    // throw two chips to opposite edges). The chip COUNT follows the model — no
+    // truncation — so the screen isn't forced to exactly four categories.
+    let child_count = node
+        .get("children")
+        .and_then(Value::as_array)
+        .map(|c| c.len())
+        .unwrap_or(0);
+    node["justifyContent"] = json!(if child_count >= 3 {
+        "space_between"
+    } else {
+        "start"
+    });
+
+    let Some(children) = node.get_mut("children").and_then(Value::as_array_mut) else {
+        return;
+    };
+    // Off-canvas guard: ~5 fit_content icon+label chips is the most that fits one
+    // 375px row (overflow.md). The count is NOT pinned to four anymore, but a
+    // single non-scrolling row beyond five would push chips off the right edge,
+    // so cap at five. (6+ categories should be a horizontal scroll rail or a
+    // grid — the model is guided there by overflow.md.)
+    const MAX_CHIPS_PER_ROW: usize = 5;
+    if children.len() > MAX_CHIPS_PER_ROW {
+        children.truncate(MAX_CHIPS_PER_ROW);
+    }
+    for (idx, child) in children.iter_mut().enumerate() {
+        if is_category_item_like_child(child) {
+            child["width"] = json!("fit_content");
+            child["height"] = json!("fit_content");
+            child["cornerRadius"] = json!(8);
+            if is_icon_label_category_item(child) {
+                child["gap"] = json!(8);
+                child["alignItems"] = json!("center");
+                normalize_category_icon_tile(child, idx == 0);
+            }
+        }
+    }
+}
+
+fn normalize_category_icon_tile(item: &mut Value, active: bool) {
+    let Some(children) = item.get_mut("children").and_then(Value::as_array_mut) else {
+        return;
+    };
+    let Some(tile) = children.iter_mut().find(|child| {
+        child.get("type").and_then(Value::as_str) == Some("frame")
+            && has_descendant_type(child, "icon_font")
+    }) else {
+        return;
+    };
+
+    tile["width"] = json!(56);
+    tile["height"] = json!(56);
+    tile["cornerRadius"] = json!(8);
+    tile["layout"] = json!("horizontal");
+    tile["justifyContent"] = json!("center");
+    tile["alignItems"] = json!("center");
+    if active {
+        tile["fill"] = solid_fill("#FFF0E3");
+        if let Some(obj) = tile.as_object_mut() {
+            obj.remove("stroke");
+            obj.remove("effects");
+        }
+        set_subtree_foreground(tile, "$color-accent");
+    } else {
+        tile["fill"] = solid_fill("#FFFFFF");
+        tile["stroke"] = neutral_stroke("#EAD8C8");
+        set_subtree_foreground(tile, "#8A5F49");
+    }
+}
+
+// ── normalizeMobileProductCardRows ──────────────────────────────────────────
+
+fn is_product_card_role(role: Option<&str>) -> bool {
+    matches!(
+        role,
+        Some("card")
+            | Some("image-card")
+            | Some("product-card")
+            | Some("restaurant-card")
+            | Some("menu-card")
+            | Some("feature-card")
+    )
+}
+
+fn is_mobile_product_card_child(node: &Value) -> bool {
+    if node.get("type").and_then(Value::as_str) != Some("frame") {
+        return false;
+    }
+    if is_product_card_role(role_of(node)) {
+        return true;
+    }
+    let label = semantic_label(node);
+    [
+        "card",
+        "product",
+        "restaurant",
+        "popular",
+        "dish",
+        "menu",
+        "nearby",
+        "餐厅",
+        "美食",
+        "热门",
+        "菜品",
+    ]
+    .iter()
+    .any(|needle| label.contains(needle))
+        || (has_descendant_type(node, "image") && has_text_descendant(node))
+}
+
+fn should_normalize_mobile_product_card_row(node: &Value, canvas_width: f64) -> bool {
+    if canvas_width > 480.0
+        || node.get("type").and_then(Value::as_str) != Some("frame")
+        || node.get("layout").and_then(Value::as_str) != Some("horizontal")
+    {
+        return false;
+    }
+    let Some(children) = node.get("children").and_then(Value::as_array) else {
+        return false;
+    };
+    if children.len() != 2 || !children.iter().all(is_mobile_product_card_child) {
+        return false;
+    }
+
+    let fixed_children_width: f64 = children
+        .iter()
+        .filter_map(|child| numeric_prop(child, "width"))
+        .sum();
+    let fixed_total = fixed_children_width + numeric_prop(node, "gap").unwrap_or(0.0);
+    let content_rail_width = (canvas_width - 40.0).max(0.0);
+    fixed_total > content_rail_width
+        || numeric_prop(node, "width")
+            .map(|width| width > content_rail_width)
+            .unwrap_or(false)
+        || matches!(
+            node.get("justifyContent").and_then(Value::as_str),
+            Some("space_between") | Some("space_around")
+        )
+}
+
+fn normalize_mobile_product_card_row(node: &mut Value, canvas_width: f64) {
+    if !should_normalize_mobile_product_card_row(node, canvas_width) {
+        return;
+    }
+
+    node["width"] = json!("fill_container");
+    node["height"] = json!("fit_content");
+    node["gap"] = json!(12);
+    node["clipContent"] = json!(false);
+    node["justifyContent"] = json!("start");
+    node["alignItems"] = json!("stretch");
+
+    let Some(children) = node.get_mut("children").and_then(Value::as_array_mut) else {
+        return;
+    };
+    for child in children {
+        child["width"] = json!("fill_container");
+        child["height"] = json!("fit_content");
+        child["cornerRadius"] = json!(8);
+    }
+}
+
+fn horizontal_padding_sum(node: &Value) -> f64 {
+    match node.get("padding") {
+        Some(Value::Number(n)) => n.as_f64().unwrap_or(0.0) * 2.0,
+        Some(Value::Array(values)) if values.len() == 2 => {
+            values.get(1).and_then(Value::as_f64).unwrap_or(0.0) * 2.0
+        }
+        Some(Value::Array(values)) if values.len() >= 4 => {
+            values.get(1).and_then(Value::as_f64).unwrap_or(0.0)
+                + values.get(3).and_then(Value::as_f64).unwrap_or(0.0)
+        }
+        _ => 0.0,
+    }
+}
+
+fn mobile_card_content_width(node: &Value, canvas_width: f64) -> f64 {
+    let fallback = (canvas_width - 40.0).max(0.0);
+    let outer = match node.get("width") {
+        Some(Value::Number(n)) => n.as_f64().unwrap_or(fallback),
+        Some(Value::String(s)) if s == "fill_container" => fallback,
+        Some(Value::String(s)) => s.parse::<f64>().unwrap_or(fallback),
+        _ => fallback,
+    };
+    (outer - horizontal_padding_sum(node)).max(0.0)
+}
+
+fn direct_image_child_indices_over_height(node: &Value, max_height: f64) -> Vec<usize> {
+    let Some(children) = node.get("children").and_then(Value::as_array) else {
+        return Vec::new();
+    };
+    children
+        .iter()
+        .enumerate()
+        .filter_map(|(idx, child)| {
+            (child.get("type").and_then(Value::as_str) == Some("image")
+                && numeric_prop(child, "height")
+                    .map(|height| height > max_height + 24.0)
+                    .unwrap_or(false))
+            .then_some(idx)
+        })
+        .collect()
+}
+
+fn looks_like_mobile_food_media_card(node: &Value) -> bool {
+    if node.get("type").and_then(Value::as_str) != Some("frame")
+        || !is_mobile_product_card_child(node)
+        || !has_descendant_type(node, "image")
+        || !has_text_descendant(node)
+    {
+        return false;
+    }
+    let label = semantic_label(node);
+    [
+        "featured",
+        "feature",
+        "dish",
+        "food",
+        "menu",
+        "product",
+        "restaurant",
+        "card",
+        "推荐",
+        "主题",
+        "美食",
+        "菜品",
+        "餐厅",
+    ]
+    .iter()
+    .any(|needle| label.contains(needle))
+}
+
+fn normalize_mobile_featured_card_media(node: &mut Value, canvas_width: f64) {
+    if canvas_width > 480.0 || !looks_like_mobile_food_media_card(node) {
+        return;
+    }
+    let content_width = mobile_card_content_width(node, canvas_width);
+    if content_width <= 0.0 {
+        return;
+    }
+    let max_height = (content_width * 0.6).round().clamp(148.0, 204.0);
+    let image_indices = direct_image_child_indices_over_height(node, max_height);
+    if image_indices.is_empty() {
+        return;
+    }
+
+    node["height"] = json!("fit_content");
+    node["clipContent"] = json!(true);
+    let Some(children) = node.get_mut("children").and_then(Value::as_array_mut) else {
+        return;
+    };
+    for idx in image_indices {
+        if let Some(image) = children.get_mut(idx) {
+            image["width"] = json!("fill_container");
+            image["height"] = json!(max_height as i64);
+        }
+    }
+}
+
+// ── normalizeCartCountBadges ────────────────────────────────────────────────
+
+fn is_short_count_text(node: &Value) -> bool {
+    if node.get("type").and_then(Value::as_str) != Some("text") {
+        return false;
+    }
+    let Some(content) = text_content(node).map(str::trim) else {
+        return false;
+    };
+    !content.is_empty() && content.len() <= 2 && content.chars().all(|c| c.is_ascii_digit())
+}
+
+fn has_short_count_text(node: &Value) -> bool {
+    is_short_count_text(node)
+        || node
+            .get("children")
+            .and_then(Value::as_array)
+            .map(|children| children.iter().any(has_short_count_text))
+            .unwrap_or(false)
+}
+
+fn is_cart_icon_node(node: &Value) -> bool {
+    let label = semantic_label(node);
+    label.contains("shopping-cart")
+        || label.contains("shopping cart")
+        || label.contains("cart")
+        || label.contains("basket")
+        || label.contains("checkout")
+        || label.contains("购物车")
+}
+
+fn is_count_badge_candidate(node: &Value) -> bool {
+    matches!(role_of(node), Some("badge")) || has_short_count_text(node)
+}
+
+fn style_count_badge(node: &mut Value) {
+    node["role"] = json!("badge");
+    node["width"] = json!(16);
+    node["height"] = json!(16);
+    node["cornerRadius"] = json!(999);
+    node["padding"] = json!([0, 0]);
+    node["layout"] = json!("horizontal");
+    node["justifyContent"] = json!("center");
+    node["alignItems"] = json!("center");
+    node["fill"] = solid_fill("$color-accent");
+    if let Some(obj) = node.as_object_mut() {
+        obj.remove("stroke");
+        obj.remove("effects");
+    }
+    set_count_badge_text_style(node);
+}
+
+fn set_count_badge_text_style(node: &mut Value) {
+    if is_short_count_text(node) {
+        node["fontSize"] = json!(10);
+        node["fontWeight"] = json!(700);
+        node["fill"] = solid_fill("#FFFFFF");
+        node["textAlign"] = json!("center");
+    }
+    if let Some(children) = node.get_mut("children").and_then(Value::as_array_mut) {
+        for child in children {
+            set_count_badge_text_style(child);
+        }
+    }
+}
+
+fn normalize_cart_count_badges(node: &mut Value) {
+    if node.get("type").and_then(Value::as_str) != Some("frame") {
+        return;
+    }
+    let Some(children) = node.get("children").and_then(Value::as_array) else {
+        return;
+    };
+    let has_cart_icon = children.iter().any(is_cart_icon_node);
+    let has_count_badge = children.iter().any(is_count_badge_candidate);
+    if !has_cart_icon || !has_count_badge {
+        return;
+    }
+
+    if matches!(role_of(node), Some("icon-button") | Some("button"))
+        || semantic_label(node).contains("cart")
+    {
+        node["fill"] = solid_fill("#FFFFFF");
+        node["stroke"] = neutral_stroke("#E5E7EB");
+        node["cornerRadius"] = json!(8);
+    }
+
+    let Some(children) = node.get_mut("children").and_then(Value::as_array_mut) else {
+        return;
+    };
+    for child in children {
+        if is_count_badge_candidate(child) {
+            style_count_badge(child);
         }
     }
 }
@@ -918,6 +1595,123 @@ fn apply_clip_content_for_image(node: &mut Value) {
     }
 }
 
+fn has_cta_descendant(node: &Value) -> bool {
+    if matches!(
+        role_of(node),
+        Some("button") | Some("cta") | Some("primary-cta")
+    ) {
+        return true;
+    }
+    let label = identity_label(node);
+    if label.contains("cta") || label.contains("order now") || label.contains("shop now") {
+        return true;
+    }
+    if node.get("type").and_then(Value::as_str) == Some("text") {
+        let content = node
+            .get("content")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_lowercase();
+        if content.contains("order now")
+            || content.contains("buy now")
+            || content.contains("shop now")
+            || content.contains("立即")
+            || content.contains("购买")
+            || content.contains("下单")
+        {
+            return true;
+        }
+    }
+    node.get("children")
+        .and_then(Value::as_array)
+        .map(|children| children.iter().any(has_cta_descendant))
+        .unwrap_or(false)
+}
+
+fn is_promo_like_container(node: &Value) -> bool {
+    let role = role_of(node).unwrap_or("");
+    if matches!(
+        role,
+        "banner" | "feature-card" | "promo-card" | "offer-card"
+    ) {
+        return true;
+    }
+    let label = identity_label(node);
+    ["promo", "offer", "deal", "discount", "limited", "banner"]
+        .iter()
+        .any(|needle| label.contains(needle))
+}
+
+fn relax_clipping_promo_height(node: &mut Value) {
+    if node.get("type").and_then(Value::as_str) != Some("frame") {
+        return;
+    }
+    if node.get("height").and_then(Value::as_f64).is_none() {
+        return;
+    }
+    let clips = node.get("clipContent").and_then(Value::as_bool) == Some(true);
+    if has_cta_descendant(node) && (clips || is_promo_like_container(node)) {
+        node["height"] = json!("fit_content");
+    }
+}
+
+fn normalize_horizontal_promo_copy_pane(node: &mut Value, canvas_width: f64) {
+    if canvas_width > 480.0
+        || node.get("type").and_then(Value::as_str) != Some("frame")
+        || node.get("layout").and_then(Value::as_str) != Some("horizontal")
+        || !is_promo_like_container(node)
+    {
+        return;
+    }
+    let Some(children) = node.get("children").and_then(Value::as_array) else {
+        return;
+    };
+    if !children
+        .iter()
+        .any(|child| child.get("type").and_then(Value::as_str) == Some("image"))
+    {
+        return;
+    }
+    let copy_idx = children.iter().position(|child| {
+        child.get("type").and_then(Value::as_str) == Some("frame")
+            && child.get("layout").and_then(Value::as_str) == Some("vertical")
+            && child
+                .get("children")
+                .and_then(Value::as_array)
+                .map(|kids| {
+                    kids.iter()
+                        .any(|kid| kid.get("type").and_then(Value::as_str) == Some("text"))
+                })
+                .unwrap_or(false)
+    });
+    let Some(copy_idx) = copy_idx else {
+        return;
+    };
+    let Some(children) = node.get_mut("children").and_then(Value::as_array_mut) else {
+        return;
+    };
+    let copy = &mut children[copy_idx];
+    copy["width"] = json!("fill_container");
+    copy["minWidth"] = json!(0);
+    let Some(copy_children) = copy.get_mut("children").and_then(Value::as_array_mut) else {
+        return;
+    };
+    for child in copy_children {
+        if child.get("type").and_then(Value::as_str) != Some("text") {
+            continue;
+        }
+        child["width"] = json!("fill_container");
+        child["textGrowth"] = json!("fixed-width");
+        if numeric_prop(child, "fontSize")
+            .map(|size| size > 28.0)
+            .unwrap_or(false)
+        {
+            child["fontSize"] = json!(28);
+            child["lineHeight"] = json!(1.12);
+        }
+    }
+}
+
 // ── walk ──────────────────────────────────────────────────────────────────
 
 fn post_pass_value(node: &mut Value, parent_fill: Option<Value>, canvas_width: f64) {
@@ -933,6 +1727,14 @@ fn post_pass_value(node: &mut Value, parent_fill: Option<Value>, canvas_width: f
     normalize_input_trailing_icon_alignment(node);
     normalize_nested_search_shell(node);
     normalize_favorite_icon_buttons(node);
+    normalize_section_header_actions(node);
+    normalize_mobile_category_section(node, canvas_width);
+    normalize_mobile_category_row(node, canvas_width);
+    normalize_mobile_product_card_row(node, canvas_width);
+    normalize_mobile_featured_card_media(node, canvas_width);
+    normalize_cart_count_badges(node);
+    relax_clipping_promo_height(node);
+    normalize_horizontal_promo_copy_pane(node, canvas_width);
     if node
         .get("layout")
         .and_then(Value::as_str)

@@ -139,7 +139,12 @@ impl LayerPanel {
         let base = node.base();
         Some(LayerItem {
             node_id: source.clone(),
-            label: base.name.clone().unwrap_or_default(),
+            // Name-or-kind fallback, same as `item_for` (TS `name ?? type`)
+            // so a nameless node's drag ghost isn't blank.
+            label: base
+                .name
+                .clone()
+                .unwrap_or_else(|| kind_label(node).to_string()),
             kind_label: kind_label(node).to_string(),
             icon: icon_for_node(node),
             depth: 0,

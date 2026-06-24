@@ -1,5 +1,6 @@
 use super::ai_chat_transcript::{
-    build_transcript_with_design_hover, TextBubble, BODY_FONT, BUBBLE_PAD, CHAR_UNIT_PX, LINE_H,
+    build_transcript_with_design_hover, TextBubble, BODY_FONT, CHAR_UNIT_PX, LINE_H,
+    USER_BUBBLE_PAD,
 };
 use super::ai_chat_transcript_text::char_display_units;
 use crate::theme::Theme;
@@ -39,14 +40,16 @@ pub(crate) fn transcript_text_offset_at(
         if text.is_empty() || bubble.lines.is_empty() {
             continue;
         }
-        let text_top = bubble.rect.origin.y + BUBBLE_PAD;
+        // User bubble text starts at USER_BUBBLE_PAD (14px) inset (#27 restyle).
+        let text_top = bubble.rect.origin.y + USER_BUBBLE_PAD;
         let line_idx = ((point.y - text_top).max(0.0) / LINE_H)
             .floor()
             .clamp(0.0, (bubble.lines.len() - 1) as f32) as usize;
         let line = &bubble.lines[line_idx];
         let line_offsets = line_start_offsets(text, &bubble.lines);
         let line_start = *line_offsets.get(line_idx).unwrap_or(&0);
-        let line_offset = line_offset_at_x(line, point.x - (bubble.rect.origin.x + BUBBLE_PAD));
+        let line_offset =
+            line_offset_at_x(line, point.x - (bubble.rect.origin.x + USER_BUBBLE_PAD));
         let offset = prev_char_boundary(text, (line_start + line_offset).min(text.len()));
         return Some(TranscriptTextHit {
             message_index: item.msg_index,
@@ -73,8 +76,9 @@ pub(crate) fn paint_user_bubble_selection(
         return;
     }
     let offsets = line_start_offsets(text, &bubble.lines);
-    let text_x = bubble.rect.origin.x + BUBBLE_PAD;
-    let mut baseline = bubble.rect.origin.y + BUBBLE_PAD + 11.0;
+    // #27 restyle: user bubble text uses USER_BUBBLE_PAD (14px) inset.
+    let text_x = bubble.rect.origin.x + USER_BUBBLE_PAD;
+    let mut baseline = bubble.rect.origin.y + USER_BUBBLE_PAD + 11.0;
     for (i, line) in bubble.lines.iter().enumerate() {
         let line_start = *offsets.get(i).unwrap_or(&0);
         let line_end = (line_start + line.len()).min(text.len());

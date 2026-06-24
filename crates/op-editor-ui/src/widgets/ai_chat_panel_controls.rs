@@ -266,6 +266,8 @@ pub(crate) fn draw_label(
 }
 
 /// Neutral hover wash color for the chat panel's borderless controls.
+/// Used in paint tests to verify hover tint values.
+#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn chat_neutral_hover_color(theme: &Theme) -> Color {
     chat_neutral_feedback_color(theme, false)
 }

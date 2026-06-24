@@ -172,7 +172,7 @@ fn cli_new_design_clears_agent_frame_indicators_after_done() {
     let deadline = Instant::now() + Duration::from_secs(10);
     while current.is_some() && Instant::now() < deadline {
         let _ = pump_commands(&mut host, &mut current, 1440.0, 900.0);
-        let _ = pump_progress(&mut host, &mut current);
+        let _ = pump_progress(&mut host, &mut current, None);
         std::thread::sleep(Duration::from_millis(2));
     }
     worker.join().expect("worker exits");

@@ -18,6 +18,7 @@ pub mod align_guides;
 pub mod button_press_state;
 pub mod chat;
 pub mod chat_button_state;
+pub mod chat_sessions;
 mod chat_design_apply;
 mod chat_title;
 pub mod clipboard;
@@ -94,6 +95,8 @@ pub mod walkers;
 pub mod web_sync;
 
 #[cfg(test)]
+mod command_app_state_tests;
+#[cfg(test)]
 mod command_attr_tests;
 #[cfg(test)]
 mod command_authored_subtree_tests;
@@ -164,6 +167,7 @@ pub use chat::{
     AgentProvider, ChatAnchor, ChatImage, ChatMessage, ChatRole, ChatState, ChatToolCall,
     ModelEntry,
 };
+pub use chat_sessions::{adjust_running_tab_after_close, ChatSessions};
 pub use chat_button_state::{ChatFooterButton, ChatHeaderButton};
 pub use color_picker::{hsv_to_rgb, parse_hex_alpha, parse_hex_rgb, rgb_to_hex, rgb_to_hsv};
 pub use command::{

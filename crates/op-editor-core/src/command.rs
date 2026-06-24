@@ -294,6 +294,15 @@ pub enum EditorCommand {
         variables: BTreeMap<String, VariableDefinition>,
         themes: BTreeMap<String, Vec<String>>,
     },
+    /// Merge generated document-root `$app` state. Additive only: a key
+    /// already present in the document root before this run is its owner
+    /// and is NEVER overwritten. Among keys ADDED during one generation
+    /// run, the entry carried by the lower `plan_idx` wins (deterministic
+    /// regardless of concurrent replay order); a conflict logs a warn.
+    MergeAppState {
+        plan_idx: usize,
+        state: BTreeMap<String, jian_ops_schema::state::StateEntry>,
+    },
     /// Replace the document's persisted design.md spec.
     SetDesignMd { spec: Box<DesignMdSpec> },
     /// Instantiate a registered component onto the active page.

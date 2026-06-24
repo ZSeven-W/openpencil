@@ -265,6 +265,9 @@ pub enum Icon {
     SquaresIntersect,
     /// SquaresExclude — Boolean Exclude row.
     SquaresExclude,
+    /// Lucide `palette.svg` — color/style palette affordance in the
+    /// AI chat bottom toolbar (#27 design: inert icon-only button).
+    Palette,
 }
 
 impl Icon {
@@ -414,6 +417,7 @@ impl Icon {
             Icon::SquaresSubtract => SQUARES_SUBTRACT,
             Icon::SquaresIntersect => SQUARES_INTERSECT,
             Icon::SquaresExclude => SQUARES_EXCLUDE,
+            Icon::Palette => PALETTE,
         }
     }
 
@@ -568,6 +572,7 @@ impl Icon {
             "distribute-v" | "align-vertical-distribute-center" | "distribute-vertical" => {
                 Icon::DistributeV
             }
+            "palette" | "color-palette" => Icon::Palette,
             _ => return None,
         })
     }
@@ -683,5 +688,15 @@ pub fn paint_icon_font_node(
 /// Used as the unknown-icon fallback (TS parity with
 /// `FALLBACK_ICON_D` in `node-renderer.ts`).
 const FALLBACK_ICON_D: &str = "M12 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0";
+
+/// Lucide `palette.svg` — artist color-palette shape with paint-dot holes.
+/// Used in the AI chat bottom toolbar as a style/palette affordance.
+/// d-string from lucide-react@0.545.0 palette.js verbatim.
+const PALETTE: &[&str] = &[
+    "M12 22a1 1 0 0 1 0-20 10 10 0 0 1 10 10 5 5 0 0 1-5 5h-2.25a1.75 1.75 0 0 0-1.75 1.75 1.75 1.75 0 0 1-1 1.575",
+    "M8.5 8.5a.5.5 0 1 0 0-1 .5.5 0 0 0 0 1",
+    "M15.5 8.5a.5.5 0 1 0 0-1 .5.5 0 0 0 0 1",
+    "M12 12.5a.5.5 0 1 0 0-1 .5.5 0 0 0 0 1",
+];
 
 use super::icons_data::*;

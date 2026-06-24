@@ -99,6 +99,7 @@ mod element_ts_schema;
 mod element_visual_alias_builders;
 #[cfg(test)]
 mod element_visual_alias_tests;
+pub mod editor_state_tool;
 pub mod extra_read_tools;
 #[cfg(test)]
 mod extra_read_tools_tests;
@@ -130,6 +131,7 @@ pub mod selected_ops_tools;
 mod selected_ops_tools_tests;
 #[cfg(test)]
 mod selection_tools_tests;
+pub mod guidelines_tools;
 pub mod style_guide_tools;
 #[cfg(test)]
 mod style_guide_tools_tests;
@@ -243,6 +245,11 @@ pub use selected_ops_tools::{
     DuplicateSelected, GroupSelected, NudgeSelected, PasteClipboard, ReorderSelected,
     UngroupSelected,
 };
+pub use guidelines_tools::{get_guidelines_snapshot, GetGuidelines};
+pub mod spawn_agents_tool;
+pub use spawn_agents_tool::{spawn_agents_snapshot, SpawnAgents, SpawnSpec};
+pub mod tool_search;
+pub use tool_search::{tool_search, tool_search_snapshot, ToolSearch};
 pub use style_guide_tools::{
     get_style_guide_snapshot, get_style_guide_tags_snapshot, GetStyleGuide, GetStyleGuideTags,
 };
@@ -254,6 +261,7 @@ pub use theme_presets::{
     list_theme_presets_snapshot, load_theme_preset_snapshot, save_theme_preset_snapshot,
     ListThemePresets, LoadThemePreset, SaveThemePreset,
 };
+pub use editor_state_tool::{get_editor_state_snapshot, GetEditorState};
 pub use tools::{
     count_nodes_snapshot, document_info_snapshot, find_empty_space_snapshot,
     find_node_by_name_snapshot, get_active_theme_snapshot, get_canvas_bounds_snapshot,

@@ -10,13 +10,19 @@
 //! seed 只发缺失的 token / 轴 —— 文档里已自定义的 `color-accent`
 //! 永远不被覆盖。
 //!
-//! 忠实的 styleGuideName → 解析 guide → 播种 guide 调色板仍是后续项;
-//! 本模块是其缺省底座(DEFAULT_PALETTE 等价物)。
+//! 当 plan 带有 styleGuideName 时，先播种缺省语义 palette，再用该
+//! guide 的颜色改写本次新建的同义 token；已有用户变量仍然不覆盖。
 
 use crate::plan::OrchestratorPlan;
 use crate::semantic_palette;
 use crate::types::DocSink;
+use jian_ops_schema::variable::{VariableDefinition, VariableScalar, VariableValue};
+use op_ai_skills::style_guide::{
+    extract_style_guide_values, select_style_guide, style_guide_registry, SelectOptions,
+    StyleGuideValues,
+};
 use op_editor_core::EditorCommand;
+use std::collections::BTreeMap;
 
 /// 回滚快照 —— seed 前"不存在"的调色板变量名 / 主题轴集合(即 seed
 /// 会真正新建的那批)。
@@ -57,11 +63,19 @@ pub fn seed_commands(plan: &OrchestratorPlan, snap: &VarSnapshot) -> Vec<EditorC
         return Vec::new();
     }
     let mut palette = semantic_palette::palette_variables();
+    let style_values = selected_style_guide_values(plan);
     // Harmonize the cool-slate neutral ramp to the design's temperature: a warm
     // page (cream/orange) gets warm grays so the search bar / chips / avatar
     // circle no longer read as off-palette cool gray. Neutral pages keep slate.
-    if let Some(page_bg) = plan.root_frame.first_solid_hex() {
+    let harmonize_bg = style_values
+        .as_ref()
+        .and_then(|values| values.colors.background.clone())
+        .or_else(|| plan.root_frame.first_solid_hex());
+    if let Some(page_bg) = harmonize_bg {
         crate::palette_harmonize::harmonize_palette_neutrals(&mut palette, &page_bg);
+    }
+    if let Some(values) = style_values.as_ref() {
+        apply_style_guide_palette(&mut palette, values);
     }
     let variables = snap
         .created
@@ -73,6 +87,77 @@ pub fn seed_commands(plan: &OrchestratorPlan, snap: &VarSnapshot) -> Vec<EditorC
         .filter(|(axis, _)| snap.created_axes.contains(axis))
         .collect();
     vec![EditorCommand::MergeThemePreset { variables, themes }]
+}
+
+fn selected_style_guide_values(plan: &OrchestratorPlan) -> Option<StyleGuideValues> {
+    let name = plan.style_guide_name.as_ref()?;
+    let guide = select_style_guide(
+        style_guide_registry(),
+        &SelectOptions {
+            name: Some(name.clone()),
+            ..Default::default()
+        },
+    )?;
+    Some(extract_style_guide_values(&guide.content))
+}
+
+fn apply_style_guide_palette(
+    palette: &mut BTreeMap<String, VariableDefinition>,
+    values: &StyleGuideValues,
+) {
+    set_light_color(
+        palette,
+        "color-bg-deep",
+        values.colors.background.as_deref(),
+    );
+    set_light_color(palette, "color-surface", values.colors.surface.as_deref());
+    set_light_color(palette, "color-accent", values.colors.accent.as_deref());
+    set_light_color(
+        palette,
+        "color-text-primary",
+        values.colors.text_primary.as_deref(),
+    );
+    set_light_color(
+        palette,
+        "color-text-body",
+        values.colors.text_secondary.as_deref(),
+    );
+    set_light_color(
+        palette,
+        "color-text-muted",
+        values.colors.text_muted.as_deref(),
+    );
+    set_light_color(palette, "color-border", values.colors.border.as_deref());
+}
+
+fn set_light_color(
+    palette: &mut BTreeMap<String, VariableDefinition>,
+    name: &str,
+    color: Option<&str>,
+) {
+    let Some(color) = color else {
+        return;
+    };
+    let Some(def) = palette.get_mut(name) else {
+        return;
+    };
+    match &mut def.value {
+        VariableValue::Themed(values) => {
+            if let Some(value) = values.iter_mut().find(|value| {
+                value
+                    .theme
+                    .as_ref()
+                    .and_then(|theme| theme.get(semantic_palette::THEME_AXIS))
+                    .is_some_and(|mode| mode == semantic_palette::THEME_LIGHT)
+            }) {
+                value.value = VariableScalar::Str(color.to_string());
+            }
+        }
+        VariableValue::Scalar(VariableScalar::Str(existing)) => {
+            *existing = color.to_string();
+        }
+        _ => {}
+    }
 }
 
 /// 回滚 seed 新建的变量与主题轴(已有者从未被覆盖,所以恢复 = 删除
@@ -120,6 +205,32 @@ mod tests {
         })
     }
 
+    fn warm_food_plan() -> OrchestratorPlan {
+        let mut plan = plan();
+        plan.style_guide_name = Some("warm-food-mobile-light".into());
+        plan
+    }
+
+    fn light_hex(def: &VariableDefinition) -> String {
+        match &def.value {
+            VariableValue::Themed(values) => values
+                .iter()
+                .find(|v| {
+                    v.theme
+                        .as_ref()
+                        .and_then(|theme| theme.get("Mode"))
+                        .is_some_and(|mode| mode == "Light")
+                })
+                .and_then(|v| match &v.value {
+                    VariableScalar::Str(s) => Some(s.clone()),
+                    _ => None,
+                })
+                .expect("light color value"),
+            VariableValue::Scalar(VariableScalar::Str(s)) => s.clone(),
+            _ => panic!("expected color string"),
+        }
+    }
+
     /// 空文档:快照报告全部 56 token + Mode 轴缺失,seed 出一条
     /// MergeThemePreset 把它们全部带上。
     #[test]
@@ -137,6 +248,23 @@ mod tests {
         assert_eq!(variables.len(), 56);
         assert!(variables.contains_key("color-accent"));
         assert_eq!(themes.get("Mode").map(Vec::len), Some(2));
+    }
+
+    #[test]
+    fn seed_uses_selected_style_guide_palette_for_new_variables() {
+        let sink = VecDocSink::new();
+        let plan = warm_food_plan();
+        let snap = snapshot_plan_vars(&sink, &plan);
+
+        let cmds = seed_commands(&plan, &snap);
+        let EditorCommand::MergeThemePreset { variables, .. } = &cmds[0] else {
+            panic!("expected MergeThemePreset");
+        };
+
+        assert_eq!(
+            light_hex(variables.get("color-accent").expect("color-accent")),
+            "#FF5A1F"
+        );
     }
 
     /// 已有同名变量获胜(TS applySemanticPalette 语义):快照不把它
