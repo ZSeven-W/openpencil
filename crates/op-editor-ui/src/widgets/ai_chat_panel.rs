@@ -464,22 +464,28 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
         let header_icon_y = rect.origin.y + (HEADER_HEIGHT - 18.0) / 2.0;
         let right_edge = rect.origin.x + rect.size.x - PAD;
         let chevron_x = rect.origin.x + PAD;
+        let tokens = crate::widgets::button::tokens_from_theme(&self.theme);
 
         // --- Collapse chevron (far left) ---
-        let chevron_hovered = self.header_hover == Some(ChatHeaderButton::ToggleCollapse);
-        let chevron_pressed = self.header_pressed == Some(ChatHeaderButton::ToggleCollapse);
-        let chevron_color = if chevron_hovered || chevron_pressed {
-            self.theme.foreground
-        } else {
-            self.theme.muted_foreground
-        };
-        draw_icon(
+        // Rendered through IconButton (like the maximize button beside the
+        // new-chat "+") so hovering/pressing it shows the same ghost
+        // button-hover wash instead of only swapping the icon color (#41).
+        jian_widgets::components::icon_button::IconButton {
+            icon_paths: Icon::ChevronDown.paths(),
+            hovered: self.header_hover == Some(ChatHeaderButton::ToggleCollapse),
+            pressed: self.header_pressed == Some(ChatHeaderButton::ToggleCollapse),
+            active: false,
+            enabled: true,
+            icon_size: 18.0,
+            stroke_width: 1.4,
+        }
+        .paint(
             cx.backend,
-            Icon::ChevronDown,
-            Point2D::new(chevron_x, header_icon_y),
-            18.0,
-            chevron_color,
-            1.4,
+            Rect {
+                origin: Point2D::new(chevron_x, header_icon_y),
+                size: Point2D::new(18.0, 18.0),
+            },
+            &tokens,
         );
 
         // --- New-chat "+" circular button (far right, 28px circle) ---
@@ -520,7 +526,6 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
 
         // --- Maximize / minimize icon (just left of new-chat) ---
         let maximize_x = right_edge - NEW_CHAT_D - MAXIMIZE_GAP - MAXIMIZE_W;
-        let tokens = crate::widgets::button::tokens_from_theme(&self.theme);
         jian_widgets::components::icon_button::IconButton {
             icon_paths: self.maximize_icon().paths(),
             hovered: self.header_hover == Some(ChatHeaderButton::ToggleMaximize),
@@ -563,7 +568,9 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
                 &self.label_start_with_ai,
                 &self.label_tip_select_elements,
                 &self.examples,
-                !can_use_model || self.is_streaming(),
+                // Examples stay enabled without a connected model (#43) — clicking
+                // one fills the input; only streaming disables them.
+                self.is_streaming(),
                 self.example_hover,
                 self.example_pressed,
             );
