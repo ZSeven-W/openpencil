@@ -273,14 +273,15 @@ pub(crate) fn paint_header_tabs(
                 },
                 1.5,
             );
-        } else if show_right_inset {
-            // × close glyph — shown on active tab (when not running) and hovered tabs.
+        } else if is_hovered {
+            // × close glyph — shown ONLY while the tab is hovered (the inset is
+            // still reserved on the active tab so the title doesn't reflow).
             draw_icon(
                 cx.backend,
                 Icon::Close,
                 Point2D::new(tr.close.origin.x, tr.close.origin.y),
                 CLOSE_W,
-                if is_hovered && !is_active {
+                if !is_active {
                     theme.foreground
                 } else {
                     theme.muted_foreground
