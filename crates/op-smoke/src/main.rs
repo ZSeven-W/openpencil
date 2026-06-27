@@ -39,6 +39,7 @@
 use std::sync::Arc;
 
 mod loop_mode;
+mod loop_seed;
 
 use agent::abort::AbortController;
 use agent::provider::anthropic::AnthropicProvider;
@@ -449,8 +450,15 @@ async fn run_loop_mode(prompt: String) -> std::process::ExitCode {
         .and_then(|s| s.parse().ok())
         .unwrap_or(8192);
     let thinking = loop_thinking_mode();
+    // `OPENPENCIL_SMOKE_LOOP_SEED=1` (only meaningful with OPENPENCIL_SMOKE_LOOP=1)
+    // arms the minimal-seed path: a page-root + named section stubs are applied
+    // before the SAME agentic loop runs to fill them. Unset ⇒ pure loop (the
+    // existing behaviour, byte-for-byte unchanged).
+    let seed = std::env::var("OPENPENCIL_SMOKE_LOOP_SEED")
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true") || v.eq_ignore_ascii_case("on"))
+        .unwrap_or(false);
 
-    eprintln!("[SMOKE] mode=loop model={model} base_url={base_url}");
+    eprintln!("[SMOKE] mode=loop seed={seed} model={model} base_url={base_url}");
     eprintln!("[SMOKE] prompt={prompt:?} thinking={thinking:?} max_tokens={max_tokens}");
 
     let system_prompt = op_ai_skills::design_agent_system_prompt().to_string();
@@ -477,6 +485,7 @@ async fn run_loop_mode(prompt: String) -> std::process::ExitCode {
             max_tokens,
             dump,
             library_path,
+            seed,
         )
     })
     .await;
