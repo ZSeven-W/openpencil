@@ -34,6 +34,11 @@ pub struct ConfiguredBuiltinProvider {
     /// uses this provider as a plain LLM and must never see tools.
     tools: Vec<ChatToolDef>,
     executor: Option<Arc<dyn ChatToolExecutor>>,
+    /// Run the loop-end structural backstop (`apply_loop_finalize`) for
+    /// this provider's turns. Set ONLY by the gated design-generation
+    /// provider; regular chat leaves it false so an ordinary tool-using
+    /// chat turn never mutates an existing design (Track-1 Step 4 scope).
+    finalize_on_exit: bool,
 }
 
 impl ConfiguredBuiltinProvider {
@@ -56,6 +61,7 @@ impl ConfiguredBuiltinProvider {
             label: label.to_string(),
             tools: Vec::new(),
             executor: None,
+            finalize_on_exit: false,
         })
     }
 
@@ -70,6 +76,16 @@ impl ConfiguredBuiltinProvider {
     ) -> Self {
         self.tools = tools;
         self.executor = Some(executor);
+        self
+    }
+
+    /// Opt this provider's agent-loop turns into the loop-end structural
+    /// backstop (Track-1 Step 4). The gated design-generation provider calls
+    /// this; regular chat does not, so a plain chat turn never re-finalizes
+    /// (and mutates) the live document. No-op without `with_canvas_tools`
+    /// (the plain streaming path never reaches `run_loop_finalize`).
+    pub fn with_loop_finalize(mut self) -> Self {
+        self.finalize_on_exit = true;
         self
     }
 
@@ -163,6 +179,7 @@ impl ChatProvider for ConfiguredBuiltinProvider {
                     tools: provider.tools.clone(),
                     executor,
                     max_turns: MAX_TOOL_TURNS,
+                    finalize_on_exit: provider.finalize_on_exit,
                 };
                 match provider.kind {
                     BuiltinAgentKind::Anthropic => run_anthropic_agent_loop(cfg, &tx).await,
