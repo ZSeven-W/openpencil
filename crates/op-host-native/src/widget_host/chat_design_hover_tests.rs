@@ -22,7 +22,7 @@ fn cursor_move_sets_chat_tab_hover_when_over_tab() {
     // body: x = tab_row_left + TAB_MAX_W / 2, y = rect.origin.y + HEADER_HEIGHT / 2.
     let over_tab0 = Point2D::new(
         chat_rect.origin.x + 32.0 + 60.0, // tab row left + half TAB_MAX_W
-        chat_rect.origin.y + 18.0,          // header mid
+        chat_rect.origin.y + 18.0,        // header mid
     );
     let panel = AIChatPlaceholder::from_editor(host.editor_state());
     assert_eq!(

@@ -199,6 +199,100 @@ fn complex_svg_fill_uses_raster_cache_after_first_paint() {
     assert_eq!(be.svg_raster_cache_len(), 1);
 }
 
+#[test]
+fn native_mesh_gradient_is_actually_interpolated_not_flat() {
+    // PROOF (native op-host path): render a 2x2 R/G/B/Y mesh onto a raster
+    // surface and read pixels back. Corners must read pure; the centre must
+    // be an interpolated blend distinct from every corner. A first-vertex
+    // solid fallback would paint the whole rect one colour.
+    use skia_safe::{image::CachingHint, AlphaType, ColorType, ISize, ImageInfo};
+
+    let be = NativeBackend::with_dpi(1.0);
+    let (w, h) = (64i32, 64i32);
+    let mut surface = skia_safe::surfaces::raster_n32_premul((w, h)).unwrap();
+    surface.canvas().clear(skia_safe::Color::BLACK);
+
+    be.fill_round_rect_mesh_gradient(
+        surface.canvas(),
+        Rect::xywh(0.0, 0.0, w as f32, h as f32),
+        0.0, // no rounding -> centre is mesh, not clipped
+        2,
+        2,
+        &[
+            Color::rgb_u8(0xff, 0x00, 0x00), // TL red
+            Color::rgb_u8(0x00, 0xff, 0x00), // TR green
+            Color::rgb_u8(0x00, 0x00, 0xff), // BL blue
+            Color::rgb_u8(0xff, 0xff, 0x00), // BR yellow
+        ],
+        1.0,
+    );
+
+    let image = surface.image_snapshot();
+    let info = ImageInfo::new(
+        ISize::new(w, h),
+        ColorType::RGBA8888,
+        AlphaType::Unpremul,
+        None,
+    );
+    let mut buf = vec![0u8; (w * h * 4) as usize];
+    assert!(
+        image.read_pixels(
+            &info,
+            &mut buf,
+            (w as usize) * 4,
+            (0, 0),
+            CachingHint::Allow
+        ),
+        "read_pixels failed"
+    );
+    let px = |x: i32, y: i32| -> (u8, u8, u8) {
+        let i = ((y * w + x) * 4) as usize;
+        (buf[i], buf[i + 1], buf[i + 2])
+    };
+
+    let tl = px(1, 1);
+    let tr = px(w - 2, 1);
+    let bl = px(1, h - 2);
+    let br = px(w - 2, h - 2);
+    assert!(tl.0 > 200 && tl.1 < 60 && tl.2 < 60, "TL not red: {:?}", tl);
+    assert!(
+        tr.0 < 60 && tr.1 > 200 && tr.2 < 60,
+        "TR not green: {:?}",
+        tr
+    );
+    assert!(
+        bl.0 < 60 && bl.1 < 60 && bl.2 > 200,
+        "BL not blue: {:?}",
+        bl
+    );
+    assert!(
+        br.0 > 200 && br.1 > 200 && br.2 < 60,
+        "BR not yellow: {:?}",
+        br
+    );
+
+    // Centre sits on the TR(green)->BL(blue) triangulation diagonal -> a
+    // green/blue blend (G,B mid). Proves Gouraud interpolation, not a flat fill.
+    let c = px(w / 2, h / 2);
+    assert!(
+        c.1 > 60 && c.1 < 200 && c.2 > 60 && c.2 < 200,
+        "centre is not an interpolated blend (flat fallback?): {:?}",
+        c
+    );
+    for (name, corner) in [("TL", tl), ("TR", tr), ("BL", bl), ("BR", br)] {
+        assert!(
+            (c.0 as i32 - corner.0 as i32).abs()
+                + (c.1 as i32 - corner.1 as i32).abs()
+                + (c.2 as i32 - corner.2 as i32).abs()
+                > 60,
+            "centre {:?} too close to corner {} {:?} (flat fill?)",
+            c,
+            name,
+            corner
+        );
+    }
+}
+
 /// Encode a solid raster surface to PNG bytes — a real image for
 /// the decode-cache test (no hardcoded blob).
 fn encode_test_png(w: i32, h: i32) -> Vec<u8> {
