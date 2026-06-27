@@ -10,10 +10,17 @@
 use crate::command_node::{build_leaf_node, remap_subtree_ids};
 use crate::fills::set_primary_fill_hex;
 use crate::node_id::NodeId;
+use crate::pen_node_ext::PenNodeExt;
 use crate::state::EditorState;
 use crate::walkers;
 use jian_ops_schema::node::PenNode;
 use jian_ops_schema::page::PenPage;
+
+/// Display name of the hidden master-store page that holds an imported
+/// component library's reusable masters. It is a side store, not a
+/// rendered design — kept off the active design page so scaffolding,
+/// role/cleanup passes and page scoring never see the masters.
+pub const COMPONENTS_PAGE_NAME: &str = "Components";
 
 /// Build a bare page with id / name / children. State + lifecycle
 /// default to `None`.
@@ -124,6 +131,86 @@ impl EditorState {
         self.ui.active_page_index = new_index;
         self.clear_selection();
         Some(new_index)
+    }
+
+    /// Append the reusable masters of an imported component library
+    /// onto a dedicated, hidden [`COMPONENTS_PAGE_NAME`] page — NOT the
+    /// active design page. Keeps `active_children()` clean (only the
+    /// design) so the orchestrator's scaffold + role/cleanup passes are
+    /// unaffected, while the masters stay in `doc.pages` where the
+    /// document-wide component lookup (`ComponentLibrary::from_document`
+    /// + `ref_resolve::resolve_refs_for_canvas`) still finds them.
+    ///
+    /// Master ids are preserved verbatim (NO remapping) so `ref` nodes
+    /// keep resolving to their targets. Masters are deduped by id
+    /// against whatever already lives on the components page, so a
+    /// re-import is idempotent.
+    ///
+    /// Returns the number of masters actually appended (post-dedup).
+    /// The active page index is preserved: a single-page document is
+    /// first migrated so its design becomes page 0, and the components
+    /// page is appended after it, so the caller's active page keeps
+    /// pointing at the design.
+    pub fn append_components_page_masters(&mut self, masters: Vec<PenNode>) -> usize {
+        if masters.is_empty() {
+            return 0;
+        }
+        // Preserve the active design page across the migration: a
+        // single-page document moves its `doc.children` into page 0,
+        // and the components page is appended at the end.
+        let active = self.ui.active_page_index;
+        self.ensure_pages();
+
+        // Find (or create) the dedicated components page.
+        let page_idx = match self
+            .doc
+            .pages
+            .as_ref()
+            .unwrap()
+            .iter()
+            .position(|p| p.name == COMPONENTS_PAGE_NAME)
+        {
+            Some(idx) => idx,
+            None => {
+                // Mint a non-colliding page id without disturbing the
+                // master ids (which must stay verbatim for refs).
+                let page_id = self
+                    .max_node_id()
+                    .checked_add(1)
+                    .map(|n| format!("n{n}"))
+                    .unwrap_or_else(|| "components-page".to_string());
+                let pages = self.doc.pages.as_mut().unwrap();
+                pages.push(make_page(
+                    page_id,
+                    COMPONENTS_PAGE_NAME.to_string(),
+                    Vec::new(),
+                ));
+                pages.len() - 1
+            }
+        };
+
+        let pages = self.doc.pages.as_mut().unwrap();
+        let page = &mut pages[page_idx];
+        let mut existing: std::collections::HashSet<String> = page
+            .children
+            .iter()
+            .map(|n| n.id_str().to_string())
+            .collect();
+        let mut added = 0usize;
+        for master in masters {
+            let id = master.id_str().to_string();
+            if existing.contains(&id) {
+                continue;
+            }
+            existing.insert(id);
+            page.children.push(master);
+            added += 1;
+        }
+
+        // The components page is hidden side storage — never the active
+        // page. Restore the caller's active index (page 0 = design).
+        self.ui.active_page_index = active;
+        added
     }
 
     /// Duplicate the page at `idx`, inserting the clone after it.
