@@ -780,7 +780,14 @@ impl EditorState {
                 item.height,
             )
             .expect("kind validated");
-            if let Some(hex) = &item.fill_hex {
+            // A full canonical fill stack overrides the solid `fill_hex`
+            // shortcut so gradient / mesh / image fills survive the batch
+            // insert; otherwise fall back to the single-colour path.
+            if let Some(fills) = &item.fill {
+                if let Some(slot) = crate::fills::node_fills_mut(&mut node) {
+                    *slot = fills.clone();
+                }
+            } else if let Some(hex) = &item.fill_hex {
                 set_primary_fill_hex(&mut node, hex);
             }
             children.push(node);
@@ -861,9 +868,7 @@ impl EditorState {
                 _ => return None,
             }
         }
-        let Some(mut next_id) = self.next_node_id_seed() else {
-            return None;
-        };
+        let mut next_id = self.next_node_id_seed()?;
         let mut taken: HashSet<NodeId> = self.collect_node_ids();
         let mut nodes = nodes;
         let replacement = crate::command_root_replace::prepare_root_frame_replacement(
