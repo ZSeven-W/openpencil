@@ -12,6 +12,8 @@ pub mod compact_prompt;
 pub mod compact_skills;
 pub mod dashboard_columns;
 pub mod design_md_policy;
+// (run_dashboard / scaffold_dashboard removed: dashboards flow through the
+//  generic sequential path; dashboard_columns keeps only normalizer predicates.)
 pub mod design_system;
 pub mod design_type;
 pub mod hoist_app_state;
@@ -51,9 +53,7 @@ pub mod role_infer;
 pub(crate) mod role_layout_post_pass;
 pub mod role_post_pass;
 pub mod run;
-pub mod run_dashboard;
 pub mod scaffold;
-pub mod scaffold_dashboard;
 pub mod spawn_concurrent;
 pub mod subagent;
 pub mod tree_heuristics;
