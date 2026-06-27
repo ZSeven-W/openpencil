@@ -55,5 +55,5 @@ DESIGN GUIDELINES:
 - CARD ROW ALIGNMENT: sibling cards in horizontal layout ALL use width/height="fill_container".
 - Navigation: justifyContent="space_between", 3 groups (logo | links | CTA), padding=[0,80].
 - Phone mockup: ONE "frame", width 260-300, height 520-580, cornerRadius 32. NEVER ellipse.
-- NEVER use ellipse for decorative shapes. Use frame/rectangle with cornerRadius.
+- Decorative shapes: ellipse is fine for circles / rings / pie / gauge (use innerRadius + start/sweepAngle); use frame/rectangle with cornerRadius for rounded rects.
 - NEVER use emoji as icons. Use path nodes with Feather icon names.
