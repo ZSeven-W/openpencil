@@ -700,6 +700,7 @@ fn parse_item(bytes: &[u8], i: &mut usize) -> Result<BatchInsertItem, String> {
     let mut width: Option<i32> = None;
     let mut height: Option<i32> = None;
     let mut fill_hex: Option<String> = None;
+    let mut fill: Option<Vec<jian_ops_schema::style::PenFill>> = None;
     loop {
         skip_ws(bytes, i);
         if *i >= bytes.len() {
@@ -720,6 +721,15 @@ fn parse_item(bytes: &[u8], i: &mut usize) -> Result<BatchInsertItem, String> {
             "kind" => kind = Some(parse_string(bytes, i)?),
             "name" => name = Some(parse_string(bytes, i)?),
             "fill_hex" => fill_hex = Some(parse_string(bytes, i)?),
+            // Generic `fill` passthrough: a full canonical PenFill stack
+            // (array of fill objects, or a single fill object) so a batch
+            // item can carry gradient / mesh / image fills, not just a
+            // solid `fill_hex`. Captured as a balanced raw-JSON slice and
+            // deserialized straight into the canonical type.
+            "fill" => {
+                let raw = capture_raw_json_value(bytes, i)?;
+                fill = Some(parse_fill_stack(&raw)?);
+            }
             "x" => x = Some(parse_int(bytes, i)?),
             "y" => y = Some(parse_int(bytes, i)?),
             "width" => width = Some(parse_int(bytes, i)?),
@@ -761,7 +771,91 @@ fn parse_item(bytes: &[u8], i: &mut usize) -> Result<BatchInsertItem, String> {
         width,
         height,
         fill_hex,
+        fill,
     })
+}
+
+/// Deserialize a raw JSON `fill` slice into a canonical fill stack.
+/// Accepts either an array of fill objects (`[{...}, ...]`) or a single
+/// fill object (`{...}`, wrapped into a 1-entry stack), mirroring the
+/// `normalize_fill` shape-tolerance on the JSON nodes path.
+fn parse_fill_stack(raw: &str) -> Result<Vec<jian_ops_schema::style::PenFill>, String> {
+    use jian_ops_schema::style::PenFill;
+    let trimmed = raw.trim_start();
+    if trimmed.starts_with('[') {
+        serde_json::from_str::<Vec<PenFill>>(raw).map_err(|e| format!("invalid `fill` array: {e}"))
+    } else {
+        serde_json::from_str::<PenFill>(raw)
+            .map(|f| vec![f])
+            .map_err(|e| format!("invalid `fill` object: {e}"))
+    }
+}
+
+/// Scan one balanced JSON value (object / array / string / number /
+/// `true` / `false` / `null`) starting at `*i`, advance `*i` past it,
+/// and return the raw slice. Respects nesting + string escapes so a
+/// `}`/`]` inside a string doesn't prematurely close the value.
+fn capture_raw_json_value(bytes: &[u8], i: &mut usize) -> Result<String, String> {
+    skip_ws(bytes, i);
+    if *i >= bytes.len() {
+        return Err("expected a JSON value".into());
+    }
+    let start = *i;
+    match bytes[*i] {
+        b'{' | b'[' => {
+            let mut depth = 0usize;
+            let mut in_str = false;
+            let mut escaped = false;
+            while *i < bytes.len() {
+                let c = bytes[*i];
+                if in_str {
+                    if escaped {
+                        escaped = false;
+                    } else if c == b'\\' {
+                        escaped = true;
+                    } else if c == b'"' {
+                        in_str = false;
+                    }
+                } else {
+                    match c {
+                        b'"' => in_str = true,
+                        b'{' | b'[' => depth += 1,
+                        b'}' | b']' => {
+                            depth -= 1;
+                            if depth == 0 {
+                                *i += 1;
+                                return slice_utf8(bytes, start, *i);
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                *i += 1;
+            }
+            Err("unterminated JSON value".into())
+        }
+        b'"' => {
+            // Reuse the string parser to advance past escapes correctly,
+            // then return the original quoted slice.
+            let _ = parse_string(bytes, i)?;
+            slice_utf8(bytes, start, *i)
+        }
+        _ => {
+            // Number / literal — run to the next delimiter.
+            while *i < bytes.len()
+                && !matches!(bytes[*i], b',' | b'}' | b']' | b' ' | b'\t' | b'\n' | b'\r')
+            {
+                *i += 1;
+            }
+            slice_utf8(bytes, start, *i)
+        }
+    }
+}
+
+fn slice_utf8(bytes: &[u8], start: usize, end: usize) -> Result<String, String> {
+    std::str::from_utf8(&bytes[start..end])
+        .map(|s| s.to_string())
+        .map_err(|_| "invalid UTF-8 in JSON value".to_string())
 }
 
 /// Reverse the JSON-string escaping the wire parser left intact.

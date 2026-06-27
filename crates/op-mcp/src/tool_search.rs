@@ -68,9 +68,10 @@ fn handle_select(catalog: &[&str], names_csv: &str) -> Vec<String> {
             continue;
         }
         // Find the first descriptor whose "name" field matches exactly.
-        if let Some(descriptor) = catalog.iter().find(|d| {
-            extract_string_field(d, "name").as_deref() == Some(name)
-        }) {
+        if let Some(descriptor) = catalog
+            .iter()
+            .find(|d| extract_string_field(d, "name").as_deref() == Some(name))
+        {
             // Deduplicate (same name requested twice).
             let ds = descriptor.to_string();
             if !results.contains(&ds) {
@@ -175,12 +176,10 @@ fn word_boundary_contains(haystack: &str, term: &str) -> bool {
         };
         let abs = start + rel;
         // Check boundary before.
-        let before_ok = abs == 0
-            || !is_word_char(haystack_bytes[abs - 1]);
+        let before_ok = abs == 0 || !is_word_char(haystack_bytes[abs - 1]);
         // Check boundary after.
         let after = abs + term_len;
-        let after_ok = after == hay_len
-            || !is_word_char(haystack_bytes[after]);
+        let after_ok = after == hay_len || !is_word_char(haystack_bytes[after]);
         if before_ok && after_ok {
             return true;
         }
@@ -304,10 +303,16 @@ mod tests {
         let results = tool_search(FIXTURE, "select:batch_design,snapshot_layout", 11);
         assert_eq!(results.len(), 2);
         // Check each result contains the right "name" field.
-        assert!(results[0].contains("\"batch_design\""),
-            "first result must be batch_design: {}", results[0]);
-        assert!(results[1].contains("\"snapshot_layout\""),
-            "second result must be snapshot_layout: {}", results[1]);
+        assert!(
+            results[0].contains("\"batch_design\""),
+            "first result must be batch_design: {}",
+            results[0]
+        );
+        assert!(
+            results[1].contains("\"snapshot_layout\""),
+            "second result must be snapshot_layout: {}",
+            results[1]
+        );
     }
 
     #[test]
@@ -315,9 +320,17 @@ mod tests {
         // "does_not_exist" is absent from fixture — must be silently
         // dropped so only the batch_design descriptor is returned.
         let results = tool_search(FIXTURE, "select:batch_design,does_not_exist", 11);
-        assert_eq!(results.len(), 1, "unknown name must be dropped: {:?}", results);
-        assert!(results[0].contains("\"batch_design\""),
-            "surviving result must be batch_design: {}", results[0]);
+        assert_eq!(
+            results.len(),
+            1,
+            "unknown name must be dropped: {:?}",
+            results
+        );
+        assert!(
+            results[0].contains("\"batch_design\""),
+            "surviving result must be batch_design: {}",
+            results[0]
+        );
     }
 
     #[test]
@@ -339,16 +352,24 @@ mod tests {
         // Both create_variable and list_variables contain "variable" in
         // their names; they should rank above batch_design / snapshot_layout.
         let results = tool_search(FIXTURE, "variable", 5);
-        assert!(!results.is_empty(), "keyword 'variable' must match at least one entry");
+        assert!(
+            !results.is_empty(),
+            "keyword 'variable' must match at least one entry"
+        );
         // Both variable tools must appear.
         let has_create = results.iter().any(|d| d.contains("\"create_variable\""));
         let has_list = results.iter().any(|d| d.contains("\"list_variables\""));
-        assert!(has_create, "create_variable must be in results: {:?}", results);
+        assert!(
+            has_create,
+            "create_variable must be in results: {:?}",
+            results
+        );
         assert!(has_list, "list_variables must be in results: {:?}", results);
         // A non-variable tool must score lower; check it's not ranked first.
         assert!(
             results[0].contains("variable"),
-            "top result should contain 'variable' in name: {}", results[0]
+            "top result should contain 'variable' in name: {}",
+            results[0]
         );
     }
 
@@ -357,13 +378,22 @@ mod tests {
         // Query "design" matches batch_design (name part) and potentially
         // others via description. max=1 must limit to exactly 1 result.
         let results = tool_search(FIXTURE, "design", 1);
-        assert_eq!(results.len(), 1, "max_results=1 must limit output: {:?}", results);
+        assert_eq!(
+            results.len(),
+            1,
+            "max_results=1 must limit output: {:?}",
+            results
+        );
     }
 
     #[test]
     fn keyword_empty_whitespace_query_returns_empty() {
         let results = tool_search(FIXTURE, "   ", 5);
-        assert!(results.is_empty(), "blank query must return empty: {:?}", results);
+        assert!(
+            results.is_empty(),
+            "blank query must return empty: {:?}",
+            results
+        );
     }
 
     #[test]
@@ -373,8 +403,11 @@ mod tests {
         // matcher should still surface it.
         let results = tool_search(FIXTURE, "hierarchical", 5);
         assert_eq!(results.len(), 1);
-        assert!(results[0].contains("\"snapshot_layout\""),
-            "description match must return snapshot_layout: {}", results[0]);
+        assert!(
+            results[0].contains("\"snapshot_layout\""),
+            "description match must return snapshot_layout: {}",
+            results[0]
+        );
     }
 
     // --- result JSON shape ---
@@ -383,15 +416,31 @@ mod tests {
     fn result_json_has_expected_fields() {
         // The OkJson path goes through build_result_json; verify the
         // shape is well-formed and has the required envelope fields.
-        let json = build_result_json("variable", 2, &[
-            r#"{"name":"create_variable"}"#.to_string(),
-            r#"{"name":"list_variables"}"#.to_string(),
-        ]);
-        assert!(json.contains("\"query\":\"variable\""), "query field missing: {json}");
+        let json = build_result_json(
+            "variable",
+            2,
+            &[
+                r#"{"name":"create_variable"}"#.to_string(),
+                r#"{"name":"list_variables"}"#.to_string(),
+            ],
+        );
+        assert!(
+            json.contains("\"query\":\"variable\""),
+            "query field missing: {json}"
+        );
         assert!(json.contains("\"count\":2"), "count field missing: {json}");
-        assert!(json.contains("\"results\":["), "results array missing: {json}");
-        assert!(json.contains("\"create_variable\""), "first result missing: {json}");
-        assert!(json.contains("\"list_variables\""), "second result missing: {json}");
+        assert!(
+            json.contains("\"results\":["),
+            "results array missing: {json}"
+        );
+        assert!(
+            json.contains("\"create_variable\""),
+            "first result missing: {json}"
+        );
+        assert!(
+            json.contains("\"list_variables\""),
+            "second result missing: {json}"
+        );
     }
 
     // --- MCP tool struct ---
@@ -407,7 +456,10 @@ mod tests {
         let tool = tool_search_snapshot(FIXTURE);
         let result = tool.call(&BTreeMap::new());
         assert!(
-            matches!(result, ToolOutcome::Err(super::super::ToolErrorCode::MissingArgument, _)),
+            matches!(
+                result,
+                ToolOutcome::Err(super::super::ToolErrorCode::MissingArgument, _)
+            ),
             "missing query must return MissingArgument: {result:?}"
         );
     }
@@ -420,8 +472,14 @@ mod tests {
         args.insert("max_results".into(), "11".into());
         match tool.call(&args) {
             ToolOutcome::OkJson(json) => {
-                assert!(json.contains("\"batch_design\""), "batch_design missing: {json}");
-                assert!(json.contains("\"snapshot_layout\""), "snapshot_layout missing: {json}");
+                assert!(
+                    json.contains("\"batch_design\""),
+                    "batch_design missing: {json}"
+                );
+                assert!(
+                    json.contains("\"snapshot_layout\""),
+                    "snapshot_layout missing: {json}"
+                );
                 assert!(json.contains("\"count\":2"), "count wrong: {json}");
             }
             other => panic!("expected OkJson, got {other:?}"),
@@ -437,7 +495,10 @@ mod tests {
         match tool.call(&args) {
             ToolOutcome::OkJson(json) => {
                 assert!(json.contains("\"count\":1"), "count must be 1: {json}");
-                assert!(json.contains("\"batch_design\""), "batch_design missing: {json}");
+                assert!(
+                    json.contains("\"batch_design\""),
+                    "batch_design missing: {json}"
+                );
                 // The unknown name may appear in the echoed "query" field but must
                 // NOT appear as a matched result in "results" — check via count.
                 // Count=1 already proves only one entry was returned.
@@ -453,7 +514,10 @@ mod tests {
         args.insert("query".into(), "variable".into());
         match tool.call(&args) {
             ToolOutcome::OkJson(json) => {
-                assert!(json.contains("variable"), "variable results missing: {json}");
+                assert!(
+                    json.contains("variable"),
+                    "variable results missing: {json}"
+                );
             }
             other => panic!("expected OkJson, got {other:?}"),
         }
