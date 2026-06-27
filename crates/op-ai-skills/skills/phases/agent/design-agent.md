@@ -13,7 +13,7 @@ Always start with `get_editor_state` to see the active page, the current selecti
 If you need access to many tools in one turn, call `ToolSearch` with:
 
 ```
-select:get_editor_state,get_guidelines,get_style_guide_tags,get_style_guide,get_variables,batch_get,snapshot_layout,batch_design,get_screenshot,find_empty_space,spawn_agents
+select:get_editor_state,get_guidelines,get_style_guide_tags,get_style_guide,get_variables,batch_get,snapshot_layout,emit_elements,batch_design,get_screenshot,find_empty_space,spawn_agents
 ```
 
 ### Step 3 — Branch on the task type
@@ -39,9 +39,26 @@ Call `batch_get` to read the structure of any component or section you plan to r
 
 Call `snapshot_layout` to inspect the current bounding boxes, hierarchy, and free space before inserting new frames. This prevents you from placing new content on top of existing frames.
 
-### Step 7 — Build with `batch_design`
+### Step 7 — Build with `emit_elements` (preferred)
 
-Call `batch_design` to create or modify nodes using the DSL described below. Work in batches of **≤ 25 operations**; split a large screen into logical, self-contained batches (e.g., navigation → hero → content sections → footer).
+PREFER `emit_elements` over `batch_design`. Instead of hand-building primitive frames/text, emit a high-level element manifest — a JSON array of element lines — and the host expands each into a polished, role-tagged subtree (stat-card, profile-header, nav-item, …) with correct typography, spacing, and color.
+
+- `elements` is a JSON array of objects. Each object has an `"el"` kind plus that kind's params, e.g. `{"el":"stat_card","label":"MRR","value":"$48k","trend":"up"}`.
+- `{"el":"section","role":"hero","direction":"vertical","gap":16}` is a structural container. Its **1-based line number** is its handle; nest later lines into it with `"in": <line number>`. Sections can hold sections one level deep.
+- NEVER write `id`, `parent_id`, or `pageId` — nesting is by `"in"` only, referencing an earlier line in the same array. Unknown params and out-of-range enums are auto-repaired, so emit your best guess rather than omitting content.
+- Build the screen as ONE manifest array (sections + their nested elements). One `emit_elements` call per logical screen/region.
+
+Example:
+
+```
+emit_elements(elements=[
+  {"el":"section","role":"stats","direction":"horizontal","gap":16},
+  {"el":"stat_card","in":1,"label":"MRR","value":"$48.2k","trend":"up"},
+  {"el":"stat_card","in":1,"label":"Active Users","value":"12.4k","trend":"up"}
+])
+```
+
+Fall back to `batch_design` (DSL below) only for what `emit_elements` cannot express: editing existing nodes, image fills (`G(...)`), component instances you already placed, or one-off bespoke primitives. Work `batch_design` in batches of **≤ 25 operations**; split a large screen into logical, self-contained batches (e.g., navigation → hero → content sections → footer).
 
 ### Step 8 — Verify with a screenshot
 
