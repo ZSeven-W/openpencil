@@ -246,8 +246,10 @@ pub(crate) fn paint_header_tabs(
         );
         // Baseline-relative vertical center: center + fs * 0.35.
         let baseline_y = tr.body.origin.y + PILL_H / 2.0 + TAB_FONT_SIZE * 0.35;
-        cx.backend
-            .draw_text(&title_layout, Point2D::new(tr.body.origin.x + TAB_PAD_X, baseline_y));
+        cx.backend.draw_text(
+            &title_layout,
+            Point2D::new(tr.body.origin.x + TAB_PAD_X, baseline_y),
+        );
 
         if is_active && is_running {
             // Spinner arc at the active tab's right inset.
@@ -420,8 +422,8 @@ pub(crate) fn tab_hit_at(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::widgets::ai_chat_panel::AI_CHAT_WIDTH;
     use crate::widgets::ai_chat_panel::AI_CHAT_HEIGHT;
+    use crate::widgets::ai_chat_panel::AI_CHAT_WIDTH;
 
     fn panel_rect() -> Rect {
         Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT)

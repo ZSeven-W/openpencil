@@ -1160,6 +1160,23 @@ fn fills_of(node: &PenNode) -> Vec<FillSummary> {
                     b.stops.first().map(|s| s.color.as_str()),
                     b.opacity.unwrap_or(1.0),
                 ),
+                PenFill::MeshGradient(b) => (
+                    b.stops.first().map(|s| s.color.as_str()),
+                    b.opacity.unwrap_or(1.0),
+                ),
+                PenFill::Shader(b) => (
+                    // Head-row swatch uses the shader's first colour
+                    // uniform (its visible fallback colour) when present.
+                    b.uniforms.as_ref().and_then(|u| {
+                        u.values().find_map(|v| match v {
+                            jian_ops_schema::style::ShaderUniformValue::Color(c) => {
+                                Some(c.as_str())
+                            }
+                            _ => None,
+                        })
+                    }),
+                    b.opacity.unwrap_or(1.0),
+                ),
                 PenFill::Image(b) => (None, b.opacity.unwrap_or(1.0)),
             };
             FillSummary {

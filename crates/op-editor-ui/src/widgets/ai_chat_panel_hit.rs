@@ -65,7 +65,10 @@ impl<'a> AIChatPlaceholder<'a> {
         }
         // Maximize / minimize icon (just left of new-chat).
         let maximize_rect = Rect {
-            origin: Point2D::new(right_edge - NEW_CHAT_D - MAXIMIZE_GAP - MAXIMIZE_W, header_icon_y),
+            origin: Point2D::new(
+                right_edge - NEW_CHAT_D - MAXIMIZE_GAP - MAXIMIZE_W,
+                header_icon_y,
+            ),
             size: Point2D::new(MAXIMIZE_W, MAXIMIZE_W),
         };
         if (maximize_rect).contains(point) {
@@ -75,8 +78,7 @@ impl<'a> AIChatPlaceholder<'a> {
         // Returns SwitchTab(i) for a tab body click; CloseTab(i) for the × glyph.
         let tab_count = self.tabs_snapshot.len();
         if tab_count > 0 {
-            if let Some((tab_idx, over_close)) =
-                tab_hit_at(rect, tab_count, point, self.tab_hover)
+            if let Some((tab_idx, over_close)) = tab_hit_at(rect, tab_count, point, self.tab_hover)
             {
                 return Some(if over_close {
                     AIChatHit::CloseTab(tab_idx)
@@ -133,8 +135,9 @@ impl<'a> AIChatPlaceholder<'a> {
                     // Hit inside picker — check which row.
                     let rows_top = picker.origin.y + 32.0;
                     for i in 1..=crate::widgets::ai_chat_panel_footer::PARALLEL_AGENTS_COUNT {
-                        let row_y = rows_top + (i - 1) as f32
-                            * crate::widgets::ai_chat_panel_footer::PARALLEL_AGENTS_ROW_H_PUB;
+                        let row_y = rows_top
+                            + (i - 1) as f32
+                                * crate::widgets::ai_chat_panel_footer::PARALLEL_AGENTS_ROW_H_PUB;
                         if point.y >= row_y
                             && point.y < row_y + crate::widgets::ai_chat_panel_footer::PARALLEL_AGENTS_ROW_H_PUB
                         {
@@ -226,15 +229,17 @@ impl<'a> AIChatPlaceholder<'a> {
                     return Some(AIChatHit::Stop);
                 }
                 if (footer.send).contains(point) {
-                    return Some(if can_use_model
-                        && !streaming
-                        && (!self.state.input.text().trim().is_empty()
-                            || !self.state.pending_attachments.is_empty())
-                    {
-                        AIChatHit::Send
-                    } else {
-                        AIChatHit::FocusInput
-                    });
+                    return Some(
+                        if can_use_model
+                            && !streaming
+                            && (!self.state.input.text().trim().is_empty()
+                                || !self.state.pending_attachments.is_empty())
+                        {
+                            AIChatHit::Send
+                        } else {
+                            AIChatHit::FocusInput
+                        },
+                    );
                 }
             }
             return Some(if self.is_streaming() {
@@ -511,11 +516,9 @@ impl<'a> AIChatPlaceholder<'a> {
         let rows_top = picker.origin.y + 32.0;
         for i in 1..=crate::widgets::ai_chat_panel_footer::PARALLEL_AGENTS_COUNT {
             let row_y = rows_top
-                + (i - 1) as f32
-                    * crate::widgets::ai_chat_panel_footer::PARALLEL_AGENTS_ROW_H_PUB;
+                + (i - 1) as f32 * crate::widgets::ai_chat_panel_footer::PARALLEL_AGENTS_ROW_H_PUB;
             if point.y >= row_y
-                && point.y
-                    < row_y + crate::widgets::ai_chat_panel_footer::PARALLEL_AGENTS_ROW_H_PUB
+                && point.y < row_y + crate::widgets::ai_chat_panel_footer::PARALLEL_AGENTS_ROW_H_PUB
             {
                 return Some(i);
             }
