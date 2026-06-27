@@ -20,7 +20,7 @@
 
 use crate::append::apply_append_context_to_plan;
 use crate::cleanup::{
-    aggregate_concurrent_verdict, cleanup_concurrent_roots, descendant_count, run_cleanup_passes,
+    aggregate_concurrent_verdict, cleanup_concurrent_roots, descendant_count, finalize_design,
 };
 use crate::concurrent::{effective_concurrency, group_subtasks_by_screen, run_concurrent};
 use crate::dashboard_columns::should_use_dashboard_columns;
@@ -526,9 +526,9 @@ impl Orchestrator {
                 .iter()
                 .flat_map(|o| o.inserted_root_ids.iter().map(String::as_str))
                 .collect();
-            run_cleanup_passes(sink, &plan, &new_roots);
+            finalize_design(sink, &plan, &new_roots);
         } else {
-            run_cleanup_passes(sink, &plan, &[&root_id]);
+            finalize_design(sink, &plan, &[&root_id]);
         }
         on_progress(Progress::CleanupDone);
 
@@ -719,7 +719,7 @@ async fn run_concurrent_path(
 
     // -- 阶段 4 (并发):清理 --
     let root_id_strs: Vec<&str> = actual_root_ids.iter().map(|s| s.as_str()).collect();
-    run_cleanup_passes(sink, &plan, &root_id_strs);
+    finalize_design(sink, &plan, &root_id_strs);
     on_progress(Progress::CleanupDone);
 
     sink.end_undo_batch();

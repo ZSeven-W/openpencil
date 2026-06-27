@@ -666,6 +666,25 @@ fn find_root<'a>(state: &'a EditorState, root_id: &str) -> Option<&'a PenNode> {
 /// ③ 过度粗体文本层级修正 ④ 根高度自适应。
 /// 未做:单组件 section root unwrap(`unwrapSingleComponentSection`
 /// Root`)—— 启发式强、对 parity 敏感,留作 S3a 后续细化。
+/// Whole-root finalize stage — the single, idempotent public entry point the
+/// orchestrator (and, in a later step, the agentic design loop) calls to run
+/// every whole-root cleanup pass over the produced root frames.
+///
+/// This is a thin, behavior-preserving wrapper around
+/// [`run_cleanup_passes`]: it forwards its inputs unchanged so the effect is
+/// byte-for-byte identical to calling `run_cleanup_passes` directly. The
+/// orchestrator's cleanup stage now routes through here so a future agentic
+/// loop can reuse the exact same finalize surface at the end of its turn.
+///
+/// SCOPE NOTE (Step 4 concern, NOT folded in here): the per-subtask Stage-1
+/// ordered passes (`role_infer` / `role_post_pass` / `tree_heuristics` in
+/// `subagent.rs`) are intentionally left where they are. They depend on
+/// per-subtask forest context that is not available at this whole-root
+/// finalize boundary, so folding them in is deferred to a later step.
+pub fn finalize_design(sink: &mut dyn DocSink, plan: &OrchestratorPlan, root_ids: &[&str]) {
+    run_cleanup_passes(sink, plan, root_ids);
+}
+
 pub fn run_cleanup_passes(sink: &mut dyn DocSink, plan: &OrchestratorPlan, root_ids: &[&str]) {
     for root_id in root_ids {
         remove_duplicate_status_bars(sink, root_id);

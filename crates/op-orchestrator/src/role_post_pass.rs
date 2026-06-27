@@ -887,9 +887,7 @@ fn category_item_row_count(node: &Value) -> Option<usize> {
     {
         return None;
     }
-    let Some(children) = node.get("children").and_then(Value::as_array) else {
-        return None;
-    };
+    let children = node.get("children").and_then(Value::as_array)?;
     let item_count = children
         .iter()
         .filter(|child| is_category_item_like_child(child))
@@ -914,7 +912,7 @@ fn should_normalize_mobile_category_row(node: &Value, canvas_width: f64) -> bool
     if !is_category_row_label(&semantic_label(node)) && !loose_spacing {
         return false;
     }
-    !(item_count < 4 && !loose_spacing)
+    item_count >= 4 || loose_spacing
 }
 
 fn should_normalize_mobile_category_row_in_section(node: &Value) -> bool {
