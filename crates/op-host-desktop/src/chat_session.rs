@@ -22,8 +22,11 @@ mod launch;
 pub(crate) use launch::builtin_provider_with_tools;
 pub use launch::{drain_new_chat_request, drain_stop_request, launch_if_pending};
 pub(crate) use launch::{provider_for_selected_model, selected_cli_model_id};
-// Sub-agent launcher (Task 3.1) reuses the design-toolset provider builder.
-pub(crate) use launch::launch_design::builtin_provider_with_design_tools;
+// Sub-agent launcher (Task 3.1) reuses the design-toolset provider builder
+// and the design-turn thinking policy.
+pub(crate) use launch::launch_design::{
+    builtin_provider_with_design_tools, design_turn_thinking_mode,
+};
 
 /// Pump the in-flight turn's deltas into the trailing assistant message, then
 /// execute any pending canvas tool calls against the live editor state.
