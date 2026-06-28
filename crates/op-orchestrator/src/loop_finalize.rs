@@ -192,6 +192,12 @@ pub fn apply_loop_finalize(state: &mut EditorState) {
         crate::role_post_pass::enforce_surface_color_discipline(forest);
     }
 
+    // The app-shell restructure (flat-vertical sidebar dashboard → horizontal
+    // [sidebar | content]) runs inside `cleanup::finalize_design` below, the
+    // whole-doc finalize point SHARED with the orchestrator path — so both the
+    // agentic loop and the orchestrator get it exactly once, after roles are
+    // resolved. See `cleanup::run_cleanup_passes`.
+
     // -- Per-root cleanup (`cleanup::finalize_design`) over every top-level
     //    root, via a borrowed-state DocSink. The cleanup passes are whole-root
     //    (they take the page-root id and recurse), so they always run over the
