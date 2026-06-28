@@ -673,44 +673,68 @@ pub fn finalize_design(sink: &mut dyn DocSink, plan: &OrchestratorPlan, root_ids
 
 pub fn run_cleanup_passes(sink: &mut dyn DocSink, plan: &OrchestratorPlan, root_ids: &[&str]) {
     for root_id in root_ids {
-        // FIRST: turn a flat-vertical desktop dashboard with a full-width
-        // sidebar into a horizontal [sidebar | content] app-shell, so the
-        // remaining cleanup passes (esp. `adjust_root_height_to_content`) see
-        // the corrected shape. This is the shared whole-doc finalize point for
-        // BOTH the orchestrator (per-subtask role passes already ran) and the
-        // agentic loop (whole-doc role passes ran in `apply_loop_finalize`), so
-        // the moved sections keep their resolved roles.
-        restructure_app_shell_root(sink, root_id);
-        remove_duplicate_status_bars(sink, root_id);
-        repair_light_mobile_nav_surfaces(sink, root_id);
-        repair_mobile_content_sections(sink, root_id);
-        cleanup_mobile_chrome::repair_mobile_structural_chrome(sink, root_id);
-        cleanup_mobile_dense::repair_dense_mobile_rows(sink, root_id);
-        cleanup_desktop_dashboard::repair_sparse_desktop_dashboard_rows(sink, plan, root_id);
-        repair_overbold_text_hierarchy(sink, root_id);
-        strip_decorative_filled_strokes(sink, root_id);
-        adjust_root_height_to_content(sink, root_id);
+        // FIRST: whole-root structural restructures, shared by BOTH the
+        // orchestrator (per-subtask role passes already ran) and the agentic
+        // loop (whole-doc role passes ran in `apply_loop_finalize`), so the
+        // moved sections keep their resolved roles. These swap the root via
+        // `ReplaceSubtree`, which allocates a FRESH root id — `apply_root_transform`
+        // returns the new id so the per-root cleanup passes below don't look up a
+        // stale id and silently no-op.
+        let mut rid = root_id.to_string();
+        // Flat-vertical / crammed-horizontal sidebar dashboard → [sidebar | content].
+        rid = apply_root_transform(sink, &rid, crate::app_shell::reshape_sidebar_to_app_shell);
+        // Flat table cells → Table → Row → Cell.
+        rid = apply_root_transform(sink, &rid, crate::table_repair::regroup_flat_table_rows);
+        let rid = rid.as_str();
+
+        remove_duplicate_status_bars(sink, rid);
+        repair_light_mobile_nav_surfaces(sink, rid);
+        repair_mobile_content_sections(sink, rid);
+        cleanup_mobile_chrome::repair_mobile_structural_chrome(sink, rid);
+        cleanup_mobile_dense::repair_dense_mobile_rows(sink, rid);
+        cleanup_desktop_dashboard::repair_sparse_desktop_dashboard_rows(sink, plan, rid);
+        repair_overbold_text_hierarchy(sink, rid);
+        strip_decorative_filled_strokes(sink, rid);
+        adjust_root_height_to_content(sink, rid);
     }
 }
 
-/// Restructure the page-root in place when it is a flat-vertical desktop
-/// dashboard whose first child is a full-width sidebar (see
-/// [`crate::app_shell::reshape_sidebar_to_app_shell`] for the strict gate). The
-/// whole subtree is swapped via `ReplaceSubtree` (the new root carries the
-/// reorganized children, so `drop_children: true` loses nothing).
-fn restructure_app_shell_root(sink: &mut dyn DocSink, root_id: &str) {
-    let Some(root) = find_root(sink.state(), root_id) else {
-        return;
+/// Apply a whole-root transform (the serialize → mutate → deserialize round-trip
+/// the structural passes use) to the page-root and commit it via `ReplaceSubtree`.
+///
+/// `ReplaceSubtree` allocates a FRESH id for the replaced node (see
+/// `command_replace_tests`), so the root's id changes on every successful
+/// transform. This returns the root's CURRENT id (re-resolved by its unchanged
+/// position) so the caller threads it into the next pass — otherwise every
+/// subsequent per-root cleanup pass would look up the stale id and no-op.
+fn apply_root_transform(
+    sink: &mut dyn DocSink,
+    root_id: &str,
+    transform: fn(&mut PenNode) -> bool,
+) -> String {
+    let Some(idx) = sink
+        .state()
+        .active_children()
+        .iter()
+        .position(|n| n.id_str() == root_id)
+    else {
+        return root_id.to_string();
     };
-    let mut new_root = root.clone();
-    if crate::app_shell::reshape_sidebar_to_app_shell(&mut new_root) {
-        sink.apply(EditorCommand::ReplaceSubtree {
-            node_id: NodeId::new(root_id.to_string()),
-            node: Box::new(new_root),
-            drop_children: true,
-            page_id: None,
-        });
+    let mut new_root = sink.state().active_children()[idx].clone();
+    if !transform(&mut new_root) {
+        return root_id.to_string();
     }
+    sink.apply(EditorCommand::ReplaceSubtree {
+        node_id: NodeId::new(root_id.to_string()),
+        node: Box::new(new_root),
+        drop_children: true,
+        page_id: None,
+    });
+    sink.state()
+        .active_children()
+        .get(idx)
+        .map(|n| n.id_str().to_string())
+        .unwrap_or_else(|| root_id.to_string())
 }
 
 /// Strip the REDUNDANT border off a filled, shadowed container. When a

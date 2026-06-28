@@ -57,6 +57,7 @@ pub mod run;
 pub mod scaffold;
 pub mod spawn_concurrent;
 pub mod subagent;
+pub mod table_repair;
 pub mod tree_heuristics;
 
 #[cfg(test)]
