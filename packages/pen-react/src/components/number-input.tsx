@@ -104,7 +104,7 @@ export function NumberInput({
     <div
       className={cn(
         'flex items-center h-6 bg-secondary rounded border border-transparent',
-        'hover:border-input focus-within:border-ring transition-colors',
+        'hover:border-input focus-within:border-ring focus-within:hover:border-ring transition-colors',
         className,
       )}
       onMouseDown={handleMouseDown}

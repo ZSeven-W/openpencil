@@ -165,7 +165,7 @@ export default function VariableRow({
               type="text"
               value={String(getValueForTheme(tv))}
               onChange={(e) => setValueForTheme(tv, e.target.value)}
-              className="flex-1 max-w-[180px] bg-secondary/50 text-foreground text-[13px] px-2 py-1 rounded-lg border border-transparent hover:border-input focus:border-ring focus:outline-none font-mono min-w-0"
+              className="flex-1 max-w-[180px] bg-secondary/50 text-foreground text-[13px] px-2 py-1 rounded-lg border border-transparent hover:border-input focus:border-ring focus:hover:border-ring focus:outline-none font-mono min-w-0"
             />
           )}
         </div>

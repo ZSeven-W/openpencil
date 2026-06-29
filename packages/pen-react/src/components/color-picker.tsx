@@ -51,7 +51,7 @@ export function ColorPicker({ value, onChange, label, className }: ColorPickerPr
   return (
     <div className={cn('flex items-center gap-1.5', className)}>
       {label && <span className="text-[10px] text-muted-foreground shrink-0">{label}</span>}
-      <div className="flex items-center h-6 bg-secondary rounded border border-transparent hover:border-input focus-within:border-ring transition-colors flex-1">
+      <div className="flex items-center h-6 bg-secondary rounded border border-transparent hover:border-input focus-within:border-ring focus-within:hover:border-ring transition-colors flex-1">
         <div className="pl-1 shrink-0">
           <input
             type="color"

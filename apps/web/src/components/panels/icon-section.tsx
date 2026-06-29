@@ -225,7 +225,7 @@ export default function IconSection({ node, onUpdate }: IconSectionProps) {
         <select
           value={displayCollection}
           onChange={(e) => handleLibraryChange(e.target.value)}
-          className="w-full h-7 bg-secondary text-foreground text-[11px] px-2 rounded border border-transparent hover:border-input focus:border-ring focus:outline-none cursor-pointer transition-colors appearance-none"
+          className="w-full h-7 bg-secondary text-foreground text-[11px] px-2 rounded border border-transparent hover:border-input focus:border-ring focus:hover:border-ring focus:outline-none cursor-pointer transition-colors appearance-none"
         >
           {!POPULAR_COLLECTIONS.some((c) => c.id === displayCollection) && displayCollection && (
             <option value={displayCollection}>{displayCollection}</option>
