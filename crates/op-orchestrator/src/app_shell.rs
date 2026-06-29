@@ -34,6 +34,9 @@ const SIDEBAR_WIDTH: f64 = 260.0;
 const DESKTOP_MIN_WIDTH: f64 = 900.0;
 /// A real sidebar is full-height; a 64–96px full-width band is a header.
 const MIN_SIDEBAR_HEIGHT: f64 = 200.0;
+/// Outer gutter for the content column `[vertical, horizontal]`. Mirrors
+/// Pencil's app-shell content `padding:[32,40]`.
+const CONTENT_PADDING: [i64; 2] = [32, 40];
 
 /// Restructure a flat-vertical desktop dashboard whose first child is a
 /// full-width sidebar into a horizontal `[sidebar(fixed) | content(fill)]`
@@ -226,6 +229,62 @@ fn detect(v: &Value) -> bool {
 
 // ── Restructure ──
 
+/// Drop the sidebar's footer (user/profile card) to the bottom of the now
+/// full-height column. Pencil splits the sidebar into a Top + Bottom group with
+/// `justifyContent: space_between`; weak models emit a flat column with a
+/// FIXED-height spacer (e.g. 120px) that no longer reaches the bottom once the
+/// sidebar stretches to the content height — so the footer floats mid-column.
+/// Stretch an existing spacer to `fill_container`; if there is none, inject a
+/// flexible spacer just before a footer-like last child.
+fn sink_sidebar_footer(sidebar: &mut Value) {
+    let sidebar_id = sidebar
+        .get("id")
+        .and_then(Value::as_str)
+        .unwrap_or("sidebar")
+        .to_string();
+    let Some(kids) = sidebar.get_mut("children").and_then(Value::as_array_mut) else {
+        return;
+    };
+    if kids.len() < 2 {
+        return;
+    }
+    let mut stretched = false;
+    for c in kids.iter_mut() {
+        if ident_text(c).contains("spacer") {
+            if let Some(o) = c.as_object_mut() {
+                o.insert("height".into(), json!("fill_container"));
+                stretched = true;
+            }
+        }
+    }
+    if stretched {
+        return;
+    }
+    let last_is_footer = kids
+        .last()
+        .map(ident_text)
+        .map(|t| {
+            ["user", "profile", "account", "avatar", "footer", "member"]
+                .iter()
+                .any(|k| t.contains(k))
+        })
+        .unwrap_or(false);
+    if last_is_footer {
+        let pos = kids.len() - 1;
+        kids.insert(
+            pos,
+            json!({
+                "type": "frame",
+                "id": format!("{sidebar_id}-spacer"),
+                "name": "Sidebar Spacer",
+                "width": "fill_container",
+                "height": "fill_container",
+                "children": [],
+            }),
+        );
+    }
+}
+
 /// Recursively retarget any descendant whose width was sized to (about) the OLD
 /// full root width down to `fill_container`, so full-width sections/dividers
 /// fill their new narrower column instead of overflowing it (taffy never
@@ -285,6 +344,7 @@ fn restructure(v: &mut Value) -> bool {
         s.insert("clipContent".into(), json!(true));
     }
     fill_full_width_descendants(&mut sidebar, root_w);
+    sink_sidebar_footer(&mut sidebar);
 
     // Content sections → fill the new column instead of the old full root width.
     for section in content_sections.iter_mut() {
@@ -299,6 +359,10 @@ fn restructure(v: &mut Value) -> bool {
         "height": "fit_content",
         "layout": "vertical",
         "gap": content_gap,
+        // Outer page gutter (Pencil's app-shell content carries padding:[32,40]
+        // so sections don't run edge-to-edge into the viewport). Without it the
+        // new fill_container column lets the stat cards touch the right edge.
+        "padding": CONTENT_PADDING,
         "children": content_sections,
     });
 
