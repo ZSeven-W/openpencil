@@ -249,13 +249,15 @@ impl LlmClient for DirectOpenAiClient {
                     obj.insert("thinking".into(), serde_json::json!({ "type": "disabled" }));
                 }
             }
-            let resp = match reqwest::Client::new()
-                .post(&url)
-                .bearer_auth(&key)
-                .json(&body)
-                .send()
-                .await
-            {
+            // Connect + overall deadlines so a hung provider endpoint surfaces
+            // as an error instead of pinning the headless harness forever
+            // (mirrors the desktop's builtin_http_client).
+            let client = reqwest::Client::builder()
+                .connect_timeout(std::time::Duration::from_secs(15))
+                .timeout(std::time::Duration::from_secs(300))
+                .build()
+                .unwrap_or_else(|_| reqwest::Client::new());
+            let resp = match client.post(&url).bearer_auth(&key).json(&body).send().await {
                 Ok(r) => r,
                 Err(e) => {
                     let _ = tx.unbounded_send(Err(LlmError {
@@ -656,6 +658,74 @@ async fn main() -> std::process::ExitCode {
     if let Err(code) = maybe_merge_smoke_library(&mut sink.state) {
         return code;
     }
+
+    // `OPENPENCIL_SMOKE_PROGRAM=<path>` runs a Pencil-style batch_design DSL
+    // PROGRAM (a `binding=I(parent,{...})` tree-builder) against the doc and
+    // saves it, bypassing the orchestrator entirely. This is the experiment
+    // harness for "can a weak model emit a structurally-stable PROGRAM
+    // (parent-by-reference) instead of fragile flat JSONL?". postProcess stays
+    // OFF so the saved doc is the RAW structure the program builds — no cleanup
+    // post-pass — which is the whole point: the program needs no repair pass.
+    if let Ok(program_path) = std::env::var("OPENPENCIL_SMOKE_PROGRAM") {
+        let program = match std::fs::read_to_string(&program_path) {
+            Ok(s) => s,
+            Err(e) => {
+                eprintln!("[PROGRAM] read {program_path}: {e}");
+                return std::process::ExitCode::from(3);
+            }
+        };
+        let tool = op_mcp::batch_design_snapshot(&sink.state);
+        let mut args: std::collections::BTreeMap<String, String> =
+            std::collections::BTreeMap::new();
+        args.insert("operations".into(), program);
+        let applied = match op_mcp::McpTool::call(&tool, &args) {
+            op_mcp::ToolOutcome::OkJsonWithCommand(json, cmd) => {
+                eprintln!("[PROGRAM] result envelope: {json}");
+                let ok = sink.state.apply(cmd);
+                eprintln!("[PROGRAM] apply -> {ok}");
+                ok
+            }
+            op_mcp::ToolOutcome::OkJson(json) => {
+                eprintln!("[PROGRAM] no command produced: {json}");
+                false
+            }
+            other => {
+                eprintln!("[PROGRAM] unexpected outcome: {other:?}");
+                false
+            }
+        };
+        let code = match std::env::var("OPENPENCIL_SMOKE_OUT") {
+            Ok(out) if !out.is_empty() => match serde_json::to_string_pretty(&sink.state.doc) {
+                Ok(j) => match std::fs::write(&out, j) {
+                    Ok(()) => {
+                        eprintln!("[PROGRAM] saved doc -> {out}");
+                        if applied {
+                            std::process::ExitCode::SUCCESS
+                        } else {
+                            std::process::ExitCode::from(1)
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("[PROGRAM] save failed ({out}): {e}");
+                        std::process::ExitCode::from(4)
+                    }
+                },
+                Err(e) => {
+                    eprintln!("[PROGRAM] serialize failed: {e}");
+                    std::process::ExitCode::from(4)
+                }
+            },
+            _ => {
+                if applied {
+                    std::process::ExitCode::SUCCESS
+                } else {
+                    std::process::ExitCode::from(1)
+                }
+            }
+        };
+        return code;
+    }
+
     let request = DesignRequest {
         prompt,
         model: Some(model),
