@@ -1,6 +1,5 @@
 import { create } from 'zustand';
-import type { PenDocument, PenNode } from '@/types/pen';
-import type { VariableDefinition } from '@/types/variables';
+import type { PenDocument } from '@/types/pen';
 import type { DesignMdSpec } from '@/types/design-md';
 
 import { normalizePenDocument } from '@/utils/normalize-pen-file';
@@ -13,10 +12,10 @@ import {
   ensureDocumentNodeIds,
   DEFAULT_PAGE_ID,
 } from './document-tree-utils';
-import { createNodeActions } from './document-store-node-actions';
-import { createComponentActions } from './document-store-component-actions';
-import { createVariableActions } from './document-store-variable-actions';
-import { createPageActions } from './document-store-pages';
+import { createNodeActions, type NodeActions } from './document-store-node-actions';
+import { createComponentActions, type ComponentActions } from './document-store-component-actions';
+import { createVariableActions, type VariableActions } from './document-store-variable-actions';
+import { createPageActions, type PageActions } from './document-store-pages';
 import {
   isElectron,
   supportsFileSystemAccess,
@@ -27,7 +26,7 @@ import {
 } from '@/utils/file-operations';
 import { documentEvents } from '@/utils/document-events';
 
-interface DocumentStoreState {
+interface DocumentStoreState extends NodeActions, ComponentActions, VariableActions, PageActions {
   document: PenDocument;
   fileName: string | null;
   isDirty: boolean;
@@ -38,47 +37,8 @@ interface DocumentStoreState {
   /** Whether the "save as" dialog is open (fallback for browsers without FS API). */
   saveDialogOpen: boolean;
 
-  addNode: (parentId: string | null, node: PenNode, index?: number) => void;
-  updateNode: (id: string, updates: Partial<PenNode>) => void;
-  removeNode: (id: string) => void;
-  moveNode: (
-    id: string,
-    newParentId: string | null,
-    index: number,
-    options?: { preserveAbsolutePosition?: boolean },
-  ) => void;
-  reorderNode: (id: string, direction: 'up' | 'down') => void;
-  toggleVisibility: (id: string) => void;
-  toggleLock: (id: string) => void;
-  duplicateNode: (id: string) => string | null;
-  groupNodes: (nodeIds: string[]) => string | null;
-  ungroupNode: (groupId: string) => void;
-  scaleDescendantsInStore: (parentId: string, scaleX: number, scaleY: number) => void;
-  rotateDescendantsInStore: (parentId: string, angleDeltaDeg: number) => void;
-  getNodeById: (id: string) => PenNode | undefined;
-  getParentOf: (id: string) => PenNode | undefined;
-  getFlatNodes: () => PenNode[];
-  isDescendantOf: (nodeId: string, ancestorId: string) => boolean;
-
-  // Component management
-  makeReusable: (nodeId: string) => void;
-  detachComponent: (nodeId: string) => string | undefined;
-
-  // Variable management
-  setVariable: (name: string, definition: VariableDefinition) => void;
-  removeVariable: (name: string) => void;
-  renameVariable: (oldName: string, newName: string) => void;
-  setThemes: (themes: Record<string, string[]>) => void;
-
   // Design.md — per-document design system spec (lives inside PenDocument).
   setDesignMd: (spec: DesignMdSpec | undefined) => void;
-
-  // Page management
-  addPage: () => string;
-  removePage: (pageId: string) => void;
-  renamePage: (pageId: string, name: string) => void;
-  reorderPage: (pageId: string, direction: 'left' | 'right') => void;
-  duplicatePage: (pageId: string) => string | null;
 
   applyExternalDocument: (doc: PenDocument) => void;
   applyHistoryState: (doc: PenDocument) => void;

@@ -3,7 +3,7 @@ import type { PenDocument, PenNode, PenPage } from '@/types/pen';
 import { useHistoryStore } from '@/stores/history-store';
 import { useCanvasStore } from '@/stores/canvas-store';
 
-interface PageActions {
+export interface PageActions {
   addPage: () => string;
   removePage: (pageId: string) => void;
   renamePage: (pageId: string, name: string) => void;

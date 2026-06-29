@@ -5,7 +5,7 @@ import { useHistoryStore } from '@/stores/history-store';
 import { getDefaultTheme } from '@/variables/resolve-variables';
 import { replaceVariableRefsInTree } from '@/variables/replace-refs';
 
-interface VariableActions {
+export interface VariableActions {
   setVariable: (name: string, definition: VariableDefinition) => void;
   removeVariable: (name: string) => void;
   renameVariable: (oldName: string, newName: string) => void;

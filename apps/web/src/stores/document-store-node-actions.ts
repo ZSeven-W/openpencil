@@ -50,7 +50,7 @@ function mutateWithHistory(
   set({ document: fn(get().document), isDirty: true });
 }
 
-interface NodeActions {
+export interface NodeActions {
   addNode: (parentId: string | null, node: PenNode, index?: number) => void;
   updateNode: (id: string, updates: Partial<PenNode>) => void;
   removeNode: (id: string) => void;

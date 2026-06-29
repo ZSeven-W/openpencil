@@ -24,7 +24,7 @@ function _setChildren(doc: PenDocument, children: PenNode[]): PenDocument {
   return setActivePageChildren(doc, useCanvasStore.getState().activePageId, children);
 }
 
-interface ComponentActions {
+export interface ComponentActions {
   makeReusable: (nodeId: string) => void;
   detachComponent: (nodeId: string) => string | undefined;
 }
