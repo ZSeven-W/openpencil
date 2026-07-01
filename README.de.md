@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./apps/desktop/build/icon.png" alt="OpenPencil" width="120" />
+  <img src="./crates/op-host-desktop/assets/icon.png" alt="OpenPencil" width="120" />
 </p>
 
 <h1 align="center">OpenPencil</h1>
@@ -224,7 +224,7 @@ op import:figma design.fig   # Figma-Datei importieren
 cat design.dsl | op design - # Pipe von stdin
 ```
 
-Unterstützt drei Eingabemethoden: Inline-String, `@filepath` (aus Datei lesen) oder `-` (von stdin lesen). Funktioniert mit der Desktop-App oder dem Web-Entwicklungsserver. Siehe [CLI README](./apps/cli/README.md) für die vollständige Befehlsreferenz.
+Unterstützt drei Eingabemethoden: Inline-String, `@filepath` (aus Datei lesen) oder `-` (von stdin lesen). Funktioniert mit der Desktop-App oder dem Web-Entwicklungsserver. Siehe [CLI README](./crates/op-cli) für die vollständige Befehlsreferenz.
 
 **LLM-Skill** — Installieren Sie das [OpenPencil Skill](https://github.com/ZSeven-W/openpencil-skill)-Plugin, um KI-Agenten (Claude Code, Cursor, Codex, Gemini CLI usw.) das Designen mit `op` beizubringen.
 
@@ -442,7 +442,7 @@ Danke an **[MrQyun](https://github.com/mrqyun)** — soll dein Name auch hier st
 ## Community
 
 <a href="https://discord.gg/h9Fmyy6pVh">
-  <img src="./apps/web/public/logo-discord.svg" alt="Discord" width="16" />
+  <img src="./screenshot/logo-discord.svg" alt="Discord" width="16" />
   <strong> Unserem Discord beitreten</strong>
 </a>
 — Fragen stellen, Designs teilen, Funktionen vorschlagen.

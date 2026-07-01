@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./apps/desktop/build/icon.png" alt="OpenPencil" width="120" />
+  <img src="./crates/op-host-desktop/assets/icon.png" alt="OpenPencil" width="120" />
 </p>
 
 <h1 align="center">OpenPencil</h1>
@@ -224,7 +224,7 @@ op import:figma design.fig   # Импортировать файл Figma
 cat design.dsl | op design - # Передача через stdin
 ```
 
-Поддерживает три метода ввода: строка, `@filepath` (чтение из файла) или `-` (чтение из stdin). Работает с десктопным приложением или веб-сервером разработки. Подробнее в [CLI README](./apps/cli/README.md).
+Поддерживает три метода ввода: строка, `@filepath` (чтение из файла) или `-` (чтение из stdin). Работает с десктопным приложением или веб-сервером разработки. Подробнее в [CLI README](./crates/op-cli).
 
 **LLM-навык** — установите плагин [OpenPencil Skill](https://github.com/ZSeven-W/openpencil-skill), чтобы научить ИИ-агентов (Claude Code, Cursor, Codex, Gemini CLI и др.) проектировать с помощью `op`.
 
@@ -442,7 +442,7 @@ OpenPencil бесплатен и open source. Разработка финанс�
 ## Сообщество
 
 <a href="https://discord.gg/h9Fmyy6pVh">
-  <img src="./apps/web/public/logo-discord.svg" alt="Discord" width="16" />
+  <img src="./screenshot/logo-discord.svg" alt="Discord" width="16" />
   <strong> Присоединяйтесь к нашему Discord</strong>
 </a>
 — Задавайте вопросы, делитесь дизайнами, предлагайте функции.

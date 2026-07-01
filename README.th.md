@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./apps/desktop/build/icon.png" alt="OpenPencil" width="120" />
+  <img src="./crates/op-host-desktop/assets/icon.png" alt="OpenPencil" width="120" />
 </p>
 
 <h1 align="center">OpenPencil</h1>
@@ -224,7 +224,7 @@ op import:figma design.fig   # นำเข้าไฟล์ Figma
 cat design.dsl | op design - # Pipe จาก stdin
 ```
 
-รองรับ 3 วิธีการป้อนข้อมูล: สตริงแบบ inline, `@filepath` (อ่านจากไฟล์) หรือ `-` (อ่านจาก stdin) ทำงานร่วมกับแอปเดสก์ท็อปหรือ web dev server ดู [CLI README](./apps/cli/README.md) สำหรับคู่มือคำสั่งฉบับเต็ม
+รองรับ 3 วิธีการป้อนข้อมูล: สตริงแบบ inline, `@filepath` (อ่านจากไฟล์) หรือ `-` (อ่านจาก stdin) ทำงานร่วมกับแอปเดสก์ท็อปหรือ web dev server ดู [CLI README](./crates/op-cli) สำหรับคู่มือคำสั่งฉบับเต็ม
 
 **LLM Skill** — ติดตั้งปลั๊กอิน [OpenPencil Skill](https://github.com/ZSeven-W/openpencil-skill) เพื่อสอน AI agent (Claude Code, Cursor, Codex, Gemini CLI ฯลฯ) ออกแบบด้วย `op`
 
@@ -442,7 +442,7 @@ OpenPencil เป็นซอฟต์แวร์ฟรีและโอเพ
 ## ชุมชน
 
 <a href="https://discord.gg/h9Fmyy6pVh">
-  <img src="./apps/web/public/logo-discord.svg" alt="Discord" width="16" />
+  <img src="./screenshot/logo-discord.svg" alt="Discord" width="16" />
   <strong> เข้าร่วม Discord ของเรา</strong>
 </a>
 — ถามคำถาม แชร์ดีไซน์ เสนอฟีเจอร์
