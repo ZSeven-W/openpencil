@@ -106,6 +106,10 @@ A new screen or page MUST open as a new top-level frame placed to the **right** 
 
 Bottom navigation bars span the full screen width. Tabs are evenly spread across that width. Every navigation tab MUST have BOTH an icon and a text label beneath it — never icon-only or label-only tabs.
 
+### Every image slot gets a real image fill
+
+Any avatar, profile photo, client/user thumbnail, product image, hero, or logo slot MUST receive an image fill via `G(id, "search", "<subject>")` — never leave it as an empty frame or a flat colored square. The subject is 2–3 English keywords UNIQUE per image, derived from the surrounding row/card (a client-row avatar is `G(avatarFrame, "search", "man portrait")`, a dish card is `G(imgFrame, "search", "pasta plate")`). Emit the `G(...)` op in the SAME batch that creates the frame so no placeholder is left unfilled.
+
 ### Reuse design-system components
 
 Prefer components found in `get_editor_state` components / retrieved via `batch_get` over rebuilding primitives. Use `$variable` references over hardcoded color hex values or numeric sizes.
