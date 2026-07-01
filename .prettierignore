@@ -1,7 +1,6 @@
 # oxfmt picks this file up automatically (alongside .gitignore).
 
 # Git submodules — owned by separate repos, not formatted from here.
-packages/agent-native/
 vendor/agent/
 vendor/casement/
 vendor/jian/

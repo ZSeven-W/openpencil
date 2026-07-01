@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
@@ -10,7 +11,10 @@ const SETS = ['lucide', 'feather', 'simple-icons'];
 // runtime (desktop: include_str at startup; web: fetched from the daemon) so
 // they never bloat the wasm first-load.
 const CORE_SETS = new Set(['lucide', 'feather']);
-const OUT_DIR = path.resolve('crates/op-editor-ui/assets');
+// Anchored to this script's location (packages/scripts/), not the CWD, so the
+// catalog always lands in crates/op-editor-ui/assets regardless of where the
+// `generate-iconify-catalog` script is invoked from.
+const OUT_DIR = fileURLToPath(new URL('../../crates/op-editor-ui/assets', import.meta.url));
 const OUT_CORE = path.join(OUT_DIR, 'iconify-catalog-core.json');
 const OUT_BRANDS = path.join(OUT_DIR, 'iconify-catalog-brands.json');
 

@@ -105,20 +105,17 @@ Export aus einer einzigen `.op`-Datei nach React + Tailwind, HTML + CSS, Vue, Sv
 ## Schnellstart
 
 ```bash
-# Abhängigkeiten installieren
-bun install
-
-# Entwicklungsserver auf http://localhost:3000 starten
-bun --bun run dev
+# Web dev server (builds the CanvasKit wasm bundle, then runs the headless web host)
+bash scripts/start-web-rust.sh
 ```
 
 Oder als Desktop-App ausführen:
 
 ```bash
-bun run electron:dev
+cargo run -p op-host-desktop
 ```
 
-> **Voraussetzungen:** [Bun](https://bun.sh/) >= 1.0 und [Node.js](https://nodejs.org/) >= 18
+> **Voraussetzungen:** [Rust](https://www.rust-lang.org/) (stable) zum Bauen des Produkts. [Bun](https://bun.sh/) >= 1.0 und [Node.js](https://nodejs.org/) >= 18 werden nur für das Web-SDK unter `packages/` benötigt.
 
 ### Docker
 
@@ -254,7 +251,7 @@ Unterstützt drei Eingabemethoden: Inline-String, `@filepath` (aus Datei lesen) 
 - Mehrstufiger Workflow — `design_skeleton` → `design_content` → `design_refine` mit fokussierten Prompts pro Phase
 - Style Guides — 50+ eingebaute Stile (glassmorphism, brutalist, retro usw.) mit tag-basiertem Fuzzy-Matching, eingebunden in Planung und Generierung
 - Multi-Modell-Fähigkeitsprofile — passt Denkmodus, Aufwand und Promptform automatisch an die Modellstufe an
-- Integrierte Agent-Laufzeit (`agent-native`, Zig NAPI) + Anthropic, Claude Agent SDK, OpenCode, Codex, Copilot, Gemini-Anbieter
+- Integrierte Agent-Laufzeit (Rust) + Anthropic, Claude Agent SDK, OpenCode, Codex, Copilot, Gemini-Anbieter
 - Anthropic-Format-Passthrough für chinesische LLM-Anbieter — Kimi, Zhipu, GLM, DouBao, Ark, Bailian/DashScope, ModelScope, Coding Plans
 
 **Git-Integration**
@@ -309,7 +306,7 @@ OpenPencil wird von Grund auf in **Rust** neu geschrieben ([#129](https://github
 | **Web-Nutzlast**           | JS + WASM-Bundle                                        | **8.2 MB** wasm / **2.18 MB** gzip über die Leitung                           |
 | **Rendering**              | CanvasKit/Skia im Web                                   | Ein GPU-beschleunigtes Skia-Backend auf **jedem** Ziel                        |
 | **Speicher**               | JavaScript GC-Pausen                                    | Kein GC — Rust-Ownership, vorhersagbare Latenz                                |
-| **Codebasis**              | Web-Stack + Electron + Zig NAPI-Agent                   | Ein Rust-Workspace: Editor · CLI · MCP · AI · Codegen · Figma · Git           |
+| **Codebasis**              | Web-Stack + Electron                   | Ein Rust-Workspace: Editor · CLI · MCP · AI · Codegen · Figma · Git           |
 | **Zielplattformen**        | Web + Desktop, zwei separate Stacks                     | Desktop (macOS/Win/Linux) · Mobile (iOS/Android) · Browser — ein Kern         |
 
 **Gemessene Verbesserungen**
@@ -382,15 +379,20 @@ openpencil/
 ## Skripte
 
 ```bash
-bun --bun run dev          # Entwicklungsserver (Port 3000)
-bun --bun run build        # Produktions-Build
-bun --bun run test         # Tests ausführen (Vitest)
-npx tsc --noEmit           # Typprüfung
-bun run bump <version>     # Version über alle package.json synchronisieren
-bun run electron:dev       # Electron-Entwicklung
-bun run electron:build     # Electron-Paketierung
-bun run cli:dev            # CLI aus Quellcode ausführen
-bun run cli:compile        # CLI nach dist kompilieren
+# Product (Rust — run from the repo root)
+cargo build --workspace              # Build all crates (add --release for prod)
+cargo test --workspace               # Run all tests
+cargo check --workspace              # Type check
+cargo clippy --workspace --all-targets -- -D warnings   # Lint
+cargo fmt --all                      # Format
+bash scripts/start-web-rust.sh       # Web dev server (wasm bundle + headless host)
+cargo run -p op-host-desktop         # Desktop app (binary: openpencil-desktop)
+cargo run -p op-cli -- <args>        # CLI (binary: op)
+
+# Web SDK / JS tooling (run from packages/)
+cd packages && bun run lint          # Lint the web SDK (oxlint); also: bun run format
+cd packages && bun run generate-iconify-catalog   # Regenerate the Rust icon catalog assets
+cd packages && bun run bump <version>             # Sync SDK package.json versions
 ```
 
 ## Mitwirken
@@ -400,7 +402,7 @@ Beiträge sind willkommen! Siehe [CLAUDE.md](./CLAUDE.md) für Architekturdetail
 1. Forken und klonen
 2. Versionssynchronisierung einrichten: `git config core.hooksPath .githooks`
 3. Branch erstellen: `git checkout -b feat/my-feature`
-4. Prüfungen ausführen: `npx tsc --noEmit && bun --bun run test`
+4. Prüfungen ausführen: `cargo test --workspace && cargo clippy --workspace --all-targets -- -D warnings`
 5. Mit [Conventional Commits](https://www.conventionalcommits.org/) committen: `feat(canvas): add rotation snapping`
 6. Pull Request gegen `main` öffnen
 
