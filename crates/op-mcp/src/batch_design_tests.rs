@@ -303,6 +303,145 @@ fn batch_design_normalizes_ts_layout_keywords() {
 }
 
 #[test]
+fn batch_design_normalizes_underscore_flex_keywords() {
+    // A CSS-fluent model writes the snake_case `flex_start`/`flex_end` (by
+    // analogy to our `space_between`). The schema only has `start`/`end`, so an
+    // un-normalized flex_* fails the WHOLE node's deserialize and it is silently
+    // dropped — measured: glm's right-aligned amount cells + left-aligned header
+    // labels vanished, leaving only the `center` ones. Both children below MUST
+    // survive with normalized alignment.
+    let tool = batch_design_snapshot(&sample());
+    let mut args = BTreeMap::new();
+    args.insert(
+        "operations".into(),
+        r##"root=I(null, {"type":"frame","name":"Row","layout":"horizontal","children":[{"type":"frame","name":"Left","justifyContent":"flex_start"},{"type":"frame","name":"Amount","justifyContent":"flex_end","alignItems":"flex_start"}]})"##
+            .into(),
+    );
+
+    let ToolOutcome::OkJsonWithCommand(_, EditorCommand::InsertAuthoredSubtree { nodes, .. }) =
+        tool.call(&args)
+    else {
+        panic!("expected InsertSubtree command");
+    };
+    let value = serde_json::to_value(&nodes[0]).expect("node json");
+    let children = value["children"].as_array().expect("children survive");
+    assert_eq!(children.len(), 2, "BOTH flex_* children must survive");
+    assert_eq!(children[0]["justifyContent"], "start");
+    assert_eq!(children[1]["justifyContent"], "end");
+    assert_eq!(children[1]["alignItems"], "start");
+}
+
+#[test]
+fn batch_design_maps_pencil_autolayout_dialect() {
+    // MiniMax-M3 is trained on Pencil's schema: it emits `layoutMode` /
+    // `itemSpacing` / `strokeWeight` / `primaryAxisAlignItems` /
+    // `counterAxisAlignItems`. serde drops those unknown keys, so the frame
+    // loses its layout entirely and 229 nodes render as one horizontal strip
+    // (measured on the barbershop loop run). The dialect map MUST rename them
+    // onto our schema so the model's layout survives.
+    let tool = batch_design_snapshot(&sample());
+    let mut args = BTreeMap::new();
+    args.insert(
+        "operations".into(),
+        r##"root=I(null, {"type":"frame","name":"Card","layoutMode":"VERTICAL","itemSpacing":16,"strokeWeight":2,"stroke":"#E7E5E4","primaryAxisAlignItems":"SPACE_BETWEEN","counterAxisAlignItems":"CENTER"})"##
+            .into(),
+    );
+
+    let ToolOutcome::OkJsonWithCommand(_, EditorCommand::InsertAuthoredSubtree { nodes, .. }) =
+        tool.call(&args)
+    else {
+        panic!("expected InsertSubtree command");
+    };
+    let value = serde_json::to_value(&nodes[0]).expect("node json");
+    assert_eq!(value["layout"], "vertical", "layoutMode → layout");
+    assert_eq!(value["gap"].as_f64(), Some(16.0), "itemSpacing → gap");
+    assert_eq!(
+        value["justifyContent"], "space_between",
+        "primaryAxisAlignItems → justifyContent"
+    );
+    assert_eq!(
+        value["alignItems"], "center",
+        "counterAxisAlignItems → alignItems"
+    );
+    // strokeWeight folds into the stroke as its thickness (schema uses per-side
+    // thickness; a scalar lands on `.thickness`).
+    assert!(
+        value["stroke"].is_object() || value["stroke"].is_array(),
+        "stroke survives as a structured value, got {:?}",
+        value["stroke"]
+    );
+}
+
+#[test]
+fn batch_design_flattens_structured_layout_object() {
+    // glm-5.2 in the agentic loop writes `layout` as a Figma/flex OBJECT —
+    // `{"type":"horizontal","gap":0,"padding":[…]}` and the externally-tagged
+    // `{"Vertical":{"gap":12}}`. serde rejects both against our string-typed
+    // `layout` field, so every `U(n1,{layout:{…}})` failed and glm's (correctly
+    // id-tracked!) tree never got its layout. Both shapes MUST flatten.
+    let tool = batch_design_snapshot(&sample());
+    let mut args = BTreeMap::new();
+    args.insert(
+        "operations".into(),
+        r##"root=I(null, {"type":"frame","name":"Shell","layout":{"type":"horizontal","gap":24,"padding":[8,8,8,8]},"children":[{"type":"frame","name":"Col","layout":{"Vertical":{"gap":12}}}]})"##
+            .into(),
+    );
+    let ToolOutcome::OkJsonWithCommand(_, EditorCommand::InsertAuthoredSubtree { nodes, .. }) =
+        tool.call(&args)
+    else {
+        panic!("expected InsertSubtree command");
+    };
+    let value = serde_json::to_value(&nodes[0]).expect("node json");
+    assert_eq!(
+        value["layout"], "horizontal",
+        "type-keyed object → layout string"
+    );
+    assert_eq!(value["gap"].as_f64(), Some(24.0), "hoisted gap");
+    assert_eq!(
+        value["padding"]
+            .as_array()
+            .and_then(|a| a.first())
+            .and_then(|v| v.as_f64()),
+        Some(8.0),
+        "hoisted per-side padding"
+    );
+    assert_eq!(
+        value["children"][0]["layout"], "vertical",
+        "externally-tagged {{Vertical:{{…}}}} → layout string"
+    );
+    assert_eq!(
+        value["children"][0]["gap"].as_f64(),
+        Some(12.0),
+        "variant-keyed inner gap hoisted"
+    );
+}
+
+#[test]
+fn batch_design_maps_direction_alias_to_layout() {
+    // glm-5.2 in the loop reaches for the flex/CSS `direction` alias instead of
+    // our `layout` (measured: `{…,"direction":"horizontal",…}` on every frame),
+    // so serde drops it and 0/62 frames got a layout. Map it.
+    let tool = batch_design_snapshot(&sample());
+    let mut args = BTreeMap::new();
+    args.insert(
+        "operations".into(),
+        r##"root=I(null, {"type":"frame","name":"Row","direction":"horizontal","children":[{"type":"frame","name":"Col","direction":"column"}]})"##
+            .into(),
+    );
+    let ToolOutcome::OkJsonWithCommand(_, EditorCommand::InsertAuthoredSubtree { nodes, .. }) =
+        tool.call(&args)
+    else {
+        panic!("expected InsertSubtree command");
+    };
+    let value = serde_json::to_value(&nodes[0]).expect("node json");
+    assert_eq!(value["layout"], "horizontal", "direction → layout");
+    assert_eq!(
+        value["children"][0]["layout"], "vertical",
+        "direction:column → vertical"
+    );
+}
+
+#[test]
 fn batch_design_insert_operations_accept_outer_page_id() {
     let tool = batch_design_snapshot(&sample());
     let mut args = BTreeMap::new();
