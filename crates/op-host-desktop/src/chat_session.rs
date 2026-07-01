@@ -121,11 +121,8 @@ fn drain_tool_requests(
         if mutated {
             changed = true;
         }
-        if attach_tool_result_to_transcript(
-            state.chat.run_tab_mut(running_tab),
-            &req.name,
-            &result,
-        ) {
+        if attach_tool_result_to_transcript(state.chat.run_tab_mut(running_tab), &req.name, &result)
+        {
             changed = true;
         }
         let _ = req.ack.send(result);

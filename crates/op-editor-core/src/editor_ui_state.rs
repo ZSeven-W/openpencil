@@ -1559,7 +1559,8 @@ impl EditorUiState {
     /// Returns `true` when something changed (so the host can skip a repaint
     /// when the picker was already closed).
     pub fn close_parallel_agents_picker(&mut self) -> bool {
-        let changed = self.parallel_agents_picker_open || self.parallel_agents_picker_hover.is_some();
+        let changed =
+            self.parallel_agents_picker_open || self.parallel_agents_picker_hover.is_some();
         self.parallel_agents_picker_open = false;
         self.parallel_agents_picker_hover = None;
         changed

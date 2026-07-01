@@ -24,10 +24,7 @@ use super::clear_fresh_starter_frame_for_design;
 /// directly — testable without env-var flakiness. Accepts "1", "true",
 /// and "on" (after trimming); everything else (including `None`) → false.
 pub fn parse_loop_flag(opt: Option<&str>) -> bool {
-    matches!(
-        opt.map(str::trim),
-        Some("1") | Some("true") | Some("on")
-    )
+    matches!(opt.map(str::trim), Some("1") | Some("true") | Some("on"))
 }
 
 /// Pure predicate for the design-agent-loop gate.

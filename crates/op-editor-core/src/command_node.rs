@@ -861,9 +861,7 @@ impl EditorState {
                 _ => return None,
             }
         }
-        let Some(mut next_id) = self.next_node_id_seed() else {
-            return None;
-        };
+        let mut next_id = self.next_node_id_seed()?;
         let mut taken: HashSet<NodeId> = self.collect_node_ids();
         let mut nodes = nodes;
         let replacement = crate::command_root_replace::prepare_root_frame_replacement(
