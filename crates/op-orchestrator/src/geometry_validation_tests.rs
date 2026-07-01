@@ -190,6 +190,79 @@ fn real_layout_scales_overflowing_table_end_to_end() {
     );
 }
 
+#[test]
+fn real_layout_wraps_text_overflowing_a_constrained_block() {
+    use crate::test_support::VecDocSink;
+    use crate::types::DocSink;
+    use jian_ops_schema::node::PenNode;
+    use op_editor_core::PenNodeExt;
+
+    // A narrow 220px sidebar row: [name-block(fill_container) holding a long
+    // fit_content name, time-block(fit_content)]. The fill block's min:0 lets it
+    // shrink below the name, so the name overflows into the time column. The fix
+    // must wrap the name to its block. Runs the REAL jian layout.
+    let root: PenNode = serde_json::from_value(json!({
+        "type":"frame","id":"sidebar","name":"Sidebar","layout":"vertical","width":220,"height":"fit_content","children":[
+            {"type":"frame","id":"row","name":"Row","layout":"horizontal","gap":8,"width":"fill_container","height":"fit_content","children":[
+                {"type":"frame","id":"nameblock","name":"NameBlock","layout":"vertical","width":"fill_container","height":"fit_content","children":[
+                    {"type":"text","id":"name","name":"Name","content":"Alexander Wellington Montgomery","fontSize":15}
+                ]},
+                {"type":"frame","id":"timeblock","name":"TimeBlock","layout":"vertical","width":"fit_content","height":"fit_content","children":[
+                    {"type":"text","id":"time","name":"Time","content":"9:00 AM","fontSize":13}
+                ]}
+            ]}
+        ]
+    }))
+    .expect("valid root");
+
+    let mut sink = VecDocSink::new();
+    sink.apply(EditorCommand::InsertSubtree {
+        nodes: vec![root],
+        parent_id: NodeId::NONE,
+        page_id: None,
+    });
+    let root_id = sink.state().active_children()[0].id_str().to_string();
+
+    geometry_validate_and_fix(&mut sink, &root_id);
+
+    let v = serde_json::to_value(sink.state().active_children()[0].clone()).unwrap();
+    // Find by the `name` field — `InsertSubtree` remaps authored ids.
+    fn find<'a>(v: &'a serde_json::Value, name: &str) -> Option<&'a serde_json::Value> {
+        if v.get("name").and_then(|x| x.as_str()) == Some(name) {
+            return Some(v);
+        }
+        for c in v
+            .get("children")
+            .and_then(|c| c.as_array())
+            .into_iter()
+            .flatten()
+        {
+            if let Some(r) = find(c, name) {
+                return Some(r);
+            }
+        }
+        None
+    }
+    let name = find(&v, "Name").expect("name text survives");
+    assert_eq!(
+        name.get("width").and_then(|w| w.as_str()),
+        Some("fill_container"),
+        "overflowing name → width fill_container"
+    );
+    assert_eq!(
+        name.get("textGrowth").and_then(|g| g.as_str()),
+        Some("fixed-width"),
+        "overflowing name → textGrowth fixed-width; got {:?}",
+        name.get("textGrowth")
+    );
+    let time = find(&v, "Time").expect("time text survives");
+    assert_ne!(
+        time.get("textGrowth").and_then(|g| g.as_str()),
+        Some("fixed-width"),
+        "the fitting time text must NOT be wrapped"
+    );
+}
+
 // ── collapse detector ──
 
 fn kw_op(cmds: &[EditorCommand], prop: &str, val: &str) -> bool {
