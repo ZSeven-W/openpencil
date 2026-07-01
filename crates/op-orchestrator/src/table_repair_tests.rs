@@ -170,6 +170,101 @@ fn negative_already_grouped() {
     );
 }
 
+/// A list/appointment area where each Row frame is followed by 2 flat orphan
+/// cells (initials + status) — the glm barbershop "Upcoming Appointments" shape.
+fn appointment_list_root() -> PenNode {
+    let row = |n: u32| {
+        json!({"type":"frame","id":format!("row{n}"),"name":format!("Appointment Row {n}"),
+            "layout":"horizontal","width":"fill_container","children":[
+            {"type":"text","id":format!("t{n}"),"name":"Time Slot","content":"09:00"}]})
+    };
+    let orphan = |n: u32, kind: &str| json!({"type":"text","id":format!("{kind}{n}"),"name":kind,"content":"x"});
+    node(json!({
+        "type":"frame","id":"main","name":"Main Content","width":940,"layout":"vertical","children":[
+            row(1), orphan(1,"Initials"), orphan(1,"Status Text"),
+            row(2), orphan(2,"Initials"), orphan(2,"Status Text"),
+            row(3), orphan(3,"Initials"), orphan(3,"Status Text")
+        ]
+    }))
+}
+
+#[test]
+fn positive_orphan_cells_reparented_into_rows() {
+    let mut root = appointment_list_root();
+    assert!(
+        regroup_flat_table_rows(&mut root),
+        "orphan rows must reparent"
+    );
+    let v = val(&root);
+    let kids = v["children"].as_array().unwrap();
+    // The 3 rows remain; the 6 orphan siblings are gone (folded into rows).
+    assert_eq!(kids.len(), 3, "only the 3 rows remain at top level");
+    for (i, row) in kids.iter().enumerate() {
+        assert!(row["name"].as_str().unwrap().starts_with("Appointment Row"));
+        let names: Vec<&str> = row["children"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|c| c["name"].as_str().unwrap())
+            .collect();
+        assert_eq!(
+            names,
+            ["Time Slot", "Initials", "Status Text"],
+            "row {} absorbed its orphans",
+            i + 1
+        );
+    }
+}
+
+#[test]
+fn negative_single_row_orphans_untouched() {
+    // Only one row → not a regular list → never guess.
+    assert_untouched(
+        node(
+            json!({"type":"frame","id":"m","name":"Main","width":940,"layout":"vertical","children":[
+            {"type":"frame","id":"r1","name":"Appointment Row 1","layout":"horizontal","children":[
+                {"type":"text","id":"t","name":"Time","content":"9"}]},
+            {"type":"text","id":"o","name":"Initials","content":"JC"}]}),
+        ),
+        "single row is not a regular list",
+    );
+}
+
+#[test]
+fn negative_irregular_orphan_counts_untouched() {
+    // Row 1 has 2 orphans, row 2 has 1 → irregular → abort.
+    assert_untouched(
+        node(
+            json!({"type":"frame","id":"m","name":"Main","width":940,"layout":"vertical","children":[
+            {"type":"frame","id":"r1","name":"Appointment Row 1","layout":"horizontal","children":[
+                {"type":"text","id":"t1","name":"Time","content":"9"}]},
+            {"type":"text","id":"i1","name":"Initials","content":"JC"},
+            {"type":"text","id":"s1","name":"Status Text","content":"OK"},
+            {"type":"frame","id":"r2","name":"Appointment Row 2","layout":"horizontal","children":[
+                {"type":"text","id":"t2","name":"Time","content":"10"}]},
+            {"type":"text","id":"i2","name":"Initials","content":"MR"}]}),
+        ),
+        "irregular orphan counts (2 vs 1)",
+    );
+}
+
+#[test]
+fn negative_section_list_not_reparented() {
+    // A vertical stack of real sections (no row frames) must be left alone.
+    assert_untouched(
+        node(
+            json!({"type":"frame","id":"m","name":"Main","width":940,"layout":"vertical","children":[
+            {"type":"frame","id":"a","name":"Metrics Section","layout":"horizontal","children":[
+                {"type":"text","id":"x","name":"X","content":"1"}]},
+            {"type":"frame","id":"b","name":"Chart Section","layout":"vertical","children":[
+                {"type":"text","id":"y","name":"Y","content":"2"}]},
+            {"type":"frame","id":"c","name":"Table Section","layout":"vertical","children":[
+                {"type":"text","id":"z","name":"Z","content":"3"}]}]}),
+        ),
+        "vertical section stack, no row frames",
+    );
+}
+
 #[test]
 fn negative_plain_text_feed() {
     // A vertical list of texts with no table header → nothing to regroup.
@@ -180,5 +275,51 @@ fn negative_plain_text_feed() {
             txt("c","Carol joined",400), txt("d","Dave updated status",400)]}),
         ),
         "plain text feed, no header",
+    );
+}
+
+// ── ensure_table_column_gap ──
+
+#[test]
+fn table_named_rows_get_column_gap() {
+    // A "Client Table" whose rows have NO gap → the columns touch. Each ≥3-column
+    // row must gain the column gap.
+    let mut root = node(json!({
+        "type":"frame","id":"tbl","name":"Client Table","layout":"vertical","gap":16,"children":[
+            {"type":"frame","id":"hd","name":"Header Row","layout":"horizontal","children":[
+                txt("h1","CLIENT",200), txt("h2","SPEND",100), txt("h3","STATUS",80)]},
+            {"type":"frame","id":"r1","name":"Row 1","layout":"horizontal","children":[
+                txt("c1","Alice",200), txt("c2","$100",100), txt("c3","VIP",80)]}
+        ]
+    }));
+    assert!(
+        ensure_table_column_gap(&mut root),
+        "gap-less table rows get a column gap"
+    );
+    let v = val(&root);
+    for row in v["children"].as_array().unwrap() {
+        assert_eq!(
+            num(row, "gap"),
+            Some(TABLE_COLUMN_GAP),
+            "each >=3-col row is spaced"
+        );
+    }
+}
+
+#[test]
+fn nav_rows_do_not_get_table_gap() {
+    // A "Navigation"-named container is NOT a table (name gate) — even though its
+    // items are multi-child horizontal rows, they must not be re-gapped.
+    let mut root = node(json!({
+        "type":"frame","id":"nav","name":"Navigation","layout":"vertical","children":[
+            {"type":"frame","id":"n1","name":"Nav Dashboard","layout":"horizontal","children":[
+                txt("i","dot",16), txt("l","Dashboard",120), txt("b","3",20)]},
+            {"type":"frame","id":"n2","name":"Nav Clients","layout":"horizontal","children":[
+                txt("i2","dot",16), txt("l2","Clients",120), txt("b2","12",20)]}
+        ]
+    }));
+    assert!(
+        !ensure_table_column_gap(&mut root),
+        "a nav container is not a table — left untouched"
     );
 }

@@ -318,11 +318,29 @@ fn build_scaffold_root_node_at(
     y: f64,
 ) -> Result<PenNode, String> {
     let rf = &plan.root_frame;
-    let layout = rf.layout.as_deref().unwrap_or("vertical");
     let fill_hex = rf
         .first_solid_hex()
         .unwrap_or_else(|| "#FFFFFF".to_string());
 
+    // Desktop sidebar dashboard → pre-build the two-column app-shell so the
+    // sidebar is a narrow left column from the first subtask (matching Pencil),
+    // instead of filling the root until the finalize `app_shell` reshape. The
+    // sidebar subtask then generates into the left column and the rest into the
+    // content column (routed in `run.rs`).
+    if plan_is_sidebar_dashboard(plan, is_mobile) {
+        return build_two_column_root_node(
+            root_id,
+            &rf.name,
+            x,
+            y,
+            rf.width,
+            rf.height,
+            &fill_hex,
+            resolve_section_gap(rf.gap),
+        );
+    }
+
+    let layout = rf.layout.as_deref().unwrap_or("vertical");
     build_root_frame_node(
         root_id,
         &rf.name,
@@ -335,6 +353,120 @@ fn build_scaffold_root_node_at(
         &fill_hex,
         is_mobile,
     )
+}
+
+/// Fixed left-column width for a pre-built dashboard app-shell. Mirrors
+/// `dashboard_columns`' sidebar width and `app_shell::SIDEBAR_WIDTH`.
+const SIDEBAR_COLUMN_WIDTH: f64 = 260.0;
+
+/// Names stamped on the two pre-built columns. The run loop re-resolves the
+/// (remapped-on-insert) column ids BY NAME, and `app_shell` skips a root that
+/// already carries a "Main Content" child — so the pre-built shell is never
+/// double-restructured at finalize.
+pub(crate) const SIDEBAR_COLUMN_NAME: &str = "Sidebar";
+pub(crate) const CONTENT_COLUMN_NAME: &str = "Main Content";
+
+/// True when the plan is a DESKTOP dashboard with a sidebar subtask plus at
+/// least two other sections — the shape worth pre-building as a two-column
+/// app-shell. Narrow on purpose (mobile / non-sidebar / single-section plans
+/// stay on the single-root path, so parity is unaffected).
+pub(crate) fn plan_is_sidebar_dashboard(plan: &OrchestratorPlan, is_mobile: bool) -> bool {
+    use crate::dashboard_columns::{
+        is_dashboard_content_subtask, is_sidebar_subtask, is_strong_sidebar_subtask,
+    };
+    if is_mobile || plan.root_frame.width < 900.0 {
+        return false;
+    }
+    let sidebars = plan
+        .subtasks
+        .iter()
+        .filter(|s| is_sidebar_subtask(s))
+        .count();
+    if sidebars == 0 {
+        return false;
+    }
+    // There must be real content for the right column.
+    let others = plan.subtasks.len().saturating_sub(sidebars);
+    if others < 1 {
+        return false;
+    }
+    // A STRONG sidebar signal ("sidebar"/"rail"/"side nav") is unambiguously a
+    // left rail → pre-build the two-column shell regardless of what the content
+    // sections are named (a desktop sidebar layout is two-column whether its
+    // sections are tables, a directory, a schedule, …). This is the common gap:
+    // a sidebar dashboard whose sections lack table/metric/chart keywords used
+    // to fall through to the single-root path and fill the sidebar full-width
+    // during streaming.
+    if plan.subtasks.iter().any(is_strong_sidebar_subtask) {
+        return true;
+    }
+    // Only an AMBIGUOUS nav/menu signal → require >=2 data-content sections so a
+    // landing/marketing page with a stray "Navigation" subtask is never mistaken
+    // for a sidebar dashboard.
+    plan.subtasks
+        .iter()
+        .filter(|s| is_dashboard_content_subtask(s))
+        .count()
+        >= 2
+}
+
+/// Build the pre-built two-column app-shell root: `horizontal [Sidebar(260,
+/// vertical, clipped) | Main Content(fill, vertical)]`, both columns empty
+/// (subtasks fill them). The sidebar `height: fill_container` stretches it to
+/// the row (cross-axis) height; `clipContent` keeps a sub-agent's full-width
+/// content from bleeding past the 260 column.
+#[allow(clippy::too_many_arguments)]
+fn build_two_column_root_node(
+    root_id: &str,
+    name: &str,
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+    fill_hex: &str,
+    gap: f64,
+) -> Result<PenNode, String> {
+    let sidebar = serde_json::json!({
+        "type": "frame",
+        "id": format!("{root_id}-sidebar"),
+        "name": SIDEBAR_COLUMN_NAME,
+        "width": SIDEBAR_COLUMN_WIDTH,
+        "height": "fill_container",
+        "layout": "vertical",
+        "fill": [{ "type": "solid", "color": fill_hex }],
+        "clipContent": true,
+        "children": [],
+    });
+    let content = serde_json::json!({
+        "type": "frame",
+        "id": format!("{root_id}-content"),
+        "name": CONTENT_COLUMN_NAME,
+        "width": "fill_container",
+        "height": "fit_content",
+        "layout": "vertical",
+        "gap": gap,
+        // Outer page gutter [vertical, horizontal] so sections don't run
+        // edge-to-edge into the viewport — parity with the app-shell reshape
+        // path (`app_shell::CONTENT_PADDING`). Without it a section the model
+        // authored with no self-padding (KPI row, table) touches the right edge.
+        "padding": [32, 40],
+        "children": [],
+    });
+    let frame = serde_json::json!({
+        "type": "frame",
+        "id": root_id,
+        "name": name,
+        "x": x,
+        "y": y,
+        "width": width,
+        "height": height,
+        "layout": "horizontal",
+        "gap": 0,
+        "alignItems": "stretch",
+        "fill": [{ "type": "solid", "color": fill_hex }],
+        "children": [sidebar, content],
+    });
+    serde_json::from_value(frame).map_err(|e| format!("two-column scaffold root `{root_id}`: {e}"))
 }
 
 #[cfg(test)]

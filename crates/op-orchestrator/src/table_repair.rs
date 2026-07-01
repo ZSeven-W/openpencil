@@ -49,7 +49,7 @@ fn regroup_in_value(v: &mut Value) -> bool {
             changed |= regroup_in_value(c);
         }
     }
-    changed | try_regroup_children(v)
+    changed | try_regroup_children(v) | try_reparent_orphans(v)
 }
 
 // ── tolerant Value readers (mirror the app_shell idiom) ──
@@ -319,6 +319,219 @@ fn build_row(
         "gap": gap,
         "children": row_cells,
     })
+}
+
+// ── orphan list-row cells ──
+//
+// A second flat-structure bug: a weak model emits a list/appointment ROW frame
+// but leaves some of its cells (avatar initials, status badge) as FLAT SIBLINGS
+// right after the row instead of inside it — so they render stacked full-width
+// below the row. Pattern: `<Row frame> <orphan> <orphan> <Row frame> <orphan>
+// <orphan> …`. Reparent each row's trailing orphans back into it.
+
+/// A list/appointment row container: a non-empty frame named/roled as a row.
+fn is_list_row(v: &Value) -> bool {
+    if v.get("type").and_then(Value::as_str) != Some("frame") {
+        return false;
+    }
+    if v.get("children")
+        .and_then(Value::as_array)
+        .is_none_or(|k| k.is_empty())
+    {
+        return false;
+    }
+    let t = ident_text(v);
+    matches!(role_str(v), Some("table-row" | "list-row" | "list-item"))
+        || t.contains("row")
+        || t.contains("list item")
+        || t.contains("appointment")
+}
+
+/// A stray leaf that belongs inside the preceding row (a text / badge / icon /
+/// layout-less small frame). Never a structural region or another row.
+fn is_orphan_cell(v: &Value) -> bool {
+    if is_list_row(v) {
+        return false;
+    }
+    let t = ident_text(v);
+    if [
+        "section", "table", "navbar", "footer", "header", "sidebar", "chart", "card",
+    ]
+    .iter()
+    .any(|k| t.contains(k))
+    {
+        return false;
+    }
+    match v.get("type").and_then(Value::as_str) {
+        Some("text" | "icon_font" | "image" | "ellipse" | "rectangle") => true,
+        // A frame/group only counts as an orphan cell when it carries no
+        // layout of its own (a real sub-section would set one).
+        Some("frame" | "group") => matches!(layout_str(v), None | Some("none")),
+        _ => false,
+    }
+}
+
+/// Reparent flat orphan cells back into the list row they belong to. Fires only
+/// on a REGULAR pattern: ≥2 row frames, each followed by the SAME non-zero
+/// number of orphan leaves — so a one-off stray sibling or an irregular list
+/// never triggers a guess.
+fn try_reparent_orphans(parent: &mut Value) -> bool {
+    if !is_column_layout(parent) {
+        return false;
+    }
+    let Some(kids) = parent.get("children").and_then(Value::as_array) else {
+        return false;
+    };
+    // Walk the children, recording (row index, trailing orphan count).
+    let mut rows: Vec<(usize, usize)> = Vec::new();
+    let mut i = 0;
+    while i < kids.len() {
+        if is_list_row(&kids[i]) {
+            let mut j = i + 1;
+            while j < kids.len() && is_orphan_cell(&kids[j]) {
+                j += 1;
+            }
+            rows.push((i, j - (i + 1)));
+            i = j;
+        } else {
+            i += 1;
+        }
+    }
+    if rows.len() < 2 {
+        return false;
+    }
+    let orphans_per_row = rows[0].1;
+    if orphans_per_row == 0 || rows.iter().any(|(_, c)| *c != orphans_per_row) {
+        return false;
+    }
+
+    // Rebuild children, folding each row's trailing orphans into the row.
+    let Some(arr) = parent.get_mut("children").and_then(Value::as_array_mut) else {
+        return false;
+    };
+    let old: Vec<Value> = std::mem::take(arr);
+    let mut out: Vec<Value> = Vec::with_capacity(old.len());
+    let mut i = 0;
+    while i < old.len() {
+        if is_list_row(&old[i]) {
+            let mut row = old[i].clone();
+            let mut orphans: Vec<Value> = Vec::with_capacity(orphans_per_row);
+            let mut j = i + 1;
+            while j < old.len() && orphans.len() < orphans_per_row && is_orphan_cell(&old[j]) {
+                orphans.push(old[j].clone());
+                j += 1;
+            }
+            if let Some(rc) = row.get_mut("children").and_then(Value::as_array_mut) {
+                rc.extend(orphans);
+            }
+            out.push(row);
+            i = j;
+        } else {
+            out.push(old[i].clone());
+            i += 1;
+        }
+    }
+    *arr = out;
+    true
+}
+
+// ── Table column gap ──
+//
+// Weak models emit a table's rows with NO column gap (`gap: null` / 0), so the
+// columns render touching — a "SPEND" + "STATUS" header pair reads as
+// "SPENDSTATUS", data cells crowd. This pass gives every ≥3-column row of a
+// `table` / `data grid`-NAMED container a sensible column gap. Gated to
+// table-named containers (never a nav / toolbar / chip row) and to ≥3-column
+// rows, so it can't space out a 2-item header/search row. Runs after
+// `regroup_flat_table_rows` in `run_cleanup_passes` (so a freshly-regrouped
+// table is spaced too).
+
+/// Default column gap injected into gap-less table rows.
+const TABLE_COLUMN_GAP: f64 = 24.0;
+
+/// Give gap-less rows of a table-named container a column gap. Returns `true`
+/// iff it changed a row. Same round-trip as the sibling passes.
+pub(crate) fn ensure_table_column_gap(root: &mut PenNode) -> bool {
+    let Ok(mut v) = serde_json::to_value(&*root) else {
+        return false;
+    };
+    if !ensure_gap_in_value(&mut v) {
+        return false;
+    }
+    match serde_json::from_value::<PenNode>(v) {
+        Ok(new_node) => {
+            *root = new_node;
+            true
+        }
+        Err(_) => false,
+    }
+}
+
+fn ensure_gap_in_value(v: &mut Value) -> bool {
+    let mut changed = false;
+    if is_table_container(v) {
+        if let Some(rows) = v.get_mut("children").and_then(Value::as_array_mut) {
+            for row in rows.iter_mut() {
+                if layout_str(row) == Some("horizontal") && row_needs_gap(row) {
+                    if let Some(obj) = row.as_object_mut() {
+                        obj.insert("gap".into(), json!(TABLE_COLUMN_GAP));
+                        changed = true;
+                    }
+                }
+            }
+        }
+    }
+    if let Some(kids) = v.get_mut("children").and_then(Value::as_array_mut) {
+        for c in kids.iter_mut() {
+            changed |= ensure_gap_in_value(c);
+        }
+    }
+    changed
+}
+
+/// A vertical container named like a table with ≥2 horizontal row children —
+/// the same name-gate the sidebar-eviction pass uses, so a nav / toolbar is
+/// never mistaken for a table.
+fn is_table_container(v: &Value) -> bool {
+    if !is_column_layout(v) {
+        return false;
+    }
+    let t = ident_text(v);
+    if !(t.contains("table") || t.contains("data grid") || t.contains("datagrid")) {
+        return false;
+    }
+    v.get("children")
+        .and_then(Value::as_array)
+        .map(|kids| {
+            kids.iter()
+                .filter(|r| {
+                    layout_str(r) == Some("horizontal")
+                        && r.get("children")
+                            .and_then(Value::as_array)
+                            .map(|c| c.len())
+                            .unwrap_or(0)
+                            >= 2
+                })
+                .count()
+                >= 2
+        })
+        .unwrap_or(false)
+}
+
+/// A ≥3-column row whose current gap is missing or effectively zero.
+fn row_needs_gap(row: &Value) -> bool {
+    let cols = row
+        .get("children")
+        .and_then(Value::as_array)
+        .map(|c| c.len())
+        .unwrap_or(0);
+    if cols < 3 {
+        return false;
+    }
+    match row.get("gap") {
+        None | Some(Value::Null) => true,
+        Some(_) => num(row, "gap").map(|g| g < 1.0).unwrap_or(true),
+    }
 }
 
 #[cfg(test)]
