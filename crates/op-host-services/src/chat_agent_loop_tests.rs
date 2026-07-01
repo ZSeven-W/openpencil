@@ -242,6 +242,7 @@ fn anthropic_loop_executes_tool_and_continues_with_tool_result() {
         executor: executor.clone(),
         max_turns: 5,
         finalize_on_exit: true,
+        disable_thinking: false,
     };
     let (outcome, deltas) = run_loop_collect(cfg, true);
     assert_eq!(outcome, Ok(true));
@@ -318,6 +319,7 @@ fn loop_skips_finalize_when_disabled_for_plain_chat() {
         executor: executor.clone(),
         max_turns: 5,
         finalize_on_exit: false,
+        disable_thinking: false,
     };
     let (outcome, _deltas) = run_loop_collect(cfg, true);
     assert_eq!(outcome, Ok(true));
@@ -347,6 +349,7 @@ fn anthropic_loop_stops_at_turn_cap_with_max_tokens_reason() {
         executor: executor.clone(),
         max_turns: 2,
         finalize_on_exit: true,
+        disable_thinking: false,
     };
     let (outcome, deltas) = run_loop_collect(cfg, true);
     assert_eq!(outcome, Ok(true));
@@ -406,6 +409,7 @@ fn openai_loop_executes_tool_and_continues_with_role_tool_message() {
         executor: executor.clone(),
         max_turns: 5,
         finalize_on_exit: true,
+        disable_thinking: false,
     };
     let (outcome, deltas) = run_loop_collect(cfg, false);
     assert_eq!(outcome, Ok(true));
@@ -518,6 +522,7 @@ fn anthropic_loop_replays_screenshot_result_as_image_content_block() {
         executor: executor.clone(),
         max_turns: 5,
         finalize_on_exit: true,
+        disable_thinking: false,
     };
     let (outcome, _deltas) = run_loop_collect(cfg, true);
     assert_eq!(outcome, Ok(true));
@@ -615,6 +620,7 @@ fn openai_loop_replays_screenshot_result_as_image_url_part() {
         executor: executor.clone(),
         max_turns: 5,
         finalize_on_exit: true,
+        disable_thinking: false,
     };
     let (outcome, _deltas) = run_loop_collect(cfg, false);
     assert_eq!(outcome, Ok(true));
