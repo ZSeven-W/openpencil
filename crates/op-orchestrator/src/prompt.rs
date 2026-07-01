@@ -91,6 +91,35 @@ that renders as a full-width band, not a table cell. Emit EVERY data row/card/it
 with realistic values -- never a header with zero rows.
 Output ONLY the program lines."#;
 
+/// Script-gen 模式（`OPENPENCIL_SCRIPT_GEN=1`）的输出协议——完全对齐 Pencil:
+/// 模型写一段真 JavaScript（循环/数组/变量）调用全局 `I(parent, obj)`。引擎
+/// (rquickjs) 执行、`JSON.stringify` 序列化每个对象（=完美 JSON,无手写括号/引号
+/// 笔误),循环展开重复结构。`I` 返回新节点 id 字符串。
+const SCRIPT_FORMAT: &str = r#"
+OUTPUT PROTOCOL: JAVASCRIPT PROGRAM. Write a JavaScript program (no prose, no markdown
+fences) that builds this section by calling the global function I(parent, node):
+  const id = I(parent, { ...node... });   // inserts node, RETURNS its id (a string)
+`parent` is null for THIS section's single root frame, otherwise an id returned by an
+EARLIER I(...) call. A node is a child of X only if you call I(X, {...}).
+I(...) is the ONLY function available — there is no console, and no other builder. Do
+not call console.log or any helper; just call I(...).
+USE REAL JAVASCRIPT — const/let, arrays of data, and for...of / .forEach loops — to
+generate repeated structure (table rows, nav items, cards, list items) by looping over a
+data array. PREFER a loop over copy-pasting near-identical I(...) calls.
+Each node object starts with type ("frame"/"text"/"rectangle"/"ellipse"/"path"/"icon_font")
+and uses camelCase props (cornerRadius, fontSize, fontWeight, justifyContent, alignItems,
+clipContent). Do NOT set x/y on children inside layout frames.
+Example:
+  const sec = I(null, {type:"frame", name:"Clients", layout:"vertical", width:"fill_container", gap:0});
+  const tbl = I(sec, {type:"frame", layout:"vertical", width:"fill_container"});
+  const rows = [{name:"Alice Chen", status:"Active"}, {name:"Bob Ito", status:"VIP"}];
+  for (const r of rows) {
+    const row = I(tbl, {type:"frame", layout:"horizontal", width:"fill_container", padding:[12,16]});
+    const c1 = I(row, {type:"frame", width:"fill_container"}); I(c1, {type:"text", content:r.name});
+    const c2 = I(row, {type:"frame", width:"fill_container"}); I(c2, {type:"text", content:r.status});
+  }
+Generate EVERY row/card/item with realistic values. Output ONLY the JavaScript program."#;
+
 /// Rich 模式 system prompt 末尾后缀 —— verbatim,`orchestrator.ts:1382-1383`。
 const RICH_SUFFIX: &str = "\n\n---\nCRITICAL OUTPUT FORMAT ENFORCEMENT:\n\
 You MUST output ONLY a single JSON object. Start your response with { and end with }.\n\
@@ -722,14 +751,24 @@ pub fn build_subagent_prompt(
     // to the smaller raw-JSONL prompt, and `parse_manifest` returning `None`
     // on such output routes parsing back through `parse_nodes`.
     let model_id = req.model.as_deref().unwrap_or("");
-    // Program-DSL protocol (OPENPENCIL_PROGRAM_GEN) takes priority over the
-    // element manifest and is mutually exclusive with it. Like manifest, it runs
-    // only on the full first attempt; the reduced/minimal retry rungs fall back
-    // to raw JSONL (and `subagent::run_subtask` routes parsing accordingly).
-    let program_on = crate::program_gen::program_gen_enabled_for_model(model_id)
+    // Protocol selection for the full first attempt. Priority when more than one
+    // is force-enabled: script (JS, env opt-in) > program (DSL) > manifest (env
+    // opt-in) > raw JSONL. In production exactly ONE is on: program-DSL is the
+    // DEFAULT for the open / Chinese reasoning models (parent-by-reference,
+    // best-effort per-line parse); script-gen + manifest are env-gated
+    // experiments; strong models (claude / gpt / gemini / o-series) stay on raw
+    // JSONL. All three run only on the full first attempt — the reduced/minimal
+    // retry rungs fall back to raw JSONL (and `subagent::run_subtask` routes
+    // parsing to match).
+    let script_on = crate::script_gen::script_gen_enabled_for_model(model_id)
         && !reduced_complexity
         && !minimal_skills;
-    let manifest_on = !program_on
+    let program_on = !script_on
+        && crate::program_gen::program_gen_enabled_for_model(model_id)
+        && !reduced_complexity
+        && !minimal_skills;
+    let manifest_on = !script_on
+        && !program_on
         && crate::manifest::manifest_enabled_for_model(model_id)
         && !reduced_complexity
         && !minimal_skills;
@@ -742,6 +781,7 @@ pub fn build_subagent_prompt(
         minimal_skills,
         manifest_on,
         program_on,
+        script_on,
         components,
     )
 }
@@ -759,6 +799,7 @@ fn build_subagent_prompt_with_manifest(
     minimal_skills: bool,
     manifest_on: bool,
     program_on: bool,
+    script_on: bool,
     components: &ComponentLibrary,
 ) -> (CallRequest, SkillLoadReport) {
     // Resolve the full generation skill set, then apply tier-gated filtering.
@@ -931,7 +972,7 @@ fn build_subagent_prompt_with_manifest(
     // model two contradictory output contracts (e2e showed glm then emitting a
     // half-program/half-`_parent` blob with unclosed objects). Drop it so the
     // protocol's own format block (MANIFEST_FORMAT / PROGRAM_FORMAT) governs alone.
-    if manifest_on || program_on {
+    if manifest_on || program_on || script_on {
         filtered.retain(|s| {
             s.skill_name() != "jsonl-format" && s.skill_name() != "jsonl-format-simplified"
         });
@@ -965,7 +1006,9 @@ fn build_subagent_prompt_with_manifest(
     // `jsonl-format` + `jsonl-format-simplified` skills both teach `_parent`,
     // so this agrees with whichever skill the tier loads (no contradiction).
     // Manifest mode swaps in the element-manifest contract instead.
-    system_prompt.push_str(if program_on {
+    system_prompt.push_str(if script_on {
+        SCRIPT_FORMAT
+    } else if program_on {
         PROGRAM_FORMAT
     } else if manifest_on {
         MANIFEST_FORMAT
@@ -1050,7 +1093,13 @@ fn build_subagent_prompt_with_manifest(
     // Three constraints differ by output protocol: the raw-JSONL path has
     // the model author its own root frame + ids; the manifest path forbids
     // exactly that (system-assigned ids, system-owned section root).
-    let (root_rule, nesting_rule, output_rule) = if program_on {
+    let (root_rule, nesting_rule, output_rule) = if script_on {
+        (
+            format!("Create EXACTLY ONE section root frame first: const sec = I(null, {{type:\"frame\", name:\"{}\", width:\"fill_container\", height:\"fit_content\", layout:\"vertical\"}}); build everything else by calling I(parent, {{...}}) with `sec` or a returned id as parent. NEVER set a fixed pixel height on the root.", subtask.label),
+            "Nest via the returned id ONLY: const row = I(sec, {...}); const cell = I(row, {...}); I(cell, {type:\"text\",...}). LOOP over a data array to emit repeated rows/cards. A cell inserted into the section/table directly renders as a full-width band, not a table cell.".to_string(),
+            "Output ONLY the JavaScript program (calls to I(...)) -- no prose, no markdown fences.".to_string(),
+        )
+    } else if program_on {
         (
             format!("Create EXACTLY ONE section root frame as the first line: sec=I(null, {{\"type\":\"frame\",\"name\":\"{}\",\"width\":\"fill_container\",\"height\":\"fit_content\",\"layout\":\"vertical\"}}). Build everything else with bindings into `sec` or its descendants. NEVER set a fixed pixel height on the root.", subtask.label),
             "Nest via bindings ONLY: row=I(sec, ...); cell=I(row, ...); I(cell, {\"type\":\"text\",...}). A cell or its content inserted into the section/table binding directly renders as a full-width band, not a table cell. Every repeated row/card/item is its own I(...) line.".to_string(),

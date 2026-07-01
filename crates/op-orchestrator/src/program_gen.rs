@@ -12,21 +12,61 @@
 //!
 //! Validated 2026-06-29 across glm-5.2 / minimax-m3 / deepseek on dashboard +
 //! e-commerce + mobile screens (see openpencil-docs/pencil-generation-way).
-//! This is gated OFF by default so it can be A/B'd against the JSONL path on the
-//! corpus before becoming the default generation protocol.
+//! This is the DEFAULT generation protocol for the open / Chinese reasoning
+//! models (see [`program_gen_enabled_for_model`]); the executable-JS script
+//! path is now an env-gated opt-in, because its all-or-nothing parse flattened
+//! tables whenever a weak model truncated the script mid-op.
 
 use std::collections::BTreeMap;
 
 use jian_ops_schema::node::PenNode;
 use op_editor_core::EditorState;
 
-/// Env gate, mirroring [`crate::manifest::manifest_enabled_for_model`]. The
-/// `model` is accepted for symmetry / future per-model rollout; today the
-/// process-global `OPENPENCIL_PROGRAM_GEN` decides for every model.
-pub fn program_gen_enabled_for_model(_model: &str) -> bool {
-    std::env::var("OPENPENCIL_PROGRAM_GEN")
-        .map(|v| matches!(v.trim(), "1" | "true" | "TRUE" | "on"))
-        .unwrap_or(false)
+/// Whether the sub-agent should emit a `batch_design` DSL PROGRAM for `model`.
+///
+/// Resolution order:
+///   1. `OPENPENCIL_PROGRAM_GEN` set → honor it verbatim (force on/off for A-B).
+///   2. Another protocol explicitly opted into (`OPENPENCIL_SCRIPT_GEN` /
+///      `OPENPENCIL_MANIFEST`) → defer to it (program stays off).
+///   3. Otherwise DEFAULT ON for the open / Chinese reasoning models and OFF for
+///      Claude / GPT / Gemini / o-series (which emit clean flat JSONL natively).
+///
+/// This is the weak-model default because it is both structurally safer and
+/// more truncation-resilient than the alternatives — see the module docs and
+/// [`crate::script_gen::script_gen_enabled_for_model`].
+pub fn program_gen_enabled_for_model(model: &str) -> bool {
+    if let Ok(v) = std::env::var("OPENPENCIL_PROGRAM_GEN") {
+        return matches!(v.trim(), "1" | "true" | "TRUE" | "on");
+    }
+    // A different generation protocol was explicitly requested — don't shadow it.
+    if std::env::var("OPENPENCIL_SCRIPT_GEN").is_ok()
+        || std::env::var("OPENPENCIL_MANIFEST").is_ok()
+    {
+        return false;
+    }
+    default_program_gen_for_model(model)
+}
+
+/// Family default (no env override): ON for the open / Chinese reasoning models,
+/// OFF for Claude / GPT / Gemini / o-series (which handle flat JSONL natively)
+/// and for an empty/unknown-but-flat-native id.
+fn default_program_gen_for_model(model: &str) -> bool {
+    let normalized = match model.find('/') {
+        Some(i) => &model[i + 1..],
+        None => model,
+    };
+    let lower = normalized.to_lowercase();
+    if lower.is_empty() {
+        return false;
+    }
+    let flat_jsonl_native = lower.contains("claude")
+        || lower.contains("gpt-")
+        || lower.contains("gpt4")
+        || lower.contains("gemini")
+        || lower.starts_with("o1")
+        || lower.starts_with("o3")
+        || lower.starts_with("o4");
+    !flat_jsonl_native
 }
 
 /// Run the emitted `batch_design` program against a FRESH empty document and
@@ -40,9 +80,19 @@ pub fn parse_program(text: &str) -> Result<Vec<PenNode>, String> {
     if program.trim().is_empty() {
         return Err("program is empty after stripping prose/fences".into());
     }
+    run_program_to_forest(&program)
+}
+
+/// Run a `batch_design` DSL PROGRAM string against a FRESH empty document and
+/// return the produced section forest. Shared by [`parse_program`] (the model
+/// authored the DSL directly) and `script_gen` (a JS engine emitted the DSL by
+/// calling the bound `I`/`C`/… functions). The executor collects per-line errors
+/// and applies the surviving lines (best-effort); a program that builds nothing
+/// is an error.
+pub fn run_program_to_forest(program: &str) -> Result<Vec<PenNode>, String> {
     let mut state = EditorState::new();
     let mut args: BTreeMap<String, String> = BTreeMap::new();
-    args.insert("operations".to_string(), program);
+    args.insert("operations".to_string(), program.to_string());
 
     let cmd = {
         let tool = op_mcp::batch_design_snapshot(&state);
