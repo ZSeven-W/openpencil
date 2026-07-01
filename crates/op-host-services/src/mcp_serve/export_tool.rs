@@ -408,7 +408,11 @@ mod tests {
             ToolOutcome::OkJson(json) => {
                 let v: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
                 let files = v["files"].as_array().expect("files array");
-                assert_eq!(files.len(), 2, "one entry per requested id (including skipped)");
+                assert_eq!(
+                    files.len(),
+                    2,
+                    "one entry per requested id (including skipped)"
+                );
                 // n1 should have bytes_base64; ghost should have error.
                 let n1 = files
                     .iter()

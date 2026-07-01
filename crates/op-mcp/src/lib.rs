@@ -59,6 +59,7 @@ pub mod design_refine_result;
 pub mod document_save;
 #[cfg(test)]
 mod document_save_tests;
+pub mod editor_state_tool;
 mod element_alias_builders;
 #[cfg(test)]
 mod element_atom_alias_tests;
@@ -99,10 +100,10 @@ mod element_ts_schema;
 mod element_visual_alias_builders;
 #[cfg(test)]
 mod element_visual_alias_tests;
-pub mod editor_state_tool;
 pub mod extra_read_tools;
 #[cfg(test)]
 mod extra_read_tools_tests;
+pub mod guidelines_tools;
 mod insert_node_args;
 mod insert_node_data;
 pub mod json_serializer;
@@ -131,7 +132,6 @@ pub mod selected_ops_tools;
 mod selected_ops_tools_tests;
 #[cfg(test)]
 mod selection_tools_tests;
-pub mod guidelines_tools;
 pub mod style_guide_tools;
 #[cfg(test)]
 mod style_guide_tools_tests;
@@ -206,6 +206,7 @@ pub use design_prompt::{get_design_prompt_snapshot, GetDesignPrompt};
 pub use design_refine_result::{design_refine_snapshot, DesignRefine};
 pub use document_save::{save_document_snapshot, SaveDocument};
 pub use extra_read_tools::{get_node_children_snapshot, ChildRecord, GetNodeChildren};
+pub use guidelines_tools::{get_guidelines_snapshot, GetGuidelines};
 pub use json_serializer::{response_to_json, tool_response_to_json};
 pub use node_attr_tools::{
     add_node_effect_snapshot, remove_node_effect_snapshot, set_ellipse_arc_snapshot,
@@ -245,11 +246,10 @@ pub use selected_ops_tools::{
     DuplicateSelected, GroupSelected, NudgeSelected, PasteClipboard, ReorderSelected,
     UngroupSelected,
 };
-pub use guidelines_tools::{get_guidelines_snapshot, GetGuidelines};
 pub mod spawn_agents_tool;
 pub use spawn_agents_tool::{spawn_agents_snapshot, SpawnAgents, SpawnSpec};
 pub mod tool_search;
-pub use tool_search::{tool_search, tool_search_snapshot, ToolSearch};
+pub use editor_state_tool::{get_editor_state_snapshot, GetEditorState};
 pub use style_guide_tools::{
     get_style_guide_snapshot, get_style_guide_tags_snapshot, GetStyleGuide, GetStyleGuideTags,
 };
@@ -261,7 +261,7 @@ pub use theme_presets::{
     list_theme_presets_snapshot, load_theme_preset_snapshot, save_theme_preset_snapshot,
     ListThemePresets, LoadThemePreset, SaveThemePreset,
 };
-pub use editor_state_tool::{get_editor_state_snapshot, GetEditorState};
+pub use tool_search::{tool_search, tool_search_snapshot, ToolSearch};
 pub use tools::{
     count_nodes_snapshot, document_info_snapshot, find_empty_space_snapshot,
     find_node_by_name_snapshot, get_active_theme_snapshot, get_canvas_bounds_snapshot,

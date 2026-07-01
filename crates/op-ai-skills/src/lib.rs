@@ -53,7 +53,11 @@ pub fn guideline_for(topic: &str) -> Option<String> {
             let design = get_skill_by_name("design-principles")?;
             // Concatenate both skills into one coherent guidelines doc.
             // A blank line separates them so the boundary is clear but readable.
-            Some(format!("{}\n\n{}", product.content.trim(), design.content.trim()))
+            Some(format!(
+                "{}\n\n{}",
+                product.content.trim(),
+                design.content.trim()
+            ))
         }
         "mobile" => {
             let mobile = get_skill_by_name("mobile-app")?;
@@ -155,31 +159,73 @@ mod tests {
     #[test]
     fn design_agent_system_prompt_resolves_and_contains_protocol_markers() {
         let prompt = design_agent_system_prompt();
-        assert!(!prompt.is_empty(), "design_agent_system_prompt must not be empty");
+        assert!(
+            !prompt.is_empty(),
+            "design_agent_system_prompt must not be empty"
+        );
 
         // Tool-loop protocol markers.
-        assert!(prompt.contains("get_editor_state"), "must reference get_editor_state");
-        assert!(prompt.contains("get_style_guide"), "must reference get_style_guide");
-        assert!(prompt.contains("get_guidelines"), "must reference get_guidelines");
-        assert!(prompt.contains("batch_design"), "must reference batch_design");
-        assert!(prompt.contains("get_screenshot"), "must reference get_screenshot");
-        assert!(prompt.contains("spawn_agents"), "must reference spawn_agents");
-        assert!(prompt.contains("find_empty_space"), "must reference find_empty_space");
+        assert!(
+            prompt.contains("get_editor_state"),
+            "must reference get_editor_state"
+        );
+        assert!(
+            prompt.contains("get_style_guide"),
+            "must reference get_style_guide"
+        );
+        assert!(
+            prompt.contains("get_guidelines"),
+            "must reference get_guidelines"
+        );
+        assert!(
+            prompt.contains("batch_design"),
+            "must reference batch_design"
+        );
+        assert!(
+            prompt.contains("get_screenshot"),
+            "must reference get_screenshot"
+        );
+        assert!(
+            prompt.contains("spawn_agents"),
+            "must reference spawn_agents"
+        );
+        assert!(
+            prompt.contains("find_empty_space"),
+            "must reference find_empty_space"
+        );
 
         // DSL / node model markers.
-        assert!(prompt.contains("placeholder"), "must describe placeholder scaffolding");
-        assert!(prompt.contains("instanceId"), "must describe instanceId path editing");
+        assert!(
+            prompt.contains("placeholder"),
+            "must describe placeholder scaffolding"
+        );
+        assert!(
+            prompt.contains("instanceId"),
+            "must describe instanceId path editing"
+        );
 
         // Batch size limit.
-        assert!(prompt.contains("25"), "must state the 25-operation batch limit");
+        assert!(
+            prompt.contains("25"),
+            "must state the 25-operation batch limit"
+        );
 
         // De-templating rules.
         assert!(
             prompt.contains("space-between") || prompt.contains("space_between"),
             "must teach spacing / spread rule (space-between)"
         );
-        assert!(prompt.contains("right"), "must state new-screen opens to the right");
-        assert!(prompt.contains("icon"), "must describe icon in nav tab rule");
-        assert!(prompt.contains("label"), "must describe label in nav tab rule");
+        assert!(
+            prompt.contains("right"),
+            "must state new-screen opens to the right"
+        );
+        assert!(
+            prompt.contains("icon"),
+            "must describe icon in nav tab rule"
+        );
+        assert!(
+            prompt.contains("label"),
+            "must describe label in nav tab rule"
+        );
     }
 }

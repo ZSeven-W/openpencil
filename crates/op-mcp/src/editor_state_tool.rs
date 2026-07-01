@@ -5,7 +5,7 @@
 //!   - active page + page count   ← `document_info_snapshot` / `list_pages_snapshot`
 //!   - selection ids + count      ← `get_selection_set_snapshot`
 //!   - top-level node records     ← direct walk of `active_children` using
-//!                                   `kind_label` (mirrors `list_node_kinds`)
+//!     `kind_label` (mirrors `list_node_kinds`)
 //!   - registered components      ← `list_components_snapshot`
 
 use std::collections::BTreeMap;
@@ -44,7 +44,10 @@ impl McpTool for GetEditorState {
     }
     fn call(&self, _args: &BTreeMap<String, String>) -> ToolOutcome {
         let mut out = BTreeMap::new();
-        out.insert("active_page_index".into(), self.active_page_index.to_string());
+        out.insert(
+            "active_page_index".into(),
+            self.active_page_index.to_string(),
+        );
         out.insert("active_page_id".into(), self.active_page_id.clone());
         out.insert("page_count".into(), self.page_count.to_string());
         out.insert("selection_ids".into(), self.selection_ids.clone());
@@ -93,9 +96,7 @@ pub fn get_editor_state_snapshot(state: &EditorState) -> GetEditorState {
             .map(|n| {
                 use op_editor_core::pen_node_ext::PenNodeExt;
                 let id = n.id_str().to_string();
-                let name = escape_record_field(
-                    n.base().name.as_deref().unwrap_or(""),
-                );
+                let name = escape_record_field(n.base().name.as_deref().unwrap_or(""));
                 let kind = kind_label(n);
                 format!("{id}|{name}|{kind}")
             })
@@ -154,7 +155,10 @@ mod tests {
         match snap.call(&BTreeMap::new()) {
             ToolOutcome::Ok(out) => {
                 let page_count: usize = out["page_count"].parse().expect("page_count numeric");
-                assert!(page_count >= 1, "page_count should be >= 1, got {page_count}");
+                assert!(
+                    page_count >= 1,
+                    "page_count should be >= 1, got {page_count}"
+                );
             }
             other => panic!("expected Ok, got {other:?}"),
         }
@@ -167,7 +171,9 @@ mod tests {
         match snap.call(&BTreeMap::new()) {
             ToolOutcome::Ok(out) => {
                 let ids = &out["selection_ids"];
-                let count: usize = out["selection_count"].parse().expect("selection_count numeric");
+                let count: usize = out["selection_count"]
+                    .parse()
+                    .expect("selection_count numeric");
                 assert!(
                     ids.contains("n1"),
                     "selection_ids should contain selected id 'n1', got {ids:?}"

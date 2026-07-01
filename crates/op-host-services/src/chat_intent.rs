@@ -450,7 +450,9 @@ pub fn requests_new_whole_screen(prompt: &str) -> bool {
     if EXISTING_SCREEN_CTX_CJK.iter().any(|k| prompt.contains(k)) {
         return false;
     }
-    let cjk_page = ["页面", "页", "屏幕", "屏"].iter().any(|k| prompt.contains(k));
+    let cjk_page = ["页面", "页", "屏幕", "屏"]
+        .iter()
+        .any(|k| prompt.contains(k));
     if cjk_page && DRAW_VERB_CJK.iter().any(|v| prompt.contains(v)) {
         return true;
     }
