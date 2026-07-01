@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./apps/desktop/build/icon.png" alt="OpenPencil" width="120" />
+  <img src="./crates/op-host-desktop/assets/icon.png" alt="OpenPencil" width="120" />
 </p>
 
 <h1 align="center">OpenPencil</h1>
@@ -224,7 +224,7 @@ op import:figma design.fig   # Figma 파일 가져오기
 cat design.dsl | op design - # stdin에서 파이프 입력
 ```
 
-세 가지 입력 방식을 지원합니다: 인라인 문자열, `@filepath` (파일에서 읽기), `-` (stdin에서 읽기). 데스크톱 앱 또는 웹 개발 서버와 연동됩니다. 전체 명령어 레퍼런스는 [CLI README](./apps/cli/README.md)를 참고하세요.
+세 가지 입력 방식을 지원합니다: 인라인 문자열, `@filepath` (파일에서 읽기), `-` (stdin에서 읽기). 데스크톱 앱 또는 웹 개발 서버와 연동됩니다. 전체 명령어 레퍼런스는 [CLI README](./crates/op-cli)를 참고하세요.
 
 **LLM 스킬** — [OpenPencil Skill](https://github.com/ZSeven-W/openpencil-skill) 플러그인을 설치하면 AI 에이전트(Claude Code, Cursor, Codex, Gemini CLI 등)에게 `op`를 사용한 디자인을 교육할 수 있습니다.
 
@@ -442,7 +442,7 @@ OpenPencil은 무료이며 오픈소스입니다. 개발은 이 도구를 유용
 ## 커뮤니티
 
 <a href="https://discord.gg/h9Fmyy6pVh">
-  <img src="./apps/web/public/logo-discord.svg" alt="Discord" width="16" />
+  <img src="./screenshot/logo-discord.svg" alt="Discord" width="16" />
   <strong> Discord에 참여하기</strong>
 </a>
 — 질문하기, 디자인 공유, 기능 제안.

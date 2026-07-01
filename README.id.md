@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./apps/desktop/build/icon.png" alt="OpenPencil" width="120" />
+  <img src="./crates/op-host-desktop/assets/icon.png" alt="OpenPencil" width="120" />
 </p>
 
 <h1 align="center">OpenPencil</h1>
@@ -224,7 +224,7 @@ op import:figma design.fig   # Impor file Figma
 cat design.dsl | op design - # Pipe dari stdin
 ```
 
-Mendukung tiga metode input: string inline, `@filepath` (baca dari file), atau `-` (baca dari stdin). Bekerja dengan aplikasi desktop atau web dev server. Lihat [CLI README](./apps/cli/README.md) untuk referensi perintah lengkap.
+Mendukung tiga metode input: string inline, `@filepath` (baca dari file), atau `-` (baca dari stdin). Bekerja dengan aplikasi desktop atau web dev server. Lihat [CLI README](./crates/op-cli) untuk referensi perintah lengkap.
 
 **LLM Skill** — instal plugin [OpenPencil Skill](https://github.com/ZSeven-W/openpencil-skill) untuk mengajarkan agen AI (Claude Code, Cursor, Codex, Gemini CLI, dll.) mendesain dengan `op`.
 
@@ -442,7 +442,7 @@ Terima kasih kepada **[MrQyun](https://github.com/mrqyun)** — ingin nama Anda 
 ## Komunitas
 
 <a href="https://discord.gg/h9Fmyy6pVh">
-  <img src="./apps/web/public/logo-discord.svg" alt="Discord" width="16" />
+  <img src="./screenshot/logo-discord.svg" alt="Discord" width="16" />
   <strong> Bergabung dengan Discord kami</strong>
 </a>
 — Ajukan pertanyaan, bagikan desain, sarankan fitur.

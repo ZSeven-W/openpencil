@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./apps/desktop/build/icon.png" alt="OpenPencil" width="120" />
+  <img src="./crates/op-host-desktop/assets/icon.png" alt="OpenPencil" width="120" />
 </p>
 
 <h1 align="center">OpenPencil</h1>
@@ -224,7 +224,7 @@ op import:figma design.fig   # Figma फ़ाइल इम्पोर्ट �
 cat design.dsl | op design - # stdin से पाइप करें
 ```
 
-तीन इनपुट विधियाँ समर्थित हैं: इनलाइन स्ट्रिंग, `@filepath` (फ़ाइल से पढ़ें), या `-` (stdin से पढ़ें)। डेस्कटॉप ऐप या वेब डेव सर्वर के साथ काम करता है। पूर्ण कमांड संदर्भ के लिए [CLI README](./apps/cli/README.md) देखें।
+तीन इनपुट विधियाँ समर्थित हैं: इनलाइन स्ट्रिंग, `@filepath` (फ़ाइल से पढ़ें), या `-` (stdin से पढ़ें)। डेस्कटॉप ऐप या वेब डेव सर्वर के साथ काम करता है। पूर्ण कमांड संदर्भ के लिए [CLI README](./crates/op-cli) देखें।
 
 **LLM स्किल** — [OpenPencil Skill](https://github.com/ZSeven-W/openpencil-skill) प्लगइन इंस्टॉल करें ताकि AI एजेंट (Claude Code, Cursor, Codex, Gemini CLI आदि) `op` से डिज़ाइन करना सीख सकें।
 
@@ -442,7 +442,7 @@ OpenPencil मुफ़्त और ओपन-सोर्स है। इस�
 ## समुदाय
 
 <a href="https://discord.gg/h9Fmyy6pVh">
-  <img src="./apps/web/public/logo-discord.svg" alt="Discord" width="16" />
+  <img src="./screenshot/logo-discord.svg" alt="Discord" width="16" />
   <strong> हमारे Discord में शामिल हों</strong>
 </a>
 — प्रश्न पूछें, डिज़ाइन साझा करें, सुविधाएँ सुझाएँ।
