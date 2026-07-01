@@ -105,20 +105,17 @@ Ekspor dari satu file `.op` ke React + Tailwind, HTML + CSS, Vue, Svelte, Flutte
 ## Mulai Cepat
 
 ```bash
-# Instal dependensi
-bun install
-
-# Jalankan server pengembangan di http://localhost:3000
-bun --bun run dev
+# Web dev server (builds the CanvasKit wasm bundle, then runs the headless web host)
+bash scripts/start-web-rust.sh
 ```
 
 Atau jalankan sebagai aplikasi desktop:
 
 ```bash
-bun run electron:dev
+cargo run -p op-host-desktop
 ```
 
-> **Prasyarat:** [Bun](https://bun.sh/) >= 1.0 dan [Node.js](https://nodejs.org/) >= 18
+> **Prasyarat:** [Rust](https://www.rust-lang.org/) (stable) untuk membangun produk. [Bun](https://bun.sh/) >= 1.0 dan [Node.js](https://nodejs.org/) >= 18 hanya diperlukan untuk web SDK di `packages/`.
 
 ### Docker
 
@@ -254,7 +251,7 @@ Mendukung tiga metode input: string inline, `@filepath` (baca dari file), atau `
 - Alur kerja berlapis — `design_skeleton` → `design_content` → `design_refine` dengan prompt yang terfokus per fase
 - Panduan Gaya — 50+ gaya bawaan (glassmorphism, brutalist, retro, dll.) dengan pencocokan fuzzy berbasis tag, terintegrasi ke perencanaan dan pembuatan
 - Profil kemampuan multi-model — secara otomatis menyesuaikan mode berpikir, upaya, dan bentuk prompt berdasarkan tingkat model
-- Runtime agen bawaan (`agent-native`, Zig NAPI) + penyedia Anthropic, Claude Agent SDK, OpenCode, Codex, Copilot, Gemini
+- Runtime agen bawaan (Rust) + penyedia Anthropic, Claude Agent SDK, OpenCode, Codex, Copilot, Gemini
 - Passthrough format Anthropic untuk penyedia LLM Tiongkok — Kimi, Zhipu, GLM, DouBao, Ark, Bailian/DashScope, ModelScope, Coding Plans
 
 **Integrasi Git**
@@ -309,7 +306,7 @@ OpenPencil sedang ditulis ulang dari awal dalam **Rust** ([#129](https://github.
 | **Payload web**           | Bundle JS + WASM                                   | **8.2 MB** wasm / **2.18 MB** gzip melalui jaringan                          |
 | **Rendering**             | CanvasKit/Skia di web                              | Satu backend Skia berakselerasi GPU di **setiap** target                      |
 | **Memori**                | Jeda JavaScript GC                                 | Tanpa GC — kepemilikan Rust, latensi yang dapat diprediksi                   |
-| **Basis kode**            | Web stack + Electron + Zig NAPI agent              | Satu workspace Rust: editor · CLI · MCP · AI · codegen · Figma · Git          |
+| **Basis kode**            | Web stack + Electron              | Satu workspace Rust: editor · CLI · MCP · AI · codegen · Figma · Git          |
 | **Target**                | Web + desktop, dua stack terpisah                  | Desktop (macOS/Win/Linux) · mobile (iOS/Android) · browser — satu inti        |
 
 **Peningkatan terukur**
@@ -382,15 +379,20 @@ openpencil/
 ## Skrip
 
 ```bash
-bun --bun run dev          # Server pengembangan (port 3000)
-bun --bun run build        # Build produksi
-bun --bun run test         # Jalankan pengujian (Vitest)
-npx tsc --noEmit           # Pemeriksaan tipe
-bun run bump <version>     # Sinkronisasi versi di semua package.json
-bun run electron:dev       # Pengembangan Electron
-bun run electron:build     # Paket Electron
-bun run cli:dev            # Jalankan CLI dari sumber
-bun run cli:compile        # Kompilasi CLI ke dist
+# Product (Rust — run from the repo root)
+cargo build --workspace              # Build all crates (add --release for prod)
+cargo test --workspace               # Run all tests
+cargo check --workspace              # Type check
+cargo clippy --workspace --all-targets -- -D warnings   # Lint
+cargo fmt --all                      # Format
+bash scripts/start-web-rust.sh       # Web dev server (wasm bundle + headless host)
+cargo run -p op-host-desktop         # Desktop app (binary: openpencil-desktop)
+cargo run -p op-cli -- <args>        # CLI (binary: op)
+
+# Web SDK / JS tooling (run from packages/)
+cd packages && bun run lint          # Lint the web SDK (oxlint); also: bun run format
+cd packages && bun run generate-iconify-catalog   # Regenerate the Rust icon catalog assets
+cd packages && bun run bump <version>             # Sync SDK package.json versions
 ```
 
 ## Berkontribusi
@@ -400,7 +402,7 @@ Kontribusi sangat disambut! Lihat [CLAUDE.md](./CLAUDE.md) untuk detail arsitekt
 1. Fork dan clone
 2. Atur sinkronisasi versi: `git config core.hooksPath .githooks`
 3. Buat cabang: `git checkout -b feat/my-feature`
-4. Jalankan pemeriksaan: `npx tsc --noEmit && bun --bun run test`
+4. Jalankan pemeriksaan: `cargo test --workspace && cargo clippy --workspace --all-targets -- -D warnings`
 5. Commit dengan [Conventional Commits](https://www.conventionalcommits.org/): `feat(canvas): add rotation snapping`
 6. Buka PR ke `main`
 

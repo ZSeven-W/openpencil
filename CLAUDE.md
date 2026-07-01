@@ -2,30 +2,28 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-> **The TypeScript OpenPencil has been retired.** `apps/web`, `apps/desktop`, `apps/cli`, and the `pen-*` packages (pen-types/core/engine/renderer/figma/mcp/ai-skills/sdk/react/acp) are gone. The product is now implemented in **Rust** (`crates/`) with a **Zig** agent runtime (`packages/agent-native`) and a thin **wasm-backed web SDK** (`packages/op-web-sdk*`). Historical `// ported from pen-*` comments in the Rust sources name the retired TS as their origin — that code no longer exists in-tree; consult git history (last TS tag `v0.7.5`) if you need it.
+> **The TypeScript OpenPencil has been retired.** `apps/web`, `apps/desktop`, `apps/cli`, and the `pen-*` packages (pen-types/core/engine/renderer/figma/mcp/ai-skills/sdk/react/acp) are gone. The product is now implemented in **Rust** (`crates/`) with a thin **wasm-backed web SDK** (`packages/op-web-sdk*`). Historical `// ported from pen-*` comments in the Rust sources name the retired TS as their origin — that code no longer exists in-tree; consult git history (last TS tag `v0.7.5`) if you need it.
 
 Detailed module docs load automatically in subdirectories:
 
 - **`crates/CLAUDE.md`** — Rust shell: crate layout, editor core, widgets, hosts (native/web/desktop), MCP, AI, orchestrator, codegen. **The canonical architecture doc.**
-- **`packages/CLAUDE.md`** — Remaining packages (agent-native Zig runtime + op-web-sdk web viewer SDK family).
-- **`packages/agent-native/CLAUDE.md`** — Zig agent runtime (NAPI addon).
+- **`packages/CLAUDE.md`** — Remaining packages (op-web-sdk web viewer SDK family).
 
 ## Commands
 
-Tooling is **Cargo** (Rust — the product) plus **Bun** (the remaining JS/Zig glue).
+Tooling is **Cargo** (Rust — the product). The root has **no `package.json`**; the JS/**Bun** tooling for the web SDK lives under `packages/` — run SDK/JS scripts from there.
 
-- **Web dev server (Rust):** `bun run dev` (= `bash scripts/start-web-rust.sh`)
-- **Build (Rust):** `bun run build` (= `cargo build --workspace --release`)
-- **Run all tests (Rust):** `bun run test` (= `cargo test --workspace`); single crate: `cargo test -p <crate>`
-- **Type check:** `cargo check --workspace`; wasm: `bun run cargo:wasm-check`
+- **Web dev server (Rust):** `bash scripts/start-web-rust.sh`
+- **Build (Rust):** `cargo build --workspace --release`
+- **Run all tests (Rust):** `cargo test --workspace`; single crate: `cargo test -p <crate>`
+- **Type check:** `cargo check --workspace`; wasm: `cargo check --target wasm32-unknown-unknown -p op-host-web --no-default-features --features web`
 - **Lint / format (Rust):** `cargo clippy --workspace --all-targets -- -D warnings` / `cargo fmt --all`
-- **Lint / format (remaining TS SDK):** `bun run lint` (oxlint) / `bun run format` (oxfmt)
+- **Lint / format (remaining TS SDK):** from `packages/`: `bun run lint` (oxlint) / `bun run format` (oxfmt)
 - **Desktop app:** `cargo build -p op-host-desktop` → binary `openpencil-desktop` (live MCP on `127.0.0.1:<port>/mcp`)
 - **CLI:** `cargo build -p op-cli` → binary `op`
 - **MCP server:** built into the desktop/web host (`--mcp <path>`); crate `op-mcp`
-- **Agent runtime (Zig):** `bun run agent:build` then `bun run agent-native:bundle`
-- **Iconify catalog (Rust assets):** `bun run generate-iconify-catalog`
-- **Bump version:** `bun run bump <version>` (syncs package.json; Rust versions live in Cargo.toml)
+- **Iconify catalog (Rust assets):** from `packages/`: `bun run generate-iconify-catalog`
+- **Bump SDK versions:** from `packages/`: `bun run bump <version>` (syncs the SDK `package.json`s; Rust versions live in Cargo.toml)
 
 ## Architecture
 
@@ -46,7 +44,6 @@ crates/
    op-git / op-opmerge / op-pen-loader / op-design-lint / op-i18n / op-smoke / …
 
 packages/
-├── agent-native/         Zig AI agent runtime (NAPI, multi-provider, concurrent Agent Teams)
 ├── op-web-sdk/           Read-only `.op` web viewer SDK (wraps the op-host-web wasm bundle)
 ├── op-web-sdk-react/     React 19 adapter for op-web-sdk
 └── op-web-sdk-vue/       Vue 3 adapter for op-web-sdk

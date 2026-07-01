@@ -105,20 +105,17 @@ Claude Code, Codex, Gemini, OpenCode, Kiro 또는 Copilot CLI에 원클릭 설�
 ## 빠른 시작
 
 ```bash
-# 의존성 설치
-bun install
-
-# http://localhost:3000 에서 개발 서버 시작
-bun --bun run dev
+# Web dev server (builds the CanvasKit wasm bundle, then runs the headless web host)
+bash scripts/start-web-rust.sh
 ```
 
 또는 데스크톱 앱으로 실행:
 
 ```bash
-bun run electron:dev
+cargo run -p op-host-desktop
 ```
 
-> **필수 조건:** [Bun](https://bun.sh/) >= 1.0 및 [Node.js](https://nodejs.org/) >= 18
+> **필수 조건:** 제품을 빌드하려면 [Rust](https://www.rust-lang.org/)(stable)가 필요합니다. [Bun](https://bun.sh/) >= 1.0 및 [Node.js](https://nodejs.org/) >= 18은 `packages/` 아래의 web SDK에만 필요합니다.
 
 ### Docker
 
@@ -254,7 +251,7 @@ cat design.dsl | op design - # stdin에서 파이프 입력
 - 계층적 워크플로 — `design_skeleton` → `design_content` → `design_refine`, 각 단계에 집중된 프롬프트 사용
 - 스타일 가이드 — 50개 이상의 내장 스타일(glassmorphism, brutalist, retro 등), 태그 기반 퍼지 매칭 지원, 플래닝과 생성에 통합
 - 멀티 모델 역량 프로파일 — 모델 등급별로 싱킹 모드, 노력도, 프롬프트 형태를 자동 적응
-- 내장 에이전트 런타임(`agent-native`, Zig NAPI) + Anthropic, Claude Agent SDK, OpenCode, Codex, Copilot, Gemini 제공자
+- 내장 에이전트 런타임(Rust) + Anthropic, Claude Agent SDK, OpenCode, Codex, Copilot, Gemini 제공자
 - 중국 LLM 제공자를 위한 Anthropic 형식 패스스루 — Kimi, Zhipu, GLM, DouBao, Ark, Bailian/DashScope, ModelScope, Coding Plans
 
 **Git 통합**
@@ -309,7 +306,7 @@ OpenPencil은 **Rust**로 처음부터 다시 작성되고 있습니다 ([#129](
 | **웹 페이로드**         | JS + WASM 번들                                            | **8.2 MB** wasm / 전송 시 **2.18 MB** gzip                              |
 | **렌더링**              | 웹에서 CanvasKit/Skia                                     | **모든** 타깃에서 GPU 가속 Skia 백엔드 하나                              |
 | **메모리**              | JavaScript GC 일시 중단                                   | GC 없음 — Rust 소유권, 예측 가능한 레이턴시                              |
-| **코드베이스**          | 웹 스택 + Electron + Zig NAPI 에이전트                    | 단일 Rust 워크스페이스: 에디터 · CLI · MCP · AI · 코드젠 · Figma · Git  |
+| **코드베이스**          | 웹 스택 + Electron                    | 단일 Rust 워크스페이스: 에디터 · CLI · MCP · AI · 코드젠 · Figma · Git  |
 | **지원 플랫폼**         | 웹 + 데스크톱, 두 개의 별도 스택                         | 데스크톱 (macOS/Win/Linux) · 모바일 (iOS/Android) · 브라우저 — 코어 하나 |
 
 **측정된 개선 사항**
@@ -382,15 +379,20 @@ openpencil/
 ## 스크립트
 
 ```bash
-bun --bun run dev          # 개발 서버 (포트 3000)
-bun --bun run build        # 프로덕션 빌드
-bun --bun run test         # 테스트 실행 (Vitest)
-npx tsc --noEmit           # 타입 검사
-bun run bump <version>     # 모든 package.json에 버전 동기화
-bun run electron:dev       # Electron 개발 모드
-bun run electron:build     # Electron 패키징
-bun run cli:dev            # 소스에서 CLI 실행
-bun run cli:compile        # CLI를 dist로 컴파일
+# Product (Rust — run from the repo root)
+cargo build --workspace              # Build all crates (add --release for prod)
+cargo test --workspace               # Run all tests
+cargo check --workspace              # Type check
+cargo clippy --workspace --all-targets -- -D warnings   # Lint
+cargo fmt --all                      # Format
+bash scripts/start-web-rust.sh       # Web dev server (wasm bundle + headless host)
+cargo run -p op-host-desktop         # Desktop app (binary: openpencil-desktop)
+cargo run -p op-cli -- <args>        # CLI (binary: op)
+
+# Web SDK / JS tooling (run from packages/)
+cd packages && bun run lint          # Lint the web SDK (oxlint); also: bun run format
+cd packages && bun run generate-iconify-catalog   # Regenerate the Rust icon catalog assets
+cd packages && bun run bump <version>             # Sync SDK package.json versions
 ```
 
 ## 기여하기
@@ -400,7 +402,7 @@ bun run cli:compile        # CLI를 dist로 컴파일
 1. 포크 후 클론
 2. 버전 동기화 설정: `git config core.hooksPath .githooks`
 3. 브랜치 생성: `git checkout -b feat/my-feature`
-4. 검사 실행: `npx tsc --noEmit && bun --bun run test`
+4. 검사 실행: `cargo test --workspace && cargo clippy --workspace --all-targets -- -D warnings`
 5. [Conventional Commits](https://www.conventionalcommits.org/) 형식으로 커밋: `feat(canvas): add rotation snapping`
 6. `main` 브랜치에 PR 생성
 

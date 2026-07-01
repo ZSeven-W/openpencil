@@ -1,15 +1,16 @@
 # Packages
 
-The JS/Zig packages that remain after the TypeScript retirement.
+The web SDK packages that remain after the TypeScript retirement. This directory is the **npm/Bun workspace root** (`packages/package.json`); the repository root is a **pure Cargo workspace** with no `package.json`.
 
-> The `pen-*` packages (pen-types, pen-core, pen-engine, pen-renderer, pen-figma, pen-mcp, pen-ai-skills, pen-sdk, pen-react, pen-acp) and pen-codegen were **retired** along with `apps/*`. Their functionality now lives in the Rust `crates/` (see `crates/CLAUDE.md`). Nothing here depends on them.
+> The `pen-*` packages (pen-types, pen-core, pen-engine, pen-renderer, pen-figma, pen-mcp, pen-ai-skills, pen-sdk, pen-react, pen-acp) and pen-codegen were **retired** along with `apps/*`. Their functionality now lives in the Rust `crates/` (see `crates/CLAUDE.md`). Nothing here depends on them. The `agent-native` Zig runtime was also **removed** — the built-in agent runtime is now the Rust `agent` crate (`vendor/agent`, shared with Zode).
 
-## agent-native (`agent-native/`)
+## Workspace tooling
 
-Native AI agent runtime written in **Zig**, exposed to JS via a NAPI addon (`napi/agent_napi.node`). Multi-provider, supports concurrent Agent Teams. Cross-product runtime (also consumed by Zode).
+Run these from `packages/`:
 
-- Build: `bun run agent:build` (`zig build napi -Doptimize=ReleaseFast`), then `bun run agent-native:bundle` to copy the `.node` into `napi/`.
-- See `agent-native/CLAUDE.md` for the full runtime docs.
+- **Lint / format the SDK:** `bun run lint` (oxlint) / `bun run format` (oxfmt).
+- **Iconify catalog (Rust assets):** `bun run generate-iconify-catalog` — `scripts/generate-iconify-catalog.mjs` reads `@iconify-json/*` and writes `crates/op-editor-ui/assets/iconify-catalog-{core,brands}.json` (the icon catalog embedded in / served by the Rust web target).
+- **Bump SDK versions:** `bun run bump <version>` (syncs the SDK `package.json`s; Rust versions live in Cargo.toml).
 
 ## op-web-sdk (`op-web-sdk/`)
 

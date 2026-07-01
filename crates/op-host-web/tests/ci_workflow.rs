@@ -137,8 +137,6 @@ fn web_rust_publish_has_docker_and_start_script_entrypoints() {
         std::fs::read_to_string(repo.join("Dockerfile.web-rust")).expect("Dockerfile readable");
     let start_script = std::fs::read_to_string(repo.join("scripts/start-web-rust.sh"))
         .expect("web rust start script is readable");
-    let package =
-        std::fs::read_to_string(repo.join("package.json")).expect("package.json readable");
 
     assert!(
         dockerfile.contains("op-host-web-server --serve-web"),
@@ -155,9 +153,5 @@ fn web_rust_publish_has_docker_and_start_script_entrypoints() {
     assert!(
         start_script.contains("OPENPENCIL_WEB_BUNDLE_DIR"),
         "start script should point the daemon at the built web bundle explicitly"
-    );
-    assert!(
-        package.contains("\"shell:web:serve\""),
-        "package scripts should expose the web Rust start script"
     );
 }
