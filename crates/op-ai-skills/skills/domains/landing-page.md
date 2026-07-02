@@ -5,84 +5,62 @@ phase: [generation]
 trigger:
   keywords: [landing, marketing, hero, homepage]
 priority: 35
-budget: 1500
+budget: 1700
 category: domain
 ---
 
-LANDING PAGE DESIGN PATTERNS:
+LANDING PAGE — CONVERSION-DRIVEN MARKETING DEPTH
 
-STRUCTURE:
+You design a page with ONE conversion intent (sign up / buy / book a demo). Every element moves toward that action; cut what doesn't. Sell the transformation, not the feature — the visitor buys a better version of themselves. The always-on design craft (type scale, 8px spacing, contrast, don't-box-everything, transparent structural wrappers) and the semantic ROLES (`section`/`hero`/`navbar`/`cta-section`/`footer`/`stats-section`/`feature-grid`/`card`/`button`) already supply layout defaults — do NOT restate their padding/layout numbers. This adds the marketing DEPTH on top.
 
-- Navigation - Hero - Features - Social Proof - CTA - Footer
-- Each section: width="fill_container", height="fit_content", layout="vertical"
-- Root frame: width=1200, height=0 (auto-expands), gap=0
+## Section flow (narrative arc)
 
-NAVIGATION:
+Build promise → proof → trust → action: what it is → why it works → why to trust it → what to do next. Order sections to tell that story; don't dump features at random. Define the copy first, then design around it — words drive layout, not the reverse.
 
-- justifyContent="space_between", 3 groups: logo | nav-links | CTA button
-- padding=[0,80], alignItems="center", height 64-80px
-- Links evenly distributed in center group
+## Rhythm (the highest-value lever)
 
-HERO SECTION:
+- Alternate density: never stack two sections of similar weight. Follow a text-heavy section with a visual one, a dense one with an airy one.
+- Alternate tone: DARK sections read as credibility / depth / emphasis (hero, CTA band, key stat); LIGHT sections read as explanation / detail (features, how-it-works). Use a dark band to make the final CTA punch.
+- Backgrounds carry the rhythm — alternate page-bg vs surface; do NOT separate sections with decorative dividers.
 
-- padding=[80,80] or larger, generous whitespace
-- ONE headline (40-56px), ONE subtitle (16-18px), ONE CTA button
-- Optional visual: phone mockup or illustration on the right (two-column horizontal layout)
-- Every extra element dilutes focus — keep it minimal
+## Composition discipline
 
-FEATURE SECTIONS:
+- ONE alignment axis per section — never mix centered and left-aligned content in the same section. Hero/CTA/quote = centered; feature lists/specs = left.
+- Proximity = relationship: tight gaps inside a group, generous space between groups.
+- Don't center-align more than 2–3 lines; longer copy goes left.
+- Body line length 50–75 characters: constrain long paragraphs to ~`width: 640` rather than letting them span the full 1200.
 
-- Section title + 3-4 feature cards in horizontal layout
-- Cards: width="fill_container", height="fill_container" for even row alignment
-- Alternate section backgrounds (#FFFFFF / #F8FAFC) for natural separation
-- Section vertical padding: 80-120px
+## Color for conversion
 
-SOCIAL PROOF:
+- The CTA is the single most prominent thing on the page. Reserve `$color-accent` (or the style-guide accent; hex when no palette) for ACTIONS only — don't spend it on decorative chrome, or the button stops standing out.
+- One primary action per section; secondary actions are ghost/outline, visually quieter.
 
-- Testimonials: card with quote + avatar + name/title
-- Stats: horizontal row with stat-cards (number + label)
-- Logos: horizontal row of company logos
+## Imagery
 
-CTA SECTION:
+- Every image is a scene from the visitor's future — people in the outcome state > product-in-context > product-in-environment > isolated product (use last sparingly).
+- Ask "would the visitor think 'I want to feel that way'?" If not, change it.
+- Text over an image needs its own contrast treatment (overlay scrim, shadow, or text in a sibling container). NEVER set an AI image as a background fill with text on top — image and text are SIBLINGS, not layers. Never stretch or distort.
 
-- Centered content, compelling headline, accent background or gradient
-- Single prominent button
+## Headline hierarchy (write strongest-down)
 
-FOOTER:
+1. Transformation — "Finally feel in control of your inbox" (strongest)
+2. Outcome — "Ship more content, grow your audience"
+3. Benefit — "Write 10x faster"
+4. Feature — "AI-powered writing assistant" (weakest)
 
-- Multi-column layout: brand + link groups + social
-- Muted colors, smaller text
-- padding=[48,80]
+Lead the hero with transformation or outcome; benefit/feature only in supporting copy.
 
-GENERAL:
+## Section archetypes (pick per section; `intent — structure`)
 
-- Centered content container ~1040-1160px across sections for alignment stability
-- Consistent cornerRadius (12-16px for cards)
-- clipContent: true on cards with images
-- Subtle shadows on cards
+- Nav — `navbar` 3 groups: logo | center links | accent CTA, `space_between`
+- Hero — `hero`, ONE headline (40–56) + ONE subtitle (16–18) + ONE CTA; optional visual right (2-col). Hero = the entire pitch compressed into the first screen.
+- Logo wall — muted row of customer logos, equal size, low contrast (proof, not focus)
+- Features — section title + `feature-grid` of 3–4 equal `feature-card`s (`fill_container` width+height for even rows)
+- How-it-works — 3 numbered steps in a row, each: number/icon + label + 1-line desc
+- Social proof — `testimonial` card (quote + avatar + name/title) OR `stats-section` (3–4 big numbers + labels)
+- Pricing — 2–3 `pricing-card`s in a row, ONE highlighted (accent border / scale) as the recommended plan
+- FAQ — left-aligned vertical list of question + answer pairs
+- CTA band — `cta-section`, dark/accent background, centered, ONE headline + ONE button (the conversion climax)
+- Footer — `footer`, multi-column brand + link groups + social, muted, smaller text
 
-## Headline Hierarchy
-
-Write headlines from the strongest level down:
-
-1. Transformation: "Finally feel in control of your inbox" (strongest)
-2. Outcome: "Ship more content, grow your audience"
-3. Benefit: "Write 10x faster"
-4. Feature: "AI-powered writing assistant" (weakest)
-
-Lead with transformation or outcome. Use benefit/feature in supporting copy only.
-
-## Image Intent Hierarchy
-
-When choosing imagery (prioritize top → bottom):
-
-1. Transformation imagery: people in the "after state" — emotion, outcome, identity achieved
-2. Contextual use: people using the product in real environments
-3. Product-in-environment: product in a setting implying use/outcome
-4. Isolated product: product alone — use sparingly
-
-Every image should be a scene from the visitor's future life.
-Ask: "Would the visitor think 'I want to feel that way'?"
-
-NEVER use AI images as background fills with text on top.
-Images and text are siblings, not layers.
+GENERAL: keep a consistent centered content max-width (~1040–1160) across sections for alignment stability; consistent card radius (12–16) and subtle shadow; `clipContent: true` on cards holding images. Apply all of this silently through node structure; never emit archetype labels as visible text.

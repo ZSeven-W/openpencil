@@ -1,57 +1,46 @@
 ---
 name: dashboard
-description: Dashboard and admin panel design patterns
+description: Dashboard, admin-panel, and data-table design depth — zone structure, table craft, metric/chart treatment beyond the always-on principles
 phase: [generation]
 trigger:
-  keywords: [dashboard, admin, analytics, data]
+  keywords: [dashboard, admin, analytics, data, table, 仪表盘, 后台, 数据表, 报表]
 priority: 35
-budget: 1500
+budget: 1800
 category: domain
 ---
 
-DASHBOARD DESIGN PATTERNS:
+DASHBOARD / ADMIN / DATA-TABLE DEPTH
 
-STRUCTURE:
+A data-dense product surface. The always-on principles (purpose-first, dominant region, action hierarchy, density, the 5 data states, structural consistency) ALREADY apply — do not restate them. Commit to COMPACT density here. Visual identity (color/type/radius) comes from the selected style guide; these add the structural depth.
 
-- Root frame: width=1200, height=0, layout="horizontal" (sidebar + main content)
-- Sidebar: width=240-280, height="fill_container", layout="vertical", dark or surface fill
-- Main content: width="fill_container", layout="vertical", gap=16-24
+ZONE STRUCTURE (adapt — do not force sidebar+table when the purpose differs):
 
-SIDEBAR:
+- Root: width=1200-1440, layout="horizontal" — Sidebar + Main.
+- Sidebar: width=240-280, height="fill_container", layout="vertical", justifyContent="space_between". Brand top (padding=[24,16]); nav groups with section labels (12px uppercase, muted, letterSpacing≈1); user/settings pinned bottom. Nav item: frame(horizontal, gap=12, alignItems="center", padding=[10,16]) > icon_font(18-20) + text(14). Active: accent surface tint OR a left accent bar — never both. icon + label always (never icon-only nav).
+- Main: width="fill_container", layout="vertical", padding=[24,32], gap=24-28.
+- Top bar: height=56-64, padding=[0,24], horizontal, justifyContent="space_between". Left: page title / breadcrumbs. Right: search + bell + avatar.
 
-- Logo/brand at top, padding=[24,16]
-- Navigation items: frame(layout="horizontal", gap=12, alignItems="center", padding=[10,16]) > icon_font + text
-- Active item: accent background or left border indicator
-- Section dividers between nav groups
-- User/settings at bottom
+METRIC ROW:
 
-TOP BAR:
+- 3-4 stat cards in one horizontal row, each width="fill_container" (equal width). Card: padding=20, gap=8, cornerRadius=8-12. Stack: label(13-14, muted) → value(28-36, bold) → trend chip. Trend uses semantic color: up=success green, down=destructive red — NOT the brand accent. Numbers in the value/trend use tabular/mono figures if the guide defines a mono family.
 
-- height=56-64, padding=[0,24], layout="horizontal", justifyContent="space_between"
-- Left: page title or breadcrumbs
-- Right: search bar + notification icon + user avatar
+CHARTS:
 
-METRICS ROW:
+- Card with header (title left + period/filter control right) then plot area. The plot is a placeholder: a frame with a DASHED border and a faint axis hint or label — NOT a solid saturated color block (that reads as a generic AI fill). Charts row = 2 equal columns, gap=24. One insight per chart.
 
-- Horizontal layout with 3-4 stat-cards, each width="fill_container"
-- Each card: icon + metric value (28-36px, bold) + label (14px, muted) + optional trend indicator
-- padding=[20,24], gap=8, cornerRadius=12
+DATA TABLES (use only when no predefined Table component exists):
 
-CHART SECTIONS:
+- STRICT hierarchy: Table(frame, vertical) > Row(frame, horizontal, width="fill_container") > Cell(frame) > content. Each CELL is its own frame — NEVER put content directly in a row, or columns won't align. Header + every body row repeat the IDENTICAL cell widths.
+- Column width by role: identifier 200-250; email/title "fill_container"; status/badge 100-120; date 120-150; number/amount 90-120; actions 80-100.
+- Column alignment by data type: text/labels left; numbers/amounts/dates RIGHT (tabular figures for clean decimal alignment); status badge + row actions centered. Header label alignment matches its column.
+- Header row: distinct treatment (subtle fill or bottom border), bold 12-13px, often uppercase muted, padding=[12,16], height fixed.
+- Body rows: padding=[12,16] (compact) or [10,16); separate with a 1px bottom divider OR a very subtle alternating row tint — pick ONE, never both. Design the hover and selected row state (tint), not just the default.
+- Cell content beyond text: status badge (pill, cornerRadius=full, semantic color: green active / amber pending / red error / muted neutral), avatar+name pair, small action buttons/icons. Identifier cell may stack a primary line + muted secondary line.
+- Row actions: trailing cell — 1-2 icon buttons inline (edit/delete) OR a single more-vertical overflow when 3+; do not spray every action across the row.
+- Below the table: a footer row with result count + pagination (prev/page-numbers/next). Design the EMPTY state (icon + one-line message + primary CTA) and the LOADING state (skeleton rows mirroring the column widths) — a data table without its empty/loading state is incomplete.
+- Responsive: a wide multi-column table does NOT survive a narrow screen — at mobile widths replace the table with a stacked list of CARDS (one card per record, label:value pairs), not a shrunken table.
+- No user data → generate realistic dummy values per cell; 4-7 columns is a sane default.
 
-- Cards with header (title + filter/period selector) + chart area placeholder
-- Chart area: colored rectangle with rounded corners as placeholder
-- width="fill_container", cornerRadius=12
+SPACING: cards cornerRadius 8-12 consistently; card padding 20 (16 for dense metric cards); section gap 24-28; align everything to an 8px rhythm.
 
-DATA TABLES:
-
-- Table header: background fill, bold text, padding=[12,16]
-- Table rows: alternating subtle backgrounds, consistent column widths
-- Status badges: pill-shaped with semantic colors (green=active, amber=pending, red=error)
-- All cells use width="fill_container"
-
-SPACING:
-
-- Main content padding=[24,24], gap=16-24
-- Cards: padding=[20,24], gap=12-16
-- Consistent 12px cornerRadius across cards
+Apply silently through node structure; never emit these as visible text.
