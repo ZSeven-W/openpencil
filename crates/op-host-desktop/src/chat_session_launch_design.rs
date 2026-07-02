@@ -127,7 +127,7 @@ fn resolve_design_thinking(model: Option<&str>, chat_default: ThinkingMode) -> T
 /// falls through to the orchestrator path).
 ///
 /// Mirrors `launch_if_pending`'s builtin chat branch but uses the
-/// design toolset and a 8192-token budget.
+/// design toolset and a 16384-token per-turn budget.
 pub(super) fn launch_design_loop_turn(
     host: &mut WidgetHostNative,
     user_text: String,
@@ -161,7 +161,14 @@ pub(super) fn launch_design_loop_turn(
         system_prompt: op_ai_skills::design_agent_system_prompt().to_string(),
         user_message: user_text,
         history,
-        max_output_tokens: 8192,
+        // Per-TURN output cap. The real budget-burner was hidden reasoning, not
+        // the DSL: a glm-5.2 loop run streamed ~94k thinking chars vs ~4k of
+        // actual batch_design, blowing the cap so a turn truncated mid-JSON, its
+        // tool call failed to parse, and the loop stopped early with an
+        // unfinished design. The root fix is at the wire (the loop now sends
+        // thinking:{type:disabled} for glm/minimax); 16384 (up from 8192) is
+        // headroom so a genuinely large section-batch still completes per turn.
+        max_output_tokens: 16384,
         thinking,
         effort,
         attachments,
