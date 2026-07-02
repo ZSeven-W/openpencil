@@ -1,29 +1,15 @@
 //! 阶段 4 —— 清理 pass。
 //!
 //! [`run_cleanup_passes`] 在所有 subtask 插入完成后运行,是独立
-//! 函数 —— S3a 顺序路径与 S3b 并发路径都复用它(spec §9)。
+//! 函数 —— 顺序路径在收尾时复用它(spec §9)。
 //!
 //! [`descendant_count`] 给 `run()` 的"零内容"判定提供基线:
 //! scaffold 之后数一次,subtask 全跑完再数一次,没涨即零内容。
-//!
-//! ## Task C1 (S3b-2): concurrent failure policy + N-root cleanup
-//!
-//! [`aggregate_concurrent_verdict`] — run-all-aggregate failure check:
-//! if EVERY collected outcome has 0 nodes → returns
-//! `Err(OrchestratorError::AllFailed)` carrying the first non-empty error
-//! string (or a fallback message); otherwise returns `Ok(())` (partial
-//! success is accepted). Port of `orchestrator-sub-agent.ts:319-325`.
-//!
-//! [`cleanup_concurrent_roots`] — N-root cleanup after a concurrent run.
-//! Per root: if `descendant_count <= baseline`, delete that root (scaffold-only).
-//! Roll back plan-derived variables only when NOTHING survived across all roots.
-//! Port of `orchestrator.ts:1101-1158`.
 
 use crate::cleanup_layout::root_content_height;
 use crate::cleanup_typography::repair_overbold_text_hierarchy;
 use crate::plan::OrchestratorPlan;
-use crate::types::{DocSink, OrchestratorError, SubtaskOutcome};
-use crate::variables::{rollback, VarSnapshot};
+use crate::types::DocSink;
 use jian_ops_schema::node::{container::Padding, PenNode};
 use jian_ops_schema::style::PenEffect;
 use op_editor_core::{
@@ -753,111 +739,6 @@ fn has_redundant_shadowed_border(node: &PenNode) -> bool {
         .is_some_and(|fx| fx.iter().any(|e| matches!(e, PenEffect::Shadow(_))));
     has_fill && container.stroke.is_some() && has_shadow
 }
-
-// ── Task C1: concurrent failure policy + N-root cleanup ──────────────────────
-
-/// Run-all-aggregate failure check.
-///
-/// Port of `orchestrator-sub-agent.ts:319-325`.
-///
-/// Called after all concurrent workers have finished and their outcomes have
-/// been collected.  Rules:
-///
-/// - `collected` must be the non-None outcomes from `run_concurrent`'s
-///   `Vec<Option<SubtaskOutcome>>` (i.e. outcomes that actually ran).
-/// - `total_nodes = Σ outcome.node_count` across `collected`.
-/// - If `total_nodes == 0 && !collected.is_empty()` → returns
-///   `Err(OrchestratorError::AllFailed(_))` carrying the FIRST non-empty
-///   `error` string.  Fallback message when no outcome has an error:
-///   `"The model failed to generate any design output."`.
-/// - Partial success (any outcome has `node_count > 0`) → returns `Ok(())`.
-/// - Empty collected (all aborted) → returns `Ok(())` (the caller handles
-///   the abort case separately).
-///
-/// This is explicitly DIFFERENT from the sequential path's fail-fast: the
-/// concurrent path runs ALL workers regardless of individual failures and only
-/// fails the entire run when nothing was produced at all.
-pub fn aggregate_concurrent_verdict(collected: &[SubtaskOutcome]) -> Result<(), OrchestratorError> {
-    if collected.is_empty() {
-        return Ok(());
-    }
-    let total_nodes: usize = collected.iter().map(|o| o.node_count).sum();
-    if total_nodes == 0 {
-        // Gather the first non-empty error string for the error context.
-        // Port of `orchestrator-sub-agent.ts:322-324`:
-        //   const errors = collected.filter(r => r.error).map(r => r.error!);
-        //   const firstError = errors[0] ?? 'The model failed to generate any design output.';
-        //   throw new Error(firstError);
-        //
-        let first_error = collected
-            .iter()
-            .find_map(|o| o.error.as_deref().filter(|s| !s.is_empty()))
-            .unwrap_or("The model failed to generate any design output.");
-        return Err(OrchestratorError::AllFailed(first_error.to_string()));
-    }
-    Ok(())
-}
-
-/// N-root cleanup on the concurrent throw path.
-///
-/// Port of `orchestrator.ts:1101-1158` (the `catch (e)` block after
-/// `executeSubAgents`).
-///
-/// For each root in `root_ids`:
-/// - Compute `now_count = descendant_count(root_id)` on the live sink state.
-/// - If `now_count <= baselines[i]` → root is scaffold-only (no sub-agent
-///   content produced); delete it (`DeleteNode`).
-/// - Otherwise → content survived; set `any_content_survived = true`.
-///
-/// After iterating all roots:
-/// - Roll back plan-derived variables (via `rollback`) ONLY when
-///   `!any_content_survived`.  With partial success the user still sees a
-///   design whose colors should match the seeded palette; rolling back would
-///   flip every `$color-*` ref to the default-palette blue.
-///
-/// `root_ids` and `baselines` must be index-aligned (both length N).
-/// Missing/already-deleted roots are silently skipped (mirrors the TS
-/// `try { store.removeNode(rn.id) } catch { /* already gone */ }` pattern).
-pub fn cleanup_concurrent_roots(
-    sink: &mut dyn DocSink,
-    root_ids: &[&str],
-    baselines: &[usize],
-    var_snapshot: &VarSnapshot,
-) {
-    debug_assert_eq!(
-        root_ids.len(),
-        baselines.len(),
-        "root_ids and baselines must be index-aligned"
-    );
-
-    let mut any_content_survived = false;
-
-    for (i, &root_id) in root_ids.iter().enumerate() {
-        let baseline = baselines.get(i).copied().unwrap_or(0);
-        let now_count = descendant_count(sink.state(), root_id);
-
-        if now_count <= baseline {
-            // Scaffold-only root — remove it (mirrors TS `store.removeNode`).
-            sink.apply(EditorCommand::DeleteNode {
-                node_id: NodeId::new(root_id.to_string()),
-                page_id: None,
-            });
-        } else {
-            any_content_survived = true;
-        }
-    }
-
-    // Roll back plan-derived variables only when NO content survived at all.
-    if !any_content_survived {
-        rollback(sink, var_snapshot);
-    }
-}
-
-// Tests are split into sibling files: cleanup_tests.rs (general
-// cleanup pass tests) + cleanup_tests_c1.rs (Task C1 tests).
-#[cfg(test)]
-#[path = "cleanup_tests_c1.rs"]
-mod tests_c1;
 
 #[cfg(test)]
 #[path = "cleanup_tests.rs"]

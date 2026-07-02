@@ -1,4 +1,4 @@
-//! `run.rs` inline tests — sequential + planning rotation + 3-attempt ladder.
+//! `run.rs` inline tests — sequential + single-mode planning + 3-attempt ladder.
 //!
 //! Wired as `#[path = "run_tests.rs"] mod tests;` inside `run.rs`;
 //! stays a child module of `run`, so `use super::*` resolves to `run`.
@@ -32,28 +32,12 @@ fn req() -> DesignRequest {
     }
 }
 
-// Standard tier → [Rich, Minimal]
+// Standard tier model id (used by the 3-attempt subtask ladder tests).
 fn req_standard() -> DesignRequest {
     DesignRequest {
         prompt: "a landing page".into(),
         // "gpt-4o" matches Standard tier in model_profile table
         model: Some("gpt-4o".into()),
-        provider: None,
-        design_md: None,
-        concurrency: 1,
-        append_context: None,
-        validation_enabled: true,
-
-        visual_ref_enabled: false,
-    }
-}
-
-// Basic tier → [Rich, Minimal, Compact]
-fn req_basic() -> DesignRequest {
-    DesignRequest {
-        prompt: "a landing page".into(),
-        // "glm" matches Basic tier in model_profile table
-        model: Some("glm-4".into()),
         provider: None,
         design_md: None,
         concurrency: 1,
@@ -299,94 +283,61 @@ fn run_planning_failure_uses_fallback_plan() {
     assert!(summary.total_nodes >= 1);
 }
 
-// ── Task C2: planning rotation tests ─────────────────────────────────────
+// ── single-mode planning tests ───────────────────────────────────────────
 
-/// Attempt 1 returns bad JSON (parse_error), attempt 2 returns valid plan.
-/// Standard tier → [Rich, Minimal] → rotation occurs.
+/// Planning parse failure → heuristic fallback plan used, run succeeds.
+/// (Single-mode planning: one bad response falls straight through to the
+/// fallback plan — no mode rotation. The fallback plan has one subtask.)
 #[test]
-fn planning_rotation_uses_attempt2_plan_on_attempt1_parse_failure() {
+fn planning_parse_failure_uses_fallback_plan() {
     let llm = ScriptedLlm::new(vec![
-        // attempt 1 (Rich) → bad JSON
+        // planning call → bad JSON
         ScriptResponse::Text("not valid json at all".into()),
-        // attempt 2 (Minimal) → valid plan
-        ScriptResponse::Text(PLAN_JSON.into()),
-        // subtasks
-        ScriptResponse::Text(node_json("hero")),
-        ScriptResponse::Text(node_json("feat")),
-    ]);
-    let mut sink = VecDocSink::new();
-    let mut on_progress = |_p: Progress| {};
-    let summary = futures::executor::block_on(Orchestrator::new().run(
-        req_standard(), // Standard tier → [Rich, Minimal]
-        &mut sink,
-        &llm,
-        &mut on_progress,
-        &AbortFlag::new(),
-        &stub_providers(),
-    ))
-    .expect("rotation run ok");
-    // 2 subtasks from the attempt-2 plan
-    assert_eq!(summary.subtasks.len(), 2);
-    assert!(summary.total_nodes >= 2);
-}
-
-/// Attempt 1 returns a stream error, attempt 2 returns valid plan.
-#[test]
-fn planning_rotation_uses_attempt2_plan_on_attempt1_stream_error() {
-    use crate::types::LlmError;
-    let llm = ScriptedLlm::new(vec![
-        // attempt 1 → stream error (non-abort)
-        ScriptResponse::Fail(LlmError {
-            message: "HTTP 500 upstream".into(),
-            aborted: false,
-        }),
-        // attempt 2 → valid plan
-        ScriptResponse::Text(PLAN_JSON.into()),
-        // subtasks
-        ScriptResponse::Text(node_json("hero")),
-        ScriptResponse::Text(node_json("feat")),
-    ]);
-    let mut sink = VecDocSink::new();
-    let mut on_progress = |_p: Progress| {};
-    let summary = futures::executor::block_on(Orchestrator::new().run(
-        req_standard(), // Standard tier → [Rich, Minimal]
-        &mut sink,
-        &llm,
-        &mut on_progress,
-        &AbortFlag::new(),
-        &stub_providers(),
-    ))
-    .expect("rotation on stream error ok");
-    assert_eq!(summary.subtasks.len(), 2);
-}
-
-/// All attempts fail (Basic tier → [Rich, Minimal, Compact]) →
-/// fallback plan used, run succeeds.
-#[test]
-fn planning_all_attempts_fail_uses_fallback_plan() {
-    // Basic tier has 3 attempts; supply 3 bad responses + 1 subtask response
-    // for the fallback plan's single subtask.
-    let llm = ScriptedLlm::new(vec![
-        ScriptResponse::Text("garbage 1".into()),
-        ScriptResponse::Text("garbage 2".into()),
-        ScriptResponse::Text("garbage 3".into()),
+        // fallback plan's single subtask
         ScriptResponse::Text(node_json("section-1")),
     ]);
     let mut sink = VecDocSink::new();
     let mut on_progress = |_p: Progress| {};
     let summary = futures::executor::block_on(Orchestrator::new().run(
-        req_basic(),
+        req_standard(),
         &mut sink,
         &llm,
         &mut on_progress,
         &AbortFlag::new(),
         &stub_providers(),
     ))
-    .expect("fallback after all failures ok");
+    .expect("fallback after parse failure ok");
     assert!(summary.total_nodes >= 1);
 }
 
-/// Abort during planning stream → `OrchestratorError::Aborted`, no rotation.
+/// Planning stream error → heuristic fallback plan used, run succeeds.
+#[test]
+fn planning_stream_error_uses_fallback_plan() {
+    use crate::types::LlmError;
+    let llm = ScriptedLlm::new(vec![
+        // planning call → stream error (non-abort)
+        ScriptResponse::Fail(LlmError {
+            message: "HTTP 500 upstream".into(),
+            aborted: false,
+        }),
+        // fallback plan's single subtask
+        ScriptResponse::Text(node_json("section-1")),
+    ]);
+    let mut sink = VecDocSink::new();
+    let mut on_progress = |_p: Progress| {};
+    let summary = futures::executor::block_on(Orchestrator::new().run(
+        req_standard(),
+        &mut sink,
+        &llm,
+        &mut on_progress,
+        &AbortFlag::new(),
+        &stub_providers(),
+    ))
+    .expect("fallback on stream error ok");
+    assert!(summary.total_nodes >= 1);
+}
+
+/// Abort during planning stream → `OrchestratorError::Aborted`.
 #[test]
 fn planning_abort_during_stream_returns_aborted() {
     use crate::types::LlmError;
