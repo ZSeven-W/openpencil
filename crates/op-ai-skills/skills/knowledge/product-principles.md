@@ -44,6 +44,5 @@ PRODUCT DESIGN PRINCIPLES (apply to every screen):
    Layout rhythm must feel system-driven. Spacing must follow a consistent scale.
 
 8. SYSTEM STATUS VISIBILITY
-   Every data-driven surface must support five states: loading, empty, error,
-   success confirmation, and restricted/permission (when access can be denied).
-   No silent failure. No blank ambiguity.
+   Every data-driven surface must support: loading state, empty state, error state,
+   success confirmation. No silent failure. No blank ambiguity.

@@ -9,7 +9,7 @@ use std::sync::mpsc::Receiver;
 use std::sync::Arc;
 
 use op_ai::chat_history::{trim_chat_history, DEFAULT_MAX_CHARS, DEFAULT_MAX_MESSAGES};
-use op_ai::chat_provider::{ChatProvider, ChatRequest, ThinkingMode};
+use op_ai::chat_provider::{ChatProvider, ChatRequest};
 use op_editor_host_core::chat::ChatSession;
 use op_editor_host_core::design::DesignSession;
 use op_host_native::WidgetHostNative;
@@ -71,54 +71,8 @@ pub(crate) fn builtin_provider_with_design_tools(
         .find(|agent| agent.id == id && agent.ready())?;
     let provider = ConfiguredBuiltinProvider::from_builtin_agent(config)?;
     let (executor, tool_rx) = chat_tool_channel();
-    let provider = provider
-        .with_canvas_tools(design_tool_defs(), Arc::new(executor))
-        .with_loop_finalize();
+    let provider = provider.with_canvas_tools(design_tool_defs(), Arc::new(executor));
     Some((Box::new(provider), tool_rx))
-}
-
-/// Effective thinking mode for a design turn (design-agent loop and
-/// orchestrator sub-agent spawns alike).
-///
-/// The design pipeline is structured generation, not free chat: reasoning
-/// models whose profile marks `thinking_disabled` (glm-5.x / minimax / …)
-/// burn their whole token budget on hidden `<think>` and emit an *empty*
-/// design when thinking is left on — glm-5.2 measured at thinking≈30k /
-/// text=0 → nothing drawn. Force those to `Disabled`; the wire layer
-/// (`chat_builtin_http`) then sends `thinking:{type:"disabled"}`. Claude and
-/// other non-`thinking_disabled` models keep the chat's default — they use
-/// thinking productively without starving content.
-pub(crate) fn design_turn_thinking_mode(host: &WidgetHostNative) -> ThinkingMode {
-    let state = host.editor_state();
-    let model = state
-        .chat
-        .selected_model_entry()
-        .and_then(|e| e.builtin_provider_id.as_deref())
-        .and_then(|id| {
-            state
-                .editor_ui
-                .agent_settings
-                .builtin_agents
-                .iter()
-                .find(|a| a.id == id)
-                .map(|a| a.model.as_str())
-        });
-    resolve_design_thinking(model, state.chat.thinking_mode)
-}
-
-/// Pure decision behind [`design_turn_thinking_mode`]: a model whose profile
-/// is `thinking_disabled` is forced to `Disabled` for the design turn;
-/// everything else (unknown model included → keep the user's choice) keeps the
-/// chat default. Split out so the policy is unit-testable without a host.
-fn resolve_design_thinking(model: Option<&str>, chat_default: ThinkingMode) -> ThinkingMode {
-    let thinking_disabled = model
-        .map(|m| op_orchestrator::resolve_model_profile(m).thinking_disabled)
-        .unwrap_or(false);
-    if thinking_disabled {
-        ThinkingMode::Disabled
-    } else {
-        chat_default
-    }
 }
 
 /// Launch the design-agent tool-loop turn when the flag is ON and a
@@ -127,7 +81,7 @@ fn resolve_design_thinking(model: Option<&str>, chat_default: ThinkingMode) -> T
 /// falls through to the orchestrator path).
 ///
 /// Mirrors `launch_if_pending`'s builtin chat branch but uses the
-/// design toolset and a 16384-token per-turn budget.
+/// design toolset and a 8192-token budget.
 pub(super) fn launch_design_loop_turn(
     host: &mut WidgetHostNative,
     user_text: String,
@@ -150,25 +104,15 @@ pub(super) fn launch_design_loop_turn(
         DEFAULT_MAX_MESSAGES,
         DEFAULT_MAX_CHARS,
     );
-    // Force thinking off for reasoning models that would otherwise emit an
-    // empty design (see `design_turn_thinking_mode`). Resolved before the
-    // `&mut` borrow below.
-    let thinking = design_turn_thinking_mode(host);
     let chat = &mut host.editor_state_mut().chat;
+    let thinking = chat.thinking_mode;
     let effort = chat.effort_level;
     let attachments = std::mem::take(&mut chat.pending_attachments);
     let req = ChatRequest {
         system_prompt: op_ai_skills::design_agent_system_prompt().to_string(),
         user_message: user_text,
         history,
-        // Per-TURN output cap. The real budget-burner was hidden reasoning, not
-        // the DSL: a glm-5.2 loop run streamed ~94k thinking chars vs ~4k of
-        // actual batch_design, blowing the cap so a turn truncated mid-JSON, its
-        // tool call failed to parse, and the loop stopped early with an
-        // unfinished design. The root fix is at the wire (the loop now sends
-        // thinking:{type:disabled} for glm/minimax); 16384 (up from 8192) is
-        // headroom so a genuinely large section-batch still completes per turn.
-        max_output_tokens: 16384,
+        max_output_tokens: 8192,
         thinking,
         effort,
         attachments,
@@ -184,45 +128,6 @@ pub(super) fn launch_design_loop_turn(
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    // ── design-turn thinking policy ───────────────────────────────────────
-    #[test]
-    fn reasoning_model_forces_thinking_off_for_design() {
-        // glm-5.2 is `thinking_disabled` in the profile: with thinking left on
-        // it burns its budget on `<think>` and draws nothing. The design turn
-        // must override the chat default to `Disabled` regardless of choice.
-        assert_eq!(
-            resolve_design_thinking(Some("glm-5.2"), ThinkingMode::Adaptive),
-            ThinkingMode::Disabled
-        );
-        assert_eq!(
-            resolve_design_thinking(Some("MiniMax-M3"), ThinkingMode::Enabled),
-            ThinkingMode::Disabled
-        );
-    }
-
-    #[test]
-    fn claude_keeps_chat_default_for_design() {
-        // Claude is NOT `thinking_disabled` — it uses thinking productively
-        // without starving content, so the design turn keeps the user's choice.
-        assert_eq!(
-            resolve_design_thinking(Some("claude-opus-4"), ThinkingMode::Adaptive),
-            ThinkingMode::Adaptive
-        );
-        assert_eq!(
-            resolve_design_thinking(Some("claude-sonnet-4-6"), ThinkingMode::Enabled),
-            ThinkingMode::Enabled
-        );
-    }
-
-    #[test]
-    fn unknown_or_absent_model_keeps_chat_default() {
-        // No selected builtin → keep the user's choice (don't silently disable).
-        assert_eq!(
-            resolve_design_thinking(None, ThinkingMode::Enabled),
-            ThinkingMode::Enabled
-        );
-    }
 
     // ── loop_enabled OR-gate: 4 combinations ──────────────────────────────
     #[test]

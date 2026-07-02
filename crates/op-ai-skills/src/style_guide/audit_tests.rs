@@ -11,8 +11,7 @@
 //! not the assertion.
 
 #[cfg(test)]
-#[allow(clippy::module_inception)]
-mod audit_tests {
+mod tests {
     use super::super::{
         loader::{select_style_guide, style_guide_registry, SelectOptions},
         types::STYLE_GUIDE_TAGS,

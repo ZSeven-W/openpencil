@@ -34,11 +34,6 @@ pub struct ConfiguredBuiltinProvider {
     /// uses this provider as a plain LLM and must never see tools.
     tools: Vec<ChatToolDef>,
     executor: Option<Arc<dyn ChatToolExecutor>>,
-    /// Run the loop-end structural backstop (`apply_loop_finalize`) for
-    /// this provider's turns. Set ONLY by the gated design-generation
-    /// provider; regular chat leaves it false so an ordinary tool-using
-    /// chat turn never mutates an existing design (Track-1 Step 4 scope).
-    finalize_on_exit: bool,
 }
 
 impl ConfiguredBuiltinProvider {
@@ -61,7 +56,6 @@ impl ConfiguredBuiltinProvider {
             label: label.to_string(),
             tools: Vec::new(),
             executor: None,
-            finalize_on_exit: false,
         })
     }
 
@@ -76,16 +70,6 @@ impl ConfiguredBuiltinProvider {
     ) -> Self {
         self.tools = tools;
         self.executor = Some(executor);
-        self
-    }
-
-    /// Opt this provider's agent-loop turns into the loop-end structural
-    /// backstop (Track-1 Step 4). The gated design-generation provider calls
-    /// this; regular chat does not, so a plain chat turn never re-finalizes
-    /// (and mutates) the live document. No-op without `with_canvas_tools`
-    /// (the plain streaming path never reaches `run_loop_finalize`).
-    pub fn with_loop_finalize(mut self) -> Self {
-        self.finalize_on_exit = true;
         self
     }
 
@@ -179,8 +163,6 @@ impl ChatProvider for ConfiguredBuiltinProvider {
                     tools: provider.tools.clone(),
                     executor,
                     max_turns: MAX_TOOL_TURNS,
-                    finalize_on_exit: provider.finalize_on_exit,
-                    disable_thinking,
                 };
                 match provider.kind {
                     BuiltinAgentKind::Anthropic => run_anthropic_agent_loop(cfg, &tx).await,
@@ -238,7 +220,7 @@ impl ChatProvider for ConfiguredBuiltinProvider {
 
 /// MiniMax M 系("MiniMax-M*"、旧 "abab*")是推理模型,其思考由 MiniMax 专属的
 /// `thinking` body 字段控制。据模型名判定,以便只对它发关思考字段。
-pub(crate) fn is_minimax_model(model: &str) -> bool {
+fn is_minimax_model(model: &str) -> bool {
     let m = model.to_ascii_lowercase();
     m.starts_with("minimax") || m.starts_with("abab")
 }
@@ -248,7 +230,7 @@ pub(crate) fn is_minimax_model(model: &str) -> bool {
 /// 一个设计子任务 thinking_len≈3 万、text_len=0，整段 parse 失败）。它接受和
 /// MiniMax 同样的 `thinking:{type:"disabled"}`（curl 对 ark glm-5.2 验证：关思考后
 /// reasoning_tokens=0、content 为干净 JSON）。按名判定，只对 GLM 下发。
-pub(crate) fn is_glm_model(model: &str) -> bool {
+fn is_glm_model(model: &str) -> bool {
     model.to_ascii_lowercase().contains("glm")
 }
 
@@ -295,7 +277,7 @@ async fn run_openai_chat(
             obj.insert("thinking".into(), json!({ "type": "disabled" }));
         }
     }
-    let resp = builtin_http_client()
+    let resp = reqwest::Client::new()
         .post(&url)
         .bearer_auth(&provider.api_key)
         .json(&body)
@@ -304,22 +286,6 @@ async fn run_openai_chat(
         .map_err(|e| format!("openai-compatible POST {url}: {e}"))?;
     let resp = ensure_success(resp, "openai-compatible").await?;
     pump_sse_response(resp, tx, parse_openai_sse_data).await
-}
-
-/// reqwest client with connect + overall timeouts. A bare `Client::new()` has
-/// NO timeout, so a hung LLM endpoint (connection opens but the server never
-/// streams, or stalls mid-response) makes the blocking provider iterator — and
-/// therefore the orchestrator's planning / sub-agent call — hang forever
-/// (desktop pinned on "Planning…", with Stop unable to interrupt the already
-/// in-flight request). These deadlines surface the stall as an error so the
-/// planning loop falls back instead of hanging. 300s is generous enough not to
-/// kill a slow-but-live generation.
-fn builtin_http_client() -> reqwest::Client {
-    reqwest::Client::builder()
-        .connect_timeout(std::time::Duration::from_secs(15))
-        .timeout(std::time::Duration::from_secs(300))
-        .build()
-        .unwrap_or_else(|_| reqwest::Client::new())
 }
 
 async fn run_anthropic_chat(
@@ -349,7 +315,7 @@ async fn run_anthropic_chat(
             .expect("anthropic request body is object")
             .insert("system".into(), json!(system_prompt));
     }
-    let resp = builtin_http_client()
+    let resp = reqwest::Client::new()
         .post(&url)
         .header("x-api-key", &provider.api_key)
         .header("anthropic-version", "2023-06-01")

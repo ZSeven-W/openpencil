@@ -23,7 +23,6 @@
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
-use std::sync::atomic::{AtomicU64, Ordering};
 
 use jian_ops_schema::node::PenNode;
 use serde_json::Value;
@@ -32,19 +31,6 @@ use crate::element_alias_builders::semantic_alias_node;
 use crate::element_tools::TS_ELEMENT_ALIASES;
 use crate::element_ts_schema::ts_alias_schema;
 use crate::ToolOutcome;
-
-/// The one manifest `el` kind that is NOT a semantic-builder alias: a
-/// component instance. `{"el":"ref","ref":"<componentId>"}` assembles to
-/// a `PenNode::Ref` (the same instance node the raw `{"type":"ref",…}`
-/// path emits + `op_editor_core::ref_resolve` expands at paint), so weak
-/// models can compose from the document's component library WITHIN the
-/// el-line protocol instead of being told to emit raw-node syntax that
-/// contradicts the dominant `el` contract.
-pub const REF_ELEMENT_KIND: &str = "ref";
-
-/// Synthetic ids for ref instances built from manifest lines (the
-/// protocol forbids model-supplied ids; every node id is system-assigned).
-static NEXT_REF_ID: AtomicU64 = AtomicU64::new(1);
 
 /// A successfully built element subtree.
 #[derive(Debug)]
@@ -80,12 +66,6 @@ pub fn build_element(
     kind: &str,
     args: &BTreeMap<String, String>,
 ) -> Result<ElementBuild, ElementBuildError> {
-    // Component-instance kind: `{"el":"ref","ref":"<id>","descendants":{…}}`.
-    // It is not a semantic-builder alias — it maps straight to a
-    // `PenNode::Ref` so the manifest can instantiate library components.
-    if kind.trim().eq_ignore_ascii_case(REF_ELEMENT_KIND) {
-        return build_ref_element(args);
-    }
     let Some(tool) = resolve_element_kind(kind) else {
         return Err(ElementBuildError::UnknownKind(kind.to_string()));
     };
@@ -126,70 +106,6 @@ pub fn build_element(
             "W-RESCUE {tool}.{key}: builder reported {message:?} — filled {placeholder:?}"
         ));
         repaired.insert(key, placeholder);
-    }
-}
-
-/// Assemble a component-instance node from a manifest `ref` line's args.
-///
-/// The `el` line shape is `{"el":"ref","ref":"<componentId>",
-/// "descendants":{…}?}`; the args map (kind + `in` already stripped by the
-/// caller) therefore carries `ref` plus an optional `descendants` JSON
-/// string. We build the SAME `{"type":"ref",…}` JSON the raw batch_design
-/// path emits and deserialize it into `PenNode::Ref`, so ref handling stays
-/// single-sourced (RefNode schema + `ref_resolve` expansion) across both
-/// protocols.
-fn build_ref_element(args: &BTreeMap<String, String>) -> Result<ElementBuild, ElementBuildError> {
-    let target = args
-        .get("ref")
-        .map(|s| s.trim())
-        .filter(|s| !s.is_empty())
-        .ok_or_else(|| ElementBuildError::BuildFailed {
-            tool: REF_ELEMENT_KIND.to_string(),
-            message: "ref element requires a `ref` component id".to_string(),
-        })?;
-
-    // The protocol forbids model-supplied ids — mint a synthetic one so the
-    // RefNode deserializes (PenNodeBase.id is required) and never collides.
-    let synthetic_id = NEXT_REF_ID.fetch_add(1, Ordering::Relaxed);
-    let mut node = serde_json::Map::new();
-    node.insert("type".to_string(), Value::String("ref".to_string()));
-    node.insert(
-        "id".to_string(),
-        Value::String(format!("__op_man_ref_{synthetic_id}")),
-    );
-    node.insert("ref".to_string(), Value::String(target.to_string()));
-
-    // `descendants` overrides (descendant-id → partial node) are the only
-    // per-instance customization a ref accepts. The manifest serializes the
-    // line's `descendants` object back to a JSON string; parse it through so
-    // text/fill overrides survive. A non-object value is dropped (the
-    // instance still renders the master subtree) with a warning.
-    let mut warnings = Vec::new();
-    if let Some(raw) = args
-        .get("descendants")
-        .map(|s| s.trim())
-        .filter(|s| !s.is_empty())
-    {
-        match serde_json::from_str::<Value>(raw) {
-            Ok(value @ Value::Object(_)) => {
-                node.insert("descendants".to_string(), value);
-            }
-            _ => warnings.push(format!(
-                "W-REF-DESCENDANTS ref {target:?}: `descendants` must be an object — ignored"
-            )),
-        }
-    }
-
-    match serde_json::from_value::<PenNode>(Value::Object(node)) {
-        Ok(node) => Ok(ElementBuild {
-            tool: REF_ELEMENT_KIND.to_string(),
-            node,
-            warnings,
-        }),
-        Err(err) => Err(ElementBuildError::BuildFailed {
-            tool: REF_ELEMENT_KIND.to_string(),
-            message: err.to_string(),
-        }),
     }
 }
 
@@ -709,89 +625,6 @@ mod tests {
         );
         assert_eq!(resolve_element_kind("Stat-Card"), Some("add_stat_card_v1"));
         assert_eq!(resolve_element_kind("nonexistent_widget"), None);
-    }
-
-    #[test]
-    fn ref_element_kind_builds_a_component_instance_node() {
-        // `{"el":"ref","ref":"X"}` → PenNode::Ref(target=X). The ref kind is
-        // not a semantic-builder alias; it maps straight to a component
-        // instance so a manifest can compose from the document's library.
-        let built = build_element("ref", &args(&[("ref", "shadcn-btn-primary")]))
-            .expect("ref element must build a component-instance node");
-        assert_eq!(built.tool, "ref");
-        match &built.node {
-            PenNode::Ref(reference) => {
-                assert_eq!(reference.target, "shadcn-btn-primary");
-                assert!(reference.descendants.is_none(), "no overrides given");
-                // The protocol forbids model ids — the system assigns one.
-                assert!(!reference.base.id.is_empty(), "synthetic id assigned");
-            }
-            other => panic!("expected PenNode::Ref, got {other:?}"),
-        }
-    }
-
-    #[test]
-    fn ref_element_carries_descendant_overrides() {
-        // `descendants` (descendant-id → partial node) overrides must carry
-        // through to the RefNode so per-instance text/fill survives.
-        let built = build_element(
-            "ref",
-            &args(&[
-                ("ref", "shadcn-btn-primary"),
-                (
-                    "descendants",
-                    r#"{"shadcn-btn-primary-label":{"content":"Get started"}}"#,
-                ),
-            ]),
-        )
-        .expect("ref with descendants must build");
-        match &built.node {
-            PenNode::Ref(reference) => {
-                let overrides = reference
-                    .descendants
-                    .as_ref()
-                    .expect("descendants carried through");
-                assert!(
-                    overrides.contains_key("shadcn-btn-primary-label"),
-                    "override keyed by descendant id, got {overrides:?}"
-                );
-            }
-            other => panic!("expected PenNode::Ref, got {other:?}"),
-        }
-    }
-
-    #[test]
-    fn ref_element_without_target_fails_cleanly() {
-        // A `ref` line missing its component id is a real rejection (not a
-        // repairable placeholder) — there is no master to instantiate.
-        let err = build_element("ref", &BTreeMap::new()).expect_err("ref without target must fail");
-        assert!(
-            matches!(err, ElementBuildError::BuildFailed { .. }),
-            "expected BuildFailed, got {err:?}"
-        );
-    }
-
-    #[test]
-    fn ref_element_non_object_descendants_is_dropped_with_warning() {
-        // A malformed `descendants` (string/array) must not sink the instance —
-        // the ref still renders the master subtree; the bad override is warned.
-        let built = build_element(
-            "ref",
-            &args(&[("ref", "card"), ("descendants", "\"Owner\"")]),
-        )
-        .expect("ref builds even with a bad descendants payload");
-        match &built.node {
-            PenNode::Ref(reference) => assert!(reference.descendants.is_none()),
-            other => panic!("expected PenNode::Ref, got {other:?}"),
-        }
-        assert!(
-            built
-                .warnings
-                .iter()
-                .any(|w| w.starts_with("W-REF-DESCENDANTS")),
-            "expected a W-REF-DESCENDANTS warning, got {:?}",
-            built.warnings
-        );
     }
 
     #[test]

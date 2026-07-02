@@ -50,11 +50,6 @@ pub fn widget_text_inset_left(w: &SceneWidget) -> f32 {
     }
 }
 
-/// Perceived luminance (0..1) of an opaque scene color.
-fn color_luminance(c: Color) -> f32 {
-    0.299 * c.r + 0.587 * c.g + 0.114 * c.b
-}
-
 /// Paint the static visual for a widget scene node, in world coords.
 ///
 /// `world_rect` is the node's already-zoom-scaled screen rect; `zoom`
@@ -254,22 +249,14 @@ fn paint_radio_group(cx: &mut PaintCx<'_>, w: &SceneWidget, r: Rect, zoom: f32) 
 /// (near-black) or, when empty, the placeholder (muted).
 fn paint_text_field(cx: &mut PaintCx<'_>, node: &SceneNode, w: &SceneWidget, r: Rect, zoom: f32) {
     let (x, y, ww, h) = rect_parts(r);
-    // Respect the AUTHORED box style. A model embedding an input into its own
-    // styled wrapper zeroes everything out (`fill: []`, `stroke.thickness: 0`,
-    // `cornerRadius: 0`) — the old unconditional white fill + grey border +
-    // 6px-radius floor painted a glaring white pill on top of a dark themed
-    // wrapper (measured on a dark dashboard's search bar). No fill → paint no
-    // box; no stroke → draw no border; radius as authored.
-    let radius = node.corner_radius * zoom;
+    let radius = (node.corner_radius * zoom).max(6.0 * zoom);
     if let Some(fill) = node.fill {
         cx.backend.fill_round_rect(r, radius, fill);
+    } else {
+        cx.backend.fill_round_rect(r, radius, KNOB);
     }
-    if let Some(stroke) = node.stroke {
-        if stroke.width > 0.0 {
-            cx.backend
-                .stroke_round_rect(r, radius, stroke.color, stroke.width * zoom);
-        }
-    }
+    let stroke_w = node.stroke.map(|s| s.width).unwrap_or(1.0) * zoom;
+    cx.backend.stroke_round_rect(r, radius, TRACK_OFF, stroke_w);
 
     // Leading / trailing lucide glyphs at the content edges, vertically
     // centred. The text inset (`widget_text_inset_left`) reserves room
@@ -301,19 +288,6 @@ fn paint_text_field(cx: &mut PaintCx<'_>, node: &SceneNode, w: &SceneWidget, r: 
     }
 
     if let Some((text, color)) = text_field_display_text(w) {
-        // The default value color (#111) assumed the old white box. On an
-        // authored DARK fill — or no box at all (transparent, blending into a
-        // dark wrapper) — flip it light; the muted placeholder grey reads on
-        // both. Only the VALUE color adapts.
-        let color = if color == TEXT_VALUE {
-            match node.fill {
-                Some(bg) if color_luminance(bg) >= 0.5 => TEXT_VALUE,
-                Some(_) => Color::rgb_u8(0xF5, 0xF5, 0xF5),
-                None => Color::rgb_u8(0x9C, 0xA3, 0xAF),
-            }
-        } else {
-            color
-        };
         let fs = 14.0 * zoom;
         // text_area top-aligns; single-line inputs vertically centre.
         let ty = if w.kind == "text_area" {

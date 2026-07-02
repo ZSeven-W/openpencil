@@ -102,20 +102,13 @@ pub trait PreValidator: Send + Sync {
     fn run_pre_validation_fixes(&self, sink: &mut dyn DocSink) -> PreValidationResult;
 }
 
-/// 截图出口。host 实现调用 `SkiaEngine.captureRegion`(Rust 侧走
-/// `op_pen_loader::editor_state_to_layout_scene` + raster 导出);stub
-/// 返回 `None` 表示"跳过视觉轮次"。
-///
-/// `state` 是**当前已变更**的文档 —— 校验循环在每一轮 apply 修复**之后**
-/// 调用本方法,所以 host 必须渲染 `sink.state()` 此刻持有的实时状态。
-/// 这与 `PreValidator::run_pre_validation_fixes` 收 sink 同理(后者读
-/// `sink.state().doc`),trait 给 provider 一个看到实时状态的入口而不必
-/// 在带外共享一份会过期的快照。
+/// 截图出口。host 实现调用 `SkiaEngine.captureRegion`;stub 返回 `None`
+/// 表示"跳过视觉轮次"。
 ///
 /// Port of `design-screenshot.ts` shape + spec §4.1.
 pub trait ScreenshotProvider: Send + Sync {
     /// 捕捉画布根帧截图,返回 base64 PNG;`None` 表示不可用 / 跳过。
-    fn capture_root_frame(&self, state: &EditorState) -> Option<String>;
+    fn capture_root_frame(&self) -> Option<String>;
 }
 
 /// 视觉 LLM 调用出口。host 实现使用多模态 LLM;stub 返回
@@ -649,10 +642,7 @@ mod tests {
     #[test]
     fn skipped_screenshot_provider_returns_none() {
         use crate::test_support::SkippedScreenshotProvider;
-        let state = op_editor_core::EditorState::new();
-        assert!(SkippedScreenshotProvider
-            .capture_root_frame(&state)
-            .is_none());
+        assert!(SkippedScreenshotProvider.capture_root_frame().is_none());
     }
 
     /// `VisionLlmClient` stub returns `VisionResponse::Skipped`.

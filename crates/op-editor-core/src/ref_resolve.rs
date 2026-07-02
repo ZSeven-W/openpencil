@@ -152,20 +152,7 @@ fn expand_ref(
         .and_then(Value::as_str)
         .unwrap_or_default();
     let overrides = ref_map.get("descendants").and_then(Value::as_object);
-    // Pencil's slot-component pattern: the master is an empty styled
-    // shell carrying a `slot:[…]` id list, and each instance supplies
-    // its real content as its OWN inline `children`. When the master
-    // has no children to render, fall back to the instance's inline
-    // slot content so the shell isn't rendered empty (an empty
-    // `fit_content` frame collapses to its padding box → a white
-    // circle for a high-`cornerRadius` card). The master-has-children
-    // branch is unchanged, so the 115 normal refs and the master-with-
-    // default-content (ambiguous) refs keep TS-parity behaviour.
-    let children_source = match component_map.get("children") {
-        Some(Value::Array(children)) if !children.is_empty() => Some(children),
-        _ => ref_map.get("children").and_then(Value::as_array),
-    };
-    if let Some(children) = children_source {
+    if let Some(Value::Array(children)) = component_map.get("children") {
         let remapped: Vec<Value> = children
             .iter()
             .map(|child| remap_ids(child, ref_id, overrides))
@@ -486,94 +473,6 @@ mod tests {
             expanded.children.as_ref().map(Vec::len),
             Some(0),
             "the cyclic inner ref is dropped"
-        );
-    }
-
-    // Pencil slot-component pattern: the master is an empty styled
-    // shell (carrying a `slot` id list, no children of its own) and
-    // the instance supplies its real content as its OWN inline
-    // `children`. Without the fallback the expanded instance renders
-    // empty (a high-`cornerRadius` `fit_content` card collapses to a
-    // white circle).
-    const DOC_WITH_SLOT_INSTANCE: &str = r##"{
-      "version":"0.8.0",
-      "children":[
-        {"type":"frame","id":"cardMaster","name":"Card/Default","reusable":true,
-         "width":"fit_content","height":"fit_content","cornerRadius":24,"padding":16,
-         "slot":["regionA","regionB"],
-         "fill":[{"type":"solid","color":"#f5f5f5"}]},
-        {"type":"ref","id":"card1","ref":"cardMaster","x":40,"y":40,
-         "children":[
-           {"type":"text","id":"label","name":"Label","content":"Revenue"},
-           {"type":"text","id":"value","name":"Value","content":"$12.4k"}
-         ]}
-      ]
-    }"##;
-
-    #[test]
-    fn empty_master_falls_back_to_instance_slot_children() {
-        let doc = doc_from(DOC_WITH_SLOT_INSTANCE);
-        let resolved = resolve_refs_for_canvas(&doc);
-        assert_eq!(resolved.children.len(), 2);
-        let PenNode::Frame(card) = &resolved.children[1] else {
-            panic!("slot instance expands to the master's Frame type");
-        };
-        assert_eq!(card.base.id, "card1");
-        // The master shell's style is preserved (still the white card).
-        assert_eq!(card.base.x, Some(40.0));
-        let children = card
-            .children
-            .as_ref()
-            .expect("instance slot content fills the empty master shell");
-        assert_eq!(
-            children.len(),
-            2,
-            "instance's own inline children render instead of an empty shell"
-        );
-        let PenNode::Text(label) = &children[0] else {
-            panic!("first slot child survives");
-        };
-        // Slot children are remapped into the instance's virtual id
-        // space exactly like master children would be.
-        assert_eq!(label.base.id, "card1__label");
-        assert_eq!(
-            label.content,
-            jian_ops_schema::node::text::TextContent::Plain("Revenue".into())
-        );
-    }
-
-    #[test]
-    fn master_children_win_over_instance_children_no_regression() {
-        // A master WITH its own children keeps TS-parity behaviour:
-        // the instance's inline children never replace the master
-        // subtree (this guards the 115 normal + ambiguous refs against
-        // the slot-fallback path).
-        let doc = doc_from(
-            r##"{
-              "version":"0.8.0",
-              "children":[
-                {"type":"frame","id":"master","name":"Master","reusable":true,
-                 "width":200,"height":100,
-                 "children":[{"type":"text","id":"masterText","name":"M","content":"FromMaster"}]},
-                {"type":"ref","id":"inst","ref":"master","x":10,"y":10,
-                 "children":[{"type":"text","id":"instText","name":"I","content":"FromInstance"}]}
-              ]
-            }"##,
-        );
-        let resolved = resolve_refs_for_canvas(&doc);
-        let PenNode::Frame(inst) = &resolved.children[1] else {
-            panic!("frame");
-        };
-        let children = inst.children.as_ref().unwrap();
-        assert_eq!(children.len(), 1);
-        let PenNode::Text(text) = &children[0] else {
-            panic!("master text wins");
-        };
-        assert_eq!(text.base.id, "inst__masterText");
-        assert_eq!(
-            text.content,
-            jian_ops_schema::node::text::TextContent::Plain("FromMaster".into()),
-            "instance inline children do not override a master that has children"
         );
     }
 }

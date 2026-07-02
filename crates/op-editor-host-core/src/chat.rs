@@ -6,7 +6,6 @@ use std::thread;
 
 use op_ai::chat_provider::{
     ChatDelta, ChatHistoryRole, ChatProvider, ChatRequest, ChatToolExecutor, ChatToolResult,
-    LOOP_FINALIZE_OP,
 };
 use op_editor_core::{ChatMessage, ChatRole, ChatToolCall};
 
@@ -31,22 +30,6 @@ impl UiChatToolExecutor {
 
 impl ChatToolExecutor for UiChatToolExecutor {
     fn execute(&self, name: &str, args_json: &str) -> ChatToolResult {
-        self.forward(name, args_json)
-    }
-
-    /// Forward the reserved [`LOOP_FINALIZE_OP`] over the same tool channel so
-    /// the host (which owns the live `EditorState`) runs
-    /// `op_orchestrator::apply_loop_finalize`. Blocks on the ack like any tool
-    /// call; the result envelope is discarded (finalize is fire-and-forget from
-    /// the loop's view).
-    fn finalize(&self) {
-        let _ = self.forward(LOOP_FINALIZE_OP, "{}");
-    }
-}
-
-impl UiChatToolExecutor {
-    /// Send one request over the tool channel and block until the host acks.
-    fn forward(&self, name: &str, args_json: &str) -> ChatToolResult {
         let (ack_tx, ack_rx) = std::sync::mpsc::sync_channel::<ChatToolResult>(1);
         let req = ChatToolRequest {
             name: name.to_string(),

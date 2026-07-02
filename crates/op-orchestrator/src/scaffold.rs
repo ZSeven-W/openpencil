@@ -4,7 +4,16 @@
 //! 栏 child)插到活动页根。根 frame 用 JSON 构建后反序列化为
 //! canonical `PenNode` —— 避免在 Rust 侧硬写富 schema 的每个字段,
 //! 且与 `parse` 模块的解析路径一致。
+//!
+//! # Concurrent (multi-root) scaffold
+//!
+//! [`build_scaffold_concurrent_mobile`] handles the N-root-frame concurrent path
+//! (S3b-2 Task A2). One root frame per [`ScreenGroup`], laid out
+//! left-to-right with gap 100. Returns `(cmds, root_ids, baselines)` where
+//! `baselines[i]` is the scaffold descendant count for root `i` (0 for
+//! desktop, 1 for mobile with status bar).
 
+use crate::concurrent::ScreenGroup;
 use crate::plan::{OrchestratorPlan, Subtask};
 use jian_ops_schema::node::PenNode;
 use op_editor_core::{EditorCommand, NodeId};
@@ -20,10 +29,31 @@ const WIFI_D: &str =
 const CAP_D: &str =
     "M0 0l0 4c0.80473-0.33878 1.32804-1.12687 1.32804-2 0-0.87313-0.52331-1.66122-1.32804-2";
 
+/// 并发多屏路径的相邻 root frame 间距(像素)。
+/// Port of `const gap = 100` in `orchestrator.ts:868`.
+const CONCURRENT_GAP: f64 = 100.0;
+
+/// 并发路径里每个 root 的最小高度(桌面端)。
+/// Port of `Math.max(320, totalRegionHeight)` in `orchestrator.ts:883`.
+const CONCURRENT_MIN_HEIGHT: f64 = 320.0;
+
+/// 移动端无 rootFrame.height 时的默认视口高度。
+/// Port of `plan.rootFrame.height || 812` in `orchestrator.ts:882`.
+const MOBILE_DEFAULT_HEIGHT: f64 = 812.0;
+
 /// Keep newly generated single-screen roots out from under the native
 /// floating toolbar.
 const SAFE_CANVAS_X: f64 = 80.0;
 const SAFE_CANVAS_Y: f64 = 40.0;
+
+/// Return type of [`build_scaffold_concurrent_mobile`]:
+/// `(commands, root_frame_ids, per_root_scaffold_baselines)`.
+///
+/// - `Vec<EditorCommand>` — one `InsertSubtree` per screen group.
+/// - `Vec<String>` — the root frame ID for each group (index-aligned).
+/// - `Vec<usize>` — scaffold descendant-count baseline per root
+///   (0 for desktop, 1 for mobile with status bar).
+pub(crate) type ConcurrentScaffoldResult = (Vec<EditorCommand>, Vec<String>, Vec<usize>);
 
 fn solid_fill_json(color: &str) -> serde_json::Value {
     serde_json::json!([{ "type": "solid", "color": color }])
@@ -205,22 +235,6 @@ fn resolve_section_gap(plan_gap: Option<f64>) -> f64 {
     }
 }
 
-/// A plan's `rootFrame.height` is often 0 — the model's "compute it from
-/// content". A LITERAL 0-height root makes every `fill_container` descendant
-/// resolve to 0px for the whole pipeline, so the geometry pass "correctly"
-/// demotes a healthy fill-height sidebar before `adjust_root_height_to_content`
-/// (the LAST pass) ever assigns the real number (measured: the sidebar footer
-/// floated mid-page on three consecutive user runs). Map non-positive to
-/// `fit_content` — the root hugs its content mid-pipeline, and the final
-/// adjust pass still writes the definitive numeric height.
-fn root_height_json(height: f64) -> serde_json::Value {
-    if height > 0.0 {
-        serde_json::json!(height)
-    } else {
-        serde_json::json!("fit_content")
-    }
-}
-
 #[allow(clippy::too_many_arguments)]
 fn build_root_frame_node(
     id: &str,
@@ -247,7 +261,7 @@ fn build_root_frame_node(
         "x": x,
         "y": y,
         "width": width,
-        "height": root_height_json(height),
+        "height": height,
         "layout": layout,
         "gap": gap,
         "fill": [{ "type": "solid", "color": fill_hex }],
@@ -334,29 +348,11 @@ fn build_scaffold_root_node_at(
     y: f64,
 ) -> Result<PenNode, String> {
     let rf = &plan.root_frame;
+    let layout = rf.layout.as_deref().unwrap_or("vertical");
     let fill_hex = rf
         .first_solid_hex()
         .unwrap_or_else(|| "#FFFFFF".to_string());
 
-    // Desktop sidebar dashboard → pre-build the two-column app-shell so the
-    // sidebar is a narrow left column from the first subtask (matching Pencil),
-    // instead of filling the root until the finalize `app_shell` reshape. The
-    // sidebar subtask then generates into the left column and the rest into the
-    // content column (routed in `run.rs`).
-    if plan_is_sidebar_dashboard(plan, is_mobile) {
-        return build_two_column_root_node(
-            root_id,
-            &rf.name,
-            x,
-            y,
-            rf.width,
-            rf.height,
-            &fill_hex,
-            resolve_section_gap(rf.gap),
-        );
-    }
-
-    let layout = rf.layout.as_deref().unwrap_or("vertical");
     build_root_frame_node(
         root_id,
         &rf.name,
@@ -371,118 +367,126 @@ fn build_scaffold_root_node_at(
     )
 }
 
-/// Fixed left-column width for a pre-built dashboard app-shell. Mirrors
-/// `dashboard_columns`' sidebar width and `app_shell::SIDEBAR_WIDTH`.
-const SIDEBAR_COLUMN_WIDTH: f64 = 260.0;
-
-/// Names stamped on the two pre-built columns. The run loop re-resolves the
-/// (remapped-on-insert) column ids BY NAME, and `app_shell` skips a root that
-/// already carries a "Main Content" child — so the pre-built shell is never
-/// double-restructured at finalize.
-pub(crate) const SIDEBAR_COLUMN_NAME: &str = "Sidebar";
-pub(crate) const CONTENT_COLUMN_NAME: &str = "Main Content";
-
-/// True when the plan is a DESKTOP dashboard with a sidebar subtask plus at
-/// least two other sections — the shape worth pre-building as a two-column
-/// app-shell. Narrow on purpose (mobile / non-sidebar / single-section plans
-/// stay on the single-root path, so parity is unaffected).
-pub(crate) fn plan_is_sidebar_dashboard(plan: &OrchestratorPlan, is_mobile: bool) -> bool {
-    use crate::dashboard_columns::{
-        is_dashboard_content_subtask, is_sidebar_subtask, is_strong_sidebar_subtask,
-    };
-    if is_mobile || plan.root_frame.width < 900.0 {
-        return false;
-    }
-    let sidebars = plan
-        .subtasks
-        .iter()
-        .filter(|s| is_sidebar_subtask(s))
-        .count();
-    if sidebars == 0 {
-        return false;
-    }
-    // There must be real content for the right column.
-    let others = plan.subtasks.len().saturating_sub(sidebars);
-    if others < 1 {
-        return false;
-    }
-    // A STRONG sidebar signal ("sidebar"/"rail"/"side nav") is unambiguously a
-    // left rail → pre-build the two-column shell regardless of what the content
-    // sections are named (a desktop sidebar layout is two-column whether its
-    // sections are tables, a directory, a schedule, …). This is the common gap:
-    // a sidebar dashboard whose sections lack table/metric/chart keywords used
-    // to fall through to the single-root path and fill the sidebar full-width
-    // during streaming.
-    if plan.subtasks.iter().any(is_strong_sidebar_subtask) {
-        return true;
-    }
-    // Only an AMBIGUOUS nav/menu signal → require >=2 data-content sections so a
-    // landing/marketing page with a stray "Navigation" subtask is never mistaken
-    // for a sidebar dashboard.
-    plan.subtasks
-        .iter()
-        .filter(|s| is_dashboard_content_subtask(s))
-        .count()
-        >= 2
+/// 构建 N-root-frame 并发画布搭建命令(多屏并发路径,S3b-2 Task A2)。
+///
+/// Port of `orchestrator.ts:856-937` (the `effectiveConcurrency > 1` scaffold
+/// branch). One root frame per screen group, laid out left-to-right with
+/// gap 100. Each group's subtasks get `parent_frame_id` = that group's root ID.
+///
+/// # Arguments
+/// * `plan` — orchestrator plan (provides `root_frame` spec).
+/// * `groups` — screen groups from [`crate::concurrent::group_subtasks_by_screen`].
+///
+/// # Returns
+/// Mobile-aware variant; exposed as a separate entry point so tests can drive
+/// the mobile path without going through `plan_normalize`.
+///
+/// Pass `is_mobile = false` for the desktop (non-mobile) path.
+///
+/// # Side effect on plan subtasks
+/// The caller is responsible for assigning `parent_frame_id` on each subtask
+/// from the returned `root_ids`. This function does NOT mutate `plan` — it
+/// returns the mapping data needed for the caller to do so.
+///
+/// Callers land in S3b-2 Task C2 (`run.rs`).
+pub(crate) fn build_scaffold_concurrent_mobile(
+    plan: &OrchestratorPlan,
+    groups: &[ScreenGroup],
+    is_mobile: bool,
+) -> Result<ConcurrentScaffoldResult, String> {
+    build_scaffold_concurrent_inner(plan, groups, is_mobile)
 }
 
-/// Build the pre-built two-column app-shell root: `horizontal [Sidebar(260,
-/// vertical, clipped) | Main Content(fill, vertical)]`, both columns empty
-/// (subtasks fill them). The sidebar `height: fill_container` stretches it to
-/// the row (cross-axis) height; `clipContent` keeps a sub-agent's full-width
-/// content from bleeding past the 260 column.
-#[allow(clippy::too_many_arguments)]
-fn build_two_column_root_node(
-    root_id: &str,
-    name: &str,
-    x: f64,
-    y: f64,
-    width: f64,
-    height: f64,
-    fill_hex: &str,
-    gap: f64,
-) -> Result<PenNode, String> {
-    let sidebar = serde_json::json!({
-        "type": "frame",
-        "id": format!("{root_id}-sidebar"),
-        "name": SIDEBAR_COLUMN_NAME,
-        "width": SIDEBAR_COLUMN_WIDTH,
-        "height": "fill_container",
-        "layout": "vertical",
-        "fill": [{ "type": "solid", "color": fill_hex }],
-        "clipContent": true,
-        "children": [],
-    });
-    let content = serde_json::json!({
-        "type": "frame",
-        "id": format!("{root_id}-content"),
-        "name": CONTENT_COLUMN_NAME,
-        "width": "fill_container",
-        "height": "fit_content",
-        "layout": "vertical",
-        "gap": gap,
-        // Outer page gutter [vertical, horizontal] so sections don't run
-        // edge-to-edge into the viewport — parity with the app-shell reshape
-        // path (`app_shell::CONTENT_PADDING`). Without it a section the model
-        // authored with no self-padding (KPI row, table) touches the right edge.
-        "padding": [32, 40],
-        "children": [],
-    });
-    let frame = serde_json::json!({
-        "type": "frame",
-        "id": root_id,
-        "name": name,
-        "x": x,
-        "y": y,
-        "width": width,
-        "height": root_height_json(height),
-        "layout": "horizontal",
-        "gap": 0,
-        "alignItems": "stretch",
-        "fill": [{ "type": "solid", "color": fill_hex }],
-        "children": [sidebar, content],
-    });
-    serde_json::from_value(frame).map_err(|e| format!("two-column scaffold root `{root_id}`: {e}"))
+fn build_scaffold_concurrent_inner(
+    plan: &OrchestratorPlan,
+    groups: &[ScreenGroup],
+    is_mobile: bool,
+) -> Result<ConcurrentScaffoldResult, String> {
+    let rf = &plan.root_frame;
+    let layout = rf.layout.as_deref().unwrap_or("vertical");
+    let fill_hex = rf
+        .first_solid_hex()
+        .unwrap_or_else(|| "#FFFFFF".to_string());
+
+    let mut cmds: Vec<EditorCommand> = Vec::with_capacity(groups.len());
+    let mut root_ids: Vec<String> = Vec::with_capacity(groups.len());
+    let mut baselines: Vec<usize> = Vec::with_capacity(groups.len());
+
+    let mut next_x: f64 = 0.0;
+
+    for (g, group) in groups.iter().enumerate() {
+        // Original ID: `{root_frame.id}-{group.screen}` — mirrors TS `originalId`.
+        // The first group uses the same id scheme; `run()` handles the
+        // empty-canvas remap (only for g == 0) after applying the InsertSubtree.
+        let original_id = format!("{}-{}", rf.id, group.screen);
+
+        // Height: mobile uses fixed viewport; desktop = max(320, Σ region heights).
+        let total_region_height: f64 = group
+            .indices
+            .iter()
+            .map(|&i| {
+                plan.subtasks
+                    .get(i)
+                    .map(|st| st.region.height)
+                    .unwrap_or(0.0)
+            })
+            .sum();
+
+        let frame_height = if is_mobile {
+            if rf.height > 0.0 {
+                rf.height
+            } else {
+                MOBILE_DEFAULT_HEIGHT
+            }
+        } else {
+            total_region_height.max(CONCURRENT_MIN_HEIGHT)
+        };
+
+        // Frame name: use screen name if the first subtask has one,
+        // else first subtask's short label. Port of `orchestrator.ts:886-888`.
+        let frame_name =
+            if let Some(first_st) = group.indices.first().and_then(|&i| plan.subtasks.get(i)) {
+                if first_st.screen.is_some() {
+                    group.screen.clone()
+                } else {
+                    short_label(first_st)
+                }
+            } else {
+                group.screen.clone()
+            };
+
+        let node = build_root_frame_node(
+            &original_id,
+            &frame_name,
+            next_x,
+            0.0,
+            rf.width,
+            frame_height,
+            layout,
+            resolve_section_gap(rf.gap),
+            &fill_hex,
+            is_mobile,
+        )?;
+
+        // The first root frame uses InsertSubtree with NONE parent (same as the
+        // single-root path) so the run() caller can handle the empty-canvas
+        // ID-remap. Subsequent roots are plain InsertSubtree with NONE parent
+        // (addNode into page root — mirrors TS `addNode(null, rootNode)`).
+        let _ = g; // both paths use NodeId::NONE — kept for clarity
+        cmds.push(EditorCommand::InsertSubtree {
+            nodes: vec![node],
+            parent_id: NodeId::NONE,
+            page_id: None,
+        });
+
+        root_ids.push(original_id);
+        // Baseline: mobile root has 1 scaffold child (status bar); desktop has 0.
+        baselines.push(if is_mobile { 1 } else { 0 });
+
+        next_x += rf.width + CONCURRENT_GAP;
+    }
+
+    Ok((cmds, root_ids, baselines))
 }
 
 #[cfg(test)]

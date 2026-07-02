@@ -215,11 +215,6 @@ fn build_element_entry(
         };
     }
 
-    // `el:"ref"` (component instance) and every semantic-builder kind route
-    // through `build_element`. The ref kind maps to a `PenNode::Ref` (the same
-    // instance node the raw `type:ref` path emits) so a manifest can compose
-    // from the document's component library; refs nest under sections via `in`
-    // exactly like any other element leaf.
     let args = element_args(&object);
     match op_mcp::element_manifest::build_element(&kind, &args) {
         Ok(built) => {
@@ -671,60 +666,6 @@ Here is the design:
             1,
             "stat_card nested inside the card, not flattened to a sibling"
         );
-    }
-
-    #[test]
-    fn ref_element_line_builds_a_component_instance() {
-        // `{"el":"ref","ref":"X"}` → a top-level PenNode::Ref(target=X), so a
-        // manifest can instantiate a library component within the el-line
-        // protocol (not the contradicting raw `type:ref` syntax).
-        let text = r#"{"el":"ref","ref":"shadcn-btn-primary"}"#;
-        let outcome = parse_manifest(text).expect("manifest");
-        assert_eq!(outcome.element_lines, 1);
-        assert_eq!(outcome.dropped_lines, 0);
-        assert_eq!(outcome.nodes.len(), 1);
-        match &outcome.nodes[0] {
-            PenNode::Ref(reference) => assert_eq!(reference.target, "shadcn-btn-primary"),
-            other => panic!("expected PenNode::Ref, got {other:?}"),
-        }
-    }
-
-    #[test]
-    fn ref_element_nests_under_its_section_via_in() {
-        // A ref leaf nests under a section exactly like any other element.
-        let text = r#"
-{"el":"section","direction":"horizontal","role":"actions"}
-{"el":"ref","in":1,"ref":"shadcn-btn-primary"}
-{"el":"ref","in":1,"ref":"shadcn-btn-secondary"}
-"#;
-        let outcome = parse_manifest(text).expect("manifest");
-        assert_eq!(outcome.element_lines, 3);
-        assert_eq!(outcome.nodes.len(), 1, "one section root");
-        let kids = frame_children(&outcome.nodes[0]);
-        assert_eq!(kids.len(), 2, "both refs nested in the section");
-        assert!(
-            kids.iter().all(|n| matches!(n, PenNode::Ref(_))),
-            "section children are component instances"
-        );
-    }
-
-    #[test]
-    fn ref_element_descendant_overrides_carry_through() {
-        // `descendants` (a JSON object) survives the manifest → builder →
-        // PenNode::Ref round trip so per-instance text overrides stick.
-        let text = r#"{"el":"ref","ref":"shadcn-btn-primary","descendants":{"shadcn-btn-primary-label":{"content":"Get started"}}}"#;
-        let outcome = parse_manifest(text).expect("manifest");
-        assert_eq!(outcome.nodes.len(), 1);
-        match &outcome.nodes[0] {
-            PenNode::Ref(reference) => {
-                let overrides = reference
-                    .descendants
-                    .as_ref()
-                    .expect("descendants carried through");
-                assert!(overrides.contains_key("shadcn-btn-primary-label"));
-            }
-            other => panic!("expected PenNode::Ref, got {other:?}"),
-        }
     }
 
     #[test]

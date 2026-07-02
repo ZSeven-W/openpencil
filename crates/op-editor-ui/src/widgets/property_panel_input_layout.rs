@@ -279,12 +279,7 @@ pub fn editable_input_rects(
                         visible.gradient_stop_count,
                     );
                 }
-                // Mesh has no editable inputs (per-vertex editing deferred).
-                FillType::LinearGradient
-                | FillType::RadialGradient
-                | FillType::MeshGradient
-                | FillType::Shader
-                | FillType::Image => {}
+                FillType::LinearGradient | FillType::RadialGradient | FillType::Image => {}
             }
             y += fill_row_body_height(fill_type, is_primary, primary_stop_count);
         }
@@ -504,12 +499,7 @@ pub(crate) fn push_fill_action_rects(
                     stop_y += INPUT_HEIGHT + 4.0;
                 }
             }
-            // Mesh emits no body action rects (per-vertex editing deferred).
-            FillType::LinearGradient
-            | FillType::RadialGradient
-            | FillType::MeshGradient
-            | FillType::Shader
-            | FillType::Image => {}
+            FillType::LinearGradient | FillType::RadialGradient | FillType::Image => {}
         }
         y += fill_row_body_height(fill_type, is_primary, primary_stop_count);
     }

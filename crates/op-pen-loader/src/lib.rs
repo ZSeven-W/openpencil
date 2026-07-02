@@ -25,7 +25,6 @@ mod effects;
 mod layout_repair;
 mod layout_scene;
 mod legacy_payload_repair;
-mod library;
 // Only the real-shaper (`skia-measure`) build benefits from caching; the
 // estimate backend is already cheap, so the module is gated to avoid dead code
 // under the CanvasKit (no-skia-measure) web build.
@@ -62,7 +61,6 @@ pub use effects::{
     effects_from_payload, effects_from_payload_ref, effects_to_payload, shadows_from_canonical,
     ShadowPayload,
 };
-pub use library::{merge_library_into_state, merge_library_src_into_state, LibraryMergeReport};
 pub use payload::{load_canonical, DocPayload, NodePayload, PagePayload, StrokePayload};
 pub use variables::{var_table_from_payload, var_table_to_payload, VarTablePayload};
 

@@ -238,10 +238,6 @@ pub(super) const ALLOWED_KINDS: &[&str] = &[
     "slider",
     "progress",
     "tabs",
-    // Component instance: a `ref` node points at a reusable master by id and
-    // renders the master's subtree (resolved by `ref_resolve` before variables
-    // + layout). Carries no fill/children of its own — those are inherited.
-    "ref",
 ];
 
 pub fn insert_node_snapshot() -> InsertNode {
