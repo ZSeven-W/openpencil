@@ -61,6 +61,74 @@ fn batch_design_parses_minimal_two_node_array() {
 }
 
 #[test]
+fn batch_design_fill_passthrough_carries_mesh_and_radial() {
+    use jian_ops_schema::style::PenFill;
+    let tool = batch_design_snapshot(&sample());
+    let mut args = BTreeMap::new();
+    args.insert(
+        "nodes_json".into(),
+        r##"[{"kind":"rect","name":"Mesh","x":0,"y":0,"width":100,"height":100,"fill":[{"type":"mesh_gradient","rows":2,"cols":2,"stops":[{"row":0,"col":0,"color":"#ff0000"},{"row":0,"col":1,"color":"#00ff00"},{"row":1,"col":0,"color":"#0000ff"},{"row":1,"col":1,"color":"#ffff00"}]}]},{"kind":"ellipse","name":"Radial","x":0,"y":0,"width":80,"height":80,"fill":{"type":"radial_gradient","stops":[{"offset":0,"color":"#fff"},{"offset":1,"color":"#000"}]}}]"##
+            .into(),
+    );
+    match tool.call(&args) {
+        ToolOutcome::OkWithCommand(_, EditorCommand::BatchInsert { items, .. }) => {
+            assert_eq!(items.len(), 2);
+            // Array form → full mesh fill stack.
+            let mesh = items[0].fill.as_ref().expect("mesh fill stack");
+            assert_eq!(mesh.len(), 1);
+            match &mesh[0] {
+                PenFill::MeshGradient(b) => {
+                    assert_eq!(b.rows, 2);
+                    assert_eq!(b.cols, 2);
+                    assert_eq!(b.stops.len(), 4);
+                }
+                other => panic!("expected mesh_gradient, got {other:?}"),
+            }
+            // Single-object form → wrapped into a 1-entry radial stack.
+            let radial = items[1].fill.as_ref().expect("radial fill stack");
+            assert_eq!(radial.len(), 1);
+            assert!(matches!(radial[0], PenFill::RadialGradient(_)));
+        }
+        other => panic!("expected BatchInsert, got {other:?}"),
+    }
+}
+
+#[test]
+fn batch_design_fill_passthrough_carries_shader() {
+    // The generic `fill` passthrough must carry a `{type:"shader",...}`
+    // entry straight through to `PenFill::Shader` with no new tool — same
+    // path mesh / radial already ride.
+    use jian_ops_schema::style::{PenFill, ShaderUniformValue};
+    let tool = batch_design_snapshot(&sample());
+    let mut args = BTreeMap::new();
+    args.insert(
+        "nodes_json".into(),
+        r##"[{"kind":"rect","name":"Shader","x":0,"y":0,"width":240,"height":240,"fill":[{"type":"shader","sksl":"half4 main(float2 p){ return half4(p.x/240.0, p.y/240.0, 0.5, 1.0); }","uniforms":{"glow":0.5,"tint":"#ff00aa"}}]}]"##
+            .into(),
+    );
+    match tool.call(&args) {
+        ToolOutcome::OkWithCommand(_, EditorCommand::BatchInsert { items, .. }) => {
+            assert_eq!(items.len(), 1);
+            let stack = items[0].fill.as_ref().expect("shader fill stack");
+            assert_eq!(stack.len(), 1);
+            match &stack[0] {
+                PenFill::Shader(b) => {
+                    assert!(b.sksl.contains("half4 main(float2 p)"));
+                    let u = b.uniforms.as_ref().expect("uniforms map");
+                    assert_eq!(u.get("glow"), Some(&ShaderUniformValue::Float(0.5)));
+                    assert_eq!(
+                        u.get("tint"),
+                        Some(&ShaderUniformValue::Color("#ff00aa".into()))
+                    );
+                }
+                other => panic!("expected shader, got {other:?}"),
+            }
+        }
+        other => panic!("expected BatchInsert, got {other:?}"),
+    }
+}
+
+#[test]
 fn batch_design_nodes_json_accepts_outer_page_id() {
     let tool = batch_design_snapshot(&sample());
     let mut args = BTreeMap::new();
@@ -180,6 +248,34 @@ fn batch_design_promotes_legacy_role_input_frame_to_text_input() {
         }
         other => panic!("expected InsertAuthoredSubtree, got {other:?}"),
     }
+}
+
+#[test]
+fn batch_design_ellipse_preserves_arc_fields() {
+    // A native ring/arc/donut: an ellipse authored with startAngle /
+    // sweepAngle / innerRadius (camelCase, as the DSL uses) must keep
+    // those fields on the constructed EllipseNode instead of dropping
+    // them — so an LLM can author a ring in one batch_design call.
+    let tool = batch_design_snapshot(&sample());
+    let mut args = BTreeMap::new();
+    args.insert(
+        "operations".into(),
+        r##"ring=I(null, {"type":"ellipse","name":"Gauge","width":120,"height":120,"innerRadius":0.6,"startAngle":0,"sweepAngle":270})"##
+            .into(),
+    );
+
+    let ToolOutcome::OkJsonWithCommand(_, EditorCommand::InsertAuthoredSubtree { nodes, .. }) =
+        tool.call(&args)
+    else {
+        panic!("expected InsertAuthoredSubtree command");
+    };
+    assert_eq!(nodes.len(), 1);
+    let jian_ops_schema::node::PenNode::Ellipse(ell) = &nodes[0] else {
+        panic!("expected PenNode::Ellipse, got {:?}", nodes[0]);
+    };
+    assert_eq!(ell.inner_radius, Some(0.6));
+    assert_eq!(ell.start_angle, Some(0.0));
+    assert_eq!(ell.sweep_angle, Some(270.0));
 }
 
 #[test]
@@ -784,6 +880,7 @@ fn batch_insert_command_adds_all_nodes() {
                 width: 10,
                 height: 20,
                 fill_hex: None,
+                fill: None,
             },
             BatchInsertItem {
                 kind: "ellipse".into(),
@@ -793,6 +890,7 @@ fn batch_insert_command_adds_all_nodes() {
                 width: 30,
                 height: 30,
                 fill_hex: Some("#00ff00".into()),
+                fill: None,
             },
         ],
         page_id: None,
@@ -814,6 +912,7 @@ fn batch_insert_command_atomic_on_bad_descriptor() {
                 width: 10,
                 height: 10,
                 fill_hex: None,
+                fill: None,
             },
             BatchInsertItem {
                 kind: "blob".into(),
@@ -823,6 +922,7 @@ fn batch_insert_command_atomic_on_bad_descriptor() {
                 width: 10,
                 height: 10,
                 fill_hex: None,
+                fill: None,
             },
         ],
         page_id: None,
