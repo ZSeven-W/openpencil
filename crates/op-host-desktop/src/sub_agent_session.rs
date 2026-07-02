@@ -134,9 +134,7 @@ pub(crate) fn build_sub_agent_prompt(spec: &SpawnSpec) -> String {
     prompt.push_str(&spec.prompt);
 
     if !spec.container_nodes.is_empty() {
-        prompt.push_str(
-            "\n\nScope: only build inside container node(s): ",
-        );
+        prompt.push_str("\n\nScope: only build inside container node(s): ");
         prompt.push_str(&spec.container_nodes.join(", "));
         prompt.push('.');
     }

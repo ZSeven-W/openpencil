@@ -99,7 +99,11 @@ pub fn launch_if_pending(
         // detects (agent-tool-executor.ts:234) rides the request here.
         if let Some(provider) = provider_for_selected_model(host) {
             *current_chat = None;
-            let llm = ChatProviderLlmClient::new(Arc::from(provider))
+            // Share one provider Arc between the design LLM and the
+            // (flag-gated) Class-C vision validator so the real loop reuses
+            // the user's selected auth/model.
+            let provider_arc: Arc<dyn ChatProvider> = Arc::from(provider);
+            let llm = ChatProviderLlmClient::new(provider_arc.clone())
                 .with_model(selected_cli_model_id(host));
             if clear_fresh_starter_frame_for_design(host.editor_state_mut()) {
                 host.mark_editor_state_dirty();
@@ -114,6 +118,7 @@ pub fn launch_if_pending(
                 llm,
                 request,
                 initial_state,
+                Some(provider_arc),
             ));
             return true;
         }
