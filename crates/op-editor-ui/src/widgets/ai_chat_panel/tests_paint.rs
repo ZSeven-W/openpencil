@@ -167,35 +167,40 @@ fn paint_quick_action_card_pressed_uses_shared_feedback() {
 
 #[test]
 fn paint_send_button_hover_adds_visible_feedback() {
-    let mut s = EditorState::new();
-    seed_available_model(&mut s);
-    s.chat.set_input_text("design a login page");
-    s.editor_ui.chat_footer_hover = Some(op_editor_core::ChatFooterButton::Send);
-    let panel = AIChatPlaceholder::from_editor(&s);
-    let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
-    let mut backend = PanelPaintBackend::default();
-    let mut cx = PaintCx {
-        backend: &mut backend,
+    // The active send circle dims on hover (rest 1.0 → hover 0.9 alpha), so the
+    // hovered fill must visibly differ from the resting fill — not just exist.
+    let send_fill = |hovered: bool| -> crate::Color {
+        let mut s = EditorState::new();
+        seed_available_model(&mut s);
+        s.chat.set_input_text("design a login page");
+        if hovered {
+            s.editor_ui.chat_footer_hover = Some(op_editor_core::ChatFooterButton::Send);
+        }
+        let panel = AIChatPlaceholder::from_editor(&s);
+        let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
+        let mut backend = PanelPaintBackend::default();
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+        panel.paint(&mut cx, rect);
+        // Use footer_layout to get the exact rect rather than hardcoding.
+        let input = panel.input_rect(rect);
+        let toolbar_top = input.origin.y + INPUT_AREA_HEIGHT;
+        let footer = panel.footer_layout(rect, input, toolbar_top);
+        backend
+            .round_rects
+            .iter()
+            .filter(|(r, _, _)| rect_close(*r, footer.send))
+            .map(|(_, _, c)| *c)
+            .last()
+            .expect("send circle must paint a fill")
     };
 
-    panel.paint(&mut cx, rect);
-
-    // old→new: send is now a 30px circle (#27 layout); resting fill always
-    // present (primary color), hover changes the alpha.
-    // Use footer_layout to get the exact rect rather than hardcoding.
-    let input = panel.input_rect(rect);
-    let toolbar_top = input.origin.y + INPUT_AREA_HEIGHT;
-    let footer = panel.footer_layout(rect, input, toolbar_top);
-    let fills: Vec<_> = backend
-        .round_rects
-        .iter()
-        .filter(|(r, _, _)| rect_close(*r, footer.send))
-        .collect();
-
-    // Send circle always paints a fill; verify at least one fill is present.
+    let resting = send_fill(false);
+    let hovered = send_fill(true);
     assert!(
-        !fills.is_empty(),
-        "hovered send button should paint a fill"
+        !color_close(resting, hovered),
+        "hovered send fill must visibly differ from the resting fill"
     );
 }
 

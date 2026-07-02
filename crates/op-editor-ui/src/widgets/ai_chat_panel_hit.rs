@@ -317,8 +317,10 @@ impl<'a> AIChatPlaceholder<'a> {
                 return Some(hit.into());
             }
         }
-        if self.state.messages.is_empty() && can_use_model && !self.is_streaming() {
+        if self.state.messages.is_empty() && !self.is_streaming() {
             // Examples grid hit-test (only rendered when no messages).
+            // Clickable regardless of model connection — clicking an example
+            // fills the input (sending separately requires a model) (#43).
             for (index, (card, ex)) in example_card_rects(rect)
                 .iter()
                 .zip(self.examples.iter())
@@ -451,23 +453,21 @@ impl<'a> AIChatPlaceholder<'a> {
             return Some(op_editor_core::ChatFooterButton::Stop);
         }
         if (footer.send).contains(point) {
-            return Some(if streaming {
-                return None; // send is dimmed but hoverable — no wash needed
-            } else if !self.state.available_models.is_empty() {
-                op_editor_core::ChatFooterButton::Send
+            // #42: stop shares this slot and is matched above while streaming, so
+            // reaching here means we're idle — the circle is the Send button.
+            return if !self.state.available_models.is_empty() {
+                Some(op_editor_core::ChatFooterButton::Send)
             } else {
-                return None;
-            });
+                None
+            };
         }
         None
     }
 
     pub fn example_hover_at(&self, rect: Rect, point: Point2D) -> Option<usize> {
-        if !self.state.messages.is_empty()
-            || self.state.available_models.is_empty()
-            || self.is_streaming()
-            || self.state.collapsed
-        {
+        // Examples are hoverable/clickable regardless of model connection (#43);
+        // gate only on messages-empty / not-streaming / not-collapsed.
+        if !self.state.messages.is_empty() || self.is_streaming() || self.state.collapsed {
             return None;
         }
         example_card_rects(rect)
