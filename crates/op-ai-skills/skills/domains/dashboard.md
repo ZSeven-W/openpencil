@@ -4,7 +4,7 @@ description: Dashboard, admin-panel, and data-table design depth — zone struct
 phase: [generation]
 trigger:
   keywords: [dashboard, admin, analytics, data, table, 仪表盘, 后台, 数据表, 报表]
-priority: 35
+priority: 28
 budget: 1800
 category: domain
 ---
@@ -16,7 +16,7 @@ A data-dense product surface. The always-on principles (purpose-first, dominant 
 ZONE STRUCTURE (adapt — do not force sidebar+table when the purpose differs):
 
 - Root: width=1200-1440, layout="horizontal" — Sidebar + Main.
-- Sidebar: width=240-280, height="fill_container", layout="vertical", justifyContent="space_between". Brand top (padding=[24,16]); nav groups with section labels (12px uppercase, muted, letterSpacing≈1); user/settings pinned bottom. Nav item: frame(horizontal, gap=12, alignItems="center", padding=[10,16]) > icon_font(18-20) + text(14). Active: accent surface tint OR a left accent bar — never both. icon + label always (never icon-only nav).
+- Sidebar: width=240-280, height="fill_container", layout="vertical", justifyContent="space_between". FOOTER-SINK CONTRACT (pins the user/account card to the very BOTTOM, not floating mid-rail): the sidebar column MUST be height="fill_container" — a "fit_content" column hugs its content so space_between has no free space to distribute and nothing sinks — AND have EXACTLY TWO children: a TOP group {brand, nav groups} and a BOTTOM group {user/account/settings}. NEVER list brand + nav + footer as flat siblings under space_between (it then spreads ALL of them evenly and the nav floats into the middle). Brand top (padding=[24,16]); nav groups with section labels (12px uppercase, muted, letterSpacing≈1). Nav item: frame(horizontal, gap=12, alignItems="center", padding=[10,16]) > icon_font(18-20) + text(14). Active: accent surface tint OR a left accent bar — never both. icon + label always (never icon-only nav).
 - Main: width="fill_container", layout="vertical", padding=[24,32], gap=24-28.
 - Top bar: height=56-64, padding=[0,24], horizontal, justifyContent="space_between". Left: page title / breadcrumbs. Right: search + bell + avatar.
 
