@@ -135,6 +135,11 @@ fn one_node_json() -> String {
 
 #[test]
 fn cli_new_design_clears_agent_frame_indicators_after_done() {
+    // Held for the whole turn so an exact animation-deadline test can't
+    // observe this run's streamed reveals mid-flight (shared registry).
+    let _guard = crate::agent_indicator_test_lock::LOCK
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     op_editor_core::agent_indicators::clear();
     let indicator_epoch = op_editor_core::agent_indicators::begin();
     let plan = CliTurnPlan {
@@ -178,11 +183,22 @@ fn cli_new_design_clears_agent_frame_indicators_after_done() {
     worker.join().expect("worker exits");
 
     assert!(current.is_none(), "design session should finish");
-    let snapshot = op_editor_core::agent_indicators::snapshot();
+    // Graceful drain (finish_if_epoch): the frame ownership + reveal queue
+    // persist after Done until the queued reveals play out, at which point
+    // the paint-path maintenance clears the whole overlay. Drive time past
+    // the drain window the way the render loop does, then assert it cleared
+    // — the invariant is "no indicator leak after Done", not "cleared on the
+    // same frame".
+    let queued = op_editor_core::agent_indicators::snapshot();
+    let drain_at = queued.reveals.values().copied().max().map_or(0, |last| {
+        last + op_editor_core::agent_indicators::REVEAL_DURATION_MS + 1
+    });
+    let drained = op_editor_core::agent_indicators::snapshot_at(drain_at);
     assert!(
-        snapshot.frames.is_empty(),
-        "agent frame badges/borders must clear after Done, got {:?}",
-        snapshot.frames
+        drained.frames.is_empty() && drained.reveals.is_empty(),
+        "agent frame ownership + reveals must clear once the drain plays out, got frames={:?} reveals={:?}",
+        drained.frames,
+        drained.reveals
     );
     op_editor_core::agent_indicators::clear();
 }

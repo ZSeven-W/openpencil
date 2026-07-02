@@ -687,10 +687,14 @@ async fn run_concurrent_path(
             &identity.name,
         );
     }
+    // Graceful drain on drop: the run's queued reveals keep playing at
+    // the queue cadence and the overlay clears itself once the last one
+    // lands. A user STOP still kills instantly — the host calls
+    // `end_if_epoch` / `clear_if_epoch` directly on that path.
     struct IndicatorGuard(u64);
     impl Drop for IndicatorGuard {
         fn drop(&mut self) {
-            op_editor_core::agent_indicators::clear_if_epoch(self.0);
+            op_editor_core::agent_indicators::finish_if_epoch(self.0);
         }
     }
     let _indicator_guard = IndicatorGuard(epoch);
