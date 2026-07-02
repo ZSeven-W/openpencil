@@ -184,6 +184,7 @@ pub fn adjust_running_tab_after_close(running: usize, closed: usize) -> Option<u
 // --------------------------------------------------------------------------
 
 #[cfg(test)]
+#[allow(clippy::field_reassign_with_default)]
 mod tests {
     use super::*;
     use crate::chat_title::DEFAULT_CHAT_TITLE;
@@ -254,7 +255,7 @@ mod tests {
         let mut s = ChatSessions::default();
         s.new_tab(); // tab 1
         s.new_tab(); // tab 2 (active)
-        // Close tab 1 (before active).
+                     // Close tab 1 (before active).
         s.close_tab(1);
         assert_eq!(s.tab_count(), 2);
         // active was 2, now tab 2 is at index 1.
@@ -305,7 +306,7 @@ mod tests {
     fn tab_mut_returns_the_indexed_tab() {
         let mut s = ChatSessions::default();
         s.new_tab(); // tab 1 (active)
-        // Write into tab 0 by index even though tab 1 is active.
+                     // Write into tab 0 by index even though tab 1 is active.
         s.tab_mut(0).unwrap().title = "zero".to_string();
         s.tab_mut(1).unwrap().title = "one".to_string();
         // Read back via switch_to to prove the writes landed per-index.
@@ -326,8 +327,10 @@ mod tests {
     fn run_tab_mut_targets_bound_tab_not_active() {
         let mut s = ChatSessions::default();
         s.new_tab(); // tab 1 (active)
-        // Run bound to tab 0; active is tab 1. The pump must write to tab 0.
-        s.run_tab_mut(Some(0)).messages.push(crate::chat::ChatMessage::user("run"));
+                     // Run bound to tab 0; active is tab 1. The pump must write to tab 0.
+        s.run_tab_mut(Some(0))
+            .messages
+            .push(crate::chat::ChatMessage::user("run"));
         // Active tab (1) stayed empty.
         assert!(s.active().messages.is_empty());
         // Tab 0 got the message.
@@ -339,10 +342,14 @@ mod tests {
     fn run_tab_mut_falls_back_to_active_when_none_or_stale() {
         let mut s = ChatSessions::default();
         s.new_tab(); // tab 1 (active)
-        // None binding → active tab.
-        s.run_tab_mut(None).messages.push(crate::chat::ChatMessage::user("a"));
+                     // None binding → active tab.
+        s.run_tab_mut(None)
+            .messages
+            .push(crate::chat::ChatMessage::user("a"));
         // Out-of-range binding → active tab.
-        s.run_tab_mut(Some(99)).messages.push(crate::chat::ChatMessage::user("b"));
+        s.run_tab_mut(Some(99))
+            .messages
+            .push(crate::chat::ChatMessage::user("b"));
         assert_eq!(s.active().messages.len(), 2);
         // Tab 0 untouched.
         s.switch_to(0);

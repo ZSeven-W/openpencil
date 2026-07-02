@@ -577,11 +577,12 @@ impl EditorState {
         // `self.chat` is a `ChatSessions` Deref wrapper and the borrow
         // checker cannot reason about field-level disjointness through
         // the Deref impl.
-        let update = self
-            .chat
-            .available_models
-            .get(idx)
-            .map(|entry| (entry.provider, entry.builtin_provider_id.is_none() && entry.acp_agent_id().is_none()));
+        let update = self.chat.available_models.get(idx).map(|entry| {
+            (
+                entry.provider,
+                entry.builtin_provider_id.is_none() && entry.acp_agent_id().is_none(),
+            )
+        });
         if let Some((provider, use_native_agent)) = update {
             self.chat.selected_model = idx;
             if use_native_agent {
