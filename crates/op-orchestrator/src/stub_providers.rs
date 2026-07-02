@@ -27,6 +27,7 @@ use crate::types::{
     DocSink, PreValidationResult, PreValidator, ScreenshotProvider, VisionCallRequest,
     VisionLlmClient, VisionResponse, VisualRefProvider,
 };
+use op_editor_core::EditorState;
 
 /// Stub `PreValidator` — always returns zero fixes; no side effects.
 pub struct SkippedPreValidator;
@@ -42,7 +43,7 @@ impl PreValidator for SkippedPreValidator {
 pub struct SkippedScreenshotProvider;
 
 impl ScreenshotProvider for SkippedScreenshotProvider {
-    fn capture_root_frame(&self) -> Option<String> {
+    fn capture_root_frame(&self, _state: &EditorState) -> Option<String> {
         None
     }
 }

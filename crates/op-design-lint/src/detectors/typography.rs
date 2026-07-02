@@ -185,6 +185,30 @@ fn first_solid_color(fills: Option<&Vec<PenFill>>) -> Option<String> {
                     return Some(stop.color.clone());
                 }
             }
+            PenFill::MeshGradient(body) => {
+                if body.opacity == Some(0.0) {
+                    continue;
+                }
+                if let Some(stop) = body.stops.first() {
+                    return Some(stop.color.clone());
+                }
+            }
+            PenFill::Shader(body) => {
+                if body.opacity == Some(0.0) {
+                    continue;
+                }
+                // A shader's effective colour is indeterminate; use its
+                // first `color` uniform as the representative when present
+                // (else fall through to the next fill).
+                if let Some(map) = &body.uniforms {
+                    if let Some(hex) = map.values().find_map(|v| match v {
+                        jian_ops_schema::style::ShaderUniformValue::Color(c) => Some(c.clone()),
+                        _ => None,
+                    }) {
+                        return Some(hex);
+                    }
+                }
+            }
             PenFill::Image(_) => continue,
             // Mesh gradients / SkSL shaders have no single representative
             // color for contrast checks — treated like image fills.

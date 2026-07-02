@@ -237,6 +237,29 @@ impl<'a> RenderBackend for NativeFrameBackend<'a> {
         );
     }
 
+    #[allow(clippy::too_many_arguments)]
+    fn fill_round_rect_radial_gradient(
+        &mut self,
+        rect: Rect,
+        radius: f32,
+        stops: &[(f32, Color)],
+        cx_frac: f32,
+        cy_frac: f32,
+        radius_frac: f32,
+        opacity: f32,
+    ) {
+        self.inner.fill_round_rect_radial_gradient(
+            self.canvas,
+            rect,
+            radius,
+            stops,
+            cx_frac,
+            cy_frac,
+            radius_frac,
+            opacity,
+        );
+    }
+
     fn fill_round_rect_mesh_gradient(
         &mut self,
         rect: Rect,
@@ -274,29 +297,6 @@ impl<'a> RenderBackend for NativeFrameBackend<'a> {
             uniforms,
             opacity,
             fallback,
-        );
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    fn fill_round_rect_radial_gradient(
-        &mut self,
-        rect: Rect,
-        radius: f32,
-        stops: &[(f32, Color)],
-        cx_frac: f32,
-        cy_frac: f32,
-        radius_frac: f32,
-        opacity: f32,
-    ) {
-        self.inner.fill_round_rect_radial_gradient(
-            self.canvas,
-            rect,
-            radius,
-            stops,
-            cx_frac,
-            cy_frac,
-            radius_frac,
-            opacity,
         );
     }
 

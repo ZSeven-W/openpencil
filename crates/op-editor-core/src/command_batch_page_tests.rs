@@ -38,6 +38,7 @@ fn batch_insert_can_target_requested_page_without_switching_active_page() {
             width: 3,
             height: 4,
             fill_hex: None,
+            fill: None,
         }],
         page_id: Some("page-2".into()),
     }));

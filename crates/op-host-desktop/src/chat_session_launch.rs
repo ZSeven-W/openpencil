@@ -99,7 +99,11 @@ pub fn launch_if_pending(
         // detects (agent-tool-executor.ts:234) rides the request here.
         if let Some(provider) = provider_for_selected_model(host) {
             *current_chat = None;
-            let llm = ChatProviderLlmClient::new(Arc::from(provider))
+            // Share one provider Arc between the design LLM and the
+            // (flag-gated) Class-C vision validator so the real loop reuses
+            // the user's selected auth/model.
+            let provider_arc: Arc<dyn ChatProvider> = Arc::from(provider);
+            let llm = ChatProviderLlmClient::new(provider_arc.clone())
                 .with_model(selected_cli_model_id(host));
             if clear_fresh_starter_frame_for_design(host.editor_state_mut()) {
                 host.mark_editor_state_dirty();
@@ -114,6 +118,7 @@ pub fn launch_if_pending(
                 llm,
                 request,
                 initial_state,
+                Some(provider_arc),
             ));
             return true;
         }
@@ -142,8 +147,15 @@ pub fn launch_if_pending(
     // executes each call via the session's tool channel.
     if let Some((provider, tool_rx)) = builtin_provider_with_tools(host) {
         let system_prompt = build_agent_system_prompt(host.editor_state());
+        // This builtin agent loop carries the full canvas toolset (`batch_design`
+        // included), so a design request runs *here* for an API-key model like
+        // glm-5.2 (experimental flag off → no design-agent loop, builtin → no CLI
+        // provider). Reasoning models burn their whole budget on hidden `<think>`
+        // and draw nothing with thinking left on (glm-5.2 measured thinking≈30k /
+        // text=0 → empty Frame). Force it off for `thinking_disabled` models, same
+        // as the design-agent loop. Resolved before the `&mut` borrow below.
+        let thinking = launch_design::design_turn_thinking_mode(host);
         let chat = &mut host.editor_state_mut().chat;
-        let thinking = chat.thinking_mode;
         let effort = chat.effort_level;
         let attachments = std::mem::take(&mut chat.pending_attachments);
         let req = ChatRequest {

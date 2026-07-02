@@ -13,6 +13,7 @@
 mod a11y;
 mod acp_agent_probe_host;
 mod app_handler;
+mod bundled_fonts;
 mod chat_acp;
 mod chat_attachment;
 mod chat_session;
@@ -979,6 +980,11 @@ fn main() {
     // simple-icons instead of the unknown-glyph fallback dot. Set-once /
     // idempotent.
     op_editor_ui::set_brand_catalog(op_host_services::web_static::ICONIFY_BRANDS_JSON);
+    // Same rationale for bundled design fonts (Inter / Space Grotesk /
+    // …): register before any native render or measure pass so designs
+    // referencing them resolve the right glyphs + metrics without a
+    // system font install.
+    bundled_fonts::register();
     init_tracing();
     // `--mcp` / `--mcp-http` swap the GUI for an MCP server mode;
     // when one of those ran, exit instead of opening a window.

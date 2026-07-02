@@ -24,15 +24,16 @@
 use jian_scene::layout_scene::NodeKind;
 use jian_scene::layout_scene::{
     stable_image_source_id, DropShadow, Effect, LayoutScene, SceneFillType, SceneGradient,
-    SceneGradientStop, SceneImageFit, SceneNode, ScenePage, SceneStroke, SceneTextAlign,
-    SceneTextRun, SceneTextVerticalAlign, SceneWidget, SceneWidgetOption,
+    SceneGradientStop, SceneImageFit, SceneNode, ScenePage, SceneShader, SceneShaderUniform,
+    SceneStroke, SceneTextAlign, SceneTextRun, SceneTextVerticalAlign, SceneWidget,
+    SceneWidgetOption,
 };
 use op_editor_core::render_backend::Color;
 use op_editor_core::scene_vars::VariableTable;
 
 use crate::editor_state_var_table;
 use crate::payload::{
-    DocPayload, GradientPayload, GradientStopPayload, NodePayload, StrokePayload,
+    DocPayload, GradientPayload, GradientStopPayload, NodePayload, ShaderPayload, StrokePayload,
 };
 
 /// Build a paint-only [`LayoutScene`] from an editor state.
@@ -216,30 +217,24 @@ fn node_payload_to_scene(
             .gradient
             .as_ref()
             .map(|g| scale_gradient_opacity(payload_gradient_to_scene(g), cum_opacity)),
-        shader: node.shader.as_ref().map(|s| {
-            jian_scene::layout_scene::SceneShader {
-                sksl: s.sksl.clone(),
-                uniforms: s
-                    .uniforms
-                    .iter()
-                    .map(
-                        |(name, values)| jian_scene::layout_scene::SceneShaderUniform {
-                            name: name.clone(),
-                            values: values.clone(),
-                        },
-                    )
-                    .collect(),
-                // Node opacity folds into the paint alpha, same as the
-                // gradient path above.
-                opacity: (s.opacity * cum_opacity).clamp(0.0, 1.0),
-                fallback: array_to_color(s.fallback),
-            }
-        }),
-        stroke: node.stroke.as_ref().map(|s| {
-            let mut st = scene_stroke(s, &node_id, var_table);
-            st.color = mul_alpha(st.color, cum_opacity);
-            st
-        }),
+        shader: node
+            .shader
+            .as_ref()
+            .map(|s| payload_shader_to_scene(s, cum_opacity)),
+        stroke: if is_status_bar_shell_stroke(node) {
+            // The scene path (editor canvas + render-shots) bypasses the
+            // adapter's `legacy_payload_repair`, so an iPhone status-bar
+            // shell ("Time"/"Levels") authored with a no-fill stroke would
+            // paint a phantom black box around the clock / signal cluster —
+            // invisible in Pencil. Drop the stroke the same way here.
+            None
+        } else {
+            node.stroke.as_ref().map(|s| {
+                let mut st = scene_stroke(s, &node_id, var_table);
+                st.color = mul_alpha(st.color, cum_opacity);
+                st
+            })
+        },
         text: node.text.clone(),
         text_runs: text_runs_to_scene(&node.text_runs, cum_opacity),
         font_family: node.font_family.clone(),
@@ -486,6 +481,25 @@ fn scene_stroke(
     }
 }
 
+/// An iPhone status-bar layout shell ("Time" / "Levels") authored with a
+/// stroke but no fill — Pencil paints nothing, so the no-fill stroke (which
+/// resolves to opaque black) must not draw a phantom box. Mirrors
+/// `legacy_payload_repair::is_legacy_status_bar_shell` on the resolved
+/// `NodePayload` the scene path carries (no canonical `PenNode` here). Width
+/// is intentionally unconstrained — the shells are `fill_container`, so a
+/// wider status bar computes a larger width than a fixed-width sample.
+fn is_status_bar_shell_stroke(node: &NodePayload) -> bool {
+    // A thin status-bar row: the authored 22 px computes to ~22-23 here
+    // (stroke / rounding), so match a small range rather than an exact 22.
+    // The no-fill + stroke + non-empty-children gates already exclude the
+    // inner "Time" text glyph node (which is filled, strokeless, leaf).
+    node.stroke.is_some()
+        && node.fill.is_none()
+        && matches!(node.name.as_str(), "Time" | "Levels")
+        && !node.children.is_empty()
+        && (18.0..=28.0).contains(&node.h)
+}
+
 /// `[r, g, b, a]` payload colour → shell-core `Color`. Lossless;
 /// the same conversion `apply_payload` runs on the `Document` path.
 fn array_to_color(a: [f32; 4]) -> Color {
@@ -560,6 +574,27 @@ fn stop_to_scene(s: &GradientStopPayload) -> SceneGradientStop {
     SceneGradientStop {
         offset: s.offset,
         color: array_to_color(s.color),
+    }
+}
+
+/// Convert a [`ShaderPayload`] into the paint-only [`SceneShader`].
+/// The SkSL source + pre-resolved uniforms ride through unchanged;
+/// node opacity (`k`) folds into the shader's own opacity multiplier.
+/// The `fallback` `[r,g,b,a]` becomes the visible solid colour for
+/// backends that can't run the program.
+fn payload_shader_to_scene(s: &ShaderPayload, k: f32) -> SceneShader {
+    SceneShader {
+        sksl: s.sksl.clone(),
+        uniforms: s
+            .uniforms
+            .iter()
+            .map(|u| SceneShaderUniform {
+                name: u.name.clone(),
+                values: u.values.clone(),
+            })
+            .collect(),
+        opacity: (s.opacity * k).clamp(0.0, 1.0),
+        fallback: array_to_color(s.fallback),
     }
 }
 

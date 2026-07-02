@@ -197,10 +197,11 @@ pub(crate) fn launch_sub_agents(
         };
 
         let system_prompt = build_sub_agent_prompt(&spec);
-        let (thinking, effort) = {
-            let chat = &host.editor_state().chat;
-            (chat.thinking_mode, chat.effort_level)
-        };
+        // Same design-turn thinking policy as the single design-agent loop:
+        // reasoning models that would burn their budget on `<think>` and draw
+        // nothing are forced thinking-off (see `design_turn_thinking_mode`).
+        let thinking = chat_session::design_turn_thinking_mode(host);
+        let effort = host.editor_state().chat.effort_level;
         let req = ChatRequest {
             system_prompt,
             user_message: spec.prompt.clone(),

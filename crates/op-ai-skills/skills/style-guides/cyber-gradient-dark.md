@@ -68,6 +68,10 @@ Key aesthetics:
 | Error          | #F87171   | Error states, destructive actions  |
 | Warning        | #FBBF24   | Alerts, pending states             |
 
+**Signature mesh-gradient recipe** (the look this style is named for — build it, don't fake it with stacked linears): give a hero / background panel a real mesh fill:
+`fill: [{ type: "mesh_gradient", rows: 2, cols: 2, stops: [{ row: 0, col: 0, color: "#8B5CF6" }, { row: 0, col: 1, color: "#06B6D4" }, { row: 1, col: 0, color: "#0A0118" }, { row: 1, col: 1, color: "#8B5CF6" }] }]`
+The four vertex colours Gouraud-interpolate into a smooth violet→cyan→void blend. For a simpler sweep use `linear_gradient` (violet→cyan); for a concentric glow use `radial_gradient`.
+
 ## Typography
 
 ### Font Families

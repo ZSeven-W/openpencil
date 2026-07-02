@@ -219,10 +219,8 @@ fn append_mode_summary_root_equals_target_parent_id() {
     assert_eq!(summary.subtasks.len(), 2, "both subtasks should appear");
 }
 
-/// (c) Append mode: effective concurrency is 1 even with concurrency=4 + 2 screens.
-///
-/// With `concurrency=4` and a plan with 2 distinct screens, the normal path
-/// would trigger concurrent multi-screen mode.  Append mode forces sequential.
+/// (c) Append mode: a multi-screen plan with `concurrency=4` still appends into
+/// the single target frame (one root), never N separate roots.
 #[test]
 fn append_mode_forces_effective_concurrency_to_one() {
     const MULTISCREEN_PLAN_JSON: &str = r##"{

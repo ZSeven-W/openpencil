@@ -2,7 +2,7 @@
 //! of `canvas_viewport.rs` to keep that file under the 800-line
 //! ceiling.
 
-use crate::layout_scene::{SceneGradient, SceneNode};
+use crate::layout_scene::{SceneGradient, SceneNode, SceneShader};
 use crate::theme::Theme;
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect};
@@ -115,24 +115,13 @@ pub fn paint_fill_then_stroke(
 ) {
     let r = node.corner_radius * zoom;
     let use_round = r > 0.5;
-    // Shader / gradient bodies win over solid `fill` when present. The
-    // scene builder leaves a representative colour in `fill` as a
-    // fallback for paint paths that don't grok them yet, so the richer
+    // A native SkSL shader fill wins over everything (gradient / solid)
+    // when present. Gradients in turn win over solid `fill`. The scene
+    // builder leaves the first stop's / fallback colour in `fill` for
+    // paint paths that don't grok the richer body, so the shader / gradient
     // body is the more faithful representation here.
     if let Some(shader) = node.shader.as_ref() {
-        let uniforms: Vec<(&str, &[f32])> = shader
-            .uniforms
-            .iter()
-            .map(|u| (u.name.as_str(), u.values.as_slice()))
-            .collect();
-        cx.backend.fill_round_rect_shader(
-            world_rect,
-            if use_round { r } else { 0.0 },
-            &shader.sksl,
-            &uniforms,
-            shader.opacity,
-            shader.fallback,
-        );
+        paint_shader_rect(cx, shader, world_rect, if use_round { r } else { 0.0 });
     } else if let Some(gradient) = node.gradient.as_ref() {
         paint_gradient_rect(cx, gradient, world_rect, if use_round { r } else { 0.0 });
     } else if let Some(fill) = fill {
@@ -262,10 +251,6 @@ pub(crate) fn paint_gradient_rect(
             colors,
             opacity,
         } => {
-            // Real Gouraud interpolation on backends that override the
-            // Painter method (the native Skia host); the trait default
-            // degrades to the first vertex colour elsewhere (CanvasKit
-            // web — documented parity gap, same as jian's own painters).
             cx.backend.fill_round_rect_mesh_gradient(
                 rect,
                 corner_radius,
@@ -276,6 +261,31 @@ pub(crate) fn paint_gradient_rect(
             );
         }
     }
+}
+
+/// Dispatch a [`SceneShader`] onto the `RenderBackend` shader method.
+/// Uniforms are flattened into `(name, values)` slices because the
+/// backend trait stays free of scene-specific types. Only the native
+/// host runs the program; every other backend paints `fallback` solid.
+pub(crate) fn paint_shader_rect(
+    cx: &mut PaintCx<'_>,
+    shader: &SceneShader,
+    rect: Rect,
+    corner_radius: f32,
+) {
+    let uniforms: Vec<(&str, &[f32])> = shader
+        .uniforms
+        .iter()
+        .map(|u| (u.name.as_str(), u.values.as_slice()))
+        .collect();
+    cx.backend.fill_round_rect_shader(
+        rect,
+        corner_radius,
+        &shader.sksl,
+        &uniforms,
+        shader.opacity,
+        shader.fallback,
+    );
 }
 
 /// Greedy line-wrap for canvas text nodes with explicit width.

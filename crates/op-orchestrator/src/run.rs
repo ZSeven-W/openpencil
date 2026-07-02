@@ -1,43 +1,27 @@
 //! `Orchestrator::run()` —— 四阶段编排主轴(spec §4)。
 //!
-//! 规划 → 画布搭建 → 顺序子 agent(或并发 screen-group) → 清理。
+//! 规划 → 画布搭建 → 顺序子 agent → 清理。
 //! 副作用全经 [`DocSink`] / [`LlmClient`]。
 //! 错误 / abort / 零内容语义见 spec §6。
 //!
-//! ## S3b-2 Task C2: concurrent path
-//! After planning, `effective_concurrency` decides whether to take the
-//! concurrent multi-screen path (N-root scaffold + `run_concurrent`) or
-//! the existing sequential single-screen path.  The sequential path is
-//! completely unchanged.
-//!
-//! ## S3b-3 Task C3: dashboard column layout
-//! In the sequential path, after planning, `should_use_dashboard_columns`
-//! decides whether to use the dashboard scaffold (sidebar + main columns)
-//! or the existing single-root vertical scaffold.  The concurrent path is
-//! NEVER given the dashboard treatment — it is sequential-only (spec §2).
-//! The dashboard path implementation lives in `run_dashboard.rs` (split to
-//! keep this file under the 800-line ceiling).
+//! 单一顺序路径:多屏(原并发 screen-group)与 dashboard(原 sidebar+main
+//! 专用 scaffold)都收敛进这条路径 —— 它们的 per-subtask 产出与确定性后处理
+//! 完全一致,仅差并发并行度 / scaffold 形状(默认 + 基准路径都没用上)。
+//! `concurrency` 字段仍由独立的 `spawn_agents` 扇出(`spawn_concurrent.rs`)消费。
 
 use crate::append::apply_append_context_to_plan;
-use crate::cleanup::{
-    aggregate_concurrent_verdict, cleanup_concurrent_roots, descendant_count, run_cleanup_passes,
-};
-use crate::concurrent::{effective_concurrency, group_subtasks_by_screen, run_concurrent};
-use crate::dashboard_columns::should_use_dashboard_columns;
+use crate::cleanup::{descendant_count, finalize_design};
 use crate::model_profile::{resolve_model_profile, ModelTier};
 use crate::plan::{build_fallback_plan, OrchestratorPlan};
 use crate::plan_normalize::{normalize, NormInfo};
 use crate::plan_repair::parse_orchestrator_response;
 use crate::prompt::build_orchestrator_prompt;
-use crate::retry::{attempt_modes, is_non_retryable};
-use crate::run_dashboard::run_dashboard_path;
-use crate::scaffold::{
-    build_scaffold_at, build_scaffold_concurrent_mobile, build_scaffold_reusing,
-};
+use crate::retry::is_non_retryable;
+use crate::scaffold::{build_scaffold_at, build_scaffold_reusing};
 use crate::subagent::{apply_command_with_reveal, reveal_now_millis, run_subtask_with_reveal_at};
 use crate::types::{
-    AbortFlag, DesignRequest, DocSink, LlmChunk, LlmClient, OrchestratorError, Progress,
-    RunSummary, SubtaskOutcome, ValidationProviders,
+    AbortFlag, DesignRequest, DocSink, LlmChunk, LlmClient, OrchestratorError, PlanningMode,
+    Progress, RunSummary, SubtaskOutcome, ValidationProviders,
 };
 use crate::validation::run_post_generation_validation;
 use crate::variables::{rollback, seed_commands, snapshot_plan_vars};
@@ -62,28 +46,24 @@ fn detect_reusable_empty_frame(state: &EditorState) -> Option<String> {
     }
 }
 
-/// Remove the fresh-canvas starter frame (a single empty top-level
-/// container) so a path that builds its OWN root(s) doesn't leave it
-/// orphaned beside the design. The sequential path REUSES it instead
-/// (see [`detect_reusable_empty_frame`] + `build_scaffold_reusing`); the
-/// concurrent (N roots) + dashboard (bespoke sidebar+main root) paths
-/// can't reuse a single starter, so they clear it here. This mirrors the
-/// host's former `clear_fresh_starter_frame_for_design` — now owned
-/// orchestrator-side so the host can leave the starter in place for the
-/// reuse path. No-op on a headless / empty canvas (op-smoke), where
-/// there is no starter to detect.
-fn clear_reusable_empty_frame(sink: &mut dyn DocSink) {
-    if let Some(id) = detect_reusable_empty_frame(sink.state()) {
-        sink.apply(EditorCommand::DeleteNode {
-            node_id: NodeId::new(id),
-            page_id: None,
-        });
-    }
-}
-
 const FOLLOW_ON_ROOT_GAP: f64 = 80.0;
 const DEFAULT_ROOT_X: f64 = 80.0;
 const DEFAULT_ROOT_Y: f64 = 40.0;
+
+/// Find the id of a direct child of `parent_id` whose name matches `name`.
+/// Used to re-resolve the pre-built two-column scaffold's column ids after the
+/// `InsertSubtree` remap (the template ids no longer hold).
+fn find_child_id_by_name(state: &EditorState, parent_id: &str, name: &str) -> Option<String> {
+    let parent = op_editor_core::walkers::find_node(
+        state.active_children(),
+        &op_editor_core::NodeId::new(parent_id.to_string()),
+    )?;
+    parent
+        .children()?
+        .iter()
+        .find(|c| c.base().name.as_deref() == Some(name))
+        .map(|c| c.id_str().to_string())
+}
 
 fn next_root_insert_position(state: &EditorState, planned_width: f64) -> (f64, f64) {
     let mut rightmost: Option<f64> = None;
@@ -129,10 +109,7 @@ impl Orchestrator {
 
     /// 跑一次完整编排。见 spec §4 数据流。
     ///
-    /// ## S3b-2 分支决策
-    /// 规划完成后检查 `effective_concurrency`:
-    /// - `> 1` → 并发多屏路径(N-root scaffold + `run_concurrent`)。
-    /// - `<= 1` → 原有顺序路径,完全不变。
+    /// 规划 → 单根 scaffold → 顺序子 agent → 清理 的单一路径。
     pub async fn run(
         &self,
         request: DesignRequest,
@@ -142,7 +119,7 @@ impl Orchestrator {
         abort: &AbortFlag,
         providers: &ValidationProviders<'_>,
     ) -> Result<RunSummary, OrchestratorError> {
-        // -- 阶段 1:规划(含 mode-rotation 重试循环 + 规范化, S3b-1b Task C2)--
+        // -- 阶段 1:规划(单档 Rich + 规范化)--
         // `planning_loop` 内部已 normalize 并回传 `NormInfo`,此处不再二次规范化。
         on_progress(Progress::Planning);
         let (mut plan, norm) = planning_loop(&request, llm, abort).await?;
@@ -164,42 +141,14 @@ impl Orchestrator {
                 .collect(),
         });
 
-        // -- S3b-2 Task C2: concurrency branch decision --
-        // Port of `orchestrator.ts:780-810`.
-        let screen_groups = group_subtasks_by_screen(&plan.subtasks);
-
-        // -- S3b-4 Task B2 call site 3: effective concurrency gate (TS :806-810) --
-        // Append mode is forced sequential — the concurrent branch creates multiple
-        // root frames which conflicts with reusing an existing content-root.
-        let effective = if append_result.skip_root_insertion {
-            1
-        } else {
-            effective_concurrency(request.concurrency, screen_groups.len())
-        };
-
-        if effective > 1 {
-            // Concurrent builds N screen roots — can't reuse the single
-            // fresh-canvas starter, so clear it (host no longer does).
-            clear_reusable_empty_frame(sink);
-            return run_concurrent_path(
-                request,
-                plan,
-                norm,
-                &screen_groups,
-                sink,
-                llm,
-                on_progress,
-                abort,
-                providers,
-                self.agent_indicator_epoch,
-            )
-            .await;
-        }
-
+        // The orchestrator runs a single sequential path. Multi-screen designs
+        // (formerly the concurrent branch) and dashboards (formerly a bespoke
+        // sidebar+main scaffold) flow through this same single-root sequential
+        // pipeline — they produced byte-identical per-subtask output, only
+        // differing in wall-clock parallelism / scaffold shape, neither of which
+        // the default + benchmarked path used. The `concurrency` field is still
+        // honored by the separate `spawn_agents` fan-out (`spawn_concurrent.rs`).
         let planned_root_id = plan.root_frame.id.clone();
-
-        // -- S3b-3 Task C3: dashboard branch decision --
-        let use_dashboard = should_use_dashboard_columns(&request.prompt, &plan);
 
         // -- 进入"已动文档"区,全程 undo batch 包裹 --
         sink.begin_undo_batch();
@@ -209,46 +158,12 @@ impl Orchestrator {
         for cmd in seed_commands(&plan, &var_snapshot) {
             sink.apply(cmd);
         }
-        // The dashboard path builds a bespoke sidebar+main root that can't
-        // reuse the fresh-canvas starter; clear it BEFORE indexing so the
-        // dashboard root lands at index 0 (not orphaned beside the starter).
-        // The sequential path below keeps the starter and REUSES it via
-        // ReplaceSubtree, so it must NOT be cleared here.
-        if !append_result.skip_root_insertion && use_dashboard {
-            clear_reusable_empty_frame(sink);
-        }
-        let scaffold_root_index = sink.state().active_children().len();
         let scaffold_root_ids_before: Vec<String> = sink
             .state()
             .active_children()
             .iter()
             .map(|n| n.id_str().to_string())
             .collect();
-
-        // -- S3b-4 Task B2: dashboard / append mutex (spec §2) --
-        // Both concurrent and dashboard paths create new root structures that
-        // conflict with reusing an existing content-root.  The concurrency gate
-        // above already enforces the concurrent/append mutex; here we enforce
-        // the dashboard/append mutex by preferring the append fast-path when
-        // both would otherwise fire.  Mirrors TS positional precedence — the
-        // append fast-path lives inside the sequential else block, before the
-        // dashboard sub-branch.
-        if !append_result.skip_root_insertion && use_dashboard {
-            // ── Dashboard path (extracted to run_dashboard.rs) ────────────
-            return run_dashboard_path(
-                plan,
-                request,
-                scaffold_root_index,
-                sink,
-                llm,
-                &var_snapshot,
-                on_progress,
-                abort,
-                providers,
-                self.agent_indicator_epoch,
-            )
-            .await;
-        }
 
         let sequential_identity = if append_result.skip_root_insertion {
             None
@@ -314,8 +229,38 @@ impl Orchestrator {
                     "scaffold root `{planned_root_id}` was not inserted"
                 )));
             };
+            // Route subtasks into the scaffold. For a pre-built two-column
+            // dashboard shell, the sidebar subtask fills the (260-wide) left
+            // column and every other subtask fills the content column; the
+            // column ids were remapped on insert, so re-resolve them by name.
+            // Any other plan keeps the single-root behaviour (all → root).
+            let two_col = crate::scaffold::plan_is_sidebar_dashboard(&plan, effective_is_mobile)
+                .then(|| {
+                    let sb = find_child_id_by_name(
+                        sink.state(),
+                        &rid,
+                        crate::scaffold::SIDEBAR_COLUMN_NAME,
+                    );
+                    let ct = find_child_id_by_name(
+                        sink.state(),
+                        &rid,
+                        crate::scaffold::CONTENT_COLUMN_NAME,
+                    );
+                    sb.zip(ct)
+                })
+                .flatten();
             for subtask in &mut plan.subtasks {
-                subtask.parent_frame_id = Some(rid.clone());
+                let parent = match &two_col {
+                    Some((sidebar_id, content_id)) => {
+                        if crate::dashboard_columns::is_sidebar_subtask(subtask) {
+                            sidebar_id.clone()
+                        } else {
+                            content_id.clone()
+                        }
+                    }
+                    None => rid.clone(),
+                };
+                subtask.parent_frame_id = Some(parent);
             }
             if let (Some(epoch), Some(identity)) =
                 (self.agent_indicator_epoch, sequential_identity.as_ref())
@@ -352,7 +297,10 @@ impl Orchestrator {
         let mut outcomes: Vec<SubtaskOutcome> = Vec::new();
         let mut aborted_mid = false;
         let mut zero_node_failure = false;
-        for subtask in &plan.subtasks {
+        // (subtask index, outcomes index) of every all-attempts-failed subtask,
+        // for the end-of-run salvage pass below.
+        let mut salvage: Vec<(usize, usize)> = Vec::new();
+        for (subtask_index, subtask) in plan.subtasks.iter().enumerate() {
             if abort.is_set() {
                 aborted_mid = true;
                 break;
@@ -503,6 +451,7 @@ impl Orchestrator {
                     error: err_msg.unwrap_or_default(),
                 });
                 zero_node_failure = true;
+                salvage.push((subtask_index, outcomes.len() - 1));
                 continue;
             }
             on_progress(Progress::SubtaskDone {
@@ -511,7 +460,89 @@ impl Orchestrator {
             });
         }
 
-        // -- 阶段 4:清理 --
+        // -- 阶段 4.4:失败抢救轮 --
+        // 瞬时故障(供应商网络抖动、偶发空回复)会把一个 subtask 的 3 次
+        // 紧挨着的尝试全部烧掉(measured:Ark 连续 3 次 "empty content from
+        // provider" → 侧栏子任务整段消失,设计**无侧栏出厂**且无可见信号)。
+        // 其余 subtask 跑完后隔了几十秒再给每个失败者最后一次完整尝试 ——
+        // 瞬时故障此时多已恢复;仍失败的维持 SubtaskFailed,不再重试。
+        if !salvage.is_empty() && !abort.is_set() {
+            for (subtask_index, outcome_index) in salvage {
+                if abort.is_set() {
+                    aborted_mid = true;
+                    break;
+                }
+                let subtask = &plan.subtasks[subtask_index];
+                on_progress(Progress::SubtaskRetry {
+                    id: subtask.id.clone(),
+                    attempt: 4,
+                    reason: "salvage pass after transient failures".into(),
+                });
+                let outcome = run_subtask_with_reveal_at(
+                    subtask,
+                    &plan,
+                    &request,
+                    llm,
+                    sink,
+                    abort,
+                    false,
+                    false,
+                    self.agent_indicator_epoch,
+                    reveal_now_millis(),
+                    None,
+                )
+                .await;
+                if outcome.node_count > 0 {
+                    on_progress(Progress::SubtaskDone {
+                        id: subtask.id.clone(),
+                        node_count: outcome.node_count,
+                    });
+                    outcomes[outcome_index] = outcome;
+                } else {
+                    on_progress(Progress::SubtaskFailed {
+                        id: subtask.id.clone(),
+                        error: outcome
+                            .error
+                            .unwrap_or_else(|| "salvage attempt still empty".into()),
+                    });
+                }
+            }
+            zero_node_failure = outcomes.iter().any(|o| o.node_count == 0);
+        }
+
+        // -- 阶段 4.5:收尾判定(spec §6.3 三路径)--
+        // Compute zero-content BEFORE cleanup. `finalize_design`'s structural
+        // passes swap the root via `ReplaceSubtree`, which allocates a FRESH root
+        // id; a post-cleanup `descendant_count(&root_id)` would then look up the
+        // now-STALE id, read 0, and declare a false "no content" — which rolls
+        // back the theme variables of a perfectly good design and returns
+        // `NoContent`. Cleanup only RESTRUCTURES (never adds content), so the
+        // pre-cleanup count is the correct "did the subtasks produce content"
+        // signal. See `reshaped_dashboard_root_is_not_a_false_no_content`.
+        let zero_content = descendant_count(sink.state(), &root_id) <= scaffold_baseline;
+        if zero_content {
+            // 错误路径才移除空 scaffold root;abort / 正常零内容只回滚变量。
+            if zero_node_failure {
+                sink.apply(EditorCommand::DeleteNode {
+                    node_id: NodeId::new(root_id.clone()),
+                    page_id: None,
+                });
+            }
+            rollback(sink, &var_snapshot);
+            sink.end_undo_batch();
+            return Err(if aborted_mid {
+                OrchestratorError::Aborted
+            } else if let Some(first_error) = outcomes
+                .iter()
+                .find_map(|o| o.error.as_deref().filter(|s| !s.is_empty()))
+            {
+                OrchestratorError::AllFailed(first_error.to_string())
+            } else {
+                OrchestratorError::NoContent
+            });
+        }
+
+        // -- 阶段 4:清理 --（有内容才跑；空 root 无可清理）
         // Append mode (skip_root_insertion): scope cleanup to ONLY the roots
         // this run inserted (post-remap ids from each outcome) so pre-existing
         // nodes under the target frame are never restyled (Component 11b).
@@ -526,39 +557,12 @@ impl Orchestrator {
                 .iter()
                 .flat_map(|o| o.inserted_root_ids.iter().map(String::as_str))
                 .collect();
-            run_cleanup_passes(sink, &plan, &new_roots);
+            finalize_design(sink, &plan, &new_roots);
         } else {
-            run_cleanup_passes(sink, &plan, &[&root_id]);
+            finalize_design(sink, &plan, &[&root_id]);
         }
         on_progress(Progress::CleanupDone);
-
-        // -- 阶段 4.5:收尾(spec §6.3 三路径)--
-        let zero_content = descendant_count(sink.state(), &root_id) <= scaffold_baseline;
-        if zero_content {
-            // 错误路径才移除空 scaffold root;abort / 正常零内容只回滚变量。
-            if zero_node_failure {
-                sink.apply(EditorCommand::DeleteNode {
-                    node_id: NodeId::new(root_id.clone()),
-                    page_id: None,
-                });
-            }
-            rollback(sink, &var_snapshot);
-        }
         sink.end_undo_batch();
-
-        // -- 返回 --
-        if zero_content {
-            return Err(if aborted_mid {
-                OrchestratorError::Aborted
-            } else if let Some(first_error) = outcomes
-                .iter()
-                .find_map(|o| o.error.as_deref().filter(|s| !s.is_empty()))
-            {
-                OrchestratorError::AllFailed(first_error.to_string())
-            } else {
-                OrchestratorError::NoContent
-            });
-        }
 
         // -- 阶段 5:视觉校验 (S3c D1) — 在 cleanup 后、返回 RunSummary 前 --
         // Port of `orchestrator.ts:1247-1292`.
@@ -585,196 +589,16 @@ impl Orchestrator {
     }
 }
 
-// ── S3b-2 Task C2: concurrent multi-screen path ───────────────────────────────
-
-/// 并发多屏路径(S3b-2 Task C2)。
+/// 规划阶段: 单档(Rich)规划 + fallback。
 ///
-/// Port of `orchestrator.ts:856-1158` concurrent branch.
-/// 只在 `effective_concurrency > 1` 时调用;顺序路径不碰此函数。
-#[allow(clippy::too_many_arguments)]
-async fn run_concurrent_path(
-    request: DesignRequest,
-    mut plan: OrchestratorPlan,
-    norm: NormInfo,
-    screen_groups: &[crate::concurrent::ScreenGroup],
-    sink: &mut dyn DocSink,
-    llm: &dyn LlmClient,
-    on_progress: &mut dyn FnMut(Progress),
-    abort: &AbortFlag,
-    providers: &ValidationProviders<'_>,
-    host_epoch: Option<u64>,
-) -> Result<RunSummary, OrchestratorError> {
-    // -- 进入"已动文档"区 --
-    sink.begin_undo_batch();
-    let var_snapshot = snapshot_plan_vars(sink, &plan);
-
-    // -- 阶段 2 (并发):变量播种 + N-root scaffold --
-    for cmd in seed_commands(&plan, &var_snapshot) {
-        sink.apply(cmd);
-    }
-
-    // Build N scaffold roots (one per screen group).
-    let (scaffold_cmds, _original_root_ids, baselines) =
-        match build_scaffold_concurrent_mobile(&plan, screen_groups, norm.is_mobile) {
-            Ok(r) => r,
-            Err(e) => {
-                rollback(sink, &var_snapshot);
-                sink.end_undo_batch();
-                return Err(OrchestratorError::Internal(e));
-            }
-        };
-
-    // Record page-child count before inserting N roots.
-    let roots_start_index = sink.state().active_children().len();
-
-    for cmd in &scaffold_cmds {
-        if !apply_command_with_reveal(sink, cmd.clone(), host_epoch, reveal_now_millis()) {
-            rollback(sink, &var_snapshot);
-            sink.end_undo_batch();
-            return Err(OrchestratorError::Internal(
-                "concurrent scaffold insert rejected by document".into(),
-            ));
-        }
-    }
-
-    // Resolve the actual (remapped) root IDs from the live document.
-    // Each InsertSubtree appended one child to the active page — capture them
-    // in insertion order.
-    let actual_root_ids: Vec<String> = sink
-        .state()
-        .active_children()
-        .iter()
-        .skip(roots_start_index)
-        .take(screen_groups.len())
-        .map(|n| n.id_str().to_string())
-        .collect();
-
-    if actual_root_ids.len() != screen_groups.len() {
-        rollback(sink, &var_snapshot);
-        sink.end_undo_batch();
-        return Err(OrchestratorError::Internal(format!(
-            "expected {} concurrent scaffold roots, got {}",
-            screen_groups.len(),
-            actual_root_ids.len()
-        )));
-    }
-
-    // Assign parent_frame_id for each group's subtasks.
-    for (g, group) in screen_groups.iter().enumerate() {
-        let root_id = &actual_root_ids[g];
-        for &idx in &group.indices {
-            if let Some(subtask) = plan.subtasks.get_mut(idx) {
-                subtask.parent_frame_id = Some(root_id.clone());
-            }
-        }
-    }
-
-    // Tag each group's root frame with a distinct agent identity so the
-    // canvas can paint a per-agent breathing border while the team works.
-    let identities = crate::agent_identity::assign_agent_identities(actual_root_ids.len());
-    // Adopt the host-minted epoch when present — the host already called
-    // `begin` (bumping the epoch + clearing the prior run) at turn start so
-    // it can clear immediately on stop. Headless / test callers pass `None`
-    // and we mint our own. Either way the guard below clears on every exit
-    // path (finish / error / cancelled worker), but only while this run is
-    // still the active epoch — a newer run keeps its own indicators.
-    let epoch = host_epoch.unwrap_or_else(op_editor_core::agent_indicators::begin);
-    for (root_id, identity) in actual_root_ids.iter().zip(identities.iter()) {
-        op_editor_core::agent_indicators::add_frame(
-            epoch,
-            root_id,
-            &identity.color,
-            &identity.name,
-        );
-    }
-    // Graceful drain on drop: the run's queued reveals keep playing at
-    // the queue cadence and the overlay clears itself once the last one
-    // lands. A user STOP still kills instantly — the host calls
-    // `end_if_epoch` / `clear_if_epoch` directly on that path.
-    struct IndicatorGuard(u64);
-    impl Drop for IndicatorGuard {
-        fn drop(&mut self) {
-            op_editor_core::agent_indicators::finish_if_epoch(self.0);
-        }
-    }
-    let _indicator_guard = IndicatorGuard(epoch);
-
-    on_progress(Progress::ScaffoldDone);
-
-    // -- 阶段 3 (并发):run_concurrent --
-    // Take a snapshot of current state for worker BufferDocSinks.
-    let state_snapshot = sink.state().clone();
-    let all_outcomes = run_concurrent(
-        screen_groups,
-        &plan,
-        &request,
-        llm,
-        abort,
-        state_snapshot,
-        sink,
-        on_progress,
-        host_epoch,
-    )
-    .await;
-
-    // Collect non-None outcomes (workers that ran at least one subtask).
-    let collected: Vec<crate::types::SubtaskOutcome> =
-        all_outcomes.iter().filter_map(|o| o.clone()).collect();
-
-    // -- 阶段 4 (并发):清理 --
-    let root_id_strs: Vec<&str> = actual_root_ids.iter().map(|s| s.as_str()).collect();
-    run_cleanup_passes(sink, &plan, &root_id_strs);
-    on_progress(Progress::CleanupDone);
-
-    sink.end_undo_batch();
-
-    // -- Run-all-aggregate failure policy (Task C1) --
-    // Check AFTER cleanup so the cleanup pass still runs on partial results.
-    if let Err(e) = aggregate_concurrent_verdict(&collected) {
-        // All workers failed → clean up N roots + roll back variables.
-        sink.begin_undo_batch();
-        cleanup_concurrent_roots(sink, &root_id_strs, &baselines, &var_snapshot);
-        sink.end_undo_batch();
-        return Err(e);
-    }
-
-    // -- Abort check --
-    if abort.is_set() && collected.iter().map(|o| o.node_count).sum::<usize>() == 0 {
-        return Err(OrchestratorError::Aborted);
-    }
-
-    // -- 阶段 5 (并发):视觉校验 (S3c D1) --
-    // Port of `orchestrator.ts:1247-1292`.
-    // 守卫: request.validation_enabled && !abort.is_set().
-    if request.validation_enabled && !abort.is_set() {
-        let _ = run_post_generation_validation(
-            sink,
-            providers.pre_validator,
-            providers.screenshot,
-            providers.vision,
-            &providers.system_prompt,
-            &request,
-            on_progress,
-            abort,
-        );
-    }
-
-    // -- Success: build RunSummary --
-    // Use the first surviving root as the "primary" root_frame_id.
-    let primary_root_id = actual_root_ids.first().cloned().unwrap_or_default();
-    let total_nodes = collected.iter().map(|o| o.node_count).sum();
-    Ok(RunSummary {
-        root_frame_id: primary_root_id,
-        subtasks: collected,
-        total_nodes,
-    })
-}
-
-/// 规划阶段: mode-rotation 重试循环。
-///
-/// Port of `callOrchestrator` planning stage in `orchestrator.ts:1323-1503`.
-/// 解析 tier → `attempt_modes` → 遍历每个 mode,调用 LLM + parse,首次
-/// 成功即回填 style_guide_name + normalize 后返回。全部失败 → fallback plan。
+/// Port of `callOrchestrator` planning stage in `orchestrator.ts:1323-1503`,
+/// simplified to a SINGLE planning mode (`Rich` — the full prompt). The former
+/// tier-driven mode-rotation ladder (Rich→Minimal→Compact) was machinery around
+/// the deterministic core, not part of it: one LLM call builds the plan, and any
+/// failure (stream error / unparseable) falls straight through to the
+/// heuristic `build_fallback_plan`. The per-subtask retry ladder (the actual
+/// weak-model quality lever) and `build_orchestrator_prompt`'s prompt
+/// construction are untouched.
 ///
 /// 返回 `(plan, NormInfo)` —— `planning_loop` 是唯一的规范化点,
 /// `NormInfo` 透传给 `build_scaffold`,调用方不再二次 `normalize`。
@@ -783,112 +607,44 @@ async fn planning_loop(
     llm: &dyn LlmClient,
     abort: &AbortFlag,
 ) -> Result<(OrchestratorPlan, NormInfo), OrchestratorError> {
-    let tier =
-        crate::model_profile::resolve_model_profile(request.model.as_deref().unwrap_or("")).tier;
-    let modes = attempt_modes(tier);
-    let last_idx = modes.len() - 1;
+    let pp = build_orchestrator_prompt(request, PlanningMode::Rich, abort.clone());
+    let forced_style_guide_name = pp.forced_style_guide_name.clone();
 
-    /// 规划失败的诊断记录 —— 仅用于 `tracing::warn!`,不影响控制流。
-    struct PlanningFailure {
-        reason: &'static str,
-        mode: &'static str,
-        detail: String,
-    }
-
-    let mut last_planning_failure: Option<PlanningFailure> = None;
-
-    for (attempt_idx, &mode) in modes.iter().enumerate() {
-        let pp = build_orchestrator_prompt(request, mode, abort.clone());
-
-        let collect_result = collect_text(llm.call(pp.call_request)).await;
-
-        let raw = match collect_result {
-            Ok(text) => text,
-            Err(true) => {
-                // abort 在流中发生 → 立即返回,不轮换
+    match collect_text(llm.call(pp.call_request)).await {
+        Ok(raw) => {
+            // abort 在流结束后被置位(两次检查对齐 TS)
+            if abort.is_set() {
                 return Err(OrchestratorError::Aborted);
             }
-            Err(false) => {
-                // 真实流错误 → 记录,继续下一档
-                let mode_name = mode_name(mode);
-                tracing::warn!(
-                    mode = mode_name,
-                    attempt = attempt_idx + 1,
-                    "planning stream error; rotating to next mode"
-                );
-                last_planning_failure = Some(PlanningFailure {
-                    reason: "stream_error",
-                    mode: mode_name,
-                    detail: String::new(),
-                });
-                if attempt_idx < last_idx {
-                    continue;
-                } else {
-                    break;
-                }
-            }
-        };
-
-        // abort 在流结束后被置位(两次检查对齐 TS)
-        if abort.is_set() {
-            return Err(OrchestratorError::Aborted);
-        }
-
-        match parse_orchestrator_response(&raw, request) {
-            Some((mut plan, _repaired)) => {
-                // compact 模式回填 forced_style_guide_name(若 plan 未携带)
+            if let Some((mut plan, _repaired)) = parse_orchestrator_response(&raw, request) {
+                // 回填 forced_style_guide_name(若 plan 未携带)
                 if plan.style_guide_name.is_none() {
-                    if let Some(forced) = pp.forced_style_guide_name {
+                    if let Some(forced) = forced_style_guide_name {
                         plan.style_guide_name = Some(forced);
                     }
                 }
                 let norm = normalize(&mut plan, request);
                 return Ok((plan, norm));
             }
-            None => {
-                let mode_name = mode_name(mode);
-                let preview = raw.trim().chars().take(150).collect::<String>();
-                tracing::warn!(
-                    mode = mode_name,
-                    attempt = attempt_idx + 1,
-                    preview = %preview,
-                    "planning parse failure; rotating to next mode"
-                );
-                last_planning_failure = Some(PlanningFailure {
-                    reason: "parse_error",
-                    mode: mode_name,
-                    detail: preview,
-                });
-                if attempt_idx < last_idx {
-                    continue;
-                }
-                // 最后一档 fall-through
-            }
+            let preview = raw.trim().chars().take(150).collect::<String>();
+            tracing::warn!(
+                preview = %preview,
+                "planning parse failure; using fallback plan"
+            );
+        }
+        Err(true) => {
+            // abort 在流中发生 → 立即返回
+            return Err(OrchestratorError::Aborted);
+        }
+        Err(false) => {
+            tracing::warn!("planning stream error; using fallback plan");
         }
     }
 
-    // 所有档次耗尽 → fallback plan(规划不可出错)
-    if let Some(f) = &last_planning_failure {
-        tracing::warn!(
-            reason = f.reason,
-            mode = f.mode,
-            detail = %f.detail,
-            "planning exhausted all modes; using fallback plan"
-        );
-    }
+    // 规划失败 → fallback plan(规划不可出错)
     let mut fallback = build_fallback_plan(request);
     let norm = normalize(&mut fallback, request);
     Ok((fallback, norm))
-}
-
-/// 返回 `PlanningMode` 的静态字符串名(用于日志)。
-fn mode_name(mode: crate::types::PlanningMode) -> &'static str {
-    use crate::types::PlanningMode;
-    match mode {
-        PlanningMode::Rich => "rich",
-        PlanningMode::Minimal => "minimal",
-        PlanningMode::Compact => "compact",
-    }
 }
 
 /// 消费一次 LLM 调用的流 —— 拼接所有 `Text` chunk,丢弃 `Thinking`。
@@ -910,16 +666,6 @@ async fn collect_text(
 #[cfg(test)]
 #[path = "run_tests.rs"]
 mod tests;
-
-// Task C2 tests are in a sibling file to keep run.rs under the 800-line cap.
-#[cfg(test)]
-#[path = "run_tests_c2.rs"]
-mod tests_c2;
-
-// Task C3 tests — dashboard column wiring.
-#[cfg(test)]
-#[path = "run_tests_c3.rs"]
-mod tests_c3;
 
 // Task B2 (S3b-4) tests — append-to-document mode wiring.
 #[cfg(test)]
