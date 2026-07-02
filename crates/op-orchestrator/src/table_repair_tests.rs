@@ -323,3 +323,48 @@ fn nav_rows_do_not_get_table_gap() {
         "a nav container is not a table — left untouched"
     );
 }
+
+#[test]
+fn gap_reaches_rows_behind_an_unnamed_wrapper() {
+    // test07021.op's verbatim shape: "Client List Table" holds a toolbar row
+    // and an UNNAMED vertical wrapper that holds the actual gap-less rows —
+    // the gap must reach through the wrapper.
+    let mut root: PenNode = serde_json::from_value(json!({
+        "type":"frame","id":"tbl","name":"Client List Table","layout":"vertical","children":[
+            {"type":"frame","id":"toolbar","layout":"horizontal","gap":12,"children":[
+                {"type":"text_input","id":"search"},{"type":"frame","id":"filter"}
+            ]},
+            {"type":"frame","id":"wrap","layout":"vertical","children":[
+                {"type":"frame","id":"hdr","layout":"horizontal","children":[
+                    {"type":"frame","id":"h1"},{"type":"frame","id":"h2"},{"type":"frame","id":"h3"}
+                ]},
+                {"type":"frame","id":"r1","layout":"horizontal","children":[
+                    {"type":"frame","id":"c1"},{"type":"frame","id":"c2"},{"type":"frame","id":"c3"}
+                ]}
+            ]}
+        ]
+    }))
+    .expect("valid PenNode");
+    assert!(
+        ensure_table_column_gap(&mut root),
+        "wrapped gap-less rows must be repaired"
+    );
+    let v = serde_json::to_value(&root).unwrap();
+    let wrap = &v["children"][1];
+    for row in wrap["children"].as_array().unwrap() {
+        assert!(
+            row.get("gap")
+                .and_then(serde_json::Value::as_f64)
+                .unwrap_or(0.0)
+                > 0.0,
+            "row behind the wrapper got a gap: {row}"
+        );
+    }
+    // The 2-item toolbar row must stay untouched.
+    assert!(
+        v["children"][0]
+            .get("gap")
+            .and_then(serde_json::Value::as_f64)
+            == Some(12.0)
+    );
+}

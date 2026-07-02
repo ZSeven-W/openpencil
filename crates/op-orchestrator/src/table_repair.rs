@@ -472,11 +472,20 @@ fn ensure_gap_in_value(v: &mut Value) -> bool {
     if is_table_container(v) {
         if let Some(rows) = v.get_mut("children").and_then(Value::as_array_mut) {
             for row in rows.iter_mut() {
-                if layout_str(row) == Some("horizontal") && row_needs_gap(row) {
-                    if let Some(obj) = row.as_object_mut() {
-                        obj.insert("gap".into(), json!(TABLE_COLUMN_GAP));
-                        changed = true;
+                // Rows may sit one level deeper, under an UNNAMED structural
+                // wrapper (a model groups [toolbar row, rows-wrapper] inside the
+                // table frame — measured: a "Client List Table" whose gap-less
+                // rows all lived in such a wrapper and rendered columns
+                // touching). The table NAME gate stays on the outer node; an
+                // unnamed vertical wrapper inherits it.
+                if is_unnamed_vertical_wrapper(row) {
+                    if let Some(inner) = row.get_mut("children").and_then(Value::as_array_mut) {
+                        for r in inner.iter_mut() {
+                            changed |= give_row_gap(r);
+                        }
                     }
+                } else {
+                    changed |= give_row_gap(row);
                 }
             }
         }
@@ -487,6 +496,27 @@ fn ensure_gap_in_value(v: &mut Value) -> bool {
         }
     }
     changed
+}
+
+/// Insert the default column gap when `row` is a gap-less ≥3-column row.
+fn give_row_gap(row: &mut Value) -> bool {
+    if layout_str(row) == Some("horizontal") && row_needs_gap(row) {
+        if let Some(obj) = row.as_object_mut() {
+            obj.insert("gap".into(), json!(TABLE_COLUMN_GAP));
+            return true;
+        }
+    }
+    false
+}
+
+/// A nameless vertical frame — pure structure between a table-named container
+/// and its rows. A NAMED child (pagination, footer, toolbar) never qualifies.
+fn is_unnamed_vertical_wrapper(v: &Value) -> bool {
+    is_column_layout(v)
+        && v.get("name")
+            .and_then(Value::as_str)
+            .map(|n| n.trim().is_empty())
+            .unwrap_or(true)
 }
 
 /// A vertical container named like a table with ≥2 horizontal row children —
@@ -504,18 +534,33 @@ fn is_table_container(v: &Value) -> bool {
         .and_then(Value::as_array)
         .map(|kids| {
             kids.iter()
-                .filter(|r| {
-                    layout_str(r) == Some("horizontal")
-                        && r.get("children")
+                .map(|k| {
+                    // Count rows both directly AND through one unnamed
+                    // structural wrapper (same tolerance as the gap pass).
+                    if is_unnamed_vertical_wrapper(k) {
+                        k.get("children")
                             .and_then(Value::as_array)
-                            .map(|c| c.len())
+                            .map(|inner| inner.iter().filter(|r| is_row_like(r)).count())
                             .unwrap_or(0)
-                            >= 2
+                    } else {
+                        usize::from(is_row_like(k))
+                    }
                 })
-                .count()
+                .sum::<usize>()
                 >= 2
         })
         .unwrap_or(false)
+}
+
+/// A horizontal frame with ≥2 children — the row shape the container gate
+/// counts.
+fn is_row_like(r: &Value) -> bool {
+    layout_str(r) == Some("horizontal")
+        && r.get("children")
+            .and_then(Value::as_array)
+            .map(|c| c.len())
+            .unwrap_or(0)
+            >= 2
 }
 
 /// A ≥3-column row whose current gap is missing or effectively zero.
