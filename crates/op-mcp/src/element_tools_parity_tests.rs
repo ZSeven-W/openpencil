@@ -47,13 +47,10 @@ fn assert_exact_props(value: &Value, keys: &[&str]) {
 }
 
 fn ts_production_element_tool_names() -> Vec<String> {
-    // The TS `pen-mcp` package was retired; the element-tool-defs shards it
-    // owned are now vendored under `assets/element-tool-defs/` (see
-    // `element_ts_schema.rs`). This parity test reads that frozen copy.
     let routes_dir =
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("assets/element-tool-defs");
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../packages/pen-mcp/src/routes");
     let mut out = Vec::new();
-    for entry in std::fs::read_dir(&routes_dir).expect("read vendored element-tool-defs dir") {
+    for entry in std::fs::read_dir(&routes_dir).expect("read TS routes dir") {
         let path = entry.expect("route entry").path();
         let Some(file_name) = path.file_name().and_then(|name| name.to_str()) else {
             continue;

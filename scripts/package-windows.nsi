@@ -27,7 +27,7 @@
 ; workflow passes absolute /D defines):
 ;   makensis "/DVERSION=0.8.0" "/DARCH=x64" ^
 ;     "/DBIN_DIR=D:\w\target\x86_64-pc-windows-msvc\release" ^
-;     "/DICON_FILE=D:\w\crates\op-host-desktop\assets\icon.ico" ^
+;     "/DICON_FILE=D:\w\apps\desktop\build\icon.ico" ^
 ;     "/DOUT_FILE=D:\w\OpenPencil-0.8.0-x64-win-setup.exe" ^
 ;     scripts\package-windows.nsi
 ;
@@ -54,7 +54,7 @@ Unicode true
   !define BIN_DIR "..\target\release"
 !endif
 !ifndef ICON_FILE
-  !define ICON_FILE "..\crates\op-host-desktop\assets\icon.ico"
+  !define ICON_FILE "..\apps\desktop\build\icon.ico"
 !endif
 !ifndef OUT_FILE
   !define OUT_FILE "OpenPencil-${VERSION}-${ARCH}-win-setup.exe"

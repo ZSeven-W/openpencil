@@ -404,8 +404,7 @@ fn paint_tool_card(cx: &mut PaintCx<'_>, theme: &Theme, card: &ToolCallCard) {
         bg.a *= 0.08;
     }
     cx.backend.fill_round_rect(card.rect, CARD_RADIUS, bg);
-    cx.backend
-        .stroke_round_rect(card.rect, CARD_RADIUS, border, 1.0);
+    cx.backend.stroke_round_rect(card.rect, CARD_RADIUS, border, 1.0);
 
     // Label: left-aligned, muted-bright color, vertically centered.
     let text_color = if card.level == ToolLevel::Delete {
@@ -546,14 +545,7 @@ fn paint_status_icon(cx: &mut PaintCx<'_>, theme: &Theme, card: &ToolCallCard) {
             success_color,
             1.0,
         );
-        draw_icon(
-            cx.backend,
-            Icon::Check,
-            icon_top_left,
-            14.0,
-            success_color,
-            1.5,
-        );
+        draw_icon(cx.backend, Icon::Check, icon_top_left, 14.0, success_color, 1.5);
     }
 }
 
@@ -717,4 +709,5 @@ mod tests {
             1.0
         }
     }
+
 }

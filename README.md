@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./crates/op-host-desktop/assets/icon.png" alt="OpenPencil" width="120" />
+  <img src="./apps/desktop/build/icon.png" alt="OpenPencil" width="120" />
 </p>
 
 <h1 align="center">OpenPencil</h1>
@@ -172,17 +172,20 @@ git submodule update --init --recursive
 ## Quick Start (Development)
 
 ```bash
-# Web dev server (builds the CanvasKit wasm bundle, then runs the headless web host)
-bash scripts/start-web-rust.sh
+# Install dependencies
+bun install
+
+# Start dev server at http://localhost:3000
+bun --bun run dev
 ```
 
 Or run as a desktop app:
 
 ```bash
-cargo run -p op-host-desktop
+bun run electron:dev
 ```
 
-> **Prerequisites:** [Rust](https://www.rust-lang.org/) (stable) to build the product. [Bun](https://bun.sh/) >= 1.0 and [Node.js](https://nodejs.org/) >= 18 are only needed for the web SDK under `packages/`.
+> **Prerequisites:** [Bun](https://bun.sh/) >= 1.0 and [Node.js](https://nodejs.org/) >= 18. Optional: [Zig](https://ziglang.org/) >= 0.14 for building `agent-native` from source (a prebuilt binary will be downloaded automatically if Zig is not installed).
 
 ### Docker
 
@@ -292,7 +295,7 @@ op import:figma design.fig   # Import Figma file
 cat design.dsl | op design - # Pipe from stdin
 ```
 
-Supports three input methods: inline string, `@filepath` (read from file), or `-` (read from stdin). Works with desktop app or web dev server. See [CLI README](./crates/op-cli) for full command reference.
+Supports three input methods: inline string, `@filepath` (read from file), or `-` (read from stdin). Works with desktop app or web dev server. See [CLI README](./apps/cli/README.md) for full command reference.
 
 **LLM Skill** — install the [OpenPencil Skill](https://github.com/ZSeven-W/openpencil-skill) plugin to teach AI agents (Claude Code, Cursor, Codex, Gemini CLI, etc.) how to design with `op`.
 
@@ -322,7 +325,7 @@ Supports three input methods: inline string, `@filepath` (read from file), or `-
 - Layered workflow — `design_skeleton` → `design_content` → `design_refine` with focused prompts per phase
 - Style Guides — 50+ built-in styles (glassmorphism, brutalist, retro, etc.) with tag-based fuzzy matching, wired into planning and generation
 - Multi-model capability profiles — auto-adapts thinking mode, effort, and prompt shape per model tier
-- Built-in Rust agent runtime + Anthropic, Claude Agent SDK, OpenCode, Codex, Copilot, Gemini providers
+- Built-in agent runtime (`agent-native`, Zig NAPI) + Anthropic, Claude Agent SDK, OpenCode, Codex, Copilot, Gemini providers
 - Anthropic-format passthrough for Chinese LLM providers — Kimi, Zhipu, GLM, DouBao, Ark, Bailian/DashScope, ModelScope, Coding Plans
 
 **Git Integration**
@@ -363,7 +366,7 @@ Supports three input methods: inline string, `@filepath` (read from file), or `-
 | **Server**      | Nitro                                                                                   |
 | **Desktop**     | Electron 35                                                                             |
 | **CLI**         | `op` — terminal control, batch design DSL                                               |
-| **AI**          | Built-in Rust runtime · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
+| **AI**          | agent-native (Zig NAPI) · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
 | **Runtime**     | Bun · Vite 7                                                                            |
 | **Lint**        | oxlint · oxfmt                                                                          |
 | **File format** | `.op` — JSON-based, human-readable, Git-friendly                                        |
@@ -379,7 +382,7 @@ OpenPencil is being rewritten from the ground up in **Rust** ([#129](https://git
 | **Web payload**       | JS + WASM bundle                               | **8.2 MB** wasm / **2.18 MB** gzip over the wire                    |
 | **Rendering**         | CanvasKit/Skia on web                          | One GPU-accelerated Skia backend on **every** target                |
 | **Memory**            | JavaScript GC pauses                           | No GC — Rust ownership, predictable latency                         |
-| **Codebase**          | Web stack + Electron                           | One Rust workspace: editor · CLI · MCP · AI · codegen · Figma · Git  |
+| **Codebase**          | Web stack + Electron + Zig NAPI agent          | One Rust workspace: editor · CLI · MCP · AI · codegen · Figma · Git  |
 | **Targets**           | Web + desktop, two separate stacks             | Desktop (macOS/Win/Linux) · mobile (iOS/Android) · browser — one core |
 
 **Measured improvements**
@@ -431,7 +434,8 @@ openpencil/
 │   ├── pen-renderer/        Standalone CanvasKit/Skia renderer
 │   ├── pen-mcp/             MCP server — tools, routes, document manager
 │   ├── pen-sdk/             Umbrella SDK (re-exports all packages)
-│   └── pen-ai-skills/       AI prompt skill engine (phase-driven prompt loading)
+│   ├── pen-ai-skills/       AI prompt skill engine (phase-driven prompt loading)
+│   └── agent-native/        Native AI agent runtime (Zig NAPI, multi-provider, teams)
 └── .githooks/               Pre-commit version sync from branch name
 ```
 
@@ -456,20 +460,18 @@ openpencil/
 ## Scripts
 
 ```bash
-# Product (Rust — run from the repo root)
-cargo build --workspace              # Build all crates (add --release for prod)
-cargo test --workspace               # Run all tests
-cargo check --workspace              # Type check
-cargo clippy --workspace --all-targets -- -D warnings   # Lint
-cargo fmt --all                      # Format
-bash scripts/start-web-rust.sh       # Web dev server (wasm bundle + headless host)
-cargo run -p op-host-desktop         # Desktop app (binary: openpencil-desktop)
-cargo run -p op-cli -- <args>        # CLI (binary: op)
-
-# Web SDK / JS tooling (run from packages/)
-cd packages && bun run lint          # Lint the web SDK (oxlint); also: bun run format
-cd packages && bun run generate-iconify-catalog   # Regenerate the Rust icon catalog assets
-cd packages && bun run bump <version>             # Sync SDK package.json versions
+bun --bun run dev          # Dev server (port 3000)
+bun --bun run build        # Production build
+bun --bun run test         # Run tests (Vitest)
+npx tsc --noEmit           # Type check
+bun run lint               # Lint (oxlint)
+bun run format             # Format (oxfmt)
+bun run bump <version>     # Sync version across all package.json
+bun run electron:dev       # Electron dev
+bun run electron:build     # Electron package
+bun run cli:dev            # Run CLI from source
+bun run cli:compile        # Compile CLI to dist
+bun run mcp:dev            # Run MCP server from source
 ```
 
 ### Rust subsystem (Step 0+)
@@ -482,11 +484,11 @@ rustup toolchain install 1.94
 rustup target add wasm32-unknown-unknown
 
 # build / test / lint
-cargo check --workspace
-cargo test --workspace
-cargo clippy --workspace --all-targets -- -D warnings
-cargo check --target wasm32-unknown-unknown -p op-host-web --no-default-features --features web  # kickoff §1.2 wasm32 invariant
-cargo deny check && cargo deny --target wasm32-unknown-unknown check bans        # cargo-deny (native + wasm32 bans; CI uses cargo-deny-action@v2)
+bun run cargo:check
+bun run cargo:test
+bun run cargo:clippy
+bun run cargo:wasm-check  # kickoff §1.2 wasm32 invariant
+bun run cargo:deny        # cargo-deny (native + wasm32 bans; CI uses cargo-deny-action@v2)
 ```
 
 **Entry crates (`crates/` — build targets):**
@@ -511,7 +513,7 @@ Contributions are welcome! See [CLAUDE.md](./CLAUDE.md) for architecture details
 1. Fork and clone
 2. Set up version sync: `git config core.hooksPath .githooks`
 3. Create a branch: `git checkout -b feat/my-feature`
-4. Run checks: `cargo test --workspace && cargo clippy --workspace --all-targets -- -D warnings`
+4. Run checks: `npx tsc --noEmit && bun --bun run test`
 5. Commit with [Conventional Commits](https://www.conventionalcommits.org/): `feat(canvas): add rotation snapping`
 6. Open a PR against `main`
 
@@ -532,7 +534,7 @@ Contributions are welcome! See [CLAUDE.md](./CLAUDE.md) for architecture details
 - [x] Headless design engine (`pen-engine`) + React UI SDK (`pen-react`)
 - [x] Style Guides with tag-based matching and MCP tools
 - [x] Concurrent Agent Teams with delegate tool and canvas indicators
-- [x] Built-in Rust agent runtime
+- [x] Native agent runtime (`agent-native` — Zig NAPI)
 - [x] Git integration — clone, branch, push/pull, folder-mode three-way merge
 - [x] Canvas raster export (PNG / JPEG / WEBP / PDF)
 - [x] Rust shell — Step 1a (G1 shared Skia context) on `v0.8.0`: `SharedSkiaContext` + `NativeBackend` (Jian-`DrawOp`-backed) + shell-core re-exports `jian_core::gesture::*` (events stay consistent with Jian — no OP-side translation layer per v19.4) + `basic_window` demo, with the multi-platform CI matrix green (macOS aarch64 + x86_64, Linux x86_64 + aarch64 cross, Windows x86_64 + aarch64 cross, iOS aarch64 + sim, Android aarch64 + x86_64, wasm32). Spec `v19.5` FROZEN; `vendor/jian` pinned at `c4a794dc`. OP visual model (single-page + infinite canvas canonical / multi-page also supported / no routing / Figma import auto-converts) and OP chrome (toolbars / panels — Rust-only) deferred to Step 1c+.
@@ -558,7 +560,7 @@ Thanks to **[MrQyun](https://github.com/mrqyun)** — want your name here too? *
 ## Community
 
 <a href="https://discord.gg/h9Fmyy6pVh">
-  <img src="./screenshot/logo-discord.svg" alt="Discord" width="16" />
+  <img src="./apps/web/public/logo-discord.svg" alt="Discord" width="16" />
   <strong> Join our Discord</strong>
 </a>
 — Ask questions, share designs, suggest features.

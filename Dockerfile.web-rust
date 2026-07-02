@@ -2,11 +2,11 @@
 #
 # Dockerfile.web-rust — container for the RUST web host (C1).
 #
-# Serves the Rust CanvasKit web editor: the `op-host-web-server` daemon running
+# Serves the Rust CanvasKit web editor: the `openpencil-desktop` daemon running
 # in `--serve-web` mode, hosting the wasm-bindgen bundle + the vendored
 # CanvasKit artifact out of a `web-bundle/` directory placed next to the binary.
-# This is the sole web container now that the TypeScript/Nitro web app (and its
-# root `Dockerfile`) have been retired.
+# This is the Rust analog of the root `Dockerfile` (which ships the retired
+# TS/Nitro web app via `bun run ./out/web/server/index.mjs`).
 #
 # Build (self-contained, builds the wasm bundle in-image — the default):
 #   docker build -f Dockerfile.web-rust -t openpencil-web-rust .

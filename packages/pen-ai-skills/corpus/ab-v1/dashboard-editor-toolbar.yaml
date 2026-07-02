@@ -1,0 +1,23 @@
+id: dashboard-editor-toolbar
+category: dashboard
+difficulty: obvious
+prompt: |
+  Design ONLY a desktop rich-text editor toolbar — a horizontal row of
+  five 36×36 icon-button tiles inside a fit_content white pill (8px
+  corner radius, 1px slate-200 border, 4/6px padding):
+    1. lucide "bold" — currently ACTIVE (slate-100 bg, slate-900 icon)
+    2. lucide "italic" (no fill, slate-600 icon)
+    3. lucide "underline" (no fill, slate-600 icon) — followed by a
+       1×20px slate-200 vertical divider that separates formatting
+       from list controls
+    4. lucide "list" (no fill, slate-600 icon)
+    5. lucide "list-ordered" (no fill, slate-600 icon)
+  Do NOT render the editor body, the surrounding page, or any other
+  panels — just the toolbar pill itself.
+expected:
+  must_contain_roles:
+    - toolbar
+    - toolbar-item
+    - toolbar-item-active
+    - toolbar-divider
+expected_tool_if_any: add_toolbar_v0

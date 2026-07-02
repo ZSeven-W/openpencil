@@ -255,7 +255,7 @@ jobs:
             "/DVERSION=$env:OP_VERSION" `
             "/DARCH=${{ matrix.arch }}" `
             "/DBIN_DIR=$env:GITHUB_WORKSPACE\target\${{ matrix.target }}\release" `
-            "/DICON_FILE=$env:GITHUB_WORKSPACE\crates\op-host-desktop\assets\icon.ico" `
+            "/DICON_FILE=$env:GITHUB_WORKSPACE\apps\desktop\build\icon.ico" `
             "/DOUT_FILE=$env:GITHUB_WORKSPACE\OpenPencil-$env:OP_VERSION-${{ matrix.arch }}-win-setup.exe" `
             scripts\package-windows.nsi
       # Authenticode signing scaffolding (NO-OP until WINDOWS_CERT_BASE64
@@ -297,7 +297,7 @@ jobs:
           bash scripts/package-deb.sh \
             --desktop-bin "target/${{ matrix.target }}/release/openpencil-desktop" \
             --cli-bin "target/${{ matrix.target }}/release/op" \
-            --icon crates/op-host-desktop/assets/icon.png \
+            --icon apps/desktop/build/icon.png \
             --version "$OP_VERSION" \
             --arch "$DEB_ARCH" \
             --out-dir .
@@ -320,7 +320,7 @@ jobs:
           bash scripts/package-appimage.sh \
             --desktop-bin "target/${{ matrix.target }}/release/openpencil-desktop" \
             --cli-bin "target/${{ matrix.target }}/release/op" \
-            --icon crates/op-host-desktop/assets/icon.png \
+            --icon apps/desktop/build/icon.png \
             --version "$OP_VERSION" \
             --arch "$AI_ARCH" \
             --tool /tmp/appimagetool \

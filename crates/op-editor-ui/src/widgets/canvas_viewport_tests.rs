@@ -368,8 +368,7 @@ fn selection_overlay_waits_for_future_reveal_nodes() {
     let mut viewport = CanvasViewport::from_editor(&state, &scene);
 
     let mut pending_backend = RecordingBackend::default();
-    // 900 < reveal-250: before the sparkle cursor's entry window, so no cursor strokes either.
-    viewport.now_ms = 900;
+    viewport.now_ms = 1_000;
     {
         let mut cx = PaintCx {
             backend: &mut pending_backend,

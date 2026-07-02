@@ -1,0 +1,34 @@
+id: mobile-onboarding-flow-composite
+category: mobile
+difficulty: composite
+prompt: |
+  Design a phone "How it works" screen for a fintech onboarding
+  flow. The screen is 375px wide. Contents top-to-bottom:
+    - a 28/700 page heading "Get started in minutes"
+    - a 14/400 muted subtitle "Three steps to a smarter wallet."
+    - 4 step cards stacked vertically with 16px gap and 24px
+      horizontal page margin. Each card has a 36px circle marker on
+      the left and a vertical text stack (title + description) on
+      the right. Use these:
+        - marker "1" (numbered ring), title "Create your account",
+          description "Use your email and a strong password to
+          sign up. No credit card required."
+        - marker "2" (numbered ring), title "Connect your bank",
+          description "Link your account in seconds. We use 256-bit
+          encryption to keep your data safe."
+        - marker "3" (numbered ring), title "Set your goals",
+          description "Tell us what you want to save for — we'll
+          do the rest."
+        - marker check (filled circle), title "You're all set",
+          description "You're ready to use the app. Tap below to
+          continue."
+  Do NOT render a top status bar, bottom CTA button, tab bar, or
+  progress dots — only the heading, subtitle, and the 4 step cards.
+expected:
+  must_contain_roles:
+    - step-card
+    - step-card-number
+    - step-card-title
+    - step-card-description
+  min_roles:
+    step-card: 4

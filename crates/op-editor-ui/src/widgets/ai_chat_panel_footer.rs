@@ -1,16 +1,13 @@
 //! Footer toolbar geometry and paint for the AI chat panel.
 //!
 //! Computes the bottom single-row toolbar rects:
-//!   model pill (LEFT) | [gap] | ⚡ parallel-agents chip | attach | palette | send (RIGHT)
+//!   model pill (LEFT) | [gap] | ⚡ parallel-agents chip | attach | palette | stop | send (RIGHT)
 //!
-//! As of #38 the ⚡/📎/🎨 cluster moved from the LEFT (between model and gap) to
-//! the RIGHT. As of #42 the cluster sits snug against the single send/stop
-//! circle (no reserved stop gap). The model pill remains at PAD.
+//! As of #38 the ⚡/📎/🎨 cluster has moved from the LEFT (between model and gap) to
+//! the RIGHT (immediately left of the stop/send circles). The model pill remains at PAD.
 //!
-//! The `stop` rect shares the `send` slot — the circle toggles send↑ ↔ stop◻
-//! in place. The caller paints stop while streaming and send otherwise; the
-//! hit-test checks `streaming && stop` before `send` so the same rect routes
-//! to the right action.
+//! The `stop` rect is always computed for paint/hit sync; the caller
+//! decides whether to paint/test it based on `is_streaming()`.
 //!
 //! The ⚡ chip is the "PARALLEL AGENTS" chip (#32): shows `"{N}x"` in gold
 //! where N = `ChatState::agent_team_size` (1–6). Clicking it opens a small
@@ -73,8 +70,8 @@ impl<'a> AIChatPlaceholder<'a> {
         // Agent-team chip — zero-width logical rect for schema compat; contains() = false.
         let agent_team = Rect::xywh(model_x + FOOTER_MODEL_PILL_W, cy - 11.0, 0.0, 22.0);
 
-        // Right cluster (#38/#42 layout) — ⚡ chip | 📎 attach | 🎨 palette | send,
-        // laid out right-to-left from right_edge (stop shares the send slot).
+        // Right cluster (#38 layout) — ⚡ palette 📎 attach 🎨 palette | stop | send,
+        // laid out right-to-left from right_edge.
         let right_edge = rect.origin.x + rect.size.x - PAD;
 
         // Send circle — rightmost.
@@ -85,28 +82,22 @@ impl<'a> AIChatPlaceholder<'a> {
             FOOTER_CIRCLE_D,
         );
 
-        // Stop circle — shares the send slot. The send arrow toggles to a
-        // stop square in place while streaming, so the icon cluster sits snug
-        // against the single circle with no reserved gap between 🎨 and send (#42).
-        let stop = send;
-
-        // Palette icon — immediately left of the send/stop circle.
-        let palette_x = send.origin.x - FOOTER_GAP - FOOTER_ICON_W;
-        let palette = Rect::xywh(
-            palette_x,
-            cy - FOOTER_ICON_W / 2.0,
-            FOOTER_ICON_W,
-            FOOTER_ICON_W,
+        // Stop circle — immediately left of send.
+        let stop = Rect::xywh(
+            right_edge - FOOTER_CIRCLE_D - FOOTER_GAP - FOOTER_CIRCLE_D,
+            cy - FOOTER_CIRCLE_D / 2.0,
+            FOOTER_CIRCLE_D,
+            FOOTER_CIRCLE_D,
         );
+
+        // Palette icon — immediately left of stop.
+        let palette_x = stop.origin.x - FOOTER_GAP - FOOTER_ICON_W;
+        let palette =
+            Rect::xywh(palette_x, cy - FOOTER_ICON_W / 2.0, FOOTER_ICON_W, FOOTER_ICON_W);
 
         // Attach icon — immediately left of palette.
         let attach_x = palette_x - FOOTER_GAP - FOOTER_ICON_W;
-        let attach = Rect::xywh(
-            attach_x,
-            cy - FOOTER_ICON_W / 2.0,
-            FOOTER_ICON_W,
-            FOOTER_ICON_W,
-        );
+        let attach = Rect::xywh(attach_x, cy - FOOTER_ICON_W / 2.0, FOOTER_ICON_W, FOOTER_ICON_W);
 
         // Parallel-agents chip (⚡ + "Nx") — immediately left of attach.
         let speed_x = attach_x - FOOTER_GAP - FOOTER_SPEED_W;
@@ -200,7 +191,8 @@ pub(crate) fn paint_parallel_agents_picker(
     let picker = parallel_agents_picker_rect(footer);
 
     // Card background + border.
-    cx.backend.fill_round_rect(picker, 8.0, theme.card);
+    cx.backend
+        .fill_round_rect(picker, 8.0, theme.card);
     cx.backend
         .stroke_round_rect(picker, 8.0, (theme.border).with_alpha(0.8), 1.0);
 
@@ -221,19 +213,13 @@ pub(crate) fn paint_parallel_agents_picker(
     let rows_top = picker.origin.y + 32.0;
     for i in 1..=PARALLEL_AGENTS_COUNT {
         let row_y = rows_top + (i - 1) as f32 * PARALLEL_AGENTS_ROW_H;
-        let row = Rect::xywh(
-            picker.origin.x + 4.0,
-            row_y,
-            picker.size.x - 8.0,
-            PARALLEL_AGENTS_ROW_H,
-        );
+        let row = Rect::xywh(picker.origin.x + 4.0, row_y, picker.size.x - 8.0, PARALLEL_AGENTS_ROW_H);
 
         // Hover / selected highlight.
         let is_selected = i == selected;
         let is_hovered = hover == Some(i);
         if is_selected {
-            cx.backend
-                .fill_round_rect(row, 5.0, (theme.primary).with_alpha(0.18));
+            cx.backend.fill_round_rect(row, 5.0, (theme.primary).with_alpha(0.18));
         } else if is_hovered {
             cx.backend
                 .fill_round_rect(row, 5.0, (theme.muted).with_alpha(0.25));
@@ -276,7 +262,7 @@ pub(crate) fn paint_parallel_agents_picker(
 
 /// Paint the bottom-toolbar row of the AI chat panel (#27 / #32 layout).
 ///
-/// Draws: model pill | [gap] | ⚡ parallel-agents chip | 📎 attach | 🎨 palette | ↑ send (◻ stop while streaming)
+/// Draws: model pill | ⚡ parallel-agents chip | 📎 attach | 🎨 palette | [gap] | ◻ stop | ↑ send
 ///
 /// The ⚡ chip shows "{N}x" in gold (N = `agent_team_size`) and opens the
 /// Parallel Agents picker on click.
@@ -300,12 +286,8 @@ pub(crate) fn paint_bottom_toolbar(
     // --- Model picker pill (left anchor) ---
     cx.backend
         .fill_round_rect(footer.model, 8.0, (widget.theme.muted).with_alpha(0.3));
-    cx.backend.stroke_round_rect(
-        footer.model,
-        8.0,
-        (widget.theme.border).with_alpha(0.75),
-        1.0,
-    );
+    cx.backend
+        .stroke_round_rect(footer.model, 8.0, (widget.theme.border).with_alpha(0.75), 1.0);
     if widget.footer_hover == Some(ChatFooterButton::ModelPicker)
         || widget.footer_pressed == Some(ChatFooterButton::ModelPicker)
     {
@@ -356,7 +338,8 @@ pub(crate) fn paint_bottom_toolbar(
         .map(|m| m.display_name.as_str())
         .unwrap_or(widget.label_no_models.as_str());
     // Reserve space for the chevron-down on the right of the pill.
-    let label_w = (footer.model.origin.x + footer.model.size.x - 18.0 - model_label_x).max(0.0);
+    let label_w =
+        (footer.model.origin.x + footer.model.size.x - 18.0 - model_label_x).max(0.0);
     let model_name_fit = fit_footer_label(model_name, 11.0, label_w);
     let model_label = TextLayout::single_run(
         &model_name_fit,
@@ -505,50 +488,49 @@ pub(crate) fn paint_bottom_toolbar(
         );
     }
 
-    // --- Send circle — shown only when NOT streaming; while a turn streams the
-    //     stop circle above occupies the same slot (toggle in place, #42). ---
-    if !streaming {
-        let send_rect = footer.send;
-        let send_pressed = widget.footer_pressed == Some(ChatFooterButton::Send);
-        let send_hovered = widget.footer_hover == Some(ChatFooterButton::Send);
-        let (send_bg, send_icon_color) = if send_active {
-            // shadcn-style primary feedback: rest 1.0 → hover 0.9 → press 0.8
-            // (the panel bg shows through the dimmed alpha as a subtle darken).
-            let alpha = if send_pressed {
-                0.8
-            } else if send_hovered {
-                0.9
-            } else {
-                1.0
-            };
-            (
-                (widget.theme.primary).with_alpha(alpha),
-                widget.theme.primary_foreground,
-            )
-        } else {
-            // Disabled state — faded.
-            (
-                (widget.theme.muted).with_alpha(0.25),
-                Color {
-                    a: 0.3,
-                    ..widget.theme.muted_foreground
-                },
-            )
-        };
-        cx.backend
-            .fill_round_rect(send_rect, FOOTER_CIRCLE_D / 2.0, send_bg);
-        // Up-arrow glyph at 12px, centered in the circle.
-        let send_glyph_size = 12.0;
-        draw_icon(
-            cx.backend,
-            Icon::ArrowUp,
-            Point2D::new(
-                send_rect.origin.x + (FOOTER_CIRCLE_D - send_glyph_size) / 2.0,
-                send_rect.origin.y + (FOOTER_CIRCLE_D - send_glyph_size) / 2.0,
-            ),
-            send_glyph_size,
-            send_icon_color,
-            1.6,
-        );
-    }
+    // --- Send circle (always shown) ---
+    let send_rect = footer.send;
+    let send_pressed = widget.footer_pressed == Some(ChatFooterButton::Send);
+    let send_hovered = widget.footer_hover == Some(ChatFooterButton::Send);
+    let (send_bg, send_icon_color) = if streaming {
+        // During streaming: send becomes a secondary indicator
+        // (stop handles cancellation); show it dimmed.
+        (
+            (widget.theme.primary).with_alpha(0.25),
+            Color {
+                a: 0.35,
+                ..widget.theme.primary_foreground
+            },
+        )
+    } else if send_active {
+        let alpha = if send_pressed { 0.9 } else if send_hovered { 1.0 } else { 1.0 };
+        (
+            (widget.theme.primary).with_alpha(alpha),
+            widget.theme.primary_foreground,
+        )
+    } else {
+        // Disabled state — faded.
+        (
+            (widget.theme.muted).with_alpha(0.25),
+            Color {
+                a: 0.3,
+                ..widget.theme.muted_foreground
+            },
+        )
+    };
+    cx.backend
+        .fill_round_rect(send_rect, FOOTER_CIRCLE_D / 2.0, send_bg);
+    // Up-arrow glyph at 12px, centered in the circle.
+    let send_glyph_size = 12.0;
+    draw_icon(
+        cx.backend,
+        Icon::ArrowUp,
+        Point2D::new(
+            send_rect.origin.x + (FOOTER_CIRCLE_D - send_glyph_size) / 2.0,
+            send_rect.origin.y + (FOOTER_CIRCLE_D - send_glyph_size) / 2.0,
+        ),
+        send_glyph_size,
+        send_icon_color,
+        1.6,
+    );
 }

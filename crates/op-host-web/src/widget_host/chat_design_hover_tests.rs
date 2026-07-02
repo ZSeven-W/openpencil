@@ -47,11 +47,8 @@ fn cursor_move_tracks_chat_footer_buttons() {
     host.last_viewport_w = viewport_w;
     host.last_viewport_h = viewport_h;
     let chat_rect = host.ai_chat_rect(viewport_w, viewport_h).unwrap();
-    // Footer right cluster (#38/#42): ⚡ speed | 📎 attach | 🎨 palette | ↑ send,
-    // laid out right-to-left. The attach icon centres at `size.x - 88` (the old
-    // `-68` now lands on the 🎨 palette icon that was added to the cluster).
     let attach = Point2D::new(
-        chat_rect.origin.x + chat_rect.size.x - 88.0,
+        chat_rect.origin.x + chat_rect.size.x - 68.0,
         chat_rect.origin.y + chat_rect.size.y - 19.0,
     );
     let send = Point2D::new(

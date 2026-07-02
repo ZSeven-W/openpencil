@@ -12,7 +12,11 @@ on:
       - 'tools/check-jian-boundaries.sh'
       - 'tools/check-web-server-headless.sh'
       - 'tools/check-widget-boundary.sh'
+      - 'tools/dump-diagnostics-golden.ts'
+      - 'packages/pen-ai-skills/**'
       - '.github/workflows/rust-check.yml'
+      # TS planner-prompt source — drives the parity drift guard.
+      - 'apps/web/src/services/ai/orchestrator-prompt-optimizer.ts'
   push:
     branches: ['**']
     paths:
@@ -26,7 +30,11 @@ on:
       - 'tools/check-jian-boundaries.sh'
       - 'tools/check-web-server-headless.sh'
       - 'tools/check-widget-boundary.sh'
+      - 'tools/dump-diagnostics-golden.ts'
+      - 'packages/pen-ai-skills/**'
       - '.github/workflows/rust-check.yml'
+      # TS planner-prompt source — drives the parity drift guard.
+      - 'apps/web/src/services/ai/orchestrator-prompt-optimizer.ts'
 
 jobs:
   check:
@@ -90,6 +98,36 @@ jobs:
         if: runner.os == 'Linux'
         run: bash tools/check-web-server-headless.sh
 
+      - name: Install Bun (retry on transient infra flake)
+        if: runner.os == 'Linux'
+        run: |
+          # `oven-sh/setup-bun@v2` intermittently fails the Bun download and
+          # reds the whole Rust Check job even though every Rust step passed.
+          # Install via the official script with a real retry loop instead.
+          # `pipefail` is REQUIRED: without it `curl | bash` returns bash's exit
+          # status, masking a curl download failure (the very flake we retry).
+          set -o pipefail
+          ok=0
+          for i in 1 2 3; do
+            if curl -fsSL https://bun.sh/install | bash; then ok=1; break; fi
+            echo "::warning::Bun install attempt $i failed; retrying in 5s"; sleep 5
+          done
+          if [ "$ok" -ne 1 ]; then
+            echo "::error::Bun install failed after 3 attempts"; exit 1
+          fi
+          echo "$HOME/.bun/bin" >> "$GITHUB_PATH"
+
+      - name: Install JS deps
+        if: runner.os == 'Linux'
+        run: bun install --frozen-lockfile
+
+      - name: Planner-prompt parity drift guard
+        if: runner.os == 'Linux'
+        run: |
+          bun run crates/op-orchestrator/tools/dump-planner-golden.ts
+          git diff --exit-code crates/op-orchestrator/tests/planner-golden/ \
+            || (echo "::error::planner golden drifted — rerun dump-planner-golden.ts" && exit 1)
+
   deny:
     name: cargo-deny (native)
     runs-on: ubuntu-latest
@@ -101,3 +139,27 @@ jobs:
       - uses: EmbarkStudios/cargo-deny-action@v2 # auto-updates within v2.x; runner cargo at this stage carries cargo-deny 0.18+ which handles modern transitive manifests (Phase 1 Task 1.8 finding)
         with:
           command: check
+
+  # S1 Plan C Task 6 — golden parity drift guard (spec §8, Risk R4).
+  # The TS `pen-ai-skills` diagnostics layer is the parity oracle for the
+  # Rust `op-design-lint` detectors. This job re-runs the golden-dump script
+  # against the live TS detectors and fails if the regenerated golden differs
+  # from the committed copy — catching a TS detector change that would
+  # silently stale the Rust parity baseline (`tests/parity.rs`).
+  diagnostics-golden-drift:
+    name: diagnostics golden drift
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: oven-sh/setup-bun@v2
+      - name: Install workspace dependencies
+        run: bun install --frozen-lockfile
+      - name: Regenerate diagnostics golden from the TS oracle
+        run: bun run tools/dump-diagnostics-golden.ts
+      - name: Fail on golden drift
+        # A non-empty diff means the committed golden no longer matches the
+        # TS detectors — regenerate locally (`bun run tools/dump-diagnostics-golden.ts`)
+        # and re-verify the Rust parity test before committing.
+        run: git diff --exit-code crates/op-design-lint/tests/fixtures/golden/

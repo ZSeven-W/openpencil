@@ -1,0 +1,38 @@
+{
+  "include": ["**/*.ts", "**/*.tsx"],
+  "compilerOptions": {
+    "target": "ES2022",
+    "jsx": "react-jsx",
+    "module": "ESNext",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["vite/client"],
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedSideEffectImports": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"],
+      "@zseven-w/pen-types": ["../../packages/pen-types/src/index.ts"],
+      "@zseven-w/pen-core": ["../../packages/pen-core/src/index.ts"],
+      "@zseven-w/pen-figma": ["../../packages/pen-figma/src/index.ts"],
+      "@zseven-w/pen-renderer": ["../../packages/pen-renderer/src/index.ts"],
+      "@zseven-w/pen-engine": ["../../packages/pen-engine/src/index.ts"],
+      "@zseven-w/pen-react": ["../../packages/pen-react/src/index.ts"],
+      "@zseven-w/pen-mcp": ["../../packages/pen-mcp/src/index.ts"],
+      "@zseven-w/pen-ai-skills": ["../../packages/pen-ai-skills/src/index.ts"],
+      "@zseven-w/pen-ai-skills/style-guide": [
+        "../../packages/pen-ai-skills/src/style-guide/index.ts"
+      ],
+      "@zseven-w/pen-ai-skills/_generated/style-guide-registry": [
+        "../../packages/pen-ai-skills/src/_generated/style-guide-registry.ts"
+      ]
+    }
+  }
+}

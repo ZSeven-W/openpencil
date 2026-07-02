@@ -1,0 +1,14 @@
+id: landing-product-ratings
+category: landing
+difficulty: obvious
+prompt: |
+  Design ONLY a row of 5 star icons representing a 4-out-of-5
+  rating — 4 filled stars and 1 empty star, inline horizontally.
+  No headline, no subtext, no review count label, no surrounding
+  card — just the 5 stars.
+expected:
+  must_contain_roles:
+    - rating-stars
+    - star-filled
+    - star-empty
+expected_tool_if_any: add_rating_stars_v0

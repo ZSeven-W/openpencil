@@ -134,7 +134,9 @@ pub(crate) fn build_sub_agent_prompt(spec: &SpawnSpec) -> String {
     prompt.push_str(&spec.prompt);
 
     if !spec.container_nodes.is_empty() {
-        prompt.push_str("\n\nScope: only build inside container node(s): ");
+        prompt.push_str(
+            "\n\nScope: only build inside container node(s): ",
+        );
         prompt.push_str(&spec.container_nodes.join(", "));
         prompt.push('.');
     }
@@ -314,11 +316,10 @@ pub(crate) fn pump_sub_agents(
             register_new_frames(ind, host.editor_state());
         }
 
-        // Advance when the active sub finished its turn. Natural finish:
-        // queued reveals drain gracefully before the overlay clears.
+        // Advance when the active sub finished its turn.
         if subs[*active].session.is_none() {
             if let Some(ind) = subs[*active].indicator.as_ref() {
-                agent_indicators::finish_if_epoch(ind.epoch);
+                agent_indicators::end_if_epoch(ind.epoch);
             }
             *active += 1;
             // Reflect one fewer running agent in the N/M header.

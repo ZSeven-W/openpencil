@@ -152,8 +152,7 @@ pub(crate) fn paint_examples(
         .enumerate()
     {
         // Base pill fill.
-        cx.backend
-            .fill_round_rect(*pill, EXAMPLE_PILL_RADIUS, pill_bg);
+        cx.backend.fill_round_rect(*pill, EXAMPLE_PILL_RADIUS, pill_bg);
 
         let hovered = !disabled && hover == Some(idx);
         let pressed = !disabled && pressed_index == Some(idx);
@@ -174,8 +173,7 @@ pub(crate) fn paint_examples(
         } else {
             pill_border
         };
-        cx.backend
-            .stroke_round_rect(*pill, EXAMPLE_PILL_RADIUS, border, 1.0);
+        cx.backend.stroke_round_rect(*pill, EXAMPLE_PILL_RADIUS, border, 1.0);
 
         // Single-line prompt label, left-padded, ellipsized if needed.
         let text_max_w = (pill.size.x - EXAMPLE_PILL_TEXT_PAD * 2.0).max(0.0);
@@ -198,9 +196,7 @@ pub(crate) fn paint_examples(
     // ── Two muted tip lines below the pills ─────────────────────────────────
     let pills = example_card_rects(rect);
     let last_pill_bottom = pills[3].origin.y + pills[3].size.y;
-    let tip_color = (theme.muted_foreground)
-        .with_alpha(0.55 * opacity)
-        .to_jian();
+    let tip_color = (theme.muted_foreground).with_alpha(0.55 * opacity).to_jian();
     let tip_font = 10.0;
 
     // Tip line 1 baseline: below the last pill by TIP_TOP_GAP, then baseline shift.
@@ -244,8 +240,10 @@ pub(crate) fn paint_examples(
     let clip_gap = 4.0;
     let total_w = tip2_w + clip_gap + clip_size;
     let tip2_x = rect.origin.x + (rect.size.x - total_w) / 2.0;
-    cx.backend
-        .draw_text(&tip2_layout, Point2D::new(tip2_x, tip2_y));
+    cx.backend.draw_text(
+        &tip2_layout,
+        Point2D::new(tip2_x, tip2_y),
+    );
     // Inline paperclip icon after the text.
     draw_icon(
         cx.backend,
@@ -358,8 +356,7 @@ mod tests {
             let expected_y = pills[i - 1].origin.y + EXAMPLE_CARD_HEIGHT + EXAMPLE_CARD_GAP;
             assert!(
                 (pills[i].origin.y - expected_y).abs() < 0.01,
-                "pill {} top should be prev_bottom + gap",
-                i
+                "pill {} top should be prev_bottom + gap", i
             );
         }
     }
@@ -374,10 +371,7 @@ mod tests {
             assert!(
                 bottom_i < pills[i + 1].origin.y,
                 "pill {} bottom ({}) must be above pill {} top ({})",
-                i,
-                bottom_i,
-                i + 1,
-                pills[i + 1].origin.y
+                i, bottom_i, i + 1, pills[i + 1].origin.y
             );
         }
     }
@@ -386,23 +380,11 @@ mod tests {
     #[test]
     fn paint_examples_paints_pill_shaped_rects() {
         let mut backend = CaptureBackend::default();
-        let mut cx = PaintCx {
-            backend: &mut backend,
-        };
+        let mut cx = PaintCx { backend: &mut backend };
         let rect = Rect::xywh(0.0, 0.0, 360.0, 600.0);
         let examples = make_examples();
 
-        paint_examples(
-            &mut cx,
-            &Theme::dark(),
-            rect,
-            "Try an example",
-            "tip",
-            &examples,
-            false,
-            None,
-            None,
-        );
+        paint_examples(&mut cx, &Theme::dark(), rect, "Try an example", "tip", &examples, false, None, None);
 
         // At least 4 round rects with large radius should be painted (one per pill).
         let pill_rects: Vec<_> = backend
@@ -421,31 +403,18 @@ mod tests {
     #[test]
     fn paint_examples_renders_prompt_labels() {
         let mut backend = CaptureBackend::default();
-        let mut cx = PaintCx {
-            backend: &mut backend,
-        };
+        let mut cx = PaintCx { backend: &mut backend };
         let rect = Rect::xywh(0.0, 0.0, 360.0, 600.0);
         let examples = make_examples();
 
-        paint_examples(
-            &mut cx,
-            &Theme::dark(),
-            rect,
-            "Try an example",
-            "tip",
-            &examples,
-            false,
-            None,
-            None,
-        );
+        paint_examples(&mut cx, &Theme::dark(), rect, "Try an example", "tip", &examples, false, None, None);
 
         // Each example title (or its ellipsized form) should appear in text runs.
         for ex in &examples {
             let first_word = ex.title.split_whitespace().next().unwrap_or("");
             assert!(
                 backend.text_runs.iter().any(|r| r.contains(first_word)),
-                "paint should render text containing '{}' for pill label",
-                first_word
+                "paint should render text containing '{}' for pill label", first_word
             );
         }
     }
@@ -455,8 +424,7 @@ mod tests {
     fn example_card_height_is_compact_40px() {
         assert!(
             (EXAMPLE_CARD_HEIGHT - 40.0).abs() < 0.01,
-            "pill height should be 40px (#37 compact), got {}",
-            EXAMPLE_CARD_HEIGHT
+            "pill height should be 40px (#37 compact), got {}", EXAMPLE_CARD_HEIGHT
         );
     }
 
@@ -465,8 +433,7 @@ mod tests {
     fn example_pill_radius_is_compact_14px() {
         assert!(
             (EXAMPLE_PILL_RADIUS - 14.0).abs() < 0.01,
-            "pill radius should be 14px (#37 compact), got {}",
-            EXAMPLE_PILL_RADIUS
+            "pill radius should be 14px (#37 compact), got {}", EXAMPLE_PILL_RADIUS
         );
     }
 

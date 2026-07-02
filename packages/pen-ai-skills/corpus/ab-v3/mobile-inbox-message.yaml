@@ -1,0 +1,27 @@
+id: mobile-inbox-message
+category: mobile
+difficulty: obvious
+prompt: |
+  Design ONLY a single inbox / email list row showing an unread message
+  from Stripe. Horizontal layout, fill_container width, fit_content
+  height, top-aligned, 10px gap, 12/16 padding. Children:
+    1. leading 8×8 blue-600 unread dot (cornerRadius=4)
+    2. fill_container vertical text stack (2px gap):
+       a. sender row — horizontal, space-between, 8px gap:
+          - bolder slate-900 14/700 from "Stripe" on the left
+          - muted slate-400 12/400 timestamp "10:42 AM" on the right
+       b. fill_container slate-900 14/600 subject "Your weekly summary"
+          (textGrowth fixed-width so long subjects wrap inside cell)
+       c. fill_container slate-600 13/400 preview "Total volume rose
+          8.4% week-over-week. View the breakdown inside." (textGrowth
+          fixed-width)
+  Do NOT render an avatar, other inbox rows, or the inbox chrome — just
+  this one message row.
+expected:
+  must_contain_roles:
+    - inbox-message
+    - inbox-message-from
+    - inbox-message-subject
+    - inbox-message-preview
+    - inbox-message-unread
+expected_tool_if_any: add_inbox_message_v0

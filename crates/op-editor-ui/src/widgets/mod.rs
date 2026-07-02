@@ -102,9 +102,7 @@ pub mod toolbar;
 
 // Step 3 — center canvas that renders document nodes as actual
 // visual primitives (frame fills, rect strokes, text strings).
-mod canvas_agent_cursor;
-#[cfg(test)]
-mod canvas_agent_cursor_tests;
+mod canvas_agent_overlay;
 mod canvas_frame_labels;
 mod canvas_path_overlay;
 mod canvas_selection_overlay;
@@ -117,8 +115,6 @@ mod canvas_viewport_grid;
 pub mod canvas_viewport_image;
 pub mod canvas_viewport_overlay;
 pub mod canvas_viewport_paint;
-#[cfg(test)]
-mod canvas_viewport_paint_pop_tests;
 mod canvas_viewport_text;
 mod canvas_viewport_widget;
 

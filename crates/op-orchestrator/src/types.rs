@@ -745,9 +745,12 @@ mod tests {
             id: "body".into(),
             nodes_so_far: 12,
         };
-        if let Progress::SubtaskNodes { id, nodes_so_far } = nodes {
-            assert_eq!(id, "body");
-            assert_eq!(nodes_so_far, 12);
+        match nodes {
+            Progress::SubtaskNodes { id, nodes_so_far } => {
+                assert_eq!(id, "body");
+                assert_eq!(nodes_so_far, 12);
+            }
+            _ => {}
         }
     }
 

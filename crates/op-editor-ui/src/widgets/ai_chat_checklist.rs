@@ -495,7 +495,6 @@ fn draw_label(cx: &mut PaintCx<'_>, text: &str, size: f32, color: Color, x: f32,
 }
 
 #[cfg(test)]
-#[allow(clippy::field_reassign_with_default)] // test fixtures build ChatState then set messages
 mod tests {
     use super::*;
     use op_editor_core::chat::{ChatMessage, ChatState};

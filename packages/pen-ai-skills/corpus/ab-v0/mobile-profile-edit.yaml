@@ -1,0 +1,13 @@
+id: mobile-profile-edit
+category: mobile
+difficulty: optional
+prompt: |
+  Design a mobile profile-edit screen (375×812). Include a top nav bar
+  ("Edit profile" + back), a large avatar with a camera-edit badge
+  overlay, form fields for Name, Email, and Bio (multi-line), and a
+  full-width "Save changes" button at the bottom.
+expected:
+  must_contain_roles:
+    - top-nav-bar
+    - avatar
+    - form-field

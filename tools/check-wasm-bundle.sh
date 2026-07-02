@@ -30,15 +30,7 @@ PKG_DIR="${CRATE_DIR}/pkg"
 WASM_RAW="${PKG_DIR}/op_host_web_bg.wasm"
 WASM_OPT="${PKG_DIR}/op_host_web_bg.opt.wasm"
 TARGET_WASM="target/wasm32-unknown-unknown/release/op_host_web.wasm"
-# The wasm feature flags rustc emits for wasm32-unknown-unknown that wasm-opt
-# must be told to accept. Kept as CANDIDATES because binaryen versions disagree
-# on their spelling: newer binaryen (dev machines, v117+) split bulk-memory into
-# `bulk-memory` (memory.init/data.drop) + `bulk-memory-opt` (memory.copy/fill),
-# while older binaryen (e.g. Ubuntu's apt `binaryen`) predates the split and its
-# single `--enable-bulk-memory` already covers memory.copy/fill. Passing an
-# unknown flag hard-fails wasm-opt ("Unknown option"), so we filter the list
-# down to only the flags the installed wasm-opt actually advertises in --help.
-WASM_OPT_CANDIDATE_FEATURES=(
+WASM_OPT_FEATURES=(
   --enable-bulk-memory
   --enable-bulk-memory-opt
   --enable-nontrapping-float-to-int
@@ -92,17 +84,6 @@ fi
 printf '  ✓ 0 env.* imports\n'
 
 step 5 5 "Verify gzip size ≤ ${LIMIT} bytes (spec §6 ceiling)"
-# Keep only the candidate feature flags this wasm-opt understands (see the
-# WASM_OPT_CANDIDATE_FEATURES note) so an older binaryen doesn't hard-fail on
-# `--enable-bulk-memory-opt`. `--enable-bulk-memory` alone still covers
-# memory.copy/fill on those versions.
-wasm_opt_help="$(wasm-opt --help 2>&1 || true)"
-WASM_OPT_FEATURES=()
-for flag in "${WASM_OPT_CANDIDATE_FEATURES[@]}"; do
-  if printf '%s\n' "${wasm_opt_help}" | grep -qF -- "${flag}"; then
-    WASM_OPT_FEATURES+=("${flag}")
-  fi
-done
 wasm-opt "${WASM_OPT_FEATURES[@]}" -Oz "${WASM_RAW}" -o "${WASM_OPT}" >/dev/null
 cp "${WASM_OPT}" "${WASM_RAW}"
 gz_bytes="$(gzip -c "${WASM_OPT}" | wc -c | tr -d ' ')"

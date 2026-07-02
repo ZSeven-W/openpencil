@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./crates/op-host-desktop/assets/icon.png" alt="OpenPencil" width="120" />
+  <img src="./apps/desktop/build/icon.png" alt="OpenPencil" width="120" />
 </p>
 
 <h1 align="center">OpenPencil</h1>
@@ -105,17 +105,20 @@
 ## Быстрый старт
 
 ```bash
-# Web dev server (builds the CanvasKit wasm bundle, then runs the headless web host)
-bash scripts/start-web-rust.sh
+# Установить зависимости
+bun install
+
+# Запустить сервер разработки на http://localhost:3000
+bun --bun run dev
 ```
 
 Или запустить как десктопное приложение:
 
 ```bash
-cargo run -p op-host-desktop
+bun run electron:dev
 ```
 
-> **Требования:** [Rust](https://www.rust-lang.org/) (stable) для сборки продукта. [Bun](https://bun.sh/) >= 1.0 и [Node.js](https://nodejs.org/) >= 18 нужны только для веб-SDK в `packages/`.
+> **Требования:** [Bun](https://bun.sh/) >= 1.0 и [Node.js](https://nodejs.org/) >= 18
 
 ### Docker
 
@@ -221,7 +224,7 @@ op import:figma design.fig   # Импортировать файл Figma
 cat design.dsl | op design - # Передача через stdin
 ```
 
-Поддерживает три метода ввода: строка, `@filepath` (чтение из файла) или `-` (чтение из stdin). Работает с десктопным приложением или веб-сервером разработки. Подробнее в [CLI README](./crates/op-cli).
+Поддерживает три метода ввода: строка, `@filepath` (чтение из файла) или `-` (чтение из stdin). Работает с десктопным приложением или веб-сервером разработки. Подробнее в [CLI README](./apps/cli/README.md).
 
 **LLM-навык** — установите плагин [OpenPencil Skill](https://github.com/ZSeven-W/openpencil-skill), чтобы научить ИИ-агентов (Claude Code, Cursor, Codex, Gemini CLI и др.) проектировать с помощью `op`.
 
@@ -251,7 +254,7 @@ cat design.dsl | op design - # Передача через stdin
 - Послойный рабочий процесс — `design_skeleton` → `design_content` → `design_refine` со сфокусированными промптами на каждой фазе
 - Руководства по стилю — 50+ встроенных стилей (glassmorphism, brutalist, retro и т. д.) с нечётким сопоставлением по тегам, интегрированным в планирование и генерацию
 - Профили возможностей мультимодели — автоматически подстраивает режим размышления, уровень усилий и форму промпта в зависимости от уровня модели
-- Встроенный рантайм агентов (Rust) + провайдеры Anthropic, Claude Agent SDK, OpenCode, Codex, Copilot, Gemini
+- Встроенный рантайм агентов (`agent-native`, Zig NAPI) + провайдеры Anthropic, Claude Agent SDK, OpenCode, Codex, Copilot, Gemini
 - Проброс формата Anthropic для китайских провайдеров LLM — Kimi, Zhipu, GLM, DouBao, Ark, Bailian/DashScope, ModelScope, Coding Plans
 
 **Интеграция с Git**
@@ -306,7 +309,7 @@ OpenPencil переписывается с нуля на **Rust** ([#129](https:
 | **Объём для веба**       | JS + WASM бандл                                | **8.2 MB** wasm / **2.18 MB** gzip по сети                                   |
 | **Рендеринг**            | CanvasKit/Skia на вебе                         | Единый GPU-ускоренный Skia бэкенд на **каждой** платформе                     |
 | **Память**               | Паузы JavaScript GC                            | Без GC — владение Rust, предсказуемая задержка                                |
-| **Кодовая база**         | Веб-стек + Electron           | Одно Rust-пространство: редактор · CLI · MCP · AI · кодген · Figma · Git     |
+| **Кодовая база**         | Веб-стек + Electron + Zig NAPI агент           | Одно Rust-пространство: редактор · CLI · MCP · AI · кодген · Figma · Git     |
 | **Платформы**            | Веб + десктоп, два раздельных стека            | Десктоп (macOS/Win/Linux) · мобильные (iOS/Android) · браузер — одно ядро    |
 
 **Измеренные улучшения**
@@ -379,20 +382,15 @@ openpencil/
 ## Скрипты
 
 ```bash
-# Product (Rust — run from the repo root)
-cargo build --workspace              # Build all crates (add --release for prod)
-cargo test --workspace               # Run all tests
-cargo check --workspace              # Type check
-cargo clippy --workspace --all-targets -- -D warnings   # Lint
-cargo fmt --all                      # Format
-bash scripts/start-web-rust.sh       # Web dev server (wasm bundle + headless host)
-cargo run -p op-host-desktop         # Desktop app (binary: openpencil-desktop)
-cargo run -p op-cli -- <args>        # CLI (binary: op)
-
-# Web SDK / JS tooling (run from packages/)
-cd packages && bun run lint          # Lint the web SDK (oxlint); also: bun run format
-cd packages && bun run generate-iconify-catalog   # Regenerate the Rust icon catalog assets
-cd packages && bun run bump <version>             # Sync SDK package.json versions
+bun --bun run dev          # Сервер разработки (порт 3000)
+bun --bun run build        # Сборка для продакшена
+bun --bun run test         # Запустить тесты (Vitest)
+npx tsc --noEmit           # Проверка типов
+bun run bump <version>     # Синхронизация версий во всех package.json
+bun run electron:dev       # Разработка Electron
+bun run electron:build     # Упаковка Electron
+bun run cli:dev            # Запуск CLI из исходников
+bun run cli:compile        # Компиляция CLI в dist
 ```
 
 ## Участие в разработке
@@ -402,7 +400,7 @@ cd packages && bun run bump <version>             # Sync SDK package.json versio
 1. Сделайте форк и клонируйте репозиторий
 2. Настройте синхронизацию версий: `git config core.hooksPath .githooks`
 3. Создайте ветку: `git checkout -b feat/my-feature`
-4. Запустите проверки: `cargo test --workspace && cargo clippy --workspace --all-targets -- -D warnings`
+4. Запустите проверки: `npx tsc --noEmit && bun --bun run test`
 5. Сделайте коммит в формате [Conventional Commits](https://www.conventionalcommits.org/): `feat(canvas): add rotation snapping`
 6. Откройте PR в ветку `main`
 
@@ -444,7 +442,7 @@ OpenPencil бесплатен и open source. Разработка финанс�
 ## Сообщество
 
 <a href="https://discord.gg/h9Fmyy6pVh">
-  <img src="./screenshot/logo-discord.svg" alt="Discord" width="16" />
+  <img src="./apps/web/public/logo-discord.svg" alt="Discord" width="16" />
   <strong> Присоединяйтесь к нашему Discord</strong>
 </a>
 — Задавайте вопросы, делитесь дизайнами, предлагайте функции.

@@ -15,14 +15,7 @@ pub struct DesignSession {
 
 impl Drop for DesignSession {
     fn drop(&mut self) {
-        if self.finished {
-            // Natural completion: let the queued reveals play out; the
-            // overlay clears itself once the last one lands.
-            op_editor_core::agent_indicators::finish_if_epoch(self.indicator_epoch);
-        } else {
-            // Aborted / discarded mid-run: tear the overlay down at once.
-            op_editor_core::agent_indicators::end_if_epoch(self.indicator_epoch);
-        }
+        op_editor_core::agent_indicators::end_if_epoch(self.indicator_epoch);
     }
 }
 

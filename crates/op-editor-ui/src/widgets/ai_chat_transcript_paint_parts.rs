@@ -37,14 +37,7 @@ pub(crate) fn paint_action_step(cx: &mut PaintCx<'_>, theme: &Theme, step: &Acti
             success_color,
             1.0,
         );
-        draw_icon(
-            cx.backend,
-            Icon::Check,
-            icon_top_left,
-            14.0,
-            success_color,
-            1.5,
-        );
+        draw_icon(cx.backend, Icon::Check, icon_top_left, 14.0, success_color, 1.5);
     } else {
         // Running / pending: dot spinner.
         let color = if step.active {

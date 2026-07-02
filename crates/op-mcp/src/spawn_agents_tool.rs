@@ -83,14 +83,19 @@ fn optional_string_array(
 /// Tests construct the args map directly (same convention as `batch_get_tests`):
 /// `args.insert("config".into(), r#"[{"prompt":"...","styleguideName":"..."}]"#.into())`.
 pub fn parse_spawn_config(args: &BTreeMap<String, String>) -> Result<Vec<SpawnSpec>, String> {
-    let raw = args.get("config").map(String::as_str).unwrap_or("").trim();
+    let raw = args
+        .get("config")
+        .map(String::as_str)
+        .unwrap_or("")
+        .trim();
 
     if raw.is_empty() {
         return Err("spawn_agents requires a non-empty config array".into());
     }
 
-    let value: Value =
-        serde_json::from_str(raw).map_err(|e| format!("config must be a JSON array: {e}"))?;
+    let value: Value = serde_json::from_str(raw).map_err(|e| {
+        format!("config must be a JSON array: {e}")
+    })?;
 
     let Value::Array(items) = value else {
         return Err("config must be a JSON array".into());
@@ -116,9 +121,7 @@ pub fn parse_spawn_config(args: &BTreeMap<String, String>) -> Result<Vec<SpawnSp
         let prompt = required_string(&obj, "prompt")
             .map_err(|e| format!("spawn_agents config[{i}]: {e}"))?;
         if prompt.trim().is_empty() {
-            return Err(format!(
-                "spawn_agents config[{i}]: prompt must be non-empty"
-            ));
+            return Err(format!("spawn_agents config[{i}]: prompt must be non-empty"));
         }
 
         let styleguide_name = required_string(&obj, "styleguideName")
@@ -231,7 +234,9 @@ mod tests {
     #[test]
     fn parse_item_without_optional_arrays_defaults_to_empty_vecs() {
         // containerNodes and guidelineNames are optional (#[serde(default)]).
-        let args = args_with_config(r#"[{"prompt":"Fill nav","styleguideName":"brand"}]"#);
+        let args = args_with_config(
+            r#"[{"prompt":"Fill nav","styleguideName":"brand"}]"#,
+        );
         let specs = parse_spawn_config(&args).expect("optional arrays absent");
         assert!(specs[0].container_nodes.is_empty());
         assert!(specs[0].guideline_names.is_empty());
@@ -258,7 +263,9 @@ mod tests {
 
     #[test]
     fn parse_item_with_empty_prompt_returns_invalid_argument_error() {
-        let args = args_with_config(r#"[{"prompt":"  ","styleguideName":"brand"}]"#);
+        let args = args_with_config(
+            r#"[{"prompt":"  ","styleguideName":"brand"}]"#,
+        );
         let err = parse_spawn_config(&args).unwrap_err();
         assert!(
             err.contains("prompt must be non-empty"),
@@ -271,7 +278,9 @@ mod tests {
         // JSON without styleguideName at all — serde deserialises to empty string
         // (no default), so the field is required.
         // We supply it as empty to trigger the trim check.
-        let args = args_with_config(r#"[{"prompt":"Hero","styleguideName":""}]"#);
+        let args = args_with_config(
+            r#"[{"prompt":"Hero","styleguideName":""}]"#,
+        );
         let err = parse_spawn_config(&args).unwrap_err();
         assert!(
             err.contains("styleguideName must be non-empty"),
@@ -327,7 +336,10 @@ mod tests {
                 let v: serde_json::Value =
                     serde_json::from_str(&json).expect("OkJson is valid JSON");
                 assert_eq!(v["spawned"], 2);
-                assert_eq!(v["agentIds"], serde_json::json!(["agent-0", "agent-1"]));
+                assert_eq!(
+                    v["agentIds"],
+                    serde_json::json!(["agent-0", "agent-1"])
+                );
             }
             other => panic!("expected OkJson, got {other:?}"),
         }
@@ -351,7 +363,9 @@ mod tests {
     #[test]
     fn call_item_with_empty_styleguide_name_returns_invalid_argument() {
         let tool = spawn_agents_snapshot();
-        let args = args_with_config(r#"[{"prompt":"Hero","styleguideName":""}]"#);
+        let args = args_with_config(
+            r#"[{"prompt":"Hero","styleguideName":""}]"#,
+        );
         match tool.call(&args) {
             ToolOutcome::Err(ToolErrorCode::InvalidArgument, msg) => {
                 assert!(

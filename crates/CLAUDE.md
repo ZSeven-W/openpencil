@@ -1,6 +1,6 @@
 # Rust Shell
 
-Native + web editor chrome implemented in Rust against jian-skia. This is the **canonical** OpenPencil implementation — the original TypeScript editor (`apps/web`, `apps/desktop`, `apps/cli`, `pen-*`) has been **retired**, so the Rust shell is the product, not a parity port. `// ported from pen-*` comments below name the retired TS as historical origin; that code lives only in git history now.
+Native + web editor chrome implemented in Rust against jian-skia. Goal: TS-equivalent editor UI surface so the backend can later swap underneath without UI regressions.
 
 ## Crate layout
 
