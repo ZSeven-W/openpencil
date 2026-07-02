@@ -60,6 +60,8 @@ emit_elements(elements=[
 
 Fall back to `batch_design` (DSL below) only for what `emit_elements` cannot express: editing existing nodes, image fills (`G(...)`), component instances you already placed, or one-off bespoke primitives. Work `batch_design` in batches of **≤ 25 operations**; split a large screen into logical, self-contained batches (e.g., navigation → hero → content sections → footer).
 
+**Act on `layoutIssues` immediately.** Every `batch_design` / `emit_elements` result may carry a `layoutIssues` list — the REAL resolved layout's defects (a collapsed fill container, table columns overflowing their row, text overflowing its block). These are measured facts, not suggestions: fix them with a follow-up `batch_design` (or `U(...)` updates) BEFORE building the next section. Do not carry a known layout defect forward.
+
 ### Step 8 — Verify with a screenshot
 
 Call `get_screenshot` with a nodeId or `"root"` to SEE your result. Iterate — fix overlaps, spacing, alignment, and contrast — until the screenshot reads as a polished, complete screen. The screenshot check is mandatory, not optional. Do not declare the design done without it.
@@ -117,7 +119,7 @@ Bottom navigation bars span the full screen width. Tabs are evenly spread across
 
 ### Every image slot gets a real image fill
 
-Any avatar, profile photo, client/user thumbnail, product image, hero, or logo slot MUST receive an image fill via `G(id, "search", "<subject>")` — never leave it as an empty frame or a flat colored square. The subject is 2–3 English keywords UNIQUE per image, derived from the surrounding row/card (a client-row avatar is `G(avatarFrame, "search", "man portrait")`, a dish card is `G(imgFrame, "search", "pasta plate")`). Emit the `G(...)` op in the SAME batch that creates the frame so no placeholder is left unfilled.
+Any avatar, profile photo, client/user thumbnail, product image, hero, or logo slot MUST receive an image fill via `G(id, "search", "<subject>")` — never leave it as an empty frame or a flat colored square. The subject is 2–3 English keywords UNIQUE per image, derived from the surrounding row/card. For an AVATAR the subject MUST include `face` or `headshot` (`G(avatarFrame, "search", "man face headshot")`) — a bare "portrait" query returns torsos and cropped bodies. A dish card is `G(imgFrame, "search", "pasta plate")`. Emit the `G(...)` op in the SAME batch that creates the frame so no placeholder is left unfilled.
 
 ### Reuse design-system components
 
