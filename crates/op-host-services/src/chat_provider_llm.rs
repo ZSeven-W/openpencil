@@ -111,7 +111,12 @@ impl LlmClient for ChatProviderLlmClient {
             // The orchestrator's prompts can run long (planner system
             // is ~12 KB, sub-agents emit dense JSON). Give them room —
             // and M3's think stream burns budget before the answer.
-            max_output_tokens: if m3_keeps_thinking { 16384 } else { 8192 },
+            // 16384 matches the headless harness value that ran a
+            // 52-prompt corpus with ZERO truncated responses; the old
+            // 8192 truncated a rich plan mid-JSON on the desktop
+            // ("planning parse failure; using fallback plan" → a
+            // skeleton design with a hero and three cards).
+            max_output_tokens: if m3_keeps_thinking { 24576 } else { 16384 },
             thinking: if m3_keeps_thinking {
                 ThinkingMode::Adaptive
             } else {
@@ -213,11 +218,11 @@ mod tests {
     fn minimax_m3_keeps_thinking_others_disable_it() {
         let m3 = call_with_model(Some("MiniMax-M3"));
         assert_eq!(m3.thinking, ThinkingMode::Adaptive);
-        assert_eq!(m3.max_output_tokens, 16384);
+        assert_eq!(m3.max_output_tokens, 24576);
 
         let m27 = call_with_model(Some("MiniMax-M2.7"));
         assert_eq!(m27.thinking, ThinkingMode::Disabled);
-        assert_eq!(m27.max_output_tokens, 8192);
+        assert_eq!(m27.max_output_tokens, 16384);
 
         let unknown = call_with_model(None);
         assert_eq!(unknown.thinking, ThinkingMode::Disabled);

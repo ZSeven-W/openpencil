@@ -267,6 +267,7 @@ fn run_planning_failure_uses_fallback_plan() {
     // 规划吐垃圾 → fallback plan;subtask 正常 → 成功。
     let llm = ScriptedLlm::new(vec![
         ScriptResponse::Text("no json here".into()),
+        ScriptResponse::Text("no json here".into()),
         ScriptResponse::Text(node_json("section-1")),
     ]);
     let mut sink = VecDocSink::new();
@@ -291,7 +292,8 @@ fn run_planning_failure_uses_fallback_plan() {
 #[test]
 fn planning_parse_failure_uses_fallback_plan() {
     let llm = ScriptedLlm::new(vec![
-        // planning call → bad JSON
+        // planning attempts 1 + 2 → bad JSON (the retry consumes one more)
+        ScriptResponse::Text("not valid json at all".into()),
         ScriptResponse::Text("not valid json at all".into()),
         // fallback plan's single subtask
         ScriptResponse::Text(node_json("section-1")),
@@ -315,7 +317,12 @@ fn planning_parse_failure_uses_fallback_plan() {
 fn planning_stream_error_uses_fallback_plan() {
     use crate::types::LlmError;
     let llm = ScriptedLlm::new(vec![
-        // planning call → stream error (non-abort)
+        // planning attempts 1 + 2 → stream error (non-abort); the retry
+        // consumes the second before the heuristic fallback engages.
+        ScriptResponse::Fail(LlmError {
+            message: "HTTP 500 upstream".into(),
+            aborted: false,
+        }),
         ScriptResponse::Fail(LlmError {
             message: "HTTP 500 upstream".into(),
             aborted: false,
@@ -697,4 +704,32 @@ fn run_dashboard_shell_keeps_sidebar_fill_height_end_to_end() {
             .take(600)
             .collect::<String>()
     );
+}
+
+#[test]
+fn planning_retries_once_before_the_fallback_plan() {
+    // A truncated planning response fails the parse; the SECOND attempt
+    // returns a valid plan and must be used (no skeleton fallback).
+    let llm = ScriptedLlm::new(vec![
+        ScriptResponse::Text(r##"{"palette":{"background":"#0B0C0E","surface":"#1A1B"##.into()),
+        ScriptResponse::Text(PLAN_JSON.into()),
+        ScriptResponse::Text(node_json("hero")),
+        ScriptResponse::Text(node_json("feat")),
+    ]);
+    let mut sink = VecDocSink::new();
+    let mut events: Vec<Progress> = Vec::new();
+    let mut on_progress = |p: Progress| events.push(p);
+
+    let summary = futures::executor::block_on(Orchestrator::new().run(
+        req(),
+        &mut sink,
+        &llm,
+        &mut on_progress,
+        &AbortFlag::new(),
+        &stub_providers(),
+    ))
+    .expect("run ok after planning retry");
+
+    // The REAL plan (2 subtasks) landed — not the single-subtask fallback.
+    assert_eq!(summary.subtasks.len(), 2, "retried plan used, not fallback");
 }
