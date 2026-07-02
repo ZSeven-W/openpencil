@@ -853,6 +853,9 @@ pub async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
     // Bidirectional live-canvas sync with the daemon (pull on version bump,
     // push local edits + selection) — same loops the skia mount wires.
     crate::live_sync_glue::start(&inner);
+    // Mirror the daemon's agent-indicator registry so design runs paint
+    // their agent borders / badges / reveal animations on web too.
+    crate::agent_indicator_sync::start(&inner);
 
     let mut listeners: Vec<Listener> = Vec::new();
     let canvas_target: web_sys::EventTarget = canvas.clone().into();

@@ -234,6 +234,15 @@ pub fn handle_web_canvas_request(
             status: "200 OK",
             body: format!(r#"{{"version":{}}}"#, state.version),
         },
+        ("GET", "/api/mcp/indicators") => WebReply {
+            // Agent-indicator relay: design runs execute inside this
+            // daemon, so the process-global registry the canvas paints
+            // from lives HERE — the browser polls this and mirrors it
+            // into its own registry (agent_indicators::apply_remote) so
+            // agent borders / badges / reveal animations show on web.
+            status: "200 OK",
+            body: op_editor_core::agent_indicators::relay_json(),
+        },
         ("POST", "/api/mcp/sync-reset") => match state.reset_document() {
             Ok(version) => WebReply {
                 status: "200 OK",
