@@ -44,6 +44,15 @@ pub struct AgentLoopConfig {
     pub tools: Vec<ChatToolDef>,
     pub executor: Arc<dyn ChatToolExecutor>,
     pub max_turns: usize,
+    /// When true, run the deterministic structural-quality backstop
+    /// ([`run_loop_finalize`] → `op_orchestrator::apply_loop_finalize`)
+    /// once at loop end. Set ONLY for the gated design-generation loop;
+    /// the regular tool-using chat loop leaves this `false` so an ordinary
+    /// chat turn never re-runs the Class-A passes over — and mutates — an
+    /// existing design (Track-1 Step 4 scoping fix). The agent loop is the
+    /// shared execution path for BOTH regular builtin chat and the design
+    /// loop, so the finalize side-effect MUST be opt-in per provider.
+    pub finalize_on_exit: bool,
 }
 
 impl AgentLoopConfig {
@@ -84,6 +93,33 @@ fn normalized_args(args_json: &str) -> String {
     }
 }
 
+/// If a tool result is a `get_screenshot` payload, pull out the base64 PNG
+/// so it can be replayed to the model as a real image content block.
+///
+/// `get_screenshot` (see `mcp_serve::screenshot_tool.rs`) returns its result
+/// as a JSON object `{"image_base64": <b64>, "format": "png"}`. Without this
+/// the base64 rides the follow-up request as an opaque text string and the
+/// model literally cannot see the render — defeating the self-correction
+/// loop. We detect the screenshot result by tool name AND the structured
+/// marker (`format == "png"` + a non-empty `image_base64`) so a tool that
+/// happened to be renamed, or an error envelope, falls back to plain text.
+///
+/// Returns `Some(base64)` only for a successful, non-error screenshot result.
+fn screenshot_image_base64(tool_name: &str, result: &ChatToolResult) -> Option<String> {
+    if tool_name != "get_screenshot" || result.is_error {
+        return None;
+    }
+    let v = serde_json::from_str::<Value>(&result.content).ok()?;
+    if v.get("format").and_then(Value::as_str) != Some("png") {
+        return None;
+    }
+    let b64 = v.get("image_base64").and_then(Value::as_str)?;
+    if b64.is_empty() {
+        return None;
+    }
+    Some(b64.to_string())
+}
+
 /// Run one tool call through the executor on a blocking thread (the
 /// executor blocks on the UI ack; never block the runtime directly).
 async fn execute_tool(
@@ -101,6 +137,24 @@ async fn execute_tool(
                 .to_string(),
             is_error: true,
         })
+}
+
+/// Run the deterministic structural-quality backstop once, at loop end
+/// (Track-1 Step 4). Forwards to the executor's `finalize` (which the desktop
+/// host bridges to `op_orchestrator::apply_loop_finalize` against the live
+/// `EditorState`). Runs on a blocking thread — the host round-trip blocks until
+/// the UI thread acks — mirroring [`execute_tool`]. The default executor
+/// `finalize` is a no-op, so this is inert for scripted / read-only executors.
+///
+/// `enabled` is `cfg.finalize_on_exit`: a no-op early-return when this loop run
+/// is a regular chat turn (the shared agent loop also serves plain builtin
+/// chat), so only the gated design-generation loop mutates the document here.
+async fn run_loop_finalize(executor: &Arc<dyn ChatToolExecutor>, enabled: bool) {
+    if !enabled {
+        return;
+    }
+    let executor = executor.clone();
+    let _ = tokio::task::spawn_blocking(move || executor.finalize()).await;
 }
 
 // ---------------------------------------------------------------------------
@@ -403,6 +457,10 @@ pub async fn run_anthropic_agent_loop(
                 .as_deref()
                 .map(map_anthropic_stop_reason)
                 .unwrap_or(StopReason::EndTurn);
+            // Normal model-stop exit: run the Step-4 structural backstop ONCE
+            // over the assembled doc BEFORE the Done delta, so the finalized
+            // document is what the UI persists/displays for this turn.
+            run_loop_finalize(&cfg.executor, cfg.finalize_on_exit).await;
             let _ = tx
                 .send(ChatDelta::Done {
                     stop_reason: reason,
@@ -422,10 +480,27 @@ pub async fn run_anthropic_agent_loop(
                 })
                 .await;
             let result = execute_tool(&cfg.executor, &call.name, &call.args_json).await;
+            // When the result is a `get_screenshot` PNG, feed it back as a
+            // real Anthropic image content block instead of an opaque base64
+            // text string — otherwise the model can never see the render.
+            let content: Value = match screenshot_image_base64(&call.name, &result) {
+                Some(b64) => json!([
+                    { "type": "text", "text": "Rendered screenshot of the current design:" },
+                    {
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": "image/png",
+                            "data": b64,
+                        },
+                    },
+                ]),
+                None => Value::String(result.content),
+            };
             results.push(json!({
                 "type": "tool_result",
                 "tool_use_id": call.id,
-                "content": result.content,
+                "content": content,
                 "is_error": result.is_error,
             }));
         }
@@ -433,7 +508,9 @@ pub async fn run_anthropic_agent_loop(
     }
 
     // Turn cap reached with the model still calling tools — stop the
-    // loop the way the TS engine reports error_max_turns.
+    // loop the way the TS engine reports error_max_turns. Still run the Step-4
+    // structural backstop ONCE over whatever the truncated turn assembled.
+    run_loop_finalize(&cfg.executor, cfg.finalize_on_exit).await;
     let _ = tx
         .send(ChatDelta::Done {
             stop_reason: StopReason::MaxTokens,
@@ -611,6 +688,9 @@ pub async fn run_openai_agent_loop(
                 .as_deref()
                 .map(map_openai_stop_reason)
                 .unwrap_or(StopReason::EndTurn);
+            // Normal model-stop exit: run the Step-4 structural backstop ONCE
+            // over the assembled doc BEFORE the Done delta.
+            run_loop_finalize(&cfg.executor, cfg.finalize_on_exit).await;
             let _ = tx
                 .send(ChatDelta::Done {
                     stop_reason: reason,
@@ -648,14 +728,44 @@ pub async fn run_openai_agent_loop(
                 })
                 .await;
             let result = execute_tool(&cfg.executor, &call.name, &call.args_json).await;
-            messages.push(json!({
-                "role": "tool",
-                "tool_call_id": call.id,
-                "content": result.content,
-            }));
+            // OpenAI `role:"tool"` messages only accept a string `content`,
+            // so an image can't ride the tool result directly. When the
+            // result is a `get_screenshot` PNG, send a short text ack as the
+            // tool result and follow it with a `role:"user"` message carrying
+            // the render as an `image_url` data URL — the only OpenAI-wire
+            // way to make the model actually see the screenshot.
+            match screenshot_image_base64(&call.name, &result) {
+                Some(b64) => {
+                    messages.push(json!({
+                        "role": "tool",
+                        "tool_call_id": call.id,
+                        "content": "Rendered screenshot attached as an image in the following message.",
+                    }));
+                    messages.push(json!({
+                        "role": "user",
+                        "content": [
+                            { "type": "text", "text": "Rendered screenshot of the current design:" },
+                            {
+                                "type": "image_url",
+                                "image_url": { "url": format!("data:image/png;base64,{b64}") },
+                            },
+                        ],
+                    }));
+                }
+                None => {
+                    messages.push(json!({
+                        "role": "tool",
+                        "tool_call_id": call.id,
+                        "content": result.content,
+                    }));
+                }
+            }
         }
     }
 
+    // Turn cap reached — run the Step-4 structural backstop ONCE over whatever
+    // the truncated turn assembled.
+    run_loop_finalize(&cfg.executor, cfg.finalize_on_exit).await;
     let _ = tx
         .send(ChatDelta::Done {
             stop_reason: StopReason::MaxTokens,
