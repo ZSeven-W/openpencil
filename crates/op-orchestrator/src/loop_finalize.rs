@@ -65,8 +65,8 @@ const DEFAULT_CANVAS_WIDTH: f64 = 1200.0;
 /// run against the loop's live document. Modeled on the test `VecDocSink` and
 /// the production `RemoteDocSink`, but synchronous + non-recording: every
 /// `apply` goes straight through `EditorState::apply`.
-struct StateDocSink<'a> {
-    state: &'a mut EditorState,
+pub(crate) struct StateDocSink<'a> {
+    pub(crate) state: &'a mut EditorState,
 }
 
 impl crate::types::DocSink for StateDocSink<'_> {
@@ -171,6 +171,168 @@ fn text_has_fill(v: &Value) -> bool {
     }
 }
 
+/// Repair THEME-POLARITY splits in the variable table. A model building a
+/// dark design writes its dark values into the ACTIVE theme slot for most
+/// variables — but leaves a few (surface-2/3, status-\*-bg) at stock LIGHT
+/// values, so a chip resolves #F1F5F9 on a #0A0A0A page (measured: glaring
+/// white pills on a dark luxury dashboard). The correct dark value usually
+/// EXISTS in the variable's other theme slot; adopt it.
+///
+/// Polarity contract, judged against the first design root's resolved page
+/// background: surface-family variables (`surface|card|panel|chip|bg`) sit on
+/// the SAME side as the page; text-family (`text|foreground`) sit OPPOSITE.
+/// A variable is only rewritten when its active value clearly violates the
+/// contract AND another slot's value clearly satisfies it — everything
+/// ambiguous is left alone.
+pub(crate) fn fix_theme_variable_polarity(sink: &mut dyn crate::types::DocSink) {
+    let fixes: Vec<(String, Value)> = {
+        let state = sink.state();
+        let Some(bg_lum) = state
+            .active_children()
+            .first()
+            .and_then(first_solid_fill_hex)
+            .map(str::to_string)
+            .and_then(|c| match c.strip_prefix('$') {
+                Some(name) => state.resolve_color_variable_hex(name),
+                None => Some(c),
+            })
+            .as_deref()
+            .and_then(hex_luminance)
+        else {
+            return;
+        };
+        let Ok(vars) = serde_json::to_value(state.doc.variables.clone()) else {
+            return;
+        };
+        let Some(map) = vars.as_object() else {
+            return;
+        };
+        let mut fixes = Vec::new();
+        for (name, def) in map {
+            if def.get("type").and_then(Value::as_str) != Some("color") {
+                continue;
+            }
+            let lname = name.to_lowercase();
+            let surface_like = ["surface", "card", "panel", "chip", "bg", "background"]
+                .iter()
+                .any(|t| lname.contains(t));
+            let text_like = lname.contains("text") || lname.contains("foreground");
+            if surface_like == text_like {
+                // neither family, or ambiguously both — leave alone
+                continue;
+            }
+            let Some(active_hex) = state.resolve_color_variable_hex(name) else {
+                continue;
+            };
+            let Some(active_lum) = hex_luminance(&active_hex) else {
+                continue;
+            };
+            // Every hex present across the variable's theme slots.
+            let mut slot_hexes: Vec<String> = Vec::new();
+            collect_hex_strings(def.get("value").unwrap_or(&Value::Null), &mut slot_hexes);
+            let violated = if surface_like {
+                (active_lum - bg_lum).abs() > 0.55
+            } else {
+                (active_lum - bg_lum).abs() < 0.22
+            };
+            if !violated {
+                continue;
+            }
+            let candidate = slot_hexes
+                .iter()
+                .filter_map(|h| hex_luminance(h).map(|l| (h, l)))
+                .filter(|(h, _)| !h.eq_ignore_ascii_case(&active_hex))
+                .filter(|(_, l)| {
+                    if surface_like {
+                        (l - bg_lum).abs() < 0.35
+                    } else {
+                        (l - bg_lum).abs() > 0.5
+                    }
+                })
+                .min_by(|a, b| {
+                    let key = |l: f64| {
+                        if surface_like {
+                            (l - bg_lum).abs()
+                        } else {
+                            -(l - bg_lum).abs()
+                        }
+                    };
+                    key(a.1).total_cmp(&key(b.1))
+                })
+                .map(|(h, _)| h.clone());
+            if let Some(hex) = candidate {
+                // Overwrite the SLOT the resolver actually hit (the entry whose
+                // value equals the resolved active hex) — `SetVariableColor`
+                // routes through the session's active-theme pin, which a
+                // freshly-loaded document does not carry, and would append a
+                // themeless entry the resolver never reads.
+                let mut def = def.clone();
+                if replace_hex_slot(
+                    def.get_mut("value").unwrap_or(&mut Value::Null),
+                    &active_hex,
+                    &hex,
+                ) {
+                    fixes.push((name.clone(), def));
+                }
+            }
+        }
+        fixes
+    };
+    if fixes.is_empty() {
+        return;
+    }
+    let mut variables = std::collections::BTreeMap::new();
+    for (name, def) in fixes {
+        if let Ok(parsed) =
+            serde_json::from_value::<jian_ops_schema::variable::VariableDefinition>(def)
+        {
+            variables.insert(name, parsed);
+        }
+    }
+    if !variables.is_empty() {
+        sink.apply(EditorCommand::SetVariables {
+            variables,
+            replace: false,
+        });
+    }
+}
+
+/// Replace the FIRST slot in a variable-value JSON whose `value` equals
+/// `from` with `to`. Returns whether a slot changed.
+fn replace_hex_slot(v: &mut Value, from: &str, to: &str) -> bool {
+    match v {
+        Value::String(s) if s.eq_ignore_ascii_case(from) => {
+            *s = to.to_string();
+            true
+        }
+        Value::Array(a) => a.iter_mut().any(|item| replace_hex_slot(item, from, to)),
+        Value::Object(o) => o
+            .get_mut("value")
+            .map(|inner| replace_hex_slot(inner, from, to))
+            .unwrap_or(false),
+        _ => false,
+    }
+}
+
+/// Collect every `#hex` string in a variable-value JSON (scalar or the themed
+/// `[{value, theme}]` array).
+fn collect_hex_strings(v: &Value, out: &mut Vec<String>) {
+    match v {
+        Value::String(s) if s.starts_with('#') => out.push(s.clone()),
+        Value::Array(a) => {
+            for item in a {
+                collect_hex_strings(item, out);
+            }
+        }
+        Value::Object(o) => {
+            for item in o.values() {
+                collect_hex_strings(item, out);
+            }
+        }
+        _ => {}
+    }
+}
+
 /// Give every fill-less text node a fill that contrasts with its nearest
 /// resolved background. A model (glm-5.2 in the agentic loop) defines a light
 /// `primary_text` variable but omits `fill` on the text nodes themselves, so
@@ -182,6 +344,17 @@ fn text_has_fill(v: &Value) -> bool {
 /// invisible — always set one". `$ref` backgrounds resolve through the live
 /// variable table (`state.resolve_color_variable_hex`).
 fn ensure_text_fill_forest(nodes: &mut [PenNode], state: &EditorState) {
+    /// What we know about the surface a text sits on. `Indeterminate` marks a
+    /// PRESENT fill we cannot reduce to a solid hex (gradient / image /
+    /// unresolvable `$ref`) — injecting a guessed color there risks the exact
+    /// invisible-text bug this pass exists to fix (dark text on a dark
+    /// gradient hero), so those texts are left alone.
+    #[derive(Clone)]
+    enum Bg {
+        Known(String),
+        Indeterminate,
+        Unknown,
+    }
     fn resolve_hex(color: &str, state: &EditorState) -> Option<String> {
         match color.strip_prefix('$') {
             Some(name) => state.resolve_color_variable_hex(name),
@@ -189,26 +362,48 @@ fn ensure_text_fill_forest(nodes: &mut [PenNode], state: &EditorState) {
             None => None,
         }
     }
-    fn walk(v: &mut Value, bg: Option<String>, state: &EditorState) {
-        // This node's own solid fill (resolved) becomes the background its
-        // descendants sit on; unresolvable / absent fills inherit the ancestor.
-        let own = v
-            .get("fill")
-            .and_then(first_solid_color_str)
-            .and_then(|c| resolve_hex(&c, state));
-        let child_bg = own.or(bg.clone());
-        if v.get("type").and_then(Value::as_str) == Some("text") && !text_has_fill(v) {
-            // Default the bg to light (lum 1.0) when unknown, so an unresolved
-            // background yields dark text rather than white-on-white.
-            let lum = child_bg.as_deref().and_then(hex_luminance).unwrap_or(1.0);
-            let fg = if lum < 0.5 { "#F5F5F5" } else { "#111827" };
-            if let Some(obj) = v.as_object_mut() {
+    fn has_present_fill(v: &Value) -> bool {
+        match v.get("fill") {
+            Some(Value::Array(a)) => !a.is_empty(),
+            Some(Value::String(s)) => !s.trim().is_empty(),
+            _ => false,
+        }
+    }
+    fn walk(v: &mut Value, bg: &Bg, state: &EditorState) {
+        // This node's own fill becomes the background its descendants sit on;
+        // absent fills inherit the ancestor's; present-but-unresolvable fills
+        // poison the chain to Indeterminate rather than silently inheriting.
+        let is_text = v.get("type").and_then(Value::as_str) == Some("text");
+        let child_bg = if is_text || !has_present_fill(v) {
+            bg.clone()
+        } else {
+            match v
+                .get("fill")
+                .and_then(first_solid_color_str)
+                .and_then(|c| resolve_hex(&c, state))
+            {
+                Some(hex) => Bg::Known(hex),
+                None => Bg::Indeterminate,
+            }
+        };
+        if is_text && !text_has_fill(v) {
+            let fg = match &child_bg {
+                Bg::Known(hex) => {
+                    let lum = hex_luminance(hex).unwrap_or(1.0);
+                    Some(if lum < 0.5 { "#F5F5F5" } else { "#111827" })
+                }
+                // No surface anywhere above → the default page is light; dark
+                // text is the safe default.
+                Bg::Unknown => Some("#111827"),
+                Bg::Indeterminate => None,
+            };
+            if let (Some(fg), Some(obj)) = (fg, v.as_object_mut()) {
                 obj.insert("fill".into(), json!([{ "type": "solid", "color": fg }]));
             }
         }
         if let Some(kids) = v.get_mut("children").and_then(Value::as_array_mut) {
             for c in kids.iter_mut() {
-                walk(c, child_bg.clone(), state);
+                walk(c, &child_bg, state);
             }
         }
     }
@@ -216,7 +411,7 @@ fn ensure_text_fill_forest(nodes: &mut [PenNode], state: &EditorState) {
         let Ok(mut v) = serde_json::to_value(&*node) else {
             continue;
         };
-        walk(&mut v, None, state);
+        walk(&mut v, &Bg::Unknown, state);
         if let Ok(nn) = serde_json::from_value::<PenNode>(v) {
             *node = nn;
         }

@@ -671,8 +671,44 @@ pub fn finalize_design(sink: &mut dyn DocSink, plan: &OrchestratorPlan, root_ids
     run_cleanup_passes(sink, plan, root_ids);
 }
 
+/// Env-gated (`OPENPENCIL_DEBUG_CLEANUP=1`) probe: log the named child's
+/// current height under `root_id`, tagged with the pass that just ran.
+fn debug_probe_child_height(sink: &dyn DocSink, root_id: &str, tag: &str) {
+    if std::env::var("OPENPENCIL_DEBUG_CLEANUP").is_err() {
+        return;
+    }
+    let Some(root) = sink
+        .state()
+        .active_children()
+        .iter()
+        .find(|n| n.id_str() == root_id)
+    else {
+        eprintln!("[CLEANUP-PROBE] {tag}: root {root_id} NOT FOUND");
+        return;
+    };
+    let Ok(v) = serde_json::to_value(root) else {
+        return;
+    };
+    for c in v
+        .get("children")
+        .and_then(|c| c.as_array())
+        .into_iter()
+        .flatten()
+    {
+        let name = c.get("name").and_then(|n| n.as_str()).unwrap_or("?");
+        if name.to_lowercase().contains("sidebar") {
+            eprintln!("[CLEANUP-PROBE] {tag}: {name} height={:?}", c.get("height"));
+        }
+    }
+}
+
 pub fn run_cleanup_passes(sink: &mut dyn DocSink, plan: &OrchestratorPlan, root_ids: &[&str]) {
+    // Doc-global (not per-root): heal theme-polarity splits in the variable
+    // table BEFORE the per-root passes, so every pass that resolves `$refs`
+    // (surface discipline, geometry text fills) sees the repaired palette.
+    crate::loop_finalize::fix_theme_variable_polarity(sink);
     for root_id in root_ids {
+        debug_probe_child_height(sink, root_id, "cleanup-entry");
         // FIRST: whole-root structural restructures, shared by BOTH the
         // orchestrator (per-subtask role passes already ran) and the agentic
         // loop (whole-doc role passes ran in `apply_loop_finalize`), so the
@@ -683,11 +719,13 @@ pub fn run_cleanup_passes(sink: &mut dyn DocSink, plan: &OrchestratorPlan, root_
         let mut rid = root_id.to_string();
         // Flat-vertical / crammed-horizontal sidebar dashboard → [sidebar | content].
         rid = apply_root_transform(sink, &rid, crate::app_shell::reshape_sidebar_to_app_shell);
+        debug_probe_child_height(sink, &rid, "reshape");
         // Already-split `[sidebar | main]` root that a model left WITHOUT a
         // horizontal layout (MiniMax-M3 in the agentic loop) — flip it to a row
         // so the columns sit side by side instead of stacking. `reshape` above
         // skips 2-child roots, so this catches the case it leaves behind.
         rid = apply_root_transform(sink, &rid, crate::app_shell::ensure_split_shell_is_row);
+        debug_probe_child_height(sink, &rid, "ensure_row");
         // Relocate a data section stranded in the narrow sidebar column — the
         // `nav`/`menu` substring routing (or a sidebar subtask that over-emitted
         // a second root) can misfile a "Client Directory" table into the 260px
@@ -698,11 +736,14 @@ pub fn run_cleanup_passes(sink: &mut dyn DocSink, plan: &OrchestratorPlan, root_
             &rid,
             crate::app_shell::evict_content_from_sidebar_column,
         );
+        debug_probe_child_height(sink, &rid, "evict");
         // Flat table cells → Table → Row → Cell.
         rid = apply_root_transform(sink, &rid, crate::table_repair::regroup_flat_table_rows);
+        debug_probe_child_height(sink, &rid, "regroup_table");
         // Gap-less table rows → column gap (weak models omit it → columns touch,
         // "SPEND"+"STATUS" reads as "SPENDSTATUS").
         rid = apply_root_transform(sink, &rid, crate::table_repair::ensure_table_column_gap);
+        debug_probe_child_height(sink, &rid, "table_gap");
         // Footer-sink floor: a vertical column that wants to PUSH content apart
         // (justifyContent space_*) or carries a flexible spacer, but hugs its
         // height, gets promoted to fill_container so the footer actually sinks.
@@ -713,6 +754,7 @@ pub fn run_cleanup_passes(sink: &mut dyn DocSink, plan: &OrchestratorPlan, root_
             &rid,
             crate::role_layout_post_pass::sink_main_axis_distribution,
         );
+        debug_probe_child_height(sink, &rid, "sink_main_axis");
         // Sidebar footer-sink for an ALREADY-STRUCTURED [sidebar | content] shell
         // whose nav column stacks flat (no space_between / spacer) with a
         // user/Pro footer last — the app-shell reshape above only handles the
@@ -722,16 +764,16 @@ pub fn run_cleanup_passes(sink: &mut dyn DocSink, plan: &OrchestratorPlan, root_
             &rid,
             crate::app_shell::sink_structured_sidebar_footers,
         );
-        // Break a `fit_content` parent ↔ `fill_container` child height cycle (a
-        // KPI card collapses, its stacked text overlaps, and the ancestor content
-        // height undercounts so the root never stretches). Runs BEFORE
-        // `adjust_root_height_to_content` below so the corrected card heights feed
-        // the root-height computation.
-        rid = apply_root_transform(
-            sink,
-            &rid,
-            crate::role_layout_post_pass::fix_circular_fill_height,
-        );
+        debug_probe_child_height(sink, &rid, "sink_footer");
+        // The tree-shape `fit_content` parent ↔ `fill_container` child demoter
+        // (`fix_circular_fill_height`) is RETIRED: the layout engine now resolves
+        // a fill-height child of a hugging parent to its content size (vertical
+        // main axis → grow, horizontal cross axis → stretch), so the collapse the
+        // pass guessed at no longer exists — while its demotions actively broke
+        // healthy shells (the app-shell's fill-height sidebar under a transient
+        // fit_content root, equal-height KPI cards stretched by a numeric
+        // sibling). A REAL collapse is still caught below by the geometry loop's
+        // `collect_collapse_fixes`, which only fires on a resolved ~0 height.
         let rid = rid.as_str();
 
         remove_duplicate_status_bars(sink, rid);
@@ -748,8 +790,22 @@ pub fn run_cleanup_passes(sink: &mut dyn DocSink, plan: &OrchestratorPlan, root_
         // the tree-shape passes miss), then re-layout and repeat until clean —
         // the deterministic analogue of Pencil's per-batch snapshot_layout
         // feedback, catching what the tree-shape passes above cannot see.
+        if let Ok(path) = std::env::var("OPENPENCIL_DEBUG_CLEANUP_DUMP") {
+            if let Some(root) = sink
+                .state()
+                .active_children()
+                .iter()
+                .find(|n| n.id_str() == rid)
+            {
+                if let Ok(json) = serde_json::to_string_pretty(root) {
+                    let _ = std::fs::write(&path, json);
+                }
+            }
+        }
         crate::geometry_validation::geometry_validate_and_fix(sink, rid);
+        debug_probe_child_height(sink, rid, "geometry");
         adjust_root_height_to_content(sink, rid);
+        debug_probe_child_height(sink, rid, "adjust_root_height");
     }
 }
 
@@ -772,6 +828,9 @@ fn apply_root_transform(
         .iter()
         .position(|n| n.id_str() == root_id)
     else {
+        // A silent no-op here means EVERY cleanup pass silently skips this
+        // root — surface it loudly so a stale-root bug can't hide again.
+        tracing::warn!(root = %root_id, "cleanup: root id not found — pass skipped");
         return root_id.to_string();
     };
     let mut new_root = sink.state().active_children()[idx].clone();
