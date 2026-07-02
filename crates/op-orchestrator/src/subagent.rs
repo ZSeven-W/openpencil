@@ -175,10 +175,28 @@ pub(crate) async fn run_subtask_with_reveal_at(
     // prompt (`program_on`) — the reduced/minimal retry rungs teach raw JSONL, so
     // parsing must fall back to `parse_nodes` there too.
     let model_id = req.model.as_deref().unwrap_or("");
-    let program_on = crate::program_gen::program_gen_enabled_for_model(model_id)
+    let script_on = crate::script_gen::script_gen_enabled_for_model(model_id)
         && !reduced_complexity
         && !minimal_skills;
-    let mut nodes = if program_on {
+    let program_on = !script_on
+        && crate::program_gen::program_gen_enabled_for_model(model_id)
+        && !reduced_complexity
+        && !minimal_skills;
+    let mut nodes = if script_on {
+        match crate::script_gen::parse_script(&text) {
+            Ok(n) => n,
+            Err(e) => {
+                tracing::warn!(
+                    subtask = %subtask.id,
+                    text_len = text.len(),
+                    thinking_len,
+                    raw = %text,
+                    "subagent script-gen parse failed"
+                );
+                return fail(e);
+            }
+        }
+    } else if program_on {
         match crate::program_gen::parse_program(&text) {
             Ok(n) => n,
             Err(e) => {
