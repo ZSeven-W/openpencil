@@ -172,6 +172,14 @@ impl SubprocessTransport {
     fn build_command(&self) -> Result<Command> {
         let mut cmd = Command::new(&self.cli_path);
 
+        #[cfg(windows)]
+        {
+            // CREATE_NO_WINDOW — every routed chat turn spawns the CLI;
+            // without this each spawn flashes a console window when the
+            // host GUI runs detached from the console subsystem.
+            cmd.creation_flags(0x0800_0000);
+        }
+
         // Always use --print for non-interactive mode to avoid terminal manipulation
         cmd.arg("--print");
 

@@ -522,9 +522,15 @@ impl OAuthClient {
 
         #[cfg(target_os = "windows")]
         {
-            std::process::Command::new("cmd")
-                .args(["/C", "start", "", url])
-                .spawn()
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+            let mut c = std::process::Command::new("cmd");
+            // Double-quote the URL so cmd doesn't split it at `&` — the
+            // OAuth authorize URL always carries multiple query params.
+            // `"` is illegal in URLs; strip it defensively.
+            c.raw_arg(format!("/C start \"\" \"{}\"", url.replace('"', "%22")));
+            c.creation_flags(CREATE_NO_WINDOW);
+            c.spawn()
                 .map_err(|e| OAuthError::BrowserOpen(e.to_string()))?;
         }
 

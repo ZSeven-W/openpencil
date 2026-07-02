@@ -919,11 +919,25 @@ fn open_external_url(url: &str) {
     #[cfg(target_os = "macos")]
     let _ = std::process::Command::new("open").arg(url).spawn();
     #[cfg(target_os = "windows")]
-    let _ = std::process::Command::new("cmd")
-        .args(["/C", "start", "", url])
-        .spawn();
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        let mut c = std::process::Command::new("cmd");
+        c.raw_arg(windows_start_args(url));
+        c.creation_flags(CREATE_NO_WINDOW);
+        let _ = c.spawn();
+    }
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     let _ = std::process::Command::new("xdg-open").arg(url).spawn();
+}
+
+/// Args for `cmd /C start "" "<url>"` with the URL double-quoted so
+/// cmd doesn't split it at `&` (query-string URLs like the Openverse
+/// OAuth registration link). `"` is illegal in URLs — stripped
+/// defensively.
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+fn windows_start_args(url: &str) -> String {
+    format!("/C start \"\" \"{}\"", url.replace('"', "%22"))
 }
 
 #[cfg(test)]
