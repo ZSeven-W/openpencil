@@ -34,6 +34,10 @@ Key aesthetics:
 | Hero Gradient Start | #7C3AED | Violet start of hero mesh gradient |
 | Hero Gradient End   | #2DD4BF | Teal end of hero mesh gradient     |
 
+**Hero mesh-gradient recipe** (build the real fill — do NOT approximate it with two stacked linear layers): the hero / landing panel uses a genuine mesh fill:
+`fill: [{ type: "mesh_gradient", rows: 2, cols: 2, stops: [{ row: 0, col: 0, color: "#7C3AED" }, { row: 0, col: 1, color: "#2DD4BF" }, { row: 1, col: 0, color: "#0F0F1A" }, { row: 1, col: 1, color: "#7C3AED" }] }]`
+The vertex grid Gouraud-interpolates violet→teal into the deep-space base. Fall back to `linear_gradient` (violet→teal) for a flat diagonal sweep or `radial_gradient` for a centred glow.
+
 ### Text Colors
 
 | Token              | Value   | Usage                                 |

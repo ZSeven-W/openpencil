@@ -34,6 +34,10 @@ Key aesthetics:
 | Gradient Start   | #A78BFA | Violet start of mesh gradient     |
 | Gradient End     | #34D399 | Emerald end of mesh gradient      |
 
+**Mesh-gradient recipe** (the named "mesh gradient" is a real fill type — author it, don't simulate it with overlapping linear rects): the hero panel / feature background uses a genuine mesh fill:
+`fill: [{ type: "mesh_gradient", rows: 2, cols: 2, stops: [{ row: 0, col: 0, color: "#A78BFA" }, { row: 0, col: 1, color: "#34D399" }, { row: 1, col: 0, color: "#09090B" }, { row: 1, col: 1, color: "#A78BFA" }] }]`
+The four vertices Gouraud-interpolate violet→emerald into the near-black base. Use `linear_gradient` for a simple violet→emerald sweep or `radial_gradient` for a centred glow when a flat gradient reads better.
+
 ### Text Colors
 
 | Token          | Value   | Usage                                |
