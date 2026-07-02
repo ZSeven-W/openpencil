@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./apps/desktop/build/icon.png" alt="OpenPencil" width="120" />
+  <img src="./crates/op-host-desktop/assets/icon.png" alt="OpenPencil" width="120" />
 </p>
 
 <h1 align="center">OpenPencil</h1>
@@ -105,20 +105,17 @@ Claude Code, Codex, Gemini, OpenCode, Kiro, या Copilot CLIs में वन
 ## त्वरित शुरुआत
 
 ```bash
-# निर्भरताएँ इंस्टॉल करें
-bun install
-
-# http://localhost:3000 पर डेव सर्वर शुरू करें
-bun --bun run dev
+# Web dev server (builds the CanvasKit wasm bundle, then runs the headless web host)
+bash scripts/start-web-rust.sh
 ```
 
 या डेस्कटॉप ऐप के रूप में चलाएँ:
 
 ```bash
-bun run electron:dev
+cargo run -p op-host-desktop
 ```
 
-> **पूर्वापेक्षाएँ:** [Bun](https://bun.sh/) >= 1.0 और [Node.js](https://nodejs.org/) >= 18
+> **पूर्वापेक्षाएँ:** उत्पाद बनाने के लिए [Rust](https://www.rust-lang.org/) (stable)। [Bun](https://bun.sh/) >= 1.0 और [Node.js](https://nodejs.org/) >= 18 केवल `packages/` के अंतर्गत web SDK के लिए आवश्यक हैं।
 
 ### Docker
 
@@ -224,7 +221,7 @@ op import:figma design.fig   # Figma फ़ाइल इम्पोर्ट �
 cat design.dsl | op design - # stdin से पाइप करें
 ```
 
-तीन इनपुट विधियाँ समर्थित हैं: इनलाइन स्ट्रिंग, `@filepath` (फ़ाइल से पढ़ें), या `-` (stdin से पढ़ें)। डेस्कटॉप ऐप या वेब डेव सर्वर के साथ काम करता है। पूर्ण कमांड संदर्भ के लिए [CLI README](./apps/cli/README.md) देखें।
+तीन इनपुट विधियाँ समर्थित हैं: इनलाइन स्ट्रिंग, `@filepath` (फ़ाइल से पढ़ें), या `-` (stdin से पढ़ें)। डेस्कटॉप ऐप या वेब डेव सर्वर के साथ काम करता है। पूर्ण कमांड संदर्भ के लिए [CLI README](./crates/op-cli) देखें।
 
 **LLM स्किल** — [OpenPencil Skill](https://github.com/ZSeven-W/openpencil-skill) प्लगइन इंस्टॉल करें ताकि AI एजेंट (Claude Code, Cursor, Codex, Gemini CLI आदि) `op` से डिज़ाइन करना सीख सकें।
 
@@ -254,7 +251,7 @@ cat design.dsl | op design - # stdin से पाइप करें
 - लेयर्ड वर्कफ़्लो — `design_skeleton` → `design_content` → `design_refine`, प्रत्येक चरण के लिए केंद्रित प्रॉम्प्ट
 - स्टाइल गाइड — 50+ इन-बिल्ट स्टाइल (glassmorphism, brutalist, retro आदि), टैग-आधारित फ़ज़ी मैचिंग, प्लानिंग और जनरेशन में एकीकृत
 - मल्टी-मॉडल क्षमता प्रोफ़ाइल — मॉडल स्तर के अनुसार थिंकिंग मोड, प्रयास और प्रॉम्प्ट रूप को स्वचालित रूप से अनुकूलित करता है
-- बिल्ट-इन एजेंट रनटाइम (`agent-native`, Zig NAPI) + Anthropic, Claude Agent SDK, OpenCode, Codex, Copilot, Gemini प्रदाता
+- बिल्ट-इन एजेंट रनटाइम (Rust) + Anthropic, Claude Agent SDK, OpenCode, Codex, Copilot, Gemini प्रदाता
 - चीनी LLM प्रदाताओं के लिए Anthropic फ़ॉर्मेट पासथ्रू — Kimi, Zhipu, GLM, DouBao, Ark, Bailian/DashScope, ModelScope, Coding Plans
 
 **Git इंटीग्रेशन**
@@ -309,7 +306,7 @@ OpenPencil को पूरी तरह **Rust** में नए सिरे 
 | **वेब पेलोड**           | JS + WASM बंडल                                  | **8.2 MB** wasm / **2.18 MB** gzip वायर पर                          |
 | **रेंडरिंग**            | CanvasKit/Skia वेब पर                           | **हर** टार्गेट पर एक GPU-एक्सेलेरेटेड Skia बैकएंड                   |
 | **मेमोरी**              | JavaScript GC पॉज़                              | कोई GC नहीं — Rust ओनरशिप, अनुमानित लेटेंसी                         |
-| **कोडबेस**              | वेब स्टैक + Electron + Zig NAPI एजेंट           | एक Rust वर्कस्पेस: editor · CLI · MCP · AI · codegen · Figma · Git   |
+| **कोडबेस**              | वेब स्टैक + Electron           | एक Rust वर्कस्पेस: editor · CLI · MCP · AI · codegen · Figma · Git   |
 | **टार्गेट**             | Web + desktop, दो अलग स्टैक                     | Desktop (macOS/Win/Linux) · mobile (iOS/Android) · browser — एक कोर |
 
 **मापे गए सुधार**
@@ -382,15 +379,20 @@ openpencil/
 ## स्क्रिप्ट
 
 ```bash
-bun --bun run dev          # डेव सर्वर (पोर्ट 3000)
-bun --bun run build        # प्रोडक्शन बिल्ड
-bun --bun run test         # टेस्ट चलाएँ (Vitest)
-npx tsc --noEmit           # टाइप चेक
-bun run bump <version>     # सभी package.json में वर्शन सिंक करें
-bun run electron:dev       # Electron डेव
-bun run electron:build     # Electron पैकेज
-bun run cli:dev            # सोर्स से CLI चलाएँ
-bun run cli:compile        # CLI को dist में कंपाइल करें
+# Product (Rust — run from the repo root)
+cargo build --workspace              # Build all crates (add --release for prod)
+cargo test --workspace               # Run all tests
+cargo check --workspace              # Type check
+cargo clippy --workspace --all-targets -- -D warnings   # Lint
+cargo fmt --all                      # Format
+bash scripts/start-web-rust.sh       # Web dev server (wasm bundle + headless host)
+cargo run -p op-host-desktop         # Desktop app (binary: openpencil-desktop)
+cargo run -p op-cli -- <args>        # CLI (binary: op)
+
+# Web SDK / JS tooling (run from packages/)
+cd packages && bun run lint          # Lint the web SDK (oxlint); also: bun run format
+cd packages && bun run generate-iconify-catalog   # Regenerate the Rust icon catalog assets
+cd packages && bun run bump <version>             # Sync SDK package.json versions
 ```
 
 ## योगदान
@@ -400,7 +402,7 @@ bun run cli:compile        # CLI को dist में कंपाइल कर
 1. फ़ोर्क और क्लोन करें
 2. वर्शन सिंक सेटअप करें: `git config core.hooksPath .githooks`
 3. ब्रांच बनाएँ: `git checkout -b feat/my-feature`
-4. चेक चलाएँ: `npx tsc --noEmit && bun --bun run test`
+4. चेक चलाएँ: `cargo test --workspace && cargo clippy --workspace --all-targets -- -D warnings`
 5. [Conventional Commits](https://www.conventionalcommits.org/) के साथ कमिट करें: `feat(canvas): add rotation snapping`
 6. `main` के विरुद्ध PR खोलें
 
@@ -442,7 +444,7 @@ OpenPencil मुफ़्त और ओपन-सोर्स है। इस�
 ## समुदाय
 
 <a href="https://discord.gg/h9Fmyy6pVh">
-  <img src="./apps/web/public/logo-discord.svg" alt="Discord" width="16" />
+  <img src="./screenshot/logo-discord.svg" alt="Discord" width="16" />
   <strong> हमारे Discord में शामिल हों</strong>
 </a>
 — प्रश्न पूछें, डिज़ाइन साझा करें, सुविधाएँ सुझाएँ।

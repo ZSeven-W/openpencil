@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./apps/desktop/build/icon.png" alt="OpenPencil" width="120" />
+  <img src="./crates/op-host-desktop/assets/icon.png" alt="OpenPencil" width="120" />
 </p>
 
 <h1 align="center">OpenPencil</h1>
@@ -105,20 +105,17 @@ Web 應用程式 + 透過 Electron 在 macOS、Windows 和 Linux 上原生執行
 ## 快速開始
 
 ```bash
-# 安裝相依套件
-bun install
-
-# 在 http://localhost:3000 啟動開發伺服器
-bun --bun run dev
+# Web dev server (builds the CanvasKit wasm bundle, then runs the headless web host)
+bash scripts/start-web-rust.sh
 ```
 
 或以桌面應用程式形式執行：
 
 ```bash
-bun run electron:dev
+cargo run -p op-host-desktop
 ```
 
-> **前置條件：** [Bun](https://bun.sh/) >= 1.0 以及 [Node.js](https://nodejs.org/) >= 18
+> **前置條件：** 建置產品需要 [Rust](https://www.rust-lang.org/)（stable）。[Bun](https://bun.sh/) >= 1.0 和 [Node.js](https://nodejs.org/) >= 18 僅用於 `packages/` 下的 web SDK。
 
 ### Docker
 
@@ -224,7 +221,7 @@ op import:figma design.fig   # 匯入 Figma 檔案
 cat design.dsl | op design - # 從 stdin 管道輸入
 ```
 
-支援三種輸入方式：內嵌字串、`@filepath`（從檔案讀取）、`-`（從 stdin 讀取）。可搭配桌面應用程式或 Web 開發伺服器使用。完整命令參考請查閱 [CLI README](./apps/cli/README.md)。
+支援三種輸入方式：內嵌字串、`@filepath`（從檔案讀取）、`-`（從 stdin 讀取）。可搭配桌面應用程式或 Web 開發伺服器使用。完整命令參考請查閱 [CLI README](./crates/op-cli)。
 
 **LLM 技能** — 安裝 [OpenPencil Skill](https://github.com/ZSeven-W/openpencil-skill) 外掛，教 AI 智慧體（Claude Code、Cursor、Codex、Gemini CLI 等）使用 `op` 進行設計。
 
@@ -254,7 +251,7 @@ cat design.dsl | op design - # 從 stdin 管道輸入
 - 分層工作流 — `design_skeleton` → `design_content` → `design_refine`，每個階段使用聚焦的提示詞
 - 風格指南 — 50+ 內建風格（glassmorphism、brutalist、retro 等），支援基於標籤的模糊匹配，並接入規劃與生成流程
 - 多模型能力設定檔 — 依模型層級自動適配思考模式、推理強度與提示詞形態
-- 內建智能體執行環境（`agent-native`，Zig NAPI）+ Anthropic、Claude Agent SDK、OpenCode、Codex、Copilot、Gemini 提供商
+- 內建智能體執行環境（Rust）+ Anthropic、Claude Agent SDK、OpenCode、Codex、Copilot、Gemini 提供商
 - 中國大型語言模型 Anthropic 格式透傳 — Kimi、Zhipu、GLM、DouBao、Ark、Bailian/DashScope、ModelScope、Coding Plans
 
 **Git 整合**
@@ -309,7 +306,7 @@ OpenPencil 正以 **Rust** 從頭重寫（[#129](https://github.com/ZSeven-W/ope
 | **Web 傳輸大小**      | JS + WASM 套件                                   | **8.2 MB** wasm / **2.18 MB** gzip 傳輸                              |
 | **渲染**              | Web 上的 CanvasKit/Skia                          | 在**所有**目標平台共用同一套 GPU 加速 Skia 後端                       |
 | **記憶體**            | JavaScript GC 暫停                               | 無 GC — Rust 所有權機制，延遲可預測                                   |
-| **程式碼庫**          | Web 技術棧 + Electron + Zig NAPI 智能體          | 單一 Rust workspace：編輯器 · CLI · MCP · AI · 程式碼生成 · Figma · Git |
+| **程式碼庫**          | Web 技術棧 + Electron          | 單一 Rust workspace：編輯器 · CLI · MCP · AI · 程式碼生成 · Figma · Git |
 | **支援平台**          | Web + 桌面端，兩套獨立技術棧                     | 桌面端（macOS/Win/Linux）· 行動端（iOS/Android）· 瀏覽器 — 同一核心  |
 
 **實測改善成果**
@@ -382,15 +379,20 @@ openpencil/
 ## 指令碼命令
 
 ```bash
-bun --bun run dev          # 開發伺服器（連接埠 3000）
-bun --bun run build        # 正式版建置
-bun --bun run test         # 執行測試（Vitest）
-npx tsc --noEmit           # 型別檢查
-bun run bump <version>     # 在所有 package.json 間同步版本號
-bun run electron:dev       # Electron 開發模式
-bun run electron:build     # Electron 封裝
-bun run cli:dev            # 從原始碼執行 CLI
-bun run cli:compile        # 編譯 CLI 到 dist
+# Product (Rust — run from the repo root)
+cargo build --workspace              # Build all crates (add --release for prod)
+cargo test --workspace               # Run all tests
+cargo check --workspace              # Type check
+cargo clippy --workspace --all-targets -- -D warnings   # Lint
+cargo fmt --all                      # Format
+bash scripts/start-web-rust.sh       # Web dev server (wasm bundle + headless host)
+cargo run -p op-host-desktop         # Desktop app (binary: openpencil-desktop)
+cargo run -p op-cli -- <args>        # CLI (binary: op)
+
+# Web SDK / JS tooling (run from packages/)
+cd packages && bun run lint          # Lint the web SDK (oxlint); also: bun run format
+cd packages && bun run generate-iconify-catalog   # Regenerate the Rust icon catalog assets
+cd packages && bun run bump <version>             # Sync SDK package.json versions
 ```
 
 ## 參與貢獻
@@ -400,7 +402,7 @@ bun run cli:compile        # 編譯 CLI 到 dist
 1. Fork 並複製存放庫
 2. 設定版本同步：`git config core.hooksPath .githooks`
 3. 建立分支：`git checkout -b feat/my-feature`
-4. 執行檢查：`npx tsc --noEmit && bun --bun run test`
+4. 執行檢查：`cargo test --workspace && cargo clippy --workspace --all-targets -- -D warnings`
 5. 使用 [Conventional Commits](https://www.conventionalcommits.org/) 提交：`feat(canvas): add rotation snapping`
 6. 向 `main` 分支發起 PR
 
@@ -442,7 +444,7 @@ OpenPencil 免費且開源,開發完全由覺得它好用的人們贊助 —— 
 ## 社群
 
 <a href="https://discord.gg/h9Fmyy6pVh">
-  <img src="./apps/web/public/logo-discord.svg" alt="Discord" width="16" />
+  <img src="./screenshot/logo-discord.svg" alt="Discord" width="16" />
   <strong> 加入我們的 Discord</strong>
 </a>
 — 提問、分享設計、提出功能建議。

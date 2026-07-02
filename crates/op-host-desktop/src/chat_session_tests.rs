@@ -735,6 +735,7 @@ fn pump_writes_to_bound_tab_not_the_active_tab() {
     assert!(!tab0.streaming);
 }
 
+
 #[test]
 fn launch_populates_system_prompt_and_history() {
     // The per-turn request assembly (GAP #31): transcript → trimmed

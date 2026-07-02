@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./apps/desktop/build/icon.png" alt="OpenPencil" width="120" />
+  <img src="./crates/op-host-desktop/assets/icon.png" alt="OpenPencil" width="120" />
 </p>
 
 <h1 align="center">OpenPencil</h1>
@@ -105,20 +105,17 @@ Tek bir `.op` dosyasından React + Tailwind, HTML + CSS, Vue, Svelte, Flutter, S
 ## Hızlı Başlangıç
 
 ```bash
-# Bağımlılıkları yükle
-bun install
-
-# http://localhost:3000 adresinde geliştirme sunucusunu başlat
-bun --bun run dev
+# Web dev server (builds the CanvasKit wasm bundle, then runs the headless web host)
+bash scripts/start-web-rust.sh
 ```
 
 Ya da masaüstü uygulaması olarak çalıştırın:
 
 ```bash
-bun run electron:dev
+cargo run -p op-host-desktop
 ```
 
-> **Ön koşullar:** [Bun](https://bun.sh/) >= 1.0 ve [Node.js](https://nodejs.org/) >= 18
+> **Ön koşullar:** Ürünü derlemek için [Rust](https://www.rust-lang.org/) (stable). [Bun](https://bun.sh/) >= 1.0 ve [Node.js](https://nodejs.org/) >= 18 yalnızca `packages/` altındaki web SDK için gereklidir.
 
 ### Docker
 
@@ -224,7 +221,7 @@ op import:figma design.fig   # Figma dosyasını içe aktar
 cat design.dsl | op design - # stdin'den pipe ile besle
 ```
 
-Üç giriş yöntemini destekler: satır içi metin, `@filepath` (dosyadan oku) veya `-` (stdin'den oku). Masaüstü uygulama veya web geliştirme sunucusuyla çalışır. Tam komut referansı için [CLI README](./apps/cli/README.md) dosyasına bakın.
+Üç giriş yöntemini destekler: satır içi metin, `@filepath` (dosyadan oku) veya `-` (stdin'den oku). Masaüstü uygulama veya web geliştirme sunucusuyla çalışır. Tam komut referansı için [CLI README](./crates/op-cli) dosyasına bakın.
 
 **LLM Becerisi** — [OpenPencil Skill](https://github.com/ZSeven-W/openpencil-skill) eklentisini kurarak AI ajanlarına (Claude Code, Cursor, Codex, Gemini CLI vb.) `op` ile tasarım yapmayı öğretin.
 
@@ -254,7 +251,7 @@ cat design.dsl | op design - # stdin'den pipe ile besle
 - Katmanlı iş akışı — `design_skeleton` → `design_content` → `design_refine`, her aşamada odaklı prompt'lar
 - Stil Rehberleri — 50+ yerleşik stil (glassmorphism, brutalist, retro vb.), etiket tabanlı bulanık eşleştirme ile planlama ve üretime entegre
 - Çoklu model yetenek profilleri — model katmanına göre düşünme modunu, çabayı ve prompt biçimini otomatik olarak uyarlar
-- Yerleşik ajan çalışma ortamı (`agent-native`, Zig NAPI) + Anthropic, Claude Agent SDK, OpenCode, Codex, Copilot, Gemini sağlayıcıları
+- Yerleşik ajan çalışma ortamı (Rust) + Anthropic, Claude Agent SDK, OpenCode, Codex, Copilot, Gemini sağlayıcıları
 - Çinli LLM sağlayıcıları için Anthropic formatlı geçiş — Kimi, Zhipu, GLM, DouBao, Ark, Bailian/DashScope, ModelScope, Coding Plans
 
 **Git Entegrasyonu**
@@ -309,7 +306,7 @@ OpenPencil, sıfırdan **Rust** ile yeniden yazılıyor ([#129](https://github.c
 | **Web yükü**             | JS + WASM paketi                                  | **8.2 MB** wasm / **2.18 MB** gzip ile transfer                          |
 | **Görüntü işleme**       | Web'de CanvasKit/Skia                             | **Her** hedefte tek GPU hızlandırmalı Skia arka ucu                      |
 | **Bellek**               | JavaScript GC duraklamaları                       | GC yok — Rust sahiplik modeli, öngörülebilir gecikme                     |
-| **Kod tabanı**           | Web yığını + Electron + Zig NAPI ajan             | Tek Rust çalışma alanı: editör · CLI · MCP · AI · codegen · Figma · Git  |
+| **Kod tabanı**           | Web yığını + Electron             | Tek Rust çalışma alanı: editör · CLI · MCP · AI · codegen · Figma · Git  |
 | **Hedefler**             | Web + masaüstü, iki ayrı yığın                   | Masaüstü (macOS/Win/Linux) · mobil (iOS/Android) · tarayıcı — tek çekirdek |
 
 **Ölçülen iyileştirmeler**
@@ -382,15 +379,20 @@ openpencil/
 ## Betikler
 
 ```bash
-bun --bun run dev          # Geliştirme sunucusu (port 3000)
-bun --bun run build        # Üretim derlemesi
-bun --bun run test         # Testleri çalıştır (Vitest)
-npx tsc --noEmit           # Tür denetimi
-bun run bump <version>     # Tüm package.json dosyalarında sürümü eşitle
-bun run electron:dev       # Electron geliştirme modu
-bun run electron:build     # Electron paketleme
-bun run cli:dev            # CLI'yi kaynaktan çalıştır
-bun run cli:compile        # CLI'yi dist'e derle
+# Product (Rust — run from the repo root)
+cargo build --workspace              # Build all crates (add --release for prod)
+cargo test --workspace               # Run all tests
+cargo check --workspace              # Type check
+cargo clippy --workspace --all-targets -- -D warnings   # Lint
+cargo fmt --all                      # Format
+bash scripts/start-web-rust.sh       # Web dev server (wasm bundle + headless host)
+cargo run -p op-host-desktop         # Desktop app (binary: openpencil-desktop)
+cargo run -p op-cli -- <args>        # CLI (binary: op)
+
+# Web SDK / JS tooling (run from packages/)
+cd packages && bun run lint          # Lint the web SDK (oxlint); also: bun run format
+cd packages && bun run generate-iconify-catalog   # Regenerate the Rust icon catalog assets
+cd packages && bun run bump <version>             # Sync SDK package.json versions
 ```
 
 ## Katkıda Bulunma
@@ -400,7 +402,7 @@ Katkılarınızı bekliyoruz! Mimari ayrıntılar ve kod stili için [CLAUDE.md]
 1. Fork'layın ve klonlayın
 2. Sürüm eşitlemeyi ayarlayın: `git config core.hooksPath .githooks`
 3. Dal oluşturun: `git checkout -b feat/my-feature`
-4. Kontrolleri çalıştırın: `npx tsc --noEmit && bun --bun run test`
+4. Kontrolleri çalıştırın: `cargo test --workspace && cargo clippy --workspace --all-targets -- -D warnings`
 5. [Conventional Commits](https://www.conventionalcommits.org/) formatıyla commit yapın: `feat(canvas): add rotation snapping`
 6. `main` dalına PR açın
 
@@ -442,7 +444,7 @@ OpenPencil ücretsiz ve açık kaynaklıdır. Geliştirme, onu faydalı bulanlar
 ## Topluluk
 
 <a href="https://discord.gg/h9Fmyy6pVh">
-  <img src="./apps/web/public/logo-discord.svg" alt="Discord" width="16" />
+  <img src="./screenshot/logo-discord.svg" alt="Discord" width="16" />
   <strong> Discord'umuza katılın</strong>
 </a>
 — Soru sorun, tasarımlarınızı paylaşın, özellik önerin.

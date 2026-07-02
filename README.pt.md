@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./apps/desktop/build/icon.png" alt="OpenPencil" width="120" />
+  <img src="./crates/op-host-desktop/assets/icon.png" alt="OpenPencil" width="120" />
 </p>
 
 <h1 align="center">OpenPencil</h1>
@@ -105,20 +105,17 @@ Exporte de um único arquivo `.op` para React + Tailwind, HTML + CSS, Vue, Svelt
 ## Início Rápido
 
 ```bash
-# Instalar dependências
-bun install
-
-# Iniciar servidor de desenvolvimento em http://localhost:3000
-bun --bun run dev
+# Web dev server (builds the CanvasKit wasm bundle, then runs the headless web host)
+bash scripts/start-web-rust.sh
 ```
 
 Ou executar como aplicativo desktop:
 
 ```bash
-bun run electron:dev
+cargo run -p op-host-desktop
 ```
 
-> **Pré-requisitos:** [Bun](https://bun.sh/) >= 1.0 e [Node.js](https://nodejs.org/) >= 18
+> **Pré-requisitos:** [Rust](https://www.rust-lang.org/) (stable) para compilar o produto. [Bun](https://bun.sh/) >= 1.0 e [Node.js](https://nodejs.org/) >= 18 são necessários apenas para o SDK web em `packages/`.
 
 ### Docker
 
@@ -224,7 +221,7 @@ op import:figma design.fig   # Importar arquivo Figma
 cat design.dsl | op design - # Entrada por pipe via stdin
 ```
 
-Suporta três métodos de entrada: string inline, `@filepath` (ler de arquivo) ou `-` (ler de stdin). Funciona com o app desktop ou servidor web de desenvolvimento. Veja o [CLI README](./apps/cli/README.md) para referência completa de comandos.
+Suporta três métodos de entrada: string inline, `@filepath` (ler de arquivo) ou `-` (ler de stdin). Funciona com o app desktop ou servidor web de desenvolvimento. Veja o [CLI README](./crates/op-cli) para referência completa de comandos.
 
 **Habilidade LLM** — instale o plugin [OpenPencil Skill](https://github.com/ZSeven-W/openpencil-skill) para ensinar agentes IA (Claude Code, Cursor, Codex, Gemini CLI, etc.) a projetar com `op`.
 
@@ -254,7 +251,7 @@ Suporta três métodos de entrada: string inline, `@filepath` (ler de arquivo) o
 - Fluxo em camadas — `design_skeleton` → `design_content` → `design_refine` com prompts focados por fase
 - Guias de estilo — mais de 50 estilos integrados (glassmorphism, brutalist, retro, etc.) com correspondência fuzzy baseada em tags, integrados ao planejamento e geração
 - Perfis de capacidade multi-modelo — adapta automaticamente o modo de pensamento, o esforço e a forma do prompt conforme o nível do modelo
-- Runtime de agente integrado (`agent-native`, Zig NAPI) + provedores Anthropic, Claude Agent SDK, OpenCode, Codex, Copilot, Gemini
+- Runtime de agente integrado (Rust) + provedores Anthropic, Claude Agent SDK, OpenCode, Codex, Copilot, Gemini
 - Passthrough no formato Anthropic para provedores de LLMs chineses — Kimi, Zhipu, GLM, DouBao, Ark, Bailian/DashScope, ModelScope, Coding Plans
 
 **Integração com Git**
@@ -309,7 +306,7 @@ O OpenPencil está sendo reescrito do zero em **Rust** ([#129](https://github.co
 | **Payload web**          | Bundle JS + WASM                                  | **8.2 MB** wasm / **2.18 MB** gzip transferido pela rede                 |
 | **Renderização**         | CanvasKit/Skia na web                             | Um único backend Skia com aceleração GPU em **todos** os alvos           |
 | **Memória**              | Pausas do JavaScript GC                           | Sem GC — ownership Rust, latência previsível                             |
-| **Base de código**       | Web stack + Electron + Zig NAPI agent             | Um workspace Rust: editor · CLI · MCP · AI · codegen · Figma · Git       |
+| **Base de código**       | Web stack + Electron             | Um workspace Rust: editor · CLI · MCP · AI · codegen · Figma · Git       |
 | **Plataformas**          | Web + desktop, duas stacks separadas              | Desktop (macOS/Win/Linux) · mobile (iOS/Android) · navegador — um núcleo |
 
 **Melhorias mensuradas**
@@ -382,15 +379,20 @@ openpencil/
 ## Scripts
 
 ```bash
-bun --bun run dev          # Servidor de desenvolvimento (porta 3000)
-bun --bun run build        # Build de produção
-bun --bun run test         # Executar testes (Vitest)
-npx tsc --noEmit           # Verificação de tipos
-bun run bump <version>     # Sincronizar versão em todos os package.json
-bun run electron:dev       # Desenvolvimento com Electron
-bun run electron:build     # Empacotamento do Electron
-bun run cli:dev            # Executar CLI a partir do código-fonte
-bun run cli:compile        # Compilar CLI para dist
+# Product (Rust — run from the repo root)
+cargo build --workspace              # Build all crates (add --release for prod)
+cargo test --workspace               # Run all tests
+cargo check --workspace              # Type check
+cargo clippy --workspace --all-targets -- -D warnings   # Lint
+cargo fmt --all                      # Format
+bash scripts/start-web-rust.sh       # Web dev server (wasm bundle + headless host)
+cargo run -p op-host-desktop         # Desktop app (binary: openpencil-desktop)
+cargo run -p op-cli -- <args>        # CLI (binary: op)
+
+# Web SDK / JS tooling (run from packages/)
+cd packages && bun run lint          # Lint the web SDK (oxlint); also: bun run format
+cd packages && bun run generate-iconify-catalog   # Regenerate the Rust icon catalog assets
+cd packages && bun run bump <version>             # Sync SDK package.json versions
 ```
 
 ## Contribuindo
@@ -400,7 +402,7 @@ Contribuições são bem-vindas! Consulte o [CLAUDE.md](./CLAUDE.md) para detalh
 1. Faça fork e clone
 2. Configure a sincronização de versão: `git config core.hooksPath .githooks`
 3. Crie uma branch: `git checkout -b feat/my-feature`
-4. Execute as verificações: `npx tsc --noEmit && bun --bun run test`
+4. Execute as verificações: `cargo test --workspace && cargo clippy --workspace --all-targets -- -D warnings`
 5. Faça commit com [Conventional Commits](https://www.conventionalcommits.org/): `feat(canvas): add rotation snapping`
 6. Abra um PR contra `main`
 
@@ -442,7 +444,7 @@ Obrigado a **[MrQyun](https://github.com/mrqyun)** — quer ver seu nome aqui? *
 ## Comunidade
 
 <a href="https://discord.gg/h9Fmyy6pVh">
-  <img src="./apps/web/public/logo-discord.svg" alt="Discord" width="16" />
+  <img src="./screenshot/logo-discord.svg" alt="Discord" width="16" />
   <strong> Entre no nosso Discord</strong>
 </a>
 — Faça perguntas, compartilhe designs, sugira funcionalidades.

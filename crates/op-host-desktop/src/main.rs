@@ -1049,3 +1049,16 @@ mod chat_intent_host_tests;
 
 #[cfg(test)]
 mod main_tests;
+
+// Serializes tests that touch the process-global `agent_indicators`
+// registry against tests that assert an exact animation deadline. The
+// registry is shared across every test in this binary running in
+// parallel, so a design-turn test streaming reveals would otherwise
+// race a caret-blink deadline assertion (the reveal deadline is smaller
+// than the blink). Guard both sides on this lock and clear the registry
+// inside the reader's critical section.
+#[cfg(test)]
+pub(crate) mod agent_indicator_test_lock {
+    use std::sync::{LazyLock, Mutex};
+    pub(crate) static LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+}

@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./apps/desktop/build/icon.png" alt="OpenPencil" width="120" />
+  <img src="./crates/op-host-desktop/assets/icon.png" alt="OpenPencil" width="120" />
 </p>
 
 <h1 align="center">OpenPencil</h1>
@@ -105,20 +105,17 @@ Xuất từ một tệp `.op` duy nhất sang React + Tailwind, HTML + CSS, Vue,
 ## Bắt đầu nhanh
 
 ```bash
-# Cài đặt các phụ thuộc
-bun install
-
-# Khởi động máy chủ phát triển tại http://localhost:3000
-bun --bun run dev
+# Web dev server (builds the CanvasKit wasm bundle, then runs the headless web host)
+bash scripts/start-web-rust.sh
 ```
 
 Hoặc chạy dưới dạng ứng dụng desktop:
 
 ```bash
-bun run electron:dev
+cargo run -p op-host-desktop
 ```
 
-> **Yêu cầu:** [Bun](https://bun.sh/) >= 1.0 và [Node.js](https://nodejs.org/) >= 18
+> **Yêu cầu:** [Rust](https://www.rust-lang.org/) (stable) để build sản phẩm. [Bun](https://bun.sh/) >= 1.0 và [Node.js](https://nodejs.org/) >= 18 chỉ cần cho web SDK trong `packages/`.
 
 ### Docker
 
@@ -224,7 +221,7 @@ op import:figma design.fig   # Nhập tệp Figma
 cat design.dsl | op design - # Pipe từ stdin
 ```
 
-Hỗ trợ ba phương thức nhập liệu: chuỗi inline, `@filepath` (đọc từ tệp), hoặc `-` (đọc từ stdin). Hoạt động với ứng dụng desktop hoặc web dev server. Xem [CLI README](./apps/cli/README.md) để biết đầy đủ các lệnh.
+Hỗ trợ ba phương thức nhập liệu: chuỗi inline, `@filepath` (đọc từ tệp), hoặc `-` (đọc từ stdin). Hoạt động với ứng dụng desktop hoặc web dev server. Xem [CLI README](./crates/op-cli) để biết đầy đủ các lệnh.
 
 **LLM Skill** — cài đặt plugin [OpenPencil Skill](https://github.com/ZSeven-W/openpencil-skill) để dạy AI agent (Claude Code, Cursor, Codex, Gemini CLI, v.v.) thiết kế bằng `op`.
 
@@ -254,7 +251,7 @@ Hỗ trợ ba phương thức nhập liệu: chuỗi inline, `@filepath` (đọc
 - Quy trình phân lớp — `design_skeleton` → `design_content` → `design_refine` với prompt tập trung cho từng giai đoạn
 - Style Guides — hơn 50 style tích hợp (glassmorphism, brutalist, retro, v.v.) với khớp mờ dựa trên tag, tích hợp vào lập kế hoạch và tạo
 - Hồ sơ năng lực đa mô hình — tự động điều chỉnh chế độ tư duy, nỗ lực và hình thức prompt theo cấp mô hình
-- Runtime tác nhân tích hợp (`agent-native`, Zig NAPI) + nhà cung cấp Anthropic, Claude Agent SDK, OpenCode, Codex, Copilot, Gemini
+- Runtime tác nhân tích hợp (Rust) + nhà cung cấp Anthropic, Claude Agent SDK, OpenCode, Codex, Copilot, Gemini
 - Chuyển tiếp định dạng Anthropic cho các nhà cung cấp LLM Trung Quốc — Kimi, Zhipu, GLM, DouBao, Ark, Bailian/DashScope, ModelScope, Coding Plans
 
 **Tích hợp Git**
@@ -309,7 +306,7 @@ OpenPencil đang được viết lại từ đầu bằng **Rust** ([#129](https
 | **Tải trọng web**            | Bundle JS + WASM                               | **8.2 MB** wasm / **2.18 MB** gzip qua mạng                         |
 | **Dựng hình**                | CanvasKit/Skia trên web                        | Một backend Skia tăng tốc GPU trên **mọi** nền tảng                  |
 | **Bộ nhớ**                   | Dừng do JavaScript GC                         | Không có GC — sở hữu Rust, độ trễ có thể dự đoán                    |
-| **Codebase**                 | Web stack + Electron + Zig NAPI agent          | Một Rust workspace: editor · CLI · MCP · AI · codegen · Figma · Git  |
+| **Codebase**                 | Web stack + Electron          | Một Rust workspace: editor · CLI · MCP · AI · codegen · Figma · Git  |
 | **Nền tảng**                 | Web + desktop, hai stack riêng biệt            | Desktop (macOS/Win/Linux) · mobile (iOS/Android) · browser — một nhân |
 
 **Cải thiện đã đo lường**
@@ -382,15 +379,20 @@ openpencil/
 ## Scripts
 
 ```bash
-bun --bun run dev          # Máy chủ phát triển (cổng 3000)
-bun --bun run build        # Build production
-bun --bun run test         # Chạy kiểm thử (Vitest)
-npx tsc --noEmit           # Kiểm tra kiểu
-bun run bump <version>     # Đồng bộ phiên bản trên tất cả package.json
-bun run electron:dev       # Electron dev
-bun run electron:build     # Đóng gói Electron
-bun run cli:dev            # Chạy CLI từ mã nguồn
-bun run cli:compile        # Biên dịch CLI sang dist
+# Product (Rust — run from the repo root)
+cargo build --workspace              # Build all crates (add --release for prod)
+cargo test --workspace               # Run all tests
+cargo check --workspace              # Type check
+cargo clippy --workspace --all-targets -- -D warnings   # Lint
+cargo fmt --all                      # Format
+bash scripts/start-web-rust.sh       # Web dev server (wasm bundle + headless host)
+cargo run -p op-host-desktop         # Desktop app (binary: openpencil-desktop)
+cargo run -p op-cli -- <args>        # CLI (binary: op)
+
+# Web SDK / JS tooling (run from packages/)
+cd packages && bun run lint          # Lint the web SDK (oxlint); also: bun run format
+cd packages && bun run generate-iconify-catalog   # Regenerate the Rust icon catalog assets
+cd packages && bun run bump <version>             # Sync SDK package.json versions
 ```
 
 ## Đóng góp
@@ -400,7 +402,7 @@ Chào mừng đóng góp! Xem [CLAUDE.md](./CLAUDE.md) để biết chi tiết v
 1. Fork và clone
 2. Thiết lập đồng bộ phiên bản: `git config core.hooksPath .githooks`
 3. Tạo branch: `git checkout -b feat/my-feature`
-4. Chạy kiểm tra: `npx tsc --noEmit && bun --bun run test`
+4. Chạy kiểm tra: `cargo test --workspace && cargo clippy --workspace --all-targets -- -D warnings`
 5. Commit theo [Conventional Commits](https://www.conventionalcommits.org/): `feat(canvas): add rotation snapping`
 6. Mở PR vào nhánh `main`
 
@@ -442,7 +444,7 @@ Cảm ơn **[MrQyun](https://github.com/mrqyun)** — muốn tên mình xuất h
 ## Cộng đồng
 
 <a href="https://discord.gg/h9Fmyy6pVh">
-  <img src="./apps/web/public/logo-discord.svg" alt="Discord" width="16" />
+  <img src="./screenshot/logo-discord.svg" alt="Discord" width="16" />
   <strong> Tham gia Discord của chúng tôi</strong>
 </a>
 — Đặt câu hỏi, chia sẻ thiết kế, đề xuất tính năng.

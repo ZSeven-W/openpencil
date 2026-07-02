@@ -40,6 +40,13 @@ fn top_bar_gap_press_blurs_chat_and_model_picker() {
 fn toolbar_gap_press_blurs_chat() {
     let mut host = WidgetHost::new();
     host.editor_state.chat.focused = true;
+    // The default chat panel is anchored bottom-left and is painted ON TOP of
+    // the toolbar (which shares the same left edge). Since the toolbar grew
+    // (Undo/Redo + Variables/Design actions), its bottom inset now falls under
+    // that panel, so the press would be claimed by the chat instead of the
+    // toolbar gap. Anchor the chat to the right so the toolbar's own blank-press
+    // handling actually receives the press.
+    host.editor_state.chat.anchor = op_editor_core::ChatAnchor::BottomRight;
 
     // Bottom inset of the toolbar's bounding rect — consumed by the
     // toolbar block but hits no button.

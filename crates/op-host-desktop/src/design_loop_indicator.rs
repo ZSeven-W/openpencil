@@ -8,9 +8,11 @@
 //! 3. Each pump, registers any *new* top-level Frame nodes (not present when
 //!    the turn started) with `agent_indicators::add_frame` so the canvas
 //!    painter draws a colour glow + name badge around them.
-//! 4. When the chat session ends (turn done / stopped), calls
-//!    `agent_indicators::end_if_epoch` to retire the epoch and clears
-//!    `state.chat.agents_running`.
+//! 4. When the chat session ends (turn done), calls
+//!    `agent_indicators::finish_if_epoch` — queued reveals drain
+//!    gracefully, then the overlay clears itself — and clears
+//!    `state.chat.agents_running`. (A user stop elsewhere calls
+//!    `end_if_epoch` for an immediate teardown.)
 //!
 //! Additive only — CRUD chat and orchestrator paths never set
 //! `agents_running > 0`, so this module is a no-op for them.
@@ -101,9 +103,10 @@ pub(super) fn pump_indicator(
             // Turn still in flight — tag any frames that appeared.
             register_new_frames(ind, state);
         } else {
-            // Turn ended (session dropped) — tear down the epoch.
+            // Turn ended (session dropped) — finish gracefully so the
+            // queued reveals play out before the overlay clears itself.
             let epoch = ind.epoch;
-            agent_indicators::end_if_epoch(epoch);
+            agent_indicators::finish_if_epoch(epoch);
             state.chat.agents_running = (0, 0);
             *indicator = None;
         }

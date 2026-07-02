@@ -1,0 +1,31 @@
+{
+  "name": "@zseven-w/openpencil-packages",
+  "version": "0.8.0",
+  "private": true,
+  "description": "Web SDK workspace for OpenPencil (the Rust product lives in ../crates). Hosts the wasm-backed op-web-sdk viewer family plus the JS build glue that feeds the Rust web target.",
+  "author": {
+    "name": "ZSeven-W",
+    "email": "xkayshen@gmail.com"
+  },
+  "type": "module",
+  "workspaces": [
+    "op-web-sdk",
+    "op-web-sdk-react",
+    "op-web-sdk-vue"
+  ],
+  "scripts": {
+    "lint": "oxlint .",
+    "lint:fix": "oxlint --fix .",
+    "format": "oxfmt .",
+    "format:check": "oxfmt --check .",
+    "generate-iconify-catalog": "node scripts/generate-iconify-catalog.mjs",
+    "bump": "sh -c 'V=$0; [ -z \"$V\" ] && echo \"Usage: bun run bump <version>\" && exit 1; for f in package.json */package.json; do [ -f \"$f\" ] && jq --arg v \"$V\" \".version=\\$v\" \"$f\" > \"$f.tmp\" && mv \"$f.tmp\" \"$f\" && echo \"$f → $V\"; done'"
+  },
+  "devDependencies": {
+    "@iconify-json/feather": "^1.2.1",
+    "@iconify-json/lucide": "^1.2.93",
+    "@iconify-json/simple-icons": "^1.2.71",
+    "oxfmt": "^0.42.0",
+    "oxlint": "^1.57.0"
+  }
+}

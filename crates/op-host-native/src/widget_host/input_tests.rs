@@ -441,12 +441,17 @@ fn dragging_user_transcript_text_selects_and_copy_queues_text() {
     let rect = host
         .ai_chat_rect(viewport_w, viewport_h)
         .expect("chat panel visible");
-    let y = rect.origin.y + 74.0;
+    // At the 360px default panel width this 18-char CJK prompt wraps to two
+    // bubble lines (line 0 = first 17 chars, line 1 = the final "页"), so a
+    // whole-prompt drag has to run from line 0 down into line 1. A horizontal
+    // drag on line 0 alone can only reach the end of line 0, dropping "页".
     let start_x = rect.origin.x + 96.0;
+    let start_y = rect.origin.y + 74.0; // line 0
     let end_x = rect.origin.x + 338.0;
+    let end_y = rect.origin.y + 88.0; // line 1 (the wrapped final glyph)
 
-    assert!(host.apply_press(start_x, y, viewport_w, viewport_h));
-    assert!(host.apply_cursor_move(end_x, y));
+    assert!(host.apply_press(start_x, start_y, viewport_w, viewport_h));
+    assert!(host.apply_cursor_move(end_x, end_y));
     assert!(host.apply_release_with_viewport(viewport_w, viewport_h));
 
     assert_eq!(
@@ -559,7 +564,12 @@ fn ai_chat_stop_click_keeps_transcript_and_queues_abort() {
 }
 
 #[test]
-fn ai_chat_agent_team_click_cycles_team_size() {
+fn ai_chat_agent_team_click_sets_team_size_via_parallel_agents_picker() {
+    // #32: the ⚡ footer chip no longer cycles the team size on click — it
+    // opens the Parallel Agents picker, and clicking a row (1x–6x) sets
+    // `agent_team_size`. Drive that two-step flow through the real hit-test
+    // routing (probe with `hit_test`, then click the resolved points).
+    use op_editor_ui::widgets::AIChatHit;
     let mut host = WidgetHostNative::new();
     host.editor_state_mut()
         .chat
@@ -571,16 +581,48 @@ fn ai_chat_agent_team_click_cycles_team_size() {
         ));
     let viewport_w = 1200.0;
     let viewport_h = 800.0;
+    host.last_viewport_w = viewport_w;
+    host.last_viewport_h = viewport_h;
     let rect = host.ai_chat_rect(viewport_w, viewport_h).unwrap();
-    let x = rect.origin.x + 132.0;
-    let y = rect.origin.y + toolbar_center_y_for_test();
 
-    assert!(host.apply_click(x, y, viewport_w, viewport_h));
+    // Locate the ⚡ speed chip along the footer toolbar row and click it to
+    // open the picker.
+    let panel = op_editor_ui::widgets::AIChatPlaceholder::from_editor(host.editor_state());
+    let toolbar_y = rect.origin.y + toolbar_center_y_for_test();
+    let mut speed_point = None;
+    let mut sx = rect.origin.x;
+    while sx < rect.origin.x + rect.size.x {
+        let p = op_editor_ui::Point2D::new(sx, toolbar_y);
+        if panel.hit_test(rect, p) == Some(AIChatHit::ToggleParallelAgentsPicker) {
+            speed_point = Some(p);
+            break;
+        }
+        sx += 1.0;
+    }
+    let speed_point = speed_point.expect("footer speed chip should be hittable");
+    assert!(host.apply_click(speed_point.x, speed_point.y, viewport_w, viewport_h));
+    assert!(host.editor_state().editor_ui.parallel_agents_picker_open);
+
+    // With the picker open, find and click the "2x" row.
+    let panel = op_editor_ui::widgets::AIChatPlaceholder::from_editor(host.editor_state());
+    let mut row_point = None;
+    let mut ry = rect.origin.y;
+    'scan: while ry < rect.origin.y + rect.size.y {
+        let mut rx = rect.origin.x;
+        while rx < rect.origin.x + rect.size.x {
+            let p = op_editor_ui::Point2D::new(rx, ry);
+            if panel.hit_test(rect, p) == Some(AIChatHit::SetParallelAgents(2)) {
+                row_point = Some(p);
+                break 'scan;
+            }
+            rx += 2.0;
+        }
+        ry += 2.0;
+    }
+    let row_point = row_point.expect("parallel agents picker row 2 should be hittable");
+    assert!(host.apply_click(row_point.x, row_point.y, viewport_w, viewport_h));
     assert_eq!(host.editor_state().chat.agent_team_size, 2);
-
-    host.editor_state_mut().chat.agent_team_size = 6;
-    assert!(host.apply_click(x, y, viewport_w, viewport_h));
-    assert_eq!(host.editor_state().chat.agent_team_size, 1);
+    assert!(!host.editor_state().editor_ui.parallel_agents_picker_open);
 }
 
 #[test]

@@ -60,7 +60,7 @@ fn rect_close(actual: Rect, expected: Rect) -> bool {
         && (actual.size.y - expected.size.y).abs() < 0.01
 }
 
-#[allow(dead_code)]
+#[allow(dead_code)] // test helper kept for future color-assertion tests
 fn color_close(a: crate::Color, b: crate::Color) -> bool {
     (a.r - b.r).abs() < 1e-6
         && (a.g - b.g).abs() < 1e-6
