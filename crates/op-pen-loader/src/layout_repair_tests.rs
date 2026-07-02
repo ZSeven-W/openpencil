@@ -188,11 +188,15 @@ fn non_clipped_fixed_height_layout_containers_expand_to_overflowing_children() {
 }
 
 #[test]
-fn clipped_vertical_root_expands_when_repaired_content_overflows() {
-    // Top-level artboards still clip at paint time, but generated legacy roots
-    // can receive taller repaired children after exact text/layout measurement.
-    // The root bounds must grow with that repaired stack or the bottom nav is
-    // clipped out of the exported artboard.
+fn clipped_vertical_root_with_fixed_height_clips_overflow_like_pencil() {
+    // A root that declares an explicit (Number) height AND `clip:true` must
+    // honour that height and clip the overflow — matching Pencil, which renders
+    // a fixed-height artboard at exactly its declared size and clips content
+    // that spills past it (verified against a Pencil `export_nodes` baseline:
+    // a 900-tall clipped screen exported at 900, not its ~950px content). This
+    // also makes the root CONSISTENT with the nested case below, where a
+    // clipped fixed-height container already refuses to grow. `fit_content`
+    // roots (no Number height) still expand via `height_can_follow_content`.
     let src = r##"{
       "version":"1.0.0","pages":[{"id":"p","name":"P","children":[
         {"type":"frame","id":"root","width":200,"height":50,"clip":true,
@@ -213,11 +217,17 @@ fn clipped_vertical_root_expands_when_repaired_content_overflows() {
     }"##;
     let scene = editor_state_to_layout_scene(&state_from(src));
     let root = &scene.pages[0].children[0];
-    let after = root.find("after").expect("following child");
 
+    // Children still lay out at their repaired positions (overflowing past 50)…
+    let after = root.find("after").expect("following child");
     assert_eq!(after.bounds.origin.y, 51.0);
-    assert_eq!(root.bounds.size.y, 61.0);
-    assert!(root.clip_content, "root must still clip after expanding");
+    // …but the root keeps its declared 50px height and clips the overflow,
+    // rather than growing to the ~61px content height.
+    assert_eq!(root.bounds.size.y, 50.0);
+    assert!(
+        root.clip_content,
+        "fixed-height clipped root must still clip"
+    );
 }
 
 #[test]

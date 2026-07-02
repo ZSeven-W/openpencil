@@ -221,11 +221,20 @@ fn node_payload_to_scene(
             .shader
             .as_ref()
             .map(|s| payload_shader_to_scene(s, cum_opacity)),
-        stroke: node.stroke.as_ref().map(|s| {
-            let mut st = scene_stroke(s, &node_id, var_table);
-            st.color = mul_alpha(st.color, cum_opacity);
-            st
-        }),
+        stroke: if is_status_bar_shell_stroke(node) {
+            // The scene path (editor canvas + render-shots) bypasses the
+            // adapter's `legacy_payload_repair`, so an iPhone status-bar
+            // shell ("Time"/"Levels") authored with a no-fill stroke would
+            // paint a phantom black box around the clock / signal cluster —
+            // invisible in Pencil. Drop the stroke the same way here.
+            None
+        } else {
+            node.stroke.as_ref().map(|s| {
+                let mut st = scene_stroke(s, &node_id, var_table);
+                st.color = mul_alpha(st.color, cum_opacity);
+                st
+            })
+        },
         text: node.text.clone(),
         text_runs: text_runs_to_scene(&node.text_runs, cum_opacity),
         font_family: node.font_family.clone(),
@@ -470,6 +479,25 @@ fn scene_stroke(
         width: s.width,
         sides: s.sides,
     }
+}
+
+/// An iPhone status-bar layout shell ("Time" / "Levels") authored with a
+/// stroke but no fill — Pencil paints nothing, so the no-fill stroke (which
+/// resolves to opaque black) must not draw a phantom box. Mirrors
+/// `legacy_payload_repair::is_legacy_status_bar_shell` on the resolved
+/// `NodePayload` the scene path carries (no canonical `PenNode` here). Width
+/// is intentionally unconstrained — the shells are `fill_container`, so a
+/// wider status bar computes a larger width than a fixed-width sample.
+fn is_status_bar_shell_stroke(node: &NodePayload) -> bool {
+    // A thin status-bar row: the authored 22 px computes to ~22-23 here
+    // (stroke / rounding), so match a small range rather than an exact 22.
+    // The no-fill + stroke + non-empty-children gates already exclude the
+    // inner "Time" text glyph node (which is filled, strokeless, leaf).
+    node.stroke.is_some()
+        && node.fill.is_none()
+        && matches!(node.name.as_str(), "Time" | "Levels")
+        && !node.children.is_empty()
+        && (18.0..=28.0).contains(&node.h)
 }
 
 /// `[r, g, b, a]` payload colour → shell-core `Color`. Lossless;
