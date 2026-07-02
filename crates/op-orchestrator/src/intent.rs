@@ -30,6 +30,18 @@ const DESIGN_KEYWORDS: &[&str] = &[
     "screen for",
     "app screen",
     "web page",
+    // 英文设计名词 — 产品/应用类（名词短语请求，无创建动词，如
+    // "Luxury webapp for managing barbershop clients"）。设计工具语境下
+    // 这些词几乎总是"造一个 X"，误判成 chat 的代价（弱 chat-agent-loop
+    // 只探索不设计）远高于偶发误判成 design 的代价。
+    "webapp",
+    "web app",
+    "website",
+    "web site",
+    "app for",
+    "mobile app",
+    "admin panel",
+    "saas",
     // 中文动词
     "设计",
     "生成",
@@ -57,6 +69,10 @@ const DESIGN_KEYWORDS: &[&str] = &[
     "搜索页",
     "详情页",
     "分类页",
+    "网站",
+    "网页",
+    "小程序",
+    "后台",
 ];
 
 /// 把用户消息分类为 [`Intent::Design`] 或 [`Intent::Chat`]。
@@ -86,6 +102,13 @@ mod tests {
             "帮我做个注册页",
             "继续画出发现页",
             "继续做订单页",
+            // 名词短语（无创建动词）— 产品/应用类请求
+            "Luxury webapp for managing barbershop clients",
+            "a SaaS website for invoicing",
+            "mobile app for habit tracking",
+            "admin panel for orders",
+            "一个理发店管理网站",
+            "记账小程序",
         ] {
             assert_eq!(classify_intent(p), Intent::Design, "{p}");
         }
