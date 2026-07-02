@@ -178,6 +178,14 @@ fn is_minimax_model(model: &str) -> bool {
     m.starts_with("minimax") || m.starts_with("abab")
 }
 
+/// GLM reasoning models burn the whole `max_tokens` budget on reasoning and
+/// return EMPTY content unless thinking is disabled (measured: an orchestrator
+/// sidebar subtask failed 3× "empty content from provider" and shipped
+/// missing). Mirrors the production gate in `chat_builtin_http::is_glm_model`.
+fn is_glm_model(model: &str) -> bool {
+    model.to_ascii_lowercase().starts_with("glm")
+}
+
 /// Direct openai-compat `LlmClient` for the harness (OPENPENCIL_SMOKE_DIRECT=1).
 ///
 /// The default [`SmokeLlmClient`] goes through the vendored `agent` QueryEngine,
@@ -244,7 +252,8 @@ impl LlmClient for DirectOpenAiClient {
             // (17% M3, ~10s answers); this lets the M3-with-think arm be
             // benchmarked (strip_reasoning handles the <think> blocks).
             let keep_thinking = std::env::var("OPENPENCIL_SMOKE_KEEP_THINKING").is_ok();
-            if !keep_thinking && (force_disable || is_minimax_model(&model)) {
+            if !keep_thinking && (force_disable || is_minimax_model(&model) || is_glm_model(&model))
+            {
                 if let Some(obj) = body.as_object_mut() {
                     obj.insert("thinking".into(), serde_json::json!({ "type": "disabled" }));
                 }
@@ -657,6 +666,57 @@ async fn main() -> std::process::ExitCode {
     // benchmark that asked for a library must not silently run without it.
     if let Err(code) = maybe_merge_smoke_library(&mut sink.state) {
         return code;
+    }
+
+    // `OPENPENCIL_SMOKE_AUDIT=<path.op>` — self-loop quality gate: load the
+    // doc, run the REAL-layout geometry diagnostics (the same detector family
+    // the per-batch feedback uses), print a JSON report, exit. Zero LLM calls.
+    // Exit code 0 = structurally clean, 1 = issues found. This is the
+    // machine-checkable leg of the develop→generate→render→audit loop.
+    if let Ok(audit_path) = std::env::var("OPENPENCIL_SMOKE_AUDIT") {
+        let text = match std::fs::read_to_string(&audit_path) {
+            Ok(s) => s,
+            Err(e) => {
+                eprintln!("[AUDIT] read {audit_path}: {e}");
+                return std::process::ExitCode::from(3);
+            }
+        };
+        let doc: jian_ops_schema::PenDocument = match serde_json::from_str(&text) {
+            Ok(d) => d,
+            Err(e) => {
+                eprintln!("[AUDIT] parse {audit_path}: {e}");
+                return std::process::ExitCode::from(3);
+            }
+        };
+        let state = op_editor_core::EditorState::from_document(doc);
+        let issues = op_orchestrator::geometry_validation::geometry_diagnostics(&state);
+        let roots: Vec<String> = state
+            .active_children()
+            .iter()
+            .map(|n| {
+                use op_editor_core::PenNodeExt;
+                format!(
+                    "{} ({})",
+                    n.base().name.as_deref().unwrap_or("?"),
+                    n.id_str()
+                )
+            })
+            .collect();
+        let report = serde_json::json!({
+            "file": audit_path,
+            "roots": roots,
+            "issueCount": issues.len(),
+            "issues": issues,
+        });
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&report).unwrap_or_default()
+        );
+        return if issues.is_empty() {
+            std::process::ExitCode::SUCCESS
+        } else {
+            std::process::ExitCode::from(1)
+        };
     }
 
     // `OPENPENCIL_SMOKE_PROGRAM=<path>` runs a Pencil-style batch_design DSL
