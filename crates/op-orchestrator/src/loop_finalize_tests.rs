@@ -253,3 +253,34 @@ fn loop_finalize_restructures_sidebar_dashboard() {
         "data sections nested under Main Content in order"
     );
 }
+
+#[test]
+fn loop_finalize_gives_fill_less_text_a_visible_fill_on_dark_surface() {
+    // glm-5.2 in the loop builds a dark design but omits `fill` on text nodes,
+    // so they render with the default color — invisible on the dark surfaces it
+    // also built. apply_loop_finalize must inject a background-contrasting fill.
+    let mut state = state_with_forest(json!([{
+        "type": "frame", "id": "root", "name": "Page", "layout": "vertical",
+        "width": 1200, "height": 800,
+        "fill": [{ "type": "solid", "color": "#0A0A0A" }],
+        "children": [{
+            "type": "frame", "id": "card", "name": "Card", "layout": "vertical",
+            "width": 400, "height": 200,
+            "fill": [{ "type": "solid", "color": "#0D0D0D" }],
+            "children": [
+                { "type": "text", "id": "label", "name": "Label", "content": "Total Clients", "fontSize": 14 }
+            ]
+        }]
+    }]));
+    let before = fill_of(&state, "Label").unwrap_or(json!(null));
+    assert!(
+        before.is_null() || before.as_array().map(|a| a.is_empty()).unwrap_or(false),
+        "precondition: Label starts fill-less, got {before:?}"
+    );
+    apply_loop_finalize(&mut state);
+    let after = fill_of(&state, "Label").expect("Label survives finalize");
+    assert!(
+        after.as_array().map(|a| !a.is_empty()).unwrap_or(false),
+        "fill-less text on a dark surface must get a visible fill; got {after:?}"
+    );
+}

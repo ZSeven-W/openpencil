@@ -285,6 +285,137 @@ fn sink_sidebar_footer(sidebar: &mut Value) {
     }
 }
 
+// ── Standalone footer-sink for ALREADY-STRUCTURED sidebars ──
+//
+// `reshape_sidebar_to_app_shell` (+ its `sink_sidebar_footer`) only fires when
+// the root is a flat-vertical band that must be turned INTO an app-shell. When a
+// weak model already emits the correct `[sidebar | content]` shell but stacks the
+// sidebar nav as a FLAT fit_content column — brand, nav groups, then a user/Pro
+// footer as the last item, with NO `space_between` and NO spacer — the footer
+// rides directly under the nav and the bottom of the rail is dead space. This
+// whole-root pass sinks that footer: promote the column to `fill_container` and
+// inject a flexible spacer before its footer-like last child. Runs in
+// `run_cleanup_passes` (after the app-shell reshape, so it only sees sidebars the
+// reshape left alone). Self-contained per node; never drops anything.
+
+/// True when a node reads as a sidebar FOOTER: an explicit footer-ish name, or
+/// (for the common UNNAMED footer card) its subtree text carries an account /
+/// owner / upgrade signal. Name-only detection misses glm's unnamed
+/// `{avatar, "James Miller", "Shop Owner"}` card — the content check catches it.
+fn is_footer_like(v: &Value) -> bool {
+    let t = ident_text(v);
+    if ["user", "profile", "account", "avatar", "footer", "member"]
+        .iter()
+        .any(|k| t.contains(k))
+    {
+        return true;
+    }
+    let mut text = String::new();
+    collect_subtree_text(v, &mut text);
+    [
+        "owner", "admin", "account", "sign out", "log out", "upgrade", "pro plan", "go pro",
+        "settings",
+    ]
+    .iter()
+    .any(|k| text.contains(k))
+}
+
+/// Lowercased concatenation of every `text`/`content` string in the subtree.
+fn collect_subtree_text(v: &Value, out: &mut String) {
+    if let Some(content) = v.get("content").and_then(Value::as_str) {
+        out.push_str(&content.to_lowercase());
+        out.push(' ');
+    }
+    if let Some(kids) = v.get("children").and_then(Value::as_array) {
+        for c in kids {
+            collect_subtree_text(c, out);
+        }
+    }
+}
+
+/// Whole-root driver: recurse, sinking the footer of any flat sidebar-nav column.
+pub(crate) fn sink_structured_sidebar_footers(root: &mut PenNode) -> bool {
+    let Ok(mut v) = serde_json::to_value(&*root) else {
+        return false;
+    };
+    if !sink_mut(&mut v) {
+        return false;
+    }
+    match serde_json::from_value::<PenNode>(v) {
+        Ok(new_node) => {
+            *root = new_node;
+            true
+        }
+        Err(_) => false,
+    }
+}
+
+/// Pure predicate: does THIS node qualify as a flat sidebar nav whose footer
+/// should be sunk? (sidebar-named vertical column, hug height, ≥3 children, last
+/// child footer-like, no existing distribution intent / spacer.)
+fn try_sink_flat_sidebar_nav(v: &Value) -> bool {
+    if !is_sidebar_named(&ident_text(v)) {
+        return false;
+    }
+    if layout_str(v) != Some("vertical") {
+        return false;
+    }
+    // Already distributing or already has a spacer → leave alone (idempotent +
+    // respects an author who DID express the pattern).
+    if matches!(
+        v.get("justifyContent").and_then(Value::as_str),
+        Some("space_between") | Some("space_around") | Some("space_evenly")
+    ) {
+        return false;
+    }
+    let Some(kids) = v.get("children").and_then(Value::as_array) else {
+        return false;
+    };
+    if kids.len() < 3 {
+        return false;
+    }
+    if kids.iter().any(|c| ident_text(c).contains("spacer")) {
+        return false;
+    }
+    kids.last().map(is_footer_like).unwrap_or(false)
+}
+
+/// Mutating walk: apply the sink to qualifying nodes, recursing into children.
+fn sink_mut(v: &mut Value) -> bool {
+    let mut changed = false;
+    if try_sink_flat_sidebar_nav(v) {
+        let id = v
+            .get("id")
+            .and_then(Value::as_str)
+            .unwrap_or("sidebar")
+            .to_string();
+        if let Some(obj) = v.as_object_mut() {
+            obj.insert("height".into(), json!("fill_container"));
+        }
+        if let Some(kids) = v.get_mut("children").and_then(Value::as_array_mut) {
+            let pos = kids.len() - 1;
+            kids.insert(
+                pos,
+                json!({
+                    "type": "frame",
+                    "id": format!("{id}-footer-spacer"),
+                    "name": "Sidebar Spacer",
+                    "width": "fill_container",
+                    "height": "fill_container",
+                    "children": [],
+                }),
+            );
+            changed = true;
+        }
+    }
+    if let Some(kids) = v.get_mut("children").and_then(Value::as_array_mut) {
+        for c in kids.iter_mut() {
+            changed |= sink_mut(c);
+        }
+    }
+    changed
+}
+
 /// Recursively retarget any descendant whose width was sized to (about) the OLD
 /// full root width down to `fill_container`, so full-width sections/dividers
 /// fill their new narrower column instead of overflowing it (taffy never
@@ -375,6 +506,245 @@ fn restructure(v: &mut Value) -> bool {
     // leaving ~600px of dead canvas below.
     obj.insert("height".into(), json!("fit_content"));
     true
+}
+
+// ── Evict mis-parented content sections from the sidebar column ──
+//
+// A dashboard's LEFT RAIL holds navigation only. But the two-column routing
+// (`run.rs` → `dashboard_columns::is_sidebar_subtask`) matches the bare
+// `nav`/`menu` substrings, so a weak model that describes a "Client Directory"
+// content section with a "filter menu" — or emits it as a second forest root of
+// the sidebar subtask — strands a full data TABLE inside the 260px `clipContent`
+// rail, where it overflows and paints over the nav. This whole-root pass
+// relocates such sections into the sibling `Main Content` column.
+//
+// Detection is STRUCTURAL (a real multi-column data table) or a content-only
+// NAME token ("table"/"directory"/"data grid"). It deliberately does NOT reuse
+// `section_has_dashboard_signal`, whose broad "analytics"/"metric" tokens also
+// match sidebar MENU-ITEM labels (this very bug's rail carries an "Analytics"
+// nav item — flagging the whole rail as content would evict the navigation
+// itself). Runs in `run_cleanup_passes`. Self-contained; only MOVES nodes.
+
+/// A `table` / `data grid`-NAMED container with a real multi-row body (≥2
+/// horizontal rows). Requiring BOTH the name AND the row structure is what keeps
+/// a NAV LIST out: a weak model's nav items are multi-child horizontal rows too
+/// (icon + label + badge + chevron = 4 children was observed), but the nav
+/// container is named "Navigation" / "Menu" / "Nav Group" — never "table". A
+/// bare row/column count evicted the entire navigation; the name gate fixes it.
+fn is_named_data_table(v: &Value) -> bool {
+    if !is_table_named(&ident_text(v)) {
+        return false;
+    }
+    v.get("children")
+        .and_then(Value::as_array)
+        .map(|kids| {
+            kids.iter()
+                .filter(|row| {
+                    layout_str(row) == Some("horizontal")
+                        && row
+                            .get("children")
+                            .and_then(Value::as_array)
+                            .map(|c| c.len())
+                            .unwrap_or(0)
+                            >= 2
+                })
+                .count()
+                >= 2
+        })
+        .unwrap_or(false)
+}
+
+fn is_table_named(t: &str) -> bool {
+    t.contains("table")
+        || t.contains("data grid")
+        || t.contains("datagrid")
+        || t.contains("data-grid")
+}
+
+/// True when a sidebar child is really a MAIN-CONTENT data section: its OWN name
+/// reads as a data section, or its subtree holds an explicit (named) data table.
+/// Deliberately NOT a bare row/column-count heuristic — weak-model nav items are
+/// multi-child horizontal rows too, and a pure structural check evicted the
+/// whole navigation. Names are the reliable discriminator (real tables are named
+/// "Table" / "Client Table" / "Data Grid"; navs are "Navigation" / "Nav X").
+fn sidebar_child_is_misplaced_content(v: &Value) -> bool {
+    let t = ident_text(v);
+    if t.contains("directory") || t.contains("data table") || t.contains("data grid") {
+        return true;
+    }
+    fn walk(v: &Value) -> bool {
+        is_named_data_table(v)
+            || v.get("children")
+                .and_then(Value::as_array)
+                .is_some_and(|kids| kids.iter().any(walk))
+    }
+    walk(v)
+}
+
+/// The narrow left rail of a `[sidebar | main content]` shell — a `sidebar`-named
+/// column that is a fixed width ≤ 400 (or non-numeric, where the strong name
+/// carries it).
+fn is_narrow_sidebar_column(v: &Value) -> bool {
+    if !is_sidebar_named(&ident_text(v)) {
+        return false;
+    }
+    match num(v, "width") {
+        Some(w) => w <= 400.0,
+        None => true,
+    }
+}
+
+const SPLIT_SHELL_SIDEBAR_WIDTH: f64 = 260.0;
+
+/// A model that already split the root into `[sidebar | main]` but left the root
+/// WITHOUT a horizontal layout stacks (or overlaps) the two columns instead of
+/// placing them side by side. Measured on the agentic loop: MiniMax-M3 emits
+/// `Dashboard > {Sidebar, Main}` with `layout=None`, and
+/// [`reshape_sidebar_to_app_shell`] deliberately SKIPS 2-child roots (its
+/// `detect` assumes a 2-child root — and a keyword/absent root width — is
+/// already a correct app-shell). This catches the already-split-but-flat case
+/// it leaves behind: flip the root to a horizontal row and give the columns
+/// definite widths so the content column doesn't collapse behind the sidebar.
+/// Gated on a STRONG sidebar name + a non-sidebar sibling so a legitimate
+/// two-section vertical page is never turned sideways.
+pub(crate) fn ensure_split_shell_is_row(root: &mut PenNode) -> bool {
+    let Ok(mut v) = serde_json::to_value(&*root) else {
+        return false;
+    };
+    if !ensure_row_mut(&mut v) {
+        return false;
+    }
+    match serde_json::from_value::<PenNode>(v) {
+        Ok(new_node) => {
+            *root = new_node;
+            true
+        }
+        Err(_) => false,
+    }
+}
+
+fn ensure_row_mut(v: &mut Value) -> bool {
+    if layout_str(v) == Some("horizontal") {
+        return false; // already a row
+    }
+    let Some(kids) = v.get("children").and_then(Value::as_array) else {
+        return false;
+    };
+    // Exactly [sidebar-column, content]: a narrow sidebar-named vertical column
+    // first, a non-sidebar sibling second.
+    if kids.len() != 2 {
+        return false;
+    }
+    if !is_narrow_sidebar_column(&kids[0]) || !is_column_layout(&kids[0]) {
+        return false;
+    }
+    if is_sidebar_named(&ident_text(&kids[1])) {
+        return false;
+    }
+    let Some(obj) = v.as_object_mut() else {
+        return false;
+    };
+    obj.insert("layout".into(), json!("horizontal"));
+    obj.entry("alignItems").or_insert(json!("stretch"));
+    if let Some(kids_mut) = obj.get_mut("children").and_then(Value::as_array_mut) {
+        // Sidebar: pin a fixed narrow width when it lacks a numeric one, so the
+        // row reserves the rail instead of letting the fill_container main eat it.
+        if num(&kids_mut[0], "width").is_none() {
+            if let Some(sb) = kids_mut[0].as_object_mut() {
+                sb.insert("width".into(), json!(SPLIT_SHELL_SIDEBAR_WIDTH));
+            }
+        }
+        // Main: fill the rest of the row.
+        if let Some(main) = kids_mut[1].as_object_mut() {
+            main.insert("width".into(), json!("fill_container"));
+        }
+    }
+    true
+}
+
+/// Whole-root driver: relocate any data section stranded in a sidebar column
+/// into the sibling `Main Content` column. Returns `true` iff it moved a node.
+pub(crate) fn evict_content_from_sidebar_column(root: &mut PenNode) -> bool {
+    let Ok(mut v) = serde_json::to_value(&*root) else {
+        return false;
+    };
+    if !evict_mut(&mut v) {
+        return false;
+    }
+    match serde_json::from_value::<PenNode>(v) {
+        Ok(new_node) => {
+            *root = new_node;
+            true
+        }
+        Err(_) => false,
+    }
+}
+
+/// Recurse; at every horizontal `[… sidebar … main content …]` node move the
+/// sidebar column's misplaced content sections into the content column.
+fn evict_mut(v: &mut Value) -> bool {
+    let mut changed = try_evict_in_shell(v);
+    if let Some(kids) = v.get_mut("children").and_then(Value::as_array_mut) {
+        for c in kids.iter_mut() {
+            changed |= evict_mut(c);
+        }
+    }
+    changed
+}
+
+fn try_evict_in_shell(shell: &mut Value) -> bool {
+    if layout_str(shell) != Some("horizontal") {
+        return false;
+    }
+    let Some(kids) = shell.get("children").and_then(Value::as_array) else {
+        return false;
+    };
+    let sidebar_idx = kids.iter().position(is_narrow_sidebar_column);
+    let content_idx = kids
+        .iter()
+        .position(|c| ident_text(c).contains("main content"));
+    let (Some(si), Some(ci)) = (sidebar_idx, content_idx) else {
+        return false;
+    };
+    if si == ci {
+        return false;
+    }
+    // Drain the misplaced content sections out of the sidebar column.
+    let mut moved: Vec<Value> = Vec::new();
+    {
+        let Some(kids_mut) = shell.get_mut("children").and_then(Value::as_array_mut) else {
+            return false;
+        };
+        if let Some(sb_kids) = kids_mut[si]
+            .get_mut("children")
+            .and_then(Value::as_array_mut)
+        {
+            let mut i = 0;
+            while i < sb_kids.len() {
+                if sidebar_child_is_misplaced_content(&sb_kids[i]) {
+                    moved.push(sb_kids.remove(i));
+                } else {
+                    i += 1;
+                }
+            }
+        }
+    }
+    if moved.is_empty() {
+        return false;
+    }
+    // Append them (in order) to the content column.
+    let Some(kids_mut) = shell.get_mut("children").and_then(Value::as_array_mut) else {
+        return false;
+    };
+    if let Some(ct_kids) = kids_mut[ci]
+        .get_mut("children")
+        .and_then(Value::as_array_mut)
+    {
+        ct_kids.append(&mut moved);
+        true
+    } else {
+        false
+    }
 }
 
 #[cfg(test)]

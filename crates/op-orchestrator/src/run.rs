@@ -50,6 +50,21 @@ const FOLLOW_ON_ROOT_GAP: f64 = 80.0;
 const DEFAULT_ROOT_X: f64 = 80.0;
 const DEFAULT_ROOT_Y: f64 = 40.0;
 
+/// Find the id of a direct child of `parent_id` whose name matches `name`.
+/// Used to re-resolve the pre-built two-column scaffold's column ids after the
+/// `InsertSubtree` remap (the template ids no longer hold).
+fn find_child_id_by_name(state: &EditorState, parent_id: &str, name: &str) -> Option<String> {
+    let parent = op_editor_core::walkers::find_node(
+        state.active_children(),
+        &op_editor_core::NodeId::new(parent_id.to_string()),
+    )?;
+    parent
+        .children()?
+        .iter()
+        .find(|c| c.base().name.as_deref() == Some(name))
+        .map(|c| c.id_str().to_string())
+}
+
 fn next_root_insert_position(state: &EditorState, planned_width: f64) -> (f64, f64) {
     let mut rightmost: Option<f64> = None;
     let mut top: Option<f64> = None;
@@ -214,8 +229,38 @@ impl Orchestrator {
                     "scaffold root `{planned_root_id}` was not inserted"
                 )));
             };
+            // Route subtasks into the scaffold. For a pre-built two-column
+            // dashboard shell, the sidebar subtask fills the (260-wide) left
+            // column and every other subtask fills the content column; the
+            // column ids were remapped on insert, so re-resolve them by name.
+            // Any other plan keeps the single-root behaviour (all → root).
+            let two_col = crate::scaffold::plan_is_sidebar_dashboard(&plan, effective_is_mobile)
+                .then(|| {
+                    let sb = find_child_id_by_name(
+                        sink.state(),
+                        &rid,
+                        crate::scaffold::SIDEBAR_COLUMN_NAME,
+                    );
+                    let ct = find_child_id_by_name(
+                        sink.state(),
+                        &rid,
+                        crate::scaffold::CONTENT_COLUMN_NAME,
+                    );
+                    sb.zip(ct)
+                })
+                .flatten();
             for subtask in &mut plan.subtasks {
-                subtask.parent_frame_id = Some(rid.clone());
+                let parent = match &two_col {
+                    Some((sidebar_id, content_id)) => {
+                        if crate::dashboard_columns::is_sidebar_subtask(subtask) {
+                            sidebar_id.clone()
+                        } else {
+                            content_id.clone()
+                        }
+                    }
+                    None => rid.clone(),
+                };
+                subtask.parent_frame_id = Some(parent);
             }
             if let (Some(epoch), Some(identity)) =
                 (self.agent_indicator_epoch, sequential_identity.as_ref())
@@ -411,7 +456,39 @@ impl Orchestrator {
             });
         }
 
-        // -- 阶段 4:清理 --
+        // -- 阶段 4.5:收尾判定(spec §6.3 三路径)--
+        // Compute zero-content BEFORE cleanup. `finalize_design`'s structural
+        // passes swap the root via `ReplaceSubtree`, which allocates a FRESH root
+        // id; a post-cleanup `descendant_count(&root_id)` would then look up the
+        // now-STALE id, read 0, and declare a false "no content" — which rolls
+        // back the theme variables of a perfectly good design and returns
+        // `NoContent`. Cleanup only RESTRUCTURES (never adds content), so the
+        // pre-cleanup count is the correct "did the subtasks produce content"
+        // signal. See `reshaped_dashboard_root_is_not_a_false_no_content`.
+        let zero_content = descendant_count(sink.state(), &root_id) <= scaffold_baseline;
+        if zero_content {
+            // 错误路径才移除空 scaffold root;abort / 正常零内容只回滚变量。
+            if zero_node_failure {
+                sink.apply(EditorCommand::DeleteNode {
+                    node_id: NodeId::new(root_id.clone()),
+                    page_id: None,
+                });
+            }
+            rollback(sink, &var_snapshot);
+            sink.end_undo_batch();
+            return Err(if aborted_mid {
+                OrchestratorError::Aborted
+            } else if let Some(first_error) = outcomes
+                .iter()
+                .find_map(|o| o.error.as_deref().filter(|s| !s.is_empty()))
+            {
+                OrchestratorError::AllFailed(first_error.to_string())
+            } else {
+                OrchestratorError::NoContent
+            });
+        }
+
+        // -- 阶段 4:清理 --（有内容才跑；空 root 无可清理）
         // Append mode (skip_root_insertion): scope cleanup to ONLY the roots
         // this run inserted (post-remap ids from each outcome) so pre-existing
         // nodes under the target frame are never restyled (Component 11b).
@@ -431,34 +508,7 @@ impl Orchestrator {
             finalize_design(sink, &plan, &[&root_id]);
         }
         on_progress(Progress::CleanupDone);
-
-        // -- 阶段 4.5:收尾(spec §6.3 三路径)--
-        let zero_content = descendant_count(sink.state(), &root_id) <= scaffold_baseline;
-        if zero_content {
-            // 错误路径才移除空 scaffold root;abort / 正常零内容只回滚变量。
-            if zero_node_failure {
-                sink.apply(EditorCommand::DeleteNode {
-                    node_id: NodeId::new(root_id.clone()),
-                    page_id: None,
-                });
-            }
-            rollback(sink, &var_snapshot);
-        }
         sink.end_undo_batch();
-
-        // -- 返回 --
-        if zero_content {
-            return Err(if aborted_mid {
-                OrchestratorError::Aborted
-            } else if let Some(first_error) = outcomes
-                .iter()
-                .find_map(|o| o.error.as_deref().filter(|s| !s.is_empty()))
-            {
-                OrchestratorError::AllFailed(first_error.to_string())
-            } else {
-                OrchestratorError::NoContent
-            });
-        }
 
         // -- 阶段 5:视觉校验 (S3c D1) — 在 cleanup 后、返回 RunSummary 前 --
         // Port of `orchestrator.ts:1247-1292`.

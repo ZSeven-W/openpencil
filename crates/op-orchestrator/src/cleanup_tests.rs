@@ -101,6 +101,41 @@ fn remove_duplicate_status_bars_keeps_one() {
 }
 
 #[test]
+fn cleanup_flips_flat_split_shell_to_horizontal_row() {
+    // minimax2 reproduction: the agentic loop's model already split the root into
+    // [Sidebar, Main] but left it WITHOUT a horizontal layout, so the two columns
+    // stack/overlap (render showed only the sidebar). The whole-root finalize
+    // pipeline must flip it to a horizontal row.
+    let mut sink = VecDocSink::new();
+    let tree: PenNode = serde_json::from_value(json!({
+        "type": "frame", "id": "root", "name": "Barbershop Dashboard",
+        "children": [
+            {"type":"frame","id":"sb","name":"Sidebar","layout":"vertical","height":"fill_container",
+             "children":[{"type":"frame","id":"nav","name":"Nav","layout":"vertical","children":[]}]},
+            {"type":"frame","id":"main","name":"Main","layout":"vertical",
+             "children":[{"type":"frame","id":"stats","name":"Stats","layout":"horizontal","children":[]}]}
+        ]
+    }))
+    .expect("valid split-shell fixture");
+    sink.state.apply(EditorCommand::InsertSubtree {
+        nodes: vec![tree],
+        parent_id: NodeId::NONE,
+        page_id: None,
+    });
+    let root_id = sink.state.active_children()[0].id_str().to_string();
+    run_cleanup_passes(&mut sink, &plan(), &[&root_id]);
+    // The current root (a fresh id if a transform swapped it) must be a row now.
+    let root = &sink.state.active_children()[0];
+    let v = serde_json::to_value(root).expect("serialize root");
+    assert_eq!(
+        v["layout"],
+        json!("horizontal"),
+        "flat [sidebar | main] split shell must become a horizontal row; got {:?}",
+        v["layout"]
+    );
+}
+
+#[test]
 fn strip_decorative_filled_strokes_clears_only_shadowed_card_borders() {
     let mut sink = VecDocSink::new();
     let shadow = json!([{"type": "shadow", "offsetX": 0, "offsetY": 2, "blur": 8, "spread": 0, "color": "#0000001A"}]);

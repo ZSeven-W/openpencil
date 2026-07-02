@@ -24,6 +24,23 @@ pub(crate) fn is_sidebar_subtask(st: &Subtask) -> bool {
     has_sidebar_keyword(&text) && !has_topbar_keyword(&text)
 }
 
+/// A STRONG sidebar signal — "sidebar" / "side bar" / "side nav" / "rail" — is
+/// unambiguously a left rail (unlike the broad `nav`/`menu` tokens, which also
+/// match a landing-page "Navigation" section). Used to pre-build the two-column
+/// app-shell scaffold without requiring a dashboard-content gate.
+pub(crate) fn is_strong_sidebar_subtask(st: &Subtask) -> bool {
+    let t = subtask_text(st);
+    (t.contains("sidebar")
+        || t.contains("side bar")
+        || t.contains("side nav")
+        || t.contains("side-nav")
+        || t.contains("left rail")
+        || t.contains("left nav")
+        || t.contains("nav rail")
+        || t.contains("navigation rail"))
+        && !has_topbar_keyword(&t)
+}
+
 /// Returns `true` when the prompt + plan subtasks suggest a dashboard-like
 /// design (desktop data-heavy screen).
 ///
@@ -40,6 +57,22 @@ pub(crate) fn is_dashboard_like_prompt(prompt: &str, plan: &OrchestratorPlan) ->
         .join("\n");
     let text = format!("{}\n{}", prompt, subtask_text).to_lowercase();
     has_dashboard_keyword(&text)
+}
+
+/// Returns `true` when the subtask is a dashboard-grade CONTENT section — a
+/// table, metric/KPI/stat block, or chart. Used (with a sidebar subtask) as the
+/// structural gate for pre-building the two-column scaffold, so a landing page
+/// with a stray "Navigation" subtask (no data sections) is NOT mistaken for a
+/// dashboard. Mirrors `app_shell`'s `section_has_dashboard_signal`.
+pub(crate) fn is_dashboard_content_subtask(st: &Subtask) -> bool {
+    let t = subtask_text(st);
+    t.contains("table")
+        || t.contains("metric")
+        || t.contains("stat")
+        || t.contains("kpi")
+        || t.contains("chart")
+        || t.contains("graph")
+        || t.contains("analytics")
 }
 
 // ---------------------------------------------------------------------------

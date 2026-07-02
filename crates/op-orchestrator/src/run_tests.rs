@@ -502,3 +502,69 @@ fn subtask_partial_result_not_retried() {
     assert_eq!(summary.subtasks.len(), 2);
     assert!(summary.total_nodes >= 2);
 }
+
+/// Regression: a dashboard whose cleanup RESTRUCTURES the root (the app-shell
+/// reshape swaps it via `ReplaceSubtree`, which allocates a FRESH root id) must
+/// NOT be mistaken for "no content". The zero-content check reads the descendant
+/// count BEFORE cleanup for exactly this reason — reading it afterward looks up
+/// the now-stale id, gets 0, and returns a false `NoContent` (rolling back the
+/// design's theme variables in the process). Before that fix this returned
+/// `Err(NoContent)` despite three full sections of content.
+#[test]
+fn reshaped_dashboard_root_is_not_a_false_no_content() {
+    const DASH_PLAN: &str = r##"{
+      "rootFrame": { "id": "root", "name": "Dashboard", "width": 1200, "height": 900,
+                     "layout": "vertical", "gap": 24,
+                     "fill": [{ "type": "solid", "color": "#FFFFFF" }] },
+      "subtasks": [
+        { "id": "sidebar", "label": "Sidebar Navigation", "region": { "width": 1200, "height": 600 } },
+        { "id": "metrics", "label": "Key Metrics", "region": { "width": 1200, "height": 160 } },
+        { "id": "table", "label": "Client Table", "region": { "width": 1200, "height": 400 } }
+      ]
+    }"##;
+    fn full_section(id: &str, name: &str, layout: &str) -> String {
+        format!(
+            r#"[{{"type":"frame","id":"{id}","name":"{name}","x":0,"y":0,"width":1200,"height":300,"layout":"{layout}","children":[{{"type":"text","id":"{id}-t","content":"{name}","fontSize":18}}]}}]"#
+        )
+    }
+    // A flat sidebar-nav column with a footer-like last child — this trips the
+    // whole-root `sink_structured_sidebar_footers` cleanup, which swaps the root
+    // via `ReplaceSubtree` (allocating the fresh root id that the guarded check
+    // must tolerate).
+    let sidebar = r#"[{"type":"frame","id":"nav","name":"Sidebar Navigation","x":0,"y":0,"width":260,"height":600,"layout":"vertical","children":[{"type":"frame","id":"logo","name":"Logo","width":"fill_container","height":40,"children":[{"type":"text","id":"logo-t","content":"Brand","fontSize":18}]},{"type":"frame","id":"navg","name":"Nav Group","width":"fill_container","height":200,"children":[{"type":"text","id":"navg-t","content":"Dashboard","fontSize":14}]},{"type":"frame","id":"owner","name":"Owner Profile","width":"fill_container","height":48,"children":[{"type":"text","id":"owner-t","content":"Marcus — Owner","fontSize":14}]}]}]"#;
+    let llm = ScriptedLlm::new(vec![
+        ScriptResponse::Text(DASH_PLAN.into()),
+        ScriptResponse::Text(sidebar.into()),
+        ScriptResponse::Text(full_section("m-1", "Key Metrics", "horizontal")),
+        ScriptResponse::Text(full_section("t-1", "Client Table", "vertical")),
+    ]);
+    let mut sink = VecDocSink::new();
+    let mut events: Vec<Progress> = Vec::new();
+    let mut on_progress = |p: Progress| events.push(p);
+
+    let summary = futures::executor::block_on(Orchestrator::new().run(
+        req(),
+        &mut sink,
+        &llm,
+        &mut on_progress,
+        &AbortFlag::new(),
+        &stub_providers(),
+    ))
+    .expect("reshaped dashboard must NOT return NoContent");
+
+    assert!(
+        summary.total_nodes >= 3,
+        "all three sections produced content"
+    );
+    // Prove a whole-root structural transform actually fired — otherwise the
+    // root id never changes and the test would not exercise the guarded path.
+    let replaced = sink
+        .applied
+        .iter()
+        .filter(|c| matches!(c, EditorCommand::ReplaceSubtree { .. }))
+        .count();
+    assert!(
+        replaced >= 1,
+        "a structural cleanup transform must have run (root id changed)"
+    );
+}
