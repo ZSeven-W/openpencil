@@ -205,6 +205,22 @@ fn resolve_section_gap(plan_gap: Option<f64>) -> f64 {
     }
 }
 
+/// A plan's `rootFrame.height` is often 0 — the model's "compute it from
+/// content". A LITERAL 0-height root makes every `fill_container` descendant
+/// resolve to 0px for the whole pipeline, so the geometry pass "correctly"
+/// demotes a healthy fill-height sidebar before `adjust_root_height_to_content`
+/// (the LAST pass) ever assigns the real number (measured: the sidebar footer
+/// floated mid-page on three consecutive user runs). Map non-positive to
+/// `fit_content` — the root hugs its content mid-pipeline, and the final
+/// adjust pass still writes the definitive numeric height.
+fn root_height_json(height: f64) -> serde_json::Value {
+    if height > 0.0 {
+        serde_json::json!(height)
+    } else {
+        serde_json::json!("fit_content")
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn build_root_frame_node(
     id: &str,
@@ -231,7 +247,7 @@ fn build_root_frame_node(
         "x": x,
         "y": y,
         "width": width,
-        "height": height,
+        "height": root_height_json(height),
         "layout": layout,
         "gap": gap,
         "fill": [{ "type": "solid", "color": fill_hex }],
@@ -459,7 +475,7 @@ fn build_two_column_root_node(
         "x": x,
         "y": y,
         "width": width,
-        "height": height,
+        "height": root_height_json(height),
         "layout": "horizontal",
         "gap": 0,
         "alignItems": "stretch",
