@@ -44,6 +44,7 @@ pub mod cleanup;
 pub(crate) mod cleanup_layout;
 pub(crate) mod cleanup_typography;
 pub mod concurrent;
+pub mod loop_finalize;
 pub mod prompt;
 pub mod role_defaults;
 pub mod role_infer;
@@ -53,6 +54,7 @@ pub mod run;
 pub mod run_dashboard;
 pub mod scaffold;
 pub mod scaffold_dashboard;
+pub mod spawn_concurrent;
 pub mod subagent;
 pub mod tree_heuristics;
 
@@ -69,14 +71,17 @@ pub use design_system::{
 };
 pub use design_type::{detect_design_type, DesignType, DesignTypePreset};
 pub use intent::classify_intent;
+pub use loop_finalize::apply_loop_finalize;
 pub use model_profile::{resolve_model_profile, ModelProfile, ModelTier};
 pub use prompt::build_orchestrator_prompt;
 pub use run::Orchestrator;
+pub use spawn_concurrent::{run_spawned_agents_concurrent, SpawnAgentResult, SpawnAgentSpec};
 pub use stub_providers::{
     SkippedPreValidator, SkippedScreenshotProvider, SkippedVisionLlmClient,
     SkippedVisualRefProvider,
 };
 pub use types::*;
+pub use validation::{run_post_generation_validation, ValidationSummary};
 
 #[cfg(test)]
 pub(crate) mod agent_indicator_test_support {

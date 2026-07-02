@@ -106,6 +106,13 @@ pub(crate) async fn run_subtask_with_reveal_at(
         inserted_root_ids: Vec::new(),
     };
 
+    // Snapshot the document's reusable-component registry before the prompt
+    // build so the AVAILABLE COMPONENTS manifest reflects whatever masters were
+    // merged into the doc (e.g. a loaded `.lib.op`). Cloned to release the
+    // shared `sink` borrow before the later mutable inserts. Empty registry ⇒
+    // `build_subagent_prompt` leaves the prompt unchanged.
+    let components = sink.state().components.clone();
+
     // 收集 LLM 文本输出。
     let (call_req, skill_report) = build_subagent_prompt(
         subtask,
@@ -114,6 +121,7 @@ pub(crate) async fn run_subtask_with_reveal_at(
         abort.clone(),
         reduced_complexity,
         minimal_skills,
+        &components,
     );
     // Surface the per-subtask skill-load report to the chat UI immediately
     // after the prompt is built (spec Component 4).
@@ -524,6 +532,12 @@ fn has_content_node(node: &PenNode) -> bool {
                         .as_ref()
                         .is_some_and(|fills| !fills.is_empty())
             }
+            // A childless `ref` is a component instance — it expands to the
+            // master's subtree at render (`ref_resolve`), so it is real
+            // content even though `is_container()` lumps it with the empty
+            // wrappers. Without this a design that reuses a component (the
+            // whole point of refs) would be rejected as "blank scaffolding".
+            PenNode::Ref(_) => true,
             _ => !node.is_container(),
         },
     }
@@ -589,6 +603,11 @@ fn coalesce_subtask_section(nodes: &mut Vec<PenNode>) {
     // actually holds content (≥1 child) is a genuine section → bail (never
     // collapse real sibling sections into one another).
     let kid_count = |n: &PenNode| n.children().map(|c| c.len()).unwrap_or(0);
+    // A childless `ref` is a component instance, not an empty wrapper — it
+    // expands to its master's subtree at render. Treat it as content so the
+    // drop/fold passes below never discard it.
+    let is_empty_wrapper =
+        |n: &PenNode| n.is_container() && kid_count(n) == 0 && !matches!(n, PenNode::Ref(_));
     let orphans_all_foldable = nodes
         .iter()
         .enumerate()
@@ -602,7 +621,7 @@ fn coalesce_subtask_section(nodes: &mut Vec<PenNode>) {
     let mut before: Vec<PenNode> = Vec::new();
     let mut after: Vec<PenNode> = Vec::new();
     let mut primary: Option<PenNode> = None;
-    let keep = |n: &PenNode| !n.is_container() || kid_count(n) > 0;
+    let keep = |n: &PenNode| !is_empty_wrapper(n);
     for (i, node) in taken.into_iter().enumerate() {
         match i.cmp(&primary_idx) {
             std::cmp::Ordering::Less if keep(&node) => before.push(node),
@@ -827,6 +846,58 @@ mod tests {
         let mut nodes: Vec<PenNode> = serde_json::from_str(json).expect("parse forest");
         coalesce_subtask_section(&mut nodes);
         assert_eq!(nodes.len(), 2, "two populated sections must be left as-is");
+    }
+
+    #[test]
+    fn ref_only_forest_is_not_rejected_as_blank() {
+        // A subtask that reuses a component is a lone childless `ref`. It has no
+        // children pre-resolution but expands to the master's subtree — so it
+        // must NOT count as a blank-scaffolding forest (which would `fail()`).
+        let json = r#"[{"type":"ref","id":"inst","ref":"comp-card","x":0,"y":0}]"#;
+        let nodes: Vec<PenNode> = serde_json::from_str(json).expect("parse forest");
+        assert!(
+            has_content_node(&nodes[0]),
+            "a ref is content (it expands to the master subtree)"
+        );
+        assert!(
+            !is_blank_container_forest(&nodes),
+            "a ref-only forest must survive the blank-container guard"
+        );
+    }
+
+    #[test]
+    fn coalesce_keeps_ref_orphan_instead_of_dropping_it() {
+        // A populated section plus a sibling component instance (`ref`). The ref
+        // is childless but is real content — it must fold into the section, not
+        // be silently dropped as an "empty container" orphan.
+        let json = r#"[
+            {"type":"frame","id":"sec","name":"Section","children":[{"type":"text","id":"t","content":"Hi"}]},
+            {"type":"ref","id":"inst","ref":"comp-card"}
+        ]"#;
+        let mut nodes: Vec<PenNode> = serde_json::from_str(json).expect("parse forest");
+        coalesce_subtask_section(&mut nodes);
+        // The ref folds into the section (no empty slot, orphan is foldable) —
+        // the key assertion is that it is NOT discarded.
+        let surviving: Vec<&str> = collect_ids(&nodes);
+        assert!(
+            surviving.contains(&"inst"),
+            "the ref instance must survive coalesce, got ids {surviving:?}"
+        );
+    }
+
+    /// Depth-first id collection for the ref-survival assertion.
+    fn collect_ids(nodes: &[PenNode]) -> Vec<&str> {
+        let mut out = Vec::new();
+        fn walk<'a>(nodes: &'a [PenNode], out: &mut Vec<&'a str>) {
+            for n in nodes {
+                out.push(n.id_str());
+                if let Some(kids) = n.children() {
+                    walk(kids, out);
+                }
+            }
+        }
+        walk(nodes, &mut out);
+        out
     }
 
     #[test]

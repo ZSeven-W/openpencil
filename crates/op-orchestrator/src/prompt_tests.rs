@@ -1,5 +1,31 @@
 use super::*;
 use crate::plan::{Region, RootFrameSpec};
+use op_editor_core::ComponentLibrary;
+
+/// Test shim: the production `build_subagent_prompt` gained a `components`
+/// param (the AVAILABLE COMPONENTS manifest source). The vast majority of
+/// these tests predate it and exercise the no-component path, so this forwards
+/// an empty registry — behaviour identical to before that param existed.
+/// Component-aware behaviour is covered by the dedicated `available_components_*`
+/// tests, which call `build_subagent_prompt` directly with a populated library.
+fn bsp(
+    subtask: &Subtask,
+    plan: &OrchestratorPlan,
+    req: &DesignRequest,
+    abort: AbortFlag,
+    reduced_complexity: bool,
+    minimal_skills: bool,
+) -> (CallRequest, SkillLoadReport) {
+    build_subagent_prompt(
+        subtask,
+        plan,
+        req,
+        abort,
+        reduced_complexity,
+        minimal_skills,
+        &ComponentLibrary::default(),
+    )
+}
 
 fn req() -> DesignRequest {
     DesignRequest {
@@ -104,7 +130,7 @@ fn subagent_prompt_carries_subtask_and_node_format() {
         generated_root_id: None,
         existing_section_labels: None,
     };
-    let (cr, _) = build_subagent_prompt(&st, &plan(), &req(), AbortFlag::new(), false, false);
+    let (cr, _) = bsp(&st, &plan(), &req(), AbortFlag::new(), false, false);
     assert!(cr.user_prompt.contains("Hero"));
     assert!(cr.user_prompt.contains("hero-"));
     assert!(cr.system_prompt.contains("PenNode"));
@@ -144,7 +170,7 @@ fn subagent_prompt_carries_ts_layout_contract() {
             existing_section_labels: None,
         },
     ];
-    let (cr, _) = build_subagent_prompt(
+    let (cr, _) = bsp(
         &plan.subtasks[1],
         &plan,
         &req(),
@@ -182,14 +208,14 @@ fn subagent_prompt_minimal_skills_only_has_schema_and_jsonl() {
     };
     // minimal_skills=true: the system prompt should contain "schema" skill
     // content and "jsonl-format" skill content, but NOT layout/text-rules etc.
-    let (cr, _) = build_subagent_prompt(&st, &plan(), &req(), AbortFlag::new(), false, true);
+    let (cr, _) = bsp(&st, &plan(), &req(), AbortFlag::new(), false, true);
     // schema and jsonl-format skills should appear (they always exist)
     assert!(
         cr.system_prompt.contains("PenNode"),
         "NODE_FORMAT suffix should still be appended"
     );
     // The system_prompt should be considerably shorter than a full-skill prompt
-    let (full_cr, _) = build_subagent_prompt(&st, &plan(), &req(), AbortFlag::new(), false, false);
+    let (full_cr, _) = bsp(&st, &plan(), &req(), AbortFlag::new(), false, false);
     assert!(
         cr.system_prompt.len() < full_cr.system_prompt.len(),
         "minimal_skills prompt should be shorter than full-skill prompt"
@@ -225,10 +251,8 @@ fn subagent_prompt_reduced_complexity_basic_is_shorter_than_full() {
 
         visual_ref_enabled: false,
     };
-    let (full_cr, _) =
-        build_subagent_prompt(&st, &plan(), &basic_req, AbortFlag::new(), false, false);
-    let (reduced_cr, _) =
-        build_subagent_prompt(&st, &plan(), &basic_req, AbortFlag::new(), true, false);
+    let (full_cr, _) = bsp(&st, &plan(), &basic_req, AbortFlag::new(), false, false);
+    let (reduced_cr, _) = bsp(&st, &plan(), &basic_req, AbortFlag::new(), true, false);
     assert!(
         reduced_cr.system_prompt.len() <= full_cr.system_prompt.len(),
         "reduced_complexity Basic prompt should be no longer than full-skill prompt"
@@ -252,9 +276,8 @@ fn subagent_prompt_reduced_complexity_full_tier_is_noop() {
         existing_section_labels: None,
     };
     // req() uses "claude" which maps to Full tier → reduced_complexity is no-op
-    let (full_cr, _) = build_subagent_prompt(&st, &plan(), &req(), AbortFlag::new(), false, false);
-    let (reduced_cr, _) =
-        build_subagent_prompt(&st, &plan(), &req(), AbortFlag::new(), true, false);
+    let (full_cr, _) = bsp(&st, &plan(), &req(), AbortFlag::new(), false, false);
+    let (reduced_cr, _) = bsp(&st, &plan(), &req(), AbortFlag::new(), true, false);
     assert_eq!(
         full_cr.system_prompt, reduced_cr.system_prompt,
         "reduced_complexity on Full tier should be a no-op"
@@ -284,7 +307,7 @@ fn subagent_prompt_basic_tier_swaps_in_simplified_format_skill() {
         validation_enabled: true,
         visual_ref_enabled: false,
     };
-    let (basic_cr, _) = build_subagent_prompt(
+    let (basic_cr, _) = bsp(
         &subtask(),
         &plan(),
         &basic_req,
@@ -293,8 +316,7 @@ fn subagent_prompt_basic_tier_swaps_in_simplified_format_skill() {
         false,
     );
     // req() is model "claude" → Full tier.
-    let (full_cr, _) =
-        build_subagent_prompt(&subtask(), &plan(), &req(), AbortFlag::new(), false, false);
+    let (full_cr, _) = bsp(&subtask(), &plan(), &req(), AbortFlag::new(), false, false);
 
     assert!(
         basic_cr.system_prompt.contains(SIMPLIFIED_ONLY),
@@ -347,7 +369,7 @@ fn subagent_prompt_basic_mobile_food_keeps_mobile_app_skill() {
         existing_section_labels: None,
     };
 
-    let (_, report) = build_subagent_prompt(
+    let (_, report) = bsp(
         &mobile_subtask,
         &mobile_plan,
         &mobile_req,
@@ -400,7 +422,7 @@ fn subagent_prompt_honors_explicit_radius_and_spacing_numbers() {
         existing_section_labels: None,
     };
 
-    let (cr, _) = build_subagent_prompt(
+    let (cr, _) = bsp(
         &subtask,
         &mobile_plan,
         &mobile_req,
@@ -460,7 +482,7 @@ fn mobile_food_prompt_avoids_fixed_food_template() {
         existing_section_labels: None,
     };
 
-    let (cr, _) = build_subagent_prompt(
+    let (cr, _) = bsp(
         &subtask,
         &mobile_plan,
         &mobile_req,
@@ -537,7 +559,7 @@ fn chinese_mobile_food_prompt_carries_language_consistency_rule() {
         existing_section_labels: None,
     };
 
-    let (cr, report) = build_subagent_prompt(
+    let (cr, report) = bsp(
         &subtask,
         &mobile_plan,
         &mobile_req,
@@ -572,8 +594,7 @@ fn subagent_prompt_drops_design_system_when_styling_covered() {
 
     // (a) No style guide named, no design.md → noStyleGuideMatch → style-defaults
     // loads and covers styling, so design-system is dropped.
-    let (covered, _) =
-        build_subagent_prompt(&subtask(), &plan(), &req(), AbortFlag::new(), false, false);
+    let (covered, _) = bsp(&subtask(), &plan(), &req(), AbortFlag::new(), false, false);
     assert!(
         covered.system_prompt.contains(STYLE_DEFAULTS_ONLY),
         "no-style-guide prompt should load style-defaults"
@@ -588,8 +609,7 @@ fn subagent_prompt_drops_design_system_when_styling_covered() {
     // false).
     let mut sg_plan = plan();
     sg_plan.style_guide_name = Some("saas-clean-light".into());
-    let (with_guide, _) =
-        build_subagent_prompt(&subtask(), &sg_plan, &req(), AbortFlag::new(), false, false);
+    let (with_guide, _) = bsp(&subtask(), &sg_plan, &req(), AbortFlag::new(), false, false);
     assert!(
         with_guide.system_prompt.contains("VISUAL STYLE GUIDE"),
         "named style guide injects its instruction block"
@@ -725,8 +745,7 @@ fn subtask() -> crate::plan::Subtask {
 /// Sub-agent prompt has profile-derived timeouts (not None).
 #[test]
 fn subagent_prompt_has_profile_timeouts() {
-    let (cr, _) =
-        build_subagent_prompt(&subtask(), &plan(), &req(), AbortFlag::new(), false, false);
+    let (cr, _) = bsp(&subtask(), &plan(), &req(), AbortFlag::new(), false, false);
     assert!(
         cr.no_text_timeout.is_some(),
         "no_text_timeout must be Some for sub-agent"
@@ -768,7 +787,7 @@ fn subagent_prompt_long_prompt_has_larger_timeout() {
 
         visual_ref_enabled: false,
     };
-    let (short_cr, _) = build_subagent_prompt(
+    let (short_cr, _) = bsp(
         &subtask(),
         &plan(),
         &short_req,
@@ -776,7 +795,7 @@ fn subagent_prompt_long_prompt_has_larger_timeout() {
         false,
         false,
     );
-    let (long_cr, _) = build_subagent_prompt(
+    let (long_cr, _) = bsp(
         &subtask(),
         &plan(),
         &long_req,
@@ -804,7 +823,7 @@ fn subagent_prompt_basic_tier_clamps_soft_timeouts() {
 
         visual_ref_enabled: false,
     };
-    let (cr, _) = build_subagent_prompt(
+    let (cr, _) = bsp(
         &subtask(),
         &plan(),
         &basic_req,
@@ -843,7 +862,7 @@ fn subagent_prompt_append_mode_injected_when_labels_present() {
         generated_root_id: None,
         existing_section_labels: Some(vec!["Hero".into(), "Pricing".into()]),
     };
-    let (cr, _) = build_subagent_prompt(&st, &plan(), &req(), AbortFlag::new(), false, false);
+    let (cr, _) = bsp(&st, &plan(), &req(), AbortFlag::new(), false, false);
     assert!(
         cr.user_prompt.contains("APPEND MODE"),
         "user_prompt must contain APPEND MODE block"
@@ -876,7 +895,7 @@ fn subagent_prompt_no_append_mode_when_labels_none() {
         generated_root_id: None,
         existing_section_labels: None,
     };
-    let (cr, _) = build_subagent_prompt(&st, &plan(), &req(), AbortFlag::new(), false, false);
+    let (cr, _) = bsp(&st, &plan(), &req(), AbortFlag::new(), false, false);
     assert!(
         !cr.user_prompt.contains("APPEND MODE"),
         "user_prompt must NOT contain APPEND MODE block when labels is None"
@@ -901,7 +920,7 @@ fn subagent_prompt_no_append_mode_when_labels_empty() {
         generated_root_id: None,
         existing_section_labels: Some(vec![]),
     };
-    let (cr, _) = build_subagent_prompt(&st, &plan(), &req(), AbortFlag::new(), false, false);
+    let (cr, _) = bsp(&st, &plan(), &req(), AbortFlag::new(), false, false);
     assert!(
         !cr.user_prompt.contains("APPEND MODE"),
         "user_prompt must NOT contain APPEND MODE block when labels is empty"
@@ -959,8 +978,7 @@ fn subtask_intent_includes_prompt_label_and_hints() {
 /// budget_max is non-zero.
 #[test]
 fn build_subagent_prompt_returns_skill_report() {
-    let (call, report) =
-        build_subagent_prompt(&subtask(), &plan(), &req(), AbortFlag::new(), false, false);
+    let (call, report) = bsp(&subtask(), &plan(), &req(), AbortFlag::new(), false, false);
     assert!(!call.system_prompt.is_empty());
     assert!(
         !report.included.is_empty(),
@@ -973,5 +991,158 @@ fn build_subagent_prompt_returns_skill_report() {
     assert!(
         report.included.iter().all(|e| !e.name.is_empty()),
         "all included entries must have a name"
+    );
+}
+
+// ── Available-components manifest (Stage 2 Part B) ───────────────────────────
+
+use jian_ops_schema::node::PenNode;
+use op_editor_core::{Component, NodeId};
+
+/// Build a `ComponentLibrary` with `n` reusable masters whose names cycle
+/// through a few categories so the grouped manifest exercises bucketing.
+/// The manifest only reads each component's `id` + `name`, so the `root`
+/// frame is a minimal reusable-flagged stub.
+fn library_with(n: usize) -> ComponentLibrary {
+    let names = [
+        "Primary Button",
+        "Search Input",
+        "Stat Card",
+        "Nav Item",
+        "Status Badge",
+        "User Avatar",
+        "Confirm Dialog",
+        "Table Row",
+        "Page Header",
+    ];
+    let mut lib = ComponentLibrary::default();
+    for i in 0..n {
+        let id = format!("comp-{i}");
+        let name = format!("{} {i}", names[i % names.len()]);
+        let root: PenNode = serde_json::from_value(serde_json::json!({
+            "id": id,
+            "type": "frame",
+            "name": name,
+            "reusable": true,
+            "width": 100,
+            "height": 40,
+        }))
+        .expect("frame fixture");
+        lib.insert(Component {
+            id: NodeId::new(&id),
+            name,
+            root,
+        });
+    }
+    lib
+}
+
+/// With NO components, the prompt is unchanged: no AVAILABLE COMPONENTS block
+/// and no `ref` teaching from the `component-composition` skill.
+#[test]
+fn no_components_prompt_omits_manifest_and_ref_teaching() {
+    let (cr, report) = build_subagent_prompt(
+        &subtask(),
+        &plan(),
+        &req(),
+        AbortFlag::new(),
+        false,
+        false,
+        &ComponentLibrary::default(),
+    );
+    assert!(
+        !cr.system_prompt.contains("AVAILABLE COMPONENTS"),
+        "empty library must not inject the components manifest"
+    );
+    // The component-composition skill only loads behind `hasReusableComponents`.
+    assert!(
+        !report
+            .included
+            .iter()
+            .any(|s| s.name == "component-composition"),
+        "component-composition skill must not load without components"
+    );
+    // And the empty-library prompt must byte-match the no-arg path (the `bsp`
+    // shim forwards an empty library too).
+    let (baseline, _) = bsp(&subtask(), &plan(), &req(), AbortFlag::new(), false, false);
+    assert_eq!(cr.system_prompt, baseline.system_prompt);
+}
+
+/// A Full-tier request (no budget override, no Basic allow-set) so the
+/// flag-gated `component-composition` skill reliably survives filtering.
+fn full_req() -> DesignRequest {
+    DesignRequest {
+        model: Some("claude-opus-4".into()),
+        ..req()
+    }
+}
+
+/// With components present, the prompt injects the AVAILABLE COMPONENTS
+/// manifest (concrete ids), the `ref` teaching, and loads the
+/// `component-composition` skill.
+#[test]
+fn components_prompt_injects_manifest_and_ref_teaching() {
+    let lib = library_with(5);
+    let (cr, report) = build_subagent_prompt(
+        &subtask(),
+        &plan(),
+        &full_req(),
+        AbortFlag::new(),
+        false,
+        false,
+        &lib,
+    );
+    let sys = &cr.system_prompt;
+    assert!(
+        sys.contains("AVAILABLE COMPONENTS"),
+        "manifest header must be present"
+    );
+    // Concrete ids from the registry are listed.
+    assert!(sys.contains("comp-0"), "manifest must list component ids");
+    assert!(sys.contains("comp-4"), "manifest must list all 5 ids");
+    // The `ref` instantiation teaching is present.
+    assert!(
+        sys.contains("\"type\":\"ref\""),
+        "manifest must teach the ref node syntax"
+    );
+    // Category grouping appears (button → Buttons bucket).
+    assert!(sys.contains("Buttons:"), "manifest groups by category");
+    // The component-composition skill loaded behind the flag.
+    assert!(
+        report
+            .included
+            .iter()
+            .any(|s| s.name == "component-composition"),
+        "component-composition skill must load when components exist"
+    );
+}
+
+/// A large library is capped: the manifest lists at most
+/// `MAX_COMPONENT_MANIFEST_ENTRIES` and notes the remainder, so the prompt
+/// budget can't be blown by a 200-master kit.
+#[test]
+fn large_component_library_is_capped() {
+    let lib = library_with(200);
+    let (cr, _) = build_subagent_prompt(
+        &subtask(),
+        &plan(),
+        &req(),
+        AbortFlag::new(),
+        false,
+        false,
+        &lib,
+    );
+    let sys = &cr.system_prompt;
+    // The header reports the true total even though the body is capped.
+    assert!(sys.contains("AVAILABLE COMPONENTS (200 reusable"));
+    assert!(
+        sys.contains("more not listed"),
+        "capped manifest must note the remainder"
+    );
+    // The number of listed `- id (name)` rows must not exceed the cap.
+    let listed = sys.matches("  - comp-").count();
+    assert!(
+        listed <= MAX_COMPONENT_MANIFEST_ENTRIES,
+        "listed {listed} entries exceeds cap {MAX_COMPONENT_MANIFEST_ENTRIES}"
     );
 }
