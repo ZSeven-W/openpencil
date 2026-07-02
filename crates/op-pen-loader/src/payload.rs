@@ -528,6 +528,7 @@ fn normalize_node_value(
                     let is_image = kind == Some("image");
                     let is_icon = kind == Some("icon");
                     let is_prompt = kind == Some("prompt");
+                    let is_path = kind == Some("path");
                     if is_image && !map.contains_key("src") {
                         map.insert("src".to_string(), Value::String(String::new()));
                         *changed = true;
@@ -553,6 +554,19 @@ fn normalize_node_value(
                             map.insert("iconFontFamily".to_string(), family);
                         }
                         *changed = true;
+                    }
+                    // Pencil stores a `path` node's flattened outline as an SVG
+                    // string under `geometry`; jian's `PathNode` reads it from
+                    // `d`. Without this remap the geometry is dropped and the
+                    // path renders empty — status-bar icons, logos, and any
+                    // vector art authored as a path vanish.
+                    if is_path {
+                        if let Some(geom) = map.get("geometry").cloned() {
+                            if geom.is_string() && !map.contains_key("d") {
+                                map.insert("d".to_string(), geom);
+                                *changed = true;
+                            }
+                        }
                     }
                     // A PenNode `fill` written as a bare string / single object /
                     // legacy `type:"color"` array → canonical `Vec<PenFill>`.
