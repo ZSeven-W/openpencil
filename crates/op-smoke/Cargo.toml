@@ -24,6 +24,11 @@ op-orchestrator = { path = "../op-orchestrator" }
 # `EditorState` + `EditorCommand` — the smoke's own `InlineDocSink` owns
 # one and applies commands on it.
 op-editor-core = { path = "../op-editor-core" }
+# `PenNode` — the minimal-seed loop mode (OPENPENCIL_SMOKE_LOOP_SEED=1) builds a
+# page-root + named section-stub subtree as canonical `PenNode`s (same JSON-build
+# → deserialize idiom op-orchestrator's `build_scaffold` uses) and applies it via
+# `EditorCommand::InsertSubtree`. op-orchestrator already pulls this same path dep.
+jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema" }
 # `merge_library_into_state` — honors OPENPENCIL_SMOKE_LIBRARY by loading a
 # harvested component library (.lib.op) into the doc before generation so the
 # generator can instantiate its reusable masters.
