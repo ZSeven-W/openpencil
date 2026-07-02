@@ -180,6 +180,7 @@ impl ChatProvider for ConfiguredBuiltinProvider {
                     executor,
                     max_turns: MAX_TOOL_TURNS,
                     finalize_on_exit: provider.finalize_on_exit,
+                    disable_thinking,
                 };
                 match provider.kind {
                     BuiltinAgentKind::Anthropic => run_anthropic_agent_loop(cfg, &tx).await,
@@ -237,7 +238,7 @@ impl ChatProvider for ConfiguredBuiltinProvider {
 
 /// MiniMax M 系("MiniMax-M*"、旧 "abab*")是推理模型,其思考由 MiniMax 专属的
 /// `thinking` body 字段控制。据模型名判定,以便只对它发关思考字段。
-fn is_minimax_model(model: &str) -> bool {
+pub(crate) fn is_minimax_model(model: &str) -> bool {
     let m = model.to_ascii_lowercase();
     m.starts_with("minimax") || m.starts_with("abab")
 }
@@ -247,7 +248,7 @@ fn is_minimax_model(model: &str) -> bool {
 /// 一个设计子任务 thinking_len≈3 万、text_len=0，整段 parse 失败）。它接受和
 /// MiniMax 同样的 `thinking:{type:"disabled"}`（curl 对 ark glm-5.2 验证：关思考后
 /// reasoning_tokens=0、content 为干净 JSON）。按名判定，只对 GLM 下发。
-fn is_glm_model(model: &str) -> bool {
+pub(crate) fn is_glm_model(model: &str) -> bool {
     model.to_ascii_lowercase().contains("glm")
 }
 

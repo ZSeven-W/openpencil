@@ -53,6 +53,14 @@ pub struct AgentLoopConfig {
     /// shared execution path for BOTH regular builtin chat and the design
     /// loop, so the finalize side-effect MUST be opt-in per provider.
     pub finalize_on_exit: bool,
+    /// When true AND the model is a MiniMax / GLM reasoning model, send
+    /// `thinking:{type:"disabled"}` in the OpenAI-compat body. Without it a
+    /// reasoning model (glm-5.2) streams tens of thousands of hidden reasoning
+    /// tokens per turn — measured 94k thinking chars vs 4k of actual
+    /// `batch_design` DSL — which burns the per-turn `max_output_tokens` and
+    /// truncates the design mid-build. The single-shot builtin chat path
+    /// already gates this on the same flag; the loop body was missing it.
+    pub disable_thinking: bool,
 }
 
 impl AgentLoopConfig {
@@ -658,13 +666,26 @@ pub async fn run_openai_agent_loop(
     messages.push(json!({ "role": "user", "content": cfg.user_prompt }));
 
     for _turn in 0..cfg.max_turns.max(1) {
-        let body = json!({
+        let mut body = json!({
             "model": cfg.model,
             "stream": true,
             "max_tokens": cfg.max_output_tokens,
             "messages": messages,
             "tools": tools_json,
         });
+        // Turn OFF hidden reasoning for MiniMax / GLM. Without this a glm-5.2
+        // design turn spends its whole `max_tokens` on `reasoning_content` and
+        // truncates the `batch_design` mid-JSON — the single-shot builtin body
+        // gates the same field on the same flag (`chat_builtin_http`), but the
+        // loop body was missing it, so every loop turn leaked thinking.
+        if cfg.disable_thinking
+            && (crate::chat_builtin_http::is_minimax_model(&cfg.model)
+                || crate::chat_builtin_http::is_glm_model(&cfg.model))
+        {
+            if let Some(obj) = body.as_object_mut() {
+                obj.insert("thinking".into(), json!({ "type": "disabled" }));
+            }
+        }
         let resp = reqwest::Client::new()
             .post(&cfg.url)
             .bearer_auth(&cfg.api_key)
