@@ -154,12 +154,21 @@ fn apply_document_response<C: RepaintContext + 'static>(
         return;
     };
     let inner_ref = &mut *inner_mut;
+    // Captured BEFORE sync() flips it on the first apply: the
+    // mount-time pull (starter doc → daemon doc) must NOT become an
+    // undo step; every later external apply (AI turn, MCP client) must.
+    let undoable = sync
+        .try_borrow()
+        .map(|sync| sync.initialized())
+        .unwrap_or(false);
     let applied = sync
         .try_borrow_mut()
         .ok()
         .and_then(|mut sync| {
             sync.sync(body, |doc, _version| {
-                inner_ref.host_mut().replace_document(doc);
+                inner_ref
+                    .host_mut()
+                    .replace_document_from_sync(doc, undoable);
                 inner_ref.repaint().is_ok()
             })
             .ok()

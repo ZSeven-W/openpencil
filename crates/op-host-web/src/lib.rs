@@ -36,6 +36,9 @@ mod repaint_ctx;
 // Pure web_sys IO (no native Skia/C toolchain) — compiled always so the `web`
 // stub still compile-checks on wasm32.
 mod live_sync;
+// Daemon → browser agent-indicator relay (poll + local mirror + rAF pump).
+#[cfg(feature = "canvaskit")]
+mod agent_indicator_sync;
 #[cfg(feature = "canvaskit")]
 mod live_sync_glue;
 // Shared daemon base-URL resolution (page origin when served by the daemon,
