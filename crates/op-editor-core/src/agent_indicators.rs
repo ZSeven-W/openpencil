@@ -230,13 +230,25 @@ pub fn finish_if_epoch(epoch: u64) {
     }
     r.run_active = false;
     r.finishing = true;
-    drain_finished_run(&mut r);
+    // An empty queue means this run never put a cursor on screen, so clear
+    // immediately WITHOUT arming the erase frame — there is nothing stale to
+    // repaint. (Arming it here would leave a sticky global flag that an
+    // unrelated animation-deadline query could observe.) A run with queued
+    // reveals keeps playing; the paint-path drain arms the erase frame once
+    // the last reveal leaves its window, because a cursor WAS on screen.
+    if r.reveals.is_empty() {
+        r.clear_maps();
+        r.epoch += 1;
+    }
 }
 
-/// Once a finishing run's reveal queue has fully played out (or was
-/// empty to begin with), clear the whole overlay and retire the epoch.
-/// Flags one final erase frame so the host repaints the (now empty)
-/// overlay instead of leaving the last-painted cursor on screen.
+/// Called from the paint-path maintenance (`snapshot_at_if_active` /
+/// `next_reveal_deadline_ms`): once a finishing run's reveal queue has
+/// played out, clear the whole overlay and retire the epoch. Arms one
+/// erase frame so the host repaints the now-empty overlay instead of
+/// leaving the last-painted cursor on screen — reaching here means a
+/// cursor was visible until this frame (an empty finish is handled
+/// inline by [`finish_if_epoch`] and never sets the flag).
 fn drain_finished_run(r: &mut AgentIndicators) {
     if r.finishing && r.reveals.is_empty() {
         r.clear_maps();
