@@ -969,6 +969,64 @@ fn round_nav_tab_items(node: &mut Value, is_bar_root: bool, accent: &str) {
     }
 }
 
+/// A model authors an "active background" as a FLEX SIBLING: a fill-less
+/// container whose first child is an EMPTY `fill_container` × `fill_container`
+/// rectangle/frame carrying the fill. In flex flow that backdrop is a real
+/// item — it eats half the row and shoves the actual content sideways
+/// (measured: a sidebar nav item's icon+label pushed outside the 260px rail by
+/// its own "Active Bg" rectangle). The fill/cornerRadius belong on the
+/// CONTAINER: move them there and delete the backdrop child. The double-fill
+/// empty box is unambiguous — a divider is thin (one fixed axis), a spacer
+/// carries no fill, an avatar placeholder has a fixed size.
+fn merge_backdrop_child_fill(v: &mut Value) {
+    let is_backdrop = |c: &Value| -> bool {
+        matches!(
+            c.get("type").and_then(Value::as_str),
+            Some("rectangle" | "frame")
+        ) && c
+            .get("children")
+            .and_then(Value::as_array)
+            .map(|k| k.is_empty())
+            .unwrap_or(true)
+            && c.get("width").and_then(Value::as_str) == Some("fill_container")
+            && c.get("height").and_then(Value::as_str) == Some("fill_container")
+            && c.get("fill")
+                .and_then(Value::as_array)
+                .is_some_and(|f| !f.is_empty())
+    };
+    let container_has_fill = v
+        .get("fill")
+        .and_then(Value::as_array)
+        .is_some_and(|f| !f.is_empty())
+        || v.get("fill").and_then(Value::as_str).is_some();
+    let eligible = v.get("type").and_then(Value::as_str) == Some("frame")
+        && !container_has_fill
+        && v.get("children")
+            .and_then(Value::as_array)
+            .is_some_and(|kids| kids.len() >= 2 && is_backdrop(&kids[0]));
+    if eligible {
+        if let Some(obj) = v.as_object_mut() {
+            if let Some(Value::Array(mut kids)) = obj.remove("children") {
+                let backdrop = kids.remove(0);
+                if let Some(fill) = backdrop.get("fill").cloned() {
+                    obj.insert("fill".into(), fill);
+                }
+                if obj.get("cornerRadius").is_none() {
+                    if let Some(radius) = backdrop.get("cornerRadius").cloned() {
+                        obj.insert("cornerRadius".into(), radius);
+                    }
+                }
+                obj.insert("children".into(), Value::Array(kids));
+            }
+        }
+    }
+    if let Some(kids) = v.get_mut("children").and_then(Value::as_array_mut) {
+        for c in kids.iter_mut() {
+            merge_backdrop_child_fill(c);
+        }
+    }
+}
+
 pub fn apply_tree_heuristics(
     nodes: &mut [PenNode],
     page_bg: Option<&str>,
@@ -997,6 +1055,7 @@ pub fn apply_tree_heuristics(
         inject_nav_surface_for_section(&mut v);
         fix_invisible_text_band(&mut v, light_theme, &design_accent);
         // Subtree-recursive.
+        merge_backdrop_child_fill(&mut v);
         convert_stacked_overlay_to_absolute(&mut v);
         clip_card_image_corners(&mut v);
         fill_card_leading_image_width(&mut v);
