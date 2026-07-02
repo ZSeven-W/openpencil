@@ -38,6 +38,8 @@
 
 use std::sync::Arc;
 
+mod loop_mode;
+
 use agent::abort::AbortController;
 use agent::provider::anthropic::AnthropicProvider;
 use agent::provider::openai_compat::{OpenAiCompatConfig, OpenAiCompatProvider};
@@ -367,6 +369,163 @@ fn describe_cmd(cmd: &EditorCommand) -> String {
     }
 }
 
+/// Honor `OPENPENCIL_SMOKE_LIBRARY=<path>` by merging a harvested component
+/// library (`.lib.op`) into `state` before generation. Unset ⇒ no-op (`Ok`),
+/// preserving today's byte-for-byte behavior. On a load/parse error returns
+/// `Err(ExitCode)` so the caller aborts — a benchmark that asked for a library
+/// must not silently run without it. Shared by both smoke modes (orchestrator +
+/// loop) so the library is available whichever path runs.
+fn maybe_merge_smoke_library(state: &mut EditorState) -> Result<(), std::process::ExitCode> {
+    let path = match std::env::var("OPENPENCIL_SMOKE_LIBRARY") {
+        Ok(p) if !p.is_empty() => p,
+        _ => return Ok(()),
+    };
+    match op_pen_loader::merge_library_into_state(state, &path) {
+        Ok(report) => {
+            eprintln!(
+                "[SMOKE] library merged from {path}: +{} master(s), {} component(s) total, \
+                 +{} variable(s), +{} theme axis(es)",
+                report.masters_added,
+                report.component_count,
+                report.variables_added,
+                report.themes_added
+            );
+            Ok(())
+        }
+        Err(e) => {
+            eprintln!("[SMOKE] library load failed ({path}): {e}");
+            Err(std::process::ExitCode::from(5))
+        }
+    }
+}
+
+/// Map the chat `OPENPENCIL_SMOKE_*` thinking knobs onto a `ThinkingMode`.
+/// Default `Disabled` for ab-v9 parity with the orchestrator DIRECT path
+/// (reasoning models burn their output budget on `<think>` otherwise);
+/// `OPENPENCIL_SMOKE_KEEP_THINKING=1` keeps reasoning on.
+fn loop_thinking_mode() -> op_ai::chat_provider::ThinkingMode {
+    use op_ai::chat_provider::ThinkingMode;
+    if std::env::var("OPENPENCIL_SMOKE_KEEP_THINKING").is_ok() {
+        ThinkingMode::Enabled
+    } else {
+        ThinkingMode::Disabled
+    }
+}
+
+/// Headless agentic tool-loop branch (`OPENPENCIL_SMOKE_LOOP=1`).
+///
+/// Reads the openai-compat `OPENPENCIL_LLM_*` env (the ab-v9 wire), runs the
+/// production builtin design loop against a live `EditorState`, then dumps
+/// `state.doc` to `OPENPENCIL_SMOKE_OUT` using the SAME serialize path as the
+/// orchestrator mode (`serde_json::to_string_pretty` → `std::fs::write`).
+async fn run_loop_mode(prompt: String) -> std::process::ExitCode {
+    let model =
+        std::env::var("OPENPENCIL_ORCHESTRATOR_MODEL").unwrap_or_else(|_| "gpt-4o-mini".into());
+    let key = match std::env::var("OPENPENCIL_LLM_API_KEY")
+        .ok()
+        .filter(|k| !k.is_empty())
+    {
+        Some(k) => k,
+        None => {
+            eprintln!(
+                "error: OPENPENCIL_LLM_API_KEY is not set (loop mode needs an openai-compat key)"
+            );
+            return std::process::ExitCode::from(3);
+        }
+    };
+    let base_url = match std::env::var("OPENPENCIL_LLM_BASE_URL")
+        .ok()
+        .filter(|u| !u.is_empty())
+    {
+        Some(u) => u,
+        None => {
+            eprintln!("error: OPENPENCIL_LLM_BASE_URL is not set (e.g. https://api.openai.com/v1)");
+            return std::process::ExitCode::from(3);
+        }
+    };
+    let dump = std::env::var("OPENPENCIL_SMOKE_DUMP").is_ok();
+    let max_tokens: u32 = std::env::var("OPENPENCIL_SMOKE_MAX_TOKENS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(8192);
+    let thinking = loop_thinking_mode();
+
+    eprintln!("[SMOKE] mode=loop model={model} base_url={base_url}");
+    eprintln!("[SMOKE] prompt={prompt:?} thinking={thinking:?} max_tokens={max_tokens}");
+
+    let system_prompt = op_ai_skills::design_agent_system_prompt().to_string();
+    // `OPENPENCIL_SMOKE_LIBRARY` is honored here too: the path is threaded into
+    // `run_loop`, which merges the harvested library into the live `EditorState`
+    // before the agentic loop runs (so its `batch_design` ref nodes can target
+    // the loaded masters). Unset ⇒ no merge, byte-for-byte unchanged.
+    let library_path = std::env::var("OPENPENCIL_SMOKE_LIBRARY")
+        .ok()
+        .filter(|p| !p.is_empty());
+    let started = std::time::Instant::now();
+
+    // The loop's `provider.send()` returns a blocking iterator driven by the
+    // crate's global `shared_runtime()`; run the drain off the async worker.
+    let result = tokio::task::spawn_blocking(move || {
+        loop_mode::run_loop(
+            base_url,
+            key,
+            model,
+            system_prompt,
+            prompt,
+            thinking,
+            op_ai::chat_provider::EffortLevel::Low,
+            max_tokens,
+            dump,
+            library_path,
+        )
+    })
+    .await;
+    let elapsed = started.elapsed();
+
+    let state = match result {
+        Ok(Ok(state)) => state,
+        Ok(Err(e)) => {
+            eprintln!("[LOOP] setup error: {e}");
+            return std::process::ExitCode::from(1);
+        }
+        Err(e) => {
+            eprintln!("[LOOP] loop task panicked: {e}");
+            return std::process::ExitCode::from(1);
+        }
+    };
+
+    let guard = state.lock().expect("EditorState mutex poisoned");
+    let total_nodes = guard.active_children().len();
+    eprintln!("[LOOP] finished in {elapsed:?}; top-level node(s)={total_nodes}");
+
+    // Dump via the IDENTICAL serialize path the orchestrator mode uses.
+    let save_failed = match std::env::var("OPENPENCIL_SMOKE_OUT") {
+        Ok(out_path) if !out_path.is_empty() => match serde_json::to_string_pretty(&guard.doc) {
+            Ok(json) => match std::fs::write(&out_path, json) {
+                Ok(()) => {
+                    eprintln!("[SMOKE] saved doc → {out_path}");
+                    false
+                }
+                Err(e) => {
+                    eprintln!("[SMOKE] save failed ({out_path}): {e}");
+                    true
+                }
+            },
+            Err(e) => {
+                eprintln!("[SMOKE] serialize failed: {e}");
+                true
+            }
+        },
+        _ => false,
+    };
+
+    if save_failed {
+        std::process::ExitCode::from(4)
+    } else {
+        std::process::ExitCode::SUCCESS
+    }
+}
+
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> std::process::ExitCode {
     let prompt = match std::env::args().nth(1) {
@@ -378,6 +537,19 @@ async fn main() -> std::process::ExitCode {
             return std::process::ExitCode::from(2);
         }
     };
+
+    // `OPENPENCIL_SMOKE_LOOP=1` is a SEPARATE branch: instead of the
+    // `Orchestrator`, it runs the headless Pencil-style agentic tool-loop
+    // (the model calls `batch_design` / `get_screenshot` / … over a real SSE
+    // stream; the host applies each call to a live `EditorState`). Without
+    // this flag op-smoke behaves exactly as before. The branch returns early
+    // so the orchestrator path below is byte-for-byte unchanged.
+    if std::env::var("OPENPENCIL_SMOKE_LOOP")
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true") || v.eq_ignore_ascii_case("on"))
+        .unwrap_or(false)
+    {
+        return run_loop_mode(prompt).await;
+    }
 
     let provider_kind =
         std::env::var("OPENPENCIL_LLM_PROVIDER").unwrap_or_else(|_| "anthropic".into());
@@ -467,6 +639,14 @@ async fn main() -> std::process::ExitCode {
             EditorState::new()
         },
     };
+    // `OPENPENCIL_SMOKE_LIBRARY=<path-to-.lib.op>` loads a harvested component
+    // library into the doc BEFORE generation so the generator can instantiate
+    // its reusable masters (the AVAILABLE COMPONENTS manifest path). Unset =
+    // today's behavior, byte-for-byte. A load error aborts the run loudly — a
+    // benchmark that asked for a library must not silently run without it.
+    if let Err(code) = maybe_merge_smoke_library(&mut sink.state) {
+        return code;
+    }
     let request = DesignRequest {
         prompt,
         model: Some(model),
