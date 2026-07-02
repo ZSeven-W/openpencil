@@ -3,7 +3,7 @@
 //! `resolve_skills` is the crate's main entry point: phase filter →
 //! intent match → per-phase memory injection → budget trim.
 
-use crate::budget::trim_by_budget;
+use crate::budget::trim_by_budget_pinned;
 use crate::loader::{get_skills_by_phase, SkillEntry};
 use crate::memory::generation_history::get_recent_entries;
 use crate::resolver::{filter_by_intent, inject_dynamic_content};
@@ -102,7 +102,11 @@ pub fn resolve_skills(phase: Phase, user_message: &str, options: &ResolveOptions
         .collect();
 
     // Step 4 — budget trim (after injection, so counts are accurate).
-    let trimmed = trim_by_budget(&injected, total_budget, user_message);
+    // Caller-pinned skills are force-kept (budget-exempt) when they survived the
+    // phase/intent/flag match above; an empty pin set (the default) is identical
+    // to the plain trim.
+    let pinned: Vec<&str> = options.pinned_skills.iter().map(String::as_str).collect();
+    let trimmed = trim_by_budget_pinned(&injected, total_budget, user_message, &pinned);
     let budget_used: u32 = trimmed.iter().map(|s| s.token_count).sum();
 
     // Diagnostics — matched skills the trimmer could not fit.

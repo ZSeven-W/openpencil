@@ -58,6 +58,27 @@ pub fn trim_by_budget(
     total_budget: u32,
     intent: &str,
 ) -> Vec<ResolvedSkill> {
+    trim_by_budget_pinned(skills, total_budget, intent, &[])
+}
+
+/// [`trim_by_budget`] with a set of force-included ("pinned") skill names.
+///
+/// A pinned skill is kept exactly like a `Base` skill — never dropped by the
+/// budget filler and never tier-trimmed downstream — regardless of category or
+/// remaining headroom. This is the budget-exemption mechanism for skills whose
+/// teaching is the *point* of a feature being active (e.g.
+/// `component-composition` when a reusable-component library is loaded): the
+/// model already received the component LIST, so the HOW-to-instantiate teaching
+/// is not optional and must survive even on the tightest tier budget.
+///
+/// `pinned` is empty on every default path, so behaviour is byte-for-byte
+/// identical to [`trim_by_budget`] when no skill is pinned.
+pub fn trim_by_budget_pinned(
+    skills: &[SkillEntry],
+    total_budget: u32,
+    intent: &str,
+    pinned: &[&str],
+) -> Vec<ResolvedSkill> {
     // Step 1 — cap each skill at its own per-skill budget.
     let with_tokens: Vec<ResolvedSkill> = skills
         .iter()
@@ -86,10 +107,17 @@ pub fn trim_by_budget(
 
     let total = total_budget as i64;
 
-    // Step 2 — base skills are always kept.
+    // A skill is force-kept when it is a `Base` skill OR its name is pinned.
+    // Pinned + Base are treated identically: always kept, then excluded from the
+    // category-priority fill below so they aren't added twice.
+    let is_force_kept = |s: &ResolvedSkill| {
+        s.meta.category == SkillCategory::Base || pinned.contains(&s.meta.name.as_str())
+    };
+
+    // Step 2 — base + pinned skills are always kept (budget-exempt).
     let mut result: Vec<ResolvedSkill> = with_tokens
         .iter()
-        .filter(|s| s.meta.category == SkillCategory::Base)
+        .filter(|s| is_force_kept(s))
         .cloned()
         .collect();
     let mut used: i64 = result.iter().map(|s| s.token_count as i64).sum();
@@ -98,10 +126,11 @@ pub fn trim_by_budget(
     // skip a candidate that doesn't fit and continue, so a large low-rank
     // skill can't block smaller, more relevant ones. The single
     // highest-relevance Domain skill that partially fits may be truncated
-    // once to fill the tail.
+    // once to fill the tail. Pinned domain skills are already kept above, so
+    // they are excluded here to avoid a duplicate entry.
     let mut domain: Vec<&ResolvedSkill> = with_tokens
         .iter()
-        .filter(|s| s.meta.category == SkillCategory::Domain)
+        .filter(|s| s.meta.category == SkillCategory::Domain && !is_force_kept(s))
         .collect();
     domain.sort_by(|a, b| {
         a.meta
@@ -143,10 +172,11 @@ pub fn trim_by_budget(
     }
 
     // Step 4 — knowledge skills only if budget remains; relevance-ranked,
-    // skip-only (never truncated).
+    // skip-only (never truncated). A pinned Knowledge skill was already
+    // force-kept in Step 2, so exclude it here to avoid a duplicate.
     let mut knowledge: Vec<&ResolvedSkill> = with_tokens
         .iter()
-        .filter(|s| s.meta.category == SkillCategory::Knowledge)
+        .filter(|s| s.meta.category == SkillCategory::Knowledge && !is_force_kept(s))
         .collect();
     knowledge.sort_by(|a, b| {
         a.meta
@@ -280,5 +310,69 @@ mod tests {
         let out = trim_by_budget(&[base], 1000, "design a login form");
         assert_eq!(out.len(), 1);
         assert_eq!(out[0].meta.name, "base");
+    }
+
+    #[test]
+    fn pinned_domain_skill_survives_a_budget_that_drops_it_unpinned() {
+        // base (~100 tok) fills nearly the whole budget; the domain skill
+        // (~10 tok) does not fit in the remaining headroom.
+        let base = skill("base", SkillCategory::Base, 100_000, &"x".repeat(400)); // ~100 tok
+        let comp = skill(
+            "component-composition",
+            SkillCategory::Domain,
+            100_000,
+            &"d".repeat(40),
+        ); // ~10 tok
+           // Budget 100 leaves 0 headroom after base — unpinned, comp is dropped.
+        let unpinned = trim_by_budget(&[base.clone(), comp.clone()], 100, "");
+        assert_eq!(
+            unpinned
+                .iter()
+                .map(|s| s.meta.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["base"],
+            "without a pin, the domain skill is budget-dropped"
+        );
+        // Pinned: comp is force-kept (budget-exempt) exactly like base.
+        let pinned = trim_by_budget_pinned(&[base, comp], 100, "", &["component-composition"]);
+        let names: Vec<_> = pinned.iter().map(|s| s.meta.name.as_str()).collect();
+        assert!(
+            names.contains(&"component-composition"),
+            "pinned domain skill must survive the tight budget; got {names:?}"
+        );
+        assert!(names.contains(&"base"), "base is still kept");
+    }
+
+    #[test]
+    fn pinned_skill_is_not_duplicated() {
+        // A pinned domain skill that ALSO fits in budget must appear exactly
+        // once, not twice (force-kept in Step 2 AND added in Step 3).
+        let base = skill("base", SkillCategory::Base, 100_000, "short"); // ~2 tok
+        let comp = skill(
+            "component-composition",
+            SkillCategory::Domain,
+            100_000,
+            &"d".repeat(40),
+        ); // ~10 tok
+        let out = trim_by_budget_pinned(&[base, comp], 100_000, "", &["component-composition"]);
+        let count = out
+            .iter()
+            .filter(|s| s.meta.name == "component-composition")
+            .count();
+        assert_eq!(
+            count, 1,
+            "pinned skill must appear exactly once, got {count}"
+        );
+    }
+
+    #[test]
+    fn empty_pin_matches_unpinned_trim() {
+        // Force-include with an empty pin set must be byte-for-byte identical
+        // to the plain trim (the default no-library path is unchanged).
+        let base = skill("base", SkillCategory::Base, 100_000, "short");
+        let domain = skill("domain", SkillCategory::Domain, 100_000, &"d".repeat(40));
+        let plain = trim_by_budget(&[base.clone(), domain.clone()], 1000, "intent");
+        let empty_pin = trim_by_budget_pinned(&[base, domain], 1000, "intent", &[]);
+        assert_eq!(plain, empty_pin);
     }
 }
