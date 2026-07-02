@@ -242,6 +242,18 @@ pub(crate) fn paint_gradient_rect(
                 *opacity,
             );
         }
+        SceneGradient::Mesh {
+            colors, opacity, ..
+        } => {
+            // No mesh-gradient method on the RenderBackend yet —
+            // degrade to the first vertex colour (same fallback the
+            // scene builder bakes into `SceneNode.fill`).
+            if let Some(first) = colors.first() {
+                let mut c = *first;
+                c.a = (c.a * opacity).clamp(0.0, 1.0);
+                cx.backend.fill_round_rect(rect, corner_radius, c);
+            }
+        }
     }
 }
 

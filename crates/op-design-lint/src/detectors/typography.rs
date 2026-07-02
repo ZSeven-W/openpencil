@@ -186,6 +186,9 @@ fn first_solid_color(fills: Option<&Vec<PenFill>>) -> Option<String> {
                 }
             }
             PenFill::Image(_) => continue,
+            // Mesh gradients / SkSL shaders have no single representative
+            // color for contrast checks — treated like image fills.
+            PenFill::MeshGradient(_) | PenFill::Shader(_) => continue,
         }
     }
     None

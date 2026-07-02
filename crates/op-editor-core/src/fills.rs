@@ -348,6 +348,8 @@ pub fn first_solid_fill_opacity(node: &PenNode) -> f32 {
             PenFill::Solid(b) => b.opacity.unwrap_or(1.0),
             PenFill::LinearGradient(b) => b.opacity.unwrap_or(1.0),
             PenFill::RadialGradient(b) => b.opacity.unwrap_or(1.0),
+            PenFill::MeshGradient(b) => b.opacity.unwrap_or(1.0),
+            PenFill::Shader(b) => b.opacity.unwrap_or(1.0),
             PenFill::Image(b) => b.opacity.unwrap_or(1.0),
         })
         .unwrap_or(1.0)
@@ -367,6 +369,8 @@ pub fn first_solid_stroke_opacity(node: &PenNode) -> f32 {
             PenFill::Solid(b) => b.opacity.unwrap_or(1.0),
             PenFill::LinearGradient(b) => b.opacity.unwrap_or(1.0),
             PenFill::RadialGradient(b) => b.opacity.unwrap_or(1.0),
+            PenFill::MeshGradient(b) => b.opacity.unwrap_or(1.0),
+            PenFill::Shader(b) => b.opacity.unwrap_or(1.0),
             PenFill::Image(b) => b.opacity.unwrap_or(1.0),
         })
         .unwrap_or(1.0)
@@ -475,6 +479,8 @@ pub fn set_primary_fill_opacity(node: &mut PenNode, opacity: f32) -> bool {
         PenFill::Solid(b) => b.opacity = Some(opacity),
         PenFill::LinearGradient(b) => b.opacity = Some(opacity),
         PenFill::RadialGradient(b) => b.opacity = Some(opacity),
+        PenFill::MeshGradient(b) => b.opacity = Some(opacity),
+        PenFill::Shader(b) => b.opacity = Some(opacity),
         PenFill::Image(b) => b.opacity = Some(opacity),
     }
     true
@@ -618,6 +624,10 @@ pub fn fill_type_of(fill: &PenFill) -> FillType {
         PenFill::Solid(_) => FillType::Solid,
         PenFill::LinearGradient(_) => FillType::LinearGradient,
         PenFill::RadialGradient(_) => FillType::RadialGradient,
+        // The property panel has no mesh-gradient / shader picker rows
+        // yet — report the neutral default so the panel stays usable
+        // without offering a lossy conversion.
+        PenFill::MeshGradient(_) | PenFill::Shader(_) => FillType::Solid,
         PenFill::Image(_) => FillType::Image,
     }
 }
@@ -692,6 +702,9 @@ fn fill_hex(fill: &PenFill) -> Option<&str> {
         PenFill::Solid(body) => Some(body.color.as_str()),
         PenFill::LinearGradient(body) => body.stops.first().map(|s| s.color.as_str()),
         PenFill::RadialGradient(body) => body.stops.first().map(|s| s.color.as_str()),
+        PenFill::MeshGradient(body) => body.stops.first().map(|s| s.color.as_str()),
+        // A shader has no representative colour.
+        PenFill::Shader(_) => None,
         PenFill::Image(_) => None,
     }
 }

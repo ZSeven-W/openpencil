@@ -216,6 +216,9 @@ fn node_payload_to_scene(
             .gradient
             .as_ref()
             .map(|g| scale_gradient_opacity(payload_gradient_to_scene(g), cum_opacity)),
+        // The payload path doesn't carry SkSL shader bodies yet — the
+        // scene painter degrades to the resolved `fill` colour.
+        shader: None,
         stroke: node.stroke.as_ref().map(|s| {
             let mut st = scene_stroke(s, &node_id, var_table);
             st.color = mul_alpha(st.color, cum_opacity);
@@ -376,6 +379,17 @@ fn scale_gradient_opacity(g: SceneGradient, k: f32) -> SceneGradient {
             radius,
             opacity: (opacity * k).clamp(0.0, 1.0),
             stops,
+        },
+        SceneGradient::Mesh {
+            rows,
+            cols,
+            colors,
+            opacity,
+        } => SceneGradient::Mesh {
+            rows,
+            cols,
+            colors,
+            opacity: (opacity * k).clamp(0.0, 1.0),
         },
     }
 }

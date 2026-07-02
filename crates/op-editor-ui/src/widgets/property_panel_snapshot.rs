@@ -1160,6 +1160,12 @@ fn fills_of(node: &PenNode) -> Vec<FillSummary> {
                     b.stops.first().map(|s| s.color.as_str()),
                     b.opacity.unwrap_or(1.0),
                 ),
+                PenFill::MeshGradient(b) => (
+                    b.stops.first().map(|s| s.color.as_str()),
+                    b.opacity.unwrap_or(1.0),
+                ),
+                // Shader fills have no representative colour.
+                PenFill::Shader(b) => (None, b.opacity.unwrap_or(1.0)),
                 PenFill::Image(b) => (None, b.opacity.unwrap_or(1.0)),
             };
             FillSummary {
