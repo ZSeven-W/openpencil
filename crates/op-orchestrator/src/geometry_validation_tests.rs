@@ -969,7 +969,7 @@ fn real_layout_shrinks_rigid_fit_child_overflowing_a_narrow_card() {
             .find_map(|c| find(c, name))
     }
     // The pair was renamed by id remap; find the frame that HOLDS the icon.
-    fn find_pair<'a>(v: &'a serde_json::Value) -> Option<&'a serde_json::Value> {
+    fn find_pair(v: &serde_json::Value) -> Option<&serde_json::Value> {
         let kids = v.get("children").and_then(|c| c.as_array())?;
         if kids
             .iter()
