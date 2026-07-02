@@ -37,7 +37,18 @@ fn auto_update_card_rect(content: Rect) -> Rect {
     }
 }
 
+/// Host capability: the auto-update toggle drives the desktop
+/// updater (`op-host-desktop/src/update_check.rs`). The web host has
+/// no updater — hide the card there instead of painting a switch that
+/// silently does nothing (same pattern as `GIT_BUTTON_AVAILABLE`).
+pub(super) const AUTO_UPDATE_AVAILABLE: bool = !cfg!(target_arch = "wasm32");
+
 fn experimental_card_rect(content: Rect) -> Rect {
+    if !AUTO_UPDATE_AVAILABLE {
+        // The auto-update card is hidden — the experimental card
+        // moves up into its slot.
+        return auto_update_card_rect(content);
+    }
     Rect {
         origin: Point2D::new(
             content.origin.x,
@@ -60,7 +71,7 @@ fn switch_rect_for(card: Rect) -> Rect {
 }
 
 pub fn hit_test(content: Rect, scrolled: Point2D) -> SystemHit {
-    if switch_rect_for(auto_update_card_rect(content)).contains(scrolled) {
+    if AUTO_UPDATE_AVAILABLE && switch_rect_for(auto_update_card_rect(content)).contains(scrolled) {
         return SystemHit::ToggleAutoUpdate;
     }
     if switch_rect_for(experimental_card_rect(content)).contains(scrolled) {
@@ -88,15 +99,18 @@ pub(super) fn paint_system_tab(
         Point2D::new(content.origin.x, content.origin.y + 20.0),
     );
 
-    paint_toggle_card(
-        cx,
-        theme,
-        ui,
-        auto_update_card_rect(content),
-        "agents.autoUpdate",
-        "settings.autoUpdateDesc",
-        settings.auto_update_enabled,
-    );
+    // Auto-update card — desktop-only (see `AUTO_UPDATE_AVAILABLE`).
+    if AUTO_UPDATE_AVAILABLE {
+        paint_toggle_card(
+            cx,
+            theme,
+            ui,
+            auto_update_card_rect(content),
+            "agents.autoUpdate",
+            "settings.autoUpdateDesc",
+            settings.auto_update_enabled,
+        );
+    }
     paint_toggle_card(
         cx,
         theme,
