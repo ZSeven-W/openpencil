@@ -237,6 +237,23 @@ pub struct RevealSchedule<'a> {
     pub(crate) now_ms: u64,
 }
 
+/// Scale-in pop window right after a node's reveal starts — the Stitch
+/// placement "pop" that replaced the old dashed border fade.
+pub(crate) const REVEAL_POP_MS: u64 = 180;
+
+/// Placement pop: 0.85 → ~1.02 overshoot → 1.0 across [`REVEAL_POP_MS`]
+/// (ease-out-back). `None` once the pop has settled.
+pub(crate) fn reveal_pop_scale(elapsed_ms: u64) -> Option<f32> {
+    if elapsed_ms >= REVEAL_POP_MS {
+        return None;
+    }
+    let t = elapsed_ms as f32 / REVEAL_POP_MS as f32;
+    let s = 1.70158f32;
+    let u = t - 1.0;
+    let back = u * u * ((s + 1.0) * u + s) + 1.0;
+    Some(0.85 + 0.15 * back)
+}
+
 struct PaintNodeOptions<'a> {
     viewport_origin: Point2D,
     zoom: f32,
@@ -281,7 +298,7 @@ impl<'a> PaintNodeHits<'a> {
 enum RevealPaintState {
     Idle,
     Pending,
-    Active,
+    Active { elapsed_ms: u64 },
 }
 
 /// Off-canvas public entry for painters outside this crate (raster/PDF
@@ -395,6 +412,10 @@ fn paint_node_inner<'a>(
     if node.hidden || matches!(reveal_state, RevealPaintState::Pending) {
         return PaintNodeHits::default();
     }
+    let pop_scale = match reveal_state {
+        RevealPaintState::Active { elapsed_ms } => reveal_pop_scale(elapsed_ms),
+        _ => None,
+    };
     let world_rect = Rect {
         origin: Point2D::new(
             viewport_origin.x + node.bounds.origin.x * zoom,
@@ -416,11 +437,12 @@ fn paint_node_inner<'a>(
     let mut hits = PaintNodeHits::for_node(node, options);
 
     // Wrap the paint in save/transform/restore when the node carries
-    // a mirror or non-zero rotation. Both pivot around the node's
-    // own bounds centre; containers use their aggregate centre.
+    // a mirror, a non-zero rotation, or an in-flight reveal pop. All
+    // pivot around the node's own bounds centre; containers use their
+    // aggregate centre.
     let flipped = node.flip_x || node.flip_y;
     let rotated = node.rotation.abs() > f32::EPSILON;
-    let transformed = flipped || rotated;
+    let transformed = flipped || rotated || pop_scale.is_some();
     if transformed {
         let pivot_doc = node.aggregate_bounds();
         let pivot = Point2D::new(
@@ -428,6 +450,9 @@ fn paint_node_inner<'a>(
             viewport_origin.y + (pivot_doc.origin.y + pivot_doc.size.y / 2.0) * zoom,
         );
         cx.backend.save();
+        if let Some(pop) = pop_scale {
+            cx.backend.scale(Point2D::new(pop, pop), pivot);
+        }
         if flipped {
             cx.backend.scale(
                 Point2D::new(
@@ -664,7 +689,9 @@ fn reveal_paint_state(schedule: RevealSchedule<'_>, node_id: &str) -> RevealPain
     if elapsed > op_editor_core::agent_indicators::REVEAL_DURATION_MS {
         return RevealPaintState::Idle;
     }
-    RevealPaintState::Active
+    RevealPaintState::Active {
+        elapsed_ms: elapsed,
+    }
 }
 
 pub(crate) fn paint_svg_path_node(
