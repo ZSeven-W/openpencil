@@ -173,6 +173,7 @@ pub fn geometry_validate_and_fix(sink: &mut dyn DocSink, root_id: &str) -> usize
             collect_collapse_fixes(&v, &rects, &mut cmds);
             collect_text_overflow_fixes(&v, &rects, &mut cmds);
             collect_frame_overflow_fixes(&v, &rects, &mut cmds);
+            collect_row_gap_fixes(&v, &rects, &mut cmds);
             cmds
         };
         if cmds.is_empty() {
@@ -304,13 +305,19 @@ fn collect_text_overflow_fixes(
     }
 }
 
-/// A NON-TEXT child with an authored NUMERIC width that resolved wider than its
-/// flex parent (a model wrote an 800px avatar bar into a ~550px row — measured
-/// on a glm loop run) → retarget it to `fill_container` so it shares the row
-/// instead of spilling across the design. Only numeric widths are touched: a
-/// keyword-sized child that overflows is the PARENT chain's problem, and text
-/// is handled by [`collect_text_overflow_fixes`]. `clipContent` parents crop on
-/// purpose — skipped.
+/// A NON-TEXT child that resolved wider than its flex parent → retarget it to
+/// `fill_container` so it shares the row instead of spilling across the design.
+/// Two authored shapes trip this:
+/// - a NUMERIC width bigger than the parent (an 800px avatar bar in a ~550px
+///   row — measured on a loop run);
+/// - a `fit_content` container whose max-content is rigid — fit never shrinks,
+///   so an icon+text pair inside an 80px card paints over its siblings
+///   (measured: a hero's "Brewing now" chip stack). Retargeting to
+///   `fill_container` gives it `min:0` shrink; the text inside then overflows
+///   ITS block and the text-overflow fixer wraps it on the NEXT loop round —
+///   the detectors converge as a chain.
+/// Text children are handled by [`collect_text_overflow_fixes`]; `clipContent`
+/// parents crop on purpose — skipped.
 fn collect_frame_overflow_fixes(
     v: &Value,
     rects: &HashMap<String, Rect>,
@@ -328,7 +335,9 @@ fn collect_frame_overflow_fixes(
                 if c.get("type").and_then(Value::as_str) == Some("text") {
                     continue;
                 }
-                if fixed_width(c).is_none() {
+                let resizable = fixed_width(c).is_some()
+                    || c.get("width").and_then(Value::as_str) == Some("fit_content");
+                if !resizable {
                     continue;
                 }
                 let Some(cid) = c.get("id").and_then(Value::as_str) else {
@@ -349,6 +358,65 @@ fn collect_frame_overflow_fixes(
     }
     for c in children(v) {
         collect_frame_overflow_fixes(c, rects, cmds);
+    }
+}
+
+/// Default gap injected into a geometry-proven jammed data row.
+const ROW_GAP_FIX: f64 = 16.0;
+
+/// GEOMETRY-driven column-gap repair — the name-blind big brother of
+/// `table_repair::ensure_table_column_gap`. A row qualifies when the REAL
+/// layout proves every adjacent pair of its ≥3 frame cells touches (<3px
+/// breathing) and the cells carry text — "Oct 24, 2024"+"42" reading as
+/// "202442" regardless of how many unnamed wrappers bury the table (measured:
+/// rows nested TWO wrapper levels below the table-named frame slipped past
+/// the name gate). Flush segmented controls stay safe: those are 2-3 equal
+/// small children, gated out by the ≥3-cells + row-cell height + text checks.
+fn collect_row_gap_fixes(v: &Value, rects: &HashMap<String, Rect>, cmds: &mut Vec<EditorCommand>) {
+    if layout_str(v) == Some("horizontal") && num(v, "gap") <= 0.0 {
+        let kids = children(v);
+        let frame_kids: Vec<&Value> = kids
+            .iter()
+            .filter(|c| {
+                matches!(
+                    c.get("type").and_then(Value::as_str),
+                    Some("frame" | "group")
+                )
+            })
+            .collect();
+        if frame_kids.len() >= 3 {
+            let rects_of: Vec<Option<&Rect>> = frame_kids
+                .iter()
+                .map(|c| {
+                    c.get("id")
+                        .and_then(Value::as_str)
+                        .and_then(|id| rects.get(id))
+                })
+                .collect();
+            let all_resolved = rects_of.iter().all(|r| r.is_some_and(|r| r.w > 0.0));
+            let row_cell_like = rects_of
+                .iter()
+                .flatten()
+                .all(|r| r.h <= ROW_CELL_MAX_H && r.h > 0.0);
+            let all_jammed = all_resolved
+                && rects_of.windows(2).all(|p| {
+                    let (a, b) = (p[0].unwrap(), p[1].unwrap());
+                    (b.x - (a.x + a.w)) < SIBLING_JAM_GAP
+                });
+            let texty = frame_kids.iter().filter(|c| bears_text(c)).count() >= 2;
+            if all_resolved && row_cell_like && all_jammed && texty {
+                if let Some(id) = v.get("id").and_then(Value::as_str) {
+                    cmds.push(EditorCommand::SetNodeLayoutProp {
+                        node_id: NodeId::new(id.to_string()),
+                        property: "gap".to_string(),
+                        value: LayoutPropValue::Number(ROW_GAP_FIX),
+                    });
+                }
+            }
+        }
+    }
+    for c in children(v) {
+        collect_row_gap_fixes(c, rects, cmds);
     }
 }
 

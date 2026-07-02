@@ -129,6 +129,10 @@ Prefer components found in `get_editor_state` components / retrieved via `batch_
 
 Every visible string in one screen MUST use the SAME language as the user's request. Do not mix CJK characters and English labels on the same screen unless the request explicitly calls for bilingual UI.
 
+### One brand, everywhere
+
+Invent the product/brand name ONCE and reuse it verbatim in every slot that mentions it — top-bar logo, sidebar brand, footer, copyright line, email domains in sample data. A footer naming a different shop than the logo reads as broken.
+
 ### Mark scaffolding for removal
 
 Any content you add as temporary scaffolding (placeholder text, dummy images) MUST be marked with `placeholder: true` on the node. Remove all placeholder nodes before the design is considered finished.
