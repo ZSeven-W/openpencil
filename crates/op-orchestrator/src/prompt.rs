@@ -65,6 +65,32 @@ Use catalog kinds for everything they cover; group with {"el":"section"} lines
 and "in" line-number references; NEVER emit id / parent_id / pageId fields.
 Output ONLY the JSONL lines."#;
 
+/// Program-DSL 模式（`OPENPENCIL_PROGRAM_GEN=1`）的输出协议。模型写一段
+/// `batch_design` 程序而非扁平 `_parent` JSONL——子节点靠"传父绑定变量"嵌套
+/// （parent-by-reference），使弱模型的"行被拆成全宽兄弟 / 表头无行"两类结构崩塌
+/// 近乎不可表达。执行器是 Rust 的 `op_mcp::run_batch_design_program`（无 JS 引擎）。
+const PROGRAM_FORMAT: &str = r#"
+OUTPUT PROTOCOL: batch_design PROGRAM. Respond with insert operations, ONE per
+line, NO prose, NO markdown fences. Each line is:
+  name=I(parent, {...node JSON...})
+`I` inserts a node; `name` captures its id so LATER lines nest children into it by
+passing `name` as their parent. `parent` is `null` ONLY for this section's single
+root frame, otherwise a binding from an EARLIER line. A node is a child of X if and
+only if its line is `something=I(X, {...})` -- there is no other way to nest.
+Each node object MUST start with "type" (frame/text/rectangle/ellipse/path/icon_font).
+camelCase fields (cornerRadius, fontSize, fontWeight, justifyContent, alignItems,
+clipContent). Do NOT set x/y on children inside layout frames.
+PARENT-BY-REFERENCE makes repeated structure correct by construction:
+  tbl=I(sec, {"type":"frame","layout":"vertical","width":"fill_container"})
+  r1=I(tbl, {"type":"frame","layout":"horizontal","width":"fill_container"})
+  c1=I(r1, {"type":"frame","width":"fill_container"})
+  I(c1, {"type":"text","content":"Alice"})
+Every table/list ROW is I(table,...); every CELL is I(row,...); every cell's content
+is I(cell,...). NEVER insert a cell or its content into the table/section directly --
+that renders as a full-width band, not a table cell. Emit EVERY data row/card/item
+with realistic values -- never a header with zero rows.
+Output ONLY the program lines."#;
+
 /// Rich 模式 system prompt 末尾后缀 —— verbatim,`orchestrator.ts:1382-1383`。
 const RICH_SUFFIX: &str = "\n\n---\nCRITICAL OUTPUT FORMAT ENFORCEMENT:\n\
 You MUST output ONLY a single JSON object. Start your response with { and end with }.\n\
@@ -695,10 +721,18 @@ pub fn build_subagent_prompt(
     // the full first attempt — the retry ladder (reduced/minimal) falls back
     // to the smaller raw-JSONL prompt, and `parse_manifest` returning `None`
     // on such output routes parsing back through `parse_nodes`.
-    let manifest_on =
-        crate::manifest::manifest_enabled_for_model(req.model.as_deref().unwrap_or(""))
-            && !reduced_complexity
-            && !minimal_skills;
+    let model_id = req.model.as_deref().unwrap_or("");
+    // Program-DSL protocol (OPENPENCIL_PROGRAM_GEN) takes priority over the
+    // element manifest and is mutually exclusive with it. Like manifest, it runs
+    // only on the full first attempt; the reduced/minimal retry rungs fall back
+    // to raw JSONL (and `subagent::run_subtask` routes parsing accordingly).
+    let program_on = crate::program_gen::program_gen_enabled_for_model(model_id)
+        && !reduced_complexity
+        && !minimal_skills;
+    let manifest_on = !program_on
+        && crate::manifest::manifest_enabled_for_model(model_id)
+        && !reduced_complexity
+        && !minimal_skills;
     build_subagent_prompt_with_manifest(
         subtask,
         plan,
@@ -707,6 +741,7 @@ pub fn build_subagent_prompt(
         reduced_complexity,
         minimal_skills,
         manifest_on,
+        program_on,
         components,
     )
 }
@@ -723,6 +758,7 @@ fn build_subagent_prompt_with_manifest(
     reduced_complexity: bool,
     minimal_skills: bool,
     manifest_on: bool,
+    program_on: bool,
     components: &ComponentLibrary,
 ) -> (CallRequest, SkillLoadReport) {
     // Resolve the full generation skill set, then apply tier-gated filtering.
@@ -890,9 +926,12 @@ fn build_subagent_prompt_with_manifest(
             );
             (filtered, agent_ctx.report, filter_drops)
         };
-    // The manifest protocol REPLACES the raw-JSONL output format —
-    // carrying both would contradict (and burn Basic-tier budget).
-    if manifest_on {
+    // The manifest AND program-DSL protocols each REPLACE the raw-JSONL output
+    // format — carrying the `jsonl-format` skill alongside either one feeds the
+    // model two contradictory output contracts (e2e showed glm then emitting a
+    // half-program/half-`_parent` blob with unclosed objects). Drop it so the
+    // protocol's own format block (MANIFEST_FORMAT / PROGRAM_FORMAT) governs alone.
+    if manifest_on || program_on {
         filtered.retain(|s| {
             s.skill_name() != "jsonl-format" && s.skill_name() != "jsonl-format-simplified"
         });
@@ -926,7 +965,9 @@ fn build_subagent_prompt_with_manifest(
     // `jsonl-format` + `jsonl-format-simplified` skills both teach `_parent`,
     // so this agrees with whichever skill the tier loads (no contradiction).
     // Manifest mode swaps in the element-manifest contract instead.
-    system_prompt.push_str(if manifest_on {
+    system_prompt.push_str(if program_on {
+        PROGRAM_FORMAT
+    } else if manifest_on {
         MANIFEST_FORMAT
     } else {
         NODE_FORMAT
@@ -1009,7 +1050,13 @@ fn build_subagent_prompt_with_manifest(
     // Three constraints differ by output protocol: the raw-JSONL path has
     // the model author its own root frame + ids; the manifest path forbids
     // exactly that (system-assigned ids, system-owned section root).
-    let (root_rule, nesting_rule, output_rule) = if manifest_on {
+    let (root_rule, nesting_rule, output_rule) = if program_on {
+        (
+            format!("Create EXACTLY ONE section root frame as the first line: sec=I(null, {{\"type\":\"frame\",\"name\":\"{}\",\"width\":\"fill_container\",\"height\":\"fit_content\",\"layout\":\"vertical\"}}). Build everything else with bindings into `sec` or its descendants. NEVER set a fixed pixel height on the root.", subtask.label),
+            "Nest via bindings ONLY: row=I(sec, ...); cell=I(row, ...); I(cell, {\"type\":\"text\",...}). A cell or its content inserted into the section/table binding directly renders as a full-width band, not a table cell. Every repeated row/card/item is its own I(...) line.".to_string(),
+            "Output ONLY the batch_design program -- one I(...) operation per line, no prose, no markdown fences.".to_string(),
+        )
+    } else if manifest_on {
         (
             "Do NOT create a page wrapper or root frame -- emit element/section manifest lines only; the system wraps them under this section's root automatically.".to_string(),
             "Group elements with {\"el\":\"section\"} lines and `in` line-number references (see ELEMENT MANIFEST rules). Lines without `in` stack vertically in output order.".to_string(),
