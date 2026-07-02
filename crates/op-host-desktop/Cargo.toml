@@ -164,6 +164,10 @@ skia-safe = { version = "0.97.0", default-features = false, features = [
 winit = { package = "casement", path = "../../vendor/casement", default-features = false, features = [
   "x11",
   "wayland",
+  # dlopen libwayland at runtime so X11-only hosts can still start the
+  # binary (without this, libwayland-client becomes a DT_NEEDED hard
+  # dependency and the dynamic linker refuses to load on X11-only boxes).
+  "wayland-dlopen",
   "wayland-csd-adwaita",
   "rwh_06",
 ] }
