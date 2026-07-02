@@ -147,8 +147,15 @@ pub fn launch_if_pending(
     // executes each call via the session's tool channel.
     if let Some((provider, tool_rx)) = builtin_provider_with_tools(host) {
         let system_prompt = build_agent_system_prompt(host.editor_state());
+        // This builtin agent loop carries the full canvas toolset (`batch_design`
+        // included), so a design request runs *here* for an API-key model like
+        // glm-5.2 (experimental flag off → no design-agent loop, builtin → no CLI
+        // provider). Reasoning models burn their whole budget on hidden `<think>`
+        // and draw nothing with thinking left on (glm-5.2 measured thinking≈30k /
+        // text=0 → empty Frame). Force it off for `thinking_disabled` models, same
+        // as the design-agent loop. Resolved before the `&mut` borrow below.
+        let thinking = launch_design::design_turn_thinking_mode(host);
         let chat = &mut host.editor_state_mut().chat;
-        let thinking = chat.thinking_mode;
         let effort = chat.effort_level;
         let attachments = std::mem::take(&mut chat.pending_attachments);
         let req = ChatRequest {
