@@ -105,7 +105,30 @@ pub fn execute_design_tool(
         );
     };
     let registry = design_tool_registry(state, name);
-    execute_with_registry(state, name, args_json, registry)
+    let (mut result, mutated) = execute_with_registry(state, name, args_json, registry);
+    // Per-batch layout feedback: after every WRITE batch, attach what the real
+    // layout proves wrong (collapses / table overflow / text overflow) so the
+    // model sees each batch's geometric consequences immediately and repairs
+    // them in-process, instead of piling defects up for the loop-end finalize.
+    // Deterministic analogue of Pencil's per-batch snapshot_layout feedback.
+    if mutated && matches!(name, "batch_design" | EMIT_ELEMENTS_TOOL) && !result.is_error {
+        let issues = op_orchestrator::geometry_validation::geometry_diagnostics(state);
+        if !issues.is_empty() {
+            if let Ok(mut envelope) = serde_json::from_str::<serde_json::Value>(&result.content) {
+                if let Some(obj) = envelope.as_object_mut() {
+                    obj.insert("layoutIssues".into(), serde_json::json!(issues));
+                    obj.insert(
+                        "layoutHint".into(),
+                        serde_json::json!(
+                            "The resolved layout has the issues above. Fix them with a follow-up batch_design before building the next section."
+                        ),
+                    );
+                    result.content = envelope.to_string();
+                }
+            }
+        }
+    }
+    (result, mutated)
 }
 
 /// Unified executor for the design agent pump: design-surface tools
@@ -304,6 +327,46 @@ mod tests {
         assert!(
             !state.active_children().is_empty(),
             "doc must have a frame after batch_design"
+        );
+    }
+
+    #[test]
+    fn execute_design_batch_design_attaches_per_batch_layout_feedback() {
+        // A batch that lands an OVERFLOWING table (5×240 fixed columns in a
+        // 600px root) must come back with `layoutIssues` — the per-batch
+        // geometry feedback the model repairs in-process.
+        let mut state = EditorState::new();
+        let ops = r#"{"operations":"root=I(null,{\"type\":\"frame\",\"name\":\"Page\",\"width\":600,\"height\":\"fit_content\",\"layout\":\"vertical\",\"children\":[{\"type\":\"frame\",\"name\":\"Client Table\",\"layout\":\"vertical\",\"width\":\"fill_container\",\"children\":[{\"type\":\"frame\",\"name\":\"Row\",\"layout\":\"horizontal\",\"gap\":16,\"width\":\"fill_container\",\"height\":24,\"children\":[{\"type\":\"frame\",\"name\":\"C\",\"width\":240,\"height\":20},{\"type\":\"frame\",\"name\":\"C\",\"width\":240,\"height\":20},{\"type\":\"frame\",\"name\":\"C\",\"width\":240,\"height\":20},{\"type\":\"frame\",\"name\":\"C\",\"width\":240,\"height\":20},{\"type\":\"frame\",\"name\":\"C\",\"width\":240,\"height\":20}]},{\"type\":\"frame\",\"name\":\"Row\",\"layout\":\"horizontal\",\"gap\":16,\"width\":\"fill_container\",\"height\":24,\"children\":[{\"type\":\"frame\",\"name\":\"C\",\"width\":240,\"height\":20},{\"type\":\"frame\",\"name\":\"C\",\"width\":240,\"height\":20},{\"type\":\"frame\",\"name\":\"C\",\"width\":240,\"height\":20},{\"type\":\"frame\",\"name\":\"C\",\"width\":240,\"height\":20},{\"type\":\"frame\",\"name\":\"C\",\"width\":240,\"height\":20}]}]}]})"}"#;
+        let (result, mutated) = execute_design_tool(&mut state, "batch_design", ops);
+        assert!(!result.is_error, "batch failed: {}", result.content);
+        assert!(mutated);
+        let v: serde_json::Value = serde_json::from_str(&result.content).unwrap();
+        let issues = v["layoutIssues"].as_array().expect("layoutIssues attached");
+        assert!(
+            issues
+                .iter()
+                .any(|i| i.as_str().unwrap_or("").contains("column widths")),
+            "table overflow reported, got {issues:?}"
+        );
+        assert!(v["layoutHint"].is_string(), "actionable hint attached");
+    }
+
+    #[test]
+    fn execute_design_clean_batch_attaches_no_layout_feedback() {
+        // A geometrically clean batch must NOT carry layoutIssues noise.
+        let mut state = EditorState::new();
+        let (result, mutated) = execute_design_tool(
+            &mut state,
+            "batch_design",
+            r#"{"operations":"root=I(null,{type:'frame',width:400,height:300})"}"#,
+        );
+        assert!(!result.is_error, "batch failed: {}", result.content);
+        assert!(mutated);
+        let v: serde_json::Value = serde_json::from_str(&result.content).unwrap();
+        assert!(
+            v.get("layoutIssues").is_none(),
+            "clean layout must not attach issues: {}",
+            result.content
         );
     }
 
