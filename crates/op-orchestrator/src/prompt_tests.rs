@@ -1117,6 +1117,37 @@ fn components_prompt_injects_manifest_and_ref_teaching() {
     );
 }
 
+/// The AVAILABLE COMPONENTS instantiation instruction must match the active
+/// output protocol. In raw/loop mode it teaches `{"type":"ref",…}`; in the
+/// element-manifest arm it teaches `{"el":"ref",…}`. Telling a manifest-arm
+/// model to emit raw-node syntax contradicts the el-line contract → 0 refs.
+#[test]
+fn components_manifest_instruction_matches_active_protocol() {
+    let lib = library_with(3);
+
+    // Raw/loop protocol (manifest off): teach the bare PenNode `type:ref`.
+    let raw = available_components_manifest(&lib, false).expect("library present");
+    assert!(
+        raw.contains("\"type\":\"ref\""),
+        "raw protocol must teach type:ref, got:\n{raw}"
+    );
+    assert!(
+        !raw.contains("\"el\":\"ref\""),
+        "raw protocol must NOT teach el:ref, got:\n{raw}"
+    );
+
+    // Element-manifest protocol (manifest on): teach the `el:ref` line.
+    let man = available_components_manifest(&lib, true).expect("library present");
+    assert!(
+        man.contains("\"el\":\"ref\""),
+        "manifest protocol must teach el:ref, got:\n{man}"
+    );
+    assert!(
+        !man.contains("\"type\":\"ref\""),
+        "manifest protocol must NOT teach the contradicting type:ref, got:\n{man}"
+    );
+}
+
 /// A large library is capped: the manifest lists at most
 /// `MAX_COMPONENT_MANIFEST_ENTRIES` and notes the remainder, so the prompt
 /// budget can't be blown by a 200-master kit.
@@ -1144,5 +1175,295 @@ fn large_component_library_is_capped() {
     assert!(
         listed <= MAX_COMPONENT_MANIFEST_ENTRIES,
         "listed {listed} entries exceeds cap {MAX_COMPONENT_MANIFEST_ENTRIES}"
+    );
+}
+
+/// Regression guard for the tier-drop bug (smoke `OPENPENCIL_SMOKE_LIBRARY`
+/// scenario): a Basic-tier model with a component library loaded must get BOTH
+/// the AVAILABLE COMPONENTS manifest (concrete ids) AND the
+/// `component-composition` teaching (the `ref` + `descendants` syntax) in its
+/// assembled subtask prompt.
+///
+/// Before the fix the `component-composition` skill resolved in behind the
+/// `hasReusableComponents` flag but was then dropped by the Basic-tier
+/// `ALLOWED` allow-set (DropReason::TierFiltered) even with budget room
+/// (`budget_used < budget_max`) — so a weak model saw the component list with
+/// no instruction on how to emit a `ref` node and built everything from
+/// scratch (0 component instances). Reproduces the real smoke path: a MiniMax
+/// (Basic-tier) mobile screen, whose 9200-token budget has room to spare.
+#[test]
+fn basic_tier_components_prompt_keeps_both_manifest_and_teaching() {
+    // Sanity: the model classifies as Basic, the path that drops non-allowed
+    // skills via the allow-set (the bug surface).
+    assert_eq!(
+        resolve_model_profile("minimax-m3").tier,
+        ModelTier::Basic,
+        "test fixture must exercise the Basic tier"
+    );
+
+    // A Basic-tier mobile request — the actual smoke scenario. Mobile routes
+    // through the wider 9200-token budget so the drop is provably tier-caused,
+    // not budget-caused.
+    let basic_req = DesignRequest {
+        prompt: "Design a 402x874 mobile shop home screen with product cards, \
+                 search, and bottom navigation using the available components"
+            .into(),
+        model: Some("minimax-m3".into()),
+        ..req()
+    };
+    let mut mobile_plan = plan();
+    mobile_plan.root_frame.width = 402.0;
+    mobile_plan.root_frame.height = 874.0;
+    let mobile_subtask = Subtask {
+        id: "main-content".into(),
+        label: "Main Content".into(),
+        region: Region {
+            width: 402.0,
+            height: 640.0,
+        },
+        id_prefix: "main-content".into(),
+        parent_frame_id: Some("page".into()),
+        elements: Some("product cards, search bar, category chips".into()),
+        screen: None,
+        generated_root_id: None,
+        existing_section_labels: None,
+    };
+
+    let lib = library_with(5);
+    let (cr, report) = build_subagent_prompt(
+        &mobile_subtask,
+        &mobile_plan,
+        &basic_req,
+        AbortFlag::new(),
+        false,
+        false,
+        &lib,
+    );
+    let sys = &cr.system_prompt;
+
+    // The drop the fix removes was budget-room-permitting: prove there was
+    // headroom so the original drop can only have been the tier allow-set.
+    assert!(
+        report.budget_used < report.budget_max,
+        "fixture must have budget headroom (the bug dropped despite room); report={report:?}"
+    );
+
+    // (1) The AVAILABLE COMPONENTS manifest reached the system prompt with
+    // concrete ids — it is a plain appended block, never tier-dropped.
+    assert!(
+        sys.contains("AVAILABLE COMPONENTS"),
+        "Basic-tier prompt must carry the components manifest"
+    );
+    assert!(
+        sys.contains("comp-0") && sys.contains("comp-4"),
+        "manifest must list the concrete component ids"
+    );
+    assert!(
+        sys.contains("\"type\":\"ref\""),
+        "manifest must point at the ref node syntax"
+    );
+
+    // (2) The component-composition TEACHING skill survived the Basic allow-set
+    // (this is the part the bug dropped).
+    assert!(
+        report
+            .included
+            .iter()
+            .any(|s| s.name == "component-composition"),
+        "Basic tier must KEEP component-composition when a library is present; report={report:?}"
+    );
+    assert!(
+        !report
+            .dropped
+            .iter()
+            .any(|s| s.name == "component-composition"),
+        "component-composition must not be tier-dropped; dropped={:?}",
+        report.dropped
+    );
+
+    // (3) The teaching skill's actual body (the `ref` + `descendants` rules)
+    // is present in the system prompt, not just listed in the report.
+    assert!(
+        sys.contains("COMPONENT COMPOSITION"),
+        "the component-composition skill body must be in the system prompt"
+    );
+    assert!(
+        sys.contains("descendants"),
+        "the prompt must teach overriding instance content via descendants"
+    );
+}
+
+/// Regression guard for the BUDGET-drop bug — the non-mobile dashboard path.
+///
+/// The earlier `basic_tier_components_prompt_keeps_both_*` test covers the
+/// MOBILE path (9200-token budget with headroom), which only ever exercised the
+/// TIER allow-set drop. The real loss in production is on the NON-MOBILE,
+/// Basic-tier dashboard path: `budget_max = 5200`, base skills alone consume
+/// ~3900, so the flag-gated `component-composition` skill (~1200 tok) does NOT
+/// fit and was dropped with `DropReason::BudgetExhausted` — the model got the
+/// AVAILABLE COMPONENTS list but no `ref` + `descendants` teaching and emitted 0
+/// instances (`("component-composition","budget")` ×4 subtasks across runs).
+///
+/// The force-include pin (prompt.rs: `pinned_skills` when `has_reusable_components`,
+/// threaded into `trim_by_budget_pinned`) keeps it budget-exempt. This test
+/// reproduces the EXACT scenario that dropped it (wide plan ⇒ 5200 budget, a
+/// library present, budget already exhausted) and asserts the teaching survives.
+#[test]
+fn tight_budget_dashboard_force_includes_component_composition() {
+    // Basic tier is the path that overrides the budget down to 5200 when the
+    // plan is NOT a mobile full screen (the bug surface).
+    assert_eq!(
+        resolve_model_profile("minimax-m3").tier,
+        ModelTier::Basic,
+        "fixture must exercise the Basic tier (5200 budget on non-mobile)"
+    );
+
+    // A wide (non-mobile) dashboard plan → is_mobile_full_screen = false →
+    // budget_override = Some(5200), the exact tight path that budget-dropped it.
+    let basic_req = DesignRequest {
+        prompt: "Design a 1280x800 analytics dashboard with metric cards, \
+                 a chart panel, and a data table using the available components"
+            .into(),
+        model: Some("minimax-m3".into()),
+        ..req()
+    };
+    let mut dash_plan = plan();
+    dash_plan.root_frame.width = 1280.0;
+    dash_plan.root_frame.height = 800.0;
+    let dash_subtask = Subtask {
+        id: "main".into(),
+        label: "Main".into(),
+        region: Region {
+            width: 1280.0,
+            height: 600.0,
+        },
+        id_prefix: "main".into(),
+        parent_frame_id: Some("page".into()),
+        elements: Some("metric cards, chart, table".into()),
+        screen: None,
+        generated_root_id: None,
+        existing_section_labels: None,
+    };
+
+    let lib = library_with(5);
+    let (cr, report) = build_subagent_prompt(
+        &dash_subtask,
+        &dash_plan,
+        &basic_req,
+        AbortFlag::new(),
+        false,
+        false,
+        &lib,
+    );
+    let sys = &cr.system_prompt;
+
+    // (0) Prove this is the TIGHT path: the 5200 budget is genuinely exhausted —
+    // budget_used >= budget_max — so the survival of component-composition can
+    // ONLY be the force-include pin, not leftover headroom. (Before the fix this
+    // same exhaustion is what dropped it with DropReason::BudgetExhausted.)
+    assert_eq!(
+        report.budget_max, 5200,
+        "non-mobile Basic must use the 5200 budget"
+    );
+    assert!(
+        report.budget_used >= report.budget_max,
+        "fixture must EXHAUST the budget so the pin is the only thing keeping the \
+         skill (the bug dropped it here); report={report:?}"
+    );
+
+    // (1) The component-composition TEACHING skill survived the tight budget.
+    assert!(
+        report
+            .included
+            .iter()
+            .any(|s| s.name == "component-composition"),
+        "tight 5200 budget must FORCE-INCLUDE component-composition when a library \
+         is present; report={report:?}"
+    );
+    // (2) It is NOT recorded as a budget drop (the exact regression).
+    assert!(
+        !report
+            .dropped
+            .iter()
+            .any(|s| s.name == "component-composition"),
+        "component-composition must not be budget-dropped on the 5200 path; \
+         dropped={:?}",
+        report.dropped
+    );
+    // (3) The skill BODY (the ref + descendants rules) is in the system prompt.
+    assert!(
+        sys.contains("COMPONENT COMPOSITION"),
+        "the component-composition skill body must reach the tight-budget prompt"
+    );
+    assert!(
+        sys.contains("descendants"),
+        "the prompt must teach overriding instance content via descendants"
+    );
+    // (4) The AVAILABLE COMPONENTS manifest with concrete ids is also present —
+    // both halves (LIST + HOW) reach the model on the tight path.
+    assert!(
+        sys.contains("AVAILABLE COMPONENTS"),
+        "tight-budget prompt must carry the components manifest"
+    );
+    assert!(
+        sys.contains("comp-0") && sys.contains("comp-4"),
+        "manifest must list the concrete component ids"
+    );
+}
+
+/// The force-include is gated on a library being present: with NO components, a
+/// tight-budget Basic dashboard prompt must NOT pin (or contain) the
+/// component-composition skill — proving the pin is additive and never changes
+/// normal no-library generation.
+#[test]
+fn tight_budget_dashboard_without_library_does_not_pin_component_composition() {
+    let basic_req = DesignRequest {
+        prompt: "Design a 1280x800 analytics dashboard with metric cards, \
+                 a chart panel, and a data table"
+            .into(),
+        model: Some("minimax-m3".into()),
+        ..req()
+    };
+    let mut dash_plan = plan();
+    dash_plan.root_frame.width = 1280.0;
+    dash_plan.root_frame.height = 800.0;
+    let dash_subtask = Subtask {
+        id: "main".into(),
+        label: "Main".into(),
+        region: Region {
+            width: 1280.0,
+            height: 600.0,
+        },
+        id_prefix: "main".into(),
+        parent_frame_id: Some("page".into()),
+        elements: Some("metric cards, chart, table".into()),
+        screen: None,
+        generated_root_id: None,
+        existing_section_labels: None,
+    };
+
+    let (cr, report) = build_subagent_prompt(
+        &dash_subtask,
+        &dash_plan,
+        &basic_req,
+        AbortFlag::new(),
+        false,
+        false,
+        &ComponentLibrary::default(),
+    );
+    assert!(
+        !report
+            .included
+            .iter()
+            .any(|s| s.name == "component-composition"),
+        "no library ⇒ component-composition must not be force-included; report={report:?}"
+    );
+    assert!(
+        !cr.system_prompt.contains("AVAILABLE COMPONENTS"),
+        "no library ⇒ no components manifest"
+    );
+    assert!(
+        !cr.system_prompt.contains("COMPONENT COMPOSITION"),
+        "no library ⇒ no component-composition teaching"
     );
 }

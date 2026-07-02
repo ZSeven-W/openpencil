@@ -25,7 +25,7 @@ use op_ai_skills::style_guide::{
     extract_style_guide_values, select_style_guide, style_guide_registry, SelectOptions,
 };
 use op_ai_skills::{
-    budget::trim_by_budget,
+    budget::trim_by_budget_pinned,
     get_skills_by_phase,
     resolver::{filter_by_intent, inject_dynamic_content},
     DropReason, DroppedSkill, Phase, ResolveOptions, ResolvedSkill, SkillLoadEntry,
@@ -496,7 +496,11 @@ fn resolve_generation_skills_after_prompt_filter(
         minimal_skills,
         reduced_complexity,
     );
-    let trimmed = trim_by_budget(&filtered_entries, total_budget, intent);
+    // Honor caller-pinned skills (force-included, budget-exempt) — same
+    // mechanism `resolve_skills` uses on the non-mobile path. Empty by default,
+    // so a no-library mobile generation is unchanged.
+    let pinned: Vec<&str> = opts.pinned_skills.iter().map(String::as_str).collect();
+    let trimmed = trim_by_budget_pinned(&filtered_entries, total_budget, intent, &pinned);
 
     for entry in &filtered_entries {
         if !trimmed.iter().any(|kept| kept.meta.name == entry.meta.name) {
@@ -587,7 +591,17 @@ const COMPONENT_CATEGORY_ORDER: &[&str] = &[
 /// [`MAX_COMPONENT_MANIFEST_ENTRIES`], plus a one-line instruction pointing the
 /// model at the `ref` + `descendants` syntax taught by the
 /// `component-composition` skill.
-fn available_components_manifest(components: &ComponentLibrary) -> Option<String> {
+///
+/// `manifest_on` branches the one-line instantiation instruction by which
+/// output protocol is active. The default raw/loop path emits a bare PenNode
+/// (`{"type":"ref",…}`); the element-manifest path emits an `el` line
+/// (`{"el":"ref",…}`). Telling a manifest-arm model to emit raw-node syntax
+/// contradicts the dominant `el`-line contract, so it emits rich `el` kinds and
+/// 0 component refs — the instruction must match the live protocol.
+fn available_components_manifest(
+    components: &ComponentLibrary,
+    manifest_on: bool,
+) -> Option<String> {
     if components.is_empty() {
         return None;
     }
@@ -601,9 +615,14 @@ fn available_components_manifest(components: &ComponentLibrary) -> Option<String
     }
 
     let total = components.len();
+    let ref_syntax = if manifest_on {
+        "an `el:\"ref\"` line"
+    } else {
+        "a `ref` node"
+    };
     let mut lines = vec![format!(
         "AVAILABLE COMPONENTS ({total} reusable components in this document — \
-         PREFER instantiating these with a `ref` node over building from scratch):"
+         PREFER instantiating these with {ref_syntax} over building from scratch):"
     )];
     let mut listed = 0usize;
     'outer: for cat in COMPONENT_CATEGORY_ORDER {
@@ -626,12 +645,25 @@ fn available_components_manifest(components: &ComponentLibrary) -> Option<String
             listed += 1;
         }
     }
-    lines.push(
-        "To use one, emit a node `{\"type\":\"ref\",\"ref\":\"<id from above>\"}` (override its \
-         text/fill via `descendants` — see the component-composition rules). Only build an \
-         element by hand when no component above fits."
-            .to_string(),
-    );
+    // Branch the instantiation example by the active output protocol so the
+    // model is never told to emit a syntax that contradicts its line contract.
+    // The example is COMPLETE (not just the envelope) so this block is
+    // self-sufficient: even if the component-composition skill were ever trimmed
+    // out, the model still has a usable, copy-pasteable instruction.
+    let instruction = if manifest_on {
+        "To use one, emit it as a manifest line — `el:\"ref\"`, the component id, nest it \
+         under a section with `in:<line>`, and override its text/fill via `descendants` \
+         (NO `id` field — the system assigns ids). Example:\n  \
+         {\"el\":\"section\",\"role\":\"actions\"}\n  \
+         {\"el\":\"ref\",\"in\":1,\"ref\":\"<id from above>\",\"descendants\":{\"<descendant-id>\":{\"content\":\"Get started\"}}}\n\
+         Only build an element by hand when no component above fits."
+    } else {
+        "To use one, emit a single node — `type:\"ref\"`, the component id, its `_parent`, and \
+         override its text/fill via `descendants` (it needs no `children`). Example:\n  \
+         {\"_parent\":\"<container-id>\",\"id\":\"<your-id>\",\"type\":\"ref\",\"ref\":\"<id from above>\",\"descendants\":{\"<descendant-id>\":{\"content\":\"Get started\"}}}\n\
+         Only build an element by hand when no component above fits."
+    };
+    lines.push(instruction.to_string());
     Some(lines.join("\n"))
 }
 
@@ -701,7 +733,7 @@ fn build_subagent_prompt_with_manifest(
     // `hasReusableComponents` flag (loads the `component-composition` skill).
     // `None` when the registry is empty, so the default no-component path is
     // byte-for-byte unchanged.
-    let component_manifest = available_components_manifest(components);
+    let component_manifest = available_components_manifest(components, manifest_on);
     let has_reusable_components = component_manifest.is_some();
 
     // design.md payload for the `{{designMdContent}}` template. If the
@@ -813,10 +845,24 @@ fn build_subagent_prompt_with_manifest(
         ModelTier::Full => None,
     };
 
+    // Force-include the component-instance teaching whenever a reusable-component
+    // library is loaded. When a library is present the model already receives the
+    // AVAILABLE COMPONENTS *list*; the `component-composition` skill carries the
+    // HOW-to-instantiate teaching (`ref` + `descendants` syntax) — without it the
+    // model gets the catalog but no usable instruction and emits 0 refs. On the
+    // tight non-mobile Basic budget (5200, of which base skills already use
+    // ~3900) the skill is otherwise dropped by BudgetExhausted, so we pin it
+    // (budget-exempt) here. Empty on every no-library path ⇒ no change there.
+    let pinned_skills = if has_reusable_components {
+        vec!["component-composition".to_string()]
+    } else {
+        Vec::new()
+    };
     let opts = ResolveOptions {
         flags,
         dynamic_content,
         budget_override,
+        pinned_skills,
         ..Default::default()
     };
     let intent = subtask_intent(req, subtask);
