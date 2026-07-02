@@ -169,34 +169,41 @@ pub(crate) async fn run_subtask_with_reveal_at(
     // truthy; it parses the element manifest first and falls back to the
     // bare PenNode JSONL path when the text carries no manifest lines.
     // Both routes converge on the same post-processing.
-    let mut nodes =
-        if crate::manifest::manifest_enabled_for_model(req.model.as_deref().unwrap_or("")) {
-            match crate::manifest::parse_manifest(&text) {
-                Some(outcome) => {
-                    for warning in &outcome.warnings {
-                        eprintln!("[manifest] {warning}");
-                    }
-                    if outcome.nodes.is_empty() {
-                        return fail("manifest parsed but produced no nodes".into());
-                    }
-                    outcome.nodes
-                }
-                None => match parse_nodes(&text) {
-                    Ok(n) => n,
-                    Err(e) => {
-                        tracing::warn!(
-                            subtask = %subtask.id,
-                            text_len = text.len(),
-                            thinking_len,
-                            raw = %text,
-                            "subagent parse failed (manifest + JSONL both missed)"
-                        );
-                        return fail(e.to_string());
-                    }
-                },
+    // Program-DSL protocol (OPENPENCIL_PROGRAM_GEN): the sub-agent emitted a
+    // `batch_design` program; run it through the Rust executor and take the
+    // produced section forest. Gated to the full first attempt exactly like the
+    // prompt (`program_on`) — the reduced/minimal retry rungs teach raw JSONL, so
+    // parsing must fall back to `parse_nodes` there too.
+    let model_id = req.model.as_deref().unwrap_or("");
+    let program_on = crate::program_gen::program_gen_enabled_for_model(model_id)
+        && !reduced_complexity
+        && !minimal_skills;
+    let mut nodes = if program_on {
+        match crate::program_gen::parse_program(&text) {
+            Ok(n) => n,
+            Err(e) => {
+                tracing::warn!(
+                    subtask = %subtask.id,
+                    text_len = text.len(),
+                    thinking_len,
+                    raw = %text,
+                    "subagent program-gen parse failed"
+                );
+                return fail(e);
             }
-        } else {
-            match parse_nodes(&text) {
+        }
+    } else if crate::manifest::manifest_enabled_for_model(model_id) {
+        match crate::manifest::parse_manifest(&text) {
+            Some(outcome) => {
+                for warning in &outcome.warnings {
+                    eprintln!("[manifest] {warning}");
+                }
+                if outcome.nodes.is_empty() {
+                    return fail("manifest parsed but produced no nodes".into());
+                }
+                outcome.nodes
+            }
+            None => match parse_nodes(&text) {
                 Ok(n) => n,
                 Err(e) => {
                     tracing::warn!(
@@ -204,12 +211,27 @@ pub(crate) async fn run_subtask_with_reveal_at(
                         text_len = text.len(),
                         thinking_len,
                         raw = %text,
-                        "subagent parse failed"
+                        "subagent parse failed (manifest + JSONL both missed)"
                     );
                     return fail(e.to_string());
                 }
+            },
+        }
+    } else {
+        match parse_nodes(&text) {
+            Ok(n) => n,
+            Err(e) => {
+                tracing::warn!(
+                    subtask = %subtask.id,
+                    text_len = text.len(),
+                    thinking_len,
+                    raw = %text,
+                    "subagent parse failed"
+                );
+                return fail(e.to_string());
             }
-        };
+        }
+    };
     if is_blank_container_forest(&nodes) {
         return fail("blank container root produced no content nodes".into());
     }
