@@ -284,3 +284,77 @@ fn loop_finalize_gives_fill_less_text_a_visible_fill_on_dark_surface() {
         "fill-less text on a dark surface must get a visible fill; got {after:?}"
     );
 }
+
+#[test]
+fn loop_finalize_leaves_text_on_gradient_surface_alone() {
+    // A gradient (or image) fill cannot be reduced to a solid hex — guessing a
+    // text color there risks dark-on-dark, the mirror of the bug the injection
+    // pass fixes. Texts under an indeterminate surface must be left fill-less.
+    let mut state = state_with_forest(json!([{
+        "type": "frame", "id": "root", "name": "Page", "layout": "vertical",
+        "width": 1200, "height": 800,
+        "fill": [{ "type": "solid", "color": "#FFFFFF" }],
+        "children": [{
+            "type": "frame", "id": "hero", "name": "Hero", "layout": "vertical",
+            "width": 1200, "height": 400,
+            "fill": [{ "type": "linear_gradient",
+                       "stops": [ { "offset": 0.0, "color": "#0B1020" },
+                                  { "offset": 1.0, "color": "#3B0764" } ] }],
+            "children": [
+                { "type": "text", "id": "h", "name": "Hero Title", "content": "Launch", "fontSize": 42 }
+            ]
+        }]
+    }]));
+    apply_loop_finalize(&mut state);
+    let after = fill_of(&state, "Hero Title").unwrap_or(json!(null));
+    assert!(
+        after.is_null() || after.as_array().map(|a| a.is_empty()).unwrap_or(false),
+        "text on a gradient surface must NOT get a guessed fill; got {after:?}"
+    );
+}
+
+#[test]
+fn theme_polarity_split_variables_are_healed() {
+    // test07021's verbatim split: a DARK design whose active (Light-slot)
+    // values are dark for bg/text but stock-light for surface-2 — the chip
+    // resolved #F1F5F9 on a #0A0A0A page. The dark value exists in the other
+    // slot; the polarity pass must adopt it. text-primary (correctly light on
+    // dark) must be left alone.
+    let doc: jian_ops_schema::PenDocument = serde_json::from_value(json!({
+        "version": "1.0",
+        "variables": {
+            "color-bg-deep": {"type":"color","value":[
+                {"value":"#0A0A0A","theme":{"Mode":"Light"}},
+                {"value":"#0F172A","theme":{"Mode":"Dark"}}]},
+            "color-surface-2": {"type":"color","value":[
+                {"value":"#F1F5F9","theme":{"Mode":"Light"}},
+                {"value":"#334155","theme":{"Mode":"Dark"}}]},
+            "color-text-primary": {"type":"color","value":[
+                {"value":"#FAFAFA","theme":{"Mode":"Light"}},
+                {"value":"#F1F5F9","theme":{"Mode":"Dark"}}]}
+        },
+        "themes": {"Mode": ["Light", "Dark"]},
+        "children": [
+            {"type":"frame","id":"root","name":"Page","width":1200,"height":800,
+             "fill":[{"type":"solid","color":"$color-bg-deep"}],"children":[]}
+        ]
+    }))
+    .expect("valid doc");
+    let mut state = op_editor_core::EditorState::from_document(doc);
+    let mut sink = crate::loop_finalize::StateDocSink { state: &mut state };
+    crate::loop_finalize::fix_theme_variable_polarity(&mut sink);
+    let s2 = state
+        .resolve_color_variable_hex("color-surface-2")
+        .expect("resolves");
+    assert!(
+        s2.eq_ignore_ascii_case("#334155"),
+        "light-slot surface-2 adopted the dark value, got {s2}"
+    );
+    let tp = state
+        .resolve_color_variable_hex("color-text-primary")
+        .expect("resolves");
+    assert!(
+        tp.eq_ignore_ascii_case("#FAFAFA"),
+        "correctly-opposite text variable untouched, got {tp}"
+    );
+}

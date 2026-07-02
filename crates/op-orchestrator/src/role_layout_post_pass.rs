@@ -220,78 +220,12 @@ fn promote_distribution_recursive(v: &mut Value) -> bool {
     changed
 }
 
-/// Break a CIRCULAR height dependency: a `fit_content`-height container cannot be
-/// sized by a `fill_container`-height child (the parent wants to hug the child;
-/// the child wants to fill the parent). jian/taffy resolves the cycle by
-/// COLLAPSING the child toward zero, so a KPI card's stacked icon + value + label
-/// render on top of each other, and the collapsed height makes every ancestor's
-/// content-height undercount (the root then never stretches — the reported "根
-/// 高度撑不起来"). Pencil forbids this shape in its prompt ("a `fit_content`
-/// parent cannot be pushed by `fill_container` children"); this is the
-/// deterministic backstop for when a weak model emits it anyway — retarget the
-/// child's height to `fit_content` so it hugs real content. Only fires on an
-/// EXPLICIT `fit_content` parent, so the numeric-height root and its
-/// `fill_container` sidebar chain are never touched. Whole-root, round-trip like
-/// the sibling passes.
-pub(crate) fn fix_circular_fill_height(root: &mut PenNode) -> bool {
-    let Ok(mut v) = serde_json::to_value(&*root) else {
-        return false;
-    };
-    if !fix_circular_recursive(&mut v) {
-        return false;
-    }
-    match serde_json::from_value::<PenNode>(v) {
-        Ok(new_root) => {
-            *root = new_root;
-            true
-        }
-        Err(_) => false,
-    }
-}
-
-fn fix_circular_recursive(v: &mut Value) -> bool {
-    let mut changed = false;
-    if v.get("height").and_then(Value::as_str) == Some("fit_content") {
-        if let Some(kids) = v.get_mut("children").and_then(Value::as_array_mut) {
-            for c in kids.iter_mut() {
-                if c.get("height").and_then(Value::as_str) == Some("fill_container") {
-                    if let Some(obj) = c.as_object_mut() {
-                        obj.insert("height".into(), json!("fit_content"));
-                        // A now-hug VERTICAL container can no longer distribute its
-                        // children on the main (vertical) axis: `space_between`
-                        // there collapses to an OVERLAP in jian (a KPI card's icon
-                        // / value / label pile on top of each other). Top-pack them
-                        // and give a modest gap so they read as a stack.
-                        let vertical =
-                            obj.get("layout").and_then(Value::as_str) == Some("vertical");
-                        let distributes = matches!(
-                            obj.get("justifyContent").and_then(Value::as_str),
-                            Some("space_between" | "space_around" | "space_evenly")
-                        );
-                        if vertical && distributes {
-                            obj.insert("justifyContent".into(), json!("start"));
-                            let has_gap = obj
-                                .get("gap")
-                                .and_then(Value::as_f64)
-                                .map(|g| g > 0.0)
-                                .unwrap_or(false);
-                            if !has_gap {
-                                obj.insert("gap".into(), json!(8));
-                            }
-                        }
-                        changed = true;
-                    }
-                }
-            }
-        }
-    }
-    if let Some(kids) = v.get_mut("children").and_then(Value::as_array_mut) {
-        for c in kids.iter_mut() {
-            changed |= fix_circular_recursive(c);
-        }
-    }
-    changed
-}
+// NOTE: the tree-shape circular-height demoter (`fix_circular_fill_height`)
+// that lived here is retired. The layout engine now resolves a fill-height
+// child of a hugging parent to its content size on BOTH axes (vertical main
+// axis → grow, horizontal cross axis → stretch), so the collapse it guessed at
+// no longer exists; a real resolved-~0 collapse is caught by
+// `geometry_validation::collect_collapse_fixes` against the actual layout.
 
 pub(crate) fn fix_text_heights(node: &mut Value) {
     let Some(children) = node.get_mut("children").and_then(Value::as_array_mut) else {
@@ -348,57 +282,6 @@ mod distribution_room_tests {
         });
         fix_main_axis_distribution_room(&mut node);
         assert_eq!(height_of(&node), Some("fill_container"));
-    }
-
-    #[test]
-    fn circular_fill_card_in_hug_row_is_demoted_and_undistributed() {
-        // KPI shape: a fit_content row of fill_container cards that distribute with
-        // space_between → the cards collapse and their stacked children overlap.
-        let mut root: PenNode = serde_json::from_value(json!({
-            "type": "frame", "id": "row", "name": "Key Metrics Row", "layout": "horizontal",
-            "height": "fit_content", "children": [
-                { "type": "frame", "id": "card", "name": "Card", "layout": "vertical",
-                  "height": "fill_container", "justifyContent": "space_between", "children": [
-                    { "type": "text", "id": "v", "content": "1,248" },
-                    { "type": "text", "id": "l", "content": "TOTAL" }
-                  ]}
-            ]
-        }))
-        .expect("valid PenNode");
-        assert!(fix_circular_fill_height(&mut root));
-        let v = serde_json::to_value(&root).unwrap();
-        let card = &v["children"][0];
-        assert_eq!(
-            card["height"],
-            json!("fit_content"),
-            "card demoted off fill"
-        );
-        assert_eq!(
-            card["justifyContent"],
-            json!("start"),
-            "space_between neutralized"
-        );
-        assert!(
-            card.get("gap").and_then(Value::as_f64).unwrap_or(0.0) > 0.0,
-            "a gap was injected"
-        );
-    }
-
-    #[test]
-    fn fill_container_child_of_numeric_parent_is_left_alone() {
-        // The sidebar (fill_container) under a NUMERIC-height root must NOT be
-        // demoted — only an explicit `fit_content` parent is circular.
-        let mut root: PenNode = serde_json::from_value(json!({
-            "type": "frame", "id": "root", "layout": "horizontal", "height": 900, "children": [
-                { "type": "frame", "id": "sb", "name": "Sidebar", "layout": "vertical",
-                  "height": "fill_container", "children": [] }
-            ]
-        }))
-        .expect("valid PenNode");
-        assert!(
-            !fix_circular_fill_height(&mut root),
-            "numeric-height parent is not circular"
-        );
     }
 
     #[test]
