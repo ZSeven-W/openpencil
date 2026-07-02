@@ -371,57 +371,88 @@ fn parse_insert_operation(line: &str, index: usize) -> Result<(String, ParentRef
     Ok((binding, parent, data))
 }
 
+/// Returns `true` when a physical line begins a new DSL operation —
+/// `name=I(...)`, `I(...)`, `U(...)`, `D(...)`, `M(...)`, `C(...)`, `R(...)`,
+/// `G(...)` (with an optional `binding =` prefix). Continuation lines of a
+/// pretty-printed JSON body (`"key": value,`) never match, so they accumulate
+/// onto the current operation.
+fn line_starts_operation(line: &str) -> bool {
+    let mut s = line.trim_start();
+    if let Some(eq) = s.find('=') {
+        let head = s[..eq].trim();
+        if !head.is_empty() && head.chars().all(|c| c.is_alphanumeric() || c == '_') {
+            s = s[eq + 1..].trim_start();
+        }
+    }
+    let mut chars = s.chars();
+    match chars.next() {
+        Some('I' | 'C' | 'R' | 'M' | 'G' | 'U' | 'D') => {
+            chars.as_str().trim_start().starts_with('(')
+        }
+        _ => false,
+    }
+}
+
+/// Split a DSL program into one string per operation. Grouping is by the
+/// physical-line operation-start grammar (`line_starts_operation`) rather than
+/// a quote/bracket state machine: a weak model that emits an unbalanced quote
+/// (e.g. `"fontWeight":"700,"fill"` — `fill` ends up unquoted, an odd number of
+/// quotes) used to leak the open-string state across the newline and SWALLOW
+/// every following operation into one malformed blob. Anchoring boundaries to
+/// the next operation-start line keeps a stray quote contained to its own line
+/// (where `parse_json_arg`'s lenient repair can still recover it), and
+/// continuation lines of a multi-line JSON body still accumulate correctly.
+/// Net bracket delta of a line — `([{` are +1, `)]}` are −1. Strings are NOT
+/// tracked on purpose: a weak model's stray quote must not be able to hide a
+/// bracket and leak the "open" state across newlines (the bug this guards).
+/// A bracket inside a string value is rare and the operation-start guard in
+/// `split_operations` recovers it.
+fn bracket_delta(line: &str) -> i32 {
+    line.chars().fold(0, |d, c| match c {
+        '(' | '[' | '{' => d + 1,
+        ')' | ']' | '}' => d - 1,
+        _ => d,
+    })
+}
+
 pub(crate) fn split_operations(raw: &str) -> Vec<String> {
     let mut out = Vec::new();
     let mut buf = String::new();
     let mut depth = 0i32;
-    let mut in_string: Option<char> = None;
-    let mut escape = false;
-    for ch in raw.chars() {
-        if escape {
-            buf.push(ch);
-            escape = false;
-            continue;
+    let flush = |buf: &mut String, out: &mut Vec<String>| {
+        let line = buf.trim();
+        if !line.is_empty() && !line.starts_with("//") {
+            out.push(line.to_string());
         }
-        if in_string.is_some() && ch == '\\' {
-            buf.push(ch);
-            escape = true;
-            continue;
+        buf.clear();
+    };
+    for line in raw.split('\n') {
+        // A new operation-start line always begins a fresh operation, even if
+        // the previous buffer's bracket count looked unbalanced (a stray quote
+        // or a bracket inside a string value can throw the count off).
+        if line_starts_operation(line) && !buf.trim().is_empty() {
+            flush(&mut buf, &mut out);
+            depth = 0;
         }
-        if let Some(quote) = in_string {
-            if ch == quote {
-                in_string = None;
+        if buf.is_empty() {
+            let t = line.trim();
+            if t.is_empty() || t.starts_with("//") {
+                continue;
             }
-            buf.push(ch);
-            continue;
         }
-        match ch {
-            '"' | '\'' => {
-                in_string = Some(ch);
-                buf.push(ch);
-            }
-            '(' | '[' | '{' => {
-                depth += 1;
-                buf.push(ch);
-            }
-            ')' | ']' | '}' => {
-                depth -= 1;
-                buf.push(ch);
-            }
-            '\n' if depth == 0 => {
-                let line = buf.trim();
-                if !line.is_empty() && !line.starts_with("//") {
-                    out.push(line.to_string());
-                }
-                buf.clear();
-            }
-            _ => buf.push(ch),
+        if !buf.is_empty() {
+            buf.push('\n');
+        }
+        buf.push_str(line);
+        depth += bracket_delta(line);
+        // Brackets balanced → the operation is complete (a multi-line JSON
+        // body keeps depth > 0 until its closing `})` line).
+        if depth <= 0 {
+            flush(&mut buf, &mut out);
+            depth = 0;
         }
     }
-    let tail = buf.trim();
-    if !tail.is_empty() && !tail.starts_with("//") {
-        out.push(tail.to_string());
-    }
+    flush(&mut buf, &mut out);
     out
 }
 
@@ -493,6 +524,17 @@ pub(crate) fn normalize_node_shape(value: &mut serde_json::Value) {
     };
     if let Some(fill) = obj.get_mut("fill") {
         normalize_fill(fill);
+    }
+    // A weak model sometimes emits an empty stroke (`"stroke":[]` or `""`),
+    // which deserializes as a 0-length `PenStroke` and fails the WHOLE node
+    // (and cascades to every child that targets its binding). Treat an empty
+    // stroke as "no stroke" — drop the key so the node still lands.
+    if obj.get("stroke").is_some_and(|s| {
+        matches!(s, serde_json::Value::Array(a) if a.is_empty())
+            || matches!(s, serde_json::Value::String(t) if t.trim().is_empty())
+            || s.is_null()
+    }) {
+        obj.remove("stroke");
     }
     if let Some(stroke) = obj.get_mut("stroke") {
         normalize_stroke(stroke);
