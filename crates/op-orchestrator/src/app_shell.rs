@@ -605,8 +605,12 @@ const SPLIT_SHELL_SIDEBAR_WIDTH: f64 = 260.0;
 /// already a correct app-shell). This catches the already-split-but-flat case
 /// it leaves behind: flip the root to a horizontal row and give the columns
 /// definite widths so the content column doesn't collapse behind the sidebar.
-/// Gated on a STRONG sidebar name + a non-sidebar sibling so a legitimate
-/// two-section vertical page is never turned sideways.
+/// It ALSO corrects an ALREADY-row shell whose sidebar hugs its content
+/// (`height=fit_content`): such a sidebar is only as tall as its nav, so a
+/// `space_between` / `fill_container` footer inside it has no room to sink and
+/// floats mid-page — the sidebar is promoted to `fill_container` height so it
+/// fills the row. Gated on a STRONG sidebar name + a non-sidebar sibling so a
+/// legitimate two-section vertical page is never turned sideways.
 pub(crate) fn ensure_split_shell_is_row(root: &mut PenNode) -> bool {
     let Ok(mut v) = serde_json::to_value(&*root) else {
         return false;
@@ -624,9 +628,7 @@ pub(crate) fn ensure_split_shell_is_row(root: &mut PenNode) -> bool {
 }
 
 fn ensure_row_mut(v: &mut Value) -> bool {
-    if layout_str(v) == Some("horizontal") {
-        return false; // already a row
-    }
+    let already_row = layout_str(v) == Some("horizontal");
     let Some(kids) = v.get("children").and_then(Value::as_array) else {
         return false;
     };
@@ -644,22 +646,43 @@ fn ensure_row_mut(v: &mut Value) -> bool {
     let Some(obj) = v.as_object_mut() else {
         return false;
     };
-    obj.insert("layout".into(), json!("horizontal"));
-    obj.entry("alignItems").or_insert(json!("stretch"));
-    if let Some(kids_mut) = obj.get_mut("children").and_then(Value::as_array_mut) {
-        // Sidebar: pin a fixed narrow width when it lacks a numeric one, so the
-        // row reserves the rail instead of letting the fill_container main eat it.
-        if num(&kids_mut[0], "width").is_none() {
-            if let Some(sb) = kids_mut[0].as_object_mut() {
+    let mut changed = false;
+    if !already_row {
+        obj.insert("layout".into(), json!("horizontal"));
+        obj.entry("alignItems").or_insert(json!("stretch"));
+        changed = true;
+    }
+    let Some(kids_mut) = obj.get_mut("children").and_then(Value::as_array_mut) else {
+        return changed;
+    };
+    // Sidebar: pin a fixed narrow WIDTH when it lacks a numeric one, and a
+    // fill_container HEIGHT so it fills the row instead of hugging its content —
+    // a `fit_content` sidebar is only as tall as its nav, so a `space_between` /
+    // `fill_container` footer inside it has no room to sink and floats mid-page
+    // (measured: a 260×532 sidebar in a 260×1234 row left the profile card
+    // stranded 700px above the bottom).
+    {
+        let needs_w = num(&kids_mut[0], "width").is_none();
+        let needs_h = kids_mut[0].get("height").and_then(Value::as_str) != Some("fill_container");
+        if let Some(sb) = kids_mut[0].as_object_mut() {
+            if needs_w {
                 sb.insert("width".into(), json!(SPLIT_SHELL_SIDEBAR_WIDTH));
+                changed = true;
+            }
+            if needs_h {
+                sb.insert("height".into(), json!("fill_container"));
+                changed = true;
             }
         }
-        // Main: fill the rest of the row.
+    }
+    // Main: fill the rest of the row (only when we just created the split — an
+    // already-correct shell keeps its authored main width).
+    if !already_row {
         if let Some(main) = kids_mut[1].as_object_mut() {
             main.insert("width".into(), json!("fill_container"));
         }
     }
-    true
+    changed
 }
 
 /// Whole-root driver: relocate any data section stranded in a sidebar column

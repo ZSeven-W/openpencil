@@ -711,3 +711,33 @@ fn legit_two_section_vertical_page_not_flipped() {
     );
     assert_eq!(val(&root)["layout"], json!("vertical"));
 }
+
+#[test]
+fn already_horizontal_shell_gets_fill_height_sidebar() {
+    // A shell that is ALREADY a row but whose sidebar hugs its content
+    // (height=fit_content) leaves the footer floating — the sidebar is only as
+    // tall as its nav, so its `space_between` child has no room to sink. Promote
+    // the sidebar to fill_container height even though the root is already a row.
+    let mut root = node(json!({
+        "type": "frame", "id": "root", "name": "Page", "layout": "horizontal",
+        "width": 1200, "height": 800,
+        "children": [
+            {"type":"frame","id":"sb","name":"Sidebar","layout":"vertical","width":260,"height":"fit_content",
+             "children":[{"type":"frame","id":"nav","name":"Nav","layout":"vertical",
+                          "justifyContent":"space_between","height":"fill_container","children":[]}]},
+            {"type":"frame","id":"main","name":"Main","layout":"vertical",
+             "width":"fill_container","height":"fill_container","children":[]}
+        ]
+    }));
+    assert!(
+        ensure_split_shell_is_row(&mut root),
+        "an already-row shell with a fit_content sidebar must still be corrected"
+    );
+    let v = val(&root);
+    assert_eq!(v["layout"], json!("horizontal"), "root stays a row");
+    assert_eq!(
+        v["children"][0]["height"],
+        json!("fill_container"),
+        "sidebar height → fill_container so its footer can sink"
+    );
+}
