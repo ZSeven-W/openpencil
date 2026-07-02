@@ -115,11 +115,25 @@ pub fn paint_fill_then_stroke(
 ) {
     let r = node.corner_radius * zoom;
     let use_round = r > 0.5;
-    // Gradients win over solid `fill` when present. The scene
-    // builder leaves the first stop's colour in `fill` as a
-    // fallback for paint paths that don't grok gradients yet, so
-    // the gradient body is the more faithful representation here.
-    if let Some(gradient) = node.gradient.as_ref() {
+    // Shader / gradient bodies win over solid `fill` when present. The
+    // scene builder leaves a representative colour in `fill` as a
+    // fallback for paint paths that don't grok them yet, so the richer
+    // body is the more faithful representation here.
+    if let Some(shader) = node.shader.as_ref() {
+        let uniforms: Vec<(&str, &[f32])> = shader
+            .uniforms
+            .iter()
+            .map(|u| (u.name.as_str(), u.values.as_slice()))
+            .collect();
+        cx.backend.fill_round_rect_shader(
+            world_rect,
+            if use_round { r } else { 0.0 },
+            &shader.sksl,
+            &uniforms,
+            shader.opacity,
+            shader.fallback,
+        );
+    } else if let Some(gradient) = node.gradient.as_ref() {
         paint_gradient_rect(cx, gradient, world_rect, if use_round { r } else { 0.0 });
     } else if let Some(fill) = fill {
         if use_round {
@@ -243,16 +257,23 @@ pub(crate) fn paint_gradient_rect(
             );
         }
         SceneGradient::Mesh {
-            colors, opacity, ..
+            rows,
+            cols,
+            colors,
+            opacity,
         } => {
-            // No mesh-gradient method on the RenderBackend yet —
-            // degrade to the first vertex colour (same fallback the
-            // scene builder bakes into `SceneNode.fill`).
-            if let Some(first) = colors.first() {
-                let mut c = *first;
-                c.a = (c.a * opacity).clamp(0.0, 1.0);
-                cx.backend.fill_round_rect(rect, corner_radius, c);
-            }
+            // Real Gouraud interpolation on backends that override the
+            // Painter method (the native Skia host); the trait default
+            // degrades to the first vertex colour elsewhere (CanvasKit
+            // web — documented parity gap, same as jian's own painters).
+            cx.backend.fill_round_rect_mesh_gradient(
+                rect,
+                corner_radius,
+                *rows,
+                *cols,
+                colors,
+                *opacity,
+            );
         }
     }
 }
