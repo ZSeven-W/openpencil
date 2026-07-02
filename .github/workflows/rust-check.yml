@@ -6,6 +6,10 @@ on:
       - 'Cargo.toml'
       - 'Cargo.lock'
       - 'crates/**'
+      # Parity with the push leg: a PR touching a vendored dep (the
+      # casement winit fork, jian, agent) must not ride green with
+      # zero CI.
+      - 'vendor/**'
       - 'rust-toolchain.toml'
       - 'rustfmt.toml'
       - 'deny.toml'

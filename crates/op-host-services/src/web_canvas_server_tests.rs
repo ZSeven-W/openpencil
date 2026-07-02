@@ -1087,3 +1087,16 @@ fn parse_serve_web_args_accepts_port_doc_and_host() {
     assert!(parse(&["3100", "--host"]).is_err(), "--host without value");
     assert!(parse(&["3100", "a.op", "b.op"]).is_err(), "two docs");
 }
+
+#[test]
+fn indicators_endpoint_serves_parseable_relay_json() {
+    let mut s = WebCanvasState::new(EditorState::starter(), 3100);
+
+    let r = handle_web_canvas_request("GET", "/api/mcp/indicators", "", &mut s);
+
+    assert!(r.status.starts_with("200"), "{}", r.body);
+    let remote = op_editor_core::agent_indicators::parse_relay_json(&r.body)
+        .expect("relay body parses back through the browser-side parser");
+    // No design run in this test process — idle registry relays as such.
+    assert!(!remote.run_active);
+}

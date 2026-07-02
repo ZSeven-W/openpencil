@@ -170,6 +170,26 @@ pub fn build_command(binary: &str, args: &[String]) -> Command {
     }
 }
 
+/// Apply CREATE_NO_WINDOW to a blocking `std::process::Command` so
+/// background CLI probes (model discovery, provider version checks)
+/// don't flash console windows once the desktop binary runs detached
+/// from the console subsystem (`windows_subsystem = "windows"`).
+/// No-op off Windows.
+pub(crate) fn hide_console_window(cmd: &mut std::process::Command) {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        // CREATE_NO_WINDOW from winbase.h — same flag build_command
+        // applies to the streaming tokio commands.
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = cmd;
+    }
+}
+
 /// Stringify an `ExitStatus` for chat error reporting. Cross-platform:
 /// on Unix `.code()` is `None` when killed by signal — show the signal
 /// number instead; on Windows `.code()` is always populated.

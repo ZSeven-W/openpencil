@@ -97,8 +97,7 @@ impl SharedSkiaContext {
 
         let glow_handle = provider.glow();
 
-        let interface =
-            skia_safe::gpu::gl::Interface::new_native().ok_or(SharedSkiaError::GlInterface)?;
+        let interface = provider_gl_interface(&provider).ok_or(SharedSkiaError::GlInterface)?;
         let mut direct_context = skia_safe::gpu::direct_contexts::make_gl(interface, None)
             .ok_or(SharedSkiaError::DirectContext)?;
 
@@ -323,6 +322,25 @@ impl Drop for SharedSkiaContext {
             tracing::error!(?err, "SharedSkiaContext drop fallback teardown failed");
         }
     }
+}
+
+/// Build the Skia GL interface for a provider. Prefer the provider's
+/// own symbol loader so resolution matches the API that created the
+/// context (EGL vs GLX vs WGL vs CGL) — `new_native()` dlopens
+/// libGL/GLX on Linux and fails on EGL-current contexts (the
+/// LINUX_GPU_SKIA_LOADER_TBD gap). Providers without a loader return
+/// `None` per symbol, the load comes back empty, and the chain falls
+/// through to `new_native()`.
+fn provider_gl_interface(
+    provider: &dyn GlContextProvider,
+) -> Option<skia_safe::gpu::gl::Interface> {
+    skia_safe::gpu::gl::Interface::new_load_with(|name| {
+        std::ffi::CString::new(name)
+            .ok()
+            .and_then(|sym| provider.gl_proc_address(&sym))
+            .unwrap_or(std::ptr::null())
+    })
+    .or_else(skia_safe::gpu::gl::Interface::new_native)
 }
 
 /// Query GL state for the current viewport + sample/stencil bits.

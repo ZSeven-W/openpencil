@@ -40,9 +40,20 @@ impl WidgetHost {
     /// succeed — and `WebSyncClient::sync` would then commit the version against
     /// a stale paint. Used by the opt-in `live-sync` glue. Lives here (not
     /// `widget_host.rs`) to keep that spine under the 800-line cap.
+    /// `undoable` = the sync client was already initialized, i.e. this
+    /// is NOT the mount-time first pull (starter → daemon doc), so the
+    /// external write (AI turn / MCP client) lands as one undo step.
     #[cfg(feature = "canvaskit")]
-    pub(crate) fn replace_document(&mut self, doc: op_editor_core::PenDocument) {
-        self.editor_state.replace_document(doc);
+    pub(crate) fn replace_document_from_sync(
+        &mut self,
+        doc: op_editor_core::PenDocument,
+        undoable: bool,
+    ) {
+        if undoable {
+            self.editor_state.replace_document_with_undo(doc);
+        } else {
+            self.editor_state.replace_document(doc);
+        }
         self.mark_dirty();
     }
 

@@ -147,6 +147,13 @@ fn client_config_copy_button_rect(content: Rect) -> Rect {
     }
 }
 
+/// Host capability: the CLI-integration toggles write MCP endpoints
+/// into external CLI config files (`~/.claude.json` etc.) via the
+/// desktop MCP runtime (`mcp_integrations.rs`). The web host has no
+/// consumer — hide the grid there instead of painting toggles that
+/// silently do nothing (same pattern as `GIT_BUTTON_AVAILABLE`).
+pub(super) const CLI_INTEGRATIONS_AVAILABLE: bool = !cfg!(target_arch = "wasm32");
+
 pub fn hit_test(content: Rect, settings: &AgentSettings, scrolled: Point2D) -> McpHit {
     if (server_button_rect(content)).contains(scrolled) {
         return McpHit::ToggleServer;
@@ -157,9 +164,11 @@ pub fn hit_test(content: Rect, settings: &AgentSettings, scrolled: Point2D) -> M
     if !settings.mcp_server.running && (port_field_rect(content)).contains(scrolled) {
         return McpHit::FocusPort;
     }
-    for (i, cli) in McpCli::ALL.iter().enumerate() {
-        if (cli_cell_rect(content, settings, i)).contains(scrolled) {
-            return McpHit::ToggleCli(*cli);
+    if CLI_INTEGRATIONS_AVAILABLE {
+        for (i, cli) in McpCli::ALL.iter().enumerate() {
+            if (cli_cell_rect(content, settings, i)).contains(scrolled) {
+                return McpHit::ToggleCli(*cli);
+            }
         }
     }
     McpHit::None
@@ -187,6 +196,11 @@ pub(super) fn paint_mcp_tab(
     paint_server_card(cx, theme, settings, ui, content, now_ms);
     paint_client_config(cx, theme, settings, ui, content, now_ms);
 
+    // Terminal-integrations section — desktop-only (see
+    // `CLI_INTEGRATIONS_AVAILABLE`).
+    if !CLI_INTEGRATIONS_AVAILABLE {
+        return;
+    }
     let mut y =
         server_card_top(content) + SERVER_CARD_H + client_config_block_h(settings) + SECTION_GAP;
     let section_title = TextLayout::single_run(

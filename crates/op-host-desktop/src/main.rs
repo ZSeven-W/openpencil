@@ -2,6 +2,13 @@
 //! Owns the event loop, GL surface, DPI, animation timer + cursor input.
 
 #![cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
+// Detach from the console subsystem in release builds so launching from
+// Explorer / the Start menu doesn't park a console window behind the GUI.
+// Debug builds keep the console — tracing writes to stderr (init_tracing).
+#![cfg_attr(
+    all(target_os = "windows", not(debug_assertions)),
+    windows_subsystem = "windows"
+)]
 
 mod a11y;
 mod acp_agent_probe_host;

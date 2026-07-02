@@ -137,6 +137,24 @@ fn finish_with_empty_queue_clears_immediately() {
 }
 
 #[test]
+fn empty_finish_does_not_arm_a_spurious_erase_frame() {
+    // A run that finishes without ever queuing a reveal never painted a
+    // cursor, so it must NOT leave the process-global erase-frame flag set
+    // — otherwise an unrelated animation-deadline query would observe a
+    // stray redraw request. Regression guard for the shared-registry race.
+    let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let epoch = begin();
+    add_frame(epoch, "f1", "#4ECDC4", "Mochi");
+    finish_if_epoch(epoch);
+    assert_eq!(
+        next_reveal_deadline_ms(5_000),
+        None,
+        "an empty finish leaves no pending erase frame for other queries to trip on"
+    );
+    clear();
+}
+
+#[test]
 fn drain_end_requests_one_final_erase_frame() {
     let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let epoch = begin();
@@ -439,4 +457,82 @@ fn reveal_offsets_give_each_element_a_readable_beat() {
         "the beat must stay slow enough that each placement reads distinctly"
     );
     assert_eq!(offsets[1] - offsets[0], REVEAL_STAGGER_MS);
+}
+
+// ── Relay (daemon → browser) ────────────────────────────────────────────
+
+#[test]
+fn relay_json_round_trips_through_parse() {
+    let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let e = begin();
+    add_node(e, "n5", "#FF6B6B", "Nova");
+    add_frame(e, "n1", "#4ECDC4", "Mochi");
+    mark_preview(e, "n9");
+    add_reveal(e, "n5", 1_234);
+
+    let remote = parse_relay_json(&relay_json()).expect("relay body parses");
+    assert!(remote.run_active);
+    assert_eq!(
+        remote.nodes,
+        vec![(
+            "n5".to_string(),
+            AgentTag {
+                color: "#FF6B6B".to_string(),
+                name: "Nova".to_string()
+            }
+        )]
+    );
+    assert_eq!(remote.frames.len(), 1);
+    assert_eq!(remote.previews, vec!["n9".to_string()]);
+    assert_eq!(remote.reveals, vec![("n5".to_string(), 1_234)]);
+    clear();
+}
+
+#[test]
+fn apply_remote_mirrors_a_daemon_run_locally() {
+    let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    clear();
+    let remote = RemoteIndicators {
+        run_active: true,
+        nodes: vec![(
+            "n5".to_string(),
+            AgentTag {
+                color: "#FF6B6B".to_string(),
+                name: "Nova".to_string(),
+            },
+        )],
+        frames: vec![],
+        previews: vec!["n9".to_string()],
+        reveals: vec![("n5".to_string(), 777)],
+    };
+    assert!(
+        apply_remote(&remote),
+        "an active remote run keeps the pump alive"
+    );
+    let snap = snapshot();
+    assert!(snap.run_active);
+    assert_eq!(snap.nodes.get("n5").unwrap().name, "Nova");
+    assert!(snap.previews.contains("n9"));
+    assert_eq!(snap.reveals.get("n5"), Some(&777));
+
+    // Re-applying must not clobber a reveal timestamp the paint path
+    // may already have rebased onto the local clock.
+    let mut second = remote.clone();
+    second.reveals = vec![("n5".to_string(), 999_999), ("n6".to_string(), 888)];
+    apply_remote(&second);
+    let snap = snapshot();
+    assert_eq!(snap.reveals.get("n5"), Some(&777), "existing reveal kept");
+    assert_eq!(snap.reveals.get("n6"), Some(&888), "new reveal inserted");
+
+    // Remote run ends with reveals still queued → graceful drain, not an
+    // instant wipe; the pump keeps running until the queue plays out.
+    let mut ended = second.clone();
+    ended.run_active = false;
+    assert!(apply_remote(&ended), "drain keeps animating");
+    assert!(!snapshot().run_active);
+
+    // An idle remote on an idle local registry is a cheap no-op.
+    clear();
+    let idle = RemoteIndicators::default();
+    assert!(!apply_remote(&idle));
 }
