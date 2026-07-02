@@ -335,3 +335,78 @@ fn negative_multiscreen_wrapper_untouched() {
         "multiple standalone screens, not dashboard sections",
     );
 }
+
+/// A vertical 1200-root with a custom sidebar + the two dashboard sections that
+/// pass the gate; lets the sidebar-footer tests vary only the sidebar.
+fn wrapper_with_sidebar(sidebar_children: Value) -> PenNode {
+    node(json!({
+        "type": "frame", "id": "root", "name": "Dashboard",
+        "width": 1200, "height": 1400, "layout": "vertical", "gap": 24,
+        "children": [
+            { "type": "frame", "id": "sb", "name": "Sidebar Navigation",
+              "width": 1200, "height": 700, "layout": "vertical", "children": sidebar_children },
+            section("Key Metrics", json!(1200), json!(117)),
+            section("Client Table", json!(1200), json!(400)),
+            section("Upcoming", json!(1200), json!(300)),
+        ]
+    }))
+}
+
+#[test]
+fn content_column_gets_outer_padding() {
+    let mut w = bug_wrapper();
+    reshape_sidebar_to_app_shell(&mut w);
+    let v = val(&w);
+    // The Main Content column carries the Pencil app-shell gutter so the
+    // sections don't run edge-to-edge into the viewport (serialized as f64).
+    let pad: Vec<f64> = v["children"][1]["padding"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|n| n.as_f64().unwrap())
+        .collect();
+    assert_eq!(pad, [32.0, 40.0]);
+}
+
+#[test]
+fn sidebar_fixed_spacer_stretched_to_sink_footer() {
+    let mut w = wrapper_with_sidebar(json!([
+        { "type": "frame", "id": "logo", "name": "Brand Logo", "height": 29, "children": [] },
+        { "type": "frame", "id": "nav", "name": "Nav Section", "height": 263, "children": [] },
+        { "type": "frame", "id": "sp", "name": "Spacer", "height": 120, "children": [] },
+        { "type": "frame", "id": "usr", "name": "User Profile Card", "height": 72, "children": [] }
+    ]));
+    assert!(reshape_sidebar_to_app_shell(&mut w));
+    let v = val(&w);
+    let sb_kids = v["children"][0]["children"].as_array().unwrap();
+    let spacer = sb_kids
+        .iter()
+        .find(|c| c["name"] == json!("Spacer"))
+        .unwrap();
+    assert_eq!(
+        spacer["height"],
+        json!("fill_container"),
+        "fixed spacer stretched"
+    );
+}
+
+#[test]
+fn sidebar_without_spacer_gets_one_injected_before_footer() {
+    let mut w = wrapper_with_sidebar(json!([
+        { "type": "frame", "id": "logo", "name": "Brand Logo", "height": 29, "children": [] },
+        { "type": "frame", "id": "nav", "name": "Nav Section", "height": 263, "children": [] },
+        { "type": "frame", "id": "usr", "name": "User Profile Card", "height": 72, "children": [] }
+    ]));
+    assert!(reshape_sidebar_to_app_shell(&mut w));
+    let v = val(&w);
+    let sb_kids = v["children"][0]["children"].as_array().unwrap();
+    // A flexible spacer was inserted right before the footer card.
+    assert_eq!(sb_kids.len(), 4, "spacer injected");
+    assert_eq!(sb_kids[2]["name"], json!("Sidebar Spacer"));
+    assert_eq!(sb_kids[2]["height"], json!("fill_container"));
+    assert_eq!(
+        sb_kids[3]["name"],
+        json!("User Profile Card"),
+        "footer stays last"
+    );
+}
