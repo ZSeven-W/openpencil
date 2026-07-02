@@ -868,3 +868,123 @@ fn page_level_columns_touching_are_not_a_jam() {
     collect_sibling_jam_diagnostics(&row, &rects, &mut out);
     assert!(out.is_empty(), "page columns are not a jam: {out:?}");
 }
+
+#[test]
+fn real_layout_gap_fix_reaches_doubly_wrapped_jammed_rows() {
+    use crate::test_support::VecDocSink;
+    use crate::types::DocSink;
+    use jian_ops_schema::node::PenNode;
+    use op_editor_core::PenNodeExt;
+
+    // p01's verbatim shape: table-named frame > unnamed vertical > unnamed
+    // vertical > gap-less 4-cell text rows. The NAME gate never sees the rows;
+    // the geometry gap fixer must prove the jam from resolved rects and inject
+    // a gap regardless of nesting.
+    let mkrow = |id: &str| {
+        json!({"type":"frame","id":id,"name":null,"layout":"horizontal","width":"fill_container","height":48,"children":[
+            {"type":"frame","id":format!("{id}a"),"width":200,"height":40,"children":[{"type":"text","id":format!("{id}at"),"content":"James Wilson","fontSize":14}]},
+            {"type":"frame","id":format!("{id}b"),"width":130,"height":40,"children":[{"type":"text","id":format!("{id}bt"),"content":"Oct 24, 2024","fontSize":13}]},
+            {"type":"frame","id":format!("{id}c"),"width":110,"height":40,"children":[{"type":"text","id":format!("{id}ct"),"content":"42","fontSize":13}]},
+            {"type":"frame","id":format!("{id}d"),"width":100,"height":40,"children":[{"type":"text","id":format!("{id}dt"),"content":"VIP","fontSize":12}]}
+        ]})
+    };
+    let root: PenNode = serde_json::from_value(json!({
+        "type":"frame","id":"root","name":"Client Directory Data Table","width":800,"height":"fit_content","layout":"vertical","children":[
+            {"type":"frame","id":"w1","layout":"vertical","width":"fill_container","height":"fit_content","children":[
+                {"type":"frame","id":"w2","layout":"vertical","width":"fill_container","height":"fit_content","children":[
+                    mkrow("r1"), mkrow("r2"), mkrow("r3")
+                ]}
+            ]}
+        ]
+    }))
+    .expect("valid root");
+    let mut sink = VecDocSink::new();
+    sink.apply(EditorCommand::InsertSubtree {
+        nodes: vec![root],
+        parent_id: NodeId::NONE,
+        page_id: None,
+    });
+    let root_id = sink.state().active_children()[0].id_str().to_string();
+    assert!(geometry_validate_and_fix(&mut sink, &root_id) >= 1);
+    let v = serde_json::to_value(sink.state().active_children()[0].clone()).unwrap();
+    fn rows_with_gap(v: &serde_json::Value, n: &mut usize) {
+        if v.get("layout").and_then(|l| l.as_str()) == Some("horizontal")
+            && v.get("gap").and_then(|g| g.as_f64()).unwrap_or(0.0) > 0.0
+        {
+            *n += 1;
+        }
+        for c in v
+            .get("children")
+            .and_then(|c| c.as_array())
+            .into_iter()
+            .flatten()
+        {
+            rows_with_gap(c, n);
+        }
+    }
+    let mut n = 0;
+    rows_with_gap(&v, &mut n);
+    assert!(n >= 3, "all three buried rows got a gap, found {n}");
+}
+
+#[test]
+fn real_layout_shrinks_rigid_fit_child_overflowing_a_narrow_card() {
+    use crate::test_support::VecDocSink;
+    use crate::types::DocSink;
+    use jian_ops_schema::node::PenNode;
+    use op_editor_core::PenNodeExt;
+
+    // p02's verbatim shape: an 80px card whose fit_content icon+text pair is
+    // rigid at max-content (~150px) and paints over siblings. The fixer must
+    // retarget it to fill_container (shrinkable); the text inside then wraps
+    // via the text-overflow fixer on the next loop round.
+    let root: PenNode = serde_json::from_value(json!({
+        "type":"frame","id":"root","name":"Hero Card","width":80,"height":"fit_content","layout":"vertical","children":[
+            {"type":"frame","id":"row","layout":"horizontal","gap":8,"width":"fill_container","height":"fit_content","children":[
+                {"type":"frame","id":"pair","layout":"horizontal","gap":6,"width":"fit_content","height":"fit_content","children":[
+                    {"type":"icon_font","id":"ic","iconFontName":"coffee","width":14,"height":14},
+                    {"type":"text","id":"t","content":"Ethiopian Yirgacheffe pour-over","fontSize":13}
+                ]}
+            ]}
+        ]
+    }))
+    .expect("valid root");
+    let mut sink = VecDocSink::new();
+    sink.apply(EditorCommand::InsertSubtree {
+        nodes: vec![root],
+        parent_id: NodeId::NONE,
+        page_id: None,
+    });
+    let root_id = sink.state().active_children()[0].id_str().to_string();
+    geometry_validate_and_fix(&mut sink, &root_id);
+    let v = serde_json::to_value(sink.state().active_children()[0].clone()).unwrap();
+    fn find<'a>(v: &'a serde_json::Value, name: &str) -> Option<&'a serde_json::Value> {
+        if v.get("name").and_then(|x| x.as_str()) == Some(name) {
+            return Some(v);
+        }
+        v.get("children")
+            .and_then(|c| c.as_array())
+            .into_iter()
+            .flatten()
+            .find_map(|c| find(c, name))
+    }
+    // The pair was renamed by id remap; find the frame that HOLDS the icon.
+    fn find_pair<'a>(v: &'a serde_json::Value) -> Option<&'a serde_json::Value> {
+        let kids = v.get("children").and_then(|c| c.as_array())?;
+        if kids
+            .iter()
+            .any(|c| c.get("type").and_then(|t| t.as_str()) == Some("icon_font"))
+        {
+            return Some(v);
+        }
+        kids.iter().find_map(find_pair)
+    }
+    let _ = find; // silence potential unused in future edits
+    let pair = find_pair(&v).expect("icon+text pair survives");
+    assert_eq!(
+        pair.get("width").and_then(|w| w.as_str()),
+        Some("fill_container"),
+        "rigid fit pair retargeted to fill, got {:?}",
+        pair.get("width")
+    );
+}
