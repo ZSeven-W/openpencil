@@ -103,6 +103,11 @@ pub struct NodePayload {
     /// a fallback for paint paths that don't grok gradients.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub gradient: Option<GradientPayload>,
+    /// Resolved SkSL shader body for the first fill when it is a
+    /// `Shader`. Parallel to `gradient`; `fill` still carries the
+    /// shader's fallback colour for paint paths that can't run it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shader: Option<ShaderPayload>,
     #[serde(default)]
     pub points: Vec<[f32; 2]>,
     /// Path bezier anchors (absolute doc coords, handles resolved).
@@ -333,6 +338,33 @@ pub enum GradientPayload {
         opacity: f32,
         stops: Vec<GradientStopPayload>,
     },
+    /// Uniform-grid mesh gradient (v1). `colors` is a row-major
+    /// `rows`×`cols` lattice (length == `rows * cols`); vertices the
+    /// author didn't specify stay transparent so a sparse mesh still
+    /// triangulates (mirrors `jian-core`'s `try_mesh_gradient`).
+    Mesh {
+        rows: u32,
+        cols: u32,
+        colors: Vec<[f32; 4]>,
+        opacity: f32,
+    },
+}
+
+/// Layout-resolved SkSL shader body for `NodePayload.shader`.
+/// Uniforms are pre-resolved (`color` hex → premultiplied-RGBA vec4)
+/// so the scene builder / painter never re-walk the canonical schema;
+/// mirrors `jian-core`'s `try_shader` conversion rules.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ShaderPayload {
+    /// RAW (untrusted) SkSL source — compiled behind a non-panicking
+    /// cache by the native painter; other painters use `fallback`.
+    pub sksl: String,
+    /// `(name, float values)` — length 1 = float, 2/3/4 = vec*.
+    pub uniforms: Vec<(String, Vec<f32>)>,
+    pub opacity: f32,
+    /// Visible solid painted when the backend can't run the program —
+    /// the first `color` uniform, else mid-gray.
+    pub fallback: [f32; 4],
 }
 
 /// One path bezier anchor in absolute doc coords. `handle_in` /
