@@ -49,6 +49,63 @@ fn headless_executor_batch_design_mutates_shared_state() {
 }
 
 #[test]
+fn headless_executor_emit_elements_produces_role_tagged_nodes() {
+    // The element-builder loop tool: a couple of high-level `el` lines must
+    // expand — via the SAME `op_orchestrator::manifest` assembler the
+    // orchestrator MANIFEST path uses — into role-tagged subtrees (stat-card),
+    // and land in the shared EditorState. This is the load-bearing capability
+    // the bare loop lacked: high-level element kinds + semantic roles, not raw
+    // primitives.
+    use jian_ops_schema::node::PenNode;
+    use op_editor_core::PenNodeExt;
+
+    fn collect_roles(node: &PenNode, out: &mut Vec<String>) {
+        if let Some(role) = node.base().role.as_deref() {
+            if !role.is_empty() {
+                out.push(role.to_string());
+            }
+        }
+        if let Some(children) = node.children() {
+            for child in children {
+                collect_roles(child, out);
+            }
+        }
+    }
+
+    let state = Arc::new(Mutex::new(EditorState::new()));
+    let exec = HeadlessExecutor::new(state.clone(), false);
+
+    let args = r#"{"elements":"[{\"el\":\"stat_card\",\"label\":\"MRR\",\"value\":\"$48.2k\",\"trend\":\"up\"},{\"el\":\"stat_card\",\"label\":\"Users\",\"value\":\"12.4k\"}]"}"#;
+    let result = exec.execute("emit_elements", args);
+    assert!(
+        !result.is_error,
+        "emit_elements must succeed, got: {}",
+        result.content
+    );
+    let v: serde_json::Value = serde_json::from_str(&result.content).expect("valid JSON envelope");
+    assert_eq!(v["success"], serde_json::Value::Bool(true));
+    assert_eq!(
+        v["data"]["elementLines"], "2",
+        "two element lines built, got: {}",
+        result.content
+    );
+
+    // The shared state really mutated, and the inserted subtree carries the
+    // semantic `stat-card` role the element builder stamps.
+    let guard = state.lock().unwrap();
+    let children = guard.active_children();
+    assert_eq!(children.len(), 2, "two top-level stat cards inserted");
+    let mut roles = Vec::new();
+    for node in children {
+        collect_roles(node, &mut roles);
+    }
+    assert!(
+        roles.iter().any(|r| r == "stat-card"),
+        "emit_elements must produce role-tagged nodes (stat-card), got roles {roles:?}"
+    );
+}
+
+#[test]
 fn headless_executor_spawn_agents_is_honestly_deferred() {
     // spawn_agents can't run headlessly (desktop-only sub-loop launch). The
     // executor must return an HONEST structured error — never a faked success.
@@ -176,6 +233,7 @@ fn loop_mode_against_mock_provider_produces_real_op() {
         2048,
         false,
         None,
+        false,
     )
     .expect("loop runs to completion");
 

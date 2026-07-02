@@ -3428,6 +3428,7 @@ version = "0.8.0"
 dependencies = [
  "agent",
  "futures",
+ "jian-ops-schema",
  "op-ai",
  "op-ai-skills",
  "op-editor-core",

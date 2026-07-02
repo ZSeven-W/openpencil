@@ -181,6 +181,13 @@ fn build_design_provider(
 ///
 /// `OPENPENCIL_SMOKE_DUMP` streams per-delta text / tool-call / thinking
 /// lines to stderr so ab-v9 logs capture the run.
+///
+/// `seed = true` (the `OPENPENCIL_SMOKE_LOOP_SEED=1` path) applies a MINIMAL
+/// scaffold seed to the `EditorState` BEFORE the loop runs — a page-root frame
+/// plus a few empty named section stubs, derived from the orchestrator's
+/// heuristic fallback planner (see [`crate::loop_seed`]). The system prompt is
+/// augmented to tell the model the scaffold exists and to fill the sections.
+/// `seed = false` is byte-for-byte the original pure-loop path.
 #[allow(clippy::too_many_arguments)]
 pub fn run_loop(
     base_url: String,
@@ -193,6 +200,7 @@ pub fn run_loop(
     max_output_tokens: u32,
     dump: bool,
     library_path: Option<String>,
+    seed: bool,
 ) -> Result<Arc<Mutex<EditorState>>, String> {
     // `OPENPENCIL_SMOKE_STARTER=1` seeds the fresh-canvas starter frame so the
     // loop exercises the same `replaceEmptyFrame` reuse path the desktop GUI
@@ -220,6 +228,25 @@ pub fn run_loop(
             report.themes_added
         );
     }
+    // Minimal scaffold seed (`OPENPENCIL_SMOKE_LOOP_SEED=1`): apply a page-root
+    // + named empty section stubs to the live state BEFORE the loop runs, so a
+    // weak model has structure to fill instead of an empty canvas it collapses
+    // on. `seed = false` ⇒ this whole block is skipped (pure-loop, unchanged).
+    let mut system_prompt = system_prompt;
+    if seed {
+        let cmd = crate::loop_seed::build_seed_command(&user_prompt)?;
+        let applied = initial.apply(cmd);
+        if !applied {
+            return Err("minimal scaffold seed failed to apply to EditorState".into());
+        }
+        system_prompt.push_str(&crate::loop_seed::seed_system_prompt_suffix(&user_prompt));
+        eprintln!(
+            "[LOOP][seed] minimal scaffold applied: {} top-level node(s), \
+             system prompt augmented to fill seeded sections",
+            initial.active_children().len()
+        );
+    }
+
     let state = Arc::new(Mutex::new(initial));
 
     let executor = Arc::new(HeadlessExecutor::new(state.clone(), dump));
