@@ -19,6 +19,13 @@ use crate::widgets::property_panel_inputs::{
 use crate::widgets::PaintCx;
 use crate::{Point2D, Rect, TextLayout};
 
+/// Host capability: the Search / Generate buttons drive the image
+/// search + generation sessions that only the desktop host executes
+/// (`image_search_session.rs` / `image_generate_host.rs`). The web
+/// host has no drain for them — hide the buttons there instead of
+/// painting dead UI (same pattern as `GIT_BUTTON_AVAILABLE`).
+pub(super) const IMAGE_REMOTE_ACTIONS_AVAILABLE: bool = !cfg!(target_arch = "wasm32");
+
 /// Total height the image section consumes BEFORE the trailing
 /// `SECTION_GAP` the walkers add — header + thumb row + optional
 /// warning + buttons row + the legacy 34 px divider tail.
@@ -28,11 +35,15 @@ pub fn image_section_height(has_warning: bool) -> f32 {
     } else {
         0.0
     };
+    let buttons = if IMAGE_REMOTE_ACTIONS_AVAILABLE {
+        IMAGE_ROW_GAP + IMAGE_BUTTON_H
+    } else {
+        0.0
+    };
     crate::widgets::property_panel_inputs::SECTION_HEADER_HEIGHT
         + INPUT_HEIGHT
         + warning
-        + IMAGE_ROW_GAP
-        + IMAGE_BUTTON_H
+        + buttons
         + 34.0
 }
 
@@ -70,22 +81,24 @@ pub fn push_image_action_rects(
         ));
         y += IMAGE_WARNING_H;
     }
-    y += IMAGE_ROW_GAP;
-    let half_w = (usable_w - 4.0) / 2.0;
-    out.push((
-        PropertyPanelAction::ToggleImageSearchPopover,
-        Rect {
-            origin: Point2D::new(x0 + PAD_X, y),
-            size: Point2D::new(half_w, IMAGE_BUTTON_H),
-        },
-    ));
-    out.push((
-        PropertyPanelAction::ToggleImageGeneratePopover,
-        Rect {
-            origin: Point2D::new(x0 + PAD_X + half_w + 4.0, y),
-            size: Point2D::new(half_w, IMAGE_BUTTON_H),
-        },
-    ));
+    if IMAGE_REMOTE_ACTIONS_AVAILABLE {
+        y += IMAGE_ROW_GAP;
+        let half_w = (usable_w - 4.0) / 2.0;
+        out.push((
+            PropertyPanelAction::ToggleImageSearchPopover,
+            Rect {
+                origin: Point2D::new(x0 + PAD_X, y),
+                size: Point2D::new(half_w, IMAGE_BUTTON_H),
+            },
+        ));
+        out.push((
+            PropertyPanelAction::ToggleImageGeneratePopover,
+            Rect {
+                origin: Point2D::new(x0 + PAD_X + half_w + 4.0, y),
+                size: Point2D::new(half_w, IMAGE_BUTTON_H),
+            },
+        ));
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -160,30 +173,35 @@ pub fn paint_image_node_section(
         y = paint_warning_row(cx, theme, warning, x, y, width);
     }
 
-    // Search / Generate buttons (TS outline buttons, flex-1 h-7).
-    y += IMAGE_ROW_GAP;
-    let half_w = (usable_w - 4.0) / 2.0;
-    paint_outline_button(
-        cx,
-        theme,
-        Rect {
-            origin: Point2D::new(x + PAD_X, y),
-            size: Point2D::new(half_w, IMAGE_BUTTON_H),
-        },
-        Icon::Search,
-        "Search",
-    );
-    paint_outline_button(
-        cx,
-        theme,
-        Rect {
-            origin: Point2D::new(x + PAD_X + half_w + 4.0, y),
-            size: Point2D::new(half_w, IMAGE_BUTTON_H),
-        },
-        Icon::Sparkles,
-        "Generate",
-    );
-    y += IMAGE_BUTTON_H + 34.0;
+    // Search / Generate buttons (TS outline buttons, flex-1 h-7) —
+    // desktop-only, mirrored by `image_section_height` /
+    // `push_image_action_rects` so paint + hit-test stay in sync.
+    if IMAGE_REMOTE_ACTIONS_AVAILABLE {
+        y += IMAGE_ROW_GAP;
+        let half_w = (usable_w - 4.0) / 2.0;
+        paint_outline_button(
+            cx,
+            theme,
+            Rect {
+                origin: Point2D::new(x + PAD_X, y),
+                size: Point2D::new(half_w, IMAGE_BUTTON_H),
+            },
+            Icon::Search,
+            "Search",
+        );
+        paint_outline_button(
+            cx,
+            theme,
+            Rect {
+                origin: Point2D::new(x + PAD_X + half_w + 4.0, y),
+                size: Point2D::new(half_w, IMAGE_BUTTON_H),
+            },
+            Icon::Sparkles,
+            "Generate",
+        );
+        y += IMAGE_BUTTON_H;
+    }
+    y += 34.0;
     paint_section_divider(cx, theme, x, y, width);
     y + SECTION_GAP
 }
