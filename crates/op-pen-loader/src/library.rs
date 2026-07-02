@@ -10,7 +10,13 @@
 //! [`op_editor_core::ComponentLibrary::from_document`], and merges them into
 //! a live [`EditorState`]:
 //!
-//! 1. the master frames are appended to `state.doc.children` (deduped by id),
+//! 1. the master frames are appended to a dedicated, hidden `Components`
+//!    page (deduped by id) — NOT the active design page. This keeps
+//!    `active_children()` clean (only the design) so the orchestrator's
+//!    dashboard scaffold + role/cleanup passes are unaffected, while the
+//!    masters stay discoverable for ref resolution (both
+//!    `ComponentLibrary::from_document` and `ref_resolve::resolve_refs_for_canvas`
+//!    walk every page, not just the active one),
 //! 2. the library's `variables` + `themes` are merged into the doc (so each
 //!    master's `$--token` fills resolve), and
 //! 3. `state.components` is rebuilt so the runtime registry + the generator's
@@ -20,7 +26,6 @@
 //! path. The smoke runner wires it behind `OPENPENCIL_SMOKE_LIBRARY`, and the
 //! desktop host can call it when a user imports a kit.
 
-use op_editor_core::pen_node_ext::PenNodeExt;
 use op_editor_core::{ComponentLibrary, EditorState};
 
 use crate::payload::load_canonical;
@@ -28,7 +33,8 @@ use crate::payload::load_canonical;
 /// Outcome of a successful library merge — counts for logging / tests.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct LibraryMergeReport {
-    /// Reusable master frames appended to `doc.children` (post-dedup).
+    /// Reusable master frames appended to the hidden `Components`
+    /// page (post-dedup).
     pub masters_added: usize,
     /// Total reusable masters now registered in `state.components`.
     pub component_count: usize,
@@ -68,23 +74,14 @@ pub fn merge_library_src_into_state(
 
     let mut report = LibraryMergeReport::default();
 
-    // 1. Append master frames to the working doc, deduped by id.
-    let existing_ids: std::collections::HashSet<String> = state
-        .doc
-        .children
-        .iter()
-        .map(|n| n.id_str().to_string())
-        .collect();
-    let mut added_ids = existing_ids.clone();
-    for component in &library.components {
-        let id = component.root.id_str().to_string();
-        if added_ids.contains(&id) {
-            continue;
-        }
-        added_ids.insert(id);
-        state.doc.children.push(component.root.clone());
-        report.masters_added += 1;
-    }
+    // 1. Append the master frames onto a dedicated, hidden `Components`
+    //    page — NOT the active design page. `append_components_page_masters`
+    //    keeps `active_children()` clean (only the design) so scaffolding +
+    //    role/cleanup passes are unaffected, preserves the active page index,
+    //    keeps master ids verbatim so refs resolve, and dedups by id so a
+    //    re-import is idempotent.
+    let masters: Vec<_> = library.components.iter().map(|c| c.root.clone()).collect();
+    report.masters_added = state.append_components_page_masters(masters);
 
     // 2. Merge the library's variables (only new names) so master `$--token`
     //    fills resolve against concrete values.
@@ -120,6 +117,21 @@ pub fn merge_library_src_into_state(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use op_editor_core::page_mutators::COMPONENTS_PAGE_NAME;
+    use op_editor_core::pen_node_ext::PenNodeExt;
+
+    /// Children of the hidden `Components` page in `state`, or an empty
+    /// slice when no such page exists. The masters live here after a
+    /// merge — NOT on the active design page.
+    fn components_page_children(state: &EditorState) -> &[jian_ops_schema::node::PenNode] {
+        state
+            .doc
+            .pages
+            .as_ref()
+            .and_then(|pages| pages.iter().find(|p| p.name == COMPONENTS_PAGE_NAME))
+            .map(|p| p.children.as_slice())
+            .unwrap_or(&[])
+    }
 
     /// One reusable master frame as canonical `.op` JSON (a button-like
     /// frame whose fill references a `$--primary` token so the merge's
@@ -178,8 +190,14 @@ mod tests {
         );
         assert_eq!(report.variables_added, 2);
         assert_eq!(report.themes_added, 1);
-        // The masters landed in the working doc.
-        assert_eq!(state.doc.children.len(), 120);
+        // The masters landed on the hidden Components page, NOT the
+        // active design page. The empty starter doc had no design, so
+        // the active page (page 0) stays empty.
+        assert_eq!(components_page_children(&state).len(), 120);
+        assert!(
+            state.active_children().is_empty(),
+            "active design page must stay clean of masters"
+        );
         // Variables + themes are present so master `$--token` fills resolve.
         assert!(state
             .doc
@@ -206,7 +224,8 @@ mod tests {
         assert_eq!(second.themes_added, 0);
         // Component count is stable.
         assert_eq!(second.component_count, 5);
-        assert_eq!(state.doc.children.len(), 5);
+        // Re-import is idempotent on the Components page (no duplicates).
+        assert_eq!(components_page_children(&state).len(), 5);
     }
 
     #[test]
@@ -220,9 +239,16 @@ mod tests {
         let src = library_src(3);
         let report = merge_library_src_into_state(&mut state, &src).expect("merge");
         assert_eq!(report.masters_added, 3);
-        // User content survived + masters appended after it.
-        assert_eq!(state.doc.children.len(), 4);
-        assert_eq!(state.doc.children[0].id_str(), "user-frame");
+        // The user's design survived untouched on the active page — the
+        // masters went to the separate Components page, not beside it.
+        assert_eq!(state.active_children().len(), 1);
+        assert_eq!(state.active_children()[0].id_str(), "user-frame");
+        assert_eq!(components_page_children(&state).len(), 3);
+        // No master leaked onto the active design page.
+        assert!(state
+            .active_children()
+            .iter()
+            .all(|n| n.id_str() == "user-frame"));
     }
 
     #[test]
@@ -232,5 +258,80 @@ mod tests {
         assert!(!err.is_empty());
         assert!(state.doc.children.is_empty());
         assert!(state.components.is_empty());
+    }
+
+    /// The root bug: masters appended to the active design page polluted
+    /// `active_children()` and broke the dashboard scaffold index math.
+    /// This pins the fix end-to-end:
+    /// - the active design page stays CLEAN of masters (so scaffold +
+    ///   role/cleanup passes work),
+    /// - the masters live on a separate hidden `Components` page,
+    /// - `ComponentLibrary::from_document` still finds all of them
+    ///   (it walks every page, not just the active one), and
+    /// - a `ref` on the active page resolves cross-page to a master on
+    ///   the Components page via `resolve_refs_for_canvas`.
+    #[test]
+    fn masters_isolated_on_components_page_but_resolve_cross_page() {
+        // Active design page carries one ordinary frame plus a `ref`
+        // instance whose target is a library master.
+        let user_doc_src = r#"{"version":"1.0","children":[
+            {"id":"design-root","type":"frame","name":"Design Root","width":1200,"height":800},
+            {"id":"inst-7","type":"ref","ref":"lib-comp-7","x":40,"y":40}
+        ]}"#;
+        let loaded = load_canonical(user_doc_src).expect("user doc");
+        let mut state = EditorState::from_document(loaded.value);
+
+        let src = library_src(46);
+        let report = merge_library_src_into_state(&mut state, &src).expect("merge");
+        assert_eq!(report.masters_added, 46);
+
+        // 1. The active design page is CLEAN of masters — only the
+        //    design root + the ref instance remain.
+        let active = state.active_children();
+        assert_eq!(active.len(), 2);
+        assert!(
+            active.iter().all(|n| !matches!(
+                n,
+                jian_ops_schema::node::PenNode::Frame(f) if f.reusable == Some(true)
+            )),
+            "no reusable master may leak onto the active design page"
+        );
+        assert_eq!(
+            state.ui.active_page_index, 0,
+            "active page stays the design"
+        );
+
+        // 2. A separate Components page holds all 46 masters.
+        assert_eq!(components_page_children(&state).len(), 46);
+
+        // 3. ComponentLibrary::from_document finds all 46 (it walks
+        //    every page, not just the active one).
+        let lib = ComponentLibrary::from_document(&state.doc);
+        assert_eq!(lib.len(), 46);
+        assert!(lib.find_by_name("Component 7").is_some());
+
+        // 4. The active-page ref resolves cross-page to its master on
+        //    the Components page via resolve_refs_for_canvas.
+        let resolved = op_editor_core::ref_resolve::resolve_refs_for_canvas(&state.doc);
+        let resolved_active = resolved
+            .pages
+            .as_ref()
+            .map(|pages| pages[0].children.as_slice())
+            .unwrap_or(&resolved.children);
+        let expanded = resolved_active
+            .iter()
+            .find(|n| n.id_str() == "inst-7")
+            .expect("ref instance survives resolution");
+        // The ref expanded into the master's Frame subtree (it carries
+        // the master's label child remapped into the instance id space),
+        // i.e. it did NOT drop as an unknown target.
+        let children = PenNodeExt::children(expanded)
+            .expect("cross-page master resolved into a populated subtree");
+        assert!(
+            children
+                .iter()
+                .any(|c| c.id_str() == "inst-7__lib-comp-7-label"),
+            "the master on the Components page resolved into the active-page instance"
+        );
     }
 }
