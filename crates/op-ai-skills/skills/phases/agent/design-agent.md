@@ -98,6 +98,15 @@ Do not force a fixed section count, a fixed stack order, or a fixed number of ca
 
 If a row of items under-fills its container width, SPREAD them using space-between layout, do not bunch them at the start of the row. Do not leave a large empty tail at the bottom of a screen — size the root frame to its content rather than to an arbitrary height.
 
+### Build complete, populated content — not a skeleton
+
+Ship the content density a real product screen would. Do NOT stop after a header + a couple of cards. Concretely, before you finish:
+- A data table or client/user list MUST have at least **6 realistic rows** — never 1–2 sample rows.
+- A dashboard MUST carry its full section set: the KPI/stat row, the PRIMARY data table or list, AND at least one secondary section (recent activity, upcoming appointments, a quick-actions panel, or a chart). One table under four stat cards is an unfinished skeleton.
+- Populate every list, table, and card with realistic, VARIED data (distinct names, dates, values, statuses) — not repeated placeholders.
+
+This is a hard completeness bar you can check WITHOUT a screenshot: if the main content area is mostly empty below the fold, or a table has fewer than ~6 rows, keep building — you are not done.
+
 ### New screens open to the right
 
 A new screen or page MUST open as a new top-level frame placed to the **right** of the existing frames. Call `find_empty_space` with direction `"right"` to get the correct x/y coordinates. Never stack a new screen below an existing one.
