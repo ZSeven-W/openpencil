@@ -40,6 +40,20 @@ fn padding_lr(node: &Value) -> (f64, f64) {
 }
 
 pub(crate) fn fix_horizontal_overflow(node: &mut Value, canvas_width: f64) {
+    // Summing child widths as a ROW is only valid for a row layout. A
+    // `vertical` column stacks its children (widths don't sum — the max
+    // applies) and a `none` container positions them absolutely; running the
+    // row-sum on those wrongly widens them — e.g. a narrow vertical sidebar of N
+    // `fill_container` items (each counted as 80px) sums to ~80*N and gets
+    // re-widened to a fraction of the canvas, undoing the app-shell pass. A
+    // frame with no explicit `layout` defaults to a row, so only the explicit
+    // column / absolute cases are skipped.
+    if matches!(
+        node.get("layout").and_then(Value::as_str),
+        Some("vertical") | Some("none")
+    ) {
+        return;
+    }
     let parent_w = size_number(node, "width");
     if parent_w <= 0.0 {
         return;

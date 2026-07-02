@@ -41,6 +41,7 @@ pub(crate) mod validation_fixes_b3;
 mod variable_binding;
 pub mod variables;
 
+pub mod app_shell;
 pub mod append;
 pub mod cleanup;
 pub(crate) mod cleanup_layout;

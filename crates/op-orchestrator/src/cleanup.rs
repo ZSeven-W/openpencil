@@ -673,6 +673,14 @@ pub fn finalize_design(sink: &mut dyn DocSink, plan: &OrchestratorPlan, root_ids
 
 pub fn run_cleanup_passes(sink: &mut dyn DocSink, plan: &OrchestratorPlan, root_ids: &[&str]) {
     for root_id in root_ids {
+        // FIRST: turn a flat-vertical desktop dashboard with a full-width
+        // sidebar into a horizontal [sidebar | content] app-shell, so the
+        // remaining cleanup passes (esp. `adjust_root_height_to_content`) see
+        // the corrected shape. This is the shared whole-doc finalize point for
+        // BOTH the orchestrator (per-subtask role passes already ran) and the
+        // agentic loop (whole-doc role passes ran in `apply_loop_finalize`), so
+        // the moved sections keep their resolved roles.
+        restructure_app_shell_root(sink, root_id);
         remove_duplicate_status_bars(sink, root_id);
         repair_light_mobile_nav_surfaces(sink, root_id);
         repair_mobile_content_sections(sink, root_id);
@@ -682,6 +690,26 @@ pub fn run_cleanup_passes(sink: &mut dyn DocSink, plan: &OrchestratorPlan, root_
         repair_overbold_text_hierarchy(sink, root_id);
         strip_decorative_filled_strokes(sink, root_id);
         adjust_root_height_to_content(sink, root_id);
+    }
+}
+
+/// Restructure the page-root in place when it is a flat-vertical desktop
+/// dashboard whose first child is a full-width sidebar (see
+/// [`crate::app_shell::reshape_sidebar_to_app_shell`] for the strict gate). The
+/// whole subtree is swapped via `ReplaceSubtree` (the new root carries the
+/// reorganized children, so `drop_children: true` loses nothing).
+fn restructure_app_shell_root(sink: &mut dyn DocSink, root_id: &str) {
+    let Some(root) = find_root(sink.state(), root_id) else {
+        return;
+    };
+    let mut new_root = root.clone();
+    if crate::app_shell::reshape_sidebar_to_app_shell(&mut new_root) {
+        sink.apply(EditorCommand::ReplaceSubtree {
+            node_id: NodeId::new(root_id.to_string()),
+            node: Box::new(new_root),
+            drop_children: true,
+            page_id: None,
+        });
     }
 }
 
