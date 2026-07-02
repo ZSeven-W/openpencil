@@ -107,6 +107,18 @@ pub trait GlContextProvider {
     /// asynchronously, so an explicit release path makes the
     /// 100-iteration RSS sanity test deterministic.
     fn release(&mut self) -> ProviderResult<()>;
+
+    /// Resolve a GL symbol through the API that created this context
+    /// (EGL / GLX / WGL / CGL). Skia consumes this via
+    /// `Interface::new_load_with` so symbol resolution matches the
+    /// context's API — `Interface::new_native()` dlopens libGL/GLX on
+    /// Linux, which fails when the current context is EGL (the
+    /// LINUX_GPU_SKIA_LOADER_TBD gap). `None` = this provider has no
+    /// loader; `SharedSkiaContext::new` falls back to `new_native()`.
+    fn gl_proc_address(&self, symbol: &std::ffi::CStr) -> Option<*const std::ffi::c_void> {
+        let _ = symbol;
+        None
+    }
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -322,6 +334,17 @@ impl GlContextProvider for GlutinProvider {
     /// no longer provides a default body).
     fn default_framebuffer_id(&self) -> u32 {
         0
+    }
+
+    /// Route Skia's symbol lookups through the same glutin display the
+    /// glow function table was loaded from, so EGL contexts resolve via
+    /// eglGetProcAddress instead of `new_native()`'s GLX path.
+    fn gl_proc_address(&self, symbol: &std::ffi::CStr) -> Option<*const std::ffi::c_void> {
+        use glutin::display::GetGlDisplay;
+        use glutin::prelude::*;
+        self.context
+            .as_ref()
+            .map(|ctx| ctx.display().get_proc_address(symbol))
     }
 
     #[tracing::instrument(skip(self))]

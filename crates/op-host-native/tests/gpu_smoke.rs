@@ -290,14 +290,14 @@ fn gpu_smoke() {
     platform::run();
 }
 
-// Linux GPU smoke deferred: skia-safe `Interface::new_native()` dlopens
-// libGL.so + glXGetProcAddress, which fails on EGL pbuffer + llvmpipe.
-// Wiring `Interface::new_load_with(eglGetProcAddress)` requires a new
-// `GlContextProvider::get_proc_address` method (spec §3.1 mini-patch
-// follow-up). Tracked LINUX_GPU_SKIA_LOADER_TBD.
+// Linux GPU smoke: Skia now loads its GL interface through
+// `GlContextProvider::gl_proc_address` (eglGetProcAddress for the EGL
+// pbuffer provider), closing the old LINUX_GPU_SKIA_LOADER_TBD gap
+// where `Interface::new_native()` went through GLX and found nothing.
+// On hosts without a working EGL/Mesa stack the test soft-skips
+// (INCONCLUSIVE eprintln) unless `STEP1A_REQUIRE_GPU=1`.
 #[cfg(target_os = "linux")]
 #[test]
-#[ignore = "LINUX_GPU_SKIA_LOADER_TBD: skia-safe Interface::new_native cannot resolve GL syms from EGL pbuffer + llvmpipe; needs new_load_with(eglGetProcAddress) loader path (spec §3.1 follow-up)"]
 fn gpu_smoke() {
     platform::run();
 }

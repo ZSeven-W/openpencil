@@ -288,11 +288,11 @@ fn gpu_chrome_stub_composition() {
     platform::run();
 }
 
-// Linux GPU chrome+stub composition deferred: same root cause as
-// LINUX_GPU_SKIA_LOADER_TBD in gpu_smoke.rs.
+// Linux GPU chrome+stub composition: unblocked by the
+// `GlContextProvider::gl_proc_address` loader path (see gpu_smoke.rs);
+// soft-skips without a working EGL stack unless STEP1A_REQUIRE_GPU=1.
 #[cfg(target_os = "linux")]
 #[test]
-#[ignore = "LINUX_GPU_SKIA_LOADER_TBD: skia-safe Interface::new_native cannot resolve GL syms from EGL pbuffer + llvmpipe (see gpu_smoke.rs)"]
 fn gpu_chrome_stub_composition() {
     platform::run();
 }

@@ -213,6 +213,15 @@ pub mod egl_pbuffer {
             0
         }
 
+        /// Resolve symbols via eglGetProcAddress — the loader path that
+        /// unblocks Skia on EGL pbuffer + llvmpipe (previously the
+        /// LINUX_GPU_SKIA_LOADER_TBD gap: `new_native()` went through
+        /// GLX and found nothing).
+        fn gl_proc_address(&self, symbol: &std::ffi::CStr) -> Option<*const c_void> {
+            let name = symbol.to_str().ok()?;
+            self.egl.get_proc_address(name).map(|p| p as *const c_void)
+        }
+
         fn resize(&mut self, _w: u32, _h: u32) -> ProviderResult<()> {
             // Pbuffer can't be resized once created — tests build the
             // surface at the size they need.
