@@ -368,6 +368,11 @@ fn normalize_layout_enum_json(object: &mut serde_json::Map<String, serde_json::V
             *justify = normalized.to_string();
         }
     }
+    if let Some(serde_json::Value::String(align)) = object.get_mut("alignItems") {
+        if let Some(normalized) = normalize_align_items(align) {
+            *align = normalized.to_string();
+        }
+    }
 }
 
 fn normalize_layout_mode(value: &str) -> Option<&'static str> {
@@ -381,12 +386,26 @@ fn normalize_layout_mode(value: &str) -> Option<&'static str> {
 
 fn normalize_justify_content(value: &str) -> Option<&'static str> {
     match value.trim().to_ascii_lowercase().as_str() {
-        "start" | "flex-start" | "left" | "top" => Some("start"),
+        "start" | "flex-start" | "flex_start" | "flexstart" | "left" | "top" => Some("start"),
         "center" | "middle" => Some("center"),
-        "end" | "flex-end" | "right" | "bottom" => Some("end"),
+        "end" | "flex-end" | "flex_end" | "flexend" | "right" | "bottom" => Some("end"),
         "space_between" | "space-between" | "space between" => Some("space_between"),
         "space_around" | "space-around" | "space around" => Some("space_around"),
         "space_evenly" | "space-evenly" | "space evenly" => Some("space_around"),
+        _ => None,
+    }
+}
+
+/// `alignItems` accepts `start`/`center`/`end`/`stretch`. A CSS-fluent model
+/// writes `flex-start`/`flex_start` (and `flex-end`/`flex_end`); without this
+/// the WHOLE node fails to deserialize and is dropped (the flat-JSONL twin of
+/// the `normalize_justify_content` fix). `stretch` is a valid schema value —
+/// pass it through unchanged.
+fn normalize_align_items(value: &str) -> Option<&'static str> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "flex-start" | "flex_start" | "flexstart" | "left" | "top" => Some("start"),
+        "center" | "middle" => Some("center"),
+        "flex-end" | "flex_end" | "flexend" | "right" | "bottom" => Some("end"),
         _ => None,
     }
 }

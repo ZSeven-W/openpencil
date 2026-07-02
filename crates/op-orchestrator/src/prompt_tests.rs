@@ -1346,11 +1346,19 @@ fn tight_budget_dashboard_force_includes_component_composition() {
     };
 
     let lib = library_with(5);
-    let (cr, report) = build_subagent_prompt(
+    // Drive the env-independent core with all three structured protocols OFF so
+    // this exercises the FLAT-JSONL tight-budget path the test is about —
+    // deterministically, regardless of the model's default protocol. (minimax-m3
+    // now defaults to script-gen, which drops the jsonl-format skill and frees
+    // budget; that would un-exhaust the 5200 budget and void the pin scenario.)
+    let (cr, report) = build_subagent_prompt_with_manifest(
         &dash_subtask,
         &dash_plan,
         &basic_req,
         AbortFlag::new(),
+        false,
+        false,
+        false,
         false,
         false,
         &lib,
