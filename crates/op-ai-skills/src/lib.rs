@@ -36,33 +36,46 @@ pub use types::{
     SkillLoadEntry, SkillLoadReport, SkillMeta, SkillTrigger, DEFAULT_BUDGETS,
 };
 
-/// Return the product-design guideline text for `topic`.
+/// Return the product-design guideline text for `topic`, composed from the
+/// embedded skill corpus. Mirrors Pencil's `get_guidelines(guide, …)`: each
+/// topic resolves to its focused task guide plus the principle skills that
+/// complete it. All content is local (embedded via `include_dir!`) — there is
+/// no remote fetch.
 ///
-/// Supported topics:
-/// - `"web-app"` — composed from the `product-principles` + `design-principles`
-///   knowledge skills (both always-on, apply to every screen / general web UI).
-/// - `"mobile"` — the `mobile-app` domain skill (three-section architecture +
-///   spacing / navigation / touch-target rules).
+/// Supported topics (aliases in parens):
+/// - `"web-app"` (`webapp`) — product principles + web-app depth laws + design craft
+/// - `"mobile"` (`mobile-app`) — the mobile-app three-section architecture
+/// - `"landing-page"` (`landing`) — landing-page domain + design craft
+/// - `"dashboard"` (`table`) — dashboard structure + product principles
+/// - `"slides"` (`deck`, `presentation`) — slide layout contracts
+/// - `"form"` (`form-ui`) — form-ui domain
+/// - `"design-system"` — design-system composition
 ///
 /// Returns `None` for any unrecognised topic so callers can produce a typed
 /// "unknown topic" error without special-casing the string themselves.
 pub fn guideline_for(topic: &str) -> Option<String> {
+    // Compose the named skills (in order) into one coherent guideline doc,
+    // skipping any that are absent. `None` if nothing resolved.
+    fn compose(names: &[&str]) -> Option<String> {
+        let parts: Vec<&str> = names
+            .iter()
+            .filter_map(|&n| get_skill_by_name(n).map(|s| s.content.trim()))
+            .filter(|c| !c.is_empty())
+            .collect();
+        if parts.is_empty() {
+            None
+        } else {
+            Some(parts.join("\n\n"))
+        }
+    }
     match topic {
-        "web-app" => {
-            let product = get_skill_by_name("product-principles")?;
-            let design = get_skill_by_name("design-principles")?;
-            // Concatenate both skills into one coherent guidelines doc.
-            // A blank line separates them so the boundary is clear but readable.
-            Some(format!(
-                "{}\n\n{}",
-                product.content.trim(),
-                design.content.trim()
-            ))
-        }
-        "mobile" => {
-            let mobile = get_skill_by_name("mobile-app")?;
-            Some(mobile.content.clone())
-        }
+        "web-app" | "webapp" => compose(&["product-principles", "web-app", "design-principles"]),
+        "mobile" | "mobile-app" => compose(&["mobile-app"]),
+        "landing-page" | "landing" => compose(&["landing-page", "design-principles"]),
+        "dashboard" | "table" => compose(&["dashboard", "product-principles"]),
+        "slides" | "deck" | "presentation" => compose(&["slides"]),
+        "form" | "form-ui" => compose(&["form-ui"]),
+        "design-system" => compose(&["design-system"]),
         _ => None,
     }
 }
@@ -157,6 +170,40 @@ mod tests {
     }
 
     #[test]
+    fn guideline_for_extended_topics_resolve() {
+        // landing-page composes the landing domain + design craft.
+        let lp = guideline_for("landing-page").expect("landing-page guideline present");
+        assert!(
+            lp.contains("DESIGN CRAFT"),
+            "landing-page must include design craft"
+        );
+        // slides resolves to the slide layout contracts.
+        let sl = guideline_for("slides").expect("slides guideline present");
+        assert!(
+            sl.to_uppercase().contains("SLIDE"),
+            "slides must include slide guidance"
+        );
+        // dashboard / table both resolve.
+        assert!(
+            guideline_for("dashboard").is_some(),
+            "dashboard guideline present"
+        );
+        assert!(guideline_for("table").is_some(), "table alias resolves");
+        // web-app now also carries the web-app depth laws.
+        let wa = guideline_for("web-app").expect("web-app guideline present");
+        assert!(
+            wa.contains("PROGRESSIVE DISCLOSURE"),
+            "web-app must include the web-app depth laws"
+        );
+        // aliases resolve.
+        assert!(guideline_for("webapp").is_some(), "webapp alias resolves");
+        assert!(
+            guideline_for("presentation").is_some(),
+            "presentation alias resolves"
+        );
+    }
+
+    #[test]
     fn design_agent_system_prompt_resolves_and_contains_protocol_markers() {
         let prompt = design_agent_system_prompt();
         assert!(
@@ -180,6 +227,14 @@ mod tests {
         assert!(
             prompt.contains("batch_design"),
             "must reference batch_design"
+        );
+        assert!(
+            prompt.contains("emit_elements"),
+            "must reference emit_elements (the preferred element-builder path)"
+        );
+        assert!(
+            prompt.contains("stat_card") || prompt.contains("stat-card"),
+            "must teach high-level element kinds via emit_elements"
         );
         assert!(
             prompt.contains("get_screenshot"),

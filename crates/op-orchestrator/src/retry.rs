@@ -1,32 +1,7 @@
 //! 重试辅助函数 —— S3b-1b Task A1。
 //!
-//! 对齐 TS `orchestrator.ts:1323-1329`(tier→mode 序列)
-//! 与 `orchestrator-sub-agent.ts:150-152`(不可重试错误检测)。
-
-use crate::model_profile::ModelTier;
-use crate::types::PlanningMode;
-
-/// 按照 tier 返回规划模式的重试序列(静态切片,首个失败 → 下一档)。
-///
-/// Port of `orchestrator.ts:1323-1329`:
-/// ```ts
-/// const ATTEMPT_MODES = {
-///   Full:     [Rich],
-///   Standard: [Rich, Minimal],
-///   Basic:    [Rich, Minimal, Compact],
-/// }
-/// ```
-pub(crate) fn attempt_modes(tier: ModelTier) -> &'static [PlanningMode] {
-    match tier {
-        ModelTier::Full => &[PlanningMode::Rich],
-        ModelTier::Standard => &[PlanningMode::Rich, PlanningMode::Minimal],
-        ModelTier::Basic => &[
-            PlanningMode::Rich,
-            PlanningMode::Minimal,
-            PlanningMode::Compact,
-        ],
-    }
-}
+//! 对齐 TS `orchestrator-sub-agent.ts:150-152`(不可重试错误检测)。
+//! 规划阶段的 tier→mode 序列(`attempt_modes`)已随单档规划收敛移除。
 
 /// 判断错误消息是否为不可重试的终止条件。
 ///
@@ -51,33 +26,6 @@ pub(crate) fn is_non_retryable(msg: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    // ── attempt_modes ───────────────────────────────────────────────────────
-
-    #[test]
-    fn full_tier_only_rich() {
-        assert_eq!(attempt_modes(ModelTier::Full), &[PlanningMode::Rich]);
-    }
-
-    #[test]
-    fn standard_tier_rich_then_minimal() {
-        assert_eq!(
-            attempt_modes(ModelTier::Standard),
-            &[PlanningMode::Rich, PlanningMode::Minimal]
-        );
-    }
-
-    #[test]
-    fn basic_tier_all_three() {
-        assert_eq!(
-            attempt_modes(ModelTier::Basic),
-            &[
-                PlanningMode::Rich,
-                PlanningMode::Minimal,
-                PlanningMode::Compact
-            ]
-        );
-    }
 
     // ── is_non_retryable — true cases ───────────────────────────────────────
 

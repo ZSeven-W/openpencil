@@ -726,3 +726,51 @@ fn media_clipper_radius_preserved_under_decorated_card() {
         "media-clipper radius preserved (rounds the photo)"
     );
 }
+
+#[test]
+fn backdrop_sibling_fill_merges_into_the_nav_item() {
+    // test07021's verbatim defect: "Dashboard Item" [Active Bg(fill×fill,
+    // $color-surface), icon, labels] — the backdrop ate the row's left half
+    // and shoved the label outside the sidebar. Its fill must move onto the
+    // item and the backdrop must disappear.
+    let mut nodes: Vec<PenNode> = vec![serde_json::from_value(json!({
+        "type":"frame","id":"item","name":"Dashboard Item","layout":"horizontal","gap":16,
+        "width":"fill_container","height":"fit_content","padding":[12,16],"children":[
+            {"type":"rectangle","id":"bg","name":"Active Bg","width":"fill_container","height":"fill_container",
+             "fill":[{"type":"solid","color":"$color-surface"}],"cornerRadius":8},
+            {"type":"icon_font","id":"ic","iconFontName":"layout-dashboard","width":20,"height":20},
+            {"type":"text","id":"lbl","content":"Dashboard","fontSize":14}
+        ]
+    }))
+    .unwrap()];
+    apply_tree_heuristics(&mut nodes, None, false, None);
+    let v = serde_json::to_value(&nodes[0]).unwrap();
+    let kids = v["children"].as_array().unwrap();
+    assert_eq!(kids.len(), 2, "backdrop removed: {kids:?}");
+    assert_eq!(
+        v["fill"][0]["color"], "$color-surface",
+        "backdrop fill moved onto the item"
+    );
+    assert_eq!(v["cornerRadius"], json!(8.0), "radius moved along");
+}
+
+#[test]
+fn thin_divider_and_fixed_avatar_are_not_backdrops() {
+    // A thin divider (fixed 1px height) and a fixed-size avatar square carry
+    // fills but are NOT backdrops — they must stay.
+    let mut nodes: Vec<PenNode> = vec![serde_json::from_value(json!({
+        "type":"frame","id":"row","name":"Row","layout":"horizontal","children":[
+            {"type":"rectangle","id":"div","name":"Divider","width":"fill_container","height":1,
+             "fill":[{"type":"solid","color":"#2A2A2A"}]},
+            {"type":"text","id":"t","content":"After","fontSize":14}
+        ]
+    }))
+    .unwrap()];
+    apply_tree_heuristics(&mut nodes, None, false, None);
+    let v = serde_json::to_value(&nodes[0]).unwrap();
+    assert_eq!(
+        v["children"].as_array().unwrap().len(),
+        2,
+        "divider survives"
+    );
+}

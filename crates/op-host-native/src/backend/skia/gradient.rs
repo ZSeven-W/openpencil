@@ -107,6 +107,176 @@ impl NativeBackend {
         paint.set_shader(shader);
         canvas.draw_round_rect(to_sk_rect(rect), radius, radius, &paint);
     }
+
+    /// Fill a (round-)rectangle with a Gouraud-interpolated mesh
+    /// gradient. `colors` is a row-major `rows`×`cols` lattice
+    /// (length == `rows * cols`); vertex `(r, c)` anchors the colour at
+    /// rect position `(c/(cols-1), r/(rows-1))`. The grid is triangulated
+    /// into `VertexMode::Triangles` with a u16 index buffer and drawn via
+    /// `Canvas::draw_vertices` under a round-rect clip so the fill
+    /// respects the corner radius. `opacity` folds into the layer alpha.
+    #[allow(clippy::too_many_arguments)]
+    pub fn fill_round_rect_mesh_gradient(
+        &self,
+        canvas: &skia_safe::Canvas,
+        rect: Rect,
+        radius: f32,
+        rows: u32,
+        cols: u32,
+        colors: &[Color],
+        opacity: f32,
+    ) {
+        let rows = rows.max(2);
+        let cols = cols.max(2);
+        let vcount = (rows * cols) as usize;
+        if colors.len() != vcount {
+            // Malformed grid — degrade to first-vertex solid so the
+            // node still paints instead of vanishing.
+            if let Some(c) = colors.first() {
+                self.fill_round_rect(canvas, rect, radius, fold_opacity(*c, opacity));
+            }
+            return;
+        }
+
+        let denom_c = (cols - 1) as f32;
+        let denom_r = (rows - 1) as f32;
+        let mut positions: Vec<skia_safe::Point> = Vec::with_capacity(vcount);
+        let mut sk_colors: Vec<skia_safe::Color> = Vec::with_capacity(vcount);
+        for r in 0..rows {
+            for c in 0..cols {
+                let x = rect.origin.x + (c as f32 / denom_c) * rect.size.x;
+                let y = rect.origin.y + (r as f32 / denom_r) * rect.size.y;
+                positions.push(skia_safe::Point::new(x, y));
+                let col = colors[(r * cols + c) as usize];
+                let to_u8 = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
+                let a = (col.a * opacity).clamp(0.0, 1.0);
+                sk_colors.push(skia_safe::Color::from_argb(
+                    to_u8(a),
+                    to_u8(col.r),
+                    to_u8(col.g),
+                    to_u8(col.b),
+                ));
+            }
+        }
+
+        // Two triangles per grid cell (CCW). Index of vertex (r, c) is
+        // `r * cols + c`.
+        let mut indices: Vec<u16> = Vec::with_capacity(((rows - 1) * (cols - 1) * 6) as usize);
+        for r in 0..(rows - 1) {
+            for c in 0..(cols - 1) {
+                let tl = (r * cols + c) as u16;
+                let tr = (r * cols + c + 1) as u16;
+                let bl = ((r + 1) * cols + c) as u16;
+                let br = ((r + 1) * cols + c + 1) as u16;
+                indices.extend_from_slice(&[tl, tr, bl, tr, br, bl]);
+            }
+        }
+
+        let vertices = skia_safe::Vertices::new_copy(
+            skia_safe::vertices::VertexMode::Triangles,
+            &positions,
+            &positions,
+            &sk_colors,
+            Some(&indices),
+        );
+
+        let restore = canvas.save();
+        if radius > 0.5 {
+            let rrect = skia_safe::RRect::new_rect_radii(
+                to_sk_rect(rect),
+                &[
+                    skia_safe::Point::new(radius, radius),
+                    skia_safe::Point::new(radius, radius),
+                    skia_safe::Point::new(radius, radius),
+                    skia_safe::Point::new(radius, radius),
+                ],
+            );
+            canvas.clip_rrect(rrect, None, Some(true));
+        } else {
+            canvas.clip_rect(to_sk_rect(rect), None, Some(true));
+        }
+        // `draw_vertices` with no shader combines each interpolated vertex
+        // colour with the paint's colour via `mode`. A default Paint is
+        // opaque BLACK, so `Modulate` (vertex × black) would paint black;
+        // seed the paint white so `Modulate` passes the vertex colours
+        // through unchanged (white × vertex == vertex). `opacity` rides in
+        // the paint's alpha.
+        let mut paint = skia_safe::Paint::default();
+        paint.set_anti_alias(true);
+        paint.set_color4f(
+            skia_safe::Color4f::new(1.0, 1.0, 1.0, opacity.clamp(0.0, 1.0)),
+            None,
+        );
+        canvas.draw_vertices(&vertices, skia_safe::BlendMode::Modulate, &paint);
+        canvas.restore_to_count(restore);
+    }
+
+    /// Fill a (round-)rectangle with a native SkSL shader. `sksl` is the
+    /// RAW (untrusted) source (entrypoint `half4 main(float2 fragCoord)`);
+    /// `uniforms` carries `(name, values)` bindings (length 1 = float,
+    /// 2/3/4 = vec*); `fallback` is the visible solid colour painted when
+    /// the program fails to compile / build. The compiled `RuntimeEffect`
+    /// is cached on `self.shader_cache` keyed by source hash, so the
+    /// per-frame editor repaint reuses the program rather than
+    /// recompiling. On ANY failure we paint `fallback` solid — never
+    /// panic, since the source is untrusted.
+    #[allow(clippy::too_many_arguments)]
+    pub fn fill_round_rect_shader(
+        &mut self,
+        canvas: &skia_safe::Canvas,
+        rect: Rect,
+        radius: f32,
+        sksl: &str,
+        uniforms: &[(&str, &[f32])],
+        opacity: f32,
+        fallback: Color,
+    ) {
+        use skia_safe::runtime_effect::RuntimeShaderBuilder;
+
+        let shader = self.shader_cache.get_or_compile(sksl).and_then(|effect| {
+            // `RuntimeEffect` is an RCHandle — this is a refcount bump,
+            // not a recompile.
+            let mut builder = RuntimeShaderBuilder::new(effect);
+            for (name, values) in uniforms {
+                // Tolerate undeclared-name / arity mismatch so one bad
+                // uniform doesn't sink the whole fill.
+                let _ = builder.set_uniform_float(*name, values);
+            }
+            builder.make_shader(&skia_safe::Matrix::default())
+        });
+
+        let mut paint = skia_safe::Paint::default();
+        paint.set_anti_alias(true);
+        paint.set_alpha_f(opacity.clamp(0.0, 1.0));
+        match shader {
+            Some(s) => {
+                paint.set_shader(s);
+            }
+            None => {
+                // Compile / build failed — visible solid fallback.
+                let c = fold_opacity(fallback, opacity);
+                paint.set_color4f(
+                    skia_safe::Color4f::new(
+                        c.r.clamp(0.0, 1.0),
+                        c.g.clamp(0.0, 1.0),
+                        c.b.clamp(0.0, 1.0),
+                        c.a.clamp(0.0, 1.0),
+                    ),
+                    None,
+                );
+                // alpha already folded into Color4f; reset the layer alpha
+                // so it isn't applied twice.
+                paint.set_alpha_f(1.0);
+            }
+        }
+        canvas.draw_round_rect(to_sk_rect(rect), radius, radius, &paint);
+    }
+
+    /// Distinct SkSL programs compiled so far — exposed for the
+    /// compile-cache proof (per-frame repaints must NOT grow this).
+    pub fn shader_compile_count(&self) -> u64 {
+        self.shader_cache.compile_count()
+    }
 }
 
 /// Multiply a colour's alpha by a per-fill opacity factor. Used as

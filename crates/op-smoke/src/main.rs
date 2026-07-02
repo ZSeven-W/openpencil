@@ -38,6 +38,9 @@
 
 use std::sync::Arc;
 
+mod loop_mode;
+mod loop_seed;
+
 use agent::abort::AbortController;
 use agent::provider::anthropic::AnthropicProvider;
 use agent::provider::openai_compat::{OpenAiCompatConfig, OpenAiCompatProvider};
@@ -175,6 +178,14 @@ fn is_minimax_model(model: &str) -> bool {
     m.starts_with("minimax") || m.starts_with("abab")
 }
 
+/// GLM reasoning models burn the whole `max_tokens` budget on reasoning and
+/// return EMPTY content unless thinking is disabled (measured: an orchestrator
+/// sidebar subtask failed 3× "empty content from provider" and shipped
+/// missing). Mirrors the production gate in `chat_builtin_http::is_glm_model`.
+fn is_glm_model(model: &str) -> bool {
+    model.to_ascii_lowercase().starts_with("glm")
+}
+
 /// Direct openai-compat `LlmClient` for the harness (OPENPENCIL_SMOKE_DIRECT=1).
 ///
 /// The default [`SmokeLlmClient`] goes through the vendored `agent` QueryEngine,
@@ -241,18 +252,21 @@ impl LlmClient for DirectOpenAiClient {
             // (17% M3, ~10s answers); this lets the M3-with-think arm be
             // benchmarked (strip_reasoning handles the <think> blocks).
             let keep_thinking = std::env::var("OPENPENCIL_SMOKE_KEEP_THINKING").is_ok();
-            if !keep_thinking && (force_disable || is_minimax_model(&model)) {
+            if !keep_thinking && (force_disable || is_minimax_model(&model) || is_glm_model(&model))
+            {
                 if let Some(obj) = body.as_object_mut() {
                     obj.insert("thinking".into(), serde_json::json!({ "type": "disabled" }));
                 }
             }
-            let resp = match reqwest::Client::new()
-                .post(&url)
-                .bearer_auth(&key)
-                .json(&body)
-                .send()
-                .await
-            {
+            // Connect + overall deadlines so a hung provider endpoint surfaces
+            // as an error instead of pinning the headless harness forever
+            // (mirrors the desktop's builtin_http_client).
+            let client = reqwest::Client::builder()
+                .connect_timeout(std::time::Duration::from_secs(15))
+                .timeout(std::time::Duration::from_secs(300))
+                .build()
+                .unwrap_or_else(|_| reqwest::Client::new());
+            let resp = match client.post(&url).bearer_auth(&key).json(&body).send().await {
                 Ok(r) => r,
                 Err(e) => {
                     let _ = tx.unbounded_send(Err(LlmError {
@@ -367,6 +381,171 @@ fn describe_cmd(cmd: &EditorCommand) -> String {
     }
 }
 
+/// Honor `OPENPENCIL_SMOKE_LIBRARY=<path>` by merging a harvested component
+/// library (`.lib.op`) into `state` before generation. Unset ⇒ no-op (`Ok`),
+/// preserving today's byte-for-byte behavior. On a load/parse error returns
+/// `Err(ExitCode)` so the caller aborts — a benchmark that asked for a library
+/// must not silently run without it. Shared by both smoke modes (orchestrator +
+/// loop) so the library is available whichever path runs.
+fn maybe_merge_smoke_library(state: &mut EditorState) -> Result<(), std::process::ExitCode> {
+    let path = match std::env::var("OPENPENCIL_SMOKE_LIBRARY") {
+        Ok(p) if !p.is_empty() => p,
+        _ => return Ok(()),
+    };
+    match op_pen_loader::merge_library_into_state(state, &path) {
+        Ok(report) => {
+            eprintln!(
+                "[SMOKE] library merged from {path}: +{} master(s), {} component(s) total, \
+                 +{} variable(s), +{} theme axis(es)",
+                report.masters_added,
+                report.component_count,
+                report.variables_added,
+                report.themes_added
+            );
+            Ok(())
+        }
+        Err(e) => {
+            eprintln!("[SMOKE] library load failed ({path}): {e}");
+            Err(std::process::ExitCode::from(5))
+        }
+    }
+}
+
+/// Map the chat `OPENPENCIL_SMOKE_*` thinking knobs onto a `ThinkingMode`.
+/// Default `Disabled` for ab-v9 parity with the orchestrator DIRECT path
+/// (reasoning models burn their output budget on `<think>` otherwise);
+/// `OPENPENCIL_SMOKE_KEEP_THINKING=1` keeps reasoning on.
+fn loop_thinking_mode() -> op_ai::chat_provider::ThinkingMode {
+    use op_ai::chat_provider::ThinkingMode;
+    if std::env::var("OPENPENCIL_SMOKE_KEEP_THINKING").is_ok() {
+        ThinkingMode::Enabled
+    } else {
+        ThinkingMode::Disabled
+    }
+}
+
+/// Headless agentic tool-loop branch (`OPENPENCIL_SMOKE_LOOP=1`).
+///
+/// Reads the openai-compat `OPENPENCIL_LLM_*` env (the ab-v9 wire), runs the
+/// production builtin design loop against a live `EditorState`, then dumps
+/// `state.doc` to `OPENPENCIL_SMOKE_OUT` using the SAME serialize path as the
+/// orchestrator mode (`serde_json::to_string_pretty` → `std::fs::write`).
+async fn run_loop_mode(prompt: String) -> std::process::ExitCode {
+    let model =
+        std::env::var("OPENPENCIL_ORCHESTRATOR_MODEL").unwrap_or_else(|_| "gpt-4o-mini".into());
+    let key = match std::env::var("OPENPENCIL_LLM_API_KEY")
+        .ok()
+        .filter(|k| !k.is_empty())
+    {
+        Some(k) => k,
+        None => {
+            eprintln!(
+                "error: OPENPENCIL_LLM_API_KEY is not set (loop mode needs an openai-compat key)"
+            );
+            return std::process::ExitCode::from(3);
+        }
+    };
+    let base_url = match std::env::var("OPENPENCIL_LLM_BASE_URL")
+        .ok()
+        .filter(|u| !u.is_empty())
+    {
+        Some(u) => u,
+        None => {
+            eprintln!("error: OPENPENCIL_LLM_BASE_URL is not set (e.g. https://api.openai.com/v1)");
+            return std::process::ExitCode::from(3);
+        }
+    };
+    let dump = std::env::var("OPENPENCIL_SMOKE_DUMP").is_ok();
+    let max_tokens: u32 = std::env::var("OPENPENCIL_SMOKE_MAX_TOKENS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(8192);
+    let thinking = loop_thinking_mode();
+    // `OPENPENCIL_SMOKE_LOOP_SEED=1` (only meaningful with OPENPENCIL_SMOKE_LOOP=1)
+    // arms the minimal-seed path: a page-root + named section stubs are applied
+    // before the SAME agentic loop runs to fill them. Unset ⇒ pure loop (the
+    // existing behaviour, byte-for-byte unchanged).
+    let seed = std::env::var("OPENPENCIL_SMOKE_LOOP_SEED")
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true") || v.eq_ignore_ascii_case("on"))
+        .unwrap_or(false);
+
+    eprintln!("[SMOKE] mode=loop seed={seed} model={model} base_url={base_url}");
+    eprintln!("[SMOKE] prompt={prompt:?} thinking={thinking:?} max_tokens={max_tokens}");
+
+    let system_prompt = op_ai_skills::design_agent_system_prompt().to_string();
+    // `OPENPENCIL_SMOKE_LIBRARY` is honored here too: the path is threaded into
+    // `run_loop`, which merges the harvested library into the live `EditorState`
+    // before the agentic loop runs (so its `batch_design` ref nodes can target
+    // the loaded masters). Unset ⇒ no merge, byte-for-byte unchanged.
+    let library_path = std::env::var("OPENPENCIL_SMOKE_LIBRARY")
+        .ok()
+        .filter(|p| !p.is_empty());
+    let started = std::time::Instant::now();
+
+    // The loop's `provider.send()` returns a blocking iterator driven by the
+    // crate's global `shared_runtime()`; run the drain off the async worker.
+    let result = tokio::task::spawn_blocking(move || {
+        loop_mode::run_loop(
+            base_url,
+            key,
+            model,
+            system_prompt,
+            prompt,
+            thinking,
+            op_ai::chat_provider::EffortLevel::Low,
+            max_tokens,
+            dump,
+            library_path,
+            seed,
+        )
+    })
+    .await;
+    let elapsed = started.elapsed();
+
+    let state = match result {
+        Ok(Ok(state)) => state,
+        Ok(Err(e)) => {
+            eprintln!("[LOOP] setup error: {e}");
+            return std::process::ExitCode::from(1);
+        }
+        Err(e) => {
+            eprintln!("[LOOP] loop task panicked: {e}");
+            return std::process::ExitCode::from(1);
+        }
+    };
+
+    let guard = state.lock().expect("EditorState mutex poisoned");
+    let total_nodes = guard.active_children().len();
+    eprintln!("[LOOP] finished in {elapsed:?}; top-level node(s)={total_nodes}");
+
+    // Dump via the IDENTICAL serialize path the orchestrator mode uses.
+    let save_failed = match std::env::var("OPENPENCIL_SMOKE_OUT") {
+        Ok(out_path) if !out_path.is_empty() => match serde_json::to_string_pretty(&guard.doc) {
+            Ok(json) => match std::fs::write(&out_path, json) {
+                Ok(()) => {
+                    eprintln!("[SMOKE] saved doc → {out_path}");
+                    false
+                }
+                Err(e) => {
+                    eprintln!("[SMOKE] save failed ({out_path}): {e}");
+                    true
+                }
+            },
+            Err(e) => {
+                eprintln!("[SMOKE] serialize failed: {e}");
+                true
+            }
+        },
+        _ => false,
+    };
+
+    if save_failed {
+        std::process::ExitCode::from(4)
+    } else {
+        std::process::ExitCode::SUCCESS
+    }
+}
+
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> std::process::ExitCode {
     let prompt = match std::env::args().nth(1) {
@@ -378,6 +557,19 @@ async fn main() -> std::process::ExitCode {
             return std::process::ExitCode::from(2);
         }
     };
+
+    // `OPENPENCIL_SMOKE_LOOP=1` is a SEPARATE branch: instead of the
+    // `Orchestrator`, it runs the headless Pencil-style agentic tool-loop
+    // (the model calls `batch_design` / `get_screenshot` / … over a real SSE
+    // stream; the host applies each call to a live `EditorState`). Without
+    // this flag op-smoke behaves exactly as before. The branch returns early
+    // so the orchestrator path below is byte-for-byte unchanged.
+    if std::env::var("OPENPENCIL_SMOKE_LOOP")
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true") || v.eq_ignore_ascii_case("on"))
+        .unwrap_or(false)
+    {
+        return run_loop_mode(prompt).await;
+    }
 
     let provider_kind =
         std::env::var("OPENPENCIL_LLM_PROVIDER").unwrap_or_else(|_| "anthropic".into());
@@ -467,6 +659,133 @@ async fn main() -> std::process::ExitCode {
             EditorState::new()
         },
     };
+    // `OPENPENCIL_SMOKE_LIBRARY=<path-to-.lib.op>` loads a harvested component
+    // library into the doc BEFORE generation so the generator can instantiate
+    // its reusable masters (the AVAILABLE COMPONENTS manifest path). Unset =
+    // today's behavior, byte-for-byte. A load error aborts the run loudly — a
+    // benchmark that asked for a library must not silently run without it.
+    if let Err(code) = maybe_merge_smoke_library(&mut sink.state) {
+        return code;
+    }
+
+    // `OPENPENCIL_SMOKE_AUDIT=<path.op>` — self-loop quality gate: load the
+    // doc, run the REAL-layout geometry diagnostics (the same detector family
+    // the per-batch feedback uses), print a JSON report, exit. Zero LLM calls.
+    // Exit code 0 = structurally clean, 1 = issues found. This is the
+    // machine-checkable leg of the develop→generate→render→audit loop.
+    if let Ok(audit_path) = std::env::var("OPENPENCIL_SMOKE_AUDIT") {
+        let text = match std::fs::read_to_string(&audit_path) {
+            Ok(s) => s,
+            Err(e) => {
+                eprintln!("[AUDIT] read {audit_path}: {e}");
+                return std::process::ExitCode::from(3);
+            }
+        };
+        let doc: jian_ops_schema::PenDocument = match serde_json::from_str(&text) {
+            Ok(d) => d,
+            Err(e) => {
+                eprintln!("[AUDIT] parse {audit_path}: {e}");
+                return std::process::ExitCode::from(3);
+            }
+        };
+        let state = op_editor_core::EditorState::from_document(doc);
+        let issues = op_orchestrator::geometry_validation::geometry_diagnostics(&state);
+        let roots: Vec<String> = state
+            .active_children()
+            .iter()
+            .map(|n| {
+                use op_editor_core::PenNodeExt;
+                format!(
+                    "{} ({})",
+                    n.base().name.as_deref().unwrap_or("?"),
+                    n.id_str()
+                )
+            })
+            .collect();
+        let report = serde_json::json!({
+            "file": audit_path,
+            "roots": roots,
+            "issueCount": issues.len(),
+            "issues": issues,
+        });
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&report).unwrap_or_default()
+        );
+        return if issues.is_empty() {
+            std::process::ExitCode::SUCCESS
+        } else {
+            std::process::ExitCode::from(1)
+        };
+    }
+
+    // `OPENPENCIL_SMOKE_PROGRAM=<path>` runs a Pencil-style batch_design DSL
+    // PROGRAM (a `binding=I(parent,{...})` tree-builder) against the doc and
+    // saves it, bypassing the orchestrator entirely. This is the experiment
+    // harness for "can a weak model emit a structurally-stable PROGRAM
+    // (parent-by-reference) instead of fragile flat JSONL?". postProcess stays
+    // OFF so the saved doc is the RAW structure the program builds — no cleanup
+    // post-pass — which is the whole point: the program needs no repair pass.
+    if let Ok(program_path) = std::env::var("OPENPENCIL_SMOKE_PROGRAM") {
+        let program = match std::fs::read_to_string(&program_path) {
+            Ok(s) => s,
+            Err(e) => {
+                eprintln!("[PROGRAM] read {program_path}: {e}");
+                return std::process::ExitCode::from(3);
+            }
+        };
+        let tool = op_mcp::batch_design_snapshot(&sink.state);
+        let mut args: std::collections::BTreeMap<String, String> =
+            std::collections::BTreeMap::new();
+        args.insert("operations".into(), program);
+        let applied = match op_mcp::McpTool::call(&tool, &args) {
+            op_mcp::ToolOutcome::OkJsonWithCommand(json, cmd) => {
+                eprintln!("[PROGRAM] result envelope: {json}");
+                let ok = sink.state.apply(cmd);
+                eprintln!("[PROGRAM] apply -> {ok}");
+                ok
+            }
+            op_mcp::ToolOutcome::OkJson(json) => {
+                eprintln!("[PROGRAM] no command produced: {json}");
+                false
+            }
+            other => {
+                eprintln!("[PROGRAM] unexpected outcome: {other:?}");
+                false
+            }
+        };
+        let code = match std::env::var("OPENPENCIL_SMOKE_OUT") {
+            Ok(out) if !out.is_empty() => match serde_json::to_string_pretty(&sink.state.doc) {
+                Ok(j) => match std::fs::write(&out, j) {
+                    Ok(()) => {
+                        eprintln!("[PROGRAM] saved doc -> {out}");
+                        if applied {
+                            std::process::ExitCode::SUCCESS
+                        } else {
+                            std::process::ExitCode::from(1)
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("[PROGRAM] save failed ({out}): {e}");
+                        std::process::ExitCode::from(4)
+                    }
+                },
+                Err(e) => {
+                    eprintln!("[PROGRAM] serialize failed: {e}");
+                    std::process::ExitCode::from(4)
+                }
+            },
+            _ => {
+                if applied {
+                    std::process::ExitCode::SUCCESS
+                } else {
+                    std::process::ExitCode::from(1)
+                }
+            }
+        };
+        return code;
+    }
+
     let request = DesignRequest {
         prompt,
         model: Some(model),

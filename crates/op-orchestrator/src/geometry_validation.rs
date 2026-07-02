@@ -1,0 +1,660 @@
+//! Geometry-driven structural validation — the deterministic analogue of
+//! Pencil's per-batch `snapshot_layout` feedback.
+//!
+//! The tree-shape post-passes (`role_layout_post_pass`, `table_repair`, …) reason
+//! about the AUTHORED tree; they can't see where a node actually LANDS once jian
+//! resolves flex sizing. A weak model that ignores the prompt's
+//! "total_width ≤ parent_inner_width" rule (glm routinely does) emits fixed table
+//! columns that sum WIDER than their row — jian then overflows them past the
+//! right edge (columns overlap, the last column is clipped). No amount of
+//! tree-shape heuristics catch it, because the widths are individually valid.
+//!
+//! This module runs the REAL jian layout (`editor_state_to_layout_scene`, the
+//! same pass `snapshot_layout` uses), reads each node's RESOLVED absolute rect,
+//! and fixes what the resolved geometry proves is wrong. First detector: a table
+//! row whose fixed columns overflow its resolved width → scale the fixed columns
+//! (and the column gap) down to fit, keeping proportions and column alignment.
+
+use std::collections::HashMap;
+
+use jian_scene::layout_scene::SceneNode;
+use op_editor_core::{EditorCommand, EditorState, LayoutPropValue, NodeId};
+use serde_json::Value;
+
+use crate::types::DocSink;
+
+#[derive(Clone, Copy)]
+struct Rect {
+    x: f64,
+    /// Not read yet — vertical stacking-overlap detection will need it; kept
+    /// so the resolved-rect map carries the full geometry.
+    #[allow(dead_code)]
+    y: f64,
+    w: f64,
+    h: f64,
+}
+
+/// EditorState → resolved absolute rect (w, h) per node id, via the SAME jian
+/// flex pass `snapshot_layout` uses.
+fn resolved_rects(state: &EditorState) -> HashMap<String, Rect> {
+    let scene = op_pen_loader::editor_state_to_layout_scene(state);
+    let mut map = HashMap::new();
+    for page in &scene.pages {
+        collect_rects(&page.children, &mut map);
+    }
+    map
+}
+
+fn collect_rects(nodes: &[SceneNode], map: &mut HashMap<String, Rect>) {
+    for n in nodes {
+        let b = n.aggregate_bounds();
+        map.insert(
+            n.id.clone(),
+            Rect {
+                x: f64::from(b.origin.x),
+                y: f64::from(b.origin.y),
+                w: f64::from(b.size.x),
+                h: f64::from(b.size.y),
+            },
+        );
+        collect_rects(&n.children, map);
+    }
+}
+
+// ── tolerant Value readers ──
+
+fn children(v: &Value) -> &[Value] {
+    v.get("children")
+        .and_then(Value::as_array)
+        .map(Vec::as_slice)
+        .unwrap_or(&[])
+}
+
+fn layout_str(v: &Value) -> Option<&str> {
+    v.get("layout").and_then(Value::as_str)
+}
+
+fn ident_text(v: &Value) -> String {
+    let name = v.get("name").and_then(Value::as_str).unwrap_or("");
+    let id = v.get("id").and_then(Value::as_str).unwrap_or("");
+    format!("{name} {id}").to_lowercase()
+}
+
+/// A cell's fixed (numeric) width, or `None` when it is a keyword sizing
+/// (`fill_container` / `fit_content`).
+fn fixed_width(v: &Value) -> Option<f64> {
+    match v.get("width") {
+        Some(Value::Number(n)) => n.as_f64(),
+        Some(Value::String(s)) => s.parse::<f64>().ok(),
+        _ => None,
+    }
+}
+
+fn num(v: &Value, key: &str) -> f64 {
+    match v.get(key) {
+        Some(Value::Number(n)) => n.as_f64().unwrap_or(0.0),
+        Some(Value::String(s)) => s.parse::<f64>().unwrap_or(0.0),
+        _ => 0.0,
+    }
+}
+
+fn is_table_named(t: &str) -> bool {
+    t.contains("table") || t.contains("data grid") || t.contains("datagrid")
+}
+
+// ── Table column-overflow fix ──
+
+/// Reserved width for each `fill_container` column so scaling leaves it room.
+const MIN_FILL_COL: f64 = 40.0;
+/// Slack so a table that fits by a hair isn't needlessly rescaled.
+const OVERFLOW_EPS: f64 = 4.0;
+/// Leave a little breathing room after scaling.
+const FIT_MARGIN: f64 = 0.97;
+/// Never shrink columns below this fraction of their authored width — beyond it
+/// the table is unsalvageable by scaling and needs a structural rethink (left to
+/// a later detector); clamp so we don't produce 5px columns.
+const MIN_SCALE: f64 = 0.35;
+
+/// Detect + fix table rows whose FIXED columns overflow their resolved width.
+/// Returns `true` iff any column was rescaled. A numeric width is set via
+/// `UpdateNode` (`SetNodeLayoutProp` only accepts KEYWORD widths); the column gap
+/// via `SetNodeLayoutProp`. Both mutate props in place — node ids never change,
+/// so no `ReplaceSubtree` id churn.
+pub fn fix_table_column_overflow(sink: &mut dyn DocSink, root_id: &str) -> bool {
+    let rects = resolved_rects(sink.state());
+    let ops: Vec<EditorCommand> = {
+        let Some(root) = op_editor_core::walkers::find_node(
+            sink.state().active_children(),
+            &NodeId::new(root_id.to_string()),
+        ) else {
+            return false;
+        };
+        let Ok(v) = serde_json::to_value(root) else {
+            return false;
+        };
+        let mut ops = Vec::new();
+        collect_scale_ops(&v, &rects, &mut ops);
+        ops
+    };
+    if ops.is_empty() {
+        return false;
+    }
+    for cmd in ops {
+        sink.apply(cmd);
+    }
+    true
+}
+
+/// Max detect→fix→relayout rounds (Pencil's multi-round `snapshot_layout`
+/// feedback, bounded so a hard-to-fix design can't spin).
+const MAX_ROUNDS: usize = 3;
+
+/// Geometry-driven validation LOOP: recompute the REAL layout, detect + fix the
+/// structural violations the resolved rects prove (table column overflow,
+/// collapsed fill containers), and repeat until a round finds nothing to do or
+/// `MAX_ROUNDS` is hit. The deterministic analogue of Pencil's per-batch
+/// `snapshot_layout` feedback. Returns the number of rounds that applied a fix.
+pub fn geometry_validate_and_fix(sink: &mut dyn DocSink, root_id: &str) -> usize {
+    let mut rounds = 0;
+    for _ in 0..MAX_ROUNDS {
+        let rects = resolved_rects(sink.state());
+        let cmds = {
+            let Some(root) = op_editor_core::walkers::find_node(
+                sink.state().active_children(),
+                &NodeId::new(root_id.to_string()),
+            ) else {
+                break;
+            };
+            let Ok(v) = serde_json::to_value(root) else {
+                break;
+            };
+            let mut cmds = Vec::new();
+            collect_scale_ops(&v, &rects, &mut cmds);
+            collect_collapse_fixes(&v, &rects, &mut cmds);
+            collect_text_overflow_fixes(&v, &rects, &mut cmds);
+            collect_frame_overflow_fixes(&v, &rects, &mut cmds);
+            cmds
+        };
+        if cmds.is_empty() {
+            break;
+        }
+        for cmd in cmds {
+            sink.apply(cmd);
+        }
+        rounds += 1;
+    }
+    rounds
+}
+
+/// A container resolves to ~0 height while declaring `fill_container`. With the
+/// engine resolving fill-of-hug to content size on both axes, this is the ONLY
+/// collapse repairer left (the tree-shape `fix_circular_fill_height` demoter is
+/// retired) — and it acts on proof from the real layout, never on tree shape.
+const COLLAPSE_H: f64 = 6.0;
+/// A child must carry real height for the parent's 0-height to read as a collapse
+/// (not an intentionally-empty spacer).
+const CHILD_MIN_H: f64 = 12.0;
+
+fn collect_collapse_fixes(v: &Value, rects: &HashMap<String, Rect>, cmds: &mut Vec<EditorCommand>) {
+    if is_collapsed_fill_container(v, rects) {
+        if std::env::var("OPENPENCIL_DEBUG_CLEANUP").is_ok() {
+            let id = v.get("id").and_then(Value::as_str).unwrap_or("?");
+            let r = rects.get(id);
+            eprintln!(
+                "[COLLAPSE-PROBE] demoting {} ({id}): resolved={:?}",
+                v.get("name").and_then(Value::as_str).unwrap_or("?"),
+                r.map(|r| (r.x, r.y, r.w, r.h))
+            );
+        }
+        if let Some(id) = v.get("id").and_then(Value::as_str) {
+            // Make it hug its content instead of filling a hugging ancestor.
+            cmds.push(EditorCommand::SetNodeLayoutProp {
+                node_id: NodeId::new(id.to_string()),
+                property: "height".to_string(),
+                value: LayoutPropValue::Keyword("fit_content".to_string()),
+            });
+            // A now-hug vertical column can't distribute on the main axis — jian
+            // collapses `space_between` there to an overlap. Top-pack + gap.
+            let distributes = matches!(
+                v.get("justifyContent").and_then(Value::as_str),
+                Some("space_between" | "space_around" | "space_evenly")
+            );
+            if distributes && layout_str(v) == Some("vertical") {
+                cmds.push(EditorCommand::SetNodeLayoutProp {
+                    node_id: NodeId::new(id.to_string()),
+                    property: "justifyContent".to_string(),
+                    value: LayoutPropValue::Keyword("start".to_string()),
+                });
+                if num(v, "gap") <= 0.0 {
+                    cmds.push(EditorCommand::SetNodeLayoutProp {
+                        node_id: NodeId::new(id.to_string()),
+                        property: "gap".to_string(),
+                        value: LayoutPropValue::Number(8.0),
+                    });
+                }
+            }
+        }
+    }
+    for c in children(v) {
+        collect_collapse_fixes(c, rects, cmds);
+    }
+}
+
+/// Slack so a text a hair wider than its block isn't needlessly wrapped.
+const TEXT_OVERFLOW_EPS: f64 = 2.0;
+
+/// A text node whose RESOLVED width exceeds its parent block's — the parent is a
+/// constrained (`fill_container` / fixed) block whose `min_size: 0` lets it shrink
+/// BELOW its `fit_content` text, so the text overflows into the next column
+/// (measured: a 260px sidebar's schedule rows painted the client name over the
+/// appointment time). Constrain the text to its block — `width: fill_container` +
+/// `textGrowth: fixed-width` — so it wraps inside instead of overflowing. The
+/// next round re-resolves with the text now bounded, so it converges immediately.
+fn collect_text_overflow_fixes(
+    v: &Value,
+    rects: &HashMap<String, Rect>,
+    cmds: &mut Vec<EditorCommand>,
+) {
+    // Only meaningful in a FLEX parent: under `layout: none` children are
+    // absolutely positioned, so "wider than the parent" is not an overflow to
+    // repair (and `width: fill_container` means nothing there).
+    let flex_parent = matches!(layout_str(v), Some("vertical" | "horizontal"));
+    if let Some(parent_w) = v
+        .get("id")
+        .and_then(Value::as_str)
+        .and_then(|id| rects.get(id))
+        .map(|r| r.w)
+        .filter(|_| flex_parent)
+    {
+        for c in children(v) {
+            if c.get("type").and_then(Value::as_str) != Some("text") {
+                continue;
+            }
+            let Some(cid) = c.get("id").and_then(Value::as_str) else {
+                continue;
+            };
+            let Some(cr) = rects.get(cid) else {
+                continue;
+            };
+            // Already bounded to its block (fill + wrap) → nothing to correct.
+            let fill = c.get("width").and_then(Value::as_str) == Some("fill_container");
+            let wrap = c
+                .get("textGrowth")
+                .and_then(Value::as_str)
+                .is_some_and(|g| g.starts_with("fixed-width"));
+            if fill && wrap {
+                continue;
+            }
+            if cr.w > parent_w + TEXT_OVERFLOW_EPS {
+                cmds.push(EditorCommand::SetNodeLayoutProp {
+                    node_id: NodeId::new(cid.to_string()),
+                    property: "width".to_string(),
+                    value: LayoutPropValue::Keyword("fill_container".to_string()),
+                });
+                cmds.push(EditorCommand::SetNodeLayoutProp {
+                    node_id: NodeId::new(cid.to_string()),
+                    property: "textGrowth".to_string(),
+                    value: LayoutPropValue::Keyword("fixed-width".to_string()),
+                });
+            }
+        }
+    }
+    for c in children(v) {
+        collect_text_overflow_fixes(c, rects, cmds);
+    }
+}
+
+/// A NON-TEXT child with an authored NUMERIC width that resolved wider than its
+/// flex parent (a model wrote an 800px avatar bar into a ~550px row — measured
+/// on a glm loop run) → retarget it to `fill_container` so it shares the row
+/// instead of spilling across the design. Only numeric widths are touched: a
+/// keyword-sized child that overflows is the PARENT chain's problem, and text
+/// is handled by [`collect_text_overflow_fixes`]. `clipContent` parents crop on
+/// purpose — skipped.
+fn collect_frame_overflow_fixes(
+    v: &Value,
+    rects: &HashMap<String, Rect>,
+    cmds: &mut Vec<EditorCommand>,
+) {
+    let clips = v.get("clipContent").and_then(Value::as_bool) == Some(true);
+    if matches!(layout_str(v), Some("vertical" | "horizontal")) && !clips {
+        if let Some(pw) = v
+            .get("id")
+            .and_then(Value::as_str)
+            .and_then(|id| rects.get(id))
+            .map(|r| r.w)
+        {
+            for c in children(v) {
+                if c.get("type").and_then(Value::as_str) == Some("text") {
+                    continue;
+                }
+                if fixed_width(c).is_none() {
+                    continue;
+                }
+                let Some(cid) = c.get("id").and_then(Value::as_str) else {
+                    continue;
+                };
+                let Some(cr) = rects.get(cid) else {
+                    continue;
+                };
+                if cr.w > pw + TEXT_OVERFLOW_EPS && pw > 1.0 {
+                    cmds.push(EditorCommand::SetNodeLayoutProp {
+                        node_id: NodeId::new(cid.to_string()),
+                        property: "width".to_string(),
+                        value: LayoutPropValue::Keyword("fill_container".to_string()),
+                    });
+                }
+            }
+        }
+    }
+    for c in children(v) {
+        collect_frame_overflow_fixes(c, rects, cmds);
+    }
+}
+
+fn is_collapsed_fill_container(v: &Value, rects: &HashMap<String, Rect>) -> bool {
+    if v.get("height").and_then(Value::as_str) != Some("fill_container") {
+        return false;
+    }
+    let Some(id) = v.get("id").and_then(Value::as_str) else {
+        return false;
+    };
+    let Some(rect) = rects.get(id) else {
+        return false;
+    };
+    if rect.h >= COLLAPSE_H {
+        return false;
+    }
+    // A real child with height proves the 0-height parent is a collapse.
+    children(v).iter().any(|c| {
+        c.get("id")
+            .and_then(Value::as_str)
+            .and_then(|cid| rects.get(cid))
+            .map(|r| r.h >= CHILD_MIN_H)
+            .unwrap_or(false)
+    })
+}
+
+/// Cap on reported issues per call — enough to act on, small enough to not
+/// drown the model's context.
+const MAX_DIAGNOSTICS: usize = 8;
+
+/// REPORT-mode counterpart of the fix loop: run the real jian layout over the
+/// CURRENT document and describe — without fixing — what the resolved geometry
+/// proves wrong (collapsed fill containers, table columns overflowing their
+/// row, text overflowing its block). Attached to every `batch_design` /
+/// `emit_elements` tool result so the design agent SEES each batch's layout
+/// consequences immediately and repairs them in-process — the deterministic
+/// analogue of Pencil's per-batch `snapshot_layout` feedback, with the
+/// detection cost paid in Rust instead of model turns.
+pub fn geometry_diagnostics(state: &EditorState) -> Vec<String> {
+    let rects = resolved_rects(state);
+    let mut out = Vec::new();
+    for root in state.active_children() {
+        if out.len() >= MAX_DIAGNOSTICS {
+            break;
+        }
+        if let Ok(v) = serde_json::to_value(root) {
+            collect_diagnostics(&v, &rects, &mut out);
+        }
+    }
+    out.truncate(MAX_DIAGNOSTICS);
+    out
+}
+
+/// `Name (id)` label for a diagnostic line.
+fn diag_label(v: &Value) -> String {
+    let name = v.get("name").and_then(Value::as_str).unwrap_or("frame");
+    let id = v.get("id").and_then(Value::as_str).unwrap_or("?");
+    format!("{name} ({id})")
+}
+
+fn collect_diagnostics(v: &Value, rects: &HashMap<String, Rect>, out: &mut Vec<String>) {
+    if out.len() >= MAX_DIAGNOSTICS {
+        return;
+    }
+    if is_collapsed_fill_container(v, rects) {
+        out.push(format!(
+            "{}: declared height fill_container but resolved to ~0px (its ancestor hugs) — give the ancestor chain a definite height or use fit_content here",
+            diag_label(v)
+        ));
+    }
+    if table_overflow_scale(v, rects).is_some() {
+        out.push(format!(
+            "{}: fixed column widths sum wider than the resolved row — shrink the column widths (or make columns fill_container) so they fit",
+            diag_label(v)
+        ));
+    }
+    // Children overflowing a FLEX parent's resolved width. `clipContent`
+    // parents are intentional croppers (scrollers, image masks) — skip them.
+    let clips = v.get("clipContent").and_then(Value::as_bool) == Some(true);
+    if matches!(layout_str(v), Some("vertical" | "horizontal")) && !clips {
+        if let Some(pw) = v
+            .get("id")
+            .and_then(Value::as_str)
+            .and_then(|id| rects.get(id))
+            .map(|r| r.w)
+        {
+            for c in children(v) {
+                if out.len() >= MAX_DIAGNOSTICS {
+                    return;
+                }
+                let Some(cr) = c
+                    .get("id")
+                    .and_then(Value::as_str)
+                    .and_then(|id| rects.get(id))
+                else {
+                    continue;
+                };
+                if cr.w <= pw + TEXT_OVERFLOW_EPS {
+                    continue;
+                }
+                if c.get("type").and_then(Value::as_str) == Some("text") {
+                    out.push(format!(
+                        "{}: text resolved {}px wide inside a {}px block — it overflows into siblings; set width fill_container + textGrowth fixed-width to wrap it",
+                        diag_label(c),
+                        cr.w.round(),
+                        pw.round()
+                    ));
+                } else {
+                    out.push(format!(
+                        "{}: resolved {}px wide inside its {}px parent — it spills out; shrink its width (or use fill_container) so it fits",
+                        diag_label(c),
+                        cr.w.round(),
+                        pw.round()
+                    ));
+                }
+            }
+        }
+    }
+    collect_sibling_jam_diagnostics(v, rects, out);
+    for c in children(v) {
+        collect_diagnostics(c, rects, out);
+    }
+}
+
+/// Two adjacent text-bearing siblings count as JAMMED below this many px of
+/// resolved horizontal breathing room ("Oct 24, 2024" + "42" reading as
+/// "202442" — measured on a gap-less table row).
+const SIBLING_JAM_GAP: f64 = 3.0;
+/// Siblings whose resolved rects overlap deeper than this are reported as
+/// OVERLAPPING (painted on top of each other), not merely jammed.
+const SIBLING_OVERLAP_EPS: f64 = 2.0;
+/// The JAM rule targets ROW cells ("Oct 24" + "42" reading as one word) —
+/// two PAGE-level columns (an app-shell's sidebar and content) legitimately
+/// touch. Only pairs where at least one side is row-cell sized qualify.
+const ROW_CELL_MAX_H: f64 = 120.0;
+
+/// Does this subtree carry visible text? A spacer / icon / image sibling
+/// touching its neighbor is normal; two TEXT columns touching is a jam.
+fn bears_text(v: &Value) -> bool {
+    if v.get("type").and_then(Value::as_str) == Some("text") {
+        return true;
+    }
+    children(v).iter().any(bears_text)
+}
+
+/// Report adjacent siblings of a horizontal FLEX row that resolved jammed
+/// (text columns touching) or overlapping. Report-only: flush layouts are
+/// sometimes intentional (joined button groups), so the model — not a fixer —
+/// arbitrates, and the name-gated table pass stays the deterministic repairer.
+fn collect_sibling_jam_diagnostics(
+    v: &Value,
+    rects: &HashMap<String, Rect>,
+    out: &mut Vec<String>,
+) {
+    if out.len() >= MAX_DIAGNOSTICS || layout_str(v) != Some("horizontal") {
+        return;
+    }
+    let kids = children(v);
+    for pair in kids.windows(2) {
+        if out.len() >= MAX_DIAGNOSTICS {
+            return;
+        }
+        let (a, b) = (&pair[0], &pair[1]);
+        let (Some(ra), Some(rb)) = (
+            a.get("id")
+                .and_then(Value::as_str)
+                .and_then(|i| rects.get(i)),
+            b.get("id")
+                .and_then(Value::as_str)
+                .and_then(|i| rects.get(i)),
+        ) else {
+            continue;
+        };
+        if ra.w <= 0.0 || rb.w <= 0.0 {
+            continue;
+        }
+        let breathing = rb.x - (ra.x + ra.w);
+        if breathing < -SIBLING_OVERLAP_EPS {
+            out.push(format!(
+                "{} and {}: siblings OVERLAP by {}px — their combined width exceeds the row; shrink widths or wrap text so they fit side by side",
+                diag_label(a),
+                diag_label(b),
+                (-breathing).round()
+            ));
+        } else if breathing < SIBLING_JAM_GAP
+            && ra.h.min(rb.h) <= ROW_CELL_MAX_H
+            && bears_text(a)
+            && bears_text(b)
+        {
+            out.push(format!(
+                "{} and {}: text columns touch (only {}px apart) — their contents read as one word; add a gap on the row (e.g. gap: 16)",
+                diag_label(a),
+                diag_label(b),
+                breathing.max(0.0).round()
+            ));
+        }
+    }
+}
+
+fn collect_scale_ops(v: &Value, rects: &HashMap<String, Rect>, ops: &mut Vec<EditorCommand>) {
+    if let Some(scale) = table_overflow_scale(v, rects) {
+        // Apply the same scale to EVERY row's fixed cells (columns stay aligned)
+        // and to each row's gap.
+        for row in children(v) {
+            if layout_str(row) != Some("horizontal") {
+                continue;
+            }
+            let cells = children(row);
+            if cells.len() < 3 {
+                continue;
+            }
+            for cell in cells {
+                if let (Some(w), Some(id)) =
+                    (fixed_width(cell), cell.get("id").and_then(Value::as_str))
+                {
+                    ops.push(EditorCommand::UpdateNode {
+                        node_id: NodeId::new(id.to_string()),
+                        x: None,
+                        y: None,
+                        width: Some((w * scale).round() as i32),
+                        height: None,
+                        name: None,
+                        fill_hex: None,
+                        page_id: None,
+                    });
+                }
+            }
+            let gap = num(row, "gap");
+            if gap > 0.0 {
+                if let Some(id) = row.get("id").and_then(Value::as_str) {
+                    ops.push(EditorCommand::SetNodeLayoutProp {
+                        node_id: NodeId::new(id.to_string()),
+                        property: "gap".to_string(),
+                        value: LayoutPropValue::Number((gap * scale).round()),
+                    });
+                }
+            }
+        }
+    }
+    for c in children(v) {
+        collect_scale_ops(c, rects, ops);
+    }
+}
+
+/// If `v` is a table container (a `table`-named vertical frame with ≥2 horizontal
+/// rows of ≥3 cells) whose columns overflow the row's RESOLVED width, return the
+/// scale factor (< 1.0) to apply to its fixed columns + gap. `None` when it isn't
+/// a table or doesn't overflow.
+fn table_overflow_scale(v: &Value, rects: &HashMap<String, Rect>) -> Option<f64> {
+    if layout_str(v) == Some("horizontal") {
+        return None;
+    }
+    if !is_table_named(&ident_text(v)) {
+        return None;
+    }
+    // Representative row: the first horizontal child with ≥3 cells.
+    let row = children(v)
+        .iter()
+        .find(|r| layout_str(r) == Some("horizontal") && children(r).len() >= 3)?;
+    // Need at least a header + one data row to be a real table.
+    let data_rows = children(v)
+        .iter()
+        .filter(|r| layout_str(r) == Some("horizontal") && children(r).len() >= 3)
+        .count();
+    if data_rows < 2 {
+        return None;
+    }
+    let cells = children(row);
+    let n_gaps = (cells.len() - 1) as f64;
+    let gap = num(row, "gap");
+    let mut fixed_sum = 0.0;
+    let mut fill_count = 0.0;
+    for cell in cells {
+        match fixed_width(cell) {
+            Some(w) => fixed_sum += w,
+            None => fill_count += 1.0, // fill_container / fit_content
+        }
+    }
+    if fixed_sum <= 0.0 {
+        return None; // all-flex table can't overflow via fixed widths
+    }
+    let row_id = row.get("id").and_then(Value::as_str)?;
+    let row_w = rects.get(row_id)?.w;
+    if row_w <= 1.0 {
+        return None;
+    }
+    // Minimum width the row NEEDS: fixed columns + gaps + a floor for each flex
+    // column. If that already fits the resolved row width, nothing to do.
+    let needed = fixed_sum + gap * n_gaps + fill_count * MIN_FILL_COL;
+    if needed <= row_w + OVERFLOW_EPS {
+        return None;
+    }
+    // Scale the fixed budget (columns + gaps) so it fits alongside the flex floor.
+    let flex_floor = fill_count * MIN_FILL_COL;
+    let fixed_budget = (row_w - flex_floor) * FIT_MARGIN;
+    let scalable = fixed_sum + gap * n_gaps;
+    if scalable <= 0.0 {
+        return None;
+    }
+    let scale = (fixed_budget / scalable).clamp(MIN_SCALE, 1.0);
+    if scale >= 1.0 - 0.001 {
+        return None;
+    }
+    Some(scale)
+}
+
+#[cfg(test)]
+#[path = "geometry_validation_tests.rs"]
+mod tests;

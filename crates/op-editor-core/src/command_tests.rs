@@ -207,6 +207,7 @@ fn batch_insert_appends_all_items() {
                 width: 10,
                 height: 10,
                 fill_hex: None,
+                fill: None,
             },
             BatchInsertItem {
                 kind: "ellipse".into(),
@@ -216,6 +217,7 @@ fn batch_insert_appends_all_items() {
                 width: 10,
                 height: 10,
                 fill_hex: Some("#00ff00".into()),
+                fill: None,
             },
         ],
         page_id: None,
@@ -237,6 +239,7 @@ fn batch_insert_rejects_whole_batch_on_one_bad_item() {
                 width: 10,
                 height: 10,
                 fill_hex: None,
+                fill: None,
             },
             BatchInsertItem {
                 kind: "bogus".into(), // bad kind kills the batch
@@ -246,6 +249,7 @@ fn batch_insert_rejects_whole_batch_on_one_bad_item() {
                 width: 10,
                 height: 10,
                 fill_hex: None,
+                fill: None,
             },
         ],
         page_id: None,

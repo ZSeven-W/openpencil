@@ -25,12 +25,13 @@ use op_ai_skills::style_guide::{
     extract_style_guide_values, select_style_guide, style_guide_registry, SelectOptions,
 };
 use op_ai_skills::{
-    budget::trim_by_budget,
+    budget::trim_by_budget_pinned,
     get_skills_by_phase,
     resolver::{filter_by_intent, inject_dynamic_content},
     DropReason, DroppedSkill, Phase, ResolveOptions, ResolvedSkill, SkillLoadEntry,
     SkillLoadReport,
 };
+use op_editor_core::ComponentLibrary;
 use std::collections::HashMap;
 
 /// sub-agent 阶段要求模型产出的 JSON 形状说明。
@@ -63,6 +64,61 @@ JSON object per line, exactly as the ELEMENT MANIFEST section above specifies.
 Use catalog kinds for everything they cover; group with {"el":"section"} lines
 and "in" line-number references; NEVER emit id / parent_id / pageId fields.
 Output ONLY the JSONL lines."#;
+
+/// Program-DSL 模式（`OPENPENCIL_PROGRAM_GEN=1`）的输出协议。模型写一段
+/// `batch_design` 程序而非扁平 `_parent` JSONL——子节点靠"传父绑定变量"嵌套
+/// （parent-by-reference），使弱模型的"行被拆成全宽兄弟 / 表头无行"两类结构崩塌
+/// 近乎不可表达。执行器是 Rust 的 `op_mcp::run_batch_design_program`（无 JS 引擎）。
+const PROGRAM_FORMAT: &str = r#"
+OUTPUT PROTOCOL: batch_design PROGRAM. Respond with insert operations, ONE per
+line, NO prose, NO markdown fences. Each line is:
+  name=I(parent, {...node JSON...})
+`I` inserts a node; `name` captures its id so LATER lines nest children into it by
+passing `name` as their parent. `parent` is `null` ONLY for this section's single
+root frame, otherwise a binding from an EARLIER line. A node is a child of X if and
+only if its line is `something=I(X, {...})` -- there is no other way to nest.
+Each node object MUST start with "type" (frame/text/rectangle/ellipse/path/icon_font).
+camelCase fields (cornerRadius, fontSize, fontWeight, justifyContent, alignItems,
+clipContent). Do NOT set x/y on children inside layout frames.
+PARENT-BY-REFERENCE makes repeated structure correct by construction:
+  tbl=I(sec, {"type":"frame","layout":"vertical","width":"fill_container"})
+  r1=I(tbl, {"type":"frame","layout":"horizontal","width":"fill_container"})
+  c1=I(r1, {"type":"frame","width":"fill_container"})
+  I(c1, {"type":"text","content":"Alice"})
+Every table/list ROW is I(table,...); every CELL is I(row,...); every cell's content
+is I(cell,...). NEVER insert a cell or its content into the table/section directly --
+that renders as a full-width band, not a table cell. Emit EVERY data row/card/item
+with realistic values -- never a header with zero rows.
+Output ONLY the program lines."#;
+
+/// Script-gen 模式（`OPENPENCIL_SCRIPT_GEN=1`）的输出协议——完全对齐 Pencil:
+/// 模型写一段真 JavaScript（循环/数组/变量）调用全局 `I(parent, obj)`。引擎
+/// (rquickjs) 执行、`JSON.stringify` 序列化每个对象（=完美 JSON,无手写括号/引号
+/// 笔误),循环展开重复结构。`I` 返回新节点 id 字符串。
+const SCRIPT_FORMAT: &str = r#"
+OUTPUT PROTOCOL: JAVASCRIPT PROGRAM. Write a JavaScript program (no prose, no markdown
+fences) that builds this section by calling the global function I(parent, node):
+  const id = I(parent, { ...node... });   // inserts node, RETURNS its id (a string)
+`parent` is null for THIS section's single root frame, otherwise an id returned by an
+EARLIER I(...) call. A node is a child of X only if you call I(X, {...}).
+I(...) is the ONLY function available — there is no console, and no other builder. Do
+not call console.log or any helper; just call I(...).
+USE REAL JAVASCRIPT — const/let, arrays of data, and for...of / .forEach loops — to
+generate repeated structure (table rows, nav items, cards, list items) by looping over a
+data array. PREFER a loop over copy-pasting near-identical I(...) calls.
+Each node object starts with type ("frame"/"text"/"rectangle"/"ellipse"/"path"/"icon_font")
+and uses camelCase props (cornerRadius, fontSize, fontWeight, justifyContent, alignItems,
+clipContent). Do NOT set x/y on children inside layout frames.
+Example:
+  const sec = I(null, {type:"frame", name:"Clients", layout:"vertical", width:"fill_container", gap:0});
+  const tbl = I(sec, {type:"frame", layout:"vertical", width:"fill_container"});
+  const rows = [{name:"Alice Chen", status:"Active"}, {name:"Bob Ito", status:"VIP"}];
+  for (const r of rows) {
+    const row = I(tbl, {type:"frame", layout:"horizontal", width:"fill_container", padding:[12,16]});
+    const c1 = I(row, {type:"frame", width:"fill_container"}); I(c1, {type:"text", content:r.name});
+    const c2 = I(row, {type:"frame", width:"fill_container"}); I(c2, {type:"text", content:r.status});
+  }
+Generate EVERY row/card/item with realistic values. Output ONLY the JavaScript program."#;
 
 /// Rich 模式 system prompt 末尾后缀 —— verbatim,`orchestrator.ts:1382-1383`。
 const RICH_SUFFIX: &str = "\n\n---\nCRITICAL OUTPUT FORMAT ENFORCEMENT:\n\
@@ -495,7 +551,11 @@ fn resolve_generation_skills_after_prompt_filter(
         minimal_skills,
         reduced_complexity,
     );
-    let trimmed = trim_by_budget(&filtered_entries, total_budget, intent);
+    // Honor caller-pinned skills (force-included, budget-exempt) — same
+    // mechanism `resolve_skills` uses on the non-mobile path. Empty by default,
+    // so a no-library mobile generation is unchanged.
+    let pinned: Vec<&str> = opts.pinned_skills.iter().map(String::as_str).collect();
+    let trimmed = trim_by_budget_pinned(&filtered_entries, total_budget, intent, &pinned);
 
     for entry in &filtered_entries {
         if !trimmed.iter().any(|kept| kept.meta.name == entry.meta.name) {
@@ -526,6 +586,142 @@ fn resolve_generation_skills_after_prompt_filter(
     (trimmed, report, filter_drops)
 }
 
+/// Max component entries listed in the AVAILABLE COMPONENTS manifest. A large
+/// harvested library (shadcn, an imported design kit) can hold hundreds of
+/// masters; listing them all would blow the prompt budget, so the manifest
+/// caps at this many (grouped by category, alphabetical within a category) and
+/// notes the remainder.
+const MAX_COMPONENT_MANIFEST_ENTRIES: usize = 60;
+
+/// Best-effort category bucket for a component, derived from its name. Pencil /
+/// shadcn kits name components like "Primary Button", "Card", "Nav Item",
+/// "Input"; bucketing by a recognised keyword groups the manifest so the model
+/// scans a short, readable list instead of a flat dump.
+fn component_category(name: &str) -> &'static str {
+    let n = name.to_ascii_lowercase();
+    let has = |kw: &str| n.contains(kw);
+    if has("button") || has("btn") || has("cta") {
+        "Buttons"
+    } else if has("input") || has("field") || has("textarea") || has("select") || has("search") {
+        "Inputs"
+    } else if has("card") || has("tile") || has("panel") {
+        "Cards"
+    } else if has("nav") || has("tab") || has("menu") || has("sidebar") || has("breadcrumb") {
+        "Navigation"
+    } else if has("badge") || has("chip") || has("tag") || has("pill") || has("label") {
+        "Badges"
+    } else if has("avatar") || has("icon") || has("image") || has("logo") {
+        "Media"
+    } else if has("modal") || has("dialog") || has("popover") || has("tooltip") || has("toast") {
+        "Overlays"
+    } else if has("table") || has("row") || has("list") || has("cell") {
+        "Tables & Lists"
+    } else if has("header") || has("footer") || has("hero") || has("section") {
+        "Layout"
+    } else {
+        "Other"
+    }
+}
+
+/// Stable category order so the manifest reads consistently across runs.
+const COMPONENT_CATEGORY_ORDER: &[&str] = &[
+    "Buttons",
+    "Inputs",
+    "Cards",
+    "Navigation",
+    "Badges",
+    "Media",
+    "Overlays",
+    "Tables & Lists",
+    "Layout",
+    "Other",
+];
+
+/// Build the AVAILABLE COMPONENTS manifest block for the generation prompt.
+///
+/// Returns `None` when the library is empty — so a no-component document's
+/// prompt is byte-for-byte unchanged (the block + the `component-composition`
+/// skill flag only fire when masters exist). When present, the block lists
+/// `id (Name)` entries grouped by category, capped at
+/// [`MAX_COMPONENT_MANIFEST_ENTRIES`], plus a one-line instruction pointing the
+/// model at the `ref` + `descendants` syntax taught by the
+/// `component-composition` skill.
+///
+/// `manifest_on` branches the one-line instantiation instruction by which
+/// output protocol is active. The default raw/loop path emits a bare PenNode
+/// (`{"type":"ref",…}`); the element-manifest path emits an `el` line
+/// (`{"el":"ref",…}`). Telling a manifest-arm model to emit raw-node syntax
+/// contradicts the dominant `el`-line contract, so it emits rich `el` kinds and
+/// 0 component refs — the instruction must match the live protocol.
+fn available_components_manifest(
+    components: &ComponentLibrary,
+    manifest_on: bool,
+) -> Option<String> {
+    if components.is_empty() {
+        return None;
+    }
+    // Bucket components by category, preserving registry order within a bucket.
+    let mut by_category: HashMap<&'static str, Vec<(&str, &str)>> = HashMap::new();
+    for c in &components.components {
+        by_category
+            .entry(component_category(&c.name))
+            .or_default()
+            .push((c.id.as_str(), c.name.as_str()));
+    }
+
+    let total = components.len();
+    let ref_syntax = if manifest_on {
+        "an `el:\"ref\"` line"
+    } else {
+        "a `ref` node"
+    };
+    let mut lines = vec![format!(
+        "AVAILABLE COMPONENTS ({total} reusable components in this document — \
+         PREFER instantiating these with {ref_syntax} over building from scratch):"
+    )];
+    let mut listed = 0usize;
+    'outer: for cat in COMPONENT_CATEGORY_ORDER {
+        let Some(entries) = by_category.get(*cat) else {
+            continue;
+        };
+        if entries.is_empty() {
+            continue;
+        }
+        lines.push(format!("{cat}:"));
+        for (id, name) in entries {
+            if listed >= MAX_COMPONENT_MANIFEST_ENTRIES {
+                lines.push(format!(
+                    "  …and {} more not listed (ask only for the ids above).",
+                    total - listed
+                ));
+                break 'outer;
+            }
+            lines.push(format!("  - {id} ({name})"));
+            listed += 1;
+        }
+    }
+    // Branch the instantiation example by the active output protocol so the
+    // model is never told to emit a syntax that contradicts its line contract.
+    // The example is COMPLETE (not just the envelope) so this block is
+    // self-sufficient: even if the component-composition skill were ever trimmed
+    // out, the model still has a usable, copy-pasteable instruction.
+    let instruction = if manifest_on {
+        "To use one, emit it as a manifest line — `el:\"ref\"`, the component id, nest it \
+         under a section with `in:<line>`, and override its text/fill via `descendants` \
+         (NO `id` field — the system assigns ids). Example:\n  \
+         {\"el\":\"section\",\"role\":\"actions\"}\n  \
+         {\"el\":\"ref\",\"in\":1,\"ref\":\"<id from above>\",\"descendants\":{\"<descendant-id>\":{\"content\":\"Get started\"}}}\n\
+         Only build an element by hand when no component above fits."
+    } else {
+        "To use one, emit a single node — `type:\"ref\"`, the component id, its `_parent`, and \
+         override its text/fill via `descendants` (it needs no `children`). Example:\n  \
+         {\"_parent\":\"<container-id>\",\"id\":\"<your-id>\",\"type\":\"ref\",\"ref\":\"<id from above>\",\"descendants\":{\"<descendant-id>\":{\"content\":\"Get started\"}}}\n\
+         Only build an element by hand when no component above fits."
+    };
+    lines.push(instruction.to_string());
+    Some(lines.join("\n"))
+}
+
 /// 单个 sub-agent 的 LLM 调用输入。
 ///
 /// * `reduced_complexity` — When `true` and the model is Basic tier,
@@ -537,6 +733,10 @@ fn resolve_generation_skills_after_prompt_filter(
 ///   only `schema` + `jsonl-format` (last-ditch fallback for models
 ///   whose safety scanner times out on the full prompt).  Port of the
 ///   `minimalSkills` param in `executeSubAgent` (lines 428-431).
+/// * `components` — the document's reusable-component registry. When
+///   non-empty it injects an AVAILABLE COMPONENTS manifest + raises the
+///   `hasReusableComponents` flag (loads the `component-composition`
+///   skill). Empty (the default path) ⇒ prompt unchanged.
 pub fn build_subagent_prompt(
     subtask: &Subtask,
     plan: &OrchestratorPlan,
@@ -544,15 +744,34 @@ pub fn build_subagent_prompt(
     abort: AbortFlag,
     reduced_complexity: bool,
     minimal_skills: bool,
+    components: &ComponentLibrary,
 ) -> (CallRequest, SkillLoadReport) {
     // Element-manifest protocol (spec 2026-06-10-element-manifest-v2): only on
     // the full first attempt — the retry ladder (reduced/minimal) falls back
     // to the smaller raw-JSONL prompt, and `parse_manifest` returning `None`
     // on such output routes parsing back through `parse_nodes`.
-    let manifest_on =
-        crate::manifest::manifest_enabled_for_model(req.model.as_deref().unwrap_or(""))
-            && !reduced_complexity
-            && !minimal_skills;
+    let model_id = req.model.as_deref().unwrap_or("");
+    // Protocol selection for the full first attempt. Priority when more than one
+    // is force-enabled: script (JS, env opt-in) > program (DSL) > manifest (env
+    // opt-in) > raw JSONL. In production exactly ONE is on: program-DSL is the
+    // DEFAULT for the open / Chinese reasoning models (parent-by-reference,
+    // best-effort per-line parse); script-gen + manifest are env-gated
+    // experiments; strong models (claude / gpt / gemini / o-series) stay on raw
+    // JSONL. All three run only on the full first attempt — the reduced/minimal
+    // retry rungs fall back to raw JSONL (and `subagent::run_subtask` routes
+    // parsing to match).
+    let script_on = crate::script_gen::script_gen_enabled_for_model(model_id)
+        && !reduced_complexity
+        && !minimal_skills;
+    let program_on = !script_on
+        && crate::program_gen::program_gen_enabled_for_model(model_id)
+        && !reduced_complexity
+        && !minimal_skills;
+    let manifest_on = !script_on
+        && !program_on
+        && crate::manifest::manifest_enabled_for_model(model_id)
+        && !reduced_complexity
+        && !minimal_skills;
     build_subagent_prompt_with_manifest(
         subtask,
         plan,
@@ -561,12 +780,16 @@ pub fn build_subagent_prompt(
         reduced_complexity,
         minimal_skills,
         manifest_on,
+        program_on,
+        script_on,
+        components,
     )
 }
 
 /// Env-independent core of [`build_subagent_prompt`] — `manifest_on` is a
 /// parameter so tests can exercise the manifest wiring without touching
 /// the process-global `OPENPENCIL_MANIFEST` variable.
+#[allow(clippy::too_many_arguments)]
 fn build_subagent_prompt_with_manifest(
     subtask: &Subtask,
     plan: &OrchestratorPlan,
@@ -575,10 +798,20 @@ fn build_subagent_prompt_with_manifest(
     reduced_complexity: bool,
     minimal_skills: bool,
     manifest_on: bool,
+    program_on: bool,
+    script_on: bool,
+    components: &ComponentLibrary,
 ) -> (CallRequest, SkillLoadReport) {
     // Resolve the full generation skill set, then apply tier-gated filtering.
     let model_id = req.model.as_deref().unwrap_or("");
     let tier = resolve_model_profile(model_id).tier;
+
+    // Available reusable components → AVAILABLE COMPONENTS manifest +
+    // `hasReusableComponents` flag (loads the `component-composition` skill).
+    // `None` when the registry is empty, so the default no-component path is
+    // byte-for-byte unchanged.
+    let component_manifest = available_components_manifest(components, manifest_on);
+    let has_reusable_components = component_manifest.is_some();
 
     // design.md payload for the `{{designMdContent}}` template. If the
     // structured policy summary is empty (a bare-minimum design.md with only
@@ -616,6 +849,7 @@ fn build_subagent_prompt_with_manifest(
     // TS production); `elements`/`elements-cookbook` therefore stay gated off.
     flags.insert("hasMcpTools".to_string(), false);
     flags.insert("hasManifest".to_string(), manifest_on);
+    flags.insert("hasReusableComponents".to_string(), has_reusable_components);
 
     let mut dynamic_content = HashMap::new();
     if has_design_md {
@@ -688,10 +922,24 @@ fn build_subagent_prompt_with_manifest(
         ModelTier::Full => None,
     };
 
+    // Force-include the component-instance teaching whenever a reusable-component
+    // library is loaded. When a library is present the model already receives the
+    // AVAILABLE COMPONENTS *list*; the `component-composition` skill carries the
+    // HOW-to-instantiate teaching (`ref` + `descendants` syntax) — without it the
+    // model gets the catalog but no usable instruction and emits 0 refs. On the
+    // tight non-mobile Basic budget (5200, of which base skills already use
+    // ~3900) the skill is otherwise dropped by BudgetExhausted, so we pin it
+    // (budget-exempt) here. Empty on every no-library path ⇒ no change there.
+    let pinned_skills = if has_reusable_components {
+        vec!["component-composition".to_string()]
+    } else {
+        Vec::new()
+    };
     let opts = ResolveOptions {
         flags,
         dynamic_content,
         budget_override,
+        pinned_skills,
         ..Default::default()
     };
     let intent = subtask_intent(req, subtask);
@@ -719,9 +967,12 @@ fn build_subagent_prompt_with_manifest(
             );
             (filtered, agent_ctx.report, filter_drops)
         };
-    // The manifest protocol REPLACES the raw-JSONL output format —
-    // carrying both would contradict (and burn Basic-tier budget).
-    if manifest_on {
+    // The manifest AND program-DSL protocols each REPLACE the raw-JSONL output
+    // format — carrying the `jsonl-format` skill alongside either one feeds the
+    // model two contradictory output contracts (e2e showed glm then emitting a
+    // half-program/half-`_parent` blob with unclosed objects). Drop it so the
+    // protocol's own format block (MANIFEST_FORMAT / PROGRAM_FORMAT) governs alone.
+    if manifest_on || program_on || script_on {
         filtered.retain(|s| {
             s.skill_name() != "jsonl-format" && s.skill_name() != "jsonl-format-simplified"
         });
@@ -755,7 +1006,11 @@ fn build_subagent_prompt_with_manifest(
     // `jsonl-format` + `jsonl-format-simplified` skills both teach `_parent`,
     // so this agrees with whichever skill the tier loads (no contradiction).
     // Manifest mode swaps in the element-manifest contract instead.
-    system_prompt.push_str(if manifest_on {
+    system_prompt.push_str(if script_on {
+        SCRIPT_FORMAT
+    } else if program_on {
+        PROGRAM_FORMAT
+    } else if manifest_on {
         MANIFEST_FORMAT
     } else {
         NODE_FORMAT
@@ -771,6 +1026,14 @@ fn build_subagent_prompt_with_manifest(
         system_prompt.push_str(instruction);
         system_prompt
             .push_str("\nThis instruction overrides style-guide examples when they conflict.");
+    }
+    // Available-components manifest LAST — recency wins, and the model should
+    // consult the concrete id list right before producing nodes. The
+    // `component-composition` skill (loaded via `hasReusableComponents`) carries
+    // the `ref` + `descendants` syntax; this block carries the actual ids.
+    if let Some(manifest) = &component_manifest {
+        system_prompt.push_str("\n\n");
+        system_prompt.push_str(manifest);
     }
 
     let section_list = plan
@@ -830,7 +1093,19 @@ fn build_subagent_prompt_with_manifest(
     // Three constraints differ by output protocol: the raw-JSONL path has
     // the model author its own root frame + ids; the manifest path forbids
     // exactly that (system-assigned ids, system-owned section root).
-    let (root_rule, nesting_rule, output_rule) = if manifest_on {
+    let (root_rule, nesting_rule, output_rule) = if script_on {
+        (
+            format!("Create EXACTLY ONE section root frame first: const sec = I(null, {{type:\"frame\", name:\"{}\", width:\"fill_container\", height:\"fit_content\", layout:\"vertical\"}}); build everything else by calling I(parent, {{...}}) with `sec` or a returned id as parent. NEVER set a fixed pixel height on the root.", subtask.label),
+            "Nest via the returned id ONLY: const row = I(sec, {...}); const cell = I(row, {...}); I(cell, {type:\"text\",...}). LOOP over a data array to emit repeated rows/cards. A cell inserted into the section/table directly renders as a full-width band, not a table cell.".to_string(),
+            "Output ONLY the JavaScript program (calls to I(...)) -- no prose, no markdown fences.".to_string(),
+        )
+    } else if program_on {
+        (
+            format!("Create EXACTLY ONE section root frame as the first line: sec=I(null, {{\"type\":\"frame\",\"name\":\"{}\",\"width\":\"fill_container\",\"height\":\"fit_content\",\"layout\":\"vertical\"}}). Build everything else with bindings into `sec` or its descendants. NEVER set a fixed pixel height on the root.", subtask.label),
+            "Nest via bindings ONLY: row=I(sec, ...); cell=I(row, ...); I(cell, {\"type\":\"text\",...}). A cell or its content inserted into the section/table binding directly renders as a full-width band, not a table cell. Every repeated row/card/item is its own I(...) line.".to_string(),
+            "Output ONLY the batch_design program -- one I(...) operation per line, no prose, no markdown fences.".to_string(),
+        )
+    } else if manifest_on {
         (
             "Do NOT create a page wrapper or root frame -- emit element/section manifest lines only; the system wraps them under this section's root automatically.".to_string(),
             "Group elements with {\"el\":\"section\"} lines and `in` line-number references (see ELEMENT MANIFEST rules). Lines without `in` stack vertically in output order.".to_string(),

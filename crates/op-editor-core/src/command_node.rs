@@ -780,7 +780,14 @@ impl EditorState {
                 item.height,
             )
             .expect("kind validated");
-            if let Some(hex) = &item.fill_hex {
+            // A full canonical fill stack overrides the solid `fill_hex`
+            // shortcut so gradient / mesh / image fills survive the batch
+            // insert; otherwise fall back to the single-colour path.
+            if let Some(fills) = &item.fill {
+                if let Some(slot) = crate::fills::node_fills_mut(&mut node) {
+                    *slot = fills.clone();
+                }
+            } else if let Some(hex) = &item.fill_hex {
                 set_primary_fill_hex(&mut node, hex);
             }
             children.push(node);

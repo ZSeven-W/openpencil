@@ -85,22 +85,29 @@ visual reason. The bottom-tab-bar is already part of the page flow; the
 spacer was reserving space for a fixed positioning pattern that doesn't
 exist in this engine. Just omit it.
 
-RING / CIRCLE WITH CENTER CONTENT (Apple Activity Ring, progress ring, badge, avatar with text):
+RING / PIE / ARC / DONUT / GAUGE / DISC (Apple Activity Ring, progress ring, pie chart, gauge, avatar):
 
-- Use frame(cornerRadius=width/2) AS the ring/circle. NEVER ellipse + sibling text.
-  Reason: ellipse cannot have children. Putting text as ellipse's sibling in a vertical/horizontal layout
-  parent stacks them — text ends up above/below the ring, NOT in the center.
-- Correct pattern:
-  frame(width=80, height=80, cornerRadius=40, stroke={thickness:8, fill:[ringColor]}, fill:[],
-  layout="horizontal", alignItems="center", justifyContent="center")
-  └── text(content="8,432", fontSize=16, fontWeight=700, fill:[textColor])
-- For an EMPTY RING (stroke only), set fill: [] on the frame. Do NOT add a smaller "inner" ellipse
-  with the parent's background color trying to "punch a hole" — that's a raster-era trick that
-  doesn't work in OpenPencil's flex-layout model.
-- For SOLID DISC, set frame fill: [{type:"solid", color:...}] and omit stroke.
+- Use a native ELLIPSE with arc fields. The renderer carves the shape directly — no frame tricks.
+  - innerRadius (0..1 fraction): carves a donut hole. 0 (or omit) = solid disc; 0.6 = thick ring; 0.85 = thin ring.
+  - startAngle + sweepAngle (degrees): carve a pie slice / arc / gauge. 0° points right, sweeps clockwise.
+    Omit both for a full 360° ring/disc.
+- Patterns:
+  - SOLID DISC: ellipse(width=80, height=80, fill:[{type:"solid", color:...}])
+  - EMPTY RING / progress track: ellipse(width=80, height=80, innerRadius=0.8, fill:[{type:"solid", color:trackColor}])
+  - PROGRESS ARC (e.g. 75%): ellipse(..., innerRadius=0.8, startAngle=-90, sweepAngle=270, fill:[{type:"solid", color:progressColor}])
+  - PIE SLICE: ellipse(..., startAngle=0, sweepAngle=120, fill:[...]) (no innerRadius)
+  - GAUGE (half ring): ellipse(..., innerRadius=0.7, startAngle=180, sweepAngle=180, fill:[...])
+  - Do NOT punch a hole with a smaller bg-colored ellipse on top — use innerRadius.
+- CAVEAT — ellipse cannot have children. For a ring/circle WITH centered text or icon (badge, avatar
+  with initials, progress ring with a "%" label), wrap the ring ellipse + the text as SIBLINGS in a
+  layout="horizontal" frame { alignItems:"center", justifyContent:"center" } — or keep the
+  frame(cornerRadius=width/2) pattern for that centered-content case only:
+  frame(width=80, height=80, layout="horizontal", alignItems="center", justifyContent="center")
+  ├── ellipse(width=80, height=80, innerRadius=0.85, fill:[ringColor])   ← the ring
+  └── text(content="8,432", fontSize=16, fontWeight=700, fill:[textColor])  ← the centered label
+  (When the ring fully encloses the text, the frame+cornerRadius single-node form also works.)
 - DO NOT use layout: "none" + nested frame with absolute x/y to overlay text on a circle.
-  layout=none + nested children renders unreliably. Always use frame+cornerRadius with standard
-  flex layout instead.
+  layout=none + nested children renders unreliably. Use the sibling-in-centered-frame pattern instead.
 - textAlignVertical is NOT supported. Use a layout=horizontal/vertical parent + alignItems=center
   - justifyContent=center to center text inside any container.
 
